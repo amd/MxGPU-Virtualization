@@ -43,7 +43,7 @@ TEST_F(AmdsmiVersionTests, GetVersion)
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(27, version.major);
 	ASSERT_EQ(0, version.minor);
-	ASSERT_EQ(0, version.release);
+	ASSERT_EQ(4, version.release);
 }
 
 TEST_F(AmdsmiVersionTests, GetVersionInval)

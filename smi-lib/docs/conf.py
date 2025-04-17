@@ -51,41 +51,37 @@ version_major, version_minor, version_release = get_version_info("../VERSION")
 
 version_number = "{}.{}.{}".format(version_major, version_minor, version_release)
 
-source_suffix = {
-    '.md': 'markdown'
-}
-
-project = 'AMD SMI'
-author = ""
-copyright = '2025 Advanced Micro Devices, Inc. All rights reserved'
+# project info
+project = "AMD SMI"
+author = "Advanced Micro Devices, Inc."
+copyright = "Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved."
 version = version_number
 release = version_number
 
-extensions = [
-    'sphinx.ext.autodoc',
-    'sphinx.ext.viewcode',
-    'myst_parser',
-    'sphinx_design'
-]
-
-myst_enable_extensions = ["colon_fence"]
-
-templates_path = ['_templates']
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
-
-html_theme = 'sphinx_book_theme'
+html_theme = "rocm_docs_theme"
 html_theme_options = {
-    "use_download_button": False,
-    "show_toc_level": 2
+    "flavor": "instinct",
+    "repository_provider": "github",
+    "repository_url": "https://github.com/amd/MxGPU-Virtualization",
+    "link_main_doc": True,
+    "nav_secondary_items": {
+        "Community": "https://github.com/ROCm/ROCm/discussions",
+        "Blogs": "https://rocm.blogs.amd.com/",
+        "ROCm&#8482 Docs": "https://rocm.docs.amd.com",
+        "ROCm Developer Hub": "https://www.amd.com/en/developer/resources/rocm-hub.html",
+    },
+    "show_toc_level": 4
 }
-
 html_title = "AMD SMI {} documentation".format(version_number)
+suppress_warnings = ["etoc.toctree"]
 external_toc_path = "./sphinx/_toc.yml"
-suppress_warnings = ["etoc.toctree", "toc.not_included", "myst.xref_missing"]
+
+external_projects_current_project = "amdsmi"
+extensions = ["rocm_docs", "rocm_docs.doxygen"]
 
 doxygen_root = "doxygen"
 doxysphinx_enabled = True
 doxygen_project = {
     "name": "AMD SMI C API reference",
-    "path": "../build/amdsmi/docs/doxygen/xml",
+    "path": "doxygen/doxy_build/xml",
 }

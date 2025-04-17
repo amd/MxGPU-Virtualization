@@ -838,22 +838,391 @@ int AmdSmiApiHost::amdsmi_get_power_metric_command(uint64_t processor_bdf, Argum
 }
 
 
-int AmdSmiApiHost::amdsmi_get_clock_metric_command(uint64_t processor_bdf, Arguments arg,
-		std::string& out)
+void fill_clk_info(std::map<std::string, std::string> &clk_map)
+{
+	clk_map["clk"] = "N/A";
+	clk_map["max_clk"] = "N/A";
+	clk_map["min_clk"] = "N/A";
+	clk_map["clk_locked"] = "N/A";
+	clk_map["deep_sleep"] = "N/A";
+}
+
+std::string format_clock_value(uint64_t value, uint64_t inval_value) {
+	return (value != inval_value) ? string_format("%lld", value) : "N/A";
+}
+
+amdsmi_status_t get_clk_info(amdsmi_processor_handle processor, amdsmi_clk_info_t &clock_measure,
+							 std::map<std::string, std::string> &clk_map, amdsmi_clk_type_t clk_type)
 {
 	amdsmi_status_t ret;
-	amdsmi_clk_info_t clock_measure_gfx, clock_measure_mem;
-	amdsmi_clk_info_t clock_measure_vclk0, clock_measure_vclk1;
-	amdsmi_clk_info_t clock_measure_dclk0, clock_measure_dclk1;
+
+	ret = host_amdsmi_get_clock_info(processor, clk_type, &clock_measure);
+	if (ret == AMDSMI_STATUS_SUCCESS) {
+		clk_map["clk"] = format_clock_value(clock_measure.clk, UINT32_MAX);
+		clk_map["max_clk"] = format_clock_value(clock_measure.max_clk, UINT32_MAX);
+		clk_map["min_clk"] = format_clock_value(clock_measure.min_clk, UINT32_MAX);
+		clk_map["clk_locked"] = "N/A";
+		clk_map["deep_sleep"] = "N/A";
+
+		if (clock_measure.clk_locked != UINT8_MAX) {
+			clk_map["clk_locked"] = clock_measure.clk_locked ? "LOCKED" : "UNLOCKED";
+		}
+
+		if (clock_measure.clk_deep_sleep != UINT8_MAX) {
+			clk_map["deep_sleep"] = clock_measure.clk_deep_sleep ? "ENABLED" : "DISABLED";
+		}
+	} else {
+		return ret;
+	}
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+amdsmi_status_t get_metric_gfx_mem_clock(amdsmi_processor_handle processor, Arguments arg, std::string& out) {
+	amdsmi_status_t ret;
+	amdsmi_clk_info_t gfx_clk{}, mem_clk{};
+	std::map<std::string, std::string> gfx_clk_str{}, mem_clk_str{};
+
+	ret = get_clk_info(processor, gfx_clk, gfx_clk_str, AMDSMI_CLK_TYPE_GFX);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		fill_clk_info(gfx_clk_str);
+	}
+
+	ret = get_clk_info(processor, mem_clk, mem_clk_str, AMDSMI_CLK_TYPE_MEM);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		fill_clk_info(mem_clk_str);
+	}
+
+	mem_clk_str["clk_locked"] = "N/A";
+	if (arg.watch > -1) {
+		out = string_format("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",
+							gfx_clk_str["clk"].c_str(), gfx_clk_str["min_clk"].c_str(), gfx_clk_str["max_clk"].c_str(),
+							gfx_clk_str["clk_locked"].c_str(), gfx_clk_str["deep_sleep"].c_str(), mem_clk_str["clk"].c_str(),
+							mem_clk_str["min_clk"].c_str(), mem_clk_str["max_clk"].c_str(), mem_clk_str["clk_locked"].c_str(),
+							mem_clk_str["deep_sleep"].c_str());
+	} else if (arg.output == json) {
+		nlohmann::ordered_json result{};
+		nlohmann::ordered_json gfx_clk_json{};
+		if (gfx_clk.clk == UINT64_MAX) {
+			gfx_clk_json["value"] = "N/A";
+			gfx_clk_json["unit"] = "N/A";
+		} else {
+			gfx_clk_json["value"] = gfx_clk.clk;
+			gfx_clk_json["unit"] = "MHz";
+		}
+		nlohmann::ordered_json gfx_max_clk_json{};
+		if (gfx_clk.max_clk == UINT64_MAX) {
+			gfx_max_clk_json["value"] = "N/A";
+			gfx_max_clk_json["unit"] = "N/A";
+		} else {
+			gfx_max_clk_json["value"] = gfx_clk.max_clk;
+			gfx_max_clk_json["unit"] = "MHz";
+		}
+		nlohmann::ordered_json gfx_min_clk_json{};
+		if (gfx_clk.min_clk == UINT64_MAX) {
+			gfx_min_clk_json["value"] = "N/A";
+			gfx_min_clk_json["unit"] = "N/A";
+		} else {
+			gfx_min_clk_json["value"] = gfx_clk.min_clk;
+			gfx_min_clk_json["unit"] = "MHz";
+		}
+		result["gfx"] = nlohmann::ordered_json::object({ { "clk", gfx_clk_json },
+			{ "min_clk", gfx_min_clk_json },
+			{ "max_clk", gfx_max_clk_json },
+			{ "clk_locked", gfx_clk_str["clk_locked"] },
+			{ "deep_sleep", gfx_clk_str["deep_sleep"] }
+		});
+
+		nlohmann::ordered_json mem_clk_json{};
+		if (mem_clk.clk == UINT64_MAX) {
+			mem_clk_json["value"] = "N/A";
+			mem_clk_json["unit"] = "N/A";
+		} else {
+			mem_clk_json["value"] = mem_clk.clk;
+			mem_clk_json["unit"] = "MHz";
+		}
+		nlohmann::ordered_json mem_max_clk_json{};
+		if (mem_clk.max_clk == UINT64_MAX) {
+			mem_max_clk_json["value"] = "N/A";
+			mem_max_clk_json["unit"] = "N/A";
+		} else {
+			mem_max_clk_json["value"] = mem_clk.max_clk;
+			mem_max_clk_json["unit"] = "MHz";
+		}
+		nlohmann::ordered_json mem_min_clk_json{};
+		if (mem_clk.min_clk == UINT64_MAX) {
+			mem_min_clk_json["value"] = "N/A";
+			mem_min_clk_json["unit"] = "N/A";
+		} else {
+			mem_min_clk_json["value"] = mem_clk.min_clk;
+			mem_min_clk_json["unit"] = "MHz";
+		}
+		result["mem"] = nlohmann::ordered_json::object({ { "clk", mem_clk_json },
+			{ "min_clk", mem_min_clk_json },
+			{ "max_clk", mem_max_clk_json },
+			{ "clk_locked", mem_clk_str["clk_locked"] },
+			{ "deep_sleep", mem_clk_str["deep_sleep"] }
+		});
+
+		out = result.dump(4);
+	} else if (arg.output == csv) {
+		out = string_format(",%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",
+							gfx_clk_str["clk"].c_str(), gfx_clk_str["min_clk"].c_str(), gfx_clk_str["max_clk"].c_str(),
+							gfx_clk_str["clk_locked"].c_str(), gfx_clk_str["deep_sleep"].c_str(), mem_clk_str["clk"].c_str(),
+							mem_clk_str["min_clk"].c_str(), mem_clk_str["max_clk"].c_str(), mem_clk_str["clk_locked"].c_str(),
+							mem_clk_str["deep_sleep"].c_str());
+	} else {
+		std::string gfx_clk_unit = gfx_clk_str["clk"] == "N/A" ? "" : "MHz";
+		std::string gfx_min_clk_unit = gfx_clk_str["min_clk"] == "N/A" ? "" : "MHz";
+		std::string gfx_max_clk_unit = gfx_clk_str["max_clk"] == "N/A" ? "" : "MHz";
+		std::string mem_clk_unit = mem_clk_str["clk"] == "N/A" ? "" : "MHz";
+		std::string mem_min_clk_unit = mem_clk_str["min_clk"] == "N/A" ? "" : "MHz";
+		std::string mem_max_clk_unit = mem_clk_str["max_clk"] == "N/A" ? "" : "MHz";
+
+		out = string_format(metricClockMeasureHostTemplate, gfx_clk_str["clk"].c_str(), gfx_clk_unit.c_str(),
+							gfx_clk_str["min_clk"].c_str(), gfx_min_clk_unit.c_str(), gfx_clk_str["max_clk"].c_str(),
+							gfx_max_clk_unit.c_str(), gfx_clk_str["clk_locked"].c_str(), gfx_clk_str["deep_sleep"].c_str(),
+							mem_clk_str["clk"].c_str(), mem_clk_unit.c_str(), mem_clk_str["min_clk"].c_str(), mem_min_clk_unit.c_str(),
+							mem_clk_str["max_clk"].c_str(), mem_max_clk_unit.c_str(), mem_clk_str["clk_locked"].c_str(),
+							mem_clk_str["deep_sleep"].c_str());
+	}
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+amdsmi_status_t get_metric_vclk_clock(amdsmi_processor_handle processor, Arguments arg, std::string& out) {
+	amdsmi_status_t ret;
+	amdsmi_clk_info_t vclk0_clk{}, vclk1_clk{};
+	std::map<std::string, std::string> vclk0_clk_str{}, vclk1_clk_str{};
+
+	ret = get_clk_info(processor, vclk0_clk, vclk0_clk_str, AMDSMI_CLK_TYPE_VCLK0);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		fill_clk_info(vclk0_clk_str);
+	}
+
+	ret = get_clk_info(processor, vclk1_clk, vclk1_clk_str, AMDSMI_CLK_TYPE_VCLK1);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		fill_clk_info(vclk1_clk_str);
+	}
+
+	vclk0_clk_str["clk_locked"] = "N/A";
+	vclk1_clk_str["clk_locked"] = "N/A";
+	if (arg.watch > -1) {
+		out = string_format("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",
+							vclk0_clk_str["clk"].c_str(), vclk0_clk_str["min_clk"].c_str(),
+							vclk0_clk_str["max_clk"].c_str(), vclk0_clk_str["clk_locked"].c_str(), vclk0_clk_str["deep_sleep"].c_str(),
+							vclk1_clk_str["clk"].c_str(), vclk1_clk_str["min_clk"].c_str(), vclk1_clk_str["max_clk"].c_str(),
+							vclk1_clk_str["clk_locked"].c_str(), vclk1_clk_str["deep_sleep"].c_str());
+	} else if (arg.output == json) {
+		nlohmann::ordered_json result{};
+		nlohmann::ordered_json vclk0_clk_json{};
+		if (vclk0_clk.clk == UINT64_MAX) {
+			vclk0_clk_json["value"] = "N/A";
+			vclk0_clk_json["unit"] = "N/A";
+		} else {
+			vclk0_clk_json["value"] = vclk0_clk.clk;
+			vclk0_clk_json["unit"] = "MHz";
+		}
+		nlohmann::ordered_json vclk0_max_clk_json{};
+		if (vclk0_clk.max_clk == UINT64_MAX) {
+			vclk0_max_clk_json["value"] = "N/A";
+			vclk0_max_clk_json["unit"] = "N/A";
+		} else {
+			vclk0_max_clk_json["value"] = vclk0_clk.max_clk;
+			vclk0_max_clk_json["unit"] = "MHz";
+		}
+		nlohmann::ordered_json vclk0_min_clk_json{};
+		if (vclk0_clk.min_clk == UINT64_MAX) {
+			vclk0_min_clk_json["value"] = "N/A";
+			vclk0_min_clk_json["unit"] = "N/A";
+		} else {
+			vclk0_min_clk_json["value"] = vclk0_clk.min_clk;
+			vclk0_min_clk_json["unit"] = "MHz";
+		}
+		result["vclk_0"] = nlohmann::ordered_json::object({ { "clk", vclk0_clk_json },
+			{ "min_clk", vclk0_min_clk_json },
+			{ "max_clk", vclk0_max_clk_json },
+			{ "clk_locked", vclk0_clk_str["clk_locked"] },
+			{ "deep_sleep", vclk0_clk_str["deep_sleep"] }
+		});
+
+		nlohmann::ordered_json vclk1_clk_json{};
+		if (vclk1_clk.clk == UINT64_MAX) {
+			vclk1_clk_json["value"] = "N/A";
+			vclk1_clk_json["unit"] = "N/A";
+		} else {
+			vclk1_clk_json["value"] = vclk1_clk.clk;
+			vclk1_clk_json["unit"] = "MHz";
+		}
+		nlohmann::ordered_json vclk1_max_clk_json{};
+		if (vclk1_clk.max_clk == UINT64_MAX) {
+			vclk1_max_clk_json["value"] = "N/A";
+			vclk1_max_clk_json["unit"] = "N/A";
+		} else {
+			vclk1_max_clk_json["value"] = vclk1_clk.max_clk;
+			vclk1_max_clk_json["unit"] = "MHz";
+		}
+		nlohmann::ordered_json vclk1_min_clk_json{};
+		if (vclk1_clk.min_clk == UINT64_MAX) {
+			vclk1_min_clk_json["value"] = "N/A";
+			vclk1_min_clk_json["unit"] = "N/A";
+		} else {
+			vclk1_min_clk_json["value"] = vclk1_clk.min_clk;
+			vclk1_min_clk_json["unit"] = "MHz";
+		}
+		result["vclk_1"] = nlohmann::ordered_json::object({ { "clk", vclk1_clk_json },
+			{ "min_clk", vclk1_min_clk_json },
+			{ "max_clk", vclk1_max_clk_json },
+			{ "clk_locked", vclk1_clk_str["clk_locked"] },
+			{ "deep_sleep", vclk1_clk_str["deep_sleep"] }
+		});
+		out = result.dump(4);
+	} else if (arg.output == csv) {
+		out = string_format(",%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",
+							vclk0_clk_str["clk"].c_str(), vclk0_clk_str["min_clk"].c_str(),
+							vclk0_clk_str["max_clk"].c_str(), vclk0_clk_str["clk_locked"].c_str(), vclk0_clk_str["deep_sleep"].c_str(),
+							vclk1_clk_str["clk"].c_str(), vclk1_clk_str["min_clk"].c_str(), vclk1_clk_str["max_clk"].c_str(),
+							vclk1_clk_str["clk_locked"].c_str(), vclk1_clk_str["deep_sleep"].c_str());
+	} else {
+		std::string vclk0_clk_unit = vclk0_clk_str["clk"] == "N/A" ? "" : "MHz";
+		std::string vclk0_min_clk_unit = vclk0_clk_str["min_clk"] == "N/A" ? "" : "MHz";
+		std::string vclk0_max_clk_unit = vclk0_clk_str["max_clk"] == "N/A" ? "" : "MHz";
+		std::string vclk1_clk_unit = vclk1_clk_str["clk"] == "N/A" ? "" : "MHz";
+		std::string vclk1_min_clk_unit = vclk1_clk_str["min_clk"] == "N/A" ? "" : "MHz";
+		std::string vclk1_max_clk_unit = vclk1_clk_str["max_clk"] == "N/A" ? "" : "MHz";
+
+		out.append(string_format(metricVCLK0ClockMeasureHostTemplate, vclk0_clk_str["clk"].c_str(),
+								 vclk0_clk_unit.c_str(), vclk0_clk_str["min_clk"].c_str(), vclk0_min_clk_unit.c_str(),
+								 vclk0_clk_str["max_clk"].c_str(), vclk0_max_clk_unit.c_str(), vclk0_clk_str["clk_locked"].c_str(),
+								 vclk0_clk_str["deep_sleep"].c_str()));
+		out.append(string_format(metricVCLK1ClockMeasureHostTemplate, vclk1_clk_str["clk"].c_str(),
+								 vclk1_clk_unit.c_str(), vclk1_clk_str["min_clk"].c_str(), vclk1_min_clk_unit.c_str(),
+								 vclk1_clk_str["max_clk"].c_str(), vclk1_max_clk_unit.c_str(), vclk1_clk_str["clk_locked"].c_str(),
+								 vclk1_clk_str["deep_sleep"].c_str()));
+	}
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+amdsmi_status_t get_metric_dclk_clock(amdsmi_processor_handle processor, Arguments arg, std::string& out) {
+	amdsmi_status_t ret;
+	amdsmi_clk_info_t  dclk0_clk{}, dclk1_clk{};
+	std::map<std::string, std::string> dclk0_clk_str{}, dclk1_clk_str{};
+
+	ret = get_clk_info(processor, dclk0_clk, dclk0_clk_str, AMDSMI_CLK_TYPE_DCLK0);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		fill_clk_info(dclk0_clk_str);
+	}
+
+	ret = get_clk_info(processor, dclk1_clk, dclk1_clk_str, AMDSMI_CLK_TYPE_DCLK1);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		fill_clk_info(dclk1_clk_str);
+	}
+
+
+	dclk0_clk_str["clk_locked"] = "N/A";
+	dclk1_clk_str["clk_locked"] = "N/A";
+	if (arg.watch > -1) {
+		out = string_format("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",  dclk0_clk_str["clk"].c_str(),
+							dclk0_clk_str["min_clk"].c_str(), dclk0_clk_str["max_clk"].c_str(), dclk0_clk_str["clk_locked"].c_str(),
+							dclk0_clk_str["deep_sleep"].c_str(), dclk1_clk_str["clk"].c_str(), dclk1_clk_str["min_clk"].c_str(),
+							dclk1_clk_str["max_clk"].c_str(), dclk1_clk_str["clk_locked"].c_str(), dclk1_clk_str["deep_sleep"].c_str());
+	} else if (arg.output == json) {
+		nlohmann::ordered_json result{};
+		nlohmann::ordered_json dclk0_clk_json{};
+		if (dclk0_clk.clk == UINT64_MAX) {
+			dclk0_clk_json["value"] = "N/A";
+			dclk0_clk_json["unit"] = "N/A";
+		} else {
+			dclk0_clk_json["value"] = dclk0_clk.clk;
+			dclk0_clk_json["unit"] = "MHz";
+		}
+		nlohmann::ordered_json dclk0_max_clk_json{};
+		if (dclk0_clk.max_clk == UINT64_MAX) {
+			dclk0_max_clk_json["value"] = "N/A";
+			dclk0_max_clk_json["unit"] = "N/A";
+		} else {
+			dclk0_max_clk_json["value"] = dclk0_clk.max_clk;
+			dclk0_max_clk_json["unit"] = "MHz";
+		}
+		nlohmann::ordered_json dclk0_min_clk_json{};
+		if (dclk0_clk.min_clk == UINT64_MAX) {
+			dclk0_min_clk_json["value"] = "N/A";
+			dclk0_min_clk_json["unit"] = "N/A";
+		} else {
+			dclk0_min_clk_json["value"] = dclk0_clk.min_clk;
+			dclk0_min_clk_json["unit"] = "MHz";
+		}
+		result["dclk_0"] = nlohmann::ordered_json::object({ { "clk", dclk0_clk_json },
+			{ "min_clk", dclk0_min_clk_json },
+			{ "max_clk", dclk0_max_clk_json },
+			{ "clk_locked", dclk0_clk_str["clk_locked"] },
+			{ "deep_sleep", dclk0_clk_str["deep_sleep"] }
+		});
+
+		nlohmann::ordered_json dclk1_clk_json{};
+		if (dclk1_clk.clk == UINT64_MAX) {
+			dclk1_clk_json["value"] = "N/A";
+			dclk1_clk_json["unit"] = "N/A";
+		} else {
+			dclk1_clk_json["value"] = dclk1_clk.clk;
+			dclk1_clk_json["unit"] = "MHz";
+		}
+		nlohmann::ordered_json dclk1_max_clk_json{};
+		if (dclk1_clk.max_clk == UINT64_MAX) {
+			dclk1_max_clk_json["value"] = "N/A";
+			dclk1_max_clk_json["unit"] = "N/A";
+		} else {
+			dclk1_max_clk_json["value"] = dclk1_clk.max_clk;
+			dclk1_max_clk_json["unit"] = "MHz";
+		}
+		nlohmann::ordered_json dclk1_min_clk_json{};
+		if (dclk1_clk.min_clk == UINT64_MAX) {
+			dclk1_min_clk_json["value"] = "N/A";
+			dclk1_min_clk_json["unit"] = "N/A";
+		} else {
+			dclk1_min_clk_json["value"] = dclk1_clk.min_clk;
+			dclk1_min_clk_json["unit"] = "MHz";
+		}
+		result["dclk_1"] = nlohmann::ordered_json::object({ { "clk", dclk1_clk_json },
+			{ "min_clk", dclk1_min_clk_json },
+			{ "max_clk", dclk1_max_clk_json },
+			{ "clk_locked", dclk1_clk_str["clk_locked"] },
+			{ "deep_sleep", dclk1_clk_str["deep_sleep"] }
+		});
+
+		out = result.dump(4);
+	} else if (arg.output == csv) {
+		out = string_format(",%s,%s,%s,%s,%s,%s,%s,%s,%s,%s", dclk0_clk_str["clk"].c_str(),
+							dclk0_clk_str["min_clk"].c_str(), dclk0_clk_str["max_clk"].c_str(), dclk0_clk_str["clk_locked"].c_str(),
+							dclk0_clk_str["deep_sleep"].c_str(), dclk1_clk_str["clk"].c_str(), dclk1_clk_str["min_clk"].c_str(),
+							dclk1_clk_str["max_clk"].c_str(), dclk1_clk_str["clk_locked"].c_str(), dclk1_clk_str["deep_sleep"].c_str());
+	} else {
+		std::string dclk0_clk_unit = dclk0_clk_str["clk"] == "N/A" ? "" : "MHz";
+		std::string dclk0_min_clk_unit = dclk0_clk_str["min_clk"] == "N/A" ? "" : "MHz";
+		std::string dclk0_max_clk_unit = dclk0_clk_str["max_clk"] == "N/A" ? "" : "MHz";
+		std::string dclk1_clk_unit = dclk1_clk_str["clk"] == "N/A" ? "" : "MHz";
+		std::string dclk1_min_clk_unit = dclk1_clk_str["min_clk"] == "N/A" ? "" : "MHz";
+		std::string dclk1_max_clk_unit = dclk1_clk_str["max_clk"] == "N/A" ? "" : "MHz";
+
+		out.append(string_format(metricDCLK0ClockMeasureHostTemplate, dclk0_clk_str["clk"].c_str(),
+								 dclk0_clk_unit.c_str(), dclk0_clk_str["min_clk"].c_str(), dclk0_min_clk_unit.c_str(),
+								 dclk0_clk_str["max_clk"].c_str(), dclk0_max_clk_unit.c_str(), dclk0_clk_str["clk_locked"].c_str(),
+								 dclk0_clk_str["deep_sleep"].c_str()));
+		out.append(string_format(metricDCLK1ClockMeasureHostTemplate, dclk1_clk_str["clk"].c_str(),
+								 dclk1_clk_unit.c_str(), dclk1_clk_str["min_clk"].c_str(), dclk1_min_clk_unit.c_str(),
+								 dclk1_clk_str["max_clk"].c_str(), dclk1_max_clk_unit.c_str(), dclk1_clk_str["clk_locked"].c_str(),
+								 dclk1_clk_str["deep_sleep"].c_str()));
+	}
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+amdsmi_status_t get_metric_clock_data(uint64_t processor_bdf, Arguments arg, std::string& out)
+{
+	amdsmi_status_t ret;
 	amdsmi_processor_handle processor;
 	amdsmi_bdf_t tmp_bdf;
 	tmp_bdf.as_uint = processor_bdf;
-
-	std::string gfx_clk{};
-	std::string gfx_max_clk{};
-	std::string gfx_min_clk{};
-	std::string is_clk_gfx_locked{"N/A"};
-	std::string gfx_clk_deep_sleep{"N/A"};
 
 	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
@@ -861,972 +1230,537 @@ int AmdSmiApiHost::amdsmi_get_clock_metric_command(uint64_t processor_bdf, Argum
 		return ret;
 	}
 
-	ret = host_amdsmi_get_clock_info(processor, AMDSMI_CLK_TYPE_GFX,
-									 &clock_measure_gfx);
+	std::string gfx_mem_out{};
+	ret = get_metric_gfx_mem_clock(processor, arg, gfx_mem_out);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
-		gfx_clk = "N/A";
-		gfx_max_clk = "N/A";
-	} else {
-		gfx_clk = string_format(
-					  "%ld", clock_measure_gfx.clk);
-		gfx_max_clk = string_format(
-						  "%ld", clock_measure_gfx.max_clk);
-	}
-	std::string mem_clk{};
-	std::string mem_max_clk{};
-	std::string mem_min_clk{};
-	std::string is_clk_mem_locked{"N/A"};
-	std::string mem_clk_deep_sleep{"N/A"};
-	ret = host_amdsmi_get_clock_info(processor, AMDSMI_CLK_TYPE_MEM,
-									 &clock_measure_mem);
-	if (ret != AMDSMI_STATUS_SUCCESS) {
-		mem_clk = "N/A";
-		mem_max_clk = "N/A";
-	} else {
-		mem_clk = string_format(
-					  "%ld", clock_measure_mem.clk);
-		mem_max_clk = string_format(
-						  "%ld", clock_measure_mem.max_clk);
-	}
-	std::string vclk0_clk{};
-	std::string vclk0_max_clk{};
-	std::string vclk0_min_clk{};
-	std::string is_clk_vclk0_locked{"N/A"};
-	std::string vclk0_clk_deep_sleep{"N/A"};
-	ret = host_amdsmi_get_clock_info(processor, AMDSMI_CLK_TYPE_VCLK0,
-									 &clock_measure_vclk0);
-	if (ret != AMDSMI_STATUS_SUCCESS) {
-		vclk0_min_clk = "N/A";
-		vclk0_clk = "N/A";
-		vclk0_max_clk = "N/A";
-	} else {
-		vclk0_clk = clock_measure_vclk0.clk == UINT_MAX ? "N/A" : string_format("%ld", clock_measure_vclk0.clk);
-		vclk0_max_clk = clock_measure_vclk0.max_clk == UINT_MAX ? "N/A" : string_format("%ld", clock_measure_vclk0.max_clk);
-		vclk0_min_clk = clock_measure_vclk0.min_clk == UINT_MAX ? "N/A" : string_format("%ld", clock_measure_vclk0.min_clk);
-	}
-	std::string vclk1_clk{};
-	std::string vclk1_max_clk{};
-	std::string vclk1_min_clk{};
-	std::string is_clk_vclk1_locked{"N/A"};
-	std::string vclk1_clk_deep_sleep{"N/A"};
-	ret = host_amdsmi_get_clock_info(processor, AMDSMI_CLK_TYPE_VCLK1,
-									 &clock_measure_vclk1);
-	if (ret != AMDSMI_STATUS_SUCCESS) {
-		vclk1_min_clk = "N/A";
-		vclk1_clk = "N/A";
-		vclk1_max_clk = "N/A";
-	} else {
-		vclk1_clk = clock_measure_vclk1.clk == UINT_MAX ? "N/A" : string_format("%ld", clock_measure_vclk1.clk);
-		vclk1_max_clk = clock_measure_vclk1.max_clk == UINT_MAX ? "N/A" : string_format("%ld", clock_measure_vclk1.max_clk);
-		vclk1_min_clk = clock_measure_vclk1.min_clk == UINT_MAX ? "N/A" : string_format("%ld", clock_measure_vclk1.min_clk);
+		out = host_fill_clock(arg, "N/A");
+		return ret;
 	}
 
-	std::string dclk0_clk{};
-	std::string dclk0_max_clk{};
-	std::string dclk0_min_clk{};
-	std::string is_clk_dclk0_locked{"N/A"};
-	std::string dclk0_clk_deep_sleep{"N/A"};
+	std::string vclk_out{};
+	ret = get_metric_vclk_clock(processor, arg, vclk_out);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		out = host_fill_clock(arg, "N/A");
+		return ret;
+	}
 
-	std::string dclk1_clk{};
-	std::string dclk1_max_clk{};
-	std::string dclk1_min_clk{};
-	std::string is_clk_dclk1_locked{"N/A"};
-	std::string dclk1_clk_deep_sleep{"N/A"};
+	std::string dclk_out{};
+	ret = get_metric_dclk_clock(processor, arg, dclk_out);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		out = host_fill_clock(arg, "N/A");
+		return ret;
+	}
 
-	bool setup_template{true};
-	bool metric_table{false};
+	if (arg.watch > -1) {
+		out.append(gfx_mem_out).append(",").append(vclk_out).append(",").append(dclk_out);
+	} else if (arg.output == json) {
+		nlohmann::ordered_json gfx_mem_json = nlohmann::ordered_json::parse(gfx_mem_out);
+		nlohmann::ordered_json vclk_json = nlohmann::ordered_json::parse(vclk_out);
+		nlohmann::ordered_json dclk_json = nlohmann::ordered_json::parse(dclk_out);
 
+		nlohmann::ordered_json combined_json = gfx_mem_json;
+		combined_json.insert(vclk_json.begin(), vclk_json.end());
+		combined_json.insert(dclk_json.begin(), dclk_json.end());
+
+		out = combined_json.dump(4);
+
+	} else if (arg.output == csv) {
+		out.append(gfx_mem_out).append(vclk_out).append(dclk_out);
+	} else {
+		out.append(gfx_mem_out).append(vclk_out).append(dclk_out);
+	}
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+std::string get_clk_deep_sleep(amdsmi_processor_handle processor, amdsmi_clk_type_t clk_type) {
+	std::string deep_sleep{"N/A"};
+	amdsmi_status_t ret;
+	amdsmi_clk_info_t clock_measure;
+
+	ret = host_amdsmi_get_clock_info(processor, clk_type, &clock_measure);
+    if (ret == AMDSMI_STATUS_SUCCESS) {
+			if (clock_measure.clk_deep_sleep != UINT8_MAX) {
+				deep_sleep = clock_measure.clk_deep_sleep ? "ENABLED" : "DISABLED";
+		}
+	}
+	return deep_sleep;
+}
+
+amdsmi_status_t get_metric_ext_clock_data(uint64_t processor_bdf, Arguments arg, std::string& out)
+{
 	std::vector<std::vector<std::string>> output_rows{};
 	std::map<std::string, std::vector<amdsmi_metric_t>> gfx_chiplet{};
 	std::map<std::string, std::vector<amdsmi_metric_t>> mem_chiplet{};
 	std::map<std::string, std::vector<amdsmi_metric_t>> vclk_chiplet{};
 	std::map<std::string, std::vector<amdsmi_metric_t>> dclk_chiplet{};
-	nlohmann::ordered_json result{};
 
-	if ((AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200())
-			&& arg.watch == -1) {
-		amdsmi_metric_t *metrics;
-		uint32_t metric_size = AMDSMI_MAX_NUM_METRICS;
-		ret = host_amdsmi_get_gpu_metrics(processor, &metric_size, NULL);
-		if (ret == AMDSMI_STATUS_SUCCESS) {
-			metrics = (amdsmi_metric_t *)malloc(sizeof(amdsmi_metric_t)*metric_size);
-			if (metrics == NULL) {
-				throw SmiToolNotEnoughMemException();
-			}
-			ret = host_amdsmi_get_gpu_metrics(processor, &metric_size, &metrics[0]);
+	amdsmi_status_t ret;
 
-			if (ret != AMDSMI_STATUS_SUCCESS) {
-				metric_table = false;
-				setup_template = true;
-			} else {
-				metric_table = true;
-				for (int i = 0; i < metric_size; i++) {
-					if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_GFX
-							&& !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
-						gfx_chiplet["clk"].push_back(metrics[i]);
-					}
-					if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_GFX_MIN_LIMIT
-							&& !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
-						gfx_chiplet["min_clk"].push_back(metrics[i]);
-					}
-					if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_GFX_MAX_LIMIT
-							&& !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
-						gfx_chiplet["max_clk"].push_back(metrics[i]);
-					}
-					if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_GFX_LOCKED
-							&& !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
-						gfx_chiplet["clk_locked"].push_back(metrics[i]);
-					}
-					if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_GFX_DS_DISABLED
-							&& !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
-						gfx_chiplet["deep_sleep"].push_back(metrics[i]);
-					}
-					if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_MEM
-							&& !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
-						mem_chiplet["clk"].push_back(metrics[i]);
-					}
-					if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_MEM_MIN_LIMIT
-							&& !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
-						mem_chiplet["min_clk"].push_back(metrics[i]);
-					}
-					if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_MEM_MAX_LIMIT
-							&& !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
-						mem_chiplet["max_clk"].push_back(metrics[i]);
-					}
-					if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_MEM_DS_DISABLED
-							&& !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
-						mem_chiplet["deep_sleep"].push_back(metrics[i]);
-					}
-					if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_VCLK
-							&& !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
-						vclk_chiplet["clk"].push_back(metrics[i]);
-					}
-					if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_VCLK_MIN_LIMIT
-							&& !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
-						vclk_chiplet["min_clk"].push_back(metrics[i]);
-					}
-					if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_VCLK_MAX_LIMIT
-							&& !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
-						vclk_chiplet["max_clk"].push_back(metrics[i]);
-					}
-					if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_VCLK_DS_DISABLED
-							&& !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
-						vclk_chiplet["deep_sleep"].push_back(metrics[i]);
-					}
-					if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_DCLK
-							&& !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
-						dclk_chiplet["clk"].push_back(metrics[i]);
-					}
-					if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_DCLK_MIN_LIMIT
-							&& !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
-						dclk_chiplet["min_clk"].push_back(metrics[i]);
-					}
-					if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_DCLK_MAX_LIMIT
-							&& !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
-						dclk_chiplet["max_clk"].push_back(metrics[i]);
-					}
-					if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_DCLK_DS_DISABLED
-							&& !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
-						dclk_chiplet["deep_sleep"].push_back(metrics[i]);
-					}
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		out = host_fill_clock(arg, "N/A");
+		return ret;
+	}
+
+	amdsmi_metric_t *metrics;
+	uint32_t metric_size = AMDSMI_MAX_NUM_METRICS;
+	ret = host_amdsmi_get_gpu_metrics(processor, &metric_size, NULL);
+	if (ret == AMDSMI_STATUS_SUCCESS) {
+		metrics = (amdsmi_metric_t *)malloc(sizeof(amdsmi_metric_t)*metric_size);
+		ret = host_amdsmi_get_gpu_metrics(processor, &metric_size, &metrics[0]);
+		if (ret != AMDSMI_STATUS_SUCCESS) {
+			free(metrics);
+			metrics = NULL;
+			return ret;
+		} else {
+			for (int i = 0; i < metric_size; i++) {
+				if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_GFX
+						&& !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
+					gfx_chiplet["clk"].push_back(metrics[i]);
+				} else if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_GFX_MIN_LIMIT
+						   && !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
+					gfx_chiplet["min_clk"].push_back(metrics[i]);
+				} else if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_GFX_MAX_LIMIT
+						   && !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
+					gfx_chiplet["max_clk"].push_back(metrics[i]);
+				} else if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_GFX_LOCKED
+						   && !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
+					gfx_chiplet["clk_locked"].push_back(metrics[i]);
+				} else if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_GFX_DS_DISABLED
+						   && !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
+					gfx_chiplet["deep_sleep"].push_back(metrics[i]);
+				} else if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_MEM
+						   && !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
+					mem_chiplet["clk"].push_back(metrics[i]);
+				} else if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_MEM_MIN_LIMIT
+						   && !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
+					mem_chiplet["min_clk"].push_back(metrics[i]);
+				} else if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_MEM_MAX_LIMIT
+						   && !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
+					mem_chiplet["max_clk"].push_back(metrics[i]);
+				} else if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_MEM_DS_DISABLED
+						   && !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
+					mem_chiplet["deep_sleep"].push_back(metrics[i]);
+				} else if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_VCLK
+						   && !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
+					vclk_chiplet["clk"].push_back(metrics[i]);
+				} else if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_VCLK_MIN_LIMIT
+						   && !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
+					vclk_chiplet["min_clk"].push_back(metrics[i]);
+				} else if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_VCLK_MAX_LIMIT
+						   && !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
+					vclk_chiplet["max_clk"].push_back(metrics[i]);
+				} else if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_VCLK_DS_DISABLED
+						   && !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
+					vclk_chiplet["deep_sleep"].push_back(metrics[i]);
+				} else if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_DCLK
+						   && !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
+					dclk_chiplet["clk"].push_back(metrics[i]);
+				} else if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_DCLK_MIN_LIMIT
+						   && !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
+					dclk_chiplet["min_clk"].push_back(metrics[i]);
+				} else if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_DCLK_MAX_LIMIT
+						   && !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
+					dclk_chiplet["max_clk"].push_back(metrics[i]);
+				} else if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_DCLK_DS_DISABLED
+						   && !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
+					dclk_chiplet["deep_sleep"].push_back(metrics[i]);
 				}
 			}
 			free(metrics);
-		} else {
-			metric_table = false;
-			setup_template = true;
+			metrics = NULL;
 		}
+	} else {
+		out = host_fill_clock(arg, "N/A");
+		return ret;
 	}
 
-	if (metric_table) {
-		std::vector<std::size_t> gfx_chiplet_size = {gfx_chiplet["clk"].size(), gfx_chiplet["min_clk"].size(), gfx_chiplet["max_clk"].size(),
-													 gfx_chiplet["clk_locked"].size(), gfx_chiplet["deep_sleep"].size()
-													};
-		std::vector<std::size_t> mem_chiplet_size = {mem_chiplet["clk"].size(), mem_chiplet["min_clk"].size(), mem_chiplet["max_clk"].size(),
-													 mem_chiplet["deep_sleep"].size()
-													};
-		std::size_t gfx_cur_size = gfx_chiplet_size[0];
-		std::size_t mem_cur_size = mem_chiplet_size[0];
-		if (std::any_of(gfx_chiplet_size.cbegin(), gfx_chiplet_size.cend(), [&](int i) {
-		return i != gfx_cur_size;
-	})) {
-			setup_template = true;
-		} else if (std::any_of(mem_chiplet_size.cbegin(), mem_chiplet_size.cend(), [&](int i) {
-		return i != mem_cur_size;
-	})) {
-			setup_template = true;
-		} else if (gfx_cur_size == 0 || mem_cur_size == 0) {
-			setup_template = true;
-		} else {
-			setup_template = false;
-			if (arg.output == json) {
-				for (int i = 0; i < gfx_cur_size; i++) {
-					nlohmann::ordered_json gfx_clk_json{};
-					if (gfx_chiplet["clk"][i].val == UINT64_MAX) {
-						gfx_clk_json["value"] = "N/A";
-					} else {
-						gfx_clk_json["value"] = gfx_chiplet["clk"][i].val;
-					}
-					gfx_clk_json["unit"] = string_format("%llu",
-														 gfx_chiplet["clk"][i].val) == "N/A" ? "N/A" : "MHz";
-					nlohmann::ordered_json gfx_min_clk_json{};
-					if (gfx_chiplet["min_clk"][i].val == UINT64_MAX) {
-						gfx_min_clk_json["value"] = "N/A";
-					} else {
-						gfx_min_clk_json["value"] = gfx_chiplet["min_clk"][i].val;
-					}
-					gfx_min_clk_json["unit"] = string_format("%llu",
-											   gfx_chiplet["min_clk"][i].val) == "N/A" ? "N/A" :  "MHz";
-					nlohmann::ordered_json gfx_max_clk_json{};
-					if (gfx_chiplet["max_clk"][i].val == UINT64_MAX) {
-						gfx_max_clk_json["value"] = "N/A";
-					} else {
-						gfx_max_clk_json["value"] = gfx_chiplet["max_clk"][i].val;
-					}
-					gfx_max_clk_json["unit"] = string_format("%llu",
-											   gfx_chiplet["max_clk"][i].val) == "N/A" ? "N/A" :  "MHz";
-					result[string_format("gfx_%d",i)] = nlohmann::ordered_json::object( {
-						{"clk", gfx_clk_json },
-						{"min_clk", gfx_min_clk_json },
-						{"max_clk", gfx_max_clk_json },
-						{"clk_locked", gfx_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : gfx_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED" },
-						{"deep_sleep", gfx_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : gfx_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED" }});
-				}
-				for (int i = 0; i < mem_cur_size; i++) {
-					nlohmann::ordered_json mem_clk_json{};
-					if (mem_chiplet["clk"][i].val == UINT64_MAX) {
-						mem_clk_json["value"] = "N/A";
-					} else {
-						mem_clk_json["value"] = mem_chiplet["clk"][i].val;
-					}
-					mem_clk_json["unit"] = string_format("%llu",
-														 mem_chiplet["clk"][i].val) == "N/A" ? "N/A" :  "MHz";
-					nlohmann::ordered_json mem_min_clk_json{};
-					if (mem_chiplet["min_clk"][i].val == UINT64_MAX) {
-						mem_min_clk_json["value"] = "N/A";
-					} else {
-						mem_min_clk_json["value"] = mem_chiplet["min_clk"][i].val;
-					}
-					mem_min_clk_json["unit"] = string_format("%llu",
-											   mem_chiplet["min_clk"][i].val) == "N/A" ? "N/A" :  "MHz";
-					nlohmann::ordered_json mem_max_clk_json{};
-					if (mem_chiplet["max_clk"][i].val == UINT64_MAX) {
-						mem_max_clk_json["value"] = "N/A";
-					} else {
-						mem_max_clk_json["value"] = mem_chiplet["max_clk"][i].val;
-					}
-					mem_max_clk_json["unit"] = string_format("%llu",
-											   mem_chiplet["max_clk"][i].val) == "N/A" ? "N/A" :  "MHz";
-					result[string_format("mem_%d",i)] = nlohmann::ordered_json::object( {
-						{"clk", mem_clk_json },
-						{"min_clk", mem_min_clk_json },
-						{"max_clk", mem_max_clk_json },
-						{"clk_locked", "N/A" },
-						{"deep_sleep", mem_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : mem_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED" }});
-				}
-			} else if (arg.output == csv) {
-				std::vector<std::string> value_rows{};
-				for (int i = 0; i < gfx_cur_size; i++) {
-					value_rows.push_back(string_format(",%d,%s,%s,%s,%s,%s", i,
-													   gfx_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-														   gfx_chiplet["clk"][i].val),
-													   gfx_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-														   gfx_chiplet["min_clk"][i].val),
-													   gfx_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-														   gfx_chiplet["max_clk"][i].val),
-													   gfx_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : gfx_chiplet["clk_locked"][i].val ?
-													   "ENABLED" : "DISABLED",
-													   gfx_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : gfx_chiplet["deep_sleep"][i].val ?
-													   "DISABLED" : "ENABLED"));
-				}
-				output_rows.push_back(value_rows);
-				value_rows.clear();
-				for (int i = 0; i < mem_cur_size; i++) {
-					value_rows.push_back(string_format(",%d,%s,%s,%s,%s,%s", i,
-													   mem_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-														   mem_chiplet["clk"][i].val),
-													   mem_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-														   mem_chiplet["min_clk"][i].val),
-													   mem_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-														   mem_chiplet["max_clk"][i].val),
-													   "N/A",
-													   mem_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : mem_chiplet["deep_sleep"][i].val ?
-													   "DISABLED" : "ENABLED"));
-				}
-				output_rows.push_back(value_rows);
-			} else {
-				out.append(metricClockMeasureHostHeaderTemplate);
-				for (int i = 0; i < gfx_cur_size; i++) {
-					out.append(string_format(metricChipletGfxClockMeasureHostTemplate, i,
-											 gfx_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-												 gfx_chiplet["clk"][i].val),
-											 gfx_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-												 gfx_chiplet["min_clk"][i].val),
-											 gfx_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-												 gfx_chiplet["max_clk"][i].val),
-											 gfx_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : gfx_chiplet["clk_locked"][i].val ?
-											 "ENABLED" : "DISABLED",
-											 gfx_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : gfx_chiplet["deep_sleep"][i].val ?
-											 "DISABLED" : "ENABLED"));
-				}
-				for (int i = 0; i < mem_cur_size; i++) {
-					out.append(string_format(metricChipletMemClockMeasureHostTemplate, i,
-											 mem_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-												 mem_chiplet["clk"][i].val),
-											 mem_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-												 mem_chiplet["min_clk"][i].val),
-											 mem_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-												 mem_chiplet["max_clk"][i].val),
-											 "N/A",
-											 mem_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : mem_chiplet["deep_sleep"][i].val ?
-											 "DISABLED" : "ENABLED"));
-				}
-			}
-		}
-	}
+	std::vector<std::size_t> gfx_chiplet_size = { gfx_chiplet["clk"].size(), gfx_chiplet["min_clk"].size(), gfx_chiplet["max_clk"].size(),
+												  gfx_chiplet["clk_locked"].size(), gfx_chiplet["deep_sleep"].size()
+												};
+	std::vector<std::size_t> mem_chiplet_size = { mem_chiplet["clk"].size(), mem_chiplet["min_clk"].size(), mem_chiplet["max_clk"].size(),
+												  mem_chiplet["deep_sleep"].size()
+												};
+	std::vector<std::size_t> vclk_chiplet_size = { vclk_chiplet["clk"].size(), vclk_chiplet["min_clk"].size(), vclk_chiplet["max_clk"].size(),
+												   vclk_chiplet["deep_sleep"].size()
+												 };
+	std::vector<std::size_t> dclk_chiplet_size = { dclk_chiplet["clk"].size(), dclk_chiplet["min_clk"].size(), dclk_chiplet["max_clk"].size(),
+												   dclk_chiplet["deep_sleep"].size()
+												 };
 
-	if (setup_template) {
-		ret = host_amdsmi_get_clock_info(processor, AMDSMI_CLK_TYPE_GFX,
-										 &clock_measure_gfx);
-		if (ret != AMDSMI_STATUS_SUCCESS) {
-			gfx_clk = "N/A";
-			gfx_max_clk = "N/A";
-			gfx_min_clk = "N/A";
-			is_clk_gfx_locked = "N/A";
-			gfx_clk_deep_sleep = "N/A";
-		} else {
-			gfx_clk = string_format(
-						  "%ld", clock_measure_gfx.clk);
-			gfx_max_clk = string_format(
-							  "%ld", clock_measure_gfx.max_clk);
-			gfx_min_clk = string_format(
-							  "%ld", clock_measure_gfx.min_clk);
-			if (clock_measure_gfx.clk_locked != AMDSMI_NOT_SUPP_UINT8_RETVAL) {
-				is_clk_gfx_locked = string_format("%s", clock_measure_gfx.clk_locked ? "ENABLED" : "DISABLED");
-			}
-			if (clock_measure_gfx.clk_deep_sleep != AMDSMI_NOT_SUPP_UINT8_RETVAL) {
-				gfx_clk_deep_sleep = string_format("%s", clock_measure_gfx.clk_deep_sleep ? "ENABLED" : "DISABLED");
-			}
-		}
+	std::size_t gfx_cur_size = gfx_chiplet_size[0];
+	std::size_t mem_cur_size = mem_chiplet_size[0];
+	std::size_t vclk_cur_size = vclk_chiplet_size[0];
+	std::size_t dclk_cur_size = dclk_chiplet_size[0];
 
-		ret = host_amdsmi_get_clock_info(processor, AMDSMI_CLK_TYPE_MEM,
-										 &clock_measure_mem);
-		if (ret != AMDSMI_STATUS_SUCCESS) {
-			mem_clk = "N/A";
-			mem_max_clk = "N/A";
-			mem_min_clk = "N/A";
-			mem_clk_deep_sleep = "N/A";
-		} else {
-			mem_clk = string_format(
-						  "%ld", clock_measure_mem.clk);
-			mem_max_clk = string_format(
-							  "%ld", clock_measure_mem.max_clk);
-			mem_min_clk = string_format(
-							  "%ld", clock_measure_mem.min_clk);
-			if (clock_measure_mem.clk_deep_sleep != AMDSMI_NOT_SUPP_UINT8_RETVAL) {
-				mem_clk_deep_sleep = string_format("%s", clock_measure_mem.clk_deep_sleep ? "ENABLED" : "DISABLED");
-			}
-		}
-		if (arg.output == json) {
+	if (arg.output == json) {
+		nlohmann::ordered_json result{};
+		for (int i = 0; i < gfx_cur_size; i++) {
 			nlohmann::ordered_json gfx_clk_json{};
-			gfx_clk_json["value"] = clock_measure_gfx.clk ;
-			gfx_clk_json["unit"] = gfx_clk == "N/A" ? "N/A" : "MHz";
+			if (gfx_chiplet["clk"][i].val == UINT64_MAX) {
+				gfx_clk_json["value"] = "N/A";
+			} else {
+				gfx_clk_json["value"] = gfx_chiplet["clk"][i].val;
+			}
+			gfx_clk_json["unit"] = string_format("%llu", gfx_chiplet["clk"][i].val) == "N/A" ? "N/A" : "MHz";
 			nlohmann::ordered_json gfx_min_clk_json{};
-			gfx_min_clk_json["value"] = clock_measure_gfx.min_clk;
-			gfx_min_clk_json["unit"] = gfx_min_clk == "N/A" ? "N/A" : "MHz";
+			if (gfx_chiplet["min_clk"][i].val == UINT64_MAX) {
+				gfx_min_clk_json["value"] = "N/A";
+			} else {
+				gfx_min_clk_json["value"] = gfx_chiplet["min_clk"][i].val;
+			}
+			gfx_min_clk_json["unit"] = string_format("%llu",
+									gfx_chiplet["min_clk"][i].val) == "N/A" ? "N/A" :  "MHz";
 			nlohmann::ordered_json gfx_max_clk_json{};
-			gfx_max_clk_json["value"] = clock_measure_gfx.max_clk;
-			gfx_max_clk_json["unit"] = gfx_max_clk == "N/A" ? "N/A" : "MHz";
-			result["gfx"] = nlohmann::ordered_json::object( {
+			if (gfx_chiplet["max_clk"][i].val == UINT64_MAX) {
+				gfx_max_clk_json["value"] = "N/A";
+			} else {
+				gfx_max_clk_json["value"] = gfx_chiplet["max_clk"][i].val;
+			}
+			gfx_max_clk_json["unit"] = string_format("%llu",
+									gfx_chiplet["max_clk"][i].val) == "N/A" ? "N/A" :  "MHz";
+
+			std::string clk_locked{"N/A"};
+			std::string clk_deep_sleep{"N/A"};
+			if (gfx_chiplet["clk_locked"].size()) {
+				clk_locked = gfx_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : gfx_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+			}
+			if(gfx_chiplet["deep_sleep"].size()) {
+				clk_deep_sleep = gfx_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : gfx_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+			} else {
+				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_GFX);
+			}
+			result[string_format("gfx_%d",i)] = nlohmann::ordered_json::object( {
 				{"clk", gfx_clk_json },
-				{ "min_clk", gfx_min_clk_json },
-				{ "max_clk", gfx_max_clk_json },
-				{ "clk_locked", is_clk_gfx_locked.c_str() },
-				{ "deep_sleep", gfx_clk_deep_sleep.c_str() }});
-
+				{"min_clk", gfx_min_clk_json },
+				{"max_clk", gfx_max_clk_json },
+				{"clk_locked", clk_locked },
+				{"deep_sleep",  clk_deep_sleep}});
+		}
+		for (int i = 0; i < mem_cur_size; i++) {
 			nlohmann::ordered_json mem_clk_json{};
-			mem_clk_json["value"] = clock_measure_mem.clk;
-			mem_clk_json["unit"] = mem_clk == "N/A" ? "N/A" : "MHz";
+			if (mem_chiplet["clk"][i].val == UINT64_MAX) {
+				mem_clk_json["value"] = "N/A";
+			} else {
+				mem_clk_json["value"] = mem_chiplet["clk"][i].val;
+			}
+			mem_clk_json["unit"] = string_format("%llu", mem_chiplet["clk"][i].val) == "N/A" ? "N/A" :  "MHz";
 			nlohmann::ordered_json mem_min_clk_json{};
-			mem_min_clk_json["value"] = clock_measure_mem.min_clk;
-			mem_min_clk_json["unit"] = mem_min_clk == "N/A" ? "N/A" : "MHz";
+			if (mem_chiplet["min_clk"][i].val == UINT64_MAX) {
+				mem_min_clk_json["value"] = "N/A";
+			} else {
+				mem_min_clk_json["value"] = mem_chiplet["min_clk"][i].val;
+			}
+			mem_min_clk_json["unit"] = string_format("%llu",
+									mem_chiplet["min_clk"][i].val) == "N/A" ? "N/A" :  "MHz";
 			nlohmann::ordered_json mem_max_clk_json{};
-			mem_max_clk_json["value"] = clock_measure_mem.max_clk;
-			mem_max_clk_json["unit"] = mem_max_clk == "N/A" ? "N/A" : "MHz";
-			result["mem"] = nlohmann::ordered_json::object( {
+			if (mem_chiplet["max_clk"][i].val == UINT64_MAX) {
+				mem_max_clk_json["value"] = "N/A";
+			} else {
+				mem_max_clk_json["value"] = mem_chiplet["max_clk"][i].val;
+			}
+			mem_max_clk_json["unit"] = string_format("%llu", mem_chiplet["max_clk"][i].val) == "N/A" ? "N/A" :  "MHz";
+			std::string clk_locked{"N/A"};
+			if (mem_chiplet["clk_locked"].size()) {
+				clk_locked = mem_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : mem_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+			}
+			std::string clk_deep_sleep{"N/A"};
+			if(mem_chiplet["deep_sleep"].size()) {
+				clk_deep_sleep = mem_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : mem_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+			} else {
+				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_MEM);
+			}
+			result[string_format("mem_%d",i)] = nlohmann::ordered_json::object( {
 				{"clk", mem_clk_json },
-				{ "min_clk", mem_min_clk_json },
-				{ "max_clk", mem_max_clk_json },
-				{ "clk_locked", is_clk_mem_locked.c_str() },
-				{ "deep_sleep", mem_clk_deep_sleep.c_str() }});
-		} else if (arg.output == csv) {
-			out.append(string_format(",%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",gfx_clk.c_str(),gfx_min_clk.c_str(),
-									 gfx_max_clk.c_str(), is_clk_gfx_locked.c_str(),
-									 gfx_clk_deep_sleep.c_str(), mem_clk.c_str(),
-									 mem_min_clk.c_str(), mem_max_clk.c_str(),
-									 is_clk_mem_locked.c_str(), mem_clk_deep_sleep.c_str()));
-		} else {
-			std::string gfx_clk_unit = gfx_clk == "N/A" ? "" : "MHz";
-			std::string gfx_min_clk_unit = gfx_min_clk == "N/A" ? "" : "MHz";
-			std::string gfx_max_clk_unit = gfx_max_clk == "N/A" ? "" : "MHz";
+				{"min_clk", mem_min_clk_json },
+				{"max_clk", mem_max_clk_json },
+				{"clk_locked", "N/A" },
+				{"deep_sleep", clk_deep_sleep }});
 
-			std::string mem_clk_unit = mem_clk == "N/A" ? "" : "MHz";
-			std::string mem_min_clk_unit = mem_min_clk == "N/A" ? "" : "MHz";
-			std::string mem_max_clk_unit = mem_max_clk == "N/A" ? "" : "MHz";
-			out.append(string_format(metricClockMeasureHostTemplate, gfx_clk.c_str(),
-									 gfx_clk_unit.c_str(),
-									 gfx_min_clk.c_str(), gfx_min_clk_unit.c_str(), gfx_max_clk.c_str(), gfx_max_clk_unit.c_str(),
-									 is_clk_gfx_locked.c_str(), gfx_clk_deep_sleep.c_str(),
-									 mem_clk.c_str(),mem_clk_unit.c_str(), mem_min_clk.c_str(), mem_min_clk_unit.c_str(),
-									 mem_max_clk.c_str(), mem_max_clk_unit.c_str(),
-									 is_clk_mem_locked.c_str(), mem_clk_deep_sleep.c_str()));
-		}
-	}
-
-	if (metric_table) {
-		std::vector<std::size_t> vclk_chiplet_size = {vclk_chiplet["clk"].size(), vclk_chiplet["min_clk"].size(), vclk_chiplet["max_clk"].size(),
-													  vclk_chiplet["deep_sleep"].size()
-													 };
-		std::size_t vclk_cur_size = vclk_chiplet_size[0];
-		if (std::any_of(vclk_chiplet_size.cbegin(), vclk_chiplet_size.cend(), [&](int i) {
-		return i != vclk_cur_size;
-	})) {
-			setup_template = true;
-		} else if (vclk_cur_size == 0) {
-			setup_template = true;
-		} else {
-			setup_template = false;
-			if (arg.output == json) {
-				for (int i = 0; i < vclk_cur_size; i++) {
-					nlohmann::ordered_json vclk_clk_json{};
-					if (vclk_chiplet["clk"][i].val == UINT64_MAX) {
-						vclk_clk_json["value"] = "N/A";
-					} else {
-						vclk_clk_json["value"] = vclk_chiplet["clk"][i].val;
-					}
-					vclk_clk_json["unit"] = string_format("%llu",
-														  vclk_chiplet["clk"][i].val) == "N/A" ? "N/A" : "MHz";
-					nlohmann::ordered_json vclk_min_clk_json{};
-					if (vclk_chiplet["min_clk"][i].val == UINT64_MAX) {
-						vclk_min_clk_json["value"] = "N/A";
-					} else {
-						vclk_min_clk_json["value"] = vclk_chiplet["min_clk"][i].val;
-					}
-					vclk_min_clk_json["unit"] = string_format("%llu",
-												vclk_chiplet["min_clk"][i].val) == "N/A" ? "N/A" : "MHz";
-					nlohmann::ordered_json vclk_max_clk_json{};
-					if (vclk_chiplet["max_clk"][i].val == UINT64_MAX) {
-						vclk_max_clk_json["value"] = "N/A";
-					} else {
-						vclk_max_clk_json["value"] = vclk_chiplet["max_clk"][i].val;
-					}
-					vclk_max_clk_json["unit"] = string_format("%llu",
-												vclk_chiplet["max_clk"][i].val) == "N/A" ? "N/A" : "MHz";
-
-					result[string_format("vclk_%d", i)] = nlohmann::ordered_json::object( {
-						{"clk", vclk_clk_json },
-						{"min_clk", vclk_min_clk_json },
-						{"max_clk", vclk_max_clk_json },
-						{"clk_locked", "N/A" },
-						{"deep_sleep", vclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : vclk_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED" }});
-				}
-			} else if (arg.output == csv) {
-				std::vector<std::string> value_rows{};
-				for (int i = 0; i < vclk_cur_size; i++) {
-					value_rows.push_back(string_format(",%d,%s,%s,%s,%s,%s", i,
-													   vclk_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-														   vclk_chiplet["clk"][i].val),
-													   vclk_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-														   vclk_chiplet["min_clk"][i].val),
-													   vclk_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-														   vclk_chiplet["max_clk"][i].val),
-													   "N/A",
-													   vclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : mem_chiplet["deep_sleep"][i].val ?
-													   "DISABLED" : "ENABLED"));
-				}
-				output_rows.push_back(value_rows);
+		for (int i = 0; i < vclk_cur_size; i++) {
+			nlohmann::ordered_json vclk_clk_json{};
+			if (vclk_chiplet["clk"][i].val == UINT64_MAX) {
+				vclk_clk_json["value"] = "N/A";
 			} else {
-				for (int i = 0; i < vclk_cur_size; i++) {
-					out.append(string_format(metricChipletVCLKClockMeasureHostTemplate, i,
-											 vclk_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-												 vclk_chiplet["clk"][i].val),
-											 vclk_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-												 vclk_chiplet["min_clk"][i].val),
-											 vclk_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-												 vclk_chiplet["max_clk"][i].val),
-											 "N/A",
-											 vclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : vclk_chiplet["deep_sleep"][i].val
-											 ?
-											 "DISABLED" : "ENABLED"));
-				}
+				vclk_clk_json["value"] = vclk_chiplet["clk"][i].val;
 			}
-		}
-	}
-
-	if (setup_template) {
-		ret = host_amdsmi_get_clock_info(processor, AMDSMI_CLK_TYPE_VCLK0,
-										 &clock_measure_vclk0);
-		if (ret != AMDSMI_STATUS_SUCCESS) {
-			vclk0_clk = "N/A";
-			vclk0_max_clk = "N/A";
-			vclk0_min_clk = "N/A";
-			vclk0_clk_deep_sleep = "N/A";
-		} else {
-			vclk0_clk = clock_measure_vclk0.clk == UINT_MAX ? "N/A" : string_format("%ld", clock_measure_vclk0.clk);
-			vclk0_max_clk = clock_measure_vclk0.max_clk == UINT_MAX ? "N/A" : string_format("%ld", clock_measure_vclk0.max_clk);
-			vclk0_min_clk = clock_measure_vclk0.min_clk == UINT_MAX ? "N/A" : string_format("%ld", clock_measure_vclk0.min_clk);
-
-			if (clock_measure_vclk0.clk_deep_sleep != AMDSMI_NOT_SUPP_UINT8_RETVAL) {
-				vclk0_clk_deep_sleep = string_format(
-										   "%s", clock_measure_vclk0.clk_deep_sleep ? "ENABLED" : "DISABLED");
-			}
-		}
-
-		ret = host_amdsmi_get_clock_info(processor, AMDSMI_CLK_TYPE_VCLK1,
-										 &clock_measure_vclk1);
-		if (ret != AMDSMI_STATUS_SUCCESS) {
-			vclk1_clk = "N/A";
-			vclk1_max_clk = "N/A";
-			vclk1_min_clk = "N/A";
-			vclk1_clk_deep_sleep = "N/A";
-		} else {
-			vclk1_clk = clock_measure_vclk1.clk == UINT_MAX ? "N/A" : string_format("%ld", clock_measure_vclk1.clk);
-			vclk1_max_clk = clock_measure_vclk1.max_clk == UINT_MAX ? "N/A" : string_format("%ld", clock_measure_vclk1.max_clk);
-			vclk1_min_clk = clock_measure_vclk1.min_clk == UINT_MAX ? "N/A" : string_format("%ld", clock_measure_vclk1.min_clk);
-
-			if (clock_measure_vclk1.clk_deep_sleep != AMDSMI_NOT_SUPP_UINT8_RETVAL) {
-				vclk1_clk_deep_sleep = string_format(
-										   "%s", clock_measure_vclk1.clk_deep_sleep ? "ENABLED" : "DISABLED");
-			}
-		}
-
-		if (arg.output == json) {
-			nlohmann::ordered_json vclk0_clk_json{};
-			vclk0_clk_json["value"] = vclk0_clk;
-			vclk0_clk_json["unit"] = vclk0_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json vclk0_min_clk_json{};
-			vclk0_min_clk_json["value"] = vclk0_min_clk;
-			vclk0_min_clk_json["unit"] = vclk0_min_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json vclk0_max_clk_json{};
-			vclk0_max_clk_json["value"] = vclk0_max_clk;
-			vclk0_max_clk_json["unit"] = vclk0_max_clk == "N/A" ? "N/A" : "MHz";
-			result["vclk0"] = nlohmann::ordered_json::object( {
-				{"clk", vclk0_clk_json },
-				{ "min_clk", vclk0_min_clk_json },
-				{ "max_clk", vclk0_max_clk_json },
-				{ "clk_locked", is_clk_vclk0_locked.c_str() },
-				{ "deep_sleep", vclk0_clk_deep_sleep.c_str() }});
-			nlohmann::ordered_json vclk1_clk_json{};
-			vclk1_clk_json["value"] =  vclk1_clk;
-			vclk1_clk_json["unit"] = vclk1_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json vclk1_min_clk_json{};
-			vclk1_min_clk_json["value"] = vclk1_min_clk;
-			vclk1_min_clk_json["unit"] = vclk1_min_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json vclk1_max_clk_json{};
-			vclk1_max_clk_json["value"] = vclk1_max_clk;
-			vclk1_max_clk_json["unit"] = vclk1_max_clk == "N/A" ? "N/A" : "MHz";
-			result["vclk1"] = nlohmann::ordered_json::object( {
-				{"clk", vclk1_clk_json },
-				{ "min_clk", vclk1_min_clk_json },
-				{ "max_clk", vclk1_max_clk_json },
-				{ "clk_locked", is_clk_vclk1_locked.c_str() },
-				{ "deep_sleep", vclk1_clk_deep_sleep.c_str() }});
-		} else if (arg.output == csv) {
-			out.append(string_format(",%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",vclk0_clk.c_str(),
-									 vclk0_min_clk.c_str(),
-									 vclk0_max_clk.c_str(),
-									 is_clk_vclk0_locked.c_str(), vclk0_clk_deep_sleep.c_str(),
-									 vclk1_clk.c_str(), vclk1_min_clk.c_str(), vclk1_max_clk.c_str(), is_clk_vclk1_locked.c_str(),
-									 vclk1_clk_deep_sleep.c_str()));
-		} else {
-			std::string vclk0_clk_unit = vclk0_clk == "N/A" ? "" : " MHz";
-			std::string vclk0_max_clk_unit = vclk0_max_clk == "N/A" ? "" : " MHz";
-			std::string vclk0_min_clk_unit = vclk0_min_clk == "N/A" ? "" : " MHz";
-
-			std::string vclk1_clk_unit = vclk1_clk == "N/A" ? "" : " MHz";
-			std::string vclk1_max_clk_unit = vclk1_max_clk == "N/A" ? "" : " MHz";
-			std::string vclk1_min_clk_unit = vclk1_min_clk == "N/A" ? "" : " MHz";
-			out.append(string_format(metricVCLK0ClockMeasureHostTemplate, vclk0_clk.c_str(),
-									 vclk0_clk_unit.c_str(),
-									 vclk0_min_clk.c_str(), vclk0_min_clk_unit.c_str(), vclk0_max_clk.c_str(),
-									 vclk0_max_clk_unit.c_str(),
-									 is_clk_vclk0_locked.c_str(), vclk0_clk_deep_sleep.c_str()));
-			out.append(string_format(metricVCLK1ClockMeasureHostTemplate, vclk1_clk.c_str(),
-									 vclk1_clk_unit.c_str(),
-									 vclk1_min_clk.c_str(),vclk1_min_clk_unit.c_str(),vclk1_max_clk.c_str(),vclk1_max_clk_unit.c_str(),
-									 is_clk_vclk1_locked.c_str(), vclk1_clk_deep_sleep.c_str()));
-		}
-	}
-
-	if (metric_table) {
-		std::vector<std::size_t> dclk_chiplet_size = {dclk_chiplet["clk"].size(), dclk_chiplet["min_clk"].size(), dclk_chiplet["max_clk"].size(),
-													  dclk_chiplet["deep_sleep"].size()
-													 };
-		std::size_t dclk_cur_size = dclk_chiplet_size[0];
-		if (std::any_of(dclk_chiplet_size.cbegin(), dclk_chiplet_size.cend(), [&](int i) {
-		return i != dclk_cur_size;
-	})) {
-			setup_template = true;
-		} else if (dclk_cur_size == 0) {
-			setup_template = true;
-		} else {
-			setup_template = false;
-			if (arg.output == json) {
-				for (int i = 0; i < dclk_cur_size; i++) {
-					nlohmann::ordered_json dclk_clk_json{};
-					if (dclk_chiplet["clk"][i].val == UINT64_MAX) {
-						dclk_clk_json["value"] = "N/A";
-					} else {
-						dclk_clk_json["value"] = dclk_chiplet["clk"][i].val;
-					}
-					dclk_clk_json["unit"] = string_format("%llu",
-														  dclk_chiplet["clk"][i].val) == "N/A" ? "N/A" : "MHz";
-					nlohmann::ordered_json dclk_min_clk_json{};
-					if (dclk_chiplet["min_clk"][i].val == UINT64_MAX) {
-						dclk_min_clk_json["value"] = "N/A";
-					} else {
-						dclk_min_clk_json["value"] = dclk_chiplet["min_clk"][i].val;
-					}
-					dclk_min_clk_json["unit"] = string_format("%llu",
-												dclk_chiplet["min_clk"][i].val) == "N/A" ? "N/A" : "MHz";
-					nlohmann::ordered_json dclk_max_clk_json{};
-					if (dclk_chiplet["max_clk"][i].val == UINT64_MAX) {
-						dclk_max_clk_json["value"] = "N/A";
-					} else {
-						dclk_max_clk_json["value"] = dclk_chiplet["max_clk"][i].val;
-					}
-					dclk_max_clk_json["unit"] = string_format("%llu",
-												dclk_chiplet["max_clk"][i].val) == "N/A" ? "N/A" : "MHz";
-					result[string_format("dclk_%d",i)] = nlohmann::ordered_json::object( {
-						{"clk", dclk_clk_json },
-						{"min_clk", dclk_min_clk_json },
-						{"max_clk", dclk_max_clk_json },
-						{"clk_locked", "N/A" },
-						{"deep_sleep", dclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : dclk_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED" }});
-				}
-			} else if (arg.output == csv) {
-				std::vector<std::string> value_rows{};
-				for (int i = 0; i < dclk_cur_size; i++) {
-					value_rows.push_back(string_format(",%d,%s,%s,%s,%s,%s", i,
-													   dclk_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-														   dclk_chiplet["clk"][i].val),
-													   dclk_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-														   dclk_chiplet["min_clk"][i].val),
-													   dclk_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-														   dclk_chiplet["max_clk"][i].val),
-													   "N/A",
-													   dclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : mem_chiplet["deep_sleep"][i].val ?
-													   "DISABLED" : "ENABLED"));
-				}
-				output_rows.push_back(value_rows);
+			vclk_clk_json["unit"] = string_format("%llu",
+												vclk_chiplet["clk"][i].val) == "N/A" ? "N/A" : "MHz";
+			nlohmann::ordered_json vclk_min_clk_json{};
+			if (vclk_chiplet["min_clk"][i].val == UINT64_MAX) {
+				vclk_min_clk_json["value"] = "N/A";
 			} else {
-				for (int i = 0; i < dclk_cur_size; i++) {
-					out.append(string_format(metricChipletDCLKClockMeasureHostTemplate, i,
-											 dclk_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-												 dclk_chiplet["clk"][i].val),
-											 dclk_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-												 dclk_chiplet["min_clk"][i].val),
-											 dclk_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-												 dclk_chiplet["max_clk"][i].val),
-											 "N/A",
-											 dclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : dclk_chiplet["deep_sleep"][i].val
-											 ?
-											 "DISABLED" : "ENABLED"));
-				}
+				vclk_min_clk_json["value"] = vclk_chiplet["min_clk"][i].val;
 			}
-		}
-	}
-
-	if (setup_template) {
-		ret = host_amdsmi_get_clock_info(processor, AMDSMI_CLK_TYPE_DCLK0,
-										 &clock_measure_dclk0);
-		if (ret != AMDSMI_STATUS_SUCCESS) {
-			dclk0_clk = "N/A";
-			dclk0_max_clk = "N/A";
-			dclk0_min_clk = "N/A";
-			dclk0_clk_deep_sleep = "N/A";
-		} else {
-			dclk0_clk = clock_measure_dclk0.clk == UINT_MAX ? "N/A" : string_format("%ld", clock_measure_dclk0.clk);
-			dclk0_max_clk = clock_measure_dclk0.max_clk == UINT_MAX ? "N/A" : string_format("%ld", clock_measure_dclk0.max_clk);
-			dclk0_min_clk = clock_measure_dclk0.min_clk == UINT_MAX ? "N/A" : string_format("%ld", clock_measure_dclk0.min_clk);
-
-			if (clock_measure_dclk0.clk_deep_sleep != AMDSMI_NOT_SUPP_UINT8_RETVAL) {
-				dclk0_clk_deep_sleep = string_format(
-										   "%s", clock_measure_dclk0.clk_deep_sleep ? "ENABLED" : "DISABLED");
+			vclk_min_clk_json["unit"] = string_format("%llu",
+										vclk_chiplet["min_clk"][i].val) == "N/A" ? "N/A" : "MHz";
+			nlohmann::ordered_json vclk_max_clk_json{};
+			if (vclk_chiplet["max_clk"][i].val == UINT64_MAX) {
+				vclk_max_clk_json["value"] = "N/A";
+			} else {
+				vclk_max_clk_json["value"] = vclk_chiplet["max_clk"][i].val;
 			}
-		}
-
-		ret = host_amdsmi_get_clock_info(processor, AMDSMI_CLK_TYPE_DCLK1,
-										 &clock_measure_dclk1);
-		if (ret != AMDSMI_STATUS_SUCCESS) {
-			dclk1_clk = "N/A";
-			dclk1_max_clk = "N/A";
-			dclk1_min_clk = "N/A";
-			dclk1_clk_deep_sleep = "N/A";
-		} else {
-			dclk1_clk = clock_measure_dclk1.clk == UINT_MAX ? "N/A" : string_format("%ld", clock_measure_dclk1.clk);
-			dclk1_max_clk = clock_measure_dclk1.max_clk == UINT_MAX ? "N/A" : string_format("%ld", clock_measure_dclk1.max_clk);
-			dclk1_min_clk = clock_measure_dclk1.min_clk == UINT_MAX ? "N/A" : string_format("%ld", clock_measure_dclk1.min_clk);
-
-			if (clock_measure_dclk1.clk_deep_sleep != AMDSMI_NOT_SUPP_UINT8_RETVAL) {
-				dclk1_clk_deep_sleep = string_format(
-										   "%s", clock_measure_dclk1.clk_deep_sleep ? "ENABLED" : "DISABLED");
+			vclk_max_clk_json["unit"] = string_format("%llu",
+										vclk_chiplet["max_clk"][i].val) == "N/A" ? "N/A" : "MHz";
+			std::string clk_locked{"N/A"};
+			std::string clk_deep_sleep{"N/A"};
+			if (vclk_chiplet["clk_locked"].size()) {
+				clk_locked = vclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : vclk_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
 			}
+			if (vclk_chiplet["deep_sleep"].size()) {
+				clk_deep_sleep = vclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : vclk_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+			} else {
+				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_VCLK0);
+			}
+			result[string_format("vclk_%d", i)] = nlohmann::ordered_json::object( {
+				{"clk", vclk_clk_json },
+				{"min_clk", vclk_min_clk_json },
+				{"max_clk", vclk_max_clk_json },
+				{"clk_locked", "N/A" },
+				{"deep_sleep",  clk_deep_sleep }});
 		}
 
-		if (arg.output == json) {
-			nlohmann::ordered_json dclk0_clk_json{};
-			dclk0_clk_json["value"] = dclk0_clk;
-			dclk0_clk_json["unit"] = dclk0_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json dclk0_min_clk_json{};
-			dclk0_min_clk_json["value"] = dclk0_min_clk;
-			dclk0_min_clk_json["unit"] = dclk0_min_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json dclk0_max_clk_json{};
-			dclk0_max_clk_json["value"] = dclk0_max_clk;
-			dclk0_max_clk_json["unit"] = dclk0_max_clk == "N/A" ? "N/A" : "MHz";
-			result["dclk0"] = nlohmann::ordered_json::object( {
-				{"clk", dclk0_clk_json },
-				{ "min_clk", dclk0_min_clk_json },
-				{ "max_clk", dclk0_max_clk_json },
-				{ "clk_locked", is_clk_dclk0_locked.c_str() },
-				{ "deep_sleep", dclk0_clk_deep_sleep.c_str() }});
-			nlohmann::ordered_json dclk1_clk_json{};
-			dclk1_clk_json["value"] = dclk1_clk;
-			dclk1_clk_json["unit"] = dclk1_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json dclk1_min_clk_json{};
-			dclk1_min_clk_json["value"] = dclk1_min_clk;
-			dclk1_min_clk_json["unit"] = dclk1_min_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json dclk1_max_clk_json{};
-			dclk1_max_clk_json["value"] = dclk1_max_clk;
-			dclk1_max_clk_json["unit"] = dclk1_max_clk == "N/A" ? "N/A" : "MHz";
-			result["dclk1"] = nlohmann::ordered_json::object( {
-				{"clk", dclk1_clk_json },
-				{ "min_clk", dclk1_min_clk_json },
-				{ "max_clk", dclk1_max_clk_json },
-				{ "clk_locked", is_clk_dclk1_locked.c_str() },
-				{ "deep_sleep", dclk1_clk_deep_sleep.c_str() }});
-		} else if (arg.output == csv) {
-			out.append(string_format(",%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",dclk0_clk.c_str(),
-									 dclk0_min_clk.c_str(),
-									 dclk0_max_clk.c_str(),
-									 is_clk_dclk0_locked.c_str(), dclk0_clk_deep_sleep.c_str(),
-									 dclk1_clk.c_str(), dclk1_min_clk.c_str(), dclk1_max_clk.c_str(), is_clk_dclk1_locked.c_str(),
-									 dclk1_clk_deep_sleep.c_str()));
-		} else {
-			std::string dclk0_clk_unit = dclk0_clk == "N/A" ? "" : " MHz";
-			std::string dclk0_min_clk_unit = dclk0_min_clk == "N/A" ? "" : " MHz";
-			std::string dclk0_max_clk_unit = dclk0_max_clk == "N/A" ? "" : " MHz";
+		for (int i = 0; i < dclk_cur_size; i++) {
+			nlohmann::ordered_json dclk_clk_json{};
+			if (dclk_chiplet["clk"][i].val == UINT64_MAX) {
+				dclk_clk_json["value"] = "N/A";
+			} else {
+				dclk_clk_json["value"] = dclk_chiplet["clk"][i].val;
+			}
+			dclk_clk_json["unit"] = string_format("%llu",
+												dclk_chiplet["clk"][i].val) == "N/A" ? "N/A" : "MHz";
+			nlohmann::ordered_json dclk_min_clk_json{};
+			if (dclk_chiplet["min_clk"][i].val == UINT64_MAX) {
+				dclk_min_clk_json["value"] = "N/A";
+			} else {
+				dclk_min_clk_json["value"] = dclk_chiplet["min_clk"][i].val;
+			}
+			dclk_min_clk_json["unit"] = string_format("%llu",
+										dclk_chiplet["min_clk"][i].val) == "N/A" ? "N/A" : "MHz";
+			nlohmann::ordered_json dclk_max_clk_json{};
+			if (dclk_chiplet["max_clk"][i].val == UINT64_MAX) {
+				dclk_max_clk_json["value"] = "N/A";
+			} else {
+				dclk_max_clk_json["value"] = dclk_chiplet["max_clk"][i].val;
+			}
+			dclk_max_clk_json["unit"] = string_format("%llu",
+										dclk_chiplet["max_clk"][i].val) == "N/A" ? "N/A" : "MHz";
+			std::string clk_locked{"N/A"};
+			std::string clk_deep_sleep{"N/A"};
+			if (dclk_chiplet["clk_locked"].size()) {
+				clk_locked = dclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : dclk_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+			}
+			if (dclk_chiplet["deep_sleep"].size()) {
+				clk_deep_sleep = dclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : dclk_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+			} else {
+				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_DCLK0);
+			}
+			result[string_format("dclk_%d",i)] = nlohmann::ordered_json::object( {
+				{"clk", dclk_clk_json },
+				{"min_clk", dclk_min_clk_json },
+				{"max_clk", dclk_max_clk_json },
+				{"clk_locked", "N/A" },
+				{"deep_sleep", clk_deep_sleep }});
 
-			std::string dclk1_clk_unit = dclk1_clk == "N/A" ? "" : " MHz";
-			std::string dclk1_min_clk_unit = dclk1_min_clk == "N/A" ? "" : " MHz";
-			std::string dclk1_max_clk_unit = dclk1_max_clk == "N/A" ? "" : " MHz";
-			out.append(string_format(metricDCLK0ClockMeasureHostTemplate, dclk0_clk.c_str(),
-									 dclk0_clk_unit.c_str(),
-									 dclk0_min_clk.c_str(), dclk0_min_clk_unit.c_str(),dclk0_max_clk.c_str(), dclk0_max_clk_unit.c_str(),
-									 is_clk_dclk0_locked.c_str(),
-									 dclk0_clk_deep_sleep.c_str()));
-			out.append(string_format(metricDCLK1ClockMeasureHostTemplate, dclk1_clk.c_str(),
-									 dclk1_clk_unit.c_str(),
-									 dclk1_min_clk.c_str(),dclk1_min_clk_unit.c_str(),dclk1_max_clk.c_str(), dclk1_max_clk_unit.c_str(),
-									 is_clk_dclk1_locked.c_str(),
-									 dclk1_clk_deep_sleep.c_str()));
-		}
-	}
-
-	if (metric_table) {
-		if (arg.output == json) {
 			out = result.dump(4);
-		} else if (arg.output == csv) {
-			csv_recursion(out, output_rows);
+			}
 		}
-	} else  {
-		if (arg.watch > -1) {
-			out = string_format("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",
-								gfx_clk.c_str(), gfx_min_clk.c_str(), gfx_max_clk.c_str(), is_clk_gfx_locked.c_str(),
-								gfx_clk_deep_sleep.c_str(),
-								mem_clk.c_str(), mem_min_clk.c_str(), mem_max_clk.c_str(), is_clk_mem_locked.c_str(),
-								mem_clk_deep_sleep.c_str(),
-								vclk0_clk.c_str(), vclk0_min_clk.c_str(), vclk0_max_clk.c_str(), is_clk_vclk0_locked.c_str(),
-								vclk0_clk_deep_sleep.c_str(),
-								vclk1_clk.c_str(), vclk1_min_clk.c_str(), vclk1_max_clk.c_str(), is_clk_vclk1_locked.c_str(),
-								vclk1_clk_deep_sleep.c_str(),
-								dclk0_clk.c_str(), dclk0_min_clk.c_str(), dclk0_max_clk.c_str(), is_clk_dclk0_locked.c_str(),
-								dclk0_clk_deep_sleep.c_str(),
-								dclk1_clk.c_str(), dclk1_min_clk.c_str(), dclk1_max_clk.c_str(), is_clk_dclk1_locked.c_str(),
-								dclk1_clk_deep_sleep.c_str());
-		} else if (arg.output == json) {
-			nlohmann::ordered_json values_json{};
-			nlohmann::ordered_json gfx_clk_json{};
-			gfx_clk_json["value"] = gfx_clk;
-			gfx_clk_json["unit"] = gfx_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json gfx_min_clk_json{};
-			gfx_min_clk_json["value"] = gfx_min_clk;
-			gfx_min_clk_json["unit"] = gfx_min_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json gfx_max_clk_json{};
-			gfx_max_clk_json["value"] = gfx_max_clk;
-			gfx_max_clk_json["unit"] = gfx_max_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json gfx = { { "clk", gfx_clk_json },
-				{ "min_clk", gfx_min_clk_json },
-				{ "max_clk", gfx_max_clk_json },
-				{ "clk_locked", is_clk_gfx_locked.c_str() },
-				{ "deep_sleep", gfx_clk_deep_sleep.c_str() }
-			};
+	} else if (arg.output == csv) {
+		std::vector<std::vector<std::string>> output_rows{};
+		std::vector<std::string> value_rows{};
+		for (int i = 0; i < gfx_cur_size; i++) {
+			std::string clk_locked{"N/A"};
+			std::string clk_deep_sleep{"N/A"};
+			if (gfx_chiplet["clk_locked"].size()) {
+				clk_locked = gfx_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : gfx_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+			}
+			if(gfx_chiplet["deep_sleep"].size()) {
+				clk_deep_sleep = gfx_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : gfx_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+			} else {
+				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_GFX);
+			}
+			value_rows.push_back(string_format(",%d,%s,%s,%s,%s,%s", i,
+											gfx_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+												gfx_chiplet["clk"][i].val).c_str(),
+											gfx_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+												gfx_chiplet["min_clk"][i].val).c_str(),
+											gfx_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+												gfx_chiplet["max_clk"][i].val).c_str(), clk_locked.c_str(), clk_deep_sleep.c_str()));
+		}
+		output_rows.push_back(value_rows);
+		value_rows.clear();
+		for (int i = 0; i < mem_cur_size; i++) {
+			std::string clk_locked{"N/A"};
+			std::string clk_deep_sleep{"N/A"};
+			if (mem_chiplet["clk_locked"].size()) {
+				clk_locked = mem_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : mem_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+			}
+			if(mem_chiplet["deep_sleep"].size()) {
+				clk_deep_sleep = mem_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : mem_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+			} else {
+				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_MEM);
+			}
+			value_rows.push_back(string_format(",%d,%s,%s,%s,%s,%s", i,
+											mem_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu", mem_chiplet["clk"][i].val).c_str(),
+											mem_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+												mem_chiplet["min_clk"][i].val).c_str(),
+											mem_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+												mem_chiplet["max_clk"][i].val).c_str(), "N/A", clk_deep_sleep.c_str()));
+		}
+		output_rows.push_back(value_rows);
+		value_rows.clear();
 
-			nlohmann::ordered_json mem_clk_json{};
-			mem_clk_json["value"] = mem_clk;
-			mem_clk_json["unit"] = mem_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json mem_min_clk_json{};
-			mem_min_clk_json["value"] = mem_min_clk;
-			mem_min_clk_json["unit"] = mem_min_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json mem_max_clk_json{};
-			mem_max_clk_json["value"] =  mem_max_clk;
-			mem_max_clk_json["unit"] = mem_max_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json mem = { { "clk", mem_clk_json },
-				{ "min_clk", mem_min_clk_json },
-				{ "max_clk", mem_max_clk_json },
-				{ "clk_locked", is_clk_mem_locked.c_str() },
-				{ "deep_sleep", mem_clk_deep_sleep.c_str() }
-			};
+		for (int i = 0; i < vclk_cur_size; i++) {
+			std::string clk_locked{"N/A"};
+			std::string clk_deep_sleep{"N/A"};
+			if (vclk_chiplet["clk_locked"].size()) {
+				clk_locked = vclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : vclk_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+			}
+			if(vclk_chiplet["deep_sleep"].size()) {
+				clk_deep_sleep = vclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : vclk_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+			} else {
+				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_VCLK0);
+			}
+			value_rows.push_back(string_format(",%d,%s,%s,%s,%s,%s", i,
+											vclk_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+												vclk_chiplet["clk"][i].val).c_str(),
+											vclk_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+												vclk_chiplet["min_clk"][i].val).c_str(),
+											vclk_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+												vclk_chiplet["max_clk"][i].val).c_str(), "N/A", clk_deep_sleep.c_str()));
+		}
+		output_rows.push_back(value_rows);
+		value_rows.clear();
 
-			nlohmann::ordered_json vclk0_clk_json{};
-			vclk0_clk_json["value"] = vclk0_clk;
-			vclk0_clk_json["unit"] = vclk0_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json vclk0_min_clk_json{};
-			vclk0_min_clk_json["value"] = vclk0_min_clk;
-			vclk0_min_clk_json["unit"] = vclk0_min_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json vclk0_max_clk_json{};
-			vclk0_max_clk_json["value"] = vclk0_max_clk;
-			vclk0_max_clk_json["unit"] = vclk0_max_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json vclk0 = { { "clk", vclk0_clk_json },
-				{ "min_clk", vclk0_min_clk_json },
-				{ "max_clk", vclk0_max_clk_json },
-				{ "clk_locked", is_clk_vclk0_locked.c_str() },
-				{ "deep_sleep", vclk0_clk_deep_sleep.c_str() }
-			};
+		for (int i = 0; i < dclk_cur_size; i++) {
+			std::string clk_locked{"N/A"};
+			std::string clk_deep_sleep{"N/A"};
+			if (dclk_chiplet["clk_locked"].size()) {
+				clk_locked = dclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : dclk_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+			}
+			if(dclk_chiplet["deep_sleep"].size()) {
+				clk_deep_sleep = dclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : dclk_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+			} else {
+				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_DCLK0);
+			}
+			value_rows.push_back(string_format(",%d,%s,%s,%s,%s,%s", i,
+											dclk_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+												dclk_chiplet["clk"][i].val).c_str(),
+											dclk_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+												dclk_chiplet["min_clk"][i].val).c_str(),
+											dclk_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+												dclk_chiplet["max_clk"][i].val).c_str(), "N/A", clk_deep_sleep.c_str()));
+		}
+		output_rows.push_back(value_rows);
+		value_rows.clear();
 
-			nlohmann::ordered_json vclk1_clk_json{};
-			vclk1_clk_json["value"] = vclk1_clk;
-			vclk1_clk_json["unit"] = vclk1_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json vclk1_min_clk_json{};
-			vclk1_min_clk_json["value"] = vclk1_min_clk;
-			vclk1_min_clk_json["unit"] = vclk1_min_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json vclk1_max_clk_json{};
-			vclk1_max_clk_json["value"] = vclk1_max_clk;
-			vclk1_max_clk_json["unit"] = vclk1_max_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json vclk1 = { { "clk", vclk1_clk_json },
-				{ "min_clk", vclk1_min_clk_json },
-				{ "max_clk", vclk1_max_clk_json },
-				{ "clk_locked", is_clk_vclk1_locked.c_str() },
-				{ "deep_sleep", vclk1_clk_deep_sleep.c_str() }
-			};
+		csv_recursion(out, output_rows);
+	} else {
+		for (int i = 0; i < gfx_cur_size; i++) {
+			std::string clk_locked{"N/A"};
+			std::string clk_deep_sleep{"N/A"};
+			if (gfx_chiplet["clk_locked"].size()) {
+				clk_locked = gfx_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : gfx_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+			}
+			if(gfx_chiplet["deep_sleep"].size()) {
+				clk_deep_sleep = gfx_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : gfx_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+			} else {
+				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_GFX);
+			}
+			out.append(string_format(metricChipletGfxClockMeasureHostTemplate, i,
+									gfx_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+										gfx_chiplet["clk"][i].val).c_str(),
+									gfx_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+										gfx_chiplet["min_clk"][i].val).c_str(),
+									gfx_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+										gfx_chiplet["max_clk"][i].val).c_str(), clk_locked.c_str(), clk_deep_sleep.c_str()));
+		}
+		for (int i = 0; i < mem_cur_size; i++) {
+			std::string clk_locked{"N/A"};
+			std::string clk_deep_sleep{"N/A"};
+			if (mem_chiplet["clk_locked"].size()) {
+				clk_locked = mem_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : mem_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+			}
+			if(mem_chiplet["deep_sleep"].size()) {
+				clk_deep_sleep = mem_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : mem_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+			} else {
+				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_MEM);
+			}
+			out.append(string_format(metricChipletMemClockMeasureHostTemplate, i,
+									mem_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+										mem_chiplet["clk"][i].val).c_str(),
+									mem_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+										mem_chiplet["min_clk"][i].val).c_str(),
+									mem_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+										mem_chiplet["max_clk"][i].val).c_str(), "N/A", clk_deep_sleep.c_str()));
+		}
 
-			nlohmann::ordered_json dclk0_clk_json{};
-			dclk0_clk_json["value"] = dclk0_clk;
-			dclk0_clk_json["unit"] = dclk0_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json dclk0_min_clk_json{};
-			dclk0_min_clk_json["value"] = dclk0_min_clk;
-			dclk0_min_clk_json["unit"] = dclk0_min_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json dclk0_max_clk_json{};
-			dclk0_max_clk_json["value"] = dclk0_max_clk;
-			dclk0_max_clk_json["unit"] = dclk0_max_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json dclk0 = { { "clk", dclk0_clk_json },
-				{ "min_clk", dclk0_min_clk_json },
-				{ "max_clk", dclk0_max_clk_json },
-				{ "clk_locked", is_clk_dclk0_locked.c_str()},
-				{ "deep_sleep", dclk0_clk_deep_sleep.c_str() }
-			};
+		for (int i = 0; i < vclk_cur_size; i++) {
+			std::string clk_locked{"N/A"};
+			std::string clk_deep_sleep{"N/A"};
+			if (vclk_chiplet["clk_locked"].size()) {
+				clk_locked = vclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : vclk_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+			}
+			if(vclk_chiplet["deep_sleep"].size()) {
+				clk_deep_sleep = vclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : vclk_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+			} else {
+				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_VCLK0);
+			}
+			out.append(string_format(metricChipletVCLKClockMeasureHostTemplate, i,
+									vclk_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+										vclk_chiplet["clk"][i].val).c_str(),
+									vclk_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+										vclk_chiplet["min_clk"][i].val).c_str(),
+									vclk_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+										vclk_chiplet["max_clk"][i].val).c_str(), "N/A", clk_deep_sleep.c_str()));
+		}
 
-			nlohmann::ordered_json dclk1_clk_json{};
-			dclk1_clk_json["value"] = dclk1_clk;
-			dclk1_clk_json["unit"] = dclk1_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json dclk1_min_clk_json{};
-			dclk1_min_clk_json["value"] = dclk1_min_clk;
-			dclk1_min_clk_json["unit"] = dclk1_min_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json dclk1_max_clk_json{};
-			dclk1_max_clk_json["value"] = dclk1_max_clk;
-			dclk1_max_clk_json["unit"] = dclk1_max_clk == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json dclk1 = { { "clk", dclk1_clk_json },
-				{ "min_clk", dclk1_min_clk_json },
-				{ "max_clk", dclk1_max_clk_json },
-				{ "clk_locked", is_clk_dclk1_locked.c_str()},
-				{ "deep_sleep", dclk1_clk_deep_sleep.c_str() }
-			};
-
-			nlohmann::ordered_json clock = { { "gfx", gfx }, { "mem", mem }, { "vclk0", vclk0 }, { "vclk1", vclk1 }, { "dclk0", dclk0 }, { "dclk1", dclk1 }
-			};
-			out = clock.dump(4);
-		} else if (arg.output == csv) {
-			out = string_format(",%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",
-								gfx_clk.c_str(), gfx_min_clk.c_str(), gfx_max_clk.c_str(), is_clk_gfx_locked.c_str(),
-								gfx_clk_deep_sleep.c_str(),
-								mem_clk.c_str(), mem_min_clk.c_str(), mem_max_clk.c_str(), is_clk_mem_locked.c_str(),
-								mem_clk_deep_sleep.c_str(),
-								vclk0_clk.c_str(), vclk0_min_clk.c_str(), vclk0_max_clk.c_str(), is_clk_vclk0_locked.c_str(),
-								vclk0_clk_deep_sleep.c_str(),
-								vclk1_clk.c_str(), vclk1_min_clk.c_str(), vclk1_max_clk.c_str(), is_clk_vclk1_locked.c_str(),
-								vclk1_clk_deep_sleep.c_str(),
-								dclk0_clk.c_str(), dclk0_min_clk.c_str(), dclk0_max_clk.c_str(), is_clk_dclk0_locked.c_str(),
-								dclk0_clk_deep_sleep.c_str(),
-								dclk1_clk.c_str(), dclk1_min_clk.c_str(), dclk1_max_clk.c_str(), is_clk_dclk1_locked.c_str(),
-								dclk1_clk_deep_sleep.c_str());
-		} else {
-			std::string gfx_clk_unit = gfx_clk == "N/A" ? "" : "MHz";
-			std::string gfx_min_clk_unit = gfx_min_clk == "N/A" ? "" : "MHz";
-			std::string gfx_max_clk_unit = gfx_max_clk == "N/A" ? "" : "MHz";
-
-			std::string mem_clk_unit = mem_clk == "N/A" ? "" : "MHz";
-			std::string mem_min_clk_unit = mem_min_clk == "N/A" ? "" : "MHz";
-			std::string mem_max_clk_unit = mem_max_clk == "N/A" ? "" : "MHz";
-
-			std::string vclk0_clk_unit = vclk0_clk == "N/A" ? "" : "MHz";
-			std::string vclk0_max_clk_unit = vclk0_max_clk == "N/A" ? "" : "MHz";
-			std::string vclk0_min_clk_unit = vclk0_min_clk == "N/A" ? "" : "MHz";
-
-			std::string vclk1_clk_unit = vclk1_clk == "N/A" ? "" : "MHz";
-			std::string vclk1_max_clk_unit = vclk1_max_clk == "N/A" ? "" : "MHz";
-			std::string vclk1_min_clk_unit = vclk1_min_clk == "N/A" ? "" : "MHz";
-
-			std::string dclk0_clk_unit = dclk0_clk == "N/A" ? "" : "MHz";
-			std::string dclk0_min_clk_unit = dclk0_min_clk == "N/A" ? "" : "MHz";
-			std::string dclk0_max_clk_unit = dclk0_max_clk == "N/A" ? "" : "MHz";
-
-			std::string dclk1_clk_unit = dclk1_clk == "N/A" ? "" : "MHz";
-			std::string dclk1_min_clk_unit = dclk1_min_clk == "N/A" ? "" : "MHz";
-			std::string dclk1_max_clk_unit = dclk1_max_clk == "N/A" ? "" : "MHz";
-			out = string_format(
-					  metricClockMeasureHostTemplate, gfx_clk.c_str(), gfx_clk_unit.c_str(),
-					  gfx_min_clk.c_str(), gfx_min_clk_unit.c_str(), gfx_max_clk.c_str(), gfx_max_clk_unit.c_str(),
-					  is_clk_gfx_locked.c_str(), gfx_clk_deep_sleep.c_str(),
-					  mem_clk.c_str(),mem_clk_unit.c_str(), mem_min_clk.c_str(), mem_min_clk_unit.c_str(),
-					  mem_max_clk.c_str(), mem_max_clk_unit.c_str(),
-					  is_clk_mem_locked.c_str(), mem_clk_deep_sleep.c_str());
-
-			out += string_format(
-					   metricVCLK0ClockMeasureHostTemplate, vclk0_clk.c_str(), vclk0_clk_unit.c_str(),
-					   vclk0_min_clk.c_str(), vclk0_min_clk_unit.c_str(), vclk0_max_clk.c_str(),
-					   vclk0_max_clk_unit.c_str(),
-					   is_clk_vclk0_locked.c_str(), vclk0_clk_deep_sleep.c_str());
-
-			out += string_format(
-					   metricVCLK1ClockMeasureHostTemplate, vclk1_clk.c_str(), vclk1_clk_unit.c_str(),
-					   vclk1_min_clk.c_str(),vclk1_min_clk_unit.c_str(),vclk1_max_clk.c_str(),vclk1_max_clk_unit.c_str(),
-					   is_clk_vclk1_locked.c_str(), vclk1_clk_deep_sleep.c_str());
-			out += string_format(
-					   metricDCLK0ClockMeasureHostTemplate, dclk0_clk.c_str(),dclk0_clk_unit.c_str(),
-					   dclk0_min_clk.c_str(), dclk0_min_clk_unit.c_str(),dclk0_max_clk.c_str(), dclk0_max_clk_unit.c_str(),
-					   is_clk_dclk0_locked.c_str(),
-					   dclk0_clk_deep_sleep.c_str()
-				   );
-			out += string_format(
-					   metricDCLK1ClockMeasureHostTemplate, dclk1_clk.c_str(),dclk1_clk_unit.c_str(),
-					   dclk1_min_clk.c_str(),dclk1_min_clk_unit.c_str(),dclk1_max_clk.c_str(), dclk1_max_clk_unit.c_str(),
-					   is_clk_dclk1_locked.c_str(),
-					   dclk1_clk_deep_sleep.c_str()
-				   );
+		for (int i = 0; i < dclk_cur_size; i++) {
+			std::string clk_locked{"N/A"};
+			std::string clk_deep_sleep{"N/A"};
+			if (dclk_chiplet["clk_locked"].size()) {
+				clk_locked = dclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : dclk_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+			}
+			if(dclk_chiplet["deep_sleep"].size()) {
+				clk_deep_sleep = dclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : dclk_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+			} else {
+				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_DCLK0);
+			}
+			out.append(string_format(metricChipletDCLKClockMeasureHostTemplate, i,
+									dclk_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+										dclk_chiplet["clk"][i].val).c_str(),
+									dclk_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+										dclk_chiplet["min_clk"][i].val).c_str(),
+									dclk_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+										dclk_chiplet["max_clk"][i].val).c_str(), "N/A", clk_deep_sleep.c_str()));
 		}
 	}
-
 	return AMDSMI_STATUS_SUCCESS;
+}
+
+int AmdSmiApiHost::amdsmi_get_clock_metric_command(uint64_t processor_bdf, Arguments arg,
+		std::string& out)
+{
+	amdsmi_status_t ret;
+	bool use_metric{false};
+
+	if ((AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200())
+			&& arg.watch == -1) {
+		use_metric = true;
+	}
+
+	if (use_metric) {
+		ret = get_metric_ext_clock_data(processor_bdf, arg, out);
+	} else {
+		ret = get_metric_clock_data(processor_bdf, arg, out);
+	}
+
+	return ret;
 }
 
 int AmdSmiApiHost::amdsmi_get_temperature_metric_command(uint64_t processor_bdf, Arguments arg,

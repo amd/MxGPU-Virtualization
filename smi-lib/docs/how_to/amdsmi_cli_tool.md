@@ -9,7 +9,7 @@ myst:
 
 AMD SMI tool is a command line utility that utilizes AMD SMI Library APIs to monitor AMD GPUs. The tool is used to monitor AMD’s GPUs status in a virtualization environment in Linux host Operating Systems and Windows guest Operating Systems. The tool outputs GPU/driver information in plain text, in JSON, or in CSV formats while it can also show the info in the console or save to the specified output file.
 
-## AMD SMI TOOL BUILD
+## AMD SMI tool build
 
 Before running the command to build the tool, make sure you are meeting the following requirements on your system:
     -cmake minimum version 3.15
@@ -23,11 +23,11 @@ When running make inside the gim/smi-lib/cli/cpp folder, the AMD SMI Tool will b
 After build is successfully finished, navigate to gim/smi-lib/cli/cpp/build folder and tool binary should be there.
 Open terminal and navigate to this location and now you can execute smi tool.
 
-## Folder Structure
+## Folder structure
 
 SMI Tool folder structure is shown below:
 
-```
+```text
 cli/
 └── cpp/
     ├── cmake/                # Contains all CMake files used in the build
@@ -50,10 +50,10 @@ cli/
 ## Usage and basic commands
 
 ```shell-session
-$ sudo ./amd-smi <arguments>
+sudo ./amd-smi <arguments>
 ```
 
-- <arguments> arguments can be command name, subcommands, modifiers, and other arguments.
+- `<arguments>` arguments can be command name, subcommands, modifiers, and other arguments.
 
 To get detailed information about the available commands and options, you can run help command.
 The help command provides a comprehensive overview of the tool's functionalities and usage instructions.
@@ -84,6 +84,7 @@ AMD-SMI Commands:
     topology          Displays topology information of the devices
     partition         Displays partition information of the devices
 ```
+
 From help message you can se which subcommand are supported on the system and a short description for each command.
 
 To access the help documentation for a specific command, simply use that command name followed by the help command.
@@ -123,6 +124,7 @@ GPU: 0
         BDF: 0000:0c:02.0
         UUID: 670074a1-0000-1000-8081-b5b9fd6edd00
 ```
+
 ```shell-session
 $ sudo ./amd-smi list --json
 
@@ -141,13 +143,16 @@ $ sudo ./amd-smi list --json
     }
 ]
 ```
+
 ```shell-session
 $ sudo ./amd-smi list --csv
 
 gpu,gpu_bdf,gpu_uuid,vf,vf_bdf,vf_uuid
 0,0000:0c:00.0,67ff74a1-0000-1000-8081-b5b9fd6edd00,0,0000:0c:02.0,670074a1-0000-1000-8081-b5b9fd6edd00
 ```
+
 And also all outputs can be saved to a file.
+
 ```shell-session
-$ sudo ./amd-smi list --file=<file_name>
+sudo ./amd-smi list --file=<file_name>
 ```

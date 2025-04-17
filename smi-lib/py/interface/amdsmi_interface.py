@@ -1998,7 +1998,12 @@ def amdsmi_set_xgmi_fb_sharing_mode_v2(processor_list, mode):
             raise AmdSmiParameterException(
                     processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
 
-    num_processors = len(processor_list)
+    # In case of auto mode(MODE_X) the input parameter num_processors should be 1
+    if (mode == AmdSmiXgmiFbSharingMode.CUSTOM):
+        num_processors = len(processor_list)
+    else:
+        num_processors = 1
+
     processors = (amdsmi_wrapper.amdsmi_processor_handle * num_processors)()
     for i in range(num_processors):
         processors[i] = processor_list[i]

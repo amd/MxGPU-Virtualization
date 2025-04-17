@@ -251,37 +251,18 @@ static unsigned int gim_hash_64(uint64_t a, unsigned int bits)
 
 static int gim_get_driver_version(amdgv_dev_t adev, uint32_t *length, char *version)
 {
-	char client_id;
-	uint32_t major;
-	uint32_t minor;
-	uint32_t subminor;
+	if ((length == NULL) || (version == NULL)) {
+		return SMI_STATUS_INVAL;
+	}
 
-	if (smi_oss_funcs->strnstr(gim_driver_version, "staging", STRLEN_NORMAL) != -1) {
-		client_id = 'K';
-		major = 0;
-		subminor = 0;
-		minor = 0;
-		*length = smi_vsnprintf(version, SMI_MAX_STRING_LENGTH, "%d.%d.%d+%c", major, minor, subminor, client_id);
+	if (smi_oss_funcs->strnstr(gim_driver_version, "staging", STRLEN_VERYLONG) != -1) {
+		const char *staging_version = "0.0.0+K";
+		strcpy(version, staging_version);
+		*length = strlen(staging_version);
 	} else {
-		if ((sscanf(gim_driver_version, "%c", &client_id) == 1) &&
-			((client_id >= 'a' && client_id <= 'z') || (client_id >= 'A' && client_id <= 'Z'))) {
-			if (sscanf(gim_driver_version, "%c.%u.%u.%u", &client_id, &major, &minor, &subminor) != 4) {
-				client_id = '-';
-				major = 0;
-				subminor = 0;
-				minor = 0;
-			}
-			*length = smi_vsnprintf(version, SMI_MAX_STRING_LENGTH, "%c.%u.%u.%u", client_id, major, minor, subminor);
-		} else {
-			char special_character;
-			if ((sscanf(gim_driver_version, "%u.%u.%u%c%c", &major, &minor, &subminor, &special_character, &client_id) != 5) ||
-				(special_character != '+' &&  special_character == '.')) {
-				client_id = '-';
-				major = 0;
-				subminor = 0;
-				minor = 0;
-			}
-			*length = smi_vsnprintf(version, SMI_MAX_STRING_LENGTH, "%u.%u.%u%c%c", major, minor, subminor, special_character, client_id);
+		*length = smi_vsnprintf(version, SMI_MAX_STRING_LENGTH, "%s", gim_driver_version);
+		if (*length >= SMI_MAX_STRING_LENGTH) {
+			return SMI_STATUS_OUT_OF_RESOURCES;
 		}
 	}
 
@@ -303,7 +284,7 @@ static int gim_get_profile_info(amdgv_dev_t adev, struct smi_profile_info *profi
 static int gim_get_driver_date(amdgv_dev_t adev, char *driver_date)
 {
 	if (driver_date == NULL) {
-		return SMI_STATUS_API_FAILED;
+		return SMI_STATUS_INVAL;
 	} else {
 		amdgv_get_date(driver_date);
 	}

@@ -243,10 +243,11 @@ install: $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET) $(OUTPUT_DIR)/$(STATICLIB_TARGET)
 docs:
 	@doxygen --version > /dev/null || (echo "ERROR: doxygen is required to generate documentation. You can install it by typing: sudo apt-get install doxygen"; exit 1)
 	python3 -mvenv .venv
-	.venv/bin/python -m pip install -r docs/requirements.txt
+	.venv/bin/python -m pip install -r docs/sphinx/requirements.txt
 	mkdir -p $(DOXYGEN_OUTPUT_DIR)
+	cd $(PROJECT_ROOT)/docs/doxygen && \
 	DOXYGEN_INPUT_DIR=$(INTERFACE_DIR) \
 	DOXYGEN_OUTPUT_DIR=$(DOXYGEN_OUTPUT_DIR) \
-		doxygen $(PROJECT_ROOT)/docs/doxygen/Doxyfile
+		doxygen Doxyfile
 	.venv/bin/sphinx-build -b html docs/ $(DOCS_OUTPUT_DIR)
 	@echo "Documentation generated at: $(AMDSMI_BUILD_DIR)/docs/index.html"

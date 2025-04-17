@@ -940,17 +940,28 @@ int AmdSmiApiHost::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argumen
 		nlohmann::ordered_json max_power{};
 		nlohmann::ordered_json min_power{};
 		nlohmann::ordered_json socket_power{};
-		if (power_cap_string == "N/A") {
+		if (power_cap_info.power_cap == UINT64_MAX) {
 			socket_power["value"] = "N/A";
 			socket_power["unit"] = "N/A";
 		} else {
 			socket_power["value"] = power_cap_info.power_cap;
 			socket_power["unit"] = "W";
 		}
-		max_power["value"] = max_power_cap_string;
-		max_power_cap_string == "N/A" ? max_power["unit"] = "N/A" : max_power["unit"] = "W";
-		min_power["value"] = min_power_cap_string;
-		min_power_cap_string == "N/A" ? min_power["unit"] = "N/A" : min_power["unit"] = "W";
+		if (power_cap_info.max_power_cap == UINT64_MAX) {
+			max_power["value"] = "N/A";
+			max_power["unit"] = "N/A";
+		} else {
+			max_power["value"] = power_cap_info.max_power_cap;
+			max_power["unit"] = "W";
+		}
+		if (power_cap_info.min_power_cap == UINT64_MAX) {
+			min_power["value"] = "N/A";
+			min_power["unit"] = "N/A";
+		} else {
+			min_power["value"] = power_cap_info.min_power_cap;
+			min_power["unit"] = "W";
+		}
+
 		nlohmann::ordered_json slowdown_edge_temperature{};
 		if (therm_limit_edge_string == "N/A") {
 			slowdown_edge_temperature["value"] = "N/A";

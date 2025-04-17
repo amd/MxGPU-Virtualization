@@ -2,7 +2,7 @@
 myst:
   html_meta:
     "description lang=en": "AMD SMI documentation and API reference."
-    "keywords": "amdsmi, lib, cli, system, management, interface, amdgpu, admin, sys"
+    "keywords": "amdsmi, lib, cli, system, management, interface, admin, sys"
 ---
 
 # AMD SMI documentation
@@ -20,12 +20,12 @@ Some of the features that are exposed in the library are:
 
 There are two parts to the AMD SMI library interface:
 
-* **C interface**
+- **C interface**
   - Consists of C function declarations.
   - The client can call these to query information about the Linux host machine.
   - The C interface can be used by the clients to build applications in C/C++ by using this interface and library binary.
 
-* **Python interface**
+- **Python interface**
   - Consists of Python function declarations.
   - These directly call the C interface.
   - The client can use the Python interface to build applications in Python.
@@ -40,28 +40,31 @@ The tool can be used to:
 - Query temperature, clocks, and usage of the GPU
 
 For additional information on installation, usage, and API references, please refer to the sections below:
+
 ::::{grid} 2
 :gutter: 3
 
 :::{grid-item-card} Install
-* [Build from source](install/build.md)
+
+- [Build from source](./install/build.md)
 :::
 
 :::{grid-item-card} How to
-* [C library usage](how_to/amdsmi_c_lib.md)
-* [Python library usage](how_to/amdsmi_py_lib.md)
-* [CLI tool usage](how_to/amdsmi_cli_tool.md)
+
+- [C library usage](./how_to/amdsmi_c_lib.md)
+- [Python library usage](./how_to/amdsmi_py_lib.md)
+- [CLI tool usage](./how_to/amdsmi_cli_tool.md)
 :::
 
 :::{grid-item-card} Reference
-* <a href="doxygen/html/index.html">C API</a>
-* [Python API](reference/amdsmi_py_api.md)
-:::
 
-:::{grid-item-card} About
-* [LICENSE](license.md)
+- [C API](./reference/amdsmi_c_api.md)
+  - [Files](../doxygen/doxy_build/html/files)
+  - [Globals](../doxygen/doxy_build/html/globals)
+  - [Data structures](../doxygen/doxy_build/html/annotated)
+  - [Data fields](../doxygen/doxy_build/html/functions_data_fields)
+- [Python API](./reference/amdsmi_py_api.md)
 :::
-
 
 ::::
 
@@ -71,7 +74,6 @@ For additional information on installation, usage, and API references, please re
 }
 </style>
 
-## DISCLAIMER
 <div id="disclaimer">
 The information contained herein is for informational purposes only, and is
 subject to change without notice. While every precaution has been taken in the

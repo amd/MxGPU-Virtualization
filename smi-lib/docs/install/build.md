@@ -6,7 +6,14 @@ myst:
 ---
 
 <a id="amd-smi-library-build"></a>
+
 # AMD SMI LIBRARY BUILD
+
+## Requirements
+
+Before building the integration and unit tests, ensure that `gtest` and `gmock` are installed on your system. These libraries are required for building and running the tests. You can install them using your system's package manager or build them from source.
+
+## Build commands
 
 When running make inside the gim folder, the AMD SMI library is built as well. Here are some useful commands for building the AMD SMI library:
 
@@ -17,30 +24,32 @@ When running make inside the gim folder, the AMD SMI library is built as well. H
 - Run `make gen_coverage` to calculate the code coverage of the AMD SMI library.
 - If any changes are made to the interface folder, regenerate the Python wrapper by running `make python_wrapper` and replace the `amdsmi_wrapper.py` file in the py/interface folder with the one generated in the build folder `build/amdsmi/amdsmi_wrapper/amdsmi_wrapper.py`.
 
-Build Options: These options allow you to customize the build process, such as specifying the build type, enabling thread safety, enabling logging, and using the Thread Sanitizer.
+### Build Options
 
-1. BUILD_TYPE:
+These options allow you to customize the build process, such as specifying the build type, enabling thread safety, enabling logging, and using the Thread Sanitizer.
+
+- BUILD_TYPE:
 
 This option specifies the type of build you want to perform. Common values are Release and Debug.
 Release builds are optimized for performance and do not include debugging information.
 Debug builds include debugging information and are not optimized, making them suitable for development and debugging.
 Default: Release
 
-2. THREAD_SAFE:
+- THREAD_SAFE:
 
 This option indicates whether the build should include thread safety features.
 When set to True, thread safety mechanisms (e.g., mutexes, locks) are enabled.
 When set to False, thread safety mechanisms are disabled, which might improve performance but can lead to race conditions in multi-threaded environments.
 Default: True
 
-3. LOGGING:
+- LOGGING:
 
 This option controls whether logging is enabled in the build.
 When set to True, logging code is included, which can help with debugging and monitoring.
 When set to False, logging code is excluded, which might improve performance.
 Default: False
 
-4. THREAD_SANITIZER:
+- THREAD_SANITIZER:
 
 This option indicates whether the Thread Sanitizer should be enabled.
 Thread Sanitizer is a tool that detects data races in multi-threaded programs.
@@ -48,7 +57,7 @@ When set to True, the build includes Thread Sanitizer instrumentation.
 When set to False, Thread Sanitizer is not included.
 Default: False
 
-5. ADDRESS_SANITIZER:
+- ADDRESS_SANITIZER:
 
 This option indicates whether the Address Sanitizer should be enabled.
 Address Sanitizer is a tool that detects memory errors such as buffer overflows, use-after-free, and memory leaks.
@@ -56,11 +65,11 @@ When set to True, the build includes Address Sanitizer instrumentation.
 When set to False, Address Sanitizer is not included.
 Default: False
 
-## Folder Structure
+## Folder structure
 
 Library folder structure is shown below:
 
-```
+```text
 smi-lib/
 ├── build/                # Contains all generated files during build
 ├── cli/
@@ -86,28 +95,35 @@ smi-lib/
 ```
 
 ## Python wrapper
+
 AMD SMI stack contains a wrapper around C SMI Library. The Python API is a one-to-one mapping to the C interface of SMI Library. It exposes library functionality into Python language, allowing for fast and easy scripting.
 
 ### Code
+
 The Python Wrapper source code can be found in smi-lib/py/interface folder.
 
 ### Build
+
 The wrapper is built together with the SMI Library. For detailed instructions, refer to the [AMD SMI LIBRARY BUILD](#amd-smi-library-build) section.
 
-### Code Style
+### Code style
+
 The code style follows the Python PEP-8 standard. See [PEP-8](https://www.python.org/dev/peps/pep-0008/) for details.
 
 ### Dependencies
+
 - Requires `Python 3.10` or higher.
 - Python Wrapper relies on `ctypes` extension of Python language.
-  See [CTYPES]https://docs.python.org/3/library/ctypes.html for details. By using this extension python code can load shared library and call its functions. The extension comes by default with Python 3.
+  See [CTYPES]<https://docs.python.org/3/library/ctypes.html> for details. By using this extension python code can load shared library and call its functions. The extension comes by default with Python 3.
 
 ### Flow
+
 1. The flow starts with the C library `libamdsmi.so`, which contains the functionality to be used in Python.
 2. A Python wrapper (`amdsmi_wrapper.py`) loads the `libamdsmi.so` library and provides a Python interface to its functions.
 3. Another wrapper (`amdsmi_interface.py`) provides a user-friendly interface for interacting with the library.
 
 ### Regenerate wrapper
+
 If any changes are made to the C interface (smi-lib/interface/amdsmi.h), regenerate the Python wrapper by running `make python_wrapper` and replace the `amdsmi_wrapper.py` file in the py/interface folder with the one generated in the build folder `build/amdsmi/amdsmi_wrapper/amdsmi_wrapper.py`.
 
 ## Python package

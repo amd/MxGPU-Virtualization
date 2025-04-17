@@ -36,7 +36,7 @@
 // deleting existing commands or modifying input/output format of existing commands
 #define AMDSMI_TOOL_VERSION_MINOR 1
 // Release version should be set to 0 as default and can be updated by the PMs for each CSP point release
-#define AMDSMI_TOOL_VERSION_RELEASE 0
+#define AMDSMI_TOOL_VERSION_RELEASE 1
 
 #define AMDSMI_TOOL_VERSION_CREATE_STRING(YEAR, MAJOR, MINOR, RELEASE) (#YEAR "." #MAJOR "." #MINOR "." #RELEASE)
 #define AMDSMI_TOOL_VERSION_EXPAND_PARTS(YEAR_STR, MAJOR_STR, MINOR_STR, RELEASE_STR) AMDSMI_TOOL_VERSION_CREATE_STRING(YEAR_STR, MAJOR_STR, MINOR_STR, RELEASE_STR)
