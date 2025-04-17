@@ -1,0 +1,28 @@
+defaults:
+  numbered: false
+root: index
+subtrees:
+- caption: Install
+  entries:
+  - file: install/build.md
+    title: Build from source
+
+- caption: How to
+  entries:
+  - file: how_to/amdsmi_c_lib.md
+    title: C library usage
+  - file: how_to/amdsmi_py_lib.md
+    title: Python library usage
+  - file: how_to/amdsmi_cli_tool.md
+    title: CLI tool usage
+
+- caption: Reference
+  entries:
+    title: C API
+  - file: reference/amdsmi_py_api.md
+    title: Python API
+
+- caption: About
+  entries:
+  - file: license.md
+

@@ -1,0 +1,518 @@
+/*
+ * Copyright (c) 2018-2021 Advanced Micro Devices, Inc. All rights reserved.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+#ifndef _AMDGV_RAS_H
+#define _AMDGV_RAS_H
+
+#include "amdgv.h"
+#include "ta_ras_if.h"
+#include "amdgv_ras_eeprom.h"
+
+#define BITS_PER_BYTE 8
+#define BITS_PER_TYPE(type) (sizeof(type) * BITS_PER_BYTE)
+
+#define BITS_PER_LONG 64
+
+#define AMDGV_RAS_GENMASK(h, l) \
+	(((~0ULL) - (1ULL << (l)) + 1) & (~0ULL >> (BITS_PER_LONG - 1 - (h))))
+
+#define AMDGV_RAS_GET_REG_FIELD(x, h, l) (((x) & AMDGV_RAS_GENMASK(h, l)) >> (l))
+
+#define AMDGV_RAS_GPU_ERR_MEM_TRAINING(x) 		AMDGV_RAS_GET_REG_FIELD(x, 0, 0)
+#define AMDGV_RAS_GPU_ERR_FW_LOAD(x) 			AMDGV_RAS_GET_REG_FIELD(x, 1, 1)
+#define AMDGV_RAS_GPU_ERR_WAFL_LINK_TRAINING(x) 	AMDGV_RAS_GET_REG_FIELD(x, 2, 2)
+#define AMDGV_RAS_GPU_ERR_XGMI_LINK_TRAINING(x) 	AMDGV_RAS_GET_REG_FIELD(x, 3, 3)
+#define AMDGV_RAS_GPU_ERR_USR_CP_LINK_TRAINING(x) 	AMDGV_RAS_GET_REG_FIELD(x, 4, 4)
+#define AMDGV_RAS_GPU_ERR_USR_DP_LINK_TRAINING(x) 	AMDGV_RAS_GET_REG_FIELD(x, 5, 5)
+#define AMDGV_RAS_GPU_ERR_HBM_MEM_TEST(x) 		AMDGV_RAS_GET_REG_FIELD(x, 6, 6)
+#define AMDGV_RAS_GPU_ERR_HBM_BIST_TEST(x) 		AMDGV_RAS_GET_REG_FIELD(x, 7, 7)
+#define AMDGV_RAS_GPU_ERR_SOCKET_ID(x) 			AMDGV_RAS_GET_REG_FIELD(x, 10, 8)
+#define AMDGV_RAS_GPU_ERR_AID_ID(x) 			AMDGV_RAS_GET_REG_FIELD(x, 12, 11)
+#define AMDGV_RAS_GPU_ERR_HBM_ID(x) 			AMDGV_RAS_GET_REG_FIELD(x, 13, 13)
+#define AMDGV_RAS_GPU_ERR_BOOT_STATUS(x) 		AMDGV_RAS_GET_REG_FIELD(x, 31, 31)
+#define AMDGV_RAS_GPU_ERR_UNKNOWN(x)			AMDGV_RAS_GET_REG_FIELD(x, 30, 30)
+
+#define AMDGV_RAS_BOOT_STATUS_POLLING_LIMIT		100
+#define AMDGV_RAS_BOOT_STEADY_STATUS			0xBA
+#define AMDGV_RAS_BOOT_STATUS_MASK			0xFF
+#define AMDGV_RAS_BOOT_READ_ERR_VAL			0xFFFFFFFF
+
+INLINE uint32_t amdgv_ras_hweight16(uint32_t w)
+{
+	uint32_t res = w - ((w >> 1) & 0x5555);
+	res = (res & 0x3333) + ((res >> 2) & 0x3333);
+	res = (res + (res >> 4)) & 0x0F0F;
+	return (res + (res >> 8)) & 0x00FF;
+}
+
+#define AMDGV_RAS_NUM_XCC(x)   amdgv_ras_hweight16(x)
+
+/* ras error status reisger fields */
+#define ERR_STATUS_LO__ERR_STATUS_VALID_FLAG__SHIFT    0x0
+#define ERR_STATUS_LO__ERR_STATUS_VALID_FLAG_MASK      0x00000001L
+#define ERR_STATUS_LO__MEMORY_ID__SHIFT                        0x18
+#define ERR_STATUS_LO__MEMORY_ID_MASK                  0xFF000000L
+#define ERR_STATUS_HI__ERR_INFO_VALID_FLAG__SHIFT      0x2
+#define ERR_STATUS_HI__ERR_INFO_VALID_FLAG_MASK                0x00000004L
+#define ERR_STATUS__ERR_CNT__SHIFT                     0x17
+#define ERR_STATUS__ERR_CNT_MASK                       0x03800000L
+
+#define AMDGV_RAS_REG_ENTRY(ip, inst, reg_lo, reg_hi) \
+		ip##_HWIP, inst, reg_lo##_BASE_IDX, reg_lo, reg_hi##_BASE_IDX, reg_hi
+
+#define AMDGV_RAS_REG_ENTRY_OFFSET(hwip, ip_inst, segment, reg) \
+		(adapt->reg_offset[hwip][ip_inst][segment] + (reg))
+
+#define AMDGV_RAS_ERR_INFO_VALID	(1 << 0)
+#define AMDGV_RAS_ERR_STATUS_VALID	(1 << 1)
+#define AMDGV_RAS_ERR_ADDRESS_VALID	(1 << 2)
+
+#define AMDGV_RAS_INV_MEM_PFN  (0xFFFFFFFFFFFFFFFFULL)
+
+struct amdgv_ras_err_status_reg_entry {
+	uint32_t hwip;
+	uint32_t ip_inst;
+	uint32_t seg_lo;
+	uint32_t reg_lo;
+	uint32_t seg_hi;
+	uint32_t reg_hi;
+	uint32_t reg_inst;
+	uint32_t flags;
+	const char *block_name;
+};
+
+struct amdgv_ras_memory_id_entry {
+	uint32_t memory_id;
+	const char *name;
+};
+
+enum amdgv_ras_block {
+	AMDGV_RAS_BLOCK__UMC = 0,
+	AMDGV_RAS_BLOCK__SDMA,
+	AMDGV_RAS_BLOCK__GFX,
+	AMDGV_RAS_BLOCK__MMHUB,
+	AMDGV_RAS_BLOCK__ATHUB,
+	AMDGV_RAS_BLOCK__PCIE_BIF,
+	AMDGV_RAS_BLOCK__HDP,
+	AMDGV_RAS_BLOCK__XGMI_WAFL,
+	AMDGV_RAS_BLOCK__DF,
+	AMDGV_RAS_BLOCK__SMN,
+	AMDGV_RAS_BLOCK__SEM,
+	AMDGV_RAS_BLOCK__MP0,
+	AMDGV_RAS_BLOCK__MP1,
+	AMDGV_RAS_BLOCK__FUSE,
+	AMDGV_RAS_BLOCK__MCA,
+	AMDGV_RAS_BLOCK__VCN,
+	AMDGV_RAS_BLOCK__JPEG,
+	AMDGV_RAS_BLOCK__IH,
+	AMDGV_RAS_BLOCK__MPIO,
+
+	AMDGV_RAS_BLOCK__LAST
+};
+
+#define AMDGV_RAS_BLOCK_COUNT AMDGV_RAS_BLOCK__LAST
+#define AMDGV_RAS_BLOCK_MASK  ((1ULL << AMDGV_RAS_BLOCK_COUNT) - 1)
+
+extern const char *amdgv_ras_block_name[AMDGV_RAS_BLOCK__LAST];
+#define ras_block_name(_blk_) \
+	(((_blk_) < ARRAY_SIZE(amdgv_ras_block_name)) ? amdgv_ras_block_name[_blk_] : "Unknown")
+
+enum amdgv_ras_error_type {
+	AMDGV_RAS_ERROR__NONE = 0,
+	AMDGV_RAS_ERROR__PARITY = 1,
+	AMDGV_RAS_ERROR__SINGLE_CORRECTABLE = 2,
+	AMDGV_RAS_ERROR__MULTI_UNCORRECTABLE = 4,
+	AMDGV_RAS_ERROR__POISON = 8,
+};
+
+enum amdgv_ras_ret {
+	AMDGV_RAS_SUCCESS = 0,
+	AMDGV_RAS_FAIL,
+	AMDGV_RAS_UE,
+	AMDGV_RAS_CE,
+	AMDGV_RAS_PT,
+};
+
+
+enum amdgv_ras_gfx_subblock {
+	/* CPC */
+	AMDGV_RAS_BLOCK__GFX_CPC_INDEX_START = 0,
+	AMDGV_RAS_BLOCK__GFX_CPC_SCRATCH =
+		AMDGV_RAS_BLOCK__GFX_CPC_INDEX_START,
+	AMDGV_RAS_BLOCK__GFX_CPC_UCODE,
+	AMDGV_RAS_BLOCK__GFX_DC_STATE_ME1,
+	AMDGV_RAS_BLOCK__GFX_DC_CSINVOC_ME1,
+	AMDGV_RAS_BLOCK__GFX_DC_RESTORE_ME1,
+	AMDGV_RAS_BLOCK__GFX_DC_STATE_ME2,
+	AMDGV_RAS_BLOCK__GFX_DC_CSINVOC_ME2,
+	AMDGV_RAS_BLOCK__GFX_DC_RESTORE_ME2,
+	AMDGV_RAS_BLOCK__GFX_CPC_INDEX_END =
+		AMDGV_RAS_BLOCK__GFX_DC_RESTORE_ME2,
+	/* CPF */
+	AMDGV_RAS_BLOCK__GFX_CPF_INDEX_START,
+	AMDGV_RAS_BLOCK__GFX_CPF_ROQ_ME2 =
+		AMDGV_RAS_BLOCK__GFX_CPF_INDEX_START,
+	AMDGV_RAS_BLOCK__GFX_CPF_ROQ_ME1,
+	AMDGV_RAS_BLOCK__GFX_CPF_TAG,
+	AMDGV_RAS_BLOCK__GFX_CPF_INDEX_END = AMDGV_RAS_BLOCK__GFX_CPF_TAG,
+	/* CPG */
+	AMDGV_RAS_BLOCK__GFX_CPG_INDEX_START,
+	AMDGV_RAS_BLOCK__GFX_CPG_DMA_ROQ =
+		AMDGV_RAS_BLOCK__GFX_CPG_INDEX_START,
+	AMDGV_RAS_BLOCK__GFX_CPG_DMA_TAG,
+	AMDGV_RAS_BLOCK__GFX_CPG_TAG,
+	AMDGV_RAS_BLOCK__GFX_CPG_INDEX_END = AMDGV_RAS_BLOCK__GFX_CPG_TAG,
+	/* GDS */
+	AMDGV_RAS_BLOCK__GFX_GDS_INDEX_START,
+	AMDGV_RAS_BLOCK__GFX_GDS_MEM = AMDGV_RAS_BLOCK__GFX_GDS_INDEX_START,
+	AMDGV_RAS_BLOCK__GFX_GDS_INPUT_QUEUE,
+	AMDGV_RAS_BLOCK__GFX_GDS_OA_PHY_CMD_RAM_MEM,
+	AMDGV_RAS_BLOCK__GFX_GDS_OA_PHY_DATA_RAM_MEM,
+	AMDGV_RAS_BLOCK__GFX_GDS_OA_PIPE_MEM,
+	AMDGV_RAS_BLOCK__GFX_GDS_INDEX_END =
+		AMDGV_RAS_BLOCK__GFX_GDS_OA_PIPE_MEM,
+	/* SPI */
+	AMDGV_RAS_BLOCK__GFX_SPI_SR_MEM,
+	/* SQ */
+	AMDGV_RAS_BLOCK__GFX_SQ_INDEX_START,
+	AMDGV_RAS_BLOCK__GFX_SQ_SGPR = AMDGV_RAS_BLOCK__GFX_SQ_INDEX_START,
+	AMDGV_RAS_BLOCK__GFX_SQ_LDS_D,
+	AMDGV_RAS_BLOCK__GFX_SQ_LDS_I,
+	AMDGV_RAS_BLOCK__GFX_SQ_VGPR,
+	AMDGV_RAS_BLOCK__GFX_SQ_INDEX_END = AMDGV_RAS_BLOCK__GFX_SQ_VGPR,
+	/* SQC (3 ranges) */
+	AMDGV_RAS_BLOCK__GFX_SQC_INDEX_START,
+	/* SQC range 0 */
+	AMDGV_RAS_BLOCK__GFX_SQC_INDEX0_START =
+		AMDGV_RAS_BLOCK__GFX_SQC_INDEX_START,
+	AMDGV_RAS_BLOCK__GFX_SQC_INST_UTCL1_LFIFO =
+		AMDGV_RAS_BLOCK__GFX_SQC_INDEX0_START,
+	AMDGV_RAS_BLOCK__GFX_SQC_DATA_CU0_WRITE_DATA_BUF,
+	AMDGV_RAS_BLOCK__GFX_SQC_DATA_CU0_UTCL1_LFIFO,
+	AMDGV_RAS_BLOCK__GFX_SQC_DATA_CU1_WRITE_DATA_BUF,
+	AMDGV_RAS_BLOCK__GFX_SQC_DATA_CU1_UTCL1_LFIFO,
+	AMDGV_RAS_BLOCK__GFX_SQC_DATA_CU2_WRITE_DATA_BUF,
+	AMDGV_RAS_BLOCK__GFX_SQC_DATA_CU2_UTCL1_LFIFO,
+	AMDGV_RAS_BLOCK__GFX_SQC_INDEX0_END =
+		AMDGV_RAS_BLOCK__GFX_SQC_DATA_CU2_UTCL1_LFIFO,
+	/* SQC range 1 */
+	AMDGV_RAS_BLOCK__GFX_SQC_INDEX1_START,
+	AMDGV_RAS_BLOCK__GFX_SQC_INST_BANKA_TAG_RAM =
+		AMDGV_RAS_BLOCK__GFX_SQC_INDEX1_START,
+	AMDGV_RAS_BLOCK__GFX_SQC_INST_BANKA_UTCL1_MISS_FIFO,
+	AMDGV_RAS_BLOCK__GFX_SQC_INST_BANKA_MISS_FIFO,
+	AMDGV_RAS_BLOCK__GFX_SQC_INST_BANKA_BANK_RAM,
+	AMDGV_RAS_BLOCK__GFX_SQC_DATA_BANKA_TAG_RAM,
+	AMDGV_RAS_BLOCK__GFX_SQC_DATA_BANKA_HIT_FIFO,
+	AMDGV_RAS_BLOCK__GFX_SQC_DATA_BANKA_MISS_FIFO,
+	AMDGV_RAS_BLOCK__GFX_SQC_DATA_BANKA_DIRTY_BIT_RAM,
+	AMDGV_RAS_BLOCK__GFX_SQC_DATA_BANKA_BANK_RAM,
+	AMDGV_RAS_BLOCK__GFX_SQC_INDEX1_END =
+		AMDGV_RAS_BLOCK__GFX_SQC_DATA_BANKA_BANK_RAM,
+	/* SQC range 2 */
+	AMDGV_RAS_BLOCK__GFX_SQC_INDEX2_START,
+	AMDGV_RAS_BLOCK__GFX_SQC_INST_BANKB_TAG_RAM =
+		AMDGV_RAS_BLOCK__GFX_SQC_INDEX2_START,
+	AMDGV_RAS_BLOCK__GFX_SQC_INST_BANKB_UTCL1_MISS_FIFO,
+	AMDGV_RAS_BLOCK__GFX_SQC_INST_BANKB_MISS_FIFO,
+	AMDGV_RAS_BLOCK__GFX_SQC_INST_BANKB_BANK_RAM,
+	AMDGV_RAS_BLOCK__GFX_SQC_DATA_BANKB_TAG_RAM,
+	AMDGV_RAS_BLOCK__GFX_SQC_DATA_BANKB_HIT_FIFO,
+	AMDGV_RAS_BLOCK__GFX_SQC_DATA_BANKB_MISS_FIFO,
+	AMDGV_RAS_BLOCK__GFX_SQC_DATA_BANKB_DIRTY_BIT_RAM,
+	AMDGV_RAS_BLOCK__GFX_SQC_DATA_BANKB_BANK_RAM,
+	AMDGV_RAS_BLOCK__GFX_SQC_INDEX2_END =
+		AMDGV_RAS_BLOCK__GFX_SQC_DATA_BANKB_BANK_RAM,
+	AMDGV_RAS_BLOCK__GFX_SQC_INDEX_END =
+		AMDGV_RAS_BLOCK__GFX_SQC_INDEX2_END,
+	/* TA */
+	AMDGV_RAS_BLOCK__GFX_TA_INDEX_START,
+	AMDGV_RAS_BLOCK__GFX_TA_FS_DFIFO =
+		AMDGV_RAS_BLOCK__GFX_TA_INDEX_START,
+	AMDGV_RAS_BLOCK__GFX_TA_FS_AFIFO,
+	AMDGV_RAS_BLOCK__GFX_TA_FL_LFIFO,
+	AMDGV_RAS_BLOCK__GFX_TA_FX_LFIFO,
+	AMDGV_RAS_BLOCK__GFX_TA_FS_CFIFO,
+	AMDGV_RAS_BLOCK__GFX_TA_INDEX_END = AMDGV_RAS_BLOCK__GFX_TA_FS_CFIFO,
+	/* TCA */
+	AMDGV_RAS_BLOCK__GFX_TCA_INDEX_START,
+	AMDGV_RAS_BLOCK__GFX_TCA_HOLE_FIFO =
+		AMDGV_RAS_BLOCK__GFX_TCA_INDEX_START,
+	AMDGV_RAS_BLOCK__GFX_TCA_REQ_FIFO,
+	AMDGV_RAS_BLOCK__GFX_TCA_INDEX_END =
+		AMDGV_RAS_BLOCK__GFX_TCA_REQ_FIFO,
+	/* TCC (5 sub-ranges) */
+	AMDGV_RAS_BLOCK__GFX_TCC_INDEX_START,
+	/* TCC range 0 */
+	AMDGV_RAS_BLOCK__GFX_TCC_INDEX0_START =
+		AMDGV_RAS_BLOCK__GFX_TCC_INDEX_START,
+	AMDGV_RAS_BLOCK__GFX_TCC_CACHE_DATA =
+		AMDGV_RAS_BLOCK__GFX_TCC_INDEX0_START,
+	AMDGV_RAS_BLOCK__GFX_TCC_CACHE_DATA_BANK_0_1,
+	AMDGV_RAS_BLOCK__GFX_TCC_CACHE_DATA_BANK_1_0,
+	AMDGV_RAS_BLOCK__GFX_TCC_CACHE_DATA_BANK_1_1,
+	AMDGV_RAS_BLOCK__GFX_TCC_CACHE_DIRTY_BANK_0,
+	AMDGV_RAS_BLOCK__GFX_TCC_CACHE_DIRTY_BANK_1,
+	AMDGV_RAS_BLOCK__GFX_TCC_HIGH_RATE_TAG,
+	AMDGV_RAS_BLOCK__GFX_TCC_LOW_RATE_TAG,
+	AMDGV_RAS_BLOCK__GFX_TCC_INDEX0_END =
+		AMDGV_RAS_BLOCK__GFX_TCC_LOW_RATE_TAG,
+	/* TCC range 1 */
+	AMDGV_RAS_BLOCK__GFX_TCC_INDEX1_START,
+	AMDGV_RAS_BLOCK__GFX_TCC_IN_USE_DEC =
+		AMDGV_RAS_BLOCK__GFX_TCC_INDEX1_START,
+	AMDGV_RAS_BLOCK__GFX_TCC_IN_USE_TRANSFER,
+	AMDGV_RAS_BLOCK__GFX_TCC_INDEX1_END =
+		AMDGV_RAS_BLOCK__GFX_TCC_IN_USE_TRANSFER,
+	/* TCC range 2 */
+	AMDGV_RAS_BLOCK__GFX_TCC_INDEX2_START,
+	AMDGV_RAS_BLOCK__GFX_TCC_RETURN_DATA =
+		AMDGV_RAS_BLOCK__GFX_TCC_INDEX2_START,
+	AMDGV_RAS_BLOCK__GFX_TCC_RETURN_CONTROL,
+	AMDGV_RAS_BLOCK__GFX_TCC_UC_ATOMIC_FIFO,
+	AMDGV_RAS_BLOCK__GFX_TCC_WRITE_RETURN,
+	AMDGV_RAS_BLOCK__GFX_TCC_WRITE_CACHE_READ,
+	AMDGV_RAS_BLOCK__GFX_TCC_SRC_FIFO,
+	AMDGV_RAS_BLOCK__GFX_TCC_SRC_FIFO_NEXT_RAM,
+	AMDGV_RAS_BLOCK__GFX_TCC_CACHE_TAG_PROBE_FIFO,
+	AMDGV_RAS_BLOCK__GFX_TCC_INDEX2_END =
+		AMDGV_RAS_BLOCK__GFX_TCC_CACHE_TAG_PROBE_FIFO,
+	/* TCC range 3 */
+	AMDGV_RAS_BLOCK__GFX_TCC_INDEX3_START,
+	AMDGV_RAS_BLOCK__GFX_TCC_LATENCY_FIFO =
+		AMDGV_RAS_BLOCK__GFX_TCC_INDEX3_START,
+	AMDGV_RAS_BLOCK__GFX_TCC_LATENCY_FIFO_NEXT_RAM,
+	AMDGV_RAS_BLOCK__GFX_TCC_INDEX3_END =
+		AMDGV_RAS_BLOCK__GFX_TCC_LATENCY_FIFO_NEXT_RAM,
+	/* TCC range 4 */
+	AMDGV_RAS_BLOCK__GFX_TCC_INDEX4_START,
+	AMDGV_RAS_BLOCK__GFX_TCC_WRRET_TAG_WRITE_RETURN =
+		AMDGV_RAS_BLOCK__GFX_TCC_INDEX4_START,
+	AMDGV_RAS_BLOCK__GFX_TCC_ATOMIC_RETURN_BUFFER,
+	AMDGV_RAS_BLOCK__GFX_TCC_INDEX4_END =
+		AMDGV_RAS_BLOCK__GFX_TCC_ATOMIC_RETURN_BUFFER,
+	AMDGV_RAS_BLOCK__GFX_TCC_INDEX_END =
+		AMDGV_RAS_BLOCK__GFX_TCC_INDEX4_END,
+	/* TCI */
+	AMDGV_RAS_BLOCK__GFX_TCI_WRITE_RAM,
+	/* TCP */
+	AMDGV_RAS_BLOCK__GFX_TCP_INDEX_START,
+	AMDGV_RAS_BLOCK__GFX_TCP_CACHE_RAM =
+		AMDGV_RAS_BLOCK__GFX_TCP_INDEX_START,
+	AMDGV_RAS_BLOCK__GFX_TCP_LFIFO_RAM,
+	AMDGV_RAS_BLOCK__GFX_TCP_CMD_FIFO,
+	AMDGV_RAS_BLOCK__GFX_TCP_VM_FIFO,
+	AMDGV_RAS_BLOCK__GFX_TCP_DB_RAM,
+	AMDGV_RAS_BLOCK__GFX_TCP_UTCL1_LFIFO0,
+	AMDGV_RAS_BLOCK__GFX_TCP_UTCL1_LFIFO1,
+	AMDGV_RAS_BLOCK__GFX_TCP_INDEX_END =
+		AMDGV_RAS_BLOCK__GFX_TCP_UTCL1_LFIFO1,
+	/* TD */
+	AMDGV_RAS_BLOCK__GFX_TD_INDEX_START,
+	AMDGV_RAS_BLOCK__GFX_TD_SS_FIFO_LO =
+		AMDGV_RAS_BLOCK__GFX_TD_INDEX_START,
+	AMDGV_RAS_BLOCK__GFX_TD_SS_FIFO_HI,
+	AMDGV_RAS_BLOCK__GFX_TD_CS_FIFO,
+	AMDGV_RAS_BLOCK__GFX_TD_INDEX_END = AMDGV_RAS_BLOCK__GFX_TD_CS_FIFO,
+	/* EA (3 sub-ranges) */
+	AMDGV_RAS_BLOCK__GFX_EA_INDEX_START,
+	/* EA range 0 */
+	AMDGV_RAS_BLOCK__GFX_EA_INDEX0_START =
+		AMDGV_RAS_BLOCK__GFX_EA_INDEX_START,
+	AMDGV_RAS_BLOCK__GFX_EA_DRAMRD_CMDMEM =
+		AMDGV_RAS_BLOCK__GFX_EA_INDEX0_START,
+	AMDGV_RAS_BLOCK__GFX_EA_DRAMWR_CMDMEM,
+	AMDGV_RAS_BLOCK__GFX_EA_DRAMWR_DATAMEM,
+	AMDGV_RAS_BLOCK__GFX_EA_RRET_TAGMEM,
+	AMDGV_RAS_BLOCK__GFX_EA_WRET_TAGMEM,
+	AMDGV_RAS_BLOCK__GFX_EA_GMIRD_CMDMEM,
+	AMDGV_RAS_BLOCK__GFX_EA_GMIWR_CMDMEM,
+	AMDGV_RAS_BLOCK__GFX_EA_GMIWR_DATAMEM,
+	AMDGV_RAS_BLOCK__GFX_EA_INDEX0_END =
+		AMDGV_RAS_BLOCK__GFX_EA_GMIWR_DATAMEM,
+	/* EA range 1 */
+	AMDGV_RAS_BLOCK__GFX_EA_INDEX1_START,
+	AMDGV_RAS_BLOCK__GFX_EA_DRAMRD_PAGEMEM =
+		AMDGV_RAS_BLOCK__GFX_EA_INDEX1_START,
+	AMDGV_RAS_BLOCK__GFX_EA_DRAMWR_PAGEMEM,
+	AMDGV_RAS_BLOCK__GFX_EA_IORD_CMDMEM,
+	AMDGV_RAS_BLOCK__GFX_EA_IOWR_CMDMEM,
+	AMDGV_RAS_BLOCK__GFX_EA_IOWR_DATAMEM,
+	AMDGV_RAS_BLOCK__GFX_EA_GMIRD_PAGEMEM,
+	AMDGV_RAS_BLOCK__GFX_EA_GMIWR_PAGEMEM,
+	AMDGV_RAS_BLOCK__GFX_EA_INDEX1_END =
+		AMDGV_RAS_BLOCK__GFX_EA_GMIWR_PAGEMEM,
+	/* EA range 2 */
+	AMDGV_RAS_BLOCK__GFX_EA_INDEX2_START,
+	AMDGV_RAS_BLOCK__GFX_EA_MAM_D0MEM =
+		AMDGV_RAS_BLOCK__GFX_EA_INDEX2_START,
+	AMDGV_RAS_BLOCK__GFX_EA_MAM_D1MEM,
+	AMDGV_RAS_BLOCK__GFX_EA_MAM_D2MEM,
+	AMDGV_RAS_BLOCK__GFX_EA_MAM_D3MEM,
+	AMDGV_RAS_BLOCK__GFX_EA_INDEX2_END =
+		AMDGV_RAS_BLOCK__GFX_EA_MAM_D3MEM,
+	AMDGV_RAS_BLOCK__GFX_EA_INDEX_END =
+		AMDGV_RAS_BLOCK__GFX_EA_INDEX2_END,
+	/* UTC VM L2 bank */
+	AMDGV_RAS_BLOCK__UTC_VML2_BANK_CACHE,
+	/* UTC VM walker */
+	AMDGV_RAS_BLOCK__UTC_VML2_WALKER,
+	/* UTC ATC L2 2MB cache */
+	AMDGV_RAS_BLOCK__UTC_ATCL2_CACHE_2M_BANK,
+	/* UTC ATC L2 4KB cache */
+	AMDGV_RAS_BLOCK__UTC_ATCL2_CACHE_4K_BANK,
+	AMDGV_RAS_BLOCK__GFX_MAX
+};
+
+struct ras_common_if {
+	enum amdgv_ras_block block;
+	enum amdgv_ras_error_type type;
+	uint32_t sub_block_index;
+	/* block name */
+	char name[32];
+};
+
+struct ras_err_data {
+	unsigned long de_count;
+	unsigned long ue_count;
+	unsigned long ce_count;
+	unsigned long err_addr_cnt;
+	struct eeprom_table_record *err_addr;
+};
+
+struct eeprom_data_record {
+	/* point to data records array */
+	struct eeprom_table_record *bps;
+	/* the count of entries */
+	int count;
+	/* capacity of bad page records array*/
+	uint32_t bps_cap;
+};
+
+/* In the legacy driver, multiple bad pages records(16 pages on mi300)
+ * are saved to eeprom for one UE/DE error, now we can infer multiple bad
+ * pages from the base address, so each UE/DE error only needs to save one
+ * record to eeprom. In this way, there are two different record types
+ * in eeprom, in order to keep the existing access eeprom bps interface
+ * unchanged, add .rom_data->bps to cache raw records loaded from or saved
+ * to eeprom, and still use the original .bps to cache data that extends to
+ * multiple bad page records.
+ */
+struct ras_err_handler_data {
+	/* the raw records in eeprom */
+	struct eeprom_data_record rom_data;
+	/* the records after expanding  */
+	struct eeprom_table_record *bps;
+	/* point to reserved bo array */
+	struct amdgv_memmgr_mem **bps_mem;
+	/* the count of entries */
+	int count;
+	/* last reserved entry's index + 1 */
+	int last_reserved;
+	/* capacity of bad page records array*/
+	uint32_t bps_cap;
+
+	uint64_t last_retired_pfn;
+
+	/* memory partition mode when bps/ram data is filled */
+	enum amdgv_memory_partition_mode nps_mode;
+};
+
+typedef int (*ras_ih_cb)(struct amdgv_adapter *adapt, void *err_data);
+
+struct ras_badpage {
+	unsigned int bp;
+	unsigned int size;
+	unsigned int flags;
+};
+
+/* interfaces for IP */
+struct ras_fs_if {
+	struct ras_common_if head;
+	char sysfs_name[32];
+	char debugfs_name[32];
+};
+
+struct ras_query_if {
+	struct ras_common_if head;
+	unsigned long ue_count;
+	unsigned long ce_count;
+	unsigned long de_count;
+};
+
+struct ras_inject_if {
+	struct ras_common_if head;
+	uint64_t address;
+	uint64_t value;
+};
+
+struct ras_cure_if {
+	struct ras_common_if head;
+	uint64_t address;
+};
+
+struct ras_ih_if {
+	struct ras_common_if head;
+	ras_ih_cb cb;
+};
+
+struct ras_dispatch_if {
+	struct ras_common_if head;
+	struct amdgv_iv_entry *entry;
+};
+
+struct ras_debug_if {
+	union {
+		struct ras_common_if head;
+		struct ras_inject_if inject;
+	};
+	int op;
+};
+
+static inline enum ta_ras_block amdgv_ras_block_to_ta(enum amdgv_ras_block block)
+{
+	switch (block) {
+	case AMDGV_RAS_BLOCK__UMC:
+		return TA_RAS_BLOCK__UMC;
+	default:
+		return TA_RAS_BLOCK__UMC;
+	}
+}
+
+static inline enum ta_ras_error_type amdgv_ras_error_to_ta(enum amdgv_ras_error_type error)
+{
+	switch (error) {
+	case AMDGV_RAS_ERROR__NONE:
+		return TA_RAS_ERROR__NONE;
+	case AMDGV_RAS_ERROR__PARITY:
+		return TA_RAS_ERROR__PARITY;
+	case AMDGV_RAS_ERROR__SINGLE_CORRECTABLE:
+		return TA_RAS_ERROR__SINGLE_CORRECTABLE;
+	case AMDGV_RAS_ERROR__MULTI_UNCORRECTABLE:
+		return TA_RAS_ERROR__MULTI_UNCORRECTABLE;
+	case AMDGV_RAS_ERROR__POISON:
+		return TA_RAS_ERROR__POISON;
+	default:
+		return TA_RAS_ERROR__NONE;
+	}
+}
+
+#endif

@@ -1,0 +1,474 @@
+dnl *
+dnl * Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+dnl *
+dnl * Permission is hereby granted, free of charge, to any person obtaining a copy
+dnl * of this software and associated documentation files (the "Software"), to deal
+dnl * in the Software without restriction, including without limitation the rights
+dnl * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+dnl * copies of the Software, and to permit persons to whom the Software is
+dnl * furnished to do so, subject to the following conditions:
+dnl *
+dnl * The above copyright notice and this permission notice shall be included in
+dnl * all copies or substantial portions of the Software.
+dnl *
+dnl * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+dnl * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+dnl * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+dnl * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+dnl * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+dnl * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+dnl * THE SOFTWARE
+dnl *
+
+dnl #
+dnl # Default kernel configuration
+dnl #
+AC_DEFUN([AC_CONFIG_KERNEL], [
+	AC_KERNEL
+	AC_KERNEL_SINGLE_TARGET
+	AC_GIM_LINUX_HEADERS
+	AC_CLASS_CREATE_1_ARG
+	AC_VFS_UNLINK_3_ARG
+	AC_VFS_UNLINK_IDMAP_ARG
+	AC_PCI_ALLOC_IRQ_VECTORS
+	AC_LOFF_T_VARIABLE
+	AC_CRYPTO_HASH_DIGEST
+	AC_SHASH_DESC_FLAGS
+	AC_DECODE_SPEED_8
+	AC_DECODE_SPEED_16
+	AC_DECODE_SPEED_32
+	AC_PXM_TO_NODE
+	AC_DCORE_IOVA_VM_CTX_VFIO_DEVICE
+	AC_DCORE_IOVA_VM_CTX_PAGE_ARRAY
+	AC_VPRINTK_EMIT_5_ARG
+	AC_FTRACE_REGS_OPS
+	AC_DEVNODE_CONST
+	AC_BRIDGE_SECONDARY_BUS_RESET
+	AC_POLL_T
+	AC_RTC_KTIME_TO_TM
+	AC_KFREE_SENSITIVE
+	AC_GET_USER_PAGES_REMOTE_6_ARG
+	AC_GET_USER_PAGES_REMOTE_7_ARG
+	AC_UP_DOWN_READ
+	AC_KERNEL_WAIT
+	AS_IF([test "$LINUX_OBJ" != "$LINUX"], [
+		KERNEL_MAKE="$KERNEL_MAKE O=$LINUX_OBJ"
+	])
+
+	AC_SUBST(KERNEL_MAKE)
+])
+
+dnl #
+dnl # Detect name used for Module.symvers file in kernel
+dnl #
+AC_DEFUN([AC_MODULE_SYMVERS], [
+	modpost=$LINUX/scripts/Makefile.modpost
+	AC_MSG_CHECKING([kernel file name for module symbols])
+	AS_IF([test -f "$modpost"], [
+		AS_IF([grep -q Modules.symvers $modpost], [
+			LINUX_SYMBOLS=Modules.symvers
+		], [
+			LINUX_SYMBOLS=Module.symvers
+		])
+
+		AS_IF([test "x$enable_linux_builtin" != xyes -a ! -f "$LINUX_OBJ/$LINUX_SYMBOLS"], [
+			AC_MSG_ERROR([
+	*** Please make sure the kernel devel package for your distribution
+	*** is installed.  If you are building with a custom kernel, make sure the
+	*** kernel is configured, built, and the '--with-linux=PATH' configure
+	*** option refers to the location of the kernel source.])
+		])
+	], [
+		LINUX_SYMBOLS=NONE
+	])
+	AC_MSG_RESULT($LINUX_SYMBOLS)
+	AC_SUBST(LINUX_SYMBOLS)
+])
+
+dnl #
+dnl # Detect the kernel to be built against
+dnl #
+AC_DEFUN([AC_KERNEL], [
+	AC_ARG_WITH([linux],
+		AS_HELP_STRING([--with-linux=PATH],
+		[Path to kernel source]),
+		[kernelsrc="$withval"])
+
+	AC_ARG_WITH(linux-obj,
+		AS_HELP_STRING([--with-linux-obj=PATH],
+		[Path to kernel build objects]),
+		[kernelbuild="$withval"])
+
+	AC_MSG_CHECKING([kernel source directory])
+	AS_IF([test -z "$kernelsrc"], [
+		AS_IF([test -e "/lib/modules/$KERNELVER/source"], [
+			headersdir="/lib/modules/$KERNELVER/source"
+			sourcelink=$(readlink -f "$headersdir")
+		], [test -e "/lib/modules/$KERNELVER/build"], [
+			headersdir="/lib/modules/$KERNELVER/build"
+			sourcelink=$(readlink -f "$headersdir")
+		], [
+			sourcelink=$(ls -1d /usr/src/kernels/* \
+			             /usr/src/linux-* \
+			             2>/dev/null | grep -v obj | tail -1)
+		])
+
+		AS_IF([test -n "$sourcelink" && test -e ${sourcelink}], [
+			kernelsrc=`readlink -f ${sourcelink}`
+		], [
+			kernelsrc="[Not found]"
+		])
+	], [
+		AS_IF([test "$kernelsrc" = "NONE"], [
+			kernsrcver=NONE
+		])
+		withlinux=yes
+	])
+
+	AC_MSG_RESULT([$kernelsrc])
+	AS_IF([test ! -d "$kernelsrc"], [
+		AC_MSG_ERROR([
+	*** Please make sure the kernel devel package for your distribution
+	*** is installed and then try again.  If that fails, you can specify the
+	*** location of the kernel source with the '--with-linux=PATH' option.])
+	])
+
+	AC_MSG_CHECKING([kernel build directory])
+	AS_IF([test -z "$kernelbuild"], [
+		AS_IF([test x$withlinux != xyes -a -e "/lib/modules/$KERNELVER/build"], [
+			kernelbuild=`readlink -f /lib/modules/$KERNELVER/build`
+		], [test -d ${kernelsrc}-obj/${target_cpu}/${target_cpu}], [
+			kernelbuild=${kernelsrc}-obj/${target_cpu}/${target_cpu}
+		], [test -d ${kernelsrc}-obj/${target_cpu}/default], [
+			kernelbuild=${kernelsrc}-obj/${target_cpu}/default
+		], [test -d `dirname ${kernelsrc}`/build-${target_cpu}], [
+			kernelbuild=`dirname ${kernelsrc}`/build-${target_cpu}
+		], [
+			kernelbuild=${kernelsrc}
+		])
+	])
+	AC_MSG_RESULT([$kernelbuild])
+
+	AC_MSG_CHECKING([kernel source version])
+	utsrelease1=$kernelbuild/include/linux/version.h
+	utsrelease2=$kernelbuild/include/linux/utsrelease.h
+	utsrelease3=$kernelbuild/include/generated/utsrelease.h
+	AS_IF([test -r $utsrelease1 && fgrep -q UTS_RELEASE $utsrelease1], [
+		utsrelease=linux/version.h
+	], [test -r $utsrelease2 && fgrep -q UTS_RELEASE $utsrelease2], [
+		utsrelease=linux/utsrelease.h
+	], [test -r $utsrelease3 && fgrep -q UTS_RELEASE $utsrelease3], [
+		utsrelease=generated/utsrelease.h
+	])
+
+	AS_IF([test "$utsrelease"], [
+		kernsrcver=`(echo "#include <$utsrelease>";
+		             echo "kernsrcver=UTS_RELEASE") |
+		             cpp -I $kernelbuild/include |
+		             grep "^kernsrcver=" | cut -d \" -f 2`
+
+		AS_IF([test -z "$kernsrcver"], [
+			AC_MSG_RESULT([Not found])
+			AC_MSG_ERROR([*** Cannot determine kernel version.])
+		])
+	], [
+		AC_MSG_RESULT([Not found])
+		if test "x$enable_linux_builtin" != xyes; then
+			AC_MSG_ERROR([*** Cannot find UTS_RELEASE definition.])
+		else
+			AC_MSG_ERROR([
+	*** Cannot find UTS_RELEASE definition.
+	*** Please run 'make prepare' inside the kernel source tree.])
+		fi
+	])
+
+	AC_MSG_RESULT([$kernsrcver])
+
+	LINUX=${kernelsrc}
+	LINUX_OBJ=${kernelbuild}
+	LINUX_VERSION=${kernsrcver}
+	build_dir_root=$(cd "${0%/*}" && pwd)
+
+	AC_SUBST(LINUX)
+	AC_SUBST(LINUX_OBJ)
+	AC_SUBST(LINUX_VERSION)
+
+	AC_MODULE_SYMVERS
+])
+
+dnl #
+dnl # AC_KERNEL_CONFTEST_H
+dnl # $1: contents to be filled in conftest.h
+dnl #
+AC_DEFUN([AC_KERNEL_CONFTEST_H], [
+cat - <<_ACEOF >conftest.h
+$1
+_ACEOF
+])
+
+dnl #
+dnl # AC_KERNEL_CONFTEST_C
+dnl # fill in contents of conftest.h and $1 to conftest.c
+dnl # $1: contents to be filled in conftest.c
+dnl #
+AC_DEFUN([AC_KERNEL_CONFTEST_C], [
+cat $build_dir_root/confdefs.h - <<_ACEOF >conftest.c
+$1
+_ACEOF
+])
+
+dnl #
+dnl # AC_KERNEL_LANG_PROGRAM([PROLOGUE], [BODY])
+dnl #
+AC_DEFUN([AC_KERNEL_LANG_PROGRAM], [
+$1
+int
+main (void)
+{
+dnl Do *not* indent the following line: there may be CPP directives.
+dnl Don't move the `;' right after for the same reason.
+$2
+  ;
+  return 0;
+}
+])
+
+dnl #
+dnl # AC_KERNEL_COMPILE_MODULE_IFELSE / like AC_COMPILE_IFELSE
+dnl # $1: contents to be filled in conftest.c
+dnl # $2: make target.
+dnl # $3: user defined commands. It "AND" the make command to check the result. If true, expands to $4. Otherwise $5.
+dnl # $4: run it if make & $3 pass.
+dnl # $5: run it if make & $3 fail.
+dnl # $6: contents to be filled in conftest.h. Could be null.
+dnl #
+AC_DEFUN([AC_KERNEL_COMPILE_MODULE_IFELSE], [
+	m4_ifvaln([$1], [AC_KERNEL_CONFTEST_C([$1])])
+	m4_ifvaln([$6], [AC_KERNEL_CONFTEST_H([$6])], [AC_KERNEL_CONFTEST_H([])])
+	touch conftest.mod.c
+	if test "x$SINGLE_TARGET_BUILD_NO_TMP_VERSIONS" = x1; then
+		test -d $SINGLE_TARGET_BUILD_MODVERDIR || mkdir $SINGLE_TARGET_BUILD_MODVERDIR
+		rm -f $SINGLE_TARGET_BUILD_MODVERDIR/*
+	fi
+	echo "obj-m := conftest.o" >Makefile
+	kbuild_src_flag=''
+	kbuild_modpost_flag='KBUILD_MODPOST_NOFINAL=1 KBUILD_MODPOST_WARN=1'
+	kbuild_additional_flag=''
+	test "x$enable_linux_builtin" = xyes && kbuild_src_flag='KBUILD_SRC=' # override KBUILD_SRC
+	test "x$enable_linux_builtin" = xyes && kbuild_additional_flag='sub_make_done=' # override sub_make_done
+	AS_IF(
+		[AC_TRY_COMMAND(make [$2] -C $LINUX_OBJ EXTRA_CFLAGS="-Werror -Wno-error=uninitialized -Wno-error=unused-variable" M=$PWD $kbuild_src_flag $kbuild_additional_flag $kbuild_modpost_flag) >/dev/null && AC_TRY_COMMAND([$3])],
+		[$4],
+		[_AC_MSG_LOG_CONFTEST m4_ifvaln([$5],[$5])]
+	)
+])
+
+dnl #
+dnl # AC_KERNEL_TMP_BUILD_DIR
+dnl # $1: contents to be executed in a temporary directory
+dnl #
+AC_DEFUN([AC_KERNEL_TMP_BUILD_DIR], [
+	build_dir=$(mktemp -d -t build_XXXXXXXX -p $build_dir_root)
+	cd $build_dir
+	$1
+	AS_IF([test -s confdefs.h], [
+		cat confdefs.h >>$build_dir_root/confdefs.h
+	])
+	cd $build_dir_root
+	rm -rf $build_dir
+])
+
+dnl #
+dnl # AC_KERNEL_TRY_COMPILE_MODULE like AC_TRY_COMPILE
+dnl # $1: Prologue for conftest.c. including header files, extends, etc
+dnl # $2: Body for conftest.c.
+dnl # $3: run it if compile pass.
+dnl # $4: run it if compile fail.
+dnl #
+AC_DEFUN([AC_KERNEL_TRY_COMPILE_MODULE],
+	target='conftest.o'
+	[AC_KERNEL_COMPILE_MODULE_IFELSE(
+	[AC_LANG_SOURCE([AC_KERNEL_LANG_PROGRAM([[$1]], [[$2]])])],
+	[$target],
+	[test -s conftest.o],
+	[$3], [$4])
+])
+
+dnl #
+dnl # AC_KERNEL_COMPILE_IFELSE / like AC_COMPILE_IFELSE
+dnl # $1: contents to be filled in conftest.c
+dnl # $2: user defined commands. It "AND" the make command to check the result. If true, expands to $4. Otherwise $5.
+dnl # $3: run it if make & $3 pass.
+dnl # $4: run it if make & $3 fail.
+dnl # $5: contents to be filled in conftest.h. Could be null.
+dnl #
+AC_DEFUN([AC_KERNEL_COMPILE_IFELSE], [
+	m4_ifvaln([$1], [AC_KERNEL_CONFTEST_C([$1])])
+	m4_ifvaln([$5], [AC_KERNEL_CONFTEST_H([$5])], [AC_KERNEL_CONFTEST_H([])])
+	AS_IF(
+		[AC_TRY_COMMAND(eval $CC $CFLAGS) > /dev/null && AC_TRY_COMMAND([$2])],
+		[$3],
+		[_AC_MSG_LOG_CONFTEST m4_ifvaln([$4],[$4])]
+	)
+])
+dnl #
+dnl # AC_KERNEL_TRY_COMPILE like AC_TRY_COMPILE
+dnl # $1: Prologue for conftest.c. including header files, extends, etc
+dnl # $2: Body for conftest.c.
+dnl # $3: run it if compile pass.
+dnl # $4: run it if compile fail.
+dnl #
+AC_DEFUN([AC_KERNEL_TRY_COMPILE],
+	[AC_KERNEL_COMPILE_IFELSE(
+	[AC_LANG_SOURCE([AC_KERNEL_LANG_PROGRAM([[$1]], [[$2]])])],
+	[test -s conftest.o || test -s .tmp_conftest.o],
+	[$3], [$4])
+])
+
+dnl #
+dnl # AC_KERNEL_CHECK_SYMBOL_EXPORT
+dnl # check symbol exported or not
+dnl # $1: symbol list to look for
+dnl # $2: file list to look for $1
+dnl # $3: run it if pass.
+dnl # $4: run it if fail.
+dnl #
+AC_DEFUN([AC_KERNEL_CHECK_SYMBOL_EXPORT], [
+	awk -v s="$1" '
+		BEGIN {
+			n = 0;
+			num = split(s, symbols, " ")
+		} {
+			for (i in symbols)
+				if (symbols[[i]] == $[2])
+					n++
+		} END {
+			if (num == n)
+				exit 0;
+			else
+				exit 1
+		}' $LINUX_OBJ/$LINUX_SYMBOLS 2>/dev/null
+	rc=$?
+	if test $rc -ne 0; then
+		n=0
+		export=0
+		for file in $2; do
+			n=$(awk -v s="$1" '
+				BEGIN {
+					n = 0;
+					split(s, symbols, " ")
+				} {
+					for (i in symbols) {
+						s="EXPORT_SYMBOL.*\\("symbols[[i]]"\\);"
+						if ($[0] ~ s)
+							n++
+					}
+				} END {
+					print n
+				}' $LINUX/$file 2>/dev/null)
+			rc=$?
+			if test $rc -eq 0; then
+				export=$(( $export+$n ))
+			fi
+		done
+		if test $(echo "$1" | wc -w) -eq $export; then :
+			$3
+		else :
+			$4
+		fi
+	else :
+		$3
+	fi
+])
+
+dnl #
+dnl # AC_KERNEL_TRY_COMPILE_SYMBOL
+dnl # like AC_KERNEL_TRY_COMPILE, except AC_KERNEL_CHECK_SYMBOL_EXPORT
+dnl # is called if not compiling for builtin
+dnl # $1: Prologue for conftest.c. including header files, extends, etc
+dnl # $2: Body for conftest.c.
+dnl # $3: AC_KERNEL_CHECK_SYMBOL_EXPORT $1
+dnl # $4: AC_KERNEL_CHECK_SYMBOL_EXPORT $2
+dnl # $5: run it if checking pass
+dnl # $6: run it if checking fail
+dnl #
+AC_DEFUN([AC_KERNEL_TRY_COMPILE_SYMBOL], [
+	AC_KERNEL_TRY_COMPILE([$1], [$2], [rc=0], [rc=1])
+	if test $rc -ne 0; then :
+		$6
+	else
+		AC_KERNEL_CHECK_SYMBOL_EXPORT([$3], [$4], [rc=0], [rc=1])
+		if test $rc -ne 0; then :
+			$6
+		else :
+			$5
+		fi
+	fi
+])
+
+dnl #
+dnl # AC_KERNEL_TEST_HEADER_FILE_EXIST
+dnl # check header file exist
+dnl # $1: header file to check
+dnl # $2: run it if header file exist
+dnl # $3: run it if header file nonexistent
+dnl #
+AC_DEFUN([AC_KERNEL_TEST_HEADER_FILE_EXIST], [
+	header_file=m4_normalize([$1])
+	header_file_obj=$LINUX_OBJ/include/$header_file
+	header_file_src=$LINUX/include/$header_file
+	AS_IF([test -e $header_file_obj -o -e $header_file_src], [
+		$2
+	], [
+		$3
+	])
+])
+
+dnl #
+dnl # AC_KERNEL_CHECK_HEADERS
+dnl # check whether header file(s) is(are) present
+dnl # $1: header filei(s) to check
+dnl #
+AC_DEFUN([AC_KERNEL_CHECK_HEADERS], [
+	AC_CHECK_HEADERS([$1],[AS_TR_CPP([HAVE_$1])=1],,[-])
+])
+
+dnl #
+dnl # AC_KERNEL_DO_BACKGROUND
+dnl # $1: contents to be executed
+dnl #
+AC_DEFUN([AC_KERNEL_DO_BACKGROUND], [
+	do_background() {
+		AC_KERNEL_TMP_BUILD_DIR([$1])
+	}
+
+	AC_CHECK_PROG(NPROC, nproc, yes)
+	AS_IF([test x"$NPROC" != x"yes"], [
+		ncpu=1
+	], [
+		ncpu=$(nproc)
+	])
+
+	while [[ $(jobs | wc -l) -gt $ncpu ]]
+	do
+		sleep 0.1
+	done
+
+	do_background &
+	procs="$! $procs"
+])
+
+dnl #
+dnl # AC_KERNEL_WAIT
+dnl # wait for all tests to be finished
+dnl #
+AC_DEFUN([AC_KERNEL_WAIT], [
+	AC_MSG_CHECKING([for module configuration])
+	wait $procs
+	AS_IF([[[ $? -eq 0 ]]], [
+		AC_MSG_RESULT([done])
+	], [
+		AC_MSG_RESULT([failed])
+	])
+])
+

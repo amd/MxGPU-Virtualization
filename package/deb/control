@@ -1,0 +1,11 @@
+Source: gim-dkms
+Section: kernel
+Priority: optional
+Maintainer: AMD <sriov@amd.com>
+Standards-Version: 4.7.0
+Build-Depends: debhelper-compat (= 13), dh-dkms
+
+Package: gim-dkms
+Architecture: all
+Depends: dkms
+Description: DKMS source for GIM driver.

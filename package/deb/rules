@@ -1,0 +1,19 @@
+#!/usr/bin/make -f
+
+include /usr/share/dpkg/pkg-info.mk
+
+%:
+	dh $@ --with dkms
+
+override_dh_install:
+	dh_install Makefile dkms gim-coms-lib gim_shim libgv smi-lib usr/src/gim-$(DEB_VERSION_UPSTREAM)/
+	echo $(DEB_VERSION_UPSTREAM) > ./debian/$(DEB_SOURCE)/usr/src/gim-$(DEB_VERSION_UPSTREAM)/VERSION
+
+override_dh_dkms:
+	dh_dkms -V $(DEB_VERSION_UPSTREAM)
+
+override_dh_auto_configure:
+override_dh_auto_build:
+override_dh_auto_test:
+override_dh_auto_install:
+override_dh_auto_clean:

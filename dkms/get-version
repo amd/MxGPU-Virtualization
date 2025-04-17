@@ -1,0 +1,22 @@
+#!/bin/bash
+
+cd "$(dirname "${BASH_SOURCE[0]}")/../"
+if [ -f "./VERSION" ]; then
+    head -1 ./VERSION
+    exit
+elif [ -e "./.git" ] && [ "$(git rev-parse --is-inside-work-tree)" = "true" ]; then
+    branch="$(git rev-parse --abbrev-ref HEAD)"
+    if [ "$branch" = "mainline" ]; then
+        name="$(git describe --long --match "mainline/*.*.*.K")"
+    fi
+    if [ -z "$name" ]; then
+        name="$(git describe --long --match "staging/*.*.*.K")"
+    fi
+    ver="${name##*/}"
+    if [ -n "$ver" ]; then
+        echo "$ver"
+        exit
+    fi
+fi
+
+echo "0.0.0.K"
