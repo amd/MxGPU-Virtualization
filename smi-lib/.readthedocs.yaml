@@ -9,7 +9,7 @@ build:
       python: "3.10"
 
 sphinx:
-   configuration: docs/conf.py
+   configuration: smi-lib/docs/conf.py
 
 formats: [htmlzip, pdf, epub]
 
