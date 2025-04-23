@@ -15,4 +15,4 @@ formats: [htmlzip, pdf, epub]
 
 python:
    install:
-   - requirements: docs/sphinx/requirements.txt
+   - requirements: smi-lib/docs/sphinx/requirements.txt
