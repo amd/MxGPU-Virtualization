@@ -23,6 +23,7 @@
 
 import re
 import sys
+import os
 from pathlib import Path
 
 html_baseurl = os.environ.get("READTHEDOCS_CANONICAL_URL", "instinct.docs.amd.com")
