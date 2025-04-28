@@ -70,6 +70,7 @@ html_theme_options = {
     "repository_provider": "github",
     "repository_url": "https://github.com/amd/MxGPU-Virtualization",
     "link_main_doc": True,
+    "announcement": "This page documents AMD-SMI for virtualization hosts only. Please see the regular <a href='https://rocm.docs.amd.com/projects/amdsmi/en/latest/'>AMD-SMI</a> site for all other uses.",
     "nav_secondary_items": {
         "Community": "https://github.com/ROCm/ROCm/discussions",
         "Blogs": "https://rocm.blogs.amd.com/",
