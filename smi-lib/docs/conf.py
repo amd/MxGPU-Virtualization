@@ -25,6 +25,11 @@ import re
 import sys
 from pathlib import Path
 
+html_baseurl = os.environ.get("READTHEDOCS_CANONICAL_URL", "instinct.docs.amd.com")
+html_context = {}
+if os.environ.get("READTHEDOCS", "") == "True":
+    html_context["READTHEDOCS"] = True
+
 sys.path.append(str(Path('_extension').resolve()))
 
 def get_version_info(filepath):
