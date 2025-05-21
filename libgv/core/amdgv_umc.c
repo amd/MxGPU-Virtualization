@@ -205,7 +205,7 @@ int amdgv_umc_add_bad_pages(struct amdgv_adapter *adapt,
 	int ret = 0;
 	int i = 0;
 
-	if (adapt->ecc.bad_page_detection_mode & (1 << AMDGV_RAS_ECC_FLAG_SKIP_BAD_PAGE_OPS))
+	if (adapt->ecc.bad_page_detection_mode & BIT(AMDGV_RAS_ECC_FLAG_SKIP_BAD_PAGE_OPS))
 		return 0;
 
 	if (!bps || pages <= 0)
@@ -259,7 +259,7 @@ int amdgv_umc_save_bad_pages(struct amdgv_adapter *adapt)
 	struct amdgv_ras_eeprom_control *control;
 	int save_count;
 
-	if (adapt->ecc.bad_page_detection_mode & (1 << AMDGV_RAS_ECC_FLAG_SKIP_BAD_PAGE_OPS))
+	if (adapt->ecc.bad_page_detection_mode & BIT(AMDGV_RAS_ECC_FLAG_SKIP_BAD_PAGE_OPS))
 		return 0;
 
 	if (!data)
@@ -307,7 +307,7 @@ int amdgv_umc_load_bad_pages(struct amdgv_adapter *adapt)
 	struct amdgv_ras_eeprom_control *control = &adapt->eeprom_control;
 	struct eeprom_table_record *bps = NULL;
 
-	if (adapt->ecc.bad_page_detection_mode & (1 << AMDGV_RAS_ECC_FLAG_SKIP_BAD_PAGE_OPS))
+	if (adapt->ecc.bad_page_detection_mode & BIT(AMDGV_RAS_ECC_FLAG_SKIP_BAD_PAGE_OPS))
 		return 0;
 
 	/* no bad page record, skip eeprom access */
@@ -351,14 +351,12 @@ int amdgv_umc_reload_bp_from_rom(struct amdgv_adapter *adapt)
 	/* release pf reserved bp */
 	amdgv_umc_release_bad_pages(adapt);
 
-	/**
-	 * reset bps for fresh reload from rom data
+	/* reset bps for fresh reload from rom data
 	 * The allocated size of bps can be larger then
 	 * actual used after reload.
 	 */
 	eh_data->count = 0;
 	eh_data->last_retired_pfn = AMDGV_RAS_INV_MEM_PFN;
-	amdgv_vfmgr_clean_bp_block_size(adapt);
 
 	/* load from rom data */
 	for (i = 0; i < rom_data->count; i++) {
@@ -449,7 +447,7 @@ static bool amdgv_umc_check_bp_in_critical_region(struct amdgv_adapter *adapt,
 	uint32_t i;
 	uint64_t err_addr_gpa;
 
-	if (adapt->ecc.bad_page_detection_mode & (1 << AMDGV_RAS_ECC_FLAG_IGNORE_RMA))
+	if (adapt->ecc.bad_page_detection_mode & BIT(AMDGV_RAS_ECC_FLAG_IGNORE_RMA))
 		return false;
 	/*
 	 * with FFBM enabled,
@@ -465,16 +463,17 @@ static bool amdgv_umc_check_bp_in_critical_region(struct amdgv_adapter *adapt,
 
 		if (idx_vf == AMDGV_PF_IDX) {
 			/* check pf memory region */
-			if (amdgv_umc_is_bp_in_range(err_addr, vf_fb_offset, vf_fb_size)) {
+			if (amdgv_umc_is_bp_in_range(err_addr, vf_fb_offset, vf_fb_size) &&
+			    (adapt->flags & AMDGV_FLAG_USE_PF)) {
 				adapt->bp_msg_type = AMDGV_BP_MSG_IN_PF_FB;
-				return (adapt->flags & AMDGV_FLAG_USE_PF);
+				return true;
 			}
 
-			if (amdgv_umc_is_bp_in_range(err_addr, adapt->memmgr_pf.offset, adapt->memmgr_pf.size)) {
+			if (amdgv_umc_is_bp_in_range(err_addr, adapt->memmgr_pf.offset, adapt->memmgr_pf.size) &&
+			    (adapt->flags & AMDGV_FLAG_USE_PF)) {
 				adapt->bp_msg_type = AMDGV_BP_MSG_IN_PF_FB;
-				return (adapt->flags & AMDGV_FLAG_USE_PF);
+				return true;
 			}
-
 		} else {
 			/* we may get multiple ECCs at the same time, and the ecc address and ecc vf may
 			* be not in sequence. So check all the VF for critical range, if found, set
@@ -491,6 +490,10 @@ static bool amdgv_umc_check_bp_in_critical_region(struct amdgv_adapter *adapt,
 				fb_size =
 					KBYTES_TO_BYTES(AMD_SRIOV_MSG_DATAEXCHANGE_OFFSET_KB) +
 					KBYTES_TO_BYTES(AMD_SRIOV_MSG_DATAEXCHANGE_SIZE_KB);
+
+				if (adapt->gpuiov.funcs->adjust_fb_size) {
+					fb_size = adapt->gpuiov.funcs->adjust_fb_size(adapt, idx_vf, fb_size);
+				}
 
 				if (amdgv_umc_is_bp_in_range(err_addr, fb_offset, fb_size)) {
 					adapt->bp_msg_type =
@@ -559,10 +562,11 @@ static bool amdgv_umc_check_bp_in_critical_region(struct amdgv_adapter *adapt,
 		 * and TMR has already been checked above
 		 */
 		err_addr_gpa = amdgv_ffbm_spa_to_gpa(adapt, err_addr, &idx_vf);
-		if (idx_vf == AMDGV_PF_IDX && err_addr_gpa != AMDGV_FFBM_INVALID_ADDR) {
+		if (idx_vf == AMDGV_PF_IDX &&
+			err_addr_gpa != AMDGV_FFBM_INVALID_ADDR && (adapt->flags & AMDGV_FLAG_USE_PF)) {
 			adapt->bp_msg_type = AMDGV_BP_MSG_IN_PF_FB;
 			/* return true if PF_FB is in use */
-			return (adapt->flags & AMDGV_FLAG_USE_PF);
+			return true;
 		}
 	}
 
@@ -577,7 +581,7 @@ static bool amdgv_umc_check_bp_in_same_mem_row(struct amdgv_adapter *adapt,
 	int i;
 	bool ret = false;
 
-	if (adapt->ecc.bad_page_detection_mode & (1 << AMDGV_RAS_ECC_FLAG_IGNORE_RMA))
+	if (adapt->ecc.bad_page_detection_mode & BIT( AMDGV_RAS_ECC_FLAG_IGNORE_RMA))
 		return false;
 
 	if (adapt->ecc.skip_row_rma)
@@ -597,35 +601,36 @@ static bool amdgv_umc_check_bp_in_same_mem_row(struct amdgv_adapter *adapt,
 	return ret;
 }
 
-static void amdgv_umc_log_bp_errors(struct amdgv_adapter *adapt)
+static void amdgv_umc_log_bp_errors(struct amdgv_adapter *adapt, uint32_t record_id)
 {
 	struct ras_err_handler_data *data = adapt->ecc.eh_data;
 
 	if (!data)
 		return;
 
-	if (adapt->ecc.bad_page_detection_mode & (1 << AMDGV_RAS_ECC_FLAG_IGNORE_RMA))
+	if (adapt->ecc.bad_page_detection_mode & BIT(AMDGV_RAS_ECC_FLAG_IGNORE_RMA))
 		return;
 
 	switch (adapt->bp_msg_type) {
 	case AMDGV_BP_MSG_IN_PF_FB:
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_IN_PF_FB,
-				AMDGV_ERROR_32_32(data->last_reserved + 1, BAD_PAGE_RECORD_THRESHOLD));
+				AMDGV_ERROR_32_32(record_id, BAD_PAGE_RECORD_THRESHOLD));
 		break;
 	case AMDGV_BP_MSG_IN_CRITICAL_REGION:
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_IN_CRI_REG,
-				AMDGV_ERROR_32_32(data->last_reserved + 1, BAD_PAGE_RECORD_THRESHOLD));
+				AMDGV_ERROR_32_32(record_id, BAD_PAGE_RECORD_THRESHOLD));
 		break;
 	case AMDGV_BP_MSG_IN_VF_CRITICAL_REGION:
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_IN_VF_CRI,
-				AMDGV_ERROR_32_32(data->last_reserved + 1, BAD_PAGE_RECORD_THRESHOLD));
+				AMDGV_ERROR_32_32(record_id, BAD_PAGE_RECORD_THRESHOLD));
 		break;
 	case AMDGV_BP_MSG_IN_SAME_ROW:
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_IN_SAME_ROW,
-				AMDGV_ERROR_32_32(data->last_reserved + 1, BAD_PAGE_RECORD_THRESHOLD));
+				AMDGV_ERROR_32_32(record_id, BAD_PAGE_RECORD_THRESHOLD));
 		break;
 	case AMDGV_BP_MSG_RECORD_THRESHOLD_REACHED:
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_REACH_THD, BAD_PAGE_RECORD_THRESHOLD);
+		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_REACH_THD,
+				BAD_PAGE_RECORD_THRESHOLD);
 		break;
 	default:
 		break;
@@ -636,7 +641,7 @@ static void amdgv_umc_log_bp_errors(struct amdgv_adapter *adapt)
 
 static bool amdgv_umc_check_bp_threshold(struct amdgv_adapter *adapt, struct ras_err_handler_data *data)
 {
-	if (adapt->ecc.bad_page_detection_mode & (1 << AMDGV_RAS_ECC_FLAG_IGNORE_RMA))
+	if (adapt->ecc.bad_page_detection_mode & BIT(AMDGV_RAS_ECC_FLAG_IGNORE_RMA))
 		return false;
 
 	/* RMA at the max count because new entries will be lost. */
@@ -657,7 +662,7 @@ int amdgv_umc_reserve_bad_pages(struct amdgv_adapter *adapt)
 	uint32_t idx_vf, total_fb_in_mb;
 	int resv_count = 0;
 
-	if (adapt->ecc.bad_page_detection_mode & (1 << AMDGV_RAS_ECC_FLAG_SKIP_BAD_PAGE_OPS))
+	if (adapt->ecc.bad_page_detection_mode & BIT(AMDGV_RAS_ECC_FLAG_SKIP_BAD_PAGE_OPS))
 		return ret;
 
 	if (!data)
@@ -666,7 +671,7 @@ int amdgv_umc_reserve_bad_pages(struct amdgv_adapter *adapt)
 	oss_mutex_lock(adapt->ecc.recovery_lock);
 
 	if (amdgv_umc_check_bp_threshold(adapt, data)) {
-		amdgv_umc_log_bp_errors(adapt);
+		amdgv_umc_log_bp_errors(adapt, BAD_PAGE_RECORD_THRESHOLD);
 		goto out;
 	}
 
@@ -681,16 +686,14 @@ int amdgv_umc_reserve_bad_pages(struct amdgv_adapter *adapt)
 		total_fb = MBYTES_TO_BYTES(total_fb);
 		err_addr_gpu = total_fb - err_addr_pf;
 
-		adapt->bp_msg_type = AMDGV_BP_MSG_INVALID;
-
 		if (amdgv_umc_check_bp_in_same_mem_row(adapt, err_addr_pf)) {
-			amdgv_umc_log_bp_errors(adapt);
+			amdgv_umc_log_bp_errors(adapt, i);
 			break;
 		}
 
 		idx_vf = amdgv_umc_calc_retired_page_vf_slot(adapt, err_addr_pf);
 		if (amdgv_umc_check_bp_in_critical_region(adapt, err_addr_pf, idx_vf)) {
-			amdgv_umc_log_bp_errors(adapt);
+			amdgv_umc_log_bp_errors(adapt, i);
 			break;
 		}
 
@@ -731,41 +734,79 @@ out:
 	return ret;
 }
 
-/* write bad page record into share memory */
-void amdgv_umc_notify_vf_bp_records(struct amdgv_adapter *adapt, uint32_t idx_vf)
+int amdgv_umc_copy_bp_records_to_vf(struct amdgv_adapter *adapt,
+				    uint32_t idx_vf,
+				    uint32_t allowed_size,
+				    uint32_t *write_size,
+				    uint32_t *more)
 {
 	struct ras_err_handler_data *data = adapt->ecc.eh_data;
 	uint64_t err_addr;
-	uint32_t bp_idx_vf;
-	struct amdgv_vf_device *entry;
-	int i, write_count;
+	int i;
+
+	*write_size = 0;
+	*more = 0;
+
+	if (!data)
+		return 0;
 
 	oss_mutex_lock(adapt->ecc.recovery_lock);
-	if (!data) {
-		oss_mutex_unlock(adapt->ecc.recovery_lock);
-		return;
+
+	for (i = 0; i < data->count; i++) {
+		err_addr = data->bps[i].retired_page << AMDGV_GPU_PAGE_SHIFT;
+		if (amdgv_umc_calc_retired_page_vf_slot(adapt, err_addr) != idx_vf ||
+		    amdgv_umc_check_bp_in_critical_region(adapt, err_addr, idx_vf))
+		    continue;
+
+		if (*write_size > allowed_size) {
+			*more = true;
+			break;
+		}
+
+		if (!amdgv_vfmgr_copy_bp_entry_to_vf_fb(adapt, idx_vf,
+							data->bps[i].retired_page,
+							(*write_size) / sizeof(uint64_t),
+							NULL))
+			(*write_size) += sizeof(uint64_t);
 	}
 
-	amdgv_vfmgr_clean_vf_bp_block_size(adapt, idx_vf);
+	oss_mutex_unlock(adapt->ecc.recovery_lock);
 
-	write_count = data->count <= BAD_PAGE_RECORD_THRESHOLD ?
-					data->count : BAD_PAGE_RECORD_THRESHOLD;
+	return 0;
+}
 
-	for (i = 0; i < write_count; i++) {
-		err_addr = data->bps[i].retired_page << AMDGV_GPU_PAGE_SHIFT;
+void amdgv_umc_check_and_handle_bp_in_crit_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	struct ras_err_handler_data *data = adapt->ecc.eh_data;
+	uint64_t err_addr;
+	int i;
 
-		bp_idx_vf = amdgv_umc_calc_retired_page_vf_slot(adapt, err_addr);
-		if (!amdgv_umc_check_bp_in_critical_region(adapt, err_addr, idx_vf) &&
-		    (idx_vf == bp_idx_vf)) {
-			entry = &adapt->array_vf[idx_vf];
-			entry->retired_page = data->bps[i].retired_page;
+	/* GPU is already in bad state */
+	if (adapt->bp_msg_type != AMDGV_BP_MSG_INVALID)
+		return;
 
-			if (amdgv_vfmgr_update_bp_message(adapt, idx_vf))
-				AMDGV_WARN("update bp message failed\n");
+	oss_mutex_lock(adapt->ecc.recovery_lock);
+
+	if (data) {
+		for (i = 0; i < data->count; i++) {
+			err_addr = data->bps[i].retired_page << AMDGV_GPU_PAGE_SHIFT;
+			if (idx_vf != amdgv_umc_calc_retired_page_vf_slot(adapt, err_addr))
+				continue;
+			if (amdgv_umc_check_bp_in_critical_region(adapt, err_addr, idx_vf)) {
+				amdgv_umc_log_bp_errors(adapt, i);
+				break;
+			}
 		}
 	}
 
 	oss_mutex_unlock(adapt->ecc.recovery_lock);
+
+	/* Commit the new status to EEPROM */
+	if (adapt->bp_msg_type != AMDGV_BP_MSG_INVALID)
+		amdgv_umc_save_bad_pages(adapt);
+
+	if (amdgv_ras_eeprom_is_gpu_bad(adapt))
+		amdgv_device_handle_bad_gpu(adapt);
 }
 
 /* called when driver unload */
@@ -790,7 +831,7 @@ out:
 	return 0;
 }
 
-int amdgv_umc_recovery_sw_init(struct amdgv_adapter *adapt)
+int amdgv_umc_sw_init(struct amdgv_adapter *adapt)
 {
 	struct ras_err_handler_data **data = &(adapt->ecc.eh_data);
 
@@ -818,11 +859,11 @@ int amdgv_umc_recovery_sw_init(struct amdgv_adapter *adapt)
 	return 0;
 error:
 	AMDGV_ERROR("Failed to initialize ras recovery!\n");
-	amdgv_umc_recovery_sw_fini(adapt);
+	amdgv_umc_sw_fini(adapt);
 	return AMDGV_FAILURE;
 }
 
-int amdgv_umc_recovery_hw_init(struct amdgv_adapter *adapt)
+int amdgv_umc_hw_init(struct amdgv_adapter *adapt)
 {
 	int ret;
 	enum amdgv_memory_partition_mode nps_mode;
@@ -892,7 +933,7 @@ free:
 	return ret;
 }
 
-int amdgv_umc_recovery_sw_fini(struct amdgv_adapter *adapt)
+int amdgv_umc_sw_fini(struct amdgv_adapter *adapt)
 {
 	struct ras_err_handler_data *data = adapt->ecc.eh_data;
 
@@ -932,7 +973,7 @@ int amdgv_umc_recovery_sw_fini(struct amdgv_adapter *adapt)
 	return 0;
 }
 
-int amdgv_umc_recovery_hw_fini(struct amdgv_adapter *adapt)
+int amdgv_umc_hw_fini(struct amdgv_adapter *adapt)
 {
 	amdgv_umc_release_bad_pages(adapt);
 	amdgv_ras_eeprom_fini(&adapt->eeprom_control);
@@ -1156,8 +1197,6 @@ int amdgv_umc_clean_bad_page_records(struct amdgv_adapter *adapt)
 			data->bps_mem[i] = NULL;
 			data->last_reserved = i;
 		}
-		/* clean bad page block size */
-		amdgv_vfmgr_clean_bp_block_size(adapt);
 	}
 
 	if (adapt->pp.pp_funcs->send_hbm_bad_pages_num)

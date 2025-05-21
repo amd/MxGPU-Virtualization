@@ -160,6 +160,27 @@ static uint32_t gim_live_update_flush_file(struct gim_live_update_manager *mgr)
 	return write_size;
 }
 
+static void gim_remove_file(const char *path)
+{
+	struct path p;
+	int err;
+
+
+	err = kern_path(path, LOOKUP_FOLLOW, &p);
+	if (!err) {
+		// file exists, remove the file
+		struct inode *dir = d_inode(p.dentry->d_parent);
+#if defined(VFS_UNLINK_HAS_3_ARG)
+		err = vfs_unlink(dir, p.dentry, NULL);
+#elif defined(VFS_UNLINK_HAS_IDMAP_ARG)
+		err = vfs_unlink(mnt_idmap(p.mnt), dir, p.dentry, NULL);
+#else
+		err = vfs_unlink(mnt_user_ns(p.mnt), dir, p.dentry, NULL);
+#endif
+		path_put(&p);
+	}
+}
+
 void gim_live_update_init_manager(struct gim_live_update_manager *mgr)
 {
 	struct path file_path;
@@ -197,6 +218,8 @@ retry:
 		if (!IS_ERR(file) && file_size > 0) {
 			gim_kernel_read(file, mgr->gpu_data_ptr, file_size, pos);
 			filp_close(file, NULL);
+			// Remove the file after reading
+			gim_remove_file(GIM_LIVE_UPDATE_DATA_PATH);
 		}
 		break;
 	case GIM_LIVE_UPDATE_MEM:

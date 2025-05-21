@@ -59,6 +59,13 @@ struct gim_conf_opt conf_opts[] = {
 				 .def = VF_NUMBER__DEFAULT,
 				 .persistent = true,
 				 .array = true },
+	[CONF_OPT_IP_DISCOVERY_LOAD_TYPE] = { .name = IP_DISCOVERY_LOAD_TYPE__KEY,
+				    .value = { IP_DISCOVERY_LOAD_TYPE__DEFAULT },
+				    .repeat_val_idx = 1,
+				    .min = IP_DISCOVERY_LOAD_TYPE__START,
+				    .max = IP_DISCOVERY_LOAD_TYPE__MAX,
+				    .def = IP_DISCOVERY_LOAD_TYPE__DEFAULT,
+				    .array = true },
 	[CONF_OPT_FW_LOAD_TYPE] = { .name = FW_LOAD_TYPE__KEY,
 				    .value = { FW_LOAD_TYPE__DEFAULT },
 				    .repeat_val_idx = 1,
@@ -122,6 +129,7 @@ struct gim_conf_opt conf_opts[] = {
 				 .max = MM_POLICY__MAX,
 				 .def = MM_POLICY__DEFAULT,
 				 .array = true },
+#ifndef EXCLUDE_DCORE_DEBUG
 	[CONF_OPT_HANG_DUMP_TIMEOUT] = { .name = HANG_DUMP_TIMEOUT__KEY,
 					 .value = { HANG_DUMP_TIMEOUT__DEFAULT },
 					 .repeat_val_idx = 1,
@@ -129,6 +137,7 @@ struct gim_conf_opt conf_opts[] = {
 					 .max = HANG_DUMP__MAX,
 					 .def = HANG_DUMP_TIMEOUT__DEFAULT,
 					 .array = true },
+#endif
 	/* Only support single mode for whole hive */
 	[CONF_OPT_FB_SHARING_MODE] = {	.name = FB_SHARING_MODE__KEY,
 					.value  = {FB_SHARING_MODE__DEFAULT},
@@ -227,10 +236,18 @@ struct gim_conf_opt conf_opts[] = {
 				      .max = MAX_CPER_COUNT__MAX,
 				      .def = MAX_CPER_COUNT__DEFAULT,
 				      .array = true },
+	[CONF_OPT_DEBUG_MODE] = { .name = DEBUG_MODE__KEY,
+		.value = { DEBUG_MODE__DEFAULT },
+		.repeat_val_idx = 1,
+		.min = DEBUG_MODE__START,
+		.max = DEBUG_MODE__MAX,
+		.def = DEBUG_MODE__DEFAULT,
+		.array = false },
 };
 
 #define MAX_OPTION (sizeof(conf_opts)/sizeof(struct gim_conf_opt))
 #define MAX_CONFIG_FILE_LENGTH 1024
+bool svm_enabled;
 
 /* Options input from command line */
 int vf_num_size;
@@ -250,6 +267,15 @@ MODULE_PARM_DESC(skip_check_bgpu, "whether skip check bad GPU(0:disable 1:enable
 		"0: check bad GPU\n\t"
 		"1: skip check bad GPU and RMA\n\t"
 		"2: skip check RMA only");
+
+int ip_discovery_load_type_size;
+uint ip_discovery_load_type[AMDGV_MAX_GPU_NUM] = {0};
+module_param_array(ip_discovery_load_type, uint, &ip_discovery_load_type_size, 0444);
+MODULE_PARM_DESC(ip_discovery_load_type, "ip discovery table loading type\n\t"
+				"ip_discovery_load_type=[I0[,I1[...[,Ix]]]]\n\t"
+				"1 <= Ix <= 2; 0 <= x <= 31\n\t"
+				"1: IP discovery table loads via PSP FW\n\t"
+				"2: IP discovery table loads via files");
 
 int fw_load_type_size;
 uint fw_load_type[AMDGV_MAX_GPU_NUM] = {0};
@@ -338,6 +364,7 @@ char *gim_enabled_devices;
  MODULE_PARM_DESC(enabled_devices, "Enabled device strings (will be set like aaaa:xx:yy.z;bbbb:xx:yy.z)");
  module_param_named(enabled_devices, gim_enabled_devices, charp, 0444);
 
+#ifndef EXCLUDE_DCORE_DEBUG
 int hangdump_timeout_size;
 uint hangdump_timeout[AMDGV_MAX_GPU_NUM] = {0};
 module_param_array(hangdump_timeout, uint, &hangdump_timeout_size, 0444);
@@ -345,6 +372,7 @@ MODULE_PARM_DESC(hangdump_timeout, "max time for dcore to do hang dump\n\t"
 			"hangdump_timeout=[T0[,T1[...[,Tx]]]]\n\t"
 			"0 <= Tx <= 60000 (ms), 0 <= x <= 31\n\t"
 			"0: use default timeout 10000 ms");
+#endif
 
 int fb_sharing_mode_size;
 uint fb_sharing_mode[AMDGV_MAX_GPU_NUM] = {0};
@@ -445,6 +473,21 @@ MODULE_PARM_DESC(max_cper_count, "Max CPER Count\n\t"
 	"0: Driver default count: " STR(AMDGV_CPER_MAX_ALLOWED_COUNT) " CPERs (Default)\n\t"
 	"1-" STR(AMDGV_CPER_MAX_ALLOWED_COUNT) ": Custom max CPER count\n\t");
 
+int debug_mode_size;
+uint debug_mode[AMDGV_MAX_GPU_NUM] = {0};
+module_param_array(debug_mode, uint, &debug_mode_size, 0444);
+MODULE_PARM_DESC(debug_mode, "Debug Mode Mask (all modes disabled by default)\n\t"
+	"debug_mode=0xD\n\t"
+	"0 <= D <= 1F;\n\t"
+	"0x0: Disable Debug Mode\n\t"
+	"0x1: Enable debug mode for VF FLR hang\n\t"
+	"0x2: Enable debug mode for whole GPU reset hang\n\t"
+	"0x4: Enable debug mode for multi-VF\n\t"
+	"0x8: Enable debug mode for RAS SMU\n\t"
+	"0x10: Enable debug mode for conditional hang\n\t"
+	"0x3: Enable debug mode for hang\n\t"
+	"0xb: Enable debug mode for hang RAS SMU\n\t"
+	"0x1f: Enable all debug modes\n\t");
 
 static int gim_conf_search_config_key(char *key)
 {
@@ -872,6 +915,10 @@ int gim_conf_init(void)
 		set_array_value(CONF_OPT_SCH_POLICY,
 				sch_policy, sch_policy_size);
 
+	if (ip_discovery_load_type_size > 0)
+		set_array_value(CONF_OPT_IP_DISCOVERY_LOAD_TYPE,
+				ip_discovery_load_type, ip_discovery_load_type_size);
+
 	if (fw_load_type_size > 0)
 		set_array_value(CONF_OPT_FW_LOAD_TYPE,
 				fw_load_type, fw_load_type_size);
@@ -903,10 +950,12 @@ int gim_conf_init(void)
 		set_array_value(CONF_OPT_PARTITION_FULL_ACCESS_EN,
 				partition_full_access_enable, partition_full_access_enable_size);
 
+#ifndef EXCLUDE_DCORE_DEBUG
 	if (hangdump_timeout_size > 0) {
 		set_array_value(CONF_OPT_HANG_DUMP_TIMEOUT,
 				hangdump_timeout, hangdump_timeout_size);
 	}
+#endif
 
 	if (debug_dump_size_array_size > 0)
 		set_array_value(CONF_OPT_DEBUG_DUMP_RESERVE_SIZE,
@@ -960,6 +1009,11 @@ int gim_conf_init(void)
 	if (max_cper_count_size > 0) {
 		set_array_value(CONF_OPT_MAX_CPER_COUNT,
 				max_cper_count, max_cper_count_size);
+	}
+
+	if (debug_mode_size > 0) {
+		set_array_value(CONF_OPT_DEBUG_MODE,
+				debug_mode, debug_mode_size);
 	}
 
 	gim_conf_clear_saved_persist_config(config_file_created);
@@ -1016,6 +1070,14 @@ uint32_t gim_conf_get_sch_policy_opt(uint32_t id)
 	return conf_opts[CONF_OPT_SCH_POLICY].value[id];
 }
 
+uint32_t gim_conf_get_ip_discovery_load_type_opt(uint32_t id)
+{
+	if (id >= AMDGV_MAX_GPU_NUM)
+		id = AMDGV_MAX_GPU_NUM - 1;
+
+	return conf_opts[CONF_OPT_IP_DISCOVERY_LOAD_TYPE].value[id];
+}
+
 uint32_t gim_conf_get_fw_load_type_opt(uint32_t id)
 {
 	if (id >= AMDGV_MAX_GPU_NUM)
@@ -1047,6 +1109,7 @@ uint32_t gim_conf_get_perf_mon_enable_opt(uint32_t id)
 	return conf_opts[CONF_OPT_PERF_MON_EN].value[id];
 }
 
+#ifndef EXCLUDE_DCORE_DEBUG
 uint32_t gim_conf_get_hangdump_timeout_opt(uint32_t id)
 {
 	if (id >= AMDGV_MAX_GPU_NUM)
@@ -1054,6 +1117,7 @@ uint32_t gim_conf_get_hangdump_timeout_opt(uint32_t id)
 
 	return conf_opts[CONF_OPT_HANG_DUMP_TIMEOUT].value[id];
 }
+#endif
 
 uint32_t gim_conf_get_fb_sharing_mode_opt(uint32_t id)
 {
@@ -1127,7 +1191,7 @@ uint32_t gim_conf_get_bp_mode_opt(uint32_t id)
 	return conf_opts[CONF_OPT_BP_MODE].value[id];
 }
 
-uint32_t gim_conf_get_pf_fb_size_opt(uint32_t id)
+uint64_t gim_conf_get_pf_fb_size_opt(uint32_t id)
 {
 	if (id >= AMDGV_MAX_GPU_NUM)
 		id = AMDGV_MAX_GPU_NUM - 1;
@@ -1157,6 +1221,14 @@ uint32_t gim_conf_get_max_cper_count_opt(uint32_t id)
 		id = AMDGV_MAX_GPU_NUM - 1;
 
 	return conf_opts[CONF_OPT_MAX_CPER_COUNT].value[id];
+}
+
+uint32_t gim_conf_get_debug_mode_opt(uint32_t id)
+{
+	if (id >= AMDGV_MAX_GPU_NUM)
+		id = AMDGV_MAX_GPU_NUM - 1;
+
+	return conf_opts[CONF_OPT_DEBUG_MODE].value[id];
 }
 
 uint32_t gim_conf_set_vf_num_opt(int value)

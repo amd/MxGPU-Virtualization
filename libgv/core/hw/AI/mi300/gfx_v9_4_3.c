@@ -1440,8 +1440,9 @@ static int gfx_v9_4_3_hw_fini(struct amdgv_adapter *adapt)
 
 struct amdgv_init_func mi300_gfx_v9_4_3_func = {
 	.name = "mi300_gfx_func",
+	.is_engine = true,
 	.sw_init = gfx_v9_4_3_sw_init,
 	.sw_fini = gfx_v9_4_3_sw_fini,
-	.hw_engine_init = gfx_v9_4_3_hw_init,
-	.hw_engine_fini = gfx_v9_4_3_hw_fini,
+	.hw_init = gfx_v9_4_3_hw_init,
+	.hw_fini = gfx_v9_4_3_hw_fini,
 };

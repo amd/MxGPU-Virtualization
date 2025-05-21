@@ -68,7 +68,6 @@ struct amdgv_misc {
 	/* ASIC specified common timeout values */
 	uint64_t timeouts[TIMEOUT_SEC_LEN];
 
-	int (*load_dfc)(struct amdgv_adapter *adapt);
 	int (*update_dummy_page_addr)(struct amdgv_adapter *adapt, uint32_t idx_vf);
 
 	/* need to reprogram golden settings during gpu_init for some ASICs */

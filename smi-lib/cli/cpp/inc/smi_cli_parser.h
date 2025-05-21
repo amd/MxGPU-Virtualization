@@ -123,7 +123,8 @@ private:
 	};
 
 	std::vector<std::string> TOPOLOGY_SUPPORTED_ARGS_GPU = {
-		"--weight", "--hops", "--fb-sharing", "--link-type", "--link-status"
+		"--weight", "--hops", "--fb-sharing", "--link-type", "--link-status",
+		"--coherent", "--atomics", "--dma", "--bi-dir"
 	};
 
 	std::vector<std::string> PROCESS_SUPPORTED_ARGS_GPU = {

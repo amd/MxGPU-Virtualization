@@ -266,8 +266,6 @@ static int ras_eeprom_v2_1_update_gpu_health(struct amdgv_adapter *adapt,
 	/* Check Driver conditions - Based on bad page reservations */
 	switch (adapt->bp_msg_type) {
 	case AMDGV_BP_MSG_IN_PF_FB:
-		if (!(adapt->flags & AMDGV_FLAG_USE_PF))
-			return 0;
 		ras_eeprom_v2_1_mark_gpu_healthy_status(
 			adapt, GPU_RETIRED__ECC_IN_CRITICAL_REGION);
 		__mark_gpu_bad(adapt);

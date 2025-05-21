@@ -183,7 +183,7 @@ int smi_cmd_handshake(struct smi_ctx *ctx, void *inb, void *outb,
 		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_LINK_TOPOLOGY,
 			smi_get_link_topology,
 			sizeof(struct smi_device_pair_info),
-			sizeof(struct smi_link_topology));
+			sizeof(struct smi_io_link));
 		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_XGMI_FB_SHARING_CAPS,
 			smi_get_xgmi_fb_sharing_caps,
 			sizeof(struct smi_device_info),

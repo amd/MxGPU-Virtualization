@@ -326,7 +326,8 @@ std::string topology_common = "";
 std::string topology_usage_common = "";
 std::string topology_usage_host =
 	"usage: amd-smi topology [-h | --help] [--json] [--file FILE] [-g | --gpu [GPU ...]]\n"
-	"                        [--weight] [--hops] [--fb-sharing] [--link-type] [--link-status]\n\n";
+	"                        [--weight] [--hops] [--fb-sharing] [--link-type] [--link-status]\n"
+	"                        [--coherent] [--atomics] [--bi-dir] [--dma]\n\n";
 std::string topology_message =
 	"Displays link topology information\n"
 	"If no argument is provided, returns information for all GPUs on the system\n\n";
@@ -339,7 +340,12 @@ std::string topology_host =
 	"    --hops                      Current hops information\n"
 	"    --fb-sharing                Current framebuffer sharing information\n"
 	"    --link-type                 Link type information\n"
-	"    --link-status               Link status information\n\n";
+	"    --link-status               Link status information\n\n"
+	"    --coherent                  Cache coherent information\n"
+	"    --atomics                   32 and 64-bit atomic link capability information\n"
+	"    --bi-dir                    bi-directional link capability information\n"
+	"    --dma                       dma link capability information\n";
+
 std::string set_common = "";
 std::string set_usage_common = "";
 std::string set_message = "";
@@ -504,7 +510,7 @@ std::string ras_host = "Ras arguments:\n"
 	"                                                                       By default, it will dump the cper report currently cached in the driver. \n"
 	"                                                                       If user specify the --file_limit=<number_of_files> option, the CLI will only keep max <number_of_files> files. \n"
 	"                                                                       If the --follow option is provided, the cli will continuous monitoring and \n"
-	"                                                                       dump the report until the ctrl-c is pressed.\n";
+	"                                                                       dump the report until the ctrl+c is pressed.\n";
 
 std::string usage_ras_common = "";
 std::string ras_common = "";

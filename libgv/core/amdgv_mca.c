@@ -363,6 +363,12 @@ static int amdgv_mca_generate_ce_cper(struct amdgv_adapter *adapt,
 		reg_data[CPER_ACA_REG_IPID_HI]   = upper_32_bits(banks[i].regs[MCA_REG_IDX_IPID]);
 		reg_data[CPER_ACA_REG_SYND_LO]   = lower_32_bits(banks[i].regs[MCA_REG_IDX_SYND]);
 		reg_data[CPER_ACA_REG_SYND_HI]   = upper_32_bits(banks[i].regs[MCA_REG_IDX_SYND]);
+		reg_data[CPER_ACA_REG_DESTAT_LO] = lower_32_bits(banks[i].regs[MCA_REG_IDX_DESTAT]);
+		reg_data[CPER_ACA_REG_DESTAT_HI] = upper_32_bits(banks[i].regs[MCA_REG_IDX_DESTAT]);
+		reg_data[CPER_ACA_REG_DEADDR_LO] = lower_32_bits(banks[i].regs[MCA_REG_IDX_DEADDR]);
+		reg_data[CPER_ACA_REG_DEADDR_HI] = upper_32_bits(banks[i].regs[MCA_REG_IDX_DEADDR]);
+		reg_data[CPER_ACA_REG_MISC1_LO]  = lower_32_bits(banks[i].regs[MCA_REG_IDX_MISC1]);
+		reg_data[CPER_ACA_REG_MISC1_HI]  = upper_32_bits(banks[i].regs[MCA_REG_IDX_MISC1]);
 
 		amdgv_cper_entry_fill_runtime_section(adapt, corrected, i,
 						      amdgv_mca_type_to_cper_sev(adapt, banks[i].type),

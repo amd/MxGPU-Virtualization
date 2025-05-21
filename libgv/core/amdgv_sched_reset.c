@@ -56,20 +56,24 @@ static int amdgv_sched_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	if (adapt->flags & AMDGV_FLAG_DEBUG_DUMP_ENABLE)
 		adapt->flags &= ~AMDGV_FLAG_DEBUG_DUMP_ENABLE;
 
+#ifndef EXCLUDE_DCORE_DEBUG
 	/* Skip for MI300 series as sched_stop_all affects VFs with workload */
 	if (!(adapt->flags & AMDGV_FLAG_SKIP_DIAG_DATA) &&
 		!(adapt->flags & AMDGV_FLAG_DISABLE_DCORE_DEBUG))
 		oss_signal_reset_happened(adapt, idx_vf);
+#endif
 
 	/* Collect the diagnosis data logs */
 	if (amdgv_diag_data_cache_dump(adapt, idx_vf,
 					       AMDGV_DIAG_DATA_LOG_COLLECT_CACHE_FLR))
 		AMDGV_WARN("Unable to collect diagnosis data log on VF FLR\n");
 
+#ifndef EXCLUDE_DCORE_DEBUG
 	/* Notify dcore module can get diagnosis data cache */
 	if (!(adapt->flags & AMDGV_FLAG_SKIP_DIAG_DATA) &&
 		!(adapt->flags & AMDGV_FLAG_DISABLE_DCORE_DEBUG))
 		oss_signal_diag_data_ready(adapt);
+#endif
 
 	amdgv_reset_notify_engine_status(adapt, idx_vf);
 
@@ -85,6 +89,8 @@ static int amdgv_sched_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf,
 
 	ret = amdgv_reset_vf_flr(adapt, idx_vf);
 
+	amdgv_guard_add_active_event(adapt, idx_vf, AMDGV_GUARD_EVENT_FLR);
+
 	if (ret)
 		return ret;
 
@@ -92,8 +98,6 @@ static int amdgv_sched_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf,
 		amdgv_gpuiov_set_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_FB, false);
 
 	amdgv_sched_context_clear_state(adapt, idx_vf, AMDGV_SCHED_BLOCK_ALL);
-
-	amdgv_guard_add_active_event(adapt, idx_vf, AMDGV_GUARD_EVENT_FLR);
 
 	if (adapt->flags & AMDGV_FLAG_USE_LEGACY_FLR_SEQUENCE) {
 		// Issue IDLE + SAVE so that RLCV can restore CSA size in SRAM
@@ -230,6 +234,8 @@ static int amdgv_sched_whole_gpu_reset(struct amdgv_adapter *adapt)
 		set_to_avail_vf(idx_vf);
 	}
 
+	amdgv_sched_remove_stale_events_after_wgr(adapt);
+
 	return 0;
 }
 
@@ -308,9 +314,9 @@ self_reset:
 		/* if any reset failed, mark hive bad to drop any further reset */
 		if (ret)
 			amdgv_xgmi_mark_hive_bad(adapt);
+
 		task_barrier_enter(&hive->tb_chain_reset, hive->number_adapters);
 
-		amdgv_sched_remove_stale_events_after_wgr(adapt);
 		/* clear the global reset flag by master */
 		if (adapt->xgmi.master_adapt == adapt) {
 			oss_spin_lock(hive->chain_reset_lock);
@@ -340,10 +346,13 @@ int amdgv_sched_gpu_reset_wrap(struct amdgv_adapter *adapt, bool reset_all)
 
 	amdgv_sched_stop_all(adapt);
 
-	if (adapt->xgmi.phy_nodes_num > 1)
+	if (adapt->xgmi.phy_nodes_num > 1) {
 		ret = amdgv_sched_gpu_chain_reset(adapt, reset_all);
-	else
+	} else {
 		ret = amdgv_sched_whole_gpu_reset(adapt);
+		/* xgmi hive case need to sync flag unsets so unset is done in amdgv_sched_gpu_chain_reset */
+		oss_atomic_set(adapt->in_ecc_recovery, 0);
+	}
 
 	return ret;
 }

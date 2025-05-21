@@ -27,9 +27,8 @@
 #include "smi_cli_device.h"
 #include "smi_cli_platform.h"
 #include "smi_cli_exception.h"
-#include <dirent.h>
-#include <sys/stat.h>
 
+#include <sys/stat.h>
 #include <map>
 #include <iostream>
 #include <sstream>
@@ -46,6 +45,36 @@
 #define MKDIR(path) mkdir(path, 0777)
 #endif
 
+#define CPER_DATA_BUFFER_SIZE 4096
+#define CPER_RAW_DATA_BUFFER_SIZE (1024 * 1024)
+#define CPER_HDRS_ARRAY_SIZE 1024
+
+struct CperEntryInfo {
+	std::string timestamp;
+	amdsmi_cper_timestamp_t cper_timestamp;
+	int gpu_id;
+	int error_severity;
+	amdsmi_cper_guid_t notify_type;
+	std::string severity_string;
+	char cper_data[CPER_DATA_BUFFER_SIZE];
+	uint32_t record_length;
+
+	CperEntryInfo(std::string ts, amdsmi_cper_timestamp_t cts, int gpu, int sev, amdsmi_cper_guid_t nt,std::string sev_str, char* cd, uint32_t rl)
+		: timestamp(ts), cper_timestamp(cts), gpu_id(gpu), error_severity(sev), notify_type(nt),
+		  severity_string(sev_str), record_length(rl) {
+			std::memcpy(cper_data, cd, std::min(sizeof(cper_data), (size_t)rl));
+		}
+
+	bool operator<(const CperEntryInfo& other) const {
+		if (cper_timestamp.year != other.cper_timestamp.year) return cper_timestamp.year < other.cper_timestamp.year;
+		if (cper_timestamp.month != other.cper_timestamp.month) return cper_timestamp.month < other.cper_timestamp.month;
+		if (cper_timestamp.day != other.cper_timestamp.day) return cper_timestamp.day < other.cper_timestamp.day;
+		if (cper_timestamp.hours != other.cper_timestamp.hours) return cper_timestamp.hours < other.cper_timestamp.hours;
+		if (cper_timestamp.minutes != other.cper_timestamp.minutes) return cper_timestamp.minutes < other.cper_timestamp.minutes;
+		return cper_timestamp.seconds < other.cper_timestamp.seconds;
+	}
+};
+
 namespace fs = std::filesystem;
 
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLES)(amdsmi_socket_handle, uint32_t *,
@@ -53,13 +82,13 @@ typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLES)(amdsmi_socket_handle, ui
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 		amdsmi_processor_handle *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_DEVICE_BDF)(amdsmi_processor_handle, amdsmi_bdf_t *);
-typedef amdsmi_status_t (*AMDSMI_GPU_GET_CPER_ENTRIES)(amdsmi_processor_handle, uint32_t, char*,
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_CPER_ENTRIES)(amdsmi_processor_handle, uint32_t, char*,
 		uint64_t *,
-		amdsmi_cper_hdr**, uint64_t *, uint64_t *);
+		amdsmi_cper_hdr_t**, uint64_t *, uint64_t *);
 
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_GPU_DEVICE_BDF host_amdsmi_get_gpu_device_bdf;
-extern AMDSMI_GPU_GET_CPER_ENTRIES host_amdsmi_gpu_get_cper_entries;
+extern AMDSMI_GET_GPU_CPER_ENTRIES host_amdsmi_get_gpu_cper_entries;
 extern AMDSMI_GET_PROCESSOR_HANDLES host_amdsmi_get_processor_handles;
 
 #define GUID_INIT(a, b, c, d0, d1, d2, d3, d4, d5, d6, d7)                 \
@@ -81,7 +110,7 @@ extern AMDSMI_GET_PROCESSOR_HANDLES host_amdsmi_get_processor_handles;
 amdsmi_cper_guid_t boot_guid = BOOT_TYPE;
 amdsmi_cper_guid_t mce_guid = CPER_NOTIFY_MCE;
 
-std::string generate_file_name(int error_severity, amdsmi_cper_guid_t *notify_type,
+std::string generate_file_name(int error_severity, const amdsmi_cper_guid_t notify_type,
 							   int error_count = 1)
 {
 	std::string prefix;
@@ -94,10 +123,10 @@ std::string generate_file_name(int error_severity, amdsmi_cper_guid_t *notify_ty
 		prefix = "corrected-";
 		break;
 	case AMDSMI_CPER_SEV_FATAL:
-		if (std::memcmp(notify_type, &boot_guid, 16) == 0) {
+		if (std::memcmp(&notify_type, &boot_guid, 16) == 0) {
 			prefix = "boot-";
 		}
-		if (std::memcmp(notify_type, &mce_guid, 16) == 0) {
+		if (std::memcmp(&notify_type, &mce_guid, 16) == 0) {
 			prefix = "fatal-";
 		}
 		break;
@@ -165,41 +194,34 @@ uint32_t convert_to_severity_mask(std::vector<std::string>& severities)
 }
 
 
+int extract_number_from_filename(const std::string& filename)
+{
+	std::regex re(R"([-_]([0-9]+)\.cper)");
+	std::smatch match;
+
+	if (std::regex_search(filename, match, re) && match.size() > 1) {
+		return std::stoi(match.str(1)); // Extract and convert the numeric part
+	}
+	return std::numeric_limits<int>::max(); // Max value if pattern doesn't match
+}
+
 void count_and_replace_oldest_files(const std::string& folder_path,
 									const std::unordered_map<std::string, std::string>& file_timestamp_map, int file_limit)
 {
 	std::vector<std::pair<fs::path, std::string>> files;
 	int file_count = 0;
 
-	DIR* dir = opendir(folder_path.c_str());
-	if (dir == nullptr) {
-	    std::cerr << "Error: Unable to open directory " << folder_path << std::endl;
-	    return;
-	}
-
-	struct dirent* entry;
-	while ((entry = readdir(dir)) != nullptr) {
-	    std::string filename = entry->d_name;
-
-	    // Skip "." and ".." entries
-	    if (filename == "." || filename == "..") {
-		continue;
-	    }
-
-	    std::string full_path = folder_path + "/" + filename;
-
-	    // Check if the entry is a regular file
-	    struct stat file_stat;
-	    if (stat(full_path.c_str(), &file_stat) == 0 && S_ISREG(file_stat.st_mode)) {
+	// Collect all files and their corresponding timestamps
+	for (const auto& entry : fs::directory_iterator(folder_path)) {
+		if (fs::is_regular_file(entry.status())) {
+			std::string filename = entry.path().filename().string();
 			auto it = file_timestamp_map.find(filename);
 			if (it != file_timestamp_map.end()) {
-				files.emplace_back(full_path, it->second);
+				files.emplace_back(entry.path(), it->second);
 				++file_count;
 			}
-	    }
+		}
 	}
-
-	closedir(dir);
 
 	// If the number of files exceeds the limit, delete the oldest files based on timestamp
 	if (file_count > file_limit) {
@@ -215,10 +237,8 @@ void count_and_replace_oldest_files(const std::string& folder_path,
 	}
 }
 
-int process_cper_entries(amdsmi_processor_handle processor, uint32_t severity_mask,
-						 uint64_t* cursor,
-						 const std::string& folder_name, int gpu_id,
-						 std::unordered_map<std::string, std::string>& file_timestamp_map)
+int process_cper_entries(amdsmi_processor_handle processor, uint32_t severity_mask, uint64_t* cursor, const std::string& folder_name,
+						 int gpu_id, std::vector<CperEntryInfo>& entries_info)
 {
 	int ret;
 	std::string file_name;
@@ -226,50 +246,57 @@ int process_cper_entries(amdsmi_processor_handle processor, uint32_t severity_ma
 	std::string severity_mask_string;
 	static int total_cper_count = 0;
 
-	char cper_data[1024*1024];   // the buffer to hold the raw cper data
-	amdsmi_cper_hdr* cper_hdrs[1024];  // the buffer to hold the parsed cper headers
+	char cper_data[CPER_RAW_DATA_BUFFER_SIZE];   // the buffer to hold the raw cper data
+	amdsmi_cper_hdr_t* cper_hdrs[CPER_HDRS_ARRAY_SIZE];  // the buffer to hold the parsed cper headers
 	uint64_t buf_size = sizeof(cper_data);
-	uint64_t entry_count {1024}; //sizeof(cper_hdrs) / sizeof(cper_hdrs[0]);
+	uint64_t entry_count = CPER_HDRS_ARRAY_SIZE; //sizeof(cper_hdrs) / sizeof(cper_hdrs[0]);
 
 	do {
-		ret = host_amdsmi_gpu_get_cper_entries(processor, severity_mask, cper_data, &buf_size, cper_hdrs,
+		ret = host_amdsmi_get_gpu_cper_entries(processor, severity_mask, cper_data, &buf_size, cper_hdrs,
 											   &entry_count, cursor);
 		if (ret != AMDSMI_STATUS_SUCCESS && ret != AMDSMI_STATUS_MORE_DATA) {
 			return ret;
 		}
 
-		for (uint32_t i = 0; i < entry_count; i++) {
-			++total_cper_count;
-			file_name = generate_file_name(cper_hdrs[i]->error_severity, &cper_hdrs[i]->notify_type,
-										   total_cper_count);
-			cper_timestamp = print_cper_timestamp(&cper_hdrs[i]->timestamp);
-			std::string path = folder_name + "/" + file_name;
-
-			std::ofstream outFile(path, std::ios::binary);
-			outFile.write((char*)cper_hdrs[i], cper_hdrs[i]->record_length);
-			outFile.close();
-
-			severity_mask_string = get_string_from_enum_cper_severity_mask(cper_hdrs[i]->error_severity);
-			printf("%s \t %d \t\t %s \t %s\n", cper_timestamp.c_str(), gpu_id, severity_mask_string.c_str(),
-				   file_name.c_str());
-
-			file_timestamp_map[file_name] = cper_timestamp;
+		amdsmi_cper_hdr_t* local_cper_hdrs[CPER_HDRS_ARRAY_SIZE];
+		size_t offset = 0;
+		for (uint32_t j = 0; j < entry_count; j++) {
+		    local_cper_hdrs[j] = reinterpret_cast<amdsmi_cper_hdr_t*>(cper_data + offset);
+		    offset += cper_hdrs[j]->record_length;
 		}
+
+		for (uint32_t i = 0; i < entry_count; i++) {
+			std::string cper_timestamp = print_cper_timestamp(&local_cper_hdrs[i]->timestamp);
+			int error_severity = local_cper_hdrs[i]->error_severity;
+			amdsmi_cper_guid_t notify_type = local_cper_hdrs[i]->notify_type;
+			std::string severity_mask_string = get_string_from_enum_cper_severity_mask(error_severity);
+
+			char byte_array[CPER_DATA_BUFFER_SIZE];
+			std::memcpy(byte_array, local_cper_hdrs[i], local_cper_hdrs[i]->record_length);
+			amdsmi_cper_hdr_t local_hdr = *local_cper_hdrs[i];
+
+			entries_info.emplace_back(cper_timestamp, local_hdr.timestamp, gpu_id, local_hdr.error_severity,
+						  local_hdr.notify_type, severity_mask_string, byte_array, local_hdr.record_length);
+
+		}
+
 	} while (ret == AMDSMI_STATUS_MORE_DATA);
+
 	return ret;
 }
 
-int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg,
-		std::string& out)
+int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg, std::string& out)
 {
 	int ret;
 	amdsmi_socket_handle socket = NULL;
 	unsigned int gpu_count;
+	int total_cper_count = 0;
 
 	uint32_t severity_mask = AMDSMI_CPER_SEV_NUM;
 	uint64_t cursor[AMDSMI_MAX_DEVICES] {0}; // The cursor to get more data
 
 	std::string folder_name {""};
+	std::vector<CperEntryInfo> all_entries_info;
 	std::unordered_map<std::string, std::string> file_timestamp_map;
 
 	ret = host_amdsmi_get_processor_handles(socket, &gpu_count, NULL);
@@ -278,12 +305,11 @@ int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg,
 	}
 
 	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(
-			amdsmi_processor_handle)*gpu_count);
+			amdsmi_processor_handle) * gpu_count);
 	ret = host_amdsmi_get_processor_handles(socket, &gpu_count, &processors[0]);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		return ret;
 	}
-
 	severity_mask = convert_to_severity_mask(arg.severities);
 	if (arg.folder_name != "") {
 		folder_name = arg.folder_name;
@@ -298,32 +324,77 @@ int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg,
 
 	if (std::find(arg.options.begin(), arg.options.end(), "follow") != arg.options.end()) {
 		while (true) {
-			for (unsigned gpu_id = 0; gpu_id < gpu_count; gpu_id++) {
-				ret = process_cper_entries(processors[gpu_id], severity_mask, 
-				&cursor[gpu_id], folder_name, gpu_id, file_timestamp_map);
+			for (uint32_t gpu_id = 0; gpu_id < gpu_count; gpu_id++) {
+				ret  = process_cper_entries(processors[gpu_id], severity_mask, &cursor[gpu_id], folder_name, gpu_id, all_entries_info);
 			}
 
+			std::sort(all_entries_info.begin(), all_entries_info.end(), [](const CperEntryInfo& a,
+			const CperEntryInfo& b) {
+				return a < b;
+			});
 
-			// Sleep for a while before the next iteration
-			std::this_thread::sleep_for(std::chrono::seconds(1));
+			for (const auto& entry : all_entries_info) {
+				++total_cper_count;
+				std::string file_name = generate_file_name(entry.error_severity, entry.notify_type,
+										total_cper_count);
+				out = string_format(RasCperTemplate, entry.timestamp.c_str(), entry.gpu_id,
+					   entry.severity_string.c_str(), file_name.c_str());
+				printf("%s", out.c_str());
+
+				std::string path = folder_name + "/" + file_name;
+				std::ofstream outFile(path, std::ios::binary);
+				outFile.write(entry.cper_data, entry.record_length);
+
+				outFile.close();
+
+				file_timestamp_map[file_name] = entry.timestamp;
+			}
+
 			if (std::find(arg.options.begin(), arg.options.end(), "file_limit") != arg.options.end()) {
-				if (folder_name != "") {
+				if (!folder_name.empty()) {
 					count_and_replace_oldest_files(folder_name, file_timestamp_map, arg.file_limit);
 				}
 			}
+			all_entries_info.clear();
+			// Sleep for a while before the next iteration
+			std::this_thread::sleep_for(std::chrono::seconds(1));
 		}
+
 	} else {
-		for (unsigned gpu_id = 0; gpu_id < gpu_count; gpu_id++) {
-				ret = process_cper_entries(processors[gpu_id], severity_mask, 
-				&cursor[gpu_id], folder_name, gpu_id, file_timestamp_map);
+
+		for (uint32_t gpu_id = 0; gpu_id < gpu_count; gpu_id++) {
+			ret  = process_cper_entries(processors[gpu_id], severity_mask, &cursor[gpu_id], folder_name, gpu_id, all_entries_info);
 		}
+
+		std::sort(all_entries_info.begin(), all_entries_info.end(), [](const CperEntryInfo& a,
+		const CperEntryInfo& b) {
+			return a < b;
+		});
+
+		for (const auto& entry : all_entries_info) {
+			++total_cper_count;
+			std::string file_name = generate_file_name(entry.error_severity, entry.notify_type,
+									total_cper_count);
+			out = string_format(RasCperTemplate, entry.timestamp.c_str(), entry.gpu_id,
+				   entry.severity_string.c_str(), file_name.c_str());
+			printf("%s", out.c_str());
+
+			std::string path = folder_name + "/" + file_name;
+			std::ofstream outFile(path, std::ios::binary);
+			outFile.write(entry.cper_data, entry.record_length);
+			outFile.close();
+
+			file_timestamp_map[file_name] = entry.timestamp;
+		}
+
 		if (std::find(arg.options.begin(), arg.options.end(), "file_limit") != arg.options.end()) {
-			if (folder_name != "") {
+			if (!folder_name.empty()) {
 				count_and_replace_oldest_files(folder_name, file_timestamp_map, arg.file_limit);
 			}
 		}
 	}
 
+	free(processors);
 	out = "\n";
 	return 0;
 }

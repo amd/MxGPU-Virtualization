@@ -782,9 +782,7 @@ int amdgv_sched_init_pf_state_late(struct amdgv_adapter *adapt)
 		AMDGV_INFO("PF entered full access mode.\n");
 
 		if (in_whole_gpu_reset()) {
-			// If this is WGR, we need to make sure PF is reinitialized first.
 			// Notify OS and wait for reinitialization to complete.
-			amdgv_device_func_hw_engine_init(adapt);
 			amdgv_reset_mailbox_notify_vf(adapt, AMDGV_PF_IDX, true);
 
 			AMDGV_INFO("Wait for PF REL_GPU_INIT.\n");

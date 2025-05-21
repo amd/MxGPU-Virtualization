@@ -26,6 +26,7 @@
 #include "amdgv_sched_internal.h"
 #include "amdgv_oss_wrapper.h"
 #include "amdgv_notify.h"
+#include "hw/common/ucode/psp_asd_bin.h"
 #include "hw/common/ucode/psp_xgmi_bin.h"
 #include "hw/common/ucode/psp_xgmi_tee3_esbin.h"
 
@@ -1176,7 +1177,6 @@ bool amdgv_psp_fw_id_support(uint32_t firmware_id)
 }
 
 /* tmr functions */
-/* NV12 pre-allocate tmr mem in sw_init using estimated tmr size */
 /* For NV series and onward, psp will caculate the tmr size when
  * libgv issue LOAD_TOC. For VG and MI series, using hardcode tmr
  * size (PSP_TMR_SIZE). The tmr buffer alignemnt remain unchanged
@@ -1858,6 +1858,123 @@ enum psp_status amdgv_psp_load_toc(struct amdgv_adapter *adapt, unsigned char *t
 	return ret;
 }
 
+enum psp_status amdgv_psp_start_rlc_autoload(struct amdgv_adapter *adapt)
+{
+	enum psp_status ret = PSP_STATUS__SUCCESS;
+	struct psp_context *psp = &adapt->psp;
+	struct psp_cmd_km *autoload_cmd = psp->psp_cmd_km_mem;
+
+	if (!autoload_cmd) {
+		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+				sizeof(struct psp_cmd_km));
+
+		return PSP_STATUS__ERROR_GENERIC;
+	}
+
+	autoload_cmd->cmd_id = PSP_CMD_KM_TYPE__AUTOLOAD_RLC;
+
+	ret = amdgv_psp_cmd_km_submit(adapt, autoload_cmd, NULL);
+
+	if (ret != PSP_STATUS__SUCCESS) {
+		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_AUTOLOAD_FAIL, 0);
+		ret = PSP_STATUS__ERROR_GENERIC;
+	}
+
+	/* Clear system memory used for RLC Autoload CMD */
+	oss_memset(autoload_cmd, 0, sizeof(struct psp_cmd_km));
+
+	return ret;
+}
+
+enum psp_status amdgv_psp_asd_load(struct amdgv_adapter *adapt)
+{
+	enum psp_status ret = PSP_STATUS__SUCCESS;
+	struct psp_asd_context *asd_context = &(adapt->psp.asd_context);
+	struct psp_local_memory *asd_bin_mem = &(adapt->psp.private_fw_memory);
+	struct psp_cmd_km *load_km_cmd = adapt->psp.psp_cmd_km_mem;
+	struct psp_gfx_resp resp_buf = { 0 };
+	uint32_t fw_size = 0;
+
+	if (!asd_bin_mem->mem)
+		return PSP_STATUS__ERROR_OUT_OF_MEMORY;
+
+	/* Copy ASD binary to PSP private fw memory */
+	if (adapt->psp.load_asd_fw_to_mem) {
+		adapt->psp.load_asd_fw_to_mem(adapt, asd_bin_mem, &fw_size);
+	} else {
+		oss_memset(amdgv_memmgr_get_cpu_addr(asd_bin_mem->mem), 0, PSP_PRIVATE_IMAGE_SIZE);
+		oss_memcpy(amdgv_memmgr_get_cpu_addr(asd_bin_mem->mem), psp_asd_bin, sizeof(psp_asd_bin));
+		fw_size = sizeof(psp_asd_bin);
+	}
+
+	if (!load_km_cmd) {
+		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+				sizeof(struct psp_cmd_km));
+
+		return PSP_STATUS__ERROR_GENERIC;
+	}
+
+	/* Prepare CMD to load ASD driver */
+	load_km_cmd->cmd_id = PSP_CMD_KM_TYPE__LOAD_ASD;
+	load_km_cmd->cmd.load_ta.app_buf_addr_lo =
+		lower_32_bits(amdgv_memmgr_get_gpu_addr(asd_bin_mem->mem));
+	load_km_cmd->cmd.load_ta.app_buf_addr_hi =
+		upper_32_bits(amdgv_memmgr_get_gpu_addr(asd_bin_mem->mem));
+	load_km_cmd->cmd.load_ta.app_size = fw_size;
+
+	/* No shared memory buffer for ASD */
+	load_km_cmd->cmd.load_ta.shared_mem_addr_lo = 0;
+	load_km_cmd->cmd.load_ta.shared_mem_addr_hi = 0;
+	load_km_cmd->cmd.load_ta.shared_mem_size = 0;
+
+	/* Submit CMD buffer to load ASD driver */
+	/* Synchronous call; will wait for response */
+	/* Update PSP FW session ID associated with ASD */
+	ret = amdgv_psp_cmd_km_submit(adapt, load_km_cmd, &resp_buf);
+	if (ret != PSP_STATUS__SUCCESS) {
+		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_ASD_LOAD_FAIL, 0);
+		ret = PSP_STATUS__ERROR_GENERIC;
+	} else
+		asd_context->asd_session_id = resp_buf.session_id;
+
+	/* Clear system memory used for ASD Load CMD */
+	oss_memset(load_km_cmd, 0, sizeof(struct psp_cmd_km));
+
+	return ret;
+}
+
+enum psp_status amdgv_psp_asd_unload(struct amdgv_adapter *adapt)
+{
+	enum psp_status ret = PSP_STATUS__SUCCESS;
+	struct psp_asd_context *asd_context = &(adapt->psp.asd_context);
+	struct psp_cmd_km *unload_km_cmd = adapt->psp.psp_cmd_km_mem;
+
+	if (!unload_km_cmd) {
+		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+				sizeof(struct psp_cmd_km));
+
+		return PSP_STATUS__ERROR_GENERIC;
+	}
+
+	/* Prepare CMD to unload ASD driver */
+	unload_km_cmd->cmd_id = PSP_CMD_KM_TYPE__UNLOAD_TA;
+	unload_km_cmd->cmd.unload_ta.session_id = asd_context->asd_session_id;
+
+	/* Submit CMD buffer to unload ASD driver */
+	/* Synchronous call; will wait for response */
+	ret = amdgv_psp_cmd_km_submit(adapt, unload_km_cmd, NULL);
+	if (ret != PSP_STATUS__SUCCESS) {
+		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_ASD_UNLOAD_FAIL, 0);
+		ret = PSP_STATUS__ERROR_GENERIC;
+	}
+
+	/* Clear system memory used for ASD Load CMD */
+	oss_memset(unload_km_cmd, 0, sizeof(struct psp_cmd_km));
+
+	return ret;
+}
+
+
 static enum psp_status amdgv_psp_ras_load(struct amdgv_adapter *adapt,
 					  unsigned char *ras_image, uint32_t ras_size)
 {
@@ -2084,7 +2201,8 @@ static enum psp_status amdgv_psp_ras_invoke(struct amdgv_adapter *adapt,
 		}
 	}
 
-	AMDGV_INFO("amdgv_psp_ras_invoke returned ras_status: 0x%x\n", ras_cmd->ras_status);
+	if (ras_cmd->ras_status)
+		AMDGV_WARN("amdgv_psp_ras_invoke returned ras_status: 0x%x\n", ras_cmd->ras_status);
 
 	/* Clear system memory used for Invoke RAS TA CMD */
 	oss_memset(invoke_km_cmd, 0, sizeof(struct psp_cmd_km));
@@ -2277,9 +2395,7 @@ uint32_t amdgv_psp_ta_version(struct amdgv_adapter *adapt, void *fw_image, char 
 	struct app_property *prop;
 	uint32_t i;
 	uint32_t name_size = oss_strlen(name) + 1; // including null terminator
-
-	if (adapt->asic_type == CHIP_MI300X ||
-	    adapt->asic_type == CHIP_MI308X)
+	if (adapt->psp.skip_ta_fw_version)
 		return 0;
 
 	buf = (struct app_prop_buff *)&(((uint8_t *)fw_image)[PSP_TA_PROP_OFFSET]);
@@ -2315,7 +2431,9 @@ enum psp_status amdgv_psp_xgmi_load(struct amdgv_adapter *adapt)
 
 	switch (adapt->psp.tee_version) {
 	case GFX_TEE_VERSION_3:
-		{
+		if (adapt->psp.get_xgmi_fw_info) {
+			adapt->psp.get_xgmi_fw_info(adapt, &fw_image, &fw_image_size);
+		} else {
 			fw_image = psp_xgmi_tee3_esbin;
 			fw_image_size = sizeof(psp_xgmi_tee3_esbin);
 		}
@@ -2892,6 +3010,73 @@ void amdgv_psp_record_loaded_fw(struct amdgv_adapter *adapt, unsigned char *fw_i
 	}
 }
 
+enum psp_status amdgv_psp_get_runtime_db_entry(struct amdgv_adapter *adapt,
+					       enum psp_runtime_entry_type entry_type,
+					       void *db_entry)
+{
+	uint64_t db_header_pos, db_dir_pos;
+	struct psp_runtime_data_header db_header = { 0 };
+	struct psp_runtime_data_directory db_dir = { 0 };
+	enum psp_status ret = PSP_STATUS__SUCCESS;
+	int i;
+	uint64_t memsize = amdgv_misc_get_memsize(adapt);
+
+	if (memsize == 0) {
+		AMDGV_ERROR("doesn't support to get config_mem\n");
+		return PSP_STATUS__ERROR_GENERIC;
+	}
+
+	db_header_pos = (memsize << 20) - PSP_RUNTIME_DB_OFFSET;
+	db_dir_pos = db_header_pos + sizeof(struct psp_runtime_data_header);
+
+	/* read runtime db header from vram */
+	amdgv_mm_copy_from_fb(adapt, (uint64_t)&db_header, db_header_pos,
+			      sizeof(struct psp_runtime_data_header));
+
+	if (db_header.cookie != PSP_RUNTIME_DB_COOKIE_ID) {
+		/* runtime db doesn't exist, exit */
+		AMDGV_ERROR("PSP runtime database doesn't exist\n");
+		return PSP_STATUS__ERROR_GENERIC;
+	}
+
+	/* read runtime database entry from vram */
+	amdgv_mm_copy_from_fb(adapt, (uint64_t)&db_dir, db_dir_pos,
+			      sizeof(struct psp_runtime_data_directory));
+
+	if (db_dir.entry_count >= PSP_RUNTIME_DB_DIAG_ENTRY_MAX_COUNT) {
+		/* invalid db entry count, exit */
+		AMDGV_ERROR("Invalid PSP runtime database entry count\n");
+		return PSP_STATUS__ERROR_GENERIC;
+	}
+
+	/* look up for requested entry type */
+	for (i = 0; i < db_dir.entry_count && !ret; i++) {
+		if (db_dir.entry_list[i].entry_type == entry_type) {
+			switch (entry_type) {
+			case PSP_RUNTIME_ENTRY_TYPE_PPTABLE_ERR_STATUS:
+				if (db_dir.entry_list[i].size <
+				    sizeof(struct psp_runtime_scpm_entry)) {
+					/* invalid db entry size */
+					AMDGV_ERROR(
+						"Invalid PSP runtime database scpm entry size\n");
+					return PSP_STATUS__ERROR_GENERIC;
+				}
+				/* read runtime database entry */
+				amdgv_mm_copy_from_fb(adapt, (uint64_t)db_entry,
+						      db_header_pos +
+							      db_dir.entry_list[i].offset,
+						      sizeof(struct psp_runtime_scpm_entry));
+				break;
+			default:
+				return PSP_STATUS__ERROR_GENERIC;
+				break;
+			}
+		}
+	}
+
+	return ret;
+}
+
 enum psp_status amdgv_psp_load_vbflash_bin(struct amdgv_adapter *adapt, char *buffer,
 					   uint32_t pos, uint32_t count)
 {
@@ -3249,4 +3434,14 @@ enum psp_status amdgv_psp_sw_fini(struct amdgv_adapter *adapt)
 	}
 
 	return PSP_STATUS__SUCCESS;
+}
+
+enum gpuv_psp_ring_type psp_ring_type_to_gpuv_psp_ring_type(enum psp_ring_type ring_type)
+{
+	switch (ring_type) {
+	case PSP_RING_TYPE__KM:
+		return GPUV_PSP_RING_TYPE__KM;
+	default:
+		return GPUV_PSP_RING_TYPE__INVALID;
+    }
 }

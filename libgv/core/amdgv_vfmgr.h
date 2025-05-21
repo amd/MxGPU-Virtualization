@@ -60,7 +60,8 @@ int amdgv_vfmgr_copy_and_calc_checksum_to_vf_fb(struct amdgv_adapter *adapt, uin
 	uint32_t *checksum);
 
 
-int amdgv_vfmgr_update_bp_message(struct amdgv_adapter *adapt, uint32_t idx_vf);
+int amdgv_vfmgr_copy_bp_entry_to_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf,
+				       uint64_t retired_page, uint32_t idx, uint32_t *checksum);
 
 int amdgv_vfmgr_update_pf2vf_message(struct amdgv_adapter *adapt, uint32_t idx_vf);
 int amdgv_vfmgr_retrieve_vf2pf_message(struct amdgv_adapter *adapt, uint32_t idx_vf,
@@ -82,9 +83,6 @@ int amdgv_vfmgr_copy_ip_data_to_vf(struct amdgv_adapter *adapt, uint32_t idx_vf,
 /* program_vf_mc_settings, clear_vf_fb and copy_ip_data_to_vf_fb */
 int amdgv_vfmgr_init_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, bool mbox_resp,
 			   uint8_t pattern_data, uint8_t flag);
-
-void amdgv_vfmgr_clean_bp_block_size(struct amdgv_adapter *adapt);
-void amdgv_vfmgr_clean_vf_bp_block_size(struct amdgv_adapter *adapt, uint32_t idx_vf);
 
 int amdgv_msg_checksum(void *obj, uint32_t obj_size, uint32_t key, uint32_t chksum);
 

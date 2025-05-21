@@ -225,8 +225,8 @@ int amdgv_misc_load_dfc(struct amdgv_adapter *adapt)
 	if (adapt->ucode.load) {
 		if (adapt->ucode.load(adapt, &fw_id, 1))
 			ret = PSP_STATUS__ERROR_GENERIC;
-	} else if (adapt->misc.load_dfc) {
-		ret = adapt->misc.load_dfc(adapt);
+	} else {
+		ret = AMDGV_FAILURE;
 	}
 
 	if (amdgv_sched_context_save(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX) != 0) {

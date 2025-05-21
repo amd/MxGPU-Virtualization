@@ -64,6 +64,34 @@ int AmdSmiTopologyCommand::topology_command_link_status(std::string &formatted_s
 	return ret;
 }
 
+int AmdSmiTopologyCommand::p2p_capability_command_coherent(std::string &formatted_string)
+{
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_coherent_p2p_capability_command(
+				  arg, bdf_vector, formatted_string);
+	return ret;
+}
+
+int AmdSmiTopologyCommand::p2p_capability_command_atomics(std::string &formatted_string)
+{
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_atomics_p2p_capability_command(
+				  arg, bdf_vector, formatted_string);
+	return ret;
+}
+
+int AmdSmiTopologyCommand::p2p_capability_command_dma(std::string &formatted_string)
+{
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_dma_p2p_capability_command(
+				  arg, bdf_vector, formatted_string);
+	return ret;
+}
+
+int AmdSmiTopologyCommand::p2p_capability_command_bi_directional(std::string &formatted_string)
+{
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_bi_directional_p2p_capability_command(
+				  arg, bdf_vector, formatted_string);
+	return ret;
+}
+
 int AmdSmiTopologyCommand::topology_command_all_status(std::string &formatted_string)
 {
 	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_all_topology_command(
@@ -130,6 +158,54 @@ void AmdSmiTopologyCommand::topology_command_human()
 			arg.all_arguments) {
 		ret = topology_command_link_status(formatted_string);
 		std::string param{"link-status"};
+		int error = handle_exceptions(ret, param, arg);
+		if (error == 0) {
+			out += formatted_string;
+		}
+		formatted_string.clear();
+	}
+
+	if ((std::find(arg.options.begin(), arg.options.end(), "coherent") !=
+			arg.options.end()) ||
+			arg.all_arguments) {
+		ret = p2p_capability_command_coherent(formatted_string);
+		std::string param{"coherent"};
+		int error = handle_exceptions(ret, param, arg);
+		if (error == 0) {
+			out += formatted_string;
+		}
+		formatted_string.clear();
+	}
+
+	if ((std::find(arg.options.begin(), arg.options.end(), "atomics") !=
+			arg.options.end()) ||
+			arg.all_arguments) {
+		ret = p2p_capability_command_atomics(formatted_string);
+		std::string param{"atomics"};
+		int error = handle_exceptions(ret, param, arg);
+		if (error == 0) {
+			out += formatted_string;
+		}
+		formatted_string.clear();
+	}
+
+	if ((std::find(arg.options.begin(), arg.options.end(), "dma") !=
+			arg.options.end()) ||
+			arg.all_arguments) {
+		ret = p2p_capability_command_dma(formatted_string);
+		std::string param{"dma"};
+		int error = handle_exceptions(ret, param, arg);
+		if (error == 0) {
+			out += formatted_string;
+		}
+		formatted_string.clear();
+	}
+
+	if ((std::find(arg.options.begin(), arg.options.end(), "bi-dir") !=
+			arg.options.end()) ||
+			arg.all_arguments) {
+		ret = p2p_capability_command_bi_directional(formatted_string);
+		std::string param{"bi-dir"};
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {
 			out += formatted_string;

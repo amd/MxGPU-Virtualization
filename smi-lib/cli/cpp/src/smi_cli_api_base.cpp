@@ -375,6 +375,29 @@ int AmdSmiApiBase::amdsmi_get_all_topology_command(Arguments arg,
 	return 2;
 }
 
+int AmdSmiApiBase::amdsmi_get_coherent_p2p_capability_command(Arguments arg,
+		std::vector<std::string> bdf_vector, std::string& out)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_get_atomics_p2p_capability_command(Arguments arg,
+			std::vector<std::string> bdf_vector, std::string& out)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_get_dma_p2p_capability_command(Arguments arg,
+			std::vector<std::string> bdf_vector, std::string& out)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_get_bi_directional_p2p_capability_command(Arguments arg,
+			std::vector<std::string> bdf_vector, std::string& out)
+{
+	return 2;
+}
 
 int AmdSmiApiBase::amdsmi_get_caps_xgmi_command(Arguments arg,
 		std::string& out)

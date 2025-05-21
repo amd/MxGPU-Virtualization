@@ -23,6 +23,7 @@
 #include "amdgv.h"
 #include "amdgv_device.h"
 #include "amdgv_mca.h"
+#include "amdgv_powerplay.h"
 #include "mi300_mca.h"
 #include "mi300_smu_ppsmc.h"
 #include "mi300_powerplay.h"
@@ -561,52 +562,26 @@ static int mi300_mca_get_valid_bank_count(struct amdgv_adapter *adapt,
 					enum amdgv_mca_error_type type,
 					uint32_t *count)
 {
-	uint32_t msg;
-	int ret;
+	int ret = AMDGV_FAILURE;
 
-	if (!count)
-		return AMDGV_FAILURE;
-
-	switch (type) {
-	case AMDGV_MCA_ERROR_TYPE_UE:
-		msg = PPSMC_MSG_QueryValidMcaCount;
-		break;
-	case AMDGV_MCA_ERROR_TYPE_CE:
-		msg = PPSMC_MSG_QueryValidMcaCeCount;
-		break;
-	default:
-		return AMDGV_FAILURE;
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->get_valid_mca_bank_count) {
+		ret = adapt->pp.pp_funcs->get_valid_mca_bank_count(adapt, (int)type, count);
 	}
 
-	ret = mi300_smu_send_msg(adapt, msg, count);
-	if (ret) {
-		*count = 0;
-		return ret;
-	}
-
-	return 0;
+	return ret;
 }
 
 static int mi300_mca_bank_read_reg32(struct amdgv_adapter *adapt,
 				enum amdgv_mca_error_type type,
 				int idx, int offset, uint32_t *val)
 {
-	uint32_t msg, param;
+	int ret = AMDGV_FAILURE;
 
-	switch (type) {
-	case AMDGV_MCA_ERROR_TYPE_UE:
-		msg = PPSMC_MSG_McaBankDumpDW;
-		break;
-	case AMDGV_MCA_ERROR_TYPE_CE:
-		msg = PPSMC_MSG_McaBankCeDumpDW;
-		break;
-	default:
-		return AMDGV_FAILURE;
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->read_mca_bank_reg32) {
+		ret = adapt->pp.pp_funcs->read_mca_bank_reg32(adapt, (int)type, idx, offset, val);
 	}
 
-	param = ((idx & 0xffff) << 16) | (offset & 0xfffc);
-
-	return mi300_smu_send_msg_with_param(adapt, msg, param, val);
+	return ret;
 }
 
 static int mi300_mca_bank_read_reg64(struct amdgv_adapter *adapt,

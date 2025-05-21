@@ -508,7 +508,7 @@ static int mi300_get_vram_info(struct amdgv_adapter *adapt,
 			       struct amdgv_gpumon_vram_info *vram_info)
 {
 	vram_info->vram_size_mb = mi300_nbio_get_total_vram_size(adapt);
-	vram_info->vram_type = adapt->vram_info.vram_type;
+	vram_info->vram_type = vram_type_to_gpumon_vram_type(adapt->vram_info.vram_type);
 	vram_info->vram_vendor = AMDGV_GPUMON_VRAM_VENDOR__PLACEHOLDER0;
 	vram_info->vram_bit_width = adapt->vram_info.vram_bit_width;
 
@@ -1119,10 +1119,12 @@ static int mi300_gpumon_smu_get_pm_policy(struct amdgv_adapter *adapt,
 			struct amdgv_gpumon_smu_dpm_policy *policy)
 {
 	int ret = AMDGV_FAILURE;
-	struct mi300_smu_dpm_policy *policy_int;
+	struct pp_smu_dpm_policy *policy_int;
 	uint32_t i = 0;
 
-	ret = mi300_smu_get_pm_policy(adapt, p_type, &policy_int);
+	if (adapt->pp.pp_funcs->smu_get_pm_policy)
+		ret = adapt->pp.pp_funcs->smu_get_pm_policy(adapt, p_type, &policy_int);
+
 	if (ret)
 		return ret;
 
@@ -1140,7 +1142,12 @@ static int mi300_gpumon_smu_set_pm_policy_level(struct amdgv_adapter *adapt,
 			enum amdgv_pp_pm_policy p_type,
 			enum amdgv_pp_policy_soc_pstate level)
 {
-	return mi300_smu_compare_and_set_pm_policy(adapt, p_type, level);
+	int ret = AMDGV_FAILURE;
+
+	if (adapt->pp.pp_funcs->smu_compare_and_set_pm_policy)
+		ret = adapt->pp.pp_funcs->smu_compare_and_set_pm_policy(adapt, p_type, level);
+
+	return ret;
 }
 
 static int mi300_get_link_metrics(struct amdgv_adapter *adapt,
@@ -1292,7 +1299,7 @@ static int mi300_get_xgmi_fb_sharing_mode_info(struct amdgv_adapter *src_adapt,
 	struct amdgv_hive_info *hive;
 	enum amdgv_xgmi_fb_sharing_mode libgv_mode;
 
-	libgv_mode = amdgv_gpumon_xgmi_mode_map(mode);
+	libgv_mode = gpumon_to_xgmi_fb_sharing_mode(mode);
 	if (libgv_mode > MI300_XGMI_MAX_SUPPORTED_MODE)
 		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
 
@@ -1335,7 +1342,7 @@ mi300_set_xgmi_fb_sharing_mode(struct amdgv_adapter *adapt,
 	int ret = AMDGV_FAILURE;
 	enum amdgv_xgmi_fb_sharing_mode libgv_mode;
 
-	libgv_mode = amdgv_gpumon_xgmi_mode_map(mode);
+	libgv_mode = gpumon_to_xgmi_fb_sharing_mode(mode);
 	if (libgv_mode > MI300_XGMI_MAX_SUPPORTED_MODE)
 		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
 
@@ -1353,7 +1360,7 @@ static int mi300_set_xgmi_fb_sharing_mode_ex(struct amdgv_adapter *adapt,
 	int ret = AMDGV_FAILURE;
 	enum amdgv_xgmi_fb_sharing_mode libgv_mode;
 
-	libgv_mode = amdgv_gpumon_xgmi_mode_map(mode);
+	libgv_mode = gpumon_to_xgmi_fb_sharing_mode(mode);
 	if (libgv_mode > MI300_XGMI_MAX_SUPPORTED_MODE)
 		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
 
@@ -1482,6 +1489,17 @@ static int mi300_get_gfx_config(struct amdgv_adapter *adapt,
 	return 0;
 }
 
+static int mi300_get_ecc_correction_schema(struct amdgv_adapter *adapt,
+	uint32_t *ecc_correction_schema)
+{
+	*ecc_correction_schema |=
+		(1 << AMDGV_RAS_ECC_SUPPORT_PARITY) |
+		(1 << AMDGV_RAS_ECC_SUPPORT_CORRECTABLE) |
+		(1 << AMDGV_RAS_ECC_SUPPORT_UNCORRECTABLE) |
+		(1 << AMDGV_RAS_ECC_SUPPORT_POISON);
+	return 0;
+}
+
 static const struct amdgv_gpumon_funcs mi300_gpumon_funcs = {
 	.get_asic_temperature = mi300_get_asic_temperature,
 	.get_gpu_power_usage = mi300_get_gpu_power_usage,
@@ -1542,6 +1560,7 @@ static const struct amdgv_gpumon_funcs mi300_gpumon_funcs = {
 	.get_pm_policy = mi300_gpumon_smu_get_pm_policy,
 	.set_pm_policy_level = mi300_gpumon_smu_set_pm_policy_level,
 	.get_gfx_config = mi300_get_gfx_config,
+	.get_ecc_correction_schema = mi300_get_ecc_correction_schema,
 };
 
 static int mi300_gpumon_sw_init(struct amdgv_adapter *adapt)

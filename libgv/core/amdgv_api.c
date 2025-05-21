@@ -196,10 +196,12 @@ const char *const amdgv_inf_name[] = {
 #endif
 	"store_rlcv_timestamp",
 	"get_ih_rb_info",
+#ifndef EXCLUDE_DCORE_DEBUG
 	"signal_reset_happened",
 	"signal_diag_data_ready",
 	"diag_data_collect_disabled",
 	"signal_manual_dump_happened",
+#endif
 	"get_device_numa_node",
 	"save_fb_sharing_mode",
 	"save_accelerator_partition_mode",
@@ -212,6 +214,7 @@ const char *const amdgv_inf_name[] = {
 	"bh_init",
 	"bh_queue",
 	"bh_fini",
+	"in_virtual_machine",
 };
 
 int AMDGV_API amdgv_init(struct oss_interface *funcs, uint16_t *dev_id_array, uint32_t flags)
@@ -642,6 +645,24 @@ int AMDGV_API amdgv_set_all_vf(amdgv_dev_t dev)
 	return 0;
 }
 
+int AMDGV_API amdgv_dump_cu_data(amdgv_dev_t dev, enum AMDGV_CU_DATA_TYPE type)
+{
+	struct amdgv_adapter *adapt;
+	int ret = 0;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	oss_mutex_lock(adapt->bp_lock);
+
+	// Cannot use pushing event queue method. Since when bp mode works, event
+	// will not be handled.
+	ret = amdgv_int_dump_cu_data(adapt, type);
+
+	oss_mutex_unlock(adapt->bp_lock);
+
+	return ret;
+}
+
 int AMDGV_API amdgv_notify_event(amdgv_dev_t dev, enum amdgv_notify_event event)
 {
 	int ret = 0;
@@ -772,7 +793,7 @@ int AMDGV_API amdgv_get_dev_info(amdgv_dev_t dev, enum amdgv_dev_info_type type,
 		if (adapt->xgmi.phy_nodes_num > 1)
 			info->oam.oam_idx = adapt->xgmi.phy_node_id;
 		else
-			info->oam.oam_idx = -1;
+			info->oam.oam_idx = 0;
 		break;
 	case AMDGV_GET_COMPUTE_PROFILE:
 		ret = amdgv_gfx_get_compute_cap(adapt, true, &(info->compute_cap.min));
@@ -838,20 +859,11 @@ int AMDGV_API amdgv_set_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 		if (conf->flag_switch == 0) {
 			AMDGV_INFO("disable force reset\n");
 			adapt->flags &= ~AMDGV_FLAG_VF_HANG_GPU_RESET;
-		} else if (conf->flag_switch == 1) {
-			AMDGV_INFO("enable force reset(BACO)\n");
-			adapt->flags |= AMDGV_FLAG_VF_HANG_GPU_RESET;
-			adapt->reset.reset_mode = AMDGV_RESET_BACO;
-		} else if (conf->flag_switch == 2) {
+		} else {
 			adapt->flags |= AMDGV_FLAG_VF_HANG_GPU_RESET;
 			AMDGV_INFO("SET RESET MODE to MODE1\n");
 			adapt->reset.reset_mode = AMDGV_RESET_MODE1;
-		} else {
-			AMDGV_INFO("SET RESET MODE to BACO\n");
-			adapt->flags |= AMDGV_FLAG_VF_HANG_GPU_RESET;
-			adapt->reset.reset_mode = AMDGV_RESET_BACO;
 		}
-
 		break;
 
 	case AMDGV_CONF_HANG_DEBUG_FLAG:
@@ -929,17 +941,11 @@ int AMDGV_API amdgv_set_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 		if (conf->flag_switch == 0) {
 			AMDGV_INFO("clear whole_gpu_reset\n");
 			adapt->reset.reset_mode = 0;
-		}  else if (conf->flag_switch == 1) {
-			AMDGV_INFO("enable whole_gpu_reset(BACO-IN/OUT)\n");
-			adapt->reset.reset_mode = AMDGV_RESET_BACO;
-		} else if (conf->flag_switch == 2) {
+		} else {
+			adapt->flags |= AMDGV_FLAG_VF_HANG_GPU_RESET;
 			AMDGV_INFO("enable whole_gpu_reset(MODE1_RESET)\n");
 			adapt->reset.reset_mode = AMDGV_RESET_MODE1;
-		} else {
-			AMDGV_INFO("enable whole_gpu_reset(BACO-IN/OUT)\n");
-			adapt->reset.reset_mode = AMDGV_RESET_BACO;
 		}
-
 		break;
 
 	case AMDGV_CONF_CMD_TIMEOUT:
@@ -980,6 +986,7 @@ int AMDGV_API amdgv_set_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 		ret = amdgv_sched_set_hliquid_min_ts(adapt, conf->hliquid_min_ts);
 		break;
 
+#ifndef EXCLUDE_DCORE_DEBUG
 	case AMDGV_CONF_DISABLE_DCORE_DEBUG:
 		if (conf->flag_switch) {
 			AMDGV_INFO("disable vf dcore debug\n");
@@ -990,6 +997,7 @@ int AMDGV_API amdgv_set_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 		}
 
 		break;
+#endif
 
 	case AMDGV_CONF_GPUV_LIVE_UPDATE:
 		if (conf->flag_switch) {
@@ -1136,9 +1144,6 @@ int AMDGV_API amdgv_get_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 
 	case AMDGV_CONF_FORCE_RESET_FLAG:
 		if (adapt->flags & AMDGV_FLAG_VF_HANG_GPU_RESET) {
-			if (adapt->reset.reset_mode == AMDGV_RESET_MODE1)
-				conf->flag_switch = 2;
-			else
 				conf->flag_switch = 1;
 		} else
 			conf->flag_switch = 0;
@@ -1169,12 +1174,8 @@ int AMDGV_API amdgv_get_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 	case AMDGV_CONF_RESET_GPU:
 		if (adapt->reset.reset_mode == 0)
 			conf->flag_switch = 0;
-		else if (adapt->reset.reset_mode == AMDGV_RESET_PF_FLR)
-			conf->flag_switch = 1;
-		else if (adapt->reset.reset_mode == AMDGV_RESET_MODE1)
-			conf->flag_switch = 2;
 		else
-			conf->flag_switch = 3;
+			conf->flag_switch = 1;
 		break;
 
 	case AMDGV_CONF_FORCE_SWITCH_VF_FLAG:
@@ -1217,12 +1218,14 @@ int AMDGV_API amdgv_get_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 		conf->hliquid_min_ts = amdgv_sched_get_hliquid_min_ts(adapt);
 		break;
 
+#ifndef EXCLUDE_DCORE_DEBUG
 	case AMDGV_CONF_DISABLE_DCORE_DEBUG:
 		if (adapt->flags & AMDGV_FLAG_DISABLE_DCORE_DEBUG)
 			conf->flag_switch = 1;
 		else
 			conf->flag_switch = 0;
 		break;
+#endif
 	case AMDGV_CONF_HANG_DETECTION_THRESHOLD:
 		if (adapt->gfx.hang_detection_supported)
 			conf->u32val = adapt->gfx.hang_detection_threshold_us;
@@ -1455,6 +1458,7 @@ static int default_threshold[AMDGV_GUARD_EVENT_MAX] = {
 	[AMDGV_GUARD_EVENT_ALL_INT] = AMDGV_DEFAULT_INTERRUPT_THRESHOLD,
 	[AMDGV_GUARD_EVENT_RAS_ERR_COUNT] = AMDGV_DEFAULT_RAS_TELEMETRY_THRESHOLD,
 	[AMDGV_GUARD_EVENT_RAS_CPER_DUMP] = AMDGV_DEFAULT_RAS_TELEMETRY_THRESHOLD,
+	[AMDGV_GUARD_EVENT_RAS_BAD_PAGES] = AMDGV_DEFAULT_RAS_TELEMETRY_THRESHOLD,
 };
 
 static int default_interval[AMDGV_GUARD_EVENT_MAX] = {
@@ -1464,6 +1468,7 @@ static int default_interval[AMDGV_GUARD_EVENT_MAX] = {
 	[AMDGV_GUARD_EVENT_ALL_INT] = AMDGV_DEFAULT_INTERRUPT_INTERVAL,
 	[AMDGV_GUARD_EVENT_RAS_ERR_COUNT] = AMDGV_DEFAULT_RAS_TELEMETRY_INTERVAL,
 	[AMDGV_GUARD_EVENT_RAS_CPER_DUMP] = AMDGV_DEFAULT_RAS_TELEMETRY_INTERVAL,
+	[AMDGV_GUARD_EVENT_RAS_BAD_PAGES] = AMDGV_DEFAULT_RAS_TELEMETRY_INTERVAL,
 };
 
 int amdgv_reset_guard_config(amdgv_dev_t dev, uint32_t idx_vf)
@@ -2850,10 +2855,12 @@ int amdgv_get_diag_data(amdgv_dev_t dev, uint32_t bdf, void *buf, uint32_t *size
 		return AMDGV_FAILURE;
 	}
 
+#ifndef EXCLUDE_DCORE_DEBUG
 	if (oss_diag_data_collect_disabled(dev, bdf)) {
 		*size = 0;
 		return AMDGV_FAILURE;
 	}
+#endif
 
 	if (dev) {
 		adapt = (struct amdgv_adapter *)dev;
@@ -3012,7 +3019,7 @@ int amdgv_read_psp_data(amdgv_dev_t dev, void *buffer, uint32_t size)
 
 	// convert libgv psp data to kmd psp data
 	// fill km_ring buffer
-	psp->km_ring.ring_type = adapt->psp.km_ring[psp_idx].ring_type;
+	psp->km_ring.ring_type = psp_ring_type_to_gpuv_psp_ring_type(adapt->psp.km_ring[psp_idx].ring_type);
 	psp->km_ring.ring_rptr = adapt->psp.km_ring[psp_idx].ring_rptr;
 	psp->km_ring.ring_wptr = adapt->psp.km_ring[psp_idx].ring_wptr;
 	psp->km_ring.ring_mem.size = adapt->psp.km_ring[psp_idx].ring_mem.size;
@@ -3591,11 +3598,14 @@ int AMDGV_API amdgv_query_debug_dump_fb_addr(amdgv_dev_t dev, uint32_t *offset, 
 	return ret;
 }
 
-bool amdgv_in_whole_gpu_reset(amdgv_dev_t dev)
+bool AMDGV_API amdgv_in_whole_gpu_reset(amdgv_dev_t dev)
 {
 	struct amdgv_adapter *adapt;
-	SET_ADAPT_AND_CHECK_STATUS_MINIMAL(adapt, dev);
 
+	if (dev == AMDGV_INVALID_HANDLE)
+		return false;
+
+	adapt = (struct amdgv_adapter *)dev;
 	return in_whole_gpu_reset();
 }
 
@@ -3649,12 +3659,16 @@ static void amdgv_disable_bp_mode_1(struct amdgv_adapter *adapt)
 
 	for (i = 0; i < adapt->sched.num_world_switch; i++) {
 		world_switch = &adapt->sched.world_switch[i];
-		if (world_switch->enabled && world_switch->sched_block == AMDGV_SCHED_BLOCK_GFX
-			&& world_switch->sched_mode > AMDGV_SCHED_MAX_HW_SCHED_MODE) {
-			oss_mutex_lock(world_switch->manual.switching_lock);
-			world_switch->switch_running = true;
-			adapt->bp_gfx_ws_pause_flag = 0;
-			oss_mutex_unlock(world_switch->manual.switching_lock);
+		if (world_switch->enabled && world_switch->sched_block == AMDGV_SCHED_BLOCK_GFX) {
+			if (world_switch->sched_mode > AMDGV_SCHED_MAX_HW_SCHED_MODE) {
+				oss_mutex_lock(world_switch->manual.switching_lock);
+				world_switch->switch_running = true;
+				adapt->bp_gfx_ws_pause_flag = 0;
+				oss_mutex_unlock(world_switch->manual.switching_lock);
+			} else {
+				world_switch->switch_running = true;
+				adapt->bp_gfx_ws_pause_flag = 0;
+			}
 			AMDGV_INFO("sched switch %d is resumed\n", i);
 			break;
 		}
@@ -3886,5 +3900,42 @@ int amdgv_gpu_timer(amdgv_dev_t dev, uint64_t micro_seconds)
 		result = 0;
 	}
 	return result;
+}
+
+int AMDGV_API amdgv_error_ring_buffer_dump(amdgv_dev_t dev, char *buf, int buf_size)
+{
+	struct amdgv_adapter *adapt;
+	int len;
+	SET_ADAPT_AND_CHECK_STATUS_MINIMAL(adapt, dev);
+	oss_mutex_lock(adapt->api_lock);
+	len = amdgv_error_get_error_all(adapt, buf, buf_size);
+	oss_mutex_unlock(adapt->api_lock);
+	return len;
+}
+
+bool AMDGV_API amdgv_is_service_vm_enabled(amdgv_dev_t dev)
+{
+	struct amdgv_adapter *adapt = (struct amdgv_adapter *)dev;
+	bool ret = false;
+
+	oss_mutex_lock(adapt->api_lock);
+	if (adapt->flags & AMDGV_FLAG_ENABLE_SVM)
+		ret = true;
+	oss_mutex_unlock(adapt->api_lock);
+
+	return ret;
+}
+
+int AMDGV_API amdgv_set_product_info_invalid(amdgv_dev_t dev)
+{
+	struct amdgv_adapter *adapt;
+
+	SET_ADAPT_AND_CHECK_STATUS_MINIMAL(adapt, dev);
+
+	if (true == adapt->product_info.visit) {
+		adapt->product_info.visit = false;
+	}
+
+	return 0;
 }
 

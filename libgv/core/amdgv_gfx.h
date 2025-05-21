@@ -513,6 +513,7 @@ struct amdgv_gfx_funcs {
 	void (*reset_ras_error_status)(struct amdgv_adapter *adapt);
 	int  (*ras_error_inject)(struct amdgv_adapter *adapt,
 		void *inject_if, uint32_t instance_mask);
+	int  (*dump_cu_data)(struct amdgv_adapter *adapt, enum AMDGV_CU_DATA_TYPE type);
 	int  (*hw_init_internal_set)(struct amdgv_adapter *adapt);
 };
 
@@ -684,6 +685,20 @@ struct amdgv_cu_info {
 	uint32_t bitmap[4][4];
 };
 
+struct amdgv_cu_dump_data_info {
+	struct amdgv_cu_info    cu_info;
+	/* the handle of CU data dump thread */
+	thread_t                cu_dump_thread;
+	/* the event for awaking CU data dump*/
+	event_t                 cu_dump_event;
+	enum AMDGV_CU_DATA_TYPE cu_dump_type;
+	uint32_t                cu_dump_size;
+	const char              *cu_data;
+	const char              *cu_data_flags;
+
+	bool                    cu_dump_finished;
+};
+
 typedef struct {
 	uint32_t group_segment_fixed_size;
 	uint32_t private_segment_fixed_size;
@@ -844,6 +859,8 @@ struct amdgv_gfx {
 
 	struct amdgv_gfx_funcs	*funcs;
 
+	struct amdgv_cu_dump_data_info cu_dump_data_info;
+
 	/* reset mask */
 	uint32_t            grbm_soft_reset;
 	uint32_t            srbm_soft_reset;
@@ -969,4 +986,10 @@ int amdgv_gfx_get_compute_cap(struct amdgv_adapter *adapt, bool min, uint32_t *c
 void amdgv_gfx_rlc_enter_safe_mode(struct amdgv_adapter *adapt, int xcc_id);
 void amdgv_gfx_rlc_exit_safe_mode(struct amdgv_adapter *adapt, int xcc_id);
 
+int amdgv_gfx_dump_data(struct amdgv_adapter *adapt);
+uint32_t amdgv_gfx_calculate_cu_data_size(struct amdgv_adapter *adapt, enum AMDGV_CU_DATA_TYPE type);
+void amdgv_gfx_check_pf_fb_size_for_cu_data_dump(struct amdgv_adapter *adapt);
+
+int amdgv_gfx_cu_data_dump_thread_init(struct amdgv_adapter *adapt);
+void amdgv_gfx_cu_data_dump_thread_fini(struct amdgv_adapter *adapt);
 #endif

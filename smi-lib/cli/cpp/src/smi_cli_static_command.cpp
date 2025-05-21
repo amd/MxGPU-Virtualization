@@ -54,7 +54,7 @@ dfc_ucode_csv_header {",version,gart_wr_guest_min,gart_wr_guest_max,dfc_fw_type,
 auto constexpr
 fb_info_csv_header {",total_fb_size,pf_fb_reserved,pf_fb_offset,fb_alignment,max_vf_fb_usable,min_vf_fb_usable"};
 auto constexpr num_vf_csv_header {",num_vf_supported,num_vf_enabled"};
-auto constexpr vram_csv_header {",vram_type,vram_vendor,vram_size,vram_bit_width"};
+auto constexpr vram_csv_header {",vram_type,vram_vendor,vram_size,vram_bit_width,vram_max_bandwidth"};
 auto constexpr vf_nested_csv_header {"gpu,vf,fb_offset,fb_size,gfx_timeslice"};
 auto constexpr
 header_cache {",cache,cache_properties,cache_size,cache_level,max_num_cu_shared,num_cache_instance"};

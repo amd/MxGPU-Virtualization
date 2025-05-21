@@ -81,7 +81,8 @@ typedef amdsmi_status_t (*AMDSMI_GET_CURR_ACCELERATOR_PARTITION)(amdsmi_processo
 		amdsmi_accelerator_partition_profile_t *, uint32_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_MEMORY_PARTITION_CONFIG)(amdsmi_processor_handle,
 		amdsmi_memory_partition_config_t *);
-
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_METRICS)(amdsmi_processor_handle, uint32_t *,
+			amdsmi_metric_t *);
 
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_GPU_DEVICE_BDF host_amdsmi_get_gpu_device_bdf;
@@ -112,6 +113,8 @@ extern AMDSMI_GET_GPU_ECC_ENABLED host_amdsmi_get_gpu_ecc_enabled;
 
 extern AMDSMI_GET_CURR_ACCELERATOR_PARTITION host_amdsmi_get_partition_profile;
 extern AMDSMI_GET_MEMORY_PARTITION_CONFIG host_amdsmi_get_gpu_memory_partition_config;
+
+extern AMDSMI_GET_GPU_METRICS host_amdsmi_get_gpu_metrics;
 
 const std::vector<amdsmi_gpu_block_t> ecc_blocks{AMDSMI_GPU_BLOCK_UMC, AMDSMI_GPU_BLOCK_SDMA, AMDSMI_GPU_BLOCK_GFX, AMDSMI_GPU_BLOCK_MMHUB,
 		  AMDSMI_GPU_BLOCK_ATHUB, AMDSMI_GPU_BLOCK_PCIE_BIF, AMDSMI_GPU_BLOCK_HDP, AMDSMI_GPU_BLOCK_XGMI_WAFL,
@@ -371,16 +374,21 @@ std::string host_fill_vram_info(Arguments arg, std::string value)
 		nlohmann::ordered_json vram_size{};
 		vram_size["value"] = value.c_str();
 		vram_size["unit"] = "N/A";
+		nlohmann::ordered_json max_vram_bandwidth{};
+		max_vram_bandwidth["value"] = value.c_str();
+		max_vram_bandwidth["unit"] = "N/A";
 		nlohmann::ordered_json vram_info_json = { { "vram_type", value.c_str() },
 			{ "vram_vendor", value.c_str()},
 			{ "vram_size",  vram_size},
-			{ "vram_bit_width",  value.c_str()}
+			{ "vram_bit_width",  value.c_str(),
+			{ "max_vram_bandwidth",  max_vram_bandwidth} }
 		};
 
 		out = vram_info_json.dump(4);
 	} else if (arg.output == csv) {
 		out = string_format(
-				  ",%s,%s,%s,%s", value.c_str(),
+				  ",%s,%s,%s,%s,%s", value.c_str(),
+				  value.c_str(),
 				  value.c_str(),
 				  value.c_str(),
 				  value.c_str());
@@ -390,7 +398,7 @@ std::string host_fill_vram_info(Arguments arg, std::string value)
 				  value.c_str(),
 				  value.c_str(),
 				  value.c_str(),
-				  value.c_str());
+				  value.c_str(), value.c_str(), " ");
 	}
 
 	return out;
@@ -940,17 +948,28 @@ int AmdSmiApiHost::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argumen
 		nlohmann::ordered_json max_power{};
 		nlohmann::ordered_json min_power{};
 		nlohmann::ordered_json socket_power{};
-		if (power_cap_string == "N/A") {
+		if (power_cap_info.power_cap == UINT64_MAX) {
 			socket_power["value"] = "N/A";
 			socket_power["unit"] = "N/A";
 		} else {
 			socket_power["value"] = power_cap_info.power_cap;
 			socket_power["unit"] = "W";
 		}
-		max_power["value"] = max_power_cap_string;
-		max_power_cap_string == "N/A" ? max_power["unit"] = "N/A" : max_power["unit"] = "W";
-		min_power["value"] = min_power_cap_string;
-		min_power_cap_string == "N/A" ? min_power["unit"] = "N/A" : min_power["unit"] = "W";
+		if (power_cap_info.max_power_cap == UINT64_MAX) {
+			max_power["value"] = "N/A";
+			max_power["unit"] = "N/A";
+		} else {
+			max_power["value"] = power_cap_info.max_power_cap;
+			max_power["unit"] = "W";
+		}
+		if (power_cap_info.min_power_cap == UINT64_MAX) {
+			min_power["value"] = "N/A";
+			min_power["unit"] = "N/A";
+		} else {
+			min_power["value"] = power_cap_info.min_power_cap;
+			min_power["unit"] = "W";
+		}
+
 		nlohmann::ordered_json slowdown_edge_temperature{};
 		if (therm_limit_edge_string == "N/A") {
 			slowdown_edge_temperature["value"] = "N/A";
@@ -1562,14 +1581,52 @@ int AmdSmiApiHost::amdsmi_get_vram_info_command(uint64_t processor_bdf, Argument
 		vram_bit_width_string = string_format("%u",vram_info.vram_bit_width);
 	}
 
+	std::string max_vram_bw_str{"N/A"};
+	std::string max_vram_bw_unit{""};
+	uint64_t max_vram_bw{UINT_MAX};
+	if (AmdSmiPlatform::getInstance().is_mi300()) {
+		std::vector<amdsmi_metric_t> max_bw{};
+		amdsmi_metric_t *metrics;
+		uint32_t metric_size = AMDSMI_MAX_NUM_METRICS;
+
+		ret = host_amdsmi_get_gpu_metrics(processor, &metric_size, NULL);
+		if (ret == AMDSMI_STATUS_SUCCESS) {
+			metrics = (amdsmi_metric_t *)malloc(sizeof(amdsmi_metric_t)*metric_size);
+			ret = host_amdsmi_get_gpu_metrics(processor, &metric_size, &metrics[0]);
+
+			if (ret == AMDSMI_STATUS_SUCCESS) {
+				auto it = std::find_if(metrics, metrics + metric_size, [](const amdsmi_metric_t& metric) {
+					return metric.name == AMDSMI_METRIC_NAME_MAX_DRAM_BANDWIDTH && !(metric.flags & AMDSMI_METRIC_TYPE_ACC);
+				});
+
+				if (it != metrics + metric_size) {
+					max_vram_bw = it->val;
+					max_vram_bw_str = string_format("%d", max_vram_bw);
+					max_vram_bw_unit = "GB/s";
+				}
+
+			}
+			free(metrics);
+		}
+	}
+
 	if (arg.output == json) {
 		nlohmann::ordered_json vram_size{};
 		vram_size["value"] = vram_info.vram_size;
 		vram_size["unit"] = vram_size_mb_string == "N/A" ? "N/A" : "MB";
+		nlohmann::ordered_json vram_max_bandwidth{};
+		if (max_vram_bw != UINT_MAX) {
+			vram_max_bandwidth["value"] = max_vram_bw;
+			vram_max_bandwidth["unit"] = max_vram_bw_unit;
+		} else {
+			vram_max_bandwidth["value"] = "N/A";
+			vram_max_bandwidth["unit"] = "N/A";
+		}
 		nlohmann::ordered_json vram_info_json = { { "type", vram_type_str.c_str() },
 			{ "vendor", vram_vendor_type_str.c_str() },
 			{ "size",  vram_size },
-			{ "bit_width", vram_info.vram_bit_width }
+			{ "bit_width", vram_info.vram_bit_width },
+			{ "max_bandwidth", vram_max_bandwidth }
 		};
 
 		if (vram_info.vram_bit_width == UINT_MAX) {
@@ -1581,18 +1638,17 @@ int AmdSmiApiHost::amdsmi_get_vram_info_command(uint64_t processor_bdf, Argument
 		formatted_string = vram_info_json.dump(4);
 	} else if (arg.output == csv) {
 		formatted_string = string_format(
-							   ",%s,%s,%s,%s", vram_type_str.c_str(),
+							   ",%s,%s,%s,%s,%s", vram_type_str.c_str(),
 							   vram_vendor_type_str.c_str(),
 							   vram_size_mb_string.c_str(),
-							   vram_bit_width_string.c_str());
+							   vram_bit_width_string.c_str(), max_vram_bw_str.c_str());
 	} else {
 		std::string vram_size_mb_string_unit = vram_size_mb_string == "N/A" ? "" : "MB";
 		formatted_string = string_format(
 							   staticVramTemplate, vram_type_str.c_str(),
 							   vram_vendor_type_str.c_str(),
 							   vram_size_mb_string.c_str(), vram_size_mb_string_unit.c_str(),
-							   vram_bit_width_string.c_str());
-
+							   vram_bit_width_string.c_str(), max_vram_bw_str.c_str(), max_vram_bw_unit.c_str());
 	}
 
 	return ret;

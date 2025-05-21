@@ -26,6 +26,7 @@
 #include "amdgv_vfmgr.h"
 #include "amdgv_powerplay_swsmu.h"
 #include "amdgv_ras.h"
+#include "amdgv_gpumon.h"
 
 static const uint32_t this_block = AMDGV_COMMUNICATION_BLOCK;
 
@@ -75,7 +76,9 @@ enum amdgv_live_info_status amdgv_import_data(struct amdgv_adapter *adapt)
 	for (data_op = AMDGV_LIVE_INFO_DATA__CRITICAL_STATE; data_op < op_num; data_op++) {
 		if ((data_op != AMDGV_LIVE_INFO_DATA__MODULE_PARAM_PRE) &&
 			(data_op != AMDGV_LIVE_INFO_DATA__MEMMGR) &&
-			(data_op != AMDGV_LIVE_INFO_DATA__UNPROCESSED_EVENT)) {
+			(data_op != AMDGV_LIVE_INFO_DATA__UNPROCESSED_EVENT) &&
+			(data_op != AMDGV_LIVE_INFO_DATA__IP_DISCOVERY || (!adapt->ip_discovery.enable_live_update))) {
+
 			offset = op_offset[data_op];
 			header = (struct live_info_table_header *)((char *)gpu_data + offset);
 			amdgv_live_info_import_data(adapt, data_op, (void *)header,
@@ -129,15 +132,13 @@ enum amdgv_live_info_status amdgv_export_data(struct amdgv_adapter *adapt)
 			return 0;
 		}
 		for (data_op = AMDGV_LIVE_INFO_DATA__CRITICAL_STATE; data_op < AMDGV_LIVE_INFO_DATA__END; data_op++) {
-			if (data_op != AMDGV_LIVE_INFO_DATA__IP_DISCOVERY) {
-				offset = ((struct amdgv_gpu_data_v2 *)gpu_data)->header.op_offset[data_op];
-				header = (struct live_info_table_header *)((char *)gpu_data + offset);
-				amdgv_live_info_export_data(adapt, data_op, (void *)header, &status);
-				if (status) {
-					adapt->fini_opt.export_status = false;
-					AMDGV_INFO("Export %d data fail\n", data_op);
-					return status;
-				}
+			offset = ((struct amdgv_gpu_data_v2 *)gpu_data)->header.op_offset[data_op];
+			header = (struct live_info_table_header *)((char *)gpu_data + offset);
+			amdgv_live_info_export_data(adapt, data_op, (void *)header, &status);
+			if (status) {
+				adapt->fini_opt.export_status = false;
+				AMDGV_INFO("Export %d data fail\n", data_op);
+				return status;
 			}
 		}
 	}
@@ -231,6 +232,12 @@ enum amdgv_live_info_status amdgv_live_info_init_metadata(struct amdgv_adapter *
 			case AMDGV_LIVE_INFO_DATA__MCA:
 				header->structure_size = sizeof(struct amdgv_live_info_mca);
 				break;
+			case AMDGV_LIVE_INFO_DATA__CPER:
+				header->structure_size = sizeof(struct amdgv_live_info_cper);
+				break;
+			case AMDGV_LIVE_INFO_DATA__IP_DISCOVERY:
+				header->structure_size = sizeof(struct amdgv_live_info_ip_discovery);
+				break;
 			default:
 				AMDGV_DEBUG("No live data struct for op %d in amdgv_live_info_data.\n", data_op);
 				break;
@@ -323,7 +330,13 @@ int amdgv_live_info_export_data(struct amdgv_adapter *adapt, uint32_t data_op,
 		break;
 	}
 	case AMDGV_LIVE_INFO_DATA__IP_DISCOVERY: {
-		AMDGV_DEBUG("Skip export IP discovery data\n");
+		if (adapt->ip_discovery.enable_live_update) {
+			struct amdgv_live_info_ip_discovery *ip_discovery = data;
+
+			oss_memcpy(ip_discovery->ip_discovery_info_data,
+					adapt->ip_discovery.origin_pf_copy.data, AMDGV_IP_DISCOVERY_SIZE);
+			ip_discovery->ip_discovery_info_data_size = AMDGV_IP_DISCOVERY_SIZE;
+		}
 		*status = AMDGV_LIVE_INFO_STATUS_SUCCESS;
 		break;
 	}
@@ -411,6 +424,10 @@ int amdgv_live_info_export_data(struct amdgv_adapter *adapt, uint32_t data_op,
 		*status = amdgv_mca_export_live_data(adapt, (struct amdgv_live_info_mca *)data);
 		break;
 	}
+	case AMDGV_LIVE_INFO_DATA__CPER: {
+		*status = amdgv_cper_export_live_data(adapt, (struct amdgv_live_info_cper *)data);
+		break;
+	}
 	default:
 		AMDGV_WARN("%d is an unknown data request\n", data_op);
 		*status = AMDGV_LIVE_INFO_STATUS_OP_UNKNOWN;
@@ -427,7 +444,10 @@ int amdgv_live_info_import_data(struct amdgv_adapter *adapt, uint32_t data_op,
 {
 	uint32_t ret = 0;
 
-	if (adapt == NULL || (data_op != AMDGV_LIVE_INFO_DATA__IP_DISCOVERY && data == NULL) || status == NULL)
+	if (adapt == NULL
+			|| ((adapt->ip_discovery.enable_live_update || (data_op != AMDGV_LIVE_INFO_DATA__IP_DISCOVERY))
+					&& (data == NULL))
+			|| status == NULL)
 		return AMDGV_FAILURE;
 
 	switch (data_op) {
@@ -505,34 +525,42 @@ int amdgv_live_info_import_data(struct amdgv_adapter *adapt, uint32_t data_op,
 		break;
 	}
 	case AMDGV_LIVE_INFO_DATA__IP_DISCOVERY: {
-		if (adapt->ip_discovery.discover_ip) {
-			if (adapt->ip_discovery.discover_ip(adapt)) {
-				*status = AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
-				return AMDGV_FAILURE;
-			}
+
+		if (adapt->ip_discovery.enable_live_update) {
+			struct amdgv_live_info_ip_discovery *ip_discovery = data;
+
+			oss_memcpy(adapt->ip_discovery.pf_copy.data, ip_discovery->ip_discovery_info_data, ip_discovery->ip_discovery_info_data_size);
+			oss_memcpy(adapt->ip_discovery.origin_pf_copy.data, ip_discovery->ip_discovery_info_data, ip_discovery->ip_discovery_info_data_size);
+			adapt->ip_discovery.size = ip_discovery->ip_discovery_info_data_size;
 		} else {
-			AMDGV_DEBUG("discover_ip function not implemented\n");
-		}
-
-		// Get vmhub info
-		if (adapt->vbios.vmhub_hook)
-			adapt->vbios.vmhub_hook(adapt);
-		else
-			AMDGV_DEBUG("vmhub_hook function not implemented\n");
-
-		// Get MM capability
-		if (adapt->vbios.get_mm_capability) {
-			// Legacy
-			if (adapt->vbios.get_mm_capability(adapt)) {
-				*status = AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
-				return AMDGV_FAILURE;
+			if (adapt->ip_discovery.discover_ip) {
+				if (adapt->ip_discovery.discover_ip(adapt)) {
+					*status = AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
+					return AMDGV_FAILURE;
+				}
+			} else {
+				AMDGV_DEBUG("discover_ip function not implemented\n");
 			}
-		} else {
-			// bandwidth config gets imported by amdgv_mmsch_get_default_bandwidth_config
-			// after fw info import
-			AMDGV_DEBUG("get_mm_capability legacy function not implemented\n");
-		}
 
+			// Get vmhub info
+			if (adapt->vbios.vmhub_hook)
+				adapt->vbios.vmhub_hook(adapt);
+			else
+				AMDGV_DEBUG("vmhub_hook function not implemented\n");
+
+			// Get MM capability
+			if (adapt->vbios.get_mm_capability) {
+				// Legacy
+				if (adapt->vbios.get_mm_capability(adapt)) {
+					*status = AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
+					return AMDGV_FAILURE;
+				}
+			} else {
+				// bandwidth config gets imported by amdgv_mmsch_get_default_bandwidth_config
+				// after fw info import
+				AMDGV_DEBUG("get_mm_capability legacy function not implemented\n");
+			}
+		}
 		*status = AMDGV_LIVE_INFO_STATUS_SUCCESS;
 		break;
 	}
@@ -640,6 +668,10 @@ int amdgv_live_info_import_data(struct amdgv_adapter *adapt, uint32_t data_op,
 		*status = amdgv_mca_import_live_data(adapt, (struct amdgv_live_info_mca *)data);
 		break;
 	}
+	case AMDGV_LIVE_INFO_DATA__CPER: {
+		*status = amdgv_cper_import_live_data(adapt, (struct amdgv_live_info_cper *)data);
+		break;
+	}
 	default:
 		AMDGV_DEBUG("%d is an unknown data request\n", data_op);
 		*status = AMDGV_LIVE_INFO_STATUS_OP_UNKNOWN;
@@ -658,7 +690,7 @@ static int amdgv_live_info_reset_gpu_timer_isr(void *context)
 	uint32_t assigned_vf_count;
 	struct amdgv_adapter *adapt = (struct amdgv_adapter *)context;
 
-	assigned_vf_count = oss_get_assigned_vf_count(adapt->dev, (adapt->xgmi.phy_nodes_num > 1));
+	assigned_vf_count = amdgv_gpumon_get_hive_vf_count(adapt);
 	if (!assigned_vf_count) {
 		amdgv_sched_queue_event(adapt, AMDGV_PF_IDX, AMDGV_EVENT_SCHED_FORCE_RESET_GPU, 0);
 	}
@@ -680,11 +712,11 @@ void amdgv_live_info_prepare_reset(struct amdgv_adapter *adapt)
 	if (!(adapt->opt.deferred_full_live_update && (adapt->flags & AMDGV_FLAG_MIDDLE_OF_LIVE_UPDATE)))
 		return;
 
-	/* If phy_node_num > 1, we need to make sure all the adapters' VFs
+	/* If phy_node_num > 1, we need to make sure all the adapters' VFs whithin the same hive
 	 * are not assigned to any VM because the WGR will trigger a chain reset
 	 * meanning that all the adapters will perform a WGR
 	 */
-	assigned_vf_count = oss_get_assigned_vf_count(adapt->dev, (adapt->xgmi.phy_nodes_num > 1));
+	assigned_vf_count = amdgv_gpumon_get_hive_vf_count(adapt);
 
 	if (assigned_vf_count <= 1) {
 		/* delay 500ms to check the count again because when

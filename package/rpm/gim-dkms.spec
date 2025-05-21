@@ -1,6 +1,6 @@
 %define full_version %(./dkms/get-version)
-%define version %(./dkms/get-version | cut -d- -f1)
-%define release %(./dkms/get-version | cut -d- -f2)
+%define version %(echo %{full_version}-0 | cut -sd- -f1)
+%define release %(echo %{full_version}-0 | cut -sd- -f2)
 
 Name: gim-dkms
 Version: %{version}
@@ -11,7 +11,7 @@ License: MIT
 URL: https://github.com/amd/mxgpu-virtualization
 Source0: ./gim-%{full_version}.tar.gz
 BuildArch: noarch
-Requires: dkms kernel-devel
+Requires: autoconf dkms kernel-devel
 
 %description
 DKMS source for GIM driver.

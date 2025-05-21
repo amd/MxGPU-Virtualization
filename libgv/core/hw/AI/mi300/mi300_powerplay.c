@@ -25,6 +25,7 @@
 #include "atombios/atom.h"
 #include "atombios/atomfirmware.h"
 #include <amdgv_device.h>
+#include "amdgv_mca.h"
 
 #include "mi300.h"
 #include "mi300/NBIO/nbio_7_9_0_offset.h"
@@ -97,6 +98,11 @@ enum mi300_dpm_clock_type {
 	DPM_CLOCK_TYPE_DCLK,
 	DPM_CLOCK_TYPE_LCLK,
 	DPM_CLOCK_TYPE_MAX,
+};
+
+struct mi300_smu_dpm_policy_ctxt {
+	struct pp_smu_dpm_policy policies[AMDGV_PP_PM_POLICY_NUM];
+	uint32_t policy_mask;
 };
 
 struct mi300_smu_dpm_context {
@@ -258,13 +264,19 @@ int mi300_smu_send_msg(struct amdgv_adapter *adapt, uint32_t msg, uint32_t *arg)
 static int mi300_smu_send_test_msg(struct amdgv_adapter *adapt)
 {
 	uint32_t param, val;
-	int ret;
+	int ret, count = 0, max_retry = 3;
 
 	param = 0x22334455;
 
 	ret = mi300_smu_send_msg_with_param(adapt, PPSMC_MSG_TestMessage, param, &val);
 	if (ret)
 		return ret;
+
+	while (val != (param + 1) && count < max_retry) {
+		oss_msleep(1);
+		val = mi300_smu_read_arg(adapt);
+		count++;
+	}
 
 	if (val != (param + 1))
 		return AMDGV_FAILURE;
@@ -323,9 +335,7 @@ static int mi300_smu_check_fw_status(struct amdgv_adapter *adapt)
 	int retries_max = 2, retries;
 
 	for (retries = 0; retries < retries_max; retries++) {
-		WREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_PCIE_INDEX2),
-		       (MP1_Public | (smnMP1_FIRMWARE_FLAGS & 0xffffffff)));
-		mp1_flags = RREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_PCIE_DATA2));
+		mp1_flags = RREG32_PCIE_EXT(SOC15_REG_OFFSET_SMN(MP1, 0, regMP1_FIRMWARE_FLAGS, MP1_Public));
 
 		if (mp1_flags == 0xffffffff) {
 			AMDGV_WARN("MP1_FIRMWARE_FLAGS read 0xffffffff, try again...\n");
@@ -584,7 +594,7 @@ static int mi300_smu_select_policy_soc_pstate(struct amdgv_adapter *adapt,
 	return ret;
 }
 
-static const struct mi300_smu_dpm_policy soc_pstate_policy = {
+static const struct pp_smu_dpm_policy soc_pstate_policy = {
 	.policy_type = AMDGV_PP_PM_POLICY_SOC_PSTATE,
 	.policies = {
 		{SOC_PSTATE_DEFAULT, "soc_pstate_default"},
@@ -637,7 +647,7 @@ static int mi300_smu_set_xgmi_plpd_mode(struct amdgv_adapter *adapt, int mode)
 	return mi300_smu_send_msg_with_param(adapt, msg, param, NULL);
 }
 
-static const struct mi300_smu_dpm_policy plpd_policy = {
+static const struct pp_smu_dpm_policy plpd_policy = {
 	.policy_type = AMDGV_PP_PM_POLICY_XGMI_PLPD,
 	.policies = {
 		{PLPD_DISALLOW, "plpd_disallow"},
@@ -737,9 +747,9 @@ static const uint8_t mi300_smu_throttler_event_map[] = {
 	[THROTTLER_THERMAL_VR_BIT] = PP_THROTTLER_EVENT__VR,
 };
 
-int mi300_smu_get_pm_policy(struct amdgv_adapter *adapt,
+static int mi300_smu_get_pm_policy(struct amdgv_adapter *adapt,
 			enum amdgv_pp_pm_policy p_type,
-			struct mi300_smu_dpm_policy **policy_int)
+			struct pp_smu_dpm_policy **policy_int)
 {
 	struct smu_context *smu = adapt_to_smu(adapt);
 	struct mi300_smu_dpm_context *dpm_ctxt =
@@ -767,17 +777,17 @@ int mi300_smu_get_pm_policy(struct amdgv_adapter *adapt,
 }
 
 static int mi300_smu_set_pm_policy(struct amdgv_adapter *adapt,
-			    struct mi300_smu_dpm_policy *dpm_policy,
+			    struct pp_smu_dpm_policy *dpm_policy,
 			    int level)
 {
 	return dpm_policy->set_policy(adapt, level);
 }
 
-int mi300_smu_compare_and_set_pm_policy(struct amdgv_adapter *adapt,
+static int mi300_smu_compare_and_set_pm_policy(struct amdgv_adapter *adapt,
 				     enum amdgv_pp_pm_policy p_type,
 				     int level)
 {
-	struct mi300_smu_dpm_policy *dpm_policy;
+	struct pp_smu_dpm_policy *dpm_policy;
 	int ret = AMDGV_FAILURE;
 
 	if (mi300_smu_get_pm_policy(adapt, p_type, &dpm_policy))
@@ -799,7 +809,7 @@ int mi300_smu_compare_and_set_pm_policy(struct amdgv_adapter *adapt,
 static void mi300_smu_restore_pm_policy(struct amdgv_adapter *adapt,
 					enum amdgv_pp_pm_policy p_type)
 {
-	struct mi300_smu_dpm_policy *policy;
+	struct pp_smu_dpm_policy *policy;
 
 	if (mi300_smu_get_pm_policy(adapt, p_type, &policy))
 		return;
@@ -818,11 +828,11 @@ static void mi300_smu_restore_pm_policies(struct amdgv_adapter *adapt)
 }
 
 /* Force apply policy. Do not update the SW cached state. */
-int mi300_smu_error_inject_set_pm_policy(struct amdgv_adapter *adapt,
+static int mi300_smu_error_inject_set_pm_policy(struct amdgv_adapter *adapt,
 					 enum amdgv_pp_pm_policy p_type,
 					 int level)
 {
-	struct mi300_smu_dpm_policy *dpm_policy;
+	struct pp_smu_dpm_policy *dpm_policy;
 
 	if (mi300_smu_get_pm_policy(adapt, p_type, &dpm_policy))
 		return AMDGV_FAILURE;
@@ -831,7 +841,7 @@ int mi300_smu_error_inject_set_pm_policy(struct amdgv_adapter *adapt,
 }
 
 /* Force apply policy to last SW cached state */
-void mi300_smu_error_inject_restore_pm_policy(struct amdgv_adapter *adapt,
+static void mi300_smu_error_inject_restore_pm_policy(struct amdgv_adapter *adapt,
 					     enum amdgv_pp_pm_policy p_type)
 {
 	mi300_smu_restore_pm_policy(adapt, p_type);
@@ -1447,7 +1457,7 @@ static int mi300_smu_set_other_dpm_table(struct amdgv_adapter *adapt, int clk_ty
 	PPTable_t *pptable = (PPTable_t *)table_context->pptable;
 	uint32_t default_freq, dpm_levels, freq;
 	uint16_t clk_id, fea_id;
-	int i, ret;
+	int i, ret, max_retry = 3;
 
 	switch (clk_type) {
 	case DPM_CLOCK_TYPE_FCLK:
@@ -1485,9 +1495,19 @@ static int mi300_smu_set_other_dpm_table(struct amdgv_adapter *adapt, int clk_ty
 	}
 
 	if (mi300_smu_feature_is_enabled(adapt, fea_id)) {
-		ret = mi300_smu_get_dpmfreq_level_count(adapt, clk_id, &dpm_levels);
-		if (ret)
-			return ret;
+		do {
+			ret = mi300_smu_get_dpmfreq_level_count(adapt, clk_id, &dpm_levels);
+			if (ret)
+				return ret;
+
+			if (dpm_levels > MI300_SMU_MAX_DPM_LEVEL_COUNT) {
+				AMDGV_WARN("dpm_levels %d exceed max supported, retry sending message\n", dpm_levels);
+				oss_msleep(1);
+			}
+		} while (dpm_levels > MI300_SMU_MAX_DPM_LEVEL_COUNT && max_retry--);
+
+		if (dpm_levels > MI300_SMU_MAX_DPM_LEVEL_COUNT)
+			return AMDGV_FAILURE;
 
 		for (i = 0; i < dpm_levels; i++) {
 			ret = mi300_smu_get_dpmfreq_by_index(adapt, clk_id, i, &freq);
@@ -2843,6 +2863,70 @@ static int mi300_send_rma_reason(struct amdgv_adapter *adapt, enum pp_rma_reason
 	return ret;
 }
 
+static int mi300_smu_get_valid_mca_bank_count(struct amdgv_adapter *adapt,
+					int type, uint32_t *count)
+{
+	uint32_t msg;
+	int ret;
+
+	if (!count)
+		return AMDGV_FAILURE;
+
+	switch ((enum amdgv_mca_error_type)type) {
+	case AMDGV_MCA_ERROR_TYPE_UE:
+		msg = PPSMC_MSG_QueryValidMcaCount;
+		break;
+	case AMDGV_MCA_ERROR_TYPE_CE:
+		msg = PPSMC_MSG_QueryValidMcaCeCount;
+		break;
+	default:
+		return AMDGV_FAILURE;
+	}
+
+	ret = mi300_smu_send_msg(adapt, msg, count);
+	if (ret) {
+		*count = 0;
+		return ret;
+	}
+
+	return 0;
+}
+
+static int mi300_smu_read_mca_bank_reg32(struct amdgv_adapter *adapt,
+				int type, int idx, int offset, uint32_t *val)
+{
+	uint32_t msg, param;
+
+	switch ((enum amdgv_mca_error_type)type) {
+	case AMDGV_MCA_ERROR_TYPE_UE:
+		msg = PPSMC_MSG_McaBankDumpDW;
+		break;
+	case AMDGV_MCA_ERROR_TYPE_CE:
+		msg = PPSMC_MSG_McaBankCeDumpDW;
+		break;
+	default:
+		return AMDGV_FAILURE;
+	}
+
+	param = ((idx & 0xffff) << 16) | (offset & 0xfffc);
+
+	return mi300_smu_send_msg_with_param(adapt, msg, param, val);
+}
+
+static int mi300_smu_reset_vf_arbiters(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	int ret = 0;
+
+	/* MI300 & MI325 */
+	if (adapt->asic_type == CHIP_MI300X && adapt->pp.smu_fw_version >= 0x00557E00) {
+		ret = mi300_smu_send_msg_with_param(adapt,
+						    PPSMC_MSG_ResetVfArbitersByIndex,
+						    idx_vf, NULL);
+	}
+
+	return ret;
+}
+
 static const struct amdgv_pp_funcs mi300_amdgv_pp_funcs = {
 	.handle_smu_irq = mi300_smu_pp_handle_irq,
 	.i2c_eeprom_xfer = mi300_smu_pp_i2c_eeprom_i2c_xfer,
@@ -2865,6 +2949,14 @@ static const struct amdgv_pp_funcs mi300_amdgv_pp_funcs = {
 	.send_hbm_bad_pages_num = mi300_smu_send_hbm_bad_pages_num,
 	.set_df_cstate = mi300_smu_set_df_cstate,
 	.send_rma_reason = mi300_send_rma_reason,
+	.get_valid_mca_bank_count = mi300_smu_get_valid_mca_bank_count,
+	.read_mca_bank_reg32 = mi300_smu_read_mca_bank_reg32,
+	.gpu_mode1_reset = mi300_gpu_mode1_reset,
+	.smu_get_pm_policy = mi300_smu_get_pm_policy,
+	.smu_compare_and_set_pm_policy = mi300_smu_compare_and_set_pm_policy,
+	.smu_error_inject_set_pm_policy = mi300_smu_error_inject_set_pm_policy,
+	.smu_error_inject_restore_pm_policy = mi300_smu_error_inject_restore_pm_policy,
+	.reset_vf_arbiters = mi300_smu_reset_vf_arbiters,
 };
 
 static int mi300_powerplay_sw_init(struct amdgv_adapter *adapt)

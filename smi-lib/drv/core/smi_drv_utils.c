@@ -781,6 +781,12 @@ enum smi_metric_name smi_map_metric_name(enum amdgv_gpumon_metric_ext_name name)
 	case AMDGV_GPUMON_METRIC_EXT_NAME__PCIE_LINK_WIDTH:
 		metric_name = SMI_METRIC_NAME_PCIE_LINK_WIDTH;
 		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__DRAM_BANDWIDTH:
+		metric_name = SMI_METRIC_NAME_DRAM_BANDWIDTH;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__MAX_DRAM_BANDWIDTH:
+		metric_name = SMI_METRIC_NAME_MAX_DRAM_BANDWIDTH;
+		break;
 	default:
 		metric_name = SMI_METRIC_NAME_UNKNOWN;
 		break;

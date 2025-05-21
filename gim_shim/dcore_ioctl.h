@@ -23,6 +23,8 @@
 #ifndef DCORE_IOCTL_H
 #define DCORE_IOCTL_H
 
+#ifndef EXCLUDE_DCORE_DEBUG
+
 #define GIM_IOCTL_NR(n) _IOC_NR(n)
 #define GIM_IOC_VOID _IOC_NONE
 #define GIM_IOC_READ _IOC_READ
@@ -122,4 +124,5 @@ struct dbglib_mes_dbg_info_block {
 	GIM_IOC(GIM_IOC_READWRITE, GIM_IOC_BASE, (GIM_COMMAND_BASE + RDL_CMD_GET_MES_DBG_INFO), 				\
 		sizeof(struct dbglib_mes_dbg_info_block))
 
+#endif //EXCLUDE_DCORE_DEBUG
 #endif

@@ -33,7 +33,7 @@ extern uint32_t shim_log_level;
 			__LINE__, ##s); } while (0)
 
 #define gim_warn_bdf(bdf, fmt, s...)	\
-	do { if (shim_log_level >= AMDGV_INFO_LEVEL) \
+	do { if (shim_log_level >= AMDGV_WARN_LEVEL) \
 		printk(KERN_WARNING "gim warning:(%02x:%02x.%x)(%s:%d) " fmt, \
 			((bdf) & 0xff00) >> 8, ((bdf) & 0xf8) >> 3, ((bdf) & 0x7), __func__, \
 			__LINE__, ##s); } while (0)
@@ -55,7 +55,7 @@ extern uint32_t shim_log_level;
 			__LINE__, ##s); } while (0)
 
 #define gim_dbg_bdf(bdf, fmt, s...)	\
-	do { if (shim_log_level >= AMDGV_INFO_LEVEL) \
+	do { if (shim_log_level >= AMDGV_DEBUG_LEVEL) \
 		printk(KERN_INFO "gim debug:(%02x:%02x.%x)(%s:%d) " fmt, \
 			((bdf) & 0xff00) >> 8, ((bdf) & 0xf8) >> 3, ((bdf) & 0x7), __func__, \
 			__LINE__, ##s); } while (0)

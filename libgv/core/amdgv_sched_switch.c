@@ -71,6 +71,23 @@ static inline bool amdgv_sched_is_one_active_vf(struct amdgv_sched_world_switch 
 	return vfs && (!(vfs & (vfs - 1)));
 }
 
+static bool amdgv_sched_should_pause_ws(struct amdgv_adapter *adapt,
+					 struct amdgv_sched_world_switch *world_switch)
+{
+	bool result = false;
+
+	if ((adapt->bp_mode == AMDGV_BP_MODE_1) &&
+		(world_switch->curr_idx_vf == AMDGV_PF_IDX) &&
+		(world_switch->sched_block == AMDGV_SCHED_BLOCK_GFX)) {
+		if (adapt->flags & AMDGV_FLAG_USE_PF)
+			result = (adapt->array_vf[AMDGV_PF_IDX].vf_status == AMDGV_VF_STATUS_END_INIT) ? true : false;
+		else
+			result = true;
+	}
+
+	return result;
+}
+
 void amdgv_sched_dump_gpu_state(struct amdgv_adapter *adapt)
 {
 	if (adapt->sched.dump_gpu_state)
@@ -593,9 +610,7 @@ load_fcn:
 		goto reset_vf;
 	}
 
-	if ((adapt->bp_mode == AMDGV_BP_MODE_1) && (world_switch->curr_idx_vf == AMDGV_PF_IDX) &&
-		adapt->array_vf[idx_vf].vf_status == AMDGV_VF_STATUS_END_INIT &&
-		world_switch->sched_block == AMDGV_SCHED_BLOCK_GFX) {
+	if (amdgv_sched_should_pause_ws(adapt, world_switch)) {
 		AMDGV_INFO("GFX world switch paused at first PF Run\n");
 		world_switch->switch_running = false;
 		adapt->bp_gfx_ws_pause_flag = 1;
@@ -1340,6 +1355,12 @@ static int amdgv_sched_auto_switch_start(struct amdgv_adapter *adapt,
 	}
 
 	world_switch->switch_running = true;
+
+	if (amdgv_sched_should_pause_ws(adapt, world_switch)) {
+		AMDGV_INFO("GFX world switch paused at first PF Run\n");
+		world_switch->switch_running = false;
+		adapt->bp_gfx_ws_pause_flag = 1;
+	}
 
 	return 0;
 
@@ -2136,6 +2157,7 @@ int amdgv_sched_world_switch_reset(struct amdgv_adapter *adapt, uint32_t idx_vf,
 {
 	int ret = 0;
 	uint32_t hw_sched_id = 0;
+	int tmp_idx_vf;
 	enum amdgv_sched_block sched_block = world_switch->sched_block;
 
 	if (adapt->reset.saved_rlcv_state && (sched_block == AMDGV_SCHED_BLOCK_GFX)) {
@@ -2170,6 +2192,14 @@ int amdgv_sched_world_switch_reset(struct amdgv_adapter *adapt, uint32_t idx_vf,
 		adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state =
 			AMDGV_SAVE_GPU_STATE;
 		adapt->sched.array_vf[idx_vf].cur_vf_state[hw_sched_id] = AMDGV_SAVE_GPU_STATE;
+
+		/* Clean SW state for atcive VFs on auto scheduler */
+		for (tmp_idx_vf = 0; tmp_idx_vf < AMDGV_MAX_VF_SLOT; tmp_idx_vf++) {
+			if (adapt->sched.array_vf[tmp_idx_vf].cur_vf_state[hw_sched_id] == AMDGV_RUN_GPU
+				&& idx_vf != AMDGV_PF_IDX) {
+				adapt->sched.array_vf[tmp_idx_vf].cur_vf_state[hw_sched_id] = AMDGV_SAVE_GPU_STATE;
+			}
+		}
 
 		if (amdgv_hw_sched_state_shutdown(adapt, idx_vf, hw_sched_id)) {
 			amdgv_put_error(idx_vf, AMDGV_ERROR_SCHED_SHUTDOWN_VF_FAIL, idx_vf);

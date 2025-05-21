@@ -25,6 +25,7 @@
 #include "smi_cli_logger_err.h"
 #include "smi_cli_templates.h"
 #include "smi_cli_device.h"
+#include "smi_cli_exception.h"
 
 #include <vector>
 #include <iostream>

@@ -45,7 +45,7 @@ int main(void)
 	unsigned int gpu_count;
 
 	char cper_data[1024*1024];   // the buffer to hold the raw cper data
-	amdsmi_cper_hdr* cper_hdrs[1024];  // the buffer to hold the parsed cper headers
+	amdsmi_cper_hdr_t* cper_hdrs[1024];  // the buffer to hold the parsed cper headers
 	uint32_t severity_mask = 3;
 	uint64_t buf_size = sizeof(cper_data);
 	uint64_t entry_count = 1024; //sizeof(cper_hdrs) / sizeof(cper_hdrs[0]);
@@ -69,7 +69,7 @@ int main(void)
 		goto fini;
 
 	do {
-		ret = amdsmi_gpu_get_cper_entries(processors[0], severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
+		ret = amdsmi_get_gpu_cper_entries(processors[0], severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
 		for(uint32_t i = 0; i < entry_count; i++) {
 			printf("Record id: 		%s \n", cper_hdrs[i]->record_id);
 			printf("Error severity: %d \n", cper_hdrs[i]->error_severity);

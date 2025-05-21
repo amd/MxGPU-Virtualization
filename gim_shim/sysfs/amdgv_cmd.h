@@ -53,12 +53,14 @@ enum amdgv_cmd_id {
     AMDGV_CMD_GET_VF_BDF,
     AMDGV_CMD_RAS_TA_LOAD,
     AMDGV_CMD_RAS_TA_UNLOAD,
+    AMDGV_CMD_DUMP_CU_DATA,
     AMDGV_CMD_SET_BP_MODE,
     AMDGV_CMD_GET_BP_MODE,
     AMDGV_CMD_GET_CURRENT_BP,
     AMDGV_CMD_BP_GO,
     AMDGV_CMD_SEND_WS_CMD,
     AMDGV_CMD_GET_DEVICES_EX_INFO,
+    AMDGV_CMD_GET_CPER_RECORDS,
     AMDGV_CMD_SUPPORTED_MAX
 };
 
@@ -73,6 +75,8 @@ enum amdgv_cmd_response {
 
 /* explilcitly assign index for api consistency */
 enum amdgv_cmd_asic_type {
+	AMDGV_CMD_CHIP_MI200 = 2,
+	AMDGV_CMD_CHIP_NAVI32 = 8,
 	AMDGV_CMD_CHIP_MI300X = 9,
 	AMDGV_CMD_CHIP_MI308X = 11,
 	AMDGV_CMD_CHIP_UNKNOWN,
@@ -103,6 +107,12 @@ enum amdgv_ras_error_type {
     AMDGV_RAS_TYPE_ERROR__SINGLE_CORRECTABLE = 2,
     AMDGV_RAS_TYPE_ERROR__MULTI_UNCORRECTABLE = 4,
     AMDGV_RAS_TYPE_ERROR__POISON = 8,
+};
+
+enum amdgv_cu_data_type {
+	AMDGV_CU_DATA_TYPE_LDS = 0,
+	AMDGV_CU_DATA_TYPE_SGPRs,
+	AMDGV_CU_DATA_TYPE_VGPRs,
 };
 
 enum amdgv_ecc_type_support {
@@ -292,6 +302,11 @@ struct amdgv_cmd_ras_ta_unload {
     uint32_t reserved[5];
 };
 
+struct amdgv_cmd_dump_cu_data_req {
+    struct amdgv_cmd_dev_handle dev;
+    enum amdgv_cu_data_type data_type;
+};
+
 /* Break Point Debug Mode:
  * 0: default value, bp_mode is off
  * 1: pause at first init/run PF
@@ -368,6 +383,19 @@ struct amdgv_cmd_user_ws_cmd {
 	enum amdgv_cmd_ws_cmd ws_cmd;
 	uint32_t hw_sched_id;
 	uint32_t idx_vf;
+};
+
+struct amdgv_get_cper_records_input {
+	struct amdgv_cmd_dev_handle dev;
+	uint8_t *buf;
+	uint64_t buf_size;
+	uint64_t rptr;
+};
+
+struct amdgv_get_cper_records_output {
+	uint64_t write_count;
+	uint64_t overflow_count;
+	uint64_t left_size;
 };
 
 #endif

@@ -327,6 +327,9 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 							   msg_data[2];
 				amdgv_sched_queue_event_ex(adapt, idx_vf, sched_event,
 							   AMDGV_SCHED_BLOCK_ALL, event_data);
+			} else if (sched_event == AMDGV_EVENT_SCHED_VF_REQ_RAS_BAD_PAGES) {
+				amdgv_sched_queue_event_ex(adapt, idx_vf, sched_event,
+							   AMDGV_SCHED_BLOCK_ALL, event_data);
 			} else if (sched_event == AMDGV_EVENT_SCHED_RAS_POISON_CONSUMPTION) {
 				event_data.poison.consumption.block = msg_data[1];
 				amdgv_put_error(idx_vf, AMDGV_ERROR_ECC_POISON_CONSUMPTION,
@@ -613,6 +616,10 @@ int amdgv_irqmgr_toggle_interrupt(struct amdgv_adapter *adapt, bool enable)
 	} else {
 		AMDGV_INFO("Unregister interrupt.\n");
 		adapt->irqmgr.ih.enabled = false;
+
+		/* make sure irq handler exit */
+		ret = amdgv_wait_for(adapt, amdgv_wait_for_irq_handler, adapt, ~0, 0);
+
 		ret = amdgv_irqmgr_unregister_interrupt(adapt);
 	}
 

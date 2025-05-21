@@ -1787,7 +1787,6 @@
 #define PA_SC_ENHANCE_2__RESERVED_3__SHIFT                                                                    0x3
 #define PA_SC_ENHANCE_2__RESERVED_4__SHIFT                                                                    0x4
 #define PA_SC_ENHANCE_2__RESERVED_5__SHIFT                                                                    0x5
-#define PA_SC_ENHANCE_2__ENABLE_SC_SEND_DB_VPZ_FOR_COMPOUND_INDEX_EN__SHIFT                                   0x6
 #define PA_SC_ENHANCE_2__ENABLE_SC_SEND_DB_VPZ_FOR_EN_PIPELINE_PRIMID__SHIFT                                  0x7
 #define PA_SC_ENHANCE_2__RSVD__SHIFT                                                                          0x8
 #define PA_SC_ENHANCE_2__RESERVED_0_MASK                                                                      0x00000001L
@@ -1796,7 +1795,6 @@
 #define PA_SC_ENHANCE_2__RESERVED_3_MASK                                                                      0x00000008L
 #define PA_SC_ENHANCE_2__RESERVED_4_MASK                                                                      0x00000010L
 #define PA_SC_ENHANCE_2__RESERVED_5_MASK                                                                      0x00000020L
-#define PA_SC_ENHANCE_2__ENABLE_SC_SEND_DB_VPZ_FOR_COMPOUND_INDEX_EN_MASK                                     0x00000040L
 #define PA_SC_ENHANCE_2__ENABLE_SC_SEND_DB_VPZ_FOR_EN_PIPELINE_PRIMID_MASK                                    0x00000080L
 #define PA_SC_ENHANCE_2__RSVD_MASK                                                                            0xFFFFFF00L
 //PA_SC_FIFO_SIZE
@@ -2261,11 +2259,13 @@
 #define SH_MEM_CONFIG__ADDRESS_MODE__SHIFT                                                                    0x0
 #define SH_MEM_CONFIG__ALIGNMENT_MODE__SHIFT                                                                  0x3
 #define SH_MEM_CONFIG__F8_MODE__SHIFT                                                                         0x8
+#define SH_MEM_CONFIG__PRECISION_MODE__SHIFT                                                                  0x9
 #define SH_MEM_CONFIG__RETRY_DISABLE__SHIFT                                                                   0xc
 #define SH_MEM_CONFIG__PRIVATE_NV__SHIFT                                                                      0xd
 #define SH_MEM_CONFIG__ADDRESS_MODE_MASK                                                                      0x00000001L
 #define SH_MEM_CONFIG__ALIGNMENT_MODE_MASK                                                                    0x00000018L
 #define SH_MEM_CONFIG__F8_MODE_MASK                                                                           0x00000100L
+#define SH_MEM_CONFIG__PRECISION_MODE_MASK                                                                    0x00000200L
 #define SH_MEM_CONFIG__RETRY_DISABLE_MASK                                                                     0x00001000L
 #define SH_MEM_CONFIG__PRIVATE_NV_MASK                                                                        0x00002000L
 //SP_MFMA_PORTD_RD_CONFIG
@@ -5498,7 +5498,6 @@
 #define DB_DEBUG2__DISABLE_NULL_EOT_FORWARDING__SHIFT                                                         0x11
 #define DB_DEBUG2__DISABLE_DTT_DATA_FORWARDING__SHIFT                                                         0x12
 #define DB_DEBUG2__DISABLE_QUAD_COHERENCY_STALL__SHIFT                                                        0x13
-#define DB_DEBUG2__DISABLE_VR_OBJ_PRIM_ID__SHIFT                                                              0x1a
 #define DB_DEBUG2__DISABLE_VR_PS_INVOKE__SHIFT                                                                0x1b
 #define DB_DEBUG2__ENABLE_PREZ_OF_REZ_SUMM__SHIFT                                                             0x1c
 #define DB_DEBUG2__DISABLE_PREZL_VIEWPORT_STALL__SHIFT                                                        0x1d
@@ -5520,7 +5519,6 @@
 #define DB_DEBUG2__DISABLE_NULL_EOT_FORWARDING_MASK                                                           0x00020000L
 #define DB_DEBUG2__DISABLE_DTT_DATA_FORWARDING_MASK                                                           0x00040000L
 #define DB_DEBUG2__DISABLE_QUAD_COHERENCY_STALL_MASK                                                          0x00080000L
-#define DB_DEBUG2__DISABLE_VR_OBJ_PRIM_ID_MASK                                                                0x04000000L
 #define DB_DEBUG2__DISABLE_VR_PS_INVOKE_MASK                                                                  0x08000000L
 #define DB_DEBUG2__ENABLE_PREZ_OF_REZ_SUMM_MASK                                                               0x10000000L
 #define DB_DEBUG2__DISABLE_PREZL_VIEWPORT_STALL_MASK                                                          0x20000000L
@@ -5612,7 +5610,6 @@
 #define DB_DEBUG4__DISABLE_HIZ_Q1_TS_COLLISION_DETECT__SHIFT                                                  0x11
 #define DB_DEBUG4__DISABLE_HIZ_Q2_TS_COLLISION_DETECT__SHIFT                                                  0x12
 #define DB_DEBUG4__DB_EXTRA_DEBUG4__SHIFT                                                                     0x13
-#define DB_DEBUG4__DISABLE_8PPC_OBJPRIMID_WHEN_NO_SHADER_EXPORTS__SHIFT                                       0x1e
 #define DB_DEBUG4__FULL_TILE_CACHE_EVICT_ON_HALF_FULL__SHIFT                                                  0x1f
 #define DB_DEBUG4__DISABLE_QC_Z_MASK_SUMMATION_MASK                                                           0x00000001L
 #define DB_DEBUG4__DISABLE_QC_STENCIL_MASK_SUMMATION_MASK                                                     0x00000002L
@@ -5634,7 +5631,6 @@
 #define DB_DEBUG4__DISABLE_HIZ_Q1_TS_COLLISION_DETECT_MASK                                                    0x00020000L
 #define DB_DEBUG4__DISABLE_HIZ_Q2_TS_COLLISION_DETECT_MASK                                                    0x00040000L
 #define DB_DEBUG4__DB_EXTRA_DEBUG4_MASK                                                                       0x3FF80000L
-#define DB_DEBUG4__DISABLE_8PPC_OBJPRIMID_WHEN_NO_SHADER_EXPORTS_MASK                                         0x40000000L
 #define DB_DEBUG4__FULL_TILE_CACHE_EVICT_ON_HALF_FULL_MASK                                                    0x80000000L
 //DB_CREDIT_LIMIT
 #define DB_CREDIT_LIMIT__DB_SC_TILE_CREDITS__SHIFT                                                            0x0
@@ -6483,7 +6479,6 @@
 #define CB_HW_CONTROL_3__DISABLE_NACK_PROCESSING_CM__SHIFT                                                    0x18
 #define CB_HW_CONTROL_3__DISABLE_NACK_COLOR_RD_WR_OPT__SHIFT                                                  0x19
 #define CB_HW_CONTROL_3__DISABLE_BLENDER_CLOCK_GATING__SHIFT                                                  0x1a
-#define CB_HW_CONTROL_3__DISABLE_DUALSRC_WITH_OBJPRIMID_FIX__SHIFT                                            0x1b
 #define CB_HW_CONTROL_3__COLOR_CACHE_PREFETCH_NUM_CLS__SHIFT                                                  0x1c
 #define CB_HW_CONTROL_3__DISABLE_SLOW_MODE_EMPTY_HALF_QUAD_KILL_MASK                                          0x00000001L
 #define CB_HW_CONTROL_3__RAM_ADDRESS_CONFLICTS_DISALLOWED_MASK                                                0x00000002L
@@ -6512,7 +6507,6 @@
 #define CB_HW_CONTROL_3__DISABLE_NACK_PROCESSING_CM_MASK                                                      0x01000000L
 #define CB_HW_CONTROL_3__DISABLE_NACK_COLOR_RD_WR_OPT_MASK                                                    0x02000000L
 #define CB_HW_CONTROL_3__DISABLE_BLENDER_CLOCK_GATING_MASK                                                    0x04000000L
-#define CB_HW_CONTROL_3__DISABLE_DUALSRC_WITH_OBJPRIMID_FIX_MASK                                              0x08000000L
 #define CB_HW_CONTROL_3__COLOR_CACHE_PREFETCH_NUM_CLS_MASK                                                    0x30000000L
 //CB_HW_MEM_ARBITER_RD
 #define CB_HW_MEM_ARBITER_RD__MODE__SHIFT                                                                     0x0
@@ -18538,11 +18532,9 @@
 #define PA_SC_TILE_STEERING_OVERRIDE__ENABLE__SHIFT                                                           0x0
 #define PA_SC_TILE_STEERING_OVERRIDE__NUM_SE__SHIFT                                                           0x1
 #define PA_SC_TILE_STEERING_OVERRIDE__NUM_RB_PER_SE__SHIFT                                                    0x5
-#define PA_SC_TILE_STEERING_OVERRIDE__DISABLE_SRBSL_DB_OPTIMIZED_PACKING__SHIFT                               0x8
 #define PA_SC_TILE_STEERING_OVERRIDE__ENABLE_MASK                                                             0x00000001L
 #define PA_SC_TILE_STEERING_OVERRIDE__NUM_SE_MASK                                                             0x00000006L
 #define PA_SC_TILE_STEERING_OVERRIDE__NUM_RB_PER_SE_MASK                                                      0x00000060L
-#define PA_SC_TILE_STEERING_OVERRIDE__DISABLE_SRBSL_DB_OPTIMIZED_PACKING_MASK                                 0x00000100L
 //CP_PERFMON_CNTX_CNTL
 #define CP_PERFMON_CNTX_CNTL__PERFMON_ENABLE__SHIFT                                                           0x1f
 #define CP_PERFMON_CNTX_CNTL__PERFMON_ENABLE_MASK                                                             0x80000000L
@@ -18555,33 +18547,6 @@
 //CP_VMID
 #define CP_VMID__VMID__SHIFT                                                                                  0x0
 #define CP_VMID__VMID_MASK                                                                                    0x0000000FL
-//PA_SC_RIGHT_VERT_GRID
-#define PA_SC_RIGHT_VERT_GRID__LEFT_QTR__SHIFT                                                                0x0
-#define PA_SC_RIGHT_VERT_GRID__LEFT_HALF__SHIFT                                                               0x8
-#define PA_SC_RIGHT_VERT_GRID__RIGHT_HALF__SHIFT                                                              0x10
-#define PA_SC_RIGHT_VERT_GRID__RIGHT_QTR__SHIFT                                                               0x18
-#define PA_SC_RIGHT_VERT_GRID__LEFT_QTR_MASK                                                                  0x000000FFL
-#define PA_SC_RIGHT_VERT_GRID__LEFT_HALF_MASK                                                                 0x0000FF00L
-#define PA_SC_RIGHT_VERT_GRID__RIGHT_HALF_MASK                                                                0x00FF0000L
-#define PA_SC_RIGHT_VERT_GRID__RIGHT_QTR_MASK                                                                 0xFF000000L
-//PA_SC_LEFT_VERT_GRID
-#define PA_SC_LEFT_VERT_GRID__LEFT_QTR__SHIFT                                                                 0x0
-#define PA_SC_LEFT_VERT_GRID__LEFT_HALF__SHIFT                                                                0x8
-#define PA_SC_LEFT_VERT_GRID__RIGHT_HALF__SHIFT                                                               0x10
-#define PA_SC_LEFT_VERT_GRID__RIGHT_QTR__SHIFT                                                                0x18
-#define PA_SC_LEFT_VERT_GRID__LEFT_QTR_MASK                                                                   0x000000FFL
-#define PA_SC_LEFT_VERT_GRID__LEFT_HALF_MASK                                                                  0x0000FF00L
-#define PA_SC_LEFT_VERT_GRID__RIGHT_HALF_MASK                                                                 0x00FF0000L
-#define PA_SC_LEFT_VERT_GRID__RIGHT_QTR_MASK                                                                  0xFF000000L
-//PA_SC_HORIZ_GRID
-#define PA_SC_HORIZ_GRID__TOP_QTR__SHIFT                                                                      0x0
-#define PA_SC_HORIZ_GRID__TOP_HALF__SHIFT                                                                     0x8
-#define PA_SC_HORIZ_GRID__BOT_HALF__SHIFT                                                                     0x10
-#define PA_SC_HORIZ_GRID__BOT_QTR__SHIFT                                                                      0x18
-#define PA_SC_HORIZ_GRID__TOP_QTR_MASK                                                                        0x000000FFL
-#define PA_SC_HORIZ_GRID__TOP_HALF_MASK                                                                       0x0000FF00L
-#define PA_SC_HORIZ_GRID__BOT_HALF_MASK                                                                       0x00FF0000L
-#define PA_SC_HORIZ_GRID__BOT_QTR_MASK                                                                        0xFF000000L
 //VGT_MULTI_PRIM_IB_RESET_INDX
 #define VGT_MULTI_PRIM_IB_RESET_INDX__RESET_INDX__SHIFT                                                       0x0
 #define VGT_MULTI_PRIM_IB_RESET_INDX__RESET_INDX_MASK                                                         0xFFFFFFFFL
@@ -20316,7 +20281,6 @@
 #define PA_CL_VS_OUT_CNTL__VS_OUT_MISC_SIDE_BUS_ENA__SHIFT                                                    0x18
 #define PA_CL_VS_OUT_CNTL__USE_VTX_GS_CUT_FLAG__SHIFT                                                         0x19
 #define PA_CL_VS_OUT_CNTL__USE_VTX_LINE_WIDTH__SHIFT                                                          0x1a
-#define PA_CL_VS_OUT_CNTL__USE_VTX_SHD_OBJPRIM_ID__SHIFT                                                      0x1b
 #define PA_CL_VS_OUT_CNTL__CLIP_DIST_ENA_0_MASK                                                               0x00000001L
 #define PA_CL_VS_OUT_CNTL__CLIP_DIST_ENA_1_MASK                                                               0x00000002L
 #define PA_CL_VS_OUT_CNTL__CLIP_DIST_ENA_2_MASK                                                               0x00000004L
@@ -20344,7 +20308,6 @@
 #define PA_CL_VS_OUT_CNTL__VS_OUT_MISC_SIDE_BUS_ENA_MASK                                                      0x01000000L
 #define PA_CL_VS_OUT_CNTL__USE_VTX_GS_CUT_FLAG_MASK                                                           0x02000000L
 #define PA_CL_VS_OUT_CNTL__USE_VTX_LINE_WIDTH_MASK                                                            0x04000000L
-#define PA_CL_VS_OUT_CNTL__USE_VTX_SHD_OBJPRIM_ID_MASK                                                        0x08000000L
 //PA_CL_NANINF_CNTL
 #define PA_CL_NANINF_CNTL__VTE_XY_INF_DISCARD__SHIFT                                                          0x0
 #define PA_CL_NANINF_CNTL__VTE_Z_INF_DISCARD__SHIFT                                                           0x1
@@ -20419,22 +20382,13 @@
 #define PA_SU_SMALL_PRIM_FILTER_CNTL__LINE_FILTER_DISABLE__SHIFT                                              0x2
 #define PA_SU_SMALL_PRIM_FILTER_CNTL__POINT_FILTER_DISABLE__SHIFT                                             0x3
 #define PA_SU_SMALL_PRIM_FILTER_CNTL__RECTANGLE_FILTER_DISABLE__SHIFT                                         0x4
-#define PA_SU_SMALL_PRIM_FILTER_CNTL__SRBSL_ENABLE__SHIFT                                                     0x5
 #define PA_SU_SMALL_PRIM_FILTER_CNTL__SC_1XMSAA_COMPATIBLE_DISABLE__SHIFT                                     0x6
 #define PA_SU_SMALL_PRIM_FILTER_CNTL__SMALL_PRIM_FILTER_ENABLE_MASK                                           0x00000001L
 #define PA_SU_SMALL_PRIM_FILTER_CNTL__TRIANGLE_FILTER_DISABLE_MASK                                            0x00000002L
 #define PA_SU_SMALL_PRIM_FILTER_CNTL__LINE_FILTER_DISABLE_MASK                                                0x00000004L
 #define PA_SU_SMALL_PRIM_FILTER_CNTL__POINT_FILTER_DISABLE_MASK                                               0x00000008L
 #define PA_SU_SMALL_PRIM_FILTER_CNTL__RECTANGLE_FILTER_DISABLE_MASK                                           0x00000010L
-#define PA_SU_SMALL_PRIM_FILTER_CNTL__SRBSL_ENABLE_MASK                                                       0x00000020L
 #define PA_SU_SMALL_PRIM_FILTER_CNTL__SC_1XMSAA_COMPATIBLE_DISABLE_MASK                                       0x00000040L
-//PA_CL_OBJPRIM_ID_CNTL
-#define PA_CL_OBJPRIM_ID_CNTL__OBJ_ID_SEL__SHIFT                                                              0x0
-#define PA_CL_OBJPRIM_ID_CNTL__ADD_PIPED_PRIM_ID__SHIFT                                                       0x1
-#define PA_CL_OBJPRIM_ID_CNTL__EN_32BIT_OBJPRIMID__SHIFT                                                      0x2
-#define PA_CL_OBJPRIM_ID_CNTL__OBJ_ID_SEL_MASK                                                                0x00000001L
-#define PA_CL_OBJPRIM_ID_CNTL__ADD_PIPED_PRIM_ID_MASK                                                         0x00000002L
-#define PA_CL_OBJPRIM_ID_CNTL__EN_32BIT_OBJPRIMID_MASK                                                        0x00000004L
 //PA_CL_NGG_CNTL
 #define PA_CL_NGG_CNTL__VERTEX_REUSE_OFF__SHIFT                                                               0x0
 #define PA_CL_NGG_CNTL__INDEX_BUF_EDGE_FLAG_ENA__SHIFT                                                        0x1
@@ -20761,11 +20715,9 @@
 #define VGT_GS_MAX_PRIMS_PER_SUBGROUP__MAX_PRIMS_PER_SUBGROUP__SHIFT                                          0x0
 #define VGT_GS_MAX_PRIMS_PER_SUBGROUP__MAX_PRIMS_PER_SUBGROUP_MASK                                            0x0000FFFFL
 //VGT_DRAW_PAYLOAD_CNTL
-#define VGT_DRAW_PAYLOAD_CNTL__OBJPRIM_ID_EN__SHIFT                                                           0x0
 #define VGT_DRAW_PAYLOAD_CNTL__EN_REG_RT_INDEX__SHIFT                                                         0x1
 #define VGT_DRAW_PAYLOAD_CNTL__EN_PIPELINE_PRIMID__SHIFT                                                      0x2
 #define VGT_DRAW_PAYLOAD_CNTL__OBJECT_ID_INST_EN__SHIFT                                                       0x3
-#define VGT_DRAW_PAYLOAD_CNTL__OBJPRIM_ID_EN_MASK                                                             0x00000001L
 #define VGT_DRAW_PAYLOAD_CNTL__EN_REG_RT_INDEX_MASK                                                           0x00000002L
 #define VGT_DRAW_PAYLOAD_CNTL__EN_PIPELINE_PRIMID_MASK                                                        0x00000004L
 #define VGT_DRAW_PAYLOAD_CNTL__OBJECT_ID_INST_EN_MASK                                                         0x00000008L

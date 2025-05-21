@@ -44,27 +44,27 @@ TEST_F(AmdSmiRasCperTests, InvalidParams)
     int ret;
     char cper_data[1024];
     uint64_t buf_size = sizeof(cper_data);
-    amdsmi_cper_hdr *cper_hdrs[10];
+    amdsmi_cper_hdr_t *cper_hdrs[10];
     uint64_t entry_count = 10;
     uint64_t cursor = 0;
     uint32_t severity_mask = 0;
 
-    ret = amdsmi_gpu_get_cper_entries(NULL, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
+    ret = amdsmi_get_gpu_cper_entries(NULL, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
     ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-    ret = amdsmi_gpu_get_cper_entries(&GPU_MOCK_HANDLE, severity_mask, NULL, &buf_size, cper_hdrs, &entry_count, &cursor);
+    ret = amdsmi_get_gpu_cper_entries(&GPU_MOCK_HANDLE, severity_mask, NULL, &buf_size, cper_hdrs, &entry_count, &cursor);
     ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-    ret = amdsmi_gpu_get_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, NULL, cper_hdrs, &entry_count, &cursor);
+    ret = amdsmi_get_gpu_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, NULL, cper_hdrs, &entry_count, &cursor);
     ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-    ret = amdsmi_gpu_get_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, NULL, &entry_count, &cursor);
+    ret = amdsmi_get_gpu_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, NULL, &entry_count, &cursor);
     ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-    ret = amdsmi_gpu_get_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, NULL, &cursor);
+    ret = amdsmi_get_gpu_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, NULL, &cursor);
     ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-    ret = amdsmi_gpu_get_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, NULL);
+    ret = amdsmi_get_gpu_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, NULL);
     ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
 
@@ -72,14 +72,14 @@ TEST_F(AmdSmiRasCperTests, IoctlFailed) {
     int ret;
     char cper_data[1024];
     uint64_t buf_size = sizeof(cper_data);
-    amdsmi_cper_hdr *cper_hdrs[10];
+    amdsmi_cper_hdr_t *cper_hdrs[10];
     uint64_t entry_count = 10;
     uint64_t cursor = 0;
     uint32_t severity_mask = 0;
 
     EXPECT_CALL(*g_system_mock, Ioctl(_)).WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_API_FAILED));
 
-    ret = amdsmi_gpu_get_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
+    ret = amdsmi_get_gpu_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
     ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 }
 
@@ -88,7 +88,7 @@ TEST_F(AmdSmiRasCperTests, GetCperEntriesAllocFail)
     int ret;
     char cper_data[1024];
     uint64_t buf_size = sizeof(cper_data);
-    amdsmi_cper_hdr *cper_hdrs[10];
+    amdsmi_cper_hdr_t *cper_hdrs[10];
     uint64_t entry_count = 10;
     uint64_t cursor = 0;
     uint32_t severity_mask = 0;
@@ -100,7 +100,7 @@ TEST_F(AmdSmiRasCperTests, GetCperEntriesAllocFail)
     EXPECT_CALL(*g_system_mock, AlignedAlloc(testing::_, testing::_, testing::_))
                 .WillOnce(testing::Return(nullptr));
 #endif
-    ret = amdsmi_gpu_get_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
+    ret = amdsmi_get_gpu_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
     ASSERT_EQ(ret, AMDSMI_STATUS_OUT_OF_RESOURCES);
 }
 
@@ -109,7 +109,7 @@ TEST_F(AmdSmiRasCperTests, GetCperEntriesSuccess)
     int ret;
     char cper_data[1024];
     uint64_t buf_size = sizeof(cper_data);
-    amdsmi_cper_hdr *cper_hdrs[10];
+    amdsmi_cper_hdr_t *cper_hdrs[10];
     uint64_t entry_count = 10;
     uint64_t cursor = 0;
     uint32_t severity_mask = 3;
@@ -129,7 +129,7 @@ TEST_F(AmdSmiRasCperTests, GetCperEntriesSuccess)
     EXPECT_CALL(*g_system_mock, AlignedAlloc(testing::_, testing::_, testing::_)).WillOnce(testing::Return(cper));
 #endif
 
-    WhenCalling(std::bind(amdsmi_gpu_get_cper_entries, &GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor));
+    WhenCalling(std::bind(amdsmi_get_gpu_cper_entries, &GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor));
     ExpectCommand(SMI_CMD_CODE_GET_CPER);
     SaveInputPayloadIn(&in_payload);
     ret = performCall();
@@ -142,13 +142,13 @@ TEST_F(AmdSmiRasCperTests, MoreData) {
     int ret;
     char cper_data[1024];
     uint64_t buf_size = sizeof(cper_data);
-    amdsmi_cper_hdr* cper_hdrs[10];
+    amdsmi_cper_hdr_t* cper_hdrs[10];
     uint64_t entry_count = 10;
     uint64_t cursor = 0;
     uint32_t severity_mask = 0;
 
     EXPECT_CALL(*g_system_mock, Ioctl(_)).WillRepeatedly(SetResponseStatus(SMI_STATUS_MORE_DATA));
 
-    ret = amdsmi_gpu_get_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
+    ret = amdsmi_get_gpu_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
     ASSERT_EQ(ret, AMDSMI_STATUS_MORE_DATA);
 }

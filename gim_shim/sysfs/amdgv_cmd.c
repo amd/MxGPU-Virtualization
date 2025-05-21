@@ -28,11 +28,13 @@
 #include <linux/fs.h>
 #include <linux/string.h>
 #include <linux/version.h>
+#include <linux/slab.h>
 
 #include "gim.h"
 #include "gim_debug.h"
 #include "gim_monitor.h"
 #include "amdgv_cmd.h"
+#include "amdgv_uniras_cmd.h"
 
 #define AMDGV_CMD_MINOR_COUNT 1
 #define AMDGV_CMD _IOWR('R', 0, struct amdgv_cmd)
@@ -85,6 +87,10 @@ static struct gim_dev_data *gim_get_dev_data(void *adev)
 static enum amdgv_cmd_asic_type amd_asic_type_to_amdgv_cmd_asic_type(enum amd_asic_type asic_type)
 {
 	switch (asic_type) {
+	case CHIP_MI200:
+		return AMDGV_CMD_CHIP_MI200;
+	case CHIP_NAVI32:
+		return AMDGV_CMD_CHIP_NAVI32;
 	case CHIP_MI300X:
 		return AMDGV_CMD_CHIP_MI300X;
 	case CHIP_MI308X:
@@ -527,6 +533,16 @@ static int amdgv_get_vf_bdf(struct amdgv_cmd_vf_info *input_data, union amdgv_cm
 	return AMDGV_CMD__SUCCESS;
 }
 
+static int amdgv_ioctl_dump_cu_data(struct amdgv_cmd_dump_cu_data_req *input_data)
+{
+	amdgv_dev_t *adev = gim_get_dev(input_data->dev.dev_handle);
+
+	if (amdgv_dump_cu_data(adev, input_data->data_type))
+		return AMDGV_CMD__ERROR_GENERIC;
+
+	return AMDGV_CMD__SUCCESS;
+}
+
 static int amdgv_ioctl_set_bp_mode(struct amdgv_cmd_set_bp_mode *input_data)
 {
 	amdgv_dev_t *adev = gim_get_dev(input_data->dev.dev_handle);
@@ -622,6 +638,41 @@ static int amdgv_get_devices_ex_info(struct amdgv_cmd_devices_ex_info *output_da
 	return AMDGV_CMD__SUCCESS;
 }
 
+static uint8_t amdgv_get_cper_records(struct amdgv_get_cper_records_input *input_data,
+				      struct amdgv_get_cper_records_output *output_data)
+{
+	amdgv_dev_t *adev;
+	uint8_t *buffer;
+	int r;
+
+	buffer = kzalloc(input_data->buf_size, GFP_KERNEL);
+	if (!buffer) {
+		gim_warn("Failed to alloc memory, size = %lld\n", input_data->buf_size);
+		return AMDGV_CMD__ERROR_GENERIC;
+	}
+
+	adev = gim_get_dev(input_data->dev.dev_handle);
+
+	r = amdgv_gpumon_cper_get_entries(adev, input_data->rptr, buffer, input_data->buf_size,
+					  &output_data->write_count, &output_data->overflow_count,
+					  &output_data->left_size);
+	if (r) {
+		gim_warn("Failed to get CPER entries, r = %d\n", r);
+		r = AMDGV_CMD__ERROR_GENERIC;
+		goto out;
+	}
+
+	r = copy_to_user((void __user *)input_data->buf, buffer, input_data->buf_size);
+	if (r) {
+		gim_warn("Failed to copy CPER records to user, r = %d\n", r);
+		r = AMDGV_CMD__ERROR_GENERIC;
+	}
+
+out:
+	kfree(buffer);
+	return r;
+}
+
 static const struct file_operations amdgv_cmd_file_ops = {
 	.owner                  = THIS_MODULE,
 	.unlocked_ioctl         = amdgv_ioctl_handler,
@@ -630,7 +681,9 @@ static const struct file_operations amdgv_cmd_file_ops = {
 
 static long amdgv_ioctl_handler(struct file *file, unsigned int cmd, unsigned long arg)
 {
-
+	if (cmd == AMDGV_UNI_CMD) {
+		return amdgv_uni_cmd_handler((void *) arg);
+	}
 	if (cmd == AMDGV_CMD) {
 		if (copy_from_user(amdgv_cmd, (void *) arg, sizeof(struct amdgv_cmd)))
 			return -EFAULT;
@@ -723,6 +776,11 @@ static long amdgv_ioctl_handler(struct file *file, unsigned int cmd, unsigned lo
 				if (amdgv_cmd->input_size == sizeof(struct amdgv_cmd_ras_ta_unload))
 					amdgv_cmd->cmd_res = amdgv_unload_ras_ta((struct amdgv_cmd_ras_ta_unload *) amdgv_cmd->input_buff_raw);
 				break;
+			case AMDGV_CMD_DUMP_CU_DATA:
+				amdgv_cmd->output_size = 0;
+				if (amdgv_cmd->input_size == sizeof(struct amdgv_cmd_dump_cu_data_req))
+					amdgv_cmd->cmd_res = amdgv_ioctl_dump_cu_data((struct amdgv_cmd_dump_cu_data_req *) amdgv_cmd->input_buff_raw);
+				break;
 			case AMDGV_CMD_SET_BP_MODE:
 				amdgv_cmd->output_size = 0;
 				if (amdgv_cmd->input_size == sizeof(struct amdgv_cmd_set_bp_mode))
@@ -753,6 +811,16 @@ static long amdgv_ioctl_handler(struct file *file, unsigned int cmd, unsigned lo
 			case AMDGV_CMD_GET_DEVICES_EX_INFO:
 				amdgv_cmd->output_size = sizeof(struct amdgv_cmd_devices_ex_info);
 				amdgv_cmd->cmd_res = amdgv_get_devices_ex_info((struct amdgv_cmd_devices_ex_info *) amdgv_cmd->output_buff_raw);
+				break;
+			case AMDGV_CMD_GET_CPER_RECORDS:
+				amdgv_cmd->output_size = sizeof(struct amdgv_get_cper_records_output);
+				if (amdgv_cmd->input_size == sizeof(struct amdgv_get_cper_records_input))
+					amdgv_cmd->cmd_res =
+						amdgv_get_cper_records(
+							(struct amdgv_get_cper_records_input *)
+								amdgv_cmd->input_buff_raw,
+							(struct amdgv_get_cper_records_output *)
+								amdgv_cmd->output_buff_raw);
 				break;
 			default:
 				amdgv_cmd->cmd_res = AMDGV_CMD__ERROR_UKNOWN_CMD;

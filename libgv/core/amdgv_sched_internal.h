@@ -95,22 +95,6 @@ INLINE bool is_active_or_suspend_vf(struct amdgv_adapter *adapt, uint32_t idx_vf
 	return (is_active_vf(idx_vf) || is_suspend_vf(idx_vf));
 }
 
-INLINE bool amdgv_sched_vf_assigned_to_vm(struct amdgv_adapter *adapt)
-{
-	uint32_t idx_vf;
-
-	if (!(adapt->flags & AMDGV_FLAG_USE_PF))
-		return oss_get_assigned_vf_count(adapt->dev, false) > 0;
-
-	for (idx_vf = 0; idx_vf < adapt->num_vf; idx_vf++) {
-		if is_active_vf(idx_vf)
-			return true;
-	}
-
-	return false;
-}
-
-
 int amdgv_sched_world_switch_init(struct amdgv_adapter *adapt);
 void amdgv_sched_world_switch_fini(struct amdgv_adapter *adapt);
 

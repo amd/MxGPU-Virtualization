@@ -1,0 +1,8 @@
+#
+#  AMD GPU IOV module configuration
+#
+
+config GIM_AMD
+	tristate "GPU IOV module driver for AMD GPU devices"
+	help
+	  Enable this if you want to use GPU IOV(IO virtualization) features on AMD GPU devices

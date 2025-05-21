@@ -12,7 +12,9 @@
 Please check out our [User Guide](https://instinct.docs.amd.com/projects/virt-drv/en/latest/) for instructions on how to set up GIM and example configurations to run SR-IOV enabled VMs.
 
 ## Hardware/Features supported:
- 
-| Hardware | Supported Host OS | Supported Guest OS/ROCm version | Number of VFs per GPU |
-|---|---|---|---|
-| [AMD Instinct MI300X](https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html) | Ubuntu 22.04 | Ubuntu 22.04/ROCm 6.4 | 1 |
+
+| Hardware | Supported Host OS | Supported Guest OS/ROCm version | Number of VFs per GPU | Infinity Fabric Configuration |
+|---|---|---|---|---|
+| [AMD Instinct MI300X](https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html) | Ubuntu 22.04 | Ubuntu 22.04/ROCm 6.4 | 1 | 1/2/4/8 VF in a single VM |
+| [AMD Instinct MI300X](https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html) | RHEL 9.4 | RHEL 9.4/ROCm 6.4 | 1 | 8 VF in a single VM |
+| [AMD Instinct MI210X](https://www.amd.com/en/products/accelerators/instinct/mi200/mi210.html) | RHEL 9.4 | RHEL 9.4, Ubuntu 22.04/ROCm 6.4 | 1 | 1/4/8 VF in a single VM |

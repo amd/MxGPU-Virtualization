@@ -41,6 +41,18 @@ else
 	SUBMINOR_NUM = 0
 endif
 
+ifeq ($(gen_json), true)
+#Generate JSON file for diagnosis data
+	GEN_JSON_SCRIPT = $(LIBGV_PATH)/amdgv_diag_data_gen_json.shs
+	JSON_COMPILE_FLAGS = ""
+	ifneq ("", "$(wildcard $(GEN_JSON_SCRIPT))")
+		JSON_COMPILE_FLAGS := $(shell $(GEN_JSON_SCRIPT))
+	endif
+	ifneq ($(JSON_COMPILE_FLAGS), "")
+		subdir-ccflags-y += $(JSON_COMPILE_FLAGS)
+	endif
+endif
+
 subdir-ccflags-y += -D MAJOR_VERSION=$(MAJOR_NUM) -D MINOR_VERSION=$(MINOR_NUM) \
 	-D SUBMINOR_VERSION=$(SUBMINOR_NUM) -D LIBGV_BUILD_DATE='"$(LIBGV_BUILD_DATE)"'
 subdir-ccflags-y += -D RWLOCK
@@ -50,8 +62,11 @@ INCLUDE_PATH := -I $(LIBGV_PATH)/inc \
 
 INCLUDE_PATH += -I $(LIBGV_PATH)/core/hw/AI \
 		-I $(LIBGV_PATH)/core/hw/AI/asic_reg/
-
+INCLUDE_PATH += -I $(LIBGV_PATH)/core/hw/AI/mi200
 INCLUDE_PATH += -I $(LIBGV_PATH)/core/hw/AI/mi300
+
+INCLUDE_PATH += -I $(LIBGV_PATH)/core/hw/navi3 \
+		-I $(LIBGV_PATH)/core/hw/navi3/asic_reg/
 
 subdir-ccflags-y += $(INCLUDE_PATH)
 

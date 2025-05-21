@@ -111,28 +111,69 @@ TEST_F(AmdSmiDeviceTests, WrongUUIDCharSequence)
 
 	ret = amdsmi_get_processor_handle_from_uuid(WRONG_CHAR_SEQUENCE_UUID, &handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+#ifdef _WIN64
+	strcpy_s(WRONG_CHAR_SEQUENCE_UUID, sizeof(WRONG_CHAR_SEQUENCE_UUID), "9aff0003*0000-1000-801f-188c37cb1ee6");
+#else
 	strcpy(WRONG_CHAR_SEQUENCE_UUID, "9aff0003*0000-1000-801f-188c37cb1ee6");
+#endif
 	ret = amdsmi_get_processor_handle_from_uuid(WRONG_CHAR_SEQUENCE_UUID, &handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+#ifdef _WIN64
+	strcpy_s(WRONG_CHAR_SEQUENCE_UUID, sizeof(WRONG_CHAR_SEQUENCE_UUID), "9aff0003-r000-1000-801f-188c37cb1ee6");
+#else
 	strcpy(WRONG_CHAR_SEQUENCE_UUID, "9aff0003-r000-1000-801f-188c37cb1ee6");
+#endif
 	ret = amdsmi_get_processor_handle_from_uuid(WRONG_CHAR_SEQUENCE_UUID, &handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+#ifdef _WIN64
+	strcpy_s(WRONG_CHAR_SEQUENCE_UUID, sizeof(WRONG_CHAR_SEQUENCE_UUID), "9aff0003-0000*1000-801f-188c37cb1ee6");
+#else
 	strcpy(WRONG_CHAR_SEQUENCE_UUID, "9aff0003-0000*1000-801f-188c37cb1ee6");
+#endif
 	ret = amdsmi_get_processor_handle_from_uuid(WRONG_CHAR_SEQUENCE_UUID, &handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+#ifdef _WIN64
+	strcpy_s(WRONG_CHAR_SEQUENCE_UUID, sizeof(WRONG_CHAR_SEQUENCE_UUID), "9aff0003-0000-1r00-801f-188c37cb1ee6");
+#else
 	strcpy(WRONG_CHAR_SEQUENCE_UUID, "9aff0003-0000-1r00-801f-188c37cb1ee6");
+#endif
 	ret = amdsmi_get_processor_handle_from_uuid(WRONG_CHAR_SEQUENCE_UUID, &handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+#ifdef _WIN64
+	strcpy_s(WRONG_CHAR_SEQUENCE_UUID, sizeof(WRONG_CHAR_SEQUENCE_UUID), "9aff0003-0000-1000*801f-188c37cb1ee6");
+#else
 	strcpy(WRONG_CHAR_SEQUENCE_UUID, "9aff0003-0000-1000*801f-188c37cb1ee6");
+#endif
 	ret = amdsmi_get_processor_handle_from_uuid(WRONG_CHAR_SEQUENCE_UUID, &handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+#ifdef _WIN64
+	strcpy_s(WRONG_CHAR_SEQUENCE_UUID, sizeof(WRONG_CHAR_SEQUENCE_UUID), "9aff0003-0000-1000-80uf-188c37cb1ee6");
+#else
 	strcpy(WRONG_CHAR_SEQUENCE_UUID, "9aff0003-0000-1000-80uf-188c37cb1ee6");
+#endif
 	ret = amdsmi_get_processor_handle_from_uuid(WRONG_CHAR_SEQUENCE_UUID, &handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+#ifdef _WIN64
+	strcpy_s(WRONG_CHAR_SEQUENCE_UUID, sizeof(WRONG_CHAR_SEQUENCE_UUID), "9aff0003-0000-1000-801f*188c37cb1ee6");
+#else
 	strcpy(WRONG_CHAR_SEQUENCE_UUID, "9aff0003-0000-1000-801f*188c37cb1ee6");
+#endif
 	ret = amdsmi_get_processor_handle_from_uuid(WRONG_CHAR_SEQUENCE_UUID, &handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+#ifdef _WIN64
+	strcpy_s(WRONG_CHAR_SEQUENCE_UUID, sizeof(WRONG_CHAR_SEQUENCE_UUID), "9aff0003-0000-1000-801f-1&8c37cb1ee6");
+#else
 	strcpy(WRONG_CHAR_SEQUENCE_UUID, "9aff0003-0000-1000-801f-1&8c37cb1ee6");
+#endif
+	ret = amdsmi_get_processor_handle_from_uuid(WRONG_CHAR_SEQUENCE_UUID, &handle);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 	ret = amdsmi_get_processor_handle_from_uuid(WRONG_CHAR_SEQUENCE_UUID, &handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 	ret = amdsmi_get_processor_handle_from_uuid("\0", &handle);

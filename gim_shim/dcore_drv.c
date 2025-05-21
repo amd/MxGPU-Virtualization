@@ -19,6 +19,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE
  */
+#ifndef EXCLUDE_DCORE_DEBUG
 
 #include <linux/kobject.h>
 #include <linux/cdev.h>
@@ -980,11 +981,14 @@ static int dcore_get_mes_dbg_info(struct file *filp, void *user_buf)
 	}
 
 	mutex_lock(&gim_device_list_lock);
-	list_for_each_entry(dev_data, &gim_device_list, list) {
-		idx_vf = gim_dbdf_to_vf_idx(mes_dbg_block.dbsf, dev_data);
-		if (-1 != idx_vf) {
-			adev = dev_data->adev;
-			break;
+
+	if (!svm_enabled) {
+		list_for_each_entry(dev_data, &gim_device_list, list) {
+			idx_vf = gim_dbdf_to_vf_idx(mes_dbg_block.dbsf, dev_data);
+			if (-1 != idx_vf) {
+				adev = dev_data->adev;
+				break;
+			}
 		}
 	}
 
@@ -1424,12 +1428,14 @@ static int dcore_iova_node_init(void)
 		if (res < 0)
 			goto err_iova;
 
-		for (i = 0; i < dev_data->vf_num; i++) {
-			pdev_vf = dev_data->vf_map[i].pdev;
-			/* VF */
-			res = dcore_iova_node_create(pdev_vf, minor++);
-			if (res < 0)
-				goto err_iova;
+		if (!svm_enabled) {
+			for (i = 0; i < dev_data->vf_num; i++) {
+				pdev_vf = dev_data->vf_map[i].pdev;
+				/* VF */
+				res = dcore_iova_node_create(pdev_vf, minor++);
+				if (res < 0)
+					goto err_iova;
+			}
 		}
 	}
 
@@ -1452,3 +1458,4 @@ static void dcore_iova_node_fini(void)
 	}
 }
 
+#endif //EXCLUDE_DCORE_DEBUG

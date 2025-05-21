@@ -361,6 +361,74 @@ struct vram_usagebyfirmware_v2_2 {
 
 /*
  ***************************************************************************
+ *Data Table smc_dpm_info  structure
+ ***************************************************************************
+ */
+struct smudpm_i2c_controller_config_v3 {
+	uint8_t Enabled;
+	uint8_t Speed;
+	uint8_t SlaveAddress;
+	uint8_t ControllerPort;
+	uint8_t ControllerName;
+	uint8_t ThermalThrotter;
+	uint8_t I2cProtocol;
+	uint8_t PaddingConfig;
+};
+
+struct atom_smc_dpm_info_v4_10 {
+	struct atom_common_table_header  table_header;
+
+	// SECTION: BOARD PARAMETERS
+	// Telemetry Settings
+	uint16_t GfxMaxCurrent; // in Amps
+	uint8_t  GfxOffset;     // in Amps
+	uint8_t  Padding_TelemetryGfx;
+
+	uint16_t SocMaxCurrent; // in Amps
+	uint8_t  SocOffset;     // in Amps
+	uint8_t  Padding_TelemetrySoc;
+
+	uint16_t MemMaxCurrent; // in Amps
+	uint8_t  MemOffset;     // in Amps
+	uint8_t  Padding_TelemetryMem;
+
+	uint16_t BoardMaxCurrent; // in Amps
+	uint8_t  BoardOffset;     // in Amps
+	uint8_t  Padding_TelemetryBoardInput;
+
+	// Platform input telemetry voltage coefficient
+	uint32_t BoardVoltageCoeffA; // decode by /1000
+	uint32_t BoardVoltageCoeffB; // decode by /1000
+
+	// GPIO Settings
+	uint8_t  VR0HotGpio;     // GPIO pin configured for VR0 HOT event
+	uint8_t  VR0HotPolarity; // GPIO polarity for VR0 HOT event
+	uint8_t  VR1HotGpio;     // GPIO pin configured for VR1 HOT event
+	uint8_t  VR1HotPolarity; // GPIO polarity for VR1 HOT event
+
+	// UCLK Spread Spectrum
+	uint8_t  UclkSpreadEnabled; // on or off
+	uint8_t  UclkSpreadPercent; // Q4.4
+	uint16_t UclkSpreadFreq;    // kHz
+
+	// FCLK Spread Spectrum
+	uint8_t  FclkSpreadEnabled; // on or off
+	uint8_t  FclkSpreadPercent; // Q4.4
+	uint16_t FclkSpreadFreq;    // kHz
+
+	// I2C Controller Structure
+	struct smudpm_i2c_controller_config_v3  I2cControllers[8];
+
+	// GPIO pins for I2C communications with 2nd controller for Input Telemetry Sequence
+	uint8_t  GpioI2cScl; // Serial Clock
+	uint8_t  GpioI2cSda; // Serial Data
+	uint16_t spare5;
+
+	uint32_t reserved[16];
+};
+
+/*
+ ***************************************************************************
  *             Data Table umc_info  structure
  ***************************************************************************
  */
@@ -494,6 +562,93 @@ enum atom_asic_init_engine_flag {
 	b3NORMAL_ENGINE_INIT   = 0,
 	b3SRIOV_SKIP_ASIC_INIT = 0x02,
 	b3SRIOV_LOAD_UCODE     = 0x40,
+};
+
+/*
+ ***************************************************************************
+ *            Structures used by getsmuclockinfo
+ ***************************************************************************
+ */
+struct atom_get_smu_clock_info_parameters_v3_1 {
+	uint8_t syspll_id;
+	uint8_t clk_id;
+	uint8_t command;
+	uint8_t dfsdid;
+};
+
+enum atom_get_smu_clock_info_command {
+	GET_SMU_CLOCK_INFO_V3_1_GET_CLOCK_FREQ	   = 0,
+	GET_SMU_CLOCK_INFO_V3_1_GET_PLLVCO_FREQ	   = 1,
+	GET_SMU_CLOCK_INFO_V3_1_GET_PLLREFCLK_FREQ = 2,
+};
+
+enum atom_smu9_syspll0_clock_id {
+	SMU9_SYSPLL0_SMNCLK_ID	 = 0,  //  SMNCLK
+	SMU9_SYSPLL0_SOCCLK_ID	 = 1,  //	SOCCLK (FCLK)
+	SMU9_SYSPLL0_MP0CLK_ID	 = 2,  //	MP0CLK
+	SMU9_SYSPLL0_MP1CLK_ID	 = 3,  //	MP1CLK
+	SMU9_SYSPLL0_LCLK_ID	 = 4,  //	LCLK
+	SMU9_SYSPLL0_DCLK_ID	 = 5,  //	DCLK
+	SMU9_SYSPLL0_VCLK_ID	 = 6,  //	VCLK
+	SMU9_SYSPLL0_ECLK_ID	 = 7,  //	ECLK
+	SMU9_SYSPLL0_DCEFCLK_ID	 = 8,  //	DCEFCLK
+	SMU9_SYSPLL0_DPREFCLK_ID = 10, //	DPREFCLK
+	SMU9_SYSPLL0_DISPCLK_ID	 = 11, //	DISPCLK
+};
+
+enum atom_smu11_syspll_id {
+	SMU11_SYSPLL0_ID   = 0,
+	SMU11_SYSPLL1_0_ID = 1,
+	SMU11_SYSPLL1_1_ID = 2,
+	SMU11_SYSPLL1_2_ID = 3,
+	SMU11_SYSPLL2_ID   = 4,
+	SMU11_SYSPLL3_0_ID = 5,
+	SMU11_SYSPLL3_1_ID = 6,
+};
+
+enum atom_smu11_syspll0_clock_id {
+	SMU11_SYSPLL0_ECLK_ID	 = 0, // ECLK
+	SMU11_SYSPLL0_SOCCLK_ID	 = 1, // SOCCLK
+	SMU11_SYSPLL0_MP0CLK_ID	 = 2, // MP0CLK
+	SMU11_SYSPLL0_DCLK_ID	 = 3, // DCLK
+	SMU11_SYSPLL0_VCLK_ID	 = 4, // VCLK
+	SMU11_SYSPLL0_DCEFCLK_ID = 5, // DCEFCLK
+};
+
+enum atom_smu11_syspll1_0_clock_id {
+	SMU11_SYSPLL1_0_UCLKA_ID = 0, // UCLK_a
+};
+
+enum atom_smu11_syspll1_1_clock_id {
+	SMU11_SYSPLL1_0_UCLKB_ID = 0, // UCLK_b
+};
+
+enum atom_smu11_syspll1_2_clock_id {
+	SMU11_SYSPLL1_0_FCLK_ID = 0, // FCLK
+};
+
+enum atom_smu11_syspll2_clock_id {
+	SMU11_SYSPLL2_GFXCLK_ID = 0, // GFXCLK
+};
+
+enum atom_smu11_syspll3_0_clock_id {
+	SMU11_SYSPLL3_0_WAFCLK_ID   = 0, // WAFCLK
+	SMU11_SYSPLL3_0_DISPCLK_ID  = 1, // DISPCLK
+	SMU11_SYSPLL3_0_DPREFCLK_ID = 2, // DPREFCLK
+};
+
+enum atom_smu11_syspll3_1_clock_id {
+	SMU11_SYSPLL3_1_MP1CLK_ID = 0, // MP1CLK
+	SMU11_SYSPLL3_1_SMNCLK_ID = 1, // SMNCLK
+	SMU11_SYSPLL3_1_LCLK_ID	  = 2, // LCLK
+};
+
+struct atom_get_smu_clock_info_output_parameters_v3_1 {
+	union {
+		uint32_t smu_clock_freq_hz;
+		uint32_t syspllvcofreq_10khz;
+		uint32_t sysspllrefclk_10khz;
+	} atom_smu_outputclkfreq;
 };
 
 enum scratch_pre_os_mode_info_bits_def {

@@ -414,14 +414,18 @@ int amdgv_cper_get_count(struct amdgv_adapter *adapt,
 			 uint64_t *size)
 {
 	uint64_t i = 0;
-
+	struct cper_hdr *hdr;
 	*size = 0;
 
 	*avail_count = adapt->cper.wptr - CPER_MOVE_TO_FIRST_VALID(rptr);
 	*wptr = adapt->cper.wptr;
 
-	for (i = CPER_MOVE_TO_FIRST_VALID(rptr); i < adapt->cper.wptr; i++)
-		*size += ((struct cper_hdr *)adapt->cper.ring[i % CPER_MAX_COUNT])->record_length;
+	for (i = CPER_MOVE_TO_FIRST_VALID(rptr); i < adapt->cper.wptr; i++) {
+		hdr = (struct cper_hdr *)adapt->cper.ring[i % CPER_MAX_COUNT];
+		if (!hdr)
+			continue;
+		*size += hdr->record_length;
+	}
 
 	return 0;
 }
@@ -445,6 +449,8 @@ int amdgv_cper_get_entries(struct amdgv_adapter *adapt, uint64_t rptr,
 	/* Fill user buffer */
 	for (i = CPER_MOVE_TO_FIRST_VALID(rptr); i < adapt->cper.wptr; i++) {
 		hdr = (struct cper_hdr *)adapt->cper.ring[i % CPER_MAX_COUNT];
+		if (!hdr)
+			continue;
 		if (offset + hdr->record_length > buf_size)
 			break;
 		oss_memcpy(((char *)buf + offset), hdr, hdr->record_length);
@@ -455,6 +461,8 @@ int amdgv_cper_get_entries(struct amdgv_adapter *adapt, uint64_t rptr,
 	/* Report remaining buffer size */
 	for (; i < adapt->cper.wptr; i++) {
 		hdr = (struct cper_hdr *)adapt->cper.ring[i % CPER_MAX_COUNT];
+		if (!hdr)
+			continue;
 		*left_size += hdr->record_length;
 	}
 
@@ -607,4 +615,76 @@ int amdgv_cper_patch_to_vf(struct amdgv_adapter *adapt, uint32_t idx_vf,
 		(*fb_offset) += next_sec_offset;
 
 	return ret;
+}
+
+int amdgv_cper_export_live_data(struct amdgv_adapter *adapt,
+				struct amdgv_live_info_cper *cper)
+{
+
+	uint32_t idx_live_data, idx_vf;
+
+	/* In current design, records in cper ring
+	 * will not be saved and restored for live update.
+	 * But will still track host's wptr and VF's cper info.
+	 */
+	for (idx_live_data = 0; idx_live_data < adapt->num_vf + 1; idx_live_data++) {
+		if (idx_live_data >= AMDGV_MAX_VF_LIVE) {
+			AMDGV_ERROR("VF CPER export live data error, slot# %u, %u live update slots\n", idx_live_data, AMDGV_MAX_VF_LIVE);
+			return AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
+		}
+
+		idx_vf = idx_live_data;
+		if (idx_live_data == adapt->num_vf)
+			idx_vf = AMDGV_PF_IDX;
+
+		cper->vf_cper[idx_live_data].caps =
+			adapt->array_vf[idx_vf].ras.caps.all;
+		cper->vf_cper[idx_live_data].start_rptr =
+			adapt->array_vf[idx_vf].ras.cper.start_rptr;
+		cper->vf_cper[idx_live_data].prev_host_wptr =
+			adapt->array_vf[idx_vf].ras.cper.prev_host_wptr;
+	}
+
+	cper->next_uid = oss_atomic_read(&adapt->cper.next_uid);
+	cper->max_count = adapt->cper.max_count;
+	cper->count = adapt->cper.count;
+	cper->wptr = adapt->cper.wptr;
+
+	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
+}
+
+int amdgv_cper_import_live_data(struct amdgv_adapter *adapt,
+				struct amdgv_live_info_cper *cper)
+{
+	uint32_t idx_live_data, idx_vf;
+	int i;
+
+	for (idx_live_data = 0; idx_live_data < adapt->num_vf + 1; idx_live_data++) {
+		if (idx_live_data >= AMDGV_MAX_VF_LIVE) {
+			AMDGV_ERROR("VF CPER import live data error, slot# %u, %u live update slots\n", idx_live_data, AMDGV_MAX_VF_LIVE);
+			return AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
+		}
+
+		idx_vf = idx_live_data;
+		if (idx_live_data == adapt->num_vf)
+			idx_vf = AMDGV_PF_IDX;
+
+		adapt->array_vf[idx_vf].ras.caps.all =
+			cper->vf_cper[idx_live_data].caps;
+		adapt->array_vf[idx_vf].ras.cper.start_rptr =
+			cper->vf_cper[idx_live_data].start_rptr;
+		adapt->array_vf[idx_vf].ras.cper.prev_host_wptr =
+			cper->vf_cper[idx_live_data].prev_host_wptr;
+	}
+
+	oss_atomic_set(&adapt->cper.next_uid, cper->next_uid);
+	adapt->cper.max_count = cper->max_count;
+	adapt->cper.count = cper->count;
+	adapt->cper.wptr = cper->wptr;
+
+	/* reset missing entries to NULL to avoid invalid memory access */
+	for (i = 0; i < adapt->cper.wptr; i++)
+		adapt->cper.ring[i] = NULL;
+
+	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
 }

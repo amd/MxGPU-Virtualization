@@ -39,7 +39,6 @@ enum psp_status mi300_psp_ring_fini(struct amdgv_adapter *adapt);
 enum psp_status mi300_psp_cmd_km_init(struct amdgv_adapter *adapt);
 enum psp_status mi300_psp_cmd_km_fini(struct amdgv_adapter *adapt);
 enum psp_status mi300_psp_ring_start(struct amdgv_adapter *adapt);
-enum psp_status mi300_psp_ring_stop(struct amdgv_adapter *adapt);
 enum psp_status mi300_psp_cmd_km_submit(struct amdgv_adapter *adapt,
 					struct psp_cmd_km *input_index);
 enum psp_status mi300_psp_ring_km_submit(struct amdgv_adapter *adapt, uint64_t cmd_buf_mc_addr,

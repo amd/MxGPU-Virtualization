@@ -405,40 +405,64 @@ INLINE rwlock_t oss_rwlock_init(void)
 
 INLINE void oss_rwlock_read_lock(rwsema_t lock)
 {
+#ifdef RWLOCK
 	amdgv_oss_funcs->rwlock_read_lock(lock);
+#else
+	return;
+#endif
 }
 
 INLINE int oss_rwlock_read_trylock(rwsema_t lock)
 {
+#ifdef RWLOCK
 	int ret = 0;
 	ret = amdgv_oss_funcs->rwlock_read_trylock(lock);
 	if (ret)
 		return -1;
 	return 0;
+#else
+	return 0;
+#endif
 }
 
 INLINE void oss_rwlock_read_unlock(rwsema_t lock)
 {
+#ifdef RWLOCK
 	amdgv_oss_funcs->rwlock_read_unlock(lock);
+#else
+	return;
+#endif
 }
 
 INLINE void oss_rwlock_write_lock(rwsema_t lock)
 {
+#ifdef RWLOCK
 	amdgv_oss_funcs->rwlock_write_lock(lock);
+#else
+	return;
+#endif
 }
 
 INLINE int oss_rwlock_write_trylock(rwsema_t lock)
 {
+#ifdef RWLOCK
 	int ret = 0;
 	ret = amdgv_oss_funcs->rwlock_write_trylock(lock);
 	if (ret)
 		return -1;
 	return 0;
+#else
+	return 0;
+#endif
 }
 
 INLINE void oss_rwlock_write_unlock(rwsema_t lock)
 {
+#ifdef RWLOCK
 	amdgv_oss_funcs->rwlock_write_unlock(lock);
+#else
+	return;
+#endif
 }
 
 INLINE void oss_rwlock_fini(rwsema_t lock)
@@ -453,40 +477,64 @@ INLINE rwlock_t oss_rwsema_init(void)
 
 INLINE void oss_rwsema_read_lock(rwsema_t lock)
 {
+#ifdef RWLOCK
 	amdgv_oss_funcs->rwsema_read_lock(lock);
+#else
+	return;
+#endif
 }
 
 INLINE int oss_rwsema_read_trylock(rwsema_t lock)
 {
+#ifdef RWLOCK
 	int ret;
 	ret = amdgv_oss_funcs->rwsema_read_trylock(lock);
 	if (!ret)
 		return -1;
 	return 0;
+#else
+	return 0;
+#endif
 }
 
 INLINE void oss_rwsema_read_unlock(rwsema_t lock)
 {
+#ifdef RWLOCK
 	amdgv_oss_funcs->rwsema_read_unlock(lock);
+#else
+	return;
+#endif
 }
 
 INLINE void oss_rwsema_write_lock(rwsema_t lock)
 {
+#ifdef RWLOCK
 	amdgv_oss_funcs->rwsema_write_lock(lock);
+#else
+	return;
+#endif
 }
 
 INLINE int oss_rwsema_write_trylock(rwsema_t lock)
 {
+#ifdef RWLOCK
 	int ret;
 	ret = amdgv_oss_funcs->rwsema_write_trylock(lock);
 	if (!ret)
 		return -1;
 	return 0;
+#else
+	return 0;
+#endif
 }
 
 INLINE void oss_rwsema_write_unlock(rwsema_t lock)
 {
+#ifdef RWLOCK
 	amdgv_oss_funcs->rwsema_write_unlock(lock);
+#else
+	return;
+#endif
 }
 
 INLINE void oss_rwsema_fini(rwsema_t lock)
@@ -981,6 +1029,7 @@ INLINE int oss_get_ih_rb_info(oss_dev_t dev, uint32_t ih_index, struct oss_ih_rb
 	return 0;
 }
 
+#ifndef EXCLUDE_DCORE_DEBUG
 INLINE void oss_signal_reset_happened(oss_dev_t dev, uint32_t idx_vf)
 {
 	if (amdgv_oss_funcs->signal_reset_happened)
@@ -999,6 +1048,7 @@ INLINE bool oss_diag_data_collect_disabled(oss_dev_t dev, uint32_t bdf)
 		return amdgv_oss_funcs->diag_data_collect_disabled(dev, bdf);
 	return false;
 }
+#endif
 
 INLINE int oss_get_device_numa_node(oss_dev_t dev)
 {
@@ -1091,6 +1141,9 @@ INLINE bool  oss_bh_fini(struct oss_bh_info *bh)
 	return amdgv_oss_funcs->bh_fini && amdgv_oss_funcs->bh_fini(bh);
 }
 
-
+INLINE bool oss_in_virtual_machine(void)
+{
+	return amdgv_oss_funcs->in_virtual_machine && amdgv_oss_funcs->in_virtual_machine();
+}
 
 #endif

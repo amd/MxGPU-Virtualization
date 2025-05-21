@@ -9,7 +9,8 @@
 #
 # Normal rules
 #
-.*
+.ccls-cache/*
+.vscode/*
 *.o
 *.o.*
 *.a

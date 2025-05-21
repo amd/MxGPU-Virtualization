@@ -62,6 +62,9 @@ enum mca_reg_idx {
 	MCA_REG_IDX_CONFIG		= 4,
 	MCA_REG_IDX_IPID		= 5,
 	MCA_REG_IDX_SYND		= 6,
+	MCA_REG_IDX_DESTAT 		= 8,
+	MCA_REG_IDX_DEADDR 		= 9,
+	MCA_REG_IDX_MISC1		= 10,
 	MCA_REG_IDX_COUNT		= 16,
 };
 

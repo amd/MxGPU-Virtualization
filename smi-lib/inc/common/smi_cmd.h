@@ -340,6 +340,9 @@ enum smi_metric_name {
 	SMI_METRIC_NAME_PCIE_LINK_SPEED,
 	SMI_METRIC_NAME_PCIE_LINK_WIDTH,
 
+	SMI_METRIC_NAME_DRAM_BANDWIDTH,
+	SMI_METRIC_NAME_MAX_DRAM_BANDWIDTH,
+
 	SMI_METRIC_NAME_UNKNOWN
 };
 
@@ -905,6 +908,15 @@ struct smi_link_topology {
 	uint32_t reserved[10];
 };
 
+struct smi_p2p_capability {
+	uint8_t is_iolink_coherent; //!< 1 = true, 0 = false, UINT8_MAX = Not defined.
+	uint8_t is_iolink_atomics_32bit;
+	uint8_t is_iolink_atomics_64bit;
+	uint8_t is_iolink_dma;
+	uint8_t is_iolink_bi_directional;
+	uint64_t reserved[3];
+};
+
 union smi_xgmi_fb_sharing_caps {
 	struct cap__ {
 		uint32_t mode_custom_cap :1;
@@ -1411,7 +1423,7 @@ struct smi_cper_timestamp {
     uint8_t century;
 };
 
-struct smi_cper_hdr{
+struct smi_cper_hdr {
     char                     signature[4];  /* "CPER"  */
     uint16_t                 revision;
     uint32_t                 signature_end; /* 0xFFFFFFFF */
@@ -1445,6 +1457,7 @@ struct smi_cper {
 	uint32_t	cper_hdrs[SMI_MAX_CPER_HDRS];
 	uint64_t 	entry_count;
 	uint64_t	cursor;
+	uint64_t	overflow_count;
 };
 
 struct smi_cper_config {
@@ -1453,6 +1466,11 @@ struct smi_cper_config {
 	uint64_t		input_cursor;
 	struct smi_cper	 	*cper;
 	uint32_t		reserved[4];
+};
+
+struct smi_io_link{
+	struct smi_link_topology link_topology;
+	struct smi_p2p_capability p2p_capability;
 };
 
 #ifndef __linux__

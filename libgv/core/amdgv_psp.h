@@ -142,8 +142,12 @@ enum psp_ih_reg {
 	HDP_NONSURFACE_BASE_HI	  = 0xD,
 	HDP_NONSURFACE_BASE	  = 0xE,
 
+	// 2nd MMHUB instance
 	GC_MC_VM_XGMI_GPUIOV_ENABLE = 23,
 	MM_MC_VM_XGMI_GPUIOV_ENABLE = 24,
+
+	// golden setting registers
+	MM_MC_VM_MX_L1_TLB_CNTL = 25,
 
 	// VM_IOMMU_CONTROL_REGISTER.IOMMUEN update by PSP
 	VM_IOMMU_CONTROL_WA = 26,
@@ -210,9 +214,80 @@ struct psp_vbflash_context {
 	bool vbflash_done;
 };
 
+/** PSP runtime DB **/
+#define PSP_RUNTIME_DB_SIZE_IN_BYTES		0x10000
+#define PSP_RUNTIME_DB_OFFSET			0x100000
+#define PSP_RUNTIME_DB_COOKIE_ID		0x0ed5
+#define PSP_RUNTIME_DB_VER_1			0x0100
+#define PSP_RUNTIME_DB_DIAG_ENTRY_MAX_COUNT	0x40
+
+enum psp_runtime_entry_type {
+	PSP_RUNTIME_ENTRY_TYPE_INVALID		= 0x0,
+	PSP_RUNTIME_ENTRY_TYPE_TEST		= 0x1,
+	PSP_RUNTIME_ENTRY_TYPE_MGPU_COMMON	= 0x2,  /* Common mGPU runtime data */
+	PSP_RUNTIME_ENTRY_TYPE_MGPU_WAFL	= 0x3,  /* WAFL runtime data */
+	PSP_RUNTIME_ENTRY_TYPE_MGPU_XGMI	= 0x4,  /* XGMI runtime data */
+	PSP_RUNTIME_ENTRY_TYPE_BOOT_CONFIG	= 0x5,  /* Boot Config runtime data */
+	PSP_RUNTIME_ENTRY_TYPE_PPTABLE_ERR_STATUS = 0x6, /* SCPM validation data */
+};
+
+/* PSP runtime DB header */
+struct psp_runtime_data_header {
+	/* determine the existence of runtime db */
+	uint16_t cookie;
+	/* version of runtime db */
+	uint16_t version;
+};
+
+/* PSP runtime DB entry */
+struct psp_runtime_entry {
+	/* type of runtime db entry */
+	uint32_t entry_type;
+	/* offset of entry in bytes */
+	uint16_t offset;
+	/* size of entry in bytes */
+	uint16_t size;
+};
+
+
+/* PSP runtime DB directory */
+struct psp_runtime_data_directory {
+	/* number of valid entries */
+	uint16_t			entry_count;
+	/* db entries*/
+	struct psp_runtime_entry	entry_list[PSP_RUNTIME_DB_DIAG_ENTRY_MAX_COUNT];
+};
+
+/* PSP run time DB SCPM authentication defines */
+enum psp_runtime_scpm_authentication {
+	SCPM_DISABLE                     = 0x0,
+	SCPM_ENABLE                      = 0x1,
+	SCPM_ENABLE_WITH_SCPM_ERR        = 0x2,
+};
+
 enum psp_gfx_tee_version {
        GFX_TEE_VERSION_2   = 2,
        GFX_TEE_VERSION_3   = 3,
+};
+
+struct psp_runtime_scpm_entry {
+	/* scpm error bits */
+	/* DWORD 0 ~ 0 */
+	uint32_t scpm_identity_token_authenticate_err               :  1;
+	/*above bit is VBIOS identity token table error*/
+	uint32_t scpm_authenticate_pptable_err                      :  1;
+	uint32_t scpm_non_pptable_err                               :  1;
+	/*above bits are VBIOS pptable error*/
+	uint32_t scpm_non_board_err                                 :  1;
+	/*above bit is BCM/VBL donot patch board table error*/
+	uint32_t scpm_non_fuse_err                                  :  1;
+	/*above bit is fuse donot set error*/
+	uint32_t scpm_pad_bits                                      : 25;
+	uint32_t scpm_enable_bits                                   :  2;
+	/* value 0x00 is SCPM disable
+	value 0x01 is SCPM enable
+	value 0x10 is SCPM enable with error status
+	*/
 };
 
 #define MAX_PSP_NUM		4	/* number of PSPs in MI300 etc*/
@@ -235,9 +310,12 @@ struct psp_context {
 	uint8_t	  fw_num;
 	uint32_t *fw_info;
 
+	enum psp_runtime_scpm_authentication scpm_status;
+
 	struct dfc_fw *dfc_fw;
 	uint32_t vf_relay_wtr_ptr;
 	enum psp_gfx_tee_version tee_version;
+	bool skip_ta_fw_version;
 
 	bool (*fw_id_support)(uint32_t fw_id);
 	enum psp_status (*program_register)(struct amdgv_adapter *adapt, uint32_t idx_vf,
@@ -277,11 +355,15 @@ struct psp_context {
 	enum psp_status (*psp_program_guest_mc_settings)(struct amdgv_adapter *adapt,
 							 uint32_t idx_vf);
 	enum psp_status (*vf_relay)(struct amdgv_adapter *adapt, uint32_t vf_id);
+	enum psp_status (*load_asd_fw_to_mem)(struct amdgv_adapter *adapt,
+		struct psp_local_memory *asd_bin_mem, uint32_t *size);
 	enum psp_status (*copy_vf_chiplet_regs)(struct amdgv_adapter *adapt,
 							uint32_t idx_vf);
 	enum psp_status(*dfc_check_guest_version)(struct amdgv_adapter *adapter,
 		char *driver_version);
 	enum psp_status(*tmr_init)(struct amdgv_adapter *adapt, uint32_t allocated_tmr_size);
+	void (*get_xgmi_fw_info)(struct amdgv_adapter *adapt, unsigned char **fw_image,
+							uint32_t *fw_image_size);
 };
 
 /* Single property buffer stored in the APP_PROP_BUF structure.
@@ -311,5 +393,11 @@ enum amdgv_live_info_status amdgv_psp_export_live_data(struct amdgv_adapter *ada
 enum amdgv_live_info_status amdgv_psp_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_psp *psp_info);
 enum amdgv_live_info_status amdgv_psp_fw_info_export_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_fw_info *fw_info);
 enum amdgv_live_info_status amdgv_psp_fw_info_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_fw_info *fw_info);
+/*
+ * psp_ring_type_to_gpuv_psp_ring_type
+ * @ring_type:	ring type
+ *
+*/
+enum gpuv_psp_ring_type psp_ring_type_to_gpuv_psp_ring_type(enum psp_ring_type ring_type);
 
 #endif

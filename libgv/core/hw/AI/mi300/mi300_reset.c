@@ -47,6 +47,44 @@
 #define PCI_CONFIG_SIZE 1024
 #define MI300_MAX_VF_NUM 8
 
+#define smnBIF_CFG_DEV0_EPF0_VF0_VENDOR_ID 0x10160000
+#define smnBIF_CFG_DEV0_EPF0_VF1_VENDOR_ID 0x10161000
+#define smnBIF_CFG_DEV0_EPF0_VF2_VENDOR_ID 0x10162000
+#define smnBIF_CFG_DEV0_EPF0_VF3_VENDOR_ID 0x10163000
+#define smnBIF_CFG_DEV0_EPF0_VF4_VENDOR_ID 0x10164000
+#define smnBIF_CFG_DEV0_EPF0_VF5_VENDOR_ID 0x10165000
+#define smnBIF_CFG_DEV0_EPF0_VF6_VENDOR_ID 0x10166000
+#define smnBIF_CFG_DEV0_EPF0_VF7_VENDOR_ID 0x10167000
+
+#define smnBIF_CFG_DEV0_EPF0_VF0_COMMAND 0x10160004
+#define smnBIF_CFG_DEV0_EPF0_VF1_COMMAND 0x10161004
+#define smnBIF_CFG_DEV0_EPF0_VF2_COMMAND 0x10162004
+#define smnBIF_CFG_DEV0_EPF0_VF3_COMMAND 0x10163004
+#define smnBIF_CFG_DEV0_EPF0_VF4_COMMAND 0x10164004
+#define smnBIF_CFG_DEV0_EPF0_VF5_COMMAND 0x10165004
+#define smnBIF_CFG_DEV0_EPF0_VF6_COMMAND 0x10166004
+#define smnBIF_CFG_DEV0_EPF0_VF7_COMMAND 0x10167004
+
+#define smnBIF_CFG_DEV0_EPF0_VF0_DEVICE_STATUS 0x1016006E
+#define smnBIF_CFG_DEV0_EPF0_VF1_DEVICE_STATUS 0x1016106E
+#define smnBIF_CFG_DEV0_EPF0_VF2_DEVICE_STATUS 0x1016206E
+#define smnBIF_CFG_DEV0_EPF0_VF3_DEVICE_STATUS 0x1016306E
+#define smnBIF_CFG_DEV0_EPF0_VF4_DEVICE_STATUS 0x1016406E
+#define smnBIF_CFG_DEV0_EPF0_VF5_DEVICE_STATUS 0x1016506E
+#define smnBIF_CFG_DEV0_EPF0_VF6_DEVICE_STATUS 0x1016606E
+#define smnBIF_CFG_DEV0_EPF0_VF7_DEVICE_STATUS 0x1016706E
+
+#define SOC15_REG_OFFSET_SMN_NBIO_BLOCK(idx_vf, blk, reg)                                \
+  (idx_vf == 0 ? smn##blk##_DEV0_EPF0_VF0_##reg :                                        \
+  (idx_vf == 1 ? smn##blk##_DEV0_EPF0_VF1_##reg :                                        \
+  (idx_vf == 2 ? smn##blk##_DEV0_EPF0_VF2_##reg :                                        \
+  (idx_vf == 3 ? smn##blk##_DEV0_EPF0_VF3_##reg :                                        \
+  (idx_vf == 4 ? smn##blk##_DEV0_EPF0_VF4_##reg :                                        \
+  (idx_vf == 5 ? smn##blk##_DEV0_EPF0_VF5_##reg :                                        \
+  (idx_vf == 6 ? smn##blk##_DEV0_EPF0_VF6_##reg :                                        \
+  (idx_vf == 7 ? smn##blk##_DEV0_EPF0_VF7_##reg :                                        \
+  (cfg##blk##_DEV0_EPF0_##reg)))))))))
+
 static const uint32_t this_block = AMDGV_SECURITY_BLOCK;
 static int mi300_reset_trigger_pf_soft_flr(struct amdgv_adapter *adapt);
 
@@ -337,36 +375,50 @@ static void mi300_reset_vf_save_and_disable(struct amdgv_adapter *adapt, uint32_
 					    uint32_t *pci_cfg, uint32_t *msix_tab)
 {
 	uint32_t idx = 0;
-	struct amdgv_vf_device *vf = &adapt->array_vf[idx_vf];
+	struct amdgv_vf_device *vf;
+	uint32_t offset = 0;
 	int entry;
 	uint32_t *tab;
 
 	/* Save the vf pci cfg space */
 	for (idx = 0; idx < PCI_CONFIG_SIZE; idx += 4) {
-		oss_pci_read_config_dword(vf->dev, idx, pci_cfg);
+		if (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM)) {
+			vf = &adapt->array_vf[idx_vf];
+			oss_pci_read_config_dword(vf->dev, idx, pci_cfg);
+		} else {
+			offset = SOC15_REG_OFFSET_SMN_NBIO_BLOCK(idx_vf, BIF_CFG, VENDOR_ID);
+			*pci_cfg = RREG32_SMN(offset + idx);
+		}
 		pci_cfg++;
 	}
 
-	/* save msix table
-	 * based on mi300 hw, the table is located in BAR5 res
-	 * and max vector number is 3 */
-	if (vf->res_mapped && vf->res.mmio) {
-		for (entry = 0; entry < 3; entry++) {
-			/* after decoding the MSI-X capability,
-			 * the PBA is 5 and table offest is 0x42000 */
-			tab = (uint32_t *)vf->res.mmio + 4 * entry +
-			      SOC15_REG_OFFSET(NBIO, 0,
-					       regRCC_DEV0_EPF0_GFXMSIX_VECT0_ADDR_LO);
-			msix_tab[entry * 4] = oss_mm_read32(tab);
-			msix_tab[entry * 4 + 1] = oss_mm_read32(tab + 1);
-			msix_tab[entry * 4 + 2] = oss_mm_read32(tab + 2);
-			msix_tab[entry * 4 + 3] = oss_mm_read32(tab + 3);
+	if (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM)) {
+		/* save msix table
+		* based on mi300 hw, the table is located in BAR5 res
+		* and max vector number is 3 */
+		if (vf->res_mapped && vf->res.mmio) {
+			for (entry = 0; entry < 3; entry++) {
+				/* after decoding the MSI-X capability,
+				* the PBA is 5 and table offest is 0x42000 */
+				tab = (uint32_t *)vf->res.mmio + 4 * entry +
+				SOC15_REG_OFFSET(NBIO, 0,
+						regRCC_DEV0_EPF0_GFXMSIX_VECT0_ADDR_LO);
+				msix_tab[entry * 4] = oss_mm_read32(tab);
+				msix_tab[entry * 4 + 1] = oss_mm_read32(tab + 1);
+				msix_tab[entry * 4 + 2] = oss_mm_read32(tab + 2);
+				msix_tab[entry * 4 + 3] = oss_mm_read32(tab + 3);
+			}
 		}
 	}
 
 	/* disable the vf by clearing the command */
 	if (idx_vf != AMDGV_PF_IDX) {
-		oss_pci_write_config_word(vf->dev, PCI_COMMAND, PCI_COMMAND_INTX_DISABLE);
+		if (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM))
+			oss_pci_write_config_word(vf->dev, PCI_COMMAND, PCI_COMMAND_INTX_DISABLE);
+		else {
+			offset = SOC15_REG_OFFSET_SMN_NBIO_BLOCK(idx_vf, BIF_CFG, COMMAND);
+			WREG16_SMN(offset, PCI_COMMAND_INTX_DISABLE);
+		}
 	}
 }
 
@@ -374,33 +426,42 @@ static void mi300_reset_vf_restore(struct amdgv_adapter *adapt, uint32_t idx_vf,
 				   uint32_t *pci_cfg, uint32_t *msix_tab)
 
 {
-	struct amdgv_vf_device *vf = &adapt->array_vf[idx_vf];
+	struct amdgv_vf_device *vf;
+	uint32_t offset = 0;
 	int entry;
 	uint32_t *val, *tab;
 	uint32_t idx;
 
 	/* Restore the vf pci cfg space */
 	for (idx = 0; idx < PCI_CONFIG_SIZE; idx += 4) {
-		oss_pci_write_config_dword(vf->dev, idx, *pci_cfg);
+		if (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM)) {
+			vf = &adapt->array_vf[idx_vf];
+			oss_pci_write_config_dword(vf->dev, idx, *pci_cfg);
+		} else {
+			offset = SOC15_REG_OFFSET_SMN_NBIO_BLOCK(idx_vf, BIF_CFG, VENDOR_ID);
+			WREG32_SMN(offset + idx, *pci_cfg);
+		}
 		pci_cfg++;
 	}
 
-	/* Restore the vf msix table */
-	if (vf->res_mapped && vf->res.mmio) {
-		/* disable mmio reg write protection */
-		amdgv_gpuiov_set_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_MMIO_REG_WRITE,
-					   true);
+	if (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM)) {
+		/* Restore the vf msix table */
+		if (vf->res_mapped && vf->res.mmio) {
+			/* disable mmio reg write protection */
+			amdgv_gpuiov_set_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_MMIO_REG_WRITE,
+						true);
 
-		for (entry = 0; entry < 3; entry++) {
-			tab = (uint32_t *)vf->res.mmio + 4 * entry +
-			      SOC15_REG_OFFSET(NBIO, 0,
-					       regRCC_DEV0_EPF0_GFXMSIX_VECT0_ADDR_LO);
-			val = &msix_tab[entry * 4];
+			for (entry = 0; entry < 3; entry++) {
+				tab = (uint32_t *)vf->res.mmio + 4 * entry +
+				SOC15_REG_OFFSET(NBIO, 0,
+						regRCC_DEV0_EPF0_GFXMSIX_VECT0_ADDR_LO);
+				val = &msix_tab[entry * 4];
 
-			oss_mm_write32(tab, val[0]);
-			oss_mm_write32(tab + 1, val[1]);
-			oss_mm_write32(tab + 2, val[2]);
-			oss_mm_write32(tab + 3, val[3]);
+				oss_mm_write32(tab, val[0]);
+				oss_mm_write32(tab + 1, val[1]);
+				oss_mm_write32(tab + 2, val[2]);
+				oss_mm_write32(tab + 3, val[3]);
+			}
 		}
 	}
 }
@@ -412,25 +473,41 @@ static int mi300_reset_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	int wait_ret;
 	int ret = 0;
 	uint16_t val;
+	struct amdgv_vf_device *vf;
+	int pos = 0;
+	uint32_t offset = 0;
 
-	struct amdgv_vf_device *vf = &adapt->array_vf[idx_vf];
-	int pos = oss_pci_find_capability(vf->dev, PCI_CAP_ID_EXP);
+	if (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM)) {
+		vf = &adapt->array_vf[idx_vf];
+		pos = oss_pci_find_capability(vf->dev, PCI_CAP_ID_EXP);
 
-	if (!pos) {
-		AMDGV_ERROR("this device does not support capability: %x\n", PCI_CAP_ID_EXP);
-		return AMDGV_FAILURE;
+		if (!pos) {
+			AMDGV_ERROR("this device does not support capability: %x\n", PCI_CAP_ID_EXP);
+			return AMDGV_FAILURE;
+		}
+
+		/* disable device bus mastering */
+		oss_pci_read_config_word(vf->dev, PCI_COMMAND, &val);
+		val &= (~PCI_COMMAND_MASTER);
+		oss_pci_write_config_word(vf->dev, PCI_COMMAND, val);
+
+		/* wait for transaction done */
+		wait_ret = amdgv_wait_for_pci_cfg(adapt, vf->dev, pos + PCIE_DEVICE_STATUS,
+				PCIE_DEVICE_STATUS__TRANS_PEND, 0, 2,
+				AMDGV_TIMEOUT(TIMEOUT_PCI_TRANS),
+				AMDGV_WAIT_CHECK_EQ, 0);
+	} else {
+		/* disable device bus mastering */
+		offset = SOC15_REG_OFFSET_SMN_NBIO_BLOCK(idx_vf, BIF_CFG, COMMAND);
+		val = RREG16_SMN(offset);
+		val &= (~PCI_COMMAND_MASTER);
+		WREG16_SMN(offset, val);
+
+		/* wait for transaction done */
+		offset = SOC15_REG_OFFSET_SMN_NBIO_BLOCK(idx_vf, BIF_CFG, DEVICE_STATUS);
+		wait_ret = amdgv_wait_for_pci_cfg(adapt, NULL, offset, PCIE_DEVICE_STATUS__TRANS_PEND,
+				0, 2, AMDGV_TIMEOUT(TIMEOUT_PCI_TRANS), AMDGV_WAIT_CHECK_EQ, 0);
 	}
-
-	/* disable device bus mastering */
-	oss_pci_read_config_word(vf->dev, PCI_COMMAND, &val);
-	val &= (~PCI_COMMAND_MASTER);
-	oss_pci_write_config_word(vf->dev, PCI_COMMAND, val);
-
-	/* wait for transaction done */
-	wait_ret = amdgv_wait_for_pci_cfg(adapt, vf->dev, pos + PCIE_DEVICE_STATUS,
-			PCIE_DEVICE_STATUS__TRANS_PEND, 0, 2,
-			AMDGV_TIMEOUT(TIMEOUT_PCI_TRANS),
-			AMDGV_WAIT_CHECK_EQ, 0);
 
 	if (wait_ret)
 		AMDGV_WARN("Abort data transaction on %s for FLR\n", amdgv_idx_to_str(idx_vf));
@@ -457,10 +534,17 @@ static int mi300_reset_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 		WREG32(mmnbif_gpu_RCC_DEV0_EPF0_STRAP4, strap4);
 	}
 
-	/* enable bus mastering */
-	oss_pci_read_config_word(vf->dev, PCI_COMMAND, &val);
-	val |= PCI_COMMAND_MASTER;
-	oss_pci_write_config_word(vf->dev, PCI_COMMAND, val);
+	if (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM)) {
+		/* enable bus mastering */
+		oss_pci_read_config_word(vf->dev, PCI_COMMAND, &val);
+		val |= PCI_COMMAND_MASTER;
+		oss_pci_write_config_word(vf->dev, PCI_COMMAND, val);
+	} else {
+		offset = SOC15_REG_OFFSET_SMN_NBIO_BLOCK(idx_vf, BIF_CFG, COMMAND);
+		val = RREG16_SMN(offset);
+		val |= PCI_COMMAND_MASTER;
+		WREG16_SMN(offset, val);
+	}
 
 	return ret;
 }
@@ -876,7 +960,8 @@ int mi300_reset_trigger_whole_gpu_reset(struct amdgv_adapter *adapt)
 	tmp = bit_s3_int | ATOM_S3_ASIC_GUI_ENGINE_HUNG;
 	WREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_SBIOS_SCRATCH_3), tmp);
 
-	ret = mi300_gpu_mode1_reset(adapt);
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->gpu_mode1_reset)
+		ret = adapt->pp.pp_funcs->gpu_mode1_reset(adapt);
 	if (ret)
 		goto exit;
 
@@ -997,7 +1082,8 @@ static int mi300_reset_whole_gpu_reset(struct amdgv_adapter *adapt)
 
 		task_barrier_enter(&hive->tb_chain_reset, hive->number_adapters);
 
-		ret = mi300_gpu_mode1_reset(adapt);
+		if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->gpu_mode1_reset)
+			ret = adapt->pp.pp_funcs->gpu_mode1_reset(adapt);
 
 		task_barrier_exit(&hive->tb_chain_reset, hive->number_adapters);
 		if (ret)
@@ -1006,7 +1092,8 @@ static int mi300_reset_whole_gpu_reset(struct amdgv_adapter *adapt)
 			    adapt->xgmi.node_id);
 
 	} else {
-		ret = mi300_gpu_mode1_reset(adapt);
+		if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->gpu_mode1_reset)
+			ret = adapt->pp.pp_funcs->gpu_mode1_reset(adapt);
 		if (ret)
 			goto exit;
 	}

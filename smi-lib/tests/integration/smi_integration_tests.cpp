@@ -1187,8 +1187,12 @@ TEST(amdsmiIntegrationTests, DISABLED_XgmiTest)
 	amdsmi_processor_handle *processors = NULL;
 	amdsmi_link_metrics_t link_metrics;
 	amdsmi_link_topology_t topology_info;
+	amdsmi_topology_nearest_t topology_nearest_info;
+	uint32_t processor_index = AMDSMI_MAX_DEVICES + 100;
 	amdsmi_xgmi_fb_sharing_caps_t caps;
 	uint8_t fb_sharing;
+	amdsmi_link_type_t type;
+	amdsmi_p2p_capability_t p2p_capability;
 	int ret = 0;
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
@@ -1241,6 +1245,17 @@ TEST(amdsmiIntegrationTests, DISABLED_XgmiTest)
 			ASSERT_EQ(amdsmi_get_xgmi_fb_sharing_mode_info(processors[i], processors[j], AMDSMI_XGMI_FB_SHARING_MODE_8, &fb_sharing), AMDSMI_STATUS_SUCCESS);
 			printf("[GPU%d, GPU%d] XGMI FB SHARING MODE 8:\n", i, j);
 			printf("	Is fb sharing enabled: %d\n", fb_sharing);
+
+			ret = amdsmi_topo_get_p2p_status(processors[i], processors[j], &type, &p2p_capability);
+			ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+		}
+		ASSERT_EQ(amdsmi_get_link_topology_nearest(processors[i], AMDSMI_LINK_TYPE_XGMI, &topology_nearest_info), AMDSMI_STATUS_SUCCESS);
+		ASSERT_EQ(amdsmi_get_index_from_processor_handle(processors[i], &processor_index), AMDSMI_STATUS_SUCCESS);
+		printf("Device with index %d have %u nearest devices\n", processor_index, topology_nearest_info.count);
+		printf("Indexes of nearest devices are following:\n");
+		for (unsigned int j = 0; j < topology_nearest_info.count; j++) {
+			ASSERT_EQ(amdsmi_get_index_from_processor_handle(topology_nearest_info.processor_list[j], &processor_index), AMDSMI_STATUS_SUCCESS);
+			printf("Device %d with index: %d\n", j, processor_index);
 		}
 	}
 
@@ -1372,7 +1387,7 @@ TEST(amdsmiIntegrationTests, PartitionTests)
 	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
 }
 
-TEST(amdsmiIntegrationTests, DISABLED_CperTests)
+TEST(amdsmiIntegrationTests, CperTests)
 {
 	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
 	amdsmi_processor_handle *processors = NULL;
@@ -1380,7 +1395,7 @@ TEST(amdsmiIntegrationTests, DISABLED_CperTests)
 
 	char cper_data[1024*1024];
 	uint64_t buf_size = sizeof(cper_data);
-	amdsmi_cper_hdr *cper_hdrs[1024];
+	amdsmi_cper_hdr_t *cper_hdrs[1024];
 	uint64_t entry_count = 1024;
 	uint64_t cursor = 0;
 	uint32_t severity_mask = 3;
@@ -1393,7 +1408,7 @@ TEST(amdsmiIntegrationTests, DISABLED_CperTests)
 
 	do {
 		for (uint32_t i = 0; i < dev_cnt; i++) {
-			ret = amdsmi_gpu_get_cper_entries(processors[i], severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
+			ret = amdsmi_get_gpu_cper_entries(processors[i], severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
 			EXPECT_TRUE((ret == AMDSMI_STATUS_SUCCESS) || (ret == AMDSMI_STATUS_NOT_SUPPORTED) || (ret == AMDSMI_STATUS_MORE_DATA));
 			if (ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_MORE_DATA) {
 				for (uint64_t j = 0; j < entry_count; j++) {
@@ -1425,6 +1440,9 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 	amdsmi_event_set set = NULL;
 	amdsmi_event_entry_t entry;
 	amdsmi_link_topology_t topology_info;
+	amdsmi_topology_nearest_t topology_nearest_info;
+	int invalid_link_min = AMDSMI_LINK_TYPE_INTERNAL - 1;
+	int invalid_link_max = AMDSMI_LINK_TYPE_UNKNOWN + 1;
 	uint8_t fb_sharing;
 	amdsmi_metric_t metrics;
 	amdsmi_eeprom_table_record_t bad_pages;
@@ -1435,7 +1453,7 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 	uint32_t partition_id[AMDSMI_MAX_ACCELERATOR_PROFILE];
 	uint32_t sensor_ind = 0;
 	char cper_data[1024*1024];
-	amdsmi_cper_hdr* cper_hdrs[1024];
+	amdsmi_cper_hdr_t* cper_hdrs[1024];
 	uint32_t severity_mask = 3;
 	uint64_t buf_size = sizeof(cper_data);
 	uint64_t entry_count = 1024;
@@ -1525,6 +1543,11 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 	ASSERT_EQ(amdsmi_get_link_topology(processors[0], NULL, &topology_info), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_link_topology(NULL, processors[0], &topology_info), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_link_topology(processors[0], processors[0], NULL), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_link_topology_nearest(NULL, AMDSMI_LINK_TYPE_XGMI, &topology_nearest_info), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_link_topology_nearest(processors[0], AMDSMI_LINK_TYPE_XGMI, NULL), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_link_topology_nearest(processors[0], (amdsmi_link_type_t)invalid_link_min, &topology_nearest_info), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_link_topology_nearest(processors[0], (amdsmi_link_type_t)invalid_link_max , &topology_nearest_info), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_link_topology_nearest(processors[0], AMDSMI_LINK_TYPE_INTERNAL, &topology_nearest_info), AMDSMI_STATUS_NOT_SUPPORTED);
 	ASSERT_EQ(amdsmi_get_xgmi_fb_sharing_mode_info(processors[0], processors[0], AMDSMI_XGMI_FB_SHARING_MODE_4, NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_xgmi_fb_sharing_mode_info(NULL, processors[0], AMDSMI_XGMI_FB_SHARING_MODE_4, &fb_sharing), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_xgmi_fb_sharing_mode_info(processors[0], NULL, AMDSMI_XGMI_FB_SHARING_MODE_4, &fb_sharing), AMDSMI_STATUS_INVAL);
@@ -1542,11 +1565,11 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 	ASSERT_EQ(amdsmi_get_gpu_accelerator_partition_profile(processors[0], NULL, partition_id), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_gpu_memory_partition_config(processors[0], NULL), AMDSMI_STATUS_INVAL);
 
-	ASSERT_EQ(amdsmi_gpu_get_cper_entries(processors[0], severity_mask, NULL, &buf_size, cper_hdrs, &entry_count, &cursor), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_gpu_get_cper_entries(processors[0], severity_mask, cper_data, NULL, cper_hdrs, &entry_count, &cursor), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_gpu_get_cper_entries(processors[0], severity_mask, cper_data, &buf_size, NULL, &entry_count, &cursor), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_gpu_get_cper_entries(processors[0], severity_mask, cper_data, &buf_size, cper_hdrs, NULL, &cursor), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_gpu_get_cper_entries(processors[0], severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, NULL), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_cper_entries(processors[0], severity_mask, NULL, &buf_size, cper_hdrs, &entry_count, &cursor), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_cper_entries(processors[0], severity_mask, cper_data, NULL, cper_hdrs, &entry_count, &cursor), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_cper_entries(processors[0], severity_mask, cper_data, &buf_size, NULL, &entry_count, &cursor), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_cper_entries(processors[0], severity_mask, cper_data, &buf_size, cper_hdrs, NULL, &cursor), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_cper_entries(processors[0], severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, NULL), AMDSMI_STATUS_INVAL);
 
 	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(amdsmi_get_processor_handles(socket, &dev_cnt, processors), AMDSMI_STATUS_NOT_INIT);

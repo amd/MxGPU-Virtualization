@@ -467,10 +467,12 @@ struct oss_interface {
 	int (*store_rlcv_timestamp)(const char *buf, uint32_t size, uint32_t bdf);
 	bool (*get_ih_rb_info)(oss_dev_t dev, uint32_t ih_index, struct oss_ih_rb_info *p_ih_rb_info);
 
+#ifndef EXCLUDE_DCORE_DEBUG
 	void (*signal_reset_happened)(oss_dev_t dev, uint32_t idx_vf);
 	void (*signal_diag_data_ready)(oss_dev_t dev);
 	bool (*diag_data_collect_disabled)(oss_dev_t dev, uint32_t bdf);
 	void (*signal_manual_dump_happened)(oss_dev_t dev, uint32_t idx_vf);
+#endif
 	int (*get_device_numa_node)(oss_dev_t dev);
 	int (*save_fb_sharing_mode)(oss_dev_t dev, uint32_t mode);
 
@@ -494,6 +496,9 @@ struct oss_interface {
 	bool  (*bh_init)(struct oss_bh_info *bh);
 	bool  (*bh_queue)(struct oss_bh_info *bh);
 	bool  (*bh_fini)(struct oss_bh_info *bh);
+
+	/* Check if running in a virtual machine */
+	bool  (*in_virtual_machine)(void);
 };
 
 #endif

@@ -361,6 +361,7 @@ int amdgv_mmsch_read_all_output(struct amdgv_adapter *adapt, uint32_t idx_vf,
 			}
 			break;
 		case AMDGV_MMSCH_CMD_TYPE_RB_DECOUPLE:
+		case AMDGV_MMSCH_CMD_TYPE_SRAM_DUMP:
 			// nothing to read
 			break;
 		default:
@@ -540,6 +541,8 @@ int amdgv_mmsch_config_vf(struct amdgv_adapter *adapt, uint32_t libgv_idx_vf)
 		if (cmd_ret)
 			AMDGV_WARN("failed to submit BW config. This will result limited BW management\n");
 		ret = cmd_ret;
+
+		oss_usleep(1000);
 
 		cmd_ret = amdgv_mmsch_submit_cmd(adapt, AMDGV_MMSCH_CMD_TYPE_RB_DECOUPLE, libgv_idx_vf);
 		if (cmd_ret)

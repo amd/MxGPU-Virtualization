@@ -7,5 +7,5 @@ Build-Depends: debhelper-compat (= 13), dh-dkms
 
 Package: gim-dkms
 Architecture: all
-Depends: dkms
+Depends: autoconf, dkms
 Description: DKMS source for GIM driver.

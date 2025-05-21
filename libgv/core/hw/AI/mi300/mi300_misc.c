@@ -290,7 +290,6 @@ static int mi300_misc_sw_fini(struct amdgv_adapter *adapt)
 	adapt->misc.get_hdp_nonsurface_base = NULL;
 	adapt->misc.set_hdp_nonsurface_base = NULL;
 	adapt->misc.dma_copy = NULL;
-	adapt->misc.load_dfc = NULL;
 	adapt->misc.clean_scratch_registers = NULL;
 
 	return 0;

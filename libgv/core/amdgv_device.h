@@ -252,13 +252,71 @@ enum {
 	AMDGV_DOORBELL64_sDMA_AI_HI_PRI_ENGINE1 = 0xE9,
 };
 
+typedef enum _AMDGV_MI200_DOORBELL_ASSIGNMENT {
+	/* Compute + GFX: 0~255 */
+	AMDGV_MI200_DOORBELL_KIQ                     = 0x000,
+	AMDGV_MI200_DOORBELL_HIQ                     = 0x001,
+	AMDGV_MI200_DOORBELL_DIQ                     = 0x002,
+	AMDGV_MI200_DOORBELL_MEC_RING0               = 0x003,
+	AMDGV_MI200_DOORBELL_MEC_RING1               = 0x004,
+	AMDGV_MI200_DOORBELL_MEC_RING2               = 0x005,
+	AMDGV_MI200_DOORBELL_MEC_RING3               = 0x006,
+	AMDGV_MI200_DOORBELL_MEC_RING4               = 0x007,
+	AMDGV_MI200_DOORBELL_MEC_RING5               = 0x008,
+	AMDGV_MI200_DOORBELL_MEC_RING6               = 0x009,
+	AMDGV_MI200_DOORBELL_MEC_RING7               = 0x00A,
+	AMDGV_MI200_DOORBELL_USERQUEUE_START         = 0x00B,
+	AMDGV_MI200_DOORBELL_USERQUEUE_END           = 0x08A,
+	AMDGV_MI200_DOORBELL_GFX_RING0               = 0x08B,
+	/* SDMA:256~335*/
+	AMDGV_MI200_DOORBELL_sDMA_ENGINE0            = 0x100,
+	AMDGV_MI200_DOORBELL_sDMA_ENGINE1            = 0x10A,
+	AMDGV_MI200_DOORBELL_sDMA_ENGINE2            = 0x114,
+	AMDGV_MI200_DOORBELL_sDMA_ENGINE3            = 0x11E,
+	AMDGV_MI200_DOORBELL_sDMA_ENGINE4            = 0x128,
+	AMDGV_MI200_DOORBELL_sDMA_ENGINE5            = 0x132,
+	AMDGV_MI200_DOORBELL_sDMA_ENGINE6            = 0x13C,
+	AMDGV_MI200_DOORBELL_sDMA_ENGINE7            = 0x146,
+	/* IH: 376~391 */
+	AMDGV_MI200_DOORBELL_IH                      = 0x178,
+	/* MMSCH: 392~407
+	 * overlap the doorbell assignment with VCN as they are  mutually
+	 * exclusive VCN engine's doorbell is 32 bit and two VCN ring share
+	 * one QWORD
+	 */
+	AMDGV_MI200_DOORBELL_MMSCH0                    = 0x188,
+	AMDGV_MI200_DOORBELL64_VCN0_1                  = 0x188, /* VNC0 */
+	AMDGV_MI200_DOORBELL64_VCN2_3                  = 0x189,
+	AMDGV_MI200_DOORBELL64_VCN4_5                  = 0x18A,
+	AMDGV_MI200_DOORBELL64_VCN6_7                  = 0x18B,
+
+	AMDGV_MI200_DOORBELL64_VCN8_9                  = 0x18C, /* VNC1 */
+	AMDGV_MI200_DOORBELL64_VCNa_b                  = 0x18D,
+	AMDGV_MI200_DOORBELL64_VCNc_d                  = 0x18E,
+	AMDGV_MI200_DOORBELL64_VCNe_f                  = 0x18F,
+
+	AMDGV_MI200_DOORBELL64_UVD_RING0_1             = 0x188,
+	AMDGV_MI200_DOORBELL64_UVD_RING2_3             = 0x189,
+	AMDGV_MI200_DOORBELL64_UVD_RING4_5             = 0x18A,
+	AMDGV_MI200_DOORBELL64_UVD_RING6_7             = 0x18B,
+
+	AMDGV_MI200_DOORBELL64_VCE_RING0_1             = 0x18C,
+	AMDGV_MI200_DOORBELL64_VCE_RING2_3             = 0x18D,
+	AMDGV_MI200_DOORBELL64_VCE_RING4_5             = 0x18E,
+	AMDGV_MI200_DOORBELL64_VCE_RING6_7             = 0x18F,
+
+	AMDGV_MI200_DOORBELL64_FIRST_NON_CP = AMDGV_MI200_DOORBELL_sDMA_ENGINE0,
+	AMDGV_MI200_DOORBELL64_LAST_NON_CP = AMDGV_MI200_DOORBELL64_VCE_RING6_7,
+
+	AMDGV_MI200_DOORBELL_MAX_ASSIGNMENT            = 0x18F,
+	AMDGV_MI200_DOORBELL_INVALID                   = 0xFFFF
+} AMDGV_MI200_DOORBELL_ASSIGNMENT;
+
 struct amdgv_adapter;
 
 /* Reserved doorbells for amdgv (including multimedia).
  * KFD can use all the rest in the 2M doorbell bar.
- * For asic before vega10, doorbell is 32-bit, so the
- * index/offset is in dword. For vega10 and after, doorbell
- * can be 64-bit, so the index defined is in qword.
+ * Doorbell can be 64-bit, so the index defined is in qword.
  */
 struct amdgv_doorbell_index {
 	uint32_t kiq;
@@ -311,6 +369,7 @@ struct amdgv_init_func {
 	/* Name of block */
 	char name[32];
 	bool hw_priority; /* true means we do hw_init for this func right after its sw_init */
+	bool is_engine;
 	/* sets up driver state, does not configure hw */
 	int (*sw_init)(struct amdgv_adapter *adapt);
 	/* tears down driver state, does not configure hw */
@@ -319,10 +378,6 @@ struct amdgv_init_func {
 	int (*hw_init)(struct amdgv_adapter *adapt);
 	/* tears down the hw state */
 	int (*hw_fini)(struct amdgv_adapter *adapt);
-	/* sets up the hw engine state */
-	int (*hw_engine_init)(struct amdgv_adapter *adapt);
-	/* tears down the hw engine state */
-	int (*hw_engine_fini)(struct amdgv_adapter *adapt);
 	/* sets up the hw state for live update (ring buffer MC address) */
 	int (*hw_live_init)(struct amdgv_adapter *adapt);
 	/* clean up after reset */
@@ -419,10 +474,6 @@ struct amdgv_vf_device {
 
 	struct amdgv_firmware_info fw_info[AMDGV_FIRMWARE_ID__MAX];
 
-	/* used for update pf2vf message */
-	uint64_t retired_page;
-	/* used for calc offset for store new retired page in vf */
-	uint32_t bp_block_size;
 	bool vram_lost;
 	enum amdgv_ws_auto_run auto_run;
 
@@ -491,6 +542,7 @@ enum emu_type {
 };
 
 enum amdgv_vram_type {
+  AMDGV_DGPU_VRAM_TYPE__UNKNOW = 0,
   AMDGV_DGPU_VRAM_TYPE__GDDR5 = 0x50,
   AMDGV_DGPU_VRAM_TYPE__HBM2 = 0x60,
   AMDGV_DGPU_VRAM_TYPE__HBM2E = 0x61,
@@ -887,10 +939,6 @@ enum amdgv_record_status {
 	AMDGV_RECORD_LOAD_RLCV_STATE_END,
 	AMDGV_RECORD_SAVE_RLCV_STATE_START,
 	AMDGV_RECORD_SAVE_RLCV_STATE_END,
-	AMDGV_RECORD_ENABLE_MMSCH_VFGATE_START,
-	AMDGV_RECORD_ENABLE_MMSCH_VFGATE_END,
-	AMDGV_RECORD_DISABLE_MMSCH_VFGATE_START,
-	AMDGV_RECORD_DISABLE_MMSCH_VFGATE_END,
 	AMDGV_RECORD_ENABLE_AUTO_SCHED_START,
 	AMDGV_RECORD_ENABLE_AUTO_SCHED_END,
 	AMDGV_RECORD_DISABLE_AUTO_SCHED_START,
@@ -1062,6 +1110,9 @@ struct amdgv_dump_reg {
 #define SOC15_REG_OFFSET(ip, inst, reg)                                                       \
 	(adapt->reg_offset[ip##_HWIP][inst][reg##_BASE_IDX] + reg)
 
+#define SOC15_REG_OFFSET_SMN(ip, inst, reg, aperture)	\
+	((aperture / 4) | (adapt->reg_offset[ip##_HWIP][inst][reg##_BASE_IDX] + reg))
+
 #define SOC15_REG_ENTRY(ip, inst, reg) ip##_HWIP, inst, reg##_BASE_IDX, reg
 
 #define SOC15_REG_ENTRY_OFFSET(entry)	(adapt->reg_offset[entry.hwip][entry.inst][entry.seg] + entry.reg_offset)
@@ -1230,4 +1281,7 @@ void amdgv_device_handle_bad_gpu(struct amdgv_adapter *adapt);
 void amdgv_device_handle_bad_hive(struct amdgv_adapter *adapt);
 bool amdgv_device_is_gpu_lost(struct amdgv_adapter *adapt);
 void amdgv_device_set_status(struct amdgv_adapter *adapt, enum amdgv_dev_status status);
+
+enum amdgv_gpumon_vram_type vram_type_to_gpumon_vram_type(enum amdgv_vram_type vram_type);
+enum amdgv_gpumon_vram_vendor vram_vendor_to_gpumon_vram_vendor(enum amdgv_vram_vendor vendor);
 #endif

@@ -49,7 +49,7 @@ int AmdSmiApiGuest::amdsmi_get_version_command(Arguments arg,
 		return ret;
 	}
 
-	std::string amdsmi_lib_ver_str = string_format("%ld.%ld.%ld.%ld", version.year, version.major,
+	std::string amdsmi_lib_ver_str = string_format("%ld.%ld.%ld", version.major,
 									 version.minor, version.release);
 
 	if (arg.output == json) {

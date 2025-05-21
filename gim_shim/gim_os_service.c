@@ -59,7 +59,9 @@
 #include <linux/ftrace.h>
 #include "gim_ftrace.h"
 
+#ifndef EXCLUDE_DCORE_DEBUG
 #include "dcore_drv.h"
+#endif
 
 #include "amdgv_oss.h"
 #include "gim_debug.h"
@@ -296,6 +298,19 @@ static int gim_pci_write_config_dword(oss_dev_t dev, int where, uint32_t val)
 	return ret;
 }
 
+static bool gim_in_virtual_machine(void)
+{
+#ifndef EXCLUDE_SUPPORT_RUNNING_IN_VM
+#ifdef CONFIG_X86
+	return boot_cpu_has(X86_FEATURE_HYPERVISOR);
+#else
+	return false;
+#endif
+#else
+	return false;
+#endif
+}
+
 #define PCI_EXT_CAP_ID_VF_REBAR	0x24
 
 static int gim_pci_resize_vf_bar(oss_dev_t dev, int bar_idx, uint32_t num_vf)
@@ -309,6 +324,7 @@ static int gim_pci_resize_vf_bar(oss_dev_t dev, int bar_idx, uint32_t num_vf)
 	int bar_base;
 	uint32_t tmp;
 	int id;
+	uint32_t pf_bdf, vf_bdf;
 	int ret;
 
 	iov_pos = pci_find_ext_capability(pdev, PCI_EXT_CAP_ID_SRIOV);
@@ -316,6 +332,11 @@ static int gim_pci_resize_vf_bar(oss_dev_t dev, int bar_idx, uint32_t num_vf)
 		return -ENOTSUPP;
 
 	if (bar_idx < 0 || bar_idx >= PCI_SRIOV_NUM_BARS)
+		return -EINVAL;
+
+	/* Check if enough resource is reserved for the VF BAR */
+	pci_read_config_word(pdev, iov_pos + PCI_SRIOV_TOTAL_VF, &total_vf);
+	if (total_vf == 0)
 		return -EINVAL;
 
 	/* Resize the VF BAR:
@@ -327,7 +348,6 @@ static int gim_pci_resize_vf_bar(oss_dev_t dev, int bar_idx, uint32_t num_vf)
 	 * so total_vf is used instead of num_vf.
 	 */
 	if (num_vf == 0) {
-		pci_read_config_word(pdev, iov_pos + PCI_SRIOV_TOTAL_VF, &total_vf);
 		pci_read_config_word(pdev, iov_pos + PCI_SRIOV_NUM_VF, (uint16_t *)&num_vf);
 		size = rounddown_pow_of_two(resource_size(res) / total_vf);
 	} else
@@ -371,18 +391,27 @@ static int gim_pci_resize_vf_bar(oss_dev_t dev, int bar_idx, uint32_t num_vf)
 	if (pos == 0)
 		goto end;
 
+	pf_bdf = PCI_DEVID(pdev->bus->number, pdev->devfn) | (pci_domain_nr(pdev->bus) << 16);
+
+	/* Check if the total space reserved for all VFs is at least as large as the PF BAR */
+	if (resource_size(res) < resource_size(&pdev->resource[bar_idx])) {
+		gim_warn_bdf(pf_bdf, "Insufficient resource reserved for VF BAR%d. PF BAR size: 0x%llx, VF BAR reserved: 0x%llx\n",
+				bar_idx, resource_size(&pdev->resource[bar_idx]), resource_size(res));
+		return -ENOMEM;
+	}
+	gim_dbg_bdf(pf_bdf, "Resource reserved for VF BAR%d: 0x%llx, PF BAR%d: 0x%llx\n",
+			bar_idx, resource_size(res), bar_idx, resource_size(&pdev->resource[bar_idx]));
+
 	/* Resize the BAR */
 	pci_read_config_dword(pdev, pos + bar_idx * 8 + 8, &tmp);
 	tmp &= ~0x3F00;
 	tmp |= (max(ilog2(size), 20) - 20) << 8;
 	pci_write_config_dword(pdev, pos + bar_idx * 8 + 8, tmp);
 
-	/* Hack up the resources of the virtfn devices */
+	/* Manipulate the resources of the virtfn devices */
 	for (id = 0; id < num_vf; ++id) {
 		struct pci_dev *virtfn;
-		uint32_t pf_bdf, vf_bdf;
 
-		pf_bdf = PCI_DEVID(pdev->bus->number, pdev->devfn) | (pci_domain_nr(pdev->bus) << 16);
 		vf_bdf = pf_bdf + offset + id;
 		virtfn = gim_get_vf_dev_from_bdf(vf_bdf);
 		if (!virtfn) {
@@ -417,6 +446,10 @@ static int gim_pci_restore_vf_rebar(oss_dev_t dev, int bar_idx)
 	uint32_t num_vf;
 	int pos;
 
+	/* VM does not support resize bar */
+	if (gim_in_virtual_machine())
+		return ret;
+
 	pos = pci_find_ext_capability(pdev, PCI_EXT_CAP_ID_SRIOV);
 	ret = pci_read_config_dword(pdev, pos + PCI_SRIOV_NUM_VF, &num_vf);
 	if (ret) {
@@ -437,6 +470,21 @@ static int gim_pci_restore_vf_rebar(oss_dev_t dev, int bar_idx)
 static int gim_pci_enable_sriov(oss_dev_t dev, uint32_t num_vf)
 {
 	int ret;
+	int pos;
+	uint16_t ctrl;
+
+	if (gim_in_virtual_machine()) {
+		/* if it is running on vm, as can't call pci_enable_sriov directly,
+		 * so use another method to tell host driver to enable sriov.
+		 * 4-11 are all set to 1 to indicate the write is from host driver.
+		 * 0-3 bit all set to 1 to indicate enable sriov,
+		 * 12-15 bit is the vf_num. */
+		pos = pci_find_ext_capability(dev, PCI_EXT_CAP_ID_SRIOV);
+		ctrl = 0xfff;
+		num_vf = num_vf << 12;
+		ctrl = num_vf | ctrl;
+		return	pci_write_config_word(dev, pos + PCI_SRIOV_CTRL, ctrl);
+	}
 
 	ret = pci_enable_sriov((struct pci_dev *)dev, num_vf);
 	if (ret)
@@ -455,6 +503,18 @@ static int gim_pci_enable_sriov(oss_dev_t dev, uint32_t num_vf)
 static int gim_pci_disable_sriov(oss_dev_t dev)
 {
 	int ret;
+	int pos;
+	uint16_t ctrl;
+
+	if (gim_in_virtual_machine()) {
+		/* if it is running on vm, as can't call pci_enable_sriov directly,
+		 * so use another method to tell host driver to enable sriov.
+		 * 4-11 are all set to 1 to indicate the write is from host driver.
+		 * 0-3 bit set to 0 to indicate disable sriov */
+		pos = pci_find_ext_capability(dev, PCI_EXT_CAP_ID_SRIOV);
+		ctrl =  0xff0;
+		return  pci_write_config_word(dev, pos + PCI_SRIOV_CTRL, ctrl);
+	}
 
 	/* restore vf bar to default size */
 	ret = gim_pci_resize_vf_bar(dev, 0, 0);
@@ -993,6 +1053,8 @@ static int gim_alloc_dma_mem_system(oss_dev_t dev,
 static int gim_alloc_dma_mem_iova_align(oss_dev_t dev,
 			     struct gim_dma_mem_info *mem_info)
 {
+	if (gim_in_virtual_machine())
+		return -1;
 
 	if (gim_alloc_dma_mem_iova(dev, mem_info))
 		return -1;
@@ -1967,6 +2029,9 @@ static int gim_get_firmware_name(enum amdgv_firmware_id fw_id,
 	char *ip_name = NULL;
 
 	switch (asic_type) {
+	case CHIP_NAVI32:
+		chip_name = "navi32";
+		break;
 	case CHIP_MI300X:
 		chip_name = "mi300x";
 		break;
@@ -2006,6 +2071,46 @@ static int gim_detect_firmware(oss_dev_t dev, enum amdgv_firmware_id fw_id,
 		return ret;
 	path_put(&path);
 
+	return 0;
+}
+
+static int gim_get_discovery_binary(oss_dev_t dev, enum amd_asic_type asic_type,
+				uint32_t *binary, uint32_t binary_size_max)
+{
+	struct pci_dev *pdev = dev;
+	const struct firmware *fw;
+	char *chip_name = NULL;
+	char fw_name[FW_NAME_SIZE_MAX];
+	char fw_path[FW_PATH_SIZE_MAX] = "/lib/firmware/";
+	struct path path;
+	int ret;
+
+	switch (asic_type) {
+	default:
+		return -1;
+	}
+	snprintf(fw_name, FW_NAME_SIZE_MAX, "gim/%s_%s.bin", chip_name, "ip_discovery");
+
+	/* detect IP disocvery bin */
+	strcat(fw_path, fw_name);
+	/* check file exist first */
+	ret = kern_path(fw_path, LOOKUP_FOLLOW, &path);
+	if (ret) {
+		gim_warn("gim/%s_%s.bin not found\n", chip_name, "ip_discovery");
+		return ret;
+	}
+	path_put(&path);
+
+	/* request IP discovery bin */
+	ret = request_firmware(&fw, fw_name, &pdev->dev);
+	if (ret)
+		return ret;
+	if (fw->size > binary_size_max)
+		goto out;
+
+	memcpy(binary, (uint32_t *)fw->data, fw->size);
+out:
+	release_firmware(fw);
 	return 0;
 }
 
@@ -2095,15 +2200,16 @@ static uint32_t gim_get_assigned_vf_count(oss_dev_t dev, bool all_gpus)
 	int i;
 	uint32_t enable_count = 0;
 
-	list_for_each_entry(dev_data, &gim_device_list, list) {
+	if (!svm_enabled) {
+		list_for_each_entry(dev_data, &gim_device_list, list) {
+			if (!all_gpus && dev_data && dev_data->pdev != (struct pci_dev *)dev)
+				continue;
 
-		if (!all_gpus && dev_data && dev_data->pdev != (struct pci_dev *)dev)
-			continue;
-
-		for (i = 0; i < dev_data->vf_num; i++) {
-			pdev_vf = dev_data->vf_map[i].pdev;
-			if (atomic_read(&pdev_vf->enable_cnt) > 0)
-				enable_count++;
+			for (i = 0; i < dev_data->vf_num; i++) {
+				pdev_vf = dev_data->vf_map[i].pdev;
+				if (atomic_read(&pdev_vf->enable_cnt) > 0)
+					enable_count++;
+			}
 		}
 	}
 	return enable_count;
@@ -2326,6 +2432,7 @@ struct oss_interface gim_oss_interfaces = {
 	.strnstr = gim_strnstr,
 	.detect_fw = gim_detect_firmware,
 	.get_fw = gim_get_firmware,
+	.get_discovery_binary = gim_get_discovery_binary,
 	.get_assigned_vf_count = gim_get_assigned_vf_count,
 	.dump_stack = gim_dump_stack,
 	.copy_call_trace_buffer = gim_copy_ftrace_buffer,
@@ -2333,14 +2440,17 @@ struct oss_interface gim_oss_interfaces = {
 	.store_record = gim_store_record,
 #endif
 	.store_rlcv_timestamp = gim_store_rlcv_timestamp,
+#ifndef EXCLUDE_DCORE_DEBUG
 	.signal_reset_happened = dcore_signal_reset_happened,
 	.signal_diag_data_ready = dcore_signal_diag_data_ready,
 	.diag_data_collect_disabled = dcore_diag_data_collect_disabled,
 	.signal_manual_dump_happened = dcore_signal_manual_dump_happened,
+#endif
 	.store_gfx_dump_data = gim_store_gfx_dump_data,
 	.save_fb_sharing_mode = gim_save_fb_sharing_mode,
 	.save_accelerator_partition_mode = gim_save_accelerator_partition_mode,
 	.save_memory_partition_mode = gim_save_memory_partition_mode,
 	.clear_conf_file = gim_clear_conf_file,
 	.schedule_work = gim_schedule_work,
+	.in_virtual_machine = gim_in_virtual_machine,
 };

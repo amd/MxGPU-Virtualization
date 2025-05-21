@@ -109,9 +109,9 @@ typedef amdsmi_status_t (*AMDSMI_GET_XGMI_FB_SHARING_MODE_INFO)(amdsmi_processor
 		amdsmi_xgmi_fb_sharing_mode_t, uint8_t *);
 typedef amdsmi_status_t (*AMDSMI_SET_XGMI_FB_SHARING_MODE_V2)(amdsmi_processor_handle, uint32_t,
 		amdsmi_xgmi_fb_sharing_mode_t);
-typedef amdsmi_status_t (*AMDSMI_GPU_GET_CPER_ENTRIES)(amdsmi_processor_handle, uint32_t, char*,
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_CPER_ENTRIES)(amdsmi_processor_handle, uint32_t, char*,
 		uint64_t *,
-		amdsmi_cper_hdr**, uint64_t *, uint64_t *);
+		amdsmi_cper_hdr_t**, uint64_t *, uint64_t *);
 
 typedef amdsmi_status_t (*AMDSMI_EVENT_CREATE)(amdsmi_processor_handle *, uint32_t,
 		uint64_t, amdsmi_event_set *);
@@ -121,6 +121,8 @@ typedef amdsmi_status_t (*AMDSMI_EVENT_DESTROY)(amdsmi_event_set);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_METRICS)(amdsmi_get_gpu_metrics);
 
 typedef amdsmi_status_t (*AMDSMI_GET_LIB_VERSION)(amdsmi_get_lib_version);
+typedef amdsmi_status_t (*AMDSMI_TOPO_GET_P2P_STATUS)(amdsmi_processor_handle,amdsmi_processor_handle,
+		amdsmi_link_type_t*, amdsmi_p2p_capability_t*);
 
 class AmdSmiLibHost
 {
@@ -196,6 +198,7 @@ public:
 	AMDSMI_EVENT_DESTROY amdsmi_event_destroy;
 
 	AMDSMI_GET_GPU_METRICS amdsmi_get_gpu_metrics;
+	AMDSMI_TOPO_GET_P2P_STATUS host_amdsmi_topo_get_p2p_status;
 
 	HMODULE amdSmiDll;
 

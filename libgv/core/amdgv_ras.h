@@ -515,4 +515,39 @@ static inline enum ta_ras_error_type amdgv_ras_error_to_ta(enum amdgv_ras_error_
 	}
 }
 
+static inline enum amdgv_smi_ras_block amdgv_ras_block_to_smi_ras_block(enum amdgv_ras_block block)
+{
+	switch (block) {
+	case AMDGV_RAS_BLOCK__UMC:
+		return AMDGV_SMI_RAS_BLOCK__UMC;
+	case AMDGV_RAS_BLOCK__SDMA:
+		return AMDGV_SMI_RAS_BLOCK__SDMA;
+	case AMDGV_RAS_BLOCK__GFX:
+		return AMDGV_SMI_RAS_BLOCK__GFX;
+	case AMDGV_RAS_BLOCK__MMHUB:
+		return AMDGV_SMI_RAS_BLOCK__MMHUB;
+	case AMDGV_RAS_BLOCK__ATHUB:
+		return AMDGV_SMI_RAS_BLOCK__ATHUB;
+	case AMDGV_RAS_BLOCK__PCIE_BIF:
+		return AMDGV_SMI_RAS_BLOCK__PCIE_BIF;
+	case AMDGV_RAS_BLOCK__HDP:
+		return AMDGV_SMI_RAS_BLOCK__HDP;
+	case AMDGV_RAS_BLOCK__XGMI_WAFL:
+		return AMDGV_SMI_RAS_BLOCK__XGMI_WAFL;
+	case AMDGV_RAS_BLOCK__DF:
+		return AMDGV_SMI_RAS_BLOCK__DF;
+	case AMDGV_RAS_BLOCK__SMN:
+		return AMDGV_SMI_RAS_BLOCK__SMN;
+	case AMDGV_RAS_BLOCK__SEM:
+		return AMDGV_SMI_RAS_BLOCK__SEM;
+	case AMDGV_RAS_BLOCK__MP0:
+		return AMDGV_SMI_RAS_BLOCK__MP0;
+	case AMDGV_RAS_BLOCK__MP1:
+		return AMDGV_SMI_RAS_BLOCK__MP1;
+	case AMDGV_RAS_BLOCK__FUSE:
+		return AMDGV_SMI_RAS_BLOCK__FUSE;
+	default:
+		return AMDGV_SMI_NUM_BLOCK_MAX;
+	}
+}
 #endif

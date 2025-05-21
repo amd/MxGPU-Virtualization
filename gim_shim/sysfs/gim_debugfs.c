@@ -31,6 +31,8 @@
 #include "gim.h"
 #include "gim_debugfs.h"
 
+#define DEBUGFS_MAX_BUFFER_SIZE (128 * 512) // Use for error ring dump with 512 byte per entry * 128 entries
+
 extern struct gim_error_ring_buffer *gim_error_rb;
 
 static struct dentry *root_dir;
@@ -426,6 +428,7 @@ static int attr_hliquid_min_ts_set(void *data, u64 val)
 DEFINE_SIMPLE_ATTRIBUTE(hliquid_min_ts_fops, attr_hliquid_min_ts_get,
 				attr_hliquid_min_ts_set, "%llu\n");
 
+#ifndef EXCLUDE_DCORE_DEBUG
 static int attr_disable_dcore_debug_set(void *data, u64 val)
 {
 	int ret;
@@ -466,6 +469,7 @@ static int attr_disable_dcore_debug_get(void *data, u64 *val)
 
 DEFINE_SIMPLE_ATTRIBUTE(disable_dcore_debug_fops, attr_disable_dcore_debug_get,
 				attr_disable_dcore_debug_set, "%llu\n");
+#endif
 
 static void *realloc_memory(void *ptr, size_t oldsize, size_t newsize)
 {
@@ -975,6 +979,7 @@ static const struct file_operations disable_psp_vf_gate_all_fops = {
 	.llseek         = default_llseek,
 };
 
+#ifndef EXCLUDE_DCORE_DEBUG
 static ssize_t disable_dcore_debug_all_write(struct file *file,
 		const char __user *user_buf,
 		size_t count, loff_t *ppos)
@@ -1045,6 +1050,7 @@ static const struct file_operations disable_dcore_debug_all_fops = {
 	.write          = disable_dcore_debug_all_write,
 	.llseek         = default_llseek,
 };
+#endif
 
 static int attr_flr_set(void *data, u64 val)
 {
@@ -1184,6 +1190,7 @@ static int init_conf_show(struct seq_file *f, void *p)
 	seq_printf(f, "\tlog_mask = 0x%x\n", opt->log_mask);
 	seq_printf(f, "\tallow_time_full_access = %u\n",
 					opt->allow_time_full_access);
+	seq_printf(f, "\tip_discovery_load_type = %u\n", opt->ip_discovery_load_type);
 	seq_printf(f, "\tfw_load_type = %u\n", opt->fw_load_type);
 
 	if (opt->pf_option) {
@@ -1815,6 +1822,7 @@ static const struct file_operations hang_detection_duration_fops = {
 	.llseek         = default_llseek,
 };
 
+#ifndef EXCLUDE_DCORE_DEBUG
 static ssize_t trigger_manual_dump_all_write(struct file *file,
 		const char __user *user_buf,
 		size_t count, loff_t *ppos)
@@ -2114,6 +2122,7 @@ static const struct file_operations mes_info_dump_fops = {
 	.write          = mes_info_dump_write,
 	.llseek         = default_llseek,
 };
+#endif
 
 static ssize_t asymmetric_fb_read(struct file *file,
 		char __user *user_buf,
@@ -2229,6 +2238,34 @@ static const struct file_operations fb_defragment_fops = {
 	.llseek         = default_llseek,
 };
 
+static ssize_t error_ring_buffer_dump_read(struct file *file,
+		char __user *user_buf,
+		size_t count, loff_t *ppos)
+{
+	int len;
+	ssize_t ret;
+	char *buf;
+	struct gim_dev_data *dev_data;
+
+	dev_data = file->private_data;
+	buf = gim_oss_interfaces.alloc_memory(DEBUGFS_MAX_BUFFER_SIZE);
+	if (!buf) {
+		return -ENOMEM;
+	}
+
+	len = amdgv_error_ring_buffer_dump(dev_data->adev, buf, DEBUGFS_MAX_BUFFER_SIZE);
+
+	ret = simple_read_from_buffer(user_buf, count, ppos, buf, len);
+	gim_oss_interfaces.free_memory(buf);
+	return ret;
+}
+
+static const struct file_operations error_ring_buffer_dump_fops = {
+	.open           = simple_open,
+	.read           = error_ring_buffer_dump_read,
+	.llseek         = default_llseek,
+};
+
 void gim_debugfs_init(void)
 {
 	int i;
@@ -2318,6 +2355,7 @@ void gim_debugfs_init(void)
 		goto err;
 	}
 
+#ifndef EXCLUDE_DCORE_DEBUG
 	entry = debugfs_create_file("disable_dcore_debug", 0200,
 			root_dir,
 			NULL, &disable_dcore_debug_all_fops);
@@ -2340,6 +2378,7 @@ void gim_debugfs_init(void)
 		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 		goto err;
 	}
+#endif
 	/* adapter debugfs dir */
 	list_for_each_entry(dev_data, &gim_device_list, list) {
 		adapt_dir = debugfs_create_dir(dev_name(&dev_data->pdev->dev),
@@ -2493,6 +2532,7 @@ void gim_debugfs_init(void)
 			goto err;
 		}
 
+#ifndef EXCLUDE_DCORE_DEBUG
 		entry = debugfs_create_file("disable_dcore_debug", 0200,
 				adapt_dir,
 				dev_data, &disable_dcore_debug_fops);
@@ -2500,6 +2540,7 @@ void gim_debugfs_init(void)
 			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
+#endif
 
 		entry = debugfs_create_file("perf_log", 0600,
 				adapt_dir,
@@ -2525,17 +2566,20 @@ void gim_debugfs_init(void)
 			goto err;
 		}
 
-		for (i = 0; i < dev_data->vf_num; i++) {
-			pdev_vf = dev_data->vf_map[i].pdev;
-			/* VF debugfs dir */
-			vf_dir = debugfs_create_dir(dev_name(&pdev_vf->dev),
-							adapt_dir);
-			if (!vf_dir || vf_dir == ERR_PTR(-ENODEV)) {
-				gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_DIR_FAIL, 0);
-				goto err;
+		if (!amdgv_is_service_vm_enabled(dev_data->adev)) {
+			for (i = 0; i < dev_data->vf_num; i++) {
+				pdev_vf = dev_data->vf_map[i].pdev;
+				/* VF debugfs dir */
+				vf_dir = debugfs_create_dir(dev_name(&pdev_vf->dev),
+								adapt_dir);
+				if (!vf_dir || vf_dir == ERR_PTR(-ENODEV)) {
+					gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_DIR_FAIL, 0);
+					goto err;
+				}
 			}
 		}
 
+#ifndef EXCLUDE_DCORE_DEBUG
 		entry = debugfs_create_file("trigger_vf_debug_dump", 0200,
 				adapt_dir,
 				dev_data, &trigger_manual_dump_fops);
@@ -2550,6 +2594,7 @@ void gim_debugfs_init(void)
 			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
+#endif
 		entry = debugfs_create_file("asymmetric_fb", 0600,
 				adapt_dir,
 				dev_data, &asymmetric_fb_fops);
@@ -2561,6 +2606,14 @@ void gim_debugfs_init(void)
 		entry = debugfs_create_file("fb_defragment", 0200,
 				adapt_dir,
 				dev_data, &fb_defragment_fops);
+		if (entry == NULL) {
+			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			goto err;
+		}
+
+		entry = debugfs_create_file("error_ring_dump", 0444,
+				adapt_dir,
+				dev_data, &error_ring_buffer_dump_fops);
 		if (entry == NULL) {
 			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;

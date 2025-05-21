@@ -246,6 +246,10 @@ struct amdgv_gpumon_funcs {
 			struct amdgv_gpumon_smu_dpm_policy *policy);
 	int (*get_gfx_config)(struct amdgv_adapter *adapt,
 			struct amdgv_gpumon_gfx_config *config);
+	int (*get_ras_eeprom_version)(struct amdgv_adapter *adapt,
+			uint32_t *ras_eeprom_version);
+	int (*get_ecc_correction_schema)(struct amdgv_adapter *adapt,
+			uint32_t *ecc_correction_schema);
 };
 
 struct amdgv_gpumon {
@@ -269,5 +273,8 @@ int amdgv_set_accelerator_partition_profile(struct amdgv_adapter *adapt,
 
 int amdgv_set_memory_partition_mode(struct amdgv_adapter *adapt,
 		enum amdgv_memory_partition_mode memory_partition_mode);
+
+uint32_t amdgv_gpumon_get_vf_count(struct amdgv_adapter *adapt);
+uint32_t amdgv_gpumon_get_hive_vf_count(struct amdgv_adapter *adapt);
 
 #endif

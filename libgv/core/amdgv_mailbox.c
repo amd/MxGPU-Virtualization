@@ -38,6 +38,7 @@ static struct amdgv_id_name amdgv_mailbox_rcv_names[] = {
 	{ MB_REQ_MSG_RAS_POISON, "RAS_POISON" },
 	{ MB_REQ_RAS_ERROR_COUNT, "REQ_RAS_ERROR_COUNT" },
 	{ MB_REQ_RAS_CPER_DUMP, "REQ_RAS_CPER_DUMP" },
+	{ MB_REQ_RAS_BAD_PAGES, "REQ_RAS_BAD_PAGES" },
 	{ MB_REQ_MSG_REQ_GPU_DEBUG, "REQ_GPU_DEBUG" },
 	{ MB_REQ_MSG_REL_GPU_DEBUG, "REL_GPU_DEBUG" },
 };
@@ -322,6 +323,9 @@ enum amdgv_sched_event_id amdgv_mailbox_get_valid_vf_event(struct amdgv_adapter 
 		break;
 	case MB_REQ_RAS_CPER_DUMP:
 		sched_event = AMDGV_EVENT_SCHED_VF_REQ_RAS_CPER_DUMP;
+		break;
+	case MB_REQ_RAS_BAD_PAGES:
+		sched_event = AMDGV_EVENT_SCHED_VF_REQ_RAS_BAD_PAGES;
 		break;
 	case MB_REQ_MSG_REQ_GPU_DEBUG:
 		// req_gpu_debug & rel_gpu_debug are only valid when debug_mode is multi-vf case

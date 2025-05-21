@@ -71,6 +71,7 @@ from .amdsmi_interface import amdsmi_get_partition_profile_info
 from .amdsmi_interface import amdsmi_is_gpu_power_management_enabled
 from .amdsmi_interface import amdsmi_get_link_metrics
 from .amdsmi_interface import amdsmi_get_link_topology
+from .amdsmi_interface import amdsmi_get_link_topology_nearest
 from .amdsmi_interface import amdsmi_get_xgmi_fb_sharing_caps
 from .amdsmi_interface import amdsmi_get_xgmi_fb_sharing_mode_info
 from .amdsmi_interface import amdsmi_set_xgmi_fb_sharing_mode
@@ -85,7 +86,8 @@ from .amdsmi_interface import amdsmi_get_gpu_accelerator_partition_profile_confi
 from .amdsmi_interface import amdsmi_get_soc_pstate
 from .amdsmi_interface import amdsmi_set_soc_pstate
 from .amdsmi_interface import amdsmi_get_gpu_driver_model
-from .amdsmi_interface import amdsmi_gpu_get_cper_entries
+from .amdsmi_interface import amdsmi_get_gpu_cper_entries
+from .amdsmi_interface import amdsmi_topo_get_p2p_status
 
 from .amdsmi_interface import AmdSmiTemperatureType
 from .amdsmi_interface import AmdSmiTemperatureMetric

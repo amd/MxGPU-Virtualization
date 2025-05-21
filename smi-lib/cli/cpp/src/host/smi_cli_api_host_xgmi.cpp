@@ -531,7 +531,6 @@ int AmdSmiApiHost::amdsmi_get_xgmi_metric_command(Arguments arg, std::string& ou
 	amdsmi_processor_handle processor_handle;
 	amdsmi_bdf_t bdf;
 	int bdf_index;
-	amdsmi_processor_handle processor;
 	amdsmi_bdf_t tmp_bdf;
 	unsigned int gpu_count;
 	amdsmi_processor_handle *processors;

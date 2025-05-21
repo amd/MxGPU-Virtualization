@@ -24,7 +24,7 @@
 #define AMDGV_IP_DISCOVERY_H
 
 #define AMDGV_IP_DISCOVERY_SIZE	  adapt->ip_discovery.size
-#define MI300_IP_DISCOVERY_SIZE   0x2800
+
 #define DEFAULT_IP_DISCOVERY_SIZE 2048
 #define AMDGV_IP_DISCOVERY_OFFSET 0x10000
 #define BINARY_SIGNATURE	  0x28211407
@@ -92,6 +92,8 @@ enum amdgv_ip_discovery_table {
 	NPS_INFO,
 	TOTAL_TABLES = 6
 };
+
+struct amdgv_adapter;
 
 #pragma pack(push, 1)
 
@@ -358,11 +360,13 @@ struct amdgv_ip_discovery_info {
 
 struct amdgv_ip_discovery {
 	struct amdgv_ip_discovery_info pf_copy;
+	struct amdgv_ip_discovery_info origin_pf_copy;
 	struct amdgv_ip_discovery_info vf_copy;
 	int (*copy_to_vf)(struct amdgv_adapter *adapt, uint32_t idx_vf);
 	int (*discover_ip)(struct amdgv_adapter *adapt);
 	int (*parse_gc_table)(struct amdgv_adapter *adapt);
 	uint16_t size;
+	bool enable_live_update;
 };
 
 #endif

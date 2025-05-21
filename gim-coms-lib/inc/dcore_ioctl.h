@@ -26,6 +26,8 @@
 #include "amdgv_cmd_def.h"
 #include <sys/ioctl.h>
 
+#ifndef EXCLUDE_DCORE_DEBUG
+
 #define GIM_IOCTL_NR(n) _IOC_NR(n)
 #define GIM_IOC_VOID _IOC_NONE
 #define GIM_IOC_READ _IOC_READ
@@ -128,4 +130,5 @@ struct dbglib_ffbm_data {
 	} out;
 };
 
+#endif //EXCLUDE_DCORE_DEBUG
 #endif //DCORE_IOCTL_H

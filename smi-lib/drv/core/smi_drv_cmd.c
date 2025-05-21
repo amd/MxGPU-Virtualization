@@ -380,8 +380,10 @@ int smi_get_gpu_vram_info(struct smi_ctx *ctx, void *inb,
 		info->vram_size = vram_info.vram_size_mb;
 		info->vram_type = smi_map_vram_type(vram_info.vram_type);
 		info->vram_vendor = smi_map_vram_vendor(vram_info.vram_vendor);
+		info->vram_bit_width = vram_info.vram_bit_width;
 	} else if (ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED) {
 		info->vram_size = SMI_NOT_SUPPORTED;
+		info->vram_bit_width = SMI_NOT_SUPPORTED;
 		ret = SMI_STATUS_SUCCESS;
 	} else {
 		goto end;
@@ -2040,17 +2042,17 @@ int smi_get_link_topology(struct smi_ctx *ctx, void *inb,
 	amdgv_dev_t *src_adev = NULL;
 	amdgv_dev_t *dst_adev = NULL;
 	bool dev_busy = false;
-	struct smi_link_topology *link = NULL;
+	struct smi_io_link *link = NULL;
 	struct amdgv_gpumon_link_topology_info link_topology;
 	int ret = SMI_STATUS_SUCCESS;
 
 	/* Check version */
 	if ((in_len != sizeof(struct smi_device_pair_info)) ||
-	    (out_len != sizeof(struct smi_link_topology))) {
+	    (out_len != sizeof(struct smi_io_link))) {
 		return SMI_STATUS_INVAL;
 	}
 
-	link = (struct smi_link_topology *) outb;
+	link = (struct smi_io_link *) outb;
 	id = (struct smi_device_pair_info *) inb;
 
 	src_adev = smi_get_handle(ctx, &id->src.dev_id, NULL, &dev_busy);
@@ -2074,11 +2076,17 @@ int smi_get_link_topology(struct smi_ctx *ctx, void *inb,
 	if (ret)
 		goto end;
 
-	link->weight = link_topology.weight;
-	link->link_status = smi_map_link_status(link_topology.link_status);
-	link->link_type = smi_map_link_type(link_topology.link_type);
-	link->num_hops = (uint8_t)link_topology.num_hops;
-	link->fb_sharing = (uint8_t)link_topology.is_fb_sharing_enabled;
+	link->link_topology.weight = link_topology.weight;
+	link->link_topology.link_status = smi_map_link_status(link_topology.link_status);
+	link->link_topology.link_type = smi_map_link_type(link_topology.link_type);
+	link->link_topology.num_hops = link_topology.num_hops;
+	link->link_topology.fb_sharing = link_topology.is_fb_sharing_enabled;
+
+	link->p2p_capability.is_iolink_coherent = (uint8_t)link_topology.p2p_caps.is_iolink_coherent;
+	link->p2p_capability.is_iolink_atomics_32bit = (uint8_t)link_topology.p2p_caps.is_iolink_atomics_32bit;
+	link->p2p_capability.is_iolink_atomics_64bit  = (uint8_t)link_topology.p2p_caps.is_iolink_atomics_64bit ;
+	link->p2p_capability.is_iolink_dma = (uint8_t)link_topology.p2p_caps.is_iolink_dma;
+	link->p2p_capability.is_iolink_bi_directional = (uint8_t)link_topology.p2p_caps.is_iolink_bi_directional;
 
 end:
 	smi_put_handle(src_adev, ctx);
@@ -2687,7 +2695,7 @@ int smi_get_cper_error(struct smi_ctx *ctx, void *inb,
 		hdr = (struct smi_cper_hdr*)((char *)hdr + hdr->record_length);
 	}
 
-	ret = smi_get_cper_data(config, in_len, size, buf, write_count, smi_cper_hdrs);
+	ret = smi_get_cper_data(config, in_len, size, buf, write_count, smi_cper_hdrs, overflow_count);
 	if (ret)
 		goto end;
 

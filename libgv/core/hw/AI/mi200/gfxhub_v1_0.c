@@ -1,0 +1,212 @@
+/*
+ * Copyright (c) 2017-2021 Advanced Micro Devices, Inc. All rights reserved.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+#include <amdgv.h>
+#include <amdgv_device.h>
+
+#include "mi200/HDP/hdp_4_0_offset.h"
+#include "mi200/HDP/hdp_4_0_sh_mask.h"
+#include "mi200/GC/gc_9_0_default.h"
+#include "mi200/GC/gc_9_0_offset.h"
+#include "mi200/GC/gc_9_0_sh_mask.h"
+#include "gfxhub_v1_0.h"
+
+static void gfxhub_v1_0_set_fault_enable_default(struct amdgv_adapter *adapt, bool value)
+{
+	uint32_t tmp;
+
+	/* mmVM_L2_PROTECTION_FAULT_CNTL */
+	tmp = RREG32(SOC15_REG_OFFSET(GC, 0, mmVM_L2_PROTECTION_FAULT_CNTL));
+	tmp = REG_SET_FIELD(tmp, VM_L2_PROTECTION_FAULT_CNTL,
+			    RANGE_PROTECTION_FAULT_ENABLE_DEFAULT, value);
+	tmp = REG_SET_FIELD(tmp, VM_L2_PROTECTION_FAULT_CNTL,
+			    PDE0_PROTECTION_FAULT_ENABLE_DEFAULT, value);
+	tmp = REG_SET_FIELD(tmp, VM_L2_PROTECTION_FAULT_CNTL,
+			    PDE1_PROTECTION_FAULT_ENABLE_DEFAULT, value);
+	tmp = REG_SET_FIELD(tmp, VM_L2_PROTECTION_FAULT_CNTL,
+			    PDE2_PROTECTION_FAULT_ENABLE_DEFAULT, value);
+	tmp = REG_SET_FIELD(tmp, VM_L2_PROTECTION_FAULT_CNTL,
+			    TRANSLATE_FURTHER_PROTECTION_FAULT_ENABLE_DEFAULT, value);
+	tmp = REG_SET_FIELD(tmp, VM_L2_PROTECTION_FAULT_CNTL,
+			    NACK_PROTECTION_FAULT_ENABLE_DEFAULT, value);
+	tmp = REG_SET_FIELD(tmp, VM_L2_PROTECTION_FAULT_CNTL,
+			    DUMMY_PAGE_PROTECTION_FAULT_ENABLE_DEFAULT, value);
+	tmp = REG_SET_FIELD(tmp, VM_L2_PROTECTION_FAULT_CNTL,
+			    VALID_PROTECTION_FAULT_ENABLE_DEFAULT, value);
+	tmp = REG_SET_FIELD(tmp, VM_L2_PROTECTION_FAULT_CNTL,
+			    READ_PROTECTION_FAULT_ENABLE_DEFAULT, value);
+	tmp = REG_SET_FIELD(tmp, VM_L2_PROTECTION_FAULT_CNTL,
+			    WRITE_PROTECTION_FAULT_ENABLE_DEFAULT, value);
+	tmp = REG_SET_FIELD(tmp, VM_L2_PROTECTION_FAULT_CNTL,
+			    EXECUTE_PROTECTION_FAULT_ENABLE_DEFAULT, value);
+
+	/* CRASH_ON_NO_RETRY */
+	tmp = REG_SET_FIELD(tmp, VM_L2_PROTECTION_FAULT_CNTL, CRASH_ON_NO_RETRY_FAULT, !value);
+	tmp = REG_SET_FIELD(tmp, VM_L2_PROTECTION_FAULT_CNTL, CRASH_ON_RETRY_FAULT, !value);
+
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_L2_PROTECTION_FAULT_CNTL), tmp);
+}
+
+void gfxhub_v1_0_vmhub_hook(struct amdgv_adapter *adapt)
+{
+	adapt->vmhub[VM_GFXHUB].fault_cntl =
+		SOC15_REG_OFFSET(GC, 0, mmVM_L2_PROTECTION_FAULT_CNTL);
+	adapt->vmhub[VM_GFXHUB].fault_status =
+		SOC15_REG_OFFSET(GC, 0, mmVM_L2_PROTECTION_FAULT_STATUS);
+}
+
+void gfxhub_v1_0_enable_system_context(struct amdgv_adapter *adapt)
+{
+	uint32_t tmp;
+
+	/* config context0 to trap all kinds of page fault */
+	tmp = RREG32(SOC15_REG_OFFSET(GC, 0, mmVM_CONTEXT0_CNTL));
+	tmp = REG_SET_FIELD(tmp, VM_CONTEXT0_CNTL, ENABLE_CONTEXT, 1);
+	tmp = REG_SET_FIELD(tmp, VM_CONTEXT0_CNTL, PAGE_TABLE_DEPTH, 0);
+	tmp = REG_SET_FIELD(tmp, VM_CONTEXT0_CNTL, RETRY_PERMISSION_OR_INVALID_PAGE_FAULT, 0);
+	tmp = REG_SET_FIELD(tmp, VM_CONTEXT0_CNTL, RANGE_PROTECTION_FAULT_ENABLE_INTERRUPT, 1);
+	tmp = REG_SET_FIELD(tmp, VM_CONTEXT0_CNTL,
+			    DUMMY_PAGE_PROTECTION_FAULT_ENABLE_INTERRUPT, 1);
+	tmp = REG_SET_FIELD(tmp, VM_CONTEXT0_CNTL, PDE0_PROTECTION_FAULT_ENABLE_INTERRUPT, 1);
+	tmp = REG_SET_FIELD(tmp, VM_CONTEXT0_CNTL, VALID_PROTECTION_FAULT_ENABLE_INTERRUPT, 1);
+	tmp = REG_SET_FIELD(tmp, VM_CONTEXT0_CNTL, READ_PROTECTION_FAULT_ENABLE_INTERRUPT, 1);
+	tmp = REG_SET_FIELD(tmp, VM_CONTEXT0_CNTL, WRITE_PROTECTION_FAULT_ENABLE_INTERRUPT, 1);
+	tmp = REG_SET_FIELD(tmp, VM_CONTEXT0_CNTL, EXECUTE_PROTECTION_FAULT_ENABLE_INTERRUPT,
+			    1);
+	/* set GART logic space range from ~0 to 0 thus force all GART range page fault */
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_CONTEXT0_CNTL), tmp);
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32), ~0);
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32), ~0);
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_CONTEXT0_PAGE_TABLE_START_ADDR_LO32), ~0);
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_CONTEXT0_PAGE_TABLE_START_ADDR_HI32), ~0);
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32), 0);
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32), 0);
+
+	/* Setup TLB control */
+	tmp = RREG32(SOC15_REG_OFFSET(GC, 0, mmMC_VM_MX_L1_TLB_CNTL));
+	tmp = REG_SET_FIELD(tmp, MC_VM_MX_L1_TLB_CNTL, ENABLE_L1_TLB, 1);
+	tmp = REG_SET_FIELD(tmp, MC_VM_MX_L1_TLB_CNTL, SYSTEM_ACCESS_MODE, 3);
+	tmp = REG_SET_FIELD(tmp, MC_VM_MX_L1_TLB_CNTL, ENABLE_ADVANCED_DRIVER_MODEL, 1);
+	tmp = REG_SET_FIELD(tmp, MC_VM_MX_L1_TLB_CNTL, SYSTEM_APERTURE_UNMAPPED_ACCESS, 0);
+	tmp = REG_SET_FIELD(tmp, MC_VM_MX_L1_TLB_CNTL, ECO_BITS, 0);
+	tmp = REG_SET_FIELD(tmp, MC_VM_MX_L1_TLB_CNTL, MTYPE, 3); /* XXX for emulation. */
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmMC_VM_MX_L1_TLB_CNTL), tmp);
+}
+
+void gfxhub_v1_0_gart_enable(struct amdgv_adapter *adapt)
+{
+	uint32_t tmp;
+
+	int32_t hdp_nonsurface_base_lo;
+	int32_t hdp_nonsurface_base_hi;
+
+	/* Config AGP space */
+	if (adapt->sys_mem_info.bus_addr)
+		WREG32(SOC15_REG_OFFSET(GC, 0, mmMC_VM_AGP_BASE),
+			adapt->sys_mem_info.bus_addr >> 24);
+
+	if (adapt->mc_agp_loc_addr && adapt->mc_agp_top_addr) {
+		WREG32(SOC15_REG_OFFSET(GC, 0, mmMC_VM_AGP_BOT), adapt->mc_agp_loc_addr >> 24);
+		WREG32(SOC15_REG_OFFSET(GC, 0, mmMC_VM_AGP_TOP), adapt->mc_agp_top_addr >> 24);
+	}
+
+	if (adapt->mc_sys_loc_addr && adapt->mc_sys_top_addr) {
+		WREG32(SOC15_REG_OFFSET(GC, 0, mmMC_VM_SYSTEM_APERTURE_LOW_ADDR),
+			adapt->mc_sys_loc_addr >> 18);
+		WREG32(SOC15_REG_OFFSET(GC, 0, mmMC_VM_SYSTEM_APERTURE_HIGH_ADDR),
+			adapt->mc_sys_top_addr >> 18);
+	}
+
+	/* Set MMMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR to HDP_NONSURFACE_BASE(FB start) */
+	hdp_nonsurface_base_lo = RREG32(SOC15_REG_OFFSET(HDP, 0, mmHDP_NONSURFACE_BASE));
+	hdp_nonsurface_base_hi = RREG32(SOC15_REG_OFFSET(HDP, 0, mmHDP_NONSURFACE_BASE_HI));
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR_LSB), hdp_nonsurface_base_lo);
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR_MSB), hdp_nonsurface_base_hi);
+
+	/* mmVM_L2_PROTECTION_FAULT_DEFAULT_ADDR */
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_LO32), 0);
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_HI32), 0);
+
+	/* mmVM_L2_PROTECTION_FAULT_CNTL2 */
+	tmp = RREG32(SOC15_REG_OFFSET(GC, 0, mmVM_L2_PROTECTION_FAULT_CNTL2));
+	tmp = REG_SET_FIELD(tmp, VM_L2_PROTECTION_FAULT_CNTL2,
+			    ACTIVE_PAGE_MIGRATION_PTE_READ_RETRY, 1);
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_L2_PROTECTION_FAULT_CNTL2), tmp);
+
+	/* mmVM_L2_CNTL */
+	tmp = RREG32(SOC15_REG_OFFSET(GC, 0, mmVM_L2_CNTL));
+	tmp = REG_SET_FIELD(tmp, VM_L2_CNTL, ENABLE_L2_CACHE, 1);
+	tmp = REG_SET_FIELD(tmp, VM_L2_CNTL, ENABLE_L2_FRAGMENT_PROCESSING, 0);
+	tmp = REG_SET_FIELD(tmp, VM_L2_CNTL, L2_PDE0_CACHE_TAG_GENERATION_MODE, 0);
+	tmp = REG_SET_FIELD(tmp, VM_L2_CNTL, PDE_FAULT_CLASSIFICATION, 1);
+	tmp = REG_SET_FIELD(tmp, VM_L2_CNTL, CONTEXT1_IDENTITY_ACCESS_MODE, 1);
+	tmp = REG_SET_FIELD(tmp, VM_L2_CNTL, IDENTITY_MODE_FRAGMENT_SIZE, 0);
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_L2_CNTL), tmp);
+
+	/* mmVM_L2_CNTL2 */
+	tmp = RREG32(SOC15_REG_OFFSET(GC, 0, mmVM_L2_CNTL2));
+	tmp = REG_SET_FIELD(tmp, VM_L2_CNTL2, INVALIDATE_ALL_L1_TLBS, 1);
+	tmp = REG_SET_FIELD(tmp, VM_L2_CNTL2, INVALIDATE_L2_CACHE, 1);
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_L2_CNTL2), tmp);
+
+	/* mmVM_L2_CNTL3 */
+	tmp = mmVM_L2_CNTL3_DEFAULT;
+	// MI100+ will always use translate_further for baremetal
+	// so set the corresponding BANK_SELECT and SIZE
+	tmp = REG_SET_FIELD(tmp, VM_L2_CNTL3, BANK_SELECT, 12);
+	tmp = REG_SET_FIELD(tmp, VM_L2_CNTL3,
+						L2_CACHE_BIGK_FRAGMENT_SIZE, 9);
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_L2_CNTL3), tmp);
+
+	/* mmVM_L2_CNTL4 */
+	tmp = mmVM_L2_CNTL4_DEFAULT;
+	tmp = REG_SET_FIELD(tmp, VM_L2_CNTL4, VMC_TAP_PDE_REQUEST_PHYSICAL, 0);
+	tmp = REG_SET_FIELD(tmp, VM_L2_CNTL4, VMC_TAP_PTE_REQUEST_PHYSICAL, 0);
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_L2_CNTL4), tmp);
+
+	/* Disable identity aperture.*/
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_LO32),
+	       0XFFFFFFFF);
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_HI32),
+	       0x0000000F);
+
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_LO32), 0);
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_HI32), 0);
+
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32), 0);
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32), 0);
+
+	gfxhub_v1_0_set_fault_enable_default(adapt, !is_debug_mode_hang());
+}
+
+void gfxhub_v1_0_gart_fini(struct amdgv_adapter *adapt)
+{
+	uint32_t tmp;
+
+	/* mmVM_L2_CNTL */
+	tmp = RREG32(SOC15_REG_OFFSET(GC, 0, mmVM_L2_CNTL));
+	tmp = REG_SET_FIELD(tmp, VM_L2_CNTL, ENABLE_L2_CACHE, 0);
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_L2_CNTL), tmp);
+
+	/* mmVM_L2_CNTL3 */
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmVM_L2_CNTL3), 0);
+}

@@ -1330,6 +1330,7 @@ static int mi300_psp_sw_init(struct amdgv_adapter *adapt)
 
 	psp_ret = amdgv_psp_sw_init(adapt);
 	adapt->psp.ras_context.set_init_flag = true;
+	adapt->psp.skip_ta_fw_version = true;
 
 	if (psp_ret == PSP_STATUS__SUCCESS)
 		psp_ret = amdgv_psp_xgmi_mem_init(adapt);

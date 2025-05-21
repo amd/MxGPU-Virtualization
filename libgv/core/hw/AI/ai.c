@@ -24,6 +24,59 @@
 #include "amdgv_vfmgr.h"
 #include "amdgv_powerplay.h"
 
+extern struct amdgv_init_func mi200_vbios_early_func;
+extern struct amdgv_init_func mi200_vbios_late_func;
+extern struct amdgv_init_func mi200_ucode_func;
+extern struct amdgv_init_func mi200_psp_func;
+extern struct amdgv_init_func mi200_smu_func;
+extern struct amdgv_init_func mi200_ecc_func;
+extern struct amdgv_init_func mi200_gpuiov_func;
+extern struct amdgv_init_func mi200_reset_func;
+extern struct amdgv_init_func mi200_sched_func;
+extern struct amdgv_init_func mi200_powerplay_func;
+extern struct amdgv_init_func mi200_gpumon_func;
+extern struct amdgv_init_func mi200_mem_func;
+extern struct amdgv_init_func mi200_clockgating_func;
+extern struct amdgv_init_func mi200_irqmgr_func;
+extern struct amdgv_init_func mi200_mailbox_func;
+extern struct amdgv_init_func mi200_misc_func;
+extern struct amdgv_init_func mi200_diag_data_func;
+extern struct amdgv_init_func mi200_live_migration_func;
+extern struct amdgv_init_func mi200_doorbell_func;
+extern struct amdgv_init_func mi200_gfx_v9_0_func;
+extern struct amdgv_init_func mi200_df_v3_6_func;
+extern struct amdgv_init_func mi200_xgmi_func;
+
+struct amdgv_init_func *mi200_init_table[] = {
+	&mi200_vbios_early_func,
+	&mi200_mem_func,
+	&mi200_ucode_func,
+	&mi200_psp_func,
+	&mi200_smu_func,
+	&mi200_vbios_late_func,
+	&mi200_df_v3_6_func,
+	&mi200_ecc_func,
+	&mi200_gpuiov_func,
+	&mi200_doorbell_func,
+	&mi200_xgmi_func,
+	&mi200_irqmgr_func,
+	&mi200_mailbox_func,
+	&mi200_reset_func,
+	&mi200_powerplay_func,
+	&mi200_gpumon_func,
+	&mi200_misc_func,
+	&amdgv_vfmgr_func,
+	&mi200_sched_func,
+	&mi200_diag_data_func,
+	&mi200_live_migration_func,
+	&mi200_gfx_v9_0_func,
+	NULL,
+};
+
+struct amdgv_reg_range *mi200_mitigation_table[] = {
+	NULL,
+};
+
 extern struct amdgv_init_func mi300_vbios_early_func;
 extern struct amdgv_init_func mi300_vbios_late_func;
 extern struct amdgv_init_func mi300_ucode_func;

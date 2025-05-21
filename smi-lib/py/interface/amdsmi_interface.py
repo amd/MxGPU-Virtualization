@@ -1943,6 +1943,29 @@ def amdsmi_get_link_topology(processor_handle_src, processor_handle_dst):
         "fb_sharing": link_topology.fb_sharing
     }
 
+def amdsmi_get_link_topology_nearest(processor_handle, link_type):
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+    if not isinstance(link_type, AmdSmiLinkType):
+        raise AmdSmiParameterException(link_type, AmdSmiLinkType)
+
+    topology_nearest_list = amdsmi_wrapper.amdsmi_topology_nearest_t()
+    _check_res(
+        amdsmi_wrapper.amdsmi_get_link_topology_nearest(
+               processor_handle,
+               link_type,
+               ctypes.byref(topology_nearest_list)
+        )
+    )
+    num_devices = topology_nearest_list.count
+    device_list = list()
+    for i in range(num_devices):
+        device_list.append(amdsmi_wrapper.amdsmi_processor_handle(topology_nearest_list.processor_list[i]))
+
+    return {
+        'processor_list': device_list
+    }
 
 def amdsmi_get_xgmi_fb_sharing_caps(processor_handle):
     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
@@ -1998,7 +2021,12 @@ def amdsmi_set_xgmi_fb_sharing_mode_v2(processor_list, mode):
             raise AmdSmiParameterException(
                     processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
 
-    num_processors = len(processor_list)
+    # In case of auto mode(MODE_X) the input parameter num_processors should be 1
+    if (mode == AmdSmiXgmiFbSharingMode.CUSTOM):
+        num_processors = len(processor_list)
+    else:
+        num_processors = 1
+
     processors = (amdsmi_wrapper.amdsmi_processor_handle * num_processors)()
     for i in range(num_processors):
         processors[i] = processor_list[i]
@@ -2228,7 +2256,7 @@ def amdsmi_set_soc_pstate(processor_handle, policy_id):
             processor_handle, policy_id))
 
 
-def amdsmi_gpu_get_cper_entries(processor_handle, severity_mask):
+def amdsmi_get_gpu_cper_entries(processor_handle, severity_mask):
     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
         raise AmdSmiParameterException(
             processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
@@ -2236,14 +2264,15 @@ def amdsmi_gpu_get_cper_entries(processor_handle, severity_mask):
     buffer_size = ctypes.c_uint64()   # Initial buffer size
     buffer_size.value = 1024
     cper_data = (ctypes.c_char * buffer_size.value)()
-    cper_hdrs = (ctypes.POINTER(amdsmi_wrapper.amdsmi_cper_hdr) * 1024)()
+    cper_hdrs = (ctypes.POINTER(amdsmi_wrapper.amdsmi_cper_hdr_t) * 1024)()
     entry_count = ctypes.c_uint64()
     cursor = ctypes.c_uint64()
+
 
     if not isinstance(severity_mask, AmdSmiCperErrorSeverity):
         raise AmdSmiParameterException(severity_mask, AmdSmiCperErrorSeverity)
 
-    ret = amdsmi_wrapper.amdsmi_gpu_get_cper_entries(
+    ret = amdsmi_wrapper.amdsmi_get_gpu_cper_entries(
         processor_handle,
         severity_mask,
         cper_data,
@@ -2253,9 +2282,42 @@ def amdsmi_gpu_get_cper_entries(processor_handle, severity_mask):
         ctypes.byref(cursor)
     )
 
+    _check_res(ret)
+
     raw_cper_data_list = []
     for i in range(entry_count.value):
-        hdr = ctypes.cast(cper_hdrs[i], ctypes.POINTER(amdsmi_wrapper.amdsmi_cper_hdr)).contents
+        hdr = ctypes.cast(cper_hdrs[i], ctypes.POINTER(amdsmi_wrapper.amdsmi_cper_hdr_t)).contents
         raw_cper_data_list.append(cper_data.raw[hdr.record_length])
 
     return raw_cper_data_list
+
+def amdsmi_topo_get_p2p_status(processor_handle_src, processor_handle_dst):
+    if not isinstance(processor_handle_src, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle_src, amdsmi_wrapper.amdsmi_processor_handle
+        )
+
+    if not isinstance(processor_handle_dst, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle_dst, amdsmi_wrapper.amdsmi_processor_handle
+        )
+
+    type = amdsmi_wrapper.amdsmi_link_type_t()
+    cap = amdsmi_wrapper.amdsmi_p2p_capability_t()
+    _check_res(
+        amdsmi_wrapper.amdsmi_topo_get_p2p_status(
+            processor_handle_src, processor_handle_dst, ctypes.byref(type), ctypes.byref(cap)
+        )
+    )
+
+    return {
+        'type' : AmdSmiLinkType(type.value),
+        'cap': {
+            'is_iolink_coherent': cap.is_iolink_coherent,
+            'is_iolink_atomics_32bit': cap.is_iolink_atomics_32bit,
+            'is_iolink_atomics_64bit': cap.is_iolink_atomics_64bit,
+            'is_iolink_dma': cap.is_iolink_dma,
+            'is_iolink_bi_directional': cap.is_iolink_bi_directional
+        }
+    }
+

@@ -52,37 +52,7 @@
 // max GFXCLK/GFX DS clock divider =  (2250/16) ~= 140
 #define MI300_GPUMON_DS_THRESHOLD 140
 
-struct mi300_smu_dpm_context;
-struct mi300_smu_dpm_policy_ctxt;
-
 struct amdgv_adapter;
-
-struct mi300_smu_dpm_policy {
-	enum amdgv_pp_pm_policy policy_type;
-	struct smu_dpm_policy_desc policies[AMDGV_GPUMON_SOC_PSTATE_COUNT];
-	uint32_t level_mask;
-	int current_level;
-	uint32_t num_supported;
-	int (*set_policy)(struct amdgv_adapter *adapt, int level);
-};
-
-struct mi300_smu_dpm_policy_ctxt {
-	struct mi300_smu_dpm_policy policies[AMDGV_PP_PM_POLICY_NUM];
-	uint32_t policy_mask;
-};
-
-int mi300_smu_get_pm_policy(struct amdgv_adapter *adapt,
-			    enum amdgv_pp_pm_policy p_type,
-			    struct mi300_smu_dpm_policy **policy_int);
-int mi300_smu_compare_and_set_pm_policy(struct amdgv_adapter *adapt,
-					enum amdgv_pp_pm_policy p_type,
-					int level);
-int mi300_smu_error_inject_set_pm_policy(struct amdgv_adapter *adapt,
-					 enum amdgv_pp_pm_policy p_type,
-					 int level);
-void mi300_smu_error_inject_restore_pm_policy(struct amdgv_adapter *adapt,
-					     enum amdgv_pp_pm_policy p_type);
-
 
 bool mi300_smu_get_fw_loaded_status(struct amdgv_adapter *adapt);
 int mi300_gpu_mode1_reset(struct amdgv_adapter *adapt);

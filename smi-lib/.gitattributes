@@ -1,0 +1,4 @@
+*.[ch] diff=cpp
+*.{cpp,hpp} diff=cpp
+*.py diff=python
+*.rs diff=rust

@@ -4005,12 +4005,6 @@
 #define regCP_RINGID_BASE_IDX                                                                           1
 #define regCP_VMID                                                                                      0x00da
 #define regCP_VMID_BASE_IDX                                                                             1
-#define regPA_SC_RIGHT_VERT_GRID                                                                        0x00e8
-#define regPA_SC_RIGHT_VERT_GRID_BASE_IDX                                                               1
-#define regPA_SC_LEFT_VERT_GRID                                                                         0x00e9
-#define regPA_SC_LEFT_VERT_GRID_BASE_IDX                                                                1
-#define regPA_SC_HORIZ_GRID                                                                             0x00ea
-#define regPA_SC_HORIZ_GRID_BASE_IDX                                                                    1
 #define regVGT_MULTI_PRIM_IB_RESET_INDX                                                                 0x0103
 #define regVGT_MULTI_PRIM_IB_RESET_INDX_BASE_IDX                                                        1
 #define regCB_BLEND_RED                                                                                 0x0105
@@ -4435,8 +4429,6 @@
 #define regPA_SU_PRIM_FILTER_CNTL_BASE_IDX                                                              1
 #define regPA_SU_SMALL_PRIM_FILTER_CNTL                                                                 0x020c
 #define regPA_SU_SMALL_PRIM_FILTER_CNTL_BASE_IDX                                                        1
-#define regPA_CL_OBJPRIM_ID_CNTL                                                                        0x020d
-#define regPA_CL_OBJPRIM_ID_CNTL_BASE_IDX                                                               1
 #define regPA_CL_NGG_CNTL                                                                               0x020e
 #define regPA_CL_NGG_CNTL_BASE_IDX                                                                      1
 #define regPA_SU_OVER_RASTERIZATION_CNTL                                                                0x020f

@@ -347,13 +347,13 @@ error_category(ECC) = {
 		  "Adapter(UMC) occurred %llu correctable ECC error since GPU load."),
 	add_entry(
 		AMDGV_ERROR_ECC_IN_PF_FB, ERROR_DATA_ARG_32_32, AMDGV_ERROR_SEVERITY_ERROR_HIGH,
-		"%u time out of %u threshold - ECC happens within PF critical region, please follow AMD Service Action Guide."),
+		"Bad Page Record #%u (of %u storage threshold) is within PF critical region, please follow AMD Service Action Guide."),
 	add_entry(
 		AMDGV_ERROR_ECC_IN_CRI_REG, ERROR_DATA_ARG_32_32, AMDGV_ERROR_SEVERITY_ERROR_HIGH,
-		"%u time out of %u threshold - ECC happens within Critical FB region, either TMR or CSA or IPD, please follow AMD Service Action Guide."),
+		"Bad Page Record #%u (of %u storage threshold) is within TMR or CSA or IPD Critical regions, please follow AMD Service Action Guide."),
 	add_entry(
 		AMDGV_ERROR_ECC_IN_VF_CRI, ERROR_DATA_ARG_32_32, AMDGV_ERROR_SEVERITY_ERROR_HIGH,
-		"%u time out of %u threshold - ECC happens within VF critical region, please follow AMD Service Action Guide."),
+		"Bad Page Record #%u (of %u storage threshold) is within VF critical region, please follow AMD Service Action Guide."),
 	add_entry(AMDGV_ERROR_ECC_REACH_THD, ERROR_DATA_ARG_64, AMDGV_ERROR_SEVERITY_ERROR_HIGH,
 		  "ECC record reach threshold %llu pages, please follow AMD Service Action Guide."),
 	add_entry(AMDGV_ERROR_ECC_VF_CE, ERROR_DATA_ARG_64, AMDGV_ERROR_SEVERITY_ERROR_LOW,

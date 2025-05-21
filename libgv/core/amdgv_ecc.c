@@ -29,13 +29,14 @@
 #include "amdgv_umc.h"
 #include "amdgv_xgmi.h"
 
+
 #define AMDGV_ECC_CHECK_RAS_BLOCK_ERR(BLOCK, CE_ERR_NUM, UE_ERR_NUM, DE_ERR_NUM) do { \
 	unsigned long corr_error = 0, uncorr_error = 0, deferred_error = 0; \
 	struct amdgv_smi_ras_query_if info = {0}; \
 	int ret = 0; \
 	if (!(adapt->ecc.enabled & (1 << AMDGV_RAS_BLOCK__##BLOCK))) \
 		break; \
-	info.head.block = AMDGV_RAS_BLOCK__##BLOCK; \
+	info.head.block = amdgv_ras_block_to_smi_ras_block(AMDGV_RAS_BLOCK__##BLOCK); \
 	ret = amdgv_ecc_get_error_count(adapt, &info); \
 	if (ret) { \
 		AMDGV_ERROR("Unable to get %s error count.\n", #BLOCK); \
@@ -72,7 +73,7 @@
 	int ret = 0; \
 	if (!(adapt->ecc.enabled & (1 << AMDGV_RAS_BLOCK__##BLOCK))) \
 	break; \
-	info.head.block = AMDGV_RAS_BLOCK__##BLOCK; \
+	info.head.block = amdgv_ras_block_to_smi_ras_block(AMDGV_RAS_BLOCK__##BLOCK); \
 	ret = amdgv_ecc_get_error_count(adapt, &info); \
 	if (ret) { \
 		AMDGV_ERROR("Unable to reset %s error count.\n", #BLOCK); \

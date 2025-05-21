@@ -94,6 +94,7 @@ enum amdgv_cmd_common_id {
 	AMDGV_CMD_PSP_VBFLASH_STATUS = AMDGV_IOCTL | COMMON_CMD | 0x3,
 };
 
+#ifndef EXCLUDE_DCORE_DEBUG
 /* command code for dcore_drv ioctl */
 enum rdl_cmd_code {
 	RDL_CMD_START_TRAP_GPU_HANG = 0x00000001,	  /* Used when host thread starts to wait for a reset event from kernel */
@@ -112,6 +113,7 @@ enum amdgv_cmd_rdl_id {
 	AMDGV_CMD_RDL_GET_FFBM_DATA = AMDGV_CMD_DCORE_IOCTL | RDL_CMD_GET_FFBM_DATA | AMDGV_CMD_SHM_SER2CLI_MASK,
 	AMDGV_CMD_RDL_STOP_TRAP_GPU_HANG = AMDGV_CMD_DCORE_IOCTL | RDL_CMD_STOP_TRAP_GPU_HANG,
 };
+#endif //EXCLUDE_DCORE_DEBUG
 
 enum amdgv_cmd_response {
 	AMDGV_CMD__SUCCESS = 0,
@@ -124,7 +126,10 @@ enum amdgv_cmd_response {
 };
 
 enum amdgv_cmd_asic_type {
+	AMDGV_CMD_CHIP_MI200 = 2,
+	AMDGV_CMD_CHIP_NAVI32 = 8,
 	AMDGV_CMD_CHIP_MI300X = 9,
+	AMDGV_CMD_CHIP_MI308X = 11,
 	AMDGV_CMD_CHIP_UNKNOWN,
 	AMDGV_CMD_CHIP_LAST,
 };

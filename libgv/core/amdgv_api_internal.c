@@ -176,7 +176,7 @@ static uint64_t amdgv_gpa_to_spa(struct amdgv_adapter *adapt, uint64_t gpa, uint
 	if (vf_idx < adapt->num_vf) {
 		addr = (adapt->xgmi.phy_node_id * adapt->xgmi.node_segment_size +
 			MBYTES_TO_BYTES(adapt->array_vf[vf_idx].fb_offset) + gpa);
-		AMDGV_INFO("phy_node_id:%d, node_segment_size:0x%llx, vf_idx:%d, fb_offset:0x%x, gpa:0x%llx\n",
+		AMDGV_DEBUG("phy_node_id:%d, node_segment_size:0x%llx, vf_idx:%d, fb_offset:0x%x, gpa:0x%llx\n",
 			adapt->xgmi.phy_node_id, adapt->xgmi.node_segment_size, vf_idx,
 			MBYTES_TO_BYTES(adapt->array_vf[vf_idx].fb_offset), gpa);
 		return addr;
@@ -188,8 +188,7 @@ static uint64_t amdgv_gpa_to_spa(struct amdgv_adapter *adapt, uint64_t gpa, uint
 
 int amdgv_int_ras_trigger_error(struct amdgv_adapter *adapt, struct amdgv_smi_ras_error_inject_info *data)
 {
-	struct ta_ras_trigger_error_input *ras_data =
-		(struct ta_ras_trigger_error_input *)data;
+	struct ta_ras_trigger_error_input ras_data;
 	int ret = 0;
 
 	if (NEED_SWITCH_TO_PF(adapt)) {
@@ -202,21 +201,25 @@ int amdgv_int_ras_trigger_error(struct amdgv_adapter *adapt, struct amdgv_smi_ra
 		uint32_t dev_mask;
 
 		vf_idx = data->vf_idx;
-		ras_data->value = data->method;
+		ras_data.value = data->method;
+		ras_data.block_id = data->block_id;
+		ras_data.inject_error_type = data->inject_error_type;
+		ras_data.sub_block_index = data->sub_block_index;
+		ras_data.address = data->address;
 		instance_mask = data->mask;
 
 		AMDGV_DEBUG("RAS: ffbm is %s, VF %u, value:0x%llx\n",
-			adapt->ffbm.enabled ? "enabled" : "disabled", vf_idx, ras_data->value);
+			adapt->ffbm.enabled ? "enabled" : "disabled", vf_idx, ras_data.value);
 
-		if (ras_data->block_id == TA_RAS_BLOCK__UMC)  {
+		if (ras_data.block_id == TA_RAS_BLOCK__UMC)  {
 			if (adapt->ffbm.enabled && (vf_idx < adapt->num_vf))
-				ras_data->address = amdgv_ffbm_gpa_to_spa(adapt, data->address, vf_idx);
+				ras_data.address = amdgv_ffbm_gpa_to_spa(adapt, data->address, vf_idx);
 			else
-				ras_data->address =
+				ras_data.address =
 					amdgv_gpa_to_spa(adapt, data->address, vf_idx);
 		}
 
-		switch (ras_data->block_id) {
+		switch (ras_data.block_id) {
 		case TA_RAS_BLOCK__GFX:
 			dev_mask = GET_MASK(GC, instance_mask);
 			break;
@@ -235,12 +238,12 @@ int amdgv_int_ras_trigger_error(struct amdgv_adapter *adapt, struct amdgv_smi_ra
 		/* reuse sub_block_index for backward compatibility */
 		dev_mask <<= AMDGV_RAS_INST_SHIFT;
 		dev_mask &= AMDGV_RAS_INST_MASK;
-		ras_data->sub_block_index |= dev_mask;
+		ras_data.sub_block_index |= dev_mask;
 
-		if (ras_data->block_id == TA_RAS_BLOCK__XGMI_WAFL)
-				ret = amdgv_xgmi_inject_error(adapt, ras_data);
+		if (ras_data.block_id == TA_RAS_BLOCK__XGMI_WAFL)
+				ret = amdgv_xgmi_inject_error(adapt, &ras_data);
 		else
-			if (amdgv_psp_ras_trigger_error(adapt, ras_data) != PSP_STATUS__SUCCESS)
+			if (amdgv_psp_ras_trigger_error(adapt, &ras_data) != PSP_STATUS__SUCCESS)
 				ret = AMDGV_FAILURE;
 	}
 	return ret;
@@ -280,3 +283,22 @@ int amdgv_int_ras_ta_unload(struct amdgv_adapter *adapt, struct amdgv_smi_cmd_ra
 	return ret;
 }
 
+int amdgv_int_dump_cu_data(struct amdgv_adapter *adapt, enum AMDGV_CU_DATA_TYPE type)
+{
+	int ret = 0;
+
+	if (adapt->gfx.funcs && adapt->gfx.funcs->dump_cu_data) {
+		if (adapt->bp_mode == AMDGV_BP_MODE_DISABLE)
+			ret = amdgv_int_stop_to_pf_helper(adapt);
+		if (ret) {
+			AMDGV_ERROR("switch to pf failed! ret code %d\n", ret);
+			return AMDGV_FAILURE;
+		}
+
+		ret = adapt->gfx.funcs->dump_cu_data(adapt, type);
+	} else {
+		AMDGV_ERROR("dump CU data not supported\n");
+		return AMDGV_FAILURE;
+	}
+	return ret;
+}

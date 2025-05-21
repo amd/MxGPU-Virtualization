@@ -182,6 +182,7 @@ struct amdgv_gpumon_temp {
 };
 
 enum amdgv_gpumon_vram_type {
+	AMDGV_GPUMON_DGPU_VRAM_TYPE__UNKNOW = 0,
 	AMDGV_GPUMON_DGPU_VRAM_TYPE__GDDR5 = 0x50,
 	AMDGV_GPUMON_DGPU_VRAM_TYPE__HBM2 = 0x60,
 	AMDGV_GPUMON_DGPU_VRAM_TYPE__HBM2E = 0x61,
@@ -232,6 +233,7 @@ enum amdgv_pp_policy_soc_pstate {
 	SOC_PSTATE_1,
 	SOC_PSTATE_2,
 	SOC_PSTATE_COUNT,
+	SOC_PSTATE_UNKNOW,
 };
 
 enum amdgv_pp_policy_plpd {
@@ -249,6 +251,7 @@ enum amdgv_gpumon_policy_soc_pstate {
 	AMDGV_GPUMON_SOC_PSTATE_1,
 	AMDGV_GPUMON_SOC_PSTATE_2,
 	AMDGV_GPUMON_SOC_PSTATE_COUNT,
+	AMDGV_GPUMON_SOC_PSTATE_UNKNOW,
 };
 
 enum amdgv_gpumon_policy_plpd {
@@ -763,8 +766,10 @@ int amdgv_gpumon_set_pm_policy_level(amdgv_dev_t dev,
 int amdgv_gpumon_get_shutdown_temperature(amdgv_dev_t dev,
 	int *shutdown_temp);
 
-enum amdgv_xgmi_fb_sharing_mode amdgv_gpumon_xgmi_mode_map(
-		enum amdgv_gpumon_xgmi_fb_sharing_mode gpumon_mode);
+enum amdgv_xgmi_fb_sharing_mode gpumon_to_xgmi_fb_sharing_mode(enum amdgv_gpumon_xgmi_fb_sharing_mode gpumon_mode);
+
+enum amdgv_pp_policy_soc_pstate gpumon_to_pp_policy_soc_pstate(enum amdgv_gpumon_policy_soc_pstate gpumon_state);
+
 int amdgv_gpumon_init_metrics_buf(struct amdgv_gpumon_metrics *metrics);
 
 int amdgv_gpumon_get_gpu_cache_info(amdgv_dev_t dev,

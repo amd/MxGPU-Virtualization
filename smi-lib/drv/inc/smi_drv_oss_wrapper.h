@@ -145,9 +145,9 @@ static inline int smi_get_partition(struct smi_profile_configs *profile_configs,
 }
 
 static inline int smi_get_cper_data(struct smi_cper_config *cper_config, uint16_t in_len, uint64_t size, char* buffer, uint64_t write_count,
-                                    uint32_t* smi_cper_hdrs)
+									uint32_t *smi_cper_hdrs, uint64_t overflow_count)
 {
-    return smi_shim_funcs->get_cper_data(cper_config, in_len, size, buffer, write_count, smi_cper_hdrs);
+    return smi_shim_funcs->get_cper_data(cper_config, in_len, size, buffer, write_count, smi_cper_hdrs, overflow_count);
 }
 
 #endif // __SMI_DRV_OSS_WRAPPER_H__

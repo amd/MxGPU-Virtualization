@@ -46,7 +46,7 @@ SystemMock *GetSystemMock()
 	return g_system_mock.get();
 }
 
-void AmdSmiTest::initialize_smi_lib(uint32_t version)
+void AmdSmiTest::initialize_smi_lib(uint32_t version, uint8_t num_dev)
 {
 	handshake_version = version;
 	// set the appropriate version for successful handshake
@@ -56,9 +56,14 @@ void AmdSmiTest::initialize_smi_lib(uint32_t version)
 
 	// set the one processor handle and bdf
 	smi_server_static_info server_info_mock = {};
-	server_info_mock.devices[0].bdf.as_uint = MOCK_BDF.as_uint;
-	server_info_mock.devices[0].dev_id = GPU_MOCK_HANDLE;
-	server_info_mock.num_devices = 1;
+	for (uint32_t i = 0; i < num_dev; i++) {
+		server_info_mock.devices[i].bdf.as_uint = MOCK_BDF.as_uint;
+        server_info_mock.devices[i].bdf.bdf.device_number = (server_info_mock.devices[i].bdf.bdf.device_number + i) % 32;
+
+		server_info_mock.devices[i].dev_id = GPU_MOCK_HANDLE;
+		server_info_mock.devices[i].dev_id.handle += i;
+	}
+	server_info_mock.num_devices = num_dev;
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
 		.WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
 

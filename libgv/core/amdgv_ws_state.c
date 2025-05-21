@@ -801,10 +801,6 @@ load_gpu:
 					ret = AMDGV_ERROR_IOV_WS_LOAD_TIMEOUT;
 					goto ws_exit;
 				}
-				if ((adapt->bp_mode == AMDGV_BP_MODE_1) && (AMDGV_PF_IDX == target_vf)) {
-					AMDGV_INFO("Scheduler stop on first PF INIT\n");
-					amdgv_sched_queue_suspend(adapt);
-				}
 				adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state =
 					AMDGV_INIT_GPU;
 			}

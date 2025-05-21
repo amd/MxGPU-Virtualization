@@ -702,18 +702,9 @@ int amdgv_gpumon_get_ecc_correction_schema(amdgv_dev_t dev, uint32_t *ecc_correc
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
-	/* Temporary method to retrive supported RAS ECC correction schema for MI300
-	@TODO: Change this method when MI300 ECC changes are ready.
-	set the supported ECC correction schema during ECC hw init*/
-	if ((adapt->asic_type == CHIP_MI300X) || (adapt->asic_type == CHIP_MI308X)) {
-		*ecc_correction_schema |=
-			(1 << AMDGV_RAS_ECC_SUPPORT_PARITY) |
-			(1 << AMDGV_RAS_ECC_SUPPORT_CORRECTABLE) |
-			(1 << AMDGV_RAS_ECC_SUPPORT_UNCORRECTABLE) |
-			(1 << AMDGV_RAS_ECC_SUPPORT_POISON);
-		ret = 0;
+	if (adapt->gpumon.funcs->get_ecc_correction_schema) {
+		ret = adapt->gpumon.funcs->get_ecc_correction_schema(adapt, ecc_correction_schema);
 	}
-
 	return ret;
 }
 
@@ -1078,6 +1069,11 @@ int amdgv_gpumon_ras_eeprom_clear(amdgv_dev_t dev)
 
 	SET_ADAPT_AND_CHECK_STATUS_NOT_LOST(adapt, dev);
 
+	if (amdgv_gpumon_get_vf_count(adapt)) {
+		AMDGV_WARN("Blocked bad pages reset while VFs are active.\n");
+		return AMDGV_ERROR_GPUMON_VF_BUSY;
+	}
+
 	if (!adapt->umc.funcs)
 		return AMDGV_FAILURE;
 
@@ -1151,6 +1147,9 @@ int amdgv_gpumon_get_ras_eeprom_version(amdgv_dev_t dev, uint32_t *ras_eeprom_ve
 		ret = 0;
 	} else {
 		*ras_eeprom_version = 0;
+
+		if (adapt->gpumon.funcs->get_ras_eeprom_version)
+			adapt->gpumon.funcs->get_ras_eeprom_version(adapt, ras_eeprom_version);
 	}
 
 	return ret;
@@ -1662,20 +1661,51 @@ static inline const char *amdgv_get_memory_partition_mode_desc(
 	}
 }
 
-static bool amdgv_gpumon_is_change_partition_mode(struct amdgv_adapter *adapt)
+uint32_t amdgv_gpumon_get_vf_count(struct amdgv_adapter *adapt)
 {
-	uint32_t vf_assignment = 0;
+	uint32_t os_vf_count = 0;
+	uint32_t libgv_vf_count = 0;
+	uint32_t idx_vf = 0;
 
-	/* check OS VF assignment */
-	vf_assignment = oss_get_assigned_vf_count(adapt->dev, false);
-	if (vf_assignment == OSS_FUNCTION_NOT_IMPLEMENTED)
-		vf_assignment = 0;
+	/* check OS VF count */
+	os_vf_count = oss_get_assigned_vf_count(adapt->dev, false);
 
-	/* check libgv VF assignment, simply OR is enough */
-	vf_assignment |= amdgv_get_vf_candidate(adapt);
+	if (os_vf_count == OSS_FUNCTION_NOT_IMPLEMENTED)
+		os_vf_count = 0;
 
-	/* return true if no assignment */
-	return (vf_assignment == 0);
+	/* check libgv VF count*/
+	if (adapt->status != AMDGV_STATUS_HW_INIT)
+		libgv_vf_count = 0;
+	else {
+		for (idx_vf = 0; idx_vf < adapt->num_vf; idx_vf++) {
+			if (is_active_vf(idx_vf))
+				libgv_vf_count++;
+		}
+	}
+
+	return (os_vf_count > libgv_vf_count ? os_vf_count : libgv_vf_count);
+}
+
+uint32_t amdgv_gpumon_get_hive_vf_count(struct amdgv_adapter *adapt)
+{
+	struct amdgv_hive_info *hive;
+	struct amdgv_adapter *next_adapt;
+	uint32_t hive_vf_count = 0;
+
+	hive = amdgv_get_xgmi_hive(adapt);
+	if (hive && (adapt->xgmi.phy_nodes_num > 1)) {
+		oss_mutex_lock(adapt->gpumon_hive_lock);
+		amdgv_list_for_each_entry(next_adapt, &hive->adapt_list, struct amdgv_adapter, xgmi.head) {
+			hive_vf_count += amdgv_gpumon_get_vf_count(next_adapt);
+		}
+	} else {
+		hive_vf_count = amdgv_gpumon_get_vf_count(adapt);
+	}
+
+	if (hive)
+		oss_mutex_unlock(adapt->gpumon_hive_lock);
+
+	return hive_vf_count;
 }
 
 int amdgv_gpumon_set_memory_partition_mode(
@@ -1687,7 +1717,6 @@ int amdgv_gpumon_set_memory_partition_mode(
 	struct amdgv_hive_info *hive;
 	struct amdgv_gpumon_memory_partition_info curr_memory_partition_info;
 
-	bool is_change_mode = true;
 	bool is_need_reset = false;
 	int tmp = 0;
 	int ret = 0;
@@ -1720,23 +1749,14 @@ int amdgv_gpumon_set_memory_partition_mode(
 		return AMDGV_ERROR_GPUMON_SET_ALREADY;
 	}
 
+	if (amdgv_gpumon_get_hive_vf_count(adapt)) {
+		AMDGV_ERROR("set memory partition mode not allowed when active VM/VFs running!\n");
+		return AMDGV_ERROR_GPUMON_VF_BUSY;
+	}
+
 	hive = amdgv_get_xgmi_hive(adapt);
 	if (hive) {
 		oss_mutex_lock(adapt->gpumon_hive_lock);
-		amdgv_list_for_each_entry(next_adapt, &hive->adapt_list, struct amdgv_adapter, xgmi.head) {
-			is_change_mode &= amdgv_gpumon_is_change_partition_mode(next_adapt);
-		}
-	} else {
-		is_change_mode = amdgv_gpumon_is_change_partition_mode(adapt);
-	}
-
-	if (!is_change_mode) {
-		AMDGV_ERROR("set memory partition mode not allowed when active VM/VFs running!\n");
-		ret = AMDGV_ERROR_GPUMON_VF_BUSY;
-		goto unlock;
-	}
-
-	if (hive) {
 		amdgv_list_for_each_entry(next_adapt, &hive->adapt_list, struct amdgv_adapter, xgmi.head) {
 			tmp = amdgv_set_memory_partition_mode(next_adapt, memory_partition_mode);
 			if (tmp == 0)
@@ -1749,7 +1769,6 @@ int amdgv_gpumon_set_memory_partition_mode(
 			is_need_reset = true;
 	}
 
-unlock:
 	if (hive)
 		oss_mutex_unlock(adapt->gpumon_hive_lock);
 
@@ -1794,7 +1813,6 @@ int amdgv_gpumon_set_accelerator_partition_profile(
 	struct amdgv_gpumon_acccelerator_partition_profile
 		accelerator_partition_profile;
 
-	bool is_change_mode = true;
 	int ret = 0;
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
@@ -1813,23 +1831,14 @@ int amdgv_gpumon_set_accelerator_partition_profile(
 		return AMDGV_ERROR_GPUMON_SET_ALREADY;
 	}
 
+	if (amdgv_gpumon_get_hive_vf_count(adapt)) {
+		AMDGV_ERROR("set accelerator partition mode not allowed when active VM/VFs running!\n");
+		return AMDGV_ERROR_GPUMON_VF_BUSY;
+	}
+
 	hive = amdgv_get_xgmi_hive(adapt);
 	if (hive) {
 		oss_mutex_lock(adapt->gpumon_hive_lock);
-		amdgv_list_for_each_entry(next_adapt, &hive->adapt_list, struct amdgv_adapter, xgmi.head) {
-			is_change_mode &= amdgv_gpumon_is_change_partition_mode(next_adapt);
-		}
-	} else {
-		is_change_mode = amdgv_gpumon_is_change_partition_mode(adapt);
-	}
-
-	if (!is_change_mode) {
-		AMDGV_ERROR("set accelerator partition mode not allowed when active VM/VFs running!\n");
-		ret = AMDGV_ERROR_GPUMON_VF_BUSY;
-		goto unlock;
-	}
-
-	if (hive) {
 		amdgv_list_for_each_entry(next_adapt, &hive->adapt_list, struct amdgv_adapter, xgmi.head) {
 			ret |= amdgv_set_accelerator_partition_profile(next_adapt, accelerator_partition_profile_index);
 		}
@@ -1837,7 +1846,6 @@ int amdgv_gpumon_set_accelerator_partition_profile(
 		ret = amdgv_set_accelerator_partition_profile(adapt, accelerator_partition_profile_index);
 	}
 
-unlock:
 	if (hive)
 		oss_mutex_unlock(adapt->gpumon_hive_lock);
 
@@ -2479,15 +2487,11 @@ int amdgv_gpumon_set_xgmi_fb_sharing_mode(amdgv_dev_t dev,
 		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
 	}
 
-	oss_mutex_lock(adapt->gpumon_hive_lock);
-
-	amdgv_list_for_each_entry(next_adapt, &hive->adapt_list,
-				struct amdgv_adapter, xgmi.head) {
-		if (amdgv_sched_vf_assigned_to_vm(next_adapt)) {
-			ret = AMDGV_ERROR_GPUMON_VF_BUSY;
-			goto out;
-		}
+	if (amdgv_gpumon_get_hive_vf_count(adapt)) {
+		return AMDGV_ERROR_GPUMON_VF_BUSY;
 	}
+
+	oss_mutex_lock(adapt->gpumon_hive_lock);
 
 	amdgv_list_for_each_entry(next_adapt, &hive->adapt_list,
 				  struct amdgv_adapter, xgmi.head) {
@@ -2625,7 +2629,7 @@ int amdgv_gpumon_set_xgmi_fb_custom_sharing_mode(uint32_t dev_list_size,
 	amdgv_dev_t *loop_dev;
 	uint32_t share_enable_mask = 0;
 	uint32_t target_mask_list[AMDGV_XGMI_MAX_CONNECTED_NODES/AMDGV_MAX_XGMI_HIVE + 1];
-	enum amdgv_gpumon_xgmi_fb_sharing_mode current_mode;
+	enum amdgv_xgmi_fb_sharing_mode current_mode;
 	int hive_adapt_count = 0;
 
 	/* set true when entering custom mode from other modes */
@@ -2650,7 +2654,7 @@ int amdgv_gpumon_set_xgmi_fb_custom_sharing_mode(uint32_t dev_list_size,
 	current_mode = adapt->xgmi.fb_sharing_mode;
 
 	/* entering from other modes to custom mode */
-	if (adapt->xgmi.fb_sharing_mode != amdgv_gpumon_xgmi_mode_map(AMDGV_GPUMON_XGMI_FB_SHARING_MODE_CUSTOM)) {
+	if (adapt->xgmi.fb_sharing_mode != gpumon_to_xgmi_fb_sharing_mode(AMDGV_GPUMON_XGMI_FB_SHARING_MODE_CUSTOM)) {
 		non_custom_to_custom_mode = true;
 	}
 
@@ -2685,7 +2689,7 @@ int amdgv_gpumon_set_xgmi_fb_custom_sharing_mode(uint32_t dev_list_size,
 
 			if (target_mask_list[hive_adapt_count] & share_enable_mask) {
 				/* loop affected nodes*/
-				if (amdgv_sched_vf_assigned_to_vm(next_adapt)) {
+				if (amdgv_gpumon_get_vf_count(next_adapt)) {
 					ret = AMDGV_ERROR_GPUMON_VF_BUSY;
 					goto out;
 				}
@@ -2698,7 +2702,7 @@ int amdgv_gpumon_set_xgmi_fb_custom_sharing_mode(uint32_t dev_list_size,
 			hive_adapt_count++;
 		} else if (next_adapt->xgmi.custom_mode_sharing_mask & share_enable_mask) {
 			/* loop affected nodes or loop all node when initializing custom mode */
-			if (amdgv_sched_vf_assigned_to_vm(next_adapt)) {
+			if (amdgv_gpumon_get_vf_count(next_adapt)) {
 				ret = AMDGV_ERROR_GPUMON_VF_BUSY;
 				goto out;
 			}
@@ -3092,6 +3096,23 @@ static void amdgv_gpumon_log_event(struct amdgv_adapter *adapt,
 			    event->data.gpumon_data.type);
 }
 
+enum amdgv_pp_policy_soc_pstate gpumon_to_pp_policy_soc_pstate(enum amdgv_gpumon_policy_soc_pstate gpumon_state)
+{
+	switch (gpumon_state) {
+	case AMDGV_GPUMON_SOC_PSTATE_DEFAULT:
+		return SOC_PSTATE_DEFAULT;
+	case AMDGV_GPUMON_SOC_PSTATE_0:
+		return SOC_PSTATE_0;
+	case AMDGV_GPUMON_SOC_PSTATE_1:
+		return SOC_PSTATE_1;
+	case AMDGV_GPUMON_SOC_PSTATE_2:
+		return SOC_PSTATE_2;
+	case AMDGV_GPUMON_SOC_PSTATE_COUNT:
+		return SOC_PSTATE_COUNT;
+	default:
+		return SOC_PSTATE_UNKNOW;
+	}
+}
 
 int amdgv_gpumon_handle_sched_event(struct amdgv_adapter *adapt,
 				    struct amdgv_sched_event *event)
@@ -3497,7 +3518,7 @@ int amdgv_gpumon_handle_sched_event(struct amdgv_adapter *adapt,
 	case GPUMON_SET_PM_POLICY_LEVEL:
 		ret = adapt->gpumon.funcs->set_pm_policy_level(adapt,
 			event->data.gpumon_data.pm_info.p_type,
-			event->data.gpumon_data.pm_info.level);
+			gpumon_to_pp_policy_soc_pstate(event->data.gpumon_data.pm_info.level));
 		*event->data.gpumon_data.result = ret;
 		break;
 	case GPUMON_GET_DPM_POLICY_LEVEL:
@@ -3547,7 +3568,7 @@ int amdgv_gpumon_handle_sched_event(struct amdgv_adapter *adapt,
 	return ret;
 }
 
-enum amdgv_xgmi_fb_sharing_mode amdgv_gpumon_xgmi_mode_map(
+enum amdgv_xgmi_fb_sharing_mode gpumon_to_xgmi_fb_sharing_mode(
 	enum amdgv_gpumon_xgmi_fb_sharing_mode gpumon_mode)
 {
 	switch (gpumon_mode) {
@@ -3576,15 +3597,8 @@ int amdgv_gpumon_init_metrics_buf(struct amdgv_gpumon_metrics *metrics)
 
 enum amdgv_live_info_status amdgv_gpumon_export_live_data(amdgv_dev_t dev, struct amdgv_live_info_gpumon *gpumon)
 {
-	struct amdgv_adapter *adapt = (struct amdgv_adapter *)dev;
-
-	gpumon->valid = adapt->product_info.valid;
-	oss_memcpy(gpumon->model_number, adapt->product_info.model_number,
-			STRLEN_NORMAL);
-	oss_memcpy(gpumon->product_serial, adapt->product_info.product_serial,
-			STRLEN_NORMAL);
-	oss_memcpy(gpumon->fru_id, adapt->product_info.fru_id, STRLEN_NORMAL);
-
+	// Product info will be retrieved during import stage.
+	// The function currently does nothing.
 	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
 }
 
@@ -3599,7 +3613,9 @@ enum amdgv_live_info_status amdgv_gpumon_import_live_data(amdgv_dev_t dev, struc
 		return AMDGV_LIVE_INFO_STATUS_FEATURE_NOT_SUPPORTED;
 	}
 
-	adapt->product_info.visit = false;
+	if (adapt->pp.pp_funcs &&
+			adapt->pp.pp_funcs->get_fru_product_info)
+		adapt->pp.pp_funcs->get_fru_product_info(adapt);
 
 	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
 }

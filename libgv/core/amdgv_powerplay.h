@@ -106,6 +106,20 @@ enum pp_rma_reason {
 	PP_RMA_BAD_PAGE_THRESHOLD = 0,
 };
 
+struct pp_smu_dpm_policy_desc {
+	uint32_t policy_id;
+	char *policy_description;
+};
+
+struct pp_smu_dpm_policy {
+	enum amdgv_pp_pm_policy policy_type;
+	struct pp_smu_dpm_policy_desc policies[AMDGV_GPUMON_SOC_PSTATE_COUNT];
+	uint32_t level_mask;
+	int current_level;
+	uint32_t num_supported;
+	int (*set_policy)(struct amdgv_adapter *adapt, int level);
+};
+
 struct amdgv_pp_funcs {
 	int (*smu_init)(struct amdgv_adapter *adapt);
 	int (*smu_fini)(struct amdgv_adapter *adapt);
@@ -175,6 +189,23 @@ struct amdgv_pp_funcs {
 	int (*get_shutdown_temperature)(struct amdgv_adapter *adapt, int *val);
 	int (*prepare_unload)(struct amdgv_adapter *adapt);
 	int (*set_workload_profile)(struct amdgv_adapter *adapt);
+	int (*get_valid_mca_bank_count)(struct amdgv_adapter *adapt,
+		int type, uint32_t *count);
+	int (*read_mca_bank_reg32)(struct amdgv_adapter *adapt,
+		int type, int idx, int offset, uint32_t *val);
+	int (*gpu_mode1_reset)(struct amdgv_adapter *adapt);
+	int (*smu_get_pm_policy)(struct amdgv_adapter *adapt,
+			    enum amdgv_pp_pm_policy p_type,
+			    struct pp_smu_dpm_policy **policy_int);
+	int (*smu_compare_and_set_pm_policy)(struct amdgv_adapter *adapt,
+					enum amdgv_pp_pm_policy p_type,
+					int level);
+	int (*smu_error_inject_set_pm_policy)(struct amdgv_adapter *adapt,
+					 enum amdgv_pp_pm_policy p_type,
+					 int level);
+	void (*smu_error_inject_restore_pm_policy)(struct amdgv_adapter *adapt,
+					     enum amdgv_pp_pm_policy p_type);
+	int (*reset_vf_arbiters)(struct amdgv_adapter *adapt, uint32_t idx_vf);
 };
 
 struct amdgv_pp_metrics_cache {

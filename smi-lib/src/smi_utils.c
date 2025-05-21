@@ -447,24 +447,11 @@ bool is_uuid_valid(const char *uuid)
 	}
 	return true;
 }
+
 amdsmi_status_t amdsmi_read_lib_version(amdsmi_version_t *lib_version) {
-	FILE *file = fopen(VERSION_FILE_PATH, "r");
-	if (file == NULL) {
-		perror("Failed to open VERSION file");
-		// Set default values in case of failure
-		lib_version->major = 0;
-		lib_version->minor = 0;
-		lib_version->release = 0;
-		return AMDSMI_STATUS_IO;
-	}
+    lib_version->major = AMDSMI_VERSION_MAJOR;
+    lib_version->minor = AMDSMI_VERSION_MINOR;
+    lib_version->release = AMDSMI_VERSION_RELEASE;
 
-	char line[AMDSMI_MAX_STRING_LENGTH];
-	while (fgets(line, sizeof(line), file)) {
-		sscanf(line, "major=%d", &lib_version->major);
-		sscanf(line, "minor=%d", &lib_version->minor);
-		sscanf(line, "release=%d", &lib_version->release);
-	}
-	fclose(file);
-
-	return AMDSMI_STATUS_SUCCESS;
+    return AMDSMI_STATUS_SUCCESS;
 }

@@ -1,0 +1,694 @@
+#!/bin/bash
+#      ^^^^- bash, not /bin/sh
+
+#
+# Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
+#Keymarkers in comments
+json_start=*"/* <GEN JSON START> */"*
+json_end=*"/* <GEN JSON END> */"*
+comment_start=*"/* <"*
+comment_end=*"> */"
+array_end=*"];"*
+block_end=*"<BLK END>"*
+obj_end=*"<OBJECT END>"*
+idx_map_start=*"<IDX MAP>"*
+idx_map_end=*"<IDX MAP END>"*
+feature_start=*"/* <FEATURE START> */"*
+feature_end=*"/* <FEATURE END> */"*
+
+#Keywords in comments
+keywords=("size" "type" "blk" "name" "rep" "pos" "base" "valmap" "idxmap" "value")
+
+#formatting variables
+tab="	"
+NL=$'\n'
+tab_str=""
+
+#Variables used by script
+MINLEN=1
+let offset=0;
+
+#handle array and nested arrays
+rep_times=(0 0 0 0 0)
+rep_len=(0 0 0 0 0)
+rep_start=(0 0 0 0 0)
+rep_nest=0
+
+#handlei/track IDX MAP
+inside_idx_map=0
+idx_map_str=""
+
+#handle BLK/OBJ and nested BLK/OBJs
+inside_obj=(0 0 0 0 0)
+idx_obj=("" "" "" "" "")
+obj_nest=0
+inside_blk=(0 0 0 0 0)
+idx_blk=("" "" "" "" "")
+blk_nest=0
+
+#Input/Ouptut file names
+input_file=""
+output_file=""
+
+compile_flags=""
+
+error_ctg_start="error_category("*
+error_ctg_end="};"
+error_entry_start=*"add_entry("*
+error_entry_end=*"),"*
+in_error_ctg=0
+in_error_entry=0
+entry_start=""
+entry_count=0
+first_category=1
+error_elements=("subcode" "arg type" "severity" "text")
+error_categories=("NOT_USED" "DRIVER" "RESET" "SCHED" "VBIOS" "ECC" "PP" "IOV" "VF" "FW" "GPU" "GUARD" "GPUMON" "MMSCH" "XGMI")
+
+error_cateogry_count=0
+error_entry_count=0
+error_set_msb=$(( 1 << 31 ))
+error_subcode_len=12
+
+host_tracelog_files_name() {
+
+	#input file name
+	script_dir="$(dirname $(readlink -f $0))"
+	input_file="${script_dir}/core/amdgv_diag_data_trace_log.h"
+
+	#geenrate md5 chksum
+	MD5=`md5sum $input_file | awk '{ print $1 }'`
+	MD5_0=0x${MD5:16:16}
+	MD5_1=0x${MD5:0:16}
+
+	#generate ouput filename
+	host_info_min_ver=`grep AMDGV_RD_HOST_TRACELOG_MINOR_VERSION $input_file | head -n 1 | cut -d x -f2`
+	host_info_maj_ver=`grep AMDGV_RD_HOST_TRACELOG_MAJOR_VERSION $input_file | head -n 1 | cut -d x -f2`
+	output_file="${script_dir}/libgv_tracelog_${host_info_maj_ver}.${host_info_min_ver}_$MD5.json"
+	compile_flags+="-D TRACE_LOG_MD5_0=$MD5_0 -D TRACE_LOG_MD5_1=$MD5_1 "
+}
+
+host_error_blk_gen_files_name() {
+
+	#input file name
+	script_dir="$(dirname $(readlink -f $0))"
+	input_file="${script_dir}/core/amdgv_error_subcode.c"
+	input_version_file="${script_dir}/core/amdgv_diag_data.h"
+
+	#geenrate md5 chksum
+	MD5=`md5sum $input_file | awk '{ print $1 }'`
+	MD5_0=0x${MD5:16:16}
+	MD5_1=0x${MD5:0:16}
+
+	#generate ouput filename
+	host_info_min_ver=`grep AMDGV_RD_HOST_ERROR_DUMP_MINOR_VERSION $input_version_file | head -n 1 | cut -d x -f2`
+	host_info_maj_ver=`grep AMDGV_RD_HOST_ERROR_DUMP_MAJOR_VERSION $input_version_file | head -n 1 | cut -d x -f2`
+	output_file="${script_dir}/libgv_error_dump_${host_info_maj_ver}.${host_info_min_ver}_$MD5.json"
+	compile_flags+="-D ERROR_LOG_MD5_0=$MD5_0 -D ERROR_LOG_MD5_1=$MD5_1 "
+}
+
+host_info_blk_gen_files_name() {
+
+	#input file name
+	script_dir="$(dirname $(readlink -f $0))"
+	input_file="${script_dir}/core/amdgv_diag_data_gen_info.h"
+
+	#geenrate md5 chksum
+	MD5=`md5sum $input_file | awk '{ print $1 }'`
+	MD5_0=0x${MD5:16:16}
+	MD5_1=0x${MD5:0:16}
+
+	#generate ouput filename
+	host_info_min_ver=`grep AMDGV_RD_HOST_GEN_INFORMATION_MINOR_VERSION $input_file | head -n 1 | cut -d x -f2`
+	host_info_maj_ver=`grep AMDGV_RD_HOST_GEN_INFORMATION_MAJOR_VERSION $input_file | head -n 1 | cut -d x -f2`
+	output_file="${script_dir}/libgv_gen_info_${host_info_maj_ver}.${host_info_min_ver}_${MD5}.json"
+	compile_flags+="-D GEN_INFO_MD5_0=$MD5_0 -D GEN_INFO_MD5_1=$MD5_1 "
+}
+
+process_array_end() {
+	if [[ $rep_nest != 0 ]]; then
+		if [[ ${rep_times[$rep_nest]} != 0 ]]; then
+			let offset=${rep_start[$rep_nest]}+$((${rep_times[$rep_nest]} * ${rep_len[$rep_nest]}))
+			rep_times[$rep_nest]=0
+			rep_len[$rep_nest]=0
+			rep_start[$rep_nest]=0
+			let rep_nest=$rep_nest-1
+		fi
+	fi
+}
+
+process_array_start() {
+	let rep_nest=$rep_nest+1
+	rep_times[$rep_nest]="${str:$idx:$val_range}"
+	rep_start[$rep_nest]=$offset
+}
+
+print_to_file() {
+	if [[ -n $print_str ]]; then
+		echo "$print_str" >> $output_file
+	fi
+	print_str=$json_str
+	json_str=""
+}
+
+process_feature_end() {
+	retval=0
+	if [[ $line == $feature_end ]]; then
+		#Print Json string generated for previous line to file
+		print_to_file
+
+		tab_str=${tab_str:1}
+		print_str=${print_str%*,}
+		json_str="$tab_str]},"
+		in_json=0
+		retval=1
+		bitmask_str=""
+	fi
+
+	return $retval
+}
+
+process_block_end() {
+	retval=0
+	if [[ $line == $block_end || $line == $obj_end ]]; then
+		#Print Json string generated for previous line to file
+		print_to_file
+
+		tab_str=${tab_str:1}
+		if [[ $line == $obj_end ]]; then
+			inside_obj[$obj_nest]=0
+			if [[ -n ${idx_obj[$obj_nest]} ]]; then
+				json_str=${json_str%*,}
+				json_str+="$tab_str],${NL}$tab_str$tab${idx_obj[$obj_nest]}}},"
+				idx_ob[$obj_nest]=""
+			else
+				print_str=${print_str%*,}
+				json_str="$tab_str]}},"
+			fi
+			let obj_nest=$obj_nest-1
+		else
+			inside_blk[$blk_nest]=0
+			if [[ -n ${idx_blk[$blk_nest]} ]]; then
+				json_str+="${NL}$tab_str$tab{${idx_blk[$blk_nest]}}]},"
+				idx_blk[$blk_nest]=""
+			else
+				print_str=${print_str%*,}
+				json_str="$tab_str]},"
+			fi
+			let blk_nest=$blk_nest-1
+		fi
+		retval=1
+	fi
+
+	if [[ $line == $array_end ]]; then
+		process_array_end
+		retval=1
+	fi
+
+	if [[ $line == $json_end ]]; then
+		print_str=${print_str%*,}
+		in_json=0
+		retval=1
+	fi
+
+	return $retval
+}
+
+process_idx_map() {
+	retval=0
+	if [[ $line == $idx_map_end ]]; then
+		tab_str=${tab_str:1}
+		idx_str=${idx_str%*,}
+		idx_str+="${NL}$tab_str]"
+		inside_idx_map=0
+		retval=1
+	fi
+
+	if (( inside_idx_map )); then
+		line=${line%>*}
+		line=${line#*<}
+		idx_str+="${NL}$tab_str{\"${line%:*}\": \"${line#*:}\"},"
+		retval=1
+	fi
+
+	if [[ $line == $idx_map_start ]]; then
+		inside_idx_map=1
+		idx_str="\"IDX MAP\" : ["
+		tab_str+=$tab
+		retval=1
+	fi
+	return $retval
+}
+
+clear_all_var() {
+	json_str=""
+	name_str=""
+	has_blk=0
+	has_obj=0
+}
+
+calc_error_code () {
+	error_code=$(( error_category_count << 12 ))
+	error_code=$(( error_code | error_value ))
+	error_code=$(( error_code | error_entry_count ))
+	return $error_code
+}
+
+process_error_category_start () {
+	in_error_ctg=1
+	tab_str+=$tab
+	line=${line%\)*}
+	line=${line#*\(}
+	idx=0
+	for i in "${error_categories[@]}" ; do
+		if [[ "$i" == "$line" ]]; then
+			error_category_count=$idx
+			break;
+		fi
+		idx=$idx+1
+	done
+	if (( $first_category )); then
+		json_str="$tab_str\"$line\":["
+	else
+		json_str="$tab_str,\"$line\":["
+	fi
+	first_category=0
+}
+
+process_error_category_end () {
+	in_error_ctg=0
+	error_entry_count=0
+	print_str=${print_str%*,}
+	json_str="$tab_str]"
+	tab_str=${tab_str:1}
+}
+
+process_error_entry_start () {
+	in_error_entry=1
+	tabstr+=$tab
+	entry_str="$tab_str{"
+	entry_count=0
+
+	#calcualte error code
+	error_code=$(( error_category_count << error_subcode_len ))
+	error_code=$(( error_code | error_set_msb ))
+	error_code=$(( error_code | error_entry_count ))
+
+	entry_str+="\"value\":\"$error_code\"",
+}
+
+process_error_entry () {
+	line=${line#*\(}
+	#tab_str+=$tab
+	while true; do
+    		if [[ -z $line ]]; then
+			if [ $entry_count == 4 ]; then
+				entry_str=${entry_str%*,}
+				in_error_entry=0
+			fi
+        		break
+    		fi
+		entry=${line%%,*}
+		line=${line#*,}
+		entry_str+="\"${error_elements[$entry_count]}\":\"$entry\"",
+		entry_count=$entry_count+1
+	done
+}
+
+process_error_entry_end () {
+	line=${line%\)*}
+	if [[ "${line#*","}" != "$line" ]]; then
+		while true; do
+			if (( $entry_count == 3 )); then
+				entry_str+="\"${error_elements[$entry_count]}\":$line"
+				break;
+			fi
+			if [[ "${line#*","}" == "$line" ]]; then
+				entry_str+="\"${error_elements[$entry_count]}\":$line"
+				break;
+			else
+				entry=${line%%,*}
+				line=${line#*,}
+				entry_str+="\"${error_elements[$entry_count]}\":\"$entry\"",
+				if [[ -z $line || -z $entry ]]; then
+					entry_str=${entry_str%*,}
+					break
+				fi
+			fi
+			entry_count=$entry_count+1
+		done
+	else
+		entry_str+="\"${error_elements[$entry_count]}\":$line"
+	fi
+
+	entry_str+="},"
+	json_str="$tab_str$entry_str"
+	in_error_entry=0
+}
+
+generate_tracelog_json () {
+	#generate input/output file names for host tracelog block
+	host_tracelog_files_name
+
+	#Make sure the input file exisit
+	if [ ! -f "$input_file" ]; then
+		echo "$input_file not found"
+		return;
+	fi
+
+	#Empty out the output file
+	echo "" > $output_file
+
+	print_str="{\"Tracelog\":{ \"Features\": ["
+	json_str=""
+	tab_str=""
+	bitmask_str=""
+	idx_str=""
+
+	#start reading from file
+	while IFS= read -r line; do
+		#only parse inside <GEN JSON START>
+		[[ $line == $feature_start ]] && in_json=1
+		if (( in_json )); then
+
+			#check if the line containts comment in format /* < -- > */
+			if [[ $line == $comment_start ]]; then
+
+				#Process IDX MAP if present i.e., <IDX MAP>
+				process_idx_map
+				idx_map_found=$?
+				if [ "$idx_map_found" == 1 ]; then
+					if [[ $line == $idx_map_end ]]; then
+						json_str=$tab_str"{$idx_str},"
+						idx_str=""
+					fi
+				fi
+
+				if [ "$idx_map_found" == 0 ]; then
+					process_feature_end
+					end_found=$?
+				fi
+
+				#Print Json string generated for previous line to file
+				print_to_file
+
+				#if not FEATURE END then process as field comment
+				if [[ "$end_found" == 0 && "$idx_map_found" == 0 ]]; then
+
+					#Clear all the variables
+					clear_all_var
+
+					#Get the contents except /* < > */
+					str=${line%>*}
+					str=${str#*<}
+
+					#Process the comment keyword by keyword
+					while [[ -n $str ]]; do
+						for i in "${keywords[@]}" ; do
+							idx=`expr match "$str" $i":"`
+							if (( idx )); then
+								val_idx=`expr index "$str" ";"`
+								let val_range=$val_idx-$idx-1
+								[ -n "$json_str" ] && json_str+=","
+								json_str+="\"$i\": \"${str:$idx:$val_range}\""
+
+								#process the type field
+								if [[ "$i" == "type" ]]; then
+									#if the type is bitmask set flag so that bitfields can be processed if present
+									if [[ ${str:$idx:$val_range} == "BITMASK" ]]; then
+										has_bitmask=1
+									fi
+
+								fi
+								break
+							fi
+						done
+
+						#Remove ; and space from the field value
+						str=${str#*;}
+						str=${str:1}
+
+					done #while [[ -n $str ]];
+
+					if [[ -n "$json_str" ]]; then
+						if (( has_bitmask )); then
+							if [[ -z "$bitmask_str" ]]; then
+								bitmask_str=$tab_str"{$json_str, \"Code\": ["
+								json_str=$bitmask_str
+								tab_str+=$tab
+							else
+								json_str=$tab_str"{$json_str},"
+							fi
+						else
+								json_str=$tab_str"{$json_str},"
+						fi #if (( has_blk ))
+					fi #if [[ -n "$json_str" ]]
+				fi #if [[ "$end_found" == 0 ]]
+
+			fi #if [[ $line == $comment_start ]]
+		fi #if (( in_json ))
+	done < $input_file
+	print_str=${print_str%*,}
+	print_str+="${NL}]}}"
+	print_to_file
+}
+
+generate_error_json () {
+	#generate input/output file names for host info block
+	host_error_blk_gen_files_name
+
+	#Make sure the input file exisit
+	if [ ! -f "$input_file" ]; then
+		echo "$input_file not found"
+		return;
+	fi
+
+	#Empty out the output file
+	echo "" > $output_file
+
+	print_str="{\"Errors\":{"
+	json_str=""
+	tab_str=""
+	#error_category_count=-1
+
+	#start reading from file
+	while read -r line; do
+
+		#Print Json string generated for previous line to file
+		print_to_file
+
+		if [[ $line == $error_ctg_start ]]; then
+			process_error_category_start
+			#error_category_count=$error_category_count+1
+			error_entry_count=0
+		fi #if [[ $line == $error_ctg_start ]];
+		if (( in_error_ctg )); then
+
+
+			if [[ $line == $error_entry_start ]]; then
+				process_error_entry_start
+				process_error_entry
+				error_entry_count=$error_entry_count+1
+			elif [[ $line == $error_entry_end ]]; then
+				process_error_entry_end
+				entry_count=0
+			elif [[ $line == $error_ctg_end ]]; then
+				if [ $in_error_ctg == 1 ]; then
+					process_error_category_end
+				fi
+			else
+				if [ $in_error_entry == 1 ]; then
+					process_error_entry
+				fi
+			fi #if [[ $line == $error_entry_start ]]
+		fi #if (( in_error_ctg ))
+	done < $input_file
+	if [[ -n $print_str ]]; then
+		print_str=${print_str%*,}
+	fi
+	print_str="}}"
+	print_to_file
+}
+
+generate_json () {
+
+	#generate input/output file names for host info block
+	host_info_blk_gen_files_name
+
+	#Make sure the input file exisit
+	if [ ! -f "$input_file" ]; then
+		offset=0;
+		return;
+	fi
+
+	#Empty out the output file
+	echo "" > $output_file
+
+	#start reading from file
+	while IFS= read -r line; do
+		#only parse inside <GEN JSON START>
+		[[ $line == $json_start ]] && in_json=1
+		if (( in_json )); then
+
+			#check if the line containts comment in format /* < -- > */
+			if [[ $line == $comment_start ]]; then
+
+				#Add tab to the output if inside block or object
+				if (( has_blk || has_obj )); then
+					tab_str+=$tab
+				fi
+
+				#Process IDX MAP if present i.e., <IDX MAP>
+				process_idx_map
+				idx_map_found=$?
+
+				#if not IDX MAP then check for block/object end i.e <OBJECT END> or <BLOCK END>
+				if [ "$idx_map_found" == 0 ]; then
+					process_block_end
+					end_found=$?
+				fi
+
+				#Print Json string generated for previous line to file
+				print_to_file
+
+				#if not IDX MAP or OBJECT/BLOCK END then process as field comment
+				if [[ "$end_found" == 0 && "$idx_map_found" == 0 ]]; then
+
+					#Clear all the variables
+					clear_all_var
+
+					#Get the contents except /* < > */
+					str=${line%>*}
+					str=${str#*<}
+
+					#Process the comment keyword by keyword
+					while [[ -n $str ]]; do
+						for i in "${keywords[@]}" ; do
+							idx=`expr match "$str" $i":"`
+							if (( idx )); then
+								val_idx=`expr index "$str" ";"`
+								let val_range=$val_idx-$idx-1
+								if [[ "$i" == "name" ]]; then
+									name_str=${str:$idx:$val_range}
+								else
+									[ -z "$json_str" ] && json_str="{" || json_str+=","
+									json_str+="\"$i\": \"${str:$idx:$val_range}\""
+								fi
+								if [[ "$i" == "blk" ]]; then
+									let blk_nest=$blk_nest+1
+									inside_blk[$blk_nest]=1
+									if [[ -n "$idx_str" ]]; then
+										idx_blk[$blk_nest]=$idx_str
+										idx_str=""
+									fi
+									has_blk=1
+								fi
+
+								#process the size field for offset calculation
+								#In case of array add the size*Rep times
+								if [[ "$i" == "size" ]]; then
+									len="${str:$idx:$val_range}"
+									if [[ ${rep_times[$rep_nest]} != 0 ]]; then
+										let rep_len[$rep_nest]=${rep_len[$rep_nest]}+len;
+									fi
+								fi
+
+								#process the Rep field i.e., the object is an array
+								if [[ "$i" == "rep" ]]; then
+									process_array_start
+								fi
+
+								#process the type field
+								if [[ "$i" == "type" ]]; then
+
+									#if the type is bitmask set flag so that bitfields can be processed if present
+									if [[ ${str:$idx:$val_range} == "BITMASK" ]]; then
+										has_bitmask=1
+									fi
+
+									#if the type is object start new block
+									if [[ ${str:$idx:$val_range} == "OBJECT" ]]; then
+										has_obj=1
+										let obj_nest=$obj_nest+1
+										inside_obj[$obj_nest]=1
+										if [[ -n "$idx_str" ]]; then
+											idx_obj[$obj_nest]="$idx_str"
+											idx_str=""
+										fi
+									fi
+								fi
+								break
+							fi
+						done
+
+						#Remove ; and space from the field value
+						str=${str#*;}
+						str=${str:1}
+
+					done #while [[ -n $str ]];
+
+					if [[ -n "$json_str" ]]; then
+						if (( has_blk )); then
+							json_str="$tab_str$json_str,\"$name_str\": ["
+						elif (( has_obj )); then
+							json_str=$tab_str"{\"$name_str\": $json_str, \"members\": ["
+						elif (( has_bitmask )); then
+							if [[ -z "$bitmask_str" ]]; then
+								bitmask_str=$tab_str"{\"$name_str\": $json_str, \"offset\": \"$offset\", \"bitmask\": ["
+								json_str=$bitmask_str
+								tab_str+=$tab
+								let offset=offset+len
+							else
+								json_str=$tab_str"{\"$name_str\": $json_str}},"
+							fi
+						else
+							if [[ -n "$idx_str" ]]; then
+								json_str=$tab_str"{\"$name_str\": $json_str, \"offset\": \"$offset\", $idx_str}},"
+								idx_str=""
+							else
+								json_str=$tab_str"{\"$name_str\": $json_str, \"offset\": \"$offset\"}},"
+							fi
+							let offset=offset+len
+						fi #if (( has_blk ))
+					fi #if [[ -n "$json_str" ]]
+				fi #if [[ "$end_found" == 0 && "$idx_map_found" == 0 ]]
+
+			#if not a comment then it can still be the end of arr i.e. "];" or bitmask
+			else
+				if [[ $line == $array_end ]]; then
+					process_array_end
+				fi
+				if (( has_bitmask )); then
+					print_str=${print_str%*,}
+					has_bitmask=0
+					bitmask_str=""
+					tab_str=${tab_str:1}
+					json_str=$tab_str"]}},"
+				fi
+			fi #if [[ $line == $comment_start ]]
+		fi #if (( in_json ))
+	done < $input_file
+}
+generate_json
+generate_error_json
+generate_tracelog_json
+echo $compile_flags
+

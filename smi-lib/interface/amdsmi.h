@@ -1036,6 +1036,9 @@ typedef enum {
 	AMDSMI_METRIC_NAME_PCIE_LINK_SPEED,
 	AMDSMI_METRIC_NAME_PCIE_LINK_WIDTH,
 
+	AMDSMI_METRIC_NAME_DRAM_BANDWIDTH,
+	AMDSMI_METRIC_NAME_MAX_DRAM_BANDWIDTH,
+
 	AMDSMI_METRIC_NAME_UNKNOWN
 } amdsmi_metric_name_t;
 
@@ -1458,6 +1461,12 @@ typedef struct {
 	uint32_t reserved[10];
 } amdsmi_link_topology_t;
 
+typedef struct {
+    uint32_t count;
+    amdsmi_processor_handle processor_list[AMDSMI_MAX_DEVICES];
+    uint64_t reserved[15];
+} amdsmi_topology_nearest_t;
+
 typedef union {
 	struct cap_ {
 		uint32_t mode_custom_cap :1;
@@ -1626,9 +1635,18 @@ typedef struct {
     uint32_t              flags;            /* Reserved */
     uint64_t              persistence_info; /* Reserved */
     uint8_t               reserved[12];     /* Reserved */
-} amdsmi_cper_hdr;
+} amdsmi_cper_hdr_t;
 
 #pragma pack(pop)
+
+typedef struct {
+    uint8_t is_iolink_coherent; //!< 1 = true, 0 = false, UINT8_MAX = Not defined.
+    uint8_t is_iolink_atomics_32bit;
+    uint8_t is_iolink_atomics_64bit;
+    uint8_t is_iolink_dma;
+    uint8_t is_iolink_bi_directional;
+    uint64_t reserved[3];
+} amdsmi_p2p_capability_t;
 
 /*****************************************************************************/
 /** @defgroup init Library Initialization
@@ -2566,6 +2584,34 @@ amdsmi_status_t amdsmi_get_link_topology(amdsmi_processor_handle processor_handl
 					 amdsmi_link_topology_t *topology_info);
 
 /**
+ *  @brief          Retrieve the set of GPUs that are nearest to a given device
+ *                  at a specific interconnectivity level.
+ *
+ *  @platform{gpu_bm_linux}  @platform{host}
+ *
+ *  @details        Once called topology_nearest_info will get populated with a list of
+ *                  all nearest devices for a given link_type. The list has a count of
+ *                  the number of devices found and their respective handles/identifiers.
+ *
+ *  @param[in]      processor_handle The identifier of the given device.
+ *
+ *  @param[in]      link_type The amdsmi_link_type_t level to search for nearest GPUs.
+ *
+ *  @param[in,out]  topology_nearest_info
+ *                  .count;
+ *                    - When zero, is set to the number of matching GPUs such that .processor_list can
+ *                    be malloc'd.
+ *                    - When non-zero, .processor_list will be filled with count number of processor_handle.
+ *
+ *  @param[out]     .processor_list An array of processor_handle for GPUs found at level.
+ *
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail.
+ */
+amdsmi_status_t amdsmi_get_link_topology_nearest(amdsmi_processor_handle processor_handle,
+						amdsmi_link_type_t link_type,
+						amdsmi_topology_nearest_t *topology_nearest_info);
+
+/**
  *  @brief Return XGMI capabilities
  *
  *  @param[in] processor_handle PF of a processor for which to query
@@ -2635,6 +2681,38 @@ amdsmi_status_t amdsmi_set_xgmi_fb_sharing_mode(amdsmi_processor_handle processo
  */
 amdsmi_status_t amdsmi_set_xgmi_fb_sharing_mode_v2(amdsmi_processor_handle *processor_list, uint32_t num_processors,
 						amdsmi_xgmi_fb_sharing_mode_t mode);
+
+
+/**
+ *  @brief Retrieve connection type and P2P capabilities between 2 GPUs
+ *
+ *  @platform{gpu_bm_linux} @platform{host} @platform{guest_1vf}  @platform{guest_mvf}
+ *
+ *  @details Given a source processor handle @p processor_handle_src and
+ *  a destination processor handle @p processor_handle_dst, a pointer to an amdsmi_link_type_t @p type,
+ *  and a pointer to amdsmi_p2p_capability_t @p cap. This function will write the connection type,
+ *  and io link capabilities between the device
+ *  @p processor_handle_src and @p processor_handle_dst to the memory
+ *  pointed to by @p cap and @p type.
+ *
+ *  @param[in] processor_handle_src the source processor handle
+ *
+ *  @param[in] processor_handle_dst the destination processor handle
+ *
+ *  @param[in,out] type A pointer to an ::amdsmi_link_type_t to which the
+ *  type for the connection should be written.
+ *
+ *  @param[in,out] cap A pointer to an ::amdsmi_p2p_capability_t to which the
+ *  io link capabilities should be written.
+ *
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
+ */
+amdsmi_status_t
+amdsmi_topo_get_p2p_status(amdsmi_processor_handle processor_handle_src,
+                           amdsmi_processor_handle processor_handle_dst,
+                           amdsmi_link_type_t *type, amdsmi_p2p_capability_t *cap);
+
+
 
 /** @} */  // end of xgmi
 
@@ -2781,7 +2859,7 @@ amdsmi_set_gpu_accelerator_partition_profile(amdsmi_processor_handle processor_h
  *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
  */
 amdsmi_status_t
-amdsmi_gpu_get_cper_entries(amdsmi_processor_handle processor_handle, uint32_t severity_mask, char *cper_data,
-	uint64_t *buf_size, amdsmi_cper_hdr** cper_hdrs, uint64_t *entry_count, uint64_t *cursor);
+amdsmi_get_gpu_cper_entries(amdsmi_processor_handle processor_handle, uint32_t severity_mask, char *cper_data,
+	uint64_t *buf_size, amdsmi_cper_hdr_t** cper_hdrs, uint64_t *entry_count, uint64_t *cursor);
 
 #endif // __AMDSMI_H__

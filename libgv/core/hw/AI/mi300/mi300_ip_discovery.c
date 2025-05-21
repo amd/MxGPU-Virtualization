@@ -34,6 +34,7 @@
 
 static const uint32_t this_block = AMDGV_SECURITY_BLOCK;
 
+#define MI300_IP_DISCOVERY_SIZE   0x2800
 #define mmRCC_CONFIG_MEMSIZE    0xde3
 #define mmMP0_SMN_C2PMSG_33     0x16061
 #define PSP_C2P_MAILBOX_CLOSED  0xFFFFFFFF
@@ -258,6 +259,8 @@ static int mi300_read_ip_discovery(struct amdgv_adapter *adapt,
 	size_dw = (offset + size) >> 2;
 	for (i = (offset >> 2); i < size_dw; i++, addr += 4)
 		adapt->ip_discovery.pf_copy.data[i] = READ_FB32(addr);
+
+	oss_memcpy(adapt->ip_discovery.origin_pf_copy.data, adapt->ip_discovery.pf_copy.data, size);
 
 	return 0;
 }
@@ -492,6 +495,7 @@ static int mi300_parse_ip_baddr(struct amdgv_adapter *adapt)
 			mi300_hw_ip_baddr(adapt, ip, pf_copy->ihdr);
 		}
 	}
+
 	return 0;
 }
 
@@ -545,8 +549,8 @@ static int mi300_parse_ip_discovery(struct amdgv_adapter *adapt)
 	case (0x74A1): /* MI300 EP */
 	case (0x74A5): /* MI325 */
 	case (0x74A2): /* MI308X */
-	case (0x74A8): /* MI308X */
 	case (0x74A9): /* MI300X HC */
+	case (0x74A8): /* MI308X */
 		adapt->mcp.num_aid = 4;
 		break;
 	default:
@@ -954,10 +958,6 @@ int mi300_discover_ip(struct amdgv_adapter *adapt)
 	char asic_name[AMDGV_SMI_ASIC_NAME];
 	uint32_t supported_flags = adapt->config.caps.supported_fields_flags;
 
-	/* skip during live update import, it is already called during sw_init() */
-	if (adapt->status == AMDGV_STATUS_SW_INIT && adapt->opt.skip_hw_init)
-		return 0;
-
 	oss_memcpy(asic_name, adapt->config.name, AMDGV_SMI_ASIC_NAME);
 
 	/* clear IP discovery parsing on init */
@@ -966,10 +966,15 @@ int mi300_discover_ip(struct amdgv_adapter *adapt)
 	oss_memcpy(adapt->config.name, asic_name, AMDGV_SMI_ASIC_NAME);
 	adapt->config.caps.supported_fields_flags = supported_flags;
 
-	/* read the IP Discovery Data from the Frame Buffer */
-	if (mi300_read_ip_discovery(adapt, 0, AMDGV_IP_DISCOVERY_SIZE))
-		return AMDGV_FAILURE;
+	if (!adapt->opt.skip_hw_init) {
+		/* read the IP Discovery Data from the Frame Buffer */
+		if (mi300_read_ip_discovery(adapt, 0, AMDGV_IP_DISCOVERY_SIZE))
+			return AMDGV_FAILURE;
 
+	} else {
+		if (amdgv_import_data_by_op(adapt, AMDGV_LIVE_INFO_DATA__IP_DISCOVERY) != AMDGV_LIVE_INFO_STATUS_SUCCESS)
+			return AMDGV_FAILURE;
+	}
 	/* count IPs (XCCs, SDMAs, VCNs) and perform checksums */
 	if (mi300_parse_ip_discovery(adapt))
 		return AMDGV_FAILURE;
@@ -1122,16 +1127,21 @@ static int mi300_ip_discovery_sw_init(struct amdgv_adapter *adapt)
 {
 	mi300_setup_common_timeout(adapt);
 
+	adapt->ip_discovery.enable_live_update = true;
+
 	adapt->ip_discovery.copy_to_vf = mi300_copy_ip_data_to_vf;
 	adapt->ip_discovery.discover_ip = mi300_discover_ip;
-
+	adapt->ip_discovery.size = MI300_IP_DISCOVERY_SIZE;
 	adapt->ip_discovery.pf_copy.data =
+		(uint32_t *)oss_zalloc(AMDGV_IP_DISCOVERY_SIZE);
+	adapt->ip_discovery.origin_pf_copy.data =
 		(uint32_t *)oss_zalloc(AMDGV_IP_DISCOVERY_SIZE);
 	adapt->ip_discovery.vf_copy.data =
 		(uint32_t *)oss_zalloc(AMDGV_IP_DISCOVERY_SIZE);
 
 	if (adapt->ip_discovery.pf_copy.data == NULL ||
-	    adapt->ip_discovery.vf_copy.data == NULL)
+		adapt->ip_discovery.origin_pf_copy.data == NULL ||
+		adapt->ip_discovery.vf_copy.data == NULL)
 		return AMDGV_FAILURE;
 
 	if (mi300_discover_ip(adapt))
@@ -1150,7 +1160,10 @@ static int mi300_ip_discovery_sw_fini(struct amdgv_adapter *adapt)
 		oss_free(adapt->ip_discovery.vf_copy.data);
 		adapt->ip_discovery.vf_copy.data = NULL;
 	}
-
+	if (adapt->ip_discovery.origin_pf_copy.data) {
+		oss_free(adapt->ip_discovery.origin_pf_copy.data);
+		adapt->ip_discovery.origin_pf_copy.data = NULL;
+	}
 	return 0;
 }
 

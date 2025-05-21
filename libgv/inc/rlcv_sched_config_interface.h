@@ -85,7 +85,7 @@ typedef struct scheduler_memory_descriptor {
   /* valid when scheduler_mode=1 or 2 and config_debug_dump_log = 1.
    * Debug dump logs IDLE/SAVE/LOAD/RUN command execution time and time of VF/PF in RUN state of each world switch loops. */
   struct buffer_descriptor debug_dump_log;
-  /* valid when scheduler_mode = 0 and config_ts_log = 1. By default RLCV won't support the ts_log feature, it needs TSL_SUPPORT build flag enabled RLCV.
+  /* valid when scheduler_mode = 0 and config_ts_log = 1.
    * ts_log feature logs time stamps of each sub steps in world switch. The feature is to analysis and turing world switch latency.
    * Currently, ts_log is manual switch only feature. */
   struct buffer_descriptor ts_log;

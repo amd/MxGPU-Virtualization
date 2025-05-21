@@ -377,9 +377,11 @@ static int mi300_ras_error_inject_xgmi(struct amdgv_adapter *adapt,
 			AMDGV_WARN("Failed to disallow df cstate");
 
 
-	if (mi300_smu_error_inject_set_pm_policy(adapt,
-			AMDGV_PP_PM_POLICY_XGMI_PLPD,
-			PP_XGMI_PLPD_MODE_DISABLE))
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->smu_error_inject_set_pm_policy)
+		ret = adapt->pp.pp_funcs->smu_error_inject_set_pm_policy(adapt,
+				AMDGV_PP_PM_POLICY_XGMI_PLPD,
+				PP_XGMI_PLPD_MODE_DISABLE);
+	if (ret)
 		AMDGV_WARN("Failed to disallow XGMI power down");
 
 	ret = amdgv_psp_ras_trigger_error(adapt, block_info);
@@ -389,7 +391,9 @@ static int mi300_ras_error_inject_xgmi(struct amdgv_adapter *adapt,
 
 	/* This call may fail if Fatal error interrupt is detected.
 	 * The policy will be restored as part of regular mode 1 reset sequence. */
-	mi300_smu_error_inject_restore_pm_policy(adapt, AMDGV_PP_PM_POLICY_XGMI_PLPD);
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->smu_error_inject_restore_pm_policy)
+		adapt->pp.pp_funcs->smu_error_inject_restore_pm_policy(adapt,
+				AMDGV_PP_PM_POLICY_XGMI_PLPD);
 
 	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->set_df_cstate)
 		if (adapt->pp.pp_funcs->set_df_cstate(adapt, DF_CSTATE_ALLOW))

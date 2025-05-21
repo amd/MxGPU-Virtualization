@@ -35,7 +35,9 @@
 #include <linux/ftrace.h>
 #include "gim_ftrace.h"
 
+#ifndef EXCLUDE_DCORE_DEBUG
 #include "dcore_drv.h"
+#endif
 
 #include "gim_debug.h"
 #include "gim_config.h"
@@ -313,6 +315,8 @@ static int gim_init_thread_func(void *context)
 		gim_conf_get_fullacces_timeout_opt(dev_data->gpu_index);
 	data->opt.gfx_sched_mode =
 		gim_conf_get_sch_policy_opt(dev_data->gpu_index);
+	data->opt.ip_discovery_load_type =
+		gim_conf_get_ip_discovery_load_type_opt(dev_data->gpu_index);
 	data->opt.fw_load_type =
 		gim_conf_get_fw_load_type_opt(dev_data->gpu_index);
 	data->opt.perf_mon_enable =
@@ -348,6 +352,7 @@ static int gim_init_thread_func(void *context)
 		gim_conf_get_bad_page_record_threshold_opt(dev_data->gpu_index);
 	data->opt.ras_vf_telemetry_policy = gim_conf_get_ras_vf_telemetry_policy_opt(dev_data->gpu_index);
 	data->opt.max_cper_count = gim_conf_get_max_cper_count_opt(dev_data->gpu_index);
+	data->opt.debug_mode = gim_conf_get_debug_mode_opt(dev_data->gpu_index);
 
 	/* Initialize device and enable SRIOV */
 	if (pci_enable_device(pdev) != 0) {
@@ -383,8 +388,10 @@ static int gim_init_thread_func(void *context)
 		gim_put_error(AMDGV_ERROR_DRIVER_DEV_INIT_FAIL,
 			PCI_DEVID(pdev->bus->number, pdev->devfn));
 	}
+	if (dev_data->adev != AMDGV_INVALID_HANDLE)
+		svm_enabled = amdgv_is_service_vm_enabled(dev_data->adev);
 
-	if (dev_data->adev != AMDGV_INVALID_HANDLE) {
+	if ((dev_data->adev != AMDGV_INVALID_HANDLE) && !svm_enabled) {
 		if (gim_build_vfs_map(dev_data))
 			gim_put_error(AMDGV_ERROR_DRIVER_DEV_INIT_FAIL,
 				PCI_DEVID(pdev->bus->number, pdev->devfn));
@@ -414,7 +421,9 @@ static int gim_init_thread_func(void *context)
 	mutex_unlock(&gim_device_list_lock);
 
 	if (dev_data->adev != AMDGV_INVALID_HANDLE) {
-		gim_guard_init_dev_sys(pdev);
+		if (!svm_enabled)
+			gim_guard_init_dev_sys(pdev);
+
 		gim_mon_create_dev_sys(dev_data);
 	};
 	gim_info("AMD GIM probed GPU(%u) %s\n",
@@ -518,7 +527,8 @@ static void gim_remove(struct pci_dev *pdev)
 
 	if (dev_data->adev != AMDGV_INVALID_HANDLE) {
 		gim_mon_remove_dev_sys(dev_data);
-		gim_guard_remove_dev_sys(pdev);
+		if (!svm_enabled)
+			gim_guard_remove_dev_sys(pdev);
 		mutex_lock(&gim_device_list_lock);
 		list_del(&dev_data->list);
 		adapt_list[dev_data->gpu_index] = NULL;
@@ -717,9 +727,11 @@ static int gim_init(void)
 	ret = gim_mon_create_drv_sys(&gim_driver.driver);
 	if (ret)
 		goto err_create_mon;
-	ret = gim_guard_init_drv_sys(&gim_driver.driver);
-	if (ret)
-		goto err_create_gurad;
+	if (!svm_enabled) {
+		ret = gim_guard_init_drv_sys(&gim_driver.driver);
+		if (ret)
+			goto err_create_gurad;
+	}
 	gim_debugfs_init();
 
 	ret = gim_cmd_handler_init();
@@ -730,23 +742,28 @@ static int gim_init(void)
 	if (ret)
 		goto err_smi_init;
 
+#ifndef EXCLUDE_DCORE_DEBUG
 	ret = dcore_init();
 	if (ret)
 		goto err_dcore_init;
+#endif
 	gim_info("AMD GIM is Running\n");
 
 	gim_set_dynamic_partition_mode();
 
 	return 0;
 
+#ifndef EXCLUDE_DCORE_DEBUG
 err_dcore_init:
+#endif
 
 	smi_cleanup();
 err_smi_init:
 	gim_cmd_handler_fini();
 err_gim_cmd_handler_init:
 	gim_debugfs_fini();
-	gim_guard_remove_drv_sys(&gim_driver.driver);
+	if (!svm_enabled)
+		gim_guard_remove_drv_sys(&gim_driver.driver);
 
 err_create_gurad:
 	gim_mon_remove_drv_sys(&gim_driver.driver);
@@ -766,7 +783,6 @@ err_conf_init:
 static void gim_exit(void)
 {
 	bool is_continue_exit = false;
-
 	struct gim_dev_data *dev_data;
 	int i = 0;
 	struct pci_dev *pdev_vf;
@@ -785,42 +801,45 @@ static void gim_exit(void)
 		}
 	}
 
-	while (is_continue_exit) {
-		list_for_each_entry(dev_data, &gim_device_list, list) {
-			for (i = 0; i < dev_data->vf_num; i++) {
-				pdev_vf = dev_data->vf_map[i].pdev;
-				vf_bdf = dev_data->vf_map[i].bdf;
-				if (atomic_read(&pdev_vf->enable_cnt) > 0) {
-					gim_info("GIM is used by [%x:%x:%x:%x]\n",
-						(vf_bdf >> 16) & (0xffff),
-						(vf_bdf >> 8) & (0xff),
-						(vf_bdf >> 3) & (0x1f),
-						(vf_bdf)      & (0x7));
+	if (!svm_enabled) {
+		while (is_continue_exit) {
+			list_for_each_entry(dev_data, &gim_device_list, list) {
+				for (i = 0; i < dev_data->vf_num; i++) {
+					pdev_vf = dev_data->vf_map[i].pdev;
+					vf_bdf = dev_data->vf_map[i].bdf;
+					if (atomic_read(&pdev_vf->enable_cnt) > 0) {
+						gim_info("GIM is used by [%x:%x:%x:%x]\n",
+							(vf_bdf >> 16) & (0xffff),
+							(vf_bdf >> 8) & (0xff),
+							(vf_bdf >> 3) & (0x1f),
+							(vf_bdf)      & (0x7));
+
+						gim_in_use = true;
+					}
+				}
+				if (amdgv_in_whole_gpu_reset(dev_data->adev)) {
+					gim_info("GIM is used by [%x:%x:%x:%x], GPU is in reset state\n",
+					0x0,
+					dev_data->pdev->bus->number,
+					(dev_data->pdev->devfn >> 3) & 0x1f,
+					(dev_data->pdev->devfn) & 0x7);
 
 					gim_in_use = true;
 				}
 			}
-			if (amdgv_in_whole_gpu_reset(dev_data->adev)) {
-				gim_info("GIM is used by [%x:%x:%x:%x], GPU is in reset state\n",
-				0x0,
-				dev_data->pdev->bus->number,
-				(dev_data->pdev->devfn >> 3) & 0x1f,
-				(dev_data->pdev->devfn) & 0x7);
-
-				gim_in_use = true;
-			}
+			if (gim_in_use) {
+				msleep(5000);
+				gim_in_use = false;
+			} else
+				break;
 		}
-		if (gim_in_use) {
-			msleep(5000);
-			gim_in_use = false;
-		} else
-			break;
 	}
 
 	gim_cmd_handler_fini();
 	smi_cleanup();
 	gim_debugfs_fini();
-	gim_guard_remove_drv_sys(&gim_driver.driver);
+	if (!svm_enabled)
+		gim_guard_remove_drv_sys(&gim_driver.driver);
 	gim_mon_remove_drv_sys(&gim_driver.driver);
 
 	gim_ftrace_fini();
@@ -835,7 +854,9 @@ static void gim_exit(void)
 
 	gim_live_update_fini_manager(&update_mgr);
 
+#ifndef EXCLUDE_DCORE_DEBUG
 	dcore_cleanup();
+#endif
 
 	gim_error_ring_buffer_fini(&gim_error_rb);
 }

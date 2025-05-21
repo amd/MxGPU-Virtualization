@@ -735,7 +735,6 @@ static void amdgv_error_dump_stack(struct amdgv_adapter *adapt, uint8_t error_le
 
 	filter_list = adapt->error_dump_stack_filter_list;
 	error_text = &amdgv_error_list[error_category].error_msg[error_sub_code];
-	AMDGV_INFO("put event %s, error code: 0x%x\n", error_text->code_string, error_text->code);
 
 	for (index = 0; index < AMDGV_ERROR_FILTER_LIST_SIZE_MAX; ++index) {
 		if (filter_list[index] == error_code)
@@ -958,6 +957,50 @@ int amdgv_error_get_error(amdgv_dev_t dev, struct amdgv_error_notifier *notifier
 	}
 
 	return 0;
+}
+
+int amdgv_error_get_error_all(amdgv_dev_t dev, char *buf, int buf_size)
+{
+	struct amdgv_adapter *adapt = (struct amdgv_adapter *)dev;
+	struct amdgv_error_ring_buffer *err_rb = adapt->error_ring_buffer;
+	struct amdgv_error_entry *entry;
+	uint32_t current_index;
+	int len = 0, ret_len;
+
+	current_index = AMDGV_ERROR_INDEX(err_rb->write_count + 1);
+
+	do {
+		entry = &err_rb->error_entry_buffer[current_index];
+		if (entry->error_code != 0) {
+			ret_len = oss_vsnprintf(buf + len, buf_size - len,
+					"timestamp: %llu\n"
+					"  vf_idx: %u\n"
+					"  error_code: 0x%x\n"
+					"  error_level: %u\n"
+					"  Message: ",
+					entry->timestamp, entry->vf_idx, entry->error_code, entry->error_level);
+
+			if (ret_len < 0 || len + ret_len >= buf_size)
+				break;
+
+			len += ret_len;
+			ret_len = amdgv_error_get_error_text(entry->error_code, entry->error_data,
+					buf + len, buf_size - len);
+			if (ret_len < 0 || len + ret_len >= buf_size)
+				break;
+
+			len += ret_len;
+			ret_len = oss_vsnprintf(buf + len, buf_size - len, "\n======================================\n");
+			if (ret_len < 0 || len + ret_len >= buf_size)
+				break;
+
+			len += ret_len;
+		}
+
+		current_index = AMDGV_ERROR_INDEX(current_index + 1);
+	} while (current_index != err_rb->write_count + 1);
+
+	return len;
 }
 
 void amdgv_error_log_put_test_entry(amdgv_dev_t dev, int category)

@@ -290,9 +290,10 @@ static int mi300_sdma_hw_fini(struct amdgv_adapter *adapt)
 
 struct amdgv_init_func mi300_sdma_v4_4_2_func = {
 	.name = "mi300_sdma_func",
+	.is_engine = true,
 	.sw_init = mi300_sdma_sw_init,
 	.sw_fini = mi300_sdma_sw_fini,
-	.hw_engine_init = mi300_sdma_hw_init,
-	.hw_engine_fini = mi300_sdma_hw_fini,
+	.hw_init = mi300_sdma_hw_init,
+	.hw_fini = mi300_sdma_hw_fini,
 	.hw_live_init = mi300_sdma_hw_init_internal_set,
 };

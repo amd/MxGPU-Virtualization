@@ -56,8 +56,6 @@ enum amdgv_gpuiov_cmd {
 	AMDGV_INIT_GPU			       = 0x07,
 	AMDGV_SAVE_RLCV_STATE		       = 0x08,
 	AMDGV_LOAD_RLCV_STATE		       = 0x09,
-	AMDGV_ENABLE_MMSCH_VFGATE	       = 0x08,
-	AMDGV_DISABLE_MMSCH_VFGATE	       = 0x09,
 	AMDGV_CLEAR_VF_STATE		       = 0x0A,
 	AMDGV_DISABLE_AUTO_HW_SCHED	       = 0x0B,
 	AMDGV_DISABLE_AUTO_HW_SCHED_AND_SWITCH = 0x0C,
@@ -146,6 +144,7 @@ struct amdgv_gpuiov_funcs {
 			 uint32_t size);
 	int (*get_vf_fb)(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_t *offset,
 			 uint32_t *size, uint32_t *real_size);
+	uint64_t (*adjust_fb_size)(struct amdgv_adapter *adapt, uint32_t idx_vf, uint64_t size);
 	int (*set_csa)(struct amdgv_adapter *adapt, uint32_t csa_base);
 
 	int (*get_vm_busy_status)(struct amdgv_adapter *adapt, uint32_t hw_sched_id,
@@ -225,9 +224,6 @@ struct amdgv_gpuiov_funcs {
 			     uint32_t vf_access_select, bool is_true);
 	bool (*get_vf_access)(struct amdgv_adapter *adapt, uint32_t idx_vf,
 				 uint32_t vf_access_select);
-	int (*set_mmsch_vfgate)(struct amdgv_adapter *adapt, enum amdgv_gpuiov_cmd cmd,
-				uint32_t hw_sched_id, uint32_t idx_vf,
-				uint32_t next_idx_vf);
 	int (*toggle_rlcg_vf_interface)(struct amdgv_adapter *adapt, uint32_t idx_vf, bool enable);
 
 	int (*get_config_info)(struct amdgv_adapter *adapt);
@@ -456,8 +452,6 @@ const char *amdgv_gpuiov_cmd_to_name(struct amdgv_adapter *adapt, uint32_t cmd, 
 const char *amdgv_gpuiov_status_to_name(uint32_t status);
 int amdgv_gpuiov_transfer_vf_data(struct amdgv_adapter *adapt,
 				  uint32_t idx_vf, uint32_t hw_sched_id, bool to_export);
-int amdgv_gpuiov_set_mmsch_vfgate(struct amdgv_adapter *adapt, uint32_t idx_vf,
-				  uint32_t hw_sched_id, bool enable);
 int amdgv_gpuiov_world_switch_oneshot(struct amdgv_adapter *adapt,
 				      uint32_t idx_vf, uint32_t next_idx_vf,
 				      uint32_t hw_sched_id);

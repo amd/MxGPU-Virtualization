@@ -42,11 +42,16 @@ auto constexpr
 power_header_csv_guest_bm {",socket_power,voltage,soc_voltage,mem_voltage"};
 auto constexpr clock_header_csv {
 	",gfx_clk,gfx_min_clk,gfx_max_clk,gfx_clk_locked,gfx_clk_deep_sleep,mem_clk,mem_min_clk,mem_max_clk,mem_clk_locked,mem_clk_deep_sleep,"
-	"vclk0_clk,vclk0_min_clk,vclk0_max_clk,vclk0_clk_locked,vclk0_clk_deep_sleep,vclk1_clk,vclk1_min_clk,vclk1_max_clk,vclk1_clk_locked,vclk1_clk_deep_sleep,dclk,dclk_min_clk,dclk_max_clk,dclk_clk_locked,dclk_clk_deep_sleep"
+	"vclk_0_clk,vclk_0_min_clk,vclk_0_max_clk,vclk_0_clk_locked,vclk_0_clk_deep_sleep,vclk_1_clk,vclk_1_min_clk,vclk_1_max_clk,vclk_1_clk_locked,vclk_1_clk_deep_sleep,"
+	"dclk_0_clk,dclk_0_min_clk,dclk_0_max_clk,dclk_0_clk_locked,dclk_0_clk_deep_sleep,dclk_1_clk,dclk_1_min_clk,dclk_1_max_clk,dclk_1_clk_locked,dclk_1_clk_deep_sleep"
+};
+auto constexpr clock_header_csv_mi {
+	",gfx,gfx_clk,gfx_min_clk,gfx_max_clk,gfx_clk_locked,gfx_clk_deep_sleep,mem,mem_clk,mem_min_clk,mem_max_clk,mem_clk_locked,mem_clk_deep_sleep,"
+	"vclk,vclk_clk,vclk_min_clk,vclk_max_clk,vclk_clk_locked,vclk_clk_deep_sleep,dclk,dclk_clk,dclk_min_clk,dclk_max_clk,dclk_clk_locked,dclk_clk_deep_sleep"
 };
 auto constexpr clock_header_csv_guest_bm {
 	",gfx_clk,gfx_min_clk,gfx_max_clk,gfx_clk_locked,gfx_clk_deep_sleep,mem_clk,mem_min_clk,mem_max_clk,mem_clk_locked,mem_clk_deep_sleep,"
-	"vclk0_clk,vclk0_min_clk,vclk0_max_clk,vclk0_clk_locked,vclk0_clk_deep_sleep,vclk1_clk,vclk1_min_clk,vclk1_max_clk,vclk1_clk_locked,vclk1_clk_deep_sleep"
+	"vclk_0_clk,vclk_0_min_clk,vclk_0_max_clk,vclk_0_clk_locked,vclk_0_clk_deep_sleep,vclk_1_clk,vclk_1_min_clk,vclk_1_max_clk,vclk_1_clk_locked,vclk_1_clk_deep_sleep"
 };
 auto constexpr temperature_header_csv {",edge_temperature,hotspot_temperature,vram_temperature"};
 auto constexpr
@@ -654,6 +659,8 @@ void AmdSmiMetricCommand::metric_command_csv()
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					if (AmdSmiPlatform::getInstance().is_host() && AmdSmiPlatform::getInstance().is_mi300()) {
+						headers.append(clock_header_csv_mi);
+					} else if (AmdSmiPlatform::getInstance().is_host()) {
 						headers.append(clock_header_csv);
 					} else {
 						headers.append(clock_header_csv_guest_bm);
@@ -979,8 +986,8 @@ void AmdSmiMetricCommand::metric_command_watch()
 						if (i == 0) {
 							first_row.push_back("gfx_clock");
 							first_row.push_back("mem_clock");
-							first_row.push_back("vclk0_clock");
-							first_row.push_back("vclk1_clock");
+							first_row.push_back("vclk_0_clock");
+							first_row.push_back("vclk_1_clock");
 							second_row.push_back("gcc,gmc,gmc,gcl,gcds");
 							second_row.push_back("mcc,mmc,mmc,mcl,mcds");
 							second_row.push_back("vcc,vmc,vmc,vcl,vcds");
@@ -989,14 +996,12 @@ void AmdSmiMetricCommand::metric_command_watch()
 							third_row.push_back("MHz");
 							third_row.push_back("MHz");
 							third_row.push_back("MHz");
-							if (AmdSmiPlatform::getInstance().is_host() && AmdSmiPlatform::getInstance().is_mi300()) {
-								first_row.push_back("dclk0_clock");
-								first_row.push_back("dclk1_clock");
-								second_row.push_back("dcc,dmc,dmc,dcl,dcds");
-								second_row.push_back("dcc,dmc,dmc,dcl,dcds");
-								third_row.push_back("MHz");
-								third_row.push_back("MHz");
-							}
+							first_row.push_back("dclk_0_clock");
+							first_row.push_back("dclk_1_clock");
+							second_row.push_back("dcc,dmc,dmc,dcl,dcds");
+							second_row.push_back("dcc,dmc,dmc,dcl,dcds");
+							third_row.push_back("MHz");
+							third_row.push_back("MHz");
 						}
 						fourth_row.push_back((clocks[0] + "," + clocks[1] + "," + clocks[2] + "," + clocks[3] + "," +
 											  clocks[4]).c_str());
@@ -1006,12 +1011,10 @@ void AmdSmiMetricCommand::metric_command_watch()
 											  clocks[14]).c_str());
 						fourth_row.push_back((clocks[15] + "," + clocks[16] + "," + clocks[17] + "," + clocks[18] + "," +
 											  clocks[19]).c_str());
-						if (AmdSmiPlatform::getInstance().is_host() && AmdSmiPlatform::getInstance().is_mi300()) {
-							fourth_row.push_back((clocks[20] + "," + clocks[21] + "," + clocks[22] + "," + clocks[23] + "," +
-												  clocks[24]).c_str());
-							fourth_row.push_back((clocks[25] + "," + clocks[26] + "," + clocks[27] + "," + clocks[28] + "," +
-												  clocks[29]).c_str());
-						}
+						fourth_row.push_back((clocks[20] + "," + clocks[21] + "," + clocks[22] + "," + clocks[23] + "," +
+												clocks[24]).c_str());
+						fourth_row.push_back((clocks[25] + "," + clocks[26] + "," + clocks[27] + "," + clocks[28] + "," +
+												clocks[29]).c_str());
 					}
 				}
 

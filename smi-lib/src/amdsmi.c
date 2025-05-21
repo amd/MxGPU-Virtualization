@@ -2297,7 +2297,7 @@ amdsmi_status_t amdsmi_get_link_topology(amdsmi_processor_handle processor_handl
 	#pragma SMI_EXPORT
 	smi_req_ctx smi_req;
 	struct smi_device_pair_info *gpu_pair = NULL;
-	struct smi_link_topology *link = NULL;
+	struct smi_io_link *link = NULL;
 
 	AMDSMI_ESCAPE_IF_NOT_INIT;
 
@@ -2324,21 +2324,83 @@ amdsmi_status_t amdsmi_get_link_topology(amdsmi_processor_handle processor_handl
 
 	const int code = amdsmi_request(&smi_req, (uint32_t)SMI_CMD_CODE_GET_LINK_TOPOLOGY,
 				     sizeof(struct smi_device_pair_info),
-				     sizeof(struct smi_link_topology));
+				     sizeof(struct smi_io_link));
 
 	if (code != AMDSMI_STATUS_SUCCESS) {
 		SMI_ERROR("Ioctl call failed. Return code: %d", code);
 		return code;
 	}
 
-	link = (struct smi_link_topology *)&smi_req.thread->ioctl_cmd.payload;
+	link = (struct smi_io_link *)&smi_req.thread->ioctl_cmd.payload;
 
 	memset(topology_info, 0, sizeof(amdsmi_link_topology_t));
-	topology_info->weight = link->weight;
-	topology_info->link_status = (amdsmi_link_status_t)link->link_status;
-	topology_info->link_type = (amdsmi_link_type_t)link->link_type;
-	topology_info->num_hops = link->num_hops;
-	topology_info->fb_sharing = link->fb_sharing;
+	topology_info->weight = link->link_topology.weight;
+	topology_info->link_status = (amdsmi_link_status_t)link->link_topology.link_status;
+	topology_info->link_type = (amdsmi_link_type_t)link->link_topology.link_type;
+	topology_info->num_hops = link->link_topology.num_hops;
+	topology_info->fb_sharing = link->link_topology.fb_sharing;
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+amdsmi_status_t amdsmi_get_link_topology_nearest(amdsmi_processor_handle processor_handle,
+						amdsmi_link_type_t link_type,
+						amdsmi_topology_nearest_t *topology_nearest_info)
+{
+	#pragma SMI_EXPORT
+	int code;
+	uint32_t index = 0;
+	int min_hops = -1;
+	uint32_t j = 0;
+	amdsmi_processor_handle devices_list[AMDSMI_MAX_DEVICES];
+	uint8_t devices_hops[AMDSMI_MAX_DEVICES];
+	amdsmi_link_topology_t topology_info;
+
+	if (processor_handle == NULL || topology_nearest_info == NULL) {
+		SMI_ERROR("Nullpointer given as input. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+	switch (link_type) {
+	case AMDSMI_LINK_TYPE_XGMI:
+	case AMDSMI_LINK_TYPE_PCIE:
+		break;
+	case AMDSMI_LINK_TYPE_INTERNAL:
+	case AMDSMI_LINK_TYPE_NOT_APPLICABLE:
+	case AMDSMI_LINK_TYPE_UNKNOWN:
+		SMI_ERROR("Type of link, given as input, is not supported. Return code: %d", AMDSMI_STATUS_NOT_SUPPORTED);
+		return AMDSMI_STATUS_NOT_SUPPORTED;
+	default:
+		SMI_ERROR("Type of link, given as input, is not valid. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+	for (uint32_t i = 0; i < g_device_handles.device_size; i++) {
+		code = amdsmi_get_link_topology(processor_handle, &g_device_handles.handles[i], &topology_info);
+		if (code != AMDSMI_STATUS_SUCCESS) {
+			SMI_ERROR("Function call failed. Return code: %d", code);
+			return code;
+		}
+		if (topology_info.link_type == link_type) {
+			if (min_hops == -1) {
+				min_hops = topology_info.num_hops;
+			} else if (topology_info.num_hops < min_hops) {
+				min_hops = topology_info.num_hops;
+			}
+			devices_list[index] = &g_device_handles.handles[i];
+			devices_hops[index] = topology_info.num_hops;
+			index++;
+		}
+	}
+	if (min_hops == -1) {
+		topology_nearest_info->count = 0;
+		return AMDSMI_STATUS_NO_DATA;
+	}
+	for (uint32_t i = 0; i < index; i++) {
+		if (devices_hops[i] == min_hops) {
+			topology_nearest_info->processor_list[j] = devices_list[i];
+			j++;
+		}
+	}
+	topology_nearest_info->count = j;
 
 	return AMDSMI_STATUS_SUCCESS;
 }
@@ -2958,8 +3020,8 @@ amdsmi_status_t amdsmi_set_soc_pstate(amdsmi_processor_handle processor_handle,
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-amdsmi_status_t amdsmi_gpu_get_cper_entries(amdsmi_processor_handle processor_handle, uint32_t severity_mask,
-    char *cper_data, uint64_t *buf_size, amdsmi_cper_hdr** cper_hdrs, uint64_t *entry_count, uint64_t *cursor)
+amdsmi_status_t amdsmi_get_gpu_cper_entries(amdsmi_processor_handle processor_handle, uint32_t severity_mask,
+    char *cper_data, uint64_t *buf_size, amdsmi_cper_hdr_t** cper_hdrs, uint64_t *entry_count, uint64_t *cursor)
 {
 	#pragma SMI_EXPORT
 
@@ -2968,7 +3030,7 @@ amdsmi_status_t amdsmi_gpu_get_cper_entries(amdsmi_processor_handle processor_ha
 
 	struct smi_cper_config *cper_config = NULL;
 	struct smi_cper *cper = NULL;
-	amdsmi_cper_hdr *hdr = NULL;
+	amdsmi_cper_hdr_t *hdr = NULL;
 	uint32_t entries_count = 0;
 	uint32_t real_buffer_size = 0;
 	system_wrapper *sys_wrapper = get_system_wrapper();
@@ -3015,13 +3077,13 @@ amdsmi_status_t amdsmi_gpu_get_cper_entries(amdsmi_processor_handle processor_ha
 		return code;
 	}
 
-	*cursor = *cursor + cper_config->cper->entry_count;
+	*cursor = *cursor + cper_config->cper->entry_count + cper_config->cper->overflow_count;
 
 	for (uint32_t i = 0; i < cper_config->cper->entry_count; i++) {
-		hdr = (amdsmi_cper_hdr*)(cper_config->cper->cper_data + cper_config->cper->cper_hdrs[i]);
+		hdr = (amdsmi_cper_hdr_t*)(cper_config->cper->cper_data + cper_config->cper->cper_hdrs[i]);
 		if (((hdr->error_severity & severity_mask) != 0) || (severity_mask == AMDSMI_CPER_SEV_NUM)) {
 			// add cper with appropriate severity
-			cper_hdrs[entries_count] = (amdsmi_cper_hdr*)(cper_config->cper->cper_data + cper_config->cper->cper_hdrs[i]);
+			cper_hdrs[entries_count] = (amdsmi_cper_hdr_t*)(cper_config->cper->cper_data + cper_config->cper->cper_hdrs[i]);
 			memcpy(cper_data + cper_config->cper->cper_hdrs[i],
 					cper_config->cper->cper_data + cper_config->cper->cper_hdrs[i],
 					hdr->record_length);
@@ -3035,6 +3097,63 @@ amdsmi_status_t amdsmi_gpu_get_cper_entries(amdsmi_processor_handle processor_ha
 	*buf_size = real_buffer_size;
 
 	sys_wrapper->free(cper);
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+
+amdsmi_status_t
+amdsmi_topo_get_p2p_status(amdsmi_processor_handle processor_handle_src,
+				amdsmi_processor_handle processor_handle_dst,
+				amdsmi_link_type_t *type, amdsmi_p2p_capability_t *cap)
+{
+	#pragma SMI_EXPORT
+	smi_req_ctx smi_req;
+	struct smi_device_pair_info *gpu_pair = NULL;
+	struct smi_io_link *link = NULL;
+
+	AMDSMI_ESCAPE_IF_NOT_INIT;
+
+	if (processor_handle_src == NULL || processor_handle_dst == NULL || type == NULL || cap == NULL) {
+		SMI_ERROR("Nullpointer given as input. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+	smi_device_handle_t *src_dev_handle = ((smi_device_handle_t *)processor_handle_src);
+	smi_device_handle_t *dst_dev_handle = ((smi_device_handle_t *)processor_handle_dst);
+
+	if (src_dev_handle == dst_dev_handle) {
+		cap->is_iolink_coherent = (uint8_t)SMI_NOT_SUPPORTED;
+		cap->is_iolink_atomics_32bit = (uint8_t)SMI_NOT_SUPPORTED;
+		cap->is_iolink_atomics_64bit = (uint8_t)SMI_NOT_SUPPORTED;
+		cap->is_iolink_dma = (uint8_t)SMI_NOT_SUPPORTED;
+		cap->is_iolink_bi_directional = (uint8_t)SMI_NOT_SUPPORTED;
+
+		return AMDSMI_STATUS_SUCCESS;
+	}
+
+	gpu_pair = (struct smi_device_pair_info *)&smi_req.thread->ioctl_cmd.payload;
+	gpu_pair->src.dev_id.handle = src_dev_handle->handle;
+	gpu_pair->dst.dev_id.handle = dst_dev_handle->handle;
+
+	const int code = amdsmi_request(&smi_req, (uint32_t)SMI_CMD_CODE_GET_LINK_TOPOLOGY,
+				     sizeof(struct smi_device_pair_info),
+				     sizeof(struct smi_io_link));
+
+	if (code != AMDSMI_STATUS_SUCCESS) {
+		SMI_ERROR("Ioctl call failed. Return code: %d", code);
+		return code;
+	}
+
+	link = (struct smi_io_link *)&smi_req.thread->ioctl_cmd.payload;
+
+	memset(cap, 0, sizeof(amdsmi_p2p_capability_t));
+	*type = (amdsmi_link_type_t)link->link_topology.link_type;
+
+	cap->is_iolink_coherent = link->p2p_capability.is_iolink_coherent;
+	cap->is_iolink_atomics_32bit = link->p2p_capability.is_iolink_atomics_32bit;
+	cap->is_iolink_atomics_64bit = link->p2p_capability.is_iolink_atomics_64bit;
+	cap->is_iolink_dma = link->p2p_capability.is_iolink_dma;
+	cap->is_iolink_bi_directional = link->p2p_capability.is_iolink_bi_directional;
+
 	return AMDSMI_STATUS_SUCCESS;
 }
 

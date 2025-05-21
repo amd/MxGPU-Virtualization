@@ -128,6 +128,15 @@ public:
 	virtual int amdsmi_get_link_status_topology_command(Arguments arg,
 			std::vector<std::string> bdf_vector, std::string& out) override;
 
+	virtual int amdsmi_get_coherent_p2p_capability_command(Arguments arg,
+			std::vector<std::string> bdf_vector, std::string& out) override;
+	virtual int amdsmi_get_atomics_p2p_capability_command(Arguments arg,
+			std::vector<std::string> bdf_vector, std::string& out) override;
+	virtual int amdsmi_get_dma_p2p_capability_command(Arguments arg,
+			std::vector<std::string> bdf_vector, std::string& out) override;
+	virtual int amdsmi_get_bi_directional_p2p_capability_command(Arguments arg,
+			std::vector<std::string> bdf_vector, std::string& out) override;
+
 	virtual int amdsmi_get_all_topology_command(Arguments arg,
 			std::vector<std::string> bdf_vector, std::string& out) override;
 

@@ -575,6 +575,7 @@ void amdgv_put_event_ext(amdgv_dev_t dev, uint32_t idx_vf, uint32_t error_code,
 int amdgv_error_get_error(amdgv_dev_t dev, struct amdgv_error_notifier *notifier,
 			  struct amdgv_error_entry **error_entry);
 
+int amdgv_error_get_error_all(amdgv_dev_t dev, char *buf, int len);
 int amdgv_error_is_pending(amdgv_dev_t dev, struct amdgv_error_notifier *notifier);
 
 void amdgv_error_log_put_test_entry(amdgv_dev_t dev, int category);

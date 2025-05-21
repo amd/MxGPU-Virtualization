@@ -127,7 +127,8 @@ static int mi300_gpuiov_set_cmd(struct amdgv_adapter *adapt,
 
 	if (!oss_atomic_read(adapt->in_sync_flood)) {
 		if (IS_HW_SCHED_TYPE_MM(hw_sched_id)) {
-			mi300_vcn_get_mmsch_regid_instid(adapt, hw_sched_id, &reg_control, true);
+
+				mi300_vcn_get_mmsch_regid_instid(adapt, hw_sched_id, &reg_control, true);
 			WREG32(reg_control, data);
 		} else
 			oss_pci_write_config_dword(adapt->dev, offset, data);
@@ -155,8 +156,10 @@ static bool mi300_gpuiov_is_cmd_complete(struct amdgv_adapter *adapt,
 	reg_status = 0;
 
 	if (IS_HW_SCHED_TYPE_MM(hw_sched_id)) {
-		mi300_vcn_get_mmsch_regid_instid(adapt, hw_sched_id, &reg_control, true);
-		mi300_vcn_get_mmsch_regid_instid(adapt, hw_sched_id, &reg_status, false);
+		{
+			mi300_vcn_get_mmsch_regid_instid(adapt, hw_sched_id, &reg_control, true);
+			mi300_vcn_get_mmsch_regid_instid(adapt, hw_sched_id, &reg_status, false);
+		}
 
 		command = RREG32(reg_control);
 		status = RREG32(reg_status) & 0xFF;
@@ -884,7 +887,8 @@ static int mi300_gpuiov_toggle_rlcg_vf_interface(struct amdgv_adapter *adapt, ui
 {
 	uint32_t xcc_id;
 
-	AMDGV_INFO("RLCG VF Interface is %s\n", enable ? "enabled" : "disabled");
+	AMDGV_DEBUG("RLCG VF Interface is %s\n", enable ? "enabled" : "disabled");
+
 	for_each_id (xcc_id, amdgv_sched_get_xcc_mask_by_vf(adapt, idx_vf)) {
 		WREG32(SOC15_REG_OFFSET(GC, GET_INST(GC, xcc_id), regRLC_GPM_GENERAL_14), enable ? 1 : 0);
 	}
@@ -1035,6 +1039,7 @@ static int mi300_gpuiov_hw_init(struct amdgv_adapter *adapt)
 	uint32_t strap4;
 	uint32_t cap;
 	uint16_t tmp;
+	uint32_t offset;
 
 	if (oss_atomic_read(adapt->in_ecc_recovery)) {
 		AMDGV_INFO("in_ecc_recovery. mi300_gpuiov_hw_fini first followed by init\n");
@@ -1068,15 +1073,20 @@ static int mi300_gpuiov_hw_init(struct amdgv_adapter *adapt)
 
 	mi300_gpuiov_get_sch_offset(adapt);
 
-	if (adapt->asic_type == CHIP_MI300X || adapt->asic_type == CHIP_MI308X) {
-		if (adapt->xgmi.phy_nodes_num > 1) {
+	if (adapt->xgmi.phy_nodes_num > 1) {
+		xgmi_enable = BIT(31);
+		xgmi_enable |= BIT(adapt->num_vf) - 1;
+		AMDGV_DEBUG("XGMI_ENABLE is set to :%02x\n", xgmi_enable);
+		if (adapt->asic_type == CHIP_MI300X || adapt->asic_type == CHIP_MI308X) {
 			if (adapt->psp.program_register) {
-				xgmi_enable = 0x1 | (1 << 31);
 				adapt->psp.program_register(adapt, AMDGV_PF_IDX, xgmi_enable,
-					0, GC_MC_VM_XGMI_GPUIOV_ENABLE);
+						0, GC_MC_VM_XGMI_GPUIOV_ENABLE);
 				adapt->psp.program_register(adapt, AMDGV_PF_IDX, xgmi_enable,
-					0, MM_MC_VM_XGMI_GPUIOV_ENABLE);
+						0, MM_MC_VM_XGMI_GPUIOV_ENABLE);
 			}
+		} else {
+			offset = adapt->gpuiov.pos + PCI_GPUIOV_P2P_OVER_XGMI_ENABLE;
+			oss_pci_write_config_dword(adapt->dev, offset, xgmi_enable);
 		}
 	}
 

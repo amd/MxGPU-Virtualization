@@ -219,6 +219,14 @@ Commands that do and their arguments are:
             Link type information
     *   `--link-status`
             Link status information
+    *   `--coherent`
+            Cache coherent information
+    *   `--atomics`
+            32 and 64-bit atomic link capability information
+    *   `--bi-dir`
+            bi-directional link capability information
+    *   `--dma`
+            dma link capability information
 
 ### xgmi
 * `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`

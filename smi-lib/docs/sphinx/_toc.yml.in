@@ -18,11 +18,21 @@ subtrees:
 
 - caption: Reference
   entries:
+  - file: reference/amdsmi_c_api.md
     title: C API
+    entries:
+    - file: doxygen/doxy_build/html/files
+      title: Files
+    - file: doxygen/doxy_build/html/globals
+      title: Globals
+    - file: doxygen/doxy_build/html/annotated
+      title: Data structures
+    - file: doxygen/doxy_build/html/functions_data_fields
+      title: Data fields
   - file: reference/amdsmi_py_api.md
     title: Python API
 
 - caption: About
   entries:
-  - file: license.md
+  - file: license.rst
 

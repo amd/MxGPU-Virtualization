@@ -119,4 +119,6 @@ int amdgv_cper_patch_to_vf(struct amdgv_adapter *adapt, uint32_t idx_vf,
 			   bool *allowed_sections, uint32_t allowed_count,
 			   uint64_t *fb_offset,
 			   uint32_t *checksum);
+int amdgv_cper_export_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_cper *cper);
+int amdgv_cper_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_cper *cper);
 #endif

@@ -464,3 +464,168 @@ void amdgv_gfx_rlc_exit_safe_mode(struct amdgv_adapter *adapt, int xcc_id)
 	adapt->gfx.rlc.in_safe_mode[xcc_id] = false;
 }
 
+int amdgv_gfx_dump_data(struct amdgv_adapter *adapt)
+{
+	char *file_type = NULL;
+	char filename[128];
+	char time_str[32];
+	uint32_t bdf = adapt->bdf;
+	uint32_t data_size = adapt->gfx.cu_dump_data_info.cu_dump_size;
+	uint32_t flag_size = data_size / 4;	// data is 32-bit, flags are 8-bit
+	int ret = AMDGV_FAILURE;
+
+	if ((adapt->gfx.cu_dump_data_info.cu_data == NULL) || (adapt->gfx.cu_dump_data_info.cu_data_flags == NULL))
+		return AMDGV_FAILURE;
+
+	oss_get_utc_time_stamp_str(time_str, sizeof(time_str));
+
+	switch (adapt->gfx.cu_dump_data_info.cu_dump_type) {
+	case AMDGV_CU_DATA_TYPE__LDS:
+		file_type = "LDS";
+		break;
+	case AMDGV_CU_DATA_TYPE__SGPRs:
+		file_type = "SGPR";
+		break;
+	case AMDGV_CU_DATA_TYPE__VGPRs:
+		file_type = "VGPR";
+		break;
+	default:
+		AMDGV_WARN("unsupported data type\n");
+		return ret;
+	}
+
+	oss_vsnprintf(filename, sizeof(filename), "%s_data_%02x_%02x_%x_%s",
+					file_type, bdf >> 8 & 0xff, bdf >> 3 & 0x1f, bdf & 0x7, time_str);
+
+	oss_store_gfx_dump_data((const char *)&adapt->gfx.cu_dump_data_info.cu_info, sizeof(struct amdgv_cu_info), filename);
+
+	oss_store_gfx_dump_data(adapt->gfx.cu_dump_data_info.cu_data, data_size, filename);
+
+	oss_store_gfx_dump_data(adapt->gfx.cu_dump_data_info.cu_data_flags, flag_size, filename);
+
+	adapt->gfx.cu_dump_data_info.cu_dump_finished = true;
+	return 0;
+}
+
+uint32_t amdgv_gfx_calculate_cu_data_size(struct amdgv_adapter *adapt, enum AMDGV_CU_DATA_TYPE type)
+{
+	uint32_t data_size = 0;
+	uint32_t total_lds_dwords, total_sgprs, total_vgpr_lanes;
+	struct amdgv_cu_info *cu_info = &adapt->gfx.cu_dump_data_info.cu_info;
+
+	switch (type) {
+	case AMDGV_CU_DATA_TYPE__LDS:
+		total_lds_dwords = cu_info->num_se;
+		total_lds_dwords *= cu_info->num_sa_per_se;
+		total_lds_dwords *= cu_info->num_cus_per_sa;
+		total_lds_dwords *= cu_info->num_lds_dwords_per_cu;
+
+		data_size = total_lds_dwords * sizeof(uint32_t);
+		break;
+	case AMDGV_CU_DATA_TYPE__SGPRs:
+		total_sgprs = cu_info->num_se;
+		total_sgprs *= cu_info->num_sa_per_se;
+		total_sgprs *= cu_info->num_cus_per_sa;
+		total_sgprs *= cu_info->simd_per_cu;
+		if (cu_info->num_sgprs_per_simd) {
+			total_sgprs *= cu_info->num_sgprs_per_simd;
+		} else {
+			total_sgprs *= cu_info->max_waves_per_simd;
+			total_sgprs *= cu_info->num_sgprs_per_wave_slot;
+		}
+
+		data_size = total_sgprs * sizeof(uint32_t);
+		break;
+	case AMDGV_CU_DATA_TYPE__VGPRs:
+		total_vgpr_lanes = cu_info->num_se;
+		total_vgpr_lanes *= cu_info->num_sa_per_se;
+		total_vgpr_lanes *= cu_info->num_cus_per_sa;
+		total_vgpr_lanes *= cu_info->simd_per_cu;
+		total_vgpr_lanes *= cu_info->num_vgprs_per_simd;
+		total_vgpr_lanes *= cu_info->num_lanes_per_vgpr;
+
+		data_size = total_vgpr_lanes * sizeof(uint32_t);
+		break;
+	default:
+		return 0;
+	}
+	return data_size;
+}
+
+void amdgv_gfx_check_pf_fb_size_for_cu_data_dump(struct amdgv_adapter *adapt)
+{
+	uint32_t lds_data_size, sgprs_data_size, vgprs_data_size, max_data_size;
+
+	lds_data_size = amdgv_gfx_calculate_cu_data_size(adapt, AMDGV_CU_DATA_TYPE__LDS);
+	sgprs_data_size = amdgv_gfx_calculate_cu_data_size(adapt, AMDGV_CU_DATA_TYPE__SGPRs);
+	vgprs_data_size = amdgv_gfx_calculate_cu_data_size(adapt, AMDGV_CU_DATA_TYPE__VGPRs);
+
+	max_data_size = MAX(MAX(lds_data_size, sgprs_data_size), vgprs_data_size);
+
+	// Currently the default pf fb size of all ASICs is 256MB in KVM.
+	// So, we suggest 256MB plus max_data_size to guarantee enough fb size
+	// to make driver work properly and dump cu data successfully.
+	if (adapt->memmgr_pf.size < (max_data_size + (256 << 20))) {
+		AMDGV_WARN("Current PF FB size may not be sufficient for CU data dump, try to make the size above %dMB\n",
+					((max_data_size + (256 << 20)) >> 20));
+	}
+}
+
+static int amdgv_gfx_cu_data_dump_process_thread(void *context)
+{
+	struct amdgv_adapter *adapt = (struct amdgv_adapter *)context;
+	enum oss_event_state state;
+
+	while (!oss_thread_should_stop(adapt->gfx.cu_dump_data_info.cu_dump_thread)) {
+		if (adapt->gfx.cu_dump_data_info.cu_dump_event != OSS_INVALID_HANDLE)
+			state = oss_wait_event(adapt->gfx.cu_dump_data_info.cu_dump_event, 0);
+
+		if (state == OSS_EVENT_STATE_WAKE_UP) {
+			amdgv_gfx_dump_data(adapt);
+		}
+	}
+
+	AMDGV_INFO("CU data dump process thread exiting!\n");
+	return 0;
+}
+
+int amdgv_gfx_cu_data_dump_thread_init(struct amdgv_adapter *adapt)
+{
+	thread_t cu_dump_thread;
+	event_t cu_dump_event;
+
+	cu_dump_event = oss_event_init();
+	if (cu_dump_event == OSS_INVALID_HANDLE) {
+		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_EVENT_FAIL, 0);
+		goto failed;
+	}
+
+	cu_dump_thread = oss_create_thread(amdgv_gfx_cu_data_dump_process_thread, (void *)adapt,
+					  "cu_data_dump_thread");
+	if (cu_dump_thread == OSS_INVALID_HANDLE) {
+		oss_event_fini(cu_dump_event);
+		cu_dump_event = OSS_INVALID_HANDLE;
+		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_THREAD_FAIL, 0);
+		goto failed;
+	}
+	adapt->gfx.cu_dump_data_info.cu_dump_event = cu_dump_event;
+	adapt->gfx.cu_dump_data_info.cu_dump_thread = cu_dump_thread;
+
+	return 0;
+
+failed:
+	return AMDGV_FAILURE;
+}
+
+void amdgv_gfx_cu_data_dump_thread_fini(struct amdgv_adapter *adapt)
+{
+	if (adapt->gfx.cu_dump_data_info.cu_dump_thread != OSS_INVALID_HANDLE) {
+		oss_signal_event_forever(adapt->gfx.cu_dump_data_info.cu_dump_event);
+		oss_close_thread(adapt->gfx.cu_dump_data_info.cu_dump_thread);
+	}
+	adapt->gfx.cu_dump_data_info.cu_dump_thread = OSS_INVALID_HANDLE;
+
+	if (adapt->gfx.cu_dump_data_info.cu_dump_event != OSS_INVALID_HANDLE)
+		oss_event_fini(adapt->gfx.cu_dump_data_info.cu_dump_event);
+	adapt->gfx.cu_dump_data_info.cu_dump_event = OSS_INVALID_HANDLE;
+}

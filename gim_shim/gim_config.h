@@ -55,6 +55,11 @@
 
 #define SCH_POLICY__MAX		(AMDGV_SCHED_END - 1)
 
+#define IP_DISCOVERY_LOAD_TYPE__KEY "ip_discovery_load_type"
+#define IP_DISCOVERY_LOAD_TYPE__START	(AMDGV_IP_DISCOVERY_LOAD_TYPE_BEGIN + 1)
+#define IP_DISCOVERY_LOAD_TYPE__DEFAULT	AMDGV_IP_DISCOVERY_LOAD_VIA_PSP
+#define IP_DISCOVERY_LOAD_TYPE__MAX	(AMDGV_IP_DISCOVERY_LOAD_TYPE_END - 1)
+
 #define FW_LOAD_TYPE__KEY "fw_load_type"
 #define FW_LOAD_TYPE__START	(AMDGV_FW_LOAD_TYPE_BEGIN + 1)
 #define FW_LOAD_TYPE__DEFAULT	AMDGV_FW_LOAD_BY_VBIOS
@@ -110,10 +115,12 @@
 #define ASYMMETRIC_FB_MODE__DEFAULT	        AMDGV_ASYMMETRIC_FB_ENABLED
 #define ASYMMETRIC_FB_MODE__MAX		        AMDGV_ASYMMETRIC_FB_MODE_MAX
 
+#ifndef EXCLUDE_DCORE_DEBUG
 #define HANG_DUMP_TIMEOUT__KEY "hangdump_timeout"
 #define HANG_DUMP_TIMEOUT__START                0
 #define HANG_DUMP_TIMEOUT__DEFAULT              10000
 #define HANG_DUMP__MAX                          60000
+#endif
 
 #define DEBUG_DUMP_RESERVE_SIZE__KEY "debug_dump_reserve_size"
 #define DEBUG_DUMP_RESERVE_SIZE__START          0
@@ -150,9 +157,15 @@
 #define MAX_CPER_COUNT__DEFAULT 0
 #define MAX_CPER_COUNT__MAX     AMDGV_CPER_MAX_ALLOWED_COUNT
 
+#define DEBUG_MODE__KEY        "debug_mode"
+#define DEBUG_MODE__START      AMDGV_DEBUG_MODE_DEFAULT
+#define DEBUG_MODE__DEFAULT    AMDGV_DEBUG_MODE_DEFAULT
+#define DEBUG_MODE__MAX        AMDGV_DEBUG_MODE_MASK
+
 enum gim_conf_opt_idx {
 	CONF_OPT_START = 0,
 	CONF_OPT_VF_NUMBER = CONF_OPT_START,
+	CONF_OPT_IP_DISCOVERY_LOAD_TYPE,
 	CONF_OPT_FW_LOAD_TYPE,
 	CONF_OPT_LOG_LEVEL,
 	CONF_OPT_GUARD,
@@ -162,7 +175,9 @@ enum gim_conf_opt_idx {
 	CONF_OPT_SKIP_CHECK_BGPU,
 	CONF_OPT_POWER_SAVING_MODE,
 	CONF_OPT_MM_POLICY,
+#ifndef EXCLUDE_DCORE_DEBUG
 	CONF_OPT_HANG_DUMP_TIMEOUT,
+#endif
 	CONF_OPT_FB_SHARING_MODE,
 	CONF_OPT_ACCELERATOR_PARTITION_MODE,
 	CONF_OPT_MEMORY_PARTITION_MODE,
@@ -176,6 +191,7 @@ enum gim_conf_opt_idx {
 	CONF_OPT_BAD_PAGE_RECORD_THRESHOLD,
 	CONF_OPT_RAS_VF_TELEMETRY_POLICY,
 	CONF_OPT_MAX_CPER_COUNT,
+	CONF_OPT_DEBUG_MODE,
 	CONF_OPT_MAX
 };
 
@@ -186,11 +202,14 @@ uint32_t gim_conf_get_skip_check_bgpu_opt(uint32_t id);
 uint32_t gim_conf_get_guard_opt(uint32_t id);
 uint32_t gim_conf_get_fullacces_timeout_opt(uint32_t id);
 uint32_t gim_conf_get_sch_policy_opt(uint32_t id);
+uint32_t gim_conf_get_ip_discovery_load_type_opt(uint32_t id);
 uint32_t gim_conf_get_fw_load_type_opt(uint32_t id);
 uint32_t gim_conf_get_log_level_opt(uint32_t id);
 uint32_t gim_conf_get_mm_policy_opt(uint32_t id);
 uint32_t gim_conf_get_perf_mon_enable_opt(uint32_t id);
+#ifndef EXCLUDE_DCORE_DEBUG
 uint32_t gim_conf_get_hangdump_timeout_opt(uint32_t id);
+#endif
 uint32_t gim_conf_get_fb_sharing_mode_opt(uint32_t id);
 uint32_t gim_conf_get_accelerator_partition_mode_opt(uint32_t id);
 uint32_t gim_conf_get_memory_partition_mode_opt(uint32_t id);
@@ -209,6 +228,7 @@ uint32_t gim_conf_clear_conf_file(void);
 int gim_conf_save(void);
 
 extern char *gim_enabled_devices;
+extern bool svm_enabled;
 
 extern uint power_saving_mode;
 
@@ -216,5 +236,7 @@ uint32_t gim_conf_get_deferred_full_live_update_opt(uint32_t id);
 
 uint32_t gim_conf_get_bp_mode_opt(uint32_t id);
 
-uint32_t gim_conf_get_pf_fb_size_opt(uint32_t id);
+uint64_t gim_conf_get_pf_fb_size_opt(uint32_t id);
+
+uint32_t gim_conf_get_debug_mode_opt(uint32_t id);
 #endif

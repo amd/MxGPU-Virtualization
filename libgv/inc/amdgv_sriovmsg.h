@@ -97,7 +97,7 @@ union amd_sriov_msg_feature_flags {
 		uint32_t pp_one_vf_mode		: 1;
 		uint32_t reg_indirect_acc	: 1;
 		uint32_t av1_support		: 1;
-		uint32_t vcn_rb_decouple 	: 1;
+		uint32_t vcn_rb_decouple	: 1;
 		uint32_t mes_info_dump_enable	: 1;
 		uint32_t ras_caps		: 1;
 		uint32_t ras_telemetry		: 1;
@@ -181,6 +181,7 @@ struct amd_sriov_msg_uuid_info {
 		};
 		uint16_t asic_4;
 	};
+
 	uint32_t asic_0;
 };
 
@@ -254,7 +255,7 @@ struct amd_sriov_msg_pf2vf_info {
 
 	/* reserved */
 	uint32_t reserved[256 - AMD_SRIOV_MSG_PF2VF_INFO_FILLED_SIZE];
-} __packed;
+};
 
 struct amd_sriov_msg_vf2pf_info_header {
 	/* the total structure size in byte */
@@ -314,7 +315,7 @@ struct amd_sriov_msg_vf2pf_info {
 	uint32_t mes_info_size;
 	/* reserved */
 	uint32_t reserved[256 - AMD_SRIOV_MSG_VF2PF_INFO_FILLED_SIZE];
-} __packed;
+};
 
 /* hvvm mailbox send from guest/FW to host */
 enum amd_sriov_hvvm_mb_request_message {
@@ -338,6 +339,7 @@ enum amd_sriov_mailbox_request_message {
 	MB_REQ_MSG_RAS_POISON = 202,
 	MB_REQ_RAS_ERROR_COUNT = 203,
 	MB_REQ_RAS_CPER_DUMP = 204,
+	MB_REQ_RAS_BAD_PAGES = 205,
 
 	MB_REQ_MSG_REQ_GPU_DEBUG = 300,
 	MB_REQ_MSG_REL_GPU_DEBUG = 301,
@@ -345,23 +347,25 @@ enum amd_sriov_mailbox_request_message {
 
 /* mailbox message send from host to guest  */
 enum amd_sriov_mailbox_response_message {
-	MB_RES_MSG_CLR_MSG_BUF = 0,
-	MB_RES_MSG_READY_TO_ACCESS_GPU = 1,
-	MB_RES_MSG_FLR_NOTIFICATION = 2,
-	MB_RES_MSG_FLR_NOTIFICATION_COMPLETION = 3,
-	MB_RES_MSG_SUCCESS = 4,
-	MB_RES_MSG_FAIL = 5,
-	MB_RES_MSG_QUERY_ALIVE = 6,
-	MB_RES_MSG_GPU_INIT_DATA_READY = 7,
-	MB_RES_MSG_RAS_POISON_READY = 8,
-	MB_RES_MSG_PF_SOFT_FLR_NOTIFICATION = 9,
-	MB_RES_MSG_GPU_RMA = 10,
-	MB_RES_MSG_RAS_ERROR_COUNT_READY = 11,
+	MB_RES_MSG_CLR_MSG_BUF			= 0,
+	MB_RES_MSG_READY_TO_ACCESS_GPU		= 1,
+	MB_RES_MSG_FLR_NOTIFICATION		= 2,
+	MB_RES_MSG_FLR_NOTIFICATION_COMPLETION  = 3,
+	MB_RES_MSG_SUCCESS			= 4,
+	MB_RES_MSG_FAIL				= 5,
+	MB_RES_MSG_QUERY_ALIVE			= 6,
+	MB_RES_MSG_GPU_INIT_DATA_READY		= 7,
+	MB_RES_MSG_RAS_POISON_READY		= 8,
+	MB_RES_MSG_PF_SOFT_FLR_NOTIFICATION	= 9,
+	MB_RES_MSG_GPU_RMA			= 10,
+	MB_RES_MSG_RAS_ERROR_COUNT_READY	= 11,
 	MB_RES_MSG_GPU_DEBUG_NOTIFICATION = 12,
 	MB_RES_MSG_GPU_DEBUG_NOTIFICATION_COMPLETION = 13,
-	MB_REQ_RAS_CPER_DUMP_READY = 14,
-
-	MB_RES_MSG_TEXT_MESSAGE = 255
+	MB_RES_RAS_CPER_DUMP_READY		= 14,
+	MB_RES_MSG_RAS_BAD_PAGES_READY = 15,
+	MB_RES_MSG_RAS_BAD_PAGES_NOTIFICATION = 16,
+	MB_RES_MSG_UNRECOV_ERR_NOTIFICATION = 17,
+	MB_RES_MSG_TEXT_MESSAGE			= 255
 };
 
 enum amd_sriov_ras_telemetry_gpu_block {
@@ -410,7 +414,7 @@ struct amd_sriov_ras_cper_dump {
 	uint64_t overflow_count;
 	uint64_t count;
 	uint64_t wptr;
-	uint32_t buf[1];
+	uint32_t buf[];
 };
 
 struct amdsriov_ras_telemetry {

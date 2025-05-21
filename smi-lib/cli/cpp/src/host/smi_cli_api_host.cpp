@@ -173,9 +173,10 @@ typedef amdsmi_status_t (*AMDSMI_SET_MEMORY_PARTITION)(amdsmi_processor_handle,
 		amdsmi_memory_partition_type_t);
 typedef amdsmi_status_t (*AMDSMI_GET_MEMORY_PARTITION_CONFIG)(amdsmi_processor_handle,
 		amdsmi_memory_partition_config_t *);
-typedef amdsmi_status_t (*AMDSMI_GPU_GET_CPER_ENTRIES)(amdsmi_processor_handle, uint32_t, char*, uint64_t *,
-        amdsmi_cper_hdr**, uint64_t *, uint64_t *);
-
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_CPER_ENTRIES)(amdsmi_processor_handle, uint32_t, char*, uint64_t *,
+        amdsmi_cper_hdr_t**, uint64_t *, uint64_t *);
+typedef amdsmi_status_t (*AMDSMI_TOPO_GET_P2P_STATUS)(amdsmi_processor_handle,amdsmi_processor_handle,
+		amdsmi_link_type_t*, amdsmi_p2p_capability_t*);
 /////
 /////
 /////
@@ -247,7 +248,8 @@ AMDSMI_GET_CURR_MEMORY_PARTITION host_amdsmi_get_curr_memory_partition;
 AMDSMI_SET_ACCELERATOR_PARTITION host_amdsmi_set_gpu_accelerator_partition_command;
 AMDSMI_SET_MEMORY_PARTITION host_amdsmi_set_gpu_memory_partition_command;
 AMDSMI_GET_MEMORY_PARTITION_CONFIG host_amdsmi_get_gpu_memory_partition_config;
-AMDSMI_GPU_GET_CPER_ENTRIES host_amdsmi_gpu_get_cper_entries;
+AMDSMI_GET_GPU_CPER_ENTRIES host_amdsmi_get_gpu_cper_entries;
+AMDSMI_TOPO_GET_P2P_STATUS host_amdsmi_topo_get_p2p_status;
 
 AmdSmiApiHost::AmdSmiApiHost()
 {
@@ -427,9 +429,11 @@ AmdSmiApiHost::AmdSmiApiHost()
 	host_amdsmi_get_gpu_memory_partition_config = (AMDSMI_GET_MEMORY_PARTITION_CONFIG)LOAD_SYM(
 			amdSmiLibHandle, "amdsmi_get_gpu_memory_partition_config");
 
-	host_amdsmi_gpu_get_cper_entries = (AMDSMI_GPU_GET_CPER_ENTRIES)LOAD_SYM(
-			amdSmiLibHandle, "amdsmi_gpu_get_cper_entries");
+	host_amdsmi_get_gpu_cper_entries = (AMDSMI_GET_GPU_CPER_ENTRIES)LOAD_SYM(
+			amdSmiLibHandle, "amdsmi_get_gpu_cper_entries");
 
+	host_amdsmi_topo_get_p2p_status = (AMDSMI_TOPO_GET_P2P_STATUS)LOAD_SYM(amdSmiLibHandle,
+			"amdsmi_topo_get_p2p_status");
 	int ret = host_amdsmi_init(AMDSMI_INIT_AMD_GPUS);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		printf("AMDSMI failed to init \n");

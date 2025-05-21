@@ -581,6 +581,9 @@ struct gpuv_engine_queue_data {
 
 #define AMDGV_FLAG_L1_TLB_CNTL_REG_PSP_EN ((uint64_t)1 << 47)
 
+/*it indicates if libgv should enable service vm or not*/
+#define AMDGV_FLAG_ENABLE_SVM ((uint64_t)1 << 48)
+
 /*
  * AMDGV_SCHED_SOLID_MODE – RLCV will be in charge of VF world switch.
  *   Each VF will get fixed time slice (e.g. 7ms) no matter such VF has
@@ -990,7 +993,9 @@ enum amdgv_dev_conf_type {
 #ifdef WS_RECORD
 	AMDGV_CONF_WS_RECORD,
 #endif
+#ifndef EXCLUDE_DCORE_DEBUG
 	AMDGV_CONF_DISABLE_DCORE_DEBUG,
+#endif
 	AMDGV_CONF_GPUV_LIVE_UPDATE,
 	AMDGV_CONF_PERF_LOG_FLAG,
 	AMDGV_CONF_DEBUG_DUMP_FLAG,
@@ -1196,6 +1201,7 @@ enum amdgv_guard_type {
 	AMDGV_GUARD_EVENT_ALL_INT	    = 3,
 	AMDGV_GUARD_EVENT_RAS_ERR_COUNT	    = 4,
 	AMDGV_GUARD_EVENT_RAS_CPER_DUMP	    = 5,
+	AMDGV_GUARD_EVENT_RAS_BAD_PAGES	    = 6,
 	AMDGV_GUARD_EVENT_MAX,
 
 	AMDGV_GUARD_ALL,
@@ -1680,6 +1686,12 @@ struct amdgv_bp_info {
 	uint32_t idx_vf;
 };
 
+enum AMDGV_CU_DATA_TYPE {
+	AMDGV_CU_DATA_TYPE__LDS = 0,
+	AMDGV_CU_DATA_TYPE__SGPRs,
+	AMDGV_CU_DATA_TYPE__VGPRs,
+};
+
 struct amdgv_perf_log_info {
 	uint32_t vf_num;
 	struct {
@@ -2104,6 +2116,16 @@ void amdgv_print_active_vfs_running_time(amdgv_dev_t dev);
  */
 int amdgv_set_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 		       union amdgv_dev_conf *conf);
+
+
+/**
+ * amdgv_set_product_info_invalid - mark product_info is invalid
+ *
+ * @dev: amdgv device handle
+ *
+ * mark product_info is invalid
+ */
+int amdgv_set_product_info_invalid(amdgv_dev_t dev);
 
 /**
  * amdgv_get_dev_conf - get device configurations
@@ -2725,11 +2747,11 @@ int amdgv_submit_frame_to_engine(amdgv_dev_t dev, enum amdgv_engine_id, uint8_t 
  *
  * @dev:	amdgv device handle
  * @bdf:	GPU bus id
- * @data:	diagnosis data
+ * @buf:	diagnosis data
  * @size:	diagnosis data size
  *
  */
-int amdgv_get_diag_data(amdgv_dev_t dev, uint32_t bdf, void *data, uint32_t *size);
+int amdgv_get_diag_data(amdgv_dev_t dev, uint32_t bdf, void *buf, uint32_t *size);
 
 #ifndef EXCLUDE_FTRACE
 /**
@@ -3035,6 +3057,14 @@ int amdgv_set_bp_mode(amdgv_dev_t dev, int mode);
 int amdgv_get_bp_mode(amdgv_dev_t dev);
 
 /*
+ * amdgv_dump_cu_data - dump CU data to file
+ *
+ * @dev:	amdgv device handle
+ * @type:	CU data type LDS/SGPRs/VGPRs
+ *
+ */
+int amdgv_dump_cu_data(amdgv_dev_t dev, enum AMDGV_CU_DATA_TYPE type);
+/*
  * amdgv_send_ws_cmd - manually send a world switch command
  *
  * @dev:			amdgv device handle
@@ -3103,4 +3133,17 @@ int amdgv_register_interrupt_handler(amdgv_dev_t dev, enum amdgv_interrupt_handl
 
 int amdgv_gpu_timer(amdgv_dev_t dev, uint64_t micro_seconds);
 
+int amdgv_error_ring_buffer_dump(amdgv_dev_t dev, char *buf, int len);
+
+/**
+ * amdgv_is_service_vm_enabled
+ *
+ * @dev: amdgv device handle
+ *
+ * Check if the adapter is set as svm enabled.
+ *
+ * Returns:
+ * true for yes, false for not.
+ */
+bool amdgv_is_service_vm_enabled(amdgv_dev_t dev);
 #endif

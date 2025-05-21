@@ -123,18 +123,23 @@ int amdgv_umc_badpages_read(struct amdgv_adapter *adapt, void **bp, unsigned int
 bool amdgv_umc_check_bad_page(struct amdgv_adapter *adapt, uint64_t addr);
 int amdgv_umc_load_bad_pages(struct amdgv_adapter *adapt);
 int amdgv_umc_clean_bad_page_records(struct amdgv_adapter *adapt);
-void amdgv_umc_notify_vf_bp_records(struct amdgv_adapter *adapt, uint32_t idx_vf);
+int amdgv_umc_copy_bp_records_to_vf(struct amdgv_adapter *adapt,
+				    uint32_t idx_vf,
+				    uint32_t allowed_size,
+				    uint32_t *write_size,
+				    uint32_t *more);
 int amdgv_umc_update_fatal_error_record(struct amdgv_adapter *adapt);
 void amdgv_umc_add_addr_to_vf_bad_block_region(struct amdgv_adapter *adapt,
 					       uint64_t err_addr_pf);
-int amdgv_umc_recovery_sw_init(struct amdgv_adapter *adapt);
-int amdgv_umc_recovery_sw_fini(struct amdgv_adapter *adapt);
-int amdgv_umc_recovery_hw_init(struct amdgv_adapter *adapt);
-int amdgv_umc_recovery_hw_fini(struct amdgv_adapter *adapt);
+int amdgv_umc_sw_init(struct amdgv_adapter *adapt);
+int amdgv_umc_sw_fini(struct amdgv_adapter *adapt);
+int amdgv_umc_hw_init(struct amdgv_adapter *adapt);
+int amdgv_umc_hw_fini(struct amdgv_adapter *adapt);
 int amdgv_umc_add_bad_pages(struct amdgv_adapter *adapt,
 		struct eeprom_table_record *bps, int pages, bool from_eeprom);
 int amdgv_umc_reserve_bad_pages(struct amdgv_adapter *adapt);
 int amdgv_umc_save_bad_pages(struct amdgv_adapter *adapt);
+void amdgv_umc_check_and_handle_bp_in_crit_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf);
 int amdgv_umc_reload_bp_from_rom(struct amdgv_adapter *adapt);
 void *amdgv_umc_grow_bp_buff(void *buff, uint32_t *cap, uint64_t size);
 int amdgv_umc_update_bp_buff(struct amdgv_adapter *adapt, struct eeprom_table_record **bp_buff, uint32_t pages, uint32_t *cap);

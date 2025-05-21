@@ -29,6 +29,11 @@
  */
 static const struct amdgv_marketing_name_entry amdgv_marketing_name_table[] = {
 
+	/* Mi200 PF */
+	{ CHIP_MI200, 0x7408, 0x00, "AMD Instinct MI250X"},
+	{ CHIP_MI200, 0x740C, 0x01, "AMD Instinct MI250X/MI250"},
+	{ CHIP_MI200, 0x740F, 0x02, "AMD Instinct MI210"},
+
 	/* Mi300 PF */
 	{ CHIP_MI300X, 0x74A1, 0x00, "AMD Instinct MI300X"},
 	{ CHIP_MI308X, 0x74A2, 0x00, "AMD Instinct MI308X"},
@@ -42,6 +47,11 @@ static const struct amdgv_marketing_name_entry amdgv_marketing_name_table[] = {
 	{ CHIP_MI308X, 0x74BC, 0x00, "AMD Instinct MI308X VF"},
 	{ CHIP_MI300X, 0x74BD, 0x00, "AMD Instinct MI300X HF"},
 
+	/* Navi32 PF */
+	{ CHIP_NAVI32, 0x7460, 0x00, "AMD Radeon PRO V710"},
+
+	/* Navi32 VF */
+	{ CHIP_NAVI32, 0x7461, 0x00, "AMD Radeon PRO V710"},
 };
 
 const char *amdgv_get_marketing_name(uint32_t dev_id, uint32_t rev_id)

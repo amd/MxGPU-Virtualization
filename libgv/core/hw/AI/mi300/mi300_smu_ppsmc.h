@@ -75,7 +75,9 @@
 #define PPSMC_MSG_PmLogGetTableVersion              0x42
 #define PPSMC_MSG_RmaDueToBadPageThreshold          0x43
 #define PPSMC_MSG_SelectPstatePolicy                0x44
-#define PPSMC_Message_Count                         0x45
+
+#define PPSMC_MSG_ResetVfArbitersByIndex            0x5A
+#define PPSMC_Message_Count                         0x4B
 
 
 //PPSMC Reset Types for driver msg argument

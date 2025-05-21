@@ -21,6 +21,29 @@
 
 SRC_PATH := $(realpath $(dir $(lastword $(MAKEFILE_LIST))))
 
+GCC_VER_GE9 = $(shell echo `gcc -dumpversion | cut -f1-2 -d.`\>=9 | bc)
+GCC_VER_GE6 = $(shell echo `gcc -dumpversion | cut -f1-2 -d.`\>=6 | bc)
+KERNEL_VER_MAJOR_GT5 = $(shell echo `uname -r | cut -f1-1 -d.`\>5 | bc)
+KERNEL_VER_MAJOR_EQ5 = $(shell echo `uname -r | cut -f1-1 -d.`\==5 | bc)
+KERNEL_VER_MINOR_GE4 = $(shell echo `uname -r | cut -f2-2 -d.`\>=4 | bc)
+
+export ws_record = false
+
+# exclude dcore debug module on kernel version less than 5.4
+ifeq ($(KERNEL_VER_MAJOR_GT5),1)
+	export exclude_dcore_debug = false
+else
+	ifeq ($(KERNEL_VER_MAJOR_EQ5),1)
+		ifeq ($(KERNEL_VER_MINOR_GE4),1)
+			export exclude_dcore_debug = false
+		else
+			export exclude_dcore_debug = true
+		endif
+	else
+		export exclude_dcore_debug = true
+	endif
+endif
+
 LIBGV_PATH = $(SRC_PATH)/libgv
 GIM_SHIM_PATH = $(SRC_PATH)/gim_shim
 
@@ -40,13 +63,35 @@ subdir-ccflags-y += -I$(SMI_PATH)/inc -I$(SMI_SHIM_PATH) -I$(SMI_LIB_COMMON_PATH
 subdir-ccflags-y += -I$(GIM_SHIM_PATH)
 subdir-ccflags-y += -I$(SYSFS_PATH)
 subdir-ccflags-y += -I$(GIM_COMS_INCLUDE_DIR)
+subdir-ccflags-y += -Werror -Wmissing-prototypes -Wimplicit-fallthrough=2 -Wno-enum-conversion -Wno-expansion-to-defined
+#subdir-ccflags-y += -D EXCLUDE_VF_DEVICE_ACCESS -D EXCLUDE_VF_DEVICE_PCI_CONFIG_ACCESS -D CONFIG_AMDGV_FLR_NOT_RESTORE_MSIX
+
+ifeq ($(GCC_VER_GE9),1)
+	subdir-ccflags-y += -fcf-protection=none
+endif
+
+ifeq ($(GCC_VER_GE6),1)
+	subdir-ccflags-y += -Wshift-negative-value
+endif
 
 KERNELDIR ?= /lib/modules/$(shell uname -r)/build
 subdir-ccflags-y += -I $(KERNELDIR)/include/linux
-subdir-ccflags-y += -Werror -Wmissing-prototypes -Wimplicit-fallthrough=2 -Wno-enum-conversion -Wno-expansion-to-defined
+
+ifeq ($(exclude_dcore_debug), true)
+	subdir-ccflags-y += -DEXCLUDE_DCORE_DEBUG
+endif
+
+ifeq ($(ws_record), true)
+  subdir-ccflags-y += -D WS_RECORD
+endif
+
 subdir-ccflags-y += -Wl,-z,relro,-z,noexecstack,-z,noexecheap -Wl,--strip-debug -Wl,--strip-all
 
-obj-m += gim.o
+ifeq ($(origin CONFIG_GIM_AMD), undefined)
+CONFIG_GIM_AMD = m
+endif
+
+obj-$(CONFIG_GIM_AMD) += gim.o
 
 include $(LIBGV_PATH)/Makefile
 gim-objs += $(LIBGV_COMPILE_FILES)
@@ -76,5 +121,6 @@ clean:
 	$(MAKE) -C $(SRC_PATH)/gim-coms-lib clean
 	$(MAKE) -C $(KERNELDIR) M=$(SRC_PATH) clean
 	$(MAKE) -C $(SRC_PATH)/smi-lib clean
+	rm libgv/VERSION
 
 .PHONY: all install clean

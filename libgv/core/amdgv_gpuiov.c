@@ -41,8 +41,6 @@ static struct amdgv_id_mask_name amdgv_gpuiov_cmd_names[] = {
 	  "DISABLE HW_AUTO_SCHED AND SWITCH" },
 	{ AMDGV_SAVE_RLCV_STATE, AMDGV_NAME_MASK_HW_GFX, "SAVE RLCV STATE" },
 	{ AMDGV_LOAD_RLCV_STATE, AMDGV_NAME_MASK_HW_GFX, "LOAD RLCV STATE" },
-	{ AMDGV_ENABLE_MMSCH_VFGATE, AMDGV_NAME_MASK_HW_MM, "MMSCH_VFGATE_ENABLE" },
-	{ AMDGV_DISABLE_MMSCH_VFGATE, AMDGV_NAME_MASK_HW_MM, "MMSCH_VFGATE_DISABLE" },
 	{ AMDGV_CLEAR_VF_STATE, AMDGV_NAME_MASK_HW_ALL, "CLEAR VF STATE" },
 	{ AMDGV_SHUTDOWN_GPU, AMDGV_NAME_MASK_HW_ALL, "SHUTDOWN VF" },
 	{ AMDGV_EVENT_NOTIFICATION, AMDGV_NAME_MASK_HW_ALL, "EVENT NOTIFICATION" },
@@ -831,35 +829,6 @@ int amdgv_gpuiov_transfer_vf_data(struct amdgv_adapter *adapt,
 	}
 
 	return ret;
-}
-
-int amdgv_gpuiov_set_mmsch_vfgate(struct amdgv_adapter *adapt, uint32_t idx_vf,
-				  uint32_t hw_sched_id, bool enable)
-{
-	int ret;
-	enum amdgv_gpuiov_cmd cmd =
-		enable ? AMDGV_ENABLE_MMSCH_VFGATE : AMDGV_DISABLE_MMSCH_VFGATE;
-
-	if (adapt->gpuiov.funcs->set_mmsch_vfgate && idx_vf != AMDGV_PF_IDX) {
-		ret = adapt->gpuiov.funcs->set_mmsch_vfgate(adapt, cmd, hw_sched_id, idx_vf,
-							    AMDGV_INVALID_IDX_VF);
-
-		/* unsupported by fw. Don't wait for resp */
-		if (ret != AMDGV_FAILURE) {
-#ifdef WS_RECORD
-			amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id, enable ? AMDGV_RECORD_ENABLE_MMSCH_VFGATE_START :
-					AMDGV_RECORD_DISABLE_MMSCH_VFGATE_START);
-#endif
-			ret = wait_cmd_complete(adapt, idx_vf, hw_sched_id, cmd_allow_time());
-#ifdef WS_RECORD
-			amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id, enable ? AMDGV_RECORD_ENABLE_MMSCH_VFGATE_END :
-					AMDGV_RECORD_DISABLE_MMSCH_VFGATE_END);
-#endif
-			return ret;
-		}
-	}
-
-	return 0;
 }
 
 int amdgv_gpuiov_shutdown_vf_no_wait(struct amdgv_adapter *adapt, uint32_t idx_vf,

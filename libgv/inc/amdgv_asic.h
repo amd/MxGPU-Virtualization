@@ -29,6 +29,8 @@
  * Use explicit assignment to avoid unintetional change of index value
  */
 enum amd_asic_type {
+	CHIP_MI200 = 2,
+	CHIP_NAVI32 = 8,
 	CHIP_MI300X = 9,
 	CHIP_MI308X = 11,
 	CHIP_LAST,

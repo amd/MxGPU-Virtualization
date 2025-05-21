@@ -683,6 +683,32 @@ enum RWL_V01_SECTION_MASK {
 	RWL_V01_SECTION_MASK_LIVEMIG_VF		= 1 << RWL_V01_SECTION_ID_LIVEMIG_VF,
 };
 
+enum RWL_SECTION_ID {
+	RWL_SECTION_ID_RAS		= 0,
+	RWL_SECTION_ID_PF		= 1,
+	RWL_SECTION_ID_SRAM_RLCV	= 2,
+	RWL_SECTION_ID_SRAM_RLCG	= 3,
+	RWL_SECTION_ID_SRAM_MMSCH	= 4,
+	RWL_SECTION_ID_SRAM_SMU		= 5,
+	RWL_SECTION_ID_SRAM_ARAM	= 6,
+	RWL_SECTION_ID_SRAM_DRAM	= 7,
+	RWL_SECTION_ID_SRIOV		= 8,
+
+	RWL_SECTION_ID_NUM
+};
+
+enum RWL_SECTION_MASK {
+	RWL_SECTION_MASK_RAS		= 1 << RWL_SECTION_ID_RAS,
+	RWL_SECTION_MASK_PF		= 1 << RWL_SECTION_ID_PF,
+	RWL_SECTION_MASK_SRAM_RLCV	= 1 << RWL_SECTION_ID_SRAM_RLCV,
+	RWL_SECTION_MASK_SRAM_RLCG	= 1 << RWL_SECTION_ID_SRAM_RLCG,
+	RWL_SECTION_MASK_SRAM_MMSCH	= 1 << RWL_SECTION_ID_SRAM_MMSCH,
+	RWL_SECTION_MASK_SRAM_SMU	= 1 << RWL_SECTION_ID_SRAM_SMU,
+	RWL_SECTION_MASK_SRAM_ARAM	= 1 << RWL_SECTION_ID_SRAM_ARAM,
+	RWL_SECTION_MASK_SRAM_DRAM	= 1 << RWL_SECTION_ID_SRAM_DRAM,
+	RWL_SECTION_MASK_SRIOV		= 1 << RWL_SECTION_ID_SRIOV,
+};
+
 struct psp_gfx_cmd_vfgate {
 	enum psp_gfx_vfgate_action action;
 	uint32_t		   target_vfid;
@@ -740,6 +766,11 @@ struct psp_gfx_cmd_sriov_memory_part {
 struct psp_gfx_cmd_sriov_copy_vf_chiplet_regs {
 	uint32_t source_vfid;
 };
+
+/* Static data includes the FW contents of  MEC, VCN, SDMA */
+#define MIGRATION_FLAG_STATIC 0x00000001
+/* dynamic data includes MMSCH_CTX, SMU_CTX, VCN0/1_RAM, PSP_CTX, SDMA_CTX, SRL, RWL */
+#define MIGRATION_FLAG_DYNAMIC 0x00000002
 
 struct psp_gfx_cmd_migration_get_psp_info {
 	uint32_t migration_version;
@@ -1097,6 +1128,9 @@ enum psp_status amdgv_psp_load_local_fw(struct amdgv_adapter *adapt,
 					enum amdgv_firmware_id ucode_id, unsigned char *embedded_fw_image);
 enum psp_status amdgv_psp_live_update_fw(struct amdgv_adapter *adapt,
 					 enum amdgv_firmware_id fw_id);
+enum psp_status amdgv_psp_start_rlc_autoload(struct amdgv_adapter *adapt);
+enum psp_status amdgv_psp_asd_load(struct amdgv_adapter *adapt);
+enum psp_status amdgv_psp_asd_unload(struct amdgv_adapter *adapt);
 enum psp_status amdgv_psp_ras_initialize(struct amdgv_adapter *adapt,
 					unsigned char *ras_image, uint32_t ras_size);
 enum psp_status amdgv_psp_ras_terminate(struct amdgv_adapter *adapt);
@@ -1141,6 +1175,8 @@ enum psp_status amdgv_psp_get_fw_attestation_info(struct amdgv_adapter *adapt, u
 void amdgv_psp_save_mb_error_record(struct amdgv_adapter *adapt, uint32_t idx_vf,
 						struct psp_mb_status *mb_status);
 void amdgv_psp_record_loaded_fw(struct amdgv_adapter *adapt, unsigned char *fw_image, uint32_t fw_id);
+enum psp_status amdgv_psp_get_runtime_db_entry(struct amdgv_adapter *adapt,
+	enum psp_runtime_entry_type entry_type, void *db_entry);
 enum psp_status amdgv_psp_load_vbflash_bin(struct amdgv_adapter *adapt,
 					char *buffer, uint32_t pos, uint32_t count);
 enum psp_status amdgv_psp_update_spirom(struct amdgv_adapter *adapt);

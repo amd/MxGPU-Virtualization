@@ -19,6 +19,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE
 
-SYSFS_LOCAL = gim_monitor.o gim_guard.o gim_debugfs.o amdgv_cmd.o
+SYSFS_LOCAL = gim_monitor.o gim_guard.o gim_debugfs.o amdgv_cmd.o amdgv_uniras_cmd.o
 
 SYSFS_FILES = $(addprefix gim_shim/sysfs/,$(SYSFS_LOCAL))

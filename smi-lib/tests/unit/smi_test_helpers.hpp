@@ -82,8 +82,10 @@ void *mem_aligned_alloc(void **mem, size_t alignment, size_t size);
 
 class AmdSmiTest : public ::testing::Test {
 protected:
+	AmdSmiTest() { num_devices = 1; };
+	AmdSmiTest(uint8_t num_dev) { num_devices = num_dev; };
+	void initialize_smi_lib(uint32_t version = SMI_VERSION_MAX, uint8_t num_dev = 1);
 
-	void initialize_smi_lib(uint32_t version = SMI_VERSION_MAX);
 
 	void finalize_smi_lib();
 
@@ -97,7 +99,7 @@ protected:
 		output_payload_ptr = nullptr;
 		output_payload_size = 0;
 
-		initialize_smi_lib();
+		initialize_smi_lib(SMI_VERSION_MAX, num_devices);
 	}
 
 	void TearDown() override
@@ -169,6 +171,7 @@ private:
 	void *output_payload_ptr;
 	size_t output_payload_size;
 	uint32_t handshake_version;
+	uint8_t num_devices;
 };
 
 } // namespace amdsmi

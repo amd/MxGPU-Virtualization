@@ -371,13 +371,19 @@ inline std::string topologyFbSharingTemplate{ "FB_SHARING_TABLE:\n" };
 inline std::string topologyLinkTypeTemplate{ "LINK_TYPE_TABLE:\n" };
 inline std::string topologyLinkStatusTemplate{ "LINK_STATUS_TABLE:\n" };
 
+inline std::string topologyCoherentTemplate{ "COHERENT_TABLE:\n" };
+inline std::string topologyAtomicsTemplate{ "ATOMICS_TABLE:\n" };
+inline std::string topologyDmaTemplate{ "DMA_TABLE:\n" };
+inline std::string topologyBiDirectionalTemplate{ "BI_DIRECTIONAL_TABLE:\n" };
+
 inline std::string metricXgmiTemplate{ "    XGMI:\n" };
 inline std::string metricXgmiLinkMetricTableTemplate{ "LINK_METRICS_TABLE:\n" };
 inline std::string staticVramTemplate{ "    VRAM:\n"
 	"        TYPE: %s \n"
 	"        VENDOR: %s \n"
 	"        SIZE: %s %s \n"
-	"        BIT_WIDTH: %s \n" };
+	"        BIT_WIDTH: %s \n"
+	"        MAX_BANDWIDTH: %s %s \n" };
 
 inline std::string staticCacheHeaderTemplate{ "    CACHE_INFO:\n" };
 inline std::string staticCacheInfoTemplate{
@@ -443,3 +449,6 @@ inline std::string staticPartitionTemplate {
 	"        ACCELERATOR_PARTITION: %s \n"
 	"        MEMORY_PARTITION: %s \n"
 	"        PARTITION_ID: %s \n"};
+
+inline std::string RasCperTemplate {
+	"%s \t %d \t\t %s \t %s\n"};

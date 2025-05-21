@@ -50,16 +50,14 @@ $(info SMI-LIB BUILD_TYPE: $(BUILD_TYPE))
 $(info SMI-LIB THREAD_SAFE: $(THREAD_SAFE))
 $(info SMI-Lib LOGGING: $(LOGGING))
 
+SYS_LIB_DIR := /usr/lib
+SYS_INC_DIR := /usr/inc
 AMDSMI_BUILD_DIR := $(BUILD_DIR)/amdsmi
 OUTPUT_DIR := $(AMDSMI_BUILD_DIR)/$(BUILD_TYPE)
 PACKAGE_OUTPUT_DIR := $(AMDSMI_BUILD_DIR)/package/$(BUILD_TYPE)/amdsmi
 DOCS_OUTPUT_DIR := $(AMDSMI_BUILD_DIR)/docs
 DOXYGEN_OUTPUT_DIR := $(DOCS_OUTPUT_DIR)/doxygen
 HOOKS_DIR=../.git/modules/smi-lib/hooks
-
-ifeq ($(PREFIX),)
-  PREFIX := /usr/local
-endif
 
 SRCS := $(filter-out $(EXCLUDE_SRCS),$(notdir $(wildcard $(SOURCE_DIR)/*.c)))
 SRCS += $(addprefix $(LIN_HOST_FOLDER)/,$(notdir $(wildcard $(LIN_SOURCE_DIR)/*.c)))
@@ -76,6 +74,17 @@ INCLUDE := $(addprefix -I,$(INCLUDE_DIR) $(INTERFACE_DIR) $(LIN_HOST_INCLUDE_DIR
 INCLUDE += $(HOST_INCLUDE_FLAGS)
 
 CFLAGS  = $(DEFAULT_CFLAGS) $(INCLUDE) -fPIC
+
+VERSION_FILE := VERSION
+VERSION_MAJOR := $(shell grep 'major=' $(VERSION_FILE) | cut -d '=' -f 2)
+VERSION_MINOR := $(shell grep 'minor=' $(VERSION_FILE) | cut -d '=' -f 2)
+VERSION_RELEASE := $(shell grep 'release=' $(VERSION_FILE) | cut -d '=' -f 2)
+
+CFLAGS += -DAMDSMI_VERSION_MAJOR=$(VERSION_MAJOR)
+CFLAGS += -DAMDSMI_VERSION_MINOR=$(VERSION_MINOR)
+CFLAGS += -DAMDSMI_VERSION_RELEASE=$(VERSION_RELEASE)
+
+VERSION_LIB := AMDSMI_VERSION_MAJOR=$(VERSION_MAJOR) AMDSMI_VERSION_MINOR=$(VERSION_MINOR) AMDSMI_VERSION_RELEASE=$(VERSION_RELEASE)
 
 DYNAMICLIB_FLAGS = -Wl,-soname,libamdsmi.so
 DYNAMICLIB_FLAGS += $(HOST_DYNAMIC_FLAGS)
@@ -183,7 +192,7 @@ EXTRACT:
 
 .PHONY: test
 test: $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET) $(OUTPUT_DIR)/$(STATICLIB_TARGET)
-	$(MAKE) -C $(TEST_DIR)/
+	$(MAKE) -C $(TEST_DIR)/ $(VERSION_LIB)
 
 .PHONY: examples
 examples: $(OUTPUT_DIR)/$(STATICLIB_TARGET)
@@ -195,11 +204,11 @@ test_clean:
 
 .PHONY: test_run
 test_run: test
-	$(MAKE) -C $(TEST_DIR)/ run
+	$(MAKE) -C $(TEST_DIR)/ run $(VERSION_LIB)
 
 .PHONY: gen_coverage
 gen_coverage:
-	$(MAKE) -C $(TEST_DIR)/ gen_coverage
+	$(MAKE) -C $(TEST_DIR)/ gen_coverage $(VERSION_LIB)
 
 ifeq ($(CPPTOOL_BUILD), True)
 .PHONY: cpptool_build
@@ -232,21 +241,25 @@ clean:
 	fi
 
 install: $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET) $(OUTPUT_DIR)/$(STATICLIB_TARGET)
-	install -d $(DESTDIR)$(PREFIX)/lib/$(LIBNAME)/
-	install -m 644 $(OUTPUT_DIR)/$(STATICLIB_TARGET) $(DESTDIR)$(PREFIX)/lib/$(LIBNAME)/
-	install -m 644 $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET) $(DESTDIR)$(PREFIX)/lib/$(LIBNAME)/
-	install -d $(DESTDIR)$(PREFIX)/inc/$(LIBNAME)/
-	install -m 644 $(INTERFACE_DIR)/*.h $(DESTDIR)$(PREFIX)/inc/$(LIBNAME)/
+	install -d $(DESTDIR)$(SYS_LIB_DIR)
+	install -m 644 $(OUTPUT_DIR)/$(STATICLIB_TARGET) $(DESTDIR)$(SYS_LIB_DIR)
+	install -m 644 $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET) $(DESTDIR)$(SYS_LIB_DIR)
+	install -d $(DESTDIR)$(SYS_INC_DIR)
+	install -m 644 $(INTERFACE_DIR)/*.h $(DESTDIR)$(SYS_INC_DIR)
 
+uninstall:
+	@if [ -f $(SYS_LIB_DIR)/libamdsmi.so ]; then $(RM) $(SYS_LIB_DIR)/libamdsmi.so; fi
+	@if [ -f $(SYS_INC_DIR)/amdsmi.h ]; then $(RM) $(SYS_INC_DIR)/amdsmi.h; fi
 
 .PHONY: docs
 docs:
 	@doxygen --version > /dev/null || (echo "ERROR: doxygen is required to generate documentation. You can install it by typing: sudo apt-get install doxygen"; exit 1)
 	python3 -mvenv .venv
-	.venv/bin/python -m pip install -r docs/requirements.txt
+	.venv/bin/python -m pip install -r docs/sphinx/requirements.txt
 	mkdir -p $(DOXYGEN_OUTPUT_DIR)
+	cd $(PROJECT_ROOT)/docs/doxygen && \
 	DOXYGEN_INPUT_DIR=$(INTERFACE_DIR) \
 	DOXYGEN_OUTPUT_DIR=$(DOXYGEN_OUTPUT_DIR) \
-		doxygen $(PROJECT_ROOT)/docs/doxygen/Doxyfile
+		doxygen Doxyfile
 	.venv/bin/sphinx-build -b html docs/ $(DOCS_OUTPUT_DIR)
 	@echo "Documentation generated at: $(AMDSMI_BUILD_DIR)/docs/index.html"

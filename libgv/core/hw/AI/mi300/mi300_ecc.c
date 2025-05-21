@@ -305,7 +305,7 @@ static bool mi300_ecc_is_poison_consumption_wgr(struct amdgv_adapter *adapt,
 	return false;
 }
 
-static void mi300_ecc_start_poison_consumption_recovery(struct amdgv_adapter *adapt,
+static void mi300_ecc_do_poison_consumption_recovery(struct amdgv_adapter *adapt,
 							uint32_t idx_vf,
 							enum amdgv_ras_block block)
 {
@@ -324,7 +324,7 @@ static void mi300_ecc_start_poison_consumption_recovery(struct amdgv_adapter *ad
 
 static void mi300_ecc_find_poison(struct amdgv_adapter *adapt,
 				  uint32_t idx_vf,
-				  bool is_consumption)
+				  bool retire_pages)
 {
 	int i = 0, ret = 0;
 	uint32_t start_count = adapt->ecc.pending_de_count;
@@ -342,15 +342,19 @@ static void mi300_ecc_find_poison(struct amdgv_adapter *adapt,
 		oss_msleep(1);
 	}
 
-	/* Trigger page retirement */
-	if (!ret && is_consumption)
+	if (!ret && retire_pages)
 		amdgv_umc_process_ras_data_cb(adapt, &err_data, idx_vf);
 }
 
 static int mi300_ecc_poison_creation(struct amdgv_adapter *adapt,
 				     struct amdgv_sched_event *event)
 {
-	mi300_ecc_find_poison(adapt, event->idx_vf, false);
+
+	mi300_ecc_find_poison(adapt, event->idx_vf, true);
+
+	if (amdgv_ras_eeprom_is_gpu_bad(adapt)) {
+		amdgv_device_handle_bad_gpu(adapt);
+	}
 
 	return 0;
 }
@@ -359,9 +363,9 @@ static int mi300_ecc_poison_consumption(struct amdgv_adapter *adapt,
 					struct amdgv_sched_event *event)
 {
 	mi300_ecc_find_poison(adapt, event->idx_vf, true);
-	mi300_ecc_start_poison_consumption_recovery(adapt,
-						    event->idx_vf,
-						    event->data.poison.consumption.block);
+	mi300_ecc_do_poison_consumption_recovery(adapt,
+						 event->idx_vf,
+						 event->data.poison.consumption.block);
 
 	mi300_ecc_clear_pending_de_count(adapt);
 
@@ -436,7 +440,7 @@ static int mi300_ecc_sw_init(struct amdgv_adapter *adapt)
 		goto out;
 	}
 
-	if (amdgv_umc_recovery_sw_init(adapt)) {
+	if (amdgv_umc_sw_init(adapt)) {
 		ret = AMDGV_FAILURE;
 		goto out;
 	}
@@ -468,7 +472,7 @@ static int mi300_ecc_sw_fini(struct amdgv_adapter *adapt)
 
 	amdgv_umc_ras_lock_fini(adapt);
 
-	amdgv_umc_recovery_sw_fini(adapt);
+	amdgv_umc_sw_fini(adapt);
 
 	//Clear all ecc data
 	oss_memset(&adapt->ecc, 0, sizeof(struct amdgv_ecc));
@@ -534,7 +538,7 @@ static int mi300_ecc_hw_init(struct amdgv_adapter *adapt)
 
 	if (amdgv_ecc_is_support(adapt, AMDGV_RAS_BLOCK__UMC)) {
 		/* init ras eeprom and load umc retired pages */
-		ret = amdgv_umc_recovery_hw_init(adapt);
+		ret = amdgv_umc_hw_init(adapt);
 		if (ret) {
 			AMDGV_ERROR("Failed to Init RAS ECC\n");
 			return ret;
@@ -553,7 +557,7 @@ static int mi300_ecc_hw_fini(struct amdgv_adapter *adapt)
 	if (adapt->ecc.supported & BIT(AMDGV_RAS_MEM_ECC_SUPPORT)) {
 		adapt->ecc.supported &= ~BIT(AMDGV_RAS_MEM_ECC_SUPPORT);
 		adapt->ecc.enabled &= ~BIT(AMDGV_RAS_BLOCK__UMC);
-		amdgv_umc_recovery_hw_fini(adapt);
+		amdgv_umc_hw_fini(adapt);
 	}
 
 	if (adapt->ecc.supported & BIT(AMDGV_RAS_SRAM_ECC_SUPPORT)) {

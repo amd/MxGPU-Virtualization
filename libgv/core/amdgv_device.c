@@ -34,6 +34,7 @@
 #include "amdgv_xgmi.h"
 
 #include "hw/AI/ai.h"
+#include "hw/navi3/navi32_device.h"
 
 static const uint32_t this_block = AMDGV_COMMUNICATION_BLOCK;
 
@@ -45,13 +46,54 @@ static const uint32_t this_block = AMDGV_COMMUNICATION_BLOCK;
 #define mmPCIE_INDEX2_HI 0x0011
 #define mmPCIE_DATA2	 0x000f
 
+#define MI200_CAPS (AMDGV_CAP_MANUAL_SCHED | AMDGV_CAP_HUNG_HW_DETECT)
 #define MI300_CAPS (AMDGV_CAP_MANUAL_SCHED | AMDGV_CAP_HUNG_HW_DETECT)
+#define NAVI32_CAPS (AMDGV_CAP_MANUAL_SCHED | AMDGV_CAP_HUNG_HW_DETECT)
 
 static const struct amdgv_asic_entry amdgv_sriov_device_table[] = {
 /* dev_id, sub_dev_id, rev_id, caps,
 	 * init function table, mitigation table,
 	 * reg base init
 	 */
+
+	/* Mi200 rev 00 */
+	{
+		CHIP_MI200,
+		0x7408,
+		ANY_ID,
+		ANY_ID,
+		MI200_CAPS,
+		&mi200_init_table,
+		NULL,
+		&mi200_mitigation_table,
+		mi200_reg_base_init,
+	},
+
+	/* Mi200 rev 01 */
+	{
+		CHIP_MI200,
+		0x740C,
+		ANY_ID,
+		ANY_ID,
+		MI200_CAPS,
+		&mi200_init_table,
+		NULL,
+		&mi200_mitigation_table,
+		mi200_reg_base_init,
+	},
+
+	/* Mi200 rev 02 */
+	{
+		CHIP_MI200,
+		0x740F,
+		ANY_ID,
+		ANY_ID,
+		MI200_CAPS,
+		&mi200_init_table,
+		NULL,
+		&mi200_mitigation_table,
+		mi200_reg_base_init,
+	},
 
 	/* Mi300X */
 	{
@@ -114,6 +156,29 @@ static const struct amdgv_asic_entry amdgv_sriov_device_table[] = {
 		mi300_reg_base_init,
 	},
 
+	/* navi32 */
+	{
+		CHIP_NAVI32,
+		0x7460,
+		ANY_ID,
+		ANY_ID,
+		NAVI32_CAPS,
+		&navi32_init_table,
+		&navi32_live_info_table,
+		&navi32_mitigation_table,
+		navi32_reg_base_init,
+	},
+	{
+		CHIP_NAVI32,
+		0x73C8,
+		ANY_ID,
+		ANY_ID,
+		NAVI32_CAPS,
+		&navi32_init_table,
+		&navi32_live_info_table,
+		&navi32_mitigation_table,
+		navi32_reg_base_init,
+	},
 };
 
 uint32_t amdgv_mm_rreg(struct amdgv_adapter *adapt, uint32_t reg, bool always_indirect)
@@ -1344,12 +1409,6 @@ static int amdgv_device_func_hw_init(struct amdgv_adapter *adapt)
 				amdgv_print_failed_init_name(adapt, false, init_func->name);
 				goto hw_init_fail;
 			}
-		} else if (init_func->hw_engine_init) {
-			AMDGV_INFO("start hw_engine_init of %s\n", init_func->name);
-			if (init_func->hw_engine_init(adapt) < 0) {
-				amdgv_print_failed_init_name(adapt, false, init_func->name);
-				goto hw_init_fail;
-			}
 		}
 	}
 
@@ -1368,9 +1427,6 @@ hw_init_fail:
 		if (adapt->init_funcs[j]->hw_fini) {
 			AMDGV_INFO("start hw_fini of %s\n", adapt->init_funcs[j]->name);
 			adapt->init_funcs[j]->hw_fini(adapt);
-		} else if (adapt->init_funcs[j]->hw_engine_fini) {
-			AMDGV_INFO("start hw_engine_fini of %s\n", adapt->init_funcs[j]->name);
-			adapt->init_funcs[j]->hw_engine_fini(adapt);
 		}
 	}
 
@@ -1413,9 +1469,9 @@ int amdgv_device_func_hw_engine_init(struct amdgv_adapter *adapt)
 	/* hw engine init */
 	for (i = 0; i < adapt->num_funcs; i++) {
 		init_func = adapt->init_funcs[i];
-		if (init_func->hw_engine_init) {
+		if (init_func->is_engine && init_func->hw_init) {
 			AMDGV_INFO("start hw_engine_init of %s\n", init_func->name);
-			ret = init_func->hw_engine_init(adapt);
+			ret = init_func->hw_init(adapt);
 			if (ret < 0) {
 				amdgv_print_failed_init_name(adapt, false, init_func->name);
 				break;
@@ -1431,9 +1487,9 @@ void amdgv_device_func_hw_engine_fini(struct amdgv_adapter *adapt)
 
 	/* hw engine fini */
 	for (i = adapt->num_funcs - 1; i >= 0; i--) {
-		if (adapt->init_funcs[i]->hw_engine_fini) {
+		if (adapt->init_funcs[i]->is_engine && adapt->init_funcs[i]->hw_fini) {
 			AMDGV_INFO("start hw_engine_fini of %s\n", adapt->init_funcs[i]->name);
-			adapt->init_funcs[i]->hw_engine_fini(adapt);
+			adapt->init_funcs[i]->hw_fini(adapt);
 		}
 	}
 }
@@ -1688,10 +1744,6 @@ struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_da
 
 	adapt->in_sync_flood = &adapt->sync_flood;
 	adapt->in_ecc_recovery = &adapt->ecc_recovery;
-	if ((adapt->asic_type == CHIP_MI300X) || (adapt->asic_type == CHIP_MI308X)) {
-		adapt->ip_discovery.size = MI300_IP_DISCOVERY_SIZE;
-	}
-	AMDGV_INFO("IP Discovery Size being used: %d\n", adapt->ip_discovery.size);
 
 	offset = adapt->sriov_cap_pos + PCIE_EXT_SRIOV_TOTALVF;
 	oss_pci_read_config_word(adapt->dev, offset, &vbios_support_vf_num);
@@ -1736,6 +1788,9 @@ struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_da
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_SW_INIT_FAIL, 0);
 		goto fail;
 	}
+
+	AMDGV_INFO("IP Discovery Size being used: %d\n", adapt->ip_discovery.size);
+
 	amdgv_device_set_status(adapt, AMDGV_STATUS_SW_INIT);
 
 	ret = amdgv_import_data(adapt);
@@ -1786,41 +1841,53 @@ static void amdgv_device_live_update_pre_fini(struct amdgv_adapter *adapt)
 		return;
 
 	hive = amdgv_get_xgmi_hive(adapt);
-	if ((adapt->xgmi.phy_nodes_num > 1) && hive) {
-		/* If all the adapters are in the same hive, we need to
-		 * disable all the adapters' interrupt, and make sure event
-		 * queue is empty before executing sw_fini. Otherwise, if a
-		 * latter adapter triggers a chained whole gpu reset, the first
-		 * few adapters may not respond because they might be already
-		 * finished sw_fini.
+
+	/* Adapters not in hive, just disable interrupt. */
+	if (!hive || !(adapt->xgmi.phy_nodes_num > 1)) {
+		amdgv_toggle_interrupt(adapt, false);
+		return;
+	}
+
+	AMDGV_INFO("Wait for all adapters idle...\n");
+	while (1) {
+		all_gpu_idle = 1;
+		/* If any adapter is in full access mode, wait until full access
+		 * ends. disable interrupts for adapters whose event thread is idle.
 		 */
 		amdgv_list_for_each_entry(entry, &hive->adapt_list,
-					struct amdgv_adapter, xgmi.head) {
-			amdgv_toggle_interrupt(entry, false);
-			entry->in_chain_live_update = true;
+			struct amdgv_adapter, xgmi.head) {
+
+			if (entry->in_chain_live_update)
+				continue;
+
+			if (entry->event_thread_status == AMDGV_EVENT_THREAD_IDLE) {
+				amdgv_toggle_interrupt(entry, false);
+				entry->in_chain_live_update = true;
+			} else
+				all_gpu_idle = 0;
+
 		}
 
-		while (1) {
-			all_gpu_idle = 1;
+		if (all_gpu_idle) {
+			/* Delay a while, re-check if all adapters are really idle
+			 * If any adapter is back to busy, re-enable its interrupt
+			 */
+			oss_msleep(5);
 			amdgv_list_for_each_entry(entry, &hive->adapt_list,
 				struct amdgv_adapter, xgmi.head) {
-					if (entry->event_thread_status != AMDGV_EVENT_THREAD_IDLE) {
-						all_gpu_idle = 0;
-						/* Skip waiting for full access exit. */
-						if (entry->event_thread_status == AMDGV_EVENT_THREAD_WAITING)
-							oss_signal_event(entry->sched.event);
-
-						break;
-					}
+				if (entry->event_thread_status != AMDGV_EVENT_THREAD_IDLE) {
+					all_gpu_idle = 0;
+					amdgv_toggle_interrupt(entry, true);
+					entry->in_chain_live_update = false;
+				}
 			}
-
-			if (all_gpu_idle)
+			if (all_gpu_idle) {
+				AMDGV_INFO("Start doing live update...\n");
 				break;
-
-			oss_msleep(5);
+			}
 		}
-	} else {
-		amdgv_toggle_interrupt(adapt, false);
+
+		oss_msleep(5);
 	}
 }
 
@@ -1852,7 +1919,6 @@ void amdgv_device_internal_fini(struct amdgv_adapter *adapt,
 			 * to notify all other threads stop touching hardware */
 			adapt->status = AMDGV_STATUS_HW_FINI;
 			amdgv_device_func_hw_fini(adapt);
-			amdgv_device_func_hw_engine_fini(adapt);
 		} else
 			AMDGV_INFO("Skip HW fini.\n");
 	}
@@ -1926,13 +1992,10 @@ void amdgv_program_register_sequence(struct amdgv_adapter *adapt,
 
 static void amdgv_device_dispatch_rma(struct amdgv_adapter *adapt)
 {
-	if (adapt->status == AMDGV_STATUS_SW_INIT) {
-		AMDGV_ERROR("RMA detected during init\n");
+	if (adapt->status == AMDGV_STATUS_SW_INIT)
 		amdgv_sched_queue_event_no_signal(adapt, AMDGV_PF_IDX, AMDGV_EVENT_SCHED_RMA, 0);
-	} else if (adapt->status == AMDGV_STATUS_HW_INIT) {
-		AMDGV_ERROR("RMA detected at runtime\n");
+	else if (adapt->status == AMDGV_STATUS_HW_INIT)
 		amdgv_sched_queue_event(adapt, AMDGV_PF_IDX, AMDGV_EVENT_SCHED_RMA, 0);
-	}
 }
 
 void amdgv_device_handle_bad_gpu(struct amdgv_adapter *adapt)
@@ -2072,4 +2135,62 @@ void amdgv_device_set_status(struct amdgv_adapter *adapt, enum amdgv_dev_status 
 bool amdgv_device_is_gpu_lost(struct amdgv_adapter *adapt)
 {
 	return (adapt->status == AMDGV_STATUS_HW_LOST);
+}
+
+enum amdgv_gpumon_vram_type vram_type_to_gpumon_vram_type(enum amdgv_vram_type vram_type)
+{
+	switch (vram_type) {
+	case AMDGV_DGPU_VRAM_TYPE__GDDR5:
+		return AMDGV_GPUMON_DGPU_VRAM_TYPE__GDDR5;
+	case AMDGV_DGPU_VRAM_TYPE__HBM2:
+		return AMDGV_GPUMON_DGPU_VRAM_TYPE__HBM2;
+	case AMDGV_DGPU_VRAM_TYPE__HBM2E:
+		return AMDGV_GPUMON_DGPU_VRAM_TYPE__HBM2E;
+	case AMDGV_DGPU_VRAM_TYPE__GDDR6:
+		return AMDGV_GPUMON_DGPU_VRAM_TYPE__GDDR6;
+	case AMDGV_DGPU_VRAM_TYPE__HBM3:
+		return AMDGV_GPUMON_DGPU_VRAM_TYPE__HBM3;
+	case AMDGV_DGPU_VRAM_TYPE__GDDR7:
+		return AMDGV_GPUMON_DGPU_VRAM_TYPE__GDDR7;
+	default:
+		return AMDGV_GPUMON_DGPU_VRAM_TYPE__UNKNOW;
+	}
+}
+
+enum amdgv_gpumon_vram_vendor vram_vendor_to_gpumon_vram_vendor(enum amdgv_vram_vendor vendor)
+{
+	switch (vendor) {
+	case AMDGV_VRAM_VENDOR__SAMSUNG:
+		return AMDGV_GPUMON_VRAM_VENDOR__SAMSUNG;
+	case AMDGV_VRAM_VENDOR__INFINEON:
+		return AMDGV_GPUMON_VRAM_VENDOR__INFINEON;
+	case AMDGV_VRAM_VENDOR__ELPIDA:
+		return AMDGV_GPUMON_VRAM_VENDOR__ELPIDA;
+	case AMDGV_VRAM_VENDOR__ETRON:
+		return AMDGV_GPUMON_VRAM_VENDOR__ETRON;
+	case AMDGV_VRAM_VENDOR__NANYA:
+		return AMDGV_GPUMON_VRAM_VENDOR__NANYA;
+	case AMDGV_VRAM_VENDOR__HYNIX:
+		return AMDGV_GPUMON_VRAM_VENDOR__HYNIX;
+	case AMDGV_VRAM_VENDOR__MOSEL:
+		return AMDGV_GPUMON_VRAM_VENDOR__MOSEL;
+	case AMDGV_VRAM_VENDOR__WINBOND:
+		return AMDGV_GPUMON_VRAM_VENDOR__WINBOND;
+	case AMDGV_VRAM_VENDOR__ESMT:
+		return AMDGV_GPUMON_VRAM_VENDOR__ESMT;
+	case AMDGV_VRAM_VENDOR__PLACEHOLDER1:
+		return AMDGV_GPUMON_VRAM_VENDOR__PLACEHOLDER1;
+	case AMDGV_VRAM_VENDOR__PLACEHOLDER2:
+		return AMDGV_GPUMON_VRAM_VENDOR__PLACEHOLDER2;
+	case AMDGV_VRAM_VENDOR__PLACEHOLDER3:
+		return AMDGV_GPUMON_VRAM_VENDOR__PLACEHOLDER3;
+	case AMDGV_VRAM_VENDOR__PLACEHOLDER4:
+		return AMDGV_GPUMON_VRAM_VENDOR__PLACEHOLDER4;
+	case AMDGV_VRAM_VENDOR__PLACEHOLDER5:
+		return AMDGV_GPUMON_VRAM_VENDOR__PLACEHOLDER5;
+	case AMDGV_VRAM_VENDOR__MICRON:
+		return AMDGV_GPUMON_VRAM_VENDOR__MICRON;
+	default:
+		return AMDGV_GPUMON_VRAM_VENDOR__PLACEHOLDER0;
+	}
 }

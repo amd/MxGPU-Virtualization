@@ -28,19 +28,17 @@
 #include <fstream>
 #include <memory>
 
-// Year should follow the IP driver package version: 22.40/23.10 and similar
-#define AMDSMI_TOOL_VERSION_YEAR 24
 // Major version should be changed for every command change (adding new commands, deprecating commands, modifying input/output format)
-#define AMDSMI_TOOL_VERSION_MAJOR 17
+#define AMDSMI_TOOL_VERSION_MAJOR 25
 // Minor version should be updated for each command change, but without adding new commands,
 // deleting existing commands or modifying input/output format of existing commands
-#define AMDSMI_TOOL_VERSION_MINOR 1
+#define AMDSMI_TOOL_VERSION_MINOR 3
 // Release version should be set to 0 as default and can be updated by the PMs for each CSP point release
-#define AMDSMI_TOOL_VERSION_RELEASE 0
+#define AMDSMI_TOOL_VERSION_RELEASE 1
 
-#define AMDSMI_TOOL_VERSION_CREATE_STRING(YEAR, MAJOR, MINOR, RELEASE) (#YEAR "." #MAJOR "." #MINOR "." #RELEASE)
-#define AMDSMI_TOOL_VERSION_EXPAND_PARTS(YEAR_STR, MAJOR_STR, MINOR_STR, RELEASE_STR) AMDSMI_TOOL_VERSION_CREATE_STRING(YEAR_STR, MAJOR_STR, MINOR_STR, RELEASE_STR)
-#define AMDSMI_TOOL_VERSION_STRING AMDSMI_TOOL_VERSION_EXPAND_PARTS(AMDSMI_TOOL_VERSION_YEAR, AMDSMI_TOOL_VERSION_MAJOR, AMDSMI_TOOL_VERSION_MINOR, AMDSMI_TOOL_VERSION_RELEASE)
+#define AMDSMI_TOOL_VERSION_CREATE_STRING(MAJOR, MINOR, RELEASE) (#MAJOR "." #MINOR "." #RELEASE)
+#define AMDSMI_TOOL_VERSION_EXPAND_PARTS(MAJOR_STR, MINOR_STR, RELEASE_STR) AMDSMI_TOOL_VERSION_CREATE_STRING(MAJOR_STR, MINOR_STR, RELEASE_STR)
+#define AMDSMI_TOOL_VERSION_STRING AMDSMI_TOOL_VERSION_EXPAND_PARTS(AMDSMI_TOOL_VERSION_MAJOR, AMDSMI_TOOL_VERSION_MINOR, AMDSMI_TOOL_VERSION_RELEASE)
 #define AMDSMI_TOOL_NAME "AMD SMI tool"
 
 #define AMDSMI_NOT_SUPP_UINT8_RETVAL 255

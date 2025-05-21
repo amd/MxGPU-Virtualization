@@ -38,5 +38,10 @@ public:
 	int topology_command_fb_sharing(std::string &formatted_string);
 	int topology_command_link_type(std::string &formatted_string);
 	int topology_command_link_status(std::string &formatted_string);
+	int p2p_capability_command_coherent(std::string &formatted_string);
+	int p2p_capability_command_atomics(std::string &formatted_string);
+	int p2p_capability_command_dma(std::string &formatted_string);
+	int p2p_capability_command_bi_directional(std::string &formatted_string);
+
 	int topology_command_all_status(std::string &formatted_string);
 };

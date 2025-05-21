@@ -25,6 +25,8 @@
 
 #include <amdgv_api.h>
 
+#ifndef EXCLUDE_DCORE_DEBUG
+
 #define DCORE_DEVICE_NAME "debug"
 
 #define DCORE_IOVA_MINOR_OFFSET		   1
@@ -146,4 +148,5 @@ void dcore_signal_manual_dump_happened(amdgv_dev_t dev, uint32_t idx_vf); /* oss
 void dcore_signal_diag_data_ready(amdgv_dev_t dev);  /* oss_interface - libgv signal the that diagnosis data are ready */
 bool dcore_diag_data_collect_disabled(amdgv_dev_t dev, uint32_t bdf);  /* oss_interface - libgv to check if legacy diagnosis data collect should be disabled*/
 
+#endif //EXCLUDE_DCORE_DEBUG
 #endif
