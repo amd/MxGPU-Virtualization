@@ -239,7 +239,7 @@
 #define mmIH_MMHUB_ERROR_BASE_IDX                                                                      0
 #define mmIH_MEM_POWER_CTRL                                                                            0x00e8
 #define mmIH_MEM_POWER_CTRL_BASE_IDX                                                                   0
-#define mmIH_RETRY_INT_CAM_CNTL                                                                        0x00e9
+#define mmIH_RETRY_INT_CAM_CNTL                                                                        0x00ea
 #define mmIH_RETRY_INT_CAM_CNTL_BASE_IDX                                                               0
 #define mmIH_REGISTER_LAST_PART2                                                                       0x00ff
 #define mmIH_REGISTER_LAST_PART2_BASE_IDX                                                              0

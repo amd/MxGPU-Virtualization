@@ -75,7 +75,7 @@ std::string version_common =
 std::string list_common =
 	"usage: amd-smi list [-h | --help] [--json | --csv] [--file FILE] [-g | --gpu [GPU ...]]\n\n"
 	"List all GPUs and VFs on the system and their most basic general information.\n"
-	"If no GPU is specified, returns metric information for all GPUs on the system.\n\n"
+	"If no GPU is specified, returns basic information for all GPUs on the system.\n\n"
 	"List arguments:\n"
 	"                          Description:\n"
 	"    -h, --help            show this help message and exit\n"
@@ -474,19 +474,19 @@ std::string partition_message =
 std::string command_modifiers =
 	"Command Modifiers:\n"
 	"                      Description:\n"
-	"--json                Displays output in JSON format (humman readable by default).\n"
-	"--csv                 Displays output in CSV format (humman readable by default).\n"
+	"--json                Displays output in JSON format (human readable by default).\n"
+	"--csv                 Displays output in CSV format (human readable by default).\n"
 	"--file FILE           Saves output into a file on the provided path (stdout by default).\n";
 std::string xgmi_topology_modifiers =
 	"Command Modifiers:\n"
 	"                      Description:\n"
-	"--json                Displays output in JSON format (humman readable by default).\n"
+	"--json                Displays output in JSON format (human readable by default).\n"
 	"--file FILE           Saves output into a file on the provided path (stdout by default).\n";
 std::string metric_modifiers =
 	"Command Modifiers:\n"
 	"                      Description:\n"
-	"--json                Displays output in JSON format (humman readable by default).\n"
-	"--csv                 Displays output in CSV format (humman readable by default).\n"
+	"--json                Displays output in JSON format (human readable by default).\n"
+	"--csv                 Displays output in CSV format (human readable by default).\n"
 	"                      It can be used only with one argument and cannot be used without or with more than one argument, in that case, the call will fail\n"
 	"--file FILE           Saves output into a file on the provided path (stdout by default).\n";
 std::string partition_modifiers =

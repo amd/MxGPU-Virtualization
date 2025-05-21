@@ -236,10 +236,10 @@ static int navi32_query_spa_update_dbit(struct amdgv_adapter *adapt, uint64_t qu
 	uint32_t leftover_bits = (temp_query_bits + prev_leftover_bits) % 8;
 	bool is_segment_dirty = false;
 	int ret = 0;
-
+	int j = 0;
 	/* Query the segments in the current FFBM block*/
 	/* start at one for easy 8 bit mod */
-	for (int j = prev_leftover_bits + 1; j <= temp_query_bits + prev_leftover_bits ; j++) {
+	for (j = prev_leftover_bits + 1; j <= temp_query_bits + prev_leftover_bits ; j++) {
 		ret = navi32_is_segment_dirty(adapt, query_spa, dbit_preserve, query_type, &is_segment_dirty);
 
 		if (ret)
@@ -288,7 +288,15 @@ static int navi32_dirtybit_query_data_internal(struct amdgv_adapter *adapt,
 				struct amdgv_query_dirty_bit_data *data, enum NV32_DBIT_QUERY query_type)
 {
 	int ret = 0;
-
+	uint64_t offset_input = data->query_fb_offset;
+	uint64_t query_spa = 0;
+	uint64_t leftover_query_size = data->query_size;
+	uint8_t *temp_dbit_data_ptr = data->dbit_plane_data_buffer;
+	uint64_t temp_query_size = 0;
+	uint32_t temp_query_bits = 0;
+	uint32_t temp_query_bytes_used = 0;
+	uint32_t prev_leftover_bits = 0;
+	uint32_t i = 0;
 	/* get ffbm mapping list for VF */
 	struct amdgv_vf_ffbm_map_list *vf_ffbm_map_list = oss_malloc(sizeof(struct amdgv_vf_ffbm_map_list));
 
@@ -302,18 +310,9 @@ static int navi32_dirtybit_query_data_internal(struct amdgv_adapter *adapt,
 
 	amdgv_get_vf_fb_mapping_list(adapt, data->idx_vf, vf_ffbm_map_list, true);
 
-	uint64_t offset_input = data->query_fb_offset;
-	uint64_t query_spa = 0;
-	uint64_t leftover_query_size = data->query_size;
-	uint8_t *temp_dbit_data_ptr = data->dbit_plane_data_buffer;
-	uint64_t temp_query_size = 0;
-	uint32_t temp_query_bits = 0;
-	uint32_t temp_query_bytes_used = 0;
-	uint32_t prev_leftover_bits = 0;
-
 	/* Find the valid FFBM map list */
 	if (vf_ffbm_map_list->count != 0) {
-		for (uint32_t i = 0; i < vf_ffbm_map_list->count; i++) {
+		for (i = 0; i < vf_ffbm_map_list->count; i++) {
 			/* Adjust offset_input to TMR block size */
 			if (vf_ffbm_map_list->entry[i].gpa == MBYTES_TO_BYTES(AMDGV_FFBM_FB_TMR_OFFSET)) {
 				offset_input += vf_ffbm_map_list->entry[i].size;
@@ -420,11 +419,14 @@ static int navi32_dirtybit_sdma_poll_dbit(struct amdgv_adapter *adapt, struct nv
 	struct amdgv_ring *ring = &adapt->sdma.sdma_ring[1];
 	uint32_t seq = ++ring->fence_drv.sync_seq;
 	int r = 0;
+	PSDMA_PKT_FENCE pFence;
+	uint64_t start;
+	uint64_t end;
 	/* patch frame */
 	uint8_t *pbuffer = adapt->dirtybit.query_submission_frame;
-	oss_memset(pbuffer, 0, ring->max_dw * 4);
 	PSDMA_PKT_POLL_DBIT_WRITE_MEM p = (PSDMA_PKT_POLL_DBIT_WRITE_MEM)pbuffer;
 
+	oss_memset(pbuffer, 0, ring->max_dw * 4);
 	p->HEADER_UNION.op = 0x08;
 	p->HEADER_UNION.sub_op = 0x02;
 	p->HEADER_UNION.ea = 0x2;  /* GC_EA */
@@ -435,7 +437,7 @@ static int navi32_dirtybit_sdma_poll_dbit(struct amdgv_adapter *adapt, struct nv
 	p->PAGE_NUM_UNION.DW_4_DATA = data->number_of_pages;
 	pbuffer += sizeof(SDMA_PKT_POLL_DBIT_WRITE_MEM);
 
-	PSDMA_PKT_FENCE pFence = (PSDMA_PKT_FENCE)pbuffer;
+	pFence = (PSDMA_PKT_FENCE)pbuffer;
 	pFence->HEADER_UNION.op = 0x05;
 	pFence->HEADER_UNION.mtype = 3;
 	pFence->ADDR_LO_UNION.addr_31_0 = ring->fence_drv.gpu_addr;
@@ -444,7 +446,7 @@ static int navi32_dirtybit_sdma_poll_dbit(struct amdgv_adapter *adapt, struct nv
 	pbuffer += sizeof(SDMA_PKT_FENCE);
 
 	/* submit */
-	uint64_t start = oss_get_time_stamp();
+	start = oss_get_time_stamp();
 	ring->funcs->submit_frame(ring, adapt->dirtybit.query_submission_frame);
 
 	/* poll fence */
@@ -453,7 +455,7 @@ static int navi32_dirtybit_sdma_poll_dbit(struct amdgv_adapter *adapt, struct nv
 		AMDGV_ERROR("Dirty Bit: SDMA poll dbit failed\n");
 		r = AMDGV_FAILURE;
 	} else {
-		uint64_t end = oss_get_time_stamp();
+		end = oss_get_time_stamp();
 		r = 0;
 		AMDGV_DEBUG("Dirty Bit: SDMA poll dbit took 0x%llx us\n", (uint64_t)(end - start));
 	}
@@ -472,7 +474,13 @@ static int navi32_dirtybit_query_replaced_pages(struct amdgv_adapter *adapt,  st
 	uint8_t *dbit_data_ptr = data->dbit_plane_data_buffer;
 	int64_t query_addr = SEGMENT_SIZE_1M_ALIGN(data->query_fb_offset);
 	bool is_segment_dirty = false;
-
+	uint32_t i;
+	uint32_t j;
+	uint64_t first_page_pos;
+	uint32_t number_of_pages_to_overwrite;
+	uint32_t bit_pos;
+	uint32_t byte_pos;
+	uint8_t dbit_mask;
 	/* get ffbm mapping list for VF */
 	struct amdgv_vf_ffbm_map_list *vf_ffbm_map_list = oss_malloc(sizeof(struct amdgv_vf_ffbm_map_list));
 
@@ -486,7 +494,7 @@ static int navi32_dirtybit_query_replaced_pages(struct amdgv_adapter *adapt,  st
 
 	amdgv_get_vf_fb_mapping_list(adapt, data->idx_vf, vf_ffbm_map_list, false);
 
-	for (uint32_t i = 1; i < vf_ffbm_map_list->count; i++) {
+	for (i = 1; i < vf_ffbm_map_list->count; i++) {
 		/* skips first block as it is 2MB reserve block */
 		if (vf_ffbm_map_list->entry[i].size > AMDGV_FFBM_PAGE_SIZE(adapt->ffbm.default_fragment)) {
 			vf_spa = vf_ffbm_map_list->entry[i].spa - (vf_ffbm_map_list->entry[i].gpa - MBYTES_TO_BYTES(adapt->tmr_size));
@@ -495,13 +503,13 @@ static int navi32_dirtybit_query_replaced_pages(struct amdgv_adapter *adapt,  st
 	}
 
 	/* query and fill in any bad pages and update OS's buffer*/
-	for (uint32_t i = 1; i < vf_ffbm_map_list->count; i++) {
+	for (i = 1; i < vf_ffbm_map_list->count; i++) {
 		/* skips first block as it is 2MB reserve block, which is handled */
 		cur_pteb = &vf_ffbm_map_list->entry[i];
 		if ((cur_pteb->spa > vf_spa + MBYTES_TO_BYTES(vf_dev->fb_size_os)) && //check that spa is in the reserved page range
 			((cur_pteb->gpa - MBYTES_TO_BYTES(adapt->tmr_size)) < (query_addr + data->query_size)) &&
 			((cur_pteb->gpa - MBYTES_TO_BYTES(adapt->tmr_size) + cur_pteb->size) > query_addr)) {
-			uint32_t j;
+
 			for (j = 0; j < (cur_pteb->size >> SHIFT_1M) ; j++) { // should be 2MB per reserve page
 				ret = navi32_is_segment_dirty(adapt, cur_pteb->spa + j * SEGMENT_SIZE_1M, data->dbit_preserve, NV32_DBIT_QUERY_GC_MM, &is_segment_dirty);
 
@@ -516,8 +524,8 @@ static int navi32_dirtybit_query_replaced_pages(struct amdgv_adapter *adapt,  st
 
 			dbit_results >>= (7 - j); // so that the result is in first 2 bits
 			/* find the bits position in */
-			uint64_t first_page_pos = 0;
-			uint32_t number_of_pages_to_overwrite = cur_pteb->size >> SHIFT_1M;
+			first_page_pos = 0;
+			number_of_pages_to_overwrite = cur_pteb->size >> SHIFT_1M;
 			if ((cur_pteb->gpa - MBYTES_TO_BYTES(adapt->tmr_size)) < query_addr) {
 				/* handle case where the first bit is out of range */
 				first_page_pos = (SEGMENT_SIZE_1M + (cur_pteb->gpa - MBYTES_TO_BYTES(adapt->tmr_size))) - query_addr;
@@ -532,11 +540,11 @@ static int navi32_dirtybit_query_replaced_pages(struct amdgv_adapter *adapt,  st
 				dbit_results &= ~(0b10);
 				number_of_pages_to_overwrite -= 1;
 			}
-			uint32_t bit_pos = first_page_pos >> SHIFT_1M;
-			uint32_t byte_pos = bit_pos / 8;
+			bit_pos = first_page_pos >> SHIFT_1M;
+			byte_pos = bit_pos / 8;
 			dbit_data_ptr = data->dbit_plane_data_buffer;
 			dbit_data_ptr += byte_pos;
-			uint8_t dbit_mask = number_of_pages_to_overwrite == 1 ? 0x1 : 0x3;
+			dbit_mask = number_of_pages_to_overwrite == 1 ? 0x1 : 0x3;
 			dbit_mask <<= (bit_pos % 8);
 			*dbit_data_ptr &= ~dbit_mask;
 			*dbit_data_ptr |= (dbit_results << (bit_pos % 8));
@@ -574,7 +582,9 @@ static int navi32_dirtybit_query_data_hybrid(struct amdgv_adapter *adapt,
 	uint8_t *dbit_gc = NULL;
 	struct nv32_poll_dbit_write_mem sdma_data = {0};
 	uint32_t sdma_dbit_plane_size  = 0;
-
+	uint32_t i;
+	uint8_t temp_dbit = 0;
+	struct amdgv_vf_ffbm_map_list *vf_ffbm_map_list = NULL;
 	/* nv32 must have ffbm enabled */
 	if (!adapt->ffbm.enabled) {
 		AMDGV_ERROR("FFBM not enabled\n");
@@ -602,7 +612,7 @@ static int navi32_dirtybit_query_data_hybrid(struct amdgv_adapter *adapt,
 	}
 
 	/* get ffbm mapping list for VF */
-	struct amdgv_vf_ffbm_map_list *vf_ffbm_map_list = oss_malloc(sizeof(struct amdgv_vf_ffbm_map_list));
+	vf_ffbm_map_list = oss_malloc(sizeof(struct amdgv_vf_ffbm_map_list));
 
 	if (!vf_ffbm_map_list) {
 		amdgv_put_error(AMDGV_PF_IDX,
@@ -618,7 +628,7 @@ static int navi32_dirtybit_query_data_hybrid(struct amdgv_adapter *adapt,
 		/* Get a big ffbm pte block that is more than 2MB (non-replaced page) from the mapping list.
 		* Use the SPA and GPA of this block to get the SPA of the VF FB start.
 		*/
-		for (uint32_t i = 1; i < vf_ffbm_map_list->count; i++) {
+		for (i = 1; i < vf_ffbm_map_list->count; i++) {
 			/* skips first block as it is 2MB reserve block */
 			if (vf_ffbm_map_list->entry[i].size > AMDGV_FFBM_PAGE_SIZE(adapt->ffbm.default_fragment)) {
 				vf_spa = vf_ffbm_map_list->entry[i].spa - (vf_ffbm_map_list->entry[i].gpa - MBYTES_TO_BYTES(adapt->tmr_size));
@@ -655,7 +665,6 @@ static int navi32_dirtybit_query_data_hybrid(struct amdgv_adapter *adapt,
 	/* OR the GC result and MM result (in dbit_data_ptr) into OS's buffer */
 	dbit_gc = (uint8_t *)amdgv_memmgr_get_cpu_addr(adapt->dirtybit.gc_dirty_bitplane);
 	sdma_dbit_plane_size = roundup(sdma_data.number_of_pages, 8) / 8;
-	uint32_t i;
 
 	for (i = 1; i <= sdma_dbit_plane_size; i++) {
 		*dbit_data_ptr = *dbit_gc | *dbit_data_ptr;
@@ -672,7 +681,7 @@ static int navi32_dirtybit_query_data_hybrid(struct amdgv_adapter *adapt,
 	* Check if the queried range includes the 2MB reserved block.
 	*/
 	if (data->query_fb_offset < MBYTES_TO_BYTES(2)) {
-		uint8_t temp_dbit = 0;
+		temp_dbit = 0;
 		dbit_data_ptr = data->dbit_plane_data_buffer;
 
 		if (data->query_fb_offset == 0) {
