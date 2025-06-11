@@ -516,6 +516,21 @@ static int mi200_get_ras_eeprom_version(struct amdgv_adapter *adapt,
 	return 0;
 }
 
+static int mi200_get_gfx_config(struct amdgv_adapter *adapt,
+			struct amdgv_gpumon_gfx_config *config)
+{
+	config->max_shader_engines = adapt->config.gfx.max_shader_engines;
+	config->max_cu_per_sh = adapt->config.gfx.max_cu_per_sh;
+	config->max_sh_per_se = adapt->config.gfx.max_sh_per_se;
+	config->max_waves_per_simd = adapt->config.gfx.max_waves_per_simd;
+	config->wave_size = adapt->config.gfx.wave_size;
+	config->active_cu_count = adapt->config.gfx.active_cu_count;
+	config->major = adapt->config.gfx.major;
+	config->minor = adapt->config.gfx.minor;
+
+	return 0;
+}
+
 static const struct amdgv_gpumon_funcs mi200_gpumon_funcs = {
 	.get_asic_temperature = mi200_get_asic_temperature,
 	.get_gpu_power_usage = mi200_get_gpu_power_usage,
@@ -543,6 +558,7 @@ static const struct amdgv_gpumon_funcs mi200_gpumon_funcs = {
 	.get_max_pcie_link_generation = mi200_get_max_pcie_link_generation,
 	.get_vram_info = mi200_get_vram_info,
 	.get_ras_eeprom_version = mi200_get_ras_eeprom_version,
+	.get_gfx_config = mi200_get_gfx_config,
 };
 
 static int mi200_gpumon_sw_init(struct amdgv_adapter *adapt)

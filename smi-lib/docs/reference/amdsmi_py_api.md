@@ -31,7 +31,7 @@ Navigate to project's root folder and run Makefile command:
 
 * `make package`
 
-Build process will create a folder `build/package/BUILD_MODE/amdsmi`, where `BUILD_MODE` can be Release or Debug.
+Build process will create a folder `build/amdsmi/package/BUILD_MODE/amdsmi`, where `BUILD_MODE` can be Release or Debug.
 The folder will contain the following files:
 
 * `__init__.py`
