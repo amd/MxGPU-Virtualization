@@ -1346,7 +1346,7 @@ int amdgv_gpumon_clear_vf_fb(amdgv_dev_t dev, uint32_t idx_vf, uint8_t pattern)
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
 	data.vf_fb_data.pattern = pattern;
-	data.vf_fb_data.flag = 1;
+	data.vf_fb_data.flag = AMDGV_VF_FB_CLEAR_FORCE;
 	data.vf_fb_data.result = &event_ret;
 
 	if (AMDGV_IS_IDX_INVALID(idx_vf) || idx_vf == AMDGV_PF_IDX)

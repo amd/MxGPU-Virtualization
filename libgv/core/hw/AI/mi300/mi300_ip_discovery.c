@@ -379,7 +379,9 @@ static int mi300_parse_harvest_table(struct amdgv_adapter *adapt)
 			break;
 		case SDMA0_HWID:
 			adapt->sdma.num_instances--;
+			adapt->sdma.harvest_instances++;
 			adapt->mcp.gfx.sdma_mask &= ~(1U << adapt->ip_discovery.pf_copy.htbl->list[i].number_instance);
+			adapt->sdma.harvest_sdma_mask |= (1U << adapt->ip_discovery.pf_copy.htbl->list[i].number_instance);
 			break;
 		case UMC_HWID:
 			adapt->umc.num_umc--;
@@ -547,10 +549,13 @@ static int mi300_parse_ip_discovery(struct amdgv_adapter *adapt)
 //	adapt->mcp.num_aid = pf_copy->ihdr->num_dies; //defer until IP Discovery Data provides this information correctly
 	switch (adapt->dev_id) {
 	case (0x74A1): /* MI300 EP */
-	case (0x74A5): /* MI325 */
 	case (0x74A2): /* MI308X */
-	case (0x74A9): /* MI300X HC */
+	case (0x74A5): /* MI325 */
 	case (0x74A8): /* MI308X */
+	case (0x74A9): /* MI300X HC */
+	case (0x75A0): /* MI350X */
+	case (0x75A1): /* MI350X LC 1.2 Kw*/
+	case (0x75A3): /* MI350X LC 1.4 Kw*/
 		adapt->mcp.num_aid = 4;
 		break;
 	default:
@@ -905,6 +910,31 @@ static uint32_t mi300_logical_to_dev_mask(struct amdgv_adapter *adev,
 	return dev_mask;
 }
 
+static void mi308_ip_map_init(struct amdgv_adapter *adapt)
+{
+	int harvest_mask;
+	int i = 0, k = 0;
+
+	harvest_mask = adapt->sdma.harvest_sdma_mask;
+
+	/* Map harvested SDMA instances for live migration, starting at index num_instances */
+	if (adapt->sdma.harvest_instances > 0) {
+		k = adapt->sdma.num_instances; // Start at the next index after normal instances
+		i = 0; // Reset i to scan through all potential SDMA instances
+
+		while (harvest_mask && k < HWIP_MAX_INSTANCE) {
+			if (harvest_mask & (1 << i)) {
+				adapt->ip_map.dev_inst[SDMA0_HWIP][k++] = i;
+				harvest_mask &= ~(1 << i);
+			}
+			i++;
+		}
+	}
+
+	for (; k < HWIP_MAX_INSTANCE; k++)
+		adapt->ip_map.dev_inst[SDMA0_HWIP][k] = -1;
+}
+
 static void mi300_ip_map_init(struct amdgv_adapter *adapt)
 {
 	int xcc_mask, sdma_mask;
@@ -936,6 +966,10 @@ static void mi300_ip_map_init(struct amdgv_adapter *adapt)
 	}
 	for (; j < HWIP_MAX_INSTANCE; j++)
 		adapt->ip_map.dev_inst[SDMA0_HWIP][j] = -1;
+
+	if (adapt->asic_type == CHIP_MI308X) {
+		mi308_ip_map_init(adapt);
+	}
 
 	adapt->ip_map.logical_to_dev_inst = mi300_logical_to_dev_inst;
 	adapt->ip_map.logical_to_dev_mask = mi300_logical_to_dev_mask;

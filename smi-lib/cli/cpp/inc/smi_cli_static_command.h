@@ -60,4 +60,6 @@ public:
 	int static_command_partition(uint64_t processors, std::string &formatted_string);
 	int static_command_soc_pstate(uint64_t processors,
 								  std::string &formatted_string);
+	int static_command_virtualization_mode(uint64_t processors,
+								  std::string &formatted_string);
 };

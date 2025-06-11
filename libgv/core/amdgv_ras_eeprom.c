@@ -138,7 +138,10 @@ int amdgv_ras_eeprom_sw_init(struct amdgv_adapter *adapt,
 		AMDGV_INFO("Using legacy EEPROM format.\n");
 		ret = ras_eeprom_legacy_sw_init(adapt);
 	} else {
-		AMDGV_INFO("Using EEPROM format v2.1.\n");
+		if (adapt->umc.eeprom_version == EEPROM_TABLE_VER_V3)
+			AMDGV_INFO("Using EEPROM format v3.0.\n");
+		else
+			AMDGV_INFO("Using EEPROM format v2.1.\n");
 		ret = ras_eeprom_v2_1_sw_init(adapt);
 	}
 

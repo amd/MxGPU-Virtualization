@@ -556,13 +556,15 @@ void amdgv_ih_process_handle3(void *handle, void *context, void *arg1, void *arg
 	struct amdgv_iv_entry *entry;
 	struct amdgv_adapter *adapt = (struct amdgv_adapter *)context;
 	/* if needs arg1&arg2, we can query adapt->irqmgr.ih_bh */
-
-	while (adapt &&
-	       adapt->irqmgr.ih_queue_rptr != adapt->irqmgr.ih_queue_wptr) {
-		entry = &adapt->irqmgr.ih_queue[adapt->irqmgr.ih_queue_rptr];
-		adapt->irqmgr.ih_funcs->process((struct amdgv_adapter *)context, entry);
-		adapt->irqmgr.ih_queue_rptr =
-		  (adapt->irqmgr.ih_queue_rptr + 1) % AMDGV_IH_QUEUE_ENTRY_NUM;
+	if (adapt) {
+		oss_spin_lock(adapt->irqmgr.ih_handler3_lock);
+		while (adapt->irqmgr.ih_queue_rptr != adapt->irqmgr.ih_queue_wptr) {
+			entry = &adapt->irqmgr.ih_queue[adapt->irqmgr.ih_queue_rptr];
+			adapt->irqmgr.ih_funcs->process((struct amdgv_adapter *)context, entry);
+			adapt->irqmgr.ih_queue_rptr =
+			(adapt->irqmgr.ih_queue_rptr + 1) % AMDGV_IH_QUEUE_ENTRY_NUM;
+		}
+		oss_spin_unlock(adapt->irqmgr.ih_handler3_lock);
 	}
 }
 
@@ -717,6 +719,13 @@ int amdgv_irqmgr_sw_init(struct amdgv_adapter *adapt)
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
 		return AMDGV_FAILURE;
 	}
+
+	adapt->irqmgr.ih_handler3_lock = oss_spin_lock_init(AMDGV_SPIN_LOCK_HIGHEST_RANK);
+	if (adapt->irqmgr.ih_handler3_lock == OSS_INVALID_HANDLE) {
+		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
+		return AMDGV_FAILURE;
+	}
+
 	/* Shim drv will parse IH and pass down decoded IH entry */
 	if (adapt->flags & AMDGV_FLAG_DISABLE_PARSE_IH)
 		adapt->irqmgr.disable_parse_ih = true;
@@ -741,6 +750,7 @@ int amdgv_irqmgr_sw_fini(struct amdgv_adapter *adapt)
 		oss_spin_lock_fini(adapt->irqmgr.hv_event_lock);
 		adapt->irqmgr.hv_event_lock = OSS_INVALID_HANDLE;
 	}
+	oss_spin_lock_fini(adapt->irqmgr.ih_handler3_lock);
 
 	if (adapt->irqmgr.ih_event_lock != OSS_INVALID_HANDLE) {
 		oss_spin_lock_fini(adapt->irqmgr.ih_event_lock);

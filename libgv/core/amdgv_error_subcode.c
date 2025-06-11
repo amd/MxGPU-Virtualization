@@ -490,6 +490,15 @@ error_category(ECC) = {
 	add_entry(AMDGV_ERROR_ECC_BAD_PAGE_APPEND, ERROR_DATA_ARG_32_32, AMDGV_ERROR_SEVERITY_INFO,
 		"%u bad page records were appended to driver RAS bad page storage. There are %u records now."),
 
+	add_entry(AMDGV_ERROR_ECC_VCN_CHIPLET_CE, ERROR_DATA_ARG_16_16_16_16, AMDGV_ERROR_SEVERITY_WARNING,
+		"[Socket %u] %u new correctable hardware errors detected in VCN Block Instance %u. %u total VCN Block correctable ECC errors since GPU load."),
+	add_entry(AMDGV_ERROR_ECC_VCN_CHIPLET_UE, ERROR_DATA_ARG_16_16_16_16, AMDGV_ERROR_SEVERITY_ERROR_MED,
+		"[Socket %u] %u new uncorrectable hardware errors detected in VCN Block Instance %u. %u total VCN Block uncorrectable ECC errors since GPU load."),
+	add_entry(AMDGV_ERROR_ECC_JPEG_CHIPLET_CE, ERROR_DATA_ARG_16_16_16_16, AMDGV_ERROR_SEVERITY_WARNING,
+		"[Socket %u] %u new correctable hardware errors detected in JPEG Block Instance %u. %u total JPEG Block correctable ECC errors since GPU load."),
+	add_entry(AMDGV_ERROR_ECC_JPEG_CHIPLET_UE, ERROR_DATA_ARG_16_16_16_16, AMDGV_ERROR_SEVERITY_ERROR_MED,
+		"[Socket %u] %u new uncorrectable hardware errors detected in JPEG Block Instance %u. %u total JPEG Block uncorrectable ECC errors since GPU load."),
+
 	/* this one is the MAX */
 	add_entry(AMDGV_ERROR_ECC_MAX, ERROR_DATA_ARG_64, AMDGV_ERROR_SEVERITY_INFO,
 		  "This is error log collect test for ECC component (test count %llu)."),

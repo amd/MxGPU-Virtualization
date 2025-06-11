@@ -23,6 +23,7 @@
 #include "amdgv_device.h"
 #include "amdgv_ras.h"
 #include "amdgv_ras_eeprom.h"
+#include "amdgv_ras_eeprom_internal.h"
 #include "amdgv_vfmgr.h"
 
 #define AMDGV_UMC_ALIGNMENT	     512
@@ -122,13 +123,18 @@ static bool amdgv_umc_is_dup_record(struct amdgv_adapter *adapt,
 	if (from_eeprom) {
 		if (adapt->umc.funcs && adapt->umc.funcs->eeprom_record_to_soc_pa) {
 			adapt->umc.funcs->eeprom_record_to_soc_pa(adapt, record, &pa_pfn);
-			record->retired_page = pa_pfn;
+			if (adapt->umc.eeprom_version == EEPROM_TABLE_VER_V3)
+				record->retired_page =
+					set_nps_to_pa(pa_pfn, get_nps_from_pa(record->retired_page));
+			else
+				record->retired_page = pa_pfn;
 		}
 		return false;
 	}
 
 	for (i = 0; i < data->rom_data.count; i++) {
-		if (data->rom_data.bps[i].retired_page == record->retired_page)
+		if (set_nps_to_pa(data->rom_data.bps[i].retired_page,
+				AMDGV_MEMORY_PARTITION_MODE_UNKNOWN) == record->retired_page)
 			return true;
 	}
 
@@ -202,6 +208,7 @@ int amdgv_umc_add_bad_pages(struct amdgv_adapter *adapt,
 				   struct eeprom_table_record *bps, int pages, bool from_eeprom)
 {
 	struct ras_err_handler_data *data = adapt->ecc.eh_data;
+	enum amdgv_memory_partition_mode nps;
 	int ret = 0;
 	int i = 0;
 
@@ -213,6 +220,15 @@ int amdgv_umc_add_bad_pages(struct amdgv_adapter *adapt,
 
 	if (!data)
 		return 0;
+
+	if (adapt->nbio.ras &&
+		adapt->nbio.ras->get_curr_memory_partition_mode) {
+		ret = adapt->nbio.ras->get_curr_memory_partition_mode(adapt, &nps);
+		if (ret) {
+			AMDGV_ERROR("Failed to get current nps mode\n");
+			return 0;
+		}
+	}
 
 	oss_mutex_lock(adapt->ecc.recovery_lock);
 
@@ -226,6 +242,9 @@ int amdgv_umc_add_bad_pages(struct amdgv_adapter *adapt,
 		if (amdgv_umc_is_dup_record(adapt, &bps[i], from_eeprom))
 			continue;
 
+		if (!from_eeprom && (adapt->umc.eeprom_version == EEPROM_TABLE_VER_V3))
+			bps[i].retired_page = set_nps_to_pa(bps[i].retired_page, nps);
+
 		ret = amdgv_umc_update_eeprom_rom_data(adapt, &bps[i]);
 		if (ret)
 			goto out;
@@ -233,7 +252,8 @@ int amdgv_umc_add_bad_pages(struct amdgv_adapter *adapt,
 		/* Since the base address translated from the legacy page
 		   record in the eeprom is the same, only the first address
 		   needs to be extended. */
-		if (data->last_retired_pfn == bps[i].retired_page)
+		if (set_nps_to_pa(data->last_retired_pfn, AMDGV_MEMORY_PARTITION_MODE_UNKNOWN) ==
+				set_nps_to_pa(bps[i].retired_page, AMDGV_MEMORY_PARTITION_MODE_UNKNOWN))
 			continue;
 
 		data->last_retired_pfn = bps[i].retired_page;
@@ -303,9 +323,11 @@ int amdgv_umc_save_bad_pages(struct amdgv_adapter *adapt)
 
 int amdgv_umc_load_bad_pages(struct amdgv_adapter *adapt)
 {
-	int ret = 0;
+	int ret = 0, new_count, i;
 	struct amdgv_ras_eeprom_control *control = &adapt->eeprom_control;
 	struct eeprom_table_record *bps = NULL;
+	struct ras_err_handler_data *data = adapt->ecc.eh_data;
+	enum amdgv_memory_partition_mode nps;
 
 	if (adapt->ecc.bad_page_detection_mode & BIT(AMDGV_RAS_ECC_FLAG_SKIP_BAD_PAGE_OPS))
 		return 0;
@@ -327,6 +349,45 @@ int amdgv_umc_load_bad_pages(struct amdgv_adapter *adapt)
 	adapt->ecc.eh_data->last_retired_pfn = AMDGV_RAS_INV_MEM_PFN;
 	if (amdgv_umc_add_bad_pages(adapt, bps, control->num_recs, true))
 		ret = AMDGV_FAILURE;
+
+	if (adapt->umc.eeprom_version == EEPROM_TABLE_VER_V3) {
+		if (control->tbl_hdr.version < EEPROM_TABLE_VER_V3) {
+			if (adapt->nbio.ras &&
+				adapt->nbio.ras->get_curr_memory_partition_mode) {
+				ret = adapt->nbio.ras->get_curr_memory_partition_mode(adapt, &nps);
+				if (ret) {
+						AMDGV_ERROR("Failed to get current nps mode\n");
+						goto out;
+				}
+			}
+			ret = amdgv_ras_eeprom_reset_table(adapt, control);
+			if (ret) {
+				AMDGV_ERROR("Failed to reset eeprom table\n");
+				goto out;
+			}
+
+			oss_mutex_lock(adapt->ecc.recovery_lock);
+			adapt->ecc.eh_data->last_retired_pfn = AMDGV_RAS_INV_MEM_PFN;
+			if (data && data->rom_data.bps && data->rom_data.count) {
+				data->rom_data.count = 0;
+				new_count = data->count / 16;
+				for (i = 0; i < new_count; i++) {
+					ret = amdgv_umc_update_eeprom_rom_data(adapt, &(data->bps[i * 16]));
+					if (ret)
+						goto out;
+					data->rom_data.bps[data->rom_data.count - 1].retired_page =
+						set_nps_to_pa(data->rom_data.bps[data->rom_data.count - 1].retired_page, nps);
+				}
+				if (amdgv_ras_eeprom_process_records(
+					adapt, control, &data->rom_data.bps[control->num_recs], true, new_count)) {
+					AMDGV_ERROR("Failed to save EEPROM table data!\n");
+					ret =  AMDGV_FAILURE;
+					goto out;
+				}
+			}
+			oss_mutex_unlock(adapt->ecc.recovery_lock);
+		}
+	}
 
 out:
 	oss_free(bps);

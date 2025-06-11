@@ -2504,7 +2504,6 @@ static int navi32_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv
 	uint32_t ctx_id;
 	uint32_t vf_flr_intr_sts;
 	uint32_t i;
-	union amdgv_sched_event_data data;
 
 	if (entry->client_id != IH_IV_CLIENTID_MP1 ||
 		entry->src_id != IH_INTERRUPT_ID_TO_DRIVER)
@@ -2530,30 +2529,24 @@ static int navi32_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv
 		 */
 		vf_flr_intr_sts = entry->src_data[1];
 
-		/* Only for KVM and one VF, only trigger FLR and clear FB if VF is active */
-		for (i = 0; i < adapt->num_vf; i++) {
-			if (vf_flr_intr_sts & (1 << i) &&
-			    adapt->sched.array_vf[i].state == AMDGV_SCHED_ACTIVE) {
+		/* Only for KVM, only trigger FLR if VF is active */
+		for_each_id(i, vf_flr_intr_sts) {
+			if (i >= adapt->num_vf)
+				break;
+
+			if (adapt->sched.array_vf[i].state == AMDGV_SCHED_ACTIVE) {
 				ret = amdgv_sched_queue_event(
 						adapt, i, AMDGV_EVENT_SCHED_FORCE_RESET_VF, AMDGV_SCHED_BLOCK_ALL);
+
 				if (ret) {
 					AMDGV_ERROR("Failed to trigger VFFLR for VF %d\n", i);
 					ret = AMDGV_FAILURE;
 					break;
 				}
-
-				/* Clear VF FB after triggering FLR */
-				data.vf_fb_data.pattern = 0x0;
-				data.vf_fb_data.flag = 1;
-
-				ret = amdgv_sched_queue_event_ex(adapt, i,
-						AMDGV_EVENT_SCHED_INIT_VF_FB, AMDGV_SCHED_BLOCK_ALL, data);
-				if (ret) {
-					AMDGV_ERROR("Failed to clear VF FB for VF %d\n", i);
-					ret = AMDGV_FAILURE;
-				}
-				amdgv_live_info_prepare_reset(adapt);
 			}
+
+			amdgv_sched_clear_dirty_vf_fb(adapt, i);
+			amdgv_live_info_prepare_reset(adapt);
 		}
 		break;
 	default:

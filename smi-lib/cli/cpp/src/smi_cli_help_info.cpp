@@ -75,7 +75,7 @@ std::string version_common =
 std::string list_common =
 	"usage: amd-smi list [-h | --help] [--json | --csv] [--file FILE] [-g | --gpu [GPU ...]]\n\n"
 	"List all GPUs and VFs on the system and their most basic general information.\n"
-	"If no GPU is specified, returns metric information for all GPUs on the system.\n\n"
+	"If no GPU is specified, returns basic information for all GPUs on the system.\n\n"
 	"List arguments:\n"
 	"                          Description:\n"
 	"    -h, --help            show this help message and exit\n"
@@ -119,7 +119,8 @@ std::string static_host_windows =
 	"    -f, --fb-info                                 All fb information\n"
 	"    -n, --num-vf                                  Displays number of supported and enabled VFs\n"
 	"    -v, --vram                                    All vram information\n"
-	"    -c, --cache                                   All cache info\n";
+	"    -c, --cache                                   All cache info\n"
+	"    -m, --virtualization-mode                    All virtualization mode info\n";
 std::string static_host_vf =
 	"    --vf=<gpu_index:vf_index, vf_bdf, vf_uuid>    Gets general information about the specified VF (e.g. timeslice, fb info)\n\n";
 std::string static_host_mi30x =
@@ -474,19 +475,19 @@ std::string partition_message =
 std::string command_modifiers =
 	"Command Modifiers:\n"
 	"                      Description:\n"
-	"--json                Displays output in JSON format (humman readable by default).\n"
-	"--csv                 Displays output in CSV format (humman readable by default).\n"
+	"--json                Displays output in JSON format (human readable by default).\n"
+	"--csv                 Displays output in CSV format (human readable by default).\n"
 	"--file FILE           Saves output into a file on the provided path (stdout by default).\n";
 std::string xgmi_topology_modifiers =
 	"Command Modifiers:\n"
 	"                      Description:\n"
-	"--json                Displays output in JSON format (humman readable by default).\n"
+	"--json                Displays output in JSON format (human readable by default).\n"
 	"--file FILE           Saves output into a file on the provided path (stdout by default).\n";
 std::string metric_modifiers =
 	"Command Modifiers:\n"
 	"                      Description:\n"
-	"--json                Displays output in JSON format (humman readable by default).\n"
-	"--csv                 Displays output in CSV format (humman readable by default).\n"
+	"--json                Displays output in JSON format (human readable by default).\n"
+	"--csv                 Displays output in CSV format (human readable by default).\n"
 	"                      It can be used only with one argument and cannot be used without or with more than one argument, in that case, the call will fail\n"
 	"--file FILE           Saves output into a file on the provided path (stdout by default).\n";
 std::string partition_modifiers =
@@ -500,7 +501,8 @@ std::string ras_usage_message =
 	"If no ras information argument is provided all ras information will be displayed\n\n";
 
 std::string usage_ras_host = "usage: amd-smi ras [-h | --help] [--cper] [--severity=[fatal, nonfatal-uncorrected, nonfatal-corrected, all]] [--folder=[FOLDER]] "
-							 "[--file_limit=[NUMBER_OF_FILES]] [--follow] \n";
+							 "[--file_limit=[NUMBER_OF_FILES]] [--follow] \n"
+							 "       amd-smi ras [-h | --help] [--afid] [--cper-file=[FOLDER]] \n";
 
 std::string ras_host = "Ras arguments:\n"
 	"                                Description:\n"
@@ -510,7 +512,8 @@ std::string ras_host = "Ras arguments:\n"
 	"                                                                       By default, it will dump the cper report currently cached in the driver. \n"
 	"                                                                       If user specify the --file_limit=<number_of_files> option, the CLI will only keep max <number_of_files> files. \n"
 	"                                                                       If the --follow option is provided, the cli will continuous monitoring and \n"
-	"                                                                       dump the report until the ctrl+c is pressed.\n";
+	"                                                                       dump the report until the ctrl+c is pressed.\n"
+	"    --afid --cper-file=[FOLDER]                                        Get ras cper AFID list \n";
 
 std::string usage_ras_common = "";
 std::string ras_common = "";

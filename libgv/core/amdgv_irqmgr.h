@@ -115,6 +115,8 @@ struct amdgv_irqmgr {
 
 	spin_lock_t hv_event_lock;
 	spin_lock_t ih_event_lock;
+	spin_lock_t ih_handler3_lock;
+
 	int (*hv_event_process)(struct amdgv_adapter *adapt);
 
 	void *ih_submission_interrupt_context;

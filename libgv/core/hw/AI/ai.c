@@ -104,6 +104,9 @@ extern struct amdgv_init_func mi300_doorbell_func;
 extern struct amdgv_init_func mi300_sdma_v4_4_2_func;
 extern struct amdgv_init_func mi300_gfx_v9_4_3_func;
 extern struct amdgv_init_func mi308_ucode_func;
+extern struct amdgv_init_func mi350_ucode_func;
+extern struct amdgv_init_func mi350_smu_func;
+extern struct amdgv_init_func mi350_powerplay_func;
 
 struct amdgv_init_func *mi300x_init_table[] = {
 	&mi300_ip_discovery_func,
@@ -163,6 +166,36 @@ struct amdgv_init_func *mi308x_init_table[] = {
 	&mi300_diag_data_func,
 #endif
 	*/
+	&mi300_sdma_v4_4_2_func,
+	&mi300_gfx_v9_4_3_func,
+	&mi300_sched_late_func,
+	NULL,
+};
+
+struct amdgv_init_func *mi350x_init_table[] = {
+	/* Uncomment some of below funcs when support is complete for MI350 */
+	&mi300_ip_discovery_func,
+	&mi300_mcp_func,
+	&mi300_xgmi_early_func,
+	&mi300_vbios_early_func,
+	&mi300_mem_func,
+	&mi350_ucode_func,
+	&mi300_psp_func,
+	&mi350_smu_func,
+	&mi300_clockgating_func,
+	&mi300_vbios_late_func,
+	&mi300_ecc_func,
+	&mi300_gpuiov_func,
+	&mi300_xgmi_late_func,
+	&mi300_doorbell_func,
+	&mi300_irqmgr_func,
+	&mi300_mailbox_func,
+	&mi300_reset_func,
+	&mi350_powerplay_func,
+	&mi300_gpumon_func,
+	&mi300_misc_func,
+	&amdgv_vfmgr_func,
+	&mi300_sched_early_func,
 	&mi300_sdma_v4_4_2_func,
 	&mi300_gfx_v9_4_3_func,
 	&mi300_sched_late_func,

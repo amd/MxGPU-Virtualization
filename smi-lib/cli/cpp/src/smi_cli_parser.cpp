@@ -605,6 +605,25 @@ bool AmdSmiParser::is_option_argument(std::string option, Arguments &parsed_argu
 		return true;
 	}
 
+	if (option.substr(0, 11) == "--cper-file") {
+
+		try {
+			parsed_arguments.cper_file_path = option.substr(12);
+		} catch (...) {
+			throw SmiToolMissingParameterValueException(option.substr(0, 11));
+		}
+		if (option.substr(11,1) != "=") {
+			if (option.substr(11,1) == "") {
+				throw SmiToolMissingParameterValueException(option);
+			}
+			throw SmiToolMissingParameterValueException(option);
+		} else {
+			if (option.substr(12,1) == "") {
+				throw SmiToolMissingParameterValueException(option.substr(0,11));
+			}
+		}
+		return true;
+	}
 
 	return false;
 }
@@ -625,12 +644,17 @@ void AmdSmiParser::add_all_gpus(Arguments &parsed_arguments)
 	}
 }
 
+bool is_argument_full_present(const std::vector<std::string>& command_arguments,
+                                       const std::string& argument) {
+    return std::find(command_arguments.begin(), command_arguments.end(), argument) != command_arguments.end();
+}
+
 void AmdSmiParser::parse_arguments(std::vector<std::string> command_argument_list,
 								   Arguments &parsed_arguments)
 {
 	if (command_argument_list.size() <= 1) {
-		if(command_argument_list[0] == "set") {
-			throw SmiToolRequiredCommandException("set");
+		if(command_argument_list[0] == "set" || command_argument_list[0] == "ras") {
+			throw SmiToolRequiredCommandException(command_argument_list[0]);
 		}
 		add_all_gpus(parsed_arguments);
 		parsed_arguments.all_arguments = true;
@@ -700,15 +724,23 @@ void AmdSmiParser::parse_arguments(std::vector<std::string> command_argument_lis
 					}
 				}
 			}
+
 			if (command_argument_list[0] == "ras") {
-				if (
-					command_argument_list[i] == "--folder" || command_argument_list[i] == "--file_limit" ||
-					command_argument_list[i] == "--severity") {
-					if (!is_option_argument(command_argument_list[i], parsed_arguments)) {
+				bool has_cper = is_argument_full_present(command_argument_list, "--cper");
+				bool has_severity = is_argument_present(command_argument_list, "--severity");
+				bool has_afid = is_argument_present(command_argument_list, "--afid");
+				bool has_cper_file = is_argument_present(command_argument_list, "--cper-file");
+
+				if ((has_cper || has_severity) && (has_afid || has_cper_file)) {
+					throw SmiToolInvalidParameterException(std::string(command_argument_list[0]));
+				}
+
+				if (is_argument_present(command_argument_list, "--cper")  && is_argument_present(command_argument_list, "--severity") &&
+				is_argument_present(command_argument_list, "--afid") && is_argument_present(command_argument_list, "--cper-file")) {
 						throw SmiToolInvalidParameterException(std::string(command_argument_list[i]));
-					}
 				}
 			}
+
 			if (command_argument_list[i].at(1) == '-') {
 				parsed_arguments.options.push_back(command_argument_list[i].substr(2));
 			} else {
@@ -743,11 +775,17 @@ void AmdSmiParser::parse_arguments(std::vector<std::string> command_argument_lis
 	}
 
 	if (command_argument_list[0] == "ras") {
-		if (!is_argument_present(command_argument_list, "--cper") ||
-				!is_argument_present(command_argument_list, "--severity")) {
-			throw SmiToolRequiredCommandException("ras");
+		if ((!is_argument_present(command_argument_list, "--cper") || !is_argument_present(command_argument_list, "--severity")) &&
+		(!is_argument_present(command_argument_list, "--afid") || !is_argument_present(command_argument_list, "--cper-file"))) {
+						throw SmiToolInvalidParameterException(std::string("ras"));
+		}
+
+		if (is_argument_present(command_argument_list, "--cper")  && is_argument_present(command_argument_list, "--severity") &&
+		is_argument_present(command_argument_list, "--afid") && is_argument_present(command_argument_list, "--cper-file")) {
+						throw SmiToolInvalidParameterException(std::string("ras"));
 		}
 	}
+
 
 	if (parsed_arguments.options.size() == 0) {
 		parsed_arguments.all_arguments = true;

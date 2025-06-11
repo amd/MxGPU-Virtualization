@@ -60,6 +60,7 @@ public:
 	std::string folder_name;
 	int file_limit {-1};
 	int follow {-1};
+	std::string cper_file_path;
 	Arguments() {};
 };
 
@@ -106,7 +107,7 @@ private:
 		"--limit", "-l", "--driver", "-d",
 		"--ras", "-r", "--dfc-ucode", "-D", "--fb-info", "-f", "--num-vf", "-n",
 		"--vram", "-v", "--cache", "-c", "--partition", "-p", "--process-isolation", "-R",
-		"--soc-pstate", "-ps"
+		"--soc-pstate", "-ps", "--virtualization-mode", "-m"
 	};
 
 	std::vector<std::string> METRIC_SUPPORTED_ARGS_GPU = {
@@ -214,7 +215,8 @@ private:
 	};
 
 	std::vector<std::string> RAS_SUPPORTED_ARGS_GPU = {
-		"--cper", "--severity", "--folder", "--file_limit", "--follow"
+		"--cper", "--severity", "--folder", "--file_limit", "--follow",
+		"--afid", "--cper-file"
 	};
 
 	std::map<std::string, std::vector<std::string> > RAS_SUPPORTED_ARGUMENTS = {

@@ -790,6 +790,12 @@ static int mi200_gpuiov_toggle_rlcg_vf_interface(struct amdgv_adapter *adapt, ui
 {
 
 	AMDGV_INFO("RLCG VF Interface is %s\n", enable ? "enabled" : "disabled");
+
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmSCRATCH_REG0), 0);
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmSCRATCH_REG1), 0);
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmSCRATCH_REG2), 0);
+	WREG32(SOC15_REG_OFFSET(GC, 0, mmSCRATCH_REG3), 0);
+
 	WREG32(SOC15_REG_OFFSET(GC, 0, mmRLC_GPM_GENERAL_14), enable ? 1 : 0);
 
 	return 0;
@@ -890,11 +896,6 @@ static int mi200_gpuiov_sw_init(struct amdgv_adapter *adapt)
 	if (!adapt->gpuiov.csa_fb_mem) {
 		AMDGV_ERROR("Failed to reserve memory for CSA\n");
 		return AMDGV_FAILURE;
-	}
-
-	/* enable config space FLR for KVM only */
-	if (!(adapt->flags & AMDGV_FLAG_USE_PF)) {
-		adapt->flags |= AMDGV_FLAG_FB_CLEAN_ON_SHUTDOWN;
 	}
 
 	return amdgv_gpuiov_ctrl_block_setup(adapt, mi200_hw_sched_static_config, MI200_HW_SCHED_BLOCK_NUM);

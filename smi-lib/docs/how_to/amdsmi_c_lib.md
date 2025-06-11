@@ -72,7 +72,8 @@ int main(void)
     if (!processors) {
         fprintf(stderr, "Memory allocation failed\n");
         ret = AMDSMI_STATUS_OUT_OF_RESOURCES;
-        goto fini;
+        amdsmi_shut_down();
+        return ret;
     }
 
     // Retrieve processor handles

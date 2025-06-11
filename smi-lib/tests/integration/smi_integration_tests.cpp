@@ -107,6 +107,7 @@ static void walkthrough_test()
 	amdsmi_vf_handle_t vf_handle;
 	amdsmi_bdf_t vf_bdf;
 	amdsmi_version_t version;
+	amdsmi_virtualization_mode_t virtualization_mode;
 	uint32_t processor_index = AMDSMI_MAX_DEVICES + 100;
 	amdsmi_driver_model_type_t driver_model;
 	uint32_t sensor_ind = 0;
@@ -134,6 +135,9 @@ static void walkthrough_test()
 		printf("Host driver name: %s\n", driver_version.driver_name);
 		printf("Host driver version: %s\n", driver_version.driver_version);
 		printf("Host driver date: %s\n", driver_version.driver_date);
+
+		ASSERT_EQ(amdsmi_get_gpu_virtualization_mode(processors[i], &virtualization_mode), AMDSMI_STATUS_SUCCESS);
+		printf("Virtualization mode: %d\n", virtualization_mode);
 
 		ret = amdsmi_get_gpu_driver_model(processors[i], &driver_model);
 		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);

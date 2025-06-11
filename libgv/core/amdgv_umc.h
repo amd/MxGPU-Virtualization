@@ -41,6 +41,24 @@
 #define LOOP_UMC_NODE_INST_AND_CH(node_inst, umc_inst, ch_inst) \
 	LOOP_UMC_NODE_INST((node_inst)) LOOP_UMC_INST_AND_CH((umc_inst), (ch_inst))
 
+/*
+ * save nps value to eeprom_table_record.retired_page[47:40],
+ * the channel index flag above will be retired.
+ */
+#define UMC_NPS_SHIFT 40
+#define UMC_NPS_MASK 0xffULL
+
+static inline enum amdgv_memory_partition_mode get_nps_from_pa(uint64_t pa)
+{
+	return (pa >> UMC_NPS_SHIFT) & UMC_NPS_MASK;
+}
+
+static inline uint64_t set_nps_to_pa(uint64_t pa, enum amdgv_memory_partition_mode nps)
+{
+	uint64_t nps_64 = (uint64_t)nps;
+	pa |= (nps_64 << UMC_NPS_SHIFT);
+	return pa;
+}
 typedef void (*umc_query_info)(struct amdgv_adapter *adapt, void *data,
 						uint32_t node_inst, uint32_t ch_inst, uint32_t umc_inst);
 
@@ -113,6 +131,7 @@ struct amdgv_umc {
 	uint64_t channel_mask;
 
 	bool use_legacy_eeprom_format;
+	uint32_t eeprom_version;
 };
 
 struct ras_err_data;

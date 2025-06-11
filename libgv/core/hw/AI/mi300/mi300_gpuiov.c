@@ -31,6 +31,7 @@
 #include "gfxhub_v1_2.h"
 
 #include "mi300_vcn.h"
+#include "mi350/mi350_vcn.h"
 
 static const int this_block = AMDGV_COMMUNICATION_BLOCK;
 
@@ -128,6 +129,9 @@ static int mi300_gpuiov_set_cmd(struct amdgv_adapter *adapt,
 	if (!oss_atomic_read(adapt->in_sync_flood)) {
 		if (IS_HW_SCHED_TYPE_MM(hw_sched_id)) {
 
+			if (adapt->asic_type == CHIP_MI350X)
+				mi350_vcn_get_mmsch_regid_instid(adapt, hw_sched_id, &reg_control, true);
+			else
 				mi300_vcn_get_mmsch_regid_instid(adapt, hw_sched_id, &reg_control, true);
 			WREG32(reg_control, data);
 		} else
@@ -156,7 +160,10 @@ static bool mi300_gpuiov_is_cmd_complete(struct amdgv_adapter *adapt,
 	reg_status = 0;
 
 	if (IS_HW_SCHED_TYPE_MM(hw_sched_id)) {
-		{
+		if (adapt->asic_type == CHIP_MI350X) {
+			mi350_vcn_get_mmsch_regid_instid(adapt, hw_sched_id, &reg_control, true);
+			mi350_vcn_get_mmsch_regid_instid(adapt, hw_sched_id, &reg_status, false);
+		} else {
 			mi300_vcn_get_mmsch_regid_instid(adapt, hw_sched_id, &reg_control, true);
 			mi300_vcn_get_mmsch_regid_instid(adapt, hw_sched_id, &reg_status, false);
 		}
@@ -890,6 +897,11 @@ static int mi300_gpuiov_toggle_rlcg_vf_interface(struct amdgv_adapter *adapt, ui
 	AMDGV_DEBUG("RLCG VF Interface is %s\n", enable ? "enabled" : "disabled");
 
 	for_each_id (xcc_id, amdgv_sched_get_xcc_mask_by_vf(adapt, idx_vf)) {
+		WREG32(SOC15_REG_OFFSET(GC, GET_INST(GC, xcc_id), regSCRATCH_REG0), 0);
+		WREG32(SOC15_REG_OFFSET(GC, GET_INST(GC, xcc_id), regSCRATCH_REG1), 0);
+		WREG32(SOC15_REG_OFFSET(GC, GET_INST(GC, xcc_id), regSCRATCH_REG2), 0);
+		WREG32(SOC15_REG_OFFSET(GC, GET_INST(GC, xcc_id), regSCRATCH_REG3), 0);
+
 		WREG32(SOC15_REG_OFFSET(GC, GET_INST(GC, xcc_id), regRLC_GPM_GENERAL_14), enable ? 1 : 0);
 	}
 
@@ -974,14 +986,6 @@ static int mi300_gpuiov_sw_init(struct amdgv_adapter *adapt)
 	if (!adapt->gpuiov.csa_fb_mem) {
 		AMDGV_ERROR("Failed to reserve memory for CSA\n");
 		return AMDGV_FAILURE;
-	}
-
-	/* enable config space FLR for KVM only */
-	/* on MI300 series, PMFW is integrated in IFWI, so driver needs to first check
-	 * if the current PMFW supports config space FLR sequence.
-	 */
-	if (!(adapt->flags & AMDGV_FLAG_USE_PF)) {
-		adapt->flags |= AMDGV_FLAG_FB_CLEAN_ON_SHUTDOWN;
 	}
 
 	/* only mi308 support diagnosis data, skip for other series */

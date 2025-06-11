@@ -192,7 +192,7 @@ int amdgv_sched_queue_init_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	union amdgv_sched_event_data data;
 
 	data.vf_fb_data.pattern = 0x00;
-	data.vf_fb_data.flag = 0;
+	data.vf_fb_data.flag = AMDGV_VF_FB_INIT;
 
 	/* Do not queue event during whole GPU reset */
 	if (adapt->reset.reset_state) {
@@ -1402,4 +1402,19 @@ void amdgv_sched_clear_unrecov_err(struct amdgv_adapter *adapt)
 bool amdgv_sched_is_unrecov_err(struct amdgv_adapter *adapt)
 {
 	return adapt->sched.unrecov_err;
+}
+
+void amdgv_sched_clear_dirty_vf_fb(struct amdgv_adapter *adapt, int vf_idx)
+{
+    union amdgv_sched_event_data data;
+    int ret;
+
+	/* Clear VF FB if guest has been init */
+	data.vf_fb_data.pattern = 0x0;
+	data.vf_fb_data.flag = AMDGV_VF_FB_CLEAR_DIRTY;
+
+	ret = amdgv_sched_queue_event_ex(adapt, vf_idx,
+			AMDGV_EVENT_SCHED_INIT_VF_FB, AMDGV_SCHED_BLOCK_ALL, data);
+	if (ret)
+		AMDGV_ERROR("Failed to clear VF FB for VF %d\n", vf_idx);
 }

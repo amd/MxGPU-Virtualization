@@ -2266,6 +2266,23 @@ static const struct file_operations error_ring_buffer_dump_fops = {
 	.llseek         = default_llseek,
 };
 
+static int set_product_info_invalid_set(void *data, u64 val)
+{
+	int ret = 0;
+	struct gim_dev_data *dev_data;
+
+	dev_data = (struct gim_dev_data *)data;
+
+	if (val) {
+		ret = amdgv_set_product_info_invalid(dev_data->adev);
+	}
+
+	return ret;
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(set_product_info_invalid_fops, NULL,
+	set_product_info_invalid_set, "%llu\n");
+
 void gim_debugfs_init(void)
 {
 	int i;
@@ -2598,6 +2615,14 @@ void gim_debugfs_init(void)
 		entry = debugfs_create_file("asymmetric_fb", 0600,
 				adapt_dir,
 				dev_data, &asymmetric_fb_fops);
+		if (entry == NULL) {
+			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			goto err;
+		}
+
+		entry = debugfs_create_file("set_product_info_invalid", 0200,
+			adapt_dir,
+			dev_data, &set_product_info_invalid_fops);
 		if (entry == NULL) {
 			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;

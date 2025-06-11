@@ -121,8 +121,11 @@ typedef amdsmi_status_t (*AMDSMI_EVENT_DESTROY)(amdsmi_event_set);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_METRICS)(amdsmi_get_gpu_metrics);
 
 typedef amdsmi_status_t (*AMDSMI_GET_LIB_VERSION)(amdsmi_get_lib_version);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_VIRTUALIZATION_MODE)(amdsmi_processor_handle,
+		amdsmi_virtualization_mode_t *);
 typedef amdsmi_status_t (*AMDSMI_TOPO_GET_P2P_STATUS)(amdsmi_processor_handle,amdsmi_processor_handle,
 		amdsmi_link_type_t*, amdsmi_p2p_capability_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_AFIDS_FROM_CPER)(amdsmi_get_afids_from_cper);
 
 class AmdSmiLibHost
 {
@@ -199,6 +202,7 @@ public:
 
 	AMDSMI_GET_GPU_METRICS amdsmi_get_gpu_metrics;
 	AMDSMI_TOPO_GET_P2P_STATUS host_amdsmi_topo_get_p2p_status;
+	AMDSMI_GET_GPU_VIRTUALIZATION_MODE amdsmi_get_gpu_virtualization_mode;
 
 	HMODULE amdSmiDll;
 

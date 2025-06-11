@@ -27,16 +27,6 @@
 
 extern struct gim_error_ring_buffer *gim_error_rb;
 
-#define CHECK_SIZE(var, a, c) do { \
-	if (sizeof(var->raw_ ## a) < sizeof(var->c)) { \
-		gim_put_error(AMDGV_ERROR_DRIVER_INVALID_VALUE, \
-			sizeof(var->c)); \
-		kfree(var); \
-		var = NULL; \
-		return SMI_STATUS_INVAL; \
-	} \
-	} while (0)
-
 int smi_cmd_handshake(struct smi_ctx *ctx, void *inb, void *outb,
 		uint16_t in_len, uint16_t out_len)
 {

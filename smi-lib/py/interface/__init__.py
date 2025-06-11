@@ -88,6 +88,8 @@ from .amdsmi_interface import amdsmi_set_soc_pstate
 from .amdsmi_interface import amdsmi_get_gpu_driver_model
 from .amdsmi_interface import amdsmi_get_gpu_cper_entries
 from .amdsmi_interface import amdsmi_topo_get_p2p_status
+from .amdsmi_interface import amdsmi_get_gpu_virtualization_mode
+from .amdsmi_interface import amdsmi_get_afids_from_cper
 
 from .amdsmi_interface import AmdSmiTemperatureType
 from .amdsmi_interface import AmdSmiTemperatureMetric

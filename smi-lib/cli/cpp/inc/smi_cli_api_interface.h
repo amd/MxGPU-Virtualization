@@ -191,6 +191,8 @@ public:
 			Arguments arg) = 0;
 	virtual int amdsmi_set_soc_pstate_command(uint64_t processor_bdf, Arguments arg) = 0;
 	virtual int amdsmi_set_power_cap_command(uint64_t processor_bdf, Arguments arg) = 0;
+	virtual int amdsmi_get_virtualization_mode_command(uint64_t processor_bdf, Arguments arg,
+			std::string &out) = 0;
 	// monitor
 	virtual int amdsmi_get_power_usage_monitor_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) = 0;
@@ -221,5 +223,7 @@ public:
 	virtual int amdsmi_get_current_partition_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) = 0;
 	virtual int amdsmi_get_cper_entries_command(Arguments arg,
+			std::string &formatted_string) = 0;
+	virtual int amdsmi_get_cper_afid_command(Arguments arg,
 			std::string &formatted_string) = 0;
 };

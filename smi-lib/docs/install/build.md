@@ -11,7 +11,7 @@ myst:
 
 ## Requirements
 
-Before building the integration and unit tests, ensure that `gtest` and `gmock` are installed on your system. These libraries are required for building and running the tests. You can install them using your system's package manager or build them from source.
+Before building the integration and unit tests, ensure that `gtest` and `gmock` are installed on your system. These libraries are required for building and running the tests. You can install them using your system's package manager or build them from source. Additionally, ensure that the `lcov` package is installed on your system before running the gen_coverage command, as it is necessary for generating code coverage reports.
 
 ## Build commands
 

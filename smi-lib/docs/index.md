@@ -16,7 +16,7 @@ Some of the features that are exposed in the library are:
 - Query information about the virtual functions on the GPU
 - Query temperature, clocks, and usage of the GPU
 
-- To run the AMD SMI library, the Linux Host Virtualization driver needs to be installed.
+- To run the AMD SMI library, the Linux PF driver needs to be installed.
 
 There are two parts to the AMD SMI library interface:
 

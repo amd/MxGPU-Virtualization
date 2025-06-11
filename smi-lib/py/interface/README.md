@@ -2521,6 +2521,10 @@ Field | Description
 `CLK_SOC_DS_DISABLED` | socket deep sleep
 `CLK_VCLK_DS_DISABLED` | vclk deep sleep
 `CLK_DCLK_DS_DISABLED` | dclk deep sleep
+`PCIE_LINK_SPEED` | pcie link speed
+`PCIE_LINK_WIDTH` | pcie link width
+`DRAM_BANDWIDTH` | dram bandwidth
+`MAX_DRAM_BANDWIDTH` | maximum dram bandwidth
 `UNKNOWN` | unknown name
 
 `AmdSmiMetricCategory` enum:
@@ -2890,6 +2894,43 @@ except AmdSmiException as e:
     print(e)
 ```
 
+## amdsmi_get_gpu_virtualization_mode
+Description: Retrieve the current GPU virtualization mode.
+
+Input parameters:
+* `processor handle` The handle to the GPU device for which the virtualization mode is being queried.
+
+Output: Enum object representing the current virtualization mode.
+
+`AmdSmiVirtualizationMode` enum:
+
+Field | Description
+---|---
+`UNKNOWN`      | unknown virtualization mode
+`NONE`         | none virtualization mode
+`HOST`         | host virtualization mode
+`GUEST`        | guest virtualization mode
+`PASSTHROUGH`  | passthrough virtualization mode
+
+Exceptions that can be thrown by `amdsmi_get_gpu_virtualization_mode` function:
+* `AmdSmiLibraryException`
+* `AmdSmiParameterException`
+
+Example:
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            virtualization_mode = amdsmi_get_gpu_virtualization_mode(processor)
+            print("Virtualization mode: {}".format(virtualization_mode))
+
+except AmdSmiException as e:
+    print(e)
+```
+
 ### amdsmi_get_gpu_accelerator_partition_profile_config
 
 Description: Returns gpu accelerator partition caps as currently configured in the system
@@ -3191,3 +3232,34 @@ try:
 except AmdSmiException as e:
     print(e)
 ```
+
+
+## amdsmi_get_afids_from_cper
+Description: Get AFID for cper error
+
+Input parameters: buffer which contains one cper
+* `cper_buffer`
+
+Output:
+* List of AFID
+
+Exceptions that can be thrown by `amdsmi_get_afids_from_cper` function:
+* `AmdSmiLibraryException`
+* `AmdSmiParameterException`
+
+Example:
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            cper_list = amdsmi_get_gpu_cper_entries(processor, AmdSmiCperErrorSeverity.NUM)
+            afid = amdsmi_get_afids_from_cper(cper_list[0])
+            print(afid)
+
+except AmdSmiException as e:
+    print(e)
+```
+

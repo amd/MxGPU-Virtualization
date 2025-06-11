@@ -83,6 +83,8 @@ typedef amdsmi_status_t (*AMDSMI_GET_MEMORY_PARTITION_CONFIG)(amdsmi_processor_h
 		amdsmi_memory_partition_config_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_METRICS)(amdsmi_processor_handle, uint32_t *,
 			amdsmi_metric_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_VIRTUALIZATION_MODE)(amdsmi_processor_handle,
+		amdsmi_virtualization_mode_t *);
 
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_GPU_DEVICE_BDF host_amdsmi_get_gpu_device_bdf;
@@ -115,6 +117,8 @@ extern AMDSMI_GET_CURR_ACCELERATOR_PARTITION host_amdsmi_get_partition_profile;
 extern AMDSMI_GET_MEMORY_PARTITION_CONFIG host_amdsmi_get_gpu_memory_partition_config;
 
 extern AMDSMI_GET_GPU_METRICS host_amdsmi_get_gpu_metrics;
+
+extern AMDSMI_GET_GPU_VIRTUALIZATION_MODE host_amdsmi_get_gpu_virtualization_mode;
 
 const std::vector<amdsmi_gpu_block_t> ecc_blocks{AMDSMI_GPU_BLOCK_UMC, AMDSMI_GPU_BLOCK_SDMA, AMDSMI_GPU_BLOCK_GFX, AMDSMI_GPU_BLOCK_MMHUB,
 		  AMDSMI_GPU_BLOCK_ATHUB, AMDSMI_GPU_BLOCK_PCIE_BIF, AMDSMI_GPU_BLOCK_HDP, AMDSMI_GPU_BLOCK_XGMI_WAFL,
@@ -570,6 +574,21 @@ std::string host_fill_soc_pstate(Arguments arg, std::string value)
 	return out;
 }
 
+std::string host_fill_virtualization_mode(Arguments arg, std::string value)
+{
+	std::string out{};
+
+	if (arg.output == json) {
+		out = value;
+	} else if(arg.output == csv) {
+		out = string_format(",%s", value);
+	} else {
+		out = string_format(staticVirtualizationModeTemplate, value);
+	}
+
+	return out;
+}
+
 int AmdSmiApiHost::amdsmi_get_asic_info_command(uint64_t processor_bdf, Arguments arg,
 		std::string& out)
 {
@@ -621,6 +640,12 @@ int AmdSmiApiHost::amdsmi_get_asic_info_command(uint64_t processor_bdf, Argument
 	} else {
 		oam_id = string_format("%ld", asic.oam_id);
 	}
+	std::string num_of_compute_units{};
+	if (asic.num_of_compute_units == UINT_MAX) {
+		num_of_compute_units = "N/A";
+	} else {
+		num_of_compute_units = string_format("%ld", asic.num_of_compute_units);
+	}
 
 	if (arg.output == json) {
 		nlohmann::ordered_json values_json{};
@@ -632,7 +657,8 @@ int AmdSmiApiHost::amdsmi_get_asic_info_command(uint64_t processor_bdf, Argument
 			{ "subsystem_id", subsystem_id_hex.c_str() },
 			{ "rev_id", rev_id_hex },
 			{ "asic_serial", serial_id_hex },
-			{ "oam_id", asic.oam_id }
+			{ "oam_id", asic.oam_id },
+			{ "num_of_compute_units", num_of_compute_units.c_str()}
 		};
 
 		if (asic.oam_id == UINT_MAX) {
@@ -641,20 +667,26 @@ int AmdSmiApiHost::amdsmi_get_asic_info_command(uint64_t processor_bdf, Argument
 			asic_json["oam_id"] = asic.oam_id;
 		}
 
+		if (asic.num_of_compute_units == UINT_MAX) {
+			asic_json["num_of_compute_units"] = num_of_compute_units;
+		} else {
+			asic_json["num_of_compute_units"] = asic.num_of_compute_units;
+		}
+
 		out = asic_json.dump(4);
 	} else if (arg.output == csv) {
-		out = string_format(",%s,%s,%s,%s,%s,%s,%s,%s,%s",
+		out = string_format(",%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",
 							asic.market_name,
 							vendor_id_hex.c_str(), vendor_name.c_str(),
 							subvendor_id_hex.c_str(), device_id_hex.c_str(),
 							subsystem_id_hex.c_str(), rev_id_hex.c_str(),
-							serial_id_hex.c_str(), oam_id.c_str());
+							serial_id_hex.c_str(), oam_id.c_str(), num_of_compute_units.c_str());
 	} else {
 		out = string_format(
 				  staticAsicTemplate, asic.market_name, vendor_id_hex.c_str(),
 				  vendor_name.c_str(), subvendor_id_hex.c_str(), device_id_hex.c_str(), subsystem_id_hex.c_str(),
 				  rev_id_hex.c_str(),
-				  serial_id_hex.c_str(), oam_id.c_str());
+				  serial_id_hex.c_str(), oam_id.c_str(), num_of_compute_units.c_str());
 	}
 
 	return ret;
@@ -1942,6 +1974,55 @@ int AmdSmiApiHost::amdsmi_get_soc_pstate(uint64_t processor_bdf, Arguments arg,
 			{ "policies", dpm_list_json}
 		};
 		formatted_string = dpm_info_json.dump(4);
+	}
+
+	return ret;
+}
+
+int AmdSmiApiHost::amdsmi_get_virtualization_mode_command(uint64_t processor_bdf, Arguments arg,
+		std::string &formatted_string)
+{
+	int ret;
+	amdsmi_virtualization_mode_t mode;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		return ret;
+	}
+
+	ret = host_amdsmi_get_gpu_virtualization_mode(processor, &mode);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		formatted_string = host_fill_virtualization_mode(arg, "N/A");
+		return ret;
+	}
+
+	std::string virtualization_mode_string;
+	switch (mode)
+	{
+	case AMDSMI_VIRTUALIZATION_MODE_HOST:
+		virtualization_mode_string = "HOST";
+		break;
+	case AMDSMI_VIRTUALIZATION_MODE_GUEST:
+		virtualization_mode_string = "GUEST";
+		break;
+	case AMDSMI_VIRTUALIZATION_MODE_PASSTHROUGH:
+		virtualization_mode_string = "PASSTHROUGH";
+		break;
+	default:
+		virtualization_mode_string = "N/A";
+		break;
+	}
+
+	if (arg.output == json) {
+		formatted_string = virtualization_mode_string;
+	} else if (arg.output == csv) {
+		formatted_string = string_format(",%s", virtualization_mode_string.c_str());
+	} else {
+		formatted_string = string_format(staticVirtualizationModeTemplate, virtualization_mode_string.c_str());
 	}
 
 	return ret;

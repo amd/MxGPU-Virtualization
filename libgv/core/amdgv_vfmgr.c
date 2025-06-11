@@ -2606,6 +2606,7 @@ enum amdgv_live_info_status amdgv_vfmgr_import_live_data(struct amdgv_adapter *a
 		adapt->sched.array_vf[idx_vf].state = vf_info[idx_live_data].state;
 		adapt->array_vf[idx_vf].reset_notify_vf_pending =
 			vf_info[idx_live_data].reset_notify_vf_pending;
+		adapt->sched.array_vf[idx_vf].fb_dirty = true;
 
 		amdgv_sched_update_time_slice(adapt, AMDGV_SCHED_BLOCK_ALL, idx_vf);
 

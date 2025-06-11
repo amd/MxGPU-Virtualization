@@ -1427,7 +1427,7 @@ typedef struct {
   uint8_t      VddqOffEnabled;
   uint8_t      PaddingUmcFlags[2];
 
-  uint32_t    PostVoltageSetBacoDelay; // in microseconds. Amount of time FW will wait after power good is established(NV33) or PSI0 command is issued(NV31/NV32)
+  uint32_t    PostVoltageSetBacoDelay; // in microseconds. Amount of time FW will wait after power good is established(NV33) or PSI0 command is issued(NV32)
   uint32_t    BacoEntryDelay; // in milliseconds. Amount of time FW will wait to trigger BACO entry after receiving entry notification from OS
 
 

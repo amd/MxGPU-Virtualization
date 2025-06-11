@@ -42,7 +42,10 @@ LIBGV_HW_MI300_LOCAL = mi300_gpuiov.o mi300_powerplay.o mi300_fru.o \
 
 LIBGV_HW_MI308_LOCAL = mi308_ucode.o mi308_mcp.o
 
+LIBGV_HW_MI350_LOCAL = mi350_ucode.o mi350_powerplay.o mi350_vcn.o
+
 LIBGV_HW_AI_FILES = $(addprefix core/hw/AI/,$(LIBGV_HW_AI_LOCAL))
 LIBGV_HW_MI200_FILES = $(addprefix core/hw/AI/mi200/,$(LIBGV_HW_MI200_LOCAL))
 LIBGV_HW_MI300_FILES = $(addprefix core/hw/AI/mi300/,$(LIBGV_HW_MI300_LOCAL))
 LIBGV_HW_MI300_FILES += $(addprefix core/hw/AI/mi300/mi308/,$(LIBGV_HW_MI308_LOCAL))
+LIBGV_HW_MI300_FILES += $(addprefix core/hw/AI/mi300/mi350/,$(LIBGV_HW_MI350_LOCAL))

@@ -1751,7 +1751,7 @@ int AmdSmiApiHost::amdsmi_get_clock_metric_command(uint64_t processor_bdf, Argum
 	amdsmi_status_t ret;
 	bool use_metric{false};
 
-	if ((AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200())
+	if ((AmdSmiPlatform::getInstance().is_mi300())
 			&& arg.watch == -1) {
 		use_metric = true;
 	}

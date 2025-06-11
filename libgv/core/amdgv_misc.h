@@ -75,9 +75,6 @@ struct amdgv_misc {
 
 	/* get memory config */
 	uint64_t (*get_memsize)(struct amdgv_adapter *adapt);
-
-	/* clean scratch registers */
-	void (*clean_scratch_registers)(struct amdgv_adapter *adapt, uint32_t idx_vf);
 };
 
 #define AMDGV_TIMEOUT(x) adapt->misc.timeouts[(x)]

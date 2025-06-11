@@ -177,6 +177,11 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_CPER_ENTRIES)(amdsmi_processor_handle, 
         amdsmi_cper_hdr_t**, uint64_t *, uint64_t *);
 typedef amdsmi_status_t (*AMDSMI_TOPO_GET_P2P_STATUS)(amdsmi_processor_handle,amdsmi_processor_handle,
 		amdsmi_link_type_t*, amdsmi_p2p_capability_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_VIRTUALIZATION_MODE)(amdsmi_processor_handle,
+		amdsmi_virtualization_mode_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_AFIDS_FROM_CPER)(char*cper_buffer, uint32_t buf_size, uint64_t *afids,
+		uint32_t *num_afids);
+
 /////
 /////
 /////
@@ -250,6 +255,8 @@ AMDSMI_SET_MEMORY_PARTITION host_amdsmi_set_gpu_memory_partition_command;
 AMDSMI_GET_MEMORY_PARTITION_CONFIG host_amdsmi_get_gpu_memory_partition_config;
 AMDSMI_GET_GPU_CPER_ENTRIES host_amdsmi_get_gpu_cper_entries;
 AMDSMI_TOPO_GET_P2P_STATUS host_amdsmi_topo_get_p2p_status;
+AMDSMI_GET_GPU_VIRTUALIZATION_MODE host_amdsmi_get_gpu_virtualization_mode;
+AMDSMI_GET_AFIDS_FROM_CPER host_amdsmi_get_afids_from_cper;
 
 AmdSmiApiHost::AmdSmiApiHost()
 {
@@ -434,6 +441,11 @@ AmdSmiApiHost::AmdSmiApiHost()
 
 	host_amdsmi_topo_get_p2p_status = (AMDSMI_TOPO_GET_P2P_STATUS)LOAD_SYM(amdSmiLibHandle,
 			"amdsmi_topo_get_p2p_status");
+
+	host_amdsmi_get_gpu_virtualization_mode = (AMDSMI_GET_GPU_VIRTUALIZATION_MODE)LOAD_SYM(
+			amdSmiLibHandle, "amdsmi_get_gpu_virtualization_mode");
+	host_amdsmi_get_afids_from_cper = (AMDSMI_GET_AFIDS_FROM_CPER)LOAD_SYM(
+										amdSmiLibHandle, "amdsmi_get_afids_from_cper");
 	int ret = host_amdsmi_init(AMDSMI_INIT_AMD_GPUS);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		printf("AMDSMI failed to init \n");

@@ -430,15 +430,6 @@ static void navi32_mmhub_program_golden_settings(struct amdgv_adapter *adapt, vo
 	WREG32(SOC15_REG_OFFSET(GC, 0, regMMVM_L2_CNTL2), tmp);
 }
 
-static void navi32_clean_scratch_reg(struct amdgv_adapter *adapt, uint32_t idx_vf)
-{
-	WREG32(SOC15_REG_OFFSET(GC, 0, regSCRATCH_REG0), 0);
-	WREG32(SOC15_REG_OFFSET(GC, 0, regSCRATCH_REG1), 0);
-	WREG32(SOC15_REG_OFFSET(GC, 0, regSCRATCH_REG2), 0);
-	WREG32(SOC15_REG_OFFSET(GC, 0, regSCRATCH_REG3), 0);
-	WREG32(SOC15_REG_OFFSET(GC, 0, regSCRATCH_REG4), 0);
-}
-
 static int navi32_misc_sw_init(struct amdgv_adapter *adapt)
 {
 	adapt->misc.get_hdp_nonsurface_base = navi32_misc_get_hdp_nonsurface_base;
@@ -453,7 +444,6 @@ static int navi32_misc_sw_init(struct amdgv_adapter *adapt)
 	}
 
 	adapt->misc.reprogram_golden_settings = navi32_mmhub_program_golden_settings;
-	adapt->misc.clean_scratch_registers = navi32_clean_scratch_reg;
 	navi32_setup_common_timeout(adapt);
 
 	return 0;
@@ -465,7 +455,6 @@ static int navi32_misc_sw_fini(struct amdgv_adapter *adapt)
 	adapt->misc.set_hdp_nonsurface_base = NULL;
 	adapt->misc.dma_copy = NULL;
 	adapt->misc.reprogram_golden_settings = NULL;
-	adapt->misc.clean_scratch_registers = NULL;
 
 	return 0;
 }

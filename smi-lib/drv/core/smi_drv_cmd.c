@@ -303,6 +303,7 @@ int smi_get_gpu_board_info(struct smi_ctx *ctx, void *inb,
 	smi_put_handle(adev, ctx);
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
+
 int smi_get_gpu_asic_info(struct smi_ctx *ctx, void *inb,
 				void *outb, uint16_t in_len, uint16_t out_len)
 {
@@ -316,6 +317,8 @@ int smi_get_gpu_asic_info(struct smi_ctx *ctx, void *inb,
 	int ret = 0;
 	uint64_t asic_serial;
 	const char *marketing_name = NULL;
+	struct amdgv_gpumon_gfx_config gfx_config;
+
 	/* Check version */
 	if ((in_len != sizeof(struct smi_device_info)) ||
 		(out_len != sizeof(struct smi_asic_info)))
@@ -342,7 +345,14 @@ int smi_get_gpu_asic_info(struct smi_ctx *ctx, void *inb,
 	}
 	info->oam_id = dev_info.oam.oam_idx;
 	info->subvendor_id = init_data->info.sub_vnd_id;
-	info->num_of_compute_units = SMI_NOT_SUPPORTED;
+
+	ret = amdgv_gpumon_get_gfx_config(adev, &gfx_config);
+	if (ret) {
+		smi_put_handle(adev, ctx);
+		return SMI_STATUS_API_FAILED;
+	}
+	info->num_of_compute_units = gfx_config.active_cu_count;
+
 	info->target_graphics_version = SMI_NOT_SUPPORTED;
 	info->subsystem_id = init_data->info.sub_sys_id;
 	ret = amdgv_gpumon_get_asic_serial(adev, &asic_serial);

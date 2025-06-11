@@ -300,12 +300,8 @@ static int gim_pci_write_config_dword(oss_dev_t dev, int where, uint32_t val)
 
 static bool gim_in_virtual_machine(void)
 {
-#ifndef EXCLUDE_SUPPORT_RUNNING_IN_VM
 #ifdef CONFIG_X86
 	return boot_cpu_has(X86_FEATURE_HYPERVISOR);
-#else
-	return false;
-#endif
 #else
 	return false;
 #endif
@@ -2035,6 +2031,9 @@ static int gim_get_firmware_name(enum amdgv_firmware_id fw_id,
 	case CHIP_MI300X:
 		chip_name = "mi300x";
 		break;
+	case CHIP_MI350X:
+		chip_name = "mi350";
+		break;
 	default:
 		return -1;
 	}
@@ -2086,6 +2085,9 @@ static int gim_get_discovery_binary(oss_dev_t dev, enum amd_asic_type asic_type,
 	int ret;
 
 	switch (asic_type) {
+	case CHIP_MI350X:
+		chip_name = "mi350";
+		break;
 	default:
 		return -1;
 	}
@@ -2200,7 +2202,7 @@ static uint32_t gim_get_assigned_vf_count(oss_dev_t dev, bool all_gpus)
 	int i;
 	uint32_t enable_count = 0;
 
-	if (!svm_enabled) {
+	if (!SVM_ENABLED(NULL)) {
 		list_for_each_entry(dev_data, &gim_device_list, list) {
 			if (!all_gpus && dev_data && dev_data->pdev != (struct pci_dev *)dev)
 				continue;

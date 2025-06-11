@@ -308,7 +308,10 @@ static int ras_eeprom_v2_1_reset_table(struct amdgv_adapter *adapt,
 	oss_mutex_lock(control->tbl_mutex);
 
 	hdr->header = EEPROM_TABLE_HDR_VAL;
-	hdr->version = EEPROM_TABLE_VER_V2_1;
+	if (adapt->umc.eeprom_version == EEPROM_TABLE_VER_V3)
+		hdr->version = EEPROM_TABLE_VER_V3;
+	else
+		hdr->version = EEPROM_TABLE_VER_V2_1;
 	hdr->first_rec_offset = EEPROM_RECORD_START_V2_1;
 	hdr->tbl_size = EEPROM_TABLE_HEADER_SIZE + EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE;
 
@@ -379,7 +382,8 @@ static int ras_eeprom_v2_1_init_sw_control(struct amdgv_adapter *adapt, struct a
 {
 	int ret = 0;
 
-	if (control->tbl_hdr.version == EEPROM_TABLE_VER_V2_1) {
+	if (control->tbl_hdr.version == EEPROM_TABLE_VER_V2_1 ||
+	    control->tbl_hdr.version == EEPROM_TABLE_VER_V3) {
 		control->num_recs = (control->tbl_hdr.tbl_size - EEPROM_TABLE_HEADER_SIZE - EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE) /
 				EEPROM_TABLE_RECORD_SIZE;
 		control->next_addr = EEPROM_RECORD_START_V2_1;
@@ -702,7 +706,8 @@ static int ras_eeprom_v2_1_parse_header(struct amdgv_adapter *adapt,
 		return AMDGV_FAILURE;
 	}
 
-	if (hdr->version != EEPROM_TABLE_VER_V2_1 && hdr->version != EEPROM_TABLE_VER_V2) {
+	if (hdr->version != EEPROM_TABLE_VER_V2_1 &&
+		    hdr->version != EEPROM_TABLE_VER_V2 && hdr->version != EEPROM_TABLE_VER_V3) {
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_EEPROM_WRONG_VER,
 			AMDGV_ERROR_32_32(hdr->version, EEPROM_TABLE_VER_V2_1));
 		return AMDGV_FAILURE;

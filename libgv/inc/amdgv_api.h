@@ -710,6 +710,12 @@ enum amdgv_hang_detection_mode {
 	AMDGV_HANG_DETECTION_MODE_MAX
 };
 
+enum amdgv_live_migration_mode {
+	AMDGV_LIVE_MIGRATION_DISABLED = 0,
+	AMDGV_LIVE_MIGRATION_ENABLED = 1,
+	AMDGV_LIVE_MIGRATION_MODE_MAX
+};
+
 enum amdgv_asymmetric_fb_mode {
 	AMDGV_ASYMMETRIC_FB_DISABLED = 0,
 	AMDGV_ASYMMETRIC_FB_ENABLED = 1,
@@ -835,6 +841,7 @@ struct amdgv_init_config_opt {
 
 	uint32_t bp_debug_mode;
 	uint32_t hang_detection_mode;
+	uint32_t live_migration_mode;
 
 	uint32_t bad_page_record_threshold;
 	bool use_legacy_eeprom_format;

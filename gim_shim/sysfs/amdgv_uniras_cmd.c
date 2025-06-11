@@ -62,6 +62,8 @@ static enum amdgv_cmd_asic_type amd_asic_type_to_amdgv_cmd_asic_type(enum amd_as
 		return AMDGV_CMD_CHIP_MI300X;
 	case CHIP_MI308X:
 		return AMDGV_CMD_CHIP_MI308X;
+	case CHIP_MI350X:
+		return AMDGV_CMD_CHIP_MI350X;
 	case CHIP_LAST:
 		return AMDGV_CMD_CHIP_LAST;
 	default:

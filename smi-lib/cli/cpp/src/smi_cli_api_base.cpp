@@ -195,6 +195,12 @@ int AmdSmiApiBase::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argumen
 	return 2;
 }
 
+int AmdSmiApiBase::amdsmi_get_virtualization_mode_command(uint64_t processor_bdf, Arguments arg,
+	std::string &out)
+{
+	return 2;
+}
+
 int AmdSmiApiBase::amdsmi_get_driver_info_command(uint64_t processor_bdf, Arguments arg,
 		std::string &out)
 {
@@ -604,6 +610,12 @@ int AmdSmiApiBase::amdsmi_get_current_partition_command(uint64_t processor_bdf, 
 }
 
 int AmdSmiApiBase::amdsmi_get_cper_entries_command(Arguments arg,
+			std::string &formatted_string)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_get_cper_afid_command(Arguments arg,
 			std::string &formatted_string)
 {
 	return 2;

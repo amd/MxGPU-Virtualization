@@ -63,7 +63,10 @@ struct amdgv_sdma_ras_funcs {
 
 struct amdgv_sdma {
 	int num_instances;
+	uint32_t harvest_instances;
+	uint32_t num_enbl_harv_inst;
 	uint32_t sdma_mask;
+	uint32_t harvest_sdma_mask;
 	int num_sdma_rings;
 	struct amdgv_ring sdma_ring[AMDGV_MAX_SDMA_RINGS];
 	int num_inst_per_aid;

@@ -34,6 +34,7 @@
 #include "mi300_golden_settings.h"
 #include "mi300_nbio.h"
 #include "mi300_powerplay.h"
+#include "mi350/mi350_powerplay.h"
 
 #include "mi300_reset.h"
 #include "smuio_v13_0_3.h"
@@ -229,6 +230,11 @@ static int mi300_vbios_early_sw_init(struct amdgv_adapter *adapt)
 	case (0x74BC):
 		name = "MI308X";
 		break;
+	case (0x75A0):
+	case (0x75A1):
+	case (0x75A3):
+		name = "MI350X";
+		break;
 	default:
 		name = "MI300X";
 		break;
@@ -296,7 +302,8 @@ static int mi300_vbios_early_hw_init(struct amdgv_adapter *adapt)
 		r = AMDGV_FAILURE;
 
 		if (mi300_psp_wait_sos_loaded_status(adapt))
-			if (mi300_smu_get_fw_loaded_status(adapt))
+			if (((adapt->asic_type == CHIP_MI350X) && mi350_smu_get_fw_loaded_status(adapt)) ||
+				((adapt->asic_type != CHIP_MI350X) && mi300_smu_get_fw_loaded_status(adapt)))
 				r = mi300_reset_trigger_whole_gpu_reset(adapt);
 
 		if (r)
@@ -314,7 +321,11 @@ static int mi300_vbios_early_hw_init(struct amdgv_adapter *adapt)
 	adapt->flags |= AMDGV_FLAG_GC_REG_RLC_EN;
 	adapt->flags |= AMDGV_FLAG_IH_REG_PSP_EN;
 
-	if (mi300_smu_get_fw_loaded_status(adapt)) {
+	//if (adapt->asic_type == CHIP_MI350X)
+	//	adapt->flags |= AMDGV_FLAG_L1_TLB_CNTL_REG_PSP_EN;
+
+	if (((adapt->asic_type == CHIP_MI350X) && mi350_smu_get_fw_loaded_status(adapt)) ||
+		((adapt->asic_type != CHIP_MI350X) && mi300_smu_get_fw_loaded_status(adapt))) {
 		AMDGV_INFO("SMU fw ready and responding\n");
 		/* RLCg needs to handshake with MP5(XCD) firmware if SMU is alived */
 		if (adapt->flags & AMDGV_FLAG_EMU_MODE)

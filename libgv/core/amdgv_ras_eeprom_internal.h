@@ -98,6 +98,8 @@
 #define EEPROM_TABLE_VER_V2_1                  0x00021000
 #define EEPROM_TABLE_V2_1_EXTRA_GPU_INFO_START EEPROM_TABLE_HEADER_SIZE
 
+#define EEPROM_TABLE_VER_V3                    0x00030000
+
 /* There are 256Bytes size for EEPROM Table extra gpu info */
 #define EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE 256
 

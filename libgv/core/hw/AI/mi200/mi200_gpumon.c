@@ -437,22 +437,14 @@ static int mi200_get_link_topology(struct amdgv_adapter *adapt,
 		 * so we use cached data if VF0(mi200 is 1VF only) is active */
 		psp_topology_info = &adapt->xgmi.topology_info;
 		if (!is_active_vf(0)) {
-			if (adapt->psp.xgmi_context.supports_extended_data) {
-				amdgv_list_for_each_entry(cur, &hive->adapt_list, struct amdgv_adapter, xgmi.head) {
-					if (amdgv_psp_xgmi_get_topology_info(cur, hive, &cur->xgmi.topology_info)) {
-						topology_info->link_status = AMDGV_GPUMON_LINK_STATUS_ERROR;
-						return 0;
-					}
-				}
-				amdgv_list_for_each_entry(cur, &hive->adapt_list, struct amdgv_adapter, xgmi.head) {
-					amdgv_xgmi_reflect_topology_info(cur, hive, &cur->xgmi.topology_info);
-				}
-			} else {
-				if (amdgv_psp_xgmi_get_topology_info(adapt, hive, &adapt->xgmi.topology_info)) {
-					topology_info->link_status = AMDGV_GPUMON_LINK_STATUS_ERROR;
-					return 0;
-				}
+			if (amdgv_psp_xgmi_get_topology_info(adapt, hive, &adapt->xgmi.topology_info)) {
+				topology_info->link_status = AMDGV_GPUMON_LINK_STATUS_ERROR;
+				return 0;
 			}
+		}
+
+		amdgv_list_for_each_entry(cur, &hive->adapt_list, struct amdgv_adapter, xgmi.head) {
+			amdgv_xgmi_reflect_topology_info(cur, hive, &cur->xgmi.topology_info);
 		}
 
 		for (i = 0; i < psp_topology_info->num_nodes; i++) {

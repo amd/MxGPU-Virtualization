@@ -94,17 +94,80 @@ static int mi300_get_error_count(struct amdgv_adapter *adapt,
 	return 0;
 }
 
+static const struct mi300_ras_cap_entry mi300_ras_cap_table[] = {
+    {0x74A1, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
+		 BIT(AMDGV_RAS_BLOCK__GFX) |
+		 BIT(AMDGV_RAS_BLOCK__SDMA) |
+		 BIT(AMDGV_RAS_BLOCK__MMHUB) |
+		 BIT(AMDGV_RAS_BLOCK__XGMI_WAFL) |
+		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF) |
+		 BIT(AMDGV_RAS_BLOCK__VCN) |
+		 BIT(AMDGV_RAS_BLOCK__JPEG)},
+    {0x74A2, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
+		 BIT(AMDGV_RAS_BLOCK__GFX) |
+		 BIT(AMDGV_RAS_BLOCK__SDMA) |
+		 BIT(AMDGV_RAS_BLOCK__MMHUB) |
+		 BIT(AMDGV_RAS_BLOCK__XGMI_WAFL) |
+		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF)},
+    {0x74A8, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
+		 BIT(AMDGV_RAS_BLOCK__GFX) |
+		 BIT(AMDGV_RAS_BLOCK__SDMA) |
+		 BIT(AMDGV_RAS_BLOCK__MMHUB) |
+		 BIT(AMDGV_RAS_BLOCK__XGMI_WAFL) |
+		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF)},
+    {0x74A5, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
+		 BIT(AMDGV_RAS_BLOCK__GFX) |
+		 BIT(AMDGV_RAS_BLOCK__SDMA) |
+		 BIT(AMDGV_RAS_BLOCK__MMHUB) |
+		 BIT(AMDGV_RAS_BLOCK__XGMI_WAFL) |
+		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF)},
+    {0x74A9, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
+		 BIT(AMDGV_RAS_BLOCK__GFX) |
+		 BIT(AMDGV_RAS_BLOCK__SDMA) |
+		 BIT(AMDGV_RAS_BLOCK__MMHUB) |
+		 BIT(AMDGV_RAS_BLOCK__XGMI_WAFL) |
+		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF)},
+    {0x75A0, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
+		 BIT(AMDGV_RAS_BLOCK__GFX) |
+		 BIT(AMDGV_RAS_BLOCK__SDMA) |
+		 BIT(AMDGV_RAS_BLOCK__MMHUB) |
+		 BIT(AMDGV_RAS_BLOCK__XGMI_WAFL) |
+		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF)},
+    {0x75A1, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
+		 BIT(AMDGV_RAS_BLOCK__GFX) |
+		 BIT(AMDGV_RAS_BLOCK__SDMA) |
+		 BIT(AMDGV_RAS_BLOCK__MMHUB) |
+		 BIT(AMDGV_RAS_BLOCK__XGMI_WAFL) |
+		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF)},
+    {0x75A3, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
+		 BIT(AMDGV_RAS_BLOCK__GFX) |
+		 BIT(AMDGV_RAS_BLOCK__SDMA) |
+		 BIT(AMDGV_RAS_BLOCK__MMHUB) |
+		 BIT(AMDGV_RAS_BLOCK__XGMI_WAFL) |
+		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF)},
+};
+
+static uint32_t mi300_get_asic_ras_caps(struct amdgv_adapter *adapt)
+{
+	uint32_t i;
+
+	for (i = 0; i < ARRAY_SIZE(mi300_ras_cap_table); i++)
+	{
+		if (adapt->dev_id == mi300_ras_cap_table[i].dev_id)
+			return mi300_ras_cap_table[i].ras_cap;
+	}
+
+	AMDGV_ERROR("dev_id 0x%x not found in ras cap table!\n", adapt->dev_id);
+
+	return 0;
+}
+
 uint32_t mi300_get_ras_cap(struct amdgv_adapter *adapt)
 {
 	uint32_t ras_cap = 0, drv_supported_blocks = 0;
 
 	/* Update line below whenever a new RAS block support is added in driver */
-	drv_supported_blocks |= BIT(AMDGV_RAS_BLOCK__UMC) |
-				BIT(AMDGV_RAS_BLOCK__GFX) |
-				BIT(AMDGV_RAS_BLOCK__SDMA) |
-				BIT(AMDGV_RAS_BLOCK__MMHUB) |
-				BIT(AMDGV_RAS_BLOCK__XGMI_WAFL) |
-				BIT(AMDGV_RAS_BLOCK__PCIE_BIF);
+	drv_supported_blocks = mi300_get_asic_ras_caps(adapt);
 
 	/* Init caps with driver supported blocks */
 	ras_cap = adapt->ecc.ras_cap = drv_supported_blocks;

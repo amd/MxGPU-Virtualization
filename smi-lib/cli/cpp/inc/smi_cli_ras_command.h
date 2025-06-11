@@ -30,4 +30,6 @@ public:
 	void ras_command_human();
 
 	int ras_command_cper(std::string &formatted_string);
+	int ras_command_afid(std::string &formatted_string);
+
 };

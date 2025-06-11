@@ -35,6 +35,8 @@
 #include "mi300_ecc.h"
 #include "mi300_ip_discovery.h"
 
+#include "hw/AI/ucode/mi350/psp_xgmi_tee3_sbin.h"
+
 #define PSP_BL_VERSION_STATUS_SUPPORT 0x00A10109
 
 /* these registers are used before ip discovery, so we cannot calculate the offset */
@@ -1301,6 +1303,13 @@ static enum psp_status mi300_psp_parse_psp_info(struct amdgv_adapter *adapt)
 	return PSP_STATUS__SUCCESS;
 }
 
+static void get_xgmi_fw_info(struct amdgv_adapter *adapt, unsigned char **fw_image,
+	uint32_t *fw_image_size)
+{
+	*fw_image = psp_xgmi_tee3_sbin;
+	*fw_image_size = sizeof(psp_xgmi_tee3_sbin);
+}
+
 static int mi300_psp_sw_init(struct amdgv_adapter *adapt)
 {
 	int ret = 0;
@@ -1331,6 +1340,9 @@ static int mi300_psp_sw_init(struct amdgv_adapter *adapt)
 	psp_ret = amdgv_psp_sw_init(adapt);
 	adapt->psp.ras_context.set_init_flag = true;
 	adapt->psp.skip_ta_fw_version = true;
+
+	if (adapt->asic_type == CHIP_MI350X)
+		adapt->psp.get_xgmi_fw_info = get_xgmi_fw_info;
 
 	if (psp_ret == PSP_STATUS__SUCCESS)
 		psp_ret = amdgv_psp_xgmi_mem_init(adapt);
@@ -1507,7 +1519,7 @@ static int mi300_psp_hw_init(struct amdgv_adapter *adapt)
 
 	adapt->psp.idx = 0;
 
-	if ((adapt->asic_type == CHIP_MI300X) || (adapt->asic_type == CHIP_MI308X)) {
+	if ((adapt->asic_type == CHIP_MI300X) || (adapt->asic_type == CHIP_MI308X) || (adapt->asic_type == CHIP_MI350X)) {
 		r = mi300_psp_load_psp_fw(adapt);
 		if (r)
 			goto init_fail;

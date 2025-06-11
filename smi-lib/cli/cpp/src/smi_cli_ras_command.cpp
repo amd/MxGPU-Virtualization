@@ -40,6 +40,12 @@ int AmdSmiRasCommand::ras_command_cper(std::string &formatted_string)
 	return ret;
 }
 
+int AmdSmiRasCommand::ras_command_afid(std::string &formatted_string)
+{
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_cper_afid_command(arg, formatted_string);
+	return ret;
+}
+
 void AmdSmiRasCommand::ras_command_human()
 {
 	int ret;
@@ -58,10 +64,20 @@ void AmdSmiRasCommand::ras_command_human()
 		}
 		formatted_string.clear();
 	}
+	if ((std::find(arg.options.begin(), arg.options.end(), "afid") != arg.options.end()) ||
+			arg.all_arguments) {
+		ret = ras_command_afid(formatted_string);
+		std::string param{"afid"};
+		int error = handle_exceptions(ret, param, arg);
+		if (error == 0) {
+			out.append(formatted_string);
+			formatted_string.clear();
+		}
+		formatted_string.clear();
+	}
 
 	std::cout << out.c_str() << std::endl;
 }
-
 
 void AmdSmiRasCommand::execute_command()
 {

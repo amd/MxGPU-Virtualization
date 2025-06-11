@@ -179,6 +179,8 @@ public:
 			Arguments arg) override;
 	virtual int amdsmi_set_soc_pstate_command(uint64_t processor_bdf, Arguments arg) override;
 	virtual int amdsmi_set_power_cap_command(uint64_t processor_bdf, Arguments arg) override;
+	virtual int amdsmi_get_virtualization_mode_command(uint64_t processor_bdf, Arguments arg,
+			std::string &formatted_string) override;
 	// monitor
 	virtual int amdsmi_get_power_usage_monitor_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) override;
@@ -207,5 +209,8 @@ public:
 	virtual int amdsmi_get_current_partition_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) override;
 	virtual int amdsmi_get_cper_entries_command(Arguments arg,
+			std::string &formatted_string) override;
+
+	virtual int amdsmi_get_cper_afid_command(Arguments arg,
 			std::string &formatted_string) override;
 };

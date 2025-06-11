@@ -51,7 +51,8 @@ static int navi32_migration_send_transfer_cmd(struct amdgv_adapter *adapt,
 static int navi32_migration_psp_export(struct amdgv_adapter *adapt,
 	uint32_t idx_vf, void *data_dst, enum amdgv_migration_export_phase phase)
 {
-	return 0;
+	int ret = 0;
+	return ret;
 }
 
 static const struct amdgv_lm_funcs navi32_lm_funcs = {

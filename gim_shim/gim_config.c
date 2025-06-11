@@ -247,7 +247,7 @@ struct gim_conf_opt conf_opts[] = {
 
 #define MAX_OPTION (sizeof(conf_opts)/sizeof(struct gim_conf_opt))
 #define MAX_CONFIG_FILE_LENGTH 1024
-bool svm_enabled;
+svm_status_t g_svm_status = SVM_STATUS_NOT_SET;
 
 /* Options input from command line */
 int vf_num_size;

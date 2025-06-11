@@ -388,10 +388,13 @@ static int gim_init_thread_func(void *context)
 		gim_put_error(AMDGV_ERROR_DRIVER_DEV_INIT_FAIL,
 			PCI_DEVID(pdev->bus->number, pdev->devfn));
 	}
-	if (dev_data->adev != AMDGV_INVALID_HANDLE)
-		svm_enabled = amdgv_is_service_vm_enabled(dev_data->adev);
+	if (dev_data->adev != AMDGV_INVALID_HANDLE) {
+		/* Initialize the SVM status by calling the function once */
+		g_svm_status = amdgv_is_service_vm_enabled(dev_data->adev) ?
+				SVM_STATUS_ENABLED : SVM_STATUS_DISABLED;
+	}
 
-	if ((dev_data->adev != AMDGV_INVALID_HANDLE) && !svm_enabled) {
+	if ((dev_data->adev != AMDGV_INVALID_HANDLE) && !SVM_ENABLED(dev_data->adev)) {
 		if (gim_build_vfs_map(dev_data))
 			gim_put_error(AMDGV_ERROR_DRIVER_DEV_INIT_FAIL,
 				PCI_DEVID(pdev->bus->number, pdev->devfn));
@@ -421,7 +424,7 @@ static int gim_init_thread_func(void *context)
 	mutex_unlock(&gim_device_list_lock);
 
 	if (dev_data->adev != AMDGV_INVALID_HANDLE) {
-		if (!svm_enabled)
+		if (!SVM_ENABLED(dev_data->adev))
 			gim_guard_init_dev_sys(pdev);
 
 		gim_mon_create_dev_sys(dev_data);
@@ -472,8 +475,8 @@ static int gim_probe(struct pci_dev *pdev,
 
 	atomic64_inc(&gim_gpu_initing_num);
 
-	/* skip this device if user want that */
-	if (gim_is_device_enabled(pdev) == false) {
+	/* skip this device if user want that or is vf */
+	if (gim_is_device_enabled(pdev) == false || pdev->is_virtfn) {
 		gim_info("AMD GIM skip probing device %s\n", dev_name(&pdev->dev));
 		goto err_out;
 	}
@@ -527,7 +530,7 @@ static void gim_remove(struct pci_dev *pdev)
 
 	if (dev_data->adev != AMDGV_INVALID_HANDLE) {
 		gim_mon_remove_dev_sys(dev_data);
-		if (!svm_enabled)
+		if (!SVM_ENABLED(dev_data->adev))
 			gim_guard_remove_dev_sys(pdev);
 		mutex_lock(&gim_device_list_lock);
 		list_del(&dev_data->list);
@@ -727,7 +730,7 @@ static int gim_init(void)
 	ret = gim_mon_create_drv_sys(&gim_driver.driver);
 	if (ret)
 		goto err_create_mon;
-	if (!svm_enabled) {
+	if (!SVM_ENABLED(NULL)) {
 		ret = gim_guard_init_drv_sys(&gim_driver.driver);
 		if (ret)
 			goto err_create_gurad;
@@ -762,7 +765,7 @@ err_smi_init:
 	gim_cmd_handler_fini();
 err_gim_cmd_handler_init:
 	gim_debugfs_fini();
-	if (!svm_enabled)
+	if (!SVM_ENABLED(NULL))
 		gim_guard_remove_drv_sys(&gim_driver.driver);
 
 err_create_gurad:
@@ -801,7 +804,7 @@ static void gim_exit(void)
 		}
 	}
 
-	if (!svm_enabled) {
+	if (!SVM_ENABLED(NULL)) {
 		while (is_continue_exit) {
 			list_for_each_entry(dev_data, &gim_device_list, list) {
 				for (i = 0; i < dev_data->vf_num; i++) {
@@ -838,7 +841,7 @@ static void gim_exit(void)
 	gim_cmd_handler_fini();
 	smi_cleanup();
 	gim_debugfs_fini();
-	if (!svm_enabled)
+	if (!SVM_ENABLED(NULL))
 		gim_guard_remove_drv_sys(&gim_driver.driver);
 	gim_mon_remove_drv_sys(&gim_driver.driver);
 

@@ -64,7 +64,6 @@ subdir-ccflags-y += -I$(GIM_SHIM_PATH)
 subdir-ccflags-y += -I$(SYSFS_PATH)
 subdir-ccflags-y += -I$(GIM_COMS_INCLUDE_DIR)
 subdir-ccflags-y += -Werror -Wmissing-prototypes -Wimplicit-fallthrough=2 -Wno-enum-conversion -Wno-expansion-to-defined
-#subdir-ccflags-y += -D EXCLUDE_VF_DEVICE_ACCESS -D EXCLUDE_VF_DEVICE_PCI_CONFIG_ACCESS -D CONFIG_AMDGV_FLR_NOT_RESTORE_MSIX
 
 ifeq ($(GCC_VER_GE9),1)
 	subdir-ccflags-y += -fcf-protection=none
@@ -121,6 +120,6 @@ clean:
 	$(MAKE) -C $(SRC_PATH)/gim-coms-lib clean
 	$(MAKE) -C $(KERNELDIR) M=$(SRC_PATH) clean
 	$(MAKE) -C $(SRC_PATH)/smi-lib clean
-	rm libgv/VERSION
+	rm -f $(SRC_PATH)/libgv/VERSION
 
 .PHONY: all install clean

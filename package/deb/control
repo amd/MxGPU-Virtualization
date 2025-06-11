@@ -3,7 +3,7 @@ Section: kernel
 Priority: optional
 Maintainer: AMD <sriov@amd.com>
 Standards-Version: 4.7.0
-Build-Depends: debhelper-compat (= 13), dh-dkms
+Build-Depends: debhelper-compat (= 13), dh-dkms | dkms
 
 Package: gim-dkms
 Architecture: all

@@ -34,6 +34,7 @@ EXCLUDE_LIN_LIB_SRCS := smi_sys_wrapper.c
 
 LIB_SRCS := $(filter-out $(EXCLUDE_LIB_SRCS),$(notdir $(wildcard $(SOURCE_DIR)/*.c)))
 LIB_SRCS += $(addprefix $(LIN_HOST_FOLDER)/,$(filter-out $(EXCLUDE_LIN_LIB_SRCS),$(notdir $(wildcard $(LIN_SOURCE_DIR)/*.c))))
+SRCS_ACA := $(filter-out $(EXCLUDE_SRCS),$(notdir $(wildcard $(SOURCE_DIR)/aca-decode/*.c)))
 
 TEST_SRCS := smi_test_init.cpp
 TEST_SRCS += smi_test_board_info.cpp
@@ -60,6 +61,7 @@ TEST_SRCS += smi_fake_sys_wrapper.cpp
 TEST_SRCS += smi_test_helpers.cpp
 
 OBJSC   := $(addprefix $(OUTPUT_DIR)/,$(LIB_SRCS:.c=.c.o))
+OBJSC	+= $(addprefix ${OUTPUT_DIR}/,$(SRCS_ACA:.c=.c.o))
 OBJSCPP := $(addprefix $(OUTPUT_DIR)/,$(TEST_SRCS:.cpp=.cpp.o))
 
 DEPS := $(OBJSC:.o=.d) $(OBJSCPP:.o=.d)
@@ -70,10 +72,12 @@ INCLUDE := $(addprefix -I,\
   $(INCLUDE_DIR)\
   $(INTERFACE_DIR)\
   $(LIN_HOST_INCLUDE_DIR)\
-  $(GIM_COMS_INCLUDE_DIR))
+  $(GIM_COMS_INCLUDE_DIR)\
+  $(INCLUDE_DIR)/aca-decode/)
 
 CFLAGS   = -std=c11 $(DEFAULT_CFLAGS) $(INCLUDE) -g -D_XOPEN_SOURCE=700
 CXXFLAGS = -std=c++17 $(DEFAULT_CXXFLAGS) $(INCLUDE) -g -D_XOPEN_SOURCE=700
+CFLAGS_ACA := $(filter-out $(DEFAULT_CFLAGS), $(CFLAGS))
 
 CFLAGS += -DAMDSMI_VERSION_MAJOR=$(AMDSMI_VERSION_MAJOR)
 CFLAGS += -DAMDSMI_VERSION_MINOR=$(AMDSMI_VERSION_MINOR)
@@ -105,8 +109,9 @@ LDFLAGS += -fsanitize=address,undefined
 endif
 
 
-vpath %.c $(SOURCE_DIR)
+vpath %.c $(SOURCE_DIR) $(SOURCE_DIR)/aca-decode/
 vpath %.cpp $(TEST_UNIT_DIR)
+
 
 default: $(OUTPUT_DIR)/$(TARGET)
 
@@ -127,9 +132,17 @@ gen_coverage: run
 			--directory $(OUTPUT_DIR) \
 			--output-file $(OUTPUT_DIR)/coverage.info
 
+	@lcov --remove $(OUTPUT_DIR)/coverage.info "$(SOURCE_DIR)/aca_decoder/*" \
+		--output-file $(OUTPUT_DIR)/coverage_filtered.info $(LCOV_OPT)
+	@rm -f $(OUTPUT_DIR)/coverage.info
+	@mv $(OUTPUT_DIR)/coverage_filtered.info $(OUTPUT_DIR)/coverage.info
+
 -include $(DEPS)
 
 $(OUTPUT_DIR)/%.c.o: %.c Makefile | $(OUTPUT_DIR)
+	$(CC) $(CFLAGS) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
+
+$(OUTPUT_DIR)/aca_%.c.o: $(SOURCE_DIR)/aca-decode/%.c | $(OUTPUT_DIR)
 	$(CC) $(CFLAGS) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
 
 $(OUTPUT_DIR)/%.cpp.o: %.cpp Makefile | $(OUTPUT_DIR)

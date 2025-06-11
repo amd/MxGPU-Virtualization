@@ -1231,6 +1231,11 @@ static int navi32_gpuiov_toggle_rlcg_vf_interface(struct amdgv_adapter *adapt, u
 {
 
 	AMDGV_DEBUG("RLCG VF Interface is %s\n", enable ? "enabled" : "disabled");
+	WREG32(SOC15_REG_OFFSET(GC, 0, regSCRATCH_REG0), 0);
+	WREG32(SOC15_REG_OFFSET(GC, 0, regSCRATCH_REG1), 0);
+	WREG32(SOC15_REG_OFFSET(GC, 0, regSCRATCH_REG2), 0);
+	WREG32(SOC15_REG_OFFSET(GC, 0, regSCRATCH_REG3), 0);
+
 	gc_v11_0_3_toggle_rlcg_vf_interface(adapt, enable);
 
 	return 0;
@@ -1372,9 +1377,6 @@ static int navi32_gpuiov_sw_init(struct amdgv_adapter *adapt)
 	if (!(adapt->flags & AMDGV_FLAG_USE_PF)) {
 		/* enable config space FLR for KVM */
 		adapt->flags |= AMDGV_FLAG_ENABLE_CFG_FLR_NOTIFY;
-
-		/* enable FB cleanup on VM shutdown for KVM */
-		adapt->flags |= AMDGV_FLAG_FB_CLEAN_ON_SHUTDOWN;
 	}
 
 	adapt->gpuiov.sched_cfg_mem =

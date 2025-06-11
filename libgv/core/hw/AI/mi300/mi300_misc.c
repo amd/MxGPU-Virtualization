@@ -258,17 +258,6 @@ static int mi300_cp_dma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, bool 
 	return 0;
 }
 
-static void mi300_clean_scratch_reg(struct amdgv_adapter *adapt, uint32_t idx_vf)
-{
-	int xcc_id;
-	for_each_id (xcc_id, amdgv_sched_get_xcc_mask_by_vf(adapt, idx_vf)) {
-		WREG32(SOC15_REG_OFFSET(GC, GET_INST(GC, xcc_id), regSCRATCH_REG0), 0);
-		WREG32(SOC15_REG_OFFSET(GC, GET_INST(GC, xcc_id), regSCRATCH_REG1), 0);
-		WREG32(SOC15_REG_OFFSET(GC, GET_INST(GC, xcc_id), regSCRATCH_REG2), 0);
-		WREG32(SOC15_REG_OFFSET(GC, GET_INST(GC, xcc_id), regSCRATCH_REG3), 0);
-	}
-}
-
 static int mi300_misc_sw_init(struct amdgv_adapter *adapt)
 {
 	adapt->misc.get_hdp_nonsurface_base = mi300_misc_get_hdp_nonsurface_base;
@@ -280,8 +269,6 @@ static int mi300_misc_sw_init(struct amdgv_adapter *adapt)
 		adapt->misc.dma_engine = AMDGV_DMA_ENGINE_NONE;
 	}
 
-	adapt->misc.clean_scratch_registers = mi300_clean_scratch_reg;
-
 	return 0;
 }
 
@@ -290,7 +277,6 @@ static int mi300_misc_sw_fini(struct amdgv_adapter *adapt)
 	adapt->misc.get_hdp_nonsurface_base = NULL;
 	adapt->misc.set_hdp_nonsurface_base = NULL;
 	adapt->misc.dma_copy = NULL;
-	adapt->misc.clean_scratch_registers = NULL;
 
 	return 0;
 }

@@ -26,7 +26,6 @@ import re
 from enum import IntEnum, Enum
 from collections.abc import Iterable
 
-
 from . import amdsmi_wrapper
 from .amdsmi_exception import *
 
@@ -740,6 +739,9 @@ class AmdSmiMetricName(IntEnum):
     PCIE_LINK_SPEED = amdsmi_wrapper.AMDSMI_METRIC_NAME_PCIE_LINK_SPEED
     PCIE_LINK_WIDTH = amdsmi_wrapper.AMDSMI_METRIC_NAME_PCIE_LINK_WIDTH
 
+    DRAM_BANDWITH = amdsmi_wrapper.AMDSMI_METRIC_NAME_DRAM_BANDWIDTH
+    MAX_DRAM_BANDWITH = amdsmi_wrapper.AMDSMI_METRIC_NAME_MAX_DRAM_BANDWIDTH
+
     UNKNOWN = amdsmi_wrapper.AMDSMI_METRIC_NAME_UNKNOWN
 
 
@@ -789,6 +791,13 @@ class AmdSmiDriverModelType(IntEnum):
     WDM = amdsmi_wrapper.AMDSMI_DRIVER_MODEL_TYPE_WDM
     MCDM = amdsmi_wrapper.AMDSMI_DRIVER_MODEL_TYPE_MCDM
 
+class AmdSmiVirtualizationMode(IntEnum):
+    UNKNOWN = amdsmi_wrapper.AMDSMI_VIRTUALIZATION_MODE_UNKNOWN
+    NONE = amdsmi_wrapper.AMDSMI_VIRTUALIZATION_MODE_NONE
+    HOST = amdsmi_wrapper.AMDSMI_VIRTUALIZATION_MODE_HOST
+    GUEST = amdsmi_wrapper.AMDSMI_VIRTUALIZATION_MODE_GUEST
+    PASSTHROUGH = amdsmi_wrapper.AMDSMI_VIRTUALIZATION_MODE_PASSTHROUGH
+
 class AmdSmiCperErrorSeverity(IntEnum):
     NON_FATAL_UNCORRECTED = amdsmi_wrapper.AMDSMI_CPER_SEV_NON_FATAL_UNCORRECTED
     FATAL = amdsmi_wrapper.AMDSMI_CPER_SEV_FATAL
@@ -804,6 +813,7 @@ _AMDSMI_MAX_DEVICES = 32
 _AMDSMI_MAX_NUM_METRICS = 255
 _AMDSMI_MAX_BAD_PAGE_RECORD = 16384
 _AMDSMI_MAX_ACCELERATOR_PROFILE = 32
+_MAX_NUMBER_OF_AFIDS_PER_RECORD = 12
 
 
 def _parse_bdf(bdf):
@@ -2081,6 +2091,16 @@ def amdsmi_get_lib_version():
         "release": version.release
     }
 
+def amdsmi_get_gpu_virtualization_mode(processor_handle):
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+
+    virtualization_mode = amdsmi_wrapper.amdsmi_virtualization_mode_t()
+    _check_res(amdsmi_wrapper.amdsmi_get_gpu_virtualization_mode(
+        processor_handle, ctypes.byref(virtualization_mode)))
+
+    return AmdSmiVirtualizationMode(virtualization_mode.value)
+
 def _format_memory_caps(mode):
     supported_capabilities = []
 
@@ -2320,4 +2340,23 @@ def amdsmi_topo_get_p2p_status(processor_handle_src, processor_handle_dst):
             'is_iolink_bi_directional': cap.is_iolink_bi_directional
         }
     }
+
+
+def amdsmi_get_afids_from_cper(cper_buffer):
+    buf_size = len(cper_buffer)
+
+    afids = (ctypes.c_uint64 * _MAX_NUMBER_OF_AFIDS_PER_RECORD)()
+    num_afids = ctypes.c_uint32(_MAX_NUMBER_OF_AFIDS_PER_RECORD)
+
+    cper_array = (ctypes.c_ubyte * len(cper_buffer))(*cper_buffer)
+    char_pointer = ctypes.cast(cper_array, ctypes.POINTER(ctypes.c_char))
+
+    _check_res(amdsmi_wrapper.amdsmi_get_afids_from_cper(
+        char_pointer,
+        buf_size,
+        afids,
+        ctypes.byref(num_afids)
+    ))
+
+    return list(afids[:num_afids.value])
 

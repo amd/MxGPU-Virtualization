@@ -29,6 +29,7 @@
 #include "amdgv_mca.h"
 #include "mi300_mca.h"
 #include "amdgv_vfmgr.h"
+#include "amdgv_ras_eeprom_internal.h"
 
 #define EEPROM_TABLE_VERSION_MI300       0x00021000
 
@@ -396,28 +397,39 @@ static int convert_eeprom_record_to_mem_addr(struct amdgv_adapter *adapt,
 	struct umc_mca_addr addr_in;
 	struct umc_phy_addr addr_out;
 	enum amdgv_memory_partition_mode nps;
+	enum amdgv_memory_partition_mode save_nps;
 	uint64_t mask_pa;
 	uint32_t ret;
 
 	ret = mi300_nbio_get_curr_memory_partition_mode(adapt, &nps);
 	if (ret)
 		return AMDGV_FAILURE;
+	save_nps = get_nps_from_pa(record->retired_page);
 
 	oss_memset(&addr_in, 0, sizeof(addr_in));
 	oss_memset(&addr_out, 0, sizeof(addr_out));
 
-	addr_in.err_addr = record->address;
-	addr_in.ch_inst = record->mem_channel;
-	addr_in.umc_inst = record->mcumc_id;
-	addr_in.node_inst = RAS_INV_AID_NODE;
-	addr_in.socket_id = adapt->xgmi.socket_id;
+	if (save_nps != nps) {
+		addr_in.err_addr = record->address;
+		addr_in.ch_inst = record->mem_channel;
+		addr_in.umc_inst = record->mcumc_id;
+		addr_in.node_inst = RAS_INV_AID_NODE;
+		addr_in.socket_id = adapt->xgmi.socket_id;
 
-	convert_ma_to_nps_pa(adapt,
-		&addr_in, &addr_out, nps, !check_legacy_record(adapt, record, &addr_in));
-
-	if (pa_pfn) {
-		mask_pa = clear_nps_pa_mask_bits(adapt, addr_out.pa, nps, false);
-		*pa_pfn = ADDR_TO_PFN(mask_pa);
+		convert_ma_to_nps_pa(adapt,
+			&addr_in, &addr_out, nps, !check_legacy_record(adapt, record, &addr_in));
+		if (pa_pfn) {
+			mask_pa = clear_nps_pa_mask_bits(adapt, addr_out.pa, nps, false);
+			*pa_pfn = ADDR_TO_PFN(mask_pa);
+		}
+	} else {
+		//no need to care about channel_idx and bank in this situation
+		addr_out.pa = PFN_TO_ADDR(set_nps_to_pa(record->retired_page,
+				AMDGV_MEMORY_PARTITION_MODE_UNKNOWN));
+		if (pa_pfn) {
+			*pa_pfn = set_nps_to_pa(record->retired_page,
+				AMDGV_MEMORY_PARTITION_MODE_UNKNOWN);
+		}
 	}
 
 	if (pfns && num)
@@ -667,5 +679,6 @@ void umc_v12_0_set_umc_funcs(struct amdgv_adapter *adapt)
 	if (adapt->opt.use_legacy_eeprom_format)
 		adapt->umc.use_legacy_eeprom_format = true;
 	adapt->umc.reset_mode = AMDGV_RESET_MODE1;
+	adapt->umc.eeprom_version = EEPROM_TABLE_VER_V3;
 }
 

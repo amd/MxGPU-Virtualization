@@ -39,7 +39,7 @@ struct amdgv_live_info_ring;
 #define AMDGV_MAX_COMPUTE_RINGS	2
 #define AMDGV_MAX_VCE_RINGS		3
 #define AMDGV_MAX_UVD_ENC_RINGS	2
-#define AMDGV_MAX_SDMA_RINGS 8
+#define AMDGV_MAX_SDMA_RINGS 16
 
 enum amdgv_ring_priority_level {
 	AMDGV_RING_PRIO_0,

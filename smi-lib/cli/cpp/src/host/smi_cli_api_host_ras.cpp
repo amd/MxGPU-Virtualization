@@ -86,10 +86,13 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_CPER_ENTRIES)(amdsmi_processor_handle, 
 		uint64_t *,
 		amdsmi_cper_hdr_t**, uint64_t *, uint64_t *);
 
+typedef amdsmi_status_t (*AMDSMI_GET_AFIDS_FROM_CPER)(char*cper_buffer, uint32_t buf_size, uint64_t *afids, uint32_t *num_afids);
+
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_GPU_DEVICE_BDF host_amdsmi_get_gpu_device_bdf;
 extern AMDSMI_GET_GPU_CPER_ENTRIES host_amdsmi_get_gpu_cper_entries;
 extern AMDSMI_GET_PROCESSOR_HANDLES host_amdsmi_get_processor_handles;
+extern AMDSMI_GET_AFIDS_FROM_CPER host_amdsmi_get_afids_from_cper;
 
 #define GUID_INIT(a, b, c, d0, d1, d2, d3, d4, d5, d6, d7)                 \
 { { (a) & 0xff, ((a) >> 8) & 0xff, ((a) >> 16) & 0xff, ((a) >> 24) & 0xff, \
@@ -299,6 +302,10 @@ int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg, std::string& o
 	std::vector<CperEntryInfo> all_entries_info;
 	std::unordered_map<std::string, std::string> file_timestamp_map;
 
+	uint64_t afids[MAX_NUMBER_OF_AFIDS_PER_RECORD];
+	uint32_t num_afids = 0;
+	std::string out_afids = {};
+
 	ret = host_amdsmi_get_processor_handles(socket, &gpu_count, NULL);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		return ret;
@@ -320,7 +327,7 @@ int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg, std::string& o
 
 	printf("Press CTRL + C when you want to stop\n\n");
 
-	printf(" timestamp \t\t gpu_id \t severity \t\t file_name\n");
+	printf("%-24s %-8s %-24s %-24s %s\n","timestamp", "gpu_id", "severity", "file_name", "list of afids");
 
 	if (std::find(arg.options.begin(), arg.options.end(), "follow") != arg.options.end()) {
 		while (true) {
@@ -333,13 +340,24 @@ int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg, std::string& o
 				return a < b;
 			});
 
-			for (const auto& entry : all_entries_info) {
+			for (auto& entry : all_entries_info) {
 				++total_cper_count;
 				std::string file_name = generate_file_name(entry.error_severity, entry.notify_type,
 										total_cper_count);
+
+				ret = host_amdsmi_get_afids_from_cper(entry.cper_data, entry.record_length, afids, &num_afids);
+				if (ret != AMDSMI_STATUS_SUCCESS) {
+					return ret;
+				}
+
+				for(uint32_t i = 0; i < num_afids; i++) {
+					out_afids += std::to_string(afids[i]) + " ";
+				}
+
 				out = string_format(RasCperTemplate, entry.timestamp.c_str(), entry.gpu_id,
-					   entry.severity_string.c_str(), file_name.c_str());
+					   entry.severity_string.c_str(), file_name.c_str(), out_afids.c_str());
 				printf("%s", out.c_str());
+				out_afids.clear();
 
 				std::string path = folder_name + "/" + file_name;
 				std::ofstream outFile(path, std::ios::binary);
@@ -371,13 +389,24 @@ int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg, std::string& o
 			return a < b;
 		});
 
-		for (const auto& entry : all_entries_info) {
+		for (auto& entry : all_entries_info) {
 			++total_cper_count;
 			std::string file_name = generate_file_name(entry.error_severity, entry.notify_type,
 									total_cper_count);
+
+			ret = host_amdsmi_get_afids_from_cper(entry.cper_data, entry.record_length, afids, &num_afids);
+			if (ret != AMDSMI_STATUS_SUCCESS) {
+				return ret;
+			}
+
+			for (uint32_t i = 0; i < num_afids; i++) {
+				out_afids += std::to_string(afids[i]) + " ";
+			}
+
 			out = string_format(RasCperTemplate, entry.timestamp.c_str(), entry.gpu_id,
-				   entry.severity_string.c_str(), file_name.c_str());
+					entry.severity_string.c_str(), file_name.c_str(), out_afids.c_str());
 			printf("%s", out.c_str());
+			out_afids.clear();
 
 			std::string path = folder_name + "/" + file_name;
 			std::ofstream outFile(path, std::ios::binary);
@@ -398,3 +427,38 @@ int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg, std::string& o
 	out = "\n";
 	return 0;
 }
+
+int AmdSmiApiHost::amdsmi_get_cper_afid_command(Arguments arg, std::string& out)
+{
+	int ret = 0;
+	uint64_t afids[MAX_NUMBER_OF_AFIDS_PER_RECORD];
+	uint32_t num_afids = 0;
+
+	std::ifstream file(arg.cper_file_path, std::ios::binary | std::ios::ate);
+	if (!file) {
+		throw SmiToolInvalidFilePathException(arg.cper_file_path);
+	}
+
+	std::streamsize fileSize = file.tellg();
+	file.seekg(0, std::ios::beg);
+
+	std::vector<char> buffer(fileSize);
+
+	if (!file.read(buffer.data(), fileSize)) {
+		throw SmiToolInvalidFilePathException(arg.cper_file_path);
+	}
+
+	ret = host_amdsmi_get_afids_from_cper(buffer.data(), buffer.size(), afids, &num_afids);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		return ret;
+	}
+
+	for(uint32_t i = 0; i < num_afids; i++) {
+		out += std::to_string(afids[i]) + " ";
+	}
+
+	out += "\n";
+
+	return ret;
+}
+

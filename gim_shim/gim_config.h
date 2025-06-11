@@ -228,7 +228,31 @@ uint32_t gim_conf_clear_conf_file(void);
 int gim_conf_save(void);
 
 extern char *gim_enabled_devices;
-extern bool svm_enabled;
+
+/* Define the tri-state enumeration for SVM status */
+typedef enum {
+	SVM_STATUS_NOT_SET = 0,
+	SVM_STATUS_ENABLED = 1,
+	SVM_STATUS_DISABLED = 2
+} svm_status_t;
+
+/* Define the global variable with default state */
+extern svm_status_t g_svm_status;
+
+/**
+ * SVM_ENABLED - Macro to check if SVM is enabled
+ * @adev: Optional AMDGPU device handle (can be NULL in global context)
+ *
+ * When passed a valid device handle, this macro will query the device
+ * if SVM status is not yet set. Otherwise, it returns the cached status.
+ * If status is not set and no device is provided, it returns false.
+ *
+ * @return: true if SVM is enabled, false otherwise
+ */
+#define SVM_ENABLED(adev) \
+	((g_svm_status == SVM_STATUS_NOT_SET && (adev) != NULL) ? \
+	amdgv_is_service_vm_enabled(adev) : \
+	(g_svm_status == SVM_STATUS_ENABLED))
 
 extern uint power_saving_mode;
 

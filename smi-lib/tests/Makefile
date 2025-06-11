@@ -64,6 +64,8 @@ run: targets
 	$(MAKE) -f $(UNIT_TEST_MK) run AMDSMI_VERSION_MAJOR=$(AMDSMI_VERSION_MAJOR) AMDSMI_VERSION_MINOR=$(AMDSMI_VERSION_MINOR) AMDSMI_VERSION_RELEASE=$(AMDSMI_VERSION_RELEASE)
 	$(MAKE) -f $(UNIT_LNX_WRAP_TEST_MK) run AMDSMI_VERSION_MAJOR=$(AMDSMI_VERSION_MAJOR) AMDSMI_VERSION_MINOR=$(AMDSMI_VERSION_MINOR) AMDSMI_VERSION_RELEASE=$(AMDSMI_VERSION_RELEASE)
 
+# ...existing code...
+
 .PHONY: gen_coverage
 gen_coverage:
 #	Check if the lcov is installed and his version is equal or greater than 1.15
@@ -79,23 +81,25 @@ gen_coverage:
 	$(MAKE) GEN_COVERAGE=YES LCOV_OPT="$(LCOV_OPT)" -f $(UNIT_TEST_MK) gen_coverage
 	$(MAKE) GEN_COVERAGE=YES LCOV_OPT="$(LCOV_OPT)" -f $(UNIT_LNX_WRAP_TEST_MK) gen_coverage
 
+#	Filter out aca-decode from each coverage.info
+	@lcov --remove $(BUILD_DIR)/amdsmi/test/amdsmi_unit_tests-lcov/coverage.info "*/aca-decode/*" -o $(BUILD_DIR)/amdsmi/test/amdsmi_unit_tests-lcov/coverage.info $(LCOV_OPT)
+	@lcov --remove $(BUILD_DIR)/amdsmi/test/amdsmi_util_test-lcov/coverage.info "*/aca-decode/*" -o $(BUILD_DIR)/amdsmi/test/amdsmi_util_test-lcov/coverage.info $(LCOV_OPT)
+	@lcov --remove $(BUILD_DIR)/amdsmi/test/amdsmi_lnx_wrapper_test-lcov/coverage.info "*/aca-decode/*" -o $(BUILD_DIR)/amdsmi/test/amdsmi_lnx_wrapper_test-lcov/coverage.info $(LCOV_OPT)
+
 	mkdir -p $(OUTPUT_DIR_LCOV)
 
 	@lcov \
-		-a $(OUTPUT_DIR)/amdsmi_unit_tests-lcov/coverage.info \
-		-a $(OUTPUT_DIR)/amdsmi_util_test-lcov/coverage.info \
-		-a $(OUTPUT_DIR)/amdsmi_lnx_wrapper_test-lcov/coverage.info \
+		-a $(BUILD_DIR)/amdsmi/test/amdsmi_unit_tests-lcov/coverage.info \
+		-a $(BUILD_DIR)/amdsmi/test/amdsmi_util_test-lcov/coverage.info \
+		-a $(BUILD_DIR)/amdsmi/test/amdsmi_lnx_wrapper_test-lcov/coverage.info \
 		-o $(OUTPUT_DIR_LCOV)/coverage.info
 
-#	Combine lnx wrapper report with amdsmi reports
-	@lcov --add $(BUILD_DIR)/amdsmi/test/amdsmi_tests-lcov/coverage.info --add $(BUILD_DIR)/amdsmi/test/amdsmi_lnx_wrapper_test-lcov/coverage.info -o $(BUILD_DIR)/amdsmi/test/coverage.info
-
 #	Keep only info about our source files
-	@lcov --extract $(BUILD_DIR)/amdsmi/test/coverage.info \
+	@lcov --extract $(OUTPUT_DIR_LCOV)/coverage.info \
 		'$(INCLUDE_DIR)/*' \
 		'$(INTERFACE_DIR)/*' \
 		'$(SOURCE_DIR)/*' \
-		 $(LCOV_OPT) \
+			$(LCOV_OPT) \
 		-o $(BUILD_DIR)/amdsmi/test/result.info
 #	Convert result to html
 	@genhtml $(BUILD_DIR)/amdsmi/test/result.info \

@@ -38,6 +38,7 @@
 #include "mi300_reset.h"
 #include "mi300_powerplay.h"
 #include "mi300_clockgating.h"
+#include "mi350/mi350_powerplay.h"
 
 #include "mi300/NBIO/nbio_7_9_0_offset.h"
 #include "mi300/NBIO/nbio_7_9_0_sh_mask.h"
@@ -630,7 +631,7 @@ static int mi300_reset_trigger_vf_flr(struct amdgv_adapter *adapt,
 	else
 		mi300_nbio_assign_sdma_to_vf(adapt);
 
-	for (sdma_id = 0; sdma_id < adapt->sdma.num_instances; sdma_id++) {
+	for (sdma_id = 0; sdma_id < adapt->sdma.num_instances + adapt->sdma.num_enbl_harv_inst; sdma_id++) {
 		doorbell_index = AMDGV_MI300_DOORBELL_sDMA_ENGINE0 + sdma_id * 10;
 		doorbell_index = doorbell_index << 1;
 		mi300_nbio_assign_sdma_doorbell(adapt, sdma_id, doorbell_index, 20);

@@ -561,3 +561,36 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_unknown_error)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_UNKNOWN_ERROR, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_UNKNOWN_ERROR - An unknown error occurred");
 }
+
+TEST_F(AmdSmiUtilTests, guid_equals_true)
+{
+    guid_t g1 = { .b = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16} };
+    guid_t g2 = { .b = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16} };
+    EXPECT_TRUE(guid_equals(&g1, &g2));
+}
+
+TEST_F(AmdSmiUtilTests, guid_equals_false)
+{
+    guid_t g1 = { .b = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16} };
+    guid_t g2 = { .b = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,99} };
+    EXPECT_FALSE(guid_equals(&g1, &g2));
+}
+
+TEST_F(AmdSmiUtilTests, get_register_array_aligned)
+{
+    uint8_t data[16] = {1,0,0,0,0,0,0,0, 2,0,0,0,0,0,0,0};
+    uint64_t reg[2] = {0, 0};
+    amdsmi_get_register_array(data, sizeof(data), reg);
+    EXPECT_EQ(reg[0], 1);
+    EXPECT_EQ(reg[1], 2);
+}
+
+TEST_F(AmdSmiUtilTests, get_register_array_unaligned)
+{
+    uint8_t data[10] = {1,2,3,4,5,6,7,8, 9,10};
+    uint64_t reg[2] = {0, 0};
+    amdsmi_get_register_array(data, sizeof(data), reg);
+    uint64_t expected = 0;
+    memcpy(&expected, data, 8);
+    EXPECT_EQ(reg[0], expected);
+}

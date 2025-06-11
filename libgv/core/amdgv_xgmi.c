@@ -245,28 +245,15 @@ void amdgv_xgmi_reflect_topology_info(struct amdgv_adapter *adapt, struct amdgv_
 int amdgv_xgmi_get_topology_info(struct amdgv_adapter *adapt)
 {
 	struct amdgv_hive_info *hive;
-	struct amdgv_adapter *cur;
 	int ret = 0;
 
 	hive = amdgv_get_xgmi_hive(adapt);
 	if (!hive)
 		return AMDGV_FAILURE;
 
-	if (adapt->psp.xgmi_context.supports_extended_data) {
-		amdgv_list_for_each_entry(cur, &hive->adapt_list, struct amdgv_adapter, xgmi.head) {
-			ret = amdgv_psp_xgmi_get_topology_info(cur, hive, &cur->xgmi.topology_info);
-			if (ret)
-				return ret;
-		}
-
-		amdgv_list_for_each_entry(cur, &hive->adapt_list, struct amdgv_adapter, xgmi.head) {
-			amdgv_xgmi_reflect_topology_info(cur, hive, &cur->xgmi.topology_info);
-		}
-	} else {
-		ret = amdgv_psp_xgmi_get_topology_info(adapt, hive, &adapt->xgmi.topology_info);
-		if (ret)
-			return ret;
-	}
+	ret = amdgv_psp_xgmi_get_topology_info(adapt, hive, &adapt->xgmi.topology_info);
+	if (ret)
+		return ret;
 
 	ret = amdgv_psp_xgmi_get_peer_link_info(adapt, hive, &adapt->xgmi.link_info);
 	if (ret)
@@ -322,7 +309,6 @@ int amdgv_xgmi_parse_topology_info_for_live_info(struct amdgv_adapter *adapt)
 int amdgv_xgmi_update_topology(struct amdgv_adapter *adapt)
 {
 	struct amdgv_hive_info *hive;
-	struct amdgv_adapter *cur;
 	int ret = 0;
 
 	if (adapt->xgmi.phy_nodes_num > 1) {
@@ -338,21 +324,12 @@ int amdgv_xgmi_update_topology(struct amdgv_adapter *adapt)
 		ret = amdgv_psp_xgmi_set_topology_info(adapt, hive);
 		if (ret)
 			goto failed;
-		if (adapt->psp.xgmi_context.supports_extended_data) {
-			amdgv_list_for_each_entry(cur, &hive->adapt_list, struct amdgv_adapter, xgmi.head) {
-				ret = amdgv_psp_xgmi_get_topology_info(cur, hive, &cur->xgmi.topology_info);
-				if (ret)
-					goto failed;
-			}
 
-			amdgv_list_for_each_entry(cur, &hive->adapt_list, struct amdgv_adapter, xgmi.head) {
-				amdgv_xgmi_reflect_topology_info(cur, hive, &cur->xgmi.topology_info);
-			}
-		} else {
-			ret = amdgv_psp_xgmi_get_topology_info(adapt, hive, &adapt->xgmi.topology_info);
-			if (ret)
-				goto failed;
-		}
+		/* If the adapt->psp.xgmi_context.supports_extended_data flag is enabled, mirroring
+		 * the topology_info table may be required before using the topology_info table */
+		ret = amdgv_psp_xgmi_get_topology_info(adapt, hive, &adapt->xgmi.topology_info);
+		if (ret)
+			goto failed;
 
 		ret = amdgv_psp_xgmi_get_peer_link_info(adapt, hive, &adapt->xgmi.link_info);
 		if (ret)

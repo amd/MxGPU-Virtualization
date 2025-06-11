@@ -168,9 +168,23 @@ enum amdgv_mem_id {
 
 	MEM_SDMA0_RING               = 0x630,
 	MEM_SDMA1_RING               = 0x631,
+	MEM_SDMA2_RING               = 0x632,
+	MEM_SDMA3_RING               = 0x633,
+	MEM_SDMA4_RING               = 0x634,
+	MEM_SDMA5_RING               = 0x635,
+	MEM_SDMA6_RING               = 0x636,
+	MEM_SDMA7_RING               = 0x637,
+	MEM_SDMA8_RING               = 0x638,
+	MEM_SDMA9_RING               = 0x639,
+	MEM_SDMA10_RING              = 0x63a,
+	MEM_SDMA11_RING              = 0x63b,
+	MEM_SDMA12_RING              = 0x63c,
+	MEM_SDMA13_RING              = 0x63d,
+	MEM_SDMA14_RING              = 0x63e,
+	MEM_SDMA15_RING              = 0x63f,
 
-	MEM_SDMA0_MQD                = 0x634,
-	MEM_SDMA1_MQD                = 0x635,
+	MEM_SDMA0_MQD                = 0x640,
+	MEM_SDMA1_MQD                = 0x641,
 
 	/* FW */
 	MEM_PFP_FW                   = 0x700,
@@ -587,7 +601,7 @@ struct amdgv_live_info_cper {
 };
 
 #define LIVE_INFO_MAX_GC_INSTANCES 8
-#define LIVE_INFO_MAX_SDMA_RINGS 8
+#define LIVE_INFO_MAX_SDMA_RINGS 16
 #define LIVE_INFO_MAX_COMPUTE_RINGS 16
 
 struct amdgv_live_info_ring {
@@ -605,7 +619,7 @@ struct amdgv_live_info_ring {
 		uint64_t rb_wptr;
 	} compute[LIVE_INFO_MAX_COMPUTE_RINGS];
 
-	uint8_t reserved[80]; // 0x80 bytes align
+	uint8_t reserved[16]; // 0x80 bytes align
 };
 
 struct amdgv_live_info_ip_discovery {

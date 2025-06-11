@@ -60,8 +60,11 @@ DOXYGEN_OUTPUT_DIR := $(DOCS_OUTPUT_DIR)/doxygen
 HOOKS_DIR=../.git/modules/smi-lib/hooks
 
 SRCS := $(filter-out $(EXCLUDE_SRCS),$(notdir $(wildcard $(SOURCE_DIR)/*.c)))
+SRCS_ACA := $(filter-out $(EXCLUDE_SRCS),$(notdir $(wildcard $(SOURCE_DIR)/aca-decode/*.c)))
 SRCS += $(addprefix $(LIN_HOST_FOLDER)/,$(notdir $(wildcard $(LIN_SOURCE_DIR)/*.c)))
 OBJS := $(addprefix ${OUTPUT_DIR}/,$(SRCS:.c=.c.o))
+OBJS += $(addprefix ${OUTPUT_DIR}/,$(SRCS_ACA:.c=.c.o))
+
 OBJS  += $(GIM_COMS_OBJS)
 
 DEPS := $(OBJS:.o=.d)
@@ -70,7 +73,7 @@ LIBNAME := libamdsmi
 DYNAMICLIB_TARGET := $(LIBNAME).so
 STATICLIB_TARGET := $(LIBNAME).a
 
-INCLUDE := $(addprefix -I,$(INCLUDE_DIR) $(INTERFACE_DIR) $(LIN_HOST_INCLUDE_DIR) $(GIM_COMS_INCLUDE_DIR))
+INCLUDE := $(addprefix -I,$(INCLUDE_DIR) $(INCLUDE_DIR)/aca-decode/  $(INTERFACE_DIR) $(LIN_HOST_INCLUDE_DIR) $(GIM_COMS_INCLUDE_DIR))
 INCLUDE += $(HOST_INCLUDE_FLAGS)
 
 CFLAGS  = $(DEFAULT_CFLAGS) $(INCLUDE) -fPIC
@@ -143,13 +146,17 @@ endif
 all: $(ALL_DEPS)
 
 
-vpath %.c $(SOURCE_DIR)
+vpath %.c $(SOURCE_DIR) $(SOURCE_DIR)/aca-decode/
 
 $(OBJS): Makefile
 
 -include $(DEPS)
 
-$(OUTPUT_DIR)/%.c.o: %.c | $(OUTPUT_DIR)
+
+$(OUTPUT_DIR)/%.c.o: $(SOURCE_DIR)/%.c | $(OUTPUT_DIR)
+	$(CC) $(CFLAGS) -DBUILD_TYPE=$(BUILD_TYPE) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
+
+$(OUTPUT_DIR)/%.c.o: $(SOURCE_DIR)/aca-decode/%.c | $(OUTPUT_DIR)
 	$(CC) $(CFLAGS) -DBUILD_TYPE=$(BUILD_TYPE) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
 
 $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET): $(OBJS) | $(OUTPUT_DIR)

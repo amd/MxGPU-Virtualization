@@ -133,14 +133,14 @@ static int navi32_mmsch_get_default_bandwidth_config(struct amdgv_adapter *adapt
 					vf_bw->job_limit.decode_max_frame_pixels     = 7680 * 4352;
 				} else if (adapt->num_vf <= 4) {
 					vf_bw->job_limit.encode_max_dimension_pixels = 3840;
-					vf_bw->job_limit.encode_max_frame_pixels     = 3840 * 2160;
+					vf_bw->job_limit.encode_max_frame_pixels     = 3840 * 2176;
 					vf_bw->job_limit.decode_max_dimension_pixels = 3840;
-					vf_bw->job_limit.decode_max_frame_pixels     = 3840 * 2160;
+					vf_bw->job_limit.decode_max_frame_pixels     = 3840 * 2176;
 				} else {
 					vf_bw->job_limit.encode_max_dimension_pixels = 2560;
-					vf_bw->job_limit.encode_max_frame_pixels     = 2560 * 1440;
+					vf_bw->job_limit.encode_max_frame_pixels     = 2560 * 1472;
 					vf_bw->job_limit.decode_max_dimension_pixels = 2560;
-					vf_bw->job_limit.decode_max_frame_pixels     = 2560 * 1440;
+					vf_bw->job_limit.decode_max_frame_pixels     = 2560 * 1472;
 				}
 			} else {
 				oss_memset(vf_bw, 0, sizeof(struct amdgv_mmsch_vcn_vf_bandwidth));

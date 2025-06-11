@@ -50,10 +50,11 @@ cli/
 ## Usage and basic commands
 
 ```shell-session
-sudo ./amd-smi <arguments>
+sudo ./amd-smi <command> <options>
 ```
 
-- `<arguments>` arguments can be command name, subcommands, modifiers, and other arguments.
+- `<command>` is the primary command to execute. It must be the first argument after amd-smi.
+- `<options>` can include subcommands, modifiers, or other arguments relevant to the specified command.
 
 To get detailed information about the available commands and options, you can run help command.
 The help command provides a comprehensive overview of the tool's functionalities and usage instructions.
@@ -98,7 +99,7 @@ Copyright 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 usage: amd-smi list [-h | --help] [--json | --csv] [--file FILE] [-g | --gpu [GPU ...]]
 
 List all GPUs and VFs on the system and their most basic general information.
-If no GPU is specified, returns metric information for all GPUs on the system.
+If no GPU is specified, returns basic information for all GPUs on the system.
 
 List arguments:
                           Description:
@@ -107,8 +108,8 @@ List arguments:
 
 Command Modifiers:
                       Description:
---json                Displays output in JSON format (humman readable by default).
---csv                 Displays output in CSV format (humman readable by default).
+--json                Displays output in JSON format (human readable by default).
+--csv                 Displays output in CSV format (human readable by default).
 --file FILE           Saves output into a file on the provided path (stdout by default).
 ```
 

@@ -155,7 +155,42 @@ static const struct amdgv_asic_entry amdgv_sriov_device_table[] = {
 		&mi300_mitigation_table,
 		mi300_reg_base_init,
 	},
-
+	/* Mi350X AC */
+	{
+		CHIP_MI350X,
+		0x75A0,
+		ANY_ID,
+		ANY_ID,
+		MI300_CAPS,
+		&mi350x_init_table,
+		NULL,
+		&mi300_mitigation_table,
+		mi300_reg_base_init,
+	},
+	/* Mi350X LC 1.2 KW*/
+	{
+		CHIP_MI350X,
+		0x75A1,
+		ANY_ID,
+		ANY_ID,
+		MI300_CAPS,
+		&mi350x_init_table,
+		NULL,
+		&mi300_mitigation_table,
+		mi300_reg_base_init,
+	},
+	/* Mi350X LC 1.4 KW*/
+	{
+		CHIP_MI350X,
+		0x75A3,
+		ANY_ID,
+		ANY_ID,
+		MI300_CAPS,
+		&mi350x_init_table,
+		NULL,
+		&mi300_mitigation_table,
+		mi300_reg_base_init,
+	},
 	/* navi32 */
 	{
 		CHIP_NAVI32,
@@ -1044,9 +1079,14 @@ static int amdgv_parse_config_opt(struct amdgv_adapter *adapt)
 	if (adapt->opt.hang_detection_mode) {
 		adapt->flags |= AMDGV_FLAG_ENABLE_HANG_DETECTION;
 	}
+
+	if (adapt->opt.live_migration_mode) {
+		adapt->flags |= AMDGV_FLAG_GPUV_LIVE_MIGRATION;
+	}
 	if (!(adapt->flags & AMDGV_FLAG_USE_PF)) {
 		adapt->flags |= AMDGV_FLAG_DISABLE_SDMA_ENGINE;
 	}
+
 	if (adapt->opt.partition_full_access_enable) {
 		adapt->flags |= AMDGV_FLAG_ENABLE_PARTITION_FULL_ACCESS;
 	}
@@ -1851,40 +1891,51 @@ static void amdgv_device_live_update_pre_fini(struct amdgv_adapter *adapt)
 	AMDGV_INFO("Wait for all adapters idle...\n");
 	while (1) {
 		all_gpu_idle = 1;
-		/* If any adapter is in full access mode, wait until full access
-		 * ends. disable interrupts for adapters whose event thread is idle.
+		/* Wait until all adapters event threads are IDLE
+		 * to disable iterrupts.
 		 */
 		amdgv_list_for_each_entry(entry, &hive->adapt_list,
 			struct amdgv_adapter, xgmi.head) {
 
-			if (entry->in_chain_live_update)
-				continue;
-
 			if (entry->event_thread_status == AMDGV_EVENT_THREAD_IDLE) {
-				amdgv_toggle_interrupt(entry, false);
 				entry->in_chain_live_update = true;
-			} else
+			} else {
+				entry->in_chain_live_update = false;
 				all_gpu_idle = 0;
-
+			}
 		}
 
 		if (all_gpu_idle) {
-			/* Delay a while, re-check if all adapters are really idle
-			 * If any adapter is back to busy, re-enable its interrupt
+			/* Disable interrupt for all adapters */
+			amdgv_list_for_each_entry(entry, &hive->adapt_list,
+				struct amdgv_adapter, xgmi.head) {
+				amdgv_toggle_interrupt(entry, false);
+			}
+
+			/* Re-check if all adapters are really idle
+			 * If any adapter is back to busy, re-enable
+			 * interrupts for all the adapters.
 			 */
-			oss_msleep(5);
 			amdgv_list_for_each_entry(entry, &hive->adapt_list,
 				struct amdgv_adapter, xgmi.head) {
 				if (entry->event_thread_status != AMDGV_EVENT_THREAD_IDLE) {
 					all_gpu_idle = 0;
-					amdgv_toggle_interrupt(entry, true);
-					entry->in_chain_live_update = false;
+					break;
 				}
 			}
+
 			if (all_gpu_idle) {
 				AMDGV_INFO("Start doing live update...\n");
 				break;
 			}
+
+			/*Not all adapters are idle, re-enable interrupt.*/
+			amdgv_list_for_each_entry(entry, &hive->adapt_list,
+				struct amdgv_adapter, xgmi.head) {
+				amdgv_toggle_interrupt(entry, true);
+				entry->in_chain_live_update = false;
+			}
+
 		}
 
 		oss_msleep(5);

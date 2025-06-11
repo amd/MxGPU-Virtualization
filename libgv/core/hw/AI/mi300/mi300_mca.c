@@ -33,7 +33,7 @@
 
 #define MI300_MCA_IPID_GFX_XCD0    0x36430400   /* GFX SMNAID XCD 0 */
 #define MI300_MCA_IPID_GFX_XCD1    0x38430400   /* GFX SMNAID XCD 1 */
-#define MI300_MCA_IPID_SDMA_MMHUB  0x03b30400
+#define MI300_MCA_IPID_SMU         0x03b30400
 
 #define MI300_MCA_MAX_VALID_MCA_COUNT	(12)
 
@@ -44,6 +44,15 @@ static int mmhub_err_codes[] = {
 	CODE_DAGB0, CODE_DAGB0 + 1, CODE_DAGB0 + 2, CODE_DAGB0 + 3, CODE_DAGB0 + 4, /* DAGB0-4 */
 	CODE_EA0, CODE_EA0 + 1, CODE_EA0 + 2, CODE_EA0 + 3, CODE_EA0 + 4,	/* MMEA0-4*/
 	CODE_VML2, CODE_VML2_WALKER, CODE_MMCANE,
+};
+static int vcn_err_codes[] = {
+	CODE_VIDD, CODE_VIDV,
+};
+static int jpeg_err_codes[] = {
+	CODE_JPEG0S, CODE_JPEG0D, CODE_JPEG1S, CODE_JPEG1D,
+	CODE_JPEG2S, CODE_JPEG2D, CODE_JPEG3S, CODE_JPEG3D,
+	CODE_JPEG4S, CODE_JPEG4D, CODE_JPEG5S, CODE_JPEG5D,
+	CODE_JPEG6S, CODE_JPEG6D, CODE_JPEG7S, CODE_JPEG7D,
 };
 
 static int mi300_mca_ras_block_to_ue_chiplet_err_code(enum amdgv_ras_block block)
@@ -59,6 +68,10 @@ static int mi300_mca_ras_block_to_ue_chiplet_err_code(enum amdgv_ras_block block
 		return AMDGV_ERROR_ECC_MMHUB_CHIPLET_UE;
 	case AMDGV_RAS_BLOCK__XGMI_WAFL:
 		return AMDGV_ERROR_ECC_XGMI_WAFL_CHIPLET_UE;
+	case AMDGV_RAS_BLOCK__VCN:
+		return AMDGV_ERROR_ECC_VCN_CHIPLET_UE;
+	case AMDGV_RAS_BLOCK__JPEG:
+		return AMDGV_ERROR_ECC_JPEG_CHIPLET_UE;
 	default:
 		return AMDGV_ERROR_ECC_UNKNOWN_CHIPLET_UE;
 	}
@@ -77,6 +90,10 @@ static int mi300_mca_ras_block_to_ce_chiplet_err_code(enum amdgv_ras_block block
 		return AMDGV_ERROR_ECC_MMHUB_CHIPLET_CE;
 	case AMDGV_RAS_BLOCK__XGMI_WAFL:
 		return AMDGV_ERROR_ECC_XGMI_WAFL_CHIPLET_CE;
+	case AMDGV_RAS_BLOCK__VCN:
+		return AMDGV_ERROR_ECC_VCN_CHIPLET_CE;
+	case AMDGV_RAS_BLOCK__JPEG:
+		return AMDGV_ERROR_ECC_JPEG_CHIPLET_CE;
 	default:
 		return AMDGV_ERROR_ECC_UNKNOWN_CHIPLET_CE;
 	}
@@ -406,6 +423,18 @@ static void mi300_mca_mmhub_push_bank_count(struct amdgv_adapter *adapt,
 	mi300_mca_push_bank_count(adapt, bank, AMDGV_RAS_BLOCK__MMHUB);
 }
 
+static void mi300_mca_vcn_push_bank_count(struct amdgv_adapter *adapt,
+					    struct mca_bank_entry *bank)
+{
+	mi300_mca_push_bank_count(adapt, bank, AMDGV_RAS_BLOCK__VCN);
+}
+
+static void mi300_mca_jpeg_push_bank_count(struct amdgv_adapter *adapt,
+					    struct mca_bank_entry *bank)
+{
+	mi300_mca_push_bank_count(adapt, bank, AMDGV_RAS_BLOCK__JPEG);
+}
+
 static int mi300_mca_parse_error_code(struct amdgv_adapter *adapt,
 				      struct mca_bank_entry *bank)
 {
@@ -446,7 +475,7 @@ static bool mi300_mca_sdma_is_bank_valid(struct amdgv_adapter *adapt,
 	instlo = REG_GET_FIELD(bank->regs[MCA_REG_IDX_IPID], MCMP1_IPIDT0, InstanceIdLo);
 	instlo &= AMDGV_RAS_GENMASK(31, 1);
 
-	if (instlo != MI300_MCA_IPID_SDMA_MMHUB)
+	if (instlo != MI300_MCA_IPID_SMU)
 		return false;
 
 	errcode = mi300_mca_parse_error_code(adapt, bank);
@@ -470,7 +499,7 @@ static bool mi300_mca_mmhub_is_bank_valid(struct amdgv_adapter *adapt,
 	instlo = REG_GET_FIELD(bank->regs[MCA_REG_IDX_IPID], MCMP1_IPIDT0, InstanceIdLo);
 	instlo &= AMDGV_RAS_GENMASK(31, 1);
 
-	if (instlo != MI300_MCA_IPID_SDMA_MMHUB)
+	if (instlo != MI300_MCA_IPID_SMU)
 		return false;
 
 	errcode = mi300_mca_parse_error_code(adapt, bank);
@@ -485,7 +514,55 @@ static bool mi300_mca_mmhub_is_bank_valid(struct amdgv_adapter *adapt,
 	return false;
 }
 
-#define MI300_MCA_HANDLER_TABLE_SIZE 5
+static bool mi300_mca_vcn_is_bank_valid(struct amdgv_adapter *adapt,
+					  struct mca_bank_entry *bank)
+{
+	uint32_t instlo;
+	int errcode, i = 0;
+
+	instlo = REG_GET_FIELD(bank->regs[MCA_REG_IDX_IPID], MCMP1_IPIDT0, InstanceIdLo);
+	instlo &= AMDGV_RAS_GENMASK(31, 1);
+
+	if (instlo != MI300_MCA_IPID_SMU)
+		return false;
+
+	errcode = mi300_mca_parse_error_code(adapt, bank);
+	if (errcode < 0)
+		return false;
+
+	for (i = 0; i < ARRAY_SIZE(vcn_err_codes); i++) {
+		if (errcode == vcn_err_codes[i])
+			return true;
+	}
+
+	return false;
+}
+
+static bool mi300_mca_jpeg_is_bank_valid(struct amdgv_adapter *adapt,
+					  struct mca_bank_entry *bank)
+{
+	uint32_t instlo;
+	int errcode, i = 0;
+
+	instlo = REG_GET_FIELD(bank->regs[MCA_REG_IDX_IPID], MCMP1_IPIDT0, InstanceIdLo);
+	instlo &= AMDGV_RAS_GENMASK(31, 1);
+
+	if (instlo != MI300_MCA_IPID_SMU)
+		return false;
+
+	errcode = mi300_mca_parse_error_code(adapt, bank);
+	if (errcode < 0)
+		return false;
+
+	for (i = 0; i < ARRAY_SIZE(jpeg_err_codes); i++) {
+		if (errcode == jpeg_err_codes[i])
+			return true;
+	}
+
+	return false;
+}
+
+#define MI300_MCA_HANDLER_TABLE_SIZE 7
 
 static struct mca_bank_handler bank_handler[MI300_MCA_HANDLER_TABLE_SIZE] = {
 	{
@@ -528,6 +605,22 @@ static struct mca_bank_handler bank_handler[MI300_MCA_HANDLER_TABLE_SIZE] = {
 		.block = AMDGV_RAS_BLOCK__MMHUB,
 		.push_bank_count = mi300_mca_mmhub_push_bank_count,
 		.is_bank_valid = mi300_mca_mmhub_is_bank_valid,
+	},
+	{
+		.ip = AMDGV_MCA_IP_SMU,
+		.hwid = 0x1,
+		.mcatype = 0x1,
+		.block = AMDGV_RAS_BLOCK__VCN,
+		.push_bank_count = mi300_mca_vcn_push_bank_count,
+		.is_bank_valid = mi300_mca_vcn_is_bank_valid,
+	},
+	{
+		.ip = AMDGV_MCA_IP_SMU,
+		.hwid = 0x1,
+		.mcatype = 0x1,
+		.block = AMDGV_RAS_BLOCK__JPEG,
+		.push_bank_count = mi300_mca_jpeg_push_bank_count,
+		.is_bank_valid = mi300_mca_jpeg_is_bank_valid,
 	},
 };
 

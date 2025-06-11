@@ -52,6 +52,10 @@ int main(void)
 
 	uint64_t cursor = 0;  // The cursor to get more data
 
+	uint64_t afids[MAX_NUMBER_OF_AFIDS_PER_RECORD];
+	uint32_t num_afids = 0;
+	char *cper_buffer;
+
 	ret = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	if (ret != AMDSMI_STATUS_SUCCESS)
 		return ret;
@@ -74,6 +78,15 @@ int main(void)
 			printf("Record id: 		%s \n", cper_hdrs[i]->record_id);
 			printf("Error severity: %d \n", cper_hdrs[i]->error_severity);
 			print_cper_timestamp(&cper_hdrs[i]->timestamp);
+
+			cper_buffer = (char*)malloc(cper_hdrs[i]->record_length * sizeof(char));
+			memcpy(cper_buffer, cper_hdrs[i], cper_hdrs[i]->record_length);
+			ret = amdsmi_get_afids_from_cper(cper_buffer, cper_hdrs[i]->record_length, afids, &num_afids);
+			for(uint32_t i = 0; i < num_afids; i++){
+				printf("Sec: %d AFID: %ld \n", i, afids[i]);
+			}
+			printf("\n");
+			free(cper_buffer);
 		}
 
 	} while(ret == AMDSMI_STATUS_MORE_DATA);

@@ -30,6 +30,7 @@
 #include <string.h>
 #include <errno.h>
 #include <ctype.h>
+#include <inttypes.h>
 
 amdsmi_status_t amdsmi_request(smi_req_ctx *smi_req, uint32_t cmd_code, size_t input_size, size_t output_size)
 {
@@ -448,10 +449,20 @@ bool is_uuid_valid(const char *uuid)
 	return true;
 }
 
-amdsmi_status_t amdsmi_read_lib_version(amdsmi_version_t *lib_version) {
-    lib_version->major = AMDSMI_VERSION_MAJOR;
-    lib_version->minor = AMDSMI_VERSION_MINOR;
-    lib_version->release = AMDSMI_VERSION_RELEASE;
+bool guid_equals(const guid_t* guid1,const guid_t* guid2) {
+    return memcmp(guid1->b, guid2->b, sizeof(guid1->b)) == 0;
+}
 
-    return AMDSMI_STATUS_SUCCESS;
+void amdsmi_get_register_array(const uint8_t* data, size_t size, uint64_t *register_array) {
+	uint8_t index = 0;
+    for (size_t i = 0; i < size; i += sizeof(uint64_t)) {
+        uint64_t value = 0;
+        if (i + sizeof(uint64_t) <= size) {
+            value = *(uint64_t*)(data + i);
+			register_array[index] = value;
+			index++;
+        } else {
+            memcpy(&value, data + i, size - i); // Handle remaining bytes
+        }
+    }
 }

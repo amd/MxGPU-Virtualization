@@ -319,39 +319,6 @@ static int amdgv_sched_psp_get_mb_status(struct amdgv_adapter *adapt, int idx_vf
 	return ret;
 }
 
-static int amdgv_sched_clear_vf_fb(struct amdgv_adapter *adapt, int idx_vf, uint8_t pattern)
-{
-	int ret = 0;
-	uint32_t world_switch_id;
-	struct amdgv_sched_world_switch *world_switch;
-
-	if (adapt->misc.dma_engine == AMDGV_DMA_ENGINE_CP_DMA) {
-		/* Switch to PF so we can use CP_DMA to access fb */
-		for_each_id (world_switch_id, amdgv_sched_get_world_switch_mask_by_sched_block(
-					  adapt, idx_vf, AMDGV_SCHED_BLOCK_GFX)) {
-			world_switch = &adapt->sched.world_switch[world_switch_id];
-			ret = amdgv_sched_world_context_switch_to_vf(adapt, AMDGV_PF_IDX, world_switch);
-
-			if (ret) {
-				amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_SCHED_WORLD_SWITCH_FAIL, 0);
-				return ret;
-			}
-		}
-	}
-
-	ret = amdgv_misc_clear_vf_fb(adapt, idx_vf, pattern);
-
-	if (adapt->misc.dma_engine == AMDGV_DMA_ENGINE_CP_DMA) {
-		for_each_id (world_switch_id, amdgv_sched_get_world_switch_mask_by_sched_block(
-					  adapt, idx_vf, AMDGV_SCHED_BLOCK_GFX)) {
-			world_switch = &adapt->sched.world_switch[world_switch_id];
-			amdgv_sched_world_context_save(adapt, world_switch);
-		}
-	}
-
-	return ret;
-}
-
 static int amdgv_sched_event_queue_init(struct amdgv_adapter *adapt)
 {
 	int size;
@@ -1170,9 +1137,6 @@ static int amdgv_sched_handle_req_gpu_init_data(struct amdgv_adapter *adapt, uin
 				      VFMGR_CPER_EVENT_GUEST_LOAD,
 				      idx_vf);
 
-	if (adapt->misc.clean_scratch_registers)
-		adapt->misc.clean_scratch_registers(adapt, idx_vf);
-
 	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->reset_vf_arbiters)
 		adapt->pp.pp_funcs->reset_vf_arbiters(adapt, idx_vf);
 
@@ -1664,6 +1628,8 @@ static int amdgv_sched_enter_full_access(struct amdgv_adapter *adapt,
 	/* enable MMIO register write, FB, DOORBELL VF access */
 	amdgv_gpuiov_set_vf_access(adapt, event->idx_vf, AMDGV_VF_ACCESS_ALL, true);
 
+	adapt->sched.array_vf[event->idx_vf].fb_dirty = true;
+
 	if (adapt->sched.rlc_safe_mode)
 		adapt->sched.rlc_safe_mode(adapt, true);
 
@@ -1680,6 +1646,7 @@ static int amdgv_sched_enter_full_access(struct amdgv_adapter *adapt,
 		}
 
 		ret = amdgv_sched_handle_req_gpu_init(adapt, event->idx_vf);
+		amdgv_misc_reprogram_golden_settings(adapt, event->idx_vf);
 		break;
 	case AMDGV_EVENT_REQ_GPU_RESET:
 		/* enable VF FB access */
@@ -1843,11 +1810,6 @@ static void amdgv_sched_exit_full_access(struct amdgv_adapter *adapt,
 		ret = amdgv_sched_handle_rel_gpu_fini(adapt, event->idx_vf);
 		amdgv_live_info_prepare_reset(adapt);
 
-		/* clear vf fb on vm shutdown */
-		if ((adapt->flags & AMDGV_FLAG_FB_CLEAN_ON_SHUTDOWN) &&
-			amdgv_sched_clear_vf_fb(adapt, event->idx_vf, 0x00)) {
-			AMDGV_WARN("clear vf fb failed\n");
-		}
 		break;
 	default:
 		AMDGV_ASSERT(false);
@@ -2661,6 +2623,7 @@ static int handle_event_in_non_full_access(struct amdgv_adapter *adapt,
 		if (adapt->flags & AMDGV_FLAG_VF_FB_PROTECTION)
 			amdgv_gpuiov_set_vf_access(adapt, event->idx_vf, AMDGV_VF_ACCESS_FB,
 						   true);
+		adapt->sched.array_vf[event->idx_vf].fb_dirty = true;
 
 		ret = amdgv_mmsch_preconfig_vf(adapt, event->idx_vf);
 		if (ret)
@@ -2811,21 +2774,27 @@ static int handle_event_in_non_full_access(struct amdgv_adapter *adapt,
 		break;
 
 	case AMDGV_EVENT_SCHED_INIT_VF_FB:
-		amdgv_sched_stop(adapt, event->idx_vf);
+		if (!adapt->sched.array_vf[event->idx_vf].fb_dirty && event->data.vf_fb_data.flag == AMDGV_VF_FB_CLEAR_DIRTY) {
+			break;
+		} else {
+			amdgv_sched_stop(adapt, event->idx_vf);
 
-		if (!amdgv_sched_is_state_ok(adapt, event->idx_vf))
-			amdgv_sched_reset_vf_auto(adapt);
+			if (!amdgv_sched_is_state_ok(adapt, event->idx_vf))
+				amdgv_sched_reset_vf_auto(adapt);
 
-		if (amdgv_sched_context_switch_gfx_to_pf(adapt, event->idx_vf) != 0)
-			amdgv_sched_reset_vf_auto(adapt);
+			if (amdgv_sched_context_switch_gfx_to_pf(adapt, event->idx_vf) != 0)
+				amdgv_sched_reset_vf_auto(adapt);
 
-		if (amdgv_vfmgr_init_vf_fb(adapt, event->idx_vf, false,
-					   event->data.vf_fb_data.pattern,
-					   event->data.vf_fb_data.flag))
-			AMDGV_WARN("Failed to init vf fb in non-full access\n");
+			if (amdgv_vfmgr_init_vf_fb(adapt, event->idx_vf, false,
+						event->data.vf_fb_data.pattern,
+						event->data.vf_fb_data.flag))
+				AMDGV_WARN("Failed to init vf fb in non-full access\n");
+			else
+				adapt->sched.array_vf[event->idx_vf].fb_dirty = false;
 
-		if (amdgv_sched_context_save(adapt, event->idx_vf, AMDGV_SCHED_BLOCK_GFX))
-			amdgv_sched_reset_vf_auto(adapt);
+			if (amdgv_sched_context_save(adapt, event->idx_vf, AMDGV_SCHED_BLOCK_GFX))
+				amdgv_sched_reset_vf_auto(adapt);
+		}
 
 		break;
 

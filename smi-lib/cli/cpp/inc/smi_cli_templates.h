@@ -31,7 +31,7 @@ inline std::string versionTemplate{ "VERSION: \n    TOOL_NAME: %s \n    TOOL_VER
 
 inline std::string staticAsicTemplate{
 	"    ASIC: \n        MARKET_NAME: %s \n        VENDOR_ID: %s \n        VENDOR_NAME: %s \n        SUBVENDOR_ID: %s \n        DEVICE_ID: %s "
-	"\n        SUBSYSTEM_ID: %s \n        REV_ID: %s \n        ASIC_SERIAL: %s\n        OAM_ID: %s\n"
+	"\n        SUBSYSTEM_ID: %s \n        REV_ID: %s \n        ASIC_SERIAL: %s\n        OAM_ID: %s\n        NUM_OF_COMPUTE_UNITS: %s\n"
 };
 
 inline std::string staticDfcHeaderTemplate{
@@ -403,6 +403,9 @@ inline std::string staticPolicyInfoTemplate{
 	"            POLICY_ID: %d\n"
 	"            POLICY_DESCRIPTION: %s\n" };
 
+inline std::string staticVirtualizationModeTemplate{
+	"    MODE: %s\n" };
+
 inline std::string eventTemplate{ "EVENT_INFO: \n"};
 inline std::string eventMessageTemplate{ "GPU: %d \n"
 	"    MESSAGE: %s \n"
@@ -451,4 +454,4 @@ inline std::string staticPartitionTemplate {
 	"        PARTITION_ID: %s \n"};
 
 inline std::string RasCperTemplate {
-	"%s \t %d \t\t %s \t %s\n"};
+	    "%-24s %-8d %-24s %-24s %s\n"};

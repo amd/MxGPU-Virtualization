@@ -23,6 +23,7 @@
 #include <amdgv_device.h>
 #include "amdgv_xgmi.h"
 #include "mi300_xgmi.h"
+#include "mi350/mi350_powerplay.h"
 #include "mi300_powerplay.h"
 #include "amdgv_psp_gfx_if.h"
 #include "mi300/GC/gc_9_4_3_offset.h"

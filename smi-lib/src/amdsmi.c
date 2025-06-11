@@ -35,6 +35,8 @@
 #include "smi_defines.h"
 #include "smi_debug.h"
 #include "smi_os_defines.h"
+#include "aca-decode/aca_api.h"
+
 
 #ifdef __linux__
 #pragma GCC diagnostic push
@@ -2681,11 +2683,26 @@ amdsmi_status_t amdsmi_get_lib_version(amdsmi_version_t *version)
 	if (version == NULL)
 		return AMDSMI_STATUS_INVAL;
 
-	const int ret = amdsmi_read_lib_version(version);
-	if (ret != AMDSMI_STATUS_SUCCESS) {
-		SMI_ERROR("Error during reading file VERSION. Return code: %d", ret);
-		return ret;
-	}
+	version->major = AMDSMI_VERSION_MAJOR;
+	version->minor = AMDSMI_VERSION_MINOR;
+	version->release = AMDSMI_VERSION_RELEASE;
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+amdsmi_status_t amdsmi_get_gpu_virtualization_mode(amdsmi_processor_handle processor_handle, amdsmi_virtualization_mode_t *mode)
+{
+	#pragma SMI_EXPORT
+	smi_req_ctx smi_req;
+
+	AMDSMI_ESCAPE_IF_NOT_INIT;
+
+	if (processor_handle == NULL || mode == NULL) {
+		SMI_ERROR("Nullpointer given as input. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+    }
+
+	*mode = AMDSMI_VIRTUALIZATION_MODE_HOST;
 
 	return AMDSMI_STATUS_SUCCESS;
 }
@@ -3156,6 +3173,73 @@ amdsmi_topo_get_p2p_status(amdsmi_processor_handle processor_handle_src,
 
 	return AMDSMI_STATUS_SUCCESS;
 }
+
+static const guid_t CRASHDUMP					= AMD_CRASHDUMP
+static const guid_t GPU_NONSTANDARD_ERROR		= AMD_GPU_NONSTANDARD_ERROR;
+
+amdsmi_status_t amdsmi_get_afids_from_cper(char *cper_buffer, uint32_t buf_size, uint64_t *afids, uint32_t *num_afids)
+{
+	#pragma SMI_EXPORT
+
+	amdsmi_cper_hdr_t* hdr = (amdsmi_cper_hdr_t*)cper_buffer;
+	uint64_t register_array[17];
+	uint32_t number_of_afids = 0;
+	int sec_afid = 0;
+
+	if (cper_buffer == NULL || afids == NULL) {
+		SMI_ERROR("Nullpointer given as input. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	amdsmi_cper_hdr_t *cper = (amdsmi_cper_hdr_t *)(cper_buffer);
+	if(cper->record_length > buf_size) {
+		return AMDSMI_STATUS_INVAL;
+	}
+	else if(cper->signature[0] != 'C' || cper->signature[1] != 'P' ||
+		cper->signature[2] != 'E' || cper->signature[3] != 'R') {
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	for (uint32_t i = 0; i < hdr->sec_cnt; ++i) {
+		struct cper_sec_desc *section;
+		section = (struct cper_sec_desc*)(cper_buffer + sizeof(amdsmi_cper_hdr_t) + i*sizeof(struct cper_sec_desc));
+
+		uint16_t hardware_revision = (uint16_t)((section->revision_major << 8) | section->revision_minor);
+		uint32_t section_flag = section->flag_mask;
+
+		void* section_start = cper_buffer + section->sec_offset;
+
+		if (guid_equals(&section->sec_type, &GPU_NONSTANDARD_ERROR)) {
+			// correctable cper
+			struct cper_sec_nonstd_err *nonstd_err;
+			nonstd_err = (struct cper_sec_nonstd_err *) section_start;
+
+			amdsmi_get_register_array((uint8_t*)(&nonstd_err->ctx.reg_dump), CPER_ACA_REG_COUNT*sizeof(uint32_t), register_array);
+			sec_afid = decode_afid(register_array, 16, section_flag, hardware_revision);
+			afids[number_of_afids] = (uint64_t)sec_afid;
+			number_of_afids++;
+		}
+		else if (guid_equals(&section->sec_type, &CRASHDUMP)) {
+			// fatal cper
+			struct cper_sec_crashdump_fatal *crashdump;
+			crashdump = (struct cper_sec_crashdump_fatal *) section_start;
+			amdsmi_get_register_array((uint8_t*)(&crashdump->body.data), sizeof(crashdump->body.data), register_array);
+			sec_afid = decode_afid(register_array, 4, section_flag, hardware_revision);
+			number_of_afids++;
+			afids[number_of_afids] = (uint64_t)sec_afid;
+
+		} else {
+			SMI_ERROR("  Unknown Section Type\n");
+			number_of_afids++;
+			afids[number_of_afids] = 0xFFFFFFFF;
+		}
+	}
+
+	*num_afids = number_of_afids;
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
 
 #ifdef __linux__
 #pragma GCC diagnostic pop

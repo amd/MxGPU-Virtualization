@@ -149,12 +149,18 @@ enum amdgv_ras_fed_src {
 	AMDGV_FED_SRC_DF_SYNC_FLOOD,
 };
 
+enum amdgv_fb_clear_type {
+	AMDGV_VF_FB_INIT = 0,
+	AMDGV_VF_FB_CLEAR_FORCE,
+	AMDGV_VF_FB_CLEAR_DIRTY,
+};
+
 struct gim_dev_data;
 union amdgv_sched_event_data {
 	struct {
 		/* pattern to be filled */
 		uint8_t pattern;
-		/* 0: for vf fb init, 1: for vf fb clear */
+		/* 0: for vf fb init, 1: for force vf fb clear, 2: for dirty vf fb clear */
 		uint8_t flag;
 		int    *result;
 	} vf_fb_data;
@@ -387,6 +393,7 @@ struct amdgv_sched_vf_info {
 	enum amdgv_sched_event_id event_id_full_access;
 	uint64_t		  start_time_full_access;
 	uint64_t		  used_time_full_access;
+	bool fb_dirty;
 };
 
 enum self_switch_status {
@@ -772,4 +779,5 @@ int amdgv_sched_get_sched_mode(struct amdgv_adapter *adapt, enum amdgv_sched_blo
 void amdgv_sched_set_unrecov_err(struct amdgv_adapter *adapt);
 void amdgv_sched_clear_unrecov_err(struct amdgv_adapter *adapt);
 bool amdgv_sched_is_unrecov_err(struct amdgv_adapter *adapt);
+void amdgv_sched_clear_dirty_vf_fb(struct amdgv_adapter *adapt, int vf_idx);
 #endif

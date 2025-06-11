@@ -982,7 +982,7 @@ static int dcore_get_mes_dbg_info(struct file *filp, void *user_buf)
 
 	mutex_lock(&gim_device_list_lock);
 
-	if (!svm_enabled) {
+	if (!SVM_ENABLED(NULL)) {
 		list_for_each_entry(dev_data, &gim_device_list, list) {
 			idx_vf = gim_dbdf_to_vf_idx(mes_dbg_block.dbsf, dev_data);
 			if (-1 != idx_vf) {
@@ -1428,7 +1428,7 @@ static int dcore_iova_node_init(void)
 		if (res < 0)
 			goto err_iova;
 
-		if (!svm_enabled) {
+		if (!SVM_ENABLED(dev_data->adev)) {
 			for (i = 0; i < dev_data->vf_num; i++) {
 				pdev_vf = dev_data->vf_map[i].pdev;
 				/* VF */

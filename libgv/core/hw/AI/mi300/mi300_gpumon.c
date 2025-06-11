@@ -29,7 +29,7 @@
 #include <amdgv_xgmi.h>
 #include <amdgv_psp_gfx_if.h>
 #include <amdgv_api_internal.h>
-
+#include "mi350/mi350_powerplay.h"
 #include "mi300_powerplay.h"
 #include "mi300_gpumon.h"
 #include "mi300_nbio.h"
@@ -751,6 +751,8 @@ mi300_get_accelerator_partition_profile_asic_config_global(struct amdgv_adapter 
 		return &mi300x_accelerator_partition_profile_configs;
 	} else if (adapt->asic_type == CHIP_MI308X) {
 		return &mi308x_accelerator_partition_profile_configs;
+	} else if (adapt->asic_type == CHIP_MI350X) {
+		return &mi300x_accelerator_partition_profile_configs;
 	} else {
 		AMDGV_ERROR("asic_type=%u not supported\n", adapt->asic_type);
 		return NULL;
@@ -1406,8 +1408,7 @@ static int mi300_get_gpu_cache_info(struct amdgv_adapter *adapt,
 	if (gpu_cache_info->num_cache_types > AMDGV_GPUMON_MAX_CACHE_TYPES)
 		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
 
-	if (adapt->asic_type != CHIP_MI300X && adapt->asic_type != CHIP_MI308X
-			 )
+	if (adapt->asic_type != CHIP_MI300X && adapt->asic_type != CHIP_MI308X && adapt->asic_type != CHIP_MI350X)
 		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
 
 	/* vL1D (Also known as TCP, GL0, CU$). On MI300 marked as GL1 cache */

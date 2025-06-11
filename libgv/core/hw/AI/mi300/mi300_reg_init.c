@@ -24,6 +24,7 @@
 #include <amdgv_device.h>
 #include <ai.h>
 #include "mi300.h"
+#include "mi350/mi350_vcn.h"
 
 void mi300_reg_base_init(struct amdgv_adapter *adapt)
 {
@@ -61,6 +62,8 @@ static int mi300_doorbell_sw_fini(struct amdgv_adapter *adapt)
 
 static int mi300_doorbell_hw_init(struct amdgv_adapter *adapt)
 {
+	if (adapt->asic_type == CHIP_MI350X)
+		mi350_vcn_set_mmsch_doorbell_addr_base(adapt);
 	return 0;
 }
 

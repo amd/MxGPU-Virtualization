@@ -31,6 +31,14 @@
 #include "amdgv_ras.h"
 #include "amdgv_sdma.h"
 #include "sdma_v4_4_2.h"
+#include "mi300_nbio.h"
+
+#define for_each_harvest_sdma_inst(inst, adapt) \
+	for (inst = adapt->sdma.num_instances; inst < adapt->sdma.num_instances + adapt->sdma.num_enbl_harv_inst; inst++)
+#define for_each_sdma_inst(inst, adapt) \
+	for (inst = 0; inst < (adapt)->sdma.num_sdma_rings; inst++)
+#define IS_SDMA_ENABLED(adapt) \
+	(!(adapt->flags & AMDGV_FLAG_DISABLE_SDMA_ENGINE) || (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION))
 
 static const uint32_t this_block = AMDGV_MEMORY_BLOCK;
 
@@ -88,12 +96,6 @@ static const struct amdgv_ring_funcs sdma_ring_funcs = {
 	.submit_frame = sdma_v4_4_2_ring_submit_frame,
 };
 
-static void sdma_set_ring_funcs(struct amdgv_adapter *adapt)
-{
-	adapt->sdma.sdma_ring[0].funcs = &sdma_ring_funcs;
-	//adapt->sdma.sdma_ring[1].funcs = &sdma_ring_funcs;
-}
-
 static int mi300_sdma_ring_init(struct amdgv_adapter *adapt, int ring_id)
 {
 	struct amdgv_ring *ring = &adapt->sdma.sdma_ring[ring_id];
@@ -109,7 +111,7 @@ static int mi300_sdma_ring_init(struct amdgv_adapter *adapt, int ring_id)
 	ring->doorbell_index = (adapt->doorbell_index.sdma_engine[ring_id]) << 1;
 	oss_vsnprintf(ring->name, 12, "sdma%d", ring_id);
 
-	sdma_set_ring_funcs(adapt);
+	adapt->sdma.sdma_ring[ring_id].funcs = &sdma_ring_funcs;
 	return amdgv_ring_init(adapt, ring, adapt->opt.paging_queue_frame_bytes_size / sizeof(uint32_t),
 				 adapt->opt.paging_queue_frame_number, AMDGV_RING_PRIO_DEFAULT, NULL,
 				 MEM_SDMA0_RING + ring_id);
@@ -117,10 +119,27 @@ static int mi300_sdma_ring_init(struct amdgv_adapter *adapt, int ring_id)
 
 static int mi300_sdma_sw_init(struct amdgv_adapter *adapt)
 {
+	uint32_t inst;
+
+	adapt->sdma.num_sdma_rings = 0;
+	adapt->sdma.num_enbl_harv_inst = 0;
+
 	if (!(adapt->flags & AMDGV_FLAG_DISABLE_SDMA_ENGINE)) {
 		adapt->sdma.num_sdma_rings = 1;
-		mi300_sdma_ring_init(adapt, 0);
 	}
+
+	if ((adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION) && (adapt->asic_type == CHIP_MI308X)) {
+		adapt->sdma.num_enbl_harv_inst = adapt->sdma.harvest_instances;
+	}
+
+	for_each_sdma_inst(inst, adapt) {
+		mi300_sdma_ring_init(adapt, inst);
+	}
+
+	for_each_harvest_sdma_inst(inst, adapt) {
+		mi300_sdma_ring_init(adapt, inst);
+	}
+
 	return 0;
 }
 
@@ -128,11 +147,14 @@ static int mi300_sdma_sw_fini(struct amdgv_adapter *adapt)
 {
 	uint32_t i;
 
-	if (!(adapt->flags & AMDGV_FLAG_DISABLE_SDMA_ENGINE)) {
-		for (i = 0; i < adapt->sdma.num_sdma_rings; i++) {
-			amdgv_ring_fini(&adapt->sdma.sdma_ring[i]);
-		}
+	for_each_sdma_inst (i, adapt) {
+		amdgv_ring_fini(&adapt->sdma.sdma_ring[i]);
 	}
+
+	for_each_harvest_sdma_inst (i, adapt) {
+		amdgv_ring_fini(&adapt->sdma.sdma_ring[i]);
+	}
+
 	return 0;
 }
 
@@ -209,6 +231,9 @@ static int mi300_enable_sdma(struct amdgv_adapter *adapt, uint32_t instance)
 		data = REG_SET_FIELD(data, SDMA_GFX_DOORBELL, ENABLE, 1);
 		WREG32_SOC15(SDMA0, GET_INST(SDMA0, instance), regSDMA_GFX_DOORBELL, data);
 	}
+
+	mi300_nbio_assign_sdma_doorbell(adapt, instance, ring->doorbell_index, 20);
+
 	/* 9. Unfreeze engine */
 	data = RREG32_SOC15(SDMA0, GET_INST(SDMA0, instance), regSDMA_FREEZE);
 	data = REG_SET_FIELD(data, SDMA_FREEZE, FREEZE, 0);
@@ -247,32 +272,61 @@ static int mi300_disable_sdma(struct amdgv_adapter *adapt, uint32_t instance)
 
 static int mi300_sdma_hw_init_internal_set(struct amdgv_adapter *adapt)
 {
-	struct amdgv_ring *ring = &adapt->sdma.sdma_ring[0];
+	uint32_t i;
+	int ret = 0;
 
-	return amdgv_ring_init_set(adapt, ring);
+	for_each_sdma_inst(i, adapt) {
+		ret = amdgv_ring_init_set(adapt, &adapt->sdma.sdma_ring[i]);
+		if (ret)
+				goto out;
+	}
+
+	for_each_harvest_sdma_inst(i, adapt) {
+		ret = amdgv_ring_init_set(adapt, &adapt->sdma.sdma_ring[i]);
+		if (ret)
+				goto out;
+	}
+
+out:
+	return ret;
+}
+
+static void mi300_process_sdma_instance(struct amdgv_adapter *adapt, uint32_t ring_id)
+{
+	struct amdgv_ring *ring;
+
+	ring = &adapt->sdma.sdma_ring[ring_id];
+	if (in_whole_gpu_reset()) {
+		// Clear the ring
+		amdgv_ring_clear_ring(ring);
+		ring->wptr = 0;
+	}
+	mi300_enable_sdma(adapt, ring_id);
 }
 
 static int mi300_sdma_hw_init(struct amdgv_adapter *adapt)
 {
 	uint32_t i;
-	struct amdgv_ring *ring;
 
-	if (!(adapt->flags & AMDGV_FLAG_DISABLE_SDMA_ENGINE)) {
-		if (!(adapt->flags & AMDGV_FLAG_USE_PF))
+	if (IS_SDMA_ENABLED(adapt)) {
+		/* LM does not need the repeated context load&save again */
+		if (!(adapt->flags & AMDGV_FLAG_USE_PF) && !(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION))
 			amdgv_sched_context_load(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX);
+
 		mi300_sdma_hw_init_internal_set(adapt);
-		for (i = 0; i < adapt->sdma.num_sdma_rings; i++) {
-			ring = &adapt->sdma.sdma_ring[i];
-			if (in_whole_gpu_reset()) {
-				// Clear the ring
-				amdgv_ring_clear_ring(ring);
-				ring->wptr = 0;
-			}
-			mi300_enable_sdma(adapt, i);
+
+		for_each_sdma_inst(i, adapt) {
+			mi300_process_sdma_instance(adapt, i);
 		}
-		if (!(adapt->flags & AMDGV_FLAG_USE_PF))
+
+		for_each_harvest_sdma_inst(i, adapt) {
+			mi300_process_sdma_instance(adapt, i);
+		}
+
+		if (!(adapt->flags & AMDGV_FLAG_USE_PF) && !(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION))
 			amdgv_sched_context_save(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX);
 	}
+
 	return 0;
 }
 
@@ -280,11 +334,14 @@ static int mi300_sdma_hw_fini(struct amdgv_adapter *adapt)
 {
 	uint32_t i;
 
-	if (!(adapt->flags & AMDGV_FLAG_DISABLE_SDMA_ENGINE)) {
-		for (i = 0; i < adapt->sdma.num_sdma_rings; i++) {
-			mi300_disable_sdma(adapt, i);
-		}
+	for_each_sdma_inst(i, adapt) {
+		mi300_disable_sdma(adapt, i);
 	}
+
+	for_each_harvest_sdma_inst(i, adapt) {
+		mi300_disable_sdma(adapt, i);
+	}
+
 	return 0;
 }
 
