@@ -117,9 +117,6 @@
 
 #define AMDGV_AUTO_SCHED_DEBUG_DUMP_MAX_SIZE	256 /* Max usable FB for pf */
 
-#define AMDGV_ACCELERATOR_PARTITION_MODE_UNKNOWN	0
-#define AMDGV_ACCELERATOR_PARTITION_MODE_MAX		9
-
 #define TO_KBYTES(x)	      ((x) >> 10)
 #define TO_MBYTES(x)	      ((x) >> 20)
 #define TO_256KBYTES(x)	      ((x) >> 18)
@@ -704,6 +701,15 @@ enum amdgv_memory_partition_mode {
 	AMDGV_MEMORY_PARTITION_MODE_MAX
 };
 
+enum amdgv_accelerator_partition_mode {
+	AMDGV_ACCELERATOR_PARTITION_MODE_UNKNOWN,
+	AMDGV_ACCELERATOR_PARTITION_MODE_SPX = 1,
+	AMDGV_ACCELERATOR_PARTITION_MODE_DPX = 2,
+	AMDGV_ACCELERATOR_PARTITION_MODE_QPX = 4,
+	AMDGV_ACCELERATOR_PARTITION_MODE_CPX = 8,
+	AMDGV_ACCELERATOR_PARTITION_MODE_MAX
+};
+
 enum amdgv_hang_detection_mode {
 	AMDGV_HANG_DETECTION_DISABLED = 0,
 	AMDGV_HANG_DETECTION_ENABLED = 1,
@@ -835,7 +841,7 @@ struct amdgv_init_config_opt {
 	enum amdgv_mm_bandwidth_policy mm_policy;
 
 	enum amdgv_xgmi_fb_sharing_mode fb_sharing_mode;
-	uint32_t accelerator_partition_mode;
+	enum amdgv_accelerator_partition_mode accelerator_partition_mode;
 	enum amdgv_memory_partition_mode memory_partition_mode;
 	uint32_t partition_full_access_enable;
 

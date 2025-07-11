@@ -2,10 +2,15 @@ defaults:
   numbered: false
 root: index
 subtrees:
-- caption: Install
+- caption: Build
   entries:
   - file: install/build.md
     title: Build from source
+
+- caption: Install
+  entries:
+  - file: install/install.md
+    title: Install from source
 
 - caption: How to
   entries:

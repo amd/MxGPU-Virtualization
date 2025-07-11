@@ -171,7 +171,8 @@ static int navi32_ffbm_invalidate_tlb(struct amdgv_adapter *adapt, struct amdgv_
 	if (navi32_ffbm_request_access(adapt, true))
 		return AMDGV_FAILURE;
 
-	amdgv_misc_hdp_flush(adapt);
+	if (amdgv_sched_context_switch_gfx_to_pf(adapt, AMDGV_PF_IDX))
+		AMDGV_WARN("Fail to switch world context\n");
 
 	for (current_gpa = pteb->gpa;
 			current_gpa < pteb->gpa + pteb->size;
@@ -204,10 +205,12 @@ static int navi32_ffbm_invalidate_tlb(struct amdgv_adapter *adapt, struct amdgv_
 		}
 
 		if (wait_ret) {
-			AMDGV_WARN("FFBM timeout waiting for FFBM invalidate response, break invalidate tlb\n");
+			AMDGV_ERROR("FFBM timeout waiting for FFBM invalidate response, break invalidate tlb\n");
 			break;
 		}
 	}
+
+	amdgv_sched_context_save(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX);
 
 	navi32_ffbm_request_access(adapt, false);
 

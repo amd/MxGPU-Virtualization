@@ -44,7 +44,7 @@ struct spatial_partition_gfx {
 struct amdgv_mcp {
 	uint32_t num_aid;
 	enum spatial_partition_mode spatial_partition_mode;
-	uint32_t accelerator_partition_mode;
+	enum amdgv_accelerator_partition_mode accelerator_partition_mode;
 	enum amdgv_memory_partition_mode memory_partition_mode;
 	bool mem_mode_switch_requested;
 	uint32_t numa_count;

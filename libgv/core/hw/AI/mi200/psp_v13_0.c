@@ -689,6 +689,9 @@ static enum psp_status psp_v13_migration_rwl_debug_print(struct amdgv_adapter *a
 	int i = 0;
 	uint32_t offset = 0;
 
+	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION))
+		return PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
+
 	if (!vf->configured) {
 		AMDGV_ERROR("VF:%d not configured. Drop request\n", idx_vf);
 		ret = PSP_STATUS__ERROR_GENERIC;
@@ -768,8 +771,10 @@ static enum psp_status psp_v13_get_migration_version(struct amdgv_adapter *adapt
 
 static enum psp_status psp_v13_migration_get_psp_info(struct amdgv_adapter *adapt)
 {
-
 	enum psp_status ret = PSP_STATUS__ERROR_GENERIC;
+
+	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION))
+		return PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
 
 	ret = psp_v13_get_migration_version(adapt, &adapt->live_migration.migration_version);
 	if (ret != PSP_STATUS__SUCCESS) {
@@ -841,6 +846,9 @@ static enum psp_status psp_v13_transfer_manifest_data(struct amdgv_adapter *adap
 	enum psp_status ret = PSP_STATUS__ERROR_GENERIC;
 	struct psp_cmd_km *migration_cmd = NULL;
 	struct psp_gfx_resp psp_resp = { 0 };
+
+	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION))
+		return PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
 
 	migration_cmd = adapt->psp.psp_cmd_km_mem;
 	if (!migration_cmd) {

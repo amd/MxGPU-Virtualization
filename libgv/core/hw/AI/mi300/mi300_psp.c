@@ -807,7 +807,7 @@ enum psp_status mi300_psp_get_fw_attestation_info(struct amdgv_adapter *adapt, u
 }
 
 static const char *mi300_get_accelerator_partition_mode_desc(
-	struct amdgv_adapter *adapt, uint32_t accelerator_partition_mode)
+	struct amdgv_adapter *adapt, enum amdgv_accelerator_partition_mode accelerator_partition_mode)
 {
 	switch (accelerator_partition_mode) {
 	case 1:
@@ -835,7 +835,7 @@ static int save_accelerator_partition_mode(void *context)
 
 enum psp_status
 mi300_psp_set_accelerator_partition_mode(struct amdgv_adapter *adapt,
-					uint32_t accelerator_partition_mode)
+					enum amdgv_accelerator_partition_mode accelerator_partition_mode)
 {
 	enum psp_status ret = PSP_STATUS__SUCCESS;
 	struct psp_cmd_km psp_cmd = { 0 };
@@ -845,14 +845,14 @@ mi300_psp_set_accelerator_partition_mode(struct amdgv_adapter *adapt,
 
 	/* if requested accelerator_partition_mode is not supported
 	 * set accelerator_partition_mode to default as follows:
-	 * 			NPS1		NPS4
-	 * 1VF		SPX			CPX
-	 * 2VF		DPX			X
-	 * 4VF		CPX-4/QPX	CPX-4/QPX
-	 * 8VF		CPX			CPX
+	 * 			NPS1		NPS2		NPS4
+	 * 1VF		SPX			DPX			CPX
+	 * 2VF		DPX			DPX			X
+	 * 4VF		CPX-4/QPX	CPX-4/QPX	CPX-4/QPX
+	 * 8VF		CPX			CPX			CPX
 	 */
 	if (adapt->mcp.accelerator_partition_mode == 0 ||
-		mi300_nbio_is_accelerator_partition_mode_supported(
+		mi300_nbio_is_partition_mode_combination_supported(
 			adapt, adapt->mcp.memory_partition_mode,
 			accelerator_partition_mode) == false) {
 		AMDGV_WARN("accelerator_partition_mode=%u is not supported. "

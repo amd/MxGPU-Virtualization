@@ -39,14 +39,19 @@ The tool can be used to:
 - Query information about the virtual functions on the GPU
 - Query temperature, clocks, and usage of the GPU
 
-For additional information on installation, usage, and API references, please refer to the sections below:
+For additional information on build, installation, usage, and API references, please refer to the sections below:
 
 ::::{grid} 2
-:gutter: 3
+:gutter: 4
+
+:::{grid-item-card} Build
+
+- [Build from source](./install/build.md)
+:::
 
 :::{grid-item-card} Install
 
-- [Build from source](./install/build.md)
+- [Build from source](./install/install.md)
 :::
 
 :::{grid-item-card} How to

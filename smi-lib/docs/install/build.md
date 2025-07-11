@@ -7,7 +7,7 @@ myst:
 
 <a id="amd-smi-library-build"></a>
 
-# AMD SMI LIBRARY BUILD
+# AMD SMI LIBRARY AND TOOL BUILD
 
 ## Requirements
 
@@ -17,18 +17,32 @@ Minimum supported `lcov` version is 1.15.
 
 ## Build commands
 
+### AMD SMI library build
+
 When running make inside the gim folder, the AMD SMI library is built as well. Here are some useful commands for building the AMD SMI library:
 
 - Run `make` in the smi-lib folder to build the library.
-- Run `sudo make install` in the smi-lib folder to install the compiled library (`libamdsmi.so`) and the header file (`amdsmi.h`) to the system library folder (`/usr/lib/`) and system include folder (`/usr/inc/`), respectively.
-- Run `sudo make uninstall` in the smi-lib folder to remove the installed library (`libamdsmi.so`) and header file (`amdsmi.h`) from the system library folder (`/usr/lib/`) and system include folder (`/usr/inc/`), respectively.
 - Run `make package` to create the AMD SMI Python package.
 - Run `make test` to build and run the integration and unit tests.
 - Run `make all` to build everything mentioned above.
 - Run `make gen_coverage` to calculate the code coverage of the AMD SMI library.
 - If any changes are made to the interface folder, regenerate the Python wrapper by running `make python_wrapper` and replace the `amdsmi_wrapper.py` file in the py/interface folder with the one generated in the build folder `build/amdsmi/amdsmi_wrapper/amdsmi_wrapper.py`.
 
-### Build Options
+### AMD SMI tool build
+
+Before running the command to build the tool, make sure you are meeting the following requirements on your system:
+    -cmake minimum version 3.15
+    -g++ minimum version 8
+
+When running make inside the gim/smi-lib/cli/cpp folder, the AMD SMI Tool will be built.
+
+- Run `make` in the gim/smi-lib/cli/cpp folder to build the tool.
+- Run `make clean` to remove all files generated during the build process, such as object files and executables, to ensure clean build environment.
+
+After build is successfully finished, navigate to gim/smi-lib/cli/cpp/build folder and tool binary should be there.
+Open terminal and navigate to this location and now you can execute smi tool.
+
+### AMD SMI LIBRARY Build Options
 
 These options allow you to customize the build process, such as specifying the build type, enabling thread safety, enabling logging, and using the Thread Sanitizer.
 

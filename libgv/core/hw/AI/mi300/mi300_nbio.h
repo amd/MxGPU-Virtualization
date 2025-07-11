@@ -23,6 +23,8 @@
 #ifndef MI300_NBIO_H
 #define MI300_NBIO_H
 
+#include "amdgv_nps.h"
+
 void mi300_nbio_enable_vf_access_mmio_over_512k(struct amdgv_adapter *adapt);
 bool mi300_nbio_vbios_need_post(struct amdgv_adapter *adapt);
 void mi300_nbio_assign_sdma_doorbell(struct amdgv_adapter *adapt, int instance,
@@ -49,18 +51,20 @@ int mi300_nbio_pcie_curr_link_width(struct amdgv_adapter *adapt);
 int mi300_nbio_get_curr_memory_partition_mode(
 	struct amdgv_adapter *adapt,
 	enum amdgv_memory_partition_mode *memory_partition_mode);
-uint32_t mi300_nbio_get_accelerator_partition_mode(struct amdgv_adapter *adapt);
-uint32_t mi300_nbio_get_accelerator_partition_mode_default_setting(
+enum amdgv_accelerator_partition_mode mi300_nbio_get_accelerator_partition_mode(struct amdgv_adapter *adapt);
+enum amdgv_accelerator_partition_mode mi300_nbio_get_accelerator_partition_mode_default_setting(
 	struct amdgv_adapter *adapt,
 	enum amdgv_memory_partition_mode memory_partition_mode);
-bool mi300_nbio_is_accelerator_partition_mode_supported(
-	struct amdgv_adapter *adapt,
-	enum amdgv_memory_partition_mode memory_partition_mode,
-	uint32_t accelerator_partition_mode);
 bool mi300_nbio_is_partition_mode_combination_supported(
 	struct amdgv_adapter *adapt,
 	enum amdgv_memory_partition_mode memory_partition_mode,
-	uint32_t accelerator_partition_mode);
+	enum amdgv_accelerator_partition_mode accelerator_partition_mode);
 int mi300_nbio_get_pcie_replay_count(struct amdgv_adapter *adapt);
 void nbio_v7_9_set_ras_funcs(struct amdgv_adapter *adapt);
+
+struct mi300_nps_combination_cap_entry {
+	enum amd_asic_type asic_type;
+	struct amdgv_vf_nps_combination vf_nps[AMDGV_VF_NPS_MAX_COMBINATIONS];
+};
+
 #endif

@@ -233,7 +233,8 @@ static int mi300_vbios_early_sw_init(struct amdgv_adapter *adapt)
 		name = "MI308X";
 		break;
 	case (0x75A0):
-	case (0x75A1):
+		name = "MI350X";
+		break;
 	case (0x75A3):
 		name = "MI355X";
 		break;
