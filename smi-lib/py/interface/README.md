@@ -31,7 +31,7 @@ Navigate to project's root folder and run Makefile command:
 
 * `make package`
 
-Build process will create a folder `build/package/BUILD_MODE/amdsmi`, where `BUILD_MODE` can be Release or Debug.
+Build process will create a folder `build/amdsmi/package/BUILD_MODE/amdsmi`, where `BUILD_MODE` can be Release or Debug.
 The folder will contain the following files:
 
 * `__init__.py`
@@ -770,8 +770,35 @@ except AmdSmiException as e:
     print(e)
 ```
 
-### amdsmi_get_gpu_bad_page_info
+## amdsmi_get_bad_page_threshold
+Description: Returns bad page threshold
 
+Input parameters:
+
+* `processor_handle` GPU device which to query
+
+Output: Bad page threshold value
+
+Exceptions that can be thrown by `amdsmi_get_bad_page_threshold` function:
+* `AmdSmiLibraryException`
+* `AmdSmiRetryException`
+* `AmdSmiParameterException`
+
+Example:
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            bad_page_threshold = amdsmi_get_bad_page_threshold(processor)
+            print(bad_page_threshold)
+except AmdSmiException as e:
+    print(e)
+```
+
+## amdsmi_get_gpu_bad_page_info
 Description: Returns bad page info.
 
 Input parameters:
@@ -3156,12 +3183,16 @@ except AmdSmiException as e:
 
 ### amdsmi_get_gpu_cper_entries
 
-Description: Get gpu ras cper entries
+Description: Dump CPER entries for a given GPU in a file using from CPER header file from RAS tool.
 
 Input parameters:
+* `processor_handle` device which to query
+* `severity_mask`    Represents different severity masks from 'AmdSmiCperErrorSeverity' enum on which filtering of cpers is based.
+* `buffer_size`      pointer to a variable that specifies the size of the cper_data
+* `cursor`           pointer to a variable that will contain the  cursor  for the next call
 
-* `processor handle` PF of a GPU device
-* `severity_mask` Represents different severity masks from 'AmdSmiCperErrorSeverity' enum on which filerting of cpers is based.
+
+`AmdSmiCperErrorSeverity`
 
 Field | Description
 ---|---
@@ -3170,9 +3201,24 @@ Field | Description
 `NON_FATAL_CORRECTED` | filters non_fatal_corrected cpers
 `NUM` | shows all cper types
 
-Output:
 
-* List of all cper errors. Each list element contains binary raw data
+Output: Dictionary with fields
+
+Field | Description
+---|---
+`error_severity`   | The severity of the CPER error ex: `non_fatal_uncorrected`, `fatal`, `non_fatal_corrected`. |
+`notify_type`      | The notification type associated with the CPER entry. |
+`timestamp`        | The time when the CPER entry was recorded, formatted as `YYYY/MM/DD HH:MM:SS`. |
+`signature`        | A 4-byte signature identifying the entry, typically `CPER`. |
+`revision`         | The revision number of the CPER record format. |
+`signature_end`    | A marker value (typically `0xFFFFFFFF`) confirming the integrity of the signature. |
+`sec_cnt`          | The count of sections included in the CPER entry. |
+`record_length`    | The total length in bytes of the CPER entry. |
+`platform_id`      | A character array identifying the GPU or platform. |
+`creator_id`       | A character array indicating the creator of the CPER entry. |
+`record_id`        | A unique identifier for the CPER entry. |
+`flags`            | Reserved flags related to the CPER entry. |
+`persistence_info` | Reserved information related to persistence. |
 
 Exceptions that can be thrown by `amdsmi_get_gpu_cper_entries` function:
 
@@ -3182,14 +3228,16 @@ Exceptions that can be thrown by `amdsmi_get_gpu_cper_entries` function:
 Example:
 
 ```python
-try:
-    processors = amdsmi_get_processor_handles()
-    if len(processors) == 0:
-        print("No GPUs on machine")
-    else:
-        for processor in processors:
-            cper_list = amdsmi_get_gpu_cper_entries(processor, AmdSmiCperErrorSeverity.NUM)
-
+for device in devices:
+        entries, new_cursor, cper_data = amdsmi_get_gpu_cper_entries(device, severity_mask, buffer_size, initial_cursor)
+        print("CPER entries for device", device)
+        for key, entry in entries.items():
+            print("Entry", key)
+            print("  Error Severity:", entry.get("error_severity", "Unknown"))
+            print("  Notify Type:", entry.get("notify_type", "Unknown"))
+            print("  Timestamp:", entry.get("timestamp", ""))
+            print()
+        print("New Cursor Position:", new_cursor)
 except AmdSmiException as e:
     print(e)
 ```
@@ -3255,11 +3303,38 @@ try:
         print("No GPUs on machine")
     else:
         for processor in processors:
-            cper_list = amdsmi_get_gpu_cper_entries(processor, AmdSmiCperErrorSeverity.NUM)
-            afid = amdsmi_get_afids_from_cper(cper_list[0])
+        entries, new_cursor, cper_data = amdsmi_get_gpu_cper_entries(processor, severity_mask, buffer_size, initial_cursor)
+            afid = amdsmi_get_afids_from_cper(cper_data[0]['bytes'])
             print(afid)
 
 except AmdSmiException as e:
     print(e)
 ```
 
+## amdsmi_reset_gpu
+Description: Reset the GPU associated with the device with provided processor handle.
+
+Input parameters: GPU device handle
+* `processor_handle`
+
+Output:
+* `None`
+
+Exceptions that can be thrown by `amdsmi_reset_gpu` function:
+
+* `AmdSmiLibraryException`
+* `AmdSmiParameterException`
+
+Example:
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            amdsmi_reset_gpu(processor)
+
+except AmdSmiException as e:
+    print(e)
+```

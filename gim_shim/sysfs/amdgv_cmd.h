@@ -34,6 +34,7 @@
 #define AMDGV_CMD_MAX_DIAG_DATA_BUFFER_SIZE (4*1024*1024)
 #define AMDGV_CMD_VERSION 1
 #define AMDGV_CMD_VERSION_V2 3
+#define AMDGV_CMD_MAX_KERNELOBJ_SIZE 2048
 
 #define __gim_max(a, b) ((int)(a) > (int)(b) ? (a) : (b))
 #define AMDGV_MAX_FB_REGIONS \
@@ -303,9 +304,30 @@ struct amdgv_cmd_ras_ta_unload {
     uint32_t reserved[5];
 };
 
+struct amdgv_cmd_dump_cu_resource_size {
+    uint32_t kernelobj_size;
+    uint32_t out_data_size;
+    uint32_t out_flag_size;
+    uint32_t group_segment_size;
+    uint16_t workgroup_size_x;
+    uint16_t workgroup_size_y;
+    uint16_t workgroup_size_z;
+    uint32_t grid_size_x;
+    uint32_t grid_size_y;
+    uint32_t grid_size_z;
+    uint32_t private_segment_size;
+};
+
+struct amdgv_cmd_dump_cu_resource_memory {
+    uint32_t *kernelobj_addr;
+    uint32_t *out_data_addr;
+    uint32_t *out_flag_addr;
+};
+
 struct amdgv_cmd_dump_cu_data_req {
     struct amdgv_cmd_dev_handle dev;
-    enum amdgv_cu_data_type data_type;
+    struct amdgv_cmd_dump_cu_resource_size resource_size;
+    struct amdgv_cmd_dump_cu_resource_memory resource_mem;
 };
 
 /* Break Point Debug Mode:

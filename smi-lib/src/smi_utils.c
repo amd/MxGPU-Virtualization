@@ -48,7 +48,7 @@ amdsmi_status_t amdsmi_request(smi_req_ctx *smi_req, uint32_t cmd_code, size_t i
 		smi_req->thread->ioctl_cmd.in_hdr.code = cmd_code;
 		smi_req->thread->ioctl_cmd.in_hdr.in_len = (int16_t) input_size;
 		smi_req->thread->ioctl_cmd.in_hdr.out_len = (int16_t) output_size;
-		const int ret = sys_wrapper->ioctl(smi_req->handle->fd, &smi_req->thread->ioctl_cmd);
+		const int ret = sys_wrapper->smi_ioctl(smi_req->handle->fd, &smi_req->thread->ioctl_cmd);
 		if (ret != 0) {
 			if (SMI_LAST_ERROR == SMI_EIO) {
 				SMI_ERROR("SMI_LAST_ERROR errno code equals to AMDSMI_EIO error code. Return code: %d", smi_req->thread->ioctl_cmd.out_hdr.status);

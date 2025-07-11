@@ -158,6 +158,33 @@ std::string SmiToolRequiredCommandException::get_message()
 	return message;
 }
 
+SmiToolInvalidSubcommandException::SmiToolInvalidSubcommandException(std::string command)
+{
+	message = string_format("Command '%s' is invalid. Must receive valid AMD-SMI Command first. Run '--help' for more info.",
+		command.c_str());
+}
+int SmiToolInvalidSubcommandException::get_error_code()
+{
+	return error_code;
+}
+std::string SmiToolInvalidSubcommandException::get_message()
+{
+	return message;
+}
+
+SmiToolPermissionDeniedException::SmiToolPermissionDeniedException()
+{
+	message = "Permission denied. This action requires elevated privileges.";
+}
+int SmiToolPermissionDeniedException::get_error_code()
+{
+	return error_code;
+}
+std::string SmiToolPermissionDeniedException::get_message()
+{
+	return message;
+}
+
 SmiToolNotEnoughMemException::SmiToolNotEnoughMemException()
 {
 	message = "Not enough memory.";
@@ -188,7 +215,7 @@ std::string SmiToolUnknownErrorException::get_message()
 SmiToolSMILIBErrorException::SmiToolSMILIBErrorException(int error_code) : smilib_error_code{error_code}
 {
 	error_code = -1000 - smilib_error_code;
-	message = string_format("SMI-LIB has returned error %d - %s.", error_code,
+	message = string_format("SMI-LIB has returned status %d - %s.", error_code,
 							SMI_LIB_ERROR_MESSAGES[smilib_error_code].c_str());
 }
 int SmiToolSMILIBErrorException::get_error_code()
@@ -209,16 +236,16 @@ void print_errors(SmiToolException &e, OutputFormat format, std::string file_pat
 	std::string out{};
 	if (format == json) {
 		nlohmann::ordered_json json;
-		json["error_message"] = e.get_message();
-		json["error_code"] = e.get_error_code();
+		json["status_message"] = e.get_message();
+		json["status_code"] = e.get_error_code();
 		out = json.dump(4);
 	} else if (format == csv) {
 		std::string error_code_string{string_format("%d", e.get_error_code())};
-		out.append("error_message,error_code").append("\n").append(e.get_message()).append(",").append(
+		out.append("status_message,status_code").append("\n").append(e.get_message()).append(",").append(
 			   error_code_string).append("\n");
 	} else {
 		std::string error_code_string{string_format("%d", e.get_error_code())};
-		out.append(e.get_message()).append(" Error code: ").append(error_code_string);
+		out.append(e.get_message()).append(" Status code: ").append(error_code_string);
 	}
 
 	if (file_path != "") {

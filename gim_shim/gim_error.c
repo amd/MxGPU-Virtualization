@@ -32,16 +32,16 @@ int gim_error_ring_buffer_init(struct gim_error_ring_buffer **rb)
 	if (rb == NULL)
 		return GIM_FAILURE;
 
-	(*rb) = kzalloc(sizeof(struct gim_error_ring_buffer), GFP_KERNEL);
+	(*rb) = gim_kzalloc(sizeof(struct gim_error_ring_buffer), GFP_KERNEL);
 	if ((*rb) == NULL)
 		goto fini;
 
-	(*rb)->read_lock = kmalloc(sizeof(struct mutex), GFP_KERNEL);
+	(*rb)->read_lock = gim_kmalloc(sizeof(struct mutex), GFP_KERNEL);
 	if ((*rb)->read_lock == NULL)
 		goto fini;
 	mutex_init((*rb)->read_lock);
 
-	(*rb)->write_lock = kmalloc(sizeof(struct mutex), GFP_KERNEL);
+	(*rb)->write_lock = gim_kmalloc(sizeof(struct mutex), GFP_KERNEL);
 	if ((*rb)->write_lock == NULL)
 		goto fini;
 	mutex_init((*rb)->write_lock);
@@ -64,15 +64,15 @@ void gim_error_ring_buffer_fini(struct gim_error_ring_buffer **rb)
 
 	if ((*rb)->read_lock) {
 		mutex_destroy((*rb)->read_lock);
-		kfree((*rb)->read_lock);
+		gim_kfree((*rb)->read_lock);
 	}
 
 	if ((*rb)->write_lock) {
 		mutex_destroy((*rb)->write_lock);
-		kfree((*rb)->write_lock);
+		gim_kfree((*rb)->write_lock);
 	}
 
-	kfree(*rb);
+	gim_kfree(*rb);
 	*rb = NULL;
 }
 

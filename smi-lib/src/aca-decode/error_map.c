@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) Advanced Micro Devices, Inc. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,6 +22,8 @@
 
 #include "error_map.h"
 #include <string.h>
+
+#define AFID_VERSION "0.7"
 
 static const error_map_entry_t error_map[] = {
     {1, "Boot-Time Errors", "FW Load", "CPER", "Fail-to-init"},
@@ -53,7 +55,11 @@ static const error_map_entry_t error_map[] = {
     {27, "Device Internal Errors", "Watchdog Timeout (WDT)", "CPER", "Fatal"},
     {28, "Device Internal Errors", "All Others", "CPER", "Uncorrected, Non-fatal"},
     {29, "Device Internal Errors", "All Others", "CPER", "Corrected"},
-    {30, "Device Internal Errors", "All Others", "CPER", "Fatal"}};
+    {30, "Device Internal Errors", "All Others", "CPER", "Fatal"},
+    {31, "CPER Format", "Malformed CPER", "CPER", "ALL"},
+    {32, "CPER Format", "Incomplete ACA Data", "CPER", "ALL"},
+    {33, "CPER Format", "Invalid ACA Data", "CPER", "ALL"},
+    {34, "Unidentified Errors", "Unidentified Error", "CPER", "ALL"}};
 
 static const size_t NUM_ERROR_ENTRIES = sizeof(error_map) / sizeof(error_map[0]);
 
@@ -64,7 +70,7 @@ int get_error_id(const char *error_category, const char *error_type, const char 
         strcmp(error_type, "UNKNOWN") == 0 ||
         strcmp(error_severity, "UNKNOWN") == 0)
     {
-        return -1;
+        return 33; // Return ID for "Invalid Error" if any input is "UNKNOWN" or NULL
     }
 
     for (size_t i = 0; i < NUM_ERROR_ENTRIES; i++)
@@ -77,5 +83,5 @@ int get_error_id(const char *error_category, const char *error_type, const char 
         }
     }
 
-    return -1;
+    return 34; // Return ID for "Unidentified Errors" if no match found
 }

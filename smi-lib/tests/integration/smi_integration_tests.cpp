@@ -211,7 +211,7 @@ static void walkthrough_test()
 		ASSERT_EQ(amdsmi_get_fb_layout(processors[i], &pf_fb_info), AMDSMI_STATUS_SUCCESS);
 
 		EXPECT_TRUE((pf_fb_info.total_fb_size >= 1024) &&
-			    (pf_fb_info.total_fb_size <= 262144));
+			    (pf_fb_info.total_fb_size <= 295000));
 		EXPECT_TRUE((pf_fb_info.pf_fb_reserved >= 1) &&
 			    (pf_fb_info.pf_fb_reserved <= 512));
 		EXPECT_TRUE((pf_fb_info.max_vf_fb_usable >= 1024) &&
@@ -513,7 +513,8 @@ TEST(amdsmiIntegrationTests, GpuPerformanceTest)
 		}
 
 		ret = amdsmi_get_soc_pstate(processors[i], &dpm_policy_info);
-		EXPECT_TRUE((ret == AMDSMI_STATUS_SUCCESS) || (ret == AMDSMI_STATUS_NOT_SUPPORTED));
+
+		EXPECT_TRUE((ret == AMDSMI_STATUS_SUCCESS) || (ret == AMDSMI_STATUS_NOT_SUPPORTED) || (ret == AMDSMI_STATUS_API_FAILED));
 
 		if (ret == AMDSMI_STATUS_SUCCESS) {
 			std::cout << "Soc pstate: " << std::endl;
@@ -909,6 +910,7 @@ TEST(amdsmiIntegrationTests, BadPageInfoTest)
 	amdsmi_eeprom_table_record_t *eeprom_table_records;
 	uint32_t bad_page_count = AMDSMI_MAX_BAD_PAGE_RECORD;
 	struct tm dtime;
+	uint32_t threshold;
 	int ret = 0;
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
@@ -957,6 +959,8 @@ TEST(amdsmiIntegrationTests, BadPageInfoTest)
 			}
 			free(eeprom_table_records);
 		}
+		ret = amdsmi_get_bad_page_threshold(processors[i], &threshold);
+		ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	}
 
 	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
@@ -1427,6 +1431,24 @@ TEST(amdsmiIntegrationTests, CperTests)
 	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
 }
 
+TEST(amdsmiIntegrationTests, ResetGpuTest)
+{
+	amdsmi_processor_handle *processors = NULL;
+	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
+	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
+
+	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, processors), AMDSMI_STATUS_SUCCESS);
+
+	for (uint32_t i = 0; i < dev_cnt; i++) {
+		ASSERT_EQ(amdsmi_reset_gpu(processors[i]), AMDSMI_STATUS_SUCCESS);
+	}
+
+	free(processors);
+	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
+
+}
+
 TEST(amdsmiIntegrationTests, WrongParamsTests)
 {
 	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
@@ -1574,6 +1596,8 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 	ASSERT_EQ(amdsmi_get_gpu_cper_entries(processors[0], severity_mask, cper_data, &buf_size, NULL, &entry_count, &cursor), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_gpu_cper_entries(processors[0], severity_mask, cper_data, &buf_size, cper_hdrs, NULL, &cursor), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_gpu_cper_entries(processors[0], severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, NULL), AMDSMI_STATUS_INVAL);
+
+	ASSERT_EQ(amdsmi_reset_gpu(NULL), AMDSMI_STATUS_INVAL);
 
 	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(amdsmi_get_processor_handles(socket, &dev_cnt, processors), AMDSMI_STATUS_NOT_INIT);

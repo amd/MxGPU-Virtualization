@@ -368,7 +368,7 @@ int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg, std::string& o
 				file_timestamp_map[file_name] = entry.timestamp;
 			}
 
-			if (std::find(arg.options.begin(), arg.options.end(), "file_limit") != arg.options.end()) {
+			if (std::find(arg.options.begin(), arg.options.end(), "file-limit") != arg.options.end()) {
 				if (!folder_name.empty()) {
 					count_and_replace_oldest_files(folder_name, file_timestamp_map, arg.file_limit);
 				}
@@ -416,7 +416,7 @@ int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg, std::string& o
 			file_timestamp_map[file_name] = entry.timestamp;
 		}
 
-		if (std::find(arg.options.begin(), arg.options.end(), "file_limit") != arg.options.end()) {
+		if (std::find(arg.options.begin(), arg.options.end(), "file-limit") != arg.options.end()) {
 			if (!folder_name.empty()) {
 				count_and_replace_oldest_files(folder_name, file_timestamp_map, arg.file_limit);
 			}
@@ -432,7 +432,7 @@ int AmdSmiApiHost::amdsmi_get_cper_afid_command(Arguments arg, std::string& out)
 {
 	int ret = 0;
 	uint64_t afids[MAX_NUMBER_OF_AFIDS_PER_RECORD];
-	uint32_t num_afids = 0;
+	uint32_t num_afids = MAX_NUMBER_OF_AFIDS_PER_RECORD;
 
 	std::ifstream file(arg.cper_file_path, std::ios::binary | std::ios::ate);
 	if (!file) {

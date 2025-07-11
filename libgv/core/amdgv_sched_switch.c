@@ -821,7 +821,7 @@ static int amdgv_sched_manual_switch_init(struct amdgv_adapter *adapt,
 					  struct amdgv_sched_world_switch *world_switch,
 					  enum amdgv_sched_mode sched_mode)
 {
-	int i;
+	uint32_t i;
 	struct amdgv_sched_active_vf_entry *entry;
 
 	world_switch->use_active_status = false;
@@ -1613,7 +1613,7 @@ int amdgv_sched_world_switch_init(struct amdgv_adapter *adapt)
 		AMDGV_INFO("Host Driver Break Point Mode %d\n", adapt->bp_mode);
 	}
 
-	for (i = 0; i < adapt->sched.num_world_switch; i++) {
+	for (i = 0; i < (int)adapt->sched.num_world_switch; i++) {
 		world_switch = &adapt->sched.world_switch[i];
 		if (world_switch->enabled == false)
 			break;

@@ -565,7 +565,7 @@ static int world_switch_goto_state_auto(struct amdgv_adapter *adapt, uint32_t ta
 					uint32_t hw_sched_id, uint32_t target_state)
 {
 	int ret = 0;
-	int i;
+	uint32_t i;
 	int auto_needs_idle;
 	const char *psched;
 	uint32_t cur_vf;

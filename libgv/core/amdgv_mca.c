@@ -212,7 +212,7 @@ int amdgv_mca_count_cache_client_get(struct amdgv_adapter *adapt,
 
 int amdgv_mca_count_cache_reset(struct amdgv_adapter *adapt)
 {
-	int idx_vf;
+	uint32_t idx_vf;
 
 	for (idx_vf = 0; idx_vf < adapt->num_vf; idx_vf++)
 		amdgv_mca_count_cache_reset_client(adapt, idx_vf);

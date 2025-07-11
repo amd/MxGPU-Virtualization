@@ -290,6 +290,16 @@ struct psp_runtime_scpm_entry {
 	*/
 };
 
+enum psp_migration_manifest_data_type {
+	PSP_MIGRATION_INVALID = 0,
+	PSP_MIGRATION_EXPORT_STATIC_DATA = 1,
+	PSP_MIGRATION_EXPORT_DYNAMIC_DATA,
+	/* static adata import */
+	PSP_MIGRATION_IMPORT_STATIC_DATA,
+	/* dynamic data import and final step */
+	PSP_MIGRATION_IMPORT_DYNAMIC_DATA,
+};
+
 #define MAX_PSP_NUM		4	/* number of PSPs in MI300 etc*/
 
 struct psp_context {
@@ -364,6 +374,13 @@ struct psp_context {
 	enum psp_status(*tmr_init)(struct amdgv_adapter *adapt, uint32_t allocated_tmr_size);
 	void (*get_xgmi_fw_info)(struct amdgv_adapter *adapt, unsigned char **fw_image,
 							uint32_t *fw_image_size);
+	enum psp_status (*transfer_manifest_data)(struct amdgv_adapter *adapt,
+						uint32_t idx_vf, uint64_t data_addr, uint32_t size,
+						enum psp_migration_manifest_data_type type);
+	enum psp_status (*get_migration_info)(struct amdgv_adapter *adapt);
+#ifdef AMDGV_MIGRATION_DEBUG
+	enum psp_status (*print_rwl)(struct amdgv_adapter *adapt, uint32_t idx_vf);
+#endif
 };
 
 /* Single property buffer stored in the APP_PROP_BUF structure.
@@ -393,6 +410,12 @@ enum amdgv_live_info_status amdgv_psp_export_live_data(struct amdgv_adapter *ada
 enum amdgv_live_info_status amdgv_psp_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_psp *psp_info);
 enum amdgv_live_info_status amdgv_psp_fw_info_export_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_fw_info *fw_info);
 enum amdgv_live_info_status amdgv_psp_fw_info_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_fw_info *fw_info);
+
+#define amdgv_psp_transfer_manifest_data(adapt, idx_vf, data_addr, size, type) \
+		((adapt->psp.transfer_manifest_data) ? \
+		 adapt->psp.transfer_manifest_data(adapt, idx_vf, data_addr, size, type) : \
+		 PSP_STATUS__ERROR_UNSUPPORTED_FEATURE)
+
 /*
  * psp_ring_type_to_gpuv_psp_ring_type
  * @ring_type:	ring type

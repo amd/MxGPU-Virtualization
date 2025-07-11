@@ -113,7 +113,7 @@ install: dkms/config.h
 	$(MAKE) -C $(KERNELDIR) M=$(SRC_PATH) modules_install
 
 dkms/config.h:
-	$(SRC_PATH)/dkms/pre-build --with-linux=$(KERNELDIR)
+	$(SRC_PATH)/dkms/pre-build.sh --with-linux=$(KERNELDIR)
 
 clean:
 	cd $(SRC_PATH)/dkms; rm -rf autom4te.cache aclocal.m4 config.* configure .*.d

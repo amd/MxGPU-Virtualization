@@ -50,12 +50,13 @@
 
 static inline enum amdgv_memory_partition_mode get_nps_from_pa(uint64_t pa)
 {
-	return (pa >> UMC_NPS_SHIFT) & UMC_NPS_MASK;
+	return (enum amdgv_memory_partition_mode)((pa >> UMC_NPS_SHIFT) & UMC_NPS_MASK);
 }
 
 static inline uint64_t set_nps_to_pa(uint64_t pa, enum amdgv_memory_partition_mode nps)
 {
 	uint64_t nps_64 = (uint64_t)nps;
+	pa &= ~(UMC_NPS_MASK << UMC_NPS_SHIFT);
 	pa |= (nps_64 << UMC_NPS_SHIFT);
 	return pa;
 }

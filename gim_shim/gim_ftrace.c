@@ -329,17 +329,17 @@ int gim_ftrace_init(amdgv_dev_t *adapt_list)
 	uint32_t buf_idx = 0;
 
 	/* Allocate ftrace context */
-	ftrace_ctx = kzalloc(sizeof(struct gim_ftrace), GFP_KERNEL);
+	ftrace_ctx = gim_kzalloc(sizeof(struct gim_ftrace), GFP_KERNEL);
 	if (!ftrace_ctx) {
 		gim_warn("Unable to init ftrace context allocation failed\n");
 		return -1;
 	}
 
 	/* Allocate ftrace buffer -- large buffer and does not have to be contig */
-	ftrace_ctx->mem_blk = vzalloc(GIM_FTRACE_LOG_SIZE);
+	ftrace_ctx->mem_blk = gim_vzalloc(GIM_FTRACE_LOG_SIZE);
 	if (ftrace_ctx->mem_blk == NULL) {
 		gim_warn("Unable to get memory for ftrace block\n");
-		kfree(ftrace_ctx);
+		gim_kfree(ftrace_ctx);
 		ftrace_ctx = NULL;
 		return -1;
 	}
@@ -384,11 +384,11 @@ int gim_ftrace_init(amdgv_dev_t *adapt_list)
 	if (gim_ftrace_start()) {
 		gim_warn("Unable to start ftrace\n");
 		if (ftrace_ctx->mem_blk) {
-			vfree(ftrace_ctx->mem_blk);
+			gim_vfree(ftrace_ctx->mem_blk);
 			ftrace_ctx->mem_blk = NULL;
 		}
 
-		kfree(ftrace_ctx);
+		gim_kfree(ftrace_ctx);
 		ftrace_ctx = NULL;
 		return -1;
 	}
@@ -412,11 +412,11 @@ void notrace gim_ftrace_fini(void)
 	gim_ftrace_add_module_functions(&ftrace_ctx->ops, 1);
 
 	if (ftrace_ctx->mem_blk) {
-		vfree(ftrace_ctx->mem_blk);
+		gim_vfree(ftrace_ctx->mem_blk);
 		ftrace_ctx->mem_blk = NULL;
 	}
 
-	kfree(ftrace_ctx);
+	gim_kfree(ftrace_ctx);
 	ftrace_ctx = NULL;
 }
 

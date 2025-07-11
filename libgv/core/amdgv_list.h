@@ -106,6 +106,33 @@ INLINE bool amdgv_list_empty(struct amdgv_list_head *head)
 	return true;
 }
 
+INLINE void amdgv_list_move_entry(struct amdgv_list_head *entry, struct amdgv_list_head *position)
+{
+	list_del(entry->prev, entry->next);
+	list_add(entry, position, position->next);
+}
+
+INLINE void amdgv_list_swap_entries(struct amdgv_list_head *entry1, struct amdgv_list_head *entry2)
+{
+	struct amdgv_list_head *entry1_prev, *entry1_next;
+	if (entry1 == entry2) {
+		return;
+	}
+
+	entry1_prev = entry1->prev;
+	entry1_next = entry1->next;
+
+	/* Move entry1 to entry2's next */
+	if (entry1_prev != entry2)
+		amdgv_list_move_entry(entry1, entry2);
+
+	/* If entry1 and entry2 are continuous, no further move is needed */
+	if (entry1_next != entry2)
+		/* Move entry2 to entry1's original position */
+		amdgv_list_move_entry(entry2, entry1_next->prev);
+
+}
+
 /*
  * Returns a pointer to the container of this list element.
  */

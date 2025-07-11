@@ -57,9 +57,6 @@
 #include "mi200/UMC/umc_6_7_0_sh_mask.h"
 #include "mi200/UMC/umc_6_7_0_offset.h"
 
-#include <mi200/VCN/vcn_2_5_offset.h>
-#include <mi200/VCN/vcn_2_5_sh_mask.h>
-
 #include <mi200/DF/df_3_6_offset.h>
 #include <mi200/DF/df_3_6_sh_mask.h>
 

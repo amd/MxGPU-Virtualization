@@ -271,6 +271,9 @@ TEST_F(AmdsmiGpuMonitoring, IoctlFailed)
 
 	ret = amdsmi_set_soc_pstate(MOCK_GPU_HANDLE, 0);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
+
+	ret = amdsmi_set_soc_pstate(NULL, 0);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
 
 TEST_F(AmdsmiGpuMonitoring, GetGpuActivity)

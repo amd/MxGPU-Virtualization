@@ -177,6 +177,7 @@ public:
 	virtual int amdsmi_reset_command(std::string vf_bdf, Arguments arg) override;
 	virtual int amdsmi_set_xgmi_fb_sharing_mode_command(std::vector<uint64_t> bfd_list,
 			Arguments arg) override;
+	virtual int amdsmi_reset_gpu_command(uint64_t processor, Arguments arg) override;
 	virtual int amdsmi_set_soc_pstate_command(uint64_t processor_bdf, Arguments arg) override;
 	virtual int amdsmi_set_power_cap_command(uint64_t processor_bdf, Arguments arg) override;
 	virtual int amdsmi_get_virtualization_mode_command(uint64_t processor_bdf, Arguments arg,

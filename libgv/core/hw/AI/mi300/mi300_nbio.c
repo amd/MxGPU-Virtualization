@@ -299,7 +299,7 @@ void mi300_nbio_enable_vf_access_mmio_over_512k(struct amdgv_adapter *adapt)
 
 void mi300_nbio_set_doorbell_fence(struct amdgv_adapter *adapt)
 {
-	int aid;
+	uint32_t aid;
 	uint32_t val;
 
 	for (aid = 0; aid < adapt->mcp.num_aid; aid++) {
@@ -461,7 +461,7 @@ void mi300_nbio_get_vram_vendor(struct amdgv_adapter *adapt)
 void mi300_nbio_enable_pf_rrmt(struct amdgv_adapter *adapt)
 {
 	uint32_t dist, aid_pf_base, aid_pf_offset, tmp;
-	int i;
+	uint32_t i;
 
 	dist = regAID1_PF_BASE_ADDR - regAID0_PF_BASE_ADDR;
 	aid_pf_base = 0x8000;

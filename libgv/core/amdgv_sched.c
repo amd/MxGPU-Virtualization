@@ -1075,7 +1075,7 @@ int amdgv_sched_reconfig_mapping_tables(struct amdgv_adapter *adapt, uint32_t nu
 
 int amdgv_sched_get_hliquid_min_ts(struct amdgv_adapter *adapt)
 {
-	int world_switch_id;
+	uint32_t world_switch_id;
 	struct amdgv_sched_world_switch *world_switch = NULL;
 
 	for (world_switch_id = 0; world_switch_id < adapt->sched.num_world_switch; world_switch_id++) {
@@ -1092,7 +1092,8 @@ int amdgv_sched_get_hliquid_min_ts(struct amdgv_adapter *adapt)
 
 int amdgv_sched_set_hliquid_min_ts(struct amdgv_adapter *adapt, int hliquid_min_ts)
 {
-	int vf_ts, world_switch_id;
+	int vf_ts;
+	uint32_t world_switch_id;
 	int ret = AMDGV_FAILURE;
 	struct amdgv_sched_world_switch *world_switch = NULL;
 
@@ -1371,7 +1372,8 @@ int amdgv_sched_setup_default_vfs_timeslice(struct amdgv_adapter *adapt)
 
 int amdgv_sched_get_sched_mode(struct amdgv_adapter *adapt, enum amdgv_sched_block sched_block, enum amdgv_sched_mode *sched_mode)
 {
-	int i = 0, ret = 0;
+	int ret = 0;
+	uint32_t i = 0;
 	struct amdgv_sched_world_switch *world_switch = NULL;
 
 	for (i = 0; i < adapt->sched.num_world_switch; ++i) {

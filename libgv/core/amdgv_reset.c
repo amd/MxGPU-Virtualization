@@ -132,7 +132,7 @@ int amdgv_reset_notify_engine_status(struct amdgv_adapter *adapt, uint32_t idx_v
 int amdgv_reset_gpu(struct amdgv_adapter *adapt)
 {
 	int ret = 0;
-	int idx_vf, i;
+	uint32_t idx_vf, i;
 
 	const struct amdgv_gpu_reset_funcs *funcs;
 	adapt->reset.reset_num++;

@@ -25,6 +25,7 @@
 #include <algorithm>
 
 #include "smi_cli_platform.h"
+#include "smi_cli_exception.h"
 
 #ifdef _WIN64
 #include <Wbemidl.h>
@@ -324,8 +325,7 @@ AmdSmiPlatform::AmdSmiPlatform()
 
 		if (linux_output_gim_loaded.empty() && linux_output_amdgpu_loaded.empty()
 				&& linux_output_gim_user_mode.empty()) {
-			unknown_platform = true;
-			std::cout << "Error: Driver is not installed!" << std::endl;
+			throw SmiToolSMILIBErrorException(34);
 		} else if (!linux_output_gim_loaded.empty() || !linux_output_gim_user_mode.empty()) {
 			is_host_ = true;
 		} else if (!linux_output.empty() && linux_output.find(hypervisor_str) == std::string::npos) {

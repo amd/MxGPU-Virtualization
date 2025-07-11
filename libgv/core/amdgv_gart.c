@@ -60,7 +60,8 @@ void amdgv_gart_map(struct amdgv_adapter *adapt, uint64_t offset, int pages,
 		    uint64_t dma_addr)
 {
 	uint64_t flags;
-	unsigned i, t;
+	unsigned t;
+	int i;
 	void *ptb_cpu_addr = adapt->ptb_mem.va_ptr;
 
 	flags = AMDGV_PTE_MTYPE_GFX9(MTYPE_UC);

@@ -103,18 +103,14 @@ static int mi300_gpuiov_get_sched_block_offset(struct amdgv_adapter *adapt,
 	return (adapt->gpuiov.pos + (adapt->gpuiov.ctrl_blocks[hw_sched_id].offset << 4));
 }
 
-static int mi300_gpuiov_set_cmd(struct amdgv_adapter *adapt,
+static int __mi300_gpuiov_set_cmd(struct amdgv_adapter *adapt,
 				 enum amdgv_gpuiov_cmd cmd,
 				 uint32_t hw_sched_id,
-				 uint32_t idx_vf, uint32_t next_idx_vf)
+				 uint32_t func_id, uint32_t next_func_id)
 {
-	uint32_t data, func_id, next_func_id;
+	uint32_t data;
 	int offset;
 	uint64_t reg_control = 0;
-
-	func_id = PCI_GPUIOV_FUNC_ID(idx_vf);
-
-	next_func_id = PCI_GPUIOV_FUNC_ID(next_idx_vf);
 
 	offset = mi300_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
 	if (offset == AMDGV_FAILURE) {
@@ -137,16 +133,37 @@ static int mi300_gpuiov_set_cmd(struct amdgv_adapter *adapt,
 		} else
 			oss_pci_write_config_dword(adapt->dev, offset, data);
 	} else {
-		AMDGV_DEBUG("In in_sync_flood. Skip idx_vf=%d sched_id=%d (%s) cmd=0x%x (%s) func_id=0x%x "
+		AMDGV_DEBUG("In in_sync_flood. Skip sched_id=%d (%s) cmd=0x%x (%s) func_id=0x%x "
 									"next_func_id=0x%x pci_write_config_dword(0x%08x, 0x%08x)\n",
-									idx_vf, hw_sched_id, amdgv_hw_sched_id_to_name(adapt, hw_sched_id), cmd,
+									hw_sched_id, amdgv_hw_sched_id_to_name(adapt, hw_sched_id), cmd,
 									amdgv_gpuiov_cmd_to_name(adapt, cmd, hw_sched_id), func_id, next_func_id,
 									offset, data);
+		return AMDGV_FAILURE;
 	}
 
 	adapt->gpuiov.ctrl_blocks[hw_sched_id].last_cmd = cmd;
 	adapt->gpuiov.ctrl_blocks[hw_sched_id].last_status = AMDGV_CMD_STATUS_PENDING_EXECUTE;
+	AMDGV_DEBUG("set cmd sched_id=%d (%s) cmd=0x%x (%s) func_id=0x%x "
+					"next_func_id=0x%x pci_write_config_dword(0x%08x, 0x%08x)\n",
+					hw_sched_id, amdgv_hw_sched_id_to_name(adapt, hw_sched_id), cmd,
+					amdgv_gpuiov_cmd_to_name(adapt, cmd, hw_sched_id), func_id, next_func_id,
+					offset, data);
+
 	return 0;
+}
+
+static int mi300_gpuiov_set_cmd(struct amdgv_adapter *adapt,
+				 enum amdgv_gpuiov_cmd cmd,
+				 uint32_t hw_sched_id,
+				 uint32_t idx_vf, uint32_t next_idx_vf)
+{
+	uint32_t func_id, next_func_id;
+
+
+	func_id = PCI_GPUIOV_FUNC_ID(idx_vf);
+	next_func_id = PCI_GPUIOV_FUNC_ID(next_idx_vf);
+
+	return __mi300_gpuiov_set_cmd(adapt, cmd, hw_sched_id, func_id, next_func_id);
 }
 
 static bool mi300_gpuiov_is_cmd_complete(struct amdgv_adapter *adapt,
@@ -929,6 +946,18 @@ static void mi300_gpuiov_toggle_vf_mse(struct amdgv_adapter *adapt, bool enable)
 			adapt->sriov_cap_pos + PCIE_EXT_SRIOV_CTRL, sriov_ctrl);
 }
 
+/*static int mi300_gpuiov_transfer_vf_data(struct amdgv_adapter *adapt,
+										 uint32_t sched_id, uint32_t idx_vf, bool to_export)
+{
+	uint32_t func_id, next_func_id;
+
+	func_id = PCI_GPUIOV_FUNC_ID(idx_vf);
+	next_func_id = (uint32_t)to_export;
+
+	return __mi300_gpuiov_set_cmd(adapt, AMDGV_TRANSFER_VF_DATA, sched_id, func_id, next_func_id);
+}
+*/
+
 static const struct amdgv_gpuiov_funcs mi300_gpuiov_funcs = {
 	.set_cmd = mi300_gpuiov_set_cmd,
 	.is_cmd_complete = mi300_gpuiov_is_cmd_complete,
@@ -1039,7 +1068,7 @@ static int mi300_gpuiov_hw_init(struct amdgv_adapter *adapt)
 {
 	int ret;
 	uint32_t xgmi_enable;
-	int i;
+	uint32_t i;
 	uint32_t strap4;
 	uint32_t cap;
 	uint16_t tmp;

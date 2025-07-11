@@ -715,9 +715,9 @@ static struct amdgv_memmgr_mem *amdgv_memmgr_find_size_at(struct amdgv_memmgr *m
 			continue;
 		/* overlap with alloced section, alloc fail */
 		if ((alloc->alloc_off > tom) &&
-		    ((alloc->alloc_off - alloc->len) <= (tom + size)))
+		    ((alloc->alloc_off - alloc->len) < (tom + size)))
 			return NULL;
-		if ((alloc->alloc_off - alloc->len) > (tom + size))
+		if ((alloc->alloc_off - alloc->len) >= (tom + size))
 			return amdgv_list_last_entry(&alloc->node, struct amdgv_memmgr_mem,
 						     node);
 	}

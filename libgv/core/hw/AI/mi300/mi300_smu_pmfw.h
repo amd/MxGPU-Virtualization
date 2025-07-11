@@ -1,5 +1,25 @@
-/* Copyright (C) 2010-2023 Advanced Micro Devices, Inc. All rights reserved. */
-
+/*
+ * Copyright (c) Advanced Micro Devices, Inc. All rights reserved.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ */
 #ifndef PMFW_MI300_H
 #define PMFW_MI300_H
 
@@ -68,6 +88,12 @@ typedef enum {
 /*46*/  NUM_FEATURES                        = 46
 } FEATURE_LIST_e;
 
+typedef enum {
+	SMU_CAP_STATIC_METRICS,
+	SMU_CAP_PLDM_VERSION,
+	SMU_CAP_ALL,
+} SMU_CAPS_LIST_e;
+
 //enum for MPIO PCIe gen speed msgs
 typedef enum {
   PCIE_LINK_SPEED_INDEX_TABLE_GEN1,
@@ -107,7 +133,7 @@ typedef enum {
   VOLTAGE_GUARDBAND_COUNT
 } GFX_GUARDBAND_e;
 
-#define SMU_METRICS_TABLE_VERSION 0xC
+#define SMU_METRICS_TABLE_VERSION 0x11
 
 #pragma pack(push, 4)
 typedef struct {
@@ -216,10 +242,19 @@ typedef struct {
   // PER XCD ACTIVITY
   uint32_t GfxBusy[8];
   uint64_t GfxBusyAcc[8];
+
+  //PCIE BW Data and error count
+  uint32_t PCIeOtherEndRecoveryAcc;       // The Pcie counter itself is accumulated
+
+  //DeviceGetViolationStatus: Total App Clock Counter
+  uint64_t GfxclkBelowHostLimitPptAcc[8];
+  uint64_t GfxclkBelowHostLimitThmAcc[8];
+  uint64_t GfxclkBelowHostLimitTotalAcc[8];
+  uint64_t GfxclkLowUtilizationAcc[8];
 } MetricsTable_t;
 #pragma pack(pop)
 
-#define SMU_VF_METRICS_TABLE_VERSION 0x4
+#define SMU_VF_METRICS_TABLE_VERSION 0x6
 
 #pragma pack(push, 4)
 typedef struct {
@@ -227,7 +262,20 @@ typedef struct {
   uint32_t InstGfxclk_TargFreq;
   uint64_t AccGfxclk_TargFreq;
   uint64_t AccGfxRsmuDpm_Busy;
+  uint64_t AccGfxclkBelowHostLimitPpt;
+  uint64_t AccGfxclkBelowHostLimitThm;
+  uint64_t AccGfxclkBelowHostLimitTotal;
+  uint64_t AccGfxclkLowUtilization;
 } VfMetricsTable_t;
+#pragma pack(pop)
+
+#pragma pack(push, 4)
+typedef struct {
+  // Telemetry
+  uint32_t InputTelemetryVoltageInmV;  // SVI3 OAM Input Voltage
+  // General info
+  uint32_t pldmVersion[2];
+} StaticMetricsTable_t;
 #pragma pack(pop)
 
 #endif

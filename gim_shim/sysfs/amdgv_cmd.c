@@ -45,8 +45,6 @@ static dev_t amdgv_dev;
 static struct class *amdgv_class;
 static struct cdev amdgv_cdev;
 
-static struct amdgv_cmd *amdgv_cmd;
-
 static void *gim_get_dev(uint32_t dev_handle)
 {
 	amdgv_dev_t adev = NULL;
@@ -239,31 +237,37 @@ static int amdgv_ras_ecc_inject(struct amdgv_cmd_ras_inject_error *input_data)
 static int amdgv_load_ras_ta(struct amdgv_cmd_ras_ta_load_req *input_data,
 	struct amdgv_cmd_ras_ta_load_rsp *out_data)
 {
+	struct amdgv_cmd_ras_ta_load_req ras_ta_load_req = {0};
 	struct amdgv_smi_cmd_ras_ta_load ras_ta_load = {0};
 	amdgv_dev_t adev = NULL;
 	uint8_t *buf_ptr;
 
-	if (!input_data->version || !input_data->data_len || !input_data->data_addr) {
+	ras_ta_load_req.dev.dev_handle = input_data->dev.dev_handle;
+	ras_ta_load_req.version = input_data->version;
+	ras_ta_load_req.data_len = input_data->data_len;
+	ras_ta_load_req.data_addr = input_data->data_addr;
+
+	if (!ras_ta_load_req.version || !ras_ta_load_req.data_len || !ras_ta_load_req.data_addr) {
 		gim_warn("Invaild ras ta parameter: version:0x%x, data_len:0x%x, data_addr:0x%llx\n",
-			input_data->version, input_data->data_len, input_data->data_addr);
+			ras_ta_load_req.version, ras_ta_load_req.data_len, ras_ta_load_req.data_addr);
 		return AMDGV_CMD__ERROR_GENERIC;
 	}
 
-	buf_ptr = gim_oss_interfaces.alloc_memory(input_data->data_len);
+	buf_ptr = gim_oss_interfaces.alloc_memory(ras_ta_load_req.data_len);
 	if (!buf_ptr) {
 		gim_warn("Failed to alloc memory!\n");
 		return AMDGV_CMD__ERROR_GENERIC;
 	}
 
-	if (copy_from_user(buf_ptr, (uint8_t *)input_data->data_addr, input_data->data_len)) {
+	if (copy_from_user(buf_ptr, (uint8_t *)ras_ta_load_req.data_addr, ras_ta_load_req.data_len)) {
 		gim_warn("Failed to copy data from user!\n");
 		gim_oss_interfaces.free_memory(buf_ptr);
 		return AMDGV_CMD__ERROR_GENERIC;
 	}
 
-	adev = gim_get_dev(input_data->dev.dev_handle);
-	ras_ta_load.version = input_data->version;
-	ras_ta_load.in_data_len = input_data->data_len;
+	adev = gim_get_dev(ras_ta_load_req.dev.dev_handle);
+	ras_ta_load.version = ras_ta_load_req.version;
+	ras_ta_load.in_data_len = ras_ta_load_req.data_len;
 	ras_ta_load.in_data_addr = (uint64_t)buf_ptr;
 
 	if (amdgv_gpumon_ras_ta_load(adev, &ras_ta_load)) {
@@ -464,13 +468,19 @@ static int amdgv_get_debug_data(struct amdgv_cmd_debug_data_dir_path *input_data
 	amdgv_dev_t adev = NULL;
 	struct gim_dev_data *dev_data = NULL;
 	void *debug_data = gim_oss_interfaces.alloc_memory(debug_data_size);
+	size_t len = 0;
 
 	if (!debug_data) {
 		return -ENOMEM;
 	}
 
-	if (strlen(input_data->abs_dir_path) > 0)
-		strcpy(dir_save_path, input_data->abs_dir_path);
+	len = strnlen(input_data->abs_dir_path, AMDGV_CMD_PATH_LEN);
+	if (len > 0 && len < AMDGV_CMD_PATH_LEN) {
+		strncpy(dir_save_path, input_data->abs_dir_path, len);
+		dir_save_path[len] = '\0';
+	} else {
+		return -EINVAL;
+	}
 
 	mutex_lock(&gim_device_list_lock);
 	dev_data = list_first_entry(&gim_device_list, typeof(*dev_data), list);
@@ -538,11 +548,54 @@ static int amdgv_get_vf_bdf(struct amdgv_cmd_vf_info *input_data, union amdgv_cm
 static int amdgv_ioctl_dump_cu_data(struct amdgv_cmd_dump_cu_data_req *input_data)
 {
 	amdgv_dev_t *adev = gim_get_dev(input_data->dev.dev_handle);
+	uint32_t ret = 0;
+	struct amdgv_dump_cu_resource_memory resource_mem;
 
-	if (amdgv_dump_cu_data(adev, input_data->data_type))
+	if (input_data->resource_size.kernelobj_size > AMDGV_CMD_MAX_KERNELOBJ_SIZE)
+		return AMDGV_CMD__ERROR_INVALID_INPUT;
+
+	if (amdgv_alloc_dump_cu_resource_memory(adev, (struct amdgv_dump_cu_resource_size *)(&(input_data->resource_size)), &resource_mem)) {
+		gim_warn("Failed to allocate dump cu resource memory from kernel\n");
 		return AMDGV_CMD__ERROR_GENERIC;
+	}
 
-	return AMDGV_CMD__SUCCESS;
+	ret = copy_from_user(resource_mem.kernelobj_addr,
+						input_data->resource_mem.kernelobj_addr,
+						input_data->resource_size.kernelobj_size);
+	if (ret) {
+		ret = AMDGV_CMD__ERROR_GENERIC;
+		gim_warn("Failed to copy data from user\n");
+		goto free_mem;
+	}
+
+	if (amdgv_dump_cu_data(adev, 0)) {
+		ret = AMDGV_CMD__ERROR_GENERIC;
+		gim_warn("Failed to dump CU data\n");
+		goto free_mem;
+	}
+
+	ret = copy_to_user(input_data->resource_mem.out_data_addr,
+						resource_mem.out_data_addr,
+						input_data->resource_size.out_data_size);
+	if (ret) {
+		ret = AMDGV_CMD__ERROR_GENERIC;
+		gim_warn("Failed to copy out data to user\n");
+		goto free_mem;
+	}
+
+	ret = copy_to_user(input_data->resource_mem.out_flag_addr,
+						resource_mem.out_flag_addr,
+						input_data->resource_size.out_flag_size);
+	if (ret) {
+		ret = AMDGV_CMD__ERROR_GENERIC;
+		gim_warn("Failed to copy out data flag to user\n");
+		goto free_mem;
+	}
+
+free_mem:
+	amdgv_free_dump_cu_resource_memory(adev);
+
+	return ret;
 }
 
 static int amdgv_ioctl_set_bp_mode(struct amdgv_cmd_set_bp_mode *input_data)
@@ -683,12 +736,23 @@ static const struct file_operations amdgv_cmd_file_ops = {
 
 static long amdgv_ioctl_handler(struct file *file, unsigned int cmd, unsigned long arg)
 {
-	if (cmd == AMDGV_UNI_CMD) {
+	struct amdgv_cmd *amdgv_cmd;
+
+	if (amdgv_is_uni_cmd(cmd)) {
 		return amdgv_uni_cmd_handler((void *) arg);
 	}
+
+	amdgv_cmd = gim_vmalloc(sizeof(struct amdgv_cmd));
+	if (!amdgv_cmd) {
+		gim_warn("Cannot allocate memory for IOCTL command\n");
+		return -ENOMEM;
+	}
+
 	if (cmd == AMDGV_CMD) {
-		if (copy_from_user(amdgv_cmd, (void *) arg, sizeof(struct amdgv_cmd)))
+		if (copy_from_user(amdgv_cmd, (void *) arg, sizeof(struct amdgv_cmd))) {
+			gim_vfree(amdgv_cmd);
 			return -EFAULT;
+		}
 
 		if (amdgv_cmd->version != AMDGV_CMD_VERSION &&
 			amdgv_cmd->version != AMDGV_CMD_VERSION_V2)
@@ -829,10 +893,13 @@ static long amdgv_ioctl_handler(struct file *file, unsigned int cmd, unsigned lo
 			}
 		}
 
-		if (copy_to_user((void *)arg, amdgv_cmd, sizeof(struct amdgv_cmd)))
+		if (copy_to_user((void *)arg, amdgv_cmd, sizeof(struct amdgv_cmd))) {
+			gim_vfree(amdgv_cmd);
 			return -EFAULT;
+		}
 	}
 	memset(amdgv_cmd, 0, sizeof(struct amdgv_cmd));
+	gim_vfree(amdgv_cmd);
 	return 0;
 }
 
@@ -871,19 +938,11 @@ int gim_cmd_handler_init(void)
 		return ret;
 	}
 
-	amdgv_cmd = vmalloc(sizeof(struct amdgv_cmd));
-	if (!amdgv_cmd) {
-		gim_warn("Cannot allocate memory for IOCTL command\n");
-		gim_cmd_handler_fini();
-		return -ENOMEM;
-	}
-
 	return 0;
 }
 
 void gim_cmd_handler_fini(void)
 {
-	vfree(amdgv_cmd);
 	cdev_del(&amdgv_cdev);
 	device_destroy(amdgv_class, amdgv_dev);
 	class_destroy(amdgv_class);

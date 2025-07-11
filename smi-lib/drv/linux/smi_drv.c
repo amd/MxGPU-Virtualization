@@ -91,7 +91,7 @@ static void gim_get_device_list(struct smi_device_data *dev_list, int *size)
 	int i = 0;
 	int j = 0;
 
-	tmp_dev_list = kmalloc_array(SMI_MAX_DEVICES, sizeof(struct smi_device_data), GFP_KERNEL);
+	tmp_dev_list = gim_kmalloc(SMI_MAX_DEVICES * sizeof(struct smi_device_data), GFP_KERNEL);
 
 	list_for_each_entry(dev_data, &gim_device_list, list) {
 		memcpy(&tmp_dev_list[i].init_data, &dev_data->init_data, sizeof(struct amdgv_init_data));
@@ -314,7 +314,7 @@ static int gim_get_metric_table(struct smi_metrics_table *metrics_table, uint16_
 	buffer_size = sizeof(struct smi_metrics);
 	nr_pages = (buffer_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
 
-	pages = kmalloc(nr_pages * sizeof(struct page *), GFP_KERNEL);
+	pages = gim_kmalloc(nr_pages * sizeof(struct page *), GFP_KERNEL);
 	if (!pages) {
 		return SMI_STATUS_OUT_OF_RESOURCES;
 	}
@@ -394,7 +394,7 @@ static int gim_get_partition(struct smi_profile_configs *profile_configs,
 	buffer_size = sizeof(struct smi_accelerator_partition_profile_config);
 	nr_pages = (buffer_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
 
-	pages = kmalloc(nr_pages * sizeof(struct page *), GFP_KERNEL);
+	pages = gim_kmalloc(nr_pages * sizeof(struct page *), GFP_KERNEL);
 	if (!pages) {
 		return SMI_STATUS_OUT_OF_RESOURCES;
 	}
@@ -491,7 +491,7 @@ static int gim_get_eeprom_table(struct smi_bad_page_info *eeprom_table, uint16_t
 	buffer_size = sizeof(struct smi_bad_page_record);
 	nr_pages = (buffer_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
 
-	pages = kmalloc(nr_pages * sizeof(struct page *), GFP_KERNEL);
+	pages = gim_kmalloc(nr_pages * sizeof(struct page *), GFP_KERNEL);
 	if (!pages) {
 		return SMI_STATUS_OUT_OF_RESOURCES;
 	}
@@ -572,7 +572,7 @@ static inline int gim_get_cper_data(struct smi_cper_config *cper_config, uint16_
 	buffer_size = sizeof(struct smi_cper);
 	nr_pages = (buffer_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
 
-	pages = kmalloc(nr_pages * sizeof(struct page *), GFP_KERNEL);
+	pages = gim_kmalloc(nr_pages * sizeof(struct page *), GFP_KERNEL);
 	if (!pages) {
 		return SMI_STATUS_OUT_OF_RESOURCES;
 	}

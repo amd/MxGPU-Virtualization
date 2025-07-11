@@ -76,7 +76,7 @@ static void mmhub_v1_8_init_system_aperture_regs(struct amdgv_adapter *adapt)
 static void mmhub_v1_8_init_tlb_regs(struct amdgv_adapter *adapt)
 {
 	uint32_t tmp;
-	int i;
+	uint32_t i;
 
 	for (i = 0; i < adapt->mcp.num_aid; i++) {
 		/* Setup TLB control */
@@ -214,7 +214,7 @@ static void mmhub_v1_8_set_fault_enable_default(struct amdgv_adapter *adapt, boo
 void mmhub_v1_8_enable_xgmi(struct amdgv_adapter *adapt)
 {
 	uint32_t xgmi_enable;
-	int i;
+	uint32_t i;
 
 	xgmi_enable = 0xFFFF | (1 << 31); /* enable all VFs and PF for xgmi */
 
@@ -254,6 +254,49 @@ static void mmhub_v1_8_query_ras_error_count(struct amdgv_adapter *adapt,
 	adapt->mca.funcs->pop_block_error_count(adapt,
 						AMDGV_RAS_BLOCK__MMHUB,
 						ras_err_status);
+}
+
+void mmhub_v1_8_dirtybit_control(struct amdgv_adapter *adapt, bool enable)
+{
+	uint32_t mm_value;
+	int i;
+
+	for (i = 0; i < adapt->mcp.num_aid; i++) {
+		mm_value = RREG32(SOC15_REG_OFFSET(MMHUB, i, regMMEA0_MAM_CTRL));
+		mm_value = REG_SET_FIELD(mm_value, MMEA0_MAM_CTRL, MAM_DISABLE, !enable);
+		mm_value = REG_SET_FIELD(mm_value, MMEA0_MAM_CTRL, ADRAM_MODE, adapt->dirtybit.mam_adram_mode);
+		WREG32(SOC15_REG_OFFSET(MMHUB, i, regMMEA0_MAM_CTRL), mm_value);
+		mm_value = RREG32(SOC15_REG_OFFSET(MMHUB, i, regMMEA0_MAM_CTRL));
+		AMDGV_DEBUG("AID(%d) regMMEA0_MAM_CTRL = 0x%x\n", i, mm_value);
+
+		mm_value = RREG32(SOC15_REG_OFFSET(MMHUB, i, regMMEA1_MAM_CTRL));
+		mm_value = REG_SET_FIELD(mm_value, MMEA1_MAM_CTRL, MAM_DISABLE, !enable);
+		mm_value = REG_SET_FIELD(mm_value, MMEA1_MAM_CTRL, ADRAM_MODE, adapt->dirtybit.mam_adram_mode);
+		WREG32(SOC15_REG_OFFSET(MMHUB, i, regMMEA1_MAM_CTRL), mm_value);
+		mm_value = RREG32(SOC15_REG_OFFSET(MMHUB, i, regMMEA1_MAM_CTRL));
+		AMDGV_DEBUG("AID(%d) regMMEA1_MAM_CTRL = 0x%x\n", i, mm_value);
+
+		mm_value = RREG32(SOC15_REG_OFFSET(MMHUB, i, regMMEA2_MAM_CTRL));
+		mm_value = REG_SET_FIELD(mm_value, MMEA2_MAM_CTRL, MAM_DISABLE, !enable);
+		mm_value = REG_SET_FIELD(mm_value, MMEA2_MAM_CTRL, ADRAM_MODE, adapt->dirtybit.mam_adram_mode);
+		WREG32(SOC15_REG_OFFSET(MMHUB, i, regMMEA2_MAM_CTRL), mm_value);
+		mm_value = RREG32(SOC15_REG_OFFSET(MMHUB, i, regMMEA2_MAM_CTRL));
+		AMDGV_DEBUG("AID(%d) regMMEA2_MAM_CTRL = 0x%x\n", i, mm_value);
+
+		mm_value = RREG32(SOC15_REG_OFFSET(MMHUB, i, regMMEA3_MAM_CTRL));
+		mm_value = REG_SET_FIELD(mm_value, MMEA3_MAM_CTRL, MAM_DISABLE, !enable);
+		mm_value = REG_SET_FIELD(mm_value, MMEA3_MAM_CTRL, ADRAM_MODE, adapt->dirtybit.mam_adram_mode);
+		WREG32(SOC15_REG_OFFSET(MMHUB, i, regMMEA3_MAM_CTRL), mm_value);
+		mm_value = RREG32(SOC15_REG_OFFSET(MMHUB, i, regMMEA3_MAM_CTRL));
+		AMDGV_DEBUG("AID(%d) regMMEA3_MAM_CTRL = 0x%x\n", i, mm_value);
+
+		mm_value = RREG32(SOC15_REG_OFFSET(MMHUB, i, regMMEA4_MAM_CTRL));
+		mm_value = REG_SET_FIELD(mm_value, MMEA4_MAM_CTRL, MAM_DISABLE, !enable);
+		mm_value = REG_SET_FIELD(mm_value, MMEA4_MAM_CTRL, ADRAM_MODE, adapt->dirtybit.mam_adram_mode);
+		WREG32(SOC15_REG_OFFSET(MMHUB, i, regMMEA4_MAM_CTRL), mm_value);
+		mm_value = RREG32(SOC15_REG_OFFSET(MMHUB, i, regMMEA4_MAM_CTRL));
+		AMDGV_DEBUG("AID(%d) regMMEA4_MAM_CTRL = 0x%x\n", i, mm_value);
+	}
 }
 
 static const struct amdgv_mmhub_funcs mmhub_v1_8_funcs = {

@@ -20,8 +20,8 @@
  * THE SOFTWARE.
  */
 
- #ifndef AMD_CPER__H_
- #define AMD_CPER__H_
+#ifndef AMD_CPER__H_
+#define AMD_CPER__H_
 
 #define CPER_HDR_REV_1          (0x100)
 #define CPER_SEC_MINOR_REV_1    (0x01)

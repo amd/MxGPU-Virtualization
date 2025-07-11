@@ -31,7 +31,7 @@ Navigate to project's root folder and run Makefile command:
 
 * `make package`
 
-Build process will create a folder `build/package/BUILD_MODE/amdsmi`, where `BUILD_MODE` can be Release or Debug.
+Build process will create a folder `build/amdsmi/package/BUILD_MODE/amdsmi`, where `BUILD_MODE` can be Release or Debug.
 The folder will contain the following files:
 
 * `__init__.py`
@@ -766,6 +766,34 @@ try:
             ras_feature = amdsmi_get_gpu_ras_feature_info(processor)
             print(ras_feature['ras_eeprom_version'])
             print(ras_feature['supported_ecc_correction_schema'])
+except AmdSmiException as e:
+    print(e)
+```
+
+## amdsmi_get_bad_page_threshold
+Description: Returns bad page threshold
+
+Input parameters:
+
+* `processor_handle` GPU device which to query
+
+Output: Bad page threshold value
+
+Exceptions that can be thrown by `amdsmi_get_bad_page_threshold` function:
+* `AmdSmiLibraryException`
+* `AmdSmiRetryException`
+* `AmdSmiParameterException`
+
+Example:
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            bad_page_threshold = amdsmi_get_bad_page_threshold(processor)
+            print(bad_page_threshold)
 except AmdSmiException as e:
     print(e)
 ```
@@ -3120,7 +3148,7 @@ Description: Get gpu ras cper entries
 Input parameters:
 
 * `processor handle` PF of a GPU device
-* `severity_mask` Represents different severity masks from 'AmdSmiCperErrorSeverity' enum on which filerting of cpers is based.
+* `severity_mask` Represents different severity masks from 'AmdSmiCperErrorSeverity' enum on which filtering of cpers is based.
 
 Field | Description
 ---|---
@@ -3148,6 +3176,33 @@ try:
     else:
         for processor in processors:
             cper_list = amdsmi_get_gpu_cper_entries(processor, AmdSmiCperErrorSeverity.NUM)
+
+except AmdSmiException as e:
+    print(e)
+```
+## amdsmi_reset_gpu
+Description: Reset the GPU associated with the device with provided processor handle.
+
+Input parameters: GPU device handle
+* `processor_handle`
+
+Output:
+* `None`
+
+Exceptions that can be thrown by `amdsmi_reset_gpu` function:
+
+* `AmdSmiLibraryException`
+* `AmdSmiParameterException`
+
+Example:
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            amdsmi_reset_gpu(processor)
 
 except AmdSmiException as e:
     print(e)

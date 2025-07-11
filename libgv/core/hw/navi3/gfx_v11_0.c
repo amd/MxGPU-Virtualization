@@ -26,7 +26,6 @@
 #include "amdgv_misc.h"
 #include "amdgv_nbio.h"
 #include "amdgv_gfx.h"
-#include "amdgv_hsa.h"
 #include <navi3/GC/gc_11_0_3_offset.h>
 #include <navi3/GC/gc_11_0_3_sh_mask.h>
 #include "navi32_gfx.h"
@@ -37,179 +36,6 @@
 static const uint32_t this_block = AMDGV_GFX_BLOCK;
 
 #define GFX11_MEC_HPD_SIZE	2048
-#define GFX11_CU_ID_MAX 20
-#define LDS_SIZE 65536
-
-static const hsa_signal_t signal = { 0 };
-
-static const kernel_descriptor_t gfx_v11_dump_lds_kernelobj = {
-	.group_segment_fixed_size = 0x10000,
-	.private_segment_fixed_size = 0x0,
-	.kernarg_size = 0x0,
-	.reserved1 = 0x0,
-	.kernel_code_entry_byte_offset = 0x0,
-	.reserved2 = {0x0, 0x0, 0x0, 0x0, 0x0},
-	.compute_pgm_rsrc3 = 0x0,
-	.compute_pgm_rsrc1 = 0x40ac0001,
-	.compute_pgm_rsrc2 = 0x4,
-	.enable_sgpr_private_segment_buffer = 0,
-	.enable_sgpr_dispatch_ptr = 0,
-	.enable_sgpr_queue_ptr = 0,
-	.enable_sgpr_kernarg_segment_ptr = 1,
-	.enable_sgpr_dispatch_id = 0,
-	.enable_sgpr_flat_scratch_init = 0,
-	.enable_sgpr_private_segment_size = 0,
-	.reserved3 = 0,
-	.enable_wavefront_size32 = 1,
-	.uses_dynamic_stack = 0,
-	.reserved4 = 0,
-	.kernarg_preload_spec_length = 0,
-	.kernarg_preload_spec_offset = 0,
-	.reserved5 = 0x0
-};
-
-static const uint32_t gfx_v11_dump_lds_shader[] = {
-	0xbfbd0000, 0xf4040280, 0xf8000000, 0xf4040300,
-	0xf8000008, 0xbf89fc07, 0xb880f817, 0x9303ff00,
-	0x00030012, 0xbe8500ff, 0x00100000, 0x96050503,
-	0x9303ff00, 0x00010010, 0xbe8600ff, 0x00080000,
-	0x96060603, 0x9303ff00, 0x0004000a, 0x84038103,
-	0x9304ff00, 0x00010008, 0x8c030403, 0xbe8700ff,
-	0x00004000, 0x96070703, 0x80030607, 0x80030503,
-	0x8004030c, 0x8205800d, 0x84038203, 0x8002030a,
-	0x8203800b, 0x7e020280, 0xbe810080, 0x7e040281,
-	0x7e080204, 0x7e0a0205, 0xd7006a04, 0x00020900,
-	0x400a0b01, 0xdc600000, 0x007c0204, 0xd7006a04,
-	0x000208ff, 0x00000400, 0x400a0a80, 0x80018101,
-	0xbf079001, 0xbfa2fff7, 0x30000082, 0xbe810080,
-	0x7e080202, 0x7e0a0203, 0xd7006a04, 0x00020900,
-	0x400a0b01, 0xd8d80000, 0x06000000, 0xbf89fc07,
-	0xdc680000, 0x007c0604, 0xd7006a04, 0x000208ff,
-	0x00001000, 0x400a0a80, 0x80018101, 0xbf079001,
-	0xbfa2fff4, 0xbfb00000
-};
-
-static const kernel_descriptor_t gfx_v11_dump_sgpr_kernelobj = {
-	.group_segment_fixed_size = 0x0,
-	.private_segment_fixed_size = 0x0,
-	.kernarg_size = 0x0,
-	.reserved1 = 0x0,
-	.kernel_code_entry_byte_offset = 0x0,
-	.reserved2 = {0x0, 0x0, 0x0, 0x0, 0x0},
-	.compute_pgm_rsrc3 = 0x0,
-	.compute_pgm_rsrc1 = 0x40ac0001,
-	.compute_pgm_rsrc2 = 0x84,
-	.enable_sgpr_private_segment_buffer = 0,
-	.enable_sgpr_dispatch_ptr = 0,
-	.enable_sgpr_queue_ptr = 0,
-	.enable_sgpr_kernarg_segment_ptr = 1,
-	.enable_sgpr_dispatch_id = 0,
-	.enable_sgpr_flat_scratch_init = 0,
-	.enable_sgpr_private_segment_size = 0,
-	.reserved3 = 0,
-	.enable_wavefront_size32 = 1,
-	.uses_dynamic_stack = 0,
-	.reserved4 = 0,
-	.kernarg_preload_spec_length = 0,
-	.kernarg_preload_spec_offset = 0,
-	.reserved5 = 0x0
-};
-
-static const uint32_t gfx_v11_dump_sgpr_shader[] = {
-	0xd7610001, 0x00010000, 0xd7610001, 0x00010201, 0xd7610001, 0x00010402, 0xd7610001, 0x00010603,
-	0xd7610001, 0x00010804, 0xd7610001, 0x00010a05, 0xd7610001, 0x00010c06, 0xd7610001, 0x00010e07,
-	0xd7610001, 0x00011008, 0xd7610001, 0x00011209, 0xd7610001, 0x0001140a, 0xd7610001, 0x0001160b,
-	0xd7610001, 0x0001180c, 0xd7610001, 0x00011a0d, 0xd7610001, 0x00011c0e, 0xd7610001, 0x00011e0f,
-	0xf4040280, 0xf8000000, 0xf4040300, 0xf8000008, 0xbf89fc07, 0xb880f817, 0xbf89fc07, 0x9303ff00,
-	0x00030012, 0xbe8500ff, 0x00004000, 0x96059005, 0x96050503, 0x9303ff00, 0x00010010, 0xbe8600ff,
-	0x00002000, 0x96069006, 0x96060603, 0x9303ff00, 0x0004000a, 0x84038103, 0x9304ff00, 0x00010008,
-	0x8c030403, 0xbe8700ff, 0x00000100, 0x96079007, 0x96070703, 0x9303ff00, 0x00010009, 0xbe8800ff,
-	0x00000080, 0x96089008, 0x96080803, 0x9303ff00, 0x00050000, 0xbe8900ff, 0x00000080, 0x96090903,
-	0x80030809, 0x80030703, 0x80030603, 0x80030503, 0x8004030c, 0x8205800d, 0x84038203, 0x8002030a,
-	0x8203800b, 0xbe8a017e, 0xbefe0181, 0xd760000c, 0x00010100, 0xd760000d, 0x00010101, 0xd760000e,
-	0x00010102, 0xd760000f, 0x00010103, 0xd7600009, 0x00010105, 0xd7610000, 0x00010002, 0xd7610001,
-	0x00010003, 0xd7610002, 0x00010004, 0xd7610003, 0x00010005, 0x7e0a02ff, 0x02020202, 0xdc6a0000,
-	0x007c0502, 0xb888f817, 0xbf89fc07, 0x7e0a0208, 0xdc6a0000, 0x007c0500, 0x7e0a0280, 0xdc6a0004,
-	0x007c0500, 0xdc6a0008, 0x007c0500, 0xdc6a000c, 0x007c0500, 0x7e0a02ff, 0x01010101, 0xdc6a0004,
-	0x007c0502, 0xd7600006, 0x00010901, 0x7e0a0206, 0xdc6a0010, 0x007c0500, 0xd7600006, 0x00010b01,
-	0x7e0a0206, 0xdc6a0014, 0x007c0500, 0xd7600006, 0x00010d01, 0x7e0a0206, 0xdc6a0018, 0x007c0500,
-	0xd7600006, 0x00010f01, 0x7e0a0206, 0xdc6a001c, 0x007c0500, 0x7e0a02ff, 0x01010101, 0xdc6a0008,
-	0x007c0502, 0xd7600006, 0x00011101, 0x7e0a0206, 0xdc6a0020, 0x007c0500, 0xd7600006, 0x00011301,
-	0x7e0a0206, 0xdc6a0024, 0x007c0500, 0xd7600006, 0x00011501, 0x7e0a0206, 0xdc6a0028, 0x007c0500,
-	0xd7600006, 0x00011701, 0x7e0a0206, 0xdc6a002c, 0x007c0500, 0x7e0a02ff, 0x01010101, 0xdc6a000c,
-	0x007c0502, 0xd7600006, 0x00011901, 0x7e0a0206, 0xdc6a0030, 0x007c0500, 0xd7600006, 0x00011b01,
-	0x7e0a0206, 0xdc6a0034, 0x007c0500, 0xd7600006, 0x00011d01, 0x7e0a0206, 0xdc6a0038, 0x007c0500,
-	0xd7600006, 0x00011f01, 0x7e0a0206, 0xdc6a003c, 0x007c0500, 0xbe880090, 0xbefd0008, 0xd7006a00,
-	0x000200c0, 0x40020280, 0xd7006a02, 0x00020490, 0x40060680, 0x7e0a02ff, 0x01010101, 0xdc6a0000,
-	0x007c0502, 0xdc6a0004, 0x007c0502, 0xdc6a0008, 0x007c0502, 0xdc6a000c, 0x007c0502, 0xbe864100,
-	0x7e0a0206, 0xdc6a0000, 0x007c0500, 0x7e0a0207, 0xdc6a0004, 0x007c0500, 0xbe864102, 0x7e0a0206,
-	0xdc6a0008, 0x007c0500, 0x7e0a0207, 0xdc6a000c, 0x007c0500, 0xbe864104, 0x7e0a0206, 0xdc6a0010,
-	0x007c0500, 0x7e0a0207, 0xdc6a0014, 0x007c0500, 0xbe864106, 0x7e0a0206, 0xdc6a0018, 0x007c0500,
-	0x7e0a0207, 0xdc6a001c, 0x007c0500, 0xbe864108, 0x7e0a0206, 0xdc6a0020, 0x007c0500, 0x7e0a0207,
-	0xdc6a0024, 0x007c0500, 0xbe86410a, 0x7e0a0206, 0xdc6a0028, 0x007c0500, 0x7e0a0207, 0xdc6a002c,
-	0x007c0500, 0xbe86410c, 0x7e0a0206, 0xdc6a0030, 0x007c0500, 0x7e0a0207, 0xdc6a0034, 0x007c0500,
-	0xbe86410e, 0x7e0a0206, 0xdc6a0038, 0x007c0500, 0x7e0a0207, 0xdc6a003c, 0x007c0500, 0x80089008,
-	0xbf06ff08, 0x00000070, 0xbfa1ffb3, 0x7e0a02ff, 0x04040404, 0xdc6a0010, 0x007c0502, 0xdc6a0014,
-	0x007c0502, 0xdc6a0018, 0x007c0502, 0xdc6a001c, 0x007c0502, 0xbefe010a, 0xbfb00000, 0xbf800000,
-	0xbf800000, 0xbf800000, 0xbf800000, 0xbf800000,
-};
-
-static const kernel_descriptor_t gfx_v11_dump_vgpr_kernelobj = {
-	.group_segment_fixed_size = 0x0,
-	.private_segment_fixed_size = 0x0,
-	.kernarg_size = 0x0,
-	.reserved1 = 0x0,
-	.kernel_code_entry_byte_offset = 0x0,
-	.reserved2 = {0x0, 0x0, 0x0, 0x0, 0x0},
-	.compute_pgm_rsrc3 = 0x0,
-	.compute_pgm_rsrc1 = 0x40ac000b,
-	.compute_pgm_rsrc2 = 0x84,
-	.enable_sgpr_private_segment_buffer = 0,
-	.enable_sgpr_dispatch_ptr = 0,
-	.enable_sgpr_queue_ptr = 0,
-	.enable_sgpr_kernarg_segment_ptr = 1,
-	.enable_sgpr_dispatch_id = 0,
-	.enable_sgpr_flat_scratch_init = 0,
-	.enable_sgpr_private_segment_size = 0,
-	.reserved3 = 0,
-	.enable_wavefront_size32 = 1,
-	.uses_dynamic_stack = 0,
-	.reserved4 = 0,
-	.kernarg_preload_spec_length = 0,
-	.kernarg_preload_spec_offset = 0,
-	.reserved5 = 0x0
-};
-
-static const uint32_t gfx_v11_dump_vgpr_shader[] = {
-	0xbfbd0000, 0xf4040280, 0xf8000000, 0xf4040300, 0xf8000008, 0xbf89fc07, 0xb880f817, 0xb881f805,
-	0x9303ff00, 0x00030012, 0xbe8500ff, 0x00600000, 0x96050503, 0x9303ff00, 0x00010010, 0xbe8600ff,
-	0x00300000, 0x96060603, 0x9303ff00, 0x0004000a, 0x84038103, 0x9304ff00, 0x00010008, 0x8c030403,
-	0xbe8700ff, 0x00018000, 0x96070703, 0x9303ff00, 0x00010009, 0xbe8800ff, 0x0000c000, 0x96080803,
-	0x9303ff01, 0x00090000, 0x84098203, 0x84098509, 0x80030809, 0x80030703, 0x80030603, 0x80030503,
-	0x8004030c, 0x8205800d, 0x84038203, 0x8002030a, 0x8203800b, 0x30000084, 0xdb7c0000, 0x00000400,
-	0x32000084, 0xd51b0007, 0x00013f00, 0x7e080204, 0x7e0a0205, 0xd7006a04, 0x00020907, 0x400a0a80,
-	0x7e0c0282, 0xdc600000, 0x007c0604, 0x7e0c0281, 0xd7006a04, 0x000208a0, 0x400a0a80, 0xdc600000,
-	0x007c0604, 0xd7006a04, 0x000208a0, 0x400a0a80, 0xdc600000, 0x007c0604, 0xd7006a04, 0x000208a0,
-	0x400a0a80, 0xdc600000, 0x007c0604, 0xd7006a04, 0x000208a0, 0x400a0a80, 0xbe8100ff, 0x0000005c,
-	0x7e0c02ff, 0x01010101, 0xdc600000, 0x007c0604, 0x80818101, 0xd7006a04, 0x000208a0, 0x400a0a80,
-	0xbf068001, 0xbfa1fff6, 0x7e080202, 0x7e0a0203, 0x300e0e82, 0xd7006a04, 0x00020907, 0x400a0a80,
-	0xdc680000, 0x007c0004, 0xd7006a04, 0x000208ff, 0x00000080, 0x400a0a80, 0xdc680000, 0x007c0104,
-	0xd7006a04, 0x000208ff, 0x00000080, 0x400a0a80, 0xdc680000, 0x007c0204, 0xd7006a04, 0x000208ff,
-	0x00000080, 0x400a0a80, 0xdc680000, 0x007c0304, 0xd7006a04, 0x000208ff, 0x00000080, 0x400a0a80,
-	0xbf89fc07, 0x30000082, 0xd8d80000, 0x06000000, 0xbf89fc07, 0xdc680000, 0x007c0604, 0xd8d80004,
-	0x06000000, 0xd7006a04, 0x000208ff, 0x00000080, 0x400a0a80, 0xbf89fc07, 0xdc680000, 0x007c0604,
-	0xd8d80008, 0x06000000, 0xd7006a04, 0x000208ff, 0x00000080, 0x400a0a80, 0xbf89fc07, 0xdc680000,
-	0x007c0604, 0xd8d8000c, 0x06000000, 0xd7006a04, 0x000208ff, 0x00000080, 0x400a0a80, 0xbf89fc07,
-	0xdc680000, 0x007c0604, 0xd7006a04, 0x000208ff, 0x00000080, 0x400a0a80, 0xbefd0088, 0x7e0c8700,
-	0xdc680000, 0x007c0604, 0xd7006a04, 0x000208ff, 0x00000080, 0x400a0a80, 0x7e0c8701, 0xdc680000,
-	0x007c0604, 0xd7006a04, 0x000208ff, 0x00000080, 0x400a0a80, 0x7e0c8702, 0xdc680000, 0x007c0604,
-	0xd7006a04, 0x000208ff, 0x00000080, 0x400a0a80, 0x7e0c8703, 0xdc680000, 0x007c0604, 0xd7006a04,
-	0x000208ff, 0x00000080, 0x400a0a80, 0x807d847d, 0xbf06ff7d, 0x00000060, 0xbfa1ffe0, 0xbfb00000,
-	0xbfbd0000, 0xf4000080, 0xf8000000, 0xbf89fc07, 0x7e080202, 0x7e0a0202, 0x7e0c0202, 0x7e0e0202,
-	0x30020084, 0xbe8000ff, 0x00004000, 0xbe810080, 0xdb7c0000, 0x00000401, 0xd5250001, 0x00000101,
-	0x80018101, 0xbf078401, 0xbfa2fff9, 0xbfb00000, 0xbf800000, 0xbf800000, 0xbf800000, 0xbf800000,
-	0xbf800000,
-};
 
 static unsigned int order_base_2(unsigned int size_of_dwords)
 {
@@ -416,18 +242,6 @@ static int gfx_v11_gpu_early_init(struct amdgv_adapter *adapt)
 	adapt->gfx.config.sc_prim_fifo_size_backend = 0x100;
 	adapt->gfx.config.sc_hiz_tile_fifo_size = 0;
 	adapt->gfx.config.sc_earlyz_tile_fifo_size = 0x4C0;
-
-	// CU setting for data dump
-	adapt->gfx.cu_dump_data_info.cu_info.num_se = 8;
-	adapt->gfx.cu_dump_data_info.cu_info.num_sa_per_se = 2;
-	adapt->gfx.cu_dump_data_info.cu_info.num_cus_per_sa = 32;
-	adapt->gfx.cu_dump_data_info.cu_info.num_lds_dwords_per_cu = 16384;
-	adapt->gfx.cu_dump_data_info.cu_info.simd_per_cu = 2;
-	adapt->gfx.cu_dump_data_info.cu_info.max_waves_per_simd = 16;
-	adapt->gfx.cu_dump_data_info.cu_info.num_sgprs_per_simd = 0;
-	adapt->gfx.cu_dump_data_info.cu_info.num_sgprs_per_wave_slot = 128;
-	adapt->gfx.cu_dump_data_info.cu_info.num_vgprs_per_simd = 1536;
-	adapt->gfx.cu_dump_data_info.cu_info.num_lanes_per_vgpr = 32;
 	return 0;
 }
 
@@ -600,7 +414,6 @@ static int gfx_v11_sw_init_internal(struct amdgv_adapter *adapt)
 	r = gfx_v11_gpu_early_init(adapt);
 	if (r)
 		return r;
-	amdgv_gfx_check_pf_fb_size_for_cu_data_dump(adapt);
 
 	return 0;
 }
@@ -695,12 +508,6 @@ static int gfx_v11_sw_init(struct amdgv_adapter *adapt)
 		AMDGV_INFO("Hang Detection Disabled\n");
 	}
 
-	if (amdgv_gfx_cu_data_dump_thread_init(adapt)) {
-		AMDGV_ERROR("CU data dump thread init failed\n");
-		amdgv_gfx_cu_data_dump_thread_fini(adapt);
-		return AMDGV_FAILURE;
-	}
-
 	if (adapt->flags & AMDGV_FLAG_DISABLE_COMPUTE_ENGINE) {
 		gfx_v11_early_init(adapt);
 		gfx_v11_gpu_early_init(adapt);
@@ -711,8 +518,6 @@ static int gfx_v11_sw_init(struct amdgv_adapter *adapt)
 
 static int gfx_v11_sw_fini(struct amdgv_adapter *adapt)
 {
-	amdgv_gfx_cu_data_dump_thread_fini(adapt);
-
 	if (!(adapt->flags & AMDGV_FLAG_DISABLE_COMPUTE_ENGINE)) {
 		gfx_v11_sw_fini_internal(adapt);
 	}
@@ -1406,232 +1211,19 @@ static int gfx_v11_ring_test_ring(struct amdgv_ring *ring)
 	return r;
 }
 
-static void gfx_v11_set_aql_comp_ring_info(struct amdgv_adapter *adapt,
-		struct amdgv_ring *aql_compute_ring, struct oss_aql_comp_rb_info *info)
+static int gfx_v11_alloc_dump_cu_resource_memory(struct amdgv_adapter *adapt,
+				struct amdgv_dump_cu_resource_size *resource_size,
+				struct amdgv_dump_cu_resource_memory *resource_mem)
 {
-	aql_compute_ring->adapt = adapt;
-
-	aql_compute_ring->aql_enable = true;
-	aql_compute_ring->use_doorbell = true;
-	aql_compute_ring->wptr = *(info->wptr_poll_memory);
-	aql_compute_ring->buf_mask = info->ring_dw_size - 1;
-	aql_compute_ring->ring = info->ring_base;
-	aql_compute_ring->ptr_mask =
-			aql_compute_ring->funcs->support_64bit_ptrs ? 0xffffffffffffffff : aql_compute_ring->buf_mask;
-	aql_compute_ring->wptr_cpu_addr = (volatile uint32_t *)(info->wptr_poll_memory);
-	aql_compute_ring->doorbell_index = info->doorbell_offset_in_dword;
-	aql_compute_ring->max_dw = AQL_COMP_RING_MAX_DWORD;
+	return amdgv_gfx_alloc_dump_cu_resource_memory(adapt, resource_size, resource_mem);
 }
 
-static int amdgv_wait_dump_cu_data_cb(void *context)
+static int gfx_v11_dump_cu_data(struct amdgv_adapter *adapt)
 {
-	bool *finish_dump = (bool *)context;
-	return !(*finish_dump == true);
-}
+	if (amdgv_gfx_dump_cu_data(adapt))
+		return AMDGV_FAILURE;
 
-static int gfx_v11_dump_cu_data(struct amdgv_adapter *adapt, enum AMDGV_CU_DATA_TYPE type)
-{
-	int i;
-	int r = 0;
-	uint32_t wb_size;
-	struct amdgv_memmgr_mem *kernelobj, *kernelarg, *host_out_data, *host_out_flag, *packet, *signal_obj;
-	uint64_t *kernarg_addr;
-	uint32_t *kernelobj_addr;
-	hsa_kernel_dispatch_packet_t *packet_addr;
-	hsa_signal_t signal;
-	uint32_t *output;
-	uint32_t alignment = 256; // 256-byte alignment
-	uint32_t padding_kernelobj;
-	uint32_t padding_shader;
-	int kernelobj_size, shader_size;
-	struct amdgv_ring *mec_ring = NULL;
-	uint32_t group_segment_size;
-	struct oss_aql_comp_rb_info *aql_comp_rb_info = NULL;
-
-	if (adapt->flags & AMDGV_FLAG_DISABLE_COMPUTE_ENGINE) {
-		aql_comp_rb_info = (struct oss_aql_comp_rb_info *)(oss_alloc_memory(sizeof(struct oss_aql_comp_rb_info)));
-		if (aql_comp_rb_info == NULL)
-			return AMDGV_FAILURE;
-
-		if (oss_map_queue(adapt->dev, true, OSS_COMPUTE_AQL_QUEUE, aql_comp_rb_info)) {
-			gfx_v11_set_aql_comp_ring_info(adapt, &adapt->aql_compute_ring, aql_comp_rb_info);
-			mec_ring = &(adapt->aql_compute_ring);
-		} else {
-			AMDGV_ERROR("Map queue failed.\n");
-			r = AMDGV_FAILURE;
-			goto clean6;
-		}
-	} else {
-		amdgv_gfx_map_kcq(adapt, 0, XCC_QUEUE_INDEX__AQL);
-		mec_ring = &(adapt->gfx.compute_ring[XCC_QUEUE_INDEX__AQL]);
-	}
-	wb_size = amdgv_gfx_calculate_cu_data_size(adapt, type);
-
-	switch (type) {
-	case AMDGV_CU_DATA_TYPE__LDS:
-		AMDGV_INFO("== dump LDS ==\n");
-		group_segment_size = 0x10000;
-		kernelobj_size = sizeof(gfx_v11_dump_lds_kernelobj);
-		shader_size = sizeof(gfx_v11_dump_lds_shader);
-		break;
-	case AMDGV_CU_DATA_TYPE__SGPRs:
-		AMDGV_INFO("== dump SGPR ==\n");
-		group_segment_size = 0;
-		kernelobj_size = sizeof(gfx_v11_dump_sgpr_kernelobj);
-		shader_size = sizeof(gfx_v11_dump_sgpr_shader);
-		break;
-	case AMDGV_CU_DATA_TYPE__VGPRs:
-		AMDGV_INFO("== dump VGPR ==\n");
-		group_segment_size = 0x10000;
-		kernelobj_size = sizeof(gfx_v11_dump_vgpr_kernelobj);
-		shader_size = sizeof(gfx_v11_dump_vgpr_shader);
-		break;
-	default:
-		AMDGV_ERROR("unsupported type\n");
-		goto unmap;
-	}
-	padding_kernelobj = (alignment - (kernelobj_size % alignment)) % alignment;
-	padding_shader = (alignment - (shader_size % alignment)) % alignment;
-
-	// Allocate the memory:
-	// kernelarg: hold address of host_out_data and host_out_flag
-	// host_out_data: hold dump data
-	// host_out_flag: dump flag which indicates the valid data position
-	// kernelobj: hsa kernel obj and shader
-	// signal_obj: completion signal
-	// packet: aql packet
-
-	kernelarg = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, 256, 256, MEM_GFX_IB);
-	if (!kernelarg) {
-		AMDGV_WARN("failed to create kernelarg.\n");
-		goto unmap;
-	}
-	host_out_data = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, wb_size, 256, MEM_GFX_IB);
-	if (!host_out_data) {
-		AMDGV_WARN("failed to create host_out_data.\n");
-		goto clean5;
-	}
-	host_out_flag = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, wb_size/sizeof(uint32_t), 256, MEM_GFX_IB);
-	if (!host_out_flag) {
-		AMDGV_WARN("failed to create host_out_flag.\n");
-		goto clean4;
-	}
-	kernelobj = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, padding_kernelobj +
-			padding_shader + kernelobj_size + shader_size, 256, MEM_GFX_IB);
-	if (!kernelobj) {
-		AMDGV_WARN("failed to create kernelobj.\n");
-		goto clean3;
-	}
-	signal_obj = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, 256, 256, MEM_GFX_IB);
-	if (!signal_obj) {
-		AMDGV_WARN("failed to create signal_obj.\n");
-		goto clean2;
-	}
-	packet = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, sizeof(hsa_kernel_dispatch_packet_t), 256, MEM_GFX_IB);
-	if (!packet) {
-		AMDGV_WARN("failed to create packet.\n");
-		goto clean1;
-	}
-
-	signal.handle = amdgv_memmgr_get_gpu_addr(signal_obj);
-	kernelobj_addr = (uint32_t *)amdgv_memmgr_get_cpu_addr(kernelobj);
-	oss_memset(kernelobj_addr, 0, padding_kernelobj + padding_shader + kernelobj_size + shader_size);
-
-	switch (type) {
-	case AMDGV_CU_DATA_TYPE__LDS:
-		oss_memcpy(kernelobj_addr, &gfx_v11_dump_lds_kernelobj, kernelobj_size);
-		oss_memcpy(kernelobj_addr + (padding_kernelobj + kernelobj_size)/sizeof(uint32_t), gfx_v11_dump_lds_shader, shader_size);
-		break;
-	case AMDGV_CU_DATA_TYPE__SGPRs:
-		oss_memcpy(kernelobj_addr, &gfx_v11_dump_sgpr_kernelobj, kernelobj_size);
-		oss_memcpy(kernelobj_addr + (padding_kernelobj + kernelobj_size)/sizeof(uint32_t), gfx_v11_dump_sgpr_shader, shader_size);
-		break;
-	case AMDGV_CU_DATA_TYPE__VGPRs:
-		oss_memcpy(kernelobj_addr, &gfx_v11_dump_vgpr_kernelobj, kernelobj_size);
-		oss_memcpy(kernelobj_addr + (padding_kernelobj + kernelobj_size)/sizeof(uint32_t), gfx_v11_dump_vgpr_shader, shader_size);
-		break;
-	default:
-		AMDGV_ERROR("unsupported type\n");
-		goto cleanall;
-	}
-
-	((kernel_descriptor_t *)kernelobj_addr)->kernel_code_entry_byte_offset = padding_kernelobj + kernelobj_size;
-
-	//do some cleanup
-	oss_memset((uint64_t *)amdgv_memmgr_get_cpu_addr(host_out_data), 2, wb_size);
-	oss_memset((uint64_t *)amdgv_memmgr_get_cpu_addr(host_out_flag), 0, wb_size/sizeof(uint32_t));
-	oss_memset((uint64_t *)amdgv_memmgr_get_cpu_addr(signal_obj), 0, 256);
-
-	kernarg_addr = (uint64_t *)amdgv_memmgr_get_cpu_addr(kernelarg);
-	kernarg_addr[0] = amdgv_memmgr_get_gpu_addr(host_out_data);
-	kernarg_addr[1] = amdgv_memmgr_get_gpu_addr(host_out_flag);
-
-	packet_addr = (hsa_kernel_dispatch_packet_t *)amdgv_memmgr_get_cpu_addr(packet);
-	oss_memset(packet_addr, 0, sizeof(hsa_kernel_dispatch_packet_t));
-
-	packet_addr->header |= HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE;
-	packet_addr->header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE;
-	packet_addr->header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE;
-	packet_addr->setup = 1 << HSA_KERNEL_DISPATCH_PACKET_SETUP_DIMENSIONS;
-	packet_addr->workgroup_size_x = 1024;
-	packet_addr->workgroup_size_y = 1;
-	packet_addr->workgroup_size_z = 1;
-	packet_addr->grid_size_x = 0xd800;
-	packet_addr->grid_size_y = 1;
-	packet_addr->grid_size_z = 1;
-	packet_addr->private_segment_size = 0;
-	packet_addr->group_segment_size = group_segment_size;
-	packet_addr->kernel_object = amdgv_memmgr_get_gpu_addr(kernelobj);
-	packet_addr->kernarg_address = (void *)(amdgv_memmgr_get_gpu_addr(kernelarg));
-	packet_addr->completion_signal = signal;
-
-	amdgv_ring_alloc(mec_ring, sizeof(hsa_kernel_dispatch_packet_t)/sizeof(uint32_t));
-	for (i = 0; i < sizeof(hsa_kernel_dispatch_packet_t)/sizeof(uint32_t); i++) {
-		amdgv_ring_write(mec_ring, ((uint32_t *)packet_addr)[i]);
-	}
-
-	output = amdgv_memmgr_get_cpu_addr(host_out_data);
-
-	amdgv_ring_commit(mec_ring);
-	oss_msleep(100);
-
-	adapt->gfx.cu_dump_data_info.cu_dump_size = wb_size;
-	adapt->gfx.cu_dump_data_info.cu_dump_type = type;
-	adapt->gfx.cu_dump_data_info.cu_dump_finished = false;
-
-	adapt->gfx.cu_dump_data_info.cu_data = (const char *)amdgv_memmgr_get_cpu_addr(host_out_data);
-	adapt->gfx.cu_dump_data_info.cu_data_flags = (const char *)amdgv_memmgr_get_cpu_addr(host_out_flag);
-	oss_signal_event(adapt->gfx.cu_dump_data_info.cu_dump_event); // signal event to CU dump worker thread
-
-	// wait 70 seconds in maximum for the dump process and then free data
-	r = amdgv_wait_for(adapt, amdgv_wait_dump_cu_data_cb,
-				     (void *)&adapt->gfx.cu_dump_data_info.cu_dump_finished,
-				     AMDGV_TIMEOUT(TIMEOUT_DUMP_CU_DATA), 0);
-
-cleanall:
-	amdgv_memmgr_free(packet);
-clean1:
-	amdgv_memmgr_free(signal_obj);
-clean2:
-	amdgv_memmgr_free(kernelobj);
-clean3:
-	amdgv_memmgr_free(host_out_flag);
-	adapt->gfx.cu_dump_data_info.cu_data_flags = NULL;
-clean4:
-	amdgv_memmgr_free(host_out_data);
-	adapt->gfx.cu_dump_data_info.cu_data = NULL;
-clean5:
-	amdgv_memmgr_free(kernelarg);
-unmap:
-	if (adapt->flags & AMDGV_FLAG_DISABLE_COMPUTE_ENGINE)
-		oss_map_queue(adapt->dev, false, OSS_COMPUTE_AQL_QUEUE, NULL);
-	else
-		amdgv_gfx_unmap_kcq(adapt, 0, XCC_QUEUE_INDEX__AQL);
-clean6:
-	if (adapt->flags & AMDGV_FLAG_DISABLE_COMPUTE_ENGINE)
-		oss_free_memory(aql_comp_rb_info);
-
-	return r;
+	return 0;
 }
 
 static const struct amdgv_ring_funcs gfx_v11_ring_funcs_compute = {
@@ -1713,6 +1305,7 @@ static int gfx_v11_early_init(struct amdgv_adapter *adapt)
 	gfx_v11_set_ring_funcs(adapt);
 	gfx_v11_set_kiq_pm4_funcs(adapt);
 	adapt->gfx.funcs->dump_cu_data = gfx_v11_dump_cu_data;
+	adapt->gfx.funcs->alloc_dump_cu_resource_memory = gfx_v11_alloc_dump_cu_resource_memory;
 
 	return 0;
 }

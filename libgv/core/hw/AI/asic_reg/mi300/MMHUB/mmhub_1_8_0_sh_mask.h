@@ -10470,6 +10470,11 @@
 #define MMEA0_PERFCOUNTER_RSLT_CNTL__ENABLE_ANY_MASK                                                          0x01000000L
 #define MMEA0_PERFCOUNTER_RSLT_CNTL__CLEAR_ALL_MASK                                                           0x02000000L
 #define MMEA0_PERFCOUNTER_RSLT_CNTL__STOP_ALL_ON_SATURATE_MASK                                                0x04000000L
+//MMEA0_MAM_CTRL
+#define MMEA0_MAM_CTRL__ADRAM_MODE__SHIFT                                                                     0x0
+#define MMEA0_MAM_CTRL__MAM_DISABLE__SHIFT                                                                    0x16
+#define MMEA0_MAM_CTRL__ADRAM_MODE_MASK                                                                       0x00000003L
+#define MMEA0_MAM_CTRL__MAM_DISABLE_MASK                                                                      0x00400000L
 //MMEA0_UE_ERR_STATUS_LO
 #define MMEA0_UE_ERR_STATUS_LO__STATUS_VALID_FLAG__SHIFT                                                      0x0
 #define MMEA0_UE_ERR_STATUS_LO__ADDRESS_VALID_FLAG__SHIFT                                                     0x1
@@ -12465,6 +12470,11 @@
 #define MMEA1_PERFCOUNTER_RSLT_CNTL__ENABLE_ANY_MASK                                                          0x01000000L
 #define MMEA1_PERFCOUNTER_RSLT_CNTL__CLEAR_ALL_MASK                                                           0x02000000L
 #define MMEA1_PERFCOUNTER_RSLT_CNTL__STOP_ALL_ON_SATURATE_MASK                                                0x04000000L
+//MMEA1_MAM_CTRL
+#define MMEA1_MAM_CTRL__ADRAM_MODE__SHIFT                                                                     0x0
+#define MMEA1_MAM_CTRL__MAM_DISABLE__SHIFT                                                                    0x16
+#define MMEA1_MAM_CTRL__ADRAM_MODE_MASK                                                                       0x00000003L
+#define MMEA1_MAM_CTRL__MAM_DISABLE_MASK                                                                      0x00400000L
 //MMEA1_UE_ERR_STATUS_LO
 #define MMEA1_UE_ERR_STATUS_LO__STATUS_VALID_FLAG__SHIFT                                                      0x0
 #define MMEA1_UE_ERR_STATUS_LO__ADDRESS_VALID_FLAG__SHIFT                                                     0x1
@@ -14460,6 +14470,11 @@
 #define MMEA2_PERFCOUNTER_RSLT_CNTL__ENABLE_ANY_MASK                                                          0x01000000L
 #define MMEA2_PERFCOUNTER_RSLT_CNTL__CLEAR_ALL_MASK                                                           0x02000000L
 #define MMEA2_PERFCOUNTER_RSLT_CNTL__STOP_ALL_ON_SATURATE_MASK                                                0x04000000L
+//MMEA2_MAM_CTRL
+#define MMEA2_MAM_CTRL__ADRAM_MODE__SHIFT                                                                     0x0
+#define MMEA2_MAM_CTRL__MAM_DISABLE__SHIFT                                                                    0x16
+#define MMEA2_MAM_CTRL__ADRAM_MODE_MASK                                                                       0x00000003L
+#define MMEA2_MAM_CTRL__MAM_DISABLE_MASK                                                                      0x00400000L
 //MMEA2_UE_ERR_STATUS_LO
 #define MMEA2_UE_ERR_STATUS_LO__STATUS_VALID_FLAG__SHIFT                                                      0x0
 #define MMEA2_UE_ERR_STATUS_LO__ADDRESS_VALID_FLAG__SHIFT                                                     0x1
@@ -16455,6 +16470,11 @@
 #define MMEA3_PERFCOUNTER_RSLT_CNTL__ENABLE_ANY_MASK                                                          0x01000000L
 #define MMEA3_PERFCOUNTER_RSLT_CNTL__CLEAR_ALL_MASK                                                           0x02000000L
 #define MMEA3_PERFCOUNTER_RSLT_CNTL__STOP_ALL_ON_SATURATE_MASK                                                0x04000000L
+//MMEA3_MAM_CTRL
+#define MMEA3_MAM_CTRL__ADRAM_MODE__SHIFT                                                                     0x0
+#define MMEA3_MAM_CTRL__MAM_DISABLE__SHIFT                                                                    0x16
+#define MMEA3_MAM_CTRL__ADRAM_MODE_MASK                                                                       0x00000003L
+#define MMEA3_MAM_CTRL__MAM_DISABLE_MASK                                                                      0x00400000L
 //MMEA3_UE_ERR_STATUS_LO
 #define MMEA3_UE_ERR_STATUS_LO__STATUS_VALID_FLAG__SHIFT                                                      0x0
 #define MMEA3_UE_ERR_STATUS_LO__ADDRESS_VALID_FLAG__SHIFT                                                     0x1
@@ -18450,6 +18470,11 @@
 #define MMEA4_PERFCOUNTER_RSLT_CNTL__ENABLE_ANY_MASK                                                          0x01000000L
 #define MMEA4_PERFCOUNTER_RSLT_CNTL__CLEAR_ALL_MASK                                                           0x02000000L
 #define MMEA4_PERFCOUNTER_RSLT_CNTL__STOP_ALL_ON_SATURATE_MASK                                                0x04000000L
+//MMEA4_MAM_CTRL
+#define MMEA4_MAM_CTRL__ADRAM_MODE__SHIFT                                                                     0x0
+#define MMEA4_MAM_CTRL__MAM_DISABLE__SHIFT                                                                    0x16
+#define MMEA4_MAM_CTRL__ADRAM_MODE_MASK                                                                       0x00000003L
+#define MMEA4_MAM_CTRL__MAM_DISABLE_MASK                                                                      0x00400000L
 //MMEA4_UE_ERR_STATUS_LO
 #define MMEA4_UE_ERR_STATUS_LO__STATUS_VALID_FLAG__SHIFT                                                      0x0
 #define MMEA4_UE_ERR_STATUS_LO__ADDRESS_VALID_FLAG__SHIFT                                                     0x1

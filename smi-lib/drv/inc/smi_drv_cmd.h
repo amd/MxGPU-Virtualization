@@ -101,6 +101,8 @@ int smi_destroy_event_set(struct smi_ctx *ctx, void *inb,
 			  void *outb, uint16_t in_len, uint16_t out_len);
 int smi_get_ras_feature_info(struct smi_ctx *ctx, void *inb,
 			     void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_bad_page_threshold(struct smi_ctx *ctx, void *inb,
+			     void *outb, uint16_t in_len, uint16_t out_len);
 int smi_get_data(struct smi_ctx *ctx, void *inb,
 		 void *outb, uint16_t in_len, uint16_t out_len);
 int smi_get_metrics_table(struct smi_ctx *ctx, void *inb,
@@ -125,5 +127,7 @@ int smi_set_soc_pstate(struct smi_ctx *ctx, void *inb,
 			  void *outb, uint16_t in_len, uint16_t out_len);
 int smi_get_cper_error(struct smi_ctx *ctx, void *inb,
 			    void *outb, uint16_t in_len, uint16_t out_len);
+int smi_reset_gpu(struct smi_ctx *ctx, void *inb,
+				void *outb, uint16_t in_len, uint16_t out_len);
 
 #endif // __SMI_DRV_CMD_H__

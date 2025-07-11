@@ -135,7 +135,6 @@ struct amdgv_fence_driver {
 	volatile uint32_t		*cpu_addr;
 	/* sync_seq is protected by ring emission lock */
 	uint32_t			sync_seq;
-	atomic_t			last_seq;
 	bool				initialized;
 	unsigned int			irq_type;
 	unsigned int			num_fences_mask;

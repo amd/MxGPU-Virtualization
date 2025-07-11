@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) Advanced Micro Devices, Inc. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -102,6 +102,16 @@ typedef struct
 } aca_synd_fields_t;
 
 /**
+ * @brief Structure containing decoded ACA address register fields
+ */
+typedef struct
+{
+    aca_fields_t base;
+    uint64_t error_addr;
+    uint64_t reserved;
+} aca_addr_fields_t;
+
+/**
  * @brief Reads the raw value from an ACA field structure
  * @param[in] fields Pointer to the ACA fields structure
  * @return The raw 64-bit value stored in the structure
@@ -128,5 +138,12 @@ void aca_ipid_init(aca_ipid_fields_t *fields, uint64_t ipid_reg);
  * @param[in] synd_reg Raw 64-bit syndrome register value
  */
 void aca_synd_init(aca_synd_fields_t *fields, uint64_t synd_reg);
+
+/**
+ * @brief Initializes ACA address fields from a raw address register value
+ * @param[out] fields Pointer to the address fields structure to initialize
+ * @param[in] addr_reg Raw 64-bit address register value
+ */
+void aca_addr_init(aca_addr_fields_t *fields, uint64_t addr_reg);
 
 #endif

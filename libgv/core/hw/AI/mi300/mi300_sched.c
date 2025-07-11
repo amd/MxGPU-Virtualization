@@ -316,9 +316,9 @@ static uint32_t mi300_cp_sched_state(struct amdgv_adapter *adapt, uint32_t idx_v
 static int mi300_sched_copy_static_spatial_part_table(struct amdgv_adapter *adapt,
 						      uint32_t num_vf)
 {
-	int r, i;
+	int r;
 	enum spatial_partition_mode mode;
-	uint32_t gfx_partition_count;
+	uint32_t gfx_partition_count, i;
 	static struct amdgv_sched_spatial_part *table;
 
 	oss_memset(adapt->sched.spatial_part, 0, sizeof(struct amdgv_sched_spatial_part));

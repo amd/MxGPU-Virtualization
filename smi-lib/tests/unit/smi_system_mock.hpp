@@ -209,6 +209,7 @@ public:
 		ON_CALL(*this, AlignedFree(testing::_)).WillByDefault(AlignedFreePasstrough());
 		ON_CALL(*this, GetDriverMode()).WillByDefault(Return(0));
 		ON_CALL(*this, Strncpy(testing::_, testing::_,testing::_, testing::_)).WillByDefault(StrncpyPasstrough());
+		ON_CALL(*this, Sysconf(testing::_)).WillByDefault(Return(1));
 	}
 
 	MOCK_METHOD1(Ioctl, int(smi_ioctl_cmd *));
@@ -227,6 +228,7 @@ public:
 	MOCK_METHOD1(AlignedFree, void(void *));
 	MOCK_METHOD0(GetDriverMode, int(void));
 	MOCK_METHOD4(Strncpy, int(char *, size_t, const char *, size_t));
+	MOCK_METHOD1(Sysconf, long(int));
 
 	virtual ~SystemMock()
 	{

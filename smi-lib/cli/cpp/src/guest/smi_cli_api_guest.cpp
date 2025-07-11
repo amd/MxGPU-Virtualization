@@ -25,6 +25,7 @@
 #include "smi_cli_logger_err.h"
 #include "smi_cli_templates.h"
 #include "smi_cli_device.h"
+#include "smi_cli_exception.h"
 
 #include <iostream>
 #include <sstream>
@@ -191,8 +192,7 @@ AmdSmiApiGuest::AmdSmiApiGuest()
 
 	int ret = guest_amdsmi_init(AMDSMI_INIT_AMD_GPUS);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
-		printf("AMDSMI failed to init \n");
-		exit(1);
+		throw SmiToolPermissionDeniedException();
 	}
 };
 

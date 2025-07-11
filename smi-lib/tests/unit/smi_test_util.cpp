@@ -225,6 +225,16 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_success)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_SUCCESS, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_SUCCESS - Command has been executed successfully");
 }
+
+TEST_F(AmdSmiUtilTests, amdsmi_status_api_failed)
+{
+	const char *status_str = NULL;
+	const char **status_string = &status_str;
+
+	const int res = amdsmi_status_code_to_string((amdsmi_status_t)(AMDSMI_STATUS_SETTING_UNAVAILABLE+100), status_string);
+	EXPECT_EQ(res, AMDSMI_STATUS_API_FAILED);
+}
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_inval)
 {
 	const char *status_str = NULL;
@@ -233,6 +243,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_inval)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_INVAL, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_INVAL - Invalid parameters");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_not_supported)
 {
 	const char *status_str = NULL;
@@ -241,6 +252,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_not_supported)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_NOT_SUPPORTED, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_NOT_SUPPORTED - Command not supported");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_not_yet_implemented)
 {
 	const char *status_str = NULL;
@@ -249,6 +261,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_not_yet_implemented)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_NOT_YET_IMPLEMENTED, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_NOT_YET_IMPLEMENTED - Not implemented yet");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_fail_load_module)
 {
 	const char *status_str = NULL;
@@ -257,6 +270,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_fail_load_module)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_FAIL_LOAD_MODULE, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_FAIL_LOAD_MODULE - Fail to load lib");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_fail_load_symbol)
 {
 	const char *status_str = NULL;
@@ -265,6 +279,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_fail_load_symbol)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_FAIL_LOAD_SYMBOL, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_FAIL_LOAD_SYMBOL - Fail to load symbol");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_drm_error)
 {
 	const char *status_str = NULL;
@@ -273,6 +288,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_drm_error)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_DRM_ERROR, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_DRM_ERROR - Error when call libdrm");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_api_failed)
 {
 	const char *status_str = NULL;
@@ -281,6 +297,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_api_failed)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_API_FAILED, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_API_FAILED - API call failed");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_timeout)
 {
 	const char *status_str = NULL;
@@ -289,6 +306,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_timeout)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_TIMEOUT, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_TIMEOUT - Timeout in API call");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_retry)
 {
 	const char *status_str = NULL;
@@ -297,6 +315,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_retry)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_RETRY, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_RETRY - Retry operation");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_no_perm)
 {
 	const char *status_str = NULL;
@@ -305,6 +324,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_no_perm)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_NO_PERM, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_NO_PERM - Permission Denied");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_interrupt)
 {
 	const char *status_str = NULL;
@@ -313,6 +333,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_interrupt)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_INTERRUPT, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_INTERRUPT - An interrupt occurred during execution of function");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_io)
 {
 	const char *status_str = NULL;
@@ -321,6 +342,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_io)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_IO, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_IO - I/O Error");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_address_fault)
 {
 	const char *status_str = NULL;
@@ -329,6 +351,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_address_fault)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_ADDRESS_FAULT, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_ADDRESS_FAULT - Bad address");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_file_error)
 {
 	const char *status_str = NULL;
@@ -337,6 +360,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_file_error)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_FILE_ERROR, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_FILE_ERROR - Problem accessing a file");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_out_of_resources)
 {
 	const char *status_str = NULL;
@@ -345,6 +369,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_out_of_resources)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_OUT_OF_RESOURCES, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_OUT_OF_RESOURCES - Not enough memory");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_internal_exception)
 {
 	const char *status_str = NULL;
@@ -353,6 +378,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_internal_exception)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_INTERNAL_EXCEPTION, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_INTERNAL_EXCEPTION - An internal exception was caught");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_out_of_bounds)
 {
 	const char *status_str = NULL;
@@ -361,6 +387,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_out_of_bounds)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_INPUT_OUT_OF_BOUNDS, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_INPUT_OUT_OF_BOUNDS - The provided input is out of allowable or safe range");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_init_error)
 {
 	const char *status_str = NULL;
@@ -369,6 +396,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_init_error)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_INIT_ERROR, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_INIT_ERROR - An error occurred when initializing internal data structures");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_refcount_overflow)
 {
 	const char *status_str = NULL;
@@ -377,6 +405,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_refcount_overflow)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_REFCOUNT_OVERFLOW, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_REFCOUNT_OVERFLOW - An internal reference counter exceeded INT32_MAX");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_busy)
 {
 	const char *status_str = NULL;
@@ -385,6 +414,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_busy)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_BUSY, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_BUSY - Processor busy");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_not_found)
 {
 	const char *status_str = NULL;
@@ -393,6 +423,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_not_found)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_NOT_FOUND, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_NOT_FOUND - Processor not found");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_not_init)
 {
 	const char *status_str = NULL;
@@ -401,6 +432,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_not_init)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_NOT_INIT, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_NOT_INIT - Processor not initialized");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_no_slot)
 {
 	const char *status_str = NULL;
@@ -409,6 +441,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_no_slot)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_NO_SLOT, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_NO_SLOT - No more free slot");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_driver_not_loaded)
 {
 	const char *status_str = NULL;
@@ -417,6 +450,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_driver_not_loaded)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_DRIVER_NOT_LOADED, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_DRIVER_NOT_LOADED - Processor driver not loaded");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_no_data)
 {
 	const char *status_str = NULL;
@@ -425,6 +459,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_no_data)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_NO_DATA, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_NO_DATA - No data was found for a given input");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_insufficient_size)
 {
 	const char *status_str = NULL;
@@ -433,6 +468,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_insufficient_size)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_INSUFFICIENT_SIZE, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_INSUFFICIENT_SIZE - Not enough resources were available for the operation");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_unexpected_size)
 {
 	const char *status_str = NULL;
@@ -441,6 +477,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_unexpected_size)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_UNEXPECTED_SIZE, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_UNEXPECTED_SIZE - An unexpected amount of data was read");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_unexpected_data)
 {
 	const char *status_str = NULL;
@@ -449,6 +486,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_unexpected_data)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_UNEXPECTED_DATA, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_UNEXPECTED_DATA - The data read or provided to function is not what was expected");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_non_amd_cpu)
 {
 	const char *status_str = NULL;
@@ -457,6 +495,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_non_amd_cpu)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_NON_AMD_CPU, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_NON_AMD_CPU - System has different cpu than AMD");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_no_energy_drv)
 {
 	const char *status_str = NULL;
@@ -465,6 +504,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_no_energy_drv)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_NO_ENERGY_DRV, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_NO_ENERGY_DRV - Energy driver not found");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_no_msr_drv)
 {
 	const char *status_str = NULL;
@@ -473,6 +513,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_no_msr_drv)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_NO_MSR_DRV, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_NO_MSR_DRV - MSR driver not found");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_no_hsmp_drv)
 {
 	const char *status_str = NULL;
@@ -481,6 +522,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_no_hsmp_drv)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_NO_HSMP_DRV, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_NO_HSMP_DRV - HSMP driver not found");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_no_hsmp_sup)
 {
 	const char *status_str = NULL;
@@ -489,6 +531,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_no_hsmp_sup)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_NO_HSMP_SUP, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_NO_HSMP_SUP - HSMP not supported");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_no_hsmp_msg_sup)
 {
 	const char *status_str = NULL;
@@ -497,6 +540,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_no_hsmp_msg_sup)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_NO_HSMP_MSG_SUP, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_NO_HSMP_MSG_SUP - HSMP message/feature not supported");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_hsmp_timeout)
 {
 	const char *status_str = NULL;
@@ -505,6 +549,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_hsmp_timeout)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_HSMP_TIMEOUT, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_HSMP_TIMEOUT - HSMP message is timedout");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_no_drv)
 {
 	const char *status_str = NULL;
@@ -513,6 +558,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_no_drv)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_NO_DRV, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_NO_DRV - No Energy and HSMP driver present");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_file_not_found)
 {
 	const char *status_str = NULL;
@@ -521,6 +567,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_file_not_found)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_FILE_NOT_FOUND, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_FILE_NOT_FOUND - File or directory not found");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_arg_ptr_null)
 {
 	const char *status_str = NULL;
@@ -529,6 +576,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_arg_ptr_null)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_ARG_PTR_NULL, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_ARG_PTR_NULL - Parsed argument is invalid");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_amdgpu_restart_err)
 {
 	const char *status_str = NULL;
@@ -537,6 +585,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_amdgpu_restart_err)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_AMDGPU_RESTART_ERR, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_AMDGPU_RESTART_ERR - AMDGPU restart failed");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_setting_unavailable)
 {
 	const char *status_str = NULL;
@@ -545,6 +594,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_setting_unavailable)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_SETTING_UNAVAILABLE, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_SETTING_UNAVAILABLE - Setting is not available");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_map_error)
 {
 	const char *status_str = NULL;
@@ -553,6 +603,7 @@ TEST_F(AmdSmiUtilTests, amdsmi_status_message_map_error)
 	amdsmi_status_code_to_string(AMDSMI_STATUS_MAP_ERROR, status_string);
 	EXPECT_STREQ(status_str, "AMDSMI_STATUS_MAP_ERROR - The internal library error did not map to a status code");
 }
+
 TEST_F(AmdSmiUtilTests, amdsmi_status_message_unknown_error)
 {
 	const char *status_str = NULL;

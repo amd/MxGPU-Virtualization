@@ -28,6 +28,8 @@
 
 static const uint32_t this_block = AMDGV_GFX_BLOCK;
 
+static const hsa_signal_t signal = { 0 };
+
 /*
  * GPU GFX IP block helpers function, bitmap is no more than 64 bits.
  */
@@ -209,7 +211,7 @@ int amdgv_gfx_mqd_sw_init(struct amdgv_adapter *adapt,
 {
 	struct amdgv_kiq *kiq = NULL;
 	struct amdgv_ring *ring = NULL;
-	int i, j;
+	uint32_t i, j;
 
 	/* create MQD for KIQ */
 	kiq = &adapt->gfx.kiq[xcc_id];
@@ -222,10 +224,9 @@ int amdgv_gfx_mqd_sw_init(struct amdgv_adapter *adapt,
 			return AMDGV_FAILURE;
 		}
 
-		/* prepare MQD backup */
-		kiq->mqd_backup = oss_zalloc(mqd_size);
-		if (!kiq->mqd_backup)
-			AMDGV_WARN("no memory to create MQD backup for ring %s\n", ring->name);
+		/* MQD backup disabled */
+		kiq->mqd_backup = NULL;
+
 	}
 
 	/* create MQD for each KCQ */
@@ -240,11 +241,8 @@ int amdgv_gfx_mqd_sw_init(struct amdgv_adapter *adapt,
 				return AMDGV_FAILURE;
 			}
 
-			/* prepare MQD backup */
-			adapt->gfx.mec.mqd_backup[j] = oss_zalloc(mqd_size);
-			if (!adapt->gfx.mec.mqd_backup[j])
-				AMDGV_WARN("no memory to create MQD backup for ring %s\n",
-					   ring->name);
+			/* MQD backup disabled */
+			adapt->gfx.mec.mqd_backup[j] = NULL;
 		}
 	}
 
@@ -254,7 +252,7 @@ int amdgv_gfx_mqd_sw_init(struct amdgv_adapter *adapt,
 int amdgv_gfx_mqd_init_set(struct amdgv_adapter *adapt, int xcc_id)
 {
 	struct amdgv_ring *ring = NULL;
-	int i, j;
+	uint32_t i, j;
 
 	/* get GPU and CPU addresses for KIQ */
 	ring = &adapt->gfx.kiq[xcc_id].ring;
@@ -275,7 +273,7 @@ int amdgv_gfx_mqd_init_set(struct amdgv_adapter *adapt, int xcc_id)
 void amdgv_gfx_mqd_sw_fini(struct amdgv_adapter *adapt, int xcc_id)
 {
 	struct amdgv_ring *ring = NULL;
-	int i, j;
+	uint32_t i, j;
 
 	for (i = 0; i < adapt->gfx.num_compute_rings; i++) {
 		j = i + xcc_id * adapt->gfx.num_compute_rings;
@@ -464,168 +462,184 @@ void amdgv_gfx_rlc_exit_safe_mode(struct amdgv_adapter *adapt, int xcc_id)
 	adapt->gfx.rlc.in_safe_mode[xcc_id] = false;
 }
 
-int amdgv_gfx_dump_data(struct amdgv_adapter *adapt)
+static void amdgv_gfx_set_aql_comp_ring_info(struct amdgv_adapter *adapt,
+		struct amdgv_ring *aql_compute_ring, struct oss_aql_comp_rb_info *info)
 {
-	char *file_type = NULL;
-	char filename[128];
-	char time_str[32];
-	uint32_t bdf = adapt->bdf;
-	uint32_t data_size = adapt->gfx.cu_dump_data_info.cu_dump_size;
-	uint32_t flag_size = data_size / 4;	// data is 32-bit, flags are 8-bit
-	int ret = AMDGV_FAILURE;
+	aql_compute_ring->adapt = adapt;
 
-	if ((adapt->gfx.cu_dump_data_info.cu_data == NULL) || (adapt->gfx.cu_dump_data_info.cu_data_flags == NULL))
+	aql_compute_ring->aql_enable = true;
+	aql_compute_ring->use_doorbell = true;
+	aql_compute_ring->wptr = *(info->wptr_poll_memory);
+	aql_compute_ring->buf_mask = info->ring_dw_size - 1;
+	aql_compute_ring->ring = info->ring_base;
+	aql_compute_ring->ptr_mask =
+			aql_compute_ring->funcs->support_64bit_ptrs ? 0xffffffffffffffff : aql_compute_ring->buf_mask;
+	aql_compute_ring->wptr_cpu_addr = (volatile uint32_t *)(info->wptr_poll_memory);
+	aql_compute_ring->doorbell_index = info->doorbell_offset_in_dword;
+	aql_compute_ring->max_dw = AQL_COMP_RING_MAX_DWORD;
+}
+
+int amdgv_gfx_alloc_dump_cu_resource_memory(struct amdgv_adapter *adapt, struct amdgv_dump_cu_resource_size *resource_size,
+											struct amdgv_dump_cu_resource_memory *resource_mem)
+{
+	struct amdgv_memmgr_mem *kernelobj, *kernelarg, *out_data, *out_flag, *packet, *signal_obj;
+	uint32_t out_data_size, out_flag_size, kernelobj_size;
+	hsa_signal_t signal;
+	uint64_t *kernarg_addr;
+
+	out_data_size = resource_size->out_data_size;
+	out_flag_size = resource_size->out_flag_size;
+	kernelobj_size = resource_size->kernelobj_size;
+
+	// Allocate the memory:
+	// kernelarg: hold address of out_data and out_flag
+	// out_data: hold dump data
+	// out_flag: dump flag which indicates the valid data position
+	// kernelobj: hsa kernel obj and shader
+	// signal_obj: completion signal
+	// packet: aql packet
+	kernelarg = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, 256, 256, MEM_GFX_IB);
+	if (!kernelarg) {
+		AMDGV_WARN("failed to create kernelarg.\n");
 		return AMDGV_FAILURE;
-
-	oss_get_utc_time_stamp_str(time_str, sizeof(time_str));
-
-	switch (adapt->gfx.cu_dump_data_info.cu_dump_type) {
-	case AMDGV_CU_DATA_TYPE__LDS:
-		file_type = "LDS";
-		break;
-	case AMDGV_CU_DATA_TYPE__SGPRs:
-		file_type = "SGPR";
-		break;
-	case AMDGV_CU_DATA_TYPE__VGPRs:
-		file_type = "VGPR";
-		break;
-	default:
-		AMDGV_WARN("unsupported data type\n");
-		return ret;
+	}
+	out_data = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, out_data_size, 256, MEM_GFX_IB);
+	if (!out_data) {
+		AMDGV_WARN("failed to create out_data.\n");
+		goto free_kernelarg;
+	}
+	out_flag = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, out_flag_size, 256, MEM_GFX_IB);
+	if (!out_flag) {
+		AMDGV_WARN("failed to create out_flag.\n");
+		goto free_out_data;
+	}
+	kernelobj = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, kernelobj_size, 256, MEM_GFX_IB);
+	if (!kernelobj) {
+		AMDGV_WARN("failed to create kernelobj.\n");
+		goto free_out_flag;
+	}
+	signal_obj = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, 256, 256, MEM_GFX_IB);
+	if (!signal_obj) {
+		AMDGV_WARN("failed to create signal_obj.\n");
+		goto free_kernelobj;
+	}
+	packet = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, sizeof(hsa_kernel_dispatch_packet_t), 256, MEM_GFX_IB);
+	if (!packet) {
+		AMDGV_WARN("failed to create packet.\n");
+		goto free_signalobj;
 	}
 
-	oss_vsnprintf(filename, sizeof(filename), "%s_data_%02x_%02x_%x_%s",
-					file_type, bdf >> 8 & 0xff, bdf >> 3 & 0x1f, bdf & 0x7, time_str);
+	resource_mem->kernelobj_addr = (uint32_t *)amdgv_memmgr_get_cpu_addr(kernelobj);
+	resource_mem->out_data_addr = (uint32_t *)amdgv_memmgr_get_cpu_addr(out_data);
+	resource_mem->out_flag_addr = (uint32_t *)amdgv_memmgr_get_cpu_addr(out_flag);
 
-	oss_store_gfx_dump_data((const char *)&adapt->gfx.cu_dump_data_info.cu_info, sizeof(struct amdgv_cu_info), filename);
+	signal.handle = amdgv_memmgr_get_gpu_addr(signal_obj);
+	oss_memset((uint64_t *)amdgv_memmgr_get_cpu_addr(signal_obj), 0, 256);
 
-	oss_store_gfx_dump_data(adapt->gfx.cu_dump_data_info.cu_data, data_size, filename);
+	// do some cleanup
+	oss_memset(resource_mem->kernelobj_addr, 0, kernelobj_size);
+	oss_memset(resource_mem->out_data_addr, 2, out_data_size);
+	oss_memset(resource_mem->out_flag_addr, 0, out_flag_size);
 
-	oss_store_gfx_dump_data(adapt->gfx.cu_dump_data_info.cu_data_flags, flag_size, filename);
+	kernarg_addr = (uint64_t *)amdgv_memmgr_get_cpu_addr(kernelarg);
+	kernarg_addr[0] = amdgv_memmgr_get_gpu_addr(out_data);
+	kernarg_addr[1] = amdgv_memmgr_get_gpu_addr(out_flag);
 
-	adapt->gfx.cu_dump_data_info.cu_dump_finished = true;
-	return 0;
-}
+	adapt->gfx.packet_addr = (hsa_kernel_dispatch_packet_t *)amdgv_memmgr_get_cpu_addr(packet);
+	oss_memset(adapt->gfx.packet_addr, 0, sizeof(hsa_kernel_dispatch_packet_t));
 
-uint32_t amdgv_gfx_calculate_cu_data_size(struct amdgv_adapter *adapt, enum AMDGV_CU_DATA_TYPE type)
-{
-	uint32_t data_size = 0;
-	uint32_t total_lds_dwords, total_sgprs, total_vgpr_lanes;
-	struct amdgv_cu_info *cu_info = &adapt->gfx.cu_dump_data_info.cu_info;
+	adapt->gfx.packet_addr->header |= HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE;
+	adapt->gfx.packet_addr->header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE;
+	adapt->gfx.packet_addr->header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE;
+	adapt->gfx.packet_addr->setup = 1 << HSA_KERNEL_DISPATCH_PACKET_SETUP_DIMENSIONS;
+	adapt->gfx.packet_addr->workgroup_size_x = resource_size->workgroup_size_x;
+	adapt->gfx.packet_addr->workgroup_size_y = resource_size->workgroup_size_y;
+	adapt->gfx.packet_addr->workgroup_size_z = resource_size->workgroup_size_z;
+	adapt->gfx.packet_addr->grid_size_x = resource_size->grid_size_x;
+	adapt->gfx.packet_addr->grid_size_y = resource_size->grid_size_y;
+	adapt->gfx.packet_addr->grid_size_z = resource_size->grid_size_z;
+	adapt->gfx.packet_addr->private_segment_size = resource_size->private_segment_size;
+	adapt->gfx.packet_addr->group_segment_size = resource_size->group_segment_size;
+	adapt->gfx.packet_addr->kernel_object = amdgv_memmgr_get_gpu_addr(kernelobj);
+	adapt->gfx.packet_addr->kernarg_address = (void *)(amdgv_memmgr_get_gpu_addr(kernelarg));
+	adapt->gfx.packet_addr->completion_signal = signal;
 
-	switch (type) {
-	case AMDGV_CU_DATA_TYPE__LDS:
-		total_lds_dwords = cu_info->num_se;
-		total_lds_dwords *= cu_info->num_sa_per_se;
-		total_lds_dwords *= cu_info->num_cus_per_sa;
-		total_lds_dwords *= cu_info->num_lds_dwords_per_cu;
+	adapt->gfx.dump_cu_memmgr_mem_group =
+			(struct amdgv_dump_cu_memmgr_mem_group *)(oss_alloc_memory(sizeof(struct amdgv_dump_cu_memmgr_mem_group)));
+	if (!adapt->gfx.dump_cu_memmgr_mem_group)
+		goto free_all;
 
-		data_size = total_lds_dwords * sizeof(uint32_t);
-		break;
-	case AMDGV_CU_DATA_TYPE__SGPRs:
-		total_sgprs = cu_info->num_se;
-		total_sgprs *= cu_info->num_sa_per_se;
-		total_sgprs *= cu_info->num_cus_per_sa;
-		total_sgprs *= cu_info->simd_per_cu;
-		if (cu_info->num_sgprs_per_simd) {
-			total_sgprs *= cu_info->num_sgprs_per_simd;
-		} else {
-			total_sgprs *= cu_info->max_waves_per_simd;
-			total_sgprs *= cu_info->num_sgprs_per_wave_slot;
-		}
-
-		data_size = total_sgprs * sizeof(uint32_t);
-		break;
-	case AMDGV_CU_DATA_TYPE__VGPRs:
-		total_vgpr_lanes = cu_info->num_se;
-		total_vgpr_lanes *= cu_info->num_sa_per_se;
-		total_vgpr_lanes *= cu_info->num_cus_per_sa;
-		total_vgpr_lanes *= cu_info->simd_per_cu;
-		total_vgpr_lanes *= cu_info->num_vgprs_per_simd;
-		total_vgpr_lanes *= cu_info->num_lanes_per_vgpr;
-
-		data_size = total_vgpr_lanes * sizeof(uint32_t);
-		break;
-	default:
-		return 0;
-	}
-	return data_size;
-}
-
-void amdgv_gfx_check_pf_fb_size_for_cu_data_dump(struct amdgv_adapter *adapt)
-{
-	uint32_t lds_data_size, sgprs_data_size, vgprs_data_size, max_data_size;
-
-	lds_data_size = amdgv_gfx_calculate_cu_data_size(adapt, AMDGV_CU_DATA_TYPE__LDS);
-	sgprs_data_size = amdgv_gfx_calculate_cu_data_size(adapt, AMDGV_CU_DATA_TYPE__SGPRs);
-	vgprs_data_size = amdgv_gfx_calculate_cu_data_size(adapt, AMDGV_CU_DATA_TYPE__VGPRs);
-
-	max_data_size = MAX(MAX(lds_data_size, sgprs_data_size), vgprs_data_size);
-
-	// Currently the default pf fb size of all ASICs is 256MB in KVM.
-	// So, we suggest 256MB plus max_data_size to guarantee enough fb size
-	// to make driver work properly and dump cu data successfully.
-	if (adapt->memmgr_pf.size < (max_data_size + (256 << 20))) {
-		AMDGV_WARN("Current PF FB size may not be sufficient for CU data dump, try to make the size above %dMB\n",
-					((max_data_size + (256 << 20)) >> 20));
-	}
-}
-
-static int amdgv_gfx_cu_data_dump_process_thread(void *context)
-{
-	struct amdgv_adapter *adapt = (struct amdgv_adapter *)context;
-	enum oss_event_state state;
-
-	while (!oss_thread_should_stop(adapt->gfx.cu_dump_data_info.cu_dump_thread)) {
-		if (adapt->gfx.cu_dump_data_info.cu_dump_event != OSS_INVALID_HANDLE)
-			state = oss_wait_event(adapt->gfx.cu_dump_data_info.cu_dump_event, 0);
-
-		if (state == OSS_EVENT_STATE_WAKE_UP) {
-			amdgv_gfx_dump_data(adapt);
-		}
-	}
-
-	AMDGV_INFO("CU data dump process thread exiting!\n");
-	return 0;
-}
-
-int amdgv_gfx_cu_data_dump_thread_init(struct amdgv_adapter *adapt)
-{
-	thread_t cu_dump_thread;
-	event_t cu_dump_event;
-
-	cu_dump_event = oss_event_init();
-	if (cu_dump_event == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_EVENT_FAIL, 0);
-		goto failed;
-	}
-
-	cu_dump_thread = oss_create_thread(amdgv_gfx_cu_data_dump_process_thread, (void *)adapt,
-					  "cu_data_dump_thread");
-	if (cu_dump_thread == OSS_INVALID_HANDLE) {
-		oss_event_fini(cu_dump_event);
-		cu_dump_event = OSS_INVALID_HANDLE;
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_THREAD_FAIL, 0);
-		goto failed;
-	}
-	adapt->gfx.cu_dump_data_info.cu_dump_event = cu_dump_event;
-	adapt->gfx.cu_dump_data_info.cu_dump_thread = cu_dump_thread;
+	adapt->gfx.dump_cu_memmgr_mem_group->kernelobj = kernelobj;
+	adapt->gfx.dump_cu_memmgr_mem_group->kernelarg = kernelarg;
+	adapt->gfx.dump_cu_memmgr_mem_group->out_data = out_data;
+	adapt->gfx.dump_cu_memmgr_mem_group->out_flag = out_flag;
+	adapt->gfx.dump_cu_memmgr_mem_group->signal_obj = signal_obj;
+	adapt->gfx.dump_cu_memmgr_mem_group->packet = packet;
 
 	return 0;
 
-failed:
+free_all:
+	amdgv_memmgr_free(packet);
+free_signalobj:
+	amdgv_memmgr_free(signal_obj);
+free_kernelobj:
+	amdgv_memmgr_free(kernelobj);
+free_out_flag:
+	amdgv_memmgr_free(out_flag);
+free_out_data:
+	amdgv_memmgr_free(out_data);
+free_kernelarg:
+	amdgv_memmgr_free(kernelarg);
+
 	return AMDGV_FAILURE;
 }
 
-void amdgv_gfx_cu_data_dump_thread_fini(struct amdgv_adapter *adapt)
+int amdgv_gfx_dump_cu_data(struct amdgv_adapter *adapt)
 {
-	if (adapt->gfx.cu_dump_data_info.cu_dump_thread != OSS_INVALID_HANDLE) {
-		oss_signal_event_forever(adapt->gfx.cu_dump_data_info.cu_dump_event);
-		oss_close_thread(adapt->gfx.cu_dump_data_info.cu_dump_thread);
-	}
-	adapt->gfx.cu_dump_data_info.cu_dump_thread = OSS_INVALID_HANDLE;
+	int i;
+	int r = 0;
+	struct amdgv_ring *mec_ring = NULL;
+	struct oss_aql_comp_rb_info *aql_comp_rb_info = NULL;
 
-	if (adapt->gfx.cu_dump_data_info.cu_dump_event != OSS_INVALID_HANDLE)
-		oss_event_fini(adapt->gfx.cu_dump_data_info.cu_dump_event);
-	adapt->gfx.cu_dump_data_info.cu_dump_event = OSS_INVALID_HANDLE;
+	if (adapt->flags & AMDGV_FLAG_DISABLE_COMPUTE_ENGINE) {
+		aql_comp_rb_info = (struct oss_aql_comp_rb_info *)(oss_alloc_memory(sizeof(struct oss_aql_comp_rb_info)));
+		if (aql_comp_rb_info == NULL)
+			return AMDGV_FAILURE;
+
+		if (oss_map_queue(adapt->dev, true, OSS_COMPUTE_AQL_QUEUE, aql_comp_rb_info)) {
+			amdgv_gfx_set_aql_comp_ring_info(adapt, &adapt->aql_compute_ring, aql_comp_rb_info);
+			mec_ring = &(adapt->aql_compute_ring);
+		} else {
+			AMDGV_ERROR("Map queue failed.\n");
+			r = AMDGV_FAILURE;
+			goto clean;
+		}
+	} else {
+		amdgv_gfx_map_kcq(adapt, 0, XCC_QUEUE_INDEX__AQL);
+		mec_ring = &(adapt->gfx.compute_ring[XCC_QUEUE_INDEX__AQL]);
+	}
+
+	if (amdgv_ring_alloc(mec_ring, sizeof(hsa_kernel_dispatch_packet_t)/sizeof(uint32_t))) {
+		AMDGV_WARN("failed to allocate ring.\n");
+		r = AMDGV_FAILURE;
+		goto unmap;
+	}
+
+	for (i = 0; i < sizeof(hsa_kernel_dispatch_packet_t)/sizeof(uint32_t); i++) {
+		amdgv_ring_write(mec_ring, ((uint32_t *)adapt->gfx.packet_addr)[i]);
+	}
+
+	amdgv_ring_commit(mec_ring);
+	oss_msleep(100);
+
+unmap:
+	if (adapt->flags & AMDGV_FLAG_DISABLE_COMPUTE_ENGINE)
+		oss_map_queue(adapt->dev, false, OSS_COMPUTE_AQL_QUEUE, NULL);
+	else
+		amdgv_gfx_unmap_kcq(adapt, 0, XCC_QUEUE_INDEX__AQL);
+clean:
+	if (adapt->flags & AMDGV_FLAG_DISABLE_COMPUTE_ENGINE)
+		oss_free_memory(aql_comp_rb_info);
+
+	return r;
 }

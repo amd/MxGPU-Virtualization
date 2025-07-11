@@ -542,8 +542,6 @@ int amdgv_mmsch_config_vf(struct amdgv_adapter *adapt, uint32_t libgv_idx_vf)
 			AMDGV_WARN("failed to submit BW config. This will result limited BW management\n");
 		ret = cmd_ret;
 
-		oss_usleep(1000);
-
 		cmd_ret = amdgv_mmsch_submit_cmd(adapt, AMDGV_MMSCH_CMD_TYPE_RB_DECOUPLE, libgv_idx_vf);
 		if (cmd_ret)
 			AMDGV_WARN("failed to enable RB decouple. This will result limited decode performance\n");

@@ -95,6 +95,11 @@ static int strncpy(char *dest, size_t destsz, const char *src, size_t count)
 	return GetSystemMock()->Strncpy(dest, destsz, src, count);
 }
 
+static long sysconf(int name)
+{
+	return GetSystemMock()->Sysconf(name);
+}
+
 } // namespace amdsmi
 
 static system_wrapper wrapper = {
@@ -110,7 +115,8 @@ static system_wrapper wrapper = {
 	NULL,
 	(void *(*)(void**, size_t, size_t))amdsmi::aligned_alloc,
 	(void (*)(void *))amdsmi::aligned_free,
-	(int (*)(char *, size_t, const char *, size_t))amdsmi::strncpy
+	(int (*)(char *, size_t, const char *, size_t))amdsmi::strncpy,
+	(long (*)(int))amdsmi::sysconf
 };
 
 extern "C" {

@@ -787,7 +787,7 @@ static int mi300_mca_pop_block_error_count(struct amdgv_adapter *adapt,
 					enum amdgv_ras_block block,
 					struct ras_err_data *err_data)
 {
-	int id;
+	uint32_t id;
 	uint32_t ce_cnt, ue_cnt, de_cnt;
 	struct block_ecc  *block_ecc;
 
@@ -825,7 +825,7 @@ static int mi300_mca_pop_block_error_count(struct amdgv_adapter *adapt,
 static int mi300_mca_reset_block_error_count(struct amdgv_adapter *adapt,
 					enum amdgv_ras_block block)
 {
-	int id = 0;
+	uint32_t id = 0;
 	struct block_ecc *block_ecc;
 	struct mca_ecc *mca_ecc;
 	struct mca_err_addr *mca_err_addr, *tmp;
@@ -886,7 +886,7 @@ static const struct amdgv_funcs mi300_mca_mca_smu_funcs = {
 void mi300_mca_init(struct amdgv_adapter *adapt)
 {
 	int i = 0;
-	int id = 0;
+	uint32_t id = 0;
 	uint32_t block_ecc_data_size = 0;
 	struct amdgv_mca *mca = &adapt->mca;
 

@@ -497,6 +497,7 @@ enum amdgv_gpumon_metric_ext_category {
 	AMDGV_GPUMON_METRIC_EXT_CATEGORY__ENERGY = 5ULL,
 	AMDGV_GPUMON_METRIC_EXT_CATEGORY__THROTTLE = 6ULL,
 	AMDGV_GPUMON_METRIC_EXT_CATEGORY__PCIE = 7ULL,
+	AMDGV_GPUMON_METRIC_EXT_CATEGORY__STATIC = 8ULL,
 };
 
 enum amdgv_gpumon_metric_ext_name {
@@ -559,6 +560,12 @@ enum amdgv_gpumon_metric_ext_name {
 	AMDGV_GPUMON_METRIC_EXT_NAME__THROTTLE_PPT_ACTIVE = 56ULL,
 	AMDGV_GPUMON_METRIC_EXT_NAME__DRAM_BANDWIDTH = 57ULL,
 	AMDGV_GPUMON_METRIC_EXT_NAME__MAX_DRAM_BANDWIDTH = 58ULL,
+	AMDGV_GPUMON_METRIC_EXT_NAME__GFX_CLK_BELOW_HOST_LIMIT_PPT = 59ULL,
+	AMDGV_GPUMON_METRIC_EXT_NAME__GFX_CLK_BELOW_HOST_LIMIT_THM = 60ULL,
+	AMDGV_GPUMON_METRIC_EXT_NAME__GFX_CLK_BELOW_HOST_LIMIT_TOTAL = 61ULL,
+	AMDGV_GPUMON_METRIC_EXT_NAME__GFX_CLK_LOW_UTILIZATION = 62ULL,
+	AMDGV_GPUMON_METRIC_EXT_NAME__INPUT_TELEMETRY_VOLTAGE = 63ULL,
+	AMDGV_GPUMON_METRIC_EXT_NAME__PLDM_VERSION = 64ULL,
 };
 
 enum amdgv_gpumon_metric_ext_unit {
@@ -582,6 +589,7 @@ enum amdgv_gpumon_metric_ext_flag {
 	AMDGV_GPUMON_METRIC_EXT_FLAG__CHIPLET_METRIC	= 1ULL,
 	AMDGV_GPUMON_METRIC_EXT_FLAG__DATA_FILTER_INST	= 2ULL,
 	AMDGV_GPUMON_METRIC_EXT_FLAG__DATA_FILTER_ACC	= 3ULL,
+	AMDGV_GPUMON_METRIC_EXT_FLAG__STATIC_METRIC	= 4ULL,
 };
 
 
@@ -646,6 +654,7 @@ int amdgv_gpumon_ras_eeprom_clear(amdgv_dev_t dev);
 void amdgv_gpumon_get_bad_page_record_count(amdgv_dev_t dev, int *bp_cnt);
 int amdgv_gpumon_get_bad_page_info(amdgv_dev_t dev, uint32_t index,
 				   struct amdgv_smi_ras_eeprom_table_record *record);
+int amdgv_gpumon_get_bad_page_record_threshold(amdgv_dev_t dev, uint32_t *bad_page_record_threshold);
 int amdgv_gpumon_ras_error_inject(amdgv_dev_t dev,
 				  struct amdgv_smi_ras_error_inject_info *data);
 int amdgv_gpumon_turn_on_ecc_injection(amdgv_dev_t dev, const uint8_t *passphrase);
@@ -809,5 +818,9 @@ int amdgv_gpumon_cper_get_entries(amdgv_dev_t dev, uint64_t rptr,
 				  uint64_t *left_size);
 int amdgv_gpumon_get_gfx_config(amdgv_dev_t dev,
 	struct amdgv_gpumon_gfx_config *config);
+int amdgv_gpumon_get_static_metrics_ext(amdgv_dev_t dev,
+		struct amdgv_gpumon_metrics_ext *metrics_ext);
+int amdgv_gpumon_get_num_static_metrics_ext_entries(amdgv_dev_t dev,
+		uint32_t *entries);
 
 #endif // __AMDGV_GPUMON_H__

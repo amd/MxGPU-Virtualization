@@ -1111,7 +1111,11 @@ static int gfx_v9_0_kcq_init_queue(struct amdgv_ring *ring)
 	 */
 	tmp_mqd = (struct v9_mqd *)adapt->gfx.mec.mqd_backup[mqd_idx];
 
-	if (tmp_mqd && !tmp_mqd->cp_hqd_pq_control) {
+	if (tmp_mqd && tmp_mqd->cp_hqd_pq_control) {
+		oss_memcpy(mqd, tmp_mqd,
+				sizeof(struct v9_mqd_allocation));
+		amdgv_ring_clear_ring(ring);
+	} else {
 		oss_memset((void *)mqd, 0, sizeof(struct v9_mqd_allocation));
 		((struct v9_mqd_allocation *)mqd)->dynamic_cu_mask = 0xFFFFFFFF;
 		((struct v9_mqd_allocation *)mqd)->dynamic_rb_mask = 0xFFFFFFFF;
@@ -1124,8 +1128,6 @@ static int gfx_v9_0_kcq_init_queue(struct amdgv_ring *ring)
 		if (tmp_mqd)
 			oss_memcpy(tmp_mqd, mqd,
 					sizeof(struct v9_mqd_allocation));
-	} else {
-		amdgv_ring_clear_ring(ring);
 	}
 
 	return 0;

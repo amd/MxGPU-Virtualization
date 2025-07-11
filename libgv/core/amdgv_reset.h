@@ -38,6 +38,8 @@ struct amdgv_gpu_reset_funcs {
 	int (*trigger_gpu_reset)(struct amdgv_adapter *adapt);
 
 	int (*notify_engine_status)(struct amdgv_adapter *adapt, uint32_t idx_vf);
+
+	int (*reset_pf_allowed)(struct amdgv_adapter *adapt, uint32_t active_vf_mask);
 };
 
 struct amdgv_reset {

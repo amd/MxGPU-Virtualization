@@ -294,11 +294,18 @@ static int mi300_misc_hw_init(struct amdgv_adapter *adapt)
 					regHDP_MISC_CNTL), Hdp_Misc_Cntl);
 	}
 
+	/*if (amdgv_migration_init(adapt)) {
+		AMDGV_ERROR("Failed to initialize migration memory.\n");
+		return AMDGV_FAILURE;
+	}
+    */
+	// MIX00 supports ucode load. Skip DFC load in misc
 	return 0;
 }
 
 static int mi300_misc_hw_fini(struct amdgv_adapter *adapt)
 {
+	//amdgv_migration_fini(adapt);
 	return 0;
 }
 

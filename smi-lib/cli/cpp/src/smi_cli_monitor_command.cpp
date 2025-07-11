@@ -36,7 +36,7 @@ auto constexpr mem_csv{",mem_util,mem_clock"};
 auto constexpr encoder_csv{",encoder_util,vclk"};
 auto constexpr decoder_csv{",decoder_util,dclk"};
 auto constexpr ecc_csv{",total_correctable_count,total_uncorrectable_count"};
-auto constexpr vram_csv{",vram_used,vram_total"};
+auto constexpr vram_csv{",vram_usage"};
 auto constexpr pcie_csv{",pcie_bw,pcie_replay"};
 auto constexpr monitor_process_general_header_csv {",pid,name,mem_usage"};
 auto constexpr monitor_process_engine_header_csv {",gfx,enc"};
@@ -515,8 +515,7 @@ void AmdSmiMonitorCommand::monitor_command_human()
 			std::string param{"vram-usage"};
 			int error = handle_exceptions(ret, param, arg);
 			if (error == 0) {
-				header.push_back("VRAM_USED");
-				header.push_back("VRAM_TOTAL");
+				header.push_back("VRAM_USAGE");
 
 				std::vector<std::string> cells{};
 				cells = split_string(formatted_string, ',');

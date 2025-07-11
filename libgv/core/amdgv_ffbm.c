@@ -558,7 +558,7 @@ static int amdgv_ffbm_map(struct amdgv_adapter *adapt, uint32_t vf_idx, uint64_t
 			AMDGV_ERROR("FFBM: can't find empty pteb\n");
 			return AMDGV_FFBM_ERROR_NO_MEM;
 		}
-		if (pteb->size > size_left)
+		if (pteb->size > (uint64_t)size_left)
 			amdgv_ffbm_pteb_divide_size(adapt, pteb, size_left);
 
 		amdgv_ffbm_pteb_update(pteb, gpa_start, pteb->spa, pteb->size, pteb->fragment,
@@ -872,7 +872,7 @@ int amdgv_ffbm_page_table_update_by_fcn(struct amdgv_adapter *adapt, uint32_t vf
 int amdgv_ffbm_page_table_init(struct amdgv_adapter *adapt)
 {
 	struct amdgv_ffbm_pte_block *pteb;
-	int i;
+	uint32_t i;
 	uint64_t avail_size;
 	uint64_t aligned_size, top_size, page_size, resv_top_offset; /* temp values */
 
@@ -929,7 +929,8 @@ int amdgv_ffbm_page_table_init(struct amdgv_adapter *adapt)
 
 void amdgv_ffbm_reserve_all_bad_pages(struct amdgv_adapter *adapt)
 {
-	int ret, i;
+	int ret;
+	uint32_t i;
 	uint32_t bp_cnt;
 	struct eeprom_table_record *record;
 
@@ -1132,7 +1133,7 @@ enum amdgv_live_info_status amdgv_ffbm_import_spa_and_gpa(struct amdgv_adapter *
 
 		// Update number of active VFs, so that we know which VFs to add shared TMR
 		if (ffbm_info->blocks[block_idx].vf_idx < adapt->num_vf)
-			num_active_vfs = (num_active_vfs) > (ffbm_info->blocks[block_idx].vf_idx + 1) ? (num_active_vfs) : (ffbm_info->blocks[block_idx].vf_idx + 1);
+			num_active_vfs = (num_active_vfs) > (ffbm_info->blocks[block_idx].vf_idx + 1u) ? (num_active_vfs) : (ffbm_info->blocks[block_idx].vf_idx + 1u);
 	}
 
 	// Add shared TMR to each active VF GPA page table

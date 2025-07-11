@@ -124,6 +124,25 @@ TEST_F(AmdSmiMetricsTest, GetChipletMetrics)
 	ASSERT_TRUE(equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
 }
 
+TEST_F(AmdSmiMetricsTest, SysconfFailed)
+{
+	int ret;
+	amdsmi_metric_t metrics;
+	uint32_t size = 7;
+
+#ifndef _WIN64
+	// Mock sysconf to return -1
+	EXPECT_CALL(*g_system_mock, Sysconf(testing::_))
+		.WillOnce(testing::Return(-1));
+#endif
+	ret = amdsmi_get_gpu_metrics(&GPU_MOCK_HANDLE, &size, &metrics);
+#ifndef _WIN64
+	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
+#else
+	ASSERT_NE(ret, AMDSMI_STATUS_SUCCESS);
+#endif
+}
+
 TEST_F(AmdSmiMetricsTest, DISABLED_GetChipletMetricsWrongSize)
 {
 	int ret;

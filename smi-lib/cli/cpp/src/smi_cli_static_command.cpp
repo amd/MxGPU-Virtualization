@@ -48,7 +48,7 @@ auto constexpr limit_csv_header {
 };
 auto constexpr driver_csv_header {",driver_name,driver_version,driver_date,driver_model"};
 auto constexpr
-ras_csv_header {",block,block_ecc_status,ras_eeprom_version,schema,schema_status"};
+ras_csv_header {",block,block_ecc_status,ras_eeprom_version,bad_page_threshold,schema,schema_status"};
 auto constexpr
 dfc_ucode_csv_header {",version,gart_wr_guest_min,gart_wr_guest_max,dfc_fw_type,verification,customer_ordinal,white_list_latest,white_list_oldest,black_list_1,black_list_2,black_list_3,black_list_4"};
 auto constexpr

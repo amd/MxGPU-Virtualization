@@ -97,6 +97,8 @@ enum smi_cmd_code {
 	SMI_CMD_CODE_GET_POWER_CAP_INFO				= SMI_IOCTL | 0x00000030,
 	SMI_CMD_CODE_GET_PF_FB_INFO				= SMI_IOCTL | 0x00000031,
 	SMI_CMD_CODE_GET_GPU_CACHE_INFO				= SMI_IOCTL | 0x00000032,
+	SMI_CMD_CODE_GET_BAD_PAGE_THRESHOLD			= SMI_IOCTL | 0x00000033,
+	SMI_CMD_CODE_RESET_GPU					= SMI_IOCTL | 0x00000034,
 	SMI_CMD_CODE__MAX					= 0xffffffff
 };
 
@@ -553,6 +555,7 @@ enum smi_fw_block {
 	SMI_FW_ID_DMCU,
 	SMI_FW_ID_PSP_RAS,
 	SMI_FW_ID_P2S_TABLE,
+	SMI_FW_ID_PLDM_VERSION,
 	SMI_FW_ID__MAX
 };
 
@@ -945,7 +948,8 @@ struct smi_event_entry {
 struct smi_ras_feature {
 	uint32_t ras_eeprom_version;
 	uint32_t supported_ecc_correction_schema; //!< ecc_correction_schema mask used with enum smi_ecc_correction_schema_support flags
-	uint64_t reserved[3];
+	uint32_t bad_page_record_threshold;
+	uint64_t reserved[2];
 };
 
 struct smi_eeprom_table_record {

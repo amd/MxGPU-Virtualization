@@ -221,7 +221,7 @@ TEST_F(AmdSmiRasCperTests, AfidValidInput) {
 
     ret = amdsmi_get_afids_from_cper(cper_buffer, sizeof(cper_buffer), afids, &num_afids);
     ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
-    ASSERT_LE(num_afids, MAX_NUMBER_OF_AFIDS_PER_RECORD);
+    ASSERT_LE(num_afids, static_cast<uint32_t>(MAX_NUMBER_OF_AFIDS_PER_RECORD));
 }
 
 TEST_F(AmdSmiRasCperTests, AfidSectionTypeNonStandard) {

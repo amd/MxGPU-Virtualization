@@ -305,7 +305,8 @@ static int mi300_clockgating_sw_fini(struct amdgv_adapter *adapt)
 
 static int mi300_sdma_clockgating_set_mgcg(struct amdgv_adapter *adapt, bool enable)
 {
-	uint32_t inst, def, val, mask;
+	uint32_t def, val, mask;
+	int inst;
 
 	mask = SDMA_CLK_CTRL__SOFT_OVERRIDE0_MASK | SDMA_CLK_CTRL__SOFT_OVERRIDE1_MASK |
 	       SDMA_CLK_CTRL__SOFT_OVERRIDE2_MASK | SDMA_CLK_CTRL__SOFT_OVERRIDE3_MASK |
@@ -336,7 +337,8 @@ static int mi300_sdma_clockgating_set_mgcg(struct amdgv_adapter *adapt, bool ena
 
 static int mi300_sdma_clockgating_set_mgls(struct amdgv_adapter *adapt, bool enable)
 {
-	uint32_t inst, def, val;
+	uint32_t def, val;
+	int inst;
 
 	if (enable) {
 		for_each_sdma_inst (inst, adapt) {

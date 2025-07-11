@@ -559,6 +559,22 @@ static int mi300_reset_verify_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	return 0;
 }
 
+static int mi300_reset_pf_allowed(struct amdgv_adapter *adapt, uint32_t active_vf_mask)
+{
+	uint32_t pf_xcc_mask = amdgv_sched_get_xcc_mask_by_vf(adapt, AMDGV_PF_IDX);
+	uint32_t idx_vf = 0;
+
+	for_each_id(idx_vf, active_vf_mask) {
+		if (pf_xcc_mask & amdgv_sched_get_xcc_mask_by_vf(adapt, idx_vf)) {
+			AMDGV_INFO("PF and VF %d share the same xcc mask %x, "
+						"promote PF Soft FLR to Mode1 reset\n", idx_vf, pf_xcc_mask);
+			return false;
+		}
+	}
+
+	return true;
+}
+
 static int mi300_reset_trigger_vf_flr(struct amdgv_adapter *adapt,
 		uint32_t idx_vf)
 {
@@ -839,7 +855,7 @@ static int mi300_reset_trigger_pf_soft_flr(struct amdgv_adapter *adapt)
 	int ret = 0;
 	struct mi300_reset_access_info access_info;
 	struct mi300_whole_gpu_reset_state *reset_state;
-	uint32_t sdma_id;
+	int sdma_id;
 	int doorbell_index;
 	uint32_t csa_offset = 0;
 
@@ -1234,7 +1250,8 @@ struct amdgv_gpu_reset_funcs mi300_reset_funcs = {
 	.save_vddgfx_state = mi300_reset_save_vddgfx_state,
 	.trigger_vf_flr = mi300_reset_trigger_vf_flr,
 	.trigger_gpu_reset = mi300_reset_whole_gpu_reset,
-	.notify_engine_status = mi300_reset_notify_engine_status
+	.notify_engine_status = mi300_reset_notify_engine_status,
+	.reset_pf_allowed = mi300_reset_pf_allowed
 };
 
 static int mi300_reset_sw_init(struct amdgv_adapter *adapt)

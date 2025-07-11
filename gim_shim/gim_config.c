@@ -243,6 +243,20 @@ struct gim_conf_opt conf_opts[] = {
 		.max = DEBUG_MODE__MAX,
 		.def = DEBUG_MODE__DEFAULT,
 		.array = false },
+	[CONF_OPT_SENTINEL_MODE] = { .name = SENTINEL_MODE__KEY,
+					.value = { SENTINEL_MODE__DEFAULT },
+					.repeat_val_idx = 1,
+					.min = SENTINEL_MODE__START,
+					.max = SENTINEL_MODE__MAX,
+					.def = SENTINEL_MODE__DEFAULT,
+					.array = false },
+	[CONF_OPT_ENABLE_LIVE_MIGRATION] = { .name = ENABLE_LIVE_MIGRATION__KEY,
+					.value = { ENABLE_LIVE_MIGRATION__DEFAULT },
+					.repeat_val_idx = 1,
+					.min = ENABLE_LIVE_MIGRATION__START,
+					.max = ENABLE_LIVE_MIGRATION__MAX,
+					.def = ENABLE_LIVE_MIGRATION__DEFAULT,
+					.array = false },
 };
 
 #define MAX_OPTION (sizeof(conf_opts)/sizeof(struct gim_conf_opt))
@@ -488,6 +502,22 @@ MODULE_PARM_DESC(debug_mode, "Debug Mode Mask (all modes disabled by default)\n\
 	"0x3: Enable debug mode for hang\n\t"
 	"0xb: Enable debug mode for hang RAS SMU\n\t"
 	"0x1f: Enable all debug modes\n\t");
+
+uint sentinel_mode;
+module_param(sentinel_mode, uint, 0444);
+MODULE_PARM_DESC(sentinel_mode, "GIM memory sentinel mode\n\t"
+				"sentinel_mode=D\n\t"
+				"0 <= D <= 1;\n\t"
+				"0: memory sentinel mode off\n\t"
+				"1: memory sentinel mode enable\n\t");
+
+uint enable_live_migration;
+module_param(enable_live_migration, uint, 0444);
+MODULE_PARM_DESC(enable_live_migration, "Whether enable live migration, disabled by default\n\t"
+				"enable_live_migration=D\n\t"
+				"D = 0 or 1;\n\t"
+				"0: live migration is disabled(default)\n\t"
+				"1: live migration is enabled\n\t");
 
 static int gim_conf_search_config_key(char *key)
 {
@@ -738,7 +768,7 @@ static long gim_conf_read_conf_file(void)
 		return PTR_ERR(config);
 
 	size = i_size_read(file_inode(config)) + 1;
-	content = kzalloc(size, GFP_KERNEL);
+	content = gim_kzalloc(size, GFP_KERNEL);
 	if (!content)
 		return -ENOMEM;
 
@@ -749,7 +779,7 @@ static long gim_conf_read_conf_file(void)
 	}
 	gim_conf_parse_conf_file(content, size);
 exit:
-	kfree(content);
+	gim_kfree(content);
 	filp_close(config, NULL);
 	return r;
 }
@@ -780,7 +810,7 @@ int gim_conf_save(void)
 	int  i = 0;
 	long ret;
 
-	buf = vmalloc(MAX_CONFIG_FILE_LENGTH);
+	buf = gim_vmalloc(MAX_CONFIG_FILE_LENGTH);
 	if (!buf) {
 		gim_warn("Cannot vmalloc memory\n");
 		return -ENOMEM;
@@ -825,7 +855,7 @@ int gim_conf_save(void)
 	if (ret != 0 && ret != -ENOENT)
 		gim_warn("writing to conf file failed.\n");
 
-	vfree(buf);
+	gim_vfree(buf);
 	return 0;
 }
 
@@ -1014,6 +1044,28 @@ int gim_conf_init(void)
 	if (debug_mode_size > 0) {
 		set_array_value(CONF_OPT_DEBUG_MODE,
 				debug_mode, debug_mode_size);
+	}
+
+	if (sentinel_mode > 0) {
+		if (gim_conf_valid_opt(CONF_OPT_SENTINEL_MODE,
+			sentinel_mode)) {
+			gim_warn("invalid token (sentinel_mode) value: %d\n",
+				sentinel_mode);
+				sentinel_mode = SENTINEL_MODE__DEFAULT;
+		}
+		for (j = 0; j < AMDGV_MAX_GPU_NUM; j++)
+			conf_opts[CONF_OPT_SENTINEL_MODE].value[j] = sentinel_mode;
+	}
+
+	if (enable_live_migration > 0) {
+		if (gim_conf_valid_opt(CONF_OPT_ENABLE_LIVE_MIGRATION,
+					enable_live_migration)) {
+			gim_warn("invalid token (enable_live_migration) value: %d\n",
+				enable_live_migration);
+			enable_live_migration = ENABLE_LIVE_MIGRATION__DEFAULT;
+		}
+
+		conf_opts[CONF_OPT_ENABLE_LIVE_MIGRATION].value[0] = enable_live_migration;
 	}
 
 	gim_conf_clear_saved_persist_config(config_file_created);
@@ -1229,6 +1281,16 @@ uint32_t gim_conf_get_debug_mode_opt(uint32_t id)
 		id = AMDGV_MAX_GPU_NUM - 1;
 
 	return conf_opts[CONF_OPT_DEBUG_MODE].value[id];
+}
+
+uint32_t gim_conf_get_sentinel_mode_opt(void)
+{
+	return conf_opts[CONF_OPT_SENTINEL_MODE].value[0];
+}
+
+uint32_t gim_conf_get_enable_live_migration_opt(void)
+{
+	return conf_opts[CONF_OPT_ENABLE_LIVE_MIGRATION].value[0];
 }
 
 uint32_t gim_conf_set_vf_num_opt(int value)

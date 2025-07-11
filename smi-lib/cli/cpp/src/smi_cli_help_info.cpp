@@ -395,13 +395,17 @@ std::string set_bm =
 std::string reset_common = "";
 std::string reset_usage_common = "";
 std::string reset_usage_linux =
-	"usage: amd-smi reset [-h | --help] [--file FILE] [--vf=<VF> <--vf-fb>]\n\n";
+	"usage: amd-smi reset [-h | --help] [--file FILE] [-g | --gpu [GPU ...] <-G | --gpureset >] [--vf=<VF> <--vf-fb>]\n\n";
 std::string reset_usage_bm =
 	"usage: amd-smi reset [-h | --help] [--json | --csv] [--file FILE]\n\n";
 std::string reset_message ="";
 std::string reset_host_linux =
 	"Reset arguments:\n"
 	"                                                                 Description:\n"
+	"    -g, --gpu [GPU ...]                                          Select a GPU ID, BDF or UUID.\n"
+	"                                                                 if not selected it will return for all GPUs\n"
+	"    --gpu arguments:\n"
+	"        -G, --gpureset                                           Reset the specified GPU\n"
 	"    --vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>         Cleanup VF FB for the specified VF\n"
 	"                                                                 If no argument is provided, returns tool exception\n"
 	"    vf arguments:\n"
@@ -501,19 +505,20 @@ std::string ras_usage_message =
 	"If no ras information argument is provided all ras information will be displayed\n\n";
 
 std::string usage_ras_host = "usage: amd-smi ras [-h | --help] [--cper] [--severity=[fatal, nonfatal-uncorrected, nonfatal-corrected, all]] [--folder=[FOLDER]] "
-							 "[--file_limit=[NUMBER_OF_FILES]] [--follow] \n"
+							 "[--file-limit=[NUMBER_OF_FILES]] [--follow] \n"
 							 "       amd-smi ras [-h | --help] [--afid] [--cper-file=[FOLDER]] \n";
 
 std::string ras_host = "Ras arguments:\n"
-	"                                Description:\n"
-	"    -h, --help                  show this help message and exit\n"
+	"                                                                                                    Description:\n"
+	"    -h, --help                                                                                      show this help message and exit\n"
 	"    --cper --severity=<fatal, nonfatal-uncorrected, nonfatal-corrected, all> --folder=[FOLDER]      Get ras cper errors and saved in file based on severity. \n"
-	"           --file_limit=<number_of_files> --follow                        If the --folder option is not provided, no files will be dumped. \n"
-	"                                                                       By default, it will dump the cper report currently cached in the driver. \n"
-	"                                                                       If user specify the --file_limit=<number_of_files> option, the CLI will only keep max <number_of_files> files. \n"
-	"                                                                       If the --follow option is provided, the cli will continuous monitoring and \n"
-	"                                                                       dump the report until the ctrl+c is pressed.\n"
-	"    --afid --cper-file=[FOLDER]                                        Get ras cper AFID list \n";
+	"           --file-limit=<number_of_files> --follow                                                  If the --folder option is not provided, no files will be dumped. \n"
+	"                                                                                                    By default, it will dump the cper report currently cached in the driver. \n"
+	"                                                                                                    If user specify the --file-limit=<number_of_files> option, the CLI will only keep max <number_of_files> files. \n"
+	"                                                                                                    If the --follow option is provided, the cli will continuous monitoring and \n"
+	"                                                                                                    dump the report until the ctrl+c is pressed.\n"
+	"    --afid --cper-file=[FILE]                                                                       Get ras cper AFID list \n";
+
 
 std::string usage_ras_common = "";
 std::string ras_common = "";

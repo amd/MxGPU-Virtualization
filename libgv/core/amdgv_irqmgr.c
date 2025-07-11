@@ -229,7 +229,8 @@ void amdgv_ih_ring_fini(struct amdgv_adapter *adapt)
 int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_entry *entry)
 {
 	const struct amdgv_pp_funcs *pp_func = adapt->pp.pp_funcs;
-	int idx_vf = 0, ret = 0, handled = 0;
+	int ret = 0, handled = 0;
+	uint32_t idx_vf = 0;
 	uint32_t hw_sched_id;
 	uint32_t event = 0, msg_data[MAILBOX_DATA_LEN_4] = { 0 };
 	enum amdgv_sched_event_id sched_event;

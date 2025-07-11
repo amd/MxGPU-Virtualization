@@ -1491,6 +1491,8 @@
 #define regMMEA0_PERFCOUNTER1_CFG_BASE_IDX                                                              0
 #define regMMEA0_PERFCOUNTER_RSLT_CNTL                                                                  0x0400
 #define regMMEA0_PERFCOUNTER_RSLT_CNTL_BASE_IDX                                                         0
+#define regMMEA0_MAM_CTRL                                                                               0x0401
+#define regMMEA0_MAM_CTRL_BASE_IDX                                                                      0
 #define regMMEA0_UE_ERR_STATUS_LO                                                                       0x0406
 #define regMMEA0_UE_ERR_STATUS_LO_BASE_IDX                                                              0
 #define regMMEA0_UE_ERR_STATUS_HI                                                                       0x0407
@@ -1717,6 +1719,8 @@
 #define regMMEA1_PERFCOUNTER1_CFG_BASE_IDX                                                              0
 #define regMMEA1_PERFCOUNTER_RSLT_CNTL                                                                  0x0540
 #define regMMEA1_PERFCOUNTER_RSLT_CNTL_BASE_IDX                                                         0
+#define regMMEA1_MAM_CTRL                                                                               0x0541
+#define regMMEA1_MAM_CTRL_BASE_IDX                                                                      0
 #define regMMEA1_UE_ERR_STATUS_LO                                                                       0x0546
 #define regMMEA1_UE_ERR_STATUS_LO_BASE_IDX                                                              0
 #define regMMEA1_UE_ERR_STATUS_HI                                                                       0x0547
@@ -1943,6 +1947,8 @@
 #define regMMEA2_PERFCOUNTER1_CFG_BASE_IDX                                                              0
 #define regMMEA2_PERFCOUNTER_RSLT_CNTL                                                                  0x0680
 #define regMMEA2_PERFCOUNTER_RSLT_CNTL_BASE_IDX                                                         0
+#define regMMEA2_MAM_CTRL                                                                               0x0681
+#define regMMEA2_MAM_CTRL_BASE_IDX                                                                      0
 #define regMMEA2_UE_ERR_STATUS_LO                                                                       0x0686
 #define regMMEA2_UE_ERR_STATUS_LO_BASE_IDX                                                              0
 #define regMMEA2_UE_ERR_STATUS_HI                                                                       0x0687
@@ -2169,6 +2175,8 @@
 #define regMMEA3_PERFCOUNTER1_CFG_BASE_IDX                                                              0
 #define regMMEA3_PERFCOUNTER_RSLT_CNTL                                                                  0x07c0
 #define regMMEA3_PERFCOUNTER_RSLT_CNTL_BASE_IDX                                                         0
+#define regMMEA3_MAM_CTRL                                                                               0x07c1
+#define regMMEA3_MAM_CTRL_BASE_IDX                                                                      0
 #define regMMEA3_UE_ERR_STATUS_LO                                                                       0x07c6
 #define regMMEA3_UE_ERR_STATUS_LO_BASE_IDX                                                              0
 #define regMMEA3_UE_ERR_STATUS_HI                                                                       0x07c7
@@ -2394,6 +2402,8 @@
 #define regMMEA4_PERFCOUNTER1_CFG_BASE_IDX                                                              0
 #define regMMEA4_PERFCOUNTER_RSLT_CNTL                                                                  0x0900
 #define regMMEA4_PERFCOUNTER_RSLT_CNTL_BASE_IDX                                                         0
+#define regMMEA4_MAM_CTRL                                                                               0x0901
+#define regMMEA4_MAM_CTRL_BASE_IDX                                                                      0
 #define regMMEA4_UE_ERR_STATUS_LO                                                                       0x0906
 #define regMMEA4_UE_ERR_STATUS_LO_BASE_IDX                                                              0
 #define regMMEA4_UE_ERR_STATUS_HI                                                                       0x0907

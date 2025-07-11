@@ -134,7 +134,7 @@ static int amdgv_sched_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf,
 static int amdgv_wait_all_guest_reset_ready_cb(void *context)
 {
 	struct amdgv_adapter *adapt = (struct amdgv_adapter *)context;
-	int idx_vf;
+	uint32_t idx_vf;
 	for (idx_vf = 0; idx_vf < adapt->max_num_vf; idx_vf++) {
 		if (!is_active_or_suspend_vf(adapt, idx_vf))
 			continue;
@@ -370,6 +370,41 @@ static void amdgv_sched_reset_vf_sched_state(struct amdgv_adapter *adapt, uint32
 	set_to_avail_vf(idx_vf);
 }
 
+static bool amdgv_sched_reset_pf_allowed(struct amdgv_adapter *adapt, uint32_t active_vf_mask)
+{
+	/* Reset PF check is currently only implemented on Mi300. */
+	if (adapt->reset.funcs && adapt->reset.funcs->reset_pf_allowed)
+		return adapt->reset.funcs->reset_pf_allowed(adapt, active_vf_mask);
+
+	return true;
+}
+
+static uint32_t amdgv_sched_active_vf_mask(struct amdgv_adapter *adapt)
+{
+	uint32_t active_vf_mask = 0;
+	uint32_t idx_vf;
+
+	for (idx_vf = 0; idx_vf < adapt->max_num_vf; idx_vf++) {
+		if (is_active_vf(idx_vf))
+			active_vf_mask |= BIT(idx_vf);
+	}
+
+	return active_vf_mask;
+}
+
+static bool amdgv_sched_reset_vf_allowed(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	if (adapt->flags & AMDGV_FLAG_VF_HANG_GPU_RESET) {
+		return false;
+	}
+
+	if (idx_vf == AMDGV_PF_IDX) {
+		return amdgv_sched_reset_pf_allowed(adapt, amdgv_sched_active_vf_mask(adapt));
+	}
+
+	return true;
+}
+
 int amdgv_sched_reset_vf(struct amdgv_adapter *adapt, uint32_t idx_vf,
 			 enum amdgv_sched_block sched_block)
 {
@@ -383,10 +418,8 @@ int amdgv_sched_reset_vf(struct amdgv_adapter *adapt, uint32_t idx_vf,
 		return AMDGV_FAILURE;
 	}
 
-	if (adapt->flags & AMDGV_FLAG_VF_HANG_GPU_RESET) {
-		AMDGV_INFO("force reset enabled! Trigger whole_gpu_reset\n");
+	if (!amdgv_sched_reset_vf_allowed(adapt, idx_vf))
 		goto whole_gpu_reset;
-	}
 
 	amdgv_time_log_note_vf_reset_start(adapt, idx_vf);
 

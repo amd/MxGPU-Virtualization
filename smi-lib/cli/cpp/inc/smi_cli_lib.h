@@ -87,6 +87,8 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_BAD_PAGE_INFO)(amdsmi_processor_handle,
 		amdsmi_eeprom_table_record_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_RAS_FEATURE_INFO)(amdsmi_processor_handle,
 		amdsmi_ras_feature_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_BAD_PAGE_THRESHOLD)(amdsmi_processor_handle,
+		uint32_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_NUM_VF)(amdsmi_processor_handle, uint32_t *, uint32_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_VF_PARTITION_INFO)(amdsmi_processor_handle, unsigned int,
 		amdsmi_partition_info_t *);
@@ -126,6 +128,8 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_VIRTUALIZATION_MODE)(amdsmi_processor_h
 typedef amdsmi_status_t (*AMDSMI_TOPO_GET_P2P_STATUS)(amdsmi_processor_handle,amdsmi_processor_handle,
 		amdsmi_link_type_t*, amdsmi_p2p_capability_t*);
 typedef amdsmi_status_t (*AMDSMI_GET_AFIDS_FROM_CPER)(amdsmi_get_afids_from_cper);
+
+typedef amdsmi_status_t (*AMDSMI_RESET_GPU)(amdsmi_processor_handle);
 
 class AmdSmiLibHost
 {
@@ -184,6 +188,7 @@ public:
 
 	AMDSMI_GET_GPU_BAD_PAGE_INFO amdsmi_get_gpu_bad_page_info;
 	AMDSMI_GET_GPU_RAS_FEATURE_INFO amdsmi_get_gpu_ras_feature_info;
+	AMDSMI_GET_BAD_PAGE_THRESHOLD amdsmi_get_bad_page_threshold;
 	AMDSMI_GET_NUM_VF amdsmi_get_num_vf;
 	AMDSMI_GET_VF_PARTITION_INFO amdsmi_get_vf_partition_info;
 	AMDSMI_GET_VF_INFO amdsmi_get_vf_info;
@@ -203,6 +208,8 @@ public:
 	AMDSMI_GET_GPU_METRICS amdsmi_get_gpu_metrics;
 	AMDSMI_TOPO_GET_P2P_STATUS host_amdsmi_topo_get_p2p_status;
 	AMDSMI_GET_GPU_VIRTUALIZATION_MODE amdsmi_get_gpu_virtualization_mode;
+
+	AMDSMI_RESET_GPU amdsmi_reset_gpu;
 
 	HMODULE amdSmiDll;
 

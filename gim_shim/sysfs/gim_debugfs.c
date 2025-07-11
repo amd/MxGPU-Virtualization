@@ -2034,6 +2034,32 @@ static const struct file_operations mes_info_dump_all_fops = {
 	.llseek         = default_llseek,
 };
 
+static ssize_t mem_overflow_check_read(struct file *file,
+	char __user *user_buf,
+	size_t count, loff_t *ppos)
+{
+	int ret = 0, len = 0;
+	char buf[128];
+
+	if (gim_sentinel_is_enabled()) {
+		ret = gim_sentinel_check_memory_overflow();
+		if (ret > 0) {
+			len += snprintf(buf, sizeof(buf), "Memory overflow detected %d times\n", ret);
+		}
+	} else {
+		len += snprintf(buf, sizeof(buf), "Sentinel is not enabled, cannot check memory overflow\n");
+	}
+	ret = simple_read_from_buffer(user_buf, count, ppos, buf, len);
+
+	return ret;
+}
+
+static const struct file_operations mem_overflow_check_fops = {
+	.open           = simple_open,
+	.read           = mem_overflow_check_read,
+	.llseek         = default_llseek,
+};
+
 static ssize_t mes_info_dump_write(struct file *file,
 		const char __user *user_buf,
 		size_t count, loff_t *ppos)
@@ -2391,6 +2417,13 @@ void gim_debugfs_init(void)
 	entry = debugfs_create_file("mes_info_dump_enable", 0200,
 			root_dir,
 			NULL, &mes_info_dump_all_fops);
+	if (entry == NULL) {
+		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+		goto err;
+	}
+	entry = debugfs_create_file("mem_overflow_check", 0200,
+			root_dir,
+			NULL, &mem_overflow_check_fops);
 	if (entry == NULL) {
 		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 		goto err;

@@ -856,6 +856,9 @@ struct amdgv_init_config_opt {
 	uint32_t paging_queue_frame_number;
 
 	int max_cper_count;
+
+	/* the length of time between thermal throttling events, in unit of microseconds */
+	uint32_t thermal_throttle_rate_limit;
 };
 
 struct amdgv_fini_config_opt {
@@ -1697,6 +1700,26 @@ enum AMDGV_CU_DATA_TYPE {
 	AMDGV_CU_DATA_TYPE__LDS = 0,
 	AMDGV_CU_DATA_TYPE__SGPRs,
 	AMDGV_CU_DATA_TYPE__VGPRs,
+};
+
+struct amdgv_dump_cu_resource_memory {
+	uint32_t *kernelobj_addr;
+	uint32_t *out_data_addr;
+	uint32_t *out_flag_addr;
+};
+
+struct amdgv_dump_cu_resource_size {
+	uint32_t kernelobj_size;
+	uint32_t out_data_size;
+	uint32_t out_flag_size;
+	uint32_t group_segment_size;
+	uint16_t workgroup_size_x;
+	uint16_t workgroup_size_y;
+	uint16_t workgroup_size_z;
+	uint32_t grid_size_x;
+	uint32_t grid_size_y;
+	uint32_t grid_size_z;
+	uint32_t private_segment_size;
 };
 
 struct amdgv_perf_log_info {
@@ -2605,6 +2628,17 @@ int amdgv_toggle_psp_vf_gate(amdgv_dev_t dev, uint32_t vf_select, bool enable);
 int amdgv_get_agp_info(amdgv_dev_t dev, void **buf);
 
 /*
+ * amdgv_migration_get_dirty_page_size - query dirty page size
+ *
+ * @dev:	amdgv device handle
+ * @dirty_page_size:	pointer to fetch dirty page size value
+ *
+ * Returns:
+ * 0 for success, other value for failure
+ */
+int amdgv_migration_get_dirty_page_size(amdgv_dev_t dev, uint32_t *dirty_page_size);
+
+/*
  * amdgv_copy_migration_vf_fb - save/restore target VF FB data
  *
  * @dev:    amdgv device handle
@@ -2638,7 +2672,7 @@ int amdgv_get_migration_ctx(amdgv_dev_t dev, uint32_t idx_vf,
  *
  */
 int amdgv_migration_export(amdgv_dev_t dev, uint32_t idx_vf,
-	void *buf, enum amdgv_migration_export_phase phase);
+	void *buf, enum amdgv_migration_export_phase type);
 
 /*
  * amdgv_migration_import - import PSP package for migration
@@ -3064,6 +3098,17 @@ int amdgv_set_bp_mode(amdgv_dev_t dev, int mode);
 int amdgv_get_bp_mode(amdgv_dev_t dev);
 
 /*
+ * amdgv_alloc_dump_cu_resource_memory - allocate memory for CU data dump
+ *
+ * @dev:	amdgv device handle
+ * @dump_cu_resource_size:	The size of various resources for CU data dump
+ * @output_data:	pointer to store the allocated memory CPU address
+ *
+ */
+int amdgv_alloc_dump_cu_resource_memory(amdgv_dev_t dev,
+		struct amdgv_dump_cu_resource_size *dump_cu_resource_size, struct amdgv_dump_cu_resource_memory *output_data);
+
+/*
  * amdgv_dump_cu_data - dump CU data to file
  *
  * @dev:	amdgv device handle
@@ -3071,6 +3116,14 @@ int amdgv_get_bp_mode(amdgv_dev_t dev);
  *
  */
 int amdgv_dump_cu_data(amdgv_dev_t dev, enum AMDGV_CU_DATA_TYPE type);
+
+/*
+ * amdgv_free_dump_cu_resource_memory - free the memmgr memory allocated for CU data dump
+ *
+ * @dev:	amdgv device handle
+ *
+ */
+int amdgv_free_dump_cu_resource_memory(amdgv_dev_t dev);
 /*
  * amdgv_send_ws_cmd - manually send a world switch command
  *

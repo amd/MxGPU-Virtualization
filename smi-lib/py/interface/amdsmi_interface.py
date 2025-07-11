@@ -25,6 +25,7 @@ import ctypes
 import re
 from enum import IntEnum, Enum
 from collections.abc import Iterable
+from typing import Any, Dict, List, Tuple, Union
 
 from . import amdsmi_wrapper
 from .amdsmi_exception import *
@@ -217,7 +218,7 @@ class AmdSmiFwBlock(IntEnum):
     FW_ID_DMCU = amdsmi_wrapper.AMDSMI_FW_ID_DMCU
     FW_ID_PSP_RAS = amdsmi_wrapper.AMDSMI_FW_ID_PSP_RAS
     FW_ID_P2S_TABLE = amdsmi_wrapper.AMDSMI_FW_ID_P2S_TABLE
-
+    FW_ID_PLDM_BUNDLE = amdsmi_wrapper.AMDSMI_FW_ID_PLDM_BUNDLE
 
 class AmdSmiEventCategory(IntEnum):
     NOT_USED = amdsmi_wrapper.AMDSMI_EVENT_CATEGORY_NON_USED
@@ -805,6 +806,20 @@ class AmdSmiCperErrorSeverity(IntEnum):
     NUM = amdsmi_wrapper.AMDSMI_CPER_SEV_NUM
     UNUSED = amdsmi_wrapper.AMDSMI_CPER_SEV_UNUSED
 
+class AmdSmiCperNotifyType(Enum):
+    CMC = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_CMC
+    CPE = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_CPE
+    MCE = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_MCE
+    PCIE = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_PCIE
+    INIT = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_INIT
+    NMI = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_NMI
+    BOOT = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_BOOT
+    DMAr = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_DMAR
+    SEA =  amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_SEA
+    SEI = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_SEI
+    PEI = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_PEI
+    CXL_COMPONENT = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_CXL_COMPONENT
+
 
 _AMDSMI_MAX_MM_IP_COUNT = 8
 _GPU_UUID_SIZE = 38
@@ -959,6 +974,18 @@ def _find_subcode(category, subcode):
     elif AmdSmiEventCategory(category) == AmdSmiEventCategory.XGMI:
         return AmdSmiEventCategoryXgmi(subcode)
 
+def _notifyTypeToString(notify_type_b):
+    guid = []
+    # Iterate over only the first 8 bytes, but backwards
+    for i in notify_type_b[7::-1]:
+        guid.append(format(i, '02x'))
+    hex_string = "".join(guid)
+    hex_value = int(hex_string, 16)
+    if hex_value in AmdSmiCperNotifyType._value2member_map_:
+        # Convert to the corresponding enum name
+        return AmdSmiCperNotifyType(hex_value).name
+    else:
+        return "Unknown"
 
 def _check_res(ret_code):
     if ret_code == amdsmi_wrapper.AMDSMI_STATUS_RETRY:
@@ -1164,6 +1191,20 @@ def amdsmi_get_gpu_ras_feature_info(processor_handle):
         'ras_eeprom_version': ras_feature.ras_eeprom_version,
         'supported_ecc_correction_schema': ras_feature.supported_ecc_correction_schema
     }
+
+def amdsmi_get_bad_page_threshold(processor_handle):
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+
+    if isinstance(processor_handle, amdsmi_wrapper.amdsmi_vf_handle_t):
+        processor_handle = ctypes.pointer(ctypes.c_uint64(processor_handle.handle))
+
+    bad_page_threshold = ctypes.c_uint32()
+    _check_res(amdsmi_wrapper.amdsmi_get_bad_page_threshold(
+        processor_handle, ctypes.byref(bad_page_threshold)))
+
+    return bad_page_threshold.value
 
 def amdsmi_status_code_to_string(status):
     if not isinstance(status, AmdSmiRetCode):
@@ -2276,40 +2317,83 @@ def amdsmi_set_soc_pstate(processor_handle, policy_id):
             processor_handle, policy_id))
 
 
-def amdsmi_get_gpu_cper_entries(processor_handle, severity_mask):
+def amdsmi_get_gpu_cper_entries(processor_handle: amdsmi_wrapper.amdsmi_processor_handle,
+    severity_mask: int,
+    buffer_size: int = 4*1048576,
+    cursor: int = 0
+) -> Tuple[List[Dict[str, Any]], int]:
+
     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
         raise AmdSmiParameterException(
-            processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+            processor_handle, amdsmi_wrapper.amdsmi_processor_handle
+        )
 
-    buffer_size = ctypes.c_uint64()   # Initial buffer size
-    buffer_size.value = 1024
-    cper_data = (ctypes.c_char * buffer_size.value)()
-    cper_hdrs = (ctypes.POINTER(amdsmi_wrapper.amdsmi_cper_hdr_t) * 1024)()
-    entry_count = ctypes.c_uint64()
-    cursor = ctypes.c_uint64()
+    # Allocate a buffer for CPER data.
+    buf = ctypes.create_string_buffer(buffer_size)
+    buf_size = ctypes.c_uint64(buffer_size)
+    entry_count = ctypes.c_uint64(20)
+    cur = ctypes.c_uint64(cursor)
+    # Allocate a pointer for the CPER header array.
+    cper_hdrs_array = (ctypes.POINTER(amdsmi_wrapper.amdsmi_cper_hdr_t) * 20)()
+    cper_hdrs = ctypes.cast(cper_hdrs_array, ctypes.POINTER(ctypes.POINTER(amdsmi_wrapper.amdsmi_cper_hdr_t)))
 
-
-    if not isinstance(severity_mask, AmdSmiCperErrorSeverity):
-        raise AmdSmiParameterException(severity_mask, AmdSmiCperErrorSeverity)
-
+    # Call the underlying AMD-SMI API.
     ret = amdsmi_wrapper.amdsmi_get_gpu_cper_entries(
         processor_handle,
-        severity_mask,
-        cper_data,
-        ctypes.byref(buffer_size),
+        ctypes.c_uint32(severity_mask),
+        buf,
+        ctypes.byref(buf_size),
         cper_hdrs,
         ctypes.byref(entry_count),
-        ctypes.byref(cursor)
+        ctypes.byref(cur)
     )
+    if ret != amdsmi_wrapper.AMDSMI_STATUS_SUCCESS:
+        raise AmdSmiLibraryException(ret)
 
-    _check_res(ret)
-
-    raw_cper_data_list = []
+    entries = {}
+    cper_data = []
+    offset = 0
+    # Iterate over each entry using its variable record_length.
     for i in range(entry_count.value):
-        hdr = ctypes.cast(cper_hdrs[i], ctypes.POINTER(amdsmi_wrapper.amdsmi_cper_hdr_t)).contents
-        raw_cper_data_list.append(cper_data.raw[hdr.record_length])
+        entry_address = ctypes.addressof(buf) + offset
+        entry_ptr = ctypes.cast(entry_address, ctypes.POINTER(amdsmi_wrapper.amdsmi_cper_hdr_t))
+        cper_data.append({
+            "bytes":list((entry_ptr.contents.record_length * ctypes.c_byte).from_address(entry_address)),
+            "size":entry_ptr.contents.record_length
+        })
+        # Extract the timestamp fields.
+        year = entry_ptr.contents.timestamp.year
+        # Adjust the year if it's less than 100. You can tweak this logic based on your expected data.
+        if year < 100:
+             year += 2000
+        formatted_timestamp = (
+           f"{year:04d}/"
+           f"{entry_ptr.contents.timestamp.month:02d}/"
+           f"{entry_ptr.contents.timestamp.day:02d} "
+           f"{entry_ptr.contents.timestamp.hours:02d}:"
+           f"{entry_ptr.contents.timestamp.minutes:02d}:"
+           f"{entry_ptr.contents.timestamp.seconds:02d}"
+        )
+        cper_entry = {
+            "error_severity": amdsmi_wrapper.amdsmi_cper_sev_t__enumvalues.get(entry_ptr.contents.error_severity, "AMDSMI_CPER_SEV_UNUSED").replace("AMDSMI_CPER_SEV_", "").lower(),
+            "notify_type": _notifyTypeToString(entry_ptr.contents.notify_type.b),
+            "timestamp": formatted_timestamp,
+            "signature" : entry_ptr.contents.signature,
+            "revision" : entry_ptr.contents.revision,
+            "signature_end" : hex(entry_ptr.contents.signature_end),
+            "sec_cnt" : entry_ptr.contents.sec_cnt,
+            "record_length" : entry_ptr.contents.record_length,
+            "platform_id" : entry_ptr.contents.platform_id,
+            "creator_id" : entry_ptr.contents.creator_id,
+            "record_id" : entry_ptr.contents.record_id,
+            "flags" : entry_ptr.contents.flags,
+            "persistence_info" : entry_ptr.contents.persistence_info,
+            "partition_id" : entry_ptr.contents.partition_id,
+        }
+        entries[i] = cper_entry.copy()
+        offset += entry_ptr.contents.record_length  # Use the actual record length to advance the offset
 
-    return raw_cper_data_list
+    return entries, cur.value, cper_data
 
 def amdsmi_topo_get_p2p_status(processor_handle_src, processor_handle_dst):
     if not isinstance(processor_handle_src, amdsmi_wrapper.amdsmi_processor_handle):
@@ -2360,3 +2444,10 @@ def amdsmi_get_afids_from_cper(cper_buffer):
 
     return list(afids[:num_afids.value])
 
+def amdsmi_reset_gpu(processor_handle):
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle, amdsmi_wrapper.amdsmi_processor_handle
+        )
+
+    _check_res(amdsmi_wrapper.amdsmi_reset_gpu(processor_handle))

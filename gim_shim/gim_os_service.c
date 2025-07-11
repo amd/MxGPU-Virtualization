@@ -564,7 +564,7 @@ static bool gim_read_bios_from_rom_bar(struct pci_dev *pdev, unsigned char *dest
 		goto end;
 	}
 
-	bios_ptr = (unsigned char *)kzalloc(size, GFP_KERNEL);
+	bios_ptr = (unsigned char *)gim_kzalloc(size, GFP_KERNEL);
 	if (!bios_ptr) {
 		gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL, size);
 		goto unmap;
@@ -576,7 +576,7 @@ static bool gim_read_bios_from_rom_bar(struct pci_dev *pdev, unsigned char *dest
 	memcpy(dest, bios_ptr, *bytes_copied);
 	ret = true;
 
-	kfree(bios_ptr);
+	gim_kfree(bios_ptr);
 unmap:
 	pci_unmap_rom(pdev, bios_io_ptr);
 end:
@@ -599,7 +599,7 @@ static bool gim_read_bios_from_platform(struct pci_dev *pdev, unsigned char *des
 		goto end;
 	}
 
-	bios_ptr = kzalloc(pdev->romlen, GFP_KERNEL);
+	bios_ptr = gim_kzalloc(pdev->romlen, GFP_KERNEL);
 	if (!bios_ptr) {
 		gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL, pdev->romlen);
 		goto unmap;
@@ -611,7 +611,7 @@ static bool gim_read_bios_from_platform(struct pci_dev *pdev, unsigned char *des
 	memcpy(dest, bios_ptr, *bytes_copied);
 	ret = true;
 
-	kfree(bios_ptr);
+	gim_kfree(bios_ptr);
 unmap:
 	iounmap(bios_io_ptr);
 end:
@@ -720,7 +720,7 @@ static int gim_register_interrupt(oss_dev_t dev,
 		}
 	} else if (intr_type == OSS_INTR_TYPE_MSIX) {
 		num_msi_vectors = intr_regrt_info->num_msi_vectors;
-		entries = kmalloc(sizeof(struct msix_entry) * num_msi_vectors,
+		entries = gim_kmalloc(sizeof(struct msix_entry) * num_msi_vectors,
 				  GFP_KERNEL);
 
 		if (entries == NULL) {
@@ -795,7 +795,7 @@ disable_pci_intr:
 		pci_disable_msi(pdev);
 	} else {
 		pci_disable_msix(pdev);
-		kfree(entries);
+		gim_kfree(entries);
 	}
 
 	return -1;
@@ -838,7 +838,7 @@ static int gim_unregister_interrupt(oss_dev_t dev,
 		pci_disable_msi(pdev);
 	} else {
 		pci_disable_msix(pdev);
-		kfree(entries);
+		gim_kfree(entries);
 	}
 
 	return 0;
@@ -846,22 +846,22 @@ static int gim_unregister_interrupt(oss_dev_t dev,
 
 static void *gim_alloc_small_memory(uint32_t size)
 {
-	return kmalloc(size, GFP_KERNEL);
+	return gim_kmalloc(size, GFP_KERNEL);
 }
 
 static void *gim_alloc_small_memory_atomic(uint32_t size)
 {
-	return kmalloc(size, GFP_ATOMIC);
+	return gim_kmalloc(size, GFP_ATOMIC);
 }
 
 static void *gim_alloc_small_zero_memory(uint32_t size)
 {
-	return kzalloc(size, GFP_KERNEL);
+	return gim_kzalloc(size, GFP_KERNEL);
 }
 
 static void gim_free_small_memory(void *ptr)
 {
-	kfree(ptr);
+	gim_kfree(ptr);
 }
 
 static void *gim_get_physical_addr(void *addr)
@@ -871,12 +871,12 @@ static void *gim_get_physical_addr(void *addr)
 
 static void *gim_alloc_memory(uint32_t size)
 {
-	return vmalloc(size);
+	return gim_vmalloc(size);
 }
 
 static void gim_free_memory(void *ptr)
 {
-	vfree(ptr);
+	gim_vfree(ptr);
 }
 
 static void *gim_memremap(uint64_t offset, uint32_t size, enum oss_memremap_type type)
@@ -937,8 +937,8 @@ static void gim_free_dma_mem_iova(struct gim_dma_mem_info *mem_info)
 {
 	dma_unmap_sg(&mem_info->dev->dev, mem_info->sg, mem_info->sg_cnt,
 		DMA_BIDIRECTIONAL);
-	vfree(mem_info->sg);
-	vfree(mem_info->va_ptr);
+	gim_vfree(mem_info->sg);
+	gim_vfree(mem_info->va_ptr);
 }
 
 static void gim_free_dma_mem_system(struct gim_dma_mem_info *mem_info)
@@ -963,11 +963,11 @@ static int gim_alloc_dma_mem_iova(oss_dev_t dev,
 
 	nr_pages = mem_info->size/PAGE_SIZE;
 
-	mem_info->va_ptr = vzalloc(mem_info->size);
+	mem_info->va_ptr = gim_vzalloc(mem_info->size);
 	if (!mem_info->va_ptr)
 		goto error_out;
 
-	mem_info->sg = vzalloc(nr_pages * sizeof(*(mem_info->sg)));
+	mem_info->sg = gim_vzalloc(nr_pages * sizeof(*(mem_info->sg)));
 	if (!mem_info->sg)
 		goto error_kzfree;
 
@@ -1003,9 +1003,9 @@ error_unmap:
 	dma_unmap_sg(&mem_info->dev->dev, mem_info->sg, mem_info->sg_cnt,
 		DMA_BIDIRECTIONAL);
 error_vfree:
-	vfree(mem_info->sg);
+	gim_vfree(mem_info->sg);
 error_kzfree:
-	vfree(mem_info->va_ptr);
+	gim_vfree(mem_info->va_ptr);
 error_out:
 	return -1;
 }
@@ -1101,7 +1101,7 @@ static int gim_alloc_dma_mem(oss_dev_t dev, uint32_t size,
 		return -1;
 	}
 
-	mem_info = kzalloc(sizeof(struct gim_dma_mem_info), GFP_KERNEL);
+	mem_info = gim_kzalloc(sizeof(struct gim_dma_mem_info), GFP_KERNEL);
 	if (!mem_info)
 		return -1;
 	mem_info->dev = (struct pci_dev *)dev;
@@ -1115,7 +1115,7 @@ static int gim_alloc_dma_mem(oss_dev_t dev, uint32_t size,
 			mem_info->sg_cnt = 0;
 			if (gim_alloc_dma_mem_system_align(dev, mem_info)) {
 				gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL, size_align);
-				kfree(mem_info);
+				gim_kfree(mem_info);
 				return -1;
 			}
 		}
@@ -1131,7 +1131,7 @@ static int gim_alloc_dma_mem(oss_dev_t dev, uint32_t size,
 		mem_info->size = size;
 		if (gim_alloc_dma_mem_system(dev, mem_info)) {
 			gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL, size);
-			kfree(mem_info);
+			gim_kfree(mem_info);
 			return -1;
 		}
 		dma_mem_info->bus_addr = mem_info->bus_addr;
@@ -1152,7 +1152,7 @@ static void gim_free_dma_mem(void *handle)
 			gim_free_dma_mem_iova(mem_info);
 		else
 			gim_free_dma_mem_system(mem_info);
-		kfree(mem_info);
+		gim_kfree(mem_info);
 	}
 }
 
@@ -1166,7 +1166,7 @@ static void *gim_spin_lock_init(int rank)
 {
 	struct gim_spin_lock *p;
 
-	p = kmalloc(sizeof(struct gim_spin_lock), GFP_KERNEL);
+	p = gim_kmalloc(sizeof(struct gim_spin_lock), GFP_KERNEL);
 	if (p) {
 		p->rank = rank;
 		spin_lock_init(&p->lock);
@@ -1215,12 +1215,12 @@ static void gim_spin_unlock_irq(void *p)
 
 static void gim_spin_lock_fini(void *p)
 {
-	kfree(p);
+	gim_kfree(p);
 }
 
 static void *gim_mutex_init(void)
 {
-	struct mutex *p = kmalloc(sizeof(struct mutex), GFP_KERNEL);
+	struct mutex *p = gim_kmalloc(sizeof(struct mutex), GFP_KERNEL);
 
 	if (p)
 		mutex_init(p);
@@ -1241,12 +1241,12 @@ static void gim_mutex_unlock(void *p)
 static void gim_mutex_fini(void *p)
 {
 	mutex_destroy((struct mutex *)p);
-	kfree(p);
+	gim_kfree(p);
 }
 static void *gim_rwlock_init(void)
 {
 	rwlock_t *p =
-		kmalloc(sizeof(rwlock_t), GFP_KERNEL);
+		gim_kmalloc(sizeof(rwlock_t), GFP_KERNEL);
 
 	if (p) {
 		rwlock_t lock = *p;
@@ -1299,13 +1299,13 @@ static void gim_rwlock_write_unlock(void *p)
 
 static void gim_rwlock_fini(void *p)
 {
-	kfree(p);
+	gim_kfree(p);
 }
 
 static void *gim_rwsema_init(void)
 {
 	struct rw_semaphore *p =
-		kmalloc(sizeof(*p), GFP_KERNEL);
+		gim_kmalloc(sizeof(*p), GFP_KERNEL);
 
 	if (p)
 		init_rwsem(p);
@@ -1385,12 +1385,12 @@ static void gim_rwsema_write_unlock(void *p)
 
 static void gim_rwsema_fini(void *p)
 {
-	kfree(p);
+	gim_kfree(p);
 }
 
 static void *gim_event_init(void)
 {
-	struct gim_event *ge = kzalloc(sizeof(struct gim_event), GFP_KERNEL);
+	struct gim_event *ge = gim_kzalloc(sizeof(struct gim_event), GFP_KERNEL);
 
 	if (ge == NULL)
 		return NULL;
@@ -1468,13 +1468,13 @@ static enum oss_event_state gim_wait_event(void *event, uint32_t timeout)
 static void gim_event_fini(void *event)
 {
 	struct gim_event *ge = container_of(event, struct gim_event, cp);
-	kfree(ge);
+	gim_kfree(ge);
 }
 
 
 static void *gim_atomic_init(void)
 {
-	return kzalloc(sizeof(atomic64_t), GFP_KERNEL);
+	return gim_kzalloc(sizeof(atomic64_t), GFP_KERNEL);
 }
 
 static uint64_t gim_atomic_read(void *p)
@@ -1514,7 +1514,7 @@ static int64_t gim_atomic_cmpxchg(void *p, int64_t comperand, int64_t exchange)
 
 static void gim_atomic_fini(void *p)
 {
-	kfree(p);
+	gim_kfree(p);
 }
 
 static void *gim_create_thread(oss_callback_t threadfn, void *context,
@@ -1581,7 +1581,7 @@ static enum hrtimer_restart gim_timer_callback_wrapper(struct hrtimer *timer)
 static void *gim_timer_init(oss_callback_t timer_cb, void *context)
 {
 	struct gim_timer *t = (struct gim_timer *)
-		kzalloc(sizeof(struct gim_timer), GFP_KERNEL);
+		gim_kzalloc(sizeof(struct gim_timer), GFP_KERNEL);
 
 	if (t == NULL)
 		return NULL;
@@ -1600,7 +1600,7 @@ static void *gim_timer_init_ex(oss_callback_t timer_cb, void *context,
 				oss_dev_t dev)
 {
 	struct gim_timer *t = (struct gim_timer *)
-		kzalloc(sizeof(struct gim_timer), GFP_KERNEL);
+		gim_kzalloc(sizeof(struct gim_timer), GFP_KERNEL);
 
 	if (t == NULL)
 		return NULL;
@@ -1651,7 +1651,7 @@ static void gim_close_timer(void *timer)
 
 	hrtimer_cancel(&t->timer);
 
-	kfree(t);
+	gim_kfree(t);
 }
 
 static void gim_udelay(uint32_t usecs)
@@ -1777,7 +1777,7 @@ static int gim_store_dump(const char *buf, uint32_t bdf)
 	loff_t pos = 0;
 
 	/* use dynamic allocate to avoid frame size compiling warn */
-	path = kzalloc(PATH_MAX, GFP_KERNEL);
+	path = gim_kzalloc(PATH_MAX, GFP_KERNEL);
 	if (NULL == path)
 		return -ENOMEM;
 
@@ -1786,7 +1786,7 @@ static int gim_store_dump(const char *buf, uint32_t bdf)
 	file = filp_open(path, O_CREAT | O_TRUNC | O_SYNC | O_WRONLY, 0);
 
 	if (IS_ERR_OR_NULL(file)) {
-		kfree(path);
+		gim_kfree(path);
 		ret = PTR_ERR(file);
 		return (int)ret == 0 ? -EINVAL : (int)ret;
 	}
@@ -1796,7 +1796,7 @@ static int gim_store_dump(const char *buf, uint32_t bdf)
 		return (int)ret == 0 ? -EINVAL : (int)ret;
 
 	filp_close(file, NULL);
-	kfree(path);
+	gim_kfree(path);
 	return 0;
 }
 #ifdef WS_RECORD
@@ -1809,7 +1809,7 @@ static int gim_store_record(const char *buf, uint32_t bdf, bool auto_sched)
 	loff_t pos = 0;
 
 	/* use dynamic allocate to avoid frame size compiling warn */
-	path = kzalloc(PATH_MAX, GFP_KERNEL);
+	path = gim_kzalloc(PATH_MAX, GFP_KERNEL);
 	if (NULL == path)
 		return -ENOMEM;
 
@@ -1824,7 +1824,7 @@ static int gim_store_record(const char *buf, uint32_t bdf, bool auto_sched)
 	file = filp_open(path, O_CREAT | O_SYNC | O_WRONLY | O_APPEND, 0);
 
 	if (IS_ERR_OR_NULL(file)) {
-		kfree(path);
+		gim_kfree(path);
 		ret = PTR_ERR(file);
 		return (int)ret == 0 ? -EINVAL : (int)ret;
 	}
@@ -1832,12 +1832,12 @@ static int gim_store_record(const char *buf, uint32_t bdf, bool auto_sched)
 	ret = gim_kernel_write(file, buf, strlen(buf), pos);
 	if (ret != strlen(buf)) {
 		filp_close(file, NULL);
-		kfree(path);
+		gim_kfree(path);
 		return (int)ret == 0 ? -EINVAL : (int)ret;
 	}
 
 	filp_close(file, NULL);
-	kfree(path);
+	gim_kfree(path);
 	return 0;
 }
 #endif
@@ -1850,7 +1850,7 @@ static int gim_store_rlcv_timestamp(const char *buf, uint32_t size, uint32_t bdf
 	loff_t pos = 0;
 
 	/* use dynamic allocate to avoid frame size compiling warn */
-	path = kzalloc(PATH_MAX, GFP_KERNEL);
+	path = gim_kzalloc(PATH_MAX, GFP_KERNEL);
 	if (NULL == path)
 		return -ENOMEM;
 
@@ -1860,7 +1860,7 @@ static int gim_store_rlcv_timestamp(const char *buf, uint32_t size, uint32_t bdf
 	csa_file = filp_open(path, O_CREAT | O_SYNC | O_WRONLY | O_APPEND, 0666);
 
 	if (IS_ERR_OR_NULL(csa_file)) {
-		kfree(path);
+		gim_kfree(path);
 		ret = PTR_ERR(csa_file);
 		return (int)ret == 0 ? -EINVAL : (int)ret;
 	}
@@ -1870,7 +1870,7 @@ static int gim_store_rlcv_timestamp(const char *buf, uint32_t size, uint32_t bdf
 		return (int)ret == 0 ? -EINVAL : (int)ret;
 
 	filp_close(csa_file, NULL);
-	kfree(path);
+	gim_kfree(path);
 	return 0;
 }
 
@@ -1895,7 +1895,7 @@ int gim_calc_hash_ext(const char *alg_name, void *out, const void *msg, uint64_t
 	if (IS_ERR(tfm))
 		return -ENOMEM;
 
-	desc = kmalloc(sizeof(*desc) + crypto_shash_descsize(tfm), GFP_KERNEL);
+	desc = gim_kmalloc(sizeof(*desc) + crypto_shash_descsize(tfm), GFP_KERNEL);
 
 	if (!desc) {
 		ret = -ENOMEM;
@@ -1910,7 +1910,7 @@ int gim_calc_hash_ext(const char *alg_name, void *out, const void *msg, uint64_t
 
 	shash_desc_zero(desc);
 
-	kfree(desc);
+	gim_kfree(desc);
 out:
 	crypto_free_shash(tfm);
 #else
@@ -1948,7 +1948,7 @@ static void *gim_sema_init(int32_t val)
 {
 	struct semaphore *sem;
 
-	sem = kmalloc(sizeof(struct semaphore), GFP_KERNEL);
+	sem = gim_kmalloc(sizeof(struct semaphore), GFP_KERNEL);
 	if (sem)
 		sema_init(sem, val);
 	else {
@@ -1961,7 +1961,7 @@ static void *gim_sema_init(int32_t val)
 
 static void gim_sema_fini(void *p)
 {
-	kfree(p);
+	gim_kfree(p);
 }
 
 static int gim_strnstr(const char *str, const char *substr, uint32_t max_size)
@@ -1978,8 +1978,8 @@ static int gim_strnstr(const char *str, const char *substr, uint32_t max_size)
 	str_size = strnlen(str, max_size);
 	substr_size = strnlen(substr, max_size);
 
-	str_cp = kmalloc(str_size+1, GFP_KERNEL);
-	substr_cp = kmalloc(substr_size+1, GFP_KERNEL);
+	str_cp = gim_kmalloc(str_size+1, GFP_KERNEL);
+	substr_cp = gim_kmalloc(substr_size+1, GFP_KERNEL);
 
 	if (str_cp == NULL || substr_cp == NULL) {
 		index = -1;
@@ -2000,9 +2000,9 @@ static int gim_strnstr(const char *str, const char *substr, uint32_t max_size)
 
 free:
 	if (str_cp != NULL)
-		kfree(str_cp);
+		gim_kfree(str_cp);
 	if (substr_cp != NULL)
-		kfree(substr_cp);
+		gim_kfree(substr_cp);
 
 	return index;
 }
@@ -2225,7 +2225,7 @@ static int gim_store_gfx_dump_data(const char *buf, uint32_t size, char *filenam
 	loff_t pos = 0;
 
 	/* use dynamic allocate to avoid frame size compiling warn */
-	path = kzalloc(PATH_MAX, GFP_KERNEL);
+	path = gim_kzalloc(PATH_MAX, GFP_KERNEL);
 	if (NULL == path)
 		return -ENOMEM;
 
@@ -2234,7 +2234,7 @@ static int gim_store_gfx_dump_data(const char *buf, uint32_t size, char *filenam
 	csa_file = filp_open(path, O_CREAT | O_SYNC | O_WRONLY | O_APPEND, 0666);
 
 	if (IS_ERR_OR_NULL(csa_file)) {
-		kfree(path);
+		gim_kfree(path);
 		ret = PTR_ERR(csa_file);
 		return (int)ret == 0 ? -EINVAL : (int)ret;
 	}
@@ -2244,7 +2244,7 @@ static int gim_store_gfx_dump_data(const char *buf, uint32_t size, char *filenam
 		return (int)ret == 0 ? -EINVAL : (int)ret;
 
 	filp_close(csa_file, NULL);
-	kfree(path);
+	gim_kfree(path);
 	return 0;
 }
 
@@ -2280,7 +2280,7 @@ static void gim_work_func(struct work_struct *work)
 	}
 
 	/* Free the allocated memory for the work */
-	kfree(work_ctx);
+	gim_kfree(work_ctx);
 }
 
 static int gim_schedule_work(oss_dev_t dev, oss_callback_t fn, void *context)
@@ -2288,7 +2288,7 @@ static int gim_schedule_work(oss_dev_t dev, oss_callback_t fn, void *context)
 	struct gim_work_queue *work_ctx;
 
 	/* Allocate work queue */
-	work_ctx = kmalloc(sizeof(struct gim_work_queue), GFP_KERNEL);
+	work_ctx = gim_kmalloc(sizeof(struct gim_work_queue), GFP_KERNEL);
 	if (!work_ctx) {
 		gim_warn("Failed to allocate memory for work structure\n");
 		return -ENOMEM;

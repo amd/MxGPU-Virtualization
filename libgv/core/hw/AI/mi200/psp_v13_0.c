@@ -677,7 +677,57 @@ enum psp_status psp_v13_trigger_snapshot(struct amdgv_adapter *adapt,
 	return ret;
 }
 
-enum psp_status psp_v13_migration_get_psp_info(struct amdgv_adapter* adapt,
+#ifdef AMDGV_MIGRATION_DEBUG
+static enum psp_status psp_v13_migration_rwl_debug_print(struct amdgv_adapter *adapt,
+	uint32_t idx_vf)
+{
+	enum psp_status ret = PSP_STATUS__SUCCESS;
+	struct amdgv_vf_device *vf = &adapt->array_vf[idx_vf];
+	struct mi200_migration_vf_state_reg *rwl =
+			mi200_migration_vf_regs;
+	uint32_t rwl_count = mi200_migration_vf_regs_count;
+	int i = 0;
+	uint32_t offset = 0;
+
+	if (!vf->configured) {
+		AMDGV_ERROR("VF:%d not configured. Drop request\n", idx_vf);
+		ret = PSP_STATUS__ERROR_GENERIC;
+		return ret;
+	}
+	if ((!vf->res_mapped) || (vf->res.mmio == NULL)) {
+		AMDGV_ERROR("VF:%d Resource not mapped. Drop request\n", idx_vf);
+		ret = PSP_STATUS__ERROR_GENERIC;
+		return ret;
+	}
+	if (!rwl) {
+		AMDGV_ERROR("Empty list for vf registers\n");
+		ret = PSP_STATUS__ERROR_GENERIC;
+		return ret;
+	}
+
+	for (i = 0; i < rwl_count; i++) {
+		/* If hwid is greater than HWIP_MAX means the offset is real address */
+		if (rwl[i].hwid < MAX_HWIP) {
+			if (!adapt->reg_offset[rwl[i].hwid][rwl[i].inst]) {
+				AMDGV_DEBUG("Failed to find reg %s\n", rwl[i].name);
+				continue;
+			}
+			offset = adapt->reg_offset[rwl[i].hwid][rwl[i].inst][rwl[i].seg]
+				+ rwl[i].reg;
+		} else {
+			offset = rwl[i].reg / 4;
+		}
+
+		AMDGV_DEBUG("[VF:%d] Reg: %s Offset:0x%02x Length:%d value:0x%x\n",
+			idx_vf, rwl[i].name, offset, rwl[i].size,
+			oss_mm_read32(((uint8_t *)(vf->res.mmio)) + offset * 4));
+	}
+
+	return ret;
+}
+#endif //AMDGV_MIGRATION_DEBUG
+
+static enum psp_status psp_v13_get_migration_version(struct amdgv_adapter *adapt,
 	uint32_t *migration_version)
 {
 
@@ -716,112 +766,151 @@ enum psp_status psp_v13_migration_get_psp_info(struct amdgv_adapter* adapt,
 	return ret;
 }
 
-enum psp_status psp_v13_migration_export(struct amdgv_adapter* adapt,
-	uint32_t vfid, uint64_t pkg_addr, uint32_t buf_size, uint32_t *pkg_size,
-	bool is_phase1)
+static enum psp_status psp_v13_migration_get_psp_info(struct amdgv_adapter *adapt)
 {
-	enum psp_status ret = PSP_STATUS__ERROR_GENERIC;
-	struct psp_cmd_km* migration_export_cmd = NULL;
-	struct psp_gfx_resp psp_resp = { 0 };
 
-	migration_export_cmd = adapt->psp.psp_cmd_km_mem;
-	if (!migration_export_cmd) {
-		amdgv_put_error(AMDGV_PF_IDX,
-			AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
-			sizeof(struct psp_cmd_km));
+	enum psp_status ret = PSP_STATUS__ERROR_GENERIC;
+
+	ret = psp_v13_get_migration_version(adapt, &adapt->live_migration.migration_version);
+	if (ret != PSP_STATUS__SUCCESS) {
+		AMDGV_ERROR("Failed to get PSP migration version.\n");
 		return ret;
 	}
 
-	migration_export_cmd->cmd_id = PSP_CMD_KM_TYPE__MIGRATION_EXPORT;
-	migration_export_cmd->cmd.migration_export.pkg_addr_lo =
-		lower_32_bits(pkg_addr);
-	migration_export_cmd->cmd.migration_export.pkg_addr_hi =
-		upper_32_bits(pkg_addr);
-	migration_export_cmd->cmd.migration_export.pkg_size_allocated = buf_size;
-	migration_export_cmd->cmd.migration_export.target_vfid = vfid;
-	migration_export_cmd->cmd.migration_export.flags =
-		is_phase1 ? MIGRATION_FLAG_STATIC  : MIGRATION_FLAG_DYNAMIC;
-
-	ret = amdgv_psp_cmd_km_submit(adapt, migration_export_cmd, &psp_resp);
-
-	if (ret == PSP_STATUS__SUCCESS) {
-		*pkg_size = psp_resp.uresp.migration_export.size_written;
-	}
-	else {
-		*pkg_size = -1;
-		if (psp_resp.status == PSP_KM_TEE_ERROR_NOT_SUPPORTED) {
-			amdgv_put_error(AMDGV_PF_IDX,
-				AMDGV_ERROR_FW_NOT_SUPPORTED_FEATURE, 0);
-			ret = PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
-		}
-		else {
-			amdgv_put_error(AMDGV_PF_IDX,
-				AMDGV_ERROR_FW_MIGRATION_EXPORT_FAIL,
-				psp_resp.status);
-		}
-	}
-
-	AMDGV_INFO("Package addr: 0x%08lx%08lx target_vfid=0x%x size_alloc=0x%x "
-			"size_written=0x%x flags=0x%x info=0x%x rsp.st=0x%x\n",
-		migration_export_cmd->cmd.migration_export.pkg_addr_hi,
-		migration_export_cmd->cmd.migration_export.pkg_addr_lo,
-		migration_export_cmd->cmd.migration_export.target_vfid,
-		migration_export_cmd->cmd.migration_export.pkg_size_allocated,
-		*pkg_size,
-		migration_export_cmd->cmd.migration_export.flags,
-		psp_resp.info,
-		psp_resp.status);
+	adapt->live_migration.static_data_size = MI200_MIGRATION_PSP_STATIC_DATA_SIZE;
+	adapt->live_migration.dynamic_data_size = MI200_MIGRATION_PSP_DYNAMIC_DATA_SIZE;
 
 	return ret;
 }
 
-enum psp_status psp_v13_migration_import(struct amdgv_adapter* adapt,
-	uint32_t vfid, uint64_t pkg_addr, uint32_t pkg_size)
+static int psp_v13_migration_cmd_init(struct psp_cmd_km *migration_cmd,
+	uint32_t vfid, uint64_t data_addr, uint32_t size,
+	enum psp_migration_manifest_data_type type)
+{
+	switch (type) {
+	case PSP_MIGRATION_EXPORT_STATIC_DATA:
+		migration_cmd->cmd_id = PSP_CMD_KM_TYPE__MIGRATION_EXPORT;
+		migration_cmd->cmd.migration_export.pkg_addr_lo =
+			lower_32_bits(data_addr);
+		migration_cmd->cmd.migration_export.pkg_addr_hi =
+			upper_32_bits(data_addr);
+		migration_cmd->cmd.migration_export.pkg_size_allocated = size;
+		migration_cmd->cmd.migration_export.target_vfid = vfid;
+		migration_cmd->cmd.migration_export.flags = MIGRATION_FLAG_STATIC;
+		break;
+	case PSP_MIGRATION_EXPORT_DYNAMIC_DATA:
+		migration_cmd->cmd_id = PSP_CMD_KM_TYPE__MIGRATION_EXPORT;
+		migration_cmd->cmd.migration_export.pkg_addr_lo =
+			lower_32_bits(data_addr);
+		migration_cmd->cmd.migration_export.pkg_addr_hi =
+			upper_32_bits(data_addr);
+		migration_cmd->cmd.migration_export.pkg_size_allocated = size;
+		migration_cmd->cmd.migration_export.target_vfid = vfid;
+		migration_cmd->cmd.migration_export.flags = MIGRATION_FLAG_DYNAMIC;
+		break;
+	case PSP_MIGRATION_IMPORT_DYNAMIC_DATA:
+		migration_cmd->cmd_id = PSP_CMD_KM_TYPE__MIGRATION_IMPORT;
+		migration_cmd->cmd.migration_import.pkg_addr_lo =
+			lower_32_bits(data_addr);
+		migration_cmd->cmd.migration_import.pkg_addr_hi =
+			upper_32_bits(data_addr);
+		migration_cmd->cmd.migration_import.pkg_size = size;
+		migration_cmd->cmd.migration_import.target_vfid = vfid;
+		break;
+	case PSP_MIGRATION_IMPORT_STATIC_DATA:
+		migration_cmd->cmd_id = PSP_CMD_KM_TYPE__MIGRATION_IMPORT;
+		migration_cmd->cmd.migration_import.pkg_addr_lo =
+			lower_32_bits(data_addr);
+		migration_cmd->cmd.migration_import.pkg_addr_hi =
+			upper_32_bits(data_addr);
+		migration_cmd->cmd.migration_import.pkg_size = size;
+		migration_cmd->cmd.migration_import.target_vfid = vfid;
+		break;
+	default:
+		//AMDGV_ERROR("Invalid migration data type: %d\n", type);
+		return -1;
+	}
+
+	return 0;
+}
+
+static enum psp_status psp_v13_transfer_manifest_data(struct amdgv_adapter *adapt,
+	uint32_t idx_vf, uint64_t data_addr, uint32_t size,
+	enum psp_migration_manifest_data_type type)
 {
 	enum psp_status ret = PSP_STATUS__ERROR_GENERIC;
-	struct psp_cmd_km* migration_import_cmd = NULL;
+	struct psp_cmd_km *migration_cmd = NULL;
 	struct psp_gfx_resp psp_resp = { 0 };
 
-	migration_import_cmd = adapt->psp.psp_cmd_km_mem;
-	if (!migration_import_cmd) {
+	migration_cmd = adapt->psp.psp_cmd_km_mem;
+	if (!migration_cmd) {
 		amdgv_put_error(AMDGV_PF_IDX,
-			AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
-			sizeof(struct psp_cmd_km));
+		AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		sizeof(struct psp_cmd_km));
 		return ret;
 	}
 
-	migration_import_cmd->cmd_id = PSP_CMD_KM_TYPE__MIGRATION_IMPORT;
-	migration_import_cmd->cmd.migration_import.pkg_addr_lo =
-		lower_32_bits(pkg_addr);
-	migration_import_cmd->cmd.migration_import.pkg_addr_hi =
-		upper_32_bits(pkg_addr);
-	migration_import_cmd->cmd.migration_import.pkg_size = pkg_size;
-	migration_import_cmd->cmd.migration_import.target_vfid = vfid;
 
-	ret = amdgv_psp_cmd_km_submit(adapt, migration_import_cmd, &psp_resp);
+#ifdef AMDGV_MIGRATION_DEBUG
+	/* Output RWL values in dynamic export pkg for debugging purpose */
+	if ((type == PSP_MIGRATION_EXPORT_DYNAMIC_DATA) &&
+		 psp_v13_migration_rwl_debug_print(adapt, idx_vf)) {
+		ret = AMDGV_FAILURE;
+	}
+#endif
 
-	if (ret != PSP_STATUS__SUCCESS) {
-		if (psp_resp.status == PSP_KM_TEE_ERROR_NOT_SUPPORTED) {
-			amdgv_put_error(AMDGV_PF_IDX,
-				AMDGV_ERROR_FW_NOT_SUPPORTED_FEATURE, 0);
-			ret = PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
-		}
-		else {
-			amdgv_put_error(AMDGV_PF_IDX,
-				AMDGV_ERROR_FW_MIGRATION_IMPORT_FAIL,
-				psp_resp.status);
-		}
+	if (psp_v13_migration_cmd_init(migration_cmd, idx_vf, data_addr, size, type)) {
+		amdgv_put_error(AMDGV_PF_IDX,
+		AMDGV_ERROR_FW_MIGRATION_EXPORT_FAIL,
+		psp_resp.status);
+		return ret;
 	}
 
-	AMDGV_INFO("Package addr: 0x%08lx%08lx target_vfid=0x%x size=0x%x rsp.info=0x%x"
-		" rsp.st=0x%x\n",
-		migration_import_cmd->cmd.migration_import.pkg_addr_hi,
-		migration_import_cmd->cmd.migration_import.pkg_addr_lo,
-		migration_import_cmd->cmd.migration_import.target_vfid,
-		migration_import_cmd->cmd.migration_import.pkg_size,
-		psp_resp.info,
-		psp_resp.status);
+	ret = amdgv_psp_cmd_km_submit(adapt, migration_cmd, &psp_resp);
 
+#ifdef AMDGV_MIGRATION_DEBUG
+	/* Output RWL values in dynamic export pkg for debugging purpose */
+	if ((type == PSP_MIGRATION_IMPORT_DYNAMIC_DATA) &&
+		 psp_v13_migration_rwl_debug_print(adapt, idx_vf)) {
+		ret = AMDGV_FAILURE;
+	}
+#endif
+
+	if (type == PSP_MIGRATION_EXPORT_STATIC_DATA ||
+		type == PSP_MIGRATION_EXPORT_DYNAMIC_DATA)
+		AMDGV_INFO("Package addr: 0x%08lx%08lx target_vfid=0x%x size=0x%x flags=0x%x rsp.info=0x%x"
+			" rsp.st=0x%x\n",
+			migration_cmd->cmd.migration_export.pkg_addr_hi,
+			migration_cmd->cmd.migration_export.pkg_addr_lo,
+			migration_cmd->cmd.migration_export.target_vfid,
+			migration_cmd->cmd.migration_export.pkg_size_allocated,
+			migration_cmd->cmd.migration_export.flags,
+			psp_resp.info,
+			psp_resp.status);
+
+	if (type == PSP_MIGRATION_IMPORT_DYNAMIC_DATA ||
+		type == PSP_MIGRATION_IMPORT_STATIC_DATA)
+		AMDGV_INFO("Package addr: 0x%08lx%08lx target_vfid=0x%x size=0x%x rsp.info=0x%x"
+			" rsp.st=0x%x\n",
+			migration_cmd->cmd.migration_import.pkg_addr_hi,
+			migration_cmd->cmd.migration_import.pkg_addr_lo,
+			migration_cmd->cmd.migration_import.target_vfid,
+			migration_cmd->cmd.migration_import.pkg_size,
+			psp_resp.info,
+			psp_resp.status);
+
+	if (ret)
+		return ret;
+
+	if ((type == PSP_MIGRATION_EXPORT_STATIC_DATA) ||
+		(type == PSP_MIGRATION_EXPORT_DYNAMIC_DATA)) {
+		uint32_t pkg_size = psp_resp.uresp.migration_export.size_written;
+
+		if (pkg_size <= 0 || pkg_size > migration_cmd->cmd.migration_export.pkg_size_allocated) {
+			AMDGV_ERROR("PSP static export data is empty or oversized.\n");
+			ret = AMDGV_FAILURE;
+		}
+	}
 	return ret;
 }
 
@@ -858,7 +947,11 @@ static int psp_v13_sw_init(struct amdgv_adapter *adapt)
 	adapt->psp.clear_vf_fw = psp_v13_clear_vf_fw;
 	adapt->psp.psp_program_guest_mc_settings =
 	    psp_v13_program_guest_mc_settings;
-
+	adapt->psp.transfer_manifest_data = psp_v13_transfer_manifest_data;
+	adapt->psp.get_migration_info = psp_v13_migration_get_psp_info;
+#ifdef AMDGV_MIGRATION_DEBUG
+	adapt->psp.print_migration_rwl = psp_v13_migration_rwl_debug_print;
+#endif
 	psp_ret = amdgv_psp_sw_init(adapt);
 	adapt->psp.ras_context.set_init_flag = true;
 

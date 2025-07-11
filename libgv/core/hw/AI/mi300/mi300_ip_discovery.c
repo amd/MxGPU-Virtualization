@@ -151,7 +151,7 @@ static int hw_id_map[MAX_HWIP] = {
 static uint16_t mi300_ip_discovery_get_checksum(uint8_t *data, uint32_t size)
 {
 	uint16_t checksum = 0;
-	int i;
+	uint32_t i;
 
 	for (i = 0; i < size; i++)
 		checksum += data[i];
@@ -595,7 +595,8 @@ static int mi300_ip_discovery_patch_vf_copy(struct amdgv_adapter *adapt,
 	uint8_t *start;
 	uint32_t *src_ptr; /* copy IP List from here */
 	uint32_t *dst_ptr; /* trimmed IP List will be copied here */
-	int i, j, k, l, m, n, ip_size;
+	int j, k, l, m, n, ip_size;
+	uint32_t i;
 	/* the number of instances for this IP (used for trimming) */
 	int num_ip_instances = 0;
 	/* remove harvested IPs from VF copy */
@@ -740,7 +741,7 @@ static void mi300_ip_discovery_patch_vf_copy_by_index(struct amdgv_adapter *adap
 	struct amdgv_nps_info_v1_0 *nps_info;
 	struct amdgv_vf_device *entry;
 	uint64_t vf_fb_offset, vf_fb_size, vf_base, vf_limit, pf_lfb_adjusted;
-	int i, j;
+	uint32_t i, j;
 
 	nps_info = (struct amdgv_nps_info_v1_0 *)((uint8_t *)copy->data + copy->bhdr->table_list[NPS_INFO].offset);
 
@@ -1155,6 +1156,8 @@ static void mi300_setup_common_timeout(struct amdgv_adapter *adapt)
 	AMDGV_TIMEOUT(TIMEOUT_BACO_HW) = 2 * 1000 * 1000;
 	/* RAS boot polling timeout */
 	AMDGV_TIMEOUT(TIMEOUT_RAS_BOOT_STATUS) = AMDGV_RAS_BOOT_STATUS_POLLING_LIMIT * 1000 * 2;
+	/* GPU chain reset timeout on reload */
+	AMDGV_TIMEOUT(TIMEOUT_CHAIN_RESET) = 100 * 1000 * 300;
 }
 
 static int mi300_ip_discovery_sw_init(struct amdgv_adapter *adapt)

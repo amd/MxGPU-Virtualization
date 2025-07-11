@@ -25,8 +25,8 @@
 
 #include <mi300/ATHUB/athub_1_8_0_offset.h>
 #include <mi300/ATHUB/athub_1_8_0_sh_mask.h>
-#include <mi300/OSSSYS/osssys_4_2_0_offset.h>
-#include <mi300/OSSSYS/osssys_4_2_0_sh_mask.h>
+#include <mi300/OSSSYS/osssys_4_4_2_offset.h>
+#include <mi300/OSSSYS/osssys_4_4_2_sh_mask.h>
 #include <mi300/SDMA/sdma_4_4_2_offset.h>
 #include <mi300/SDMA/sdma_4_4_2_sh_mask.h>
 
@@ -68,9 +68,6 @@
 
 #define mmnbif_gpu_RCC_DEV0_EPF0_STRAP4 0x0D3F
 #define STRAP_FLR_EN_DEV0_F0_MASK	0x00400000L
-
-#define mmIH_CHICKEN_MI300	    0x18d
-#define mmIH_CHICKEN_MI300_BASE_IDX 0
 
 typedef enum _AMDGV_MI300_DOORBELL_ASSIGNMENT {
 	/* Compute: 0~255 */

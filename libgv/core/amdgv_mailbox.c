@@ -73,7 +73,7 @@ int amdgv_mailbox_receive_msg(struct amdgv_adapter *adapt, uint32_t idx_vf, uint
 		return AMDGV_FAILURE;
 	}
 
-	if (msg_len > adapt->mailbox.msg_buf_len)
+	if (msg_len > (int)adapt->mailbox.msg_buf_len)
 		AMDGV_WARN("Message too long: only first %d considered\n",
 			   adapt->mailbox.msg_buf_len);
 
@@ -85,7 +85,7 @@ int amdgv_mailbox_receive_msg(struct amdgv_adapter *adapt, uint32_t idx_vf, uint
 		adapt->mailbox.funcs->rcv_msg(adapt, idx_vf, i, &msg_data[i]);
 
 	/* clear message before ack */
-	for (i = 0; i < adapt->mailbox.msg_buf_len; i++)
+	for (i = 0; i < (int)adapt->mailbox.msg_buf_len; i++)
 		adapt->mailbox.funcs->trn_msg(adapt, idx_vf, i, 0);
 
 	adapt->mailbox.funcs->trn_msg_valid(adapt, idx_vf, false);
@@ -119,7 +119,7 @@ int amdgv_mailbox_send_msg(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_
 		return AMDGV_FAILURE;
 	}
 
-	if (msg_len > adapt->mailbox.msg_buf_len)
+	if (msg_len > (int)adapt->mailbox.msg_buf_len)
 		AMDGV_WARN("Message too long: only first %d considered\n",
 			   adapt->mailbox.msg_buf_len);
 
@@ -155,7 +155,7 @@ int amdgv_mailbox_clear_valid_msg(struct amdgv_adapter *adapt, uint32_t idx_vf)
 
 	adapt->mailbox.funcs->update_index(adapt, idx_vf);
 
-	for (i = 0; i < adapt->mailbox.msg_buf_len; i++)
+	for (i = 0; i < (int)adapt->mailbox.msg_buf_len; i++)
 		adapt->mailbox.funcs->trn_msg(adapt, idx_vf, i, 0);
 
 	adapt->mailbox.funcs->trn_msg_valid(adapt, idx_vf, false);

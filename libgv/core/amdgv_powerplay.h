@@ -206,6 +206,10 @@ struct amdgv_pp_funcs {
 	void (*smu_error_inject_restore_pm_policy)(struct amdgv_adapter *adapt,
 					     enum amdgv_pp_pm_policy p_type);
 	int (*reset_vf_arbiters)(struct amdgv_adapter *adapt, uint32_t idx_vf);
+	int (*get_static_metrics_ext)(struct amdgv_adapter *adapt,
+			struct amdgv_gpumon_metrics_ext *metrics_ext);
+	int (*get_num_static_metrics_ext_entries)(struct amdgv_adapter *adapt,
+				 uint32_t *entries);
 };
 
 struct amdgv_pp_metrics_cache {
@@ -220,6 +224,7 @@ struct amdgv_pp {
 	void *smu_backend;
 	void *backend;
 	void *drv_metrics_ext;
+	void *drv_static_metrics_ext;
 	struct amdgv_pp_metrics_cache metrics_cache;
 	const void *soft_pp_table;
 	uint32_t soft_pp_table_size;
@@ -235,6 +240,7 @@ struct amdgv_pp {
 	mutex_t smu_lock;
 
 	uint32_t smu_features_mask[2];
+	uint64_t thermal_throttle_start_time;
 
 	const struct amdgv_pp_funcs *pp_funcs;
 

@@ -30,10 +30,10 @@ INTEGRATION_TEST_MK := $(TEST_INTEGRATION_DIR)/smi_integration_tests.mk
 
 LCOV_VERSION := $(shell lcov --version 2>/dev/null | awk '/LCOV version/ {print $$4}')
 
-ifneq ($(shell printf '%s\n' "1.15" "$(LCOV_VERSION)" | sort -V | head -n1),1.15)
-	LCOV_OPT :=
+ifeq ($(shell printf '%s\n' "2.0" "$(LCOV_VERSION)" | sort -V | head -n1),2.0)
+LCOV_OPT := --ignore-errors inconsistent,inconsistent,mismatch,mismatch,gcov,gcov
 else
-	LCOV_OPT := --ignore-errors gcov,unused,empty,format,mismatch,inconsistent,gcov,unused,empty,format,mismatch,inconsistent
+LCOV_OPT :=
 endif
 
 .PHONY: all
@@ -82,9 +82,9 @@ gen_coverage:
 	$(MAKE) GEN_COVERAGE=YES LCOV_OPT="$(LCOV_OPT)" -f $(UNIT_LNX_WRAP_TEST_MK) gen_coverage
 
 #	Filter out aca-decode from each coverage.info
-	@lcov --remove $(BUILD_DIR)/amdsmi/test/amdsmi_unit_tests-lcov/coverage.info "*/aca-decode/*" -o $(BUILD_DIR)/amdsmi/test/amdsmi_unit_tests-lcov/coverage.info $(LCOV_OPT)
-	@lcov --remove $(BUILD_DIR)/amdsmi/test/amdsmi_util_test-lcov/coverage.info "*/aca-decode/*" -o $(BUILD_DIR)/amdsmi/test/amdsmi_util_test-lcov/coverage.info $(LCOV_OPT)
-	@lcov --remove $(BUILD_DIR)/amdsmi/test/amdsmi_lnx_wrapper_test-lcov/coverage.info "*/aca-decode/*" -o $(BUILD_DIR)/amdsmi/test/amdsmi_lnx_wrapper_test-lcov/coverage.info $(LCOV_OPT)
+	@lcov --remove $(BUILD_DIR)/amdsmi/test/amdsmi_unit_tests-lcov/coverage.info -o $(BUILD_DIR)/amdsmi/test/amdsmi_unit_tests-lcov/coverage.info $(LCOV_OPT)
+	@lcov --remove $(BUILD_DIR)/amdsmi/test/amdsmi_util_test-lcov/coverage.info -o $(BUILD_DIR)/amdsmi/test/amdsmi_util_test-lcov/coverage.info $(LCOV_OPT)
+	@lcov --remove $(BUILD_DIR)/amdsmi/test/amdsmi_lnx_wrapper_test-lcov/coverage.info -o $(BUILD_DIR)/amdsmi/test/amdsmi_lnx_wrapper_test-lcov/coverage.info $(LCOV_OPT)
 
 	mkdir -p $(OUTPUT_DIR_LCOV)
 
@@ -97,7 +97,6 @@ gen_coverage:
 #	Keep only info about our source files
 	@lcov --extract $(OUTPUT_DIR_LCOV)/coverage.info \
 		'$(INCLUDE_DIR)/*' \
-		'$(INTERFACE_DIR)/*' \
 		'$(SOURCE_DIR)/*' \
 			$(LCOV_OPT) \
 		-o $(BUILD_DIR)/amdsmi/test/result.info

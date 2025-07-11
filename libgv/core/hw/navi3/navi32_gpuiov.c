@@ -1262,6 +1262,11 @@ static int navi32_gpuiov_transfer_vf_data(struct amdgv_adapter *adapt,
 	uint32_t data, cmd, func_id, next_func_id;
 	int offset;
 
+	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)) {
+		AMDGV_ERROR("Live Migration not supported\n");
+		return AMDGV_FAILURE;
+	}
+
 	cmd = AMDGV_TRANSFER_VF_DATA;
 	func_id = PCI_GPUIOV_FUNC_ID(idx_vf);
 

@@ -209,13 +209,13 @@ std::string guest_fill_ras_info(Arguments arg, std::string value)
 		out = ras_json.dump(4);
 	} else if (arg.output == csv) {
 		out = string_format(
-				  ",%s,%s,%s,%s,%s,%s", value.c_str(), value.c_str(),
+				  ",%s,%s,%s,%s,%s,%s,%s", value.c_str(), value.c_str(), value.c_str(),
 				  value.c_str(), value.c_str(),
 				  "N/A",
 				  "N/A" );
 	} else {
 		out = string_format(
-				  staticRasTemplateHost, value.c_str(), value.c_str(),
+				  staticRasTemplateHost, value.c_str(), value.c_str(), value.c_str(),
 				  value.c_str(), value.c_str(),
 				  "N/A",
 				  "N/A" );
@@ -655,14 +655,14 @@ int AmdSmiApiGuest::amdsmi_get_ras_info_command(uint64_t processor_bdf, Argument
 		formatted_string = ras_json.dump(4);
 	} else if (arg.output == csv) {
 		formatted_string = string_format(
-							   ",%s,%s,%s,%s,%s,%s", dram_ecc_str.c_str(), sram_ecc_str.c_str(),
-							   poisoning_str.c_str(), need_reboot_str.c_str(),
+							   ",%s,%s,%s,%s,%s,%s,%s", dram_ecc_str.c_str(), sram_ecc_str.c_str(),
+							   poisoning_str.c_str(), need_reboot_str.c_str(), "N/A",
 							   "N/A",
 							   "N/A" );
 	} else {
 		formatted_string = string_format(
 							   staticRasTemplateHost, dram_ecc_str.c_str(), sram_ecc_str.c_str(),
-							   poisoning_str.c_str(), need_reboot_str.c_str(),
+							   poisoning_str.c_str(), need_reboot_str.c_str(), "N/A",
 							   "N/A",
 							   "N/A" );
 	}

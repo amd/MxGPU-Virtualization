@@ -23,6 +23,34 @@ When running make inside the gim/smi-lib/cli/cpp folder, the AMD SMI Tool will b
 After build is successfully finished, navigate to gim/smi-lib/cli/cpp/build folder and tool binary should be there.
 Open terminal and navigate to this location and now you can execute smi tool.
 
+## AMD SMI tool installation
+
+To install the tool system-wide:
+
+Navigate to the cpp directory:
+-   `cd smi_lib/cli/cpp`
+
+Build the project if you haven't already:
+-   `make [BUILD_TYPE=<debug|release>]`
+
+Install the tool:
+-   `sudo make install`
+
+This will install the amd-smi binary to /usr/local/bin making the tool available for all users.
+Once installed, you can run the amd-smi command from any directory in your terminal without specifying the full path.
+
+## AMD SMI tool uninstallation
+
+To remove the installed tool:
+
+Navigate to the cpp directory:
+-   `cd smi_lib/cli/cpp`
+
+Run the uninstall command:
+-   `sudo make uninstall`
+
+This command deletes all files that were installed by the `sudo make install` command
+
 ## Folder structure
 
 SMI Tool folder structure is shown below:

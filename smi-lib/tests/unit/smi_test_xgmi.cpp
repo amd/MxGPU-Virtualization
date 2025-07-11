@@ -480,3 +480,77 @@ TEST_F(AmdSmiXgmiTest, GetP2PStatusGpuItself)
 	ASSERT_EQ(p2p_capability.is_iolink_bi_directional, 0xFF);
 	ASSERT_EQ(p2p_capability.is_iolink_dma, 0xFF);
 }
+
+TEST_F(AmdSmiXgmiTest, SetFbCustomSharingModeInsufficientBufferSize)
+{
+	int ret;
+	amdsmi_xgmi_fb_sharing_mode_t mode = AMDSMI_XGMI_FB_SHARING_MODE_CUSTOM;
+	uint32_t num_processors = 0;
+	amdsmi_processor_handle* processor_list =
+		(amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*num_processors);
+
+	ret = amdsmi_set_xgmi_fb_sharing_mode_v2(processor_list, num_processors, mode);
+	free(processor_list);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+}
+
+TEST_F(AmdSmiXgmiTest, SetFbCustomSharingModeWrongBuffSize)
+{
+	int ret;
+	amdsmi_xgmi_fb_sharing_mode_t mode = AMDSMI_XGMI_FB_SHARING_MODE_4;
+	uint32_t num_processors = 2;
+	amdsmi_processor_handle* processor_list =
+		(amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*num_processors);
+
+	ret = amdsmi_set_xgmi_fb_sharing_mode_v2(processor_list, num_processors, mode);
+	free(processor_list);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+}
+
+TEST_F(AmdSmiXgmiTest, SetFbCustomSharingModeNullPointer)
+{
+	int ret;
+	amdsmi_xgmi_fb_sharing_mode_t mode = AMDSMI_XGMI_FB_SHARING_MODE_4;
+	uint32_t num_processors = 1;
+	amdsmi_processor_handle* processor_list =
+		(amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*num_processors);
+	processor_list[0] = NULL;
+
+	ret = amdsmi_set_xgmi_fb_sharing_mode_v2(processor_list, num_processors, mode);
+	free(processor_list);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+}
+
+TEST_F(AmdSmiXgmiTest, SetFbCustomSharingModeMode_4)
+{
+	int ret;
+	amdsmi_xgmi_fb_sharing_mode_t mode = AMDSMI_XGMI_FB_SHARING_MODE_4;
+	uint32_t num_processors = 1;
+	amdsmi_processor_handle* processor_list =
+		(amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*num_processors);
+	processor_list[0] = &GPU_MOCK_HANDLE;
+	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_SET_XGMI_FB_SHARING_MODE)))
+		.WillOnce(amdsmi::SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED));
+	ret = amdsmi_set_xgmi_fb_sharing_mode_v2(processor_list, num_processors, mode);
+	free(processor_list);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+}
+
+TEST_F(AmdSmiXgmiTest, SetFbCustomSharingModeNotSupported)
+{
+	int ret;
+	amdsmi_xgmi_fb_sharing_mode_t mode = AMDSMI_XGMI_FB_SHARING_MODE_CUSTOM;
+	uint32_t num_processors = 2;
+	amdsmi_processor_handle* processor_list =
+		(amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*num_processors);
+	processor_list[0] = &GPU_MOCK_HANDLE;
+	processor_list[1] = &GPU_MOCK_HANDLE_DIFF;
+
+	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_SET_XGMI_FB_SHARING_MODE_VER_2)))
+	.WillOnce(amdsmi::SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED));
+
+	ret = amdsmi_set_xgmi_fb_sharing_mode_v2(processor_list, num_processors, mode);
+
+	free(processor_list);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+}

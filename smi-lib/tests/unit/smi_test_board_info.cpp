@@ -86,6 +86,7 @@ TEST_F(AmdSmiBoardTests, InvalidParams)
 {
 	int ret;
 	uint32_t sensor_ind = 0;
+	amdsmi_virtualization_mode_t mode;
 
 	ret = amdsmi_get_gpu_asic_info(&GPU_MOCK_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
@@ -106,6 +107,9 @@ TEST_F(AmdSmiBoardTests, InvalidParams)
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_get_pcie_info(&GPU_MOCK_HANDLE, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_gpu_virtualization_mode(NULL, &mode);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
 
@@ -282,4 +286,15 @@ TEST_F(AmdSmiBoardTests, GetFbInfo)
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_TRUE(amdsmi::equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
 	ASSERT_TRUE(equal_fb_info(gpu_info_mock, fb_info));
+}
+
+TEST_F(AmdSmiBoardTests, GetVirtualizationMode_Sucess)
+{
+	int ret;
+	amdsmi_virtualization_mode_t mode;
+	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
+
+	ret = amdsmi_get_gpu_virtualization_mode(&MOCK_GPU_HANDLE, &mode);
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(mode, AMDSMI_VIRTUALIZATION_MODE_HOST);
 }

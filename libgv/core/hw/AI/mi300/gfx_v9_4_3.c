@@ -30,10 +30,57 @@
 
 static const uint32_t this_block = AMDGV_GFX_BLOCK;
 
+static void gfx_v9_4_3_xcc_select_se_sh(struct amdgv_adapter *adapt, uint32_t se_num,
+					uint32_t sh_num, uint32_t instance, int xcc_id)
+{
+	uint32_t data = 0;
+
+	if (instance == 0xffffffff)
+		data = REG_SET_FIELD(0, GRBM_GFX_INDEX,
+				     INSTANCE_BROADCAST_WRITES, 1);
+	else
+		data = REG_SET_FIELD(0, GRBM_GFX_INDEX,
+				     INSTANCE_INDEX, instance);
+
+	if (se_num == 0xffffffff)
+		data = REG_SET_FIELD(data, GRBM_GFX_INDEX,
+				     SE_BROADCAST_WRITES, 1);
+	else
+		data = REG_SET_FIELD(data, GRBM_GFX_INDEX, SE_INDEX, se_num);
+
+	if (sh_num == 0xffffffff)
+		data = REG_SET_FIELD(data, GRBM_GFX_INDEX,
+				     SH_BROADCAST_WRITES, 1);
+	else
+		data = REG_SET_FIELD(data, GRBM_GFX_INDEX, SH_INDEX, sh_num);
+
+	WREG32_SOC15_RLC_SHADOW_EX(reg, GC, GET_INST(GC, xcc_id), regGRBM_GFX_INDEX, data);
+}
+
 static void gfx_v9_4_3_query_ras_error_count(struct amdgv_adapter *adapt,
 					void *ras_error_status)
 {
 	adapt->mca.funcs->pop_block_error_count(adapt, AMDGV_RAS_BLOCK__GFX, ras_error_status);
+}
+
+void gfx_v9_4_2_dirtybit_control(struct amdgv_adapter *adapt, bool enable)
+{
+	uint32_t gc_value;
+	int xcc_id;
+
+	for (xcc_id = 0; xcc_id < adapt->mcp.gfx.num_xcc; xcc_id++) {
+		/* There are 16 instances in one XCC, if we want to read MAM_CTRL in EA#N,
+		 * we should set GRBM_GFX_INDEX.INSTANCE_INDEX to #N firstly.
+		 *
+		 * Broadcast the value to all the instances.
+		 */
+		gfx_v9_4_3_xcc_select_se_sh(adapt, 0xffffffff, 0xffffffff, 0xffffffff, xcc_id);
+		gc_value = RREG32(SOC15_REG_OFFSET(GC, GET_INST(GC, xcc_id), regGCEA_MAM_CTRL));
+		gc_value = REG_SET_FIELD(gc_value, GCEA_MAM_CTRL, MAM_DISABLE, !enable);
+		gc_value = REG_SET_FIELD(gc_value, GCEA_MAM_CTRL, ADRAM_MODE, adapt->dirtybit.mam_adram_mode);
+		WREG32(SOC15_REG_OFFSET(GC, GET_INST(GC, xcc_id), regGCEA_MAM_CTRL), gc_value);
+
+	}
 }
 
 struct amdgv_gfx_funcs gfx_v9_4_3_mi300_funcs = {
@@ -402,8 +449,9 @@ static int gfx_v9_4_3_early_init(struct amdgv_adapter *adapt);
 
 static int gfx_v9_4_3_sw_init_internal(struct amdgv_adapter *adapt)
 {
-	int i, j, k, r, ring_id, xcc_id, num_xcc;
+	int r, ring_id, xcc_id, num_xcc;
 	struct amdgv_kiq *kiq;
+	uint32_t i, j, k;
 
 	if (in_whole_gpu_reset())
 		return 0;
@@ -475,8 +523,9 @@ static int gfx_v9_4_3_sw_init_internal(struct amdgv_adapter *adapt)
 
 static int gfx_v9_4_3_hw_init_internal_set(struct amdgv_adapter *adapt)
 {
-	int i, j, k, ring_id, r, xcc_id, num_xcc;
+	int ring_id, r, xcc_id, num_xcc;
 	struct amdgv_ring *ring;
+	uint32_t i, j, k;
 
 	r = gfx_v9_4_3_mec_init_set(adapt);
 	if (r) {
@@ -526,7 +575,7 @@ static int gfx_v9_4_3_sw_fini_internal(struct amdgv_adapter *adapt)
 	int i, num_xcc;
 
 	num_xcc = adapt->mcp.gfx.num_xcc;
-	for (i = 0; i < adapt->gfx.num_compute_rings * num_xcc; i++)
+	for (i = 0; i < (int)(adapt->gfx.num_compute_rings) * num_xcc; i++)
 		amdgv_ring_fini(&adapt->gfx.compute_ring[i]);
 
 	for (i = 0; i < num_xcc; i++) {
@@ -1010,7 +1059,7 @@ static int gfx_v9_4_3_xcc_q_fini_register(struct amdgv_ring *ring, int xcc_id)
 static int gfx_v9_4_3_xcc_kcq_fini_register(struct amdgv_adapter *adapt, int xcc_id)
 {
 	struct amdgv_ring *ring;
-	int i;
+	uint32_t i;
 
 	if (in_whole_gpu_reset())
 		return 0;
@@ -1095,7 +1144,8 @@ static int gfx_v9_4_3_xcc_kiq_resume(struct amdgv_adapter *adapt, int xcc_id)
 static int gfx_v9_4_3_xcc_kcq_resume(struct amdgv_adapter *adapt, int xcc_id)
 {
 	struct amdgv_ring *ring = NULL;
-	int r = 0, i;
+	int r = 0;
+	uint32_t i;
 
 	gfx_v9_4_3_xcc_cp_compute_enable(adapt, true, xcc_id);
 
@@ -1382,7 +1432,7 @@ static const struct amdgv_ring_funcs gfx_v9_4_3_ring_funcs_kiq = {
 
 static void gfx_v9_4_3_set_ring_funcs(struct amdgv_adapter *adapt)
 {
-	int i, j, num_xcc;
+	uint32_t i, j, num_xcc;
 	num_xcc = adapt->mcp.gfx.num_xcc;
 	for (i = 0; i < num_xcc; i++) {
 		adapt->gfx.kiq[i].ring.funcs = &gfx_v9_4_3_ring_funcs_kiq;

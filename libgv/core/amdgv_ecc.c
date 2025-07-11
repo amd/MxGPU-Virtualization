@@ -504,6 +504,8 @@ enum amdgv_live_info_status amdgv_ecc_import_live_data(struct amdgv_adapter *ada
 		adapt->ecc.correctable_error_num = ecc_info->correctable_error_num;
 		adapt->ecc.uncorrectable_error_num = ecc_info->uncorrectable_error_num;
 
+		amdgv_import_data_by_op(adapt, AMDGV_LIVE_INFO_DATA__RAS_EEPROM_DATA);
+
 		// read bad pages directly from eeprom
 		ret = amdgv_ras_eeprom_init(adapt, &(adapt->eeprom_control));
 		if (ret)
@@ -530,6 +532,10 @@ enum amdgv_live_info_status amdgv_ecc_import_live_data(struct amdgv_adapter *ada
 
 	}
 
+	if (adapt->ecc.ras_eerpom_raw_data.data_buf) {
+		oss_free(adapt->ecc.ras_eerpom_raw_data.data_buf);
+		adapt->ecc.ras_eerpom_raw_data.data_len = 0;
+	}
 	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
 
 release:

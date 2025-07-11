@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Advanced Micro Devices, Inc.
+ * Copyright 2022 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -20,11 +20,11 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  *
  */
-#ifndef _osssys_4_2_0_SH_MASK_HEADER
-#define _osssys_4_2_0_SH_MASK_HEADER
+#ifndef _osssys_4_4_2_SH_MASK_HEADER
+#define _osssys_4_4_2_SH_MASK_HEADER
 
 
-// addressBlock: osssys_osssysdec
+// addressBlock: aid_osssys_osssysdec
 //IH_VMID_0_LUT
 #define IH_VMID_0_LUT__PASID__SHIFT                                                                           0x0
 #define IH_VMID_0_LUT__PASID_MASK                                                                             0x0000FFFFL
@@ -166,21 +166,6 @@
 //IH_REGISTER_LAST_PART0
 #define IH_REGISTER_LAST_PART0__RESERVED__SHIFT                                                               0x0
 #define IH_REGISTER_LAST_PART0__RESERVED_MASK                                                                 0xFFFFFFFFL
-//SEM_REQ_INPUT_0
-#define SEM_REQ_INPUT_0__DATA__SHIFT                                                                          0x0
-#define SEM_REQ_INPUT_0__DATA_MASK                                                                            0xFFFFFFFFL
-//SEM_REQ_INPUT_1
-#define SEM_REQ_INPUT_1__DATA__SHIFT                                                                          0x0
-#define SEM_REQ_INPUT_1__DATA_MASK                                                                            0xFFFFFFFFL
-//SEM_REQ_INPUT_2
-#define SEM_REQ_INPUT_2__DATA__SHIFT                                                                          0x0
-#define SEM_REQ_INPUT_2__DATA_MASK                                                                            0xFFFFFFFFL
-//SEM_REQ_INPUT_3
-#define SEM_REQ_INPUT_3__DATA__SHIFT                                                                          0x0
-#define SEM_REQ_INPUT_3__DATA_MASK                                                                            0xFFFFFFFFL
-//SEM_REGISTER_LAST_PART0
-#define SEM_REGISTER_LAST_PART0__RESERVED__SHIFT                                                              0x0
-#define SEM_REGISTER_LAST_PART0__RESERVED_MASK                                                                0xFFFFFFFFL
 //IH_RB_CNTL
 #define IH_RB_CNTL__RB_ENABLE__SHIFT                                                                          0x0
 #define IH_RB_CNTL__RB_SIZE__SHIFT                                                                            0x1
@@ -245,6 +230,11 @@
 #define IH_DOORBELL_RPTR__ENABLE__SHIFT                                                                       0x1c
 #define IH_DOORBELL_RPTR__OFFSET_MASK                                                                         0x03FFFFFFL
 #define IH_DOORBELL_RPTR__ENABLE_MASK                                                                         0x10000000L
+//IH_DOORBELL_RETRY_CAM
+#define IH_DOORBELL_RETRY_CAM__OFFSET__SHIFT                                                                  0x0
+#define IH_DOORBELL_RETRY_CAM__ENABLE__SHIFT                                                                  0x1c
+#define IH_DOORBELL_RETRY_CAM__OFFSET_MASK                                                                    0x03FFFFFFL
+#define IH_DOORBELL_RETRY_CAM__ENABLE_MASK                                                                    0x10000000L
 //IH_RB_CNTL_RING1
 #define IH_RB_CNTL_RING1__RB_ENABLE__SHIFT                                                                    0x0
 #define IH_RB_CNTL_RING1__RB_SIZE__SHIFT                                                                      0x1
@@ -297,69 +287,9 @@
 #define IH_DOORBELL_RPTR_RING1__ENABLE__SHIFT                                                                 0x1c
 #define IH_DOORBELL_RPTR_RING1__OFFSET_MASK                                                                   0x03FFFFFFL
 #define IH_DOORBELL_RPTR_RING1__ENABLE_MASK                                                                   0x10000000L
-//IH_RB_CNTL_RING2
-#define IH_RB_CNTL_RING2__RB_ENABLE__SHIFT                                                                    0x0
-#define IH_RB_CNTL_RING2__RB_SIZE__SHIFT                                                                      0x1
-#define IH_RB_CNTL_RING2__RB_GPU_TS_ENABLE__SHIFT                                                             0x7
-#define IH_RB_CNTL_RING2__RB_FULL_DRAIN_ENABLE__SHIFT                                                         0x9
-#define IH_RB_CNTL_RING2__FULL_DRAIN_CLEAR__SHIFT                                                             0xa
-#define IH_RB_CNTL_RING2__PAGE_RB_CLEAR__SHIFT                                                                0xb
-#define IH_RB_CNTL_RING2__RB_USED_INT_THRESHOLD__SHIFT                                                        0xc
-#define IH_RB_CNTL_RING2__WPTR_OVERFLOW_ENABLE__SHIFT                                                         0x10
-#define IH_RB_CNTL_RING2__MC_SWAP__SHIFT                                                                      0x12
-#define IH_RB_CNTL_RING2__MC_SNOOP__SHIFT                                                                     0x14
-#define IH_RB_CNTL_RING2__MC_RO__SHIFT                                                                        0x16
-#define IH_RB_CNTL_RING2__MC_VMID__SHIFT                                                                      0x18
-#define IH_RB_CNTL_RING2__MC_SPACE__SHIFT                                                                     0x1c
-#define IH_RB_CNTL_RING2__WPTR_OVERFLOW_CLEAR__SHIFT                                                          0x1f
-#define IH_RB_CNTL_RING2__RB_ENABLE_MASK                                                                      0x00000001L
-#define IH_RB_CNTL_RING2__RB_SIZE_MASK                                                                        0x0000003EL
-#define IH_RB_CNTL_RING2__RB_GPU_TS_ENABLE_MASK                                                               0x00000080L
-#define IH_RB_CNTL_RING2__RB_FULL_DRAIN_ENABLE_MASK                                                           0x00000200L
-#define IH_RB_CNTL_RING2__FULL_DRAIN_CLEAR_MASK                                                               0x00000400L
-#define IH_RB_CNTL_RING2__PAGE_RB_CLEAR_MASK                                                                  0x00000800L
-#define IH_RB_CNTL_RING2__RB_USED_INT_THRESHOLD_MASK                                                          0x0000F000L
-#define IH_RB_CNTL_RING2__WPTR_OVERFLOW_ENABLE_MASK                                                           0x00010000L
-#define IH_RB_CNTL_RING2__MC_SWAP_MASK                                                                        0x000C0000L
-#define IH_RB_CNTL_RING2__MC_SNOOP_MASK                                                                       0x00100000L
-#define IH_RB_CNTL_RING2__MC_RO_MASK                                                                          0x00400000L
-#define IH_RB_CNTL_RING2__MC_VMID_MASK                                                                        0x0F000000L
-#define IH_RB_CNTL_RING2__MC_SPACE_MASK                                                                       0x70000000L
-#define IH_RB_CNTL_RING2__WPTR_OVERFLOW_CLEAR_MASK                                                            0x80000000L
-//IH_RB_BASE_RING2
-#define IH_RB_BASE_RING2__ADDR__SHIFT                                                                         0x0
-#define IH_RB_BASE_RING2__ADDR_MASK                                                                           0xFFFFFFFFL
-//IH_RB_BASE_HI_RING2
-#define IH_RB_BASE_HI_RING2__ADDR__SHIFT                                                                      0x0
-#define IH_RB_BASE_HI_RING2__ADDR_MASK                                                                        0x000000FFL
-//IH_RB_RPTR_RING2
-#define IH_RB_RPTR_RING2__OFFSET__SHIFT                                                                       0x2
-#define IH_RB_RPTR_RING2__OFFSET_MASK                                                                         0x0003FFFCL
-//IH_RB_WPTR_RING2
-#define IH_RB_WPTR_RING2__RB_OVERFLOW__SHIFT                                                                  0x0
-#define IH_RB_WPTR_RING2__OFFSET__SHIFT                                                                       0x2
-#define IH_RB_WPTR_RING2__RB_LEFT_NONE__SHIFT                                                                 0x12
-#define IH_RB_WPTR_RING2__RB_MAY_OVERFLOW__SHIFT                                                              0x13
-#define IH_RB_WPTR_RING2__RB_OVERFLOW_MASK                                                                    0x00000001L
-#define IH_RB_WPTR_RING2__OFFSET_MASK                                                                         0x0003FFFCL
-#define IH_RB_WPTR_RING2__RB_LEFT_NONE_MASK                                                                   0x00040000L
-#define IH_RB_WPTR_RING2__RB_MAY_OVERFLOW_MASK                                                                0x00080000L
-//IH_DOORBELL_RPTR_RING2
-#define IH_DOORBELL_RPTR_RING2__OFFSET__SHIFT                                                                 0x0
-#define IH_DOORBELL_RPTR_RING2__ENABLE__SHIFT                                                                 0x1c
-#define IH_DOORBELL_RPTR_RING2__OFFSET_MASK                                                                   0x03FFFFFFL
-#define IH_DOORBELL_RPTR_RING2__ENABLE_MASK                                                                   0x10000000L
-//IH_RETRY_INT_CAM_CNTL
-#define IH_RETRY_INT_CAM_CNTL__CAM_SIZE__SHIFT                                                                0x0
-#define IH_RETRY_INT_CAM_CNTL__BACK_PRESSURE_SKID_VALUE__SHIFT                                                0x8
-#define IH_RETRY_INT_CAM_CNTL__ENABLE__SHIFT                                                                  0x10
-#define IH_RETRY_INT_CAM_CNTL__BACK_PRESSURE_ENABLE__SHIFT                                                    0x11
-#define IH_RETRY_INT_CAM_CNTL__PER_VF_ENTRY_SIZE__SHIFT                                                       0x14
-#define IH_RETRY_INT_CAM_CNTL__CAM_SIZE_MASK                                                                  0x0000001FL
-#define IH_RETRY_INT_CAM_CNTL__BACK_PRESSURE_SKID_VALUE_MASK                                                  0x00003F00L
-#define IH_RETRY_INT_CAM_CNTL__ENABLE_MASK                                                                    0x00010000L
-#define IH_RETRY_INT_CAM_CNTL__BACK_PRESSURE_ENABLE_MASK                                                      0x00020000L
-#define IH_RETRY_INT_CAM_CNTL__PER_VF_ENTRY_SIZE_MASK                                                         0x00300000L
+//IH_RETRY_CAM_ACK
+#define IH_RETRY_CAM_ACK__INDEX__SHIFT                                                                        0x0
+#define IH_RETRY_CAM_ACK__INDEX_MASK                                                                          0x000003FFL
 //IH_VERSION
 #define IH_VERSION__MINVER__SHIFT                                                                             0x0
 #define IH_VERSION__MAJVER__SHIFT                                                                             0x8
@@ -372,10 +302,14 @@
 #define IH_CNTL__IH_IDLE_HYSTERESIS_CNTL__SHIFT                                                               0x6
 #define IH_CNTL__IH_FIFO_HIGHWATER__SHIFT                                                                     0x8
 #define IH_CNTL__MC_WR_CLEAN_CNT__SHIFT                                                                       0x14
+#define IH_CNTL__SRAM_ECC_ENABLE__SHIFT                                                                       0x19
+#define IH_CNTL__FED_ENABLE__SHIFT                                                                            0x1a
 #define IH_CNTL__WPTR_WRITEBACK_TIMER_MASK                                                                    0x0000001FL
 #define IH_CNTL__IH_IDLE_HYSTERESIS_CNTL_MASK                                                                 0x000000C0L
 #define IH_CNTL__IH_FIFO_HIGHWATER_MASK                                                                       0x00007F00L
 #define IH_CNTL__MC_WR_CLEAN_CNT_MASK                                                                         0x01F00000L
+#define IH_CNTL__SRAM_ECC_ENABLE_MASK                                                                         0x02000000L
+#define IH_CNTL__FED_ENABLE_MASK                                                                              0x04000000L
 //IH_CNTL2
 #define IH_CNTL2__SELF_IV_FORCE_WPTR_UPDATE_TIMEOUT__SHIFT                                                    0x0
 #define IH_CNTL2__SELF_IV_FORCE_WPTR_UPDATE_ENABLE__SHIFT                                                     0x8
@@ -397,10 +331,11 @@
 #define IH_STATUS__RB1_FULL__SHIFT                                                                            0xc
 #define IH_STATUS__RB1_FULL_DRAIN__SHIFT                                                                      0xd
 #define IH_STATUS__RB1_OVERFLOW__SHIFT                                                                        0xe
-#define IH_STATUS__RB2_FULL__SHIFT                                                                            0xf
-#define IH_STATUS__RB2_FULL_DRAIN__SHIFT                                                                      0x10
-#define IH_STATUS__RB2_OVERFLOW__SHIFT                                                                        0x11
 #define IH_STATUS__SELF_INT_GEN_IDLE__SHIFT                                                                   0x12
+#define IH_STATUS__RETRY_INT_CAM_IDLE__SHIFT                                                                  0x13
+#define IH_STATUS__IH_BUFFER_MEM_POWER_GATED__SHIFT                                                           0x14
+#define IH_STATUS__IH_RETRY_INT_CAM_MEM_POWER_GATED__SHIFT                                                    0x15
+#define IH_STATUS__IH_PASID_LUT_MEM_POWER_GATED__SHIFT                                                        0x16
 #define IH_STATUS__IDLE_MASK                                                                                  0x00000001L
 #define IH_STATUS__INPUT_IDLE_MASK                                                                            0x00000002L
 #define IH_STATUS__BUFFER_IDLE_MASK                                                                           0x00000004L
@@ -416,10 +351,11 @@
 #define IH_STATUS__RB1_FULL_MASK                                                                              0x00001000L
 #define IH_STATUS__RB1_FULL_DRAIN_MASK                                                                        0x00002000L
 #define IH_STATUS__RB1_OVERFLOW_MASK                                                                          0x00004000L
-#define IH_STATUS__RB2_FULL_MASK                                                                              0x00008000L
-#define IH_STATUS__RB2_FULL_DRAIN_MASK                                                                        0x00010000L
-#define IH_STATUS__RB2_OVERFLOW_MASK                                                                          0x00020000L
 #define IH_STATUS__SELF_INT_GEN_IDLE_MASK                                                                     0x00040000L
+#define IH_STATUS__RETRY_INT_CAM_IDLE_MASK                                                                    0x00080000L
+#define IH_STATUS__IH_BUFFER_MEM_POWER_GATED_MASK                                                             0x00100000L
+#define IH_STATUS__IH_RETRY_INT_CAM_MEM_POWER_GATED_MASK                                                      0x00200000L
+#define IH_STATUS__IH_PASID_LUT_MEM_POWER_GATED_MASK                                                          0x00400000L
 //IH_PERFMON_CNTL
 #define IH_PERFMON_CNTL__ENABLE0__SHIFT                                                                       0x0
 #define IH_PERFMON_CNTL__CLEAR0__SHIFT                                                                        0x1
@@ -429,10 +365,10 @@
 #define IH_PERFMON_CNTL__PERF_SEL1__SHIFT                                                                     0x12
 #define IH_PERFMON_CNTL__ENABLE0_MASK                                                                         0x00000001L
 #define IH_PERFMON_CNTL__CLEAR0_MASK                                                                          0x00000002L
-#define IH_PERFMON_CNTL__PERF_SEL0_MASK                                                                       0x000007FCL
+#define IH_PERFMON_CNTL__PERF_SEL0_MASK                                                                       0x00000FFCL
 #define IH_PERFMON_CNTL__ENABLE1_MASK                                                                         0x00010000L
 #define IH_PERFMON_CNTL__CLEAR1_MASK                                                                          0x00020000L
-#define IH_PERFMON_CNTL__PERF_SEL1_MASK                                                                       0x07FC0000L
+#define IH_PERFMON_CNTL__PERF_SEL1_MASK                                                                       0x0FFC0000L
 //IH_PERFCOUNTER0_RESULT
 #define IH_PERFCOUNTER0_RESULT__PERF_COUNT__SHIFT                                                             0x0
 #define IH_PERFCOUNTER0_RESULT__PERF_COUNT_MASK                                                               0xFFFFFFFFL
@@ -456,6 +392,7 @@
 #define IH_DSM_MATCH_FIELD_CONTROL__VMID_EN__SHIFT                                                            0x4
 #define IH_DSM_MATCH_FIELD_CONTROL__PASID_EN__SHIFT                                                           0x5
 #define IH_DSM_MATCH_FIELD_CONTROL__CLIENT_ID_EN__SHIFT                                                       0x6
+#define IH_DSM_MATCH_FIELD_CONTROL__DIEID_EN__SHIFT                                                           0x7
 #define IH_DSM_MATCH_FIELD_CONTROL__SRC_EN_MASK                                                               0x00000001L
 #define IH_DSM_MATCH_FIELD_CONTROL__FCNID_EN_MASK                                                             0x00000002L
 #define IH_DSM_MATCH_FIELD_CONTROL__TIMESTAMP_EN_MASK                                                         0x00000004L
@@ -463,6 +400,7 @@
 #define IH_DSM_MATCH_FIELD_CONTROL__VMID_EN_MASK                                                              0x00000010L
 #define IH_DSM_MATCH_FIELD_CONTROL__PASID_EN_MASK                                                             0x00000020L
 #define IH_DSM_MATCH_FIELD_CONTROL__CLIENT_ID_EN_MASK                                                         0x00000040L
+#define IH_DSM_MATCH_FIELD_CONTROL__DIEID_EN_MASK                                                             0x00000080L
 //IH_DSM_MATCH_DATA_CONTROL
 #define IH_DSM_MATCH_DATA_CONTROL__VALUE__SHIFT                                                               0x0
 #define IH_DSM_MATCH_DATA_CONTROL__VALUE_MASK                                                                 0x0FFFFFFFL
@@ -470,7 +408,7 @@
 #define IH_DSM_MATCH_FCN_ID__PF_VF__SHIFT                                                                     0x0
 #define IH_DSM_MATCH_FCN_ID__VF_ID__SHIFT                                                                     0x1
 #define IH_DSM_MATCH_FCN_ID__PF_VF_MASK                                                                       0x00000001L
-#define IH_DSM_MATCH_FCN_ID__VF_ID_MASK                                                                       0x0000001EL
+#define IH_DSM_MATCH_FCN_ID__VF_ID_MASK                                                                       0x0000000EL
 //IH_LIMIT_INT_RATE_CNTL
 #define IH_LIMIT_INT_RATE_CNTL__LIMIT_ENABLE__SHIFT                                                           0x0
 #define IH_LIMIT_INT_RATE_CNTL__PERF_INTERVAL__SHIFT                                                          0x1
@@ -485,29 +423,21 @@
 //IH_VF_RB_STATUS
 #define IH_VF_RB_STATUS__RB_FULL_DRAIN_VF__SHIFT                                                              0x0
 #define IH_VF_RB_STATUS__RB_OVERFLOW_VF__SHIFT                                                                0x10
-#define IH_VF_RB_STATUS__RB_FULL_DRAIN_VF_MASK                                                                0x0000FFFFL
-#define IH_VF_RB_STATUS__RB_OVERFLOW_VF_MASK                                                                  0xFFFF0000L
+#define IH_VF_RB_STATUS__RB_FULL_DRAIN_VF_MASK                                                                0x000000FFL
+#define IH_VF_RB_STATUS__RB_OVERFLOW_VF_MASK                                                                  0x00FF0000L
 //IH_VF_RB_STATUS2
 #define IH_VF_RB_STATUS2__RB_FULL_VF__SHIFT                                                                   0x0
 #define IH_VF_RB_STATUS2__BIF_INTERRUPT_LINE_VF__SHIFT                                                        0x10
-#define IH_VF_RB_STATUS2__RB_FULL_VF_MASK                                                                     0x0000FFFFL
-#define IH_VF_RB_STATUS2__BIF_INTERRUPT_LINE_VF_MASK                                                          0xFFFF0000L
+#define IH_VF_RB_STATUS2__RB_FULL_VF_MASK                                                                     0x000000FFL
+#define IH_VF_RB_STATUS2__BIF_INTERRUPT_LINE_VF_MASK                                                          0x00FF0000L
 //IH_VF_RB1_STATUS
 #define IH_VF_RB1_STATUS__RB_FULL_DRAIN_VF__SHIFT                                                             0x0
 #define IH_VF_RB1_STATUS__RB_OVERFLOW_VF__SHIFT                                                               0x10
-#define IH_VF_RB1_STATUS__RB_FULL_DRAIN_VF_MASK                                                               0x0000FFFFL
-#define IH_VF_RB1_STATUS__RB_OVERFLOW_VF_MASK                                                                 0xFFFF0000L
+#define IH_VF_RB1_STATUS__RB_FULL_DRAIN_VF_MASK                                                               0x000000FFL
+#define IH_VF_RB1_STATUS__RB_OVERFLOW_VF_MASK                                                                 0x00FF0000L
 //IH_VF_RB1_STATUS2
 #define IH_VF_RB1_STATUS2__RB_FULL_VF__SHIFT                                                                  0x0
-#define IH_VF_RB1_STATUS2__RB_FULL_VF_MASK                                                                    0x0000FFFFL
-//IH_VF_RB2_STATUS
-#define IH_VF_RB2_STATUS__RB_FULL_DRAIN_VF__SHIFT                                                             0x0
-#define IH_VF_RB2_STATUS__RB_OVERFLOW_VF__SHIFT                                                               0x10
-#define IH_VF_RB2_STATUS__RB_FULL_DRAIN_VF_MASK                                                               0x0000FFFFL
-#define IH_VF_RB2_STATUS__RB_OVERFLOW_VF_MASK                                                                 0xFFFF0000L
-//IH_VF_RB2_STATUS2
-#define IH_VF_RB2_STATUS2__RB_FULL_VF__SHIFT                                                                  0x0
-#define IH_VF_RB2_STATUS2__RB_FULL_VF_MASK                                                                    0x0000FFFFL
+#define IH_VF_RB1_STATUS2__RB_FULL_VF_MASK                                                                    0x000000FFL
 //IH_INT_FLOOD_CNTL
 #define IH_INT_FLOOD_CNTL__HIGHWATER__SHIFT                                                                   0x0
 #define IH_INT_FLOOD_CNTL__FLOOD_CNTL_ENABLE__SHIFT                                                           0x3
@@ -518,18 +448,13 @@
 //IH_RB0_INT_FLOOD_STATUS
 #define IH_RB0_INT_FLOOD_STATUS__RB_INT_DROPPED_VF__SHIFT                                                     0x0
 #define IH_RB0_INT_FLOOD_STATUS__RB_INT_DROPPED__SHIFT                                                        0x1f
-#define IH_RB0_INT_FLOOD_STATUS__RB_INT_DROPPED_VF_MASK                                                       0x0000FFFFL
+#define IH_RB0_INT_FLOOD_STATUS__RB_INT_DROPPED_VF_MASK                                                       0x000000FFL
 #define IH_RB0_INT_FLOOD_STATUS__RB_INT_DROPPED_MASK                                                          0x80000000L
 //IH_RB1_INT_FLOOD_STATUS
 #define IH_RB1_INT_FLOOD_STATUS__RB_INT_DROPPED_VF__SHIFT                                                     0x0
 #define IH_RB1_INT_FLOOD_STATUS__RB_INT_DROPPED__SHIFT                                                        0x1f
-#define IH_RB1_INT_FLOOD_STATUS__RB_INT_DROPPED_VF_MASK                                                       0x0000FFFFL
+#define IH_RB1_INT_FLOOD_STATUS__RB_INT_DROPPED_VF_MASK                                                       0x000000FFL
 #define IH_RB1_INT_FLOOD_STATUS__RB_INT_DROPPED_MASK                                                          0x80000000L
-//IH_RB2_INT_FLOOD_STATUS
-#define IH_RB2_INT_FLOOD_STATUS__RB_INT_DROPPED_VF__SHIFT                                                     0x0
-#define IH_RB2_INT_FLOOD_STATUS__RB_INT_DROPPED__SHIFT                                                        0x1f
-#define IH_RB2_INT_FLOOD_STATUS__RB_INT_DROPPED_VF_MASK                                                       0x0000FFFFL
-#define IH_RB2_INT_FLOOD_STATUS__RB_INT_DROPPED_MASK                                                          0x80000000L
 //IH_INT_FLOOD_STATUS
 #define IH_INT_FLOOD_STATUS__INT_DROP_CNT__SHIFT                                                              0x0
 #define IH_INT_FLOOD_STATUS__FIRST_DROP_INT_CLIENT_ID__SHIFT                                                  0x8
@@ -540,7 +465,7 @@
 #define IH_INT_FLOOD_STATUS__INT_DROP_CNT_MASK                                                                0x000000FFL
 #define IH_INT_FLOOD_STATUS__FIRST_DROP_INT_CLIENT_ID_MASK                                                    0x0000FF00L
 #define IH_INT_FLOOD_STATUS__FIRST_DROP_INT_SOURCE_ID_MASK                                                    0x00FF0000L
-#define IH_INT_FLOOD_STATUS__FIRST_DROP_INT_VF_ID_MASK                                                        0x0F000000L
+#define IH_INT_FLOOD_STATUS__FIRST_DROP_INT_VF_ID_MASK                                                        0x07000000L
 #define IH_INT_FLOOD_STATUS__FIRST_DROP_INT_VF_MASK                                                           0x10000000L
 #define IH_INT_FLOOD_STATUS__INT_DROPPED_MASK                                                                 0x40000000L
 //IH_STORM_CLIENT_LIST_CNTL
@@ -607,6 +532,8 @@
 #define IH_STORM_CLIENT_LIST_CNTL__CLIENT30_IS_STORM_CLIENT_MASK                                              0x40000000L
 #define IH_STORM_CLIENT_LIST_CNTL__CLIENT31_IS_STORM_CLIENT_MASK                                              0x80000000L
 //IH_CLK_CTRL
+#define IH_CLK_CTRL__IH_PASID_LUT_MEM_CLK_SOFT_OVERRIDE__SHIFT                                                0x17
+#define IH_CLK_CTRL__IH_RAS_CLK_SOFT_OVERRIDE__SHIFT                                                          0x18
 #define IH_CLK_CTRL__IH_RETRY_INT_CAM_MEM_CLK_SOFT_OVERRIDE__SHIFT                                            0x19
 #define IH_CLK_CTRL__IH_BUFFER_MEM_CLK_SOFT_OVERRIDE__SHIFT                                                   0x1a
 #define IH_CLK_CTRL__DBUS_MUX_CLK_SOFT_OVERRIDE__SHIFT                                                        0x1b
@@ -614,6 +541,8 @@
 #define IH_CLK_CTRL__LIMIT_SMN_CLK_SOFT_OVERRIDE__SHIFT                                                       0x1d
 #define IH_CLK_CTRL__DYN_CLK_SOFT_OVERRIDE__SHIFT                                                             0x1e
 #define IH_CLK_CTRL__REG_CLK_SOFT_OVERRIDE__SHIFT                                                             0x1f
+#define IH_CLK_CTRL__IH_PASID_LUT_MEM_CLK_SOFT_OVERRIDE_MASK                                                  0x00800000L
+#define IH_CLK_CTRL__IH_RAS_CLK_SOFT_OVERRIDE_MASK                                                            0x01000000L
 #define IH_CLK_CTRL__IH_RETRY_INT_CAM_MEM_CLK_SOFT_OVERRIDE_MASK                                              0x02000000L
 #define IH_CLK_CTRL__IH_BUFFER_MEM_CLK_SOFT_OVERRIDE_MASK                                                     0x04000000L
 #define IH_CLK_CTRL__DBUS_MUX_CLK_SOFT_OVERRIDE_MASK                                                          0x08000000L
@@ -705,7 +634,7 @@
 #define IH_LAST_INT_INFO2__VF_ID__SHIFT                                                                       0x10
 #define IH_LAST_INT_INFO2__VF__SHIFT                                                                          0x14
 #define IH_LAST_INT_INFO2__PAS_ID_MASK                                                                        0x0000FFFFL
-#define IH_LAST_INT_INFO2__VF_ID_MASK                                                                         0x000F0000L
+#define IH_LAST_INT_INFO2__VF_ID_MASK                                                                         0x00070000L
 #define IH_LAST_INT_INFO2__VF_MASK                                                                            0x00100000L
 //IH_SCRATCH
 #define IH_SCRATCH__DATA__SHIFT                                                                               0x0
@@ -782,21 +711,24 @@
 #define IH_GPU_IOV_VIOLATION_LOG__OPCODE__SHIFT                                                               0x12
 #define IH_GPU_IOV_VIOLATION_LOG__VF__SHIFT                                                                   0x13
 #define IH_GPU_IOV_VIOLATION_LOG__VF_ID__SHIFT                                                                0x14
-#define IH_GPU_IOV_VIOLATION_LOG__INITIATOR_ID__SHIFT                                                         0x18
 #define IH_GPU_IOV_VIOLATION_LOG__VIOLATION_STATUS_MASK                                                       0x00000001L
 #define IH_GPU_IOV_VIOLATION_LOG__MULTIPLE_VIOLATION_STATUS_MASK                                              0x00000002L
 #define IH_GPU_IOV_VIOLATION_LOG__ADDRESS_MASK                                                                0x0003FFFCL
 #define IH_GPU_IOV_VIOLATION_LOG__OPCODE_MASK                                                                 0x00040000L
 #define IH_GPU_IOV_VIOLATION_LOG__VF_MASK                                                                     0x00080000L
-#define IH_GPU_IOV_VIOLATION_LOG__VF_ID_MASK                                                                  0x00F00000L
-#define IH_GPU_IOV_VIOLATION_LOG__INITIATOR_ID_MASK                                                           0xFF000000L
+#define IH_GPU_IOV_VIOLATION_LOG__VF_ID_MASK                                                                  0x00700000L
+//IH_GPU_IOV_VIOLATION_LOG2
+#define IH_GPU_IOV_VIOLATION_LOG2__INITIATOR_ID__SHIFT                                                        0x0
+#define IH_GPU_IOV_VIOLATION_LOG2__INITIATOR_ID_MASK                                                          0x000003FFL
 //IH_COOKIE_REC_VIOLATION_LOG
 #define IH_COOKIE_REC_VIOLATION_LOG__VIOLATION_STATUS__SHIFT                                                  0x0
-#define IH_COOKIE_REC_VIOLATION_LOG__CLIENT_ID__SHIFT                                                         0x10
-#define IH_COOKIE_REC_VIOLATION_LOG__INITIATOR_ID__SHIFT                                                      0x18
+#define IH_COOKIE_REC_VIOLATION_LOG__CLIENT_ID__SHIFT                                                         0x8
+#define IH_COOKIE_REC_VIOLATION_LOG__INITIATOR_ID__SHIFT                                                      0x10
+#define IH_COOKIE_REC_VIOLATION_LOG__DIE_ID__SHIFT                                                            0x1a
 #define IH_COOKIE_REC_VIOLATION_LOG__VIOLATION_STATUS_MASK                                                    0x00000001L
-#define IH_COOKIE_REC_VIOLATION_LOG__CLIENT_ID_MASK                                                           0x00FF0000L
-#define IH_COOKIE_REC_VIOLATION_LOG__INITIATOR_ID_MASK                                                        0xFF000000L
+#define IH_COOKIE_REC_VIOLATION_LOG__CLIENT_ID_MASK                                                           0x0000FF00L
+#define IH_COOKIE_REC_VIOLATION_LOG__INITIATOR_ID_MASK                                                        0x03FF0000L
+#define IH_COOKIE_REC_VIOLATION_LOG__DIE_ID_MASK                                                              0x3C000000L
 //IH_CREDIT_STATUS
 #define IH_CREDIT_STATUS__CLIENT_1_CREDIT_RETURNED__SHIFT                                                     0x1
 #define IH_CREDIT_STATUS__CLIENT_2_CREDIT_RETURNED__SHIFT                                                     0x2
@@ -867,12 +799,14 @@
 #define IH_MMHUB_ERROR__IH_BUSER_NACK_01__SHIFT                                                               0x5
 #define IH_MMHUB_ERROR__IH_BUSER_NACK_10__SHIFT                                                               0x6
 #define IH_MMHUB_ERROR__IH_BUSER_NACK_11__SHIFT                                                               0x7
+#define IH_MMHUB_ERROR__IH_BUSER_FED__SHIFT                                                                   0x8
 #define IH_MMHUB_ERROR__IH_BRESP_01_MASK                                                                      0x00000002L
 #define IH_MMHUB_ERROR__IH_BRESP_10_MASK                                                                      0x00000004L
 #define IH_MMHUB_ERROR__IH_BRESP_11_MASK                                                                      0x00000008L
 #define IH_MMHUB_ERROR__IH_BUSER_NACK_01_MASK                                                                 0x00000020L
 #define IH_MMHUB_ERROR__IH_BUSER_NACK_10_MASK                                                                 0x00000040L
 #define IH_MMHUB_ERROR__IH_BUSER_NACK_11_MASK                                                                 0x00000080L
+#define IH_MMHUB_ERROR__IH_BUSER_FED_MASK                                                                     0x00000100L
 //IH_MEM_POWER_CTRL
 #define IH_MEM_POWER_CTRL__IH_BUFFER_MEM_POWER_CTRL_EN__SHIFT                                                 0x0
 #define IH_MEM_POWER_CTRL__IH_BUFFER_MEM_POWER_LS_EN__SHIFT                                                   0x1
@@ -881,6 +815,13 @@
 #define IH_MEM_POWER_CTRL__IH_BUFFER_MEM_IDLE_HYSTERESIS__SHIFT                                               0x4
 #define IH_MEM_POWER_CTRL__IH_BUFFER_MEM_POWER_UP_RECOVER_DELAY__SHIFT                                        0x8
 #define IH_MEM_POWER_CTRL__IH_BUFFER_MEM_POWER_DOWN_LS_ENTER_DELAY__SHIFT                                     0xe
+#define IH_MEM_POWER_CTRL__IH_RETRY_INT_CAM_MEM_POWER_CTRL_EN__SHIFT                                          0x10
+#define IH_MEM_POWER_CTRL__IH_RETRY_INT_CAM_MEM_POWER_LS_EN__SHIFT                                            0x11
+#define IH_MEM_POWER_CTRL__IH_RETRY_INT_CAM_MEM_POWER_DS_EN__SHIFT                                            0x12
+#define IH_MEM_POWER_CTRL__IH_RETRY_INT_CAM_MEM_POWER_SD_EN__SHIFT                                            0x13
+#define IH_MEM_POWER_CTRL__IH_RETRY_INT_CAM_MEM_IDLE_HYSTERESIS__SHIFT                                        0x14
+#define IH_MEM_POWER_CTRL__IH_RETRY_INT_CAM_MEM_POWER_UP_RECOVER_DELAY__SHIFT                                 0x18
+#define IH_MEM_POWER_CTRL__IH_RETRY_INT_CAM_MEM_POWER_DOWN_LS_ENTER_DELAY__SHIFT                              0x1e
 #define IH_MEM_POWER_CTRL__IH_BUFFER_MEM_POWER_CTRL_EN_MASK                                                   0x00000001L
 #define IH_MEM_POWER_CTRL__IH_BUFFER_MEM_POWER_LS_EN_MASK                                                     0x00000002L
 #define IH_MEM_POWER_CTRL__IH_BUFFER_MEM_POWER_DS_EN_MASK                                                     0x00000004L
@@ -888,298 +829,111 @@
 #define IH_MEM_POWER_CTRL__IH_BUFFER_MEM_IDLE_HYSTERESIS_MASK                                                 0x00000070L
 #define IH_MEM_POWER_CTRL__IH_BUFFER_MEM_POWER_UP_RECOVER_DELAY_MASK                                          0x00003F00L
 #define IH_MEM_POWER_CTRL__IH_BUFFER_MEM_POWER_DOWN_LS_ENTER_DELAY_MASK                                       0x0000C000L
+#define IH_MEM_POWER_CTRL__IH_RETRY_INT_CAM_MEM_POWER_CTRL_EN_MASK                                            0x00010000L
+#define IH_MEM_POWER_CTRL__IH_RETRY_INT_CAM_MEM_POWER_LS_EN_MASK                                              0x00020000L
+#define IH_MEM_POWER_CTRL__IH_RETRY_INT_CAM_MEM_POWER_DS_EN_MASK                                              0x00040000L
+#define IH_MEM_POWER_CTRL__IH_RETRY_INT_CAM_MEM_POWER_SD_EN_MASK                                              0x00080000L
+#define IH_MEM_POWER_CTRL__IH_RETRY_INT_CAM_MEM_IDLE_HYSTERESIS_MASK                                          0x00700000L
+#define IH_MEM_POWER_CTRL__IH_RETRY_INT_CAM_MEM_POWER_UP_RECOVER_DELAY_MASK                                   0x3F000000L
+#define IH_MEM_POWER_CTRL__IH_RETRY_INT_CAM_MEM_POWER_DOWN_LS_ENTER_DELAY_MASK                                0xC0000000L
+//IH_RETRY_INT_CAM_CNTL
+#define IH_RETRY_INT_CAM_CNTL__CAM_SIZE__SHIFT                                                                0x0
+#define IH_RETRY_INT_CAM_CNTL__BACK_PRESSURE_SKID_VALUE__SHIFT                                                0x8
+#define IH_RETRY_INT_CAM_CNTL__ENABLE__SHIFT                                                                  0x10
+#define IH_RETRY_INT_CAM_CNTL__BACK_PRESSURE_ENABLE__SHIFT                                                    0x11
+#define IH_RETRY_INT_CAM_CNTL__PER_VF_ENTRY_SIZE__SHIFT                                                       0x14
+#define IH_RETRY_INT_CAM_CNTL__CAM_SIZE_MASK                                                                  0x0000001FL
+#define IH_RETRY_INT_CAM_CNTL__BACK_PRESSURE_SKID_VALUE_MASK                                                  0x00007F00L
+#define IH_RETRY_INT_CAM_CNTL__ENABLE_MASK                                                                    0x00010000L
+#define IH_RETRY_INT_CAM_CNTL__BACK_PRESSURE_ENABLE_MASK                                                      0x00020000L
+#define IH_RETRY_INT_CAM_CNTL__PER_VF_ENTRY_SIZE_MASK                                                         0x00300000L
+//IH_VMID_LUT_INDEX
+#define IH_VMID_LUT_INDEX__INDEX__SHIFT                                                                       0x0
+#define IH_VMID_LUT_INDEX__INDEX_MASK                                                                         0x0000000FL
+//IH_MEM_POWER_CTRL2
+#define IH_MEM_POWER_CTRL2__IH_PASID_LUT_MEM_POWER_CTRL_EN__SHIFT                                             0x0
+#define IH_MEM_POWER_CTRL2__IH_PASID_LUT_MEM_POWER_LS_EN__SHIFT                                               0x1
+#define IH_MEM_POWER_CTRL2__IH_PASID_LUT_MEM_POWER_DS_EN__SHIFT                                               0x2
+#define IH_MEM_POWER_CTRL2__IH_PASID_LUT_MEM_POWER_SD_EN__SHIFT                                               0x3
+#define IH_MEM_POWER_CTRL2__IH_PASID_LUT_MEM_IDLE_HYSTERESIS__SHIFT                                           0x4
+#define IH_MEM_POWER_CTRL2__IH_PASID_LUT_MEM_POWER_UP_RECOVER_DELAY__SHIFT                                    0x8
+#define IH_MEM_POWER_CTRL2__IH_PASID_LUT_MEM_POWER_DOWN_LS_ENTER_DELAY__SHIFT                                 0xe
+#define IH_MEM_POWER_CTRL2__IH_PASID_LUT_MEM_POWER_CTRL_EN_MASK                                               0x00000001L
+#define IH_MEM_POWER_CTRL2__IH_PASID_LUT_MEM_POWER_LS_EN_MASK                                                 0x00000002L
+#define IH_MEM_POWER_CTRL2__IH_PASID_LUT_MEM_POWER_DS_EN_MASK                                                 0x00000004L
+#define IH_MEM_POWER_CTRL2__IH_PASID_LUT_MEM_POWER_SD_EN_MASK                                                 0x00000008L
+#define IH_MEM_POWER_CTRL2__IH_PASID_LUT_MEM_IDLE_HYSTERESIS_MASK                                             0x00000070L
+#define IH_MEM_POWER_CTRL2__IH_PASID_LUT_MEM_POWER_UP_RECOVER_DELAY_MASK                                      0x00003F00L
+#define IH_MEM_POWER_CTRL2__IH_PASID_LUT_MEM_POWER_DOWN_LS_ENTER_DELAY_MASK                                   0x0000C000L
 //IH_REGISTER_LAST_PART2
 #define IH_REGISTER_LAST_PART2__RESERVED__SHIFT                                                               0x0
 #define IH_REGISTER_LAST_PART2__RESERVED_MASK                                                                 0xFFFFFFFFL
-//SEM_CLK_CTRL
-#define SEM_CLK_CTRL__ON_DELAY__SHIFT                                                                         0x0
-#define SEM_CLK_CTRL__OFF_HYSTERESIS__SHIFT                                                                   0x4
-#define SEM_CLK_CTRL__RESERVED__SHIFT                                                                         0xc
-#define SEM_CLK_CTRL__SOFT_OVERRIDE7__SHIFT                                                                   0x18
-#define SEM_CLK_CTRL__SOFT_OVERRIDE6__SHIFT                                                                   0x19
-#define SEM_CLK_CTRL__MEM_CLK_SOFT_OVERRIDE__SHIFT                                                            0x1a
-#define SEM_CLK_CTRL__SOFT_OVERRIDE4__SHIFT                                                                   0x1b
-#define SEM_CLK_CTRL__SOFT_OVERRIDE3__SHIFT                                                                   0x1c
-#define SEM_CLK_CTRL__SOFT_OVERRIDE2__SHIFT                                                                   0x1d
-#define SEM_CLK_CTRL__DYN_CLK_SOFT_OVERRIDE__SHIFT                                                            0x1e
-#define SEM_CLK_CTRL__REG_CLK_SOFT_OVERRIDE__SHIFT                                                            0x1f
-#define SEM_CLK_CTRL__ON_DELAY_MASK                                                                           0x0000000FL
-#define SEM_CLK_CTRL__OFF_HYSTERESIS_MASK                                                                     0x00000FF0L
-#define SEM_CLK_CTRL__RESERVED_MASK                                                                           0x00FFF000L
-#define SEM_CLK_CTRL__SOFT_OVERRIDE7_MASK                                                                     0x01000000L
-#define SEM_CLK_CTRL__SOFT_OVERRIDE6_MASK                                                                     0x02000000L
-#define SEM_CLK_CTRL__MEM_CLK_SOFT_OVERRIDE_MASK                                                              0x04000000L
-#define SEM_CLK_CTRL__SOFT_OVERRIDE4_MASK                                                                     0x08000000L
-#define SEM_CLK_CTRL__SOFT_OVERRIDE3_MASK                                                                     0x10000000L
-#define SEM_CLK_CTRL__SOFT_OVERRIDE2_MASK                                                                     0x20000000L
-#define SEM_CLK_CTRL__DYN_CLK_SOFT_OVERRIDE_MASK                                                              0x40000000L
-#define SEM_CLK_CTRL__REG_CLK_SOFT_OVERRIDE_MASK                                                              0x80000000L
-//SEM_UTC_CREDIT
-#define SEM_UTC_CREDIT__UTCL2_CREDIT__SHIFT                                                                   0x0
-#define SEM_UTC_CREDIT__WATERMARK__SHIFT                                                                      0x8
-#define SEM_UTC_CREDIT__UTCL2_CREDIT_MASK                                                                     0x0000001FL
-#define SEM_UTC_CREDIT__WATERMARK_MASK                                                                        0x00000F00L
-//SEM_UTC_CONFIG
-#define SEM_UTC_CONFIG__USE_MTYPE__SHIFT                                                                      0x0
-#define SEM_UTC_CONFIG__FORCE_SNOOP__SHIFT                                                                    0x3
-#define SEM_UTC_CONFIG__FORCE_GCC__SHIFT                                                                      0x4
-#define SEM_UTC_CONFIG__USE_PT_SNOOP__SHIFT                                                                   0x5
-#define SEM_UTC_CONFIG__USE_MTYPE_MASK                                                                        0x00000007L
-#define SEM_UTC_CONFIG__FORCE_SNOOP_MASK                                                                      0x00000008L
-#define SEM_UTC_CONFIG__FORCE_GCC_MASK                                                                        0x00000010L
-#define SEM_UTC_CONFIG__USE_PT_SNOOP_MASK                                                                     0x00000020L
-//SEM_UTCL2_TRAN_EN_LUT
-#define SEM_UTCL2_TRAN_EN_LUT__SDMA0_UTCL2_EN__SHIFT                                                          0x0
-#define SEM_UTCL2_TRAN_EN_LUT__SDMA1_UTCL2_EN__SHIFT                                                          0x1
-#define SEM_UTCL2_TRAN_EN_LUT__UVD_UTCL2_EN__SHIFT                                                            0x2
-#define SEM_UTCL2_TRAN_EN_LUT__VCE0_UTCL2_EN__SHIFT                                                           0x3
-#define SEM_UTCL2_TRAN_EN_LUT__ACP_UTCL2_EN__SHIFT                                                            0x4
-#define SEM_UTCL2_TRAN_EN_LUT__ISP_UTCL2_EN__SHIFT                                                            0x5
-#define SEM_UTCL2_TRAN_EN_LUT__VCE1_UTCL2_EN__SHIFT                                                           0x6
-#define SEM_UTCL2_TRAN_EN_LUT__VP8_UTCL2_EN__SHIFT                                                            0x7
-#define SEM_UTCL2_TRAN_EN_LUT__UVD1_UTCL2_EN__SHIFT                                                           0x8
-#define SEM_UTCL2_TRAN_EN_LUT__RESERVED__SHIFT                                                                0x9
-#define SEM_UTCL2_TRAN_EN_LUT__CP_UTCL2_EN__SHIFT                                                             0x1f
-#define SEM_UTCL2_TRAN_EN_LUT__SDMA0_UTCL2_EN_MASK                                                            0x00000001L
-#define SEM_UTCL2_TRAN_EN_LUT__SDMA1_UTCL2_EN_MASK                                                            0x00000002L
-#define SEM_UTCL2_TRAN_EN_LUT__UVD_UTCL2_EN_MASK                                                              0x00000004L
-#define SEM_UTCL2_TRAN_EN_LUT__VCE0_UTCL2_EN_MASK                                                             0x00000008L
-#define SEM_UTCL2_TRAN_EN_LUT__ACP_UTCL2_EN_MASK                                                              0x00000010L
-#define SEM_UTCL2_TRAN_EN_LUT__ISP_UTCL2_EN_MASK                                                              0x00000020L
-#define SEM_UTCL2_TRAN_EN_LUT__VCE1_UTCL2_EN_MASK                                                             0x00000040L
-#define SEM_UTCL2_TRAN_EN_LUT__VP8_UTCL2_EN_MASK                                                              0x00000080L
-#define SEM_UTCL2_TRAN_EN_LUT__UVD1_UTCL2_EN_MASK                                                             0x00000100L
-#define SEM_UTCL2_TRAN_EN_LUT__RESERVED_MASK                                                                  0x7FFFFE00L
-#define SEM_UTCL2_TRAN_EN_LUT__CP_UTCL2_EN_MASK                                                               0x80000000L
-//SEM_MCIF_CONFIG
-#define SEM_MCIF_CONFIG__MC_REQ_SWAP__SHIFT                                                                   0x0
-#define SEM_MCIF_CONFIG__MC_WRREQ_CREDIT__SHIFT                                                               0x2
-#define SEM_MCIF_CONFIG__MC_RDREQ_CREDIT__SHIFT                                                               0x8
-#define SEM_MCIF_CONFIG__MC_REQ_SWAP_MASK                                                                     0x00000003L
-#define SEM_MCIF_CONFIG__MC_WRREQ_CREDIT_MASK                                                                 0x000000FCL
-#define SEM_MCIF_CONFIG__MC_RDREQ_CREDIT_MASK                                                                 0x00003F00L
-//SEM_PERFMON_CNTL
-#define SEM_PERFMON_CNTL__PERF_ENABLE0__SHIFT                                                                 0x0
-#define SEM_PERFMON_CNTL__PERF_CLEAR0__SHIFT                                                                  0x1
-#define SEM_PERFMON_CNTL__PERF_SEL0__SHIFT                                                                    0x2
-#define SEM_PERFMON_CNTL__PERF_ENABLE1__SHIFT                                                                 0xa
-#define SEM_PERFMON_CNTL__PERF_CLEAR1__SHIFT                                                                  0xb
-#define SEM_PERFMON_CNTL__PERF_SEL1__SHIFT                                                                    0xc
-#define SEM_PERFMON_CNTL__PERF_ENABLE0_MASK                                                                   0x00000001L
-#define SEM_PERFMON_CNTL__PERF_CLEAR0_MASK                                                                    0x00000002L
-#define SEM_PERFMON_CNTL__PERF_SEL0_MASK                                                                      0x000003FCL
-#define SEM_PERFMON_CNTL__PERF_ENABLE1_MASK                                                                   0x00000400L
-#define SEM_PERFMON_CNTL__PERF_CLEAR1_MASK                                                                    0x00000800L
-#define SEM_PERFMON_CNTL__PERF_SEL1_MASK                                                                      0x000FF000L
-//SEM_PERFCOUNTER0_RESULT
-#define SEM_PERFCOUNTER0_RESULT__PERF_COUNT__SHIFT                                                            0x0
-#define SEM_PERFCOUNTER0_RESULT__PERF_COUNT_MASK                                                              0xFFFFFFFFL
-//SEM_PERFCOUNTER1_RESULT
-#define SEM_PERFCOUNTER1_RESULT__PERF_COUNT__SHIFT                                                            0x0
-#define SEM_PERFCOUNTER1_RESULT__PERF_COUNT_MASK                                                              0xFFFFFFFFL
-//SEM_STATUS
-#define SEM_STATUS__SEM_IDLE__SHIFT                                                                           0x0
-#define SEM_STATUS__SEM_INTERNAL_IDLE__SHIFT                                                                  0x1
-#define SEM_STATUS__MC_RDREQ_FIFO_FULL__SHIFT                                                                 0x2
-#define SEM_STATUS__MC_WRREQ_FIFO_FULL__SHIFT                                                                 0x3
-#define SEM_STATUS__WRITE1_FIFO_FULL__SHIFT                                                                   0x4
-#define SEM_STATUS__CHECK0_FIFO_FULL__SHIFT                                                                   0x5
-#define SEM_STATUS__MC_RDREQ_PENDING__SHIFT                                                                   0x6
-#define SEM_STATUS__MC_WRREQ_PENDING__SHIFT                                                                   0x7
-#define SEM_STATUS__SDMA0_MAILBOX_PENDING__SHIFT                                                              0x8
-#define SEM_STATUS__SDMA1_MAILBOX_PENDING__SHIFT                                                              0x9
-#define SEM_STATUS__UVD_MAILBOX_PENDING__SHIFT                                                                0xa
-#define SEM_STATUS__VCE_MAILBOX_PENDING__SHIFT                                                                0xb
-#define SEM_STATUS__CPG1_MAILBOX_PENDING__SHIFT                                                               0xc
-#define SEM_STATUS__CPG2_MAILBOX_PENDING__SHIFT                                                               0xd
-#define SEM_STATUS__VCE1_MAILBOX_PENDING__SHIFT                                                               0xe
-#define SEM_STATUS__ATC_REQ_PENDING__SHIFT                                                                    0xf
-#define SEM_STATUS__OUTSTANDING_CLEAN__SHIFT                                                                  0x10
-#define SEM_STATUS__INVREQ_FLUSH_VF_MISMATCH__SHIFT                                                           0x11
-#define SEM_STATUS__INVREQ_NONFLUSH_VF_MISMATCH__SHIFT                                                        0x12
-#define SEM_STATUS__INVREQ_CNT_IDLE__SHIFT                                                                    0x13
-#define SEM_STATUS__ENTRYLIST_IDLE__SHIFT                                                                     0x14
-#define SEM_STATUS__MIF_IDLE__SHIFT                                                                           0x15
-#define SEM_STATUS__REGISTER_IDLE__SHIFT                                                                      0x16
-#define SEM_STATUS__ATCL2_INVREQ_IDLE__SHIFT                                                                  0x17
-#define SEM_STATUS__UVD1_MAILBOX_PENDING__SHIFT                                                               0x18
-#define SEM_STATUS__SWITCH_READY__SHIFT                                                                       0x1f
-#define SEM_STATUS__SEM_IDLE_MASK                                                                             0x00000001L
-#define SEM_STATUS__SEM_INTERNAL_IDLE_MASK                                                                    0x00000002L
-#define SEM_STATUS__MC_RDREQ_FIFO_FULL_MASK                                                                   0x00000004L
-#define SEM_STATUS__MC_WRREQ_FIFO_FULL_MASK                                                                   0x00000008L
-#define SEM_STATUS__WRITE1_FIFO_FULL_MASK                                                                     0x00000010L
-#define SEM_STATUS__CHECK0_FIFO_FULL_MASK                                                                     0x00000020L
-#define SEM_STATUS__MC_RDREQ_PENDING_MASK                                                                     0x00000040L
-#define SEM_STATUS__MC_WRREQ_PENDING_MASK                                                                     0x00000080L
-#define SEM_STATUS__SDMA0_MAILBOX_PENDING_MASK                                                                0x00000100L
-#define SEM_STATUS__SDMA1_MAILBOX_PENDING_MASK                                                                0x00000200L
-#define SEM_STATUS__UVD_MAILBOX_PENDING_MASK                                                                  0x00000400L
-#define SEM_STATUS__VCE_MAILBOX_PENDING_MASK                                                                  0x00000800L
-#define SEM_STATUS__CPG1_MAILBOX_PENDING_MASK                                                                 0x00001000L
-#define SEM_STATUS__CPG2_MAILBOX_PENDING_MASK                                                                 0x00002000L
-#define SEM_STATUS__VCE1_MAILBOX_PENDING_MASK                                                                 0x00004000L
-#define SEM_STATUS__ATC_REQ_PENDING_MASK                                                                      0x00008000L
-#define SEM_STATUS__OUTSTANDING_CLEAN_MASK                                                                    0x00010000L
-#define SEM_STATUS__INVREQ_FLUSH_VF_MISMATCH_MASK                                                             0x00020000L
-#define SEM_STATUS__INVREQ_NONFLUSH_VF_MISMATCH_MASK                                                          0x00040000L
-#define SEM_STATUS__INVREQ_CNT_IDLE_MASK                                                                      0x00080000L
-#define SEM_STATUS__ENTRYLIST_IDLE_MASK                                                                       0x00100000L
-#define SEM_STATUS__MIF_IDLE_MASK                                                                             0x00200000L
-#define SEM_STATUS__REGISTER_IDLE_MASK                                                                        0x00400000L
-#define SEM_STATUS__ATCL2_INVREQ_IDLE_MASK                                                                    0x00800000L
-#define SEM_STATUS__UVD1_MAILBOX_PENDING_MASK                                                                 0x01000000L
-#define SEM_STATUS__SWITCH_READY_MASK                                                                         0x80000000L
-//SEM_MAILBOX_CLIENTCONFIG
-#define SEM_MAILBOX_CLIENTCONFIG__CP_CLIENT0__SHIFT                                                           0x0
-#define SEM_MAILBOX_CLIENTCONFIG__CP_CLIENT1__SHIFT                                                           0x3
-#define SEM_MAILBOX_CLIENTCONFIG__CP_CLIENT2__SHIFT                                                           0x6
-#define SEM_MAILBOX_CLIENTCONFIG__CP_CLIENT3__SHIFT                                                           0x9
-#define SEM_MAILBOX_CLIENTCONFIG__SDMA_CLIENT0__SHIFT                                                         0xc
-#define SEM_MAILBOX_CLIENTCONFIG__UVD_CLIENT0__SHIFT                                                          0xf
-#define SEM_MAILBOX_CLIENTCONFIG__SDMA1_CLIENT0__SHIFT                                                        0x12
-#define SEM_MAILBOX_CLIENTCONFIG__VCE_CLIENT0__SHIFT                                                          0x15
-#define SEM_MAILBOX_CLIENTCONFIG__CP_CLIENT0_MASK                                                             0x00000007L
-#define SEM_MAILBOX_CLIENTCONFIG__CP_CLIENT1_MASK                                                             0x00000038L
-#define SEM_MAILBOX_CLIENTCONFIG__CP_CLIENT2_MASK                                                             0x000001C0L
-#define SEM_MAILBOX_CLIENTCONFIG__CP_CLIENT3_MASK                                                             0x00000E00L
-#define SEM_MAILBOX_CLIENTCONFIG__SDMA_CLIENT0_MASK                                                           0x00007000L
-#define SEM_MAILBOX_CLIENTCONFIG__UVD_CLIENT0_MASK                                                            0x00038000L
-#define SEM_MAILBOX_CLIENTCONFIG__SDMA1_CLIENT0_MASK                                                          0x001C0000L
-#define SEM_MAILBOX_CLIENTCONFIG__VCE_CLIENT0_MASK                                                            0x00E00000L
 //SEM_MAILBOX
 #define SEM_MAILBOX__HOSTPORT__SHIFT                                                                          0x0
 #define SEM_MAILBOX__RESERVED__SHIFT                                                                          0x10
 #define SEM_MAILBOX__HOSTPORT_MASK                                                                            0x0000FFFFL
 #define SEM_MAILBOX__RESERVED_MASK                                                                            0xFFFF0000L
-//SEM_MAILBOX_CONTROL
-#define SEM_MAILBOX_CONTROL__HOSTPORT_ENABLE__SHIFT                                                           0x0
-#define SEM_MAILBOX_CONTROL__RESERVED__SHIFT                                                                  0x10
-#define SEM_MAILBOX_CONTROL__HOSTPORT_ENABLE_MASK                                                             0x0000FFFFL
-#define SEM_MAILBOX_CONTROL__RESERVED_MASK                                                                    0xFFFF0000L
-//SEM_CHICKEN_BITS
-#define SEM_CHICKEN_BITS__VMID_PIPELINE_EN__SHIFT                                                             0x0
-#define SEM_CHICKEN_BITS__ENTRY_PIPELINE_EN__SHIFT                                                            0x1
-#define SEM_CHICKEN_BITS__CHECK_COUNTER_EN__SHIFT                                                             0x2
-#define SEM_CHICKEN_BITS__ECC_BEHAVIOR__SHIFT                                                                 0x3
-#define SEM_CHICKEN_BITS__PHY_TRAN_EN__SHIFT                                                                  0x6
-#define SEM_CHICKEN_BITS__ADDR_CMP_UNTRAN_EN__SHIFT                                                           0x7
-#define SEM_CHICKEN_BITS__IDLE_COUNTER_INDEX__SHIFT                                                           0x8
-#define SEM_CHICKEN_BITS__OUTSTANDING_CLEAN_COUNTER_INDEX__SHIFT                                              0xa
-#define SEM_CHICKEN_BITS__ATCL2_BUS_ID__SHIFT                                                                 0xc
-#define SEM_CHICKEN_BITS__ATOMIC_EN__SHIFT                                                                    0xe
-#define SEM_CHICKEN_BITS__EXTERNAL_ATOMIC_CHECK__SHIFT                                                        0xf
-#define SEM_CHICKEN_BITS__CLEAR_MAILBOX__SHIFT                                                                0x10
-#define SEM_CHICKEN_BITS__INVACK_AFTER_OUTSTANDING_CLEAN__SHIFT                                               0x12
-#define SEM_CHICKEN_BITS__UTC_TAG_CONFLICT_CHECK__SHIFT                                                       0x13
-#define SEM_CHICKEN_BITS__VMID_PIPELINE_EN_MASK                                                               0x00000001L
-#define SEM_CHICKEN_BITS__ENTRY_PIPELINE_EN_MASK                                                              0x00000002L
-#define SEM_CHICKEN_BITS__CHECK_COUNTER_EN_MASK                                                               0x00000004L
-#define SEM_CHICKEN_BITS__ECC_BEHAVIOR_MASK                                                                   0x00000018L
-#define SEM_CHICKEN_BITS__PHY_TRAN_EN_MASK                                                                    0x00000040L
-#define SEM_CHICKEN_BITS__ADDR_CMP_UNTRAN_EN_MASK                                                             0x00000080L
-#define SEM_CHICKEN_BITS__IDLE_COUNTER_INDEX_MASK                                                             0x00000300L
-#define SEM_CHICKEN_BITS__OUTSTANDING_CLEAN_COUNTER_INDEX_MASK                                                0x00000C00L
-#define SEM_CHICKEN_BITS__ATCL2_BUS_ID_MASK                                                                   0x00003000L
-#define SEM_CHICKEN_BITS__ATOMIC_EN_MASK                                                                      0x00004000L
-#define SEM_CHICKEN_BITS__EXTERNAL_ATOMIC_CHECK_MASK                                                          0x00008000L
-#define SEM_CHICKEN_BITS__CLEAR_MAILBOX_MASK                                                                  0x00030000L
-#define SEM_CHICKEN_BITS__INVACK_AFTER_OUTSTANDING_CLEAN_MASK                                                 0x00040000L
-#define SEM_CHICKEN_BITS__UTC_TAG_CONFLICT_CHECK_MASK                                                         0x00080000L
-//SEM_MAILBOX_CLIENTCONFIG_EXTRA
-#define SEM_MAILBOX_CLIENTCONFIG_EXTRA__VCE1_CLIENT0__SHIFT                                                   0x0
-#define SEM_MAILBOX_CLIENTCONFIG_EXTRA__UVD1_CLIENT0__SHIFT                                                   0x4
-#define SEM_MAILBOX_CLIENTCONFIG_EXTRA__VCE1_CLIENT0_MASK                                                     0x0000000FL
-#define SEM_MAILBOX_CLIENTCONFIG_EXTRA__UVD1_CLIENT0_MASK                                                     0x000000F0L
-//SEM_GPU_IOV_VIOLATION_LOG
-#define SEM_GPU_IOV_VIOLATION_LOG__VIOLATION_STATUS__SHIFT                                                    0x0
-#define SEM_GPU_IOV_VIOLATION_LOG__MULTIPLE_VIOLATION_STATUS__SHIFT                                           0x1
-#define SEM_GPU_IOV_VIOLATION_LOG__ADDRESS__SHIFT                                                             0x2
-#define SEM_GPU_IOV_VIOLATION_LOG__OPCODE__SHIFT                                                              0x12
-#define SEM_GPU_IOV_VIOLATION_LOG__VF__SHIFT                                                                  0x13
-#define SEM_GPU_IOV_VIOLATION_LOG__VF_ID__SHIFT                                                               0x14
-#define SEM_GPU_IOV_VIOLATION_LOG__INITIATOR_ID__SHIFT                                                        0x18
-#define SEM_GPU_IOV_VIOLATION_LOG__VIOLATION_STATUS_MASK                                                      0x00000001L
-#define SEM_GPU_IOV_VIOLATION_LOG__MULTIPLE_VIOLATION_STATUS_MASK                                             0x00000002L
-#define SEM_GPU_IOV_VIOLATION_LOG__ADDRESS_MASK                                                               0x0003FFFCL
-#define SEM_GPU_IOV_VIOLATION_LOG__OPCODE_MASK                                                                0x00040000L
-#define SEM_GPU_IOV_VIOLATION_LOG__VF_MASK                                                                    0x00080000L
-#define SEM_GPU_IOV_VIOLATION_LOG__VF_ID_MASK                                                                 0x00F00000L
-#define SEM_GPU_IOV_VIOLATION_LOG__INITIATOR_ID_MASK                                                          0xFF000000L
-//SEM_OUTSTANDING_THRESHOLD
-#define SEM_OUTSTANDING_THRESHOLD__VALUE__SHIFT                                                               0x0
-#define SEM_OUTSTANDING_THRESHOLD__VALUE_MASK                                                                 0x000000FFL
-//SEM_MEM_POWER_CTRL
-#define SEM_MEM_POWER_CTRL__MEM_POWER_CTRL_EN__SHIFT                                                          0x0
-#define SEM_MEM_POWER_CTRL__MEM_POWER_LS_EN__SHIFT                                                            0x1
-#define SEM_MEM_POWER_CTRL__MEM_POWER_DS_EN__SHIFT                                                            0x2
-#define SEM_MEM_POWER_CTRL__MEM_POWER_SD_EN__SHIFT                                                            0x3
-#define SEM_MEM_POWER_CTRL__MEM_IDLE_HYSTERESIS__SHIFT                                                        0x4
-#define SEM_MEM_POWER_CTRL__MEM_POWER_UP_RECOVER_DELAY__SHIFT                                                 0x8
-#define SEM_MEM_POWER_CTRL__MEM_POWER_DOWN_LS_ENTER_DELAY__SHIFT                                              0xe
-#define SEM_MEM_POWER_CTRL__MEM_POWER_CTRL_EN_MASK                                                            0x00000001L
-#define SEM_MEM_POWER_CTRL__MEM_POWER_LS_EN_MASK                                                              0x00000002L
-#define SEM_MEM_POWER_CTRL__MEM_POWER_DS_EN_MASK                                                              0x00000004L
-#define SEM_MEM_POWER_CTRL__MEM_POWER_SD_EN_MASK                                                              0x00000008L
-#define SEM_MEM_POWER_CTRL__MEM_IDLE_HYSTERESIS_MASK                                                          0x00000070L
-#define SEM_MEM_POWER_CTRL__MEM_POWER_UP_RECOVER_DELAY_MASK                                                   0x00003F00L
-#define SEM_MEM_POWER_CTRL__MEM_POWER_DOWN_LS_ENTER_DELAY_MASK                                                0x0000C000L
+//SEM_MAILBOX_CLEAR
+#define SEM_MAILBOX_CLEAR__CLEAR__SHIFT                                                                       0x0
+#define SEM_MAILBOX_CLEAR__RESERVED__SHIFT                                                                    0x10
+#define SEM_MAILBOX_CLEAR__CLEAR_MASK                                                                         0x0000FFFFL
+#define SEM_MAILBOX_CLEAR__RESERVED_MASK                                                                      0xFFFF0000L
 //SEM_REGISTER_LAST_PART2
 #define SEM_REGISTER_LAST_PART2__RESERVED__SHIFT                                                              0x0
 #define SEM_REGISTER_LAST_PART2__RESERVED_MASK                                                                0xFFFFFFFFL
 //IH_ACTIVE_FCN_ID
 #define IH_ACTIVE_FCN_ID__VF_ID__SHIFT                                                                        0x0
-#define IH_ACTIVE_FCN_ID__RESERVED__SHIFT                                                                     0x4
+#define IH_ACTIVE_FCN_ID__RESERVED__SHIFT                                                                     0x3
 #define IH_ACTIVE_FCN_ID__PF_VF__SHIFT                                                                        0x1f
-#define IH_ACTIVE_FCN_ID__VF_ID_MASK                                                                          0x0000000FL
-#define IH_ACTIVE_FCN_ID__RESERVED_MASK                                                                       0x7FFFFFF0L
+#define IH_ACTIVE_FCN_ID__VF_ID_MASK                                                                          0x00000007L
+#define IH_ACTIVE_FCN_ID__RESERVED_MASK                                                                       0x7FFFFFF8L
 #define IH_ACTIVE_FCN_ID__PF_VF_MASK                                                                          0x80000000L
 //IH_VIRT_RESET_REQ
 #define IH_VIRT_RESET_REQ__VF__SHIFT                                                                          0x0
 #define IH_VIRT_RESET_REQ__PF__SHIFT                                                                          0x1f
-#define IH_VIRT_RESET_REQ__VF_MASK                                                                            0x0000FFFFL
+#define IH_VIRT_RESET_REQ__VF_MASK                                                                            0x000000FFL
 #define IH_VIRT_RESET_REQ__PF_MASK                                                                            0x80000000L
 //IH_CLIENT_CFG
 #define IH_CLIENT_CFG__TOTAL_CLIENT_NUM__SHIFT                                                                0x0
-#define IH_CLIENT_CFG__TOTAL_CLIENT_NUM_MASK                                                                  0x0000001FL
+#define IH_CLIENT_CFG__TOTAL_CLIENT_NUM_MASK                                                                  0x0000007FL
 //IH_CLIENT_CFG_INDEX
 #define IH_CLIENT_CFG_INDEX__INDEX__SHIFT                                                                     0x0
 #define IH_CLIENT_CFG_INDEX__INDEX_MASK                                                                       0x0000001FL
 //IH_CLIENT_CFG_DATA
-#define IH_CLIENT_CFG_DATA__CREDIT_RETURN_ADDR__SHIFT                                                         0x0
-#define IH_CLIENT_CFG_DATA__CLIENT_TYPE__SHIFT                                                                0x12
+#define IH_CLIENT_CFG_DATA__CLIENT_TYPE__SHIFT                                                                0x13
 #define IH_CLIENT_CFG_DATA__RING_ID__SHIFT                                                                    0x14
 #define IH_CLIENT_CFG_DATA__VF_RB_SELECT__SHIFT                                                               0x16
 #define IH_CLIENT_CFG_DATA__OVERWRITE_RING_ID_WITH_ACTIVE_FCN_ID__SHIFT                                       0x18
-#define IH_CLIENT_CFG_DATA__CREDIT_RETURN_ADDR_MASK                                                           0x0003FFFFL
-#define IH_CLIENT_CFG_DATA__CLIENT_TYPE_MASK                                                                  0x000C0000L
+#define IH_CLIENT_CFG_DATA__INTERFACE_TYPE__SHIFT                                                             0x19
+#define IH_CLIENT_CFG_DATA__DIE_TYPE__SHIFT                                                                   0x1a
+#define IH_CLIENT_CFG_DATA__CLIENT_TYPE_MASK                                                                  0x00080000L
 #define IH_CLIENT_CFG_DATA__RING_ID_MASK                                                                      0x00300000L
 #define IH_CLIENT_CFG_DATA__VF_RB_SELECT_MASK                                                                 0x00C00000L
 #define IH_CLIENT_CFG_DATA__OVERWRITE_RING_ID_WITH_ACTIVE_FCN_ID_MASK                                         0x01000000L
+#define IH_CLIENT_CFG_DATA__INTERFACE_TYPE_MASK                                                               0x02000000L
+#define IH_CLIENT_CFG_DATA__DIE_TYPE_MASK                                                                     0x04000000L
+//IH_CLIENT_CFG_DATA2
+#define IH_CLIENT_CFG_DATA2__CREDIT_RETURN_ADDR__SHIFT                                                        0x0
+#define IH_CLIENT_CFG_DATA2__CREDIT_RETURN_ADDR_MASK                                                          0xFFFFFFFFL
 //IH_CID_REMAP_INDEX
 #define IH_CID_REMAP_INDEX__INDEX__SHIFT                                                                      0x0
-#define IH_CID_REMAP_INDEX__INDEX_MASK                                                                        0x00000003L
+#define IH_CID_REMAP_INDEX__INDEX_MASK                                                                        0x00000007L
 //IH_CID_REMAP_DATA
 #define IH_CID_REMAP_DATA__CLIENT_ID__SHIFT                                                                   0x0
 #define IH_CID_REMAP_DATA__INITIATOR_ID__SHIFT                                                                0x8
-#define IH_CID_REMAP_DATA__CLIENT_ID_REMAP__SHIFT                                                             0x10
+#define IH_CID_REMAP_DATA__CLIENT_ID_REMAP__SHIFT                                                             0x18
 #define IH_CID_REMAP_DATA__CLIENT_ID_MASK                                                                     0x000000FFL
-#define IH_CID_REMAP_DATA__INITIATOR_ID_MASK                                                                  0x0000FF00L
-#define IH_CID_REMAP_DATA__CLIENT_ID_REMAP_MASK                                                               0x00FF0000L
+#define IH_CID_REMAP_DATA__INITIATOR_ID_MASK                                                                  0x0003FF00L
+#define IH_CID_REMAP_DATA__CLIENT_ID_REMAP_MASK                                                               0xFF000000L
 //IH_CHICKEN
 #define IH_CHICKEN__ACTIVE_FCN_ID_PROT_ENABLE__SHIFT                                                          0x0
 #define IH_CHICKEN__MC_SPACE_FBPA_ENABLE__SHIFT                                                               0x3
 #define IH_CHICKEN__MC_SPACE_GPA_ENABLE__SHIFT                                                                0x4
+#define IH_CHICKEN__REG_FIREWALL_ENABLE__SHIFT                                                                0x5
 #define IH_CHICKEN__ACTIVE_FCN_ID_PROT_ENABLE_MASK                                                            0x00000001L
 #define IH_CHICKEN__MC_SPACE_FBPA_ENABLE_MASK                                                                 0x00000008L
 #define IH_CHICKEN__MC_SPACE_GPA_ENABLE_MASK                                                                  0x00000010L
-//IH_MMHUB_CNTL
-#define IH_MMHUB_CNTL__UNITID__SHIFT                                                                          0x0
-#define IH_MMHUB_CNTL__IV_TLVL__SHIFT                                                                         0x8
-#define IH_MMHUB_CNTL__WPTR_WB_TLVL__SHIFT                                                                    0xc
-#define IH_MMHUB_CNTL__UNITID_MASK                                                                            0x0000003FL
-#define IH_MMHUB_CNTL__IV_TLVL_MASK                                                                           0x00000700L
-#define IH_MMHUB_CNTL__WPTR_WB_TLVL_MASK                                                                      0x00007000L
+#define IH_CHICKEN__REG_FIREWALL_ENABLE_MASK                                                                  0x00000020L
 //IH_INT_DROP_CNTL
 #define IH_INT_DROP_CNTL__INT_DROP_EN__SHIFT                                                                  0x0
 #define IH_INT_DROP_CNTL__CLIENT_ID_MATCH_EN__SHIFT                                                           0x1
@@ -1227,85 +981,15 @@
 //IH_INT_DROP_MATCH_MASK1
 #define IH_INT_DROP_MATCH_MASK1__CONTEXT_ID_31_0_MATCH_MASK__SHIFT                                            0x0
 #define IH_INT_DROP_MATCH_MASK1__CONTEXT_ID_31_0_MATCH_MASK_MASK                                              0xFFFFFFFFL
+//IH_MMHUB_CNTL
+#define IH_MMHUB_CNTL__UNITID__SHIFT                                                                          0x0
+#define IH_MMHUB_CNTL__IV_TLVL__SHIFT                                                                         0x8
+#define IH_MMHUB_CNTL__WPTR_WB_TLVL__SHIFT                                                                    0xc
+#define IH_MMHUB_CNTL__UNITID_MASK                                                                            0x0000003FL
+#define IH_MMHUB_CNTL__IV_TLVL_MASK                                                                           0x00000F00L
+#define IH_MMHUB_CNTL__WPTR_WB_TLVL_MASK                                                                      0x0000F000L
 //IH_REGISTER_LAST_PART1
 #define IH_REGISTER_LAST_PART1__RESERVED__SHIFT                                                               0x0
 #define IH_REGISTER_LAST_PART1__RESERVED_MASK                                                                 0xFFFFFFFFL
-//SEM_ACTIVE_FCN_ID
-#define SEM_ACTIVE_FCN_ID__VFID__SHIFT                                                                        0x0
-#define SEM_ACTIVE_FCN_ID__VF__SHIFT                                                                          0x1f
-#define SEM_ACTIVE_FCN_ID__VFID_MASK                                                                          0x0000000FL
-#define SEM_ACTIVE_FCN_ID__VF_MASK                                                                            0x80000000L
-//SEM_VIRT_RESET_REQ
-#define SEM_VIRT_RESET_REQ__VF__SHIFT                                                                         0x0
-#define SEM_VIRT_RESET_REQ__PF__SHIFT                                                                         0x1f
-#define SEM_VIRT_RESET_REQ__VF_MASK                                                                           0x0000FFFFL
-#define SEM_VIRT_RESET_REQ__PF_MASK                                                                           0x80000000L
-//SEM_RESP_SDMA0
-#define SEM_RESP_SDMA0__ADDR__SHIFT                                                                           0x2
-#define SEM_RESP_SDMA0__ADDR_MASK                                                                             0x000FFFFCL
-//SEM_RESP_SDMA1
-#define SEM_RESP_SDMA1__ADDR__SHIFT                                                                           0x2
-#define SEM_RESP_SDMA1__ADDR_MASK                                                                             0x000FFFFCL
-//SEM_RESP_UVD
-#define SEM_RESP_UVD__ADDR__SHIFT                                                                             0x2
-#define SEM_RESP_UVD__ADDR_MASK                                                                               0x000FFFFCL
-//SEM_RESP_VCE_0
-#define SEM_RESP_VCE_0__ADDR__SHIFT                                                                           0x2
-#define SEM_RESP_VCE_0__ADDR_MASK                                                                             0x000FFFFCL
-//SEM_RESP_ACP
-#define SEM_RESP_ACP__ADDR__SHIFT                                                                             0x2
-#define SEM_RESP_ACP__ADDR_MASK                                                                               0x000FFFFCL
-//SEM_RESP_ISP
-#define SEM_RESP_ISP__ADDR__SHIFT                                                                             0x2
-#define SEM_RESP_ISP__ADDR_MASK                                                                               0x000FFFFCL
-//SEM_RESP_VCE_1
-#define SEM_RESP_VCE_1__ADDR__SHIFT                                                                           0x2
-#define SEM_RESP_VCE_1__ADDR_MASK                                                                             0x000FFFFCL
-//SEM_RESP_VP8
-#define SEM_RESP_VP8__ADDR__SHIFT                                                                             0x2
-#define SEM_RESP_VP8__ADDR_MASK                                                                               0x000FFFFCL
-//SEM_RESP_GC
-#define SEM_RESP_GC__ADDR__SHIFT                                                                              0x2
-#define SEM_RESP_GC__ADDR_MASK                                                                                0x000FFFFCL
-//SEM_RESP_UVD_1
-#define SEM_RESP_UVD_1__ADDR__SHIFT                                                                           0x2
-#define SEM_RESP_UVD_1__ADDR_MASK                                                                             0x000FFFFCL
-//SEM_CID_REMAP_INDEX
-#define SEM_CID_REMAP_INDEX__INDEX__SHIFT                                                                     0x0
-#define SEM_CID_REMAP_INDEX__INDEX_MASK                                                                       0x00000003L
-//SEM_CID_REMAP_DATA
-#define SEM_CID_REMAP_DATA__CLIENT_ID__SHIFT                                                                  0x0
-#define SEM_CID_REMAP_DATA__INITIATOR_ID__SHIFT                                                               0x8
-#define SEM_CID_REMAP_DATA__CLIENT_ID_REMAP__SHIFT                                                            0x10
-#define SEM_CID_REMAP_DATA__CLIENT_ID_MASK                                                                    0x000000FFL
-#define SEM_CID_REMAP_DATA__INITIATOR_ID_MASK                                                                 0x0000FF00L
-#define SEM_CID_REMAP_DATA__CLIENT_ID_REMAP_MASK                                                              0x00FF0000L
-//SEM_ATOMIC_OP_LUT
-#define SEM_ATOMIC_OP_LUT__SIGNAL_NORMAL__SHIFT                                                               0x0
-#define SEM_ATOMIC_OP_LUT__SIGNAL_WRITE1__SHIFT                                                               0x7
-#define SEM_ATOMIC_OP_LUT__WAIT_NORMAL__SHIFT                                                                 0xe
-#define SEM_ATOMIC_OP_LUT__WAIT_CHECK0__SHIFT                                                                 0x15
-#define SEM_ATOMIC_OP_LUT__SIGNAL_NORMAL_MASK                                                                 0x0000007FL
-#define SEM_ATOMIC_OP_LUT__SIGNAL_WRITE1_MASK                                                                 0x00003F80L
-#define SEM_ATOMIC_OP_LUT__WAIT_NORMAL_MASK                                                                   0x001FC000L
-#define SEM_ATOMIC_OP_LUT__WAIT_CHECK0_MASK                                                                   0x0FE00000L
-//SEM_EDC_CONFIG
-#define SEM_EDC_CONFIG__WRITE_DIS__SHIFT                                                                      0x0
-#define SEM_EDC_CONFIG__DIS_EDC__SHIFT                                                                        0x1
-#define SEM_EDC_CONFIG__WRITE_DIS_MASK                                                                        0x00000001L
-#define SEM_EDC_CONFIG__DIS_EDC_MASK                                                                          0x00000002L
-//SEM_CHICKEN_BITS2
-#define SEM_CHICKEN_BITS2__ACTIVE_FCN_ID_PROT_ENABLE__SHIFT                                                   0x0
-#define SEM_CHICKEN_BITS2__MM_CLIENT_USE_CONFIG_VFID__SHIFT                                                   0x1
-#define SEM_CHICKEN_BITS2__ACTIVE_FCN_ID_PROT_ENABLE_MASK                                                     0x00000001L
-#define SEM_CHICKEN_BITS2__MM_CLIENT_USE_CONFIG_VFID_MASK                                                     0x00000002L
-//SEM_MMHUB_CNTL
-#define SEM_MMHUB_CNTL__UNIT_ID__SHIFT                                                                        0x0
-#define SEM_MMHUB_CNTL__TLVL_VALUE__SHIFT                                                                     0x8
-#define SEM_MMHUB_CNTL__UNIT_ID_MASK                                                                          0x0000003FL
-#define SEM_MMHUB_CNTL__TLVL_VALUE_MASK                                                                       0x00000700L
-//SEM_REGISTER_LAST_PART1
-#define SEM_REGISTER_LAST_PART1__RESERVED__SHIFT                                                              0x0
-#define SEM_REGISTER_LAST_PART1__RESERVED_MASK                                                                0xFFFFFFFFL
 
 #endif

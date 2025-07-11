@@ -92,7 +92,7 @@ static void amdgv_cper_fill_timestamp(struct cper_timestamp *ts,
 	ts->hours = hour;
 	ts->day = day;
 	ts->month = month;
-	ts->century = (year / 100) + 1;
+	ts->century = year / 100;
 	ts->year = year % 100;
 }
 

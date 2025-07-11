@@ -130,6 +130,7 @@
 
 int ras_eeprom_v2_1_sw_init(struct amdgv_adapter *adapt);
 int ras_eeprom_legacy_sw_init(struct amdgv_adapter *adapt);
+int ras_eeprom_v2_1_export_live_data(struct amdgv_adapter *adapt, uint8_t *data);
 
 
 bool __get_eeprom_i2c_params(struct amdgv_adapter *adapt, struct amdgv_ras_eeprom_control *control);

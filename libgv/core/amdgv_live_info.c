@@ -73,10 +73,11 @@ enum amdgv_live_info_status amdgv_import_data(struct amdgv_adapter *adapt)
 	op_num    =  ((struct amdgv_gpu_data_v2 *)gpu_data)->header.op_num;
 	op_offset = &((struct amdgv_gpu_data_v2 *)gpu_data)->header.op_offset[0];
 
-	for (data_op = AMDGV_LIVE_INFO_DATA__CRITICAL_STATE; data_op < op_num; data_op++) {
+	for (data_op = AMDGV_LIVE_INFO_DATA__CRITICAL_STATE; (uint32_t)data_op < op_num; data_op++) {
 		if ((data_op != AMDGV_LIVE_INFO_DATA__MODULE_PARAM_PRE) &&
 			(data_op != AMDGV_LIVE_INFO_DATA__MEMMGR) &&
 			(data_op != AMDGV_LIVE_INFO_DATA__UNPROCESSED_EVENT) &&
+			(data_op != AMDGV_LIVE_INFO_DATA__RAS_EEPROM_DATA) &&
 			(data_op != AMDGV_LIVE_INFO_DATA__IP_DISCOVERY || (!adapt->ip_discovery.enable_live_update))) {
 
 			offset = op_offset[data_op];
@@ -238,6 +239,9 @@ enum amdgv_live_info_status amdgv_live_info_init_metadata(struct amdgv_adapter *
 			case AMDGV_LIVE_INFO_DATA__IP_DISCOVERY:
 				header->structure_size = sizeof(struct amdgv_live_info_ip_discovery);
 				break;
+			case AMDGV_LIVE_INFO_DATA__RAS_EEPROM_DATA:
+				header->structure_size = sizeof(struct amdgv_live_info_ras_eeprom_data);
+				break;
 			default:
 				AMDGV_DEBUG("No live data struct for op %d in amdgv_live_info_data.\n", data_op);
 				break;
@@ -381,6 +385,7 @@ int amdgv_live_info_export_data(struct amdgv_adapter *adapt, uint32_t data_op,
 		// smu clk info
 		powerplay->socclk = table_context->boot_values.socclk;
 		powerplay->dcefclk = table_context->boot_values.dcefclk;
+		powerplay->smu_features = smu->supported_caps;
 		*status = AMDGV_LIVE_INFO_STATUS_SUCCESS;
 
 		break;
@@ -426,6 +431,14 @@ int amdgv_live_info_export_data(struct amdgv_adapter *adapt, uint32_t data_op,
 	}
 	case AMDGV_LIVE_INFO_DATA__CPER: {
 		*status = amdgv_cper_export_live_data(adapt, (struct amdgv_live_info_cper *)data);
+		break;
+	}
+	case AMDGV_LIVE_INFO_DATA__RAS_EEPROM_DATA:
+	{
+		struct amdgv_live_info_ras_eeprom_data *eeprom_data = (struct amdgv_live_info_ras_eeprom_data *)data;
+
+		eeprom_data->data_len = amdgv_ras_eeprom_export_live_update(adapt, eeprom_data->data_buffer);
+		*status = AMDGV_LIVE_INFO_STATUS_SUCCESS;
 		break;
 	}
 	default:
@@ -627,6 +640,7 @@ int amdgv_live_info_import_data(struct amdgv_adapter *adapt, uint32_t data_op,
 		// smu clk info
 		table_context->boot_values.socclk = powerplay->socclk;
 		table_context->boot_values.dcefclk = powerplay->dcefclk;
+		smu->supported_caps = powerplay->smu_features;
 		*status = AMDGV_LIVE_INFO_STATUS_SUCCESS;
 		break;
 	}
@@ -670,6 +684,21 @@ int amdgv_live_info_import_data(struct amdgv_adapter *adapt, uint32_t data_op,
 	}
 	case AMDGV_LIVE_INFO_DATA__CPER: {
 		*status = amdgv_cper_import_live_data(adapt, (struct amdgv_live_info_cper *)data);
+		break;
+	}
+	case AMDGV_LIVE_INFO_DATA__RAS_EEPROM_DATA: {
+		struct amdgv_live_info_ras_eeprom_data *eeprom_data = (struct amdgv_live_info_ras_eeprom_data *)data;
+
+		if (eeprom_data->data_len > 0) {
+			adapt->ecc.ras_eerpom_raw_data.data_buf = oss_zalloc(eeprom_data->data_len);
+			if (adapt->ecc.ras_eerpom_raw_data.data_buf) {
+				oss_memcpy(adapt->ecc.ras_eerpom_raw_data.data_buf, eeprom_data->data_buffer, eeprom_data->data_len);
+				adapt->ecc.ras_eerpom_raw_data.data_len = eeprom_data->data_len;
+				*status = AMDGV_LIVE_INFO_STATUS_SUCCESS;
+			} else
+				*status = AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
+		} else
+			*status = AMDGV_LIVE_INFO_STATUS_SUCCESS;
 		break;
 	}
 	default:

@@ -48,6 +48,8 @@
 #define SMUQ10_FRAC(x) ((x) & 0x3ff)
 #define SMUQ10_ROUND(x) ((SMUQ10_TO_UINT(x)) + ((SMUQ10_FRAC(x)) >= 0x200))
 
+#define PLDM_VERSION_NOT_SUPPORTED 0xffffffff
+
 // This DS threshold was calculated based on MI300 characteristics using the formula
 // max GFXCLK/GFX DS clock divider =  (2250/16) ~= 140
 #define MI300_GPUMON_DS_THRESHOLD 140

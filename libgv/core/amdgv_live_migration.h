@@ -25,36 +25,22 @@
 #define AMDGV_LIVE_MIGRATION_H
 
 struct amdgv_live_migration {
-
 	struct amdgv_memmgr_mem		*static_data_mem;
 	struct amdgv_memmgr_mem		*dynamic_data_mem;
-
-	mutex_t						lm_lock;
-	const struct amdgv_lm_funcs *lm_funcs;
-};
-
-struct amdgv_lm_funcs {
-	int (*get_migration_version)(struct amdgv_adapter *adapt,
-		uint32_t *migration_version);
-	int (*get_manifest_size)(struct amdgv_adapter *adapt, uint64_t* size,
-		enum amdgv_migration_data_section section);
-	int (*send_transfer_cmd)(struct amdgv_adapter *adapt, uint32_t idx_vf,
-		bool to_export);
-	int (*psp_export)(struct amdgv_adapter *adapt, uint32_t idx_vf,
-		void* data_dst, enum amdgv_migration_export_phase phase);
-	int (*psp_import)(struct amdgv_adapter *adapt, uint32_t idx_vf,
-		enum amdgv_migration_import_phase phase);
+	mutex_t				lm_lock;
+	uint32_t			static_data_size;
+	uint32_t			dynamic_data_size;
+	uint32_t			migration_version;
+	int32_t				migration_status;
 };
 
 int amdgv_migration_get_migration_version(struct amdgv_adapter *adapt,
 	uint32_t *migration_version);
 int amdgv_migration_get_psp_data_size(struct amdgv_adapter *adapt, uint64_t *size,
 	enum amdgv_migration_data_section section);
-int amdgv_migration_send_transfer_cmd(struct amdgv_adapter *adapt, uint32_t idx_vf,
-	bool to_export);
-int amdgv_migration_export_vf(struct amdgv_adapter *adapt, uint32_t idx_vf,
-	void* data_dst, enum amdgv_migration_export_phase phase);
-int amdgv_migration_import_vf(struct amdgv_adapter *adapt, uint32_t idx_vf,
-	void* data_src, enum amdgv_migration_import_phase phase);
-
+int amdgv_migration_transfer_manifest_data(struct amdgv_adapter *adapt,
+					struct amdgv_sched_event *event);
+int amdgv_migration_init(struct amdgv_adapter *adapt);
+void amdgv_migration_fini(struct amdgv_adapter *adapt);
+int amdgv_migration_collect_info(struct amdgv_adapter *adapt);
 #endif

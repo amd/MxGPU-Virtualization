@@ -231,8 +231,8 @@ struct amdgv_gpuiov_funcs {
 	int (*set_event_notification)(struct amdgv_adapter *adapt, uint32_t hw_sched_id,
 				uint32_t idx_vf, enum amdgv_gpuiov_event_id event_id, uint32_t value);
 
-	int (*transfer_vf_data)(struct amdgv_adapter *adapt,
-				uint32_t hw_sched_id, uint32_t idx_vf, bool to_export);
+	int (*transfer_vf_data)(struct amdgv_adapter *adapt, uint32_t hw_sched_id, uint32_t idx_vf, bool to_export);
+
 	uint32_t (*update_vf_busy_status)(struct amdgv_adapter *adapt, uint32_t hw_sched_id);
 	void (*ctx_empty_intr_control)(struct amdgv_adapter *adapt, uint32_t hw_sched_id, bool enable);
 	int (*setup_sched_debug_log)(struct amdgv_adapter *adapt, enum amdgv_auto_sched_log_op op);
@@ -451,7 +451,12 @@ const char *amdgv_gpuiov_cmd_to_name_default(struct amdgv_adapter *adapt, uint32
 const char *amdgv_gpuiov_cmd_to_name(struct amdgv_adapter *adapt, uint32_t cmd, uint32_t hw_sched_id);
 const char *amdgv_gpuiov_status_to_name(uint32_t status);
 int amdgv_gpuiov_transfer_vf_data(struct amdgv_adapter *adapt,
-				  uint32_t idx_vf, uint32_t hw_sched_id, bool to_export);
+				  uint32_t idx_vf, bool to_export);
+int amdgv_gpuiov_set_mmsch_vfgate(struct amdgv_adapter *adapt, uint32_t idx_vf,
+				  uint32_t hw_sched_id, bool enable);
+#ifndef EXCLUDE_NOT_USED
+int amdgv_gpuiov_set_csa(struct amdgv_adapter *adapt, uint32_t csa_base);
+#endif // EXCLUDE_NOT_USED
 int amdgv_gpuiov_world_switch_oneshot(struct amdgv_adapter *adapt,
 				      uint32_t idx_vf, uint32_t next_idx_vf,
 				      uint32_t hw_sched_id);

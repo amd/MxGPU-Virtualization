@@ -1105,6 +1105,30 @@ static int mi300_get_num_metrics_ext_entries(struct amdgv_adapter *adapt,
 	return ret;
 }
 
+static int mi300_get_static_metrics_ext(struct amdgv_adapter *adapt,
+		struct amdgv_gpumon_metrics_ext *metrics_ext)
+{
+	int ret = AMDGV_FAILURE;
+
+	if (adapt->pp.pp_funcs->get_static_metrics_ext) {
+		ret = adapt->pp.pp_funcs->get_static_metrics_ext(adapt, metrics_ext);
+	}
+
+	return ret;
+}
+
+static int mi300_get_num_static_metrics_ext_entries(struct amdgv_adapter *adapt,
+		uint32_t *entries)
+{
+	int ret = AMDGV_FAILURE;
+
+	if (adapt->pp.pp_funcs->get_num_static_metrics_ext_entries) {
+		ret = adapt->pp.pp_funcs->get_num_static_metrics_ext_entries(adapt, entries);
+	}
+
+	return ret;
+}
+
 static int mi300_is_pm_enabled(struct amdgv_adapter *adapt, bool *pm_enabled)
 {
 	int ret = AMDGV_FAILURE;
@@ -1171,7 +1195,7 @@ static int mi300_get_link_topology(struct amdgv_adapter *adapt,
 				   struct amdgv_adapter *dest_adapt,
 				   struct amdgv_gpumon_link_topology_info *topology_info)
 {
-	int i;
+	uint32_t i;
 	struct amdgv_hive_info *hive;
 	struct amdgv_xgmi_psp_topology_info *psp_topology_info = NULL;
 	struct amdgv_xgmi_psp_node_info *psp_node_info = NULL;
@@ -1562,6 +1586,8 @@ static const struct amdgv_gpumon_funcs mi300_gpumon_funcs = {
 	.set_pm_policy_level = mi300_gpumon_smu_set_pm_policy_level,
 	.get_gfx_config = mi300_get_gfx_config,
 	.get_ecc_correction_schema = mi300_get_ecc_correction_schema,
+	.get_static_metrics_ext = mi300_get_static_metrics_ext,
+	.get_num_static_metrics_ext_entries = mi300_get_num_static_metrics_ext_entries,
 };
 
 static int mi300_gpumon_sw_init(struct amdgv_adapter *adapt)

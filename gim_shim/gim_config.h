@@ -162,6 +162,16 @@
 #define DEBUG_MODE__DEFAULT    AMDGV_DEBUG_MODE_DEFAULT
 #define DEBUG_MODE__MAX        AMDGV_DEBUG_MODE_MASK
 
+#define SENTINEL_MODE__KEY        "sentinel_mode"
+#define SENTINEL_MODE__START      0
+#define SENTINEL_MODE__DEFAULT    0
+#define SENTINEL_MODE__MAX        1
+
+#define ENABLE_LIVE_MIGRATION__KEY "enable_live_migration"
+#define ENABLE_LIVE_MIGRATION__START 0
+#define ENABLE_LIVE_MIGRATION__DEFAULT 0
+#define ENABLE_LIVE_MIGRATION__MAX 1
+
 enum gim_conf_opt_idx {
 	CONF_OPT_START = 0,
 	CONF_OPT_VF_NUMBER = CONF_OPT_START,
@@ -192,6 +202,8 @@ enum gim_conf_opt_idx {
 	CONF_OPT_RAS_VF_TELEMETRY_POLICY,
 	CONF_OPT_MAX_CPER_COUNT,
 	CONF_OPT_DEBUG_MODE,
+	CONF_OPT_SENTINEL_MODE,
+	CONF_OPT_ENABLE_LIVE_MIGRATION,
 	CONF_OPT_MAX
 };
 
@@ -223,6 +235,7 @@ uint32_t gim_conf_set_accelerator_partition_mode_opt(int value);
 uint32_t gim_conf_set_memory_partition_mode_opt(int value);
 uint32_t gim_conf_get_ras_vf_telemetry_policy_opt(uint32_t id);
 uint32_t gim_conf_get_max_cper_count_opt(uint32_t id);
+uint32_t gim_conf_get_sentinel_mode_opt(void);
 uint32_t gim_conf_set_opt(int index, int value);
 uint32_t gim_conf_clear_conf_file(void);
 int gim_conf_save(void);
@@ -263,4 +276,5 @@ uint32_t gim_conf_get_bp_mode_opt(uint32_t id);
 uint64_t gim_conf_get_pf_fb_size_opt(uint32_t id);
 
 uint32_t gim_conf_get_debug_mode_opt(uint32_t id);
+uint32_t gim_conf_get_enable_live_migration_opt(void);
 #endif

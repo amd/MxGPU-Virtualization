@@ -37,8 +37,6 @@
 	for (inst = adapt->sdma.num_instances; inst < adapt->sdma.num_instances + adapt->sdma.num_enbl_harv_inst; inst++)
 #define for_each_sdma_inst(inst, adapt) \
 	for (inst = 0; inst < (adapt)->sdma.num_sdma_rings; inst++)
-#define IS_SDMA_ENABLED(adapt) \
-	(!(adapt->flags & AMDGV_FLAG_DISABLE_SDMA_ENGINE) || (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION))
 
 static const uint32_t this_block = AMDGV_MEMORY_BLOCK;
 
@@ -49,6 +47,11 @@ static void sdma_v4_4_2_query_ras_error_count(struct amdgv_adapter *adapt,
 						AMDGV_RAS_BLOCK__SDMA,
 						ras_error_status);
 };
+
+int sdma_v4_4_2_sdma_query_dirtybit(struct amdgv_adapter *adapt, uint64_t mc_addr, struct amdgv_query_dirty_bit_data *data)
+{
+	return AMDGV_FAILURE;
+}
 
 const struct amdgv_sdma_ras_funcs sdma_v4_4_2_ras_funcs = {
 	.err_cnt_init = NULL,
@@ -86,13 +89,144 @@ static void sdma_v4_4_2_ring_submit_frame(struct amdgv_ring *ring, uint8_t *fram
 	}
 }
 
+static int sdma_v4_4_2_ring_test_ring(struct amdgv_ring *ring)
+{
+#if 0
+	struct amdgv_adapter *adapt = ring->adapt;
+	unsigned i;
+	int r = 0;
+	uint32_t tmp;
+	uint32_t index;
+	uint64_t gpu_addr;
+	uint32_t timeout;
+
+	tmp = 0xCAFEDEAD;
+	r = amdgv_wb_memory_get(adapt, &index);
+	if (r) {
+		AMDGV_ERROR("Failed to allocate wb\n");
+		return r;
+	}
+
+	gpu_addr = adapt->wb.gpu_addr + (index * 4);
+	adapt->wb.wb[index] = cpu_to_le32(tmp);
+
+	r = amdgv_ring_alloc(ring, 5);
+	if (r)
+		return r;
+
+	amdgv_ring_write(ring, SDMA_PKT_HEADER_OP(SDMA_OP_WRITE) |
+			  SDMA_PKT_HEADER_SUB_OP(SDMA_SUBOP_WRITE_LINEAR));
+	amdgv_ring_write(ring, lower_32_bits(gpu_addr));
+	amdgv_ring_write(ring, upper_32_bits(gpu_addr));
+	amdgv_ring_write(ring, SDMA_PKT_WRITE_UNTILED_DW_3_COUNT(0));
+	amdgv_ring_write(ring, 0xDEADBEEF);
+	amdgv_ring_commit(ring);
+	timeout = 100;
+	for (i = 0; i < timeout; i++) {
+		tmp = le32_to_cpu(adapt->wb.wb[index]);
+		if (tmp == 0xDEADBEEF)
+			break;
+		oss_msleep(1);
+	}
+
+	if (i >= timeout) {
+		AMDGV_ERROR("Failed to do sdma ring test\n");
+		r = -1;
+	}
+
+	amdgv_wb_memory_free(adapt, index);
+	return r;
+#endif
+	return 0;
+}
+
+static uint64_t sdma_v4_4_2_ring_get_rptr(struct amdgv_ring *ring)
+{
+	uint64_t *rptr;
+
+	rptr = (uint64_t *)ring->rptr_cpu_addr;
+
+	return ((*rptr) >> 2);
+}
+
+static uint64_t sdma_v4_4_2_ring_get_wptr(struct amdgv_ring *ring)
+{
+	struct amdgv_adapter *adapt = ring->adapt;
+	uint64_t wptr;
+
+	if (ring->use_doorbell) {
+		wptr = (*((volatile uint64_t *)ring->wptr_cpu_addr));
+	} else {
+		wptr = RREG32_SOC15(SDMA0, GET_INST(SDMA0, ring->queue), regSDMA_GFX_RB_WPTR_HI);
+		wptr = wptr << 32;
+		wptr |= RREG32_SOC15(SDMA0, GET_INST(SDMA0, ring->queue), regSDMA_GFX_RB_WPTR);
+	}
+
+	return wptr >> 2;
+}
+
+static void sdma_v4_4_2_ring_set_wptr(struct amdgv_ring *ring)
+{
+	struct amdgv_adapter *adapt = ring->adapt;
+
+	if (ring->use_doorbell) {
+		adapt->wb.wb[ring->wptr_offs] = ring->wptr;
+		WDOORBELL64(ring->doorbell_index, ring->wptr << 2);
+	} else {
+		WREG32_SOC15(SDMA0, GET_INST(SDMA0, ring->queue), regSDMA_GFX_RB_WPTR, lower_32_bits(ring->wptr << 2));
+		WREG32_SOC15(SDMA0, GET_INST(SDMA0, ring->queue), regSDMA_GFX_RB_WPTR_HI, upper_32_bits(ring->wptr << 2));
+	}
+}
+
+static void sdma_v4_4_2_ring_insert_nop(struct amdgv_ring *ring, uint32_t count)
+{
+	int i = 0;
+
+	for (i = 0; i < count; i++)
+		amdgv_ring_write(ring, SDMA_PKT_NOP_HEADER_OP(0));
+}
+
+static void sdma_v4_4_2_ring_emit_fence(struct amdgv_ring *ring, uint64_t addr, uint64_t seq,
+				      unsigned flags)
+{
+	struct amdgv_adapter *adapt = ring->adapt;
+	bool write64bit = flags & AMDGV_FENCE_FLAG_64BIT;
+
+	/* write the fence */
+	amdgv_ring_write(ring, SDMA_PKT_HEADER_OP(SDMA_OP_FENCE) |
+			  SDMA_PKT_FENCE_HEADER_MTYPE(0x3));
+
+	/* zero in first two bits */
+	if (addr & 0x3) {
+		AMDGV_WARN("addr:%llx\n", addr);
+	}
+	amdgv_ring_write(ring, lower_32_bits(addr));
+	amdgv_ring_write(ring, upper_32_bits(addr));
+	amdgv_ring_write(ring, lower_32_bits(seq));
+
+	/* optionally write high bits as well */
+	if (write64bit) {
+		addr += 4;
+		amdgv_ring_write(ring, SDMA_PKT_HEADER_OP(SDMA_OP_FENCE) |
+				  SDMA_PKT_FENCE_HEADER_MTYPE(0x3));
+		amdgv_ring_write(ring, lower_32_bits(addr));
+		amdgv_ring_write(ring, upper_32_bits(addr));
+		amdgv_ring_write(ring, upper_32_bits(seq));
+	}
+}
+
 static const struct amdgv_ring_funcs sdma_ring_funcs = {
 	.type = AMDGV_RING_TYPE_SDMA,
 	.align_mask = 0xff,
-	.nop = 0,
+	.nop = SDMA_PKT_NOP_HEADER_OP(SDMA_OP_NOP),
 	.support_64bit_ptrs = true,
-	.vmhub = 0,
-//	.set_wptr = sdma_ring_set_wptr,
+	.vmhub = VM_MMHUB0,
+	.get_rptr = sdma_v4_4_2_ring_get_rptr,
+	.get_wptr = sdma_v4_4_2_ring_get_wptr,
+	.set_wptr = sdma_v4_4_2_ring_set_wptr,
+	.insert_nop = sdma_v4_4_2_ring_insert_nop,
+	.emit_fence = sdma_v4_4_2_ring_emit_fence,
+	.test_ring = sdma_v4_4_2_ring_test_ring,
 	.submit_frame = sdma_v4_4_2_ring_submit_frame,
 };
 
@@ -145,7 +279,7 @@ static int mi300_sdma_sw_init(struct amdgv_adapter *adapt)
 
 static int mi300_sdma_sw_fini(struct amdgv_adapter *adapt)
 {
-	uint32_t i;
+	int i;
 
 	for_each_sdma_inst (i, adapt) {
 		amdgv_ring_fini(&adapt->sdma.sdma_ring[i]);
@@ -278,17 +412,16 @@ static int mi300_sdma_hw_init_internal_set(struct amdgv_adapter *adapt)
 	for_each_sdma_inst(i, adapt) {
 		ret = amdgv_ring_init_set(adapt, &adapt->sdma.sdma_ring[i]);
 		if (ret)
-				goto out;
+			return ret;
 	}
 
 	for_each_harvest_sdma_inst(i, adapt) {
 		ret = amdgv_ring_init_set(adapt, &adapt->sdma.sdma_ring[i]);
 		if (ret)
-				goto out;
+			return ret;
 	}
 
-out:
-	return ret;
+	return 0;
 }
 
 static void mi300_process_sdma_instance(struct amdgv_adapter *adapt, uint32_t ring_id)
@@ -304,43 +437,104 @@ static void mi300_process_sdma_instance(struct amdgv_adapter *adapt, uint32_t ri
 	mi300_enable_sdma(adapt, ring_id);
 }
 
-static int mi300_sdma_hw_init(struct amdgv_adapter *adapt)
+static void sdma_v4_4_2_harvest_sdma_hw_fini(struct amdgv_adapter *adapt)
 {
-	uint32_t i;
-
-	if (IS_SDMA_ENABLED(adapt)) {
-		/* LM does not need the repeated context load&save again */
-		if (!(adapt->flags & AMDGV_FLAG_USE_PF) && !(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION))
-			amdgv_sched_context_load(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX);
-
-		mi300_sdma_hw_init_internal_set(adapt);
-
-		for_each_sdma_inst(i, adapt) {
-			mi300_process_sdma_instance(adapt, i);
-		}
-
-		for_each_harvest_sdma_inst(i, adapt) {
-			mi300_process_sdma_instance(adapt, i);
-		}
-
-		if (!(adapt->flags & AMDGV_FLAG_USE_PF) && !(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION))
-			amdgv_sched_context_save(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX);
-	}
-
-	return 0;
-}
-
-static int mi300_sdma_hw_fini(struct amdgv_adapter *adapt)
-{
-	uint32_t i;
-
-	for_each_sdma_inst(i, adapt) {
-		mi300_disable_sdma(adapt, i);
-	}
+	int i;
 
 	for_each_harvest_sdma_inst(i, adapt) {
 		mi300_disable_sdma(adapt, i);
 	}
+}
+
+static void sdma_v4_4_2_pf_sdma_hw_fini(struct amdgv_adapter *adapt)
+{
+	int i;
+
+	for_each_sdma_inst(i, adapt) {
+		mi300_disable_sdma(adapt, i);
+	}
+}
+
+static int sdma_v4_4_2_harvest_sdma_hw_init(struct amdgv_adapter *adapt)
+{
+	int ret = 0;
+	int i;
+
+	for_each_harvest_sdma_inst(i, adapt) {
+		mi300_process_sdma_instance(adapt, i);
+	}
+
+	for_each_harvest_sdma_inst(i, adapt) {
+		if (amdgv_ring_test_helper(&adapt->sdma.sdma_ring[i])) {
+			ret = AMDGV_FAILURE;
+			break;
+		}
+	}
+
+	if (ret == AMDGV_FAILURE) {
+		sdma_v4_4_2_harvest_sdma_hw_fini(adapt);
+	}
+
+	return ret;
+}
+
+static int sdma_v4_4_2_pf_sdma_hw_init(struct amdgv_adapter *adapt)
+{
+	int ret = 0;
+	int i;
+
+	if (adapt->flags & AMDGV_FLAG_USE_PF)
+		amdgv_sched_context_load(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX);
+
+	for_each_sdma_inst(i, adapt) {
+		mi300_process_sdma_instance(adapt, i);
+	}
+
+	for_each_sdma_inst(i, adapt) {
+		if (amdgv_ring_test_helper(&adapt->sdma.sdma_ring[i])) {
+			ret = AMDGV_FAILURE;
+			break;
+		}
+	}
+
+	if (ret == AMDGV_FAILURE) {
+		sdma_v4_4_2_pf_sdma_hw_fini(adapt);
+	}
+
+	if (adapt->flags & AMDGV_FLAG_USE_PF)
+		amdgv_sched_context_save(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX);
+
+	return ret;
+}
+
+static int mi300_sdma_hw_init(struct amdgv_adapter *adapt)
+{
+	if (mi300_sdma_hw_init_internal_set(adapt)) {
+		AMDGV_ERROR("SDMA hw init internal set failed\n");
+		return AMDGV_FAILURE;
+	}
+
+	if (sdma_v4_4_2_harvest_sdma_hw_init(adapt)) {
+		AMDGV_ERROR("Harvest SDMA hw init failed\n");
+		return AMDGV_FAILURE;
+	}
+
+	if (sdma_v4_4_2_pf_sdma_hw_init(adapt)) {
+		AMDGV_ERROR("PF SDMA hw init failed\n");
+		goto err;
+	}
+
+	return 0;
+err:
+	sdma_v4_4_2_harvest_sdma_hw_fini(adapt);
+
+	return AMDGV_FAILURE;
+}
+
+static int mi300_sdma_hw_fini(struct amdgv_adapter *adapt)
+{
+	sdma_v4_4_2_harvest_sdma_hw_fini(adapt);
+	sdma_v4_4_2_pf_sdma_hw_fini(adapt);
 
 	return 0;
 }

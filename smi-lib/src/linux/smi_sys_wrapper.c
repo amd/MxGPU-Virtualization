@@ -186,7 +186,7 @@ static int amdsmi_verify_driver(void)
 	client = gim_get_ioctl();
 	if (client == NULL) {
 		SMI_ERROR("ioctl client not found\n");
-		return false;
+		return -1;
 	}
 
 	return client->access(SMI_IOCTL);
@@ -244,19 +244,20 @@ static int amdsmi_strncpy(char *dest, size_t destsz, const char *src, size_t cou
 system_wrapper *get_system_wrapper(void)
 {
 	static system_wrapper wrapper = {
-		.malloc = malloc,
-		.calloc = calloc,
-		.free = free,
-		.ioctl = amdsmi_ioctl_request,
-		.open = amdsmi_open_file_handle,
-		.access = amdsmi_verify_driver,
-		.close = amdsmi_close_file_handle,
-		.poll = amdsmi_lnx_poll,
-		.poll_alloc = amdsmi_lnx_poll_alloc,
-		.is_user_mode = amdsmi_is_user_mode,
-		.aligned_alloc = amdsmi_aligned_alloc,
-		.aligned_free = free,
-		.strncpy = amdsmi_strncpy
+		.smi_malloc = malloc,
+		.smi_calloc = calloc,
+		.smi_free = free,
+		.smi_ioctl = amdsmi_ioctl_request,
+		.smi_open = amdsmi_open_file_handle,
+		.smi_access = amdsmi_verify_driver,
+		.smi_close = amdsmi_close_file_handle,
+		.smi_poll = amdsmi_lnx_poll,
+		.smi_poll_alloc = amdsmi_lnx_poll_alloc,
+		.smi_is_user_mode = amdsmi_is_user_mode,
+		.smi_aligned_alloc = amdsmi_aligned_alloc,
+		.smi_aligned_free = free,
+		.smi_strncpy = amdsmi_strncpy,
+		.smi_sysconf = sysconf
 	};
 
 	return &wrapper;

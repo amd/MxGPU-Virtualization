@@ -24,6 +24,7 @@
 #define AMDGV_POWERPLAY_SWSMU_H
 #include "amdgv_device.h"
 
+#define SMU_CAPS(x)		(1ULL << (x))
 struct smu_local_memory {
 	uint64_t size;	    // in bytes
 	uint32_t alignment; // in bytes
@@ -86,6 +87,7 @@ struct smu_table_context {
 
 struct smu_context {
 	uint64_t features;
+	uint64_t supported_caps;
 	void    *smu_table_context;
 	void    *smu_dpm_context;
 	void    *smu_overdrive_context;

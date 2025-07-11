@@ -378,7 +378,8 @@ int AmdSmiApiGuest::get_string_from_enum_fw_block(int fw_block, std::string& out
 		{AMDSMI_FW_ID_SMC, "SMC"},
 		{AMDSMI_FW_ID_DMCU, "DMCU"},
 		{AMDSMI_FW_ID_PSP_RAS, "PSP_RAS"},
-		{AMDSMI_FW_ID_P2S_TABLE, "P2S_TABLE"}
+		{AMDSMI_FW_ID_P2S_TABLE, "P2S_TABLE"},
+		{AMDSMI_FW_ID_PLDM_BUNDLE, "PLDM"}
 	};
 
 	out = fw_blocks((amdsmi_fw_block_t)fw_block);

@@ -120,6 +120,12 @@ struct amdgv_ecc {
 	struct eeprom_table_record last_err_bps[MAX_UMC_CHANNEL_NUM];
 	uint32_t last_err_bps_cnt;
 	mutex_t unhandled_bps_lock;
+	struct eeprom_raw_data {
+		uint32_t data_len;
+		uint8_t *data_buf;
+	} ras_eerpom_raw_data;
+
+	bool eeprom_live_update_enable;
 
 	int (*toggle_ecc_mode)(struct amdgv_adapter *adapt);
 	int (*get_correctable_error_count)(struct amdgv_adapter *adapt,

@@ -362,8 +362,10 @@ static bool mi300_ecc_is_poison_consumption_wgr(struct amdgv_adapter *adapt,
 		return true;
 
 	if ((block != AMDGV_RAS_BLOCK__GFX) &&
-	    (block != AMDGV_RAS_BLOCK__SDMA))
-	    return true;
+	    (block != AMDGV_RAS_BLOCK__SDMA)) {
+		AMDGV_ERROR("Block %d is not supported for poison consumption, triggering VF FLR instead.\n", block);
+		return false;
+	}
 
 	return false;
 }
@@ -480,6 +482,7 @@ static int mi300_ecc_sw_init(struct amdgv_adapter *adapt)
 	adapt->ecc.get_ras_cap = mi300_get_ras_cap;
 	adapt->ecc.poison_consumption = mi300_ecc_poison_consumption;
 	adapt->ecc.poison_creation = mi300_ecc_poison_creation;
+	adapt->ecc.eeprom_live_update_enable = true;
 
 	umc_v12_0_set_umc_funcs(adapt);
 	nbio_v7_9_set_ras_funcs(adapt);

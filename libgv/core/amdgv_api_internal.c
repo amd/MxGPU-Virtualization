@@ -36,7 +36,7 @@ static const uint32_t this_block = AMDGV_API_BLOCK;
 int amdgv_int_allocate_vf(struct amdgv_adapter *adapt, struct amdgv_vf_option *option)
 {
 	int opt_err = 0, ret;
-	int i;
+	uint32_t i;
 
 	/* First time only, remove all default VFs */
 	if (!adapt->customized_vf_config_mode)
@@ -115,7 +115,7 @@ unlock:
 int amdgv_int_set_vf_number(struct amdgv_adapter *adapt, uint32_t num_vf)
 {
 	int opt_err;
-	int i;
+	uint32_t i;
 
 	/* all VFs must be in avail or unavail state */
 	for (i = 0; i < adapt->num_vf; i++) {
@@ -283,7 +283,19 @@ int amdgv_int_ras_ta_unload(struct amdgv_adapter *adapt, struct amdgv_smi_cmd_ra
 	return ret;
 }
 
-int amdgv_int_dump_cu_data(struct amdgv_adapter *adapt, enum AMDGV_CU_DATA_TYPE type)
+int amdgv_int_alloc_dump_cu_resource_memory(struct amdgv_adapter *adapt, struct amdgv_dump_cu_resource_size *dump_cu_resource_size,
+											struct amdgv_dump_cu_resource_memory *output_data)
+{
+	int ret = AMDGV_FAILURE;
+
+	if (adapt->gfx.funcs && adapt->gfx.funcs->alloc_dump_cu_resource_memory) {
+		ret = adapt->gfx.funcs->alloc_dump_cu_resource_memory(adapt, dump_cu_resource_size, output_data);
+	}
+
+	return ret;
+}
+
+int amdgv_int_dump_cu_data(struct amdgv_adapter *adapt)
 {
 	int ret = 0;
 
@@ -295,10 +307,33 @@ int amdgv_int_dump_cu_data(struct amdgv_adapter *adapt, enum AMDGV_CU_DATA_TYPE 
 			return AMDGV_FAILURE;
 		}
 
-		ret = adapt->gfx.funcs->dump_cu_data(adapt, type);
+		ret = adapt->gfx.funcs->dump_cu_data(adapt);
 	} else {
 		AMDGV_ERROR("dump CU data not supported\n");
 		return AMDGV_FAILURE;
 	}
 	return ret;
+}
+
+void amdgv_int_free_dump_cu_resource_memory(struct amdgv_adapter *adapt)
+{
+	if (!adapt->gfx.dump_cu_memmgr_mem_group)
+		return;
+
+	if (adapt->gfx.dump_cu_memmgr_mem_group->packet)
+		amdgv_memmgr_free(adapt->gfx.dump_cu_memmgr_mem_group->packet);
+	if (adapt->gfx.dump_cu_memmgr_mem_group->signal_obj)
+		amdgv_memmgr_free(adapt->gfx.dump_cu_memmgr_mem_group->signal_obj);
+	if (adapt->gfx.dump_cu_memmgr_mem_group->kernelarg)
+		amdgv_memmgr_free(adapt->gfx.dump_cu_memmgr_mem_group->kernelarg);
+	if (adapt->gfx.dump_cu_memmgr_mem_group->kernelobj)
+		amdgv_memmgr_free(adapt->gfx.dump_cu_memmgr_mem_group->kernelobj);
+	if (adapt->gfx.dump_cu_memmgr_mem_group->out_flag)
+		amdgv_memmgr_free(adapt->gfx.dump_cu_memmgr_mem_group->out_flag);
+	if (adapt->gfx.dump_cu_memmgr_mem_group->out_data)
+		amdgv_memmgr_free(adapt->gfx.dump_cu_memmgr_mem_group->out_data);
+
+	oss_free_memory(adapt->gfx.dump_cu_memmgr_mem_group);
+
+	return;
 }

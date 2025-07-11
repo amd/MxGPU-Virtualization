@@ -28,6 +28,7 @@
 
 #include "amdgv_error.h"
 #include "gim_gpumon.h"
+#include "gim.h"
 
 
 #include <linux/version.h>
@@ -163,7 +164,7 @@ int smi_create_event(struct smi_ctx *smi, amdgv_dev_t *adev, struct smi_event_se
 	smi_process_handle file;
 	char *name;
 
-	set = kzalloc(sizeof(struct smi_lnx_event_ctx), GFP_KERNEL);
+	set = gim_kzalloc(sizeof(struct smi_lnx_event_ctx), GFP_KERNEL);
 	if (set == NULL)
 		return -ENOMEM;
 

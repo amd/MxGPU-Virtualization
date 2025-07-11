@@ -200,7 +200,7 @@ int amdgv_diag_data_host_collect_reg_dump(struct amdgv_adapter *adapt,
 		struct amdgv_diag_data_dump_reg *dbg_regs, uint32_t regs_count,
 		struct amdgv_diag_data_file_info *file_data)
 {
-	int i, j;
+	uint32_t i, j;
 	uint32_t used_size = 0;
 	uint32_t reg, value;
 	uint32_t reg_first_inst = 0;

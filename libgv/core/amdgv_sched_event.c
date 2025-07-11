@@ -151,6 +151,8 @@ static const char *amdgv_event_name(uint32_t event)
 		return "REL_GPU_DEBUG";
 	case AMDGV_EVENT_SCHED_VF_REQ_RAS_BAD_PAGES:
 		return "SCHED_VF_REQ_RAS_BAD_PAGES";
+	case AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA:
+		return "LIVE_MIGRATION_MANIFEST_DATA";
 	default:
 		break;
 	}
@@ -419,7 +421,7 @@ static int amdgv_sched_event_queue_push_ex(struct amdgv_adapter *adapt, uint32_t
 		AMDGV_DEBUG("queue %s request from %s for %s\n", amdgv_event_name(event_id),
 			   amdgv_idx_to_str(idx_vf), amdgv_sched_block_to_name(sched_block));
 	else
-		AMDGV_DEBUG("queue %s request from %s for %s\n", amdgv_event_name(event_id),
+		AMDGV_DEBUG4("queue %s request from %s for %s\n", amdgv_event_name(event_id),
 			    amdgv_idx_to_str(idx_vf), amdgv_sched_block_to_name(sched_block));
 
 	if (amdgv_sched_event_is_event_invalid(adapt, idx_vf, event_id, sched_block)) {
@@ -731,6 +733,7 @@ static void amdgv_sched_event_arrange_event_list(struct amdgv_adapter *adapt,
 		case AMDGV_EVENT_SCHED_PSP_VF_GATE:
 		case AMDGV_EVENT_SCHED_PSP_VF_CMD_RELAY:
 		case AMDGV_EVENT_HANDLE_CRASH:
+		case AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA:
 			amdgv_list_move_tail(
 				&entry->list,
 				&adapt->sched.event_list[AMDGV_SCHED_EVENT_LIST_3]);
@@ -923,6 +926,7 @@ static void amdgv_sched_push_back_event(struct amdgv_adapter *adapt,
 	case AMDGV_EVENT_SCHED_MMSCH_GENERAL_NOTIFICATION:
 	case AMDGV_EVENT_SCHED_PSP_VF_CMD_RELAY:
 	case AMDGV_EVENT_HANDLE_CRASH:
+	case AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA:
 	case AMDGV_EVENT_SCHED_RMA:
 		adapt->sched.curr_event_list_idx = AMDGV_SCHED_EVENT_LIST_3;
 		amdgv_list_add(&entry->list,
@@ -1810,6 +1814,9 @@ static void amdgv_sched_exit_full_access(struct amdgv_adapter *adapt,
 		ret = amdgv_sched_handle_rel_gpu_fini(adapt, event->idx_vf);
 		amdgv_live_info_prepare_reset(adapt);
 
+		if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)
+			amdgv_dirtybit_clear_fb_dbit(adapt, event->idx_vf);
+
 		break;
 	default:
 		AMDGV_ASSERT(false);
@@ -2038,7 +2045,7 @@ static int amdgv_sched_enter_power_saving(struct amdgv_adapter *adapt)
 	struct amdgv_sched_world_switch *world_switch;
 
 	uint32_t idx_tmp = AMDGV_PF_IDX;
-	int i = 0;
+	uint32_t i = 0;
 	uint32_t hw_sched_id = 0;
 
 	for (i = 0; i < adapt->num_vf; i++) {
@@ -2185,7 +2192,8 @@ static int amdgv_sched_event_handle_rma(struct amdgv_adapter *adapt)
 static int handle_event_in_full_access(struct amdgv_adapter *adapt,
 				       struct amdgv_sched_event *event)
 {
-	int ret = 0, i = 0;
+	int ret = 0;
+	uint32_t i = 0;
 	uint32_t world_switch_id = 0;
 	struct amdgv_sched_vf_info *vf_info;
 
@@ -2537,6 +2545,7 @@ static int handle_event_in_full_access(struct amdgv_adapter *adapt,
 	case AMDGV_EVENT_CUR_VF_CTX_EMPTY:
 	case AMDGV_EVENT_SCHED_UPDATE_TOPOLOGY:
 	case AMDGV_EVENT_SCHED_GET_TOPOLOGY:
+	case AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA:
 		amdgv_sched_push_back_event(adapt, event);
 		ret = AMDGV_EVENT_STOP_AND_KEEP;
 		break;
@@ -2590,6 +2599,7 @@ static int handle_event_in_non_full_access(struct amdgv_adapter *adapt,
 	     (event->id != AMDGV_EVENT_SCHED_RAS_FED) &
 	     (event->id != AMDGV_EVENT_SCHED_UPDATE_TOPOLOGY) &&
 		 (event->id != AMDGV_EVENT_SCHED_GET_TOPOLOGY) &&
+		 (event->id != AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA) &&
 	     (event->id != AMDGV_EVENT_SCHED_UPDATE_MCA_BANKS)))
 		return 0;
 
@@ -2597,6 +2607,7 @@ static int handle_event_in_non_full_access(struct amdgv_adapter *adapt,
 	 * If the scheduler is locked defer all events till we get a resume
 	 */
 	if (adapt->lock_world_switch && (event->id != AMDGV_EVENT_SCHED_RESUME) &&
+	    (event->id != AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA) &&
 	    (event->id != AMDGV_EVENT_EXIT_POWER_SAVING) &&
 		(event->id != AMDGV_EVENT_SCHED_RESUME_LIVE) &&
 		(!(adapt->debug.in_live_debugging && event->id == AMDGV_EVENT_REL_GPU_DEBUG)) &&
@@ -2617,6 +2628,9 @@ static int handle_event_in_non_full_access(struct amdgv_adapter *adapt,
 
 	switch (event->id) {
 	case AMDGV_EVENT_REQ_GPU_INIT_DATA:
+		if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)
+			amdgv_dirtybit_clear_fb_dbit(adapt, event->idx_vf);
+
 		/* reprogram VF's golden setting */
 		amdgv_misc_reprogram_golden_settings(adapt, event->idx_vf);
 
@@ -2911,6 +2925,9 @@ static int handle_event_in_non_full_access(struct amdgv_adapter *adapt,
 				if (amdgv_vfmgr_update_pf2vf_message(adapt, event->idx_vf))
 					AMDGV_WARN("update pf2vf message failed\n");
 			}
+
+			if (amdgv_gpuiov_get_vf_access(adapt, event->idx_vf, AMDGV_VF_ACCESS_MMIO_REG_WRITE))
+				amdgv_gpuiov_set_vf_access(adapt, event->idx_vf, AMDGV_VF_ACCESS_MMIO_REG_WRITE, false);
 		} else {
 			AMDGV_WARN("resuming non-suspended %s\n",
 				   amdgv_idx_to_str(event->idx_vf));
@@ -3109,7 +3126,15 @@ static int handle_event_in_non_full_access(struct amdgv_adapter *adapt,
 		adapt->debug.in_live_debugging = false;
 		adapt->lock_world_switch = false;
 		break;
+	case AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA:
+		if (event->data.lm.type == AMDGV_MIGRATION_IMPORT_DYNAMIC_DATA ||
+		    event->data.lm.type == AMDGV_MIGRATION_EXPORT_DYNAMIC_DATA)
+			amdgv_sched_stop(adapt, event->idx_vf);
 
+		if (amdgv_migration_transfer_manifest_data(adapt, event))
+			return AMDGV_FAILURE;
+
+		break;
 	default:
 		break;
 	}
@@ -3160,7 +3185,7 @@ static bool amdgv_sched_should_skip_event(struct amdgv_adapter *adapt)
 static int amdgv_sched_process_event(struct amdgv_adapter *adapt)
 {
 	int stop;
-	int i;
+	uint32_t i;
 	struct amdgv_sched_event *event;
 	struct amdgv_vf_device *vf_device;
 
@@ -3290,7 +3315,7 @@ static int amdgv_sched_process_event(struct amdgv_adapter *adapt)
 
 static enum amdgv_sched_full_access_status amdgv_sched_partition_full_access_check_and_process(struct amdgv_adapter *adapt, int64_t *time_remain)
 {
-	int i;
+	uint32_t i;
 	int64_t left_time;
 	int64_t left_time_min;
 	bool timed_out = false;
@@ -3502,7 +3527,7 @@ static bool amdgv_sched_allow_queue_in_unrecov_err(struct amdgv_adapter *adapt,
 						   enum amdgv_sched_event_id event_id,
 						   union amdgv_sched_event_data data)
 {
-	int i = 0;
+	uint32_t i = 0;
 
 	/* allow chain reset from other adapt */
 	if (event_id == AMDGV_EVENT_SCHED_FORCE_RESET_GPU_INTERNAL)

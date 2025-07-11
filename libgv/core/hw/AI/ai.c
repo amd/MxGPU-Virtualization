@@ -41,7 +41,6 @@ extern struct amdgv_init_func mi200_irqmgr_func;
 extern struct amdgv_init_func mi200_mailbox_func;
 extern struct amdgv_init_func mi200_misc_func;
 extern struct amdgv_init_func mi200_diag_data_func;
-extern struct amdgv_init_func mi200_live_migration_func;
 extern struct amdgv_init_func mi200_doorbell_func;
 extern struct amdgv_init_func mi200_gfx_v9_0_func;
 extern struct amdgv_init_func mi200_df_v3_6_func;
@@ -68,7 +67,6 @@ struct amdgv_init_func *mi200_init_table[] = {
 	&amdgv_vfmgr_func,
 	&mi200_sched_func,
 	&mi200_diag_data_func,
-	&mi200_live_migration_func,
 	&mi200_gfx_v9_0_func,
 	NULL,
 };
@@ -107,6 +105,7 @@ extern struct amdgv_init_func mi308_ucode_func;
 extern struct amdgv_init_func mi350_ucode_func;
 extern struct amdgv_init_func mi350_smu_func;
 extern struct amdgv_init_func mi350_powerplay_func;
+extern struct amdgv_init_func mi300_dirtybit_func;
 
 struct amdgv_init_func *mi300x_init_table[] = {
 	&mi300_ip_discovery_func,
@@ -162,13 +161,12 @@ struct amdgv_init_func *mi308x_init_table[] = {
 	&amdgv_vfmgr_func,
 	&mi300_sched_early_func,
 	/* Uncomment when support is complete for MI300
-#ifndef EXCLUDE_DIAG_DATA
 	&mi300_diag_data_func,
-#endif
 	*/
 	&mi300_sdma_v4_4_2_func,
 	&mi300_gfx_v9_4_3_func,
 	&mi300_sched_late_func,
+	&mi300_dirtybit_func,
 	NULL,
 };
 

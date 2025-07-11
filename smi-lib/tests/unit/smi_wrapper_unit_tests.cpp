@@ -160,8 +160,8 @@ protected:
 TEST_F(AmdSmiLnxWrapperTests, TestDefaultWrapper)
 {
 	auto wrapper = get_system_wrapper();
-	ASSERT_EQ((void*)wrapper->free, (void*)free);
-	ASSERT_EQ((void*)wrapper->malloc, (void*)malloc);
+	ASSERT_EQ((void*)wrapper->smi_free, (void*)free);
+	ASSERT_EQ((void*)wrapper->smi_malloc, (void*)malloc);
 }
 
 TEST_F(AmdSmiLnxWrapperTests, TestPollAlloc)
@@ -173,7 +173,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestPollAlloc)
 	event_handle[0].fd = MAGIC_FD;
 	event_handle[1].fd = MAGIC_FD;
 
-	void *fds = wrapper->poll_alloc(event_handle, num_fds);
+	void *fds = wrapper->smi_poll_alloc(event_handle, num_fds);
 
 	auto actual_fds = reinterpret_cast<struct pollfd *>(fds);
 
@@ -199,7 +199,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestEventTimeout)
 
 	poll_ret = 0; // timeout
 
-	int ret = wrapper->poll(&event_set, &event, timeout);
+	int ret = wrapper->smi_poll(&event_set, &event, timeout);
 
 	ASSERT_GE(poll_cnt, 1);
 	ASSERT_EQ(read_cnt, 0);
@@ -219,7 +219,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestPollFailed)
 	event_set._private = &fd;
 	poll_ret = -1; // error
 
-	int ret = wrapper->poll(&event_set, &event, timeout);
+	int ret = wrapper->smi_poll(&event_set, &event, timeout);
 
 	ASSERT_GE(poll_cnt, 1);
 	ASSERT_EQ(read_cnt, 0);
@@ -241,7 +241,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestPollWaitOne)
 	poll_ret = 1;
 	read_ret = 0; // EOF
 
-	int ret = wrapper->poll(&event_set, &event, timeout);
+	int ret = wrapper->smi_poll(&event_set, &event, timeout);
 
 	ASSERT_GE(poll_cnt, 1);
 	ASSERT_GE(read_cnt, 1);
@@ -263,7 +263,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestPollWaitForever)
 	poll_ret = 1;
 	read_ret = 0; // EOF
 
-	int ret = wrapper->poll(&event_set, &event, timeout);
+	int ret = wrapper->smi_poll(&event_set, &event, timeout);
 
 	ASSERT_GE(poll_cnt, 1);
 	ASSERT_GE(read_cnt, 1);
@@ -285,7 +285,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestReadSucceeds)
 	poll_ret = 1;
 	read_ret = 1;
 
-	int ret = wrapper->poll(&event_set, &event, timeout);
+	int ret = wrapper->smi_poll(&event_set, &event, timeout);
 
 	ASSERT_GE(poll_cnt, 1);
 	ASSERT_GE(read_cnt, 1);
@@ -307,7 +307,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestReadFailed)
 	poll_ret = 1;
 	read_ret = -1; // error
 
-	int ret = wrapper->poll(&event_set, &event, timeout);
+	int ret = wrapper->smi_poll(&event_set, &event, timeout);
 
 	ASSERT_GE(poll_cnt, 1);
 	ASSERT_GE(read_cnt, 1);
@@ -324,7 +324,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestIoctlNull)
 
 	ioctl_ret = -EINVAL;
 
-	int ret = wrapper->ioctl(MAGIC_FD, buffer);
+	int ret = wrapper->smi_ioctl(MAGIC_FD, buffer);
 
 	ASSERT_EQ(ret, ioctl_ret);
 	ASSERT_EQ(read_cnt, 0);
@@ -338,7 +338,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestIoctlSuccess)
 
 	ioctl_ret = 0;
 
-	int ret = wrapper->ioctl(MAGIC_FD, buffer);
+	int ret = wrapper->smi_ioctl(MAGIC_FD, buffer);
 
 	ASSERT_EQ(ret, ioctl_ret);
 	ASSERT_EQ(read_cnt, 1);
@@ -354,7 +354,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestIoctlFailed)
 
 	ioctl_ret = -1;
 
-	int ret = wrapper->ioctl(MAGIC_FD, buffer);
+	int ret = wrapper->smi_ioctl(MAGIC_FD, buffer);
 
 	ASSERT_EQ(ret, ioctl_ret);
 	ASSERT_EQ(read_cnt, 0);
@@ -369,7 +369,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestOpenNull)
 
 	open_ret = -EINVAL;
 
-	int ret = wrapper->open(SMI_READONLY);
+	int ret = wrapper->smi_open(SMI_READONLY);
 
 	ASSERT_EQ(open_ret, ret);
 	ASSERT_EQ(open_cnt, 0);
@@ -381,7 +381,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestOpenSuccess)
 
 	open_ret = 0;
 
-	int ret = wrapper->open(SMI_READONLY);
+	int ret = wrapper->smi_open(SMI_READONLY);
 
 	ASSERT_EQ(open_ret, ret);
 	ASSERT_EQ(open_cnt, 1);
@@ -394,14 +394,14 @@ TEST_F(AmdSmiLnxWrapperTests, TestOpenFailed)
 
 	open_ret = -1;
 
-	int ret = wrapper->open(SMI_RDWR);
+	int ret = wrapper->smi_open(SMI_RDWR);
 
 	ASSERT_EQ(open_ret, ret);
 	ASSERT_EQ(open_cnt, 1);
 
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wconversion"
-	ret = wrapper->open((smi_file_access_mode)(SMI_RDWR + 5));
+	ret = wrapper->smi_open((smi_file_access_mode)(SMI_RDWR + 5));
 	#pragma GCC diagnostic pop
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
@@ -413,7 +413,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestAccessSuccess)
 
 	access_ret = 0;
 
-	int ret = wrapper->access();
+	int ret = wrapper->smi_access();
 
 	ASSERT_EQ(access_ret, ret);
 	ASSERT_EQ(access_cnt, 1);
@@ -426,7 +426,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestAccessFailed)
 
 	access_ret = -1;
 
-	int ret = wrapper->access();
+	int ret = wrapper->smi_access();
 
 	ASSERT_EQ(access_ret, ret);
 	ASSERT_EQ(access_cnt, 1);
@@ -437,9 +437,9 @@ TEST_F(AmdSmiLnxWrapperTests, TestSysWrapperNull)
 	EXPECT_CALL(*amdsmi::g_system_mock, GetDriverMode())
 		.WillOnce(Return(2));
 	auto wrapper = get_system_wrapper();
-	access_ret = 0;
+	access_ret = -1;
 
-	int ret = wrapper->access();
+	int ret = wrapper->smi_access();
 
 	ASSERT_EQ(access_ret, ret);
 }
@@ -449,7 +449,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestIsUserModeDriver)
 	auto wrapper = get_system_wrapper();
 	access_ret = 1;
 
-	int ret = wrapper->is_user_mode();
+	int ret = wrapper->smi_is_user_mode();
 
 	ASSERT_EQ(access_ret, ret);
 }
@@ -461,7 +461,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestIsKernelModeDriver)
 	auto wrapper = get_system_wrapper();
 	access_ret = 0;
 
-	int ret = wrapper->is_user_mode();
+	int ret = wrapper->smi_is_user_mode();
 
 	ASSERT_EQ(access_ret, ret);
 }
@@ -473,7 +473,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestIsNullModeDriver)
 	auto wrapper = get_system_wrapper();
 	access_ret = 0;
 
-	int ret = wrapper->is_user_mode();
+	int ret = wrapper->smi_is_user_mode();
 
 	ASSERT_EQ(access_ret, ret);
 }
@@ -485,7 +485,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestCloseNull)
 	auto wrapper = get_system_wrapper();
 	access_ret = 0;
 
-	int ret = wrapper->close(MAGIC_FD);
+	int ret = wrapper->smi_close(MAGIC_FD);
 
 	ASSERT_EQ(access_ret, ret);
 }
@@ -497,7 +497,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestCloseSuccess)
 	auto wrapper = get_system_wrapper();
 	access_ret = 0;
 
-	int ret = wrapper->close(MAGIC_FD);
+	int ret = wrapper->smi_close(MAGIC_FD);
 
 	ASSERT_EQ(access_ret, ret);
 }
@@ -509,7 +509,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestCloseFailed)
 	auto wrapper = get_system_wrapper();
 	access_ret = 1;
 
-	int ret = wrapper->close(MAGIC_FD);
+	int ret = wrapper->smi_close(MAGIC_FD);
 
 	ASSERT_EQ(access_ret, ret);
 }
@@ -523,7 +523,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestAlignedAlloc)
 
 	*mem = 300;
 	page_size = 4096;
-	aligned_mem = wrapper->aligned_alloc((void **)mem, (size_t)page_size, page_size*sizeof(int));
+	aligned_mem = wrapper->smi_aligned_alloc((void **)mem, (size_t)page_size, page_size*sizeof(int));
 
 	ASSERT_EQ(aligned_mem ? 0:1, 0);
 	free(mem);
@@ -539,7 +539,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestStrncpySuccess)
 	size_t count = 7;
 	int ret = 0;
 
-	ret = wrapper->strncpy(dest, destsz, src, count);
+	ret = wrapper->smi_strncpy(dest, destsz, src, count);
 
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 }
@@ -553,7 +553,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestStrncpyFail)
 	size_t count = 7;
 	int ret = 0;
 
-	ret = wrapper->strncpy(dest, destsz, src, count);
+	ret = wrapper->smi_strncpy(dest, destsz, src, count);
 
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 }
@@ -567,7 +567,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestStrncpyCount)
 	size_t count = destsz + 1;
 	int ret = 0;
 
-	ret = wrapper->strncpy(dest, destsz, src, count);
+	ret = wrapper->smi_strncpy(dest, destsz, src, count);
 
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 }

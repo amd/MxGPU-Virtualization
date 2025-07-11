@@ -1,6 +1,0 @@
-#!/bin/bash -e
-
-cd "$(dirname "${BASH_SOURCE[0]}")"
-autoreconf
-./configure "$@"
-./get-version > ../libgv/VERSION

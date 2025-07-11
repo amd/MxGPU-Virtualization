@@ -601,6 +601,8 @@ int AmdSmiApiGuest::amdsmi_get_vram_usage_monitor_command(uint64_t processor_bdf
 	amdsmi_status_t ret;
 	amdsmi_processor_handle processor;
 	amdsmi_vram_usage_t vram_usage;
+	uint32_t vram_total;
+	uint32_t vram_used;
 	amdsmi_bdf_t tmp_bdf;
 	tmp_bdf.as_uint = processor_bdf;
 
@@ -616,27 +618,22 @@ int AmdSmiApiGuest::amdsmi_get_vram_usage_monitor_command(uint64_t processor_bdf
 		return ret;
 	}
 
-	std::string vram_total_str{ string_format("%lld", vram_usage.vram_total) };
-	std::string vram_used_str{ string_format("%lld", vram_usage.vram_used) };
+	vram_total = vram_usage.vram_total / 1024;
+	vram_used = vram_usage.vram_used / 1024;
+	std::string vram_usage_str{ string_format("%lld/%lld", vram_used, vram_total) };
 
 	if (arg.output == json) {
 		nlohmann::ordered_json vram_total_json{};
-		vram_total_json["value"] = vram_usage.vram_total;
-		vram_total_json["unit"] =  vram_total_str == "N/A" ? "N/A" : "MB";
-		nlohmann::ordered_json vram_used_json{};
-		vram_used_json["value"] = vram_usage.vram_used;
-		vram_used_json["unit"] = vram_used_str == "N/A" ? "N/A" : "MB";
-		nlohmann::ordered_json vram_usage_json = { { "vram_total", vram_total_json }, { "vram_used", vram_used_json }, };
-
+		vram_total_json["value"] = vram_usage_str;
+		vram_total_json["unit"] =  vram_usage_str == "N/A" ? "N/A" : "GB";
+		nlohmann::ordered_json vram_usage_json = { { "vram_total", vram_total_json }, };
 		formatted_string = vram_usage_json.dump(4);
 	} else if (arg.output == csv) {
-		formatted_string = string_format(",%s,%s", vram_total_str.c_str(),vram_used_str.c_str());
+		formatted_string = string_format(",%s", vram_usage_str.c_str());
 	} else {
-		std::string vram_total_str_unit = vram_total_str == "N/A" ? "" : "MB";
-		std::string vram_used_str_unit = vram_used_str == "N/A" ? "" : "MB";
-		std::string vram_used{string_format("%s %s", vram_used_str.c_str(), vram_used_str_unit.c_str())};
-		std::string vram_total{string_format("%s %s", vram_total_str.c_str(),vram_total_str_unit.c_str())};
-		formatted_string = string_format("%s,%s", vram_used.c_str(), vram_total.c_str());
+		std::string vram_usage_str_unit = vram_usage_str == "N/A" ? "" : "GB";
+		std::string vram_usage{string_format("%s %s", vram_usage_str.c_str(), vram_usage_str_unit.c_str())};
+		formatted_string = string_format("%s", vram_usage.c_str());
 	}
 
 	return AMDSMI_STATUS_SUCCESS;

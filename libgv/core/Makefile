@@ -35,7 +35,7 @@ LIBGV_CORE_LOCAL = amdgv_device.o amdgv_api.o amdgv_gpuiov.o amdgv_irqmgr.o \
 	amdgv_marketing_name.o amdgv_debug.o amdgv_cper.o amdgv_ras_eeprom.o \
 	amdgv_ras_eeprom_internal.o amdgv_live_info.o amdgv_live_migration.o \
 	amdgv_dirtybit.o amdgv_diag_data.o amdgv_diag_data_host_drv.o \
-	amdgv_diag_data_exclude_list.o
+	amdgv_diag_data_exclude_list.o amdgv_uni_cmd.o
 
 LIBGV_CORE_FILES = $(addprefix core/,$(LIBGV_CORE_LOCAL))
 

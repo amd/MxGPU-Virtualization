@@ -31,6 +31,7 @@
 #include "gim_gpumon.h"
 #include "amdgv_error.h"
 #include "gim_monitor.h"
+#include "gim_sysfs_emit.h"
 
 extern struct gim_error_ring_buffer *gim_error_rb;
 #include "gim_live_update.h"
@@ -52,10 +53,10 @@ static ssize_t gim_mon_reset_gpu_show(struct device *dev,
 	/* reset GPU */
 	ret = amdgv_force_reset_gpu(data->adev);
 	if (ret)
-		count = sprintf(buf, "failed to do dev(%s) reset\n",
+		count = gim_sysfs_emit(buf, "failed to do dev(%s) reset\n",
 				dev_name(dev));
 	else
-		count = sprintf(buf, "dev(%s) reset completed\n",
+		count = gim_sysfs_emit(buf, "dev(%s) reset completed\n",
 				dev_name(dev));
 	return count;
 }
@@ -78,9 +79,9 @@ static ssize_t gim_mon_self_switch_show(struct device *dev,
 			&conf);
 
 	if (conf.flag_switch == 0)
-		count = sprintf(buf, "1\n");
+		count = gim_sysfs_emit(buf, "1\n");
 	else
-		count = sprintf(buf, "0\n");
+		count = gim_sysfs_emit(buf, "0\n");
 
 	return count;
 }
@@ -168,7 +169,7 @@ static ssize_t gim_mon_psp_vbflash_status(struct device *dev,
 
 	amdgv_get_vbflash_status(data->adev, &vbflash_status);
 
-	return sprintf(buf, "0x%x\n", vbflash_status);
+	return gim_sysfs_emit(buf, "0x%x\n", vbflash_status);
 }
 
 static DEVICE_ATTR(psp_vbflash_status, (0444),
@@ -247,25 +248,25 @@ static ssize_t gim_mon_accelerator_partition_profile_show(struct device *dev,
 
 	ret = amdgv_gpumon_get_accelerator_partition_profile(data->adev, &accelerator_partition_profile);
 	if (ret) {
-		count = sprintf(buf, "failed to get current accelerator partition profile\n");
+		count += gim_sysfs_emit_at(buf, count, "failed to get current accelerator partition profile\n");
 	} else {
-		count += sprintf(buf + count, "%-20s%-20s%-20s%-20s%-20s\n",
+		count += gim_sysfs_emit_at(buf, count, "%-20s%-20s%-20s%-20s%-20s\n",
 				"profile_index", "profile_type", "num_of_partitions", "num_of_resources", "resource_index_in_resource_profiles");
-		count += sprintf(buf + count, "%-20u%-20s%-20u%-20u[",
+		count += gim_sysfs_emit_at(buf, count, "%-20u%-20s%-20u%-20u[",
 			accelerator_partition_profile.profile_index,
 			gim_mon_get_profile_type_desc(accelerator_partition_profile.profile_type),
 			accelerator_partition_profile.num_partitions,
 			accelerator_partition_profile.num_resources
 			);
 		for (j = 0; j < accelerator_partition_profile.num_partitions; j++) {
-			count += sprintf(buf + count, "[");
+			count += gim_sysfs_emit_at(buf, count, "[");
 			for (k = 0; k < accelerator_partition_profile.num_resources; k++) {
-				count += sprintf(buf + count, "%u ",
+				count += gim_sysfs_emit_at(buf, count, "%u ",
 					accelerator_partition_profile.resources[j][k]);
 			}
-			count += sprintf(buf + count, "]");
+			count += gim_sysfs_emit_at(buf, count, "]");
 		}
-		count += sprintf(buf + count, "]\n");
+		count += gim_sysfs_emit_at(buf, count, "]\n");
 	}
 
 	return count;
@@ -333,14 +334,14 @@ static ssize_t gim_mon_memory_partition_mode_show(struct device *dev,
 
 	ret = amdgv_gpumon_get_memory_partition_mode(data->adev, &memory_partition_info);
 	if (ret) {
-		count = sprintf(buf, "failed to get current mp mode\n");
+		count += gim_sysfs_emit_at(buf, count, "failed to get current mp mode\n");
 	} else {
-		count = sprintf(buf, "memory_partition_mode: %s\n",
+		count += gim_sysfs_emit_at(buf, count, "memory_partition_mode: %s\n",
 			gim_mon_get_memory_partition_mode_desc(memory_partition_info.memory_partition_mode));
-		count += sprintf(buf + count, "numa_count: %d\n",
+		count += gim_sysfs_emit_at(buf, count, "numa_count: %d\n",
 			memory_partition_info.num_numa_ranges);
 		for (i = 0; i < memory_partition_info.num_numa_ranges; i++) {
-			count += sprintf(buf + count, "NUMA%u type=%u start=0x%016llx end=0x%016llx\n",
+			count += gim_sysfs_emit_at(buf, count, "NUMA%u type=%u start=0x%016llx end=0x%016llx\n",
 				i,
 				memory_partition_info.numa_range[i].memory_type,
 				memory_partition_info.numa_range[i].start,
@@ -435,9 +436,9 @@ static ssize_t gim_mon_spatial_partition_mode_show(struct device *dev,
 
 	ret = amdgv_gpumon_get_spatial_partition_num(data->adev, &spatial_partition_num);
 	if (ret) {
-		count = sprintf(buf, "failed to get current sp mode\n");
+		count = gim_sysfs_emit(buf, "failed to get current sp mode\n");
 	} else {
-		count = sprintf(buf, "%s\n", gim_mon_get_spatial_partition_mode_desc(spatial_partition_num));
+		count = gim_sysfs_emit(buf, "%s\n", gim_mon_get_spatial_partition_mode_desc(spatial_partition_num));
 	}
 
 	return count;
@@ -459,32 +460,32 @@ static ssize_t gim_mon_accelerator_partition_profile_config_show(struct device *
 
 	data = pci_get_drvdata(pdev);
 
-	accelerator_partition_profile_config = kzalloc(sizeof(struct amdgv_gpumon_accelerator_partition_profile_config), GFP_KERNEL);
+	accelerator_partition_profile_config = gim_kzalloc(sizeof(struct amdgv_gpumon_accelerator_partition_profile_config), GFP_KERNEL);
 	if (accelerator_partition_profile_config == NULL) {
-		count = sprintf(buf, "failed to allocate memory for cp profile\n");
+		count += gim_sysfs_emit_at(buf, count, "failed to allocate memory for cp profile\n");
 		return count;
 	}
 
 	ret = amdgv_gpumon_get_accelerator_partition_profile_config(data->adev, accelerator_partition_profile_config);
 	if (ret) {
-		count = sprintf(buf, "failed to get cp profile\n");
+		count += gim_sysfs_emit_at(buf, count, "failed to get cp profile\n");
 	} else {
-		count += sprintf(buf + count, "resource_profiles:\n");
-		count += sprintf(buf + count, "%-20s%-20s%-20s%-20s\n",
+		count += gim_sysfs_emit_at(buf, count, "resource_profiles:\n");
+		count += gim_sysfs_emit_at(buf, count, "%-20s%-20s%-20s%-20s\n",
 				"resource_index", "resource_type", "resource_in_partition", "num_partitions_share_resource");
 		for (i = 0; i < accelerator_partition_profile_config->number_of_resource_profiles; i++) {
-			count += sprintf(buf + count, "%-20u%-20s%-20u%-20u\n",
+			count += gim_sysfs_emit_at(buf, count, "%-20u%-20s%-20u%-20u\n",
 				accelerator_partition_profile_config->resource_profiles[i].resource_index,
 				gim_mon_get_resource_type_desc(accelerator_partition_profile_config->resource_profiles[i].resource_type),
 				accelerator_partition_profile_config->resource_profiles[i].partition_resource,
 				accelerator_partition_profile_config->resource_profiles[i].num_partitions_share_resource
 				);
 		}
-		count += sprintf(buf + count, "profiles:\n");
-		count += sprintf(buf + count, "%-20s%-20s%-20s%-20s%-20s%-20s\n",
+		count += gim_sysfs_emit_at(buf, count, "profiles:\n");
+		count += gim_sysfs_emit_at(buf, count, "%-20s%-20s%-20s%-20s%-20s%-20s\n",
 				"profile_index", "profile_type", "num_of_partitions", "memory_caps", "num_of_resources", "resource_index");
 		for (i = 0; i < accelerator_partition_profile_config->number_of_profiles; i++) {
-			count += sprintf(buf + count, "%-20u%-20s%-20u%-20s%-20u[",
+			count += gim_sysfs_emit_at(buf, count, "%-20u%-20s%-20u%-20s%-20u[",
 				accelerator_partition_profile_config->profiles[i].profile_index,
 				gim_mon_get_profile_type_desc(accelerator_partition_profile_config->profiles[i].profile_type),
 				accelerator_partition_profile_config->profiles[i].num_partitions,
@@ -492,18 +493,18 @@ static ssize_t gim_mon_accelerator_partition_profile_config_show(struct device *
 				accelerator_partition_profile_config->profiles[i].num_resources
 				);
 			for (j = 0; j < accelerator_partition_profile_config->profiles[i].num_partitions; j++) {
-				count += sprintf(buf + count, "[");
+				count += gim_sysfs_emit_at(buf, count, "[");
 				for (k = 0; k < accelerator_partition_profile_config->profiles[i].num_resources; k++) {
-					count += sprintf(buf + count, "%u ",
+					count += gim_sysfs_emit_at(buf, count, "%u ",
 						accelerator_partition_profile_config->profiles[i].resources[j][k]);
 				}
-				count += sprintf(buf + count, "]");
+				count += gim_sysfs_emit_at(buf, count, "]");
 			}
-			count += sprintf(buf + count, "]\n");
+			count += gim_sysfs_emit_at(buf, count, "]\n");
 		}
 	}
 
-	kfree(accelerator_partition_profile_config);
+	gim_kfree(accelerator_partition_profile_config);
 	return count;
 }
 
@@ -525,25 +526,25 @@ static ssize_t gim_mon_memory_partition_config_show(struct device *dev,
 
 	ret = amdgv_gpumon_get_memory_partition_config(data->adev, &memory_partition_config);
 	if (ret) {
-		count = sprintf(buf, "failed to get mp caps\n");
+		count += gim_sysfs_emit_at(buf, count, "failed to get mp caps\n");
 	} else {
 		if (memory_partition_config.mp_caps.nps1_cap) {
-			count += sprintf(buf + count, "%s ",
+			count += gim_sysfs_emit_at(buf, count, "%s ",
 				gim_mon_get_memory_partition_mode_desc(AMDGV_MEMORY_PARTITION_MODE_NPS1));
 		}
 		if (memory_partition_config.mp_caps.nps2_cap) {
-			count += sprintf(buf + count, "%s ",
+			count += gim_sysfs_emit_at(buf, count, "%s ",
 				gim_mon_get_memory_partition_mode_desc(AMDGV_MEMORY_PARTITION_MODE_NPS2));
 		}
 		if (memory_partition_config.mp_caps.nps4_cap) {
-			count += sprintf(buf + count, "%s ",
+			count += gim_sysfs_emit_at(buf, count, "%s ",
 				gim_mon_get_memory_partition_mode_desc(AMDGV_MEMORY_PARTITION_MODE_NPS4));
 		}
 		if (memory_partition_config.mp_caps.nps8_cap) {
-			count += sprintf(buf + count, "%s ",
+			count += gim_sysfs_emit_at(buf, count, "%s ",
 				gim_mon_get_memory_partition_mode_desc(AMDGV_MEMORY_PARTITION_MODE_NPS8));
 		}
-		count += sprintf(buf + count, "\n");
+		count += gim_sysfs_emit_at(buf, count, "\n");
 	}
 
 	return count;
@@ -566,9 +567,9 @@ static ssize_t gim_mon_spatial_partition_caps_show(struct device *dev,
 
 	ret = amdgv_gpumon_get_spatial_partition_caps(data->adev, &spatial_partition_caps);
 	if (ret) {
-		count = sprintf(buf, "failed to get sp caps\n");
+		count = gim_sysfs_emit(buf, "failed to get sp caps\n");
 	} else {
-		count = sprintf(buf, "num_xcc=%u num_sdma=%u num_vcn=%u num_jpeg=%u\n",
+		count = gim_sysfs_emit(buf, "num_xcc=%u num_sdma=%u num_vcn=%u num_jpeg=%u\n",
 			spatial_partition_caps.num_xcc, spatial_partition_caps.num_sdma, spatial_partition_caps.num_vcn, spatial_partition_caps.num_jpeg);
 	}
 
@@ -713,21 +714,20 @@ void gim_mon_remove_dev_sys(struct gim_dev_data *data)
 static ssize_t gim_mon_self_switch_all_show(struct device_driver *drv,
 						char *buf)
 {
-	size_t count;
+	size_t count = 0;
 	struct gim_dev_data *data;
 	union amdgv_dev_conf conf;
 
-	count = 0;
 	list_for_each_entry(data, &gim_device_list, list) {
 		amdgv_get_dev_conf(data->adev,
 				AMDGV_CONF_DISABLE_SELF_SWITCH_FLAG,
 				&conf);
 
 		if (conf.flag_switch == 0)
-			count += sprintf(buf + count, "Adapter[%s] : 1\n",
+			count += gim_sysfs_emit_at(buf, count, "Adapter[%s] : 1\n",
 				dev_name(&data->pdev->dev));
 		else
-			count += sprintf(buf + count, "Adapter[%s] : 0\n",
+			count += gim_sysfs_emit_at(buf, count, "Adapter[%s] : 0\n",
 				dev_name(&data->pdev->dev));
 	}
 
@@ -774,17 +774,16 @@ static struct driver_attribute driver_attr_self_switch =
 static ssize_t gim_mon_force_reset_all_show(struct device_driver *drv,
 						char *buf)
 {
-	size_t count;
+	size_t count = 0;
 	struct gim_dev_data *data;
 	union amdgv_dev_conf conf;
 
-	count = 0;
 	list_for_each_entry(data, &gim_device_list, list) {
 		amdgv_get_dev_conf(data->adev,
 				AMDGV_CONF_FORCE_RESET_FLAG,
 				&conf);
 
-		count += sprintf(buf + count, "Adapter[%s] : %d\n",
+		count += gim_sysfs_emit_at(buf, count, "Adapter[%s] : %d\n",
 			dev_name(&data->pdev->dev), conf.flag_switch);
 	}
 
@@ -821,12 +820,11 @@ static struct driver_attribute driver_attr_force_reset =
 static ssize_t gim_mon_live_update_all_show(struct device_driver *drv,
 						char *buf)
 {
-	size_t count;
+	size_t count = 0;
 	struct gim_dev_data *data;
 
-	count = 0;
 	list_for_each_entry(data, &gim_device_list, list) {
-		count += sprintf(buf + count, "Adapter[%s] live_update: %s\n",
+		count += gim_sysfs_emit_at(buf, count, "Adapter[%s] live_update: %s\n",
 		dev_name(&data->pdev->dev), update_mgr.is_export ? "enabled" : "disabled");
 	}
 

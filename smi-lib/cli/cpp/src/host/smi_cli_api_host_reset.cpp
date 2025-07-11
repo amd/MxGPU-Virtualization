@@ -33,11 +33,15 @@
 
 typedef amdsmi_status_t (*AMDSMI_GET_VF_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 		amdsmi_vf_handle_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
+		amdsmi_processor_handle *);
 typedef amdsmi_status_t (*AMDSMI_CLEAR_VF_FB)(amdsmi_vf_handle_t);
+typedef amdsmi_status_t (*AMDSMI_RESET_GPU)(amdsmi_processor_handle);
 
 extern AMDSMI_GET_VF_HANDLE_FROM_BDF host_amdsmi_get_vf_handle_from_bdf;
+extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_CLEAR_VF_FB host_amdsmi_clear_vf_fb;
-
+extern AMDSMI_RESET_GPU host_amdsmi_reset_gpu;
 
 int AmdSmiApiHost::amdsmi_reset_command(std::string vf_bdf_str, Arguments arg)
 {
@@ -60,5 +64,28 @@ int AmdSmiApiHost::amdsmi_reset_command(std::string vf_bdf_str, Arguments arg)
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		return ret;
 	}
+	return ret;
+}
+
+int AmdSmiApiHost::amdsmi_reset_gpu_command(uint64_t processor_bdf, Arguments arg)
+{
+	int ret;
+
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		return ret;
+	}
+
+	ret = host_amdsmi_reset_gpu(processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		return ret;
+	}
+
 	return ret;
 }

@@ -33,4 +33,6 @@
 
 void gfx_v9_4_3_set_funcs(struct amdgv_adapter *adapt);
 
+void gfx_v9_4_2_dirtybit_control(struct amdgv_adapter *adapt, bool enable);
+
 #endif

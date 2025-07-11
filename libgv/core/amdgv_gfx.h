@@ -24,6 +24,7 @@
 
 #include "amdgv_ras.h"
 #include "amdgv_ring.h"
+#include "amdgv_hsa.h"
 
 #define MAX_KIQ_REG_WAIT       5000 /* in usecs, 5ms */
 #define MAX_KIQ_REG_BAILOUT_INTERVAL   5 /* in msecs, 5ms */
@@ -513,7 +514,9 @@ struct amdgv_gfx_funcs {
 	void (*reset_ras_error_status)(struct amdgv_adapter *adapt);
 	int  (*ras_error_inject)(struct amdgv_adapter *adapt,
 		void *inject_if, uint32_t instance_mask);
-	int  (*dump_cu_data)(struct amdgv_adapter *adapt, enum AMDGV_CU_DATA_TYPE type);
+	int  (*dump_cu_data)(struct amdgv_adapter *adapt);
+	int  (*alloc_dump_cu_resource_memory)(struct amdgv_adapter *adapt, struct amdgv_dump_cu_resource_size *resource_size,
+			struct amdgv_dump_cu_resource_memory *resource_mem);
 	int  (*hw_init_internal_set)(struct amdgv_adapter *adapt);
 };
 
@@ -699,6 +702,15 @@ struct amdgv_cu_dump_data_info {
 	bool                    cu_dump_finished;
 };
 
+struct amdgv_dump_cu_memmgr_mem_group {
+	struct amdgv_memmgr_mem *kernelobj;
+	struct amdgv_memmgr_mem *kernelarg;
+	struct amdgv_memmgr_mem *out_data;
+	struct amdgv_memmgr_mem *out_flag;
+	struct amdgv_memmgr_mem *packet;
+	struct amdgv_memmgr_mem *signal_obj;
+};
+
 typedef struct {
 	uint32_t group_segment_fixed_size;
 	uint32_t private_segment_fixed_size;
@@ -860,6 +872,8 @@ struct amdgv_gfx {
 	struct amdgv_gfx_funcs	*funcs;
 
 	struct amdgv_cu_dump_data_info cu_dump_data_info;
+	struct amdgv_dump_cu_memmgr_mem_group *dump_cu_memmgr_mem_group;
+	hsa_kernel_dispatch_packet_t *packet_addr;
 
 	/* reset mask */
 	uint32_t            grbm_soft_reset;
@@ -986,10 +1000,7 @@ int amdgv_gfx_get_compute_cap(struct amdgv_adapter *adapt, bool min, uint32_t *c
 void amdgv_gfx_rlc_enter_safe_mode(struct amdgv_adapter *adapt, int xcc_id);
 void amdgv_gfx_rlc_exit_safe_mode(struct amdgv_adapter *adapt, int xcc_id);
 
-int amdgv_gfx_dump_data(struct amdgv_adapter *adapt);
-uint32_t amdgv_gfx_calculate_cu_data_size(struct amdgv_adapter *adapt, enum AMDGV_CU_DATA_TYPE type);
-void amdgv_gfx_check_pf_fb_size_for_cu_data_dump(struct amdgv_adapter *adapt);
-
-int amdgv_gfx_cu_data_dump_thread_init(struct amdgv_adapter *adapt);
-void amdgv_gfx_cu_data_dump_thread_fini(struct amdgv_adapter *adapt);
+int amdgv_gfx_alloc_dump_cu_resource_memory(struct amdgv_adapter *adapt, struct amdgv_dump_cu_resource_size *resource_size,
+			struct amdgv_dump_cu_resource_memory *resource_mem);
+int amdgv_gfx_dump_cu_data(struct amdgv_adapter *adapt);
 #endif

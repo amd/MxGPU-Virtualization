@@ -101,6 +101,21 @@ TEST_F(AmdSmiDeviceTests, InvalidParams)
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 	ret = amdsmi_get_vf_handle_from_uuid(NULL, &vf_handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_reset_gpu(NULL);
+	EXPECT_EQ(ret, AMDSMI_STATUS_INVAL);
+}
+
+TEST_F(AmdSmiDeviceTests, ResetGpuTest)
+{
+	int ret;
+	amdsmi_processor_handle handle = &GPU_MOCK_HANDLE;
+
+	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_RESET_GPU)))
+		.WillRepeatedly(amdsmi::SetResponseStatus(AMDSMI_STATUS_SUCCESS));
+
+	ret = amdsmi_reset_gpu(handle);
+	EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 }
 
 TEST_F(AmdSmiDeviceTests, WrongUUIDCharSequence)
@@ -167,6 +182,9 @@ TEST_F(AmdSmiDeviceTests, WrongUUIDCharSequence)
 	ret = amdsmi_get_processor_handle_from_uuid(WRONG_CHAR_SEQUENCE_UUID, &handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+	const char* too_long_uuid = "12345678-1234-1234-1234-123456789abcf";
+	ret = amdsmi_get_processor_handle_from_uuid(too_long_uuid, &handle);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 #ifdef _WIN64
 	strcpy_s(WRONG_CHAR_SEQUENCE_UUID, sizeof(WRONG_CHAR_SEQUENCE_UUID), "9aff0003-0000-1000-801f-1&8c37cb1ee6");
 #else

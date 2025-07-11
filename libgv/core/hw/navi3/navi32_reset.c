@@ -706,6 +706,26 @@ static int navi32_reset_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	return ret;
 }
 
+static int navi32_reset_check_utcl2_status(struct amdgv_adapter *adapt)
+{
+	uint32_t grbm_status2 = 0;
+	uint32_t gcvm_l2_status = 0;
+
+	grbm_status2 = RREG32(SOC15_REG_OFFSET(GC, 0, regGRBM_STATUS2));
+	gcvm_l2_status = RREG32(SOC15_REG_OFFSET(GC, 0, regGCVM_L2_STATUS));
+
+	if (grbm_status2 & GRBM_STATUS2__UTCL2_BUSY_MASK) {
+		AMDGV_WARN("GRBM_STATUS2: 0x%lx, UTCL2 shows busy after vfflr\n", grbm_status2);
+
+		if (gcvm_l2_status & GCVM_L2_STATUS__L2_BUSY_MASK) {
+			AMDGV_ERROR("GCVM_L2_STATUS: 0x%lx, UTCL2 is likely hang after vfflr\n", gcvm_l2_status);
+			return AMDGV_FAILURE;
+		}
+
+	}
+	return 0;
+}
+
 static int navi32_reset_wait_for_grbm(struct amdgv_adapter *adapt)
 {
 	uint32_t grbm_status = 0;
@@ -784,6 +804,8 @@ static int navi32_reset_trigger_vf_flr(struct amdgv_adapter *adapt, uint32_t idx
 			AMDGV_ERROR("failed at GRBM_STATUS2 not clean\n");
 			return AMDGV_FAILURE;
 		}
+		if (navi32_reset_check_utcl2_status(adapt))
+			return AMDGV_FAILURE;
 	}
 
 	/* restore mmio protection info after flr */

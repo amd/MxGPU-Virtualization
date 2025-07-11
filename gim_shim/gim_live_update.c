@@ -208,7 +208,7 @@ retry:
 		}
 
 		mgr->gpu_data_size = GIM_LIVE_UPDATE_DEFAULT_SIZE;
-		mgr->gpu_data_ptr = (uint8_t *)vzalloc(mgr->gpu_data_size);
+		mgr->gpu_data_ptr = (uint8_t *)gim_vzalloc(mgr->gpu_data_size);
 		if (!mgr->gpu_data_ptr) {
 			gim_warn("live update memory allocate failed\n");
 			goto failed;
@@ -269,7 +269,7 @@ void gim_live_update_fini_manager(struct gim_live_update_manager *mgr)
 	case GIM_LIVE_UPDATE_FILE:
 		gim_live_update_flush_file(mgr);
 		if (mgr->gpu_data_ptr)
-			vfree(mgr->gpu_data_ptr);
+			gim_vfree(mgr->gpu_data_ptr);
 		break;
 	case GIM_LIVE_UPDATE_MEM:
 		if (mgr->io_ptr) {

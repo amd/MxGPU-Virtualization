@@ -29,6 +29,9 @@ set(CMAKE_CXX_COMPILER g++)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_BUILD_RPATH_USE_ORIGIN TRUE)
+set(CMAKE_BUILD_RPATH "$ORIGIN")
+set(CMAKE_INSTALL_RPATH "$ORIGIN")
 set(PROJECT_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 set(PLATFORM linux)
 set(TARGET amd-smi)
@@ -78,8 +81,11 @@ target_link_libraries(${TARGET} pthread)
 target_link_libraries(${TARGET} stdc++fs)
 target_link_libraries(${TARGET} ${CMAKE_DL_LIBS})
 
-add_custom_command(
-  TARGET amd-smi
-  POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:amd-smi>
-          ${CMAKE_SOURCE_DIR}/../../tool/amd-smi)
+# Define installation rules
+install(
+    TARGETS amd-smi
+    RUNTIME DESTINATION bin
+    PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                GROUP_READ GROUP_EXECUTE
+                WORLD_READ WORLD_EXECUTE
+)

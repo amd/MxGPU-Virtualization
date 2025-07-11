@@ -1,12 +1,42 @@
-This example shows all ras errors for a single specified device. In order to get logs, you must first enable ras on the server and then inject errors.
+# RAS CPER Example
 
-Dependency: `libamdsmi.so`
+This example demonstrates how to retrieve RAS (Reliability, Availability, and Serviceability) errors for a specified device. To collect logs, you must first enable RAS on the server and then inject errors for testing.
 
-Prerequisite: OS dynamic library search path has to contain the path where `libamdsmi.so` is located.
+## Dependencies
 
-Usage: `ras_cper`
+- `libamdsmi.so` - AMD SMI library
 
-Usage examples:
+## Prerequisites
 
-* If `libamdsmi.so` is installed to system path like `/lib` or `/usr/lib`, the following command is sufficient: `sudo ./ras_cper`
-* Otherwise the command should contain the path to `libamdsmi.so`: `sudo LD_LIBRARY_PATH=/path/to/libamdsmi/library/ ./ras_cper `
+- The OS dynamic library search path must include the location of `libamdsmi.so`
+- Root privileges required for RAS operations
+
+## Usage
+
+```bash
+ras_cper
+```
+
+## Examples
+
+### System Installation
+If `libamdsmi.so` is installed to a system path (e.g., `/lib` or `/usr/lib`):
+
+```bash
+sudo ./ras_cper
+```
+
+### Custom Library Path
+If the library is in a custom location:
+
+```bash
+sudo LD_LIBRARY_PATH=/path/to/libamdsmi/library/ ./ras_cper
+```
+
+## Building
+
+Ensure you have the AMD SMI library installed and properly linked during compilation.
+
+## License
+
+This example is provided under the same license as the parent project.

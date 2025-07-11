@@ -47,6 +47,7 @@
 #include "smi_drv_oss.h"
 #include "amdgv_api.h"
 #include "amdgv_gpumon.h"
+#include "gim_memory_sentinel.h"
 
 #include "gim_guard.h"
 #include "gim_debugfs.h"
@@ -336,6 +337,9 @@ static int gim_init_thread_func(void *context)
 
 	data->opt.mm_policy = gim_conf_get_mm_policy_opt(dev_data->gpu_index);
 
+	if (gim_conf_get_enable_live_migration_opt())
+		data->opt.flags |= AMDGV_FLAG_GPUV_LIVE_MIGRATION;
+
 	data->opt.libgv_res_fb_offset = 0;
 	data->opt.libgv_res_fb_size = ((uint64_t) gim_conf_get_pf_fb_size_opt(dev_data->gpu_index) << 20);
 	data->opt.debug_dump_reserve_size =
@@ -463,8 +467,7 @@ static bool gim_is_device_enabled(struct pci_dev *pdev)
 			}
 		}
 	}
-
-	kfree(pciaddstr);
+	gim_kfree(pciaddstr);
 	return ret;
 }
 
@@ -472,12 +475,14 @@ static int gim_probe(struct pci_dev *pdev,
 		const struct pci_device_id *ent)
 {
 	int gpu_id;
+	int ret = 0;
 
 	atomic64_inc(&gim_gpu_initing_num);
 
 	/* skip this device if user want that or is vf */
 	if (gim_is_device_enabled(pdev) == false || pdev->is_virtfn) {
 		gim_info("AMD GIM skip probing device %s\n", dev_name(&pdev->dev));
+		ret = -ENODEV;
 		goto err_out;
 	}
 
@@ -513,7 +518,7 @@ err_out:
 	atomic64_dec(&gim_gpu_initing_num);
 	complete(&gim_gpu_init_event);
 
-	return 0;
+	return ret;
 }
 
 static void gim_remove(struct pci_dev *pdev)
@@ -547,7 +552,6 @@ static void gim_remove(struct pci_dev *pdev)
 	gim_release_pci_res(data, pdev);
 
 	devm_kfree(&pdev->dev, dev_data);
-
 	gim_info("AMD GIM removed device %s\n", dev_name(&pdev->dev));
 }
 
@@ -665,6 +669,12 @@ static int gim_init(void)
 
 	gim_info("%s\n", gim_copyright);
 
+	ret = gim_conf_init();
+	if (ret)
+		goto err_conf_init;
+
+	gim_memory_sentinel_init();
+
 	/* Start ftrace here */
 	if (gim_ftrace_init(adapt_list) != 0)
 		gim_warn("Unable to init ftracing\n");
@@ -677,10 +687,6 @@ static int gim_init(void)
 
 	for (i = 0; i < AMDGV_MAX_GPU_NUM; i++)
 		gim_init_thread[i].init_thread = NULL;
-
-	ret = gim_conf_init();
-	if (ret)
-		goto err_conf_init;
 
 	flags = 0;
 	mutex_init(&gim_device_list_lock);
@@ -752,6 +758,10 @@ static int gim_init(void)
 #endif
 	gim_info("AMD GIM is Running\n");
 
+	if (gim_sentinel_is_enabled() && gim_sentinel_check_memory_overflow() > 0) {
+		gim_warn("Memory overflow detected!\n");
+	}
+
 	gim_set_dynamic_partition_mode();
 
 	return 0;
@@ -804,9 +814,9 @@ static void gim_exit(void)
 		}
 	}
 
-	if (!SVM_ENABLED(NULL)) {
-		while (is_continue_exit) {
-			list_for_each_entry(dev_data, &gim_device_list, list) {
+	while (is_continue_exit) {
+		list_for_each_entry(dev_data, &gim_device_list, list) {
+			if (!SVM_ENABLED(NULL)) {
 				for (i = 0; i < dev_data->vf_num; i++) {
 					pdev_vf = dev_data->vf_map[i].pdev;
 					vf_bdf = dev_data->vf_map[i].bdf;
@@ -820,22 +830,27 @@ static void gim_exit(void)
 						gim_in_use = true;
 					}
 				}
-				if (amdgv_in_whole_gpu_reset(dev_data->adev)) {
-					gim_info("GIM is used by [%x:%x:%x:%x], GPU is in reset state\n",
-					0x0,
-					dev_data->pdev->bus->number,
-					(dev_data->pdev->devfn >> 3) & 0x1f,
-					(dev_data->pdev->devfn) & 0x7);
-
+			} else {
+				if (amdgv_get_vf_candidate(dev_data->adev)) {
+					gim_info("Cannot unload gim because of active VFs\n");
 					gim_in_use = true;
 				}
 			}
-			if (gim_in_use) {
-				msleep(5000);
-				gim_in_use = false;
-			} else
-				break;
+			if (amdgv_in_whole_gpu_reset(dev_data->adev)) {
+				gim_info("GIM is used by [%x:%x:%x:%x], GPU is in reset state\n",
+				0x0,
+				dev_data->pdev->bus->number,
+				(dev_data->pdev->devfn >> 3) & 0x1f,
+				(dev_data->pdev->devfn) & 0x7);
+
+				gim_in_use = true;
+			}
 		}
+		if (gim_in_use) {
+			msleep(5000);
+			gim_in_use = false;
+		} else
+			break;
 	}
 
 	gim_cmd_handler_fini();
@@ -862,6 +877,8 @@ static void gim_exit(void)
 #endif
 
 	gim_error_ring_buffer_fini(&gim_error_rb);
+
+	gim_memory_sentinel_fini();
 }
 
 module_init(gim_init)

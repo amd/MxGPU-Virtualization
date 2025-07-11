@@ -2304,6 +2304,38 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
+int smi_get_bad_page_threshold(struct smi_ctx *ctx, void *inb,
+			     void *outb, uint16_t in_len, uint16_t out_len)
+{
+	struct smi_device_info *id = NULL;
+	amdgv_dev_t *adev = NULL;
+	bool dev_busy = false;
+	struct smi_ras_feature *ras_info = NULL;
+	int ret = SMI_STATUS_SUCCESS;
+
+	/* Check version */
+	if ((in_len != sizeof(struct smi_device_info)) ||
+	    (out_len != sizeof(struct smi_ras_feature))) {
+		return SMI_STATUS_INVAL;
+	}
+
+	ras_info = (struct smi_ras_feature *) outb;
+	id = (struct smi_device_info *) inb;
+
+	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
+	if (!adev)
+		return SMI_STATUS_NOT_FOUND;
+	if (dev_busy)
+		return SMI_STATUS_BUSY;
+
+	ret = amdgv_gpumon_get_bad_page_record_threshold(adev, &ras_info->bad_page_record_threshold);
+
+	smi_put_handle(adev, ctx);
+
+	return smi_convert_ret_value(ERROR_OTHER, ret);
+}
+
+
 int smi_get_metrics_table(struct smi_ctx *ctx, void *inb,
 			    void *outb, uint16_t in_len, uint16_t out_len)
 {
@@ -2398,6 +2430,7 @@ end:
 int smi_set_memory_partition_setting(struct smi_ctx *ctx, void *inb,
 				void *outb, uint16_t in_len, uint16_t out_len)
 {
+	union amdgv_gpumon_memory_partition_config memory_partition_config;
 	struct smi_set_gpu_memory_partition_setting *id = NULL;
 	struct amdgv_dev_t *adev = NULL;
 	bool dev_busy = false;
@@ -2418,8 +2451,13 @@ int smi_set_memory_partition_setting(struct smi_ctx *ctx, void *inb,
 	if (dev_busy)
 		return SMI_STATUS_BUSY;
 
+	ret = amdgv_gpumon_get_memory_partition_config(adev, &memory_partition_config);
+	if (ret)
+		goto end;
+
 	ret = amdgv_gpumon_set_memory_partition_mode(adev, smi_map_memory_partition_mode(id->mode));
 
+end:
 	smi_put_handle(adev, ctx);
 
 	return smi_convert_ret_value(ERROR_OTHER, ret);
@@ -2717,6 +2755,33 @@ int smi_get_cper_error(struct smi_ctx *ctx, void *inb,
 
 end:
 	smi_oss_funcs->free_memory(buf);
+	smi_put_handle(adev, ctx);
+	return smi_convert_ret_value(ERROR_OTHER, ret);
+}
+
+int smi_reset_gpu(struct smi_ctx *ctx, void *inb,
+				void *outb, uint16_t in_len, uint16_t out_len)
+{
+	struct smi_device_info *id = NULL;
+	int ret = SMI_STATUS_SUCCESS;
+
+	amdgv_dev_t *adev = NULL;
+	bool dev_busy = false;
+	if (in_len != sizeof(struct smi_device_info))
+		return SMI_STATUS_INVAL;
+
+	id = (struct smi_device_info *) inb;
+
+	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
+	if (!adev) {
+		return SMI_STATUS_NOT_FOUND;
+	}
+	if (dev_busy) {
+		return SMI_STATUS_BUSY;
+	}
+
+	ret = amdgv_force_reset_gpu(adev);
+
 	smi_put_handle(adev, ctx);
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }

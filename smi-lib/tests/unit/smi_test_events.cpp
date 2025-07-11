@@ -79,9 +79,9 @@ TEST_F(AmdSmiEventsTests, EventCreate)
 
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 
-	sys_wrapper->free(((struct smi_event_set_s*)set)->handles);
-	sys_wrapper->free(((struct smi_event_set_s*)set)->devices);
-	sys_wrapper->free((struct smi_event_set_s*)set);
+	sys_wrapper->smi_free(((struct smi_event_set_s*)set)->handles);
+	sys_wrapper->smi_free(((struct smi_event_set_s*)set)->devices);
+	sys_wrapper->smi_free((struct smi_event_set_s*)set);
 
 	WhenCalling(std::bind(amdsmi_event_create, &processor_list[0], num_devices, (uint64_t)0xC0FFEE, &set));
 	ExpectCommand(SMI_CMD_CODE_CREATE_EVENT);
@@ -101,7 +101,7 @@ TEST_F(AmdSmiEventsTests, EventCreateMallocOutOfResources)
 	processor_list[0] = &GPU_MOCK_HANDLE;
 		system_wrapper *sys_wrapper = get_system_wrapper();
 	struct smi_event_set_s *handle_s =
-		(struct smi_event_set_s *)sys_wrapper->malloc(sizeof(struct smi_event_set_s));
+		(struct smi_event_set_s *)sys_wrapper->smi_malloc(sizeof(struct smi_event_set_s));
 	EXPECT_CALL(*g_system_mock, Malloc(testing::_)).WillOnce(testing::Return(handle_s))
 												   .WillOnce(testing::Return(nullptr));
 
@@ -118,8 +118,8 @@ TEST_F(AmdSmiEventsTests, EventCreateMallocFailure)
 	processor_list[0] = &GPU_MOCK_HANDLE;
 		system_wrapper *sys_wrapper = get_system_wrapper();
 	struct smi_event_set_s *handle_s =
-		(struct smi_event_set_s *)sys_wrapper->malloc(sizeof(struct smi_event_set_s));
-	handle_s->handles = (smi_event_handle_t*)sys_wrapper->malloc(sizeof(smi_event_handle_t));
+		(struct smi_event_set_s *)sys_wrapper->smi_malloc(sizeof(struct smi_event_set_s));
+	handle_s->handles = (smi_event_handle_t*)sys_wrapper->smi_malloc(sizeof(smi_event_handle_t));
 	EXPECT_CALL(*g_system_mock, Malloc(testing::_)).WillOnce(testing::Return(handle_s))
 												   .WillOnce(testing::Return(handle_s->handles))
 												   .WillOnce(testing::Return(nullptr));
@@ -193,15 +193,15 @@ TEST_F(AmdSmiEventsTests, EventDestroy)
 	int ret;
 	system_wrapper *sys_wrapper = get_system_wrapper();
 	struct smi_event_set_s *handle_s =
-		(struct smi_event_set_s *)sys_wrapper->malloc(sizeof(struct smi_event_set_s));
+		(struct smi_event_set_s *)sys_wrapper->smi_malloc(sizeof(struct smi_event_set_s));
 	struct smi_device_info in_payload;
 
 	handle_s->num_handles = 1;
-	handle_s->handles = (smi_event_handle_t*)sys_wrapper->malloc(sizeof(smi_event_handle_t));
-	handle_s->devices = (smi_device_handle_t*)sys_wrapper->malloc(sizeof(smi_device_handle_t));
+	handle_s->handles = (smi_event_handle_t*)sys_wrapper->smi_malloc(sizeof(smi_event_handle_t));
+	handle_s->devices = (smi_device_handle_t*)sys_wrapper->smi_malloc(sizeof(smi_device_handle_t));
 	handle_s->handles[0].fd = 0;
 	handle_s->signaled_device_index = 0;
-	handle_s->_private = sys_wrapper->malloc(4);
+	handle_s->_private = sys_wrapper->smi_malloc(4);
 
 	ret = amdsmi_event_destroy(NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
@@ -240,13 +240,13 @@ TEST_F(AmdSmiEventsTests, EventDestroy)
 	int ret;
 	system_wrapper *sys_wrapper = get_system_wrapper();
 	struct smi_event_set_s *handle_s =
-		(struct smi_event_set_s *)sys_wrapper->malloc(sizeof(struct smi_event_set_s));
+		(struct smi_event_set_s *)sys_wrapper->smi_malloc(sizeof(struct smi_event_set_s));
 
 	handle_s->num_handles = 1;
-	handle_s->handles = (smi_event_handle_t*)sys_wrapper->malloc(sizeof(smi_event_handle_t));
-	handle_s->devices = (smi_device_handle_t*)sys_wrapper->malloc(sizeof(smi_device_handle_t));
+	handle_s->handles = (smi_event_handle_t*)sys_wrapper->smi_malloc(sizeof(smi_event_handle_t));
+	handle_s->devices = (smi_device_handle_t*)sys_wrapper->smi_malloc(sizeof(smi_device_handle_t));
 	handle_s->handles[0].fd = 0;
-	handle_s->_private = sys_wrapper->malloc(4);
+	handle_s->_private = sys_wrapper->smi_malloc(4);
 	ret = amdsmi_event_destroy(NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ret = amdsmi_event_destroy(handle_s);

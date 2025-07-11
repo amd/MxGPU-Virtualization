@@ -25,6 +25,7 @@
 #include "smi_cli_logger_err.h"
 #include "smi_cli_templates.h"
 #include "smi_cli_device.h"
+#include "smi_cli_exception.h"
 
 #include <iostream>
 #include <sstream>
@@ -117,6 +118,8 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_BAD_PAGE_INFO)(amdsmi_processor_handle,
 		uint32_t *, amdsmi_eeprom_table_record_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_RAS_FEATURE_INFO)(amdsmi_processor_handle,
 		amdsmi_ras_feature_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_BAD_PAGE_THRESHOLD)(amdsmi_processor_handle,
+		uint32_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_NUM_VF)(amdsmi_processor_handle, uint32_t *, uint32_t *);
 typedef amdsmi_status_t (*AMDSMI_SET_NUM_VF)(amdsmi_processor_handle, uint32_t);
 typedef amdsmi_status_t (*AMDSMI_GET_VF_PARTITION_INFO)(amdsmi_processor_handle, unsigned int,
@@ -182,6 +185,7 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_VIRTUALIZATION_MODE)(amdsmi_processor_h
 typedef amdsmi_status_t (*AMDSMI_GET_AFIDS_FROM_CPER)(char*cper_buffer, uint32_t buf_size, uint64_t *afids,
 		uint32_t *num_afids);
 
+typedef amdsmi_status_t (*AMDSMI_RESET_GPU)(amdsmi_processor_handle);
 /////
 /////
 /////
@@ -226,6 +230,7 @@ AMDSMI_GET_GPU_ECC_ENABLED host_amdsmi_get_gpu_ecc_enabled;
 
 AMDSMI_GET_GPU_BAD_PAGE_INFO host_amdsmi_get_gpu_bad_page_info;
 AMDSMI_GET_GPU_RAS_FEATURE_INFO host_amdsmi_get_gpu_ras_feature_info;
+AMDSMI_GET_BAD_PAGE_THRESHOLD host_amdsmi_get_bad_page_threshold;
 AMDSMI_GET_NUM_VF host_amdsmi_get_num_vf;
 AMDSMI_SET_NUM_VF host_amdsmi_set_num_vf;
 AMDSMI_GET_VF_PARTITION_INFO host_amdsmi_get_vf_partition_info;
@@ -257,6 +262,7 @@ AMDSMI_GET_GPU_CPER_ENTRIES host_amdsmi_get_gpu_cper_entries;
 AMDSMI_TOPO_GET_P2P_STATUS host_amdsmi_topo_get_p2p_status;
 AMDSMI_GET_GPU_VIRTUALIZATION_MODE host_amdsmi_get_gpu_virtualization_mode;
 AMDSMI_GET_AFIDS_FROM_CPER host_amdsmi_get_afids_from_cper;
+AMDSMI_RESET_GPU host_amdsmi_reset_gpu;
 
 AmdSmiApiHost::AmdSmiApiHost()
 {
@@ -273,9 +279,9 @@ AmdSmiApiHost::AmdSmiApiHost()
 	// load libamdsmi_host.dll located in Windows/System32
 	amdSmiLibHandle = (HMODULE)LoadLibraryA(systemPath);
 #elif __linux__
-	amdSmiLibHandle = dlopen("/usr/lib/libamdsmi.so", RTLD_NOW | RTLD_GLOBAL);
+	amdSmiLibHandle = dlopen("libamdsmi.so", RTLD_NOW | RTLD_GLOBAL);
 	if (amdSmiLibHandle == NULL) {
-		amdSmiLibHandle = dlopen("./libamdsmi.so", RTLD_NOW | RTLD_GLOBAL);
+		amdSmiLibHandle = dlopen("/usr/local/lib/libamdsmi.so", RTLD_NOW | RTLD_GLOBAL);
 	}
 #endif
 	if (amdSmiLibHandle == NULL) {
@@ -283,8 +289,10 @@ AmdSmiApiHost::AmdSmiApiHost()
 		std::cout << "Error LoadLibraryA" << std::endl;
 #elif __linux__
 		std::cout <<
-				  "Error while loading shared library: libamdsmi.so: cannot open shared object file: No such file or directory"
-				  << std::endl;
+			"Error while loading shared library libamdsmi.so. "
+			"Cannot open shared object file: "
+			"No such file or directory"
+		<< std::endl;
 #endif
 		exit(1);
 	}
@@ -373,6 +381,8 @@ AmdSmiApiHost::AmdSmiApiHost()
 											amdSmiLibHandle, "amdsmi_get_gpu_bad_page_info");
 	host_amdsmi_get_gpu_ras_feature_info = (AMDSMI_GET_GPU_RAS_FEATURE_INFO)LOAD_SYM(
 			amdSmiLibHandle, "amdsmi_get_gpu_ras_feature_info");
+	host_amdsmi_get_bad_page_threshold = (AMDSMI_GET_BAD_PAGE_THRESHOLD)LOAD_SYM(
+			amdSmiLibHandle, "amdsmi_get_bad_page_threshold");
 	host_amdsmi_get_num_vf = (AMDSMI_GET_NUM_VF)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_num_vf");
 	host_amdsmi_set_num_vf = (AMDSMI_SET_NUM_VF)LOAD_SYM(amdSmiLibHandle, "amdsmi_set_num_vf");
 	host_amdsmi_get_vf_partition_info = (AMDSMI_GET_VF_PARTITION_INFO)LOAD_SYM(
@@ -446,10 +456,10 @@ AmdSmiApiHost::AmdSmiApiHost()
 			amdSmiLibHandle, "amdsmi_get_gpu_virtualization_mode");
 	host_amdsmi_get_afids_from_cper = (AMDSMI_GET_AFIDS_FROM_CPER)LOAD_SYM(
 										amdSmiLibHandle, "amdsmi_get_afids_from_cper");
+	host_amdsmi_reset_gpu = (AMDSMI_RESET_GPU)LOAD_SYM(amdSmiLibHandle, "amdsmi_reset_gpu");
 	int ret = host_amdsmi_init(AMDSMI_INIT_AMD_GPUS);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
-		printf("AMDSMI failed to init \n");
-		exit(1);
+		throw SmiToolPermissionDeniedException();
 	}
 };
 

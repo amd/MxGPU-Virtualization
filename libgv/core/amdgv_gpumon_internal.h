@@ -85,6 +85,8 @@ enum amdgv_gpumon_type {
 	GPUMON_RAS_REPORT,
 	GPUMON_CPER_GET_COUNT,
 	GPUMON_CPER_GET_ENTRIES,
+	GPUMON_GET_STATIC_METRICS_EXT,
+	GPUMON_GET_NUM_STATIC_METRICS_EXT_ENTRIES,
 
 	/* -- SETTERS -- */
 
@@ -250,6 +252,10 @@ struct amdgv_gpumon_funcs {
 			uint32_t *ras_eeprom_version);
 	int (*get_ecc_correction_schema)(struct amdgv_adapter *adapt,
 			uint32_t *ecc_correction_schema);
+	int (*get_static_metrics_ext)(struct amdgv_adapter *adapt,
+			struct amdgv_gpumon_metrics_ext *metrics_ext);
+	int (*get_num_static_metrics_ext_entries)(struct amdgv_adapter *adapt,
+			uint32_t *entries);
 };
 
 struct amdgv_gpumon {

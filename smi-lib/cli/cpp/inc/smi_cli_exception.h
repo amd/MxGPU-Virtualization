@@ -148,6 +148,28 @@ private:
 	std::string parameter;
 };
 
+class SmiToolInvalidSubcommandException : public SmiToolException
+{
+public:
+SmiToolInvalidSubcommandException(std::string command);
+	int get_error_code();
+	std::string get_message();
+private:
+	int error_code{-10};
+	std::string message;
+};
+
+class SmiToolPermissionDeniedException : public SmiToolException
+{
+public:
+	SmiToolPermissionDeniedException();
+	int get_error_code();
+	std::string get_message();
+private:
+	int error_code{-11};
+	std::string message;
+};
+
 class SmiToolUnknownErrorException : public SmiToolException
 {
 public:
@@ -200,6 +222,7 @@ public:
 		{ 31, "Device Not found" },
 		{ 32, "Device not initialized" },
 		{ 33, "No slot available" },
+		{ 34, "Driver not loaded" },
 		{ 40, "No data was found for a given input" },
 		{ 41, "Not enough resources were available for the operation" },
 		{ 42, "An unexpected amount of data was read" },

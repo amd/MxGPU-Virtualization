@@ -143,7 +143,7 @@ static int mi350_smu_wait_for_response(struct amdgv_adapter *adapt, uint32_t *va
 
 	ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90),
 				      MP1_SMN_C2PMSG_90__CONTENT_MASK, 0,
-				      AMDGV_TIMEOUT(TIMEOUT_SMU_REG) * 1000, AMDGV_WAIT_CHECK_NE, 0);
+				      AMDGV_TIMEOUT(TIMEOUT_SMU_REG), AMDGV_WAIT_CHECK_NE, 0);
 
 	tmp = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90));
 	if (val)
@@ -802,11 +802,17 @@ static int mi350_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv_
 	uint32_t val, throttler_status;
 	uint32_t ctx_id;
 	uint32_t vf_flr_intr_sts;
-	int i;
+	uint32_t i;
+	uint64_t curr_time, throttle_delta;
 
 	if (entry->client_id != IH_IV_CLIENTID_MP1 ||
 	    entry->src_id != IH_INTERRUPT_ID_TO_DRIVER)
 		return 0;
+
+	/* ack irq first */
+	val = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_IH_SW_INT_CTRL));
+	val = REG_SET_FIELD(val, MP1_SMN_IH_SW_INT_CTRL, INT_ACK, 1);
+	WREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_IH_SW_INT_CTRL), val);
 
 	ctx_id = entry->src_data[0];
 	switch (ctx_id) {
@@ -844,13 +850,13 @@ static int mi350_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv_
 		}
 		break;
 	case IH_INTERRUPT_CONTEXT_ID_THERMAL_THROTTLING:
-		/* ack irq first */
-		val = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_IH_SW_INT_CTRL));
-		val = REG_SET_FIELD(val, MP1_SMN_IH_SW_INT_CTRL, INT_ACK, 1);
-		WREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_IH_SW_INT_CTRL), val);
-
-		throttler_status = entry->src_data[1];
-		mi350_smu_notify_throttler_error(adapt, throttler_status);
+		curr_time = oss_get_time_stamp();
+		throttle_delta = curr_time - adapt->pp.thermal_throttle_start_time;
+		if (throttle_delta > adapt->opt.thermal_throttle_rate_limit) {
+			adapt->pp.thermal_throttle_start_time = curr_time;
+			throttler_status = entry->src_data[1];
+			mi350_smu_notify_throttler_error(adapt, throttler_status);
+		}
 		break;
 	default:
 		AMDGV_ERROR("mi350 smu can't process this context id %d\n", ctx_id);
@@ -1377,7 +1383,8 @@ static int mi350_smu_set_other_dpm_table(struct amdgv_adapter *adapt, int clk_ty
 	PPTable_t *pptable = (PPTable_t *)table_context->pptable;
 	uint32_t default_freq, dpm_levels, freq;
 	uint16_t clk_id, fea_id;
-	int i, ret;
+	int ret;
+	uint32_t i;
 
 	switch (clk_type) {
 	case DPM_CLOCK_TYPE_FCLK:
@@ -1579,6 +1586,30 @@ static int mi350_pp_smu_init_drv_metrics_ext(struct amdgv_adapter *adapt)
 					BOOL,		(METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC))),
 					uint_mask_bit,	(void *)&metrics_table->GfxLockXCDMak,
 					vf_mask);
+
+		/* DeviceGetViolationStatus: Total App Clock Counter */
+		if ((adapt->pp.smu_fw_version >= 0x00561E00 && adapt->asic_type == CHIP_MI350X)) {
+			ADD_DRV_METRICS_EXT_ENTRY(
+				METRIC_EXT_CODE(THROTTLE,	GFX_CLK_BELOW_HOST_LIMIT_PPT,
+						BOOL,	METRIC_EXT_FLAG(DATA_FILTER_ACC) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+						Q10_64,		(void *)&metrics_table->GfxclkBelowHostLimitPptAcc[i],
+						vf_mask);
+			ADD_DRV_METRICS_EXT_ENTRY(
+				METRIC_EXT_CODE(THROTTLE,	GFX_CLK_BELOW_HOST_LIMIT_THM,
+						BOOL,	METRIC_EXT_FLAG(DATA_FILTER_ACC) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+						Q10_64,		(void *)&metrics_table->GfxclkBelowHostLimitThmAcc[i],
+						vf_mask);
+			ADD_DRV_METRICS_EXT_ENTRY(
+				METRIC_EXT_CODE(THROTTLE,	GFX_CLK_BELOW_HOST_LIMIT_TOTAL,
+						BOOL,	METRIC_EXT_FLAG(DATA_FILTER_ACC) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+						Q10_64,		(void *)&metrics_table->GfxclkBelowHostLimitTotalAcc[i],
+						vf_mask);
+			ADD_DRV_METRICS_EXT_ENTRY(
+				METRIC_EXT_CODE(THROTTLE,	GFX_CLK_LOW_UTILIZATION,
+						BOOL,	METRIC_EXT_FLAG(DATA_FILTER_ACC) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+						Q10_64,		(void *)&metrics_table->GfxclkLowUtilizationAcc[i],
+						vf_mask);
+		}
 	}
 
 	/* UCLK */
@@ -1803,27 +1834,27 @@ static int mi350_pp_smu_init_drv_metrics_ext(struct amdgv_adapter *adapt)
 
 	ADD_DRV_METRICS_EXT_ENTRY(
 		METRIC_EXT_CODE(PCIE, PCIE_L0_TO_RECOVERY_COUNT,
-				UINT, METRIC_EXT_FLAG(COUNTER)),
+				UINT, METRIC_EXT_FLAG(DATA_FILTER_ACC)),
 				UINT_32, (void *)&(metrics_table->PCIeL0ToRecoveryCountAcc),
 				whole_gpu_vf_mask);
 	ADD_DRV_METRICS_EXT_ENTRY(
 		METRIC_EXT_CODE(PCIE, PCIE_REPLAY_COUNT,
-				UINT, METRIC_EXT_FLAG(COUNTER)),
+				UINT, METRIC_EXT_FLAG(DATA_FILTER_ACC)),
 				UINT_32, (void *)&(metrics_table->PCIenReplayAAcc),
 				whole_gpu_vf_mask);
 	ADD_DRV_METRICS_EXT_ENTRY(
 		METRIC_EXT_CODE(PCIE, PCIE_REPLAY_ROLLOVER_COUNT,
-				UINT, METRIC_EXT_FLAG(COUNTER)),
+				UINT, METRIC_EXT_FLAG(DATA_FILTER_ACC)),
 				UINT_32, (void *)&(metrics_table->PCIenReplayARolloverCountAcc),
 				whole_gpu_vf_mask);
 	ADD_DRV_METRICS_EXT_ENTRY(
 		METRIC_EXT_CODE(PCIE, PCIE_NAK_SENT_COUNT,
-				UINT, METRIC_EXT_FLAG(COUNTER)),
+				UINT, METRIC_EXT_FLAG(DATA_FILTER_ACC)),
 				UINT_32, (void *)&(metrics_table->PCIeNAKSentCountAcc),
 				whole_gpu_vf_mask);
 	ADD_DRV_METRICS_EXT_ENTRY(
 		METRIC_EXT_CODE(PCIE, PCIE_NAK_RECEIVED_COUNT,
-				UINT, METRIC_EXT_FLAG(COUNTER)),
+				UINT, METRIC_EXT_FLAG(DATA_FILTER_ACC)),
 				UINT_32, (void *)&(metrics_table->PCIeNAKReceivedCountAcc),
 				whole_gpu_vf_mask);
 
@@ -1934,6 +1965,11 @@ static int mi350_smu_pp_get_power_capacity(struct amdgv_adapter *adapt, int *val
 	*val = (int)tmp;
 
 	return 0;
+}
+
+static int mi350_smu_pp_set_power_capacity(struct amdgv_adapter *adapt, int val)
+{
+	return mi350_smu_send_msg_with_param(adapt, PPSMC_MSG_SetPptLimit, val, NULL);
 }
 
 static int mi350_smu_pp_get_dpm_capacity(struct amdgv_adapter *adapt, int *val)
@@ -2387,7 +2423,7 @@ static int mi350_smu_pp_get_link_metrics(struct amdgv_adapter *adapt,
 static void mi350_smu_fill_eeprom_i2c_req(SwI2cRequest_t *req, bool write, uint8_t address,
 					  uint8_t i2c_port, uint8_t *data, uint32_t numbytes)
 {
-	int i;
+	uint32_t i;
 
 	/* numbytes should not exceed MAX_SW_I2C_COMMANDS */
 	req->I2CcontrollerPort = i2c_port;
@@ -2451,7 +2487,8 @@ static int mi350_smu_i2c_eeprom_read_data(struct amdgv_adapter *adapt, uint8_t a
 					  uint8_t i2c_port, uint8_t *data, uint32_t numbytes)
 {
 	SwI2cRequest_t req;
-	int i, ret = 0;
+	int ret = 0;
+	uint32_t i;
 	int retry_count = 1;
 
 	oss_memset(&req, 0, sizeof(req));
@@ -2710,6 +2747,7 @@ static const struct amdgv_pp_funcs mi350_amdgv_pp_funcs = {
 	.handle_smu_irq = mi350_smu_pp_handle_irq,
 	.i2c_eeprom_xfer = mi350_smu_pp_i2c_eeprom_i2c_xfer,
 	.get_power_capacity = mi350_smu_pp_get_power_capacity,
+	.set_power_capacity = mi350_smu_pp_set_power_capacity,
 	.get_dpm_capacity = mi350_smu_pp_get_dpm_capacity,
 	.get_clock_limit = mi350_smu_pp_get_clock_limit,
 	.get_pp_metrics = mi350_smu_pp_get_pp_metrics,
@@ -2738,6 +2776,7 @@ static const struct amdgv_pp_funcs mi350_amdgv_pp_funcs = {
 static int mi350_powerplay_sw_init(struct amdgv_adapter *adapt)
 {
 	adapt->pp.pp_funcs = &mi350_amdgv_pp_funcs;
+	adapt->pp.thermal_throttle_start_time = 0;
 
 	return 0;
 }

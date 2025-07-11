@@ -133,6 +133,7 @@ enum amdgv_sched_event_id {
 	AMDGV_EVENT_SCHED_VF_REQ_RAS_CPER_DUMP,
 	AMDGV_EVENT_SCHED_RAS_POISON_CREATION,
 	AMDGV_EVENT_SCHED_VF_REQ_RAS_BAD_PAGES,
+	AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA,
 	AMDGV_EVENT_INVALID_EVENT = 0xffffffff,
 };
 
@@ -153,6 +154,18 @@ enum amdgv_fb_clear_type {
 	AMDGV_VF_FB_INIT = 0,
 	AMDGV_VF_FB_CLEAR_FORCE,
 	AMDGV_VF_FB_CLEAR_DIRTY,
+};
+
+enum amdgv_migration_manifest_data_type {
+	AMDGV_MIGRATION_INVALID = 0,
+	AMDGV_MIGRATION_EXPORT_STATIC_DATA = 1,
+	AMDGV_MIGRATION_EXPORT_DYNAMIC_DATA,
+	/* Prepare VF on Target VF */
+	AMDGV_MIGRATION_IMPORT_PREPARE,
+	/* static adata import */
+	AMDGV_MIGRATION_IMPORT_STATIC_DATA,
+	/* dynamic data import and final step */
+	AMDGV_MIGRATION_IMPORT_DYNAMIC_DATA,
 };
 
 struct gim_dev_data;
@@ -298,6 +311,10 @@ union amdgv_sched_event_data {
 			/* Nothing for creation yet. */
 		};
 	} poison;
+	struct {
+		uint64_t addr;
+		enum amdgv_migration_manifest_data_type type;
+	} lm;
 };
 
 enum amdgv_event_status {

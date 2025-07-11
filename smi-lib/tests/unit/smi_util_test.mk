@@ -116,7 +116,7 @@ gen_coverage: run
 			--directory $(OUTPUT_DIR) \
 			--output-file $(OUTPUT_DIR)/coverage.info
 
-	@lcov --remove $(OUTPUT_DIR)/coverage.info "$(SOURCE_DIR)/aca_decoder/*" \
+	@lcov --remove $(OUTPUT_DIR)/coverage.info "$(SOURCE_DIR)/aca-decode*" \
 		--output-file $(OUTPUT_DIR)/coverage_filtered.info $(LCOV_OPT)
 	@rm -f $(OUTPUT_DIR)/coverage.info
 	@mv $(OUTPUT_DIR)/coverage_filtered.info $(OUTPUT_DIR)/coverage.info

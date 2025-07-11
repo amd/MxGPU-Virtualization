@@ -46,7 +46,7 @@ static uint32_t hive_count;
 */
 int amdgv_xgmi_init_hive(struct amdgv_adapter *adapt)
 {
-	int i;
+	uint32_t i;
 	struct amdgv_hive_info *hive = NULL;
 
 	oss_mutex_lock(adapt->hive_lock);
@@ -126,7 +126,7 @@ fail:
 
 struct amdgv_hive_info *amdgv_get_xgmi_hive(struct amdgv_adapter *adapt)
 {
-	int i;
+	uint32_t i;
 	struct amdgv_hive_info *hive = NULL;
 
 	if (!adapt->xgmi.hive_id)
@@ -214,7 +214,7 @@ static void amdgv_xgmi_parse_custom_mode_sharing_mask(struct amdgv_adapter *adap
 void amdgv_xgmi_reflect_topology_info(struct amdgv_adapter *adapt, struct amdgv_hive_info *hive, struct amdgv_xgmi_psp_topology_info *topology_info)
 {
 	struct amdgv_adapter *cur;
-	int i;
+	uint32_t i;
 
 	for (i = 0; i < topology_info->num_nodes; i++) {
 		if (topology_info->node[i].num_hops) {
@@ -224,7 +224,7 @@ void amdgv_xgmi_reflect_topology_info(struct amdgv_adapter *adapt, struct amdgv_
 
 			amdgv_list_for_each_entry(cur, &hive->adapt_list, struct amdgv_adapter, xgmi.head) {
 				struct amdgv_xgmi_psp_topology_info *mirror_top_info;
-				int j;
+				uint32_t j;
 
 				if (cur->xgmi.node_id != dst_node_id)
 					continue;

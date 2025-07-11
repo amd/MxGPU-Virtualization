@@ -39,6 +39,7 @@ from .amdsmi_interface import amdsmi_get_gpu_ecc_count
 from .amdsmi_interface import amdsmi_get_gpu_ecc_enabled
 from .amdsmi_interface import amdsmi_status_code_to_string
 from .amdsmi_interface import amdsmi_get_gpu_ras_feature_info
+from .amdsmi_interface import amdsmi_get_bad_page_threshold
 from .amdsmi_interface import amdsmi_get_gpu_bad_page_info
 from .amdsmi_interface import amdsmi_get_gpu_asic_info
 from .amdsmi_interface import amdsmi_get_pcie_info
@@ -90,6 +91,7 @@ from .amdsmi_interface import amdsmi_get_gpu_cper_entries
 from .amdsmi_interface import amdsmi_topo_get_p2p_status
 from .amdsmi_interface import amdsmi_get_gpu_virtualization_mode
 from .amdsmi_interface import amdsmi_get_afids_from_cper
+from .amdsmi_interface import amdsmi_reset_gpu
 
 from .amdsmi_interface import AmdSmiTemperatureType
 from .amdsmi_interface import AmdSmiTemperatureMetric

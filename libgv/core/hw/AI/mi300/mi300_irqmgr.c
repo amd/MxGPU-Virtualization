@@ -39,21 +39,21 @@ static const uint32_t this_block = AMDGV_COMMUNICATION_BLOCK;
 
 static int mi300_ih_iv_ring_enable(struct amdgv_adapter *adapt, bool enable)
 {
-	uint32_t ih_rb_cntl = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_CNTL));
+	uint32_t ih_rb_cntl = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_CNTL));
 
 	if (enable) {
 		ih_rb_cntl = REG_SET_FIELD(ih_rb_cntl, IH_RB_CNTL, RB_ENABLE, 1);
 		ih_rb_cntl = REG_SET_FIELD(ih_rb_cntl, IH_RB_CNTL, ENABLE_INTR, 1);
-		WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_CNTL), ih_rb_cntl);
+		WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_CNTL), ih_rb_cntl);
 		adapt->irqmgr.ih.enabled = true;
 	} else {
 		ih_rb_cntl = REG_SET_FIELD(ih_rb_cntl, IH_RB_CNTL, RB_ENABLE, 0);
 		ih_rb_cntl = REG_SET_FIELD(ih_rb_cntl, IH_RB_CNTL, ENABLE_INTR, 0);
-		WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_CNTL), ih_rb_cntl);
+		WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_CNTL), ih_rb_cntl);
 
 		/* set rptr, wptr to 0 */
-		WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_RPTR), 0);
-		WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_WPTR), 0);
+		WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_RPTR), 0);
+		WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_WPTR), 0);
 		adapt->irqmgr.ih.enabled = false;
 		adapt->irqmgr.ih.rptr = 0;
 	}
@@ -65,7 +65,7 @@ static uint32_t mi300_ih_get_wptr(struct amdgv_adapter *adapt)
 {
 	uint32_t wptr, tmp;
 
-	wptr = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_WPTR));
+	wptr = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_WPTR));
 	if (REG_GET_FIELD(wptr, IH_RB_WPTR, RB_OVERFLOW)) {
 		wptr = REG_SET_FIELD(wptr, IH_RB_WPTR, RB_OVERFLOW, 0);
 
@@ -75,9 +75,9 @@ static uint32_t mi300_ih_get_wptr(struct amdgv_adapter *adapt)
 		adapt->irqmgr.ih.rptr = wptr & adapt->irqmgr.ih.ptr_mask;
 		adapt->irqmgr.ih_funcs->set_rptr(adapt);
 
-		tmp = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_CNTL));
+		tmp = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_CNTL));
 		tmp = REG_SET_FIELD(tmp, IH_RB_CNTL, WPTR_OVERFLOW_CLEAR, 1);
-		WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_CNTL), tmp);
+		WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_CNTL), tmp);
 	}
 
 	return (wptr & adapt->irqmgr.ih.ptr_mask);
@@ -88,14 +88,14 @@ static void mi300_ih_set_rptr(struct amdgv_adapter *adapt)
 	if (adapt->irqmgr.ih.use_doorbell)
 		WDOORBELL32(adapt->irqmgr.ih.doorbell_index, adapt->irqmgr.ih.rptr);
 	else
-		WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_RPTR), adapt->irqmgr.ih.rptr);
+		WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_RPTR), adapt->irqmgr.ih.rptr);
 }
 
 static uint32_t mi300_ih_get_rptr(struct amdgv_adapter *adapt)
 {
 	uint32_t rptr;
 
-	rptr = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_RPTR));
+	rptr = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_RPTR));
 
 	return (rptr & adapt->irqmgr.ih.ptr_mask);
 }
@@ -352,8 +352,8 @@ static void mi300_ih_iv_ring_hw_init(struct amdgv_adapter *adapt)
 		rb_base_addr = adapt->irqmgr.ih.rb_dma_addr;
 	else
 		rb_base_addr = adapt->irqmgr.ih.gpu_addr;
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_BASE), rb_base_addr >> 8);
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_BASE_HI), rb_base_addr >> 40);
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_BASE), rb_base_addr >> 8);
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_BASE_HI), rb_base_addr >> 40);
 	AMDGV_DEBUG("rb_base_addr=0x%llx\n", rb_base_addr);
 
 	/* Use the physical address of the iv ring base as the IH
@@ -371,7 +371,7 @@ static void mi300_ih_iv_ring_hw_init(struct amdgv_adapter *adapt)
 	WREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_INTERRUPT_CNTL), interrupt_cntl);
 
 	/* Program IH_RB_CNTL */
-	ih_rb_cntl = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_CNTL));
+	ih_rb_cntl = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_CNTL));
 	ih_rb_cntl = REG_SET_FIELD(ih_rb_cntl, IH_RB_CNTL, RB_ENABLE, 0);
 	ih_rb_cntl = REG_SET_FIELD(ih_rb_cntl, IH_RB_CNTL, ENABLE_INTR, 0);
 	ih_rb_cntl = REG_SET_FIELD(ih_rb_cntl, IH_RB_CNTL, RB_SIZE,
@@ -389,28 +389,28 @@ static void mi300_ih_iv_ring_hw_init(struct amdgv_adapter *adapt)
 				   adapt->irqmgr.ih.use_bus_addr ? 1 : 0);
 	ih_rb_cntl = REG_SET_FIELD(ih_rb_cntl, IH_RB_CNTL, MC_RO,
 				   adapt->irqmgr.ih.use_bus_addr ? 0 : 1);
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_CNTL), ih_rb_cntl);
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_CNTL), ih_rb_cntl);
 
 	/* Program IH_CNTL */
-	ih_cntl = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_CNTL));
+	ih_cntl = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_CNTL));
 	ih_cntl = REG_SET_FIELD(ih_cntl, IH_CNTL, MC_WR_CLEAN_CNT, 0x10);
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_CNTL), ih_cntl);
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_CNTL), ih_cntl);
 
 	/* set the writeback address */
 	if (adapt->irqmgr.ih.use_bus_addr)
 		wptr_off = adapt->irqmgr.ih.rb_dma_addr + (adapt->irqmgr.ih.wptr_offs * 4);
 	else
 		wptr_off = adapt->irqmgr.ih.gpu_addr + (adapt->irqmgr.ih.wptr_offs * 4);
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_WPTR_ADDR_LO), lower_32_bits(wptr_off));
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_WPTR_ADDR_HI), upper_32_bits(wptr_off));
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_WPTR_ADDR_LO), lower_32_bits(wptr_off));
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_WPTR_ADDR_HI), upper_32_bits(wptr_off));
 	AMDGV_DEBUG("writeback_addr=0x%llx\n", wptr_off);
 
 	/* set rptr, wptr to 0 */
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_RPTR), 0);
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_WPTR), 0);
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_RPTR), 0);
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_WPTR), 0);
 
 	/* set rptr with doorbell reg */
-	rptr = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_DOORBELL_RPTR));
+	rptr = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_DOORBELL_RPTR));
 	/* use doorbell */
 	if (adapt->irqmgr.ih.use_doorbell) {
 		/* doorbell index */
@@ -420,7 +420,7 @@ static void mi300_ih_iv_ring_hw_init(struct amdgv_adapter *adapt)
 	} else {
 		rptr = REG_SET_FIELD(rptr, IH_DOORBELL_RPTR, ENABLE, 0);
 	}
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_DOORBELL_RPTR), rptr);
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_DOORBELL_RPTR), rptr);
 
 	if (adapt->irqmgr.ih.use_doorbell) {
 		/* assign ih doorbell range */
@@ -469,8 +469,8 @@ int mi300_irqmgr_restore_and_init(struct amdgv_adapter *adapt,
 	       reset_state->hdp_host_path_cntl);
 
 	/* IH_RB_BASE */
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_BASE), reset_state->rb_base_addr);
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_BASE_HI), reset_state->rb_base_addr_hi);
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_BASE), reset_state->rb_base_addr);
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_BASE_HI), reset_state->rb_base_addr_hi);
 
 	/* Setup IH dummy reads */
 	WREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_INTERRUPT_CNTL2),
@@ -481,21 +481,21 @@ int mi300_irqmgr_restore_and_init(struct amdgv_adapter *adapt,
 	       reset_state->interrupt_cntl);
 
 	/* Program IH_RB_CNTL */
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_CNTL), reset_state->ih_rb_cntl);
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_CNTL), reset_state->ih_rb_cntl);
 
 	/* Program IH_CNTL */
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_CNTL), reset_state->ih_cntl);
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_CNTL), reset_state->ih_cntl);
 
 	/* set the writeback address */
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_WPTR_ADDR_LO), reset_state->wptr_off_lo);
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_WPTR_ADDR_HI), reset_state->wptr_off_hi);
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_WPTR_ADDR_LO), reset_state->wptr_off_lo);
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_WPTR_ADDR_HI), reset_state->wptr_off_hi);
 
 	/* set rptr, wptr */
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_RPTR), reset_state->rptr);
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_WPTR), reset_state->wptr);
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_RPTR), reset_state->rptr);
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_WPTR), reset_state->wptr);
 
 	/* set rptr with doorbell reg */
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_DOORBELL_RPTR), reset_state->doorbell_rptr);
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_DOORBELL_RPTR), reset_state->doorbell_rptr);
 
 	/* Enable BIF doorbell aperture */
 	WREG32(SOC15_REG_OFFSET(NBIO, 0, regRCC_DEV0_EPF0_RCC_DOORBELL_APER_EN),
@@ -522,9 +522,9 @@ void mi300_irqmgr_save_and_fini(struct amdgv_adapter *adapt,
 	mi300_mbox_irq_source_enable(adapt, false);
 
 	/* read rptr and wptr before disable the ring or they will be zero */
-	reset_state->rptr = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_RPTR));
+	reset_state->rptr = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_RPTR));
 	AMDGV_INFO("rptr = 0x%08x!\n", reset_state->rptr);
-	reset_state->wptr = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_WPTR));
+	reset_state->wptr = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_WPTR));
 	AMDGV_INFO("wptr = 0x%08x!\n", reset_state->wptr);
 
 	/* disable IH interrupts */
@@ -534,8 +534,8 @@ void mi300_irqmgr_save_and_fini(struct amdgv_adapter *adapt,
 		RREG32(SOC15_REG_OFFSET(HDP, 0, regHDP_HOST_PATH_CNTL));
 
 	/* IH_RB_BASE */
-	reset_state->rb_base_addr = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_BASE));
-	reset_state->rb_base_addr_hi = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_BASE_HI));
+	reset_state->rb_base_addr = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_BASE));
+	reset_state->rb_base_addr_hi = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_BASE_HI));
 
 	reset_state->interrupt_cntl2 =
 		RREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_INTERRUPT_CNTL2));
@@ -545,17 +545,17 @@ void mi300_irqmgr_save_and_fini(struct amdgv_adapter *adapt,
 		RREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_INTERRUPT_CNTL));
 
 	/* IH_RB_CNTL */
-	reset_state->ih_rb_cntl = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_CNTL));
+	reset_state->ih_rb_cntl = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_CNTL));
 
 	/* IH_CNTL */
-	reset_state->ih_cntl = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_CNTL));
+	reset_state->ih_cntl = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_CNTL));
 
 	/* writeback address */
-	reset_state->wptr_off_lo = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_WPTR_ADDR_LO));
-	reset_state->wptr_off_hi = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_WPTR_ADDR_HI));
+	reset_state->wptr_off_lo = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_WPTR_ADDR_LO));
+	reset_state->wptr_off_hi = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RB_WPTR_ADDR_HI));
 
 	/* rptr doorbell reg */
-	reset_state->doorbell_rptr = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_DOORBELL_RPTR));
+	reset_state->doorbell_rptr = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_DOORBELL_RPTR));
 
 	/* BIF doorbell aperture */
 	reset_state->doorbell_aper =
@@ -755,9 +755,9 @@ static int mi300_irqmgr_sw_fini(struct amdgv_adapter *adapt)
 
 void mi300_irqmgr_golden_init(struct amdgv_adapter *adapt)
 {
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_STORM_CLIENT_LIST_CNTL), 0x00040000);
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_INT_FLOOD_CNTL), 8);
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RETRY_INT_CAM_CNTL), 0x00015810);
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_STORM_CLIENT_LIST_CNTL), 0x00040000);
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_INT_FLOOD_CNTL), 8);
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RETRY_INT_CAM_CNTL), 0x00015810);
 }
 
 static int mi300_irqmgr_hw_init(struct amdgv_adapter *adapt)

@@ -12,12 +12,19 @@ echo 1.2.3.K > ./VERSION
 
 # To make a deb package:
 
-the depends need install:
-    ubuntu24: debhelper-compat dh-dkms
-    ubuntu22: debhelper-compat
+Install the dependencies, for newer distros like ubuntu 24.04, do:
 
+``` sh
+apt install devscripts debhelper-compat dh-dkms
+```
 
-the package can be built with
+For older distros like ubuntu 22.04, do:
+
+``` sh
+apt install devscripts debhelper-compat dkms
+```
+
+then package can be built with
 
 ``` sh
 # copy the package files to the project root
@@ -32,7 +39,12 @@ This should create a package at the parent directory, i.e. in the same directory
 
 # To make a rpm package:
 
-Simply run
+Install the dependencies:
+``` sh
+    dnf install rpm-build
+```
+
+and run
 
 ``` sh
 rpmbuild -bb --build-in-place ./package/rpm/gim-dkms.spec

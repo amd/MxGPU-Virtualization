@@ -166,3 +166,10 @@ void amdgv_ras_eeprom_fini(struct amdgv_ras_eeprom_control *control)
 {
 }
 
+int amdgv_ras_eeprom_export_live_update(struct amdgv_adapter *adapt, uint8_t *data)
+{
+	if (adapt->umc.use_legacy_eeprom_format)
+		return 0;
+	else
+		return ras_eeprom_v2_1_export_live_data(adapt, data);
+}

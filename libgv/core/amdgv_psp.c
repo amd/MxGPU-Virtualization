@@ -24,6 +24,7 @@
 #include "amdgv_device.h"
 #include "amdgv_psp_gfx_if.h"
 #include "amdgv_sched_internal.h"
+#include "amdgv_sched.h"
 #include "amdgv_oss_wrapper.h"
 #include "amdgv_notify.h"
 #include "hw/common/ucode/psp_asd_bin.h"
@@ -1167,6 +1168,7 @@ bool amdgv_psp_fw_id_support(uint32_t firmware_id)
 	case AMDGV_FIRMWARE_ID__RLC_SAVE_RESTROE_LIST:
 	case AMDGV_FIRMWARE_ID__PSP_RAS:
 	case AMDGV_FIRMWARE_ID__RAS_TA:
+	case AMDGV_FIRMWARE_ID__PLDM_VERSION:
 		support = true;
 		break;
 	default:
@@ -2662,7 +2664,7 @@ enum psp_status amdgv_psp_xgmi_get_topology_info(struct amdgv_adapter *adapt,
 	struct ta_xgmi_cmd_get_topology_info_output *topology_info_output;
 	struct amdgv_adapter *cur;
 	enum psp_status ret = PSP_STATUS__SUCCESS;
-	int i = 0;
+	uint32_t i = 0;
 
 	xgmi_cmd = (struct ta_xgmi_shared_memory *)(amdgv_memmgr_get_cpu_addr(
 		xgmi_context->shared_buffer.mem));
@@ -2716,7 +2718,7 @@ enum psp_status amdgv_psp_xgmi_get_peer_link_info(struct amdgv_adapter *adapt,
 	struct ta_xgmi_cmd_get_extend_peer_link_info *peer_link_info;
 	struct amdgv_adapter *cur;
 	enum psp_status ret = PSP_STATUS__SUCCESS;
-	int i = 0, j = 0, num_links = 0;
+	uint32_t i = 0, j = 0, num_links = 0;
 
 	xgmi_cmd = (struct ta_xgmi_shared_memory *)(amdgv_memmgr_get_cpu_addr(
 		xgmi_context->shared_buffer.mem));
@@ -3213,7 +3215,7 @@ enum amdgv_live_info_status amdgv_psp_export_live_data(struct amdgv_adapter *ada
 
 enum amdgv_live_info_status amdgv_psp_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_psp *psp_info)
 {
-	int i;
+	uint32_t i;
 
 	adapt->psp.xgmi_context.xgmi_initialized = psp_info->xgmi_initialized;
 	adapt->psp.xgmi_context.xgmi_session_id = psp_info->xgmi_session_id;
@@ -3284,6 +3286,7 @@ enum amdgv_live_info_status amdgv_psp_fw_info_export_live_data(struct amdgv_adap
 	fw_info->fw_info_dfc_fw = adapt->psp.fw_info[AMDGV_FIRMWARE_ID__DFC_FW];
 	fw_info->fw_info_psp_spl = adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_SPL];
 	fw_info->smu_fw_version = adapt->pp.smu_fw_version;
+	fw_info->fw_info_pldm = adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PLDM_VERSION];
 
 	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
 }
@@ -3330,6 +3333,7 @@ enum amdgv_live_info_status amdgv_psp_fw_info_import_live_data(struct amdgv_adap
 	adapt->psp.fw_info[AMDGV_FIRMWARE_ID__DFC_FW] = fw_info->fw_info_dfc_fw;
 	adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_SPL] = fw_info->fw_info_psp_spl;
 	adapt->pp.smu_fw_version = fw_info->smu_fw_version;
+	adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PLDM_VERSION] = fw_info->fw_info_pldm;
 
 	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
 }

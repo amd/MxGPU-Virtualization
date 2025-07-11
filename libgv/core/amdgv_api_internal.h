@@ -71,7 +71,11 @@ int amdgv_int_set_vf_number(struct amdgv_adapter *adapt, uint32_t num_vf);
 int amdgv_int_ras_trigger_error(struct amdgv_adapter *adapt, struct amdgv_smi_ras_error_inject_info *data);
 int amdgv_int_ras_ta_load(struct amdgv_adapter *adapt, struct amdgv_smi_cmd_ras_ta_load *data);
 int amdgv_int_ras_ta_unload(struct amdgv_adapter *adapt, struct amdgv_smi_cmd_ras_ta_unload *data);
-int amdgv_int_dump_cu_data(struct amdgv_adapter *adapt, enum AMDGV_CU_DATA_TYPE type);
+
+int amdgv_int_alloc_dump_cu_resource_memory(struct amdgv_adapter *adapt,
+		struct amdgv_dump_cu_resource_size *dump_cu_resource_size, struct amdgv_dump_cu_resource_memory *output_data);
+int amdgv_int_dump_cu_data(struct amdgv_adapter *adapt);
+void amdgv_int_free_dump_cu_resource_memory(struct amdgv_adapter *adapt);
 
 int amdgv_int_stop_to_pf_helper(struct amdgv_adapter *adapt);
 

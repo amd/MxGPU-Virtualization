@@ -30,7 +30,7 @@ static const uint32_t this_block = AMDGV_SECURITY_BLOCK;
 static int amdgv_atomfirmware_update_checksum(struct amdgv_adapter *adapt, uint8_t *image,
 					      unsigned int image_size)
 {
-	int i, sum = 0;
+	uint32_t i, sum = 0;
 
 	VBIOS_ROM_HEADER *rom_header = (VBIOS_ROM_HEADER *)image;
 

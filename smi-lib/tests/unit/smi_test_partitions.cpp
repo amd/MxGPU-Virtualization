@@ -131,7 +131,9 @@ TEST_F(AmdSmiPartitionTest, IoctlFailed)
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 	ret = amdsmi_set_gpu_memory_partition_mode(&GPU_MOCK_HANDLE, mode);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
-
+	mode = AMDSMI_MEMORY_PARTITION_UNKNOWN;
+	ret = amdsmi_set_gpu_memory_partition_mode(&GPU_MOCK_HANDLE, mode);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
 
 TEST_F(AmdSmiPartitionTest, GetAcceleratorCapsAllocFail)
@@ -200,6 +202,22 @@ TEST_F(AmdSmiPartitionTest, GetAcceleratorPartitionCaps)
 	free(profile_configs);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_TRUE(amdsmi::equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
+}
+
+TEST_F(AmdSmiPartitionTest, GetGpuMemoryPartitionConfigSysconfFailed)
+{
+	int ret;
+	amdsmi_accelerator_partition_profile_config_t config;
+#ifndef _WIN64
+	// Mock sysconf to return -1
+	EXPECT_CALL(*g_system_mock, Sysconf(testing::_)).WillOnce(testing::Return(-1));
+#endif
+	ret = amdsmi_get_gpu_accelerator_partition_profile_config(&GPU_MOCK_HANDLE, &config);
+#ifndef _WIN64
+	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
+#else
+	ASSERT_NE(ret, AMDSMI_STATUS_SUCCESS);
+#endif
 }
 
 TEST_F(AmdSmiPartitionTest, GetMemoryPartitionCaps)

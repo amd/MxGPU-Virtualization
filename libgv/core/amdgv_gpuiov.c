@@ -799,33 +799,33 @@ int amdgv_gpuiov_save_rlcv_state(struct amdgv_adapter *adapt, uint32_t idx_vf,
 }
 
 
-int amdgv_gpuiov_transfer_vf_data(struct amdgv_adapter *adapt,
-				  uint32_t idx_vf, uint32_t hw_sched_id, bool to_export)
+static int amdgv_gpuiov_wait_transfer_vf_data_done(struct amdgv_adapter *adapt,
+			uint32_t idx_vf, uint32_t hw_sched_id, bool to_export)
 {
+	int ret;
+	ret = wait_cmd_complete(adapt, idx_vf, hw_sched_id, cmd_allow_time());
+
+	return ret;
+}
+
+int amdgv_gpuiov_transfer_vf_data(struct amdgv_adapter *adapt,
+				  uint32_t idx_vf, bool to_export)
+{
+	uint32_t hw_sched_id;
 	int ret = 0;
 
-	if (adapt->gpuiov.funcs->transfer_vf_data
-			&& idx_vf != AMDGV_PF_IDX) {
-		ret = adapt->gpuiov.funcs->transfer_vf_data(adapt, hw_sched_id, idx_vf, to_export);
+	if (adapt->gpuiov.funcs->transfer_vf_data == NULL) {
+		AMDGV_ERROR("TRANSFER_VF_DATA is not supported.\n");
+		return AMDGV_FAILURE;
+	}
 
-		if (ret != AMDGV_FAILURE) {
-#ifdef WS_RECORD
-			amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
-					to_export ? AMDGV_RECORD_EXPORT_VF_DATA_START :
-					AMDGV_RECORD_IMPORT_VF_DATA_START);
-#endif
-			ret = wait_cmd_complete(adapt, idx_vf, hw_sched_id, cmd_allow_time());
-#ifdef WS_RECORD
-			amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
-					to_export ? AMDGV_RECORD_EXPORT_VF_DATA_END :
-					AMDGV_RECORD_IMPORT_VF_DATA_END);
-#endif
-		} else {
-			AMDGV_ERROR("Failed to complete TRANSFER_VF_DATA.\n");
+	for_each_id(hw_sched_id, amdgv_sched_get_hw_sched_mask_by_vf(adapt, idx_vf)) {
+		ret = adapt->gpuiov.funcs->transfer_vf_data(adapt, hw_sched_id, idx_vf, to_export);
+		if ((!ret) && (amdgv_gpuiov_wait_transfer_vf_data_done(adapt, idx_vf, hw_sched_id, to_export))) {
+			AMDGV_ERROR("Failed to export GPU state for VF%d sch_id=%d\n", idx_vf, hw_sched_id);
+			ret = AMDGV_FAILURE;
+			break;
 		}
-	} else {
-		AMDGV_ERROR("Unable to start TRANSFER_VF_DATA.\n");
-		ret = AMDGV_FAILURE;
 	}
 
 	return ret;

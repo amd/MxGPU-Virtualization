@@ -724,7 +724,7 @@ void amdgv_vfmgr_init_vfs_config_tmr(struct amdgv_adapter *adapt, bool vf_config
 {
 	uint32_t idx_vf;
 	struct amdgv_vf_device *entry;
-	int i, j;
+	uint32_t i, j;
 
 	if (!adapt->ffbm.enabled) {
 		return;
@@ -780,7 +780,7 @@ void amdgv_vfmgr_init_vfs_config_tmr(struct amdgv_adapter *adapt, bool vf_config
 
 void amdgv_vfmgr_init_vfs_config(struct amdgv_adapter *adapt)
 {
-	int i, j;
+	uint32_t i, j;
 	uint32_t idx_vf, pf_fb_size, vf_fb_offset = 0;
 	uint32_t numa_node_size, numa_fb_size = 0, tmr_ip_data_size = 0, vf_fb_size = 0;
 	uint32_t total_usable_fb, total_vf_fb_size = 0;
@@ -1642,6 +1642,9 @@ int amdgv_vfmgr_free_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	ret = amdgv_misc_clear_vf_fb(adapt, idx_vf, 0x00);
 	if (ret)
 		return ret;
+
+	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)
+		amdgv_dirtybit_clear_fb_dbit(adapt, idx_vf);
 
 	entry = &adapt->array_vf[idx_vf];
 

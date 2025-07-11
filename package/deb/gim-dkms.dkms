@@ -1,6 +1,9 @@
+# keep this file in sync with ./package/rpm/dkms.conf !!!
 PACKAGE_NAME="gim"
 BUILT_MODULE_NAME[0]="gim"
 PACKAGE_VERSION="#MODULE_VERSION#"
 DEST_MODULE_LOCATION[0]="/kernel/updates"
 AUTOINSTALL="yes"
-PRE_BUILD="./dkms/pre-build --with-linux=$kernel_source_dir"
+PRE_BUILD="./dkms/pre-build.sh --with-linux=$kernel_source_dir"
+POST_INSTALL="./dkms/post-install.sh"
+POST_REMOVE="./dkms/post-remove.sh"

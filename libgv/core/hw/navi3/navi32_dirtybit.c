@@ -84,6 +84,12 @@ int navi32_dirtybit_control(struct amdgv_adapter *adapt, bool enable)
 	return 0;
 }
 
+static int navi32_dirtybit_query_dirty_page_size(struct amdgv_adapter *adapt, uint32_t *dirty_page_size)
+{
+	*dirty_page_size = adapt->dirtybit.dirty_page_size;
+	return 0;
+}
+
 /* driver query GC and/or MM for segment dirty status */
 int navi32_is_segment_dirty(struct amdgv_adapter *adapt, uint64_t segment, bool dbit_preserve,
 				enum NV32_DBIT_QUERY query_type, bool *is_dirty)
@@ -706,6 +712,7 @@ fail:
 
 static const struct amdgv_dirtybit_funcs navi32_db_funcs = {
 	.control = navi32_dirtybit_control,
+    .query_dirty_page_size = navi32_dirtybit_query_dirty_page_size,
 	.query_data = navi32_dirtybit_query_data_hybrid,
 };
 
@@ -745,7 +752,6 @@ int navi32_dirtybit_hw_init(struct amdgv_adapter *adapt)
 
 	pf_fb_size = adapt->array_vf[AMDGV_PF_IDX].fb_size;
 	amdgv_gpuiov_get_usable_fb_size(adapt, &total_usable_fb);
-	/* Max SDMA page size is 256kb */
 	bitplane_size = (total_usable_fb - pf_fb_size) << (SHIFT_1M - SHIFT_256K);
 	bitplane_size = roundup(bitplane_size, 8) / 8;
 
@@ -787,6 +793,8 @@ int navi32_dirtybit_hw_init(struct amdgv_adapter *adapt)
 
 		if (adapt->dirtybit.gc_dirty_bitplane == NULL)
 			ret = AMDGV_FAILURE;
+
+		adapt->dirtybit.dirty_page_size = SEGMENT_SIZE_1M;
 	}
 	return ret;
 }

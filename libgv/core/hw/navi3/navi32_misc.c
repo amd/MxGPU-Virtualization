@@ -476,6 +476,13 @@ static int navi32_misc_hw_init(struct amdgv_adapter *adapt)
 
 	navi32_enable_mmutcl1_system_aperture_fault(adapt);
 
+	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION) {
+		if (amdgv_migration_init(adapt)) {
+			AMDGV_ERROR("Failed to initialize migration memory.\n");
+			return AMDGV_FAILURE;
+		}
+	}
+
 	return 0;
 }
 
@@ -484,6 +491,9 @@ static int navi32_misc_hw_fini(struct amdgv_adapter *adapt)
 	if (!adapt->reset.reset_state) {
 		navi32_disable_gfxhub_gart(adapt);
 	}
+
+	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)
+		amdgv_migration_fini(adapt);
 
 	return 0;
 }

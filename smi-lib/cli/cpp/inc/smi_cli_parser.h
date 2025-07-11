@@ -133,7 +133,7 @@ private:
 	};
 
 	std::vector<std::string> RESET_SUPPORTED_ARGS_GPU = {
-		"--clean-local-data", "-l"
+		"--clean-local-data", "-l", "--gpureset", "-G"
 	};
 
 	std::vector<std::string> RESET_SUPPORTED_ARGS_VF = {
@@ -215,13 +215,22 @@ private:
 	};
 
 	std::vector<std::string> RAS_SUPPORTED_ARGS_GPU = {
-		"--cper", "--severity", "--folder", "--file_limit", "--follow",
-		"--afid", "--cper-file"
+		"--cper", "--afid"
+	};
+
+	std::vector<std::string> CPER_SUPPORTED_ARGS_GPU = {
+		"--severity", "--folder", "--file-limit", "--follow"
+	};
+
+	std::vector<std::string> AFID_SUPPORTED_ARGS_GPU = {
+		"--cper-file"
 	};
 
 	std::map<std::string, std::vector<std::string> > RAS_SUPPORTED_ARGUMENTS = {
 		{ "--gpu", RAS_SUPPORTED_ARGS_GPU },
 		{ "-g", RAS_SUPPORTED_ARGS_GPU },
+		{ "--cper", CPER_SUPPORTED_ARGS_GPU },
+		{ "--afid", AFID_SUPPORTED_ARGS_GPU }
 	};
 
 	std::map<std::string, std::map<std::string, std::vector<std::string> > >

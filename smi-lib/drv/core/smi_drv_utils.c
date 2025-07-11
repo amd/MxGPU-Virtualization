@@ -299,6 +299,9 @@ enum smi_fw_block smi_ucode_amdgv_to_smi(enum amdgv_firmware_id ucode_id)
 	case AMDGV_FIRMWARE_ID__P2S_TABLE:
 		ret_ucode_id = SMI_FW_ID_P2S_TABLE;
 		break;
+	case AMDGV_FIRMWARE_ID__PLDM_VERSION:
+		ret_ucode_id = SMI_FW_ID_PLDM_VERSION;
+		break;
 	default:
 		ret_ucode_id = SMI_FW_ID__MAX;
 		break;

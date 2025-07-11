@@ -367,7 +367,7 @@ int amdgv_vbios_atom_hw_init(struct amdgv_adapter *adapt)
 static int amdgv_vbios_image_checksum(struct amdgv_adapter *adapt)
 {
 	struct amdgv_vbios *vbios = &adapt->vbios;
-	int i, sum = 0;
+	uint32_t i, sum = 0;
 	for (i = 0; i < vbios->image_size; i++)
 		sum += vbios->image[i];
 
@@ -546,7 +546,7 @@ unsigned char *amdgv_vbios_find_str_in_rom(struct amdgv_adapter *adapt, char *st
 	str_len = oss_strnlen(str, maxlen);
 	p_rom = adapt->vbios.image;
 
-	if (end >= adapt->vbios.image_size)
+	if (end >= (int)adapt->vbios.image_size)
 		end = adapt->vbios.image_size - 1;
 
 	for (; start <= end; ++start) {
@@ -702,7 +702,7 @@ int amdgv_vbios_get_vbios_version(struct amdgv_adapter *adapt, unsigned char *ve
 unsigned int amdgv_vbios_read_rom_image(struct amdgv_adapter *adapt, unsigned char *dest,
 					unsigned int size, unsigned int offset)
 {
-	int i;
+	uint32_t i;
 	unsigned char *p_rom;
 
 	p_rom = (unsigned char *)(adapt->vbios.image);

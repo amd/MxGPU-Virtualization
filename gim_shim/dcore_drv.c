@@ -167,7 +167,7 @@ static int dcore_drv_open(struct inode *inode, struct file *filp)
 {
 	struct dbglib_private *private;
 
-	private = kzalloc(sizeof(struct dbglib_private), GFP_KERNEL);
+	private = gim_kzalloc(sizeof(struct dbglib_private), GFP_KERNEL);
 	if (!private)
 		return -ENOMEM;
 
@@ -202,7 +202,7 @@ static int dcore_drv_release(struct inode *inode, struct file *filp)
 	}
 
 	if (private)
-		kfree(private);
+		gim_kfree(private);
 
 	return 0;
 }
@@ -252,7 +252,7 @@ static int get_vf_bdf_by_idx(amdgv_dev_t dev, uint32_t idx_vf, uint32_t *vf_bdf)
 	if (!dev || !vf_bdf)
 		return -EINVAL;
 
-	vf_info = kzalloc(sizeof(union amdgv_vf_info), GFP_KERNEL);
+	vf_info = gim_kzalloc(sizeof(union amdgv_vf_info), GFP_KERNEL);
 	if (!vf_info)
 		return -ENOMEM;
 
@@ -265,7 +265,7 @@ static int get_vf_bdf_by_idx(amdgv_dev_t dev, uint32_t idx_vf, uint32_t *vf_bdf)
 
 end:
 	if (vf_info)
-		kfree(vf_info);
+		gim_kfree(vf_info);
 
 	return ret;
 }
@@ -360,7 +360,7 @@ static int dcore_get_ffbm_data(struct file *file, void *user_buf)
 	int len = 0;
 	int ret = 0;
 	int dbsf = 0;
-	void *buffer = vmalloc(max_num * ffbm_struct_size);
+	void *buffer = gim_vmalloc(max_num * ffbm_struct_size);
 
 	if (!buffer) {
 		ret = -ENOMEM;
@@ -386,7 +386,7 @@ static int dcore_get_ffbm_data(struct file *file, void *user_buf)
 
 end:
 	if (buffer)
-		vfree(buffer);
+		gim_vfree(buffer);
 	return ret;
 }
 /*
@@ -526,7 +526,7 @@ void dcore_signal_manual_dump_happened(amdgv_dev_t dev, uint32_t idx_vf)
 		}
 	}
 
-	debug_data = vmalloc(debug_data_size);
+	debug_data = gim_vmalloc(debug_data_size);
 	if (!debug_data) {
 		return;
 	}
@@ -822,7 +822,7 @@ dump:
 	if (debug_data.in.buffer_size > GIM_DIAG_DATA_DEFAULT_MEM_SIZE) {
 		debug_data.in.buffer_size = GIM_DIAG_DATA_DEFAULT_MEM_SIZE;
 	}
-	buffer = vmalloc(debug_data.in.buffer_size);
+	buffer = gim_vmalloc(debug_data.in.buffer_size);
 	if (!buffer) {
 		ret = -ENOMEM;
 		goto end;
@@ -862,7 +862,7 @@ end:
 	}
 
 	if (buffer)
-		vfree(buffer);
+		gim_vfree(buffer);
 
 	return ret;
 }
@@ -974,7 +974,7 @@ static int dcore_get_mes_dbg_info(struct file *filp, void *user_buf)
 		goto out;
 	}
 
-	vf2pf_msg = (struct amd_sriov_msg_vf2pf_info *)vmalloc(sizeof(struct amd_sriov_msg_vf2pf_info));
+	vf2pf_msg = (struct amd_sriov_msg_vf2pf_info *)gim_vmalloc(sizeof(struct amd_sriov_msg_vf2pf_info));
 	if (vf2pf_msg == NULL) {
 		ret = AMDGV_FAILURE;
 		goto out;
@@ -1010,7 +1010,7 @@ out:
 	if (copy_to_user(user_buf, &mes_dbg_block, sizeof(struct dbglib_mes_dbg_info_block)))
 		ret = -EINVAL;
 	if (vf2pf_msg)
-		vfree(vf2pf_msg);
+		gim_vfree(vf2pf_msg);
 	if (ret)
 		DCORE_WARN("Failed to get mes_dbg_info\n");
 
@@ -1057,12 +1057,12 @@ static int dcore_create_trap_ctx(struct gim_dev_data *dev_data)
 	struct dbglib_trap_gpu_ctx *ctx = NULL;
 	int ret = 0;
 
-	ctx = kzalloc(sizeof(struct dbglib_trap_gpu_ctx), GFP_KERNEL);
+	ctx = gim_kzalloc(sizeof(struct dbglib_trap_gpu_ctx), GFP_KERNEL);
 	if (!ctx) {
 		ret = -ENOMEM;
 		goto failed;
 	}
-	ctx->proc_info = kzalloc(sizeof(struct dbglib_process_info), GFP_KERNEL);
+	ctx->proc_info = gim_kzalloc(sizeof(struct dbglib_process_info), GFP_KERNEL);
 	if (!ctx->proc_info) {
 		ret = -ENOMEM;
 		goto failed;
@@ -1103,9 +1103,9 @@ static int dcore_create_trap_ctx(struct gim_dev_data *dev_data)
 
 failed:
 	if (ctx && ctx->proc_info)
-		kfree(ctx->proc_info);
+		gim_kfree(ctx->proc_info);
 	if (ctx)
-		kfree(ctx);
+		gim_kfree(ctx);
 
 	return ret;
 }
@@ -1140,8 +1140,8 @@ static void dcore_trap_gpu_ctx_fini(void)
 	spin_lock(&lock_ctx_list);
 	list_for_each_entry_safe(ctx, tmp, &trap_ctx_list, node) {
 		list_del(&ctx->node);
-		kfree(ctx->proc_info);
-		kfree(ctx);
+		gim_kfree(ctx->proc_info);
+		gim_kfree(ctx);
 	}
 	spin_unlock(&lock_ctx_list);
 }
@@ -1213,9 +1213,9 @@ static void dcore_iova_vma_close(struct vm_area_struct *vma)
 #endif
 
 	/* free vm context */
-	vfree(ctx->host_pfn);
-	vfree(ctx->guest_pfn);
-	vfree(ctx);
+	gim_vfree(ctx->host_pfn);
+	gim_vfree(ctx->guest_pfn);
+	gim_vfree(ctx);
 }
 
 static vm_fault_t dcore_iova_vma_fault(struct vm_fault *vmf)
@@ -1280,9 +1280,9 @@ int dcore_iova_mmap(struct file *filp, struct vm_area_struct *vma)
 		return -EINVAL;
 	}
 
-	vm_ctx = vmalloc(sizeof(struct dcore_iova_vm_ctx));
-	guest_pfn = vmalloc(sizeof(unsigned long) * page_cnt);
-	host_pfn = vmalloc(sizeof(unsigned long) * page_cnt);
+	vm_ctx = gim_vmalloc(sizeof(struct dcore_iova_vm_ctx));
+	guest_pfn = gim_vmalloc(sizeof(unsigned long) * page_cnt);
+	host_pfn = gim_vmalloc(sizeof(unsigned long) * page_cnt);
 
 	if (!vm_ctx || !guest_pfn || !host_pfn) {
 		DCORE_ERROR("Can't allocate memory. probably out of memory\n");
@@ -1343,13 +1343,13 @@ unreg:
 
 failed:
 	if (vm_ctx)
-		vfree(vm_ctx);
+		gim_vfree(vm_ctx);
 
 	if (guest_pfn)
-		vfree(guest_pfn);
+		gim_vfree(guest_pfn);
 
 	if (host_pfn)
-		vfree(host_pfn);
+		gim_vfree(host_pfn);
 
 	return -ENOMEM;
 }
@@ -1375,7 +1375,7 @@ static int dcore_iova_node_create(struct pci_dev *pdev, int minor)
 	int devno;
 	struct iova_node *node;
 
-	node = kzalloc(sizeof(struct iova_node), GFP_KERNEL);
+	node = gim_kzalloc(sizeof(struct iova_node), GFP_KERNEL);
 	if (!node) {
 		res = -ENOMEM;
 		goto failed;
@@ -1402,7 +1402,7 @@ err_cdev:
 	device_destroy(dcore.dcore_class, node->dev->devt);
 failed:
 	if (node)
-		kfree(node);
+		gim_kfree(node);
 	return res;
 }
 
@@ -1454,7 +1454,7 @@ static void dcore_iova_node_fini(void)
 		kobject_uevent(&node->iova_cdev.kobj, KOBJ_REMOVE);
 		cdev_del(&node->iova_cdev);
 		device_destroy(dcore.dcore_class, node->dev->devt);
-		kfree(node);
+		gim_kfree(node);
 	}
 }
 

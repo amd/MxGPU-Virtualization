@@ -20,18 +20,18 @@
  * THE SOFTWARE.
  */
 
- #ifndef AMDGV_CMD_UNI_DEF__H_
- #define AMDGV_CMD_UNI_DEF__H_
+#ifndef AMDGV_CMD_UNI_DEF__H_
+#define AMDGV_CMD_UNI_DEF__H_
 
-#define AMDGV_INTERFACE_MAJOR_VERSION  3
-#define AMDGV_INTERFACE_MINOR_VERSION  0
 #define AMDGV_RAS_MAX_NUM_SAFE_RANGES 64
 #define AMDGV_CMD_MAX_BAD_PAGES_PER_GROUP 32
-#define AMDGV_CMD_MAX_GPU_NUM 32
 #define AMDGV_CMD_MAX_IN_SIZE 128
 #define AMDGV_CMD_MAX_OUT_SIZE 1600
+#define AMDGV_INTERFACE_MAJOR_VERSION  3
+#define AMDGV_INTERFACE_MINOR_VERSION  0
 #define AMDGV_CMD_VERSION_V1 1
 #define AMDGV_CMD_VERSION_V2 2
+#define AMDGV_CMD_MAX_GPU_NUM 32
 
 enum unify_ioctl_type {
 	AMDGV_UNI_IOCTL = 2 << 24,
@@ -79,6 +79,14 @@ enum amdgv_cmd_asic_type {
 	AMDGV_CMD_CHIP_LAST,
 };
 
+enum amdgv_ras_ta_load_status {
+	AMDGV_RAS_TA_STATUS_NO_CHANGE,
+	AMDGV_RAS_TA_STATUS_UPGRADED,
+	AMDGV_RAS_TA_STATUS_DOWNGRADED,
+	AMDGV_RAS_TA_STATUS_LOADED
+};
+
+
 enum amdgv_ras_block {
 	AMDGV_RAS_BLOCK__UMC = 0,
 	AMDGV_RAS_BLOCK__SDMA,
@@ -110,19 +118,11 @@ enum amdgv_ras_error_type {
     AMDGV_RAS_TYPE_ERROR__POISON = 8,
 };
 
-enum amdgv_ras_ta_load_status {
-	AMDGV_RAS_TA_STATUS_NO_CHANGE,
-	AMDGV_RAS_TA_STATUS_UPGRADED,
-	AMDGV_RAS_TA_STATUS_DOWNGRADED,
-	AMDGV_RAS_TA_STATUS_LOADED
-};
-
 enum amdgv_ras_eeprom_err_type {
 	AMDGV_RAS_EEPROM_ERR_PLACE_HOLDER,
 	AMDGV_RAS_EEPROM_ERR_RECOVERABLE,
 	AMDGV_RAS_EEPROM_ERR_NON_RECOVERABLE
 };
-
 
 struct amdgv_cmd_bad_page_record {
     union {
@@ -156,38 +156,6 @@ struct amdgv_cmd_ecc_count {
     uint32_t deferred_error_cnt;
 };
 
-struct amdgv_query_interface_version_req {
-	uint32_t reserved[8];
-};
-
-struct amdgv_query_interface_version_rsp {
-	uint8_t major_ver;    // interface major
-	uint8_t minor_ver;    // interface minor
-	uint8_t reserved[26];
-};
-
-struct amdgv_cmd_dev_info {
-    uint64_t dev_handle;
-    uint32_t bdf;
-    uint32_t ecc_enabled;
-    uint32_t ecc_supported;
-    uint32_t vf_num;
-    uint32_t asic_type;
-};
-
-struct amdgv_cmd_dev_info_ex {
-    uint32_t oam_id;
-    uint32_t reserved[2];
-};
-
-
-struct amdgv_cmd_devices_info {
-    struct amdgv_cmd_dev_info devs[AMDGV_CMD_MAX_GPU_NUM];
-    uint8_t dev_num;
-	// below is supported when cmd_id version >= 2
-    struct amdgv_cmd_dev_info_ex devs_ex[AMDGV_CMD_MAX_GPU_NUM];
-};
-
 struct amdgv_cmd_ras_safe_fb_address_ranges_rsp {
     uint32_t num_ranges;
 	uint32_t reserved[3];
@@ -196,10 +164,6 @@ struct amdgv_cmd_ras_safe_fb_address_ranges_rsp {
 		uint64_t size;
 		uint32_t reserved[2];
 	} range[AMDGV_RAS_MAX_NUM_SAFE_RANGES];
-};
-
-struct amdgv_cmd_dev_handle {
-    uint64_t dev_handle;
 };
 
 enum amdgv_fb_addr_type {
@@ -222,6 +186,10 @@ struct amdgv_fb_bank_addr {
 struct amdgv_fb_vf_phy_addr {
 	uint32_t vf_idx;
 	uint64_t addr;
+};
+
+struct amdgv_cmd_dev_handle {
+    uint64_t dev_handle;
 };
 
 struct amdgv_cmd_translate_fb_address_req {
@@ -315,8 +283,39 @@ struct amdgv_get_cper_records_output {
 	uint64_t left_size;
 };
 
+struct amdgv_query_interface_version_req {
+	uint32_t reserved[8];
+};
+
+struct amdgv_query_interface_version_rsp {
+	uint8_t major_ver;    // interface major
+	uint8_t minor_ver;    // interface minor
+	uint8_t reserved[26];
+};
+
+struct amdgv_cmd_dev_info {
+    uint64_t dev_handle;
+    uint32_t bdf;
+    uint32_t ecc_enabled;
+    uint32_t ecc_supported;
+    uint32_t vf_num;
+    uint32_t asic_type;
+};
+
+struct amdgv_cmd_dev_info_ex {
+    uint32_t oam_id;
+    uint32_t reserved[2];
+};
+
+struct amdgv_cmd_devices_info {
+    struct amdgv_cmd_dev_info devs[AMDGV_CMD_MAX_GPU_NUM];
+    uint8_t dev_num;
+	// below is supported when cmd_id version >= 2
+    struct amdgv_cmd_dev_info_ex devs_ex[AMDGV_CMD_MAX_GPU_NUM];
+};
+
 #pragma pack(push, 8)
-struct amdgv_cmd {
+struct amdgv_uni_cmd {
 	uint32_t cmd_id;
 	uint32_t input_size;
 	uint32_t output_size;
@@ -328,4 +327,7 @@ struct amdgv_cmd {
 	uint8_t output_buff_raw[AMDGV_CMD_MAX_OUT_SIZE];
 };
 #pragma pack(pop)
+
+uint8_t amdgv_handle_uni_cmd(void *data, struct amdgv_uni_cmd *cmd);
+
 #endif

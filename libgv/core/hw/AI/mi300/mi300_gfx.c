@@ -79,7 +79,7 @@ bool mi300_gfx_is_symetric_cu(struct amdgv_adapter *adapt, uint32_t xcc_id)
 {
 	int cu_per_se = 0;
 	int pre_cu = 0;
-	int i, j, k;
+	uint32_t i, j, k;
 	uint32_t mask, bitmap;
 	bool is_symmetric = true;
 
@@ -109,7 +109,7 @@ bool mi300_gfx_is_symetric_cu(struct amdgv_adapter *adapt, uint32_t xcc_id)
 uint32_t mi300_gfx_get_xcc_cu_count(struct amdgv_adapter *adapt, uint32_t xcc_id)
 {
 	uint32_t cu_count = 0;
-	int i, j, k;
+	uint32_t i, j, k;
 	uint32_t mask, bitmap;
 
 	for (i = 0; i < adapt->config.gfx.max_shader_engines; i++) {

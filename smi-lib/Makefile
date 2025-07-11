@@ -50,14 +50,16 @@ $(info SMI-LIB BUILD_TYPE: $(BUILD_TYPE))
 $(info SMI-LIB THREAD_SAFE: $(THREAD_SAFE))
 $(info SMI-Lib LOGGING: $(LOGGING))
 
-SYS_LIB_DIR := /usr/lib
-SYS_INC_DIR := /usr/inc
 AMDSMI_BUILD_DIR := $(BUILD_DIR)/amdsmi
 OUTPUT_DIR := $(AMDSMI_BUILD_DIR)/$(BUILD_TYPE)
 PACKAGE_OUTPUT_DIR := $(AMDSMI_BUILD_DIR)/package/$(BUILD_TYPE)/amdsmi
 DOCS_OUTPUT_DIR := $(AMDSMI_BUILD_DIR)/docs
 DOXYGEN_OUTPUT_DIR := $(DOCS_OUTPUT_DIR)/doxygen
 HOOKS_DIR=../.git/modules/smi-lib/hooks
+
+ifeq ($(PREFIX),)
+  PREFIX := /usr/local
+endif
 
 SRCS := $(filter-out $(EXCLUDE_SRCS),$(notdir $(wildcard $(SOURCE_DIR)/*.c)))
 SRCS_ACA := $(filter-out $(EXCLUDE_SRCS),$(notdir $(wildcard $(SOURCE_DIR)/aca-decode/*.c)))
@@ -90,6 +92,7 @@ CFLAGS += -DAMDSMI_VERSION_RELEASE=$(VERSION_RELEASE)
 VERSION_LIB := AMDSMI_VERSION_MAJOR=$(VERSION_MAJOR) AMDSMI_VERSION_MINOR=$(VERSION_MINOR) AMDSMI_VERSION_RELEASE=$(VERSION_RELEASE)
 
 DYNAMICLIB_FLAGS = -Wl,-soname,libamdsmi.so
+DYNAMICLIB_FLAGS += -Wl,-rpath,'$$ORIGIN'
 DYNAMICLIB_FLAGS += $(HOST_DYNAMIC_FLAGS)
 
 STATICLIB_FLAGS = rcs
@@ -248,15 +251,16 @@ clean:
 	fi
 
 install: $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET) $(OUTPUT_DIR)/$(STATICLIB_TARGET)
-	install -d $(DESTDIR)$(SYS_LIB_DIR)
-	install -m 644 $(OUTPUT_DIR)/$(STATICLIB_TARGET) $(DESTDIR)$(SYS_LIB_DIR)
-	install -m 644 $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET) $(DESTDIR)$(SYS_LIB_DIR)
-	install -d $(DESTDIR)$(SYS_INC_DIR)
-	install -m 644 $(INTERFACE_DIR)/*.h $(DESTDIR)$(SYS_INC_DIR)
+	install -d $(DESTDIR)$(PREFIX)/lib/
+	install -m 644 $(OUTPUT_DIR)/$(STATICLIB_TARGET) $(DESTDIR)$(PREFIX)/lib/
+	install -m 644 $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET) $(DESTDIR)$(PREFIX)/lib/
+	install -d $(DESTDIR)$(PREFIX)/include/
+	install -m 644 $(INTERFACE_DIR)/*.h $(DESTDIR)$(PREFIX)/include/
 
 uninstall:
-	@if [ -f $(SYS_LIB_DIR)/libamdsmi.so ]; then $(RM) $(SYS_LIB_DIR)/libamdsmi.so; fi
-	@if [ -f $(SYS_INC_DIR)/amdsmi.h ]; then $(RM) $(SYS_INC_DIR)/amdsmi.h; fi
+	@if [ -f $(DESTDIR)$(PREFIX)/lib/$(STATICLIB_TARGET) ]; then $(RM) $(DESTDIR)$(PREFIX)/lib/$(STATICLIB_TARGET); fi
+	@if [ -f $(DESTDIR)$(PREFIX)/lib/$(DYNAMICLIB_TARGET) ]; then $(RM) $(DESTDIR)$(PREFIX)/lib/$(DYNAMICLIB_TARGET); fi
+	@if [ -f $(DESTDIR)$(PREFIX)/include/amdsmi.h ]; then $(RM) $(DESTDIR)$(PREFIX)/include/amdsmi.h; fi
 
 .PHONY: docs
 docs:

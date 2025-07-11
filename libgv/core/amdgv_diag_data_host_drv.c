@@ -232,7 +232,7 @@ int amdgv_diag_data_add_vbios_post_log(struct amdgv_adapter *adapt, uint32_t op,
 static int amdgv_diag_data_host_driver_collect_gen_info(
 	struct amdgv_adapter *adapt, struct amdgv_diag_data_file_info *file_data)
 {
-	int i;
+	uint32_t i;
 	int j;
 	int k;
 	uint8_t *img;

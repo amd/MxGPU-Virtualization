@@ -65,6 +65,21 @@ void AmdSmiResetCommand::reset_command()
 			}
 		}
 	}
+
+	if ((std::find(arg.options.begin(), arg.options.end(), "gpureset") != arg.options.end()) ||
+			(std::find(arg.options.begin(), arg.options.end(), "G") != arg.options.end()) ||
+			arg.all_arguments) {
+		for (unsigned int i = 0; i < arg.devices.size(); i++) {
+			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_reset_gpu_command(gpu_bdf, arg);
+			std::string param{"gpureset"};
+			int error = handle_exceptions(ret, param, arg);
+			if (error == 0) {
+				std::cout << "GPU: " << arg.devices[i]->get_gpu_index() << std::endl;
+				std::cout << "    GPU_RESET: Successfully reset GPU" << std::endl;
+			}
+		}
+	}
 }
 
 void AmdSmiResetCommand::execute_command()

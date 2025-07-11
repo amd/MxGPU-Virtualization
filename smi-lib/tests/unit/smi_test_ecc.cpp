@@ -68,6 +68,9 @@ TEST_F(AmdSmiEccTests, InvalidParams)
 
 	ret = amdsmi_get_gpu_bad_page_info(&GPU_MOCK_HANDLE, NULL, &table_records);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_bad_page_threshold(&GPU_MOCK_HANDLE, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
 
 TEST_F(AmdSmiEccTests, IoctlFailed)
@@ -78,6 +81,7 @@ TEST_F(AmdSmiEccTests, IoctlFailed)
 	uint64_t enabled_blocks = 0;
 	amdsmi_eeprom_table_record_t bad_pages;
 	uint32_t size = 1;
+	uint32_t threshold;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
 		.WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_API_FAILED));
@@ -91,6 +95,8 @@ TEST_F(AmdSmiEccTests, IoctlFailed)
 	ret = amdsmi_get_gpu_ras_feature_info(&GPU_MOCK_HANDLE, &ras_feature);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 	ret = amdsmi_get_gpu_bad_page_info(&GPU_MOCK_HANDLE, &size, &bad_pages);
+	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
+	ret = amdsmi_get_bad_page_threshold(&GPU_MOCK_HANDLE, &threshold);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 }
 
@@ -376,3 +382,44 @@ TEST_F(AmdSmiEccTests, GetEccBadPageInfo)
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_TRUE(equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
 }
+
+
+TEST_F(AmdSmiEccTests, GetEccBadPageInfoConfigSysconfFailed)
+{
+	int ret;
+	amdsmi_eeprom_table_record_t bad_pages;
+	uint32_t size = 2;
+
+#ifndef _WIN64
+	// Mock sysconf to return -1
+	EXPECT_CALL(*g_system_mock, Sysconf(testing::_)).WillOnce(testing::Return(-1));
+#endif
+	ret = amdsmi_get_gpu_bad_page_info(&GPU_MOCK_HANDLE, &size, &bad_pages);
+
+#ifndef _WIN64
+	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
+#else
+	ASSERT_NE(ret, AMDSMI_STATUS_SUCCESS);
+#endif
+}
+
+TEST_F(AmdSmiEccTests, GetBadPageRecordThreshold)
+{
+	int ret;
+	uint32_t bad_page_record_threshold;
+	struct smi_device_info in_payload;
+	struct smi_ras_feature mocked_resp = {};
+
+
+	mocked_resp.bad_page_record_threshold = 1;
+
+	WhenCalling(std::bind(amdsmi_get_bad_page_threshold, &GPU_MOCK_HANDLE, &bad_page_record_threshold));
+	ExpectCommand(SMI_CMD_CODE_GET_BAD_PAGE_THRESHOLD);
+	SaveInputPayloadIn(&in_payload);
+	PlantMockOutput(&mocked_resp);
+	ret = performCall();
+
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(mocked_resp.bad_page_record_threshold, bad_page_record_threshold);
+}
+

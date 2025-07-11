@@ -23,30 +23,7 @@
 #ifndef AMDGV_UNIRAS_CMD__H_
 #define AMDGV_UNIRAS_CMD__H_
 
-#define AMDGV_UNI_CMD _IOWR('R', 0, struct amdgv_uni_cmd)
-#define AMDGV_UNI_CMD_MAX_IN_SIZE 128
-#define AMDGV_UNI_CMD_MAX_OUT_SIZE 1600
-
-/*
- * This structure is added to mirror the one defined in inc/amdgv_cmd_uni_def.h.
- * The only purpose is to allow the main IOCTL handler to handle both old and
- * new amdgv_cmd calls without header conflicts. In all other cases,
- * inc/amdgv_cmd_uni_def.h should be used to get proper amdgv_cmd definition.
- */
-#pragma pack(push, 8)
-struct amdgv_uni_cmd {
-	uint32_t cmd_id;
-	uint32_t input_size;
-	uint32_t output_size;
-	uint8_t version;
-	uint8_t cmd_res;
-	uint32_t pid;
-	uint32_t reserved[3];
-	uint8_t input_buff_raw[AMDGV_UNI_CMD_MAX_IN_SIZE];
-	uint8_t output_buff_raw[AMDGV_UNI_CMD_MAX_OUT_SIZE];
-};
-#pragma pack(pop)
-
 long amdgv_uni_cmd_handler(void *arg);
+bool amdgv_is_uni_cmd(unsigned int cmd);
 
 #endif

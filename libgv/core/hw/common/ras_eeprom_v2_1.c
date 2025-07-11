@@ -16,7 +16,7 @@
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS INL684
  * THE SOFTWARE.
  */
 
@@ -33,6 +33,13 @@ static const uint32_t this_block = AMDGV_MEMORY_BLOCK;
 int ras_eeprom_v2_1_process_records(struct amdgv_adapter *adapt,
 				     struct amdgv_ras_eeprom_control *control,
 				     struct eeprom_table_record *records, bool write, int num);
+
+static int ras_eeprom_v2_1_get_eeprom_data(
+		struct amdgv_adapter *adapt,
+		struct amdgv_ras_eeprom_control *control,
+		uint32_t eeprom_address,
+		uint8_t *buff,
+		uint32_t data_len);
 
 static int ras_eeprom_v2_1_format_i2c_msg(struct amdgv_adapter *adapt,
 			struct amdgv_ras_eeprom_control *control,
@@ -101,18 +108,18 @@ static int ras_eeprom_v2_1_i2c_transfer_record(struct amdgv_adapter *adapt,
 	int msg_num = 1;
 
 	/* write record to EEPROM buff */
-	if (write)
+	if (write) {
 		oss_memcpy(eeprom_buff + EEPROM_ADDRESS_SIZE, encoded_record, encoded_record_len);
-
-	ras_eeprom_v2_1_format_i2c_msg(adapt, control, &msg, eeprom_buff,
-		sizeof(eeprom_buff), control->next_addr, write);
-
-	if (msg_num != __smu_i2c_transfer(adapt, control, &msg, msg_num))
-		return AMDGV_FAILURE;
-
-	/* read record from EEPROM buff */
-	if (!write)
+		ras_eeprom_v2_1_format_i2c_msg(adapt, control, &msg, eeprom_buff,
+			sizeof(eeprom_buff), control->next_addr, write);
+		if (msg_num != __smu_i2c_transfer(adapt, control, &msg, msg_num))
+			return AMDGV_FAILURE;
+	} else {
+		/* read record from EEPROM buff */
+		if (msg_num != ras_eeprom_v2_1_get_eeprom_data(adapt, control, control->next_addr, eeprom_buff, encoded_record_len))
+			return AMDGV_FAILURE;
 		oss_memcpy(encoded_record, eeprom_buff + EEPROM_ADDRESS_SIZE, encoded_record_len);
+	}
 
 	return 0;
 }
@@ -122,15 +129,11 @@ static int ras_eeprom_v2_1_write_table_header(struct amdgv_adapter *adapt,
 {
 	unsigned char buff[EEPROM_ADDRESS_SIZE + EEPROM_TABLE_HEADER_SIZE] = { 0 };
 	int ret = 0;
-	struct i2c_msg msg = {
-		.addr = control->i2c_address,
-		.flags = 0,
-		.len = EEPROM_ADDRESS_SIZE + EEPROM_TABLE_HEADER_SIZE,
-		.buf = buff,
-	};
+	struct i2c_msg msg = { 0 };
 
-	*(uint16_t *)buff = EEPROM_HDR_START;
 	__encode_table_header_to_buff(&control->tbl_hdr, buff + EEPROM_ADDRESS_SIZE);
+
+	ras_eeprom_v2_1_format_i2c_msg(adapt, control, &msg, buff, sizeof(buff), EEPROM_HDR_START, true);
 
 	ret = __smu_i2c_transfer(adapt, control, &msg, 1);
 	if (ret < 1)
@@ -146,10 +149,7 @@ static int ras_eeprom_v2_1_write_table_header_ext(struct amdgv_adapter *adapt,
 	unsigned char *buff = NULL;
 	int ret = 0;
 	uint32_t len = 0;
-	struct i2c_msg msg = {
-		.addr = control->i2c_address,
-		.flags = 0,
-	};
+	struct i2c_msg msg = { 0 };
 
 	if (write_reserved)
 		len = EEPROM_ADDRESS_SIZE + EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE;
@@ -161,13 +161,10 @@ static int ras_eeprom_v2_1_write_table_header_ext(struct amdgv_adapter *adapt,
 		AMDGV_ERROR("Alloc memory to update extra info failed\n");
 		return AMDGV_FAILURE;
 	}
-	msg.buf = buff;
-
-	msg.len = len;
-	buff[0] = ((EEPROM_TABLE_V2_1_EXTRA_GPU_INFO_START >> 8) & 0xFF);
-	buff[1] = (EEPROM_TABLE_V2_1_EXTRA_GPU_INFO_START & 0xFF);
 
 	ras_eeprom_v2_1_encode_extra_info_to_buff(control, buff + EEPROM_ADDRESS_SIZE);
+
+	ras_eeprom_v2_1_format_i2c_msg(adapt, control, &msg, buff, len, EEPROM_TABLE_V2_1_EXTRA_GPU_INFO_START, true);
 
 	ret = __smu_i2c_transfer(adapt, control, &msg, 1);
 	if (ret < 1)
@@ -345,34 +342,29 @@ static int ras_eeprom_v2_1_reset_table(struct amdgv_adapter *adapt,
 	return ret;
 }
 
-static int ras_eeprom_v2_1_parse_table_hdr_extra_info(struct amdgv_adapter *adapt,
-						       struct i2c_msg *msg)
+static int ras_eeprom_v2_1_parse_table_hdr_extra_info(struct amdgv_adapter *adapt)
 {
 	unsigned char *buff = NULL;
 	struct amdgv_ras_eeprom_control *control = &adapt->eeprom_control;
 	int ret = 1;
 
-	buff = (unsigned char *)oss_zalloc(EEPROM_ADDRESS_SIZE +
-					   EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE);
+	buff = (unsigned char *)oss_zalloc(EEPROM_ADDRESS_SIZE + EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE);
 	if (!buff) {
 		AMDGV_ERROR("Alloc memory to read extra info failed\n");
 		return AMDGV_FAILURE;
 	}
-	msg->buf = buff;
 
-	msg->len = EEPROM_ADDRESS_SIZE + EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE;
-	buff[0] = ((EEPROM_TABLE_V2_1_EXTRA_GPU_INFO_START >> 8) & 0xFF);
-	buff[1] = (EEPROM_TABLE_V2_1_EXTRA_GPU_INFO_START & 0xFF);
+	ret = ras_eeprom_v2_1_get_eeprom_data(adapt, control,
+			EEPROM_TABLE_V2_1_EXTRA_GPU_INFO_START,
+			buff,
+			EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE);
 
-	ret = __smu_i2c_transfer(adapt, control, msg, 1);
 	if (ret < 1) {
-		AMDGV_ERROR("Failed to read EEPROM extra gpu info, ret:%d\n",
-			ret);
+		AMDGV_ERROR("Failed to read EEPROM extra gpu info, ret:%d\n", ret);
 		goto out;
 	}
 
-	ras_eeprom_v2_1_decode_extra_info_from_buff(control, &buff[2]);
-
+	ras_eeprom_v2_1_decode_extra_info_from_buff(control, &buff[EEPROM_ADDRESS_SIZE]);
 out:
 	oss_free(buff);
 	return ret;
@@ -672,34 +664,57 @@ free_bp_cache:
 	return ret;
 }
 
+static int ras_eeprom_v2_1_get_eeprom_data(
+		struct amdgv_adapter *adapt,
+		struct amdgv_ras_eeprom_control *control,
+		uint32_t eeprom_address,
+		uint8_t *buff,
+		uint32_t data_len)
+{
+	int ret;
+	struct i2c_msg msg = { 0 };
+
+	if (!(adapt->ecc.eeprom_live_update_enable && adapt->ecc.ras_eerpom_raw_data.data_buf && adapt->status == AMDGV_STATUS_SW_INIT)) {
+		ras_eeprom_v2_1_format_i2c_msg(adapt, control, &msg, buff,
+			EEPROM_ADDRESS_SIZE + data_len, eeprom_address, false);
+
+		ret = __smu_i2c_transfer(adapt, control, &msg, 1);
+		if (ret < 1) {
+			AMDGV_ERROR("Failed to read EEPROM data, ret:%d\n", ret);
+			return AMDGV_FAILURE;
+		}
+	} else if (adapt->ecc.ras_eerpom_raw_data.data_buf) {
+		if (eeprom_address < adapt->ecc.ras_eerpom_raw_data.data_len &&
+				eeprom_address + data_len <= adapt->ecc.ras_eerpom_raw_data.data_len) {
+			oss_memcpy(buff + EEPROM_ADDRESS_SIZE, adapt->ecc.ras_eerpom_raw_data.data_buf + eeprom_address, data_len);
+			ret = 1;
+		} else {
+			AMDGV_ERROR("Failed to get EEPROM data from live update, out of buffer bounds\n");
+			return AMDGV_FAILURE;
+		}
+	}
+	return ret;
+}
 
 static int ras_eeprom_v2_1_parse_header(struct amdgv_adapter *adapt,
 			  struct amdgv_ras_eeprom_control *control)
 {
 	int ret = 0;
-	unsigned char buff[EEPROM_ADDRESS_SIZE + EEPROM_TABLE_HEADER_SIZE] = { 0 };
+	uint8_t buff[EEPROM_TABLE_HEADER_SIZE + EEPROM_ADDRESS_SIZE] = { 0 };
 	struct amdgv_ras_eeprom_table_header *hdr = NULL;
-	struct i2c_msg msg = {
-		.addr = 0,
-		.flags = I2C_M_RD,
-		.len = EEPROM_ADDRESS_SIZE + EEPROM_TABLE_HEADER_SIZE,
-		.buf = buff,
-	};
 
 	hdr = &control->tbl_hdr;
 	if (!adapt->umc.supports_ras_eeprom)
 		return 0;
-	msg.addr = control->i2c_address;
-	*(uint16_t *)buff = EEPROM_HDR_START;
 
-	/* Read/Create table header from EEPROM address 0 */
-	ret = __smu_i2c_transfer(adapt, control, &msg, 1);
+	ret = ras_eeprom_v2_1_get_eeprom_data(adapt, control, EEPROM_HDR_START, buff, EEPROM_TABLE_HEADER_SIZE);
+
 	if (ret < 1) {
 		AMDGV_ERROR("Failed to read EEPROM table header, ret:%d\n", ret);
 		return AMDGV_FAILURE;
 	}
 
-	__decode_table_header_from_buff(hdr, &buff[2]);
+	__decode_table_header_from_buff(hdr, &buff[EEPROM_ADDRESS_SIZE]);
 
 	if (hdr->header != EEPROM_TABLE_HDR_VAL && hdr->header != EEPROM_TABLE_HDR_BAD) {
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_EEPROM_WRONG_HDR, hdr->header);
@@ -713,7 +728,7 @@ static int ras_eeprom_v2_1_parse_header(struct amdgv_adapter *adapt,
 		return AMDGV_FAILURE;
 	}
 
-	ret = ras_eeprom_v2_1_parse_table_hdr_extra_info(adapt, &msg);
+	ret = ras_eeprom_v2_1_parse_table_hdr_extra_info(adapt);
 	if (ret < 1)
 		return AMDGV_FAILURE;
 
@@ -859,4 +874,24 @@ int ras_eeprom_v2_1_sw_init(struct amdgv_adapter *adapt)
 	adapt->ras_eeprom.funcs = &ras_eeprom_v2_1_funcs;
 
 	return 0;
+}
+
+int ras_eeprom_v2_1_export_live_data(struct amdgv_adapter *adapt, uint8_t *data)
+{
+	int i;
+	int data_len = EEPROM_TABLE_HEADER_SIZE + EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE;
+	uint8_t *record_data_addr = data + EEPROM_RECORD_START_V2_1;
+
+	__encode_table_header_to_buff(&adapt->eeprom_control.tbl_hdr, data + EEPROM_HDR_START);
+	ras_eeprom_v2_1_encode_extra_info_to_buff(&adapt->eeprom_control, data + EEPROM_TABLE_V2_1_EXTRA_GPU_INFO_START);
+
+	for (i = 0; i < adapt->ecc.eh_data->rom_data.count; i++) {
+		__encode_table_record_to_buff(
+				&adapt->eeprom_control,
+				&adapt->ecc.eh_data->rom_data.bps[i],
+				record_data_addr + i * EEPROM_TABLE_RECORD_SIZE);
+		data_len += EEPROM_TABLE_RECORD_SIZE;
+	}
+
+	return data_len;
 }

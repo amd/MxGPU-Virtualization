@@ -45,7 +45,7 @@ static const uint32_t this_block = AMDGV_GFX_BLOCK;
 
 inline void amdgv_ring_clear_ring(struct amdgv_ring *ring)
 {
-	int i = 0;
+	uint32_t i = 0;
 
 	while (i <= ring->buf_mask) {
 		if (ring->aql_enable) {
@@ -113,7 +113,7 @@ int amdgv_ring_alloc(struct amdgv_ring *ring, unsigned int ndw)
  */
 void amdgv_ring_insert_nop(struct amdgv_ring *ring, uint32_t count)
 {
-	int i;
+	uint32_t i;
 
 	for (i = 0; i < count; i++) {
 		if (ring->aql_enable)
@@ -208,7 +208,7 @@ static int amdgv_fence_driver_start_ring(struct amdgv_ring *ring)
 	ring->fence_drv.cpu_addr = ring->fence_cpu_addr;
 	ring->fence_drv.gpu_addr = ring->fence_gpu_addr;
 
-	amdgv_fence_write(ring, oss_atomic_read(&ring->fence_drv.last_seq));
+	amdgv_fence_write(ring, ring->fence_drv.sync_seq);
 
 	ring->fence_drv.initialized = true;
 
@@ -236,7 +236,6 @@ static int amdgv_fence_driver_init_ring(struct amdgv_ring *ring)
 	ring->fence_drv.cpu_addr = NULL;
 	ring->fence_drv.gpu_addr = 0;
 	ring->fence_drv.sync_seq = 0;
-	oss_atomic_set(&ring->fence_drv.last_seq, 0);
 	ring->fence_drv.initialized = false;
 
 	ring->fence_drv.num_fences_mask = ring->num_hw_submission * 2 - 1;
@@ -473,7 +472,7 @@ static uint32_t amdgv_fence_read(struct amdgv_ring *ring)
 	if (drv->cpu_addr)
 		seq = le32_to_cpu(*drv->cpu_addr);
 	else
-		seq = oss_atomic_read(&drv->last_seq);
+		seq = drv->sync_seq;
 
 	return seq;
 }
@@ -516,16 +515,11 @@ signed long amdgv_fence_wait_polling(struct amdgv_ring *ring, uint32_t wait_seq,
 int amdgv_fence_emit_polling(struct amdgv_ring *ring, uint32_t *s, uint32_t timeout)
 {
 	uint32_t seq;
-	signed long r;
 
 	if (!s)
 		return AMDGV_FAILURE;
 
 	seq = ++ring->fence_drv.sync_seq;
-	r = amdgv_fence_wait_polling(ring, seq - ring->fence_drv.num_fences_mask, timeout);
-	if (r < 1)
-		return AMDGV_FAILURE;
-
 	amdgv_ring_emit_fence(ring, ring->fence_drv.gpu_addr, seq, 0);
 
 	*s = seq;

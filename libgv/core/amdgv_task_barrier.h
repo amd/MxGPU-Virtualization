@@ -29,6 +29,7 @@ struct task_barrier {
 	atomic_t count;
 	atomic_t thread_count;
 	atomic_t thread_yield_count;
+	uint32_t terminate;
 };
 
 static inline bool task_barrier_init(struct task_barrier *tb)
@@ -36,6 +37,7 @@ static inline bool task_barrier_init(struct task_barrier *tb)
 	oss_atomic_set(&tb->count, 0);
 	oss_atomic_set(&tb->thread_count, 0);
 	oss_atomic_set(&tb->thread_yield_count, 0);
+	tb->terminate = 0;
 
 	return true;
 }
@@ -45,6 +47,7 @@ static inline void task_barrier_fini(struct task_barrier *tb)
 	oss_atomic_set(&tb->count, 0);
 	oss_atomic_set(&tb->thread_count, 0);
 	oss_atomic_set(&tb->thread_yield_count, 0);
+	tb->terminate = 0;
 }
 
 static inline void task_barrier_enter(struct task_barrier *tb, uint32_t count)
@@ -68,6 +71,25 @@ static inline void task_barrier_exit(struct task_barrier *tb, uint32_t count)
 		oss_usleep(50);
 
 	oss_atomic_dec_return(&tb->thread_yield_count);
+}
+
+static inline int task_barrier_enter_timeout(struct task_barrier *tb, uint32_t count, uint32_t timeout)
+{
+	int usec_timeout = timeout;
+
+	oss_atomic_inc_return(&tb->thread_count);
+
+	while ((oss_atomic_read(&tb->thread_count) < count) && (tb->terminate == 0)) {
+		oss_usleep(50);
+		if (usec_timeout > 50)
+			usec_timeout -= 50;
+		else {
+			tb->terminate = 1;
+			oss_usleep(usec_timeout);
+		}
+	}
+
+	return (oss_atomic_read(&tb->thread_count) != count);
 }
 
 /* Convenience function when nothing to be done in between entry and exit */

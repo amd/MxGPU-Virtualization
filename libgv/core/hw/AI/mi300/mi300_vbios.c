@@ -44,6 +44,8 @@ static const uint32_t this_block = AMDGV_SECURITY_BLOCK;
 #define BUILD_NUM_MAX_LENGTH 8
 #define BUILD_DATA_LENGTH    17
 
+struct task_barrier reload_reset_tb = {0};
+
 static int mi300_vbios_special_version_check(struct amdgv_adapter *adapt, uint8_t *img)
 {
 	int i, j, k;
@@ -112,9 +114,9 @@ static void mi300_vbios_program_asic_golden(struct amdgv_adapter *adapt)
 	mi300_sdma_program_golden_settings(adapt);
 	mi300_gfx_program_golden_settings(adapt);
 
-	tmp = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_CHICKEN_MI300));
+	tmp = RREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_CHICKEN));
 	tmp = REG_SET_FIELD(tmp, IH_CHICKEN, MC_SPACE_GPA_ENABLE, 1);
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_CHICKEN_MI300), tmp);
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_CHICKEN), tmp);
 
 	return;
 }
@@ -233,7 +235,7 @@ static int mi300_vbios_early_sw_init(struct amdgv_adapter *adapt)
 	case (0x75A0):
 	case (0x75A1):
 	case (0x75A3):
-		name = "MI350X";
+		name = "MI355X";
 		break;
 	default:
 		name = "MI300X";
@@ -303,8 +305,18 @@ static int mi300_vbios_early_hw_init(struct amdgv_adapter *adapt)
 
 		if (mi300_psp_wait_sos_loaded_status(adapt))
 			if (((adapt->asic_type == CHIP_MI350X) && mi350_smu_get_fw_loaded_status(adapt)) ||
-				((adapt->asic_type != CHIP_MI350X) && mi300_smu_get_fw_loaded_status(adapt)))
-				r = mi300_reset_trigger_whole_gpu_reset(adapt);
+				((adapt->asic_type != CHIP_MI350X) && mi300_smu_get_fw_loaded_status(adapt))) {
+				if (adapt->xgmi.phy_nodes_num > 1) {
+					r = task_barrier_enter_timeout(&reload_reset_tb, adapt->xgmi.phy_nodes_num,
+									AMDGV_TIMEOUT(TIMEOUT_CHAIN_RESET));
+					if (r == 0) {
+						r = mi300_reset_trigger_whole_gpu_reset(adapt);
+						task_barrier_exit(&reload_reset_tb, adapt->xgmi.phy_nodes_num);
+					}
+				} else {
+					r = mi300_reset_trigger_whole_gpu_reset(adapt);
+				}
+			}
 
 		if (r)
 			goto failed;

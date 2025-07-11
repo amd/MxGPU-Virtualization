@@ -60,6 +60,8 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_DRIVER_MODEL)(amdsmi_processor_handle,
 		amdsmi_driver_model_type_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_RAS_FEATURE_INFO)(amdsmi_processor_handle,
 		amdsmi_ras_feature_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_BAD_PAGE_THRESHOLD)(amdsmi_processor_handle,
+		uint32_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_DFC_FW_TABLE)(amdsmi_processor_handle, amdsmi_dfc_fw_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_NUM_VF)(amdsmi_processor_handle, uint32_t *, uint32_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_VRAM_INFO)(amdsmi_processor_handle,
@@ -100,6 +102,7 @@ extern AMDSMI_GET_TEMP_METRIC host_amdsmi_get_temp_metric;
 extern AMDSMI_GET_GPU_DRIVER_INFO host_amdsmi_get_gpu_driver_info;
 extern AMDSMI_GET_GPU_DRIVER_MODEL host_amdsmi_get_gpu_driver_model;
 extern AMDSMI_GET_GPU_RAS_FEATURE_INFO host_amdsmi_get_gpu_ras_feature_info;
+extern AMDSMI_GET_BAD_PAGE_THRESHOLD host_amdsmi_get_bad_page_threshold;
 extern AMDSMI_GET_DFC_FW_TABLE host_amdsmi_get_dfc_fw_table;
 
 extern AMDSMI_GET_NUM_VF host_amdsmi_get_num_vf;
@@ -275,6 +278,7 @@ std::string host_fill_ras_info(Arguments arg, std::string value)
 
 		nlohmann::ordered_json feature_json = {
 			{ "ras_eeprom_version", value.c_str() },
+			{ "bad_page_threshold", value.c_str() },
 			{ "supported_ecc_correction_schema", value.c_str() }
 		};
 
@@ -284,10 +288,10 @@ std::string host_fill_ras_info(Arguments arg, std::string value)
 		out = ras_json.dump(4);
 	} else if (arg.output == csv) {
 		out = string_format(
-				  ",%s,%s", value.c_str(), value.c_str());
+				  ",%s,%s,%s", value.c_str(), value.c_str(), value.c_str());
 	} else {
 		out = string_format(
-				  staticRasTemplateHost, value.c_str(), value.c_str(), value.c_str(), value.c_str(), value.c_str() );
+				  staticRasTemplateHost, value.c_str(), value.c_str(), value.c_str(), value.c_str(), value.c_str(), value.c_str() );
 	}
 
 	return out;
@@ -1162,10 +1166,12 @@ int AmdSmiApiHost::amdsmi_get_ras_info_command(uint64_t processor_bdf, Arguments
 {
 	int ret_ras_info;
 	int ret_ecc_enabled;
+	int bad_page_threshold_ret;
 	int ret;
 	nlohmann::ordered_json ras_json;
 
 	amdsmi_ras_feature_t ras_feature;
+	uint32_t bad_page_threshold;
 	amdsmi_processor_handle processor;
 	amdsmi_bdf_t tmp_bdf;
 	tmp_bdf.as_uint = processor_bdf;
@@ -1178,10 +1184,13 @@ int AmdSmiApiHost::amdsmi_get_ras_info_command(uint64_t processor_bdf, Arguments
 
 	ret_ras_info = host_amdsmi_get_gpu_ras_feature_info(processor,
 				   &ras_feature);
+	bad_page_threshold_ret = host_amdsmi_get_bad_page_threshold(processor, &bad_page_threshold);
+
 	std::vector<std::string> ecc_correction_schema_flag;
 	std::string ras_eeprom_version_str;
+	std::string bad_page_threshold_str{ string_format("%u", bad_page_threshold) };
 	std::vector<std::string> schema{"parity_schema","single_bit_schema","double_bit_schema","poison_schema"};
-	if (ret_ras_info != AMDSMI_STATUS_SUCCESS) {
+	if (ret_ras_info != AMDSMI_STATUS_SUCCESS || bad_page_threshold_ret != AMDSMI_STATUS_SUCCESS) {
 		formatted_string = host_fill_ras_info(arg, "N/A");
 	} else {
 		ras_eeprom_version_str = string_format("0x%X", ras_feature.ras_eeprom_version);
@@ -1193,13 +1202,14 @@ int AmdSmiApiHost::amdsmi_get_ras_info_command(uint64_t processor_bdf, Arguments
 
 		if (arg.output == json) {
 			ras_json["eeprom_version"] = ras_eeprom_version_str.c_str();
+			ras_json["bad_page_threshold"] = bad_page_threshold_str.c_str();
 			for(int i = 0; i < ecc_correction_schema_flag.size(); i++) {
 				ras_json[schema[i].c_str()] = ecc_correction_schema_flag[i].c_str();
 			}
 		}
 		if(arg.output == human) {
 			formatted_string = string_format(
-								   staticRasTemplateHost, ras_eeprom_version_str.c_str(), ecc_correction_schema_flag[0].c_str(),
+								   staticRasTemplateHost, ras_eeprom_version_str.c_str(), bad_page_threshold_str.c_str(), ecc_correction_schema_flag[0].c_str(),
 								   ecc_correction_schema_flag[1].c_str()
 								   ,ecc_correction_schema_flag[2].c_str(),ecc_correction_schema_flag[3].c_str());
 		}
@@ -1223,7 +1233,7 @@ int AmdSmiApiHost::amdsmi_get_ras_info_command(uint64_t processor_bdf, Arguments
 		} else if (arg.output == csv) {
 			for(int i = 0; i < ecc_correction_schema_flag.size(); i++) {
 				formatted_string += string_format(
-										",%s,%s,%s,%s,%s\n", block_str.c_str(), status.c_str(), ras_eeprom_version_str.c_str(),
+										",%s,%s,%s,%s,%s,%s\n", block_str.c_str(), status.c_str(), ras_eeprom_version_str.c_str(), bad_page_threshold_str.c_str(),
 										schema[i].c_str(), ecc_correction_schema_flag[i].c_str());
 			}
 		} else {
@@ -1235,7 +1245,7 @@ int AmdSmiApiHost::amdsmi_get_ras_info_command(uint64_t processor_bdf, Arguments
 		formatted_string = ras_json.dump(4);
 	}
 
-	return (ret_ras_info == AMDSMI_STATUS_SUCCESS
+	return (ret_ras_info == AMDSMI_STATUS_SUCCESS || bad_page_threshold_ret == AMDSMI_STATUS_SUCCESS
 			|| ret_ecc_enabled == AMDSMI_STATUS_SUCCESS) ? AMDSMI_STATUS_SUCCESS : ret_ras_info;
 }
 

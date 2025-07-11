@@ -1661,7 +1661,7 @@ amdsmi_status_t get_metric_ext_clock_data(uint64_t processor_bdf, Arguments arg,
 
 		csv_recursion(out, output_rows);
 	} else {
-		out.append(string_format(metricClockMeasureHostHeaderTemplate));
+		out.append(metricClockMeasureHostHeaderTemplate);
 
 		for (int i = 0; i < gfx_cur_size; i++) {
 			std::string clk_locked{"N/A"};

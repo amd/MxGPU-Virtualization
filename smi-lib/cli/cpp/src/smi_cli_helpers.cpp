@@ -178,6 +178,7 @@ std::string transform_fw(int fw_block_id, uint32_t uversion)
 		break;
 	case 42: //"IMU_DRAM"
 	case 43: //"IMU_IRAM"
+	case 80: //"PLDM_VERSION"
 		uversion_str = string_format("%d.%d.%d.%d", (uversion >> 24) & 0xFF,
 									 (uversion >> 16) & 0xFF,
 									 (uversion >> 8) & 0xFF,

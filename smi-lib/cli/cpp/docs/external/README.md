@@ -1,25 +1,3 @@
-#
-# Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy of
-# this software and associated documentation files (the "Software"), to deal in
-# the Software without restriction, including without limitation the rights to
-# use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
-# the Software, and to permit persons to whom the Software is furnished to do so,
-# subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
-# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-#
-
-
 # AMDSMI cpptool
 
 ## Requirements
@@ -51,6 +29,32 @@ Once the compilation is complete, amd-smi binary will be generated in:
 The tool can be run after installing and loading the driver. Tool is located on the /usr/src/gim-<specific_name>/smi-lib/tool path (for example gim-0.staging.psdb.830). specific_name changes and depends on the system and driver version. In order for the tool to work, it is necessary for the libamdsmi.so to be located in the same folder as the tool or it can be on the system path as well (/usr/lib). libamdsmi.so can be found on the following path gim/smi-lib/build/amdsmi/Release/libamdsmi.so.
 
 Running the tool is possible by just executing the executable file, e.g. sudo ./amd-smi list
+
+## Installation
+To install the tool system-wide:
+
+Navigate to the cpp directory:
+    cd smi_lib/cli/cpp
+
+Build the project if you haven't already:
+    make [BUILD_TYPE=<debug|release>]
+
+Install the tool:
+    sudo make install
+
+This will install the amd-smi binary to /usr/local/bin making the tool available for all users.
+Once installed, you can run the amd-smi command from any directory in your terminal without specifying the full path.
+
+## Uninstallation
+To remove the installed tool:
+
+Navigate to the cpp directory:
+cd smi_lib/cli/cpp
+
+Run the uninstall command:
+sudo make uninstall
+
+This command deletes all files that were installed by the sudo make install command
 
 ## Commands
 On the top level, the tool supports multiple commands each having its own set of mandatory or optional arguments for more granular control of the tool.
@@ -269,6 +273,8 @@ Commands that do and their arguments are:
     Available only in human readable format.
     * `--clean-local-data`
         Clean up data in LDS/GPRs.
+    * `--resetgpu`
+        Reset GPU.
 
 ### set
 * `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`

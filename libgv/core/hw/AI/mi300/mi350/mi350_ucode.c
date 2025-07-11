@@ -27,7 +27,7 @@
 
 static const uint32_t this_block = AMDGV_SECURITY_BLOCK;
 
-static int mi350_ucode_load(struct amdgv_adapter *adapt, uint32_t *ucode_id_list,
+static int mi350_ucode_load(struct amdgv_adapter *adapt, enum amdgv_firmware_id *ucode_id_list,
 			    uint32_t ucode_id_count)
 {
 	enum psp_status ret = PSP_STATUS__SUCCESS;

@@ -29,6 +29,7 @@
 #include "gim_config.h"
 #include "gim.h"
 
+#include "gim_sysfs_emit.h"
 #include "gim_guard.h"
 
 extern struct gim_error_ring_buffer *gim_error_rb;
@@ -44,32 +45,32 @@ static ssize_t gim_guard_adapt_guard_status_show(struct device *dev,
 	struct gim_dev_data *data;
 	struct amdgv_guard_info info;
 
-	int ret = 0;
+	ssize_t size = 0;
 
 	pf_pdev = to_pci_dev(dev);
 
-	ret += sprintf(buf + ret,
+	size += gim_sysfs_emit_at(buf, size,
 			"VF[bdf]\t\t\tflr\tex\text\tint\n");
 
 	data = pci_get_drvdata(pf_pdev);
 	for (idx_vf = 0; idx_vf < data->vf_num; idx_vf++) {
 		vf_pdev = data->vf_map[idx_vf].pdev;
 
-		ret += sprintf(buf + ret, "VF[%s]:",
+		size += gim_sysfs_emit_at(buf, size, "VF[%s]:",
 				dev_name(&vf_pdev->dev));
 
 		for (type = 0; type < AMDGV_GUARD_EVENT_MAX; type++) {
 			info.type = type;
 			amdgv_get_guard_info(data->adev, idx_vf, &info);
-			ret += sprintf(buf + ret, "\t[%u:%u:%u]",
+			size += gim_sysfs_emit_at(buf, size, "\t[%u:%u:%u]",
 					info.parm.event.state,
 					info.parm.event.active,
 					info.parm.event.amount);
 		}
-		ret += sprintf(buf + ret, "\n");
+		size += gim_sysfs_emit_at(buf, size, "\n");
 	}
 
-	ret += sprintf(buf + ret,
+	size += gim_sysfs_emit_at(buf, size,
 			"Notes:\n1)flr: function level reset;\n"
 			"2)ex: exclusive access mode\n"
 			"3)ext: exclusive access timeout\n"
@@ -79,7 +80,7 @@ static ssize_t gim_guard_adapt_guard_status_show(struct device *dev,
 			"7)valid: event number in the latest interval\n"
 			"8)total: total event number\n");
 
-	return ret;
+	return size;
 }
 
 static DEVICE_ATTR(guard_status, S_IRUGO,
@@ -96,30 +97,30 @@ static ssize_t gim_guard_adapt_threshold_show(struct device *dev,
 	struct gim_dev_data *data;
 	struct amdgv_guard_info info;
 
-	int ret = 0;
+	ssize_t size = 0;
 
 	pf_pdev = to_pci_dev(dev);
 
-	ret += sprintf(buf + ret,
+	size += gim_sysfs_emit_at(buf, size,
 			"VF[bdf]\t\t\tflr\tex\text\tint\n");
 
 	data = pci_get_drvdata(pf_pdev);
 	for (idx_vf = 0; idx_vf < data->vf_num; idx_vf++) {
 		vf_pdev = data->vf_map[idx_vf].pdev;
 
-		ret += sprintf(buf + ret, "VF[%s]:",
+		size += gim_sysfs_emit_at(buf, size, "VF[%s]:",
 				dev_name(&vf_pdev->dev));
 
 		for (type = 0; type < AMDGV_GUARD_EVENT_MAX; type++) {
 			info.type = type;
 			amdgv_get_guard_info(data->adev, idx_vf, &info);
-			ret += sprintf(buf + ret, "\t[%u]",
+			size += gim_sysfs_emit_at(buf, size, "\t[%u]",
 					info.parm.event.threshold);
 		}
-		ret += sprintf(buf + ret, "\n");
+		size += gim_sysfs_emit_at(buf, size, "\n");
 	}
 
-	return ret;
+	return size;
 }
 
 static ssize_t gim_guard_adapt_threshold_store(struct device *dev,
@@ -209,37 +210,37 @@ static ssize_t gim_guard_platform_status_show(struct device_driver *drv, char *b
 	struct gim_dev_data *data;
 	struct amdgv_guard_info info;
 
-	int ret = 0;
+	ssize_t size = 0;
 
 	list_for_each_entry(data, &gim_device_list, list) {
 		pf_pdev = data->pdev;
-		ret += snprintf(buf + ret, PAGE_SIZE,
+		size += gim_sysfs_emit_at(buf, size,
 				"Adapter[%s]\n",
 				dev_name(&pf_pdev->dev));
 
-		ret += sprintf(buf + ret,
+		size += gim_sysfs_emit_at(buf, size,
 				"VF[bdf]\t\t\tflr\tex\text\tint\n");
 
 		for (idx_vf = 0; idx_vf < data->vf_num; idx_vf++) {
 			vf_pdev = data->vf_map[idx_vf].pdev;
 
-			ret += sprintf(buf + ret, "VF[%s]:",
+			size += gim_sysfs_emit_at(buf, size, "VF[%s]:",
 					dev_name(&vf_pdev->dev));
 
 			for (type = 0; type < AMDGV_GUARD_EVENT_MAX; type++) {
 				info.type = type;
 				amdgv_get_guard_info(data->adev, idx_vf, &info);
-				ret += sprintf(buf + ret, "\t[%u:%u:%u]",
+				size += gim_sysfs_emit_at(buf, size, "\t[%u:%u:%u]",
 						info.parm.event.state,
 						info.parm.event.active,
 						info.parm.event.amount);
 			}
-			ret += sprintf(buf + ret, "\n");
+			size += gim_sysfs_emit_at(buf, size, "\n");
 		}
 
 	}
 
-	ret += sprintf(buf + ret,
+	size += gim_sysfs_emit_at(buf, size,
 			"Notes:\n1)flr: function level reset;\n"
 			"2)ex: exclusive access mode\n"
 			"3)ext: exclusive access timeout\n"
@@ -249,7 +250,7 @@ static ssize_t gim_guard_platform_status_show(struct device_driver *drv, char *b
 			"7)valid: valid event number in the interval\n"
 			"8)total: total served event number\n");
 
-	return ret;
+	return size;
 }
 
 static struct driver_attribute driver_attr_guard_status =
@@ -268,37 +269,35 @@ static ssize_t gim_guard_platform_threshold_show(struct device_driver *drv,
 	struct gim_dev_data *data;
 	struct amdgv_guard_info info;
 
-	int ret = 0;
+	ssize_t size = 0;
 
 	list_for_each_entry(data, &gim_device_list, list) {
 		pf_pdev = data->pdev;
 
-		ret += sprintf(buf + ret,
+		size += gim_sysfs_emit_at(buf, size,
 				"Adapter[%s]\n",
 				dev_name(&pf_pdev->dev));
 
-		ret += sprintf(buf + ret,
+		size += gim_sysfs_emit_at(buf, size,
 				"VF[bdf]\t\t\tflr\tex\text\tint\n");
 
 		for (idx_vf = 0; idx_vf < data->vf_num; idx_vf++) {
 			vf_pdev = data->vf_map[idx_vf].pdev;
 
-			ret += sprintf(buf + ret, "VF[%s]:",
+			size += gim_sysfs_emit_at(buf, size, "VF[%s]:",
 					dev_name(&vf_pdev->dev));
 
 			for (type = 0; type < AMDGV_GUARD_EVENT_MAX; type++) {
 				info.type = type;
 				amdgv_get_guard_info(data->adev, idx_vf, &info);
-				ret += sprintf(buf + ret, "\t[%u]",
+				size += gim_sysfs_emit_at(buf, size, "\t[%u]",
 						info.parm.event.threshold);
 			}
-			ret += sprintf(buf + ret, "\n");
+			size += gim_sysfs_emit_at(buf, size, "\n");
 		}
 	}
 
-	return ret;
-
-
+	return size;
 }
 
 static ssize_t gim_guard_platform_threshold_store(struct device_driver *drv,

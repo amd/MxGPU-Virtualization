@@ -50,10 +50,10 @@ int amdgv_umc_get_badpages_record(struct amdgv_adapter *adapt, uint32_t index, v
 	if (!data)
 		return ret;
 
-	if (data->count && index <= data->count)
+	if (data->count && index <= (uint32_t)data->count)
 		oss_memcpy(bp_record, &data->bps[index], sizeof(struct eeprom_table_record));
 
-	if (index > data->count)
+	if (index > (uint32_t)data->count)
 		ret = AMDGV_FAILURE;
 
 	return ret;
@@ -233,7 +233,7 @@ int amdgv_umc_add_bad_pages(struct amdgv_adapter *adapt,
 	oss_mutex_lock(adapt->ecc.recovery_lock);
 
 	for (i = 0; i < pages; i++) {
-		if (data->count >= adapt->eeprom_control.max_record_num) {
+		if (data->count >= (int)adapt->eeprom_control.max_record_num) {
 			AMDGV_ERROR("Bad page record count exceeds the max limit! Dropping new bad pages\n");
 			ret = AMDGV_FAILURE;
 			goto out;
@@ -503,10 +503,12 @@ static bool amdgv_umc_check_bp_in_critical_region(struct amdgv_adapter *adapt,
 	struct psp_local_memory *tmr_mem;
 	struct amdgv_memmgr_mem *csa_fb_mem;
 	uint64_t vf_fb_offset, vf_fb_size, vf_real_fb_size;
-	uint64_t fb_offset, fb_size, total_avail_fb, fb_gpu_addr;
+	uint64_t fb_offset, fb_size, total_avail_fb;
 	uint32_t total_avail_fb_in_mb;
 	uint32_t i;
 	uint64_t err_addr_gpa;
+	/* start offset of fb in mc */
+	const uint64_t fb_mc_base = adapt->memmgr_pf.mc_base;
 
 	if (adapt->ecc.bad_page_detection_mode & BIT(AMDGV_RAS_ECC_FLAG_IGNORE_RMA))
 		return false;
@@ -585,8 +587,7 @@ static bool amdgv_umc_check_bp_in_critical_region(struct amdgv_adapter *adapt,
 	/* check bp whether in tmr region */
 	tmr_mem = &adapt->psp.tmr_context;
 	if (tmr_mem->mem) {
-		fb_gpu_addr = amdgv_memmgr_get_gpu_addr(tmr_mem->mem);
-		fb_offset = fb_gpu_addr - adapt->memmgr_pf.mc_base;
+		fb_offset = amdgv_memmgr_get_gpu_addr(tmr_mem->mem) - fb_mc_base;
 		fb_size = amdgv_memmgr_get_size(tmr_mem->mem);
 		if (amdgv_umc_is_bp_in_range(err_addr, fb_offset, fb_size)) {
 			adapt->bp_msg_type = AMDGV_BP_MSG_IN_CRITICAL_REGION;
@@ -607,7 +608,7 @@ static bool amdgv_umc_check_bp_in_critical_region(struct amdgv_adapter *adapt,
 	/* check bp whether in csa region */
 	csa_fb_mem = adapt->gpuiov.csa_fb_mem;
 	if (csa_fb_mem) {
-		fb_offset = total_avail_fb - amdgv_memmgr_get_offset(csa_fb_mem);
+		fb_offset = amdgv_memmgr_get_gpu_addr(csa_fb_mem) - fb_mc_base;
 		fb_size = amdgv_memmgr_get_size(csa_fb_mem);
 		if (amdgv_umc_is_bp_in_range(err_addr, fb_offset, fb_size)) {
 			adapt->bp_msg_type = AMDGV_BP_MSG_IN_CRITICAL_REGION;
@@ -706,7 +707,7 @@ static bool amdgv_umc_check_bp_threshold(struct amdgv_adapter *adapt, struct ras
 		return false;
 
 	/* RMA at the max count because new entries will be lost. */
-	if (data->count >= BAD_PAGE_RECORD_THRESHOLD) {
+	if (data->count >= (int)BAD_PAGE_RECORD_THRESHOLD) {
 		adapt->bp_msg_type = AMDGV_BP_MSG_RECORD_THRESHOLD_REACHED;
 		return true;
 	}
@@ -736,7 +737,7 @@ int amdgv_umc_reserve_bad_pages(struct amdgv_adapter *adapt)
 		goto out;
 	}
 
-	resv_count = data->count <= BAD_PAGE_RECORD_THRESHOLD ? data->count : BAD_PAGE_RECORD_THRESHOLD;
+	resv_count = data->count <= (int)BAD_PAGE_RECORD_THRESHOLD ? data->count : BAD_PAGE_RECORD_THRESHOLD;
 
 	/* reserve vram at driver post stage. */
 	for (i = data->last_reserved; i < resv_count; i++) {
@@ -1412,7 +1413,7 @@ int amdgv_umc_local_gpa_to_spa(struct amdgv_adapter *adapt,
 int amdgv_umc_local_spa_to_gpa(struct amdgv_adapter *adapt, uint64_t spa,
 		uint64_t *gpa, uint32_t *idx_vf)
 {
-	int i;
+	uint32_t i;
 	struct amdgv_vf_device *entry;
 	uint64_t fb_offset, fb_size;
 

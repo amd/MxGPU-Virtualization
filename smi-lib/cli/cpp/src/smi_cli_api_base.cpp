@@ -513,6 +513,11 @@ int AmdSmiApiBase::amdsmi_reset_local_data_command(uint64_t processor_bdf, Argum
 	return 2;
 }
 
+int AmdSmiApiBase::amdsmi_reset_gpu_command(uint64_t processor_bdf, Arguments arg)
+{
+	return 2;
+}
+
 int AmdSmiApiBase::amdsmi_set_process_isolation_command(uint64_t processor_bdf, Arguments arg)
 {
 	return 2;

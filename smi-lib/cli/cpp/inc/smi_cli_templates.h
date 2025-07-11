@@ -103,6 +103,7 @@ inline std::string staticLimitTemplate{
 inline std::string staticRasTemplateHost{
 	"    RAS:\n"
 	"        EEPROM_VERSION: %s\n"
+	"        BAD_PAGE_THRESHOLD: %s\n"
 	"        PARITY_SCHEMA: %s\n"
 	"        SINGLE_BIT_SCHEMA: %s\n"
 	"        DOUBLE_BIT_SCHEMA: %s\n"

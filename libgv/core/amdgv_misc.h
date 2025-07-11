@@ -44,6 +44,7 @@ enum amdgv_timeout_section {
 	TIMEOUT_LSDMA,           /* for LSDMA per 64mb copy */
 	TIMEOUT_RAS_BOOT_STATUS,
 	TIMEOUT_DUMP_CU_DATA,
+	TIMEOUT_CHAIN_RESET,
 	TIMEOUT_SEC_LEN,
 };
 

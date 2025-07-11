@@ -22,6 +22,7 @@
 BUILD_DIR := build
 BUILD_PLATFORM ?=
 BUILD_TYPE ?= release
+PREFIX ?= /usr/local
 
 ifeq ($(BUILD_PLATFORM),windows)
 	PLATFORM := windows
@@ -80,7 +81,7 @@ endif
 cmake_config:
 ifeq ($(PLATFORM),linux)
 	@cp $(CMAKE_PATH)/CMakeLists.txt .
-	cmake -S . -B $(BUILD_DIR) $(BUILD_FLAGS)
+	cmake -S . -B $(BUILD_DIR) $(BUILD_FLAGS) -DCMAKE_INSTALL_PREFIX=$(PREFIX)
 else ifeq ($(PLATFORM),windows)
 	cmake -S $(CMAKE_PATH) -B $(BUILD_DIR) $(BUILD_FLAGS)
 endif
@@ -102,6 +103,35 @@ wNxt64a.dbg:
 .PHONY: clean_cmake
 clean_cmake:
 	@rm -f CMakeLists.txt
+
+.PHONY: install
+install:
+ifeq ($(PLATFORM),linux)
+	@if [ ! -d build ]; then \
+		echo "Error: build directory not found. Run 'make' first."; \
+		exit 1; \
+	fi
+	@echo "Installing using CMake..."
+	DESTDIR=$(DESTDIR) cmake --install build --prefix $(PREFIX)
+else ifeq ($(PLATFORM),windows)
+	@echo "Installation is not supported on Windows."
+	@exit 1
+endif
+
+.PHONY: uninstall
+uninstall:
+ifeq ($(PLATFORM),linux)
+	@if [ -f build/install_manifest.txt ]; then \
+		xargs rm -f < build/install_manifest.txt; \
+		echo "Uninstalled successfully."; \
+	else \
+		echo "Error: install_manifest.txt not found. Nothing to uninstall."; \
+		exit 1; \
+	fi
+else ifeq ($(PLATFORM),windows)
+	@echo "Installation is not supported on Windows."
+	@exit 1
+endif
 
 .PHONE: clean
 clean:

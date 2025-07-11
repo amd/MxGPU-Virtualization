@@ -210,6 +210,10 @@ int smi_cmd_handshake(struct smi_ctx *ctx, void *inb, void *outb,
 			smi_get_ras_feature_info,
 			sizeof(struct smi_device_info),
 			sizeof(struct smi_ras_feature));
+		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_BAD_PAGE_THRESHOLD,
+			smi_get_bad_page_threshold,
+			sizeof(struct smi_device_info),
+			sizeof(struct smi_ras_feature));
 		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_METRICS_TABLE,
 			smi_get_metrics_table,
 			sizeof(struct smi_metrics_table),
@@ -249,6 +253,10 @@ int smi_cmd_handshake(struct smi_ctx *ctx, void *inb, void *outb,
 		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_CPER,
 			smi_get_cper_error,
 			sizeof(struct smi_cper_config),
+			0);
+		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_RESET_GPU,
+			smi_reset_gpu,
+			sizeof(struct smi_device_info),
 			0);
 
 		/* Set max num of commands

@@ -27,6 +27,7 @@
 
 #include "smi_drv.h"
 #include "smi_drv_oss.h"
+#include "gim_memory_sentinel.h"
 #include <amdgv_live_info.h>
 
 struct vf_info {
@@ -88,6 +89,14 @@ struct gim_event {
 	struct completion cp;
 	uint64_t flags;
 };
+
+extern void *(*gim_kmalloc)(size_t size, gfp_t flags);
+extern void *(*gim_kzalloc)(size_t size, gfp_t flags);
+extern void *(*gim_vmalloc)(size_t size);
+extern void *(*gim_vzalloc)(size_t size);
+
+extern void (*gim_kfree)(const void *p);
+extern void (*gim_vfree)(const void *p);
 
 #if defined(HAVE_LOFF_T_VARIABLE)
 #define gim_kernel_read(file, buf, size, pos) kernel_read(file, buf, size, &pos)

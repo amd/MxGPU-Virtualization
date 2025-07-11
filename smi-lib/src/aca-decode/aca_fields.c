@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) Advanced Micro Devices, Inc. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -19,7 +19,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
 
 /**
  * @file aca_fields.c
@@ -96,4 +95,11 @@ void aca_synd_init(aca_synd_fields_t *fields, uint64_t synd_reg)
     fields->reserved27 = EXTRACT_BITS(synd_reg, 27, 5, uint8_t);
     fields->syndrome = EXTRACT_BITS(synd_reg, 32, 7, uint16_t);
     fields->reserved39 = EXTRACT_BITS(synd_reg, 39, 25, uint32_t);
+}
+
+void aca_addr_init(aca_addr_fields_t *fields, uint64_t addr_reg)
+{
+    fields->base.raw_value = addr_reg;
+    fields->error_addr = EXTRACT_BITS(addr_reg, 0, 56, uint64_t);
+    fields->reserved = EXTRACT_BITS(addr_reg, 56, 8, uint8_t);
 }

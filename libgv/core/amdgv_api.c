@@ -645,6 +645,22 @@ int AMDGV_API amdgv_set_all_vf(amdgv_dev_t dev)
 	return 0;
 }
 
+int AMDGV_API amdgv_alloc_dump_cu_resource_memory(amdgv_dev_t dev,
+				struct amdgv_dump_cu_resource_size *dump_cu_resource_size, struct amdgv_dump_cu_resource_memory *output_data)
+{
+	struct amdgv_adapter *adapt;
+	int ret = 0;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+	oss_mutex_lock(adapt->bp_lock);
+
+	ret = amdgv_int_alloc_dump_cu_resource_memory(adapt, dump_cu_resource_size, output_data);
+
+	oss_mutex_unlock(adapt->bp_lock);
+
+	return ret;
+}
+
 int AMDGV_API amdgv_dump_cu_data(amdgv_dev_t dev, enum AMDGV_CU_DATA_TYPE type)
 {
 	struct amdgv_adapter *adapt;
@@ -656,11 +672,26 @@ int AMDGV_API amdgv_dump_cu_data(amdgv_dev_t dev, enum AMDGV_CU_DATA_TYPE type)
 
 	// Cannot use pushing event queue method. Since when bp mode works, event
 	// will not be handled.
-	ret = amdgv_int_dump_cu_data(adapt, type);
+	ret = amdgv_int_dump_cu_data(adapt);
 
 	oss_mutex_unlock(adapt->bp_lock);
 
 	return ret;
+}
+
+int AMDGV_API amdgv_free_dump_cu_resource_memory(amdgv_dev_t dev)
+{
+	struct amdgv_adapter *adapt;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	oss_mutex_lock(adapt->bp_lock);
+
+	amdgv_int_free_dump_cu_resource_memory(adapt);
+
+	oss_mutex_unlock(adapt->bp_lock);
+
+	return 0;
 }
 
 int AMDGV_API amdgv_notify_event(amdgv_dev_t dev, enum amdgv_notify_event event)
@@ -737,7 +768,7 @@ int AMDGV_API amdgv_get_mitigation_range(amdgv_dev_t dev, struct amdgv_reg_range
 		goto out;
 	}
 
-	if (*length < adapt->num_miti) {
+	if (*length < (uint32_t)adapt->num_miti) {
 		ret = AMDGV_FAILURE;
 	} else {
 		oss_memcpy(table, adapt->miti_table,
@@ -812,7 +843,7 @@ int AMDGV_API amdgv_get_dev_info(amdgv_dev_t dev, enum amdgv_dev_info_type type,
 
 static void amdgv_force_switch_idx_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
-	int i = 0;
+	uint32_t i = 0;
 	struct amdgv_sched_world_switch *world_switch = NULL;
 
 	for (i = 0; i < adapt->sched.num_world_switch; ++i) {
@@ -1510,7 +1541,7 @@ uint32_t amdgv_get_vf_candidate(amdgv_dev_t dev)
 {
 	const struct amdgv_adapter *adapt;
 	int vf_candidate = 0;
-	int i = 0;
+	uint32_t i = 0;
 
 	if (dev == AMDGV_INVALID_HANDLE)
 		return 0;
@@ -1598,7 +1629,7 @@ int amdgv_get_smi_info(amdgv_dev_t dev, enum amdgv_smi_query_type type,
 	struct amdgv_adapter *adapt = (struct amdgv_adapter *)dev;
 	struct amdgv_vbios_info vbios_info;
 	struct amdgv_vf_device *vf = NULL;
-	int i = 0;
+	uint32_t i = 0;
 	int j = 0;
 	// always able to return version and status
 	if (type != AMDGV_SMI_LIBGV_VERSION && type != AMDGV_SMI_GET_STATUS)
@@ -2496,6 +2527,19 @@ int amdgv_get_agp_info(amdgv_dev_t dev, void **buf)
 	return ret;
 }
 
+int amdgv_migration_get_dirty_page_size(amdgv_dev_t dev, uint32_t *dirty_page_size)
+{
+	struct amdgv_adapter *adapt;
+	int ret = 0;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+	oss_mutex_lock(adapt->api_lock);
+	ret = amdgv_dirtybit_get_dirty_page_size(adapt, dirty_page_size);
+	oss_mutex_unlock(adapt->api_lock);
+
+	return ret;
+}
+
 int amdgv_copy_migration_vf_fb(amdgv_dev_t dev, uint32_t idx_vf, uint32_t idx_fb_block,
 			       void *buf, bool to_fb)
 {
@@ -2647,82 +2691,91 @@ out:
 	return ret;
 }
 
-int amdgv_migration_import(amdgv_dev_t dev, uint32_t idx_vf, void *buf,
-			   enum amdgv_migration_import_phase phase)
+static int amdgv_migration_transfer_manifest_data_event(amdgv_dev_t dev, uint32_t idx_vf, void *buf,
+				enum amdgv_migration_manifest_data_type type)
 {
-	int ret = 0;
 	struct amdgv_adapter *adapt;
-	uint64_t size = 0;
+	union amdgv_sched_event_data data;
+	int ret = 0;
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
 	oss_mutex_lock(adapt->api_lock);
 
-	switch (phase) {
-	case AMDGV_MIGRATION_IMPORT_PHASE2_STATIC_DATA:
-		if (!adapt->live_migration.static_data_mem) {
-			AMDGV_ERROR("Static data memory on FB for migration isn't ready.\n");
-			ret = AMDGV_FAILURE;
-			goto out;
-		}
-		if (amdgv_migration_get_psp_data_size(
-			    adapt, &size, AMDGV_MIGRATION_CONTENT_VF_HW_STATIC_DATA)) {
-			AMDGV_ERROR("failed to get static data size.\n");
-			ret = AMDGV_FAILURE;
-			goto out;
-		}
-		oss_memcpy(amdgv_memmgr_get_cpu_addr(adapt->live_migration.static_data_mem),
-			   buf, size);
+	data.lm.type = type;
+	data.lm.addr = (uint64_t)buf;
+	adapt->live_migration.migration_status = 0;
+	ret = amdgv_sched_queue_event_and_wait_ex(adapt, idx_vf,
+					AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA,
+					AMDGV_SCHED_BLOCK_ALL, data);
+
+	oss_mutex_unlock(adapt->api_lock);
+
+	if (ret)
+		AMDGV_ERROR("Queue Migration transfer manifest data event failed .\n");
+	else if (adapt->live_migration.migration_status)
+		ret = adapt->live_migration.migration_status;
+
+	return ret;
+}
+
+static enum amdgv_migration_manifest_data_type _amdgv_migration_export_phase_to_manifest_type_mapping(enum amdgv_migration_export_phase type)
+{
+	enum amdgv_migration_manifest_data_type manifest_data_type = AMDGV_MIGRATION_INVALID;
+
+	switch (type) {
+	case AMDGV_MIGRATION_EXPORT_PHASE1_STATIC_DATA:
+		manifest_data_type = AMDGV_MIGRATION_EXPORT_STATIC_DATA;
 		break;
+
+	case AMDGV_MIGRATION_EXPORT_PHASE2_DYNAMIC_DATA:
+		manifest_data_type = AMDGV_MIGRATION_EXPORT_DYNAMIC_DATA;
+		break;
+
+	default:
+		manifest_data_type = AMDGV_MIGRATION_INVALID;
+		break;
+	}
+
+	return manifest_data_type;
+}
+
+static enum amdgv_migration_manifest_data_type _amdgv_migration_import_phase_to_manifest_type_mapping(enum amdgv_migration_import_phase type)
+{
+	enum amdgv_migration_manifest_data_type manifest_data_type = AMDGV_MIGRATION_INVALID;
+
+	switch (type) {
+	case AMDGV_MIGRATION_IMPORT_PHASE1_PREPARE:
+		manifest_data_type = AMDGV_MIGRATION_IMPORT_PREPARE;
+		break;
+
+	case AMDGV_MIGRATION_IMPORT_PHASE2_STATIC_DATA:
+		manifest_data_type = AMDGV_MIGRATION_IMPORT_STATIC_DATA;
+		break;
+
 	case AMDGV_MIGRATION_IMPORT_PHASE3_DYNAMIC_DATA:
-		if (!adapt->live_migration.dynamic_data_mem) {
-			AMDGV_ERROR("Dynamic data memory on FB for migration isn't ready.\n");
-			ret = AMDGV_FAILURE;
-			goto out;
-		}
-		if (amdgv_migration_get_psp_data_size(
-			    adapt, &size, AMDGV_MIGRATION_CONTENT_VF_HW_DYNAMIC_DATA)) {
-			AMDGV_ERROR("failed to get dynamic data size.\n");
-			ret = AMDGV_FAILURE;
-			goto out;
-		}
-		oss_memcpy(amdgv_memmgr_get_cpu_addr(adapt->live_migration.dynamic_data_mem),
-			   buf, size);
+		manifest_data_type = AMDGV_MIGRATION_IMPORT_DYNAMIC_DATA;
 		break;
 	default:
+		manifest_data_type = AMDGV_MIGRATION_INVALID;
 		break;
 	}
 
-	if (amdgv_migration_import_vf(adapt, idx_vf, buf, phase)) {
-		AMDGV_ERROR("failed to get VF%d do phase%d import.\n", idx_vf, phase);
-		ret = AMDGV_FAILURE;
-		goto out;
-	}
+	return manifest_data_type;
+}
 
-out:
-	oss_mutex_unlock(adapt->api_lock);
-	return ret;
+int amdgv_migration_import(amdgv_dev_t dev, uint32_t idx_vf, void *buf,
+			   enum amdgv_migration_import_phase phase)
+{
+	enum amdgv_migration_manifest_data_type manifest_data_type = _amdgv_migration_import_phase_to_manifest_type_mapping(phase);
+	return amdgv_migration_transfer_manifest_data_event(dev, idx_vf, buf, manifest_data_type);
 }
 
 int amdgv_migration_export(amdgv_dev_t dev, uint32_t idx_vf, void *buf,
 			   enum amdgv_migration_export_phase phase)
 {
-	int ret = 0;
-	struct amdgv_adapter *adapt;
-
-	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
-
-	oss_mutex_lock(adapt->api_lock);
-
-	if (amdgv_migration_export_vf(adapt, idx_vf, buf, phase)) {
-		AMDGV_ERROR("failed to get VF%d do phase%d export.\n", idx_vf, phase);
-		ret = AMDGV_FAILURE;
-		goto out;
-	}
-
-out:
-	oss_mutex_unlock(adapt->api_lock);
-	return ret;
+	enum amdgv_migration_manifest_data_type manifest_data_type = _amdgv_migration_export_phase_to_manifest_type_mapping(phase);
+	return amdgv_migration_transfer_manifest_data_event(dev, idx_vf, buf, manifest_data_type);
 }
 
 int amdgv_get_migration_static_package(amdgv_dev_t dev, void *buf, uint64_t *size)
@@ -2839,7 +2892,6 @@ int amdgv_query_dirtybit_data(amdgv_dev_t dev,
 	ret = amdgv_dirtybit_querydata(adapt, data);
 	oss_mutex_unlock(adapt->api_lock);
 	return ret;
-
 }
 
 int amdgv_get_diag_data(amdgv_dev_t dev, uint32_t bdf, void *buf, uint32_t *size)
@@ -3132,7 +3184,7 @@ int amdgv_toggle_power_saving(amdgv_dev_t dev, bool enable)
 	union amdgv_sched_event_data data;
 	int event_ret = 0;
 	uint32_t status;
-	int i = 0;
+	uint32_t i = 0;
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
@@ -3629,7 +3681,7 @@ int AMDGV_API amdgv_set_mes_info_dump_enable(amdgv_dev_t dev, bool enable)
 int AMDGV_API amdgv_get_mes_info_dump_enable(amdgv_dev_t dev, uint32_t *data_adapt, uint32_t *data_vf, unsigned int *num_vf)
 {
 	struct amdgv_adapter *adapt;
-	int i = 0;
+	uint32_t i = 0;
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 	oss_mutex_lock(adapt->api_lock);
@@ -3654,7 +3706,7 @@ int AMDGV_API amdgv_get_mes_info_dump_enable(amdgv_dev_t dev, uint32_t *data_ada
 
 static void amdgv_disable_bp_mode_1(struct amdgv_adapter *adapt)
 {
-	int i;
+	uint32_t i;
 	struct amdgv_sched_world_switch *world_switch;
 
 	for (i = 0; i < adapt->sched.num_world_switch; i++) {
@@ -3677,7 +3729,7 @@ static void amdgv_disable_bp_mode_1(struct amdgv_adapter *adapt)
 
 static void amdgv_disable_bp_mode_2(struct amdgv_adapter *adapt)
 {
-	int i;
+	uint32_t i;
 	struct amdgv_sched_world_switch *world_switch;
 
 	for (i = 0; i < adapt->sched.num_world_switch; i++) {

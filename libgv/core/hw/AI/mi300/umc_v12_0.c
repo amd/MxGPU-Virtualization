@@ -453,7 +453,7 @@ static int umc_v12_0_eeprom_record_to_pages(struct amdgv_adapter *adapt,
 static void umc_v12_0_query_error_address(struct amdgv_adapter *adapt,
 					  void *ras_error_status)
 {
-	int aid;
+	uint32_t aid;
 	struct block_ecc  *umc_ecc;
 	struct ras_err_data *err_data = (struct ras_err_data *)ras_error_status;
 	uint64_t mc_umc_status;

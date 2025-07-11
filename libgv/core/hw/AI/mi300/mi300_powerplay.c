@@ -74,6 +74,8 @@ struct mi300_smu_table_context {
 	uint32_t pptable_size;
 	void *ecctable_array;
 	uint32_t ecctable_array_size;
+	void *static_metrics_table;
+	uint32_t static_metrics_table_size;
 };
 
 struct mi300_dpm_clock_level {
@@ -485,6 +487,11 @@ static int mi300_smu_table_context_setup(struct amdgv_adapter *adapt)
 	if (!table_context->pptable)
 		return AMDGV_FAILURE;
 
+	table_context->static_metrics_table_size = sizeof(StaticMetricsTable_t);
+	table_context->static_metrics_table = oss_zalloc(sizeof(StaticMetricsTable_t));
+	if (!table_context->static_metrics_table)
+		return AMDGV_FAILURE;
+
 	return 0;
 }
 
@@ -497,6 +504,11 @@ static void mi300_smu_table_context_release(struct amdgv_adapter *adapt)
 	if (table_context->metrics_table) {
 		oss_free(table_context->metrics_table);
 		table_context->metrics_table = NULL;
+	}
+
+	if (table_context->static_metrics_table) {
+		oss_free(table_context->static_metrics_table);
+		table_context->static_metrics_table = NULL;
 	}
 
 	if (table_context->ecctable_array) {
@@ -868,7 +880,8 @@ static int mi300_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv_
 	uint32_t val, throttler_status;
 	uint32_t ctx_id;
 	uint32_t vf_flr_intr_sts;
-	int i;
+	uint32_t i;
+	uint64_t curr_time, throttle_delta;
 
 	if (entry->client_id != IH_IV_CLIENTID_MP1 ||
 	    entry->src_id != IH_INTERRUPT_ID_TO_DRIVER)
@@ -915,8 +928,13 @@ static int mi300_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv_
 		}
 		break;
 	case IH_INTERRUPT_CONTEXT_ID_THERMAL_THROTTLING:
-		throttler_status = entry->src_data[1];
-		mi300_smu_notify_throttler_error(adapt, throttler_status);
+		curr_time = oss_get_time_stamp();
+		throttle_delta = curr_time - adapt->pp.thermal_throttle_start_time;
+		if (throttle_delta > adapt->opt.thermal_throttle_rate_limit) {
+			adapt->pp.thermal_throttle_start_time = curr_time;
+			throttler_status = entry->src_data[1];
+			mi300_smu_notify_throttler_error(adapt, throttler_status);
+		}
 		break;
 	default:
 		AMDGV_ERROR("mi300 smu can't process this context id %d\n", ctx_id);
@@ -976,6 +994,19 @@ static int mi300_smu_sw_init(struct amdgv_adapter *adapt)
 	adapt->pp.drv_metrics_ext =
 		oss_zalloc(sizeof(struct mi300_pp_drv_metrics_ext));
 
+	if (!adapt->pp.drv_metrics_ext) {
+		AMDGV_ERROR("Failed to alloc memory for drv_metrics_ext\n");
+		return AMDGV_FAILURE;
+	}
+
+	adapt->pp.drv_static_metrics_ext =
+		oss_zalloc(sizeof(struct mi300_pp_drv_metrics_ext));
+
+	if (!adapt->pp.drv_static_metrics_ext) {
+		AMDGV_ERROR("Failed to alloc memory for drv_static_metrics_ext\n");
+		return AMDGV_FAILURE;
+	}
+
 	adapt->pp.smu_lock = oss_mutex_init();
 	if (adapt->pp.smu_lock == OSS_INVALID_HANDLE) {
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
@@ -996,6 +1027,11 @@ static int mi300_smu_sw_fini(struct amdgv_adapter *adapt)
 	if (adapt->pp.drv_metrics_ext) {
 		oss_free(adapt->pp.drv_metrics_ext);
 		adapt->pp.drv_metrics_ext = NULL;
+	}
+
+	if (adapt->pp.drv_static_metrics_ext) {
+		oss_free(adapt->pp.drv_static_metrics_ext);
+		adapt->pp.drv_static_metrics_ext = NULL;
 	}
 
 	if (adapt->pp.smu_lock) {
@@ -1249,6 +1285,28 @@ static int mi300_smu_feature_control(struct amdgv_adapter *adapt, bool enable)
 	return 0;
 }
 
+static int mi300_smu_init_supported_caps(struct amdgv_adapter *adapt)
+{
+	struct smu_context *smu = adapt_to_smu(adapt);
+	uint32_t version;
+	int ret;
+
+	smu->supported_caps = 0;
+	/* Get the metrics table version */
+	ret = mi300_smu_send_msg(adapt, PPSMC_MSG_GetMetricsVersion, &version);
+	if (ret) {
+		AMDGV_ERROR("failed to get metrics table version\n");
+		return ret;
+	}
+
+	if (version >= 0x11) {
+		smu->supported_caps |= SMU_CAPS(SMU_CAP_STATIC_METRICS);
+		smu->supported_caps |= SMU_CAPS(SMU_CAP_PLDM_VERSION);
+	}
+
+	return 0;
+}
+
 static int mi300_smu_set_tool_table_address(struct amdgv_adapter *adapt)
 {
 	struct smu_context *smu = adapt_to_smu(adapt);
@@ -1449,7 +1507,8 @@ static int mi300_smu_set_other_dpm_table(struct amdgv_adapter *adapt, int clk_ty
 	PPTable_t *pptable = (PPTable_t *)table_context->pptable;
 	uint32_t default_freq, dpm_levels, freq;
 	uint16_t clk_id, fea_id;
-	int i, ret, max_retry = 3;
+	int ret, max_retry = 3;
+	uint32_t i;
 
 	switch (clk_type) {
 	case DPM_CLOCK_TYPE_FCLK:
@@ -1675,6 +1734,31 @@ static int mi300_pp_smu_init_drv_metrics_ext(struct amdgv_adapter *adapt)
 				METRIC_EXT_CODE(ACTIVITY, 	USAGE_GFX,
 						PERCENT,	(METRIC_EXT_FLAG(DATA_FILTER_ACC) | METRIC_EXT_FLAG(CHIPLET_METRIC))),
 						Q10_64,		(void *)&metrics_table->GfxBusyAcc[i],
+						vf_mask);
+		}
+
+		/* DeviceGetViolationStatus: Total App Clock Counter */
+		// TO-DO: Need an update for MI308 when PMFW has a release version
+		if ((adapt->pp.smu_fw_version >= 0x00557D00 && adapt->asic_type == CHIP_MI300X)) {
+			ADD_DRV_METRICS_EXT_ENTRY(
+				METRIC_EXT_CODE(THROTTLE,	GFX_CLK_BELOW_HOST_LIMIT_PPT,
+						BOOL,	METRIC_EXT_FLAG(DATA_FILTER_ACC) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+						Q10_64,		(void *)&metrics_table->GfxclkBelowHostLimitPptAcc[i],
+						vf_mask);
+			ADD_DRV_METRICS_EXT_ENTRY(
+				METRIC_EXT_CODE(THROTTLE,	GFX_CLK_BELOW_HOST_LIMIT_THM,
+						BOOL,	METRIC_EXT_FLAG(DATA_FILTER_ACC) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+						Q10_64,		(void *)&metrics_table->GfxclkBelowHostLimitThmAcc[i],
+						vf_mask);
+			ADD_DRV_METRICS_EXT_ENTRY(
+				METRIC_EXT_CODE(THROTTLE,	GFX_CLK_BELOW_HOST_LIMIT_TOTAL,
+						BOOL,	METRIC_EXT_FLAG(DATA_FILTER_ACC) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+						Q10_64,		(void *)&metrics_table->GfxclkBelowHostLimitTotalAcc[i],
+						vf_mask);
+			ADD_DRV_METRICS_EXT_ENTRY(
+				METRIC_EXT_CODE(THROTTLE,	GFX_CLK_LOW_UTILIZATION,
+						BOOL,	METRIC_EXT_FLAG(DATA_FILTER_ACC) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+						Q10_64,		(void *)&metrics_table->GfxclkLowUtilizationAcc[i],
 						vf_mask);
 		}
 	}
@@ -1923,27 +2007,27 @@ static int mi300_pp_smu_init_drv_metrics_ext(struct amdgv_adapter *adapt)
 
 		ADD_DRV_METRICS_EXT_ENTRY(
 			METRIC_EXT_CODE(PCIE, PCIE_L0_TO_RECOVERY_COUNT,
-				UINT, METRIC_EXT_FLAG(COUNTER)),
+				UINT, METRIC_EXT_FLAG(DATA_FILTER_ACC)),
 			UINT_32, (void *)&(metrics_table->PCIeL0ToRecoveryCountAcc),
 					whole_gpu_vf_mask);
 		ADD_DRV_METRICS_EXT_ENTRY(
 			METRIC_EXT_CODE(PCIE, PCIE_REPLAY_COUNT,
-				UINT, METRIC_EXT_FLAG(COUNTER)),
+				UINT, METRIC_EXT_FLAG(DATA_FILTER_ACC)),
 			UINT_32, (void *)&(metrics_table->PCIenReplayAAcc),
 					whole_gpu_vf_mask);
 		ADD_DRV_METRICS_EXT_ENTRY(
 			METRIC_EXT_CODE(PCIE, PCIE_REPLAY_ROLLOVER_COUNT,
-				UINT, METRIC_EXT_FLAG(COUNTER)),
+				UINT, METRIC_EXT_FLAG(DATA_FILTER_ACC)),
 			UINT_32, (void *)&(metrics_table->PCIenReplayARolloverCountAcc),
 					whole_gpu_vf_mask);
 		ADD_DRV_METRICS_EXT_ENTRY(
 			METRIC_EXT_CODE(PCIE, PCIE_NAK_SENT_COUNT,
-				UINT, METRIC_EXT_FLAG(COUNTER)),
+				UINT, METRIC_EXT_FLAG(DATA_FILTER_ACC)),
 			UINT_32, (void *)&(metrics_table->PCIeNAKSentCountAcc),
 					whole_gpu_vf_mask);
 		ADD_DRV_METRICS_EXT_ENTRY(
 			METRIC_EXT_CODE(PCIE, PCIE_NAK_RECEIVED_COUNT,
-				UINT, METRIC_EXT_FLAG(COUNTER)),
+				UINT, METRIC_EXT_FLAG(DATA_FILTER_ACC)),
 			UINT_32, (void *)&(metrics_table->PCIeNAKReceivedCountAcc),
 					whole_gpu_vf_mask);
 	}
@@ -2012,6 +2096,67 @@ static void mi300_smu_set_reset_quirks(struct amdgv_adapter *adapt)
 	}
 }
 
+static int mi300_smu_get_static_metrics_table(struct amdgv_adapter *adapt)
+{
+	struct smu_context *smu = adapt_to_smu(adapt);
+	struct mi300_smu_table_context *table_context = (struct mi300_smu_table_context *)smu->smu_table_context;
+	struct smu_local_memory *driver_mem = &table_context->driver_table_mem;
+	uint32_t static_metrics_table_size = table_context->static_metrics_table_size;
+	void *data = table_context->static_metrics_table;
+	void *cpu_addr;
+	int ret = 0;
+
+	if (smu->supported_caps & SMU_CAPS(SMU_CAP_STATIC_METRICS)) {
+		ret = mi300_smu_send_msg(adapt, PPSMC_MSG_GetStaticMetricsTable, NULL);
+		if (ret)
+			return ret;
+
+		cpu_addr = amdgv_memmgr_get_cpu_addr(driver_mem->mem);
+		oss_memcpy(data, cpu_addr, static_metrics_table_size);
+	}
+
+	return ret;
+}
+
+static int mi300_pp_smu_init_drv_static_metrics_ext(struct amdgv_adapter *adapt)
+{
+	struct smu_context *smu = adapt_to_smu(adapt);
+	struct mi300_pp_drv_metrics_ext *drv_metrics_ext =
+		(struct mi300_pp_drv_metrics_ext *)adapt->pp.drv_static_metrics_ext;
+	struct mi300_smu_table_context *table_context =
+		(struct mi300_smu_table_context *)smu->smu_table_context;
+	StaticMetricsTable_t *metrics_table = (StaticMetricsTable_t *)table_context->static_metrics_table;
+
+	uint32_t whole_gpu_vf_mask = ((adapt->num_vf - 1) | (1 << AMDGV_PF_IDX));
+
+	if (!drv_metrics_ext)
+		return AMDGV_FAILURE;
+
+	mi300_pp_smu_clear_drv_metrics_ext(adapt, drv_metrics_ext);
+
+	if (smu->supported_caps & SMU_CAPS(SMU_CAP_STATIC_METRICS)) {
+		ADD_DRV_METRICS_EXT_ENTRY(
+				METRIC_EXT_CODE(STATIC, INPUT_TELEMETRY_VOLTAGE,
+					MILLIVOLT, METRIC_EXT_FLAG(STATIC_METRIC)),
+					UINT_32, (void *)&(metrics_table->InputTelemetryVoltageInmV),
+					whole_gpu_vf_mask);
+		ADD_DRV_METRICS_EXT_ENTRY(
+				METRIC_EXT_CODE(STATIC, PLDM_VERSION,
+					UINT, METRIC_EXT_FLAG(STATIC_METRIC)),
+					UINT_32, (void *)&(metrics_table->pldmVersion[0]),
+					whole_gpu_vf_mask);
+
+		if (metrics_table->pldmVersion[0] == PLDM_VERSION_NOT_SUPPORTED)
+			adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PLDM_VERSION] = 0;
+		else
+			adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PLDM_VERSION] = metrics_table->pldmVersion[0];
+	} else {
+		adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PLDM_VERSION] = 0;
+	}
+
+	return 0;
+}
+
 static int mi300_smu_hw_init(struct amdgv_adapter *adapt)
 {
 	int ret;
@@ -2046,6 +2191,10 @@ static int mi300_smu_hw_init(struct amdgv_adapter *adapt)
 	if (ret)
 		return ret;
 
+	ret = mi300_smu_init_supported_caps(adapt);
+	if (ret)
+		return ret;
+
 	ret = mi300_smu_init_pptable(adapt);
 	if (ret)
 		return ret;
@@ -2058,6 +2207,14 @@ static int mi300_smu_hw_init(struct amdgv_adapter *adapt)
 	 * partitions.
 	*/
 	ret = mi300_pp_smu_init_drv_metrics_ext(adapt);
+	if (ret)
+		return ret;
+
+	ret = mi300_smu_get_static_metrics_table(adapt);
+	if (ret)
+		return ret;
+
+	ret = mi300_pp_smu_init_drv_static_metrics_ext(adapt);
 	if (ret)
 		return ret;
 
@@ -2462,6 +2619,12 @@ static int mi300_pp_smu_get_metrics_ext(struct amdgv_adapter *adapt,
 	if (ret)
 		return ret;
 
+	if (drv_metrics_ext->num_metric == 0) {
+		ret = mi300_pp_smu_init_drv_metrics_ext(adapt);
+		if (ret)
+			return ret;
+	}
+
 	ret = mi300_pp_smu_update_drv_metrics_ext(adapt, drv_metrics_ext);
 	if (ret)
 		return ret;
@@ -2484,6 +2647,50 @@ static int mi300_pp_smu_get_num_metrics_ext_entries(struct amdgv_adapter *adapt,
 		return AMDGV_FAILURE;
 
 	*entries = drv_metrics_ext->num_metric;
+
+	return 0;
+}
+
+static int mi300_pp_smu_get_static_metrics_ext(struct amdgv_adapter *adapt,
+		struct amdgv_gpumon_metrics_ext *static_metrics_ext)
+{
+	struct mi300_pp_drv_metrics_ext *drv_static_metrics_ext =
+		(struct mi300_pp_drv_metrics_ext *)adapt->pp.drv_static_metrics_ext;
+	struct smu_context *smu = adapt_to_smu(adapt);
+	int ret;
+
+	if (!drv_static_metrics_ext || !(smu->supported_caps & SMU_CAPS(SMU_CAP_STATIC_METRICS)))
+		return AMDGV_FAILURE;
+
+	if (drv_static_metrics_ext->num_metric == 0) {
+		ret = mi300_smu_get_static_metrics_table(adapt);
+		if (ret)
+			return ret;
+
+		ret = mi300_pp_smu_init_drv_static_metrics_ext(adapt);
+		if (ret)
+			return ret;
+		ret = mi300_pp_smu_update_drv_metrics_ext(adapt, drv_static_metrics_ext);
+		if (ret)
+			return ret;
+	}
+
+	ret = mi300_pp_smu_copy_drv_metric_ext_to_user(adapt,
+			drv_static_metrics_ext, static_metrics_ext);
+
+	return ret;
+}
+
+static int mi300_pp_smu_get_num_static_metrics_ext_entries(struct amdgv_adapter *adapt,
+		uint32_t *entries)
+{
+	struct mi300_pp_drv_metrics_ext *drv_static_metrics_ext =
+		(struct mi300_pp_drv_metrics_ext *)adapt->pp.drv_static_metrics_ext;
+
+	if (!drv_static_metrics_ext)
+		return AMDGV_FAILURE;
+
+	*entries = drv_static_metrics_ext->num_metric;
 
 	return 0;
 }
@@ -2610,7 +2817,7 @@ static int mi300_smu_pp_get_link_metrics(struct amdgv_adapter *adapt,
 static void mi300_smu_fill_eeprom_i2c_req(SwI2cRequest_t *req, bool write, uint8_t address,
 					  uint8_t i2c_port, uint8_t *data, uint32_t numbytes)
 {
-	int i;
+	uint32_t i;
 
 	/* numbytes should not exceed MAX_SW_I2C_COMMANDS */
 	req->I2CcontrollerPort = i2c_port;
@@ -2674,7 +2881,8 @@ static int mi300_smu_i2c_eeprom_read_data(struct amdgv_adapter *adapt, uint8_t a
 					  uint8_t i2c_port, uint8_t *data, uint32_t numbytes)
 {
 	SwI2cRequest_t req;
-	int i, ret = 0;
+	int ret = 0;
+	uint32_t i;
 	int retry_count = 1;
 
 	oss_memset(&req, 0, sizeof(req));
@@ -2949,11 +3157,14 @@ static const struct amdgv_pp_funcs mi300_amdgv_pp_funcs = {
 	.smu_error_inject_set_pm_policy = mi300_smu_error_inject_set_pm_policy,
 	.smu_error_inject_restore_pm_policy = mi300_smu_error_inject_restore_pm_policy,
 	.reset_vf_arbiters = mi300_smu_reset_vf_arbiters,
+	.get_static_metrics_ext = mi300_pp_smu_get_static_metrics_ext,
+	.get_num_static_metrics_ext_entries = mi300_pp_smu_get_num_static_metrics_ext_entries,
 };
 
 static int mi300_powerplay_sw_init(struct amdgv_adapter *adapt)
 {
 	adapt->pp.pp_funcs = &mi300_amdgv_pp_funcs;
+	adapt->pp.thermal_throttle_start_time = 0;
 
 	return 0;
 }

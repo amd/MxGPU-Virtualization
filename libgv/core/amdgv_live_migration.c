@@ -34,144 +34,106 @@
 
 static const uint32_t this_block = AMDGV_LIVE_MIGRATION_BLOCK;
 
+
+static int amdgv_migration_get_migration_info(struct amdgv_adapter *adapt)
+{
+	return (adapt->psp.get_migration_info) ?
+		adapt->psp.get_migration_info(adapt) :
+		PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
+}
+
 int amdgv_migration_get_migration_version(struct amdgv_adapter *adapt,
 					  uint32_t *migration_version)
 {
-	int ret = 0;
+	*migration_version = adapt->live_migration.migration_version;
 
-	if (adapt->live_migration.lm_funcs &&
-	    adapt->live_migration.lm_funcs->get_migration_version) {
-		ret = adapt->live_migration.lm_funcs->get_migration_version(adapt,
-									    migration_version);
-	} else {
-		AMDGV_ERROR("get_migration_version is not properly defined.");
-		ret = AMDGV_FAILURE;
-	}
-
-	return ret;
+	return 0;
 }
 
 int amdgv_migration_get_psp_data_size(struct amdgv_adapter *adapt, uint64_t *size,
 				      enum amdgv_migration_data_section section)
 {
-	int ret = 0;
-
-	if (adapt->live_migration.lm_funcs &&
-	    adapt->live_migration.lm_funcs->get_manifest_size) {
-		ret = adapt->live_migration.lm_funcs->get_manifest_size(adapt, size, section);
-	} else {
-		AMDGV_ERROR("get_manifest_size is not properly defined.");
-		ret = AMDGV_FAILURE;
+	switch (section) {
+	case AMDGV_MIGRATION_CONTENT_VF_HW_STATIC_DATA:
+		*size = adapt->live_migration.static_data_size;
+		break;
+	case AMDGV_MIGRATION_CONTENT_VF_HW_DYNAMIC_DATA:
+		*size = adapt->live_migration.dynamic_data_size;
+		break;
+	default:
+		AMDGV_ERROR("Invalid section.\n");
+		return AMDGV_FAILURE;
 	}
-
-	return ret;
+	return 0;
 }
 
-int amdgv_migration_send_transfer_cmd(struct amdgv_adapter *adapt, uint32_t idx_vf,
-				      bool to_export)
+int amdgv_migration_transfer_manifest_data(struct amdgv_adapter *adapt, struct amdgv_sched_event *event)
 {
-	int ret = 0;
+	int ret = AMDGV_FAILURE;
+	uint32_t idx_vf = event->idx_vf;
+	enum amdgv_migration_manifest_data_type type = event->data.lm.type;
+	void *data_addr = (void *)event->data.lm.addr;
+	uint64_t size = 0;
+	struct amdgv_memmgr_mem *mem = NULL;
 
-	if (adapt->live_migration.lm_funcs &&
-	    adapt->live_migration.lm_funcs->send_transfer_cmd) {
-		ret = adapt->live_migration.lm_funcs->send_transfer_cmd(adapt, idx_vf,
-									to_export);
-	} else {
-		AMDGV_ERROR("send_transfer_cmd is not properly defined.");
-		ret = AMDGV_FAILURE;
-	}
+	switch (type) {
+	case AMDGV_MIGRATION_EXPORT_STATIC_DATA:
+		mem = adapt->live_migration.static_data_mem;
+		AMDGV_DEBUG("Migration Export: PSP static import MEC, VCN, SDMA FW\n");
+		if (mem == NULL)
+			goto exit;
 
-	return ret;
-}
+		if (amdgv_migration_get_psp_data_size(adapt, &size,
+					AMDGV_MIGRATION_CONTENT_VF_HW_STATIC_DATA))
+			goto exit;
 
-int amdgv_migration_export_vf(struct amdgv_adapter *adapt, uint32_t idx_vf, void *data_dst,
-			      enum amdgv_migration_export_phase phase)
-{
-	int ret = 0;
-	bool vf_needs_restored = false;
-
-	oss_mutex_lock(adapt->live_migration.lm_lock);
-
-	/* If target VF is not suspended, suspend it first.
-	 * if it's in phase 1 export, target VF will be restored to the state
-	 * before enter this function. */
-	if (!is_suspend_vf(idx_vf)) {
-		AMDGV_DEBUG("Target VF%d is not suspended yet, suspend it now.\n", idx_vf);
-		if (amdgv_sched_queue_event_and_wait(adapt, idx_vf,
-						     AMDGV_EVENT_SCHED_SUSPEND_VF,
-						     AMDGV_SCHED_BLOCK_ALL)) {
-			AMDGV_ERROR("Failed to schedule suspend_VF.\n");
+#ifdef AMDGV_MIGRATION_DEBUG
+		/* Output RWL values in dynamic export pkg for debugging purpose */
+		if ((adapt->psp.print_rwl == NULL) ||
+			(adapt->psp.print_rwl(adapt, idx_vf))) {
 			ret = AMDGV_FAILURE;
 			goto exit;
 		}
-		if (!is_suspend_vf(idx_vf)) {
-			AMDGV_ERROR("Failed to suspend the target VF.\n");
-			ret = AMDGV_FAILURE;
+#endif
+		ret = amdgv_psp_transfer_manifest_data(adapt, idx_vf,
+					amdgv_memmgr_get_gpu_addr(mem), size, PSP_MIGRATION_EXPORT_STATIC_DATA);
+		if (ret) {
+			AMDGV_ERROR("Failed to do migration psp static export.\n");
 			goto exit;
 		}
-		vf_needs_restored =
-			(phase == AMDGV_MIGRATION_EXPORT_PHASE1_STATIC_DATA) ? true : false;
-	}
 
-	AMDGV_DEBUG("Migration Export: Switch WS to PF on all blocks\n");
-	if (amdgv_sched_context_switch_to_vf(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_ALL)) {
-		AMDGV_ERROR("Failed to switch to PF on all blocks.\n");
-		ret = AMDGV_FAILURE;
-		goto exit;
-	}
-
-	if (phase == AMDGV_MIGRATION_EXPORT_PHASE2_DYNAMIC_DATA) {
+		oss_memcpy(data_addr, amdgv_memmgr_get_cpu_addr(mem), size);
+		break;
+	case AMDGV_MIGRATION_EXPORT_DYNAMIC_DATA:
+		mem = adapt->live_migration.dynamic_data_mem;
 		AMDGV_DEBUG("Migration Export: Send TRANSFER_VF_DATA to MMSCH and RLCV\n");
-		if (amdgv_migration_send_transfer_cmd(adapt, idx_vf, true)) {
-			ret = AMDGV_FAILURE;
+		if (mem == NULL)
+			goto exit;
+
+		if (amdgv_migration_get_psp_data_size(adapt, &size,
+					AMDGV_MIGRATION_CONTENT_VF_HW_DYNAMIC_DATA))
+			goto exit;
+
+		if (amdgv_gpuiov_transfer_vf_data(adapt, idx_vf, true))
+			goto exit;
+
+		ret = amdgv_psp_transfer_manifest_data(adapt, idx_vf,
+					amdgv_memmgr_get_gpu_addr(mem), size, PSP_MIGRATION_EXPORT_DYNAMIC_DATA);
+		if (ret) {
+			AMDGV_ERROR("Failed to do migration psp static export.\n");
 			goto exit;
 		}
-	}
 
-	AMDGV_DEBUG("Migration Export: PSP export phase%d\n", phase);
-	if (adapt->live_migration.lm_funcs && adapt->live_migration.lm_funcs->psp_export) {
-		ret = adapt->live_migration.lm_funcs->psp_export(adapt, idx_vf, data_dst,
-								 phase);
-	} else {
-		AMDGV_ERROR("psp_export is not properly defined.");
-		ret = AMDGV_FAILURE;
-	}
-
-	if (vf_needs_restored) {
-		if (amdgv_sched_queue_event_and_wait(adapt, idx_vf,
-						     AMDGV_EVENT_SCHED_RESUME_VF,
-						     AMDGV_SCHED_BLOCK_ALL)) {
-			AMDGV_ERROR("Failed to schedule resume_vf.\n");
-			ret = AMDGV_FAILURE;
-			goto exit;
-		}
-		if (!is_active_vf(idx_vf)) {
-			AMDGV_ERROR("Failed to resume target VF.\n");
-			ret = AMDGV_FAILURE;
-		}
-	}
-
-exit:
-	oss_mutex_unlock(adapt->live_migration.lm_lock);
-	return ret;
-}
-
-int amdgv_migration_import_vf(struct amdgv_adapter *adapt, uint32_t idx_vf, void *data_src,
-			      enum amdgv_migration_import_phase phase)
-{
-	int ret = 0;
-
-	oss_mutex_lock(adapt->live_migration.lm_lock);
-
-	switch (phase) {
-	case AMDGV_MIGRATION_IMPORT_PHASE1_PREPARE:
+		oss_memcpy(data_addr, amdgv_memmgr_get_cpu_addr(mem), size);
+		break;
+	case AMDGV_MIGRATION_IMPORT_PREPARE:
 		/* Save current PF, init VF on all blocks */
 		AMDGV_DEBUG("Migration Import: Init target VF on all blocks\n");
+		ret = 0;
 		if (amdgv_sched_context_init(adapt, idx_vf, AMDGV_SCHED_BLOCK_ALL)) {
 			AMDGV_DEBUG("Failed to init VF%d WS context.\n", idx_vf);
 			ret = AMDGV_FAILURE;
 		}
-
 		/* Switch to PF on all blocks */
 		AMDGV_DEBUG("Migration Import: Switch to PF on all blocks\n");
 		if (amdgv_sched_context_switch_to_vf(adapt, AMDGV_PF_IDX,
@@ -179,44 +141,51 @@ int amdgv_migration_import_vf(struct amdgv_adapter *adapt, uint32_t idx_vf, void
 			AMDGV_DEBUG("Failed to switch to PF on all blocks.\n");
 			ret = AMDGV_FAILURE;
 		}
-
-		AMDGV_DEBUG("Migration Import: Enable mmio/doorbell write access\n");
+		AMDGV_DEBUG("Migration Import: Enable fb/mmio/doorbell write access\n");
 		if (amdgv_gpuiov_set_vf_access(
 			    adapt, idx_vf,
-			    AMDGV_VF_ACCESS_MMIO_REG_WRITE | AMDGV_VF_ACCESS_DOORBELL, true)) {
+			    AMDGV_VF_ACCESS_ALL, true)) {
 			AMDGV_DEBUG("Failed to enable mmio/doorbell write access.\n");
 			ret = AMDGV_FAILURE;
+		}
+		break;
+	case AMDGV_MIGRATION_IMPORT_STATIC_DATA:
+		AMDGV_DEBUG("Migration Import: PSP static import MEC, VCN, SDMA FW\n");
+		mem = adapt->live_migration.static_data_mem;
+		if (mem == NULL)
+			goto exit;
+
+		if (amdgv_migration_get_psp_data_size(adapt, &size,
+					AMDGV_MIGRATION_CONTENT_VF_HW_STATIC_DATA))
+			goto exit;
+
+		oss_memcpy(amdgv_memmgr_get_cpu_addr(mem), data_addr, size);
+		ret = amdgv_psp_transfer_manifest_data(adapt, idx_vf,
+					amdgv_memmgr_get_gpu_addr(mem), size, PSP_MIGRATION_IMPORT_STATIC_DATA);
+		if (ret) {
+			AMDGV_ERROR("Failed to do migration psp dynamic import.\n");
 			goto exit;
 		}
+		set_to_suspend_vf(idx_vf);
 		break;
+	case AMDGV_MIGRATION_IMPORT_DYNAMIC_DATA:
+		mem = adapt->live_migration.dynamic_data_mem;
+		if (mem == NULL)
+			goto exit;
 
-	case AMDGV_MIGRATION_IMPORT_PHASE2_STATIC_DATA:
-		AMDGV_DEBUG("Migration Import: PSP static import MEC, VCN, SDMA FW\n");
-		if (adapt->live_migration.lm_funcs &&
-		    adapt->live_migration.lm_funcs->psp_import) {
-			ret = adapt->live_migration.lm_funcs->psp_import(adapt, idx_vf, phase);
-			AMDGV_DEBUG("Set VF to suspended\n");
-			/* Once the VF is imported, set it to suspended so it can be resumed. */
-			set_to_suspend_vf(idx_vf);
-		} else {
-			AMDGV_ERROR("psp_import is not properly defined.");
-			ret = AMDGV_FAILURE;
-		}
-		break;
+		if (amdgv_migration_get_psp_data_size(adapt, &size,
+					AMDGV_MIGRATION_CONTENT_VF_HW_DYNAMIC_DATA))
+			goto exit;
 
-	case AMDGV_MIGRATION_IMPORT_PHASE3_DYNAMIC_DATA:
-		AMDGV_DEBUG("Migration Import: PSP dynamic import MMSCH_CTX, SMU_CTX, "
-			    "VCN0/1_RAM, PSP_CTX, SDMA_CTX, SRL, RWL\n");
-		if (adapt->live_migration.lm_funcs &&
-		    adapt->live_migration.lm_funcs->psp_import) {
-			if (adapt->live_migration.lm_funcs->psp_import(adapt, idx_vf, phase)) {
-				AMDGV_ERROR("Phase 3 PSP import failed.\n");
-				ret = AMDGV_FAILURE;
-				goto exit;
-			}
-		} else {
-			AMDGV_ERROR("psp_import is not properly defined.");
-			ret = AMDGV_FAILURE;
+		oss_memcpy(amdgv_memmgr_get_cpu_addr(mem), data_addr, size);
+		ret = amdgv_psp_transfer_manifest_data(adapt, idx_vf,
+					amdgv_memmgr_get_gpu_addr(mem), size, PSP_MIGRATION_IMPORT_DYNAMIC_DATA);
+
+		if (amdgv_gpuiov_transfer_vf_data(adapt, idx_vf, false))
+			goto exit;
+
+		if (ret) {
+			AMDGV_ERROR("Failed to do migration psp dynamic import.\n");
 			goto exit;
 		}
 
@@ -228,40 +197,93 @@ int amdgv_migration_import_vf(struct amdgv_adapter *adapt, uint32_t idx_vf, void
 		}
 
 		AMDGV_DEBUG("Migration Import: Send TRANSFER_VF_DATA to MMSCH and RLCV\n");
-		if (amdgv_migration_send_transfer_cmd(adapt, idx_vf, false)) {
+		if (amdgv_gpuiov_transfer_vf_data(adapt, idx_vf, false)) {
 			ret = AMDGV_FAILURE;
 			goto exit;
 		}
 
-		AMDGV_DEBUG("Migration Import: Add VF back to WS\n");
-		if (amdgv_sched_queue_event_and_wait(adapt, idx_vf,
-						     AMDGV_EVENT_SCHED_RESUME_VF,
-						     AMDGV_SCHED_BLOCK_ALL)) {
-			AMDGV_ERROR("Failed to schedule resume_vf.\n");
+#ifdef AMDGV_MIGRATION_DEBUG
+		/* Output RWL values in dynamic import pkg for debugging purpose */
+		if ((adapt->psp.print_rwl == NULL) ||
+			(adapt->psp.print_rwl(adapt, idx_vf))) {
 			ret = AMDGV_FAILURE;
 			goto exit;
 		}
-		if (!is_active_vf(idx_vf)) {
-			AMDGV_ERROR("Failed to resume target VF.\n");
-			ret = AMDGV_FAILURE;
-		}
-
-		AMDGV_DEBUG("Migration Import: Disable MMIO write access.\n");
-		if (amdgv_gpuiov_set_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_MMIO_REG_WRITE,
-					       false)) {
-			AMDGV_ERROR("Failed to enable mmio protection.\n");
-			ret = AMDGV_FAILURE;
-			goto exit;
-		}
+#endif
 		break;
-
 	default:
 		ret = AMDGV_FAILURE;
 		break;
 	}
-
 exit:
-	oss_mutex_unlock(adapt->live_migration.lm_lock);
+	if (mem)
+		oss_memset(amdgv_memmgr_get_cpu_addr(mem), 0, size);
+
+	adapt->live_migration.migration_status = ret;
 	return ret;
 }
 
+int amdgv_migration_init(struct amdgv_adapter *adapt)
+{
+	uint64_t static_size = 0;
+	uint64_t dynamic_size = 0;
+
+	if (amdgv_migration_get_migration_info(adapt))
+		return AMDGV_FAILURE;
+
+	if (amdgv_migration_get_psp_data_size(adapt, &static_size, AMDGV_MIGRATION_CONTENT_VF_HW_STATIC_DATA) ||
+		amdgv_migration_get_psp_data_size(adapt, &dynamic_size, AMDGV_MIGRATION_CONTENT_VF_HW_DYNAMIC_DATA))
+		return AMDGV_FAILURE;
+
+	/* allocate static/dynamic data pkg inside visible framebuffer
+	* if the memory manager is enabled.
+	* Skip alloc for reset to avoid double allocation
+	*/
+	if (adapt->memmgr_pf.is_init) {
+		//TODO: use one memory for static and dynamic data.
+		if (adapt->live_migration.static_data_mem == NULL) {
+			adapt->live_migration.static_data_mem =
+				amdgv_memmgr_alloc(&adapt->memmgr_pf, static_size,
+						MEM_MIGRATION_PSP_STATIC_DATA);
+			if (!adapt->live_migration.static_data_mem) {
+				amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_FB_MEM_FAIL,
+						static_size);
+				return AMDGV_FAILURE;
+			}
+		}
+
+		if (adapt->live_migration.dynamic_data_mem == NULL) {
+			adapt->live_migration.dynamic_data_mem =
+				amdgv_memmgr_alloc(&adapt->memmgr_pf, dynamic_size,
+						MEM_MIGRATION_PSP_DYNAMIC_DATA);
+			if (!adapt->live_migration.dynamic_data_mem) {
+				amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_FB_MEM_FAIL,
+						dynamic_size);
+				return AMDGV_FAILURE;
+			}
+		}
+		adapt->live_migration.migration_status = 0;
+		AMDGV_INFO("Migration mem init: static_size=%lu, dynamic_size=%lu\n",
+		static_size, dynamic_size);
+	} else {
+		AMDGV_WARN("memmgr_pf is not initialized, skipped live migration.\n");
+		return AMDGV_FAILURE;
+	}
+
+
+	oss_memset(amdgv_memmgr_get_cpu_addr(adapt->live_migration.static_data_mem), 0, static_size);
+	oss_memset(amdgv_memmgr_get_cpu_addr(adapt->live_migration.dynamic_data_mem), 0, dynamic_size);
+	return 0;
+}
+
+void amdgv_migration_fini(struct amdgv_adapter *adapt)
+{
+	if (adapt->live_migration.static_data_mem) {
+		amdgv_memmgr_free(adapt->live_migration.static_data_mem);
+		adapt->live_migration.static_data_mem = NULL;
+	}
+	if (adapt->live_migration.dynamic_data_mem) {
+		amdgv_memmgr_free(adapt->live_migration.dynamic_data_mem);
+		adapt->live_migration.dynamic_data_mem = NULL;
+	}
+}

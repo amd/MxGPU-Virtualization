@@ -186,6 +186,7 @@ public:
 	virtual int amdsmi_get_version_command(Arguments arg, std::string &out_string) = 0;
 	virtual int amdsmi_reset_command(std::string vf_bdf, Arguments arg) = 0;
 	virtual int amdsmi_reset_local_data_command(uint64_t processor_bdf, Arguments arg) = 0;
+	virtual int amdsmi_reset_gpu_command(uint64_t processor_bdf, Arguments arg) = 0;
 	virtual int amdsmi_set_process_isolation_command(uint64_t processor_bdf, Arguments arg) = 0;
 	virtual int amdsmi_set_xgmi_fb_sharing_mode_command(std::vector<uint64_t> bfd_list,
 			Arguments arg) = 0;

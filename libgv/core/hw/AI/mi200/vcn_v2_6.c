@@ -22,8 +22,8 @@
  *
  */
 #include "amdgv.h"
-#include "mi200/VCN/vcn_2_5_offset.h"
-#include "mi200/VCN/vcn_2_5_sh_mask.h"
+#include "mi200/VCN/vcn_2_6_0_offset.h"
+#include "mi200/VCN/vcn_2_6_0_sh_mask.h"
 #include "amdgv_device.h"
 #include "amdgv_ras.h"
 #include "amdgv_vcn.h"
@@ -39,7 +39,7 @@ static void vcn_v2_6_query_poison_by_instance(struct amdgv_adapter *adapt,
 	switch (sub_block) {
 	case AMDGV_VCN_V2_6_VCPU_VCODEC:
 		reg_value = SOC15_REG_OFFSET(VCN, instance,
-						mmUVD_RAS_VCPU_VCODEC_STATUS);
+						regUVD_RAS_VCPU_VCODEC_STATUS);
 		break;
 	case AMDGV_VCN_V2_6_MMSCH:
 		/* MMSCH_FATAL_ERROR is only for VCN0 */
@@ -47,7 +47,7 @@ static void vcn_v2_6_query_poison_by_instance(struct amdgv_adapter *adapt,
 			return;
 
 		reg_value = SOC15_REG_OFFSET(VCN, instance,
-						mmUVD_RAS_MMSCH_FATAL_ERROR);
+						regUVD_RAS_MMSCH_FATAL_ERROR);
 		break;
 	default:
 		break;

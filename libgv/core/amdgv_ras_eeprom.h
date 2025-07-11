@@ -52,4 +52,6 @@ int amdgv_ras_eeprom_process_records(struct amdgv_adapter *adapt,
 bool amdgv_ras_eeprom_is_gpu_bad(struct amdgv_adapter *adapt);
 uint64_t amdgv_utc_to_eeprom_format(struct amdgv_adapter *adapt, uint64_t utc_timestamp);
 
+int amdgv_ras_eeprom_export_live_update(struct amdgv_adapter *adapt, uint8_t *data);
+
 #endif // _AMDGV_RAS_EEPROM_H

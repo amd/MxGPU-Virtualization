@@ -187,6 +187,10 @@ static const char *amdgv_gpumon_event_name(enum amdgv_gpumon_type type)
 		return "GPUMON_CPER_GET_ENTRIES";
 	case GPUMON_GET_GFX_CONFIG:
 		return "GPUMON_GET_GFX_CONFIG";
+	case GPUMON_GET_STATIC_METRICS_EXT:
+		return "GPUMON_GET_STATIC_METRICS_EXT";
+	case GPUMON_GET_NUM_STATIC_METRICS_EXT_ENTRIES:
+		return "GPUMON_GET_NUM_STATIC_METRICS_EXT_ENTRIES";
 	default:
 		break;
 	}
@@ -202,7 +206,7 @@ static bool amdgv_find_fb_offset(amdgv_dev_t dev, struct amdgv_vf_option *opt)
 {
 	struct amdgv_adapter *adapt = (struct amdgv_adapter *)dev;
 	struct amdgv_vf_device *vf;
-	int i;
+	uint32_t i;
 
 	// start and end fb location
 	uint32_t opt_s, opt_e;
@@ -363,7 +367,7 @@ bool amdgv_get_vf_gfx_part_valid(amdgv_dev_t dev, struct amdgv_vf_option *opt)
 	uint32_t used_time_slice = 0;
 	struct amdgv_adapter *adapt;
 	struct amdgv_vf_device *vf;
-	int i;
+	uint32_t i;
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
@@ -401,7 +405,7 @@ bool amdgv_is_fb_overlap(amdgv_dev_t dev, struct amdgv_vf_option *opt)
 {
 	struct amdgv_adapter *adapt = (struct amdgv_adapter *)dev;
 	struct amdgv_vf_device *vf;
-	int i;
+	uint32_t i;
 
 	// start and end fb location
 	uint32_t opt_s, opt_e;
@@ -1153,6 +1157,17 @@ int amdgv_gpumon_get_ras_eeprom_version(amdgv_dev_t dev, uint32_t *ras_eeprom_ve
 	}
 
 	return ret;
+}
+
+int amdgv_gpumon_get_bad_page_record_threshold(amdgv_dev_t dev, uint32_t *bad_page_record_threshold)
+{
+	struct amdgv_adapter *adapt;
+
+	SET_ADAPT_AND_CHECK_STATUS_NOT_LOST(adapt, dev);
+
+	*bad_page_record_threshold = BAD_PAGE_RECORD_THRESHOLD;
+
+	return 0;
 }
 
 int amdgv_gpumon_ras_error_inject(amdgv_dev_t dev,
@@ -2291,6 +2306,60 @@ int amdgv_gpumon_get_num_metrics_ext_entries(amdgv_dev_t dev,
 	return ret;
 }
 
+int amdgv_gpumon_get_static_metrics_ext(amdgv_dev_t dev,
+		struct amdgv_gpumon_metrics_ext *metrics_ext)
+{
+	struct amdgv_adapter *adapt;
+	union amdgv_sched_event_data data;
+	int ret = AMDGV_FAILURE;
+	int event_ret = 0;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	data.gpumon_data.ptr = metrics_ext;
+	data.gpumon_data.type = GPUMON_GET_STATIC_METRICS_EXT;
+	data.gpumon_data.result = &event_ret;
+
+	if (adapt->gpumon.funcs &&
+			adapt->gpumon.funcs->get_static_metrics_ext &&
+			metrics_ext) {
+		ret = amdgv_sched_queue_event_and_wait_ex(adapt, AMDGV_PF_IDX,
+				AMDGV_EVENT_SCHED_GPUMON,
+				AMDGV_SCHED_BLOCK_ALL, data);
+		if (!ret)
+			ret = event_ret;
+	}
+
+	return ret;
+}
+
+int amdgv_gpumon_get_num_static_metrics_ext_entries(amdgv_dev_t dev,
+		uint32_t *entries)
+{
+	struct amdgv_adapter *adapt;
+	union amdgv_sched_event_data data;
+	int ret = AMDGV_FAILURE;
+	int event_ret = 0;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	data.gpumon_data.ptr = entries;
+	data.gpumon_data.type = GPUMON_GET_NUM_STATIC_METRICS_EXT_ENTRIES;
+	data.gpumon_data.result = &event_ret;
+
+	if (adapt->gpumon.funcs &&
+			adapt->gpumon.funcs->get_num_static_metrics_ext_entries &&
+			entries) {
+		ret = amdgv_sched_queue_event_and_wait_ex(adapt, AMDGV_PF_IDX,
+				AMDGV_EVENT_SCHED_GPUMON,
+				AMDGV_SCHED_BLOCK_ALL, data);
+		if (!ret)
+			ret = event_ret;
+	}
+
+	return ret;
+}
+
 int amdgv_gpumon_is_power_management_enabled(amdgv_dev_t dev,
 			bool *pm_enabled)
 {
@@ -2634,7 +2703,7 @@ int amdgv_gpumon_set_xgmi_fb_custom_sharing_mode(uint32_t dev_list_size,
 
 	/* set true when entering custom mode from other modes */
 	bool non_custom_to_custom_mode = false;
-	int i = 0;
+	uint32_t i = 0;
 
 	/* allow  1 2 4 sharing only */
 	if (!(dev_list_size == 1 || dev_list_size == 2 || dev_list_size == 4))
@@ -3557,6 +3626,16 @@ int amdgv_gpumon_handle_sched_event(struct amdgv_adapter *adapt,
 		break;
 	case GPUMON_GET_GFX_CONFIG:
 		ret = adapt->gpumon.funcs->get_gfx_config(adapt, event->data.gpumon_data.ptr);
+		*event->data.gpumon_data.result = ret;
+		break;
+	case GPUMON_GET_STATIC_METRICS_EXT:
+		ret = adapt->gpumon.funcs->get_static_metrics_ext(adapt,
+				event->data.gpumon_data.ptr);
+		*event->data.gpumon_data.result = ret;
+		break;
+	case GPUMON_GET_NUM_STATIC_METRICS_EXT_ENTRIES:
+		ret = adapt->gpumon.funcs->get_num_static_metrics_ext_entries(adapt,
+				event->data.gpumon_data.ptr);
 		*event->data.gpumon_data.result = ret;
 		break;
 	default:

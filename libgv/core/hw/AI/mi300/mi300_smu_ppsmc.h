@@ -1,4 +1,25 @@
-/* Copyright (C) 2010-2023 Advanced Micro Devices, Inc. All rights reserved. */
+/*
+ * Copyright (c) Advanced Micro Devices, Inc. All rights reserved.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ */
 
 #ifndef PPSMC_H
 #define PPSMC_H
@@ -75,9 +96,29 @@
 #define PPSMC_MSG_PmLogGetTableVersion              0x42
 #define PPSMC_MSG_RmaDueToBadPageThreshold          0x43
 #define PPSMC_MSG_SelectPstatePolicy                0x44
-
+#define PPSMC_MSG_SetPhaseDetectCSBWThreshold       0x45
+#define PPSMC_MSG_SetPhaseDetectFreqHigh            0x46
+#define PPSMC_MSG_SetPhaseDetectFreqLow             0x47
+#define PPSMC_MSG_SetPhaseDetectDownHysterisis      0x48
+#define PPSMC_MSG_SetPhaseDetectAlphaX1e6           0x49
+#define PPSMC_MSG_SetPhaseDetectOnOff               0x4A
+#define PPSMC_MSG_GetPhaseDetectResidency           0x4B
+#define PPSMC_MSG_UpdatePccWaitDecMaxStr            0x4C
+#define PPSMC_MSG_ResetSDMA                         0x4D
+#define PPSMC_MSG_GetRasTableVersion                0x4E
+#define PPSMC_MSG_GetRmaStatus                      0x4F
+#define PPSMC_MSG_GetErrorCount                     0x50
+#define PPSMC_MSG_GetBadPageCount                   0x51
+#define PPSMC_MSG_GetBadPageInfo                    0x52
+#define PPSMC_MSG_GetBadPagePaAddrLoHi              0x53
+#define PPSMC_MSG_SetTimestampLoHi                  0x54
+#define PPSMC_MSG_GetTimestampLoHi                  0x55
+#define PPSMC_MSG_GetRasPolicy                      0x56
+#define PPSMC_MSG_DumpErrorRecord                   0x57
+#define PPSMC_MSG_EraseRasTable                     0x58
+#define PPSMC_MSG_GetStaticMetricsTable             0x59
 #define PPSMC_MSG_ResetVfArbitersByIndex            0x5A
-#define PPSMC_Message_Count                         0x4B
+#define PPSMC_Message_Count                         0x5B
 
 
 //PPSMC Reset Types for driver msg argument

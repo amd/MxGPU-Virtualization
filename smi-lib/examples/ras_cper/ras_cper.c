@@ -74,6 +74,10 @@ int main(void)
 
 	do {
 		ret = amdsmi_get_gpu_cper_entries(processors[0], severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
+		if (ret != AMDSMI_STATUS_SUCCESS && ret != AMDSMI_STATUS_MORE_DATA) {
+			goto fini;
+		}
+
 		for(uint32_t i = 0; i < entry_count; i++) {
 			printf("Record id: 		%s \n", cper_hdrs[i]->record_id);
 			printf("Error severity: %d \n", cper_hdrs[i]->error_severity);
@@ -82,8 +86,13 @@ int main(void)
 			cper_buffer = (char*)malloc(cper_hdrs[i]->record_length * sizeof(char));
 			memcpy(cper_buffer, cper_hdrs[i], cper_hdrs[i]->record_length);
 			ret = amdsmi_get_afids_from_cper(cper_buffer, cper_hdrs[i]->record_length, afids, &num_afids);
+			if (ret != AMDSMI_STATUS_SUCCESS) {
+				free(cper_buffer);
+				goto fini;
+			}
+
 			for(uint32_t i = 0; i < num_afids; i++){
-				printf("Sec: %d AFID: %ld \n", i, afids[i]);
+				printf("Sec: %d AFID: %lu \n", i, afids[i]);
 			}
 			printf("\n");
 			free(cper_buffer);

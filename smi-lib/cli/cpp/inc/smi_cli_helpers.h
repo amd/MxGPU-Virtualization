@@ -29,10 +29,10 @@
 #include <memory>
 
 // Major version should be changed for every command change (adding new commands, deprecating commands, modifying input/output format)
-#define AMDSMI_TOOL_VERSION_MAJOR 25
+#define AMDSMI_TOOL_VERSION_MAJOR 27
 // Minor version should be updated for each command change, but without adding new commands,
 // deleting existing commands or modifying input/output format of existing commands
-#define AMDSMI_TOOL_VERSION_MINOR 5
+#define AMDSMI_TOOL_VERSION_MINOR 4
 // Release version should be set to 0 as default and can be updated by the PMs for each CSP point release
 #define AMDSMI_TOOL_VERSION_RELEASE 0
 

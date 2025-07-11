@@ -48,14 +48,14 @@ static const struct amdgv_marketing_name_entry amdgv_marketing_name_table[] = {
 	{ CHIP_MI300X, 0x74BD, 0x00, "AMD Instinct MI300X HF"},
 
 	/* Mi350 PF */
-	{ CHIP_MI350X, 0x75A0, 0x00, "AMD Instinct MI350X"},
-	{ CHIP_MI350X, 0x75A1, 0x00, "AMD Instinct MI350X LC 1.2"},
-	{ CHIP_MI350X, 0x75A3, 0x00, "AMD Instinct MI350X LC 1.4"},
+	{ CHIP_MI350X, 0x75A0, 0x00, "AMD Instinct MI355X"},
+	{ CHIP_MI350X, 0x75A1, 0x00, "AMD Instinct MI355X LC 1.2"},
+	{ CHIP_MI350X, 0x75A3, 0x00, "AMD Instinct MI355X LC 1.4"},
 
 	/* Mi350 VF */
-	{ CHIP_MI350X, 0x75B0, 0x00, "AMD Instinct MI350X VF"},
-	{ CHIP_MI350X, 0x75B1, 0x00, "AMD Instinct MI350X VF LC 1,2"},
-	{ CHIP_MI350X, 0x75B3, 0x00, "AMD Instinct MI350X VF LC 1.4"},
+	{ CHIP_MI350X, 0x75B0, 0x00, "AMD Instinct MI355X VF"},
+	{ CHIP_MI350X, 0x75B1, 0x00, "AMD Instinct MI355X VF LC 1,2"},
+	{ CHIP_MI350X, 0x75B3, 0x00, "AMD Instinct MI355X VF LC 1.4"},
 
 	/* Navi32 PF */
 	{ CHIP_NAVI32, 0x7460, 0x00, "AMD Radeon PRO V710"},
