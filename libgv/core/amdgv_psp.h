@@ -378,6 +378,9 @@ struct psp_context {
 						uint32_t idx_vf, uint64_t data_addr, uint32_t size,
 						enum psp_migration_manifest_data_type type);
 	enum psp_status (*get_migration_info)(struct amdgv_adapter *adapt);
+#ifdef AMDGV_MIGRATION_DEBUG
+	enum psp_status (*print_rwl)(struct amdgv_adapter *adapt, uint32_t idx_vf);
+#endif
 };
 
 /* Single property buffer stored in the APP_PROP_BUF structure.

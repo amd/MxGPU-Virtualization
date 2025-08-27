@@ -7,7 +7,7 @@ myst:
 
 # Overview - AMD SMI tool
 
-AMD SMI tool is a command line utility that utilizes AMD SMI Library APIs to monitor AMD GPUs. The tool is used to monitor AMD’s GPUs status in a virtualization environment in Linux host Operating Systems and Windows guest Operating Systems. The tool outputs GPU/driver information in plain text, in JSON, or in CSV formats while it can also show the info in the console or save to the specified output file.
+AMD SMI tool is a command line utility that utilizes AMD SMI Library APIs to monitor and configure AMD GPUs. The tool is used to monitor AMD’s GPUs status in a virtualization environment in Linux host Operating Systems and Windows guest Operating Systems. The tool outputs GPU/driver information in plain text, in JSON, or in CSV formats while it can also show the info in the console or save to the specified output file.
 
 ## Folder structure
 

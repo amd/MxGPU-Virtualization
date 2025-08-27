@@ -1840,7 +1840,8 @@ int amdgv_vfmgr_copy_to_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, uint
 	uint64_t vf_fb_offset = MBYTES_TO_BYTES(entry->fb_offset);
 	int ret = 0;
 
-	if (!entry->configured || entry->dev == AMDGV_INVALID_HANDLE)
+	if (!entry->configured ||
+		(!(adapt->flags & AMDGV_FLAG_ENABLE_SVM) && entry->dev == AMDGV_INVALID_HANDLE))
 		return AMDGV_FAILURE;
 
 	if (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM))
@@ -1868,7 +1869,8 @@ int amdgv_vfmgr_copy_from_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, ui
 	uint64_t vf_fb_offset = MBYTES_TO_BYTES(entry->fb_offset);
 	int ret = 0;
 
-	if (!entry->configured || entry->dev == AMDGV_INVALID_HANDLE)
+	if (!entry->configured ||
+		(!(adapt->flags & AMDGV_FLAG_ENABLE_SVM) && entry->dev == AMDGV_INVALID_HANDLE))
 		return AMDGV_FAILURE;
 
 	if (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM))

@@ -38,6 +38,51 @@
 #define MI200_MIGRATION_ALIGN(addr) \
 	roundup(addr, MI200_MIGRATION_ALIGNMENT)
 
+#ifdef AMDGV_MIGRATION_DEBUG
+/* MI200 migration size data for reference */
+#define MI200_MIGRATION_SEC_SDMA_CTX_SIZE		(64 * 1024)
+#define MI200_MIGRATION_SEC_SRL_SIZE			(64 * 1024)
+#define MI200_MIGRATION_SEC_RLCV_CTX_SIZE		(8 * 1024)
+#define MI200_MIGRATION_SEC_MMSCH_CTX_SIZE		(8 * 1024)
+#define MI200_MIGRATION_SEC_SMU_CTX_SIZE		(8 * 1024)
+#define MI200_MIGRATION_SEC_MEC_FW_SIZE			(1 * 1024 * 1024)
+#define MI200_MIGRATION_SEC_VCN0_FW_SIZE		(1 * 1024 * 1024)
+#define MI200_MIGRATION_SEC_VCN1_FW_SIZE		(1 * 1024 * 1024)
+#define MI200_MIGRATION_SEC_VCN0_RAM_SIZE		(256 * 1024)
+#define MI200_MIGRATION_SEC_VCN1_RAM_SIZE		(256 * 1024)
+#define MI200_MIGRATION_SEC_VF_REG_LIST_SIZE	(1 * 1024 * 1024)
+#define MI200_MIGRATION_SEC_PSP_STATE_SIZE		(128 * 1024)
+
+#define MI200_MIGRATION_SEC_STATIC_AMOUNT		3
+#define MI200_MIGRATION_SEC_DYNAMIC_AMOUNT		9
+
+#define MI200_SIGNATURE_SIZE					256
+
+enum MI200_MIGRATION_RWL_TYPE {
+	MI200_MIGRATION_RWL_MMIO	= 0,
+	MI200_MIGRATION_RWL_MMIO_DEBUG_USE,
+};
+
+struct mi200_migration_vf_state_reg {
+	char *name;
+
+	enum MI200_MIGRATION_RWL_TYPE type;
+	uint32_t size;
+
+	uint32_t hwid;
+	uint32_t inst;
+	uint32_t seg;
+	uint32_t reg;
+
+	uint32_t value;
+};
+
+extern struct mi200_migration_vf_state_reg mi200_migration_vf_regs[];
+extern uint32_t mi200_migration_vf_regs_count;
+extern uint32_t mi200_migration_vf_regs_size;
+
+#endif //AMDGV_MIGRATION_DEBUG
+
 bool psp_v13_wait_sos_loaded_status(struct amdgv_adapter *adapt);
 int psp_v13_ring_destroy(struct amdgv_adapter *adapt);
 int psp_v13_hw_start(struct amdgv_adapter *adapt);

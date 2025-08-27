@@ -677,6 +677,56 @@ enum psp_status psp_v13_trigger_snapshot(struct amdgv_adapter *adapt,
 	return ret;
 }
 
+#ifdef AMDGV_MIGRATION_DEBUG
+static enum psp_status psp_v13_migration_rwl_debug_print(struct amdgv_adapter *adapt,
+	uint32_t idx_vf)
+{
+	enum psp_status ret = PSP_STATUS__SUCCESS;
+	struct amdgv_vf_device *vf = &adapt->array_vf[idx_vf];
+	struct mi200_migration_vf_state_reg *rwl =
+			mi200_migration_vf_regs;
+	uint32_t rwl_count = mi200_migration_vf_regs_count;
+	int i = 0;
+	uint32_t offset = 0;
+
+	if (!vf->configured) {
+		AMDGV_ERROR("VF:%d not configured. Drop request\n", idx_vf);
+		ret = PSP_STATUS__ERROR_GENERIC;
+		return ret;
+	}
+	if ((!vf->res_mapped) || (vf->res.mmio == NULL)) {
+		AMDGV_ERROR("VF:%d Resource not mapped. Drop request\n", idx_vf);
+		ret = PSP_STATUS__ERROR_GENERIC;
+		return ret;
+	}
+	if (!rwl) {
+		AMDGV_ERROR("Empty list for vf registers\n");
+		ret = PSP_STATUS__ERROR_GENERIC;
+		return ret;
+	}
+
+	for (i = 0; i < rwl_count; i++) {
+		/* If hwid is greater than HWIP_MAX means the offset is real address */
+		if (rwl[i].hwid < MAX_HWIP) {
+			if (!adapt->reg_offset[rwl[i].hwid][rwl[i].inst]) {
+				AMDGV_DEBUG("Failed to find reg %s\n", rwl[i].name);
+				continue;
+			}
+			offset = adapt->reg_offset[rwl[i].hwid][rwl[i].inst][rwl[i].seg]
+				+ rwl[i].reg;
+		} else {
+			offset = rwl[i].reg / 4;
+		}
+
+		AMDGV_DEBUG("[VF:%d] Reg: %s Offset:0x%02x Length:%d value:0x%x\n",
+			idx_vf, rwl[i].name, offset, rwl[i].size,
+			oss_mm_read32(((uint8_t *)(vf->res.mmio)) + offset * 4));
+	}
+
+	return ret;
+}
+#endif //AMDGV_MIGRATION_DEBUG
+
 static enum psp_status psp_v13_get_migration_version(struct amdgv_adapter *adapt,
 	uint32_t *migration_version)
 {
@@ -801,6 +851,14 @@ static enum psp_status psp_v13_transfer_manifest_data(struct amdgv_adapter *adap
 	}
 
 
+#ifdef AMDGV_MIGRATION_DEBUG
+	/* Output RWL values in dynamic export pkg for debugging purpose */
+	if ((type == PSP_MIGRATION_EXPORT_DYNAMIC_DATA) &&
+		 psp_v13_migration_rwl_debug_print(adapt, idx_vf)) {
+		ret = AMDGV_FAILURE;
+	}
+#endif
+
 	if (psp_v13_migration_cmd_init(migration_cmd, idx_vf, data_addr, size, type)) {
 		amdgv_put_error(AMDGV_PF_IDX,
 		AMDGV_ERROR_FW_MIGRATION_EXPORT_FAIL,
@@ -809,6 +867,14 @@ static enum psp_status psp_v13_transfer_manifest_data(struct amdgv_adapter *adap
 	}
 
 	ret = amdgv_psp_cmd_km_submit(adapt, migration_cmd, &psp_resp);
+
+#ifdef AMDGV_MIGRATION_DEBUG
+	/* Output RWL values in dynamic export pkg for debugging purpose */
+	if ((type == PSP_MIGRATION_IMPORT_DYNAMIC_DATA) &&
+		 psp_v13_migration_rwl_debug_print(adapt, idx_vf)) {
+		ret = AMDGV_FAILURE;
+	}
+#endif
 
 	if (type == PSP_MIGRATION_EXPORT_STATIC_DATA ||
 		type == PSP_MIGRATION_EXPORT_DYNAMIC_DATA)
@@ -883,6 +949,9 @@ static int psp_v13_sw_init(struct amdgv_adapter *adapt)
 	    psp_v13_program_guest_mc_settings;
 	adapt->psp.transfer_manifest_data = psp_v13_transfer_manifest_data;
 	adapt->psp.get_migration_info = psp_v13_migration_get_psp_info;
+#ifdef AMDGV_MIGRATION_DEBUG
+	adapt->psp.print_migration_rwl = psp_v13_migration_rwl_debug_print;
+#endif
 	psp_ret = amdgv_psp_sw_init(adapt);
 	adapt->psp.ras_context.set_init_flag = true;
 

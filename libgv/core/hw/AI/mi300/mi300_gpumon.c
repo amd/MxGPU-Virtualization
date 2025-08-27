@@ -765,33 +765,13 @@ static struct amdgv_gpumon_accelerator_partition_profile_config
 		{
 			1,
 			AMDGV_GPUMON_ACCELERATOR_PARTITION_DPX,
-			{ .mp_caps = {.nps1_cap = 1, .nps2_cap = 1 } },
+			{ .mp_caps = {.nps2_cap = 1 } },
 			2,
 			{0, 1},
 			2,
 			{ { 2, 6 }, { 2, 6 } },
 			(1 << 1)
 		},
-		{
-			2,
-			AMDGV_GPUMON_ACCELERATOR_PARTITION_QPX,
-			{ .mp_caps = {.nps1_cap = 1, .nps2_cap = 1 } },
-			4,
-			{0, 1, 2, 3},
-			2,
-			{ { 1, 5 }, { 1, 5 }, { 1, 5 }, { 1, 5 } },
-			(1 << 1)
-		},
-		{
-			3,
-			AMDGV_GPUMON_ACCELERATOR_PARTITION_CPX,
-			{ .mp_caps = {.nps1_cap = 1, .nps2_cap = 1 } },
-			8,
-			{0, 1, 2, 3, 4, 5, 6, 7},
-			2,
-			{ { 0, 4 }, { 0, 4 }, { 0, 4 }, { 0, 4 }, { 0, 4 }, { 0, 4 }, { 0, 4 }, { 0, 4 } },
-			(1 << 1)
-		}
 	}
 };
 

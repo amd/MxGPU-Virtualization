@@ -260,7 +260,10 @@ static int mi300_read_ip_discovery(struct amdgv_adapter *adapt,
 	for (i = (offset >> 2); i < size_dw; i++, addr += 4)
 		adapt->ip_discovery.pf_copy.data[i] = READ_FB32(addr);
 
-	oss_memcpy(adapt->ip_discovery.origin_pf_copy.data, adapt->ip_discovery.pf_copy.data, size);
+	/* Only update the pf original copy when reading the whole data i.e. first time */
+	if (offset == 0 && size == AMDGV_IP_DISCOVERY_SIZE)
+		oss_memcpy(adapt->ip_discovery.origin_pf_copy.data,
+				adapt->ip_discovery.pf_copy.data, size);
 
 	return 0;
 }
@@ -452,7 +455,7 @@ static void mi300_hw_ip_baddr(struct amdgv_adapter *adapt, struct amdgv_ip_v4 *i
 		 * reading adapt->reg_offset[][][x] and getting a (non-zero)
 		 * 32-bit address */
 		for (k = 0; k < ip->num_base_address; k++) {
-			ip->base_address[k] = (uint32_t)ip->base_address_64[k];
+			ip->base_address[k] = ((uint64_t *)ip->base_address)[k];
 		}
 	}
 
@@ -478,7 +481,7 @@ static int mi300_parse_ip_baddr(struct amdgv_adapter *adapt)
 {
 	struct amdgv_ip_discovery_info *pf_copy;
 	struct amdgv_die_header *dhdr;
-	int i, j;
+	int i, j, k;
 	struct amdgv_ip_v4 *ip = NULL;
 	uint8_t *start;
 
@@ -490,10 +493,16 @@ static int mi300_parse_ip_baddr(struct amdgv_adapter *adapt)
 	forEachDie(i, dhdr, pf_copy->ihdr, start) {
 		AMDGV_DEBUG("Die: %d ID: 0x%x num_ips: %d\n", i, dhdr->die_id, dhdr->num_ips);
 		forEachIPv4(j, ip, dhdr, pf_copy->ihdr) {
-			AMDGV_DEBUG("ip %s [hwid=%d, inst=%d, nba=%d]"
-				"\tv%d.%d rev(%d)\t@%016x\n",
-				hw_id_names[ip->hw_id], ip->hw_id, ip->instance_number, ip->num_base_address,
-				ip->major, ip->minor, ip->revision, ip->base_address_64[0]);
+			AMDGV_DEBUG("ip %s [hwid=%d, inst=%d, nba=%d]\tv%d.%d rev(%d)",
+				    hw_id_names[ip->hw_id], ip->hw_id, ip->instance_number,
+				    ip->num_base_address, ip->major, ip->minor, ip->revision);
+			for (k = 0; k < ip->num_base_address; k++) {
+				if (pf_copy->ihdr->base_addr_64_bit)
+					AMDGV_DEBUG("\t@%016x", ((uint64_t *)ip->base_address)[k]);
+				else
+					AMDGV_DEBUG("\t@%08x", ip->base_address[k]);
+			}
+			AMDGV_DEBUG("\n");
 			mi300_hw_ip_baddr(adapt, ip, pf_copy->ihdr);
 		}
 	}
@@ -726,10 +735,16 @@ static int mi300_ip_discovery_patch_vf_copy(struct amdgv_adapter *adapt,
 	forEachDie(i, dhdr, vf_copy->ihdr, start) {
 		AMDGV_DEBUG("Die: %d ID: 0x%x num_ips: %d\n", i, dhdr->die_id, dhdr->num_ips);
 		forEachIPv4(j, ip, dhdr, vf_copy->ihdr) {
-			AMDGV_DEBUG("ip %s [hwid=%d, inst=%d, nba=%d]"
-				"\tv%d.%d rev(%d)\t@%016x\n",
-				hw_id_names[ip->hw_id], ip->hw_id, ip->instance_number, ip->num_base_address,
-				ip->major, ip->minor, ip->revision, ip->base_address_64[0]);
+			AMDGV_DEBUG("ip %s [hwid=%d, inst=%d, nba=%d]\tv%d.%d rev(%d)",
+				    hw_id_names[ip->hw_id], ip->hw_id, ip->instance_number,
+				    ip->num_base_address, ip->major, ip->minor, ip->revision);
+			for (k = 0; k < ip->num_base_address; k++) {
+				if (pf_copy->ihdr->base_addr_64_bit)
+					AMDGV_DEBUG("\t@%016x", ((uint64_t *)ip->base_address)[k]);
+				else
+					AMDGV_DEBUG("\t@%08x", ip->base_address[k]);
+			}
+			AMDGV_DEBUG("\n");
 		}
 	}
 

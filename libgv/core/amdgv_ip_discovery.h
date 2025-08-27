@@ -38,23 +38,20 @@
 	     ((dhdr = (struct amdgv_die_header *)((start) + (ihdr)->die_info[i].die_offset)) != 0);  \
 	     i++)
 
-#define forEachIP(i, ip, dhdr)                                                                \
-	for (i = 0;                                                                           \
-	     i < (dhdr)->num_ips &&                                                           \
-	     (((ip) = (struct amdgv_ip *)(i == 0 ?                                             \
-		(uint8_t *)(dhdr) + sizeof(struct amdgv_die_header) :                         \
-		(uint8_t *)(ip) + sizeof(struct amdgv_ip) + 4 * ((ip)->num_base_address - 1))) != 0); \
-	     i++)
+#define forEachIP(i, ip, dhdr)                                                            \
+	for (i = 0; i < (dhdr)->num_ips &&                                                    \
+		 ((ip) = (struct amdgv_ip *)(i == 0 ?                                             \
+			(uint8_t *)(dhdr) + sizeof(struct amdgv_die_header) :                         \
+			(uint8_t *)(ip) + sizeof(struct amdgv_ip) + 4 * (ip)->num_base_address));     \
+		i++)
 
-#define forEachIPv4(i, ip, dhdr, ihdr)                                                        \
-	for (i = 0;                                                                           \
-	     i < (dhdr)->num_ips &&                                                           \
-	     (((ip) = (struct amdgv_ip_v4 *)(i == 0 ?                                          \
-		(uint8_t *)(dhdr) + sizeof(struct amdgv_die_header) :                         \
-		ihdr->base_addr_64_bit == 0 ?                                                 \
-		(uint8_t *)(ip) + (sizeof(struct amdgv_ip_v4) - 4) + 4 * ((ip)->num_base_address - 1) : \
-		(uint8_t *)(ip) + sizeof(struct amdgv_ip_v4) + 8 * ((ip)->num_base_address - 1))) != 0); \
-	     i++)
+#define forEachIPv4(i, ip, dhdr, ihdr)                                                    \
+	for (i = 0; i < (dhdr)->num_ips &&                                                    \
+		 ((ip) = (struct amdgv_ip_v4 *)(i == 0 ?                                          \
+			(uint8_t *)(dhdr) + sizeof(struct amdgv_die_header) :                         \
+			(uint8_t *)(ip) + sizeof(struct amdgv_ip_v4)                                  \
+			+ (ihdr->base_addr_64_bit ? 8 : 4) * (ip)->num_base_address));                \
+		i++)
 
 #define IP_VERSION_FULL(mj, mn, rv, var, srev) \
 	(((mj) << 24) | ((mn) << 16) | ((rv) << 8) | ((var) << 4) | (srev))
@@ -294,7 +291,7 @@ struct amdgv_ip {
 	uint8_t revision;
 	uint8_t harvest	 : 4;
 	uint8_t reserved : 4;
-	uint32_t base_address[1];
+	uint32_t base_address[];
 };
 
 struct amdgv_ip_v4 {
@@ -306,10 +303,7 @@ struct amdgv_ip_v4 {
 	uint8_t revision;
 	uint8_t sub_revision : 4; /* HCID Sub-Revision */
 	uint8_t variant : 4; /* HW variant */
-	union {
-		uint32_t base_address[1];
-		uint64_t base_address_64[1];
-	};
+	uint32_t base_address[];
 };
 
 struct amdgv_die_header {
