@@ -1399,38 +1399,39 @@ static int amdgv_device_func_hw_init(struct amdgv_adapter *adapt)
 	struct amdgv_init_func *init_func;
 
 	if (adapt->opt.skip_hw_init) {
+		int ret;
+		uint32_t world_switch_id;
+		uint32_t hw_sched_id;
+		struct amdgv_sched_world_switch *world_switch;
+
 		AMDGV_INFO("Skip hw init for live update.\n");
 
 		if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_UPDATE) {
-			int ret;
-			uint32_t world_switch_id;
-			uint32_t hw_sched_id;
-			struct amdgv_sched_world_switch *world_switch;
 
 			AMDGV_INFO("Enable SRIOV for GPUV.\n");
 			ret = oss_pci_enable_sriov(adapt->dev, adapt->num_vf);
 			if (ret)
 				AMDGV_ERROR("Enable SRIOV for GPUV failed\n");
+		}
 
-			if ((adapt->flags & AMDGV_FLAG_DISABLE_SDMA_ENGINE) &&
-				(adapt->flags & AMDGV_FLAG_DISABLE_COMPUTE_ENGINE)) {
-				// Prep PF Shutdown: idle, save
-				for_each_id(world_switch_id, amdgv_sched_get_world_switch_mask(adapt, AMDGV_PF_IDX)) {
-					world_switch = &adapt->sched.world_switch[world_switch_id];
-					for_each_id(hw_sched_id, world_switch->hw_sched_mask) {
-						adapt->gpuiov.ctrl_blocks[hw_sched_id].last_cmd = AMDGV_RUN_GPU;
-					}
+		if ((adapt->flags & AMDGV_FLAG_DISABLE_SDMA_ENGINE) &&
+			(adapt->flags & AMDGV_FLAG_DISABLE_COMPUTE_ENGINE)) {
+			// Prep PF Shutdown: idle, save
+			for_each_id(world_switch_id, amdgv_sched_get_world_switch_mask(adapt, AMDGV_PF_IDX)) {
+				world_switch = &adapt->sched.world_switch[world_switch_id];
+				for_each_id(hw_sched_id, world_switch->hw_sched_mask) {
+					adapt->gpuiov.ctrl_blocks[hw_sched_id].last_cmd = AMDGV_RUN_GPU;
 				}
-				ret = amdgv_sched_context_save(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_ALL);
-
-				ret = amdgv_sched_shutdown_vf(adapt, AMDGV_PF_IDX);
-				ret = amdgv_sched_init_pf_state(adapt);
-
-				if (ret)
-					AMDGV_ERROR("Init PF state failed after GPUV live update, status: 0x%x\n", ret);
-			} else {
-				amdgv_device_func_hw_live_init(adapt);
 			}
+			ret = amdgv_sched_context_save(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_ALL);
+
+			ret = amdgv_sched_shutdown_vf(adapt, AMDGV_PF_IDX);
+			ret = amdgv_sched_init_pf_state(adapt);
+
+			if (ret)
+				AMDGV_ERROR("Init PF state failed after GPUV live update, status: 0x%x\n", ret);
+		} else {
+			amdgv_device_func_hw_live_init(adapt);
 		}
 
 		return 0;
@@ -1545,6 +1546,26 @@ int amdgv_device_func_hw_live_init(struct amdgv_adapter *adapt)
 		if (init_func->hw_live_init) {
 			AMDGV_INFO("start hw_live_init of %s\n", init_func->name);
 			ret = init_func->hw_live_init(adapt);
+			if (ret < 0) {
+				amdgv_print_failed_init_name(adapt, false, init_func->name);
+				break;
+			}
+		}
+	}
+	return ret;
+}
+
+int amdgv_device_func_hw_live_fini(struct amdgv_adapter *adapt)
+{
+	struct amdgv_init_func *init_func;
+	int ret = 0, i;
+
+	/* hw live fini */
+	for (i = 0; i < adapt->num_funcs; i++) {
+		init_func = adapt->init_funcs[i];
+		if (init_func->hw_live_fini) {
+			AMDGV_INFO("start hw_live_fini of %s\n", init_func->name);
+			ret = init_func->hw_live_fini(adapt);
 			if (ret < 0) {
 				amdgv_print_failed_init_name(adapt, false, init_func->name);
 				break;
@@ -1809,6 +1830,10 @@ struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_da
 		AMDGV_WARN("please add reg_base_init() for your ASIC\n");
 		goto fail;
 	}
+	/* set mapped_fb_size */
+	adapt->mapped_fb_size = adapt->fb_size;
+	if ((adapt->flags & AMDGV_FLAG_USE_PF) && adapt->fb_size > MAX_OS_FB_MAPPING_SIZE)
+		adapt->mapped_fb_size = MAX_OS_FB_MAPPING_SIZE;
 
 	/* diagnosis data initialization */
 	if (amdgv_diag_data_init(adapt) < 0)
@@ -1970,8 +1995,10 @@ void amdgv_device_internal_fini(struct amdgv_adapter *adapt,
 			 * to notify all other threads stop touching hardware */
 			adapt->status = AMDGV_STATUS_HW_FINI;
 			amdgv_device_func_hw_fini(adapt);
-		} else
+		} else {
 			AMDGV_INFO("Skip HW fini.\n");
+			amdgv_device_func_hw_live_fini(adapt);
+		}
 	}
 
 	adapt->status = AMDGV_STATUS_SW_FINI;
@@ -2201,6 +2228,8 @@ enum amdgv_gpumon_vram_type vram_type_to_gpumon_vram_type(enum amdgv_vram_type v
 		return AMDGV_GPUMON_DGPU_VRAM_TYPE__GDDR6;
 	case AMDGV_DGPU_VRAM_TYPE__HBM3:
 		return AMDGV_GPUMON_DGPU_VRAM_TYPE__HBM3;
+	case AMDGV_DGPU_VRAM_TYPE__HBM3E:
+		return AMDGV_GPUMON_DGPU_VRAM_TYPE__HBM3E;
 	case AMDGV_DGPU_VRAM_TYPE__GDDR7:
 		return AMDGV_GPUMON_DGPU_VRAM_TYPE__GDDR7;
 	default:

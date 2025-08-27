@@ -38,6 +38,34 @@ uint64_t gfxhub_v1_2_get_mc_fb_offset(struct amdgv_adapter *adapt)
 	return (uint64_t)RREG32_SOC15(GC, GET_INST(GC, 0), regMC_VM_FB_OFFSET) << 24;
 }
 
+static void gfxhub_v1_2_init_gart_aperture_regs(struct amdgv_adapter *adapt)
+{
+	uint64_t page_table_base;
+	int i;
+
+	page_table_base = amdgv_memmgr_get_gpu_pa(adapt->pdb0_mem);
+	page_table_base |= AMDGV_PTE_VALID;
+	page_table_base |= AMDGV_PTE_SNOOPED;
+
+	for (i = 0; i < adapt->mcp.gfx.num_xcc; i++) {
+		WREG32_SOC15(GC, GET_INST(GC, i), regVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32,
+			     lower_32_bits(page_table_base));
+
+		WREG32_SOC15(GC, GET_INST(GC, i), regVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32,
+			     upper_32_bits(page_table_base));
+
+		WREG32_SOC15(GC, GET_INST(GC, i), regVM_CONTEXT0_PAGE_TABLE_START_ADDR_LO32,
+			     (uint32_t)(GART_START >> 12));
+		WREG32_SOC15(GC, GET_INST(GC, i), regVM_CONTEXT0_PAGE_TABLE_START_ADDR_HI32,
+			     (uint32_t)(GART_START >> 44));
+
+		WREG32_SOC15(GC, GET_INST(GC, i), regVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32,
+			     (uint32_t)((adapt->gart_size + GART_START) >> 12));
+		WREG32_SOC15(GC, GET_INST(GC, i), regVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32,
+			     (uint32_t)((adapt->gart_size + GART_START) >> 44));
+	}
+}
+
 static void gfxhub_v1_2_init_system_aperture_regs(struct amdgv_adapter *adapt)
 {
 	uint32_t tmp;
@@ -128,6 +156,33 @@ static void gfxhub_v1_2_init_cache_regs(struct amdgv_adapter *adapt)
 		tmp = REG_SET_FIELD(tmp, VM_L2_CNTL4, VMC_TAP_PDE_REQUEST_PHYSICAL, 0);
 		tmp = REG_SET_FIELD(tmp, VM_L2_CNTL4, VMC_TAP_PTE_REQUEST_PHYSICAL, 0);
 		WREG32_SOC15(GC, GET_INST(GC, i), regVM_L2_CNTL4, tmp);
+	}
+}
+
+static void gfxhub_v1_2_enable_system_domain(struct amdgv_adapter *adapt)
+{
+	uint32_t tmp;
+	int i, j;
+	struct amdgv_vmhub *hub;
+
+	for (i = 0; i < adapt->mcp.gfx.num_xcc; i++) {
+		tmp = RREG32_SOC15(GC, GET_INST(GC, i), regVM_CONTEXT0_CNTL);
+		tmp = REG_SET_FIELD(tmp, VM_CONTEXT0_CNTL, ENABLE_CONTEXT, 1);
+		tmp = REG_SET_FIELD(tmp, VM_CONTEXT0_CNTL, PAGE_TABLE_DEPTH, 1);
+		tmp = REG_SET_FIELD(tmp, VM_CONTEXT0_CNTL, PAGE_TABLE_BLOCK_SIZE, 12);
+		tmp = REG_SET_FIELD(tmp, VM_CONTEXT0_CNTL,
+				    RETRY_PERMISSION_OR_INVALID_PAGE_FAULT, 0);
+		WREG32_SOC15(GC, GET_INST(GC, i), regVM_CONTEXT0_CNTL, tmp);
+
+		hub = &adapt->vmhub[AMDGV_GFXHUB(i)];
+		if (!hub->eng_addr_distance)
+			continue;
+		for (j = 0 ; j < 18; ++j) {
+			WREG32_SOC15_OFFSET(GC, GET_INST(GC, i), regVM_INVALIDATE_ENG0_ADDR_RANGE_LO32,
+					    j * hub->eng_addr_distance, 0xffffffff);
+			WREG32_SOC15_OFFSET(GC, GET_INST(GC, i), regVM_INVALIDATE_ENG0_ADDR_RANGE_HI32,
+					    j * hub->eng_addr_distance, 0x1f);
+		}
 	}
 }
 
@@ -271,9 +326,11 @@ void gfxhub_v1_2_enable_xgmi(struct amdgv_adapter *adapt)
 
 void gfxhub_v1_2_gart_enable(struct amdgv_adapter *adapt)
 {
+	gfxhub_v1_2_init_gart_aperture_regs(adapt);
 	gfxhub_v1_2_init_system_aperture_regs(adapt);
 	gfxhub_v1_2_init_tlb_regs(adapt);
 	gfxhub_v1_2_init_cache_regs(adapt);
+	gfxhub_v1_2_enable_system_domain(adapt);
 	gfxhub_v1_2_disable_identity_aperture(adapt);
 	gfxhub_v1_2_set_fault_enable_default(adapt, !is_debug_mode_hang());
 }
@@ -291,5 +348,46 @@ void gfxhub_v1_2_gart_fini(struct amdgv_adapter *adapt)
 
 		/* regVM_L2_CNTL3 */
 		WREG32_SOC15(GC, GET_INST(GC, i), regVM_L2_CNTL3, 0);
+	}
+}
+
+void gfxhub_v1_2_init(struct amdgv_adapter *adapt)
+{
+	struct amdgv_vmhub *hub;
+	int i;
+
+	for (i = 0; i < adapt->mcp.gfx.num_xcc; i++) {
+		hub = &adapt->vmhub[AMDGV_GFXHUB(i)];
+
+		hub->ctx0_ptb_addr_lo32 =
+			SOC15_REG_OFFSET(GC, GET_INST(GC, i),
+				regVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32);
+		hub->ctx0_ptb_addr_hi32 =
+			SOC15_REG_OFFSET(GC, GET_INST(GC, i),
+				regVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32);
+		hub->vm_inv_eng0_sem =
+			SOC15_REG_OFFSET(GC, GET_INST(GC, i), regVM_INVALIDATE_ENG0_SEM);
+		hub->vm_inv_eng0_req =
+			SOC15_REG_OFFSET(GC, GET_INST(GC, i), regVM_INVALIDATE_ENG0_REQ);
+		hub->vm_inv_eng0_ack =
+			SOC15_REG_OFFSET(GC, GET_INST(GC, i), regVM_INVALIDATE_ENG0_ACK);
+		hub->vm_context0_cntl =
+			SOC15_REG_OFFSET(GC, GET_INST(GC, i), regVM_CONTEXT0_CNTL);
+		hub->vm_l2_pro_fault_status =
+			SOC15_REG_OFFSET(GC, GET_INST(GC, i),
+				regVM_L2_PROTECTION_FAULT_STATUS);
+		hub->vm_l2_pro_fault_cntl =
+			SOC15_REG_OFFSET(GC, GET_INST(GC, i), regVM_L2_PROTECTION_FAULT_CNTL);
+
+		hub->ctx_distance = regVM_CONTEXT1_CNTL -
+				regVM_CONTEXT0_CNTL;
+		hub->ctx_addr_distance =
+				regVM_CONTEXT1_PAGE_TABLE_BASE_ADDR_LO32 -
+				regVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32;
+		hub->eng_distance = regVM_INVALIDATE_ENG1_REQ -
+				regVM_INVALIDATE_ENG0_REQ;
+		hub->eng_addr_distance =
+				regVM_INVALIDATE_ENG1_ADDR_RANGE_LO32 -
+				regVM_INVALIDATE_ENG0_ADDR_RANGE_LO32;
 	}
 }

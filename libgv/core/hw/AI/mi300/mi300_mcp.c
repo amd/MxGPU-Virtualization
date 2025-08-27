@@ -26,6 +26,8 @@
 #include "amdgv_mcp.h"
 #include "mi300/NBIO/nbio_7_9_0_offset.h"
 #include "mi300/NBIO/nbio_7_9_0_sh_mask.h"
+#include "mi300/GC/gc_9_4_3_offset.h"
+#include "mi300/GC/gc_9_4_3_sh_mask.h"
 #include "mi300_gpuiov.h"
 
 static const uint32_t this_block = AMDGV_COMMUNICATION_BLOCK;
@@ -156,6 +158,19 @@ static int mi300_mcp_get_vf_mask_by_aid(struct amdgv_adapter *adapt, uint32_t id
 	return vf_mask;
 }
 
+static int mi300_mcp_get_xcp_by_xcc(struct amdgv_adapter *adapt, uint32_t idx_xcc)
+{
+	uint32_t num_xcc_in_xcp;
+
+	num_xcc_in_xcp = REG_GET_FIELD(RREG32(SOC15_REG_OFFSET(GC, GET_INST(GC, 0), regCP_HYP_XCP_CTL)),
+				       CP_HYP_XCP_CTL, NUM_XCC_IN_XCP);
+
+	if (!num_xcc_in_xcp)
+		return 0;
+
+	return (idx_xcc / num_xcc_in_xcp);
+}
+
 static int mi300_mcp_sw_init(struct amdgv_adapter *adapt)
 {
 	adapt->mcp.amdgv_mcp_get_gfx_num_spatial_partitions =
@@ -163,6 +178,7 @@ static int mi300_mcp_sw_init(struct amdgv_adapter *adapt)
 	adapt->mcp.amdgv_mcp_get_spatial_partition_mode = mi300_mcp_get_spatial_partition_mode;
 	adapt->mcp.get_vf_mask_by_xcc = mi300_mcp_get_vf_mask_by_xcc;
 	adapt->mcp.get_vf_mask_by_aid = mi300_mcp_get_vf_mask_by_aid;
+	adapt->mcp.get_xcp_by_xcc = mi300_mcp_get_xcp_by_xcc;
 
 	mi300_mcp_set_spatial_partition_mode(adapt);
 	mi300_mcp_set_num_xcc_per_partition(adapt);

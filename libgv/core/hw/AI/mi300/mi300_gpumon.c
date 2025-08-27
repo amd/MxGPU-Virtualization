@@ -544,7 +544,7 @@ static inline const char *mi300_get_memory_partition_mode_desc(
 }
 
 static const char *mi300_get_accelerator_partition_mode_desc(
-	struct amdgv_adapter *adapt, uint32_t accelerator_partition_mode)
+	struct amdgv_adapter *adapt, enum amdgv_accelerator_partition_mode accelerator_partition_mode)
 {
 	switch (accelerator_partition_mode) {
 	case 1:
@@ -570,7 +570,11 @@ static int mi300_get_memory_partition_config(
 
 	memory_partition_config->mp_cap_mask = 0;
 	memory_partition_config->mp_caps.nps1_cap = 1;
-	memory_partition_config->mp_caps.nps4_cap = 1;
+
+	if (adapt->asic_type == CHIP_MI350X)
+		memory_partition_config->mp_caps.nps2_cap = 1;
+	else
+		memory_partition_config->mp_caps.nps4_cap = 1;
 
 	return 0;
 }
@@ -580,7 +584,7 @@ static int mi300_set_memory_partition_mode(
 	enum amdgv_memory_partition_mode memory_partition_mode)
 {
 	enum psp_status psp_ret = PSP_STATUS__SUCCESS;
-	uint32_t default_accelerator_partition_mode;
+	enum amdgv_accelerator_partition_mode default_accelerator_partition_mode;
 
 	default_accelerator_partition_mode =
 		mi300_nbio_get_accelerator_partition_mode_default_setting(
@@ -733,6 +737,64 @@ static struct amdgv_gpumon_accelerator_partition_profile_config
 	}
 };
 
+static struct amdgv_gpumon_accelerator_partition_profile_config
+	mi350x_accelerator_partition_profile_configs = {
+	8, // number_of_resource_profiles
+	{
+		{ 0, AMDGV_GPUMON_ACCELERATOR_PARTITION_RESOURCE_XCC, 1, 1 },
+		{ 1, AMDGV_GPUMON_ACCELERATOR_PARTITION_RESOURCE_XCC, 2, 1 },
+		{ 2, AMDGV_GPUMON_ACCELERATOR_PARTITION_RESOURCE_XCC, 4, 1 },
+		{ 3, AMDGV_GPUMON_ACCELERATOR_PARTITION_RESOURCE_XCC, 8, 1 },
+		{ 4, AMDGV_GPUMON_ACCELERATOR_PARTITION_RESOURCE_DECODER, 1, 2 },
+		{ 5, AMDGV_GPUMON_ACCELERATOR_PARTITION_RESOURCE_DECODER, 1, 1 },
+		{ 6, AMDGV_GPUMON_ACCELERATOR_PARTITION_RESOURCE_DECODER, 2, 1 },
+		{ 7, AMDGV_GPUMON_ACCELERATOR_PARTITION_RESOURCE_DECODER, 4, 1 }
+	},
+	4, // number_of_profiles
+	{
+		{
+			0,
+			AMDGV_GPUMON_ACCELERATOR_PARTITION_SPX,
+			{ .mp_caps = {.nps1_cap = 1 } },
+			1,
+			{0},
+			2,
+			{ { 3, 7 } },
+			(1 << 1)
+		},
+		{
+			1,
+			AMDGV_GPUMON_ACCELERATOR_PARTITION_DPX,
+			{ .mp_caps = {.nps1_cap = 1, .nps2_cap = 1 } },
+			2,
+			{0, 1},
+			2,
+			{ { 2, 6 }, { 2, 6 } },
+			(1 << 1)
+		},
+		{
+			2,
+			AMDGV_GPUMON_ACCELERATOR_PARTITION_QPX,
+			{ .mp_caps = {.nps1_cap = 1, .nps2_cap = 1 } },
+			4,
+			{0, 1, 2, 3},
+			2,
+			{ { 1, 5 }, { 1, 5 }, { 1, 5 }, { 1, 5 } },
+			(1 << 1)
+		},
+		{
+			3,
+			AMDGV_GPUMON_ACCELERATOR_PARTITION_CPX,
+			{ .mp_caps = {.nps1_cap = 1, .nps2_cap = 1 } },
+			8,
+			{0, 1, 2, 3, 4, 5, 6, 7},
+			2,
+			{ { 0, 4 }, { 0, 4 }, { 0, 4 }, { 0, 4 }, { 0, 4 }, { 0, 4 }, { 0, 4 }, { 0, 4 } },
+			(1 << 1)
+		}
+	}
+};
+
 /* Only containing profile configs valid for current num_vf, filled in
  * mi300_get_accelerator_partition_profile_asic_config
  */
@@ -752,7 +814,7 @@ mi300_get_accelerator_partition_profile_asic_config_global(struct amdgv_adapter 
 	} else if (adapt->asic_type == CHIP_MI308X) {
 		return &mi308x_accelerator_partition_profile_configs;
 	} else if (adapt->asic_type == CHIP_MI350X) {
-		return &mi300x_accelerator_partition_profile_configs;
+		return &mi350x_accelerator_partition_profile_configs;
 	} else {
 		AMDGV_ERROR("asic_type=%u not supported\n", adapt->asic_type);
 		return NULL;
@@ -923,6 +985,10 @@ static int mi300_set_accelerator_partition_profile(struct amdgv_adapter *adapt,
 		return AMDGV_FAILURE;
 	}
 
+	/* Re-init partition mapping for all metrics */
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->init_drv_metrics_ext)
+		adapt->pp.pp_funcs->init_drv_metrics_ext(adapt);
+
 	return 0;
 }
 
@@ -930,7 +996,7 @@ static int mi300_get_accelerator_partition_profile(
 	struct amdgv_adapter *adapt,
 	struct amdgv_gpumon_acccelerator_partition_profile *profile)
 {
-	uint32_t accelerator_partition_mode;
+	enum amdgv_accelerator_partition_mode accelerator_partition_mode;
 	struct amdgv_gpumon_accelerator_partition_profile_config
 		*profile_asic_configs;
 	uint32_t i;
@@ -1006,7 +1072,10 @@ static int mi300_get_memory_partition_mode(
 
 	memory_partition_info->num_numa_ranges = adapt->mcp.numa_count;
 	for (i = 0; i < memory_partition_info->num_numa_ranges; i++) {
-		memory_partition_info->numa_range[i].memory_type = AMDGV_GPUMON_DGPU_VRAM_TYPE__HBM3;
+		memory_partition_info->numa_range[i].memory_type =
+			(adapt->vram_info.vram_type == AMDGV_DGPU_VRAM_TYPE__HBM3E) ?
+				AMDGV_GPUMON_DGPU_VRAM_TYPE__HBM3E : AMDGV_GPUMON_DGPU_VRAM_TYPE__HBM3;
+
 		memory_partition_info->numa_range[i].start = adapt->mcp.numa_range[i].start;
 		memory_partition_info->numa_range[i].end = adapt->mcp.numa_range[i].end;
 	}

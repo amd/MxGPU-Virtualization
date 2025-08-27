@@ -34,6 +34,7 @@
 #include "amdgv_ecc.h"
 #include "amdgv_gfx.h"
 #include "amdgv_marketing_name.h"
+#include "amdgv_gart.h"
 
 #define AMDGV_API
 
@@ -100,6 +101,7 @@ const char *const amdgv_inf_name[] = {
 	"free_memory",
 	"alloc_dma_mem",
 	"free_dma_mem",
+	"sg_dma_address",
 	"memremap",
 	"memunmap",
 	"memset",
@@ -207,6 +209,7 @@ const char *const amdgv_inf_name[] = {
 	"save_accelerator_partition_mode",
 	"save_memory_partition_mode",
 	"clear_conf_file",
+	"mb",
 	"schedule_work",
 	"notify_shim_ext",
 	"store_gfx_dump_data",
@@ -1484,6 +1487,7 @@ int amdgv_get_guard_info(amdgv_dev_t dev, uint32_t idx_vf, struct amdgv_guard_in
 
 static int default_threshold[AMDGV_GUARD_EVENT_MAX] = {
 	[AMDGV_GUARD_EVENT_FLR] = AMDGV_DEFAULT_FLR_THRESHOLD,
+	[AMDGV_GUARD_EVENT_WGR] = AMDGV_DEFAULT_WGR_THRESHOLD,
 	[AMDGV_GUARD_EVENT_EXCLUSIVE_MOD] = AMDGV_DEFAULT_EXCLUSIVE_THRESHOLD,
 	[AMDGV_GUARD_EVENT_EXCLUSIVE_TIMEOUT] = AMDGV_DEFAULT_EXCLUSIVE_TIMEOUT_THRESHOLD,
 	[AMDGV_GUARD_EVENT_ALL_INT] = AMDGV_DEFAULT_INTERRUPT_THRESHOLD,
@@ -1494,6 +1498,7 @@ static int default_threshold[AMDGV_GUARD_EVENT_MAX] = {
 
 static int default_interval[AMDGV_GUARD_EVENT_MAX] = {
 	[AMDGV_GUARD_EVENT_FLR] = AMDGV_DEFAULT_FLR_INTERVAL,
+	[AMDGV_GUARD_EVENT_WGR] = AMDGV_DEFAULT_WGR_INTERVAL,
 	[AMDGV_GUARD_EVENT_EXCLUSIVE_MOD] = AMDGV_DEFAULT_EXCLUSIVE_INTERVAL,
 	[AMDGV_GUARD_EVENT_EXCLUSIVE_TIMEOUT] = AMDGV_DEFAULT_EXCLUSIVE_TIMEOUT_INTERVAL,
 	[AMDGV_GUARD_EVENT_ALL_INT] = AMDGV_DEFAULT_INTERRUPT_INTERVAL,
@@ -1942,6 +1947,18 @@ int amdgv_import_live_info_data(amdgv_dev_t dev, uint32_t data_op, void *data,
 	oss_mutex_unlock(adapt->api_lock);
 
 	return ret;
+}
+
+int amdgv_restore_ultralite_data(amdgv_dev_t dev)
+{
+	struct amdgv_adapter* adapt;
+
+	if (dev != NULL)
+		adapt = (struct amdgv_adapter*)dev;
+	else
+		return AMDGV_ERROR_GPU_DEVICE_LOST;
+
+	return amdgv_restore_ultralite_vf_data(adapt);
 }
 
 int amdgv_lock_sched(amdgv_dev_t dev)
@@ -2540,21 +2557,154 @@ int amdgv_migration_get_dirty_page_size(amdgv_dev_t dev, uint32_t *dirty_page_si
 	return ret;
 }
 
+static inline bool amdgv_buffer_do_check(uint64_t addr, uint64_t size,
+					uint64_t aperture_start, uint64_t aperture_size)
+{
+	if (addr >= aperture_start && addr + size <= aperture_start + aperture_size)
+		return true;
+
+	return false;
+}
+
+static bool amdgv_buffer_check(struct amdgv_adapter *adapt, uint64_t gpu_addr, uint64_t size)
+{
+	if (size == 0)
+		return false;
+
+	if (amdgv_memmgr_get_cpu_addr(adapt->pdb0_mem)) {
+		if (amdgv_buffer_do_check(gpu_addr, size, GART_START, adapt->gart_size))
+			return true;
+	}
+
+	if (adapt->sys_mem_info.va_ptr) {
+		if (amdgv_buffer_do_check(gpu_addr, size, adapt->mc_agp_loc_addr, AMDGV_AGP_APERTURE_SIZE))
+			return true;
+	}
+
+	return false;
+}
+
 int amdgv_copy_migration_vf_fb(amdgv_dev_t dev, uint32_t idx_vf, uint32_t idx_fb_block,
 			       void *buf, bool to_fb)
 {
 	int ret;
 	struct amdgv_adapter *adapt;
+	union amdgv_sched_event_data data = {0};
+	int event_ret = 0;
+	uint64_t offset = 0;
+	uint64_t block_size = AMDGV_MIGRATION_VF_FB_COPY_BLOCK_SIZE;
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
-	oss_mutex_lock(adapt->api_lock);
+	if (!adapt->sys_mem_info.va_ptr)
+		return AMDGV_FAILURE;
 
-	ret = amdgv_misc_migrate_fb(adapt, idx_vf, idx_fb_block, buf, to_fb);
+	offset = ((uint8_t *)buf) - ((uint8_t *)adapt->sys_mem_info.va_ptr);
+	data.vf_fb_copy_data.vaddr = buf;
+	data.vf_fb_copy_data.fb_offset = idx_fb_block * block_size;
+	data.vf_fb_copy_data.gpu_addr = adapt->mc_agp_loc_addr + offset;
+	data.vf_fb_copy_data.size = block_size;
+	data.vf_fb_copy_data.to_fb = to_fb;
+	data.vf_fb_copy_data.result = &event_ret;
+
+	if (!amdgv_buffer_check(adapt, data.vf_fb_copy_data.gpu_addr,
+					data.vf_fb_copy_data.size)) {
+		AMDGV_ERROR("Invalid buffer address, exit.\n");
+		return AMDGV_FAILURE;
+	}
+
+	oss_mutex_lock(adapt->api_lock);
+	ret = amdgv_sched_queue_event_and_wait_ex(adapt, idx_vf,
+					  AMDGV_EVENT_VF_FB_COPY,
+					  AMDGV_SCHED_BLOCK_ALL, data);
+
+	if (!ret)
+		ret = event_ret;
 
 	oss_mutex_unlock(adapt->api_lock);
 
 	return ret;
+}
+
+int amdgv_vf_fb_copy(amdgv_dev_t dev, uint32_t idx_vf, uint64_t fb_offset,
+			     uint64_t size, uint64_t gpu_addr, bool to_fb, void *vaddr)
+{
+	struct amdgv_adapter *adapt;
+	union amdgv_sched_event_data data = {0};
+	int event_ret = 0;
+	int ret = 0;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	data.vf_fb_copy_data.fb_offset = fb_offset;
+	data.vf_fb_copy_data.size = size;
+	data.vf_fb_copy_data.gpu_addr = gpu_addr;
+	data.vf_fb_copy_data.to_fb = to_fb;
+	data.vf_fb_copy_data.vaddr = vaddr;
+	data.vf_fb_copy_data.result = &event_ret;
+
+	if (!amdgv_buffer_check(adapt, data.vf_fb_copy_data.gpu_addr,
+					data.vf_fb_copy_data.size)) {
+		AMDGV_ERROR("Invalid buffer address, exit.\n");
+		return AMDGV_FAILURE;
+	}
+
+	oss_mutex_lock(adapt->api_lock);
+	ret = amdgv_sched_queue_event_and_wait_ex(adapt, idx_vf,
+					  AMDGV_EVENT_VF_FB_COPY,
+					  AMDGV_SCHED_BLOCK_ALL, data);
+
+	if (!ret)
+		ret = event_ret;
+
+	oss_mutex_unlock(adapt->api_lock);
+	return ret;
+}
+
+static void amdgv_get_vf_identifier_v1(struct amdgv_adapter *adapt, uint32_t idx_vf, struct amdgv_vf_identifier *vf_id)
+{
+	vf_id->version = 0;
+	vf_id->v1_0.vf_fb_size_mb = adapt->array_vf[idx_vf].fb_size;
+	vf_id->v1_0.gfx_timeslice_us = adapt->array_vf[idx_vf].time_slice[AMDGV_SCHED_BLOCK_GFX];
+	vf_id->v1_0.mm_timeslice_us = 0;
+	vf_id->v1_0.vcn_engine_bitmask = 0;
+	vf_id->v1_0.jpeg_engine_bitmask = 0;
+	vf_id->v1_0.partition_config = 0;
+
+	AMDGV_DEBUG("migration ctx: fb size = %#x\n", vf_id->v1_0.vf_fb_size_mb);
+	AMDGV_DEBUG("migration ctx: gfx_timeslice_us = %#x\n",
+		    vf_id->v1_0.gfx_timeslice_us);
+}
+
+static void amdgv_get_vf_identifier_v2(struct amdgv_adapter *adapt, uint32_t idx_vf, struct amdgv_vf_identifier *vf_id)
+{
+	vf_id->vf_index = idx_vf;
+	vf_id->version = LIBGV_VF_VERSION;
+	vf_id->v2_0.vf_fb_size_mb = adapt->array_vf[idx_vf].fb_size;
+	vf_id->v2_0.partition_config = adapt->mcp.spatial_partition_mode;
+	vf_id->v2_0.sdma_engine_bitmask = adapt->mcp.gfx.sdma_mask;
+	vf_id->v2_0.hw_sched_engine_bitmask = amdgv_sched_get_hw_sched_mask_by_vf(adapt, idx_vf);
+	vf_id->v2_0.timeslice_gfx = adapt->array_vf[idx_vf].time_slice[AMDGV_SCHED_BLOCK_GFX];
+	vf_id->v2_0.timeslice_uvd = adapt->array_vf[idx_vf].time_slice[AMDGV_SCHED_BLOCK_UVD];
+	vf_id->v2_0.timeslice_vce = adapt->array_vf[idx_vf].time_slice[AMDGV_SCHED_BLOCK_VCE];
+	vf_id->v2_0.timeslice_uvd1 = adapt->array_vf[idx_vf].time_slice[AMDGV_SCHED_BLOCK_UVD1];
+	vf_id->v2_0.timeslice_vcn = adapt->array_vf[idx_vf].time_slice[AMDGV_SCHED_BLOCK_VCN];
+	vf_id->v2_0.timeslice_vcn1 = adapt->array_vf[idx_vf].time_slice[AMDGV_SCHED_BLOCK_VCN1];
+	vf_id->v2_0.timeslice_jpeg = adapt->array_vf[idx_vf].time_slice[AMDGV_SCHED_BLOCK_JPEG];
+
+	AMDGV_DEBUG("migration ctx: vf index = %d\n", vf_id->vf_index);
+	AMDGV_DEBUG("migration ctx: vf version = %#x\n", vf_id->version);
+	AMDGV_DEBUG("migration ctx: fb size = %#x\n", vf_id->v2_0.vf_fb_size_mb);
+	AMDGV_DEBUG("migration ctx: partition config = %d\n", vf_id->v2_0.partition_config);
+	AMDGV_DEBUG("migration ctx: sdma engine bitmask = %#x\n", vf_id->v2_0.sdma_engine_bitmask);
+	AMDGV_DEBUG("migration ctx: hw sched engine bitmask = %#x\n", vf_id->v2_0.hw_sched_engine_bitmask);
+	AMDGV_DEBUG("migration ctx: timeslice_gfx = %#x\n", vf_id->v2_0.timeslice_gfx);
+	AMDGV_DEBUG("migration ctx: timeslice_uvd = %#x\n", vf_id->v2_0.timeslice_uvd);
+	AMDGV_DEBUG("migration ctx: timeslice_vce = %#x\n", vf_id->v2_0.timeslice_vce);
+	AMDGV_DEBUG("migration ctx: timeslice_uvd1 = %#x\n", vf_id->v2_0.timeslice_uvd1);
+	AMDGV_DEBUG("migration ctx: timeslice_vcn = %#x\n", vf_id->v2_0.timeslice_vcn);
+	AMDGV_DEBUG("migration ctx: timeslice_vcn1 = %#x\n", vf_id->v2_0.timeslice_vcn1);
+	AMDGV_DEBUG("migration ctx: timeslice_jpeg = %#x\n", vf_id->v2_0.timeslice_jpeg);
 }
 
 int amdgv_get_migration_ctx(amdgv_dev_t dev, uint32_t idx_vf, struct amdgv_migration_ctx *ctx)
@@ -2562,7 +2712,6 @@ int amdgv_get_migration_ctx(amdgv_dev_t dev, uint32_t idx_vf, struct amdgv_migra
 	int ret = 0;
 	struct amdgv_adapter *adapt;
 	struct amdgv_vbios_info vbios_info;
-	struct amdgv_vf_device *vf_dev;
 	int i;
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
@@ -2575,10 +2724,13 @@ int amdgv_get_migration_ctx(amdgv_dev_t dev, uint32_t idx_vf, struct amdgv_migra
 	}
 
 	if (ctx) {
-		/* 0. Device ID will be retrived on shim level*/
+		uint32_t libgv_major_version, libgv_minor_version;
+
+		/* 0. Device ID */
+		ctx->gpu.device_id = adapt->dev_id;
+		AMDGV_DEBUG("migration ctx: device_id = %u\n", ctx->gpu.device_id);
 
 		/* 1. Get libgv version */
-		uint32_t libgv_major_version, libgv_minor_version;
 		amdgv_get_version((int *)&libgv_major_version, (int *)&libgv_minor_version);
 		ctx->gpu.libgv_version = libgv_major_version << 16 | libgv_minor_version;
 		AMDGV_DEBUG("migration ctx: libgv_version = %u\n", ctx->gpu.libgv_version);
@@ -2625,24 +2777,26 @@ int amdgv_get_migration_ctx(amdgv_dev_t dev, uint32_t idx_vf, struct amdgv_migra
 			ctx->gpu.fw[i - 1].id = i;
 		}
 
-		/* 5. get vf version. */
-		ctx->vf.version = 0;
+		switch (adapt->live_migration.context_version) {
+		case AMDGV_MIGRATION_CONTEXT_VERSION_V2:
+			ctx->gpu.nps_mode = adapt->mcp.memory_partition_mode;
+			ctx->gpu.xgmi_state = adapt->psp.xgmi_context.xgmi_initialized;
+			ctx->gpu.cu_num = adapt->config.gfx.active_cu_count;
+			ctx->gpu.num_vf = adapt->num_vf;
+			ctx->gpu.gpu_ordinate = adapt->xgmi.phy_node_id;
 
-		/* 6. get vf fb size */
-		vf_dev = &adapt->array_vf[idx_vf];
-		ctx->vf.v1_0.vf_fb_size_mb = vf_dev->fb_size;
-		AMDGV_DEBUG("migration ctx: fb size = %#x\n", ctx->vf.v1_0.vf_fb_size_mb);
+			AMDGV_DEBUG("migration ctx: nps mode = %d\n", ctx->gpu.nps_mode);
+			AMDGV_DEBUG("migration ctx: xgmi state = %d\n", ctx->gpu.xgmi_state);
+			AMDGV_DEBUG("migration ctx: cu num = %d\n", ctx->gpu.cu_num);
+			AMDGV_DEBUG("migration ctx: num vf = %d\n", ctx->gpu.num_vf);
+			AMDGV_DEBUG("migration ctx: gpu ordinate = %d\n", ctx->gpu.gpu_ordinate);
 
-		/* 7. get vf information:
-			not in use right now, will be implemented in the future */
-		ctx->vf.v1_0.gfx_timeslice_us = vf_dev->time_slice[AMDGV_SCHED_BLOCK_GFX];
-		AMDGV_DEBUG("migration ctx: gfx_timeslice_us = %#x\n",
-			    ctx->vf.v1_0.gfx_timeslice_us);
-
-		ctx->vf.v1_0.mm_timeslice_us = 0;
-		ctx->vf.v1_0.vcn_engine_bitmask = 0;
-		ctx->vf.v1_0.jpeg_engine_bitmask = 0;
-		ctx->vf.v1_0.partition_config = 0;
+			amdgv_get_vf_identifier_v2(adapt, idx_vf, &ctx->vf);
+			break;
+		default:
+			amdgv_get_vf_identifier_v1(adapt, idx_vf, &ctx->vf);
+			break;
+		}
 	}
 
 out:
@@ -2884,12 +3038,24 @@ int amdgv_control_dirtybit(amdgv_dev_t dev, bool enable)
 int amdgv_query_dirtybit_data(amdgv_dev_t dev,
 				struct amdgv_query_dirty_bit_data *data)
 {
-	int ret = 0;
 	struct amdgv_adapter *adapt;
+	union amdgv_sched_event_data event_data;
+	int event_ret = 0;
+	int ret = 0;
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	oss_memcpy(&event_data.dirtybit_query_data.data, data, sizeof(struct amdgv_query_dirty_bit_data));
+	event_data.dirtybit_query_data.result = &event_ret;
+
 	oss_mutex_lock(adapt->api_lock);
-	ret = amdgv_dirtybit_querydata(adapt, data);
+	ret = amdgv_sched_queue_event_and_wait_ex(adapt, data->idx_vf,
+					  AMDGV_EVENT_QUERY_DIRTYBIT_DATA,
+					  AMDGV_SCHED_BLOCK_ALL, event_data);
+	if (!ret) {
+		ret = event_ret;
+	}
+
 	oss_mutex_unlock(adapt->api_lock);
 	return ret;
 }
@@ -3991,3 +4157,51 @@ int AMDGV_API amdgv_set_product_info_invalid(amdgv_dev_t dev)
 	return 0;
 }
 
+void *AMDGV_API amdgv_map_sysmem(amdgv_dev_t dev, uint64_t len, void **va_ptr, uint64_t *gpu_addr)
+{
+	struct amdgv_adapter *adapt;
+	struct amdgv_memmgr_mem *mem;
+
+	if (dev == AMDGV_INVALID_HANDLE)
+		return NULL;
+
+	adapt = (struct amdgv_adapter *)dev;
+	if ((adapt->status == AMDGV_STATUS_SW_INIT)
+		|| (adapt->status != AMDGV_STATUS_HW_INIT)
+		|| (!adapt->memmgr_sys.is_init) || !va_ptr || !gpu_addr)
+		return NULL;
+
+	oss_mutex_lock(adapt->api_lock);
+	mem = amdgv_memmgr_alloc_sys_align(&adapt->memmgr_sys, len,
+						  PAGE_SIZE, gpu_addr, *va_ptr);
+
+	if (!mem) {
+		oss_mutex_unlock(adapt->api_lock);
+		return NULL;
+	}
+
+	if (!*va_ptr)
+		*va_ptr = mem->sys_mem.va_ptr;
+	oss_mutex_unlock(adapt->api_lock);
+
+	return (void *)(&mem->sys_mem);
+}
+
+int AMDGV_API amdgv_unmap_sysmem(amdgv_dev_t dev,
+			     void *handle)
+{
+	struct amdgv_adapter *adapt;
+	int ret = 0;
+	struct amdgv_memmgr_mem *mem;
+	struct oss_dma_mem_info *dma_mem_info = (struct oss_dma_mem_info *)handle;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+	if (!adapt->memmgr_sys.is_init || !handle)
+		return AMDGV_FAILURE;
+
+	oss_mutex_lock(adapt->api_lock);
+	mem = container_of(dma_mem_info, struct amdgv_memmgr_mem, sys_mem);
+	ret = amdgv_memmgr_free(mem);
+	oss_mutex_unlock(adapt->api_lock);
+	return ret;
+}

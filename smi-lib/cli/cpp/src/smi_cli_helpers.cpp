@@ -257,10 +257,10 @@ std::string format_link_type(const int& link_type)
 	return out;
 }
 
-std::string format_link_status(const int& link_status)
+std::string format_link_status(const int& link_status, bool legend)
 {
 	std::string out;
-	AmdSmiApiBase::CreateAmdSmiApiObject().format_link_status(link_status, out);
+	AmdSmiApiBase::CreateAmdSmiApiObject().format_link_status(link_status, legend, out);
 	return out;
 }
 

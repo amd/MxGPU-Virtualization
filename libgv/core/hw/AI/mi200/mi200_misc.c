@@ -273,39 +273,42 @@ static int mi200_misc_hw_init(struct amdgv_adapter *adapt)
 					mmHDP_MISC_CNTL), Hdp_Misc_Cntl);
 	}
 
-	if (amdgv_migration_init(adapt)) {
-		AMDGV_ERROR("Failed to initialize migration memory.\n");
-		return AMDGV_FAILURE;
-	}
+	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION) {
+		if (amdgv_migration_init(adapt)) {
+			AMDGV_ERROR("Failed to initialize migration memory.\n");
+			return AMDGV_FAILURE;
+		}
 
-	/* Allocate sysmem buffer for storing VF FB during live migration*/
-	/* TODO: will need a better way to move the allocation to be during runtime */
-	if (!(adapt->flags & AMDGV_FLAG_USE_PF) &&
-		!(adapt->flags & AMDGV_FLAG_DISABLE_SYS_APERTURE)) {
-		if (!adapt->sys_mem_info.va_ptr) {
-			if (oss_alloc_dma_mem(adapt->dev, AMDGV_AGP_APERTURE_SIZE,
-					OSS_DMA_MEM_CACHEABLE, &adapt->sys_mem_info)) {
-				AMDGV_WARN("Failed to allocate %dMB continuous dma memory\n",
-				AMDGV_AGP_APERTURE_SIZE >> 20);
-				return AMDGV_FAILURE;
-			} else {
-				AMDGV_DEBUG("ma = 0x%llx, va = %p\n",
-					adapt->sys_mem_info.bus_addr, adapt->sys_mem_info.va_ptr);
+		/* Allocate sysmem buffer for storing VF FB during live migration*/
+		/* TODO: will need a better way to move the allocation to be during runtime */
+		if (!(adapt->flags & AMDGV_FLAG_USE_PF) &&
+			!(adapt->flags & AMDGV_FLAG_DISABLE_SYS_APERTURE)) {
+			if (!adapt->sys_mem_info.va_ptr) {
+				if (oss_alloc_dma_mem(adapt->dev, AMDGV_AGP_APERTURE_SIZE,
+						OSS_DMA_MEM_CACHEABLE, &adapt->sys_mem_info)) {
+					AMDGV_WARN("Failed to allocate %dMB continuous dma memory\n",
+					AMDGV_AGP_APERTURE_SIZE >> 20);
+					return AMDGV_FAILURE;
+				} else {
+					AMDGV_DEBUG("ma = 0x%llx, va = %p\n",
+						adapt->sys_mem_info.bus_addr, adapt->sys_mem_info.va_ptr);
+				}
 			}
 		}
 	}
-
 
 	return 0;
 }
 
 static int mi200_misc_hw_fini(struct amdgv_adapter *adapt)
 {
-	amdgv_migration_fini(adapt);
+	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION) {
+		amdgv_migration_fini(adapt);
 
-	if (adapt->sys_mem_info.handle) {
-		oss_free_dma_mem(adapt->sys_mem_info.handle);
-		adapt->sys_mem_info.handle = NULL;
+		if (adapt->sys_mem_info.handle) {
+			oss_free_dma_mem(adapt->sys_mem_info.handle);
+			adapt->sys_mem_info.handle = NULL;
+		}
 	}
 
 	return 0;

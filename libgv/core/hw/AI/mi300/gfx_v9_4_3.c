@@ -786,6 +786,10 @@ static int gfx_v9_4_3_xcc_mqd_init(struct amdgv_ring *ring, int xcc_id)
 	uint64_t hqd_gpu_addr, wb_gpu_addr, eop_base_addr;
 	uint32_t tmp;
 
+	if (!mqd_alloc)
+		return AMDGV_FAILURE;
+
+
 	mqd_alloc->dynamic_cu_mask = 0xFFFFFFFF;
 	mqd_alloc->dynamic_rb_mask = 0xFFFFFFFF;
 
@@ -1410,7 +1414,7 @@ static const struct amdgv_ring_funcs gfx_v9_4_3_ring_funcs_kiq = {
 	.align_mask = 0xff,
 	.nop = PACKET3(PACKET3_NOP, 0x3FFF),
 	.support_64bit_ptrs = true,
-	.vmhub = 0,
+	.vmhub = VM_GFXHUB,
 	.set_wptr = gfx_v9_4_3_ring_set_wptr_compute,
 	.emit_frame_size =
 		20 + /* gfx_v9_0_ring_emit_gds_switch */

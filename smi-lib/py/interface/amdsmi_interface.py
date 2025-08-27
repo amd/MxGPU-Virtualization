@@ -86,8 +86,9 @@ class AmdSmiGuardType(IntEnum):
     FLR = amdsmi_wrapper.AMDSMI_GUARD_EVENT_FLR
     EXCLUSIVE_MOD = amdsmi_wrapper.AMDSMI_GUARD_EVENT_EXCLUSIVE_MOD
     EXCLUSIVE_TIMEOUT = amdsmi_wrapper.AMDSMI_GUARD_EVENT_EXCLUSIVE_TIMEOUT
-    ALL_INT = amdsmi_wrapper.AMDSMI_GUARD_EVENT_ALL_INT
-
+    RAS_ERR_COUNT = amdsmi_wrapper.AMDSMI_GUARD_EVENT_RAS_ERR_COUNT
+    RAS_CPER_DUMP = amdsmi_wrapper.AMDSMI_GUARD_EVENT_RAS_CPER_DUMP
+    RAS_BAD_PAGES = amdsmi_wrapper.AMDSMI_GUARD_EVENT_RAS_BAD_PAGES
 
 class AmdSmiGuardState(IntEnum):
     NORMAL = amdsmi_wrapper.AMDSMI_GUARD_STATE_NORMAL
@@ -102,6 +103,7 @@ class AmdSmiVramType(IntEnum):
     HBM2 = amdsmi_wrapper.AMDSMI_VRAM_TYPE_HBM2
     HBM2E = amdsmi_wrapper.AMDSMI_VRAM_TYPE_HBM2E
     HBM3 = amdsmi_wrapper.AMDSMI_VRAM_TYPE_HBM3
+    HBM3E = amdsmi_wrapper.AMDSMI_VRAM_TYPE_HBM3E
     # DDR
     DDR2 = amdsmi_wrapper.AMDSMI_VRAM_TYPE_DDR2
     DDR3 = amdsmi_wrapper.AMDSMI_VRAM_TYPE_DDR3
@@ -606,6 +608,7 @@ class AmdSmiLinkType(IntEnum):
 class AmdSmiLinkStatus(IntEnum):
     ENABLED = amdsmi_wrapper.AMDSMI_LINK_STATUS_ENABLED
     DISABLED = amdsmi_wrapper.AMDSMI_LINK_STATUS_DISABLED
+    INACTIVE = amdsmi_wrapper.AMDSMI_LINK_STATUS_INACTIVE
     ERROR = amdsmi_wrapper.AMDSMI_LINK_STATUS_ERROR
 
 
@@ -764,6 +767,19 @@ class AmdSmiMetricType(IntEnum):
     INST = amdsmi_wrapper.AMDSMI_METRIC_TYPE_INST
     ACC = amdsmi_wrapper.AMDSMI_METRIC_TYPE_ACC
 
+class AmdSmiMetricResGroup(IntEnum):
+    NA = amdsmi_wrapper.AMDSMI_METRIC_RES_GROUP_NA
+    GPU = amdsmi_wrapper.AMDSMI_METRIC_RES_GROUP_GPU
+    XCP = amdsmi_wrapper.AMDSMI_METRIC_RES_GROUP_XCP
+    AID = amdsmi_wrapper.AMDSMI_METRIC_RES_GROUP_AID
+    MID = amdsmi_wrapper.AMDSMI_METRIC_RES_GROUP_MID
+    UNKNOWN = amdsmi_wrapper.AMDSMI_METRIC_RES_GROUP_UNKNOWN
+
+class AmdSmiMetricResSubgroup(IntEnum):
+    NA = amdsmi_wrapper.AMDSMI_METRIC_RES_SUBGROUP_NA
+    XCC = amdsmi_wrapper.AMDSMI_METRIC_RES_SUBGROUP_XCC
+    ENGINE = amdsmi_wrapper.AMDSMI_METRIC_RES_SUBGROUP_ENGINE
+    UNKNOWN = amdsmi_wrapper.AMDSMI_METRIC_RES_SUBGROUP_UNKNOWN
 
 class AmdSmiAcceleratorPartitionSetting(IntEnum):
     INVALID = amdsmi_wrapper.AMDSMI_ACCELERATOR_PARTITION_INVALID
@@ -819,6 +835,10 @@ class AmdSmiCperNotifyType(Enum):
     SEI = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_SEI
     PEI = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_PEI
     CXL_COMPONENT = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_CXL_COMPONENT
+
+class AmdSmiAffinityScope(IntEnum):
+    NUMA_SCOPE = amdsmi_wrapper.AMDSMI_AFFINITY_SCOPE_NODE
+    SOCKET_SCOPE = amdsmi_wrapper.AMDSMI_AFFINITY_SCOPE_SOCKET
 
 
 _AMDSMI_MAX_MM_IP_COUNT = 8
@@ -1966,7 +1986,8 @@ def amdsmi_get_link_metrics(processor_handle):
             "max_bandwidth": link_metrics.links[i].max_bandwidth,
             "link_type": AmdSmiLinkType(link_metrics.links[i].link_type).name,
             "read": link_metrics.links[i].read,
-            "write": link_metrics.links[i].write
+            "write": link_metrics.links[i].write,
+            "link_status": AmdSmiLinkStatus(link_metrics.links[i].link_status).name,
         })
 
     return {
@@ -2116,7 +2137,9 @@ def amdsmi_get_gpu_metrics(processor_handle):
             "category": AmdSmiMetricCategory(metrics_table[i].category),
             "flags": flags,
             "vf_mask": metrics_table[i].vf_mask,
-            "val": metrics_table[i].val
+            "res_group": AmdSmiMetricResGroup(metrics_table[i].res_group),
+            "res_subgroup": AmdSmiMetricResSubgroup(metrics_table[i].res_subgroup),
+            "res_instance": metrics_table[i].res_instance
         })
 
     return metrics_list
@@ -2451,3 +2474,38 @@ def amdsmi_reset_gpu(processor_handle):
         )
 
     _check_res(amdsmi_wrapper.amdsmi_reset_gpu(processor_handle))
+
+def amdsmi_get_cpu_affinity_with_scope(processor_handle, scope) -> List[int]:
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle, amdsmi_wrapper.amdsmi_processor_handle
+        )
+
+    if not isinstance(scope, AmdSmiAffinityScope):
+        raise AmdSmiParameterException(scope, AmdSmiAffinityScope)
+
+    size = ctypes.c_uint32(4)
+    cpu_set = (ctypes.c_uint64 * size.value)()
+
+    _check_res(
+        amdsmi_wrapper.amdsmi_get_cpu_affinity_with_scope(
+            processor_handle, size, cpu_set, scope)
+    )
+
+    return cpu_set
+
+def amdsmi_topo_get_numa_node_number(processor_handle):
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle, amdsmi_wrapper.amdsmi_processor_handle
+        )
+
+    numa_node_number = ctypes.c_uint32()
+
+    _check_res(
+        amdsmi_wrapper.amdsmi_topo_get_numa_node_number(
+            processor_handle, ctypes.byref(numa_node_number)
+        )
+    )
+
+    return numa_node_number.value

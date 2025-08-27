@@ -647,7 +647,7 @@ static int mi300_reset_trigger_vf_flr(struct amdgv_adapter *adapt,
 	else
 		mi300_nbio_assign_sdma_to_vf(adapt);
 
-	for (sdma_id = 0; sdma_id < adapt->sdma.num_instances + adapt->sdma.num_enbl_harv_inst; sdma_id++) {
+	for (sdma_id = 0; sdma_id < adapt->sdma.num_instances + adapt->sdma.num_pf_dedicated_inst; sdma_id++) {
 		doorbell_index = AMDGV_MI300_DOORBELL_sDMA_ENGINE0 + sdma_id * 10;
 		doorbell_index = doorbell_index << 1;
 		mi300_nbio_assign_sdma_doorbell(adapt, sdma_id, doorbell_index, 20);

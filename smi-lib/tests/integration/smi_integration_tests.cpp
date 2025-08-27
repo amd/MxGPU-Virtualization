@@ -1604,3 +1604,44 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 	free(partitioning_info);
 	free(processors);
 }
+
+
+#ifdef __linux__
+TEST(amdsmiIntegrationTests, NumaInfoTest)
+{
+	uint32_t dev_cnt = 0;
+	amdsmi_socket_handle socket_handle = NULL;
+	amdsmi_processor_handle *processors = NULL;
+	int ret = 0;
+	uint32_t numa_node = 0;
+	uint64_t cpu_set[4];
+	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
+
+	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, NULL), AMDSMI_STATUS_SUCCESS);
+	ASSERT_GE(dev_cnt, (unsigned)1);
+	ASSERT_LE(dev_cnt, AMDSMI_MAX_DEVICES);
+
+	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, &processors[0]), AMDSMI_STATUS_SUCCESS);
+
+	for (uint32_t i = 0; i < dev_cnt; i++) {
+		ret = amdsmi_topo_get_numa_node_number(processors[i], &numa_node);
+		ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+
+		ret = amdsmi_get_cpu_affinity_with_scope(processors[i],4, cpu_set, AMDSMI_AFFINITY_SCOPE_NODE);
+		ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+
+
+		printf("GPU %u \n", i);
+		printf("NUMA NODE: %d \n", numa_node);
+		printf("CPU_AFFINITY 0: %016lx \n", cpu_set[0]);
+		printf("CPU_AFFINITY 1: %016lx \n", cpu_set[1]);
+		printf("CPU_AFFINITY 2: %016lx \n", cpu_set[2]);
+		printf("CPU_AFFINITY 3: %016lx \n", cpu_set[3]);
+
+	}
+
+	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
+	free(processors);
+}
+#endif

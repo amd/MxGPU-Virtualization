@@ -206,6 +206,8 @@ enum amdgv_mem_id {
 	MEM_MIGRATION_PSP_STATIC_DATA  = 0x800,
 	MEM_MIGRATION_PSP_DYNAMIC_DATA = 0x801,
 	MEM_GC_DIRTY_BIT_PLANE         = 0X802,
+	MEM_GART_MEM_PDB0 = 0x803,
+	MEM_GART_MEM_PTB = 0x804,
 
 	MEM_ID_UNKNOWN               = 0xffffffff,
 };
@@ -229,12 +231,14 @@ struct amdgv_live_info_param {
 	struct live_info_table_header header;
 	uint32_t num_vf;
 	uint32_t fw_load_type;
+	uint32_t unused_1;
 	uint32_t log_level;
 	uint32_t log_mask;
 	uint64_t flags;
 	uint32_t gfx_sched_mode;
 	uint32_t allow_time_full_access;
 	uint32_t perf_mon_enable;
+	uint32_t unused_2;
 	uint32_t debug_mode;
 	uint8_t customized_vf_config_mode;
 	uint32_t accelerator_partition_mode;
@@ -243,7 +247,7 @@ struct amdgv_live_info_param {
 	uint32_t bad_page_record_threshold;
 	uint32_t max_cper_count;
 	int32_t ras_vf_telemetry_policy;
-	uint8_t reserved[47]; // 0x80 align
+	uint8_t reserved[39]; // 0x80 align
 };
 
 struct amdgv_live_info_vbios {
@@ -378,12 +382,14 @@ struct amdgv_live_info_ras_eeprom_data {
 struct amdgv_live_info_powerplay {
 	struct live_info_table_header header;
 	uint64_t smu_features;
+	uint32_t unused_1;
+	uint8_t unused_2;
 	uint32_t clock_gating_features_flags;
 	// smu clk info
 	uint32_t socclk;
 	uint32_t dcefclk;
 	uint64_t supported_caps;
-	uint8_t reserved[84]; // 0x80 align
+	uint8_t reserved[79]; // 0x80 align
 };
 
 struct amdgv_live_info_sched_event {
@@ -480,7 +486,9 @@ struct amdgv_live_info_world_switch {
 	/* allowed time for completing a gpuiov cmd (in us) */
 	uint64_t allow_time_cmd_complete;
 	uint8_t		switch_running;
-	uint8_t reserved[14]; // 0x80 align
+	/* auto sched config active vfs */
+	uint32_t auto_sched_cfg_active_vfs;
+	uint8_t reserved[10]; // 0x80 align
 };
 
 struct amdgv_live_info_critical_state {

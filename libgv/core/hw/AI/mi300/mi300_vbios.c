@@ -166,7 +166,9 @@ static void mi300_mc_location_setting(struct amdgv_adapter *adapt)
 	adapt->mc_fb_loc_addr =
 		REG_GET_FIELD(adapt->mc_fb_loc_addr, MC_VM_FB_LOCATION_BASE, FB_BASE);
 	adapt->mc_fb_loc_addr <<= MC_VM_FB_LOCATION__FB_ADDRESS__SHIFT;
-	AMDGV_INFO("MC base is at 0x%llx\n", adapt->mc_fb_loc_addr);
+
+	adapt->mc_fb_offset = (uint64_t)RREG32_SOC15(GC, GET_INST(GC, 0), regMC_VM_FB_OFFSET) << 24;
+	AMDGV_INFO("MC base is at 0x%llx, adapt->mc_fb_offset:%llx\n", adapt->mc_fb_loc_addr, adapt->mc_fb_offset);
 
 	adapt->mc_fb_top_addr =
 		RREG32(SOC15_REG_OFFSET(GC, GET_INST(GC, 0), regMC_VM_FB_LOCATION_TOP));
@@ -233,7 +235,8 @@ static int mi300_vbios_early_sw_init(struct amdgv_adapter *adapt)
 		name = "MI308X";
 		break;
 	case (0x75A0):
-	case (0x75A1):
+		name = "MI350X";
+		break;
 	case (0x75A3):
 		name = "MI355X";
 		break;
@@ -396,10 +399,6 @@ static int mi300_vbios_late_hw_init(struct amdgv_adapter *adapt)
 	}
 	mi300_nbio_assign_mmsch_doorbell(adapt);
 
-	gfxhub_v1_2_gart_enable(adapt);
-
-	mmhub_v1_8_gart_enable(adapt);
-
 	r = mi300_enable_pci_atomic_request(adapt);
 	if (r) {
 		AMDGV_ERROR("enable pci atomic request failed!\n");
@@ -421,10 +420,6 @@ static int mi300_vbios_early_hw_fini(struct amdgv_adapter *adapt)
 		mi300_disable_pci_atomic_request(adapt);
 
 		mi300_nbio_enable_doorbell_aperture(adapt, false);
-
-		gfxhub_v1_2_gart_fini(adapt);
-
-		mmhub_v1_8_fini(adapt);
 
 		if (adapt->vbios.image) {
 			oss_free_memory(adapt->vbios.image);

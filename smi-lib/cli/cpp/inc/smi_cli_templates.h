@@ -147,6 +147,46 @@ inline std::string fwErrorRecordsTemplate{
 	"             NAME: %d\n             STATUS: %d\n"
 };
 
+inline std::string metricPerPartitionTemplate{
+	"        PER_PARTITION:\n"};
+
+inline std::string AIDTemplate{
+	"            AID_%s:\n"};
+
+inline std::string XCPTemplate{
+	"            XCP_%s:\n"};
+
+
+inline std::string activityPerPartitionTemplate{
+	"                VCN_ACTIVITY: %s %s\n"};
+
+inline std::string VCLKPerPartitionTemplate{
+	"                CLK_VCLK: %s %s\n"};
+
+inline std::string VCLKMinPerPartitionTemplate{
+	"                CLK_VCLK_MIN_LIMIT: %s %s\n"};
+
+inline std::string VCLKMaxPerPartitionTemplate{
+	"                CLK_VCLK_MAX_LIMIT: %s %s\n"};
+
+inline std::string DCLKPerPartitionTemplate{
+	"                CLK_DCLK_LIMIT: %s %s\n"};
+
+inline std::string DCLKMinPerPartitionTemplate{
+	"                CLK_DCLK_MIN_LIMIT: %s %s\n"};
+
+inline std::string DCLKMaxPerPartitionTemplate{
+	"                CLK_DCLK_MAX_LIMIT: %s %s\n"};
+
+inline std::string SCLKPerPartitionTemplate{
+	"                CLK_SCLK_LIMIT: %s %s\n"};
+
+inline std::string SCLKMinPerPartitionTemplate{
+	"                CLK_SCLK_MIN_LIMIT: %s %s\n"};
+
+inline std::string SCLKMaxPerPartitionTemplate{
+	"                CLK_SCLK_MAX_LIMIT: %s %s\n"};
+
 inline std::string metricUsageTemplate{
 	"    USAGE:\n"
 	"        GFX_ACTIVITY: %s %s\n"
@@ -172,7 +212,43 @@ inline std::string metricJpegUsageHeaderTemplate{
 	"]\n"
 	"        JPEG_ACTIVITY: ["};
 
+inline std::string metricJpegUsagePerPartitionHeaderTemplate{
+	"                JPEG_ACTIVITY: ["};
+
+inline std::string metricGFXCLKPerPartitionHeaderTemplate{
+	"                GFX_CLK: ["};
+
+inline std::string metricGFXMinCLKPerPartitionHeaderTemplate{
+	"                GFX_MIN_CLK: ["};
+
+inline std::string metricGFXMaxCLKPerPartitionHeaderTemplate{
+	"                GFX_MAX_CLK: ["};
+
+inline std::string metricGFXLockedCLKPerPartitionHeaderTemplate{
+	"                GFX_CLK_LOCKED: ["};
+
+inline std::string metricGFXUsagePerPartitionHeaderTemplate{
+	"                GFX_USAGE: ["};
+
 inline std::string metricJpegUsageTemplate{
+	"%s %s"};
+
+inline std::string metricJpegUsagePerPartitionTemplate{
+	"%s %s"};
+
+inline std::string GFXPerPartitionTemplate{
+	"%s %s"};
+
+inline std::string GFXMinPerPartitionTemplate{
+	"%s %s"};
+
+inline std::string GFXMaxPerPartitionTemplate{
+	"%s %s"};
+
+inline std::string GFXLockedPerPartitionTemplate{
+	"%s"};
+
+inline std::string GFXUsagePerPartitionTemplate{
 	"%s %s"};
 
 inline std::string metricJpegUsageFooterTemplate{
@@ -318,7 +394,7 @@ inline std::string metricScheduleTemplate = {
 inline std::string metricGuardTemplate = {
 	"        GUARD:\n"
 	"            ENABLED: %s\n"
-	"            GUARD_INFO:\n%s\n"
+	"            GUARD_INFO:\n%s"
 };
 
 inline std::string metricGuestDataTemplate = {
@@ -379,6 +455,8 @@ inline std::string topologyBiDirectionalTemplate{ "BI_DIRECTIONAL_TABLE:\n" };
 
 inline std::string metricXgmiTemplate{ "    XGMI:\n" };
 inline std::string metricXgmiLinkMetricTableTemplate{ "LINK_METRICS_TABLE:\n" };
+inline std::string metricXgmiLinkStatusTableTemplate{ "XGMI_LINK_STATUS:\n" };
+
 inline std::string staticVramTemplate{ "    VRAM:\n"
 	"        TYPE: %s \n"
 	"        VENDOR: %s \n"

@@ -19,7 +19,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
+#include "amdgv.h"
+#include "amdgv_device.h"
 #include "mi300_dirtybit.h"
 #include "gfx_v9_4_3.h"
 #include "mmhub_v1_8.h"
@@ -63,6 +64,158 @@ static int mi300_dirtybit_query_dirty_page_size(struct amdgv_adapter *adapt, uin
 	return 0;
 }
 
+static inline uint64_t mi300_dirtybit_get_total_bitmap_size(struct amdgv_adapter *adapt, uint64_t fb_size, uint32_t page_size)
+{
+	uint64_t bitmap_size = -1;
+
+	bitmap_size = amdgv_fb_size_to_bitmap_size(fb_size, page_size);
+	bitmap_size *= adapt->mcp.num_dagb + (adapt->mcp.gfx.num_xcc / adapt->mcp.num_aid);
+	bitmap_size *= adapt->mcp.num_aid;
+
+	return bitmap_size;
+}
+
+static uint64_t mi300_dirtybit_get_usable_fb_bitmap_size(struct amdgv_adapter *adapt, uint32_t page_size)
+{
+	uint64_t fb_size = 0;
+	uint32_t fb_size_mb = 0;
+
+	amdgv_gpuiov_get_usable_fb_size(adapt, &fb_size_mb);
+	fb_size = MBYTES_TO_BYTES(fb_size_mb);
+
+	return mi300_dirtybit_get_total_bitmap_size(adapt, fb_size, page_size);
+}
+
+static int mi300_dirtybit_query_data_sdma(struct amdgv_adapter *adapt, uint64_t mc_addr, struct amdgv_query_dirty_bit_data *data)
+{
+	int page_size = 0;
+	struct amdgv_ring *ring;
+	int ring_index = -1;
+	uint32_t seq[16] = {0};
+	uint32_t *query_bitmap_vaddr = (uint32_t *)data->dbit_plane_data_buffer;
+	uint32_t query_bitmap_size;
+	uint32_t query_bitmap_size_total;
+	void *bitmap_vaddr;
+	uint64_t bitmap_gpu_addr;
+	uint64_t nr_pages;
+	int aid, dagb, xcc_id, ea_per_aid;
+	int i, ret = 0;
+
+	if (adapt->sdma.query_dirtybit == NULL) {
+		AMDGV_ERROR("query_dirtybit is not set\n");
+		return AMDGV_FAILURE;
+	}
+
+	if (amdgv_dirtybit_get_dirty_page_size(adapt, &page_size)) {
+		AMDGV_ERROR("failed to get dirty page size\n");
+		return AMDGV_FAILURE;
+	}
+
+	if (adapt->sdma.bitmap_mem == NULL) {
+		if (amdgv_sdma_alloc_bitmap_mem(adapt,
+				mi300_dirtybit_get_usable_fb_bitmap_size(adapt, page_size))) {
+			AMDGV_ERROR("failed to allocate bitmap memory\n");
+			return AMDGV_FAILURE;
+		}
+	}
+
+	bitmap_vaddr = amdgv_memmgr_get_cpu_addr(adapt->sdma.bitmap_mem);
+	bitmap_gpu_addr = amdgv_memmgr_get_gpu_addr(adapt->sdma.bitmap_mem);
+	if (bitmap_vaddr == NULL) {
+		AMDGV_ERROR("failed to get bitmap memory\n");
+		return AMDGV_FAILURE;
+	}
+
+	nr_pages = DIV_ROUND_UP(data->query_size, page_size);
+	nr_pages = nr_pages == 0 ? 1 : nr_pages;
+	query_bitmap_size = amdgv_fb_size_to_bitmap_size(data->query_size, page_size);
+	ea_per_aid = adapt->mcp.num_dagb + (adapt->mcp.gfx.num_xcc / adapt->mcp.num_aid);
+	query_bitmap_size_total = mi300_dirtybit_get_total_bitmap_size(adapt, data->query_size, page_size);
+	if (query_bitmap_size > data->dbit_plane_data_size) {
+		AMDGV_ERROR("dbit_plane_data_size is not enough\n");
+		return AMDGV_FAILURE;
+	}
+
+	if (query_bitmap_size_total > adapt->sdma.bitmap_size) {
+		AMDGV_ERROR("queried fb size is too large\n");
+		return AMDGV_FAILURE;
+	}
+
+	oss_memset(bitmap_vaddr, 0, query_bitmap_size_total);
+
+	for (xcc_id = 0; xcc_id < adapt->mcp.gfx.num_xcc; xcc_id++) {
+		aid = GET_INST(GC, xcc_id) / 2;
+		/* Get the SDMA ring in aid #N */
+		ring = amdgv_sdma_get_pf_dedicated_ring(adapt, aid, ++ring_index);
+		if (ring == NULL) {
+			AMDGV_ERROR("failed to get ring at aid=%d, index=%d\n", aid, ring_index);
+			return AMDGV_FAILURE;
+		}
+
+		/* Submit the SDMA pkg to query dirty bit in GFXHUB in aid #N */
+		amdgv_sdma_ring_query_dirtybit(ring, mc_addr, nr_pages,
+			bitmap_gpu_addr + ea_per_aid * aid * query_bitmap_size,
+			aid, GET_INST(GC, xcc_id) & 0x1, 0,
+			!data->dbit_preserve);
+		amdgv_fence_emit_polling(ring, &seq[ring_index], SDMA_MAX_TIMEOUT);
+		amdgv_ring_commit(ring);
+
+		 /* Get the SDMA ring in aid #N */
+		ring = amdgv_sdma_get_pf_dedicated_ring(adapt, aid, ++ring_index);
+		if (ring == NULL) {
+			AMDGV_ERROR("failed to get ring at aid=%d, index=%d\n", aid, ring_index);
+			return AMDGV_FAILURE;
+		}
+		/* Submit the SDMA pkg to query dirty bit in all the MMHUB instances in aid #N */
+		for (dagb = 0; dagb < adapt->mcp.num_dagb; dagb++) {
+			amdgv_sdma_ring_query_dirtybit(ring, mc_addr, nr_pages,
+				bitmap_gpu_addr + query_bitmap_size * (ea_per_aid * aid + dagb + 1),
+				aid, 2, dagb, !data->dbit_preserve);
+		}
+
+		amdgv_fence_emit_polling(ring, &seq[ring_index], SDMA_MAX_TIMEOUT);
+		amdgv_ring_commit(ring);
+	}
+
+	ring_index = -1;
+	for (xcc_id = 0; xcc_id < adapt->mcp.gfx.num_xcc; xcc_id++) {
+		int r;
+
+		aid = GET_INST(GC, xcc_id) / 2;
+		ring = amdgv_sdma_get_pf_dedicated_ring(adapt, aid, ++ring_index);
+		/* Wait for the GFXHUB query is done in aid #N */
+		r = amdgv_fence_wait_polling(ring, seq[ring_index], SDMA_MAX_TIMEOUT);
+		if (r <= 0) {
+			AMDGV_ERROR("gc ring wait polling failed, aid=%d, index=%d\n", aid, ring_index);
+			ret = AMDGV_FAILURE;
+			goto out;
+		}
+
+		ring = amdgv_sdma_get_pf_dedicated_ring(adapt, aid, ++ring_index);
+		/* Wait for the MMHUB query is done in aid #N */
+		r = amdgv_fence_wait_polling(ring, seq[ring_index], SDMA_MAX_TIMEOUT);
+		if (r <= 0) {
+			AMDGV_ERROR("mm ring wait polling failed, aid=%d, index=%d\n", aid, ring_index);
+			ret = AMDGV_FAILURE;
+			goto out;
+		}
+	}
+
+	for (i = 0; i < query_bitmap_size_total; i += query_bitmap_size) {
+		uint32_t *ptr;
+		int j;
+
+		ptr = (uint32_t *)(((uint8_t *)bitmap_vaddr) + i);
+		for (j = 0; j < query_bitmap_size / sizeof(uint32_t); j++) {
+			if (ptr[j] != 0)
+				query_bitmap_vaddr[j] |= ptr[j];
+		}
+	}
+	ret = 0;
+out:
+	return ret;
+}
+
 static int mi300_dirtybit_query_data(struct amdgv_adapter *adapt, struct amdgv_query_dirty_bit_data *data)
 {
 	struct amdgv_vf_device *entry = &adapt->array_vf[data->idx_vf];
@@ -88,7 +241,7 @@ static int mi300_dirtybit_query_data(struct amdgv_adapter *adapt, struct amdgv_q
 		data->query_fb_offset, mc_addr, data->query_size, data->dbit_plane_data_size,
 		vf_fb_offset, vf_fb_size, adapt->xgmi.phy_node_id, adapt->xgmi.node_segment_size);
 
-	return sdma_v4_4_2_sdma_query_dirtybit(adapt, mc_addr, data);
+	return mi300_dirtybit_query_data_sdma(adapt, mc_addr, data);
 }
 
 static const struct amdgv_dirtybit_funcs mi300_db_funcs = {

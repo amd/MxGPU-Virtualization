@@ -175,7 +175,7 @@ enum smi_cmd_code {
 #define SMI_MAX_NUM_NUMA_NODES 32
 
 #define SMI_MAX_CPER_SIZE (10*1024)
-#define SMI_MAX_CPER_HDRS 10
+#define SMI_MAX_CPER_HDRS 128
 
 // >>>>>>>>>>>>>>>>>>>> ENUM TYPE DEFINITIONS >>>>>>>>>>>>>>>>>>>>
 
@@ -360,6 +360,22 @@ enum smi_metric_category {
 	SMI_METRIC_CATEGORY_UNKNOWN
 };
 
+enum smi_metric_res_group {
+	SMI_METRIC_RES_GROUP_UNKNOWN,
+	SMI_METRIC_RES_GROUP_NA,
+	SMI_METRIC_RES_GROUP_GPU,
+	SMI_METRIC_RES_GROUP_XCP,
+	SMI_METRIC_RES_GROUP_AID,
+	SMI_METRIC_RES_GROUP_MID
+};
+
+enum smi_metric_res_subgroup {
+	SMI_METRIC_RES_SUBGROUP_UNKNOWN,
+	SMI_METRIC_RES_SUBGROUP_NA,
+	SMI_METRIC_RES_SUBGROUP_XCC,
+	SMI_METRIC_RES_SUBGROUP_ENGINE
+};
+
 enum smi_memory_partition_type {
 	SMI_MEMORY_PARTITION_UNKNOWN = 0,
 	SMI_MEMORY_PARTITION_NPS1 = 1,  //!< NPS1 - All CCD & XCD data is interleaved
@@ -439,6 +455,7 @@ enum smi_vram_type {
 	SMI_VRAM_TYPE_HBM2 = 2,
 	SMI_VRAM_TYPE_HBM2E = 3,
 	SMI_VRAM_TYPE_HBM3 = 4,
+	SMI_VRAM_TYPE_HBM3E = 5,
 	// DDR
 	SMI_VRAM_TYPE_DDR2 = 10,
 	SMI_VRAM_TYPE_DDR3 = 11,
@@ -564,6 +581,9 @@ enum smi_guard_type {
 	SMI_GUARD_EVENT_EXCLUSIVE_MOD,
 	SMI_GUARD_EVENT_EXCLUSIVE_TIMEOUT,
 	SMI_GUARD_EVENT_ALL_INT,
+	SMI_GUARD_EVENT_RAS_ERR_COUNT,
+	SMI_GUARD_EVENT_RAS_CPER_DUMP,
+	SMI_GUARD_EVENT_RAS_BAD_PAGES,
 	SMI_GUARD_EVENT__MAX
 };
 
@@ -578,7 +598,8 @@ enum smi_link_type {
 enum smi_link_status {
 	SMI_LINK_STATUS_ENABLED = 0,
 	SMI_LINK_STATUS_DISABLED = 1,
-	SMI_LINK_STATUS_ERROR = 2
+	SMI_LINK_STATUS_INACTIVE = 2,
+	SMI_LINK_STATUS_ERROR = 3
 };
 
 enum smi_ecc_correction_schema_support {
@@ -849,9 +870,7 @@ struct smi_guard_info {
 		uint32_t threshold;
 		/* current number of events in the interval*/
 		uint32_t active;
-		uint32_t reserved[4];
 	} guard[SMI_GUARD_EVENT__MAX];
-	uint32_t reserved[6];
 };
 
 struct smi_vf_data {
@@ -897,7 +916,8 @@ struct smi_link_metrics {
 		enum smi_link_type link_type; //!< type of the link
 		uint64_t read; //!< total data received for each link in KB
 		uint64_t write; //!< total data transfered for each link in KB
-		uint64_t reserved[2];
+		enum smi_link_status link_status;
+		uint64_t reserved[1];
 	} links[SMI_MAX_NUM_XGMI_PHYSICAL_LINK];
 	uint64_t reserved[7];
 };
@@ -1339,13 +1359,16 @@ struct smi_metric {
 			uint64_t flag_chiplet_metric : 1;
 			uint64_t flag_data_filter_inst : 1;
 			uint64_t flag_data_filter_acc : 1;
-			uint64_t flag_reserved : 12;
+			enum smi_metric_res_group res_group : 5;
+			enum smi_metric_res_subgroup res_subgroup : 5;
+			uint64_t flag_reserved : 2;
 		} metric;
 		uint64_t code;
 	} metric_union;
 	uint32_t vf_mask; //!< Mask of all active VFs + PF that this metric applies to
 	uint64_t val;
-	uint64_t reserved[5];
+	uint32_t res_instance;
+	uint32_t reserved[9];
 };
 
 struct smi_metrics {

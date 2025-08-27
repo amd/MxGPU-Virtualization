@@ -123,6 +123,7 @@ static void mi300_ih_decode_iv(struct amdgv_adapter *adapt, struct amdgv_iv_entr
 	entry->timestamp = dw[1] | ((uint64_t)(dw[2] & 0xffff) << 32);
 	entry->timestamp_src = dw[2] >> 31;
 	entry->pas_id = dw[3] & 0xffff;
+	entry->node_id = (dw[3] >> 16) & 0xff;
 	entry->pasid_src = dw[3] >> 31;
 	entry->src_data[0] = dw[4];
 	entry->src_data[1] = dw[5];
@@ -248,7 +249,9 @@ static void mi300_handle_page_fault(struct amdgv_adapter *adapt, struct amdgv_iv
 {
 	uint64_t addr;
 	uint32_t tmp, src_id, ring_id, vm_id;
+	uint32_t node_id;
 
+	node_id = entry->node_id;
 	addr = (uint64_t)entry->src_data[0] << 12;
 	addr |= ((uint64_t)entry->src_data[1] & 0x1f) << 44;
 
@@ -258,25 +261,25 @@ static void mi300_handle_page_fault(struct amdgv_adapter *adapt, struct amdgv_iv
 
 	switch (entry->client_id) {
 	case IH_IV_CLIENTID_UTCL2: /* cover GC/GFXHUB */
-		tmp = adapt->vmhub[0].fault_status;
+		tmp = adapt->vmhub[VM_GFXHUB].fault_status;
 		AMDGV_ERROR("DMAR: trapped by GMC as page fault, client_id=%u, src_id=%u, "
 			    "ring_id=%u, vm_id=%u address=0x%016llx, "
 			    "VM_L2_PROTECTION_FAULT_STATUS=%08x\n",
 			    entry->client_id, src_id, ring_id, vm_id, addr, RREG32(tmp));
-		tmp = RREG32(adapt->vmhub[0].fault_cntl);
+		tmp = RREG32(adapt->vmhub[VM_GFXHUB].fault_cntl);
 		tmp |= 1; /* to clear the page fault */
-		WREG32(adapt->vmhub[0].fault_cntl, tmp);
+		WREG32(adapt->vmhub[VM_GFXHUB].fault_cntl, tmp);
 		break;
 
 	case IH_IV_CLIENTID_VMC: /* cover MMHUB0 */
-		tmp = adapt->vmhub[1].fault_status;
+		tmp = adapt->vmhub[AMDGV_MMHUB0(node_id / 4)].fault_status;
 		AMDGV_ERROR("DMAR: trapped by GMC as page fault, client_id=%u, src_id=%u, "
 			    "ring_id=%u, vm_id=%u address=0x%016llx, "
 			    "VM_L2_PROTECTION_FAULT_STATUS=%08x\n",
 			    entry->client_id, src_id, ring_id, vm_id, addr, RREG32(tmp));
-		tmp = RREG32(adapt->vmhub[1].fault_cntl);
+		tmp = RREG32(adapt->vmhub[AMDGV_MMHUB0(node_id / 4)].fault_cntl);
 		tmp |= 1; /* to clear the page fault */
-		WREG32(adapt->vmhub[1].fault_cntl, tmp);
+		WREG32(adapt->vmhub[AMDGV_MMHUB0(node_id / 4)].fault_cntl, tmp);
 		break;
 	default:
 		AMDGV_ERROR("Unknown/Unhandled Interrupt Received: client_id=%u "

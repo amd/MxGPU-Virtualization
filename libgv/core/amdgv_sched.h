@@ -134,6 +134,8 @@ enum amdgv_sched_event_id {
 	AMDGV_EVENT_SCHED_RAS_POISON_CREATION,
 	AMDGV_EVENT_SCHED_VF_REQ_RAS_BAD_PAGES,
 	AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA,
+	AMDGV_EVENT_VF_FB_COPY,
+	AMDGV_EVENT_QUERY_DIRTYBIT_DATA,
 	AMDGV_EVENT_INVALID_EVENT = 0xffffffff,
 };
 
@@ -315,6 +317,18 @@ union amdgv_sched_event_data {
 		uint64_t addr;
 		enum amdgv_migration_manifest_data_type type;
 	} lm;
+	struct {
+		uint64_t fb_offset;
+		uint64_t size;
+		uint64_t gpu_addr;
+		void *vaddr;
+		bool to_fb;
+		int *result;
+	} vf_fb_copy_data;
+	struct {
+		struct amdgv_query_dirty_bit_data data;
+		int *result;
+	} dirtybit_query_data;
 };
 
 enum amdgv_event_status {

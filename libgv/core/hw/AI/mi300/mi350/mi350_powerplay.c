@@ -42,11 +42,15 @@ static const uint32_t this_block = AMDGV_POWER_BLOCK;
 #define max(a, b)		      ((a) > (b) ? (a) : (b))
 #define MI350_SMU_MAX_DPM_LEVEL_COUNT (4)
 
-#define MI350_SMU_NUM_AID_CLK 4
-#define MI350_SMU_NUM_XCC_CLK 8
+#define MI350_SMU_NUM_AID_CLK	4
+#define MI350_SMU_NUM_XCC_CLK	8
+#define MI350_JPEG_PER_AID	10
+#define MI350_GPU_RES_ID	0
 
-#define ADD_DRV_METRICS_EXT_ENTRY(metric_code, encoding, addr, mask) \
-	mi350_pp_smu_add_drv_metrics_ext_entry(adapt, drv_metrics_ext, metric_code, encoding, addr, mask)
+#define ADD_DRV_METRICS_EXT_ENTRY(drv_metric_code, vf_mask, res_instance, encoding, addr)	\
+	mi350_pp_smu_add_drv_metrics_ext_entry(adapt, drv_metrics_ext,				\
+					       mi350_drv_metric_code[drv_metric_code],		\
+					       encoding, addr, vf_mask, res_instance)
 
 /* no pptable in pmfw, add fake one */
 typedef struct Mi350_PPTable {
@@ -134,6 +138,79 @@ struct mi350_pp_drv_metrics_ext {
 		void *addr;
 		enum mi350_metric_addr_encoding encoding;
 	} runtime_config[AMDGV_GPUMON_MAX_NUM_METRICS_EXT];
+};
+
+uint64_t mi350_drv_metric_code[MI350_METRIC_NAME_COUNT] = {
+	/*						 CATEGORY	NAME				UNIT		RES  SUBRES	FLAGS	*/
+	[MI350_METRICS_COUNTER]		= METRIC_EXT_CODE(ACC_COUNTER,	METRIC_ACC_COUNTER,		COUNTER,	GPU, NA,	METRIC_EXT_FLAG(COUNTER)),
+
+	[MI350_GFX_CLK_XCD]		= METRIC_EXT_CODE(FREQUENCY,	CLK_GFX,			MHZ,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_GFX_CLK_MAX_XCD]		= METRIC_EXT_CODE(FREQUENCY,	CLK_GFX_MAX_LIMIT,		MHZ,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_GFX_CLK_MIN_XCD]		= METRIC_EXT_CODE(FREQUENCY,	CLK_GFX_MIN_LIMIT,		MHZ,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_GFX_CLK_DS_XCD]		= METRIC_EXT_CODE(FREQUENCY,	CLK_GFX_DS_DISABLED,		BOOL,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_GFX_CLK_LOCKED_XCD]	= METRIC_EXT_CODE(FREQUENCY,	CLK_GFX_LOCKED,			BOOL,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_USAGE_GFX_XCD]		= METRIC_EXT_CODE(ACTIVITY,	USAGE_GFX,			PERCENT,	XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+
+	[MI350_GFX_CLK_XCD_ACC]		= METRIC_EXT_CODE(FREQUENCY,	CLK_GFX,			MHZ,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_ACC)  | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_USAGE_GFX_XCD_ACC]	= METRIC_EXT_CODE(ACTIVITY,	USAGE_GFX,			PERCENT,	XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_ACC)  | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_THROT_GFX_BEL_PPT_ACC]	= METRIC_EXT_CODE(THROTTLE,	GFX_CLK_BELOW_HOST_LIMIT_PPT,	BOOL,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_ACC)  | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_THROT_GFX_BEL_THM_ACC]	= METRIC_EXT_CODE(THROTTLE,	GFX_CLK_BELOW_HOST_LIMIT_THM,	BOOL,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_ACC)  | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_THROT_GFX_BEL_TOT_ACC]	= METRIC_EXT_CODE(THROTTLE,	GFX_CLK_BELOW_HOST_LIMIT_TOTAL,	BOOL,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_ACC)  | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_THROT_GFX_CLK_LOW_ACC]	= METRIC_EXT_CODE(THROTTLE,	GFX_CLK_LOW_UTILIZATION,	BOOL,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_ACC)  | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+
+	[MI350_SOC_CLK_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_SOC,			MHZ, 		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_VCLK_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_VCLK,			MHZ,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_DCLK_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_DCLK,			MHZ,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_SOC_CLK_MAX_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_SOC_MAX_LIMIT,		MHZ,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_VCLK_MAX_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_VCLK_MAX_LIMIT,		MHZ,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_DCLK_MAX_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_DCLK_MAX_LIMIT,		MHZ,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_SOC_CLK_MIN_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_SOC_MIN_LIMIT,		MHZ,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_VCLK_MIN_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_VCLK_MIN_LIMIT,		MHZ,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_DCLK_MIN_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_DCLK_MIN_LIMIT,		MHZ,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_SOC_CLK_DS_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_SOC_DS_DISABLED,		BOOL,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_VCLK_DS_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_VCLK_DS_DISABLED,		BOOL,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_DCLK_DS_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_DCLK_DS_DISABLED,		BOOL,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+
+	[MI350_USAGE_JPEG]		= METRIC_EXT_CODE(ACTIVITY,	USAGE_JPEG,			PERCENT,	AID, ENGINE,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI350_USAGE_VCN]		= METRIC_EXT_CODE(ACTIVITY,	USAGE_VCN,			PERCENT,	AID, ENGINE,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+
+	[MI350_MEMCLK]			= METRIC_EXT_CODE(FREQUENCY,	CLK_MEM,			MHZ,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI350_MEMCLK_MAX]		= METRIC_EXT_CODE(FREQUENCY,	CLK_MEM_MAX_LIMIT,		MHZ,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI350_MEMCLK_MIN]		= METRIC_EXT_CODE(FREQUENCY,	CLK_MEM_MIN_LIMIT,		MHZ,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI350_MEM_CLK_DS]		= METRIC_EXT_CODE(FREQUENCY,	CLK_MEM_DS_DISABLED,		BOOL,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI350_USAGE_GFX]		= METRIC_EXT_CODE(ACTIVITY,	USAGE_GFX,			PERCENT,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI350_USAGE_MEM]		= METRIC_EXT_CODE(ACTIVITY,	USAGE_MEM,			PERCENT,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI350_DRAM_BANDWIDTH_MAX]	= METRIC_EXT_CODE(ACTIVITY,	MAX_DRAM_BANDWIDTH,		GBPS,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI350_TEMP_HOTSPOT]		= METRIC_EXT_CODE(TEMPERATURE,	TEMP_HOTSPOT_CURR,		CELSIUS,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI350_TEMP_VR]			= METRIC_EXT_CODE(TEMPERATURE,	TEMP_VR_CURR,			CELSIUS,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI350_TEMP_MEM]		= METRIC_EXT_CODE(TEMPERATURE,	TEMP_MEM_CURR,			CELSIUS,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI350_POWER_MAX]		= METRIC_EXT_CODE(POWER,	POWER_LIMIT,			WATT,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI350_POWER]			= METRIC_EXT_CODE(POWER,	POWER_CURR,			WATT,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI350_PCIE_LINK_SPEED]		= METRIC_EXT_CODE(PCIE,		PCIE_LINK_SPEED,		PCIE_GEN,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI350_PCIE_LINK_WIDTH]		= METRIC_EXT_CODE(PCIE,		PCIE_LINK_WIDTH,		PCIE_LANES,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI350_PCIE_BANDWIDTH]		= METRIC_EXT_CODE(PCIE,		PCIE_BANDWIDTH,			MBITPS,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+
+	[MI350_USAGE_GFX_ACC]		= METRIC_EXT_CODE(ACTIVITY,	USAGE_GFX,			PERCENT,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI350_USAGE_MEM_ACC]		= METRIC_EXT_CODE(ACTIVITY,	USAGE_MEM,			PERCENT,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI350_DRAM_BANDWIDTH_ACC]	= METRIC_EXT_CODE(ACTIVITY,	DRAM_BANDWIDTH,			GBPS,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI350_TEMP_HOTSPOT_ACC]	= METRIC_EXT_CODE(TEMPERATURE,	TEMP_HOTSPOT_CURR,		CELSIUS,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI350_TEMP_VR_ACC]		= METRIC_EXT_CODE(TEMPERATURE,	TEMP_VR_CURR,			CELSIUS,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI350_TEMP_MEM_ACC]		= METRIC_EXT_CODE(TEMPERATURE,	TEMP_MEM_CURR,			CELSIUS,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI350_ENERGY_SOCKET_ACC]	= METRIC_EXT_CODE(ENERGY,	ENERGY_SOCKET,			JOULE,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI350_ENERGY_XCD_ACC]		= METRIC_EXT_CODE(ENERGY,	ENERGY_XCD,			JOULE,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI350_ENERGY_AID_ACC]		= METRIC_EXT_CODE(ENERGY,	ENERGY_AID,			JOULE,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI350_ENERGY_MEM_ACC]		= METRIC_EXT_CODE(ENERGY,	ENERGY_MEM,			JOULE,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI350_THROT_PROCHOT_ACC]	= METRIC_EXT_CODE(THROTTLE,	THROTTLE_PROCHOT_ACTIVE,	BOOL,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI350_THROT_PPT_ACC]		= METRIC_EXT_CODE(THROTTLE,	THROTTLE_PPT_ACTIVE,		BOOL,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI350_THROT_SOCKET_ACC]	= METRIC_EXT_CODE(THROTTLE,	THROTTLE_SOCKET_ACTIVE,		BOOL,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI350_THROT_VR_ACC]		= METRIC_EXT_CODE(THROTTLE,	THROTTLE_VR_ACTIVE,		BOOL,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI350_THROT_MEM_ACC]		= METRIC_EXT_CODE(THROTTLE,	THROTTLE_MEM_ACTIVE,		BOOL,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI350_PCIE_BANDWIDTH_ACC]	= METRIC_EXT_CODE(PCIE,		PCIE_BANDWIDTH,			GBPS,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI350_PCIE_L0_TO_RECOVER_ACC]	= METRIC_EXT_CODE(PCIE,		PCIE_L0_TO_RECOVERY_COUNT,	UINT,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI350_PCIE_REPL_ACC]		= METRIC_EXT_CODE(PCIE,		PCIE_REPLAY_COUNT,		UINT,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI350_PCIE_REPL_ROLLOVER_ACC]	= METRIC_EXT_CODE(PCIE,		PCIE_REPLAY_ROLLOVER_COUNT,	UINT,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI350_PCIE_NAK_SENT_ACC]	= METRIC_EXT_CODE(PCIE,		PCIE_NAK_SENT_COUNT,		UINT,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI350_PCIE_NAK_RECEIVED_ACC]	= METRIC_EXT_CODE(PCIE,		PCIE_NAK_RECEIVED_COUNT,	UINT,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
 };
 
 static int mi350_smu_wait_for_response(struct amdgv_adapter *adapt, uint32_t *val)
@@ -1498,10 +1575,8 @@ static void mi350_pp_smu_clear_drv_metrics_ext(struct amdgv_adapter *adapt,
 
 static int mi350_pp_smu_add_drv_metrics_ext_entry(struct amdgv_adapter *adapt,
 	struct mi350_pp_drv_metrics_ext *drv_metrics_ext,
-	uint64_t metric_code,
-	enum mi350_metric_addr_encoding addr_encoding,
-	void *metric_addr,
-	uint32_t vf_mask)
+	uint64_t metric_code, enum mi350_metric_addr_encoding addr_encoding,
+	void *metric_addr, uint32_t vf_mask, uint32_t res_instance)
 {
 	uint32_t entry_idx = drv_metrics_ext->num_metric;
 
@@ -1513,6 +1588,7 @@ static int mi350_pp_smu_add_drv_metrics_ext_entry(struct amdgv_adapter *adapt,
 
 	drv_metrics_ext->metric[entry_idx].code = metric_code;
 	drv_metrics_ext->metric[entry_idx].vf_mask = vf_mask;
+	drv_metrics_ext->metric[entry_idx].res_instance = res_instance;
 
 	drv_metrics_ext->runtime_config[entry_idx].encoding = addr_encoding;
 	drv_metrics_ext->runtime_config[entry_idx].addr = metric_addr;
@@ -1520,6 +1596,109 @@ static int mi350_pp_smu_add_drv_metrics_ext_entry(struct amdgv_adapter *adapt,
 	drv_metrics_ext->num_metric++;
 
 	return 0;
+}
+
+static void mi350_pp_smu_init_drv_xcp_metrics(struct amdgv_adapter *adapt,
+					      struct mi350_pp_drv_metrics_ext *drv_metrics_ext,
+					      struct mi350_smu_dpm_context *dpm_context,
+					      MetricsTable_t *metrics_table,
+					      uint32_t xcc_id)
+{
+	uint32_t vf_mask = amdgv_mcp_get_vf_mask_by_xcc(adapt, xcc_id);
+	uint32_t xcp_id = amdgv_mcp_get_xcp_by_xcc(adapt, xcc_id);
+	uint32_t uint_mask_bit = xcc_id;
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_GFX_CLK_XCD, vf_mask, xcp_id,
+				  Q10_32, (void *)&metrics_table->GfxclkFrequency[xcc_id]);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_GFX_CLK_XCD_ACC, vf_mask, xcp_id,
+				  Q10_64, (void *)&metrics_table->GfxclkFrequencyAcc[xcc_id]);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_GFX_CLK_MAX_XCD, vf_mask, xcp_id,
+				  UINT_32, (void *)&dpm_context->dpm_entry[DPM_CLOCK_TYPE_GFXCLK].max);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_GFX_CLK_MIN_XCD, vf_mask, xcp_id,
+				  UINT_32, (void *)&dpm_context->dpm_entry[DPM_CLOCK_TYPE_GFXCLK].min);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_GFX_CLK_DS_XCD, vf_mask, xcp_id,
+				  Q10_32_DS, (void *)&metrics_table->GfxclkFrequency[xcc_id]);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_GFX_CLK_LOCKED_XCD, vf_mask, xcp_id,
+				  uint_mask_bit, (void *)&metrics_table->GfxLockXCDMak);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_USAGE_GFX_XCD, vf_mask, xcp_id,
+					Q10_32, (void *)&metrics_table->GfxBusy[xcc_id]);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_USAGE_GFX_XCD_ACC, vf_mask, xcp_id,
+					Q10_64, (void *)&metrics_table->GfxBusyAcc[xcc_id]);
+
+	if (adapt->pp.smu_fw_version >= 0x00561E00) {
+		ADD_DRV_METRICS_EXT_ENTRY(MI350_THROT_GFX_BEL_PPT_ACC, vf_mask, xcp_id,
+					  Q10_64, (void *)&metrics_table->GfxclkBelowHostLimitPptAcc[xcc_id]);
+
+		ADD_DRV_METRICS_EXT_ENTRY(MI350_THROT_GFX_BEL_THM_ACC, vf_mask, xcp_id,
+					  Q10_64, (void *)&metrics_table->GfxclkBelowHostLimitThmAcc[xcc_id]);
+
+		ADD_DRV_METRICS_EXT_ENTRY(MI350_THROT_GFX_BEL_TOT_ACC, vf_mask, xcp_id,
+					  Q10_64, (void *)&metrics_table->GfxclkBelowHostLimitTotalAcc[xcc_id]);
+
+		ADD_DRV_METRICS_EXT_ENTRY(MI350_THROT_GFX_CLK_LOW_ACC, vf_mask, xcp_id,
+					  Q10_64, (void *)&metrics_table->GfxclkLowUtilizationAcc[xcc_id]);
+	}
+}
+
+static void mi350_pp_smu_init_drv_aid_metrics(struct amdgv_adapter *adapt,
+					      struct mi350_pp_drv_metrics_ext *drv_metrics_ext,
+					      struct mi350_smu_dpm_context *dpm_context,
+					      MetricsTable_t *metrics_table,
+					      uint32_t aid_id)
+{
+	uint32_t vf_mask = amdgv_mcp_get_vf_mask_by_aid(adapt, aid_id);
+	uint32_t i = 0;
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_SOC_CLK_AID, vf_mask, aid_id,
+				  Q10_32, (void *)&metrics_table->SocclkFrequency[aid_id]);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_SOC_CLK_MAX_AID, vf_mask, aid_id,
+				  UINT_32, (void *)&dpm_context->dpm_entry[DPM_CLOCK_TYPE_SOCCLK].max);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_SOC_CLK_MIN_AID, vf_mask, aid_id,
+				  UINT_32, (void *)&dpm_context->dpm_entry[DPM_CLOCK_TYPE_SOCCLK].min);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_SOC_CLK_DS_AID, vf_mask, aid_id,
+				  Q10_32_DS, (void *)&metrics_table->SocclkFrequency[aid_id]);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_VCLK_AID, vf_mask, aid_id,
+				  Q10_32, (void *)&metrics_table->VclkFrequency[aid_id]);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_VCLK_MAX_AID, vf_mask, aid_id,
+				  UINT_32, (void *)&dpm_context->dpm_entry[DPM_CLOCK_TYPE_VCLK].max);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_VCLK_MIN_AID, vf_mask, aid_id,
+				  UINT_32, (void *)&dpm_context->dpm_entry[DPM_CLOCK_TYPE_VCLK].min);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_VCLK_DS_AID, vf_mask, aid_id,
+				  Q10_32_DS, (void *)&metrics_table->VclkFrequency[aid_id]);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_DCLK_AID, vf_mask, aid_id,
+				  Q10_32, (void *)&metrics_table->DclkFrequency[aid_id]);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_DCLK_MAX_AID, vf_mask, aid_id,
+				  UINT_32, (void *)&dpm_context->dpm_entry[DPM_CLOCK_TYPE_DCLK].max);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_DCLK_MIN_AID, vf_mask, aid_id,
+				  UINT_32, (void *)&dpm_context->dpm_entry[DPM_CLOCK_TYPE_DCLK].min);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_DCLK_DS_AID, vf_mask, aid_id,
+				  Q10_32_DS, (void *)&metrics_table->DclkFrequency[aid_id]);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_USAGE_VCN, vf_mask, aid_id,
+				  Q10_32, (void *)&(metrics_table->VcnBusy[aid_id]));
+
+	for (i = MI350_JPEG_PER_AID * aid_id; i < MI350_JPEG_PER_AID * aid_id + MI350_JPEG_PER_AID; i++) {
+		ADD_DRV_METRICS_EXT_ENTRY(MI350_USAGE_JPEG, vf_mask, (i / MI350_JPEG_PER_AID),
+					  Q10_32, (void *)&(metrics_table->JpegBusy[i]));
+	}
 }
 
 static int mi350_pp_smu_init_drv_metrics_ext(struct amdgv_adapter *adapt)
@@ -1532,348 +1711,131 @@ static int mi350_pp_smu_init_drv_metrics_ext(struct amdgv_adapter *adapt)
 	MetricsTable_t *metrics_table = (MetricsTable_t *)table_context->metrics_table;
 	struct mi350_smu_dpm_context *dpm_context = (struct mi350_smu_dpm_context *)smu->smu_dpm_context;
 	uint32_t whole_gpu_vf_mask = ((adapt->num_vf - 1) | (1 << AMDGV_PF_IDX));
-	uint32_t vf_mask = 0;
-	uint32_t i = 0, uint_mask_bit;
+	uint32_t i = 0;
 
 	if (!drv_metrics_ext)
 		return AMDGV_FAILURE;
 
 	mi350_pp_smu_clear_drv_metrics_ext(adapt, drv_metrics_ext);
 
-	/* FW Counter*/
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(ACC_COUNTER, 	METRIC_ACC_COUNTER,
-				COUNTER, 	METRIC_EXT_FLAG(COUNTER)),
-				UINT_32, 	(void *)&metrics_table->AccumulationCounter,
-				whole_gpu_vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_METRICS_COUNTER, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  UINT_32, (void *)&metrics_table->AccumulationCounter);
 
-	for (i = 0; i < MI350_SMU_NUM_XCC_CLK; i++) {
-		vf_mask = amdgv_mcp_get_vf_mask_by_xcc(adapt, i);
-		uint_mask_bit = i;
-		/* GFX CLK */
-		ADD_DRV_METRICS_EXT_ENTRY(
-			METRIC_EXT_CODE(FREQUENCY,	CLK_GFX,
-					MHZ,		(METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC))),
-					Q10_32,		(void *)&metrics_table->GfxclkFrequency[i],
-					vf_mask);
-		ADD_DRV_METRICS_EXT_ENTRY(
-			METRIC_EXT_CODE(FREQUENCY,	CLK_GFX,
-					MHZ,		(METRIC_EXT_FLAG(DATA_FILTER_ACC) | METRIC_EXT_FLAG(CHIPLET_METRIC))),
-					Q10_64,		(void *)&metrics_table->GfxclkFrequencyAcc[i],
-					vf_mask);
-		ADD_DRV_METRICS_EXT_ENTRY(
-			METRIC_EXT_CODE(FREQUENCY,	CLK_GFX_MAX_LIMIT,
-					MHZ,		(METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC))),
-					UINT_32,	(void *)&dpm_context->dpm_entry[DPM_CLOCK_TYPE_GFXCLK].max,
-					vf_mask);
+	for (i = 0; i < MI350_SMU_NUM_XCC_CLK; i++)
+		mi350_pp_smu_init_drv_xcp_metrics(adapt, drv_metrics_ext, dpm_context,
+						  metrics_table, i);
 
-		ADD_DRV_METRICS_EXT_ENTRY(
-			METRIC_EXT_CODE(FREQUENCY,	CLK_GFX_MIN_LIMIT,
-					MHZ,		(METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC))),
-					UINT_32,	(void *)&dpm_context->dpm_entry[DPM_CLOCK_TYPE_GFXCLK].min,
-					vf_mask);
+	for (i = 0; i < MI350_SMU_NUM_AID_CLK; i++)
+		mi350_pp_smu_init_drv_aid_metrics(adapt, drv_metrics_ext, dpm_context,
+						  metrics_table, i);
 
-		/* Deep-sleep state */
-		ADD_DRV_METRICS_EXT_ENTRY(
-			METRIC_EXT_CODE(FREQUENCY,	CLK_GFX_DS_DISABLED,
-					BOOL,		(METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC))),
-					Q10_32_DS,	(void *)&metrics_table->GfxclkFrequency[i],
-					vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_MEMCLK, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_32, (void *)&metrics_table->UclkFrequency);
 
-		/* Clock locked */
-		ADD_DRV_METRICS_EXT_ENTRY(
-			METRIC_EXT_CODE(FREQUENCY,	CLK_GFX_LOCKED,
-					BOOL,		(METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC))),
-					uint_mask_bit,	(void *)&metrics_table->GfxLockXCDMak,
-					vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_MEMCLK_MAX, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  UINT_32, (void *)&dpm_context->dpm_entry[DPM_CLOCK_TYPE_UCLK].max);
 
-		/* DeviceGetViolationStatus: Total App Clock Counter */
-		if ((adapt->pp.smu_fw_version >= 0x00561E00 && adapt->asic_type == CHIP_MI350X)) {
-			ADD_DRV_METRICS_EXT_ENTRY(
-				METRIC_EXT_CODE(THROTTLE,	GFX_CLK_BELOW_HOST_LIMIT_PPT,
-						BOOL,	METRIC_EXT_FLAG(DATA_FILTER_ACC) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-						Q10_64,		(void *)&metrics_table->GfxclkBelowHostLimitPptAcc[i],
-						vf_mask);
-			ADD_DRV_METRICS_EXT_ENTRY(
-				METRIC_EXT_CODE(THROTTLE,	GFX_CLK_BELOW_HOST_LIMIT_THM,
-						BOOL,	METRIC_EXT_FLAG(DATA_FILTER_ACC) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-						Q10_64,		(void *)&metrics_table->GfxclkBelowHostLimitThmAcc[i],
-						vf_mask);
-			ADD_DRV_METRICS_EXT_ENTRY(
-				METRIC_EXT_CODE(THROTTLE,	GFX_CLK_BELOW_HOST_LIMIT_TOTAL,
-						BOOL,	METRIC_EXT_FLAG(DATA_FILTER_ACC) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-						Q10_64,		(void *)&metrics_table->GfxclkBelowHostLimitTotalAcc[i],
-						vf_mask);
-			ADD_DRV_METRICS_EXT_ENTRY(
-				METRIC_EXT_CODE(THROTTLE,	GFX_CLK_LOW_UTILIZATION,
-						BOOL,	METRIC_EXT_FLAG(DATA_FILTER_ACC) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-						Q10_64,		(void *)&metrics_table->GfxclkLowUtilizationAcc[i],
-						vf_mask);
-		}
-	}
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_MEMCLK_MIN, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  UINT_32, (void *)&dpm_context->dpm_entry[DPM_CLOCK_TYPE_UCLK].min);
 
-	/* UCLK */
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(FREQUENCY,		CLK_MEM,
-				MHZ,			METRIC_EXT_FLAG(DATA_FILTER_INST)),
-				Q10_32,			(void *)&metrics_table->UclkFrequency,
-				whole_gpu_vf_mask);
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(FREQUENCY,		CLK_MEM_MAX_LIMIT,
-				MHZ,			METRIC_EXT_FLAG(DATA_FILTER_INST)),
-				UINT_32,		(void *)&dpm_context->dpm_entry[DPM_CLOCK_TYPE_UCLK].max,
-				whole_gpu_vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_MEM_CLK_DS, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_32_DS, (void *)&metrics_table->UclkFrequency);
 
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(FREQUENCY,		CLK_MEM_MIN_LIMIT,
-				MHZ,			METRIC_EXT_FLAG(DATA_FILTER_INST)),
-				UINT_32,		(void *)&dpm_context->dpm_entry[DPM_CLOCK_TYPE_UCLK].min,
-				whole_gpu_vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_TEMP_HOTSPOT, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_32, (void *)&metrics_table->MaxSocketTemperature);
 
-	ADD_DRV_METRICS_EXT_ENTRY(
-			METRIC_EXT_CODE(FREQUENCY,	CLK_MEM_DS_DISABLED,
-					BOOL,		(METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC))),
-					Q10_32_DS,	(void *)&metrics_table->UclkFrequency,
-					vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_TEMP_VR, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_32, (void *)&metrics_table->MaxVrTemperature);
 
-	for (i = 0; i < MI350_SMU_NUM_AID_CLK; i++) {
-		vf_mask = amdgv_mcp_get_vf_mask_by_aid(adapt, i);
-		/* SOC CLK */
-		ADD_DRV_METRICS_EXT_ENTRY(
-			METRIC_EXT_CODE(FREQUENCY,	CLK_SOC,
-					MHZ,		(METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC))),
-					Q10_32,		(void *)&metrics_table->SocclkFrequency[i],
-					vf_mask);
-		ADD_DRV_METRICS_EXT_ENTRY(
-			METRIC_EXT_CODE(FREQUENCY,	CLK_SOC_MAX_LIMIT,
-					MHZ,		(METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC))),
-					UINT_32,	(void *)&dpm_context->dpm_entry[DPM_CLOCK_TYPE_SOCCLK].max,
-					vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_TEMP_MEM, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_32, (void *)&metrics_table->MaxHbmTemperature);
 
-		ADD_DRV_METRICS_EXT_ENTRY(
-			METRIC_EXT_CODE(FREQUENCY,	CLK_SOC_MIN_LIMIT,
-					MHZ,		(METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC))),
-					UINT_32,	(void *)&dpm_context->dpm_entry[DPM_CLOCK_TYPE_SOCCLK].min,
-					vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_TEMP_HOTSPOT_ACC, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_64, (void *)&metrics_table->MaxSocketTemperatureAcc);
 
-		ADD_DRV_METRICS_EXT_ENTRY(
-			METRIC_EXT_CODE(FREQUENCY,	CLK_SOC_DS_DISABLED,
-					BOOL,		(METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC))),
-					Q10_32_DS,	(void *)&metrics_table->SocclkFrequency[i],
-					vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_TEMP_VR_ACC, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_64, (void *)&metrics_table->MaxVrTemperatureAcc);
 
-		/* VCLK */
-		ADD_DRV_METRICS_EXT_ENTRY(
-			METRIC_EXT_CODE(FREQUENCY,	CLK_VCLK,
-					MHZ,		(METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC))),
-					Q10_32,		(void *)&metrics_table->VclkFrequency[i],
-					vf_mask);
-		ADD_DRV_METRICS_EXT_ENTRY(
-			METRIC_EXT_CODE(FREQUENCY,	CLK_VCLK_MAX_LIMIT,
-					MHZ,		(METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC))),
-					UINT_32,	(void *)&dpm_context->dpm_entry[DPM_CLOCK_TYPE_VCLK].max,
-					vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_TEMP_MEM_ACC, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_64, (void *)&metrics_table->MaxHbmTemperatureAcc);
 
-		ADD_DRV_METRICS_EXT_ENTRY(
-			METRIC_EXT_CODE(FREQUENCY,	CLK_VCLK_MIN_LIMIT,
-					MHZ,		(METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC))),
-					UINT_32,	(void *)&dpm_context->dpm_entry[DPM_CLOCK_TYPE_VCLK].min,
-					vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_POWER_MAX, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_32, (void *)&metrics_table->SocketPowerLimit);
 
-		ADD_DRV_METRICS_EXT_ENTRY(
-			METRIC_EXT_CODE(FREQUENCY,	CLK_VCLK_DS_DISABLED,
-					BOOL,		(METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC))),
-					Q10_32_DS,	(void *)&metrics_table->VclkFrequency[i],
-					vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_POWER, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_32, (void *)&metrics_table->SocketPower);
 
-		/* DCLK */
-		ADD_DRV_METRICS_EXT_ENTRY(
-			METRIC_EXT_CODE(FREQUENCY,	CLK_DCLK,
-					MHZ,		(METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC))),
-					Q10_32,		(void *)&metrics_table->DclkFrequency[i],
-					vf_mask);
-		ADD_DRV_METRICS_EXT_ENTRY(
-			METRIC_EXT_CODE(FREQUENCY,	CLK_DCLK_MAX_LIMIT,
-					MHZ,		(METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC))),
-					UINT_32,	(void *)&dpm_context->dpm_entry[DPM_CLOCK_TYPE_DCLK].max,
-					vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_ENERGY_SOCKET_ACC, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_64, (void *)&metrics_table->SocketEnergyAcc);
 
-		ADD_DRV_METRICS_EXT_ENTRY(
-			METRIC_EXT_CODE(FREQUENCY,	CLK_DCLK_MIN_LIMIT,
-					MHZ,		(METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC))),
-					UINT_32,	(void *)&dpm_context->dpm_entry[DPM_CLOCK_TYPE_DCLK].min,
-					vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_ENERGY_XCD_ACC, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_64, (void *)&metrics_table->XcdEnergyAcc);
 
-		ADD_DRV_METRICS_EXT_ENTRY(
-			METRIC_EXT_CODE(FREQUENCY,	CLK_DCLK_DS_DISABLED,
-					BOOL,		(METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC))),
-					Q10_32_DS,	(void *)&metrics_table->DclkFrequency[i],
-					vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_ENERGY_AID_ACC, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_64, (void *)&metrics_table->AidEnergyAcc);
 
-	}
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_ENERGY_MEM_ACC, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_64, (void *)&metrics_table->HbmEnergyAcc);
 
-	/* Instant Temperatures */
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(TEMPERATURE, 		TEMP_HOTSPOT_CURR,
-				CELSIUS,		METRIC_EXT_FLAG(DATA_FILTER_INST)),
-				Q10_32,			(void *)&metrics_table->MaxSocketTemperature,
-				whole_gpu_vf_mask);
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(TEMPERATURE, 		TEMP_VR_CURR,
-				CELSIUS,		METRIC_EXT_FLAG(DATA_FILTER_INST)),
-				Q10_32,			(void *)&metrics_table->MaxVrTemperature,
-				whole_gpu_vf_mask);
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(TEMPERATURE, 		TEMP_MEM_CURR,
-				CELSIUS,		METRIC_EXT_FLAG(DATA_FILTER_INST)),
-				Q10_32,			(void *)&metrics_table->MaxHbmTemperature,
-				whole_gpu_vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_USAGE_GFX, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_32, (void *)&metrics_table->SocketGfxBusy);
 
-	/* Accumulated Temperatures */
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(TEMPERATURE, 		TEMP_HOTSPOT_CURR,
-				CELSIUS,		METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-				Q10_64,			(void *)&metrics_table->MaxSocketTemperatureAcc,
-				whole_gpu_vf_mask);
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(TEMPERATURE, 		TEMP_VR_CURR,
-				CELSIUS,		METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-				Q10_64,			(void *)&metrics_table->MaxVrTemperatureAcc,
-				whole_gpu_vf_mask);
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(TEMPERATURE, 		TEMP_MEM_CURR,
-				CELSIUS,		METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-				Q10_64,			(void *)&metrics_table->MaxHbmTemperatureAcc,
-				whole_gpu_vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_USAGE_MEM, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_32, (void *)&metrics_table->DramBandwidthUtilization);
 
-	/* Power */
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(POWER, 			POWER_LIMIT,
-				WATT,			METRIC_EXT_FLAG(DATA_FILTER_INST)),
-				Q10_32,			(void *)&metrics_table->SocketPowerLimit,
-				whole_gpu_vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_USAGE_GFX_ACC, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_64, (void *)&metrics_table->SocketGfxBusyAcc);
 
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(POWER, 			POWER_CURR,
-				WATT,			METRIC_EXT_FLAG(DATA_FILTER_INST)),
-				Q10_32,			(void *)&metrics_table->SocketPower,
-				whole_gpu_vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_USAGE_MEM_ACC, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_64, (void *)&metrics_table->DramBandwidthUtilizationAcc);
 
-	/* Energy */
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(ENERGY, 		ENERGY_SOCKET,
-				JOULE,			METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-				Q10_64,			(void *)&metrics_table->SocketEnergyAcc,
-				whole_gpu_vf_mask);
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(ENERGY, 		ENERGY_XCD,
-				JOULE,			METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-				Q10_64,			(void *)&metrics_table->XcdEnergyAcc,
-				whole_gpu_vf_mask);
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(ENERGY, 		ENERGY_AID,
-				JOULE,			METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-				Q10_64,			(void *)&metrics_table->AidEnergyAcc,
-				whole_gpu_vf_mask);
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(ENERGY, 		ENERGY_MEM,
-				JOULE,			METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-				Q10_64,			(void *)&metrics_table->HbmEnergyAcc,
-				whole_gpu_vf_mask);
-	/* Instant Usage */
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(ACTIVITY, 		USAGE_GFX,
-				PERCENT,		METRIC_EXT_FLAG(DATA_FILTER_INST)),
-				Q10_32,			(void *)&metrics_table->SocketGfxBusy,
-				whole_gpu_vf_mask);
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(ACTIVITY, 		USAGE_MEM,
-				PERCENT,		METRIC_EXT_FLAG(DATA_FILTER_INST)),
-				Q10_32,			(void *)&metrics_table->DramBandwidthUtilization,
-				whole_gpu_vf_mask);
-	/* Accumulated Usage */
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(ACTIVITY, 		USAGE_GFX,
-				PERCENT,		METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-				Q10_64,			(void *)&metrics_table->SocketGfxBusyAcc,
-				whole_gpu_vf_mask);
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(ACTIVITY, 		USAGE_MEM,
-				PERCENT,		METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-				Q10_64,			(void *)&metrics_table->DramBandwidthUtilizationAcc,
-				whole_gpu_vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_DRAM_BANDWIDTH_ACC, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_64, (void *)&metrics_table->DramBandwidthAcc);
 
-	/* Accumulated PCIE Bandwidth */
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(PCIE, 			PCIE_BANDWIDTH,
-				GBPS,			METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-				Q10_64,			(void *)&metrics_table->PcieBandwidthAcc[0],
-				whole_gpu_vf_mask);
-	/* Throttling Counters */
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(THROTTLE, 		THROTTLE_SOCKET_ACTIVE,
-				BOOL,			METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-				Q10_32,			(void *)&metrics_table->SocketThmResidencyAcc,
-				whole_gpu_vf_mask);
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(THROTTLE, 		THROTTLE_VR_ACTIVE,
-				BOOL,			METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-				Q10_32,			(void *)&metrics_table->VrThmResidencyAcc,
-				whole_gpu_vf_mask);
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(THROTTLE, 		THROTTLE_MEM_ACTIVE,
-				BOOL,			METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-				Q10_32,			(void *)&metrics_table->HbmThmResidencyAcc,
-				whole_gpu_vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_DRAM_BANDWIDTH_MAX, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_32, (void *)&metrics_table->MaxDramBandwidth);
 
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(PCIE, PCIE_BANDWIDTH,
-				MBITPS, METRIC_EXT_FLAG(DATA_FILTER_INST)),
-				Q10_32, (void *)&(metrics_table->PcieBandwidth[0]),
-				whole_gpu_vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_PCIE_BANDWIDTH_ACC, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_64, (void *)&metrics_table->PcieBandwidthAcc[0]);
 
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(PCIE, PCIE_L0_TO_RECOVERY_COUNT,
-				UINT, METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-				UINT_32, (void *)&(metrics_table->PCIeL0ToRecoveryCountAcc),
-				whole_gpu_vf_mask);
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(PCIE, PCIE_REPLAY_COUNT,
-				UINT, METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-				UINT_32, (void *)&(metrics_table->PCIenReplayAAcc),
-				whole_gpu_vf_mask);
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(PCIE, PCIE_REPLAY_ROLLOVER_COUNT,
-				UINT, METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-				UINT_32, (void *)&(metrics_table->PCIenReplayARolloverCountAcc),
-				whole_gpu_vf_mask);
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(PCIE, PCIE_NAK_SENT_COUNT,
-				UINT, METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-				UINT_32, (void *)&(metrics_table->PCIeNAKSentCountAcc),
-				whole_gpu_vf_mask);
-	ADD_DRV_METRICS_EXT_ENTRY(
-		METRIC_EXT_CODE(PCIE, PCIE_NAK_RECEIVED_COUNT,
-				UINT, METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-				UINT_32, (void *)&(metrics_table->PCIeNAKReceivedCountAcc),
-				whole_gpu_vf_mask);
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_THROT_PROCHOT_ACC, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_32, (void *)&metrics_table->ProchotResidencyAcc);
 
-	/* JPEG - 40 engines */
-	for (i = 0; i < 40; i++) {
-		ADD_DRV_METRICS_EXT_ENTRY(
-			METRIC_EXT_CODE(ACTIVITY, 		USAGE_JPEG,
-					PERCENT,		METRIC_EXT_FLAG(DATA_FILTER_INST)),
-					Q10_32,			(void *)&(metrics_table->JpegBusy[i]),
-					whole_gpu_vf_mask);
-	}
-	/* VCN - 4 engines */
-	for (i = 0; i < 4; i++) {
-		ADD_DRV_METRICS_EXT_ENTRY(
-			METRIC_EXT_CODE(ACTIVITY, 		USAGE_VCN,
-					PERCENT,		METRIC_EXT_FLAG(DATA_FILTER_INST)),
-					Q10_32,			(void *)&(metrics_table->VcnBusy[i]),
-					whole_gpu_vf_mask);
-	}
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_THROT_PPT_ACC, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_32, (void *)&metrics_table->PptResidencyAcc);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_THROT_SOCKET_ACC, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_32, (void *)&metrics_table->SocketThmResidencyAcc);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_THROT_VR_ACC, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_32, (void *)&metrics_table->VrThmResidencyAcc);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_THROT_MEM_ACC, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_32, (void *)&metrics_table->HbmThmResidencyAcc);
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_PCIE_BANDWIDTH, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  Q10_32, (void *)&(metrics_table->PcieBandwidth[0]));
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_PCIE_L0_TO_RECOVER_ACC, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  UINT_32, (void *)&(metrics_table->PCIeL0ToRecoveryCountAcc));
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_PCIE_REPL_ACC, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  UINT_32, (void *)&(metrics_table->PCIenReplayAAcc));
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_PCIE_REPL_ROLLOVER_ACC, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  UINT_32, (void *)&(metrics_table->PCIenReplayARolloverCountAcc));
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_PCIE_NAK_SENT_ACC, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  UINT_32, (void *)&(metrics_table->PCIeNAKSentCountAcc));
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_PCIE_NAK_RECEIVED_ACC, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  UINT_32, (void *)&(metrics_table->PCIeNAKReceivedCountAcc));
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_PCIE_LINK_SPEED, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  UINT_32, (void *)&(metrics_table->PCIeLinkSpeed));
+
+	ADD_DRV_METRICS_EXT_ENTRY(MI350_PCIE_LINK_WIDTH, whole_gpu_vf_mask, MI350_GPU_RES_ID,
+				  UINT_32, (void *)&(metrics_table->PCIeLinkWidth));
 
 	return 0;
 };
@@ -2310,6 +2272,12 @@ static int mi350_pp_smu_get_metrics_ext(struct amdgv_adapter *adapt,
 	if (ret)
 		return ret;
 
+	if (drv_metrics_ext->num_metric == 0) {
+		ret = mi350_pp_smu_init_drv_metrics_ext(adapt);
+		if (ret)
+			return ret;
+	}
+
 	ret = mi350_pp_smu_update_drv_metrics_ext(adapt, drv_metrics_ext);
 	if (ret)
 		return ret;
@@ -2381,41 +2349,39 @@ static int mi350_smu_pp_get_link_metrics(struct amdgv_adapter *adapt,
 		(struct mi350_smu_table_context *)smu->smu_table_context;
 	MetricsTable_t *metrics_table = (MetricsTable_t *)table_context->metrics_table;
 	struct amdgv_xgmi_psp_link_info *psp_link_info;
-	uint32_t i = 0, j = 0, port_id = 0;
-	struct amdgv_hive_info *hive;
-	struct amdgv_adapter *tmp_adapt = NULL;
+	uint32_t i = 0, port_id = 0;
 
 	if (mi350_smu_get_metrics_table(adapt))
 		return AMDGV_FAILURE;
 
-	hive = amdgv_get_xgmi_hive(adapt);
-	if (!hive)
-		return AMDGV_FAILURE;
-
 	psp_link_info = &adapt->xgmi.link_info;
 
-	for (j = 0; j < psp_link_info->num_links; j++) {
-		amdgv_list_for_each_entry(tmp_adapt, &hive->adapt_list,
-			struct amdgv_adapter, xgmi.head) {
-			if (tmp_adapt->xgmi.node_id != psp_link_info->link[j].dest_node_id)
-				continue;
+	for (i = 0; i < 8; i++) {
+		port_id = phy_port_to_aid_link_idx[i];
+		link_metrics->links[i].link_type = AMDGV_GPUMON_LINK_TYPE_XGMI3;
+		link_metrics->links[i].bdf = psp_link_info->link[i].dest_bdf;
+		link_metrics->links[i].read = SMUQ10_TO_UINT(metrics_table->XgmiReadDataSizeAcc[port_id]);
+		link_metrics->links[i].write = SMUQ10_TO_UINT(metrics_table->XgmiWriteDataSizeAcc[port_id]);
+		link_metrics->links[i].width = metrics_table->XgmiWidth;
+		link_metrics->links[i].speed = metrics_table->XgmiBitrate;
 
-			link_metrics->links[i].link_type = AMDGV_GPUMON_LINK_TYPE_XGMI3;
-			link_metrics->links[i].bdf = tmp_adapt->bdf;
-
-			port_id = phy_port_to_aid_link_idx[psp_link_info->link[j].src_port_id];
-			link_metrics->links[i].read =
-				SMUQ10_ROUND(metrics_table->XgmiReadDataSizeAcc[port_id]);
-			link_metrics->links[i].write =
-				SMUQ10_ROUND(metrics_table->XgmiWriteDataSizeAcc[port_id]);
-			link_metrics->links[i].width = SMUQ10_ROUND(metrics_table->XgmiWidth);
-			link_metrics->links[i].speed = SMUQ10_ROUND(metrics_table->XgmiBitrate);
-
-			i++;
+		switch (amdgv_xgmi_get_link_status(adapt, i)) {
+		case AMDGV_XGMI_LINK_STATUS__ACTIVE:
+			link_metrics->links[i].status = AMDGV_GPUMON_LINK_STATUS_ENABLED;
+			break;
+		case AMDGV_XGMI_LINK_STATUS__DISABLED:
+			link_metrics->links[i].status = AMDGV_GPUMON_LINK_STATUS_DISABLED;
+			break;
+		case AMDGV_XGMI_LINK_STATUS__INACTIVE:
+			link_metrics->links[i].status = AMDGV_GPUMON_LINK_STATUS_INACTIVE;
+			break;
+		default:
+			link_metrics->links[i].status = AMDGV_GPUMON_LINK_STATUS_ERROR;
+			break;
 		}
 	}
 
-	link_metrics->num_links = i;
+	link_metrics->num_links = 8;
 
 	return 0;
 }

@@ -32,6 +32,7 @@ struct amdgv_live_migration {
 	uint32_t			dynamic_data_size;
 	uint32_t			migration_version;
 	int32_t				migration_status;
+	enum amdgv_migration_context_version context_version;
 };
 
 int amdgv_migration_get_migration_version(struct amdgv_adapter *adapt,
@@ -43,4 +44,6 @@ int amdgv_migration_transfer_manifest_data(struct amdgv_adapter *adapt,
 int amdgv_migration_init(struct amdgv_adapter *adapt);
 void amdgv_migration_fini(struct amdgv_adapter *adapt);
 int amdgv_migration_collect_info(struct amdgv_adapter *adapt);
+void amdgv_migration_set_ctx_version(struct amdgv_adapter *adapt,
+				     enum amdgv_migration_context_version version);
 #endif

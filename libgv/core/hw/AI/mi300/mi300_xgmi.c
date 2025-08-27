@@ -246,6 +246,59 @@ static bool mi300_xgmi_is_fb_sharing_allowed(struct amdgv_adapter *adapt,
 	}
 }
 
+/* Fixed pattern for smn addressing on different AIDs:
+*   bit[34]: indicate cross AID access
+*   bit[33:32]: indicate target AID id
+* AID id range is 0 ~ 3 as maximum AID number is 4.
+*/
+static uint64_t __ext_smn_addressing(int ext_id)
+{
+	uint64_t ext_offset;
+
+	/* local routing and bit[34:32] will be zeros */
+	if (ext_id == 0)
+	return 0;
+
+	/* Initiated from host, accessing to all non-zero aids are cross traffic */
+	ext_offset = ((uint64_t)(ext_id & 0x3) << 32) | (1ULL << 34);
+
+	return ext_offset;
+}
+
+static uint32_t smn_xgmi_6_4_pcs_state_hist1[2] = { 0x11a00070, 0x11b00070 };
+static uint32_t smn_xgmi_6_4_1_pcs_state_hist1[2] = { 0x12100070, 0x11b00070 };
+
+#define SMN_XGMI_PCS_STATE_DISABLE 0xD1
+#define SMN_XGMI_PCS_STATE_ACTIVE  0x81
+
+static enum amdgv_xgmi_link_status mi300_xgmi_get_link_status(struct amdgv_adapter *adapt,
+							      uint32_t phy_link_idx)
+{
+	uint32_t n = 0, instance;
+	uint64_t addr = 0;
+	uint32_t reg_stat;
+
+	if (adapt->asic_type == CHIP_MI350X) {
+		n = ARRAY_SIZE(smn_xgmi_6_4_1_pcs_state_hist1);
+		addr = smn_xgmi_6_4_1_pcs_state_hist1[phy_link_idx % n];
+	} else {
+		n = ARRAY_SIZE(smn_xgmi_6_4_pcs_state_hist1);
+		addr = smn_xgmi_6_4_pcs_state_hist1[phy_link_idx % n];
+	}
+
+	instance = phy_link_idx / n;
+	addr += __ext_smn_addressing(instance);
+
+	reg_stat = RREG32_PCIE_EXT((addr >> 2));
+
+	if ((reg_stat & 0xFF) == SMN_XGMI_PCS_STATE_DISABLE)
+		return AMDGV_XGMI_LINK_STATUS__DISABLED;
+	else if ((reg_stat & 0xFF) == SMN_XGMI_PCS_STATE_ACTIVE)
+		return AMDGV_XGMI_LINK_STATUS__ACTIVE;
+	else
+		return AMDGV_XGMI_LINK_STATUS__INACTIVE;
+}
+
 static int mi300_xgmi_early_sw_init(struct amdgv_adapter *adapt)
 {
 	return 0;
@@ -278,8 +331,8 @@ static int mi300_xgmi_early_hw_fini(struct amdgv_adapter *adapt)
 static int mi300_xgmi_late_sw_init(struct amdgv_adapter *adapt)
 {
 	adapt->xgmi.is_fb_sharing_allowed = mi300_xgmi_is_fb_sharing_allowed;
-
 	adapt->xgmi.get_fb_sharing_mode_mask = mi300_get_fb_sharing_mode_mask;
+	adapt->xgmi.get_link_status = mi300_xgmi_get_link_status;
 
 	return 0;
 }

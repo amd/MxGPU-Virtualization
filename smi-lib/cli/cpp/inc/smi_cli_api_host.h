@@ -41,7 +41,7 @@ public:
 	virtual int amdsmi_get_vf_tree(std::vector<std::map<std::string, std::string>> &out) override;
 	virtual int amdsmi_get_error_message(int error_code, std::string& out) override;
 	virtual int format_link_type(const int& link_type, std::string& out) override;
-	virtual int format_link_status(const int& link_status, std::string& out) override;
+	virtual int format_link_status(const int& link_status, bool legend, std::string& out) override;
 	virtual int transform_ecc_correction_schema(uint32_t flag, std::vector<std::string>& out) override;
 	virtual int transform_cache_properties(uint32_t initial_property,
 										   std::vector<std::string>& properties) override;
@@ -112,6 +112,8 @@ public:
 
 	virtual int amdsmi_get_usage_metric_command(uint64_t processor_bdf, Arguments arg,
 			std::string& out) override;
+	virtual int amdsmi_get_metric_command_per_partition(uint64_t processor_bdf, uint64_t vf_index, Arguments arg,
+			std::string& out) override;
 	virtual int amdsmi_get_power_metric_command(uint64_t processor_bdf, Arguments arg,
 			std::string& out) override;
 	virtual int amdsmi_get_clock_metric_command(uint64_t processor_bdf, Arguments arg,
@@ -163,6 +165,8 @@ public:
 	virtual int amdsmi_get_fb_sharing_xgmi_command(Arguments arg,
 			std::string& out) override;
 	virtual int amdsmi_set_fb_sharing_xgmi_command(Arguments arg,
+			std::string& out) override;
+	virtual int amdsmi_get_xgmi_link_status_command(Arguments arg,
 			std::string& out) override;
 
 	virtual int amdsmi_get_all_xgmi_command(Arguments arg,

@@ -92,6 +92,8 @@ from .amdsmi_interface import amdsmi_topo_get_p2p_status
 from .amdsmi_interface import amdsmi_get_gpu_virtualization_mode
 from .amdsmi_interface import amdsmi_get_afids_from_cper
 from .amdsmi_interface import amdsmi_reset_gpu
+from .amdsmi_interface import amdsmi_get_cpu_affinity_with_scope
+from .amdsmi_interface import amdsmi_topo_get_numa_node_number
 
 from .amdsmi_interface import AmdSmiTemperatureType
 from .amdsmi_interface import AmdSmiTemperatureMetric
@@ -136,6 +138,7 @@ from .amdsmi_interface import AmdSmiAcceleratorPartitionResource
 from .amdsmi_interface import AmdSmiAcceleratorPartitionSetting
 from .amdsmi_interface import AmdSmiMemoryPartitionSetting
 from .amdsmi_interface import AmdSmiCperErrorSeverity
+from .amdsmi_interface import AmdSmiAffinityScope
 
 from .amdsmi_exception import AmdSmiLibraryException
 from .amdsmi_exception import AmdSmiRetryException

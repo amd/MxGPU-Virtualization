@@ -34,8 +34,8 @@ static const uint32_t this_block = AMDGV_COMMUNICATION_BLOCK;
 
 /* set SDMA golden setting for SDMA cntl and UTC L1 */
 static const struct amdgv_reg_golden golden_settings_sdma_6_0[] = {
-	SOC15_REG_GOLDEN_VALUE(GC, 0, regSDMA0_CNTL, 0xffffffff, 0x10002441),
-	SOC15_REG_GOLDEN_VALUE(GC, 0, regSDMA1_CNTL, 0xffffffff, 0x10002441),
+	SOC15_REG_GOLDEN_VALUE(GC, 0, regSDMA0_CNTL, 0xffffffff, 0x00002441),
+	SOC15_REG_GOLDEN_VALUE(GC, 0, regSDMA1_CNTL, 0xffffffff, 0x00002441),
 	SOC15_REG_GOLDEN_VALUE(GC, 0, regSDMA0_SEM_WAIT_FAIL_TIMER_CNTL, 0xffffffff, 0x00000000),
 	SOC15_REG_GOLDEN_VALUE(GC, 0, regSDMA1_SEM_WAIT_FAIL_TIMER_CNTL, 0xffffffff, 0x00000000),
 	SOC15_REG_GOLDEN_VALUE(GC, 0, regSDMA0_UTCL1_CNTL, 0xffffffff, 0x2c000689),
@@ -95,7 +95,7 @@ static void sdma_set_ring_funcs(struct amdgv_adapter *adapt)
 	adapt->sdma.sdma_ring[1].funcs = &sdma_ring_funcs;
 }
 
-static int navi32_sdam_ring_init(struct amdgv_adapter *adapt, int ring_id)
+static int navi32_sdma_ring_init(struct amdgv_adapter *adapt, int ring_id)
 {
 	struct amdgv_ring *ring = &adapt->sdma.sdma_ring[ring_id];
 
@@ -118,20 +118,18 @@ static int navi32_sdam_ring_init(struct amdgv_adapter *adapt, int ring_id)
 
 static int navi32_sdma_sw_init(struct amdgv_adapter *adapt)
 {
-	if (!(adapt->flags & AMDGV_FLAG_DISABLE_SDMA_ENGINE)) {
-		adapt->sdma.num_sdma_rings = 2;
-		navi32_sdam_ring_init(adapt, 0);
-		navi32_sdam_ring_init(adapt, 1);
-	}
+	adapt->sdma.num_sdma_rings = 2;
+	navi32_sdma_ring_init(adapt, 0);
+	navi32_sdma_ring_init(adapt, 1);
+
 	return 0;
 }
 
 static int navi32_sdma_sw_fini(struct amdgv_adapter *adapt)
 {
-	if (!(adapt->flags & AMDGV_FLAG_DISABLE_SDMA_ENGINE)) {
-		amdgv_ring_fini(&adapt->sdma.sdma_ring[0]);
-		amdgv_ring_fini(&adapt->sdma.sdma_ring[1]);
-	}
+	amdgv_ring_fini(&adapt->sdma.sdma_ring[0]);
+	amdgv_ring_fini(&adapt->sdma.sdma_ring[1]);
+
 	return 0;
 }
 
@@ -355,9 +353,10 @@ static int navi32_disable_sdma1(struct amdgv_adapter *adapt)
 
 static int navi32_sdma_hw_init_internal_set(struct amdgv_adapter *adapt)
 {
-	struct amdgv_ring *ring = &adapt->sdma.sdma_ring[0];
-	int ret;
+	struct amdgv_ring *ring = NULL;
+	int ret = 0;
 
+	ring = &adapt->sdma.sdma_ring[0];
 	ret = amdgv_ring_init_set(adapt, ring);
 
 	if (ret)
@@ -374,39 +373,33 @@ static int navi32_sdma_hw_init(struct amdgv_adapter *adapt)
 	struct amdgv_ring *ring;
 	int ret = 0;
 
-	if (!(adapt->flags & AMDGV_FLAG_DISABLE_SDMA_ENGINE)) {
-		if (!(adapt->flags & AMDGV_FLAG_USE_PF))
-			amdgv_sched_context_load(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX);
-		ret = navi32_sdma_hw_init_internal_set(adapt);
+	ret = navi32_sdma_hw_init_internal_set(adapt);
 
-		if (in_whole_gpu_reset()) {
-			// Clear the ring
-			ring = &adapt->sdma.sdma_ring[0];
-			amdgv_ring_clear_ring(ring);
-			ring->wptr = 0;
-			ring = &adapt->sdma.sdma_ring[1];
-			amdgv_ring_clear_ring(ring);
-			ring->wptr = 0;
-		}
+	if (in_whole_gpu_reset()) {
+		// Clear the ring
+		ring = &adapt->sdma.sdma_ring[0];
+		amdgv_ring_clear_ring(ring);
+		ring->wptr = 0;
 
-		if (ret)
-			return ret;
-
-		navi32_enable_sdma(adapt);
-		navi32_enable_sdma1(adapt);
-
-		if (!(adapt->flags & AMDGV_FLAG_USE_PF))
-			amdgv_sched_context_save(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX);
+		ring = &adapt->sdma.sdma_ring[1];
+		amdgv_ring_clear_ring(ring);
+		ring->wptr = 0;
 	}
+
+	if (ret)
+		return ret;
+
+	navi32_enable_sdma(adapt);
+	navi32_enable_sdma1(adapt);
+
 	return 0;
 }
 
 static int navi32_sdma_hw_fini(struct amdgv_adapter *adapt)
 {
-	if (!(adapt->flags & AMDGV_FLAG_DISABLE_SDMA_ENGINE)) {
-		navi32_disable_sdma(adapt);
-		navi32_disable_sdma1(adapt);
-	}
+	navi32_disable_sdma(adapt);
+	navi32_disable_sdma1(adapt);
+
 	return 0;
 }
 

@@ -348,6 +348,14 @@ INLINE void oss_free_dma_mem(void *handle)
 	amdgv_oss_funcs->free_dma_mem(handle);
 }
 
+INLINE unsigned long oss_sg_dma_address(void *handle, uint32_t page)
+{
+	if (amdgv_oss_funcs->sg_dma_address)
+		return amdgv_oss_funcs->sg_dma_address(handle, page);
+	return 0;
+}
+
+
 INLINE spin_lock_t oss_spin_lock_init(int rank)
 {
 	return amdgv_oss_funcs->spin_lock_init(rank);
@@ -1146,4 +1154,9 @@ INLINE bool oss_in_virtual_machine(void)
 	return amdgv_oss_funcs->in_virtual_machine && amdgv_oss_funcs->in_virtual_machine();
 }
 
+INLINE void oss_mb(void)
+{
+	if (amdgv_oss_funcs->mb)
+		amdgv_oss_funcs->mb();
+}
 #endif

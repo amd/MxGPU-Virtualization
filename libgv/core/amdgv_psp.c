@@ -46,9 +46,6 @@ static const uint32_t this_block = AMDGV_SECURITY_BLOCK;
 
 static inline struct amdgv_memmgr *amdgv_psp__get_memmgr(struct amdgv_adapter *adapt)
 {
-	if (adapt->memmgr_sys.is_init)
-		return &adapt->memmgr_sys;
-
 	return &adapt->memmgr_pf;
 }
 
@@ -2718,19 +2715,21 @@ enum psp_status amdgv_psp_xgmi_get_peer_link_info(struct amdgv_adapter *adapt,
 	struct ta_xgmi_cmd_get_extend_peer_link_info *peer_link_info;
 	struct amdgv_adapter *cur;
 	enum psp_status ret = PSP_STATUS__SUCCESS;
-	uint32_t i = 0, j = 0, num_links = 0;
+	uint32_t i = 0, j = 0;
+	uint32_t link_idx = 0;
+	struct amdgv_adapter *tmp_adapt = NULL;
 
 	xgmi_cmd = (struct ta_xgmi_shared_memory *)(amdgv_memmgr_get_cpu_addr(
 		xgmi_context->shared_buffer.mem));
 	if (!xgmi_cmd)
 		return PSP_STATUS__ERROR_OUT_OF_MEMORY;
+
 	oss_memset(xgmi_cmd, 0, sizeof(struct ta_xgmi_shared_memory));
 
 	xgmi_cmd->cmd_id = TA_COMMAND_XGMI__GET_EXTEND_PEER_LINKS;
 	peer_link_info = &xgmi_cmd->xgmi_out_message.get_extend_link_info;
 
-	amdgv_list_for_each_entry(cur, &hive->adapt_list,
-				  struct amdgv_adapter, xgmi.head) {
+	amdgv_list_for_each_entry(cur, &hive->adapt_list, struct amdgv_adapter, xgmi.head) {
 		if (peer_link_info->num_nodes < TA_XGMI__MAX_CONNECTED_NODES) {
 			peer_link_info->nodes[i].node_id = cur->xgmi.node_id;
 			i++;
@@ -2742,24 +2741,52 @@ enum psp_status amdgv_psp_xgmi_get_peer_link_info(struct amdgv_adapter *adapt,
 	peer_link_info->num_nodes = i;
 
 	ret = amdgv_psp_xgmi_invoke(adapt, xgmi_cmd->cmd_id, xgmi_context->xgmi_session_id);
-	if (ret)
+	if (ret) {
 		AMDGV_ERROR("xgmi get_topology_info failed\n");
+		return ret;
+	}
 
+	if (peer_link_info->num_nodes > TA_XGMI__MAX_CONNECTED_NODES) {
+		AMDGV_ERROR("Invalid XGMI Node Info\n", i);
+		ret = PSP_STATUS__ERROR_GENERIC;
+	}
+
+	/* Copy peer info */
 	for (i = 0; i < peer_link_info->num_nodes; i++) {
+		if (peer_link_info->nodes[i].num_links > TA_XGMI__MAX_PORT_NUM) {
+			AMDGV_ERROR("Invalid XGMI Link Info on node %d\n", i);
+			ret = PSP_STATUS__ERROR_GENERIC;
+			break;
+		}
+
 		for (j = 0; j < peer_link_info->nodes[i].num_links; j++) {
-			if (num_links >= AMDGV_XGMI_MAX_NUM_LINKS || j >= TA_XGMI__MAX_PORT_NUM) {
-				link_info->num_links = 0;
-				AMDGV_ERROR("Failed to copy get topology\n");
-				return PSP_STATUS__ERROR_OUT_OF_MEMORY;
+			link_idx = peer_link_info->nodes[i].port_num[j].src_xgmi_port_num;
+			if (link_idx >= AMDGV_XGMI_MAX_NUM_LINKS) {
+				AMDGV_ERROR("Invalid XGMI Link Info on link %d\n", j);
+				ret = PSP_STATUS__ERROR_GENERIC;
+				break;
 			}
-			link_info->link[num_links].dest_node_id = peer_link_info->nodes[i].node_id;
-			link_info->link[num_links].src_port_id = peer_link_info->nodes[i].port_num[j].src_xgmi_port_num;
-			link_info->link[num_links].dest_port_id = peer_link_info->nodes[i].port_num[j].dst_xgmi_port_num;
-			num_links++;
+
+			link_info->link[link_idx].dest_port_id = peer_link_info->nodes[i].port_num[j].dst_xgmi_port_num;
+			link_info->link[link_idx].dest_node_id = peer_link_info->nodes[i].node_id;
+			link_info->num_links++;
+
 		}
 	}
 
-	link_info->num_links = num_links;
+	if (ret != PSP_STATUS__SUCCESS)
+		link_info->num_links = 0;
+
+	/* Discover BDF info */
+	for (i = 0; i < link_info->num_links; i++) {
+		amdgv_list_for_each_entry(tmp_adapt, &hive->adapt_list,
+						struct amdgv_adapter, xgmi.head) {
+			if (tmp_adapt->xgmi.node_id == link_info->link[i].dest_node_id) {
+				link_info->link[i].dest_bdf = tmp_adapt->bdf;
+				break;
+			}
+		}
+	}
 
 	AMDGV_DEBUG("ret = 0x%x\n", ret);
 	return ret;

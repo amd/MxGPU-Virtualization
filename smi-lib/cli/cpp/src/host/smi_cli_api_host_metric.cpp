@@ -76,6 +76,10 @@ typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLES)(amdsmi_socket_handle, ui
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_METRICS)(amdsmi_processor_handle, uint32_t *,
 		amdsmi_metric_t *);
 
+typedef amdsmi_status_t (*AMDSMI_GET_NUM_VF)(amdsmi_processor_handle, uint32_t *, uint32_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_CURR_ACCELERATOR_PARTITION)(amdsmi_processor_handle,
+		amdsmi_accelerator_partition_profile_t *, uint32_t *);
+
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_GPU_ACTIVITY host_amdsmi_get_gpu_activity;
 extern AMDSMI_GET_POWER_INFO host_amdsmi_get_power_info;
@@ -95,6 +99,11 @@ extern AMDSMI_GET_VF_DATA host_amdsmi_get_vf_data;
 extern AMDSMI_GET_GUEST_DATA host_amdsmi_get_guest_data;
 extern AMDSMI_GET_PROCESSOR_HANDLES host_amdsmi_get_processor_handles;
 extern AMDSMI_GET_GPU_METRICS host_amdsmi_get_gpu_metrics;
+
+extern AMDSMI_GET_NUM_VF host_amdsmi_get_num_vf;
+extern AMDSMI_GET_CURR_ACCELERATOR_PARTITION host_amdsmi_get_partition_profile;
+
+constexpr int MAX_AID_NUM{4};
 
 const std::vector<amdsmi_gpu_block_t> ecc_blocks{AMDSMI_GPU_BLOCK_UMC, AMDSMI_GPU_BLOCK_SDMA, AMDSMI_GPU_BLOCK_GFX, AMDSMI_GPU_BLOCK_MMHUB,
 		  AMDSMI_GPU_BLOCK_ATHUB, AMDSMI_GPU_BLOCK_PCIE_BIF, AMDSMI_GPU_BLOCK_HDP, AMDSMI_GPU_BLOCK_XGMI_WAFL,
@@ -506,7 +515,6 @@ int AmdSmiApiHost::amdsmi_get_usage_metric_command(uint64_t processor_bdf, Argum
 								  "%ld", engine_usage.umc_activity) };
 	std::string umc_activity_percent = (mm_activity_str == "N/A") ? "%" : "";
 
-	bool setup_template{true};
 	bool metric_table{false};
 	std::vector<amdsmi_metric_t> jpeg_chiplet{};
 	std::vector<amdsmi_metric_t> vcn_chiplet{};
@@ -522,7 +530,6 @@ int AmdSmiApiHost::amdsmi_get_usage_metric_command(uint64_t processor_bdf, Argum
 		ret = host_amdsmi_get_gpu_metrics(processor, &metric_size, NULL);
 		if (ret != AMDSMI_STATUS_SUCCESS) {
 			metric_table = false;
-			setup_template = true;
 		}
 		metrics = (amdsmi_metric_t *)malloc(sizeof(amdsmi_metric_t)*metric_size);
 		if (metrics == NULL) {
@@ -531,12 +538,10 @@ int AmdSmiApiHost::amdsmi_get_usage_metric_command(uint64_t processor_bdf, Argum
 		ret = host_amdsmi_get_gpu_metrics(processor, &metric_size, &metrics[0]);
 		if (ret != AMDSMI_STATUS_SUCCESS) {
 			metric_table = false;
-			setup_template = true;
 		}
 
 		if (ret == AMDSMI_STATUS_SUCCESS) {
 			metric_table = true;
-			setup_template = false;
 			for (int i = 0; i < metric_size; i++) {
 				if ((metrics[i].name == AMDSMI_METRIC_NAME_USAGE_VCN)
 						&& !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
@@ -559,17 +564,12 @@ int AmdSmiApiHost::amdsmi_get_usage_metric_command(uint64_t processor_bdf, Argum
 					gfx_chiplet.push_back(metrics[i]);
 				}
 			}
-			if (jpeg_chiplet.size() == 0 || vcn_chiplet.size() == 0 || mem_chiplet.size() != 1
-					|| gfx_chiplet.size() != 1) {
-				setup_template = true;
-			}
 		} else {
 			metric_table = false;
-			setup_template = true;
 		}
 		free(metrics);
 	}
-	if (metric_table == false || setup_template == true) {
+	if (metric_table == false) {
 		if (arg.watch > -1) {
 			out = string_format("%s,%s,%s",gfx_activity.c_str(), umc_activity.c_str(),
 								mm_activity_str.c_str());
@@ -2389,6 +2389,541 @@ int AmdSmiApiHost::amdsmi_get_guard_metric_command(std::string device, Arguments
 	} else {
 		out = string_format(
 				  metricGuardTemplate, is_enabled_str.c_str(), guard_info_str.c_str());
+	}
+	return ret;
+}
+
+int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bdf, uint64_t vf_index, Arguments arg,
+		std::string& out)
+{
+	amdsmi_status_t ret;
+	amdsmi_processor_handle processor;
+	uint32_t num_vf_supported;
+	uint32_t num_vf_enabled;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+	uint32_t max_aid_num = MAX_AID_NUM;
+	amdsmi_accelerator_partition_profile_t curr_profile;
+	uint32_t partition_ids[AMDSMI_MAX_ACCELERATOR_PARTITIONS];
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		return ret;
+	}
+
+	ret = host_amdsmi_get_num_vf(processor, &num_vf_enabled, &num_vf_supported);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		return ret;
+	}
+
+	ret = host_amdsmi_get_partition_profile(processor, &curr_profile, partition_ids);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		return ret;
+	}
+
+	std::string num_partition = string_format("%d", curr_profile.num_partitions);
+	uint32_t num_partitions = curr_profile.num_partitions;
+
+	// Calculate AID assignment per VF
+	auto get_aids_for_vf = [&](uint32_t vf_idx, uint32_t num_vf) -> std::vector<int> {
+		std::vector<int> aids;
+		if (num_vf == 1) {
+			// All AIDs for the only VF
+			for (int i = 0; i < (int)max_aid_num; ++i) aids.push_back(i);
+		} else if (num_vf == 2) {
+			// Each VF gets two AIDs
+			aids.push_back(vf_idx * 2);
+			aids.push_back(vf_idx * 2 + 1);
+		} else if (num_vf == 4) {
+			// Each VF gets one AID
+			aids.push_back(vf_idx);
+		} else if (num_vf == 8) {
+			// Each two VFs share an AID
+			aids.push_back(vf_idx / 2);
+		}
+		return aids;
+	};
+
+	std::vector<amdsmi_metric_t> vcn_chiplet_per_partition{};
+	std::vector<amdsmi_metric_t> jpeg_chiplet_per_partition{};
+	std::vector<amdsmi_metric_t> vclk_chiplet_per_partition{};
+	std::vector<amdsmi_metric_t> vclk_min_chiplet_per_partition{};
+	std::vector<amdsmi_metric_t> vclk_max_chiplet_per_partition{};
+	std::vector<amdsmi_metric_t> dclk_chiplet_per_partition{};
+	std::vector<amdsmi_metric_t> dclk_min_chiplet_per_partition{};
+	std::vector<amdsmi_metric_t> dclk_max_chiplet_per_partition{};
+	std::vector<amdsmi_metric_t> sclk_chiplet_per_partition{};
+	std::vector<amdsmi_metric_t> sclk_min_chiplet_per_partition{};
+	std::vector<amdsmi_metric_t> sclk_max_chiplet_per_partition{};
+	std::vector<amdsmi_metric_t> gfx_chiplet_per_partition{};
+	std::vector<amdsmi_metric_t> gfx_min_chiplet_per_partition{};
+	std::vector<amdsmi_metric_t> gfx_max_chiplet_per_partition{};
+	std::vector<amdsmi_metric_t> gfx_locked_chiplet_per_partition{};
+	std::vector<amdsmi_metric_t> gfx_usage_chiplet_per_partition{};
+
+	amdsmi_metric_t *metrics;
+	uint32_t metric_size = AMDSMI_MAX_NUM_METRICS;
+
+	ret = host_amdsmi_get_gpu_metrics(processor, &metric_size, NULL);
+		if (ret != AMDSMI_STATUS_SUCCESS) {
+		return ret;
+	}
+
+	metrics = (amdsmi_metric_t *)malloc(sizeof(amdsmi_metric_t) * metric_size);
+	if (metrics == NULL) {
+		throw SmiToolNotEnoughMemException();
+	}
+
+	ret = host_amdsmi_get_gpu_metrics(processor, &metric_size, &metrics[0]);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		free(metrics);
+		return ret;
+	}
+
+	for (uint32_t i = 0; i < metric_size; i++) {
+		if (!(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC) &&
+			(metrics[i].flags & AMDSMI_METRIC_TYPE_CHIPLET)) {
+			switch (metrics[i].name) {
+				case AMDSMI_METRIC_NAME_USAGE_VCN:
+					vcn_chiplet_per_partition.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_USAGE_JPEG:
+					jpeg_chiplet_per_partition.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_CLK_VCLK:
+					vclk_chiplet_per_partition.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_CLK_VCLK_MIN_LIMIT:
+					vclk_min_chiplet_per_partition.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_CLK_VCLK_MAX_LIMIT:
+					vclk_max_chiplet_per_partition.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_CLK_DCLK:
+					dclk_chiplet_per_partition.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_CLK_DCLK_MIN_LIMIT:
+					dclk_min_chiplet_per_partition.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_CLK_DCLK_MAX_LIMIT:
+					dclk_max_chiplet_per_partition.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_CLK_SOC:
+					sclk_chiplet_per_partition.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_CLK_SOC_MIN_LIMIT:
+					sclk_min_chiplet_per_partition.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_CLK_SOC_MAX_LIMIT:
+					sclk_max_chiplet_per_partition.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_CLK_GFX:
+					gfx_chiplet_per_partition.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_CLK_GFX_MIN_LIMIT:
+					gfx_min_chiplet_per_partition.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_CLK_GFX_MAX_LIMIT:
+					gfx_max_chiplet_per_partition.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_CLK_GFX_LOCKED:
+					gfx_locked_chiplet_per_partition.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_USAGE_GFX:
+					gfx_usage_chiplet_per_partition.push_back(metrics[i]);
+					break;
+				default:
+					break;
+			}
+		}
+	}
+	free(metrics);
+	metrics = NULL;
+
+	if (arg.output == json) {
+		nlohmann::ordered_json result_json;
+		for (uint32_t vf_curr_index = 0; vf_curr_index < num_vf_enabled; vf_curr_index++) {
+			if (vf_curr_index == vf_index) {
+				auto aids = get_aids_for_vf(vf_curr_index, num_vf_enabled);
+				nlohmann::ordered_json aid_json;
+				for (auto aid_index : aids) {
+					// VCLK
+					for (const auto& vclk : vclk_chiplet_per_partition) {
+						if (vclk.res_group == AMDSMI_METRIC_RES_GROUP_AID && vclk.res_instance == aid_index) {
+							aid_json["vclk"] = {
+								{"value", vclk.val},
+								{"unit", vclk.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : ""}
+							};
+						}
+					}
+					for (const auto& vclk_min : vclk_min_chiplet_per_partition) {
+						if (vclk_min.res_group == AMDSMI_METRIC_RES_GROUP_AID && vclk_min.res_instance == aid_index) {
+							aid_json["vclk_min"] = {
+								{"value", vclk_min.val},
+								{"unit", vclk_min.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : ""}
+							};
+						}
+					}
+					for (const auto& vclk_max : vclk_max_chiplet_per_partition) {
+						if (vclk_max.res_group == AMDSMI_METRIC_RES_GROUP_AID && vclk_max.res_instance == aid_index) {
+							aid_json["vclk_max"] = {
+								{"value", vclk_max.val},
+								{"unit", vclk_max.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : ""}
+							};
+						}
+					}
+					// DCLK
+					for (const auto& dclk : dclk_chiplet_per_partition) {
+						if (dclk.res_group == AMDSMI_METRIC_RES_GROUP_AID && dclk.res_instance == aid_index) {
+							aid_json["dclk"] = {
+								{"value", dclk.val},
+								{"unit", dclk.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : ""}
+							};
+						}
+					}
+					for (const auto& dclk_min : dclk_min_chiplet_per_partition) {
+						if (dclk_min.res_group == AMDSMI_METRIC_RES_GROUP_AID && dclk_min.res_instance == aid_index) {
+							aid_json["dclk_min"] = {
+								{"value", dclk_min.val},
+								{"unit", dclk_min.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : ""}
+							};
+						}
+					}
+					for (const auto& dclk_max : dclk_max_chiplet_per_partition) {
+						if (dclk_max.res_group == AMDSMI_METRIC_RES_GROUP_AID && dclk_max.res_instance == aid_index) {
+							aid_json["dclk_max"] = {
+								{"value", dclk_max.val},
+								{"unit", dclk_max.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : ""}
+							};
+						}
+					}
+					// SCLK
+					for (const auto& sclk : sclk_chiplet_per_partition) {
+						if (sclk.res_group == AMDSMI_METRIC_RES_GROUP_AID && sclk.res_instance == aid_index) {
+							aid_json["sclk"] = {
+								{"value", sclk.val},
+								{"unit", sclk.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : ""}
+							};
+						}
+					}
+					for (const auto& sclk_min : sclk_min_chiplet_per_partition) {
+						if (sclk_min.res_group == AMDSMI_METRIC_RES_GROUP_AID && sclk_min.res_instance == aid_index) {
+							aid_json["sclk_min"] = {
+								{"value", sclk_min.val},
+								{"unit", sclk_min.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : ""}
+							};
+						}
+					}
+					for (const auto& sclk_max : sclk_max_chiplet_per_partition) {
+						if (sclk_max.res_group == AMDSMI_METRIC_RES_GROUP_AID && sclk_max.res_instance == aid_index) {
+							aid_json["sclk_max"] = {
+								{"value", sclk_max.val},
+								{"unit", sclk_max.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : ""}
+							};
+						}
+					}
+					// VCN
+					for (const auto& vcn : vcn_chiplet_per_partition) {
+						if (vcn.res_group == AMDSMI_METRIC_RES_GROUP_AID &&
+							vcn.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_ENGINE &&
+							vcn.res_instance == aid_index) {
+							aid_json["vcn_activity"] = {
+								{"value", vcn.val},
+								{"unit", vcn.unit == AMDSMI_METRIC_UNIT_PERCENT ? "%" : ""}
+							};
+						}
+					}
+					// JPEG (can be multiple)
+					nlohmann::ordered_json jpeg_array = nlohmann::ordered_json::array();
+					for (const auto& jpeg : jpeg_chiplet_per_partition) {
+						if (jpeg.res_group == AMDSMI_METRIC_RES_GROUP_AID &&
+							jpeg.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_ENGINE &&
+							jpeg.res_instance == aid_index) {
+							jpeg_array.push_back({
+								{"value", jpeg.val},
+								{"unit", jpeg.unit == AMDSMI_METRIC_UNIT_PERCENT ? "%" : ""}
+							});
+						}
+					}
+					if (!jpeg_array.empty()) {
+						aid_json["jpeg_activity"] = jpeg_array;
+					}
+					result_json[string_format("aid_%d", aid_index)] = aid_json;
+				}
+				// Iterate over XCPs assigned to this VF and AID
+				uint32_t num_xcp = num_partitions;
+				uint32_t num_vf = num_vf_enabled;
+				uint32_t xcps_per_vf = num_xcp / num_vf;
+				uint32_t xcp_start = vf_curr_index * xcps_per_vf;
+				uint32_t xcp_end = xcp_start + xcps_per_vf;
+
+				for (uint32_t xcp_id = xcp_start; xcp_id < xcp_end; xcp_id++) {
+					nlohmann::ordered_json xcp_json;
+
+					// GFX clocks
+					for (const auto& gfx : gfx_chiplet_per_partition) {
+						if (gfx.res_group == AMDSMI_METRIC_RES_GROUP_XCP && gfx.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx.res_instance == xcp_id) {
+							nlohmann::ordered_json gfx_json;
+							gfx_json["value"] = gfx.val;
+							gfx_json["unit"] = gfx.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
+							xcp_json["gfx"].push_back(gfx_json);
+						}
+					}
+					for (const auto& gfx_min : gfx_min_chiplet_per_partition) {
+						if (gfx_min.res_group == AMDSMI_METRIC_RES_GROUP_XCP && gfx_min.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx_min.res_instance == xcp_id) {
+							nlohmann::ordered_json gfx_min_json;
+							gfx_min_json["value"] = gfx_min.val;
+							gfx_min_json["unit"] = gfx_min.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
+							xcp_json["gfx_min"].push_back(gfx_min_json);
+						}
+					}
+					for (const auto& gfx_max : gfx_max_chiplet_per_partition) {
+						if (gfx_max.res_group == AMDSMI_METRIC_RES_GROUP_XCP && gfx_max.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx_max.res_instance == xcp_id) {
+							nlohmann::ordered_json gfx_max_json;
+							gfx_max_json["value"] = gfx_max.val;
+							gfx_max_json["unit"] = gfx_max.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
+							xcp_json["gfx_max"].push_back(gfx_max_json);
+						}
+					}
+					for (const auto& gfx_locked : gfx_locked_chiplet_per_partition) {
+						if (gfx_locked.res_group == AMDSMI_METRIC_RES_GROUP_XCP && gfx_locked.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx_locked.res_instance == xcp_id) {
+							std::string locked_val = gfx_locked.val == UINT64_MAX ? "N/A" : (gfx_locked.val ? "ENABLED" : "DISABLED");
+							xcp_json["gfx_locked"].push_back(locked_val);
+						}
+					}
+					for (const auto& gfx_usage : gfx_usage_chiplet_per_partition) {
+						if (gfx_usage.res_group == AMDSMI_METRIC_RES_GROUP_XCP && gfx_usage.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx_usage.res_instance == xcp_id) {
+							nlohmann::ordered_json gfx_usage_json;
+							gfx_usage_json["value"] = gfx_usage.val;
+							gfx_usage_json["unit"] = gfx_usage.unit == AMDSMI_METRIC_UNIT_PERCENT ? "%" : "";
+							xcp_json["gfx_usage"].push_back(gfx_usage_json);
+						}
+					}
+
+					if (!xcp_json.empty()) {
+						result_json[string_format("xcp_%d", xcp_id)] = xcp_json;
+					}
+				}
+			}
+		}
+		out = result_json.dump(4);
+	} else {
+		out = string_format(metricPerPartitionTemplate);
+
+		for (uint32_t vf_curr_index = 0; vf_curr_index < num_vf_enabled; vf_curr_index++) {
+			if (vf_curr_index == vf_index) {
+				auto aids = get_aids_for_vf(vf_curr_index, num_vf_enabled);
+				for (auto aid_index : aids) {
+					std::string aid_index_string = string_format("%d", aid_index);
+					out += string_format(AIDTemplate, aid_index_string.c_str());
+
+					for (const auto& vclk : vclk_chiplet_per_partition) {
+						if (vclk.res_group == AMDSMI_METRIC_RES_GROUP_AID && vclk.res_instance == aid_index) {
+							std::string vclk_unit = vclk.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
+							std::string vclk_chiplet_val = string_format("%d", vclk.val);
+							out += string_format(VCLKPerPartitionTemplate, vclk_chiplet_val.c_str(), vclk_unit.c_str());
+						}
+					}
+					for (const auto& vclk_min : vclk_min_chiplet_per_partition) {
+						if (vclk_min.res_group == AMDSMI_METRIC_RES_GROUP_AID && vclk_min.res_instance == aid_index) {
+							std::string vclk_min_unit = vclk_min.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
+							std::string vclk_min_chiplet_val = string_format("%d", vclk_min.val);
+							out += string_format(VCLKMinPerPartitionTemplate, vclk_min_chiplet_val.c_str(), vclk_min_unit.c_str());
+						}
+					}
+					for (const auto& vclk_max : vclk_max_chiplet_per_partition) {
+						if (vclk_max.res_group == AMDSMI_METRIC_RES_GROUP_AID && vclk_max.res_instance == aid_index) {
+							std::string vclk_max_unit = vclk_max.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
+							std::string vclk_max_chiplet_val = string_format("%d", vclk_max.val);
+							out += string_format(VCLKMaxPerPartitionTemplate, vclk_max_chiplet_val.c_str(), vclk_max_unit.c_str());
+						}
+					}
+					for (const auto& dclk : dclk_chiplet_per_partition) {
+						if (dclk.res_group == AMDSMI_METRIC_RES_GROUP_AID && dclk.res_instance == aid_index) {
+							std::string dclk_unit = dclk.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
+							std::string dclk_chiplet_val = string_format("%d", dclk.val);
+							out += string_format(DCLKPerPartitionTemplate, dclk_chiplet_val.c_str(), dclk_unit.c_str());
+						}
+					}
+					for (const auto& dclk_min : dclk_min_chiplet_per_partition) {
+						if (dclk_min.res_group == AMDSMI_METRIC_RES_GROUP_AID && dclk_min.res_instance == aid_index) {
+							std::string dclk_min_unit = dclk_min.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
+							std::string dclk_min_chiplet_val = string_format("%d", dclk_min.val);
+							out += string_format(DCLKMinPerPartitionTemplate, dclk_min_chiplet_val.c_str(), dclk_min_unit.c_str());
+						}
+					}
+					for (const auto& dclk_max : dclk_max_chiplet_per_partition) {
+						if (dclk_max.res_group == AMDSMI_METRIC_RES_GROUP_AID && dclk_max.res_instance == aid_index) {
+							std::string dclk_max_unit = dclk_max.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
+							std::string dclk_max_chiplet_val = string_format("%d", dclk_max.val);
+							out += string_format(DCLKMaxPerPartitionTemplate, dclk_max_chiplet_val.c_str(), dclk_max_unit.c_str());
+						}
+					}
+					for (const auto& sclk : sclk_chiplet_per_partition) {
+						if (sclk.res_group == AMDSMI_METRIC_RES_GROUP_AID && sclk.res_instance == aid_index) {
+							std::string sclk_unit = sclk.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
+							std::string sclk_chiplet_val = string_format("%d", sclk.val);
+							out += string_format(SCLKPerPartitionTemplate, sclk_chiplet_val.c_str(), sclk_unit.c_str());
+						}
+					}
+					for (const auto& sclk_min : sclk_min_chiplet_per_partition) {
+						if (sclk_min.res_group == AMDSMI_METRIC_RES_GROUP_AID && sclk_min.res_instance == aid_index) {
+							std::string sclk_min_unit = sclk_min.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
+							std::string sclk_min_chiplet_val = string_format("%d", sclk_min.val);
+							out += string_format(SCLKMinPerPartitionTemplate, sclk_min_chiplet_val.c_str(), sclk_min_unit.c_str());
+						}
+					}
+					for (const auto& sclk_max : sclk_max_chiplet_per_partition) {
+						if (sclk_max.res_group == AMDSMI_METRIC_RES_GROUP_AID && sclk_max.res_instance == aid_index) {
+							std::string sclk_max_unit = sclk_max.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
+							std::string sclk_max_chiplet_val = string_format("%d", sclk_max.val);
+							out += string_format(SCLKMaxPerPartitionTemplate, sclk_max_chiplet_val.c_str(), sclk_max_unit.c_str());
+						}
+					}
+
+					for (const auto& vcn : vcn_chiplet_per_partition) {
+						if (vcn.res_group == AMDSMI_METRIC_RES_GROUP_AID &&
+							vcn.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_ENGINE &&
+							vcn.res_instance == aid_index) {
+							std::string vcn_unit = vcn.unit == AMDSMI_METRIC_UNIT_PERCENT ? "%" : "";
+							std::string vcn_chiplet_val = string_format("%d", vcn.val);
+							out += string_format(activityPerPartitionTemplate, vcn_chiplet_val.c_str(), vcn_unit.c_str());
+						}
+					}
+
+					out += string_format(metricJpegUsagePerPartitionHeaderTemplate);
+
+					// Collect all matching JPEG metrics for this aid_index
+					std::vector<const amdsmi_metric_t*> matching_jpegs;
+					for (const auto& jpeg : jpeg_chiplet_per_partition) {
+						if (jpeg.res_group == AMDSMI_METRIC_RES_GROUP_AID &&
+							jpeg.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_ENGINE &&
+							jpeg.res_instance == aid_index) {
+							matching_jpegs.push_back(&jpeg);
+						}
+					}
+					for (size_t i = 0; i < matching_jpegs.size(); i++) {
+						const auto& jpeg = *matching_jpegs[i];
+						std::string jpeg_unit = jpeg.unit == AMDSMI_METRIC_UNIT_PERCENT ? "%" : "";
+						std::string jpeg_chiplet_val = string_format("%d", jpeg.val);
+						out += string_format(metricJpegUsagePerPartitionTemplate, jpeg_chiplet_val.c_str(), jpeg_unit.c_str());
+						if (i + 1 < matching_jpegs.size()) {
+							out += string_format(commaTemplate);
+						}
+					}
+					out += string_format(metricJpegUsageFooterTemplate);
+				}
+
+				// Calculate XCPs assigned to this VF
+				uint32_t num_xcp = num_partitions;
+				uint32_t num_vf = num_vf_enabled;
+				uint32_t xcps_per_vf = num_xcp / num_vf;
+				uint32_t xcp_start = vf_curr_index * xcps_per_vf;
+				uint32_t xcp_end = xcp_start + xcps_per_vf;
+
+				for (uint32_t xcp_id = xcp_start; xcp_id < xcp_end; xcp_id++) {
+					std::string xcp_index_string = string_format("%d", xcp_id);
+					out += string_format(XCPTemplate, xcp_index_string.c_str());
+
+					out += string_format(metricGFXCLKPerPartitionHeaderTemplate);
+
+					// GFX (can be multiple per XCP)
+					std::vector<const amdsmi_metric_t*> matching_gfx;
+					for (const auto& gfx : gfx_chiplet_per_partition) {
+						if (gfx.res_group == AMDSMI_METRIC_RES_GROUP_XCP && gfx.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx.res_instance == xcp_id) {
+							matching_gfx.push_back(&gfx);
+						}
+					}
+					for (size_t i = 0; i < matching_gfx.size(); i++) {
+						const auto& gfx = *matching_gfx[i];
+						std::string gfx_unit = gfx.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
+						std::string gfx_chiplet_val = string_format("%d", gfx.val);
+						out += string_format(GFXPerPartitionTemplate, gfx_chiplet_val.c_str(), gfx_unit.c_str());
+						if (i + 1 < matching_gfx.size()) {
+							out += string_format(commaTemplate);
+						}
+					}
+
+					out += string_format(metricJpegUsageFooterTemplate);
+					out += string_format(metricGFXMinCLKPerPartitionHeaderTemplate);
+
+					// GFX_MIN (can be multiple per XCP)
+					std::vector<const amdsmi_metric_t*> matching_gfx_min;
+					for (const auto& gfx_min : gfx_min_chiplet_per_partition) {
+						if (gfx_min.res_group == AMDSMI_METRIC_RES_GROUP_XCP && gfx_min.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx_min.res_instance == xcp_id) {
+							matching_gfx_min.push_back(&gfx_min);
+						}
+					}
+					for (size_t i = 0; i < matching_gfx_min.size(); i++) {
+						const auto& gfx_min = *matching_gfx_min[i];
+						std::string gfx_min_unit = gfx_min.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
+						std::string gfx_min_chiplet_val = string_format("%d", gfx_min.val);
+						out += string_format(GFXMinPerPartitionTemplate, gfx_min_chiplet_val.c_str(), gfx_min_unit.c_str());
+						if (i + 1 < matching_gfx_min.size()) {
+							out += string_format(commaTemplate);
+						}
+					}
+					out += string_format(metricJpegUsageFooterTemplate);
+					out += string_format(metricGFXMaxCLKPerPartitionHeaderTemplate);
+
+					// GFX_MAX (can be multiple per XCP)
+					std::vector<const amdsmi_metric_t*> matching_gfx_max;
+					for (const auto& gfx_max : gfx_max_chiplet_per_partition) {
+						if (gfx_max.res_group == AMDSMI_METRIC_RES_GROUP_XCP && gfx_max.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC &&  gfx_max.res_instance == xcp_id) {
+							matching_gfx_max.push_back(&gfx_max);
+						}
+					}
+					for (size_t i = 0; i < matching_gfx_max.size(); i++) {
+						const auto& gfx_max = *matching_gfx_max[i];
+						std::string gfx_max_unit = gfx_max.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
+						std::string gfx_max_chiplet_val = string_format("%d", gfx_max.val);
+						out += string_format(GFXMaxPerPartitionTemplate, gfx_max_chiplet_val.c_str(), gfx_max_unit.c_str());
+						if (i + 1 < matching_gfx_max.size()) {
+							out += string_format(commaTemplate);
+						}
+					}
+					out += string_format(metricJpegUsageFooterTemplate);
+					out += string_format(metricGFXLockedCLKPerPartitionHeaderTemplate);
+
+					// GFX_LOCKED (can be multiple per XCP)
+					std::vector<const amdsmi_metric_t*> matching_gfx_locked;
+					for (const auto& gfx_locked : gfx_locked_chiplet_per_partition) {
+						if (gfx_locked.res_group == AMDSMI_METRIC_RES_GROUP_XCP && gfx_locked.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx_locked.res_instance == xcp_id) {
+							matching_gfx_locked.push_back(&gfx_locked);
+						}
+					}
+					for (size_t i = 0; i < matching_gfx_locked.size(); i++) {
+						const auto& gfx_locked = *matching_gfx_locked[i];
+						std::string gfx_locked_val = gfx_locked.val == UINT64_MAX ? "N/A" : (gfx_locked.val ? "ENABLED" : "DISABLED");
+						out += string_format(GFXLockedPerPartitionTemplate, gfx_locked_val.c_str());
+						if (i + 1 < matching_gfx_locked.size()) {
+							out += string_format(commaTemplate);
+						}
+					}
+
+					out += string_format(metricJpegUsageFooterTemplate);
+					out += string_format(metricGFXUsagePerPartitionHeaderTemplate);
+
+					// GFX Usage (can be multiple per XCP)
+					std::vector<const amdsmi_metric_t*> matching_gfx_usage;
+					for (const auto& gfx_usage : gfx_usage_chiplet_per_partition) {
+						if (gfx_usage.res_group == AMDSMI_METRIC_RES_GROUP_XCP && gfx_usage.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx_usage.res_instance == xcp_id) {
+							matching_gfx_usage.push_back(&gfx_usage);
+						}
+					}
+					for (size_t i = 0; i < matching_gfx_usage.size(); i++) {
+						const auto& gfx_usage = *matching_gfx_usage[i];
+						std::string gfx_usage_unit = gfx_usage.unit == AMDSMI_METRIC_UNIT_PERCENT ? "%" : "";
+						std::string gfx_usage_val = string_format("%d", gfx_usage.val);
+						out += string_format(GFXUsagePerPartitionTemplate, gfx_usage_val.c_str(), gfx_usage_unit.c_str());
+						if (i + 1 < matching_gfx_usage.size()) {
+							out += string_format(commaTemplate);
+						}
+					}
+					out += string_format(metricJpegUsageFooterTemplate);
+				}
+			}
+		}
 	}
 	return ret;
 }

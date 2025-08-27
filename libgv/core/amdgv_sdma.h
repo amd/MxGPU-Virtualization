@@ -26,6 +26,8 @@
 
 #include "amdgv_ring.h"
 
+#define SDMA_MAX_TIMEOUT (500000)
+
 enum amdgv_sdma_ras_memory_id {
 	AMDGV_SDMA_MBANK_DATA_BUF0 = 1,
 	AMDGV_SDMA_MBANK_DATA_BUF1 = 2,
@@ -64,14 +66,44 @@ struct amdgv_sdma_ras_funcs {
 struct amdgv_sdma {
 	int num_instances;
 	uint32_t harvest_instances;
-	uint32_t num_enbl_harv_inst;
+	uint32_t num_pf_dedicated_inst;
 	uint32_t sdma_mask;
 	uint32_t harvest_sdma_mask;
 	int num_sdma_rings;
+	uint32_t page_size_config;
 	struct amdgv_ring sdma_ring[AMDGV_MAX_SDMA_RINGS];
 	int num_inst_per_aid;
 	struct ras_common_if	*ras_if;
 	const struct amdgv_sdma_ras_funcs	*funcs;
+	int (*sdma_copy)(struct amdgv_ring *ring, uint64_t src, uint64_t size, uint64_t dest);
+	struct amdgv_memmgr_mem *bitmap_mem;
+	uint32_t bitmap_size;
+	void (*query_dirtybit)(struct amdgv_ring *ring,
+			uint64_t src_addr, uint32_t page_nr,
+			uint64_t dst_addr,
+			uint32_t aid_inst, uint32_t ea_inst, uint32_t dagb,
+			bool clear_dbit);
 };
 
+#define AMDGV_SDMA_PF_DECIDATED_RING_START_INDEX(adapt) ((adapt)->sdma.num_instances)
+#define AMDGV_SDMA_PF_DECIDATED_RING_END_INDEX(adapt) \
+		(AMDGV_SDMA_PF_DECIDATED_RING_START_INDEX(adapt) + (adapt)->sdma.num_pf_dedicated_inst)
+
+#define for_each_pf_dedicated_sdma_inst(inst, adapt) \
+	for (inst = AMDGV_SDMA_PF_DECIDATED_RING_START_INDEX(adapt); \
+		inst < AMDGV_SDMA_PF_DECIDATED_RING_END_INDEX(adapt); \
+		inst++)
+#define for_each_pfvf_shared_sdma_inst(inst, adapt) \
+	for (inst = 0; inst < (adapt)->sdma.num_sdma_rings; inst++)
+
+#define amdgv_sdma_ring_query_dirtybit(r, mc_addr, nr_pages, dst, aid, ea, dagb, clear_dbit) \
+		((adapt)->sdma.query_dirtybit != NULL ? \
+		 (adapt)->sdma.query_dirtybit((r), (mc_addr), (nr_pages), (dst), (aid), (ea), (dagb), (clear_dbit)) : \
+		 AMDGV_FAILURE)
+
+struct amdgv_ring *amdgv_sdma_get_available_ring(struct amdgv_adapter *adapt, enum amdgv_ring_shared_type shared_type);
+int amdgv_sdma_ring_copy(struct amdgv_ring *ring, uint64_t src, uint64_t size, uint64_t dst);
+int amdgv_sdma_alloc_bitmap_mem(struct amdgv_adapter *adapt, uint64_t bitmap_size);
+int amdgv_sdma_free_bitmap_mem(struct amdgv_adapter *adapt);
+struct amdgv_ring *amdgv_sdma_get_pf_dedicated_ring(struct amdgv_adapter *adapt, int aid, int index);
 #endif

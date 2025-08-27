@@ -36,7 +36,9 @@ TODO: Fix memory layout for these structures:
 	X(amdsmi_nps_caps_t) \
 	X(amdsmi_memory_partition_config_t) \
 	X(amdsmi_dpm_policy_entry_t) \
-	X(amdsmi_version_t)
+	X(amdsmi_version_t) \
+	X(amdsmi_guard_info_t) \
+	X(amdsmi_vf_data_t) \
 */
 
 #define AMD_SMI_STRUCTURES_8 \
@@ -66,7 +68,6 @@ TODO: Fix memory layout for these structures:
 	X(amdsmi_board_info_t) \
 	X(amdsmi_pf_fb_info_t) \
 	X(amdsmi_partition_info_t) \
-	X(amdsmi_guard_info_t) \
 	X(amdsmi_vf_info_t) \
 	X(amdsmi_guest_data_t) \
 	X(amdsmi_dfc_fw_header_t) \
@@ -78,7 +79,6 @@ TODO: Fix memory layout for these structures:
 	X(amdsmi_vram_info_t) \
 	X(amdsmi_metric_t) \
 	X(amdsmi_sched_info_t) \
-	X(amdsmi_vf_data_t) \
 	X(amdsmi_accelerator_partition_profile_t) \
 	X(amdsmi_accelerator_partition_resource_profile_t) \
 	X(amdsmi_accelerator_partition_profile_config_t) \

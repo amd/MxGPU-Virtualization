@@ -385,7 +385,7 @@ int amdgv_live_info_export_data(struct amdgv_adapter *adapt, uint32_t data_op,
 		// smu clk info
 		powerplay->socclk = table_context->boot_values.socclk;
 		powerplay->dcefclk = table_context->boot_values.dcefclk;
-		powerplay->smu_features = smu->supported_caps;
+		powerplay->supported_caps = smu->supported_caps;
 		*status = AMDGV_LIVE_INFO_STATUS_SUCCESS;
 
 		break;
@@ -640,7 +640,7 @@ int amdgv_live_info_import_data(struct amdgv_adapter *adapt, uint32_t data_op,
 		// smu clk info
 		table_context->boot_values.socclk = powerplay->socclk;
 		table_context->boot_values.dcefclk = powerplay->dcefclk;
-		smu->supported_caps = powerplay->smu_features;
+		smu->supported_caps = powerplay->supported_caps;
 		*status = AMDGV_LIVE_INFO_STATUS_SUCCESS;
 		break;
 	}

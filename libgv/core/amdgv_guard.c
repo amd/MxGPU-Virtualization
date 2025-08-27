@@ -145,6 +145,10 @@ static void amdgv_guard_set_event_default_interval(struct amdgv_monitor_event *e
 		event->interval = AMDGV_DEFAULT_FLR_INTERVAL;
 		break;
 
+	case AMDGV_GUARD_EVENT_WGR:
+		event->interval = AMDGV_DEFAULT_WGR_INTERVAL;
+		break;
+
 	case AMDGV_GUARD_EVENT_EXCLUSIVE_MOD:
 		event->interval = AMDGV_DEFAULT_EXCLUSIVE_INTERVAL;
 		break;
@@ -177,6 +181,10 @@ static void amdgv_guard_set_event_default_threshold(struct amdgv_monitor_event *
 	switch (event_id) {
 	case AMDGV_GUARD_EVENT_FLR:
 		event->threshold = AMDGV_DEFAULT_FLR_THRESHOLD;
+		break;
+
+	case AMDGV_GUARD_EVENT_WGR:
+		event->threshold = AMDGV_DEFAULT_WGR_THRESHOLD;
 		break;
 
 	case AMDGV_GUARD_EVENT_EXCLUSIVE_MOD:
@@ -212,6 +220,10 @@ static void amdgv_guard_set_event_name(struct amdgv_monitor_event *event, uint32
 		oss_memcpy(event->name, "FLR", 4);
 		break;
 
+	case AMDGV_GUARD_EVENT_WGR:
+		oss_memcpy(event->name, "WGR", 4);
+		break;
+
 	case AMDGV_GUARD_EVENT_EXCLUSIVE_MOD:
 		oss_memcpy(event->name, "EXCLUSIVE", 10);
 		break;
@@ -245,6 +257,9 @@ static uint32_t amdgv_guard_get_max_threshold(uint32_t event_id)
 	switch (event_id) {
 	case AMDGV_GUARD_EVENT_FLR:
 		max_threshold = AMDGV_GUARD_MAX_FLR;
+		break;
+	case AMDGV_GUARD_EVENT_WGR:
+		max_threshold = AMDGV_GUARD_MAX_WGR;
 		break;
 	case AMDGV_GUARD_EVENT_EXCLUSIVE_MOD:
 		max_threshold = AMDGV_GUARD_MAX_EXCLUSIVE_MOD;

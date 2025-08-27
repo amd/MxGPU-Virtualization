@@ -257,6 +257,13 @@ struct gim_conf_opt conf_opts[] = {
 					.max = ENABLE_LIVE_MIGRATION__MAX,
 					.def = ENABLE_LIVE_MIGRATION__DEFAULT,
 					.array = false },
+	[CONF_OPT_THERMAL_THROTTLE_RATE_LIMIT] = {.name = THERMAL_THROTTLE_RATE_LIMIT__KEY,
+					.value  = {THERMAL_THROTTLE_RATE_LIMIT__DEFAULT},
+					.repeat_val_idx = 1,
+					.min = THERMAL_THROTTLE_RATE_LIMIT__START,
+					.max = THERMAL_THROTTLE_RATE_LIMIT__MAX,
+					.def = THERMAL_THROTTLE_RATE_LIMIT__DEFAULT,
+					.array = true },
 };
 
 #define MAX_OPTION (sizeof(conf_opts)/sizeof(struct gim_conf_opt))
@@ -518,6 +525,13 @@ MODULE_PARM_DESC(enable_live_migration, "Whether enable live migration, disabled
 				"D = 0 or 1;\n\t"
 				"0: live migration is disabled(default)\n\t"
 				"1: live migration is enabled\n\t");
+
+int thermal_throttle_rate_limit_size;
+uint thermal_throttle_rate_limit[AMDGV_MAX_GPU_NUM] = {0};
+module_param_array(thermal_throttle_rate_limit, uint, &thermal_throttle_rate_limit_size, 0444);
+MODULE_PARM_DESC(thermal_throttle_rate_limit, "Thermal throttle notification rate limit in us\n\t"
+				"thermal_throttle_rate_limit=[D0[,D1[...[,Dx]]]]\n\t"
+				"0 <= Dx <= 60000000;\n\t");
 
 static int gim_conf_search_config_key(char *key)
 {
@@ -1068,6 +1082,11 @@ int gim_conf_init(void)
 		conf_opts[CONF_OPT_ENABLE_LIVE_MIGRATION].value[0] = enable_live_migration;
 	}
 
+	if (thermal_throttle_rate_limit_size > 0) {
+		set_array_value(CONF_OPT_THERMAL_THROTTLE_RATE_LIMIT,
+				thermal_throttle_rate_limit, thermal_throttle_rate_limit_size);
+	}
+
 	gim_conf_clear_saved_persist_config(config_file_created);
 
 	/* save options to config file. */
@@ -1291,6 +1310,14 @@ uint32_t gim_conf_get_sentinel_mode_opt(void)
 uint32_t gim_conf_get_enable_live_migration_opt(void)
 {
 	return conf_opts[CONF_OPT_ENABLE_LIVE_MIGRATION].value[0];
+}
+
+uint32_t gim_conf_get_thermal_throttle_rate_limit_opt(uint32_t id)
+{
+	if (id >= AMDGV_MAX_GPU_NUM)
+		id = AMDGV_MAX_GPU_NUM - 1;
+
+	return conf_opts[CONF_OPT_THERMAL_THROTTLE_RATE_LIMIT].value[id];
 }
 
 uint32_t gim_conf_set_vf_num_opt(int value)

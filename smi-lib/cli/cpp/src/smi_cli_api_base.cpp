@@ -80,7 +80,7 @@ int AmdSmiApiBase::format_link_type(const int& link_type, std::string& out)
 	return 2;
 }
 
-int AmdSmiApiBase::format_link_status(const int& link_status, std::string& out)
+int AmdSmiApiBase::format_link_status(const int& link_status, bool legend, std::string& out)
 {
 	return 2;
 }
@@ -273,6 +273,11 @@ int AmdSmiApiBase::amdsmi_get_usage_metric_command(uint64_t processor_bdf, Argum
 	return 2;
 }
 
+int AmdSmiApiBase::amdsmi_get_metric_command_per_partition(uint64_t processor_bdf, uint64_t vf_index, Arguments arg,
+		std::string& out)
+{
+	return 2;
+}
 
 int AmdSmiApiBase::amdsmi_get_power_metric_command(uint64_t processor_bdf, Arguments arg,
 		std::string& out)
@@ -406,6 +411,11 @@ int AmdSmiApiBase::amdsmi_get_bi_directional_p2p_capability_command(Arguments ar
 }
 
 int AmdSmiApiBase::amdsmi_get_caps_xgmi_command(Arguments arg,
+		std::string& out)
+{
+	return 2;
+}
+int AmdSmiApiBase::amdsmi_get_xgmi_link_status_command(Arguments arg,
 		std::string& out)
 {
 	return 2;

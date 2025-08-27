@@ -76,6 +76,14 @@ int AmdSmiMetricCommand::metric_command_usage(uint64_t processor,
 	return ret;
 }
 
+int AmdSmiMetricCommand::metric_command_per_partition(uint64_t processor, uint64_t vf_index,
+		std::string &formatted_string)
+{
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_metric_command_per_partition(processor, vf_index,
+			  arg, formatted_string);
+	return ret;
+}
+
 int AmdSmiMetricCommand::metric_command_power(uint64_t processor,
 		std::string &formatted_string)
 {
@@ -183,8 +191,11 @@ void AmdSmiMetricCommand::metric_command_json()
 			getGpuVfIndexFromVfId(arg.vf_id);
 		vf_bdf = std::get<2>(indexes).c_str();
 		json = {};
-		json["gpu"] = std::stoi(std::get<0>(indexes).c_str());
-		json["vf"] = std::stoi(std::get<1>(indexes).c_str());
+		uint64_t gpu_index = std::stoi(std::get<0>(indexes));
+		uint64_t vf_index = std::stoi(std::get<1>(indexes));
+		json["gpu"] = gpu_index;
+		json["vf"] = vf_index;
+		uint64_t gpu_bdf = arg.devices[gpu_index]->get_bdf();
 		if (is_vf_schedule || arg.all_arguments) {
 			ret = metric_vf_command_schedule(vf_bdf, out);
 			std::string param{"vf_schedule"};
@@ -192,8 +203,8 @@ void AmdSmiMetricCommand::metric_command_json()
 			if (error == 0) {
 				values_json = nlohmann::ordered_json::parse(out);
 				json["schedule"] = values_json;
-				out.clear();
 			}
+			out.clear();
 		}
 		if (is_vf_guard_info || arg.all_arguments) {
 			ret = metric_vf_command_guard(vf_bdf, out);
@@ -202,8 +213,8 @@ void AmdSmiMetricCommand::metric_command_json()
 			if (error == 0) {
 				values_json = nlohmann::ordered_json::parse(out);
 				json["guard"] = values_json;
-				out.clear();
 			}
+			out.clear();
 		}
 		if (is_vf_guest_data || arg.all_arguments) {
 			ret = metric_vf_command_guest_data(vf_bdf, out);
@@ -212,9 +223,18 @@ void AmdSmiMetricCommand::metric_command_json()
 			if (error == 0) {
 				values_json = nlohmann::ordered_json::parse(out);
 				json["guest_data"] = values_json;
-				out.clear();
 			}
-
+			out.clear();
+		}
+		if (is_per_partition || arg.all_arguments) {
+			ret = metric_command_per_partition(gpu_bdf, vf_index, out);
+			std::string param{"per-partition"};
+			int error = handle_exceptions(ret, param, arg);
+			if (error == 0) {
+				values_json = nlohmann::ordered_json::parse(out);
+				json["per_partition"] = values_json;
+			}
+			out.clear();
 		}
 		json_format.insert(json_format.end(), json);
 		result = json_format.dump(4);
@@ -365,6 +385,10 @@ void AmdSmiMetricCommand::metric_command_human()
 				   vfNestedTemplate, std::get<0>(indexes).c_str(),
 				   std::get<1>(indexes).c_str());
 		vf_bdf = std::get<2>(indexes).c_str();
+		uint64_t gpu_index = std::stoi(std::get<0>(indexes));
+		uint64_t vf_index = std::stoi(std::get<1>(indexes));
+		auto device_obj = arg.devices[gpu_index];
+		uint64_t gpu_bdf = device_obj->get_bdf();
 
 		if (is_vf_schedule || arg.all_arguments) {
 			ret = metric_vf_command_schedule(vf_bdf, formatted_string);
@@ -372,8 +396,8 @@ void AmdSmiMetricCommand::metric_command_human()
 			int error = handle_exceptions(ret, param, arg);
 			if (error == 0) {
 				out += formatted_string;
-				formatted_string.clear();
 			}
+			formatted_string.clear();
 		}
 		if (is_vf_guard_info || arg.all_arguments) {
 			ret = metric_vf_command_guard(vf_bdf, formatted_string);
@@ -381,8 +405,8 @@ void AmdSmiMetricCommand::metric_command_human()
 			int error = handle_exceptions(ret, param, arg);
 			if (error == 0) {
 				out += formatted_string;
-				formatted_string.clear();
 			}
+			formatted_string.clear();
 		}
 		if (is_vf_guest_data || arg.all_arguments) {
 			ret = metric_vf_command_guest_data(vf_bdf, formatted_string);
@@ -390,8 +414,17 @@ void AmdSmiMetricCommand::metric_command_human()
 			int error = handle_exceptions(ret, param, arg);
 			if (error == 0) {
 				out += formatted_string;
-				formatted_string.clear();
 			}
+			formatted_string.clear();
+		}
+		if (is_per_partition || arg.all_arguments) {
+			ret = metric_command_per_partition(gpu_bdf, vf_index, formatted_string);
+			std::string param{"per-partition"};
+			int error = handle_exceptions(ret, param, arg);
+			if (error == 0) {
+				out += formatted_string;
+			}
+			formatted_string.clear();
 		}
 	} else {
 		for (unsigned int i = 0; i < arg.devices.size(); i++) {
@@ -1204,6 +1237,10 @@ void AmdSmiMetricCommand::execute_command()
 	if ((std::find(arg.options.begin(), arg.options.end(), "guest-data") != arg.options.end())
 			|| (std::find(arg.options.begin(), arg.options.end(), "u") != arg.options.end())) {
 		is_vf_guest_data = true;
+	}
+	if ((std::find(arg.options.begin(), arg.options.end(), "per-partition") != arg.options.end())
+			|| (std::find(arg.options.begin(), arg.options.end(), "pp") != arg.options.end())) {
+		is_per_partition = true;
 	}
 
 	if (arg.watch > -1) {

@@ -374,6 +374,9 @@ enum smi_link_status smi_map_link_status(enum amdgv_gpumon_link_status amdgv_lin
 	case AMDGV_GPUMON_LINK_STATUS_DISABLED:
 		link_status = SMI_LINK_STATUS_DISABLED;
 		break;
+	case AMDGV_GPUMON_LINK_STATUS_INACTIVE:
+		link_status = SMI_LINK_STATUS_INACTIVE;
+		break;
 	default:
 		link_status = SMI_LINK_STATUS_ERROR;
 		break;
@@ -506,6 +509,9 @@ enum smi_vram_type smi_map_vram_type(enum amdgv_gpumon_vram_type type)
 		break;
 	case AMDGV_GPUMON_DGPU_VRAM_TYPE__HBM3:
 		vram_type = SMI_VRAM_TYPE_HBM3;
+		break;
+	case AMDGV_GPUMON_DGPU_VRAM_TYPE__HBM3E:
+		vram_type = SMI_VRAM_TYPE_HBM3E;
 		break;
 	case AMDGV_GPUMON_DGPU_VRAM_TYPE__GDDR5:
 		vram_type = SMI_VRAM_TYPE_GDDR5;
@@ -847,6 +853,54 @@ enum smi_metric_unit smi_map_metric_unit(enum amdgv_gpumon_metric_ext_unit unit)
 	}
 
 	return metric_unit;
+}
+
+enum smi_metric_res_group smi_map_metric_res_group(enum amdgv_gpumon_metric_ext_res_group res_group)
+{
+	enum smi_metric_res_group metric_res_group = SMI_METRIC_RES_GROUP_UNKNOWN;
+
+	switch (res_group) {
+	case AMDGV_GPUMON_METRIC_EXT_RES_GROUP__NA:
+		metric_res_group = SMI_METRIC_RES_GROUP_NA;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_RES_GROUP__GPU:
+		metric_res_group = SMI_METRIC_RES_GROUP_GPU;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_RES_GROUP__XCP:
+		metric_res_group = SMI_METRIC_RES_GROUP_XCP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_RES_GROUP__AID:
+		metric_res_group = SMI_METRIC_RES_GROUP_AID;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_RES_GROUP__MID:
+		metric_res_group = SMI_METRIC_RES_GROUP_MID;
+		break;
+	default:
+		metric_res_group = SMI_METRIC_RES_GROUP_UNKNOWN;
+	}
+
+	return metric_res_group;
+}
+
+enum smi_metric_res_subgroup smi_map_metric_res_subgroup(enum amdgv_gpumon_metric_ext_res_subgroup res_subgroup)
+{
+	enum smi_metric_res_group metric_res_subgroup = SMI_METRIC_RES_SUBGROUP_UNKNOWN;
+
+	switch (res_subgroup) {
+	case AMDGV_GPUMON_METRIC_EXT_RES_SUBGROUP__NA:
+		metric_res_subgroup = SMI_METRIC_RES_SUBGROUP_NA;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_RES_SUBGROUP__XCC:
+		metric_res_subgroup = SMI_METRIC_RES_SUBGROUP_XCC;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_RES_SUBGROUP__ENGINE:
+		metric_res_subgroup = SMI_METRIC_RES_SUBGROUP_ENGINE;
+		break;
+	default:
+		metric_res_subgroup = SMI_METRIC_RES_SUBGROUP_UNKNOWN;
+	}
+
+	return metric_res_subgroup;
 }
 
 enum smi_memory_partition_type smi_map_mp_mode(enum amdgv_memory_partition_mode mode)

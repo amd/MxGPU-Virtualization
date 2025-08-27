@@ -27,6 +27,7 @@ extern "C" {
 #include "smi_sys_wrapper.h"
 #include "common/smi_handle.h"
 #include "smi_defines.h"
+#include <cstdio>
 }
 
 namespace amdsmi
@@ -100,6 +101,16 @@ static long sysconf(int name)
 	return GetSystemMock()->Sysconf(name);
 }
 
+static FILE* fopen(const char* filename, const char* mode)
+{
+	return GetSystemMock()->Fopen(filename, mode);
+}
+
+static char* fgets(char* str, int count, FILE* stream)
+{
+	return GetSystemMock()->Fgets(str, count, stream);
+}
+
 } // namespace amdsmi
 
 static system_wrapper wrapper = {
@@ -116,7 +127,9 @@ static system_wrapper wrapper = {
 	(void *(*)(void**, size_t, size_t))amdsmi::aligned_alloc,
 	(void (*)(void *))amdsmi::aligned_free,
 	(int (*)(char *, size_t, const char *, size_t))amdsmi::strncpy,
-	(long (*)(int))amdsmi::sysconf
+	(long (*)(int))amdsmi::sysconf,
+	(FILE *(*)(const char *, const char *))amdsmi::fopen,
+	(char *(*)(char *, int, FILE *))amdsmi::fgets
 };
 
 extern "C" {

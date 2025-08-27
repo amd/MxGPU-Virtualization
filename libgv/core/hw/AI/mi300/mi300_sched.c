@@ -445,11 +445,11 @@ static int mi300_sched_hw_fini(struct amdgv_adapter *adapt)
 }
 
 static int mi300_sched_sw_init_early(struct amdgv_adapter *adapt) { return mi300_sched_sw_init(adapt); }
-static int mi300_sched_sw_fini_early(struct amdgv_adapter *adapt) { return mi300_sched_sw_fini(adapt); }
+static int mi300_sched_sw_fini_early(struct amdgv_adapter *adapt) { return 0; }
 static int mi300_sched_hw_fini_early(struct amdgv_adapter *adapt) { return mi300_sched_hw_fini(adapt); }
 
 static int mi300_sched_sw_init_late(struct amdgv_adapter *adapt) { return 0; }
-static int mi300_sched_sw_fini_late(struct amdgv_adapter *adapt) { return 0; }
+static int mi300_sched_sw_fini_late(struct amdgv_adapter *adapt) { return mi300_sched_sw_fini(adapt); }
 static int mi300_sched_hw_fini_late(struct amdgv_adapter *adapt) { return 0; }
 
 struct amdgv_init_func mi300_sched_early_func = {

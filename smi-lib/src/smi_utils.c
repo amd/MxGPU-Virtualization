@@ -466,3 +466,58 @@ void amdsmi_get_register_array(const uint8_t* data, size_t size, uint64_t *regis
         }
     }
 }
+
+
+int make_sysfs_pci_device_prefix(amdsmi_processor_handle processor_handle, char *out_path, size_t out_path_size)
+{
+	amdsmi_bdf_t bdf;
+	int ret = amdsmi_get_gpu_device_bdf(processor_handle, &bdf);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		return ret;
+	}
+
+	// Format: /sys/bus/pci/devices/0000:22:00.0/
+	int n = snprintf(
+		out_path, out_path_size,
+		"/sys/bus/pci/devices/%04x:%02x:%02x.%01x/",
+		(unsigned)bdf.bdf.domain_number,
+		bdf.bdf.bus_number,
+		bdf.bdf.device_number,
+		bdf.bdf.function_number
+	);
+	if (n < 0 || (size_t)n >= out_path_size) {
+		return -1; // Buffer too small or snprintf error
+	}
+	return 0;
+}
+
+int parse_cpu_list(const char *cpu_list, uint64_t *cpu_set, uint32_t cpu_set_size)
+{
+	// Clear the cpu_set
+	memset(cpu_set, 0, cpu_set_size * sizeof(uint64_t));
+
+	const char *p = cpu_list;
+	while (*p) {
+		while (*p && !isdigit(*p)) p++;
+		if (!*p) break;
+		int start = atoi(p);
+		while (*p && isdigit(*p)) p++;
+		int end = start;
+		if (*p == '-') {
+			p++;
+			end = atoi(p);
+			while (*p && isdigit(*p)) p++;
+		}
+
+		// Set bits from start to end
+		for (int cpu = start; cpu <= end; ++cpu) {
+			uint32_t idx = (unsigned)cpu / 64;
+			uint32_t bit = (unsigned)cpu % 64;
+			if (idx < cpu_set_size)
+				cpu_set[idx] |= (1ULL << bit);
+		}
+		while (*p && *p != ',') p++;
+		if (*p == ',') p++;
+	}
+	return 0;
+}

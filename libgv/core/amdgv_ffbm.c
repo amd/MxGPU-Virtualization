@@ -696,26 +696,28 @@ void amdgv_ffbm_unmap_by_fcn(struct amdgv_adapter *adapt, uint32_t vf_idx, bool 
 
 /* copy content to gpa with FFBM enabled */
 uint64_t amdgv_ffbm_copy_to_gpa(struct amdgv_adapter *adapt, uint32_t *data, uint32_t idx_vf,
-				uint64_t gpa, uint64_t size, enum amdgv_ffbm_copy type)
+				uint64_t gpa, uint64_t size)
 {
 	struct amdgv_ffbm_pte_block *pteb;
 	uint64_t size_left = size;
 	uint64_t size_copy = 0;
+	uint64_t dst_offset = 0;
+
 	FFBM_LOCK_LIST;
 	amdgv_list_for_each_entry(pteb, &adapt->array_vf[idx_vf].gpa_list,
 				   struct amdgv_ffbm_pte_block, gpa_list_node) {
 		if (AMDGV_FFBM_ADDR_IN_RANGE(pteb->gpa, pteb->size, gpa)) {
 			size_copy = min(pteb->size - (gpa - pteb->gpa), size_left);
+			dst_offset = pteb->spa + (gpa - pteb->gpa);
+			if (dst_offset + size_copy > adapt->mapped_fb_size)
 			/* copy using MM_INDEX/DATA regs */
-			if (type == AMDGV_FFBM_MM_COPY)
-				amdgv_mm_copy_to_fb(adapt, pteb->spa + (gpa - pteb->gpa),
+				amdgv_mm_copy_to_fb(adapt, dst_offset,
 						(uint64_t)&data[((size - size_left) / 4)], size_copy);
-			/* copy using PF bar */
-			else if (type == AMDGV_FFBM_PF_COPY)
-				oss_memcpy((void *)((uint64_t)adapt->fb + pteb->spa + (gpa - pteb->gpa)),
-						&data[((size - size_left) / 4)], size_copy);
 			else
-				break;
+			/* copy using PF bar */
+				oss_memcpy((void *)((uint64_t)adapt->fb + dst_offset),
+						&data[((size - size_left) / 4)], size_copy);
+
 			size_left -= size_copy;
 			gpa += size_copy;
 		}
@@ -728,26 +730,27 @@ uint64_t amdgv_ffbm_copy_to_gpa(struct amdgv_adapter *adapt, uint32_t *data, uin
 
 /* copy content from gpa with FFBM enabled */
 uint64_t amdgv_ffbm_copy_from_gpa(struct amdgv_adapter *adapt, uint32_t *data, uint32_t idx_vf,
-				uint64_t gpa, uint64_t size, enum amdgv_ffbm_copy type)
+				uint64_t gpa, uint64_t size)
 {
 	struct amdgv_ffbm_pte_block *pteb;
 	uint64_t size_left = size;
 	uint64_t size_copy = 0;
+	uint64_t src_offset = 0;
+
 	FFBM_LOCK_LIST;
 	amdgv_list_for_each_entry(pteb, &adapt->array_vf[idx_vf].gpa_list,
 				   struct amdgv_ffbm_pte_block, gpa_list_node) {
 		if (AMDGV_FFBM_ADDR_IN_RANGE(pteb->gpa, pteb->size, gpa)) {
 			size_copy = min(pteb->size - (gpa - pteb->gpa), size_left);
+			src_offset = pteb->spa + (gpa - pteb->gpa);
+			if (src_offset + size_copy > adapt->mapped_fb_size)
 			/* copy using MM_INDEX/DATA regs */
-			if (type == AMDGV_FFBM_MM_COPY)
 				amdgv_mm_copy_from_fb(adapt, (uint64_t)&data[((size - size_left) / 4)],
-						pteb->spa + (gpa - pteb->gpa), size_copy);
-			/* copy using PF bar */
-			else if (type == AMDGV_FFBM_PF_COPY)
-				oss_memcpy(&data[((size - size_left) / 4)],
-						(void *)((uint64_t)adapt->fb + pteb->spa + (gpa - pteb->gpa)), size_copy);
+						src_offset, size_copy);
 			else
-				break;
+			/* copy using PF bar */
+				oss_memcpy(&data[((size - size_left) / 4)],
+						(void *)((uint64_t)adapt->fb + src_offset), size_copy);
 			size_left -= size_copy;
 			gpa += size_copy;
 		}

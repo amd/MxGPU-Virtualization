@@ -54,6 +54,7 @@ enum oss_data_type {
 enum oss_dma_mem_type {
 	OSS_DMA_MEM_CACHEABLE = (1 << 0),
 	OSS_DMA_PA_CONTIGUOUS = (1 << 1),
+	OSS_DMA_ALLOW_DMA_NOT_CONTIGUOUS = (1 << 2),
 };
 
 enum oss_memremap_type {
@@ -299,6 +300,7 @@ struct oss_interface {
 	int (*alloc_dma_mem)(oss_dev_t dev, uint32_t size, enum oss_dma_mem_type type,
 			     struct oss_dma_mem_info *dma_mem_info);
 	void (*free_dma_mem)(void *handle);
+	uint64_t (*sg_dma_address)(void *handle, uint32_t page);
 
 	void *(*memremap)(uint64_t offset, uint32_t size, uint32_t flags);
 	void (*memunmap)(void *addr);
@@ -484,6 +486,7 @@ struct oss_interface {
 
 	/* Run fn as a passive level work item */
 	int (*schedule_work)(oss_dev_t dev, oss_callback_t fn, void *context);
+	void (*mb)(void);
 	void (*notify_shim_ext)(oss_dev_t dev, uint32_t error_code, uint32_t severity,
 			const char *fmt, va_list args);
 

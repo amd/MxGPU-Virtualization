@@ -65,6 +65,12 @@ int amdgv_dirtybit_querydata(struct amdgv_adapter *adapt,
 		AMDGV_ERROR("query_size is 0\n");
 		return AMDGV_FAILURE;
 	}
+
+	if (data->query_fb_offset > adapt->mc_fb_top_addr) {
+		AMDGV_ERROR("query_fb_offset is out of range\n");
+		return AMDGV_FAILURE;
+	}
+
 	if (data->dbit_plane_data_buffer == NULL) {
 		AMDGV_ERROR("dbit_plane_data_buffer is NULL\n");
 		return AMDGV_FAILURE;

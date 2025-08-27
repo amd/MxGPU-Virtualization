@@ -24,6 +24,7 @@
 #define AMDGV_MEMMGR_H
 
 #include "amdgv_live_info.h"
+#include "amdgv_ring.h"
 
 struct amdgv_memmgr;
 struct amdgv_memmgr_mem;
@@ -60,6 +61,11 @@ struct amdgv_memmgr_mem;
 
 #define MEM_ID_GET_ID(mem_id) (mem_id & 0xFFFF)
 #define MEM_ID_GET_INDEX(mem_id) ((mem_id >> 16) & 0xFFFF)
+
+enum amdgv_map_op {
+	AMDGV_UNMAP = 0,
+	AMDGV_MAP = 1,
+};
 
 /*
  *
@@ -110,6 +116,7 @@ struct amdgv_memmgr_mem {
 	struct amdgv_list_head node;
 
 	enum amdgv_mem_id id;	/* id to track mem block user */
+	enum amdgv_map_op map_op; /* only valid for sys memmgr */
 };
 
 struct amdgv_memmgr {
@@ -137,6 +144,9 @@ struct amdgv_memmgr {
 
 	/* is init flag */
 	bool is_init;
+
+	/* is system memmory manager or not*/
+	bool is_sys;
 };
 
 struct amdgv_mem_with_bitmap {
@@ -149,6 +159,22 @@ struct amdgv_mem_with_bitmap {
 	 * and now memmgr_mem->id will be: [31:16]index[15:0]mem_id
 	 */
 	uint64_t bitmaps[MAX_BITMAP_COUNT];
+};
+
+/*
+ * GPU MC structures, functions & helpers
+ */
+struct amdgv_gmc_funcs {
+	/* flush the vm tlb via mmio */
+	int (*flush_gpu_tlb)(struct amdgv_adapter *adapter, uint32_t vmid,
+						uint32_t vmhub, uint32_t flush_type);
+	/* flush the vm tlb via ring */
+	uint64_t (*emit_flush_gpu_tlb)(struct amdgv_ring *ring, unsigned vmid,
+								uint64_t pd_addr);
+};
+
+struct amdgv_gmc {
+	const struct amdgv_gmc_funcs *funcs;
 };
 
 /* Allocate a memory manager */
@@ -164,6 +190,8 @@ struct amdgv_memmgr_mem *amdgv_memmgr_alloc(struct amdgv_memmgr *memmgr, uint64_
 					    enum amdgv_mem_id id);
 struct amdgv_memmgr_mem *amdgv_memmgr_alloc_align(struct amdgv_memmgr *memmgr, uint64_t len,
 						  uint64_t align, enum amdgv_mem_id id);
+struct amdgv_memmgr_mem *amdgv_memmgr_alloc_sys_align(struct amdgv_memmgr *memmgr, uint64_t len,
+							uint64_t align, uint64_t *gpu_addr, void *va_ptr);
 struct amdgv_memmgr_mem *amdgv_memmgr_alloc_align_at(struct amdgv_memmgr *memmgr,
 						     uint64_t offset, uint64_t len,
 						     enum amdgv_mem_id id);
@@ -193,6 +221,7 @@ void *amdgv_memmgr_get_cpu_base(struct amdgv_memmgr_mem *mem);
 
 /* Get the physical address of a memory reservation */
 uint64_t amdgv_memmgr_get_gpu_addr(struct amdgv_memmgr_mem *mem);
+uint64_t amdgv_memmgr_get_gpu_pa(struct amdgv_memmgr_mem *mem);
 void *amdgv_memmgr_get_cpu_addr(struct amdgv_memmgr_mem *mem);
 
 /* Get the physical offset of a memory reservation */
@@ -205,4 +234,7 @@ uint64_t amdgv_memmgr_get_align(struct amdgv_memmgr_mem *mem);
 
 enum amdgv_live_info_status amdgv_memmgr_export_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_memmgr *memmgr_info);
 enum amdgv_live_info_status amdgv_memmgr_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_memmgr *memmgr_info);
+void amdgv_gmc_flush_gpu_tlb(struct amdgv_adapter *adapt, uint32_t vmid,
+					uint32_t vmhub, uint32_t flush_type);
+int amdgv_map_sys_mem_allocs(struct amdgv_memmgr *memmgr, enum amdgv_map_op map_op);
 #endif

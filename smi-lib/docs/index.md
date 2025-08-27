@@ -39,13 +39,14 @@ The tool can be used to:
 - Query information about the virtual functions on the GPU
 - Query temperature, clocks, and usage of the GPU
 
-For additional information on installation, usage, and API references, please refer to the sections below:
+For additional information on build, installation, usage, versioning and API references, please refer to the sections below:
 
 ::::{grid} 2
-:gutter: 3
+:gutter: 4
 
 :::{grid-item-card} Install
 
+- [Library and CLI tool installation](./install/install.md)
 - [Build from source](./install/build.md)
 :::
 
@@ -64,6 +65,11 @@ For additional information on installation, usage, and API references, please re
   - [Data structures](../doxygen/doxy_build/html/annotated)
   - [Data fields](../doxygen/doxy_build/html/functions_data_fields)
 - [Python API](./reference/amdsmi_py_api.md)
+:::
+
+:::{grid-item-card} General
+
+- [Library and CLI tool versioning](./general/versioning.md)
 :::
 
 ::::

@@ -23,8 +23,9 @@ include ../../defines.mk
 
 BUILD_TYPE ?= Release
 HEADER  = -I$(INTERFACE_DIR)
-SO_FILE = $(BUILD_DIR)/amdsmi/$(BUILD_TYPE)/libamdsmi.a
-FLAGS   = -pthread $(DEFAULT_CFLAGS)
+SO_PATH = -L$(BUILD_DIR)/amdsmi/$(BUILD_TYPE)/
+SO_FILE = -lamdsmi -pthread
+FLAGS   = $(DEFAULT_CFLAGS)
 DEFS    =
 
 ifeq ($(BUILD_TYPE), Debug)
@@ -34,7 +35,7 @@ endif
 INCLUDE = $(HEADER) $(SO_PATH) $(SO_FILE)
 
 all:
-	$(CC) ras_cper.c -o ras_cper $(HEADER) $(SO_FILE) $(SO_PATH) $(FLAGS) $(DEFS)
+	$(CC) ras_cper.c -o ras_cper $(FLAGS) $(DEFS) $(INCLUDE)
 
 .PHONY: clean
 clean:

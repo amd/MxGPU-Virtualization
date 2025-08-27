@@ -72,6 +72,7 @@ struct amdgv_iv_entry {
 	uint64_t	timestamp;
 	unsigned int	timestamp_src;
 	unsigned int	pas_id;
+	unsigned int	node_id;
 	unsigned int	pasid_src;
 	unsigned int	src_data[AMDGV_IH_SRC_DATA_MAX_SIZE_DW];
 	const uint32_t *iv_entry;

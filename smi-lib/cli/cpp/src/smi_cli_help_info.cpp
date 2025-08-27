@@ -187,6 +187,20 @@ std::string metric_host_mi200 =
 	"        --schedule                                            All scheduling info\n"
 	"        --guard                                               All guard information\n"
 	"        --guest-data                                          All guest data information\n\n";
+std::string metric_host_mi3xx =
+	"    -p, --power                                               All power readings information\n"
+	"    -c, --clock                                               All frequency sensor readings\n"
+	"    -t, --temperature                                         All thermal sensor readings\n"
+	"    -e, --ecc                                                 All ecc information\n"
+	"    -k, --ecc-block                                           Number of ECC errors per block\n"
+	"    -P, --pcie                                                Current pcie information\n"
+	"    -E, --energy                                              Amount of energy consumed\n"
+	"    --vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>      Gets metric information about the specified VF\n"
+	"                                                              If no metric information argument is provided all metric information will be displayed\n"
+	"        --schedule                                            All scheduling info\n"
+	"        --guard                                               All guard information\n"
+	"        --guest-data                                          All guest data information\n"
+	"        --per-partition                                       All metric per partition information\n\n";
 std::string metric_usage_host =
 	"                     [-p | --power] [-c | --clock] [-t | --temperature] [-e | --ecc] [-P | --pcie] [-E | --energy] [--vf [VF]]\n\n";
 std::string metric_usage_host_mi200 =
@@ -636,7 +650,7 @@ AmdSmiHelpInfo::AmdSmiHelpInfo()
 				help_specific = help_command_linux_host + help_command_mi30x_host;
 				static_specific = static_host_linux + static_host_mi30x + static_host_vf;
 				usage_static_specific = usage_static_host_linux + usage_static_hyperv + usage_vf_static_host;
-				metric_specific = metric_host;
+				metric_specific = metric_host_mi3xx;
 				usage_metric_specific = metric_usage_host;
 				xgmi_specific = xgmi_host;
 				usage_xgmi_specific = xgmi_usage_host;

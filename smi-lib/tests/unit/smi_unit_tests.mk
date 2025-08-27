@@ -56,6 +56,7 @@ TEST_SRCS += smi_test_chiplet_metrics.cpp
 TEST_SRCS += smi_test_version.cpp
 TEST_SRCS += smi_test_partitions.cpp
 TEST_SRCS += smi_test_ras_cper.cpp
+TEST_SRCS += smi_test_numa_info.cpp
 
 TEST_SRCS += smi_fake_sys_wrapper.cpp
 TEST_SRCS += smi_test_helpers.cpp

@@ -27,10 +27,10 @@ if [ -f "./VERSION" ]; then
 elif [ -e "./.git" ] && [ "$(git rev-parse --is-inside-work-tree)" = "true" ]; then
     branch="$(git rev-parse --abbrev-ref HEAD)"
     if [ "$branch" = "mainline" ]; then
-        name="$(git describe --long --match "mainline/*.*.*.K")"
+        name="$(git describe --long --match "mainline/*.*.*.K" 2>/dev/null)"
     fi
     if [ -z "$name" ]; then
-        name="$(git describe --long --match "staging/*.*.*.K")"
+        name="$(git describe --long --match "staging/*.*.*.K" 2>/dev/null)"
     fi
     ver="${name##*/}"
     if [ -n "$ver" ]; then
@@ -39,4 +39,5 @@ elif [ -e "./.git" ] && [ "$(git rev-parse --is-inside-work-tree)" = "true" ]; t
     fi
 fi
 
+echo "Cannot detect version, using fallback version 0.0.0.K" 1>&2
 echo "0.0.0.K"

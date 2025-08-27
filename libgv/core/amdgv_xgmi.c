@@ -595,3 +595,14 @@ int amdgv_xgmi_inject_error(struct amdgv_adapter *adapt,
 
 	return AMDGV_FAILURE;
 }
+
+enum amdgv_xgmi_link_status amdgv_xgmi_get_link_status(struct amdgv_adapter *adapt,
+							      uint32_t phy_link_idx)
+{
+	if (adapt->xgmi.get_link_status)
+		return adapt->xgmi.get_link_status(adapt, phy_link_idx);
+
+	AMDGV_WARN("Get Link Status not supported!\n");
+
+	return AMDGV_XGMI_LINK_STATUS__ERROR;
+}

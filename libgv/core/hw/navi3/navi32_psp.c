@@ -1015,7 +1015,7 @@ enum psp_status navi32_psp_vf_cmd_relay(struct amdgv_adapter *adapt, uint32_t vf
 
 	vf_relay_cmd->cmd_id = PSP_CMD_KM_TYPE__VF_RELAY;
 	vf_relay_cmd->cmd.vf_relay.target_vf = vf_id;
-	vf_relay_cmd->cmd.vf_relay.vf_relay_wtr_ptr = adapt->psp.vf_relay_wtr_ptr;
+	vf_relay_cmd->cmd.vf_relay.vf_relay_wtr_ptr = adapt->psp.vf_relay_wtr_ptr[vf_id];
 
 	ret = amdgv_psp_cmd_km_submit(adapt, vf_relay_cmd, &psp_resp);
 
@@ -1060,11 +1060,11 @@ enum psp_status navi32_psp_load_asd_fw_to_mem(struct amdgv_adapter *adapt,
 static enum psp_status navi32_psp_get_migration_version(struct amdgv_adapter *adapt,
 	uint32_t *migration_version)
 {
-
-	enum psp_status ret = PSP_STATUS__ERROR_GENERIC;
+	enum psp_status ret = PSP_STATUS__SUCCESS;
 	struct psp_cmd_km *migration_get_psp_info_cmd = NULL;
 	struct psp_gfx_resp psp_resp = { 0 };
 
+	*migration_version = 0;
 	migration_get_psp_info_cmd = adapt->psp.psp_cmd_km_mem;
 	if (!migration_get_psp_info_cmd) {
 		amdgv_put_error(AMDGV_PF_IDX,
@@ -1086,6 +1086,8 @@ static enum psp_status navi32_psp_get_migration_version(struct amdgv_adapter *ad
 				AMDGV_ERROR_FW_MIGRATION_GET_PSP_INFO_FAIL,
 				psp_resp.status);
 		}
+		AMDGV_WARN("Live Migration get version not supported, fallback to default\n");
+		return 0;
 	}
 
 	*migration_version =

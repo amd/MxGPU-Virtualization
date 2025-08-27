@@ -111,7 +111,7 @@ static void gim_get_device_list(struct smi_device_data *dev_list, int *size)
 	}
 
 	*size = i;
-	kfree(tmp_dev_list);
+	gim_kfree(tmp_dev_list);
 }
 
 static void gim_get_device_data(amdgv_dev_t adev, struct smi_device_data *ret_dev_data, bool *dev_busy, struct smi_ctx *ctx)
@@ -335,7 +335,7 @@ static int gim_get_metric_table(struct smi_metrics_table *metrics_table, uint16_
     num_pages = get_user_pages_remote(NULL, mm, (unsigned long)metrics_table->metrics, nr_pages, gup_flags, pages, NULL, NULL);
 #endif
 	if (num_pages <= 0) {
-		kfree(pages);
+		gim_kfree(pages);
 #if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
 		up_read(&current->mm->mmap_lock);
 #else
@@ -354,6 +354,9 @@ static int gim_get_metric_table(struct smi_metrics_table *metrics_table, uint16_
 		metrics->metric[i].metric_union.metric.unit = smi_map_metric_unit(gpumon_metrics_table->metric[i].unit);
 		metrics->metric[i].vf_mask = gpumon_metrics_table->metric[i].vf_mask;
 		metrics->metric[i].val = gpumon_metrics_table->metric[i].val;
+		metrics->metric[i].metric_union.metric.res_group = smi_map_metric_res_group(gpumon_metrics_table->metric[i].res_group);
+		metrics->metric[i].metric_union.metric.res_subgroup = smi_map_metric_res_subgroup(gpumon_metrics_table->metric[i].res_subgroup);
+		metrics->metric[i].res_instance = gpumon_metrics_table->metric[i].res_instance;
 	}
 	// Unmap and release mapped pages and
 	// free the virtual contiguous memory
@@ -365,7 +368,7 @@ static int gim_get_metric_table(struct smi_metrics_table *metrics_table, uint16_
 		put_page(pages[i]);
 	}
 
-	kfree(pages);
+	gim_kfree(pages);
 #if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
 	up_read(&current->mm->mmap_lock);
 #else
@@ -415,7 +418,7 @@ static int gim_get_partition(struct smi_profile_configs *profile_configs,
 	num_pages = get_user_pages_remote(mm, (unsigned long)profile_configs->profile_configs, nr_pages, gup_flags, pages, NULL);
 #endif
 	if (num_pages <= 0) {
-		kfree(pages);
+		gim_kfree(pages);
 #if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
 		up_read(&current->mm->mmap_lock);
 #else
@@ -462,7 +465,7 @@ static int gim_get_partition(struct smi_profile_configs *profile_configs,
 	}
 
 
-	kfree(pages);
+	gim_kfree(pages);
 #if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
 	up_read(&current->mm->mmap_lock);
 #else
@@ -513,7 +516,7 @@ static int gim_get_eeprom_table(struct smi_bad_page_info *eeprom_table, uint16_t
 #endif
 
 	if (num_pages <= 0) {
-		kfree(pages);
+		gim_kfree(pages);
 #if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
 		up_read(&current->mm->mmap_lock);
 #else
@@ -544,7 +547,7 @@ static int gim_get_eeprom_table(struct smi_bad_page_info *eeprom_table, uint16_t
 		put_page(pages[i]);
 	}
 
-	kfree(pages);
+	gim_kfree(pages);
 #if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
 	up_read(&current->mm->mmap_lock);
 #else
@@ -593,7 +596,7 @@ static inline int gim_get_cper_data(struct smi_cper_config *cper_config, uint16_
 	num_pages = get_user_pages_remote(NULL, mm, (unsigned long)cper_config->cper, nr_pages, gup_flags, pages, NULL, NULL);
 #endif
 	if (num_pages <= 0) {
-		kfree(pages);
+		gim_kfree(pages);
 #if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
 		up_read(&current->mm->mmap_lock);
 #else
@@ -624,7 +627,7 @@ static inline int gim_get_cper_data(struct smi_cper_config *cper_config, uint16_
 		put_page(pages[i]);
 	}
 
-	kfree(pages);
+	gim_kfree(pages);
 #if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
 	up_read(&current->mm->mmap_lock);
 #else

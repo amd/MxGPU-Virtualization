@@ -2355,6 +2355,7 @@ enum amdgv_live_info_status amdgv_sched_ws_export_live_data(struct amdgv_adapter
 	}
 
 	world_switch->allow_time_cmd_complete = adapt->gpuiov.allow_time_cmd_complete;
+	world_switch->auto_sched_cfg_active_vfs = adapt->gpuiov.sched_cfg.auto_config.active_functions;
 
 	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
 }
@@ -2405,6 +2406,7 @@ enum amdgv_live_info_status amdgv_sched_ws_import_live_data(struct amdgv_adapter
 	}
 
 	adapt->gpuiov.allow_time_cmd_complete = world_switch->allow_time_cmd_complete;
+	adapt->gpuiov.sched_cfg.auto_config.active_functions = world_switch->auto_sched_cfg_active_vfs;
 
 	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
 }

@@ -454,9 +454,6 @@ int amdgv_gpuiov_transfer_vf_data(struct amdgv_adapter *adapt,
 				  uint32_t idx_vf, bool to_export);
 int amdgv_gpuiov_set_mmsch_vfgate(struct amdgv_adapter *adapt, uint32_t idx_vf,
 				  uint32_t hw_sched_id, bool enable);
-#ifndef EXCLUDE_NOT_USED
-int amdgv_gpuiov_set_csa(struct amdgv_adapter *adapt, uint32_t csa_base);
-#endif // EXCLUDE_NOT_USED
 int amdgv_gpuiov_world_switch_oneshot(struct amdgv_adapter *adapt,
 				      uint32_t idx_vf, uint32_t next_idx_vf,
 				      uint32_t hw_sched_id);

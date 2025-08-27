@@ -46,6 +46,8 @@ typedef struct {
 	void (*smi_aligned_free)(void *);
 	int (*smi_strncpy)(char *dest, size_t destsz, const char *src, size_t count);
 	long (*smi_sysconf)(int);
+	FILE* (*fopen)(const char *, const char *);
+	char* (*fgets)(char *, int, FILE *);
 } system_wrapper;
 
 extern system_wrapper *get_system_wrapper(void);

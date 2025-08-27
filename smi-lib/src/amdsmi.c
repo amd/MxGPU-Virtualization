@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <ctype.h>
 
 #include "smi_sys_wrapper.h"
 
@@ -2317,6 +2318,7 @@ amdsmi_status_t amdsmi_get_link_metrics(amdsmi_processor_handle processor_handle
 		link_metrics->links[i].link_type = (amdsmi_link_type_t)link->links[i].link_type;
 		link_metrics->links[i].read = link->links[i].read;
 		link_metrics->links[i].write = link->links[i].write;
+		link_metrics->links[i].link_status = (amdsmi_link_status_t)link->links[i].link_status;
 	}
 
 	return AMDSMI_STATUS_SUCCESS;
@@ -2698,6 +2700,9 @@ amdsmi_status_t amdsmi_get_gpu_metrics(amdsmi_processor_handle processor_handle,
 					    AMDSMI_METRIC_TYPE_INST : 0;
 			metrics[i].flags |= table->metrics->metric[i].metric_union.code & (1ULL << SMI_METRIC_TYPE_ACC) ?
 					    AMDSMI_METRIC_TYPE_ACC : 0;
+			metrics[i].res_group = (amdsmi_metric_res_group_t)table->metrics->metric[i].metric_union.metric.res_group;
+			metrics[i].res_subgroup = (amdsmi_metric_res_subgroup_t)table->metrics->metric[i].metric_union.metric.res_subgroup;
+			metrics[i].res_instance = table->metrics->metric[i].res_instance;
 		}
 	}
 
@@ -3118,7 +3123,7 @@ amdsmi_status_t amdsmi_get_gpu_cper_entries(amdsmi_processor_handle processor_ha
 	const int code = amdsmi_request(&smi_req, (uint32_t)SMI_CMD_CODE_GET_CPER,
 					sizeof(struct smi_cper_config),
 					0);
-	if (code != AMDSMI_STATUS_SUCCESS) {
+	if (code != AMDSMI_STATUS_SUCCESS && code != AMDSMI_STATUS_MORE_DATA) {
 		SMI_ERROR("Ioctl call failed. Return code: %d", code);
 		sys_wrapper->smi_free(cper);
 		return code;
@@ -3144,7 +3149,7 @@ amdsmi_status_t amdsmi_get_gpu_cper_entries(amdsmi_processor_handle processor_ha
 	*buf_size = real_buffer_size;
 
 	sys_wrapper->smi_free(cper);
-	return AMDSMI_STATUS_SUCCESS;
+	return code;
 }
 
 
@@ -3305,6 +3310,109 @@ amdsmi_status_t amdsmi_reset_gpu(amdsmi_processor_handle processor_handle)
 	return AMDSMI_STATUS_SUCCESS;
 }
 
+amdsmi_status_t amdsmi_get_cpu_affinity_with_scope(amdsmi_processor_handle processor_handle,
+		uint32_t cpu_set_size, uint64_t* cpu_set, amdsmi_affinity_scope_t scope)
+{
+	#pragma SMI_EXPORT
+#ifdef __linux__
+	char prefix[AMDSMI_MAX_STRING_LENGTH/2];
+	char path[AMDSMI_MAX_STRING_LENGTH];
+	FILE *f;
+	char buf[AMDSMI_MAX_STRING_LENGTH];
+	system_wrapper *sys_wrapper = get_system_wrapper();
+
+	if (processor_handle == NULL || cpu_set == NULL) {
+		SMI_ERROR("Nullpointer given as input. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	if (scope != AMDSMI_AFFINITY_SCOPE_NODE) {
+		SMI_ERROR("Only NUMA node affinity is currently supported.");
+		return AMDSMI_STATUS_NOT_SUPPORTED;
+	}
+
+	if (make_sysfs_pci_device_prefix(processor_handle, prefix, sizeof(prefix)) != 0) {
+		SMI_ERROR("Failed to create sysfs prefix\n");
+		return AMDSMI_STATUS_API_FAILED;
+	}
+
+	snprintf(path, sizeof(path), "%slocal_cpulist", prefix);
+
+	f = sys_wrapper->fopen(path, "r");
+	if (!f) {
+		SMI_ERROR("Cannot open %s: %s\n", path, strerror(errno));
+		return AMDSMI_STATUS_NOT_FOUND;
+	}
+
+	if (sys_wrapper->fgets(buf, sizeof(buf), f) == NULL) {
+		fclose(f);
+		return AMDSMI_STATUS_IO;
+	}
+
+	buf[strcspn(buf, "\n")] = 0; // Remove newline
+	parse_cpu_list(buf, cpu_set, cpu_set_size);
+	fclose(f);
+
+	return AMDSMI_STATUS_SUCCESS;
+#else
+	AMDSMI_UNUSED(processor_handle);
+	AMDSMI_UNUSED(cpu_set_size);
+	AMDSMI_UNUSED(cpu_set);
+	AMDSMI_UNUSED(scope);
+
+	return AMDSMI_STATUS_NOT_SUPPORTED;
+#endif
+}
+
+amdsmi_status_t amdsmi_topo_get_numa_node_number(amdsmi_processor_handle processor_handle, uint32_t *numa_node)
+{
+	#pragma SMI_EXPORT
+#ifdef __linux__
+	char prefix[AMDSMI_MAX_STRING_LENGTH/2];
+	char path[AMDSMI_MAX_STRING_LENGTH];
+	FILE *f;
+	char buf[AMDSMI_MAX_STRING_LENGTH];
+	system_wrapper *sys_wrapper = get_system_wrapper();
+
+	if (processor_handle == NULL || numa_node == NULL) {
+		SMI_ERROR("Nullpointer given as input. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	if (make_sysfs_pci_device_prefix(processor_handle, prefix, sizeof(prefix)) != 0) {
+		SMI_ERROR("Failed to create sysfs prefix\n");
+		return AMDSMI_STATUS_API_FAILED;
+	}
+
+	snprintf(path, sizeof(path), "%snuma_node", prefix);
+
+	f = sys_wrapper->fopen(path, "r");
+	if (!f) {
+		SMI_ERROR("Cannot open %s: %s\n", path, strerror(errno));
+		return AMDSMI_STATUS_NOT_FOUND;
+	}
+
+	if (sys_wrapper->fgets(buf, sizeof(buf), f) == NULL) {
+		fclose(f);
+		return AMDSMI_STATUS_IO;
+	}
+
+	buf[strcspn(buf, "\n")] = 0; // Remove newline
+	uint32_t value = (uint32_t)strtoul(buf, NULL, 10);
+
+	*numa_node = value;
+
+	fclose(f);
+
+	return AMDSMI_STATUS_SUCCESS;
+#else
+	AMDSMI_UNUSED(processor_handle);
+	AMDSMI_UNUSED(numa_node);
+
+	return AMDSMI_STATUS_NOT_SUPPORTED;
+#endif
+
+}
 
 #ifdef __linux__
 #pragma GCC diagnostic pop

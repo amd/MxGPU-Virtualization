@@ -581,8 +581,27 @@ struct amdgv_memmgr_mem *amdgv_memmgr_alloc(struct amdgv_memmgr *memmgr, uint64_
 	return amdgv_memmgr_alloc_align(memmgr, len, 0x1ULL << memmgr->align, id);
 }
 
-struct amdgv_memmgr_mem *amdgv_memmgr_alloc_align(struct amdgv_memmgr *memmgr, uint64_t len,
-						  uint64_t align, enum amdgv_mem_id id)
+static int amdgv_map_mem_gart(struct amdgv_memmgr_mem *mem, enum amdgv_map_op map_op)
+{
+	int pages, offset, ret = 0;
+	uint64_t i;
+
+	if (mem->map_op == map_op)
+		return ret;
+
+	pages = mem->len >> AMDGV_GPU_PAGE_SHIFT;
+	offset = amdgv_memmgr_get_offset(mem);
+	for (i = 0; i < pages; i++)
+		amdgv_gart_map(mem->memmgr->adapt, offset + (i << AMDGV_GPU_PAGE_SHIFT), 1,
+			map_op == AMDGV_UNMAP ? 0 : oss_sg_dma_address(mem->sys_mem.handle, i));
+	mem->map_op = map_op;
+
+	return ret;
+}
+
+static struct amdgv_memmgr_mem *amdgv_memmgr_alloc_unify_align(struct amdgv_memmgr *memmgr, uint64_t len,
+						  uint64_t align, enum amdgv_mem_id id,
+						  uint64_t *gpu_addr, void *va_ptr)
 {
 	struct amdgv_adapter *adapt = memmgr->adapt;
 	struct amdgv_memmgr_mem *prev, *new;
@@ -590,34 +609,40 @@ struct amdgv_memmgr_mem *amdgv_memmgr_alloc_align(struct amdgv_memmgr *memmgr, u
 	uint32_t mem_id;
 	struct amdgv_memmgr_mem *same_id_mem;
 
-	mem_id = amdgv_memmgr_mem_id_add(adapt, id);
-	if (mem_id == MEM_ID_NOT_AVAILABLE) {
-		AMDGV_ERROR("Fail to add %s to the mem_id list\n", amdgv_mem_id_name(id));
+	if (!memmgr->is_init)
 		return NULL;
-	}
 
-	/* For live update, find if same id mem has already been allocated,
-	 * if so, memmgr->allocs has already contained the copied mem info,
-	 * just find it and return the mem
-	 */
-	if (adapt->opt.skip_hw_init) {
-		/* Some mem have the same mem_id such as MEM_ECC_BAD_PAGE.
-		 * Always alloc new mem for them.
+	mem_id = id;
+	if (!memmgr->is_sys) {
+		mem_id = amdgv_memmgr_mem_id_add(adapt, id);
+		if (mem_id == MEM_ID_NOT_AVAILABLE) {
+			AMDGV_ERROR("Fail to add %s to the mem_id list\n", amdgv_mem_id_name(id));
+			return NULL;
+		}
+		/* For live update, find if same id mem has already been allocated,
+		 * if so, memmgr->allocs has already contained the copied mem info,
+		 * just find it and return the mem
 		 */
-		if (amdgv_memmgr_always_alloc_new(id))
-			goto alloc_new;
-		same_id_mem = amdgv_memmgr_find_id(memmgr->allocs, mem_id);
-		if (same_id_mem) {
-			AMDGV_DEBUG(
-				"Same ID mem: %s, index: %x, location: %s, alloc_off: 0x%09llx, len: 0x%09llx, align: 0x%09llx\n",
-				amdgv_mem_id_name(mem_id), MEM_ID_GET_INDEX(mem_id), GET_MEM_LOCATION(same_id_mem),
-				same_id_mem->alloc_off, same_id_mem->len, same_id_mem->align);
+		if (adapt->opt.skip_hw_init) {
+			/* Some mem have the same mem_id such as MEM_ECC_BAD_PAGE.
+			 * Always alloc new mem for them.
+			 */
+			if (amdgv_memmgr_always_alloc_new(id))
+				goto alloc_new;
+			same_id_mem = amdgv_memmgr_find_id(memmgr->allocs, mem_id);
+			if (same_id_mem) {
+				AMDGV_DEBUG(
+					"Same ID mem: %s, index: %x, location: %s, alloc_off: 0x%09llx, len: 0x%09llx, align: 0x%09llx\n",
+					amdgv_mem_id_name(mem_id), MEM_ID_GET_INDEX(mem_id), GET_MEM_LOCATION(same_id_mem),
+					same_id_mem->alloc_off, same_id_mem->len, same_id_mem->align);
 
-			return same_id_mem;
+				return same_id_mem;
+			}
+
+			goto alloc_new;
 		} else
 			goto alloc_new;
-	} else
-		goto alloc_new;
+	}
 alloc_new:
 	new = oss_malloc(sizeof(struct amdgv_memmgr_mem));
 	if (!new) {
@@ -626,20 +651,6 @@ alloc_new:
 		return NULL;
 	}
 
-	new->sys_mem.handle = NULL;
-	if (adapt->gart_size != 0) {
-		/* AMDGV_GPU_PAGE_SIZE is the minimal size GART can manage.
-		 * roundup the length and alignment to AMDGV_GPU_PAGE_SIZE.
-		 */
-		len = roundup(len, AMDGV_GPU_PAGE_SIZE);
-		align = roundup(align, AMDGV_GPU_PAGE_SIZE);
-		if (oss_alloc_dma_mem(adapt->dev, len, OSS_DMA_PA_CONTIGUOUS,
-			&new->sys_mem) != 0) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_DMA_MEM_FAIL, len);
-			oss_free(new);
-			return NULL;
-		}
-	}
 	oss_mutex_lock(memmgr->lock);
 
 	/* Find where to place an aligned memory block of the req size */
@@ -666,13 +677,36 @@ alloc_new:
 	new->align = align;
 	new->id = mem_id;
 	new->memmgr = memmgr;
+	new->sys_mem.handle = NULL;
+	new->sys_mem.va_ptr = va_ptr;
+
+	if (memmgr->is_sys) {
+		/* AMDGV_GPU_PAGE_SIZE is the minimal size GART can manage.
+		 * roundup the length and alignment to AMDGV_GPU_PAGE_SIZE.
+		 */
+		len = roundup(len, AMDGV_GPU_PAGE_SIZE);
+		align = roundup(align, AMDGV_GPU_PAGE_SIZE);
+		if (oss_alloc_dma_mem(adapt->dev, len, OSS_DMA_ALLOW_DMA_NOT_CONTIGUOUS,
+			&new->sys_mem) != 0) {
+			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_DMA_MEM_FAIL, len);
+			goto alloc_fail;
+		}
+		if (gpu_addr)
+			*gpu_addr = amdgv_memmgr_get_gpu_addr(new);
+
+		new->map_op = AMDGV_UNMAP;
+		if (adapt->gart_ready) {
+			if (amdgv_map_mem_gart(new, AMDGV_MAP)) {
+				amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_MAP_DMA_MEM_FAIL, len);
+				goto map_fail;
+			}
+		}
+	}
 	amdgv_list_add(&new->node, &prev->node);
 
 	/* Adding a new allocation beyond current TOP of memory */
 	if (prev->alloc_off == memmgr->tom)
 		memmgr->tom = new->alloc_off;
-
-	oss_mutex_unlock(memmgr->lock);
 
 	AMDGV_DEBUG("Alloc addr: 0x%09llx len:0x%09llx\n", addr, len);
 
@@ -681,19 +715,28 @@ alloc_new:
 		amdgv_mem_id_name(mem_id), MEM_ID_GET_INDEX(mem_id), GET_MEM_LOCATION(new), new->alloc_off, new->len,
 		new->align);
 
-	if (adapt->gart_size != 0) {
-		int pages;
-
-		pages = len >> AMDGV_GPU_PAGE_SHIFT;
-		amdgv_gart_map(adapt, memmgr->mc_base + addr, pages, new->sys_mem.bus_addr);
-	}
+	oss_mutex_unlock(memmgr->lock);
 
 	return new;
 
+map_fail:
+	oss_free_dma_mem(new->sys_mem.handle);
 alloc_fail:
 	oss_mutex_unlock(memmgr->lock);
 	oss_free(new);
 	return NULL;
+}
+
+struct amdgv_memmgr_mem *amdgv_memmgr_alloc_sys_align(struct amdgv_memmgr *memmgr, uint64_t len,
+						  uint64_t align, uint64_t *gpu_addr, void *va_ptr)
+{
+	return amdgv_memmgr_alloc_unify_align(memmgr, len, align, 0, gpu_addr, va_ptr);
+}
+
+struct amdgv_memmgr_mem *amdgv_memmgr_alloc_align(struct amdgv_memmgr *memmgr, uint64_t len,
+						  uint64_t align, enum amdgv_mem_id id)
+{
+	return amdgv_memmgr_alloc_unify_align(memmgr, len, align, id, NULL, NULL);
 }
 
 static struct amdgv_memmgr_mem *amdgv_memmgr_find_size_at(struct amdgv_memmgr *memmgr,
@@ -871,7 +914,7 @@ int amdgv_memmgr_free(struct amdgv_memmgr_mem *mem)
 
 	memmgr = mem->memmgr;
 	adapt = memmgr->adapt;
-	addr = mem->alloc_off;
+	addr = amdgv_memmgr_get_offset(mem);
 
 	oss_mutex_lock(memmgr->lock);
 
@@ -883,11 +926,18 @@ int amdgv_memmgr_free(struct amdgv_memmgr_mem *mem)
 		prev = amdgv_list_last_entry(alloc_list, struct amdgv_memmgr_mem, node);
 		memmgr->tom = prev->alloc_off;
 	}
-	amdgv_memmgr_mem_id_remove(adapt, mem->id);
-	oss_mutex_unlock(memmgr->lock);
 
-	if (mem->sys_mem.handle)
+	if (!memmgr->is_sys)
+		amdgv_memmgr_mem_id_remove(adapt, mem->id);
+
+	if (memmgr->is_sys) {
 		oss_free_dma_mem(mem->sys_mem.handle);
+
+		if (adapt->gart_ready)
+			amdgv_map_mem_gart(mem, true);
+		mem->sys_mem.handle = NULL;
+	}
+	oss_mutex_unlock(memmgr->lock);
 	oss_free(mem);
 
 	AMDGV_DEBUG("Free addr: 0x%09llx\n", addr);
@@ -994,6 +1044,16 @@ uint64_t amdgv_memmgr_get_gpu_addr(struct amdgv_memmgr_mem *mem)
 	return memmgr->mc_base + mem->alloc_off - mem->len;
 }
 
+/**
+ *apu - vram buffer's system physical address.
+ *dgpu - vram buffer offset from FB location base.
+ */
+uint64_t amdgv_memmgr_get_gpu_pa(struct amdgv_memmgr_mem *mem)
+{
+	return amdgv_memmgr_get_gpu_addr(mem) - mem->memmgr->adapt->mc_fb_loc_addr
+		+ mem->memmgr->adapt->mc_fb_offset;
+}
+
 void *amdgv_memmgr_get_cpu_addr(struct amdgv_memmgr_mem *mem)
 {
 	struct amdgv_adapter *adapt;
@@ -1002,12 +1062,14 @@ void *amdgv_memmgr_get_cpu_addr(struct amdgv_memmgr_mem *mem)
 	if (!mem)
 		return NULL;
 	memmgr = mem->memmgr;
-	if (!memmgr->cpu_base)
-		return NULL;
+
 	adapt = memmgr->adapt;
 
-	if (adapt->gart_size != 0)
+	if (memmgr->is_sys)
 		return mem->sys_mem.va_ptr;
+
+	if (!memmgr->cpu_base)
+		return NULL;
 
 	if (memmgr->down)
 		return (void *)((uint32_t *)memmgr->cpu_base - (mem->alloc_off >> 2));
@@ -1073,15 +1135,6 @@ enum amdgv_live_info_status amdgv_memmgr_export_live_data(struct amdgv_adapter *
 		memmgr_info->memmgr_gpu_down = adapt->memmgr_gpu.down;
 	}
 
-	if (adapt->memmgr_sys.is_init) {
-		memmgr_info->memmgr_sys_mc_base = adapt->memmgr_sys.mc_base;
-		memmgr_info->memmgr_sys_offset = adapt->memmgr_sys.offset;
-		memmgr_info->memmgr_sys_size = adapt->memmgr_sys.size;
-		memmgr_info->memmgr_sys_align = adapt->memmgr_sys.align;
-		memmgr_info->memmgr_sys_tom = adapt->memmgr_sys.tom;
-		memmgr_info->memmgr_sys_down = adapt->memmgr_sys.down;
-	}
-
 	ret = amdgv_memmgr_export_mem_allocs_all(adapt, memmgr_info->mem_allocs,
 							&memmgr_info->mem_allocs_count);
 
@@ -1122,17 +1175,6 @@ enum amdgv_live_info_status amdgv_memmgr_import_live_data(struct amdgv_adapter *
 		adapt->memmgr_gpu.down = memmgr_info->memmgr_gpu_down;
 	}
 
-	if (adapt->memmgr_sys.is_init) {
-		adapt->memmgr_sys.mc_base = memmgr_info->memmgr_sys_mc_base;
-		amdgv_memmgr_set_cpu_base(&adapt->memmgr_sys,
-						adapt->sys_mem_info.va_ptr);
-		adapt->memmgr_sys.offset = memmgr_info->memmgr_sys_offset;
-		adapt->memmgr_sys.size = memmgr_info->memmgr_sys_size;
-		adapt->memmgr_sys.align = memmgr_info->memmgr_sys_align;
-		adapt->memmgr_sys.tom = memmgr_info->memmgr_sys_tom;
-		adapt->memmgr_sys.down = memmgr_info->memmgr_sys_down;
-	}
-
 	ret = amdgv_memmgr_import_mem_allocs_all(adapt, memmgr_info->mem_allocs,
 							memmgr_info->mem_allocs_count);
 
@@ -1143,3 +1185,33 @@ enum amdgv_live_info_status amdgv_memmgr_import_live_data(struct amdgv_adapter *
 	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
 }
 
+void amdgv_gmc_flush_gpu_tlb(struct amdgv_adapter *adapt, uint32_t vmid,
+					uint32_t vmhub, uint32_t flush_type)
+{
+	if (adapt->gmc.funcs && adapt->gmc.funcs->flush_gpu_tlb)
+		adapt->gmc.funcs->flush_gpu_tlb(adapt, vmid, vmhub, flush_type);
+}
+
+int amdgv_map_sys_mem_allocs(struct amdgv_memmgr *memmgr, enum amdgv_map_op map_op)
+{
+	struct amdgv_list_head *head;
+	struct amdgv_memmgr_mem *alloc;
+	int ret = 0;
+
+	if ((!memmgr->is_init) || (!memmgr->is_sys))
+		return AMDGV_FAILURE;
+
+	head = &memmgr->allocs->node;
+
+	if (amdgv_list_empty(head))
+		return ret;
+
+	head = &memmgr->allocs->node;
+
+	amdgv_list_for_each_entry(alloc, head, struct amdgv_memmgr_mem, node) {
+		if (alloc->sys_mem.handle)
+			ret = amdgv_map_mem_gart(alloc, map_op);
+	}
+
+	return ret;
+}

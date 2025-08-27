@@ -289,6 +289,38 @@ enum smi_metric_name smi_map_metric_name(enum amdgv_gpumon_metric_ext_name name)
 enum smi_metric_unit smi_map_metric_unit(enum amdgv_gpumon_metric_ext_unit unit);
 
 /**
+ * @brief Maps an enum representing a LibGV metric resource group to an enum representing an SMI metric resource group.
+ *
+ * This function takes an enum value representing a LibGV resource group and maps it to an
+ * equivalent enum value representing an SMI resource group. The mapping is performed based on
+ * predefined set of rules. If the provided LibGV resource group does not match any of the
+ * predefined values, it is mapped to SMI_METRIC_RES_GROUP_UNKNOWN.
+ *
+ * @param[in] res_group The enum value representing LibGV resource group.
+ * @return The enum value representing the corresponding mapped SMI metric resource group.
+ *
+ * @note This function assumes that the enum values for both enums (smi_metric_res_group and amdgv_gpumon_metric_ext_res_group)
+ * are compatible and represent similar concepts.
+ */
+enum smi_metric_res_group smi_map_metric_res_group(enum amdgv_gpumon_metric_ext_res_group res_group);
+
+/**
+ * @brief Maps an enum representing a LibGV metric resource subgroup to an enum representing an SMI metric resource subgroup.
+ *
+ * This function takes an enum value representing a LibGV resource subgroup and maps it to an
+ * equivalent enum value representing an SMI resource subgroup. The mapping is performed based on
+ * predefined set of rules. If the provided LibGV resource group does not match any of the
+ * predefined values, it is mapped to SMI_METRIC_RES_SUBGROUP_UNKNOWN.
+ *
+ * @param[in] res_subgroup The enum value representing LibGV resource group.
+ * @return The enum value representing the corresponding mapped SMI metric resource group.
+ *
+ * @note This function assumes that the enum values for both enums (smi_metric_res_subgroup and amdgv_gpumon_metric_ext_res_subgroup)
+ * are compatible and represent similar concepts.
+ */
+enum smi_metric_res_subgroup smi_map_metric_res_subgroup(enum amdgv_gpumon_metric_ext_res_subgroup res_subgroup);
+
+/**
  * @brief Maps an enum representing a LibGV memory partition mode to an enum representing an SMI memory partition mode.
  *
  * This function takes an enum value representing a LibGV memory partition mode and maps it to an

@@ -34,6 +34,7 @@
 #define LIBGV_DEBUG_HEADER  "gim debug libgv: "
 #define LIBGV_PRINT_HEADER  LIBGV_INFO_HEADER
 #define LIBGV_EVENT_HEADER  "gim event libgv: "
+#define LIBGV_VF_VERSION              1
 
 #define AMDGV_FAILURE -1
 
@@ -116,9 +117,6 @@
 #define AMDGV_VBIOS_FILE_MAX_SIZE      (1024*1024*3)
 
 #define AMDGV_AUTO_SCHED_DEBUG_DUMP_MAX_SIZE	256 /* Max usable FB for pf */
-
-#define AMDGV_ACCELERATOR_PARTITION_MODE_UNKNOWN	0
-#define AMDGV_ACCELERATOR_PARTITION_MODE_MAX		9
 
 #define TO_KBYTES(x)	      ((x) >> 10)
 #define TO_MBYTES(x)	      ((x) >> 20)
@@ -213,6 +211,7 @@ enum {
 	AMDGV_SCHEDULER_BLOCK		= (1 << 8),
 	AMDGV_SECURITY_BLOCK		= (1 << 9),
 	AMDGV_XGMI_BLOCK		= (1 << 10),
+	AMDGV_SDMA_BLOCK		= (1 << 11),
 	AMDGV_MAX_LOG_BLOCK
 };
 #define AMDGV_ALL_BLOCK		(((AMDGV_MAX_LOG_BLOCK - 1) << 1) - 1)
@@ -704,6 +703,15 @@ enum amdgv_memory_partition_mode {
 	AMDGV_MEMORY_PARTITION_MODE_MAX
 };
 
+enum amdgv_accelerator_partition_mode {
+	AMDGV_ACCELERATOR_PARTITION_MODE_UNKNOWN,
+	AMDGV_ACCELERATOR_PARTITION_MODE_SPX = 1,
+	AMDGV_ACCELERATOR_PARTITION_MODE_DPX = 2,
+	AMDGV_ACCELERATOR_PARTITION_MODE_QPX = 4,
+	AMDGV_ACCELERATOR_PARTITION_MODE_CPX = 8,
+	AMDGV_ACCELERATOR_PARTITION_MODE_MAX
+};
+
 enum amdgv_hang_detection_mode {
 	AMDGV_HANG_DETECTION_DISABLED = 0,
 	AMDGV_HANG_DETECTION_ENABLED = 1,
@@ -835,7 +843,7 @@ struct amdgv_init_config_opt {
 	enum amdgv_mm_bandwidth_policy mm_policy;
 
 	enum amdgv_xgmi_fb_sharing_mode fb_sharing_mode;
-	uint32_t accelerator_partition_mode;
+	enum amdgv_accelerator_partition_mode accelerator_partition_mode;
 	enum amdgv_memory_partition_mode memory_partition_mode;
 	uint32_t partition_full_access_enable;
 
@@ -1212,6 +1220,7 @@ enum amdgv_guard_type {
 	AMDGV_GUARD_EVENT_RAS_ERR_COUNT	    = 4,
 	AMDGV_GUARD_EVENT_RAS_CPER_DUMP	    = 5,
 	AMDGV_GUARD_EVENT_RAS_BAD_PAGES	    = 6,
+	AMDGV_GUARD_EVENT_WGR               = 7,
 	AMDGV_GUARD_EVENT_MAX,
 
 	AMDGV_GUARD_ALL,
@@ -1225,6 +1234,7 @@ enum amdgv_guard_type {
 #define AMDGV_GUARD_EVENT_OVERFLOW (2)
 
 #define AMDGV_GUARD_MAX_FLR		  (5)
+#define AMDGV_GUARD_MAX_WGR		  (5)
 #define AMDGV_GUARD_MAX_EXCLUSIVE_MOD	  (10)
 #define AMDGV_GUARD_MAX_EXCLUSIVE_TIMEOUT (3)
 #define AMDGV_GUARD_MAX_ALL_INT		  (57)
@@ -1642,6 +1652,11 @@ struct amdgv_query_dirty_bit_data {
 	bool dbit_preserve;
 };
 
+enum amdgv_migration_context_version {
+	AMDGV_MIGRATION_CONTEXT_VERSION_V1 = 0,
+	AMDGV_MIGRATION_CONTEXT_VERSION_V2 = 2,
+};
+
 struct amdgv_gpu_identifier {
 
 	/* PCI device ID of the GPU */
@@ -1652,6 +1667,12 @@ struct amdgv_gpu_identifier {
 	/* Get from PSP */
 	uint32_t migration_version;
 	uint32_t num_fw;
+	/* gpu info */
+	uint32_t gpu_ordinate;
+	uint32_t num_vf;
+	bool xgmi_state;
+	uint32_t cu_num;
+	uint32_t nps_mode;
 	struct {
 
 		/* from AMDGV_FW_enum */
@@ -1663,9 +1684,9 @@ struct amdgv_gpu_identifier {
 
 #define AMDGV_MIGRATION_VF_IDENTIFIER_V1_SIZE 256
 struct amdgv_vf_identifier {
-
 	/* set to valid value for the asic */
 	uint32_t version;
+	uint32_t vf_index;
 
 	union {
 		struct {
@@ -1680,6 +1701,21 @@ struct amdgv_vf_identifier {
 			uint32_t partition_config;
 		} v1_0;
 
+		struct {
+			uint32_t vf_fb_size_mb;
+			/* assign to type of partition SPX, DPX, TPX, etc. */
+			uint32_t partition_config;
+			uint32_t sdma_engine_bitmask;
+			uint32_t hw_sched_engine_bitmask;
+			uint64_t timeslice_gfx;
+			uint64_t timeslice_uvd;
+			uint64_t timeslice_vce;
+			uint64_t timeslice_uvd1;
+			uint64_t timeslice_vcn;
+			uint64_t timeslice_vcn1;
+			uint64_t timeslice_jpeg;
+		} v2_0;
+
 		uint32_t reserved[AMDGV_MIGRATION_VF_IDENTIFIER_V1_SIZE];
 	};
 };
@@ -1687,6 +1723,7 @@ struct amdgv_vf_identifier {
 struct amdgv_migration_ctx {
 	struct amdgv_gpu_identifier gpu;
 	struct amdgv_vf_identifier vf;
+	enum amdgv_sched_state vf_status;
 };
 
 struct amdgv_bp_info {
@@ -2349,6 +2386,18 @@ int amdgv_import_live_info_data(amdgv_dev_t dev,
 				   enum amdgv_live_info_status *status);
 
 /**
+ * amdgv_restore_ultralite_data - import live GPU information data
+ *
+ * @dev: amdgv device handle
+ *
+ * restores GPU information data
+ *
+ * Returns:
+ * 0 for success, errors for failure.
+ */
+int amdgv_restore_ultralite_data(amdgv_dev_t dev);
+
+/**
  * amdgv_lock_sched - lock scheduler
  *
  * @dev: amdgv device handle
@@ -2735,6 +2784,20 @@ int amdgv_control_dirtybit(amdgv_dev_t dev, bool enable);
  *
  */
 int amdgv_query_dirtybit_data(amdgv_dev_t dev, struct amdgv_query_dirty_bit_data *data);
+
+/*
+ * amdgv_vf_fb_copy - copy VF FB data to/from VF FB.
+ *
+ * @dev:	amdgv device handle
+ * @idx_vf:	target VF
+ * @fb_offset:	offset in the VF FB
+ * @size:	size to copy
+ * @gpu_addr:	address to FB
+ * @to_fb:	true to copy to VF FB, false to copy from VF FB
+ * @vaddr:	pointer to the system buffer
+ */
+int amdgv_vf_fb_copy(amdgv_dev_t dev, uint32_t idx_vf, uint64_t fb_offset,
+			     uint64_t size, uint64_t gpu_addr, bool to_fb, void *vaddr);
 
 /*
  * amdgv_read_vbios - read vbios from libgv.
@@ -3184,6 +3247,30 @@ int amdgv_dump_asymmetric_fb_layout(amdgv_dev_t dev, char *buf, int *len, uint32
 const char *amdgv_get_market_name(uint32_t dev_id, uint32_t rev_id);
 
 int amdgv_set_sysmem_va_ptr(amdgv_dev_t dev, void *ptr);
+
+/*
+ * amdgv_map_sysmem - map system memory to dma address and map it to gart table
+ *
+ * @dev_id:			device id
+ * @len:				input parameter, the size of system memory
+ * @va_ptr:			input parameter, input the virtual cpu address of system memory if allocated
+ * @va_ptr:			or as the output parameter, if the system memory hasn't been allocated
+ * @gpu_addr:		output parameter, the virtual gpu mc address
+ * Returns:
+ * the handle of the system memory object, used for unmap the system memory object
+ */
+void *amdgv_map_sysmem(amdgv_dev_t dev, uint64_t len, void **va_ptr,
+			     uint64_t *gpu_addr);
+
+/*
+ * amdgv_unmap_sysmem - unmap system memory
+ *
+ * @dev_id:			device id
+ * @handle:			input parameter, the handle of the system memory object
+ * Returns:
+ * unmap successful or not
+ */
+int amdgv_unmap_sysmem(amdgv_dev_t dev, void *handle);
 
 enum amdgv_interrupt_handler_id {
 	SUBMISSION_INTERRUPT = 0,

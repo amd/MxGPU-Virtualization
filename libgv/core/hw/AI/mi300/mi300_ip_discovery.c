@@ -557,6 +557,7 @@ static int mi300_parse_ip_discovery(struct amdgv_adapter *adapt)
 	case (0x75A1): /* MI350X LC 1.2 Kw*/
 	case (0x75A3): /* MI350X LC 1.4 Kw*/
 		adapt->mcp.num_aid = 4;
+		adapt->mcp.num_dagb = 5;
 		break;
 	default:
 		AMDGV_ERROR("not getting proper num_aid setting.\n");
@@ -993,6 +994,13 @@ int mi300_discover_ip(struct amdgv_adapter *adapt)
 	char asic_name[AMDGV_SMI_ASIC_NAME];
 	uint32_t supported_flags = adapt->config.caps.supported_fields_flags;
 
+	/* skip during live update import, it is already called during sw_init() */
+	if (adapt->status == AMDGV_STATUS_SW_INIT &&
+				!adapt->ip_discovery.enable_live_update &&
+				adapt->opt.skip_hw_init) {
+		return 0;
+	}
+
 	oss_memcpy(asic_name, adapt->config.name, AMDGV_SMI_ASIC_NAME);
 
 	/* clear IP discovery parsing on init */
@@ -1001,15 +1009,16 @@ int mi300_discover_ip(struct amdgv_adapter *adapt)
 	oss_memcpy(adapt->config.name, asic_name, AMDGV_SMI_ASIC_NAME);
 	adapt->config.caps.supported_fields_flags = supported_flags;
 
-	if (!adapt->opt.skip_hw_init) {
+	if (adapt->opt.skip_hw_init && adapt->ip_discovery.enable_live_update) {
+		/* In live update mode, and ip discovery will be imported from the live data.*/
+		if (amdgv_import_data_by_op(adapt, AMDGV_LIVE_INFO_DATA__IP_DISCOVERY) != AMDGV_LIVE_INFO_STATUS_SUCCESS)
+			return AMDGV_FAILURE;
+	} else {
 		/* read the IP Discovery Data from the Frame Buffer */
 		if (mi300_read_ip_discovery(adapt, 0, AMDGV_IP_DISCOVERY_SIZE))
 			return AMDGV_FAILURE;
-
-	} else {
-		if (amdgv_import_data_by_op(adapt, AMDGV_LIVE_INFO_DATA__IP_DISCOVERY) != AMDGV_LIVE_INFO_STATUS_SUCCESS)
-			return AMDGV_FAILURE;
 	}
+
 	/* count IPs (XCCs, SDMAs, VCNs) and perform checksums */
 	if (mi300_parse_ip_discovery(adapt))
 		return AMDGV_FAILURE;
@@ -1164,7 +1173,8 @@ static int mi300_ip_discovery_sw_init(struct amdgv_adapter *adapt)
 {
 	mi300_setup_common_timeout(adapt);
 
-	adapt->ip_discovery.enable_live_update = true;
+	if (adapt->asic_type != CHIP_MI308X)
+		adapt->ip_discovery.enable_live_update = true;
 
 	adapt->ip_discovery.copy_to_vf = mi300_copy_ip_data_to_vf;
 	adapt->ip_discovery.discover_ip = mi300_discover_ip;

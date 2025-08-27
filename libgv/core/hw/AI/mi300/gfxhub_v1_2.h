@@ -29,4 +29,5 @@ void gfxhub_v1_2_vmhub_hook(struct amdgv_adapter *adapt);
 void gfxhub_v1_2_enable_system_context(struct amdgv_adapter *adapt);
 uint64_t gfxhub_v1_2_get_mc_fb_offset(struct amdgv_adapter *adapt);
 void gfxhub_v1_2_enable_xgmi(struct amdgv_adapter *adapt);
+void gfxhub_v1_2_init(struct amdgv_adapter *adapt);
 #endif

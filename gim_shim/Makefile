@@ -21,7 +21,7 @@
 
 GIM_SHIM_LOCAL = gim_drv.o gim_os_service.o gim_config.o gim_gpumon.o \
     gim_error.o gim_live_update.o gim_ftrace.o gim_baco_power_saving.o \
-	gim_memory_sentinel.o
+	gim_memory_sentinel.o gim_iova_sys_mem.o
 
 #ifndef EXCLUDE_DCORE_DEBUG
 ifeq ($(findstring DEXCLUDE_DCORE_DEBUG,$(subdir-ccflags-y)),)

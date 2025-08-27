@@ -42,6 +42,12 @@ static int amdgv_migration_get_migration_info(struct amdgv_adapter *adapt)
 		PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
 }
 
+void amdgv_migration_set_ctx_version(struct amdgv_adapter *adapt,
+				     enum amdgv_migration_context_version version)
+{
+	adapt->live_migration.context_version = version;
+}
+
 int amdgv_migration_get_migration_version(struct amdgv_adapter *adapt,
 					  uint32_t *migration_version)
 {
@@ -87,14 +93,6 @@ int amdgv_migration_transfer_manifest_data(struct amdgv_adapter *adapt, struct a
 					AMDGV_MIGRATION_CONTENT_VF_HW_STATIC_DATA))
 			goto exit;
 
-#ifdef AMDGV_MIGRATION_DEBUG
-		/* Output RWL values in dynamic export pkg for debugging purpose */
-		if ((adapt->psp.print_rwl == NULL) ||
-			(adapt->psp.print_rwl(adapt, idx_vf))) {
-			ret = AMDGV_FAILURE;
-			goto exit;
-		}
-#endif
 		ret = amdgv_psp_transfer_manifest_data(adapt, idx_vf,
 					amdgv_memmgr_get_gpu_addr(mem), size, PSP_MIGRATION_EXPORT_STATIC_DATA);
 		if (ret) {
@@ -202,14 +200,6 @@ int amdgv_migration_transfer_manifest_data(struct amdgv_adapter *adapt, struct a
 			goto exit;
 		}
 
-#ifdef AMDGV_MIGRATION_DEBUG
-		/* Output RWL values in dynamic import pkg for debugging purpose */
-		if ((adapt->psp.print_rwl == NULL) ||
-			(adapt->psp.print_rwl(adapt, idx_vf))) {
-			ret = AMDGV_FAILURE;
-			goto exit;
-		}
-#endif
 		break;
 	default:
 		ret = AMDGV_FAILURE;
