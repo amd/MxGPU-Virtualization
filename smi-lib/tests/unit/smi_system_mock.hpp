@@ -132,6 +132,20 @@ ACTION(FreePasstrough)
 	free(arg0);
 }
 
+ACTION(FopenPasstrough)
+{
+#ifdef _WIN64
+	return NULL;
+#else
+	return fopen(arg0, arg1);
+#endif
+}
+
+ACTION(FgetsPasstrough)
+{
+	return fgets(arg0, arg1, arg2);
+}
+
 ACTION_P(SaveInputHeader, in_hdr)
 {
 	std::memcpy(in_hdr, &arg0->in_hdr, sizeof(*in_hdr));
@@ -210,6 +224,8 @@ public:
 		ON_CALL(*this, GetDriverMode()).WillByDefault(Return(0));
 		ON_CALL(*this, Strncpy(testing::_, testing::_,testing::_, testing::_)).WillByDefault(StrncpyPasstrough());
 		ON_CALL(*this, Sysconf(testing::_)).WillByDefault(Return(1));
+		ON_CALL(*this, Fopen(testing::_, testing::_)).WillByDefault(FopenPasstrough());
+		ON_CALL(*this, Fgets(testing::_, testing::_, testing::_)).WillByDefault(FgetsPasstrough());
 	}
 
 	MOCK_METHOD1(Ioctl, int(smi_ioctl_cmd *));
@@ -229,6 +245,8 @@ public:
 	MOCK_METHOD0(GetDriverMode, int(void));
 	MOCK_METHOD4(Strncpy, int(char *, size_t, const char *, size_t));
 	MOCK_METHOD1(Sysconf, long(int));
+	MOCK_METHOD2(Fopen, FILE *(const char *, const char *));
+	MOCK_METHOD3(Fgets, char *(char *, int, FILE *));
 
 	virtual ~SystemMock()
 	{

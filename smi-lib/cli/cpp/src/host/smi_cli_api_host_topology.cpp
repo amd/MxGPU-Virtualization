@@ -302,7 +302,7 @@ int AmdSmiApiHost::amdsmi_get_link_status_topology_command(Arguments arg,
 			if(gpu_index == j) {
 				link_status_string = "N/A";
 			} else {
-				format_link_status(topology[i][j].link_status, link_status_string);
+				format_link_status(topology[i][j].link_status, false, link_status_string);
 			}
 
 			out.append(string_format("%-13s",
@@ -517,7 +517,7 @@ int AmdSmiApiHost::amdsmi_get_all_topology_command(Arguments arg,
 				if(i  == j) {
 					link_status_string = "N/A";
 				} else {
-					format_link_status(topology[i][j].link_status, link_status_string);
+					format_link_status(topology[i][j].link_status, false, link_status_string);
 				}
 				link_topology["link_status"] =  link_status_string;
 			}

@@ -269,6 +269,8 @@ static int mi300_misc_sw_init(struct amdgv_adapter *adapt)
 		adapt->misc.dma_engine = AMDGV_DMA_ENGINE_NONE;
 	}
 
+	amdgv_migration_set_ctx_version(adapt, AMDGV_MIGRATION_CONTEXT_VERSION_V2);
+
 	return 0;
 }
 

@@ -358,21 +358,48 @@ int AmdSmiApiHost::format_link_type(const int& link_type, std::string& out)
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-int AmdSmiApiHost::format_link_status(const int& link_status, std::string& out)
+int AmdSmiApiHost::format_link_status(const int& link_status, bool legend, std::string& out)
 {
-	switch(link_status) {
-	case AMDSMI_LINK_STATUS_ENABLED:
-		out = "ENABLED";
-		return AMDSMI_STATUS_SUCCESS;
-	case AMDSMI_LINK_STATUS_DISABLED:
-		out = "DISABLED";
-		return AMDSMI_STATUS_SUCCESS;
-	case AMDSMI_LINK_STATUS_ERROR:
-		out = "N/A";
-		return AMDSMI_STATUS_SUCCESS;
-	default:
-		out = "N/A";
+	if(legend) {
+		switch(link_status) {
+		case AMDSMI_LINK_STATUS_ENABLED:
+			out = "U";
+			return AMDSMI_STATUS_SUCCESS;
+		case AMDSMI_LINK_STATUS_DISABLED:
+			out = "X";
+			return AMDSMI_STATUS_SUCCESS;
+		case AMDSMI_LINK_STATUS_INACTIVE:
+			out = "D";
+			return AMDSMI_STATUS_SUCCESS;
+		case AMDSMI_LINK_STATUS_ERROR:
+			out = "N/A";
+			return AMDSMI_STATUS_SUCCESS;
+		default:
+			out = "N/A";
+		}
+
 	}
+	else {
+		switch(link_status) {
+		case AMDSMI_LINK_STATUS_ENABLED:
+			out = "ENABLED";
+			return AMDSMI_STATUS_SUCCESS;
+		case AMDSMI_LINK_STATUS_DISABLED:
+			out = "DISABLED";
+			return AMDSMI_STATUS_SUCCESS;
+		case AMDSMI_LINK_STATUS_INACTIVE:
+			out = "INACTIVE";
+			return AMDSMI_STATUS_SUCCESS;
+		case AMDSMI_LINK_STATUS_ERROR:
+			out = "N/A";
+			return AMDSMI_STATUS_SUCCESS;
+		default:
+			out = "N/A";
+		}
+	}
+
+
+
 	return AMDSMI_STATUS_SUCCESS;
 }
 
@@ -534,6 +561,9 @@ int AmdSmiApiHost::get_string_from_enum_vf_guard_type(int guard_type, std::strin
 		{AMDSMI_GUARD_EVENT_FLR, "FLR"},
 		{AMDSMI_GUARD_EVENT_EXCLUSIVE_MOD, "EXCLUSIVE_MODE"},
 		{AMDSMI_GUARD_EVENT_EXCLUSIVE_TIMEOUT, "EXCLUSIVE_TIMEOUT"},
+		{AMDSMI_GUARD_EVENT_RAS_ERR_COUNT, "RAS_ERR_COUNT"},
+		{AMDSMI_GUARD_EVENT_RAS_CPER_DUMP, "RAS_CPER_DUMP"},
+		{AMDSMI_GUARD_EVENT_RAS_BAD_PAGES, "RAS_BAD_PAGES"},
 		{AMDSMI_GUARD_EVENT_ALL_INT, "ALLOWED_INTERRUPT"}
 	};
 
@@ -550,6 +580,7 @@ int AmdSmiApiHost::get_string_from_enum_vram_type(int vram_type, std::string& ou
 		{AMDSMI_VRAM_TYPE_HBM2, "HBM2"},
 		{AMDSMI_VRAM_TYPE_HBM2E, "HBM2E"},
 		{AMDSMI_VRAM_TYPE_HBM3, "HBM3"},
+		{AMDSMI_VRAM_TYPE_HBM3E, "HBM3E"},
 		{AMDSMI_VRAM_TYPE_DDR2, "DDR2"},
 		{AMDSMI_VRAM_TYPE_DDR3, "DDR3"},
 		{AMDSMI_VRAM_TYPE_DDR4, "DDR4"},

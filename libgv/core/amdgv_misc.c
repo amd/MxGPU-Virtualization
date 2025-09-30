@@ -267,17 +267,12 @@ int amdgv_misc_get_agp_cpu_base(struct amdgv_adapter *adapt, void **data)
 	return AMDGV_FAILURE;
 }
 
-int amdgv_misc_migrate_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_t idx_fb_block,
-			  void *data, bool to_fb)
+int amdgv_misc_dma_copy(struct amdgv_adapter *adapt, int idx_vf,
+			uint64_t src, uint64_t size, uint64_t dst)
 {
-	uint64_t filled_size;
-	uint64_t block_size = AMDGV_MIGRATION_VF_FB_COPY_BLOCK_SIZE;
-	uint64_t vf_fb_offset;
-	uint64_t vf_fb_size;
-	struct amdgv_vf_device *entry;
+	uint64_t size_copied = 0;
 
-	entry = &adapt->array_vf[idx_vf];
-	if (!entry->configured)
+	if (!adapt->array_vf[idx_vf].configured)
 		return AMDGV_FAILURE;
 
 	if (!adapt->sys_mem_info.handle) {
@@ -285,75 +280,15 @@ int amdgv_misc_migrate_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_t
 		return AMDGV_FAILURE;
 	}
 
-	vf_fb_offset = MBYTES_TO_BYTES(entry->fb_offset);
-	vf_fb_size = MBYTES_TO_BYTES(entry->fb_size);
-
-	AMDGV_DEBUG("%s fb_offset=0x%llx fb_size=0x%llx\n", amdgv_idx_to_str(idx_vf),
-		    vf_fb_offset, vf_fb_size);
-
 	if (adapt->misc.dma_copy) {
-		uint64_t src;
-		uint64_t dst;
-		uint64_t fb_offset;
-
-		if (to_fb) {
-			/* Check if pass-in data is pointing to agp memory */
-			if (data != adapt->sys_mem_info.va_ptr) {
-				AMDGV_DEBUG("oss_memcpy needed.\n");
-				oss_memcpy(adapt->sys_mem_info.va_ptr, data, block_size);
-			}
-
-			src = adapt->mc_agp_loc_addr;
-			dst = adapt->mc_fb_loc_addr + vf_fb_offset + idx_fb_block * block_size;
-			if (adapt->xgmi.phy_nodes_num > 1)
-				dst += adapt->xgmi.phy_node_id * adapt->xgmi.node_segment_size;
-
-			fb_offset = vf_fb_offset + idx_fb_block * block_size;
-			AMDGV_DEBUG("src in mc addr = 0x%llx, dst in mc addr = 0x%llx\n", src,
-				    dst);
-
-			filled_size = idx_fb_block * block_size;
-			if (block_size >= (vf_fb_size - filled_size)) {
-				block_size = vf_fb_size - filled_size;
-			}
-			AMDGV_DEBUG("block_size = 0x%lx\n", block_size);
-
-			filled_size = 0;
-			adapt->misc.dma_copy(adapt, idx_vf, false, src, dst, block_size, &filled_size);
-			if (filled_size)
-				AMDGV_DEBUG("0x%lx bytes copied with GPU\n", filled_size);
-
-		} else {
-			src = adapt->mc_fb_loc_addr + vf_fb_offset + idx_fb_block * block_size;
-			if (adapt->xgmi.phy_nodes_num > 1)
-				src += adapt->xgmi.phy_node_id * adapt->xgmi.node_segment_size;
-			dst = adapt->mc_agp_loc_addr;
-
-			fb_offset = vf_fb_offset + idx_fb_block * block_size;
-			AMDGV_DEBUG("src in mc addr = 0x%llx, dst in mc addr = 0x%llx\n", src,
-				    dst);
-
-			filled_size = idx_fb_block * block_size;
-			if (block_size >= (vf_fb_size - filled_size)) {
-				block_size = vf_fb_size - filled_size;
-			}
-			AMDGV_DEBUG("block_size = 0x%lx\n", block_size);
-
-			filled_size = 0;
-			adapt->misc.dma_copy(adapt, idx_vf, false, src, dst, block_size, &filled_size);
-			if (filled_size)
-				AMDGV_DEBUG("0x%lx bytes copied with GPU\n", filled_size);
-
-			/* Check if pass-in data is pointing to agp memory */
-			if (data != adapt->sys_mem_info.va_ptr) {
-				AMDGV_DEBUG("oss_memcpy needed.\n");
-				oss_memcpy(data, adapt->sys_mem_info.va_ptr, block_size);
-			}
+		if (adapt->misc.dma_copy(adapt, idx_vf, false, src, dst, size, &size_copied))
+			return AMDGV_FAILURE;
+		else {
+			AMDGV_DEBUG("0x%lx bytes copied with GPU\n", size_copied);
+			return 0;
 		}
-	} else {
-		AMDGV_ERROR("dma copy not supported.\n");
+	} else
 		return AMDGV_FAILURE;
-	}
 
 	return 0;
 }

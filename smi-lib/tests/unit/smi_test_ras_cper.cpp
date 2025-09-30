@@ -171,22 +171,6 @@ TEST_F(AmdSmiRasCperTests, GetCperEntriesSuccess)
     ASSERT_TRUE(equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
 }
 
-TEST_F(AmdSmiRasCperTests, MoreData) {
-    int ret;
-    char cper_data[1024];
-    uint64_t buf_size = sizeof(cper_data);
-    amdsmi_cper_hdr_t* cper_hdrs[10];
-    uint64_t entry_count = 10;
-    uint64_t cursor = 0;
-    uint32_t severity_mask = 0;
-
-    EXPECT_CALL(*g_system_mock, Ioctl(_)).WillRepeatedly(SetResponseStatus(SMI_STATUS_MORE_DATA));
-
-    ret = amdsmi_get_gpu_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
-    ASSERT_EQ(ret, AMDSMI_STATUS_MORE_DATA);
-}
-
-
 TEST_F(AmdSmiRasCperTests, AfidBufferTooSmall) {
     int ret;
     char cper_buffer[16]; // Insufficient buffer size

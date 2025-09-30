@@ -39,6 +39,10 @@
 #define ADDR_TO_PFN(addr) ((addr) >> AMDGV_GPU_PAGE_SHIFT)
 #define PFN_TO_ADDR(pfn) ((pfn) << AMDGV_GPU_PAGE_SHIFT)
 
+/* SID0 SID1 R14 R13 bits in NA */
+#define HBM3E_ADDRHI_MASK 0xf0000000ULL
+#define HBM3E_ADDRHI_SHIFT 28
+
 static const uint32_t this_block = AMDGV_MEMORY_BLOCK;
 
 const uint32_t umc_v12_0_channel_idx_tbl[]
@@ -53,12 +57,33 @@ const uint32_t umc_v12_0_channel_idx_tbl[]
 	 {115, 119, 123, 127, 114, 118, 122, 126}, {113, 117, 121, 125, 112, 116, 120, 124}}
 };
 
+const uint32_t umc_v12_5_channel_idx_tbl[]
+	[UMC_V12_0_UMC_INSTANCE_NUM][UMC_V12_0_CHANNEL_INSTANCE_NUM] = {
+	{{10,   13,   15,  14,  9,   12,   11,  7},  {6,   4,   5,   8,  1,   2,   3,   0},
+	 {28,  27,  31,  30,  24,  29,  25,  21},  {23,  18,  22,  26,  19,  20,  16,  17}},
+	{{42,  45,  47,  46,  41,  44,  43,  39},  {38,  36,  37,  40,  33,  34,  35,  32},
+	 {60,  59,  63,  62,  56,  61,  57,  53},  {55,  50,  54,  58,  51,  52,  48,  49}},
+	{{74,  77,  79,  78,  73,  76,  75,  71},  {70,  68,  69,  72,  65,  66,  67,  64},
+	 {92,  91,  95,  94,  88,  93,  89,  85},  {87,  82,  86,  90,  83,  84,  80,  81}},
+	{{106,  109, 111, 110, 105,  108, 107, 103}, {102,  100, 101, 104, 97,  98, 99, 96},
+	 {124, 123, 127, 126, 120, 125, 121, 117}, {119, 114, 118, 122, 115, 116, 112, 113}}
+};
+
+
 /* mapping of MCA error address to normalized address */
 static const uint32_t umc_v12_0_ma2na_mapping[] = {
 	0,  5,  6,  8,  9,  14, 12, 13,
 	10, 11, 15, 16, 17, 18, 19, 20,
 	21, 22, 23, 24, 25, 26, 27, 28,
 	24, 7,  29, 30,
+};
+
+/* mapping of MCA error address to normalized address for HBM3e */
+static const uint32_t umc_v12_5_ma2na_mapping[] = {
+	0,  5,  6,  8,  9,  14, 12, 13,
+	10, 11, 15, 16, 17, 18, 19, 20,
+	21, 22, 23, 24, 25, 26, 27, 28,
+	29, 7,  30, 31,
 };
 
 
@@ -134,7 +159,7 @@ static int convert_ma_to_nps_pa(struct amdgv_adapter *adapt,
 			enum amdgv_memory_partition_mode nps, bool is_ma)
 {
 	uint32_t i, na_shift = 8;
-	uint64_t soc_pa, na, na_nps;
+	uint64_t soc_pa, na, na_nps, addrhi, addrhi_na;
 	uint32_t bank_hash0, bank_hash1, bank_hash2, bank_hash3, col, row;
 	uint32_t bank0, bank1, bank2, bank3, bank = 0;
 	uint32_t ch_inst = addr_in->ch_inst;
@@ -143,6 +168,8 @@ static int convert_ma_to_nps_pa(struct amdgv_adapter *adapt,
 	uint32_t socket_id = addr_in->socket_id;
 	uint32_t channel_index = 0;
 	uint64_t err_addr = addr_in->err_addr;
+	bool hbm3e = (adapt->vram_info.vram_type == AMDGV_DGPU_VRAM_TYPE__HBM3E) ? 1 : 0;
+	uint64_t lfb_size = (hbm3e) ? SOCKET_LFB_SIZE_HBM3E : SOCKET_LFB_SIZE;
 
 	if (node_inst != RAS_INV_AID_NODE) {
 		if (ch_inst >= UMC_V12_0_CHANNEL_INSTANCE_NUM ||
@@ -162,7 +189,10 @@ static int convert_ma_to_nps_pa(struct amdgv_adapter *adapt,
 		bank_hash2 = (err_addr >> UMC_V12_0_MCA_B2_BIT) & 0x1ULL;
 		bank_hash3 = (err_addr >> UMC_V12_0_MCA_B3_BIT) & 0x1ULL;
 		col = (err_addr >> 1) & 0x1fULL;
-		row = (err_addr >> 10) & 0x3fffULL;
+		if (hbm3e)
+			row = (err_addr >> 10) & 0x7fffULL;
+		else
+			row = (err_addr >> 10) & 0x3fffULL;
 
 		/* apply bank hash algorithm */
 		bank0 =
@@ -189,8 +219,21 @@ static int convert_ma_to_nps_pa(struct amdgv_adapter *adapt,
 
 	na_nps = 0x0;
 	/* convert mca error address to normalized address */
-	for (i = 1; i < ARRAY_SIZE(umc_v12_0_ma2na_mapping); i++)
-		na_nps |= ((err_addr >> i) & 0x1ULL) << umc_v12_0_ma2na_mapping[i];
+	if (hbm3e) {
+		for (i = 1; i < ARRAY_SIZE(umc_v12_5_ma2na_mapping); i++)
+			na_nps |= ((err_addr >> i) & 0x1ULL) << umc_v12_5_ma2na_mapping[i];
+
+		/* It's 2.25GB per channel, R[14:13] in MCA address can't be 0x3,
+		* [SID1 SID0 R14 R13] should be converted to original value.
+		*/
+		addrhi = (na_nps & HBM3E_ADDRHI_MASK) >> HBM3E_ADDRHI_SHIFT;
+		addrhi_na = (addrhi >> 2) * 3 + addrhi % 4;
+		na_nps &= ~HBM3E_ADDRHI_MASK;
+		na_nps |= (addrhi_na << HBM3E_ADDRHI_SHIFT);
+	} else {
+		for (i = 1; i < ARRAY_SIZE(umc_v12_0_ma2na_mapping); i++)
+			na_nps |= ((err_addr >> i) & 0x1ULL) << umc_v12_0_ma2na_mapping[i];
+	}
 
 	if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS1)
 		na_shift = 8;
@@ -205,9 +248,10 @@ static int convert_ma_to_nps_pa(struct amdgv_adapter *adapt,
 
 	na = ((na_nps >> na_shift) << 8) | (na_nps & 0xff);
 
-	if (node_inst != RAS_INV_AID_NODE)
-		channel_index =
+	if (node_inst != RAS_INV_AID_NODE) {
+		channel_index = (hbm3e) ? umc_v12_5_channel_idx_tbl[node_inst][umc_inst][ch_inst] :
 			umc_v12_0_channel_idx_tbl[node_inst][umc_inst][ch_inst];
+	}
 	else {
 		channel_index = ch_inst;
 		node_inst = channel_index /
@@ -220,11 +264,11 @@ static int convert_ma_to_nps_pa(struct amdgv_adapter *adapt,
 		OFFSET_IN_256B_BLOCK(na);
 
 	/* calc channel hash based on absolute address */
-	soc_pa += socket_id * SOCKET_LFB_SIZE;
+	soc_pa += socket_id * lfb_size;
 	/* the umc channel bits are not original values, they are hashed */
 	UMC_V12_0_SET_CHANNEL_HASH(channel_index, soc_pa);
 	/* restore pa */
-	soc_pa -= socket_id * SOCKET_LFB_SIZE;
+	soc_pa -= socket_id * lfb_size;
 
 	/* get some channel bits from na_nps directly and
 	* add nps section offset
@@ -232,16 +276,16 @@ static int convert_ma_to_nps_pa(struct amdgv_adapter *adapt,
 	if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS2) {
 		soc_pa &= ~(0x1ULL << UMC_V12_0_PA_CH5_BIT);
 		soc_pa |= ((na_nps & 0x100) << 5);
-		soc_pa += (node_inst >> 1) * (SOCKET_LFB_SIZE >> 1);
+		soc_pa += (node_inst >> 1) * (lfb_size >> 1);
 	} else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS4) {
 		soc_pa &= ~(0x3ULL << UMC_V12_0_PA_CH4_BIT);
 		soc_pa |= ((na_nps & 0x300) << 4);
-		soc_pa += node_inst * (SOCKET_LFB_SIZE >> 2);
+		soc_pa += node_inst * (lfb_size >> 2);
 	} else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS8) {
 		soc_pa &= ~(0x7ULL << UMC_V12_0_PA_CH4_BIT);
 		soc_pa |= ((na_nps & 0x700) << 4);
-		soc_pa += node_inst * (SOCKET_LFB_SIZE >> 2) +
-			(channel_index >> 4) * (SOCKET_LFB_SIZE >> 3);
+		soc_pa += node_inst * (lfb_size >> 2) +
+			(channel_index >> 4) * (lfb_size >> 3);
 	}
 
 	addr_out->pa = soc_pa;
@@ -253,23 +297,55 @@ static int convert_ma_to_nps_pa(struct amdgv_adapter *adapt,
 
 static int get_nps_pa_mask_bits(struct amdgv_adapter *adapt,
 			enum amdgv_memory_partition_mode nps,
-			uint32_t *loop_bits, uint32_t num)
+			uint32_t *loop_bits, uint32_t num,
+			uint32_t *flip_row_bit, uint32_t *r13_in_pa)
 {
+	uint32_t vram_type = adapt->vram_info.vram_type;
 
-	if (!loop_bits || (num < UMC_V12_0_RETIRE_LOOP_BITS))
+	if (!loop_bits || !flip_row_bit || !r13_in_pa || (num < UMC_V12_0_RETIRE_LOOP_BITS))
 		return AMDGV_FAILURE;
 
-	if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS4) {
+	loop_bits[0] = UMC_V12_0_PA_C2_BIT;
+	loop_bits[1] = UMC_V12_0_PA_C3_BIT;
+	loop_bits[2] = UMC_V12_0_PA_C4_BIT;
+	loop_bits[3] = UMC_V12_0_PA_R13_BIT;
+	*flip_row_bit = 13;
+	*r13_in_pa = UMC_V12_0_PA_R13_BIT;
+
+	if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS2) {
+		loop_bits[0] = UMC_V12_0_PA_CH5_BIT;
+		loop_bits[1] = UMC_V12_0_PA_C2_BIT;
+		loop_bits[2] = UMC_V12_0_PA_B1_BIT;
+		*r13_in_pa = UMC_V12_0_PA_R12_BIT;
+	} else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS4) {
 		loop_bits[0] = UMC_V12_0_PA_CH4_BIT;
 		loop_bits[1] = UMC_V12_0_PA_CH5_BIT;
 		loop_bits[2] = UMC_V12_0_PA_B0_BIT;
-		loop_bits[3] = UMC_V12_0_PA_R11_BIT;
-	} else {
+		*r13_in_pa = UMC_V12_0_PA_R11_BIT;
+	}
+
+	switch (vram_type) {
+	case AMDGV_DGPU_VRAM_TYPE__HBM3:
 		/* other nps modes are taken as nps1 */
-		loop_bits[0] = UMC_V12_0_PA_C2_BIT;
-		loop_bits[1] = UMC_V12_0_PA_C3_BIT;
-		loop_bits[2] = UMC_V12_0_PA_C4_BIT;
-		loop_bits[3] = UMC_V12_0_PA_R13_BIT;
+		if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS2)
+			loop_bits[3] = UMC_V12_0_PA_R12_BIT;
+		else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS4)
+			loop_bits[3] = UMC_V12_0_PA_R11_BIT;
+		break;
+
+	case AMDGV_DGPU_VRAM_TYPE__HBM3E:
+		loop_bits[3] = UMC_V12_0_PA_R12_BIT;
+		*flip_row_bit = 12;
+
+		if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS2)
+			loop_bits[3] = UMC_V12_0_PA_R11_BIT;
+		else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS4)
+			loop_bits[3] = UMC_V12_0_PA_R10_BIT;
+		break;
+
+	default:
+		AMDGV_WARN("Unknown HBM type, set RAS retire loop bits to the value in NPS1 mode.\n");
+		break;
 	}
 
 	return 0;
@@ -279,10 +355,11 @@ static uint64_t clear_nps_pa_mask_bits(struct amdgv_adapter *adapt,
 		uint64_t pa, enum amdgv_memory_partition_mode nps, bool zero_pfn_ok)
 {
 	uint32_t loop_bits[UMC_V12_0_RETIRE_LOOP_BITS] = {0};
+	uint32_t flip_row_bit, r13_in_pa;
 	uint64_t mask_pa;
 	int i;
 
-	get_nps_pa_mask_bits(adapt, nps, loop_bits, ARRAY_SIZE(loop_bits));
+	get_nps_pa_mask_bits(adapt, nps, loop_bits, ARRAY_SIZE(loop_bits), &flip_row_bit, &r13_in_pa);
 
 	mask_pa = pa;
 	/* clear loop bits in soc physical address */
@@ -317,19 +394,30 @@ static int lookup_bad_pages_in_a_row(struct amdgv_adapter *adapt,
 		enum amdgv_memory_partition_mode nps,
 		uint64_t *pfns, uint32_t num, bool dump)
 {
-	uint32_t col, col_lower, row, row_lower, idx;
+	uint32_t col, col_lower, row, row_lower, row_high, idx, flip_row_bit, r13_in_pa;
 	uint32_t i, loop_bits[UMC_V12_0_RETIRE_LOOP_BITS] = {0};
 	uint64_t soc_pa, mask_pa, column, err_addr;
+	bool hbm3e = (adapt->vram_info.vram_type == AMDGV_DGPU_VRAM_TYPE__HBM3E) ? 1 : 0;
 
-	get_nps_pa_mask_bits(adapt, nps, loop_bits, ARRAY_SIZE(loop_bits));
+	get_nps_pa_mask_bits(adapt, nps, loop_bits, ARRAY_SIZE(loop_bits), &flip_row_bit, &r13_in_pa);
 
 	mask_pa = clear_nps_pa_mask_bits(adapt, pa->pa, nps, true);
 
 	err_addr = ma->err_addr;
 	/* get column bit 0 and 1 in mca address */
 	col_lower = (err_addr >> 1) & 0x3ULL;
-	/* MA_R13_BIT will be handled later */
+	/* extra row bit will be handled later */
 	row_lower = (err_addr >> UMC_V12_0_MCA_R0_BIT) & 0x1fffULL;
+	row_lower &= ~(0x1ULL << flip_row_bit);
+
+	if (hbm3e) {
+		row_high = (mask_pa >> r13_in_pa) & 0x3ULL;
+		/* it's 2.25GB in each channel, from MCA address to PA
+		 * [R14 R13] is converted if the two bits value are 0x3,
+		 * get them from PA instead of MCA address.
+		 */
+		row_lower |= (row_high << 13);
+	}
 
 	idx = 0;
 	/* loop for all possibilities of retire bits */
@@ -340,7 +428,7 @@ static int lookup_bad_pages_in_a_row(struct amdgv_adapter *adapt,
 
 		col = ((column & 0x7) << 2) | col_lower;
 		/* add row bit 13 */
-		row = ((column >> 3) << 13) | row_lower;
+		row = ((column >> 3) << flip_row_bit) | row_lower;
 
 		if (dump)
 			AMDGV_INFO("Error Address(PA):0x%-10llx Row:0x%-4x Col:0x%-2x Bank:0x%x Channel:0x%x\n",

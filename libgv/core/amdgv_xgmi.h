@@ -27,7 +27,12 @@
 #define AMDGV_XGMI_MAX_CONNECTED_NODES 64
 #define AMDGV_XGMI_MAX_NUM_LINKS 64
 
-
+enum amdgv_xgmi_link_status {
+	AMDGV_XGMI_LINK_STATUS__ACTIVE = 0,
+	AMDGV_XGMI_LINK_STATUS__DISABLED = 1,
+	AMDGV_XGMI_LINK_STATUS__INACTIVE = 2,
+	AMDGV_XGMI_LINK_STATUS__ERROR = 3,
+};
 
 enum amdgv_xgmi_psp_topology_status {
 	AMDGV_XGMI_PSP_TOPOLOGY_STATUS__PENDING,
@@ -71,7 +76,7 @@ struct amdgv_xgmi_psp_link_info {
 	uint32_t num_links;
 	struct {
 		uint64_t dest_node_id;
-		uint32_t src_port_id;
+		uint32_t dest_bdf;
 		uint32_t dest_port_id;
 	} link[AMDGV_XGMI_MAX_NUM_LINKS]; /* Peer link info */
 };
@@ -120,9 +125,10 @@ struct amdgv_xgmi {
 	bool (*is_fb_sharing_allowed)(struct amdgv_adapter *adapt,
 		uint32_t src_phy_node_id, uint32_t dest_phy_node_id,
 		enum amdgv_xgmi_fb_sharing_mode mode);
-
 	uint32_t (*get_fb_sharing_mode_mask)(struct amdgv_adapter *adapt,
 			enum amdgv_xgmi_fb_sharing_mode mode);
+	enum amdgv_xgmi_link_status (*get_link_status)(struct amdgv_adapter *adapt,
+						       uint32_t phy_link_idx);
 
 };
 
@@ -158,4 +164,6 @@ int amdgv_xgmi_flr_fb_sharing_vfs(struct amdgv_adapter *adapt,
 bool amdgv_xgmi_all_nodes_fb_sharing(struct amdgv_adapter *adapt);
 int amdgv_xgmi_inject_error(struct amdgv_adapter *adapt,
 			    struct ta_ras_trigger_error_input *block_info);
+enum amdgv_xgmi_link_status amdgv_xgmi_get_link_status(struct amdgv_adapter *adapt,
+							      uint32_t phy_link_idx);
 #endif

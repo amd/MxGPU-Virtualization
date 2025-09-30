@@ -113,18 +113,25 @@
 #define THROTTLER_SPARE_5          5
 #define THROTTLER_TEMP_GPU_BIT     6
 #define THROTTLER_TEMP_MEM_BIT     7
-#define THORTTLER_SPARE_8          8
-#define THORTTLER_SPARE_9          9
-#define THORTTLER_SPARE_10         10
+#define THROTTLER_SPARE_8          8
+#define THROTTLER_SPARE_9          9
+#define THROTTLER_SPARE_10         10
 #define THROTTLER_TEMP_VR_GFX_BIT  11
 #define THROTTLER_TEMP_VR_SOC_BIT  12
 #define THROTTLER_TEMP_VR_MEM_BIT  13
-#define THORTTLER_SPARE_14         14
-#define THORTTLER_SPARE_15         15
-#define THORTTLER_SPARE_16         16
-#define THORTTLER_SPARE_17         17
-#define THORTTLER_SPARE_18         18
+#define THROTTLER_SPARE_14         14
+#define THROTTLER_SPARE_15         15
+#define THROTTLER_SPARE_16         16
+#define THROTTLER_SPARE_17         17
+#define THROTTLER_SPARE_18         18
 #define THROTTLER_APCC_BIT         19
+
+//thermal over-temp mask defines for IH interrup to host
+#define THROTTLER_PROCHOT_BIT           0
+#define THROTTLER_RESERVED              1
+#define THROTTLER_THERMAL_SOCKET_BIT    2//AID, XCD, CCD throttling
+#define THROTTLER_THERMAL_VR_BIT        3//VRHOT
+#define THROTTLER_THERMAL_HBM_BIT       4
 
 // Table transfer status
 #define TABLE_TRANSFER_OK         0x0

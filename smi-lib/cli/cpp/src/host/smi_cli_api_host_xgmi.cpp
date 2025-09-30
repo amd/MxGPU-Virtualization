@@ -605,6 +605,78 @@ int AmdSmiApiHost::amdsmi_get_xgmi_metric_command(Arguments arg, std::string& ou
 	return ret;
 }
 
+int AmdSmiApiHost::amdsmi_get_xgmi_link_status_command(Arguments arg, std::string& out)
+{
+	amdsmi_status_t ret;
+	amdsmi_processor_handle gpu_handle;
+	amdsmi_link_metrics_t link_metrics;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = arg.devices[0]->get_bdf();
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &gpu_handle);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+			Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+			out = get_xgmi_caps_empty_table();
+			return ret;
+	}
+
+	ret = host_amdsmi_get_link_metrics(gpu_handle, &link_metrics);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+			Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+			out = get_xgmi_caps_empty_table();
+			return ret;
+	}
+
+	out.append("XGMI_LINK_STATUS:\n");
+	out.append(string_format("%-13s%-15s%-13s\n",
+							 "GPU", "BDF", "LINK_STATUS"));
+	out.append(string_format("                            "));
+	out.append(string_format("%-3d",0 ));
+	for(int j=1; j < link_metrics.num_links; j++) {
+		out.append(string_format(" %-3d",j ));
+	}
+	out.append(string_format("\n"));
+
+	for (uint8_t i = 0; i < arg.devices.size(); i++) {
+		amdsmi_bdf_t tmp_bdf;
+		tmp_bdf.as_uint = arg.devices[i]->get_bdf();
+
+		ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &gpu_handle);
+		if (ret != AMDSMI_STATUS_SUCCESS) {
+			Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+			out = get_xgmi_caps_empty_table();
+			return ret;
+		}
+
+		std::string bdf{ convert_bdf_to_string(tmp_bdf.bdf.function_number, tmp_bdf.bdf.device_number, tmp_bdf.bdf.bus_number, tmp_bdf.bdf.domain_number) };
+
+		ret = host_amdsmi_get_link_metrics(gpu_handle, &link_metrics);
+		if (ret != AMDSMI_STATUS_SUCCESS) {
+			Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+			out = get_xgmi_caps_empty_table();
+			return ret;
+		}
+
+		std::string gpu_bdf_string = "GPU" + std::to_string(i);
+		out.append(string_format("%-13s%-15s", gpu_bdf_string.c_str(), bdf.c_str()));
+		std::string link_status_string = {};
+		for(int j=0; j<link_metrics.num_links; j++) {
+			format_link_status(link_metrics.links[j].link_status, true, link_status_string);
+			out.append(string_format("%-4s", link_status_string.c_str()));
+		}
+		out.append("\n");
+	}
+
+    out.append(
+        "\nLegend:\n"
+        " N/A = Not supported \n"
+        " U / D / X = Link is Up / Down / Disabled\n"
+    );
+
+
+	return 0;
+}
+
 int amdsmi_get_bdf(int index, std::string& bdf)
 {
 	unsigned int gpu_count;
@@ -817,9 +889,29 @@ int AmdSmiApiHost::amdsmi_get_all_xgmi_command(Arguments arg, std::string& out)
 				json["link_metrics"]["fb_sharing"].insert(json["link_metrics"]["fb_sharing"].end(),
 						fb_sharing_element);
 			}
-		}
+
 
 		output.insert(output.end(), json);
+	}
+
+	if (std::find(arg.options.begin(), arg.options.end(), "link-status") != arg.options.end() ||
+			arg.all_arguments) {
+
+		ret = host_amdsmi_get_link_metrics(processors[gpu_index], &link_metrics);
+		if (ret != AMDSMI_STATUS_SUCCESS) {
+			Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		}
+		std::string param{"link-status"};
+		int error = handle_exceptions(ret, param, arg);
+		if (error == 0) {
+			json["link_status"] = nlohmann::ordered_json::array();
+			std::string link_status_string;
+			for(int j=0; j<link_metrics.num_links; j++) {
+				format_link_status(link_metrics.links[j].link_status, true, link_status_string);
+				json["link_status"].insert(json["link_status"].end(), link_status_string.c_str());
+			}
+		}
+		output.insert(output.end(), json);}
 	}
 
 	out = output.dump(4);

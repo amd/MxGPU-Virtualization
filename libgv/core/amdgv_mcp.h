@@ -43,8 +43,9 @@ struct spatial_partition_gfx {
 
 struct amdgv_mcp {
 	uint32_t num_aid;
+	uint32_t num_dagb;
 	enum spatial_partition_mode spatial_partition_mode;
-	uint32_t accelerator_partition_mode;
+	enum amdgv_accelerator_partition_mode accelerator_partition_mode;
 	enum amdgv_memory_partition_mode memory_partition_mode;
 	bool mem_mode_switch_requested;
 	uint32_t numa_count;
@@ -59,6 +60,7 @@ struct amdgv_mcp {
 	int (*amdgv_mcp_get_spatial_partition_mode)(struct amdgv_adapter *adapt, enum spatial_partition_mode *mode);
 	int (*get_vf_mask_by_xcc)(struct amdgv_adapter *adapt,  uint32_t idx_xcc);
 	int (*get_vf_mask_by_aid)(struct amdgv_adapter *adapt,  uint32_t idx_aid);
+	int (*get_xcp_by_xcc)(struct amdgv_adapter *adapt, uint32_t idx_xcc);
 };
 const char *amdgv_mcp_spatial_partition_to_name(enum spatial_partition_mode mode);
 int amdgv_mcp_get_num_gfx_spatial_partitions(struct amdgv_adapter *adapt, uint32_t *count);
@@ -67,5 +69,6 @@ int amdgv_mcp_get_num_xcc_per_partition(struct amdgv_adapter *adapt, uint32_t *c
 int amdgv_mcp_get_xcc_mask_by_idx_part(struct amdgv_adapter *adapt, uint32_t idx_part);
 int amdgv_mcp_get_vf_mask_by_xcc(struct amdgv_adapter *adapt, uint32_t idx_xcc);
 int amdgv_mcp_get_vf_mask_by_aid(struct amdgv_adapter *adapt, uint32_t idx_aid);
+int amdgv_mcp_get_xcp_by_xcc(struct amdgv_adapter *adapt, uint32_t idx_xcc);
 
 #endif

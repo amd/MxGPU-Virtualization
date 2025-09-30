@@ -310,6 +310,10 @@ extern const uint32_t
 /* one device has 192GB HBM */
 #define SOCKET_LFB_SIZE   0x3000000000ULL
 
+/* one device has 288GB HBM3e memory */
+#define SOCKET_LFB_SIZE_HBM3E 0x4800000000ULL
+
+
 struct umc_mca_addr {
 	uint64_t err_addr;
 	uint32_t ch_inst;

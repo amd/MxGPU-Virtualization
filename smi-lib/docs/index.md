@@ -11,10 +11,12 @@ AMD SMI LIB is a library that enables you to manage and monitor AMD Virtualizati
 
 Some of the features that are exposed in the library are:
 
-- Query static information about the GPU (ASIC, framebuffer, etc.)
+- Query static information about the GPU (ASIC, framebuffer etc.)
 - Query information about the FW on the physical function
 - Query information about the virtual functions on the GPU
-- Query temperature, clocks, and usage of the GPU
+- Query GPU metrics (temperature, clocks, usage etc.)
+- Set GPU configuration (partitioning modes, FB sharing modes, power cap etc.)
+- GPU reset and clear VF FB (on MI products)
 
 - To run the AMD SMI library, the Linux PF driver needs to be installed.
 
@@ -22,7 +24,7 @@ There are two parts to the AMD SMI library interface:
 
 - **C interface**
   - Consists of C function declarations.
-  - The client can call these to query information about the Linux host machine.
+  - The client can call these to query information and configure settings on the Linux host machine.
   - The C interface can be used by the clients to build applications in C/C++ by using this interface and library binary.
 
 - **Python interface**
@@ -30,22 +32,25 @@ There are two parts to the AMD SMI library interface:
   - These directly call the C interface.
   - The client can use the Python interface to build applications in Python.
 
-AMD SMI tool is a command line utility that utilizes AMD SMI Library APIs to monitor AMD GPUs. The tool is used to monitor AMD’s GPUs status in a virtualization environment in both host OS and guest VM, as well as in a bare metal environment for both Windows and Linux Operating Systems. The tool outputs GPU/driver information in plain text, in JSON, or in CSV formats while it can also show the info in the console or save to the specified output file.
+AMD SMI tool is a command line utility that utilizes AMD SMI Library APIs to monitor and configure AMD GPUs. The tool is used to monitor AMD’s GPUs status in a virtualization environment in both host OS and guest VM, as well as in a bare metal environment for both Windows and Linux Operating Systems. The tool outputs GPU/driver information in plain text, in JSON, or in CSV formats while it can also show the info in the console or save to the specified output file.
 
 The tool can be used to:
 
-- Query static information about the GPU (ASIC, framebuffer, etc.)
+- Query static information about the GPU (ASIC, framebuffer etc.)
 - Query information about the FW on the physical function
 - Query information about the virtual functions on the GPU
-- Query temperature, clocks, and usage of the GPU
+- Query GPU metrics (temperature, clocks, usage etc.)
+- Set GPU configuration (partitioning modes, FB sharing modes, power cap etc.)
+- Reset GPU and clear VF FB (on MI products)
 
-For additional information on installation, usage, and API references, please refer to the sections below:
+For additional information on build, installation, usage, versioning and API references, please refer to the sections below:
 
 ::::{grid} 2
-:gutter: 3
+:gutter: 4
 
 :::{grid-item-card} Install
 
+- [Library and CLI tool installation](./install/install.md)
 - [Build from source](./install/build.md)
 :::
 
@@ -64,6 +69,11 @@ For additional information on installation, usage, and API references, please re
   - [Data structures](../doxygen/doxy_build/html/annotated)
   - [Data fields](../doxygen/doxy_build/html/functions_data_fields)
 - [Python API](./reference/amdsmi_py_api.md)
+:::
+
+:::{grid-item-card} General
+
+- [Library and CLI tool versioning](./general/versioning.md)
 :::
 
 ::::

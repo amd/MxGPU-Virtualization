@@ -1431,6 +1431,7 @@ Field | Description
 `HBM2` | HBM2 VRAM type
 `HBM2E` | HBM2E VRAM type
 `HBM3` | HBM3 VRAM type
+`HBM3E` | HBM3E VRAM type
 `DDR2` | DDR2 VRAM type
 `DDR3` | DDR3 VRAM type
 `DDR4` | DDR4 VRAM type
@@ -2474,6 +2475,9 @@ Field | Description
 `category` | category of the metric from `AmdSmiMetricCategory` enum
 `flags` |  list of types of the metric from `AmdSmiMetricType` enum
 `vf_mask` |  mask of all active VFs + PF that this metric applies to
+`res_group` |  resource group from `AmdSmiResGroup` enum
+`res_subgroup` |  resource group from `AmdSmiResSubGroup` enum
+`res_instance` |  resource instance number
 
 `AmdSmiMetricUnit` enum:
 
@@ -2574,6 +2578,26 @@ Field | Description
 `CHIPLET` | chiplet
 `INST` | instantaneous data
 `ACC` | accumulated data
+
+`AmdSmiMetricResGroup` enum:
+
+Field | Description
+---|---
+`UNKNOWN` | unknown resource group
+`NA` | resource group is not applicable
+`GPU` | gpu resource group
+`XCP` | xcp resource group
+`AID` | aid resource group
+`MID` | mid resource group
+
+`AmdSmiMetricResSubgroup` enum:
+
+Field | Description
+---|---
+`UNKNOWN` | unknown resource subgroup
+`NA` | resource subgroup is not applicable
+`XCC` | xcc resource subgroup
+`ENGINE` | xcp resource subgroup
 
 Exceptions that can be thrown by `amdsmi_get_gpu_metrics` function:
 
@@ -3204,6 +3228,68 @@ try:
         for processor in processors:
             amdsmi_reset_gpu(processor)
 
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_cpu_affinity_with_scope
+
+Description: Returns list of bitmask information for the given GPU.
+
+Input parameters:
+
+* `processor_handle` device which to query
+* `scope`  enum value for numa or socket affinity
+
+Output: bitmask of CPU cores that this processor affinities with
+
+Exceptions that can be thrown by `amdsmi_get_cpu_affinity_with_scope` function:
+
+* `AmdSmiLibraryException`
+* `AmdSmiRetryException`
+* `AmdSmiParameterException`
+
+Example:
+
+```python
+try:
+    devices = amdsmi_get_processor_handles()
+    if len(devices) == 0:
+        print("No GPUs on machine")
+    else:
+        for device in devices:
+            bitmask = amdsmi_get_cpu_affinity_with_scope(device, AmdSmiAffinityScope.NUMA_SCOPE)
+            print(bitmask)
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_topo_get_numa_node_number
+Description: Get the NUMA node associated with a device
+
+Input parameters:
+
+* `processor_handle` device which to query
+
+Output: NUMA node value
+
+Exceptions that can be thrown by `amdsmi_topo_get_numa_node_number` function:
+
+* `AmdSmiLibraryException`
+* `AmdSmiRetryException`
+* `AmdSmiParameterException`
+
+Example:
+
+```python
+try:
+    devices = amdsmi_get_processor_handles()
+    if len(devices) == 0:
+        print("No GPUs on machine")
+    else:
+        for device in devices:
+            numa_node = amdsmi_topo_get_numa_node_number(device)
+            print(numa_node)
 except AmdSmiException as e:
     print(e)
 ```

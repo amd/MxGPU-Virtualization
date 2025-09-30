@@ -356,6 +356,10 @@ struct amdgv_diag_data_gen_info {
 				/* <1:AMDGV_GUARD_EVENT_EXCLUSIVE_MOD > */
 				/* <2:AMDGV_GUARD_EVENT_EXCLUSIVE_TIMEOUT > */
 				/* <3:AMDGV_GUARD_EVENT_ALL_INT > */
+				/* <4:AMDGV_GUARD_EVENT_RAS_ERR_COUNT> */
+				/* <5:AMDGV_GUARD_EVENT_RAS_CPER_DUMP> */
+				/* <6:AMDGV_GUARD_EVENT_RAS_BAD_PAGES > */
+				/* <7:AMDGV_GUARD_EVENT_WGR > */
 				/* <IDX MAP END> */
 				/* <name:Guard Type; type:INT; size:4; base:10; idxmap:VF Guard IDX; valmap:1;> */
 				uint32_t guard_type;

@@ -26,6 +26,7 @@
 #include "amdgv_powerplay.h"
 #include "mi300_mca.h"
 #include "mi300_smu_ppsmc.h"
+#include "mi300_smu_pmfw.h"
 #include "mi300_powerplay.h"
 #include "umc_v12_0.h"
 #include "mi300.h"
@@ -440,7 +441,7 @@ static int mi300_mca_parse_error_code(struct amdgv_adapter *adapt,
 {
 	int errcode;
 
-	if (adapt->pp.smu_fw_version >= 0x00555600) {
+	if (mi300_smu_cap_supported(adapt, SMU_CAP_ACA_SYND)) {
 		errcode = REG_GET_FIELD(bank->regs[MCA_REG_IDX_SYND], MCMP1_SYNDT0, ErrorInformation);
 		errcode &= 0xff;
 	} else {

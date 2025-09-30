@@ -27,6 +27,14 @@
 
 #define SDMA_INST_TO_AID(_SDMA_INST_) ((_SDMA_INST_)/adapt->sdma.num_inst_per_aid)
 
+enum SDMA_V4_4_2_DBIT_PAGE_SIZE_CONFIG {
+	SDMA_V4_4_2_DBIT_PAGE_SIZE_CONFIG_256KB = 0,
+	SDMA_V4_4_2_DBIT_PAGE_SIZE_CONFIG_512KB = 1,
+	SDMA_V4_4_2_DBIT_PAGE_SIZE_CONFIG_1MB = 2,
+	SDMA_V4_4_2_DBIT_PAGE_SIZE_CONFIG_2MB = 3,
+	SDMA_V4_4_2_DBIT_PAGE_SIZE_CONFIG_MAX,
+};
+
 /*define for HEADER word*/
 /*define for op field*/
 #define SDMA_PKT_NOP_HEADER_op_offset 0
@@ -136,7 +144,4 @@
 #define SDMA_OP_AQL_BARRIER_OR  0
 
 void sdma_v4_4_2_set_ras_funcs(struct amdgv_adapter *adapt);
-int sdma_v4_4_2_sdma_query_dirtybit(struct amdgv_adapter *adapt, uint64_t mc_addr,
-			struct amdgv_query_dirty_bit_data *data);
-
 #endif

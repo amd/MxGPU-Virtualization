@@ -55,6 +55,8 @@ protected:
 				<< " for i = " << i;
 			SMI_ASSERT_EQ(expect.links[i].write, actual.links[i].write)
 				<< " for i = " << i;
+			SMI_ASSERT_EQ(expect.links[i].link_status, (enum smi_link_status)actual.links[i].link_status)
+				<< " for i = " << i;
 		}
 
 		return ::testing::AssertionSuccess();
@@ -174,6 +176,8 @@ TEST_F(AmdSmiXgmiTest, GetLinkMetrics)
 		mocked_resp.links[i].link_type = SMI_LINK_TYPE_XGMI;
 		mocked_resp.links[i].read = i*3;
 		mocked_resp.links[i].write = i*4;
+		mocked_resp.links[i].link_status = SMI_LINK_STATUS_ENABLED;
+
 	}
 
 	WhenCalling(std::bind(amdsmi_get_link_metrics, MOCK_GPU_HANDLE,

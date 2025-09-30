@@ -48,6 +48,7 @@ typedef enum MTYPE {
 } MTYPE;
 
 void amdgv_gart_init_pdb0(struct amdgv_adapter *adapt);
+void amdgpu_gart_invalidate_tlb(struct amdgv_adapter *adapt);
 void amdgv_gart_map(struct amdgv_adapter *adapt, uint64_t offset, int pages,
 		    uint64_t dma_addr);
 

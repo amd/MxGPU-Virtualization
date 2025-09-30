@@ -821,6 +821,9 @@ typedef enum {
 	AMDSMI_GUARD_EVENT_EXCLUSIVE_MOD,
 	AMDSMI_GUARD_EVENT_EXCLUSIVE_TIMEOUT,
 	AMDSMI_GUARD_EVENT_ALL_INT,
+	AMDSMI_GUARD_EVENT_RAS_ERR_COUNT,
+	AMDSMI_GUARD_EVENT_RAS_CPER_DUMP,
+	AMDSMI_GUARD_EVENT_RAS_BAD_PAGES,
 	AMDSMI_GUARD_EVENT__MAX
 } amdsmi_guard_type_t;
 
@@ -860,7 +863,8 @@ typedef enum {
 typedef enum {
 	AMDSMI_LINK_STATUS_ENABLED = 0,
 	AMDSMI_LINK_STATUS_DISABLED = 1,
-	AMDSMI_LINK_STATUS_ERROR = 2
+	AMDSMI_LINK_STATUS_INACTIVE = 2,
+	AMDSMI_LINK_STATUS_ERROR = 3
 } amdsmi_link_status_t;
 
 typedef enum {
@@ -895,6 +899,7 @@ typedef enum {
 	AMDSMI_VRAM_TYPE_HBM2 = 2,
 	AMDSMI_VRAM_TYPE_HBM2E = 3,
 	AMDSMI_VRAM_TYPE_HBM3 = 4,
+	AMDSMI_VRAM_TYPE_HBM3E = 5,
 	// DDR
 	AMDSMI_VRAM_TYPE_DDR2 = 10,
 	AMDSMI_VRAM_TYPE_DDR3 = 11,
@@ -1069,6 +1074,22 @@ typedef enum {
 	AMDSMI_METRIC_TYPE_ACC = (1 << 3)  //!< accumulated metric
 } amdsmi_metric_type_t;
 
+typedef enum {
+	AMDSMI_METRIC_RES_GROUP_UNKNOWN,
+	AMDSMI_METRIC_RES_GROUP_NA,
+	AMDSMI_METRIC_RES_GROUP_GPU,
+	AMDSMI_METRIC_RES_GROUP_XCP,
+	AMDSMI_METRIC_RES_GROUP_AID,
+	AMDSMI_METRIC_RES_GROUP_MID
+} amdsmi_metric_res_group_t;
+
+typedef enum {
+	AMDSMI_METRIC_RES_SUBGROUP_UNKNOWN,
+	AMDSMI_METRIC_RES_SUBGROUP_NA,
+	AMDSMI_METRIC_RES_SUBGROUP_XCC,
+	AMDSMI_METRIC_RES_SUBGROUP_ENGINE
+} amdsmi_metric_res_subgroup_t;
+
 /**
  * @brief Memory Partitions. This enum is used to identify various
  * memory partition types.
@@ -1129,6 +1150,11 @@ typedef enum {
 	AMDSMI_VIRTUALIZATION_MODE_GUEST,
 	AMDSMI_VIRTUALIZATION_MODE_PASSTHROUGH
 } amdsmi_virtualization_mode_t;
+
+typedef enum {
+    AMDSMI_AFFINITY_SCOPE_NODE = 0,      // Memory affinity as numa node
+    AMDSMI_AFFINITY_SCOPE_SOCKET = 1,    // socket affinity
+} amdsmi_affinity_scope_t;
 
 /**
  * @brief AUX STRUCTURES
@@ -1328,9 +1354,7 @@ typedef struct {
 		uint32_t threshold;
 		/* current number of events in the interval*/
 		uint32_t active;
-		uint32_t reserved[4];
 	} guard[AMDSMI_GUARD_EVENT__MAX];
-	uint32_t reserved[6];
 } amdsmi_guard_info_t;
 
 typedef struct {
@@ -1459,7 +1483,8 @@ typedef struct {
 		amdsmi_link_type_t link_type; //!< type of the link
 		uint64_t read; //!< total data received for each link in KB
 		uint64_t write; //!< total data transfered for each link in KB
-		uint64_t reserved[2];
+		amdsmi_link_status_t link_status; //!< HW status of the link
+		uint64_t reserved[1];
 	} links[AMDSMI_MAX_NUM_XGMI_PHYSICAL_LINK];
 	uint64_t reserved[7];
 } amdsmi_link_metrics_t;
@@ -1506,7 +1531,10 @@ typedef struct {
 	uint32_t flags;		//!< used to determine type of the metric (amdsmi_metric_type_t)
 	uint32_t vf_mask;	//!< Mask of all active VFs + PF that this metric applies to
 	uint64_t val;
-	uint32_t reserved[8];
+	amdsmi_metric_res_group_t res_group;	//!< Resource group this metric belongs to
+	amdsmi_metric_res_subgroup_t res_subgroup;	//!< Resource subgroup this metric belongs to
+	uint32_t res_instance;	//!< Resource instance this metric belongs to
+	uint32_t reserved[5];	//!< Reserved for future use
 } amdsmi_metric_t;
 
 /**
@@ -1937,6 +1965,35 @@ amdsmi_status_t amdsmi_get_vf_uuid(amdsmi_vf_handle_t processor_handle, unsigned
  *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
  */
  amdsmi_status_t amdsmi_get_gpu_virtualization_mode(amdsmi_processor_handle processor_handle, amdsmi_virtualization_mode_t *mode);
+
+/**
+ *  @brief Retrieves an array of uint64_t (sized to cpu_set_size) of bitmasks with the
+ *   affinity within numa node or socket for the device.
+ *
+ *  @ingroup tagProcDiscovery
+ *
+ *  @platform{gpu_bm_linux} {host}
+ *
+ *  @details Given a processor handle @p processor_handle, the size of the cpu_set array @p cpu_set_size,
+ *  and a pointer to an array of int64_t @p cpu_set, and @p scope, this function will write the CPU affinity bitmask
+ *  to the array pointed to by @p cpu_set.
+ *
+ * User must allocate the enough memory for the cpu_set array. The size of the array is determined by the
+ * number of CPU cores in the system. As an example, if there are 2 CPUs and each has 112 cores, the size
+ * should be ceiling(2*112/64) = 4, where 64 is the bits of uint64_t. The function will write the CPU affinity bitmask
+ * to the array. For example, to describe the CPU cores 0-55,112-167, it will set the 0-55 and 112-167 bits
+ * to 1 and the reset of bits to 0 in the cpu_set array.
+ *
+ *  @param[in] processor_handle a processor handle
+ *  @param[in] cpu_set_size The size of the cpu_set array that is safe to access
+ *  @param[in,out] cpu_set Array reference in which to return a bitmask of CPU cores that this processor affinities with.
+ *  @param[in] scope Scope for socket or numa affinity.
+ *
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
+ */
+amdsmi_status_t amdsmi_get_cpu_affinity_with_scope(amdsmi_processor_handle processor_handle,
+            uint32_t cpu_set_size, uint64_t* cpu_set, amdsmi_affinity_scope_t scope);
+
 /** @} */  // end of discovery
 
 /*****************************************************************************/
@@ -2967,5 +3024,26 @@ amdsmi_status_t amdsmi_get_afids_from_cper(char *cper_buffer, uint32_t buf_size,
  */
 amdsmi_status_t amdsmi_reset_gpu(amdsmi_processor_handle processor_handle);
 
+/**
+ *  @brief Retrieve the NUMA CPU node number for a device
+ *
+ *  @ingroup tagHWTopology
+ *
+ *  @platform{gpu_bm_linux} {host}
+ *
+ *  @details Given a processor handle @p processor_handle, and a pointer to an
+ *  uint32_t @p numa_node, this function will write the
+ *  node number of NUMA CPU for the device @p processor_handle to the memory
+ *  pointed to by @p numa_node.
+ *
+ *  @param[in] processor_handle a processor handle
+ *
+ *  @param[in,out] numa_node A pointer to an uint32_t to which the
+ *  numa node number should be written.
+ *
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
+ */
+amdsmi_status_t
+amdsmi_topo_get_numa_node_number(amdsmi_processor_handle processor_handle, uint32_t* numa_node);
 
 #endif // __AMDSMI_H__

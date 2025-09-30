@@ -46,6 +46,12 @@ static const uint32_t this_block = AMDGV_POWER_BLOCK;
 		_metrics->num_metric++; \
 	} while (0)
 
+static const uint8_t mi200_smu_throttler_event_map[] = {
+	[THROTTLER_PROCHOT_BIT] = PP_THROTTLER_EVENT__PROCHOT,
+	[THROTTLER_THERMAL_SOCKET_BIT] = PP_THROTTLER_EVENT__SOCKET,
+	[THROTTLER_THERMAL_HBM_BIT] = PP_THROTTLER_EVENT__HBM,
+	[THROTTLER_THERMAL_VR_BIT] = PP_THROTTLER_EVENT__VR,
+};
 
 static int mi200_smu_13_0_send_msg_without_waiting(struct amdgv_adapter *adapt,
 	uint16_t msg)
@@ -2207,13 +2213,29 @@ static int mi200_pp_smu_get_metrics_ext(struct amdgv_adapter *adapt,
 	return ret;
 }
 
+static void mi200_smu_notify_throttler_error(struct amdgv_adapter *adapt,
+					     uint32_t throttler_status)
+{
+	uint64_t throttler_event;
+
+	throttler_event =
+		smu_pp_throttler_event_convert(adapt, mi200_smu_throttler_event_map,
+							 ARRAY_SIZE(mi200_smu_throttler_event_map),
+							 (uint64_t)throttler_status);
+
+	AMDGV_DEBUG("mi200 smu notify throttler status 0x%08x, throttler_event 0x%016llx\n",
+		    throttler_status, throttler_event);
+	amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_PP_THROTTLER_EVENT, throttler_event);
+}
+
 static int mi200_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv_entry *entry)
 {
 	int ret = 0;
-	uint32_t val;
+	uint32_t val, throttler_status;
 	uint32_t ctx_id;
 	uint32_t vf_flr_intr_sts;
 	int i;
+	uint64_t curr_time, throttle_delta;
 
 	if (entry->client_id != IH_IV_CLIENTID_MP1 ||
 	    entry->src_id != IH_INTERRUPT_ID_TO_DRIVER)
@@ -2258,6 +2280,15 @@ static int mi200_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv_
 			amdgv_live_info_prepare_reset(adapt);
 		}
 		break;
+	case IH_INTERRUPT_CONTEXT_ID_THERMAL_THROTTLING:
+		curr_time = oss_get_time_stamp();
+		throttle_delta = curr_time - adapt->pp.thermal_throttle_start_time;
+		if (throttle_delta > adapt->opt.thermal_throttle_rate_limit) {
+			adapt->pp.thermal_throttle_start_time = curr_time;
+			throttler_status = entry->src_data[1];
+			mi200_smu_notify_throttler_error(adapt, throttler_status);
+		}
+		break;
 	default:
 		AMDGV_ERROR("mi200 smu can't process this context id %d\n", ctx_id);
 		break;
@@ -2282,6 +2313,7 @@ const struct amdgv_pp_funcs mi200_amdgv_pp_funcs = {
 
 int mi200_powerplay_sw_init(struct amdgv_adapter *adapt)
 {
+	adapt->pp.thermal_throttle_start_time = 0;
 	return 0;
 }
 

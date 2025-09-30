@@ -28,12 +28,17 @@
 #include <fstream>
 #include <memory>
 
-// Major version should be changed for every command change (adding new commands, deprecating commands, modifying input/output format)
+// Major version should be changed when making incompatible changes to the command interface:
+// - Deprecating or removing existing commands
+// - Modifying input/output format of commands
 #define AMDSMI_TOOL_VERSION_MAJOR 27
-// Minor version should be updated for each command change, but without adding new commands,
-// deleting existing commands or modifying input/output format of existing commands
-#define AMDSMI_TOOL_VERSION_MINOR 4
-// Release version should be set to 0 as default and can be updated by the PMs for each CSP point release
+// Minor version should be incremented for backward-compatible command changes:
+// - Adding new commands
+// - Improvements to existing commands
+// - Adding new options to existing commands without changing the basic input/output format
+#define AMDSMI_TOOL_VERSION_MINOR 8
+// Release version should be incremented for minor issue fixes and maintenance updates
+// that don't add features or change command behavior
 #define AMDSMI_TOOL_VERSION_RELEASE 0
 
 
@@ -196,7 +201,7 @@ std::string convert_slot_type_to_string(uint32_t pcie_slot_type);
 
 std::string format_link_type(const int& link_type);
 
-std::string format_link_status(const int& link_status);
+std::string format_link_status(const int& link_status, bool legend);
 
 std::tuple<std::string, std::string, std::string> getGpuVfIndexFromVfId(std::string vf_id);
 

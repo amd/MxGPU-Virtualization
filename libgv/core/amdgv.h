@@ -49,6 +49,8 @@
 
 #define rounddown(x, y) ((x) - ((x) % (y)))
 
+#define DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
+
 #ifndef offsetof
 #define offsetof(typ, memb) ((uint64_t)((char *)&(((typ *)0)->memb)))
 #endif
@@ -65,6 +67,7 @@
 	((idx_vf == AMDGV_PF_IDX) ? (1U << 31) : (1U << idx_vf))
 
 #define BIT(x) (1 << x)
+#define BIT64(x) (1ULL << x)
 
 #define AMDGV_ERROR(fmt, ...)                                                                 \
 	do {                                                                                  \

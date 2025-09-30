@@ -67,6 +67,7 @@
 #include "gim_debug.h"
 #include "gim_config.h"
 #include "gim.h"
+#include "gim_iova_sys_mem.h"
 
 extern struct gim_error_ring_buffer *gim_error_rb;
 
@@ -924,159 +925,6 @@ uint32_t gim_do_div(uint64_t *n, uint32_t base)
 	return do_div(*n, base);
 }
 
-struct gim_dma_mem_info {
-	struct pci_dev   *dev;
-	dma_addr_t   bus_addr;
-	void             *va_ptr;
-	unsigned int     size;
-	struct scatterlist *sg;
-	int	sg_cnt;
-};
-
-static void gim_free_dma_mem_iova(struct gim_dma_mem_info *mem_info)
-{
-	dma_unmap_sg(&mem_info->dev->dev, mem_info->sg, mem_info->sg_cnt,
-		DMA_BIDIRECTIONAL);
-	gim_vfree(mem_info->sg);
-	gim_vfree(mem_info->va_ptr);
-}
-
-static void gim_free_dma_mem_system(struct gim_dma_mem_info *mem_info)
-{
-#if !defined(HAVE_LINUX_PCI_DMA_COMPAT_H)
-	dma_free_coherent(&mem_info->dev->dev, mem_info->size,
-			mem_info->va_ptr, mem_info->bus_addr);
-#else
-	pci_free_consistent(mem_info->dev, mem_info->size,
-			mem_info->va_ptr, mem_info->bus_addr);
-#endif
-}
-
-static int gim_alloc_dma_mem_iova(oss_dev_t dev,
-			     struct gim_dma_mem_info *mem_info)
-{
-	int nr_pages;
-	unsigned long dma_addr, dma_addr_next;
-	unsigned long len;
-	int i;
-	struct page *pg;
-
-	nr_pages = mem_info->size/PAGE_SIZE;
-
-	mem_info->va_ptr = gim_vzalloc(mem_info->size);
-	if (!mem_info->va_ptr)
-		goto error_out;
-
-	mem_info->sg = gim_vzalloc(nr_pages * sizeof(*(mem_info->sg)));
-	if (!mem_info->sg)
-		goto error_kzfree;
-
-	sg_init_table(mem_info->sg, nr_pages);
-	for (i = 0; i < nr_pages; i++) {
-		pg = vmalloc_to_page(mem_info->va_ptr + i * PAGE_SIZE);
-		sg_set_page(&mem_info->sg[i], pg, PAGE_SIZE, 0);
-	}
-	mem_info->sg_cnt = nr_pages;
-
-	if (!dma_map_sg(&mem_info->dev->dev, mem_info->sg,
-			mem_info->sg_cnt, DMA_BIDIRECTIONAL))
-		goto error_vfree;
-
-	for (i = 0; i < mem_info->sg_cnt - 1; i++) {
-		dma_addr = sg_dma_address(&mem_info->sg[i]);
-		dma_addr_next  = sg_dma_address(&mem_info->sg[i+1]);
-		len = mem_info->sg[i].length;
-
-		gim_dbg("DMA offset[%d] %llx->%llx\n",
-				i, sg_dma_address(&mem_info->sg[i]),
-				sg_phys(&mem_info->sg[i]));
-
-		if ((dma_addr_next - dma_addr) != len) {
-			gim_info("DMA buffers not contiguous\n");
-			goto error_unmap;
-		}
-	}
-
-	mem_info->bus_addr = sg_dma_address(mem_info->sg);
-	return 0;
-error_unmap:
-	dma_unmap_sg(&mem_info->dev->dev, mem_info->sg, mem_info->sg_cnt,
-		DMA_BIDIRECTIONAL);
-error_vfree:
-	gim_vfree(mem_info->sg);
-error_kzfree:
-	gim_vfree(mem_info->va_ptr);
-error_out:
-	return -1;
-}
-
-static int gim_alloc_dma_mem_system(oss_dev_t dev,
-			     struct gim_dma_mem_info *mem_info)
-{
-	int nr_pages;
-
-	nr_pages = mem_info->size/PAGE_SIZE;
-
-	if (nr_pages > MAX_ORDER_NR_PAGES) {
-#ifdef MAX_PAGE_ORDER
-		gim_info("Please enlarge MAX_PAGE_ORDER from %d to %d to alloc %dMB pysical contiguous system memory\n",
-					MAX_PAGE_ORDER,
-					order_base_2(nr_pages),
-					nr_pages >> 8);
-#else
-		gim_info("Please enlarge MAX_ORDER from %d to %d to alloc %dMB pysical contiguous system memory\n",
-					MAX_ORDER,
-					order_base_2(nr_pages) - order_base_2(MAX_ORDER_NR_PAGES) + MAX_ORDER,
-					nr_pages >> 8);
-#endif
-		return -1;
-	}
-
-	mem_info->va_ptr =
-#if !defined(HAVE_LINUX_PCI_DMA_COMPAT_H)
-		dma_alloc_coherent(&((struct pci_dev *)dev)->dev, mem_info->size,
-				     &mem_info->bus_addr, GFP_KERNEL);
-#else
-		pci_alloc_consistent((struct pci_dev *)dev, mem_info->size,
-				     &mem_info->bus_addr);
-#endif
-	if (!mem_info->va_ptr)
-		return -1;
-
-	return 0;
-}
-
-static int gim_alloc_dma_mem_iova_align(oss_dev_t dev,
-			     struct gim_dma_mem_info *mem_info)
-{
-	if (gim_in_virtual_machine())
-		return -1;
-
-	if (gim_alloc_dma_mem_iova(dev, mem_info))
-		return -1;
-	else if (mem_info->bus_addr & (mem_info->size - 1)) {
-		gim_free_dma_mem_iova(mem_info);
-		mem_info->size = mem_info->size << 1;
-		if (gim_alloc_dma_mem_iova(dev, mem_info))
-			return -1;
-	}
-	return 0;
-}
-
-static int gim_alloc_dma_mem_system_align(oss_dev_t dev,
-			     struct gim_dma_mem_info *mem_info)
-{
-	if (gim_alloc_dma_mem_system(dev, mem_info))
-		return -1;
-	else if (mem_info->bus_addr & (mem_info->size - 1)) {
-		gim_free_dma_mem_system(mem_info);
-		mem_info->size = mem_info->size << 1;
-		if (gim_alloc_dma_mem_system(dev, mem_info))
-			return -1;
-	}
-	return 0;
-}
-
 /**
 It will follow logic to allocate 16MB continues dma memory:
  * First try to use iova method to allocate 16MB
@@ -1092,68 +940,18 @@ static int gim_alloc_dma_mem(oss_dev_t dev, uint32_t size,
 			     enum oss_dma_mem_type type,
 			     struct oss_dma_mem_info *dma_mem_info)
 {
-	struct gim_dma_mem_info *mem_info;
-	dma_mem_info->va_ptr = NULL;
-	dma_mem_info->handle = (void *)NULL;
-
-	if ((type != OSS_DMA_MEM_CACHEABLE) && (type != OSS_DMA_PA_CONTIGUOUS)) {
-		gim_put_error(AMDGV_ERROR_DRIVER_INVALID_VALUE, type);
-		return -1;
-	}
-
-	mem_info = gim_kzalloc(sizeof(struct gim_dma_mem_info), GFP_KERNEL);
-	if (!mem_info)
-		return -1;
-	mem_info->dev = (struct pci_dev *)dev;
-
-	if (type == OSS_DMA_MEM_CACHEABLE) {
-		int size_align = ALIGN(size, PAGE_SIZE);
-
-		mem_info->size = size_align;
-		if (gim_alloc_dma_mem_iova_align(dev, mem_info)) {
-			gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_IOVA_ALIGN_FAIL, 0);
-			mem_info->sg_cnt = 0;
-			if (gim_alloc_dma_mem_system_align(dev, mem_info)) {
-				gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL, size_align);
-				gim_kfree(mem_info);
-				return -1;
-			}
-		}
-		dma_mem_info->bus_addr = ALIGN(mem_info->bus_addr, size_align);
-		dma_mem_info->va_ptr = mem_info->va_ptr + (dma_mem_info->bus_addr - mem_info->bus_addr);
-		if (mem_info->sg_cnt != 0)
-			dma_mem_info->phys_addr = sg_phys(mem_info->sg);
-		else
-			dma_mem_info->phys_addr = dma_to_phys(&mem_info->dev->dev, mem_info->bus_addr);
-
-		dma_mem_info->handle = (void *)mem_info;
-	} else if (type == OSS_DMA_PA_CONTIGUOUS) {
-		mem_info->size = size;
-		if (gim_alloc_dma_mem_system(dev, mem_info)) {
-			gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL, size);
-			gim_kfree(mem_info);
-			return -1;
-		}
-		dma_mem_info->bus_addr = mem_info->bus_addr;
-		dma_mem_info->va_ptr = mem_info->va_ptr;
-		dma_mem_info->phys_addr = dma_to_phys(&mem_info->dev->dev, mem_info->bus_addr);
-		dma_mem_info->handle = (void *)mem_info;
-	}
-
-	return 0;
+	/* This function designed as size == align size */
+	return gim_iova_mem_allocate((struct pci_dev *)dev, size, size, type, dma_mem_info);
 }
 
 static void gim_free_dma_mem(void *handle)
 {
-	struct gim_dma_mem_info *mem_info = (struct gim_dma_mem_info *)handle;
+	gim_iova_mem_free(handle);
+}
 
-	if (mem_info) {
-		if (mem_info->sg_cnt)
-			gim_free_dma_mem_iova(mem_info);
-		else
-			gim_free_dma_mem_system(mem_info);
-		gim_kfree(mem_info);
-	}
+static uint64_t gim_sg_dma_address(void *handle, uint32_t page)
+{
+	return gim_iova_sg_dma_address(handle, page);
 }
 
 struct gim_spin_lock {
@@ -2116,6 +1914,52 @@ out:
 	return 0;
 }
 
+static int gim_dfc_validate(enum amd_asic_type asic_type,
+				unsigned char *pfw_image, uint32_t *pfw_size)
+{
+	uint32_t max_size = AMDGV_MAX_DFC_FW_SIZE;
+	uint32_t min_size = AMDGV_MIN_DFC_FW_SIZE;
+	uint32_t entry_num, expected_size, signature_index = 0;
+
+	if (CHIP_NAVI32 == asic_type)
+		max_size -= 256;
+	else
+		min_size += 256;
+
+	if (*pfw_size > max_size) {
+		gim_warn("dfc size is too large\n");
+		return -EINVAL;
+	}
+
+	if (*pfw_size < min_size) {
+		gim_warn("dfc size is too small\n");
+		return -EINVAL;
+	}
+
+	entry_num = ((uint32_t *)pfw_image)[65];
+
+	if (entry_num > DFC_FW_MAX_NUMBER_OF_ENTRIES) {
+		gim_warn("dfc entry num is not allowed\n");
+		return -EINVAL;
+	}
+
+	expected_size = entry_num * 112 * 4 + min_size;
+
+	if (*pfw_size != expected_size) {
+		gim_warn("dfc size is not expected\n");
+		return -EINVAL;
+	}
+
+	signature_index = entry_num * 112 + 64 + 16;
+
+	if (0 == ((uint32_t *)pfw_image)[signature_index]) {
+		gim_warn("dfc signature is not found\n");
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 static int gim_get_firmware(oss_dev_t dev, enum amdgv_firmware_id fw_id,
 				enum amd_asic_type asic_type, unsigned char *pfw_image,
 				uint32_t *pfw_size, uint32_t fw_size_max)
@@ -2149,6 +1993,9 @@ static int gim_get_firmware(oss_dev_t dev, enum amdgv_firmware_id fw_id,
 	fw_size = le32_to_cpu(hdr->ucode_size_bytes);
 	memcpy(pfw_image, fw_data, fw_size);
 	*pfw_size = fw_size;
+
+	if (fw_id == AMDGV_FIRMWARE_ID__DFC_FW)
+		ret = gim_dfc_validate(asic_type, pfw_image, pfw_size);
 
 out:
 	release_firmware(fw_entry);
@@ -2305,6 +2152,11 @@ static int gim_schedule_work(oss_dev_t dev, oss_callback_t fn, void *context)
 	return 0;
 }
 
+static void gim_mb (void)
+{
+	mb();
+}
+
 struct oss_interface gim_oss_interfaces = {
 	.get_vf_dev_from_bdf = gim_get_vf_dev_from_bdf,
 	.put_vf_dev = gim_put_vf_dev,
@@ -2350,6 +2202,7 @@ struct oss_interface gim_oss_interfaces = {
 	.free_memory = gim_free_memory,
 	.alloc_dma_mem = gim_alloc_dma_mem,
 	.free_dma_mem = gim_free_dma_mem,
+	.sg_dma_address = gim_sg_dma_address,
 	.memremap = gim_memremap,
 	.memunmap = gim_memunmap,
 	.memset = gim_memset,
@@ -2455,4 +2308,5 @@ struct oss_interface gim_oss_interfaces = {
 	.clear_conf_file = gim_clear_conf_file,
 	.schedule_work = gim_schedule_work,
 	.in_virtual_machine = gim_in_virtual_machine,
+	.mb = gim_mb,
 };

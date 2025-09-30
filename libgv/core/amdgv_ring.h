@@ -141,6 +141,11 @@ struct amdgv_fence_driver {
 	spin_lock_t			lock;
 };
 
+enum amdgv_ring_shared_type {
+	AMDGV_RING_PFVF_SHARED = 0,
+	AMDGV_RING_PF_DEDICATED = 1,
+};
+
 int amdgv_fence_emit_polling(struct amdgv_ring *ring, uint32_t *s,
 			      uint32_t timeout);
 signed long amdgv_fence_wait_polling(struct amdgv_ring *ring,
@@ -276,6 +281,7 @@ struct amdgv_ring {
 	/* used for mes */
 	bool			is_mes_queue;
 	uint32_t		hw_queue_id;
+	enum amdgv_ring_shared_type	shared_type;
 };
 
 #define amdgv_ring_parse_cs(r, p, job, ib) \

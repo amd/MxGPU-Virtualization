@@ -700,7 +700,7 @@ static uint8_t amdgv_get_cper_records(struct amdgv_get_cper_records_input *input
 	uint8_t *buffer;
 	int r;
 
-	buffer = kzalloc(input_data->buf_size, GFP_KERNEL);
+	buffer = gim_kzalloc(input_data->buf_size, GFP_KERNEL);
 	if (!buffer) {
 		gim_warn("Failed to alloc memory, size = %lld\n", input_data->buf_size);
 		return AMDGV_CMD__ERROR_GENERIC;
@@ -724,7 +724,7 @@ static uint8_t amdgv_get_cper_records(struct amdgv_get_cper_records_input *input
 	}
 
 out:
-	kfree(buffer);
+	gim_kfree(buffer);
 	return r;
 }
 

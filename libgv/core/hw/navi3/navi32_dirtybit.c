@@ -591,6 +591,12 @@ static int navi32_dirtybit_query_data_hybrid(struct amdgv_adapter *adapt,
 	uint32_t i;
 	uint8_t temp_dbit = 0;
 	struct amdgv_vf_ffbm_map_list *vf_ffbm_map_list = NULL;
+
+	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)) {
+		AMDGV_ERROR("GPUV live migration not enabled\n");
+		return AMDGV_FAILURE;
+	}
+
 	/* nv32 must have ffbm enabled */
 	if (!adapt->ffbm.enabled) {
 		AMDGV_ERROR("FFBM not enabled\n");
@@ -720,6 +726,10 @@ int navi32_dirtybit_sw_init(struct amdgv_adapter *adapt)
 {
 	int ret = 0;
 	adapt->dirtybit.funcs = &navi32_db_funcs;
+
+	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION))
+		return ret;
+
 	adapt->dirtybit.query_submission_frame = (uint8_t *)oss_malloc(adapt->sdma.sdma_ring[1].max_dw * 4);
 
 	if (!adapt->dirtybit.query_submission_frame) {

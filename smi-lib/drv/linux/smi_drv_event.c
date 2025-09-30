@@ -150,9 +150,9 @@ static void smi_event_free(struct kref *refcount)
 
 	amdgv_error_delete_notifier(adev, set->notifier);
 #if !defined(HAVE_KFREE_SENSITIVE)
-	kzfree(set);
+	gim_kzfree(set);
 #else
-	kfree_sensitive(set);
+	gim_kfree_sensitive(set);
 #endif
 }
 
@@ -176,7 +176,7 @@ int smi_create_event(struct smi_ctx *smi, amdgv_dev_t *adev, struct smi_event_se
 
 	name = kasprintf(GFP_KERNEL, "gim-evt-%d", fd);
 	file = anon_inode_getfile(name, &smi_event_fops, set, O_RDONLY);
-	kfree(name);
+	gim_kfree(name);
 
 	if (IS_ERR(file)) {
 		ret = PTR_ERR(file);
@@ -208,7 +208,7 @@ free_mod:
 free_fd:
 	put_unused_fd(fd);
 free_ctx:
-	kfree(set);
+	gim_kfree(set);
 
 	return ret;
 }

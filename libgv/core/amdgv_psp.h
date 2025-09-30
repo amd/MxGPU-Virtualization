@@ -323,7 +323,7 @@ struct psp_context {
 	enum psp_runtime_scpm_authentication scpm_status;
 
 	struct dfc_fw *dfc_fw;
-	uint32_t vf_relay_wtr_ptr;
+	uint32_t vf_relay_wtr_ptr[AMDGV_MAX_VF_NUM];
 	enum psp_gfx_tee_version tee_version;
 	bool skip_ta_fw_version;
 

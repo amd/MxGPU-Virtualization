@@ -195,11 +195,20 @@ enum amdgv_ws_auto_run {
 	AMDGV_WS_AUTO_RUN_ENABLED  = 1,
 };
 
+/*
+ * max number of VMHUB
+ * layout: max 8 GFXHUB + 4 MMHUB0
+ */
+#define AMDGV_MAX_VMHUBS                       12
+#define AMDGV_GFXHUB_START                     0
+#define AMDGV_MMHUB0_START                     8
+#define AMDGV_GFXHUB(x)                        (AMDGV_GFXHUB_START + (x))
+#define AMDGV_MMHUB0(x)                        (AMDGV_MMHUB0_START + (x))
+
 enum amdgv_hub_idx {
 	VM_GFXHUB = 0,
-	VM_MMHUB0 = 1,
-	VM_MMHUB1 = 2,
-	VM_NUMHUB,
+	VM_MMHUB0 = AMDGV_MMHUB0_START,
+	VM_NUMHUB = AMDGV_MAX_VMHUBS,
 };
 
 /* Define the HW IP blocks will be used in driver , add more if necessary */
@@ -380,6 +389,8 @@ struct amdgv_init_func {
 	int (*hw_fini)(struct amdgv_adapter *adapt);
 	/* sets up the hw state for live update (ring buffer MC address) */
 	int (*hw_live_init)(struct amdgv_adapter *adapt);
+	/* finalize the hw state for live update (ring buffer MC address) */
+	int (*hw_live_fini)(struct amdgv_adapter *adapt);
 	/* clean up after reset */
 	int (*post_reset)(struct amdgv_adapter *adapt);
 	/* clean up before reset */
@@ -444,6 +455,8 @@ struct amdgv_vf_device {
 	 * */
 	uint32_t real_fb_size;
 
+	uint64_t mapped_fb_size;
+
 	/* fb's offset and size with tmr area */
 	uint32_t fb_offset_tmr;
 	uint32_t fb_size_tmr;
@@ -505,6 +518,24 @@ struct amdgv_reg_golden {
 };
 
 struct amdgv_vmhub {
+	uint32_t ctx0_ptb_addr_lo32;
+	uint32_t ctx0_ptb_addr_hi32;
+	uint32_t vm_inv_eng0_sem;
+	uint32_t vm_inv_eng0_req;
+	uint32_t vm_inv_eng0_ack;
+	uint32_t  vm_context0_cntl;
+	uint32_t vm_l2_pro_fault_status;
+	uint32_t vm_l2_pro_fault_cntl;
+
+	/*
+	 * store the register distances between two continuous context domain
+	 * and invalidation engine.
+	 */
+	uint32_t ctx_distance;
+	uint32_t ctx_addr_distance; /* include LO32/HI32 */
+	uint32_t eng_distance;
+	uint32_t eng_addr_distance; /* include LO32/HI32 */
+
 	uint32_t fault_cntl;
 	uint32_t fault_status;
 	uint32_t fault_addr_lo;
@@ -548,6 +579,7 @@ enum amdgv_vram_type {
   AMDGV_DGPU_VRAM_TYPE__HBM2E = 0x61,
   AMDGV_DGPU_VRAM_TYPE__GDDR6 = 0x70,
   AMDGV_DGPU_VRAM_TYPE__HBM3 = 0x80,
+  AMDGV_DGPU_VRAM_TYPE__HBM3E = 0x81,
   AMDGV_DGPU_VRAM_TYPE__GDDR7 = 0x90,
 };
 
@@ -615,6 +647,7 @@ struct amdgv_adapter {
 	uint64_t          fb_pa;
 	/* the size of framebuffer */
 	uint64_t          fb_size;
+	uint64_t          mapped_fb_size;
 
 	uint64_t          mmio_pa;
 	uint64_t          mmio_size;
@@ -660,6 +693,7 @@ struct amdgv_adapter {
 	uint16_t          sriov_vf_devid;
 
 	uint64_t          mc_fb_loc_addr;
+	uint64_t          mc_fb_offset;
 	uint64_t          mc_fb_top_addr;
 	uint64_t          mc_sys_loc_addr;
 	uint64_t          mc_sys_top_addr;
@@ -886,9 +920,10 @@ struct amdgv_adapter {
 	uint32_t rlcv_ts_buff[CSA_TSL_SIZE / 4];
 
 	/* GART */
-	struct oss_dma_mem_info pdb0_mem;
-	struct oss_dma_mem_info ptb_mem;
+	struct amdgv_memmgr_mem *pdb0_mem;
+	struct amdgv_memmgr_mem *ptb_mem;
 	uint64_t gart_size;
+	bool gart_ready;
 
 	/* Asymmetric FB layout */
 	bool asymmetric_fb_enabled;
@@ -919,6 +954,7 @@ struct amdgv_adapter {
 
 	/* psp mb int status, for xgmi.set_mb_in_hive feature to sync hive status */
 	bool psp_mb_int_status;
+	struct amdgv_gmc gmc;
 };
 
 #ifdef WS_RECORD
@@ -1254,6 +1290,7 @@ void amdgv_device_internal_fini(struct amdgv_adapter *adapt,
 int amdgv_device_func_hw_engine_init(struct amdgv_adapter *adapt);
 void amdgv_device_func_hw_engine_fini(struct amdgv_adapter *adapt);
 int amdgv_device_func_hw_live_init(struct amdgv_adapter *adapt);
+int amdgv_device_func_hw_live_fini(struct amdgv_adapter *adapt);
 
 int amdgv_get_supported_dev_ids(struct amdgv_device_ids *dev_ids, int length);
 

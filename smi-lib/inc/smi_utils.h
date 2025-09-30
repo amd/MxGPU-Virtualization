@@ -400,4 +400,26 @@ bool guid_equals(const guid_t* guid1,const guid_t* guid2);
  */
 void amdsmi_get_register_array(const uint8_t* data, size_t size, uint64_t *register_array);
 
+/**
+ *  \brief  Creates a sysfs PCI device path prefix for a given processor handle.
+ *
+ *  \param [in] processor_handle - Handle to the processor for which to generate the path.
+ *  \param [out] out_path - Buffer to store the generated path.
+ *  \param [in] out_path_size - Size of the output buffer in bytes.
+ *
+ *  \return 0 on success, error code otherwise.
+ */
+int make_sysfs_pci_device_prefix(amdsmi_processor_handle processor_handle, char *out_path, size_t out_path_size);
+
+/**
+ *  \brief  Parses a CPU list string and sets corresponding bits in the CPU set.
+ *
+ *  \param [in] cpu_list - String containing CPU list (e.g., "0,2-4,7").
+ *  \param [out] cpu_set - Array of 64-bit integers representing the CPU bit mask.
+ *  \param [in] cpu_set_size - Size of the cpu_set array in elements.
+ *
+ *  \return 0 on success, error code otherwise.
+ */
+int parse_cpu_list(const char *cpu_list, uint64_t *cpu_set, uint32_t cpu_set_size);
+
 #endif // __SMI_UTILS_H__

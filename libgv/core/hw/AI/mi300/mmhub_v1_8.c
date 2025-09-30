@@ -36,6 +36,34 @@
 
 static const uint32_t this_block = AMDGV_MEMORY_BLOCK;
 
+static void mmhub_v1_8_init_gart_aperture_regs(struct amdgv_adapter *adapt)
+{
+	uint64_t page_table_base;
+	int i;
+
+	page_table_base = amdgv_memmgr_get_gpu_pa(adapt->pdb0_mem);
+	page_table_base |= AMDGV_PTE_VALID;
+	page_table_base |= AMDGV_PTE_SNOOPED;
+
+	for (i = 0; i < adapt->mcp.num_aid; i++) {
+		WREG32_SOC15(MMHUB, i, regVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32,
+			     lower_32_bits(page_table_base));
+
+		WREG32_SOC15(MMHUB, i, regVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32,
+			     upper_32_bits(page_table_base));
+
+		WREG32_SOC15(MMHUB, i, regVM_CONTEXT0_PAGE_TABLE_START_ADDR_LO32,
+			     (uint32_t)(GART_START >> 12));
+		WREG32_SOC15(MMHUB, i, regVM_CONTEXT0_PAGE_TABLE_START_ADDR_HI32,
+			     (uint32_t)(GART_START >> 44));
+
+		WREG32_SOC15(MMHUB, i, regVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32,
+			     (uint32_t)((adapt->gart_size + GART_START) >> 12));
+		WREG32_SOC15(MMHUB, i, regVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32,
+			     (uint32_t)((adapt->gart_size + GART_START) >> 44));
+	}
+}
+
 static void mmhub_v1_8_init_system_aperture_regs(struct amdgv_adapter *adapt)
 {
 	uint64_t value;
@@ -153,6 +181,36 @@ static void mmhub_v1_8_init_snoop_override_regs(struct amdgv_adapter *adapt)
 	}
 }
 
+static void mmhub_v1_8_enable_system_domain(struct amdgv_adapter *adapt)
+{
+	uint32_t tmp;
+	int i, j;
+	struct amdgv_vmhub *hub;
+
+	for (i = 0; i < adapt->mcp.num_aid; i++) {
+		tmp = RREG32_SOC15(MMHUB, i, regVM_CONTEXT0_CNTL);
+		tmp = REG_SET_FIELD(tmp, VM_CONTEXT0_CNTL, ENABLE_CONTEXT, 1);
+		tmp = REG_SET_FIELD(tmp, VM_CONTEXT0_CNTL, PAGE_TABLE_DEPTH, 1);
+		tmp = REG_SET_FIELD(tmp, VM_CONTEXT0_CNTL, PAGE_TABLE_BLOCK_SIZE, 12);
+		tmp = REG_SET_FIELD(tmp, VM_CONTEXT0_CNTL,
+				    RETRY_PERMISSION_OR_INVALID_PAGE_FAULT, 0);
+		WREG32_SOC15(MMHUB, i, regVM_CONTEXT0_CNTL, tmp);
+
+		hub = &adapt->vmhub[AMDGV_MMHUB0(i)];
+		if (!hub->eng_addr_distance)
+			continue;
+
+		for (j = 0; j < 18; ++j) {
+			WREG32_SOC15_OFFSET(MMHUB, i,
+					regVM_INVALIDATE_ENG0_ADDR_RANGE_LO32,
+					j * hub->eng_addr_distance, 0xffffffff);
+			WREG32_SOC15_OFFSET(MMHUB, i,
+					regVM_INVALIDATE_ENG0_ADDR_RANGE_HI32,
+					j * hub->eng_addr_distance, 0x1f);
+		}
+	}
+}
+
 static void mmhub_v1_8_disable_identity_aperture(struct amdgv_adapter *adapt)
 {
 	uint32_t i = 0;
@@ -226,15 +284,51 @@ void mmhub_v1_8_enable_xgmi(struct amdgv_adapter *adapt)
 
 void mmhub_v1_8_gart_enable(struct amdgv_adapter *adapt)
 {
+	mmhub_v1_8_init_gart_aperture_regs(adapt);
 	mmhub_v1_8_init_system_aperture_regs(adapt);
 	mmhub_v1_8_init_tlb_regs(adapt);
 	mmhub_v1_8_init_cache_regs(adapt);
 	mmhub_v1_8_init_snoop_override_regs(adapt);
+	mmhub_v1_8_enable_system_domain(adapt);
 	mmhub_v1_8_disable_identity_aperture(adapt);
 	mmhub_v1_8_set_fault_enable_default(adapt, true);
 }
 
-void mmhub_v1_8_fini(struct amdgv_adapter *adapt)
+void mmhub_v1_8_init(struct amdgv_adapter *adapt)
+{
+	struct amdgv_vmhub *hub;
+	int i;
+
+	for (i = 0; i < adapt->mcp.num_aid; i++) {
+		hub = &adapt->vmhub[AMDGV_MMHUB0(i)];
+
+		hub->ctx0_ptb_addr_lo32 = SOC15_REG_OFFSET(MMHUB, i,
+			regVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32);
+		hub->ctx0_ptb_addr_hi32 = SOC15_REG_OFFSET(MMHUB, i,
+			regVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32);
+		hub->vm_inv_eng0_req =
+			SOC15_REG_OFFSET(MMHUB, i, regVM_INVALIDATE_ENG0_REQ);
+		hub->vm_inv_eng0_ack =
+			SOC15_REG_OFFSET(MMHUB, i, regVM_INVALIDATE_ENG0_ACK);
+		hub->vm_context0_cntl =
+			SOC15_REG_OFFSET(MMHUB, i, regVM_CONTEXT0_CNTL);
+		hub->vm_l2_pro_fault_status = SOC15_REG_OFFSET(MMHUB, i,
+			regVM_L2_PROTECTION_FAULT_STATUS);
+		hub->vm_l2_pro_fault_cntl = SOC15_REG_OFFSET(MMHUB, i,
+			regVM_L2_PROTECTION_FAULT_CNTL);
+
+		hub->ctx_distance = regVM_CONTEXT1_CNTL - regVM_CONTEXT0_CNTL;
+		hub->ctx_addr_distance =
+			regVM_CONTEXT1_PAGE_TABLE_BASE_ADDR_LO32 -
+			regVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32;
+		hub->eng_distance = regVM_INVALIDATE_ENG1_REQ -
+			regVM_INVALIDATE_ENG0_REQ;
+		hub->eng_addr_distance = regVM_INVALIDATE_ENG1_ADDR_RANGE_LO32 -
+			regVM_INVALIDATE_ENG0_ADDR_RANGE_LO32;
+	}
+}
+
+void mmhub_v1_8_gart_fini(struct amdgv_adapter *adapt)
 {
 	uint32_t tmp;
 	uint32_t i = 0;

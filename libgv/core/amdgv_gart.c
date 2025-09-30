@@ -23,6 +23,7 @@
 #include <amdgv.h>
 #include <amdgv_device.h>
 #include "amdgv_gart.h"
+#include "amdgv_misc.h"
 
 static const uint32_t this_block = AMDGV_MEMORY_BLOCK;
 
@@ -49,6 +50,24 @@ static int amdgv_gart_set_pte_pde(struct amdgv_adapter *adapt, void *cpu_pt_addr
 }
 
 /**
+ * amdgpu_gart_invalidate_tlb - invalidate gart TLB
+ *
+ * @adev: amdgpu device driver pointer
+ *
+ * Invalidate gart TLB which can be use as a way to flush gart changes
+ *
+ */
+void amdgpu_gart_invalidate_tlb(struct amdgv_adapter *adapt)
+{
+	int i;
+
+	oss_mb();
+	amdgv_misc_hdp_flush(adapt);
+	for (i = 0; i < AMDGV_MAX_VMHUBS; i++)
+		amdgv_gmc_flush_gpu_tlb(adapt, 0, i, 0);
+}
+
+/**
  * amdgv_gart_map - map dma addresses into GART entries
  *
  * @adapt: amdgv_adapter pointer
@@ -62,7 +81,7 @@ void amdgv_gart_map(struct amdgv_adapter *adapt, uint64_t offset, int pages,
 	uint64_t flags;
 	unsigned t;
 	int i;
-	void *ptb_cpu_addr = adapt->ptb_mem.va_ptr;
+	void *ptb_cpu_addr = amdgv_memmgr_get_cpu_addr(adapt->ptb_mem);
 
 	flags = AMDGV_PTE_MTYPE_GFX9(MTYPE_UC);
 	flags |= AMDGV_PTE_EXECUTABLE;
@@ -78,13 +97,14 @@ void amdgv_gart_map(struct amdgv_adapter *adapt, uint64_t offset, int pages,
 		AMDGV_DEBUG("GART address: 0x%llx DMA address: 0x%llx\n", (offset + (i << AMDGV_GPU_PAGE_SHIFT)), dma_addr + (i << AMDGV_GPU_PAGE_SHIFT));
 		amdgv_gart_set_pte_pde(adapt, ptb_cpu_addr, t + i, dma_addr + (i << AMDGV_GPU_PAGE_SHIFT), flags);
 	}
+	amdgpu_gart_invalidate_tlb(adapt);
 }
 
 void amdgv_gart_init_pdb0(struct amdgv_adapter *adapt)
 {
 	uint64_t flags;
-	void *pdb0_cpu_addr = adapt->pdb0_mem.va_ptr;
-	uint64_t gart_dma_addr = adapt->ptb_mem.bus_addr;
+	void *pdb0_cpu_addr = amdgv_memmgr_get_cpu_addr(adapt->pdb0_mem);
+	uint64_t ptb_pa = amdgv_memmgr_get_gpu_pa(adapt->ptb_mem);
 
 	/* The first PDE0 entry points to a huge
 	 * PTB who has more than 512 entries each
@@ -94,7 +114,6 @@ void amdgv_gart_init_pdb0(struct amdgv_adapter *adapt)
 	 * mapping VF memory and CXL memory in the future.
 	 */
 	flags = AMDGV_PTE_VALID;
-	flags |= AMDGV_PTE_SYSTEM;
 	flags |= AMDGV_PTE_SNOOPED;
-	amdgv_gart_set_pte_pde(adapt, pdb0_cpu_addr, 0, gart_dma_addr, flags);
+	amdgv_gart_set_pte_pde(adapt, pdb0_cpu_addr, 0, ptb_pa, flags);
 }

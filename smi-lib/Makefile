@@ -29,6 +29,7 @@ LOGGING ?= False
 THREAD_SANITIZER ?= False
 ADDRESS_SANITIZER ?= False
 CPPTOOL_BUILD ?= False
+ENABLE_GCOV ?= False
 
 ifeq ($(BUILD_TYPE), Debug)
   LOGGING = True
@@ -73,7 +74,6 @@ DEPS := $(OBJS:.o=.d)
 
 LIBNAME := libamdsmi
 DYNAMICLIB_TARGET := $(LIBNAME).so
-STATICLIB_TARGET := $(LIBNAME).a
 
 INCLUDE := $(addprefix -I,$(INCLUDE_DIR) $(INCLUDE_DIR)/aca-decode/  $(INTERFACE_DIR) $(LIN_HOST_INCLUDE_DIR) $(GIM_COMS_INCLUDE_DIR))
 INCLUDE += $(HOST_INCLUDE_FLAGS)
@@ -94,8 +94,6 @@ VERSION_LIB := AMDSMI_VERSION_MAJOR=$(VERSION_MAJOR) AMDSMI_VERSION_MINOR=$(VERS
 DYNAMICLIB_FLAGS = -Wl,-soname,libamdsmi.so
 DYNAMICLIB_FLAGS += -Wl,-rpath,'$$ORIGIN'
 DYNAMICLIB_FLAGS += $(HOST_DYNAMIC_FLAGS)
-
-STATICLIB_FLAGS = rcs
 
 ifeq ($(THREAD_SAFE), True)
   CFLAGS  += -DTHREAD_SAFE -pthread
@@ -127,7 +125,12 @@ ifeq ($(BUILD_TYPE), Release)
 	DYNAMICLIB_FLAGS += -Wl,-z,relro,-z,noexecstack,-z,noexecheap -Wl,--strip-debug -Wl,--strip-all
 endif
 
-DEFAULT_DEPS := $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET) $(OUTPUT_DIR)/$(STATICLIB_TARGET)
+ifeq ($(ENABLE_GCOV), True)
+	CFLAGS += -coverage
+	DYNAMICLIB_FLAGS += -lgcov
+endif
+
+DEFAULT_DEPS := $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET)
 ifeq ($(THREAD_SANITIZER), False)
 	DEFAULT_DEPS += package
 endif
@@ -165,9 +168,6 @@ $(OUTPUT_DIR)/%.c.o: $(SOURCE_DIR)/aca-decode/%.c | $(OUTPUT_DIR)
 $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET): $(OBJS) | $(OUTPUT_DIR)
 	$(CC) -shared -o $@ $^ $(DYNAMICLIB_FLAGS)
 
-$(OUTPUT_DIR)/$(STATICLIB_TARGET): $(OBJS) | $(OUTPUT_DIR)
-	$(AR) $(STATICLIB_FLAGS) -o $@ $^
-
 $(OUTPUT_DIR):
 	mkdir -p $(OUTPUT_DIR)/$(LIN_HOST_FOLDER)
 
@@ -201,11 +201,11 @@ EXTRACT:
 	unzip -o $(PROJECT_ROOT)/dl/clang-10.0.1-py3-none-any.whl -d $(AMDSMI_BUILD_DIR)/amdsmi_wrapper
 
 .PHONY: test
-test: $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET) $(OUTPUT_DIR)/$(STATICLIB_TARGET)
+test: $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET)
 	$(MAKE) -C $(TEST_DIR)/ $(VERSION_LIB)
 
 .PHONY: examples
-examples: $(OUTPUT_DIR)/$(STATICLIB_TARGET)
+examples: $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET)
 	$(MAKE) -C $(EXAMPLES_DIR)/
 
 .PHONY: test_clean
@@ -250,15 +250,13 @@ clean:
 		rm $(HOOKS_DIR)/pre-commit; \
 	fi
 
-install: $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET) $(OUTPUT_DIR)/$(STATICLIB_TARGET)
+install: $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET)
 	install -d $(DESTDIR)$(PREFIX)/lib/
-	install -m 644 $(OUTPUT_DIR)/$(STATICLIB_TARGET) $(DESTDIR)$(PREFIX)/lib/
 	install -m 644 $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET) $(DESTDIR)$(PREFIX)/lib/
 	install -d $(DESTDIR)$(PREFIX)/include/
 	install -m 644 $(INTERFACE_DIR)/*.h $(DESTDIR)$(PREFIX)/include/
 
 uninstall:
-	@if [ -f $(DESTDIR)$(PREFIX)/lib/$(STATICLIB_TARGET) ]; then $(RM) $(DESTDIR)$(PREFIX)/lib/$(STATICLIB_TARGET); fi
 	@if [ -f $(DESTDIR)$(PREFIX)/lib/$(DYNAMICLIB_TARGET) ]; then $(RM) $(DESTDIR)$(PREFIX)/lib/$(DYNAMICLIB_TARGET); fi
 	@if [ -f $(DESTDIR)$(PREFIX)/include/amdsmi.h ]; then $(RM) $(DESTDIR)$(PREFIX)/include/amdsmi.h; fi
 

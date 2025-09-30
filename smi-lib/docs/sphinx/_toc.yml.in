@@ -4,6 +4,8 @@ root: index
 subtrees:
 - caption: Install
   entries:
+  - file: install/install.md
+    title: Library and CLI tool installation
   - file: install/build.md
     title: Build from source
 
@@ -31,6 +33,11 @@ subtrees:
       title: Data fields
   - file: reference/amdsmi_py_api.md
     title: Python API
+
+- caption: General
+  entries:
+  - file: general/versioning.md
+    title: Library and CLI tool versioning
 
 - caption: About
   entries:

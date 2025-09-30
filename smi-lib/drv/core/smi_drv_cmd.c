@@ -30,6 +30,7 @@
 
 #include "smi_drv_oss_wrapper.h"
 #include "smi_drv_utils.h"
+#include <ctype.h>
 
 enum smi_error_type {
 	ERROR_OTHER		= 1,
@@ -2002,7 +2003,6 @@ int smi_get_link_metrics(struct smi_ctx *ctx, void *inb,
 	struct amdgv_gpumon_link_metrics *link_metrics = NULL;
 	uint32_t i = 0;
 	int ret = SMI_STATUS_SUCCESS;
-
 	/* Check version */
 	if ((in_len != sizeof(struct smi_device_info)) ||
 	    (out_len != sizeof(struct smi_link_metrics))) {
@@ -2036,6 +2036,7 @@ int smi_get_link_metrics(struct smi_ctx *ctx, void *inb,
 		link->links[i].link_type = smi_map_link_type(link_metrics->links[i].link_type);
 		link->links[i].read = link_metrics->links[i].read;
 		link->links[i].write = link_metrics->links[i].write;
+		link->links[i].link_status = smi_map_link_status(link_metrics->links[i].status);
 	}
 
 end:
@@ -2616,7 +2617,7 @@ int smi_get_soc_pstate(struct smi_ctx *ctx, void *inb,
 	struct smi_dpm_policy *dpm_policy = NULL;
 	struct amdgv_gpumon_smu_dpm_policy dpm_policy_info;
 	bool dev_busy = false;
-	int i;
+	int i, j;
 	int ret = SMI_STATUS_SUCCESS;
 
 	/* Check version */
@@ -2647,6 +2648,9 @@ int smi_get_soc_pstate(struct smi_ctx *ctx, void *inb,
 		smi_oss_funcs->memcpy(dpm_policy->policies[i].policy_description,
 			dpm_policy_info.policies[i].policy_description,
 			smi_oss_funcs->strlen(dpm_policy_info.policies[i].policy_description));
+		for (j = 0; dpm_policy->policies[i].policy_description[j] != '\0'; j++) {
+			dpm_policy->policies[i].policy_description[j] = (char)toupper((unsigned char)dpm_policy->policies[i].policy_description[j]);
+		}
 	}
 
 end:

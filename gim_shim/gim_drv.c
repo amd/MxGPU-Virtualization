@@ -357,6 +357,7 @@ static int gim_init_thread_func(void *context)
 	data->opt.ras_vf_telemetry_policy = gim_conf_get_ras_vf_telemetry_policy_opt(dev_data->gpu_index);
 	data->opt.max_cper_count = gim_conf_get_max_cper_count_opt(dev_data->gpu_index);
 	data->opt.debug_mode = gim_conf_get_debug_mode_opt(dev_data->gpu_index);
+	data->opt.thermal_throttle_rate_limit = gim_conf_get_thermal_throttle_rate_limit_opt(dev_data->gpu_index);
 
 	/* Initialize device and enable SRIOV */
 	if (pci_enable_device(pdev) != 0) {

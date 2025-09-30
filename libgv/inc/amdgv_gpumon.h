@@ -51,18 +51,23 @@
 #define AMDGV_GPUMON_MAX_NUM_NUMA_NODE 32
 #define AMDGV_GPUMON_MAX_NUM_SPATIAL_PARTITION 32
 
-#define AMDGV_GPUMON_MAX_NUM_METRICS_EXT 	255
+#define AMDGV_GPUMON_MAX_NUM_METRICS_EXT	255
 
-#define AMDGV_GPUMON_METRIC_EXT_UNIT_SHIFT 		0ULL
-#define AMDGV_GPUMON_METRIC_EXT_NAME_SHIFT 		16ULL
-#define AMDGV_GPUMON_METRIC_EXT_CATEGORY_SHIFT 		32ULL
-#define AMDGV_GPUMON_METRIC_EXT_FLAGS_SHIFT 		48ULL
+#define AMDGV_GPUMON_METRIC_EXT_UNIT_SHIFT		0ULL
+#define AMDGV_GPUMON_METRIC_EXT_NAME_SHIFT		16ULL
+#define AMDGV_GPUMON_METRIC_EXT_CATEGORY_SHIFT		32ULL
+#define AMDGV_GPUMON_METRIC_EXT_FLAGS_SHIFT		48ULL
+#define AMDGV_GPUMON_METRIC_EXT_RES_GROUP_SHIFT		52ULL
+#define AMDGV_GPUMON_METRIC_EXT_RES_SUBGROUP_SHIFT	57ULL
 
 #define METRIC_EXT_FLAG(FLAG)  (1ULL << AMDGV_GPUMON_METRIC_EXT_FLAG__##FLAG)
-#define METRIC_EXT_CODE(CATEGORY, NAME, UNIT, FLAGS) \
+
+#define METRIC_EXT_CODE(CATEGORY, NAME, UNIT, RES_GROUP, RES_SUBGROUP, FLAGS) \
 	((((uint64_t)(AMDGV_GPUMON_METRIC_EXT_CATEGORY__##CATEGORY)) << AMDGV_GPUMON_METRIC_EXT_CATEGORY_SHIFT) | \
 	(((uint64_t)(AMDGV_GPUMON_METRIC_EXT_NAME__##NAME)) << AMDGV_GPUMON_METRIC_EXT_NAME_SHIFT) | \
 	(((uint64_t)(AMDGV_GPUMON_METRIC_EXT_UNIT__##UNIT)) << AMDGV_GPUMON_METRIC_EXT_UNIT_SHIFT) | \
+	(((uint64_t)(AMDGV_GPUMON_METRIC_EXT_RES_GROUP__##RES_GROUP)) << AMDGV_GPUMON_METRIC_EXT_RES_GROUP_SHIFT) | \
+	(((uint64_t)(AMDGV_GPUMON_METRIC_EXT_RES_SUBGROUP__##RES_SUBGROUP)) << AMDGV_GPUMON_METRIC_EXT_RES_SUBGROUP_SHIFT) | \
 	(((uint64_t)(FLAGS)) << AMDGV_GPUMON_METRIC_EXT_FLAGS_SHIFT))
 
 struct amdgv_live_info_gpumon;
@@ -188,6 +193,7 @@ enum amdgv_gpumon_vram_type {
 	AMDGV_GPUMON_DGPU_VRAM_TYPE__HBM2E = 0x61,
 	AMDGV_GPUMON_DGPU_VRAM_TYPE__GDDR6 = 0x70,
 	AMDGV_GPUMON_DGPU_VRAM_TYPE__HBM3 = 0x80,
+	AMDGV_GPUMON_DGPU_VRAM_TYPE__HBM3E = 0x81,
 	AMDGV_GPUMON_DGPU_VRAM_TYPE__GDDR7 = 0x90,
 };
 
@@ -279,9 +285,10 @@ enum amdgv_gpumon_card_form_factor {
 };
 
 enum amdgv_gpumon_link_status {
-	AMDGV_GPUMON_LINK_STATUS_ENABLED = 0,
+	AMDGV_GPUMON_LINK_STATUS_ENABLED = 0,		//Active
 	AMDGV_GPUMON_LINK_STATUS_DISABLED = 1,
-	AMDGV_GPUMON_LINK_STATUS_ERROR = 2
+	AMDGV_GPUMON_LINK_STATUS_INACTIVE = 2,
+	AMDGV_GPUMON_LINK_STATUS_ERROR = 3
 };
 
 enum amdgv_gpumon_link_type {
@@ -304,11 +311,13 @@ struct amdgv_gpumon_link_metrics {
 	uint32_t num_links;
 	struct {
 		enum amdgv_gpumon_link_type link_type;
+		enum amdgv_gpumon_link_status status;
 		uint32_t bdf;
 		uint32_t speed; /* Gbps */
 		uint32_t width;
 		uint64_t read; /* KB */
 		uint64_t write; /* KB */
+
 	} links[AMDGV_GPUMON_MAX_NUM_XGMI_PHYSICAL_LINK];
 };
 
@@ -326,7 +335,7 @@ union amdgv_gpumon_p2p_caps {
 
 struct amdgv_gpumon_link_topology_info {
 	uint64_t weight;
-	enum amdgv_gpumon_link_status link_status;
+	enum amdgv_gpumon_link_status link_status;	/* Depprecated! Use link metrics for accurate status */
 	enum amdgv_gpumon_link_type link_type;
 	uint8_t num_hops;
 	uint8_t is_fb_sharing_enabled;
@@ -589,7 +598,20 @@ enum amdgv_gpumon_metric_ext_flag {
 	AMDGV_GPUMON_METRIC_EXT_FLAG__CHIPLET_METRIC	= 1ULL,
 	AMDGV_GPUMON_METRIC_EXT_FLAG__DATA_FILTER_INST	= 2ULL,
 	AMDGV_GPUMON_METRIC_EXT_FLAG__DATA_FILTER_ACC	= 3ULL,
-	AMDGV_GPUMON_METRIC_EXT_FLAG__STATIC_METRIC	= 4ULL,
+};
+
+enum amdgv_gpumon_metric_ext_res_group {
+	AMDGV_GPUMON_METRIC_EXT_RES_GROUP__NA	= 0ULL,
+	AMDGV_GPUMON_METRIC_EXT_RES_GROUP__GPU	= 1ULL,
+	AMDGV_GPUMON_METRIC_EXT_RES_GROUP__XCP	= 2ULL,
+	AMDGV_GPUMON_METRIC_EXT_RES_GROUP__AID	= 3ULL,
+	AMDGV_GPUMON_METRIC_EXT_RES_GROUP__MID	= 4ULL,
+};
+
+enum amdgv_gpumon_metric_ext_res_subgroup {
+	AMDGV_GPUMON_METRIC_EXT_RES_SUBGROUP__NA	= 0ULL,
+	AMDGV_GPUMON_METRIC_EXT_RES_SUBGROUP__XCC 	= 1ULL,
+	AMDGV_GPUMON_METRIC_EXT_RES_SUBGROUP__ENGINE	= 2ULL,
 };
 
 
@@ -598,24 +620,33 @@ enum amdgv_gpumon_metric_ext_flag {
  * bits [0  - 15] are metric units
  * bits [16 - 31] are metric names
  * bits [32 - 47] are metric categories
- * bits [48 - 63] are metric flags
+ * bits [  48   ] counter flag
+ * bits [  49   ] chiplet metric flag
+ * bits [  50   ] instanenuous data filter flag
+ * bits [  51   ] accumulated data filter flag
+ * bits [52 - 56] resource group
+ * bits [57 - 61] resource subgroup
+ * bits [62 - 63] reserved
  ****************************************************/
 struct amdgv_gpumon_metric_ext {
 	union {
 		struct {
-			enum amdgv_gpumon_metric_ext_unit 	unit 	 : 16;
-			enum amdgv_gpumon_metric_ext_name 	name 	 : 16;
-			enum amdgv_gpumon_metric_ext_category 	category : 16;
-			uint64_t flag_counter				 : 1;
-			uint64_t flag_chiplet_metric			 : 1;
-			uint64_t flag_data_filter_inst			 : 1;
-			uint64_t flag_data_filter_acc			 : 1;
-			uint64_t flag_reserved				 : 12;
+			enum amdgv_gpumon_metric_ext_unit		unit			: 16;
+			enum amdgv_gpumon_metric_ext_name		name			: 16;
+			enum amdgv_gpumon_metric_ext_category		category		: 16;
+			uint64_t					flag_counter		: 1;
+			uint64_t					flag_chiplet_metric	: 1;
+			uint64_t					flag_data_filter_inst	: 1;
+			uint64_t					flag_data_filter_acc	: 1;
+			enum amdgv_gpumon_metric_ext_res_group		res_group		: 5;
+			enum amdgv_gpumon_metric_ext_res_subgroup	res_subgroup		: 5;
+			uint64_t 					reserved		: 2;
 		};
 		uint64_t code;
 	};
-	uint32_t vf_mask; /* Mask of all active VFs + PF that this metric applies to */
+	uint32_t vf_mask;	/* Mask of all active VFs + PF that this metric applies to */
 	uint64_t val;
+	uint32_t res_instance;	/* Instance of res_group */
 };
 
 struct amdgv_gpumon_metrics_ext {

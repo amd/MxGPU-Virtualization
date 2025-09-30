@@ -288,7 +288,7 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 			}
 
 			if (sched_event == AMDGV_EVENT_SCHED_PSP_VF_CMD_RELAY) {
-				adapt->psp.vf_relay_wtr_ptr = msg_data[1];
+				adapt->psp.vf_relay_wtr_ptr[idx_vf] = msg_data[1];
 			}
 
 			if (sched_event == AMDGV_EVENT_TEXT_MESSAGE) {

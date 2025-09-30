@@ -81,6 +81,11 @@ static inline void *_kzalloc(size_t size, gfp_t flags)
 	return kzalloc(size, flags);
 }
 
+static inline void *_kmalloc_array(size_t n, size_t size, gfp_t flags)
+{
+	return kmalloc_array(n, size, flags);
+}
+
 static inline void *_vmalloc(size_t size)
 {
 	return vmalloc(size);
@@ -93,19 +98,28 @@ static inline void *_vzalloc(size_t size)
 
 void *(*gim_kmalloc)(size_t size, gfp_t flags) = _kmalloc;
 void *(*gim_kzalloc)(size_t size, gfp_t flags) = _kzalloc;
+void *(*gim_kmalloc_array)(size_t n, size_t size, gfp_t flags) = _kmalloc_array;
 void *(*gim_vmalloc)(size_t size) = _vmalloc;
 void *(*gim_vzalloc)(size_t size) = _vzalloc;
 
 void (*gim_kfree)(const void *p) = kfree;
 void (*gim_vfree)(const void *p) = vfree;
 
+#if !defined(HAVE_KFREE_SENSITIVE)
+	void (*gim_kzfree)(const void *p) = kzfree;
+#else
+	void (*gim_kfree_sensitive)(const void *p) = kfree_sensitive;
+#endif
+
 static void *gim_sentinel_kmalloc(size_t size, unsigned int flags);
 static void *gim_sentinel_kzalloc(size_t size, unsigned int flags);
+static void *gim_sentinel_kmalloc_array(size_t n, size_t size, gfp_t flags);
 static void *gim_sentinel_vmalloc(size_t size);
 static void *gim_sentinel_vzalloc(size_t size);
 
 static void gim_sentinel_kfree(const void *p);
 static void gim_sentinel_vfree(const void *p);
+static void gim_sentinel_secure_kfree(const void *p);
 
 
 static inline bool is_vmalloc_range(const void *p)
@@ -421,10 +435,17 @@ static void __gim_memory_sentinel_init(struct gim_memory_sentinel_manager **msm,
 
 		gim_kmalloc = gim_sentinel_kmalloc;
 		gim_kzalloc = gim_sentinel_kzalloc;
+		gim_kmalloc_array = gim_sentinel_kmalloc_array;
 		gim_vmalloc = gim_sentinel_vmalloc;
 		gim_vzalloc = gim_sentinel_vzalloc;
 		gim_kfree = gim_sentinel_kfree;
 		gim_vfree = gim_sentinel_vfree;
+#if !defined(HAVE_KFREE_SENSITIVE)
+		gim_kzfree = gim_sentinel_secure_kfree;
+#else
+		gim_kfree_sensitive = gim_sentinel_secure_kfree;
+#endif
+
 	} else {
 		return;
 	}
@@ -444,10 +465,16 @@ static void __gim_memory_sentinel_fini(struct gim_memory_sentinel_manager **msm)
 	// set malloc/free function to original to avoid some other module alloc/free memory after gim_exit()
 	gim_kmalloc = _kmalloc;
 	gim_kzalloc = _kzalloc;
+	gim_kmalloc_array = _kmalloc_array;
 	gim_vmalloc = _vmalloc;
 	gim_vzalloc = _vzalloc;
 	gim_kfree = kfree;
 	gim_vfree = vfree;
+#if !defined(HAVE_KFREE_SENSITIVE)
+	gim_kzfree = kzfree;
+#else
+	gim_kfree_sensitive = kfree_sensitive;
+#endif
 
 	// Free all allocated tables
 	for (i = 0; i < (*msm)->tables_count; i++) {
@@ -596,7 +623,7 @@ static inline unsigned long gim_sentinel_get_allocate_stack(void)
 	return record_entry;
 }
 
-void *gim_sentinel_kmalloc(size_t size, unsigned int flags)
+static void *gim_sentinel_kmalloc(size_t size, unsigned int flags)
 {
 	uint16_t type = GIM_MEMORY_SENTINEL_ALLOC_TYPE_NORMAL;
 	size_t total_size;
@@ -625,7 +652,7 @@ void *gim_sentinel_kmalloc(size_t size, unsigned int flags)
 	return gim_sentinel_malloc_helper(ptr, size, (uint64_t)record_entry, type);
 }
 
-void *gim_sentinel_kzalloc(size_t size, unsigned int flags)
+static void *gim_sentinel_kzalloc(size_t size, unsigned int flags)
 {
 	uint16_t type = GIM_MEMORY_SENTINEL_ALLOC_TYPE_NORMAL;
 	size_t total_size;
@@ -654,7 +681,12 @@ void *gim_sentinel_kzalloc(size_t size, unsigned int flags)
 	return gim_sentinel_malloc_helper(ptr, size, (uint64_t)record_entry, type);
 }
 
-void *gim_sentinel_vmalloc(size_t size)
+static void *gim_sentinel_kmalloc_array(size_t n, size_t size, gfp_t flags)
+{
+	return gim_sentinel_kmalloc(n * size, flags);
+}
+
+static void *gim_sentinel_vmalloc(size_t size)
 {
 	uint16_t type = GIM_MEMORY_SENTINEL_ALLOC_TYPE_NORMAL;
 	size_t total_size;
@@ -683,7 +715,7 @@ void *gim_sentinel_vmalloc(size_t size)
 	return gim_sentinel_malloc_helper(ptr, size, (uint64_t)record_entry, type);
 }
 
-void *gim_sentinel_vzalloc(size_t size)
+static void *gim_sentinel_vzalloc(size_t size)
 {
 	uint16_t type = GIM_MEMORY_SENTINEL_ALLOC_TYPE_NORMAL;
 	size_t total_size;
@@ -926,5 +958,21 @@ void gim_sentinel_vfree(const void *p)
 		gim_dbg("[%s] free allc_ptr 0x%016llx successful, user ptr: 0x%016llx\n", __func__, (uint64_t)alloc_ptr, (uint64_t)p);
 	} else {
 		gim_dbg("[%s] free allc_ptr 0x%016llx failed, user ptr: 0x%016llx\n", __func__, (uint64_t)alloc_ptr, (uint64_t)p);
+	}
+}
+
+void gim_sentinel_secure_kfree(const void *p)
+{
+	void *alloc_ptr = NULL;
+
+	alloc_ptr = gim_sentinel_free_helper(p);
+
+	if (likely(alloc_ptr)) {
+#if !defined(HAVE_KFREE_SENSITIVE)
+		kzfree(alloc_ptr);
+#else
+		kfree_sensitive(alloc_ptr);
+#endif
+		gim_dbg("[%s] secure free allc_ptr 0x%016llx successful, user ptr: 0x%016llx\n", __func__, (uint64_t)alloc_ptr, (uint64_t)p);
 	}
 }

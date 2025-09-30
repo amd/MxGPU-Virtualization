@@ -34,6 +34,7 @@
 #include "amdgv_ras_eeprom.h"
 #include "amdgv_xgmi.h"
 #include "amdgv_mca.h"
+#include "amdgv_gart.h"
 
 static const uint32_t this_block = AMDGV_SCHEDULER_BLOCK;
 
@@ -153,6 +154,10 @@ static const char *amdgv_event_name(uint32_t event)
 		return "SCHED_VF_REQ_RAS_BAD_PAGES";
 	case AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA:
 		return "LIVE_MIGRATION_MANIFEST_DATA";
+	case AMDGV_EVENT_VF_FB_COPY:
+		return "VF_FB_COPY";
+	case AMDGV_EVENT_QUERY_DIRTYBIT_DATA:
+		return "QUERY_DIRTYBIT_DATA";
 	default:
 		break;
 	}
@@ -734,6 +739,8 @@ static void amdgv_sched_event_arrange_event_list(struct amdgv_adapter *adapt,
 		case AMDGV_EVENT_SCHED_PSP_VF_CMD_RELAY:
 		case AMDGV_EVENT_HANDLE_CRASH:
 		case AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA:
+		case AMDGV_EVENT_VF_FB_COPY:
+		case AMDGV_EVENT_QUERY_DIRTYBIT_DATA:
 			amdgv_list_move_tail(
 				&entry->list,
 				&adapt->sched.event_list[AMDGV_SCHED_EVENT_LIST_3]);
@@ -927,6 +934,8 @@ static void amdgv_sched_push_back_event(struct amdgv_adapter *adapt,
 	case AMDGV_EVENT_SCHED_PSP_VF_CMD_RELAY:
 	case AMDGV_EVENT_HANDLE_CRASH:
 	case AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA:
+	case AMDGV_EVENT_VF_FB_COPY:
+	case AMDGV_EVENT_QUERY_DIRTYBIT_DATA:
 	case AMDGV_EVENT_SCHED_RMA:
 		adapt->sched.curr_event_list_idx = AMDGV_SCHED_EVENT_LIST_3;
 		amdgv_list_add(&entry->list,
@@ -1621,6 +1630,14 @@ static int amdgv_sched_enter_full_access(struct amdgv_adapter *adapt,
 		return AMDGV_FAILURE;
 	}
 
+	/* Ensure the event guard is not FULL for WGR (it may have happened when
+	 * dealing with orphan VF
+	 */
+	if (amdgv_guard_is_event_full(adapt, event->idx_vf, AMDGV_GUARD_EVENT_WGR) ==
+	    AMDGV_GUARD_EVENT_OVERFLOW) {
+		return AMDGV_FAILURE;
+	}
+
 	/* Enable psp mailbox ints */
 	if (adapt->xgmi.phy_nodes_num > 1 && adapt->xgmi.set_mb_in_hive)
 		ret = amdgv_sched_psp_set_mb_int_in_hive(adapt, event->idx_vf,
@@ -2189,6 +2206,141 @@ static int amdgv_sched_event_handle_rma(struct amdgv_adapter *adapt)
 	return 0;
 }
 
+static int amdgv_sched_event_get_vf_fb_info(struct amdgv_adapter *adapt, uint32_t idx_vf,
+				union amdgv_sched_event_data *event_data,
+				uint64_t *mc_addr, void **vaddr, uint64_t *size)
+{
+	struct amdgv_vf_device *entry = NULL;
+	uint64_t vf_fb_offset;
+	uint64_t vf_fb_size;
+	uint64_t fb_offset, _size;
+
+	if (idx_vf >= adapt->num_vf) {
+		AMDGV_ERROR("invalid idx_vf\n");
+		return AMDGV_FAILURE;
+	}
+
+	entry = &adapt->array_vf[idx_vf];
+	if (!entry->configured)
+		return AMDGV_FAILURE;
+
+	vf_fb_offset = MBYTES_TO_BYTES(entry->fb_offset);
+	vf_fb_size = MBYTES_TO_BYTES(entry->fb_size);
+
+	fb_offset = event_data->vf_fb_copy_data.fb_offset;
+	_size = event_data->vf_fb_copy_data.size;
+
+	if (fb_offset >= vf_fb_size) {
+		AMDGV_ERROR("invalid fb_offset\n");
+		return AMDGV_FAILURE;
+	}
+
+	if (fb_offset + _size > vf_fb_size)
+		_size = vf_fb_size - fb_offset;
+
+	fb_offset += vf_fb_offset;
+	if (vaddr)
+		*vaddr = ((uint8_t *)adapt->fb) + fb_offset;
+
+	if (size)
+		*size = _size;
+
+	if (mc_addr) {
+		fb_offset += adapt->mc_fb_loc_addr;
+		if (adapt->xgmi.phy_nodes_num > 1)
+			fb_offset += adapt->xgmi.phy_node_id * adapt->xgmi.node_segment_size;
+
+		*mc_addr = fb_offset;
+	}
+
+	return 0;
+}
+
+static int amdgv_sched_event_get_vf_fb_copy_info(struct amdgv_adapter *adapt, int idx_vf,
+				union amdgv_sched_event_data *event_data,
+				uint64_t *src, uint64_t *size, uint64_t *dst,
+				void **src_vaddr, void **dst_vaddr)
+{
+	uint64_t fb_mc_addr = -1, fb_size = 0;
+	void *fb_vaddr = NULL;
+
+	if (amdgv_sched_event_get_vf_fb_info(adapt, idx_vf, event_data, &fb_mc_addr, &fb_vaddr, &fb_size)) {
+		AMDGV_ERROR("Failed to get fb mc_addr or vaddr\n");
+		return AMDGV_FAILURE;
+	}
+
+	if (size)
+		*size = min(fb_size, event_data->vf_fb_copy_data.size);
+
+	if (event_data->vf_fb_copy_data.to_fb) {
+		if (src && dst) {
+			*src = event_data->vf_fb_copy_data.gpu_addr;
+			*dst = fb_mc_addr;
+		}
+
+		if (event_data->vf_fb_copy_data.vaddr && src_vaddr && dst_vaddr) {
+			*src_vaddr = event_data->vf_fb_copy_data.vaddr;
+			*dst_vaddr = fb_vaddr;
+		}
+	} else {
+		if (src && dst) {
+			*src = fb_mc_addr;
+			*dst = event_data->vf_fb_copy_data.gpu_addr;
+		}
+
+		if (event_data->vf_fb_copy_data.vaddr && src_vaddr && dst_vaddr) {
+			*src_vaddr = fb_vaddr;
+			*dst_vaddr = event_data->vf_fb_copy_data.vaddr;
+		}
+	}
+
+	return 0;
+}
+
+static int amdgv_sched_event_vf_fb_copy(struct amdgv_adapter *adapt, int idx_vf,
+				union amdgv_sched_event_data *event_data)
+{
+	void *src_vaddr = NULL;
+	void *dst_vaddr = NULL;
+	uint64_t src = -1, dst = -1, size = -1;
+
+	if (amdgv_sched_event_get_vf_fb_copy_info(adapt, idx_vf, event_data,
+				&src, &size, &dst, &src_vaddr, &dst_vaddr))
+		return AMDGV_FAILURE;
+
+	AMDGV_DEBUG("vf_fb_copy, src: 0x%lx, dst: 0x%lx, size: 0x%lx, src_vaddr: %llx, dst_vaddr: %llx\n",
+		src, dst, size, (long long)src_vaddr, (long long)dst_vaddr);
+
+	if (size == 0)
+		return AMDGV_FAILURE;
+
+	if ((src != -1) && (dst != -1)) {
+		struct amdgv_ring *ring;
+
+		ring = amdgv_sdma_get_available_ring(adapt, AMDGV_RING_PF_DEDICATED);
+		if (ring) {
+			if (amdgv_sdma_ring_copy(ring, src, size, dst)) {
+				amdgv_sched_queue_event(adapt, AMDGV_PF_IDX, AMDGV_EVENT_SCHED_FORCE_RESET_GPU, 0);
+				return AMDGV_FAILURE;
+			}
+
+			return 0;
+		}
+
+		if (adapt->misc.dma_engine == AMDGV_DMA_ENGINE_LSDMA) {
+			if (!amdgv_misc_dma_copy(adapt, idx_vf, src, size, dst))
+				return 0;
+		}
+	}
+
+	if (src_vaddr != NULL && dst_vaddr != NULL) {
+		oss_memcpy(dst_vaddr, src_vaddr, size);
+		return 0;
+	}
+
+	return AMDGV_FAILURE;
+}
+
 static int handle_event_in_full_access(struct amdgv_adapter *adapt,
 				       struct amdgv_sched_event *event)
 {
@@ -2546,6 +2698,8 @@ static int handle_event_in_full_access(struct amdgv_adapter *adapt,
 	case AMDGV_EVENT_SCHED_UPDATE_TOPOLOGY:
 	case AMDGV_EVENT_SCHED_GET_TOPOLOGY:
 	case AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA:
+	case AMDGV_EVENT_VF_FB_COPY:
+	case AMDGV_EVENT_QUERY_DIRTYBIT_DATA:
 		amdgv_sched_push_back_event(adapt, event);
 		ret = AMDGV_EVENT_STOP_AND_KEEP;
 		break;
@@ -2598,9 +2752,11 @@ static int handle_event_in_non_full_access(struct amdgv_adapter *adapt,
 	     (event->id != AMDGV_EVENT_SCHED_PSP_VF_GATE) &&
 	     (event->id != AMDGV_EVENT_SCHED_RAS_FED) &
 	     (event->id != AMDGV_EVENT_SCHED_UPDATE_TOPOLOGY) &&
-		 (event->id != AMDGV_EVENT_SCHED_GET_TOPOLOGY) &&
-		 (event->id != AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA) &&
-	     (event->id != AMDGV_EVENT_SCHED_UPDATE_MCA_BANKS)))
+	     (event->id != AMDGV_EVENT_SCHED_GET_TOPOLOGY) &&
+	     (event->id != AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA) &&
+	     (event->id != AMDGV_EVENT_SCHED_UPDATE_MCA_BANKS) &&
+	     (event->id != AMDGV_EVENT_VF_FB_COPY) &&
+	     (event->id != AMDGV_EVENT_QUERY_DIRTYBIT_DATA)))
 		return 0;
 
 	/*
@@ -2608,6 +2764,8 @@ static int handle_event_in_non_full_access(struct amdgv_adapter *adapt,
 	 */
 	if (adapt->lock_world_switch && (event->id != AMDGV_EVENT_SCHED_RESUME) &&
 	    (event->id != AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA) &&
+	    (event->id != AMDGV_EVENT_VF_FB_COPY) &&
+	    (event->id != AMDGV_EVENT_QUERY_DIRTYBIT_DATA) &&
 	    (event->id != AMDGV_EVENT_EXIT_POWER_SAVING) &&
 		(event->id != AMDGV_EVENT_SCHED_RESUME_LIVE) &&
 		(!(adapt->debug.in_live_debugging && event->id == AMDGV_EVENT_REL_GPU_DEBUG)) &&
@@ -2949,7 +3107,7 @@ static int handle_event_in_non_full_access(struct amdgv_adapter *adapt,
 
 		if (!amdgv_sched_gpu_reset_wrap(adapt,
 						event->id == AMDGV_EVENT_SCHED_FORCE_RESET_GPU ?
-						1 : 0))
+						1 : 0, event->idx_vf))
 			AMDGV_INFO("finish %s reset.\n", amdgv_idx_to_str(event->idx_vf));
 
 		amdgv_notify_shim(adapt->dev, AMDGV_NOTIFICATION_FORCED_WHOLE_GPU_RESET,
@@ -3134,6 +3292,17 @@ static int handle_event_in_non_full_access(struct amdgv_adapter *adapt,
 		if (amdgv_migration_transfer_manifest_data(adapt, event))
 			return AMDGV_FAILURE;
 
+		break;
+	case AMDGV_EVENT_VF_FB_COPY:
+		ret = amdgv_sched_event_vf_fb_copy(adapt, event->idx_vf, &event->data);
+		if (event->data.vf_fb_copy_data.result)
+			*event->data.vf_fb_copy_data.result = ret;
+
+		break;
+	case AMDGV_EVENT_QUERY_DIRTYBIT_DATA:
+		ret = amdgv_dirtybit_querydata(adapt, &event->data.dirtybit_query_data.data);
+		if (event->data.dirtybit_query_data.result)
+			*event->data.dirtybit_query_data.result = ret;
 		break;
 	default:
 		break;
@@ -3583,6 +3752,14 @@ static int amdgv_sched_sanitize_queue_event(struct amdgv_adapter *adapt, uint32_
 		}
 
 		if (amdgv_guard_is_event_full(adapt, idx_vf, AMDGV_GUARD_EVENT_FLR) ==
+			    AMDGV_GUARD_EVENT_OVERFLOW &&
+		    (event_id == AMDGV_EVENT_REQ_GPU_RESET ||
+		     event_id == AMDGV_EVENT_REQ_GPU_INIT)) {
+			amdgv_put_error(idx_vf, AMDGV_ERROR_GUARD_EVENT_OVERFLOW, event_id);
+			return AMDGV_FAILURE;
+		}
+
+		if (amdgv_guard_is_event_full(adapt, idx_vf, AMDGV_GUARD_EVENT_WGR) ==
 			    AMDGV_GUARD_EVENT_OVERFLOW &&
 		    (event_id == AMDGV_EVENT_REQ_GPU_RESET ||
 		     event_id == AMDGV_EVENT_REQ_GPU_INIT)) {

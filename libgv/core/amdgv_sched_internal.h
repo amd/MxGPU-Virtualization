@@ -160,7 +160,7 @@ void amdgv_sched_record_queue_process_fini(struct amdgv_adapter *adapt);
 int amdgv_sched_reset_vf(struct amdgv_adapter *adapt, uint32_t idx_vf,
 			 enum amdgv_sched_block sched_block);
 int amdgv_sched_reset_vf_auto(struct amdgv_adapter *adapt);
-int amdgv_sched_gpu_reset_wrap(struct amdgv_adapter *adapt, bool reset_all);
+int amdgv_sched_gpu_reset_wrap(struct amdgv_adapter *adapt, bool reset_all, uint32_t idx_vf);
 
 void amdgv_sched_dump_gpu_state(struct amdgv_adapter *adapt);
 

@@ -60,6 +60,8 @@ public:
 	//metric
 	virtual int amdsmi_get_usage_metric_command(uint64_t processor_bdf, Arguments arg,
 			std::string& out) override;
+	virtual int amdsmi_get_metric_command_per_partition(uint64_t processor_bdf, uint64_t vf_index, Arguments arg,
+			std::string& out) override;
 	virtual int amdsmi_get_power_metric_command(uint64_t processor_bdf, Arguments arg,
 			std::string& out) override;
 	virtual int amdsmi_get_clock_metric_command(uint64_t processor_bdf, Arguments arg,

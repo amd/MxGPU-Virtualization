@@ -98,6 +98,8 @@ error_category(DRIVER) = {
 		  AMDGV_ERROR_SEVERITY_ERROR_MED, "Allocate FB memory failed (length: %llu)!"),
 	add_entry(AMDGV_ERROR_DRIVER_ALLOC_DMA_MEM_FAIL, ERROR_DATA_ARG_64,
 		  AMDGV_ERROR_SEVERITY_ERROR_MED, "Allocate DMA memory failed (length: %llu)!"),
+	add_entry(AMDGV_ERROR_DRIVER_MAP_DMA_MEM_FAIL, ERROR_DATA_ARG_64,
+		  AMDGV_ERROR_SEVERITY_ERROR_MED, "Map DMA memory to gart failed (length: %llu)!"),
 	add_entry(AMDGV_ERROR_DRIVER_NO_FB_MANAGER, ERROR_DATA_ARG_NONE,
 		  AMDGV_ERROR_SEVERITY_ERROR_MED, "FB memory manager is not allocated."),
 	add_entry(AMDGV_ERROR_DRIVER_HW_INIT_FAIL, ERROR_DATA_ARG_NONE,

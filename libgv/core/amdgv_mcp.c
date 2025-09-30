@@ -99,3 +99,11 @@ int amdgv_mcp_get_vf_mask_by_aid(struct amdgv_adapter *adapt, uint32_t idx_aid)
 	}
 }
 
+int amdgv_mcp_get_xcp_by_xcc(struct amdgv_adapter *adapt, uint32_t idx_xcc)
+{
+	if (adapt->mcp.get_xcp_by_xcc) {
+		return adapt->mcp.get_xcp_by_xcc(adapt, idx_xcc);
+	} else {
+		return 0;
+	}
+}

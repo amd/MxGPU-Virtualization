@@ -36,6 +36,8 @@ public:
 
 	int metric_command_usage(uint64_t processor,
 							 std::string &formatted_string);
+	int metric_command_per_partition(uint64_t processor, uint64_t vf_index,
+							 std::string &formatted_string);
 	int metric_command_power(uint64_t processor,
 							 std::string &formatted_string);
 	int metric_command_clock(uint64_t processor,
@@ -63,5 +65,6 @@ private:
 	bool is_vf_schedule = false;
 	bool is_vf_guard_info = false;
 	bool is_vf_guest_data = false;
+	bool is_per_partition = false;
 
 };

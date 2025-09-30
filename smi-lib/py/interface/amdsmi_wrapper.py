@@ -1392,13 +1392,19 @@ c__EA_amdsmi_guard_type_t__enumvalues = {
     1: 'AMDSMI_GUARD_EVENT_EXCLUSIVE_MOD',
     2: 'AMDSMI_GUARD_EVENT_EXCLUSIVE_TIMEOUT',
     3: 'AMDSMI_GUARD_EVENT_ALL_INT',
-    4: 'AMDSMI_GUARD_EVENT__MAX',
+    4: 'AMDSMI_GUARD_EVENT_RAS_ERR_COUNT',
+    5: 'AMDSMI_GUARD_EVENT_RAS_CPER_DUMP',
+    6: 'AMDSMI_GUARD_EVENT_RAS_BAD_PAGES',
+    7: 'AMDSMI_GUARD_EVENT__MAX',
 }
 AMDSMI_GUARD_EVENT_FLR = 0
 AMDSMI_GUARD_EVENT_EXCLUSIVE_MOD = 1
 AMDSMI_GUARD_EVENT_EXCLUSIVE_TIMEOUT = 2
 AMDSMI_GUARD_EVENT_ALL_INT = 3
-AMDSMI_GUARD_EVENT__MAX = 4
+AMDSMI_GUARD_EVENT_RAS_ERR_COUNT = 4
+AMDSMI_GUARD_EVENT_RAS_CPER_DUMP = 5
+AMDSMI_GUARD_EVENT_RAS_BAD_PAGES = 6
+AMDSMI_GUARD_EVENT__MAX = 7
 c__EA_amdsmi_guard_type_t = ctypes.c_uint32 # enum
 amdsmi_guard_type_t = c__EA_amdsmi_guard_type_t
 amdsmi_guard_type_t__enumvalues = c__EA_amdsmi_guard_type_t__enumvalues
@@ -1475,11 +1481,13 @@ amdsmi_guest_fw_load_status_t__enumvalues = c__EA_amdsmi_guest_fw_load_status_t_
 c__EA_amdsmi_link_status_t__enumvalues = {
     0: 'AMDSMI_LINK_STATUS_ENABLED',
     1: 'AMDSMI_LINK_STATUS_DISABLED',
-    2: 'AMDSMI_LINK_STATUS_ERROR',
+    2: 'AMDSMI_LINK_STATUS_INACTIVE',
+    3: 'AMDSMI_LINK_STATUS_ERROR',
 }
 AMDSMI_LINK_STATUS_ENABLED = 0
 AMDSMI_LINK_STATUS_DISABLED = 1
-AMDSMI_LINK_STATUS_ERROR = 2
+AMDSMI_LINK_STATUS_INACTIVE = 2
+AMDSMI_LINK_STATUS_ERROR = 3
 c__EA_amdsmi_link_status_t = ctypes.c_uint32 # enum
 amdsmi_link_status_t = c__EA_amdsmi_link_status_t
 amdsmi_link_status_t__enumvalues = c__EA_amdsmi_link_status_t__enumvalues
@@ -1544,6 +1552,7 @@ c__EA_amdsmi_vram_type_t__enumvalues = {
     2: 'AMDSMI_VRAM_TYPE_HBM2',
     3: 'AMDSMI_VRAM_TYPE_HBM2E',
     4: 'AMDSMI_VRAM_TYPE_HBM3',
+    5: 'AMDSMI_VRAM_TYPE_HBM3E',
     10: 'AMDSMI_VRAM_TYPE_DDR2',
     11: 'AMDSMI_VRAM_TYPE_DDR3',
     12: 'AMDSMI_VRAM_TYPE_DDR4',
@@ -1560,6 +1569,7 @@ AMDSMI_VRAM_TYPE_HBM = 1
 AMDSMI_VRAM_TYPE_HBM2 = 2
 AMDSMI_VRAM_TYPE_HBM2E = 3
 AMDSMI_VRAM_TYPE_HBM3 = 4
+AMDSMI_VRAM_TYPE_HBM3E = 5
 AMDSMI_VRAM_TYPE_DDR2 = 10
 AMDSMI_VRAM_TYPE_DDR3 = 11
 AMDSMI_VRAM_TYPE_DDR4 = 12
@@ -1867,6 +1877,40 @@ c__EA_amdsmi_metric_type_t = ctypes.c_uint32 # enum
 amdsmi_metric_type_t = c__EA_amdsmi_metric_type_t
 amdsmi_metric_type_t__enumvalues = c__EA_amdsmi_metric_type_t__enumvalues
 
+# values for enumeration 'c__EA_amdsmi_metric_res_group_t'
+c__EA_amdsmi_metric_res_group_t__enumvalues = {
+    0: 'AMDSMI_METRIC_RES_GROUP_UNKNOWN',
+    1: 'AMDSMI_METRIC_RES_GROUP_NA',
+    2: 'AMDSMI_METRIC_RES_GROUP_GPU',
+    3: 'AMDSMI_METRIC_RES_GROUP_XCP',
+    4: 'AMDSMI_METRIC_RES_GROUP_AID',
+    5: 'AMDSMI_METRIC_RES_GROUP_MID',
+}
+AMDSMI_METRIC_RES_GROUP_UNKNOWN = 0
+AMDSMI_METRIC_RES_GROUP_NA = 1
+AMDSMI_METRIC_RES_GROUP_GPU = 2
+AMDSMI_METRIC_RES_GROUP_XCP = 3
+AMDSMI_METRIC_RES_GROUP_AID = 4
+AMDSMI_METRIC_RES_GROUP_MID = 5
+c__EA_amdsmi_metric_res_group_t = ctypes.c_uint32 # enum
+amdsmi_metric_res_group_t = c__EA_amdsmi_metric_res_group_t
+amdsmi_metric_res_group_t__enumvalues = c__EA_amdsmi_metric_res_group_t__enumvalues
+
+# values for enumeration 'c__EA_amdsmi_metric_res_subgroup_t'
+c__EA_amdsmi_metric_res_subgroup_t__enumvalues = {
+    0: 'AMDSMI_METRIC_RES_SUBGROUP_UNKNOWN',
+    1: 'AMDSMI_METRIC_RES_SUBGROUP_NA',
+    2: 'AMDSMI_METRIC_RES_SUBGROUP_XCC',
+    3: 'AMDSMI_METRIC_RES_SUBGROUP_ENGINE',
+}
+AMDSMI_METRIC_RES_SUBGROUP_UNKNOWN = 0
+AMDSMI_METRIC_RES_SUBGROUP_NA = 1
+AMDSMI_METRIC_RES_SUBGROUP_XCC = 2
+AMDSMI_METRIC_RES_SUBGROUP_ENGINE = 3
+c__EA_amdsmi_metric_res_subgroup_t = ctypes.c_uint32 # enum
+amdsmi_metric_res_subgroup_t = c__EA_amdsmi_metric_res_subgroup_t
+amdsmi_metric_res_subgroup_t__enumvalues = c__EA_amdsmi_metric_res_subgroup_t__enumvalues
+
 # values for enumeration 'c__EA_amdsmi_memory_partition_type_t'
 c__EA_amdsmi_memory_partition_type_t__enumvalues = {
     0: 'AMDSMI_MEMORY_PARTITION_UNKNOWN',
@@ -1955,6 +1999,17 @@ AMDSMI_VIRTUALIZATION_MODE_PASSTHROUGH = 4
 c__EA_amdsmi_virtualization_mode_t = ctypes.c_uint32 # enum
 amdsmi_virtualization_mode_t = c__EA_amdsmi_virtualization_mode_t
 amdsmi_virtualization_mode_t__enumvalues = c__EA_amdsmi_virtualization_mode_t__enumvalues
+
+# values for enumeration 'c__EA_amdsmi_affinity_scope_t'
+c__EA_amdsmi_affinity_scope_t__enumvalues = {
+    0: 'AMDSMI_AFFINITY_SCOPE_NODE',
+    1: 'AMDSMI_AFFINITY_SCOPE_SOCKET',
+}
+AMDSMI_AFFINITY_SCOPE_NODE = 0
+AMDSMI_AFFINITY_SCOPE_SOCKET = 1
+c__EA_amdsmi_affinity_scope_t = ctypes.c_uint32 # enum
+amdsmi_affinity_scope_t = c__EA_amdsmi_affinity_scope_t
+amdsmi_affinity_scope_t__enumvalues = c__EA_amdsmi_affinity_scope_t__enumvalues
 class union_c__UA_amdsmi_bdf_t(Union):
     pass
 
@@ -2287,15 +2342,13 @@ struct_c__SA_amdsmi_guard_info_t_0._fields_ = [
     ('interval', ctypes.c_uint64),
     ('threshold', ctypes.c_uint32),
     ('active', ctypes.c_uint32),
-    ('reserved', ctypes.c_uint32 * 4),
 ]
 
 struct_c__SA_amdsmi_guard_info_t._pack_ = 1 # source:False
 struct_c__SA_amdsmi_guard_info_t._fields_ = [
     ('enabled', ctypes.c_ubyte),
     ('PADDING_0', ctypes.c_ubyte * 7),
-    ('guard', struct_c__SA_amdsmi_guard_info_t_0 * 4),
-    ('reserved', ctypes.c_uint32 * 6),
+    ('guard', struct_c__SA_amdsmi_guard_info_t_0 * 7),
 ]
 
 amdsmi_guard_info_t = struct_c__SA_amdsmi_guard_info_t
@@ -2522,7 +2575,9 @@ struct_links_._fields_ = [
     ('PADDING_0', ctypes.c_ubyte * 4),
     ('read', ctypes.c_uint64),
     ('write', ctypes.c_uint64),
-    ('reserved', ctypes.c_uint64 * 2),
+    ('link_status', amdsmi_link_status_t),
+    ('PADDING_1', ctypes.c_ubyte * 4),
+    ('reserved', ctypes.c_uint64 * 1),
 ]
 
 struct_c__SA_amdsmi_link_metrics_t._pack_ = 1 # source:False
@@ -2610,7 +2665,10 @@ struct_c__SA_amdsmi_metric_t._fields_ = [
     ('vf_mask', ctypes.c_uint32),
     ('PADDING_0', ctypes.c_ubyte * 4),
     ('val', ctypes.c_uint64),
-    ('reserved', ctypes.c_uint32 * 8),
+    ('res_group', amdsmi_metric_res_group_t),
+    ('res_subgroup', amdsmi_metric_res_subgroup_t),
+    ('res_instance', ctypes.c_uint32),
+    ('reserved', ctypes.c_uint32 * 5),
 ]
 
 amdsmi_metric_t = struct_c__SA_amdsmi_metric_t
@@ -2930,6 +2988,9 @@ amdsmi_get_vf_uuid.argtypes = [amdsmi_vf_handle_t, ctypes.POINTER(ctypes.c_uint3
 amdsmi_get_gpu_virtualization_mode = _libraries['libamdsmi.so'].amdsmi_get_gpu_virtualization_mode
 amdsmi_get_gpu_virtualization_mode.restype = amdsmi_status_t
 amdsmi_get_gpu_virtualization_mode.argtypes = [amdsmi_processor_handle, ctypes.POINTER(c__EA_amdsmi_virtualization_mode_t)]
+amdsmi_get_cpu_affinity_with_scope = _libraries['libamdsmi.so'].amdsmi_get_cpu_affinity_with_scope
+amdsmi_get_cpu_affinity_with_scope.restype = amdsmi_status_t
+amdsmi_get_cpu_affinity_with_scope.argtypes = [amdsmi_processor_handle, uint32_t, ctypes.POINTER(ctypes.c_uint64), amdsmi_affinity_scope_t]
 amdsmi_get_gpu_driver_info = _libraries['libamdsmi.so'].amdsmi_get_gpu_driver_info
 amdsmi_get_gpu_driver_info.restype = amdsmi_status_t
 amdsmi_get_gpu_driver_info.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_c__SA_amdsmi_driver_info_t)]
@@ -3105,6 +3166,9 @@ amdsmi_get_afids_from_cper.argtypes = [ctypes.POINTER(ctypes.c_char), uint32_t, 
 amdsmi_reset_gpu = _libraries['libamdsmi.so'].amdsmi_reset_gpu
 amdsmi_reset_gpu.restype = amdsmi_status_t
 amdsmi_reset_gpu.argtypes = [amdsmi_processor_handle]
+amdsmi_topo_get_numa_node_number = _libraries['libamdsmi.so'].amdsmi_topo_get_numa_node_number
+amdsmi_topo_get_numa_node_number.restype = amdsmi_status_t
+amdsmi_topo_get_numa_node_number.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
 __all__ = \
     ['AMDSMI_ACCELERATOR_DECODER', 'AMDSMI_ACCELERATOR_DMA',
     'AMDSMI_ACCELERATOR_ENCODER', 'AMDSMI_ACCELERATOR_JPEG',
@@ -3115,6 +3179,7 @@ __all__ = \
     'AMDSMI_ACCELERATOR_PARTITION_QPX',
     'AMDSMI_ACCELERATOR_PARTITION_SPX',
     'AMDSMI_ACCELERATOR_PARTITION_TPX', 'AMDSMI_ACCELERATOR_XCC',
+    'AMDSMI_AFFINITY_SCOPE_NODE', 'AMDSMI_AFFINITY_SCOPE_SOCKET',
     'AMDSMI_CACHE_PROPERTY_CPU_CACHE',
     'AMDSMI_CACHE_PROPERTY_DATA_CACHE',
     'AMDSMI_CACHE_PROPERTY_ENABLED',
@@ -3419,24 +3484,27 @@ __all__ = \
     'AMDSMI_GPU_BLOCK_XGMI_WAFL', 'AMDSMI_GUARD_EVENT_ALL_INT',
     'AMDSMI_GUARD_EVENT_EXCLUSIVE_MOD',
     'AMDSMI_GUARD_EVENT_EXCLUSIVE_TIMEOUT', 'AMDSMI_GUARD_EVENT_FLR',
-    'AMDSMI_GUARD_EVENT__MAX', 'AMDSMI_GUARD_STATE_FULL',
-    'AMDSMI_GUARD_STATE_NORMAL', 'AMDSMI_GUARD_STATE_OVERFLOW',
-    'AMDSMI_GUEST_FW_ID_ASD', 'AMDSMI_GUEST_FW_ID_CE',
-    'AMDSMI_GUEST_FW_ID_DMCU', 'AMDSMI_GUEST_FW_ID_MC',
-    'AMDSMI_GUEST_FW_ID_ME', 'AMDSMI_GUEST_FW_ID_MEC',
-    'AMDSMI_GUEST_FW_ID_MEC2', 'AMDSMI_GUEST_FW_ID_PFP',
-    'AMDSMI_GUEST_FW_ID_RLC', 'AMDSMI_GUEST_FW_ID_RLC_SRLC',
-    'AMDSMI_GUEST_FW_ID_RLC_SRLG', 'AMDSMI_GUEST_FW_ID_RLC_SRLS',
-    'AMDSMI_GUEST_FW_ID_SDMA', 'AMDSMI_GUEST_FW_ID_SDMA2',
-    'AMDSMI_GUEST_FW_ID_SMC', 'AMDSMI_GUEST_FW_ID_SOS',
-    'AMDSMI_GUEST_FW_ID_TA_RAS', 'AMDSMI_GUEST_FW_ID_TA_XGMI',
-    'AMDSMI_GUEST_FW_ID_UVD', 'AMDSMI_GUEST_FW_ID_VCE',
-    'AMDSMI_GUEST_FW_ID_VCN', 'AMDSMI_GUEST_FW_ID__MAX',
-    'AMDSMI_INIT_ALL_PROCESSORS', 'AMDSMI_INIT_AMD_APUS',
-    'AMDSMI_INIT_AMD_CPUS', 'AMDSMI_INIT_AMD_GPUS',
-    'AMDSMI_INIT_NON_AMD_CPUS', 'AMDSMI_INIT_NON_AMD_GPUS',
-    'AMDSMI_LINK_STATUS_DISABLED', 'AMDSMI_LINK_STATUS_ENABLED',
-    'AMDSMI_LINK_STATUS_ERROR', 'AMDSMI_LINK_TYPE_INTERNAL',
+    'AMDSMI_GUARD_EVENT_RAS_BAD_PAGES',
+    'AMDSMI_GUARD_EVENT_RAS_CPER_DUMP',
+    'AMDSMI_GUARD_EVENT_RAS_ERR_COUNT', 'AMDSMI_GUARD_EVENT__MAX',
+    'AMDSMI_GUARD_STATE_FULL', 'AMDSMI_GUARD_STATE_NORMAL',
+    'AMDSMI_GUARD_STATE_OVERFLOW', 'AMDSMI_GUEST_FW_ID_ASD',
+    'AMDSMI_GUEST_FW_ID_CE', 'AMDSMI_GUEST_FW_ID_DMCU',
+    'AMDSMI_GUEST_FW_ID_MC', 'AMDSMI_GUEST_FW_ID_ME',
+    'AMDSMI_GUEST_FW_ID_MEC', 'AMDSMI_GUEST_FW_ID_MEC2',
+    'AMDSMI_GUEST_FW_ID_PFP', 'AMDSMI_GUEST_FW_ID_RLC',
+    'AMDSMI_GUEST_FW_ID_RLC_SRLC', 'AMDSMI_GUEST_FW_ID_RLC_SRLG',
+    'AMDSMI_GUEST_FW_ID_RLC_SRLS', 'AMDSMI_GUEST_FW_ID_SDMA',
+    'AMDSMI_GUEST_FW_ID_SDMA2', 'AMDSMI_GUEST_FW_ID_SMC',
+    'AMDSMI_GUEST_FW_ID_SOS', 'AMDSMI_GUEST_FW_ID_TA_RAS',
+    'AMDSMI_GUEST_FW_ID_TA_XGMI', 'AMDSMI_GUEST_FW_ID_UVD',
+    'AMDSMI_GUEST_FW_ID_VCE', 'AMDSMI_GUEST_FW_ID_VCN',
+    'AMDSMI_GUEST_FW_ID__MAX', 'AMDSMI_INIT_ALL_PROCESSORS',
+    'AMDSMI_INIT_AMD_APUS', 'AMDSMI_INIT_AMD_CPUS',
+    'AMDSMI_INIT_AMD_GPUS', 'AMDSMI_INIT_NON_AMD_CPUS',
+    'AMDSMI_INIT_NON_AMD_GPUS', 'AMDSMI_LINK_STATUS_DISABLED',
+    'AMDSMI_LINK_STATUS_ENABLED', 'AMDSMI_LINK_STATUS_ERROR',
+    'AMDSMI_LINK_STATUS_INACTIVE', 'AMDSMI_LINK_TYPE_INTERNAL',
     'AMDSMI_LINK_TYPE_NOT_APPLICABLE', 'AMDSMI_LINK_TYPE_PCIE',
     'AMDSMI_LINK_TYPE_UNKNOWN', 'AMDSMI_LINK_TYPE_XGMI',
     'AMDSMI_MEMORY_PARTITION_NPS1', 'AMDSMI_MEMORY_PARTITION_NPS2',
@@ -3500,7 +3568,14 @@ __all__ = \
     'AMDSMI_METRIC_NAME_USAGE_JPEG', 'AMDSMI_METRIC_NAME_USAGE_MEM',
     'AMDSMI_METRIC_NAME_USAGE_MM', 'AMDSMI_METRIC_NAME_USAGE_VCN',
     'AMDSMI_METRIC_NAME_VOLT_GFX', 'AMDSMI_METRIC_NAME_VOLT_MEM',
-    'AMDSMI_METRIC_NAME_VOLT_SOC', 'AMDSMI_METRIC_TYPE_ACC',
+    'AMDSMI_METRIC_NAME_VOLT_SOC', 'AMDSMI_METRIC_RES_GROUP_AID',
+    'AMDSMI_METRIC_RES_GROUP_GPU', 'AMDSMI_METRIC_RES_GROUP_MID',
+    'AMDSMI_METRIC_RES_GROUP_NA', 'AMDSMI_METRIC_RES_GROUP_UNKNOWN',
+    'AMDSMI_METRIC_RES_GROUP_XCP',
+    'AMDSMI_METRIC_RES_SUBGROUP_ENGINE',
+    'AMDSMI_METRIC_RES_SUBGROUP_NA',
+    'AMDSMI_METRIC_RES_SUBGROUP_UNKNOWN',
+    'AMDSMI_METRIC_RES_SUBGROUP_XCC', 'AMDSMI_METRIC_TYPE_ACC',
     'AMDSMI_METRIC_TYPE_CHIPLET', 'AMDSMI_METRIC_TYPE_COUNTER',
     'AMDSMI_METRIC_TYPE_INST', 'AMDSMI_METRIC_UNIT_BOOL',
     'AMDSMI_METRIC_UNIT_CELSIUS', 'AMDSMI_METRIC_UNIT_COUNTER',
@@ -3590,15 +3665,15 @@ __all__ = \
     'AMDSMI_VRAM_TYPE_GDDR5', 'AMDSMI_VRAM_TYPE_GDDR6',
     'AMDSMI_VRAM_TYPE_GDDR7', 'AMDSMI_VRAM_TYPE_HBM',
     'AMDSMI_VRAM_TYPE_HBM2', 'AMDSMI_VRAM_TYPE_HBM2E',
-    'AMDSMI_VRAM_TYPE_HBM3', 'AMDSMI_VRAM_TYPE_UNKNOWN',
-    'AMDSMI_VRAM_VENDOR_ELPIDA', 'AMDSMI_VRAM_VENDOR_ESMT',
-    'AMDSMI_VRAM_VENDOR_ETRON', 'AMDSMI_VRAM_VENDOR_HYNIX',
-    'AMDSMI_VRAM_VENDOR_INFINEON', 'AMDSMI_VRAM_VENDOR_MICRON',
-    'AMDSMI_VRAM_VENDOR_MOSEL', 'AMDSMI_VRAM_VENDOR_NANYA',
-    'AMDSMI_VRAM_VENDOR_SAMSUNG', 'AMDSMI_VRAM_VENDOR_UNKNOWN',
-    'AMDSMI_VRAM_VENDOR_WINBOND', 'AMDSMI_XGMI_FB_SHARING_MODE_1',
-    'AMDSMI_XGMI_FB_SHARING_MODE_2', 'AMDSMI_XGMI_FB_SHARING_MODE_4',
-    'AMDSMI_XGMI_FB_SHARING_MODE_8',
+    'AMDSMI_VRAM_TYPE_HBM3', 'AMDSMI_VRAM_TYPE_HBM3E',
+    'AMDSMI_VRAM_TYPE_UNKNOWN', 'AMDSMI_VRAM_VENDOR_ELPIDA',
+    'AMDSMI_VRAM_VENDOR_ESMT', 'AMDSMI_VRAM_VENDOR_ETRON',
+    'AMDSMI_VRAM_VENDOR_HYNIX', 'AMDSMI_VRAM_VENDOR_INFINEON',
+    'AMDSMI_VRAM_VENDOR_MICRON', 'AMDSMI_VRAM_VENDOR_MOSEL',
+    'AMDSMI_VRAM_VENDOR_NANYA', 'AMDSMI_VRAM_VENDOR_SAMSUNG',
+    'AMDSMI_VRAM_VENDOR_UNKNOWN', 'AMDSMI_VRAM_VENDOR_WINBOND',
+    'AMDSMI_XGMI_FB_SHARING_MODE_1', 'AMDSMI_XGMI_FB_SHARING_MODE_2',
+    'AMDSMI_XGMI_FB_SHARING_MODE_4', 'AMDSMI_XGMI_FB_SHARING_MODE_8',
     'AMDSMI_XGMI_FB_SHARING_MODE_CUSTOM',
     'AMDSMI_XGMI_FB_SHARING_MODE_UNKNOWN',
     'GUEST_FW_LOAD_STATUS_BAD_SIG',
@@ -3612,6 +3687,7 @@ __all__ = \
     'amdsmi_accelerator_partition_resource_type_t__enumvalues',
     'amdsmi_accelerator_partition_type_t',
     'amdsmi_accelerator_partition_type_t__enumvalues',
+    'amdsmi_affinity_scope_t', 'amdsmi_affinity_scope_t__enumvalues',
     'amdsmi_asic_info_t', 'amdsmi_bdf_t', 'amdsmi_board_info_t',
     'amdsmi_cache_property_type_t',
     'amdsmi_cache_property_type_t__enumvalues',
@@ -3654,8 +3730,9 @@ __all__ = \
     'amdsmi_fw_error_record_t', 'amdsmi_fw_info_t',
     'amdsmi_fw_load_error_record_t', 'amdsmi_get_afids_from_cper',
     'amdsmi_get_bad_page_threshold', 'amdsmi_get_clock_info',
-    'amdsmi_get_dfc_fw_table', 'amdsmi_get_fb_layout',
-    'amdsmi_get_fw_error_records', 'amdsmi_get_fw_info',
+    'amdsmi_get_cpu_affinity_with_scope', 'amdsmi_get_dfc_fw_table',
+    'amdsmi_get_fb_layout', 'amdsmi_get_fw_error_records',
+    'amdsmi_get_fw_info',
     'amdsmi_get_gpu_accelerator_partition_profile',
     'amdsmi_get_gpu_accelerator_partition_profile_config',
     'amdsmi_get_gpu_activity', 'amdsmi_get_gpu_asic_info',
@@ -3704,7 +3781,10 @@ __all__ = \
     'amdsmi_memory_partition_type_t__enumvalues',
     'amdsmi_metric_category_t',
     'amdsmi_metric_category_t__enumvalues', 'amdsmi_metric_name_t',
-    'amdsmi_metric_name_t__enumvalues', 'amdsmi_metric_t',
+    'amdsmi_metric_name_t__enumvalues', 'amdsmi_metric_res_group_t',
+    'amdsmi_metric_res_group_t__enumvalues',
+    'amdsmi_metric_res_subgroup_t',
+    'amdsmi_metric_res_subgroup_t__enumvalues', 'amdsmi_metric_t',
     'amdsmi_metric_type_t', 'amdsmi_metric_type_t__enumvalues',
     'amdsmi_metric_unit_t', 'amdsmi_metric_unit_t__enumvalues',
     'amdsmi_mm_ip_t', 'amdsmi_mm_ip_t__enumvalues',
@@ -3729,9 +3809,9 @@ __all__ = \
     'amdsmi_temperature_metric_t__enumvalues',
     'amdsmi_temperature_type_t',
     'amdsmi_temperature_type_t__enumvalues',
-    'amdsmi_topo_get_p2p_status', 'amdsmi_topology_nearest_t',
-    'amdsmi_vbios_info_t', 'amdsmi_version_t',
-    'amdsmi_vf_config_flags_t',
+    'amdsmi_topo_get_numa_node_number', 'amdsmi_topo_get_p2p_status',
+    'amdsmi_topology_nearest_t', 'amdsmi_vbios_info_t',
+    'amdsmi_version_t', 'amdsmi_vf_config_flags_t',
     'amdsmi_vf_config_flags_t__enumvalues', 'amdsmi_vf_data_t',
     'amdsmi_vf_fb_info_t', 'amdsmi_vf_handle_t', 'amdsmi_vf_info_t',
     'amdsmi_vf_sched_state_t', 'amdsmi_vf_sched_state_t__enumvalues',
@@ -3743,6 +3823,7 @@ __all__ = \
     'amdsmi_xgmi_fb_sharing_mode_t__enumvalues',
     'c__EA_amdsmi_accelerator_partition_resource_type_t',
     'c__EA_amdsmi_accelerator_partition_type_t',
+    'c__EA_amdsmi_affinity_scope_t',
     'c__EA_amdsmi_cache_property_type_t',
     'c__EA_amdsmi_card_form_factor_t', 'c__EA_amdsmi_clk_type_t',
     'c__EA_amdsmi_cper_notify_type_t', 'c__EA_amdsmi_cper_sev_t',
@@ -3763,6 +3844,8 @@ __all__ = \
     'c__EA_amdsmi_link_type_t',
     'c__EA_amdsmi_memory_partition_type_t',
     'c__EA_amdsmi_metric_category_t', 'c__EA_amdsmi_metric_name_t',
+    'c__EA_amdsmi_metric_res_group_t',
+    'c__EA_amdsmi_metric_res_subgroup_t',
     'c__EA_amdsmi_metric_type_t', 'c__EA_amdsmi_metric_unit_t',
     'c__EA_amdsmi_mm_ip_t', 'c__EA_amdsmi_profile_capability_type_t',
     'c__EA_amdsmi_sched_block_t', 'c__EA_amdsmi_status_t',

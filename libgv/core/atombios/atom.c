@@ -104,7 +104,7 @@ static void debug_print_spaces(int n)
 		oss_print(AMDGV_DEBUG_LEVEL, "   ");
 }
 
-#define DEBUG(fmt, ...)                                                                       \
+#define ADEBUG(fmt, ...)                                                                       \
 	do {                                                                                  \
 		if (amdgv_atom_debug) {                                                       \
 			oss_print(AMDGV_DEBUG_LEVEL, LIBGV_DEBUG_HEADER fmt, ##__VA_ARGS__);  \
@@ -119,7 +119,7 @@ static void debug_print_spaces(int n)
 		}                                                                             \
 	} while (0)
 #else
-#define DEBUG(...) do { } while (0)
+#define ADEBUG(...) do { } while (0)
 #define SDEBUG(...) do { } while (0)
 #endif
 
@@ -195,7 +195,7 @@ static uint32_t atom_get_src_int(atom_exec_context *ctx, uint8_t attr, int *ptr,
 		idx = U16(*ptr);
 		(*ptr) += 2;
 		if (print)
-			DEBUG("REG[0x%04X]", idx);
+			ADEBUG("REG[0x%04X]", idx);
 		idx += gctx->reg_block;
 		switch (gctx->io_mode) {
 		case ATOM_IO_MM:
@@ -229,13 +229,13 @@ static uint32_t atom_get_src_int(atom_exec_context *ctx, uint8_t attr, int *ptr,
 		 * tables, noticed on a DEC Alpha. */
 		val = get_unaligned_le32((uint32_t *)&ctx->ps[idx]);
 		if (print)
-			DEBUG("PS[0x%02X,0x%04X]", idx, val);
+			ADEBUG("PS[0x%02X,0x%04X]", idx, val);
 		break;
 	case ATOM_ARG_WS:
 		idx = U8(*ptr);
 		(*ptr)++;
 		if (print)
-			DEBUG("WS[0x%02X]", idx);
+			ADEBUG("WS[0x%02X]", idx);
 		switch (idx) {
 		case ATOM_WS_QUOTIENT:
 			val = gctx->divmul[0];
@@ -273,9 +273,9 @@ static uint32_t atom_get_src_int(atom_exec_context *ctx, uint8_t attr, int *ptr,
 		(*ptr) += 2;
 		if (print) {
 			if (gctx->data_block)
-				DEBUG("ID[0x%04X+%04X]", idx, gctx->data_block);
+				ADEBUG("ID[0x%04X+%04X]", idx, gctx->data_block);
 			else
-				DEBUG("ID[0x%04X]", idx);
+				ADEBUG("ID[0x%04X]", idx);
 		}
 		val = U32(idx + gctx->data_block);
 		break;
@@ -286,7 +286,7 @@ static uint32_t atom_get_src_int(atom_exec_context *ctx, uint8_t attr, int *ptr,
 		ctx->read_addr = gctx->fb_base + (idx * 4);
 		ctx->read_val = val;
 		if (print)
-			DEBUG("FB[0x%02X]", idx);
+			ADEBUG("FB[0x%02X]", idx);
 		break;
 	case ATOM_ARG_IMM:
 		switch (align) {
@@ -294,7 +294,7 @@ static uint32_t atom_get_src_int(atom_exec_context *ctx, uint8_t attr, int *ptr,
 			val = U32(*ptr);
 			(*ptr) += 4;
 			if (print)
-				DEBUG("IMM 0x%08X\n", val);
+				ADEBUG("IMM 0x%08X\n", val);
 			break;
 		case ATOM_SRC_WORD0:
 		case ATOM_SRC_WORD8:
@@ -302,7 +302,7 @@ static uint32_t atom_get_src_int(atom_exec_context *ctx, uint8_t attr, int *ptr,
 			val = U16(*ptr);
 			(*ptr) += 2;
 			if (print)
-				DEBUG("IMM 0x%04X\n", val);
+				ADEBUG("IMM 0x%04X\n", val);
 			break;
 		case ATOM_SRC_BYTE0:
 		case ATOM_SRC_BYTE8:
@@ -311,21 +311,21 @@ static uint32_t atom_get_src_int(atom_exec_context *ctx, uint8_t attr, int *ptr,
 			val = U8(*ptr);
 			(*ptr)++;
 			if (print)
-				DEBUG("IMM 0x%02X\n", val);
+				ADEBUG("IMM 0x%02X\n", val);
 		}
 		return val;
 	case ATOM_ARG_PLL:
 		idx = U8(*ptr);
 		(*ptr)++;
 		if (print)
-			DEBUG("PLL[0x%02X]", idx);
+			ADEBUG("PLL[0x%02X]", idx);
 		val = gctx->card->pll_read(gctx->card, idx);
 		break;
 	case ATOM_ARG_MC:
 		idx = U8(*ptr);
 		(*ptr)++;
 		if (print)
-			DEBUG("MC[0x%02X]", idx);
+			ADEBUG("MC[0x%02X]", idx);
 		val = gctx->card->mc_read(gctx->card, idx);
 		ctx->read_addr = idx;
 		ctx->read_val = val;
@@ -338,28 +338,28 @@ static uint32_t atom_get_src_int(atom_exec_context *ctx, uint8_t attr, int *ptr,
 	if (print)
 		switch (align) {
 		case ATOM_SRC_DWORD:
-			DEBUG(".[31:0] -> 0x%08X\n", val);
+			ADEBUG(".[31:0] -> 0x%08X\n", val);
 			break;
 		case ATOM_SRC_WORD0:
-			DEBUG(".[15:0] -> 0x%04X\n", val);
+			ADEBUG(".[15:0] -> 0x%04X\n", val);
 			break;
 		case ATOM_SRC_WORD8:
-			DEBUG(".[23:8] -> 0x%04X\n", val);
+			ADEBUG(".[23:8] -> 0x%04X\n", val);
 			break;
 		case ATOM_SRC_WORD16:
-			DEBUG(".[31:16] -> 0x%04X\n", val);
+			ADEBUG(".[31:16] -> 0x%04X\n", val);
 			break;
 		case ATOM_SRC_BYTE0:
-			DEBUG(".[7:0] -> 0x%02X\n", val);
+			ADEBUG(".[7:0] -> 0x%02X\n", val);
 			break;
 		case ATOM_SRC_BYTE8:
-			DEBUG(".[15:8] -> 0x%02X\n", val);
+			ADEBUG(".[15:8] -> 0x%02X\n", val);
 			break;
 		case ATOM_SRC_BYTE16:
-			DEBUG(".[23:16] -> 0x%02X\n", val);
+			ADEBUG(".[23:16] -> 0x%02X\n", val);
 			break;
 		case ATOM_SRC_BYTE24:
-			DEBUG(".[31:24] -> 0x%02X\n", val);
+			ADEBUG(".[31:24] -> 0x%02X\n", val);
 			break;
 		}
 	return val;
@@ -460,7 +460,7 @@ static void atom_put_dst(atom_exec_context *ctx, int arg, uint8_t attr, int *ptr
 	case ATOM_ARG_REG:
 		idx = U16(*ptr);
 		(*ptr) += 2;
-		DEBUG("REG[0x%04X]", idx);
+		ADEBUG("REG[0x%04X]", idx);
 		idx += gctx->reg_block;
 		switch (gctx->io_mode) {
 		case ATOM_IO_MM:
@@ -497,13 +497,13 @@ static void atom_put_dst(atom_exec_context *ctx, int arg, uint8_t attr, int *ptr
 	case ATOM_ARG_PS:
 		idx = U8(*ptr);
 		(*ptr)++;
-		DEBUG("PS[0x%02X]", idx);
+		ADEBUG("PS[0x%02X]", idx);
 		ctx->ps[idx] = cpu_to_le32(val);
 		break;
 	case ATOM_ARG_WS:
 		idx = U8(*ptr);
 		(*ptr)++;
-		DEBUG("WS[0x%02X]", idx);
+		ADEBUG("WS[0x%02X]", idx);
 		switch (idx) {
 		case ATOM_WS_QUOTIENT:
 			gctx->divmul[0] = val;
@@ -539,18 +539,18 @@ static void atom_put_dst(atom_exec_context *ctx, int arg, uint8_t attr, int *ptr
 		gctx->card->fb_write(gctx->card, gctx->fb_base + (idx * 4), val);
 		ctx->write_addr = gctx->fb_base + (idx * 4);
 		ctx->write_val = val;
-		DEBUG("FB[0x%02X]", idx);
+		ADEBUG("FB[0x%02X]", idx);
 		break;
 	case ATOM_ARG_PLL:
 		idx = U8(*ptr);
 		(*ptr)++;
-		DEBUG("PLL[0x%02X]", idx);
+		ADEBUG("PLL[0x%02X]", idx);
 		gctx->card->pll_write(gctx->card, idx, val);
 		break;
 	case ATOM_ARG_MC:
 		idx = U8(*ptr);
 		(*ptr)++;
-		DEBUG("MC[0x%02X]", idx);
+		ADEBUG("MC[0x%02X]", idx);
 		gctx->card->mc_write(gctx->card, idx, val);
 		ctx->write_addr = idx;
 		ctx->write_val = val;
@@ -558,28 +558,28 @@ static void atom_put_dst(atom_exec_context *ctx, int arg, uint8_t attr, int *ptr
 	}
 	switch (align) {
 	case ATOM_SRC_DWORD:
-		DEBUG(".[31:0] <- 0x%08X\n", old_val);
+		ADEBUG(".[31:0] <- 0x%08X\n", old_val);
 		break;
 	case ATOM_SRC_WORD0:
-		DEBUG(".[15:0] <- 0x%04X\n", old_val);
+		ADEBUG(".[15:0] <- 0x%04X\n", old_val);
 		break;
 	case ATOM_SRC_WORD8:
-		DEBUG(".[23:8] <- 0x%04X\n", old_val);
+		ADEBUG(".[23:8] <- 0x%04X\n", old_val);
 		break;
 	case ATOM_SRC_WORD16:
-		DEBUG(".[31:16] <- 0x%04X\n", old_val);
+		ADEBUG(".[31:16] <- 0x%04X\n", old_val);
 		break;
 	case ATOM_SRC_BYTE0:
-		DEBUG(".[7:0] <- 0x%02X\n", old_val);
+		ADEBUG(".[7:0] <- 0x%02X\n", old_val);
 		break;
 	case ATOM_SRC_BYTE8:
-		DEBUG(".[15:8] <- 0x%02X\n", old_val);
+		ADEBUG(".[15:8] <- 0x%02X\n", old_val);
 		break;
 	case ATOM_SRC_BYTE16:
-		DEBUG(".[23:16] <- 0x%02X\n", old_val);
+		ADEBUG(".[23:16] <- 0x%02X\n", old_val);
 		break;
 	case ATOM_SRC_BYTE24:
-		DEBUG(".[31:24] <- 0x%02X\n", old_val);
+		ADEBUG(".[31:24] <- 0x%02X\n", old_val);
 		break;
 	}
 }

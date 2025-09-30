@@ -42,6 +42,12 @@ static int amdgv_migration_get_migration_info(struct amdgv_adapter *adapt)
 		PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
 }
 
+void amdgv_migration_set_ctx_version(struct amdgv_adapter *adapt,
+				     enum amdgv_migration_context_version version)
+{
+	adapt->live_migration.context_version = version;
+}
+
 int amdgv_migration_get_migration_version(struct amdgv_adapter *adapt,
 					  uint32_t *migration_version)
 {

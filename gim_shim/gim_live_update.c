@@ -80,7 +80,7 @@ static bool gim_live_update_is_gpu_match(struct gim_live_update_manager *mgr, st
 	gim_oss_interfaces.pci_write_config_dword(data->info.dev, hash_addr, 0);
 	is_hash_match = (header_hash == hash);
 
-	gim_info_bdf(data->info.bdf, "header hash 0x%llx, pci hash 0x%x\n", header_hash, hash);
+	gim_dbg_bdf(data->info.bdf, "header hash 0x%llx, pci hash 0x%x\n", header_hash, hash);
 
 	return is_hash_match;
 }
@@ -287,18 +287,20 @@ void gim_live_update_fini_manager(struct gim_live_update_manager *mgr)
 static void gim_live_update_fill_compatibility(struct gim_live_update_manager *mgr, struct amdgv_init_data *data, struct amdgv_gpu_data_v2 *gpu_data)
 {
 	struct amdgv_live_update_file_header *file_header;
+	struct amdgv_live_info_param *module_param;
 
 	file_header = gim_live_update_get_file_header_ptr(mgr);
+	module_param = (struct amdgv_live_info_param *)((char *)gpu_data + gpu_data->header.op_offset[AMDGV_LIVE_INFO_DATA__MODULE_PARAM_PRE]);
 	if (file_header->version <= LIVE_INFO_GET_HEADER_VERSION(2, 0)) {
-		gpu_data->module_param.partition_full_access_enable = 1;
-		gpu_data->module_param.memory_partition_mode = AMDGV_MEMORY_PARTITION_MODE_NPS1;
-		gpu_data->module_param.accelerator_partition_mode = gpu_data->module_param.num_vf;
+		module_param->partition_full_access_enable = 1;
+		module_param->memory_partition_mode = AMDGV_MEMORY_PARTITION_MODE_NPS1;
+		module_param->accelerator_partition_mode = module_param->num_vf;
 	}
 
-	data->opt.total_vf_num = gpu_data->module_param.num_vf;
-	data->opt.accelerator_partition_mode = gpu_data->module_param.accelerator_partition_mode;
-	data->opt.memory_partition_mode = gpu_data->module_param.memory_partition_mode;
-	data->opt.partition_full_access_enable = gpu_data->module_param.partition_full_access_enable;
+	data->opt.total_vf_num = module_param->num_vf;
+	data->opt.accelerator_partition_mode = module_param->accelerator_partition_mode;
+	data->opt.memory_partition_mode = module_param->memory_partition_mode;
+	data->opt.partition_full_access_enable = module_param->partition_full_access_enable;
 }
 
 static enum gim_live_update_data_status gim_import_data(struct gim_live_update_manager *mgr, struct gim_dev_data *dev_data)

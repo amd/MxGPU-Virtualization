@@ -116,7 +116,8 @@ private:
 	};
 
 	std::vector<std::string> METRIC_SUPPORTED_ARGS_VF = {
-		"--schedule", "-s", "--guard", "-G", "--guest-data", "-u"
+		"--schedule", "-s", "--guard", "-G", "--guest-data", "-u",
+		"--per-partition", "-pp"
 	};
 
 	std::vector<std::string> WATCH_SUPPORTED_ARGS = {
@@ -174,7 +175,7 @@ private:
 	};
 
 	std::vector<std::string> XGMI_SUPPORTED_ARGS_GPU = {
-		"--caps", "--fb-sharing", "--set", "--mode", "--metric"
+		"--caps", "--fb-sharing", "--set", "--mode", "--metric", "--link-status"
 	};
 
 	std::map<std::string, std::vector<std::string> > XGMI_SUPPORTED_ARGUMENTS = {

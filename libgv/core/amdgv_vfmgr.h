@@ -110,6 +110,7 @@ enum amdgv_live_info_status amdgv_vfmgr_export_live_data(struct amdgv_adapter *a
 enum amdgv_live_info_status amdgv_vfmgr_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_vf *vf_info);
 enum amdgv_live_info_status amdgv_vfmgr_export_live_data_extend(struct amdgv_adapter *adapt, struct amdgv_live_info_vf_extend *vf_extend);
 enum amdgv_live_info_status amdgv_vfmgr_import_live_data_extend(struct amdgv_adapter *adapt, struct amdgv_live_info_vf_extend *vf_extend);
+enum amdgv_live_info_status amdgv_restore_ultralite_vf_data(struct amdgv_adapter* adapt);
 
 struct amdgv_vf_fb_block *amdgv_vfmgr_find_fb_block_by_fcn(struct amdgv_adapter *adapt, uint32_t vf_idx);
 struct amdgv_vf_fb_block *amdgv_vfmgr_find_usable_free_block(struct amdgv_adapter *adapt, uint32_t fb_size);

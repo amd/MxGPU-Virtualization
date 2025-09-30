@@ -645,3 +645,52 @@ TEST_F(AmdSmiUtilTests, get_register_array_unaligned)
     memcpy(&expected, data, 8);
     EXPECT_EQ(reg[0], expected);
 }
+
+TEST_F(AmdSmiUtilTests, parse_cpu_list_simple_range)
+{
+    uint64_t cpu_set[2] = {0};
+    // "0-3" should set bits 0,1,2,3
+    ASSERT_EQ(parse_cpu_list("0-3", cpu_set, 2), 0);
+    EXPECT_EQ(cpu_set[0], 0xF);
+    EXPECT_EQ(cpu_set[1], 0);
+}
+
+TEST_F(AmdSmiUtilTests, parse_cpu_list_empty_string)
+{
+    uint64_t cpu_set[2] = {0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF};
+    ASSERT_EQ(parse_cpu_list("", cpu_set, 2), 0);
+    EXPECT_EQ(cpu_set[0], 0);
+    EXPECT_EQ(cpu_set[1], 0);
+}
+
+TEST_F(AmdSmiUtilTests, parse_cpu_list_out_of_bounds)
+{
+    uint64_t cpu_set[1] = {0};
+    // "0-100" with cpu_set_size=1, only bits 0-63 should be set
+    ASSERT_EQ(parse_cpu_list("0-100", cpu_set, 1), 0);
+    EXPECT_EQ(cpu_set[0], 0xFFFFFFFFFFFFFFFFULL);
+}
+
+TEST_F(AmdSmiUtilTests, parse_cpu_list_full_range)
+{
+    uint64_t cpu_set[2] = {0};
+    // "0-15,32-56" should set bits 0-15 and 32-56
+    ASSERT_EQ(parse_cpu_list("0-15,32-56", cpu_set, 2), 0);
+
+    // Check bits 0-15
+    for (int i = 0; i <= 15; ++i) {
+        EXPECT_TRUE(cpu_set[i / 64] & (1ULL << (i % 64)));
+    }
+    // Check bits 16-31 are not set
+    for (int i = 16; i <= 31; ++i) {
+        EXPECT_FALSE(cpu_set[i / 64] & (1ULL << (i % 64)));
+    }
+    // Check bits 32-56
+    for (int i = 32; i <= 56; ++i) {
+        EXPECT_TRUE(cpu_set[i / 64] & (1ULL << (i % 64)));
+    }
+    // Check bits 57-63 are not set
+    for (int i = 57; i <= 63; ++i) {
+        EXPECT_FALSE(cpu_set[i / 64] & (1ULL << (i % 64)));
+    }
+}

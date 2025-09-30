@@ -89,6 +89,6 @@ uint64_t amdgv_misc_get_memsize(struct amdgv_adapter *adapt);
 void amdgv_misc_hdp_flush(struct amdgv_adapter *adapt);
 
 int amdgv_misc_get_agp_cpu_base(struct amdgv_adapter *adapt, void **data);
-int amdgv_misc_migrate_fb(struct amdgv_adapter *adapt,
-	uint32_t idx_vf, uint32_t idx_fb_block, void *data, bool to_fb);
+int amdgv_misc_dma_copy(struct amdgv_adapter *adapt, int idx_vf,
+			uint64_t src, uint64_t size, uint64_t dst);
 #endif

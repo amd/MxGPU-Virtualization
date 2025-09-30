@@ -93,7 +93,7 @@ mi300_psp_wait_for_bootloader_steady(struct amdgv_adapter *adapt);
 uint32_t mi300_psp_get_bootloader_version(struct amdgv_adapter *adapt);
 enum psp_status
 mi300_psp_set_accelerator_partition_mode(struct amdgv_adapter *adapt,
-					uint32_t accelerator_partition_mode);
+					enum amdgv_accelerator_partition_mode accelerator_partition_mode);
 enum psp_status
 mi300_psp_set_memory_partition_mode(struct amdgv_adapter *adapt,
 					enum amdgv_memory_partition_mode memory_partition_mode);

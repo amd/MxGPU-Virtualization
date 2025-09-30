@@ -7,49 +7,7 @@ myst:
 
 # Overview - AMD SMI tool
 
-AMD SMI tool is a command line utility that utilizes AMD SMI Library APIs to monitor AMD GPUs. The tool is used to monitor AMD’s GPUs status in a virtualization environment in Linux host Operating Systems and Windows guest Operating Systems. The tool outputs GPU/driver information in plain text, in JSON, or in CSV formats while it can also show the info in the console or save to the specified output file.
-
-## AMD SMI tool build
-
-Before running the command to build the tool, make sure you are meeting the following requirements on your system:
-    -cmake minimum version 3.15
-    -g++ minimum version 8
-
-When running make inside the gim/smi-lib/cli/cpp folder, the AMD SMI Tool will be built. Here are some useful commands for building the AMD SMI library:
-
-- Run `make` in the gim/smi-lib/cli/cpp folder to build the tool.
-- Run `make clean` to remove all files generated during the build process, such as object files and executables, to ensure clean build environment.
-
-After build is successfully finished, navigate to gim/smi-lib/cli/cpp/build folder and tool binary should be there.
-Open terminal and navigate to this location and now you can execute smi tool.
-
-## AMD SMI tool installation
-
-To install the tool system-wide:
-
-Navigate to the cpp directory:
--   `cd smi_lib/cli/cpp`
-
-Build the project if you haven't already:
--   `make [BUILD_TYPE=<debug|release>]`
-
-Install the tool:
--   `sudo make install`
-
-This will install the amd-smi binary to /usr/local/bin making the tool available for all users.
-Once installed, you can run the amd-smi command from any directory in your terminal without specifying the full path.
-
-## AMD SMI tool uninstallation
-
-To remove the installed tool:
-
-Navigate to the cpp directory:
--   `cd smi_lib/cli/cpp`
-
-Run the uninstall command:
--   `sudo make uninstall`
-
-This command deletes all files that were installed by the `sudo make install` command
+AMD SMI tool is a command line utility that utilizes AMD SMI Library APIs to monitor and configure AMD GPUs. The tool is used to monitor AMD’s GPUs status in a virtualization environment in Linux host Operating Systems and Windows guest Operating Systems. The tool outputs GPU/driver information in plain text, in JSON, or in CSV formats while it can also show the info in the console or save to the specified output file.
 
 ## Folder structure
 

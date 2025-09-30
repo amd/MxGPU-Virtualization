@@ -146,7 +146,7 @@ static int amdgv_wait_all_guest_reset_ready_cb(void *context)
 	return 0;
 }
 
-static int amdgv_sched_whole_gpu_reset(struct amdgv_adapter *adapt)
+static int amdgv_sched_whole_gpu_reset(struct amdgv_adapter *adapt, uint32_t triggered_idx_vf)
 {
 	uint32_t idx_vf, i;
 	uint32_t hw_sched_id;
@@ -206,6 +206,11 @@ static int amdgv_sched_whole_gpu_reset(struct amdgv_adapter *adapt)
 
 	/* reset the whole GPU */
 	ret = amdgv_reset_gpu(adapt);
+
+	/* event guard will be triggered for WGR*/
+	if (triggered_idx_vf != AMDGV_PF_IDX) {
+		amdgv_guard_add_active_event(adapt, triggered_idx_vf, AMDGV_GUARD_EVENT_WGR);
+	}
 
 	if (ret)
 		return AMDGV_FAILURE;
@@ -267,7 +272,7 @@ static int amdgv_sched_whole_gpu_reset(struct amdgv_adapter *adapt)
  * But in case somehow the redundant interal_WGR isn’t cleaned, make the case 4 happen.
  * This should be an orphan reset request, just drop it.
  */
-static int amdgv_sched_gpu_chain_reset(struct amdgv_adapter *adapt, bool reset_all)
+static int amdgv_sched_gpu_chain_reset(struct amdgv_adapter *adapt, bool reset_all, uint32_t idx_vf)
 {
 	struct amdgv_adapter *adapt_next = NULL;
 	struct amdgv_hive_info *hive;
@@ -309,7 +314,7 @@ static int amdgv_sched_gpu_chain_reset(struct amdgv_adapter *adapt, bool reset_a
 self_reset:
 	if (hive->in_chain_reset) {
 		adapt->reset.in_xgmi_chain_reset = true;
-		ret = amdgv_sched_whole_gpu_reset(adapt);
+		ret = amdgv_sched_whole_gpu_reset(adapt, idx_vf);
 
 		/* if any reset failed, mark hive bad to drop any further reset */
 		if (ret)
@@ -334,7 +339,7 @@ self_reset:
 	return ret;
 }
 
-int amdgv_sched_gpu_reset_wrap(struct amdgv_adapter *adapt, bool reset_all)
+int amdgv_sched_gpu_reset_wrap(struct amdgv_adapter *adapt, bool reset_all, uint32_t idx_vf)
 {
 	int ret = AMDGV_FAILURE;
 
@@ -347,9 +352,9 @@ int amdgv_sched_gpu_reset_wrap(struct amdgv_adapter *adapt, bool reset_all)
 	amdgv_sched_stop_all(adapt);
 
 	if (adapt->xgmi.phy_nodes_num > 1) {
-		ret = amdgv_sched_gpu_chain_reset(adapt, reset_all);
+		ret = amdgv_sched_gpu_chain_reset(adapt, reset_all, idx_vf);
 	} else {
-		ret = amdgv_sched_whole_gpu_reset(adapt);
+		ret = amdgv_sched_whole_gpu_reset(adapt, idx_vf);
 		/* xgmi hive case need to sync flag unsets so unset is done in amdgv_sched_gpu_chain_reset */
 		oss_atomic_set(adapt->in_ecc_recovery, 0);
 	}
@@ -460,7 +465,7 @@ whole_gpu_reset:
 			  "Whole GPU reset triggered by failed FLR on %s.",
 			  amdgv_idx_to_str(idx_vf));
 
-	ret = amdgv_sched_gpu_reset_wrap(adapt, 1);
+	ret = amdgv_sched_gpu_reset_wrap(adapt, 1, idx_vf);
 
 	amdgv_time_log_note_vf_reset_end(adapt, idx_vf);
 
@@ -617,7 +622,7 @@ whole_gpu_reset__auto:
 	amdgv_notify_shim(adapt->dev, AMDGV_NOTIFICATION_ERROR_WHOLE_GPU_RESET,
 			  "Whole GPU reset triggered by failed VF reset auto.");
 
-	ret = amdgv_sched_gpu_reset_wrap(adapt, 1);
+	ret = amdgv_sched_gpu_reset_wrap(adapt, 1, abnormal_idx_vf);
 
 	/* end recording for VF even for failure */
 	if (abnormal_idx_vf != AMDGV_INVALID_IDX_VF)

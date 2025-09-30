@@ -104,6 +104,7 @@ TEST_F(AmdSmiMetricsTest, GetChipletMetrics)
 		metrics_table->metric[i].metric_union.code = i;
 		metrics_table->metric[i].val = i*2;
 		metrics_table->metric[i].vf_mask = i*3;
+		metrics_table->metric[i].res_instance = i*4;
 	}
 #ifdef _WIN64
 	EXPECT_CALL(*g_system_mock, Calloc(testing::_, testing::_)).WillOnce(testing::Return(metrics_table));
@@ -202,6 +203,7 @@ TEST_F(AmdSmiMetricsTest, GetChipletMetricsSizeOutOfRange)
 		metrics_table->metric[i].metric_union.code = i;
 		metrics_table->metric[i].val = i*2;
 		metrics_table->metric[i].vf_mask = i*3;
+		metrics_table->metric[i].res_instance = i*4;
 	}
 
 #ifdef _WIN64

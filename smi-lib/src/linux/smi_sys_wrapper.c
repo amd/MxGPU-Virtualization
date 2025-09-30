@@ -257,7 +257,9 @@ system_wrapper *get_system_wrapper(void)
 		.smi_aligned_alloc = amdsmi_aligned_alloc,
 		.smi_aligned_free = free,
 		.smi_strncpy = amdsmi_strncpy,
-		.smi_sysconf = sysconf
+		.smi_sysconf = sysconf,
+		.fopen = fopen,
+		.fgets = fgets
 	};
 
 	return &wrapper;
