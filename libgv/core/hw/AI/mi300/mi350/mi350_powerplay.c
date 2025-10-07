@@ -768,7 +768,7 @@ static int mi350_smu_get_pm_policy(struct amdgv_adapter *adapt,
 	struct mi350_smu_dpm_policy_ctxt *policy_ctxt =
 			dpm_ctxt->dpm_policies;
 	bool policy_found = false;
-	int ret = AMDGV_FAILURE;
+	int ret = AMDGV_NOT_SUPPORTED;
 	int i = 0;
 
 	if (!policy_ctxt || !(policy_ctxt->policy_mask & BIT(p_type)))
@@ -801,11 +801,11 @@ static int mi350_smu_compare_and_set_pm_policy(struct amdgv_adapter *adapt,
 	struct pp_smu_dpm_policy *dpm_policy;
 	int ret = AMDGV_FAILURE;
 
-	if (mi350_smu_get_pm_policy(adapt, p_type, &dpm_policy))
+	if ((ret = mi350_smu_get_pm_policy(adapt, p_type, &dpm_policy)))
 		return ret;
 
 	if (!(dpm_policy->level_mask & BIT(level)) || !dpm_policy->set_policy)
-		return ret;
+		return AMDGV_FAILURE;
 
 	if (dpm_policy->current_level == level)
 		return 0;
@@ -1293,6 +1293,25 @@ static int mi350_smu_feature_control(struct amdgv_adapter *adapt, bool enable)
 	}
 
 	return 0;
+}
+
+static int mi350_smu_init_supported_caps(struct amdgv_adapter *adapt)
+{
+	struct smu_context *smu = adapt_to_smu(adapt);
+
+	smu->supported_caps = 0;
+
+	if ((adapt->pp.smu_fw_version >= 0x00562600)) {
+		smu->supported_caps |= SMU_CAPS(SMU_CAP_ACA_SYND);
+	}
+
+	return 0;
+}
+
+static bool mi350_smu_cap_supported(struct amdgv_adapter *adapt, int cap)
+{
+	struct smu_context *smu = adapt_to_smu(adapt);
+	return (smu->supported_caps & SMU_CAPS(cap)) != 0;
 }
 
 static int mi350_smu_set_tool_table_address(struct amdgv_adapter *adapt)
@@ -1872,6 +1891,10 @@ static int mi350_smu_hw_init(struct amdgv_adapter *adapt)
 		return ret;
 
 	ret = mi350_smu_feature_control(adapt, true);
+	if (ret)
+		return ret;
+
+	ret = mi350_smu_init_supported_caps(adapt);
 	if (ret)
 		return ret;
 
@@ -2737,6 +2760,7 @@ static const struct amdgv_pp_funcs mi350_amdgv_pp_funcs = {
 	.smu_error_inject_set_pm_policy = mi350_smu_error_inject_set_pm_policy,
 	.smu_error_inject_restore_pm_policy = mi350_smu_error_inject_restore_pm_policy,
 	.reset_vf_arbiters = mi350_smu_reset_vf_arbiters,
+	.get_smu_cap_supported = mi350_smu_cap_supported,
 };
 
 static int mi350_powerplay_sw_init(struct amdgv_adapter *adapt)

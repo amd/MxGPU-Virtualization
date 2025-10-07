@@ -1411,6 +1411,11 @@ void amdgv_sched_clear_dirty_vf_fb(struct amdgv_adapter *adapt, int vf_idx)
     union amdgv_sched_event_data data;
     int ret;
 
+	if (adapt->status == AMDGV_STATUS_HW_RMA || adapt->status == AMDGV_STATUS_HW_HIVE_RMA) {
+		AMDGV_DEBUG("Device already in RMA state, any incoming event is dropped.\n");
+		return;
+	}
+
 	/* Clear VF FB if guest has been init */
 	data.vf_fb_data.pattern = 0x0;
 	data.vf_fb_data.flag = AMDGV_VF_FB_CLEAR_DIRTY;

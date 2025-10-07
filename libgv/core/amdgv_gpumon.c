@@ -2622,6 +2622,9 @@ int amdgv_gpumon_get_pm_policy(amdgv_dev_t dev,
 	if (!ret)
 		ret = event_ret;
 
+	if (ret == AMDGV_NOT_SUPPORTED)
+		ret = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+
 	return ret;
 }
 
@@ -2649,6 +2652,9 @@ int amdgv_gpumon_set_pm_policy_level(amdgv_dev_t dev,
 
 	if (!ret)
 		ret = event_ret;
+
+	if (ret == AMDGV_NOT_SUPPORTED)
+		ret = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
 
 	return ret;
 }

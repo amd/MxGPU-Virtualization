@@ -211,6 +211,7 @@ struct amdgv_pp_funcs {
 	int (*get_num_static_metrics_ext_entries)(struct amdgv_adapter *adapt,
 				 uint32_t *entries);
 	int (*init_drv_metrics_ext)(struct amdgv_adapter *adapt);
+	bool (*get_smu_cap_supported)(struct amdgv_adapter *adapt, int cap);
 };
 
 struct amdgv_pp_metrics_cache {

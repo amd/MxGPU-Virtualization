@@ -37,6 +37,7 @@
 #define LIBGV_VF_VERSION              1
 
 #define AMDGV_FAILURE -1
+#define AMDGV_NOT_SUPPORTED -2
 
 #define AMDGV_INVALID_HANDLE NULL
 

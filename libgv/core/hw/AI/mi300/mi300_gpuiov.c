@@ -1059,6 +1059,11 @@ static int mi300_gpuiov_hw_fini(struct amdgv_adapter *adapt)
 	} else {
 		oss_pci_write_config_dword(adapt->dev,
 				adapt->sriov_cap_pos + PCIE_EXT_SRIOV_CTRL, 0);
+
+               /* Delay of 1 Sec to give PMFW time to execute VF Disable */
+               if (adapt->asic_type == CHIP_MI350X)
+                       oss_msleep(1000);
+
 	}
 
 	return 0;

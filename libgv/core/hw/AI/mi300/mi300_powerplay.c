@@ -702,6 +702,12 @@ static const struct pp_smu_dpm_policy soc_pstate_policy = {
 	.set_policy = mi300_smu_select_policy_soc_pstate
 };
 
+static bool mi300_smu_cap_supported(struct amdgv_adapter *adapt, int cap)
+{
+	struct smu_context *smu = adapt_to_smu(adapt);
+	return (smu->supported_caps & SMU_CAPS(cap)) != 0;
+}
+
 static int mi300_smu_set_xgmi_plpd_mode(struct amdgv_adapter *adapt, int mode)
 {
 	uint32_t msg = 0, param = 0, version = 0;
@@ -1433,12 +1439,6 @@ static int mi300_smu_init_supported_caps(struct amdgv_adapter *adapt)
 		smu->supported_caps |= SMU_CAPS(SUM_CAP_XGMI_PLPD);
 	}
 	return 0;
-}
-
-bool mi300_smu_cap_supported(struct amdgv_adapter *adapt, int cap)
-{
-	struct smu_context *smu = adapt_to_smu(adapt);
-	return !!(smu->supported_caps & SMU_CAPS(cap));
 }
 
 static int mi300_smu_set_tool_table_address(struct amdgv_adapter *adapt)
@@ -3106,6 +3106,7 @@ static const struct amdgv_pp_funcs mi300_amdgv_pp_funcs = {
 	.get_static_metrics_ext = mi300_pp_smu_get_static_metrics_ext,
 	.get_num_static_metrics_ext_entries = mi300_pp_smu_get_num_static_metrics_ext_entries,
 	.init_drv_metrics_ext = mi300_pp_smu_init_drv_metrics_ext,
+	.get_smu_cap_supported = mi300_smu_cap_supported,
 };
 
 static int mi300_powerplay_sw_init(struct amdgv_adapter *adapt)

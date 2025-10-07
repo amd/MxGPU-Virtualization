@@ -509,7 +509,7 @@ static int mi300_get_vram_info(struct amdgv_adapter *adapt,
 {
 	vram_info->vram_size_mb = mi300_nbio_get_total_vram_size(adapt);
 	vram_info->vram_type = vram_type_to_gpumon_vram_type(adapt->vram_info.vram_type);
-	vram_info->vram_vendor = AMDGV_GPUMON_VRAM_VENDOR__PLACEHOLDER0;
+	vram_info->vram_vendor = vram_vendor_to_gpumon_vram_vendor(adapt->vram_info.vram_vendor);
 	vram_info->vram_bit_width = adapt->vram_info.vram_bit_width;
 
 	return 0;
@@ -750,7 +750,7 @@ static struct amdgv_gpumon_accelerator_partition_profile_config
 		{ 6, AMDGV_GPUMON_ACCELERATOR_PARTITION_RESOURCE_DECODER, 2, 1 },
 		{ 7, AMDGV_GPUMON_ACCELERATOR_PARTITION_RESOURCE_DECODER, 4, 1 }
 	},
-	4, // number_of_profiles
+	3, // number_of_profiles
 	{
 		{
 			0,
@@ -772,6 +772,16 @@ static struct amdgv_gpumon_accelerator_partition_profile_config
 			{ { 2, 6 }, { 2, 6 } },
 			(1 << 1)
 		},
+		{
+			2,
+			AMDGV_GPUMON_ACCELERATOR_PARTITION_CPX,
+			{ .mp_caps = {.nps2_cap = 1 } },
+			8,
+			{0, 1, 2, 3, 4, 5, 6, 7},
+			2,
+			{ { 0, 4 }, { 0, 4 }, { 0, 4 }, { 0, 4 }, { 0, 4 }, { 0, 4 }, { 0, 4 }, { 0, 4 } },
+			(1 << 1)
+		}
 	}
 };
 

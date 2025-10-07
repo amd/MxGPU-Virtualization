@@ -437,15 +437,16 @@ static void mi300_mca_jpeg_push_bank_count(struct amdgv_adapter *adapt,
 }
 
 static int mi300_mca_parse_error_code(struct amdgv_adapter *adapt,
-				      struct mca_bank_entry *bank)
+					  struct mca_bank_entry *bank)
 {
-	int errcode;
+	int errcode = -1;
 
-	if (mi300_smu_cap_supported(adapt, SMU_CAP_ACA_SYND)) {
-		errcode = REG_GET_FIELD(bank->regs[MCA_REG_IDX_SYND], MCMP1_SYNDT0, ErrorInformation);
-		errcode &= 0xff;
-	} else {
-		errcode = REG_GET_FIELD(bank->regs[MCA_REG_IDX_STATUS], MCMP1_STATUST0, ErrorCode);
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->get_smu_cap_supported) {
+		if (adapt->pp.pp_funcs->get_smu_cap_supported(adapt, SMU_CAP_ACA_SYND)) {
+			errcode = REG_GET_FIELD(bank->regs[MCA_REG_IDX_SYND], MCMP1_SYNDT0, ErrorInformation);
+			errcode &= 0xff;
+		} else
+			errcode = REG_GET_FIELD(bank->regs[MCA_REG_IDX_STATUS], MCMP1_STATUST0, ErrorCode);
 	}
 
 	return errcode;
