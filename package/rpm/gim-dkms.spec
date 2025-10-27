@@ -31,7 +31,7 @@ License: MIT
 URL: https://github.com/amd/mxgpu-virtualization
 Source0: ./gim-%{full_version}.tar.gz
 BuildArch: noarch
-Requires: autoconf cmake dkms g++ kernel-devel
+Requires: autoconf cmake dkms gcc-c++ kernel-devel
 
 %description
 DKMS source for GIM driver.
