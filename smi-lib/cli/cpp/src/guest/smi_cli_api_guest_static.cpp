@@ -65,6 +65,8 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_ACTIVITY)(amdsmi_processor_handle,
 		amdsmi_engine_usage_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_PROCESS_ISOLATION)(amdsmi_processor_handle,
 		uint32_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_VIRTUALIZATION_MODE)(amdsmi_processor_handle,
+		amdsmi_virtualization_mode_t *);
 
 extern AMDSMI_GET_PROCESSOR_HANDLES guest_amdsmi_get_processor_handles;
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF guest_amdsmi_get_processor_handle_from_bdf;
@@ -80,6 +82,7 @@ extern AMDSMI_GET_GPU_RAS_FEATURE_INFO guest_amdsmi_get_gpu_ras_feature_info;
 
 extern AMDSMI_GET_GPU_ACTIVITY guest_amdsmi_get_gpu_activity;
 extern AMDSMI_GET_GPU_PROCESS_ISOLATION guest_amdsmi_get_gpu_process_isolation;
+extern AMDSMI_GET_GPU_VIRTUALIZATION_MODE guest_amdsmi_get_gpu_virtualization_mode;
 
 std::string guest_fill_asic_info(Arguments arg, std::string value)
 {
@@ -200,7 +203,7 @@ std::string guest_fill_ras_info(Arguments arg, std::string value)
 			{ "poisoning", value.c_str() },
 			{ "needs_reboot", value.c_str() },
 			{ "ras_eeprom_version", "N/A" },
-			{ "supported_ecc_correction_schema", "N/A" }
+			{ "ecc_correction_schema", "N/A" }
 		};
 
 		nlohmann::ordered_json ras_json;
@@ -273,6 +276,21 @@ std::string guest_fill_process_isolation(Arguments arg, std::string value)
 	} else {
 		out = string_format(
 				  staticProcessIsolate, value.c_str());
+	}
+
+	return out;
+}
+
+std::string guest_fill_virtualization_mode(Arguments arg, std::string value)
+{
+	std::string out{};
+
+	if (arg.output == json) {
+		out = value;
+	} else if(arg.output == csv) {
+		out = string_format(",%s", value);
+	} else {
+		out = string_format(staticVirtualizationModeTemplate, value);
 	}
 
 	return out;
@@ -627,11 +645,7 @@ int AmdSmiApiGuest::amdsmi_get_ras_info_command(uint64_t processor_bdf, Argument
 	bool dram_ecc = ras_feature.ras_info.dram_ecc;
 	bool sram_ecc = ras_feature.ras_info.sram_ecc;
 	bool poisoning = ras_feature.ras_info.poisoning;
-	std::string ras_eeprom_version_str{ string_format(
-											"%u", ras_feature.ras_eeprom_version) };
-	std::string ecc_correction_schema_flag_str;
-	// transform_ecc_correction_schema(
-	// 	ras_feature.ecc_correction_schema_flag, ecc_correction_schema_flag_str);
+	std::string ras_eeprom_version_str{ string_format("%u", ras_feature.ras_eeprom_version) };
 
 	std::string dram_ecc_str{ ras_feature.ras_info.dram_ecc ? "True" : "False" };
 	std::string sram_ecc_str{ ras_feature.ras_info.sram_ecc ? "True" : "False" };
@@ -646,7 +660,7 @@ int AmdSmiApiGuest::amdsmi_get_ras_info_command(uint64_t processor_bdf, Argument
 			{ "poisoning_scheme", poisoning },
 			{ "needs_reboot", ras_feature.needs_reboot },
 			{ "eeprom_version", "N/A" },
-			{ "supported_ecc_correction_schema", "N/A" }
+			{ "ecc_correction_schema", "N/A" }
 		};
 
 		nlohmann::ordered_json ras_json;
@@ -701,6 +715,58 @@ int AmdSmiApiGuest::amdsmi_get_process_isolation(uint64_t processor_bdf, Argumen
 	} else {
 		formatted_string = string_format(
 							   staticProcessIsolate, pisolate_str.c_str());
+	}
+
+	return ret;
+}
+
+int AmdSmiApiGuest::amdsmi_get_virtualization_mode_command(uint64_t processor_bdf, Arguments arg,
+		std::string &formatted_string)
+{
+	int ret;
+	amdsmi_virtualization_mode_t mode;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = guest_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		return ret;
+	}
+
+	ret = guest_amdsmi_get_gpu_virtualization_mode(processor, &mode);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		formatted_string = guest_fill_virtualization_mode(arg, "N/A");
+		return ret;
+	}
+
+	std::string virtualization_mode_string;
+	switch (mode)
+	{
+	case AMDSMI_VIRTUALIZATION_MODE_HOST:
+		virtualization_mode_string = "HOST";
+		break;
+	case AMDSMI_VIRTUALIZATION_MODE_GUEST:
+		virtualization_mode_string = "GUEST";
+		break;
+	case AMDSMI_VIRTUALIZATION_MODE_PASSTHROUGH:
+		virtualization_mode_string = "PASSTHROUGH";
+		break;
+	case AMDSMI_VIRTUALIZATION_MODE_BAREMETAL:
+		virtualization_mode_string = "BAREMETAL";
+		break;
+	default:
+		virtualization_mode_string = "N/A";
+		break;
+	}
+
+	if (arg.output == json) {
+		formatted_string = virtualization_mode_string;
+	} else if (arg.output == csv) {
+		formatted_string = string_format(",%s", virtualization_mode_string.c_str());
+	} else {
+		formatted_string = string_format(staticVirtualizationModeTemplate, virtualization_mode_string.c_str());
 	}
 
 	return ret;

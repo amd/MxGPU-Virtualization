@@ -87,13 +87,13 @@ static void amdgv_cper_fill_timestamp(struct cper_timestamp *ts,
 		second = remaining_seconds % seconds_per_minute;
 	}
 
-	ts->seconds = second;
-	ts->minutes = minute;
-	ts->hours = hour;
-	ts->day = day;
-	ts->month = month;
-	ts->century = year / 100;
-	ts->year = year % 100;
+	ts->seconds = (uint8_t)second;
+	ts->minutes = (uint8_t)minute;
+	ts->hours = (uint8_t)hour;
+	ts->day = (uint8_t)day;
+	ts->month = (uint8_t)month;
+	ts->century = (uint8_t)(year / 100);
+	ts->year = (uint8_t)(year % 100);
 }
 
 void amdgv_cper_entry_fill_hdr(struct amdgv_adapter *adapt,
@@ -252,9 +252,13 @@ int amdgv_cper_entry_fill_runtime_section(struct amdgv_adapter *adapt,
 
 	reg_count = min(reg_count, CPER_ACA_REG_COUNT);
 
+	section->hdr.valid_bits.pcie_devid = 1;
+	section->hdr.valid_bits.pldm_bndl = (adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PLDM_VERSION]) ? 1 : 0;
 	section->hdr.valid_bits.err_info_cnt = 1;
 	section->hdr.valid_bits.err_context_cnt = 1;
 
+	section->hdr.pcie_devid = adapt->dev_id;
+	section->hdr.pldm_bndl = adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PLDM_VERSION];
 	section->info.error_type = RUNTIME;
 	section->info.ms_chk_bits.err_type_valid = 1;
 	section->ctx.reg_ctx_type = CPER_CTX_TYPE_CRASH; /* 1 */
@@ -269,7 +273,7 @@ int amdgv_cper_entry_fill_runtime_section(struct amdgv_adapter *adapt,
 
 int amdgv_cper_entry_fill_bad_page_thr_section(struct amdgv_adapter *adapt,
 					       struct cper_hdr *hdr,
-					       uint32_t idx)
+					       uint32_t idx, uint32_t oam_id)
 {
 	struct cper_sec_desc *section_desc;
 	struct cper_sec_nonstd_err *section;
@@ -281,9 +285,13 @@ int amdgv_cper_entry_fill_bad_page_thr_section(struct amdgv_adapter *adapt,
 					   CPER_SEV_FATAL, RUNTIME, NONSTD_SEC_LEN,
 					   NONSTD_SEC_OFFSET(hdr->sec_cnt, idx));
 
+	section->hdr.valid_bits.pcie_devid = 1;
+	section->hdr.valid_bits.pldm_bndl = (adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PLDM_VERSION]) ? 1 : 0;
 	section->hdr.valid_bits.err_info_cnt = 1;
 	section->hdr.valid_bits.err_context_cnt = 1;
 
+	section->hdr.pcie_devid = adapt->dev_id;
+	section->hdr.pldm_bndl = adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PLDM_VERSION];
 	section->info.error_type = RUNTIME;
 	section->info.ms_chk_bits.err_type_valid = 1;
 	section->ctx.reg_ctx_type = CPER_CTX_TYPE_CRASH; /* 1 */
@@ -300,8 +308,8 @@ int amdgv_cper_entry_fill_bad_page_thr_section(struct amdgv_adapter *adapt,
 	section->ctx.reg_dump[CPER_ACA_REG_MISC0_HI]  = 0x0;
 	section->ctx.reg_dump[CPER_ACA_REG_CONFIG_LO] = 0x2;
 	section->ctx.reg_dump[CPER_ACA_REG_CONFIG_HI] = 0x1ff;
-	section->ctx.reg_dump[CPER_ACA_REG_IPID_LO]   = 0x0;
-	section->ctx.reg_dump[CPER_ACA_REG_IPID_HI]   = 0x96;
+	section->ctx.reg_dump[CPER_ACA_REG_IPID_LO]   = (oam_id >> 2) & 0x1;
+	section->ctx.reg_dump[CPER_ACA_REG_IPID_HI]   = (0x96 | ((oam_id & 0x3) << 12));
 	section->ctx.reg_dump[CPER_ACA_REG_SYND_LO]   = 0x0;
 	section->ctx.reg_dump[CPER_ACA_REG_SYND_HI]   = 0x0;
 
@@ -313,7 +321,7 @@ int amdgv_cper_entry_fill_bad_page_thr_section(struct amdgv_adapter *adapt,
 int amdgv_cper_commit_entry(struct amdgv_adapter *adapt,
 			    struct cper_hdr *hdr)
 {
-	uint32_t wr_idx = 0;
+	uint64_t wr_idx = 0;
 
 	if (!adapt->cper.enabled)
 		return AMDGV_FAILURE;
@@ -515,11 +523,11 @@ static int amdgv_cper_patch_to_vf_hdr(struct amdgv_adapter *adapt, uint32_t idx_
 				      uint32_t *checksum)
 {
 	int ret;
-	uint32_t save_sec_count = hdr->sec_cnt;
+	uint16_t save_sec_count = hdr->sec_cnt;
 	uint32_t save_record_length = hdr->record_length;
 
 	/* Patch Info for VF */
-	hdr->sec_cnt = new_sec_count;
+	hdr->sec_cnt = (uint16_t)new_sec_count;
 	hdr->record_length = new_record_length;
 
 	ret = amdgv_vfmgr_copy_and_calc_checksum_to_vf_fb(adapt, idx_vf,
@@ -576,13 +584,13 @@ int amdgv_cper_patch_to_vf(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	int ret = 0;
 	uint32_t write_count = 0;
 	struct cper_sec_desc *sec_desc = NULL;
-	uint64_t next_sec_offset;
+	uint32_t next_sec_offset;
 	uint32_t i = 0;
 
 	if (!allowed_count)
 		return 0;
 
-	next_sec_offset = HDR_LEN  + SEC_DESC_LEN * allowed_count;
+	next_sec_offset = HDR_LEN + SEC_DESC_LEN * allowed_count;
 
 	for (i = 0; i < hdr->sec_cnt; i++) {
 		if (!allowed_sections[i])

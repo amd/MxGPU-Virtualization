@@ -147,6 +147,7 @@ void amdgv_ring_commit(struct amdgv_ring *ring)
 	count %= align_mask + 1;
 	ring->funcs->insert_nop(ring, count);
 
+	amdgv_misc_hdp_flush(ring->adapt);
 	amdgv_ring_set_wptr(ring);
 
 	if (ring->funcs->end_use)
@@ -395,6 +396,10 @@ int amdgv_ring_init_set(struct amdgv_adapter *adapt, struct amdgv_ring *ring)
 
 	// Clear the ring
 	amdgv_ring_clear_ring(ring);
+
+	ring->wptr = 0;
+	if (ring->wptr_cpu_addr)
+		*((volatile uint64_t *)(ring->wptr_cpu_addr)) = 0;
 
 	return 0;
 }

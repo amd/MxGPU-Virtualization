@@ -212,6 +212,12 @@ static ssize_t gim_guard_platform_status_show(struct device_driver *drv, char *b
 
 	ssize_t size = 0;
 
+	/* Add warning about 4KB sysfs limitation */
+	size += gim_sysfs_emit_at(buf, size,
+			"WARNING: The driver sysfs may show incomplete guard information. \n "
+			"Please use each device sysfs instead.\n "
+			"  cat /sys/bus/pci/drivers/gim/<PF_DBDF>/guard_status\n\n");
+
 	list_for_each_entry(data, &gim_device_list, list) {
 		pf_pdev = data->pdev;
 		size += gim_sysfs_emit_at(buf, size,
@@ -270,6 +276,12 @@ static ssize_t gim_guard_platform_threshold_show(struct device_driver *drv,
 	struct amdgv_guard_info info;
 
 	ssize_t size = 0;
+
+	/* Add warning about 4KB sysfs limitation */
+	size += gim_sysfs_emit_at(buf, size,
+			"WARNING: The driver sysfs may show incomplete guard information. \n "
+			"Please use each device sysfs instead.\n "
+			"  cat /sys/bus/pci/drivers/gim/<PF_DBDF>/guard_threshold\n\n");
 
 	list_for_each_entry(data, &gim_device_list, list) {
 		pf_pdev = data->pdev;

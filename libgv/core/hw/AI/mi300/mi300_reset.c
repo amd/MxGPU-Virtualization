@@ -440,7 +440,10 @@ static void mi300_reset_vf_restore(struct amdgv_adapter *adapt, uint32_t idx_vf,
 			oss_pci_write_config_dword(vf->dev, idx, *pci_cfg);
 		} else {
 			offset = SOC15_REG_OFFSET_SMN_NBIO_BLOCK(idx_vf, BIF_CFG, VENDOR_ID);
-			WREG32_SMN(offset + idx, *pci_cfg);
+			if (*pci_cfg != RREG32_SMN(offset + idx)) {
+				AMDGV_DEBUG("VF%d: Restoring PCI config 0x%x to register 0x%x\n", idx_vf, *pci_cfg, offset + idx);
+				WREG32_SMN(offset + idx, *pci_cfg);
+			}
 		}
 		pci_cfg++;
 	}
@@ -1134,6 +1137,13 @@ static int mi300_reset_whole_gpu_reset(struct amdgv_adapter *adapt)
 	tmp = RREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BIOS_SCRATCH_7));
 	tmp &= ~ATOM_ASIC_INIT_COMPLETE;
 	WREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BIOS_SCRATCH_7), tmp);
+
+	if (!adapt->umc.is_pmfw_managed_eeprom) {
+		ret = amdgv_umc_replace_bad_pages(adapt);
+		if (ret) {
+			goto exit;
+		}
+	}
 
 	/* re-init HW */
 	for (idx = 0; idx < adapt->num_funcs; idx++) {

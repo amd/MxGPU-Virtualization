@@ -44,7 +44,7 @@ typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 		amdsmi_processor_handle *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_ACTIVITY)(amdsmi_processor_handle,
 		amdsmi_engine_usage_t *);
-typedef amdsmi_status_t (*AMDSMI_GET_POWER_INFO)(amdsmi_processor_handle, uint32_t,
+typedef amdsmi_status_t (*AMDSMI_GET_POWER_INFO)(amdsmi_processor_handle,
 		amdsmi_power_info_t *);
 typedef amdsmi_status_t (*AMDSMI_IS_GPU_POWER_MANAGEMENT_ENABLED)(amdsmi_processor_handle, bool *);
 typedef amdsmi_status_t (*AMDSMI_GET_CLOCK_INFO)(amdsmi_processor_handle, amdsmi_clk_type_t,
@@ -737,7 +737,6 @@ int AmdSmiApiHost::amdsmi_get_power_metric_command(uint64_t processor_bdf, Argum
 	amdsmi_status_t ret;
 
 	amdsmi_power_info_t power_info;
-	uint32_t sensor_ind = 0;
 	bool is_power_management_enabled;
 	amdsmi_processor_handle processor;
 	amdsmi_bdf_t tmp_bdf;
@@ -749,7 +748,7 @@ int AmdSmiApiHost::amdsmi_get_power_metric_command(uint64_t processor_bdf, Argum
 		return ret;
 	}
 
-	ret = host_amdsmi_get_power_info(processor, sensor_ind, &power_info);
+	ret = host_amdsmi_get_power_info(processor, &power_info);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		out = host_fill_power(arg, "N/A");
 		return ret;
@@ -2708,7 +2707,7 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 		}
 		out = result_json.dump(4);
 	} else {
-		out = string_format(metricPerPartitionTemplate);
+		out = metricPerPartitionTemplate;
 
 		for (uint32_t vf_curr_index = 0; vf_curr_index < num_vf_enabled; vf_curr_index++) {
 			if (vf_curr_index == vf_index) {
@@ -2791,7 +2790,7 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						}
 					}
 
-					out += string_format(metricJpegUsagePerPartitionHeaderTemplate);
+					out += metricJpegUsagePerPartitionHeaderTemplate;
 
 					// Collect all matching JPEG metrics for this aid_index
 					std::vector<const amdsmi_metric_t*> matching_jpegs;
@@ -2808,10 +2807,10 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						std::string jpeg_chiplet_val = string_format("%d", jpeg.val);
 						out += string_format(metricJpegUsagePerPartitionTemplate, jpeg_chiplet_val.c_str(), jpeg_unit.c_str());
 						if (i + 1 < matching_jpegs.size()) {
-							out += string_format(commaTemplate);
+							out += commaTemplate;
 						}
 					}
-					out += string_format(metricJpegUsageFooterTemplate);
+					out += metricJpegUsageFooterTemplate;
 				}
 
 				// Calculate XCPs assigned to this VF
@@ -2825,7 +2824,7 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 					std::string xcp_index_string = string_format("%d", xcp_id);
 					out += string_format(XCPTemplate, xcp_index_string.c_str());
 
-					out += string_format(metricGFXCLKPerPartitionHeaderTemplate);
+					out += metricGFXCLKPerPartitionHeaderTemplate;
 
 					// GFX (can be multiple per XCP)
 					std::vector<const amdsmi_metric_t*> matching_gfx;
@@ -2840,12 +2839,12 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						std::string gfx_chiplet_val = string_format("%d", gfx.val);
 						out += string_format(GFXPerPartitionTemplate, gfx_chiplet_val.c_str(), gfx_unit.c_str());
 						if (i + 1 < matching_gfx.size()) {
-							out += string_format(commaTemplate);
+							out += commaTemplate;
 						}
 					}
 
-					out += string_format(metricJpegUsageFooterTemplate);
-					out += string_format(metricGFXMinCLKPerPartitionHeaderTemplate);
+					out += metricJpegUsageFooterTemplate;
+					out += metricGFXMinCLKPerPartitionHeaderTemplate;
 
 					// GFX_MIN (can be multiple per XCP)
 					std::vector<const amdsmi_metric_t*> matching_gfx_min;
@@ -2860,11 +2859,11 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						std::string gfx_min_chiplet_val = string_format("%d", gfx_min.val);
 						out += string_format(GFXMinPerPartitionTemplate, gfx_min_chiplet_val.c_str(), gfx_min_unit.c_str());
 						if (i + 1 < matching_gfx_min.size()) {
-							out += string_format(commaTemplate);
+							out += commaTemplate;
 						}
 					}
-					out += string_format(metricJpegUsageFooterTemplate);
-					out += string_format(metricGFXMaxCLKPerPartitionHeaderTemplate);
+					out += metricJpegUsageFooterTemplate;
+					out += metricGFXMaxCLKPerPartitionHeaderTemplate;
 
 					// GFX_MAX (can be multiple per XCP)
 					std::vector<const amdsmi_metric_t*> matching_gfx_max;
@@ -2879,11 +2878,11 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						std::string gfx_max_chiplet_val = string_format("%d", gfx_max.val);
 						out += string_format(GFXMaxPerPartitionTemplate, gfx_max_chiplet_val.c_str(), gfx_max_unit.c_str());
 						if (i + 1 < matching_gfx_max.size()) {
-							out += string_format(commaTemplate);
+							out += commaTemplate;
 						}
 					}
-					out += string_format(metricJpegUsageFooterTemplate);
-					out += string_format(metricGFXLockedCLKPerPartitionHeaderTemplate);
+					out += metricJpegUsageFooterTemplate;
+					out += metricGFXLockedCLKPerPartitionHeaderTemplate;
 
 					// GFX_LOCKED (can be multiple per XCP)
 					std::vector<const amdsmi_metric_t*> matching_gfx_locked;
@@ -2897,12 +2896,12 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						std::string gfx_locked_val = gfx_locked.val == UINT64_MAX ? "N/A" : (gfx_locked.val ? "ENABLED" : "DISABLED");
 						out += string_format(GFXLockedPerPartitionTemplate, gfx_locked_val.c_str());
 						if (i + 1 < matching_gfx_locked.size()) {
-							out += string_format(commaTemplate);
+							out += commaTemplate;
 						}
 					}
 
-					out += string_format(metricJpegUsageFooterTemplate);
-					out += string_format(metricGFXUsagePerPartitionHeaderTemplate);
+					out += metricJpegUsageFooterTemplate;
+					out += metricGFXUsagePerPartitionHeaderTemplate;
 
 					// GFX Usage (can be multiple per XCP)
 					std::vector<const amdsmi_metric_t*> matching_gfx_usage;
@@ -2917,10 +2916,10 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						std::string gfx_usage_val = string_format("%d", gfx_usage.val);
 						out += string_format(GFXUsagePerPartitionTemplate, gfx_usage_val.c_str(), gfx_usage_unit.c_str());
 						if (i + 1 < matching_gfx_usage.size()) {
-							out += string_format(commaTemplate);
+							out += commaTemplate;
 						}
 					}
-					out += string_format(metricJpegUsageFooterTemplate);
+					out += metricJpegUsageFooterTemplate;
 				}
 			}
 		}

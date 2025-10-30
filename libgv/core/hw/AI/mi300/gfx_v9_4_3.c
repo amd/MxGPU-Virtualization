@@ -766,6 +766,7 @@ static void gfx_v9_4_3_ring_submit_frame(struct amdgv_ring *ring, uint8_t *frame
 	dword_wptr = ring->wptr;
 	*((volatile uint64_t *)(ring->wptr_cpu_addr)) = dword_wptr;
 
+	amdgv_misc_hdp_flush(adapt);
 	if (ring->use_doorbell) {
 		WDOORBELL64(ring->doorbell_index, dword_wptr);
 	} else {

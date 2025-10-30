@@ -36,6 +36,8 @@
 #endif
 #include <limits.h>
 
+#define MAX_CPU_SET_SIZE 16
+
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 		amdsmi_processor_handle *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_DEVICE_BDF)(amdsmi_processor_handle, amdsmi_bdf_t *);
@@ -72,6 +74,10 @@ typedef amdsmi_status_t (*AMDSMI_GET_SOC_PSTATE)(amdsmi_processor_handle,
 		amdsmi_dpm_policy_t *);
 typedef amdsmi_status_t (*AMDSMI_SET_SOC_PSTATE)(amdsmi_processor_handle,
 		uint32_t);
+typedef amdsmi_status_t (*AMDSMI_GET_XGMI_PLPD)(amdsmi_processor_handle,
+		amdsmi_dpm_policy_t *);
+typedef amdsmi_status_t (*AMDSMI_SET_XGMI_PLPD)(amdsmi_processor_handle,
+		uint32_t);
 typedef amdsmi_status_t (*AMDSMI_GET_VF_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 		amdsmi_vf_handle_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_VF_INFO)(amdsmi_vf_handle_t, amdsmi_vf_info_t *);
@@ -87,6 +93,10 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_METRICS)(amdsmi_processor_handle, uint3
 			amdsmi_metric_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_VIRTUALIZATION_MODE)(amdsmi_processor_handle,
 		amdsmi_virtualization_mode_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_CPU_AFFINITY_WITH_SCOPE)(amdsmi_processor_handle,
+		uint32_t, uint64_t *, amdsmi_affinity_scope_t);
+typedef amdsmi_status_t (*AMDSMI_TOPO_GET_NUMA_NODE_NUMBER)(amdsmi_processor_handle,
+		uint32_t *);
 
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_GPU_DEVICE_BDF host_amdsmi_get_gpu_device_bdf;
@@ -110,6 +120,8 @@ extern AMDSMI_GET_GPU_VRAM_INFO host_amdsmi_get_gpu_vram_info;
 extern AMDSMI_GET_GPU_CACHE_INFO host_amdsmi_get_gpu_cache_info;
 extern AMDSMI_GET_SOC_PSTATE host_amdsmi_get_soc_pstate;
 extern AMDSMI_SET_SOC_PSTATE host_amdsmi_set_soc_pstate;
+extern AMDSMI_GET_XGMI_PLPD host_amdsmi_get_xgmi_plpd;
+extern AMDSMI_SET_XGMI_PLPD host_amdsmi_set_xgmi_plpd;
 
 extern AMDSMI_GET_VF_HANDLE_FROM_BDF host_amdsmi_get_vf_handle_from_bdf;
 extern AMDSMI_GET_VF_INFO host_amdsmi_get_vf_info;
@@ -122,6 +134,9 @@ extern AMDSMI_GET_MEMORY_PARTITION_CONFIG host_amdsmi_get_gpu_memory_partition_c
 extern AMDSMI_GET_GPU_METRICS host_amdsmi_get_gpu_metrics;
 
 extern AMDSMI_GET_GPU_VIRTUALIZATION_MODE host_amdsmi_get_gpu_virtualization_mode;
+
+extern AMDSMI_GET_CPU_AFFINITY_WITH_SCOPE host_amdsmi_get_cpu_affinity_with_scope;
+extern AMDSMI_TOPO_GET_NUMA_NODE_NUMBER host_amdsmi_topo_get_numa_node_number;
 
 const std::vector<amdsmi_gpu_block_t> ecc_blocks{AMDSMI_GPU_BLOCK_UMC, AMDSMI_GPU_BLOCK_SDMA, AMDSMI_GPU_BLOCK_GFX, AMDSMI_GPU_BLOCK_MMHUB,
 		  AMDSMI_GPU_BLOCK_ATHUB, AMDSMI_GPU_BLOCK_PCIE_BIF, AMDSMI_GPU_BLOCK_HDP, AMDSMI_GPU_BLOCK_XGMI_WAFL,
@@ -168,18 +183,19 @@ std::string host_fill_vbios_info(Arguments arg, std::string value)
 		nlohmann::ordered_json vbios_json = { { "name", value.c_str() },
 			{ "build_date", value.c_str() },
 			{ "part_number", value.c_str() },
-			{ "version", value.c_str() }
+			{ "version", value.c_str() },
+			{ "boot_firmware",  value.c_str() }
 		};
 
 		formatted_string = vbios_json.dump(4);
 	} else if (arg.output == csv) {
 		formatted_string = string_format(
-							   ",%s,%s,%s,%s", value.c_str(), value.c_str(),
-							   value.c_str(), value.c_str());
+							   ",%s,%s,%s,%s,%s", value.c_str(), value.c_str(),
+							   value.c_str(), value.c_str(), value.c_str());
 	} else {
 		formatted_string = string_format(
 							   staticVbiosTemplate, value.c_str(), value.c_str(),
-							   value.c_str(), value.c_str());
+							   value.c_str(), value.c_str(), value.c_str());
 	}
 	return formatted_string;
 }
@@ -279,7 +295,7 @@ std::string host_fill_ras_info(Arguments arg, std::string value)
 		nlohmann::ordered_json feature_json = {
 			{ "ras_eeprom_version", value.c_str() },
 			{ "bad_page_threshold", value.c_str() },
-			{ "supported_ecc_correction_schema", value.c_str() }
+			{ "ecc_correction_schema", value.c_str() }
 		};
 
 		nlohmann::ordered_json ras_json;
@@ -556,23 +572,18 @@ std::string host_fill_soc_pstate(Arguments arg, std::string value)
 
 	if (arg.output == json) {
 		auto dpm_list_json = nlohmann::ordered_json::array();
-		nlohmann::ordered_json dpm_info_json = { { "num_supported", "N/A"},
-			{ "current_id", "N/A"},
-			{ "policies", dpm_list_json}
+		nlohmann::ordered_json dpm_info_json = {
+			{ "num_supported", "N/A" },
+			{ "current_id", "N/A" },
+			{ "policies", dpm_list_json }
 		};
 		out = dpm_info_json.dump(4);
-	} else if(arg.output == csv) {
-		out += string_format(
-				   "%s,%s,%s,%s,%s,%s", value.c_str(),
-				   value.c_str(), value.c_str(), value.c_str(),
-				   value.c_str(), value.c_str());
+	} else if (arg.output == csv) {
+		out += string_format("%s,%s,%s,%s",
+			value.c_str(), value.c_str(), value.c_str(), value.c_str());
 	} else {
-		out = staticCacheHeaderTemplate;
-		out += string_format(
-				   staticCacheInfoTemplate, value.c_str(), value.c_str(),
-				   value.c_str(), "", value.c_str(),
-				   value.c_str(),
-				   value.c_str());
+		out = string_format(staticPolicyHeaderTemplate, value.c_str(), value.c_str());
+		out += string_format(staticPolicyInfoTemplate, value.c_str(), value.c_str(), "[]");
 	}
 
 	return out;
@@ -588,6 +599,26 @@ std::string host_fill_virtualization_mode(Arguments arg, std::string value)
 		out = string_format(",%s", value);
 	} else {
 		out = string_format(staticVirtualizationModeTemplate, value);
+	}
+
+	return out;
+}
+
+std::string host_fill_numa(Arguments arg, std::string value)
+{
+	std::string out{};
+
+	if (arg.output == json) {
+		nlohmann::ordered_json numa_info_json{};
+		numa_info_json["node"] = value.c_str();
+		numa_info_json["cpu_affinity"] = "N/A";
+		numa_info_json["socket_affinity"] = "N/A";
+		out = numa_info_json.dump(4);
+	} else if(arg.output == csv) {
+		out = string_format(",%s,%s,%s,%s,%s", value.c_str(), "N/A",
+							"N/A", "N/A", "N/A");
+	} else {
+		out = string_format(staticNumaTemplate_NA, value.c_str());
 	}
 
 	return out;
@@ -802,18 +833,19 @@ int AmdSmiApiHost::amdsmi_get_vbios_info_command(uint64_t processor_bdf, Argumen
 		nlohmann::ordered_json vbios_json = { { "name", vbios_info.name },
 			{ "build_date", vbios_info.build_date },
 			{ "part_number", vbios_info.part_number },
-			{ "version", vbios_info.version }
+			{ "version", vbios_info.version },
+			{ "boot_firmware", vbios_info.boot_firmware }
 		};
 
 		formatted_string = vbios_json.dump(4);
 	} else if (arg.output == csv) {
 		formatted_string = string_format(
-							   ",%s,%s,%s,%s", vbios_info.name, vbios_info.build_date,
-							   vbios_info.part_number, vbios_info.version);
+							   ",%s,%s,%s,%s,%s", vbios_info.name, vbios_info.build_date,
+							   vbios_info.part_number, vbios_info.version, vbios_info.boot_firmware);
 	} else {
 		formatted_string = string_format(
 							   staticVbiosTemplate, vbios_info.name, vbios_info.build_date,
-							   vbios_info.part_number, vbios_info.version);
+							   vbios_info.part_number, vbios_info.version, vbios_info.boot_firmware);
 	}
 
 	return ret;
@@ -1186,7 +1218,7 @@ int AmdSmiApiHost::amdsmi_get_ras_info_command(uint64_t processor_bdf, Arguments
 				   &ras_feature);
 	bad_page_threshold_ret = host_amdsmi_get_bad_page_threshold(processor, &bad_page_threshold);
 
-	std::vector<std::string> ecc_correction_schema_flag;
+	std::vector<std::string> ecc_correction_schema;
 	std::string ras_eeprom_version_str;
 	std::string bad_page_threshold_str{ string_format("%u", bad_page_threshold) };
 	std::vector<std::string> schema{"parity_schema","single_bit_schema","double_bit_schema","poison_schema"};
@@ -1195,7 +1227,7 @@ int AmdSmiApiHost::amdsmi_get_ras_info_command(uint64_t processor_bdf, Arguments
 	} else {
 		ras_eeprom_version_str = string_format("0x%X", ras_feature.ras_eeprom_version);
 		transform_ecc_correction_schema(
-			ras_feature.supported_ecc_correction_schema, ecc_correction_schema_flag);
+			ras_feature.ecc_correction_schema_flag, ecc_correction_schema);
 
 		nlohmann::ordered_json supperted_schemas_json;
 		nlohmann::ordered_json gpu_blocks_json;
@@ -1203,15 +1235,15 @@ int AmdSmiApiHost::amdsmi_get_ras_info_command(uint64_t processor_bdf, Arguments
 		if (arg.output == json) {
 			ras_json["eeprom_version"] = ras_eeprom_version_str.c_str();
 			ras_json["bad_page_threshold"] = bad_page_threshold_str.c_str();
-			for(int i = 0; i < ecc_correction_schema_flag.size(); i++) {
-				ras_json[schema[i].c_str()] = ecc_correction_schema_flag[i].c_str();
+			for(int i = 0; i < ecc_correction_schema.size(); i++) {
+				ras_json[schema[i].c_str()] = ecc_correction_schema[i].c_str();
 			}
 		}
 		if(arg.output == human) {
 			formatted_string = string_format(
-								   staticRasTemplateHost, ras_eeprom_version_str.c_str(), bad_page_threshold_str.c_str(), ecc_correction_schema_flag[0].c_str(),
-								   ecc_correction_schema_flag[1].c_str()
-								   ,ecc_correction_schema_flag[2].c_str(),ecc_correction_schema_flag[3].c_str());
+								   staticRasTemplateHost, ras_eeprom_version_str.c_str(), bad_page_threshold_str.c_str(), ecc_correction_schema[0].c_str(),
+								   ecc_correction_schema[1].c_str()
+								   ,ecc_correction_schema[2].c_str(),ecc_correction_schema[3].c_str());
 		}
 	}
 	uint64_t enabled_blocks{};
@@ -1231,10 +1263,10 @@ int AmdSmiApiHost::amdsmi_get_ras_info_command(uint64_t processor_bdf, Arguments
 		if (arg.output == json) {
 			blocks_values[block_str] = status;
 		} else if (arg.output == csv) {
-			for(int i = 0; i < ecc_correction_schema_flag.size(); i++) {
+			for(int i = 0; i < ecc_correction_schema.size(); i++) {
 				formatted_string += string_format(
 										",%s,%s,%s,%s,%s,%s\n", block_str.c_str(), status.c_str(), ras_eeprom_version_str.c_str(), bad_page_threshold_str.c_str(),
-										schema[i].c_str(), ecc_correction_schema_flag[i].c_str());
+										schema[i].c_str(), ecc_correction_schema[i].c_str());
 			}
 		} else {
 			formatted_string.append(string_format(staticRasBlockTemplate, block_str.c_str(), status.c_str()));
@@ -1280,10 +1312,10 @@ int AmdSmiApiHost::amdsmi_get_dfc_info_command(uint64_t processor_bdf, Arguments
 	version_str = transform_fw(
 					  AMDSMI_FW_ID_DFC, dfc_info.header.dfc_fw_version);
 
-	std::string dfc_gart_wr_guest_min_str = AmdSmiPlatform::getInstance().getInstance().is_nv32() ?
+	std::string dfc_gart_wr_guest_min_str = AmdSmiPlatform::getInstance().getInstance().is_nv() ?
 											string_format("%ld", dfc_info.header.dfc_gart_wr_guest_min) :
 											"N/A";
-	std::string dfc_gart_wr_guest_max_str = AmdSmiPlatform::getInstance().getInstance().is_nv32() ?
+	std::string dfc_gart_wr_guest_max_str = AmdSmiPlatform::getInstance().getInstance().is_nv() ?
 											string_format("%ld", dfc_info.header.dfc_gart_wr_guest_max) :
 											"N/A";
 
@@ -1306,7 +1338,7 @@ int AmdSmiApiHost::amdsmi_get_dfc_info_command(uint64_t processor_bdf, Arguments
 			} else if (dfc_info.data[i].verification_enabled == 0) {
 				verification_value = "DISABLED";
 			}
-			if (AmdSmiPlatform::getInstance().getInstance().is_nv32()) {
+			if (AmdSmiPlatform::getInstance().getInstance().is_nv()) {
 				customer_ordinal_str = string_format("%ld", dfc_info.data[i].customer_ordinal);
 			} else {
 				customer_ordinal_str = "N/A";
@@ -1395,7 +1427,7 @@ int AmdSmiApiHost::amdsmi_get_dfc_info_command(uint64_t processor_bdf, Arguments
 				}
 			}
 			if (arg.output == json) {
-				if (AmdSmiPlatform::getInstance().getInstance().is_nv32()) {
+				if (AmdSmiPlatform::getInstance().getInstance().is_nv()) {
 					data_list_json.push_back(nlohmann::ordered_json::object( {
 						{ "dfc_fw_type", dfc_info.data[i].dfc_fw_type },
 						{ "verification", verification_value },
@@ -1420,7 +1452,7 @@ int AmdSmiApiHost::amdsmi_get_dfc_info_command(uint64_t processor_bdf, Arguments
 
 	if (arg.output == json) {
 		nlohmann::ordered_json header;
-		if (AmdSmiPlatform::getInstance().getInstance().is_nv32()) {
+		if (AmdSmiPlatform::getInstance().getInstance().is_nv()) {
 			header = { { "version", version_str.c_str() },
 				{ "gart_wr_guest_min", dfc_info.header.dfc_gart_wr_guest_min },
 				{ "gart_wr_guest_max", dfc_info.header.dfc_gart_wr_guest_max }
@@ -1608,13 +1640,6 @@ int AmdSmiApiHost::amdsmi_get_vram_info_command(uint64_t processor_bdf, Argument
 
 	std::string vram_type_str;
 	get_string_from_enum_vram_type(vram_info.vram_type, vram_type_str);
-	std::string vram_vendor_type_str;
-	if (vram_info.vram_vendor == AMDSMI_VRAM_VENDOR_UNKNOWN) {
-		vram_vendor_type_str = "N/A";
-	} else {
-		get_string_from_enum_vram_vendor_type(vram_info.vram_vendor, vram_vendor_type_str);
-	}
-
 	std::string vram_size_mb_string{ string_format("%lu", vram_info.vram_size) };
 	std::string vram_bit_width_string{};
 	if (vram_info.vram_bit_width == UINT_MAX) {
@@ -1665,7 +1690,8 @@ int AmdSmiApiHost::amdsmi_get_vram_info_command(uint64_t processor_bdf, Argument
 			vram_max_bandwidth["unit"] = "N/A";
 		}
 		nlohmann::ordered_json vram_info_json = { { "type", vram_type_str.c_str() },
-			{ "vendor", vram_vendor_type_str.c_str() },
+			{ "vendor", vram_info.vram_vendor == "UNKNOWN" ? "N/A" :
+				vram_info.vram_vendor },
 			{ "size",  vram_size },
 			{ "bit_width", vram_info.vram_bit_width },
 			{ "max_bandwidth", vram_max_bandwidth }
@@ -1680,15 +1706,15 @@ int AmdSmiApiHost::amdsmi_get_vram_info_command(uint64_t processor_bdf, Argument
 		formatted_string = vram_info_json.dump(4);
 	} else if (arg.output == csv) {
 		formatted_string = string_format(
-							   ",%s,%s,%s,%s,%s", vram_type_str.c_str(),
-							   vram_vendor_type_str.c_str(),
+							   ",%s,%s,%s,%s", vram_type_str.c_str(),
+							   vram_info.vram_vendor,
 							   vram_size_mb_string.c_str(),
 							   vram_bit_width_string.c_str(), max_vram_bw_str.c_str());
 	} else {
 		std::string vram_size_mb_string_unit = vram_size_mb_string == "N/A" ? "" : "MB";
 		formatted_string = string_format(
 							   staticVramTemplate, vram_type_str.c_str(),
-							   vram_vendor_type_str.c_str(),
+							   vram_info.vram_vendor,
 							   vram_size_mb_string.c_str(), vram_size_mb_string_unit.c_str(),
 							   vram_bit_width_string.c_str(), max_vram_bw_str.c_str(), max_vram_bw_unit.c_str());
 	}
@@ -1950,19 +1976,76 @@ int AmdSmiApiHost::amdsmi_get_soc_pstate(uint64_t processor_bdf, Arguments arg,
 		return ret;
 	}
 
+	std::string num_supported_str = string_format("%d", policy.num_supported);
+	std::string curr_str = string_format("%d", policy.current);
+
+	if (arg.output == human) {
+		formatted_string += string_format(staticPolicyHeaderTemplate, num_supported_str.c_str(),
+						  curr_str.c_str());
+	}
+
+	for (uint8_t i = 0; i < policy.num_supported; i++) {
+		std::string dpm_description = string_format("%s", policy.policies[i].policy_description);
+		std::string policy_id_str = string_format("%d", policy.policies[i].policy_id);
+
+		if (arg.output == json) {
+			dpm_list_json.push_back(nlohmann::ordered_json::object({
+				{ "policy_id", policy.policies[i].policy_id },
+				{ "policy_description", dpm_description }
+			}));
+		} else if (arg.output == csv) {
+			formatted_string += string_format(
+				",%s,%s,%s,%s\n", num_supported_str.c_str(),
+				curr_str.c_str(), policy_id_str.c_str(), dpm_description.c_str());
+		} else {
+			formatted_string += string_format(
+				staticPolicyInfoTemplate, policy_id_str.c_str(),
+				dpm_description.c_str());
+		}
+	}
+
+	if (arg.output == json) {
+		nlohmann::ordered_json dpm_info_json = { { "num_supported", policy.num_supported},
+			{ "current_id", policy.current},
+			{ "policies", dpm_list_json}
+		};
+		formatted_string = dpm_info_json.dump(4);
+	}
+
+	return ret;
+}
+
+int AmdSmiApiHost::amdsmi_get_plpd(uint64_t processor_bdf, Arguments arg,
+		std::string &formatted_string)
+{
+	int ret;
+	auto dpm_list_json = nlohmann::ordered_json::array();
+	amdsmi_dpm_policy_t policy;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		return ret;
+	}
+
+	ret = host_amdsmi_get_xgmi_plpd(processor, &policy);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		host_fill_soc_pstate(arg, "N/A");
+		return ret;
+	}
+
 	if (arg.output == human) {
 		formatted_string += string_format(
-								staticPolicyHeaderTemplate, policy.num_supported,
-								policy.cur);
+								staticPlpdsHeaderTemplate, policy.num_supported,
+								policy.current);
 	}
 
 	for(uint8_t i = 0; i < policy.num_supported; i++) {
-		std::string cache_properties_string{};
-
-		std::string dpm_description{
-			string_format("%s", policy.policies[i].policy_description)
-		};
-
+		std::string dpm_description = string_format("%s", policy.policies[i].policy_description);
+		std::string policy_id_str = string_format("%d", policy.policies[i].policy_id);
 		if(arg.output == json) {
 			dpm_list_json.push_back(nlohmann::ordered_json::object( {
 				{ "policy_id", policy.policies[i].policy_id},
@@ -1970,18 +2053,19 @@ int AmdSmiApiHost::amdsmi_get_soc_pstate(uint64_t processor_bdf, Arguments arg,
 		} else if (arg.output == csv) {
 			formatted_string += string_format(
 									",%d,%d,%d,%s\n", policy.num_supported,
-									policy.cur, policy.policies[i].policy_id, dpm_description.c_str());
+									policy.current, policy_id_str.c_str(), dpm_description.c_str());
 		} else {
 			formatted_string += string_format(
-									staticPolicyInfoTemplate, policy.policies[i].policy_id,
+									staticPolicyInfoTemplate, policy_id_str.c_str(),
 									dpm_description.c_str());
 		}
 	}
 
 	if (arg.output == json) {
-		nlohmann::ordered_json dpm_info_json = { { "num_supported", policy.num_supported},
-			{ "current_id", policy.cur},
-			{ "policies", dpm_list_json}
+		nlohmann::ordered_json dpm_info_json = {
+			{ "num_supported", policy.num_supported },
+			{ "current_id", policy.current },
+			{ "policies", dpm_list_json }
 		};
 		formatted_string = dpm_info_json.dump(4);
 	}
@@ -2034,6 +2118,110 @@ int AmdSmiApiHost::amdsmi_get_virtualization_mode_command(uint64_t processor_bdf
 	} else {
 		formatted_string = string_format(staticVirtualizationModeTemplate, virtualization_mode_string.c_str());
 	}
+
+	return ret;
+}
+
+int AmdSmiApiHost::amdsmi_get_numa_command(uint64_t processor_bdf, Arguments arg,
+		std::string &formatted_string)
+{
+	int ret;
+	uint32_t numa_node;
+#ifdef _WIN64
+	SYSTEM_INFO sysInfo;
+	GetSystemInfo(&sysInfo);
+	long num_processors = sysInfo.dwNumberOfProcessors;
+#else
+	long num_processors = sysconf(_SC_NPROCESSORS_CONF);
+#endif
+	uint32_t cpu_set_size_loc = (num_processors + 63) / 64;  // Ceiling division
+	amdsmi_affinity_scope_t scope = AMDSMI_AFFINITY_SCOPE_NODE;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+	auto cpu_list = nlohmann::ordered_json::array();
+	std::string formatted_substring = "";
+
+	if (cpu_set_size_loc < 1)
+		cpu_set_size_loc = 1;
+	if (cpu_set_size_loc > MAX_CPU_SET_SIZE)
+		cpu_set_size_loc = MAX_CPU_SET_SIZE;
+
+	uint64_t *cpu_set = (uint64_t*)calloc(cpu_set_size_loc, sizeof(uint64_t));
+	if (!cpu_set) {
+		Logger::getInstance().log(LogLevel::Error, AMDSMI_STATUS_OUT_OF_RESOURCES,
+				__FUNCTION__, __FILE__, __LINE__);
+		return AMDSMI_STATUS_OUT_OF_RESOURCES;
+	}
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		free(cpu_set);
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		return ret;
+	}
+
+	ret = host_amdsmi_topo_get_numa_node_number(processor, &numa_node);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		formatted_string = host_fill_numa(arg, "N/A");
+		free(cpu_set);
+
+		return ret;
+	}
+
+	ret = host_amdsmi_get_cpu_affinity_with_scope(processor, cpu_set_size_loc, cpu_set, scope);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		formatted_string = host_fill_numa(arg, string_format("%d", numa_node));
+	} else {
+		for(int i = 0; i < cpu_set_size_loc; ++i) {
+			auto maskRanges = bitmaskToRangesList(cpu_set[i],
+						sizeof(cpu_set[0]) * CHAR_BIT * i);
+			uint64_t mask{0};
+			std::vector<std::string> ranges_vec{};
+			nlohmann::ordered_json numajson{};
+			for (const auto& [subMask, rangeStr] : maskRanges) {
+				if (arg.output == csv) {
+					formatted_substring =
+					string_format(",%016lx,%s", subMask, rangeStr.c_str());
+					formatted_string += string_format(",%d,%d", numa_node, i)
+					+ formatted_substring + ",N/A\n";
+				} else {
+					mask |= subMask;
+					ranges_vec.push_back(rangeStr);
+				}
+			}
+			if (arg.output == json) {
+					cpu_list.push_back(nlohmann::ordered_json::object( {
+						{ "bitmask", string_format("%016lx", mask)},
+						{ "core_range", ranges_vec}
+					}));
+			} else if (arg.output == human) {
+				std::string joined_range;
+				for (size_t idx = 0; idx < ranges_vec.size(); ++idx) {
+					if (idx > 0) joined_range += ", ";
+					joined_range += ranges_vec[idx];
+				}
+				joined_range = string_format("[%s]", joined_range.c_str());
+				formatted_substring += string_format(staticCpuListTemplate,
+						i, mask, joined_range.c_str());
+			}
+		}
+		if (arg.output == json) {
+			nlohmann::ordered_json numa_info_json{};
+			nlohmann::ordered_json cpu_affinity{};
+			cpu_affinity["cpu_list"] = cpu_list;
+			numa_info_json["node"] = numa_node;
+			numa_info_json["cpu_affinity"] = cpu_affinity;
+			numa_info_json["socket_affinity"] = "N/A";
+
+			formatted_string = numa_info_json.dump(4);
+		} else if (arg.output == human) {
+			formatted_string = string_format(staticNumaTemplate,
+							numa_node,
+							formatted_substring.c_str());
+		}
+	}
+	free(cpu_set);
 
 	return ret;
 }

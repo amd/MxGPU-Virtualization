@@ -49,7 +49,7 @@ mkdir -p %{buildroot}/usr/src/gim-%{full_version}/
 mkdir -p %{buildroot}/usr/src/gim-%{full_version}/gim-coms-lib
 mkdir -p %{buildroot}/usr/src/gim-%{full_version}/smi-lib
 mkdir -p %{buildroot}/usr/src/gim-%{full_version}/libgv
-cp -r Makefile dkms gim_shim %{buildroot}/usr/src/gim-%{full_version}/
+cp -r Makefile dkms gim_shim amd-vfio-pci inc %{buildroot}/usr/src/gim-%{full_version}/
 cp -r gim-coms-lib/* %{buildroot}/usr/src/gim-%{full_version}/gim-coms-lib/
 cp -r smi-lib/* %{buildroot}/usr/src/gim-%{full_version}/smi-lib/
 cp -r libgv/core libgv/inc libgv/Makefile %{buildroot}/usr/src/gim-%{full_version}/libgv/

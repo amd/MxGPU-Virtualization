@@ -114,7 +114,7 @@ int AmdSmiApiHost::amdsmi_get_bdf_from_uuid_or_bdf(uint64_t &processor_bdf, int 
 		free(processors);
 		exit(1);
 	}
-	if (type == BDF) {
+	if (type == static_cast<int>(DeviceType::BDF)) {
 		for (int i = 0; i < gpu_count; i++) {
 			amdsmi_bdf_t bdf;
 			ret = host_amdsmi_get_gpu_device_bdf(processors[i], &bdf);
@@ -484,6 +484,7 @@ int AmdSmiApiHost::get_string_from_enum_fw_block(int fw_block, std::string& out)
 		{AMDSMI_FW_ID_SDMA_TH0, "SDMA_TH0"},
 		{AMDSMI_FW_ID_SDMA_TH1, "SDMA_TH1"},
 		{AMDSMI_FW_ID_CP_MES, "CP_MES"},
+		{AMDSMI_FW_ID_MES_KIQ, "MES_KIQ"},
 		{AMDSMI_FW_ID_MES_STACK, "MES_STACK"},
 		{AMDSMI_FW_ID_MES_THREAD1, "MES_THREAD1"},
 		{AMDSMI_FW_ID_MES_THREAD1_STACK, "MES_THREAD1_STACK"},
@@ -510,9 +511,11 @@ int AmdSmiApiHost::get_string_from_enum_fw_block(int fw_block, std::string& out)
 		{AMDSMI_FW_ID_RLC_SAVE_RESTORE_LIST, "RLC_SAVE_RESTORE_LIST"},
 		{AMDSMI_FW_ID_ASD, "ASD"},
 		{AMDSMI_FW_ID_TA_RAS, "TA_RAS"},
+		{AMDSMI_FW_ID_TA_XGMI, "TA_XGMI"},
 		{AMDSMI_FW_ID_XGMI, "XGMI"},
 		{AMDSMI_FW_ID_RLC_SRLG, "RLC_SRLG"},
 		{AMDSMI_FW_ID_RLC_SRLS, "RLC_SRLS"},
+		{AMDSMI_FW_ID_PM, "PM"},
 		{AMDSMI_FW_ID_SMC, "SMC"},
 		{AMDSMI_FW_ID_DMCU, "DMCU"},
 		{AMDSMI_FW_ID_PSP_RAS, "PSP_RAS"},
@@ -662,6 +665,24 @@ std::vector<std::string> decode_memory_caps(uint32_t nps_cap_mask)
 	return nps_modes;
 }
 
+std::vector<std::string> decode_vf_partition_mask(uint32_t vf_mask)
+{
+	std::vector<std::string> vf_modes;
+	if (vf_mask & AMDSMI_VF_MODE_1) {
+		vf_modes.push_back("1");
+	}
+	if (vf_mask & AMDSMI_VF_MODE_2) {
+		vf_modes.push_back("2");
+	}
+	if (vf_mask & AMDSMI_VF_MODE_4) {
+		vf_modes.push_back("4");
+	}
+	if (vf_mask & AMDSMI_VF_MODE_8) {
+		vf_modes.push_back("8");
+	}
+	return vf_modes;
+}
+
 std::string possible_memory_caps_to_human_readable(const std::vector<std::string>& nps_modes)
 {
 	std::string result;
@@ -674,24 +695,16 @@ std::string possible_memory_caps_to_human_readable(const std::vector<std::string
 	return result;
 }
 
-int AmdSmiApiHost::get_string_from_enum_vram_vendor_type(int vram_vendor_type, std::string& out)
+std::string possible_vf_partition_mask_to_human_readable(const std::vector<std::string>& vf_modes)
 {
-	EnumToString<amdsmi_vram_vendor_t> enum_vram_ven_type;
-	enum_vram_ven_type.data = {
-		{AMDSMI_VRAM_VENDOR_SAMSUNG, "SAMSUNG"},
-		{AMDSMI_VRAM_VENDOR_INFINEON, "INFINEON"},
-		{AMDSMI_VRAM_VENDOR_ELPIDA, "ELPIDA"},
-		{AMDSMI_VRAM_VENDOR_ETRON, "ETRON"},
-		{AMDSMI_VRAM_VENDOR_NANYA, "NANYA"},
-		{AMDSMI_VRAM_VENDOR_HYNIX, "HYNIX"},
-		{AMDSMI_VRAM_VENDOR_MOSEL, "MOSEL"},
-		{AMDSMI_VRAM_VENDOR_WINBOND, "WINBOND"},
-		{AMDSMI_VRAM_VENDOR_ESMT, "ESMT"},
-		{AMDSMI_VRAM_VENDOR_MICRON, "MICRON"},
-	};
-
-	out = enum_vram_ven_type((amdsmi_vram_vendor_t)vram_vendor_type);
-	return AMDSMI_STATUS_SUCCESS;
+	std::string result;
+	for (size_t i = 0; i < vf_modes.size(); i++) {
+		result += vf_modes[i];
+		if (i < vf_modes.size() - 1) {
+			result += ",";
+		}
+	}
+	return result;
 }
 
 int AmdSmiApiHost::get_string_from_enum_driver_model(int driver_model, std::string& out)

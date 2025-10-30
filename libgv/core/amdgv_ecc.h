@@ -30,6 +30,9 @@
 #define MAX_IN_BAND_QUERY_ECC_CNT  100
 #define MAX_BAD_PAGE_THRESHOLD 256
 
+#define AMDGV_ECC_FLAG__SKIP_ROW_RMA		(1 << 0)
+#define AMDGV_ECC_FLAG__CSA_NON_CRITICAL	(1 << 1)
+
 enum amdgv_ecc_bad_page_detection {
 	AMDGV_RAS_ECC_FLAG_SKIP_BAD_PAGE_OPS = 0,
 	AMDGV_RAS_ECC_FLAG_IGNORE_RMA
@@ -85,6 +88,7 @@ struct amdgv_ecc {
 	bool fatal_error;
 	/* skip ROW RMA Condition flag */
 	bool skip_row_rma;
+	uint32_t ras_ecc_flags;
 
 	/* record gfx error count info */
 	uint32_t gfx_correctable_error_num;
@@ -111,6 +115,15 @@ struct amdgv_ecc {
 	struct umc_ecc_info umc_ecc;
 	/* indicate bad page detection mode*/
 	uint32_t bad_page_detection_mode;
+
+	/* record ras bad page info for cross NPS */
+	struct ras_err_handler_data *eh_data_across_nps;
+	struct eeprom_table_record *init_bps;
+	unsigned int init_bps_num_recs;
+	bool eh_data_across_nps_initialized;
+	int supported_nps_count;
+	enum amdgv_memory_partition_mode supported_nps[AMDGV_MEMORY_PARTITION_MODE_MAX];
+	atomic_t in_cross_nps_handling;
 
 	/* unhandled bad page stack, since FFBM invalidation needs
 	 * to switch to PF, the FFBM page replacement will happen

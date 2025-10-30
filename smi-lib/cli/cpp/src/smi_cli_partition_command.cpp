@@ -55,6 +55,14 @@ int AmdSmiPartitionCommand::current_partition_command(uint64_t processor,
 	return ret;
 }
 
+int AmdSmiPartitionCommand::global_partition_command(uint64_t processor,
+		std::vector<tabulate::Table::Row_t> &rows, std::string &gpu_id)
+{
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_global_partition_command(processor,
+			  arg, rows, gpu_id);
+	return ret;
+}
+
 std::string format_accelerator_table(tabulate::Table &table)
 {
 	table.format().font_style({tabulate::FontStyle::bold})
@@ -79,6 +87,7 @@ void AmdSmiPartitionCommand::partition_command_human()
 	std::string out{};
 	std::vector<tabulate::Table::Row_t> all_rows;
 	std::vector<tabulate::Table::Row_t> resource_rows;
+	std::vector<tabulate::Table::Row_t> global_rows;
 	bool header_added = false;
 	std::string formatted_string{};
 	int error = 0;
@@ -196,6 +205,31 @@ void AmdSmiPartitionCommand::partition_command_human()
 						  resources_table) + "\n\n";
 			}
 		}
+	}
+
+	for (int i = 0; i < arg.devices.size(); i++) {
+		uint64_t gpu_bdf = arg.devices[i]->get_bdf();
+		std::string gpu_id{string_format("%d", arg.devices[i]->get_gpu_index())};
+		if ((std::find(arg.options.begin(), arg.options.end(), "global") != arg.options.end()) ||
+				(std::find(arg.options.begin(), arg.options.end(), "gl") != arg.options.end())
+				|| arg.all_arguments) {
+
+			ret = global_partition_command(gpu_bdf, global_rows, gpu_id);
+			std::string param{"global"};
+			if (i == 0 && error == 0) {
+				out += " GLOBAL_PARTITION_CONFIG:\n";
+			}
+			if (error == 0 && i == arg.devices.size() - 1) {
+				//Add tables and header only once
+				tabulate::Table global_table;
+				global_table.add_row({"GPU", "ACCELERATOR_TYPE", "SUPPORTED_VF_MODE", "MEMORY_PARTITION_CAPS"});
+				for (const auto &row : global_rows) {
+					global_table.add_row(row);
+				}
+				out += format_accelerator_table(global_table);
+			}
+		}
+
 	}
 
 	if (arg.is_file) {

@@ -323,24 +323,23 @@ static void navi32_dump_rlcv_sram(struct amdgv_adapter *adapt)
 		AMDGV_WARN("store rlcv timestamp failed, ret=%d\n", ret);
 }
 
-static int navi32_gpuiov_setup_sched_debug_log(struct amdgv_adapter *adapt,
-				enum amdgv_auto_sched_log_op op)
+static int navi32_gpuiov_setup_sched_log_mem(struct amdgv_adapter *adapt,
+	 enum amdgv_auto_sched_log_op op)
 {
 	int ret = 0;
-	uint32_t world_switch_id;
-	struct amdgv_sched_world_switch *world_switch;
 
 	switch (op) {
 	case AMDGV_AUTO_SCHED_PERF_LOG:
 		if (adapt->gpuiov.perf_log_mem)
-			return 0;
+			break;
 
 		adapt->gpuiov.perf_log_mem =
 			amdgv_memmgr_alloc_align(&adapt->memmgr_pf, NAVI32_AUTO_SCHED_PERF_LOG_SIZE,
 						PAGE_SIZE, MEM_GPUIOV_SCHED_LOG);
 		if (!adapt->gpuiov.perf_log_mem) {
 			AMDGV_ERROR("Failed to allocate debug dump memory!\n");
-			return AMDGV_FAILURE;
+			ret = AMDGV_FAILURE;
+			break;
 		}
 		AMDGV_DEBUG("PERF LOG MEM: GPU_ADDR=0x%llx MEM_ADDR=0x%llx MEM_SIZE=0x%llx\n",
 				amdgv_memmgr_get_gpu_addr(adapt->gpuiov.perf_log_mem),
@@ -350,7 +349,7 @@ static int navi32_gpuiov_setup_sched_debug_log(struct amdgv_adapter *adapt,
 
 	case AMDGV_AUTO_SCHED_DEBUG_DUMP:
 		if (adapt->gpuiov.debug_dump_mem)
-			return 0;
+			break;
 
 		if (adapt->opt.debug_dump_reserve_size > NAVI32_AUTO_SCHED_DEBUG_DUMP_MAX_SIZE) {
 			AMDGV_WARN("For Navi32 the max usable size is 40MB. Setting debug_dump_reserve_size to 40MB\n");
@@ -362,7 +361,8 @@ static int navi32_gpuiov_setup_sched_debug_log(struct amdgv_adapter *adapt,
 						1 << 20, MEM_GPUIOV_SCHED_LOG);
 		if (!adapt->gpuiov.debug_dump_mem) {
 			AMDGV_ERROR("Failed to allocate debug dump memory!\n");
-			return AMDGV_FAILURE;
+			ret = AMDGV_FAILURE;
+			break;
 		}
 		AMDGV_DEBUG("DEBUG DUMP MEM: GPU_ADDR=0x%llx MEM_ADDR=0x%llx MEM_SIZE=0x%llx\n",
 				amdgv_memmgr_get_gpu_addr(adapt->gpuiov.debug_dump_mem),
@@ -372,19 +372,11 @@ static int navi32_gpuiov_setup_sched_debug_log(struct amdgv_adapter *adapt,
 
 	default:
 		AMDGV_ERROR("Invalid debug log type %d\n", op);
-		return AMDGV_FAILURE;
+		ret = AMDGV_FAILURE;
+		break;
 	}
 
-	for_each_id(world_switch_id, amdgv_sched_get_world_switch_mask_by_sched_block(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX)) {
-		world_switch = &adapt->sched.world_switch[world_switch_id];
-		if (world_switch->sched_mode > AMDGV_SCHED_MAX_HW_SCHED_MODE)
-			continue;
-		ret = amdgv_sched_world_switch_config_auto_sched_mode(adapt, world_switch);
-		if (ret)
-			return ret;
-	}
-
-	return 0;
+	return ret;
 }
 
 static bool navi32_gpuiov_is_cmd_complete(struct amdgv_adapter *adapt,
@@ -1329,7 +1321,6 @@ static const struct amdgv_gpuiov_funcs navi32_gpuiov_funcs = {
 	.get_config_info = navi32_gpuiov_get_config_info,
 	.toggle_rlcg_vf_interface = navi32_gpuiov_toggle_rlcg_vf_interface,
 	.set_event_notification = navi32_set_event_notification,
-	.setup_sched_debug_log = navi32_gpuiov_setup_sched_debug_log,
 	.cmd_to_name = navi32_gpuiov_cmd_to_name,
 	.ctx_empty_intr_control = navi32_gpuiov_ctx_empty_intr_control,
 	.transfer_vf_data = navi32_gpuiov_transfer_vf_data,
@@ -1340,7 +1331,6 @@ static int navi32_gpuiov_sw_init(struct amdgv_adapter *adapt)
 	uint64_t csa_mem_size;
 	uint64_t csa_mem_align;
 	int ret = 0;
-	uint32_t i = 0;
 
 	adapt->rlcv_stamp_todo = false;
 	adapt->rlcv_stamp_status = false;
@@ -1396,17 +1386,16 @@ static int navi32_gpuiov_sw_init(struct amdgv_adapter *adapt)
 			amdgv_memmgr_get_offset(adapt->gpuiov.sched_cfg_mem),
 			amdgv_memmgr_get_size(adapt->gpuiov.sched_cfg_mem));
 
-	ret = amdgv_gpuiov_ctrl_block_setup(adapt, navi32_hw_sched_static_config, NAVI32_HW_SCHED_BLOCK_NUM);
-
-	// Override the default GFX scheduler mode to manual switch if adapt->flags & AMDGV_FLAG_USE_PF
-	if (adapt->flags & AMDGV_FLAG_USE_PF) {
-		for (i = 0; i < adapt->gpuiov.num_ctrl_blocks; i++) {
-			if (adapt->gpuiov.ctrl_blocks[i].hw_sched_type != AMDGV_HW_SCHED_TYPE_GFX)
-				continue;
-			if (!amdgv_gpuiov_is_sched_mode_supported(adapt, navi32_hw_sched_static_config[i], adapt->opt.gfx_sched_mode))
-				adapt->gpuiov.ctrl_blocks[i].sched_mode = AMDGV_SCHED_FAIRNESS;
-		}
+	ret = navi32_gpuiov_setup_sched_log_mem(adapt, AMDGV_AUTO_SCHED_PERF_LOG);
+	if (ret)
+		return ret;
+	if (adapt->opt.debug_dump_reserve_size) {
+		ret = navi32_gpuiov_setup_sched_log_mem(adapt, AMDGV_AUTO_SCHED_DEBUG_DUMP);
+		if (ret)
+			return ret;
 	}
+
+	ret = amdgv_gpuiov_ctrl_block_setup(adapt, navi32_hw_sched_static_config, NAVI32_HW_SCHED_BLOCK_NUM);
 
 	return ret;
 }

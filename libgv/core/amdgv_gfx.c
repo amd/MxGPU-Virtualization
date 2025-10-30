@@ -486,6 +486,9 @@ int amdgv_gfx_alloc_dump_cu_resource_memory(struct amdgv_adapter *adapt, struct 
 	uint32_t out_data_size, out_flag_size, kernelobj_size;
 	hsa_signal_t signal;
 	uint64_t *kernarg_addr;
+	void *out_data_cpua = NULL;
+	void *out_flag_cpua = NULL;
+	uint64_t out_data_gpua, out_flag_gpua;
 
 	out_data_size = resource_size->out_data_size;
 	out_flag_size = resource_size->out_flag_size;
@@ -493,9 +496,9 @@ int amdgv_gfx_alloc_dump_cu_resource_memory(struct amdgv_adapter *adapt, struct 
 
 	// Allocate the memory:
 	// kernelarg: hold address of out_data and out_flag
+	// kernelobj: hsa kernel obj and shader
 	// out_data: hold dump data
 	// out_flag: dump flag which indicates the valid data position
-	// kernelobj: hsa kernel obj and shader
 	// signal_obj: completion signal
 	// packet: aql packet
 	kernelarg = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, 256, 256, MEM_GFX_IB);
@@ -503,12 +506,12 @@ int amdgv_gfx_alloc_dump_cu_resource_memory(struct amdgv_adapter *adapt, struct 
 		AMDGV_WARN("failed to create kernelarg.\n");
 		return AMDGV_FAILURE;
 	}
-	out_data = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, out_data_size, 256, MEM_GFX_IB);
+	out_data = amdgv_memmgr_alloc_sys_align(&adapt->memmgr_sys, out_data_size, PAGE_SIZE, &out_data_gpua, out_data_cpua);
 	if (!out_data) {
 		AMDGV_WARN("failed to create out_data.\n");
 		goto free_kernelarg;
 	}
-	out_flag = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, out_flag_size, 256, MEM_GFX_IB);
+	out_flag = amdgv_memmgr_alloc_sys_align(&adapt->memmgr_sys, out_flag_size, PAGE_SIZE, &out_flag_gpua, out_flag_cpua);
 	if (!out_flag) {
 		AMDGV_WARN("failed to create out_flag.\n");
 		goto free_out_data;
@@ -529,21 +532,24 @@ int amdgv_gfx_alloc_dump_cu_resource_memory(struct amdgv_adapter *adapt, struct 
 		goto free_signalobj;
 	}
 
+	if (out_data->sys_mem.va_ptr)
+		out_data_cpua = out_data->sys_mem.va_ptr;
+	if (out_flag->sys_mem.va_ptr)
+		out_flag_cpua = out_flag->sys_mem.va_ptr;
+
 	resource_mem->kernelobj_addr = (uint32_t *)amdgv_memmgr_get_cpu_addr(kernelobj);
-	resource_mem->out_data_addr = (uint32_t *)amdgv_memmgr_get_cpu_addr(out_data);
-	resource_mem->out_flag_addr = (uint32_t *)amdgv_memmgr_get_cpu_addr(out_flag);
+	resource_mem->out_data_addr = (uint32_t *)out_data_cpua;
+	resource_mem->out_flag_addr = (uint32_t *)out_flag_cpua;
 
 	signal.handle = amdgv_memmgr_get_gpu_addr(signal_obj);
 	oss_memset((uint64_t *)amdgv_memmgr_get_cpu_addr(signal_obj), 0, 256);
-
-	// do some cleanup
 	oss_memset(resource_mem->kernelobj_addr, 0, kernelobj_size);
-	oss_memset(resource_mem->out_data_addr, 2, out_data_size);
-	oss_memset(resource_mem->out_flag_addr, 0, out_flag_size);
+	oss_memset((uint64_t *)out_data_cpua, 2, out_data_size);
+	oss_memset((uint64_t *)out_flag_cpua, 0, out_flag_size);
 
 	kernarg_addr = (uint64_t *)amdgv_memmgr_get_cpu_addr(kernelarg);
-	kernarg_addr[0] = amdgv_memmgr_get_gpu_addr(out_data);
-	kernarg_addr[1] = amdgv_memmgr_get_gpu_addr(out_flag);
+	kernarg_addr[0] = out_data_gpua;
+	kernarg_addr[1] = out_flag_gpua;
 
 	adapt->gfx.packet_addr = (hsa_kernel_dispatch_packet_t *)amdgv_memmgr_get_cpu_addr(packet);
 	oss_memset(adapt->gfx.packet_addr, 0, sizeof(hsa_kernel_dispatch_packet_t));

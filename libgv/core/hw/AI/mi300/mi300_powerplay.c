@@ -67,14 +67,16 @@ typedef struct Mi300_PPTable {
 struct mi300_smu_table_context {
 	struct smu_local_memory driver_table_mem;
 	struct smu_local_memory tool_table_mem;
+
 	void *metrics_table;
 	uint32_t metrics_table_size;
-	void *pptable;
-	uint32_t pptable_size;
-	void *ecctable_array;
-	uint32_t ecctable_array_size;
+	uint64_t metrics_ts;
+
 	void *static_metrics_table;
 	uint32_t static_metrics_table_size;
+	uint64_t static_metrics_ts;
+
+	PPTable_t pptable;
 };
 
 struct mi300_dpm_clock_level {
@@ -138,79 +140,79 @@ struct mi300_pp_drv_metrics_ext {
 };
 
 uint64_t mi300_drv_metric_code[MI300_METRIC_NAME_COUNT] = {
-	/*						 CATEGORY	NAME				UNIT		RES  SUBRES	FLAGS	*/
-	[MI300_METRICS_COUNTER]		= METRIC_EXT_CODE(ACC_COUNTER,	METRIC_ACC_COUNTER,		COUNTER,	GPU, NA,	METRIC_EXT_FLAG(COUNTER)),
+	/*				  CATEGORY			NAME				UNIT			RES  SUBRES	FLAGS	*/
+	[MI300_METRICS_COUNTER]		= METRIC_EXT_CODE(ACC_COUNTER,	METRIC_ACC_COUNTER,		COUNTER,		GPU, NA,	METRIC_EXT_FLAG(COUNTER)),
 
-	[MI300_GFX_CLK_XCD]		= METRIC_EXT_CODE(FREQUENCY,	CLK_GFX,			MHZ,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_GFX_CLK_MAX_XCD]		= METRIC_EXT_CODE(FREQUENCY,	CLK_GFX_MAX_LIMIT,		MHZ,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_GFX_CLK_MIN_XCD]		= METRIC_EXT_CODE(FREQUENCY,	CLK_GFX_MIN_LIMIT,		MHZ,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_GFX_CLK_DS_XCD]		= METRIC_EXT_CODE(FREQUENCY,	CLK_GFX_DS_DISABLED,		BOOL,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_GFX_CLK_LOCKED_XCD]	= METRIC_EXT_CODE(FREQUENCY,	CLK_GFX_LOCKED,			BOOL,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_USAGE_GFX_XCD]		= METRIC_EXT_CODE(ACTIVITY,	USAGE_GFX,			PERCENT,	XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_GFX_CLK_XCD]		= METRIC_EXT_CODE(FREQUENCY,	CLK_GFX,			MHZ,			XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_GFX_CLK_MAX_XCD]		= METRIC_EXT_CODE(FREQUENCY,	CLK_GFX_MAX_LIMIT,		MHZ,			XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_GFX_CLK_MIN_XCD]		= METRIC_EXT_CODE(FREQUENCY,	CLK_GFX_MIN_LIMIT,		MHZ,			XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_GFX_CLK_DS_XCD]		= METRIC_EXT_CODE(FREQUENCY,	CLK_GFX_DS_DISABLED,		BOOL,			XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_GFX_CLK_LOCKED_XCD]	= METRIC_EXT_CODE(FREQUENCY,	CLK_GFX_LOCKED,			BOOL,			XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_USAGE_GFX_XCD]		= METRIC_EXT_CODE(ACTIVITY,	USAGE_GFX,			PERCENT,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
 
-	[MI300_GFX_CLK_XCD_ACC]		= METRIC_EXT_CODE(FREQUENCY,	CLK_GFX,			MHZ,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_ACC)  | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_USAGE_GFX_XCD_ACC]	= METRIC_EXT_CODE(ACTIVITY,	USAGE_GFX,			PERCENT,	XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_ACC)  | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_THROT_GFX_BEL_PPT_ACC]	= METRIC_EXT_CODE(THROTTLE,	GFX_CLK_BELOW_HOST_LIMIT_PPT,	BOOL,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_ACC)  | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_THROT_GFX_BEL_THM_ACC]	= METRIC_EXT_CODE(THROTTLE,	GFX_CLK_BELOW_HOST_LIMIT_THM,	BOOL,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_ACC)  | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_THROT_GFX_BEL_TOT_ACC]	= METRIC_EXT_CODE(THROTTLE,	GFX_CLK_BELOW_HOST_LIMIT_TOTAL,	BOOL,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_ACC)  | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_THROT_GFX_CLK_LOW_ACC]	= METRIC_EXT_CODE(THROTTLE,	GFX_CLK_LOW_UTILIZATION,	BOOL,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_ACC)  | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_GFX_CLK_XCD_ACC]		= METRIC_EXT_CODE(FREQUENCY,	CLK_GFX,			MHZ,			XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_ACC)  | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_USAGE_GFX_XCD_ACC]	= METRIC_EXT_CODE(ACTIVITY,	USAGE_GFX,			PERCENT,		XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_ACC)  | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_THROT_GFX_BEL_PPT_ACC]	= METRIC_EXT_CODE(THROTTLE,	GFX_CLK_BELOW_HOST_LIMIT_PPT,	BOOL,			XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_ACC)  | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_THROT_GFX_BEL_THM_ACC]	= METRIC_EXT_CODE(THROTTLE,	GFX_CLK_BELOW_HOST_LIMIT_THM,	BOOL,			XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_ACC)  | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_THROT_GFX_BEL_TOT_ACC]	= METRIC_EXT_CODE(THROTTLE,	GFX_CLK_BELOW_HOST_LIMIT_TOTAL,	BOOL,			XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_ACC)  | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_THROT_GFX_CLK_LOW_ACC]	= METRIC_EXT_CODE(THROTTLE,	GFX_CLK_LOW_UTILIZATION,	BOOL,			XCP, XCC,	METRIC_EXT_FLAG(DATA_FILTER_ACC)  | METRIC_EXT_FLAG(CHIPLET_METRIC)),
 
-	[MI300_SOC_CLK_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_SOC,			MHZ, 		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_VCLK_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_VCLK,			MHZ,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_DCLK_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_DCLK,			MHZ,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_SOC_CLK_MAX_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_SOC_MAX_LIMIT,		MHZ,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_VCLK_MAX_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_VCLK_MAX_LIMIT,		MHZ,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_DCLK_MAX_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_DCLK_MAX_LIMIT,		MHZ,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_SOC_CLK_MIN_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_SOC_MIN_LIMIT,		MHZ,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_VCLK_MIN_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_VCLK_MIN_LIMIT,		MHZ,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_DCLK_MIN_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_DCLK_MIN_LIMIT,		MHZ,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_SOC_CLK_DS_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_SOC_DS_DISABLED,		BOOL,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_VCLK_DS_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_VCLK_DS_DISABLED,		BOOL,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_DCLK_DS_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_DCLK_DS_DISABLED,		BOOL,		AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_SOC_CLK_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_SOC,			MHZ, 			AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_VCLK_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_VCLK,			MHZ,			AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_DCLK_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_DCLK,			MHZ,			AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_SOC_CLK_MAX_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_SOC_MAX_LIMIT,		MHZ,			AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_VCLK_MAX_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_VCLK_MAX_LIMIT,		MHZ,			AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_DCLK_MAX_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_DCLK_MAX_LIMIT,		MHZ,			AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_SOC_CLK_MIN_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_SOC_MIN_LIMIT,		MHZ,			AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_VCLK_MIN_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_VCLK_MIN_LIMIT,		MHZ,			AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_DCLK_MIN_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_DCLK_MIN_LIMIT,		MHZ,			AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_SOC_CLK_DS_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_SOC_DS_DISABLED,		BOOL,			AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_VCLK_DS_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_VCLK_DS_DISABLED,		BOOL,			AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_DCLK_DS_AID]		= METRIC_EXT_CODE(FREQUENCY,	CLK_DCLK_DS_DISABLED,		BOOL,			AID, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
 
-	[MI300_USAGE_JPEG]		= METRIC_EXT_CODE(ACTIVITY,	USAGE_JPEG,			PERCENT,	AID, ENGINE,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
-	[MI300_USAGE_VCN]		= METRIC_EXT_CODE(ACTIVITY,	USAGE_VCN,			PERCENT,	AID, ENGINE,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_USAGE_JPEG]		= METRIC_EXT_CODE(ACTIVITY,	USAGE_JPEG,			PERCENT,		AID, ENGINE,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
+	[MI300_USAGE_VCN]		= METRIC_EXT_CODE(ACTIVITY,	USAGE_VCN,			PERCENT,		AID, ENGINE,	METRIC_EXT_FLAG(DATA_FILTER_INST) | METRIC_EXT_FLAG(CHIPLET_METRIC)),
 
-	[MI300_MEMCLK]			= METRIC_EXT_CODE(FREQUENCY,	CLK_MEM,			MHZ,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
-	[MI300_MEMCLK_MAX]		= METRIC_EXT_CODE(FREQUENCY,	CLK_MEM_MAX_LIMIT,		MHZ,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
-	[MI300_MEMCLK_MIN]		= METRIC_EXT_CODE(FREQUENCY,	CLK_MEM_MIN_LIMIT,		MHZ,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
-	[MI300_MEM_CLK_DS]		= METRIC_EXT_CODE(FREQUENCY,	CLK_MEM_DS_DISABLED,		BOOL,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
-	[MI300_USAGE_GFX]		= METRIC_EXT_CODE(ACTIVITY,	USAGE_GFX,			PERCENT,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
-	[MI300_USAGE_MEM]		= METRIC_EXT_CODE(ACTIVITY,	USAGE_MEM,			PERCENT,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
-	[MI300_DRAM_BANDWIDTH_MAX]	= METRIC_EXT_CODE(ACTIVITY,	MAX_DRAM_BANDWIDTH,		GBPS,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
-	[MI300_TEMP_HOTSPOT]		= METRIC_EXT_CODE(TEMPERATURE,	TEMP_HOTSPOT_CURR,		CELSIUS,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
-	[MI300_TEMP_VR]			= METRIC_EXT_CODE(TEMPERATURE,	TEMP_VR_CURR,			CELSIUS,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
-	[MI300_TEMP_MEM]		= METRIC_EXT_CODE(TEMPERATURE,	TEMP_MEM_CURR,			CELSIUS,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
-	[MI300_POWER_MAX]		= METRIC_EXT_CODE(POWER,	POWER_LIMIT,			WATT,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
-	[MI300_POWER]			= METRIC_EXT_CODE(POWER,	POWER_CURR,			WATT,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
-	[MI300_PCIE_LINK_SPEED]		= METRIC_EXT_CODE(PCIE,		PCIE_LINK_SPEED,		PCIE_GEN,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
-	[MI300_PCIE_LINK_WIDTH]		= METRIC_EXT_CODE(PCIE,		PCIE_LINK_WIDTH,		PCIE_LANES,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
-	[MI300_PCIE_BANDWIDTH]		= METRIC_EXT_CODE(PCIE,		PCIE_BANDWIDTH,			MBITPS,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI300_MEMCLK]			= METRIC_EXT_CODE(FREQUENCY,	CLK_MEM,			MHZ,			GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI300_MEMCLK_MAX]		= METRIC_EXT_CODE(FREQUENCY,	CLK_MEM_MAX_LIMIT,		MHZ,			GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI300_MEMCLK_MIN]		= METRIC_EXT_CODE(FREQUENCY,	CLK_MEM_MIN_LIMIT,		MHZ,			GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI300_MEM_CLK_DS]		= METRIC_EXT_CODE(FREQUENCY,	CLK_MEM_DS_DISABLED,		BOOL,			GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI300_USAGE_GFX]		= METRIC_EXT_CODE(ACTIVITY,	USAGE_GFX,			PERCENT,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI300_USAGE_MEM]		= METRIC_EXT_CODE(ACTIVITY,	USAGE_MEM,			PERCENT,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI300_DRAM_BANDWIDTH_MAX]	= METRIC_EXT_CODE(ACTIVITY,	MAX_DRAM_BANDWIDTH,		GBPS,			GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI300_TEMP_HOTSPOT]		= METRIC_EXT_CODE(TEMPERATURE,	TEMP_HOTSPOT_CURR,		CELSIUS,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI300_TEMP_VR]			= METRIC_EXT_CODE(TEMPERATURE,	TEMP_VR_CURR,			CELSIUS,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI300_TEMP_MEM]		= METRIC_EXT_CODE(TEMPERATURE,	TEMP_MEM_CURR,			CELSIUS,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI300_POWER_MAX]		= METRIC_EXT_CODE(POWER,	POWER_LIMIT,			WATT,			GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI300_POWER]			= METRIC_EXT_CODE(POWER,	POWER_CURR,			WATT,			GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI300_PCIE_LINK_SPEED]		= METRIC_EXT_CODE(PCIE,		PCIE_LINK_SPEED,		PCIE_GEN,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI300_PCIE_LINK_WIDTH]		= METRIC_EXT_CODE(PCIE,		PCIE_LINK_WIDTH,		PCIE_LANES,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI300_PCIE_BANDWIDTH]		= METRIC_EXT_CODE(PCIE,		PCIE_BANDWIDTH,			MBITPS,			GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
 
-	[MI300_USAGE_GFX_ACC]		= METRIC_EXT_CODE(ACTIVITY,	USAGE_GFX,			PERCENT,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-	[MI300_USAGE_MEM_ACC]		= METRIC_EXT_CODE(ACTIVITY,	USAGE_MEM,			PERCENT,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-	[MI300_DRAM_BANDWIDTH_ACC]	= METRIC_EXT_CODE(ACTIVITY,	DRAM_BANDWIDTH,			GBPS,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-	[MI300_TEMP_HOTSPOT_ACC]	= METRIC_EXT_CODE(TEMPERATURE,	TEMP_HOTSPOT_CURR,		CELSIUS,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-	[MI300_TEMP_VR_ACC]		= METRIC_EXT_CODE(TEMPERATURE,	TEMP_VR_CURR,			CELSIUS,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-	[MI300_TEMP_MEM_ACC]		= METRIC_EXT_CODE(TEMPERATURE,	TEMP_MEM_CURR,			CELSIUS,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-	[MI300_ENERGY_SOCKET_ACC]	= METRIC_EXT_CODE(ENERGY,	ENERGY_SOCKET,			JOULE,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-	[MI300_ENERGY_XCD_ACC]		= METRIC_EXT_CODE(ENERGY,	ENERGY_XCD,			JOULE,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-	[MI300_ENERGY_AID_ACC]		= METRIC_EXT_CODE(ENERGY,	ENERGY_AID,			JOULE,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-	[MI300_ENERGY_MEM_ACC]		= METRIC_EXT_CODE(ENERGY,	ENERGY_MEM,			JOULE,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-	[MI300_THROT_PROCHOT_ACC]	= METRIC_EXT_CODE(THROTTLE,	THROTTLE_PROCHOT_ACTIVE,	BOOL,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-	[MI300_THROT_PPT_ACC]		= METRIC_EXT_CODE(THROTTLE,	THROTTLE_PPT_ACTIVE,		BOOL,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-	[MI300_THROT_SOCKET_ACC]	= METRIC_EXT_CODE(THROTTLE,	THROTTLE_SOCKET_ACTIVE,		BOOL,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-	[MI300_THROT_VR_ACC]		= METRIC_EXT_CODE(THROTTLE,	THROTTLE_VR_ACTIVE,		BOOL,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-	[MI300_THROT_MEM_ACC]		= METRIC_EXT_CODE(THROTTLE,	THROTTLE_MEM_ACTIVE,		BOOL,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-	[MI300_PCIE_BANDWIDTH_ACC]	= METRIC_EXT_CODE(PCIE,		PCIE_BANDWIDTH,			GBPS,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-	[MI300_PCIE_L0_TO_RECOVER_ACC]	= METRIC_EXT_CODE(PCIE,		PCIE_L0_TO_RECOVERY_COUNT,	UINT,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-	[MI300_PCIE_REPL_ACC]		= METRIC_EXT_CODE(PCIE,		PCIE_REPLAY_COUNT,		UINT,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-	[MI300_PCIE_REPL_ROLLOVER_ACC]	= METRIC_EXT_CODE(PCIE,		PCIE_REPLAY_ROLLOVER_COUNT,	UINT,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-	[MI300_PCIE_NAK_SENT_ACC]	= METRIC_EXT_CODE(PCIE,		PCIE_NAK_SENT_COUNT,		UINT,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
-	[MI300_PCIE_NAK_RECEIVED_ACC]	= METRIC_EXT_CODE(PCIE,		PCIE_NAK_RECEIVED_COUNT,	UINT,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI300_USAGE_GFX_ACC]		= METRIC_EXT_CODE(ACTIVITY,	USAGE_GFX,			PERCENT,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI300_USAGE_MEM_ACC]		= METRIC_EXT_CODE(ACTIVITY,	USAGE_MEM,			PERCENT,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI300_DRAM_BANDWIDTH_ACC]	= METRIC_EXT_CODE(ACTIVITY,	DRAM_BANDWIDTH,			GBPS,			GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI300_TEMP_HOTSPOT_ACC]	= METRIC_EXT_CODE(TEMPERATURE,	TEMP_HOTSPOT_CURR,		CELSIUS,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI300_TEMP_VR_ACC]		= METRIC_EXT_CODE(TEMPERATURE,	TEMP_VR_CURR,			CELSIUS,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI300_TEMP_MEM_ACC]		= METRIC_EXT_CODE(TEMPERATURE,	TEMP_MEM_CURR,			CELSIUS,		GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI300_ENERGY_SOCKET_ACC]	= METRIC_EXT_CODE(ENERGY,	ENERGY_SOCKET,			15_625_MILLIJOULE,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI300_ENERGY_XCD_ACC]		= METRIC_EXT_CODE(ENERGY,	ENERGY_XCD,			15_625_MILLIJOULE,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI300_ENERGY_AID_ACC]		= METRIC_EXT_CODE(ENERGY,	ENERGY_AID,			15_625_MILLIJOULE,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI300_ENERGY_MEM_ACC]		= METRIC_EXT_CODE(ENERGY,	ENERGY_MEM,			15_625_MILLIJOULE,	GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI300_THROT_PROCHOT_ACC]	= METRIC_EXT_CODE(THROTTLE,	THROTTLE_PROCHOT_ACTIVE,	BOOL,			GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI300_THROT_PPT_ACC]		= METRIC_EXT_CODE(THROTTLE,	THROTTLE_PPT_ACTIVE,		BOOL,			GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI300_THROT_SOCKET_ACC]	= METRIC_EXT_CODE(THROTTLE,	THROTTLE_SOCKET_ACTIVE,		BOOL,			GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI300_THROT_VR_ACC]		= METRIC_EXT_CODE(THROTTLE,	THROTTLE_VR_ACTIVE,		BOOL,			GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI300_THROT_MEM_ACC]		= METRIC_EXT_CODE(THROTTLE,	THROTTLE_MEM_ACTIVE,		BOOL,			GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI300_PCIE_BANDWIDTH_ACC]	= METRIC_EXT_CODE(PCIE,		PCIE_BANDWIDTH,			GBPS,			GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI300_PCIE_L0_TO_RECOVER_ACC]	= METRIC_EXT_CODE(PCIE,		PCIE_L0_TO_RECOVERY_COUNT,	UINT,			GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI300_PCIE_REPL_ACC]		= METRIC_EXT_CODE(PCIE,		PCIE_REPLAY_COUNT,		UINT,			GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI300_PCIE_REPL_ROLLOVER_ACC]	= METRIC_EXT_CODE(PCIE,		PCIE_REPLAY_ROLLOVER_COUNT,	UINT,			GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI300_PCIE_NAK_SENT_ACC]	= METRIC_EXT_CODE(PCIE,		PCIE_NAK_SENT_COUNT,		UINT,			GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
+	[MI300_PCIE_NAK_RECEIVED_ACC]	= METRIC_EXT_CODE(PCIE,		PCIE_NAK_RECEIVED_COUNT,	UINT,			GPU, NA,	METRIC_EXT_FLAG(DATA_FILTER_ACC)),
 
-	[MI300_IN_TEL_VOLTAGE]		= METRIC_EXT_CODE(STATIC,	PCIE_NAK_RECEIVED_COUNT,	MILLIVOLT,	GPU, NA,	0),
-	[MI300_PLDM_VERSION]		= METRIC_EXT_CODE(STATIC,	PCIE_NAK_RECEIVED_COUNT,	UINT,		GPU, NA,	0),
+	[MI300_IN_TEL_VOLTAGE]		= METRIC_EXT_CODE(STATIC,	INPUT_TELEMETRY_VOLTAGE,	MILLIVOLT,		GPU, NA,	0),
+	[MI300_PLDM_VERSION]		= METRIC_EXT_CODE(STATIC,	PLDM_VERSION,			UINT,			GPU, NA,	0),
 
 };
 
@@ -550,23 +552,12 @@ static int mi300_smu_table_context_setup(struct amdgv_adapter *adapt)
 	if (!table_context->metrics_table)
 		return AMDGV_FAILURE;
 
-	table_context->ecctable_array_size = sizeof(EccInfoTable_t) * adapt->mcp.num_aid;
-	table_context->ecctable_array = oss_zalloc(table_context->ecctable_array_size);
-	if (!table_context->ecctable_array)
-		return AMDGV_FAILURE;
-
 	driver_mem->alignment = PAGE_SIZE;
 	driver_mem->size = max(driver_mem->size, table_context->metrics_table_size);
-	driver_mem->size = max(driver_mem->size, table_context->ecctable_array_size);
 	driver_mem->size = max(driver_mem->size, sizeof(SwI2cRequest_t));
 
 	tool_mem->alignment = PAGE_SIZE;
 	tool_mem->size = TOOL_SIZE;
-
-	table_context->pptable_size = sizeof(PPTable_t);
-	table_context->pptable = oss_zalloc(sizeof(PPTable_t));
-	if (!table_context->pptable)
-		return AMDGV_FAILURE;
 
 	table_context->static_metrics_table_size = sizeof(StaticMetricsTable_t);
 	table_context->static_metrics_table = oss_zalloc(sizeof(StaticMetricsTable_t));
@@ -590,16 +581,6 @@ static void mi300_smu_table_context_release(struct amdgv_adapter *adapt)
 	if (table_context->static_metrics_table) {
 		oss_free(table_context->static_metrics_table);
 		table_context->static_metrics_table = NULL;
-	}
-
-	if (table_context->ecctable_array) {
-		oss_free(table_context->ecctable_array);
-		table_context->ecctable_array = NULL;
-	}
-
-	if (table_context->pptable) {
-		oss_free(table_context->pptable);
-		table_context->pptable = NULL;
 	}
 }
 
@@ -701,6 +682,12 @@ static const struct pp_smu_dpm_policy soc_pstate_policy = {
 	.num_supported = SOC_PSTATE_COUNT,
 	.set_policy = mi300_smu_select_policy_soc_pstate
 };
+
+static bool mi300_smu_cap_supported(struct amdgv_adapter *adapt, int cap)
+{
+	struct smu_context *smu = adapt_to_smu(adapt);
+	return (smu->supported_caps & SMU_CAPS(cap)) != 0;
+}
 
 static int mi300_smu_set_xgmi_plpd_mode(struct amdgv_adapter *adapt, int mode)
 {
@@ -1072,18 +1059,16 @@ static int mi300_smu_sw_init(struct amdgv_adapter *adapt)
 	if (ret)
 		return ret;
 
-	adapt->pp.drv_metrics_ext =
+	adapt->pp.metrics[AMDGV_PP_METRIC__GPU] =
 		oss_zalloc(sizeof(struct mi300_pp_drv_metrics_ext));
-
-	if (!adapt->pp.drv_metrics_ext) {
+	if (!adapt->pp.metrics[AMDGV_PP_METRIC__GPU]) {
 		AMDGV_ERROR("Failed to alloc memory for drv_metrics_ext\n");
 		return AMDGV_FAILURE;
 	}
 
-	adapt->pp.drv_static_metrics_ext =
+	adapt->pp.metrics[AMDGV_PP_METRIC__GPU_STATIC] =
 		oss_zalloc(sizeof(struct mi300_pp_drv_metrics_ext));
-
-	if (!adapt->pp.drv_static_metrics_ext) {
+	if (!adapt->pp.metrics[AMDGV_PP_METRIC__GPU_STATIC]) {
 		AMDGV_ERROR("Failed to alloc memory for drv_static_metrics_ext\n");
 		return AMDGV_FAILURE;
 	}
@@ -1105,14 +1090,14 @@ static int mi300_smu_sw_fini(struct amdgv_adapter *adapt)
 		adapt->pp.smu_backend = NULL;
 	}
 
-	if (adapt->pp.drv_metrics_ext) {
-		oss_free(adapt->pp.drv_metrics_ext);
-		adapt->pp.drv_metrics_ext = NULL;
+	if (adapt->pp.metrics[AMDGV_PP_METRIC__GPU]) {
+		oss_free(adapt->pp.metrics[AMDGV_PP_METRIC__GPU]);
+		adapt->pp.metrics[AMDGV_PP_METRIC__GPU] = NULL;
 	}
 
-	if (adapt->pp.drv_static_metrics_ext) {
-		oss_free(adapt->pp.drv_static_metrics_ext);
-		adapt->pp.drv_static_metrics_ext = NULL;
+	if (adapt->pp.metrics[AMDGV_PP_METRIC__GPU_STATIC]) {
+		oss_free(adapt->pp.metrics[AMDGV_PP_METRIC__GPU_STATIC]);
+		adapt->pp.metrics[AMDGV_PP_METRIC__GPU_STATIC] = NULL;
 	}
 
 	if (adapt->pp.smu_lock) {
@@ -1165,7 +1150,29 @@ int mi300_smu_get_metrics_version(struct amdgv_adapter *adapt, uint32_t *version
 	return mi300_smu_send_msg(adapt, PPSMC_MSG_GetMetricsVersion, version);
 }
 
-static int mi300_smu_get_metrics_table(struct amdgv_adapter *adapt)
+static int mi300_smu_get_static_metrics_table(struct amdgv_adapter *adapt, bool force)
+{
+	struct smu_context *smu = adapt_to_smu(adapt);
+	struct mi300_smu_table_context *table_context =
+		(struct mi300_smu_table_context *)smu->smu_table_context;
+	struct smu_local_memory *driver_mem = &table_context->driver_table_mem;
+	uint32_t static_metrics_table_size = table_context->static_metrics_table_size;
+	void *data = table_context->static_metrics_table;
+	void *cpu_addr = amdgv_memmgr_get_cpu_addr(driver_mem->mem);
+	int ret = 0;
+
+	if (force || (amdgv_after_time(table_context->static_metrics_ts + adapt->pp.metrics_cache_expire_us))) {
+		ret = mi300_smu_send_msg(adapt, PPSMC_MSG_GetStaticMetricsTable, NULL);
+		if (ret)
+			return ret;
+		oss_memcpy(data, cpu_addr, static_metrics_table_size);
+		table_context->static_metrics_ts = oss_get_time_stamp();
+	}
+
+	return ret;
+}
+
+static int mi300_smu_get_metrics_table(struct amdgv_adapter *adapt, bool force)
 {
 	struct smu_context *smu = adapt_to_smu(adapt);
 	struct mi300_smu_table_context *table_context =
@@ -1173,16 +1180,16 @@ static int mi300_smu_get_metrics_table(struct amdgv_adapter *adapt)
 	struct smu_local_memory *driver_mem = &table_context->driver_table_mem;
 	uint32_t metrics_table_size = table_context->metrics_table_size;
 	void *data = table_context->metrics_table;
-	void *cpu_addr;
-	int ret;
+	void *cpu_addr = amdgv_memmgr_get_cpu_addr(driver_mem->mem);
+	int ret = 0;
 
-	ret = mi300_smu_send_msg(adapt, PPSMC_MSG_GetMetricsTable, NULL);
-	if (ret)
-		return ret;
-
-	/* TODO: need invalidate hdp if enabled */
-	cpu_addr = amdgv_memmgr_get_cpu_addr(driver_mem->mem);
-	oss_memcpy(data, cpu_addr, metrics_table_size);
+	if (force || (amdgv_after_time(table_context->metrics_ts + adapt->pp.metrics_cache_expire_us))) {
+		ret = mi300_smu_send_msg(adapt, PPSMC_MSG_GetMetricsTable, NULL);
+		if (ret)
+			return ret;
+		oss_memcpy(data, cpu_addr, metrics_table_size);
+		table_context->metrics_ts = oss_get_time_stamp();
+	}
 
 	return ret;
 }
@@ -1435,12 +1442,6 @@ static int mi300_smu_init_supported_caps(struct amdgv_adapter *adapt)
 	return 0;
 }
 
-bool mi300_smu_cap_supported(struct amdgv_adapter *adapt, int cap)
-{
-	struct smu_context *smu = adapt_to_smu(adapt);
-	return !!(smu->supported_caps & SMU_CAPS(cap));
-}
-
 static int mi300_smu_set_tool_table_address(struct amdgv_adapter *adapt)
 {
 	struct smu_context *smu = adapt_to_smu(adapt);
@@ -1463,8 +1464,9 @@ static int mi300_smu_init_pptable(struct amdgv_adapter *adapt)
 	struct smu_context *smu = adapt_to_smu(adapt);
 	struct mi300_smu_table_context *table_context =
 		(struct mi300_smu_table_context *)smu->smu_table_context;
-	PPTable_t *pptable = (PPTable_t *)table_context->pptable;
+	PPTable_t *pptable = &table_context->pptable;
 	MetricsTable_t *metrics = table_context->metrics_table;
+	StaticMetricsTable_t *static_metrics = table_context->static_metrics_table;
 	int i, ret, retry = 100;
 
 	uint32_t temp;
@@ -1473,7 +1475,7 @@ static int mi300_smu_init_pptable(struct amdgv_adapter *adapt)
 	 * message to pmfw, add following check to avoid driver a empty data.
 	 * */
 	while (retry--) {
-		ret = mi300_smu_get_metrics_table(adapt);
+		ret = mi300_smu_get_metrics_table(adapt, true);
 		if (ret)
 			return ret;
 
@@ -1488,8 +1490,11 @@ static int mi300_smu_init_pptable(struct amdgv_adapter *adapt)
 		return AMDGV_FAILURE;
 	}
 
-	pptable->MaxSocketPowerLimit = SMUQ10_ROUND(metrics->MaxSocketPowerLimit);
+	ret = mi300_smu_get_static_metrics_table(adapt, true);
+	if (ret)
+		return ret;
 
+	pptable->MaxSocketPowerLimit = SMUQ10_ROUND(metrics->MaxSocketPowerLimit);
 	pptable->MaxGfxclkFrequency = SMUQ10_ROUND(metrics->MaxGfxclkFrequency);
 	pptable->MinGfxclkFrequency = SMUQ10_ROUND(metrics->MinGfxclkFrequency);
 
@@ -1526,6 +1531,11 @@ static int mi300_smu_init_pptable(struct amdgv_adapter *adapt)
 	} else {
 		pptable->HotSpotCtfTemp = -1;
 		pptable->MemCtfTemp = -1;
+	}
+
+	if ((smu->supported_caps & SMU_CAPS(SMU_CAP_STATIC_METRICS)) &&
+	    (static_metrics->pldmVersion[0] != PLDM_VERSION_NOT_SUPPORTED)) {
+		adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PLDM_VERSION] = static_metrics->pldmVersion[0];
 	}
 
 	return 0;
@@ -1603,7 +1613,7 @@ static int mi300_smu_set_gfx_dpm_table(struct amdgv_adapter *adapt,
 	struct smu_context *smu = adapt_to_smu(adapt);
 	struct mi300_smu_table_context *table_context =
 		(struct mi300_smu_table_context *)smu->smu_table_context;
-	PPTable_t *pptable = (PPTable_t *)table_context->pptable;
+	PPTable_t *pptable = &table_context->pptable;
 		uint32_t min, max;
 	int ret;
 
@@ -1637,7 +1647,7 @@ static int mi300_smu_set_other_dpm_table(struct amdgv_adapter *adapt, int clk_ty
 	struct smu_context *smu = adapt_to_smu(adapt);
 	struct mi300_smu_table_context *table_context =
 		(struct mi300_smu_table_context *)smu->smu_table_context;
-	PPTable_t *pptable = (PPTable_t *)table_context->pptable;
+	PPTable_t *pptable = &table_context->pptable;
 	uint32_t default_freq, dpm_levels, freq;
 	uint16_t clk_id, fea_id;
 	int ret, max_retry = 3;
@@ -1726,7 +1736,7 @@ static int mi300_smu_set_default_dpm_table(struct amdgv_adapter *adapt)
 	MetricsTable_t *metrics = (MetricsTable_t *)table_context->metrics_table;
 	int clk_type, ret;
 
-	ret = mi300_smu_get_metrics_table(adapt);
+	ret = mi300_smu_get_metrics_table(adapt, true);
 	if (ret)
 		return ret;
 
@@ -1792,10 +1802,11 @@ static void mi300_pp_smu_init_drv_xcp_metrics(struct amdgv_adapter *adapt,
 					      struct mi300_pp_drv_metrics_ext *drv_metrics_ext,
 					      struct mi300_smu_dpm_context *dpm_context,
 					      MetricsTable_t *metrics_table,
-					      uint32_t xcc_id)
+					      uint32_t logical_xcc_id)
 {
-	uint32_t vf_mask = amdgv_mcp_get_vf_mask_by_xcc(adapt, xcc_id);
-	uint32_t xcp_id = amdgv_mcp_get_xcp_by_xcc(adapt, xcc_id);
+	uint32_t vf_mask = amdgv_mcp_get_vf_mask_by_xcc(adapt, logical_xcc_id);
+	uint32_t xcp_id = amdgv_mcp_get_xcp_by_xcc(adapt, logical_xcc_id);
+	uint32_t xcc_id = GET_INST(GC, logical_xcc_id);
 	uint32_t uint_mask_bit = xcc_id;
 
 	ADD_DRV_METRICS_EXT_ENTRY(MI300_GFX_CLK_XCD, vf_mask, xcp_id,
@@ -1899,8 +1910,7 @@ static void mi300_pp_smu_init_drv_aid_metrics(struct amdgv_adapter *adapt,
 static int mi300_pp_smu_init_drv_metrics_ext(struct amdgv_adapter *adapt)
 {
 	struct smu_context *smu = adapt_to_smu(adapt);
-	struct mi300_pp_drv_metrics_ext *drv_metrics_ext =
-		(struct mi300_pp_drv_metrics_ext *)adapt->pp.drv_metrics_ext;
+	struct mi300_pp_drv_metrics_ext *drv_metrics_ext = adapt->pp.metrics[AMDGV_PP_METRIC__GPU];
 	struct mi300_smu_table_context *table_context =
 		(struct mi300_smu_table_context *)smu->smu_table_context;
 	MetricsTable_t *metrics_table = (MetricsTable_t *)table_context->metrics_table;
@@ -1916,7 +1926,7 @@ static int mi300_pp_smu_init_drv_metrics_ext(struct amdgv_adapter *adapt)
 	ADD_DRV_METRICS_EXT_ENTRY(MI300_METRICS_COUNTER, whole_gpu_vf_mask, MI300_GPU_RES_ID,
 				  UINT_32, (void *)&metrics_table->AccumulationCounter);
 
-	for (i = 0; i < MI300_SMU_NUM_XCC_CLK; i++)
+	for (i = 0; i < adapt->mcp.gfx.num_xcc; i++)
 		mi300_pp_smu_init_drv_xcp_metrics(adapt, drv_metrics_ext, dpm_context,
 						  metrics_table, i);
 
@@ -1961,16 +1971,16 @@ static int mi300_pp_smu_init_drv_metrics_ext(struct amdgv_adapter *adapt)
 				  Q10_32, (void *)&metrics_table->SocketPower);
 
 	ADD_DRV_METRICS_EXT_ENTRY(MI300_ENERGY_SOCKET_ACC, whole_gpu_vf_mask, MI300_GPU_RES_ID,
-				  Q10_64, (void *)&metrics_table->SocketEnergyAcc);
+				  UINT_64, (void *)&metrics_table->SocketEnergyAcc);
 
 	ADD_DRV_METRICS_EXT_ENTRY(MI300_ENERGY_XCD_ACC, whole_gpu_vf_mask, MI300_GPU_RES_ID,
-				  Q10_64, (void *)&metrics_table->XcdEnergyAcc);
+				  UINT_64, (void *)&metrics_table->XcdEnergyAcc);
 
 	ADD_DRV_METRICS_EXT_ENTRY(MI300_ENERGY_AID_ACC, whole_gpu_vf_mask, MI300_GPU_RES_ID,
-				  Q10_64, (void *)&metrics_table->AidEnergyAcc);
+				  UINT_64, (void *)&metrics_table->AidEnergyAcc);
 
 	ADD_DRV_METRICS_EXT_ENTRY(MI300_ENERGY_MEM_ACC, whole_gpu_vf_mask, MI300_GPU_RES_ID,
-				  Q10_64, (void *)&metrics_table->HbmEnergyAcc);
+				  UINT_64, (void *)&metrics_table->HbmEnergyAcc);
 
 	ADD_DRV_METRICS_EXT_ENTRY(MI300_USAGE_GFX, whole_gpu_vf_mask, MI300_GPU_RES_ID,
 				  Q10_32, (void *)&metrics_table->SocketGfxBusy);
@@ -1994,19 +2004,19 @@ static int mi300_pp_smu_init_drv_metrics_ext(struct amdgv_adapter *adapt)
 				  Q10_64, (void *)&metrics_table->PcieBandwidthAcc[0]);
 
 	ADD_DRV_METRICS_EXT_ENTRY(MI300_THROT_PROCHOT_ACC, whole_gpu_vf_mask, MI300_GPU_RES_ID,
-				  Q10_32, (void *)&metrics_table->ProchotResidencyAcc);
+				  UINT_32, (void *)&metrics_table->ProchotResidencyAcc);
 
 	ADD_DRV_METRICS_EXT_ENTRY(MI300_THROT_PPT_ACC, whole_gpu_vf_mask, MI300_GPU_RES_ID,
-				  Q10_32, (void *)&metrics_table->PptResidencyAcc);
+				  UINT_32, (void *)&metrics_table->PptResidencyAcc);
 
 	ADD_DRV_METRICS_EXT_ENTRY(MI300_THROT_SOCKET_ACC, whole_gpu_vf_mask, MI300_GPU_RES_ID,
-				  Q10_32, (void *)&metrics_table->SocketThmResidencyAcc);
+				  UINT_32, (void *)&metrics_table->SocketThmResidencyAcc);
 
 	ADD_DRV_METRICS_EXT_ENTRY(MI300_THROT_VR_ACC, whole_gpu_vf_mask, MI300_GPU_RES_ID,
-				  Q10_32, (void *)&metrics_table->VrThmResidencyAcc);
+				  UINT_32, (void *)&metrics_table->VrThmResidencyAcc);
 
 	ADD_DRV_METRICS_EXT_ENTRY(MI300_THROT_MEM_ACC, whole_gpu_vf_mask, MI300_GPU_RES_ID,
-				  Q10_32, (void *)&metrics_table->HbmThmResidencyAcc);
+				  UINT_32, (void *)&metrics_table->HbmThmResidencyAcc);
 
 	if (mi300_smu_cap_supported(adapt, SMU_CAP_STATIC_PCIE_METRICS)) {
 		ADD_DRV_METRICS_EXT_ENTRY(MI300_PCIE_BANDWIDTH, whole_gpu_vf_mask, MI300_GPU_RES_ID,
@@ -2043,38 +2053,18 @@ static void mi300_smu_set_reset_quirks(struct amdgv_adapter *adapt)
 	if ((adapt->asic_type == CHIP_MI308X &&
 		(adapt->pp.smu_fw_version >= 0x05550800)) ||
 		(adapt->asic_type == CHIP_MI300X && // MI325X
-		(adapt->pp.smu_fw_version >= 0x07550100))) {
+		(adapt->pp.smu_fw_version >= 0x07550100)) ||
+		(adapt->asic_type == CHIP_MI300X && // MI300X
+		(adapt->pp.smu_fw_version >= 0x00558200))) {
 		adapt->flags |= AMDGV_FLAG_ENABLE_CFG_FLR_NOTIFY;
 	}
-}
-
-static int mi300_smu_get_static_metrics_table(struct amdgv_adapter *adapt)
-{
-	struct smu_context *smu = adapt_to_smu(adapt);
-	struct mi300_smu_table_context *table_context = (struct mi300_smu_table_context *)smu->smu_table_context;
-	struct smu_local_memory *driver_mem = &table_context->driver_table_mem;
-	uint32_t static_metrics_table_size = table_context->static_metrics_table_size;
-	void *data = table_context->static_metrics_table;
-	void *cpu_addr;
-	int ret = 0;
-
-	if (smu->supported_caps & SMU_CAPS(SMU_CAP_STATIC_METRICS)) {
-		ret = mi300_smu_send_msg(adapt, PPSMC_MSG_GetStaticMetricsTable, NULL);
-		if (ret)
-			return ret;
-
-		cpu_addr = amdgv_memmgr_get_cpu_addr(driver_mem->mem);
-		oss_memcpy(data, cpu_addr, static_metrics_table_size);
-	}
-
-	return ret;
 }
 
 static int mi300_pp_smu_init_drv_static_metrics_ext(struct amdgv_adapter *adapt)
 {
 	struct smu_context *smu = adapt_to_smu(adapt);
 	struct mi300_pp_drv_metrics_ext *drv_metrics_ext =
-		(struct mi300_pp_drv_metrics_ext *)adapt->pp.drv_static_metrics_ext;
+		(struct mi300_pp_drv_metrics_ext *)adapt->pp.metrics[AMDGV_PP_METRIC__GPU_STATIC];
 	struct mi300_smu_table_context *table_context =
 		(struct mi300_smu_table_context *)smu->smu_table_context;
 	StaticMetricsTable_t *metrics_table = (StaticMetricsTable_t *)table_context->static_metrics_table;
@@ -2087,19 +2077,11 @@ static int mi300_pp_smu_init_drv_static_metrics_ext(struct amdgv_adapter *adapt)
 	mi300_pp_smu_clear_drv_metrics_ext(adapt, drv_metrics_ext);
 
 	if (smu->supported_caps & SMU_CAPS(SMU_CAP_STATIC_METRICS)) {
-
 		ADD_DRV_METRICS_EXT_ENTRY(MI300_IN_TEL_VOLTAGE, whole_gpu_vf_mask, MI300_GPU_RES_ID,
 					  UINT_32, (void *)&(metrics_table->InputTelemetryVoltageInmV));
 
 		ADD_DRV_METRICS_EXT_ENTRY(MI300_PLDM_VERSION, whole_gpu_vf_mask, MI300_GPU_RES_ID,
 					  UINT_32, (void *)&(metrics_table->pldmVersion[0]));
-
-		if (metrics_table->pldmVersion[0] == PLDM_VERSION_NOT_SUPPORTED)
-			adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PLDM_VERSION] = 0;
-		else
-			adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PLDM_VERSION] = metrics_table->pldmVersion[0];
-	} else {
-		adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PLDM_VERSION] = 0;
 	}
 
 	return 0;
@@ -2155,10 +2137,6 @@ static int mi300_smu_hw_init(struct amdgv_adapter *adapt)
 	 * partitions.
 	*/
 	ret = mi300_pp_smu_init_drv_metrics_ext(adapt);
-	if (ret)
-		return ret;
-
-	ret = mi300_smu_get_static_metrics_table(adapt);
 	if (ret)
 		return ret;
 
@@ -2283,7 +2261,7 @@ static int mi300_smu_pp_get_shutdown_temperature(struct amdgv_adapter *adapt, in
 	struct smu_context *smu = adapt_to_smu(adapt);
 	struct mi300_smu_table_context *table_context =
 		(struct mi300_smu_table_context *)smu->smu_table_context;
-	PPTable_t *pptable = (PPTable_t *)table_context->pptable;
+	PPTable_t *pptable = &table_context->pptable;
 
 	*val = pptable->HotSpotCtfTemp;
 
@@ -2302,7 +2280,7 @@ static int mi300_smu_pp_get_pp_metrics(struct amdgv_adapter *adapt,
 	struct mi300_smu_table_context *table_context =
 		(struct mi300_smu_table_context *)smu->smu_table_context;
 	MetricsTable_t *metrics_table = (MetricsTable_t *)table_context->metrics_table;
-	PPTable_t *pptable = (PPTable_t *)table_context->pptable;
+	PPTable_t *pptable = &table_context->pptable;
 	/* use xcd0/aid0 value default */
 	int xcd = 0, aid = 0;
 	uint32_t val;
@@ -2313,7 +2291,7 @@ static int mi300_smu_pp_get_pp_metrics(struct amdgv_adapter *adapt,
 
 	amdgv_gpumon_init_metrics_buf(metrics);
 
-	ret = mi300_smu_get_metrics_table(adapt);
+	ret = mi300_smu_get_metrics_table(adapt, false);
 	if (ret)
 		return ret;
 
@@ -2374,7 +2352,7 @@ static int mi300_smu_pp_get_pp_metrics(struct amdgv_adapter *adapt,
 	metrics->mem_usage = SMUQ10_ROUND(metrics_table->DramBandwidthUtilization);
 	metrics->power = SMUQ10_ROUND(metrics_table->SocketPower);
 	metrics->power_limit = SMUQ10_ROUND(metrics_table->SocketPowerLimit);
-	metrics->energy = SMUQ16_TO_UINT(metrics_table->SocketEnergyAcc);
+	metrics->energy = 0;
 
 	ret = mi300_smu_send_msg_with_param(adapt, PPSMC_MSG_ReadThrottlerLimit,
 					    PPSMC_THROTTLING_LIMIT_TYPE_HBM, &val);
@@ -2425,7 +2403,7 @@ static int mi300_smu_pp_is_clock_locked(struct amdgv_adapter *adapt,
 	MetricsTable_t *metrics_table = (MetricsTable_t *)table_context->metrics_table;
 	int ret;
 
-	ret = mi300_smu_get_metrics_table(adapt);
+	ret = mi300_smu_get_metrics_table(adapt, false);
 	if (ret)
 		return AMDGV_FAILURE;
 
@@ -2451,7 +2429,7 @@ static int mi300_pp_smu_get_max_configurable_power_limit(struct amdgv_adapter *a
 	struct smu_context *smu = adapt_to_smu(adapt);
 	struct mi300_smu_table_context *table_context =
 		(struct mi300_smu_table_context *)smu->smu_table_context;
-	PPTable_t *pptable = (PPTable_t *)table_context->pptable;
+	PPTable_t *pptable = &table_context->pptable;
 
 	*power_limit = pptable->MaxSocketPowerLimit;
 
@@ -2464,7 +2442,7 @@ static int mi300_pp_smu_get_default_power_limit(struct amdgv_adapter *adapt,
 	struct smu_context *smu = adapt_to_smu(adapt);
 	struct mi300_smu_table_context *table_context =
 		(struct mi300_smu_table_context *)smu->smu_table_context;
-	PPTable_t *pptable = (PPTable_t *)table_context->pptable;
+	PPTable_t *pptable = &table_context->pptable;
 
 	*default_power = pptable->DefaultPowerLimit;
 
@@ -2555,13 +2533,13 @@ static int mi300_pp_smu_get_metrics_ext(struct amdgv_adapter *adapt,
 				 struct amdgv_gpumon_metrics_ext *metrics_ext)
 {
 	struct mi300_pp_drv_metrics_ext *drv_metrics_ext =
-		(struct mi300_pp_drv_metrics_ext *)adapt->pp.drv_metrics_ext;
+		(struct mi300_pp_drv_metrics_ext *)adapt->pp.metrics[AMDGV_PP_METRIC__GPU];
 	int ret;
 
 	if (!drv_metrics_ext)
 		return AMDGV_FAILURE;
 
-	ret = mi300_smu_get_metrics_table(adapt);
+	ret = mi300_smu_get_metrics_table(adapt, false);
 	if (ret)
 		return ret;
 
@@ -2587,7 +2565,7 @@ static int mi300_pp_smu_get_num_metrics_ext_entries(struct amdgv_adapter *adapt,
 				 uint32_t *entries)
 {
 	struct mi300_pp_drv_metrics_ext *drv_metrics_ext =
-		(struct mi300_pp_drv_metrics_ext *)adapt->pp.drv_metrics_ext;
+		(struct mi300_pp_drv_metrics_ext *)adapt->pp.metrics[AMDGV_PP_METRIC__GPU];
 
 	if (!drv_metrics_ext)
 		return AMDGV_FAILURE;
@@ -2601,7 +2579,7 @@ static int mi300_pp_smu_get_static_metrics_ext(struct amdgv_adapter *adapt,
 		struct amdgv_gpumon_metrics_ext *static_metrics_ext)
 {
 	struct mi300_pp_drv_metrics_ext *drv_static_metrics_ext =
-		(struct mi300_pp_drv_metrics_ext *)adapt->pp.drv_static_metrics_ext;
+		(struct mi300_pp_drv_metrics_ext *)adapt->pp.metrics[AMDGV_PP_METRIC__GPU_STATIC];
 	struct smu_context *smu = adapt_to_smu(adapt);
 	int ret;
 
@@ -2609,7 +2587,7 @@ static int mi300_pp_smu_get_static_metrics_ext(struct amdgv_adapter *adapt,
 		return AMDGV_FAILURE;
 
 	if (drv_static_metrics_ext->num_metric == 0) {
-		ret = mi300_smu_get_static_metrics_table(adapt);
+		ret = mi300_smu_get_static_metrics_table(adapt, true);
 		if (ret)
 			return ret;
 
@@ -2632,7 +2610,7 @@ static int mi300_pp_smu_get_num_static_metrics_ext_entries(struct amdgv_adapter 
 		uint32_t *entries)
 {
 	struct mi300_pp_drv_metrics_ext *drv_static_metrics_ext =
-		(struct mi300_pp_drv_metrics_ext *)adapt->pp.drv_static_metrics_ext;
+		(struct mi300_pp_drv_metrics_ext *)adapt->pp.metrics[AMDGV_PP_METRIC__GPU_STATIC];
 
 	if (!drv_static_metrics_ext)
 		return AMDGV_FAILURE;
@@ -2725,7 +2703,7 @@ static int mi300_smu_pp_get_link_metrics(struct amdgv_adapter *adapt,
 	struct amdgv_xgmi_psp_link_info *psp_link_info;
 	uint32_t i = 0, port_id = 0;
 
-	if (mi300_smu_get_metrics_table(adapt))
+	if (mi300_smu_get_metrics_table(adapt, false))
 		return AMDGV_FAILURE;
 
 	psp_link_info = &adapt->xgmi.link_info;
@@ -2734,8 +2712,8 @@ static int mi300_smu_pp_get_link_metrics(struct amdgv_adapter *adapt,
 		port_id = phy_port_to_aid_link_idx[i];
 		link_metrics->links[i].link_type = AMDGV_GPUMON_LINK_TYPE_XGMI3;
 		link_metrics->links[i].bdf = psp_link_info->link[i].dest_bdf;
-		link_metrics->links[i].read = SMUQ10_TO_UINT(metrics_table->XgmiReadDataSizeAcc[port_id]);
-		link_metrics->links[i].write = SMUQ10_TO_UINT(metrics_table->XgmiWriteDataSizeAcc[port_id]);
+		link_metrics->links[i].read = SMUQ10_ROUND(metrics_table->XgmiReadDataSizeAcc[port_id]);
+		link_metrics->links[i].write = SMUQ10_ROUND(metrics_table->XgmiWriteDataSizeAcc[port_id]);
 		link_metrics->links[i].width = metrics_table->XgmiWidth;
 		link_metrics->links[i].speed = metrics_table->XgmiBitrate;
 
@@ -2983,8 +2961,6 @@ static int mi300_parse_smu_table_info(struct amdgv_adapter *adapt)
 	mi300_smu_init_pptable(adapt);
 	mi300_smu_set_default_dpm_table(adapt);
 
-
-
 	return 0;
 }
 
@@ -3106,12 +3082,16 @@ static const struct amdgv_pp_funcs mi300_amdgv_pp_funcs = {
 	.get_static_metrics_ext = mi300_pp_smu_get_static_metrics_ext,
 	.get_num_static_metrics_ext_entries = mi300_pp_smu_get_num_static_metrics_ext_entries,
 	.init_drv_metrics_ext = mi300_pp_smu_init_drv_metrics_ext,
+	.get_smu_cap_supported = mi300_smu_cap_supported,
 };
 
 static int mi300_powerplay_sw_init(struct amdgv_adapter *adapt)
 {
 	adapt->pp.pp_funcs = &mi300_amdgv_pp_funcs;
 	adapt->pp.thermal_throttle_start_time = 0;
+	adapt->pp.metrics_cache_expire_us = PP_METRICS_CACHE_EXPIRY_US;
+
+	amdgv_ras_eeprom_version_init(adapt);
 
 	return 0;
 }

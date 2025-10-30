@@ -262,8 +262,6 @@ static int mi300_vbios_early_sw_init(struct amdgv_adapter *adapt)
 	adapt->max_mm_bandwidth[AMDGV_HEVC_ENGINE] = 2 << 20;
 	adapt->max_mm_bandwidth[AMDGV_HEVC1_ENGINE] = 2 << 20;
 
-	adapt->config.gfx.major = 9;
-	adapt->config.gfx.minor = 0;
 
 	adapt->config.caps.supported_fields_flags = 0;
 
@@ -289,6 +287,7 @@ static int mi300_vbios_late_sw_fini(struct amdgv_adapter *adapt)
 static int mi300_vbios_early_hw_init(struct amdgv_adapter *adapt)
 {
 	int r;
+	uint32_t tmp;
 
 	if (!in_whole_gpu_reset()) {
 		/* read rom */
@@ -304,14 +303,12 @@ static int mi300_vbios_early_hw_init(struct amdgv_adapter *adapt)
 
 	/* post vbios */
 	if (!mi300_nbio_vbios_need_post(adapt)) {
-		r = AMDGV_FAILURE;
-
-		if (mi300_psp_wait_sos_loaded_status(adapt))
+		if (mi300_psp_wait_sos_loaded_status(adapt)) {
 			if (((adapt->asic_type == CHIP_MI350X) && mi350_smu_get_fw_loaded_status(adapt)) ||
-				((adapt->asic_type != CHIP_MI350X) && mi300_smu_get_fw_loaded_status(adapt))) {
+					((adapt->asic_type != CHIP_MI350X) && mi300_smu_get_fw_loaded_status(adapt))) {
 				if (adapt->xgmi.phy_nodes_num > 1) {
 					r = task_barrier_enter_timeout(&reload_reset_tb, adapt->xgmi.phy_nodes_num,
-									AMDGV_TIMEOUT(TIMEOUT_CHAIN_RESET));
+							AMDGV_TIMEOUT(TIMEOUT_CHAIN_RESET));
 					if (r == 0) {
 						r = mi300_reset_trigger_whole_gpu_reset(adapt);
 						task_barrier_exit(&reload_reset_tb, adapt->xgmi.phy_nodes_num);
@@ -320,6 +317,12 @@ static int mi300_vbios_early_hw_init(struct amdgv_adapter *adapt)
 					r = mi300_reset_trigger_whole_gpu_reset(adapt);
 				}
 			}
+		} else {
+			/* clear VBIOS status */
+			tmp = RREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BIOS_SCRATCH_7));
+			tmp &= ~ATOM_ASIC_INIT_COMPLETE;
+			WREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BIOS_SCRATCH_7), tmp);
+		}
 
 		if (r)
 			goto failed;

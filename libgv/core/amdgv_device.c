@@ -2139,7 +2139,7 @@ int amdgv_device_generate_rma_cper(struct amdgv_adapter *adapt)
 		return AMDGV_FAILURE;
 
 	amdgv_cper_entry_fill_hdr(adapt, bad_page_thr, AMDGV_CPER_TYPE_BP_THR, CPER_SEV_FATAL);
-	amdgv_cper_entry_fill_bad_page_thr_section(adapt, bad_page_thr, 0);
+	amdgv_cper_entry_fill_bad_page_thr_section(adapt, bad_page_thr, 0, adapt->xgmi.phy_node_id);
 
 	amdgv_cper_commit_entry(adapt, bad_page_thr);
 
@@ -2149,7 +2149,7 @@ int amdgv_device_generate_rma_cper(struct amdgv_adapter *adapt)
 /* Different program PMFWs have different interfaces */
 void amdgv_device_report_rma_to_fw(struct amdgv_adapter *adapt)
 {
-	if (amdgv_ras_eeprom_is_gpu_bad(adapt)) {
+	if (amdgv_ras_eeprom_is_gpu_bad(adapt) && !adapt->umc.is_pmfw_managed_eeprom) {
 		if (adapt->pp.pp_funcs->send_rma_reason)
 			adapt->pp.pp_funcs->send_rma_reason(adapt, PP_RMA_BAD_PAGE_THRESHOLD);
 		if (adapt->gpumon.funcs->ras_report)
@@ -2273,4 +2273,21 @@ enum amdgv_gpumon_vram_vendor vram_vendor_to_gpumon_vram_vendor(enum amdgv_vram_
 	default:
 		return AMDGV_GPUMON_VRAM_VENDOR__PLACEHOLDER0;
 	}
+}
+
+uint64_t amdgv_gpa_to_local_spa(struct amdgv_adapter *adapt, uint64_t addr, uint32_t idx_vf)
+{
+	if (idx_vf == AMDGV_PF_IDX)
+		return addr;
+
+	if (adapt->ffbm.enabled)
+		return amdgv_ffbm_gpa_to_spa(adapt, addr, idx_vf);
+	else
+		return MBYTES_TO_BYTES(adapt->array_vf[idx_vf].fb_offset) + addr;
+}
+
+uint64_t amdgv_gpa_to_global_spa(struct amdgv_adapter *adapt, uint64_t addr, uint32_t idx_vf)
+{
+	return (adapt->xgmi.phy_node_id * adapt->xgmi.node_segment_size) +
+	       amdgv_gpa_to_local_spa(adapt, addr, idx_vf);
 }

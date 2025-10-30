@@ -434,6 +434,11 @@ static int gim_init_thread_func(void *context)
 
 		gim_mon_create_dev_sys(dev_data);
 	};
+
+#if defined(SUPPORT_LIVE_MIGRATION)
+	if (data->opt.flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)
+		gim_mig_init(pdev);
+#endif
 	gim_info("AMD GIM probed GPU(%u) %s\n",
 		dev_data->gpu_index, dev_name(&pdev->dev));
 	goto out;
@@ -534,6 +539,11 @@ static void gim_remove(struct pci_dev *pdev)
 
 	data = &dev_data->init_data;
 
+#if defined(SUPPORT_LIVE_MIGRATION)
+	if (data->opt.flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)
+		gim_mig_fini(pdev);
+#endif
+
 	if (dev_data->adev != AMDGV_INVALID_HANDLE) {
 		gim_mon_remove_dev_sys(dev_data);
 		if (!SVM_ENABLED(dev_data->adev))
@@ -631,6 +641,11 @@ static void gim_set_dynamic_partition_mode(void)
 {
 	struct gim_dev_data *dev_data;
 	struct amdgv_gpumon_memory_partition_info curr_memory_partition_info;
+	uint32_t temp_accelerator_num_partitions;
+	struct amdgv_gpumon_accelerator_partition_profile_config *accelerator_profile_config = gim_kmalloc(
+			sizeof(struct amdgv_gpumon_accelerator_partition_profile_config), GFP_KERNEL);
+	int i;
+
 	int ret;
 
 	list_for_each_entry(dev_data, &gim_device_list, list) {
@@ -642,17 +657,38 @@ static void gim_set_dynamic_partition_mode(void)
 			gim_info("failed to get current NPS mode of GPU %s\n", dev_name(&dev_data->pdev->dev));
 		} else if (curr_memory_partition_info.memory_partition_mode !=
 			dev_data->init_data.opt.memory_partition_mode) {
+
+			/* setting memory mode may overwrite saved accel mode
+			 * even if its valid. Save to temp var to reapply after */
+			temp_accelerator_num_partitions = dev_data->init_data.opt.accelerator_partition_mode;
+
 			gim_info("NPS mode mismatch. "
 				"curr_memory_partition_mode=%s saved_memory_partition_mode=%s\n",
 				gim_get_memory_partition_mode_desc(curr_memory_partition_info.memory_partition_mode),
 				gim_get_memory_partition_mode_desc(dev_data->init_data.opt.memory_partition_mode));
 			gim_info("force NPS mode to %s\n",
 				gim_get_memory_partition_mode_desc(dev_data->init_data.opt.memory_partition_mode));
+
 			amdgv_gpumon_set_memory_partition_mode(
-				dev_data->adev, dev_data->init_data.opt.memory_partition_mode);
+					dev_data->adev, dev_data->init_data.opt.memory_partition_mode);
+
+			/* apply accel partition mode in case mem mode switch changed it */
+			amdgv_gpumon_get_accelerator_partition_profile_config(dev_data->adev,
+				accelerator_profile_config);
+
+			for (i = 0; i < accelerator_profile_config->number_of_profiles; i++) {
+				if (accelerator_profile_config->profiles[i].num_partitions ==
+						temp_accelerator_num_partitions) {
+
+					amdgv_gpumon_set_accelerator_partition_profile(
+							dev_data->adev, i);
+					break;
+				}
+			}
 			break;
 		}
 	}
+	gim_kfree(accelerator_profile_config);
 }
 
 static int gim_init(void)

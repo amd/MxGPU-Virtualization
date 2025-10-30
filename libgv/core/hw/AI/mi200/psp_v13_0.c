@@ -727,9 +727,6 @@ static enum psp_status psp_v13_migration_get_psp_info(struct amdgv_adapter *adap
 		return ret;
 	}
 
-	adapt->live_migration.static_data_size = MI200_MIGRATION_PSP_STATIC_DATA_SIZE;
-	adapt->live_migration.dynamic_data_size = MI200_MIGRATION_PSP_DYNAMIC_DATA_SIZE;
-
 	return ret;
 }
 
@@ -890,6 +887,11 @@ static int psp_v13_sw_init(struct amdgv_adapter *adapt)
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_INIT_FAIL, 0);
 		psp_v13_sw_fini(adapt);
 		ret = AMDGV_FAILURE;
+	}
+
+	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION) {
+		adapt->live_migration.static_data_size = MI200_MIGRATION_PSP_STATIC_DATA_SIZE;
+		adapt->live_migration.dynamic_data_size = MI200_MIGRATION_PSP_DYNAMIC_DATA_SIZE;
 	}
 
 	return ret;

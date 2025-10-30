@@ -128,7 +128,7 @@ TEST_F(AmdsmiUUIDTests, GetUUID_VF)
 	strcpy(gpu_info_mock.market_name, name.c_str());
 #endif
 	gpu_info_mock.vendor_id = 2;
-	gpu_info_mock.device_id = 3;
+	gpu_info_mock.device_id = 0x74A1;
 	gpu_info_mock.rev_id = 4;
 #ifdef _WIN64
 	strcpy_s(gpu_info_mock.asic_serial, sizeof(gpu_info_mock.asic_serial), "0x9A1F188C37CB1EE6");
@@ -189,7 +189,7 @@ TEST_F(AmdsmiUUIDTests, GetUUID_VF)
 
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(uuid_length, AMDSMI_GPU_UUID_SIZE);
-	ASSERT_EQ(strcmp(uuid, "9a010003-0000-1000-801f-188c37cb1ee6"), 0);
+	ASSERT_EQ(strcmp(uuid, "9a0174b5-0000-1000-801f-188c37cb1ee6"), 0);
 }
 
 TEST_F(AmdsmiUUIDTests, GetUUID_VF_INVAL)

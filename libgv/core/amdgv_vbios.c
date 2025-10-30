@@ -521,6 +521,74 @@ int amdgv_vbios_read_img(struct amdgv_adapter *adapt)
 	return 0;
 }
 
+static int amdgv_vbios_update_guest_checksum(struct amdgv_adapter *adapt, uint8_t *image,
+					      unsigned int image_size, int64_t delta)
+{
+	uint32_t sum;
+	VBIOS_ROM_HEADER *rom_header = (VBIOS_ROM_HEADER *)image;
+
+	sum = (uint32_t)((int64_t)adapt->vbios.byte_sum + delta);
+	adapt->vbios.byte_sum = sum;
+	rom_header->CheckSum[0] = 0x100 - (uint8_t)sum;
+
+	AMDGV_INFO("update guest vbios checksum to 0x%02x after updating offsets\n", rom_header->CheckSum[0]);
+
+	return 0;
+}
+
+static int amdgv_vbios_update_image_offset(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	int64_t delta = 0;
+	uint32_t tmp_original = 0;
+	uint16_t data_offset = 0;
+	uint16_t size = 0;
+	uint8_t frev = 0;
+	uint8_t crev = 0;
+	struct vram_usagebyfirmware_v2_2 *firmware_usage_v2_2 = NULL;
+	struct atom_context *ctx = adapt->vbios.atom_context;
+	int index = get_index_into_master_table(atom_master_list_of_data_tables_v2_1,
+						vram_usagebyfirmware);
+
+	if (!adapt->umc.is_pmfw_managed_eeprom || adapt->array_vf[idx_vf].vf_crit_region != GPU_CRIT_REGION_V2)
+		return 0;
+
+	if (amdgv_atom_parse_data_header(ctx, index, &size, &frev, &crev, &data_offset)) {
+		if (frev == 2 && crev == 1) {
+			/* Dynamic critical region init only applies to ASICs with atombios v2.2 */
+			return 0;
+		} else if (frev >= 2 && crev >= 2) {
+			if (adapt->ffbm.share_tmr)
+				return 0;
+
+			firmware_usage_v2_2 = (struct vram_usagebyfirmware_v2_2 *)(adapt->vbios.guest_image + data_offset);
+
+			/* set all values to 0 to avoid double reservation on guest driver side */
+			tmp_original = firmware_usage_v2_2->used_by_driver_region0_in_kb;
+			firmware_usage_v2_2->used_by_driver_region0_in_kb = 0;
+			delta += (int64_t)tmp_original - (int64_t)(firmware_usage_v2_2->used_by_driver_region0_in_kb);
+
+			tmp_original = firmware_usage_v2_2->fw_region_start_address_in_kb;
+			firmware_usage_v2_2->fw_region_start_address_in_kb = 0 | (ATOM_VRAM_BLOCK_NEEDS_NO_RESERVATION << 30);
+			delta += (int64_t)tmp_original - (int64_t)(firmware_usage_v2_2->fw_region_start_address_in_kb);
+			AMDGV_DEBUG("update atom firmware usage v2_2 start at %08x %dkb fw and start at %08x %dkb drv region0\n",
+				firmware_usage_v2_2->fw_region_start_address_in_kb,
+				firmware_usage_v2_2->used_by_firmware_in_kb,
+				firmware_usage_v2_2->driver_region0_start_address_in_kb,
+				firmware_usage_v2_2->used_by_driver_region0_in_kb);
+		} else {
+			AMDGV_ERROR("Uncompatible format_revision (%d) and content_revision (%d) combination", frev, crev);
+			return AMDGV_FAILURE;
+		}
+
+		amdgv_vbios_update_guest_checksum(adapt, adapt->vbios.guest_image,
+						  adapt->vbios.image_size, delta);
+
+		return 0;
+	}
+
+	return AMDGV_FAILURE;
+}
+
 int amdgv_vbios_upload_image_to_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
 	/* check if guest_image is valid, live update gim does not migrate guest_image,
@@ -531,7 +599,10 @@ int amdgv_vbios_upload_image_to_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 			   adapt->vbios.image_size);
 		amdgv_atomfirmware_set_fw_usage_fb_guest(adapt);
 	}
-	return amdgv_vfmgr_copy_to_vf_fb(adapt, idx_vf, AMDGV_RESERVE_FB_OFFSET_KB,
+
+	amdgv_vbios_update_image_offset(adapt, idx_vf);
+
+	return amdgv_vfmgr_copy_to_vf_fb(adapt, idx_vf, GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, VBIOS_IMG),
 					 adapt->vbios.guest_image, adapt->vbios.image_size);
 }
 

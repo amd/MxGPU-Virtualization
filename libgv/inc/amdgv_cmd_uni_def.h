@@ -28,7 +28,7 @@
 #define AMDGV_CMD_MAX_IN_SIZE 128
 #define AMDGV_CMD_MAX_OUT_SIZE 1600
 #define AMDGV_INTERFACE_MAJOR_VERSION  3
-#define AMDGV_INTERFACE_MINOR_VERSION  0
+#define AMDGV_INTERFACE_MINOR_VERSION  1
 #define AMDGV_CMD_VERSION_V1 1
 #define AMDGV_CMD_VERSION_V2 2
 #define AMDGV_CMD_MAX_GPU_NUM 32
@@ -56,6 +56,7 @@ enum amdgv_cmd_ras_id {
 	AMDGV_CMD_RAS_RESET_ALL_ERROR_COUNTS = AMDGV_UNI_IOCTL | 0x00f,
 	AMDGV_CMD_GET_LINK_TOPOLOGY = AMDGV_UNI_IOCTL | 0x011,
 	AMDGV_CMD_GET_CPER_RECORDS = AMDGV_UNI_IOCTL | 0x012,
+	AMDGV_CMD_GET_RAS_POLICY_INFO = AMDGV_UNI_IOCTL | 0x013,
 	AMDGV_CMD_SUPPORTED_MAX
 };
 
@@ -75,6 +76,7 @@ enum amdgv_cmd_asic_type {
 	AMDGV_CMD_CHIP_MI300X = 9,
 	AMDGV_CMD_CHIP_MI308X = 11,
 	AMDGV_CMD_CHIP_MI350X = 12,
+	AMDGV_CMD_CHIP_MI325X = 13,
 	AMDGV_CMD_CHIP_UNKNOWN,
 	AMDGV_CMD_CHIP_LAST,
 };
@@ -107,6 +109,7 @@ enum amdgv_ras_block {
 	AMDGV_RAS_BLOCK__JPEG,
 	AMDGV_RAS_BLOCK__IH,
 	AMDGV_RAS_BLOCK__MPIO,
+	AMDGV_RAS_BLOCK__MMSCH,
 	AMDGV_RAS_BLOCK_MAX
 };
 
@@ -304,7 +307,8 @@ struct amdgv_cmd_dev_info {
 
 struct amdgv_cmd_dev_info_ex {
     uint32_t oam_id;
-    uint32_t reserved[2];
+    uint32_t ras_eeprom_version;	/* RAS EEPROM version (0 if unavailable) */
+    uint32_t reserved[1];
 };
 
 struct amdgv_cmd_devices_info {
@@ -327,6 +331,15 @@ struct amdgv_uni_cmd {
 	uint8_t output_buff_raw[AMDGV_CMD_MAX_OUT_SIZE];
 };
 #pragma pack(pop)
+
+struct amdgv_cmd_ras_policy_info {
+	uint8_t minor_version;
+	uint8_t major_version;
+	uint8_t padding[2];
+	uint16_t dram_non_critical_region_threshold;	// Non-critical region UCE threshold
+	uint16_t dram_critical_region_threshold;		// Critical region UCE threshold
+	uint32_t reserved[8];
+};
 
 uint8_t amdgv_handle_uni_cmd(void *data, struct amdgv_uni_cmd *cmd);
 

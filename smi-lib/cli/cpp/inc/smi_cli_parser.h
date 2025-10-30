@@ -61,6 +61,8 @@ public:
 	int file_limit {-1};
 	int follow {-1};
 	std::string cper_file_path;
+	std::string plpd_set;
+	std::string num_vf;
 	Arguments() {};
 };
 
@@ -79,7 +81,7 @@ private:
 		"discovery", "ucode",	"firmware",
 		"bad-pages", "metric",	"process",
 		"profile",   "version", "event", "topology", "xgmi", "reset", "set", "monitor", "partition",
-		"ras"
+		"ras", "set"
 	};
 
 	std::vector<std::string> FW_SUPPORTED_ARGS_GPU = {
@@ -107,7 +109,8 @@ private:
 		"--limit", "-l", "--driver", "-d",
 		"--ras", "-r", "--dfc-ucode", "-D", "--fb-info", "-f", "--num-vf", "-n",
 		"--vram", "-v", "--cache", "-c", "--partition", "-p", "--process-isolation", "-R",
-		"--soc-pstate", "-ps", "--virtualization-mode", "-m"
+		"--soc-pstate", "-ps", "--virtualization-mode", "-m", "--numa", "-u",
+		"--xgmi-plpd", "-pd", "--ifwi", "-I"
 	};
 
 	std::vector<std::string> METRIC_SUPPORTED_ARGS_GPU = {
@@ -125,7 +128,7 @@ private:
 	};
 
 	std::vector<std::string> TOPOLOGY_SUPPORTED_ARGS_GPU = {
-		"--weight", "--hops", "--fb-sharing", "--link-type", "--link-status",
+		"--weight", "--hops", "--fb-sharing", "--link-type",
 		"--coherent", "--atomics", "--dma", "--bi-dir"
 	};
 
@@ -143,11 +146,12 @@ private:
 
 	std::vector<std::string> SET_SUPPORTED_ARGS_GPU = {
 		"--xgmi", "--fb-sharing-mode", "--group", "--memory-partition", "--accelerator-partition",
-		"process-isolation", "-R", "--soc-pstate", "-ps", "--power-cap", "-pc"
+		"process-isolation", "-R", "--soc-pstate", "-ps", "--power-cap", "-pc",
+		"--xgmi-plpd", "-pd", "--num-vf"
 	};
 
 	std::vector<std::string> PARTITION_SUPPORTED_ARGS_GPU = {
-		"--accelerator", "-a", "--memory", "-m", "--current", "-c"
+		"--accelerator", "-a", "--memory", "-m", "--current", "-c", "--global", "-gl"
 	};
 
 	std::map<std::string, std::vector<std::string> > PARTITION_SUPPORTED_ARGUMENTS = {
@@ -175,7 +179,8 @@ private:
 	};
 
 	std::vector<std::string> XGMI_SUPPORTED_ARGS_GPU = {
-		"--caps", "--fb-sharing", "--set", "--mode", "--metric", "--link-status"
+		"--caps", "--fb-sharing", "--set", "--mode", "--metric", "--source-status",
+		"--link-status"
 	};
 
 	std::map<std::string, std::vector<std::string> > XGMI_SUPPORTED_ARGUMENTS = {
@@ -354,6 +359,13 @@ private:
 
 	bool is_argument_present(const std::vector<std::string>& command_arguments,
 							 const std::string& argument_prefix);
+	/**
+	 * @brief Check if option is valid and have a valid value
+	 *
+	 * @param option_name option that is checked
+	 * @param option_len length of option that is being checked
+	 */
+	void does_option_have_value(const std::string& option, uint32_t option_len);
 
 public:
 	/**

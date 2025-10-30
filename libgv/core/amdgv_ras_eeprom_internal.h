@@ -100,6 +100,8 @@
 
 #define EEPROM_TABLE_VER_V3                    0x00030000
 
+#define EEPROM_TABLE_VER_V4                    0x00040000
+
 /* There are 256Bytes size for EEPROM Table extra gpu info */
 #define EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE 256
 
@@ -122,6 +124,15 @@
 #define EEPROM_TIMESTAMP_DAY     17
 #define EEPROM_TIMESTAMP_MONTH   23
 #define EEPROM_TIMESTAMP_YEAR    27
+
+/* bad page timestamp format changed after V4
+ * ts_hi yy[31:16] mm[15:8] day[7:0]
+ * ts_lo hh[23:16] mm[15:8] ss[7:0]
+ */
+#define EEPROM_V4_TIMESTAMP_MINUTE  8
+#define EEPROM_V4_TIMESTAMP_HOUR    16
+#define EEPROM_V4_TIMESTAMP_MONTH   8
+#define EEPROM_V4_TIMESTAMP_YEAR    16
 #define IS_LEAP_YEAR(x) ((x % 4 == 0 && x % 100 != 0) || x % 400 == 0)
 
 #define cpu_to_le64(x) (x)
@@ -131,7 +142,7 @@
 int ras_eeprom_v2_1_sw_init(struct amdgv_adapter *adapt);
 int ras_eeprom_legacy_sw_init(struct amdgv_adapter *adapt);
 int ras_eeprom_v2_1_export_live_data(struct amdgv_adapter *adapt, uint8_t *data);
-
+int ras_eeprom_pmme_sw_init(struct amdgv_adapter *adapt);
 
 bool __get_eeprom_i2c_params(struct amdgv_adapter *adapt, struct amdgv_ras_eeprom_control *control);
 int __smu_i2c_transfer(struct amdgv_adapter *adapt,

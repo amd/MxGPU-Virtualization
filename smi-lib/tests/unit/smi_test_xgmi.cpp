@@ -95,6 +95,8 @@ TEST_F(AmdSmiXgmiTest, IoctlFailed)
 	amdsmi_xgmi_fb_sharing_caps_t caps;
 	amdsmi_topology_nearest_t topology_nearest_info;
 	uint8_t fb_sharing;
+	amdsmi_dpm_policy_t dpm_policy;
+	uint32_t policy_id = 0;
 	uint32_t num_processors = 2;
 	amdsmi_p2p_capability_t p2p_capability;
 	amdsmi_link_type_t link_type;
@@ -121,7 +123,10 @@ TEST_F(AmdSmiXgmiTest, IoctlFailed)
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 	ret = amdsmi_topo_get_p2p_status(&GPU_MOCK_HANDLE, &GPU_MOCK_HANDLE_DIFF, &link_type, &p2p_capability);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
-
+	ret = amdsmi_get_xgmi_plpd(&GPU_MOCK_HANDLE, &dpm_policy);
+	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
+	ret = amdsmi_set_xgmi_plpd(&GPU_MOCK_HANDLE, policy_id);
+	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 	free(processor_list);
 }
 
@@ -157,6 +162,8 @@ TEST_F(AmdSmiXgmiTest, InvalidParams)
 	ASSERT_EQ(amdsmi_topo_get_p2p_status(&GPU_MOCK_HANDLE, &GPU_MOCK_HANDLE_DIFF, NULL, &p2p_capability), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_topo_get_p2p_status(&GPU_MOCK_HANDLE, &GPU_MOCK_HANDLE_DIFF, &link_type, NULL), AMDSMI_STATUS_INVAL);
 
+	ASSERT_EQ(amdsmi_get_xgmi_plpd(&GPU_MOCK_HANDLE, NULL), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_set_xgmi_plpd(NULL, 0), AMDSMI_STATUS_INVAL);
 }
 
 TEST_F(AmdSmiXgmiTest, GetLinkMetrics)
@@ -557,4 +564,66 @@ TEST_F(AmdSmiXgmiTest, SetFbCustomSharingModeNotSupported)
 
 	free(processor_list);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+}
+
+TEST_F(AmdSmiXgmiTest, GetXgmiPlpd)
+{
+	int ret;
+	amdsmi_dpm_policy_t dpm_policy_info;
+	smi_device_info in_payload;
+	struct smi_dpm_policy  mocked_resp = {};
+	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
+
+	mocked_resp.num_supported = 4;
+	mocked_resp.cur = 1;
+	mocked_resp.policies[0].policy_id = 0;
+#ifdef _WIN64
+	strcpy_s(mocked_resp.policies[0].policy_description, sizeof(mocked_resp.policies[0].policy_description), "pstate_default");
+#else
+	strcpy(mocked_resp.policies[0].policy_description, "pstate_default");
+#endif
+	mocked_resp.policies[1].policy_id = 1;
+#ifdef _WIN64
+	strcpy_s(mocked_resp.policies[1].policy_description, sizeof(mocked_resp.policies[1].policy_description), "soc_pstate_0");
+#else
+	strcpy(mocked_resp.policies[1].policy_description, "soc_pstate_0");
+#endif
+	mocked_resp.policies[2].policy_id = 2;
+#ifdef _WIN64
+	strcpy_s(mocked_resp.policies[2].policy_description, sizeof(mocked_resp.policies[2].policy_description), "soc_pstate_1");
+#else
+	strcpy(mocked_resp.policies[2].policy_description, "soc_pstate_1");
+#endif
+	mocked_resp.policies[3].policy_id = 3;
+#ifdef _WIN64
+	strcpy_s(mocked_resp.policies[3].policy_description, sizeof(mocked_resp.policies[3].policy_description), "soc_pstate_2");
+#else
+	strcpy(mocked_resp.policies[3].policy_description, "soc_pstate_2");
+#endif
+
+	WhenCalling(std::bind(amdsmi_get_xgmi_plpd, MOCK_GPU_HANDLE,
+			      &dpm_policy_info));
+	ExpectCommand(SMI_CMD_CODE_GET_XGMI_PLPD);
+	SaveInputPayloadIn(&in_payload);
+	PlantMockOutput(&mocked_resp);
+	ret = performCall();
+
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_TRUE(equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
+	ASSERT_TRUE(amdsmi::equal_dpm_policy(mocked_resp, dpm_policy_info));
+}
+
+TEST_F(AmdSmiXgmiTest, SetXgmiPlpd)
+{
+	int ret;
+	struct smi_set_dpm_policy in_payload;
+	uint32_t policy_id = 1;
+	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
+
+	WhenCalling(std::bind(amdsmi_set_xgmi_plpd, MOCK_GPU_HANDLE, policy_id));
+	ExpectCommand(SMI_CMD_CODE_SET_XGMI_PLPD);
+	SaveInputPayloadIn(&in_payload);
+	ret = performCall();
+
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 }

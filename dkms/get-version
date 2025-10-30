@@ -20,24 +20,52 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 
-cd "$(dirname "${BASH_SOURCE[0]}")/../"
-if [ -f "./VERSION" ]; then
-    head -1 ./VERSION
-    exit
-elif [ -e "./.git" ] && [ "$(git rev-parse --is-inside-work-tree)" = "true" ]; then
-    branch="$(git rev-parse --abbrev-ref HEAD)"
-    if [ "$branch" = "mainline" ]; then
-        name="$(git describe --long --match "mainline/*.*.*.K" 2>/dev/null)"
-    fi
-    if [ -z "$name" ]; then
-        name="$(git describe --long --match "staging/*.*.*.K" 2>/dev/null)"
-    fi
-    ver="${name##*/}"
-    if [ -n "$ver" ]; then
-        echo "$ver"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "${script_dir}/.." && pwd)"
+
+# helpers
+is_git_repo=false
+if git -C "$repo_root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    is_git_repo=true
+fi
+
+# 1) git tag + commits ahead + 10-char hash
+if $is_git_repo; then
+    # Expect tags like 8.5.0.K, 8.5.0.K-dev, 8.4.0.K-rc1
+    desc="$(git -C "$repo_root" describe --tags --long --abbrev=10 --match "[0-9]*.[0-9]*.[0-9]*.K*" 2>/dev/null || true)"
+    if [ -n "$desc" ]; then
+        desc="$(echo "$desc" | sed -E 's/-g([0-9a-f]{10})$/-\1/')"
+        echo "$desc"
         exit
     fi
 fi
 
-echo "Cannot detect version, using fallback version 0.0.0.K" 1>&2
+# 2) VERSION file + git hash
+version_file="${script_dir}/VERSION"
+if [ -f "$version_file" ]; then
+    base_ver="$(head -1 "$version_file")"
+    if $is_git_repo; then
+        shash="$(git -C "$repo_root" rev-parse --short=10 HEAD 2>/dev/null || true)"
+    else
+        shash=""
+    fi
+    if [ -n "$shash" ]; then
+        echo "${base_ver}-${shash}"
+    else
+        echo "$base_ver"
+    fi
+    exit
+fi
+
+# 3) Git hash only -> 0.0.0.K-g<hash>
+if $is_git_repo; then
+    shash="$(git -C "$repo_root" rev-parse --short=10 HEAD 2>/dev/null || true)"
+    if [ -n "$shash" ]; then
+        echo "0.0.0.K-${shash}"
+        exit
+    fi
+fi
+
+# 4) Default
+echo "Cannot detect tag, git hash or VERSION file, using fallback version 0.0.0.K" 1>&2
 echo "0.0.0.K"

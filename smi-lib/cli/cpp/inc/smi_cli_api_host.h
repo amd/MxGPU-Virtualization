@@ -56,7 +56,6 @@ public:
 	virtual int get_string_from_enum_mp_setting(int mp_setting, std::string& out) override;
 	virtual int get_string_from_enum_resource_type(int resource_type, std::string& out) override;
 
-	virtual int get_string_from_enum_vram_vendor_type(int vram_vendor_type, std::string& out) override;
 	virtual int get_string_from_enum_driver_model(int driver_model, std::string& out) override;
 	virtual int get_string_from_enum_cper_severity_mask(int severity_mask, std::string& out) override;
 	virtual int initTopology(std::vector<std::shared_ptr<Device> > devices,
@@ -95,6 +94,8 @@ public:
 			std::string& out) override;
 	virtual int amdsmi_get_soc_pstate(uint64_t processor_bdf, Arguments arg,
 									  std::string &formatted_string);
+	virtual int amdsmi_get_plpd(uint64_t processor_bdf, Arguments arg,
+								std::string &formatted_string);
 
 	virtual int amdsmi_get_list_command(Arguments arg, std::string& out) override;
 	virtual int amdsmi_get_bad_pages_command(uint64_t processor_bdf, Arguments arg, std::string& out,
@@ -112,7 +113,8 @@ public:
 
 	virtual int amdsmi_get_usage_metric_command(uint64_t processor_bdf, Arguments arg,
 			std::string& out) override;
-	virtual int amdsmi_get_metric_command_per_partition(uint64_t processor_bdf, uint64_t vf_index, Arguments arg,
+	virtual int amdsmi_get_metric_command_per_partition(uint64_t processor_bdf, uint64_t vf_index,
+			Arguments arg,
 			std::string& out) override;
 	virtual int amdsmi_get_power_metric_command(uint64_t processor_bdf, Arguments arg,
 			std::string& out) override;
@@ -144,8 +146,6 @@ public:
 			std::vector<std::string> bdf_vector, std::string& out) override;
 	virtual int amdsmi_get_link_type_topology_command(Arguments arg,
 			std::vector<std::string> bdf_vector, std::string& out) override;
-	virtual int amdsmi_get_link_status_topology_command(Arguments arg,
-			std::vector<std::string> bdf_vector, std::string& out) override;
 
 	virtual int amdsmi_get_coherent_p2p_capability_command(Arguments arg,
 			std::vector<std::string> bdf_vector, std::string& out) override;
@@ -164,8 +164,9 @@ public:
 			std::string& out) override;
 	virtual int amdsmi_get_fb_sharing_xgmi_command(Arguments arg,
 			std::string& out) override;
-	virtual int amdsmi_set_fb_sharing_xgmi_command(Arguments arg,
+	virtual int amdsmi_get_source_gpu_xgmi_status_command(Arguments arg,
 			std::string& out) override;
+
 	virtual int amdsmi_get_xgmi_link_status_command(Arguments arg,
 			std::string& out) override;
 
@@ -186,6 +187,11 @@ public:
 	virtual int amdsmi_set_power_cap_command(uint64_t processor_bdf, Arguments arg) override;
 	virtual int amdsmi_get_virtualization_mode_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) override;
+	virtual int amdsmi_get_numa_command(uint64_t processor_bdf, Arguments arg,
+										std::string &formatted_string) override;
+	virtual int amdsmi_set_plpd_command(uint64_t processor_bdf, Arguments arg) override;
+	virtual int amdsmi_set_num_vf_command(uint64_t processor_bdf, Arguments arg) override;
+
 	// monitor
 	virtual int amdsmi_get_power_usage_monitor_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) override;
@@ -213,6 +219,8 @@ public:
 			std::string &formatted_string) override;
 	virtual int amdsmi_get_current_partition_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) override;
+	virtual int amdsmi_get_global_partition_command(uint64_t processor_bdf, Arguments arg,
+			std::vector<tabulate::Table::Row_t> &rows, std::string &gpu_id) override;
 	virtual int amdsmi_get_cper_entries_command(Arguments arg,
 			std::string &formatted_string) override;
 

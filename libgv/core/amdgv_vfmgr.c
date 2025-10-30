@@ -189,53 +189,6 @@ static void amdgv_vfmgr_set_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf)
 		amdgv_umc_check_and_handle_bp_in_crit_vf_fb(adapt, idx_vf);
 }
 
-void amdgv_vfmgr_import_vfs_fb(struct amdgv_adapter *adapt)
-{
-	uint32_t idx_vf;
-	uint32_t vf_fb_offset_tmr = 0, vf_fb_size_tmr = 0;
-	uint32_t pf_fb_size, vf_fb_offset, vf_fb_size;
-	uint32_t total_usable_fb, total_vf_fb_size;
-
-	if (adapt->ffbm.enabled && adapt->ffbm.share_tmr) {
-		amdgv_gpuiov_get_usable_fb_size(adapt, &total_usable_fb);
-
-		pf_fb_size = adapt->array_vf[AMDGV_PF_IDX].fb_size;
-		total_vf_fb_size = total_usable_fb - pf_fb_size;
-
-		vf_fb_size = total_vf_fb_size / adapt->num_vf;
-
-		vf_fb_offset = roundup(pf_fb_size, AMDGV_FUNCTION_FB_ALIGNMENT);
-		vf_fb_size = rounddown(vf_fb_size, AMDGV_FUNCTION_FB_ALIGNMENT);
-
-		vf_fb_size_tmr = roundup(vf_fb_size + TO_MBYTES(adapt->psp.tmr_context.mem->len), AMDGV_FUNCTION_FB_ALIGNMENT);
-		vf_fb_offset_tmr = vf_fb_offset;
-
-		AMDGV_ASSERT(adapt->tmr_size == vf_fb_size_tmr - vf_fb_size);
-	}
-
-	for (idx_vf = 0; idx_vf < adapt->num_vf; idx_vf++) {
-		/* get vf fb settings from GPU */
-		if (adapt->ffbm.enabled && adapt->ffbm.share_tmr) {
-			/* FFBM WA which includes TMR in VF FB*/
-			amdgv_gpuiov_get_vf_fb(adapt, idx_vf,
-					       &(adapt->array_vf[idx_vf].fb_offset_tmr),
-					       &(adapt->array_vf[idx_vf].fb_size_tmr),
-					       &(adapt->array_vf[idx_vf].real_fb_size));
-
-			// For non-active VFs
-			if (adapt->array_vf[idx_vf].fb_size_tmr == 0) {
-				adapt->array_vf[idx_vf].fb_size_tmr = vf_fb_size_tmr;
-				adapt->array_vf[idx_vf].fb_offset_tmr = vf_fb_offset_tmr + idx_vf * vf_fb_size_tmr;
-			}
-		} else {
-			amdgv_gpuiov_get_vf_fb(adapt, idx_vf,
-					       &(adapt->array_vf[idx_vf].fb_offset),
-					       &(adapt->array_vf[idx_vf].fb_size),
-					       &(adapt->array_vf[idx_vf].real_fb_size));
-		}
-	}
-}
-
 static bool amdgv_vfmgr_is_uuid_info_empty(struct amd_sriov_msg_uuid_info *uuid_info)
 {
 	return (uuid_info->time_low == 0 &&
@@ -293,14 +246,18 @@ void amdgv_vfmgr_init_pf_config(struct amdgv_adapter *adapt)
 
 	/* if the memory manager is enabled query the PF usage */
 	if (adapt->memmgr_pf.is_init) {
-		amdgv_memmgr_get_tom(&adapt->memmgr_pf, &pf_fb_min_size);
-		// The value of memmgr_pf.size will be between 256MB to 1024MB. When loading host driver,
-		// we can set PF FB size larger than default value, which means we need more PF FB size.
-		// Like dumping CU data in runtime.
-		if (adapt->memmgr_pf.size >= MBYTES_TO_BYTES(AMDGV_DEFAULT_USE_PF_SIZE))
-			pf_fb_min_size += (adapt->memmgr_pf.size - MBYTES_TO_BYTES(AMDGV_DEFAULT_USE_PF_SIZE));
-		pf_fb_min_size = roundup(pf_fb_min_size, fb_alignment_byte);
-		pf_fb_min_size = TO_MBYTES(pf_fb_min_size);
+		if (!adapt->umc.is_pmfw_managed_eeprom) {
+			amdgv_memmgr_get_tom(&adapt->memmgr_pf, &pf_fb_min_size);
+			// The value of memmgr_pf.size will be between 256MB to 1024MB. When loading host driver,
+			// we can set PF FB size larger than default value, which means we need more PF FB size.
+			// Like dumping CU data in runtime.
+			if (adapt->memmgr_pf.size >= MBYTES_TO_BYTES(AMDGV_DEFAULT_USE_PF_SIZE))
+				pf_fb_min_size += (adapt->memmgr_pf.size - MBYTES_TO_BYTES(AMDGV_DEFAULT_USE_PF_SIZE));
+			pf_fb_min_size = roundup(pf_fb_min_size, fb_alignment_byte);
+			pf_fb_min_size = TO_MBYTES(pf_fb_min_size);
+		} else {
+			pf_fb_min_size = TO_MBYTES(adapt->memmgr_pf.size);
+		}
 	}
 
 	if (adapt->flags & AMDGV_FLAG_USE_PF) {
@@ -963,7 +920,7 @@ static void amdgv_vfmgr_remove_inactive_vfs(struct amdgv_adapter *adapt)
 			continue;
 
 		if (!is_unavail_vf(idx_vf) && !is_avail_vf(idx_vf)) {
-			AMDGV_WARN("Active VFs detected. Report bug\n");
+			AMDGV_WARN("Active VFs detected.\n");
 			continue;
 		}
 
@@ -1050,6 +1007,8 @@ static void amdgv_vfmgr_remove_configured_vfs(struct amdgv_adapter *adapt)
 
 		/* set its framebuffer to 0 */
 		amdgv_gpuiov_set_vf_fb(adapt, idx_vf, 0, 0);
+
+		amdgv_memmgr_fini(adapt, &adapt->array_vf[idx_vf].memmgr_vf);
 	}
 }
 
@@ -1105,6 +1064,8 @@ amdgv_ras_block_to_sriov(enum amdgv_ras_block block)
 		return RAS_TELEMETRY_GPU_BLOCK_IH;
 	case (AMDGV_RAS_BLOCK__MPIO):
 		return RAS_TELEMETRY_GPU_BLOCK_MPIO;
+	case (AMDGV_RAS_BLOCK__MMSCH):
+		return RAS_TELEMETRY_GPU_BLOCK_MMSCH;
 	default:
 		return RAS_TELEMETRY_GPU_BLOCK_COUNT;
 	}
@@ -1162,7 +1123,7 @@ int amdgv_vfmgr_dump_ras_error_counts(struct amdgv_adapter *adapt, uint32_t idx_
 					0, 0);
 
 	ret = amdgv_vfmgr_copy_to_vf_fb(adapt, idx_vf,
-					KBYTES_TO_BYTES(AMD_SRIOV_MSG_RAS_TELEMETRY_OFFSET_KB),
+					GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, RAS_TELEMETRY),
 					telemetry, sizeof(*telemetry));
 
 fail:
@@ -1196,7 +1157,7 @@ static bool amdgv_vfmgr_cper_is_section_allowed(struct amdgv_adapter *adapt, uin
 	if (sriov_blk >= RAS_TELEMETRY_GPU_BLOCK_COUNT)
 		return false;
 
-	return (adapt->array_vf[idx_vf].ras.caps.all) & BIT64(sriov_blk);
+	return (adapt->array_vf[idx_vf].ras.caps.all) & (uint32_t)BIT64(sriov_blk);
 }
 
 static void amdgv_vfmgr_cper_get_allowed_list(struct amdgv_adapter *adapt, uint32_t idx_vf,
@@ -1253,7 +1214,7 @@ int amdgv_vfmgr_dump_cpers(struct amdgv_adapter *adapt, uint32_t idx_vf, uint64_
 	uint64_t wptr = adapt->cper.wptr;
 	uint64_t buf_offset =  offsetof(struct amdsriov_ras_telemetry, body.cper_dump) +
 			       offsetof(struct amd_sriov_ras_cper_dump, buf);
-	uint64_t fb_offset = KBYTES_TO_BYTES(AMD_SRIOV_MSG_RAS_TELEMETRY_OFFSET_KB) +
+	uint64_t fb_offset = GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, RAS_TELEMETRY) +
 			     buf_offset;
 
 
@@ -1275,14 +1236,14 @@ int amdgv_vfmgr_dump_cpers(struct amdgv_adapter *adapt, uint32_t idx_vf, uint64_
 			continue;
 
 		if (cper_hdr->record_length >
-		    KBYTES_TO_BYTES(AMD_SRIOV_RAS_TELEMETRY_SIZE_KB) - buf_offset) {
+		    KBYTES_TO_BYTES(GET_VF_TABLE_SIZE_KB_BY_ID(adapt, idx_vf, RAS_TELEMETRY)) - buf_offset) {
 			AMDGV_ERROR("CPER%d Cannot fit in RAS Telemetry region!\n", rptr);
 			continue;
 		}
 
 		/* Next entry doesn't fit */
-		if ((fb_offset - KBYTES_TO_BYTES(AMD_SRIOV_MSG_RAS_TELEMETRY_OFFSET_KB) +
-		    cper_hdr->record_length) > KBYTES_TO_BYTES(AMD_SRIOV_RAS_TELEMETRY_SIZE_KB))
+		if ((fb_offset - GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, RAS_TELEMETRY) +
+		    cper_hdr->record_length) > KBYTES_TO_BYTES(GET_VF_TABLE_SIZE_KB_BY_ID(adapt, idx_vf, RAS_TELEMETRY)))
 			break;
 
 		if (amdgv_vfmgr_cper_copy_to_vf(adapt, idx_vf,
@@ -1302,12 +1263,12 @@ int amdgv_vfmgr_dump_cpers(struct amdgv_adapter *adapt, uint32_t idx_vf, uint64_
 	hdr.checksum  += amd_sriov_msg_checksum(&cper_dump,
 					       offsetof(struct amd_sriov_ras_cper_dump, buf),
 					       0, 0);
-	hdr.used_size =  fb_offset - sizeof(struct amd_sriov_ras_telemetry_header) -
-			KBYTES_TO_BYTES(AMD_SRIOV_MSG_RAS_TELEMETRY_OFFSET_KB);
+	hdr.used_size = (uint32_t) (fb_offset - sizeof(struct amd_sriov_ras_telemetry_header) -
+			GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, RAS_TELEMETRY));
 
 	/* Copy static sized cper_dump fields */
 	ret = amdgv_vfmgr_copy_to_vf_fb(adapt, idx_vf,
-					KBYTES_TO_BYTES(AMD_SRIOV_MSG_RAS_TELEMETRY_OFFSET_KB) +
+					GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, RAS_TELEMETRY) +
 					sizeof(struct amd_sriov_ras_telemetry_header),
 					&cper_dump,
 					offsetof(struct amd_sriov_ras_cper_dump, buf));
@@ -1315,7 +1276,7 @@ int amdgv_vfmgr_dump_cpers(struct amdgv_adapter *adapt, uint32_t idx_vf, uint64_
 	/* Copy header */
 	if (!ret)
 		ret = amdgv_vfmgr_copy_to_vf_fb(adapt, idx_vf,
-					KBYTES_TO_BYTES(AMD_SRIOV_MSG_RAS_TELEMETRY_OFFSET_KB),
+					GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, RAS_TELEMETRY),
 					&hdr,
 					sizeof(struct amd_sriov_ras_telemetry_header));
 
@@ -1356,6 +1317,41 @@ int amdgv_vfmgr_cper_notify_event(struct amdgv_adapter *adapt, enum amdgv_vfmgr_
 	}
 
 	return 0;
+}
+
+int amdgv_vfmgr_ras_vf_chk_criti_region(struct amdgv_adapter *adapt, uint32_t idx_vf, uint64_t addr)
+{
+	struct amdsriov_ras_telemetry *telemetry = NULL;
+	uint32_t hit;
+	int ret;
+
+	telemetry = oss_zalloc(sizeof(*telemetry));
+	if (!telemetry) {
+		amdgv_put_error(AMDGV_PF_IDX,
+				AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+				sizeof(*telemetry));
+		return AMDGV_FAILURE;
+	}
+
+	ret = amdgv_umc_vf_chk_critical_region(adapt, addr, idx_vf, &hit);
+	if (ret)
+		goto fail;
+
+	telemetry->body.chk_criti.hit = hit;
+	telemetry->header.used_size = sizeof(struct amd_sriov_ras_chk_criti);
+	telemetry->header.checksum = amd_sriov_msg_checksum(
+					&telemetry->body,
+					sizeof(struct amd_sriov_ras_chk_criti),
+					0, 0);
+
+	ret = amdgv_vfmgr_copy_to_vf_fb(adapt, idx_vf,
+					GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, RAS_TELEMETRY),
+					telemetry, sizeof(*telemetry));
+
+fail:
+	oss_free(telemetry);
+
+	return ret;
 }
 
 int amdgv_vfmgr_sw_init(struct amdgv_adapter *adapt)
@@ -1416,6 +1412,8 @@ int amdgv_vfmgr_sw_fini(struct amdgv_adapter *adapt)
 int amdgv_vfmgr_hw_init(struct amdgv_adapter *adapt)
 {
 	uint32_t idx_vf;
+	uint32_t has_bps = 0;
+	int ret = 0;
 	struct amdgv_vf_device *entry;
 
 	if (!in_whole_gpu_reset()) {
@@ -1434,18 +1432,63 @@ int amdgv_vfmgr_hw_init(struct amdgv_adapter *adapt)
 	/* write pf fb settings to hardware */
 	amdgv_vfmgr_set_pf_fb(adapt);
 
+	/* retrieve bad pages before querying eeprom for bad pages */
+	if (!in_whole_gpu_reset())
+		amdgv_umc_retrieve_bad_pages(adapt);
+
 	/* write all vf fb settings to hardware */
 	for (idx_vf = 0; idx_vf < adapt->num_vf; idx_vf++) {
 		if (!adapt->array_vf[idx_vf].configured)
 			continue;
 		amdgv_vfmgr_set_vf_fb(adapt, idx_vf);
-	}
 
-	if (!in_whole_gpu_reset())
-		amdgv_umc_retrieve_bad_pages(adapt);
+		if (in_whole_gpu_reset() && adapt->umc.is_pmfw_managed_eeprom) {
+			/* recheck tables, if bp falls in any of them, set the VF and all peers to
+			 * conditionally available state. */
+			ret = amdgv_vfmgr_check_existing_bps_in_crit_region(adapt, idx_vf, &has_bps);
+
+			if (ret) {
+				AMDGV_ERROR("Failed to check bps in critical regions on VF%d!\n", idx_vf);
+				return AMDGV_FAILURE;
+			}
+
+			adapt->array_vf[idx_vf].host_crit_region_caps =
+				has_bps ? adapt->array_vf[idx_vf].host_crit_region_caps & ~BIT(0) :
+				adapt->array_vf[idx_vf].host_crit_region_caps;
+
+			if (has_bps) {
+				AMDGV_ERROR("A bad page was found in critical regions on VF%d!\n", idx_vf);
+				amdgv_sched_queue_set_vf_cond_avail(adapt, idx_vf);
+			}
+		} else if (adapt->umc.is_pmfw_managed_eeprom) {
+			/* init host dynamic table capability */
+			adapt->array_vf[idx_vf].host_crit_region_caps = 0b11;
+
+			/* Init v1 crit region at first to determine if we can support v2 */
+			adapt->array_vf[idx_vf].vf_crit_region = GPU_CRIT_REGION_V1;
+			amdgv_vfmgr_init_crit_region(adapt, idx_vf);
+
+			ret = amdgv_vfmgr_check_existing_bps_in_crit_region(adapt, idx_vf, &has_bps);
+			if (ret) {
+				AMDGV_ERROR("Failed to check bps in critical regions on VF%d!\n", idx_vf);
+				return AMDGV_FAILURE;
+			} else {
+				adapt->array_vf[idx_vf].host_crit_region_caps =
+					has_bps ? adapt->array_vf[idx_vf].host_crit_region_caps & ~BIT(0) :
+					adapt->array_vf[idx_vf].host_crit_region_caps;
+			}
+		} else {
+			adapt->array_vf[idx_vf].host_crit_region_caps = 0b1;
+			adapt->array_vf[idx_vf].vf_crit_region = GPU_CRIT_REGION_V1;
+			amdgv_vfmgr_init_crit_region(adapt, idx_vf);
+		}
+	}
 
 	if (adapt->ffbm.enabled)
 		amdgv_ffbm_reserve_all_bad_pages(adapt);
+
+	if (amdgv_ras_eeprom_is_gpu_bad(adapt))
+		amdgv_device_handle_bad_gpu(adapt);
 
 	if (in_whole_gpu_reset()) {
 		return 0;
@@ -1840,7 +1883,8 @@ int amdgv_vfmgr_copy_to_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, uint
 	uint64_t vf_fb_offset = MBYTES_TO_BYTES(entry->fb_offset);
 	int ret = 0;
 
-	if (!entry->configured || entry->dev == AMDGV_INVALID_HANDLE)
+	if (!entry->configured ||
+		(!(adapt->flags & AMDGV_FLAG_ENABLE_SVM) && entry->dev == AMDGV_INVALID_HANDLE))
 		return AMDGV_FAILURE;
 
 	if (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM))
@@ -1868,7 +1912,8 @@ int amdgv_vfmgr_copy_from_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, ui
 	uint64_t vf_fb_offset = MBYTES_TO_BYTES(entry->fb_offset);
 	int ret = 0;
 
-	if (!entry->configured || entry->dev == AMDGV_INVALID_HANDLE)
+	if (!entry->configured ||
+		(!(adapt->flags & AMDGV_FLAG_ENABLE_SVM) && entry->dev == AMDGV_INVALID_HANDLE))
 		return AMDGV_FAILURE;
 
 	if (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM))
@@ -1899,7 +1944,7 @@ int amdgv_vfmgr_copy_bp_entry_to_vf_fb(struct amdgv_adapter *adapt, uint32_t idx
 	if (!entry->configured)
 		return AMDGV_FAILURE;
 
-	start_offset = KBYTES_TO_BYTES(AMD_SRIOV_MSG_BAD_PAGE_OFFSET_KB);
+	start_offset = GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, BAD_PAGE_INFO);
 
 	/* translate retired page in VF view */
 	retired_page = retired_page - (MBYTES_TO_BYTES(entry->fb_offset) >> AMDGV_GPU_PAGE_SHIFT);
@@ -1962,6 +2007,8 @@ static int amdgv_vfmgr_update_vf2vf_ras_caps(struct amdgv_adapter *adapt,
 		pf2vf_msg->ras_en_caps.bits.block_ih = 1;
 	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__MPIO))
 		pf2vf_msg->ras_en_caps.bits.block_mpio = 1;
+	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__MMSCH))
+		pf2vf_msg->ras_en_caps.bits.block_mmsch = 1;
 
 	if (adapt->ecc.supported & BIT(AMDGV_RAS_POISON_ECC_SUPPORT))
 		pf2vf_msg->ras_en_caps.bits.poison_propogation_mode = 1;
@@ -2008,6 +2055,307 @@ static int amdgv_vfmgr_update_vf2vf_ras_caps(struct amdgv_adapter *adapt,
 	return 0;
 }
 
+static bool amdgv_vfmgr_check_bp_in_v1_crit_region(struct amdgv_adapter *adapt, uint32_t idx_vf,
+						   uint64_t err_addr)
+{
+	uint64_t fb_size, fb_offset;
+	uint64_t vf_fb_offset = MBYTES_TO_BYTES(adapt->array_vf[idx_vf].fb_offset);
+
+	/* check bp whether in vbios and data exchange region */
+	fb_offset = vf_fb_offset + GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, VBIOS_IMG);
+	fb_size = GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, DATAEXCHANGE) +
+	    	  KBYTES_TO_BYTES(GET_VF_TABLE_SIZE_KB_BY_ID(adapt, idx_vf, DATAEXCHANGE));
+
+	if (adapt->gpuiov.funcs->adjust_fb_size) {
+		fb_size = adapt->gpuiov.funcs->adjust_fb_size(adapt, idx_vf, fb_size);
+	}
+
+	if (BP_IN_RANGE(err_addr, fb_offset, fb_size))
+		return true;
+
+	/* check bp whether in vf ip discovery data block region */
+	fb_offset = vf_fb_offset + GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, IPD);
+	fb_size = KBYTES_TO_BYTES(GET_VF_TABLE_SIZE_KB_BY_ID(adapt, idx_vf, IPD));
+	if (BP_IN_RANGE(err_addr, fb_offset, fb_size))
+		return true;
+
+	return false;
+}
+
+static bool amdgv_vfmgr_check_bp_in_v2_crit_region(struct amdgv_adapter *adapt, uint32_t idx_vf,
+						   uint64_t err_addr)
+{
+	uint32_t tb_idx = 0;
+
+	for (tb_idx = 0; tb_idx < AMD_SRIOV_MSG_MAX_TABLE_ID; tb_idx++) {
+		if (BP_IN_RANGE(err_addr, MBYTES_TO_BYTES(adapt->array_vf[idx_vf].fb_offset) +
+				GET_VF_TABLE_OFFSET(adapt, idx_vf, tb_idx),
+				KBYTES_TO_BYTES(GET_VF_TABLE_SIZE_KB(adapt, idx_vf, tb_idx))))
+			return true;
+	}
+
+	return false;
+}
+
+bool amdgv_vfmgr_check_bp_in_crit_region(struct amdgv_adapter *adapt, uint32_t idx_vf,
+					 uint64_t err_addr)
+{
+	if (adapt->array_vf[idx_vf].vf_crit_region == GPU_CRIT_REGION_V2)
+		return amdgv_vfmgr_check_bp_in_v2_crit_region(adapt, idx_vf, err_addr);
+	else
+		return amdgv_vfmgr_check_bp_in_v1_crit_region(adapt, idx_vf, err_addr);
+
+}
+
+int amdgv_vfmgr_check_existing_bps_in_crit_region(struct amdgv_adapter *adapt, uint32_t idx_vf,
+	uint32_t *has_bps)
+{
+	struct ras_err_handler_data *data = adapt->ecc.eh_data;
+	uint64_t *bp_offsets = NULL;
+	uint32_t i = 0;
+	int ret = 0;
+
+	if (has_bps == NULL)
+		return AMDGV_FAILURE;
+
+	if (!data->count) {
+		AMDGV_INFO("No bad pages found on idx_vf %d\n", idx_vf);
+		*has_bps = false;
+		return ret;
+	}
+
+	if (amdgv_umc_fetch_and_sort_bps(adapt, &bp_offsets))
+		return AMDGV_FAILURE;
+
+	for (i = 0; i < data->count; i++) {
+		if (amdgv_vfmgr_check_bp_in_crit_region(adapt, idx_vf, bp_offsets[i])) {
+			*has_bps = 1;
+			goto free_offsets;
+		}
+	}
+
+	*has_bps = 0;
+
+free_offsets:
+	oss_free(bp_offsets);
+	return ret;
+}
+
+static int amdgv_vfmgr_init_v1_crit_region(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	SET_VF_TABLE_SIZE_KB(adapt, idx_vf, AMD_SRIOV_MSG_VBIOS_IMG_TABLE_ID,
+		AMD_SRIOV_MSG_VBIOS_SIZE_KB_V1);
+	SET_VF_TABLE_SIZE_KB(adapt, idx_vf, AMD_SRIOV_MSG_RAS_TELEMETRY_TABLE_ID,
+		AMD_SRIOV_MSG_RAS_TELEMETRY_SIZE_KB_V1);
+	SET_VF_TABLE_SIZE_KB(adapt, idx_vf, AMD_SRIOV_MSG_IPD_TABLE_ID,
+		TO_KBYTES(AMDGV_IP_DISCOVERY_SIZE));
+	SET_VF_TABLE_SIZE_KB(adapt, idx_vf, AMD_SRIOV_MSG_DATAEXCHANGE_TABLE_ID,
+		AMD_SRIOV_MSG_DATAEXCHANGE_SIZE_KB_V1);
+	SET_VF_TABLE_SIZE_KB(adapt, idx_vf, AMD_SRIOV_MSG_BAD_PAGE_INFO_TABLE_ID,
+		AMD_SRIOV_MSG_BAD_PAGE_SIZE_KB_V1);
+
+	SET_VF_TABLE_OFFSET(adapt, idx_vf, AMD_SRIOV_MSG_VBIOS_IMG_TABLE_ID,
+		KBYTES_TO_BYTES(AMD_SRIOV_MSG_VBIOS_OFFSET_V1));
+	SET_VF_TABLE_OFFSET(adapt, idx_vf, AMD_SRIOV_MSG_RAS_TELEMETRY_TABLE_ID,
+		KBYTES_TO_BYTES(AMD_SRIOV_MSG_RAS_TELEMETRY_OFFSET_KB_V1));
+	SET_VF_TABLE_OFFSET(adapt, idx_vf, AMD_SRIOV_MSG_IPD_TABLE_ID,
+		MBYTES_TO_BYTES(adapt->array_vf[idx_vf].real_fb_size) - AMDGV_IP_DISCOVERY_OFFSET);
+	SET_VF_TABLE_OFFSET(adapt, idx_vf, AMD_SRIOV_MSG_DATAEXCHANGE_TABLE_ID,
+		KBYTES_TO_BYTES(AMD_SRIOV_MSG_DATAEXCHANGE_OFFSET_KB_V1));
+	SET_VF_TABLE_OFFSET(adapt, idx_vf, AMD_SRIOV_MSG_BAD_PAGE_INFO_TABLE_ID,
+		KBYTES_TO_BYTES(AMD_SRIOV_MSG_BAD_PAGE_OFFSET_KB_V1));
+
+	return 0;
+}
+
+static void amdgv_vfmgr_init_v2_crit_region_table_sizes(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	SET_VF_TABLE_SIZE_KB(adapt, idx_vf, AMD_SRIOV_MSG_INITD_H_TABLE_ID,
+		AMDGV_INIT_DATA_HEADER_SIZE_KB_V2);
+	SET_VF_TABLE_SIZE_KB(adapt, idx_vf, AMD_SRIOV_MSG_VBIOS_IMG_TABLE_ID,
+		AMD_SRIOV_MSG_VBIOS_SIZE_KB_V1);
+	SET_VF_TABLE_SIZE_KB(adapt, idx_vf, AMD_SRIOV_MSG_RAS_TELEMETRY_TABLE_ID,
+		AMD_SRIOV_MSG_RAS_TELEMETRY_SIZE_KB_V1);
+	SET_VF_TABLE_SIZE_KB(adapt, idx_vf, AMD_SRIOV_MSG_IPD_TABLE_ID,
+		TO_KBYTES(AMDGV_IP_DISCOVERY_SIZE));
+	SET_VF_TABLE_SIZE_KB(adapt, idx_vf, AMD_SRIOV_MSG_DATAEXCHANGE_TABLE_ID,
+		AMDGV_DATAEXCHANGE_SIZE_KB_V2);
+	SET_VF_TABLE_SIZE_KB(adapt, idx_vf, AMD_SRIOV_MSG_BAD_PAGE_INFO_TABLE_ID,
+		AMD_SRIOV_MSG_BAD_PAGE_SIZE_KB_V1);
+}
+
+static enum amdgv_mem_id amdgv_vfmgr_table_id_to_memmgr_id(enum amd_sriov_msg_table_id_enum id)
+{
+	switch (id) {
+	case AMD_SRIOV_MSG_INITD_H_TABLE_ID:
+		return MEM_VF_INITD_H_TABLE;
+	case AMD_SRIOV_MSG_IPD_TABLE_ID:
+		return MEM_VF_IPD_TABLE;
+	case AMD_SRIOV_MSG_VBIOS_IMG_TABLE_ID:
+		return MEM_VF_VBIOS_IMG;
+	case AMD_SRIOV_MSG_RAS_TELEMETRY_TABLE_ID:
+		return MEM_VF_RAS_TELEMETRY_TABLE;
+	case AMD_SRIOV_MSG_DATAEXCHANGE_TABLE_ID:
+		return MEM_VF_DATAEXCHANGE_TABLE;
+	case AMD_SRIOV_MSG_BAD_PAGE_INFO_TABLE_ID:
+		return MEM_VF_BAD_PAGE_INFO_TABLE;
+
+	default:
+		return MEM_ID_UNKNOWN;
+	}
+}
+
+static const char *amdgv_vfmgr_table_name(enum amd_sriov_msg_table_id_enum id)
+{
+	switch (id) {
+	case AMD_SRIOV_MSG_INITD_H_TABLE_ID:
+		return "MEM_VF_INITD_H_TABLE";
+	case AMD_SRIOV_MSG_IPD_TABLE_ID:
+		return "MEM_VF_IPD_TABLE";
+	case AMD_SRIOV_MSG_VBIOS_IMG_TABLE_ID:
+		return "MEM_VF_VBIOS_IMG";
+	case AMD_SRIOV_MSG_RAS_TELEMETRY_TABLE_ID:
+		return "MEM_VF_RAS_TELEMETRY_TABLE";
+	case AMD_SRIOV_MSG_DATAEXCHANGE_TABLE_ID:
+		return "MEM_VF_DATAEXCHANGE_TABLE";
+	case AMD_SRIOV_MSG_BAD_PAGE_INFO_TABLE_ID:
+		return "MEM_VF_BAD_PAGE_INFO_TABLE";
+
+	default:
+		return "MEM_ID_UNKNOWN";
+	}
+}
+
+static int amdgv_vfmgr_init_v2_crit_region_tables(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	uint64_t *bp_offsets = NULL;
+	uint64_t fb_offset;
+	uint64_t tb_offset;
+	struct ras_err_handler_data *data = adapt->ecc.eh_data;
+	int ret = 0, bp_idx = 0, tb_idx = 0;
+	struct amdgv_memmgr_mem *alloc = NULL;
+
+	amdgv_vfmgr_init_v2_crit_region_table_sizes(adapt, idx_vf);
+	fb_offset = MBYTES_TO_BYTES(adapt->array_vf[idx_vf].fb_offset);
+
+	/* Allocate a memory manager for the VF new critical region (incl. bad pages) */
+	if (amdgv_memmgr_init(adapt, &adapt->array_vf[idx_vf].memmgr_vf, fb_offset,
+			      AMDGV_V2_CRIT_REGION_SIZE_BYTES, 0, false)) {
+		AMDGV_ERROR("Failed to init vf critical region memory manager\n");
+		return AMDGV_FAILURE;
+	}
+
+	if (amdgv_umc_fetch_and_sort_bps(adapt, &bp_offsets))
+		return AMDGV_FAILURE;
+
+	for (bp_idx = 0; bp_idx < data->count; bp_idx++) {
+		if (bp_offsets[bp_idx] + PAGE_SIZE < fb_offset)
+			continue;
+		else if (bp_offsets[bp_idx] >= fb_offset + adapt->array_vf[idx_vf].fb_size)
+			break;
+
+		alloc = amdgv_memmgr_alloc_align_at(&adapt->array_vf[idx_vf].memmgr_vf,
+						    bp_offsets[bp_idx], PAGE_SIZE,
+						    MEM_ECC_BAD_PAGE);
+		if (!alloc) {
+			AMDGV_ERROR("Allocate bad page into VF critical region failed!\n");
+
+			ret = AMDGV_FAILURE;
+			goto free_offsets;
+		}
+	}
+
+	for (tb_idx = 0; tb_idx < AMD_SRIOV_MSG_MAX_TABLE_ID; tb_idx++) {
+		alloc = amdgv_memmgr_alloc(&adapt->array_vf[idx_vf].memmgr_vf,
+					   KBYTES_TO_BYTES(GET_VF_TABLE_SIZE_KB(adapt, idx_vf, tb_idx)),
+					   amdgv_vfmgr_table_id_to_memmgr_id(tb_idx));
+		if (!alloc) {
+			AMDGV_ERROR("Dynamic allocation of VF table failed!\n");
+
+			ret = AMDGV_FAILURE;
+			goto free_offsets;
+		}
+
+		tb_offset = alloc->alloc_off - fb_offset -
+			    KBYTES_TO_BYTES(GET_VF_TABLE_SIZE_KB(adapt, idx_vf, tb_idx));
+
+		SET_VF_TABLE_OFFSET(adapt, idx_vf, tb_idx, tb_offset);
+		AMDGV_INFO("V2 critical region init: set %s offset: 0x%lx size: 0x%lx\n",
+			   amdgv_vfmgr_table_name(tb_idx), tb_offset,
+			   KBYTES_TO_BYTES(GET_VF_TABLE_SIZE_KB(adapt, idx_vf, tb_idx)));
+	}
+
+free_offsets:
+	oss_free(bp_offsets);
+
+	return ret;
+}
+
+static uint8_t amdgv_vfmgr_calc_checksum(uint8_t *buf_start, uint8_t *buf_end)
+{
+	uint32_t sum = 0;
+
+	if (buf_start >= buf_end)
+		return 0;
+
+	for (; buf_start < buf_end; buf_start++) {
+		sum += buf_start[0];
+	}
+
+	return 0xffffffff - sum;
+}
+
+static int amdgv_vfmgr_init_v2_crit_region(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	int ret;
+	struct amd_sriov_msg_init_data_header hdr = {0};
+
+	ret = amdgv_vfmgr_init_v2_crit_region_tables(adapt, idx_vf);
+	if (ret)
+		return ret;
+
+	hdr.signature[0]	= 'I';
+	hdr.signature[1]	= 'N';
+	hdr.signature[2]	= 'D';
+	hdr.signature[3]	= 'A';
+	hdr.version = adapt->array_vf[idx_vf].vf_crit_region;
+	hdr.initdata_offset = AMDGV_V2_CRIT_REGION_OFFSET;
+	hdr.initdata_size_in_kb = TO_KBYTES(AMDGV_V2_CRIT_REGION_SIZE_BYTES);
+	hdr.valid_tables = 1 << AMD_SRIOV_MSG_INITD_H_TABLE_ID |
+			   1 << AMD_SRIOV_MSG_VBIOS_IMG_TABLE_ID |
+			   1 << AMD_SRIOV_MSG_RAS_TELEMETRY_TABLE_ID |
+			   1 << AMD_SRIOV_MSG_IPD_TABLE_ID |
+			   1 << AMD_SRIOV_MSG_DATAEXCHANGE_TABLE_ID;
+	hdr.vbios_img_offset = GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, VBIOS_IMG);
+	hdr.vbios_img_size_in_kb = GET_VF_TABLE_SIZE_KB_BY_ID(adapt, idx_vf, VBIOS_IMG);
+	hdr.dataexchange_offset = GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, DATAEXCHANGE);
+	hdr.dataexchange_size_in_kb = GET_VF_TABLE_SIZE_KB_BY_ID(adapt, idx_vf, DATAEXCHANGE);
+	hdr.ras_tele_info_offset = GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, RAS_TELEMETRY);
+	hdr.ras_tele_info_size_in_kb = GET_VF_TABLE_SIZE_KB_BY_ID(adapt, idx_vf, RAS_TELEMETRY);
+	hdr.ip_discovery_offset = GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, IPD);
+	hdr.ip_discovery_size_in_kb = GET_VF_TABLE_SIZE_KB_BY_ID(adapt, idx_vf, IPD);
+	hdr.bad_page_info_offset = GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, BAD_PAGE_INFO);
+	hdr.bad_page_size_in_kb = GET_VF_TABLE_SIZE_KB_BY_ID(adapt, idx_vf, BAD_PAGE_INFO);
+	hdr.checksum = 0;
+	hdr.checksum = amdgv_vfmgr_calc_checksum((uint8_t *)&(hdr.initdata_offset),
+						 (uint8_t *)&(hdr) + sizeof(struct amd_sriov_msg_init_data_header));
+
+	AMDGV_INFO("update v2 critical region init header checksum to 0x%02x \n", hdr.checksum);
+
+	ret = amdgv_vfmgr_copy_to_vf_fb(adapt, idx_vf, GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, INITD_H),
+					&hdr, sizeof(struct amd_sriov_msg_init_data_header));
+
+	return ret;
+}
+
+int amdgv_vfmgr_init_crit_region(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	if (adapt->array_vf[idx_vf].vf_crit_region == GPU_CRIT_REGION_V2)
+		return amdgv_vfmgr_init_v2_crit_region(adapt, idx_vf);
+	else
+		return amdgv_vfmgr_init_v1_crit_region(adapt, idx_vf);
+}
+
 static int amdgv_vfmgr_update_pf2vf_bad_pages(struct amdgv_adapter *adapt,
 					      struct amd_sriov_msg_pf2vf_info *pf2vf_msg,
 					      uint32_t idx_vf)
@@ -2018,7 +2366,7 @@ static int amdgv_vfmgr_update_pf2vf_bad_pages(struct amdgv_adapter *adapt,
 		return 0;
 
 	amdgv_umc_copy_bp_records_to_vf(adapt, idx_vf,
-					KBYTES_TO_BYTES(AMD_SRIOV_MSG_BAD_PAGE_SIZE_KB),
+					KBYTES_TO_BYTES(GET_VF_TABLE_SIZE_KB_BY_ID(adapt, idx_vf, BAD_PAGE_INFO)),
 					&pf2vf_msg->bp_block_size,
 					&tmp_more_bp);
 
@@ -2029,9 +2377,9 @@ static int amdgv_vfmgr_update_pf2vf_bad_pages(struct amdgv_adapter *adapt,
 	pf2vf_msg->more_bp = false;
 
 	pf2vf_msg->bp_block_offset_low =
-			KBYTES_TO_BYTES(AMD_SRIOV_MSG_BAD_PAGE_OFFSET_KB) & 0xFFFFFFFF;
+			GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, BAD_PAGE_INFO) & 0xFFFFFFFF;
 	pf2vf_msg->bp_block_offset_high =
-		(KBYTES_TO_BYTES(AMD_SRIOV_MSG_BAD_PAGE_OFFSET_KB) >> 32) & 0xFFFFFFFF;
+		(GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, BAD_PAGE_INFO) >> 32) & 0xFFFFFFFF;
 
 	return 0;
 }
@@ -2149,7 +2497,7 @@ int amdgv_vfmgr_update_pf2vf_message(struct amdgv_adapter *adapt, uint32_t idx_v
 		pf2vf_msg, sizeof(struct amd_sriov_msg_pf2vf_info), 0, 0);
 
 	ret = amdgv_vfmgr_copy_to_vf_fb(adapt, idx_vf,
-					KBYTES_TO_BYTES(AMD_SRIOV_MSG_PF2VF_OFFSET_KB),
+					GET_PF2VF_OFFSET(adapt, idx_vf),
 					pf2vf_msg, sizeof(struct amd_sriov_msg_pf2vf_info));
 
 	if (ret == 0) {
@@ -2190,8 +2538,8 @@ int amdgv_vfmgr_retrieve_vf2pf_message(struct amdgv_adapter *adapt, uint32_t idx
 
 retry:
 	ret = amdgv_vfmgr_copy_from_vf_fb(adapt, idx_vf,
-			KBYTES_TO_BYTES(AMD_SRIOV_MSG_VF2PF_OFFSET_KB),
-			vf2pf_msg, sizeof(struct amd_sriov_msg_vf2pf_info));
+			GET_VF2PF_OFFSET(adapt, idx_vf),
+		vf2pf_msg, sizeof(struct amd_sriov_msg_vf2pf_info));
 
 	if (ret == 0) {
 		vf2pf_version = vf2pf_msg->header.version;
@@ -2207,7 +2555,7 @@ retry:
 			goto retry;
 		}
 
-		if (vf2pf_size > KBYTES_TO_BYTES(AMD_SRIOV_MSG_SIZE_KB) ||
+		if (vf2pf_size > KBYTES_TO_BYTES(GET_VF2PF_SIZE_KB(adapt, idx_vf)) ||
 		    amd_sriov_msg_checksum(vf2pf_msg, vf2pf_size, msg_key, checksum) != checksum) {
 			AMDGV_ERROR("Untrustworthy guest information in VF2PF msg. Drop request\n");
 			return AMDGV_FAILURE;
@@ -2493,6 +2841,7 @@ enum amdgv_live_info_status amdgv_vfmgr_export_live_data(struct amdgv_adapter *a
 		vf_info[idx_live_data].vf_status = adapt->array_vf[idx_vf].vf_status;
 		vf_info[idx_live_data].gpu_init_data_ready =
 			adapt->array_vf[idx_vf].gpu_init_data_ready;
+		vf_info[idx_live_data].real_fb_size = adapt->array_vf[idx_vf].real_fb_size;
 
 		/* We now need to save each hw_sched info individually as some asics
 		 * may have multiple hw schedulers of same type
@@ -2508,6 +2857,7 @@ enum amdgv_live_info_status amdgv_vfmgr_export_live_data(struct amdgv_adapter *a
 		vf_info[idx_live_data].state = adapt->sched.array_vf[idx_vf].state;
 		vf_info[idx_live_data].reset_notify_vf_pending =
 			adapt->array_vf[idx_vf].reset_notify_vf_pending;
+		vf_info[idx_live_data].is_cond_avail = adapt->sched.array_vf[idx_vf].is_cond_avail;
 
 		if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_UPDATE)) {
 			if (idx_vf != AMDGV_PF_IDX && adapt->array_vf[idx_vf].res_mapped) {
@@ -2519,6 +2869,17 @@ enum amdgv_live_info_status amdgv_vfmgr_export_live_data(struct amdgv_adapter *a
 		if (idx_vf != AMDGV_PF_IDX) {
 			oss_put_dev(adapt->array_vf[idx_vf].dev);
 			adapt->array_vf[idx_vf].dev = AMDGV_INVALID_HANDLE;
+
+			oss_memcpy(&vf_info[idx_live_data].crit_region_data.vf_table_offsets,
+				   &adapt->array_vf[idx_vf].vf_table_offsets,
+				   sizeof(adapt->array_vf[idx_vf].vf_table_offsets));
+			oss_memcpy(&vf_info[idx_live_data].crit_region_data.vf_table_sizes_kb,
+				   &adapt->array_vf[idx_vf].vf_table_sizes_kb,
+				   sizeof(adapt->array_vf[idx_vf].vf_table_sizes_kb));
+			vf_info[idx_live_data].crit_region_data.vf_crit_region = adapt->array_vf[idx_vf].vf_crit_region;
+			vf_info[idx_live_data].crit_region_data.host_crit_region_caps = adapt->array_vf[idx_vf].host_crit_region_caps;
+			vf_info[idx_live_data].crit_region_data.guest_crit_region_caps = adapt->array_vf[idx_vf].guest_crit_region_caps;
+			vf_info[idx_live_data].crit_region_data.guest_gpu_init_flags = adapt->array_vf[idx_vf].guest_gpu_init_flags;
 		}
 	}
 
@@ -2542,8 +2903,19 @@ enum amdgv_live_info_status amdgv_vfmgr_import_live_data(struct amdgv_adapter *a
 		if (idx_vf == AMDGV_PF_IDX) {
 			adapt->array_vf[idx_vf].dev = adapt->dev;
 			adapt->array_vf[idx_vf].idx_vf = AMDGV_PF_IDX;
-		} else
+		} else {
 			adapt->array_vf[idx_vf].dev = oss_get_dev_from_bdf(adapt->array_vf[idx_vf].bdf);
+			oss_memcpy(&adapt->array_vf[idx_vf].vf_table_offsets,
+				   &vf_info[idx_live_data].crit_region_data.vf_table_offsets,
+				   sizeof(adapt->array_vf[idx_vf].vf_table_offsets));
+			oss_memcpy(&adapt->array_vf[idx_vf].vf_table_sizes_kb,
+				   &vf_info[idx_live_data].crit_region_data.vf_table_sizes_kb,
+				   sizeof(adapt->array_vf[idx_vf].vf_table_sizes_kb));
+			adapt->array_vf[idx_vf].vf_crit_region = vf_info[idx_live_data].crit_region_data.vf_crit_region;
+			adapt->array_vf[idx_vf].host_crit_region_caps = vf_info[idx_live_data].crit_region_data.host_crit_region_caps;
+			adapt->array_vf[idx_vf].guest_crit_region_caps = vf_info[idx_live_data].crit_region_data.guest_crit_region_caps;
+			adapt->array_vf[idx_vf].guest_gpu_init_flags = vf_info[idx_live_data].crit_region_data.guest_gpu_init_flags;
+		}
 
 		adapt->array_vf[idx_vf].configured = vf_info[idx_live_data].configured;
 		adapt->array_vf[idx_vf].mm_bandwidth[AMDGV_HEVC_ENGINE] =
@@ -2585,6 +2957,8 @@ enum amdgv_live_info_status amdgv_vfmgr_import_live_data(struct amdgv_adapter *a
 		adapt->array_vf[idx_vf].reset_notify_vf_pending =
 			vf_info[idx_live_data].reset_notify_vf_pending;
 		adapt->sched.array_vf[idx_vf].fb_dirty = true;
+		adapt->sched.array_vf[idx_vf].is_cond_avail = vf_info[idx_live_data].is_cond_avail;
+		adapt->array_vf[idx_vf].real_fb_size = vf_info[idx_live_data].real_fb_size;
 
 		amdgv_sched_update_time_slice(adapt, AMDGV_SCHED_BLOCK_ALL, idx_vf);
 
@@ -2598,7 +2972,7 @@ enum amdgv_live_info_status amdgv_vfmgr_import_live_data(struct amdgv_adapter *a
 	}
 
 	amdgv_vfmgr_init_pf_config(adapt);
-	amdgv_vfmgr_import_vfs_fb(adapt);
+	amdgv_vfmgr_init_vfs_fb_config_tmr(adapt);
 
 	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
 }

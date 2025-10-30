@@ -170,8 +170,8 @@ TEST_F(AmdSmiEventsTests, EventRead)
 	mocked_resp.fcn_id.handle = 6;
 	mocked_resp.dev_id = 7;
 #ifdef _WIN64
-	strcpy_s(mocked_resp.date, AMDSMI_MAX_DATE_LENGTH, "random date");
-	strcpy_s(mocked_resp.message, AMDSMI_EVENT_MSG_SIZE, "random message");
+	strcpy_s(mocked_resp.date, AMDSMI_MAX_STRING_LENGTH, "random date");
+	strcpy_s(mocked_resp.message, AMDSMI_MAX_STRING_LENGTH, "random message");
 #else
 	strcpy(mocked_resp.date, "random date");
 	strcpy(mocked_resp.message, "random message");

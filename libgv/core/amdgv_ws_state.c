@@ -45,12 +45,16 @@ static int amdgv_world_switch_do_enable_auto_sched(struct amdgv_adapter *adapt,
 		/* If cannot set debug dump by sysnode, automatically enable it when enable_auto_sched. */
 		if (adapt->flags & AMDGV_FLAG_USE_PF &&
 			adapt->flags & AMDGV_FLAG_DEBUG_DUMP_ENABLE) {
-			amdgv_sched_set_auto_sched_debug_log(adapt, AMDGV_AUTO_SCHED_DEBUG_DUMP, true);
+			amdgv_sched_set_auto_sched_log_feature(adapt, hw_sched_id, AMDGV_AUTO_SCHED_DEBUG_DUMP, true);
 		}
 		if (amdgv_gpuiov_enable_auto_sched(adapt, hw_sched_id)) {
 			AMDGV_ERROR("WSSM: Failed to move from %s to AUTO state for VF%d\n",
 				    amdgv_gpuiov_cmd_to_name(adapt, cur_state, hw_sched_id), cur_vf);
 			return -1;
+		} else {
+			/* enable perf log for GFX auto sched */
+			if (IS_HW_SCHED_TYPE_GFX(hw_sched_id))
+				amdgv_sched_toggle_perflog(adapt, true, hw_sched_id);
 		}
 	}
 	adapt->sched.hw_state_machine[hw_sched_id].cur_vf_id = target_vf;
@@ -640,6 +644,8 @@ static int world_switch_goto_state_auto(struct amdgv_adapter *adapt, uint32_t ta
 			}
 			adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state =
 				AMDGV_SAVE_GPU_STATE;
+			/* update save time and cumulative active time after save of vf done */
+			amdgv_gpumon_update_save_end_time(adapt, cur_vf, world_switch);
 			break;
 
 		/*
@@ -830,6 +836,8 @@ load_gpu:
 			}
 			adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state =
 				AMDGV_RUN_GPU;
+			/* update load time in timelog when run */
+			amdgv_gpumon_update_load_start_time(adapt, cur_vf, world_switch, false);
 			break;
 
 		/* RUN can go to IDLE or to Enable_auto switch */
@@ -899,6 +907,9 @@ load_gpu:
 					target_state = AMDGV_SAVE_GPU_STATE;
 					break;
 				}
+				/* disable perf log before exit auto sched */
+				if (IS_HW_SCHED_TYPE_GFX(hw_sched_id))
+					amdgv_sched_toggle_perflog(adapt, false, hw_sched_id);
 				if (amdgv_gpuiov_disable_auto_sched(adapt, hw_sched_id)) {
 					AMDGV_ERROR(
 						"WSSM: Failed to move from ENABLE_AUTO to DISABLE_AUTO state for VF%d\n",
@@ -925,7 +936,7 @@ load_gpu:
 				/* If cannot set debug dump by sysnode, automatically disable it when disable_auto_sched. */
 				if (adapt->flags & AMDGV_FLAG_USE_PF &&
 					adapt->flags & AMDGV_FLAG_DEBUG_DUMP_ENABLE)
-					amdgv_sched_set_auto_sched_debug_log(adapt, AMDGV_AUTO_SCHED_DEBUG_DUMP, false);
+					amdgv_sched_set_auto_sched_log_feature(adapt, hw_sched_id, AMDGV_AUTO_SCHED_DEBUG_DUMP, false);
 				/*
 				 * Cur VF is not known after leaving AUTO switch state
 				 * Need to ask hardware

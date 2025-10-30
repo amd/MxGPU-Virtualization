@@ -31,15 +31,15 @@
 // Major version should be changed when making incompatible changes to the command interface:
 // - Deprecating or removing existing commands
 // - Modifying input/output format of commands
-#define AMDSMI_TOOL_VERSION_MAJOR 27
+#define AMDSMI_TOOL_VERSION_MAJOR 30
 // Minor version should be incremented for backward-compatible command changes:
 // - Adding new commands
 // - Improvements to existing commands
 // - Adding new options to existing commands without changing the basic input/output format
-#define AMDSMI_TOOL_VERSION_MINOR 8
+#define AMDSMI_TOOL_VERSION_MINOR 0
 // Release version should be incremented for minor issue fixes and maintenance updates
 // that don't add features or change command behavior
-#define AMDSMI_TOOL_VERSION_RELEASE 0
+#define AMDSMI_TOOL_VERSION_RELEASE 3
 
 
 #define AMDSMI_TOOL_VERSION_CREATE_STRING(MAJOR, MINOR, RELEASE) (#MAJOR "." #MINOR "." #RELEASE)
@@ -126,14 +126,6 @@ std::string get_string_from_enum_vram_type(int vram_type);
 /**
  * @brief Converts enum name to string
  *
- * @param guard_type amdsmi_vram_vendor_type_t structure
- * @return std::string of amdsmi_vram_vendor_type_t
- */
-std::string get_string_from_enum_vram_vendor_type(int vram_vendor_type);
-
-/**
- * @brief Converts enum name to string
- *
  * @param driver_model amdsmi_driver_model_type_t structure
  * @return std::string of amdsmi_driver_model_type_t
  */
@@ -180,12 +172,31 @@ std::string get_string_from_enum_resource_type(int resource_type);
 std::vector<std::string> decode_memory_caps(uint32_t nps_cap_mask);
 
 /**
+ * @brief Decodes a VF partition mask into a vector of human-readable strings.
+ *
+ * This function takes a 32-bit mask representing VF partition settings and returns a vector of strings,
+ * each describing a possible VF partition configuration indicated by the mask.
+ *
+ * @param[in] vf_mask A 32-bit integer mask representing VF partition settings.
+ * @return A vector of strings representing the possible VF partition configurations.
+ */
+std::vector<std::string> decode_vf_partition_mask(uint32_t vf_mask);
+
+/**
  * @brief Converts a vector of possible memory partition configurations to a human-readable string
  *
  * @param[in] nps_modes a vector of strings representing the possible NPS setting
  * @return A string representing the possible NPS settings in a human-readable format
  */
 std::string possible_memory_caps_to_human_readable(const std::vector<std::string>& nps_modes);
+
+/**
+ * @brief Converts a vector of possible vf accelerator configurations to a human-readable string
+ *
+ * @param[in] vf_modes a vector of strings representing the possible VF setting
+ * @return A string representing the possible VF settings in a human-readable format
+ */
+std::string possible_vf_partition_mask_to_human_readable(const std::vector<std::string>& vf_modes);
 
 std::string transform_fw(int fw_block_id, uint32_t uversion);
 
@@ -262,16 +273,26 @@ std::vector<std::string> splitString(const std::string& s, const std::string& de
 void write_to_file(std::string file_name, std::string string, bool enable_append = false);
 
 /**
-	 * @brief Check if a string is in BDF format
-	 *
-	 * @param[in] s String for check
-	 * @return true if string is in BDF format, else false
-	 */
+ * @brief Check if a string is in BDF format
+ *
+ * @param[in] s String for check
+ * @return true if string is in BDF format, else false
+ */
 bool is_BDF(std::string s);
+
 /**
-	 * @brief Check if a string is in UUID format
-	 *
-	 * @param[in] s String for check
-	 * @return true if string is in UUID format, else false
-	 */
+ * @brief Check if a string is in UUID format
+ *
+ * @param[in] s String for check
+ * @return true if string is in UUID format, else false
+ */
 bool is_UUID(std::string s);
+
+/**
+ * @brief Converts a 64-bit mask to a string of bit ranges.
+ *
+ * @param[in] mask 64-bit value whose set bits are converted into ranges
+ * @param[in] bitOffset Starting offset for bit numbering (used when processing part of a larger array)
+ * @return String representation of ranges of set bits, e.g. "0-15,32-47"
+ */
+std::vector<std::pair<uint64_t, std::string>> bitmaskToRangesList(uint64_t mask, int bitOffset);

@@ -31,7 +31,7 @@
 #define AMDGV_MAX_WB (AMDGV_WB_QWORD_COUNT * 64)
 
 // Each write back memory is 32 (0x20) bytes memory block
-#define AMDGV_WB_MEORY_BYTE_SIZE (8 * sizeof(uint32_t))
+#define AMDGV_WB_MEMORY_BYTE_SIZE (8 * sizeof(uint32_t))
 
 struct amdgv_wb {
 	struct amdgv_memmgr_mem	*wb_obj;

@@ -5,6 +5,7 @@ This example reads events from the GPU with configurable category and severity f
 ## Description
 
 The program accepts two optional arguments to filter GPU events:
+
 - **Category**: Event category (0-14) representing `AMDSMI_EVENT_CATEGORY`
 - **Severity**: Severity level (0-4) where lower numbers indicate higher severity
 
@@ -17,6 +18,7 @@ If no arguments are provided, all GPU events are displayed. If the category valu
 ## Prerequisites
 
 - OS dynamic library search path must include the location of `libamdsmi.so`. For example, you can set the `LD_LIBRARY_PATH` as follows:
+
   ```bash
   export LD_LIBRARY_PATH=/path/to/libamdsmi/library:$LD_LIBRARY_PATH
   ```
@@ -32,6 +34,7 @@ event_monitor <category> <severity>
 ### Arguments
 
 #### Category (0-14)
+
 | Value | Category |
 |-------|----------|
 | 0 | `AMDSMI_EVENT_CATEGORY_NON_USED` |
@@ -52,6 +55,7 @@ event_monitor <category> <severity>
 | ≥15 | All categories |
 
 #### Severity Level (0-4)
+
 | Value | Level | Description |
 |-------|-------|-------------|
 | 0 | Critical | Highest severity, critical errors |
@@ -65,11 +69,13 @@ event_monitor <category> <severity>
 ## Examples
 
 ### System-installed library
+
 ```bash
 sudo ./event_monitor 2 1
 ```
 
 ### Custom library path
+
 ```bash
 sudo LD_LIBRARY_PATH=/path/to/libamdsmi/library/ ./event_monitor 2 1
 ```

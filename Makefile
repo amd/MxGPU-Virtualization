@@ -28,6 +28,7 @@ KERNEL_VER_MAJOR_EQ5 = $(shell echo `uname -r | cut -f1-1 -d.`\==5 | bc)
 KERNEL_VER_MINOR_GE4 = $(shell echo `uname -r | cut -f2-2 -d.`\>=4 | bc)
 
 export ws_record = false
+export enable_gcov = false
 
 # exclude dcore debug module on kernel version less than 5.4
 ifeq ($(KERNEL_VER_MAJOR_GT5),1)
@@ -57,7 +58,8 @@ include $(GIM_COMS_PATH)/defines.mk
 
 SYSFS_PATH = $(SRC_PATH)/gim_shim/sysfs
 
-subdir-ccflags-y = -I$(LIBGV_PATH)/inc
+subdir-ccflags-y = -I$(SRC_PATH)/inc
+subdir-ccflags-y += -I$(LIBGV_PATH)/inc
 subdir-ccflags-y += -include $(SRC_PATH)/dkms/config.h
 subdir-ccflags-y += -I$(SMI_PATH)/inc -I$(SMI_SHIM_PATH) -I$(SMI_LIB_COMMON_PATH)
 subdir-ccflags-y += -I$(GIM_SHIM_PATH)
@@ -73,7 +75,8 @@ ifeq ($(GCC_VER_GE6),1)
 	subdir-ccflags-y += -Wshift-negative-value
 endif
 
-KERNELDIR ?= /lib/modules/$(shell uname -r)/build
+KERNELRELEASE ?= $(shell uname -r)
+KERNELDIR ?= /lib/modules/$(KERNELRELEASE)/build
 subdir-ccflags-y += -I $(KERNELDIR)/include/linux
 
 ifeq ($(exclude_dcore_debug), true)
@@ -82,6 +85,11 @@ endif
 
 ifeq ($(ws_record), true)
   subdir-ccflags-y += -D WS_RECORD
+endif
+
+# collect GCOV coverage log if the base kernel is configured for it
+ifeq ($(enable_gcov), true)
+	GCOV_PROFILE := y
 endif
 
 subdir-ccflags-y += -Wl,-z,relro,-z,noexecstack,-z,noexecheap -Wl,--strip-debug -Wl,--strip-all
@@ -108,6 +116,7 @@ all: dkms/config.h
 	$(MAKE) -C $(SRC_PATH)/gim-coms-lib
 	$(MAKE) -C $(KERNELDIR) M=$(SRC_PATH) modules
 	$(MAKE) -C $(SRC_PATH)/smi-lib default
+	$(MAKE) -C $(KERNELDIR) M=$(SRC_PATH)/amd-vfio-pci modules
 
 install: dkms/config.h
 	$(MAKE) -C $(KERNELDIR) M=$(SRC_PATH) modules_install
@@ -120,6 +129,11 @@ clean:
 	$(MAKE) -C $(SRC_PATH)/gim-coms-lib clean
 	$(MAKE) -C $(KERNELDIR) M=$(SRC_PATH) clean
 	$(MAKE) -C $(SRC_PATH)/smi-lib clean
+	$(MAKE) -C $(KERNELDIR) M=$(SRC_PATH)/amd-vfio-pci clean
 	rm -f $(SRC_PATH)/libgv/VERSION
 
-.PHONY: all install clean
+dkms_modules:
+	$(MAKE) -C $(KERNELDIR) M=$(SRC_PATH) modules
+	$(MAKE) -C $(KERNELDIR) M=$(SRC_PATH)/amd-vfio-pci modules
+
+.PHONY: all install clean dkms_modules

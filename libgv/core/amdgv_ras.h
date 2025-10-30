@@ -124,6 +124,7 @@ enum amdgv_ras_block {
 	AMDGV_RAS_BLOCK__JPEG,
 	AMDGV_RAS_BLOCK__IH,
 	AMDGV_RAS_BLOCK__MPIO,
+	AMDGV_RAS_BLOCK__MMSCH,
 
 	AMDGV_RAS_BLOCK__LAST
 };
@@ -430,10 +431,17 @@ struct ras_err_handler_data {
 	/* capacity of bad page records array*/
 	uint32_t bps_cap;
 
+	/* sorted bad pages for fast range queries */
+	uint64_t *sorted_bps;
+	int sorted_bp_count;
+	uint32_t sorted_bps_cap;
+
 	uint64_t last_retired_pfn;
 
 	/* memory partition mode when bps/ram data is filled */
 	enum amdgv_memory_partition_mode nps_mode;
+
+	bool bp_replace_pending;
 };
 
 typedef int (*ras_ih_cb)(struct amdgv_adapter *adapt, void *err_data);
@@ -546,6 +554,8 @@ static inline enum amdgv_smi_ras_block amdgv_ras_block_to_smi_ras_block(enum amd
 		return AMDGV_SMI_RAS_BLOCK__MP1;
 	case AMDGV_RAS_BLOCK__FUSE:
 		return AMDGV_SMI_RAS_BLOCK__FUSE;
+	case AMDGV_RAS_BLOCK__MMSCH:
+		return AMDGV_SMI_RAS_BLOCK__MMSCH;
 	default:
 		return AMDGV_SMI_NUM_BLOCK_MAX;
 	}

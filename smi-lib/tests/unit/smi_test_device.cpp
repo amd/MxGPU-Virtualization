@@ -635,7 +635,7 @@ TEST_F(AmdSmiDeviceTests, GetVfHandleForUUID)
 	strcpy(gpu_info_mock.market_name, name.c_str());
 #endif
 	gpu_info_mock.vendor_id = 2;
-	gpu_info_mock.device_id = 3;
+	gpu_info_mock.device_id = 0x74A1;
 	gpu_info_mock.rev_id = 4;
 #ifdef _WIN64
 	strcpy_s(gpu_info_mock.asic_serial, sizeof(gpu_info_mock.asic_serial), "0x9A1F188C37CB1EE6");

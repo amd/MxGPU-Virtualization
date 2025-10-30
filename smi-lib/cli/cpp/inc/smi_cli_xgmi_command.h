@@ -34,7 +34,8 @@ public:
 	int xgmi_command_fb_sharing(std::string &formatted_string);
 	int set_xgmi_command_fb_sharing(std::string &formatted_string);
 	int metric_command_xgmi(std::string &formatted_string);
-	int link_status_command_xgmi(std::string &formatted_string);
+	int source_gpu_status_command_xgmi(std::string &formatted_string);
+	int xgmi_link_status_command(std::string &formatted_string);
 	int xgmi_command_all(std::string &formatted_string);
 
 };

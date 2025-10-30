@@ -23,6 +23,7 @@
 #include "amdgv_device.h"
 #include "amdgv_sched_internal.h"
 #include "amdgv_psp_gfx_if.h"
+#include "amdgv_vfmgr.h"
 
 static const uint32_t this_block = AMDGV_MEMORY_BLOCK;
 
@@ -175,9 +176,16 @@ int amdgv_misc_clear_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, uint8_t
 
 	fb_offset = MBYTES_TO_BYTES(entry->fb_offset);
 	fb_size = MBYTES_TO_BYTES(entry->fb_size);
-	/* do not clear IP Discovery region, to support VM reload */
-	fb_offset_end = (fb_offset + fb_size) - AMDGV_IP_DISCOVERY_OFFSET;
-	fb_size = fb_offset_end - fb_offset;
+
+	if (adapt->umc.is_pmfw_managed_eeprom) {
+		/* Clear entire VF FB */
+		fb_offset = MBYTES_TO_BYTES(entry->fb_offset);
+		fb_offset_end = fb_offset + fb_size;
+	} else {
+		/* do not clear IP Discovery region, to support VM reload */
+		fb_offset_end = fb_offset + GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, IPD);
+		fb_size = fb_offset_end - fb_offset;
+	}
 	AMDGV_DEBUG("%s fb_offset=0x%llx fb_offset_end=0x%llx fb_size=0x%llx\n",
 		   amdgv_idx_to_str(idx_vf), fb_offset, fb_offset_end, fb_size);
 

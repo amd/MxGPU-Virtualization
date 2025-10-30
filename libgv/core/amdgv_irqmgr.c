@@ -266,18 +266,9 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 						  true);
 			event = msg_data[0];
 
-			/*
-			 * This log message is duplicated on purpose.
-			 * The first message is the new format to make the logs more readable.
-			 * The second message is required by VATS to pass the "VM Pause 4" test
-			 * Both messages are to be submitted into staging but when VATS is modified
-			 * to be compatible with the new message, the original message can be removed.
-			 */
 			AMDGV_DEBUG("Received %s request from %s\n",
-				   amdgv_mailbox_rcv_idh_to_name(event),
-				   amdgv_idx_to_str(idx_vf));
-			AMDGV_INFO("Received Event: %s, event = 0x%x(%s)\n",
-				   amdgv_idx_to_str(idx_vf), event, amdgv_mailbox_rcv_idh_to_name(event));
+				    amdgv_mailbox_rcv_idh_to_name(event),
+				    amdgv_idx_to_str(idx_vf));
 
 			sched_event = amdgv_mailbox_get_valid_vf_event(adapt, event);
 			if (sched_event == AMDGV_EVENT_INVALID_EVENT) {
@@ -337,6 +328,18 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 						AMDGV_ERROR_32_32(idx_vf, msg_data[1]));
 				amdgv_sched_queue_event_ex(adapt, idx_vf, sched_event,
 							AMDGV_SCHED_BLOCK_ALL, event_data);
+			} else if (sched_event == AMDGV_EVENT_REQ_GPU_INIT_DATA) {
+				adapt->array_vf[idx_vf].guest_gpu_init_flags = msg_data[1];
+
+				/* 0 recv'd by host means guest only supports v1 table allocation */
+				adapt->array_vf[idx_vf].guest_crit_region_caps = (msg_data[2] == 0) ? 0b1 : msg_data[2];
+				amdgv_sched_queue_event_ex(adapt, idx_vf, sched_event,
+							AMDGV_SCHED_BLOCK_ALL, event_data);
+			} else if (sched_event == AMDGV_EVENT_SCHED_VF_REQ_RAS_CHK_CRITI_REGION) {
+				event_data.chk_criti.addr = ((uint64_t)msg_data[1] << 32) |
+							    msg_data[2];
+				amdgv_sched_queue_event_ex(adapt, idx_vf, sched_event,
+							   AMDGV_SCHED_BLOCK_ALL, event_data);
 			} else {
 				/* queue event to scheduler */
 				amdgv_sched_queue_event(adapt, idx_vf, sched_event,

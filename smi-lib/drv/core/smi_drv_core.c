@@ -46,7 +46,7 @@ const char * const smi_shim_inf_name[] = {
 	"get_profile_info", "get_driver_date",
 	"get_driver_model",
 	"get_metric_table", "get_eeprom_table",
-	"get_partition", "get_cper_data"
+	"get_partition", "get_cper_data", "get_partition_global"
 };
 
 void smi_print(const char *fmt, ...)
@@ -249,6 +249,9 @@ int smi_core_ioctl_handler(file_t filp, unsigned int cmd, void *arg)
 	unsigned int i;
 
 	struct smi_ioctl_cmd *uptr = (struct smi_ioctl_cmd *) arg;
+
+	if (uptr == NULL)
+		return -SMI_EINVAL;
 
 	/* Check that the file descriptor is correct */
 	if (smi_verify_file_descriptor(filp))

@@ -369,6 +369,32 @@ static void insert_clk_seq(uuid_t *uuid, uint16_t seq)
 	uuid->clk_seq_hi = (seq >> 8) & 0x3fU;
 }
 
+int smi_get_vf_device_id_from_pf(uint64_t pf_device_id, uint64_t *vf_device_id)
+{
+    static const struct {
+		uint64_t pf_id;
+		uint64_t vf_id;
+	} pf_vf_map[] = {
+		{0x74A1, 0x74B5},
+		{0x74A2, 0x74B6},
+		{0x74A8, 0x74BC},
+		{0x74A9, 0x74BD},
+		{0x75A0, 0x75B0},
+		{0x75A3, 0x75B3},
+		{0x7460, 0x7461}
+	};
+
+	for (size_t i = 0; i < sizeof(pf_vf_map) / sizeof(pf_vf_map[0]); i++) {
+		if (pf_device_id == pf_vf_map[i].pf_id) {
+			*vf_device_id = pf_vf_map[i].vf_id;
+			return 0;
+		}
+	}
+
+	*vf_device_id = 0xFFFF;
+	return -1;
+}
+
 int smi_uuid_gen(char *str, uint64_t serial, uint16_t did, uint8_t idx)
 {
 	uuid_t uuid;
@@ -520,4 +546,35 @@ int parse_cpu_list(const char *cpu_list, uint64_t *cpu_set, uint32_t cpu_set_siz
 		if (*p == ',') p++;
 	}
 	return 0;
+}
+
+amdsmi_status_t is_cmd_supported(uint64_t device_id)
+{
+	static const uint64_t dev_id_list_nv[] = {
+		0x73C4,
+		0x73C5,
+		0x73C8,
+		0x7460,
+		0x7461,
+		0x73A1,
+		0x73AE
+    };
+
+	static const uint64_t dev_id_list_mi2plus[] = {
+		0x7410
+	};
+
+	for (size_t i = 0; i < sizeof(dev_id_list_nv) / sizeof(dev_id_list_nv[0]); i++) {
+		if (device_id == dev_id_list_nv[i]) {
+			return AMDSMI_STATUS_NOT_SUPPORTED;
+		}
+	}
+
+	for (size_t i = 0; i < sizeof(dev_id_list_mi2plus) / sizeof(dev_id_list_mi2plus[0]); i++) {
+		if (device_id == dev_id_list_mi2plus[i]) {
+			return AMDSMI_STATUS_NOT_SUPPORTED;
+		}
+	}
+
+	return AMDSMI_STATUS_SUCCESS;
 }

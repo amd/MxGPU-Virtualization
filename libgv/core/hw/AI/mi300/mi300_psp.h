@@ -20,15 +20,15 @@
  * THE SOFTWARE
  */
 
-#ifndef AMDGV_PSP_V13_H
-#define AMDGV_PSP_V13_H
+#ifndef AMDGV_MI300_PSP_H
+#define AMDGV_MI300_PSP_H
 
 #include "amdgv_psp_gfx_if.h"
 
 #define PSP_REGISTER_VALUE_INVALID 0xFFFFFFFF
 //TODO: get the size from psp pkg
-#define MI300_MIGRATION_PSP_STATIC_DATA_SIZE		(12 * 1024 * 1024)
-#define MI300_MIGRATION_PSP_DYNAMIC_DATA_SIZE		(4 * 1024 * 1024)
+#define MI300_MIGRATION_PSP_STATIC_DATA_SIZE		(10 * 1024 * 1024)
+#define MI300_MIGRATION_PSP_DYNAMIC_DATA_SIZE		(2 * 1024 * 1024)
 
 uint32_t mi300_psp_get_sos_loaded_status(struct amdgv_adapter *adapt);
 bool mi300_psp_wait_sos_loaded_status(struct amdgv_adapter *adapt);

@@ -88,6 +88,8 @@ struct amdgv_nbio_funcs {
 	void (*clear_doorbell_interrupt)(struct amdgv_adapter *adapt);
 	uint32_t (*get_rom_offset)(struct amdgv_adapter *adapt);
 	void (*hdp_flush)(struct amdgv_adapter *adapt);
+	int (*get_nps_mode)(struct amdgv_adapter *adapt,
+			enum amdgv_memory_partition_mode *nps_mode);
 };
 
 struct amdgv_nbio_ras {
@@ -96,8 +98,8 @@ struct amdgv_nbio_ras {
 	int (*set_ras_controller_irq_state)(struct amdgv_adapter *adapt, bool state);
 	int (*set_ras_err_event_athub_irq_state)(struct amdgv_adapter *adapt, bool state);
 	void (*query_ras_error_count)(struct amdgv_adapter *adapt, void *ras_error_status);
-	int (*get_curr_memory_partition_mode)(struct amdgv_adapter *adapt,
-			enum amdgv_memory_partition_mode *memory_partition_mode);
+	int (*get_supported_memory_partition_mode)(struct amdgv_adapter *adapt,
+			enum amdgv_memory_partition_mode *supported_nps, int* supported_nps_count);
 };
 
 struct amdgv_nbio {

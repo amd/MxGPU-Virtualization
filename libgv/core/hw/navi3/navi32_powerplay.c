@@ -2587,6 +2587,7 @@ const struct amdgv_pp_funcs navi32_amdgv_pp_funcs = {
 
 static int navi32_powerplay_sw_init(struct amdgv_adapter *adapt)
 {
+	amdgv_ras_eeprom_version_init(adapt);
 	return 0;
 }
 

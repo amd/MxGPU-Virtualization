@@ -88,17 +88,17 @@ endif
 
 .PHONY: wNow64a.rel wNow64a.dbg
 wNow64a.rel:
-	$(MAKE) OS_TARGET=wNow64a BUILD_TYPE=rel
+	$(MAKE) -C $(CMAKE_PATH) wNow64a.rel
 
 wNow64a.dbg:
-	$(MAKE) OS_TARGET=wNow64a BUILD_TYPE=dbg
+	$(MAKE) -C $(CMAKE_PATH) wNow64a.dbg
 
 .PHONY: wNxt64a.rel wNxt64a.dbg
 wNxt64a.rel:
-	$(MAKE) OS_TARGET=wNxt64a BUILD_TYPE=rel
+	$(MAKE) -C $(CMAKE_PATH) wNxt64a.rel
 
 wNxt64a.dbg:
-	$(MAKE) OS_TARGET=wNxt64a BUILD_TYPE=dbg
+	$(MAKE) -C $(CMAKE_PATH) wNxt64a.dbg
 
 .PHONY: clean_cmake
 clean_cmake:
@@ -133,6 +133,6 @@ else ifeq ($(PLATFORM),windows)
 	@exit 1
 endif
 
-.PHONE: clean
+.PHONY: clean
 clean:
 	@rm -rf $(BUILD_DIR)

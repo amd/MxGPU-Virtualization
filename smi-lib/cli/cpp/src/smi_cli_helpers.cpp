@@ -82,14 +82,6 @@ std::string get_string_from_enum_vram_type(int vram_type)
 	return out;
 }
 
-std::string get_string_from_enum_vram_vendor_type(int vram_vendor_type)
-{
-	std::string out;
-	AmdSmiApiBase::CreateAmdSmiApiObject().get_string_from_enum_vram_vendor_type(vram_vendor_type,
-			out);
-	return out;
-}
-
 std::string get_string_from_enum_driver_model(int driver_model)
 {
 	std::string out;
@@ -160,11 +152,11 @@ std::string transform_fw(int fw_block_id, uint32_t uversion)
 	case 34: //"PSP_SPL"
 	case 37: //"PSP_BL"
 	case 41: //"REG_ACCESS_WHITELIST"
-	case 64: //"PSP_SOC"
-	case 65: //"PSP_DBG"
-	case 66: //"PSP_INTF"
-	case 72: //"TA_RAS"
-	case 78: //"PSP_RAS"
+	case 65: //"PSP_SOC"
+	case 66: //"PSP_DBG"
+	case 67: //"PSP_INTF"
+	case 73: //"TA_RAS"
+	case 81: //"PSP_RAS"
 		uversion_str = string_format("%x.%x.%x.%x", (uversion >> 24) & 0xFF,
 									 (uversion >> 16) & 0xFF,
 									 (uversion >> 8) & 0xFF,
@@ -178,7 +170,7 @@ std::string transform_fw(int fw_block_id, uint32_t uversion)
 		break;
 	case 42: //"IMU_DRAM"
 	case 43: //"IMU_IRAM"
-	case 80: //"PLDM_VERSION"
+	case 83: //"PLDM_VERSION"
 		uversion_str = string_format("%d.%d.%d.%d", (uversion >> 24) & 0xFF,
 									 (uversion >> 16) & 0xFF,
 									 (uversion >> 8) & 0xFF,
@@ -190,9 +182,9 @@ std::string transform_fw(int fw_block_id, uint32_t uversion)
 		uversion_str = string_format("0x%x", uversion);
 		break;
 	case 46: //"CP_MES"
-	case 47: //"MES_STACK"
-	case 48: //"MES_THREAD1"
-	case 49: //"MES_THREAD1_STACK"
+	case 48: //"MES_STACK"
+	case 49: //"MES_THREAD1"
+	case 50: //"MES_THREAD1_STACK"
 		uversion_str = string_format("0x%08x", uversion);
 		break;
 	default:
@@ -502,4 +494,60 @@ void write_to_file(std::string file_name, std::string string, bool enable_append
 			throw SmiToolInvalidFilePathException(file_name);
 		}
 	}
+}
+
+std::vector<std::pair<uint64_t, std::string>> bitmaskToRangesList(uint64_t mask, int bitOffset) {
+	std::vector<std::pair<uint64_t, std::string>> results;
+
+	if (mask == 0) {
+		return results;
+	}
+
+	int startRange = -1;
+	uint64_t currentMask = 0;
+
+	for (int bit = 0; bit < 64; ++bit) {
+		bool bitSet = (mask & (1ULL << bit)) != 0;
+
+		if (bitSet) {
+			if (startRange == -1) {
+				startRange = bit;
+			}
+			currentMask |= (1ULL << bit);
+		} else {
+			if (startRange != -1) {
+				int endRange = bit - 1;
+				int startWithOffset = startRange + bitOffset;
+				int endWithOffset = endRange + bitOffset;
+
+				std::stringstream ss;
+				if (startWithOffset == endWithOffset) {
+					ss << startWithOffset;
+				} else {
+					ss << startWithOffset << "-" << endWithOffset;
+				}
+
+				results.emplace_back(currentMask, ss.str());
+
+				currentMask = 0;
+				startRange = -1;
+			}
+		}
+	}
+
+	if (startRange != -1) {
+		int startWithOffset = startRange + bitOffset;
+		int endWithOffset = 63 + bitOffset;
+
+		std::stringstream ss;
+		if (startWithOffset == endWithOffset) {
+			ss << startWithOffset;
+		} else {
+			ss << startWithOffset << "-" << endWithOffset;
+		}
+
+		results.emplace_back(currentMask, ss.str());
+	}
+
+	return results;
 }

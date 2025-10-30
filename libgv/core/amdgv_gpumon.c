@@ -191,6 +191,8 @@ static const char *amdgv_gpumon_event_name(enum amdgv_gpumon_type type)
 		return "GPUMON_GET_STATIC_METRICS_EXT";
 	case GPUMON_GET_NUM_STATIC_METRICS_EXT_ENTRIES:
 		return "GPUMON_GET_NUM_STATIC_METRICS_EXT_ENTRIES";
+	case GPUMON_GET_NPM_INFO:
+		return "GPUMON_GET_NPM_INFO";
 	default:
 		break;
 	}
@@ -200,7 +202,6 @@ static const uint32_t this_block = AMDGV_MANAGEMENT_BLOCK;
 
 /* 1000 ms */
 #define MAX_TIME_SLICE		   (1000 * 1000)
-#define PP_METRICS_CACHE_EXPIRY_US 1000
 
 static bool amdgv_find_fb_offset(amdgv_dev_t dev, struct amdgv_vf_option *opt)
 {
@@ -1170,6 +1171,26 @@ int amdgv_gpumon_get_bad_page_record_threshold(amdgv_dev_t dev, uint32_t *bad_pa
 	return 0;
 }
 
+int amdgv_gpumon_get_ras_policy_info(amdgv_dev_t dev, struct amdgv_gpumon_ras_policy_info *info)
+{
+	struct amdgv_adapter *adapt;
+	struct amdgv_ras_eeprom_control *control;
+
+	SET_ADAPT_AND_CHECK_STATUS_NOT_LOST(adapt, dev);
+
+	if (!info)
+		return AMDGV_FAILURE;
+
+	control = &adapt->eeprom_control;
+
+	info->minor_version = control->ras_policy_info.minor_version;
+	info->major_version = control->ras_policy_info.major_version;
+	info->dram_non_critical_region_threshold = control->ras_policy_info.dram_non_critical_region_threshold;
+	info->dram_critical_region_threshold = control->ras_policy_info.dram_critical_region_threshold;
+
+	return 0;
+}
+
 int amdgv_gpumon_ras_error_inject(amdgv_dev_t dev,
 				  struct amdgv_smi_ras_error_inject_info *data)
 {
@@ -1434,9 +1455,10 @@ void amdgv_gpumon_update_load_start_time(struct amdgv_adapter *adapt, uint32_t i
 			time_log = &adapt->array_vf[idx_vf].time_log[hw_sched_id];
 			time_log->last_load_start = oss_get_time_stamp();
 
-			if (is_init)
+			if (is_init) {
 				time_log->historical_active_time_data =
 					time_log->cumulative_active_time;
+			}
 		}
 		break;
 	default:
@@ -1457,12 +1479,29 @@ void amdgv_gpumon_update_save_end_time(struct amdgv_adapter *adapt, uint32_t idx
 		for_each_id(hw_sched_id, world_switch->hw_sched_mask) {
 			time_log = &adapt->array_vf[idx_vf].time_log[hw_sched_id];
 			time_log->last_save_end = oss_get_time_stamp();
-			time_log->cumulative_active_time +=
-				time_log->last_save_end - time_log->last_load_start;
+			if (world_switch->sched_mode > AMDGV_SCHED_MAX_HW_SCHED_MODE)
+				time_log->cumulative_active_time +=
+					time_log->last_save_end - time_log->last_load_start;
 		}
 		break;
 	default:
 		break;
+	}
+	return;
+}
+
+void amdgv_gpumon_update_auto_sched_last_active_time(struct amdgv_adapter *adapt,
+				       uint32_t hw_sched_id)
+{
+	struct amdgv_time_log *time_log;
+	int i;
+	/**
+	 * time log for now is per adapt and not specific to each scheduler
+	**/
+	for (i = 0; i < adapt->num_vf; i++) {
+		time_log = &adapt->array_vf[i].time_log[hw_sched_id];
+		time_log->cumulative_active_time +=
+			adapt->perf_log.vf_perf_log_info[i].time_quanta;
 	}
 	return;
 }
@@ -1900,7 +1939,7 @@ int amdgv_gpumon_reset_partition_mode(amdgv_dev_t dev)
 	for (i = 0; i < accelerator_partition_profile_config->number_of_profiles; i++) {
 		if (accelerator_partition_profile_config->profiles[i].num_partitions == adapt->num_vf) {
 			ret = amdgv_gpumon_set_accelerator_partition_profile(dev, i);
-			if (ret) {
+			if (ret != 0 && ret != AMDGV_ERROR_GPUMON_SET_ALREADY) {
 				AMDGV_ERROR("failed to reset accelerator partition mode\n");
 				goto out;
 			}
@@ -1978,6 +2017,29 @@ int amdgv_gpumon_get_memory_partition_config(
 	    memory_partition_config) {
 		ret = adapt->gpumon.funcs->get_memory_partition_config(
 			adapt, memory_partition_config);
+	}
+
+	return ret;
+}
+
+int amdgv_gpumon_get_accelerator_partition_profile_config_global(
+	amdgv_dev_t dev,
+	struct amdgv_gpumon_accelerator_partition_profile_config
+		*profile_configs)
+{
+	struct amdgv_adapter *adapt;
+	int ret = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (!profile_configs)
+		return AMDGV_FAILURE;
+
+	if (adapt->gpumon.funcs &&
+		adapt->gpumon.funcs->get_accelerator_partition_profile_config_global &&
+		profile_configs) {
+		ret = adapt->gpumon.funcs->get_accelerator_partition_profile_config_global(
+			adapt, profile_configs);
 	}
 
 	return ret;
@@ -2622,6 +2684,9 @@ int amdgv_gpumon_get_pm_policy(amdgv_dev_t dev,
 	if (!ret)
 		ret = event_ret;
 
+	if (ret == AMDGV_NOT_SUPPORTED)
+		ret = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+
 	return ret;
 }
 
@@ -2649,6 +2714,9 @@ int amdgv_gpumon_set_pm_policy_level(amdgv_dev_t dev,
 
 	if (!ret)
 		ret = event_ret;
+
+	if (ret == AMDGV_NOT_SUPPORTED)
+		ret = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
 
 	return ret;
 }
@@ -3050,6 +3118,65 @@ int amdgv_gpumon_get_num_active_vfs(amdgv_dev_t dev, uint32_t *num_vfs)
 	return 0;
 }
 
+int amdgv_gpumon_get_node_handle(amdgv_dev_t dev, void **node_handle)
+{
+	struct amdgv_adapter *adapt;
+	int ret = AMDGV_FAILURE;
+	struct amdgv_hive_info *hive;
+	struct amdgv_adapter *npm_adapt = NULL;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (node_handle == NULL)
+		return AMDGV_FAILURE;
+
+	if (adapt->xgmi.phy_nodes_num == 1) {
+		node_handle = (void *)adapt;
+		return 0;
+	}
+
+	/* Node handle is socket 0 */
+	hive = amdgv_get_xgmi_hive(adapt);
+	if (hive && (adapt->xgmi.phy_nodes_num > 1)) {
+		amdgv_list_for_each_entry(npm_adapt, &hive->adapt_list, struct amdgv_adapter, xgmi.head) {
+			if (npm_adapt->xgmi.phy_node_id == 0) {
+				*node_handle = (void *)npm_adapt;
+				ret = 0;
+				break;
+			}
+		}
+	}
+
+	return ret;
+}
+
+int amdgv_gpumon_get_npm_info(amdgv_dev_t dev, struct amdgv_gpumon_npm_info *npm_info)
+{
+	struct amdgv_adapter *adapt;
+	union amdgv_sched_event_data data;
+	int ret = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+	int event_ret = 0;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (!npm_info)
+		return AMDGV_FAILURE;
+
+	data.gpumon_data.ptr = npm_info;
+	data.gpumon_data.type = GPUMON_GET_NPM_INFO;
+	data.gpumon_data.result = &event_ret;
+
+	if (adapt->gpumon.funcs && adapt->gpumon.funcs->get_gpu_power_usage && npm_info) {
+		ret = amdgv_sched_queue_event_and_wait_ex(adapt, AMDGV_PF_IDX,
+				AMDGV_EVENT_SCHED_GPUMON,
+				AMDGV_SCHED_BLOCK_ALL, data);
+		if (!ret)
+			ret = event_ret;
+	}
+
+	return ret;
+}
+
 int amdgv_gpumon_cper_get_count(amdgv_dev_t dev,
 				uint64_t rptr, uint64_t *wptr,
 				uint64_t *avail_count,
@@ -3189,9 +3316,9 @@ int amdgv_gpumon_handle_sched_event(struct amdgv_adapter *adapt,
 	int ret = 0;
 	struct amdgv_gpumon_metrics *metrics = NULL;
 	struct amdgv_gpumon_temp *temp = NULL;
+	struct amdgv_gpumon_npm_info *npm_info = NULL;
 	int *val = NULL;
 	char *str = NULL;
-	uint64_t tstamp;
 	int size;
 
 	amdgv_gpumon_log_event(adapt, event);
@@ -3213,10 +3340,9 @@ int amdgv_gpumon_handle_sched_event(struct amdgv_adapter *adapt,
 			break;
 		}
 
-		tstamp = oss_get_time_stamp();
 		size = sizeof(struct amdgv_gpumon_metrics);
 
-		if ((tstamp - adapt->pp.metrics_cache.tstamp < PP_METRICS_CACHE_EXPIRY_US)) {
+		if (!amdgv_after_time(adapt->pp.metrics_cache.tstamp + PP_METRICS_CACHE_EXPIRY_US)) {
 			oss_memcpy(metrics, adapt->pp.metrics_cache.metrics, size);
 			*event->data.gpumon_data.result = 0;
 			break;
@@ -3227,7 +3353,7 @@ int amdgv_gpumon_handle_sched_event(struct amdgv_adapter *adapt,
 
 		if (!ret) {
 			oss_memcpy(adapt->pp.metrics_cache.metrics, metrics, size);
-			adapt->pp.metrics_cache.tstamp = tstamp;
+			adapt->pp.metrics_cache.tstamp = oss_get_time_stamp();
 		}
 
 		break;
@@ -3636,6 +3762,17 @@ int amdgv_gpumon_handle_sched_event(struct amdgv_adapter *adapt,
 	case GPUMON_GET_NUM_STATIC_METRICS_EXT_ENTRIES:
 		ret = adapt->gpumon.funcs->get_num_static_metrics_ext_entries(adapt,
 				event->data.gpumon_data.ptr);
+		*event->data.gpumon_data.result = ret;
+		break;
+	case GPUMON_GET_NPM_INFO:
+		if (adapt->gpumon.funcs == NULL ||
+			adapt->gpumon.funcs->get_npm_info == NULL ||
+			adapt->xgmi.phy_node_id != 0) {
+			*event->data.gpumon_data.result = AMDGV_FAILURE;
+			break;
+		}
+		npm_info = event->data.gpumon_data.ptr;
+		ret = adapt->gpumon.funcs->get_npm_info(adapt, npm_info);
 		*event->data.gpumon_data.result = ret;
 		break;
 	default:

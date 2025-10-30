@@ -20,6 +20,7 @@ ras_cper
 ## Examples
 
 ### System Installation
+
 If `libamdsmi.so` is installed to a system path (e.g., `/lib` or `/usr/lib`):
 
 ```bash
@@ -27,6 +28,7 @@ sudo ./ras_cper
 ```
 
 ### Custom Library Path
+
 If the library is in a custom location:
 
 ```bash

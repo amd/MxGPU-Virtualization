@@ -88,6 +88,7 @@ enum amdgv_gpumon_type {
 	GPUMON_GET_STATIC_METRICS_EXT,
 	GPUMON_GET_NUM_STATIC_METRICS_EXT_ENTRIES,
 	GPUMON_GET_GFX_CONFIG,
+	GPUMON_GET_NPM_INFO,
 
 	/* -- SETTERS -- */
 
@@ -256,6 +257,7 @@ struct amdgv_gpumon_funcs {
 			struct amdgv_gpumon_metrics_ext *metrics_ext);
 	int (*get_num_static_metrics_ext_entries)(struct amdgv_adapter *adapt,
 			uint32_t *entries);
+	int (*get_npm_info)(struct amdgv_adapter *adapt, struct amdgv_gpumon_npm_info *npm_info);
 };
 
 struct amdgv_gpumon {
@@ -268,6 +270,8 @@ void amdgv_gpumon_update_load_start_time(struct amdgv_adapter *adapt, uint32_t i
 					 struct amdgv_sched_world_switch *world_switch, bool is_init);
 void amdgv_gpumon_update_save_end_time(struct amdgv_adapter *adapt, uint32_t idx_vf,
 				       struct amdgv_sched_world_switch *world_switch);
+void amdgv_gpumon_update_auto_sched_last_active_time(struct amdgv_adapter *adapt,
+				       uint32_t hw_sched_id);
 int amdgv_gpumon_handle_sched_event(struct amdgv_adapter *adapt,
 				    struct amdgv_sched_event *event);
 

@@ -144,6 +144,11 @@ static inline int smi_get_partition(struct smi_profile_configs *profile_configs,
     return smi_shim_funcs->get_partition(profile_configs, caps);
 }
 
+static inline int smi_get_partition_global(struct smi_profile_configs_global *profile_configs_global, struct amdgv_gpumon_accelerator_partition_profile_config *caps)
+{
+    return smi_shim_funcs->get_partition_global(profile_configs_global, caps);
+}
+
 static inline int smi_get_cper_data(struct smi_cper_config *cper_config, uint16_t in_len, uint64_t size, char* buffer, uint64_t write_count,
 									uint32_t *smi_cper_hdrs, uint64_t overflow_count)
 {

@@ -36,6 +36,24 @@ enum amdgv_ras_eeprom_err_type {
 	AMDGV_RAS_EEPROM_ERR_NON_RECOVERABLE
 };
 
+struct amdgv_ras_policy_info {
+	uint8_t minor_version;
+	uint8_t major_version;
+	uint16_t od_sram_ecc_threshold;
+	uint16_t wdt_threshold;
+	uint16_t hwa_threshold;
+	uint16_t dram_non_critical_region_threshold;	// Non-critical region UCE threshold
+	uint16_t dram_critical_region_threshold;		// Critical region UCE threshold
+};
+
+struct amdgv_ras_eeprom_bad_page_info {
+	uint32_t mca_addr_lo;
+	uint32_t mca_addr_hi;
+	uint32_t mca_ipid_lo;
+	uint32_t mca_ipid_hi;
+	uint32_t timestamp;
+	uint32_t severity;
+};
 #pragma pack(push, 1)
 struct amdgv_ras_eeprom_table_header {
 	uint32_t header;
@@ -102,6 +120,9 @@ struct amdgv_ras_eeprom_control {
 	uint32_t bad_channel_bitmap;
 
 	uint32_t max_record_num;
+
+	struct amdgv_ras_policy_info ras_policy_info;
+	uint32_t next_bp_record_idx;
 };
 
 struct i2c_msg {

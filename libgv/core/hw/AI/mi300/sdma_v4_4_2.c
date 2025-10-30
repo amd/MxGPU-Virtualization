@@ -117,6 +117,7 @@ static void sdma_v4_4_2_ring_submit_frame(struct amdgv_ring *ring, uint8_t *fram
 	ring_byte_wptr = ring->wptr << 2;
 	*((volatile uint64_t *)(ring->wptr_cpu_addr)) = ring_byte_wptr;
 
+	amdgv_misc_hdp_flush(adapt);
 	if (ring->use_doorbell) {
 		WDOORBELL64(ring->doorbell_index, ring_byte_wptr);
 	} else {
@@ -156,6 +157,52 @@ static int sdma_v4_4_2_sdma_copy(struct amdgv_ring *ring, uint64_t src, uint64_t
 
 static int sdma_v4_4_2_ring_test_ring(struct amdgv_ring *ring)
 {
+#ifdef MI300_ENABLE_SDMA_RING_TEST
+	struct amdgv_adapter *adapt = ring->adapt;
+	unsigned i;
+	int r = 0;
+	uint32_t tmp;
+	uint32_t index;
+	uint64_t gpu_addr;
+	uint32_t timeout;
+
+	tmp = 0xCAFEDEAD;
+	r = amdgv_wb_memory_get(adapt, &index);
+	if (r) {
+		AMDGV_ERROR("Failed to allocate wb\n");
+		return r;
+	}
+
+	gpu_addr = adapt->wb.gpu_addr + (index * 4);
+	adapt->wb.wb[index] = cpu_to_le32(tmp);
+
+	r = amdgv_ring_alloc(ring, 5);
+	if (r)
+		return r;
+
+	amdgv_ring_write(ring, SDMA_PKT_HEADER_OP(SDMA_OP_WRITE) |
+			  SDMA_PKT_HEADER_SUB_OP(SDMA_SUBOP_WRITE_LINEAR));
+	amdgv_ring_write(ring, lower_32_bits(gpu_addr));
+	amdgv_ring_write(ring, upper_32_bits(gpu_addr));
+	amdgv_ring_write(ring, SDMA_PKT_WRITE_UNTILED_DW_3_COUNT(0));
+	amdgv_ring_write(ring, 0xDEADBEEF);
+	amdgv_ring_commit(ring);
+	timeout = 100;
+	for (i = 0; i < timeout; i++) {
+		tmp = le32_to_cpu(adapt->wb.wb[index]);
+		if (tmp == 0xDEADBEEF)
+			break;
+		oss_msleep(1);
+	}
+
+	if (i >= timeout) {
+		AMDGV_ERROR("Failed to do sdma ring test\n");
+		r = -1;
+	}
+
+	amdgv_wb_memory_free(adapt, index);
+	return r;
+#endif
 	return 0;
 }
 

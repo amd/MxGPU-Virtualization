@@ -82,7 +82,7 @@ static struct gim_dev_data *gim_get_dev_data(void *adev)
 	return dev_data;
 }
 
-static enum amdgv_cmd_asic_type amd_asic_type_to_amdgv_cmd_asic_type(enum amd_asic_type asic_type)
+static enum amdgv_cmd_asic_type amd_asic_type_to_amdgv_cmd_asic_type(enum amd_asic_type asic_type, uint32_t dev_id)
 {
 	switch (asic_type) {
 	case CHIP_MI200:
@@ -90,7 +90,10 @@ static enum amdgv_cmd_asic_type amd_asic_type_to_amdgv_cmd_asic_type(enum amd_as
 	case CHIP_NAVI32:
 		return AMDGV_CMD_CHIP_NAVI32;
 	case CHIP_MI300X:
-		return AMDGV_CMD_CHIP_MI300X;
+		if (dev_id == 0x74A5)
+			return AMDGV_CMD_CHIP_MI325X;
+		else
+			return AMDGV_CMD_CHIP_MI300X;
 	case CHIP_MI308X:
 		return AMDGV_CMD_CHIP_MI308X;
 	case CHIP_MI350X:
@@ -112,7 +115,7 @@ static void __amdgv_get_device_info(struct gim_dev_data *dev_data, struct amdgv_
 		hash_64(dev_data->init_data.info.dev_id ^ dev_data->init_data.info.bdf, 64);
 
 	if (!amdgv_gpumon_get_asic_type(dev_data->adev, &asic_type))
-		amdgv_dev->asic_type = amd_asic_type_to_amdgv_cmd_asic_type(asic_type);
+		amdgv_dev->asic_type = amd_asic_type_to_amdgv_cmd_asic_type(asic_type, dev_data->init_data.info.dev_id);
 	else
 		amdgv_dev->asic_type = AMDGV_CMD_CHIP_UNKNOWN;
 
@@ -378,6 +381,16 @@ static int amdgv_clear_bad_page_info(struct amdgv_cmd_dev_handle *input_data)
 	amdgv_dev_t *adev = gim_get_dev(input_data->dev_handle);
 
 	if (amdgv_gpumon_ras_eeprom_clear(adev))
+		return AMDGV_CMD__ERROR_GENERIC;
+
+	return AMDGV_CMD__SUCCESS;
+}
+
+static int amdgv_reset_all_error_counts(struct amdgv_cmd_dev_handle *input_data)
+{
+	amdgv_dev_t *adev = gim_get_dev(input_data->dev_handle);
+
+	if (amdgv_gpumon_reset_all_error_counts(adev))
 		return AMDGV_CMD__ERROR_GENERIC;
 
 	return AMDGV_CMD__SUCCESS;
@@ -658,7 +671,7 @@ static void __amdgv_get_device_ex_info(struct gim_dev_data *dev_data, struct amd
 		hash_64(dev_data->init_data.info.dev_id ^ dev_data->init_data.info.bdf, 64);
 
 	if (!amdgv_gpumon_get_asic_type(dev_data->adev, &asic_type))
-		amdgv_dev->asic_type = amd_asic_type_to_amdgv_cmd_asic_type(asic_type);
+		amdgv_dev->asic_type = amd_asic_type_to_amdgv_cmd_asic_type(asic_type, dev_data->init_data.info.dev_id);
 	else
 		amdgv_dev->asic_type = AMDGV_CMD_CHIP_UNKNOWN;
 
@@ -677,6 +690,9 @@ static void __amdgv_get_device_ex_info(struct gim_dev_data *dev_data, struct amd
 				amdgv_dev->ecc_enabled = 0;
 				amdgv_dev->ecc_supported = 0;
 	}
+
+	if (amdgv_gpumon_get_ras_eeprom_version(dev_data->adev, &amdgv_dev->ras_eeprom_version))
+		amdgv_dev->ras_eeprom_version = 0;
 }
 
 static int amdgv_get_devices_ex_info(struct amdgv_cmd_devices_ex_info *output_data)
@@ -726,6 +742,27 @@ static uint8_t amdgv_get_cper_records(struct amdgv_get_cper_records_input *input
 out:
 	gim_kfree(buffer);
 	return r;
+}
+
+static uint8_t amdgv_get_ras_policy_info(struct amdgv_cmd_dev_handle *input_data, struct amdgv_cmd_ras_policy_info *output_data)
+{
+	amdgv_dev_t *adev;
+	struct amdgv_gpumon_ras_policy_info ras_policy_info = {0};
+
+	if (!input_data || !output_data)
+		return AMDGV_CMD__ERROR_INVALID_INPUT;
+
+	adev = gim_get_dev(input_data->dev_handle);
+
+	if (amdgv_gpumon_get_ras_policy_info(adev, &ras_policy_info))
+		return AMDGV_CMD__ERROR_GENERIC;
+
+	output_data->minor_version = ras_policy_info.minor_version;
+	output_data->major_version = ras_policy_info.major_version;
+	output_data->dram_non_critical_region_threshold = ras_policy_info.dram_non_critical_region_threshold;
+	output_data->dram_critical_region_threshold = ras_policy_info.dram_critical_region_threshold;
+
+	return AMDGV_CMD__SUCCESS;
 }
 
 static const struct file_operations amdgv_cmd_file_ops = {
@@ -886,6 +923,21 @@ static long amdgv_ioctl_handler(struct file *file, unsigned int cmd, unsigned lo
 							(struct amdgv_get_cper_records_input *)
 								amdgv_cmd->input_buff_raw,
 							(struct amdgv_get_cper_records_output *)
+								amdgv_cmd->output_buff_raw);
+				break;
+			case AMDGV_CMD_RESET_ALL_ERROR_COUNTS:
+				amdgv_cmd->output_size = 0;
+				if (amdgv_cmd->input_size == sizeof(struct amdgv_cmd_dev_handle))
+					amdgv_cmd->cmd_res = amdgv_reset_all_error_counts((struct amdgv_cmd_dev_handle *) amdgv_cmd->input_buff_raw);
+				break;
+			case AMDGV_CMD_GET_RAS_POLICY_INFO:
+				amdgv_cmd->output_size = sizeof(struct amdgv_cmd_ras_policy_info);
+				if (amdgv_cmd->input_size == sizeof(struct amdgv_cmd_dev_handle))
+					amdgv_cmd->cmd_res =
+						amdgv_get_ras_policy_info(
+							(struct amdgv_cmd_dev_handle *)
+								amdgv_cmd->input_buff_raw,
+							(struct amdgv_cmd_ras_policy_info *)
 								amdgv_cmd->output_buff_raw);
 				break;
 			default:

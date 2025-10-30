@@ -44,7 +44,8 @@ std::string help_command_windows_host =
 std::string help_command_linux_host =
 	"    bad-pages         Gets bad page information about the specified GPU\n"
 	"    event             Displays event information for the given GPU\n"
-	"    firmware          Gets firmware information about the specified GPU\n";
+	"    firmware          Gets firmware information about the specified GPU\n"
+	"    set               Set options for devices\n";
 std::string help_command_bm =
 	"    firmware          Gets firmware information about the specified GPU\n"
 	"    process           Lists general process information running on the specified GPU\n"
@@ -55,7 +56,6 @@ std::string help_command_guest =
 	"    set               Set options for devices\n"
 	"    reset             Reset options for devices\n";
 std::string help_command_mi30x_host =
-	"    set               Set options for devices\n"
 	"    reset             Reset options for devices\n"
 	"    xgmi              Displays xgmi information of the devices\n"
 	"    topology          Displays topology information of the devices\n"
@@ -82,9 +82,9 @@ std::string list_common =
 	"    -g, --gpu [GPU ...]   Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n\n";
 std::string usage_static_common =
 	"usage: amd-smi static [-h | --help] [-g | --gpu [GPU ...]] [--json | --csv] [--file FILE]\n"
-	"                      [-a | --asic] [-b | --bus] [-V | --vbios] [-d | --driver]\n";
+	"                      [-a | --asic] [-b | --bus] [-I | --ifwi] [-d | --driver]\n";
 std::string usage_static_hyperv =
-	"                      [-p | --partition]\n";
+	"                      [-p | --partition] [-pd | --xgmi-plpd]\n";
 std::string usage_static_host =
 	"                      [-l | --limit] [-B | --board] [-r | --ras] [-D | --dfc-ucode] [-f | --fb-info]\n"
 	"                      [-n | --num-vf] [-v | --vram] [-c | --cache]\n";
@@ -109,7 +109,7 @@ std::string static_common =
 	"    -g, --gpu [GPU ...]                           Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
 	"    -a, --asic                                    All asic inforamtion\n"
 	"    -b, --bus                                     All bus information\n"
-	"    -V, --vbios                                   All video bios information\n"
+	"    -I, --ifwi                                    All video bios/IFWI information\n"
 	"    -d, --driver                                  Displays driver version\n";
 std::string static_host_windows =
 	"    -B, --board                                   All board information\n"
@@ -120,11 +120,13 @@ std::string static_host_windows =
 	"    -n, --num-vf                                  Displays number of supported and enabled VFs\n"
 	"    -v, --vram                                    All vram information\n"
 	"    -c, --cache                                   All cache info\n"
-	"    -m, --virtualization-mode                    All virtualization mode info\n";
+	"    -m, --virtualization-mode                     All virtualization mode info\n";
 std::string static_host_vf =
 	"    --vf=<gpu_index:vf_index, vf_bdf, vf_uuid>    Gets general information about the specified VF (e.g. timeslice, fb info)\n\n";
 std::string static_host_mi30x =
-	"    -p, --partition                               Gets current memory and accelerator partition information\n";
+	"    -p, --partition                               Gets current memory and accelerator partition information\n"
+	"    -pd, --xgmi-plpd                              Gets current xgmi plpd information\n"
+	"    -ps, --soc-pstate                             Gets current soc pstate information\n";
 std::string static_bm =
 	"    --limit                                       All limit metric values (i.e. power and thermal limits)\n"
 	"    --process-isolation                           The process isolation status\n\n";
@@ -135,7 +137,8 @@ std::string static_host_linux =
 	"    -f, --fb-info                                 All fb information\n"
 	"    -n, --num-vf                                  Displays number of supported and enabled VFs\n"
 	"    -v, --vram                                    All vram information\n"
-	"    -c, --cache                                   All cache info\n";
+	"    -c, --cache                                   All cache info\n"
+	"    -u, --numa                                    All numa info\n";
 std::string static_host_linux_mi200 =
 	"    -B, --board                                   All board information\n"
 	"    -l, --limit                                   All limit metric values (i.e. power and thermal limits)\n"
@@ -329,7 +332,9 @@ std::string xgmi_host =
 	"    -g, --gpu [GPU ...]         Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
 	"    --caps                      XGMI capabilities\n"
 	"    --fb-sharing                Framebuffer sharing for each mode\n"
-	"    --metric                    Metric XGMI information\n\n";
+	"    --metric                    Metric XGMI information\n"
+	"    --source-status             Source GPU status information\n"
+	"    --link-status               XGMI link status between two GPUs in the xgmi command \n\n";
 std::string xgmi_host_mi200 =
 	"Xgmi arguments:\n"
 	"                                Description:\n"
@@ -365,30 +370,43 @@ std::string set_common = "";
 std::string set_usage_common = "";
 std::string set_message = "";
 std::string set_usage_host =
-	"usage: amd-smi set [-h | --help] [--file FILE] [-xgmi ----fb-sharing-mode=[MODE] --group[<GPUx, GPUy>]]\n"
-	"                   [--memory-partition [PARTITION_MODE]] [ --accelerator-partition [PROFILE_INDEX]] [ --power-cap [POWER_CAP_VALUE]]\n\n";
+	"usage: amd-smi set [-h | --help] --num_vf=<NUM_VF> [-g=<GPU> | --gpu=<GPU>]\n\n";
+std::string set_usage_host_mi300 =
+	"usage: amd-smi set [-h | --help] [--file FILE] [-xgmi --fb-sharing-mode=[MODE] --group[<GPUx, GPUy>]]\n"
+	"                   [--memory-partition [PARTITION_MODE]] [ --accelerator-partition [PROFILE_INDEX]] [ --power-cap [POWER_CAP_VALUE]]\n"
+	"                   [--xgmi-plpd [XGMI_PLPD_VALUE]] [--num_vf=<NUM_VF> [-g=<GPU> | --gpu=<GPU>]]\n\n";
 std::string set_usage_host_mi200 =
-	"usage: amd-smi set [-h | --help] [--file FILE] [-xgmi ----fb-sharing-mode=[MODE] --group[<GPUx, GPUy>]]\n";
+	"usage: amd-smi set [-h | --help] [--file FILE] [-xgmi --fb-sharing-mode=[MODE] --group[<GPUx, GPUy>]]\n";
 std::string set_usage_bm =
 	"usage: amd-smi set [-h | --help] [--json | --csv] [--file FILE]\n\n";
 std::string set_host =
 	"Set arguments:\n"
 	"                                                                                           Description:\n"
 	"    -h, --help                                                                             show this help message and exit\n"
-	"    --xgmi --fb-sharing-mode=<AmdSmiXgmiFbSharingMode> --group=\"<gpu_id1-gpu_id2>\"         Sets framebuffer sharing mode from group [\"MODE_1\", \"MODE_2\", \"MODE_4\", \"MODE_8\", \"CUSTOM\"]\n"
+	"    --num_vf=<num_vf>                                                                      Sets number of VFs\n"
+	"    -g=<gpu_id>, --gpu=<gpu_id>                                                            Select a GPU ID, BDF or UUID, if not selected it will set given num of VFs for all GPUs\n";
+std::string set_host_mi300 =
+	"Set arguments:\n"
+	"                                                                                           Description:\n"
+	"    -h, --help                                                                             show this help message and exit\n"
+	"    --xgmi --fb-sharing-mode=<AmdSmiXgmiFbSharingMode> --group=\"<gpu_id1-gpu_id2>\"       Sets framebuffer sharing mode from group [\"MODE_1\", \"MODE_2\", \"MODE_4\", \"MODE_8\", \"CUSTOM\"]\n"
 	"                                                                                           Where, MODE_X represents that X GPUs will be in the same group, linked together:\n"
 	"                                                                                           MODE_1 (one GPU in a group), MODE_2 (two GPUs in a group), MODE_4 (four GPUs in a group), MODE_8 (eight GPUs in a group).\n"
 	"                                                                                           Note: This command will only work if there's no guest VM running.\n"
-	"                                                                                           All possible configurations can be seen by running the .\\amd-smi.exe xgmi command.\n\n"
-	"    --memory-partition=<AmdSmiMemoryPartitionSetting>                                      Sets memory partition setting from group ['NPS1', 'NPS2', 'NPS4', 'NPS8']\n"
+	"                                                                                           All possible configurations can be seen by running the amd-smi xgmi command.\n\n"
+	"    --memory-partition=<AmdSmiMemoryPartitionSetting>                                      Sets memory partition setting\n"
 	"                                                                                           Note: This command will only work if there's no guest VM running.\n"
-	"                                                                                           All possible configurations can be seen by running the .\\amd-smi.exe partition command.\n\n"
+	"                                                                                           Run 'amd-smi partition' to list memory-partition modes supported on current platform.\n\n"
 	"    --accelerator-partition=<profile_index>                                                Sets accelerator partition setting to a mode based on profile_index from partition command\n"
 	"                                                                                           Note: This command will only work if there's no guest VM running.\n"
-	"                                                                                           All possible configurations can be seen by running the .\\amd-smi.exe partition command.\n\n"
+	"                                                                                           All possible configurations can be seen by running the amd-smi partition command.\n\n"
 	"    --power-cap=<power_cap_value>                                                          Sets power cap to the provided power cap value.\n"
 	"                                                                                           Note: Cap value must be between the minimum (min_power_cap) and maximum (max_power_cap) power cap values.\n"
-	"                                                                                           Range of the cap value can be seen by running the .\\amd-smi.exe static command.\n\n";
+	"                                                                                           Range of the cap value can be seen by running the amd-smi static command.\n\n"
+	"    --num_vf=<num_vf>                                                                      Sets number of VFs\n"
+	"    --xgmi-plpd=<xgmi-plpd_value>                                                          Sets xgmi plpd setting to the provided xgmi plpd value.\n"
+	"    --soc-pstate=<soc-pstate_value>                                                        Sets soc pstate setting to the provided soc pstate value.\n"
+	"    -g=<gpu_id>, --gpu=<gpu_id>                                                            Select a GPU ID, BDF or UUID, if not selected it will set given num of VFs for all GPUs\n\n";
 std::string set_host_mi200 =
 	"Set arguments:\n"
 	"                                                                                           Description:\n"
@@ -397,7 +415,7 @@ std::string set_host_mi200 =
 	"                                                                                           Where, MODE_X represents that X GPUs will be in the same group, linked together:\n"
 	"                                                                                           MODE_1 (one GPU in a group), MODE_2 (two GPUs in a group), MODE_4 (four GPUs in a group), MODE_8 (eight GPUs in a group).\n"
 	"                                                                                           Note: This command will only work if there's no guest VM running.\n"
-	"                                                                                           All possible configurations can be seen by running the .\\amd-smi.exe xgmi command.\n\n";
+	"                                                                                           All possible configurations can be seen by running the amd-smi xgmi command.\n\n";
 std::string set_bm =
 	"Set arguments:\n"
 	"                                                                                           Description:\n"
@@ -405,7 +423,7 @@ std::string set_bm =
 	"    --process-isolation=<0 or 1>                                                           Enable or disable the GPU process isolation: 0 for disable and 1 for enable\n\n"
 	"    --power-cap=<power_cap_value>                                                          Sets power cap to the provided power cap value.\n"
 	"                                                                                           Note: Cap value must be between the minimum (min_power_cap) and maximum (max_power_cap) power cap values.\n"
-	"                                                                                           Range of the cap value can be seen by running the .\\amd-smi.exe static command.\n\n";
+	"                                                                                           Range of the cap value can be seen by running the amd-smi static command.\n\n";
 std::string reset_common = "";
 std::string reset_usage_common = "";
 std::string reset_usage_linux =
@@ -481,11 +499,12 @@ std::string partition_host =
 	"    -g, --gpu [GPU ...]          Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
 	"    -c, --current                Displays current memory and accelerator partition mode\n"
 	"    -m, --memory                 Displays caps and current memory partition setting\n"
-	"    -a, --accelerator            Displays caps and current accelerator partition setting.\n\n";
+	"    -a, --accelerator            Displays caps and current accelerator partition setting.\n"
+	"    -gl, --global            	  Displays global partitioning setting.\n\n";
 std::string partition_usage_common = "";
 std::string partition_usage_host =
 	"usage: amd-smi partition [-h | --help] [--file FILE] [-g | --gpu [GPU ...]]\n"
-	"                         [-c | --current] [-m | --memory] [-a | --accelerator]\n\n";
+	"                         [-c | --current] [-m | --memory] [-a | --accelerator] [-gl | --global]\n\n";
 std::string partition_message =
 	"Displays partition information about specific GPU.\n"
 	"If no GPU is provided, returns information for all GPUs on the system\n"
@@ -514,24 +533,26 @@ std::string partition_modifiers =
 	"--file FILE           Saves output into a file on the provided path (stdout by default).\n";
 
 std::string ras_usage_message =
-	"\nGet ras informations \n"
-	"If no GPU is provided, returns information for all GPUs on the system\n"
-	"If no ras information argument is provided all ras information will be displayed\n\n";
+	"\nGets ras information. \n"
+	"For --cper operations: If no GPU is provided, returns information for all GPUs on the system\n"
+	"For --afid operations: GPU filtering is not supported (operates on CPER files)\n"
+	"A target argument (--cper or --afid) is required\n\n";
 
-std::string usage_ras_host = "usage: amd-smi ras [-h | --help] [--cper] [--severity=[fatal, nonfatal-uncorrected, nonfatal-corrected, all]] [--folder=[FOLDER]] "
-							 "[--file-limit=[NUMBER_OF_FILES]] [--follow] \n"
-							 "       amd-smi ras [-h | --help] [--afid] [--cper-file=[FOLDER]] \n";
+std::string usage_ras_host =
+	"usage: amd-smi ras [-h | --help] [--cper] [--severity=[fatal, nonfatal-uncorrected, nonfatal-corrected, all]] [--folder=[FOLDER]] "
+	"[--file-limit=[NUMBER_OF_FILES]] [--follow] [-g | --gpu [GPU ...]] \n"
+	"       amd-smi ras [-h | --help] [--afid] [--cper-file=[FOLDER]] \n";
 
 std::string ras_host = "Ras arguments:\n"
-	"                                                                                                    Description:\n"
-	"    -h, --help                                                                                      show this help message and exit\n"
-	"    --cper --severity=<fatal, nonfatal-uncorrected, nonfatal-corrected, all> --folder=[FOLDER]      Get ras cper errors and saved in file based on severity. \n"
-	"           --file-limit=<number_of_files> --follow                                                  If the --folder option is not provided, no files will be dumped. \n"
-	"                                                                                                    By default, it will dump the cper report currently cached in the driver. \n"
-	"                                                                                                    If user specify the --file-limit=<number_of_files> option, the CLI will only keep max <number_of_files> files. \n"
-	"                                                                                                    If the --follow option is provided, the cli will continuous monitoring and \n"
-	"                                                                                                    dump the report until the ctrl+c is pressed.\n"
-	"    --afid --cper-file=[FILE]                                                                       Get ras cper AFID list \n";
+					   "                                                                                                    Description:\n"
+					   "    -h, --help                                                                                      show this help message and exit\n"
+					   "    -g, --gpu [GPU ...]                                                                             Select a GPU ID, BDF or UUID (only valid with --cper)\n"
+					   "    --cper --severity=<fatal, nonfatal-uncorrected, nonfatal-corrected, all> --folder=[FOLDER]      Get ras cper errors and saved in file based on severity. \n"
+					   "           --file-limit=<number_of_files> --follow                                                  Supports GPU filtering. If --folder not provided, no files dumped. \n"
+					   "                                                                                                    By default, dumps cper report currently cached in driver. \n"
+					   "                                                                                                    If --file-limit=<number> specified, CLI keeps max <number> files. \n"
+					   "                                                                                                    If --follow specified, continuous monitoring until ctrl+c pressed.\n"
+					   "    --afid --cper-file=[FILE]                                                                       Get AFID list from existing CPER file (GPU filtering not supported)\n";
 
 
 std::string usage_ras_common = "";
@@ -555,8 +576,8 @@ AmdSmiHelpInfo::AmdSmiHelpInfo()
 				usage_xgmi_specific = xgmi_usage_host;
 				topology_specific = topology_host;
 				usage_topology_specific = topology_usage_host;
-				set_specific = set_host;
-				usage_set_specific = set_usage_host;
+				set_specific = "";
+				usage_set_specific = set_usage_host_mi300;
 				reset_specific = "";
 				usage_reset_specific = "";
 				partition_specific = partition_host;
@@ -656,8 +677,8 @@ AmdSmiHelpInfo::AmdSmiHelpInfo()
 				usage_xgmi_specific = xgmi_usage_host;
 				topology_specific = topology_host;
 				usage_topology_specific = topology_usage_host;
-				set_specific = set_host;
-				usage_set_specific = set_usage_host;
+				set_specific = set_host_mi300;
+				usage_set_specific = set_usage_host_mi300;
 				reset_specific = reset_host_linux;
 				usage_reset_specific = reset_usage_linux;
 				partition_specific = partition_host;
@@ -690,9 +711,9 @@ AmdSmiHelpInfo::AmdSmiHelpInfo()
 				usage_xgmi_specific = "";
 				topology_specific = "";
 				usage_topology_specific = "";
-				set_specific = "";
+				set_specific = set_host;
 				reset_specific = "";
-				usage_set_specific = "";
+				usage_set_specific = set_usage_host;
 				usage_reset_specific = "";
 				partition_specific = "";
 				usage_partition_specific = "";

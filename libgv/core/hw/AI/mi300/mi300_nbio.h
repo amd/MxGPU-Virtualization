@@ -48,9 +48,10 @@ void mi300_nbio_assign_vcn_to_vf(struct amdgv_adapter *adapt);
 void mi300_nbio_dump_partition_config(struct amdgv_adapter *adapt);
 int mi300_nbio_pcie_curr_link_speed(struct amdgv_adapter *adapt);
 int mi300_nbio_pcie_curr_link_width(struct amdgv_adapter *adapt);
-int mi300_nbio_get_curr_memory_partition_mode(
-	struct amdgv_adapter *adapt,
-	enum amdgv_memory_partition_mode *memory_partition_mode);
+int mi300_nbio_get_supported_memory_partition_mode(struct amdgv_adapter *adapt,
+			enum amdgv_memory_partition_mode *supported_nps, int *supported_nps_count);
+int mi300_nbio_get_nps_mode(struct amdgv_adapter *adapt,
+			    enum amdgv_memory_partition_mode *memory_partition_mode);
 enum amdgv_accelerator_partition_mode mi300_nbio_get_accelerator_partition_mode(struct amdgv_adapter *adapt);
 enum amdgv_accelerator_partition_mode mi300_nbio_get_accelerator_partition_mode_default_setting(
 	struct amdgv_adapter *adapt,

@@ -28,21 +28,7 @@ When running make inside the gim folder, the AMD SMI library is built as well. H
 - Run `make gen_coverage` to calculate the code coverage of the AMD SMI library.
 - If any changes are made to the interface folder, regenerate the Python wrapper by running `make python_wrapper` and replace the `amdsmi_wrapper.py` file in the py/interface folder with the one generated in the build folder `build/amdsmi/amdsmi_wrapper/amdsmi_wrapper.py`.
 
-### AMD SMI tool build
-
-Before running the command to build the tool, make sure you are meeting the following requirements on your system:
-    -cmake minimum version 3.15
-    -g++ minimum version 8
-
-When running make inside the gim/smi-lib/cli/cpp folder, the AMD SMI Tool will be built.
-
-- Run `make` in the gim/smi-lib/cli/cpp folder to build the tool.
-- Run `make clean` to remove all files generated during the build process, such as object files and executables, to ensure clean build environment.
-
-After build is successfully finished, navigate to gim/smi-lib/cli/cpp/build folder and tool binary should be there.
-Open terminal and navigate to this location and now you can execute smi tool.
-
-### AMD SMI LIBRARY Build Options
+## AMD SMI LIBRARY Build Options
 
 These options allow you to customize the build process, such as specifying the build type, enabling thread safety, enabling logging, and using the Thread Sanitizer.
 
@@ -152,3 +138,116 @@ On a Linux platform, go to the smi-lib directory `gim/smi-lib/` and run the foll
 
 `make clean` - cleaning build/ directory
 `make package -j$(nproc)` - building AMD SMI library and getting AMD SMI Python package on the following path: `gim/smi-lib/build/amdsmi/package/Release/amdsmi`
+
+## AMD SMI tool build
+
+The AMD SMI CLI tool is a command line utility built in C++ that utilizes AMD SMI Library APIs to monitor and configure AMD GPUs on Linux host systems.
+
+#### Tool Source Code Structure
+
+The CLI tool source code is organized in a structured hierarchy designed for maintainability and platform-specific implementations.
+
+##### Folder Structure
+
+```text
+cli/
+└── cpp/
+    ├── cmake/                # Contains all CMake files used in the build
+    │   └── linux/
+    ├── docs/
+    │   └── external/         # Contains documents
+    ├── inc/                  # Internal include files
+    ├── src/                  # Source files
+    │   ├── guest/            # Windows Guest-specific source files
+    │   └── host/             # Host-specific source files
+    └── utils/
+        ├── scripts/          # Utility scripts
+        └── third_party/
+            └── inc/          # Third-party libraries
+                ├── json/
+                └── tabulate/
+```
+
+##### Key Components
+
+**Include Files (`inc/`)**
+Contains all header files that define the CLI tool's interfaces, including:
+- Command parsers and handlers
+- API interface definitions
+- Template definitions for output formatting
+- Helper functions and utilities
+
+**Source Files (`src/`)**
+- **`host/`**: Contains Linux host-specific implementations for GPU management and monitoring
+- **`guest/`**: Contains Windows guest-specific source files (for cross-platform compatibility)
+
+**Build System (`cmake/`)**
+- **`linux/`**: Linux-specific CMake configuration files
+- Platform-specific build configurations and dependencies
+
+**Third-party Libraries (`utils/third_party/`)**
+- **`json/`**: JSON parsing and formatting library. Converts internal data structures to properly formatted JSON objects for machine-readable output.
+- **`tabulate/`**: Table formatting library for structured output. Handles the alignment, spacing, and visual formatting of tabular data (like the monitor command output showing GPU metrics in neat columns).
+
+
+#### Build Requirements
+
+**Prerequisites**
+- Modern C++ compiler (g++11)
+- CMake 3.16 or higher
+- AMD SMI Library development files
+- Linux kernel headers (for host functionality)
+
+**Dependencies**
+- AMD SMI Library (libamdsmi)
+- Standard C++ libraries
+- JSON library (bundled in third_party)
+- Tabulate library (bundled in third_party)
+
+#### Build Process
+
+**Basic Build Steps**
+
+- Run `make` in the `smi-lib/cli/cpp` folder to build the tool.
+- Run `make clean` to remove all files generated during the build process, such as object files and executables, to ensure clean build environment.
+
+
+#### Output Location
+
+After successful compilation, the `amd-smi` binary will be generated in: `smi-lib/cli/cpp/build/` (build directory).
+
+#### Runtime Requirements
+
+**Library Dependencies**
+The CLI tool requires the AMD SMI Library (`libamdsmi.so`) to be available either:
+- In the same directory as the `amd-smi` binary
+- In the system library path (`/usr/local/lib`)
+- Via `LD_LIBRARY_PATH` environment variable
+
+**Driver Requirements**
+- AMD SR-IOV Host driver must be installed and loaded
+- For SRIOV functionality: SR-IOV must be enabled in the system
+
+#### Development Notes
+
+**Code Organization**
+- Each command is implemented as a separate class inheriting from a base command interface
+- Template-based output formatting ensures consistent display across all commands
+- Platform-specific code is isolated in respective directories (`host/` vs `guest/`)
+
+**Extending Functionality**
+To add new commands or features:
+1. Create new command class in appropriate `src/` subdirectory
+2. Add corresponding header file in `inc/`
+3. Update command parser to recognize new commands
+
+#### Troubleshooting
+
+**Common Build Issues**
+- **Missing AMD SMI Library**: Ensure `libamdsmi.so` is built and available
+- **CMake version**: Verify CMake 3.16+ is installed
+
+**Runtime Issues**
+- **Library not found**: Check `LD_LIBRARY_PATH` includes AMD SMI Library location
+- **Permission errors**: Ensure proper permissions for GPU device access
+- **Driver issues**: Verify AMD SR-IOV Host driver is properly installed and loaded

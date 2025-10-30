@@ -39,6 +39,7 @@ static int amdgv_atomfirmware_update_checksum(struct amdgv_adapter *adapt, uint8
 	for (i = 0; i < image_size; i++)
 		sum += image[i];
 
+	adapt->vbios.byte_sum = sum;
 	rom_header->CheckSum[0] = 0x100 - (uint8_t)sum;
 
 	AMDGV_INFO("update guest vbios checksum to 0x%02x \n", rom_header->CheckSum[0]);
@@ -133,6 +134,7 @@ int amdgv_atomfirmware_set_fw_usage_fb_guest(struct amdgv_adapter *adapt)
 				AMDGV_DEBUG("FFBM TMR share enabled: atom tmr offset kb: %d, allocated tmr size kb: %d", AMD_SRIOV_MSG_TMR_OFFSET_KB, adapt->psp.allocated_tmr_size / 1024);
 				firmware_usage_v2_2->used_by_driver_region0_in_kb = (uint32_t)(AMD_SRIOV_MSG_TMR_OFFSET_KB + adapt->psp.allocated_tmr_size / 1024);
 			} else {
+				/* this is not read in PMFW managed eeprom devices */
 				firmware_usage_v2_2->used_by_driver_region0_in_kb = AMDGV_RESERVE_FB_SIZE_KB;
 			}
 

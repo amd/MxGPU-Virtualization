@@ -777,7 +777,8 @@ static int amdgv_sched_manual_switch_remove_vf(struct amdgv_adapter *adapt,
 
 	amdgv_list_del(&entry->list);
 
-	world_switch->vf_inited &= ~(1 << idx_vf);
+	if (!is_suspend_vf(idx_vf))
+		world_switch->vf_inited &= ~(1 << idx_vf);
 
 	if (entry->idx_vf != AMDGV_PF_IDX)
 		entry->idx_vf = AMDGV_INVALID_IDX_VF;
@@ -1247,7 +1248,9 @@ static int amdgv_sched_auto_switch_remove_vf(struct amdgv_adapter *adapt,
 
 	AMDGV_DEBUG("remove %s from auto_scheduling on sched_block=%d\n",
 			amdgv_idx_to_str(idx_vf), world_switch->sched_block);
-	world_switch->vf_inited &= ~(1 << idx_vf);
+
+	if (!is_suspend_vf(idx_vf))
+		world_switch->vf_inited &= ~(1 << idx_vf);
 
 	/* remove idx_vf from active_vfs */
 	adapt->array_vf[idx_vf].auto_run = AMDGV_WS_AUTO_RUN_DISABLED;
@@ -1267,7 +1270,8 @@ static int amdgv_sched_auto_switch_update_time_slice(struct amdgv_adapter *adapt
 {
 	struct amdgv_vf_device *entry = &adapt->array_vf[idx_vf];
 	uint32_t time_slice = entry->time_slice[world_switch->sched_block];
-	int ret = 0;
+	int ret = 0, i;
+	bool switch_running = world_switch->switch_running;
 
 	if (world_switch->sched_block != AMDGV_SCHED_BLOCK_GFX)
 		return 0;
@@ -1279,7 +1283,16 @@ static int amdgv_sched_auto_switch_update_time_slice(struct amdgv_adapter *adapt
 	if (ret)
 		return ret;
 
-	ret = amdgv_sched_world_switch_config_auto_sched_mode(adapt, world_switch);
+	amdgv_sched_world_switch_stop(adapt, world_switch);
+
+	for_each_id(i, world_switch->hw_sched_mask) {
+		ret = amdgv_sched_world_switch_config_auto_sched_mode(adapt, i);
+		if (ret)
+			return ret;
+	}
+
+	if (switch_running)
+		amdgv_sched_world_switch_start(adapt, world_switch);
 
 	return ret;
 }
@@ -1750,31 +1763,25 @@ int amdgv_sched_world_switch_update_time_slice(struct amdgv_adapter *adapt, uint
 	return world_switch->funcs->update_time_slice(adapt, world_switch, idx_vf);
 }
 
-int amdgv_sched_world_switch_config_auto_sched_mode(
-	struct amdgv_adapter *adapt, struct amdgv_sched_world_switch *world_switch)
+int amdgv_sched_world_switch_config_auto_sched_mode(struct amdgv_adapter *adapt,
+	 uint32_t hw_sched_id)
 {
-	uint32_t hw_sched_id = 0;
-	bool switch_running = world_switch->switch_running;
+	struct amdgv_sched_world_switch *world_switch;
 	int ret = 0;
+
+	if (amdgv_sched_get_world_switch_by_hw_sched_id(adapt, hw_sched_id, &world_switch))
+		return AMDGV_FAILURE;
 
 	if (!world_switch->enabled)
 		return 0;
 
-	for_each_id(hw_sched_id, world_switch->hw_sched_mask) {
-		if (world_switch->sched_mode <= AMDGV_SCHED_MAX_HW_SCHED_MODE) {
-			if (switch_running) {
-				ret = amdgv_hw_sched_state_pause(adapt, -1, hw_sched_id);
-				world_switch->switch_running = false;
-			}
-			if (!ret)
-				ret = amdgv_gpuiov_config_auto_sched_mode(adapt, hw_sched_id,
-								world_switch->sched_mode);
-			if (!ret && switch_running) {
-				ret = amdgv_hw_sched_state_run_auto(adapt, -1, hw_sched_id);
-				world_switch->switch_running = true;
-			}
-		}
+	if (adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state == AMDGV_ENABLE_AUTO_HW_SWITCH) {
+		AMDGV_WARN("hw sched enabled, skip config sched mode\n");
+		return AMDGV_FAILURE;
 	}
+
+	ret = amdgv_gpuiov_config_auto_sched_mode(adapt, hw_sched_id,
+						world_switch->sched_mode);
 
 	return ret;
 }
@@ -1874,37 +1881,30 @@ int amdgv_sched_world_context_one_time_loop(struct amdgv_adapter *adapt,
 {
 	int ret;
 	uint64_t time_slice;
-	struct amdgv_sched_active_vf_entry *entry;
+	int idx_vf;
 
-	if (amdgv_list_empty(&world_switch->manual.active_vf_list))
+	/* one time loop is only for gfx now */
+	if (world_switch->sched_block != AMDGV_SCHED_BLOCK_GFX)
 		return 0;
 
-	amdgv_list_for_each_entry(entry, &world_switch->manual.active_vf_list,
-				   struct amdgv_sched_active_vf_entry, list) {
-		if (entry->dummy_vf)
+	for (idx_vf = 0; idx_vf <= AMDGV_PF_IDX; ++idx_vf) {
+		if (adapt->array_vf[idx_vf].unshutdown)
 			continue;
 
-		if (adapt->array_vf[entry->idx_vf].unshutdown)
+		if (!is_active_vf(idx_vf))
 			continue;
 
 		/* only if Windows PF participates in world switch, give 6ms to all the VF's */
-		if (adapt->flags & AMDGV_FLAG_USE_PF) {
+		if (adapt->flags & AMDGV_FLAG_USE_PF)
 			time_slice = DEFAULT_GFX_TIME_SLICE;
-		} else {
-			time_slice = amdgv_sched_world_switch_calculate_time_slice(
-				adapt, world_switch, entry->idx_vf);
-			/* Give VF the minimum time slice instead of skipping */
-			if (time_slice == 0)
-				time_slice = world_switch->manual.array_vf[entry->idx_vf]
-							 .time_slice /
-						 2;
-		}
+		else
+			time_slice = adapt->array_vf[idx_vf].time_slice[world_switch->sched_block];
 
-		ret = amdgv_sched_world_context_load(adapt, entry->idx_vf, world_switch);
+		ret = amdgv_sched_world_context_load(adapt, idx_vf, world_switch);
 		if (ret)
 			return ret;
 
-		oss_msleep(time_slice / 1000);
+		oss_usleep(time_slice);
 
 		ret = amdgv_sched_world_context_save(adapt, world_switch);
 		if (ret)
@@ -2191,14 +2191,14 @@ int amdgv_sched_world_switch_reset(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	for_each_id(hw_sched_id, world_switch->hw_sched_mask) {
 		adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state =
 			AMDGV_SAVE_GPU_STATE;
-		adapt->sched.array_vf[idx_vf].cur_vf_state[hw_sched_id] = AMDGV_SAVE_GPU_STATE;
 
-		/* Clean SW state for atcive VFs on auto scheduler */
+		/* Clean SW state for all active VFs on auto scheduler */
 		for (tmp_idx_vf = 0; tmp_idx_vf < AMDGV_MAX_VF_SLOT; tmp_idx_vf++) {
-			if (adapt->sched.array_vf[tmp_idx_vf].cur_vf_state[hw_sched_id] == AMDGV_RUN_GPU
-				&& idx_vf != AMDGV_PF_IDX) {
-				adapt->sched.array_vf[tmp_idx_vf].cur_vf_state[hw_sched_id] = AMDGV_SAVE_GPU_STATE;
-			}
+
+			if (!is_active_vf(tmp_idx_vf))
+				continue;
+
+			adapt->sched.array_vf[tmp_idx_vf].cur_vf_state[hw_sched_id] = AMDGV_SAVE_GPU_STATE;
 		}
 
 		if (amdgv_hw_sched_state_shutdown(adapt, idx_vf, hw_sched_id)) {

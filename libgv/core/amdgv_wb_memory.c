@@ -46,7 +46,7 @@ int amdgv_wb_memory_init(struct amdgv_adapter *adapt)
 {
 	adapt->wb.wb_obj =
 		amdgv_memmgr_alloc_align(&adapt->memmgr_pf,
-						AMDGV_MAX_WB * AMDGV_WB_MEORY_BYTE_SIZE,
+						AMDGV_MAX_WB * AMDGV_WB_MEMORY_BYTE_SIZE,
 						PAGE_SIZE, MEM_GFX_WB);
 	if (!adapt->wb.wb_obj) {
 		AMDGV_WARN("Create WB bo failed\n");
@@ -76,7 +76,7 @@ void amdgv_wb_memory_fini(struct amdgv_adapter *adapt)
 void amdgv_wb_memory_clear(struct amdgv_adapter *adapt)
 {
 	/* Clear the whole wb memory */
-	oss_memset((void *)adapt->wb.wb, 0, AMDGV_MAX_WB * AMDGV_WB_MEORY_BYTE_SIZE);
+	oss_memset((void *)adapt->wb.wb, 0, AMDGV_MAX_WB * AMDGV_WB_MEMORY_BYTE_SIZE);
 }
 
 int amdgv_wb_memory_hw_init_address(struct amdgv_adapter *adapt)

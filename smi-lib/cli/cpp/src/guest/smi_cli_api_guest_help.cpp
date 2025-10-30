@@ -117,7 +117,7 @@ int AmdSmiApiGuest::amdsmi_get_bdf_from_uuid_or_bdf(uint64_t &processor_bdf, int
 		free(processors);
 		exit(1);
 	}
-	if (type == BDF) {
+	if (type == static_cast<int>(DeviceType::BDF)) {
 		for (int i = 0; i < gpu_count; i++) {
 			amdsmi_bdf_t bdf;
 			ret = guest_amdsmi_get_gpu_device_bdf(processors[i], &bdf);
@@ -378,8 +378,7 @@ int AmdSmiApiGuest::get_string_from_enum_fw_block(int fw_block, std::string& out
 		{AMDSMI_FW_ID_SMC, "SMC"},
 		{AMDSMI_FW_ID_DMCU, "DMCU"},
 		{AMDSMI_FW_ID_PSP_RAS, "PSP_RAS"},
-		{AMDSMI_FW_ID_P2S_TABLE, "P2S_TABLE"},
-		{AMDSMI_FW_ID_PLDM_BUNDLE, "PLDM"}
+		{AMDSMI_FW_ID_P2S_TABLE, "P2S_TABLE"}
 	};
 
 	out = fw_blocks((amdsmi_fw_block_t)fw_block);

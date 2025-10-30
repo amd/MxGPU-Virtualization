@@ -39,7 +39,7 @@ auto constexpr
 asic_csv_header {",asic_market_name,asic_vendor_id,asic_vendor_name,asic_subvendor_id,asic_device_id,asic_subsystem_id,asic_rev_id,asic_serial,oam_id,num_of_compute_units"};
 auto constexpr
 bus_csv_header {",bus_bdf,max_pcie_width,max_pcie_speed,pcie_interface_version,slot_type,max_pcie_interface_version"};
-auto constexpr vbios_csv_header {",vbios_name,vbios_build_date,vbios_part_number,vbios_version"};
+auto constexpr ifwi_csv_header {",ifwi_name,ifwi_build_date,ifwi_part_number,ifwi_version,ifwi_boot_firmware"};
 auto constexpr
 board_csv_header {",board_model_number,board_product_serial,board_fru_id,board_manufacturer_name,board_product_name"};
 auto constexpr limit_csv_header {
@@ -62,6 +62,8 @@ auto constexpr header_process_isolation {",process_isolation"};
 auto constexpr header_static_partition {",accelerator_partition,memory_partition,partition_id"};
 auto constexpr header_soc_pstate {",num_supported,current_id,policy_id,policy_description"};
 auto constexpr header_virtualization_mode {",mode"};
+auto constexpr header_numa {",numa_node,numa_cpu_affinity_list,numa_cpu_affinity_bitmask,numa_cpu_affinity_core_range,numa_socket_affinity"};
+auto constexpr header_xgmi_plpd {",num_supported,current_id,policy_id,policy_description"};
 
 int AmdSmiStaticCommand::static_command_asic(uint64_t processor,
 		std::string &formatted_string)
@@ -179,10 +181,26 @@ int AmdSmiStaticCommand::static_command_soc_pstate(uint64_t processor,
 int AmdSmiStaticCommand::static_command_virtualization_mode(uint64_t processor,
 	std::string &formatted_string)
 {
-int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_virtualization_mode_command(processor,
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_virtualization_mode_command(processor,
 		  arg, formatted_string);
-return ret;
+	return ret;
 }
+
+int AmdSmiStaticCommand::static_command_numa(uint64_t processor,
+					std::string &formatted_string)
+{
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_numa_command(processor,
+		  arg, formatted_string);
+	return ret;
+}
+
+int AmdSmiStaticCommand::static_command_xgmi_plpd(uint64_t processor, std::string &formatted_string)
+{
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_plpd(processor,
+			  arg, formatted_string);
+	return ret;
+}
+
 
 void AmdSmiStaticCommand::static_command_json()
 {
@@ -246,13 +264,15 @@ void AmdSmiStaticCommand::static_command_json()
 			}
 			if ((std::find(arg.options.begin(), arg.options.end(), "vbios") != arg.options.end()) ||
 					(std::find(arg.options.begin(), arg.options.end(), "V") !=  arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "ifwi") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "I") !=  arg.options.end()) ||
 					arg.all_arguments) {
-				std::string param{"vbios"};
+				std::string param{"ifwi"};
 				ret = static_command_vbios(gpu_bdf, out);
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					values_json = nlohmann::ordered_json::parse(out);
-					json["vbios"] = values_json;
+					json["ifwi"] = values_json;
 					out.clear();
 				}
 				out.clear();
@@ -387,6 +407,20 @@ void AmdSmiStaticCommand::static_command_json()
 				}
 				out.clear();
 			}
+			if ((std::find(arg.options.begin(), arg.options.end(), "xgmi-plpd") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "pd") != arg.options.end()) ||
+					arg.all_arguments) {
+				std::string param{"xgmi-plpd"};
+				ret = static_command_xgmi_plpd(gpu_bdf, out);
+				int error = handle_exceptions(ret, param, arg);
+				if (error == 0) {
+					values_json = nlohmann::ordered_json::parse(out);
+					json["xgmi-plpd"] = values_json;
+					out.clear();
+				} else if (error == COMMAND_NOT_SUPPORTED_AND_ALL_ARGS) {
+					out.clear();
+				}
+			}
 			if ((std::find(arg.options.begin(), arg.options.end(), "partition") != arg.options.end()) ||
 					(std::find(arg.options.begin(), arg.options.end(), "p") != arg.options.end()) ||
 					arg.all_arguments) {
@@ -420,6 +454,20 @@ void AmdSmiStaticCommand::static_command_json()
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					json["virtualization_mode"] = out;
+					out.clear();
+				} else if (error == COMMAND_NOT_SUPPORTED_AND_ALL_ARGS) {
+					out.clear();
+				}
+			}
+			if ((std::find(arg.options.begin(), arg.options.end(), "numa") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "u") != arg.options.end()) ||
+					arg.all_arguments) {
+				std::string param{"numa"};
+				ret = static_command_numa(gpu_bdf, out);
+				int error = handle_exceptions(ret, param, arg);
+				if (error == 0) {
+					nlohmann::ordered_json json_numa = nlohmann::ordered_json::parse(out);
+					json["numa"] = json_numa;
 					out.clear();
 				} else if (error == COMMAND_NOT_SUPPORTED_AND_ALL_ARGS) {
 					out.clear();
@@ -485,9 +533,11 @@ void AmdSmiStaticCommand::static_command_human()
 			}
 			if ((std::find(arg.options.begin(), arg.options.end(), "vbios") != arg.options.end()) ||
 					(std::find(arg.options.begin(), arg.options.end(), "V") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "ifwi") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "I") != arg.options.end()) ||
 					arg.all_arguments) {
 				ret = static_command_vbios(gpu_bdf, formatted_string);
-				std::string param{"vbios"};
+				std::string param{"ifwi"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					out += formatted_string;
@@ -615,6 +665,19 @@ void AmdSmiStaticCommand::static_command_human()
 				}
 				formatted_string.clear();
 			}
+			if ((std::find(arg.options.begin(), arg.options.end(), "xgmi-plpd") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "pd") != arg.options.end()) ||
+					arg.all_arguments) {
+				ret = static_command_xgmi_plpd(gpu_bdf, formatted_string);
+				std::string param{"xgmi-plpd"};
+				int error = handle_exceptions(ret, param, arg);
+				if (error == 0) {
+					out += formatted_string;
+					formatted_string.clear();
+				} else if (error == COMMAND_NOT_SUPPORTED_AND_ALL_ARGS) {
+					formatted_string.clear();
+				}
+			}
 			if ((std::find(arg.options.begin(), arg.options.end(), "partition") != arg.options.end()) ||
 					(std::find(arg.options.begin(), arg.options.end(), "p") != arg.options.end()) ||
 					arg.all_arguments) {
@@ -644,6 +707,18 @@ void AmdSmiStaticCommand::static_command_human()
 					arg.all_arguments) {
 				ret = static_command_virtualization_mode(gpu_bdf, formatted_string);
 				std::string param{"virtualization_mode"};
+				int error = handle_exceptions(ret, param, arg);
+				if (error == 0) {
+					out += formatted_string;
+					formatted_string.clear();
+				}
+				formatted_string.clear();
+			}
+			if ((std::find(arg.options.begin(), arg.options.end(), "numa") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "u") != arg.options.end()) ||
+					arg.all_arguments) {
+				ret = static_command_numa(gpu_bdf, formatted_string);
+				std::string param{"numa"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					out += formatted_string;
@@ -689,8 +764,10 @@ void AmdSmiStaticCommand::static_command_csv()
 		header.append("gpu");
 		for (unsigned int i = 0; i < arg.devices.size(); i++) {
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
-			std::string gpu_id{string_format("%d",i)};
-			results.push_back({gpu_id});
+			int gpu_id = arg.devices[i]->get_gpu_index();
+
+			std::string gpu_id_str{string_format("%d",gpu_id)};
+			results.push_back({gpu_id_str});
 
 			if ((std::find(arg.options.begin(), arg.options.end(), "asic") != arg.options.end()) ||
 					(std::find(arg.options.begin(), arg.options.end(), "a") != arg.options.end()) ||
@@ -718,12 +795,14 @@ void AmdSmiStaticCommand::static_command_csv()
 			}
 			if ((std::find(arg.options.begin(), arg.options.end(), "vbios") != arg.options.end()) ||
 					(std::find(arg.options.begin(), arg.options.end(), "V") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "ifwi") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "I") != arg.options.end()) ||
 					arg.all_arguments) {
 				ret = static_command_vbios(gpu_bdf, formatted_string);
-				std::string param{"vbios"};
+				std::string param{"ifwi"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					header.append(vbios_csv_header);
+					header.append(ifwi_csv_header);
 					results.push_back({formatted_string});
 					formatted_string.clear();
 				}
@@ -880,6 +959,26 @@ void AmdSmiStaticCommand::static_command_csv()
 					formatted_string.clear();
 				}
 			}
+			if ((std::find(arg.options.begin(), arg.options.end(), "xgmi-plpd") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "pd") != arg.options.end()) ||
+					arg.all_arguments) {
+				ret = static_command_xgmi_plpd(gpu_bdf, formatted_string);
+				std::string param{"xgmi-plpd"};
+				int error = handle_exceptions(ret, param, arg);
+				if (error == 0) {
+					header.append(header_xgmi_plpd);
+					std::vector<std::string> dpm_data{split_string(formatted_string, '\n')};
+					std::vector<std::string> policy_rows{};
+					while (!dpm_data.empty()) {
+						std::string first{};
+						first = dpm_data.front();
+						dpm_data.erase(dpm_data.begin());
+						policy_rows.push_back(first);
+					}
+					results.push_back(policy_rows);
+					formatted_string.clear();
+				}
+			}
 			if ((std::find(arg.options.begin(), arg.options.end(), "partition") != arg.options.end()) ||
 					(std::find(arg.options.begin(), arg.options.end(), "p") != arg.options.end()) ||
 					arg.all_arguments) {
@@ -921,6 +1020,26 @@ void AmdSmiStaticCommand::static_command_csv()
 				if (error == 0) {
 					header.append(header_virtualization_mode);
 					results.push_back({formatted_string});
+					formatted_string.clear();
+				}
+			}
+			if ((std::find(arg.options.begin(), arg.options.end(), "numa") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "u") != arg.options.end()) ||
+					arg.all_arguments) {
+				ret = static_command_numa(gpu_bdf, formatted_string);
+				std::string param{"numa"};
+				int error = handle_exceptions(ret, param, arg);
+				if (error == 0) {
+					header.append(header_numa);
+					std::vector<std::string> numa_data{split_string(formatted_string, '\n')};
+					std::vector<std::string> numa_rows{};
+					while (!numa_data.empty()) {
+						std::string first{};
+						first = numa_data.front();
+						numa_data.erase(numa_data.begin());
+						numa_rows.push_back(first);
+					}
+					results.push_back(numa_rows);
 					formatted_string.clear();
 				}
 			}

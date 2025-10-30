@@ -33,6 +33,7 @@
 #include "amdgv_device.h"
 #include "amdgv_sched_internal.h"
 #include "amdgv_guard.h"
+#include "amdgv_vfmgr.h"
 #include "atombios/atom.h"
 
 static const uint32_t this_block = AMDGV_MANAGEMENT_BLOCK;
@@ -434,12 +435,12 @@ static int amdgv_diag_data_host_driver_collect_gen_info(
 		fb_offset = MBYTES_TO_BYTES(adapt->array_vf[i].fb_offset);
 		fb_real_size = MBYTES_TO_BYTES(adapt->array_vf[i].real_fb_size);
 		info->gpu_info.fb_info.vf_region[i].func_dataexchange.size =
-			KBYTES_TO_BYTES(AMDGV_VF_DATAEXCHANGE_SIZE);
+			KBYTES_TO_BYTES(GET_VF_TABLE_SIZE_KB_BY_ID(adapt, i, DATAEXCHANGE));
 		info->gpu_info.fb_info.vf_region[i].func_dataexchange.offset =
-			fb_offset + KBYTES_TO_BYTES(AMD_SRIOV_MSG_DATAEXCHANGE_OFFSET_KB);
+			fb_offset + GET_VF_TABLE_OFFSET_BY_ID(adapt, i, DATAEXCHANGE);
 		info->gpu_info.fb_info.vf_region[i].func_ipd.size = AMDGV_IP_DISCOVERY_SIZE;
 		info->gpu_info.fb_info.vf_region[i].func_ipd.offset =
-			fb_offset + fb_real_size - AMDGV_IP_DISCOVERY_OFFSET;
+			fb_offset + GET_VF_TABLE_OFFSET_BY_ID(adapt, i, IPD);
 	}
 
 	/* Virtual Function Info */
@@ -615,11 +616,13 @@ static int amdgv_diag_data_host_driver_collect_error_log(
 		(struct amdgv_diag_data_host_drv_blk *)
 			AMDGV_DIAG_DATA_HOST_DRV_INTER_STRUCT_OFFSET;
 
-	if (!host_drv || host_drv->error_dump.w_count == 0 ||
-	    host_drv->error_dump.total_entries == 0) {
+	if (!host_drv || host_drv->error_dump.total_entries == 0) {
 		AMDGV_WARN("Empty buffer for host driver error dump\n");
 		return AMDGV_FAILURE;
 	}
+
+	if (host_drv->error_dump.w_count == 0)
+		return 0;
 
 	entry_size = sizeof(struct amdgv_diag_data_error_dump_entry);
 
@@ -712,10 +715,13 @@ static int amdgv_diag_data_host_driver_collect_vbios_post_log(
 		return AMDGV_FAILURE;
 
 	vpost_log = &host_drv->vbios_post_log;
-	if (vpost_log->w_count == 0 || vpost_log->mem_blk.vaddr == NULL) {
+	if (vpost_log->mem_blk.vaddr == NULL) {
 		AMDGV_INFO("VBIOS Post Log not avilable\n");
 		return AMDGV_FAILURE;
 	}
+
+	if (vpost_log->w_count == 0)
+		return 0;
 
 	entry_size = sizeof(struct amdgv_diag_data_vbios_post_entry);
 

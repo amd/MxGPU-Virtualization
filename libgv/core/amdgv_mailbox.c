@@ -41,6 +41,7 @@ static struct amdgv_id_name amdgv_mailbox_rcv_names[] = {
 	{ MB_REQ_RAS_BAD_PAGES, "REQ_RAS_BAD_PAGES" },
 	{ MB_REQ_MSG_REQ_GPU_DEBUG, "REQ_GPU_DEBUG" },
 	{ MB_REQ_MSG_REL_GPU_DEBUG, "REL_GPU_DEBUG" },
+	{ MB_REQ_RAS_CHK_CRITI, "RAS_CHK_CRITI_REGION" },
 };
 
 static struct amdgv_id_name amdgv_mailbox_trn_names[] = {
@@ -335,6 +336,9 @@ enum amdgv_sched_event_id amdgv_mailbox_get_valid_vf_event(struct amdgv_adapter 
 	case MB_REQ_MSG_REL_GPU_DEBUG:
 		if (is_debug_mode_multi_vf())
 			sched_event = AMDGV_EVENT_REL_GPU_DEBUG;
+		break;
+	case MB_REQ_RAS_CHK_CRITI:
+		sched_event = AMDGV_EVENT_SCHED_VF_REQ_RAS_CHK_CRITI_REGION;
 		break;
 	default:
 		sched_event = AMDGV_EVENT_INVALID_EVENT;

@@ -64,8 +64,7 @@ typedef amdsmi_status_t (*AMDSMI_GET_DFC_FW_TABLE)(amdsmi_processor_handle, amds
 
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_ACTIVITY)(amdsmi_processor_handle,
 		amdsmi_engine_usage_t *);
-typedef amdsmi_status_t (*AMDSMI_GET_POWER_INFO)(amdsmi_processor_handle, uint32_t,
-		amdsmi_power_info_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_POWER_INFO)(amdsmi_processor_handle, amdsmi_power_info_t *);
 typedef amdsmi_status_t (*AMDSMI_IS_GPU_POWER_MANAGEMENT_ENABLED)(amdsmi_processor_handle, bool *);
 typedef amdsmi_status_t (*AMDSMI_GET_CLOCK_INFO)(amdsmi_processor_handle, amdsmi_clk_type_t,
 		amdsmi_clk_info_t *);
@@ -125,6 +124,10 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_METRICS)(amdsmi_get_gpu_metrics);
 typedef amdsmi_status_t (*AMDSMI_GET_LIB_VERSION)(amdsmi_get_lib_version);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_VIRTUALIZATION_MODE)(amdsmi_processor_handle,
 		amdsmi_virtualization_mode_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_CPU_AFFINITY_WITH_SCOPE)(amdsmi_processor_handle,
+		uint32_t, uint64_t *, amdsmi_affinity_scope_t);
+typedef amdsmi_status_t (*AMDSMI_TOPO_GET_NUMA_NODE_NUMBER)(amdsmi_processor_handle,
+		uint32_t *);
 typedef amdsmi_status_t (*AMDSMI_TOPO_GET_P2P_STATUS)(amdsmi_processor_handle,amdsmi_processor_handle,
 		amdsmi_link_type_t*, amdsmi_p2p_capability_t*);
 typedef amdsmi_status_t (*AMDSMI_GET_AFIDS_FROM_CPER)(amdsmi_get_afids_from_cper);
@@ -208,6 +211,8 @@ public:
 	AMDSMI_GET_GPU_METRICS amdsmi_get_gpu_metrics;
 	AMDSMI_TOPO_GET_P2P_STATUS host_amdsmi_topo_get_p2p_status;
 	AMDSMI_GET_GPU_VIRTUALIZATION_MODE amdsmi_get_gpu_virtualization_mode;
+	AMDSMI_GET_CPU_AFFINITY_WITH_SCOPE amdsmi_get_cpu_affinity_with_scope;
+	AMDSMI_TOPO_GET_NUMA_NODE_NUMBER amdsmi_topo_get_numa_node_number;
 
 	AMDSMI_RESET_GPU amdsmi_reset_gpu;
 

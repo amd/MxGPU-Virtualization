@@ -233,6 +233,7 @@ static void walkthrough_test()
 		printf("    Name: %s\n", vbios_info.name);
 		printf("    Part num (P/N): %s\n", vbios_info.part_number);
 		printf("    VBIOS Version: %s\n", vbios_info.version);
+		printf("    VBIOS boot firmware: %s\n", vbios_info.boot_firmware);
 
 		ret = amdsmi_get_gpu_cache_info(processors[i], &cache_info);
 		EXPECT_TRUE((ret == AMDSMI_STATUS_SUCCESS) || (ret == AMDSMI_STATUS_NOT_SUPPORTED));
@@ -272,7 +273,8 @@ static void walkthrough_test()
 			  AMDSMI_STATUS_SUCCESS);
 		ret = amdsmi_set_num_vf(processors[i], num_vf_enabled);
 		EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS
-					|| ret == AMDSMI_STATUS_BUSY);
+					|| ret == AMDSMI_STATUS_BUSY
+					|| ret == AMDSMI_STATUS_NOT_SUPPORTED);
 
 		EXPECT_TRUE(num_vf_supported <= 31);
 		printf("Num VF supported: %d\n", num_vf_supported);
@@ -465,7 +467,6 @@ TEST(amdsmiIntegrationTests, GpuPerformanceTest)
 	int64_t temp_measure;
 	amdsmi_vram_info_t vram_info;
 	amdsmi_status_t ret = AMDSMI_STATUS_SUCCESS;
-	uint32_t sensor_ind = 0;
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 
@@ -494,7 +495,7 @@ TEST(amdsmiIntegrationTests, GpuPerformanceTest)
 			std::cout << "    mm_activity: " << engine_usage.mm_activity << std::endl;
 		}
 
-		ret = amdsmi_get_power_info(processors[i], sensor_ind, &power_info);
+		ret = amdsmi_get_power_info(processors[i], &power_info);
 
 		EXPECT_TRUE((ret == AMDSMI_STATUS_SUCCESS) || (ret == AMDSMI_STATUS_NOT_SUPPORTED));
 		if (ret == AMDSMI_STATUS_SUCCESS) {
@@ -519,38 +520,38 @@ TEST(amdsmiIntegrationTests, GpuPerformanceTest)
 		if (ret == AMDSMI_STATUS_SUCCESS) {
 			std::cout << "Soc pstate: " << std::endl;
 			std::cout << "    num supported: " << dpm_policy_info.num_supported << std::endl;
-			std::cout << "    current: " << dpm_policy_info.cur << std::endl;
+			std::cout << "    current: " << dpm_policy_info.current << std::endl;
 			std::cout << "	  policies: " << std::endl;
 			for (unsigned int j = 0; j < dpm_policy_info.num_supported; ++j) {
 				std::cout << "	  	  policy id: " << dpm_policy_info.policies[j].policy_id << std::endl;
 				std::cout << "	  	  policy description: " << dpm_policy_info.policies[j].policy_description << std::endl;
 			}
-			dpm_policy_default = dpm_policy_info.cur;
+			dpm_policy_default = dpm_policy_info.current;
 			ret = amdsmi_set_soc_pstate(processors[i], 0);
 			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS);
 			ret = amdsmi_get_soc_pstate(processors[i], &dpm_policy_info);
 			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS);
-			EXPECT_TRUE(dpm_policy_info.cur == 0);
+			EXPECT_TRUE(dpm_policy_info.current == 0);
 			ret = amdsmi_set_soc_pstate(processors[i], 1);
 			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS);
 			ret = amdsmi_get_soc_pstate(processors[i], &dpm_policy_info);
 			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS);
-			EXPECT_TRUE(dpm_policy_info.cur == 1);
+			EXPECT_TRUE(dpm_policy_info.current == 1);
 			ret = amdsmi_set_soc_pstate(processors[i], 2);
 			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS);
 			ret = amdsmi_get_soc_pstate(processors[i], &dpm_policy_info);
 			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS);
-			EXPECT_TRUE(dpm_policy_info.cur == 2);
+			EXPECT_TRUE(dpm_policy_info.current == 2);
 			ret = amdsmi_set_soc_pstate(processors[i], 3);
 			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS);
 			ret = amdsmi_get_soc_pstate(processors[i], &dpm_policy_info);
 			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS);
-			EXPECT_TRUE(dpm_policy_info.cur == 3);
+			EXPECT_TRUE(dpm_policy_info.current == 3);
 			ret = amdsmi_set_soc_pstate(processors[i], dpm_policy_default);
 			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS);
 			ret = amdsmi_get_soc_pstate(processors[i], &dpm_policy_info);
 			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS);
-			EXPECT_TRUE(dpm_policy_info.cur == dpm_policy_default);
+			EXPECT_TRUE(dpm_policy_info.current == dpm_policy_default);
 		}
 
 		std::string clk_deep_sleep_str = "N/A";
@@ -803,7 +804,7 @@ TEST(amdsmiIntegrationTests, ECCTests)
 			ASSERT_EQ(amdsmi_get_gpu_ras_feature_info(processors[i], &ras_feature),
 			  	AMDSMI_STATUS_SUCCESS);
 			std::cout << "RAS EEPROM version:      " << ras_feature.ras_eeprom_version << std::endl;
-			std::cout << "ECC correction schema:      " << ras_feature.supported_ecc_correction_schema << std::endl;
+			std::cout << "ECC correction schema:      " << ras_feature.ecc_correction_schema_flag << std::endl;
 		}
 
 		ret = amdsmi_get_gpu_total_ecc_count(processors[i], &ec);
@@ -1041,7 +1042,8 @@ static void firmware_attestation_test()
 			  AMDSMI_STATUS_SUCCESS);
 		ret = amdsmi_set_num_vf(processors[i], num_vf_enabled);
 		EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS
-					|| ret == AMDSMI_STATUS_BUSY);
+					|| ret == AMDSMI_STATUS_BUSY
+					|| ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		ASSERT_EQ(amdsmi_get_vf_partition_info(processors[i], num_vf_enabled,
 			  partitions), AMDSMI_STATUS_SUCCESS);
 
@@ -1126,7 +1128,8 @@ TEST(amdsmiIntegrationTests, Vf2PfTest)
 			  AMDSMI_STATUS_SUCCESS);
 		int ret = amdsmi_set_num_vf(processors[i], num_vf_enabled);
 		EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS
-					|| ret == AMDSMI_STATUS_BUSY);
+					|| ret == AMDSMI_STATUS_BUSY
+					|| ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		ASSERT_EQ(amdsmi_get_vf_partition_info(processors[i], num_vf_enabled,
 			  partitions), AMDSMI_STATUS_SUCCESS);
 
@@ -1198,6 +1201,8 @@ TEST(amdsmiIntegrationTests, DISABLED_XgmiTest)
 	amdsmi_topology_nearest_t topology_nearest_info;
 	uint32_t processor_index = AMDSMI_MAX_DEVICES + 100;
 	amdsmi_xgmi_fb_sharing_caps_t caps;
+	amdsmi_dpm_policy_t dpm_policy_info;
+	uint32_t dpm_policy_default;
 	uint8_t fb_sharing;
 	amdsmi_link_type_t type;
 	amdsmi_p2p_capability_t p2p_capability;
@@ -1265,6 +1270,41 @@ TEST(amdsmiIntegrationTests, DISABLED_XgmiTest)
 			ASSERT_EQ(amdsmi_get_index_from_processor_handle(topology_nearest_info.processor_list[j], &processor_index), AMDSMI_STATUS_SUCCESS);
 			printf("Device %d with index: %d\n", j, processor_index);
 		}
+
+		ret = amdsmi_get_xgmi_plpd(processors[i], &dpm_policy_info);
+		EXPECT_TRUE((ret == AMDSMI_STATUS_SUCCESS) || (ret == AMDSMI_STATUS_NOT_SUPPORTED));
+
+		if (ret == AMDSMI_STATUS_SUCCESS) {
+			std::cout << "XGMI plpd: " << std::endl;
+			std::cout << "    num supported: " << dpm_policy_info.num_supported << std::endl;
+			std::cout << "    current: " << dpm_policy_info.current << std::endl;
+			std::cout << "	  plpds: " << std::endl;
+			for (unsigned int j = 0; j < dpm_policy_info.num_supported; ++j) {
+				std::cout << "	  	  policy id: " << dpm_policy_info.policies[j].policy_id << std::endl;
+				std::cout << "	  	  policy description: " << dpm_policy_info.policies[j].policy_description << std::endl;
+			}
+			dpm_policy_default = dpm_policy_info.current;
+			ret = amdsmi_set_xgmi_plpd(processors[i], 0);
+			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS);
+			ret = amdsmi_get_xgmi_plpd(processors[i], &dpm_policy_info);
+			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS);
+			EXPECT_TRUE(dpm_policy_info.current == 0);
+			ret = amdsmi_set_xgmi_plpd(processors[i], 1);
+			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS);
+			ret = amdsmi_get_xgmi_plpd(processors[i], &dpm_policy_info);
+			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS);
+			EXPECT_TRUE(dpm_policy_info.current == 1);
+			ret = amdsmi_set_xgmi_plpd(processors[i], 2);
+			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS);
+			ret = amdsmi_get_xgmi_plpd(processors[i], &dpm_policy_info);
+			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS);
+			EXPECT_TRUE(dpm_policy_info.current == 2);
+			ret = amdsmi_set_xgmi_plpd(processors[i], dpm_policy_default);
+			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS);
+			ret = amdsmi_get_xgmi_plpd(processors[i], &dpm_policy_info);
+			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS);
+			EXPECT_TRUE(dpm_policy_info.current == dpm_policy_default);
+		}
 	}
 
 	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
@@ -1311,12 +1351,14 @@ static void partition_tests()
 	uint32_t partition_id[AMDSMI_MAX_ACCELERATOR_PROFILE];
 	amdsmi_memory_partition_config_t memory_setting;
 	amdsmi_accelerator_partition_profile_config_t profile_configs;
+	amdsmi_accelerator_partition_profile_config_global_t profile_configs_global;
 	unsigned int i = 0;
 	int ret = 0;
 
 	memset(&profile, 0, sizeof(profile));
 	memset(&memory_setting, 0, sizeof(memory_setting));
 	memset(&profile_configs, 0, sizeof(profile_configs));
+	memset(&profile_configs_global, 0, sizeof(profile_configs_global));
 
 	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
 	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, processors), AMDSMI_STATUS_SUCCESS);
@@ -1338,14 +1380,39 @@ static void partition_tests()
 		for (uint32_t j = 0; j < profile_configs.num_profiles; j++) {
 			printf("   Profile type: %d\n", profile_configs.profiles[j].profile_type);
 			printf("   Number of partitions: %d\n", profile_configs.profiles[j].num_partitions);
-			printf("   Number of partitions: %d\n", profile_configs.profiles[j].memory_caps.nps_cap_mask);
+			printf("   Memory capability: %d\n", profile_configs.profiles[j].memory_caps.nps_cap_mask);
 			printf("   Index of profile: %d\n", profile_configs.profiles[j].profile_index);
 			printf("   Number of resources: %d\n", profile_configs.profiles[j].num_resources);
 			for (uint32_t k = 0; k < profile_configs.profiles[j].num_partitions; k++) {
-				for (uint32_t m = 0; m < profile_configs.profiles[j].num_resources; m++) {
-					printf("   Index of resource profile: %d\n", profile_configs.profiles[j].resources[k][m]);
+				for (uint32_t l = 0; l < profile_configs.profiles[j].num_resources; l++) {
+					printf("   Index of resource profile: %d\n", profile_configs.profiles[j].resources[k][l]);
 				}
 			}
+		}
+
+		ret = amdsmi_get_gpu_accelerator_partition_profile_config_global(processors[i], &profile_configs_global);
+		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+		printf("   [Global] Number of profiles: %d\n", profile_configs_global.num_profiles);
+		printf("   [Global] Number of resource profiles: %d\n", profile_configs_global.num_resource_profiles);
+		printf("   [Global] Default profile index: %d\n", profile_configs_global.default_profile_index);
+		for (uint32_t j = 0; j < profile_configs_global.num_resource_profiles; j++) {
+			printf("   Index of a profile: %d\n", profile_configs_global.resource_profiles[j].profile_index);
+			printf("   Resource type: %d\n", profile_configs_global.resource_profiles[j].resource_type);
+			printf("   Resource in a partition: %d\n", profile_configs_global.resource_profiles[j].partition_resource);
+			printf("   Number of partitions share resource: %d\n", profile_configs_global.resource_profiles[j].num_partitions_share_resource);
+		}
+		for (uint32_t j = 0; j < profile_configs_global.num_profiles; j++) {
+			printf("   [Global] Profile type: %d\n", profile_configs_global.profiles[j].profile.profile_type);
+			printf("   [Global] Number of partitions: %d\n", profile_configs_global.profiles[j].profile.num_partitions);
+			printf("   [Global] Memory capability: %d\n", profile_configs_global.profiles[j].profile.memory_caps.nps_cap_mask);
+			printf("   [Global] Index of profile: %d\n", profile_configs_global.profiles[j].profile.profile_index);
+			printf("   [Global] Number of resources: %d\n", profile_configs_global.profiles[j].profile.num_resources);
+			for (uint32_t k = 0; k < profile_configs_global.profiles[j].profile.num_partitions; k++) {
+				for (uint32_t l = 0; l < profile_configs_global.profiles[j].profile.num_resources; l++) {
+					printf("   Index of resource profile: %d\n", profile_configs_global.profiles[j].profile.resources[k][l]);
+				}
+			}
+			printf("   [Global] Supported VF modes: %d\n", profile_configs_global.profiles[j].vf_mode);
 		}
 
 		ret = amdsmi_get_gpu_accelerator_partition_profile(processors[i], &profile, partition_id);
@@ -1401,12 +1468,13 @@ TEST(amdsmiIntegrationTests, CperTests)
 	amdsmi_processor_handle *processors = NULL;
 	int ret = 0;
 
-	char cper_data[1024*1024];
-	uint64_t buf_size = sizeof(cper_data);
+	char *cper_data = (char*)malloc(1024*1024);
+	uint64_t buf_size = 1024*1024;
 	amdsmi_cper_hdr_t *cper_hdrs[1024];
-	uint64_t entry_count = 1024;
 	uint64_t cursor = 0;
 	uint32_t severity_mask = 3;
+
+	memset(cper_hdrs, 0, sizeof(cper_hdrs));
 
 	processors =  (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
@@ -1416,17 +1484,21 @@ TEST(amdsmiIntegrationTests, CperTests)
 
 	do {
 		for (uint32_t i = 0; i < dev_cnt; i++) {
-			ret = amdsmi_get_gpu_cper_entries(processors[i], severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
+			uint64_t current_entry_count = 1024;
+			ret = amdsmi_get_gpu_cper_entries(processors[i], severity_mask, cper_data, &buf_size, cper_hdrs, &current_entry_count, &cursor);
 			EXPECT_TRUE((ret == AMDSMI_STATUS_SUCCESS) || (ret == AMDSMI_STATUS_NOT_SUPPORTED) || (ret == AMDSMI_STATUS_MORE_DATA));
 			if (ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_MORE_DATA) {
-				for (uint64_t j = 0; j < entry_count; j++) {
-					printf("Record id: 		%s \n", cper_hdrs[i]->record_id);
-					printf("Error severity: %d \n", cper_hdrs[i]->error_severity);
+				for (uint64_t j = 0; j < current_entry_count; j++) {
+					if (cper_hdrs[j] != NULL) {
+						printf("Record id: 		%s \n", cper_hdrs[j]->record_id);
+						printf("Error severity: %d \n", cper_hdrs[j]->error_severity);
+					}
+				}
 			}
 		}
-	}
 	} while (ret == AMDSMI_STATUS_MORE_DATA);
 
+	free(cper_data);
 	free(processors);
 	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
 }
@@ -1478,10 +1550,10 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 	amdsmi_accelerator_partition_profile_t profile;
 	uint32_t partition_id[AMDSMI_MAX_ACCELERATOR_PROFILE];
 	uint32_t sensor_ind = 0;
-	char cper_data[1024*1024];
+	char *cper_data = (char*)malloc(1024*1024);
 	amdsmi_cper_hdr_t* cper_hdrs[1024];
 	uint32_t severity_mask = 3;
-	uint64_t buf_size = sizeof(cper_data);
+	uint64_t buf_size = 1024*1024;
 	uint64_t entry_count = 1024;
 	uint64_t cursor = 0;
 
@@ -1540,7 +1612,7 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 	ASSERT_EQ(amdsmi_get_vf_data(partitioning_info[0].id, NULL), AMDSMI_STATUS_INVAL);
 
 	ASSERT_EQ(amdsmi_get_gpu_activity(processors[0], NULL), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_power_info(processors[0], sensor_ind, NULL), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_power_info(processors[0], NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_soc_pstate(processors[0], NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_set_soc_pstate(NULL, 0), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_clock_info(processors[0], AMDSMI_CLK_TYPE_MEM, NULL),
@@ -1578,6 +1650,8 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 	ASSERT_EQ(amdsmi_get_xgmi_fb_sharing_mode_info(NULL, processors[0], AMDSMI_XGMI_FB_SHARING_MODE_4, &fb_sharing), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_xgmi_fb_sharing_mode_info(processors[0], NULL, AMDSMI_XGMI_FB_SHARING_MODE_4, &fb_sharing), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_set_xgmi_fb_sharing_mode(NULL, AMDSMI_XGMI_FB_SHARING_MODE_4), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_xgmi_plpd(processors[0], NULL), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_set_xgmi_plpd(NULL, 0), AMDSMI_STATUS_INVAL);
 
 	ASSERT_EQ(amdsmi_get_gpu_metrics(processors[0], NULL, NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_gpu_metrics(processors[0], NULL, &metrics), AMDSMI_STATUS_INVAL);
@@ -1586,6 +1660,7 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 	ASSERT_EQ(amdsmi_get_gpu_bad_page_info(processors[0], NULL, &bad_pages), AMDSMI_STATUS_INVAL);
 
 	ASSERT_EQ(amdsmi_get_gpu_accelerator_partition_profile_config(processors[0], NULL), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_accelerator_partition_profile_config_global(processors[0], NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_gpu_accelerator_partition_profile(processors[0], NULL, NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_gpu_accelerator_partition_profile(processors[0], &profile, NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_gpu_accelerator_partition_profile(processors[0], NULL, partition_id), AMDSMI_STATUS_INVAL);
@@ -1601,6 +1676,7 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 
 	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(amdsmi_get_processor_handles(socket, &dev_cnt, processors), AMDSMI_STATUS_NOT_INIT);
+	free(cper_data);
 	free(partitioning_info);
 	free(processors);
 }

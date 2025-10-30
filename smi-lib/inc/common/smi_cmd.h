@@ -99,6 +99,9 @@ enum smi_cmd_code {
 	SMI_CMD_CODE_GET_GPU_CACHE_INFO				= SMI_IOCTL | 0x00000032,
 	SMI_CMD_CODE_GET_BAD_PAGE_THRESHOLD			= SMI_IOCTL | 0x00000033,
 	SMI_CMD_CODE_RESET_GPU					= SMI_IOCTL | 0x00000034,
+	SMI_CMD_CODE_GET_XGMI_PLPD					= SMI_IOCTL | 0x00000035,
+	SMI_CMD_CODE_SET_XGMI_PLPD					= SMI_IOCTL | 0x00000036,
+	SMI_CMD_CODE_GET_ACCELERATOR_PARTITION_PROFILE_CONFIG_GLOBAL	= SMI_IOCTL | 0x00000037,
 	SMI_CMD_CODE__MAX					= 0xffffffff
 };
 
@@ -140,7 +143,6 @@ enum smi_cmd_code {
 #define SMI_PF_INDEX	(SMI_MAX_VF_COUNT - 1)
 #define SMI_MAX_MM_IP_COUNT 8
 #define SMI_MAX_STRING_LENGTH 256
-#define SMI_MAX_DRIVER_INFO_RSVD 64
 #define SMI_MAX_CACHE_TYPES 10
 #define SMI_MAX_NUM_XGMI_PHYSICAL_LINK 64
 #define SMI_MAX_NUM_PM_POLICIES 32
@@ -164,7 +166,8 @@ enum smi_cmd_code {
 
 
 #define SMI_MAX_NUM_METRICS_V1 255
-#define SMI_MAX_NUM_METRICS SMI_MAX_NUM_METRICS_V1
+#define SMI_MAX_NUM_METRICS_V2 512
+#define SMI_MAX_NUM_METRICS SMI_MAX_NUM_METRICS_V2
 #define SMI_MAX_BAD_PAGE_RECORD_V1 512
 #define SMI_MAX_BAD_PAGE_RECORD_V2 16384
 #define SMI_MAX_BAD_PAGE_RECORD SMI_MAX_BAD_PAGE_RECORD_V2
@@ -174,7 +177,7 @@ enum smi_cmd_code {
 #define SMI_MAX_ACCELERATOR_PROFILE 32
 #define SMI_MAX_NUM_NUMA_NODES 32
 
-#define SMI_MAX_CPER_SIZE (10*1024)
+#define SMI_MAX_CPER_SIZE (128*1024)
 #define SMI_MAX_CPER_HDRS 128
 
 // >>>>>>>>>>>>>>>>>>>> ENUM TYPE DEFINITIONS >>>>>>>>>>>>>>>>>>>>
@@ -203,7 +206,6 @@ enum smi_status {
 	SMI_STATUS_INPUT_OUT_OF_BOUNDS = 17,  //!< The provided input is out of allowable or safe range
 	SMI_STATUS_INIT_ERROR = 18,  //!< An error occurred when initializing internal data structures
 	SMI_STATUS_REFCOUNT_OVERFLOW = 19,  //!< An internal reference counter exceeded INT32_MAX
-	SMI_STATUS_MORE_DATA = 20,
 	// Processor related errors
 	SMI_STATUS_BUSY = 30,  //!< Processor busy
 	SMI_STATUS_NOT_FOUND = 31,  //!< Processor not found
@@ -211,6 +213,7 @@ enum smi_status {
 	SMI_STATUS_NO_SLOT = 33,  //!< No more free slot
 	SMI_STATUS_DRIVER_NOT_LOADED = 34, //!< Processor driver not loaded
 	// Data and size errors
+	SMI_STATUS_MORE_DATA = 39,
 	SMI_STATUS_NO_DATA = 40,  //!< No data was found for a given input
 	SMI_STATUS_INSUFFICIENT_SIZE = 41,  //!< Not enough resources were available for the operation
 	SMI_STATUS_UNEXPECTED_SIZE = 42,  //!< An unexpected amount of data was read
@@ -270,6 +273,7 @@ enum smi_metric_unit {
 	SMI_METRIC_UNIT_MBITPS,
 	SMI_METRIC_UNIT_PCIE_GEN,
 	SMI_METRIC_UNIT_PCIE_LANES,
+	SMI_METRIC_UNIT__15_625_MILLIJOULE,
 	SMI_METRIC_UNIT_UNKNOWN
 };
 
@@ -345,6 +349,60 @@ enum smi_metric_name {
 	SMI_METRIC_NAME_DRAM_BANDWIDTH,
 	SMI_METRIC_NAME_MAX_DRAM_BANDWIDTH,
 
+	SMI_METRIC_NAME_GFX_CLK_BELOW_HOST_LIMIT_PPT,
+	SMI_METRIC_NAME_GFX_CLK_BELOW_HOST_LIMIT_THM,
+	SMI_METRIC_NAME_GFX_CLK_BELOW_HOST_LIMIT_TOTAL,
+	SMI_METRIC_NAME_GFX_CLK_LOW_UTILIZATION,
+	SMI_METRIC_NAME_INPUT_TELEMETRY_VOLTAGE,
+	SMI_METRIC_NAME_PLDM_VERSION,
+	SMI_METRIC_NAME_TEMP_XCD,
+	SMI_METRIC_NAME_TEMP_AID,
+	SMI_METRIC_NAME_TEMP_HBM,
+
+	SMI_METRIC_NAME_SYS_METRIC_ACC_COUNTER,
+	SMI_METRIC_NAME_SYSTEM_TEMP_UBB_FPGA,
+	SMI_METRIC_NAME_SYSTEM_TEMP_UBB_FRONT,
+	SMI_METRIC_NAME_SYSTEM_TEMP_UBB_BACK,
+	SMI_METRIC_NAME_SYSTEM_TEMP_UBB_OAM7,
+	SMI_METRIC_NAME_SYSTEM_TEMP_UBB_IBC,
+	SMI_METRIC_NAME_SYSTEM_TEMP_UBB_UFPGA,
+	SMI_METRIC_NAME_SYSTEM_TEMP_UBB_OAM1,
+	SMI_METRIC_NAME_SYSTEM_TEMP_OAM_0_1_HSC,
+	SMI_METRIC_NAME_SYSTEM_TEMP_OAM_2_3_HSC,
+	SMI_METRIC_NAME_SYSTEM_TEMP_OAM_4_5_HSC,
+	SMI_METRIC_NAME_SYSTEM_TEMP_OAM_6_7_HSC,
+	SMI_METRIC_NAME_SYSTEM_TEMP_UBB_FPGA_0V72_VR,
+	SMI_METRIC_NAME_SYSTEM_TEMP_UBB_FPGA_3V3_VR,
+	SMI_METRIC_NAME_SYSTEM_TEMP_RETIMER_0_1_2_3_1V2_VR,
+	SMI_METRIC_NAME_SYSTEM_TEMP_RETIMER_4_5_6_7_1V2_VR,
+	SMI_METRIC_NAME_SYSTEM_TEMP_RETIMER_0_1_0V9_VR,
+	SMI_METRIC_NAME_SYSTEM_TEMP_RETIMER_4_5_0V9_VR,
+	SMI_METRIC_NAME_SYSTEM_TEMP_RETIMER_2_3_0V9_VR,
+	SMI_METRIC_NAME_SYSTEM_TEMP_RETIMER_6_7_0V9_VR,
+	SMI_METRIC_NAME_SYSTEM_TEMP_OAM_0_1_2_3_3V3_VR,
+	SMI_METRIC_NAME_SYSTEM_TEMP_OAM_4_5_6_7_3V3_VR,
+	SMI_METRIC_NAME_SYSTEM_TEMP_IBC_HSC,
+	SMI_METRIC_NAME_SYSTEM_TEMP_IBC,
+	SMI_METRIC_NAME_NODE_TEMP_RETIMER,
+	SMI_METRIC_NAME_NODE_TEMP_IBC_TEMP,
+	SMI_METRIC_NAME_NODE_TEMP_IBC_2_TEMP,
+	SMI_METRIC_NAME_NODE_TEMP_VDD18_VR_TEMP,
+	SMI_METRIC_NAME_NODE_TEMP_04_HBM_B_VR_TEMP,
+	SMI_METRIC_NAME_NODE_TEMP_04_HBM_D_VR_TEMP,
+	SMI_METRIC_NAME_VR_TEMP_VDDCR_VDD0,
+	SMI_METRIC_NAME_VR_TEMP_VDDCR_VDD1,
+	SMI_METRIC_NAME_VR_TEMP_VDDCR_VDD2,
+	SMI_METRIC_NAME_VR_TEMP_VDDCR_VDD3,
+	SMI_METRIC_NAME_VR_TEMP_VDDCR_SOC_A,
+	SMI_METRIC_NAME_VR_TEMP_VDDCR_SOC_C,
+	SMI_METRIC_NAME_VR_TEMP_VDDCR_SOCIO_A,
+	SMI_METRIC_NAME_VR_TEMP_VDDCR_SOCIO_C,
+	SMI_METRIC_NAME_VR_TEMP_VDD_085_HBM,
+	SMI_METRIC_NAME_VR_TEMP_VDDCR_11_HBM_B,
+	SMI_METRIC_NAME_VR_TEMP_VDDCR_11_HBM_D,
+	SMI_METRIC_NAME_VR_TEMP_VDD_USR,
+	SMI_METRIC_NAME_VR_TEMP_VDDIO_11_E32,
+
 	SMI_METRIC_NAME_UNKNOWN
 };
 
@@ -357,6 +415,10 @@ enum smi_metric_category {
 	SMI_METRIC_CATEGORY_ENERGY,
 	SMI_METRIC_CATEGORY_THROTTLE,
 	SMI_METRIC_CATEGORY_PCIE,
+	SMI_METRIC_CATEGORY_STATIC,
+	SMI_METRIC_CATEGORY_SYS_ACC_COUNTER,
+	SMI_METRIC_CATEGORY_SYS_BASEBOARD_TEMP,
+	SMI_METRIC_CATEGORY_SYS_GPUBOARD_TEMP,
 	SMI_METRIC_CATEGORY_UNKNOWN
 };
 
@@ -366,14 +428,18 @@ enum smi_metric_res_group {
 	SMI_METRIC_RES_GROUP_GPU,
 	SMI_METRIC_RES_GROUP_XCP,
 	SMI_METRIC_RES_GROUP_AID,
-	SMI_METRIC_RES_GROUP_MID
+	SMI_METRIC_RES_GROUP_MID,
+	SMI_METRIC_RES_GROUP_SYSTEM
 };
 
 enum smi_metric_res_subgroup {
 	SMI_METRIC_RES_SUBGROUP_UNKNOWN,
 	SMI_METRIC_RES_SUBGROUP_NA,
 	SMI_METRIC_RES_SUBGROUP_XCC,
-	SMI_METRIC_RES_SUBGROUP_ENGINE
+	SMI_METRIC_RES_SUBGROUP_ENGINE,
+	SMI_METRIC_RES_SUBGROUP_HBM,
+	SMI_METRIC_RES_SUBGROUP_BASEBOARD,
+	SMI_METRIC_RES_SUBGROUP_GPUBOARD
 };
 
 enum smi_memory_partition_type {
@@ -468,20 +534,7 @@ enum smi_vram_type {
 	SMI_VRAM_TYPE_GDDR5 = 21,
 	SMI_VRAM_TYPE_GDDR6 = 22,
 	SMI_VRAM_TYPE_GDDR7 = 23,
-};
-
-enum smi_vram_vendor {
-	SMI_VRAM_VENDOR_SAMSUNG,
-	SMI_VRAM_VENDOR_INFINEON,
-	SMI_VRAM_VENDOR_ELPIDA,
-	SMI_VRAM_VENDOR_ETRON,
-	SMI_VRAM_VENDOR_NANYA,
-	SMI_VRAM_VENDOR_HYNIX,
-	SMI_VRAM_VENDOR_MOSEL,
-	SMI_VRAM_VENDOR_WINBOND,
-	SMI_VRAM_VENDOR_ESMT,
-	SMI_VRAM_VENDOR_MICRON,
-	SMI_VRAM_VENDOR_UNKNOWN
+	SMI_VRAM_TYPE__MAX = SMI_VRAM_TYPE_GDDR7
 };
 
 enum smi_card_form_factor {
@@ -539,6 +592,7 @@ enum smi_fw_block {
 	SMI_FW_ID_SDMA_TH0,
 	SMI_FW_ID_SDMA_TH1,
 	SMI_FW_ID_CP_MES,
+	SMI_FW_ID_MES_KIQ,
 	SMI_FW_ID_MES_STACK,
 	SMI_FW_ID_MES_THREAD1, //!< FW_ID_MES_THREAD1 = CP_MES_KIQ
 	SMI_FW_ID_MES_THREAD1_STACK, //! FW_ID_MES_THREAD1_STACK = MES_KIQ_STACK
@@ -565,9 +619,11 @@ enum smi_fw_block {
 	SMI_FW_ID_RLC_SAVE_RESTORE_LIST,
 	SMI_FW_ID_ASD,
 	SMI_FW_ID_TA_RAS,
+	SMI_FW_ID_TA_XGMI,
 	SMI_FW_ID_XGMI,
 	SMI_FW_ID_RLC_SRLG,
 	SMI_FW_ID_RLC_SRLS,
+	SMI_FW_ID_PM,
 	SMI_FW_ID_SMC,
 	SMI_FW_ID_DMCU,
 	SMI_FW_ID_PSP_RAS,
@@ -589,8 +645,8 @@ enum smi_guard_type {
 
 enum smi_link_type {
 	SMI_LINK_TYPE_INTERNAL,
-	SMI_LINK_TYPE_XGMI,
 	SMI_LINK_TYPE_PCIE,
+	SMI_LINK_TYPE_XGMI,
 	SMI_LINK_TYPE_NOT_APPLICABLE,
 	SMI_LINK_TYPE_UNKNOWN
 };
@@ -702,10 +758,11 @@ enum smi_data_query_type {
 // Mapped AMDSMI library structures and unions
 struct smi_vram_info {
 	enum smi_vram_type vram_type;
-	enum smi_vram_vendor vram_vendor;
-	uint32_t vram_size;
+	char vram_vendor[SMI_MAX_STRING_LENGTH];
+	uint32_t vram_size; //!< vram size in MB
 	uint32_t vram_bit_width;
-	uint64_t reserved[6];
+	uint64_t vram_max_bandwidth;   //!< The VRAM max bandwidth at current memory clock (GB/s)
+	uint64_t reserved[37];
 };
 
 struct smi_pcie_info {
@@ -746,7 +803,8 @@ struct smi_vbios_info {
 	char build_date[SMI_MAX_DATE_LENGTH];
 	char part_number[SMI_MAX_STRING_LENGTH];
 	char version[SMI_MAX_STRING_LENGTH];
-	uint64_t reserved[68];
+	char boot_firmware[SMI_MAX_STRING_LENGTH];
+	uint64_t reserved[36];
 };
 
 struct smi_pf_fb_info {
@@ -761,18 +819,17 @@ struct smi_pf_fb_info {
 
 struct smi_asic_info {
 	char market_name[SMI_MAX_STRING_LENGTH];
-	char vendor_name[SMI_MAX_STRING_LENGTH];
-	char asic_serial[SMI_MAX_STRING_LENGTH];
-	uint64_t reserved[64];
 	uint32_t vendor_id;
-	uint32_t subvendor_id;	//!< The subsystem vendor id
-	uint64_t device_id;	//!< The unique id of a GPU
+	char vendor_name[SMI_MAX_STRING_LENGTH];
+	uint32_t subvendor_id; //!< The subsystem vendor id
+	uint64_t device_id;    //!< The device id of a GPU
 	uint32_t rev_id;
-	uint32_t oam_id;
-	uint32_t num_of_compute_units;   //< 0xFFFFFFFF if not supported
-	uint64_t target_graphics_version;  //< 0xFFFFFFFFFFFFFFFF if not supported
-	uint32_t subsystem_id;	//!< The subsystem device id
-	uint64_t reserved_2[10];
+	char asic_serial[SMI_MAX_STRING_LENGTH];
+	uint32_t oam_id;       //!< 0xFFFF if not supported
+	uint32_t num_of_compute_units;     //!< 0xFFFFFFFF if not supported
+	uint64_t target_graphics_version;  //!< 0xFFFFFFFFFFFFFFFF if not supported
+	uint32_t subsystem_id;
+	uint32_t reserved[21];  //!< The subsystem device id
 };
 
 struct smi_board_info {
@@ -902,7 +959,7 @@ struct smi_error_count {
 };
 
 struct smi_guest_data {
-	char driver_version[SMI_MAX_DRIVER_INFO_RSVD];
+	char driver_version[SMI_MAX_STRING_LENGTH];
 	uint32_t fb_usage; /**<  guest framebuffer usage in MB */
 	uint64_t reserved[23];
 };
@@ -967,7 +1024,9 @@ struct smi_event_entry {
 
 struct smi_ras_feature {
 	uint32_t ras_eeprom_version;
-	uint32_t supported_ecc_correction_schema; //!< ecc_correction_schema mask used with enum smi_ecc_correction_schema_support flags
+	uint32_t ecc_correction_schema_flag; /**< ecc_correction_schema mask.
+						PARITY error(bit 0), Single Bit correctable (bit1),
+						Double bit error detection (bit2), Poison (bit 3) */
 	uint32_t bad_page_record_threshold;
 	uint64_t reserved[2];
 };
@@ -1100,6 +1159,21 @@ struct smi_accelerator_partition_profile_config {
 	struct smi_accelerator_partition_resource_profile resource_profiles[SMI_MAX_CP_PROFILE_RESOURCES];
 	uint32_t default_profile_index;	//!< The index of the default profile in the profiles array
 	struct smi_accelerator_partition_profile profiles[SMI_MAX_ACCELERATOR_PROFILE];
+	uint64_t reserved[30];
+};
+
+struct smi_accelerator_partition_profile_global {
+	struct smi_accelerator_partition_profile profile;
+	uint32_t vf_mode;		//!< Bitmask of VF modes (see amdsmi_vf_mode_t)
+	uint64_t reserved[6];
+};
+
+struct smi_accelerator_partition_profile_config_global {
+	uint32_t num_profiles;	//!< The length of profiles array
+	uint32_t num_resource_profiles;
+	struct smi_accelerator_partition_resource_profile resource_profiles[SMI_MAX_CP_PROFILE_RESOURCES];
+	uint32_t default_profile_index;	//!< The index of the default profile in the profiles array
+	struct smi_accelerator_partition_profile_global profiles[SMI_MAX_ACCELERATOR_PROFILE];
 	uint64_t reserved[30];
 };
 
@@ -1261,7 +1335,7 @@ struct smi_gpu_caps {
 	uint32_t gfx_ip_count;
 	uint32_t dma_ip_count;
 	uint32_t ras_eeprom_version;
-	uint32_t supported_ecc_correction_schema;
+	uint32_t ecc_correction_schema_flag;
 	uint32_t reserved[3];
 };
 
@@ -1285,7 +1359,7 @@ struct smi_server_static_info {
 		char			padding[3];
 		uint32_t		reserved[3];
 	} devices[SMI_MAX_DEVICES];
-	uint64_t reserved[383]; // expanded to MAX IOCTL copy size
+	uint64_t reserved[351]; // expanded to MAX IOCTL copy size
 };
 
 struct smi_gpu_performance_info {
@@ -1410,6 +1484,12 @@ struct smi_set_gpu_memory_partition_setting {
 struct smi_profile_configs {
 	smi_device_handle_t dev_id;
 	struct smi_accelerator_partition_profile_config *profile_configs;
+	uint32_t reserved[10];
+};
+
+struct smi_profile_configs_global {
+	smi_device_handle_t dev_id;
+	struct smi_accelerator_partition_profile_config_global *profile_configs;
 	uint32_t reserved[10];
 };
 

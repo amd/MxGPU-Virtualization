@@ -86,6 +86,7 @@ class AmdSmiGuardType(IntEnum):
     FLR = amdsmi_wrapper.AMDSMI_GUARD_EVENT_FLR
     EXCLUSIVE_MOD = amdsmi_wrapper.AMDSMI_GUARD_EVENT_EXCLUSIVE_MOD
     EXCLUSIVE_TIMEOUT = amdsmi_wrapper.AMDSMI_GUARD_EVENT_EXCLUSIVE_TIMEOUT
+    ALL_INT = amdsmi_wrapper.AMDSMI_GUARD_EVENT_ALL_INT
     RAS_ERR_COUNT = amdsmi_wrapper.AMDSMI_GUARD_EVENT_RAS_ERR_COUNT
     RAS_CPER_DUMP = amdsmi_wrapper.AMDSMI_GUARD_EVENT_RAS_CPER_DUMP
     RAS_BAD_PAGES = amdsmi_wrapper.AMDSMI_GUARD_EVENT_RAS_BAD_PAGES
@@ -116,21 +117,6 @@ class AmdSmiVramType(IntEnum):
     GDDR5 = amdsmi_wrapper.AMDSMI_VRAM_TYPE_GDDR5
     GDDR6 = amdsmi_wrapper.AMDSMI_VRAM_TYPE_GDDR6
     GDDR7 = amdsmi_wrapper.AMDSMI_VRAM_TYPE_GDDR7
-
-
-class AmdSmiVramVendor(IntEnum):
-    SAMSUNG = amdsmi_wrapper.AMDSMI_VRAM_VENDOR_SAMSUNG
-    INFINEON = amdsmi_wrapper.AMDSMI_VRAM_VENDOR_INFINEON
-    ELPIDA = amdsmi_wrapper.AMDSMI_VRAM_VENDOR_ELPIDA
-    ETRON = amdsmi_wrapper.AMDSMI_VRAM_VENDOR_ETRON
-    NANYA = amdsmi_wrapper.AMDSMI_VRAM_VENDOR_NANYA
-    HYNIX = amdsmi_wrapper.AMDSMI_VRAM_VENDOR_HYNIX
-    MOSEL = amdsmi_wrapper.AMDSMI_VRAM_VENDOR_MOSEL
-    WINBOND = amdsmi_wrapper.AMDSMI_VRAM_VENDOR_WINBOND
-    ESMT = amdsmi_wrapper.AMDSMI_VRAM_VENDOR_ESMT
-    MICRON = amdsmi_wrapper.AMDSMI_VRAM_VENDOR_MICRON
-    UNKNOWN = amdsmi_wrapper.AMDSMI_VRAM_VENDOR_UNKNOWN
-
 
 class AmdSmiCacheProperty(IntEnum):
     ENABLED = amdsmi_wrapper.AMDSMI_CACHE_PROPERTY_ENABLED
@@ -187,6 +173,7 @@ class AmdSmiFwBlock(IntEnum):
     FW_ID_SDMA_TH0 = amdsmi_wrapper.AMDSMI_FW_ID_SDMA_TH0
     FW_ID_SDMA_TH1 = amdsmi_wrapper.AMDSMI_FW_ID_SDMA_TH1
     FW_ID_CP_MES = amdsmi_wrapper.AMDSMI_FW_ID_CP_MES
+    FW_ID_MES_KIQ = amdsmi_wrapper.AMDSMI_FW_ID_MES_KIQ
     FW_ID_MES_STACK = amdsmi_wrapper.AMDSMI_FW_ID_MES_STACK
     FW_ID_MES_THREAD1 = amdsmi_wrapper.AMDSMI_FW_ID_MES_THREAD1
     FW_ID_MES_THREAD1_STACK = amdsmi_wrapper.AMDSMI_FW_ID_MES_THREAD1_STACK
@@ -213,9 +200,12 @@ class AmdSmiFwBlock(IntEnum):
     FW_ID_RLC_SAVE_RESTORE_LIST = amdsmi_wrapper.AMDSMI_FW_ID_RLC_SAVE_RESTORE_LIST
     FW_ID_ASD = amdsmi_wrapper.AMDSMI_FW_ID_ASD
     FW_ID_TA_RAS = amdsmi_wrapper.AMDSMI_FW_ID_TA_RAS
+    FW_ID_TA_XGMI = amdsmi_wrapper.AMDSMI_FW_ID_TA_XGMI
     FW_ID_XGMI = amdsmi_wrapper.AMDSMI_FW_ID_XGMI
     FW_ID_RLC_SRLG = amdsmi_wrapper.AMDSMI_FW_ID_RLC_SRLG
     FW_ID_RLC_SRLS = amdsmi_wrapper.AMDSMI_FW_ID_RLC_SRLS
+    FW_ID_ID_PM = amdsmi_wrapper.AMDSMI_FW_ID_PM
+    FW_ID_PM = amdsmi_wrapper.AMDSMI_FW_ID_PM
     FW_ID_SMC = amdsmi_wrapper.AMDSMI_FW_ID_SMC
     FW_ID_DMCU = amdsmi_wrapper.AMDSMI_FW_ID_DMCU
     FW_ID_PSP_RAS = amdsmi_wrapper.AMDSMI_FW_ID_PSP_RAS
@@ -575,11 +565,11 @@ class AmdSmiGuestFwName(IntEnum):
 
 
 class AmdSmiGuestFwLoadStatus(IntEnum):
-    OK = amdsmi_wrapper.GUEST_FW_LOAD_STATUS_OK
-    OBSOLETE = amdsmi_wrapper.GUEST_FW_LOAD_STATUS_OBSOLETE_FW
-    BAD_SIG = amdsmi_wrapper.GUEST_FW_LOAD_STATUS_BAD_SIG
-    FW_LOAD_FAIL = amdsmi_wrapper.GUEST_FW_LOAD_STATUS_FW_LOAD_FAIL
-    ERR_GENERIC = amdsmi_wrapper.GUEST_FW_LOAD_STATUS_ERR_GENERIC
+    OK = amdsmi_wrapper.AMDSMI_GUEST_FW_LOAD_STATUS_OK
+    OBSOLETE = amdsmi_wrapper.AMDSMI_GUEST_FW_LOAD_STATUS_OBSOLETE_FW
+    BAD_SIG = amdsmi_wrapper.AMDSMI_GUEST_FW_LOAD_STATUS_BAD_SIG
+    FW_LOAD_FAIL = amdsmi_wrapper.AMDSMI_GUEST_FW_LOAD_STATUS_FW_LOAD_FAIL
+    ERR_GENERIC = amdsmi_wrapper.AMDSMI_GUEST_FW_LOAD_STATUS_ERR_GENERIC
 
 
 class AmdSmiProfileCapabilityType(IntEnum):
@@ -669,6 +659,7 @@ class AmdSmiMetricUnit(IntEnum):
     MBITPS = amdsmi_wrapper.AMDSMI_METRIC_UNIT_MBITPS
     PCIE_GEN = amdsmi_wrapper.AMDSMI_METRIC_UNIT_PCIE_GEN
     PCIE_LANES = amdsmi_wrapper.AMDSMI_METRIC_UNIT_PCIE_LANES
+    METRIC_UNIT_15_625_MILLIJOULE = amdsmi_wrapper.AMDSMI_METRIC_UNIT_15_625_MILLIJOULE
     UNKNOWN = amdsmi_wrapper.AMDSMI_METRIC_UNIT_UNKNOWN
 
 
@@ -746,6 +737,59 @@ class AmdSmiMetricName(IntEnum):
     DRAM_BANDWITH = amdsmi_wrapper.AMDSMI_METRIC_NAME_DRAM_BANDWIDTH
     MAX_DRAM_BANDWITH = amdsmi_wrapper.AMDSMI_METRIC_NAME_MAX_DRAM_BANDWIDTH
 
+    GFX_CLK_BELOW_HOST_LIMIT_PPT = amdsmi_wrapper.AMDSMI_METRIC_NAME_GFX_CLK_BELOW_HOST_LIMIT_PPT
+    GFX_CLK_BELOW_HOST_LIMIT_THM = amdsmi_wrapper.AMDSMI_METRIC_NAME_GFX_CLK_BELOW_HOST_LIMIT_THM
+    GFX_CLK_BELOW_HOST_LIMIT_TOTAL = amdsmi_wrapper.AMDSMI_METRIC_NAME_GFX_CLK_BELOW_HOST_LIMIT_TOTAL
+
+    GFX_CLK_LOW_UTILIZATION = amdsmi_wrapper.AMDSMI_METRIC_NAME_GFX_CLK_LOW_UTILIZATION
+    INPUT_TELEMETRY_VOLTAGE = amdsmi_wrapper.AMDSMI_METRIC_NAME_INPUT_TELEMETRY_VOLTAGE
+    PLDM_VERSION = amdsmi_wrapper.AMDSMI_METRIC_NAME_PLDM_VERSION
+    TEMP_XCD = amdsmi_wrapper.AMDSMI_METRIC_NAME_TEMP_XCD
+    TEMP_AID = amdsmi_wrapper.AMDSMI_METRIC_NAME_TEMP_AID
+    TEMP_HBM = amdsmi_wrapper.AMDSMI_METRIC_NAME_TEMP_HBM
+    SYS_METRIC_ACC_COUNTER = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYS_METRIC_ACC_COUNTER
+    SYSTEM_TEMP_UBB_FPGA = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_UBB_FPGA
+    SYSTEM_TEMP_UBB_FRONT = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_UBB_FRONT
+    SYSTEM_TEMP_UBB_BACK = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_UBB_BACK
+    SYSTEM_TEMP_UBB_OAM7 = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_UBB_OAM7
+    SYSTEM_TEMP_UBB_IBC = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_UBB_IBC
+    SYSTEM_TEMP_UBB_UFPGA = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_UBB_UFPGA
+    SYSTEM_TEMP_UBB_OAM1 = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_UBB_OAM1
+    SYSTEM_TEMP_OAM_0_1_HSC = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_OAM_0_1_HSC
+    SYSTEM_TEMP_OAM_2_3_HSC = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_OAM_2_3_HSC
+    SYSTEM_TEMP_OAM_4_5_HSC = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_OAM_4_5_HSC
+    SYSTEM_TEMP_OAM_6_7_HSC = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_OAM_6_7_HSC
+    SYSTEM_TEMP_UBB_FPGA_0V72_VR = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_UBB_FPGA_0V72_VR
+    SYSTEM_TEMP_UBB_FPGA_3V3_VR = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_UBB_FPGA_3V3_VR
+    SYSTEM_TEMP_RETIMER_0_1_2_3_1V2_VR = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_RETIMER_0_1_2_3_1V2_VR
+    SYSTEM_TEMP_RETIMER_4_5_6_7_1V2_VR = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_RETIMER_4_5_6_7_1V2_VR
+    SYSTEM_TEMP_RETIMER_0_1_0V9_VR = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_RETIMER_0_1_0V9_VR
+    SYSTEM_TEMP_RETIMER_4_5_0V9_VR = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_RETIMER_4_5_0V9_VR
+    SYSTEM_TEMP_RETIMER_2_3_0V9_VR = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_RETIMER_2_3_0V9_VR
+    SYSTEM_TEMP_RETIMER_6_7_0V9_VR = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_RETIMER_6_7_0V9_VR
+    SYSTEM_TEMP_OAM_0_1_2_3_3V3_VR = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_OAM_0_1_2_3_3V3_VR
+    SYSTEM_TEMP_OAM_4_5_6_7_3V3_VR = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_OAM_4_5_6_7_3V3_VR
+    SYSTEM_TEMP_IBC_HSC = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_IBC_HSC
+    SYSTEM_TEMP_IBC = amdsmi_wrapper.AMDSMI_METRIC_NAME_SYSTEM_TEMP_IBC
+    NODE_TEMP_RETIMER = amdsmi_wrapper.AMDSMI_METRIC_NAME_NODE_TEMP_RETIMER
+    NODE_TEMP_IBC_TEMP = amdsmi_wrapper.AMDSMI_METRIC_NAME_NODE_TEMP_IBC_TEMP
+    NODE_TEMP_IBC_2_TEMP = amdsmi_wrapper.AMDSMI_METRIC_NAME_NODE_TEMP_IBC_2_TEMP
+    NODE_TEMP_VDD18_VR_TEMP = amdsmi_wrapper.AMDSMI_METRIC_NAME_NODE_TEMP_VDD18_VR_TEMP
+    NODE_TEMP_04_HBM_B_VR_TEMP = amdsmi_wrapper.AMDSMI_METRIC_NAME_NODE_TEMP_04_HBM_B_VR_TEMP
+    NODE_TEMP_04_HBM_D_VR_TEMP = amdsmi_wrapper.AMDSMI_METRIC_NAME_NODE_TEMP_04_HBM_D_VR_TEMP
+    VR_TEMP_VDDCR_VDD0 = amdsmi_wrapper.AMDSMI_METRIC_NAME_VR_TEMP_VDDCR_VDD0
+    VR_TEMP_VDDCR_VDD1 = amdsmi_wrapper.AMDSMI_METRIC_NAME_VR_TEMP_VDDCR_VDD1
+    VR_TEMP_VDDCR_VDD2 = amdsmi_wrapper.AMDSMI_METRIC_NAME_VR_TEMP_VDDCR_VDD2
+    VR_TEMP_VDDCR_VDD3 = amdsmi_wrapper.AMDSMI_METRIC_NAME_VR_TEMP_VDDCR_VDD3
+    VR_TEMP_VDDCR_SOC_A = amdsmi_wrapper.AMDSMI_METRIC_NAME_VR_TEMP_VDDCR_SOC_A
+    VR_TEMP_VDDCR_SOC_C = amdsmi_wrapper.AMDSMI_METRIC_NAME_VR_TEMP_VDDCR_SOC_C
+    VR_TEMP_VDDCR_SOCIO_A = amdsmi_wrapper.AMDSMI_METRIC_NAME_VR_TEMP_VDDCR_SOCIO_A
+    VR_TEMP_VDDCR_SOCIO_C = amdsmi_wrapper.AMDSMI_METRIC_NAME_VR_TEMP_VDDCR_SOCIO_C
+    VR_TEMP_VDD_085_HBM = amdsmi_wrapper.AMDSMI_METRIC_NAME_VR_TEMP_VDD_085_HBM
+    VR_TEMP_VDDCR_11_HBM_B = amdsmi_wrapper.AMDSMI_METRIC_NAME_VR_TEMP_VDDCR_11_HBM_B
+    VR_TEMP_VDDCR_11_HBM_D = amdsmi_wrapper.AMDSMI_METRIC_NAME_VR_TEMP_VDDCR_11_HBM_D
+    VR_TEMP_VDD_USR = amdsmi_wrapper.AMDSMI_METRIC_NAME_VR_TEMP_VDD_USR
+    VR_TEMP_VDDIO_11_E32 = amdsmi_wrapper.AMDSMI_METRIC_NAME_VR_TEMP_VDDIO_11_E32
     UNKNOWN = amdsmi_wrapper.AMDSMI_METRIC_NAME_UNKNOWN
 
 
@@ -758,6 +802,10 @@ class AmdSmiMetricCategory(IntEnum):
     ENERGY = amdsmi_wrapper.AMDSMI_METRIC_CATEGORY_ENERGY
     THROTTLE = amdsmi_wrapper.AMDSMI_METRIC_CATEGORY_THROTTLE
     PCIE = amdsmi_wrapper.AMDSMI_METRIC_CATEGORY_PCIE
+    STATIC = amdsmi_wrapper.AMDSMI_METRIC_CATEGORY_STATIC
+    SYS_ACC_COUNTER = amdsmi_wrapper.AMDSMI_METRIC_CATEGORY_SYS_ACC_COUNTER
+    SYS_BASEBOARD_TEMP = amdsmi_wrapper.AMDSMI_METRIC_CATEGORY_SYS_BASEBOARD_TEMP
+    SYS_GPUBOARD_TEMP = amdsmi_wrapper.AMDSMI_METRIC_CATEGORY_SYS_GPUBOARD_TEMP
     UNKNOWN = amdsmi_wrapper.AMDSMI_METRIC_CATEGORY_UNKNOWN
 
 
@@ -773,12 +821,16 @@ class AmdSmiMetricResGroup(IntEnum):
     XCP = amdsmi_wrapper.AMDSMI_METRIC_RES_GROUP_XCP
     AID = amdsmi_wrapper.AMDSMI_METRIC_RES_GROUP_AID
     MID = amdsmi_wrapper.AMDSMI_METRIC_RES_GROUP_MID
+    SYSTEM = amdsmi_wrapper.AMDSMI_METRIC_RES_GROUP_SYSTEM
     UNKNOWN = amdsmi_wrapper.AMDSMI_METRIC_RES_GROUP_UNKNOWN
 
 class AmdSmiMetricResSubgroup(IntEnum):
     NA = amdsmi_wrapper.AMDSMI_METRIC_RES_SUBGROUP_NA
     XCC = amdsmi_wrapper.AMDSMI_METRIC_RES_SUBGROUP_XCC
     ENGINE = amdsmi_wrapper.AMDSMI_METRIC_RES_SUBGROUP_ENGINE
+    HBM = amdsmi_wrapper.AMDSMI_METRIC_RES_SUBGROUP_HBM
+    BASEBOARD = amdsmi_wrapper.AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD
+    GPUBOARD = amdsmi_wrapper.AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD
     UNKNOWN = amdsmi_wrapper.AMDSMI_METRIC_RES_SUBGROUP_UNKNOWN
 
 class AmdSmiAcceleratorPartitionSetting(IntEnum):
@@ -788,6 +840,13 @@ class AmdSmiAcceleratorPartitionSetting(IntEnum):
     TPX = amdsmi_wrapper.AMDSMI_ACCELERATOR_PARTITION_TPX
     QPX = amdsmi_wrapper.AMDSMI_ACCELERATOR_PARTITION_QPX
     CPX = amdsmi_wrapper.AMDSMI_ACCELERATOR_PARTITION_CPX
+
+class AmdSmiVfMode(IntEnum):
+    VF_MODE_1 = amdsmi_wrapper.AMDSMI_VF_MODE_1
+    VF_MODE_2 = amdsmi_wrapper.AMDSMI_VF_MODE_2
+    VF_MODE_4 = amdsmi_wrapper.AMDSMI_VF_MODE_4
+    VF_MODE_8 = amdsmi_wrapper.AMDSMI_VF_MODE_8
+    VF_MODE_ALL = amdsmi_wrapper.AMDSMI_VF_MODE_ALL
 
 class AmdSmiAcceleratorPartitionResource(IntEnum):
     XCC = amdsmi_wrapper.AMDSMI_ACCELERATOR_XCC
@@ -810,7 +869,7 @@ class AmdSmiDriverModelType(IntEnum):
 
 class AmdSmiVirtualizationMode(IntEnum):
     UNKNOWN = amdsmi_wrapper.AMDSMI_VIRTUALIZATION_MODE_UNKNOWN
-    NONE = amdsmi_wrapper.AMDSMI_VIRTUALIZATION_MODE_NONE
+    NONE = amdsmi_wrapper.AMDSMI_VIRTUALIZATION_MODE_BAREMETAL
     HOST = amdsmi_wrapper.AMDSMI_VIRTUALIZATION_MODE_HOST
     GUEST = amdsmi_wrapper.AMDSMI_VIRTUALIZATION_MODE_GUEST
     PASSTHROUGH = amdsmi_wrapper.AMDSMI_VIRTUALIZATION_MODE_PASSTHROUGH
@@ -845,7 +904,7 @@ _AMDSMI_MAX_MM_IP_COUNT = 8
 _GPU_UUID_SIZE = 38
 _AMDSMI_MAX_VF_COUNT = 32
 _AMDSMI_MAX_DEVICES = 32
-_AMDSMI_MAX_NUM_METRICS = 255
+_AMDSMI_MAX_NUM_METRICS = 512
 _AMDSMI_MAX_BAD_PAGE_RECORD = 16384
 _AMDSMI_MAX_ACCELERATOR_PROFILE = 32
 _MAX_NUMBER_OF_AFIDS_PER_RECORD = 12
@@ -1209,7 +1268,7 @@ def amdsmi_get_gpu_ras_feature_info(processor_handle):
 
     return {
         'ras_eeprom_version': ras_feature.ras_eeprom_version,
-        'supported_ecc_correction_schema': ras_feature.supported_ecc_correction_schema
+        'ecc_correction_schema': ras_feature.ecc_correction_schema_flag
     }
 
 def amdsmi_get_bad_page_threshold(processor_handle):
@@ -1395,7 +1454,7 @@ def amdsmi_get_gpu_activity(processor_handle):
     }
 
 
-def amdsmi_get_power_info(processor_handle, sensor_ind = 0):
+def amdsmi_get_power_info(processor_handle):
     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
 
@@ -1404,7 +1463,7 @@ def amdsmi_get_power_info(processor_handle, sensor_ind = 0):
 
     power_info = amdsmi_wrapper.amdsmi_power_info_t()
     _check_res(amdsmi_wrapper.amdsmi_get_power_info(
-        processor_handle, sensor_ind, ctypes.byref(power_info)))
+        processor_handle, ctypes.byref(power_info)))
 
     return {
         'socket_power': power_info.socket_power,
@@ -1509,7 +1568,7 @@ def amdsmi_get_gpu_vram_info(processor_handle):
 
     return {
         'vram_type': AmdSmiVramType(vram_info.vram_type),
-        'vram_vendor':  AmdSmiVramVendor(vram_info.vram_vendor),
+        'vram_vendor':  vram_info.vram_vendor.decode("utf-8"),
         'vram_size':  vram_info.vram_size,
         'vram_bit_width':  vram_info.vram_bit_width
     }
@@ -1531,7 +1590,8 @@ def amdsmi_get_gpu_vbios_info(processor_handle):
         'name': vbios_info.name.decode("utf-8"),
         'build_date': vbios_info.build_date.decode("utf-8"),
         'part_number': vbios_info.part_number.decode("utf-8"),
-        'version': vbios_info.version.decode("utf-8")
+        'version': vbios_info.version.decode("utf-8"),
+        'boot_firmware': vbios_info.boot_firmware.decode("utf-8")
     }
 
 
@@ -1627,7 +1687,7 @@ def amdsmi_set_num_vf(processor_handle, num_vf):
         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
 
     _check_res(amdsmi_wrapper.amdsmi_set_num_vf(
-        processor_handle, ctypes.c_uint8(num_vf)))
+        processor_handle, ctypes.c_uint32(num_vf)))
 
 def amdsmi_clear_vf_fb(vf_handle):
     if not isinstance(vf_handle, amdsmi_wrapper.amdsmi_vf_handle_t):
@@ -2137,6 +2197,7 @@ def amdsmi_get_gpu_metrics(processor_handle):
             "category": AmdSmiMetricCategory(metrics_table[i].category),
             "flags": flags,
             "vf_mask": metrics_table[i].vf_mask,
+            "val": metrics_table[i].val,
             "res_group": AmdSmiMetricResGroup(metrics_table[i].res_group),
             "res_subgroup": AmdSmiMetricResSubgroup(metrics_table[i].res_subgroup),
             "res_instance": metrics_table[i].res_instance
@@ -2262,6 +2323,68 @@ def amdsmi_get_gpu_accelerator_partition_profile_config(processor_handle):
         'profiles': profiles
     }
 
+def _format_vf_mask(vf_mode):
+    supported_vf_modes = []
+
+    if vf_mode & AmdSmiVfMode.VF_MODE_1:
+        supported_vf_modes.append(AmdSmiVfMode.VF_MODE_1.name)
+    if vf_mode & AmdSmiVfMode.VF_MODE_2:
+        supported_vf_modes.append(AmdSmiVfMode.VF_MODE_2.name)
+    if vf_mode & AmdSmiVfMode.VF_MODE_4:
+        supported_vf_modes.append(AmdSmiVfMode.VF_MODE_4.name)
+    if vf_mode & AmdSmiVfMode.VF_MODE_8:
+        supported_vf_modes.append(AmdSmiVfMode.VF_MODE_8.name)
+
+    return supported_vf_modes
+
+def amdsmi_get_gpu_accelerator_partition_profile_config_global(processor_handle):
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+
+    if isinstance(processor_handle, amdsmi_wrapper.amdsmi_vf_handle_t):
+        processor_handle = ctypes.pointer(ctypes.c_uint64(processor_handle.handle))
+
+    config = amdsmi_wrapper.amdsmi_accelerator_partition_profile_config_global_t()
+    _check_res(amdsmi_wrapper.amdsmi_get_gpu_accelerator_partition_profile_config_global(
+        processor_handle, ctypes.byref(config)))
+
+    # profiles = list()
+    # for i in range(profile_config.num_profiles):
+    resources = list()
+
+    for i in range(config.num_resource_profiles):
+        resources.append({
+            'profile_index': config.resource_profiles[i].profile_index,
+            'resource_type': AmdSmiAcceleratorPartitionResource(config.resource_profiles[i].resource_type),
+            'partition_resource': config.resource_profiles[i].partition_resource,
+            'num_partitions_share_resource': config.resource_profiles[i].num_partitions_share_resource
+        })
+
+    profiles = list()
+    for i in range(config.num_profiles):
+        resource_profile_index = list()
+        for j in range(config.profiles[i].profile.num_partitions):
+            partition_resources = []
+            for k in range(config.profiles[i].profile.num_resources):
+                partition_resources.append(
+                    config.profiles[i].profile.resources[j][k]
+                )
+            resource_profile_index.append(partition_resources)
+        profiles.append({
+            'profile_type': AmdSmiAcceleratorPartitionSetting(config.profiles[i].profile.profile_type),
+            'num_partitions': config.profiles[i].profile.num_partitions,
+            'memory_caps': _format_memory_caps(config.profiles[i].profile.memory_caps),
+            'profile_index': config.profiles[i].profile.profile_index,
+            'resources': resource_profile_index,
+            'vf_mode': _format_vf_mask(config.profiles[i].vf_mode),
+        })
+
+    return {
+        'resource_profiles': resources,
+        'default_profiles_index': config.default_profile_index,
+        'profiles': profiles
+    }
+
 def amdsmi_get_gpu_accelerator_partition_profile(processor_handle):
     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
@@ -2327,7 +2450,7 @@ def amdsmi_get_soc_pstate(processor_handle):
         })
 
     return {
-        "cur": dpm_policy.cur,
+        "cur": dpm_policy.current,
         "policies": policies_list
     }
 
@@ -2338,7 +2461,6 @@ def amdsmi_set_soc_pstate(processor_handle, policy_id):
 
     _check_res(amdsmi_wrapper.amdsmi_set_soc_pstate(
             processor_handle, policy_id))
-
 
 def amdsmi_get_gpu_cper_entries(processor_handle: amdsmi_wrapper.amdsmi_processor_handle,
     severity_mask: int,
@@ -2509,3 +2631,33 @@ def amdsmi_topo_get_numa_node_number(processor_handle):
     )
 
     return numa_node_number.value
+
+def amdsmi_get_xgmi_plpd(processor_handle):
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+
+    dpm_policy = amdsmi_wrapper.amdsmi_dpm_policy_t()
+    _check_res(amdsmi_wrapper.amdsmi_get_xgmi_plpd(
+            processor_handle, ctypes.byref(dpm_policy)))
+
+    plpds_list = list()
+
+    for i in range(0, dpm_policy.num_supported):
+        plpds_list.append({
+            "policy_id": dpm_policy.policies[i].policy_id,
+            "policy_description": dpm_policy.policies[i].policy_description.decode("utf-8"),
+        })
+
+    return {
+        "cur": dpm_policy.cur,
+        "policies": plpds_list
+    }
+
+def amdsmi_set_xgmi_plpd(processor_handle, policy_id):
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+
+    _check_res(amdsmi_wrapper.amdsmi_set_xgmi_plpd(
+            processor_handle, policy_id))

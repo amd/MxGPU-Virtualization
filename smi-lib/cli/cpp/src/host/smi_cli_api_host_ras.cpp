@@ -179,18 +179,18 @@ uint32_t convert_to_severity_mask(std::vector<std::string>& severities)
 {
 	uint32_t severity_mask = 0;
 
-	for(auto severity : severities) {
+	for (auto& severity : severities) {
 		if (severity == "nonfatal-uncorrected") {
-			severity_mask |= AMDSMI_CPER_SEV_NON_FATAL_UNCORRECTED;
-		} else if(severity == "nonfatal-corrected") {
-			severity_mask |= AMDSMI_CPER_SEV_NON_FATAL_CORRECTED;
-		} else if(severity == "fatal") {
-			severity_mask |= AMDSMI_CPER_SEV_FATAL;
-		} else if(severity == "all") {
-			severity_mask |= AMDSMI_CPER_SEV_NUM;
+			severity_mask |= (1 << AMDSMI_CPER_SEV_NON_FATAL_UNCORRECTED);
+		} else if (severity == "fatal") {
+			severity_mask |= (1 << AMDSMI_CPER_SEV_FATAL);
+		} else if (severity == "nonfatal-corrected") {
+			severity_mask |= (1 << AMDSMI_CPER_SEV_NON_FATAL_CORRECTED);
+		} else if (severity == "all") {
+			severity_mask = (1 << AMDSMI_CPER_SEV_NUM);
 			break;
 		} else {
-			severity_mask |= AMDSMI_CPER_SEV_UNUSED;
+			severity_mask |= (1 << AMDSMI_CPER_SEV_UNUSED);
 		}
 	}
 	return severity_mask;
@@ -325,13 +325,13 @@ int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg, std::string& o
 		printf("WARNING: No cper files will be dumped unless the --folder=<folder_name> is specified\n\n");
 	}
 
-	printf("Press CTRL + C when you want to stop\n\n");
-
-	printf("%-24s %-8s %-24s %-24s %s\n","timestamp", "gpu_id", "severity", "file_name", "list of afids");
-
 	if (std::find(arg.options.begin(), arg.options.end(), "follow") != arg.options.end()) {
+		printf("Press CTRL + C when you want to stop\n\n");
+		printf("%-24s %-8s %-24s %-24s %s\n","timestamp", "gpu_id", "severity", "file_name", "list of afids");
 		while (true) {
-			for (uint32_t gpu_id = 0; gpu_id < gpu_count; gpu_id++) {
+			// Iterate through specified devices or all GPUs if none specified
+			for (uint32_t i = 0; i < arg.devices.size(); i++) {
+				uint32_t gpu_id = arg.devices[i]->get_gpu_index();
 				ret  = process_cper_entries(processors[gpu_id], severity_mask, &cursor[gpu_id], folder_name, gpu_id, all_entries_info);
 			}
 
@@ -379,8 +379,10 @@ int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg, std::string& o
 		}
 
 	} else {
-
-		for (uint32_t gpu_id = 0; gpu_id < gpu_count; gpu_id++) {
+		printf("%-24s %-8s %-24s %-24s %s\n","timestamp", "gpu_id", "severity", "file_name", "list of afids");
+		// Iterate through specified devices or all GPUs if none specified
+		for (uint32_t i = 0; i < arg.devices.size(); i++) {
+			uint32_t gpu_id = arg.devices[i]->get_gpu_index();
 			ret  = process_cper_entries(processors[gpu_id], severity_mask, &cursor[gpu_id], folder_name, gpu_id, all_entries_info);
 		}
 

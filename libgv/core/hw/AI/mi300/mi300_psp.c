@@ -947,7 +947,7 @@ static enum psp_status mi300_psp_check_memory_partition_mode(
 	int ret;
 	enum amdgv_memory_partition_mode curr_memory_partition_mode;
 
-	ret = mi300_nbio_get_curr_memory_partition_mode(
+	ret = mi300_nbio_get_nps_mode(
 		adapt, &curr_memory_partition_mode);
 	if (ret) {
 		AMDGV_ERROR("failed to get current NPS mode\n");
@@ -1277,7 +1277,7 @@ enum psp_status mi300_psp_trigger_snapshot(struct amdgv_adapter *adapt, uint32_t
 	return ret;
 }
 
-/*static enum psp_status mi300_psp_get_migration_version(struct amdgv_adapter *adapt,
+static enum psp_status mi300_psp_get_migration_version(struct amdgv_adapter *adapt,
 	uint32_t *migration_version)
 {
 
@@ -1325,9 +1325,6 @@ static enum psp_status mi300_psp_get_migration_info(struct amdgv_adapter *adapt)
 		return ret;
 	}
 
-	adapt->live_migration.static_data_size = MI300_MIGRATION_PSP_STATIC_DATA_SIZE;
-	adapt->live_migration.dynamic_data_size = MI300_MIGRATION_PSP_DYNAMIC_DATA_SIZE;
-
 	return ret;
 }
 
@@ -1374,6 +1371,9 @@ static int mi300_psp_migration_cmd_init(struct psp_cmd_km *migration_cmd,
 		migration_cmd->cmd.migration_import.pkg_size = size;
 		migration_cmd->cmd.migration_import.target_vfid = vfid;
 		break;
+	default:
+		return AMDGV_FAILURE;
+	}
 
 	return 0;
 }
@@ -1409,13 +1409,23 @@ static enum psp_status mi300_psp_transfer_manifest_data(struct amdgv_adapter *ad
 			ret = PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
 		} else {
 			amdgv_put_error(AMDGV_PF_IDX,
-				AMDGV_ERROR_FW_MIGRATION_IMPORT_FAIL,
+				(type == PSP_MIGRATION_EXPORT_STATIC_DATA || type == PSP_MIGRATION_EXPORT_DYNAMIC_DATA) ?
+				AMDGV_ERROR_FW_MIGRATION_EXPORT_FAIL : AMDGV_ERROR_FW_MIGRATION_IMPORT_FAIL,
 				psp_resp.status);
+			ret = PSP_STATUS__ERROR_GENERIC;
 		}
 	}
 
 	if (type == PSP_MIGRATION_EXPORT_STATIC_DATA ||
-		type == PSP_MIGRATION_EXPORT_DYNAMIC_DATA)
+	    type == PSP_MIGRATION_EXPORT_DYNAMIC_DATA) {
+		uint32_t pkg_size = psp_resp.uresp.migration_export.size_written;
+
+		if (pkg_size <= 0 || pkg_size > migration_cmd->cmd.migration_export.pkg_size_allocated) {
+			AMDGV_ERROR("PSP export size error, copied_size: 0x%x, allocated_size: 0x%x, type: 0x%x\n",
+				pkg_size, migration_cmd->cmd.migration_export.pkg_size_allocated, type);
+
+			ret = AMDGV_FAILURE;
+		}
 		AMDGV_INFO("Package addr: 0x%08lx%08lx target_vfid=0x%x size=0x%x flags=0x%x rsp.info=0x%x"
 			" rsp.st=0x%x\n",
 			migration_cmd->cmd.migration_export.pkg_addr_hi,
@@ -1425,9 +1435,10 @@ static enum psp_status mi300_psp_transfer_manifest_data(struct amdgv_adapter *ad
 			migration_cmd->cmd.migration_export.flags,
 			psp_resp.info,
 			psp_resp.status);
+	}
 
 	if (type == PSP_MIGRATION_IMPORT_DYNAMIC_DATA ||
-		type == PSP_MIGRATION_IMPORT_STATIC_DATA)
+	    type == PSP_MIGRATION_IMPORT_STATIC_DATA)
 		AMDGV_INFO("Package addr: 0x%08lx%08lx target_vfid=0x%x size=0x%x rsp.info=0x%x"
 			" rsp.st=0x%x\n",
 			migration_cmd->cmd.migration_import.pkg_addr_hi,
@@ -1437,23 +1448,8 @@ static enum psp_status mi300_psp_transfer_manifest_data(struct amdgv_adapter *ad
 			psp_resp.info,
 			psp_resp.status);
 
-		if (ret)
-			return ret;
-
-    // TODO: implement psp_resp.status to give specific error
-	if ((type == PSP_MIGRATION_EXPORT_STATIC_DATA) ||
-	(type == PSP_MIGRATION_EXPORT_DYNAMIC_DATA)) {
-		uint32_t pkg_size = psp_resp.uresp.migration_export.size_written;
-
-		if (pkg_size <= 0 || pkg_size > migration_cmd->cmd.migration_export.pkg_size_allocated) {
-			AMDGV_ERROR("PSP static export data is empty or oversized.\n");
-			ret = AMDGV_FAILURE;
-		}
-	}
-
 	return ret;
 }
-*/
 
 static int mi300_psp_sw_fini(struct amdgv_adapter *adapt)
 {
@@ -1514,8 +1510,8 @@ static int mi300_psp_sw_init(struct amdgv_adapter *adapt)
 	adapt->psp.parse_psp_info = mi300_psp_parse_psp_info;
 	adapt->psp.get_fw_attestation_info = mi300_psp_get_fw_attestation_info;
 	adapt->psp.fw_attestation_support = mi300_psp_fw_attestation_support;
-	// adapt->psp.transfer_manifest_data = mi300_psp_transfer_manifest_data;
-	// adapt->psp.get_migration_info = mi300_psp_get_migration_info;
+	adapt->psp.transfer_manifest_data = mi300_psp_transfer_manifest_data;
+	adapt->psp.get_migration_info = mi300_psp_get_migration_info;
 
 	psp_ret = amdgv_psp_sw_init(adapt);
 	adapt->psp.ras_context.set_init_flag = true;
@@ -1531,6 +1527,11 @@ static int mi300_psp_sw_init(struct amdgv_adapter *adapt)
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_INIT_FAIL, 0);
 		mi300_psp_sw_fini(adapt);
 		ret = AMDGV_FAILURE;
+	}
+
+	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION) {
+		adapt->live_migration.static_data_size = MI300_MIGRATION_PSP_STATIC_DATA_SIZE;
+		adapt->live_migration.dynamic_data_size = MI300_MIGRATION_PSP_DYNAMIC_DATA_SIZE;
 	}
 
 	return ret;

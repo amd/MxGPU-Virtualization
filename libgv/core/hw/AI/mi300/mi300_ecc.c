@@ -132,19 +132,28 @@ static const struct mi300_ras_cap_entry mi300_ras_cap_table[] = {
 		 BIT(AMDGV_RAS_BLOCK__SDMA) |
 		 BIT(AMDGV_RAS_BLOCK__MMHUB) |
 		 BIT(AMDGV_RAS_BLOCK__XGMI_WAFL) |
-		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF)},
+		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF) |
+		 BIT(AMDGV_RAS_BLOCK__VCN) |
+		 BIT(AMDGV_RAS_BLOCK__JPEG) |
+		 BIT(AMDGV_RAS_BLOCK__MMSCH)},
     {0x75A1, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
 		 BIT(AMDGV_RAS_BLOCK__GFX) |
 		 BIT(AMDGV_RAS_BLOCK__SDMA) |
 		 BIT(AMDGV_RAS_BLOCK__MMHUB) |
 		 BIT(AMDGV_RAS_BLOCK__XGMI_WAFL) |
-		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF)},
+		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF) |
+		 BIT(AMDGV_RAS_BLOCK__VCN) |
+		 BIT(AMDGV_RAS_BLOCK__JPEG) |
+		 BIT(AMDGV_RAS_BLOCK__MMSCH)},
     {0x75A3, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
 		 BIT(AMDGV_RAS_BLOCK__GFX) |
 		 BIT(AMDGV_RAS_BLOCK__SDMA) |
 		 BIT(AMDGV_RAS_BLOCK__MMHUB) |
 		 BIT(AMDGV_RAS_BLOCK__XGMI_WAFL) |
-		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF)},
+		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF) |
+		 BIT(AMDGV_RAS_BLOCK__VCN) |
+		 BIT(AMDGV_RAS_BLOCK__JPEG) |
+		 BIT(AMDGV_RAS_BLOCK__MMSCH)},
 };
 
 static uint32_t mi300_get_asic_ras_caps(struct amdgv_adapter *adapt)
@@ -361,6 +370,9 @@ static bool mi300_ecc_is_poison_consumption_wgr(struct amdgv_adapter *adapt,
 	if (idx_vf == AMDGV_PF_IDX)
 		return true;
 
+	if (adapt->ecc.eh_data->bp_replace_pending)
+		return true;
+
 	if ((block != AMDGV_RAS_BLOCK__GFX) &&
 	    (block != AMDGV_RAS_BLOCK__SDMA)) {
 		AMDGV_ERROR("Block %d is not supported for poison consumption, triggering VF FLR instead.\n", block);
@@ -378,6 +390,7 @@ static void mi300_ecc_do_poison_consumption_recovery(struct amdgv_adapter *adapt
 		amdgv_device_handle_bad_gpu(adapt);
 		return;
 	}
+
 	if (mi300_ecc_is_poison_consumption_wgr(adapt, idx_vf, block))
 		amdgv_sched_queue_event(adapt->xgmi.master_adapt ?
 					adapt->xgmi.master_adapt : adapt,
@@ -474,7 +487,7 @@ static int mi300_ecc_sw_init(struct amdgv_adapter *adapt)
 	else
 		adapt->ecc.bad_page_record_threshold = 128;
 
-	adapt->ecc.skip_row_rma = true;
+	adapt->ecc.ras_ecc_flags |= AMDGV_ECC_FLAG__CSA_NON_CRITICAL;
 
 	adapt->ecc.get_correctable_error_count = mi300_umc_update_error_count;
 	adapt->ecc.get_uncorrectable_error_count = mi300_umc_update_uc_error_count;

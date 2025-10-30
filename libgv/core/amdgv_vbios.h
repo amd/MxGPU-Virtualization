@@ -64,6 +64,8 @@ struct amdgv_vbios {
 
 	unsigned int image_size;
 
+	uint32_t byte_sum;
+
 	uint64_t vram_usage_start_addr;
 
 	bool is_atom_fw;

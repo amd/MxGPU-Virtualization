@@ -80,6 +80,9 @@ void *mem_aligned_alloc(void **mem, size_t alignment, size_t size);
 
 ::testing::AssertionResult equal_bdfs(amdsmi_bdf_t bdf_expect, amdsmi_bdf_t bdf_actual);
 
+::testing::AssertionResult equal_dpm_policy(smi_dpm_policy expect,
+					amdsmi_dpm_policy_t actual);
+
 class AmdSmiTest : public ::testing::Test {
 protected:
 	AmdSmiTest() { num_devices = 1; };

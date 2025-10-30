@@ -26,6 +26,8 @@
 #include "amdgv_common_eeprom.h"
 #include "amdgv_gpumon.h"
 
+#define PP_METRICS_CACHE_EXPIRY_US 1000
+
 struct amdgv_pp_metrics;
 struct i2c_msg;
 struct umc_ecc_info;
@@ -83,14 +85,6 @@ enum pp_ras_type {
 	PP_RAS_TYPE__RMA                = 1 << 7,
 };
 
-enum pp_throttler_event {
-	PP_THROTTLER_EVENT__PROCHOT = 0,
-	PP_THROTTLER_EVENT__SOCKET,
-	PP_THROTTLER_EVENT__VR,
-	PP_THROTTLER_EVENT__HBM,
-	PP_THROTTLER_EVENT__COUNT,
-};
-
 enum pp_xgmi_plpd_mode {
 	PP_XGMI_PLPD_MODE_DISABLE = 0,
 	PP_XGMI_PLPD_MODE_ENABLE,
@@ -120,6 +114,33 @@ struct pp_smu_dpm_policy {
 	int (*set_policy)(struct amdgv_adapter *adapt, int level);
 };
 
+enum pp_bad_page_cmd_type {
+	PP_GET_BAD_PAGE_INFO_CMD_TYPE_LO = 1,
+	PP_GET_BAD_PAGE_INFO_CMD_TYPE_HI = 2,
+};
+
+enum pp_rma_status {
+	PP_RMA_OD_SRAM_ECC_PARITY_THRESHOLD = BIT(0),
+	PP_RMA_HWA_THRESHOLD = BIT(1),
+	PP_RMA_WDT_THRESHOLD = BIT(2),
+	PP_RMA_DRAM_CRITICAL_REGION_UCE_THRESHOLD = BIT(3),
+};
+
+enum pp_ras_policy_type {
+	PP_RAS_POLICY_TYPE__MINORVERSION,
+	PP_RAS_POLICY_TYPE__MAJORVERSION,
+	PP_RAS_POLICY_TYPE__OD_SRAM_ECC_THRESHOLD,
+	PP_RAS_POLICY_TYPE__HWA_THRESHOLD,
+	PP_RAS_POLICY_TYPE__WDT_THRESHOLD,
+	PP_RAS_POLICY_TYPE__DRAM_CRITICAL_REGION_THRESHOLD,
+	PP_RAS_POLICY_TYPE__DRAM_NON_CRITICAL_REGION_THRESHOLD,
+};
+
+enum pp_erase_ras_table_status {
+	PP_ERASE_RAS_TABLE_STATUS__SUCCESS = 0,
+	PP_ERASE_RAS_TABLE_STATUS__ASIC_BUSY,
+	PP_ERASE_RAS_TABLE_STATUS__IO_ERROR,
+};
 struct amdgv_pp_funcs {
 	int (*smu_init)(struct amdgv_adapter *adapt);
 	int (*smu_fini)(struct amdgv_adapter *adapt);
@@ -211,12 +232,39 @@ struct amdgv_pp_funcs {
 	int (*get_num_static_metrics_ext_entries)(struct amdgv_adapter *adapt,
 				 uint32_t *entries);
 	int (*init_drv_metrics_ext)(struct amdgv_adapter *adapt);
+	bool (*get_smu_cap_supported)(struct amdgv_adapter *adapt, int cap);
+	int (*get_npm_info)(struct amdgv_adapter *adapt, struct amdgv_gpumon_npm_info *npm_info);
+};
+
+struct amdgv_pmme_funcs {
+	bool (*is_pmfw_managed_eeprom)(struct amdgv_adapter *adapt);
+	bool (*is_pmme_ready)(struct amdgv_adapter *adapt);
+	int (*get_ras_table_version)(struct amdgv_adapter *adapt,
+					uint32_t *eeprom_version);
+	int (*get_rma_status)(struct amdgv_adapter *adapt, uint32_t *rma_status);
+	int (*get_bad_page_count)(struct amdgv_adapter *adapt, uint32_t *bad_page_count);
+	int (*get_bad_page_address)(struct amdgv_adapter *adapt,
+					uint32_t bp_rec_idx, uint64_t *soc_pa);
+	int (*get_bad_page_info_details)(struct amdgv_adapter *adapt,
+				uint32_t bp_rec_idx, struct amdgv_ras_eeprom_bad_page_info *bad_page_info);
+	int (*set_eeprom_timestamp)(struct amdgv_adapter *adapt, uint64_t utc_timestamp);
+	int (*get_ras_policy_details)(struct amdgv_adapter *adapt,
+					struct amdgv_ras_policy_info *ras_policy_info);
+	int (*erase_ras_table)(struct amdgv_adapter *adapt, uint32_t *status);
 };
 
 struct amdgv_pp_metrics_cache {
 	void *metrics;
 	uint64_t tstamp;
 };
+enum amdgv_pp_metric_table_type {
+	AMDGV_PP_METRIC__GPU,
+	AMDGV_PP_METRIC__GPU_STATIC,
+	AMDGV_PP_METRIC__SYSTEM,
+	AMDGV_PP_METRIC__NUM,
+};
+
+#define adapt_to_pp_metrics(adapt, TYPE) adapt->pp.metrics[TYPE]
 
 struct amdgv_pp {
 	struct phm_platform_descriptor platform_descriptor;
@@ -224,9 +272,13 @@ struct amdgv_pp {
 	void *pptable;
 	void *smu_backend;
 	void *backend;
-	void *drv_metrics_ext;
-	void *drv_static_metrics_ext;
-	struct amdgv_pp_metrics_cache metrics_cache;
+
+	void *metrics[AMDGV_PP_METRIC__NUM];
+	uint64_t metrics_cache_expire_us;
+
+	/* cache for legacy metrics API. New ASICs handle caching in IP backend. */
+struct amdgv_pp_metrics_cache metrics_cache;
+
 	const void *soft_pp_table;
 	uint32_t soft_pp_table_size;
 	uint32_t available_fb_base;
@@ -245,6 +297,9 @@ struct amdgv_pp {
 
 	const struct amdgv_pp_funcs *pp_funcs;
 
+	uint32_t rma_status;
+	const struct amdgv_pmme_funcs *pmme_funcs;
+
 	/* test SMU functionality, expect SMU failure */
 	bool is_test_smu;
 
@@ -252,7 +307,6 @@ struct amdgv_pp {
 	uint32_t pf_bif_bx_strap0;
 	uint32_t pf_bif_db_int;
 	struct pp_pf_pci_state pf_pci_config;
-
 };
 
 int amdgv_pp_early_init(struct amdgv_adapter *adapt);

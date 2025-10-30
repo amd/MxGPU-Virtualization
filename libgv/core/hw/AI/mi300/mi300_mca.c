@@ -55,6 +55,9 @@ static int jpeg_err_codes[] = {
 	CODE_JPEG4S, CODE_JPEG4D, CODE_JPEG5S, CODE_JPEG5D,
 	CODE_JPEG6S, CODE_JPEG6D, CODE_JPEG7S, CODE_JPEG7D,
 };
+static int mmsch_err_codes[] = {
+	CODE_MMSCHD,
+};
 
 static int mi300_mca_ras_block_to_ue_chiplet_err_code(enum amdgv_ras_block block)
 {
@@ -73,6 +76,8 @@ static int mi300_mca_ras_block_to_ue_chiplet_err_code(enum amdgv_ras_block block
 		return AMDGV_ERROR_ECC_VCN_CHIPLET_UE;
 	case AMDGV_RAS_BLOCK__JPEG:
 		return AMDGV_ERROR_ECC_JPEG_CHIPLET_UE;
+	case AMDGV_RAS_BLOCK__MMSCH:
+		return AMDGV_ERROR_ECC_MMSCH_CHIPLET_UE;
 	default:
 		return AMDGV_ERROR_ECC_UNKNOWN_CHIPLET_UE;
 	}
@@ -95,6 +100,8 @@ static int mi300_mca_ras_block_to_ce_chiplet_err_code(enum amdgv_ras_block block
 		return AMDGV_ERROR_ECC_VCN_CHIPLET_CE;
 	case AMDGV_RAS_BLOCK__JPEG:
 		return AMDGV_ERROR_ECC_JPEG_CHIPLET_CE;
+	case AMDGV_RAS_BLOCK__MMSCH:
+		return AMDGV_ERROR_ECC_MMSCH_CHIPLET_CE;
 	default:
 		return AMDGV_ERROR_ECC_UNKNOWN_CHIPLET_CE;
 	}
@@ -436,16 +443,23 @@ static void mi300_mca_jpeg_push_bank_count(struct amdgv_adapter *adapt,
 	mi300_mca_push_bank_count(adapt, bank, AMDGV_RAS_BLOCK__JPEG);
 }
 
-static int mi300_mca_parse_error_code(struct amdgv_adapter *adapt,
-				      struct mca_bank_entry *bank)
+static void mi300_mca_mmsch_push_bank_count(struct amdgv_adapter *adapt,
+					    struct mca_bank_entry *bank)
 {
-	int errcode;
+	mi300_mca_push_bank_count(adapt, bank, AMDGV_RAS_BLOCK__MMSCH);
+}
 
-	if (mi300_smu_cap_supported(adapt, SMU_CAP_ACA_SYND)) {
-		errcode = REG_GET_FIELD(bank->regs[MCA_REG_IDX_SYND], MCMP1_SYNDT0, ErrorInformation);
-		errcode &= 0xff;
-	} else {
-		errcode = REG_GET_FIELD(bank->regs[MCA_REG_IDX_STATUS], MCMP1_STATUST0, ErrorCode);
+static int mi300_mca_parse_error_code(struct amdgv_adapter *adapt,
+					  struct mca_bank_entry *bank)
+{
+	int errcode = -1;
+
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->get_smu_cap_supported) {
+		if (adapt->pp.pp_funcs->get_smu_cap_supported(adapt, SMU_CAP_ACA_SYND)) {
+			errcode = REG_GET_FIELD(bank->regs[MCA_REG_IDX_SYND], MCMP1_SYNDT0, ErrorInformation);
+			errcode &= 0xff;
+		} else
+			errcode = REG_GET_FIELD(bank->regs[MCA_REG_IDX_STATUS], MCMP1_STATUST0, ErrorCode);
 	}
 
 	return errcode;
@@ -563,7 +577,31 @@ static bool mi300_mca_jpeg_is_bank_valid(struct amdgv_adapter *adapt,
 	return false;
 }
 
-#define MI300_MCA_HANDLER_TABLE_SIZE 7
+static bool mi300_mca_mmsch_is_bank_valid(struct amdgv_adapter *adapt,
+					  struct mca_bank_entry *bank)
+{
+	uint32_t instlo;
+	int errcode, i = 0;
+
+	instlo = REG_GET_FIELD(bank->regs[MCA_REG_IDX_IPID], MCMP1_IPIDT0, InstanceIdLo);
+	instlo &= AMDGV_RAS_GENMASK(31, 1);
+
+	if (instlo != MI300_MCA_IPID_SMU)
+		return false;
+
+	errcode = mi300_mca_parse_error_code(adapt, bank);
+	if (errcode < 0)
+		return false;
+
+	for (i = 0; i < ARRAY_SIZE(mmsch_err_codes); i++) {
+		if (errcode == mmsch_err_codes[i])
+			return true;
+	}
+
+	return false;
+}
+
+#define MI300_MCA_HANDLER_TABLE_SIZE 8
 
 static struct mca_bank_handler bank_handler[MI300_MCA_HANDLER_TABLE_SIZE] = {
 	{
@@ -622,6 +660,14 @@ static struct mca_bank_handler bank_handler[MI300_MCA_HANDLER_TABLE_SIZE] = {
 		.block = AMDGV_RAS_BLOCK__JPEG,
 		.push_bank_count = mi300_mca_jpeg_push_bank_count,
 		.is_bank_valid = mi300_mca_jpeg_is_bank_valid,
+	},
+	{
+		.ip = AMDGV_MCA_IP_SMU,
+		.hwid = 0x1,
+		.mcatype = 0x1,
+		.block = AMDGV_RAS_BLOCK__MMSCH,
+		.push_bank_count = mi300_mca_mmsch_push_bank_count,
+		.is_bank_valid = mi300_mca_mmsch_is_bank_valid,
 	},
 };
 

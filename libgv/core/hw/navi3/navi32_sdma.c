@@ -34,8 +34,8 @@ static const uint32_t this_block = AMDGV_COMMUNICATION_BLOCK;
 
 /* set SDMA golden setting for SDMA cntl and UTC L1 */
 static const struct amdgv_reg_golden golden_settings_sdma_6_0[] = {
-	SOC15_REG_GOLDEN_VALUE(GC, 0, regSDMA0_CNTL, 0xffffffff, 0x00002441),
-	SOC15_REG_GOLDEN_VALUE(GC, 0, regSDMA1_CNTL, 0xffffffff, 0x00002441),
+	SOC15_REG_GOLDEN_VALUE(GC, 0, regSDMA0_CNTL, 0xffffffff, 0x10002441),
+	SOC15_REG_GOLDEN_VALUE(GC, 0, regSDMA1_CNTL, 0xffffffff, 0x10002441),
 	SOC15_REG_GOLDEN_VALUE(GC, 0, regSDMA0_SEM_WAIT_FAIL_TIMER_CNTL, 0xffffffff, 0x00000000),
 	SOC15_REG_GOLDEN_VALUE(GC, 0, regSDMA1_SEM_WAIT_FAIL_TIMER_CNTL, 0xffffffff, 0x00000000),
 	SOC15_REG_GOLDEN_VALUE(GC, 0, regSDMA0_UTCL1_CNTL, 0xffffffff, 0x2c000689),
@@ -66,6 +66,8 @@ static void navi32_sdma_ring_submit_frame(struct amdgv_ring *ring, uint8_t *fram
 	// "ring->wptr" is DWORD offset, but register SDMA WPTR is BYTE offset
 	ring_byte_wptr = ring->wptr << 2;
 	*((volatile uint64_t *)(ring->wptr_cpu_addr)) = ring_byte_wptr;
+
+	amdgv_misc_hdp_flush(adapt);
 
 	if (ring->use_doorbell) {
 		WDOORBELL64(ring->doorbell_index, ring_byte_wptr);

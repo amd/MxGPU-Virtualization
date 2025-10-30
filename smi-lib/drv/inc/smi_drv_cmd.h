@@ -109,6 +109,9 @@ int smi_get_metrics_table(struct smi_ctx *ctx, void *inb,
 			  void *outb, uint16_t in_len, uint16_t out_len);
 int smi_get_accelerator_partition_profile_config(struct smi_ctx *ctx, void *inb,
 			  void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_accelerator_partition_profile_config_global(struct smi_ctx *ctx, void *inb,
+			  void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_accelerator_partition_profile_config_common(struct smi_ctx *ctx, void *inb, int in_len, int some_other_parameter);
 int smi_get_memory_partition_caps(struct smi_ctx *ctx, void *inb,
 			  void *outb, uint16_t in_len, uint16_t out_len);
 int smi_get_accelerator_partition_profile(struct smi_ctx *ctx, void *inb,
@@ -129,5 +132,8 @@ int smi_get_cper_error(struct smi_ctx *ctx, void *inb,
 			    void *outb, uint16_t in_len, uint16_t out_len);
 int smi_reset_gpu(struct smi_ctx *ctx, void *inb,
 				void *outb, uint16_t in_len, uint16_t out_len);
-
+int smi_get_xgmi_plpd(struct smi_ctx *ctx, void *inb,
+			  void *outb, uint16_t in_len, uint16_t out_len);
+int smi_set_xgmi_plpd(struct smi_ctx *ctx, void *inb,
+			  void *outb, uint16_t in_len, uint16_t out_len);
 #endif // __SMI_DRV_CMD_H__

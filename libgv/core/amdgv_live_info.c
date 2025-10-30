@@ -78,6 +78,7 @@ enum amdgv_live_info_status amdgv_import_data(struct amdgv_adapter *adapt)
 			(data_op != AMDGV_LIVE_INFO_DATA__MEMMGR) &&
 			(data_op != AMDGV_LIVE_INFO_DATA__UNPROCESSED_EVENT) &&
 			(data_op != AMDGV_LIVE_INFO_DATA__RAS_EEPROM_DATA) &&
+			(data_op != AMDGV_LIVE_INFO_DATA__XGMI) &&
 			(data_op != AMDGV_LIVE_INFO_DATA__IP_DISCOVERY || (!adapt->ip_discovery.enable_live_update))) {
 
 			offset = op_offset[data_op];
@@ -160,7 +161,8 @@ enum amdgv_live_info_status amdgv_live_info_init_metadata(struct amdgv_adapter *
 	uint32_t size_offset = 0;
 
 	if ((adapt->flags & AMDGV_FLAG_GPUV_LIVE_UPDATE) || adapt->fini_opt.skip_hw_fini) {
-		offset      = offsetof(struct amdgv_gpu_data_v2, crtical_state);
+		// first data block's offset in gpu_data_v2
+		offset      = sizeof(struct amdgv_gpu_data_header_v2);
 		size_offset = offsetof(struct amdgv_gpu_data_v2, header.size);
 		gpu_data = (struct amdgv_gpu_data_v2 *)adapt->sys_mem_info.va_ptr;
 		oss_memset(gpu_data, 0, AMDGV_LIVE_INFO_V2_SIZE);
@@ -249,6 +251,8 @@ enum amdgv_live_info_status amdgv_live_info_init_metadata(struct amdgv_adapter *
 
 			AMDGV_DEBUG("op:%d, \t offset:%08x,\t size:%08x\t\n", data_op, offset, header->structure_size);
 			offset = offset + header->structure_size;
+			header->data_op = data_op;
+			oss_memcpy(&header->signature, "HEADER", 6);
 		}
 
 		gpu_data->header.size = offset - size_offset;

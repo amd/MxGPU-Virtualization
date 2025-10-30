@@ -588,6 +588,7 @@ static const struct mi300_nps_combination_cap_entry mi300_nps_combination_cap_ta
 			.combinations = {
 				{AMDGV_MEMORY_PARTITION_MODE_NPS1, AMDGV_ACCELERATOR_PARTITION_MODE_SPX},
 				{AMDGV_MEMORY_PARTITION_MODE_NPS2, AMDGV_ACCELERATOR_PARTITION_MODE_DPX},
+				{AMDGV_MEMORY_PARTITION_MODE_NPS2, AMDGV_ACCELERATOR_PARTITION_MODE_CPX},
 				}
 			}
 		}
@@ -614,9 +615,48 @@ static const struct amdgv_nps_compute_combination *mi300_nbio_get_asic_nps_caps(
 	return NULL;
 }
 
-int mi300_nbio_get_curr_memory_partition_mode(
-	struct amdgv_adapter *adapt,
-	enum amdgv_memory_partition_mode *memory_partition_mode)
+int mi300_nbio_get_supported_memory_partition_mode(struct amdgv_adapter *adapt,
+			enum amdgv_memory_partition_mode *supported_nps, int *supported_nps_count)
+{
+	int i, j, k;
+	uint64_t cap = 0, mask = 0;
+	uint32_t count = 0;
+
+	for (i = 0; i < ARRAY_SIZE(mi300_nps_combination_cap_table); i++) {
+		/* find the asic */
+		if (adapt->asic_type == mi300_nps_combination_cap_table[i].asic_type) {
+			const struct amdgv_vf_nps_combination *vf_nps_list =
+							mi300_nps_combination_cap_table[i].vf_nps;
+
+			for (j = 0; j < AMDGV_VF_NPS_MAX_COMBINATIONS; j++) {
+				const struct amdgv_nps_compute_combination *comb = vf_nps_list[j].combinations;
+				for (k = 0; k < AMDGV_NPS_COMPUTE_MAX_COMBINATIONS; k++) {
+					switch (comb[k].nps_mode) {
+						case AMDGV_MEMORY_PARTITION_MODE_NPS1:
+						case AMDGV_MEMORY_PARTITION_MODE_NPS2:
+						case AMDGV_MEMORY_PARTITION_MODE_NPS4:
+						case AMDGV_MEMORY_PARTITION_MODE_NPS8:
+							cap = 1 << (comb[k].nps_mode);
+							if ((mask & cap) == 0) {
+								mask |= cap;
+								supported_nps[count] = comb[k].nps_mode;
+								count++;
+							}
+							break;
+						default:
+							continue;
+					}
+				}
+			}
+		}
+	}
+
+	*supported_nps_count = count;
+	return 0;
+}
+
+int mi300_nbio_get_nps_mode(struct amdgv_adapter *adapt,
+			    enum amdgv_memory_partition_mode *memory_partition_mode)
 {
 	uint32_t mem_status;
 	uint32_t mem_mode;
@@ -857,13 +897,14 @@ void mi300_hdp_flush(struct amdgv_adapter *adapt)
 
 const struct amdgv_nbio_funcs mi300_nbio_funcs = {
 	.hdp_flush = mi300_hdp_flush,
+	.get_nps_mode = mi300_nbio_get_nps_mode,
 };
 
 const struct amdgv_nbio_ras nbio_v7_9_ras = {
 	.handle_ras_controller_intr_no_bifring = nbio_v7_9_handle_ras_controller_intr_no_bifring,
 	.handle_ras_err_event_athub_intr_no_bifring = nbio_v7_9_handle_ras_err_event_athub_intr_no_bifring,
 	.set_ras_err_event_athub_irq_state = nbio_v7_9_set_ras_err_event_athub_irq_state,
-	.get_curr_memory_partition_mode = mi300_nbio_get_curr_memory_partition_mode,
+	.get_supported_memory_partition_mode = mi300_nbio_get_supported_memory_partition_mode,
 };
 
 void nbio_v7_9_set_ras_funcs(struct amdgv_adapter *adapt)

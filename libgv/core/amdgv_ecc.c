@@ -504,21 +504,43 @@ enum amdgv_live_info_status amdgv_ecc_import_live_data(struct amdgv_adapter *ada
 		adapt->ecc.correctable_error_num = ecc_info->correctable_error_num;
 		adapt->ecc.uncorrectable_error_num = ecc_info->uncorrectable_error_num;
 
+		/* ecc bad page calculation needs xgmi socket_id */
+		amdgv_import_data_by_op(adapt, AMDGV_LIVE_INFO_DATA__XGMI);
+
 		amdgv_import_data_by_op(adapt, AMDGV_LIVE_INFO_DATA__RAS_EEPROM_DATA);
+
+		ret = amdgv_atomfirmware_get_vram_info(adapt);
+		if (ret) {
+			AMDGV_ERROR("get vram info failed!\n");
+			return ret;
+		}
+
+		amdgv_ras_eeprom_version_init(adapt);
 
 		// read bad pages directly from eeprom
 		ret = amdgv_ras_eeprom_init(adapt, &(adapt->eeprom_control));
 		if (ret)
 			goto free;
 
-		if (adapt->nbio.ras &&
-			 adapt->nbio.ras->get_curr_memory_partition_mode) {
-			ret = adapt->nbio.ras->get_curr_memory_partition_mode(adapt, &nps_mode);
+		if (adapt->nbio.funcs &&
+			 adapt->nbio.funcs->get_nps_mode) {
+			ret = adapt->nbio.funcs->get_nps_mode(adapt, &nps_mode);
 			if (ret) {
 				AMDGV_ERROR("Failed to get current nps mode\n");
 				goto release;
 			}
 			adapt->ecc.eh_data->nps_mode = nps_mode;
+		}
+
+		if (adapt->umc.is_pmfw_managed_eeprom) {
+			/* Get current bad page count*/
+			if (adapt->pp.pmme_funcs &&
+				adapt->pp.pmme_funcs->get_bad_page_count) {
+				ret = adapt->pp.pmme_funcs->get_bad_page_count(adapt,
+					&adapt->eeprom_control.num_recs);
+				if (ret)
+					return ret;
+			}
 		}
 
 		if (adapt->eeprom_control.num_recs) {

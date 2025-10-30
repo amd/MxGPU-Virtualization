@@ -192,8 +192,8 @@ int main(void)
 		printw("-->Driver version: %s\n", driver_version.driver_version);
 		printw("-->Driver date: %s\n", driver_version.driver_date);
 		CHECKRET(amdsmi_get_gpu_vbios_info(processors[i], &vbios));
-		printw("+VBIOS ver:%s %s %s\n", vbios.version, vbios.build_date,
-				vbios.part_number);
+		printw("+VBIOS ver:%s %s %s %s\n", vbios.version, vbios.build_date,
+				vbios.part_number, vbios.boot_firmware);
 		CHECKRET(amdsmi_get_gpu_activity(processors[i], &usage));
 		CHECKRET(amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_GFX,
 					&clock));
@@ -244,7 +244,7 @@ int main(void)
 			CHECKRET(amdsmi_is_gpu_power_management_enabled(processors[i], &is_power_management_enabled));
 			printw("+Power management enabled: %s\n", is_power_management_enabled ? "true" : "false");
 		}
-		CHECKRET(amdsmi_get_power_info(processors[i], sensor_ind, &power_info));
+		CHECKRET(amdsmi_get_power_info(processors[i], &power_info));
 		CHECKRET(amdsmi_get_temp_metric(processors[i], AMDSMI_TEMPERATURE_TYPE_EDGE,
 										AMDSMI_TEMP_CURRENT, &temp_edge));
 		CHECKRET(amdsmi_get_temp_metric(processors[i], AMDSMI_TEMPERATURE_TYPE_VRAM,

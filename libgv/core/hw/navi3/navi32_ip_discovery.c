@@ -250,8 +250,6 @@ static int navi32_parse_gc_table(struct amdgv_adapter *adapt)
 	adapt->config.gfx.max_waves_per_simd = gc_info->gc_max_waves_per_simd;
 	adapt->config.gfx.wave_size = gc_info->gc_wave_size;
 
-	AMDGV_INFO("%s GFX IP: %d.%d\n", adapt->config.name, adapt->config.gfx.major,
-		   adapt->config.gfx.minor);
 	AMDGV_INFO("+gc_num_se          : %d\n", gc_info->gc_num_se);
 	AMDGV_INFO("+gc_num_wgp0_per_sa : %d\n", gc_info->gc_num_wgp0_per_sa);
 	AMDGV_INFO("+gc_num_wgp1_per_sa : %d\n", gc_info->gc_num_wgp1_per_sa);
@@ -315,10 +313,6 @@ static void navi32_hw_ip_map(struct amdgv_adapter *adapt, struct amdgv_ip *ip)
 			ipn = ip->instance_number;
 			adapt->reg_offset[hw_ip][ipn] = ip->base_address;
 			switch (ip->hw_id) {
-			case GC_HWID:
-				adapt->config.gfx.major = ip->major;
-				adapt->config.gfx.minor = ip->minor;
-				break;
 			case VCE_HWID:
 				adapt->config.mm.count[AMDGV_VCE_ENGINE]++;
 				break;
@@ -534,6 +528,7 @@ int navi32_copy_ip_data_to_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 		offset = ((uint64_t)vf->fb_size_tmr << 20) - AMDGV_IP_DISCOVERY_OFFSET;
 	else
 		offset = ((uint64_t)vf->fb_size << 20) - AMDGV_IP_DISCOVERY_OFFSET;
+
 	ret = amdgv_vfmgr_copy_to_vf_fb(adapt, idx_vf, offset, vf_copy.data, AMDGV_IP_DISCOVERY_SIZE);
 
 	oss_free_memory(vf_copy.data);

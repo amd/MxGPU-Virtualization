@@ -81,6 +81,18 @@ static enum amdgv_smi_ras_block amdgv_block_to_ta_block(enum amdgv_ras_block blo
 		return AMDGV_SMI_RAS_BLOCK__MP1;
 	case AMDGV_RAS_BLOCK__FUSE:
 		return AMDGV_SMI_RAS_BLOCK__FUSE;
+	case AMDGV_RAS_BLOCK__MCA:
+		return AMDGV_SMI_RAS_BLOCK__MCA;
+	case AMDGV_RAS_BLOCK__VCN:
+		return AMDGV_SMI_RAS_BLOCK__VCN;
+	case AMDGV_RAS_BLOCK__JPEG:
+		return AMDGV_SMI_RAS_BLOCK__JPEG;
+	case AMDGV_RAS_BLOCK__IH:
+		return AMDGV_SMI_RAS_BLOCK__IH;
+	case AMDGV_RAS_BLOCK__MPIO:
+		return AMDGV_SMI_RAS_BLOCK__MPIO;
+	case AMDGV_RAS_BLOCK__MMSCH:
+		return AMDGV_SMI_RAS_BLOCK__MMSCH;
 	default:
 		return -1;
 	}
@@ -488,6 +500,28 @@ static uint8_t amdgv_clear_bad_page_info(amdgv_dev_t adev, struct amdgv_uni_cmd 
 	return AMDGV_CMD__SUCCESS;
 }
 
+static uint8_t amdgv_get_ras_policy_info(amdgv_dev_t adev, struct amdgv_uni_cmd *cmd)
+{
+	struct amdgv_cmd_ras_policy_info *output_data =
+			(struct amdgv_cmd_ras_policy_info *)cmd->output_buff_raw;
+	struct amdgv_gpumon_ras_policy_info ras_policy_info = {0};
+
+	if (cmd->input_size != sizeof(struct amdgv_cmd_dev_handle) ||
+			cmd->version != AMDGV_CMD_VERSION_V1 || !adev)
+		return AMDGV_CMD__ERROR_INVALID_INPUT;
+
+	if (amdgv_gpumon_get_ras_policy_info(adev, &ras_policy_info))
+		return AMDGV_CMD__ERROR_GENERIC;
+
+	output_data->minor_version = ras_policy_info.minor_version;
+	output_data->major_version = ras_policy_info.major_version;
+	output_data->dram_non_critical_region_threshold = ras_policy_info.dram_non_critical_region_threshold;
+	output_data->dram_critical_region_threshold = ras_policy_info.dram_critical_region_threshold;
+
+	cmd->output_size = sizeof(struct amdgv_cmd_ras_policy_info);
+	return AMDGV_CMD__SUCCESS;
+}
+
 static amdgv_cmd_func_map amdgv_ras_func[] = {
 	{AMDGV_CMD_GET_BLOCK_ECC_STATUS, amdgv_get_block_ecc_info},
 	{AMDGV_CMD_RAS_INJECT_ERROR, amdgv_ras_ecc_inject},
@@ -498,7 +532,8 @@ static amdgv_cmd_func_map amdgv_ras_func[] = {
 	{AMDGV_CMD_RAS_GET_SAFE_FB_ADDRESS_RANGES, amdgv_get_safe_fb_addr_ranges},
 	{AMDGV_CMD_TRANSLATE_FB_ADDRESS, amdgv_translate_fb_address},
 	{AMDGV_CMD_RAS_RESET_ALL_ERROR_COUNTS, amdgv_reset_all_error_counts},
-	{AMDGV_CMD_GET_CPER_RECORDS, amdgv_get_cper_records}
+	{AMDGV_CMD_GET_CPER_RECORDS, amdgv_get_cper_records},
+	{AMDGV_CMD_GET_RAS_POLICY_INFO, amdgv_get_ras_policy_info},
 };
 
 uint8_t amdgv_handle_uni_cmd(void *data, struct amdgv_uni_cmd *cmd)

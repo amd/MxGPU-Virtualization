@@ -24,6 +24,7 @@
 #include "amdgv_vfmgr.h"
 #include "amdgv_powerplay.h"
 
+extern struct amdgv_init_func amdgv_migration_func;
 extern struct amdgv_init_func mi200_vbios_early_func;
 extern struct amdgv_init_func mi200_vbios_late_func;
 extern struct amdgv_init_func mi200_ucode_func;
@@ -68,6 +69,7 @@ struct amdgv_init_func *mi200_init_table[] = {
 	&mi200_sched_func,
 	&mi200_diag_data_func,
 	&mi200_gfx_v9_0_func,
+	&amdgv_migration_func,
 	NULL,
 };
 
@@ -103,7 +105,10 @@ extern struct amdgv_init_func mi300_sdma_v4_4_2_func;
 extern struct amdgv_init_func mi300_gfx_v9_4_3_func;
 extern struct amdgv_init_func mi308_ucode_func;
 extern struct amdgv_init_func mi350_ucode_func;
-extern struct amdgv_init_func mi350_smu_func;
+extern struct amdgv_init_func mi350_mem_func;
+extern struct amdgv_init_func mi350_pmfw_eeprom_func;
+extern struct amdgv_init_func mi350_smu_early_func;
+extern struct amdgv_init_func mi350_smu_late_func;
 extern struct amdgv_init_func mi350_powerplay_func;
 extern struct amdgv_init_func mi300_dirtybit_func;
 
@@ -163,10 +168,11 @@ struct amdgv_init_func *mi308x_init_table[] = {
 	/* Uncomment when support is complete for MI300
 	&mi300_diag_data_func,
 	*/
+	&amdgv_migration_func,
+	&mi300_dirtybit_func,
 	&mi300_sdma_v4_4_2_func,
 	&mi300_gfx_v9_4_3_func,
 	&mi300_sched_late_func,
-	&mi300_dirtybit_func,
 	NULL,
 };
 
@@ -176,10 +182,12 @@ struct amdgv_init_func *mi350x_init_table[] = {
 	&mi300_mcp_func,
 	&mi300_xgmi_early_func,
 	&mi300_vbios_early_func,
-	&mi300_mem_func,
+	&mi350_smu_early_func,
+	&mi350_pmfw_eeprom_func,
+	&mi350_mem_func,
 	&mi350_ucode_func,
 	&mi300_psp_func,
-	&mi350_smu_func,
+	&mi350_smu_late_func,
 	&mi300_clockgating_func,
 	&mi300_vbios_late_func,
 	&mi300_ecc_func,

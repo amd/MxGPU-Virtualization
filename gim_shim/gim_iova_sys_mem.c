@@ -25,9 +25,13 @@
 #include <linux/version.h>
 
 #include "gim.h"
+#include "gim_error.h"
+#include "gim_debug.h"
 #include "amdgv_oss.h"
 #include "gim_iova_sys_mem.h"
 #include <asm/set_memory.h>
+
+extern struct gim_error_ring_buffer *gim_error_rb;
 
 struct gim_iova_mem_info {
 	struct pci_dev   *pdev;
@@ -43,12 +47,12 @@ static int gim_iova_mem_alloc_direct(struct gim_iova_mem_info *iova_info)
 {
 	if (iova_info->nr_pages > MAX_ORDER_NR_PAGES) {
 #if defined(HAVE_MAX_PAGE_ORDER)
-		pr_err("Please enlarge MAX_PAGE_ORDER from %d to %d to alloc %dMB pysical contiguous system memory\n",
+		gim_warn("Please enlarge MAX_PAGE_ORDER from %d to %d to alloc %dMB pysical contiguous system memory\n",
 					MAX_PAGE_ORDER,
 					order_base_2(iova_info->nr_pages),
 					iova_info->nr_pages >> 8);
 #else
-		pr_err("Please enlarge MAX_ORDER from %d to %d to alloc %dMB pysical contiguous system memory\n",
+		gim_warn("Please enlarge MAX_ORDER from %d to %d to alloc %dMB pysical contiguous system memory\n",
 					MAX_ORDER,
 					order_base_2(iova_info->nr_pages) - order_base_2(MAX_ORDER_NR_PAGES) + MAX_ORDER,
 					iova_info->nr_pages >> 8);
@@ -79,42 +83,73 @@ static void gim_iova_mem_free_direct(struct gim_iova_mem_info *iova_info)
 #endif
 }
 
+static bool gim_iova_check_mem_attribute_wc(unsigned long va)
+{
+	pgprot_t orig_prot;
+	int level;
+	pte_t *pte = lookup_address(va, &level);
+
+	if (!pte) {
+		gim_put_error(AMDGV_ERROR_DRIVER_FIND_ADDR_PTE_FAIL, 0);
+		return false;
+	}
+
+	orig_prot = pte_pgprot(*pte);
+
+	if (pgprot_val(orig_prot) == pgprot_val(pgprot_writecombine(orig_prot)))
+		return true;
+
+	return false;
+}
+
 static struct scatterlist *gim_iova_alloc_sg_pages(struct gim_iova_mem_info *iova_info)
 {
 	struct page *pg;
 	struct scatterlist *sg = NULL;
 	int i = 0;
 
+	if (iova_info->va_ptr && !gim_iova_check_mem_attribute_wc((unsigned long)iova_info->va_ptr)) {
+		gim_warn("Memory provided is not write-combine\n");
+		return NULL;
+	}
+
 	if (!iova_info->va_ptr) {
 		iova_info->va_ptr = gim_vmalloc(iova_info->nr_pages << PAGE_SHIFT);
-		if (!iova_info->va_ptr)
+		if (!iova_info->va_ptr) {
+			gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL, (iova_info->nr_pages << PAGE_SHIFT));
 			return NULL;
+		}
 		iova_info->alloc_new = true;
-	}
-	if (set_memory_wc((unsigned long)iova_info->va_ptr, iova_info->nr_pages)) {
-		pr_err("Set memory wc fail\n");
-		goto error_out;
 	}
 
 	sg = gim_vzalloc(iova_info->nr_pages * sizeof(*sg));
 	if (!sg) {
-		pr_err("Alloc sg fail\n");
+		gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_SG_FAIL, 0);
 		goto error_out;
 	}
 
 	sg_init_table(sg, iova_info->nr_pages);
 	for (i = 0; i < iova_info->nr_pages; i++) {
+		void *va = iova_info->va_ptr + i * PAGE_SIZE;
 		if (is_vmalloc_addr(iova_info->va_ptr))
-			pg = vmalloc_to_page(iova_info->va_ptr + i * PAGE_SIZE);
+			pg = vmalloc_to_page(va);
 		else
-			pg = virt_to_page(iova_info->va_ptr + i * PAGE_SIZE);
+			pg = virt_to_page(va);
 		sg_set_page(&sg[i], pg, PAGE_SIZE, 0);
+
+		if (iova_info->alloc_new && set_memory_wc((unsigned long)va, 1)) {
+			gim_put_error(AMDGV_ERROR_DRIVER_SET_MEM_ATTRIBUTE_FAIL, 0);
+			goto error_out;
+		}
 	}
 
 	return sg;
 error_out:
-	if (iova_info->alloc_new && iova_info->va_ptr)
+	if (iova_info->alloc_new && iova_info->va_ptr) {
 		gim_vfree(iova_info->va_ptr);
+		iova_info->va_ptr = NULL;
+		iova_info->alloc_new = false;
+	}
 	if (sg)
 		gim_vfree(sg);
 	return NULL;
@@ -122,8 +157,19 @@ error_out:
 
 static void gim_iova_free_sg_pages(struct gim_iova_mem_info *iova_info)
 {
-	if (iova_info->alloc_new)
+	int i = 0;
+
+	if (iova_info->alloc_new && iova_info->va_ptr) {
+		for (i = 0; i < iova_info->nr_pages; i++) {
+			void *va = iova_info->va_ptr + i * PAGE_SIZE;
+			if (set_memory_wb((unsigned long)va, 1))
+				gim_put_error(AMDGV_ERROR_DRIVER_SET_MEM_ATTRIBUTE_FAIL, 0);
+		}
+
 		gim_vfree(iova_info->va_ptr);
+		iova_info->va_ptr = NULL;
+		iova_info->alloc_new = false;
+	}
 	gim_vfree(iova_info->sg);
 }
 
@@ -136,7 +182,7 @@ static int gim_iova_mem_alloc_dma(struct gim_iova_mem_info *iova_info, uint64_t 
 
 	iova_info->sg = gim_iova_alloc_sg_pages(iova_info);
 	if (!iova_info->sg) {
-		pr_err("Alloc satterlist failed\n");
+		gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_SG_FAIL, 0);
 		return -ENOMEM;
 	}
 
@@ -144,7 +190,7 @@ static int gim_iova_mem_alloc_dma(struct gim_iova_mem_info *iova_info, uint64_t 
 			iova_info->nr_pages, DMA_BIDIRECTIONAL);
 
 	if (!iova_info->sg_cnt) {
-		pr_err("DMA map failed\n");
+		gim_put_error(AMDGV_ERROR_DRIVER_MAP_DMA_MEM_FAIL, (iova_info->nr_pages << PAGE_SHIFT));
 		goto error_map;
 	}
 
@@ -153,7 +199,7 @@ static int gim_iova_mem_alloc_dma(struct gim_iova_mem_info *iova_info, uint64_t 
 	}
 
 	if ((j >> PAGE_SHIFT) != iova_info->nr_pages) {
-		pr_err("DMA map failed, actual:%d, wanted:%d\n", j, iova_info->nr_pages);
+		gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_IOVA_ALIGN_FAIL, 0);
 		goto error_num;
 	}
 
@@ -163,7 +209,7 @@ error_num:
 			iova_info->sg_cnt, DMA_BIDIRECTIONAL);
 error_map:
 	gim_iova_free_sg_pages(iova_info);
-	pr_err("iova memory allocation fail\n");
+	gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_IOVA_ALIGN_FAIL, 0);
 	return -ENOMEM;
 }
 

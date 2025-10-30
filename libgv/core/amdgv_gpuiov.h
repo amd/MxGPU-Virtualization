@@ -235,7 +235,6 @@ struct amdgv_gpuiov_funcs {
 
 	uint32_t (*update_vf_busy_status)(struct amdgv_adapter *adapt, uint32_t hw_sched_id);
 	void (*ctx_empty_intr_control)(struct amdgv_adapter *adapt, uint32_t hw_sched_id, bool enable);
-	int (*setup_sched_debug_log)(struct amdgv_adapter *adapt, enum amdgv_auto_sched_log_op op);
 
 	const char *(*cmd_to_name)(struct amdgv_adapter *adapt, uint32_t cmd, uint32_t hw_sched_id);
 	bool (*skip_ctrl_block)(struct amdgv_adapter *adapt, int idx);

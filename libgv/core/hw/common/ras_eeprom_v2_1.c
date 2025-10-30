@@ -275,12 +275,6 @@ static int ras_eeprom_v2_1_update_gpu_health(struct amdgv_adapter *adapt,
 		__mark_gpu_bad(adapt);
 		return 0;
 		break;
-	case AMDGV_BP_MSG_IN_SAME_ROW:
-		ras_eeprom_v2_1_mark_gpu_healthy_status(
-			adapt, GPU_RETIRED__ECC_IN_SAME_MEMORY_ROW);
-		__mark_gpu_bad(adapt);
-		return 0;
-		break;
 	case AMDGV_BP_MSG_RECORD_THRESHOLD_REACHED:
 		ras_eeprom_v2_1_mark_gpu_healthy_status(
 				adapt, GPU_RETIRED__ECC_REACH_THRESHOLD);
@@ -375,7 +369,8 @@ static int ras_eeprom_v2_1_init_sw_control(struct amdgv_adapter *adapt, struct a
 	int ret = 0;
 
 	if (control->tbl_hdr.version == EEPROM_TABLE_VER_V2_1 ||
-	    control->tbl_hdr.version == EEPROM_TABLE_VER_V3) {
+	    control->tbl_hdr.version == EEPROM_TABLE_VER_V3 ||
+	    control->tbl_hdr.version == EEPROM_TABLE_VER_V4) {
 		control->num_recs = (control->tbl_hdr.tbl_size - EEPROM_TABLE_HEADER_SIZE - EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE) /
 				EEPROM_TABLE_RECORD_SIZE;
 		control->next_addr = EEPROM_RECORD_START_V2_1;
@@ -722,9 +717,12 @@ static int ras_eeprom_v2_1_parse_header(struct amdgv_adapter *adapt,
 	}
 
 	if (hdr->version != EEPROM_TABLE_VER_V2_1 &&
-		    hdr->version != EEPROM_TABLE_VER_V2 && hdr->version != EEPROM_TABLE_VER_V3) {
+	    hdr->version != EEPROM_TABLE_VER_V2 &&
+	    hdr->version != EEPROM_TABLE_VER_V3 &&
+	    hdr->version != EEPROM_TABLE_VER_V4)
+	{
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_EEPROM_WRONG_VER,
-			AMDGV_ERROR_32_32(hdr->version, EEPROM_TABLE_VER_V2_1));
+				AMDGV_ERROR_32_32(hdr->version, EEPROM_TABLE_VER_V2_1));
 		return AMDGV_FAILURE;
 	}
 
@@ -757,8 +755,6 @@ static int ras_eeprom_v2_1_init(struct amdgv_adapter *adapt,
 		if (ret)
 			goto reset_eeprom;
 
-		if (amdgv_ras_eeprom_is_gpu_bad(adapt))
-			amdgv_device_handle_bad_gpu(adapt);
 	}
 
 	return ret;
@@ -867,6 +863,8 @@ static const struct amdgv_ras_eeprom_funcs ras_eeprom_v2_1_funcs = {
 	.fini = NULL,
 	.reset_table = ras_eeprom_v2_1_reset_table,
 	.process_records = ras_eeprom_v2_1_process_records,
+	.utc_to_eeprom_format = amdgv_utc_to_eeprom_format,
+	.is_gpu_bad = amdgv_ras_eeprom_is_header_bad,
 };
 
 int ras_eeprom_v2_1_sw_init(struct amdgv_adapter *adapt)

@@ -42,7 +42,7 @@
 #define lower_32_bits(n) ((uint32_t)(n))
 
 /*
- * roundup has a bug? When x = 0, the result is NOT round up, but ZERO
+ * When x = 0, the result is NOT round up, but ZERO
  * make sure do a ZERO check before using this macro
  */
 #define roundup(x, y) ((((x) + ((y)-1)) / (y)) * (y))

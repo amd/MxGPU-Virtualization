@@ -509,7 +509,7 @@ static int mi300_get_vram_info(struct amdgv_adapter *adapt,
 {
 	vram_info->vram_size_mb = mi300_nbio_get_total_vram_size(adapt);
 	vram_info->vram_type = vram_type_to_gpumon_vram_type(adapt->vram_info.vram_type);
-	vram_info->vram_vendor = AMDGV_GPUMON_VRAM_VENDOR__PLACEHOLDER0;
+	vram_info->vram_vendor = vram_vendor_to_gpumon_vram_vendor(adapt->vram_info.vram_vendor);
 	vram_info->vram_bit_width = adapt->vram_info.vram_bit_width;
 
 	return 0;
@@ -573,7 +573,7 @@ static int mi300_get_memory_partition_config(
 
 	if (adapt->asic_type == CHIP_MI350X)
 		memory_partition_config->mp_caps.nps2_cap = 1;
-	else
+	else if (adapt->asic_type == CHIP_MI300X)
 		memory_partition_config->mp_caps.nps4_cap = 1;
 
 	return 0;
@@ -727,12 +727,12 @@ static struct amdgv_gpumon_accelerator_partition_profile_config
 		{
 			2,
 			AMDGV_GPUMON_ACCELERATOR_PARTITION_CPX,
-			{ .mp_caps = {.nps1_cap = 1, .nps4_cap = 1 } },
+			{ .mp_caps = {.nps1_cap = 1 } },
 			4,
 			{0, 1, 2, 3},
 			2,
 			{ { 0, 3 }, { 0, 3 }, { 0, 3 }, { 0, 3 } },
-			(1 << 1) | (1 << 2) | (1 << 4)
+			(1 << 1) | (1 << 4)
 		}
 	}
 };
@@ -750,7 +750,7 @@ static struct amdgv_gpumon_accelerator_partition_profile_config
 		{ 6, AMDGV_GPUMON_ACCELERATOR_PARTITION_RESOURCE_DECODER, 2, 1 },
 		{ 7, AMDGV_GPUMON_ACCELERATOR_PARTITION_RESOURCE_DECODER, 4, 1 }
 	},
-	4, // number_of_profiles
+	3, // number_of_profiles
 	{
 		{
 			0,
@@ -765,7 +765,7 @@ static struct amdgv_gpumon_accelerator_partition_profile_config
 		{
 			1,
 			AMDGV_GPUMON_ACCELERATOR_PARTITION_DPX,
-			{ .mp_caps = {.nps1_cap = 1, .nps2_cap = 1 } },
+			{ .mp_caps = {.nps2_cap = 1 } },
 			2,
 			{0, 1},
 			2,
@@ -774,18 +774,8 @@ static struct amdgv_gpumon_accelerator_partition_profile_config
 		},
 		{
 			2,
-			AMDGV_GPUMON_ACCELERATOR_PARTITION_QPX,
-			{ .mp_caps = {.nps1_cap = 1, .nps2_cap = 1 } },
-			4,
-			{0, 1, 2, 3},
-			2,
-			{ { 1, 5 }, { 1, 5 }, { 1, 5 }, { 1, 5 } },
-			(1 << 1)
-		},
-		{
-			3,
 			AMDGV_GPUMON_ACCELERATOR_PARTITION_CPX,
-			{ .mp_caps = {.nps1_cap = 1, .nps2_cap = 1 } },
+			{ .mp_caps = {.nps2_cap = 1 } },
 			8,
 			{0, 1, 2, 3, 4, 5, 6, 7},
 			2,
@@ -954,7 +944,7 @@ static int mi300_set_accelerator_partition_profile(struct amdgv_adapter *adapt,
 		return AMDGV_FAILURE;
 	}
 
-	ret = mi300_nbio_get_curr_memory_partition_mode(
+	ret = mi300_nbio_get_nps_mode(
 		adapt, &curr_memory_partition_mode);
 	if (ret || (curr_memory_partition_mode != adapt->mcp.memory_partition_mode)) {
 		AMDGV_ERROR("failed to get current memory partition mode or memory partition mode mismatch\n");
@@ -1064,7 +1054,7 @@ static int mi300_get_memory_partition_mode(
 		return AMDGV_ERROR_GPUMON_INVALID_OPTION;
 	}
 
-	ret = mi300_nbio_get_curr_memory_partition_mode(adapt,
+	ret = mi300_nbio_get_nps_mode(adapt,
 			&memory_partition_info->memory_partition_mode);
 	if (ret) {
 		return ret;
@@ -1241,6 +1231,17 @@ static int mi300_gpumon_smu_set_pm_policy_level(struct amdgv_adapter *adapt,
 
 	if (adapt->pp.pp_funcs->smu_compare_and_set_pm_policy)
 		ret = adapt->pp.pp_funcs->smu_compare_and_set_pm_policy(adapt, p_type, level);
+
+	return ret;
+}
+
+static int mi300_get_npm_info(struct amdgv_adapter *adapt, struct amdgv_gpumon_npm_info *npm_info)
+{
+	int ret = AMDGV_FAILURE;
+
+	if (adapt->pp.pp_funcs->get_npm_info) {
+		ret = adapt->pp.pp_funcs->get_npm_info(adapt, npm_info);
+	}
 
 	return ret;
 }
@@ -1571,14 +1572,15 @@ static int mi300_get_max_pcie_link_generation(struct amdgv_adapter *adapt,
 static int mi300_get_gfx_config(struct amdgv_adapter *adapt,
 			struct amdgv_gpumon_gfx_config *config)
 {
+	config->ip.hw_id = GC_HWIP;
+	config->ip.full_ver = adapt->ip_versions[GC_HWIP][GET_INST(GC, 0)];
+
 	config->max_shader_engines = adapt->config.gfx.max_shader_engines;
 	config->max_cu_per_sh = adapt->config.gfx.max_cu_per_sh;
 	config->max_sh_per_se = adapt->config.gfx.max_sh_per_se;
 	config->max_waves_per_simd = adapt->config.gfx.max_waves_per_simd;
 	config->wave_size = adapt->config.gfx.wave_size;
 	config->active_cu_count = adapt->config.gfx.active_cu_count;
-	config->major = adapt->config.gfx.major;
-	config->minor = adapt->config.gfx.minor;
 
 	return 0;
 }
@@ -1657,6 +1659,7 @@ static const struct amdgv_gpumon_funcs mi300_gpumon_funcs = {
 	.get_ecc_correction_schema = mi300_get_ecc_correction_schema,
 	.get_static_metrics_ext = mi300_get_static_metrics_ext,
 	.get_num_static_metrics_ext_entries = mi300_get_num_static_metrics_ext_entries,
+	.get_npm_info = mi300_get_npm_info,
 };
 
 static int mi300_gpumon_sw_init(struct amdgv_adapter *adapt)

@@ -36,6 +36,9 @@
 #define EEPROM_I2C_TARGET_ADDR_MI300        0xA8
 #define EEPROM_I2C_CONTROLLER_PORT_MI300    0
 
+/* Macro to combine two uint32_t variables (lo, hi) into a uint64_t */
+#define COMBINE_LO_HI_TO_UINT64(lo, hi) ((uint64_t)(hi) << 32 | (lo))
+
 #define ADDR_TO_PFN(addr) ((addr) >> AMDGV_GPU_PAGE_SHIFT)
 #define PFN_TO_ADDR(pfn) ((pfn) << AMDGV_GPU_PAGE_SHIFT)
 
@@ -453,7 +456,7 @@ static int umc_v12_0_convert_ma_to_pa(struct amdgv_adapter *adapt,
 	if (!err_data)
 		return AMDGV_FAILURE;
 
-	ret = mi300_nbio_get_curr_memory_partition_mode(adapt, &nps);
+	ret = mi300_nbio_get_nps_mode(adapt, &nps);
 	if (ret)
 		return AMDGV_FAILURE;
 
@@ -489,10 +492,13 @@ static int convert_eeprom_record_to_mem_addr(struct amdgv_adapter *adapt,
 	uint64_t mask_pa;
 	uint32_t ret;
 
-	ret = mi300_nbio_get_curr_memory_partition_mode(adapt, &nps);
+	ret = mi300_nbio_get_nps_mode(adapt, &nps);
 	if (ret)
 		return AMDGV_FAILURE;
 	save_nps = get_nps_from_pa(record->retired_page);
+
+	if (oss_atomic_read(&adapt->ecc.in_cross_nps_handling))
+		nps = save_nps;
 
 	oss_memset(&addr_in, 0, sizeof(addr_in));
 	oss_memset(&addr_out, 0, sizeof(addr_out));
@@ -536,6 +542,49 @@ static int umc_v12_0_eeprom_record_to_pages(struct amdgv_adapter *adapt,
 		struct eeprom_table_record *record, uint64_t *pfns, uint32_t num)
 {
 	return convert_eeprom_record_to_mem_addr(adapt, record, NULL, pfns, num);
+}
+
+static int umc_v12_0_set_eeprom_record(struct amdgv_adapter *adapt,
+		struct eeprom_table_record *record,
+		struct amdgv_ras_eeprom_bad_page_info *bp_info)
+{
+	struct umc_mca_addr addr_in;
+	struct umc_phy_addr addr_out;
+	enum amdgv_memory_partition_mode nps;
+	uint32_t ret;
+	uint64_t mca_address, mca_ipid, mask_pa;
+
+	if (!record || !bp_info)
+		return AMDGV_FAILURE;
+
+	ret = mi300_nbio_get_nps_mode(adapt, &nps);
+	if (ret)
+		return AMDGV_FAILURE;
+
+	oss_memset(&addr_in, 0, sizeof(addr_in));
+	oss_memset(&addr_out, 0, sizeof(addr_out));
+
+	mca_address = COMBINE_LO_HI_TO_UINT64(bp_info->mca_addr_lo, bp_info->mca_addr_hi);
+	mca_ipid = COMBINE_LO_HI_TO_UINT64(bp_info->mca_ipid_lo, bp_info->mca_ipid_hi);
+	addr_in.err_addr = REG_GET_FIELD(mca_address, MCA_UMC_UMC0_MCUMC_ADDRT0, ErrorAddr);
+	addr_in.ch_inst = MCA_IPID_2_UMC_CH(mca_ipid);
+	addr_in.umc_inst = MCA_IPID_2_UMC_INST(mca_ipid);
+	addr_in.node_inst = MCA_IPID_2_DIE_ID(mca_ipid);
+	addr_in.socket_id = MCA_IPID_2_SOCKET_ID(mca_ipid);
+
+	convert_ma_to_nps_pa(adapt, &addr_in, &addr_out, nps, true);
+
+	mask_pa = clear_nps_pa_mask_bits(adapt, addr_out.pa, nps, false);
+
+	record->retired_page = ADDR_TO_PFN(mask_pa);
+	record->mem_channel = addr_out.channel_idx;
+	record->mcumc_id = addr_in.umc_inst;
+	record->cu = 0;
+	record->address = mca_address;
+	record->ts = amdgv_ras_eeprom_utc_to_eeprom_format(adapt, (uint64_t)bp_info->timestamp);
+	record->err_type = bp_info->severity;
+
+	return 0;
 }
 
 static void umc_v12_0_query_error_address(struct amdgv_adapter *adapt,
@@ -621,6 +670,7 @@ static bool umc_v12_0_query_ras_poison_mode(struct amdgv_adapter *adapt)
 static int umc_v12_0_get_ras_vf_safe_range(struct amdgv_adapter *adapt,
 		uint64_t *offset, uint64_t *size, uint32_t idx_vf)
 {
+	/* future improvement: get safe ranges */
 	struct amdgv_vf_device *entry;
 	uint64_t reserved_start;
 
@@ -637,17 +687,23 @@ static int umc_v12_0_get_ras_vf_safe_range(struct amdgv_adapter *adapt,
 	} else {
 		entry = &adapt->array_vf[idx_vf];
 		if (entry->configured) {
-			reserved_start = KBYTES_TO_BYTES(AMD_SRIOV_MSG_DATAEXCHANGE_OFFSET_KB) +
-					KBYTES_TO_BYTES(AMD_SRIOV_MSG_DATAEXCHANGE_SIZE_KB);
-			/* Add an additional 4MB to critical range
-			* to account for guest sw init reservations
-			*
-			* TODO: review how guest can take this into account
-			* and add this change later.
-			* reserved_start += KBYTES_TO_BYTES(0x1000);
-			*/
-			*offset = reserved_start + MBYTES_TO_BYTES(entry->fb_offset);
-			*size = MBYTES_TO_BYTES(entry->real_fb_size) - reserved_start - AMDGV_IP_DISCOVERY_OFFSET;
+			if (entry->vf_crit_region == GPU_CRIT_REGION_V2) {
+				/* right now, just leave as [shared memory region end offset, end of vf fb] */
+				*offset = MBYTES_TO_BYTES(entry->fb_offset) + AMDGV_V2_CRIT_REGION_SIZE_BYTES;
+				*size =  MBYTES_TO_BYTES(entry->real_fb_size) - AMDGV_V2_CRIT_REGION_SIZE_BYTES;
+			} else {
+				reserved_start = GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, DATAEXCHANGE) +
+				KBYTES_TO_BYTES(GET_VF_TABLE_SIZE_KB_BY_ID(adapt, idx_vf, DATAEXCHANGE));
+				/* Add an additional 4MB to critical range
+				* to account for guest sw init reservations
+				*
+				* review how guest can take this into account
+				* and add this change later.
+				* reserved_start += KBYTES_TO_BYTES(0x1000);
+				*/
+				*offset = reserved_start + MBYTES_TO_BYTES(entry->fb_offset);
+				*size = GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, IPD) - reserved_start;
+			}
 		} else {
 			*offset = 0;
 			*size = 0;
@@ -733,6 +789,19 @@ static void umc_v12_0_set_eeprom_table_version(struct amdgv_adapter *adapt)
        control->tbl_hdr.version = EEPROM_TABLE_VERSION_MI300;
 }
 
+static int umc_v12_0_pages_in_a_row(struct amdgv_adapter *adapt, uint64_t pa, uint64_t *pfns, int len)
+{
+	enum amdgv_memory_partition_mode nps;
+	struct umc_mca_addr mca_addr = {0};
+	struct umc_phy_addr phy_addr = {0};
+
+	if (mi300_nbio_get_nps_mode(adapt, &nps))
+		return AMDGV_FAILURE;
+
+	phy_addr.pa = pa;
+	return lookup_bad_pages_in_a_row(adapt, &mca_addr, &phy_addr, nps, pfns, len, false);
+}
+
 const struct amdgv_umc_funcs umc_v12_0_funcs = {
 	.err_cnt_init = NULL,
 	.query_ras_error_count = umc_v12_0_query_ras_error_count,
@@ -745,6 +814,8 @@ const struct amdgv_umc_funcs umc_v12_0_funcs = {
 	.soc_pa_to_bank = umc_12_0_soc_pa_to_bank,
 	.eeprom_record_to_soc_pa = umc_v12_0_eeprom_record_to_pa,
 	.eeprom_record_to_pages = umc_v12_0_eeprom_record_to_pages,
+	.set_eeprom_record = umc_v12_0_set_eeprom_record,
+	.pages_in_a_row = umc_v12_0_pages_in_a_row,
 };
 
 void umc_v12_0_set_umc_funcs(struct amdgv_adapter *adapt)
@@ -769,4 +840,3 @@ void umc_v12_0_set_umc_funcs(struct amdgv_adapter *adapt)
 	adapt->umc.reset_mode = AMDGV_RESET_MODE1;
 	adapt->umc.eeprom_version = EEPROM_TABLE_VER_V3;
 }
-

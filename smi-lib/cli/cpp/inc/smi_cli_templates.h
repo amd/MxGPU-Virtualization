@@ -81,7 +81,7 @@ inline std::string staticBusTemplate{
 
 inline std::string staticVbiosTemplate{
 	"    VBIOS: \n        NAME: %s \n        BUILD_DATE: %s "
-	"\n        PART_NUMBER: %s \n        VERSION: %s\n"
+	"\n        PART_NUMBER: %s \n        VERSION: %s\n        BOOT_FIRMWARE: %s\n"
 };
 
 inline std::string staticBoardTemplate{
@@ -455,7 +455,7 @@ inline std::string topologyBiDirectionalTemplate{ "BI_DIRECTIONAL_TABLE:\n" };
 
 inline std::string metricXgmiTemplate{ "    XGMI:\n" };
 inline std::string metricXgmiLinkMetricTableTemplate{ "LINK_METRICS_TABLE:\n" };
-inline std::string metricXgmiLinkStatusTableTemplate{ "XGMI_LINK_STATUS:\n" };
+inline std::string metricXgmiLinkStatusTableTemplate{ "SOURCE_GPU_XGMI_LINK_STATUS:\n" };
 
 inline std::string staticVramTemplate{ "    VRAM:\n"
 	"        TYPE: %s \n"
@@ -475,15 +475,37 @@ inline std::string staticCacheInfoTemplate{
 
 inline std::string staticPolicyHeaderTemplate{
 	"    SOC_PSTATE:\n"
+	"        NUM_SUPPORTED: %s\n"
+	"        CURRENT_ID: %s\n"
+	"        POLICIES:\n" };
+inline std::string staticPlpdsHeaderTemplate{
+	"    XGMI_PLPD:\n"
 	"        NUM_SUPPORTED: %d\n"
 	"        CURRENT_ID: %d\n"
 	"        POLICIES:\n" };
 inline std::string staticPolicyInfoTemplate{
-	"            POLICY_ID: %d\n"
+	"            POLICY_ID: %s\n"
 	"            POLICY_DESCRIPTION: %s\n" };
 
 inline std::string staticVirtualizationModeTemplate{
 	"    MODE: %s\n" };
+
+inline std::string staticCpuListTemplate{
+	"            CPU_LIST_%d:\n"
+	"                BITMASK: %016lx\n"
+	"                CORE_RANGE: %s\n"};
+
+inline std::string staticNumaTemplate{
+	"    NUMA:\n"
+	"        NODE: %d\n"
+	"        CPU_AFFINITY:\n%s"
+	"        SOCKET_AFFINITY: N/A\n" };
+
+inline std::string staticNumaTemplate_NA{
+	"    NUMA:\n"
+	"        NODE: %s\n"
+	"        CPU_AFFINITY: N/A\n"
+	"        SOCKET_AFFINITY: N/A\n" };
 
 inline std::string eventTemplate{ "EVENT_INFO: \n"};
 inline std::string eventMessageTemplate{ "GPU: %d \n"
@@ -534,3 +556,7 @@ inline std::string staticPartitionTemplate {
 
 inline std::string RasCperTemplate {
 	    "%-24s %-8d %-24s %-24s %s\n"};
+
+inline std::string setSuccessfullyTemplate {
+	"GPU: %d\n"
+	"    %s: Successfully set %s to %s\n"};

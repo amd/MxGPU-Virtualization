@@ -378,14 +378,15 @@ static int navi32_get_vram_info(struct amdgv_adapter *adapt,
 static int navi32_get_gfx_config(struct amdgv_adapter *adapt,
 	struct amdgv_gpumon_gfx_config *config)
 {
+	config->ip.hw_id = GC_HWIP;
+	config->ip.full_ver = adapt->ip_versions[GC_HWIP][GET_INST(GC, 0)];
+
 	config->max_shader_engines = adapt->config.gfx.max_shader_engines;
 	config->max_cu_per_sh = adapt->config.gfx.max_cu_per_sh;
 	config->max_sh_per_se = adapt->config.gfx.max_sh_per_se;
 	config->max_waves_per_simd = adapt->config.gfx.max_waves_per_simd;
 	config->wave_size = adapt->config.gfx.wave_size;
 	config->active_cu_count = adapt->config.gfx.active_cu_count;
-	config->major = adapt->config.gfx.major;
-	config->minor = adapt->config.gfx.minor;
 
 	return 0;
 }

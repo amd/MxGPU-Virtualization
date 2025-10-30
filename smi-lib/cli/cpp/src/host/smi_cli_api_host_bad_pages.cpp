@@ -34,6 +34,8 @@
 #include <sysinfoapi.h>
 #endif
 
+#include <climits>
+
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 		amdsmi_processor_handle *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_BAD_PAGE_INFO)(amdsmi_processor_handle,
@@ -85,19 +87,22 @@ int AmdSmiApiHost::amdsmi_get_bad_pages_command(uint64_t processor_bdf, Argument
 			bad_pages_iterator++) {
 		std::string timestamp{"N/A"};
 		time_t rawtime = eeprom_table_records[bad_pages_iterator].ts;
+
+		if (eeprom_table_records[bad_pages_iterator].ts != UINT64_MAX) {
 #ifdef WIN64
-		if(localtime_s(&dtime, &rawtime) != NULL) {
-			timestamp = string_format(
-							"%d/%d/%d:%d/%d/%d", dtime.tm_year + 1900, dtime.tm_mon + 1,
-							dtime.tm_mday, dtime.tm_hour, dtime.tm_min, dtime.tm_sec);
-		}
+			if(localtime_s(&dtime, &rawtime) == 0) {
+				timestamp = string_format(
+								"%d/%d/%d:%d/%d/%d", dtime.tm_year + 1900, dtime.tm_mon + 1,
+								dtime.tm_mday, dtime.tm_hour, dtime.tm_min, dtime.tm_sec);
+			}
 #else
-		if(localtime_r(&rawtime, &dtime) != NULL) {
-			timestamp = string_format(
-							"%d/%d/%d:%d/%d/%d", dtime.tm_year + 1900, dtime.tm_mon + 1,
-							dtime.tm_mday, dtime.tm_hour, dtime.tm_min, dtime.tm_sec);
-		}
+			if(localtime_r(&rawtime, &dtime) != NULL) {
+				timestamp = string_format(
+								"%d/%d/%d:%d/%d/%d", dtime.tm_year + 1900, dtime.tm_mon + 1,
+								dtime.tm_mday, dtime.tm_hour, dtime.tm_min, dtime.tm_sec);
+			}
 #endif
+		}
 		std::string retired_page { string_format(
 									   "0x%X",
 									   eeprom_table_records[bad_pages_iterator].retired_page)

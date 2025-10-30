@@ -62,4 +62,8 @@ public:
 								  std::string &formatted_string);
 	int static_command_virtualization_mode(uint64_t processors,
 								  std::string &formatted_string);
+	int static_command_numa(uint64_t processors,
+				std::string &formatted_string);
+	int static_command_xgmi_plpd(uint64_t processors,
+							 std::string &formatted_string);
 };

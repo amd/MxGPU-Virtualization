@@ -84,6 +84,7 @@ from .amdsmi_interface import amdsmi_set_gpu_accelerator_partition_profile
 from .amdsmi_interface import amdsmi_set_gpu_memory_partition_mode
 from .amdsmi_interface import amdsmi_get_gpu_accelerator_partition_profile
 from .amdsmi_interface import amdsmi_get_gpu_accelerator_partition_profile_config
+from .amdsmi_interface import amdsmi_get_gpu_accelerator_partition_profile_config_global
 from .amdsmi_interface import amdsmi_get_soc_pstate
 from .amdsmi_interface import amdsmi_set_soc_pstate
 from .amdsmi_interface import amdsmi_get_gpu_driver_model
@@ -94,13 +95,14 @@ from .amdsmi_interface import amdsmi_get_afids_from_cper
 from .amdsmi_interface import amdsmi_reset_gpu
 from .amdsmi_interface import amdsmi_get_cpu_affinity_with_scope
 from .amdsmi_interface import amdsmi_topo_get_numa_node_number
+from .amdsmi_interface import amdsmi_get_xgmi_plpd
+from .amdsmi_interface import amdsmi_set_xgmi_plpd
 
 from .amdsmi_interface import AmdSmiTemperatureType
 from .amdsmi_interface import AmdSmiTemperatureMetric
 from .amdsmi_interface import AmdSmiClkType
 from .amdsmi_interface import AmdSmiGuardState
 from .amdsmi_interface import AmdSmiVramType
-from .amdsmi_interface import AmdSmiVramVendor
 from .amdsmi_interface import AmdSmiGuardType
 from .amdsmi_interface import AmdSmiVfState
 from .amdsmi_interface import AmdSmiFwBlock
@@ -139,6 +141,8 @@ from .amdsmi_interface import AmdSmiAcceleratorPartitionSetting
 from .amdsmi_interface import AmdSmiMemoryPartitionSetting
 from .amdsmi_interface import AmdSmiCperErrorSeverity
 from .amdsmi_interface import AmdSmiAffinityScope
+from .amdsmi_interface import AmdSmiVirtualizationMode
+from .amdsmi_interface import AmdSmiDriverModelType
 
 from .amdsmi_exception import AmdSmiLibraryException
 from .amdsmi_exception import AmdSmiRetryException

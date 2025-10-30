@@ -360,6 +360,7 @@ struct amdgv_diag_data_gen_info {
 				/* <5:AMDGV_GUARD_EVENT_RAS_CPER_DUMP> */
 				/* <6:AMDGV_GUARD_EVENT_RAS_BAD_PAGES > */
 				/* <7:AMDGV_GUARD_EVENT_WGR > */
+				/* <8:AMDGV_GUARD_EVENT_RAS_CHK_CRITI > */
 				/* <IDX MAP END> */
 				/* <name:Guard Type; type:INT; size:4; base:10; idxmap:VF Guard IDX; valmap:1;> */
 				uint32_t guard_type;

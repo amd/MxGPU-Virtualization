@@ -80,6 +80,16 @@ protected:
 
 		return ::testing::AssertionSuccess();
 	}
+
+	::testing::AssertionResult equal_vram_vendor(smi_vram_info expect,
+						amdsmi_vram_info_t actual)
+	{
+		SMI_ASSERT_STR_EQ(expect.vram_vendor, actual.vram_vendor);
+		SMI_ASSERT_EQ(expect.vram_size, actual.vram_size);
+		SMI_ASSERT_EQ(expect.vram_bit_width, actual.vram_bit_width);
+
+		return ::testing::AssertionSuccess();
+	}
 };
 
 TEST_F(AmdSmiBoardTests, InvalidParams)
@@ -181,7 +191,11 @@ TEST_F(AmdSmiBoardTests, GetVramInfo)
 	smi_vram_info gpu_info_mock = {};
 	smi_device_info in_payload;
 	gpu_info_mock.vram_type = SMI_VRAM_TYPE_GDDR5;
-	gpu_info_mock.vram_vendor = SMI_VRAM_VENDOR_SAMSUNG;
+#ifdef _WIN64
+	strcpy_s(gpu_info_mock.vram_vendor, sizeof(gpu_info_mock.vram_vendor), "SMI_VRAM_VENDOR_SAMSUNG");
+#else
+	strcpy(gpu_info_mock.vram_vendor, "SMI_VRAM_VENDOR_SAMSUNG");
+#endif
 	gpu_info_mock.vram_size = 512;
 	gpu_info_mock.vram_bit_width = 8192;
 
@@ -194,10 +208,8 @@ TEST_F(AmdSmiBoardTests, GetVramInfo)
 
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_TRUE(amdsmi::equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
-	ASSERT_EQ(vram_info.vram_type, gpu_info_mock.vram_type);
-	ASSERT_EQ(vram_info.vram_vendor, gpu_info_mock.vram_vendor);
-	ASSERT_EQ(vram_info.vram_size, gpu_info_mock.vram_size);
-	ASSERT_EQ(vram_info.vram_bit_width, gpu_info_mock.vram_bit_width);
+	ASSERT_EQ(gpu_info_mock.vram_type, vram_info.vram_type);
+	ASSERT_TRUE(equal_vram_vendor(gpu_info_mock, vram_info));
 }
 
 TEST_F(AmdSmiBoardTests, GetVramInfoNotSupported)

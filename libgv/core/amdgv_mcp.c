@@ -80,7 +80,7 @@ int amdgv_mcp_get_num_xcc_per_partition(struct amdgv_adapter *adapt, uint32_t *c
 	return 0;
 }
 
-/* Physical XCC input */
+/* Logical XCC */
 int amdgv_mcp_get_vf_mask_by_xcc(struct amdgv_adapter *adapt, uint32_t idx_xcc)
 {
 	if (adapt->mcp.get_vf_mask_by_xcc) {

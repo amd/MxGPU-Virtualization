@@ -7,7 +7,7 @@ myst:
 
 # Python package usage
 
-Before creating python package make sure that python version on your sistem is at least 3.10
+Before creating python package make sure that python version on your system is at least 3.10
 
 Run ```make package``` to create the AMD SMI Python package.
 Open terminal and navigate to ```gim/smi-lib/build/amdsmi/package/Release```.

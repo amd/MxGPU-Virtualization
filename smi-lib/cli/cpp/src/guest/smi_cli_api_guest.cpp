@@ -89,6 +89,8 @@ typedef amdsmi_status_t (*AMDSMI_GET_LIB_VERSION)(amdsmi_version_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_PROCESS_ISOLATION)(amdsmi_processor_handle, uint32_t *);
 typedef amdsmi_status_t (*AMDSMI_SET_GPU_PROCESS_ISOLATION)(amdsmi_processor_handle, uint32_t);
 typedef amdsmi_status_t (*AMDSMI_CLEAN_GPU_LOCAL_DATA)(amdsmi_processor_handle);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_VIRTUALIZATION_MODE)(amdsmi_processor_handle,
+		amdsmi_virtualization_mode_t *);
 
 /////////////////////
 
@@ -117,6 +119,7 @@ AMDSMI_GET_LIB_VERSION guest_amdsmi_get_lib_version;
 AMDSMI_GET_GPU_PROCESS_ISOLATION guest_amdsmi_get_gpu_process_isolation;
 AMDSMI_SET_GPU_PROCESS_ISOLATION guest_amdsmi_set_gpu_process_isolation;
 AMDSMI_CLEAN_GPU_LOCAL_DATA guest_amdsmi_clean_gpu_local_data;
+AMDSMI_GET_GPU_VIRTUALIZATION_MODE guest_amdsmi_get_gpu_virtualization_mode;
 
 AmdSmiApiGuest::AmdSmiApiGuest()
 {
@@ -189,6 +192,8 @@ AmdSmiApiGuest::AmdSmiApiGuest()
 		"amdsmi_set_gpu_process_isolation");
 	guest_amdsmi_clean_gpu_local_data = (AMDSMI_CLEAN_GPU_LOCAL_DATA)LOAD_SYM(amdSmiLibHandle,
 										"amdsmi_clean_gpu_local_data");
+	guest_amdsmi_get_gpu_virtualization_mode = (AMDSMI_GET_GPU_VIRTUALIZATION_MODE)LOAD_SYM(amdSmiLibHandle,
+		"amdsmi_get_gpu_virtualization_mode");
 
 	int ret = guest_amdsmi_init(AMDSMI_INIT_AMD_GPUS);
 	if (ret != AMDSMI_STATUS_SUCCESS) {

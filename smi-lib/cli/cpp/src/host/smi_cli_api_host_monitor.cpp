@@ -33,7 +33,7 @@
 
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 		amdsmi_processor_handle *);
-typedef amdsmi_status_t (*AMDSMI_GET_POWER_INFO)(amdsmi_processor_handle, uint32_t,
+typedef amdsmi_status_t (*AMDSMI_GET_POWER_INFO)(amdsmi_processor_handle,
 		amdsmi_power_info_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_TEMP_METRIC)(amdsmi_processor_handle,
 		amdsmi_temperature_type_t,
@@ -225,8 +225,6 @@ int AmdSmiApiHost::amdsmi_get_power_usage_monitor_command(uint64_t processor_bdf
 	amdsmi_status_t ret;
 
 	amdsmi_power_info_t power_info;
-	uint32_t sensor_ind = 0;
-
 	amdsmi_processor_handle processor;
 	amdsmi_bdf_t tmp_bdf;
 	tmp_bdf.as_uint = processor_bdf;
@@ -237,7 +235,7 @@ int AmdSmiApiHost::amdsmi_get_power_usage_monitor_command(uint64_t processor_bdf
 		return ret;
 	}
 
-	ret = host_amdsmi_get_power_info(processor, sensor_ind, &power_info);
+	ret = host_amdsmi_get_power_info(processor, &power_info);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		formatted_string = host_fill_power_usage(arg);
 		return ret;

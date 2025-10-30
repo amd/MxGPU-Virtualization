@@ -432,9 +432,6 @@ static int mi200_vbios_early_sw_init(struct amdgv_adapter *adapt)
 	adapt->max_mm_bandwidth[AMDGV_HEVC_ENGINE] = 2 << 20;
 	adapt->max_mm_bandwidth[AMDGV_HEVC1_ENGINE] = 2 << 20;
 
-	adapt->config.gfx.major = 9;
-	adapt->config.gfx.minor = 0;
-
 	adapt->config.caps.supported_fields_flags = 0;
 
 	return amdgv_vbios_atom_sw_init(adapt);

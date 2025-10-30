@@ -27,8 +27,8 @@
  *          into their corresponding names and types.
  */
 
-#ifndef ACA_TABLES_H
-#define ACA_TABLES_H
+#ifndef RAS_DECODE_TABLES_H
+#define RAS_DECODE_TABLES_H
 
 #include <stdint.h>
 #include <stddef.h>

@@ -172,6 +172,10 @@ static void amdgv_guard_set_event_default_interval(struct amdgv_monitor_event *e
 	case AMDGV_GUARD_EVENT_RAS_BAD_PAGES:
 		event->interval = AMDGV_DEFAULT_RAS_TELEMETRY_INTERVAL;
 		break;
+
+	case AMDGV_GUARD_EVENT_RAS_CHK_CRITI:
+		event->interval = AMDGV_DEFAULT_RAS_TELEMETRY_INTERVAL;
+		break;
 	}
 }
 
@@ -208,6 +212,10 @@ static void amdgv_guard_set_event_default_threshold(struct amdgv_monitor_event *
 		break;
 
 	case AMDGV_GUARD_EVENT_RAS_BAD_PAGES:
+		event->threshold = AMDGV_DEFAULT_RAS_TELEMETRY_THRESHOLD;
+		break;
+
+	case AMDGV_GUARD_EVENT_RAS_CHK_CRITI:
 		event->threshold = AMDGV_DEFAULT_RAS_TELEMETRY_THRESHOLD;
 		break;
 	}
@@ -247,6 +255,10 @@ static void amdgv_guard_set_event_name(struct amdgv_monitor_event *event, uint32
 	case AMDGV_GUARD_EVENT_RAS_BAD_PAGES:
 		oss_memcpy(event->name, "RAS_BAD_PAGES", 14);
 		break;
+
+	case AMDGV_GUARD_EVENT_RAS_CHK_CRITI:
+		oss_memcpy(event->name, "RAS_CHK_CRITI", 14);
+		break;
 	}
 }
 
@@ -277,6 +289,9 @@ static uint32_t amdgv_guard_get_max_threshold(uint32_t event_id)
 		max_threshold = AMDGV_GUARD_MAX_RAS_TELEMETRY;
 		break;
 	case AMDGV_GUARD_EVENT_RAS_BAD_PAGES:
+		max_threshold = AMDGV_GUARD_MAX_RAS_TELEMETRY;
+		break;
+	case AMDGV_GUARD_EVENT_RAS_CHK_CRITI:
 		max_threshold = AMDGV_GUARD_MAX_RAS_TELEMETRY;
 		break;
 	default:

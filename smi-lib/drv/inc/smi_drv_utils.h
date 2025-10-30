@@ -39,6 +39,17 @@
 #define EEPROM_TIMESTAMP_YEAR    27
 #define IS_LEAP_YEAR(x) ((x % 4 == 0 && x % 100 != 0) || x % 400 == 0)
 
+/* bad page timestamp format changed after V4
+ * ts_hi yy[31:16] mm[15:8] day[7:0]
+ * ts_lo hh[23:16] mm[15:8] ss[7:0]
+ */
+#define EEPROM_V4_TIMESTAMP_MINUTE  8
+#define EEPROM_V4_TIMESTAMP_HOUR    16
+#define EEPROM_V4_TIMESTAMP_MONTH   8
+#define EEPROM_V4_TIMESTAMP_YEAR    16
+
+#define EEPROM_TABLE_VER_V3         0x00030000
+
 /**
  * @brief Converts an EEPROM timestamp to UTC format.
  *
@@ -52,6 +63,30 @@
  *
  */
 uint64_t smi_eeprom_to_utc_format(uint64_t eeprom_timestamp);
+
+/**
+ * @brief Converts an EEPROM V4 format timestamp to UTC format.
+ *
+ * This function takes a timestamp from an EEPROM in V4 format and converts it to a UTC timestamp
+ * in seconds since Unix epoch (January 1, 1970). The V4 format uses a split 64-bit timestamp
+ * where the upper 32 bits contain year, month, and day information, and the lower 32 bits
+ * contain hour, minute, and second information.
+ *
+ * V4 timestamp format:
+ * - ts_hi (upper 32 bits): yy[31:16] mm[15:8] day[7:0]
+ * - ts_lo (lower 32 bits): hh[23:16] mm[15:8] ss[7:0]
+ *
+ * @param[in] eeprom_timestamp The 64-bit timestamp from EEPROM in V4 format.
+ * @return The corresponding UTC timestamp in seconds since Unix epoch.
+ *         Returns 0 if the input timestamp is 0.
+ *         Returns SMI_NOT_SUPPORTED if the extracted date/time values are invalid.
+ *
+ * @note This function performs validation on extracted date/time components to prevent
+ *       invalid dates and array bounds violations. It accounts for leap years when
+ *       calculating the UTC timestamp. The function is specifically designed for
+ *       EEPROM version 4 format (EEPROM_TABLE_VER_V4).
+ */
+uint64_t smi_eeprom_v4_to_utc_format(uint64_t eeprom_timestamp);
 
 /**
  * @brief Generates a time string representing the given microseconds.
@@ -211,20 +246,20 @@ enum amdgv_smi_ras_block smi_map_gpu_block(enum smi_gpu_block block);
 enum smi_vram_type smi_map_vram_type(enum amdgv_gpumon_vram_type type);
 
 /**
- * @brief Maps an enum representing a LibGV vram vendor to an enum representing an SMI vram vendor.
+ * @brief Maps an enum representing a LibGV vram vendor to a string representing an SMI vram vendor.
  *
  * This function takes an enum value representing a LibGV vram vendor and maps it to an
- * equivalent enum value representing an SMI vram vendor. The mapping is performed based on
+ * equivalent string value representing an SMI vram vendor. The mapping is performed based on
  * predefined set of rules. If the provided LibGV vram vendor does not match any of the
  * predefined values, it is mapped to SMI_VRAM_VENDOR_UNKNOWN.
  *
  * @param[in] vendor The enum value representing LibGV vram vendor.
- * @return The enum value representing the corresponding mapped SMI vram vendor.
+ * @return The string value representing the corresponding mapped SMI vram vendor.
  *
- * @note This function assumes that the enum values for both enums (smi_vram_vendor and amdgv_gpumon_vram_vendor)
+ * @note This function assumes that the enum value and string value
  * are compatible and represent similar concepts.
  */
-enum smi_vram_vendor smi_map_vram_vendor(enum amdgv_gpumon_vram_vendor vendor);
+const char* smi_map_vram_vendor(enum amdgv_gpumon_vram_vendor vendor);
 
 /**
  * @brief Comparison function for sorting devices by BDF.

@@ -33,7 +33,7 @@ extern "C" {
 
 amdsmi_bdf_t MOCK_BDF = { { 0x4, 0x3, 0x2, 0x1 } }; // 0001:02:03.04
 const char *GPU_MOCK_UUID{"9aff0003-0000-1000-801f-188c37cb1ee6"};
-const char *VF_MOCK_UUID{"9a010003-0000-1000-801f-188c37cb1ee6"};
+const char *VF_MOCK_UUID{"9a0174b5-0000-1000-801f-188c37cb1ee6"};
 smi_device_handle_t GPU_MOCK_HANDLE = { (0x1234ULL << 32) | 0x1234 };
 amdsmi_vf_handle_t VF_MOCK_HANDLE = { (0x1234ULL << 32) | 0x4567 };
 
@@ -99,6 +99,21 @@ void AmdSmiTest::finalize_smi_lib()
 ::testing::AssertionResult equal_bdfs(amdsmi_bdf_t bdf_expect, amdsmi_bdf_t bdf_actual)
 {
 	SMI_ASSERT_EQ(bdf_expect.as_uint, bdf_actual.as_uint);
+	return ::testing::AssertionSuccess();
+}
+
+::testing::AssertionResult equal_dpm_policy(smi_dpm_policy expect,
+							amdsmi_dpm_policy_t actual)
+{
+	SMI_ASSERT_EQ(expect.num_supported, actual.num_supported);
+	SMI_ASSERT_EQ(expect.cur, actual.current);
+	for (uint32_t i = 0; i < expect.num_supported; i++) {
+		SMI_ASSERT_STR_EQ(expect.policies[i].policy_description, actual.policies[i].policy_description)
+			<< " for i = " << i;
+		SMI_ASSERT_EQ(expect.policies[i].policy_id, actual.policies[i].policy_id)
+			<< " for i = " << i;
+	}
+
 	return ::testing::AssertionSuccess();
 }
 

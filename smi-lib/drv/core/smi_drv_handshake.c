@@ -222,6 +222,10 @@ int smi_cmd_handshake(struct smi_ctx *ctx, void *inb, void *outb,
 			smi_get_accelerator_partition_profile_config,
 			sizeof(struct smi_profile_configs),
 			0);
+		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_ACCELERATOR_PARTITION_PROFILE_CONFIG_GLOBAL,
+			smi_get_accelerator_partition_profile_config_global,
+			sizeof(struct smi_profile_configs_global),
+			0);
 		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_GPU_ACCELERATOR_PARTITION,
 			smi_get_accelerator_partition_profile,
 			sizeof(struct smi_device_info),
@@ -258,7 +262,14 @@ int smi_cmd_handshake(struct smi_ctx *ctx, void *inb, void *outb,
 			smi_reset_gpu,
 			sizeof(struct smi_device_info),
 			0);
-
+		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_XGMI_PLPD,
+			smi_get_xgmi_plpd,
+			sizeof(struct smi_device_info),
+			sizeof(struct smi_dpm_policy));
+		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_SET_XGMI_PLPD,
+			smi_set_xgmi_plpd,
+			sizeof(struct smi_set_dpm_policy),
+			0);
 		/* Set max num of commands
 		 * This needs to be set to the number of functions
 		 * defined here

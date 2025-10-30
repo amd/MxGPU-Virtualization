@@ -2018,11 +2018,11 @@ static enum psp_status amdgv_psp_ras_load(struct amdgv_adapter *adapt,
 					adapt->umc.channel_dis_num;
 			ras_cmd->ras_in_message.init_flags.xcc_mask = adapt->mcp.gfx.xcc_mask;
 
-			if (adapt->nbio.ras->get_curr_memory_partition_mode) {
+			if (adapt->nbio.funcs->get_nps_mode) {
 				enum amdgv_memory_partition_mode curr_memory_partition_mode;
 				int res;
 
-				res = adapt->nbio.ras->get_curr_memory_partition_mode(
+				res = adapt->nbio.funcs->get_nps_mode(
 						adapt, &curr_memory_partition_mode);
 				if (!res)
 					ras_cmd->ras_in_message.init_flags.nps_mode = curr_memory_partition_mode;

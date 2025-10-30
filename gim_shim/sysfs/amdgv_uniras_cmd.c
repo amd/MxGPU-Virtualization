@@ -53,7 +53,7 @@ bool amdgv_is_uni_cmd(unsigned int cmd)
 		return false;
 }
 
-static enum amdgv_cmd_asic_type amd_asic_type_to_amdgv_cmd_asic_type(enum amd_asic_type asic_type)
+static enum amdgv_cmd_asic_type amd_asic_type_to_amdgv_cmd_asic_type(enum amd_asic_type asic_type, uint32_t dev_id)
 {
 	switch (asic_type) {
 	case CHIP_MI200:
@@ -61,7 +61,10 @@ static enum amdgv_cmd_asic_type amd_asic_type_to_amdgv_cmd_asic_type(enum amd_as
 	case CHIP_NAVI32:
 		return AMDGV_CMD_CHIP_NAVI32;
 	case CHIP_MI300X:
-		return AMDGV_CMD_CHIP_MI300X;
+		if (dev_id == 0x74A5)
+			return AMDGV_CMD_CHIP_MI325X;
+		else
+			return AMDGV_CMD_CHIP_MI300X;
 	case CHIP_MI308X:
 		return AMDGV_CMD_CHIP_MI308X;
 	case CHIP_MI350X:
@@ -103,7 +106,7 @@ static void __amdgv_get_device_info_v1(struct gim_dev_data *dev_data, struct amd
 	uint32_t asic_type;
 
 	if (!amdgv_gpumon_get_asic_type(dev_data->adev, &asic_type))
-		amdgv_dev->asic_type = amd_asic_type_to_amdgv_cmd_asic_type(asic_type);
+		amdgv_dev->asic_type = amd_asic_type_to_amdgv_cmd_asic_type(asic_type, dev_data->init_data.info.dev_id);
 	else
 		amdgv_dev->asic_type = AMDGV_CMD_CHIP_UNKNOWN;
 
@@ -131,7 +134,7 @@ static void __amdgv_get_device_info_v2(struct gim_dev_data *dev_data, struct amd
 	uint32_t asic_type;
 
 	if (!amdgv_gpumon_get_asic_type(dev_data->adev, &asic_type))
-		amdgv_dev->asic_type = amd_asic_type_to_amdgv_cmd_asic_type(asic_type);
+		amdgv_dev->asic_type = amd_asic_type_to_amdgv_cmd_asic_type(asic_type, dev_data->init_data.info.dev_id);
 	else
 		amdgv_dev->asic_type = AMDGV_CMD_CHIP_UNKNOWN;
 
@@ -153,6 +156,9 @@ static void __amdgv_get_device_info_v2(struct gim_dev_data *dev_data, struct amd
 
 	if (!amdgv_get_dev_info(dev_data->adev, AMDGV_GET_OAM_IDX, &dev_info))
 		amdgv_dev_ex->oam_id = dev_info.oam.oam_idx;
+
+	if (amdgv_gpumon_get_ras_eeprom_version(dev_data->adev, &amdgv_dev_ex->ras_eeprom_version))
+		amdgv_dev_ex->ras_eeprom_version = 0;
 }
 
 static uint8_t  amdgv_get_device_info(struct amdgv_uni_cmd *cmd)

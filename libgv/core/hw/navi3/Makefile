@@ -52,7 +52,8 @@ LIBGV_HW_NAVI3_LOCAL = \
 	navi32_vcn.o \
 	navi32_nbio.o \
 	gfx_v11_0.o \
-	navi32_dirtybit.o
+	navi32_dirtybit.o \
+	mmhub_v3_0.o
 
 LIBGV_HW_NAVI3_FILES = $(addprefix core/hw/navi3/,$(LIBGV_HW_NAVI3_LOCAL))
 

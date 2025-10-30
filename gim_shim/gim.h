@@ -29,6 +29,7 @@
 #include "smi_drv_oss.h"
 #include "gim_memory_sentinel.h"
 #include <amdgv_live_info.h>
+#include "gim_mig.h"
 
 struct vf_info {
 	uint32_t bdf;
@@ -54,6 +55,8 @@ struct gim_dev_data {
 
 	void	*live_data_ptr;
 	uint64_t live_data_size;
+
+	struct gim_mig_device *pf_mig_dev;
 };
 
 struct common_firmware_header {

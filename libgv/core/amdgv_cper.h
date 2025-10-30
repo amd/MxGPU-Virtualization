@@ -83,7 +83,8 @@ int amdgv_cper_entry_fill_runtime_section(struct amdgv_adapter *adapt,
 					  uint32_t reg_count);
 int amdgv_cper_entry_fill_bad_page_thr_section(struct amdgv_adapter *adapt,
 					       struct cper_hdr *hdr,
-					       uint32_t section_idx);
+					       uint32_t section_idx,
+					       uint32_t oam_id);
 
 int amdgv_cper_commit_entry(struct amdgv_adapter *adapt,
 			    struct cper_hdr *hdr);

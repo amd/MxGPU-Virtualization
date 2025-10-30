@@ -398,13 +398,7 @@ static int ras_eeprom_legacy_init(struct amdgv_adapter *adapt,
 		amdgv_ras_eeprom_set_max_record_num(adapt, control);
 	}
 
-	/* In reset state, the bad GPU state is handled by reset event */
-	if (!amdgv_ras_eeprom_is_gpu_bad(adapt) || in_whole_gpu_reset()) {
-		return 0;
-	} else {
-		amdgv_device_handle_bad_gpu(adapt);
-		return 0;
-	}
+	return 0;
 
 reset_eeprom:
 	AMDGV_INFO("Creating new EEPROM table\n");
@@ -503,12 +497,6 @@ static int ras_eeprom_legacy_update_gpu_health(struct amdgv_adapter *adapt,
 	case AMDGV_BP_MSG_IN_VF_CRITICAL_REGION:
 		ras_eeprom_legacy_mark_gpu_healthy_status(
 			adapt, GPU_RETIRED__ECC_IN_CRITICAL_REGION);
-		__mark_gpu_bad(adapt);
-		return 0;
-		break;
-	case AMDGV_BP_MSG_IN_SAME_ROW:
-		ras_eeprom_legacy_mark_gpu_healthy_status(
-			adapt, GPU_RETIRED__ECC_IN_SAME_MEMORY_ROW);
 		__mark_gpu_bad(adapt);
 		return 0;
 		break;
@@ -693,6 +681,8 @@ static const struct amdgv_ras_eeprom_funcs ras_eeprom_legacy_funcs = {
 	.fini = NULL,
 	.reset_table = ras_eeprom_legacy_reset_table,
 	.process_records = ras_eeprom_legacy_process_records,
+	.utc_to_eeprom_format = amdgv_utc_to_eeprom_format,
+	.is_gpu_bad = amdgv_ras_eeprom_is_header_bad,
 };
 
 int ras_eeprom_legacy_sw_init(struct amdgv_adapter *adapt)

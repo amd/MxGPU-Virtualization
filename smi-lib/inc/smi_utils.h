@@ -141,6 +141,20 @@ amdsmi_status_t amdsmi_get_pcie_speed_from_pcie_type(uint32_t pcie_type, uint32_
 amdsmi_status_t amdsmi_get_string_from_status_enum(amdsmi_status_t status, const char **out);
 
 /**
+ *  \brief  Maps Physical Function (PF) device ID to corresponding Virtual Function (VF) device ID.
+ *
+ *  \details This function takes a PF device ID and returns the corresponding VF device ID
+ *
+ *  \param [in] pf_device_id - The Physical Function device ID to be mapped.
+ *
+ *  \param [out] vf_device_id - Pointer to store the corresponding Virtual Function device ID.
+ *                              Must be allocated by caller.
+ *
+ *  \return SMI_RET_CODE indicating result.
+ */
+int smi_get_vf_device_id_from_pf(uint64_t pf_device_id, uint64_t *vf_device_id);
+
+/**
  *  \brief  Generates uuid for device with specified parameters
  *
  *  \param [out] str      String buffer where to output generated uuid
@@ -421,5 +435,14 @@ int make_sysfs_pci_device_prefix(amdsmi_processor_handle processor_handle, char 
  *  \return 0 on success, error code otherwise.
  */
 int parse_cpu_list(const char *cpu_list, uint64_t *cpu_set, uint32_t cpu_set_size);
+
+/**
+ *  \brief  Checks if a command is supported for a given device ID.
+ *
+ *  \param [in] device_id - The device ID to check.
+ *
+ *  \return AMDSMI_STATUS_SUCCESS if the command is supported, AMDSMI_STATUS_NOT_SUPPORTED otherwise.
+ */
+amdsmi_status_t is_cmd_supported(uint64_t device_id);
 
 #endif // __SMI_UTILS_H__

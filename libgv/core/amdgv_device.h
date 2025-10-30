@@ -67,6 +67,7 @@
 #include "amdgv_mca.h"
 #include "amdgv_debug.h"
 #include "amdgv_cper.h"
+#include "amdgv_vfmgr.h"
 
 #include "amdgv_ras_eeprom.h"
 
@@ -83,14 +84,14 @@
 #define AMDGV_CAP_VCE_MANUAL_SCHED  (1 << 9)
 #define AMDGV_CAP_HEVC_MANUAL_SCHED (1 << 10)
 
-#define AMDGV_VBIOS_SIZE_KB	   AMD_SRIOV_MSG_VBIOS_SIZE_KB
-#define AMDGV_DATAEXCHANGE_SIZE_KB AMD_SRIOV_MSG_DATAEXCHANGE_SIZE_KB
+#define AMDGV_VBIOS_SIZE_KB	   AMD_SRIOV_MSG_VBIOS_SIZE_KB_V1
+#define AMDGV_DATAEXCHANGE_SIZE_KB AMD_SRIOV_MSG_DATAEXCHANGE_SIZE_KB_V1
 #define AMDGV_MECFW_SIZE_KB	   (512)
 #define AMDGV_UVDFW_SIZE_KB	   (512)
 #define AMDGV_VCEFW_SIZE_KB	   (512)
 
-#define AMDGV_RESERVE_FB_OFFSET_KB AMD_SRIOV_MSG_VBIOS_OFFSET
-#define AMDGV_RESERVE_FB_SIZE_KB   (AMDGV_VBIOS_SIZE_KB + AMDGV_DATAEXCHANGE_SIZE_KB + AMD_SRIOV_RAS_TELEMETRY_SIZE_KB)
+#define AMDGV_RESERVE_FB_OFFSET_KB AMD_SRIOV_MSG_VBIOS_OFFSET_V1
+#define AMDGV_RESERVE_FB_SIZE_KB   (AMDGV_VBIOS_SIZE_KB + AMDGV_DATAEXCHANGE_SIZE_KB + AMD_SRIOV_MSG_RAS_TELEMETRY_SIZE_KB_V1)
 #define AMDGV_RESERVE_FB_SIZE_KB_UCODE                                                        \
 	(AMDGV_VBIOS_SIZE_KB + AMDGV_DATAEXCHANGE_SIZE_KB + AMDGV_MECFW_SIZE_KB +             \
 	 AMDGV_UVDFW_SIZE_KB + AMDGV_VCEFW_SIZE_KB)
@@ -426,8 +427,8 @@ struct amdgv_pf_pcie_restore {
 struct amdgv_vf_ras {
 	union amd_sriov_ras_caps caps;
 	struct {
-		uint32_t start_rptr;
-		uint32_t prev_host_wptr;
+		uint64_t start_rptr;
+		uint64_t prev_host_wptr;
 	} cper;
 };
 
@@ -506,6 +507,23 @@ struct amdgv_vf_device {
 	bool mes_info_dump_enabled;
 
 	struct amdgv_vf_ras ras;
+
+	uint64_t vf_table_offsets[AMD_SRIOV_MSG_MAX_TABLE_ID];
+
+	uint64_t vf_table_sizes_kb[AMD_SRIOV_MSG_MAX_TABLE_ID];
+
+	/* if set to v1, use v1 offsets; if set to v2, VF must use new allocation scheme due to bad pages */
+	enum amd_sriov_crit_region_version vf_crit_region;
+
+	/* critical region init support capability. bit 0 - version 1; bit 1 - Version 2 */
+	uint32_t host_crit_region_caps;
+	uint32_t guest_crit_region_caps;
+
+	/* reserved variable for future use */
+	uint32_t guest_gpu_init_flags;
+
+	/* memory manager for VF critical region */
+	struct amdgv_memmgr memmgr_vf;
 };
 
 struct amdgv_reg_golden {
@@ -517,13 +535,17 @@ struct amdgv_reg_golden {
 	uint32_t	or_mask;
 };
 
+struct amdgv_vmhub_funcs {
+	uint32_t (*get_invalidate_req)(unsigned int vmid, uint32_t flush_type);
+};
+
 struct amdgv_vmhub {
 	uint32_t ctx0_ptb_addr_lo32;
 	uint32_t ctx0_ptb_addr_hi32;
 	uint32_t vm_inv_eng0_sem;
 	uint32_t vm_inv_eng0_req;
 	uint32_t vm_inv_eng0_ack;
-	uint32_t  vm_context0_cntl;
+	uint32_t vm_context0_cntl;
 	uint32_t vm_l2_pro_fault_status;
 	uint32_t vm_l2_pro_fault_cntl;
 
@@ -540,6 +562,10 @@ struct amdgv_vmhub {
 	uint32_t fault_status;
 	uint32_t fault_addr_lo;
 	uint32_t fault_addr_hi;
+
+	uint32_t vm_l2_bank_select_reserved_cid2;
+
+	struct amdgv_vmhub_funcs *vmhub_funcs;
 };
 
 
@@ -1283,6 +1309,12 @@ struct amdgv_dump_reg {
 		WREG32(target_reg, value); \
 	} while (0)
 
+/* ms */
+INLINE bool amdgv_after_time(uint64_t end_ts)
+{
+	return (oss_get_time_stamp() >= end_ts) ? true : false;
+}
+
 uint32_t amdgv_internal_get_asic_type(uint32_t device_id, uint32_t revision_id);
 struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_data);
 void amdgv_device_internal_fini(struct amdgv_adapter *adapt,
@@ -1321,4 +1353,6 @@ void amdgv_device_set_status(struct amdgv_adapter *adapt, enum amdgv_dev_status 
 
 enum amdgv_gpumon_vram_type vram_type_to_gpumon_vram_type(enum amdgv_vram_type vram_type);
 enum amdgv_gpumon_vram_vendor vram_vendor_to_gpumon_vram_vendor(enum amdgv_vram_vendor vendor);
+uint64_t amdgv_gpa_to_local_spa(struct amdgv_adapter *adapt, uint64_t addr, uint32_t idx_vf);
+uint64_t amdgv_gpa_to_global_spa(struct amdgv_adapter *adapt, uint64_t addr, uint32_t idx_vf);
 #endif

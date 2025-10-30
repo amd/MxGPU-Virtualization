@@ -1110,10 +1110,6 @@ static enum psp_status navi32_psp_get_migration_info(struct amdgv_adapter *adapt
 		return ret;
 	}
 
-	//TODO: get the size from PSP pkg
-	adapt->live_migration.static_data_size = NAVI32_MIGRATION_PSP_STATIC_DATA_SIZE;
-	adapt->live_migration.dynamic_data_size = NAVI32_MIGRATION_PSP_DYNAMIC_DATA_SIZE;
-
 	return ret;
 }
 
@@ -1247,6 +1243,28 @@ static enum psp_status navi32_psp_transfer_manifest_data(struct amdgv_adapter *a
 	return ret;
 }
 
+static enum psp_status navi32_psp_clear_vf_fw(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	enum psp_status ret = PSP_STATUS__SUCCESS;
+	struct psp_cmd_km psp_cmd = { 0 };
+	struct psp_gfx_resp psp_resp = { 0 };
+
+	psp_cmd.cmd_id = PSP_CMD_KM_TYPE__CLEAR_VF_FW;
+	psp_cmd.cmd.clear_vf_fw.target_vf = idx_vf;
+
+	psp_resp.status = 0xdeadbeef;
+	ret = amdgv_psp_cmd_km_submit(adapt, &psp_cmd, &psp_resp);
+
+	if (ret != PSP_STATUS__SUCCESS || psp_resp.status != 0) {
+		AMDGV_INFO("PSP: failed to submit GFX_CMD_ID_CLEAR_VF_FW "
+			   "(gfx_cmd_resp=0x%08x)\n",
+			   psp_resp.status);
+		ret = PSP_STATUS__ERROR_GENERIC;
+	}
+
+	return ret;
+}
+
 static int navi32_psp_sw_fini(struct amdgv_adapter *adapt)
 {
 	if (amdgv_psp_sw_fini(adapt) != PSP_STATUS__SUCCESS)
@@ -1323,6 +1341,7 @@ static int navi32_psp_sw_init(struct amdgv_adapter *adapt)
 	adapt->psp.tmr_init = navi32_psp_tmr_init;
 	adapt->psp.transfer_manifest_data = navi32_psp_transfer_manifest_data;
 	adapt->psp.get_migration_info = navi32_psp_get_migration_info;
+	adapt->psp.clear_vf_fw = navi32_psp_clear_vf_fw;
 
 	psp_ret = amdgv_psp_sw_init(adapt);
 	adapt->psp.ras_context.set_init_flag = true;
@@ -1331,6 +1350,11 @@ static int navi32_psp_sw_init(struct amdgv_adapter *adapt)
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_INIT_FAIL, 0);
 		navi32_psp_sw_fini(adapt);
 		ret = AMDGV_FAILURE;
+	}
+
+	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION) {
+		adapt->live_migration.static_data_size = NAVI32_MIGRATION_PSP_STATIC_DATA_SIZE;
+		adapt->live_migration.dynamic_data_size = NAVI32_MIGRATION_PSP_DYNAMIC_DATA_SIZE;
 	}
 
 	return ret;
@@ -1519,7 +1543,7 @@ static int navi32_psp_load_np_fw(struct amdgv_adapter *adapt)
 		AMDGV_FIRMWARE_ID__RS64_MEC_P2_DATA,
 		AMDGV_FIRMWARE_ID__RS64_MEC_P3_DATA,
 		AMDGV_FIRMWARE_ID__RLC,
-		AMDGV_FIRMWARE_ID__RLC_V,	//Side-load F32 RLCV as part of FW WA of a world switch HW bug.
+		AMDGV_FIRMWARE_ID__RLC_V,	//Side-load F32 RLCV as part of FW WA of a world switch.
 		AMDGV_FIRMWARE_ID__RLC_P,
 		AMDGV_FIRMWARE_ID__RLC_RESTORE_LIST_GPM_MEM,
 		AMDGV_FIRMWARE_ID__RLC_RESTORE_LIST_SRM_MEM,

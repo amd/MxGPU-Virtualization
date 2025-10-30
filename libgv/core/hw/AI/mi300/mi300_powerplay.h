@@ -141,5 +141,4 @@ int mi300_smu_trigger_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf);
 int mi300_smu_trigger_mode_3_reset(struct amdgv_adapter *adapt, uint32_t xcc_mask);
 int mi300_smu_gfx_flr_recovery(struct amdgv_adapter *adapt, uint32_t idx_vf);
 int mi300_smu_gfx_mode_3_recovery(struct amdgv_adapter *adapt, uint32_t xcc_mask);
-bool mi300_smu_cap_supported(struct amdgv_adapter *adapt, int cap);
 #endif

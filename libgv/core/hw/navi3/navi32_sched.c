@@ -227,8 +227,9 @@ static int navi32_setup_default_vfs_timeslice(struct amdgv_adapter *adapt)
 	uint32_t i;
 	uint32_t gfx_tmp;
 	int ret = 0;
-	uint32_t world_switch_id;
+	uint32_t world_switch_id, hw_sched_id;
 	struct amdgv_sched_world_switch *world_switch;
+	bool switch_running = false;
 
 	gfx_tmp = navi32_sched_get_asic_time_slice_gfx(adapt, adapt->sched.num_vf_per_gfx_sched);
 	for (i = 0; i < adapt->num_vf; i++)
@@ -237,13 +238,26 @@ static int navi32_setup_default_vfs_timeslice(struct amdgv_adapter *adapt)
 	if ((adapt->flags & AMDGV_FLAG_USE_PF))
 		ret = amdgv_sched_setup_vf_timeslice(adapt, AMDGV_PF_IDX, gfx_tmp, AMDGV_SCHED_BLOCK_GFX);
 
+
+	/* auto sched to stop before config */
 	for_each_id(world_switch_id, amdgv_sched_get_world_switch_mask_by_sched_block(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX)) {
 		world_switch = &adapt->sched.world_switch[world_switch_id];
+		switch_running = adapt->sched.world_switch[world_switch_id].switch_running;
+
 		if (world_switch->sched_mode > AMDGV_SCHED_MAX_HW_SCHED_MODE)
 			continue;
-		ret = amdgv_sched_world_switch_config_auto_sched_mode(adapt, world_switch);
-		if (ret)
-			return ret;
+
+		amdgv_sched_world_switch_stop(adapt, world_switch);
+
+		for_each_id(hw_sched_id, world_switch->hw_sched_mask) {
+			ret = amdgv_sched_world_switch_config_auto_sched_mode(adapt, hw_sched_id);
+			if (ret)
+				return ret;
+		}
+
+		if (switch_running)
+			amdgv_sched_world_switch_start(adapt, world_switch);
+
 	}
 
 	return ret;
@@ -315,6 +329,7 @@ static int navi32_asymmetric_fb_reconfig(struct amdgv_adapter *adapt, uint32_t i
 
 static int navi32_sched_sw_init_early(struct amdgv_adapter *adapt)
 {
+	int i;
 	adapt->sched.dump_gpu_state = navi32_sched_dump_gpu_state;
 	adapt->sched.get_asic_time_slice = navi32_sched_get_asic_time_slice;
 	adapt->sched.reconfig_mapping_tables = navi32_sched_reconfig_mapping_tables;
@@ -335,6 +350,17 @@ static int navi32_sched_sw_init_early(struct amdgv_adapter *adapt)
 
 	if (amdgv_sched_init(adapt))
 		return AMDGV_FAILURE;
+
+	/**
+	 * sched_mode determined in gpuiov sw_init
+	 * perf log at the time is nv32 only
+	**/
+	for (i = 0; i < adapt->gpuiov.num_ctrl_blocks; i++) {
+		if (adapt->gpuiov.ctrl_blocks[i].hw_sched_type == AMDGV_HW_SCHED_TYPE_GFX)
+			if (adapt->gpuiov.ctrl_blocks[i].sched_mode <= AMDGV_SCHED_MAX_HW_SCHED_MODE)
+				adapt->flags |= AMDGV_FLAG_PERF_LOG_ENABLE;
+	}
+	adapt->sched.perf_log_enabled = false;
 
 	if (adapt->opt.allow_time_full_access == 0 && adapt->sched.num_vf_per_gfx_sched > 1) {
 		adapt->sched.allow_time_full_access = 3000 * 1000;
@@ -372,6 +398,7 @@ static int navi32_sched_hw_fini_early(struct amdgv_adapter *adapt)
 static int navi32_sched_hw_init_late(struct amdgv_adapter *adapt)
 {
 	int ret;
+	adapt->sched.perf_log_enabled = false;
 	ret = amdgv_sched_init_pf_state_late(adapt);
 	if (ret)
 		return ret;

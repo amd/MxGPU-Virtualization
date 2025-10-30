@@ -24,7 +24,7 @@
 Device::Device(int gpu, int vf, DeviceType device_type)
 	: gpu_index(gpu), vf_index(vf), type(device_type)
 {
-	if (type != VF_INDEX) {
+	if (type != DeviceType::VF_INDEX) {
 		//error
 	} else {
 		domain = "--vf";
@@ -34,7 +34,7 @@ Device::Device(int gpu, int vf, DeviceType device_type)
 
 Device::Device(int gpu, DeviceType device_type) : gpu_index(gpu), type(device_type)
 {
-	if (type != GPU_INDEX) {
+	if (type != DeviceType::GPU_INDEX) {
 		//error
 		exit(1);
 	} else {
@@ -46,10 +46,10 @@ Device::Device(int gpu, DeviceType device_type) : gpu_index(gpu), type(device_ty
 Device::Device(std::string device, DeviceType device_type, std::string domain)
 	: value(device), type(device_type), domain(domain)
 {
-	if ((type != BDF) && (type != UUID)) {
+	if ((type != DeviceType::BDF) && (type != DeviceType::UUID)) {
 		//error
 	}
 
 	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_bdf_from_uuid_or_bdf(bdf, gpu_index,
-			  device, type);
+			  device, static_cast<int>(type));
 }

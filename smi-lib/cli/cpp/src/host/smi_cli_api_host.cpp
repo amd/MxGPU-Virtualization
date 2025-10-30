@@ -90,8 +90,7 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_ACTIVITY)(amdsmi_processor_handle,
 		amdsmi_engine_usage_t *);
 // typedef amdsmi_status_t (*AMDSMI_GET_PCIE_LINK_STATUS)(amdsmi_processor_handle,
 // 						       amdsmi_pcie_info_t *);
-typedef amdsmi_status_t (*AMDSMI_GET_POWER_INFO)(amdsmi_processor_handle, uint32_t,
-		amdsmi_power_info_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_POWER_INFO)(amdsmi_processor_handle, amdsmi_power_info_t *);
 typedef amdsmi_status_t (*AMDSMI_SET_POWER_CAP)(amdsmi_processor_handle, uint32_t,
 		uint64_t);
 typedef amdsmi_status_t (*AMDSMI_IS_GPU_POWER_MANAGEMENT_ENABLED)(amdsmi_processor_handle, bool *);
@@ -107,6 +106,10 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_TOTAL_ECC_COUNT)(amdsmi_processor_handl
 typedef amdsmi_status_t (*AMDSMI_GET_SOC_PSTATE)(amdsmi_processor_handle,
 		amdsmi_dpm_policy_t *);
 typedef amdsmi_status_t (*AMDSMI_SET_SOC_PSTATE)(amdsmi_processor_handle,
+		uint32_t);
+typedef amdsmi_status_t (*AMDSMI_GET_XGMI_PLPD)(amdsmi_processor_handle,
+		amdsmi_dpm_policy_t *);
+typedef amdsmi_status_t (*AMDSMI_SET_XGMI_PLPD)(amdsmi_processor_handle,
 		uint32_t);
 
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_ECC_COUNT)(amdsmi_processor_handle, amdsmi_gpu_block_t,
@@ -165,6 +168,8 @@ typedef amdsmi_status_t (*AMDSMI_CLEAR_VF_FB)(amdsmi_vf_handle_t);
 
 typedef amdsmi_status_t (*AMDSMI_GET_PARTITION_PROFILE_CONFIG)(amdsmi_processor_handle,
 		amdsmi_accelerator_partition_profile_config_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_GLOBAL_PARTITION)(amdsmi_processor_handle,
+		amdsmi_accelerator_partition_profile_config_global_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_CURR_ACCELERATOR_PARTITION)(amdsmi_processor_handle,
 		amdsmi_accelerator_partition_profile_t *, uint32_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_MEMORY_PARTITION_CAPS)(amdsmi_processor_handle,
@@ -176,13 +181,20 @@ typedef amdsmi_status_t (*AMDSMI_SET_MEMORY_PARTITION)(amdsmi_processor_handle,
 		amdsmi_memory_partition_type_t);
 typedef amdsmi_status_t (*AMDSMI_GET_MEMORY_PARTITION_CONFIG)(amdsmi_processor_handle,
 		amdsmi_memory_partition_config_t *);
-typedef amdsmi_status_t (*AMDSMI_GET_GPU_CPER_ENTRIES)(amdsmi_processor_handle, uint32_t, char*, uint64_t *,
-        amdsmi_cper_hdr_t**, uint64_t *, uint64_t *);
-typedef amdsmi_status_t (*AMDSMI_TOPO_GET_P2P_STATUS)(amdsmi_processor_handle,amdsmi_processor_handle,
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_CPER_ENTRIES)(amdsmi_processor_handle, uint32_t, char*,
+		uint64_t *,
+		amdsmi_cper_hdr_t**, uint64_t *, uint64_t *);
+typedef amdsmi_status_t (*AMDSMI_TOPO_GET_P2P_STATUS)(amdsmi_processor_handle,
+		amdsmi_processor_handle,
 		amdsmi_link_type_t*, amdsmi_p2p_capability_t*);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_VIRTUALIZATION_MODE)(amdsmi_processor_handle,
 		amdsmi_virtualization_mode_t *);
-typedef amdsmi_status_t (*AMDSMI_GET_AFIDS_FROM_CPER)(char*cper_buffer, uint32_t buf_size, uint64_t *afids,
+typedef amdsmi_status_t (*AMDSMI_GET_CPU_AFFINITY_WITH_SCOPE)(amdsmi_processor_handle,
+		uint32_t, uint64_t *, amdsmi_affinity_scope_t);
+typedef amdsmi_status_t (*AMDSMI_TOPO_GET_NUMA_NODE_NUMBER)(amdsmi_processor_handle,
+		uint32_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_AFIDS_FROM_CPER)(char*cper_buffer, uint32_t buf_size,
+		uint64_t *afids,
 		uint32_t *num_afids);
 
 typedef amdsmi_status_t (*AMDSMI_RESET_GPU)(amdsmi_processor_handle);
@@ -223,6 +235,8 @@ AMDSMI_GET_TEMP_METRIC host_amdsmi_get_temp_metric;
 AMDSMI_GET_GPU_CACHE_INFO host_amdsmi_get_gpu_cache_info;
 AMDSMI_GET_SOC_PSTATE host_amdsmi_get_soc_pstate;
 AMDSMI_SET_SOC_PSTATE host_amdsmi_set_soc_pstate;
+AMDSMI_GET_XGMI_PLPD host_amdsmi_get_xgmi_plpd;
+AMDSMI_SET_XGMI_PLPD host_amdsmi_set_xgmi_plpd;
 AMDSMI_GET_GPU_TOTAL_ECC_COUNT host_amdsmi_get_gpu_total_ecc_count;
 
 AMDSMI_GET_GPU_ECC_COUNT host_amdsmi_get_gpu_ecc_count;
@@ -252,6 +266,7 @@ AMDSMI_GET_GPU_METRICS host_amdsmi_get_gpu_metrics;
 AMDSMI_GET_LIB_VERSION host_amdsmi_get_lib_version;
 AMDSMI_CLEAR_VF_FB host_amdsmi_clear_vf_fb;
 AMDSMI_GET_PARTITION_PROFILE_CONFIG host_amdsmi_get_partition_profile_config;
+AMDSMI_GET_GLOBAL_PARTITION host_amdsmi_get_accelerator_partition_profile_config_global;
 AMDSMI_GET_CURR_ACCELERATOR_PARTITION host_amdsmi_get_partition_profile;
 AMDSMI_GET_MEMORY_PARTITION_CAPS host_amdsmi_get_memory_partition_caps;
 AMDSMI_GET_CURR_MEMORY_PARTITION host_amdsmi_get_curr_memory_partition;
@@ -261,6 +276,8 @@ AMDSMI_GET_MEMORY_PARTITION_CONFIG host_amdsmi_get_gpu_memory_partition_config;
 AMDSMI_GET_GPU_CPER_ENTRIES host_amdsmi_get_gpu_cper_entries;
 AMDSMI_TOPO_GET_P2P_STATUS host_amdsmi_topo_get_p2p_status;
 AMDSMI_GET_GPU_VIRTUALIZATION_MODE host_amdsmi_get_gpu_virtualization_mode;
+AMDSMI_GET_CPU_AFFINITY_WITH_SCOPE host_amdsmi_get_cpu_affinity_with_scope;
+AMDSMI_TOPO_GET_NUMA_NODE_NUMBER host_amdsmi_topo_get_numa_node_number;
 AMDSMI_GET_AFIDS_FROM_CPER host_amdsmi_get_afids_from_cper;
 AMDSMI_RESET_GPU host_amdsmi_reset_gpu;
 
@@ -280,19 +297,16 @@ AmdSmiApiHost::AmdSmiApiHost()
 	amdSmiLibHandle = (HMODULE)LoadLibraryA(systemPath);
 #elif __linux__
 	amdSmiLibHandle = dlopen("libamdsmi.so", RTLD_NOW | RTLD_GLOBAL);
-	if (amdSmiLibHandle == NULL) {
-		amdSmiLibHandle = dlopen("/usr/local/lib/libamdsmi.so", RTLD_NOW | RTLD_GLOBAL);
-	}
 #endif
 	if (amdSmiLibHandle == NULL) {
 #ifdef _WIN64
 		std::cout << "Error LoadLibraryA" << std::endl;
 #elif __linux__
 		std::cout <<
-			"Error while loading shared library libamdsmi.so. "
-			"Cannot open shared object file: "
-			"No such file or directory"
-		<< std::endl;
+				  "Error while loading shared library libamdsmi.so. "
+				  "Cannot open shared object file: "
+				  "No such file or directory"
+				  << std::endl;
 #endif
 		exit(1);
 	}
@@ -369,6 +383,10 @@ AmdSmiApiHost::AmdSmiApiHost()
 		(AMDSMI_GET_SOC_PSTATE)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_soc_pstate");
 	host_amdsmi_set_soc_pstate =
 		(AMDSMI_SET_SOC_PSTATE)LOAD_SYM(amdSmiLibHandle, "amdsmi_set_soc_pstate");
+	host_amdsmi_get_xgmi_plpd =
+		(AMDSMI_GET_XGMI_PLPD)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_xgmi_plpd");
+	host_amdsmi_set_xgmi_plpd =
+		(AMDSMI_SET_XGMI_PLPD)LOAD_SYM(amdSmiLibHandle, "amdsmi_set_xgmi_plpd");
 	host_amdsmi_get_gpu_total_ecc_count = (AMDSMI_GET_GPU_TOTAL_ECC_COUNT)LOAD_SYM(
 			amdSmiLibHandle, "amdsmi_get_gpu_total_ecc_count");
 
@@ -431,6 +449,9 @@ AmdSmiApiHost::AmdSmiApiHost()
 	host_amdsmi_get_partition_profile_config = (AMDSMI_GET_PARTITION_PROFILE_CONFIG)LOAD_SYM(
 			amdSmiLibHandle,
 			"amdsmi_get_gpu_accelerator_partition_profile_config");
+	host_amdsmi_get_accelerator_partition_profile_config_global = (AMDSMI_GET_GLOBAL_PARTITION)LOAD_SYM(
+			amdSmiLibHandle,
+			"amdsmi_get_gpu_accelerator_partition_profile_config_global");
 	host_amdsmi_get_memory_partition_caps = (AMDSMI_GET_MEMORY_PARTITION_CAPS)LOAD_SYM(amdSmiLibHandle,
 											"amdsmi_get_gpu_memory_partition_caps");
 	host_amdsmi_get_curr_memory_partition = (AMDSMI_GET_CURR_MEMORY_PARTITION)LOAD_SYM(amdSmiLibHandle,
@@ -447,15 +468,19 @@ AmdSmiApiHost::AmdSmiApiHost()
 			amdSmiLibHandle, "amdsmi_get_gpu_memory_partition_config");
 
 	host_amdsmi_get_gpu_cper_entries = (AMDSMI_GET_GPU_CPER_ENTRIES)LOAD_SYM(
-			amdSmiLibHandle, "amdsmi_get_gpu_cper_entries");
+										   amdSmiLibHandle, "amdsmi_get_gpu_cper_entries");
 
 	host_amdsmi_topo_get_p2p_status = (AMDSMI_TOPO_GET_P2P_STATUS)LOAD_SYM(amdSmiLibHandle,
-			"amdsmi_topo_get_p2p_status");
+									  "amdsmi_topo_get_p2p_status");
 
 	host_amdsmi_get_gpu_virtualization_mode = (AMDSMI_GET_GPU_VIRTUALIZATION_MODE)LOAD_SYM(
 			amdSmiLibHandle, "amdsmi_get_gpu_virtualization_mode");
+	host_amdsmi_get_cpu_affinity_with_scope = (AMDSMI_GET_CPU_AFFINITY_WITH_SCOPE)LOAD_SYM(
+			amdSmiLibHandle, "amdsmi_get_cpu_affinity_with_scope");
+	host_amdsmi_topo_get_numa_node_number = (AMDSMI_TOPO_GET_NUMA_NODE_NUMBER)LOAD_SYM(
+			amdSmiLibHandle, "amdsmi_topo_get_numa_node_number");
 	host_amdsmi_get_afids_from_cper = (AMDSMI_GET_AFIDS_FROM_CPER)LOAD_SYM(
-										amdSmiLibHandle, "amdsmi_get_afids_from_cper");
+										  amdSmiLibHandle, "amdsmi_get_afids_from_cper");
 	host_amdsmi_reset_gpu = (AMDSMI_RESET_GPU)LOAD_SYM(amdSmiLibHandle, "amdsmi_reset_gpu");
 	int ret = host_amdsmi_init(AMDSMI_INIT_AMD_GPUS);
 	if (ret != AMDSMI_STATUS_SUCCESS) {

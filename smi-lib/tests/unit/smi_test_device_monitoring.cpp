@@ -160,7 +160,7 @@ protected:
 						       amdsmi_dpm_policy_t actual)
 	{
 		SMI_ASSERT_EQ(expect.num_supported, actual.num_supported);
-		SMI_ASSERT_EQ(expect.cur, actual.cur);
+		SMI_ASSERT_EQ(expect.cur, actual.current);
 		for (uint32_t i = 0; i < expect.num_supported; i++) {
 			SMI_ASSERT_STR_EQ(expect.policies[i].policy_description, actual.policies[i].policy_description)
 				<< " for i = " << i;
@@ -176,12 +176,11 @@ TEST_F(AmdsmiGpuMonitoring, InvalidParams)
 {
 	int ret;
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
-	uint32_t sensor_ind = 0;
 
 	ret = amdsmi_get_gpu_activity(MOCK_GPU_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-	ret = amdsmi_get_power_info(MOCK_GPU_HANDLE, sensor_ind, NULL);
+	ret = amdsmi_get_power_info(MOCK_GPU_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_is_gpu_power_management_enabled(MOCK_GPU_HANDLE, NULL);
@@ -235,7 +234,6 @@ TEST_F(AmdsmiGpuMonitoring, IoctlFailed)
 	amdsmi_gpu_cache_info_t cache_res;
 	amdsmi_pcie_info_t pcie_info;
 	amdsmi_dpm_policy_t dpm_policy_info;
-	uint32_t sensor_ind = 0;
 
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 
@@ -245,7 +243,7 @@ TEST_F(AmdsmiGpuMonitoring, IoctlFailed)
 	ret = amdsmi_get_gpu_activity(MOCK_GPU_HANDLE, &engine_res);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 
-	ret = amdsmi_get_power_info(MOCK_GPU_HANDLE, sensor_ind, &power_res);
+	ret = amdsmi_get_power_info(MOCK_GPU_HANDLE, &power_res);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 
 	ret = amdsmi_is_gpu_power_management_enabled(MOCK_GPU_HANDLE, &is_power_management_enabled);
@@ -305,7 +303,6 @@ TEST_F(AmdsmiGpuMonitoring, GetPowerMeasure)
 	amdsmi_power_info_t power_info;
 	smi_device_info_ex in_payload;
 	smi_gpu_performance_info mocked_resp = {};
-	uint32_t sensor_ind = 0;
 
 	mocked_resp.power.socket_power = 20;
 	mocked_resp.power.gfx_voltage = 800;
@@ -313,7 +310,7 @@ TEST_F(AmdsmiGpuMonitoring, GetPowerMeasure)
 	mocked_resp.power.mem_voltage = 62;
 
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
-	WhenCalling(std::bind(amdsmi_get_power_info, MOCK_GPU_HANDLE, sensor_ind, &power_info));
+	WhenCalling(std::bind(amdsmi_get_power_info, MOCK_GPU_HANDLE, &power_info));
 	ExpectCommand(SMI_CMD_CODE_GET_GPU_PERFORMANCE_INFO);
 	SaveInputPayloadIn(&in_payload);
 	PlantMockOutput(&mocked_resp);
@@ -784,7 +781,7 @@ TEST_F(AmdsmiGpuMonitoring, GetSocPstate)
 	ret = performCall();
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_TRUE(amdsmi::equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
-	ASSERT_TRUE(equal_dpm_policy(mocked_resp, dpm_policy_info));
+	ASSERT_TRUE(amdsmi::equal_dpm_policy(mocked_resp, dpm_policy_info));
 }
 
 TEST_F(AmdsmiGpuMonitoring, SetSocPstate)

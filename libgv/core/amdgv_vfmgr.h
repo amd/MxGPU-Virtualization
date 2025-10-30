@@ -27,6 +27,39 @@
 
 extern struct amdgv_init_func amdgv_vfmgr_func;
 
+#define AMDGV_V2_CRIT_REGION_OFFSET 		0
+#define AMDGV_V2_CRIT_REGION_SIZE_BYTES 	0x500000
+
+/* v2 layout sizes */
+#define AMDGV_INIT_DATA_HEADER_SIZE_KB_V2 	1
+#define AMDGV_DATAEXCHANGE_SIZE_KB_V2 		(AMD_SRIOV_MSG_PF2VF_SIZE_KB_V1 + AMD_SRIOV_MSG_VF2PF_SIZE_KB_V1)
+
+#define SET_VF_TABLE_SIZE_KB(adapt, idx_vf, id, size)			\
+	do {								\
+		adapt->array_vf[idx_vf].vf_table_sizes_kb[id] = size;	\
+	} while (0)
+
+#define GET_VF_TABLE_SIZE_KB(adapt, idx_vf, id) (adapt->array_vf[idx_vf].vf_table_sizes_kb[id])
+
+#define SET_VF_TABLE_OFFSET(adapt, idx_vf, id, offset)			\
+	do {								\
+		adapt->array_vf[idx_vf].vf_table_offsets[id] = offset;	\
+	} while (0)
+
+#define GET_VF_TABLE_OFFSET(adapt, idx_vf, id) (adapt->array_vf[idx_vf].vf_table_offsets[id])
+
+#define GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, tb_id) (adapt->array_vf[idx_vf].vf_table_offsets[AMD_SRIOV_MSG_##tb_id##_TABLE_ID])
+
+#define GET_VF_TABLE_SIZE_KB_BY_ID(adapt, idx_vf, tb_id) (adapt->array_vf[idx_vf].vf_table_sizes_kb[AMD_SRIOV_MSG_##tb_id##_TABLE_ID])
+
+#define GET_PF2VF_OFFSET(adapt, idx_vf) (GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, DATAEXCHANGE))
+#define GET_VF2PF_OFFSET(adapt, idx_vf) (GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, DATAEXCHANGE) + (((uint64_t)AMD_SRIOV_MSG_PF2VF_SIZE_KB_V1) << 10))
+
+/* Right now pf2vf and vf2pf size is the same in v1 and v2, change once they diverge */
+#define GET_PF2VF_SIZE_KB(adapt, idx_vf) AMD_SRIOV_MSG_PF2VF_SIZE_KB_V1
+#define GET_VF2PF_SIZE_KB(adapt, idx_vf) AMD_SRIOV_MSG_VF2PF_SIZE_KB_V1
+
+#define BP_IN_RANGE(err_addr, offset_start, offset_size) ((err_addr < (offset_start + offset_size)) && (offset_start < (err_addr + PAGE_SIZE)))
 
 enum amdgv_vfmgr_cper_event {
 	VFMGR_CPER_EVENT_GUEST_LOAD,
@@ -63,6 +96,14 @@ int amdgv_vfmgr_copy_and_calc_checksum_to_vf_fb(struct amdgv_adapter *adapt, uin
 int amdgv_vfmgr_copy_bp_entry_to_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf,
 				       uint64_t retired_page, uint32_t idx, uint32_t *checksum);
 
+bool amdgv_vfmgr_check_bp_in_crit_region(struct amdgv_adapter *adapt, uint32_t idx_vf,
+					 uint64_t err_addr);
+int amdgv_vfmgr_check_existing_bps_in_crit_region(struct amdgv_adapter *adapt, uint32_t idx_vf,
+	uint32_t *has_bps);
+int amdgv_vfmgr_init_crit_region(struct amdgv_adapter *adapt, uint32_t idx_vf);
+
+int amdgv_vfmgr_update_init_data_header(struct amdgv_adapter *adapt, uint32_t idx_vf);
+
 int amdgv_vfmgr_update_pf2vf_message(struct amdgv_adapter *adapt, uint32_t idx_vf);
 int amdgv_vfmgr_retrieve_vf2pf_message(struct amdgv_adapter *adapt, uint32_t idx_vf,
 					struct amd_sriov_msg_vf2pf_info *output);
@@ -87,7 +128,6 @@ int amdgv_vfmgr_init_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, bool mb
 int amdgv_msg_checksum(void *obj, uint32_t obj_size, uint32_t key, uint32_t chksum);
 
 void amdgv_vfmgr_import_pf_fb(struct amdgv_adapter *adapt);
-void amdgv_vfmgr_import_vfs_fb(struct amdgv_adapter *adapt);
 int amdgv_vfmgr_read_mmio(struct amdgv_adapter *adapt, uint32_t idx_vf,
     void *buffer, uint32_t offset, uint32_t length);
 int amdgv_vfmgr_write_mmio(struct amdgv_adapter *adapt, uint32_t idx_vf,
@@ -129,4 +169,5 @@ int amdgv_vfmgr_dump_ras_error_counts(struct amdgv_adapter *adapt, uint32_t idx_
 
 int amdgv_vfmgr_dump_cpers(struct amdgv_adapter *adapt, uint32_t idx_vf, uint64_t vf_rptr, bool *allow_again);
 int amdgv_vfmgr_cper_notify_event(struct amdgv_adapter *adapt, enum amdgv_vfmgr_cper_event event, uint32_t idx_vf);
+int amdgv_vfmgr_ras_vf_chk_criti_region(struct amdgv_adapter *adapt, uint32_t idx_vf, uint64_t addr);
 #endif

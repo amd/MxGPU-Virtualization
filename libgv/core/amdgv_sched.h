@@ -136,6 +136,9 @@ enum amdgv_sched_event_id {
 	AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA,
 	AMDGV_EVENT_VF_FB_COPY,
 	AMDGV_EVENT_QUERY_DIRTYBIT_DATA,
+	AMDGV_EVENT_SET_VF_MIGRATION_STATE,
+	AMDGV_EVENT_SCHED_VF_REQ_RAS_CHK_CRITI_REGION,
+	AMDGV_EVENT_SCHED_SET_VF_COND_AVAIL,
 	AMDGV_EVENT_INVALID_EVENT = 0xffffffff,
 };
 
@@ -316,6 +319,7 @@ union amdgv_sched_event_data {
 	struct {
 		uint64_t addr;
 		enum amdgv_migration_manifest_data_type type;
+		int *result;
 	} lm;
 	struct {
 		uint64_t fb_offset;
@@ -329,6 +333,13 @@ union amdgv_sched_event_data {
 		struct amdgv_query_dirty_bit_data data;
 		int *result;
 	} dirtybit_query_data;
+	struct {
+		enum amdgv_migration_vf_state state;
+		int *result;
+	} migration_state;
+	struct {
+		uint64_t addr;
+	} chk_criti;
 };
 
 enum amdgv_event_status {
@@ -425,6 +436,7 @@ struct amdgv_sched_vf_info {
 	uint64_t		  start_time_full_access;
 	uint64_t		  used_time_full_access;
 	bool fb_dirty;
+	bool is_cond_avail;
 };
 
 enum self_switch_status {
@@ -625,6 +637,8 @@ struct amdgv_sched {
 
 	/* Flag to enable parallel hw scheduler switching of logical scheduler */
 	bool enable_bulk_goto_state;
+	/* perf log status in runtime */
+	bool perf_log_enabled;
 
 	uint32_t num_world_switch;
 	uint32_t num_vf_per_gfx_sched;
@@ -673,6 +687,7 @@ int amdgv_sched_queue_suspend(struct amdgv_adapter *adapt);
 int amdgv_sched_queue_resume(struct amdgv_adapter *adapt);
 int amdgv_sched_queue_suspend_ex(struct amdgv_adapter *adapt, struct amdgv_lock_sched_opt opt);
 int amdgv_sched_queue_resume_ex(struct amdgv_adapter *adapt, struct amdgv_lock_sched_opt opt);
+int amdgv_sched_queue_set_vf_cond_avail(struct amdgv_adapter *adapt, uint32_t idx_vf);
 int amdgv_sched_queue_force_reset_gpu(struct amdgv_adapter *adapt);
 
 uint32_t amdgv_sched_get_idx_part_mask(struct amdgv_adapter *adapt, uint32_t idx_vf);
@@ -683,7 +698,7 @@ uint32_t amdgv_sched_get_world_switch_mask_by_sched_block(struct amdgv_adapter *
 uint32_t amdgv_sched_get_hw_sched_mask_by_vf(struct amdgv_adapter *adapt, uint32_t idx_vf);
 uint32_t amdgv_sched_get_hw_sched_mask_by_sched_block(struct amdgv_adapter *adapt, uint32_t idx_vf,
 							enum amdgv_sched_block sched_block);
-enum amdgv_sched_block amdgv_sched_get_world_switch_by_hw_sched_id(struct amdgv_adapter *adapt,
+int amdgv_sched_get_world_switch_by_hw_sched_id(struct amdgv_adapter *adapt,
 	uint32_t hw_sched_id, struct amdgv_sched_world_switch **world_switch);
 uint32_t amdgv_sched_get_world_switch(struct amdgv_adapter *adapt, uint32_t idx_part,
 	enum amdgv_sched_block sched_block, struct amdgv_sched_world_switch **world_switch);
@@ -724,6 +739,8 @@ bool amdgv_sched_is_state_ok(struct amdgv_adapter *adapt, uint32_t idx_vf);
 int amdgv_sched_update_time_slice(struct amdgv_adapter *adapt, enum amdgv_sched_block sched_block,
 				  uint32_t idx_vf);
 enum amdgv_sched_state amdgv_sched_get_vf_status(struct amdgv_adapter *adapt, uint32_t idx_vf);
+
+void amdgv_sched_notify_vf_unrecov_err(struct amdgv_adapter *adapt, uint32_t idx_vf);
 
 int amdgv_sched_queue_event(struct amdgv_adapter *adapt, uint32_t idx_vf,
 			    enum amdgv_sched_event_id event_id,
@@ -796,8 +813,9 @@ int amdgv_sched_part_mapping_init(struct amdgv_adapter *adapt);
 
 int amdgv_sched_get_hliquid_min_ts(struct amdgv_adapter *adapt);
 int amdgv_sched_set_hliquid_min_ts(struct amdgv_adapter *adapt, int hliquid_min_ts);
-int amdgv_sched_set_auto_sched_debug_log(struct amdgv_adapter *adapt, enum amdgv_auto_sched_log_op op, bool enable);
+int amdgv_sched_set_auto_sched_log_feature(struct amdgv_adapter *adapt, uint32_t hw_sched_id, enum amdgv_auto_sched_log_op op, bool enable);
 int amdgv_sched_read_perf_log_data(struct amdgv_adapter *adapt);
+int amdgv_sched_handle_req_gpu_init_data(struct amdgv_adapter *adapt, uint32_t idx_vf);
 #ifdef WS_RECORD
 void amdgv_sched_debug_dump_data_flush(struct amdgv_adapter *adapt);
 #endif
@@ -811,4 +829,7 @@ void amdgv_sched_set_unrecov_err(struct amdgv_adapter *adapt);
 void amdgv_sched_clear_unrecov_err(struct amdgv_adapter *adapt);
 bool amdgv_sched_is_unrecov_err(struct amdgv_adapter *adapt);
 void amdgv_sched_clear_dirty_vf_fb(struct amdgv_adapter *adapt, int vf_idx);
+int amdgv_sched_toggle_perflog(struct amdgv_adapter *adapt, bool enable, uint32_t hw_sched_id);
+
+int amdgv_sched_set_ws_log_op(struct amdgv_adapter *adapt, enum amdgv_auto_sched_log_op op, bool enable);
 #endif

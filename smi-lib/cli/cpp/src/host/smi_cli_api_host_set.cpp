@@ -47,6 +47,16 @@ typedef amdsmi_status_t (*AMDSMI_SET_SOC_PSTATE)(amdsmi_processor_handle,
 		uint32_t);
 typedef amdsmi_status_t (*AMDSMI_SET_POWER_CAP)(amdsmi_processor_handle, uint32_t,
 		uint64_t);
+typedef amdsmi_status_t (*AMDSMI_SET_XGMI_PLPD)(amdsmi_processor_handle,
+		uint32_t);
+
+typedef amdsmi_status_t (*AMDSMI_GET_XGMI_FB_SHARING_MODE_INFO)(amdsmi_processor_handle,
+		amdsmi_processor_handle,
+		amdsmi_xgmi_fb_sharing_mode_t, uint8_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_LINK_TOPOLOGY)(amdsmi_processor_handle,
+		amdsmi_processor_handle,
+		amdsmi_link_topology_t *);
+typedef amdsmi_status_t (*AMDSMI_SET_NUM_VF)(amdsmi_processor_handle, uint32_t);
 
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_PROCESSOR_HANDLES host_amdsmi_get_processor_handles;
@@ -56,6 +66,12 @@ extern AMDSMI_SET_ACCELERATOR_PARTITION host_amdsmi_set_gpu_accelerator_partitio
 extern AMDSMI_SET_MEMORY_PARTITION host_amdsmi_set_gpu_memory_partition_command;
 extern AMDSMI_SET_SOC_PSTATE host_amdsmi_set_soc_pstate;
 extern AMDSMI_SET_POWER_CAP host_amdsmi_set_power_cap;
+extern AMDSMI_SET_XGMI_PLPD host_amdsmi_set_xgmi_plpd;
+extern AMDSMI_GET_XGMI_FB_SHARING_MODE_INFO host_amdsmi_get_xgmi_fb_sharing_mode_info;
+extern AMDSMI_GET_LINK_TOPOLOGY host_amdsmi_get_link_topology;
+extern AMDSMI_SET_NUM_VF host_amdsmi_set_num_vf;
+
+
 
 int AmdSmiApiHost::amdsmi_set_xgmi_fb_sharing_mode_command(std::vector<uint64_t> bfd_list,
 		Arguments arg)
@@ -96,7 +112,9 @@ int AmdSmiApiHost::amdsmi_set_xgmi_fb_sharing_mode_command(std::vector<uint64_t>
 		throw SmiToolNotEnoughMemException();
 	}
 	ret = host_amdsmi_get_processor_handles(socket, &gpu_count, &processors[0]);
-
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		goto end;
+	}
 	if (arg.fb_sharing_mode == "CUSTOM") {
 		mode = AMDSMI_XGMI_FB_SHARING_MODE_CUSTOM;
 	} else if (arg.fb_sharing_mode == "MODE_1") {
@@ -114,21 +132,38 @@ int AmdSmiApiHost::amdsmi_set_xgmi_fb_sharing_mode_command(std::vector<uint64_t>
 	}
 
 	if (bfd_list.empty()) {
-		for (unsigned int j = 0; j < gpu_count; j++) {
-			ret = host_amdsmi_set_xgmi_fb_sharing_mode_info(processors[j], mode);
-			if (ret != AMDSMI_STATUS_SUCCESS) {
-				free(processor_list);
-				free(processors);
-				return ret;
+		uint8_t is_fb_sharing_enabled{0};
+		amdsmi_link_topology_t topology_info;
+		ret = host_amdsmi_set_xgmi_fb_sharing_mode_info(processors[0], mode);
+		if (ret != AMDSMI_STATUS_SUCCESS) {
+			goto end;
+		}
+		for (uint32_t i = 1; i < gpu_count; i++) {
+			for (uint32_t j = 0; j < gpu_count; j++) {
+				ret = host_amdsmi_get_xgmi_fb_sharing_mode_info(processors[i], processors[j], mode, &is_fb_sharing_enabled);
+				if (ret != AMDSMI_STATUS_SUCCESS) {
+						goto end;
+				}
+				ret = host_amdsmi_get_link_topology(processors[i], processors[j], &topology_info);
+				if (ret != AMDSMI_STATUS_SUCCESS) {
+						goto end;
+				}
+				if (is_fb_sharing_enabled != topology_info.fb_sharing) {
+					ret = host_amdsmi_set_xgmi_fb_sharing_mode_info(processors[i], mode);
+					if (ret != AMDSMI_STATUS_SUCCESS) {
+						goto end;
+					}
+					break;
+				}
 			}
 		}
 	} else {
 		ret = host_amdsmi_set_xgmi_fb_sharing_mode_v2(processor_list, i, mode);
 	}
 
+end:
 	free(processor_list);
 	free(processors);
-
 	return ret;
 }
 
@@ -210,7 +245,7 @@ int AmdSmiApiHost::amdsmi_set_soc_pstate_command(uint64_t processor_bdf, Argumen
 	} else if(arg.pstate_set == "3") {
 		mode = 3;
 	} else {
-		return INVALID_PARAM_VALUE;
+		throw SmiToolInvalidParameterValueException(arg.pstate_set);
 	}
 
 	ret = host_amdsmi_set_soc_pstate(processor, mode);
@@ -232,5 +267,51 @@ int AmdSmiApiHost::amdsmi_set_power_cap_command(uint64_t processor_bdf, Argument
 	}
 
 	ret = host_amdsmi_set_power_cap(processor, sensor_ind, arg.power_cap_set);
+	return ret;
+}
+
+int AmdSmiApiHost::amdsmi_set_plpd_command(uint64_t processor_bdf, Arguments arg)
+{
+	int ret, i = 0;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	uint32_t mode;
+
+	tmp_bdf.as_uint = processor_bdf;
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		return ret;
+	}
+
+	if (arg.plpd_set == "0") {
+		mode = 0;
+	} else if(arg.plpd_set == "1") {
+		mode = 1;
+	} else if(arg.plpd_set == "2") {
+		mode = 2;
+	} else {
+		throw SmiToolInvalidParameterValueException(arg.plpd_set);
+	}
+
+	ret = host_amdsmi_set_xgmi_plpd(processor, mode);
+
+	return ret;
+}
+
+int AmdSmiApiHost::amdsmi_set_num_vf_command(uint64_t processor_bdf, Arguments arg)
+{
+	int ret, i = 0;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	uint32_t num_vf = static_cast<uint32_t>(std::stoul(arg.num_vf));
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		return ret;
+	}
+
+	ret = host_amdsmi_set_num_vf(processor, num_vf);
+
 	return ret;
 }

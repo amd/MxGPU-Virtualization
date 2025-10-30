@@ -40,13 +40,6 @@ int AmdSmiXgmiCommand::xgmi_command_fb_sharing(std::string &formatted_string)
 	return ret;
 }
 
-int AmdSmiXgmiCommand::set_xgmi_command_fb_sharing(std::string &formatted_string)
-{
-	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_fb_sharing_xgmi_command(arg,
-			  formatted_string);
-	return ret;
-}
-
 int AmdSmiXgmiCommand::xgmi_command_all(std::string &formatted_string)
 {
 	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_all_xgmi_command(arg,
@@ -64,7 +57,17 @@ int AmdSmiXgmiCommand::metric_command_xgmi(std::string &formatted_string)
 	return ret;
 }
 
-int AmdSmiXgmiCommand::link_status_command_xgmi(std::string &formatted_string)
+int AmdSmiXgmiCommand::source_gpu_status_command_xgmi(std::string &formatted_string)
+{
+	int ret = PARAM_NOT_SUPPORTED_ON_PLATFORM;
+	if (AmdSmiPlatform::getInstance().is_host() && (AmdSmiPlatform::getInstance().is_mi300()
+			|| AmdSmiPlatform::getInstance().is_mi200())) {
+		ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_source_gpu_xgmi_status_command(arg, formatted_string);
+	}
+	return ret;
+}
+
+int AmdSmiXgmiCommand::xgmi_link_status_command(std::string &formatted_string)
 {
 	int ret = PARAM_NOT_SUPPORTED_ON_PLATFORM;
 	if (AmdSmiPlatform::getInstance().is_host() && (AmdSmiPlatform::getInstance().is_mi300()
@@ -74,23 +77,12 @@ int AmdSmiXgmiCommand::link_status_command_xgmi(std::string &formatted_string)
 	return ret;
 }
 
+
 void AmdSmiXgmiCommand::xgmi_command_human()
 {
 	int ret;
 	std::string formatted_string{};
 	std::string out{};
-
-	if ((std::find(arg.options.begin(), arg.options.end(), "set") != arg.options.end())) {
-		ret = set_xgmi_command_fb_sharing(formatted_string);
-		std::string param{"set xgmi"};
-		int error = handle_exceptions(ret, param, arg);
-		if (error == 0) {
-			out.append(formatted_string);
-			formatted_string.clear();
-		} else {
-			formatted_string.clear();
-		}
-	}
 
 	if ((std::find(arg.options.begin(), arg.options.end(), "caps") !=
 			arg.options.end()) ||
@@ -132,10 +124,10 @@ void AmdSmiXgmiCommand::xgmi_command_human()
 		formatted_string.clear();
 	}
 
-	if ((std::find(arg.options.begin(), arg.options.end(), "link-status") != arg.options.end()) ||
+	if ((std::find(arg.options.begin(), arg.options.end(), "source-status") != arg.options.end()) ||
 			arg.all_arguments) {
-		ret = link_status_command_xgmi(formatted_string);
-		std::string param{"link-status"};
+		ret = source_gpu_status_command_xgmi(formatted_string);
+		std::string param{"source-status"};
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {
 			out += formatted_string;
@@ -144,7 +136,17 @@ void AmdSmiXgmiCommand::xgmi_command_human()
 		formatted_string.clear();
 	}
 
-
+	if ((std::find(arg.options.begin(), arg.options.end(), "link-status") != arg.options.end()) ||
+			arg.all_arguments) {
+		ret = xgmi_link_status_command(formatted_string);
+		std::string param{"link-status"};
+		int error = handle_exceptions(ret, param, arg);
+		if (error == 0) {
+			out += formatted_string;
+			formatted_string.clear();
+		}
+		formatted_string.clear();
+	}
 
 	if (arg.is_file) {
 		write_to_file(arg.file_path, out);

@@ -37,6 +37,7 @@
 #define LIBGV_VF_VERSION              1
 
 #define AMDGV_FAILURE -1
+#define AMDGV_NOT_SUPPORTED -2
 
 #define AMDGV_INVALID_HANDLE NULL
 
@@ -97,9 +98,6 @@
 #define AMDGV_GPU_MEM_ROW_SIZE (1024 * 32)
 
 #define AMDGV_MAX_PSP_MB_ERROR_RECORD	10
-
-/* VF data exchange size in KB */
-#define AMDGV_VF_DATAEXCHANGE_SIZE 2
 
 #define EEPROM_BYTE_SIZE 0x100000
 
@@ -724,6 +722,12 @@ enum amdgv_live_migration_mode {
 	AMDGV_LIVE_MIGRATION_MODE_MAX
 };
 
+enum amdgv_migration_vf_state {
+	AMDGV_MIGRATION_VF_STATE_DEFAULT = 0,
+	AMDGV_MIGRATION_VF_STATE_PRE_COPY = 1,
+	AMDGV_MIGRATION_VF_STATE_STOP_COPY = 2,
+};
+
 enum amdgv_asymmetric_fb_mode {
 	AMDGV_ASYMMETRIC_FB_DISABLED = 0,
 	AMDGV_ASYMMETRIC_FB_ENABLED = 1,
@@ -1221,6 +1225,7 @@ enum amdgv_guard_type {
 	AMDGV_GUARD_EVENT_RAS_CPER_DUMP	    = 5,
 	AMDGV_GUARD_EVENT_RAS_BAD_PAGES	    = 6,
 	AMDGV_GUARD_EVENT_WGR               = 7,
+	AMDGV_GUARD_EVENT_RAS_CHK_CRITI     = 8,
 	AMDGV_GUARD_EVENT_MAX,
 
 	AMDGV_GUARD_ALL,
@@ -1354,6 +1359,7 @@ enum amdgv_smi_ras_block {
 	AMDGV_SMI_RAS_BLOCK__JPEG,
 	AMDGV_SMI_RAS_BLOCK__IH,
 	AMDGV_SMI_RAS_BLOCK__MPIO,
+	AMDGV_SMI_RAS_BLOCK__MMSCH,
 	AMDGV_SMI_NUM_BLOCK_MAX
 };
 
@@ -1467,8 +1473,6 @@ struct amdgv_config {
 		uint32_t max_waves_per_simd;
 		uint32_t wave_size;
 		uint32_t active_cu_count;
-		uint32_t major;
-		uint32_t minor;
 	} gfx;
 	struct {
 		uint8_t count[AMDGV_MAX_MM_ENGINE];
@@ -1619,6 +1623,7 @@ enum amdgv_migration_data_section {
 	AMDGV_MIGRATION_CONTENT_VF_HW_DYNAMIC_DATA = 2,
 	/* VF FB DATA */
 	AMDGV_MIGRATION_CONTENT_VF_FB_DATA = 3,
+	AMDGV_MIGRATION_CONTENT_VF_FB_BITMAP = 4,
 
 	AMDGV_MIGRATION_CONTENT_MAX
 };
@@ -2784,6 +2789,16 @@ int amdgv_control_dirtybit(amdgv_dev_t dev, bool enable);
  *
  */
 int amdgv_query_dirtybit_data(amdgv_dev_t dev, struct amdgv_query_dirty_bit_data *data);
+
+
+/*
+ * amdgv_set_vf_migration_state - update migration state for a particular vf
+ *
+ * @dev: 	amdgv device handle
+ * @idx_vf: vf index
+ * @state: migration state of the vf
+ */
+int amdgv_set_vf_migration_state(amdgv_dev_t dev, uint32_t idx_vf, enum amdgv_migration_vf_state state);
 
 /*
  * amdgv_vf_fb_copy - copy VF FB data to/from VF FB.

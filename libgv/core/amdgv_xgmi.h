@@ -162,6 +162,7 @@ void amdgv_xgmi_mark_bad_gpu_in_hive(struct amdgv_adapter *adapt);
 int amdgv_xgmi_flr_fb_sharing_vfs(struct amdgv_adapter *adapt,
 	uint32_t idx_vf, struct amdgv_hive_info *hive);
 bool amdgv_xgmi_all_nodes_fb_sharing(struct amdgv_adapter *adapt);
+bool amdgv_xgmi_node_fb_sharing_allowed(struct amdgv_adapter *adapt);
 int amdgv_xgmi_inject_error(struct amdgv_adapter *adapt,
 			    struct ta_ras_trigger_error_input *block_info);
 enum amdgv_xgmi_link_status amdgv_xgmi_get_link_status(struct amdgv_adapter *adapt,

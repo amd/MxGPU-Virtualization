@@ -206,6 +206,8 @@ int amdgv_reset_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 		adapt->sched.rlc_safe_mode(adapt, false);
 
 	adapt->array_vf[idx_vf].gpu_init_data_ready = false;
+	/* perf log is reset to disable state after flr */
+	adapt->sched.perf_log_enabled = false;
 
 	if (ret)
 		amdgv_put_error(idx_vf, AMDGV_ERROR_RESET_FLR_FAILED, idx_vf);

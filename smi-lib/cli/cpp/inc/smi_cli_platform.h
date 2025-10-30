@@ -32,7 +32,7 @@ private:
 	bool is_linux_{ false };
 	bool is_windows_{ false };
 	bool is_mi300_{ false };
-	bool is_nv32_ { false };
+	bool is_nv_ { false };
 	bool is_mi200_ { false };
 	/**
 	 * @brief Construct a new Amd Smi Helpers object
@@ -93,7 +93,7 @@ public:
 	 *
 	 * @return true if it is nv32 gpu
 	 */
-	bool is_nv32();
+	bool is_nv();
 	/**
 	 * @brief Check if it is mi200 gpu
 	 *

@@ -32,7 +32,20 @@
 #define AMDGV_SCHED_EXCLUSIVE_TIMEOUT_MS_1VF 3000
 #define AMDGV_SCHED_EXCLUSIVE_TIMEOUT_MS_COMMON 1500
 
+/* VF can transition from conditionally available to available under very limited circumstances */
 #define set_to_avail_vf(idx_vf) adapt->sched.array_vf[(idx_vf)].state = AMDGV_SCHED_AVAIL
+
+#define set_to_avail_vf_force(idx_vf)                                \
+	do {                                                        \
+		adapt->sched.array_vf[idx_vf].is_cond_avail = false; \
+		set_to_avail_vf(idx_vf);                            \
+	} while (0)
+
+#define set_to_cond_avail_vf(idx_vf)                                \
+	do {                                                        \
+		adapt->sched.array_vf[idx_vf].is_cond_avail = true; \
+		set_to_avail_vf(idx_vf);                            \
+	} while (0)
 
 #define set_to_active_vf(idx_vf) adapt->sched.array_vf[(idx_vf)].state = AMDGV_SCHED_ACTIVE
 
@@ -57,6 +70,8 @@
 		(adapt->sched.array_vf[(idx_vf)].in_full_access) : is_in_full_access())
 
 #define is_avail_vf(idx_vf) (adapt->sched.array_vf[(idx_vf)].state == AMDGV_SCHED_AVAIL)
+
+#define is_cond_avail_vf(idx_vf) (adapt->sched.array_vf[idx_vf].is_cond_avail == true)
 
 #define is_active_vf(idx_vf) (adapt->sched.array_vf[(idx_vf)].state == AMDGV_SCHED_ACTIVE)
 
@@ -137,7 +152,7 @@ void amdgv_sched_world_context_clear_state(struct amdgv_adapter *adapt, uint32_t
 					   struct amdgv_sched_world_switch *world_switch);
 void amdgv_sched_world_context_clear_state_rst(struct amdgv_adapter *adapt);
 int amdgv_sched_world_switch_config_auto_sched_mode(struct amdgv_adapter *adapt,
-					  struct amdgv_sched_world_switch *world_switch);
+					 uint32_t hw_sched_id);
 int amdgv_sched_manual_switch_clear_time_slice(struct amdgv_sched_world_switch *world_switch, uint32_t idx_vf);
 bool amdgv_sched_world_context_is_state_ok(struct amdgv_adapter *adapt,
 						struct amdgv_sched_world_switch *world_switch);

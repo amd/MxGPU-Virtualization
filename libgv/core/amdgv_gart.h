@@ -36,9 +36,6 @@
 #define AMDGV_PTE_READABLE	(1ULL << 5)
 #define AMDGV_PTE_WRITEABLE	(1ULL << 6)
 
-/* For GFX9 */
-#define AMDGV_PTE_MTYPE_GFX9(a)	((uint64_t)(a) << 57)
-
 typedef enum MTYPE {
 	MTYPE_NC = 0x00000000,
 	MTYPE_WC = 0x00000001,
@@ -48,7 +45,7 @@ typedef enum MTYPE {
 } MTYPE;
 
 void amdgv_gart_init_pdb0(struct amdgv_adapter *adapt);
-void amdgpu_gart_invalidate_tlb(struct amdgv_adapter *adapt);
+void amdgv_gart_invalidate_tlb(struct amdgv_adapter *adapt);
 void amdgv_gart_map(struct amdgv_adapter *adapt, uint64_t offset, int pages,
 		    uint64_t dma_addr);
 

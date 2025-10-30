@@ -926,7 +926,7 @@ int AMDGV_API amdgv_set_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 				adapt->flags &= ~AMDGV_FLAG_DEBUG_DUMP_ENABLE;
 			}
 			if (!ret)
-				ret = amdgv_sched_set_auto_sched_debug_log(adapt, AMDGV_AUTO_SCHED_DEBUG_DUMP, !!conf->flag_switch);
+				ret = amdgv_sched_set_ws_log_op(adapt, AMDGV_AUTO_SCHED_DEBUG_DUMP, !!conf->flag_switch);
 		}
 
 		break;
@@ -1070,7 +1070,7 @@ int AMDGV_API amdgv_set_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 				ret = AMDGV_FAILURE;
 		}
 		if (!ret)
-			ret = amdgv_sched_set_auto_sched_debug_log(adapt, AMDGV_AUTO_SCHED_PERF_LOG, !!conf->flag_switch);
+			ret = amdgv_sched_set_ws_log_op(adapt, AMDGV_AUTO_SCHED_PERF_LOG, !!conf->flag_switch);
 		break;
 
 	case AMDGV_CONF_DEBUG_DUMP_FLAG:
@@ -1093,7 +1093,7 @@ int AMDGV_API amdgv_set_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 				ret = AMDGV_FAILURE;
 		}
 		if (!ret)
-			ret = amdgv_sched_set_auto_sched_debug_log(adapt, AMDGV_AUTO_SCHED_DEBUG_DUMP, !!conf->flag_switch);
+			ret = amdgv_sched_set_ws_log_op(adapt, AMDGV_AUTO_SCHED_DEBUG_DUMP, !!conf->flag_switch);
 		break;
 	case AMDGV_CONF_ASYMMETRIC_TIMESLICE_FLAG:
 		if (conf->asymmetric.reset) {
@@ -1358,6 +1358,12 @@ int AMDGV_API amdgv_get_vf_info(amdgv_dev_t dev, uint32_t idx_vf, enum amdgv_vf_
 		for_each_id(hw_sched_id, amdgv_sched_get_hw_sched_mask_by_vf(adapt, idx_vf)) {
 			if (adapt->gpuiov.ctrl_blocks[hw_sched_id].sched_block ==
 			    AMDGV_SCHED_BLOCK_GFX) {
+				/* hw scheduler perf log flush */
+				if (adapt->gpuiov.ctrl_blocks[hw_sched_id].sched_mode <= AMDGV_SCHED_MAX_HW_SCHED_MODE &&
+					 adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state == AMDGV_ENABLE_AUTO_HW_SWITCH) {
+					amdgv_sched_toggle_perflog(adapt, false, hw_sched_id);
+					amdgv_sched_toggle_perflog(adapt, true, hw_sched_id);
+				}
 				oss_memcpy(&(info->time_log),
 					   &(adapt->array_vf[idx_vf].time_log[hw_sched_id]),
 					   sizeof(struct amdgv_time_log));
@@ -1435,13 +1441,13 @@ int AMDGV_API amdgv_get_fb_regions_info(amdgv_dev_t dev, uint32_t idx_vf,
 		info->tmr.size = amdgv_memmgr_get_size(tmr_mem->mem);
 	}
 
-	info->vf_dataexchange.size = KBYTES_TO_BYTES(AMDGV_VF_DATAEXCHANGE_SIZE);
+	info->vf_dataexchange.size = KBYTES_TO_BYTES(GET_VF_TABLE_SIZE_KB_BY_ID(adapt, idx_vf, DATAEXCHANGE));
 	info->vf_dataexchange.offset =
-		fb_offset + KBYTES_TO_BYTES(AMD_SRIOV_MSG_DATAEXCHANGE_OFFSET_KB);
-	info->vf_ipd.size = AMDGV_IP_DISCOVERY_SIZE;
-	info->vf_ipd.offset = fb_offset + fb_real_size - AMDGV_IP_DISCOVERY_OFFSET;
-	info->pf_dataexchange.size = KBYTES_TO_BYTES(AMD_SRIOV_MSG_DATAEXCHANGE_SIZE_KB);
-	info->pf_dataexchange.offset = KBYTES_TO_BYTES(AMD_SRIOV_MSG_DATAEXCHANGE_OFFSET_KB);
+		fb_offset + GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, DATAEXCHANGE);
+	info->vf_ipd.size = KBYTES_TO_BYTES(GET_VF_TABLE_SIZE_KB_BY_ID(adapt, idx_vf, IPD));
+	info->vf_ipd.offset = fb_offset + GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, IPD);
+	info->pf_dataexchange.size = KBYTES_TO_BYTES(AMD_SRIOV_MSG_DATAEXCHANGE_SIZE_KB_V1);
+	info->pf_dataexchange.offset = KBYTES_TO_BYTES(AMD_SRIOV_MSG_DATAEXCHANGE_OFFSET_KB_V1);
 	info->pf_ipd.size = AMDGV_IP_DISCOVERY_SIZE;
 	info->pf_ipd.offset = total_avail_fb - AMDGV_IP_DISCOVERY_OFFSET;
 
@@ -1494,6 +1500,7 @@ static int default_threshold[AMDGV_GUARD_EVENT_MAX] = {
 	[AMDGV_GUARD_EVENT_RAS_ERR_COUNT] = AMDGV_DEFAULT_RAS_TELEMETRY_THRESHOLD,
 	[AMDGV_GUARD_EVENT_RAS_CPER_DUMP] = AMDGV_DEFAULT_RAS_TELEMETRY_THRESHOLD,
 	[AMDGV_GUARD_EVENT_RAS_BAD_PAGES] = AMDGV_DEFAULT_RAS_TELEMETRY_THRESHOLD,
+	[AMDGV_GUARD_EVENT_RAS_CHK_CRITI] = AMDGV_DEFAULT_RAS_TELEMETRY_THRESHOLD,
 };
 
 static int default_interval[AMDGV_GUARD_EVENT_MAX] = {
@@ -1505,6 +1512,7 @@ static int default_interval[AMDGV_GUARD_EVENT_MAX] = {
 	[AMDGV_GUARD_EVENT_RAS_ERR_COUNT] = AMDGV_DEFAULT_RAS_TELEMETRY_INTERVAL,
 	[AMDGV_GUARD_EVENT_RAS_CPER_DUMP] = AMDGV_DEFAULT_RAS_TELEMETRY_INTERVAL,
 	[AMDGV_GUARD_EVENT_RAS_BAD_PAGES] = AMDGV_DEFAULT_RAS_TELEMETRY_INTERVAL,
+	[AMDGV_GUARD_EVENT_RAS_CHK_CRITI] = AMDGV_DEFAULT_RAS_TELEMETRY_INTERVAL,
 };
 
 int amdgv_reset_guard_config(amdgv_dev_t dev, uint32_t idx_vf)
@@ -2296,13 +2304,15 @@ int amdgv_get_pf2vf_info(amdgv_dev_t dev, uint32_t idx_vf,
 {
 	struct amdgv_adapter *adapt;
 	int ret;
-	uint64_t msg_offset = KBYTES_TO_BYTES(AMD_SRIOV_MSG_PF2VF_OFFSET_KB);
+	uint64_t msg_offset;
 	uint32_t size = sizeof(struct amd_sriov_msg_pf2vf_info);
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
 	if (AMDGV_IS_IDX_INVALID(idx_vf))
 		return AMDGV_FAILURE;
+
+	msg_offset = GET_PF2VF_OFFSET(adapt, idx_vf);
 
 	ret = amdgv_vfmgr_copy_from_vf_fb(adapt, idx_vf, msg_offset, pf2vf_info, size);
 	if (ret)
@@ -2337,13 +2347,13 @@ void amdgv_dump_sriov_msg(amdgv_dev_t dev, uint32_t idx_vf)
 	}
 
 	if (amdgv_vfmgr_copy_from_vf_fb(adapt, idx_vf,
-					KBYTES_TO_BYTES(AMD_SRIOV_MSG_PF2VF_OFFSET_KB),
+					GET_PF2VF_OFFSET(adapt, idx_vf),
 					pf2vf_info, sizeof(struct amd_sriov_msg_pf2vf_info))) {
 		AMDGV_PRINT("Failed to copy from VF FB pf2vf\n");
 	}
 
 	if (amdgv_vfmgr_copy_from_vf_fb(adapt, idx_vf,
-					KBYTES_TO_BYTES(AMD_SRIOV_MSG_VF2PF_OFFSET_KB),
+					GET_VF2PF_OFFSET(adapt, idx_vf),
 					vf2pf_info, sizeof(struct amd_sriov_msg_vf2pf_info))) {
 		AMDGV_PRINT("Failed to copy from VF FB vf2pf\n");
 	}
@@ -2553,6 +2563,31 @@ int amdgv_migration_get_dirty_page_size(amdgv_dev_t dev, uint32_t *dirty_page_si
 	oss_mutex_lock(adapt->api_lock);
 	ret = amdgv_dirtybit_get_dirty_page_size(adapt, dirty_page_size);
 	oss_mutex_unlock(adapt->api_lock);
+
+	return ret;
+}
+
+int amdgv_set_vf_migration_state(amdgv_dev_t dev, uint32_t idx_vf, enum amdgv_migration_vf_state state)
+{
+	struct amdgv_adapter *adapt;
+	union amdgv_sched_event_data data;
+	int result = 0;
+	int ret = 0;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	data.migration_state.state = state;
+	data.migration_state.result = &result;
+
+	oss_mutex_lock(adapt->api_lock);
+	ret = amdgv_sched_queue_event_and_wait_ex(adapt, idx_vf,
+					  AMDGV_EVENT_SET_VF_MIGRATION_STATE,
+					  AMDGV_SCHED_BLOCK_ALL, data);
+
+	oss_mutex_unlock(adapt->api_lock);
+
+	if (ret == 0)
+		ret = result;
 
 	return ret;
 }
@@ -2780,7 +2815,7 @@ int amdgv_get_migration_ctx(amdgv_dev_t dev, uint32_t idx_vf, struct amdgv_migra
 		switch (adapt->live_migration.context_version) {
 		case AMDGV_MIGRATION_CONTEXT_VERSION_V2:
 			ctx->gpu.nps_mode = adapt->mcp.memory_partition_mode;
-			ctx->gpu.xgmi_state = adapt->psp.xgmi_context.xgmi_initialized;
+			ctx->gpu.xgmi_state = amdgv_xgmi_node_fb_sharing_allowed(adapt);
 			ctx->gpu.cu_num = adapt->config.gfx.active_cu_count;
 			ctx->gpu.num_vf = adapt->num_vf;
 			ctx->gpu.gpu_ordinate = adapt->xgmi.phy_node_id;
@@ -2849,7 +2884,8 @@ static int amdgv_migration_transfer_manifest_data_event(amdgv_dev_t dev, uint32_
 				enum amdgv_migration_manifest_data_type type)
 {
 	struct amdgv_adapter *adapt;
-	union amdgv_sched_event_data data;
+	union amdgv_sched_event_data data = {0};
+	int result = 0;
 	int ret = 0;
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
@@ -2858,7 +2894,7 @@ static int amdgv_migration_transfer_manifest_data_event(amdgv_dev_t dev, uint32_
 
 	data.lm.type = type;
 	data.lm.addr = (uint64_t)buf;
-	adapt->live_migration.migration_status = 0;
+	data.lm.result = &result;
 	ret = amdgv_sched_queue_event_and_wait_ex(adapt, idx_vf,
 					AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA,
 					AMDGV_SCHED_BLOCK_ALL, data);
@@ -2867,8 +2903,8 @@ static int amdgv_migration_transfer_manifest_data_event(amdgv_dev_t dev, uint32_
 
 	if (ret)
 		AMDGV_ERROR("Queue Migration transfer manifest data event failed .\n");
-	else if (adapt->live_migration.migration_status)
-		ret = adapt->live_migration.migration_status;
+	else
+		ret = result;
 
 	return ret;
 }

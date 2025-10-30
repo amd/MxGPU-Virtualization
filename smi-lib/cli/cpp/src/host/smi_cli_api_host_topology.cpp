@@ -265,48 +265,11 @@ int AmdSmiApiHost::amdsmi_get_link_type_topology_command(Arguments arg,
 		for (j = 0; j < gpu_count; j++) {
 			std::string  link_type_string;
 			format_link_type(topology[i][j].link_type, link_type_string);
+			if (i == j) {
+				link_type_string = "SELF";
+			}
 			out.append(string_format("%-13s",
 									 link_type_string.c_str()));
-		}
-		out.append("\n");
-	}
-	out.append("\n");
-
-	return AMDSMI_STATUS_SUCCESS;
-}
-
-int AmdSmiApiHost::amdsmi_get_link_status_topology_command(Arguments arg,
-		std::vector<std::string> bdf_vector, std::string& out)
-{
-	unsigned int i;
-	unsigned int j;
-	unsigned int gpu_count;
-
-	amdsmi_get_gpu_count(gpu_count);
-
-	out.append(topologyLinkStatusTemplate);
-	out.append(string_format("%-13s", " "));
-
-	for (i = 0; i < gpu_count; i++) {
-		out.append(string_format("%-13s",
-								 bdf_vector[i].c_str()));
-	}
-	out.append("\n");
-	for (i = 0; i < arg.devices.size(); i++) {
-		int gpu_index = arg.devices[i]->get_gpu_index();
-		out.append(string_format("%-13s",
-								 bdf_vector[gpu_index].c_str()));
-
-		for (j = 0; j < gpu_count; j++) {
-			std::string link_status_string;
-			if(gpu_index == j) {
-				link_status_string = "N/A";
-			} else {
-				format_link_status(topology[i][j].link_status, false, link_status_string);
-			}
-
-			out.append(string_format("%-13s",
-									 link_status_string.c_str()));
 		}
 		out.append("\n");
 	}
@@ -341,7 +304,7 @@ int AmdSmiApiHost::amdsmi_get_coherent_p2p_capability_command(Arguments arg,
 		for (j = 0; j < gpu_count; j++) {
 			std::string coherent_string;
 			if(gpu_index == j) {
-				coherent_string = "N/A";
+				coherent_string = "SELF";
 			} else {
 				 coherent_string = p2p_capability[i][j].is_iolink_coherent == 1 ? "C" : "NC";
 			}
@@ -382,7 +345,7 @@ int AmdSmiApiHost::amdsmi_get_atomics_p2p_capability_command(Arguments arg,
 		for (j = 0; j < gpu_count; j++) {
 			std::string atomics_string;
 			if(gpu_index == j) {
-				atomics_string = "N/A";
+				atomics_string = "SELF";
 			} else {
 				atomics_string = p2p_capability[i][j].is_iolink_atomics_64bit == 1 ? "64" : "";
 				if(p2p_capability[i][j].is_iolink_atomics_64bit == 1) {
@@ -428,7 +391,7 @@ int AmdSmiApiHost::amdsmi_get_dma_p2p_capability_command(Arguments arg,
 		for (j = 0; j < gpu_count; j++) {
 			std::string dma_string;
 			if(gpu_index == j) {
-				dma_string = "N/A";
+				dma_string = "SELF";
 			} else {
 				dma_string = p2p_capability[i][j].is_iolink_dma == 1 ? "True" : "False";
 			}
@@ -469,7 +432,7 @@ int AmdSmiApiHost::amdsmi_get_bi_directional_p2p_capability_command(Arguments ar
 		for (j = 0; j < gpu_count; j++) {
 			std::string bi_directional_string;
 			if(gpu_index == j) {
-				bi_directional_string = "N/A";
+				bi_directional_string = "SELF";
 			} else {
 				bi_directional_string = p2p_capability[i][j].is_iolink_bi_directional == 1 ? "True" : "False";
 			}
@@ -511,17 +474,6 @@ int AmdSmiApiHost::amdsmi_get_all_topology_command(Arguments arg,
 				link_topology["weight"] = topology[i][j].weight;
 			}
 
-			if (std::find(arg.options.begin(), arg.options.end(), "link-status") != arg.options.end() ||
-					arg.all_arguments) {
-				std::string link_status_string;
-				if(i  == j) {
-					link_status_string = "N/A";
-				} else {
-					format_link_status(topology[i][j].link_status, false, link_status_string);
-				}
-				link_topology["link_status"] =  link_status_string;
-			}
-
 			if (std::find(arg.options.begin(), arg.options.end(), "link-type") != arg.options.end() ||
 					arg.all_arguments) {
 				std::string  link_type_string;
@@ -541,7 +493,7 @@ int AmdSmiApiHost::amdsmi_get_all_topology_command(Arguments arg,
 					arg.all_arguments) {
 				std::string coherent_status_string;
 				if(i  == j) {
-					coherent_status_string = "N/A";
+					coherent_status_string = "SELF";
 				} else {
 					coherent_status_string = p2p_capability[i][j].is_iolink_coherent == 1 ? "C" : "NC";
 				}
@@ -553,7 +505,7 @@ int AmdSmiApiHost::amdsmi_get_all_topology_command(Arguments arg,
 
 				std::string atomics_string;
 				if(i == j) {
-					atomics_string = "N/A";
+					atomics_string = "SELF";
 				} else {
 					atomics_string = p2p_capability[i][j].is_iolink_atomics_64bit == 1 ? "64" : "";
 					if(p2p_capability[i][j].is_iolink_atomics_64bit == 1) {
@@ -569,7 +521,7 @@ int AmdSmiApiHost::amdsmi_get_all_topology_command(Arguments arg,
 					arg.all_arguments) {
 				std::string dma_status_string;
 				if(i  == j) {
-					dma_status_string = "N/A";
+					dma_status_string = "SELF";
 				} else {
 					dma_status_string = p2p_capability[i][j].is_iolink_dma == 1 ? "True" : "False";
 				}
@@ -580,7 +532,7 @@ int AmdSmiApiHost::amdsmi_get_all_topology_command(Arguments arg,
 					arg.all_arguments) {
 				std::string bi_dir_status_string;
 				if(i  == j) {
-					bi_dir_status_string = "N/A";
+					bi_dir_status_string = "SELF";
 				} else {
 					bi_dir_status_string = p2p_capability[i][j].is_iolink_bi_directional == 1 ? "True" : "False";
 				}

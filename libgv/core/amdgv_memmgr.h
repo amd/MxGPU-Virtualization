@@ -116,7 +116,6 @@ struct amdgv_memmgr_mem {
 	struct amdgv_list_head node;
 
 	enum amdgv_mem_id id;	/* id to track mem block user */
-	enum amdgv_map_op map_op; /* only valid for sys memmgr */
 };
 
 struct amdgv_memmgr {
@@ -135,6 +134,8 @@ struct amdgv_memmgr {
 
 	/* Allocation list */
 	struct amdgv_memmgr_mem *allocs;
+	struct amdgv_memmgr_mem *reserves;
+	int reserve_count;
 
 	/* Tracker for the amount of memory consumed by the heap */
 	uint64_t tom;
@@ -168,6 +169,7 @@ struct amdgv_gmc_funcs {
 	/* flush the vm tlb via mmio */
 	int (*flush_gpu_tlb)(struct amdgv_adapter *adapter, uint32_t vmid,
 						uint32_t vmhub, uint32_t flush_type);
+	uint64_t (*get_gart_map_flags)(struct amdgv_adapter *adapt);
 	/* flush the vm tlb via ring */
 	uint64_t (*emit_flush_gpu_tlb)(struct amdgv_ring *ring, unsigned vmid,
 								uint64_t pd_addr);
@@ -197,6 +199,14 @@ struct amdgv_memmgr_mem *amdgv_memmgr_alloc_align_at(struct amdgv_memmgr *memmgr
 						     enum amdgv_mem_id id);
 int amdgv_memmgr_fill_reserved_bad_pages_all(struct amdgv_adapter *adapt,
 					     struct amdgv_memmgr_mem **bps_mem);
+struct amdgv_memmgr_mem *amdgv_memmgr_find_mem_at_offset(struct amdgv_memmgr *memmgr,
+							  uint64_t offset,
+							  uint64_t size);
+struct amdgv_memmgr_mem *amdgv_memmgr_alloc_and_replace(struct amdgv_adapter *adapt,
+					     struct amdgv_memmgr *memmgr,
+						 struct amdgv_memmgr_mem *mem_old,
+						 enum amdgv_mem_id replace_type);
+
 int amdgv_memmgr_export_mem_allocs_all(struct amdgv_adapter *adapt,
 				       struct amdgv_live_info_memmgr_mem *mem_allocs,
 				       uint32_t *mem_allocs_count);
@@ -204,6 +214,7 @@ int amdgv_memmgr_import_mem_allocs_all(struct amdgv_adapter *adapt,
 				       struct amdgv_live_info_memmgr_mem *mem_nodes,
 				       uint32_t mem_allocs_count);
 /* Free a memory reservation */
+int amdgv_memmgr_free_by_id(struct amdgv_memmgr *memmgr, enum amdgv_mem_id id);
 int amdgv_memmgr_free(struct amdgv_memmgr_mem *mem);
 /* Returns the current Top of Memory, that is the used size of the manager */
 int amdgv_memmgr_get_tom(struct amdgv_memmgr *memmgr, uint64_t *tom);
@@ -237,4 +248,8 @@ enum amdgv_live_info_status amdgv_memmgr_import_live_data(struct amdgv_adapter *
 void amdgv_gmc_flush_gpu_tlb(struct amdgv_adapter *adapt, uint32_t vmid,
 					uint32_t vmhub, uint32_t flush_type);
 int amdgv_map_sys_mem_allocs(struct amdgv_memmgr *memmgr, enum amdgv_map_op map_op);
+
+int amdgv_memmgr_assign_reserved_region(struct amdgv_memmgr_mem *reserved);
+int amdgv_memmgr_alloc_deferred_region(struct amdgv_memmgr *memmgr);
+
 #endif

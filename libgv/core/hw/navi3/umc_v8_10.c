@@ -302,7 +302,7 @@ static void umc_v8_10_query_error_address(struct amdgv_adapter *adapt,
 		err_rec->cu = 0;
 		err_rec->mem_channel = eccinfo_table_idx;
 		err_rec->mcumc_id = umc_inst;
-		err_rec->ts = amdgv_utc_to_eeprom_format(adapt, oss_get_utc_time_stamp());
+		err_rec->ts = amdgv_ras_eeprom_utc_to_eeprom_format(adapt, oss_get_utc_time_stamp());
 		err_data->err_addr_cnt++;
 	}
 }
@@ -362,7 +362,7 @@ static void umc_v8_10_hw_query_error_address(struct amdgv_adapter *adapt,
 		err_rec->cu = 0;
 		err_rec->mem_channel = eccinfo_table_idx;
 		err_rec->mcumc_id = umc_inst;
-		err_rec->ts = amdgv_utc_to_eeprom_format(adapt, oss_get_utc_time_stamp());
+		err_rec->ts = amdgv_ras_eeprom_utc_to_eeprom_format(adapt, oss_get_utc_time_stamp());
 		err_data->err_addr_cnt++;
 
 		WREG64_PCIE((mc_umc_status_addr + umc_reg_offset), 0x0ULL);
@@ -518,8 +518,8 @@ static int umc_v8_10_get_ras_vf_safe_range(struct amdgv_adapter *adapt,
 	uint64_t fb_offset = 0;
 	uint64_t fb_size   = 0;
 
-	uint64_t reserved_offset = KBYTES_TO_BYTES(AMD_SRIOV_MSG_DATAEXCHANGE_OFFSET_KB + AMD_SRIOV_MSG_DATAEXCHANGE_SIZE_KB);
-	uint64_t tmr_offset      = KBYTES_TO_BYTES(AMD_SRIOV_MSG_DATAEXCHANGE_OFFSET_KB);
+	uint64_t reserved_offset = KBYTES_TO_BYTES(AMD_SRIOV_MSG_DATAEXCHANGE_OFFSET_KB_V1 + AMD_SRIOV_MSG_DATAEXCHANGE_SIZE_KB_V1);
+	uint64_t tmr_offset      = KBYTES_TO_BYTES(AMD_SRIOV_MSG_DATAEXCHANGE_OFFSET_KB_V1);
 	uint64_t tmr_size        = MBYTES_TO_BYTES(adapt->tmr_size);
 
 	if (adapt->ffbm.enabled) {

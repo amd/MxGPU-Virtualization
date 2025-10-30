@@ -57,12 +57,6 @@ int AmdSmiTopologyCommand::topology_command_link_type(std::string &formatted_str
 			  bdf_vector, formatted_string);
 	return ret;
 }
-int AmdSmiTopologyCommand::topology_command_link_status(std::string &formatted_string)
-{
-	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_link_status_topology_command(
-				  arg, bdf_vector, formatted_string);
-	return ret;
-}
 
 int AmdSmiTopologyCommand::p2p_capability_command_coherent(std::string &formatted_string)
 {
@@ -146,18 +140,6 @@ void AmdSmiTopologyCommand::topology_command_human()
 			arg.all_arguments) {
 		ret = topology_command_link_type(formatted_string);
 		std::string param{"link-type"};
-		int error = handle_exceptions(ret, param, arg);
-		if (error == 0) {
-			out += formatted_string;
-		}
-		formatted_string.clear();
-	}
-
-	if ((std::find(arg.options.begin(), arg.options.end(), "link-status") !=
-			arg.options.end()) ||
-			arg.all_arguments) {
-		ret = topology_command_link_status(formatted_string);
-		std::string param{"link-status"};
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {
 			out += formatted_string;

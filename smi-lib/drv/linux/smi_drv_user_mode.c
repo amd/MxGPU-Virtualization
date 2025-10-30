@@ -307,6 +307,12 @@ static int gim_get_partition(struct smi_profile_configs *profile_configs,
 	return SMI_STATUS_NOT_SUPPORTED;
 }
 
+static int gim_get_partition_global(struct smi_profile_configs_global *profile_configs_global,
+				struct amdgv_gpumon_accelerator_partition_profile_config *caps)
+{
+	return SMI_STATUS_NOT_SUPPORTED;
+}
+
 static int gim_get_metric_table(struct smi_metrics_table *metrics_table, uint16_t size,
 				   struct amdgv_gpumon_metrics_ext *gpumon_metrics_table)
 {
@@ -349,6 +355,7 @@ struct smi_shim_interface gim_smi_interfaces = {
 	.get_metric_table = gim_get_metric_table,
 	.get_eeprom_table = gim_get_eeprom_table,
 	.get_partition = gim_get_partition,
+	.get_partition_global = gim_get_partition_global,
 	.get_cper_data = gim_get_cper_data,
 
 	.create_event = gim_create_event,

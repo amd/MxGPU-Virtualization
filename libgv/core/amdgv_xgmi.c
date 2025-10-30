@@ -585,6 +585,31 @@ bool amdgv_xgmi_all_nodes_fb_sharing(struct amdgv_adapter *adapt)
 
 	return true;
 }
+
+bool amdgv_xgmi_node_fb_sharing_allowed(struct amdgv_adapter *adapt)
+{
+	struct amdgv_hive_info *hive;
+	struct amdgv_adapter *tmp_adapt;
+
+	hive = amdgv_get_xgmi_hive(adapt);
+	if (!hive)
+		return false;
+
+	amdgv_list_for_each_entry(tmp_adapt, &hive->adapt_list,
+				  struct amdgv_adapter, xgmi.head) {
+		if (tmp_adapt == adapt)
+			continue;
+
+		if (amdgv_xgmi_is_fb_sharing_allowed(adapt,
+					adapt->xgmi.phy_node_id,
+					tmp_adapt->xgmi.phy_node_id,
+					adapt->xgmi.fb_sharing_mode))
+			return true;
+	}
+
+	return false;
+}
+
 int amdgv_xgmi_inject_error(struct amdgv_adapter *adapt,
 			    struct ta_ras_trigger_error_input *block_info)
 {

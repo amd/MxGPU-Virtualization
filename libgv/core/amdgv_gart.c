@@ -57,7 +57,7 @@ static int amdgv_gart_set_pte_pde(struct amdgv_adapter *adapt, void *cpu_pt_addr
  * Invalidate gart TLB which can be use as a way to flush gart changes
  *
  */
-void amdgpu_gart_invalidate_tlb(struct amdgv_adapter *adapt)
+void amdgv_gart_invalidate_tlb(struct amdgv_adapter *adapt)
 {
 	int i;
 
@@ -78,18 +78,13 @@ void amdgpu_gart_invalidate_tlb(struct amdgv_adapter *adapt)
 void amdgv_gart_map(struct amdgv_adapter *adapt, uint64_t offset, int pages,
 		    uint64_t dma_addr)
 {
-	uint64_t flags;
+	uint64_t flags = 0;
 	unsigned t;
 	int i;
 	void *ptb_cpu_addr = amdgv_memmgr_get_cpu_addr(adapt->ptb_mem);
 
-	flags = AMDGV_PTE_MTYPE_GFX9(MTYPE_UC);
-	flags |= AMDGV_PTE_EXECUTABLE;
-	flags |= AMDGV_PTE_VALID;
-	flags |= AMDGV_PTE_READABLE;
-	flags |= AMDGV_PTE_WRITEABLE;
-	flags |= AMDGV_PTE_SNOOPED;
-	flags |= AMDGV_PTE_SYSTEM;
+	if (adapt->gmc.funcs && adapt->gmc.funcs->get_gart_map_flags)
+		flags = adapt->gmc.funcs->get_gart_map_flags(adapt);
 
 	t = offset >> AMDGV_GPU_PAGE_SHIFT;
 
@@ -97,7 +92,9 @@ void amdgv_gart_map(struct amdgv_adapter *adapt, uint64_t offset, int pages,
 		AMDGV_DEBUG("GART address: 0x%llx DMA address: 0x%llx\n", (offset + (i << AMDGV_GPU_PAGE_SHIFT)), dma_addr + (i << AMDGV_GPU_PAGE_SHIFT));
 		amdgv_gart_set_pte_pde(adapt, ptb_cpu_addr, t + i, dma_addr + (i << AMDGV_GPU_PAGE_SHIFT), flags);
 	}
-	amdgpu_gart_invalidate_tlb(adapt);
+
+	if (!in_whole_gpu_reset())
+		amdgv_gart_invalidate_tlb(adapt);
 }
 
 void amdgv_gart_init_pdb0(struct amdgv_adapter *adapt)

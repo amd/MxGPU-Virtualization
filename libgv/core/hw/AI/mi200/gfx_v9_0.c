@@ -1278,7 +1278,7 @@ static void gfx_v9_0_ring_set_wptr_compute(struct amdgv_ring *ring)
 		*((volatile uint64_t *)(ring->wptr_cpu_addr)) = ring->wptr;
 		WDOORBELL32(ring->doorbell_index, ring->wptr);
 	} else {
-		//BUG(); /* only DOORBELL method supported on gfx9 now */
+		/* only DOORBELL method supported on gfx9 now */
 	}
 }
 

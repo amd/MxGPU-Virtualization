@@ -34,6 +34,7 @@
 #include "navi32_reset.h"
 #include "navi32_powerplay.h"
 #include "navi32_nbio.h"
+#include "mmhub_v3_0.h"
 
 #include <navi3/MMHUB/mmhub_3_0_0_offset.h>
 #include <navi3/MMHUB/mmhub_3_0_0_sh_mask.h>
@@ -211,172 +212,6 @@ static void navi32_program_asic_golden_settings(struct amdgv_adapter *adapt)
 	tmp = REG_SET_FIELD(tmp, HDP_MISC_CNTL, FED_ENABLE, 1);
 	tmp = REG_SET_FIELD(tmp, HDP_MISC_CNTL, ATOMIC_FED_ENABLE, 1);
 	WREG32(SOC15_REG_OFFSET(HDP, 0, regHDP_MISC_CNTL), tmp);
-}
-
-static void navi32_enable_mmhub_gart(struct amdgv_adapter *adapt)
-{
-	uint32_t tmp;
-	uint32_t crash_on_fault = 0;
-
-	uint32_t hdp_nonsurface_base_lo;
-	uint32_t hdp_nonsurface_base_hi;
-
-	/* Program apertures */
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMMC_VM_AGP_BASE),
-	       adapt->sys_mem_info.bus_addr >> 24);
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMMC_VM_AGP_BOT), adapt->mc_agp_loc_addr >> 24);
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMMC_VM_AGP_TOP), adapt->mc_agp_top_addr >> 24);
-
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMMC_VM_SYSTEM_APERTURE_LOW_ADDR),
-	       adapt->mc_sys_loc_addr >> 18);
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMMC_VM_SYSTEM_APERTURE_HIGH_ADDR),
-	       adapt->mc_sys_top_addr >> 18);
-
-	/* config context0 to trap all kinds of page fault */
-	tmp = RREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_CONTEXT0_CNTL));
-	tmp = REG_SET_FIELD(tmp, MMVM_CONTEXT0_CNTL, ENABLE_CONTEXT, 1);
-	tmp = REG_SET_FIELD(tmp, MMVM_CONTEXT0_CNTL, PAGE_TABLE_DEPTH, 0);
-	tmp = REG_SET_FIELD(tmp, MMVM_CONTEXT0_CNTL, RETRY_PERMISSION_OR_INVALID_PAGE_FAULT,
-			    0);
-	tmp = REG_SET_FIELD(tmp, MMVM_CONTEXT0_CNTL, RANGE_PROTECTION_FAULT_ENABLE_INTERRUPT,
-			    1);
-	tmp = REG_SET_FIELD(tmp, MMVM_CONTEXT0_CNTL,
-			    DUMMY_PAGE_PROTECTION_FAULT_ENABLE_INTERRUPT, 1);
-	tmp = REG_SET_FIELD(tmp, MMVM_CONTEXT0_CNTL, PDE0_PROTECTION_FAULT_ENABLE_INTERRUPT,
-			    1);
-	tmp = REG_SET_FIELD(tmp, MMVM_CONTEXT0_CNTL, VALID_PROTECTION_FAULT_ENABLE_INTERRUPT,
-			    1);
-	tmp = REG_SET_FIELD(tmp, MMVM_CONTEXT0_CNTL, READ_PROTECTION_FAULT_ENABLE_INTERRUPT,
-			    1);
-	tmp = REG_SET_FIELD(tmp, MMVM_CONTEXT0_CNTL, WRITE_PROTECTION_FAULT_ENABLE_INTERRUPT,
-			    1);
-	tmp = REG_SET_FIELD(tmp, MMVM_CONTEXT0_CNTL, EXECUTE_PROTECTION_FAULT_ENABLE_INTERRUPT,
-			    1);
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_CONTEXT0_CNTL), tmp);
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32), ~0);
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32), ~0);
-	/* set GART logic space range from ~0 to 0
-	 * thus force all GART range page fault
-	 */
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_LO32), ~0);
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_HI32), ~0);
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32), 0);
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32), 0);
-
-	/* Setup TLB control */
-	tmp = RREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMMC_VM_MX_L1_TLB_CNTL));
-	tmp = REG_SET_FIELD(tmp, MMMC_VM_MX_L1_TLB_CNTL, ENABLE_L1_TLB, 1);
-	tmp = REG_SET_FIELD(tmp, MMMC_VM_MX_L1_TLB_CNTL, SYSTEM_ACCESS_MODE, 3);
-	tmp = REG_SET_FIELD(tmp, MMMC_VM_MX_L1_TLB_CNTL, ENABLE_ADVANCED_DRIVER_MODEL, 1);
-	tmp = REG_SET_FIELD(tmp, MMMC_VM_MX_L1_TLB_CNTL, SYSTEM_APERTURE_UNMAPPED_ACCESS, 0);
-	tmp = REG_SET_FIELD(tmp, MMMC_VM_MX_L1_TLB_CNTL, ECO_BITS, 0);
-	tmp = REG_SET_FIELD(tmp, MMMC_VM_MX_L1_TLB_CNTL, MTYPE, 3); /* XXX for emulation. */
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMMC_VM_MX_L1_TLB_CNTL), tmp);
-
-	/* Set MMMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR to HDP_NONSURFACE_BASE(FB start) */
-	hdp_nonsurface_base_lo = RREG32(SOC15_REG_OFFSET(HDP, 0, regHDP_NONSURFACE_BASE));
-	hdp_nonsurface_base_hi = RREG32(SOC15_REG_OFFSET(HDP, 0, regHDP_NONSURFACE_BASE_HI));
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR_LSB), hdp_nonsurface_base_lo);
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR_MSB), hdp_nonsurface_base_hi);
-
-	/* mmMMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR */
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_LO32), 0);
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_HI32), 0);
-
-	/* regMMVM_L2_PROTECTION_FAULT_CNTL2 */
-	tmp = RREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_PROTECTION_FAULT_CNTL2));
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_PROTECTION_FAULT_CNTL2,
-			    ACTIVE_PAGE_MIGRATION_PTE_READ_RETRY, 1);
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_PROTECTION_FAULT_CNTL2), tmp);
-
-	/* regMMVM_L2_CNTL3 */
-	tmp = RREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_CNTL3));
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_CNTL3, BANK_SELECT, 9);
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_CNTL3, L2_CACHE_BIGK_FRAGMENT_SIZE, 6);
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_CNTL3), tmp);
-
-	/* regMMVM_L2_CNTL */
-	tmp = RREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_CNTL));
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_CNTL, ENABLE_L2_CACHE, 1);
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_CNTL, ENABLE_L2_FRAGMENT_PROCESSING, 1);
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_CNTL, ENABLE_DEFAULT_PAGE_OUT_TO_SYSTEM_MEMORY, 1);
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_CNTL, L2_PDE0_CACHE_TAG_GENERATION_MODE, 0);
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_CNTL, PDE_FAULT_CLASSIFICATION, 1);
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_CNTL, CONTEXT1_IDENTITY_ACCESS_MODE, 1);
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_CNTL, IDENTITY_MODE_FRAGMENT_SIZE, 0);
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_CNTL), tmp);
-
-	/* regMMVM_L2_CNTL2 */
-	tmp = RREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_CNTL2));
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_CNTL2, INVALIDATE_ALL_L1_TLBS, 1);
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_CNTL2, INVALIDATE_L2_CACHE, 1);
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_CNTL2), tmp);
-
-	/* regMMVM_L2_CNTL4 */
-	tmp = RREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_CNTL4));
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_CNTL4, VMC_TAP_PDE_REQUEST_PHYSICAL, 0);
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_CNTL4, VMC_TAP_PTE_REQUEST_PHYSICAL, 0);
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_CNTL4), tmp);
-
-	/* Disable identity aperture.*/
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_LO32),
-	       0XFFFFFFFF);
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_HI32),
-	       0x0000000F);
-
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_LO32),
-	       0);
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_HI32),
-	       0);
-
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32), 0);
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32), 0);
-
-	/* regMMVM_L2_PROTECTION_FAULT_CNTL */
-	tmp = RREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_PROTECTION_FAULT_CNTL));
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_PROTECTION_FAULT_CNTL,
-			    RANGE_PROTECTION_FAULT_ENABLE_DEFAULT, !crash_on_fault);
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_PROTECTION_FAULT_CNTL,
-			    PDE0_PROTECTION_FAULT_ENABLE_DEFAULT, !crash_on_fault);
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_PROTECTION_FAULT_CNTL,
-			    PDE1_PROTECTION_FAULT_ENABLE_DEFAULT, !crash_on_fault);
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_PROTECTION_FAULT_CNTL,
-			    PDE2_PROTECTION_FAULT_ENABLE_DEFAULT, !crash_on_fault);
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_PROTECTION_FAULT_CNTL,
-			    TRANSLATE_FURTHER_PROTECTION_FAULT_ENABLE_DEFAULT, !crash_on_fault);
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_PROTECTION_FAULT_CNTL,
-			    NACK_PROTECTION_FAULT_ENABLE_DEFAULT, !crash_on_fault);
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_PROTECTION_FAULT_CNTL,
-			    DUMMY_PAGE_PROTECTION_FAULT_ENABLE_DEFAULT, !crash_on_fault);
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_PROTECTION_FAULT_CNTL,
-			    VALID_PROTECTION_FAULT_ENABLE_DEFAULT, !crash_on_fault);
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_PROTECTION_FAULT_CNTL,
-			    READ_PROTECTION_FAULT_ENABLE_DEFAULT, !crash_on_fault);
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_PROTECTION_FAULT_CNTL,
-			    WRITE_PROTECTION_FAULT_ENABLE_DEFAULT, !crash_on_fault);
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_PROTECTION_FAULT_CNTL,
-			    EXECUTE_PROTECTION_FAULT_ENABLE_DEFAULT, !crash_on_fault);
-
-	/* CRASH_ON_NO_RETRY */
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_PROTECTION_FAULT_CNTL, CRASH_ON_NO_RETRY_FAULT,
-			    crash_on_fault);
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_PROTECTION_FAULT_CNTL, CRASH_ON_RETRY_FAULT,
-			    crash_on_fault);
-
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_PROTECTION_FAULT_CNTL), tmp);
-}
-
-static void navi32_disable_mmhub_gart(struct amdgv_adapter *adapt)
-{
-	uint32_t tmp;
-
-	/* regMMVM_L2_CNTL */
-	tmp = RREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_CNTL));
-	tmp = REG_SET_FIELD(tmp, MMVM_L2_CNTL, ENABLE_L2_CACHE, 0);
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_CNTL), tmp);
-
-	/* regMMVM_L2_CNTL3 */
-	WREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMVM_L2_CNTL3), 0);
 }
 
 static int navi32_enable_pci_atomic_request(struct amdgv_adapter *adapt)
@@ -832,6 +667,9 @@ static int navi32_vbios_hw_init(struct amdgv_adapter *adapt)
 		REG_GET_FIELD(adapt->mc_fb_loc_addr, MMMC_VM_FB_LOCATION_BASE, FB_BASE);
 	adapt->mc_fb_loc_addr <<= MC_VM_FB_LOCATION__FB_ADDRESS__SHIFT;
 
+	adapt->mc_fb_offset = (uint64_t)RREG32_SOC15(GC, 0, regMMMC_VM_FB_OFFSET) << 24;
+	AMDGV_INFO("MC base is at 0x%llx, adapt->mc_fb_offset:%llx\n", adapt->mc_fb_loc_addr, adapt->mc_fb_offset);
+
 	adapt->mc_fb_top_addr = RREG32(SOC15_REG_OFFSET(MMHUB, 0, regMMMC_VM_FB_LOCATION_TOP));
 	adapt->mc_fb_top_addr =
 		REG_GET_FIELD(adapt->mc_fb_top_addr, MMMC_VM_FB_LOCATION_TOP, FB_TOP);
@@ -877,7 +715,7 @@ static int navi32_vbios_hw_init(struct amdgv_adapter *adapt)
 
 	navi32_assign_asic_doorbell_ranges(adapt);
 
-	navi32_enable_mmhub_gart(adapt);
+	mmhub_v3_0_gart_enable(adapt);
 
 	ret = navi32_enable_pci_atomic_request(adapt);
 	if (ret) {
@@ -909,8 +747,7 @@ static int navi32_vbios_hw_fini(struct amdgv_adapter *adapt)
 	amdgv_vbios_atom_hw_fini(adapt);
 
 	if (!adapt->reset.reset_state) {
-		navi32_disable_mmhub_gart(adapt);
-
+		mmhub_v3_0_gart_fini(adapt);
 		/* hardware will be put to RESET status after called this, so
 		put it to the last step of hw_fini */
 		if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->prepare_unload)

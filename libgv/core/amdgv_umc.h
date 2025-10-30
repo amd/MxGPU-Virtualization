@@ -96,6 +96,8 @@ struct amdgv_umc_funcs {
 	int (*soc_pa_to_bank)(struct amdgv_adapter *adapt, uint64_t soc_pa, struct amdgv_umc_fb_bank_addr *bank_addr);
 	int (*eeprom_record_to_soc_pa)(struct amdgv_adapter *adapt, struct eeprom_table_record *record, uint64_t *pa_pfn);
 	int (*eeprom_record_to_pages)(struct amdgv_adapter *adapt, struct eeprom_table_record *record, uint64_t *pages, uint32_t num);
+	int (*set_eeprom_record)(struct amdgv_adapter *adapt, struct eeprom_table_record *record, struct amdgv_ras_eeprom_bad_page_info *bp_info);
+	int (*pages_in_a_row)(struct amdgv_adapter *adapt, uint64_t pa, uint64_t *pfns, int len);
 };
 
 struct amdgv_umc {
@@ -133,6 +135,8 @@ struct amdgv_umc {
 
 	bool use_legacy_eeprom_format;
 	uint32_t eeprom_version;
+	bool is_pmfw_managed_eeprom;
+	bool is_pmme_ready;
 };
 
 struct ras_err_data;
@@ -141,7 +145,9 @@ void amdgv_umc_badpages_count_read(struct amdgv_adapter *adapt, int *bp_cnt);
 int amdgv_umc_get_badpages_record(struct amdgv_adapter *adapt, uint32_t index, void *record);
 int amdgv_umc_badpages_read(struct amdgv_adapter *adapt, void **bp, unsigned int *count);
 bool amdgv_umc_check_bad_page(struct amdgv_adapter *adapt, uint64_t addr);
+bool amdgv_umc_check_bad_pages_in_range(struct amdgv_adapter *adapt, uint64_t fb_offset, uint64_t size);
 int amdgv_umc_load_bad_pages(struct amdgv_adapter *adapt);
+int amdgv_umc_load_bad_pages_across_nps(struct amdgv_adapter *adapt);
 int amdgv_umc_clean_bad_page_records(struct amdgv_adapter *adapt);
 int amdgv_umc_copy_bp_records_to_vf(struct amdgv_adapter *adapt,
 				    uint32_t idx_vf,
@@ -165,6 +171,8 @@ void *amdgv_umc_grow_bp_buff(void *buff, uint32_t *cap, uint64_t size);
 int amdgv_umc_update_bp_buff(struct amdgv_adapter *adapt, struct eeprom_table_record **bp_buff, uint32_t pages, uint32_t *cap);
 int amdgv_umc_release_bad_pages(struct amdgv_adapter *adapt);
 int amdgv_umc_retrieve_bad_pages(struct amdgv_adapter *adapt);
+int amdgv_umc_replace_bad_pages(struct amdgv_adapter *adapt);
+
 int amdgv_umc_process_ras_data_cb(struct amdgv_adapter *adapt,
 			void *ras_error_status, uint32_t idx_vf);
 int amdgv_umc_update_uc_error_count(struct amdgv_adapter *adapt,
@@ -194,5 +202,19 @@ int amdgv_umc_local_gpa_to_spa(struct amdgv_adapter *adapt,
 	uint64_t gpa, uint32_t idx_vf, uint64_t *spa);
 int amdgv_umc_local_spa_to_gpa(struct amdgv_adapter *adapt, uint64_t spa,
 	uint64_t *gpa, uint32_t *idx_vf);
+int amdgv_umc_set_eeprom_record(struct amdgv_adapter *adapt,
+	struct eeprom_table_record *record, struct amdgv_ras_eeprom_bad_page_info *bp_info);
+int amdgv_umc_vf_chk_critical_region(struct amdgv_adapter *adapt, uint64_t err_addr,
+				     uint32_t idx_vf, uint32_t *hit);
 
+int amdgv_umc_across_nps_err_data_init(struct amdgv_adapter *adapt);
+int amdgv_umc_across_nps_err_data_fini(struct amdgv_adapter *adapt);
+int amdgv_umc_fetch_and_sort_bps(struct amdgv_adapter *adapt, uint64_t **bp_offsets);
+int amdgv_umc_fetch_and_sort_bps_across_nps(struct amdgv_adapter *adapt, uint64_t **bp_offsets, int *bp_count);
 #endif
+
+/* Sorted bad pages management functions */
+int amdgv_umc_init_sorted_bad_pages(struct amdgv_adapter *adapt);
+void amdgv_umc_cleanup_sorted_bad_pages(struct amdgv_adapter *adapt);
+int amdgv_umc_insert_sorted_bad_page(struct amdgv_adapter *adapt, uint64_t page_addr,
+					 struct ras_err_handler_data *data);

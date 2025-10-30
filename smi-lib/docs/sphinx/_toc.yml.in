@@ -4,10 +4,10 @@ root: index
 subtrees:
 - caption: Install
   entries:
-  - file: install/install.md
-    title: Library and CLI tool installation
   - file: install/build.md
     title: Build from source
+  - file: install/install.md
+    title: Library and CLI tool installation
 
 - caption: How to
   entries:
@@ -15,7 +15,7 @@ subtrees:
     title: C library usage
   - file: how_to/amdsmi_py_lib.md
     title: Python library usage
-  - file: how_to/amdsmi_cli_tool.md
+  - file: how_to/amdsmi_cli_usage.md
     title: CLI tool usage
 
 - caption: Reference

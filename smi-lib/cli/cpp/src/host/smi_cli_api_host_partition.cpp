@@ -41,7 +41,8 @@ typedef amdsmi_status_t (*AMDSMI_GET_CURR_ACCELERATOR_PARTITION)(amdsmi_processo
 		amdsmi_accelerator_partition_profile_t *, uint32_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_MEMORY_PARTITION_CONFIG)(amdsmi_processor_handle,
 		amdsmi_memory_partition_config_t *);
-
+typedef amdsmi_status_t (*AMDSMI_GET_GLOBAL_PARTITION)(amdsmi_processor_handle,
+		amdsmi_accelerator_partition_profile_config_global_t *);
 
 extern AMDSMI_GET_PARTITION_PROFILE_CONFIG host_amdsmi_get_partition_profile_config;
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
@@ -49,6 +50,7 @@ extern AMDSMI_GET_MEMORY_PARTITION_CAPS host_amdsmi_get_memory_partition_caps;
 extern AMDSMI_GET_CURR_MEMORY_PARTITION host_amdsmi_get_curr_memory_partition;
 extern AMDSMI_GET_CURR_ACCELERATOR_PARTITION host_amdsmi_get_partition_profile;
 extern AMDSMI_GET_MEMORY_PARTITION_CONFIG host_amdsmi_get_gpu_memory_partition_config;
+extern AMDSMI_GET_GLOBAL_PARTITION host_amdsmi_get_accelerator_partition_profile_config_global;
 
 std::string host_fill_memory_partition(Arguments arg, std::string value)
 {
@@ -167,6 +169,55 @@ int AmdSmiApiHost::amdsmi_get_accelerator_partition_command(uint64_t processor_b
 										  profile_configs.resource_profiles[i].profile_index);
 			resource_rows.push_back({resources_index, resource_type_str, resource_instances, resources_shared});
 		}
+	}
+	return ret;
+}
+
+int AmdSmiApiHost::amdsmi_get_global_partition_command(uint64_t processor_bdf, Arguments arg,
+		std::vector<tabulate::Table::Row_t> &rows, std::string &gpu_id)
+{
+	int ret = 0;
+	amdsmi_accelerator_partition_profile_config_global_t global_config;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		return ret;
+	}
+
+	ret = host_amdsmi_get_accelerator_partition_profile_config_global(processor, &global_config);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		return ret;
+	}
+
+	bool first_row = true;
+	for (uint8_t i = 0; i < global_config.num_profiles; i++) {
+
+		std::string partition_type_str;
+		get_string_from_enum_accelerator_partition_type(global_config.profiles[i].profile.profile_type,
+				partition_type_str);
+
+		std::vector<std::string> possible_memory_caps = decode_memory_caps(
+				global_config.profiles[i].profile.memory_caps.nps_cap_mask);
+		std::string possible_memory_human_readable = possible_memory_caps_to_human_readable(
+				possible_memory_caps);
+
+		std::vector<std::string> possible_vf_modes = decode_vf_partition_mask(
+				global_config.profiles[i].vf_mode);
+		std::string possible_vf_modes_human =  possible_vf_partition_mask_to_human_readable(
+				possible_vf_modes);
+
+		if (first_row) {
+			rows.push_back({gpu_id, partition_type_str, possible_vf_modes_human, possible_memory_human_readable});
+			first_row = false;
+		} else {
+			rows.push_back({"", partition_type_str, possible_vf_modes_human, possible_memory_human_readable});
+		}
+
 	}
 	return ret;
 }

@@ -49,7 +49,7 @@ extern struct amdgv_init_func gfx_v11_func;
 extern struct amdgv_init_func navi32_sdma_func;
 extern struct amdgv_init_func navi32_diag_data_func;
 extern struct amdgv_init_func navi32_dirtybit_func;
-
+extern struct amdgv_init_func amdgv_migration_func;
 extern struct amdgv_live_info_func navi32_ecc_live_info_func;
 
 struct amdgv_init_func *navi32_init_table[] = {
@@ -80,6 +80,7 @@ struct amdgv_init_func *navi32_init_table[] = {
 	&gfx_v11_func,
 	&navi32_sched_late_func,
 	&navi32_diag_data_func,
+	&amdgv_migration_func,
 	&navi32_dirtybit_func,
 	NULL,
 };

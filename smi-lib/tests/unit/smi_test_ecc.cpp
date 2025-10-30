@@ -167,7 +167,7 @@ TEST_F(AmdSmiEccTests, GetRasFeatureInfo)
 	amdsmi_ras_feature_t ras_feature;
 
 	mocked_resp.ras_eeprom_version = 123;
-	mocked_resp.supported_ecc_correction_schema = 1;
+	mocked_resp.ecc_correction_schema_flag = 1;
 
 	WhenCalling(std::bind(amdsmi_get_gpu_ras_feature_info, &GPU_MOCK_HANDLE, &ras_feature));
 	ExpectCommand(SMI_CMD_CODE_GET_RAS_FEATURE_INFO);
@@ -177,7 +177,7 @@ TEST_F(AmdSmiEccTests, GetRasFeatureInfo)
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_TRUE(amdsmi::equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
 	ASSERT_EQ(mocked_resp.ras_eeprom_version, ras_feature.ras_eeprom_version);
-	ASSERT_EQ(mocked_resp.supported_ecc_correction_schema, ras_feature.supported_ecc_correction_schema);
+	ASSERT_EQ(mocked_resp.ecc_correction_schema_flag, ras_feature.ecc_correction_schema_flag);
 }
 
 TEST_F(AmdSmiEccTests, GetEccBadPageInfoAllocFail)

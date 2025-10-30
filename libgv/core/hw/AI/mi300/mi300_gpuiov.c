@@ -946,8 +946,8 @@ static void mi300_gpuiov_toggle_vf_mse(struct amdgv_adapter *adapt, bool enable)
 			adapt->sriov_cap_pos + PCIE_EXT_SRIOV_CTRL, sriov_ctrl);
 }
 
-/*static int mi300_gpuiov_transfer_vf_data(struct amdgv_adapter *adapt,
-										 uint32_t sched_id, uint32_t idx_vf, bool to_export)
+static int mi300_gpuiov_transfer_vf_data(struct amdgv_adapter *adapt,
+					 uint32_t sched_id, uint32_t idx_vf, bool to_export)
 {
 	uint32_t func_id, next_func_id;
 
@@ -956,7 +956,6 @@ static void mi300_gpuiov_toggle_vf_mse(struct amdgv_adapter *adapt, bool enable)
 
 	return __mi300_gpuiov_set_cmd(adapt, AMDGV_TRANSFER_VF_DATA, sched_id, func_id, next_func_id);
 }
-*/
 
 static const struct amdgv_gpuiov_funcs mi300_gpuiov_funcs = {
 	.set_cmd = mi300_gpuiov_set_cmd,
@@ -995,6 +994,7 @@ static const struct amdgv_gpuiov_funcs mi300_gpuiov_funcs = {
 	.wait_auto_sched_stop = mi300_gpuiov_wait_auto_sched_stop,
 	.toggle_rlcg_vf_interface = mi300_gpuiov_toggle_rlcg_vf_interface,
 	.skip_ctrl_block = mi300_gpuiov_skip_ctrl_block,
+	.transfer_vf_data = mi300_gpuiov_transfer_vf_data,
 };
 
 static int mi300_gpuiov_sw_init(struct amdgv_adapter *adapt)
@@ -1059,6 +1059,11 @@ static int mi300_gpuiov_hw_fini(struct amdgv_adapter *adapt)
 	} else {
 		oss_pci_write_config_dword(adapt->dev,
 				adapt->sriov_cap_pos + PCIE_EXT_SRIOV_CTRL, 0);
+
+               /* Delay of 1 Sec to give PMFW time to execute VF Disable */
+               if (adapt->asic_type == CHIP_MI350X)
+                       oss_msleep(1000);
+
 	}
 
 	return 0;

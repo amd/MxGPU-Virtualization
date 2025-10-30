@@ -78,6 +78,7 @@ struct smi_shim_interface {
 	int (*get_metric_table)(struct smi_metrics_table *metrics_table, uint16_t size, struct amdgv_gpumon_metrics_ext *gpumon_metrics_table);
 	int (*get_eeprom_table)(struct smi_bad_page_info *eeprom_table, uint16_t size, uint32_t bp_cnt, struct amdgv_smi_ras_eeprom_table_record *gpumon_eeprom_table);
 	int (*get_partition)(struct smi_profile_configs *profile_configs, struct amdgv_gpumon_accelerator_partition_profile_config *caps);
+	int (*get_partition_global)(struct smi_profile_configs_global *profile_configs_global, struct amdgv_gpumon_accelerator_partition_profile_config *caps);
 	int (*get_cper_data)(struct smi_cper_config *cper_config, uint16_t in_len, uint64_t size, char* buffer, uint64_t write_count,
 						uint32_t *smi_cper_hdrs, uint64_t overflow_count);
 };

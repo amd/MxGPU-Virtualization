@@ -417,6 +417,8 @@ int amdgv_sched_reset_vf(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	bool notify_vf;
 	uint32_t world_switch_id;
 	struct amdgv_sched_world_switch *world_switch;
+	uint32_t hw_sched_id;
+	uint32_t curr_vf_state;
 
 	if (oss_atomic_read(adapt->in_ecc_recovery)) {
 		/* Fatal error interrupt will queue a reset. */
@@ -450,7 +452,24 @@ int amdgv_sched_reset_vf(struct amdgv_adapter *adapt, uint32_t idx_vf,
 		}
 	}
 
-	amdgv_psp_clear_vf_fw(adapt, idx_vf);
+	if (idx_vf != AMDGV_PF_IDX)
+		amdgv_psp_clear_vf_fw(adapt, idx_vf);
+
+	/* PF is necessary for solid/fairness mode
+	 * need to init PF after FLR in time to ensure dummy PF work
+	 */
+	if (idx_vf == AMDGV_PF_IDX) {
+		for_each_id(world_switch_id,
+				amdgv_sched_get_world_switch_mask(adapt, idx_vf)) {
+			world_switch = &adapt->sched.world_switch[world_switch_id];
+
+			for_each_id(hw_sched_id, world_switch->hw_sched_mask) {
+				if (!amdgv_sched_world_context_get_hw_curr_state(adapt, hw_sched_id,
+									&curr_vf_state))
+				amdgv_hw_sched_state_run(adapt, idx_vf, hw_sched_id);
+			}
+		}
+	}
 
 	AMDGV_INFO("finish %s reset\n", amdgv_idx_to_str(idx_vf));
 
@@ -607,7 +626,24 @@ int amdgv_sched_reset_vf_auto(struct amdgv_adapter *adapt)
 		}
 	}
 
-	amdgv_psp_clear_vf_fw(adapt, abnormal_idx_vf);
+	if (abnormal_idx_vf != AMDGV_PF_IDX)
+		amdgv_psp_clear_vf_fw(adapt, abnormal_idx_vf);
+
+	/* PF is necessary for solid/fairness mode
+	 * need to init PF after FLR in time to ensure dummy PF work
+	 */
+	if (abnormal_idx_vf == AMDGV_PF_IDX) {
+		for_each_id(world_switch_id,
+				amdgv_sched_get_world_switch_mask(adapt, abnormal_idx_vf)) {
+			world_switch = &adapt->sched.world_switch[world_switch_id];
+
+			for_each_id(hw_sched_id, world_switch->hw_sched_mask) {
+				if (!amdgv_sched_world_context_get_hw_curr_state(adapt, hw_sched_id,
+									&curr_vf_state))
+				amdgv_hw_sched_state_run(adapt, abnormal_idx_vf, hw_sched_id);
+			}
+		}
+	}
 
 	AMDGV_INFO("finish VF reset auto.\n");
 
@@ -621,6 +657,9 @@ whole_gpu_reset__auto:
 
 	amdgv_notify_shim(adapt->dev, AMDGV_NOTIFICATION_ERROR_WHOLE_GPU_RESET,
 			  "Whole GPU reset triggered by failed VF reset auto.");
+
+	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)
+		amdgv_live_migration_set_abort_all(adapt);
 
 	ret = amdgv_sched_gpu_reset_wrap(adapt, 1, abnormal_idx_vf);
 

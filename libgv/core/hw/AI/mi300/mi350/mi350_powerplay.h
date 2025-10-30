@@ -48,11 +48,14 @@
 #define SMUQ10_FRAC(x) ((x) & 0x3ff)
 #define SMUQ10_ROUND(x) ((SMUQ10_TO_UINT(x)) + ((SMUQ10_FRAC(x)) >= 0x200))
 
+#define PLDM_VERSION_NOT_SUPPORTED 0xffffffff
+
 // This DS threshold was calculated based on MI300 characteristics using the formula
 // max GFXCLK/GFX DS clock divider =  (2250/16) ~= 140
 #define MI350_GPUMON_DS_THRESHOLD 140
 
 enum mi350_metric_name {
+	/* GPU */
 	MI350_METRICS_COUNTER,
 	MI350_GFX_CLK_XCD,
 	MI350_GFX_CLK_MAX_XCD,
@@ -116,8 +119,59 @@ enum mi350_metric_name {
 	MI350_PCIE_REPL_ROLLOVER_ACC,
 	MI350_PCIE_NAK_SENT_ACC,
 	MI350_PCIE_NAK_RECEIVED_ACC,
+	MI350_TEMP_XCD,
+	MI350_TEMP_AID,
+	MI350_TEMP_HBM,
+
+	/* GPU Static */
 	MI350_IN_TEL_VOLTAGE,
 	MI350_PLDM_VERSION,
+
+	/* System */
+	MI350__SYS_METRIC_ACC_COUNTER,
+	MI350__SYSTEM_TEMP_UBB_FPGA,
+	MI350__SYSTEM_TEMP_UBB_FRONT,
+	MI350__SYSTEM_TEMP_UBB_BACK,
+	MI350__SYSTEM_TEMP_UBB_OAM7,
+	MI350__SYSTEM_TEMP_UBB_IBC,
+	MI350__SYSTEM_TEMP_UBB_UFPGA,
+	MI350__SYSTEM_TEMP_UBB_OAM1,
+	MI350__SYSTEM_TEMP_OAM_0_1_HSC,
+	MI350__SYSTEM_TEMP_OAM_2_3_HSC,
+	MI350__SYSTEM_TEMP_OAM_4_5_HSC,
+	MI350__SYSTEM_TEMP_OAM_6_7_HSC,
+	MI350__SYSTEM_TEMP_UBB_FPGA_0V72_VR,
+	MI350__SYSTEM_TEMP_UBB_FPGA_3V3_VR,
+	MI350__SYSTEM_TEMP_RETIMER_0_1_2_3_1V2_VR,
+	MI350__SYSTEM_TEMP_RETIMER_4_5_6_7_1V2_VR,
+	MI350__SYSTEM_TEMP_RETIMER_0_1_0V9_VR,
+	MI350__SYSTEM_TEMP_RETIMER_4_5_0V9_VR,
+	MI350__SYSTEM_TEMP_RETIMER_2_3_0V9_VR,
+	MI350__SYSTEM_TEMP_RETIMER_6_7_0V9_VR,
+	MI350__SYSTEM_TEMP_OAM_0_1_2_3_3V3_VR,
+	MI350__SYSTEM_TEMP_OAM_4_5_6_7_3V3_VR,
+	MI350__SYSTEM_TEMP_IBC_HSC,
+	MI350__SYSTEM_TEMP_IBC,
+	MI350__NODE_TEMP_RETIMER,
+	MI350__NODE_TEMP_IBC_TEMP,
+	MI350__NODE_TEMP_IBC_2_TEMP,
+	MI350__NODE_TEMP_VDD18_VR_TEMP,
+	MI350__NODE_TEMP_04_HBM_B_VR_TEMP,
+	MI350__NODE_TEMP_04_HBM_D_VR_TEMP,
+	MI350__VR_TEMP_VDDCR_VDD0,
+	MI350__VR_TEMP_VDDCR_VDD1,
+	MI350__VR_TEMP_VDDCR_VDD2,
+	MI350__VR_TEMP_VDDCR_VDD3,
+	MI350__VR_TEMP_VDDCR_SOC_A,
+	MI350__VR_TEMP_VDDCR_SOC_C,
+	MI350__VR_TEMP_VDDCR_SOCIO_A,
+	MI350__VR_TEMP_VDDCR_SOCIO_C,
+	MI350__VR_TEMP_VDD_085_HBM,
+	MI350__VR_TEMP_VDDCR_11_HBM_B,
+	MI350__VR_TEMP_VDDCR_11_HBM_D,
+	MI350__VR_TEMP_VDD_USR,
+	MI350__VR_TEMP_VDDIO_11_E32,
+
 	MI350_METRIC_NAME_COUNT,
 };
 
@@ -130,6 +184,8 @@ int mi350_wait_gpu_reset_completion(struct amdgv_adapter *adapt);
 uint32_t mi350_smu_read_arg(struct amdgv_adapter *adapt);
 int mi350_smu_send_msg_with_param(struct amdgv_adapter *adapt, uint32_t msg, uint32_t param,
 				  uint32_t *arg);
+int mi350_smu_send_msg_with_resp(struct amdgv_adapter *adapt, uint32_t msg, uint32_t param,
+				  uint32_t *arg, uint32_t *resp);
 int mi350_smu_send_msg(struct amdgv_adapter *adapt, uint32_t msg, uint32_t *arg);
 int mi350_smu_get_version(struct amdgv_adapter *adapt, uint32_t *smu_version,
 			  uint32_t *driver_if_version);

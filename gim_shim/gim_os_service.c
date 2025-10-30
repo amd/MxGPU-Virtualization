@@ -368,6 +368,12 @@ static int gim_pci_resize_vf_bar(oss_dev_t dev, int bar_idx, uint32_t num_vf)
 	pci_read_config_dword(pdev, bar_base + 4, &save_hi);
 
 	if (!(save_lo & ~0xc) && !save_hi) {
+		/* If resource has parent, it means resource is already assigned,
+		 * release it before reassign.
+		 */
+		if (res->parent)
+			release_resource(res);
+
 		/* bar_base might be lost (value read is 0x0000000c) at this moment.
 		 * a possible case is that amdgpu has been loaded prior to gim,
 		 * during which a mode1 reset is triggered. BAR0 did not get restored

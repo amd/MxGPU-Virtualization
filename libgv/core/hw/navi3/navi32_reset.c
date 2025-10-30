@@ -42,6 +42,8 @@
 #include "navi32_reset.h"
 #include "navi32_smu_ppsmc_wrapper.h"
 #include "navi32_gc.h"
+#include "gfx_v11_0.h"
+#include "mmhub_v3_0.h"
 
 static const uint32_t this_block = AMDGV_SECURITY_BLOCK;
 
@@ -819,6 +821,11 @@ static int navi32_reset_trigger_vf_flr(struct amdgv_adapter *adapt, uint32_t idx
 		navi32_sdma_program_golden_settings(adapt);
 	}
 
+	if (idx_vf == AMDGV_PF_IDX) {
+		gfx_v11_enable_gfxhub_gart(adapt);
+		mmhub_v3_0_gart_enable(adapt);
+	}
+
 	/* restore VF_PCI CONFIG and CSA_CONFIG */
 	navi32_reset_restore_pci_config(adapt, &pci_state);
 	navi32_reset_restore_csa_config(adapt, &vf_state);
@@ -953,6 +960,11 @@ static int navi32_reset_hardware_reset(struct amdgv_adapter *adapt, uint32_t mod
 	/* restore doorbell interrupt after PF_FLR or WHOLE_GPU_RESET */
 	tmp = REG_SET_FIELD(bif_db_int, BIF_DOORBELL_INT_CNTL, DOORBELL_INTERRUPT_DISABLE, 0);
 	WREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BIF_DOORBELL_INT_CNTL), tmp);
+
+	ret = amdgv_umc_replace_bad_pages(adapt);
+	if (ret) {
+		goto exit_whole_gpu_reset;
+	}
 
 	/* re-init HW */
 	for (i = 0; i < adapt->num_funcs; i++) {

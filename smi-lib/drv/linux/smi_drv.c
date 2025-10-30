@@ -301,11 +301,11 @@ static int gim_get_metric_table(struct smi_metrics_table *metrics_table, uint16_
 {
 	struct smi_metrics *metrics = NULL;
 	long num_pages = 0;
-	unsigned int gup_flags;
-	struct mm_struct *mm;
-	size_t buffer_size;
-	unsigned long nr_pages;
-	struct page **pages;
+	unsigned int gup_flags = 0;
+	struct mm_struct *mm = NULL;
+	size_t buffer_size = 0;
+	unsigned long nr_pages = 0;
+	struct page **pages = NULL;
 	uint32_t i = 0;
 
 	mm = current->mm; // Get memory management structure
@@ -336,6 +336,7 @@ static int gim_get_metric_table(struct smi_metrics_table *metrics_table, uint16_
 #endif
 	if (num_pages <= 0) {
 		gim_kfree(pages);
+		pages = NULL;
 #if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
 		up_read(&current->mm->mmap_lock);
 #else
@@ -347,7 +348,13 @@ static int gim_get_metric_table(struct smi_metrics_table *metrics_table, uint16_
 	// map array of pages into virtual contiguous memory
 	metrics = (struct smi_metrics *) vmap(pages, num_pages, VM_MAP, PAGE_KERNEL);
 	metrics->num_metric = gpumon_metrics_table->num_metric;
-	for (i = 0; i < gpumon_metrics_table->num_metric; i++) {
+
+	//out of bound check
+	if (metrics->num_metric > SMI_MAX_NUM_METRICS) {
+		metrics->num_metric = SMI_MAX_NUM_METRICS;
+	}
+
+	for (i = 0; i < metrics->num_metric; i++) {
 		metrics->metric[i].metric_union.code = gpumon_metrics_table->metric[i].code;
 		metrics->metric[i].metric_union.metric.category = smi_map_metric_category(gpumon_metrics_table->metric[i].category);
 		metrics->metric[i].metric_union.metric.name = smi_map_metric_name(gpumon_metrics_table->metric[i].name);
@@ -357,6 +364,12 @@ static int gim_get_metric_table(struct smi_metrics_table *metrics_table, uint16_
 		metrics->metric[i].metric_union.metric.res_group = smi_map_metric_res_group(gpumon_metrics_table->metric[i].res_group);
 		metrics->metric[i].metric_union.metric.res_subgroup = smi_map_metric_res_subgroup(gpumon_metrics_table->metric[i].res_subgroup);
 		metrics->metric[i].res_instance = gpumon_metrics_table->metric[i].res_instance;
+
+		// PMFW reports senergy in 15.625mJ units per value. We need to convert to J
+		if ((metrics->metric[i].metric_union.metric.name == SMI_METRIC_NAME_ENERGY_SOCKET) &&
+			(metrics->metric[i].metric_union.code & METRIC_EXT_FLAG(DATA_FILTER_ACC) )) {
+				metrics->metric[i].val = (gpumon_metrics_table->metric[i].val * 15625) / 1000000;
+		}
 	}
 	// Unmap and release mapped pages and
 	// free the virtual contiguous memory
@@ -369,6 +382,7 @@ static int gim_get_metric_table(struct smi_metrics_table *metrics_table, uint16_
 	}
 
 	gim_kfree(pages);
+	pages = NULL;
 #if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
 	up_read(&current->mm->mmap_lock);
 #else
@@ -383,11 +397,11 @@ static int gim_get_partition(struct smi_profile_configs *profile_configs,
 {
 	struct smi_accelerator_partition_profile_config *partition_profile_configs = NULL;
 	long num_pages = 0;
-	unsigned int gup_flags;
-	struct mm_struct *mm;
-	size_t buffer_size;
-	unsigned long nr_pages;
-	struct page **pages;
+	unsigned int gup_flags = 0;
+	struct mm_struct *mm = NULL;
+	size_t buffer_size = 0;
+	unsigned long nr_pages = 0;
+	struct page **pages = NULL;
 	uint32_t i;
 	uint32_t j, k;
 
@@ -419,6 +433,7 @@ static int gim_get_partition(struct smi_profile_configs *profile_configs,
 #endif
 	if (num_pages <= 0) {
 		gim_kfree(pages);
+		pages = NULL;
 #if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
 		up_read(&current->mm->mmap_lock);
 #else
@@ -466,6 +481,7 @@ static int gim_get_partition(struct smi_profile_configs *profile_configs,
 
 
 	gim_kfree(pages);
+	pages = NULL;
 #if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
 	up_read(&current->mm->mmap_lock);
 #else
@@ -475,17 +491,99 @@ static int gim_get_partition(struct smi_profile_configs *profile_configs,
 	return SMI_STATUS_SUCCESS;
 }
 
-
-static int gim_get_eeprom_table(struct smi_bad_page_info *eeprom_table, uint16_t size, uint32_t bp_cnt,
-				   struct amdgv_smi_ras_eeprom_table_record *gpumon_eeprom_table)
+static int gim_get_partition_global(struct smi_profile_configs_global *profile_configs_global,
+				struct amdgv_gpumon_accelerator_partition_profile_config *caps)
 {
-	struct smi_bad_page_record *bad_pages = NULL;
+	struct smi_accelerator_partition_profile_config_global *partition_profile_configs_global = NULL;
 	long num_pages = 0;
 	unsigned int gup_flags;
 	struct mm_struct *mm;
 	size_t buffer_size;
 	unsigned long nr_pages;
 	struct page **pages;
+	uint32_t i, j, k;
+
+	mm = current->mm; // Get memory management structure
+
+	// Calculate the number of pages needed to map the entire partition config
+	buffer_size = sizeof(struct smi_accelerator_partition_profile_config_global);
+	nr_pages = (buffer_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
+
+	pages = kmalloc(nr_pages * sizeof(struct page *), GFP_KERNEL);
+	if (!pages) {
+		return SMI_STATUS_OUT_OF_RESOURCES;
+	}
+
+	down_read(&current->mm->mmap_lock);
+	gup_flags = FOLL_WRITE;
+	// Map user space buffer containing accelerator partition config into kernel space
+	// by creating memory pages
+#if !defined(HAVE_GET_USER_PAGES_REMOTE_6_ARG)
+	num_pages = get_user_pages_remote(mm, (unsigned long)profile_configs_global->profile_configs, nr_pages, gup_flags, pages, NULL, NULL);
+#else
+	num_pages = get_user_pages_remote(mm, (unsigned long)profile_configs_global->profile_configs, nr_pages, gup_flags, pages, NULL);
+#endif
+	if (num_pages <= 0) {
+		kfree(pages);
+		up_read(&current->mm->mmap_lock);
+		return SMI_STATUS_API_FAILED;
+	}
+	// Access mapped accelerator partition config in kernel space
+	// map array of pages into virtual contiguous memory
+	partition_profile_configs_global = (struct smi_accelerator_partition_profile_config_global *) vmap(pages, num_pages, VM_MAP, PAGE_KERNEL);
+
+	partition_profile_configs_global->num_profiles = caps->number_of_profiles;
+	partition_profile_configs_global->num_resource_profiles = caps->number_of_resource_profiles;
+	partition_profile_configs_global->default_profile_index = caps->default_profile_index;
+
+	for (i = 0; i < partition_profile_configs_global->num_resource_profiles; i++) {
+		partition_profile_configs_global->resource_profiles[i].profile_index = caps->resource_profiles[i].resource_index;
+		partition_profile_configs_global->resource_profiles[i].resource_type = smi_map_resource_type(caps->resource_profiles[i].resource_type);
+		partition_profile_configs_global->resource_profiles[i].partition_resource = caps->resource_profiles[i].partition_resource;
+		partition_profile_configs_global->resource_profiles[i].num_partitions_share_resource = caps->resource_profiles[i].num_partitions_share_resource;
+	}
+
+	for (i = 0; i < partition_profile_configs_global->num_profiles; i++) {
+		partition_profile_configs_global->profiles[i].profile.profile_type = smi_map_partition_type(caps->profiles[i].profile_type);
+		partition_profile_configs_global->profiles[i].profile.num_partitions = caps->profiles[i].num_partitions;
+		partition_profile_configs_global->profiles[i].profile.memory_caps.nps_cap_mask = caps->profiles[i].memory_caps.mp_cap_mask;
+		partition_profile_configs_global->profiles[i].profile.profile_index = caps->profiles[i].profile_index;
+		partition_profile_configs_global->profiles[i].profile.num_resources = caps->profiles[i].num_resources;
+		for (j = 0; j < partition_profile_configs_global->profiles[i].profile.num_partitions; j++) {
+			for (k = 0; k < partition_profile_configs_global->profiles[i].profile.num_resources; k++) {
+				partition_profile_configs_global->profiles[i].profile.resources[j][k] = caps->profiles[i].resources[j][k];
+			}
+		}
+		partition_profile_configs_global->profiles[i].vf_mode = caps->profiles[i].support_vf_num;
+	};
+
+	// Unmap and release mapped pages and
+	// free the virtual contiguous memory
+	vunmap(partition_profile_configs_global);
+	for (i = 0; i < num_pages; i++) {
+		if (!PageReserved(pages[i])) {
+			SetPageDirty(pages[i]);
+		}
+		put_page(pages[i]);
+	}
+
+
+	kfree(pages);
+	up_read(&current->mm->mmap_lock);
+
+	return SMI_STATUS_SUCCESS;
+}
+
+static int gim_get_eeprom_table(struct smi_bad_page_info *eeprom_table, uint16_t size, uint32_t bp_cnt,
+				   struct amdgv_smi_ras_eeprom_table_record *gpumon_eeprom_table)
+{
+	struct smi_bad_page_record *bad_pages = NULL;
+	long num_pages = 0;
+	unsigned int gup_flags = 0;
+	struct mm_struct *mm = NULL;
+	size_t buffer_size = 0;
+	unsigned long nr_pages = 0;
+	struct page **pages = NULL;
 	uint32_t i = 0;
 
 	mm = current->mm; // Get memory management structure
@@ -517,6 +615,7 @@ static int gim_get_eeprom_table(struct smi_bad_page_info *eeprom_table, uint16_t
 
 	if (num_pages <= 0) {
 		gim_kfree(pages);
+		pages = NULL;
 #if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
 		up_read(&current->mm->mmap_lock);
 #else
@@ -548,6 +647,7 @@ static int gim_get_eeprom_table(struct smi_bad_page_info *eeprom_table, uint16_t
 	}
 
 	gim_kfree(pages);
+	pages = NULL;
 #if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
 	up_read(&current->mm->mmap_lock);
 #else
@@ -614,7 +714,7 @@ static inline int gim_get_cper_data(struct smi_cper_config *cper_config, uint16_
 	for (i = 0; i < write_count; i++) {
 		cper->cper_hdrs[i] = smi_cper_hdrs[i];
 	}
-	cper->cursor = write_count;
+	cper->cursor = cper_config->input_cursor;
 	cper->overflow_count = overflow_count;
 
 	// Unmap and release mapped pages and
@@ -664,6 +764,7 @@ struct smi_shim_interface gim_smi_interface = {
 	.get_metric_table = gim_get_metric_table,
 	.get_eeprom_table = gim_get_eeprom_table,
 	.get_partition = gim_get_partition,
+	.get_partition_global = gim_get_partition_global,
 	.get_cper_data = gim_get_cper_data
 };
 

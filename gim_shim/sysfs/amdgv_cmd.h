@@ -62,6 +62,8 @@ enum amdgv_cmd_id {
     AMDGV_CMD_SEND_WS_CMD,
     AMDGV_CMD_GET_DEVICES_EX_INFO,
     AMDGV_CMD_GET_CPER_RECORDS,
+    AMDGV_CMD_RESET_ALL_ERROR_COUNTS,
+    AMDGV_CMD_GET_RAS_POLICY_INFO,
     AMDGV_CMD_SUPPORTED_MAX
 };
 
@@ -81,6 +83,7 @@ enum amdgv_cmd_asic_type {
 	AMDGV_CMD_CHIP_MI300X = 9,
 	AMDGV_CMD_CHIP_MI308X = 11,
 	AMDGV_CMD_CHIP_MI350X = 12,
+	AMDGV_CMD_CHIP_MI325X = 13,
 	AMDGV_CMD_CHIP_UNKNOWN,
 	AMDGV_CMD_CHIP_LAST,
 };
@@ -224,7 +227,8 @@ struct amdgv_cmd_dev_ex_info {
     uint32_t vf_num;
     uint32_t asic_type;
     uint32_t oam_id;
-    uint32_t reserved[2];
+    uint32_t ras_eeprom_version;
+    uint32_t reserved[1];
 };
 
 struct amdgv_cmd_devices_ex_info {
@@ -421,4 +425,12 @@ struct amdgv_get_cper_records_output {
 	uint64_t left_size;
 };
 
+struct amdgv_cmd_ras_policy_info {
+	uint8_t minor_version;
+	uint8_t major_version;
+	uint8_t padding[2];
+	uint16_t dram_non_critical_region_threshold;	// Non-critical region UCE threshold
+	uint16_t dram_critical_region_threshold;		// Critical region UCE threshold
+	uint32_t reserved[8];
+};
 #endif

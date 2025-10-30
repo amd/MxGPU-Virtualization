@@ -24,7 +24,7 @@
 #define AMD_CPER__H_
 
 #define CPER_HDR_REV_1          (0x100)
-#define CPER_SEC_MINOR_REV_1    (0x01)
+#define CPER_SEC_MINOR_REV_1    (0x02)
 #define CPER_SEC_MAJOR_REV_22   (0x22)
 #define CPER_MAX_OAM_COUNT      (8)
 
@@ -174,10 +174,18 @@ struct cper_sec_nonstd_err_hdr {
 			uint64_t fw_id           : 1;
 			uint64_t err_info_cnt    : 6;
 			uint64_t err_context_cnt : 6;
+			uint64_t pcie_devid      : 1;
+			uint64_t pldm_bndl       : 1;
 		} valid_bits;
 		uint64_t valid_mask;
 	};
-	uint64_t apic_id;
+	union {
+		struct {
+			uint32_t pcie_devid;
+			uint32_t pldm_bndl;
+		};
+		uint64_t apic_id;
+	};
 	char     fw_id[48];
 };
 

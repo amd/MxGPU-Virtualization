@@ -38,6 +38,14 @@ uint64_t smi_eeprom_to_utc_format(uint64_t eeprom_timestamp)
 
 	year += 2000;
 
+	/* Validate extracted values to prevent array bounds violations and invalid dates */
+	if (month < 1 || month > 12 ||
+		day < 1 || day > 31 ||
+		hour > 23 || minute > 59 || second > 59) {
+		/* Invalid date/time, return -1 */
+		return SMI_NOT_SUPPORTED;
+	}
+
 	for (i = 1970; i < year; i++) {
 		utc_timestamp += (IS_LEAP_YEAR(i) ? 366 : 365) * 24 * 60 * 60;
 	}
@@ -46,6 +54,57 @@ uint64_t smi_eeprom_to_utc_format(uint64_t eeprom_timestamp)
 		utc_timestamp += days_in_month[i - 1] * 24 * 60 * 60;
 		if (i == 2 && IS_LEAP_YEAR(year))
 			utc_timestamp += 24 * 60 * 60;
+	}
+
+	utc_timestamp += (day - 1) * 24 * 60 * 60;
+	utc_timestamp += hour * 60 * 60;
+	utc_timestamp += minute * 60;
+	utc_timestamp += second;
+
+	return utc_timestamp;
+}
+
+uint64_t smi_eeprom_v4_to_utc_format(uint64_t eeprom_timestamp)
+{
+	uint64_t year, month, day, hour, minute, second;
+	uint64_t i;
+	uint64_t utc_timestamp = 0;
+	int days_in_month[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+	uint32_t ts_hi, ts_lo;
+	uint8_t raw_val;
+
+	//V4 format uses the following split format:
+	// ts_hi: yy[31:16] mm[15:8] day[7:0]
+	// ts_lo: hh[23:16] mm[15:8] ss[7:0]
+	ts_hi = (uint32_t)(eeprom_timestamp >> 32);  // Upper 32 bits
+	ts_lo = (uint32_t)(eeprom_timestamp & 0xFFFFFFFF);  // Lower 32 bits
+
+	raw_val = (ts_hi >> EEPROM_V4_TIMESTAMP_YEAR) & 0xFF;
+	year = 2000 + raw_val;
+
+	month = (ts_hi >> EEPROM_V4_TIMESTAMP_MONTH) & 0xFF;
+	day = ts_hi & 0xFF;
+	hour = (ts_lo >> EEPROM_V4_TIMESTAMP_HOUR) & 0xFF;
+	minute = (ts_lo >> EEPROM_V4_TIMESTAMP_MINUTE) & 0xFF;
+	second = ts_lo & 0xFF;
+
+	/* Validate extracted values to prevent array bounds violations and invalid dates */
+	if (month < 1 || month > 12 ||
+		day < 1 || day > 31 ||
+		hour > 23 || minute > 59 || second > 59) {
+		/* Invalid date/time, return -1 */
+		return SMI_NOT_SUPPORTED;
+	}
+
+	for (i = 1970; i < year; i++) {
+		utc_timestamp += (IS_LEAP_YEAR(i) ? 366 : 365) * 24 * 60 * 60;
+	}
+
+	for (i = 1; i < month; i++) {
+		utc_timestamp += days_in_month[i - 1] * 24 * 60 * 60;
+		if (i == 2 && IS_LEAP_YEAR(year)) {
+			utc_timestamp += 24 * 60 * 60;
+		}
 	}
 
 	utc_timestamp += (day - 1) * 24 * 60 * 60;
@@ -530,47 +589,34 @@ enum smi_vram_type smi_map_vram_type(enum amdgv_gpumon_vram_type type)
 	return vram_type;
 }
 
-enum smi_vram_vendor smi_map_vram_vendor(enum amdgv_gpumon_vram_vendor vendor)
+const char* smi_map_vram_vendor(enum amdgv_gpumon_vram_vendor vendor)
 {
-	uint32_t vram_vendor;
-
 	switch (vendor) {
 	case AMDGV_GPUMON_VRAM_VENDOR__SAMSUNG:
-		vram_vendor = SMI_VRAM_VENDOR_SAMSUNG;
-		break;
+		return "SAMSUNG";
 	case AMDGV_GPUMON_VRAM_VENDOR__INFINEON:
-		vram_vendor = SMI_VRAM_VENDOR_INFINEON;
-		break;
+		return "INFINEON";
 	case AMDGV_GPUMON_VRAM_VENDOR__ELPIDA:
-		vram_vendor = SMI_VRAM_VENDOR_ELPIDA;
-		break;
+		return "ELPIDA";
 	case AMDGV_GPUMON_VRAM_VENDOR__ETRON:
-		vram_vendor = SMI_VRAM_VENDOR_ETRON;
-		break;
+		return "ETRON";
 	case AMDGV_GPUMON_VRAM_VENDOR__NANYA:
-		vram_vendor = SMI_VRAM_VENDOR_NANYA;
-		break;
+		return "NANYA";
 	case AMDGV_GPUMON_VRAM_VENDOR__HYNIX:
-		vram_vendor = SMI_VRAM_VENDOR_HYNIX;
-		break;
+		return "HYNIX";
 	case AMDGV_GPUMON_VRAM_VENDOR__MOSEL:
-		vram_vendor = SMI_VRAM_VENDOR_MOSEL;
-		break;
+		return "MOSEL";
 	case AMDGV_GPUMON_VRAM_VENDOR__WINBOND:
-		vram_vendor = SMI_VRAM_VENDOR_WINBOND;
-		break;
+		return "WINBOND";
 	case AMDGV_GPUMON_VRAM_VENDOR__ESMT:
-		vram_vendor = SMI_VRAM_VENDOR_ESMT;
-		break;
+		return "ESMT";
 	case AMDGV_GPUMON_VRAM_VENDOR__MICRON:
-		vram_vendor = SMI_VRAM_VENDOR_MICRON;
-		break;
+		return "MICRON";
 	default:
-		vram_vendor = SMI_VRAM_VENDOR_UNKNOWN;
 		break;
 	}
 
-	return vram_vendor;
+	return "UNKNOWN";
 }
 
 int smi_compare_dev_bdf(const void *a, const void *b)
@@ -611,6 +657,18 @@ enum smi_metric_category smi_map_metric_category(enum amdgv_gpumon_metric_ext_ca
 		break;
 	case AMDGV_GPUMON_METRIC_EXT_CATEGORY__PCIE:
 		metric_category = SMI_METRIC_CATEGORY_PCIE;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_CATEGORY__STATIC:
+		metric_category = SMI_METRIC_CATEGORY_STATIC;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_CATEGORY__SYS_ACC_COUNTER:
+		metric_category = SMI_METRIC_CATEGORY_SYS_ACC_COUNTER;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_CATEGORY__SYS_BASEBOARD_TEMP:
+		metric_category = SMI_METRIC_CATEGORY_SYS_BASEBOARD_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_CATEGORY__SYS_GPUBOARD_TEMP:
+		metric_category = SMI_METRIC_CATEGORY_SYS_GPUBOARD_TEMP;
 		break;
 	default:
 		metric_category = SMI_METRIC_CATEGORY_UNKNOWN;
@@ -796,6 +854,162 @@ enum smi_metric_name smi_map_metric_name(enum amdgv_gpumon_metric_ext_name name)
 	case AMDGV_GPUMON_METRIC_EXT_NAME__MAX_DRAM_BANDWIDTH:
 		metric_name = SMI_METRIC_NAME_MAX_DRAM_BANDWIDTH;
 		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__GFX_CLK_BELOW_HOST_LIMIT_PPT:
+		metric_name = SMI_METRIC_NAME_GFX_CLK_BELOW_HOST_LIMIT_PPT;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__GFX_CLK_BELOW_HOST_LIMIT_THM:
+		metric_name = SMI_METRIC_NAME_GFX_CLK_BELOW_HOST_LIMIT_THM;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__GFX_CLK_BELOW_HOST_LIMIT_TOTAL:
+		metric_name = SMI_METRIC_NAME_GFX_CLK_BELOW_HOST_LIMIT_TOTAL;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__GFX_CLK_LOW_UTILIZATION:
+		metric_name = SMI_METRIC_NAME_GFX_CLK_LOW_UTILIZATION;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__INPUT_TELEMETRY_VOLTAGE:
+		metric_name = SMI_METRIC_NAME_INPUT_TELEMETRY_VOLTAGE;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__PLDM_VERSION:
+		metric_name = SMI_METRIC_NAME_PLDM_VERSION;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__TEMP_XCD:
+		metric_name = SMI_METRIC_NAME_TEMP_XCD;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__TEMP_AID:
+		metric_name = SMI_METRIC_NAME_TEMP_AID;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__TEMP_HBM:
+		metric_name = SMI_METRIC_NAME_TEMP_HBM;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYS_METRIC_ACC_COUNTER:
+		metric_name = SMI_METRIC_NAME_SYS_METRIC_ACC_COUNTER;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_UBB_FPGA:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_UBB_FPGA;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_UBB_FRONT:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_UBB_FRONT;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_UBB_BACK:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_UBB_BACK;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_UBB_OAM7:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_UBB_OAM7;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_UBB_IBC:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_UBB_IBC;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_UBB_UFPGA:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_UBB_UFPGA;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_UBB_OAM1:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_UBB_OAM1;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_OAM_0_1_HSC:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_OAM_0_1_HSC;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_OAM_2_3_HSC:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_OAM_2_3_HSC;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_OAM_4_5_HSC:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_OAM_4_5_HSC;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_OAM_6_7_HSC:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_OAM_6_7_HSC;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_UBB_FPGA_0V72_VR:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_UBB_FPGA_0V72_VR;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_UBB_FPGA_3V3_VR:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_UBB_FPGA_3V3_VR;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_RETIMER_0_1_2_3_1V2_VR:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_RETIMER_0_1_2_3_1V2_VR;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_RETIMER_4_5_6_7_1V2_VR:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_RETIMER_4_5_6_7_1V2_VR;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_RETIMER_0_1_0V9_VR:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_RETIMER_0_1_0V9_VR;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_RETIMER_4_5_0V9_VR:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_RETIMER_4_5_0V9_VR;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_RETIMER_2_3_0V9_VR:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_RETIMER_2_3_0V9_VR;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_RETIMER_6_7_0V9_VR:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_RETIMER_6_7_0V9_VR;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_OAM_0_1_2_3_3V3_VR:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_OAM_0_1_2_3_3V3_VR;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_OAM_4_5_6_7_3V3_VR:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_OAM_4_5_6_7_3V3_VR;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_IBC_HSC:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_IBC_HSC;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_TEMP_IBC:
+		metric_name = SMI_METRIC_NAME_SYSTEM_TEMP_IBC;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__NODE_TEMP_RETIMER:
+		metric_name = SMI_METRIC_NAME_NODE_TEMP_RETIMER;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__NODE_TEMP_IBC_TEMP:
+		metric_name = SMI_METRIC_NAME_NODE_TEMP_IBC_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__NODE_TEMP_IBC_2_TEMP:
+		metric_name = SMI_METRIC_NAME_NODE_TEMP_IBC_2_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__NODE_TEMP_VDD18_VR_TEMP:
+		metric_name = SMI_METRIC_NAME_NODE_TEMP_VDD18_VR_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__NODE_TEMP_04_HBM_B_VR_TEMP:
+		metric_name = SMI_METRIC_NAME_NODE_TEMP_04_HBM_B_VR_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__NODE_TEMP_04_HBM_D_VR_TEMP:
+		metric_name = SMI_METRIC_NAME_NODE_TEMP_04_HBM_D_VR_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__VR_TEMP_VDDCR_VDD0:
+		metric_name = SMI_METRIC_NAME_VR_TEMP_VDDCR_VDD0;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__VR_TEMP_VDDCR_VDD1:
+		metric_name = SMI_METRIC_NAME_VR_TEMP_VDDCR_VDD1;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__VR_TEMP_VDDCR_VDD2:
+		metric_name = SMI_METRIC_NAME_VR_TEMP_VDDCR_VDD2;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__VR_TEMP_VDDCR_VDD3:
+		metric_name = SMI_METRIC_NAME_VR_TEMP_VDDCR_VDD3;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__VR_TEMP_VDDCR_SOC_A:
+		metric_name = SMI_METRIC_NAME_VR_TEMP_VDDCR_SOC_A;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__VR_TEMP_VDDCR_SOC_C:
+		metric_name = SMI_METRIC_NAME_VR_TEMP_VDDCR_SOC_C;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__VR_TEMP_VDDCR_SOCIO_A:
+		metric_name = SMI_METRIC_NAME_VR_TEMP_VDDCR_SOCIO_A;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__VR_TEMP_VDDCR_SOCIO_C:
+		metric_name = SMI_METRIC_NAME_VR_TEMP_VDDCR_SOCIO_C;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__VR_TEMP_VDD_085_HBM:
+		metric_name = SMI_METRIC_NAME_VR_TEMP_VDD_085_HBM;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__VR_TEMP_VDDCR_11_HBM_B:
+		metric_name = SMI_METRIC_NAME_VR_TEMP_VDDCR_11_HBM_B;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__VR_TEMP_VDDCR_11_HBM_D:
+		metric_name = SMI_METRIC_NAME_VR_TEMP_VDDCR_11_HBM_D;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__VR_TEMP_VDD_USR:
+		metric_name = SMI_METRIC_NAME_VR_TEMP_VDD_USR;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__VR_TEMP_VDDIO_11_E32:
+		metric_name = SMI_METRIC_NAME_VR_TEMP_VDDIO_11_E32;
+		break;
 	default:
 		metric_name = SMI_METRIC_NAME_UNKNOWN;
 		break;
@@ -848,6 +1062,9 @@ enum smi_metric_unit smi_map_metric_unit(enum amdgv_gpumon_metric_ext_unit unit)
 	case AMDGV_GPUMON_METRIC_EXT_UNIT__PCIE_LANES:
 		metric_unit = SMI_METRIC_UNIT_PCIE_LANES;
 		break;
+	case AMDGV_GPUMON_METRIC_EXT_UNIT__15_625_MILLIJOULE:
+		metric_unit = SMI_METRIC_UNIT__15_625_MILLIJOULE;
+		break;
 	default:
 		metric_unit = SMI_METRIC_UNIT_UNKNOWN;
 	}
@@ -875,6 +1092,9 @@ enum smi_metric_res_group smi_map_metric_res_group(enum amdgv_gpumon_metric_ext_
 	case AMDGV_GPUMON_METRIC_EXT_RES_GROUP__MID:
 		metric_res_group = SMI_METRIC_RES_GROUP_MID;
 		break;
+	case AMDGV_GPUMON_METRIC_EXT_RES_GROUP__SYSTEM:
+		metric_res_group = SMI_METRIC_RES_GROUP_SYSTEM;
+		break;
 	default:
 		metric_res_group = SMI_METRIC_RES_GROUP_UNKNOWN;
 	}
@@ -896,12 +1116,22 @@ enum smi_metric_res_subgroup smi_map_metric_res_subgroup(enum amdgv_gpumon_metri
 	case AMDGV_GPUMON_METRIC_EXT_RES_SUBGROUP__ENGINE:
 		metric_res_subgroup = SMI_METRIC_RES_SUBGROUP_ENGINE;
 		break;
+	case AMDGV_GPUMON_METRIC_EXT_RES_SUBGROUP__HBM:
+		metric_res_subgroup = SMI_METRIC_RES_SUBGROUP_HBM;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_RES_SUBGROUP__BASEBOARD:
+		metric_res_subgroup = SMI_METRIC_RES_SUBGROUP_BASEBOARD;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_RES_SUBGROUP__GPUBOARD:
+		metric_res_subgroup = SMI_METRIC_RES_SUBGROUP_GPUBOARD;
+		break;
 	default:
 		metric_res_subgroup = SMI_METRIC_RES_SUBGROUP_UNKNOWN;
 	}
 
 	return metric_res_subgroup;
 }
+
 
 enum smi_memory_partition_type smi_map_mp_mode(enum amdgv_memory_partition_mode mode)
 {

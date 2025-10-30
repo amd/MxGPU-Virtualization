@@ -34,7 +34,7 @@
 
 const std::vector<std::string> dev_id_list_mi30x = {"74A0", "74A1", "74A2", "74B6", "74A9", "74BD", "74A5", "74B9", "74A8", "74BC", "75A0", "75A1", "75A3", "75B0", "75B1", "75B3"};
 const std::vector<std::string> dev_id_list_mi2plus = {"7410"};
-const std::vector<std::string> dev_id_list_nv3plus = {"73C4", "73C5", "73C8", "7460", "7461"};
+const std::vector<std::string> dev_id_list_nv = {"73C4", "73C5", "73C8", "7460", "7461", "73A1","73AE" };
 
 bool check_if_mi30x(std::string output)
 {
@@ -49,17 +49,17 @@ bool check_if_mi30x(std::string output)
 	return is_mi300;
 }
 
-bool check_if_nv32(std::string output)
+bool check_if_nv(std::string output)
 {
 	std::string::size_type n;
-	bool is_nv32{false};
-	for (auto x : dev_id_list_nv3plus) {
+	bool is_nv{false};
+	for (auto x : dev_id_list_nv) {
 		n = output.find(x);
 		if (std::string::npos != n) {
-			is_nv32 = true;
+			is_nv = true;
 		}
 	}
-	return is_nv32;
+	return is_nv;
 }
 
 bool check_if_mi200(std::string output)
@@ -274,13 +274,13 @@ AmdSmiPlatform::AmdSmiPlatform()
 		std::string diskpart_out = exec("diskpart /?");
 		if (diskpart_out.find("MININT") != std::string::npos) {
 			is_baremetal_ = true;
-			is_nv32_ = true;
+			is_nv_ = true;
 			return;
 		}
 #ifdef _WIN64
 		std::string output = get_device_ids();
 		is_mi300_ = check_if_mi30x(output);
-		is_nv32_ = check_if_nv32(output);
+		is_nv_ = check_if_nv(output);
 		is_mi200_ = check_if_mi200(output);
 
 		if (is_vm_compute_running()) {
@@ -319,7 +319,7 @@ AmdSmiPlatform::AmdSmiPlatform()
 		transform(gpu_id_list.begin(), gpu_id_list.end(), gpu_id_list.begin(),
 				  ::toupper);
 
-		is_nv32_ = check_if_nv32(gpu_id_list);
+		is_nv_ = check_if_nv(gpu_id_list);
 		is_mi300_ = check_if_mi30x(gpu_id_list);
 		is_mi200_ = check_if_mi200(gpu_id_list);
 
@@ -393,9 +393,9 @@ bool AmdSmiPlatform::is_mi300()
 {
 	return is_mi300_;
 }
-bool AmdSmiPlatform::is_nv32()
+bool AmdSmiPlatform::is_nv()
 {
-	return is_nv32_;
+	return is_nv_;
 }
 bool AmdSmiPlatform::is_mi200()
 {

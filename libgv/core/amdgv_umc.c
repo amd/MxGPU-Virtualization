@@ -24,6 +24,7 @@
 #include "amdgv_ras.h"
 #include "amdgv_ras_eeprom.h"
 #include "amdgv_ras_eeprom_internal.h"
+#include "amdgv_sched_internal.h"
 #include "amdgv_vfmgr.h"
 
 #define AMDGV_UMC_ALIGNMENT	     512
@@ -123,7 +124,7 @@ static bool amdgv_umc_is_dup_record(struct amdgv_adapter *adapt,
 	if (from_eeprom) {
 		if (adapt->umc.funcs && adapt->umc.funcs->eeprom_record_to_soc_pa) {
 			adapt->umc.funcs->eeprom_record_to_soc_pa(adapt, record, &pa_pfn);
-			if (adapt->umc.eeprom_version == EEPROM_TABLE_VER_V3)
+			if (adapt->umc.eeprom_version == EEPROM_TABLE_VER_V3 || adapt->umc.is_pmfw_managed_eeprom)
 				record->retired_page =
 					set_nps_to_pa(pa_pfn, get_nps_from_pa(record->retired_page));
 			else
@@ -147,10 +148,8 @@ static bool amdgv_umc_is_dup_record(struct amdgv_adapter *adapt,
  * to bad page addresses.
  */
 static int amdgv_umc_update_eeprom_rom_data(struct amdgv_adapter *adapt,
-		struct eeprom_table_record *bps)
+		struct eeprom_table_record *bps, struct eeprom_data_record *data)
 {
-	struct eeprom_data_record *data = &adapt->ecc.eh_data->rom_data;
-
 	/* grow bad page buffer if the pending total bad pages is greater than bad page buffer size */
 	if (amdgv_umc_update_bp_buff(adapt, &data->bps, (uint32_t)(data->count + 1), &data->bps_cap)) {
 		AMDGV_ERROR("Failed to update eeprom rom bad page buffer!\n");
@@ -167,9 +166,8 @@ static int amdgv_umc_update_eeprom_rom_data(struct amdgv_adapter *adapt,
  * be extended to the bad page addresses before caching.
  */
 static int amdgv_umc_update_eeprom_ram_data(struct amdgv_adapter *adapt,
-				struct eeprom_table_record *bps)
+				struct eeprom_table_record *bps, struct ras_err_handler_data *data)
 {
-	struct ras_err_handler_data *data = adapt->ecc.eh_data;
 	uint64_t page_pfn[16] = {0};
 	bool expand_to_pages = false;
 	int count, j;
@@ -196,6 +194,8 @@ static int amdgv_umc_update_eeprom_ram_data(struct amdgv_adapter *adapt,
 			bps->retired_page = page_pfn[j];
 		oss_memcpy(&data->bps[data->count], bps, sizeof(struct eeprom_table_record));
 		data->count++;
+		/* Add page to sorted bad pages array */
+		amdgv_umc_insert_sorted_bad_page(adapt, bps->retired_page, data);
 	}
 
 	amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_BAD_PAGE_APPEND,
@@ -208,7 +208,7 @@ int amdgv_umc_add_bad_pages(struct amdgv_adapter *adapt,
 				   struct eeprom_table_record *bps, int pages, bool from_eeprom)
 {
 	struct ras_err_handler_data *data = adapt->ecc.eh_data;
-	enum amdgv_memory_partition_mode nps;
+	enum amdgv_memory_partition_mode nps = AMDGV_MEMORY_PARTITION_MODE_UNKNOWN;
 	int ret = 0;
 	int i = 0;
 
@@ -221,9 +221,9 @@ int amdgv_umc_add_bad_pages(struct amdgv_adapter *adapt,
 	if (!data)
 		return 0;
 
-	if (adapt->nbio.ras &&
-		adapt->nbio.ras->get_curr_memory_partition_mode) {
-		ret = adapt->nbio.ras->get_curr_memory_partition_mode(adapt, &nps);
+	if (adapt->nbio.funcs &&
+		adapt->nbio.funcs->get_nps_mode) {
+		ret = adapt->nbio.funcs->get_nps_mode(adapt, &nps);
 		if (ret) {
 			AMDGV_ERROR("Failed to get current nps mode\n");
 			return 0;
@@ -242,10 +242,11 @@ int amdgv_umc_add_bad_pages(struct amdgv_adapter *adapt,
 		if (amdgv_umc_is_dup_record(adapt, &bps[i], from_eeprom))
 			continue;
 
-		if (!from_eeprom && (adapt->umc.eeprom_version == EEPROM_TABLE_VER_V3))
+		if (adapt->umc.is_pmfw_managed_eeprom ||
+				(!from_eeprom && (adapt->umc.eeprom_version == EEPROM_TABLE_VER_V3)))
 			bps[i].retired_page = set_nps_to_pa(bps[i].retired_page, nps);
 
-		ret = amdgv_umc_update_eeprom_rom_data(adapt, &bps[i]);
+		ret = amdgv_umc_update_eeprom_rom_data(adapt, &bps[i], &data->rom_data);
 		if (ret)
 			goto out;
 
@@ -258,7 +259,7 @@ int amdgv_umc_add_bad_pages(struct amdgv_adapter *adapt,
 
 		data->last_retired_pfn = bps[i].retired_page;
 
-		ret = amdgv_umc_update_eeprom_ram_data(adapt, &bps[i]);
+		ret = amdgv_umc_update_eeprom_ram_data(adapt, &bps[i], data);
 		if (ret)
 			goto out;
 	}
@@ -280,6 +281,12 @@ int amdgv_umc_save_bad_pages(struct amdgv_adapter *adapt)
 	int save_count;
 
 	if (adapt->ecc.bad_page_detection_mode & BIT(AMDGV_RAS_ECC_FLAG_SKIP_BAD_PAGE_OPS))
+		return 0;
+
+	/*for pmfw managed eeprom, the bad pages are saved by pmfw,
+	 * driver has no direct access to eeprom.
+	 */
+	if (adapt->umc.is_pmfw_managed_eeprom)
 		return 0;
 
 	if (!data)
@@ -321,6 +328,112 @@ int amdgv_umc_save_bad_pages(struct amdgv_adapter *adapt)
 	return 0;
 }
 
+static int amdgv_umc_add_bad_pages_across_nps(struct amdgv_adapter *adapt,
+				   struct eeprom_table_record *bps, int pages,
+				   enum amdgv_memory_partition_mode nps,
+				   struct ras_err_handler_data *data)
+{
+	int ret = 0;
+	int i = 0;
+	uint64_t pa_pfn = 0;
+
+	if (adapt->ecc.bad_page_detection_mode & BIT(AMDGV_RAS_ECC_FLAG_SKIP_BAD_PAGE_OPS))
+		return 0;
+
+	if (!bps || pages <= 0)
+		return 0;
+
+	if (!data)
+		return 0;
+
+	oss_mutex_lock(adapt->ecc.recovery_lock);
+
+	for (i = 0; i < pages; i++) {
+		if (data->count >= (int)adapt->eeprom_control.max_record_num) {
+			AMDGV_ERROR("Bad page record count exceeds the max limit! Dropping new bad pages\n");
+			ret = AMDGV_FAILURE;
+			goto out;
+		}
+
+		/* Emit checking for duplicate records as it's from EEPROM */
+		if (adapt->umc.funcs && adapt->umc.funcs->eeprom_record_to_soc_pa) {
+			pa_pfn = 0;
+			/* Get un-nps-masked PA in pa_pfn*/
+			adapt->umc.funcs->eeprom_record_to_soc_pa(adapt, &bps[i], &pa_pfn);
+		}
+
+		/* Convert to nps-masked pa_pfn */
+		bps[i].retired_page = set_nps_to_pa(pa_pfn, nps);
+
+		ret = amdgv_umc_update_eeprom_rom_data(adapt, &bps[i], &data->rom_data);
+		if (ret)
+			goto out;
+
+		/* Since the base address translated from the legacy page
+		   record in the eeprom is the same, only the first address
+		   needs to be extended. */
+		if (set_nps_to_pa(data->last_retired_pfn, AMDGV_MEMORY_PARTITION_MODE_UNKNOWN) ==
+				set_nps_to_pa(bps[i].retired_page, AMDGV_MEMORY_PARTITION_MODE_UNKNOWN))
+			continue;
+
+		data->last_retired_pfn = bps[i].retired_page;
+
+		/* Extending pages */
+		oss_atomic_set(&adapt->ecc.in_cross_nps_handling, 1);
+		ret = amdgv_umc_update_eeprom_ram_data(adapt, &bps[i], data);
+		if (ret)
+			goto out;
+	}
+
+out:
+	oss_atomic_set(&adapt->ecc.in_cross_nps_handling, 0);
+	oss_mutex_unlock(adapt->ecc.recovery_lock);
+
+	return ret;
+}
+
+int amdgv_umc_load_bad_pages_across_nps(struct amdgv_adapter *adapt)
+{
+	int ret = 0, i;
+	struct amdgv_ras_eeprom_control *control = &adapt->eeprom_control;
+	struct eeprom_table_record *bps = adapt->ecc.init_bps;
+	struct eeprom_table_record *temp_bps = NULL;
+	struct ras_err_handler_data *data = adapt->ecc.eh_data_across_nps;
+	enum amdgv_memory_partition_mode nps = 0;
+	int supported_nps_count = adapt->ecc.supported_nps_count;
+
+	if (adapt->ecc.bad_page_detection_mode & BIT(AMDGV_RAS_ECC_FLAG_SKIP_BAD_PAGE_OPS))
+		return ret;
+
+	if (!bps)
+		return AMDGV_FAILURE;
+
+	temp_bps = oss_zalloc(control->num_recs * sizeof(*temp_bps));
+	if (!temp_bps)
+		return AMDGV_FAILURE;
+
+	/* Get existing pmfw-eeprom bad pages records to minimizing pmfw accesss */
+	if (amdgv_ras_eeprom_process_records(adapt, control, bps, false, control->num_recs)) {
+			AMDGV_ERROR("Failed to load EEPROM table records!\n");
+			ret = AMDGV_FAILURE;
+			goto out;
+		}
+
+	for (i = 0; i < supported_nps_count; i++) {
+		oss_memcpy(temp_bps, bps, control->num_recs * sizeof(*bps));
+
+		/* Add bad pages masked with supported nps to data[i] */
+		data[i].last_retired_pfn = AMDGV_RAS_INV_MEM_PFN;
+		nps = adapt->ecc.supported_nps[i];
+		if (amdgv_umc_add_bad_pages_across_nps(adapt, temp_bps, control->num_recs, nps, &data[i]))
+			ret = AMDGV_FAILURE;
+	}
+
+out:
+	oss_free(temp_bps);
+	return ret;
+}
+
 int amdgv_umc_load_bad_pages(struct amdgv_adapter *adapt)
 {
 	int ret = 0, new_count, i;
@@ -340,21 +453,42 @@ int amdgv_umc_load_bad_pages(struct amdgv_adapter *adapt)
 	if (!bps)
 		return AMDGV_FAILURE;
 
-	if (amdgv_ras_eeprom_process_records(adapt, control, bps, false, control->num_recs)) {
-		AMDGV_ERROR("Failed to load EEPROM table records!\n");
-		ret = AMDGV_FAILURE;
-		goto out;
+	if (adapt->umc.is_pmfw_managed_eeprom && adapt->ecc.init_bps_num_recs) {
+		if (adapt->ecc.init_bps_num_recs == control->num_recs){
+			if (!adapt->ecc.init_bps)
+				return AMDGV_FAILURE;
+
+			oss_memcpy(bps, adapt->ecc.init_bps, control->num_recs * sizeof(*bps));
+		} else {
+			AMDGV_ERROR("New bad page records come in during hw_init, exiting.\n");
+			return AMDGV_FAILURE;
+		}
+	} else {
+		if (amdgv_ras_eeprom_process_records(adapt, control, bps, false, control->num_recs)) {
+			AMDGV_ERROR("Failed to load EEPROM table records!\n");
+			ret = AMDGV_FAILURE;
+			goto out;
+		}
 	}
 
-	adapt->ecc.eh_data->last_retired_pfn = AMDGV_RAS_INV_MEM_PFN;
+	if (adapt->ecc.eh_data) {
+		adapt->ecc.eh_data->last_retired_pfn = AMDGV_RAS_INV_MEM_PFN;
+	}
+
+	if (adapt->ecc.eh_data && adapt->ecc.eh_data->sorted_bps) {
+		adapt->ecc.eh_data->sorted_bp_count = 0;
+		/* Reset the count and zero out the memory */
+		oss_memset(adapt->ecc.eh_data->sorted_bps, 0,
+			  adapt->ecc.eh_data->sorted_bps_cap * sizeof(uint64_t));
+	}
 	if (amdgv_umc_add_bad_pages(adapt, bps, control->num_recs, true))
 		ret = AMDGV_FAILURE;
 
-	if (adapt->umc.eeprom_version == EEPROM_TABLE_VER_V3) {
+	if (adapt->umc.eeprom_version >= EEPROM_TABLE_VER_V3) {
 		if (control->tbl_hdr.version < EEPROM_TABLE_VER_V3) {
-			if (adapt->nbio.ras &&
-				adapt->nbio.ras->get_curr_memory_partition_mode) {
-				ret = adapt->nbio.ras->get_curr_memory_partition_mode(adapt, &nps);
+			if (adapt->nbio.funcs &&
+				adapt->nbio.funcs->get_nps_mode) {
+				ret = adapt->nbio.funcs->get_nps_mode(adapt, &nps);
 				if (ret) {
 						AMDGV_ERROR("Failed to get current nps mode\n");
 						goto out;
@@ -372,7 +506,7 @@ int amdgv_umc_load_bad_pages(struct amdgv_adapter *adapt)
 				data->rom_data.count = 0;
 				new_count = data->count / 16;
 				for (i = 0; i < new_count; i++) {
-					ret = amdgv_umc_update_eeprom_rom_data(adapt, &(data->bps[i * 16]));
+					ret = amdgv_umc_update_eeprom_rom_data(adapt, &(data->bps[i * 16]), &data->rom_data);
 					if (ret)
 						goto out;
 					data->rom_data.bps[data->rom_data.count - 1].retired_page =
@@ -404,10 +538,18 @@ out:
  **/
 int amdgv_umc_reload_bp_from_rom(struct amdgv_adapter *adapt)
 {
-	struct eeprom_data_record *rom_data = &adapt->ecc.eh_data->rom_data;
-	struct ras_err_handler_data *eh_data = adapt->ecc.eh_data;
+	struct eeprom_data_record *rom_data;
+	struct ras_err_handler_data *eh_data;
 
 	int i, ret = 0;
+
+	if (!adapt->ecc.eh_data) {
+		AMDGV_ERROR("eh_data is null\n");
+		return AMDGV_FAILURE;
+	}
+
+	rom_data = &adapt->ecc.eh_data->rom_data;
+	eh_data = adapt->ecc.eh_data;
 
 	/* release pf reserved bp */
 	amdgv_umc_release_bad_pages(adapt);
@@ -419,9 +561,16 @@ int amdgv_umc_reload_bp_from_rom(struct amdgv_adapter *adapt)
 	eh_data->count = 0;
 	eh_data->last_retired_pfn = AMDGV_RAS_INV_MEM_PFN;
 
+	if (adapt->ecc.eh_data && adapt->ecc.eh_data->sorted_bps) {
+		adapt->ecc.eh_data->sorted_bp_count = 0;
+		/* Reset the count and zero out the memory */
+		oss_memset(adapt->ecc.eh_data->sorted_bps, 0,
+			  adapt->ecc.eh_data->sorted_bps_cap * sizeof(uint64_t));
+	}
+
 	/* load from rom data */
 	for (i = 0; i < rom_data->count; i++) {
-		ret = amdgv_umc_update_eeprom_ram_data(adapt, &rom_data->bps[i]);
+		ret = amdgv_umc_update_eeprom_ram_data(adapt, &rom_data->bps[i], eh_data);
 		if (ret)
 			break;
 	}
@@ -463,14 +612,46 @@ out:
 
 static bool amdgv_umc_is_bp_in_range(uint64_t err_addr, uint64_t offset, uint64_t size)
 {
-	if ((err_addr >= offset) && (err_addr < offset + size))
+	uint64_t err_addr_begin, err_addr_end;
+
+	err_addr_begin = err_addr & ~(AMDGV_GPU_PAGE_SIZE - 1);
+	err_addr_end = err_addr_begin | (AMDGV_GPU_PAGE_SIZE - 1);
+	if ((err_addr_begin >= offset) && (err_addr_end < offset + size))
 		return true;
 	else
 		return false;
 }
 
+bool amdgv_umc_check_bad_pages_in_range(struct amdgv_adapter *adapt, uint64_t fb_offset, uint64_t size)
+{
+	struct ras_err_handler_data *data = adapt->ecc.eh_data;
+	int i;
+	bool ret = false;
+	uint64_t fb_end = fb_offset + size;
+	uint64_t bad_page_addr;
+
+	oss_mutex_lock(adapt->ecc.recovery_lock);
+	if (!data || !data->sorted_bps)
+		goto out;
+
+	/* Iterate through all bad pages and check if any falls within the range */
+	for (i = 0; i < data->sorted_bp_count; i++) {
+		bad_page_addr = data->sorted_bps[i] << AMDGV_GPU_PAGE_SHIFT;
+		if (amdgv_umc_is_bp_in_range(bad_page_addr, fb_offset, size)) {
+			AMDGV_INFO("Bad page found in fb range [0x%llx-0x%llx] at address 0x%llx\n",
+					fb_offset, fb_end, bad_page_addr);
+			ret = true;
+			goto out;
+		}
+	}
+
+out:
+	oss_mutex_unlock(adapt->ecc.recovery_lock);
+	return ret;
+}
+
 static uint32_t amdgv_umc_calc_retired_page_vf_slot(struct amdgv_adapter *adapt,
-						    uint64_t err_addr)
+		uint64_t err_addr)
 {
 	struct amdgv_vf_device *entry;
 	uint32_t vf_slot = AMDGV_PF_IDX;
@@ -496,8 +677,8 @@ static uint32_t amdgv_umc_calc_retired_page_vf_slot(struct amdgv_adapter *adapt,
 	return vf_slot;
 }
 
-static bool amdgv_umc_check_bp_in_critical_region(struct amdgv_adapter *adapt,
-						  uint64_t err_addr, uint32_t idx_vf)
+static bool amdgv_umc_check_bp_in_critical_region(struct amdgv_adapter *adapt, uint64_t err_addr,
+						  uint32_t idx_vf, bool log_err)
 {
 	struct amdgv_vf_device *entry;
 	struct psp_local_memory *tmr_mem;
@@ -528,52 +709,28 @@ static bool amdgv_umc_check_bp_in_critical_region(struct amdgv_adapter *adapt,
 			/* check pf memory region */
 			if (amdgv_umc_is_bp_in_range(err_addr, vf_fb_offset, vf_fb_size) &&
 			    (adapt->flags & AMDGV_FLAG_USE_PF)) {
-				adapt->bp_msg_type = AMDGV_BP_MSG_IN_PF_FB;
+				if (log_err)
+					adapt->bp_msg_type = AMDGV_BP_MSG_IN_PF_FB;
 				return true;
 			}
 
 			if (amdgv_umc_is_bp_in_range(err_addr, adapt->memmgr_pf.offset, adapt->memmgr_pf.size) &&
 			    (adapt->flags & AMDGV_FLAG_USE_PF)) {
-				adapt->bp_msg_type = AMDGV_BP_MSG_IN_PF_FB;
+				if (log_err)
+					adapt->bp_msg_type = AMDGV_BP_MSG_IN_PF_FB;
 				return true;
 			}
-		} else {
+		} else if (!adapt->umc.is_pmfw_managed_eeprom ||
+			   (adapt->umc.is_pmfw_managed_eeprom && is_active_vf(idx_vf))) {
 			/* we may get multiple ECCs at the same time, and the ecc address and ecc vf may
 			* be not in sequence. So check all the VF for critical range, if found, set
 			* to RMA status */
 			for (i = 0; i < adapt->num_vf; i++) {
 				entry = &adapt->array_vf[i];
-				vf_fb_offset = MBYTES_TO_BYTES(entry->fb_offset);
-				vf_fb_size = MBYTES_TO_BYTES(entry->fb_size);
-				vf_real_fb_size = MBYTES_TO_BYTES(entry->real_fb_size);
 
-				/* check bp whether in vbios and data exchange region */
-				fb_offset = vf_fb_offset +
-					    KBYTES_TO_BYTES(AMD_SRIOV_MSG_VBIOS_OFFSET);
-				fb_size =
-					KBYTES_TO_BYTES(AMD_SRIOV_MSG_DATAEXCHANGE_OFFSET_KB) +
-					KBYTES_TO_BYTES(AMD_SRIOV_MSG_DATAEXCHANGE_SIZE_KB);
-
-				if (adapt->gpuiov.funcs->adjust_fb_size) {
-					fb_size = adapt->gpuiov.funcs->adjust_fb_size(adapt, idx_vf, fb_size);
-				}
-
-				if (amdgv_umc_is_bp_in_range(err_addr, fb_offset, fb_size)) {
-					adapt->bp_msg_type =
-						AMDGV_BP_MSG_IN_VF_CRITICAL_REGION;
-
-					return true;
-				}
-
-				/* check bp whether in vf ip discovery data block region */
-				fb_offset = vf_fb_offset + vf_real_fb_size -
-					    AMDGV_IP_DISCOVERY_OFFSET;
-
-				fb_size = AMDGV_IP_DISCOVERY_SIZE;
-				if (amdgv_umc_is_bp_in_range(err_addr, fb_offset, fb_size)) {
-					adapt->bp_msg_type =
-						AMDGV_BP_MSG_IN_VF_CRITICAL_REGION;
-
+				if (amdgv_vfmgr_check_bp_in_crit_region(adapt, idx_vf, err_addr)) {
+					if (log_err)
+						adapt->bp_msg_type = AMDGV_BP_MSG_IN_VF_CRITICAL_REGION;
 					return true;
 				}
 			}
@@ -590,7 +747,8 @@ static bool amdgv_umc_check_bp_in_critical_region(struct amdgv_adapter *adapt,
 		fb_offset = amdgv_memmgr_get_gpu_addr(tmr_mem->mem) - fb_mc_base;
 		fb_size = amdgv_memmgr_get_size(tmr_mem->mem);
 		if (amdgv_umc_is_bp_in_range(err_addr, fb_offset, fb_size)) {
-			adapt->bp_msg_type = AMDGV_BP_MSG_IN_CRITICAL_REGION;
+			if (log_err)
+				adapt->bp_msg_type = AMDGV_BP_MSG_IN_CRITICAL_REGION;
 
 			return true;
 		}
@@ -600,23 +758,30 @@ static bool amdgv_umc_check_bp_in_critical_region(struct amdgv_adapter *adapt,
 	fb_offset = total_avail_fb - AMDGV_IP_DISCOVERY_OFFSET;
 	fb_size = AMDGV_IP_DISCOVERY_SIZE;
 	if (amdgv_umc_is_bp_in_range(err_addr, fb_offset, fb_size)) {
-		adapt->bp_msg_type = AMDGV_BP_MSG_IN_CRITICAL_REGION;
+		if (log_err)
+			adapt->bp_msg_type = AMDGV_BP_MSG_IN_CRITICAL_REGION;
 
 		return true;
 	}
 
 	/* check bp whether in csa region */
 	csa_fb_mem = adapt->gpuiov.csa_fb_mem;
-	if (csa_fb_mem) {
-		fb_offset = amdgv_memmgr_get_gpu_addr(csa_fb_mem) - fb_mc_base;
-		fb_size = amdgv_memmgr_get_size(csa_fb_mem);
-		if (amdgv_umc_is_bp_in_range(err_addr, fb_offset, fb_size)) {
-			adapt->bp_msg_type = AMDGV_BP_MSG_IN_CRITICAL_REGION;
+	if (adapt->ecc.ras_ecc_flags & AMDGV_ECC_FLAG__CSA_NON_CRITICAL) {
+		AMDGV_DEBUG("skip csa critical region check.\n");
+	} else {
+		if (csa_fb_mem) {
+			fb_offset = amdgv_memmgr_get_gpu_addr(csa_fb_mem) - fb_mc_base;
+			fb_size = amdgv_memmgr_get_size(csa_fb_mem);
+			if (amdgv_umc_is_bp_in_range(err_addr, fb_offset, fb_size)) {
+				if (log_err)
+					adapt->bp_msg_type = AMDGV_BP_MSG_IN_CRITICAL_REGION;
 
-			return true;
-		}
-	} else
-		AMDGV_ERROR("Private csa fb memory not allocated\n");
+				return true;
+			}
+		} else
+			AMDGV_ERROR("Private csa fb memory not allocated\n");
+	}
+
 
 	/* check FFBM PF fb region */
 	if (adapt->ffbm.enabled) {
@@ -626,7 +791,8 @@ static bool amdgv_umc_check_bp_in_critical_region(struct amdgv_adapter *adapt,
 		err_addr_gpa = amdgv_ffbm_spa_to_gpa(adapt, err_addr, &idx_vf);
 		if (idx_vf == AMDGV_PF_IDX &&
 			err_addr_gpa != AMDGV_FFBM_INVALID_ADDR && (adapt->flags & AMDGV_FLAG_USE_PF)) {
-			adapt->bp_msg_type = AMDGV_BP_MSG_IN_PF_FB;
+			if (log_err)
+				adapt->bp_msg_type = AMDGV_BP_MSG_IN_PF_FB;
 			/* return true if PF_FB is in use */
 			return true;
 		}
@@ -635,32 +801,40 @@ static bool amdgv_umc_check_bp_in_critical_region(struct amdgv_adapter *adapt,
 	return false;
 }
 
-static bool amdgv_umc_check_bp_in_same_mem_row(struct amdgv_adapter *adapt,
-					       uint64_t err_addr_new)
+int amdgv_umc_vf_chk_critical_region(struct amdgv_adapter *adapt, uint64_t err_addr,
+				     uint32_t idx_vf, uint32_t *hit)
 {
-	struct ras_err_handler_data *data = adapt->ecc.eh_data;
-	uint64_t err_addr, mem_row_idx;
-	int i;
-	bool ret = false;
+	uint64_t page_pfns[32] = {0}, pa;
+	uint32_t idx;
+	int i, count;
 
-	if (adapt->ecc.bad_page_detection_mode & BIT( AMDGV_RAS_ECC_FLAG_IGNORE_RMA))
-		return false;
+	if (hit)
+		*hit = 0;
+	else
+		return 0;
 
-	if (adapt->ecc.skip_row_rma)
-		return ret;
+	err_addr = amdgv_gpa_to_local_spa(adapt, err_addr, idx_vf);
 
-	mem_row_idx = err_addr_new / AMDGV_GPU_MEM_ROW_SIZE;
-	for (i = 0; i < data->last_reserved; i++) {
-		err_addr = data->bps[i].retired_page << AMDGV_GPU_PAGE_SHIFT;
-		if (mem_row_idx == (err_addr / AMDGV_GPU_MEM_ROW_SIZE))
-			ret = true;
+	if (adapt->umc.funcs->pages_in_a_row)
+		count = adapt->umc.funcs->pages_in_a_row(adapt, err_addr,
+							 page_pfns, ARRAY_SIZE(page_pfns));
+	else
+		return 0;
+
+	if (count <= 0)
+		return AMDGV_FAILURE;
+
+	for (i = 0; i < count; i++) {
+		pa = page_pfns[i] << AMDGV_GPU_PAGE_SHIFT;
+		/* idx_vf is ignored as bp in critical region of any of vf slots is a concern */
+		idx = amdgv_umc_calc_retired_page_vf_slot(adapt, pa);
+		if (amdgv_umc_check_bp_in_critical_region(adapt, pa, idx, false)) {
+			*hit = 1;
+			break;
+		}
 	}
 
-	if (ret) {
-		adapt->bp_msg_type = AMDGV_BP_MSG_IN_SAME_ROW;
-	}
-
-	return ret;
+	return 0;
 }
 
 static void amdgv_umc_log_bp_errors(struct amdgv_adapter *adapt, uint32_t record_id)
@@ -684,10 +858,6 @@ static void amdgv_umc_log_bp_errors(struct amdgv_adapter *adapt, uint32_t record
 		break;
 	case AMDGV_BP_MSG_IN_VF_CRITICAL_REGION:
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_IN_VF_CRI,
-				AMDGV_ERROR_32_32(record_id, BAD_PAGE_RECORD_THRESHOLD));
-		break;
-	case AMDGV_BP_MSG_IN_SAME_ROW:
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_IN_SAME_ROW,
 				AMDGV_ERROR_32_32(record_id, BAD_PAGE_RECORD_THRESHOLD));
 		break;
 	case AMDGV_BP_MSG_RECORD_THRESHOLD_REACHED:
@@ -748,14 +918,21 @@ int amdgv_umc_reserve_bad_pages(struct amdgv_adapter *adapt)
 		total_fb = MBYTES_TO_BYTES(total_fb);
 		err_addr_gpu = total_fb - err_addr_pf;
 
-		if (amdgv_umc_check_bp_in_same_mem_row(adapt, err_addr_pf)) {
-			amdgv_umc_log_bp_errors(adapt, i);
-			break;
-		}
-
 		idx_vf = amdgv_umc_calc_retired_page_vf_slot(adapt, err_addr_pf);
-		if (amdgv_umc_check_bp_in_critical_region(adapt, err_addr_pf, idx_vf)) {
-			amdgv_umc_log_bp_errors(adapt, i);
+		if (amdgv_umc_check_bp_in_critical_region(adapt, err_addr_pf, idx_vf, true)) {
+			/* if PMFW managed EEPROM and VF is not active, critical regions
+			 * don't exist yet so we should not log anything here */
+			if (adapt->umc.is_pmfw_managed_eeprom && is_active_vf(idx_vf)) {
+				/* bad page discovered in critical region of active VF, we must
+				 * set VF to conditionally available */
+				amdgv_umc_log_bp_errors(adapt, i);
+				amdgv_sched_queue_set_vf_cond_avail(adapt, idx_vf);
+				adapt->array_vf[idx_vf].host_crit_region_caps =
+					adapt->array_vf[idx_vf].host_crit_region_caps & ~BIT(0);
+			}
+			if (!adapt->umc.is_pmfw_managed_eeprom)
+				amdgv_umc_log_bp_errors(adapt, i);
+
 			break;
 		}
 
@@ -771,9 +948,11 @@ int amdgv_umc_reserve_bad_pages(struct amdgv_adapter *adapt)
 			data->bps_mem[i] = amdgv_memmgr_alloc_align_at(
 				&adapt->memmgr_pf, err_addr_pf, AMDGV_GPU_PAGE_SIZE,
 				MEM_ECC_BAD_PAGE);
-			if (!data->bps_mem[i])
+			if (!data->bps_mem[i]) {
 				AMDGV_WARN("Reserve page at 0x%llx in memmgr_pf failed\n",
 					   err_addr_pf);
+				data->bp_replace_pending = true;
+			}
 		} else if ((err_addr_gpu >= adapt->memmgr_gpu.offset) &&
 			   (err_addr_gpu <
 			    adapt->memmgr_gpu.offset + adapt->memmgr_gpu.size)) {
@@ -817,7 +996,7 @@ int amdgv_umc_copy_bp_records_to_vf(struct amdgv_adapter *adapt,
 	for (i = 0; i < data->count; i++) {
 		err_addr = data->bps[i].retired_page << AMDGV_GPU_PAGE_SHIFT;
 		if (amdgv_umc_calc_retired_page_vf_slot(adapt, err_addr) != idx_vf ||
-		    amdgv_umc_check_bp_in_critical_region(adapt, err_addr, idx_vf))
+		    amdgv_umc_check_bp_in_critical_region(adapt, err_addr, idx_vf, true))
 		    continue;
 
 		if (*write_size > allowed_size) {
@@ -854,7 +1033,7 @@ void amdgv_umc_check_and_handle_bp_in_crit_vf_fb(struct amdgv_adapter *adapt, ui
 			err_addr = data->bps[i].retired_page << AMDGV_GPU_PAGE_SHIFT;
 			if (idx_vf != amdgv_umc_calc_retired_page_vf_slot(adapt, err_addr))
 				continue;
-			if (amdgv_umc_check_bp_in_critical_region(adapt, err_addr, idx_vf)) {
+			if (amdgv_umc_check_bp_in_critical_region(adapt, err_addr, idx_vf, true)) {
 				amdgv_umc_log_bp_errors(adapt, i);
 				break;
 			}
@@ -867,8 +1046,6 @@ void amdgv_umc_check_and_handle_bp_in_crit_vf_fb(struct amdgv_adapter *adapt, ui
 	if (adapt->bp_msg_type != AMDGV_BP_MSG_INVALID)
 		amdgv_umc_save_bad_pages(adapt);
 
-	if (amdgv_ras_eeprom_is_gpu_bad(adapt))
-		amdgv_device_handle_bad_gpu(adapt);
 }
 
 /* called when driver unload */
@@ -893,6 +1070,66 @@ out:
 	return 0;
 }
 
+int amdgv_umc_across_nps_err_data_init(struct amdgv_adapter *adapt)
+{
+	struct ras_err_handler_data **data_across_nps = &(adapt->ecc.eh_data_across_nps);
+	enum amdgv_memory_partition_mode supported_nps[AMDGV_MEMORY_PARTITION_MODE_MAX] = {0};
+	int supported_nps_count = 0;
+	int i, ret = 0;
+	struct eeprom_table_record **init_bps = &(adapt->ecc.init_bps);
+
+	/* Allocate driver buf for existing pmfw-eeprom bad pages records to minimizing pmfw access */
+	*init_bps = oss_zalloc(adapt->eeprom_control.num_recs * sizeof(**init_bps));
+	if (!*init_bps)
+		goto error;
+	adapt->ecc.init_bps_num_recs = adapt->eeprom_control.num_recs;
+
+	/* get supported nps info/count */
+	if (adapt->nbio.ras && adapt->nbio.ras->get_supported_memory_partition_mode) {
+		ret = adapt->nbio.ras->get_supported_memory_partition_mode(adapt,
+			supported_nps, &supported_nps_count);
+		if (supported_nps_count == 0) {
+			AMDGV_ERROR("No supported nps mode found.\n");
+			return AMDGV_FAILURE;
+		}
+	}
+
+	/* Allocate it to contain bad pages masking with all supported NPS respectively */
+	*data_across_nps = oss_zalloc(supported_nps_count * sizeof(**data_across_nps));
+	if (!*data_across_nps)
+		goto error;
+
+	for (i = 0; i < supported_nps_count; i++) {
+		(*data_across_nps)[i].last_retired_pfn = AMDGV_RAS_INV_MEM_PFN;
+		(*data_across_nps)[i].rom_data.bps_cap = BAD_PAGE_RECORD_THRESHOLD;
+		(*data_across_nps)[i].rom_data.bps = oss_zalloc(AMDGV_UMC_ALIGN(
+			(*data_across_nps)[i].rom_data.bps_cap * sizeof(*(*data_across_nps)[i].rom_data.bps), AMDGV_UMC_ALIGNMENT));
+
+		(*data_across_nps)[i].bps_cap = BAD_PAGE_RECORD_THRESHOLD;
+		(*data_across_nps)[i].bps = oss_zalloc(AMDGV_UMC_ALIGN(
+			(*data_across_nps)[i].bps_cap * sizeof(*(*data_across_nps)[i].bps), AMDGV_UMC_ALIGNMENT));
+		(*data_across_nps)[i].bps_mem = oss_zalloc(AMDGV_UMC_ALIGN(
+			BAD_PAGE_RECORD_THRESHOLD * sizeof(*(*data_across_nps)[i].bps_mem), AMDGV_UMC_ALIGNMENT));
+
+		(*data_across_nps)[i].bp_replace_pending = false;
+
+		if (!(*data_across_nps)[i].rom_data.bps || !(*data_across_nps)[i].bps || !(*data_across_nps)[i].bps_mem)
+			goto error;
+	}
+
+	adapt->ecc.eh_data_across_nps_initialized = true;
+	for (i = 0; i < supported_nps_count; i++)
+		adapt->ecc.supported_nps[i] = supported_nps[i];
+	adapt->ecc.supported_nps_count = supported_nps_count;
+
+	return 0;
+error:
+	AMDGV_ERROR("Failed to initialize ras data with all supported nps info!\n");
+	amdgv_umc_across_nps_err_data_fini(adapt);
+	return AMDGV_FAILURE;
+
+}
+
 int amdgv_umc_sw_init(struct amdgv_adapter *adapt)
 {
 	struct ras_err_handler_data **data = &(adapt->ecc.eh_data);
@@ -912,10 +1149,15 @@ int amdgv_umc_sw_init(struct amdgv_adapter *adapt)
 	(*data)->bps_mem = oss_zalloc(AMDGV_UMC_ALIGN(
 		BAD_PAGE_RECORD_THRESHOLD * sizeof(*(*data)->bps_mem), AMDGV_UMC_ALIGNMENT));
 
-	if (!(*data)->bps || !(*data)->bps_mem)
-		goto error;
+	(*data)->bp_replace_pending = false;
 
-	if (amdgv_ras_eeprom_sw_init(adapt, &(adapt->eeprom_control)))
+	/* Initialize sorted bad pages array */
+	if (amdgv_umc_init_sorted_bad_pages(adapt) != 0) {
+		AMDGV_ERROR("Failed to initialize sorted bad pages array\n");
+		goto error;
+	}
+
+	if (!(*data)->bps || !(*data)->bps_mem)
 		goto error;
 
 	return 0;
@@ -927,7 +1169,7 @@ error:
 
 int amdgv_umc_hw_init(struct amdgv_adapter *adapt)
 {
-	int ret;
+	int ret = 0;
 	enum amdgv_memory_partition_mode nps_mode;
 
 	/* get fb available size in advance for possible usage in page retirement */
@@ -950,9 +1192,9 @@ int amdgv_umc_hw_init(struct amdgv_adapter *adapt)
 		if (ret)
 			goto release;
 
-		if (adapt->nbio.ras &&
-			 adapt->nbio.ras->get_curr_memory_partition_mode) {
-			ret = adapt->nbio.ras->get_curr_memory_partition_mode(adapt, &nps_mode);
+		if (adapt->nbio.funcs &&
+			 adapt->nbio.funcs->get_nps_mode) {
+			ret = adapt->nbio.funcs->get_nps_mode(adapt, &nps_mode);
 			if (ret) {
 				AMDGV_ERROR("Failed to get current nps mode\n");
 				goto release;
@@ -966,18 +1208,24 @@ int amdgv_umc_hw_init(struct amdgv_adapter *adapt)
 					goto release;
 				}
 				adapt->ecc.eh_data->nps_mode = nps_mode;
+			} else {
+				ret = amdgv_umc_reserve_bad_pages(adapt);
+				if (ret) {
+					AMDGV_ERROR("Failed to reserve bad pages\n");
+					goto release;
+				}
 			}
 		}
-
 
 		ret = amdgv_umc_save_bad_pages(adapt);
 		if (ret)
 			goto release;
-	} else {
+	} else if (!adapt->umc.is_pmfw_managed_eeprom) {
 		ret = amdgv_ras_eeprom_init(adapt, &(adapt->eeprom_control));
 		if (ret)
 			goto free;
 	}
+
 
 	if (adapt->ecc.bad_page_detection_mode & (1 << AMDGV_RAS_ECC_FLAG_SKIP_BAD_PAGE_OPS))
 		return 0;
@@ -989,10 +1237,73 @@ free:
 	if (ret)
 		amdgv_ras_eeprom_fini(&adapt->eeprom_control);
 
-	if (amdgv_ras_eeprom_is_gpu_bad(adapt))
-		amdgv_device_handle_bad_gpu(adapt);
-
 	return ret;
+}
+
+int amdgv_umc_across_nps_err_data_fini(struct amdgv_adapter *adapt)
+{
+	struct ras_err_handler_data *data_across_nps = adapt->ecc.eh_data_across_nps;
+	struct eeprom_table_record *init_bps = adapt->ecc.init_bps;
+	int supported_nps_count = adapt->ecc.supported_nps_count;
+	int i;
+
+	if (!init_bps)
+		return 0;
+
+	/* Fini init_bps */
+	oss_free(init_bps);
+	adapt->ecc.init_bps = NULL;
+	adapt->ecc.init_bps_num_recs = 0;
+
+	if (!data_across_nps)
+		return 0;
+
+	/* get supported nps count */
+	if (adapt->ecc.supported_nps_count != 0) {
+		for (i = 0; i < supported_nps_count; i++) {
+			struct ras_err_handler_data *data = &data_across_nps[i];
+
+			data->count = 0;
+			data->last_reserved = 0;
+			data->rom_data.count = 0;
+
+			if (data->rom_data.bps) {
+				oss_memset(data->rom_data.bps, 0,
+					AMDGV_UMC_ALIGN(data->rom_data.bps_cap * sizeof(*data->rom_data.bps),
+						AMDGV_UMC_ALIGNMENT));
+				oss_free(data->rom_data.bps);
+				data->rom_data.bps = NULL;
+				data->rom_data.bps_cap = 0;
+			}
+
+			if (data->bps) {
+				oss_memset(data->bps, 0,
+					AMDGV_UMC_ALIGN(data->bps_cap * sizeof(*data->bps),
+						AMDGV_UMC_ALIGNMENT));
+				oss_free(data->bps);
+				data->bps = NULL;
+				data->bps_cap = 0;
+			}
+
+			if (data->bps_mem) {
+				oss_memset(data->bps_mem, 0,
+					AMDGV_UMC_ALIGN(BAD_PAGE_RECORD_THRESHOLD * sizeof(*data->bps_mem),
+						AMDGV_UMC_ALIGNMENT));
+				oss_free(data->bps_mem);
+				data->bps_mem = NULL;
+			}
+		}
+
+		oss_free(data_across_nps);
+		adapt->ecc.eh_data_across_nps = NULL;
+		for (i = 0; i < supported_nps_count; i++)
+			adapt->ecc.supported_nps[i] = 0;
+		adapt->ecc.supported_nps_count = 0;
+	}
+
+	adapt->ecc.eh_data_across_nps_initialized = false;
+
+	return 0;
 }
 
 int amdgv_umc_sw_fini(struct amdgv_adapter *adapt)
@@ -1007,7 +1318,7 @@ int amdgv_umc_sw_fini(struct amdgv_adapter *adapt)
 		data->rom_data.count = 0;
 
 		if (data->rom_data.bps) {
-			oss_memset(data->bps, 0,
+			oss_memset(data->rom_data.bps, 0,
 				AMDGV_UMC_ALIGN(data->rom_data.bps_cap * sizeof(*data->rom_data.bps),
 					AMDGV_UMC_ALIGNMENT));
 			oss_free(data->rom_data.bps);
@@ -1021,6 +1332,7 @@ int amdgv_umc_sw_fini(struct amdgv_adapter *adapt)
 			oss_free(data->bps);
 			data->bps = NULL;
 		}
+
 		if (data->bps_mem) {
 			oss_memset(data->bps_mem, 0,
 				AMDGV_UMC_ALIGN(BAD_PAGE_RECORD_THRESHOLD * sizeof(*data->bps_mem),
@@ -1028,6 +1340,8 @@ int amdgv_umc_sw_fini(struct amdgv_adapter *adapt)
 			oss_free(data->bps_mem);
 			data->bps_mem = NULL;
 		}
+		/* Cleanup sorted bad pages array */
+		amdgv_umc_cleanup_sorted_bad_pages(adapt);
 		oss_free(data);
 		adapt->ecc.eh_data = NULL;
 	}
@@ -1078,6 +1392,16 @@ int amdgv_umc_retrieve_bad_pages(struct amdgv_adapter *adapt)
 	if (!adapt->ecc.eh_data)
 		return 0;
 
+	if (adapt->umc.is_pmfw_managed_eeprom) {
+		/* Get current bad page count*/
+		if (adapt->pp.pmme_funcs &&
+			adapt->pp.pmme_funcs->get_bad_page_count) {
+			ret = adapt->pp.pmme_funcs->get_bad_page_count(adapt,
+				&adapt->eeprom_control.num_recs);
+			if (ret)
+				return ret;
+		}
+	}
 	if (adapt->eeprom_control.num_recs) {
 		ret = amdgv_umc_load_bad_pages(adapt);
 		if (ret)
@@ -1087,9 +1411,9 @@ int amdgv_umc_retrieve_bad_pages(struct amdgv_adapter *adapt)
 			goto release;
 
 		/* nps mode is required if memory partitioning supported */
-		if (adapt->nbio.ras &&
-			adapt->nbio.ras->get_curr_memory_partition_mode) {
-			ret = adapt->nbio.ras->get_curr_memory_partition_mode(adapt, &nps_mode);
+		if (adapt->nbio.funcs &&
+			adapt->nbio.funcs->get_nps_mode) {
+			ret = adapt->nbio.funcs->get_nps_mode(adapt, &nps_mode);
 			if (ret) {
 				AMDGV_ERROR("Failed to get current nps mode\n");
 				goto release;
@@ -1120,9 +1444,6 @@ release:
 free:
 	if (ret)
 		amdgv_ras_eeprom_fini(&adapt->eeprom_control);
-
-	if (amdgv_ras_eeprom_is_gpu_bad(adapt))
-		amdgv_device_handle_bad_gpu(adapt);
 
 	return ret;
 }
@@ -1195,7 +1516,7 @@ void amdgv_umc_fill_error_record(struct amdgv_adapter *adapt,
 	err_rec->address = err_addr;
 	/* page frame address is saved */
 	err_rec->retired_page = retired_page >> AMDGV_GPU_PAGE_SHIFT;
-	err_rec->ts = amdgv_utc_to_eeprom_format(adapt, oss_get_utc_time_stamp());
+	err_rec->ts = amdgv_ras_eeprom_utc_to_eeprom_format(adapt, oss_get_utc_time_stamp());
 	err_rec->err_type = AMDGV_RAS_EEPROM_ERR_NON_RECOVERABLE;
 	err_rec->cu = 0;
 	err_rec->mem_channel = channel_index;
@@ -1245,9 +1566,20 @@ int amdgv_umc_clean_bad_page_records(struct amdgv_adapter *adapt)
 		AMDGV_ERROR("Failed to reset eeprom table\n");
 		return AMDGV_FAILURE;
 	}
-
 	oss_mutex_lock(adapt->ecc.recovery_lock);
-	adapt->ecc.eh_data->last_retired_pfn = AMDGV_RAS_INV_MEM_PFN;
+	if (adapt->ecc.eh_data) {
+		adapt->ecc.eh_data->last_retired_pfn = AMDGV_RAS_INV_MEM_PFN;
+	}
+
+	if (data) {
+		data->rom_data.bps_cap = BAD_PAGE_RECORD_THRESHOLD;
+	}
+	if (adapt->ecc.eh_data && adapt->ecc.eh_data->sorted_bps) {
+		adapt->ecc.eh_data->sorted_bp_count = 0;
+		/* Reset the count and zero out the memory */
+		oss_memset(adapt->ecc.eh_data->sorted_bps, 0,
+			  adapt->ecc.eh_data->sorted_bps_cap * sizeof(uint64_t));
+	}
 	if (data && data->rom_data.bps && data->rom_data.count)
 		data->rom_data.count = 0;
 
@@ -1261,7 +1593,7 @@ int amdgv_umc_clean_bad_page_records(struct amdgv_adapter *adapt)
 		}
 	}
 
-	if (adapt->pp.pp_funcs->send_hbm_bad_pages_num)
+	if (adapt->pp.pp_funcs->send_hbm_bad_pages_num && !adapt->umc.is_pmfw_managed_eeprom)
 		ret = adapt->pp.pp_funcs->send_hbm_bad_pages_num(adapt,
 				control->num_recs);
 	adapt->eeprom_control.bad_channel_bitmap = 0;
@@ -1467,10 +1799,15 @@ void *amdgv_umc_grow_bp_buff(void *buff, uint32_t *cap, uint64_t size)
 int amdgv_umc_update_bp_buff(struct amdgv_adapter *adapt, struct eeprom_table_record **bp_buff,
 		uint32_t pages, uint32_t *cap)
 {
-	struct eeprom_table_record *temp_buff = *bp_buff;
+	struct eeprom_table_record *temp_buff;
+	struct ras_err_handler_data *data = adapt->ecc.eh_data;
+	uint32_t original_cap;
 
 	if (!*bp_buff || !cap)
 		return AMDGV_FAILURE;
+
+	temp_buff = *bp_buff;
+	original_cap = *cap;
 	/* Increase the bad page buffer size to store more bad pages */
 	while (pages >= *cap) {
 		temp_buff = (struct eeprom_table_record *)amdgv_umc_grow_bp_buff((void *)temp_buff,
@@ -1482,5 +1819,368 @@ int amdgv_umc_update_bp_buff(struct amdgv_adapter *adapt, struct eeprom_table_re
 		*bp_buff = temp_buff;
 	}
 
+	/* Update sorted bad pages buffer capacity */
+	if (data && data->sorted_bps && *cap > original_cap &&
+	    (bp_buff == &data->bps || bp_buff == &data->rom_data.bps)) {
+		uint64_t *temp_sorted_buff;
+		uint32_t new_sorted_cap = *cap;
+
+		/* Grow the sorted bad pages buffer to match the main buffer capacity */
+		temp_sorted_buff = (uint64_t *)amdgv_umc_grow_bp_buff((void *)data->sorted_bps,
+								     &new_sorted_cap, sizeof(uint64_t));
+		if (!temp_sorted_buff) {
+			AMDGV_ERROR("Failed to grow sorted bad pages buffer!\n");
+			return AMDGV_FAILURE;
+		}
+
+		data->sorted_bps = temp_sorted_buff;
+		data->sorted_bps_cap = new_sorted_cap;
+
+		AMDGV_DEBUG("Updated sorted bad pages buffer capacity from %d to %d\n",
+			   original_cap, data->sorted_bps_cap);
+	}
+
 	return 0;
+}
+
+int amdgv_umc_set_eeprom_record(struct amdgv_adapter *adapt,
+		struct eeprom_table_record *record, struct amdgv_ras_eeprom_bad_page_info *bp_info)
+{
+	int ret;
+
+	if (adapt->umc.funcs && adapt->umc.funcs->set_eeprom_record) {
+		ret = adapt->umc.funcs->set_eeprom_record(adapt, record, bp_info);
+		if (ret) {
+			AMDGV_ERROR("Failed to set eeprom record\n");
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
+/**
+ * amdgv_umc_replace_bad_pages - replace and reserve bad pages that is currently in-use in pf fb
+ *
+ * save info of memmgr mem that are affected by bp
+ * release all these mem
+ * reserve all bp
+ * allocate new mem with saved mem info
+ **/
+int amdgv_umc_replace_bad_pages(struct amdgv_adapter *adapt)
+{
+	uint64_t err_addr;
+	struct amdgv_memmgr_mem *old, *new, *prev;
+	struct amdgv_memmgr *memmgr;
+	struct ras_err_handler_data *data = adapt->ecc.eh_data;
+	int i, ret = 0;
+	int resv_count = data->count <= BAD_PAGE_RECORD_THRESHOLD ? data->count : BAD_PAGE_RECORD_THRESHOLD;
+
+	struct amdgv_list_head list_tmp;
+	struct amdgv_memmgr_mem *alloc, *alloc_tmp;
+
+	memmgr = &adapt->memmgr_pf;
+
+	if (amdgv_ras_eeprom_is_gpu_bad(adapt))
+		goto exit;
+	if (!resv_count)
+		goto exit;
+
+	if (!memmgr)
+		goto exit;
+
+	oss_mutex_lock(adapt->ecc.recovery_lock);
+
+
+	AMDGV_INIT_LIST_HEAD(&list_tmp);
+
+	for (i = 0; i < resv_count; i++) {
+		err_addr = data->bps[i].retired_page << AMDGV_GPU_PAGE_SHIFT;
+		/* look for bad page using memmgr offset and size*/
+		if (amdgv_umc_is_bp_in_range(err_addr, memmgr->offset, memmgr->size)) {
+			if (!data->bps_mem[i]) {
+				oss_mutex_lock(memmgr->lock);
+				/**
+				 * for each mem that has overlap with bad address
+				 * if the mem is bad page, save to eh data list
+				 * for the mem at current tom, update tom to next highest
+				 * move out the mem if it is not bad page
+				 **/
+				old = amdgv_memmgr_find_mem_at_offset(memmgr, err_addr, AMDGV_GPU_PAGE_SIZE);
+				while (old) {
+					if (MEM_ECC_BAD_PAGE == MEM_ID_GET_ID(old->id)) {
+						data->bps_mem[i] = old;
+						break;
+					}
+					/* update memmgr tom */
+					if (old == amdgv_list_last_entry(&memmgr->allocs->node, struct amdgv_memmgr_mem, node)) {
+						prev = amdgv_list_last_entry(&old->node, struct amdgv_memmgr_mem, node);
+						memmgr->tom = prev->alloc_off;
+					}
+					/* move out mem that contain bad page */
+					amdgv_list_move_entry(&old->node, &list_tmp);
+					old = amdgv_memmgr_find_mem_at_offset(memmgr, err_addr, AMDGV_GPU_PAGE_SIZE);
+				}
+				oss_mutex_unlock(memmgr->lock);
+				/* reserve bad page */
+				if (!data->bps_mem[i])
+					data->bps_mem[i] = amdgv_memmgr_alloc_align_at(
+						&adapt->memmgr_pf, err_addr, AMDGV_GPU_PAGE_SIZE,
+						MEM_ECC_BAD_PAGE);
+
+				if (!data->bps_mem[i])
+					AMDGV_WARN("No page reserved at 0x%lx in memmgr_pf \n",
+						err_addr);
+			}
+		}
+	}
+
+	amdgv_list_for_each_entry_safe(alloc, alloc_tmp, &list_tmp, struct amdgv_memmgr_mem, node) {
+		if (alloc->len == 0)
+			continue;
+
+		/**
+		 * mem_id used does not affect replaced memory which always use the previous id
+		 * use param mem type MEM_ECC_BAD_PAGE to always allocate new mem
+		**/
+		if (MEM_ECC_BAD_PAGE == MEM_ID_GET_ID(alloc->id))
+			AMDGV_WARN("attempting to replace bad page type mem\n");
+		new = amdgv_memmgr_alloc_and_replace(adapt, memmgr, alloc, MEM_ECC_BAD_PAGE);
+		if (new) {
+			/**
+			 * now 'new' is swapped into list_tmp and holding 'alloc''s offset/size
+			 * loop node 'alloc' is holding new allocated offset and size and is placed in memmgr alloc list
+			**/
+
+			/* release node in list_tmp */
+			amdgv_list_del(&new->node);
+			if (new->sys_mem.handle)
+				oss_free_dma_mem(new->sys_mem.handle);
+			oss_free(new);
+		} else {
+			/* no new mem allocation available, return failure */
+			ret = AMDGV_FAILURE;
+			break;
+		}
+	}
+
+	if (!amdgv_list_empty(&list_tmp)) {
+		amdgv_list_for_each_entry_safe(alloc, alloc_tmp, &list_tmp, struct amdgv_memmgr_mem, node) {
+			amdgv_list_del(&alloc->node);
+			if (alloc->sys_mem.handle)
+				oss_free_dma_mem(alloc->sys_mem.handle);
+			oss_free(alloc);
+		}
+	}
+
+	oss_mutex_unlock(adapt->ecc.recovery_lock);
+exit:
+	adapt->ecc.eh_data->bp_replace_pending = false;
+	return ret;
+}
+
+/* Initialize sorted bad pages array */
+int amdgv_umc_init_sorted_bad_pages(struct amdgv_adapter *adapt)
+{
+	struct ras_err_handler_data *data = adapt->ecc.eh_data;
+
+	if (!data)
+		return AMDGV_FAILURE;
+
+	/* Allocate sorted bad pages array with same capacity as regular bps */
+	data->sorted_bps_cap = data->bps_cap;
+	data->sorted_bps = oss_zalloc(data->sorted_bps_cap * sizeof(uint64_t));
+	if (!data->sorted_bps) {
+		AMDGV_ERROR("Failed to allocate sorted bad pages array\n");
+		return AMDGV_FAILURE;
+	}
+
+	data->sorted_bp_count = 0;
+
+	AMDGV_INFO("Initialized sorted bad pages array with capacity %d\n", data->sorted_bps_cap);
+
+	return 0;
+}
+
+/* Cleanup sorted bad pages array */
+void amdgv_umc_cleanup_sorted_bad_pages(struct amdgv_adapter *adapt)
+{
+	struct ras_err_handler_data *data = adapt->ecc.eh_data;
+	/* Check if recovery lock is still valid before using it */
+
+	if (!data)
+		return;
+
+	if (data->sorted_bps) {
+		oss_free(data->sorted_bps);
+		data->sorted_bps = NULL;
+	}
+
+	data->sorted_bp_count = 0;
+	data->sorted_bps_cap = 0;
+}
+
+/* Insert a new bad page into the sorted array using binary search */
+int amdgv_umc_insert_sorted_bad_page(struct amdgv_adapter *adapt, uint64_t page_addr,
+										struct ras_err_handler_data *data)
+{
+	int left, right, mid;
+	int insert_pos;
+	int i;
+	uint64_t fb_offset, mc_addr;
+
+	if (!data || !data->sorted_bps)
+		return AMDGV_FAILURE;
+
+	/* Check if array is full */
+	if (data->sorted_bp_count >= data->sorted_bps_cap) {
+		AMDGV_ERROR("Sorted bad pages array is full\n");
+		return AMDGV_FAILURE;
+	}
+
+	/* Convert FB page address to MC page address */
+	fb_offset = page_addr << AMDGV_GPU_PAGE_SHIFT;
+	mc_addr = fb_offset;
+
+	/* Convert FB offset to MC address */
+	mc_addr += adapt->mc_fb_loc_addr;
+	if (adapt->xgmi.phy_nodes_num > 1)
+			mc_addr += adapt->xgmi.phy_node_id * adapt->xgmi.node_segment_size;
+
+	page_addr = mc_addr >> AMDGV_GPU_PAGE_SHIFT;
+
+	/* Binary search to find insertion position */
+	left = 0;
+	right = data->sorted_bp_count - 1;
+	insert_pos = data->sorted_bp_count; /* Default to end */
+
+	while (left <= right) {
+		mid = (left + right) / 2;
+		if (data->sorted_bps[mid] == page_addr) {
+			/* Page already exists, don't insert duplicate */
+			AMDGV_DEBUG("Bad page 0x%llx already exists in sorted list\n", page_addr);
+			return 0;
+		} else if (data->sorted_bps[mid] < page_addr) {
+			left = mid + 1;
+		} else {
+			insert_pos = mid;
+			right = mid - 1;
+		}
+	}
+
+	/* Shift elements to make room for new entry */
+	for (i = data->sorted_bp_count; i > insert_pos; i--) {
+		data->sorted_bps[i] = data->sorted_bps[i - 1];
+	}
+
+	/* Insert new page */
+	data->sorted_bps[insert_pos] = page_addr;
+	data->sorted_bp_count++;
+
+	AMDGV_DEBUG("Inserted bad page 0x%llx at position %d, total count: %d\n",
+			page_addr, insert_pos, data->sorted_bp_count);
+
+	return 0;
+}
+
+/* Bubble sort the existing bp by offsets and remove duplicate if necessary */
+static int amdgv_umc_sort_bp_offsets(uint64_t *bp_offsets, uint32_t num_bps)
+{
+	int i, j = 0;
+	uint64_t temp;
+	uint32_t unique_bp_idx;
+
+	if (num_bps <= 1)
+		return AMDGV_FAILURE;
+
+	if (bp_offsets == NULL)
+		return AMDGV_FAILURE;
+
+	/* Sorting */
+	for (i = 0; i < num_bps - 1; i++) {
+		for (j = 0; j < num_bps - i - 1; j++) {
+			if (bp_offsets[j] > bp_offsets[j + 1]) {
+				temp = bp_offsets[j];
+				bp_offsets[j] = bp_offsets[j + 1];
+				bp_offsets[j + 1] = temp;
+			}
+		}
+	}
+
+	/* Remove duplicate */
+	unique_bp_idx = 0;
+	for (i = 1; i < num_bps; i++) {
+		if (bp_offsets[i] != bp_offsets[unique_bp_idx]) {
+			unique_bp_idx++;
+			bp_offsets[unique_bp_idx] = bp_offsets[i];
+		}
+	}
+
+	return (unique_bp_idx + 1);
+}
+
+/* This function fetches the raw bad page offsets.
+ * There are 16 pages reserved per raw bad page offset.
+ * The user is responsible for freeing bp_offsets.
+ */
+int amdgv_umc_fetch_and_sort_bps(struct amdgv_adapter *adapt, uint64_t **bp_offsets)
+{
+	uint64_t *tmp_bp_offsets = NULL;
+	struct ras_err_handler_data *data = adapt->ecc.eh_data;
+	int ret = 0, i = 0;
+
+	if (bp_offsets == NULL)
+		return AMDGV_FAILURE;
+
+	tmp_bp_offsets = oss_zalloc(data->count * sizeof(uint64_t));
+	if (!tmp_bp_offsets)
+		return AMDGV_FAILURE;
+
+	for (i = 0; i < data->count; i++)
+		tmp_bp_offsets[i] = data->bps[i].retired_page << AMDGV_GPU_PAGE_SHIFT;
+
+	amdgv_umc_sort_bp_offsets(tmp_bp_offsets, data->count);
+
+	*bp_offsets = tmp_bp_offsets;
+
+	return ret;
+}
+
+/* This function fetches the raw bad page offsets across supported nps mode.
+ * There are 16 pages reserved per raw bad page offset.
+ * The user is responsible for freeing bp_offsets.
+ */
+int amdgv_umc_fetch_and_sort_bps_across_nps(struct amdgv_adapter *adapt, uint64_t **bp_offsets,
+												int *bp_count)
+{
+	uint64_t *tmp_bp_offsets = NULL;
+	struct ras_err_handler_data *data_across_nps = adapt->ecc.eh_data_across_nps;
+	int ret = 0;
+	int i, j, k = 0;
+	int total_bps_count = 0;
+
+	if (bp_offsets == NULL)
+		return AMDGV_FAILURE;
+
+	for (i = 0; i < adapt->ecc.supported_nps_count; i++) {
+		total_bps_count += data_across_nps[i].count;
+	}
+
+	tmp_bp_offsets = oss_zalloc(total_bps_count * sizeof(uint64_t));
+	if (!tmp_bp_offsets)
+		return AMDGV_FAILURE;
+
+	for (i = 0; i < adapt->ecc.supported_nps_count; i++) {
+		for (j = 0; j < data_across_nps[i].count; j++) {
+			tmp_bp_offsets[k] = data_across_nps[i].bps[j].retired_page << AMDGV_GPU_PAGE_SHIFT;
+			k++;
+		}
+	}
+
+	total_bps_count = amdgv_umc_sort_bp_offsets(tmp_bp_offsets, total_bps_count);
+
+	*bp_offsets = tmp_bp_offsets;
+	*bp_count = total_bps_count;
+
+	return ret;
 }

@@ -31,6 +31,10 @@
 
 #define CACHE_FLUSH_AND_INV_TS_EVENT		(20 << 0)
 
+void gfx_v11_enable_gfxhub_gart(struct amdgv_adapter *adapt);
+void gfx_v11_gfxhub_gart_fini(struct amdgv_adapter *adapt);
+void gfx_v11_gfxhub_init(struct amdgv_adapter *adapt);
+
 /* SH_MEM_ADDRESS_MODE enum */
 typedef enum SH_MEM_ADDRESS_MODE {
 	SH_MEM_ADDRESS_MODE_64                   = 0x00000000,

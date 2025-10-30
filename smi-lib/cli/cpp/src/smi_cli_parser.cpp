@@ -103,12 +103,12 @@ std::shared_ptr<Device> AmdSmiParser::get_device_from_input(std::string gpu)
 		if (std::stoi(gpu) >= gpu_count) {
 			throw SmiToolDeviceNotFoundException(gpu);
 		} else {
-			return std::shared_ptr<Device>(new Device(std::stoi(gpu), GPU_INDEX));
+			return std::shared_ptr<Device>(new Device(std::stoi(gpu), DeviceType::GPU_INDEX));
 		}
 	} else if (is_BDF(gpu)) {
-		return std::shared_ptr<Device>(new Device(gpu, BDF, "--gpu"));
+		return std::shared_ptr<Device>(new Device(gpu, DeviceType::BDF, "--gpu"));
 	} else if (is_UUID(gpu)) {
-		return std::shared_ptr<Device>(new Device(gpu, UUID, "--gpu"));
+		return std::shared_ptr<Device>(new Device(gpu, DeviceType::UUID, "--gpu"));
 	} else {
 		if(gpu.size() == 0) {
 			throw SmiToolMissingParameterValueException("--gpu=");
@@ -212,13 +212,9 @@ bool AmdSmiParser::is_option_argument(std::string option, Arguments &parsed_argu
 		if (parsed_arguments.command == "reset") {
 			throw SmiToolInvalidParameterException(option);
 		}
-
-		if (option.substr(6, 1) == "=") {
-			parsed_arguments.is_file = true;
-			parsed_arguments.file_path = option.substr(7);
-		} else {
-			throw SmiToolInvalidParameterException(option);
-		}
+		does_option_have_value(option, 6);
+		parsed_arguments.is_file = true;
+		parsed_arguments.file_path = option.substr(7);
 		return true;
 	}
 
@@ -233,22 +229,13 @@ bool AmdSmiParser::is_option_argument(std::string option, Arguments &parsed_argu
 		if (parsed_arguments.watch == -1) {
 			throw SmiToolInvalidParameterException(option.substr(0, 12));
 		}
-		if (option.substr(12,1) != "=") {
-			if (option.substr(12,1) == "") {
-				throw SmiToolInvalidParameterException(option);
-			}
-			throw SmiToolInvalidParameterException(option);
-		} else {
-			if (option.substr(13,1) == "") {
-				throw SmiToolMissingParameterValueException(option.substr(0,12));
-			}
-		}
+		does_option_have_value(option, 12);
 		if (is_negative_number(option.substr(13))) {
 			throw SmiToolInvalidParameterValueException(option.substr(13));
 		}
-		if (is_number(option.substr(13))) {
+		try {
 			parsed_arguments.watch_time = std::stoi(option.substr(13));
-		} else {
+		} catch (...) {
 			throw SmiToolInvalidParameterValueException(option.substr(13));
 		}
 
@@ -259,22 +246,13 @@ bool AmdSmiParser::is_option_argument(std::string option, Arguments &parsed_argu
 				&& (parsed_arguments.command != "monitor")) {
 			throw SmiToolInvalidParameterException(option.substr(0, 7));
 		}
-		if (option.substr(7,1) != "=") {
-			if (option.substr(7,1) == "") {
-				throw SmiToolInvalidParameterException(option);
-			}
-			throw SmiToolInvalidParameterException(option);
-		} else {
-			if (option.substr(8,1) == "") {
-				throw SmiToolMissingParameterValueException(option.substr(0,12));
-			}
-		}
+		does_option_have_value(option, 7);
 		if (is_negative_number(option.substr(8))) {
 			throw SmiToolInvalidParameterValueException(option.substr(8));
 		}
-		if (is_number(option.substr(8))) {
+		try {
 			parsed_arguments.watch = std::stoi(option.substr(8));
-		} else {
+		} catch (...) {
 			throw SmiToolInvalidParameterValueException(option.substr(8));
 		}
 
@@ -289,246 +267,248 @@ bool AmdSmiParser::is_option_argument(std::string option, Arguments &parsed_argu
 			throw SmiToolInvalidParameterException(option.substr(0, 13));
 		}
 		if (parsed_arguments.watch == -1) {
-			throw SmiToolMissingParameterValueException(option.substr(0, 12));
+			throw SmiToolInvalidParameterException(option.substr(0, 12));
 		}
-
-		if (option.substr(12,1) != "=") {
-			if (option.substr(12,1) == "") {
-				throw SmiToolInvalidParameterException(option);
-			}
-			throw SmiToolInvalidParameterException(option);
-		} else {
-			if (option.substr(13,1) == "") {
-				throw SmiToolMissingParameterValueException(option.substr(0,12));
-			}
-		}
+		does_option_have_value(option, 12);
 		if (is_negative_number(option.substr(13))) {
 			throw SmiToolInvalidParameterValueException(option.substr(13));
 		}
-		if (is_number(option.substr(13))) {
+		try {
 			parsed_arguments.iterations = std::stoi(option.substr(13));
-		} else {
+		} catch (...) {
 			throw SmiToolInvalidParameterValueException(option.substr(13));
 		}
-
 		return true;
 	}
 	if (option.substr(0, 6) == "--name") {
 		if (parsed_arguments.command != "process") {
 			throw SmiToolInvalidParameterException(option.substr(0, 6));
 		}
-		if (option.substr(6,1) != "=") {
-			if (option.substr(6,1) == "") {
-				throw SmiToolInvalidParameterException(option);
-			}
-			throw SmiToolInvalidParameterException(option);
-		} else {
-			if (option.substr(7,1) == "") {
-				throw SmiToolMissingParameterValueException(option.substr(0,12));
-			}
+		does_option_have_value(option, 6);
+		try {
+			parsed_arguments.options.push_back("name");
+			parsed_arguments.process_map[option.substr(7)] = ProcessType::name;
+		} catch (...) {
+			throw SmiToolInvalidParameterValueException(option.substr(7));
 		}
-		parsed_arguments.options.push_back("name");
-		parsed_arguments.process_map[option.substr(7)] = ProcessType::name;
 		return true;
 	}
 	if (option.substr(0, 5) == "--pid") {
 		if (parsed_arguments.command != "process") {
 			throw SmiToolInvalidParameterException(option.substr(0, 5));
 		}
-		if (option.substr(5,1) != "=") {
-			if (option.substr(5,1) == "") {
-				throw SmiToolInvalidParameterException(option);
-			}
-			throw SmiToolInvalidParameterException(option);
-		} else {
-			if (option.substr(6,1) == "") {
-				throw SmiToolMissingParameterValueException(option.substr(0,12));
-			}
-		}
-		if (is_number(option.substr(6))) {
+		does_option_have_value(option, 5);
+		try {
 			parsed_arguments.options.push_back("pid");
 			parsed_arguments.process_map[option.substr(6)] = ProcessType::pid;
-			return true;
-		} else {
+		} catch (...) {
 			throw SmiToolInvalidParameterValueException(option.substr(6));
-			return false;
 		}
+		return true;
 	}
 
 	if (option.substr(0, 6) == "--mode") {
+		if (parsed_arguments.command != "xgmi") {
+			throw SmiToolInvalidParameterException(option.substr(0, 6));
+		}
+		does_option_have_value(option, 6);
 		try {
 			parsed_arguments.xgmi_mode = option.substr(7);
 		} catch (...) {
-			throw SmiToolMissingParameterValueException(option.substr(0, 6));
+			throw SmiToolInvalidParameterValueException(option.substr(7));
 		}
 		return true;
 	}
 
 	if (option.substr(0, 17) == "--fb-sharing-mode") {
+		if (parsed_arguments.command != "set") {
+			throw SmiToolInvalidParameterException(option.substr(0, 17));
+		}
+		does_option_have_value(option, 17);
 		try {
 			parsed_arguments.fb_sharing_mode = option.substr(18);
 		} catch (...) {
-			throw SmiToolMissingParameterValueException(option.substr(0, 17));
+			throw SmiToolInvalidParameterValueException(option.substr(18));
 		}
 		return true;
 	}
 
 	if (option.substr(0, 23) == "--accelerator-partition") {
+		if (parsed_arguments.command != "set") {
+			throw SmiToolInvalidParameterException(option.substr(0, 23));
+		}
+		does_option_have_value(option, 23);
+		if (is_negative_number(option.substr(24))) {
+			throw SmiToolInvalidParameterValueException(option.substr(24));
+		}
 		try {
+			parsed_arguments.options.push_back("accelerator-partition");
 			parsed_arguments.accelerator_partition_setting = std::stoul(option.substr(24));
 		} catch (...) {
-			throw SmiToolMissingParameterValueException(option.substr(0, 13));
+			throw SmiToolInvalidParameterValueException(option.substr(24));
 		}
-		if (option.substr(23,1) != "=") {
-			if (option.substr(23,1) == "") {
-				throw SmiToolInvalidParameterException(option);
-			}
-			throw SmiToolInvalidParameterException(option);
-		} else {
-			if (option.substr(24,1) == "") {
-				throw SmiToolMissingParameterValueException(option.substr(0,23));
-			}
-		}
-		parsed_arguments.options.push_back("accelerator-partition");
-		parsed_arguments.accelerator_partition_setting = std::stoul(option.substr(24));
 		return true;
 	}
 
 	if (option.substr(0, 18) == "--memory-partition") {
+		if (parsed_arguments.command != "set") {
+			throw SmiToolInvalidParameterException(option.substr(0, 18));
+		}
+		does_option_have_value(option, 18);
 		try {
+			parsed_arguments.options.push_back("memory-partition");
 			parsed_arguments.memory_partition_setting = option.substr(19);
 		} catch (...) {
-			throw SmiToolMissingParameterValueException(option.substr(0, 18));
+			throw SmiToolInvalidParameterValueException(option.substr(19));
 		}
-		if (option.substr(18,1) != "=") {
-			if (option.substr(18,1) == "") {
-				throw SmiToolInvalidParameterException(option);
-			}
-			throw SmiToolInvalidParameterException(option);
-		} else {
-			if (option.substr(19,1) == "") {
-				throw SmiToolMissingParameterValueException(option.substr(0,18));
-			}
-		}
-		parsed_arguments.options.push_back("memory-partition");
-		parsed_arguments.memory_partition_setting = option.substr(19);
 		return true;
 	}
 
 	if (option.substr(0, 7) == "--group") {
-		if (option.substr(7,1) != "=") {
-			if (option.substr(7,1) == "") {
-				throw SmiToolInvalidParameterException(option);
-			}
-			throw SmiToolInvalidParameterException(option);
-		} else {
-			if (option.substr(8,1) == "") {
-				throw SmiToolMissingParameterValueException(option.substr(0,7));
-			}
+		if (parsed_arguments.command != "set") {
+			throw SmiToolInvalidParameterException(option.substr(0, 7));
 		}
+		does_option_have_value(option, 7);
 		parseAndFillVector(option.substr(8), parsed_arguments.groups, parsed_arguments);
 		return true;
 	}
 
 	if (option.substr(0, 19) == "--process-isolation") {
+		if (parsed_arguments.command != "set") {
+			throw SmiToolInvalidParameterException(option.substr(0, 19));
+		}
+		does_option_have_value(option, 19);
 		try {
 			parsed_arguments.process_isolation_set = option.substr(20);
 		} catch (...) {
-			throw SmiToolMissingParameterValueException(option.substr(0, 19));
-		}
-		if (option.substr(19,1) != "=") {
-			if (option.substr(19,1) == "") {
-				throw SmiToolInvalidParameterException(option);
-			}
-			throw SmiToolInvalidParameterException(option);
-		} else {
-			if (option.substr(20,1) == "") {
-				throw SmiToolMissingParameterValueException(option.substr(0,19));
-			}
+			throw SmiToolInvalidParameterValueException(option.substr(20));
 		}
 		return true;
 	}
 
 	if (option.substr(0, 2) == "-R") {
+		if (parsed_arguments.command != "set") {
+			throw SmiToolInvalidParameterException(option.substr(0, 2));
+		}
+		does_option_have_value(option, 2);
 		try {
 			parsed_arguments.process_isolation_set = option.substr(3);
 		} catch (...) {
-			throw SmiToolMissingParameterValueException(option.substr(0, 2));
-		}
-		if (option.substr(2,1) != "=") {
-			if (option.substr(2,1) == "") {
-				throw SmiToolInvalidParameterException(option);
-			}
-			throw SmiToolInvalidParameterException(option);
-		} else {
-			if (option.substr(3,1) == "") {
-				throw SmiToolMissingParameterValueException(option.substr(0,2));
-			}
+			throw SmiToolInvalidParameterValueException(option.substr(3));
 		}
 		return true;
 	}
 
 	if (option.substr(0, 12) == "--soc-pstate") {
+		if (parsed_arguments.command != "set") {
+			throw SmiToolInvalidParameterException(option.substr(0, 12));
+		}
+		does_option_have_value(option, 12);
 		try {
+			parsed_arguments.options.push_back("soc-pstate");
 			parsed_arguments.pstate_set = option.substr(13);
 		} catch (...) {
-			throw SmiToolMissingParameterValueException(option.substr(0, 12));
+			throw SmiToolInvalidParameterValueException(option.substr(13));
 		}
-		parsed_arguments.options.push_back("soc-pstate");
 		return true;
 	}
 
 	if (option.substr(0, 3) == "-ps") {
+		if (parsed_arguments.command != "set") {
+			throw SmiToolInvalidParameterException(option.substr(0, 3));
+		}
+		does_option_have_value(option, 3);
 		try {
+			parsed_arguments.options.push_back("soc-pstate");
 			parsed_arguments.pstate_set = option.substr(4);
 		} catch (...) {
-			throw SmiToolMissingParameterValueException(option.substr(0, 3));
+			throw SmiToolInvalidParameterValueException(option.substr(4));
 		}
-		parsed_arguments.options.push_back("soc-pstate");
 		return true;
 	}
+
+	if (option.substr(0, 11) == "--xgmi-plpd") {
+		if (parsed_arguments.command == "set") {
+			does_option_have_value(option, 11);
+			try {
+				parsed_arguments.options.push_back("xgmi-plpd");
+				parsed_arguments.plpd_set = option.substr(12);
+			} catch (...) {
+				throw SmiToolMissingParameterValueException(option.substr(0, 11));
+			}
+			return true;
+		} else if (parsed_arguments.command == "static") {
+			if (option.substr(11,1) != "") {
+				throw SmiToolInvalidParameterException(option.substr(0, 12));
+			}
+		}
+	}
+
+	if (option.substr(0, 3) == "-pd") {
+		if (parsed_arguments.command == "set") {
+			does_option_have_value(option, 3);
+			try {
+				parsed_arguments.options.push_back("xgmi-plpd");
+				parsed_arguments.plpd_set = option.substr(4);
+			} catch (...) {
+				throw SmiToolMissingParameterValueException(option.substr(0, 3));
+			}
+			return true;
+		} else if (parsed_arguments.command == "static") {
+			if (option.substr(3,1) != "") {
+				throw SmiToolInvalidParameterException(option.substr(0, 4));
+			}
+		}
+	}
+
+
+	if (option.substr(0, 8) == "--num-vf") {
+		does_option_have_value(option, 8);
+		if (!is_number(option.substr(9)) || is_negative_number(option.substr(9))) {
+			throw SmiToolInvalidParameterValueException(option.substr(9));
+		}
+		try {
+			parsed_arguments.options.push_back("num-vf");
+			parsed_arguments.num_vf = option.substr(9);
+		} catch (...) {
+			throw SmiToolMissingParameterValueException(option.substr(0, 8));
+		}
+		return true;
+	}
+
 	if (option.substr(0, 11) == "--power-cap") {
+		if (parsed_arguments.command != "set") {
+			throw SmiToolInvalidParameterException(option.substr(0, 11));
+		}
+		does_option_have_value(option, 11);
 		try {
 			parsed_arguments.power_cap_set = std::stoul(option.substr(12));
 			parsed_arguments.options.push_back("power-cap");
 		} catch (...) {
-			throw SmiToolMissingParameterValueException(option.substr(0, 13));
-		}
-		if (option.substr(11,1) != "=") {
-			throw SmiToolInvalidParameterException(option);
-		} else {
-			if (option.substr(12,1) == "") {
-				throw SmiToolMissingParameterValueException(option.substr(0,11));
-			}
+			throw SmiToolInvalidParameterValueException(option.substr(12));
 		}
 		return true;
 	}
 
 	if (option.substr(0, 3) == "-pc") {
+		if (parsed_arguments.command != "set") {
+			throw SmiToolInvalidParameterException(option.substr(0, 3));
+		}
+		does_option_have_value(option, 3);
 		try {
 			parsed_arguments.power_cap_set = std::stoul(option.substr(4));
 			parsed_arguments.options.push_back("power-cap");
 		} catch (...) {
-			throw SmiToolMissingParameterValueException(option.substr(0, 3));
-		}
-		if (option.substr(3,1) != "=") {
-			throw SmiToolInvalidParameterException(option);
-		} else {
-			if (option.substr(4,1) == "") {
-				throw SmiToolMissingParameterValueException(option.substr(0,3));
-			}
+			throw SmiToolInvalidParameterValueException(option.substr(4));
 		}
 		return true;
 	}
 
 	if (option.substr(0, 10) == "--severity") {
-		if (option.substr(10,1) != "=") {
-			throw SmiToolMissingParameterValueException(option);
-		} else {
-			if (option.substr(11,1) == "") {
-				throw SmiToolMissingParameterValueException(option.substr(0,10));
-			}
+		if (parsed_arguments.command != "ras") {
+			throw SmiToolInvalidParameterException(option.substr(0, 10));
 		}
+		does_option_have_value(option, 10);
 		try {
 			std::string severities = option.substr(11);
 			std::vector<std::string> severities_vector = split_string(severities, ',');
@@ -538,14 +518,14 @@ bool AmdSmiParser::is_option_argument(std::string option, Arguments &parsed_argu
 			for (const std::string& severity : severities_vector) {
 				if (std::find(valid_severities.begin(), valid_severities.end(),
 							  severity) == valid_severities.end()) {
-					throw SmiToolInvalidParameterException(severity);
+					throw SmiToolInvalidParameterValueException(severity);
 				}
 			}
 
 			parsed_arguments.severities.insert(parsed_arguments.severities.begin(),
 											   severities_vector.begin(), severities_vector.end());
-		} catch (const SmiToolInvalidParameterException& ex) {
-			throw;
+		} catch (const SmiToolInvalidParameterValueException& ex) {
+			throw SmiToolInvalidParameterValueException(option.substr(11));
 		} catch (...) {
 			throw SmiToolMissingParameterValueException(option.substr(0, 10));
 		}
@@ -553,20 +533,14 @@ bool AmdSmiParser::is_option_argument(std::string option, Arguments &parsed_argu
 	}
 
 	if (option.substr(0, 8) == "--folder") {
+		if (parsed_arguments.command != "ras") {
+			throw SmiToolInvalidParameterException(option.substr(0, 8));
+		}
+		does_option_have_value(option, 8);
 		try {
 			parsed_arguments.folder_name = option.substr(9);
 		} catch (...) {
-			throw SmiToolMissingParameterValueException(option.substr(0, 8));
-		}
-		if (option.substr(8,1) != "=") {
-			if (option.substr(8,1) == "") {
-				throw SmiToolMissingParameterValueException(option);
-			}
-			throw SmiToolMissingParameterValueException(option);
-		} else {
-			if (option.substr(9,1) == "") {
-				throw SmiToolMissingParameterValueException(option.substr(0,8));
-			}
+			throw SmiToolInvalidParameterValueException(option.substr(9));
 		}
 		return true;
 	}
@@ -575,47 +549,30 @@ bool AmdSmiParser::is_option_argument(std::string option, Arguments &parsed_argu
 		if (parsed_arguments.command != "ras") {
 			throw SmiToolInvalidParameterException(option.substr(0, 12));
 		}
-		if (option.substr(12,1) != "=") {
-			if (option.substr(12,1) == "") {
-				throw SmiToolMissingParameterValueException(option);
-			}
-			throw SmiToolMissingParameterValueException(option);
-		} else {
-			if (option.substr(13,1) == "") {
-				throw SmiToolMissingParameterValueException(option.substr(0,12));
-			}
-		}
+		does_option_have_value(option, 12);
 		if (is_negative_number(option.substr(13))) {
 			throw SmiToolInvalidParameterValueException(option.substr(13));
 		}
-		if (is_number(option.substr(13))) {
-			if (std::stoi(option.substr(13)) == 0) {
+		try {
+			int value = std::stoi(option.substr(13));
+        		if (value == 0) {
 				throw SmiToolInvalidParameterValueException(option.substr(13));
-			}
+        		}
+			parsed_arguments.options.push_back("file_limit");
 			parsed_arguments.file_limit = std::stoi(option.substr(13));
-		} else {
+		} catch (...) {
 			throw SmiToolInvalidParameterValueException(option.substr(13));
 		}
-		parsed_arguments.options.push_back("file-limit");
 
 		return true;
 	}
 
 	if (option.substr(0, 11) == "--cper-file") {
+		does_option_have_value(option, 11);
 		try {
 			parsed_arguments.cper_file_path = option.substr(12);
 		} catch (...) {
 			throw SmiToolMissingParameterValueException(option.substr(0, 11));
-		}
-		if (option.substr(11,1) != "=") {
-			if (option.substr(11,1) == "") {
-				throw SmiToolMissingParameterValueException(option);
-			}
-			throw SmiToolMissingParameterValueException(option);
-		} else {
-			if (option.substr(12,1) == "") {
-				throw SmiToolMissingParameterValueException(option.substr(0,11));
-			}
 		}
 		return true;
 	}
@@ -677,16 +634,40 @@ void AmdSmiParser::parse_arguments(std::vector<std::string> command_argument_lis
 		parsed_arguments.command = "help";
 		for (int i = 1; i < command_argument_list.size(); i++) {
 			if (command_argument_list[i].substr(0, 6) == "--file") {
-				if (command_argument_list[i].substr(6, 1) == "=") {
-					parsed_arguments.is_file = true;
-					parsed_arguments.file_path = command_argument_list[i].substr(7);
-				} else {
-					throw SmiToolInvalidParameterException(command_argument_list[i]);
-				}
+				does_option_have_value(command_argument_list[i], 6);
+				parsed_arguments.is_file = true;
+				parsed_arguments.file_path = command_argument_list[i].substr(7);
 			}
 		}
 
 		return;
+	}
+
+	// Check for invalid RAS parameter combinations before processing device types
+	if (command_argument_list[0] == "ras") {
+		bool has_afid = is_argument_present(command_argument_list, "--afid");
+		bool has_cper = is_argument_present(command_argument_list, "--cper");
+		bool has_long_gpu = is_argument_present(command_argument_list, "--gpu");
+		bool has_short_gpu = is_argument_present(command_argument_list, "-g");
+
+		// If only GPU parameter is specified without target operation, require target argument
+		if ((has_long_gpu || has_short_gpu) && !has_cper && !has_afid) {
+			throw SmiToolRequiredCommandException("ras");
+		}
+		if (has_afid && (has_long_gpu || has_short_gpu)) {
+			// Find the actual GPU parameter that was used
+			std::string gpu_param = "";
+			for (const auto& arg : command_argument_list) {
+				if (arg.find("--gpu") == 0) {
+					gpu_param = arg;
+					break;
+				} else if (arg.find("-g") == 0) {
+					gpu_param = arg;
+					break;
+				}
+			}
+			throw SmiToolInvalidParameterException(gpu_param);
+		}
 	}
 
 	std::string device_type = get_device_type(command_argument_list, parsed_arguments);
@@ -724,7 +705,9 @@ void AmdSmiParser::parse_arguments(std::vector<std::string> command_argument_lis
 						|| command_argument_list[i] == "--accelerator-partition"
 						|| command_argument_list[i] == "--process-isolation"
 						|| command_argument_list[i] == "-R"
-						|| command_argument_list[i] == "--soc-pstate" || command_argument_list[i] == "-ps") {
+						|| command_argument_list[i] == "--soc-pstate"
+						|| command_argument_list[i] == "-ps"
+						|| command_argument_list[i] == "--num-vf") {
 					if (!is_option_argument(command_argument_list[i], parsed_arguments)) {
 						throw SmiToolInvalidParameterException(std::string(command_argument_list[i]));
 					}
@@ -736,6 +719,7 @@ void AmdSmiParser::parse_arguments(std::vector<std::string> command_argument_lis
 				const bool has_cper_file{is_argument_present(command_argument_list, "--cper-file")};
 				const bool has_folder{is_argument_present(command_argument_list, "--folder")};
 				const bool has_file_limit{is_argument_present(command_argument_list, "--file-limit")};
+				const bool has_afid{is_argument_present(command_argument_list, "--afid")};
 
 				bool has_cper{is_argument_full_present(command_argument_list, "--cper")};
 				if (command_argument_list[i] == "--cper") {
@@ -745,13 +729,11 @@ void AmdSmiParser::parse_arguments(std::vector<std::string> command_argument_lis
 					parsed_arguments.options.push_back("cper");
 					has_cper = true;
 				}
-				bool has_afid{is_argument_present(command_argument_list, "--afid")};
 				if (command_argument_list[i] == "--afid") {
 					if (std::find(command_argument_list.begin(), command_argument_list.end(), "--cper") != command_argument_list.end()) {
 						throw SmiToolInvalidParameterException("--cper");
 					}
 					parsed_arguments.options.push_back("afid");
-					has_afid = true;
 				}
 
 				if (has_cper && !has_severity) {
@@ -787,6 +769,8 @@ void AmdSmiParser::parse_arguments(std::vector<std::string> command_argument_lis
 					throw SmiToolInvalidParameterException(std::string(inval_par));
 				}
 
+
+
 				if (is_argument_present(command_argument_list, "--cper")  && is_argument_present(command_argument_list, "--severity") &&
 				is_argument_present(command_argument_list, "--afid") && is_argument_present(command_argument_list, "--cper-file")) {
 					throw SmiToolInvalidParameterException(std::string(command_argument_list[i]));
@@ -811,7 +795,10 @@ void AmdSmiParser::parse_arguments(std::vector<std::string> command_argument_lis
 				!is_argument_present(command_argument_list, "--soc-pstate") &&
 				!is_argument_present(command_argument_list, "-ps") &&
 				!is_argument_present(command_argument_list, "--power-cap") &&
-				!is_argument_present(command_argument_list, "-pc")) {
+				!is_argument_present(command_argument_list, "-pc") &&
+				!is_argument_present(command_argument_list, "--xgmi-plpd") &&
+				!is_argument_present(command_argument_list, "-pd") &&
+				!is_argument_present(command_argument_list, "--num-vf")) {
 			throw SmiToolRequiredCommandException("set");
 		} else {
 			if (parsed_arguments.fb_sharing_mode != "CUSTOM") {
@@ -875,4 +862,16 @@ void AmdSmiParser::parse_arg(int argc, char **argv, Arguments &ret)
 	parse_output_format(command_argument_list, ret);
 	parse_command_object(command_argument_list, ret);
 	parse_arguments(command_argument_list, ret);
+}
+
+void AmdSmiParser::does_option_have_value(const std::string& option, uint32_t option_len)
+{
+	if (option.substr(option_len,1) != "=") {
+		if (option.substr(option_len,1) == "") {
+			throw SmiToolMissingParameterValueException(option);
+		}
+		throw SmiToolInvalidParameterException(option);
+	} else if (option.substr((option_len + 1),1) == "") {
+		throw SmiToolMissingParameterValueException(option.substr(0,option_len));
+	}
 }

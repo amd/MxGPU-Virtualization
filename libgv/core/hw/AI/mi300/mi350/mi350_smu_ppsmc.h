@@ -30,6 +30,7 @@
 #define PPSMC_Result_UnknownCmd                     0xFE
 #define PPSMC_Result_CmdRejectedPrereq              0xFD
 #define PPSMC_Result_CmdRejectedBusy                0xFC
+#define PPSMC_Result_EepromNotReady                 0xFB
 
 // Message Definitions:
 #define PPSMC_MSG_TestMessage                       0x1
@@ -95,10 +96,33 @@
 #define PPSMC_MSG_PmLogReadSample                   0x41
 #define PPSMC_MSG_PmLogGetTableVersion              0x42
 #define PPSMC_MSG_RmaDueToBadPageThreshold          0x43 //Returns SMC_Result_CmdRejectedPrereq if APCB_TOKEN_UID_HROM_EN token is set.
+#define PPSMC_MSG_SetThrottlingPolicy               0x44 //NOT SUPPORTED: Not POR
+#define PPSMC_MSG_SetPhaseDetectCSBWThreshold       0x45
+#define PPSMC_MSG_SetPhaseDetectFreqHigh            0x46
+#define PPSMC_MSG_SetPhaseDetectFreqLow             0x47
+#define PPSMC_MSG_SetPhaseDetectDownHysterisis      0x48
+#define PPSMC_MSG_SetPhaseDetectAlphaX1e6           0x49
+#define PPSMC_MSG_SetPhaseDetectOnOff               0x4A
+#define PPSMC_MSG_GetPhaseDetectResidency           0x4B
+#define PPSMC_MSG_UpdatePccWaitDecMaxStr            0x4C
+#define PPSMC_MSG_ResetSDMA                         0x4D
+#define PPSMC_MSG_GetRasTableVersion                0x4E
+#define PPSMC_MSG_GetRmaStatus                      0x4F
+#define PPSMC_MSG_GetBadPageCount                   0x50
+#define PPSMC_MSG_GetBadPageMcaAddress              0x51
+#define PPSMC_MSG_GetBadPagePaAddress               0x52
+#define PPSMC_MSG_SetTimestamp                      0x53
+#define PPSMC_MSG_SetTimestampHi                    0x54
+#define PPSMC_MSG_GetTimestamp                      0x55
+#define PPSMC_MSG_GetRasPolicy                      0x56
+#define PPSMC_MSG_GetBadPageIpIdLoHi                0x57
+#define PPSMC_MSG_EraseRasTable                     0x58
 #define PPSMC_MSG_GetStaticMetricsTable             0x59
 #define PPSMC_MSG_ResetVfArbitersByIndex            0x5A
-#define PPSMC_Message_Count                         0x5B
-
+#define PPSMC_MSG_GetBadPageSeverity                0x5B
+#define PPSMC_MSG_GetSystemMetricsTable             0x5C
+#define PPSMC_MSG_GetSystemMetricsVersion           0x5D
+#define PPSMC_Message_Count                         0x5E
 
 //PPSMC Reset Types for driver msg argument
 #define PPSMC_RESET_TYPE_DRIVER_MODE_1_RESET        0x1

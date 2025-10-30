@@ -22,7 +22,7 @@
 #include <string>
 #include <cstdint>
 
-enum DeviceType { GPU_INDEX, VF_INDEX, BDF, UUID = 3 };
+enum class DeviceType { GPU_INDEX, VF_INDEX, BDF, UUID = 3 };
 
 class Device
 {

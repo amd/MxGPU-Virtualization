@@ -239,7 +239,7 @@ Example:
 ```python
 try:
     processor = amdsmi_get_processor_handle_from_bdf("0000:23:00.0")
-    print("Processor's bdf:", amdsmi_get_gpu_device_bdf(processor))
+    print("GPU bdf:", amdsmi_get_gpu_device_bdf(processor))
 except AmdSmiException as e:
     print(e)
 ```
@@ -499,7 +499,7 @@ Output:
 
 * current driver model from `AmdSmiDriverModelType` enum
 
-'AmdSmiDriverModelType' enum:
+`AmdSmiDriverModelType` enum:
 
 Field | Description
 ---|---
@@ -525,7 +525,7 @@ except AmdSmiException as e:
 
 ### amdsmi_get_vf_handle_from_vf_index
 
-Description: Returns VF id of the VF referenced by it's index (in partitioning info)
+Description: Returns VF id of the VF referenced by its index (in partitioning info)
 
 Input parameters:
 
@@ -746,7 +746,7 @@ Output: Dictionary with fields
 Field | Description
 ---|---
 `ras_eeprom_version`| RAS EEPROM version
-`supported_ecc_correction_schema`| ecc correction schema mask used with `AmdSmiEccCorrectionSchemaSupport` enum
+`ecc_correction_schema`| ecc correction schema mask used with `AmdSmiEccCorrectionSchemaSupport` enum
 
 Exceptions that can be thrown by `amdsmi_get_gpu_ras_feature_info` function:
 
@@ -765,7 +765,7 @@ try:
         for processor in processors:
             ras_feature = amdsmi_get_gpu_ras_feature_info(processor)
             print(ras_feature['ras_eeprom_version'])
-            print(ras_feature['supported_ecc_correction_schema'])
+            print(ras_feature['ecc_correction_schema'])
 except AmdSmiException as e:
     print(e)
 ```
@@ -1081,7 +1081,6 @@ Description: Returns the current power, power limit, and voltage for the given G
 Input parameters:
 
 * `processor_handle` GPU device which to query
-* `sensor_ind` sensor index. Normally, this will be 0. If a processor has more than one sensor, it could be greater than 0. Parameter sensor_ind is unused on @platform{host}. It is an optional parameter and is set to 0 by default.
 
 Output: Dictionary with fields
 
@@ -1498,6 +1497,7 @@ Field | Description
 `build_date` | vbios build date
 `part_number` | vbios part number
 `version` | vbios version string
+`boot_firmware` | boot firmware info
 
 Exceptions that can be thrown by `amdsmi_get_gpu_vbios_info` function:
 
@@ -1519,6 +1519,7 @@ try:
             print(vbios_info['build_date'])
             print(vbios_info['part_number'])
             print(vbios_info['version'])
+            print(vbios_info['boot_firmware'])
 except AmdSmiException as e:
     print(e)
 ```
@@ -2494,6 +2495,9 @@ Field | Description
 `JOULE` | joule
 `GBPS` | gigabyte per second
 `MBITPS` | megabit per second
+`PCIE_GEN` | PCIe generation
+`PCIE_LANES` | PCIe lanes
+`15_625_MILLIJOULE` | millijoule
 `UNKNOWN` | unknown unit
 
 `AmdSmiMetricName` enum:
@@ -2553,6 +2557,62 @@ Field | Description
 `CLK_SOC_DS_DISABLED` | socket deep sleep
 `CLK_VCLK_DS_DISABLED` | vclk deep sleep
 `CLK_DCLK_DS_DISABLED` | dclk deep sleep
+`PCIE_LINK_SPEED` | pcie link speed
+`PCIE_LINK_WIDTH` | pcie link width
+`DRAM_BANDWIDTH` | dram bandwidth
+`MAX_DRAM_BANDWIDTH` | maximum dram bandwidth
+`GFX_CLK_BELOW_HOST_LIMIT_PPT` | gfx clock below host limit ppt
+`GFX_CLK_BELOW_HOST_LIMIT_THM` | gfx clock below host limit thermal
+`GFX_CLK_BELOW_HOST_LIMIT_TOTAL` | gfx clock below host limit total
+`GFX_CLK_LOW_UTILIZATION` | gfx clock low utilization
+`INPUT_TELEMETRY_VOLTAGE` | input telemetry voltage
+`PLDM_VERSION` | pldm version
+`TEMP_XCD` | xcd temperature
+`TEMP_AID` | aid temperature
+`TEMP_HBM` | hbm temperature
+`SYS_METRIC_ACC_COUNTER` | system metric accumulated counter
+`SYSTEM_TEMP_UBB_FPGA` | system temperature ubb fpga
+`SYSTEM_TEMP_UBB_FRONT` | system temperature ubb front
+`SYSTEM_TEMP_UBB_BACK` | system temperature ubb back
+`SYSTEM_TEMP_UBB_OAM7` | system temperature ubb oam7
+`SYSTEM_TEMP_UBB_IBC` | system temperature ubb ibc
+`SYSTEM_TEMP_UBB_UFPGA` | system temperature ubb ufpga
+`SYSTEM_TEMP_UBB_OAM1` | system temperature ubb oam1
+`SYSTEM_TEMP_OAM_0_1_HSC` | system temperature oam 0 1 hsc
+`SYSTEM_TEMP_OAM_2_3_HSC` | system temperature oam 2 3 hsc
+`SYSTEM_TEMP_OAM_4_5_HSC` | system temperature oam 4 5 hsc
+`SYSTEM_TEMP_OAM_6_7_HSC` | system temperature oam 6 7 hsc
+`SYSTEM_TEMP_UBB_FPGA_0V72_VR` | system temperature ubb fpga 0v72 vr
+`SYSTEM_TEMP_UBB_FPGA_3V3_VR` | system temperature ubb fpga 3v3 vr
+`SYSTEM_TEMP_RETIMER_0_1_2_3_1V2_VR` | system temperature retimer 0 1 2 3 1v2 vr
+`SYSTEM_TEMP_RETIMER_4_5_6_7_1V2_VR` | system temperature retimer 4 5 6 7 1v2 vr
+`SYSTEM_TEMP_RETIMER_0_1_0V9_VR` | system temperature retimer 0 1 0v9 vr
+`SYSTEM_TEMP_RETIMER_4_5_0V9_VR` | system temperature retimer 4 5 0v9 vr
+`SYSTEM_TEMP_RETIMER_2_3_0V9_VR` | system temperature retimer 2 3 0v9 vr
+`SYSTEM_TEMP_RETIMER_6_7_0V9_VR` | system temperature retimer 6 7 0v9 vr
+`SYSTEM_TEMP_OAM_0_1_2_3_3V3_VR` | system temperature oam 0 1 2 3 3v3 vr
+`SYSTEM_TEMP_OAM_4_5_6_7_3V3_VR` | system temperature oam 4 5 6 7 3v3 vr
+`SYSTEM_TEMP_IBC_HSC` | system temperature ibc hsc
+`SYSTEM_TEMP_IBC` | system temperature ibc
+`NODE_TEMP_RETIMER` | node temperature retimer
+`NODE_TEMP_IBC_TEMP` | node temperature ibc temp
+`NODE_TEMP_IBC_2_TEMP` | node temperature ibc 2 temp
+`NODE_TEMP_VDD18_VR_TEMP` | node temperature vdd18 vr temp
+`NODE_TEMP_04_HBM_B_VR_TEMP` | node temperature 04 hbm b vr temp
+`NODE_TEMP_04_HBM_D_VR_TEMP` | node temperature 04 hbm d vr temp
+`VR_TEMP_VDDCR_VDD0` | vr temperature vddcr vdd0
+`VR_TEMP_VDDCR_VDD1` | vr temperature vddcr vdd1
+`VR_TEMP_VDDCR_VDD2` | vr temperature vddcr vdd2
+`VR_TEMP_VDDCR_VDD3` | vr temperature vddcr vdd3
+`VR_TEMP_VDDCR_SOC_A` | vr temperature vddcr soc a
+`VR_TEMP_VDDCR_SOC_C` | vr temperature vddcr soc c
+`VR_TEMP_VDDCR_SOCIO_A` | vr temperature vddcr socio a
+`VR_TEMP_VDDCR_SOCIO_C` | vr temperature vddcr socio c
+`VR_TEMP_VDD_085_HBM` | vr temperature vdd 085 hbm
+`VR_TEMP_VDDCR_11_HBM_B` | vr temperature vddcr 11 hbm b
+`VR_TEMP_VDDCR_11_HBM_D` | vr temperature vddcr 11 hbm d
+`VR_TEMP_VDD_USR` | vr temperature vdd usr
+`VR_TEMP_VDDIO_11_E32` | vr temperature vddio 11 e32
 `UNKNOWN` | unknown name
 
 `AmdSmiMetricCategory` enum:
@@ -2565,9 +2625,12 @@ Field | Description
 `TEMPERATURE` | temperature
 `POWER` | power
 `ENERGY` | energy
-`CELSIUS` | celsius
 `THROTTLE` | throttle
 `PCIE` | pcie
+`STATIC` | static
+`SYS_ACC_COUNTER` | system accumulated counter
+`SYS_BASEBOARD_TEMP` | system baseboard temperature
+`SYS_GPUBOARD_TEMP` | system gpu board temperature
 `UNKNOWN` | unknown category
 
 `AmdSmiMetricType` enum:
@@ -2583,21 +2646,25 @@ Field | Description
 
 Field | Description
 ---|---
-`UNKNOWN` | unknown resource group
 `NA` | resource group is not applicable
 `GPU` | gpu resource group
 `XCP` | xcp resource group
 `AID` | aid resource group
 `MID` | mid resource group
+`SYSTEM` | system resource group
+`UNKNOWN` | unknown resource group
 
 `AmdSmiMetricResSubgroup` enum:
 
 Field | Description
 ---|---
-`UNKNOWN` | unknown resource subgroup
 `NA` | resource subgroup is not applicable
 `XCC` | xcc resource subgroup
-`ENGINE` | xcp resource subgroup
+`ENGINE` | engine resource subgroup
+`HBM` | hbm resource subgroup
+`BASEBOARD` | baseboard resource subgroup
+`GPUBOARD` | gpuboard resource subgroup
+`UNKNOWN` | unknown resource subgroup
 
 Exceptions that can be thrown by `amdsmi_get_gpu_metrics` function:
 
@@ -2812,7 +2879,7 @@ Category | Description
 `XGMI`| xgmi events
 `ALL`   | monitor all categories
 
-`every AmdSmiEventCategory has it's corresponding enum subcategory,` <br/>
+`every AmdSmiEventCategory has its corresponding enum subcategory,` <br/>
 `subcategories are:`
 
 Subcategory | Field
@@ -2995,6 +3062,62 @@ try:
         for processor in processors:
             accelerator_partition_config = amdsmi_get_gpu_accelerator_partition_profile_config(processor)
             print(accelerator_partition_config)
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_gpu_accelerator_partition_profile_config_global
+
+Description: Returns all GPU accelerator partition capabilities which can be configured on the system
+
+Input parameters:
+
+* `processor_handle` PF of a GPU device
+
+Output: Dictionary with fields
+
+Field | Description
+---|---
+`profiles` | List of dictionaries, each describing a supported accelerator partition profile. Each dictionary contains:<br><table>  <thead><tr> <th> Subfield </th> <th> Description</th></tr></thead><tbody><tr><td>`profile_type`</td><td>Profile type from `AmdSmiAcceleratorPartitionSetting` enum</td></tr><tr><td>`num_partitions`</td><td>Number of partitions in the profile</td></tr><tr><td>`memory_caps`</td><td>Memory capabilities of the profile</td></tr><tr><td>`profile_index`</td><td>Index of the profile</td></tr><tr><td>`vf_mode`</td><td>List of supported VF counts for this profile (e.g., [1, 2, 4, 8])</td></tr><tr><td>`resources`</td><td>List of resource types (from `AmdSmiAcceleratorPartitionResource` enum) available in this profile</td></tr></tbody></table>
+`default_profile_index` | Index of the default profile used if no custom configuration is set
+
+`AmdSmiAcceleratorPartitionSetting` enum:
+
+Field | Description
+---|---
+`INVALID`  | Invalid compute partition
+`SPX`      | Compute partition with all xccs in group (8/1)
+`DPX`      | Compute partition with four xccs in group (8/2)
+`TPX`      | Compute partition with two xccs in group (6/3)
+`QPX`      | Compute partition with two xccs in group (8/4)
+`CPX`      | Compute partition with one xcc in group (8/8)
+
+`AmdSmiAcceleratorPartitionResource` enum:
+
+Field | Description
+---|---
+`XCC`      | xcc resource capabilities
+`ENCODER`  | encoder resource capabilities
+`DECODER`  | decoder resource capabilities
+`DMA`      | dma resource capabilities
+`JPEG`     | jpeg resource capabilities
+
+Exceptions that can be thrown by `amdsmi_get_gpu_accelerator_partition_profile_config_global` function:
+
+* `AmdSmiLibraryException`
+* `AmdSmiParameterException`
+
+Example:
+
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            config = amdsmi_get_gpu_accelerator_partition_profile_config_global(processor)
+            print(config)
 except AmdSmiException as e:
     print(e)
 ```

@@ -44,6 +44,7 @@ protected:
 		SMI_ASSERT_STR_EQ(expect.name, actual.name);
 		SMI_ASSERT_STR_EQ(expect.version, actual.version);
 		SMI_ASSERT_STR_EQ(expect.part_number, actual.part_number);
+		SMI_ASSERT_STR_EQ(expect.boot_firmware, actual.boot_firmware);
 
 		return ::testing::AssertionSuccess();
 	}
@@ -126,16 +127,19 @@ TEST_F(AmdSmiFirmwareVbiosTests, GetVbiosInfo)
 	std::string name = "VG10 A1 D05318 32Mx128 8GB 300e/945m";
 	std::string part_number = "113-D0531800-B04";
 	std::string version = "017.003.000.007.015638";
+	std::string boot_firmware = "N/A";
 #ifdef _WIN64
 	strcpy_s(gpu_info_mock.build_date, sizeof(gpu_info_mock.build_date), build_date.c_str());
 	strcpy_s(gpu_info_mock.name, sizeof(gpu_info_mock.name), name.c_str());
 	strcpy_s(gpu_info_mock.part_number, sizeof(gpu_info_mock.part_number), part_number.c_str());
 	strcpy_s(gpu_info_mock.version, sizeof(gpu_info_mock.version), version.c_str());
+	strcpy_s(gpu_info_mock.boot_firmware, sizeof(gpu_info_mock.boot_firmware), boot_firmware.c_str());
 #else
 	strcpy(gpu_info_mock.build_date, build_date.c_str());
 	strcpy(gpu_info_mock.name, name.c_str());
 	strcpy(gpu_info_mock.part_number, part_number.c_str());
 	strcpy(gpu_info_mock.version, version.c_str());
+	strcpy(gpu_info_mock.boot_firmware, boot_firmware.c_str());
 #endif
 
 

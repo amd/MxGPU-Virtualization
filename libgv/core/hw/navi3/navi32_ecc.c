@@ -139,6 +139,12 @@ static int navi32_poison_consumption(struct amdgv_adapter *adapt,
 	/* page judgement and reserve */
 	ret = amdgv_umc_process_ras_data_cb(adapt, &err_data, 0);
 
+	if (adapt->ecc.eh_data->bp_replace_pending) {
+		if (event->data.fed_data.src == AMDGV_FED_SRC_GC_RLC)
+			navi32_reset_grbm_soft_reset_stage_2(adapt);
+		goto reset_gpu;
+	}
+
 	if (err_data.err_addr_cnt == 0) {
 		if (!adapt->ecc.fatal_error)
 			goto exit;
@@ -208,7 +214,6 @@ static int navi32_ecc_sw_init(struct amdgv_adapter *adapt)
 
 	adapt->ecc.poison_consumption = navi32_poison_consumption;
 	adapt->ecc.fatal_error = false;
-	adapt->ecc.skip_row_rma = true;
 	adapt->ecc.unhandled_bps_lock = oss_mutex_init();
 
 	if (!adapt->opt.use_legacy_eeprom_format &&
