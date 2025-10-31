@@ -563,7 +563,7 @@ static int mi300_ecc_queue_err_query_post_init(struct amdgv_adapter *adapt)
 {
 	union amdgv_sched_event_data data;
 
-	if (adapt->opt.skip_hw_init)
+	if (amdgv_in_live_update_seq())
 		return 0;
 
 	data.mca_bank.error_type = AMDGV_MCA_ERROR_TYPE_CE;

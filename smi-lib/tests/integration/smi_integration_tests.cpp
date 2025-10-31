@@ -1524,7 +1524,12 @@ TEST(amdsmiIntegrationTests, ResetGpuTest)
 TEST(amdsmiIntegrationTests, WrongParamsTests)
 {
 	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
-	uint64_t fake_handle = { 123446 };
+	struct smi_gpu_handle {
+		int type;
+		amdsmi_bdf_t bdf;
+		uint64_t handle;
+		uint64_t dev_id;
+	} fake_handle = { 1, {0}, 123446, 0 };
 	amdsmi_processor_handle fake_dev_handle = &fake_handle;
 	amdsmi_vf_handle_t vf_handle;
 	amdsmi_driver_info_t driver_version;

@@ -105,7 +105,7 @@ int AmdSmiApiHost::amdsmi_set_xgmi_fb_sharing_mode_command(std::vector<uint64_t>
 	amdsmi_processor_handle *processors;
 	unsigned int gpu_count;
 
-	amdsmi_get_gpu_count(gpu_count);
+	amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
 	ret = host_amdsmi_get_processor_handles(socket, &gpu_count, NULL);
 	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*gpu_count);
 	if (processors == NULL) {

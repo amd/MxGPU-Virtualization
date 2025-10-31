@@ -46,6 +46,11 @@ static uint32_t mi300_node_group_size_map[AMDGV_XGMI_FB_SHARING_MODE_NUM] = {
 	[AMDGV_XGMI_FB_SHARING_MODE_UNKNOWN] = 1
 };
 
+static int mi300_guest_ext_peer_link_ta_cmd_supported (struct amdgv_adapter *adapt)
+{
+	return ((adapt->psp.fw_info[AMDGV_FIRMWARE_ID__XGMI_TA] & 0xFF) >= 0x15);
+}
+
 enum amdgv_xgmi_fb_sharing_mode
 mi300_get_largest_xgmi_fb_sharing_mode(struct amdgv_adapter *adapt, uint32_t num_phy_nodes)
 {
@@ -63,8 +68,6 @@ mi300_get_largest_xgmi_fb_sharing_mode(struct amdgv_adapter *adapt, uint32_t num
 	}
 }
 
-
-
 static int mi300_xgmi_reset_hive_fb_sharing_config(struct amdgv_adapter *adapt,
 			struct amdgv_hive_info *hive,
 			enum amdgv_xgmi_fb_sharing_mode mode)
@@ -79,7 +82,6 @@ static int mi300_xgmi_reset_hive_fb_sharing_config(struct amdgv_adapter *adapt,
 	amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_XGMI_FB_SHARING_SETTING_RESET, 0);
 	return 0;
 }
-
 
 /*
  * It is possible a hive is only partially updated with a new FB sharing mode
@@ -301,6 +303,8 @@ static enum amdgv_xgmi_link_status mi300_xgmi_get_link_status(struct amdgv_adapt
 
 static int mi300_xgmi_early_sw_init(struct amdgv_adapter *adapt)
 {
+	adapt->xgmi.guest_ext_peer_link_ta_cmd_supported =
+		mi300_guest_ext_peer_link_ta_cmd_supported;
 	return 0;
 }
 
@@ -326,7 +330,6 @@ static int mi300_xgmi_early_hw_fini(struct amdgv_adapter *adapt)
 {
 	return 0;
 }
-
 
 static int mi300_xgmi_late_sw_init(struct amdgv_adapter *adapt)
 {
@@ -421,6 +424,7 @@ static void mi300_xgmi_query_ras_error_count(struct amdgv_adapter *adapt, void *
 						AMDGV_RAS_BLOCK__XGMI_WAFL,
 						ras_error_status);
 }
+
 static int mi300_ras_error_inject_xgmi(struct amdgv_adapter *adapt,
 				       struct ta_ras_trigger_error_input *block_info)
 {
@@ -461,7 +465,6 @@ const struct amdgv_xgmi_funcs  mi300_xgmi_funcs = {
 	.reset_ras_error_count = NULL,
 	.ras_error_inject = mi300_ras_error_inject_xgmi,
 };
-
 
 void mi300_xgmi_set_ras_funcs(struct amdgv_adapter *adapt)
 {

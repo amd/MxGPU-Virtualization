@@ -21,23 +21,31 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-
+# AMD SMI CORE
 from .amdsmi_interface import amdsmi_init
 from .amdsmi_interface import amdsmi_shut_down
 from .amdsmi_interface import amdsmi_get_processor_handles
+from .amdsmi_interface import amdsmi_get_processor_handles_by_type
 from .amdsmi_interface import amdsmi_get_processor_handle_from_bdf
 from .amdsmi_interface import amdsmi_get_index_from_processor_handle
 from .amdsmi_interface import amdsmi_get_processor_handle_from_index
 from .amdsmi_interface import amdsmi_get_vf_handle_from_bdf
 from .amdsmi_interface import amdsmi_get_gpu_device_bdf
+from .amdsmi_interface import amdsmi_get_nic_device_bdf
+from .amdsmi_interface import amdsmi_get_processor_bdf
 from .amdsmi_interface import amdsmi_get_vf_bdf
 from .amdsmi_interface import amdsmi_get_vf_handle_from_vf_index
 from .amdsmi_interface import amdsmi_get_vf_handle_from_uuid
 from .amdsmi_interface import amdsmi_get_processor_handle_from_uuid
+from .amdsmi_interface import amdsmi_status_code_to_string
+
+from .amdsmi_interface import AmdSmiProcessorType
+from .amdsmi_interface import AmdSmiInitFlags
+
+# AMD SMI GPU
 from .amdsmi_interface import amdsmi_get_gpu_total_ecc_count
 from .amdsmi_interface import amdsmi_get_gpu_ecc_count
 from .amdsmi_interface import amdsmi_get_gpu_ecc_enabled
-from .amdsmi_interface import amdsmi_status_code_to_string
 from .amdsmi_interface import amdsmi_get_gpu_ras_feature_info
 from .amdsmi_interface import amdsmi_get_bad_page_threshold
 from .amdsmi_interface import amdsmi_get_gpu_bad_page_info
@@ -123,7 +131,6 @@ from .amdsmi_interface import AmdSmiEventCategoryGpumon
 from .amdsmi_interface import AmdSmiEventCategoryMmsch
 from .amdsmi_interface import AmdSmiEventCategoryXgmi
 from .amdsmi_interface import AmdSmiEventSeverity
-from .amdsmi_interface import AmdSmiInitFlags
 from .amdsmi_interface import AmdSmiGuestFwName
 from .amdsmi_interface import AmdSmiGuestFwLoadStatus
 from .amdsmi_interface import AmdSmiProfileCapabilityType
@@ -144,6 +151,18 @@ from .amdsmi_interface import AmdSmiAffinityScope
 from .amdsmi_interface import AmdSmiVirtualizationMode
 from .amdsmi_interface import AmdSmiDriverModelType
 
+# AMD SMI NIC
+from .amdsmi_nic_interface import amdsmi_get_nic_driver_info
+from .amdsmi_nic_interface import amdsmi_get_nic_asic_info
+from .amdsmi_nic_interface import amdsmi_get_nic_bus_info
+from .amdsmi_nic_interface import amdsmi_get_nic_numa_info
+from .amdsmi_nic_interface import amdsmi_get_nic_port_info
+from .amdsmi_nic_interface import amdsmi_get_nic_rdma_dev_info
+from .amdsmi_nic_interface import amdsmi_get_nic_port_statistics
+from .amdsmi_nic_interface import amdsmi_get_nic_vendor_statistics
+from .amdsmi_nic_interface import amdsmi_get_nic_rdma_port_statistics
+
+# AMD SMI Exception
 from .amdsmi_exception import AmdSmiLibraryException
 from .amdsmi_exception import AmdSmiRetryException
 from .amdsmi_exception import AmdSmiParameterException

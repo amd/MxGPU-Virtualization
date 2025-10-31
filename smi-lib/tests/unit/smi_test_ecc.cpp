@@ -50,17 +50,34 @@ TEST_F(AmdSmiEccTests, InvalidParams)
 {
 	int ret;
 	amdsmi_eeprom_table_record_t table_records;
+	amdsmi_error_count_t err_cnt;
+	uint64_t blocks;
+	uint32_t size;
+	amdsmi_ras_feature_t ras_feature;
+	uint32_t threshold;
 
 	ret = amdsmi_get_gpu_total_ecc_count(&GPU_MOCK_HANDLE, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_gpu_total_ecc_count(&NIC_MOCK_HANDLE, &err_cnt);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_get_gpu_ecc_count(&GPU_MOCK_HANDLE, AMDSMI_GPU_BLOCK_GFX, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+	ret = amdsmi_get_gpu_ecc_count(&NIC_MOCK_HANDLE, AMDSMI_GPU_BLOCK_GFX, &err_cnt);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
 	ret = amdsmi_get_gpu_ecc_enabled(&GPU_MOCK_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+	ret = amdsmi_get_gpu_ecc_enabled(&NIC_MOCK_HANDLE, &blocks);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
 	ret = amdsmi_get_gpu_ras_feature_info(&GPU_MOCK_HANDLE, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_gpu_ras_feature_info(&NIC_MOCK_HANDLE, &ras_feature);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_get_gpu_bad_page_info(&GPU_MOCK_HANDLE, NULL, NULL);
@@ -69,7 +86,13 @@ TEST_F(AmdSmiEccTests, InvalidParams)
 	ret = amdsmi_get_gpu_bad_page_info(&GPU_MOCK_HANDLE, NULL, &table_records);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+	ret = amdsmi_get_gpu_bad_page_info(&NIC_MOCK_HANDLE, &size, &table_records);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
 	ret = amdsmi_get_bad_page_threshold(&GPU_MOCK_HANDLE, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_bad_page_threshold(&NIC_MOCK_HANDLE, &threshold);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
 

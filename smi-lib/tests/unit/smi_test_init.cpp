@@ -32,7 +32,9 @@ extern "C" {
 }
 
 #include "smi_test_helpers.hpp"
-
+#ifdef AMD_SMI_NIC_SUPPORT
+#include "smi_fake_nic_interface.h"
+#endif
 #ifdef _WIN64
 #define SET_SYSTEM_ERROR(x) SetLastError(x);
 #else
@@ -448,3 +450,121 @@ TEST_F(AmdSmiInitTests, InitTest_TwoThreadsFiniAtEnd)
 	ASSERT_EQ(dev_cnt_res, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(dev_cnt, server_info_mock.num_devices);
 }
+
+#ifdef AMD_SMI_NIC_SUPPORT
+TEST_F(AmdSmiInitTests, InitTest_NicInitFailure)
+{
+	int res;
+
+	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_HANDSHAKE)))
+		.WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
+
+	smi_server_static_info server_info_mock = {};
+	server_info_mock.num_devices = 1;
+	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
+		.WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
+
+	const bool nic_flag = get_nic_init();
+	set_nic_init(false);
+
+	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
+	EXPECT_EQ(res, AMDSMI_STATUS_SUCCESS);
+
+	set_nic_init(nic_flag);
+}
+
+TEST_F(AmdSmiInitTests, InitTest_NicGetDevicesFailure)
+{
+	int res;
+
+	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_HANDSHAKE)))
+		.WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
+
+	smi_server_static_info server_info_mock = {};
+	server_info_mock.num_devices = 1;
+	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
+		.WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
+
+	const bool nic_flag = get_nic_discovery();
+	set_nic_discovery(false);
+
+	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
+	EXPECT_EQ(res, AMDSMI_STATUS_SUCCESS);
+
+	set_nic_discovery(nic_flag);
+}
+
+TEST_F(AmdSmiInitTests, ShutDownTest_NicCleanupFailure)
+{
+	int res;
+
+	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_HANDSHAKE)))
+		.WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
+
+	smi_server_static_info server_info_mock = {};
+	server_info_mock.num_devices = 1;
+	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
+		.WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
+
+	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
+	EXPECT_EQ(res, AMDSMI_STATUS_SUCCESS);
+
+	testing::Mock::VerifyAndClearExpectations(g_system_mock.get());
+
+	const bool nic_flag = get_nic_cleanup();
+	set_nic_cleanup(false);
+
+	res = amdsmi_shut_down();
+	EXPECT_EQ(res, AMDSMI_STATUS_SUCCESS);
+
+	set_nic_cleanup(nic_flag);
+}
+
+TEST_F(AmdSmiInitTests, InitTest_NicGetDevices_BdfsAllocFailure)
+{
+	int res;
+	int malloc_call_count = 0;
+
+	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_HANDSHAKE)))
+		.WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
+
+	smi_server_static_info server_info_mock = {};
+	server_info_mock.num_devices = 1;
+	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
+		.WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
+
+	EXPECT_CALL(*g_system_mock, Malloc(testing::_))
+		// LCOV_EXCL_START
+		.WillRepeatedly(testing::Invoke([&malloc_call_count](size_t size) -> void* {
+			malloc_call_count++;
+			if (malloc_call_count == 2) {
+				return nullptr;
+			}
+			return malloc(size);
+		}));
+		// LCOV_EXCL_STOP
+
+	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
+	EXPECT_EQ(res, AMDSMI_STATUS_SUCCESS);
+}
+
+TEST_F(AmdSmiInitTests, InitTest_NicGetDevices_InterfaceNameTooLong)
+{
+	int res;
+
+	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_HANDSHAKE)))
+		.WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
+
+	smi_server_static_info server_info_mock = {};
+	server_info_mock.num_devices = 1;
+	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
+		.WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
+
+	set_nic_long_interface_name(true);
+
+	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
+	EXPECT_EQ(res, AMDSMI_STATUS_SUCCESS);
+
+	set_nic_long_interface_name(false);
+}
+#endif

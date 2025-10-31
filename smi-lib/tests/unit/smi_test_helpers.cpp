@@ -25,6 +25,7 @@
 extern "C" {
 #include "smi_defines.h"
 #include "common/smi_cmd.h"
+#include "smi_processor_handle.h"
 }
 
 #include "smi_test_helpers.hpp"
@@ -34,8 +35,17 @@ extern "C" {
 amdsmi_bdf_t MOCK_BDF = { { 0x4, 0x3, 0x2, 0x1 } }; // 0001:02:03.04
 const char *GPU_MOCK_UUID{"9aff0003-0000-1000-801f-188c37cb1ee6"};
 const char *VF_MOCK_UUID{"9a0174b5-0000-1000-801f-188c37cb1ee6"};
-smi_device_handle_t GPU_MOCK_HANDLE = { (0x1234ULL << 32) | 0x1234 };
+struct smi_gpu_handle GPU_MOCK_HANDLE = {
+	SMI_PROCESSOR_TYPE_AMD_GPU,
+	{ { 0x4, 0x3, 0x2, 0x1 } },
+	(0x1234ULL << 32) | 0x1234,
+	0x5678
+};
 amdsmi_vf_handle_t VF_MOCK_HANDLE = { (0x1234ULL << 32) | 0x4567 };
+struct smi_nic_handle NIC_MOCK_HANDLE = {
+	SMI_PROCESSOR_TYPE_AMD_NIC,
+	{ { 0x4, 0x3, 0x2, 0x1 } }
+};
 
 namespace amdsmi
 {
@@ -54,13 +64,12 @@ void AmdSmiTest::initialize_smi_lib(uint32_t version, uint8_t num_dev)
 		.WillOnce(testing::DoAll(SetPayload(smi_handshake{ handshake_version }),
 					 testing::Return(0)));
 
-	// set the one processor handle and bdf
 	smi_server_static_info server_info_mock = {};
 	for (uint32_t i = 0; i < num_dev; i++) {
 		server_info_mock.devices[i].bdf.as_uint = MOCK_BDF.as_uint;
-        server_info_mock.devices[i].bdf.bdf.device_number = (server_info_mock.devices[i].bdf.bdf.device_number + i) % 32;
+		server_info_mock.devices[i].bdf.bdf.device_number = (server_info_mock.devices[i].bdf.bdf.device_number + i) % 32;
 
-		server_info_mock.devices[i].dev_id = GPU_MOCK_HANDLE;
+		server_info_mock.devices[i].dev_id.handle = GPU_MOCK_HANDLE.handle;
 		server_info_mock.devices[i].dev_id.handle += i;
 	}
 	server_info_mock.num_devices = num_dev;
@@ -90,7 +99,7 @@ void AmdSmiTest::finalize_smi_lib()
 }
 
 ::testing::AssertionResult equal_handles(smi_device_handle_t expect,
-					 smi_device_handle_t actual)
+					 struct smi_gpu_handle actual)
 {
 	SMI_ASSERT_EQ(expect.handle, actual.handle);
 	return ::testing::AssertionSuccess();

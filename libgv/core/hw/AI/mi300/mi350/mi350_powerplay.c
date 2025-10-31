@@ -838,10 +838,10 @@ static void mi350_smu_context_fini(struct amdgv_adapter *adapt)
 }
 
 static const uint8_t mi350_smu_throttler_event_map[] = {
-	[THROTTLER_PROCHOT_BIT] = PP_THROTTLER_EVENT__PROCHOT,
-	[THROTTLER_THERMAL_SOCKET_BIT] = PP_THROTTLER_EVENT__SOCKET,
-	[THROTTLER_THERMAL_HBM_BIT] = PP_THROTTLER_EVENT__HBM,
-	[THROTTLER_THERMAL_VR_BIT] = PP_THROTTLER_EVENT__VR,
+	[THROTTLER_PROCHOT_BIT] = AMDGV_PP_THROTTLER_EVENT__PROCHOT,
+	[THROTTLER_THERMAL_SOCKET_BIT] = AMDGV_PP_THROTTLER_EVENT__SOCKET,
+	[THROTTLER_THERMAL_HBM_BIT] = AMDGV_PP_THROTTLER_EVENT__HBM,
+	[THROTTLER_THERMAL_VR_BIT] = AMDGV_PP_THROTTLER_EVENT__VR,
 };
 
 static int mi350_smu_get_pm_policy(struct amdgv_adapter *adapt,
@@ -1320,6 +1320,8 @@ static const char *mi350_smu_get_feature_name(int id)
 		return "FEATURE_DVO";
 	case FEATURE_XVMINORPSM_CLKSTOP_DS:
 		return "FEATURE_XVMINORPSM_CLKSTOP_DS";
+	case FEATURE_HROM_EN:
+		return "FEATURE_HROM_EN";
 	default:
 		break;
 	}
@@ -3244,14 +3246,17 @@ static bool mi350_smu_is_pmme_ready(struct amdgv_adapter *adapt)
 	while (retry_count <= MI350_SMU_PMME_READY_RETRY_ATTEMPTS) {
 		ret = mi350_smu_send_msg_with_resp(adapt, PPSMC_MSG_GetBadPageCount, 0, NULL, &resp);
 
-		if (ret == 0) {
+		if (ret == 0 && resp == PPSMC_Result_OK)
 			return true;
-		} else if (resp == PPSMC_Result_EepromNotReady) {
+
+		/* Managed but not ready yet: retry after short delay */
+		if (resp == PPSMC_Result_CmdRejectedBusy) {
 			retry_count++;
 			oss_msleep(40);
-		} else {
-			return false;
+			continue;
 		}
+
+		return false;
 	}
 
 	AMDGV_ERROR("Timedout waiting for PMFW managed EEPROM initialization to be finished.\n");
@@ -3263,8 +3268,8 @@ static bool mi350_smu_is_pmfw_managed_eeprom(struct amdgv_adapter *adapt)
 	/*
 	 * Returns true if PMFW manages EEPROM, based on driver interface version and SMU response.
 	 * - If driver_if_version > 0x00860000, check SMU response for GetBadPageCount:
-	 *   - If ret == 0 (success), return true.
-	 *   - If resp == PPSMC_Result_EepromNotReady, return true (EEPROM not ready but managed).
+	 *   - If ret == 0 (success) and resp == PPSMC_Result_OK, return true.
+	 *   - If resp == PPSMC_Result_CmdRejectedBusy, return true (EEPROM not ready but managed).
 	 *   - Otherwise, return false.
 	 * - For older firmware, return false.
 	 */
@@ -3278,12 +3283,12 @@ static bool mi350_smu_is_pmfw_managed_eeprom(struct amdgv_adapter *adapt)
 
 	if (driver_if_version > 0x00860000) {
 		ret = mi350_smu_send_msg_with_resp(adapt, PPSMC_MSG_GetBadPageCount, 0, NULL, &resp);
-		if (ret == 0)
+		if (resp == PPSMC_Result_CmdRejectedBusy)
 			return true;
-		else if (resp == PPSMC_Result_EepromNotReady)
+
+		if (ret == 0 && resp == PPSMC_Result_OK)
 			return true;
-		else
-			return false;
+		return false;
 	}
 
 	return false;

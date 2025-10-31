@@ -89,8 +89,12 @@ TEST_F(AmdSmiPartitionProfileTest, IoctlFailed)
 TEST_F(AmdSmiPartitionProfileTest, InvalidParams)
 {
 	int ret;
+	amdsmi_profile_info_t profile;
 
 	ret = amdsmi_get_partition_profile_info(&GPU_MOCK_HANDLE, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_partition_profile_info(&NIC_MOCK_HANDLE, &profile);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
 

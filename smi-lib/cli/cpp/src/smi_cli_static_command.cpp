@@ -65,6 +65,54 @@ auto constexpr header_virtualization_mode {",mode"};
 auto constexpr header_numa {",numa_node,numa_cpu_affinity_list,numa_cpu_affinity_bitmask,numa_cpu_affinity_core_range,numa_socket_affinity"};
 auto constexpr header_xgmi_plpd {",num_supported,current_id,policy_id,policy_description"};
 
+int AmdSmiStaticCommand::static_command_nic_asic(uint64_t processors,
+		std::string &formatted_string)
+{
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_nic_asic_info_command(processors,
+			  arg, formatted_string);
+	return ret;
+}
+
+int AmdSmiStaticCommand::static_command_nic_bus(uint64_t processors,
+		std::string &formatted_string)
+{
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_nic_bus_info_command(processors,
+			  arg, formatted_string);
+	return ret;
+}
+
+int AmdSmiStaticCommand::static_command_nic_driver(uint64_t processors,
+		std::string &formatted_string)
+{
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_nic_driver_info_command(processors,
+			  arg, formatted_string);
+	return ret;
+}
+
+int AmdSmiStaticCommand::static_command_nic_numa(uint64_t processors,
+		std::string &formatted_string)
+{
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_nic_numa_info_command(processors,
+			  arg, formatted_string);
+	return ret;
+}
+
+int AmdSmiStaticCommand::static_command_nic_port(uint64_t processors,
+		std::string &formatted_string)
+{
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_nic_port_info_command(processors,
+			  arg, formatted_string);
+	return ret;
+}
+
+int AmdSmiStaticCommand::static_command_nic_rdma_devices(uint64_t processors,
+		std::string &formatted_string)
+{
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_nic_rdma_devices_info_command(processors,
+			  arg, formatted_string);
+	return ret;
+}
+
 int AmdSmiStaticCommand::static_command_asic(uint64_t processor,
 		std::string &formatted_string)
 {
@@ -208,6 +256,7 @@ void AmdSmiStaticCommand::static_command_json()
 	unsigned int i;
 	nlohmann::ordered_json json_format = nlohmann::ordered_json::array();
 	nlohmann::ordered_json json;
+	nlohmann::ordered_json option_json;
 	std::string out{};
 	std::string result{};
 
@@ -232,7 +281,7 @@ void AmdSmiStaticCommand::static_command_json()
 	} else {
 		for (i = 0; i < arg.devices.size(); i++) {
 			json = {};
-			json["gpu"] = arg.devices[i]->get_gpu_index();
+			option_json = {};
 			nlohmann::ordered_json values_json;
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
 
@@ -244,7 +293,7 @@ void AmdSmiStaticCommand::static_command_json()
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					values_json = nlohmann::ordered_json::parse(out);
-					json["asic"] = values_json;
+					option_json["asic"] = values_json;
 					out.clear();
 				}
 				out.clear();
@@ -257,7 +306,7 @@ void AmdSmiStaticCommand::static_command_json()
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					values_json = nlohmann::ordered_json::parse(out);
-					json["bus"] = values_json;
+					option_json["bus"] = values_json;
 					out.clear();
 				}
 				out.clear();
@@ -272,7 +321,7 @@ void AmdSmiStaticCommand::static_command_json()
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					values_json = nlohmann::ordered_json::parse(out);
-					json["ifwi"] = values_json;
+					option_json["ifwi"] = values_json;
 					out.clear();
 				}
 				out.clear();
@@ -285,7 +334,7 @@ void AmdSmiStaticCommand::static_command_json()
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					values_json = nlohmann::ordered_json::parse(out);
-					json["limit"] = values_json;
+					option_json["limit"] = values_json;
 					out.clear();
 				}
 				out.clear();
@@ -298,7 +347,7 @@ void AmdSmiStaticCommand::static_command_json()
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					values_json = nlohmann::ordered_json::parse(out);
-					json["driver"] = values_json;
+					option_json["driver"] = values_json;
 					out.clear();
 				}
 				out.clear();
@@ -311,7 +360,7 @@ void AmdSmiStaticCommand::static_command_json()
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					values_json = nlohmann::ordered_json::parse(out);
-					json["board"] = values_json;
+					option_json["board"] = values_json;
 					out.clear();
 				}
 				out.clear();
@@ -324,7 +373,7 @@ void AmdSmiStaticCommand::static_command_json()
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					values_json = nlohmann::ordered_json::parse(out);
-					json["ras"] = values_json;
+					option_json["ras"] = values_json;
 					out.clear();
 				}
 				out.clear();
@@ -337,7 +386,7 @@ void AmdSmiStaticCommand::static_command_json()
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					values_json = nlohmann::ordered_json::parse(out);
-					json["dfc"] = values_json;
+					option_json["dfc"] = values_json;
 					out.clear();
 				}
 				out.clear();
@@ -350,20 +399,20 @@ void AmdSmiStaticCommand::static_command_json()
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					values_json = nlohmann::ordered_json::parse(out);
-					json["fb_info"] = values_json;
+					option_json["fb_info"] = values_json;
 					out.clear();
 				}
 				out.clear();
 			}
 			if ((std::find(arg.options.begin(), arg.options.end(), "num-vf") != arg.options.end()) ||
-					(std::find(arg.options.begin(), arg.options.end(), "n") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "nv") != arg.options.end()) ||
 					arg.all_arguments) {
 				std::string param{"num-vf"};
 				ret = static_command_num_vf(gpu_bdf, out);
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					values_json = nlohmann::ordered_json::parse(out);
-					json["num-vf"] = values_json;
+					option_json["num-vf"] = values_json;
 					out.clear();
 				}
 				out.clear();
@@ -376,7 +425,7 @@ void AmdSmiStaticCommand::static_command_json()
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					values_json = nlohmann::ordered_json::parse(out);
-					json["vram"] = values_json;
+					option_json["vram"] = values_json;
 					out.clear();
 				}
 				out.clear();
@@ -389,7 +438,7 @@ void AmdSmiStaticCommand::static_command_json()
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					values_json = nlohmann::ordered_json::parse(out);
-					json["cache_info"] = values_json;
+					option_json["cache_info"] = values_json;
 					out.clear();
 				}
 				out.clear();
@@ -402,7 +451,7 @@ void AmdSmiStaticCommand::static_command_json()
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					values_json = nlohmann::ordered_json::parse(out);
-					json["soc_pstate"] = values_json;
+					option_json["soc_pstate"] = values_json;
 					out.clear();
 				}
 				out.clear();
@@ -415,7 +464,7 @@ void AmdSmiStaticCommand::static_command_json()
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					values_json = nlohmann::ordered_json::parse(out);
-					json["xgmi-plpd"] = values_json;
+					option_json["xgmi-plpd"] = values_json;
 					out.clear();
 				} else if (error == COMMAND_NOT_SUPPORTED_AND_ALL_ARGS) {
 					out.clear();
@@ -429,7 +478,7 @@ void AmdSmiStaticCommand::static_command_json()
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					values_json = nlohmann::ordered_json::parse(out);
-					json["partition"] = values_json;
+					option_json["partition"] = values_json;
 					out.clear();
 				}
 				out.clear();
@@ -441,7 +490,7 @@ void AmdSmiStaticCommand::static_command_json()
 				ret = static_command_process_isolation(gpu_bdf, out);
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					json["process_isolation"] = out;
+					option_json["process_isolation"] = out;
 					out.clear();
 				}
 				out.clear();
@@ -453,7 +502,7 @@ void AmdSmiStaticCommand::static_command_json()
 				ret = static_command_virtualization_mode(gpu_bdf, out);
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					json["virtualization_mode"] = out;
+					option_json["virtualization_mode"] = out;
 					out.clear();
 				} else if (error == COMMAND_NOT_SUPPORTED_AND_ALL_ARGS) {
 					out.clear();
@@ -467,13 +516,112 @@ void AmdSmiStaticCommand::static_command_json()
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					nlohmann::ordered_json json_numa = nlohmann::ordered_json::parse(out);
-					json["numa"] = json_numa;
+					option_json["numa"] = json_numa;
 					out.clear();
 				} else if (error == COMMAND_NOT_SUPPORTED_AND_ALL_ARGS) {
 					out.clear();
 				}
 			}
-			json_format.insert(json_format.end(), json);
+			if (!option_json.empty()) {
+				json["gpu"] = arg.devices[i]->get_gpu_index();
+				for (auto& [key, value] : option_json.items()) {
+					json[key] = value;
+				}
+				json_format.insert(json_format.end(), json);
+			}
+		}
+		for (i = 0; i < arg.nic_devices.size(); i++) {
+			json = {};
+			option_json = {};
+			nlohmann::ordered_json values_json;
+			uint64_t nic_bdf = arg.nic_devices[i]->get_bdf();
+
+			if ((std::find(arg.options.begin(), arg.options.end(), "asic") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "a") != arg.options.end()) ||
+					arg.all_arguments) {
+				std::string param{"asic"};
+				ret = static_command_nic_asic(nic_bdf, out);
+				int error = handle_exceptions(ret, param, arg);
+				if (error == 0) {
+					values_json = nlohmann::ordered_json::parse(out);
+					option_json["asic"] = values_json;
+					out.clear();
+				}
+				out.clear();
+			}
+			if ((std::find(arg.options.begin(), arg.options.end(), "bus") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "b") != arg.options.end()) ||
+					arg.all_arguments) {
+				std::string param{"bus"};
+				ret = static_command_nic_bus(nic_bdf, out);
+				int error = handle_exceptions(ret, param, arg);
+				if (error == 0) {
+					values_json = nlohmann::ordered_json::parse(out);
+					option_json["bus"] = values_json;
+					out.clear();
+				}
+				out.clear();
+			}
+			if ((std::find(arg.options.begin(), arg.options.end(), "driver") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "d") != arg.options.end()) ||
+					arg.all_arguments) {
+				std::string param{"driver"};
+				ret = static_command_nic_driver(nic_bdf, out);
+				int error = handle_exceptions(ret, param, arg);
+				if (error == 0) {
+					values_json = nlohmann::ordered_json::parse(out);
+					option_json["driver"] = values_json;
+					out.clear();
+				}
+				out.clear();
+			}
+			if ((std::find(arg.options.begin(), arg.options.end(), "numa") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "u") != arg.options.end()) ||
+					arg.all_arguments) {
+				std::string param{"numa"};
+				ret = static_command_nic_numa(nic_bdf, out);
+				int error = handle_exceptions(ret, param, arg);
+				if (error == 0) {
+					values_json = nlohmann::ordered_json::parse(out);
+					option_json["numa"] = values_json;
+					out.clear();
+				}
+				out.clear();
+			}
+			if ((std::find(arg.options.begin(), arg.options.end(), "port") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "po") != arg.options.end()) ||
+					arg.all_arguments) {
+				std::string param{"port"};
+				ret = static_command_nic_port(nic_bdf, out);
+				int error = handle_exceptions(ret, param, arg);
+				if (error == 0) {
+					values_json = nlohmann::ordered_json::parse(out);
+					option_json["ports"] = values_json;
+					out.clear();
+				}
+				out.clear();
+			}
+			if ((std::find(arg.options.begin(), arg.options.end(), "rdma-devices") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "rd") != arg.options.end()) ||
+					arg.all_arguments) {
+				std::string param{"rdma-devices"};
+				ret = static_command_nic_rdma_devices(nic_bdf, out);
+				int error = handle_exceptions(ret, param, arg);
+				if (error == 0) {
+					values_json = nlohmann::ordered_json::parse(out);
+					option_json["rdma_devices"] = values_json;
+					out.clear();
+				}
+				out.clear();
+			}
+			if (!option_json.empty()) {
+				json["nic"] = arg.nic_devices[i]->get_gpu_index();
+				for (auto& [key, value] : option_json.items()) {
+					json[key] = value;
+				}
+				json_format.insert(json_format.end(), json);
+			}
+			option_json = {};
 		}
 
 		result = json_format.dump(4);
@@ -490,6 +638,7 @@ void AmdSmiStaticCommand::static_command_human()
 {
 	int ret;
 	std::string formatted_string{};
+	std::string options_string{};
 	std::string out{};
 
 	if (arg.is_vf) {
@@ -504,7 +653,6 @@ void AmdSmiStaticCommand::static_command_human()
 			  arg, out);
 	} else {
 		for (unsigned int i = 0; i < arg.devices.size(); i++) {
-			out += string_format(gpuTemplate, arg.devices[i]->get_gpu_index());
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
 
 			if ((std::find(arg.options.begin(), arg.options.end(), "asic") != arg.options.end()) ||
@@ -514,8 +662,7 @@ void AmdSmiStaticCommand::static_command_human()
 				std::string param{"asic"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					out += formatted_string;
-					formatted_string.clear();
+					options_string += formatted_string;
 				}
 				formatted_string.clear();
 			}
@@ -526,8 +673,7 @@ void AmdSmiStaticCommand::static_command_human()
 				std::string param{"bus"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					out += formatted_string;
-					formatted_string.clear();
+					options_string += formatted_string;
 				}
 				formatted_string.clear();
 			}
@@ -540,8 +686,7 @@ void AmdSmiStaticCommand::static_command_human()
 				std::string param{"ifwi"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					out += formatted_string;
-					formatted_string.clear();
+					options_string += formatted_string;
 				}
 				formatted_string.clear();
 			}
@@ -552,8 +697,7 @@ void AmdSmiStaticCommand::static_command_human()
 				std::string param{"limit"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					out += formatted_string;
-					formatted_string.clear();
+					options_string += formatted_string;
 				}
 				formatted_string.clear();
 			}
@@ -564,8 +708,7 @@ void AmdSmiStaticCommand::static_command_human()
 				std::string param{"driver"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					out += formatted_string;
-					formatted_string.clear();
+					options_string += formatted_string;
 				}
 				formatted_string.clear();
 			}
@@ -576,8 +719,7 @@ void AmdSmiStaticCommand::static_command_human()
 				std::string param{"board"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					out += formatted_string;
-					formatted_string.clear();
+					options_string += formatted_string;
 				}
 				formatted_string.clear();
 			}
@@ -588,8 +730,7 @@ void AmdSmiStaticCommand::static_command_human()
 				std::string param{"ras"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					out += formatted_string;
-					formatted_string.clear();
+					options_string += formatted_string;
 				}
 				formatted_string.clear();
 			}
@@ -600,8 +741,7 @@ void AmdSmiStaticCommand::static_command_human()
 				std::string param{"dfc-ucode"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					out += formatted_string;
-					formatted_string.clear();
+					options_string += formatted_string;
 				}
 				formatted_string.clear();
 			}
@@ -612,20 +752,18 @@ void AmdSmiStaticCommand::static_command_human()
 				std::string param{"fb-info"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					out += formatted_string;
-					formatted_string.clear();
+					options_string += formatted_string;
 				}
 				formatted_string.clear();
 			}
 			if ((std::find(arg.options.begin(), arg.options.end(), "num-vf") != arg.options.end()) ||
-					(std::find(arg.options.begin(), arg.options.end(), "n") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "nv") != arg.options.end()) ||
 					arg.all_arguments) {
 				ret = static_command_num_vf(gpu_bdf, formatted_string);
 				std::string param{"num-vf"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					out += formatted_string;
-					formatted_string.clear();
+					options_string += formatted_string;
 				}
 				formatted_string.clear();
 			}
@@ -636,8 +774,7 @@ void AmdSmiStaticCommand::static_command_human()
 				std::string param{"vram"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					out += formatted_string;
-					formatted_string.clear();
+					options_string += formatted_string;
 				}
 				formatted_string.clear();
 			}
@@ -648,8 +785,7 @@ void AmdSmiStaticCommand::static_command_human()
 				std::string param{"cache"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					out += formatted_string;
-					formatted_string.clear();
+					options_string += formatted_string;
 				}
 				formatted_string.clear();
 			}
@@ -660,8 +796,7 @@ void AmdSmiStaticCommand::static_command_human()
 				std::string param{"soc-pstate"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					out += formatted_string;
-					formatted_string.clear();
+					options_string += formatted_string;
 				}
 				formatted_string.clear();
 			}
@@ -672,7 +807,7 @@ void AmdSmiStaticCommand::static_command_human()
 				std::string param{"xgmi-plpd"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					out += formatted_string;
+					options_string += formatted_string;
 					formatted_string.clear();
 				} else if (error == COMMAND_NOT_SUPPORTED_AND_ALL_ARGS) {
 					formatted_string.clear();
@@ -685,8 +820,7 @@ void AmdSmiStaticCommand::static_command_human()
 				std::string param{"partition"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					out += formatted_string;
-					formatted_string.clear();
+					options_string += formatted_string;
 				}
 				formatted_string.clear();
 			}
@@ -697,8 +831,7 @@ void AmdSmiStaticCommand::static_command_human()
 				std::string param{"process-isolation"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					out += formatted_string;
-					formatted_string.clear();
+					options_string += formatted_string;
 				}
 				formatted_string.clear();
 			}
@@ -709,8 +842,7 @@ void AmdSmiStaticCommand::static_command_human()
 				std::string param{"virtualization_mode"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					out += formatted_string;
-					formatted_string.clear();
+					options_string += formatted_string;
 				}
 				formatted_string.clear();
 			}
@@ -721,11 +853,91 @@ void AmdSmiStaticCommand::static_command_human()
 				std::string param{"numa"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					out += formatted_string;
-					formatted_string.clear();
+					options_string += formatted_string;
 				}
 				formatted_string.clear();
 			}
+			if (!options_string.empty()) {
+				out += string_format(gpuTemplate, arg.devices[i]->get_gpu_index());
+				out += options_string;
+				options_string.clear();
+			}
+			options_string.clear();
+		}
+	}
+	for (unsigned int i = 0; i < arg.nic_devices.size(); i++) {
+		int nic_index = arg.nic_devices[i]->get_gpu_index();
+		uint64_t nic_bdf = arg.nic_devices[i]->get_bdf();
+		if ((std::find(arg.options.begin(), arg.options.end(), "asic") != arg.options.end()) ||
+				(std::find(arg.options.begin(), arg.options.end(), "a") != arg.options.end()) ||
+				arg.all_arguments) {
+			ret = static_command_nic_asic(nic_bdf, formatted_string);
+			std::string param{"nic_asic"};
+			int error = handle_exceptions(ret, param, arg);
+			if (error == 0) {
+				options_string += formatted_string;
+			}
+			formatted_string.clear();
+		}
+		if ((std::find(arg.options.begin(), arg.options.end(), "bus") != arg.options.end()) ||
+				(std::find(arg.options.begin(), arg.options.end(), "b") != arg.options.end()) ||
+				arg.all_arguments) {
+			ret = static_command_nic_bus(nic_bdf, formatted_string);
+			std::string param{"nic_bus"};
+			int error = handle_exceptions(ret, param, arg);
+			if (error == 0) {
+				options_string += formatted_string;
+			}
+			formatted_string.clear();
+		}
+		if ((std::find(arg.options.begin(), arg.options.end(), "driver") != arg.options.end()) ||
+				(std::find(arg.options.begin(), arg.options.end(), "d") != arg.options.end()) ||
+				arg.all_arguments) {
+			ret = static_command_nic_driver(nic_bdf, formatted_string);
+			std::string param{"nic_driver"};
+			int error = handle_exceptions(ret, param, arg);
+			if (error == 0) {
+				options_string += formatted_string;
+			}
+			formatted_string.clear();
+		}
+		if ((std::find(arg.options.begin(), arg.options.end(), "numa") != arg.options.end()) ||
+				(std::find(arg.options.begin(), arg.options.end(), "u") != arg.options.end()) ||
+				arg.all_arguments) {
+			ret = static_command_nic_numa(nic_bdf, formatted_string);
+			std::string param{"nic_numa"};
+			int error = handle_exceptions(ret, param, arg);
+			if (error == 0) {
+				options_string += formatted_string;
+			}
+			formatted_string.clear();
+		}
+		if ((std::find(arg.options.begin(), arg.options.end(), "port") != arg.options.end()) ||
+				(std::find(arg.options.begin(), arg.options.end(), "po") != arg.options.end()) ||
+				arg.all_arguments) {
+			ret = static_command_nic_port(nic_bdf, formatted_string);
+			std::string param{"nic_port"};
+			int error = handle_exceptions(ret, param, arg);
+			if (error == 0) {
+				options_string += formatted_string;
+			}
+			formatted_string.clear();
+		}
+		if ((std::find(arg.options.begin(), arg.options.end(), "rdma-devices") != arg.options.end()) ||
+				(std::find(arg.options.begin(), arg.options.end(), "rd") != arg.options.end()) ||
+				arg.all_arguments) {
+			ret = static_command_nic_rdma_devices(nic_bdf, formatted_string);
+			std::string param{"nic_rdma_devices"};
+			int error = handle_exceptions(ret, param, arg);
+			if (error == 0) {
+				options_string += formatted_string;
+			}
+			formatted_string.clear();
+		}
+		if (!options_string.empty()) {
+			out += string_format("NIC: %d\n", nic_index);
+			out += options_string;
+			options_string.clear();
 		}
 	}
 	if (arg.is_file) {
@@ -896,7 +1108,7 @@ void AmdSmiStaticCommand::static_command_csv()
 				}
 			}
 			if ((std::find(arg.options.begin(), arg.options.end(), "num-vf") != arg.options.end()) ||
-					(std::find(arg.options.begin(), arg.options.end(), "n") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "nv") != arg.options.end()) ||
 					arg.all_arguments) {
 				ret = static_command_num_vf(gpu_bdf, formatted_string);
 				std::string param{"num-vf"};

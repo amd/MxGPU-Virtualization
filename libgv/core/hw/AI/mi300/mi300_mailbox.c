@@ -249,7 +249,7 @@ static int mi300_mailbox_sw_fini(struct amdgv_adapter *adapt)
 
 static int mi300_mailbox_hw_init(struct amdgv_adapter *adapt)
 {
-	if (!adapt->opt.skip_hw_init)
+	if (!amdgv_in_live_update_seq())
 		mi300_mailbox_reset(adapt);
 
 	return 0;

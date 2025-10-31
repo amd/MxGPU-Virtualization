@@ -129,7 +129,7 @@ struct amdgv_xgmi {
 			enum amdgv_xgmi_fb_sharing_mode mode);
 	enum amdgv_xgmi_link_status (*get_link_status)(struct amdgv_adapter *adapt,
 						       uint32_t phy_link_idx);
-
+	int (*guest_ext_peer_link_ta_cmd_supported)(struct amdgv_adapter *adapt);
 };
 
 struct amdgv_pcs_ras_field {
@@ -167,4 +167,5 @@ int amdgv_xgmi_inject_error(struct amdgv_adapter *adapt,
 			    struct ta_ras_trigger_error_input *block_info);
 enum amdgv_xgmi_link_status amdgv_xgmi_get_link_status(struct amdgv_adapter *adapt,
 							      uint32_t phy_link_idx);
+bool amdgv_xgmi_is_guest_ext_peer_link_ta_cmd_supported(struct amdgv_adapter *adapt);
 #endif

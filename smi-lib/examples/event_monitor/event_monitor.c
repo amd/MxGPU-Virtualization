@@ -22,6 +22,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include "amdsmi.h"
 #include <stdbool.h>
 
@@ -53,18 +54,19 @@ const char *const EVENT_SEVERITY_STR[] = {
 
 int main(int argc, char *argv[])
 {
-	int ret;
-	unsigned int gpu_count;
+	int ret = 0;
+	unsigned int gpu_count = 0;
 	amdsmi_socket_handle socket = NULL;
+	amdsmi_processor_handle *processors = NULL;
 
 	amdsmi_event_set monitor;
-	amdsmi_event_entry_t event;
+	amdsmi_event_entry_t event = {0};
 
 	unsigned long category = AMDSMI_EVENT_CATEGORY__MAX;
 	unsigned long severity = 5;
 
-	amdsmi_bdf_t gpu_bdf;
-	amdsmi_bdf_t vf_bdf;
+	amdsmi_bdf_t gpu_bdf = {0};
+	amdsmi_bdf_t vf_bdf = {0};
 
 	/* a clear event mask which only masks high severities */
 	uint64_t event_mask = AMDSMI_MASK_INIT;
@@ -127,18 +129,25 @@ int main(int argc, char *argv[])
 	if (ret != AMDSMI_STATUS_SUCCESS)
 		goto finish;
 
-	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*gpu_count);
+	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*gpu_count);
+	if (processors == NULL) {
+		ret = AMDSMI_STATUS_OUT_OF_RESOURCES;
+		goto finish;
+	}
 
 	ret = amdsmi_get_processor_handles(socket, &gpu_count, &processors[0]);
 	if (ret != AMDSMI_STATUS_SUCCESS)
-		goto finish;
+		goto cleanup_processors;
 
 	/* log all events */
 	ret = amdsmi_event_create(&processors[0], (uint8_t) gpu_count, event_mask, &monitor);
 	if (ret != AMDSMI_STATUS_SUCCESS)
-		goto finish;
+		goto cleanup_processors;
 
 	while (true) {
+		/* Clear event structure before reading */
+		memset(&event, 0, sizeof(event));
+
 		/* wait 10 sec for event */
 		ret = amdsmi_event_read(monitor, 1000 * 1000 * 10, &event);
 
@@ -149,7 +158,7 @@ int main(int argc, char *argv[])
 			break;
 		} else if (ret == AMDSMI_STATUS_SUCCESS) {
 			/* if read an event, let's print it and try again */
-			amdsmi_get_gpu_device_bdf(&event.dev_id, &gpu_bdf);
+			amdsmi_get_gpu_device_bdf(event.processor_handle, &gpu_bdf);
 			amdsmi_get_gpu_device_bdf(&event.fcn_id, &vf_bdf);
 
 			printf("\n");
@@ -181,9 +190,12 @@ int main(int argc, char *argv[])
 
 	amdsmi_event_destroy(monitor);
 
+cleanup_processors:
+	if (processors != NULL)
+		free(processors);
+
 finish:
 	if (amdsmi_shut_down() != AMDSMI_STATUS_SUCCESS)
 		printf("SMI failed to finish\n");
-	free(processors);
 	return ret;
 }

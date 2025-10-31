@@ -141,7 +141,7 @@ On a Linux platform, go to the smi-lib directory `gim/smi-lib/` and run the foll
 
 ## AMD SMI tool build
 
-The AMD SMI CLI tool is a command line utility built in C++ that utilizes AMD SMI Library APIs to monitor and configure AMD GPUs on Linux host systems.
+The AMD SMI CLI tool is a command line utility built in C++ that utilizes AMD SMI Library APIs to monitor and configure AMD GPUs and NICs on Linux host systems.
 
 #### Tool Source Code Structure
 
@@ -170,22 +170,22 @@ cli/
 
 ##### Key Components
 
-**Include Files (`inc/`)**
+**Include files (`inc/`)**
 Contains all header files that define the CLI tool's interfaces, including:
-- Command parsers and handlers
-- API interface definitions
+- Command parsers and handlers for GPU and NIC operations
+- API interface definitions for GPU and NIC management
 - Template definitions for output formatting
 - Helper functions and utilities
 
-**Source Files (`src/`)**
-- **`host/`**: Contains Linux host-specific implementations for GPU management and monitoring
+**Source files (`src/`)**
+- **`host/`**: Contains Linux host-specific implementations for GPU and NIC management and monitoring
 - **`guest/`**: Contains Windows guest-specific source files (for cross-platform compatibility)
 
-**Build System (`cmake/`)**
+**Build system (`cmake/`)**
 - **`linux/`**: Linux-specific CMake configuration files
 - Platform-specific build configurations and dependencies
 
-**Third-party Libraries (`utils/third_party/`)**
+**Third-party libraries (`utils/third_party/`)**
 - **`json/`**: JSON parsing and formatting library. Converts internal data structures to properly formatted JSON objects for machine-readable output.
 - **`tabulate/`**: Table formatting library for structured output. Handles the alignment, spacing, and visual formatting of tabular data (like the monitor command output showing GPU metrics in neat columns).
 
@@ -206,11 +206,42 @@ Contains all header files that define the CLI tool's interfaces, including:
 
 #### Build Process
 
-**Basic Build Steps**
+**Basic build steps**
 
 - Run `make` in the `smi-lib/cli/cpp` folder to build the tool.
 - Run `make clean` to remove all files generated during the build process, such as object files and executables, to ensure clean build environment.
 
+#### Build Options
+
+The CLI tool build system supports various configuration options to customize the build for different environments and hardware support requirements.
+
+**NIC support configuration**
+
+The CLI tool can be built with or without NIC (Network Interface Card) support depending on your system requirements:
+
+**Build with NIC support (default)**
+```bash
+cd smi-lib/cli/cpp
+make
+```
+
+**Build with NIC support using build flag**
+```bash
+cd smi-lib/cli/cpp
+make AMD_SMI_NIC_SUPPORT=True ..
+```
+
+**Build without NIC support**
+```bash
+cd smi-lib/cli/cpp
+make AMD_SMI_NIC_SUPPORT=False ..
+```
+
+**Available build options**
+- `AMD_SMI_NIC_SUPPORT`: Enable/disable NIC monitoring functionality (Default: True)
+
+**Notes:**
+- When NIC support is disabled (`AMD_SMI_NIC_SUPPORT=False`), all NIC-related commands and functionality will be excluded from the build
 
 #### Output Location
 
@@ -218,24 +249,28 @@ After successful compilation, the `amd-smi` binary will be generated in: `smi-li
 
 #### Runtime Requirements
 
-**Library Dependencies**
+**Library dependencies**
 The CLI tool requires the AMD SMI Library (`libamdsmi.so`) to be available either:
 - In the same directory as the `amd-smi` binary
 - In the system library path (`/usr/local/lib`)
 - Via `LD_LIBRARY_PATH` environment variable
 
-**Driver Requirements**
+**Driver requirements**
 - AMD SR-IOV Host driver must be installed and loaded
 - For SRIOV functionality: SR-IOV must be enabled in the system
 
+**NIC support requirements**
+- AMD Pensando NIC drivers must be installed and loaded
+- Appropriate permissions for network device access
+
 #### Development Notes
 
-**Code Organization**
+**Code organization**
 - Each command is implemented as a separate class inheriting from a base command interface
 - Template-based output formatting ensures consistent display across all commands
 - Platform-specific code is isolated in respective directories (`host/` vs `guest/`)
 
-**Extending Functionality**
+**Extending functionality**
 To add new commands or features:
 1. Create new command class in appropriate `src/` subdirectory
 2. Add corresponding header file in `inc/`
@@ -243,11 +278,15 @@ To add new commands or features:
 
 #### Troubleshooting
 
-**Common Build Issues**
-- **Missing AMD SMI Library**: Ensure `libamdsmi.so` is built and available
+**Common build issues**
+- **Missing AMD SMI library**: Ensure `libamdsmi.so` is built and available
 - **CMake version**: Verify CMake 3.16+ is installed
 
-**Runtime Issues**
+**Runtime issues**
 - **Library not found**: Check `LD_LIBRARY_PATH` includes AMD SMI Library location
 - **Permission errors**: Ensure proper permissions for GPU device access
 - **Driver issues**: Verify AMD SR-IOV Host driver is properly installed and loaded
+
+**NIC-related issues**
+- **NIC not detected**: Verify AMD Pensando NIC drivers are installed and loaded
+- **Network permission errors**: Ensure proper network device access permissions

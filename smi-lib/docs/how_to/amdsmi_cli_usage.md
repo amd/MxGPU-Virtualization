@@ -1,15 +1,15 @@
 ---
 myst:
   html_meta:
-    "description lang=en": "Learn how to use the AMD SMI command line tool - comprehensive usage guide."
-    "keywords": "amdsmi, cli, usage, commands, examples, gpu, monitoring"
+    "description lang=en": "Learn how to use the AMD SMI command line tool - comprehensive usage guide for GPUs and NICs."
+    "keywords": "amdsmi, cli, usage, commands, examples, gpu, nic, network, monitoring"
 ---
 
 # AMD SMI CLI Tool - Usage Guide
 
 ## Overview
 
-**AMD SMI tool** is a command line utility that utilizes AMD SMI Library APIs to monitor and configure AMD GPUs on Linux host systems. The tool is used to monitor AMD GPUs status in virtualization environments, providing comprehensive GPU management capabilities for host administrators. The tool outputs GPU/driver information in plain text, in JSON, or in CSV formats while it can also show the info in the console or save to the specified output file.
+**AMD SMI tool** is a command line utility that utilizes AMD SMI Library APIs to monitor and configure AMD GPUs and NICs on Linux host systems. The tool is used to monitor AMD GPUs and NICs status in virtualization environments, providing comprehensive GPU management capabilities for host administrators. The tool outputs GPU and NIC information in plain text, in JSON, or in CSV formats while it can also show the info in the console or save to the specified output file.
 
 ## Return Codes
 
@@ -46,67 +46,89 @@ The commands and respective arguments that they accept are described as follows:
    Display information about current version of the library and the tool.
 
 3. **list** (discovery)
-   Lists all GPUs and VFs on the system and their most basic general information.
+   Lists all GPUs, GPU VFs, and NICs on the system and their general information.
 
 4. **static**
-   Gets static information about the specified GPU or VF. If no target is specified, returns information for all GPUs on the system.
+   Gets static information about the specified GPU or VF. If no target is specified, returns information for all devices on the system.
 
    **GPU Parameters:**
    - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`: Parameters for a specific GPU
-     - `--asic`: All asic information.
-     - `--bus`: All bus information.
-     - `--vbios`: All video bios information (if available).
-     - `--board`: All board information.
-     - `--limit`: All limit metric values (i.e. power and thermal limits).
-     - `--driver`: Displays driver version.
-     - `--ras`: Displays ras features information.
-     - `--dfc-ucode`: All dfc ucode table information.
-     - `--fb-info`: All fb information.
-     - `--num-vf`: Displays number of supported and enabled VFs.
-     - `--vram`: All vram information.
-     - `--cache`: All cache info.
-     - `--partition`: All partition information.
-     - `--ifwi`: All IFWI/video bios information.
-     - `--numa`: All NUMA information.
+   - `--asic`: All asic information.
+   - `--bus`: All bus information.
+   - `--vbios`: All video bios information (if available).
+   - `--board`: All board information.
+   - `--limit`: All limit metric values (i.e. power and thermal limits).
+   - `--driver`: Displays driver version.
+   - `--ras`: Displays ras features information.
+   - `--dfc-ucode`: All dfc ucode table information.
+   - `--fb-info`: All fb information.
+   - `--num-vf`: Displays number of supported and enabled VFs.
+   - `--vram`: All vram information.
+   - `--cache`: All cache info.
+   - `--partition`: All partition information.
+   - `--ifwi`: All IFWI/video bios information.
+   - `--numa`: All NUMA information.
 
    **VF Parameters:**
    - `--vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>`: Gets general information about the specified VF (e.g. timeslice, fb info)
 
+   **NIC Parameters:**
+   - `--nic=<nic_index from list, nic_bdf>`: Parameters for a specific NIC
+     - `--asic`: All asic information.
+     - `--bus`: All bus information.
+     - `--driver`: NIC driver information.
+     - `--numa`: All NUMA information.
+     - `--port`: All port information.
+     - `--rdma-devices`: All RDMA devices information.
+
+
 5. **firmware** (ucode)
-   Gets firmware information about the specified GPU or VF. If no target is specified, returns information for all GPUs on the system.
+   Gets firmware information about the specified GPU, VF, or NIC. If no target is specified, returns information for all GPUs on the system.
 
    **GPU Parameters:**
    - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`: Parameters for a specific GPU
-     - `--fw-list`: All firmware list information.
-     - `--error-records`: All error records information.
+   - `--fw-list`: All firmware list information.
+   - `--error-records`: All error records information.
 
    **VF Parameters:**
    - `--vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>`: Parameters for a specific VF
-     - `--fw-list`: All firmware list information.
+   - `--fw-list`: All firmware list information.
+
+
 
 6. **bad-pages**
    - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`: Gets bad page information about the specified GPU. If no argument is provided, returns information for all GPUs on the system.
 
 7. **metric**
-   Gets metric information about the specified GPU or VF. If no target is specified, returns information for all GPUs on the system.
+   Gets metric information about the specified GPU, VF, or NIC. If no target is specified, returns information for all devices on the system.
 
    **GPU Parameters:**
    - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`: Parameters for a specific GPU
-     - `--usage`: All usage information.
-     - `--power`: All power readings information.
-     - `--clock`: All frequency sensor readings.
-     - `--temperature`: All thermal sensor readings.
-     - `--ecc`: All ecc information.
-     - `--ecc-block`: Number of ECC errors per block.
-     - `--pcie`: Current pcie information.
-     - `--energy`: Amount of energy consumed.
+   - `--usage`: All usage information.
+   - `--power`: All power readings information.
+   - `--clock`: All frequency sensor readings.
+   - `--temperature`: All thermal sensor readings.
+   - `--ecc`: All ecc information.
+   - `--ecc-block`: Number of ECC errors per block.
+   - `--pcie`: Current pcie information.
+   - `--energy`: Amount of energy consumed.
 
    **VF Parameters:**
    - `--vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>`: Parameters for a specific VF
-     - `--schedule`: All scheduling info.
-     - `--guard`: All guard information.
-     - `--guest-data`: All guest data information.
-     - `--per-partition`: Per-partition metrics information.
+   - `--schedule`: All scheduling info.
+   - `--guard`: All guard information.
+   - `--guest-data`: All guest data information.
+   - `--per-partition`: Per-partition metrics information.
+
+   **NIC Parameters:**
+   - `--nic=<nic_index from list, nic_bdf>`: Parameters for a specific NIC
+     - `--port`: All port information.
+     - `--rdma-devices`: All RDMA devices information.
+
+   **NIC Parameters:**
+   - `--nic=<nic_index from list, nic_bdf>`: Parameters for a specific NIC
+     - `--port`: All port information.
+     - `--rdma-devices`: All RDMA devices information.
 
    **Note:** When using the `--csv` format modifier with the metric command, only one argument is supported per command (e.g., metric --usage). For all other formats (plain text and json), multiple arguments are supported. The per-partition command does not support the `--csv` format modifier.
 
@@ -121,15 +143,14 @@ The commands and respective arguments that they accept are described as follows:
     Displays link topology information. If no argument is provided, returns information for all GPUs on the system.
 
     Topology arguments for the GPU are the following:
-    - `--weight`: Current weight information.
-    - `--hops`: Current hops information.
-    - `--fb-sharing`: Current framebuffer sharing information.
-    - `--link-type`: Link type information.
+      - `--weight`: Current weight information.
+      - `--hops`: Current hops information.
+      - `--fb-sharing`: Current framebuffer sharing information.
+      - `--link-type`: Link type information.
       - `--coherent`: Cache coherent information.
       - `--atomics`: 32 and 64-bit atomic link capability information.
       - `--bi-dir`: bi-directional link capability information.
       - `--dma`: dma link capability information.
-    - `--link-status`: Link status information.
 
     **Note:** The topology command does not support the `--csv` format modifier.
 
@@ -138,11 +159,11 @@ The commands and respective arguments that they accept are described as follows:
     Displays XGMI capabilities, framebuffer sharing and metric information. If no argument is provided, returns information for all GPUs on the system.
 
     XGMI arguments for the GPU are the following:
-    - `--caps`: XGMI capabilities.
-    - `--fb-sharing`: Framebuffer sharing for each mode.
-    - `--metric`: Metric XGMI information.
-    - `--source-status`: Port status information.
-    - `--link-status`: Link status information.
+      - `--caps`: XGMI capabilities.
+      - `--fb-sharing`: Framebuffer sharing for each mode.
+      - `--metric`: Metric XGMI information.
+      - `--source-status`: Port status information.
+      - `--link-status`: Link status information.
 
     **Note:** The xgmi command does not support the `--csv` format modifier.
 
@@ -152,7 +173,6 @@ The commands and respective arguments that they accept are described as follows:
     **GPU Parameters:**
     - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`: Parameters for a specific GPU
       - `--gpureset`: Reset GPU.
-
 
     **VF Parameters:**
     - `--vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>`: Parameters for a specific VF (requires SR-IOV)
@@ -172,28 +192,30 @@ The commands and respective arguments that they accept are described as follows:
     - `--xgmi --fb-sharing-mode=<AmdSmiXgmiFbSharingMode>`: Sets framebuffer sharing mode from list ["MODE_1", "MODE_2", "MODE_4", "MODE_8"] where, MODE_X represents that X GPUs will be in the same group, linked together: MODE_1 (one GPU in a group), MODE_2 (two GPUs in a group), MODE_4 (four GPUs in a group), MODE_8 (eight GPUs in a group). All possible configurations can be seen by running the `amd-smi xgmi` command, not all of them are supported on all systems.
 
 13. **monitor**
-    - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`:
-    Monitor a target device for the specified arguments. If no arguments are provided, all arguments will be enabled. Use the watch arguments to run continuously.
+    Monitor target devices for the specified arguments. If no arguments are provided, all arguments will be enabled. Use the watch arguments to run continuously.
 
-    Monitor arguments for the GPU are the following:
-    - `--gfx`: Monitor graphics utilization (%) and clock (MHz).
-    - `--mem`: Monitor memory utilization (%) and clock (MHz).
-    - `--encoder`: Monitor encoder utilization (%) and clock (MHz).
-    - `--ecc`: Monitor ECC single bit, ECC double bit.
-    - `--pcie`: Monitor PCIe bandwidth in Mb/s and PCIe replay error count.
-    - `--power-usage`: Monitor power usage in Watts.
-    - `--temperature`: Monitor temperature in Celsius.
-    - `--decoder`: Monitor decoder utilization (%) and clock (MHz).
+    **GPU Parameters:**
+    - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`: Monitor a specific GPU
+      - `--gfx`: Monitor graphics utilization (%) and clock (MHz).
+      - `--mem`: Monitor memory utilization (%) and clock (MHz).
+      - `--encoder`: Monitor encoder utilization (%) and clock (MHz).
+      - `--ecc`: Monitor ECC single bit, ECC double bit.
+      - `--pcie`: Monitor PCIe bandwidth in Mb/s and PCIe replay error count.
+      - `--power-usage`: Monitor power usage in Watts.
+      - `--temperature`: Monitor temperature in Celsius.
+      - `--decoder`: Monitor decoder utilization (%) and clock (MHz).
+
+
 
 14. **partition**
     - `--gpu= <gpu_index from list, gpu_bdf, gpu_uuid>`:
     Displays capabilities and current information for memory and accelerator partition. If no argument is provided, returns information for all GPUs on the system.
 
     Partition arguments for the GPU are the following:
-    - `--current`: Current memory and accelerator partition information.
-    - `--memory`: Memory partition information.
-    - `--accelerator`: Accelerator partition information.
-    - `--global`: Global partition configuration settings.
+      - `--current`: Current memory and accelerator partition information.
+      - `--memory`: Memory partition information.
+      - `--accelerator`: Accelerator partition information.
+      - `--global`: Global partition configuration settings.
 
     **Note:** The partition command does not support the `--csv` or `--json` format modifiers.
 
@@ -1102,6 +1124,716 @@ gpu,pcie_current_width,pcie_current_speed,pcie_current_bandwidth,pcie_replay_cou
 0,16,32,18,0,0,0,0,0
 ```
 
+### 15. NIC Information and Monitoring
+
+**List NICs:**
+
+```shell-session
+$ sudo amd-smi list --nic
+```
+
+**Output:**
+```
+NIC: 0
+    BDF: 0000:41:00.0
+    PERMANENT_ADDRESS: 04:90:81:2c:7b:10
+    PRODUCT_NAME: POLLARA 1x400G QSFP112
+    PART_NUMBER: POLLARA-1Q400P
+    SERIAL_NUMBER: FPL250300C5EC0V2
+    VENDOR_NAME: AMD Pensando Systems, Inc.
+```
+
+**Get NIC static information:**
+
+```shell-session
+$ sudo amd-smi static --nic=0
+```
+
+**Output:**
+```
+NIC: 0
+    ASIC:
+        VENDOR_ID: 0x1DD8
+        SUBVENDOR_ID: 0x1DD8
+        DEVICE_ID: 0x8
+        SUBSYSTEM_ID: 0x5201
+        REVISION: 0x0
+        PERMANENT_ADDRESS: 04:90:81:2c:7b:10
+        PRODUCT_NAME: POLLARA 1x400G QSFP112
+        PART_NUMBER: POLLARA-1Q400P
+        SERIAL_NUMBER: FPL250300C5EC0V2
+        VENDOR_NAME: AMD Pensando Systems, Inc.
+    BUS:
+        BDF: 0000:41:00.0
+        MAX_PCIE_WIDTH: 16
+        MAX_PCIE_SPEED: 32 GT/s
+        PCIE_INTERFACE_VERSION: N/A
+        SLOT_TYPE: N/A
+    DRIVER:
+        NAME: ionic
+        VERSION: 25.08.1.001
+    NUMA:
+        NODE: 0
+        AFFINITY: [0-95,192-287]
+    PORTS:
+        PORT_0:
+            BDF: 0000:44:00.0
+            PORT_NUM: 0
+            TYPE: Ethernet
+            FLAVOUR: N/A
+            NETDEV: enp68s0
+            IFINDEX: 48
+            MAC_ADDRESS: 04:90:81:2c:7b:10
+            CARRIER: 0
+            MTU: 1500 B
+            LINK_STATE: DOWN
+            LINK_SPEED: 100000 Mb/s
+            ACTIVE_FEC: 4
+            AUTONEG: DISABLED
+            PAUSE_AUTONEG: OFF
+            PAUSE_RX: OFF
+            PAUSE_TX: OFF
+    RDMA_DEVICES:
+        RDMA_DEVICE_0:
+            RDMA_DEV: rocep68s0
+            NODE_GUID: 0690:81ff:fe2c:7b10
+            NODE_TYPE: CA
+            SYS_IMAGE_GUID: 0690:81ff:fe2c:7b10
+            FW_VER: 1.117.2-a-11
+            PORTS:
+                PORT_0:
+                    NETDEV: enp68s0
+                    STATE: DOWN
+                    RDMA_PORT: 1
+                    MAX_MTU: N/A
+                    ACTIVE_MTU: N/A
+```
+
+**Get NIC RDMA devices statistics:**
+
+```shell-session
+$ sudo amd-smi metric --nic=0 --rdma_devices
+```
+
+**Output:**
+```
+NIC: 0
+    RDMA_DEVICES:
+            RDMA_DEVICE_0:
+                RDMA_DEV: rocep68s0
+                PORTS:
+                    PORT_0:
+                        STATISTICS:
+                            LIFESPAN: 10
+                            REQ_RX_CQE_ERR: 0
+                            REQ_RX_CQE_FLUSH: 0
+                            REQ_RX_DUP_RESPONSE: 0
+                            REQ_RX_IMPL_NAK_SEQ_ERR: 0
+                            REQ_RX_INVAL_PKTS: 0
+                            REQ_RX_OPER_ERR: 0
+                            REQ_RX_PKT_SEQ_ERR: 0
+                            REQ_RX_RMT_ACC_ERR: 0
+                            REQ_RX_RMT_REQ_ERR: 0
+                            REQ_RX_RNR_RETRY_ERR: 0
+                            REQ_TX_LOC_ACC_ERR: 0
+                            REQ_TX_LOC_OPER_ERR: 0
+                            REQ_TX_LOC_SGL_INV_ERR: 0
+                            REQ_TX_MEM_MGMT_ERR: 0
+                            REQ_TX_RETRY_EXCD_ERR: 0
+                            RESP_RX_CQE_ERR: 0
+                            RESP_RX_CQE_FLUSH: 0
+                            RESP_RX_DUP_REQUEST: 0
+                            RESP_RX_INVAL_REQUEST: 0
+                            RESP_RX_LOC_LEN_ERR: 0
+                            RESP_RX_LOC_OPER_ERR: 0
+                            RESP_RX_OUTOF_ATOMIC: 0
+                            RESP_RX_OUTOF_BUF: 0
+                            RESP_RX_OUTOUF_SEQ: 0
+                            RESP_RX_S0_TABLE_ERR: 0
+                            RESP_TX_LOC_SGL_INV_ERR: 0
+                            RESP_TX_PKT_SEQ_ERR: 0
+                            RESP_TX_RMT_ACC_ERR: 0
+                            RESP_TX_RMT_INVAL_REQ_ERR: 0
+                            RESP_TX_RMT_OPER_ERR: 0
+                            RESP_TX_RNR_RETRY_ERR: 0
+                            RX_RDMA_CNP_PKTS: 0
+                            RX_RDMA_ECN_PKTS: 0
+                            RX_RDMA_MCAST_BYTES: 0
+                            RX_RDMA_MCAST_PKTS: 0
+                            RX_RDMA_UCAST_BYTES: 0
+                            RX_RDMA_UCAST_PKTS: 0
+                            TX_RDMA_CNP_PKTS: 0
+                            TX_RDMA_MCAST_BYTES: 0
+                            TX_RDMA_MCAST_PKTS: 0
+                            TX_RDMA_UCAST_BYTES: 0
+                            TX_RDMA_UCAST_PKTS: 0
+```
+**Get NIC ports statistics:**
+
+```shell-session
+$ sudo amd-smi metric --nic=0 --port
+```
+
+**Output:**
+```
+NIC: 0
+    PORTS:
+        PORT_0:
+            NETDEV: enp153s0
+            VENDOR_STATISTICS:
+                    RX_BYTES: 0
+                    RX_CSUM_NONE: 0
+                    RX_PACKETS: 0
+                    TX_BYTES: 0
+                    TX_CSUM: 0
+                    TX_CSUM_NONE: 0
+                    TX_PACKETS: 0
+                    TX_TSO: 0
+                    TX_TSO_BYTES: 0
+            STATISTICS:
+                    COLLISIONS: 0
+                    MULTICAST: 0
+                    RX_BYTES: 0
+                    RX_COMPRESSED: 0
+                    RX_CRC_ERRORS: 0
+                    RX_DROPPED: 0
+                    RX_ERRORS: 0
+                    RX_FIFO_ERRORS: 0
+                    RX_FRAME_ERRORS: 0
+                    RX_LENGTH_ERRORS: 0
+                    RX_MISSED_ERRORS: 0
+                    RX_NOHANDLER: 0
+                    RX_OVER_ERRORS: 0
+                    RX_PACKETS: 0
+                    TX_ABORTED_ERRORS: 0
+                    TX_BYTES: 0
+                    TX_CARRIER_ERRORS: 0
+                    TX_COMPRESSED: 0
+                    TX_DROPPED: 0
+                    TX_ERRORS: 0
+                    TX_FIFO_ERRORS: 0
+                    TX_HEARTBEAT_ERRORS: 0
+                    TX_PACKETS: 0
+                    TX_WINDOW_ERRORS: 0
+```
+**Get NIC and GPU static information:**
+
+```shell-session
+$ sudo amd-smi static --gpu=0 --gpu=1 --gpu=2 --nic=0
+```
+**Output**
+```
+GPU: 0
+    ASIC:
+        MARKET_NAME: AMD Instinct MI350X
+        VENDOR_ID: 0x1002
+        VENDOR_NAME: Advanced Micro Devices Inc. [AMD/ATI]
+        SUBVENDOR_ID: 0x1002
+        DEVICE_ID: 0x75A0
+        SUBSYSTEM_ID: 0x75A0
+        REV_ID: 0x0
+        ASIC_SERIAL: 0xDB992407CFE01E26
+        OAM_ID: 6
+        NUM_OF_COMPUTE_UNITS: 256
+    BUS:
+        BDF: 0000:05:00.0
+        MAX_PCIE_WIDTH: 16
+        MAX_PCIE_SPEED: 32 GT/s
+        PCIE_INTERFACE_VERSION: Gen 4
+        SLOT_TYPE: OAM
+        MAX_PCIE_INTERFACE_VERSION: Gen 5
+    IFWI:
+        NAME: AMD MI350X
+        BUILD_DATE: 2025/08/31 23:49
+        PART_NUMBER: 113-M350-01-1K0-980C
+        VERSION: 023.040.001.008.000001
+        BOOT_FIRMWARE: N/A
+    LIMIT:
+        MAX_POWER: 1000 W
+        MIN_POWER: 0 W
+        SOCKET_POWER: 1000 W
+        SLOWDOWN_EDGE_TEMPERATURE: N/A
+        SLOWDOWN_HOTSPOT_TEMPERATURE: 100 C
+        SLOWDOWN_MEM_TEMPERATURE: 115 C
+        SHUTDOWN_EDGE_TEMPERATURE: N/A
+        SHUTDOWN_HOTSPOT_TEMPERATURE: 110 C
+        SHUTDOWN_MEM_TEMPERATURE: 125 C
+    DRIVER:
+        NAME: libgv
+        VERSION: 8.6.0.K-dev-107-1dfb7bfa73
+        DATE: 2025-07-24 10:19:16
+        MODEL: N/A
+    BOARD:
+        MODEL_NUMBER: 102-G36212-0C
+        PRODUCT_SERIAL: 692517020426
+        FRU_ID: 113-AMDG362120C01-100-300000082
+        PRODUCT_NAME: AMD Instinct MI350 OAM
+        MANUFACTURER_NAME: AMD
+    RAS:
+        EEPROM_VERSION: 0x30000
+        BAD_PAGE_THRESHOLD: 128
+        PARITY_SCHEMA: ENABLED
+        SINGLE_BIT_SCHEMA: ENABLED
+        DOUBLE_BIT_SCHEMA: ENABLED
+        POISON_SCHEMA: ENABLED
+        BLOCK_STATE:
+            UMC: ENABLED
+            SDMA: ENABLED
+            GFX: ENABLED
+            MMHUB: ENABLED
+            ATHUB: DISABLED
+            PCIE_BIF: ENABLED
+            HDP: DISABLED
+            XGMI_WAFL: ENABLED
+            DF: DISABLED
+            SMN: DISABLED
+            SEM: DISABLED
+            MP0: DISABLED
+            MP1: DISABLED
+            FUSE: DISABLED
+            MCA: DISABLED
+            VCN: DISABLED
+            JPEG: DISABLED
+            IH: DISABLED
+            MPIO: DISABLED
+    FB_INFO:
+        TOTAL_FB_SIZE: 257752 MB
+        PF_FB_RESERVED: 16 MB
+        PF_FB_OFFSET: 0 MB
+        FB_ALIGNMENT: 16 MB
+        MAX_VF_FB_USABLE: 257736 MB
+        MIN_VF_FB_USABLE: 16 MB
+    NUM_VF:
+        SUPPORTED: 1
+        ENABLED: 1
+    VRAM:
+        TYPE: HBM3E
+        VENDOR: SAMSUNG
+        SIZE: 258032 MB
+        BIT_WIDTH: 0
+        MAX_BANDWIDTH: 6810 GB/s
+    CACHE_INFO:
+        CACHE_0:
+            CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
+            CACHE_SIZE: 32 KB
+            CACHE_LEVEL: 1
+            MAX_NUM_CU_SHARED: 1
+            NUM_CACHE_INSTANCE: 256
+        CACHE_1:
+            CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
+            CACHE_SIZE: 16 KB
+            CACHE_LEVEL: 1
+            MAX_NUM_CU_SHARED: 2
+            NUM_CACHE_INSTANCE: 128
+        CACHE_2:
+            CACHE_PROPERTIES: INST_CACHE, SIMD_CACHE
+            CACHE_SIZE: 64 KB
+            CACHE_LEVEL: 1
+            MAX_NUM_CU_SHARED: 2
+            NUM_CACHE_INSTANCE: 128
+        CACHE_3:
+            CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
+            CACHE_SIZE: 4096 KB
+            CACHE_LEVEL: 2
+            MAX_NUM_CU_SHARED: 32
+            NUM_CACHE_INSTANCE: 8
+        CACHE_4:
+            CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
+            CACHE_SIZE: 262144 KB
+            CACHE_LEVEL: 3
+            MAX_NUM_CU_SHARED: 256
+            NUM_CACHE_INSTANCE: 1
+    XGMI_PLPD:
+        NUM_SUPPORTED: 3
+        CURRENT_ID: 1
+        POLICIES:
+            POLICY_ID: 0
+            POLICY_DESCRIPTION: plpd_disallow
+            POLICY_ID: 1
+            POLICY_DESCRIPTION: plpd_default
+            POLICY_ID: 2
+            POLICY_DESCRIPTION: plpd_optimized
+    PARTITION:
+        ACCELERATOR_PARTITION: SPX
+        MEMORY_PARTITION: NPS1
+        PARTITION_ID: 0
+    MODE: HOST
+    NUMA:
+        NODE: 0
+        CPU_AFFINITY:
+            CPU_LIST_0:
+                BITMASK: ffffffffffffffff
+                CORE_RANGE: [0-63]
+            CPU_LIST_1:
+                BITMASK: 0000000000000000
+                CORE_RANGE: []
+            CPU_LIST_2:
+                BITMASK: ffffffffffffffff
+                CORE_RANGE: [128-191]
+            CPU_LIST_3:
+                BITMASK: 0000000000000000
+                CORE_RANGE: []
+        SOCKET_AFFINITY: N/A
+GPU: 1
+    ASIC:
+        MARKET_NAME: AMD Instinct MI350X
+        VENDOR_ID: 0x1002
+        VENDOR_NAME: Advanced Micro Devices Inc. [AMD/ATI]
+        SUBVENDOR_ID: 0x1002
+        DEVICE_ID: 0x75A0
+        SUBSYSTEM_ID: 0x75A0
+        REV_ID: 0x0
+        ASIC_SERIAL: 0x5F002195F0DFC795
+        OAM_ID: 7
+        NUM_OF_COMPUTE_UNITS: 256
+    BUS:
+        BDF: 0000:15:00.0
+        MAX_PCIE_WIDTH: 16
+        MAX_PCIE_SPEED: 32 GT/s
+        PCIE_INTERFACE_VERSION: Gen 4
+        SLOT_TYPE: OAM
+        MAX_PCIE_INTERFACE_VERSION: Gen 5
+    IFWI:
+        NAME: AMD MI350X
+        BUILD_DATE: 2025/08/31 23:49
+        PART_NUMBER: 113-M350-01-1K0-980C
+        VERSION: 023.040.001.008.000001
+        BOOT_FIRMWARE: N/A
+    LIMIT:
+        MAX_POWER: 1000 W
+        MIN_POWER: 0 W
+        SOCKET_POWER: 1000 W
+        SLOWDOWN_EDGE_TEMPERATURE: N/A
+        SLOWDOWN_HOTSPOT_TEMPERATURE: 100 C
+        SLOWDOWN_MEM_TEMPERATURE: 115 C
+        SHUTDOWN_EDGE_TEMPERATURE: N/A
+        SHUTDOWN_HOTSPOT_TEMPERATURE: 110 C
+        SHUTDOWN_MEM_TEMPERATURE: 125 C
+    DRIVER:
+        NAME: libgv
+        VERSION: 8.6.0.K-dev-107-1dfb7bfa73
+        DATE: 2025-07-24 10:19:16
+        MODEL: N/A
+    BOARD:
+        MODEL_NUMBER: 102-G36212-0C
+        PRODUCT_SERIAL: 692517020489
+        FRU_ID: 113-AMDG362120C01-100-300000082
+        PRODUCT_NAME: AMD Instinct MI350 OAM
+        MANUFACTURER_NAME: AMD
+    RAS:
+        EEPROM_VERSION: 0x30000
+        BAD_PAGE_THRESHOLD: 128
+        PARITY_SCHEMA: ENABLED
+        SINGLE_BIT_SCHEMA: ENABLED
+        DOUBLE_BIT_SCHEMA: ENABLED
+        POISON_SCHEMA: ENABLED
+        BLOCK_STATE:
+            UMC: ENABLED
+            SDMA: ENABLED
+            GFX: ENABLED
+            MMHUB: ENABLED
+            ATHUB: DISABLED
+            PCIE_BIF: ENABLED
+            HDP: DISABLED
+            XGMI_WAFL: ENABLED
+            DF: DISABLED
+            SMN: DISABLED
+            SEM: DISABLED
+            MP0: DISABLED
+            MP1: DISABLED
+            FUSE: DISABLED
+            MCA: DISABLED
+            VCN: DISABLED
+            JPEG: DISABLED
+            IH: DISABLED
+            MPIO: DISABLED
+    FB_INFO:
+        TOTAL_FB_SIZE: 257752 MB
+        PF_FB_RESERVED: 16 MB
+        PF_FB_OFFSET: 0 MB
+        FB_ALIGNMENT: 16 MB
+        MAX_VF_FB_USABLE: 257736 MB
+        MIN_VF_FB_USABLE: 16 MB
+    NUM_VF:
+        SUPPORTED: 1
+        ENABLED: 1
+    VRAM:
+        TYPE: HBM3E
+        VENDOR: SAMSUNG
+        SIZE: 258032 MB
+        BIT_WIDTH: 0
+        MAX_BANDWIDTH: 6810 GB/s
+    CACHE_INFO:
+        CACHE_0:
+            CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
+            CACHE_SIZE: 32 KB
+            CACHE_LEVEL: 1
+            MAX_NUM_CU_SHARED: 1
+            NUM_CACHE_INSTANCE: 256
+        CACHE_1:
+            CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
+            CACHE_SIZE: 16 KB
+            CACHE_LEVEL: 1
+            MAX_NUM_CU_SHARED: 2
+            NUM_CACHE_INSTANCE: 128
+        CACHE_2:
+            CACHE_PROPERTIES: INST_CACHE, SIMD_CACHE
+            CACHE_SIZE: 64 KB
+            CACHE_LEVEL: 1
+            MAX_NUM_CU_SHARED: 2
+            NUM_CACHE_INSTANCE: 128
+        CACHE_3:
+            CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
+            CACHE_SIZE: 4096 KB
+            CACHE_LEVEL: 2
+            MAX_NUM_CU_SHARED: 32
+            NUM_CACHE_INSTANCE: 8
+        CACHE_4:
+            CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
+            CACHE_SIZE: 262144 KB
+            CACHE_LEVEL: 3
+            MAX_NUM_CU_SHARED: 256
+            NUM_CACHE_INSTANCE: 1
+    XGMI_PLPD:
+        NUM_SUPPORTED: 3
+        CURRENT_ID: 1
+        POLICIES:
+            POLICY_ID: 0
+            POLICY_DESCRIPTION: plpd_disallow
+            POLICY_ID: 1
+            POLICY_DESCRIPTION: plpd_default
+            POLICY_ID: 2
+            POLICY_DESCRIPTION: plpd_optimized
+    PARTITION:
+        ACCELERATOR_PARTITION: SPX
+        MEMORY_PARTITION: NPS1
+        PARTITION_ID: 0
+    MODE: HOST
+    NUMA:
+        NODE: 0
+        CPU_AFFINITY:
+            CPU_LIST_0:
+                BITMASK: ffffffffffffffff
+                CORE_RANGE: [0-63]
+            CPU_LIST_1:
+                BITMASK: 0000000000000000
+                CORE_RANGE: []
+            CPU_LIST_2:
+                BITMASK: ffffffffffffffff
+                CORE_RANGE: [128-191]
+            CPU_LIST_3:
+                BITMASK: 0000000000000000
+                CORE_RANGE: []
+        SOCKET_AFFINITY: N/A
+GPU: 2
+    ASIC:
+        MARKET_NAME: AMD Instinct MI350X
+        VENDOR_ID: 0x1002
+        VENDOR_NAME: Advanced Micro Devices Inc. [AMD/ATI]
+        SUBVENDOR_ID: 0x1002
+        DEVICE_ID: 0x75A0
+        SUBSYSTEM_ID: 0x75A0
+        REV_ID: 0x0
+        ASIC_SERIAL: 0x20285E597D0C8872
+        OAM_ID: 5
+        NUM_OF_COMPUTE_UNITS: 256
+    BUS:
+        BDF: 0000:65:00.0
+        MAX_PCIE_WIDTH: 16
+        MAX_PCIE_SPEED: 32 GT/s
+        PCIE_INTERFACE_VERSION: Gen 4
+        SLOT_TYPE: OAM
+        MAX_PCIE_INTERFACE_VERSION: Gen 5
+    IFWI:
+        NAME: AMD MI350X
+        BUILD_DATE: 2025/08/31 23:49
+        PART_NUMBER: 113-M350-01-1K0-980C
+        VERSION: 023.040.001.008.000001
+        BOOT_FIRMWARE: N/A
+    LIMIT:
+        MAX_POWER: 1000 W
+        MIN_POWER: 0 W
+        SOCKET_POWER: 1000 W
+        SLOWDOWN_EDGE_TEMPERATURE: N/A
+        SLOWDOWN_HOTSPOT_TEMPERATURE: 100 C
+        SLOWDOWN_MEM_TEMPERATURE: 115 C
+        SHUTDOWN_EDGE_TEMPERATURE: N/A
+        SHUTDOWN_HOTSPOT_TEMPERATURE: 110 C
+        SHUTDOWN_MEM_TEMPERATURE: 125 C
+    DRIVER:
+        NAME: libgv
+        VERSION: 8.6.0.K-dev-107-1dfb7bfa73
+        DATE: 2025-07-24 10:19:16
+        MODEL: N/A
+    BOARD:
+        MODEL_NUMBER: 102-G36212-0C
+        PRODUCT_SERIAL: 692517020515
+        FRU_ID: 113-AMDG362120C01-100-300000082
+        PRODUCT_NAME: AMD Instinct MI350 OAM
+        MANUFACTURER_NAME: AMD
+    RAS:
+        EEPROM_VERSION: 0x30000
+        BAD_PAGE_THRESHOLD: 128
+        PARITY_SCHEMA: ENABLED
+        SINGLE_BIT_SCHEMA: ENABLED
+        DOUBLE_BIT_SCHEMA: ENABLED
+        POISON_SCHEMA: ENABLED
+        BLOCK_STATE:
+            UMC: ENABLED
+            SDMA: ENABLED
+            GFX: ENABLED
+            MMHUB: ENABLED
+            ATHUB: DISABLED
+            PCIE_BIF: ENABLED
+            HDP: DISABLED
+            XGMI_WAFL: ENABLED
+            DF: DISABLED
+            SMN: DISABLED
+            SEM: DISABLED
+            MP0: DISABLED
+            MP1: DISABLED
+            FUSE: DISABLED
+            MCA: DISABLED
+            VCN: DISABLED
+            JPEG: DISABLED
+            IH: DISABLED
+            MPIO: DISABLED
+    FB_INFO:
+        TOTAL_FB_SIZE: 257752 MB
+        PF_FB_RESERVED: 16 MB
+        PF_FB_OFFSET: 0 MB
+        FB_ALIGNMENT: 16 MB
+        MAX_VF_FB_USABLE: 257736 MB
+        MIN_VF_FB_USABLE: 16 MB
+    NUM_VF:
+        SUPPORTED: 1
+        ENABLED: 1
+    VRAM:
+        TYPE: HBM3E
+        VENDOR: SAMSUNG
+        SIZE: 258032 MB
+        BIT_WIDTH: 0
+        MAX_BANDWIDTH: 6810 GB/s
+    CACHE_INFO:
+        CACHE_0:
+            CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
+            CACHE_SIZE: 32 KB
+            CACHE_LEVEL: 1
+            MAX_NUM_CU_SHARED: 1
+            NUM_CACHE_INSTANCE: 256
+        CACHE_1:
+            CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
+            CACHE_SIZE: 16 KB
+            CACHE_LEVEL: 1
+            MAX_NUM_CU_SHARED: 2
+            NUM_CACHE_INSTANCE: 128
+        CACHE_2:
+            CACHE_PROPERTIES: INST_CACHE, SIMD_CACHE
+            CACHE_SIZE: 64 KB
+            CACHE_LEVEL: 1
+            MAX_NUM_CU_SHARED: 2
+            NUM_CACHE_INSTANCE: 128
+        CACHE_3:
+            CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
+            CACHE_SIZE: 4096 KB
+            CACHE_LEVEL: 2
+            MAX_NUM_CU_SHARED: 32
+            NUM_CACHE_INSTANCE: 8
+        CACHE_4:
+            CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
+            CACHE_SIZE: 262144 KB
+            CACHE_LEVEL: 3
+            MAX_NUM_CU_SHARED: 256
+            NUM_CACHE_INSTANCE: 1
+    XGMI_PLPD:
+        NUM_SUPPORTED: 3
+        CURRENT_ID: 1
+        POLICIES:
+            POLICY_ID: 0
+            POLICY_DESCRIPTION: plpd_disallow
+            POLICY_ID: 1
+            POLICY_DESCRIPTION: plpd_default
+            POLICY_ID: 2
+            POLICY_DESCRIPTION: plpd_optimized
+    PARTITION:
+        ACCELERATOR_PARTITION: SPX
+        MEMORY_PARTITION: NPS1
+        PARTITION_ID: 0
+    MODE: HOST
+    NUMA:
+        NODE: 0
+        CPU_AFFINITY:
+            CPU_LIST_0:
+                BITMASK: ffffffffffffffff
+                CORE_RANGE: [0-63]
+            CPU_LIST_1:
+                BITMASK: 0000000000000000
+                CORE_RANGE: []
+            CPU_LIST_2:
+                BITMASK: ffffffffffffffff
+                CORE_RANGE: [128-191]
+            CPU_LIST_3:
+                BITMASK: 0000000000000000
+                CORE_RANGE: []
+        SOCKET_AFFINITY: N/A
+NIC: 0
+    ASIC:
+        VENDOR_ID: 0x1DD8
+        SUBVENDOR_ID: 0x1DD8
+        DEVICE_ID: 0x8
+        SUBSYSTEM_ID: 0x5201
+        REVISION: 0x0
+        PERMANENT_ADDRESS: 04:90:81:34:12:e0
+        PRODUCT_NAME: POLLARA 1x400G QSFP112
+        PART_NUMBER: POLLARA-1Q400P
+        SERIAL_NUMBER: FPL25170119EC0V2
+        VENDOR_NAME: AMD Pensando Systems, Inc.
+    BUS:
+        BDF: 0000:96:00.0
+        MAX_PCIE_WIDTH: 16
+        MAX_PCIE_SPEED: 32 GT/s
+        PCIE_INTERFACE_VERSION: N/A
+        SLOT_TYPE: N/A
+    DRIVER:
+        NAME: ionic
+        VERSION: 25.08.4.003
+    NUMA:
+        NODE: 1
+        AFFINITY: [64-127,192-255]
+    PORTS:
+        PORT_0:
+            BDF: 0000:99:00.0
+            PORT_NUM: 0
+            TYPE: Ethernet
+            FLAVOUR: N/A
+            NETDEV: enp153s0
+            IFINDEX: 10
+            MAC_ADDRESS: 04:90:81:34:12:e0
+            CARRIER: 0
+            MTU: 1500 B
+            LINK_STATE: DOWN
+            LINK_SPEED: 400000 Mb/s
+            ACTIVE_FEC: 4
+            AUTONEG: OFF
+            PAUSE_AUTONEG: OFF
+            PAUSE_RX: ON
+            PAUSE_TX: ON
+    RDMA_DEVICES:
+        RDMA_DEVICE_0:
+            RDMA_DEV: ionic_0
+            NODE_GUID: 0690:81ff:fe34:12e0
+            NODE_TYPE: CA
+            SYS_IMAGE_GUID: 0690:81ff:fe34:12e0
+            FW_VER: 1.117.1-a-42
+            PORTS:
+                PORT_0:
+                    NETDEV: enp153s0
+                    STATE: DOWN
+                    RDMA_PORT: 1
+                    MAX_MTU: N/A
+                    ACTIVE_MTU: N/A
+```
+
 ## Use Case Scenarios
 
 This section provides practical workflows for common administrative tasks using **amd-smi**.
@@ -1251,3 +1983,36 @@ $ sudo amd-smi ras --afid --cper-file=/var/log/gpu_errors/fatal-1.cper
 
 # Step 4: Monitor specific GPU for non-fatal corrected errors
 $ sudo amd-smi ras --gpu=0 --cper --severity=nonfatal-corrected --folder=/var/log/gpu0_errors
+```
+
+### Network Interface Management
+
+**Scenario**: Monitor and manage network interface performance
+
+```bash
+# Step 1: List all available NICs on the system
+$ sudo amd-smi list --nic
+
+# Step 2: Check NIC static configuration and capabilities
+$ sudo amd-smi static --nic=0 --asic --port --bus
+
+# Step 3: Check network port statistics
+$ sudo amd-smi metric --nic=0 --port
+
+```
+
+### Multi-Device System Monitoring
+
+**Scenario**: Comprehensive monitoring of GPUs and NICs in a multi-device system
+
+```bash
+# Step 1: List all system devices (GPUs, VFs, and NICs)
+$ sudo amd-smi list
+
+# Step 2: Generate comprehensive system report
+$ sudo amd-smi static --json --gpu=0 > system_gpu_static.json
+$ sudo amd-smi metric --json --gpu=0 > system_gpu_metrics.json
+$ sudo amd-smi static --json --nic=0 > system_nic_static.json
+$ sudo amd-smi metric --json --nic=0 > system_nic_metrics.json
+$ sudo amd-smi static --json > system_static.json
+$ sudo amd-smi metric --json > system_metrics.json

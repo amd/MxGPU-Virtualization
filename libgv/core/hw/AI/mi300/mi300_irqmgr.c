@@ -731,7 +731,7 @@ static int mi300_irqmgr_sw_init(struct amdgv_adapter *adapt)
 
 	adapt->irqmgr.ih.doorbell_index = (adapt->doorbell_index.ih) << 1;
 
-	if (!adapt->opt.skip_hw_init) {
+	if (!amdgv_in_live_update_seq()) {
 		/* register interrupt handler */
 		if (mi300_register_interrupt(adapt) < 0) {
 			AMDGV_ERROR("failed to register interrupt!\n");

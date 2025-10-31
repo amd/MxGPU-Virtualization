@@ -170,4 +170,6 @@ int amdgv_vfmgr_dump_ras_error_counts(struct amdgv_adapter *adapt, uint32_t idx_
 int amdgv_vfmgr_dump_cpers(struct amdgv_adapter *adapt, uint32_t idx_vf, uint64_t vf_rptr, bool *allow_again);
 int amdgv_vfmgr_cper_notify_event(struct amdgv_adapter *adapt, enum amdgv_vfmgr_cper_event event, uint32_t idx_vf);
 int amdgv_vfmgr_ras_vf_chk_criti_region(struct amdgv_adapter *adapt, uint32_t idx_vf, uint64_t addr);
+enum amdgv_live_info_status amdgv_vfmgr_export_live_data_crit_region(struct amdgv_adapter *adapt, struct amdgv_live_info_vf_crit_region *vf_crit_region);
+enum amdgv_live_info_status amdgv_vfmgr_import_live_data_crit_region(struct amdgv_adapter *adapt, struct amdgv_live_info_vf_crit_region *vf_crit_region);
 #endif

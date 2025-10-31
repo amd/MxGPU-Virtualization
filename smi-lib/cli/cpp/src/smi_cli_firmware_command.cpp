@@ -172,14 +172,14 @@ void AmdSmiFirmwareCommand::firmware_command_human()
 		std::string vf_bdf;
 		std::tuple<std::string, std::string, std::string> indexes =
 			getGpuVfIndexFromVfId(arg.vf_id);
+		out += string_format(
+				   vfNestedTemplate, std::get<0>(indexes).c_str(),
+				   std::get<1>(indexes).c_str());
 		vf_bdf = std::get<2>(indexes).c_str();
 		ret = firmware_command_vf_fw_list(vf_bdf, out);
 		std::string param{"vf-fw-list"};
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {
-			out += string_format(
-				   vfNestedTemplate, std::get<0>(indexes).c_str(),
-				   std::get<1>(indexes).c_str());
 			out += formatted_string;
 			formatted_string.clear();
 			}
@@ -190,6 +190,7 @@ void AmdSmiFirmwareCommand::firmware_command_human()
 			log_err.log(LogLevel::Error, ret, __FUNCTION__, __FILE__,
 					__LINE__);
 		}
+		formatted_string.clear();
 	} else {
 		for (unsigned int i = 0; i < arg.devices.size(); i++) {
 			out += string_format(gpuTemplate, arg.devices[i]->get_gpu_index());
@@ -258,7 +259,7 @@ void AmdSmiFirmwareCommand::firmware_command_csv()
 		if (error == 0) {
 			headers.append(vf_header_csv);
 			headers.append(fw_list_header_csv);
-			out.append(headers).append(formatted_string);
+			values.append(formatted_string);
 			formatted_string.clear();
 		}
 		else if (error == PARAM_NOT_SUPPORTED_ON_PLATFORM){
@@ -268,6 +269,9 @@ void AmdSmiFirmwareCommand::firmware_command_csv()
 			log_err.log(LogLevel::Error, ret, __FUNCTION__, __FILE__,
 					__LINE__);
 		}
+		out.append(headers).append("\n");
+		out.append(values);
+		values.clear();
 	} else {
 		for (unsigned int i = 0; i < arg.devices.size(); i++) {
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();

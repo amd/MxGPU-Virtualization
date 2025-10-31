@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2017-2023 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,9 +21,7 @@
 
 LIBGV_CORE_PATH = $(LIBGV_PATH)/core
 
-include $(LIBGV_CORE_PATH)/atombios/Makefile
-
-LIBGV_CORE_LOCAL = amdgv_device.o amdgv_api.o amdgv_gpuiov.o amdgv_irqmgr.o \
+LIBGV_CORE_FILES = amdgv_device.o amdgv_api.o amdgv_gpuiov.o amdgv_irqmgr.o \
 	amdgv_mailbox.o amdgv_reset.o amdgv_vfmgr.o amdgv_ws_state.o \
 	amdgv_sched_event.o amdgv_sched_reset.o amdgv_sched.o amdgv_sched_switch.o \
 	amdgv_vbios.o amdgv_guard.o amdgv_gpumon.o amdgv_gpumon_internal.o \
@@ -37,17 +35,14 @@ LIBGV_CORE_LOCAL = amdgv_device.o amdgv_api.o amdgv_gpuiov.o amdgv_irqmgr.o \
 	amdgv_dirtybit.o amdgv_diag_data.o amdgv_diag_data_host_drv.o \
 	amdgv_diag_data_exclude_list.o amdgv_uni_cmd.o amdgv_sdma.o
 
-LIBGV_CORE_FILES = $(addprefix core/,$(LIBGV_CORE_LOCAL))
-
-LIBGV_FILES = $(LIBGV_CORE_FILES) $(LIBGV_ATOMBIOS_FILES)
+include $(LIBGV_CORE_PATH)/atombios/Makefile
+LIBGV_CORE_FILES += $(addprefix atombios/,$(LIBGV_ATOMBIOS_FILES))
 
 include $(LIBGV_CORE_PATH)/hw/common/Makefile
-LIBGV_FILES += $(LIBGV_HW_COMMON_FILES)
+LIBGV_CORE_FILES += $(addprefix hw/common/,$(LIBGV_HW_COMMON_FILES))
 
 include $(LIBGV_CORE_PATH)/hw/AI/Makefile
-LIBGV_FILES += $(LIBGV_HW_AI_FILES)
-LIBGV_FILES += $(LIBGV_HW_MI200_FILES)
-LIBGV_FILES += $(LIBGV_HW_MI300_FILES)
+LIBGV_CORE_FILES += $(addprefix hw/AI/,$(LIBGV_HW_AI_FILES))
 
 include $(LIBGV_CORE_PATH)/hw/navi3/Makefile
-LIBGV_FILES += $(LIBGV_HW_NAVI3_FILES)
+LIBGV_CORE_FILES += $(addprefix hw/navi3/,$(LIBGV_HW_NAVI3_FILES))

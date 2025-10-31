@@ -54,6 +54,16 @@ int AmdSmiApiBase::amdsmi_get_bdf_from_gpu_index(uint64_t &processor_bdf, int in
 	return 2;
 }
 
+int AmdSmiApiBase::amdsmi_get_bdf_from_nic_index(uint64_t &processor_bdf, int index)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_get_processor_from_index_by_type(void *processor_handle, int index, int type)
+{
+	return 2;
+}
+
 int AmdSmiApiBase::amdsmi_get_bdf_from_uuid_or_bdf(uint64_t &processor_bdf, int &gpu_index,
 		std::string device, int type)
 {
@@ -61,6 +71,11 @@ int AmdSmiApiBase::amdsmi_get_bdf_from_uuid_or_bdf(uint64_t &processor_bdf, int 
 }
 
 int AmdSmiApiBase::amdsmi_get_gpu_count(unsigned int &gpu_count)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_get_device_count(unsigned int &device_count, int device_type)
 {
 	return 2;
 }
@@ -153,6 +168,44 @@ int AmdSmiApiBase::get_string_from_enum_cper_severity_mask(int severity_mask, st
 {
 	return 2;
 }
+
+int AmdSmiApiBase::amdsmi_get_nic_asic_info_command(uint64_t processor_bdf, Arguments arg,
+		std::string& out)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_get_nic_bus_info_command(uint64_t processor_bdf, Arguments arg,
+		std::string& out)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_get_nic_driver_info_command(uint64_t processor_bdf, Arguments arg,
+		std::string& out)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_get_nic_numa_info_command(uint64_t processor_bdf, Arguments arg,
+		std::string& out)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_get_nic_port_info_command(uint64_t processor_bdf, Arguments arg,
+		std::string& out)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_get_nic_rdma_devices_info_command(uint64_t processor_bdf, Arguments arg,
+		std::string& out)
+{
+	return 2;
+}
+
+
 
 int AmdSmiApiBase::amdsmi_get_asic_info_command(uint64_t processor_bdf, Arguments arg,
 		std::string& out)
@@ -341,6 +394,18 @@ int AmdSmiApiBase::amdsmi_get_guest_data_metric_command(std::string device, Argu
 }
 
 int AmdSmiApiBase::amdsmi_get_energy_metric_command(uint64_t processor_bdf, Arguments arg,
+		std::string& out)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_get_port_netdev_command(uint64_t processor_bdf, Arguments arg,
+		std::string& out)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_get_port_rdma_command(uint64_t processor_bdf, Arguments arg,
 		std::string& out)
 {
 	return 2;
@@ -650,6 +715,23 @@ int AmdSmiApiBase::amdsmi_get_cper_entries_command(Arguments arg,
 
 int AmdSmiApiBase::amdsmi_get_cper_afid_command(Arguments arg,
 		std::string &formatted_string)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_get_baseboard_command(uint64_t processor_bdf, Arguments arg,
+			std::string &formatted_string)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments arg,
+			std::string &formatted_string)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::ThrottlerDataToString(uint64_t data, std::string& out)
 {
 	return 2;
 }

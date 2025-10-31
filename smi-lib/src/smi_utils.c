@@ -21,7 +21,6 @@
  */
 
 #include "smi_utils.h"
-#include "amdsmi.h"
 
 #include "smi_debug.h"
 #include "smi_vcs.h"
@@ -493,17 +492,11 @@ void amdsmi_get_register_array(const uint8_t* data, size_t size, uint64_t *regis
     }
 }
 
-
-int make_sysfs_pci_device_prefix(amdsmi_processor_handle processor_handle, char *out_path, size_t out_path_size)
+int make_sysfs_pci_device_prefix(amdsmi_bdf_t bdf, char *out_path, size_t out_path_size)
 {
-	amdsmi_bdf_t bdf;
-	int ret = amdsmi_get_gpu_device_bdf(processor_handle, &bdf);
-	if (ret != AMDSMI_STATUS_SUCCESS) {
-		return ret;
-	}
-
+	system_wrapper *sys_wrapper = get_system_wrapper();
 	// Format: /sys/bus/pci/devices/0000:22:00.0/
-	int n = snprintf(
+	int n = sys_wrapper->snprintf(
 		out_path, out_path_size,
 		"/sys/bus/pci/devices/%04x:%02x:%02x.%01x/",
 		(unsigned)bdf.bdf.domain_number,
@@ -558,7 +551,7 @@ amdsmi_status_t is_cmd_supported(uint64_t device_id)
 		0x7461,
 		0x73A1,
 		0x73AE
-    };
+	};
 
 	static const uint64_t dev_id_list_mi2plus[] = {
 		0x7410

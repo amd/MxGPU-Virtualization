@@ -2801,6 +2801,22 @@ int amdgv_query_dirtybit_data(amdgv_dev_t dev, struct amdgv_query_dirty_bit_data
 int amdgv_set_vf_migration_state(amdgv_dev_t dev, uint32_t idx_vf, enum amdgv_migration_vf_state state);
 
 /*
+ * amdgv_migration_query_abort - query if migration should be aborted
+ *
+ * @dev:	amdgv device handle
+ * @idx_vf:	vf index
+ */
+int amdgv_migration_query_abort(amdgv_dev_t dev, uint32_t idx_vf, bool *should_abort);
+
+/*
+ * amdgv_migration_set_abort - set migration abort flag
+ *
+ * @dev:	amdgv device handle
+ * @idx_vf:	vf index
+ */
+int amdgv_migration_set_abort(amdgv_dev_t dev, uint32_t idx_vf);
+
+/*
  * amdgv_vf_fb_copy - copy VF FB data to/from VF FB.
  *
  * @dev:	amdgv device handle
@@ -3308,4 +3324,12 @@ int amdgv_error_ring_buffer_dump(amdgv_dev_t dev, char *buf, int len);
  * true for yes, false for not.
  */
 bool amdgv_is_service_vm_enabled(amdgv_dev_t dev);
+
+/*
+ * amdgv_reset_vf_arbiters - reset vf arbiters
+ *
+ * @dev:	amdgv device handle
+ *
+ */
+int amdgv_reset_vf_arbiters(amdgv_dev_t dev, uint32_t idx_vf);
 #endif

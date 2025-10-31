@@ -171,11 +171,18 @@ TEST_F(AmdSmiPartitionTest, InvalidParams)
 {
 	amdsmi_accelerator_partition_profile_t profile;
 	uint32_t partition_id[AMDSMI_MAX_ACCELERATOR_PROFILE];
+	amdsmi_memory_partition_config_t config;
+	amdsmi_accelerator_partition_profile_config_t profile_config;
+	amdsmi_accelerator_partition_profile_config_global_t global_profile_config;
 	int ret;
 
 	ret = amdsmi_get_gpu_accelerator_partition_profile_config(&GPU_MOCK_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+	ret = amdsmi_get_gpu_accelerator_partition_profile_config(&NIC_MOCK_HANDLE, &profile_config);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 	ret = amdsmi_get_gpu_accelerator_partition_profile_config_global(&GPU_MOCK_HANDLE, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+	ret = amdsmi_get_gpu_accelerator_partition_profile_config_global(&NIC_MOCK_HANDLE, &global_profile_config);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 	ret = amdsmi_get_gpu_accelerator_partition_profile(&GPU_MOCK_HANDLE, NULL, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
@@ -183,13 +190,21 @@ TEST_F(AmdSmiPartitionTest, InvalidParams)
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 	ret = amdsmi_get_gpu_accelerator_partition_profile(&GPU_MOCK_HANDLE, NULL, partition_id);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+	ret = amdsmi_get_gpu_accelerator_partition_profile(&NIC_MOCK_HANDLE, &profile, partition_id);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 	ret = amdsmi_get_gpu_memory_partition_config(&GPU_MOCK_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+	ret = amdsmi_get_gpu_memory_partition_config(&NIC_MOCK_HANDLE, &config);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 	ret = amdsmi_set_gpu_accelerator_partition_profile(NULL, 0);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+	ret = amdsmi_set_gpu_accelerator_partition_profile(&NIC_MOCK_HANDLE, 0);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 	ret = amdsmi_set_gpu_memory_partition_mode(NULL, AMDSMI_MEMORY_PARTITION_NPS1);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 	ret = amdsmi_set_gpu_memory_partition_mode(NULL, AMDSMI_MEMORY_PARTITION_UNKNOWN);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+	ret = amdsmi_set_gpu_memory_partition_mode(&NIC_MOCK_HANDLE, AMDSMI_MEMORY_PARTITION_NPS1);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 }

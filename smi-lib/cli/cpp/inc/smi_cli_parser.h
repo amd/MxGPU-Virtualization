@@ -28,6 +28,8 @@
 
 enum OutputFormat { human, json, csv = 2 };
 
+enum DevicesType { GPU_TYPE, NIC_TYPE, ALL_TYPE };
+
 enum ProcessType { name, pid };
 using process_value = std::string;
 
@@ -42,6 +44,7 @@ public:
 	std::string command;
 	std::vector<std::string> options;
 	std::vector<std::shared_ptr<Device> > devices;
+	std::vector<std::shared_ptr<Device> > nic_devices;
 	bool all_arguments{ false };
 	int watch{ -1 };
 	int watch_time{ -1 };
@@ -63,6 +66,8 @@ public:
 	std::string cper_file_path;
 	std::string plpd_set;
 	std::string num_vf;
+	DevicesType devices_type{ ALL_TYPE };
+	std::map<DevicesType, std::vector<std::string>> device_format{};
 	Arguments() {};
 };
 
@@ -76,12 +81,13 @@ struct deviceType {
 class AmdSmiParser
 {
 private:
-	unsigned int gpu_count;
+	unsigned int gpu_count = 0;
+	unsigned int nic_count = 0;
 	std::vector<std::string> SUPPORTED_COMMANDS = { "help",	     "list",	"static",
 		"discovery", "ucode",	"firmware",
 		"bad-pages", "metric",	"process",
 		"profile",   "version", "event", "topology", "xgmi", "reset", "set", "monitor", "partition",
-		"ras", "set"
+		"ras", "set", "node"
 	};
 
 	std::vector<std::string> FW_SUPPORTED_ARGS_GPU = {
@@ -101,26 +107,37 @@ private:
 
 	std::map<std::string, std::vector<std::string> > LIST_SUPPORTED_ARGUMENTS = {
 		{ "--gpu", {} },
-		{ "-g", {} }
+		{ "-g", {} },
+		{ "--nic", {} },
+		{ "-n", {} }
 	};
 
 	std::vector<std::string> STATIC_SUPPORTED_ARGS_GPU = {
 		"--asic", "-a", "--bus", "-b", "--vbios", "-V", "--board", "-B",
 		"--limit", "-l", "--driver", "-d",
-		"--ras", "-r", "--dfc-ucode", "-D", "--fb-info", "-f", "--num-vf", "-n",
+		"--ras", "-r", "--dfc-ucode", "-D", "--fb-info", "-f", "--num-vf", "-nv",
 		"--vram", "-v", "--cache", "-c", "--partition", "-p", "--process-isolation", "-R",
 		"--soc-pstate", "-ps", "--virtualization-mode", "-m", "--numa", "-u",
 		"--xgmi-plpd", "-pd", "--ifwi", "-I"
 	};
 
+	std::vector<std::string> STATIC_SUPPORTED_ARGS_NIC = {
+		"--asic", "-a", "--bus", "-b", "--driver", "-d", "--numa", "-u", "--port", "-po", "--rdma-devices", "-rd"
+	};
+
 	std::vector<std::string> METRIC_SUPPORTED_ARGS_GPU = {
 		"--usage", "-u", "--power", "-p", "--clock", "-c", "--temperature",
-		"-t", "--ecc", "-e", "--ecc-block", "-k", "--pcie", "-P", "--fb-usage", "--energy", "-E"
+		"-t", "--ecc", "-e", "--ecc-block", "-k", "--pcie", "-P", "--fb-usage", "--energy", "-E",
+		"--gpuboard", "-G"
 	};
 
 	std::vector<std::string> METRIC_SUPPORTED_ARGS_VF = {
 		"--schedule", "-s", "--guard", "-G", "--guest-data", "-u",
 		"--per-partition", "-pp"
+	};
+
+	std::vector<std::string> METRIC_SUPPORTED_ARGS_NIC = {
+		"--port", "-po", "--rdma-devices", "-rd"
 	};
 
 	std::vector<std::string> WATCH_SUPPORTED_ARGS = {
@@ -154,6 +171,10 @@ private:
 		"--accelerator", "-a", "--memory", "-m", "--current", "-c", "--global", "-gl"
 	};
 
+	std::vector<std::string> NODE_SUPPORTED_ARGS = {
+		"--baseboard", "-b"
+	};
+
 	std::map<std::string, std::vector<std::string> > PARTITION_SUPPORTED_ARGUMENTS = {
 		{ "--gpu", PARTITION_SUPPORTED_ARGS_GPU },
 		{ "-g", PARTITION_SUPPORTED_ARGS_GPU }
@@ -162,7 +183,9 @@ private:
 	std::map<std::string, std::vector<std::string> > STATIC_SUPPORTED_ARGUMENTS = {
 		{ "--gpu", STATIC_SUPPORTED_ARGS_GPU },
 		{ "-g", STATIC_SUPPORTED_ARGS_GPU },
-		{ "--vf", {} }
+		{ "--vf", {} },
+		{ "--nic", STATIC_SUPPORTED_ARGS_NIC },
+		{ "-n", STATIC_SUPPORTED_ARGS_NIC }
 	};
 
 	std::map<std::string, std::vector<std::string> > METRIC_SUPPORTED_ARGUMENTS = {
@@ -170,7 +193,9 @@ private:
 		{ "-g", METRIC_SUPPORTED_ARGS_GPU },
 		{ "--vf", METRIC_SUPPORTED_ARGS_VF },
 		{ "--watch", WATCH_SUPPORTED_ARGS},
-		{ "--w", WATCH_SUPPORTED_ARGS}
+		{ "--w", WATCH_SUPPORTED_ARGS},
+		{ "--nic", METRIC_SUPPORTED_ARGS_NIC },
+		{ "-n", METRIC_SUPPORTED_ARGS_NIC }
 	};
 
 	std::map<std::string, std::vector<std::string> > TOPOLOGY_SUPPORTED_ARGUMENTS = {
@@ -259,7 +284,8 @@ private:
 		{ "set", SET_SUPPORTED_ARGUMENTS },
 		{ "monitor", MONITOR_SUPPORTED_ARGUMENTS },
 		{ "partition", PARTITION_SUPPORTED_ARGUMENTS},
-		{ "ras", RAS_SUPPORTED_ARGUMENTS }
+		{ "ras", RAS_SUPPORTED_ARGUMENTS },
+		{ "node", { { "", NODE_SUPPORTED_ARGS } } }
 	};
 
 	/**
@@ -279,21 +305,21 @@ private:
 	bool is_negative_number(const std::string &s);
 
 	/**
-	 * @brief Get the gpu device from string
+	 * @brief Get the device from string
 	 *
-	 * @param[in] gpu string from which we extract gpu index
-	 * @return gpu device
+	 * @param[in] device string from which we extract device index
+	 * @return device
 	 */
-	std::shared_ptr<Device> get_device_from_input(std::string gpu);
+	std::shared_ptr<Device> get_device_from_input(std::string device, DeviceType device_type);
 
 	/**
-	 * @brief Get device type (gpu or vf)
+	 * @brief Check if argument is vf
 	 *
 	 * @param[inout] command_argument_list list of command arguments
 	 * @param[inout] parsed_arguments parsed arguments
-	 * @return std::string - gpu if type is gpu else vf if type vf
+	 * @return true if option is valid else false
 	 */
-	std::string get_device_type(std::vector<std::string> &command_argument_list,
+	bool is_argument_vf(std::vector<std::string> &command_argument_list,
 								Arguments &parsed_arguments);
 
 	/**
@@ -315,11 +341,27 @@ private:
 							  Arguments &parsed_arguments);
 
 	/**
+	 * @brief Parse command from argument list
+	 *
+	 * @param[in] command_argument_list argument list
+	 * @param[inout] parsed_arguments parsed arguments
+	 */
+	void parse_device_type(std::vector<std::string> &command_argument_list,
+							  Arguments &parsed_arguments);
+
+	/**
 	 * @brief Add all gpus into parsed_arguments
 	 *
 	 * @param parsed_arguments parsed arguments
 	 */
 	void add_all_gpus(Arguments &parsed_arguments);
+
+	/**
+	 * @brief Add all nics into parsed_arguments
+	 *
+	 * @param parsed_arguments parsed arguments
+	 */
+	void add_all_nics(Arguments &parsed_arguments);
 
 	/**
 	 * @brief Parse command options arguments
@@ -366,6 +408,14 @@ private:
 	 * @param option_len length of option that is being checked
 	 */
 	void does_option_have_value(const std::string& option, uint32_t option_len);
+
+	/**
+	 * @brief Check if command supports NIC devices
+	 *
+	 * @param[in] command Command to check
+	 * @return true if command supports NIC devices, false otherwise
+	 */
+	bool is_nic_supported_command(const std::string& command) const;
 
 public:
 	/**

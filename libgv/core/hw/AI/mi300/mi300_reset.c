@@ -664,6 +664,10 @@ static int mi300_reset_trigger_vf_flr(struct amdgv_adapter *adapt,
 	if (ret)
 		goto failed;
 
+	/* Allow DPM jobs to clear before sending GFX recovery msg */
+	if (adapt->asic_type == CHIP_MI350X)
+		oss_usleep(50000);
+
 	/* PMFW unhalt SDMA & RLCV, restore GPUIOV settings */
 	ret = mi300_smu_gfx_flr_recovery(adapt, idx_vf);
 	if (ret)

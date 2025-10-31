@@ -61,7 +61,7 @@ int AmdSmiApiHost::initEvent()
 	unsigned int gpu_count;
 	amdsmi_socket_handle socket = NULL;
 
-	amdsmi_get_gpu_count(gpu_count);
+	amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
 
 	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*gpu_count);
 	if (processors == NULL) {
@@ -92,9 +92,24 @@ void thread_func_human(char *stopped, amdsmi_event_set set, Arguments arg)
 			continue;
 		if ((ret == AMDSMI_STATUS_SUCCESS) && (event.category != AMDSMI_EVENT_CATEGORY_NON_USED)) {
 			for (unsigned int i = 0; i < arg.devices.size(); i++) {
-				if((*((uint64_t*)processors[i])) == event.dev_id) {
+				if (processors[i] == event.processor_handle) {
 					gpu_index = arg.devices[i]->get_gpu_index();
-					event_msg = std::string(event.message);
+					if ((event.category == AMDSMI_EVENT_CATEGORY_PP) &&
+						(event.subcode == AMDSMI_EVENT_PP_THROTTLER_EVENT)) {
+						std::string base_msg = std::string(event.message);
+						size_t colon_pos = base_msg.find(':');
+						if (colon_pos != std::string::npos) {
+							std::string throttler_data;
+							throttler_data = ThrottlerDataToString(event.data);
+							event_msg = base_msg.substr(0, colon_pos + 1) + " " + throttler_data;
+						} else {
+							std::string throttler_data;
+							throttler_data = ThrottlerDataToString(event.data);
+							event_msg = base_msg + ": " + throttler_data;
+						}
+					} else {
+						event_msg = std::string(event.message);
+					}
 					event_msg = std::regex_replace(event_msg, std::regex("\n"), " ");
 					formatted_string = string_format(
 										   eventMessageTemplate, gpu_index, event_msg.c_str(), EVENT_CATEGORY_STR[unsigned(event.category)],
@@ -126,9 +141,24 @@ void thread_func_json(char *stopped, amdsmi_event_set set, Arguments arg)
 			continue;
 		if ((ret == AMDSMI_STATUS_SUCCESS) && (event.category != AMDSMI_EVENT_CATEGORY_NON_USED)) {
 			for (unsigned int i = 0; i < arg.devices.size(); i++) {
-				if((*((uint64_t*)processors[i])) == event.dev_id) {
+				if (processors[i] == event.processor_handle) {
 					gpu_index = arg.devices[i]->get_gpu_index();
-					event_msg = std::string(event.message);
+					if ((event.category == AMDSMI_EVENT_CATEGORY_PP) &&
+						(event.subcode == AMDSMI_EVENT_PP_THROTTLER_EVENT)) {
+						std::string base_msg = std::string(event.message);
+						size_t colon_pos = base_msg.find(':');
+						if (colon_pos != std::string::npos) {
+							std::string throttler_data;
+							throttler_data = ThrottlerDataToString(event.data);
+							event_msg = base_msg.substr(0, colon_pos + 1) + " " + throttler_data;
+						} else {
+							std::string throttler_data;
+							throttler_data = ThrottlerDataToString(event.data);
+							event_msg = base_msg + ": " + throttler_data;
+						}
+					} else {
+						event_msg = std::string(event.message);
+					}
 					event_msg = std::regex_replace(event_msg, std::regex("\n"), " ");
 					nlohmann::ordered_json event_json = {
 						{ "gpu", gpu_index },
@@ -166,9 +196,25 @@ void thread_func_csv(char *stopped, amdsmi_event_set set, Arguments arg)
 		if ((ret == AMDSMI_STATUS_SUCCESS) && (event.category != AMDSMI_EVENT_CATEGORY_NON_USED)) {
 			out.append(event_csv_header).append("\n");
 			for (unsigned int i = 0; i < arg.devices.size(); i++) {
-				if((*((uint64_t*)processors[i])) == event.dev_id) {
+				if (processors[i] == event.processor_handle) {
 					gpu_index = arg.devices[i]->get_gpu_index();
-					event_msg = std::string(event.message);
+					if ((event.category == AMDSMI_EVENT_CATEGORY_PP) &&
+						(event.subcode == AMDSMI_EVENT_PP_THROTTLER_EVENT)) {
+						std::string base_msg = std::string(event.message);
+						size_t colon_pos = base_msg.find(':');
+						if (colon_pos != std::string::npos) {
+							std::string throttler_data;
+							throttler_data = ThrottlerDataToString(event.data);
+							event_msg = base_msg.substr(0, colon_pos + 1) + " " + throttler_data;
+						} else {
+							std::string throttler_data;
+							throttler_data = ThrottlerDataToString(event.data);
+							event_msg = base_msg + ": " + throttler_data;
+						}
+						event_msg = std::regex_replace(event_msg, std::regex(","), "");
+					} else {
+						event_msg = std::string(event.message);
+					}
 					event_msg = std::regex_replace(event_msg, std::regex("\n"), " ");
 					formatted_string = string_format("%d,%s,%s,%s", gpu_index,
 													 event_msg.c_str(), EVENT_CATEGORY_STR[unsigned(event.category)], event.date);

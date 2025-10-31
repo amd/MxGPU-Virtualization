@@ -57,7 +57,7 @@ enum psp_cmd_km_type {
 	PSP_CMD_KM_TYPE__LOAD_TOC	 = 0x00000020, /* load TOC */
 	PSP_CMD_KM_TYPE__AUTOLOAD_RLC	 = 0x00000021, /* Start Autoload */
 	PSP_CMD_KM_TYPE__SRIOV_SPATIAL_PART = 0x00000022,
-	PSP_CMD_KMD_TYPE_SRIOV_COPY_VF_CHIPLET_REGS = 0x00000023, /* Copy VF Regs values to master IOD */
+	PSP_CMD_KM_TYPE__SRIOV_COPY_VF_CHIPLET_REGS = 0x00000023, /* Copy VF Regs values to master IOD */
 	PSP_CMD_KM_TYPE__MIGRATION_GET_PSP_INFO	= 0x25,
 	PSP_CMD_KM_TYPE__MIGRATION_EXPORT		= 0x26,
 	PSP_CMD_KM_TYPE__MIGRATION_IMPORT		= 0x27,
@@ -1116,7 +1116,7 @@ enum psp_status amdgv_psp_ring_init(struct amdgv_adapter *adapt);
 enum psp_status amdgv_psp_ring_fini(struct amdgv_adapter *adapt);
 enum psp_status amdgv_psp_wait_for_register(struct amdgv_adapter *adapt, uint32_t reg_index,
 					    uint32_t reg_value, uint32_t reg_mask,
-					    bool check_changed);
+					    bool check_changed, uint32_t wait_flag);
 void amdgv_psp_get_fw_info(uint32_t image_version, char *info, uint32_t size, uint32_t fw_id);
 enum psp_status amdgv_psp_load_np_fw(struct amdgv_adapter *adapt, unsigned char *fw_image,
 				     uint32_t fw_image_size, uint32_t fw_id);

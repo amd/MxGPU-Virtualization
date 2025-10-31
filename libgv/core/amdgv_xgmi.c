@@ -631,3 +631,9 @@ enum amdgv_xgmi_link_status amdgv_xgmi_get_link_status(struct amdgv_adapter *ada
 
 	return AMDGV_XGMI_LINK_STATUS__ERROR;
 }
+
+bool amdgv_xgmi_is_guest_ext_peer_link_ta_cmd_supported(struct amdgv_adapter *adapt)
+{
+	return (adapt->xgmi.guest_ext_peer_link_ta_cmd_supported &&
+		adapt->xgmi.guest_ext_peer_link_ta_cmd_supported(adapt));
+}

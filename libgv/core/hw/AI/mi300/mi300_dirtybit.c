@@ -28,6 +28,8 @@
 
 static const uint32_t this_block = AMDGV_GFX_BLOCK;
 
+#define MI300_DIRTYBIT_BUFFER_SIZE KBYTES_TO_BYTES(16)
+
 static int mi300_dirtybit_control(struct amdgv_adapter *adapt, bool enable)
 {
 	gfx_v9_4_2_dirtybit_control(adapt, enable);
@@ -68,7 +70,7 @@ static inline uint64_t mi300_dirtybit_get_total_bitmap_size(struct amdgv_adapter
 {
 	uint64_t bitmap_size = -1;
 
-	bitmap_size = amdgv_fb_size_to_bitmap_size(fb_size, page_size);
+	bitmap_size = amdgv_fb_size_to_bitmap_size_align(fb_size, page_size);
 	bitmap_size *= adapt->mcp.num_dagb + (adapt->mcp.gfx.num_xcc / adapt->mcp.num_aid);
 	bitmap_size *= adapt->mcp.num_aid;
 
@@ -128,7 +130,7 @@ static int mi300_dirtybit_query_data_sdma(struct amdgv_adapter *adapt, uint64_t 
 
 	nr_pages = DIV_ROUND_UP(data->query_size, page_size);
 	nr_pages = nr_pages == 0 ? 1 : nr_pages;
-	query_bitmap_size = amdgv_fb_size_to_bitmap_size(data->query_size, page_size);
+	query_bitmap_size = amdgv_fb_size_to_bitmap_size_align(data->query_size, page_size);
 	ea_per_aid = adapt->mcp.num_dagb + (adapt->mcp.gfx.num_xcc / adapt->mcp.num_aid);
 	query_bitmap_size_total = mi300_dirtybit_get_total_bitmap_size(adapt, data->query_size, page_size);
 	if (query_bitmap_size > data->dbit_plane_data_size) {
@@ -260,6 +262,13 @@ static int mi300_dirtybit_sw_init(struct amdgv_adapter *adapt)
 	adapt->dirtybit.funcs = &mi300_db_funcs;
 	adapt->dirtybit.mam_adram_mode = MI300_MAM_ADRAM_MODE_2MB;
 
+	adapt->dirtybit.acc_bits_whole_fb = oss_malloc(MI300_DIRTYBIT_BUFFER_SIZE);
+	if (adapt->dirtybit.acc_bits_whole_fb == NULL) {
+		AMDGV_ERROR("failed to allocate acc_bits_whole_fb\n");
+		return AMDGV_FAILURE;
+	}
+	oss_memset(adapt->dirtybit.acc_bits_whole_fb, 0, MI300_DIRTYBIT_BUFFER_SIZE);
+
 	return 0;
 }
 
@@ -267,6 +276,9 @@ static int mi300_dirtybit_sw_fini(struct amdgv_adapter *adapt)
 {
 	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION))
 		return 0;
+
+	oss_free(adapt->dirtybit.acc_bits_whole_fb);
+	adapt->dirtybit.acc_bits_whole_fb = NULL;
 
 	return 0;
 }
@@ -278,6 +290,11 @@ static int mi300_dirtybit_hw_init(struct amdgv_adapter *adapt)
 
 	mi300_dirtybit_control(adapt, true);
 
+	if (amdgv_dirtybit_assgin_acc_bits_to_vf(adapt)) {
+		AMDGV_ERROR("Failed to assign the acc_bits to VF");
+		return AMDGV_FAILURE;
+	}
+
 	return 0;
 }
 
@@ -287,6 +304,7 @@ static int mi300_dirtybit_hw_fini(struct amdgv_adapter *adapt)
 		return 0;
 
 	mi300_dirtybit_control(adapt, false);
+	amdgv_dirtybit_destroy_vf_acc_bits(adapt);
 
 	return 0;
 }

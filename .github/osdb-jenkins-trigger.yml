@@ -1,0 +1,6 @@
+jenkinsURLs:
+  - https://cvs-ci.amd.com/job/automations/job/entrypoints/job/github-osdb-entrypoint/
+  - https://cloudgpu-ci.amd.com/job/automations/job/entrypoints/job/github-osdb-entrypoint/
+
+targetBranches: 
+- branchName: dev

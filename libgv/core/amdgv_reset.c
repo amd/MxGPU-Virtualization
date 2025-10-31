@@ -176,6 +176,9 @@ int amdgv_reset_gpu(struct amdgv_adapter *adapt)
 			adapt->array_vf[idx_vf].vram_lost = true;
 	}
 
+	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)
+		amdgv_dirtybit_set_vfs_acc_bits(adapt, 0x0);
+
 	return ret;
 }
 
@@ -186,7 +189,13 @@ int amdgv_reset_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 
 	amdgv_put_error(idx_vf, AMDGV_ERROR_RESET_FLR, idx_vf);
 
-	if ((adapt->flags & AMDGV_FLAG_VF_HANG_GPU_RESET) && !adapt->opt.skip_hw_init) {
+	/* VF FLR will clear the Dbit in HW,
+	 * so query the Dbit and merge to acc bits before VF FLR
+	 */
+	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)
+		amdgv_dirtybit_query_vf_fb_dbit(adapt, idx_vf);
+
+	if ((adapt->flags & AMDGV_FLAG_VF_HANG_GPU_RESET) && !amdgv_in_live_update_seq()) {
 		// During GPUV live update bootup, need PF FLR, so ignore whether force reset flag is set
 		AMDGV_INFO("return flr failure because of force reset flag\n");
 		return AMDGV_FAILURE;
@@ -208,6 +217,9 @@ int amdgv_reset_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	adapt->array_vf[idx_vf].gpu_init_data_ready = false;
 	/* perf log is reset to disable state after flr */
 	adapt->sched.perf_log_enabled = false;
+
+	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)
+		amdgv_dirtybit_control(adapt, true);
 
 	if (ret)
 		amdgv_put_error(idx_vf, AMDGV_ERROR_RESET_FLR_FAILED, idx_vf);

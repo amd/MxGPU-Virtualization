@@ -18,7 +18,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#include "interface/amdsmi.h"
+#include "amdsmi_guest.h"
 #include "smi_cli_api_guest.h"
 #include "smi_cli_helpers.h"
 #include "smi_cli_parser.h"
@@ -117,7 +117,7 @@ int AmdSmiApiGuest::amdsmi_get_bdf_from_uuid_or_bdf(uint64_t &processor_bdf, int
 		free(processors);
 		exit(1);
 	}
-	if (type == static_cast<int>(DeviceType::BDF)) {
+	if (type == static_cast<int>(DeviceIdentifierType::BDF)) {
 		for (int i = 0; i < gpu_count; i++) {
 			amdsmi_bdf_t bdf;
 			ret = guest_amdsmi_get_gpu_device_bdf(processors[i], &bdf);
@@ -196,6 +196,15 @@ int AmdSmiApiGuest::amdsmi_get_gpu_count(unsigned int &gpu_count)
 		exit(1);
 	}
 	return AMDSMI_STATUS_SUCCESS;
+}
+
+int AmdSmiApiGuest::amdsmi_get_device_count(unsigned int &device_count, int device_type)
+{
+	if (device_type != static_cast<int>(DeviceType::GPU)) {
+		return AMDSMI_STATUS_NOT_SUPPORTED;
+	}
+	int ret = amdsmi_get_gpu_count(device_count);
+	return ret;
 }
 
 int AmdSmiApiGuest::amdsmi_get_error_message(int error_code, std::string& out)

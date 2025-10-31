@@ -3531,6 +3531,10 @@ int amdgv_gpumon_handle_sched_event(struct amdgv_adapter *adapt,
 			adapt->array_vf[event->data.gpumon_data.val].fb_size = 0;
 			adapt->array_vf[event->data.gpumon_data.val].fb_offset_tmr = 0;
 			adapt->array_vf[event->data.gpumon_data.val].fb_size_tmr = 0;
+
+			/* VF arbiters reset */
+			if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->reset_vf_arbiters)
+				adapt->pp.pp_funcs->reset_vf_arbiters(adapt, event->data.gpumon_data.val);
 		}
 		*event->data.gpumon_data.result = ret;
 		break;

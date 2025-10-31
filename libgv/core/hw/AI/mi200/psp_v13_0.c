@@ -83,7 +83,7 @@ enum psp_status psp_v13_ring_start(struct amdgv_adapter *adapt)
 	/* Wait for response flag (bit 31) in C2PMSG_64 */
 	ret = amdgv_psp_wait_for_register(
 	    adapt, SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_64), 0x80000000,
-	    0x8000FFFF, false);
+	    0x8000FFFF, false, AMDGV_WAIT_FLAG_FORCE_YIELD);
 
 	if (ret != PSP_STATUS__SUCCESS)
 		AMDGV_ERROR("PSP: Failed to start ring.\n");
@@ -115,7 +115,7 @@ enum psp_status psp_v13_load_key_db(struct amdgv_adapter *adapt,
 	/* wait for C2P[35] != PSP_BL__LOAD_KEY_DATABASE */
 	if (amdgv_psp_wait_for_register(
 		adapt, SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_35),
-		0x80000000, 0x80000000, false) != PSP_STATUS__SUCCESS) {
+		0x80000000, 0x80000000, false, AMDGV_WAIT_FLAG_FORCE_YIELD) != PSP_STATUS__SUCCESS) {
 		return PSP_STATUS__ERROR_GENERIC;
 	}
 
@@ -152,7 +152,7 @@ enum psp_status psp_v13_load_sysdrv(struct amdgv_adapter *adapt,
 	/* wait for C2P[35] != PSP_BL__LOAD_SYSDRV */
 	if (amdgv_psp_wait_for_register(
 		adapt, SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_35),
-		0x80000000, 0x80000000, false) != PSP_STATUS__SUCCESS) {
+		0x80000000, 0x80000000, false, AMDGV_WAIT_FLAG_FORCE_YIELD) != PSP_STATUS__SUCCESS) {
 		return PSP_STATUS__ERROR_GENERIC;
 	}
 
@@ -928,7 +928,7 @@ static int psp_v13_hw_init(struct amdgv_adapter *adapt)
 	 */
 	if (amdgv_psp_wait_for_register(
 		adapt, SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_35),
-		0x80000000, 0x80000000, false) != PSP_STATUS__SUCCESS) {
+		0x80000000, 0x80000000, false, AMDGV_WAIT_FLAG_FORCE_YIELD) != PSP_STATUS__SUCCESS) {
 		AMDGV_ERROR("TIMEOUT waiting for GFX mailbox to open\n");
 		return AMDGV_FAILURE;
 	}

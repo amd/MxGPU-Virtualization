@@ -177,7 +177,8 @@ int amdgv_misc_clear_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, uint8_t
 	fb_offset = MBYTES_TO_BYTES(entry->fb_offset);
 	fb_size = MBYTES_TO_BYTES(entry->fb_size);
 
-	if (adapt->umc.is_pmfw_managed_eeprom) {
+	if (adapt->umc.is_pmfw_managed_eeprom ||
+		GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, IPD) == 0) {
 		/* Clear entire VF FB */
 		fb_offset = MBYTES_TO_BYTES(entry->fb_offset);
 		fb_offset_end = fb_offset + fb_size;

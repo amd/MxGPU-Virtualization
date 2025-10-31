@@ -30,12 +30,14 @@
 #include <functional>
 
 #include "common/smi_device_handle.h"
+#include "smi_processor_handle.h"
 
 extern amdsmi_bdf_t MOCK_BDF;
 extern const char *GPU_MOCK_UUID;
 extern const char *VF_MOCK_UUID;
-extern smi_device_handle_t GPU_MOCK_HANDLE;
+extern struct smi_gpu_handle GPU_MOCK_HANDLE;
 extern amdsmi_vf_handle_t VF_MOCK_HANDLE;
+extern struct smi_nic_handle NIC_MOCK_HANDLE;
 
 namespace amdsmi
 {
@@ -76,7 +78,7 @@ void *mem_aligned_alloc(void **mem, size_t alignment, size_t size);
 						  uint32_t *actual_thresholds);
 
 ::testing::AssertionResult equal_handles(smi_device_handle_t expect,
-					 smi_device_handle_t actual);
+					 struct smi_gpu_handle actual);
 
 ::testing::AssertionResult equal_bdfs(amdsmi_bdf_t bdf_expect, amdsmi_bdf_t bdf_actual);
 
@@ -88,7 +90,6 @@ protected:
 	AmdSmiTest() { num_devices = 1; };
 	AmdSmiTest(uint8_t num_dev) { num_devices = num_dev; };
 	void initialize_smi_lib(uint32_t version = SMI_VERSION_MAX, uint8_t num_dev = 1);
-
 
 	void finalize_smi_lib();
 

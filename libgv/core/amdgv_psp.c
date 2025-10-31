@@ -386,7 +386,7 @@ enum psp_status amdgv_psp_cmd_km_buf_prep(struct psp_context *psp, struct psp_cm
 			km_cmd->cmd.sriov_memory_part.num_parts;
 		break;
 
-	case PSP_CMD_KMD_TYPE_SRIOV_COPY_VF_CHIPLET_REGS:
+	case PSP_CMD_KM_TYPE__SRIOV_COPY_VF_CHIPLET_REGS:
 		gfx_cmd->cmd_id = GFX_CMD_ID_SRIOV_COPY_VF_CHIPLET_REGS;
 		gfx_cmd->cmd.cmd_sriov_copy_vf_chiplet_regs.source_vfid =
 			km_cmd->cmd.sriov_copy_vf_chiplet_regs.source_vfid;
@@ -1166,6 +1166,7 @@ bool amdgv_psp_fw_id_support(uint32_t firmware_id)
 	case AMDGV_FIRMWARE_ID__PSP_RAS:
 	case AMDGV_FIRMWARE_ID__RAS_TA:
 	case AMDGV_FIRMWARE_ID__PLDM_VERSION:
+	case AMDGV_FIRMWARE_ID__XGMI_TA:
 		support = true;
 		break;
 	default:
@@ -1515,16 +1516,16 @@ enum psp_status amdgv_psp_ring_fini(struct amdgv_adapter *adapt)
 
 enum psp_status amdgv_psp_wait_for_register(struct amdgv_adapter *adapt, uint32_t reg_index,
 					    uint32_t reg_value, uint32_t reg_mask,
-					    bool check_changed)
+					    bool check_changed, uint32_t wait_flag)
 {
 	int wait_ret;
 
 	if (check_changed) {
 		reg_mask = ~0; /* mask to ~0 as we don't care about mask here */
 		wait_ret = amdgv_wait_for_register(adapt, reg_index, reg_mask, reg_value,
-						   AMDGV_TIMEOUT(TIMEOUT_PSP_REG),
-						   AMDGV_WAIT_CHECK_NE,
-						   AMDGV_WAIT_FLAG_FORCE_YIELD);
+			   AMDGV_TIMEOUT(TIMEOUT_PSP_REG),
+			   AMDGV_WAIT_CHECK_NE,
+			   wait_flag);
 		if (!wait_ret) {
 			AMDGV_DEBUG("PSP responded successfully: "
 				    "readback_value=0x%08x should NOT equal reg_value=0x%08x\n",
@@ -1537,9 +1538,9 @@ enum psp_status amdgv_psp_wait_for_register(struct amdgv_adapter *adapt, uint32_
 		}
 	} else {
 		wait_ret = amdgv_wait_for_register(adapt, reg_index, reg_mask, reg_value,
-						   AMDGV_TIMEOUT(TIMEOUT_PSP_REG),
-						   AMDGV_WAIT_CHECK_EQ,
-						   AMDGV_WAIT_FLAG_FORCE_YIELD);
+			   AMDGV_TIMEOUT(TIMEOUT_PSP_REG),
+			   AMDGV_WAIT_CHECK_EQ,
+			   wait_flag);
 		if (!wait_ret) {
 			AMDGV_DEBUG("PSP responded successfully: "
 				    "readback_value=0x%08x should equal reg_value=0x%08x\n",
@@ -2477,6 +2478,7 @@ enum psp_status amdgv_psp_xgmi_load(struct amdgv_adapter *adapt)
 
 		fw_ver = amdgv_psp_ta_version(adapt, (uint8_t *)fw_image, PSP_TA_PROP_VER_NAME);
 		if (fw_ver) {
+			adapt->psp.fw_info[AMDGV_FIRMWARE_ID__XGMI_TA] = fw_ver;
 			AMDGV_INFO("PSP: XGMI TA(version:%X.%X.%X.%X) is loaded.\n",
 				(fw_ver >> 24) & 0xFF, (fw_ver >> 16) & 0xFF,
 				(fw_ver >> 8) & 0xFF, fw_ver & 0xFF);
@@ -2487,6 +2489,7 @@ enum psp_status amdgv_psp_xgmi_load(struct amdgv_adapter *adapt)
 				AMDGV_INFO("PSP: XGMI TA(version:%X.%X.%X.%X) is loaded.\n",
 					(fw_hdr->image_version >> 24) & 0xFF, (fw_hdr->image_version >> 16) & 0xFF,
 					(fw_hdr->image_version >> 8) & 0xFF, fw_hdr->image_version & 0xFF);
+				adapt->psp.fw_info[AMDGV_FIRMWARE_ID__XGMI_TA] = fw_hdr->image_version;
 			} else {
 				AMDGV_WARN("PSP: XGMI TA version not found.\n");
 			}

@@ -52,10 +52,16 @@ TEST_F(AmdSmiNumaTests, GetCpuAffinityWithScope_InvalidParams)
 	ret = amdsmi_topo_get_numa_node_number(&GPU_MOCK_HANDLE, NULL);
 	EXPECT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+	ret = amdsmi_topo_get_numa_node_number(&NIC_MOCK_HANDLE, &numa_node);
+	EXPECT_EQ(ret, AMDSMI_STATUS_INVAL);
+
 	ret = amdsmi_get_cpu_affinity_with_scope(NULL, 4, cpu_set, AMDSMI_AFFINITY_SCOPE_NODE);
 	EXPECT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_get_cpu_affinity_with_scope(&GPU_MOCK_HANDLE, 4, NULL, AMDSMI_AFFINITY_SCOPE_NODE);
+	EXPECT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_cpu_affinity_with_scope(&NIC_MOCK_HANDLE, 4, cpu_set, AMDSMI_AFFINITY_SCOPE_NODE);
 	EXPECT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_get_cpu_affinity_with_scope(&GPU_MOCK_HANDLE, 4, cpu_set, AMDSMI_AFFINITY_SCOPE_SOCKET);
@@ -66,11 +72,11 @@ TEST_F(AmdSmiNumaTests, GetCpuAffinityWithScope_CreateSysFSFailure)
 {
 	int ret;
 	uint64_t cpu_set[4] = {0};
-	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(amdsmi::SetResponseStatus(AMDSMI_STATUS_API_FAILED));
+
+	EXPECT_CALL(*g_system_mock, Snprintf(testing::_, testing::_, testing::_))
+				.WillOnce(testing::Return(-1));
 
 	ret = amdsmi_get_cpu_affinity_with_scope(&GPU_MOCK_HANDLE, 4, cpu_set, AMDSMI_AFFINITY_SCOPE_NODE);
-
 	EXPECT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 }
 
@@ -78,11 +84,11 @@ TEST_F(AmdSmiNumaTests, TopoGetNumaNodeNum_CreateSysFSFailure)
 {
 	int ret;
 	uint32_t numa_node = 0;
-	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(amdsmi::SetResponseStatus(AMDSMI_STATUS_API_FAILED));
+
+	EXPECT_CALL(*g_system_mock, Snprintf(testing::_, testing::_, testing::_))
+				.WillOnce(testing::Return(-1));
 
 	ret = amdsmi_topo_get_numa_node_number(&GPU_MOCK_HANDLE, &numa_node);
-
 	EXPECT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 }
 
@@ -90,15 +96,6 @@ TEST_F(AmdSmiNumaTests, GetCpuAffinityWithScope_FOpenFailure)
 {
 	int ret;
 	uint64_t cpu_set[4] = {0};
-	smi_server_static_info server_info_mock = {};
-	server_info_mock.num_devices = 1;
-	server_info_mock.devices[0].bdf.as_uint = MOCK_BDF.as_uint;
-	server_info_mock.devices[0].dev_id = GPU_MOCK_HANDLE;
-	server_info_mock.devices[0].dev_id.handle = GPU_MOCK_HANDLE.handle;
-
-
-	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(testing::DoAll(amdsmi::SetPayload(server_info_mock), testing::Return(AMDSMI_STATUS_SUCCESS)));
 
 	EXPECT_CALL(*g_system_mock, Fopen(testing::_, testing::_))
 				.WillOnce(testing::Return((FILE *)NULL));
@@ -112,14 +109,6 @@ TEST_F(AmdSmiNumaTests, TopoGetNumaNodeNum_FOpenFailure)
 {
 	int ret;
 	uint32_t numa_node = 0;
-	smi_server_static_info server_info_mock = {};
-	server_info_mock.num_devices = 1;
-	server_info_mock.devices[0].bdf.as_uint = MOCK_BDF.as_uint;
-	server_info_mock.devices[0].dev_id = GPU_MOCK_HANDLE;
-	server_info_mock.devices[0].dev_id.handle = GPU_MOCK_HANDLE.handle;
-
-	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(testing::DoAll(amdsmi::SetPayload(server_info_mock), testing::Return(AMDSMI_STATUS_SUCCESS)));
 
 	EXPECT_CALL(*g_system_mock, Fopen(testing::_, testing::_))
 				.WillOnce(testing::Return((FILE *)NULL));
@@ -133,16 +122,8 @@ TEST_F(AmdSmiNumaTests, GetCpuAffinityWithScope_Success)
 {
 	int ret;
 	uint64_t cpu_set[4] = {0};
-	smi_server_static_info server_info_mock = {};
-	server_info_mock.num_devices = 1;
-	server_info_mock.devices[0].bdf.as_uint = MOCK_BDF.as_uint;
-	server_info_mock.devices[0].dev_id = GPU_MOCK_HANDLE;
-	server_info_mock.devices[0].dev_id.handle = GPU_MOCK_HANDLE.handle;
 	char buffer[1024];
 	FILE* f1 = fmemopen(buffer, sizeof(buffer), "r+");
-
-	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(testing::DoAll(amdsmi::SetPayload(server_info_mock), testing::Return(AMDSMI_STATUS_SUCCESS)));
 
 	EXPECT_CALL(*g_system_mock, Fopen(testing::_, testing::_))
 				.WillOnce(testing::Return(f1));
@@ -156,16 +137,8 @@ TEST_F(AmdSmiNumaTests, TopoGetNumaNodeNum_Success)
 {
 	int ret;
 	uint32_t numa_node = 0;
-	smi_server_static_info server_info_mock = {};
-	server_info_mock.num_devices = 1;
-	server_info_mock.devices[0].bdf.as_uint = MOCK_BDF.as_uint;
-	server_info_mock.devices[0].dev_id = GPU_MOCK_HANDLE;
-	server_info_mock.devices[0].dev_id.handle = GPU_MOCK_HANDLE.handle;
 	char buffer[1024];
 	FILE* f1 = fmemopen(buffer, sizeof(buffer), "r+");
-
-	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(testing::DoAll(amdsmi::SetPayload(server_info_mock), testing::Return(AMDSMI_STATUS_SUCCESS)));
 
 	EXPECT_CALL(*g_system_mock, Fopen(testing::_, testing::_))
 				.WillOnce(testing::Return(f1));
@@ -175,18 +148,44 @@ TEST_F(AmdSmiNumaTests, TopoGetNumaNodeNum_Success)
 	EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 }
 
+TEST_F(AmdSmiNumaTests, GetCpuAffinityWithScope_FgetsFailure)
+{
+	int ret;
+	uint64_t cpu_set[4] = {0};
+	char buffer[1024];
+	FILE* f1 = fmemopen(buffer, sizeof(buffer), "r+");
+
+	EXPECT_CALL(*g_system_mock, Fopen(testing::_, testing::_))
+				.WillOnce(testing::Return(f1));
+	EXPECT_CALL(*g_system_mock, Fgets(testing::_, testing::_, testing::_))
+				.WillOnce(testing::Return((char *)NULL));
+
+	ret = amdsmi_get_cpu_affinity_with_scope(&GPU_MOCK_HANDLE, 4, cpu_set, AMDSMI_AFFINITY_SCOPE_NODE);
+
+	EXPECT_EQ(ret, AMDSMI_STATUS_IO);
+}
+
+TEST_F(AmdSmiNumaTests, TopoGetNumaNodeNum_FgetsFailure)
+{
+	int ret;
+	uint32_t numa_node = 0;
+	char buffer[1024];
+	FILE* f1 = fmemopen(buffer, sizeof(buffer), "r+");
+
+	EXPECT_CALL(*g_system_mock, Fopen(testing::_, testing::_))
+				.WillOnce(testing::Return(f1));
+	EXPECT_CALL(*g_system_mock, Fgets(testing::_, testing::_, testing::_))
+				.WillOnce(testing::Return((char *)NULL));
+
+	ret = amdsmi_topo_get_numa_node_number(&GPU_MOCK_HANDLE, &numa_node);
+
+	EXPECT_EQ(ret, AMDSMI_STATUS_IO);
+}
+
 TEST_F(AmdSmiNumaTests, GetCpuAffinityWithScope_NotFound)
 {
 	int ret;
 	uint64_t cpu_set[4] = {0};
-	smi_server_static_info server_info_mock = {};
-	server_info_mock.num_devices = 1;
-	server_info_mock.devices[0].bdf.as_uint = MOCK_BDF.as_uint;
-	server_info_mock.devices[0].dev_id = GPU_MOCK_HANDLE;
-	server_info_mock.devices[0].dev_id.handle = GPU_MOCK_HANDLE.handle;
-
-	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(testing::DoAll(amdsmi::SetPayload(server_info_mock), testing::Return(AMDSMI_STATUS_SUCCESS)));
 
 	ret = amdsmi_get_cpu_affinity_with_scope(&GPU_MOCK_HANDLE, 4, cpu_set, AMDSMI_AFFINITY_SCOPE_NODE);
 
@@ -197,14 +196,6 @@ TEST_F(AmdSmiNumaTests, TopoGetNumaNodeNum_NotFound)
 {
 	int ret;
 	uint32_t numa_node = 0;
-	smi_server_static_info server_info_mock = {};
-	server_info_mock.num_devices = 1;
-	server_info_mock.devices[0].bdf.as_uint = MOCK_BDF.as_uint;
-	server_info_mock.devices[0].dev_id = GPU_MOCK_HANDLE;
-	server_info_mock.devices[0].dev_id.handle = GPU_MOCK_HANDLE.handle;
-
-	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(testing::DoAll(amdsmi::SetPayload(server_info_mock), testing::Return(AMDSMI_STATUS_SUCCESS)));
 
 	ret = amdsmi_topo_get_numa_node_number(&GPU_MOCK_HANDLE, &numa_node);
 

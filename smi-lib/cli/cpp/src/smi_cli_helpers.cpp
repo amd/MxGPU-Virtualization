@@ -112,6 +112,8 @@ std::string get_string_from_enum_ecc_blocks(int ecc_block)
 	return out;
 }
 
+
+
 std::string transform_fw(int fw_block_id, uint32_t uversion)
 {
 	std::string uversion_str;
@@ -313,7 +315,7 @@ getGpuVfIndexFromVfId(std::string vf_id)
 	if(!foundGpuIndex) {
 		if (is_ID(vf_id)) {
 			unsigned int gpu_count;
-			int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_gpu_count(gpu_count);
+			int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
 			if (ret != 0) {
 				throw SmiToolSMILIBErrorException(ret);
 			}
@@ -550,4 +552,10 @@ std::vector<std::pair<uint64_t, std::string>> bitmaskToRangesList(uint64_t mask,
 	}
 
 	return results;
+}
+
+std::string ThrottlerDataToString(uint64_t data) {
+	std::string out;
+	AmdSmiApiBase::CreateAmdSmiApiObject().ThrottlerDataToString(data, out);
+	return out;
 }

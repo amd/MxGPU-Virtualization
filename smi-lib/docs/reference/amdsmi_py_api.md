@@ -162,6 +162,8 @@ except AmdSmiException as e:
 
 Description: Returns list of GPU device handle objects on current machine
 
+Note: This function currently supports only AMD GPUs. To enumerate other devices, such as AMD NICs, use amdsmi_get_processor_handles_by_type().
+
 Input parameters: `None`
 
 Output: List of GPU device handles
@@ -180,6 +182,53 @@ try:
     else:
         for processor in processors:
             print(amdsmi_get_gpu_device_uuid(processor))
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_processor_handles_by_type
+
+Description: Returns a list of processor handles of the specified type in the system.
+
+Input parameters:
+
+* `processor_type` one of `AmdSmiProcessorType` enum values:
+
+Field | Description
+---|---
+`UNKNOWN` | Unknown processor type
+`AMD_GPU` | AMD GPU device
+`AMD_CPU` | AMD CPU device (**_Not supported yet_**)
+`NON_AMD_GPU` | Non-AMD GPU device (**_Not supported yet_**)
+`NON_AMD_CPU` | Non-AMD CPU device (**_Not supported yet_**)
+`AMD_CPU_CORE` | AMD CPU core (**_Not supported yet_**)
+`AMD_APU` | AMD Accelerated Processing Unit (APU) (**_Not supported yet_**)
+`AMD_NIC` | AMD Network Interface Card (NIC)
+
+Output: List of processor handles of the chosen type
+
+Exceptions that can be thrown by `amdsmi_get_processor_handles_by_type` function:
+
+* `AmdSmiParameterException`
+* `AmdSmiLibraryException`
+
+Example:
+
+```python
+try:
+    processor_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_GPU)
+    if len(processor_handles) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processor_handles:
+            print(amdsmi_get_gpu_device_uuid(processor))
+
+    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    if len(nic_handles) == 0:
+        print("No NICs on machine")
+    else:
+        for nic in nic_handles:
+            print(amdsmi_get_nic_asic_info(nic))
 except AmdSmiException as e:
     print(e)
 ```
@@ -215,7 +264,7 @@ except AmdSmiException as e:
 
 ### amdsmi_get_gpu_device_bdf
 
-Description: Returns BDF of the given device
+Description: Returns BDF of the given processor (GPU PF).
 
 Input parameters:
 
@@ -240,6 +289,68 @@ Example:
 try:
     processor = amdsmi_get_processor_handle_from_bdf("0000:23:00.0")
     print("GPU bdf:", amdsmi_get_gpu_device_bdf(processor))
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_nic_device_bdf
+
+Description: Returns BDF of the given processor (NIC).
+
+Input parameters:
+
+* NIC device for which to query
+
+Output: BDF string in form of `<domain>:<bus>:<device>.<function>` in hexcode format.
+Where:
+
+* `<domain>` is 4 hex digits long from 0000-FFFF interval
+* `<bus>` is 2 hex digits long from 00-FF interval
+* `<device>` is 2 hex digits long from 00-1F interval
+* `<function>` is 1 hex digit long from 0-7 interval
+
+Exceptions that can be thrown by `amdsmi_get_nic_device_bdf` function:
+
+* `AmdSmiParameterException`
+* `AmdSmiLibraryException`
+
+Example:
+
+```python
+try:
+    processor = amdsmi_get_processor_handle_from_bdf("0000:23:00.0")
+    print("NIC bdf:", amdsmi_get_nic_device_bdf(processor))
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_processor_bdf
+
+Description: Returns BDF of the given processor.
+
+Input parameters:
+
+* Processor for which to query
+
+Output: BDF string in form of `<domain>:<bus>:<device>.<function>` in hexcode format.
+Where:
+
+* `<domain>` is 4 hex digits long from 0000-FFFF interval
+* `<bus>` is 2 hex digits long from 00-FF interval
+* `<device>` is 2 hex digits long from 00-1F interval
+* `<function>` is 1 hex digit long from 0-7 interval
+
+Exceptions that can be thrown by `amdsmi_get_processor_bdf` function:
+
+* `AmdSmiParameterException`
+* `AmdSmiLibraryException`
+
+Example:
+
+```python
+try:
+    processor = amdsmi_get_processor_handle_from_bdf("0000:23:00.0")
+    print("processor bdf:", amdsmi_get_processor_bdf(processor))
 except AmdSmiException as e:
     print(e)
 ```
@@ -770,7 +881,7 @@ except AmdSmiException as e:
     print(e)
 ```
 
-## amdsmi_get_bad_page_threshold
+### amdsmi_get_bad_page_threshold
 Description: Returns bad page threshold
 
 Input parameters:
@@ -799,7 +910,6 @@ except AmdSmiException as e:
 ```
 
 ### amdsmi_get_gpu_bad_page_info
-
 Description: Returns bad page info.
 
 Input parameters:
@@ -2763,6 +2873,72 @@ except AmdSmiException as e:
     print(e)
 ```
 
+### amdsmi_get_xgmi_plpd
+Description: Gets the xgmi per-link power down policy parameter for the processor
+
+Input parameters:
+* `processor handle` PF of a GPU device
+
+Output: Dictionary with fields
+Field | Description
+---|---
+`cur` | current policy index
+`policies` | List of policies
+
+Each policies list entry is a dictionary with following fields:
+Field | Description
+---|---
+`policy_id` | policy id
+`policy_description` | policy description
+
+
+Exceptions that can be thrown by `amdsmi_get_xgmi_plpd` function:
+* `AmdSmiLibraryException`
+* `AmdSmiParameterException`
+
+Example:
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            dpm_policy = amdsmi_get_xgmi_plpd(processor)
+            print(dpm_policy)
+
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_set_xgmi_plpd
+Description: Sets the xgmi per-link power down policy parameter for the processor
+
+Input parameters:
+* `processor handle` PF of a GPU device
+* `policy_id` policy id represents one of the values we get from the policies list from amdsmi_get_soc_pstate.
+
+Output:
+* `None`
+
+Exceptions that can be thrown by `amdsmi_set_xgmi_plpd` function:
+* `AmdSmiLibraryException`
+* `AmdSmiParameterException`
+
+Example:
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            amdsmi_set_xgmi_plpd(processor, 0)
+
+except AmdSmiException as e:
+    print(e)
+```
+
 ### AmdSmiEventReader class
 
 Description: Providing methods for event monitoring
@@ -2849,7 +3025,7 @@ Output: Dictionary with fields
 Field | Description
 ---|---
 `fcn_id` | VF handle
-`dev_id` | GPU device handle
+`dev_id` | GPU device id
 `timestamp` | UTC time (in microseconds) when the error happened
 `data` | data value associated with the specific event
 `category` | event category
@@ -2857,6 +3033,7 @@ Field | Description
 `level` | event severity
 `date` | UTC date and time when the error happend
 `message` | message describing the event
+`processor_handle` | processor handle object where the event happened
 
 `event category is AmdSmiEventCategory enum object with values`
 
@@ -3005,6 +3182,43 @@ try:
         for device in devices:
             version = amdsmi_get_lib_version()
             print(version)
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_gpu_virtualization_mode
+Description: Retrieve the current GPU virtualization mode.
+
+Input parameters:
+* `processor handle` The handle to the GPU device for which the virtualization mode is being queried.
+
+Output: Enum object representing the current virtualization mode.
+
+`AmdSmiVirtualizationMode` enum:
+
+Field | Description
+---|---
+`UNKNOWN`      | unknown virtualization mode
+`NONE`         | none virtualization mode
+`HOST`         | host virtualization mode
+`GUEST`        | guest virtualization mode
+`PASSTHROUGH`  | passthrough virtualization mode
+
+Exceptions that can be thrown by `amdsmi_get_gpu_virtualization_mode` function:
+* `AmdSmiLibraryException`
+* `AmdSmiParameterException`
+
+Example:
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            virtualization_mode = amdsmi_get_gpu_virtualization_mode(processor)
+            print("Virtualization mode: {}".format(virtualization_mode))
+
 except AmdSmiException as e:
     print(e)
 ```
@@ -3290,12 +3504,16 @@ except AmdSmiException as e:
 
 ### amdsmi_get_gpu_cper_entries
 
-Description: Get gpu ras cper entries
+Description: Dump CPER entries for a given GPU in a file using from CPER header file from RAS tool.
 
 Input parameters:
+* `processor_handle` device which to query
+* `severity_mask`    Represents different severity masks from 'AmdSmiCperErrorSeverity' enum on which filtering of cpers is based.
+* `buffer_size`      pointer to a variable that specifies the size of the cper_data
+* `cursor`           pointer to a variable that will contain the  cursor  for the next call
 
-* `processor handle` PF of a GPU device
-* `severity_mask` Represents different severity masks from 'AmdSmiCperErrorSeverity' enum on which filtering of cpers is based.
+
+`AmdSmiCperErrorSeverity`
 
 Field | Description
 ---|---
@@ -3304,13 +3522,67 @@ Field | Description
 `NON_FATAL_CORRECTED` | filters non_fatal_corrected cpers
 `NUM` | shows all cper types
 
-Output:
 
-* List of all cper errors. Each list element contains binary raw data
+Output: Dictionary with fields
+
+Field | Description
+---|---
+`error_severity`   | The severity of the CPER error ex: `non_fatal_uncorrected`, `fatal`, `non_fatal_corrected`. |
+`notify_type`      | The notification type associated with the CPER entry. |
+`timestamp`        | The time when the CPER entry was recorded, formatted as `YYYY/MM/DD HH:MM:SS`. |
+`signature`        | A 4-byte signature identifying the entry, typically `CPER`. |
+`revision`         | The revision number of the CPER record format. |
+`signature_end`    | A marker value (typically `0xFFFFFFFF`) confirming the integrity of the signature. |
+`sec_cnt`          | The count of sections included in the CPER entry. |
+`record_length`    | The total length in bytes of the CPER entry. |
+`platform_id`      | A character array identifying the GPU or platform. |
+`creator_id`       | A character array indicating the creator of the CPER entry. |
+`record_id`        | A unique identifier for the CPER entry. |
+`flags`            | Reserved flags related to the CPER entry. |
+`persistence_info` | Reserved information related to persistence. |
 
 Exceptions that can be thrown by `amdsmi_get_gpu_cper_entries` function:
 
 * `AmdSmiLibraryException`
+* `AmdSmiParameterException`
+
+Example:
+
+```python
+for device in devices:
+        entries, new_cursor, cper_data = amdsmi_get_gpu_cper_entries(device, severity_mask, buffer_size, initial_cursor)
+        print("CPER entries for device", device)
+        for key, entry in entries.items():
+            print("Entry", key)
+            print("  Error Severity:", entry.get("error_severity", "Unknown"))
+            print("  Notify Type:", entry.get("notify_type", "Unknown"))
+            print("  Timestamp:", entry.get("timestamp", ""))
+            print()
+        print("New Cursor Position:", new_cursor)
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_p2p_status
+
+Description: Retrieve the connection type and P2P capabilities between 2 GPUs
+
+Input parameters:
+
+* `processor_handle_src` the source device handle
+* `processor_handle_dest` the destination device handle
+
+Output:  Dictionary with fields:
+
+Fields | Description
+---|---
+`type` | AmdSmiLinkType
+`cap` | <table><thead><tr> <th> Subfield </th> <th> Description</th> </tr></thead><tbody><tr><td>`is_iolink_coherent`</td><td>1 == True; 0 == False; Uint_max = Undefined</td></tr><tr><td>`is_iolink_atomics_32bit`</td><td>Supports 32bit atomics</td></tr><tr><td>`is_iolink_atomics_64bit`</td><td>Supports 64bit atomics</td></tr><tr><td>`is_iolink_dma`</td><td>Supports DMA</td></tr><tr><td>`is_iolink_bi_directional`</td><td>Is the IOLink Bidirectional</td></tr></tbody></table>
+
+Exceptions that can be thrown by `amdsmi_get_p2p_status` function:
+
+* `AmdSmiLibraryException`
+* `AmdSmiRetryException`
 * `AmdSmiParameterException`
 
 Example:
@@ -3321,13 +3593,46 @@ try:
     if len(processors) == 0:
         print("No GPUs on machine")
     else:
+        processor_handle_src = processors[0]
+        processor_handle_dest = processors[1]
+        link_type = amdsmi_get_p2p_status(processor_handle_src, processor_handle_dest)
+        print(link_type['type'])
+        print(link_type['caps'])
+except AmdSmiException as e:
+    print(e)
+```
+
+
+### amdsmi_get_afids_from_cper
+Description: Get AFID for cper error
+
+Input parameters: buffer which contains one cper
+* `cper_buffer`
+
+Output:
+* List of AFID
+
+Exceptions that can be thrown by `amdsmi_get_afids_from_cper` function:
+* `AmdSmiLibraryException`
+* `AmdSmiParameterException`
+
+Example:
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
         for processor in processors:
-            cper_list = amdsmi_get_gpu_cper_entries(processor, AmdSmiCperErrorSeverity.NUM)
+        entries, new_cursor, cper_data = amdsmi_get_gpu_cper_entries(processor, severity_mask, buffer_size, initial_cursor)
+            afid = amdsmi_get_afids_from_cper(cper_data[0]['bytes'])
+            print(afid)
 
 except AmdSmiException as e:
     print(e)
 ```
-## amdsmi_reset_gpu
+
+### amdsmi_reset_gpu
 Description: Reset the GPU associated with the device with provided processor handle.
 
 Input parameters: GPU device handle
@@ -3413,6 +3718,401 @@ try:
         for device in devices:
             numa_node = amdsmi_topo_get_numa_node_number(device)
             print(numa_node)
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_nic_driver_info
+
+Description: Retrieves information about the NIC driver
+
+Input parameters:
+
+* `processor_handle` NIC for which to query
+
+Output: Dictionary with fields
+
+Field | Description
+---|---
+`name` | driver name
+`version` | driver version
+
+Exceptions that can be thrown by `amdsmi_get_nic_driver_info` function:
+
+* `AmdSmiParameterException`
+* `AmdSmiLibraryException`
+
+Example:
+
+```python
+try:
+    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    if len(nic_handles) == 0:
+        print("No NICs on machine")
+    else:
+        for nic in nic_handles:
+            print(amdsmi_get_nic_driver_info(nic))
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_nic_asic_info
+
+Description: Retrieves ASIC information for the NIC
+
+Input parameters:
+
+* `processor_handle` NIC for which to query
+
+Output: Dictionary with fields
+
+Field | Description
+---|---
+`vendor_id` | vendor id
+`subvendor_id` | subsystem vendor id
+`device_id` | device id
+`subsystem_id` | subsystem device id
+`revision` | revision id
+`permanent_address` | permanent mac address
+`product_name` | product name
+`part_number` | part number
+`serial_number` | serial number
+`vendor_name` | vendor name
+
+Exceptions that can be thrown by `amdsmi_get_nic_asic_info` function:
+
+* `AmdSmiParameterException`
+* `AmdSmiLibraryException`
+
+Example:
+
+```python
+try:
+    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    if len(nic_handles) == 0:
+        print("No NICs on machine")
+    else:
+        for nic in nic_handles:
+            print(amdsmi_get_nic_asic_info(nic))
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_nic_bus_info
+
+Description: Retrieves BUS information for the NIC
+
+Input parameters:
+
+* `processor_handle` NIC for which to query
+
+Output: Dictionary with fields
+
+Field | Description
+---|---
+`bdf` | bus
+`max_pcie_width` | maximum supported PCIe link width
+`max_pcie_speed` | maximum supported PCIe link speed
+`pcie_interface_version` | PCIe interface version (**_Not supported yet, currently hardcoded to 0_**)
+`slot_type` | physical slot type (**_Not supported yet, currently hardcoded to 0_**)
+
+Exceptions that can be thrown by `amdsmi_get_nic_bus_info` function:
+
+* `AmdSmiParameterException`
+* `AmdSmiLibraryException`
+
+Example:
+
+```python
+try:
+    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    if len(nic_handles) == 0:
+        print("No NICs on machine")
+    else:
+        for nic in nic_handles:
+            print(amdsmi_get_nic_bus_info(nic))
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_nic_numa_info
+
+Description: Retrieves NUMA information for the NIC
+
+Input parameters:
+
+* `processor_handle` NIC for which to query
+
+Output: Dictionary with fields
+
+Field | Content
+---|---
+`node` | NUMA (Non-Uniform Memory Access) node identifier associated with the device.
+`affinity` | CPU affinity mask for the device
+
+Exceptions that can be thrown by `amdsmi_get_nic_numa_info` function:
+
+* `AmdSmiParameterException`
+* `AmdSmiLibraryException`
+
+Example:
+
+```python
+try:
+    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    if len(nic_handles) == 0:
+        print("No NICs on machine")
+    else:
+        for nic in nic_handles:
+            print(amdsmi_get_nic_numa_info(nic))
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_nic_port_info
+
+Description: Retrieves PORT information for the NIC
+
+Input parameters:
+
+* `processor_handle` NIC for which to query
+
+Output: Dictionary with fields
+
+Field | Description
+---|---
+`ports` | List of port information dictionaries
+
+Each port dictionary contains:
+
+Field | Content
+---|---
+`bdf` | BDF of the port
+`port_num` | Port number
+`type` | Type of the port
+`flavour` | Port flavour
+`netdev` | Associated network device name
+`ifindex` | Interface index of the port
+`mac_address` | MAC address assigned to the port
+`carrier` | Carrier state
+`mtu` | Maximum Transmission Unit size
+`link_state` | Current link state
+`link_speed` | Link speed in Mbps
+`active_fec` | Currently active Forward Error Correction mode
+`autoneg` | Auto-negotiation status
+`pause_autoneg` | Pause frame auto-negotiation status
+`pause_rx` | Receive pause frame status
+`pause_tx` | Transmit pause frame status
+
+Exceptions that can be thrown by `amdsmi_get_nic_port_info` function:
+
+* `AmdSmiParameterException`
+* `AmdSmiLibraryException`
+
+Example:
+
+```python
+try:
+    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    if len(nic_handles) == 0:
+        print("No NICs on machine")
+    else:
+        for nic in nic_handles:
+            port_info = amdsmi_get_nic_port_info(nic)
+            print(f"Number of ports: {len(port_info['ports'])}")
+            for i, port in enumerate(port_info['ports']):
+                print(f"Port {i}:")
+                print(f"  BDF: {port['bdf']}")
+                print(f"  Port Number: {port['port_num']}")
+                print(f"  Type: {port['type']}")
+                print(f"  Flavour: {port['flavour']}")
+                print(f"  Network Device: {port['netdev']}")
+                print(f"  Interface Index: {port['ifindex']}")
+                print(f"  MAC Address: {port['mac_address']}")
+                print(f"  Carrier: {port['carrier']}")
+                print(f"  MTU: {port['mtu']}")
+                print(f"  Link State: {port['link_state']}")
+                print(f"  Link Speed: {port['link_speed']}")
+                print(f"  Active FEC: {port['active_fec']}")
+                print(f"  Auto-negotiation: {port['autoneg']}")
+                print(f"  Pause Auto-negotiation: {port['pause_autoneg']}")
+                print(f"  Pause RX: {port['pause_rx']}")
+                print(f"  Pause TX: {port['pause_tx']}")
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_nic_rdma_dev_info
+
+Description: Retrieves RDMA devices information for the NIC
+
+Input parameters:
+
+* `processor_handle` NIC for which to query
+
+Output: Dictionary with fields
+
+Field | Description
+---|---
+`rdma_dev_info` | List of RDMA device information dictionaries
+
+Each RDMA device info dictionary contains:
+
+Field | Description
+---|---
+`rdma_dev` | RDMA device name
+`node_guid` | Node GUID
+`node_type` | Node type
+`sys_image_guid` | System image GUID
+`fw_ver` | Firmware version
+`rdma_port_info` | List of RDMA port information dictionaries
+
+Each RDMA port info dictionary contains:
+
+Field | Description
+---|---
+`netdev` | Associated network device name
+`state` | Port state (DOWN, INIT, ARMED, ACTIVE, ACTIVE_DEFER)
+`rdma_port` | RDMA port number
+`max_mtu` | Maximum MTU size
+`active_mtu` | Currently active MTU size
+
+Exceptions that can be thrown by `amdsmi_get_nic_rdma_dev_info` function:
+
+* `AmdSmiParameterException`
+* `AmdSmiLibraryException`
+
+Example:
+
+```python
+try:
+    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    if len(nic_handles) == 0:
+        print("No NICs on machine")
+    else:
+        for nic in nic_handles:
+            rdma_info = amdsmi_get_nic_rdma_dev_info(nic)
+            print(f"Number of RDMA devices: {len(rdma_info['rdma_dev_info'])}")
+            for i, rdma_dev in enumerate(rdma_info['rdma_dev_info']):
+                print(f"RDMA Device {i}:")
+                print(f"  Device: {rdma_dev['rdma_dev']}")
+                print(f"  Node GUID: {rdma_dev['node_guid']}")
+                print(f"  Node Type: {rdma_dev['node_type']}")
+                print(f"  System Image GUID: {rdma_dev['sys_image_guid']}")
+                print(f"  Firmware Version: {rdma_dev['fw_ver']}")
+                print(f"  Number of RDMA ports: {len(rdma_dev['rdma_port_info'])}")
+                for j, port in enumerate(rdma_dev['rdma_port_info']):
+                    print(f"    Port {j}:")
+                    print(f"      Network Device: {port['netdev']}")
+                    print(f"      State: {port['state']}")
+                    print(f"      RDMA Port: {port['rdma_port']}")
+                    print(f"      Max MTU: {port['max_mtu']}")
+                    print(f"      Active MTU: {port['active_mtu']}")
+except AmdSmiException as e:
+    print(e)
+```
+
+
+### amdsmi_get_nic_port_statistics
+
+Description: Retrieve all available PORT statistics for the specified NIC port
+
+Input parameters:
+* `processor_handle` NIC for which to query
+* `port_index` index of the NIC port to query
+
+Output: Returns a list of dictionaries, each containing:
+* `name`
+* `value`
+
+Exceptions that can be thrown by `amdsmi_get_nic_port_statistics` function:
+
+* `AmdSmiParameterException`
+* `AmdSmiLibraryException`
+
+Example:
+
+```python
+try:
+    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    if len(nic_handles) == 0:
+        print("No NICs on machine")
+    else:
+        for nic in nic_handles:
+            port_stats = amdsmi_get_nic_port_statistics(nic, 0)
+            for stat in port_stats:
+                print(f"{stat['name']}: {stat['value']}")
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_nic_vendor_statistics
+
+Description: Retrieve vendor specific statistics for the NIC port
+
+Input parameters:
+* `processor_handle` NIC for which to query
+* `port_index` index of the NIC port to query
+
+Output: Returns a list of dictionaries, each containing:
+* `name`
+* `value`
+
+This API provides access to vendor/driver specific statistics that may vary between different NIC vendors and driver/firmware versions. The statistic names are preserved as provided by the underlying driver implementation.
+
+Note: The exact statistics available depend on the NIC vendor, hardware and driver version.
+
+Exceptions that can be thrown by `amdsmi_get_nic_vendor_statistics` function:
+
+* `AmdSmiParameterException`
+* `AmdSmiLibraryException`
+
+Example:
+
+```python
+try:
+    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    if len(nic_handles) == 0:
+        print("No NICs on machine")
+    else:
+        for nic in nic_handles:
+            vendor_stats = amdsmi_get_nic_vendor_statistics(nic, 0)
+            for stat in vendor_stats:
+                print(f"{stat['name']}: {stat['value']}")
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_nic_rdma_port_statistics
+
+Description: Retrieve RDMA port statistics for the NIC
+
+Input parameters:
+* `processor_handle` NIC for which to query
+* `rdma_port_index` index of the NIC RDMA port to query
+
+Output: Returns a list of dictionaries, each containing:
+* `name`
+* `value`
+
+Exceptions that can be thrown by `amdsmi_get_nic_rdma_port_statistics` function:
+
+* `AmdSmiParameterException`
+* `AmdSmiLibraryException`
+
+Example:
+
+```python
+try:
+    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    if len(nic_handles) == 0:
+        print("No NICs on machine")
+    else:
+        rdma_port_index = 0
+        for nic in nic_handles:
+            rdma_stats = amdsmi_get_nic_rdma_port_statistics(nic, rdma_port_index)
+            for stat in rdma_stats:
+                print(f"{stat['name']}: {stat['value']}")
 except AmdSmiException as e:
     print(e)
 ```

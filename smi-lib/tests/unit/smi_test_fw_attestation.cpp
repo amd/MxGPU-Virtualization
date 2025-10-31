@@ -74,11 +74,15 @@ protected:
 TEST_F(AmdSmiFwAttestationTests, InvalidParams)
 {
 	int ret;
+	amdsmi_fw_error_record_t fw_er;
 
 	ret = amdsmi_get_vf_fw_info(VF_MOCK_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_get_fw_error_records(&GPU_MOCK_HANDLE, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_fw_error_records(&NIC_MOCK_HANDLE, &fw_er);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
 

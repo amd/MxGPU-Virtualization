@@ -20,6 +20,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 inline std::string gpuListTemplate{ "GPU: %d \n    BDF: %s \n    UUID: %s\n" };
 
@@ -27,11 +28,99 @@ inline std::string vfListTemplate{ "    VF: %d \n        BDF: %s\n        UUID: 
 
 inline std::string vfNestedTemplate{ "GPU: %s \n    VF: %s \n" };
 
+inline std::string nicListTemplate{
+	"NIC: %d \n"
+	"    BDF: %s \n"
+	"    PERMANENT_ADDRESS: %s\n"
+	"    PRODUCT_NAME: %s\n"
+	"    PART_NUMBER: %s\n"
+	"    SERIAL_NUMBER: %s\n"
+	"    VENDOR_NAME: %s\n"
+};
+
 inline std::string versionTemplate{ "VERSION: \n    TOOL_NAME: %s \n    TOOL_VERSION: %s \n    LIB_VERSION: %s \n" };
 
 inline std::string staticAsicTemplate{
 	"    ASIC: \n        MARKET_NAME: %s \n        VENDOR_ID: %s \n        VENDOR_NAME: %s \n        SUBVENDOR_ID: %s \n        DEVICE_ID: %s "
 	"\n        SUBSYSTEM_ID: %s \n        REV_ID: %s \n        ASIC_SERIAL: %s\n        OAM_ID: %s\n        NUM_OF_COMPUTE_UNITS: %s\n"
+};
+
+inline std::string nicStaticAsicTemplate{
+	"    ASIC: \n"
+	"        VENDOR_ID: %s \n"
+	"        SUBVENDOR_ID: %s \n"
+	"        DEVICE_ID: %s \n"
+	"        SUBSYSTEM_ID: %s \n"
+	"        REVISION: %s \n"
+	"        PERMANENT_ADDRESS: %s \n"
+	"        PRODUCT_NAME: %s \n"
+	"        PART_NUMBER: %s \n"
+	"        SERIAL_NUMBER: %s \n"
+	"        VENDOR_NAME: %s \n"
+};
+
+inline std::string nicStaticBusTemplate{
+	"    BUS: \n"
+	"        BDF: %s \n"
+	"        MAX_PCIE_WIDTH: %s \n"
+	"        MAX_PCIE_SPEED: %s %s\n"
+	"        PCIE_INTERFACE_VERSION: %s \n"
+	"        SLOT_TYPE: %s \n"
+};
+
+inline std::string nicStaticDriverTemplate{
+	"    DRIVER: \n"
+	"        NAME: %s \n"
+	"        VERSION: %s \n"
+};
+
+inline std::string nicStaticNumaTemplate{
+	"    NUMA: \n"
+	"        NODE: %s \n"
+	"        AFFINITY: %s\n"
+};
+
+inline std::string nicStaticPortHeaderTemplate{ "    PORTS:\n" };
+
+inline std::string nicStaticPortTemplate{
+	"        PORT_%u:\n"
+	"            BDF: %s\n"
+	"            PORT_NUM: %s\n"
+	"            TYPE: %s\n"
+	"            FLAVOUR: %s\n"
+	"            NETDEV: %s\n"
+	"            IFINDEX: %s\n"
+	"            MAC_ADDRESS: %s\n"
+	"            CARRIER: %s\n"
+	"            MTU: %s %s\n"
+	"            LINK_STATE: %s\n"
+	"            LINK_SPEED: %s %s\n"
+	"            ACTIVE_FEC: %s\n"
+	"            AUTONEG: %s\n"
+	"            PAUSE_AUTONEG: %s\n"
+	"            PAUSE_RX: %s\n"
+	"            PAUSE_TX: %s\n"
+};
+
+inline std::string nicStaticRdmaDevHeaderTemplate{ "    RDMA_DEVICES:\n" };
+
+inline std::string nicStaticRdmaDevTemplate{
+	"        RDMA_DEVICE_%u:\n"
+	"            RDMA_DEV: %s \n"
+	"            NODE_GUID: %s \n"
+	"            NODE_TYPE: %s \n"
+	"            SYS_IMAGE_GUID: %s\n"
+	"            FW_VER: %s \n"
+	"            PORTS:\n"
+};
+
+inline std::string nicStaticRdmaPortTemplate{
+	"                PORT_%u:\n"
+	"                    NETDEV: %s \n"
+	"                    STATE: %s\n"
+	"                    RDMA_PORT: %s\n"
+	"                    MAX_MTU: %s\n"
+	"                    ACTIVE_MTU: %s\n"
 };
 
 inline std::string staticDfcHeaderTemplate{
@@ -80,7 +169,7 @@ inline std::string staticBusTemplate{
 };
 
 inline std::string staticVbiosTemplate{
-	"    VBIOS: \n        NAME: %s \n        BUILD_DATE: %s "
+	"    IFWI: \n        NAME: %s \n        BUILD_DATE: %s "
 	"\n        PART_NUMBER: %s \n        VERSION: %s\n        BOOT_FIRMWARE: %s\n"
 };
 
@@ -138,7 +227,13 @@ inline std::string fwTemplate{
 	"        FW_%d:\n            FW_ID: %s\n            FW_VERSION: %s\n"
 };
 
+inline std::string fwVfTemplate{
+	"            FW_%d:\n                FW_ID: %s\n                FW_VERSION: %s\n"
+};
+
 inline std::string gpuTemplate{ "GPU: %d\n" };
+
+inline std::string nicTemplate{ "NIC: %d\n" };
 
 inline std::string fwErrorRecordListTemplate{ "    ERROR_RECORDS: \n" };
 
@@ -159,6 +254,9 @@ inline std::string XCPTemplate{
 
 inline std::string activityPerPartitionTemplate{
 	"                VCN_ACTIVITY: %s %s\n"};
+
+inline std::string TemperaturePerPartitionTemplate{
+        "                TEMPERATURE: %s %s\n"};
 
 inline std::string VCLKPerPartitionTemplate{
 	"                CLK_VCLK: %s %s\n"};
@@ -215,6 +313,12 @@ inline std::string metricJpegUsageHeaderTemplate{
 inline std::string metricJpegUsagePerPartitionHeaderTemplate{
 	"                JPEG_ACTIVITY: ["};
 
+inline std::string metricTempPerPartitionHeaderTemplate{
+	"                TEMPERATURE: ["};
+
+inline std::string metricHbmTempPerPartitionHeaderTemplate{
+	"                HBM_TEMPERATURE: ["};
+
 inline std::string metricGFXCLKPerPartitionHeaderTemplate{
 	"                GFX_CLK: ["};
 
@@ -236,6 +340,12 @@ inline std::string metricJpegUsageTemplate{
 inline std::string metricJpegUsagePerPartitionTemplate{
 	"%s %s"};
 
+inline std::string metricTempPerPartitionTemplate{
+	"%s %s"};
+
+inline std::string metricHbmTempPerPartitionTemplate{
+	"%s %s"};
+
 inline std::string GFXPerPartitionTemplate{
 	"%s %s"};
 
@@ -249,6 +359,9 @@ inline std::string GFXLockedPerPartitionTemplate{
 	"%s"};
 
 inline std::string GFXUsagePerPartitionTemplate{
+	"%s %s"};
+
+inline std::string TempXcdPerPartitionTemplate{
 	"%s %s"};
 
 inline std::string metricJpegUsageFooterTemplate{
@@ -560,3 +673,84 @@ inline std::string RasCperTemplate {
 inline std::string setSuccessfullyTemplate {
 	"GPU: %d\n"
 	"    %s: Successfully set %s to %s\n"};
+
+inline std::string NodeHeaderTemplate {	"NODE: \n"};
+
+inline std::string BaseBoardHeaderTemplate{ "    BASEBOARD:\n" };
+
+inline std::string baseboardSystemTempUbbFpgaTemplate{ "        UBB_FPGA: %s %s\n" };
+inline std::string baseboardSystemTempUbbFrontTemplate{ "        UBB_FRONT: %s %s\n" };
+inline std::string baseboardSystemTempUbbBackTemplate{ "        UBB_BACK: %s %s\n" };
+inline std::string baseboardSystemTempUbbOam7Template{ "        UBB_OAM7: %s %s\n" };
+inline std::string baseboardSystemTempUbbIbcTemplate{ "        UBB_IBC: %s %s\n" };
+inline std::string baseboardSystemTempUbbUfpgaTemplate{ "        UBB_UFPGA: %s %s\n" };
+inline std::string baseboardSystemTempUbbOam1Template{ "        UBB_OAM1: %s %s\n" };
+inline std::string baseboardSystemTempOam01HscTemplate{ "        OAM_0_1_HSC: %s %s\n" };
+inline std::string baseboardSystemTempOam23HscTemplate{ "        OAM_2_3_HSC: %s %s\n" };
+inline std::string baseboardSystemTempOam45HscTemplate{ "        OAM_4_5_HSC: %s %s\n" };
+inline std::string baseboardSystemTempOam67HscTemplate{ "        OAM_6_7_HSC: %s %s\n" };
+inline std::string baseboardSystemTempUbbFpga0v72VrTemplate{ "        UBB_FPGA_0V72_VR: %s %s\n" };
+inline std::string baseboardSystemTempUbbFpga3v3VrTemplate{ "        UBB_FPGA_3V3_VR: %s %s\n" };
+inline std::string baseboardSystemTempRetimer01231v2VrTemplate{ "        RETIMER_0_1_2_3_1V2_VR: %s %s\n" };
+inline std::string baseboardSystemTempRetimer45671v2VrTemplate{ "        RETIMER_4_5_6_7_1V2_VR: %s %s\n" };
+inline std::string baseboardSystemTempRetimer010v9VrTemplate{ "        RETIMER_0_1_0V9_VR: %s %s\n" };
+inline std::string baseboardSystemTempRetimer450v9VrTemplate{ "        RETIMER_4_5_0V9_VR: %s %s\n" };
+inline std::string baseboardSystemTempRetimer230v9VrTemplate{ "        RETIMER_2_3_0V9_VR: %s %s\n" };
+inline std::string baseboardSystemTempRetimer670v9VrTemplate{ "        RETIMER_6_7_0V9_VR: %s %s\n" };
+inline std::string baseboardSystemTempOam01233v3VrTemplate{ "        OAM_0_1_2_3_3V3_VR: %s %s\n" };
+inline std::string baseboardSystemTempOam45673v3VrTemplate{ "        OAM_4_5_6_7_3V3_VR: %s %s\n" };
+inline std::string baseboardSystemTempIbcHscTemplate{ "        IBC_HSC: %s %s\n" };
+inline std::string baseboardSystemTempIbcTemplate{ "        IBC: %s %s\n" };
+
+inline std::string GpuBoardHeaderTemplate{ "    GPUBOARD:\n" };
+
+inline std::string gpuboardNodeTempRetimerTemplate{ "        NODE_TEMP_RETIMER: %s %s\n" };
+inline std::string gpuboardNodeTempIbcTempTemplate{ "        NODE_TEMP_IBC_TEMP: %s %s\n" };
+inline std::string gpuboardNodeTempIbc2TempTemplate{ "        NODE_TEMP_IBC_2_TEMP: %s %s\n" };
+inline std::string gpuboardNodeTempVdd18VrTempTemplate{ "        NODE_TEMP_VDD18_VR_TEMP: %s %s\n" };
+inline std::string gpuboardNodeTemp04HbmBVrTempTemplate{ "        NODE_TEMP_04_HBM_B_VR_TEMP: %s %s\n" };
+inline std::string gpuboardNodeTemp04HbmDVrTempTemplate{ "        NODE_TEMP_04_HBM_D_VR_TEMP: %s %s\n" };
+inline std::string gpuboardVrTempVddcrVdd0Template{ "        VR_TEMP_VDDCR_VDD0: %s %s\n" };
+inline std::string gpuboardVrTempVddcrVdd1Template{ "        VR_TEMP_VDDCR_VDD1: %s %s\n" };
+inline std::string gpuboardVrTempVddcrVdd2Template{ "        VR_TEMP_VDDCR_VDD2: %s %s\n" };
+inline std::string gpuboardVrTempVddcrVdd3Template{ "        VR_TEMP_VDDCR_VDD3: %s %s\n" };
+inline std::string gpuboardVrTempVddcrSocATemplate{ "        VR_TEMP_VDDCR_SOC_A: %s %s\n" };
+inline std::string gpuboardVrTempVddcrSocCTemplate{ "        VR_TEMP_VDDCR_SOC_C: %s %s\n" };
+inline std::string gpuboardVrTempVddcrSocioATemplate{ "        VR_TEMP_VDDCR_SOCIO_A: %s %s\n" };
+inline std::string gpuboardVrTempVddcrSocioCTemplate{ "        VR_TEMP_VDDCR_SOCIO_C: %s %s\n" };
+inline std::string gpuboardVrTempVdd085HbmTemplate{ "        VR_TEMP_VDD_085_HBM: %s %s\n" };
+inline std::string gpuboardVrTempVddcr11HbmBTemplate{ "        VR_TEMP_VDDCR_11_HBM_B: %s %s\n" };
+inline std::string gpuboardVrTempVddcr11HbmDTemplate{ "        VR_TEMP_VDDCR_11_HBM_D: %s %s\n" };
+inline std::string gpuboardVrTempVddUsrTemplate{ "        VR_TEMP_VDD_USR: %s %s\n" };
+inline std::string gpuboardVrTempVddio11E32Template{ "        VR_TEMP_VDDIO_11_E32: %s %s\n" };
+
+inline std::string metricPortHeaderTemplate {
+	"    PORT: \n"
+	"        INDEX: %s\n"
+	"        NETDEV: \n"
+	"            NAME: %s\n"
+	"            STATISTICS: \n"};
+inline std::string metricNicPortStatsHeaderTemplate {
+	"    PORTS:\n"};
+
+inline std::string metricNicPortTemplate {
+	"        PORT_%u:\n"
+	"            NETDEV: %s\n"};
+
+inline std::string metricNicVendorStatsHeaderTemplate {
+	"            VENDOR_STATISTICS:\n"};
+
+inline std::string metricNicPortStatisticsHeaderTemplate {
+	"            STATISTICS:\n"};
+
+inline std::string metricNicRdmaStatsHeaderTemplate {
+	"    RDMA_DEVICES:\n"};
+
+inline std::string metricNicRdmaDeviceTemplate {
+	"            RDMA_DEVICE_%u:\n"
+	"                RDMA_DEV: %s\n"
+	"                PORTS:\n"};
+
+inline std::string metricNicRdmaPortTemplate {
+	"                    PORT_%u:\n"
+	"                        STATISTICS:\n"};

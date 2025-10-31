@@ -147,6 +147,7 @@ enum smi_cmd_code {
 #define SMI_MAX_NUM_XGMI_PHYSICAL_LINK 64
 #define SMI_MAX_NUM_PM_POLICIES 32
 #define SMI_EVENT_MSG_SIZE 256
+#define SMI_MAX_DATE_STRING_LENGTH 32
 #define SMI_DFC_FW_NUMBER_OF_ENTRIES 9
 #define SMI_MAX_WHITE_LIST_ELEMENTS 16
 #define SMI_MAX_BLACK_LIST_ELEMENTS 64
@@ -1009,19 +1010,6 @@ union smi_xgmi_fb_sharing_caps {
 	uint32_t xgmi_fb_sharing_cap_mask;
 };
 
-struct smi_event_entry {
-	struct smi_vf_handle	fcn_id;
-	uint64_t		dev_id;
-	uint64_t		timestamp; //!< UTC microseconds
-	uint64_t		data;
-	uint32_t		category;
-	uint32_t		subcode;
-	uint32_t		level;
-	char			date[SMI_MAX_DATE_LENGTH]; //!< UTC date and time
-	char			message[SMI_EVENT_MSG_SIZE];
-	uint64_t		reserved[6];
-};
-
 struct smi_ras_feature {
 	uint32_t ras_eeprom_version;
 	uint32_t ecc_correction_schema_flag; /**< ecc_correction_schema mask.
@@ -1578,6 +1566,20 @@ struct smi_cper_config {
 struct smi_io_link{
 	struct smi_link_topology link_topology;
 	struct smi_p2p_capability p2p_capability;
+};
+
+struct smi_event_entry {
+	struct smi_vf_handle	fcn_id;
+	uint64_t		dev_id;
+	uint64_t		timestamp; //!< UTC microseconds
+	uint64_t		data;
+	uint32_t		category;
+	uint32_t		subcode;
+	uint32_t		level;
+	char			date[SMI_MAX_DATE_STRING_LENGTH]; //!< UTC date and time
+	char			message[SMI_EVENT_MSG_SIZE];
+	smi_device_handle_t	processor_handle;
+	uint64_t		reserved[36];
 };
 
 #ifndef __linux__

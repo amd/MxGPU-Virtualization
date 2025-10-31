@@ -87,7 +87,7 @@ enum psp_status mi300_psp_ring_start(struct amdgv_adapter *adapt)
 	for (i = 0; i < adapt->mcp.num_aid; i++) {
 		ret = amdgv_psp_wait_for_register(
 			adapt, SOC15_REG_OFFSET(MP0, i, regMP0_SMN_C2PMSG_64), 0x80000000,
-			0x80000000, false);
+			0x80000000, false, AMDGV_WAIT_FLAG_FORCE_YIELD);
 
 		if (ret != PSP_STATUS__SUCCESS) {
 			AMDGV_ERROR(
@@ -117,7 +117,7 @@ enum psp_status mi300_psp_ring_start(struct amdgv_adapter *adapt)
 	/* Wait for response flag (bit 31) in C2PMSG_64 */
 	ret = amdgv_psp_wait_for_register(
 		adapt, SOC15_REG_OFFSET(MP0, psp->idx, regMP0_SMN_C2PMSG_64), 0x80000000,
-		0x8000FFFF, false);
+		0x8000FFFF, false, AMDGV_WAIT_FLAG_FORCE_YIELD);
 
 	if (ret != PSP_STATUS__SUCCESS)
 		AMDGV_ERROR("PSP: Failed to start ring.\n");
@@ -147,7 +147,7 @@ mi300_psp_bootloader_load_component(struct amdgv_adapter *adapt, unsigned char *
 	/* wait for loading completed */
 	if (amdgv_psp_wait_for_register(
 		    adapt, SOC15_REG_OFFSET(MP0, psp->idx, regMP0_SMN_C2PMSG_35), 0x80000000,
-		    0x80000000, false) != PSP_STATUS__SUCCESS) {
+		    0x80000000, false, AMDGV_WAIT_FLAG_FORCE_YIELD) != PSP_STATUS__SUCCESS) {
 		return PSP_STATUS__ERROR_GENERIC;
 	}
 
@@ -669,7 +669,7 @@ enum psp_status mi300_psp_get_fw_attestation_database_addr(struct amdgv_adapter 
 		return ret;
 	}
 
-	if (!adapt->opt.skip_hw_init) {
+	if (!amdgv_in_live_update_seq()) {
 		// Get FW attestation GPU virtual address
 		ret = amdgv_psp_get_fw_attestation_db_add(adapt);
 
@@ -1030,14 +1030,14 @@ mi300_psp_copy_vf_chiplet_regs(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	struct psp_cmd_km psp_cmd = { 0 };
 	struct psp_gfx_resp psp_resp = { 0 };
 
-	psp_cmd.cmd_id = PSP_CMD_KMD_TYPE_SRIOV_COPY_VF_CHIPLET_REGS;
+	psp_cmd.cmd_id = PSP_CMD_KM_TYPE__SRIOV_COPY_VF_CHIPLET_REGS;
 	psp_cmd.cmd.sriov_copy_vf_chiplet_regs.source_vfid = idx_vf;
 
 	psp_resp.status = 0xdeadbeef;
 	ret = amdgv_psp_cmd_km_submit(adapt, &psp_cmd, &psp_resp);
 
 	if (ret != PSP_STATUS__SUCCESS || psp_resp.status != 0) {
-		AMDGV_INFO("PSP: failed to submit PSP_CMD_KMD_TYPE_SRIOV_COPY_VF_CHIPLET_REGS "
+		AMDGV_INFO("PSP: failed to submit PSP_CMD_KM_TYPE__SRIOV_COPY_VF_CHIPLET_REGS "
 			   "(gfx_cmd_resp=0x%08x)\n",
 			   psp_resp.status);
 		ret = PSP_STATUS__ERROR_GENERIC;
@@ -1549,7 +1549,7 @@ static int mi300_psp_load_psp_fw(struct amdgv_adapter *adapt)
 	 */
 	if (amdgv_psp_wait_for_register(
 		    adapt, SOC15_REG_OFFSET(MP0, adapt->psp.idx, regMP0_SMN_C2PMSG_35),
-		    0x80000000, 0x80000000, false) != PSP_STATUS__SUCCESS) {
+		    0x80000000, 0x80000000, false, AMDGV_WAIT_FLAG_FORCE_YIELD) != PSP_STATUS__SUCCESS) {
 		AMDGV_ERROR("TIMEOUT waiting for GFX mailbox to open\n");
 		return AMDGV_FAILURE;
 	}
@@ -1625,7 +1625,7 @@ static enum psp_status mi300_psp_wait_for_bootloader(struct amdgv_adapter *adapt
 	/* wait for PSP to indicate BL completion */
 	for (retry_loop = 0; retry_loop < PSP_WAIT_BOOTLOADER_RETRY; retry_loop++) {
 		ret = amdgv_psp_wait_for_register(adapt, reg_mmMP0_SMN_C2PMSG_33,
-						  0x80000000, 0xFFFFFFFF, false);
+						  0x80000000, 0xFFFFFFFF, false, AMDGV_WAIT_FLAG_FORCE_YIELD);
 		if (ret == PSP_STATUS__SUCCESS)
 			break;
 	}
@@ -1645,7 +1645,8 @@ enum psp_status mi300_psp_wait_for_bootloader_steady(struct amdgv_adapter *adapt
 	for (retry_loop = 0; retry_loop < PSP_WAIT_BOOTLOADER_RETRY; retry_loop++) {
 		ret = amdgv_psp_wait_for_register(
 			adapt, reg_mmMP0_SMN_C2PMSG_35,
-			0x80000000, 0xFFFFFFFF, false);
+			0x80000000, 0xFFFFFFFF, false,
+			AMDGV_WAIT_FLAG_FORCE_YIELD | AMDGV_WAIT_FLAG_NO_WARNING);
 		if (!ret)
 			break;
 	}

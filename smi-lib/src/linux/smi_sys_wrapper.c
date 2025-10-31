@@ -75,7 +75,7 @@ static void *amdsmi_lnx_poll_alloc(smi_event_handle_t *event_handle, uint32_t nu
 }
 
 
-static int amdsmi_lnx_poll(struct smi_event_set_s *event_set, amdsmi_event_entry_t *event,
+static int amdsmi_lnx_poll(struct smi_event_set_s *event_set, struct smi_event_entry *event,
 			    int64_t timeout)
 {
 	struct timeval stop, start;
@@ -108,7 +108,7 @@ static int amdsmi_lnx_poll(struct smi_event_set_s *event_set, amdsmi_event_entry
 
 	for (size_t i = 0; i < event_set->num_handles; ++i) {
 		if (poll_fds[i].revents & POLLIN) {
-			read_res = read(poll_fds[i].fd, event, sizeof(amdsmi_event_entry_t));
+			read_res = read(poll_fds[i].fd, event, sizeof(struct smi_event_entry));
 			if (read_res == 0) {
 				continue;
 			} else if (read_res < 0) {
@@ -259,7 +259,8 @@ system_wrapper *get_system_wrapper(void)
 		.smi_strncpy = amdsmi_strncpy,
 		.smi_sysconf = sysconf,
 		.fopen = fopen,
-		.fgets = fgets
+		.fgets = fgets,
+		.snprintf = snprintf
 	};
 
 	return &wrapper;

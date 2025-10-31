@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2017-2021 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -19,11 +19,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-SMI_FILES = smi_drv_handshake.o smi_drv_cmd.o smi_drv_core.o smi_drv_utils.o
+SMI_CORE_LOCAL = smi_drv_handshake.o smi_drv_cmd.o smi_drv_core.o smi_drv_utils.o
+SMI_LINUX_LOCAL = smi_drv.o smi_drv_event.o
 
-SMI_COMPILE_FILES  = $(addprefix smi-lib/drv/core/,$(SMI_FILES))
-SMI_COMPILE_FILES += smi-lib/drv/linux/smi_drv.o
-SMI_COMPILE_FILES += smi-lib/drv/linux/smi_drv_event.o
-
-SMI_COMPILE_FILES_USER_MODE  = $(addprefix smi-lib/drv/core/,$(SMI_FILES))
-SMI_COMPILE_FILES_USER_MODE += smi-lib/drv/linux/smi_drv_user_mode.o
+SMI_COMPILE_FILES = $(addprefix core/,$(SMI_CORE_LOCAL))
+SMI_COMPILE_FILES += $(addprefix linux/,$(SMI_LINUX_LOCAL))

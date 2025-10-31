@@ -149,7 +149,7 @@ int AmdSmiApiHost::amdsmi_get_fb_sharing_xgmi_command(Arguments arg, std::string
 	std::vector<std::string> bdf_list{};
 	amdsmi_socket_handle socket = NULL;
 
-	amdsmi_get_gpu_count(gpu_count);
+	amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
 
 	dst_handles = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*gpu_count);
 	if (dst_handles == NULL) {
@@ -373,7 +373,7 @@ void print_first_row(std::string &out,
 					 std::vector<std::string> bdf_vector)
 {
 	unsigned int gpu_count;
-	AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_gpu_count(gpu_count);
+	AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
 
 	out.append(string_format("%-10s%-13s%-9s%-14s%-10s", " ",
 							 "bdf","bit_rate","max_bandwidth","link_type"));
@@ -490,7 +490,7 @@ int AmdSmiApiHost::amdsmi_get_xgmi_metric_command(Arguments arg, std::string& ou
 	amdsmi_processor_handle *processors;
 	amdsmi_socket_handle socket = NULL;
 
-	amdsmi_get_gpu_count(gpu_count);
+	amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
 
 	gpu_number = arg.devices.size();
 
@@ -662,7 +662,7 @@ int AmdSmiApiHost::amdsmi_get_xgmi_link_status_command(Arguments arg, std::strin
 	const std::vector<std::shared_ptr<Device>>& devices = arg.devices.size() ? arg.devices : [&] {
 		std::vector<std::shared_ptr<Device>> all;
 		for (unsigned int i = 0; i < gpu_count; i++)
-			all.push_back(std::make_shared<Device>(i, DeviceType::GPU_INDEX));
+			all.push_back(std::make_shared<Device>(i, DeviceIdentifierType::INDEX, DeviceType::GPU));
 		return all;
 	}();
 
@@ -779,7 +779,7 @@ int AmdSmiApiHost::amdsmi_get_all_xgmi_command(Arguments arg, std::string& out)
 	nlohmann::ordered_json output = nlohmann::ordered_json::array();
 	nlohmann::ordered_json json;
 
-	amdsmi_get_gpu_count(gpu_count);
+	amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
 	ret = host_amdsmi_get_processor_handles(socket, &gpu_count, NULL);
 	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*gpu_count);
 	if (processors == NULL) {

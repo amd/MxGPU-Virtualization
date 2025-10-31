@@ -3096,6 +3096,37 @@ int amdgv_query_dirtybit_data(amdgv_dev_t dev,
 	return ret;
 }
 
+int amdgv_migration_query_abort(amdgv_dev_t dev, uint32_t idx_vf, bool *should_abort)
+{
+	struct amdgv_adapter *adapt;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	oss_mutex_lock(adapt->api_lock);
+	*should_abort = AMDGV_MIGRATION_SHOULD_ABORT(adapt, idx_vf);
+	oss_mutex_unlock(adapt->api_lock);
+
+	return 0;
+}
+
+int amdgv_migration_set_abort(amdgv_dev_t dev, uint32_t idx_vf)
+{
+	struct amdgv_adapter *adapt;
+	union amdgv_sched_event_data data = {0};
+
+	int ret = 0;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	oss_mutex_lock(adapt->api_lock);
+	ret = amdgv_sched_queue_event_and_wait_ex(adapt, idx_vf,
+						  AMDGV_EVENT_VF_MIGRATION_SET_ABORT,
+						  AMDGV_SCHED_BLOCK_ALL, data);
+	oss_mutex_unlock(adapt->api_lock);
+
+	return ret;
+}
+
 int amdgv_get_diag_data(amdgv_dev_t dev, uint32_t bdf, void *buf, uint32_t *size)
 {
 	int ret;
@@ -4239,5 +4270,22 @@ int AMDGV_API amdgv_unmap_sysmem(amdgv_dev_t dev,
 	mem = container_of(dma_mem_info, struct amdgv_memmgr_mem, sys_mem);
 	ret = amdgv_memmgr_free(mem);
 	oss_mutex_unlock(adapt->api_lock);
+	return ret;
+}
+
+int AMDGV_API amdgv_reset_vf_arbiters(amdgv_dev_t dev, uint32_t idx_vf)
+{
+	struct amdgv_adapter *adapt;
+	int ret = 0;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	oss_mutex_lock(adapt->api_lock);
+
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->reset_vf_arbiters)
+		ret = adapt->pp.pp_funcs->reset_vf_arbiters(adapt, idx_vf);
+
+	oss_mutex_unlock(adapt->api_lock);
+
 	return ret;
 }

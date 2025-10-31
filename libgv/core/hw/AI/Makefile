@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2017-2023 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -18,11 +18,8 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
-LIBGV_HW_AI_PATH = $(LIBGV_CORE_PATH)/hw/AI
-LIBGV_HW_MI200_PATH = $(LIBGV_CORE_PATH)/hw/AI/mi200
-LIBGV_HW_MI300_PATH = $(LIBGV_CORE_PATH)/hw/AI/mi300
 
-LIBGV_HW_AI_LOCAL = ai.o
+LIBGV_HW_AI_FILES = ai.o
 
 LIBGV_HW_MI200_LOCAL = mi200_gpuiov.o mi200_powerplay.o mi200_reset.o \
 	mi200_sched.o mi200_vbios.o mmhub_v1_7.o mi200_nbio.o mi200_reg_init.o \
@@ -45,8 +42,7 @@ LIBGV_HW_MI308_LOCAL = mi308_ucode.o mi308_mcp.o
 
 LIBGV_HW_MI350_LOCAL = mi350_ucode.o mi350_powerplay.o mi350_vcn.o
 
-LIBGV_HW_AI_FILES = $(addprefix core/hw/AI/,$(LIBGV_HW_AI_LOCAL))
-LIBGV_HW_MI200_FILES = $(addprefix core/hw/AI/mi200/,$(LIBGV_HW_MI200_LOCAL))
-LIBGV_HW_MI300_FILES = $(addprefix core/hw/AI/mi300/,$(LIBGV_HW_MI300_LOCAL))
-LIBGV_HW_MI300_FILES += $(addprefix core/hw/AI/mi300/mi308/,$(LIBGV_HW_MI308_LOCAL))
-LIBGV_HW_MI300_FILES += $(addprefix core/hw/AI/mi300/mi350/,$(LIBGV_HW_MI350_LOCAL))
+LIBGV_HW_AI_FILES += $(addprefix mi200/,$(LIBGV_HW_MI200_LOCAL))
+LIBGV_HW_AI_FILES += $(addprefix mi300/,$(LIBGV_HW_MI300_LOCAL))
+LIBGV_HW_AI_FILES += $(addprefix mi300/mi308/,$(LIBGV_HW_MI308_LOCAL))
+LIBGV_HW_AI_FILES += $(addprefix mi300/mi350/,$(LIBGV_HW_MI350_LOCAL))

@@ -190,7 +190,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestEventTimeout)
 	auto wrapper = get_system_wrapper();
 
 	struct pollfd fd = { MAGIC_FD, POLLIN, 0 };
-	amdsmi_event_entry_t event;
+	struct smi_event_entry event;
 	int64_t timeout = 10 * 1000; // 10ms
 	struct smi_event_set_s event_set;
 
@@ -211,7 +211,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestPollFailed)
 	auto wrapper = get_system_wrapper();
 
 	struct pollfd fd = { MAGIC_FD, POLLIN, 0 };
-	amdsmi_event_entry_t event;
+	struct smi_event_entry event;
 	int64_t timeout = 10 * 1000; // 10ms
 	struct smi_event_set_s event_set;
 
@@ -231,7 +231,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestPollWaitOne)
 	auto wrapper = get_system_wrapper();
 
 	struct pollfd fd = { MAGIC_FD, POLLIN, 0 };
-	amdsmi_event_entry_t event;
+	struct smi_event_entry event;
 	int64_t timeout = 1;
 	struct smi_event_set_s event_set;
 
@@ -253,7 +253,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestPollWaitForever)
 	auto wrapper = get_system_wrapper();
 
 	struct pollfd fd = { MAGIC_FD, POLLIN, 0 };
-	amdsmi_event_entry_t event;
+	struct smi_event_entry event;
 	int64_t timeout = -1; // forever
 	struct smi_event_set_s event_set;
 
@@ -275,7 +275,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestReadSucceeds)
 	auto wrapper = get_system_wrapper();
 
 	struct pollfd fd = { MAGIC_FD, POLLIN, 0 };
-	amdsmi_event_entry_t event;
+	struct smi_event_entry event;
 	int64_t timeout = -1; // forever
 	struct smi_event_set_s event_set;
 
@@ -297,7 +297,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestReadFailed)
 	auto wrapper = get_system_wrapper();
 
 	struct pollfd fd = { MAGIC_FD, POLLIN, 0 };
-	amdsmi_event_entry_t event;
+	struct smi_event_entry event;
 	int64_t timeout = -1; // forever
 	struct smi_event_set_s event_set;
 

@@ -23,14 +23,14 @@
 #include "smi_cli_help_command.h"
 #include "smi_cli_help_info.h"
 
-std::string AmdSmiHelpCommand::get_list_help_message(AmdSmiHelpInfo &info_helper)
+std::string AmdSmiHelpCommand::get_list_help_message(AmdSmiHelpInfo &info_helper, Arguments arg)
 {
-	std::string formatted_string = info_helper.get_list_help_message(true);
+	std::string formatted_string = info_helper.get_list_help_message(arg, true);
 	return formatted_string;
 }
-std::string AmdSmiHelpCommand::get_static_help_message(AmdSmiHelpInfo &info_helper)
+std::string AmdSmiHelpCommand::get_static_help_message(AmdSmiHelpInfo &info_helper, Arguments arg)
 {
-	std::string formatted_string = info_helper.get_static_help_message(true);
+	std::string formatted_string = info_helper.get_static_help_message(arg, true);
 	return formatted_string;
 }
 std::string AmdSmiHelpCommand::get_bad_page_help_message(AmdSmiHelpInfo &info_helper)
@@ -43,9 +43,9 @@ std::string AmdSmiHelpCommand::get_firmware_help_message(AmdSmiHelpInfo &info_he
 	std::string formatted_string = info_helper.get_firmware_help_message(true);
 	return formatted_string;
 }
-std::string AmdSmiHelpCommand::get_metric_help_message(AmdSmiHelpInfo &info_helper)
+std::string AmdSmiHelpCommand::get_metric_help_message(AmdSmiHelpInfo &info_helper, Arguments arg)
 {
-	std::string formatted_string = info_helper.get_metric_help_message(true);
+	std::string formatted_string = info_helper.get_metric_help_message(arg, true);
 	return formatted_string;
 }
 std::string AmdSmiHelpCommand::get_process_help_message(AmdSmiHelpInfo &info_helper)
@@ -116,34 +116,112 @@ std::string AmdSmiHelpCommand::get_ras_help_message(AmdSmiHelpInfo &info_helper)
 	return formatted_string;
 }
 
+std::string AmdSmiHelpCommand::get_node_help_message(AmdSmiHelpInfo &info_helper)
+{
+	std::string formatted_string = info_helper.get_node_help_message(true);
+	return formatted_string;
+}
+
 void AmdSmiHelpCommand::execute_command()
 {
-	AmdSmiHelpInfo info_helper;
+	AmdSmiHelpInfo info_helper(arg);
 	std::string out{};
 	if(arg.options.size() == 0) {
 		out = get_help_message(info_helper);
 	} else {
-		std::map<std::string, std::function<std::string(AmdSmiHelpInfo&)>> command_map{
-			{"list", std::bind(&AmdSmiHelpCommand::get_list_help_message, this, std::placeholders::_1)},
-			{"discovery", std::bind(&AmdSmiHelpCommand::get_list_help_message, this, std::placeholders::_1)},
-			{"static", std::bind(&AmdSmiHelpCommand::get_static_help_message, this, std::placeholders::_1)},
-			{"bad-pages", std::bind(&AmdSmiHelpCommand::get_bad_page_help_message, this, std::placeholders::_1)},
-			{"firmware", std::bind(&AmdSmiHelpCommand::get_firmware_help_message, this, std::placeholders::_1)},
-			{"ucode", std::bind(&AmdSmiHelpCommand::get_firmware_help_message, this, std::placeholders::_1)},
-			{"metric", std::bind(&AmdSmiHelpCommand::get_metric_help_message, this, std::placeholders::_1)},
-			{"process", std::bind(&AmdSmiHelpCommand::get_process_help_message, this, std::placeholders::_1)},
-			{"profile", std::bind(&AmdSmiHelpCommand::get_profile_help_message, this, std::placeholders::_1)},
-			{"version", std::bind(&AmdSmiHelpCommand::get_version_help_message, this, std::placeholders::_1)},
-			{"event", std::bind(&AmdSmiHelpCommand::get_event_help_message, this, std::placeholders::_1)},
-			{"xgmi", std::bind(&AmdSmiHelpCommand::get_xgmi_help_message, this, std::placeholders::_1)},
-			{"topology", std::bind(&AmdSmiHelpCommand::get_topology_help_message, this, std::placeholders::_1)},
-			{"partition", std::bind(&AmdSmiHelpCommand::get_partition_help_message, this, std::placeholders::_1)},
-			{"reset", std::bind(&AmdSmiHelpCommand::get_reset_help_message, this, std::placeholders::_1)},
-			{"set", std::bind(&AmdSmiHelpCommand::get_set_help_message, this, std::placeholders::_1)},
-			{"monitor", std::bind(&AmdSmiHelpCommand::get_monitor_help_message, this, std::placeholders::_1)},
-			{"ras", std::bind(&AmdSmiHelpCommand::get_ras_help_message, this, std::placeholders::_1)},
+		std::map<std::string, std::function<std::string(AmdSmiHelpInfo&, Arguments)>> command_map{
+			{"list", [this](AmdSmiHelpInfo& info, Arguments arg)
+				{
+					return get_list_help_message(info, arg);
+				}
+			},
+			{"discovery", [this](AmdSmiHelpInfo& info, Arguments arg)
+				{
+					return get_list_help_message(info, arg);
+				}
+			},
+			{"static", [this](AmdSmiHelpInfo& info, Arguments arg)
+				{
+					return get_static_help_message(info, arg);
+				}
+			},
+			{"bad-pages", [this](AmdSmiHelpInfo& info, Arguments arg)
+				{
+					return get_bad_page_help_message(info);
+				}
+			},
+			{"firmware", [this](AmdSmiHelpInfo& info, Arguments arg)
+				{
+					return get_firmware_help_message(info);
+				}
+			},
+			{"ucode", [this](AmdSmiHelpInfo& info, Arguments arg)
+				{
+					return get_firmware_help_message(info);
+				}
+			},
+			{"metric", [this](AmdSmiHelpInfo& info, Arguments arg)
+				{
+					return get_metric_help_message(info, arg);
+				}
+			},
+			{"process", [this](AmdSmiHelpInfo& info, Arguments arg)
+				{
+					return get_process_help_message(info);
+				}
+			},
+			{"profile", [this](AmdSmiHelpInfo& info, Arguments arg)
+				{
+					return get_profile_help_message(info);
+				}
+			},
+			{"version", [this](AmdSmiHelpInfo& info, Arguments arg)
+				{
+					return get_version_help_message(info);
+				}
+			},
+			{"event", [this](AmdSmiHelpInfo& info, Arguments arg)
+				{
+					return get_event_help_message(info);
+				}
+			},
+			{"xgmi", [this](AmdSmiHelpInfo& info, Arguments arg)
+				{
+					return get_xgmi_help_message(info);
+				}
+			},
+			{"topology", [this](AmdSmiHelpInfo& info, Arguments arg)
+				{
+					return get_topology_help_message(info);
+				}
+			},
+			{"partition", [this](AmdSmiHelpInfo& info, Arguments arg)
+				{
+					return get_partition_help_message(info);
+				}
+			},
+			{"reset", [this](AmdSmiHelpInfo& info, Arguments arg)
+				{
+					return get_reset_help_message(info);
+				}
+			},
+			{"set", [this](AmdSmiHelpInfo& info, Arguments arg)
+				{
+					return get_set_help_message(info);
+				}
+			},
+			{"monitor", [this](AmdSmiHelpInfo& info, Arguments arg)
+				{
+					return get_monitor_help_message(info);
+				}
+			},
+			{"ras", [this](AmdSmiHelpInfo& info, Arguments arg)
+				{
+					return get_ras_help_message(info);
+				}
+			},
 		};
-		out = command_map[arg.options[0]](info_helper);
+		out = command_map[arg.options[0]](info_helper, arg);
 	}
 
 	if (arg.is_file) {

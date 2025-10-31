@@ -6,10 +6,7 @@ include /usr/share/dpkg/pkg-info.mk
 	dh $@ --with dkms
 
 override_dh_install:
-	dh_install Makefile dkms gim_shim inc amd-vfio-pci usr/src/gim-$(DEB_VERSION)/
-	dh_install gim-coms-lib/* usr/src/gim-$(DEB_VERSION)/gim-coms-lib/
-	dh_install smi-lib/* usr/src/gim-$(DEB_VERSION)/smi-lib/
-	dh_install libgv/core libgv/inc libgv/Makefile usr/src/gim-$(DEB_VERSION)/libgv/
+	dh_install gim gim-coms-lib libgv smi-lib usr/src/gim-$(DEB_VERSION)/
 	echo $(DEB_VERSION) > ./debian/$(DEB_SOURCE)/usr/src/gim-$(DEB_VERSION)/VERSION
 
 override_dh_dkms:

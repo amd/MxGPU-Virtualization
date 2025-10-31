@@ -195,7 +195,7 @@ void AmdSmiSetCommand::set_command()
 	}
 
 	if ((std::find(arg.options.begin(), arg.options.end(), "xgmi-plpd") != arg.options.end()) ||
-	(std::find(arg.options.begin(), arg.options.end(), "P") != arg.options.end())) {
+	(std::find(arg.options.begin(), arg.options.end(), "pd") != arg.options.end())) {
 		for (unsigned int i = 0; i < arg.devices.size(); i++) {
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
 			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_plpd_command(gpu_bdf,

@@ -39,6 +39,7 @@
 #endif
 
 #include <limits.h>
+#include <vector>
 
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 		amdsmi_processor_handle *);
@@ -79,6 +80,16 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_METRICS)(amdsmi_processor_handle, uint3
 typedef amdsmi_status_t (*AMDSMI_GET_NUM_VF)(amdsmi_processor_handle, uint32_t *, uint32_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_CURR_ACCELERATOR_PARTITION)(amdsmi_processor_handle,
 		amdsmi_accelerator_partition_profile_t *, uint32_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_NIC_PORT_STATISTICS)(amdsmi_processor_handle, uint32_t,
+		uint32_t *, amdsmi_nic_stat_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_NIC_PORT_INFO)(amdsmi_processor_handle,
+		amdsmi_nic_port_info_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_NIC_VENDOR_STATISTICS)(amdsmi_processor_handle, uint32_t,
+		uint32_t *, amdsmi_nic_stat_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_NIC_RDMA_PORT_STATISTICS)(amdsmi_processor_handle, uint32_t,
+		uint32_t *, amdsmi_nic_stat_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_NIC_RDMA_DEV_INFO)(amdsmi_processor_handle,
+		amdsmi_nic_rdma_devices_info_t *);
 
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_GPU_ACTIVITY host_amdsmi_get_gpu_activity;
@@ -102,6 +113,11 @@ extern AMDSMI_GET_GPU_METRICS host_amdsmi_get_gpu_metrics;
 
 extern AMDSMI_GET_NUM_VF host_amdsmi_get_num_vf;
 extern AMDSMI_GET_CURR_ACCELERATOR_PARTITION host_amdsmi_get_partition_profile;
+extern AMDSMI_GET_NIC_PORT_STATISTICS host_amdsmi_get_nic_port_statistics;
+extern AMDSMI_GET_NIC_PORT_INFO host_amdsmi_get_nic_port_info;
+extern AMDSMI_GET_NIC_VENDOR_STATISTICS host_amdsmi_get_nic_vendor_statistics;
+extern AMDSMI_GET_NIC_RDMA_PORT_STATISTICS host_amdsmi_get_nic_rdma_port_statistics;
+extern AMDSMI_GET_NIC_RDMA_DEV_INFO host_amdsmi_get_nic_rdma_dev_info;
 
 constexpr int MAX_AID_NUM{4};
 
@@ -483,6 +499,66 @@ std::string host_fill_energy(Arguments arg, std::string value)
 	return out;
 }
 
+std::string host_fill_metric_nic_rdma_dev_info(Arguments arg, std::string value)
+{
+	std::string out{};
+
+	if (arg.output == json) {
+		auto rdma_devices_json = nlohmann::ordered_json::array();
+		auto rdma_ports_json = nlohmann::ordered_json::array();
+		nlohmann::ordered_json rdma_port_json = {
+			{"statistics", value.c_str()}
+		};
+		rdma_ports_json.push_back(rdma_port_json);
+
+		nlohmann::ordered_json rdma_device_json = {
+			{"rdma_dev", value.c_str()},
+			{"ports", rdma_ports_json}
+		};
+		rdma_devices_json.push_back(rdma_device_json);
+
+		out = rdma_devices_json.dump(4);
+	} else if (arg.output == csv) {
+
+	} else {
+		out += metricNicRdmaStatsHeaderTemplate;
+		out += string_format(metricNicRdmaDeviceTemplate, 0, value.c_str());
+		out += string_format("                    PORT_0:\n");
+		out += string_format("                        STATISTICS: %s\n", value.c_str());
+	}
+
+	return out;
+}
+
+std::string host_fill_nic_port_netdev_info(Arguments arg, std::string value)
+{
+	std::string out{};
+
+	if (arg.output == json) {
+		auto ports_json = nlohmann::ordered_json::array();
+		nlohmann::ordered_json port_json = {
+			{"netdev", value.c_str()},
+			{"vendor_statistics", value.c_str()},
+			{"statistics", value.c_str()}
+		};
+		ports_json.push_back(port_json);
+
+		std::string rdma_fill_output = host_fill_metric_nic_rdma_dev_info(arg, value);
+		nlohmann::ordered_json rdma_devices_array = nlohmann::ordered_json::parse(rdma_fill_output);
+
+		nlohmann::ordered_json result_json = {
+			{"ports", ports_json}
+		};
+		out = result_json.dump(4);
+	} else if (arg.output == human) {
+		out += metricNicPortStatsHeaderTemplate;
+		out += string_format(metricNicPortTemplate, 0, value.c_str());
+		out += string_format("            VENDOR_STATISTICS: %s\n", value.c_str());
+		out += string_format("            STATISTICS: %s\n", value.c_str());
+	}
+	return out;
+}
+
 int AmdSmiApiHost::amdsmi_get_usage_metric_command(uint64_t processor_bdf, Arguments arg,
 		std::string& out)
 {
@@ -768,7 +844,7 @@ int AmdSmiApiHost::amdsmi_get_power_metric_command(uint64_t processor_bdf, Argum
 
 	std::string is_power_management_enabled_str;
 	ret = host_amdsmi_is_gpu_power_management_enabled(processor,
-		  &is_power_management_enabled);
+			&is_power_management_enabled);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		is_power_management_enabled_str = "N/A";
 	} else
@@ -846,7 +922,8 @@ void fill_clk_info(std::map<std::string, std::string> &clk_map)
 	clk_map["deep_sleep"] = "N/A";
 }
 
-std::string format_clock_value(uint64_t value, uint64_t inval_value) {
+std::string format_clock_value(uint64_t value, uint64_t inval_value)
+{
 	return (value != inval_value) ? string_format("%lld", value) : "N/A";
 }
 
@@ -876,7 +953,9 @@ amdsmi_status_t get_clk_info(amdsmi_processor_handle processor, amdsmi_clk_info_
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-amdsmi_status_t get_metric_gfx_mem_clock(amdsmi_processor_handle processor, Arguments arg, std::string& out) {
+amdsmi_status_t get_metric_gfx_mem_clock(amdsmi_processor_handle processor, Arguments arg,
+		std::string& out)
+{
 	amdsmi_status_t ret;
 	amdsmi_clk_info_t gfx_clk{}, mem_clk{};
 	std::map<std::string, std::string> gfx_clk_str{}, mem_clk_str{};
@@ -977,10 +1056,12 @@ amdsmi_status_t get_metric_gfx_mem_clock(amdsmi_processor_handle processor, Argu
 		std::string mem_min_clk_unit = mem_clk_str["min_clk"] == "N/A" ? "" : "MHz";
 		std::string mem_max_clk_unit = mem_clk_str["max_clk"] == "N/A" ? "" : "MHz";
 
-		out = string_format(metricClockMeasureHostTemplate, gfx_clk_str["clk"].c_str(), gfx_clk_unit.c_str(),
+		out = string_format(metricClockMeasureHostTemplate, gfx_clk_str["clk"].c_str(),
+							gfx_clk_unit.c_str(),
 							gfx_clk_str["min_clk"].c_str(), gfx_min_clk_unit.c_str(), gfx_clk_str["max_clk"].c_str(),
 							gfx_max_clk_unit.c_str(), gfx_clk_str["clk_locked"].c_str(), gfx_clk_str["deep_sleep"].c_str(),
-							mem_clk_str["clk"].c_str(), mem_clk_unit.c_str(), mem_clk_str["min_clk"].c_str(), mem_min_clk_unit.c_str(),
+							mem_clk_str["clk"].c_str(), mem_clk_unit.c_str(), mem_clk_str["min_clk"].c_str(),
+							mem_min_clk_unit.c_str(),
 							mem_clk_str["max_clk"].c_str(), mem_max_clk_unit.c_str(), mem_clk_str["clk_locked"].c_str(),
 							mem_clk_str["deep_sleep"].c_str());
 	}
@@ -988,7 +1069,9 @@ amdsmi_status_t get_metric_gfx_mem_clock(amdsmi_processor_handle processor, Argu
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-amdsmi_status_t get_metric_vclk_clock(amdsmi_processor_handle processor, Arguments arg, std::string& out) {
+amdsmi_status_t get_metric_vclk_clock(amdsmi_processor_handle processor, Arguments arg,
+									  std::string& out)
+{
 	amdsmi_status_t ret;
 	amdsmi_clk_info_t vclk0_clk{}, vclk1_clk{};
 	std::map<std::string, std::string> vclk0_clk_str{}, vclk1_clk_str{};
@@ -1008,7 +1091,8 @@ amdsmi_status_t get_metric_vclk_clock(amdsmi_processor_handle processor, Argumen
 	if (arg.watch > -1) {
 		out = string_format("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",
 							vclk0_clk_str["clk"].c_str(), vclk0_clk_str["min_clk"].c_str(),
-							vclk0_clk_str["max_clk"].c_str(), vclk0_clk_str["clk_locked"].c_str(), vclk0_clk_str["deep_sleep"].c_str(),
+							vclk0_clk_str["max_clk"].c_str(), vclk0_clk_str["clk_locked"].c_str(),
+							vclk0_clk_str["deep_sleep"].c_str(),
 							vclk1_clk_str["clk"].c_str(), vclk1_clk_str["min_clk"].c_str(), vclk1_clk_str["max_clk"].c_str(),
 							vclk1_clk_str["clk_locked"].c_str(), vclk1_clk_str["deep_sleep"].c_str());
 	} else if (arg.output == json) {
@@ -1078,7 +1162,8 @@ amdsmi_status_t get_metric_vclk_clock(amdsmi_processor_handle processor, Argumen
 	} else if (arg.output == csv) {
 		out = string_format(",%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",
 							vclk0_clk_str["clk"].c_str(), vclk0_clk_str["min_clk"].c_str(),
-							vclk0_clk_str["max_clk"].c_str(), vclk0_clk_str["clk_locked"].c_str(), vclk0_clk_str["deep_sleep"].c_str(),
+							vclk0_clk_str["max_clk"].c_str(), vclk0_clk_str["clk_locked"].c_str(),
+							vclk0_clk_str["deep_sleep"].c_str(),
 							vclk1_clk_str["clk"].c_str(), vclk1_clk_str["min_clk"].c_str(), vclk1_clk_str["max_clk"].c_str(),
 							vclk1_clk_str["clk_locked"].c_str(), vclk1_clk_str["deep_sleep"].c_str());
 	} else {
@@ -1102,7 +1187,9 @@ amdsmi_status_t get_metric_vclk_clock(amdsmi_processor_handle processor, Argumen
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-amdsmi_status_t get_metric_dclk_clock(amdsmi_processor_handle processor, Arguments arg, std::string& out) {
+amdsmi_status_t get_metric_dclk_clock(amdsmi_processor_handle processor, Arguments arg,
+									  std::string& out)
+{
 	amdsmi_status_t ret;
 	amdsmi_clk_info_t  dclk0_clk{}, dclk1_clk{};
 	std::map<std::string, std::string> dclk0_clk_str{}, dclk1_clk_str{};
@@ -1122,9 +1209,11 @@ amdsmi_status_t get_metric_dclk_clock(amdsmi_processor_handle processor, Argumen
 	dclk1_clk_str["clk_locked"] = "N/A";
 	if (arg.watch > -1) {
 		out = string_format("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",  dclk0_clk_str["clk"].c_str(),
-							dclk0_clk_str["min_clk"].c_str(), dclk0_clk_str["max_clk"].c_str(), dclk0_clk_str["clk_locked"].c_str(),
+							dclk0_clk_str["min_clk"].c_str(), dclk0_clk_str["max_clk"].c_str(),
+							dclk0_clk_str["clk_locked"].c_str(),
 							dclk0_clk_str["deep_sleep"].c_str(), dclk1_clk_str["clk"].c_str(), dclk1_clk_str["min_clk"].c_str(),
-							dclk1_clk_str["max_clk"].c_str(), dclk1_clk_str["clk_locked"].c_str(), dclk1_clk_str["deep_sleep"].c_str());
+							dclk1_clk_str["max_clk"].c_str(), dclk1_clk_str["clk_locked"].c_str(),
+							dclk1_clk_str["deep_sleep"].c_str());
 	} else if (arg.output == json) {
 		nlohmann::ordered_json result{};
 		nlohmann::ordered_json dclk0_clk_json{};
@@ -1192,9 +1281,11 @@ amdsmi_status_t get_metric_dclk_clock(amdsmi_processor_handle processor, Argumen
 		out = result.dump(4);
 	} else if (arg.output == csv) {
 		out = string_format(",%s,%s,%s,%s,%s,%s,%s,%s,%s,%s", dclk0_clk_str["clk"].c_str(),
-							dclk0_clk_str["min_clk"].c_str(), dclk0_clk_str["max_clk"].c_str(), dclk0_clk_str["clk_locked"].c_str(),
+							dclk0_clk_str["min_clk"].c_str(), dclk0_clk_str["max_clk"].c_str(),
+							dclk0_clk_str["clk_locked"].c_str(),
 							dclk0_clk_str["deep_sleep"].c_str(), dclk1_clk_str["clk"].c_str(), dclk1_clk_str["min_clk"].c_str(),
-							dclk1_clk_str["max_clk"].c_str(), dclk1_clk_str["clk_locked"].c_str(), dclk1_clk_str["deep_sleep"].c_str());
+							dclk1_clk_str["max_clk"].c_str(), dclk1_clk_str["clk_locked"].c_str(),
+							dclk1_clk_str["deep_sleep"].c_str());
 	} else {
 		std::string dclk0_clk_unit = dclk0_clk_str["clk"] == "N/A" ? "" : "MHz";
 		std::string dclk0_min_clk_unit = dclk0_clk_str["min_clk"] == "N/A" ? "" : "MHz";
@@ -1272,15 +1363,16 @@ amdsmi_status_t get_metric_clock_data(uint64_t processor_bdf, Arguments arg, std
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-std::string get_clk_deep_sleep(amdsmi_processor_handle processor, amdsmi_clk_type_t clk_type) {
+std::string get_clk_deep_sleep(amdsmi_processor_handle processor, amdsmi_clk_type_t clk_type)
+{
 	std::string deep_sleep{"N/A"};
 	amdsmi_status_t ret;
 	amdsmi_clk_info_t clock_measure;
 
 	ret = host_amdsmi_get_clock_info(processor, clk_type, &clock_measure);
-    if (ret == AMDSMI_STATUS_SUCCESS) {
-			if (clock_measure.clk_deep_sleep != UINT8_MAX) {
-				deep_sleep = clock_measure.clk_deep_sleep ? "ENABLED" : "DISABLED";
+	if (ret == AMDSMI_STATUS_SUCCESS) {
+		if (clock_measure.clk_deep_sleep != UINT8_MAX) {
+			deep_sleep = clock_measure.clk_deep_sleep ? "ENABLED" : "DISABLED";
 		}
 	}
 	return deep_sleep;
@@ -1414,7 +1506,7 @@ amdsmi_status_t get_metric_ext_clock_data(uint64_t processor_bdf, Arguments arg,
 				gfx_min_clk_json["value"] = gfx_chiplet["min_clk"][i].val;
 			}
 			gfx_min_clk_json["unit"] = string_format("%llu",
-									gfx_chiplet["min_clk"][i].val) == "N/A" ? "N/A" :  "MHz";
+									   gfx_chiplet["min_clk"][i].val) == "N/A" ? "N/A" :  "MHz";
 			nlohmann::ordered_json gfx_max_clk_json{};
 			if (gfx_chiplet["max_clk"][i].val == UINT64_MAX) {
 				gfx_max_clk_json["value"] = "N/A";
@@ -1422,15 +1514,17 @@ amdsmi_status_t get_metric_ext_clock_data(uint64_t processor_bdf, Arguments arg,
 				gfx_max_clk_json["value"] = gfx_chiplet["max_clk"][i].val;
 			}
 			gfx_max_clk_json["unit"] = string_format("%llu",
-									gfx_chiplet["max_clk"][i].val) == "N/A" ? "N/A" :  "MHz";
+									   gfx_chiplet["max_clk"][i].val) == "N/A" ? "N/A" :  "MHz";
 
 			std::string clk_locked{"N/A"};
 			std::string clk_deep_sleep{"N/A"};
 			if (gfx_chiplet["clk_locked"].size()) {
-				clk_locked = gfx_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : gfx_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+				clk_locked = gfx_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" :
+							 gfx_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
 			}
 			if(gfx_chiplet["deep_sleep"].size()) {
-				clk_deep_sleep = gfx_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : gfx_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+				clk_deep_sleep = gfx_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" :
+								 gfx_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
 			} else {
 				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_GFX);
 			}
@@ -1456,21 +1550,24 @@ amdsmi_status_t get_metric_ext_clock_data(uint64_t processor_bdf, Arguments arg,
 				mem_min_clk_json["value"] = mem_chiplet["min_clk"][i].val;
 			}
 			mem_min_clk_json["unit"] = string_format("%llu",
-									mem_chiplet["min_clk"][i].val) == "N/A" ? "N/A" :  "MHz";
+									   mem_chiplet["min_clk"][i].val) == "N/A" ? "N/A" :  "MHz";
 			nlohmann::ordered_json mem_max_clk_json{};
 			if (mem_chiplet["max_clk"][i].val == UINT64_MAX) {
 				mem_max_clk_json["value"] = "N/A";
 			} else {
 				mem_max_clk_json["value"] = mem_chiplet["max_clk"][i].val;
 			}
-			mem_max_clk_json["unit"] = string_format("%llu", mem_chiplet["max_clk"][i].val) == "N/A" ? "N/A" :  "MHz";
+			mem_max_clk_json["unit"] = string_format("%llu",
+									   mem_chiplet["max_clk"][i].val) == "N/A" ? "N/A" :  "MHz";
 			std::string clk_locked{"N/A"};
 			if (mem_chiplet["clk_locked"].size()) {
-				clk_locked = mem_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : mem_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+				clk_locked = mem_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" :
+							 mem_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
 			}
 			std::string clk_deep_sleep{"N/A"};
 			if(mem_chiplet["deep_sleep"].size()) {
-				clk_deep_sleep = mem_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : mem_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+				clk_deep_sleep = mem_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" :
+								 mem_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
 			} else {
 				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_MEM);
 			}
@@ -1481,92 +1578,96 @@ amdsmi_status_t get_metric_ext_clock_data(uint64_t processor_bdf, Arguments arg,
 				{"clk_locked", "N/A" },
 				{"deep_sleep", clk_deep_sleep }});
 
-		for (int i = 0; i < vclk_cur_size; i++) {
-			nlohmann::ordered_json vclk_clk_json{};
-			if (vclk_chiplet["clk"][i].val == UINT64_MAX) {
-				vclk_clk_json["value"] = "N/A";
-			} else {
-				vclk_clk_json["value"] = vclk_chiplet["clk"][i].val;
+			for (int i = 0; i < vclk_cur_size; i++) {
+				nlohmann::ordered_json vclk_clk_json{};
+				if (vclk_chiplet["clk"][i].val == UINT64_MAX) {
+					vclk_clk_json["value"] = "N/A";
+				} else {
+					vclk_clk_json["value"] = vclk_chiplet["clk"][i].val;
+				}
+				vclk_clk_json["unit"] = string_format("%llu",
+													  vclk_chiplet["clk"][i].val) == "N/A" ? "N/A" : "MHz";
+				nlohmann::ordered_json vclk_min_clk_json{};
+				if (vclk_chiplet["min_clk"][i].val == UINT64_MAX) {
+					vclk_min_clk_json["value"] = "N/A";
+				} else {
+					vclk_min_clk_json["value"] = vclk_chiplet["min_clk"][i].val;
+				}
+				vclk_min_clk_json["unit"] = string_format("%llu",
+											vclk_chiplet["min_clk"][i].val) == "N/A" ? "N/A" : "MHz";
+				nlohmann::ordered_json vclk_max_clk_json{};
+				if (vclk_chiplet["max_clk"][i].val == UINT64_MAX) {
+					vclk_max_clk_json["value"] = "N/A";
+				} else {
+					vclk_max_clk_json["value"] = vclk_chiplet["max_clk"][i].val;
+				}
+				vclk_max_clk_json["unit"] = string_format("%llu",
+											vclk_chiplet["max_clk"][i].val) == "N/A" ? "N/A" : "MHz";
+				std::string clk_locked{"N/A"};
+				std::string clk_deep_sleep{"N/A"};
+				if (vclk_chiplet["clk_locked"].size()) {
+					clk_locked = vclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" :
+								 vclk_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+				}
+				if (vclk_chiplet["deep_sleep"].size()) {
+					clk_deep_sleep = vclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" :
+									 vclk_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+				} else {
+					clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_VCLK0);
+				}
+				result[string_format("vclk_%d", i)] = nlohmann::ordered_json::object( {
+					{"clk", vclk_clk_json },
+					{"min_clk", vclk_min_clk_json },
+					{"max_clk", vclk_max_clk_json },
+					{"clk_locked", "N/A" },
+					{"deep_sleep",  clk_deep_sleep }});
 			}
-			vclk_clk_json["unit"] = string_format("%llu",
-												vclk_chiplet["clk"][i].val) == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json vclk_min_clk_json{};
-			if (vclk_chiplet["min_clk"][i].val == UINT64_MAX) {
-				vclk_min_clk_json["value"] = "N/A";
-			} else {
-				vclk_min_clk_json["value"] = vclk_chiplet["min_clk"][i].val;
-			}
-			vclk_min_clk_json["unit"] = string_format("%llu",
-										vclk_chiplet["min_clk"][i].val) == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json vclk_max_clk_json{};
-			if (vclk_chiplet["max_clk"][i].val == UINT64_MAX) {
-				vclk_max_clk_json["value"] = "N/A";
-			} else {
-				vclk_max_clk_json["value"] = vclk_chiplet["max_clk"][i].val;
-			}
-			vclk_max_clk_json["unit"] = string_format("%llu",
-										vclk_chiplet["max_clk"][i].val) == "N/A" ? "N/A" : "MHz";
-			std::string clk_locked{"N/A"};
-			std::string clk_deep_sleep{"N/A"};
-			if (vclk_chiplet["clk_locked"].size()) {
-				clk_locked = vclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : vclk_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
-			}
-			if (vclk_chiplet["deep_sleep"].size()) {
-				clk_deep_sleep = vclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : vclk_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
-			} else {
-				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_VCLK0);
-			}
-			result[string_format("vclk_%d", i)] = nlohmann::ordered_json::object( {
-				{"clk", vclk_clk_json },
-				{"min_clk", vclk_min_clk_json },
-				{"max_clk", vclk_max_clk_json },
-				{"clk_locked", "N/A" },
-				{"deep_sleep",  clk_deep_sleep }});
-		}
 
-		for (int i = 0; i < dclk_cur_size; i++) {
-			nlohmann::ordered_json dclk_clk_json{};
-			if (dclk_chiplet["clk"][i].val == UINT64_MAX) {
-				dclk_clk_json["value"] = "N/A";
-			} else {
-				dclk_clk_json["value"] = dclk_chiplet["clk"][i].val;
-			}
-			dclk_clk_json["unit"] = string_format("%llu",
-												dclk_chiplet["clk"][i].val) == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json dclk_min_clk_json{};
-			if (dclk_chiplet["min_clk"][i].val == UINT64_MAX) {
-				dclk_min_clk_json["value"] = "N/A";
-			} else {
-				dclk_min_clk_json["value"] = dclk_chiplet["min_clk"][i].val;
-			}
-			dclk_min_clk_json["unit"] = string_format("%llu",
-										dclk_chiplet["min_clk"][i].val) == "N/A" ? "N/A" : "MHz";
-			nlohmann::ordered_json dclk_max_clk_json{};
-			if (dclk_chiplet["max_clk"][i].val == UINT64_MAX) {
-				dclk_max_clk_json["value"] = "N/A";
-			} else {
-				dclk_max_clk_json["value"] = dclk_chiplet["max_clk"][i].val;
-			}
-			dclk_max_clk_json["unit"] = string_format("%llu",
-										dclk_chiplet["max_clk"][i].val) == "N/A" ? "N/A" : "MHz";
-			std::string clk_locked{"N/A"};
-			std::string clk_deep_sleep{"N/A"};
-			if (dclk_chiplet["clk_locked"].size()) {
-				clk_locked = dclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : dclk_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
-			}
-			if (dclk_chiplet["deep_sleep"].size()) {
-				clk_deep_sleep = dclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : dclk_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
-			} else {
-				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_DCLK0);
-			}
-			result[string_format("dclk_%d",i)] = nlohmann::ordered_json::object( {
-				{"clk", dclk_clk_json },
-				{"min_clk", dclk_min_clk_json },
-				{"max_clk", dclk_max_clk_json },
-				{"clk_locked", "N/A" },
-				{"deep_sleep", clk_deep_sleep }});
+			for (int i = 0; i < dclk_cur_size; i++) {
+				nlohmann::ordered_json dclk_clk_json{};
+				if (dclk_chiplet["clk"][i].val == UINT64_MAX) {
+					dclk_clk_json["value"] = "N/A";
+				} else {
+					dclk_clk_json["value"] = dclk_chiplet["clk"][i].val;
+				}
+				dclk_clk_json["unit"] = string_format("%llu",
+													  dclk_chiplet["clk"][i].val) == "N/A" ? "N/A" : "MHz";
+				nlohmann::ordered_json dclk_min_clk_json{};
+				if (dclk_chiplet["min_clk"][i].val == UINT64_MAX) {
+					dclk_min_clk_json["value"] = "N/A";
+				} else {
+					dclk_min_clk_json["value"] = dclk_chiplet["min_clk"][i].val;
+				}
+				dclk_min_clk_json["unit"] = string_format("%llu",
+											dclk_chiplet["min_clk"][i].val) == "N/A" ? "N/A" : "MHz";
+				nlohmann::ordered_json dclk_max_clk_json{};
+				if (dclk_chiplet["max_clk"][i].val == UINT64_MAX) {
+					dclk_max_clk_json["value"] = "N/A";
+				} else {
+					dclk_max_clk_json["value"] = dclk_chiplet["max_clk"][i].val;
+				}
+				dclk_max_clk_json["unit"] = string_format("%llu",
+											dclk_chiplet["max_clk"][i].val) == "N/A" ? "N/A" : "MHz";
+				std::string clk_locked{"N/A"};
+				std::string clk_deep_sleep{"N/A"};
+				if (dclk_chiplet["clk_locked"].size()) {
+					clk_locked = dclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" :
+								 dclk_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+				}
+				if (dclk_chiplet["deep_sleep"].size()) {
+					clk_deep_sleep = dclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" :
+									 dclk_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+				} else {
+					clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_DCLK0);
+				}
+				result[string_format("dclk_%d",i)] = nlohmann::ordered_json::object( {
+					{"clk", dclk_clk_json },
+					{"min_clk", dclk_min_clk_json },
+					{"max_clk", dclk_max_clk_json },
+					{"clk_locked", "N/A" },
+					{"deep_sleep", clk_deep_sleep }});
 
-			out = result.dump(4);
+				out = result.dump(4);
 			}
 		}
 	} else if (arg.output == csv) {
@@ -1576,20 +1677,22 @@ amdsmi_status_t get_metric_ext_clock_data(uint64_t processor_bdf, Arguments arg,
 			std::string clk_locked{"N/A"};
 			std::string clk_deep_sleep{"N/A"};
 			if (gfx_chiplet["clk_locked"].size()) {
-				clk_locked = gfx_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : gfx_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+				clk_locked = gfx_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" :
+							 gfx_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
 			}
 			if(gfx_chiplet["deep_sleep"].size()) {
-				clk_deep_sleep = gfx_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : gfx_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+				clk_deep_sleep = gfx_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" :
+								 gfx_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
 			} else {
 				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_GFX);
 			}
 			value_rows.push_back(string_format(",%d,%s,%s,%s,%s,%s", i,
-											gfx_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-												gfx_chiplet["clk"][i].val).c_str(),
-											gfx_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-												gfx_chiplet["min_clk"][i].val).c_str(),
-											gfx_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-												gfx_chiplet["max_clk"][i].val).c_str(), clk_locked.c_str(), clk_deep_sleep.c_str()));
+											   gfx_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+													   gfx_chiplet["clk"][i].val).c_str(),
+											   gfx_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+													   gfx_chiplet["min_clk"][i].val).c_str(),
+											   gfx_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+													   gfx_chiplet["max_clk"][i].val).c_str(), clk_locked.c_str(), clk_deep_sleep.c_str()));
 		}
 		output_rows.push_back(value_rows);
 		value_rows.clear();
@@ -1597,19 +1700,22 @@ amdsmi_status_t get_metric_ext_clock_data(uint64_t processor_bdf, Arguments arg,
 			std::string clk_locked{"N/A"};
 			std::string clk_deep_sleep{"N/A"};
 			if (mem_chiplet["clk_locked"].size()) {
-				clk_locked = mem_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : mem_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+				clk_locked = mem_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" :
+							 mem_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
 			}
 			if(mem_chiplet["deep_sleep"].size()) {
-				clk_deep_sleep = mem_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : mem_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+				clk_deep_sleep = mem_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" :
+								 mem_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
 			} else {
 				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_MEM);
 			}
 			value_rows.push_back(string_format(",%d,%s,%s,%s,%s,%s", i,
-											mem_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu", mem_chiplet["clk"][i].val).c_str(),
-											mem_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-												mem_chiplet["min_clk"][i].val).c_str(),
-											mem_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-												mem_chiplet["max_clk"][i].val).c_str(), "N/A", clk_deep_sleep.c_str()));
+											   mem_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+													   mem_chiplet["clk"][i].val).c_str(),
+											   mem_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+													   mem_chiplet["min_clk"][i].val).c_str(),
+											   mem_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+													   mem_chiplet["max_clk"][i].val).c_str(), "N/A", clk_deep_sleep.c_str()));
 		}
 		output_rows.push_back(value_rows);
 		value_rows.clear();
@@ -1618,20 +1724,22 @@ amdsmi_status_t get_metric_ext_clock_data(uint64_t processor_bdf, Arguments arg,
 			std::string clk_locked{"N/A"};
 			std::string clk_deep_sleep{"N/A"};
 			if (vclk_chiplet["clk_locked"].size()) {
-				clk_locked = vclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : vclk_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+				clk_locked = vclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" :
+							 vclk_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
 			}
 			if(vclk_chiplet["deep_sleep"].size()) {
-				clk_deep_sleep = vclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : vclk_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+				clk_deep_sleep = vclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" :
+								 vclk_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
 			} else {
 				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_VCLK0);
 			}
 			value_rows.push_back(string_format(",%d,%s,%s,%s,%s,%s", i,
-											vclk_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-												vclk_chiplet["clk"][i].val).c_str(),
-											vclk_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-												vclk_chiplet["min_clk"][i].val).c_str(),
-											vclk_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-												vclk_chiplet["max_clk"][i].val).c_str(), "N/A", clk_deep_sleep.c_str()));
+											   vclk_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+													   vclk_chiplet["clk"][i].val).c_str(),
+											   vclk_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+													   vclk_chiplet["min_clk"][i].val).c_str(),
+											   vclk_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+													   vclk_chiplet["max_clk"][i].val).c_str(), "N/A", clk_deep_sleep.c_str()));
 		}
 		output_rows.push_back(value_rows);
 		value_rows.clear();
@@ -1640,20 +1748,22 @@ amdsmi_status_t get_metric_ext_clock_data(uint64_t processor_bdf, Arguments arg,
 			std::string clk_locked{"N/A"};
 			std::string clk_deep_sleep{"N/A"};
 			if (dclk_chiplet["clk_locked"].size()) {
-				clk_locked = dclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : dclk_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+				clk_locked = dclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" :
+							 dclk_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
 			}
 			if(dclk_chiplet["deep_sleep"].size()) {
-				clk_deep_sleep = dclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : dclk_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+				clk_deep_sleep = dclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" :
+								 dclk_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
 			} else {
 				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_DCLK0);
 			}
 			value_rows.push_back(string_format(",%d,%s,%s,%s,%s,%s", i,
-											dclk_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-												dclk_chiplet["clk"][i].val).c_str(),
-											dclk_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-												dclk_chiplet["min_clk"][i].val).c_str(),
-											dclk_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
-												dclk_chiplet["max_clk"][i].val).c_str(), "N/A", clk_deep_sleep.c_str()));
+											   dclk_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+													   dclk_chiplet["clk"][i].val).c_str(),
+											   dclk_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+													   dclk_chiplet["min_clk"][i].val).c_str(),
+											   dclk_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu",
+													   dclk_chiplet["max_clk"][i].val).c_str(), "N/A", clk_deep_sleep.c_str()));
 		}
 		output_rows.push_back(value_rows);
 		value_rows.clear();
@@ -1666,79 +1776,87 @@ amdsmi_status_t get_metric_ext_clock_data(uint64_t processor_bdf, Arguments arg,
 			std::string clk_locked{"N/A"};
 			std::string clk_deep_sleep{"N/A"};
 			if (gfx_chiplet["clk_locked"].size()) {
-				clk_locked = gfx_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : gfx_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+				clk_locked = gfx_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" :
+							 gfx_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
 			}
 			if(gfx_chiplet["deep_sleep"].size()) {
-				clk_deep_sleep = gfx_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : gfx_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+				clk_deep_sleep = gfx_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" :
+								 gfx_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
 			} else {
 				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_GFX);
 			}
 			out.append(string_format(metricChipletGfxClockMeasureHostTemplate, i,
-									gfx_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-										gfx_chiplet["clk"][i].val).c_str(),
-									gfx_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-										gfx_chiplet["min_clk"][i].val).c_str(),
-									gfx_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-										gfx_chiplet["max_clk"][i].val).c_str(), clk_locked.c_str(), clk_deep_sleep.c_str()));
+									 gfx_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+											 gfx_chiplet["clk"][i].val).c_str(),
+									 gfx_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+											 gfx_chiplet["min_clk"][i].val).c_str(),
+									 gfx_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+											 gfx_chiplet["max_clk"][i].val).c_str(), clk_locked.c_str(), clk_deep_sleep.c_str()));
 		}
 		for (int i = 0; i < mem_cur_size; i++) {
 			std::string clk_locked{"N/A"};
 			std::string clk_deep_sleep{"N/A"};
 			if (mem_chiplet["clk_locked"].size()) {
-				clk_locked = mem_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : mem_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+				clk_locked = mem_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" :
+							 mem_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
 			}
 			if(mem_chiplet["deep_sleep"].size()) {
-				clk_deep_sleep = mem_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : mem_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+				clk_deep_sleep = mem_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" :
+								 mem_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
 			} else {
 				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_MEM);
 			}
 			out.append(string_format(metricChipletMemClockMeasureHostTemplate, i,
-									mem_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-										mem_chiplet["clk"][i].val).c_str(),
-									mem_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-										mem_chiplet["min_clk"][i].val).c_str(),
-									mem_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-										mem_chiplet["max_clk"][i].val).c_str(), "N/A", clk_deep_sleep.c_str()));
+									 mem_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+											 mem_chiplet["clk"][i].val).c_str(),
+									 mem_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+											 mem_chiplet["min_clk"][i].val).c_str(),
+									 mem_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+											 mem_chiplet["max_clk"][i].val).c_str(), "N/A", clk_deep_sleep.c_str()));
 		}
 
 		for (int i = 0; i < vclk_cur_size; i++) {
 			std::string clk_locked{"N/A"};
 			std::string clk_deep_sleep{"N/A"};
 			if (vclk_chiplet["clk_locked"].size()) {
-				clk_locked = vclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : vclk_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+				clk_locked = vclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" :
+							 vclk_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
 			}
 			if(vclk_chiplet["deep_sleep"].size()) {
-				clk_deep_sleep = vclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : vclk_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+				clk_deep_sleep = vclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" :
+								 vclk_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
 			} else {
 				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_VCLK0);
 			}
 			out.append(string_format(metricChipletVCLKClockMeasureHostTemplate, i,
-									vclk_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-										vclk_chiplet["clk"][i].val).c_str(),
-									vclk_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-										vclk_chiplet["min_clk"][i].val).c_str(),
-									vclk_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-										vclk_chiplet["max_clk"][i].val).c_str(), "N/A", clk_deep_sleep.c_str()));
+									 vclk_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+											 vclk_chiplet["clk"][i].val).c_str(),
+									 vclk_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+											 vclk_chiplet["min_clk"][i].val).c_str(),
+									 vclk_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+											 vclk_chiplet["max_clk"][i].val).c_str(), "N/A", clk_deep_sleep.c_str()));
 		}
 
 		for (int i = 0; i < dclk_cur_size; i++) {
 			std::string clk_locked{"N/A"};
 			std::string clk_deep_sleep{"N/A"};
 			if (dclk_chiplet["clk_locked"].size()) {
-				clk_locked = dclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" : dclk_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
+				clk_locked = dclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A" :
+							 dclk_chiplet["clk_locked"][i].val ? "ENABLED" : "DISABLED";
 			}
 			if(dclk_chiplet["deep_sleep"].size()) {
-				clk_deep_sleep = dclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" : dclk_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
+				clk_deep_sleep = dclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A" :
+								 dclk_chiplet["deep_sleep"][i].val ? "DISABLED" : "ENABLED";
 			} else {
 				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_DCLK0);
 			}
 			out.append(string_format(metricChipletDCLKClockMeasureHostTemplate, i,
-									dclk_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-										dclk_chiplet["clk"][i].val).c_str(),
-									dclk_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-										dclk_chiplet["min_clk"][i].val).c_str(),
-									dclk_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
-										dclk_chiplet["max_clk"][i].val).c_str(), "N/A", clk_deep_sleep.c_str()));
+									 dclk_chiplet["clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+											 dclk_chiplet["clk"][i].val).c_str(),
+									 dclk_chiplet["min_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+											 dclk_chiplet["min_clk"][i].val).c_str(),
+									 dclk_chiplet["max_clk"][i].val == UINT64_MAX ? "N/A" : string_format("%llu MHz",
+											 dclk_chiplet["max_clk"][i].val).c_str(), "N/A", clk_deep_sleep.c_str()));
 		}
 	}
 	return AMDSMI_STATUS_SUCCESS;
@@ -1995,7 +2113,7 @@ int AmdSmiApiHost::amdsmi_get_ecc_block_metric_command(uint64_t processor_bdf, A
 				std::string block_uncorrectable_errors{string_format("%lld", block_error_count.uncorrectable_count)};
 				std::string block_deferred_errors = (block_error_count.deferred_count == -1
 													 || block_error_count.deferred_count == UINT64_MAX) ? "N/A" : string_format("%lld",
-														 block_error_count.deferred_count);
+															 block_error_count.deferred_count);
 
 				if (arg.watch > -1) {
 				} else if (arg.output == json) {
@@ -2080,9 +2198,9 @@ int AmdSmiApiHost::amdsmi_get_pcie_metric_command(uint64_t processor_bdf, Argume
 											string_format(
 													"%lld", pcie_info.pcie_metric.pcie_l0_to_recovery_count);
 	std::string pcie_replay_roll_over_count = (pcie_info.pcie_metric.pcie_replay_roll_over_count ==
-		UINT64_MAX || pcie_info.pcie_metric.pcie_replay_roll_over_count == UINT_MAX) ? "N/A" :
-		string_format(
-			"%lld", pcie_info.pcie_metric.pcie_replay_roll_over_count);
+			UINT64_MAX || pcie_info.pcie_metric.pcie_replay_roll_over_count == UINT_MAX) ? "N/A" :
+			string_format(
+				"%lld", pcie_info.pcie_metric.pcie_replay_roll_over_count);
 
 	std::string pcie_nak_sent_count = (pcie_info.pcie_metric.pcie_nak_sent_count == UINT64_MAX
 									   || pcie_info.pcie_metric.pcie_nak_sent_count == UINT_MAX) ?
@@ -2208,7 +2326,7 @@ int AmdSmiApiHost::amdsmi_get_schedule_metric_command(std::string device, Argume
 		string_format("%lu", flr_count);
 	std::string shutdown_time_str = (last_shutdown_start == "--N/A--") ? "--N/A--" :
 									string_format("%lu",
-										shutdown_time);
+											shutdown_time);
 	std::string reset_time_str = (last_reset_start == "--N/A--") ? "--N/A--" : string_format("%lu",
 								 reset_time);
 
@@ -2392,7 +2510,8 @@ int AmdSmiApiHost::amdsmi_get_guard_metric_command(std::string device, Arguments
 	return ret;
 }
 
-int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bdf, uint64_t vf_index, Arguments arg,
+int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bdf,
+		uint64_t vf_index, Arguments arg,
 		std::string& out)
 {
 	amdsmi_status_t ret;
@@ -2426,17 +2545,21 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 	// Calculate AID assignment per VF
 	auto get_aids_for_vf = [&](uint32_t vf_idx, uint32_t num_vf) -> std::vector<int> {
 		std::vector<int> aids;
-		if (num_vf == 1) {
+		if (num_vf == 1)
+		{
 			// All AIDs for the only VF
 			for (int i = 0; i < (int)max_aid_num; ++i) aids.push_back(i);
-		} else if (num_vf == 2) {
+		} else if (num_vf == 2)
+		{
 			// Each VF gets two AIDs
 			aids.push_back(vf_idx * 2);
 			aids.push_back(vf_idx * 2 + 1);
-		} else if (num_vf == 4) {
+		} else if (num_vf == 4)
+		{
 			// Each VF gets one AID
 			aids.push_back(vf_idx);
-		} else if (num_vf == 8) {
+		} else if (num_vf == 8)
+		{
 			// Each two VFs share an AID
 			aids.push_back(vf_idx / 2);
 		}
@@ -2445,6 +2568,8 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 
 	std::vector<amdsmi_metric_t> vcn_chiplet_per_partition{};
 	std::vector<amdsmi_metric_t> jpeg_chiplet_per_partition{};
+	std::vector<amdsmi_metric_t> temp_aid_chiplet_per_partition{};
+	std::vector<amdsmi_metric_t> temp_hbm_metrics_chiplet_per_partition{};
 	std::vector<amdsmi_metric_t> vclk_chiplet_per_partition{};
 	std::vector<amdsmi_metric_t> vclk_min_chiplet_per_partition{};
 	std::vector<amdsmi_metric_t> vclk_max_chiplet_per_partition{};
@@ -2459,12 +2584,13 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 	std::vector<amdsmi_metric_t> gfx_max_chiplet_per_partition{};
 	std::vector<amdsmi_metric_t> gfx_locked_chiplet_per_partition{};
 	std::vector<amdsmi_metric_t> gfx_usage_chiplet_per_partition{};
+	std::vector<amdsmi_metric_t> temp_xcd_chiplet_per_partition{};
 
 	amdsmi_metric_t *metrics;
 	uint32_t metric_size = AMDSMI_MAX_NUM_METRICS;
 
 	ret = host_amdsmi_get_gpu_metrics(processor, &metric_size, NULL);
-		if (ret != AMDSMI_STATUS_SUCCESS) {
+	if (ret != AMDSMI_STATUS_SUCCESS) {
 		return ret;
 	}
 
@@ -2481,13 +2607,19 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 
 	for (uint32_t i = 0; i < metric_size; i++) {
 		if (!(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC) &&
-			(metrics[i].flags & AMDSMI_METRIC_TYPE_CHIPLET)) {
+				(metrics[i].flags & AMDSMI_METRIC_TYPE_CHIPLET)) {
 			switch (metrics[i].name) {
 				case AMDSMI_METRIC_NAME_USAGE_VCN:
 					vcn_chiplet_per_partition.push_back(metrics[i]);
 					break;
 				case AMDSMI_METRIC_NAME_USAGE_JPEG:
 					jpeg_chiplet_per_partition.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_TEMP_AID:
+					temp_aid_chiplet_per_partition.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_TEMP_MEM_CURR:
+					temp_hbm_metrics_chiplet_per_partition.push_back(metrics[i]);
 					break;
 				case AMDSMI_METRIC_NAME_CLK_VCLK:
 					vclk_chiplet_per_partition.push_back(metrics[i]);
@@ -2530,6 +2662,9 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 					break;
 				case AMDSMI_METRIC_NAME_USAGE_GFX:
 					gfx_usage_chiplet_per_partition.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_TEMP_XCD:
+					temp_xcd_chiplet_per_partition.push_back(metrics[i]);
 					break;
 				default:
 					break;
@@ -2624,8 +2759,8 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 					// VCN
 					for (const auto& vcn : vcn_chiplet_per_partition) {
 						if (vcn.res_group == AMDSMI_METRIC_RES_GROUP_AID &&
-							vcn.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_ENGINE &&
-							vcn.res_instance == aid_index) {
+								vcn.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_ENGINE &&
+								vcn.res_instance == aid_index) {
 							aid_json["vcn_activity"] = {
 								{"value", vcn.val},
 								{"unit", vcn.unit == AMDSMI_METRIC_UNIT_PERCENT ? "%" : ""}
@@ -2636,8 +2771,8 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 					nlohmann::ordered_json jpeg_array = nlohmann::ordered_json::array();
 					for (const auto& jpeg : jpeg_chiplet_per_partition) {
 						if (jpeg.res_group == AMDSMI_METRIC_RES_GROUP_AID &&
-							jpeg.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_ENGINE &&
-							jpeg.res_instance == aid_index) {
+								jpeg.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_ENGINE &&
+								jpeg.res_instance == aid_index) {
 							jpeg_array.push_back({
 								{"value", jpeg.val},
 								{"unit", jpeg.unit == AMDSMI_METRIC_UNIT_PERCENT ? "%" : ""}
@@ -2646,6 +2781,46 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 					}
 					if (!jpeg_array.empty()) {
 						aid_json["jpeg_activity"] = jpeg_array;
+					}
+					// Temperature
+					if (temp_aid_chiplet_per_partition.size() != 0) {
+						for (const auto& temp : temp_aid_chiplet_per_partition) {
+							if (temp.res_group == AMDSMI_METRIC_RES_GROUP_AID &&
+								temp.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_NA &&
+								temp.res_instance == aid_index) {
+								aid_json["temperature"] = {
+									{"value", temp.val},
+									{"unit", temp.unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
+								};
+							}
+						}
+					} else {
+						aid_json["temperature"] = {
+							{"value", "N/A"},
+							{"unit", ""}
+						};
+					}
+					// HBM Temp metrics (can be multiple)
+					nlohmann::ordered_json hbm_temp_metrics_array = nlohmann::ordered_json::array();
+					if (temp_hbm_metrics_chiplet_per_partition.size() != 0) {
+						for (const auto& temp : temp_hbm_metrics_chiplet_per_partition) {
+							if (temp.res_group == AMDSMI_METRIC_RES_GROUP_AID &&
+								temp.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_HBM &&
+								temp.res_instance == aid_index) {
+								hbm_temp_metrics_array.push_back({
+									{"value", temp.val},
+									{"unit", temp.unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
+								});
+							}
+						}
+					} else {
+						hbm_temp_metrics_array.push_back({
+							{"value", "N/A"},
+							{"unit", ""}
+						});
+					}
+					if (!hbm_temp_metrics_array.empty()) {
+						aid_json["hbm_temperature"] = hbm_temp_metrics_array;
 					}
 					result_json[string_format("aid_%d", aid_index)] = aid_json;
 				}
@@ -2661,7 +2836,8 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 
 					// GFX clocks
 					for (const auto& gfx : gfx_chiplet_per_partition) {
-						if (gfx.res_group == AMDSMI_METRIC_RES_GROUP_XCP && gfx.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx.res_instance == xcp_id) {
+						if (gfx.res_group == AMDSMI_METRIC_RES_GROUP_XCP
+								&& gfx.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx.res_instance == xcp_id) {
 							nlohmann::ordered_json gfx_json;
 							gfx_json["value"] = gfx.val;
 							gfx_json["unit"] = gfx.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
@@ -2669,7 +2845,8 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						}
 					}
 					for (const auto& gfx_min : gfx_min_chiplet_per_partition) {
-						if (gfx_min.res_group == AMDSMI_METRIC_RES_GROUP_XCP && gfx_min.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx_min.res_instance == xcp_id) {
+						if (gfx_min.res_group == AMDSMI_METRIC_RES_GROUP_XCP
+								&& gfx_min.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx_min.res_instance == xcp_id) {
 							nlohmann::ordered_json gfx_min_json;
 							gfx_min_json["value"] = gfx_min.val;
 							gfx_min_json["unit"] = gfx_min.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
@@ -2677,7 +2854,8 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						}
 					}
 					for (const auto& gfx_max : gfx_max_chiplet_per_partition) {
-						if (gfx_max.res_group == AMDSMI_METRIC_RES_GROUP_XCP && gfx_max.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx_max.res_instance == xcp_id) {
+						if (gfx_max.res_group == AMDSMI_METRIC_RES_GROUP_XCP
+								&& gfx_max.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx_max.res_instance == xcp_id) {
 							nlohmann::ordered_json gfx_max_json;
 							gfx_max_json["value"] = gfx_max.val;
 							gfx_max_json["unit"] = gfx_max.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
@@ -2685,20 +2863,37 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						}
 					}
 					for (const auto& gfx_locked : gfx_locked_chiplet_per_partition) {
-						if (gfx_locked.res_group == AMDSMI_METRIC_RES_GROUP_XCP && gfx_locked.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx_locked.res_instance == xcp_id) {
-							std::string locked_val = gfx_locked.val == UINT64_MAX ? "N/A" : (gfx_locked.val ? "ENABLED" : "DISABLED");
+						if (gfx_locked.res_group == AMDSMI_METRIC_RES_GROUP_XCP
+								&& gfx_locked.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx_locked.res_instance == xcp_id) {
+							std::string locked_val = gfx_locked.val == UINT64_MAX ? "N/A" : (gfx_locked.val ? "ENABLED" :
+													 "DISABLED");
 							xcp_json["gfx_locked"].push_back(locked_val);
 						}
 					}
 					for (const auto& gfx_usage : gfx_usage_chiplet_per_partition) {
-						if (gfx_usage.res_group == AMDSMI_METRIC_RES_GROUP_XCP && gfx_usage.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx_usage.res_instance == xcp_id) {
+						if (gfx_usage.res_group == AMDSMI_METRIC_RES_GROUP_XCP
+								&& gfx_usage.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx_usage.res_instance == xcp_id) {
 							nlohmann::ordered_json gfx_usage_json;
 							gfx_usage_json["value"] = gfx_usage.val;
 							gfx_usage_json["unit"] = gfx_usage.unit == AMDSMI_METRIC_UNIT_PERCENT ? "%" : "";
 							xcp_json["gfx_usage"].push_back(gfx_usage_json);
 						}
 					}
-
+					if (temp_xcd_chiplet_per_partition.size() != 0) {
+						for (const auto& temp : temp_xcd_chiplet_per_partition) {
+							if (temp.res_group == AMDSMI_METRIC_RES_GROUP_XCP && temp.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && temp.res_instance == xcp_id) {
+								nlohmann::ordered_json temp_json;
+								temp_json["value"] = temp.val;
+								temp_json["unit"] = temp.unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+								xcp_json["temperature"].push_back(temp_json);
+							}
+						}
+					} else {
+						nlohmann::ordered_json temp_json;
+						temp_json["value"] = "N/A";
+						temp_json["unit"] = "";
+						xcp_json["temperature"].push_back(temp_json);
+					}
 					if (!xcp_json.empty()) {
 						result_json[string_format("xcp_%d", xcp_id)] = xcp_json;
 					}
@@ -2727,14 +2922,16 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						if (vclk_min.res_group == AMDSMI_METRIC_RES_GROUP_AID && vclk_min.res_instance == aid_index) {
 							std::string vclk_min_unit = vclk_min.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
 							std::string vclk_min_chiplet_val = string_format("%d", vclk_min.val);
-							out += string_format(VCLKMinPerPartitionTemplate, vclk_min_chiplet_val.c_str(), vclk_min_unit.c_str());
+							out += string_format(VCLKMinPerPartitionTemplate, vclk_min_chiplet_val.c_str(),
+												 vclk_min_unit.c_str());
 						}
 					}
 					for (const auto& vclk_max : vclk_max_chiplet_per_partition) {
 						if (vclk_max.res_group == AMDSMI_METRIC_RES_GROUP_AID && vclk_max.res_instance == aid_index) {
 							std::string vclk_max_unit = vclk_max.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
 							std::string vclk_max_chiplet_val = string_format("%d", vclk_max.val);
-							out += string_format(VCLKMaxPerPartitionTemplate, vclk_max_chiplet_val.c_str(), vclk_max_unit.c_str());
+							out += string_format(VCLKMaxPerPartitionTemplate, vclk_max_chiplet_val.c_str(),
+												 vclk_max_unit.c_str());
 						}
 					}
 					for (const auto& dclk : dclk_chiplet_per_partition) {
@@ -2748,14 +2945,16 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						if (dclk_min.res_group == AMDSMI_METRIC_RES_GROUP_AID && dclk_min.res_instance == aid_index) {
 							std::string dclk_min_unit = dclk_min.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
 							std::string dclk_min_chiplet_val = string_format("%d", dclk_min.val);
-							out += string_format(DCLKMinPerPartitionTemplate, dclk_min_chiplet_val.c_str(), dclk_min_unit.c_str());
+							out += string_format(DCLKMinPerPartitionTemplate, dclk_min_chiplet_val.c_str(),
+												 dclk_min_unit.c_str());
 						}
 					}
 					for (const auto& dclk_max : dclk_max_chiplet_per_partition) {
 						if (dclk_max.res_group == AMDSMI_METRIC_RES_GROUP_AID && dclk_max.res_instance == aid_index) {
 							std::string dclk_max_unit = dclk_max.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
 							std::string dclk_max_chiplet_val = string_format("%d", dclk_max.val);
-							out += string_format(DCLKMaxPerPartitionTemplate, dclk_max_chiplet_val.c_str(), dclk_max_unit.c_str());
+							out += string_format(DCLKMaxPerPartitionTemplate, dclk_max_chiplet_val.c_str(),
+												 dclk_max_unit.c_str());
 						}
 					}
 					for (const auto& sclk : sclk_chiplet_per_partition) {
@@ -2769,21 +2968,23 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						if (sclk_min.res_group == AMDSMI_METRIC_RES_GROUP_AID && sclk_min.res_instance == aid_index) {
 							std::string sclk_min_unit = sclk_min.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
 							std::string sclk_min_chiplet_val = string_format("%d", sclk_min.val);
-							out += string_format(SCLKMinPerPartitionTemplate, sclk_min_chiplet_val.c_str(), sclk_min_unit.c_str());
+							out += string_format(SCLKMinPerPartitionTemplate, sclk_min_chiplet_val.c_str(),
+												 sclk_min_unit.c_str());
 						}
 					}
 					for (const auto& sclk_max : sclk_max_chiplet_per_partition) {
 						if (sclk_max.res_group == AMDSMI_METRIC_RES_GROUP_AID && sclk_max.res_instance == aid_index) {
 							std::string sclk_max_unit = sclk_max.unit == AMDSMI_METRIC_UNIT_MHZ ? "MHz" : "";
 							std::string sclk_max_chiplet_val = string_format("%d", sclk_max.val);
-							out += string_format(SCLKMaxPerPartitionTemplate, sclk_max_chiplet_val.c_str(), sclk_max_unit.c_str());
+							out += string_format(SCLKMaxPerPartitionTemplate, sclk_max_chiplet_val.c_str(),
+												 sclk_max_unit.c_str());
 						}
 					}
 
 					for (const auto& vcn : vcn_chiplet_per_partition) {
 						if (vcn.res_group == AMDSMI_METRIC_RES_GROUP_AID &&
-							vcn.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_ENGINE &&
-							vcn.res_instance == aid_index) {
+								vcn.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_ENGINE &&
+								vcn.res_instance == aid_index) {
 							std::string vcn_unit = vcn.unit == AMDSMI_METRIC_UNIT_PERCENT ? "%" : "";
 							std::string vcn_chiplet_val = string_format("%d", vcn.val);
 							out += string_format(activityPerPartitionTemplate, vcn_chiplet_val.c_str(), vcn_unit.c_str());
@@ -2796,8 +2997,8 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 					std::vector<const amdsmi_metric_t*> matching_jpegs;
 					for (const auto& jpeg : jpeg_chiplet_per_partition) {
 						if (jpeg.res_group == AMDSMI_METRIC_RES_GROUP_AID &&
-							jpeg.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_ENGINE &&
-							jpeg.res_instance == aid_index) {
+								jpeg.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_ENGINE &&
+								jpeg.res_instance == aid_index) {
 							matching_jpegs.push_back(&jpeg);
 						}
 					}
@@ -2805,10 +3006,51 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						const auto& jpeg = *matching_jpegs[i];
 						std::string jpeg_unit = jpeg.unit == AMDSMI_METRIC_UNIT_PERCENT ? "%" : "";
 						std::string jpeg_chiplet_val = string_format("%d", jpeg.val);
-						out += string_format(metricJpegUsagePerPartitionTemplate, jpeg_chiplet_val.c_str(), jpeg_unit.c_str());
+						out += string_format(metricJpegUsagePerPartitionTemplate, jpeg_chiplet_val.c_str(),
+											 jpeg_unit.c_str());
 						if (i + 1 < matching_jpegs.size()) {
 							out += commaTemplate;
 						}
+					}
+					out += metricJpegUsageFooterTemplate;
+
+					if (temp_aid_chiplet_per_partition.size() != 0 ) {
+						for (const auto& temp_aid : temp_aid_chiplet_per_partition) {
+							if (temp_aid.res_group == AMDSMI_METRIC_RES_GROUP_AID &&
+								temp_aid.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_NA &&
+								temp_aid.res_instance == aid_index) {
+								std::string temp_aid_unit = temp_aid.unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+								std::string temp_aid_chiplet_val = string_format("%d", temp_aid.val);
+								out += string_format(TemperaturePerPartitionTemplate, temp_aid_chiplet_val.c_str(), temp_aid_unit.c_str());
+							}
+						}
+					} else {
+						out += string_format(TemperaturePerPartitionTemplate, "N/A", "");
+					}
+
+					out += metricHbmTempPerPartitionHeaderTemplate;
+
+					// Collect all matching HBM_TEMP metrics for this aid_index
+					std::vector<const amdsmi_metric_t*> matching_hbm_temp_metrics;
+					for (const auto& hbm_temp_metrics : temp_hbm_metrics_chiplet_per_partition) {
+						if (hbm_temp_metrics.res_group == AMDSMI_METRIC_RES_GROUP_AID &&
+							hbm_temp_metrics.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_HBM &&
+							hbm_temp_metrics.res_instance == aid_index) {
+							matching_hbm_temp_metrics.push_back(&hbm_temp_metrics);
+						}
+					}
+					if (matching_hbm_temp_metrics.size() != 0) {
+						for (size_t i = 0; i < matching_hbm_temp_metrics.size(); i++) {
+							const auto& hbm_temp_metrics = *matching_hbm_temp_metrics[i];
+							std::string hbm_temp_aid_unit = hbm_temp_metrics.unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+							std::string hbm_temp_aid_chiplet_val = string_format("%d", hbm_temp_metrics.val);
+							out += string_format(metricHbmTempPerPartitionTemplate, hbm_temp_aid_chiplet_val.c_str(), hbm_temp_aid_unit.c_str());
+							if (i + 1 < matching_hbm_temp_metrics.size()) {
+								out += commaTemplate;
+							}
+						}
+					} else {
+						out += string_format(metricHbmTempPerPartitionTemplate, "N/A", "");
 					}
 					out += metricJpegUsageFooterTemplate;
 				}
@@ -2829,7 +3071,8 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 					// GFX (can be multiple per XCP)
 					std::vector<const amdsmi_metric_t*> matching_gfx;
 					for (const auto& gfx : gfx_chiplet_per_partition) {
-						if (gfx.res_group == AMDSMI_METRIC_RES_GROUP_XCP && gfx.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx.res_instance == xcp_id) {
+						if (gfx.res_group == AMDSMI_METRIC_RES_GROUP_XCP
+								&& gfx.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx.res_instance == xcp_id) {
 							matching_gfx.push_back(&gfx);
 						}
 					}
@@ -2849,7 +3092,8 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 					// GFX_MIN (can be multiple per XCP)
 					std::vector<const amdsmi_metric_t*> matching_gfx_min;
 					for (const auto& gfx_min : gfx_min_chiplet_per_partition) {
-						if (gfx_min.res_group == AMDSMI_METRIC_RES_GROUP_XCP && gfx_min.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx_min.res_instance == xcp_id) {
+						if (gfx_min.res_group == AMDSMI_METRIC_RES_GROUP_XCP
+								&& gfx_min.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx_min.res_instance == xcp_id) {
 							matching_gfx_min.push_back(&gfx_min);
 						}
 					}
@@ -2868,7 +3112,8 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 					// GFX_MAX (can be multiple per XCP)
 					std::vector<const amdsmi_metric_t*> matching_gfx_max;
 					for (const auto& gfx_max : gfx_max_chiplet_per_partition) {
-						if (gfx_max.res_group == AMDSMI_METRIC_RES_GROUP_XCP && gfx_max.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC &&  gfx_max.res_instance == xcp_id) {
+						if (gfx_max.res_group == AMDSMI_METRIC_RES_GROUP_XCP
+								&& gfx_max.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC &&  gfx_max.res_instance == xcp_id) {
 							matching_gfx_max.push_back(&gfx_max);
 						}
 					}
@@ -2887,13 +3132,15 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 					// GFX_LOCKED (can be multiple per XCP)
 					std::vector<const amdsmi_metric_t*> matching_gfx_locked;
 					for (const auto& gfx_locked : gfx_locked_chiplet_per_partition) {
-						if (gfx_locked.res_group == AMDSMI_METRIC_RES_GROUP_XCP && gfx_locked.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx_locked.res_instance == xcp_id) {
+						if (gfx_locked.res_group == AMDSMI_METRIC_RES_GROUP_XCP
+								&& gfx_locked.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx_locked.res_instance == xcp_id) {
 							matching_gfx_locked.push_back(&gfx_locked);
 						}
 					}
 					for (size_t i = 0; i < matching_gfx_locked.size(); i++) {
 						const auto& gfx_locked = *matching_gfx_locked[i];
-						std::string gfx_locked_val = gfx_locked.val == UINT64_MAX ? "N/A" : (gfx_locked.val ? "ENABLED" : "DISABLED");
+						std::string gfx_locked_val = gfx_locked.val == UINT64_MAX ? "N/A" : (gfx_locked.val ? "ENABLED" :
+													 "DISABLED");
 						out += string_format(GFXLockedPerPartitionTemplate, gfx_locked_val.c_str());
 						if (i + 1 < matching_gfx_locked.size()) {
 							out += commaTemplate;
@@ -2906,7 +3153,8 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 					// GFX Usage (can be multiple per XCP)
 					std::vector<const amdsmi_metric_t*> matching_gfx_usage;
 					for (const auto& gfx_usage : gfx_usage_chiplet_per_partition) {
-						if (gfx_usage.res_group == AMDSMI_METRIC_RES_GROUP_XCP && gfx_usage.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx_usage.res_instance == xcp_id) {
+						if (gfx_usage.res_group == AMDSMI_METRIC_RES_GROUP_XCP
+								&& gfx_usage.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && gfx_usage.res_instance == xcp_id) {
 							matching_gfx_usage.push_back(&gfx_usage);
 						}
 					}
@@ -2918,6 +3166,29 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						if (i + 1 < matching_gfx_usage.size()) {
 							out += commaTemplate;
 						}
+					}
+					out += metricJpegUsageFooterTemplate;
+					out += metricTempPerPartitionHeaderTemplate;
+
+					// temperature (can be multiple per XCP)
+					std::vector<const amdsmi_metric_t*> matching_temp_xcd;
+					for (const auto& temp : temp_xcd_chiplet_per_partition) {
+						if (temp.res_group == AMDSMI_METRIC_RES_GROUP_XCP && temp.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC && temp.res_instance == xcp_id) {
+							matching_temp_xcd.push_back(&temp);
+						}
+					}
+					if (matching_temp_xcd.size() != 0) {
+						for (size_t i = 0; i < matching_temp_xcd.size(); i++) {
+							const auto& temp = *matching_temp_xcd[i];
+							std::string temp_unit = temp.unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+							std::string temp_val = string_format("%d", temp.val);
+							out += string_format(TempXcdPerPartitionTemplate, temp_val.c_str(), temp_unit.c_str());
+							if (i + 1 < matching_temp_xcd.size()) {
+								out += commaTemplate;
+							}
+						}
+					} else {
+						out += string_format(TempXcdPerPartitionTemplate, "N/A", "");
 					}
 					out += metricJpegUsageFooterTemplate;
 				}
@@ -2955,7 +3226,9 @@ int AmdSmiApiHost::amdsmi_get_guest_data_metric_command(std::string device, Argu
 	std::string driver_version_str = reinterpret_cast<char *>(guest_data.driver_version);
 
 	// Check for non-printable characters
-	if (std::any_of(driver_version_str.begin(), driver_version_str.end(), [](char c) { return !std::isprint(c); })) {
+	if (std::any_of(driver_version_str.begin(), driver_version_str.end(), [](char c) {
+	return !std::isprint(c);
+	})) {
 		driver_version_str = "N/A";
 	}
 
@@ -3087,5 +3360,1155 @@ int AmdSmiApiHost::amdsmi_get_energy_metric_command(uint64_t processor_bdf, Argu
 	}
 
 	free(metrics);
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+
+
+int AmdSmiApiHost::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments arg,
+		std::string &formatted_string)
+{
+	int ret;
+	amdsmi_processor_handle processor;
+	amdsmi_metric_t *metrics;
+	uint32_t metric_size = AMDSMI_MAX_NUM_METRICS;
+	bool is_supported = false;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	std::vector<amdsmi_metric_t> node_temp_retimer{};
+	std::vector<amdsmi_metric_t> node_temp_ibc_temp{};
+	std::vector<amdsmi_metric_t> node_temp_ibc_2_temp{};
+	std::vector<amdsmi_metric_t> node_temp_vdd18_vr_temp{};
+	std::vector<amdsmi_metric_t> node_temp_04_hbm_b_vr_temp{};
+	std::vector<amdsmi_metric_t> node_temp_04_hbm_d_vr_temp{};
+	std::vector<amdsmi_metric_t> vr_temp_vddcr_vdd0{};
+	std::vector<amdsmi_metric_t> vr_temp_vddcr_vdd1{};
+	std::vector<amdsmi_metric_t> vr_temp_vddcr_vdd2{};
+	std::vector<amdsmi_metric_t> vr_temp_vddcr_vdd3{};
+	std::vector<amdsmi_metric_t> vr_temp_vddcr_soc_a{};
+	std::vector<amdsmi_metric_t> vr_temp_vddcr_soc_c{};
+	std::vector<amdsmi_metric_t> vr_temp_vddcr_socio_a{};
+	std::vector<amdsmi_metric_t> vr_temp_vddcr_socio_c{};
+	std::vector<amdsmi_metric_t> vr_temp_vdd_085_hbm{};
+	std::vector<amdsmi_metric_t> vr_temp_vddcr_11_hbm_b{};
+	std::vector<amdsmi_metric_t> vr_temp_vddcr_11_hbm_d{};
+	std::vector<amdsmi_metric_t> vr_temp_vdd_usr{};
+	std::vector<amdsmi_metric_t> vr_temp_vddio_11_e32{};
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		return ret;
+	}
+
+	ret = host_amdsmi_get_gpu_metrics(processor, &metric_size, NULL);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		return ret;
+	}
+	metrics = (amdsmi_metric_t *)malloc(sizeof(amdsmi_metric_t)*metric_size);
+	if (metrics == NULL) {
+		throw SmiToolNotEnoughMemException();
+	}
+	ret = host_amdsmi_get_gpu_metrics(processor, &metric_size, &metrics[0]);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		return ret;
+	}
+
+	for (uint32_t i = 0; i < metric_size; i++) {
+		if (!(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC) &&
+			(metrics[i].flags & AMDSMI_METRIC_TYPE_INST)) {
+			switch (metrics[i].name) {
+				case AMDSMI_METRIC_NAME_NODE_TEMP_RETIMER:
+					node_temp_retimer.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_NODE_TEMP_IBC_TEMP:
+					node_temp_ibc_temp.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_NODE_TEMP_IBC_2_TEMP:
+					node_temp_ibc_2_temp.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_NODE_TEMP_VDD18_VR_TEMP:
+					node_temp_vdd18_vr_temp.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_NODE_TEMP_04_HBM_B_VR_TEMP:
+					node_temp_04_hbm_b_vr_temp.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_NODE_TEMP_04_HBM_D_VR_TEMP:
+					node_temp_04_hbm_d_vr_temp.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_VR_TEMP_VDDCR_VDD0:
+					vr_temp_vddcr_vdd0.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_VR_TEMP_VDDCR_VDD1:
+					vr_temp_vddcr_vdd1.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_VR_TEMP_VDDCR_VDD2:
+					vr_temp_vddcr_vdd2.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_VR_TEMP_VDDCR_VDD3:
+					vr_temp_vddcr_vdd3.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_VR_TEMP_VDDCR_SOC_A:
+					vr_temp_vddcr_soc_a.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_VR_TEMP_VDDCR_SOC_C:
+					vr_temp_vddcr_soc_c.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_VR_TEMP_VDDCR_SOCIO_A:
+					vr_temp_vddcr_socio_a.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_VR_TEMP_VDDCR_SOCIO_C:
+					vr_temp_vddcr_socio_c.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_VR_TEMP_VDD_085_HBM:
+					vr_temp_vdd_085_hbm.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_VR_TEMP_VDDCR_11_HBM_B:
+					vr_temp_vddcr_11_hbm_b.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_VR_TEMP_VDDCR_11_HBM_D:
+					vr_temp_vddcr_11_hbm_d.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_VR_TEMP_VDD_USR:
+					vr_temp_vdd_usr.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_VR_TEMP_VDDIO_11_E32:
+					vr_temp_vddio_11_e32.push_back(metrics[i]);
+					break;
+				default:
+					break;
+			}
+		}
+	}
+
+	free(metrics);
+	if (arg.watch > -1) {
+	} else if (arg.output == json) {
+		nlohmann::ordered_json gpuboard_json;
+
+		if (node_temp_retimer.size() == 0) {
+			gpuboard_json["node_temp_retimer"] = {
+				{"value", "N/A"},
+				{"unit", ""}
+			};
+		} else {
+			for (uint32_t i = 0; i < node_temp_retimer.size(); i++) {
+				if (node_temp_retimer[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && node_temp_retimer[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					gpuboard_json["node_temp_retimer"] = {
+						{"value", node_temp_retimer[i].val},
+						{"unit", node_temp_retimer[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
+					};
+				}
+			}
+		}
+
+		if (node_temp_ibc_temp.size() == 0) {
+			gpuboard_json["node_temp_ibc_temp"] = {
+				{"value", "N/A"},
+				{"unit", ""}
+			};
+		} else {
+			for (uint32_t i = 0; i < node_temp_ibc_temp.size(); i++) {
+				if (node_temp_ibc_temp[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && node_temp_ibc_temp[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					gpuboard_json["node_temp_ibc_temp"] = {
+						{"value", node_temp_ibc_temp[i].val},
+						{"unit", node_temp_ibc_temp[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
+					};
+				}
+			}
+		}
+
+		if (node_temp_ibc_2_temp.size() == 0) {
+			gpuboard_json["node_temp_ibc_2_temp"] = {
+				{"value", "N/A"},
+				{"unit", ""}
+			};
+		} else {
+			for (uint32_t i = 0; i < node_temp_ibc_2_temp.size(); i++) {
+				if (node_temp_ibc_2_temp[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && node_temp_ibc_2_temp[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					gpuboard_json["node_temp_ibc_2_temp"] = {
+						{"value", node_temp_ibc_2_temp[i].val},
+						{"unit", node_temp_ibc_2_temp[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
+					};
+				}
+			}
+		}
+
+		if (node_temp_vdd18_vr_temp.size() == 0) {
+			gpuboard_json["node_temp_vdd18_vr_temp"] = {
+				{"value", "N/A"},
+				{"unit", ""}
+			};
+		} else {
+			for (uint32_t i = 0; i < node_temp_vdd18_vr_temp.size(); i++) {
+				if (node_temp_vdd18_vr_temp[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && node_temp_vdd18_vr_temp[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					gpuboard_json["node_temp_vdd18_vr_temp"] = {
+						{"value", node_temp_vdd18_vr_temp[i].val},
+						{"unit", node_temp_vdd18_vr_temp[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
+					};
+				}
+			}
+		}
+
+		if (node_temp_04_hbm_b_vr_temp.size() == 0) {
+			gpuboard_json["node_temp_04_hbm_b_vr_temp"] = {
+				{"value", "N/A"},
+				{"unit", ""}
+			};
+		} else {
+			for (uint32_t i = 0; i < node_temp_04_hbm_b_vr_temp.size(); i++) {
+				if (node_temp_04_hbm_b_vr_temp[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && node_temp_04_hbm_b_vr_temp[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					gpuboard_json["node_temp_04_hbm_b_vr_temp"] = {
+						{"value", node_temp_04_hbm_b_vr_temp[i].val},
+						{"unit", node_temp_04_hbm_b_vr_temp[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
+					};
+				}
+			}
+		}
+
+		if (node_temp_04_hbm_d_vr_temp.size() == 0) {
+			gpuboard_json["node_temp_04_hbm_d_vr_temp"] = {
+				{"value", "N/A"},
+				{"unit", ""}
+			};
+		} else {
+			for (uint32_t i = 0; i < node_temp_04_hbm_d_vr_temp.size(); i++) {
+				if (node_temp_04_hbm_d_vr_temp[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && node_temp_04_hbm_d_vr_temp[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					gpuboard_json["node_temp_04_hbm_d_vr_temp"] = {
+						{"value", node_temp_04_hbm_d_vr_temp[i].val},
+						{"unit", node_temp_04_hbm_d_vr_temp[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
+					};
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_vdd0.size() == 0) {
+			gpuboard_json["vr_temp_vddcr_vdd0"] = {
+				{"value", "N/A"},
+				{"unit", ""}
+			};
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_vdd0.size(); i++) {
+				if (vr_temp_vddcr_vdd0[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_vdd0[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					gpuboard_json["vr_temp_vddcr_vdd0"] = {
+						{"value", vr_temp_vddcr_vdd0[i].val},
+						{"unit", vr_temp_vddcr_vdd0[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
+					};
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_vdd1.size() == 0) {
+			gpuboard_json["vr_temp_vddcr_vdd1"] = {
+				{"value", "N/A"},
+				{"unit", ""}
+			};
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_vdd1.size(); i++) {
+				if (vr_temp_vddcr_vdd1[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_vdd1[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					gpuboard_json["vr_temp_vddcr_vdd1"] = {
+						{"value", vr_temp_vddcr_vdd1[i].val},
+						{"unit", vr_temp_vddcr_vdd1[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
+					};
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_vdd2.size() == 0) {
+			gpuboard_json["vr_temp_vddcr_vdd2"] = {
+				{"value", "N/A"},
+				{"unit", ""}
+			};
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_vdd2.size(); i++) {
+				if (vr_temp_vddcr_vdd2[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_vdd2[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					gpuboard_json["vr_temp_vddcr_vdd2"] = {
+						{"value", vr_temp_vddcr_vdd2[i].val},
+						{"unit", vr_temp_vddcr_vdd2[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
+					};
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_vdd3.size() == 0) {
+			gpuboard_json["vr_temp_vddcr_vdd3"] = {
+				{"value", "N/A"},
+				{"unit", ""}
+			};
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_vdd3.size(); i++) {
+				if (vr_temp_vddcr_vdd3[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_vdd3[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					gpuboard_json["vr_temp_vddcr_vdd3"] = {
+						{"value", vr_temp_vddcr_vdd3[i].val},
+						{"unit", vr_temp_vddcr_vdd3[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
+					};
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_soc_a.size() == 0) {
+			gpuboard_json["vr_temp_vddcr_soc_a"] = {
+				{"value", "N/A"},
+				{"unit", ""}
+			};
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_soc_a.size(); i++) {
+				if (vr_temp_vddcr_soc_a[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_soc_a[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					gpuboard_json["vr_temp_vddcr_soc_a"] = {
+						{"value", vr_temp_vddcr_soc_a[i].val},
+						{"unit", vr_temp_vddcr_soc_a[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
+					};
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_soc_c.size() == 0) {
+			gpuboard_json["vr_temp_vddcr_soc_c"] = {
+				{"value", "N/A"},
+				{"unit", ""}
+			};
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_soc_c.size(); i++) {
+				if (vr_temp_vddcr_soc_c[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_soc_c[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					gpuboard_json["vr_temp_vddcr_soc_c"] = {
+						{"value", vr_temp_vddcr_soc_c[i].val},
+						{"unit", vr_temp_vddcr_soc_c[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
+					};
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_socio_a.size() == 0) {
+			gpuboard_json["vr_temp_vddcr_socio_a"] = {
+				{"value", "N/A"},
+				{"unit", ""}
+			};
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_socio_a.size(); i++) {
+				if (vr_temp_vddcr_socio_a[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_socio_a[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					gpuboard_json["vr_temp_vddcr_socio_a"] = {
+						{"value", vr_temp_vddcr_socio_a[i].val},
+						{"unit", vr_temp_vddcr_socio_a[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
+					};
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_socio_c.size() == 0) {
+			gpuboard_json["vr_temp_vddcr_socio_c"] = {
+				{"value", "N/A"},
+				{"unit", ""}
+			};
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_socio_c.size(); i++) {
+				if (vr_temp_vddcr_socio_c[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_socio_c[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					gpuboard_json["vr_temp_vddcr_socio_c"] = {
+						{"value", vr_temp_vddcr_socio_c[i].val},
+						{"unit", vr_temp_vddcr_socio_c[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
+					};
+				}
+			}
+		}
+
+		if (vr_temp_vdd_085_hbm.size() == 0) {
+			gpuboard_json["vr_temp_vdd_085_hbm"] = {
+				{"value", "N/A"},
+				{"unit", ""}
+			};
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vdd_085_hbm.size(); i++) {
+				if (vr_temp_vdd_085_hbm[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vdd_085_hbm[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					gpuboard_json["vr_temp_vdd_085_hbm"] = {
+						{"value", vr_temp_vdd_085_hbm[i].val},
+						{"unit", vr_temp_vdd_085_hbm[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
+					};
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_11_hbm_b.size() == 0) {
+			gpuboard_json["vr_temp_vddcr_11_hbm_b"] = {
+				{"value", "N/A"},
+				{"unit", ""}
+			};
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_11_hbm_b.size(); i++) {
+				if (vr_temp_vddcr_11_hbm_b[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_11_hbm_b[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					gpuboard_json["vr_temp_vddcr_11_hbm_b"] = {
+						{"value", vr_temp_vddcr_11_hbm_b[i].val},
+						{"unit", vr_temp_vddcr_11_hbm_b[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
+					};
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_11_hbm_d.size() == 0) {
+			gpuboard_json["vr_temp_vddcr_11_hbm_d"] = {
+				{"value", "N/A"},
+				{"unit", ""}
+			};
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_11_hbm_d.size(); i++) {
+				if (vr_temp_vddcr_11_hbm_d[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_11_hbm_d[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					gpuboard_json["vr_temp_vddcr_11_hbm_d"] = {
+						{"value", vr_temp_vddcr_11_hbm_d[i].val},
+						{"unit", vr_temp_vddcr_11_hbm_d[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
+					};
+				}
+			}
+		}
+
+		if (vr_temp_vdd_usr.size() == 0) {
+			gpuboard_json["vr_temp_vdd_usr"] = {
+				{"value", "N/A"},
+				{"unit", ""}
+			};
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vdd_usr.size(); i++) {
+				if (vr_temp_vdd_usr[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vdd_usr[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					gpuboard_json["vr_temp_vdd_usr"] = {
+						{"value", vr_temp_vdd_usr[i].val},
+						{"unit", vr_temp_vdd_usr[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
+					};
+				}
+			}
+		}
+
+		if (vr_temp_vddio_11_e32.size() == 0) {
+			gpuboard_json["vr_temp_vddio_11_e32"] = {
+				{"value", "N/A"},
+				{"unit", ""}
+			};
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddio_11_e32.size(); i++) {
+				if (vr_temp_vddio_11_e32[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddio_11_e32[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					gpuboard_json["vr_temp_vddio_11_e32"] = {
+						{"value", vr_temp_vddio_11_e32[i].val},
+						{"unit", vr_temp_vddio_11_e32[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
+					};
+				}
+			}
+		}
+
+		formatted_string = gpuboard_json.dump(4);
+	} else if (arg.output == csv) {
+		if (node_temp_retimer.size() == 0) {
+			formatted_string += string_format(",%s", "N/A");
+		} else {
+			for (uint32_t i = 0; i < node_temp_retimer.size(); i++) {
+				if (node_temp_retimer[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && node_temp_retimer[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					formatted_string += string_format(",%d", node_temp_retimer[i].val);
+				}
+			}
+		}
+
+		if (node_temp_ibc_temp.size() == 0) {
+			formatted_string += string_format(",%s", "N/A");
+		} else {
+			for (uint32_t i = 0; i < node_temp_ibc_temp.size(); i++) {
+				if (node_temp_ibc_temp[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && node_temp_ibc_temp[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					formatted_string += string_format(",%d", node_temp_ibc_temp[i].val);
+				}
+			}
+		}
+
+		if (node_temp_ibc_2_temp.size() == 0) {
+			formatted_string += string_format(",%s", "N/A");
+		} else {
+			for (uint32_t i = 0; i < node_temp_ibc_2_temp.size(); i++) {
+				if (node_temp_ibc_2_temp[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && node_temp_ibc_2_temp[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					formatted_string += string_format(",%d", node_temp_ibc_2_temp[i].val);
+				}
+			}
+		}
+
+		if (node_temp_vdd18_vr_temp.size() == 0) {
+			formatted_string += string_format(",%s", "N/A");
+		} else {
+			for (uint32_t i = 0; i < node_temp_vdd18_vr_temp.size(); i++) {
+				if (node_temp_vdd18_vr_temp[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && node_temp_vdd18_vr_temp[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					formatted_string += string_format(",%d", node_temp_vdd18_vr_temp[i].val);
+				}
+			}
+		}
+
+		if (node_temp_04_hbm_b_vr_temp.size() == 0) {
+			formatted_string += string_format(",%s", "N/A");
+		} else {
+			for (uint32_t i = 0; i < node_temp_04_hbm_b_vr_temp.size(); i++) {
+				if (node_temp_04_hbm_b_vr_temp[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && node_temp_04_hbm_b_vr_temp[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					formatted_string += string_format(",%d", node_temp_04_hbm_b_vr_temp[i].val);
+				}
+			}
+		}
+
+		if (node_temp_04_hbm_d_vr_temp.size() == 0) {
+			formatted_string += string_format(",%s", "N/A");
+		} else {
+			for (uint32_t i = 0; i < node_temp_04_hbm_d_vr_temp.size(); i++) {
+				if (node_temp_04_hbm_d_vr_temp[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && node_temp_04_hbm_d_vr_temp[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					formatted_string += string_format(",%d", node_temp_04_hbm_d_vr_temp[i].val);
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_vdd0.size() == 0) {
+			formatted_string += string_format(",%s", "N/A");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_vdd0.size(); i++) {
+				if (vr_temp_vddcr_vdd0[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_vdd0[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					formatted_string += string_format(",%d", vr_temp_vddcr_vdd0[i].val);
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_vdd1.size() == 0) {
+			formatted_string += string_format(",%s", "N/A");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_vdd1.size(); i++) {
+				if (vr_temp_vddcr_vdd1[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_vdd1[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					formatted_string += string_format(",%d", vr_temp_vddcr_vdd1[i].val);
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_vdd2.size() == 0) {
+			formatted_string += string_format(",%s", "N/A");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_vdd2.size(); i++) {
+				if (vr_temp_vddcr_vdd2[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_vdd2[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					formatted_string += string_format(",%d", vr_temp_vddcr_vdd2[i].val);
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_vdd3.size() == 0) {
+			formatted_string += string_format(",%s", "N/A");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_vdd3.size(); i++) {
+				if (vr_temp_vddcr_vdd3[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_vdd3[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					formatted_string += string_format(",%d", vr_temp_vddcr_vdd3[i].val);
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_soc_a.size() == 0) {
+			formatted_string += string_format(",%s", "N/A");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_soc_a.size(); i++) {
+				if (vr_temp_vddcr_soc_a[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_soc_a[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					formatted_string += string_format(",%d", vr_temp_vddcr_soc_a[i].val);
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_soc_c.size() == 0) {
+			formatted_string += string_format(",%s", "N/A");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_soc_c.size(); i++) {
+				if (vr_temp_vddcr_soc_c[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_soc_c[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					formatted_string += string_format(",%d", vr_temp_vddcr_soc_c[i].val);
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_socio_a.size() == 0) {
+			formatted_string += string_format(",%s", "N/A");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_socio_a.size(); i++) {
+				if (vr_temp_vddcr_socio_a[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_socio_a[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					formatted_string += string_format(",%d", vr_temp_vddcr_socio_a[i].val);
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_socio_c.size() == 0) {
+			formatted_string += string_format(",%s", "N/A");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_socio_c.size(); i++) {
+				if (vr_temp_vddcr_socio_c[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_socio_c[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					formatted_string += string_format(",%d", vr_temp_vddcr_socio_c[i].val);
+				}
+			}
+		}
+
+		if (vr_temp_vdd_085_hbm.size() == 0) {
+			formatted_string += string_format(",%s", "N/A");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vdd_085_hbm.size(); i++) {
+				if (vr_temp_vdd_085_hbm[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vdd_085_hbm[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					formatted_string += string_format(",%d", vr_temp_vdd_085_hbm[i].val);
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_11_hbm_b.size() == 0) {
+			formatted_string += string_format(",%s", "N/A");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_11_hbm_b.size(); i++) {
+				if (vr_temp_vddcr_11_hbm_b[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_11_hbm_b[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					formatted_string += string_format(",%d", vr_temp_vddcr_11_hbm_b[i].val);
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_11_hbm_d.size() == 0) {
+			formatted_string += string_format(",%s", "N/A");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_11_hbm_d.size(); i++) {
+				if (vr_temp_vddcr_11_hbm_d[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_11_hbm_d[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					formatted_string += string_format(",%d", vr_temp_vddcr_11_hbm_d[i].val);
+				}
+			}
+		}
+
+		if (vr_temp_vdd_usr.size() == 0) {
+			formatted_string += string_format(",%s", "N/A");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vdd_usr.size(); i++) {
+				if (vr_temp_vdd_usr[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vdd_usr[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					formatted_string += string_format(",%d", vr_temp_vdd_usr[i].val);
+				}
+			}
+		}
+
+		if (vr_temp_vddio_11_e32.size() == 0) {
+			formatted_string += string_format(",%s", "N/A");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddio_11_e32.size(); i++) {
+				if (vr_temp_vddio_11_e32[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddio_11_e32[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					formatted_string += string_format(",%d", vr_temp_vddio_11_e32[i].val);
+				}
+			}
+		}
+
+	} else {
+		formatted_string = GpuBoardHeaderTemplate;
+
+		if (node_temp_retimer.size() == 0) {
+			formatted_string += string_format(gpuboardNodeTempRetimerTemplate, "N/A", "");
+		} else {
+			for (uint32_t i = 0; i < node_temp_retimer.size(); i++) {
+				if (node_temp_retimer[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && node_temp_retimer[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					std::string node_temp_retimer_unit = node_temp_retimer[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+					std::string node_temp_retimer_val = string_format("%d", node_temp_retimer[i].val);
+					formatted_string += string_format(gpuboardNodeTempRetimerTemplate, node_temp_retimer_val.c_str(), node_temp_retimer_unit.c_str());
+				}
+			}
+		}
+
+		if (node_temp_ibc_temp.size() == 0) {
+			formatted_string += string_format(gpuboardNodeTempIbcTempTemplate, "N/A", "");
+		} else {
+			for (uint32_t i = 0; i < node_temp_ibc_temp.size(); i++) {
+				if (node_temp_ibc_temp[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && node_temp_ibc_temp[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					std::string node_temp_ibc_temp_unit = node_temp_ibc_temp[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+					std::string node_temp_ibc_temp_val = string_format("%d", node_temp_ibc_temp[i].val);
+					formatted_string += string_format(gpuboardNodeTempIbcTempTemplate, node_temp_ibc_temp_val.c_str(), node_temp_ibc_temp_unit.c_str());
+				}
+			}
+		}
+
+		if (node_temp_ibc_2_temp.size() == 0) {
+			formatted_string += string_format(gpuboardNodeTempIbc2TempTemplate, "N/A", "");
+		} else {
+			for (uint32_t i = 0; i < node_temp_ibc_2_temp.size(); i++) {
+				if (node_temp_ibc_2_temp[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && node_temp_ibc_2_temp[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					std::string node_temp_ibc_2_temp_unit = node_temp_ibc_2_temp[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+					std::string node_temp_ibc_2_temp_val = string_format("%d", node_temp_ibc_2_temp[i].val);
+					formatted_string += string_format(gpuboardNodeTempIbc2TempTemplate, node_temp_ibc_2_temp_val.c_str(), node_temp_ibc_2_temp_unit.c_str());
+				}
+			}
+		}
+
+		if (node_temp_vdd18_vr_temp.size() == 0) {
+			formatted_string += string_format(gpuboardNodeTempVdd18VrTempTemplate, "N/A", "");
+		} else {
+			for (uint32_t i = 0; i < node_temp_vdd18_vr_temp.size(); i++) {
+				if (node_temp_vdd18_vr_temp[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && node_temp_vdd18_vr_temp[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					std::string node_temp_vdd18_vr_temp_unit = node_temp_vdd18_vr_temp[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+					std::string node_temp_vdd18_vr_temp_val = string_format("%d", node_temp_vdd18_vr_temp[i].val);
+					formatted_string += string_format(gpuboardNodeTempVdd18VrTempTemplate, node_temp_vdd18_vr_temp_val.c_str(), node_temp_vdd18_vr_temp_unit.c_str());
+				}
+			}
+		}
+
+		if (node_temp_04_hbm_b_vr_temp.size() == 0) {
+			formatted_string += string_format(gpuboardNodeTemp04HbmBVrTempTemplate, "N/A", "");
+		} else {
+			for (uint32_t i = 0; i < node_temp_04_hbm_b_vr_temp.size(); i++) {
+				if (node_temp_04_hbm_b_vr_temp[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && node_temp_04_hbm_b_vr_temp[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					std::string node_temp_04_hbm_b_vr_temp_unit = node_temp_04_hbm_b_vr_temp[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+					std::string node_temp_04_hbm_b_vr_temp_val = string_format("%d", node_temp_04_hbm_b_vr_temp[i].val);
+					formatted_string += string_format(gpuboardNodeTemp04HbmBVrTempTemplate, node_temp_04_hbm_b_vr_temp_val.c_str(), node_temp_04_hbm_b_vr_temp_unit.c_str());
+				}
+			}
+		}
+
+		if (node_temp_04_hbm_d_vr_temp.size() == 0) {
+			formatted_string += string_format(gpuboardNodeTemp04HbmDVrTempTemplate, "N/A", "");
+		} else {
+			for (uint32_t i = 0; i < node_temp_04_hbm_d_vr_temp.size(); i++) {
+				if (node_temp_04_hbm_d_vr_temp[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && node_temp_04_hbm_d_vr_temp[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					std::string node_temp_04_hbm_d_vr_temp_unit = node_temp_04_hbm_d_vr_temp[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+					std::string node_temp_04_hbm_d_vr_temp_val = string_format("%d", node_temp_04_hbm_d_vr_temp[i].val);
+					formatted_string += string_format(gpuboardNodeTemp04HbmDVrTempTemplate, node_temp_04_hbm_d_vr_temp_val.c_str(), node_temp_04_hbm_d_vr_temp_unit.c_str());
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_vdd0.size() == 0) {
+			formatted_string += string_format(gpuboardVrTempVddcrVdd0Template, "N/A", "");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_vdd0.size(); i++) {
+				if (vr_temp_vddcr_vdd0[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_vdd0[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					std::string vr_temp_vddcr_vdd0_unit = vr_temp_vddcr_vdd0[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+					std::string vr_temp_vddcr_vdd0_val = string_format("%d", vr_temp_vddcr_vdd0[i].val);
+					formatted_string += string_format(gpuboardVrTempVddcrVdd0Template, vr_temp_vddcr_vdd0_val.c_str(), vr_temp_vddcr_vdd0_unit.c_str());
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_vdd1.size() == 0) {
+			formatted_string += string_format(gpuboardVrTempVddcrVdd1Template, "N/A", "");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_vdd1.size(); i++) {
+				if (vr_temp_vddcr_vdd1[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_vdd1[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					std::string vr_temp_vddcr_vdd1_unit = vr_temp_vddcr_vdd1[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+					std::string vr_temp_vddcr_vdd1_val = string_format("%d", vr_temp_vddcr_vdd1[i].val);
+					formatted_string += string_format(gpuboardVrTempVddcrVdd1Template, vr_temp_vddcr_vdd1_val.c_str(), vr_temp_vddcr_vdd1_unit.c_str());
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_vdd2.size() == 0) {
+			formatted_string += string_format(gpuboardVrTempVddcrVdd2Template, "N/A", "");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_vdd2.size(); i++) {
+				if (vr_temp_vddcr_vdd2[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_vdd2[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					std::string vr_temp_vddcr_vdd2_unit = vr_temp_vddcr_vdd2[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+					std::string vr_temp_vddcr_vdd2_val = string_format("%d", vr_temp_vddcr_vdd2[i].val);
+					formatted_string += string_format(gpuboardVrTempVddcrVdd2Template, vr_temp_vddcr_vdd2_val.c_str(), vr_temp_vddcr_vdd2_unit.c_str());
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_vdd3.size() == 0) {
+			formatted_string += string_format(gpuboardVrTempVddcrVdd3Template, "N/A", "");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_vdd3.size(); i++) {
+				if (vr_temp_vddcr_vdd3[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_vdd3[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					std::string vr_temp_vddcr_vdd3_unit = vr_temp_vddcr_vdd3[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+					std::string vr_temp_vddcr_vdd3_val = string_format("%d", vr_temp_vddcr_vdd3[i].val);
+					formatted_string += string_format(gpuboardVrTempVddcrVdd3Template, vr_temp_vddcr_vdd3_val.c_str(), vr_temp_vddcr_vdd3_unit.c_str());
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_soc_a.size() == 0) {
+			formatted_string += string_format(gpuboardVrTempVddcrSocATemplate, "N/A", "");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_soc_a.size(); i++) {
+				if (vr_temp_vddcr_soc_a[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_soc_a[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					std::string vr_temp_vddcr_soc_a_unit = vr_temp_vddcr_soc_a[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+					std::string vr_temp_vddcr_soc_a_val = string_format("%d", vr_temp_vddcr_soc_a[i].val);
+					formatted_string += string_format(gpuboardVrTempVddcrSocATemplate, vr_temp_vddcr_soc_a_val.c_str(), vr_temp_vddcr_soc_a_unit.c_str());
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_soc_c.size() == 0) {
+			formatted_string += string_format(gpuboardVrTempVddcrSocCTemplate, "N/A", "");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_soc_c.size(); i++) {
+				if (vr_temp_vddcr_soc_c[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_soc_c[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					std::string vr_temp_vddcr_soc_c_unit = vr_temp_vddcr_soc_c[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+					std::string vr_temp_vddcr_soc_c_val = string_format("%d", vr_temp_vddcr_soc_c[i].val);
+					formatted_string += string_format(gpuboardVrTempVddcrSocCTemplate, vr_temp_vddcr_soc_c_val.c_str(), vr_temp_vddcr_soc_c_unit.c_str());
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_socio_a.size() == 0) {
+			formatted_string += string_format(gpuboardVrTempVddcrSocioATemplate, "N/A", "");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_socio_a.size(); i++) {
+				if (vr_temp_vddcr_socio_a[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_socio_a[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					std::string vr_temp_vddcr_socio_a_unit = vr_temp_vddcr_socio_a[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+					std::string vr_temp_vddcr_socio_a_val = string_format("%d", vr_temp_vddcr_socio_a[i].val);
+					formatted_string += string_format(gpuboardVrTempVddcrSocioATemplate, vr_temp_vddcr_socio_a_val.c_str(), vr_temp_vddcr_socio_a_unit.c_str());
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_socio_c.size() == 0) {
+			formatted_string += string_format(gpuboardVrTempVddcrSocioCTemplate, "N/A", "");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_socio_c.size(); i++) {
+				if (vr_temp_vddcr_socio_c[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_socio_c[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					std::string vr_temp_vddcr_socio_c_unit = vr_temp_vddcr_socio_c[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+					std::string vr_temp_vddcr_socio_c_val = string_format("%d", vr_temp_vddcr_socio_c[i].val);
+					formatted_string += string_format(gpuboardVrTempVddcrSocioCTemplate, vr_temp_vddcr_socio_c_val.c_str(), vr_temp_vddcr_socio_c_unit.c_str());
+				}
+			}
+		}
+
+		if (vr_temp_vdd_085_hbm.size() == 0) {
+			formatted_string += string_format(gpuboardVrTempVdd085HbmTemplate, "N/A", "");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vdd_085_hbm.size(); i++) {
+				if (vr_temp_vdd_085_hbm[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vdd_085_hbm[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					std::string vr_temp_vdd_085_hbm_unit = vr_temp_vdd_085_hbm[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+					std::string vr_temp_vdd_085_hbm_val = string_format("%d", vr_temp_vdd_085_hbm[i].val);
+					formatted_string += string_format(gpuboardVrTempVdd085HbmTemplate, vr_temp_vdd_085_hbm_val.c_str(), vr_temp_vdd_085_hbm_unit.c_str());
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_11_hbm_b.size() == 0) {
+			formatted_string += string_format(gpuboardVrTempVddcr11HbmBTemplate, "N/A", "");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_11_hbm_b.size(); i++) {
+				if (vr_temp_vddcr_11_hbm_b[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_11_hbm_b[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					std::string vr_temp_vddcr_11_hbm_b_unit = vr_temp_vddcr_11_hbm_b[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+					std::string vr_temp_vddcr_11_hbm_b_val = string_format("%d", vr_temp_vddcr_11_hbm_b[i].val);
+					formatted_string += string_format(gpuboardVrTempVddcr11HbmBTemplate, vr_temp_vddcr_11_hbm_b_val.c_str(), vr_temp_vddcr_11_hbm_b_unit.c_str());
+				}
+			}
+		}
+
+		if (vr_temp_vddcr_11_hbm_d.size() == 0) {
+			formatted_string += string_format(gpuboardVrTempVddcr11HbmDTemplate, "N/A", "");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddcr_11_hbm_d.size(); i++) {
+				if (vr_temp_vddcr_11_hbm_d[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddcr_11_hbm_d[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					std::string vr_temp_vddcr_11_hbm_d_unit = vr_temp_vddcr_11_hbm_d[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+					std::string vr_temp_vddcr_11_hbm_d_val = string_format("%d", vr_temp_vddcr_11_hbm_d[i].val);
+					formatted_string += string_format(gpuboardVrTempVddcr11HbmDTemplate, vr_temp_vddcr_11_hbm_d_val.c_str(), vr_temp_vddcr_11_hbm_d_unit.c_str());
+				}
+			}
+		}
+
+		if (vr_temp_vdd_usr.size() == 0) {
+			formatted_string += string_format(gpuboardVrTempVddUsrTemplate, "N/A", "");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vdd_usr.size(); i++) {
+				if (vr_temp_vdd_usr[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vdd_usr[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					std::string vr_temp_vdd_usr_unit = vr_temp_vdd_usr[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+					std::string vr_temp_vdd_usr_val = string_format("%d", vr_temp_vdd_usr[i].val);
+					formatted_string += string_format(gpuboardVrTempVddUsrTemplate, vr_temp_vdd_usr_val.c_str(), vr_temp_vdd_usr_unit.c_str());
+				}
+			}
+		}
+
+		if (vr_temp_vddio_11_e32.size() == 0) {
+			formatted_string += string_format(gpuboardVrTempVddio11E32Template, "N/A", "");
+		} else {
+			for (uint32_t i = 0; i < vr_temp_vddio_11_e32.size(); i++) {
+				if (vr_temp_vddio_11_e32[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && vr_temp_vddio_11_e32[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_GPUBOARD) {
+					is_supported = true;
+					std::string vr_temp_vddio_11_e32_unit = vr_temp_vddio_11_e32[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : "";
+					std::string vr_temp_vddio_11_e32_val = string_format("%d", vr_temp_vddio_11_e32[i].val);
+					formatted_string += string_format(gpuboardVrTempVddio11E32Template, vr_temp_vddio_11_e32_val.c_str(), vr_temp_vddio_11_e32_unit.c_str());
+				}
+			}
+		}
+	}
+
+	if (is_supported) {
+		return ret;
+	} else {
+		return AMDSMI_STATUS_NOT_SUPPORTED;
+	}
+}
+
+int AmdSmiApiHost::amdsmi_get_port_netdev_command(uint64_t processor_bdf, Arguments arg,
+		std::string& out)
+{
+	amdsmi_processor_handle processor;
+	amdsmi_nic_port_info_t nic_port_info;
+	int ret;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		out = host_fill_nic_port_netdev_info(arg, "N/A");
+		return ret;
+	}
+
+	ret = host_amdsmi_get_nic_port_info(processor, &nic_port_info);
+	if (ret != AMDSMI_STATUS_SUCCESS || nic_port_info.num_ports == 0) {
+		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED) {
+			out = host_fill_nic_port_netdev_info(arg, "N/A");
+			return AMDSMI_STATUS_SUCCESS;
+		}
+		out = host_fill_nic_port_netdev_info(arg, "N/A");
+		return ret != AMDSMI_STATUS_SUCCESS ? ret : AMDSMI_STATUS_SUCCESS;
+	}
+
+	if (arg.output == json) {
+		nlohmann::ordered_json result_json;
+
+		nlohmann::ordered_json ports_array = nlohmann::ordered_json::array();
+		for (uint32_t port_idx = 0; port_idx < nic_port_info.num_ports; port_idx++) {
+			nlohmann::ordered_json port_json;
+			std::string netdev_name = (nic_port_info.ports[port_idx].netdev[0] != '\0') ?
+									  nic_port_info.ports[port_idx].netdev : "N/A";
+			port_json["netdev"] = netdev_name;
+
+			nlohmann::ordered_json nic_statistics_json;
+
+			uint32_t num_vendor_stats = 0;
+			ret = host_amdsmi_get_nic_vendor_statistics(processor, port_idx, &num_vendor_stats, nullptr);
+			if (ret == AMDSMI_STATUS_SUCCESS && num_vendor_stats > 0) {
+				std::vector<amdsmi_nic_stat_t> vendor_stats(num_vendor_stats);
+				ret = host_amdsmi_get_nic_vendor_statistics(processor, port_idx, &num_vendor_stats,
+						vendor_stats.data());
+				if (ret == AMDSMI_STATUS_SUCCESS) {
+					for (uint32_t i = 0; i < num_vendor_stats; i++) {
+						std::string stat_name = vendor_stats[i].name;
+						std::transform(stat_name.begin(), stat_name.end(), stat_name.begin(), ::tolower);
+						nic_statistics_json[stat_name] = vendor_stats[i].value;
+					}
+				}
+			}
+			port_json["vendor_statistics"] = nic_statistics_json;
+
+			nlohmann::ordered_json port_statistics_json;
+
+			uint32_t num_port_stats = 0;
+			ret = host_amdsmi_get_nic_port_statistics(processor, port_idx, &num_port_stats, nullptr);
+			if (ret == AMDSMI_STATUS_SUCCESS && num_port_stats > 0) {
+				std::vector<amdsmi_nic_stat_t> port_stats(num_port_stats);
+				ret = host_amdsmi_get_nic_port_statistics(processor, port_idx, &num_port_stats, port_stats.data());
+				if (ret == AMDSMI_STATUS_SUCCESS) {
+					for (uint32_t i = 0; i < num_port_stats; i++) {
+						std::string stat_name = port_stats[i].name;
+						std::transform(stat_name.begin(), stat_name.end(), stat_name.begin(), ::tolower);
+						port_statistics_json[stat_name] = port_stats[i].value;
+					}
+				}
+			}
+			port_json["statistics"] = port_statistics_json;
+			ports_array.push_back(port_json);
+		}
+		result_json["ports"] = ports_array;
+
+		out = result_json.dump(4);
+	} else if (arg.output == human) {
+		out.append(metricNicPortStatsHeaderTemplate);
+		for (uint32_t port_idx = 0; port_idx < nic_port_info.num_ports; port_idx++) {
+			std::string netdev_name = (nic_port_info.ports[port_idx].netdev[0] != '\0') ?
+									  nic_port_info.ports[port_idx].netdev : "N/A";
+			out.append(string_format(metricNicPortTemplate, port_idx, netdev_name.c_str()));
+
+			out.append(metricNicVendorStatsHeaderTemplate);
+
+			uint32_t num_vendor_stats = 0;
+			ret = host_amdsmi_get_nic_vendor_statistics(processor, port_idx, &num_vendor_stats, nullptr);
+			if (ret == AMDSMI_STATUS_SUCCESS && num_vendor_stats > 0) {
+				std::vector<amdsmi_nic_stat_t> vendor_stats(num_vendor_stats);
+				ret = host_amdsmi_get_nic_vendor_statistics(processor, port_idx, &num_vendor_stats,
+						vendor_stats.data());
+				if (ret == AMDSMI_STATUS_SUCCESS) {
+					for (uint32_t i = 0; i < num_vendor_stats; i++) {
+						std::string stat_name = vendor_stats[i].name;
+						std::transform(stat_name.begin(), stat_name.end(), stat_name.begin(), ::toupper);
+						std::string value_str = string_format("%llu", vendor_stats[i].value);
+						out.append(string_format("                    %s: %s\n", stat_name.c_str(), value_str.c_str()));
+					}
+				}
+			}
+
+			out.append(metricNicPortStatisticsHeaderTemplate);
+			uint32_t num_port_stats = 0;
+			ret = host_amdsmi_get_nic_port_statistics(processor, port_idx, &num_port_stats, nullptr);
+			if (ret == AMDSMI_STATUS_SUCCESS && num_port_stats > 0) {
+				std::vector<amdsmi_nic_stat_t> port_stats(num_port_stats);
+				ret = host_amdsmi_get_nic_port_statistics(processor, port_idx, &num_port_stats, port_stats.data());
+				if (ret == AMDSMI_STATUS_SUCCESS) {
+					for (uint32_t i = 0; i < num_port_stats; i++) {
+						std::string stat_name = port_stats[i].name;
+						std::transform(stat_name.begin(), stat_name.end(), stat_name.begin(), ::toupper);
+						std::string value_str = string_format("%llu", port_stats[i].value);
+						out.append(string_format("                    %s: %s\n", stat_name.c_str(), value_str.c_str()));
+					}
+				}
+			}
+		}
+	}
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+int AmdSmiApiHost::amdsmi_get_port_rdma_command(uint64_t processor_bdf, Arguments arg,
+		std::string& out)
+{
+	amdsmi_processor_handle processor;
+	amdsmi_nic_port_info_t nic_port_info;
+	amdsmi_nic_rdma_devices_info_t nic_rdma_devices_info;
+	int ret;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		out = host_fill_nic_port_netdev_info(arg, "N/A");
+		return ret;
+	}
+
+	ret = host_amdsmi_get_nic_port_info(processor, &nic_port_info);
+	if (ret != AMDSMI_STATUS_SUCCESS || nic_port_info.num_ports == 0) {
+		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED) {
+			out = host_fill_nic_port_netdev_info(arg, "N/A");
+			return AMDSMI_STATUS_SUCCESS;
+		}
+		out = host_fill_nic_port_netdev_info(arg, "N/A");
+		return ret != AMDSMI_STATUS_SUCCESS ? ret : AMDSMI_STATUS_SUCCESS;
+	}
+
+	ret = host_amdsmi_get_nic_rdma_dev_info(processor, &nic_rdma_devices_info);
+
+	if (arg.output == json) {
+		nlohmann::ordered_json result_json;
+		if (ret != AMDSMI_STATUS_SUCCESS || nic_rdma_devices_info.num_rdma_dev == 0) {
+			if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED) {
+				std::string rdma_fill_output = host_fill_metric_nic_rdma_dev_info(arg, "N/A");
+				result_json["rdma_devices"] = nlohmann::ordered_json::parse(rdma_fill_output);
+			}
+		} else {
+			nlohmann::ordered_json rdma_devices_array = nlohmann::ordered_json::array();
+			for (uint32_t rdma_dev_idx = 0; rdma_dev_idx < nic_rdma_devices_info.num_rdma_dev; rdma_dev_idx++) {
+				nlohmann::ordered_json rdma_device_json;
+				rdma_device_json["rdma_dev"] = nic_rdma_devices_info.rdma_dev_info[rdma_dev_idx].rdma_dev;
+
+				nlohmann::ordered_json rdma_ports_array = nlohmann::ordered_json::array();
+				for (uint32_t rdma_port_idx = 0;
+						rdma_port_idx < nic_rdma_devices_info.rdma_dev_info[rdma_dev_idx].num_rdma_ports; rdma_port_idx++) {
+					nlohmann::ordered_json rdma_port_json;
+
+					nlohmann::ordered_json rdma_port_statistics_json;
+					uint8_t rdma_port_num =
+						nic_rdma_devices_info.rdma_dev_info[rdma_dev_idx].rdma_port_info[rdma_port_idx].rdma_port;
+
+					uint32_t num_rdma_stats = 0;
+					ret = host_amdsmi_get_nic_rdma_port_statistics(processor, rdma_port_idx, &num_rdma_stats, nullptr);
+					if (ret == AMDSMI_STATUS_SUCCESS && num_rdma_stats > 0) {
+						std::vector<amdsmi_nic_stat_t> rdma_stats(num_rdma_stats);
+						uint32_t actual_stats = num_rdma_stats;
+
+						ret = host_amdsmi_get_nic_rdma_port_statistics(processor, rdma_port_idx, &actual_stats,
+								rdma_stats.data());
+						if (ret == AMDSMI_STATUS_SUCCESS) {
+							for (uint32_t i = 0; i < actual_stats; i++) {
+								std::string stat_name = rdma_stats[i].name;
+								std::transform(stat_name.begin(), stat_name.end(), stat_name.begin(), ::tolower);
+								rdma_port_statistics_json[stat_name] = rdma_stats[i].value;
+							}
+						}
+					}
+					rdma_port_json["statistics"] = rdma_port_statistics_json;
+					rdma_ports_array.push_back(rdma_port_json);
+				}
+				rdma_device_json["ports"] = rdma_ports_array;
+				rdma_devices_array.push_back(rdma_device_json);
+			}
+			result_json["rdma_devices"] = rdma_devices_array;
+		}
+
+		out = result_json.dump(4);
+	} else if (arg.output == human) {
+		if (nic_rdma_devices_info.num_rdma_dev > 0) {
+			out.append(metricNicRdmaStatsHeaderTemplate);
+			for (uint32_t rdma_dev_idx = 0; rdma_dev_idx < nic_rdma_devices_info.num_rdma_dev; rdma_dev_idx++) {
+				out.append(string_format(metricNicRdmaDeviceTemplate, rdma_dev_idx,
+										 nic_rdma_devices_info.rdma_dev_info[rdma_dev_idx].rdma_dev));
+
+				for (uint32_t rdma_port_idx = 0;
+						rdma_port_idx < nic_rdma_devices_info.rdma_dev_info[rdma_dev_idx].num_rdma_ports; rdma_port_idx++) {
+					uint8_t rdma_port_num =
+						nic_rdma_devices_info.rdma_dev_info[rdma_dev_idx].rdma_port_info[rdma_port_idx].rdma_port;
+					out.append(string_format(metricNicRdmaPortTemplate, rdma_port_idx));
+
+					uint32_t num_rdma_stats = 0;
+					ret = host_amdsmi_get_nic_rdma_port_statistics(processor, rdma_port_idx, &num_rdma_stats, nullptr);
+					if (ret == AMDSMI_STATUS_SUCCESS && num_rdma_stats > 0) {
+						std::vector<amdsmi_nic_stat_t> rdma_stats(num_rdma_stats);
+						uint32_t actual_stats = num_rdma_stats;
+						ret = host_amdsmi_get_nic_rdma_port_statistics(processor, rdma_port_idx, &actual_stats,
+								rdma_stats.data());
+
+						if (ret == AMDSMI_STATUS_SUCCESS) {
+							for (uint32_t i = 0; i < actual_stats; i++) {
+								std::string stat_name = rdma_stats[i].name;
+								std::transform(stat_name.begin(), stat_name.end(), stat_name.begin(), ::toupper);
+								std::string value_str = string_format("%llu", rdma_stats[i].value);
+								out.append(string_format("                            %s: %s\n", stat_name.c_str(),
+														 value_str.c_str()));
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	return AMDSMI_STATUS_SUCCESS;
 }

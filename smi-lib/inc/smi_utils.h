@@ -53,7 +53,7 @@ enum smi_metric_type {
  *  \param [in] output_size - Size of the output structure returned by the
  * command.
  *
- *  \return AMDSMI_RET_CODE indicating result.
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
  */
 amdsmi_status_t amdsmi_request(smi_req_ctx *smi_req, uint32_t cmd_code, size_t input_size,
 		size_t output_size);
@@ -66,7 +66,7 @@ amdsmi_status_t amdsmi_request(smi_req_ctx *smi_req, uint32_t cmd_code, size_t i
  *
  *  \param [in] handle - Amdsmi processor handle.
  *
- *  \return AMDSMI_RET_CODE indicating result.
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
  */
 amdsmi_status_t amdsmi_ioctl_get_vf_partitioning_info(smi_req_ctx *smi_req, smi_device_handle_t handle);
 
@@ -78,7 +78,7 @@ amdsmi_status_t amdsmi_ioctl_get_vf_partitioning_info(smi_req_ctx *smi_req, smi_
  *
  *  \param [in] vf_handle - VF handle to query.
  *
- *  \return AMDSMI_RET_CODE indicating result.
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
  */
 amdsmi_status_t amdsmi_ioctl_get_vf_static_info(smi_req_ctx *smi_req, smi_device_handle_t vf_handle);
 
@@ -90,7 +90,7 @@ amdsmi_status_t amdsmi_ioctl_get_vf_static_info(smi_req_ctx *smi_req, smi_device
  *
  *  \param [in] handle - Amdsmi processor handle.
  *
- *  \return AMDSMI_RET_CODE indicating result.
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
  */
 amdsmi_status_t amdsmi_ioctl_get_gpu_performance_info(smi_req_ctx *smi_req, smi_device_handle_t handle);
 
@@ -102,7 +102,7 @@ amdsmi_status_t amdsmi_ioctl_get_gpu_performance_info(smi_req_ctx *smi_req, smi_
  *
  *  \param [in] handle - Amdsmi processor handle.
  *
- *  \return AMDSMI_RET_CODE indicating result.
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
  */
 amdsmi_status_t amdsmi_ioctl_get_ecc_error_count(smi_req_ctx *smi_req, smi_device_handle_t handle);
 
@@ -114,7 +114,7 @@ amdsmi_status_t amdsmi_ioctl_get_ecc_error_count(smi_req_ctx *smi_req, smi_devic
  *
  *  \param [in] vf_handle - VF handle to query.
  *
- *  \return AMDSMI_RET_CODE indicating result.
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
  */
 amdsmi_status_t amdsmi_ioctl_get_vf_dynamic_info(smi_req_ctx *smi_req, smi_device_handle_t vf_handle);
 
@@ -125,7 +125,7 @@ amdsmi_status_t amdsmi_ioctl_get_vf_dynamic_info(smi_req_ctx *smi_req, smi_devic
  *
  *  \param [out] pcie_speed - Pcie speed.
  *
- *  \return AMDSMI_RET_CODE indicating result.
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
  */
 amdsmi_status_t amdsmi_get_pcie_speed_from_pcie_type(uint32_t pcie_type, uint32_t *pcie_speed, uint64_t dev_id);
 
@@ -136,7 +136,7 @@ amdsmi_status_t amdsmi_get_pcie_speed_from_pcie_type(uint32_t pcie_type, uint32_
  *
  *  \param [out] out - String message.
  *
- *  \return AMDSMI_RET_CODE indicating result.
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
  */
 amdsmi_status_t amdsmi_get_string_from_status_enum(amdsmi_status_t status, const char **out);
 
@@ -177,8 +177,6 @@ int smi_uuid_gen(char *str, uint64_t serial, uint16_t did, uint8_t idx);
  *  \return true if uuid format is valid or false if it is not
  */
 bool is_uuid_valid(const char *uuid);
-
-
 
 #pragma pack(push, 1)
 
@@ -415,15 +413,15 @@ bool guid_equals(const guid_t* guid1,const guid_t* guid2);
 void amdsmi_get_register_array(const uint8_t* data, size_t size, uint64_t *register_array);
 
 /**
- *  \brief  Creates a sysfs PCI device path prefix for a given processor handle.
+ *  \brief  Creates a sysfs PCI device path prefix for a given BDF.
  *
- *  \param [in] processor_handle - Handle to the processor for which to generate the path.
+ *  \param [in] bdf - BDF of the PCI device.
  *  \param [out] out_path - Buffer to store the generated path.
  *  \param [in] out_path_size - Size of the output buffer in bytes.
  *
  *  \return 0 on success, error code otherwise.
  */
-int make_sysfs_pci_device_prefix(amdsmi_processor_handle processor_handle, char *out_path, size_t out_path_size);
+int make_sysfs_pci_device_prefix(amdsmi_bdf_t bdf, char *out_path, size_t out_path_size);
 
 /**
  *  \brief  Parses a CPU list string and sets corresponding bits in the CPU set.

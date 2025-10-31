@@ -53,6 +53,7 @@ extern struct amdgv_adapter *adapt;
 #define AMDGV_MAX_VF_LIVE 9
 #define AMDGV_LIVE_MAX_XCD_NUM 16
 #define AMDGV_LIVE_MAX_RAS_BLOCK 32
+#define AMDGV_LIVE_MAX_SRIOV_MSG_TABLE 10
 
 /* Use pcie config space 0x108 to store the live info hash */
 #define LIVE_INFO_HASH_ADDR 0x108
@@ -90,6 +91,7 @@ enum amdgv_live_info_data {
 	AMDGV_LIVE_INFO_DATA__MCA,
 	AMDGV_LIVE_INFO_DATA__CPER,
 	AMDGV_LIVE_INFO_DATA__RAS_EEPROM_DATA,
+	AMDGV_LIVE_INFO_DATA__VF_CRIT_REGION,
 	AMDGV_LIVE_INFO_DATA__END,
 };
 
@@ -449,8 +451,8 @@ struct amdgv_live_info_gpumon {
 };
 
 struct amdgv_live_info_vf_crit_region {
-	uint64_t vf_table_offsets[AMD_SRIOV_MSG_MAX_TABLE_ID];
-	uint64_t vf_table_sizes_kb[AMD_SRIOV_MSG_MAX_TABLE_ID];
+	uint64_t vf_table_offsets[AMDGV_LIVE_MAX_SRIOV_MSG_TABLE];
+	uint64_t vf_table_sizes_kb[AMDGV_LIVE_MAX_SRIOV_MSG_TABLE];
 
 	enum amd_sriov_crit_region_version vf_crit_region;
 
@@ -459,6 +461,8 @@ struct amdgv_live_info_vf_crit_region {
 
 	/* reserved variable for future use */
 	uint32_t guest_gpu_init_flags;
+
+	uint8_t reserved[80];  // 0x100 align
 };
 
 struct amdgv_live_info_vf {
@@ -496,10 +500,9 @@ struct amdgv_live_info_vf {
 	uint8_t	reset_notify_vf_pending;
 	uint32_t mm_bandwidth_jpeg;
 
-	struct amdgv_live_info_vf_crit_region crit_region_data;
 	uint8_t is_cond_avail;
 	uint32_t real_fb_size;
-	uint8_t reserved[17]; // 0x100 align
+	uint8_t reserved[1]; // 0x80 align
 };
 
 struct amdgv_live_info_world_switch {
@@ -675,7 +678,7 @@ struct amdgv_live_info_ip_discovery {
 };
 
 #define AMDGV_MAX_LIVE_INFO_DATA         256
-#define AMDGV_LIVE_INFO_COMMON_DATA_SIZE 0x0002F820
+#define AMDGV_LIVE_INFO_COMMON_DATA_SIZE 0x0002FCA0
 #define AMDGV_GPU_DATA_HASH_SIZE         32
 
 // v1
@@ -728,7 +731,8 @@ struct amdgv_live_info_ip_discovery {
 	struct amdgv_live_info_mca               mca;                                      /* op:AMDGV_LIVE_INFO_DATA__MCA,                     offset:00028EA0, size:00004C00 */ \
 	struct amdgv_live_info_cper              cper;                                     /* op:AMDGV_LIVE_INFO_DATA__CPER,                    offset:0002DA20, size:00000100 */ \
 	struct amdgv_live_info_ras_eeprom_data   ras_eeprom_data;                          /* op:AMDGV_LIVE_INFO_DATA__RAS_EEPROM_DATA          offset:0002DB20, size:00001880 */ \
-	/*                                                                                    Total                                             offset:0002F3A0                */ \
+	struct amdgv_live_info_vf_crit_region    vf_crit_region[AMDGV_MAX_VF_LIVE];        /* op:AMDGV_LIVE_INFO_DATA__VF_CRIT_REGION           offset:0002F3A0, size:00000900 */ \
+	/*                                                                                    Total                                             offset:0002FCA0                */ \
 }
 // v1
 struct amdgv_gpu_data_header {
@@ -747,8 +751,8 @@ struct amdgv_gpu_data_header {
 // v1
 struct amdgv_gpu_data {
 	struct amdgv_gpu_data_header header;                  // offset:00000000, size:00000480
-	struct amdgv_live_update_common_data();               // offset:00000480, size:0002F820
-	uint8_t reserved[AMDGV_LIVE_INFO_MEMO_RESERVED_SIZE]; // offset:0002FCA0
+	struct amdgv_live_update_common_data();               // offset:00000480, size:0002FCA0
+	uint8_t reserved[AMDGV_LIVE_INFO_MEMO_RESERVED_SIZE]; // offset:00030120
 	char agp_mem[AMDGV_AGP_MEM_SIZE];                     // AGP memory
 };
 
@@ -767,8 +771,8 @@ struct amdgv_gpu_data_file_header {
 // remove and use amdgv_gpu_data_v2
 struct amdgv_gpu_data_file {
 	struct amdgv_gpu_data_file_header header;           // offset:00000000, size:00000420
-	struct amdgv_live_update_common_data();             // offset:00000420, size:0002F820
-	uint8_t reserved[AMDGV_LIVE_INFO_V2_RESERVED_SIZE]; // offset:0002FC40
+	struct amdgv_live_update_common_data();             // offset:00000420, size:0002FCA0
+	uint8_t reserved[AMDGV_LIVE_INFO_V2_RESERVED_SIZE]; // offset:000300C0
 };
 
 #define LIVE_INFO_SIG_STR "GPU DATA"
@@ -807,8 +811,8 @@ struct amdgv_gpu_data_header_v2 {
  */
 struct amdgv_gpu_data_v2 {
 	struct  amdgv_gpu_data_header_v2 header;               // offset:00000000, size:00000420
-	uint8_t common_data[AMDGV_LIVE_INFO_COMMON_DATA_SIZE]; // offset:00000420, szie:0001D9A0
-	uint8_t reserved[AMDGV_LIVE_INFO_V2_RESERVED_SIZE];    // offset:0001DDC0
+	uint8_t common_data[AMDGV_LIVE_INFO_COMMON_DATA_SIZE]; // offset:00000420, szie:0002FCA0
+	uint8_t reserved[AMDGV_LIVE_INFO_V2_RESERVED_SIZE];    // offset:000300C0
 };
 
 enum amdgv_live_info_status amdgv_live_info_init_metadata(struct amdgv_adapter *adapt);
@@ -880,8 +884,8 @@ _Static_assert(
 	"amdgv_live_info_gpumon must be 0x80 byte align");
 
 _Static_assert(
-	sizeof(struct amdgv_live_info_vf) == 0x100,
-	"amdgv_live_info_vf_config must be 0x100 byte align");
+	sizeof(struct amdgv_live_info_vf) == 0x80,
+	"amdgv_live_info_vf_config must be 0x80 byte align");
 
 _Static_assert(
 	sizeof(struct amdgv_live_info_world_switch) == 0x80,

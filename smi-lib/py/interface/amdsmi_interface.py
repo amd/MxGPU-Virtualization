@@ -30,6 +30,15 @@ from typing import Any, Dict, List, Tuple, Union
 from . import amdsmi_wrapper
 from .amdsmi_exception import *
 
+class AmdSmiProcessorType(IntEnum):
+    UNKNOWN = amdsmi_wrapper.AMDSMI_PROCESSOR_TYPE_UNKNOWN
+    AMD_GPU = amdsmi_wrapper.AMDSMI_PROCESSOR_TYPE_AMD_GPU
+    AMD_CPU = amdsmi_wrapper.AMDSMI_PROCESSOR_TYPE_AMD_CPU
+    NON_AMD_GPU = amdsmi_wrapper.AMDSMI_PROCESSOR_TYPE_NON_AMD_GPU
+    NON_AMD_CPU = amdsmi_wrapper.AMDSMI_PROCESSOR_TYPE_NON_AMD_CPU
+    AMD_CPU_CORE = amdsmi_wrapper.AMDSMI_PROCESSOR_TYPE_AMD_CPU_CORE
+    AMD_APU = amdsmi_wrapper.AMDSMI_PROCESSOR_TYPE_AMD_APU
+    AMD_NIC = amdsmi_wrapper.AMDSMI_PROCESSOR_TYPE_AMD_NIC
 
 class AmdSmiTemperatureType(IntEnum):
     EDGE = amdsmi_wrapper.AMDSMI_TEMPERATURE_TYPE_EDGE
@@ -1096,6 +1105,19 @@ def amdsmi_get_processor_handles():
         return []
     return list(amdsmi_wrapper.amdsmi_processor_handle(processor_handles[i]) for i in range(processor_count.value))
 
+def amdsmi_get_processor_handles_by_type(processor_type):
+    if not isinstance(processor_type, AmdSmiProcessorType):
+        raise AmdSmiParameterException(processor_type, AmdSmiProcessorType)
+
+    socket_handle = amdsmi_wrapper.amdsmi_socket_handle()
+    processor_count = ctypes.c_uint32(_AMDSMI_MAX_DEVICES)
+    processor_handles = (amdsmi_wrapper.amdsmi_processor_handle * _AMDSMI_MAX_DEVICES)()
+    _check_res(amdsmi_wrapper.amdsmi_get_processor_handles_by_type(socket_handle, processor_type,
+        processor_handles, ctypes.byref(processor_count)))
+
+    if processor_count.value == 0:
+        return []
+    return list(amdsmi_wrapper.amdsmi_processor_handle(processor_handles[i]) for i in range(processor_count.value))
 
 def amdsmi_get_processor_handle_from_bdf(bdf):
     bdf = _parse_bdf(bdf)
@@ -1146,6 +1168,32 @@ def amdsmi_get_gpu_device_bdf(processor_handle):
     bdf = amdsmi_wrapper.amdsmi_bdf_t()
 
     _check_res(amdsmi_wrapper.amdsmi_get_gpu_device_bdf(
+        processor_handle, ctypes.byref(bdf)))
+
+    return _format_bdf(bdf)
+
+
+def amdsmi_get_nic_device_bdf(processor_handle):
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+
+    bdf = amdsmi_wrapper.amdsmi_bdf_t()
+
+    _check_res(amdsmi_wrapper.amdsmi_get_nic_device_bdf(
+        processor_handle, ctypes.byref(bdf)))
+
+    return _format_bdf(bdf)
+
+
+def amdsmi_get_processor_bdf(processor_handle):
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+
+    bdf = amdsmi_wrapper.amdsmi_bdf_t()
+
+    _check_res(amdsmi_wrapper.amdsmi_get_processor_bdf(
         processor_handle, ctypes.byref(bdf)))
 
     return _format_bdf(bdf)
@@ -1922,14 +1970,15 @@ class AmdSmiEventReader:
 
         return {
             'fcn_id': amdsmi_event_entry.fcn_id,
-            'dev_id': amdsmi_wrapper.amdsmi_processor_handle(amdsmi_event_entry.dev_id),
+            'dev_id': hex(amdsmi_event_entry.dev_id),
             'timestamp': amdsmi_event_entry.timestamp,
             'data': amdsmi_event_entry.data,
             'category': AmdSmiEventCategory(amdsmi_event_entry.category),
             'subcode': _find_subcode(amdsmi_event_entry.category, amdsmi_event_entry.subcode),
             'level': AmdSmiEventSeverity(amdsmi_event_entry.level),
             'date': amdsmi_event_entry.date.decode("utf-8"),
-            'message': amdsmi_event_entry.message.decode("utf-8")
+            'message': amdsmi_event_entry.message.decode("utf-8"),
+            'processor_handle': amdsmi_wrapper.amdsmi_processor_handle(amdsmi_event_entry.processor_handle)
         }
 
     def stop(self):
@@ -2650,7 +2699,7 @@ def amdsmi_get_xgmi_plpd(processor_handle):
         })
 
     return {
-        "cur": dpm_policy.cur,
+        "cur": dpm_policy.current,
         "policies": plpds_list
     }
 
@@ -2661,3 +2710,4 @@ def amdsmi_set_xgmi_plpd(processor_handle, policy_id):
 
     _check_res(amdsmi_wrapper.amdsmi_set_xgmi_plpd(
             processor_handle, policy_id))
+

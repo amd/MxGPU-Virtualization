@@ -176,17 +176,37 @@ TEST_F(AmdsmiGpuMonitoring, InvalidParams)
 {
 	int ret;
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
+	amdsmi_pcie_info_t pcie;
+	amdsmi_engine_usage_t engine;
+	amdsmi_power_info_t power;
+	bool pwr_mngmt;
+	amdsmi_clk_info_t clk;
+	int64_t temp;
+	amdsmi_gpu_cache_info_t cache;
+	amdsmi_dpm_policy_t policy;
 
 	ret = amdsmi_get_gpu_activity(MOCK_GPU_HANDLE, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_gpu_activity(&NIC_MOCK_HANDLE, &engine);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_get_power_info(MOCK_GPU_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+	ret = amdsmi_get_power_info(&NIC_MOCK_HANDLE, &power);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
 	ret = amdsmi_is_gpu_power_management_enabled(MOCK_GPU_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+	ret = amdsmi_is_gpu_power_management_enabled(&NIC_MOCK_HANDLE, &pwr_mngmt);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
 	ret = amdsmi_get_clock_info(MOCK_GPU_HANDLE, AMDSMI_CLK_TYPE_GFX, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_clock_info(&NIC_MOCK_HANDLE, AMDSMI_CLK_TYPE_GFX, &clk);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_get_temp_metric(MOCK_GPU_HANDLE, AMDSMI_TEMPERATURE_TYPE_EDGE,
@@ -201,13 +221,26 @@ TEST_F(AmdsmiGpuMonitoring, InvalidParams)
 								 AMDSMI_TEMP_SHUTDOWN, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+	ret = amdsmi_get_temp_metric(&NIC_MOCK_HANDLE, AMDSMI_TEMPERATURE_TYPE_EDGE,
+								 AMDSMI_TEMP_CURRENT, &temp);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
 	ret = amdsmi_get_pcie_info(MOCK_GPU_HANDLE, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_pcie_info(&NIC_MOCK_HANDLE, &pcie);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_get_gpu_cache_info(MOCK_GPU_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+	ret = amdsmi_get_gpu_cache_info(&NIC_MOCK_HANDLE, &cache);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
 	ret = amdsmi_get_soc_pstate(MOCK_GPU_HANDLE, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_soc_pstate(&NIC_MOCK_HANDLE, &policy);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
 
@@ -271,6 +304,9 @@ TEST_F(AmdsmiGpuMonitoring, IoctlFailed)
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 
 	ret = amdsmi_set_soc_pstate(NULL, 0);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_set_soc_pstate(&NIC_MOCK_HANDLE, 0);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
 

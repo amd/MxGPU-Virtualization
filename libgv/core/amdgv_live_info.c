@@ -38,7 +38,7 @@ enum amdgv_live_info_status amdgv_import_data_by_op(struct amdgv_adapter *adapt,
 	struct live_info_table_header *header;
 	uint32_t offset, op_num;
 
-	if (!adapt->opt.skip_hw_init)
+	if (!amdgv_in_live_update_seq())
 		return 0;
 
 	gpu_data = adapt->sys_mem_info.va_ptr;
@@ -66,7 +66,7 @@ enum amdgv_live_info_status amdgv_import_data(struct amdgv_adapter *adapt)
 	uint32_t *op_offset;
 	enum amdgv_live_info_data data_op;
 
-	if (!adapt->opt.skip_hw_init)
+	if (!amdgv_in_live_update_seq())
 		return 0;
 
 	gpu_data  = adapt->sys_mem_info.va_ptr;
@@ -243,6 +243,9 @@ enum amdgv_live_info_status amdgv_live_info_init_metadata(struct amdgv_adapter *
 				break;
 			case AMDGV_LIVE_INFO_DATA__RAS_EEPROM_DATA:
 				header->structure_size = sizeof(struct amdgv_live_info_ras_eeprom_data);
+				break;
+			case AMDGV_LIVE_INFO_DATA__VF_CRIT_REGION:
+				header->structure_size = sizeof(struct amdgv_live_info_vf_crit_region) * AMDGV_MAX_VF_LIVE;
 				break;
 			default:
 				AMDGV_DEBUG("No live data struct for op %d in amdgv_live_info_data.\n", data_op);
@@ -443,6 +446,10 @@ int amdgv_live_info_export_data(struct amdgv_adapter *adapt, uint32_t data_op,
 
 		eeprom_data->data_len = amdgv_ras_eeprom_export_live_update(adapt, eeprom_data->data_buffer);
 		*status = AMDGV_LIVE_INFO_STATUS_SUCCESS;
+		break;
+	}
+	case AMDGV_LIVE_INFO_DATA__VF_CRIT_REGION: {
+		*status = amdgv_vfmgr_export_live_data_crit_region(adapt, (struct amdgv_live_info_vf_crit_region *)data);
 		break;
 	}
 	default:
@@ -703,6 +710,10 @@ int amdgv_live_info_import_data(struct amdgv_adapter *adapt, uint32_t data_op,
 				*status = AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
 		} else
 			*status = AMDGV_LIVE_INFO_STATUS_SUCCESS;
+		break;
+	}
+	case AMDGV_LIVE_INFO_DATA__VF_CRIT_REGION: {
+		*status = amdgv_vfmgr_import_live_data_crit_region(adapt, (struct amdgv_live_info_vf_crit_region *)data);
 		break;
 	}
 	default:

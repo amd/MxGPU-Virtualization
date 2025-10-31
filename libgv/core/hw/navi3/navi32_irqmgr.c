@@ -861,7 +861,7 @@ static int navi32_irqmgr_sw_init(struct amdgv_adapter *adapt)
 	adapt->irqmgr.ih.doorbell_index = (adapt->doorbell_index.ih) << 1;
 
 	/* register interrupt handler */
-	if (!adapt->opt.skip_hw_init) {
+	if (!amdgv_in_live_update_seq()) {
 		if (navi32_register_interrupt(adapt) < 0) {
 			AMDGV_ERROR("failed to register interrupt!\n");
 			return AMDGV_FAILURE;

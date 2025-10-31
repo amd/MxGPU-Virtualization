@@ -32,6 +32,14 @@ smi_tss_t smi_thread_key;
 
 void smi_free_handle(void *thread)
 {
+#ifdef AMD_SMI_NIC_SUPPORT
+	smi_thread_ctx *ctx = (smi_thread_ctx *)thread;
+	if (ctx && ctx->nic_init && ctx->nic_ctx) {
+		smi_nic_destroy_context(ctx->nic_ctx);
+		ctx->nic_ctx = NULL;
+		ctx->nic_init = false;
+	}
+#endif
 	free(thread);
 }
 

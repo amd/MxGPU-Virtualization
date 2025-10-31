@@ -25,6 +25,7 @@
 extern "C" {
 #include "amdsmi.h"
 #include "common/smi_cmd.h"
+#include "smi_processor_handle.h"
 }
 
 #include "smi_system_mock.hpp"
@@ -36,7 +37,12 @@ using amdsmi::SetResponseStatus;
 
 class AmdSmiMetricsTest : public amdsmi::AmdSmiTest {
 protected:
-	smi_device_handle_t GPU_MOCK_HANDLE_DIFF = { (0x1234ULL << 32) | 0x4321 };
+	struct smi_gpu_handle GPU_MOCK_HANDLE_DIFF = {
+		SMI_PROCESSOR_TYPE_AMD_GPU,
+		{ { 0x4, 0x3, 0x2, 0x2 } },
+		(0x1234ULL << 32) | 0x4321,
+		0x8765
+	};
 };
 
 TEST_F(AmdSmiMetricsTest, IoctlFailed)
@@ -55,9 +61,11 @@ TEST_F(AmdSmiMetricsTest, IoctlFailed)
 TEST_F(AmdSmiMetricsTest, InvalidParams)
 {
 	amdsmi_metric_t metrics;
+	uint32_t size = 300;
 
 	ASSERT_EQ(amdsmi_get_gpu_metrics(&GPU_MOCK_HANDLE, NULL, NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_gpu_metrics(&GPU_MOCK_HANDLE, NULL, &metrics), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_metrics(&NIC_MOCK_HANDLE, &size, &metrics), AMDSMI_STATUS_INVAL);
 }
 
 TEST_F(AmdSmiMetricsTest, GetChipletMetricsAllocFail)

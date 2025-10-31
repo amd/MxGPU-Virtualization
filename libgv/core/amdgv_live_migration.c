@@ -61,7 +61,11 @@ int amdgv_live_migration_set_vf_mig_state(struct amdgv_adapter *adapt, uint32_t 
 	switch (state) {
 	case AMDGV_MIGRATION_VF_STATE_DEFAULT:
 		AMDGV_MIGRATION_CLEAR_ABORT(adapt, idx_vf);
+		adapt->dirtybit.acc_bits[idx_vf].is_first_query = false;
 		break;
+	case AMDGV_MIGRATION_VF_STATE_PRE_COPY:
+		/* Always have pre_copy */
+		adapt->dirtybit.acc_bits[idx_vf].is_first_query = true;
 	default:
 		break;
 	}

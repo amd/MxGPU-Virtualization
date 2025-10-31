@@ -38,6 +38,7 @@ public:
 	int list_command(int format, unsigned int gpu_index, std::string bdf, char *uuid,
 					 std::string &formatted_string);
 	virtual int amdsmi_get_gpu_count(unsigned int &gpu_count) override;
+	virtual int amdsmi_get_device_count(unsigned int &device_count, int device_type) override;
 
 	virtual int amdsmi_get_list_command(Arguments arg, std::string& out) override;
 	virtual int csv_recursion(std::string& main_buffer,

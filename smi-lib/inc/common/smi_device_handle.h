@@ -23,18 +23,9 @@
 #ifndef __SMI_DEVICE_HANDLE_H__
 #define __SMI_DEVICE_HANDLE_H__
 
-#define AMDSMI_MAX_DEVICES 32
-
 typedef struct device_handle {
-    uint64_t handle;
-    uint64_t device_id;
+	uint64_t handle;
+	uint64_t device_id;
 } smi_device_handle_t;
-
-typedef struct device_handles {
-    smi_device_handle_t handles[AMDSMI_MAX_DEVICES];
-    unsigned int device_size;
-    uint32_t padding;
-    uint64_t reserved[7];
-} smi_device_handles_t;
 
 #endif // __SMI_DEVICE_HANDLE_H__

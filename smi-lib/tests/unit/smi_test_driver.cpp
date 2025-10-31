@@ -43,11 +43,19 @@ class AmdSmiHostDriverTests : public amdsmi::AmdSmiTest {
 TEST_F(AmdSmiHostDriverTests, InvalidParams)
 {
 	int ret;
+	amdsmi_driver_info_t driver;
+	amdsmi_driver_model_type_t model;
 
 	ret = amdsmi_get_gpu_driver_info(&GPU_MOCK_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+	ret = amdsmi_get_gpu_driver_info(&NIC_MOCK_HANDLE, &driver);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
 	ret = amdsmi_get_gpu_driver_model(&GPU_MOCK_HANDLE, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_gpu_driver_model(&NIC_MOCK_HANDLE, &model);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
 

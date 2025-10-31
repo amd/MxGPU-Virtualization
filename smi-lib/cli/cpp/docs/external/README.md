@@ -64,53 +64,53 @@ The commands and their descriptions are the following:
 
 * discovery (list)
 
-    Lists all GPUs and VFs on the system, sorted by BDF, and their most basic general
+    Lists all devices and VFs on the system, sorted by BDF, and their most basic general
     information
 
 * static
 
-    Displays all specified static information for the specified GPU
+    Displays all static information for all devices detected on the system
 
 * firmware (ucode)
 
-    Displays all microcode information for the specified GPU
+    Displays all microcode information for the specified device (GPU only)
 
 * bad-pages
 
-    Displays all bad page information for the specified GPU
+    Displays all bad page information for the specified device (GPU only)
 
 * metric
 
-    Displays all specified metric information for the specified GPU
+    Displays all metric information for for all devices detected on the system
 
 * profile
 
-    Displays information about all profiles and current profile
+    Displays information about all profiles and current profile (GPU only)
 
 * event
 
-    Displays event information for given GPU.
+    Displays event information for given device (GPU only)
 
 * topology
 
-    Displays link topology information.
+    Displays link topology information. (GPU only)
 
 * xgmi
 
-    Displays XGMI capabilities, framebuffer sharing and metric information
+    Displays XGMI capabilities, framebuffer sharing and metric information (GPU only)
 
 * partition
 
-    Displays partitionig information, such as memory and accelerator
+    Displays partitionig information, such as memory and accelerator (GPU only)
 
 * reset
 
     Cleanup VF FB for the specified VF or reset memory and accelerator
-    parittion to default mode
+    parittion to default mode (GPU only)
 
 * set
 
-    Set xgmi frame buffer sharing mode and partitioning modes
+    Set xgmi frame buffer sharing mode and partitioning modes (GPU only)
 
 ## Command Arguments
 
@@ -121,9 +121,8 @@ Commands that do and their arguments are:
 
 * `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`
     Gets static information about the
-    specified GPU. If no argument is provided, returns information for all GPUs on the system. If
-    no static information argument is provided all static information will be returned. Static
-    arguments for the GPU are the following:
+    specified GPU. If no argument is provided, returns information for all devices
+    available on the system. If it is only --gpu without any value, then it returns information for all GPUs. If no static information argument is provided all static information will be returned. Static arguments for the GPU are the following:
   * `--asic`
           All asic information
   * `--bus`
@@ -154,6 +153,7 @@ Commands that do and their arguments are:
 * `--vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>`
  Gets general information about the specified VF (timeslice, fb info, …)
 
+
 ### firmware (ucode)
 
 * `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`
@@ -180,8 +180,8 @@ Commands that do and their arguments are:
 
 * `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`
     Gets metric information about the specified GPU
-    If no argument is provided, returns information for all GPUs on the system
-    If no metric information argument is provided all metric information will be displayed
+    If no argument is provided, returns information for all devices
+    available on the system. If it is only --gpu without any value, then it returns information for all GPUs. If no metric information argument is provided all metric information will be displayed
     Metric arguments for the GPU are the following:
   * `--usage`
         All usage information
@@ -212,6 +212,7 @@ Commands that do and their arguments are:
         All guard information
   * `--guest-data`
         All guest data information
+
 
 ### process
 

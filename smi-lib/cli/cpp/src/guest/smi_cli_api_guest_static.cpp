@@ -18,7 +18,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#include "interface/amdsmi.h"
+#include "amdsmi_guest.h"
 #include "smi_cli_api_guest.h"
 #include "smi_cli_parser.h"
 #include "smi_cli_logger_err.h"
@@ -58,6 +58,8 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_RAS_FEATURE_INFO)(amdsmi_processor_hand
 		amdsmi_ras_feature_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_POWER_INFO)(amdsmi_processor_handle,
 		amdsmi_power_info_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_POWER_CAP_INFO)(amdsmi_processor_handle,
+		 uint32_t, amdsmi_power_cap_info_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_TEMP_METRIC)(amdsmi_processor_handle,
 		amdsmi_temperature_type_t,
 		amdsmi_temperature_metric_t, int64_t *);
@@ -71,6 +73,7 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_VIRTUALIZATION_MODE)(amdsmi_processor_h
 extern AMDSMI_GET_PROCESSOR_HANDLES guest_amdsmi_get_processor_handles;
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF guest_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_POWER_INFO guest_amdsmi_get_power_info;
+extern AMDSMI_GET_POWER_CAP_INFO guest_amdsmi_get_power_cap_info;
 extern AMDSMI_GET_TEMP_METRIC guest_amdsmi_get_temp_metric;
 extern AMDSMI_GET_GPU_ASIC_INFO guest_amdsmi_get_gpu_asic_info;
 extern AMDSMI_GET_GPU_DEVICE_BDF guest_amdsmi_get_gpu_device_bdf;
@@ -391,18 +394,19 @@ int AmdSmiApiGuest::amdsmi_get_vbios_info_command(uint64_t processor_bdf, Argume
 		nlohmann::ordered_json vbios_json = { { "name", vbios_name },
 			{ "build_date", vbios_info.build_date },
 			{ "part_number", vbios_info.part_number },
-			{ "version", vbios_info.version }
+			{ "version", vbios_info.version },
+			{ "boot_firmware", vbios_info.boot_firmware }
 		};
 
 		formatted_string = vbios_json.dump(4);
 	} else if (arg.output == csv) {
 		formatted_string = string_format(
-							   ",%s,%s,%s,%s", vbios_name.c_str(), vbios_info.build_date,
-							   vbios_info.part_number, vbios_info.version);
+							   ",%s,%s,%s,%s,%s", vbios_name.c_str(), vbios_info.build_date,
+							   vbios_info.part_number, vbios_info.version, vbios_info.boot_firmware);
 	} else {
 		formatted_string = string_format(
 							   staticVbiosTemplate, vbios_name.c_str(), vbios_info.build_date,
-							   vbios_info.part_number, vbios_info.version);
+							   vbios_info.part_number, vbios_info.version, vbios_info.boot_firmware);
 	}
 
 	return ret;
@@ -417,6 +421,7 @@ int AmdSmiApiGuest::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argume
 	int ret;
 
 	amdsmi_power_info_t power_limit;
+	amdsmi_power_cap_info_t power_cap;
 	int64_t therm_limit_edge;
 	int64_t therm_limit_junction;
 
@@ -435,13 +440,17 @@ int AmdSmiApiGuest::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argume
 	std::string power_limit_string{};
 	ret = guest_amdsmi_get_power_info(processor, &power_limit);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
-		max_board_power_limit_string = "N/A";
 		power_limit_string = "N/A";
 	} else {
-		max_board_power_limit_string = string_format(
-										   "%ld", power_limit.max_board_power_limit);
 		power_limit_string = string_format(
 								 "%ld", power_limit.power_limit);
+	}
+	ret = guest_amdsmi_get_power_cap_info(processor, 0, &power_cap);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		max_board_power_limit_string = "N/A";
+	} else {
+		max_board_power_limit_string = string_format(
+										   "%ld", power_cap.power_cap);
 	}
 
 	ret = guest_amdsmi_get_temp_metric(
@@ -475,7 +484,7 @@ int AmdSmiApiGuest::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argume
 	if (arg.output == json) {
 		nlohmann::ordered_json values_json{};
 
-		nlohmann::ordered_json limit_json = { { "max_power", power_limit.max_board_power_limit } };
+		nlohmann::ordered_json limit_json = { { "max_power", power_cap.power_cap } };
 		limit_json["current_power"] = power_limit.power_limit;
 		limit_json["slowdown_edge_temperature"] = therm_limit_edge_string.c_str();
 		limit_json["slowdown_hotspot_temperature"] = therm_limit_junction;

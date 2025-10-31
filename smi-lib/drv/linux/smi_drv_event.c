@@ -114,7 +114,7 @@ static ssize_t smi_lnx_event_read(smi_process_handle filp, char __user *buf, siz
 			ctx->event.subcode =
 				AMDGV_ERROR_SUBCODE(entry->error_code);
 			ctx->event.level = entry->error_level;
-			ctx->event.dev_id = ctx->dev_id.handle;
+			ctx->event.processor_handle.handle = ctx->dev_id.handle;
 
 			if (entry->vf_idx == SMI_PF_INDEX)
 				ctx->event.fcn_id.handle = ctx->dev_id.handle;
@@ -125,7 +125,7 @@ static ssize_t smi_lnx_event_read(smi_process_handle filp, char __user *buf, siz
 			amdgv_error_get_error_text(entry->error_code,
 				entry->error_data,
 				ctx->event.message, SMI_EVENT_MSG_SIZE);
-
+			ctx->event.data = entry->error_data;
 			if (copy_to_user(buf + ptr, &ctx->event,
 					sizeof(struct smi_event_entry))) {
 				ret = -EFAULT;

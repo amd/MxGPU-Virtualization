@@ -1,7 +1,8 @@
 Start at the project root
 
 ``` sh
-cd ./gim
+$ ls
+gim  LICENSE  package  README.md  ...etc
 ```
 
 If you are not using git, or doesn't have the proper git tags, you can set the version with
@@ -30,18 +31,18 @@ then package can be built with
 # copy the package files to the project root
 cp -r ./package/deb ./debian
 # update the change log
-debchange --newversion=$(./dkms/get-version)
+debchange --newversion=$(./gim/dkms/get-version)
 # build the package,
 dpkg-buildpackage -tc
 ```
 
-This should create a package at the parent directory, i.e. in the same directory as ./gim.
+This should create a package at the parent directory, i.e. one level above the project root.
 
 # To make a rpm package:
 
 Install the dependencies:
 ``` sh
-    dnf install rpm-build
+dnf install rpm-build
 ```
 
 and run

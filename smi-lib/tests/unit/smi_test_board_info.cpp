@@ -97,29 +97,52 @@ TEST_F(AmdSmiBoardTests, InvalidParams)
 	int ret;
 	uint32_t sensor_ind = 0;
 	amdsmi_virtualization_mode_t mode;
+	amdsmi_asic_info_t asic;
+	amdsmi_vram_info_t vram;
+	amdsmi_power_cap_info_t power_cap;
+	amdsmi_pf_fb_info_t fb;
+	uint64_t cap = 0;
 
 	ret = amdsmi_get_gpu_asic_info(&GPU_MOCK_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_get_gpu_asic_info(&GPU_MOCK_HANDLE, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_gpu_asic_info(&NIC_MOCK_HANDLE, &asic);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_get_gpu_vram_info(&GPU_MOCK_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+	ret = amdsmi_get_gpu_vram_info(&NIC_MOCK_HANDLE, &vram);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
 	ret = amdsmi_get_power_cap_info(&GPU_MOCK_HANDLE, sensor_ind, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_power_cap_info(&NIC_MOCK_HANDLE, sensor_ind, &power_cap);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_set_power_cap(NULL, sensor_ind, 0);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+	ret = amdsmi_set_power_cap(&NIC_MOCK_HANDLE, sensor_ind, cap);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
 	ret = amdsmi_get_fb_layout(&GPU_MOCK_HANDLE, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_fb_layout(&NIC_MOCK_HANDLE, &fb);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_get_pcie_info(&GPU_MOCK_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_get_gpu_virtualization_mode(NULL, &mode);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_gpu_virtualization_mode(&NIC_MOCK_HANDLE, &mode);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
 
@@ -304,9 +327,8 @@ TEST_F(AmdSmiBoardTests, GetVirtualizationMode_Sucess)
 {
 	int ret;
 	amdsmi_virtualization_mode_t mode;
-	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 
-	ret = amdsmi_get_gpu_virtualization_mode(&MOCK_GPU_HANDLE, &mode);
+	ret = amdsmi_get_gpu_virtualization_mode(&GPU_MOCK_HANDLE, &mode);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(mode, AMDSMI_VIRTUALIZATION_MODE_HOST);
 }

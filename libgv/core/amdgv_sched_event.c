@@ -160,6 +160,8 @@ static const char *amdgv_event_name(uint32_t event)
 		return "QUERY_DIRTYBIT_DATA";
 	case AMDGV_EVENT_SET_VF_MIGRATION_STATE:
 		return "SET_VF_MIGRATION_STATE";
+	case AMDGV_EVENT_VF_MIGRATION_SET_ABORT:
+		return "VF_MIGRATION_ABORT_SET_ABORT";
 	case AMDGV_EVENT_SCHED_VF_REQ_RAS_CHK_CRITI_REGION:
 		return "SCHED_VF_REQ_RAS_CHK_CRITI_REGION";
 	case AMDGV_EVENT_SCHED_SET_VF_COND_AVAIL:
@@ -779,6 +781,7 @@ static void amdgv_sched_event_arrange_event_list(struct amdgv_adapter *adapt,
 		case AMDGV_EVENT_SCHED_GPUMON:
 		case AMDGV_EVENT_SCHED_UPDATE_MCA_BANKS:
 		case AMDGV_EVENT_SCHED_GET_TOPOLOGY:
+		case AMDGV_EVENT_VF_MIGRATION_SET_ABORT:
 		case AMDGV_EVENT_SET_VF_MIGRATION_STATE:
 			amdgv_list_move_tail(
 				&entry->list,
@@ -974,6 +977,7 @@ static void amdgv_sched_push_back_event(struct amdgv_adapter *adapt,
 	case AMDGV_EVENT_SCHED_GPUMON:
 	case AMDGV_EVENT_SCHED_UPDATE_MCA_BANKS:
 	case AMDGV_EVENT_SCHED_GET_TOPOLOGY:
+	case AMDGV_EVENT_VF_MIGRATION_SET_ABORT:
 	case AMDGV_EVENT_SET_VF_MIGRATION_STATE:
 		adapt->sched.curr_event_list_idx = AMDGV_SCHED_EVENT_LIST_5;
 		amdgv_list_add(&entry->list,
@@ -1507,6 +1511,9 @@ static int amdgv_sched_handle_rel_gpu_fini(struct amdgv_adapter *adapt, uint32_t
 
 	adapt->array_vf[idx_vf].vf_status = AMDGV_VF_STATUS_END_UNINIT;
 	set_to_avail_vf(idx_vf);
+
+	// Attempt VF arbiters reset (covers guest driver unload)
+	amdgv_reset_vf_arbiters(adapt, idx_vf);
 
 	return ret;
 }
@@ -2958,6 +2965,9 @@ static int handle_event_in_full_access(struct amdgv_adapter *adapt,
 		AMDGV_DEBUG("Migration aborted by event %d\n", event->id);
 		*event->data.migration_state.result = AMDGV_FAILURE;
 		break;
+	case AMDGV_EVENT_VF_MIGRATION_SET_ABORT:
+		AMDGV_DEBUG("Migration aborted by event %d\n", event->id);
+		break;
 	case AMDGV_EVENT_EXIT_POWER_SAVING:
 	case AMDGV_EVENT_ENTER_POWER_SAVING:
 		amdgv_sched_push_back_event(adapt, event);
@@ -3033,7 +3043,8 @@ static int handle_event_in_non_full_access(struct amdgv_adapter *adapt,
 	     (event->id != AMDGV_EVENT_SCHED_UPDATE_MCA_BANKS) &&
 	     (event->id != AMDGV_EVENT_VF_FB_COPY) &&
 	     (event->id != AMDGV_EVENT_QUERY_DIRTYBIT_DATA) &&
-	     (event->id != AMDGV_EVENT_SET_VF_MIGRATION_STATE)))
+	     (event->id != AMDGV_EVENT_SET_VF_MIGRATION_STATE) &&
+	     (event->id != AMDGV_EVENT_VF_MIGRATION_SET_ABORT)))
 		return 0;
 
 	/*
@@ -3044,6 +3055,7 @@ static int handle_event_in_non_full_access(struct amdgv_adapter *adapt,
 	    (event->id != AMDGV_EVENT_VF_FB_COPY) &&
 	    (event->id != AMDGV_EVENT_QUERY_DIRTYBIT_DATA) &&
 	    (event->id != AMDGV_EVENT_SET_VF_MIGRATION_STATE) &&
+		(event->id != AMDGV_EVENT_VF_MIGRATION_SET_ABORT) &&
 	    (event->id != AMDGV_EVENT_EXIT_POWER_SAVING) &&
 		(event->id != AMDGV_EVENT_SCHED_RESUME_LIVE) &&
 		(!(adapt->debug.in_live_debugging && event->id == AMDGV_EVENT_REL_GPU_DEBUG)) &&
@@ -3064,8 +3076,10 @@ static int handle_event_in_non_full_access(struct amdgv_adapter *adapt,
 
 	switch (event->id) {
 	case AMDGV_EVENT_REQ_GPU_INIT_DATA:
-		if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)
+		if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION) {
 			amdgv_dirtybit_clear_fb_dbit(adapt, event->idx_vf);
+			AMDGV_MIGRATION_CLEAR_ABORT(adapt, event->idx_vf);
+		}
 
 		/* reprogram VF's golden setting */
 		amdgv_misc_reprogram_golden_settings(adapt, event->idx_vf);
@@ -3674,6 +3688,19 @@ set_to_cond_avail:
 		*event->data.dirtybit_query_data.result =
 			amdgv_dirtybit_querydata(adapt, &event->data.dirtybit_query_data.data);
 
+		if (*event->data.dirtybit_query_data.result == 0) {
+			if (adapt->dirtybit.acc_bits[event->idx_vf].is_first_query) {
+				/* The queried Dbit(new bits) may be incomplete, so OR the acc bits to the
+				 * queried bits(new bits) to get the complete Dbit at the first query of the LM.
+				 */
+				if (amdgv_merge_acc_bits_to_new_bits(adapt, &event->data.dirtybit_query_data.data)) {
+					AMDGV_ERROR("Failed to update dbit plane data for VF[%d]\n", event->idx_vf);
+					*event->data.dirtybit_query_data.result = AMDGV_FAILURE;
+				}
+				adapt->dirtybit.acc_bits[event->idx_vf].is_first_query = false;
+			}
+		}
+
 		break;
 	case AMDGV_EVENT_SET_VF_MIGRATION_STATE:
 		*event->data.migration_state.result =
@@ -3688,6 +3715,9 @@ set_to_cond_avail:
 			}
 			adapt->live_migration.mig_state[event->idx_vf].is_target = false;
 		}
+		break;
+	case AMDGV_EVENT_VF_MIGRATION_SET_ABORT:
+		AMDGV_MIGRATION_SET_ABORT(adapt, event->idx_vf);
 		break;
 	case AMDGV_EVENT_SCHED_SET_VF_COND_AVAIL:
 		ret = amdgv_sched_event_set_vf_cond_avail(adapt, event->idx_vf);

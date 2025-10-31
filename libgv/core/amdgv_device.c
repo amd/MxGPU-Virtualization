@@ -1346,7 +1346,7 @@ static int amdgv_device_func_sw_init(struct amdgv_adapter *adapt)
 		}
 		sw_init_complete[i] = true;
 
-		if (adapt->opt.skip_hw_init && adapt->memmgr_pf.is_init && !imported_memmgr) {
+		if (amdgv_in_live_update_seq() && adapt->memmgr_pf.is_init && !imported_memmgr) {
 			if (amdgv_import_data_by_op(adapt, AMDGV_LIVE_INFO_DATA__MEMMGR)) {
 				init_func->sw_fini(adapt);
 				init_func->sw_init(adapt);
@@ -1354,7 +1354,7 @@ static int amdgv_device_func_sw_init(struct amdgv_adapter *adapt)
 			imported_memmgr = true;
 		}
 
-		if (init_func->hw_priority) {
+		if (!amdgv_in_live_update_seq() && init_func->hw_priority) {
 			AMDGV_INFO("start hw_init of %s\n", init_func->name);
 			if (init_func->hw_init && init_func->hw_init(adapt) < 0) {
 				amdgv_print_failed_init_name(adapt, false, init_func->name);
@@ -1398,7 +1398,7 @@ static int amdgv_device_func_hw_init(struct amdgv_adapter *adapt)
 	int j;
 	struct amdgv_init_func *init_func;
 
-	if (adapt->opt.skip_hw_init) {
+	if (amdgv_in_live_update_seq()) {
 		int ret;
 		uint32_t world_switch_id;
 		uint32_t hw_sched_id;
@@ -1840,10 +1840,10 @@ struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_da
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_DIAG_DATA_INIT_FAIL, 0);
 
 	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_UPDATE) {
-		if (adapt->opt.skip_hw_init)
+		if (amdgv_in_live_update_seq())
 			adapt->live_update_state = AMDGV_LIVE_UPDATE_RESTORE;
 	} else {
-		adapt->in_live_update = adapt->opt.skip_hw_init ? true : false;
+		adapt->in_live_update = amdgv_in_live_update_seq() ? true : false;
 	}
 
 	amdgv_import_data_by_op(adapt, AMDGV_LIVE_INFO_DATA__MODULE_PARAM_PRE);
@@ -1871,7 +1871,7 @@ struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_da
 	}
 
 	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_UPDATE)) {
-		if (adapt->opt.skip_hw_init) {
+		if (amdgv_in_live_update_seq()) {
 			AMDGV_DEBUG("Resume sched.\n");
 			amdgv_unlock_sched_ex(adapt, opt);
 			amdgv_import_data_by_op(adapt, AMDGV_LIVE_INFO_DATA__UNPROCESSED_EVENT);

@@ -23,6 +23,7 @@
 #include "amdgv_device.h"
 #include "amdgv_dirtybit.h"
 #include "amdgv_api.h"
+#include "amdgv_sched_internal.h"
 
 static const uint32_t this_block = AMDGV_LIVE_MIGRATION_BLOCK;
 
@@ -56,6 +57,137 @@ int amdgv_dirtybit_control(struct amdgv_adapter *adapt, bool enable)
 	return ret;
 }
 
+int amdgv_dirtybit_assgin_acc_bits_to_vf(struct amdgv_adapter *adapt)
+{
+	uint32_t idx_vf;
+	struct amdgv_vf_device *entry;
+	uint64_t fb_size;
+	uint64_t fb_offset;
+	uint32_t dirty_page_size;
+	uint32_t byte_size;
+
+	if (adapt->dirtybit.acc_bits_whole_fb == NULL)
+		return 0;
+
+	if (amdgv_dirtybit_get_dirty_page_size(adapt, &dirty_page_size))
+		return AMDGV_FAILURE;
+
+	for (idx_vf = 0; idx_vf < adapt->num_vf; idx_vf++) {
+		entry = &adapt->array_vf[idx_vf];
+		fb_size = MBYTES_TO_BYTES(entry->fb_size);
+		fb_offset = MBYTES_TO_BYTES(entry->fb_offset);
+
+		byte_size = amdgv_fb_size_to_byte_size(fb_offset, dirty_page_size);
+		adapt->dirtybit.acc_bits[idx_vf].ptr = (char *)adapt->dirtybit.acc_bits_whole_fb + byte_size;
+
+		byte_size = amdgv_fb_size_to_byte_size(fb_size, dirty_page_size);
+		adapt->dirtybit.acc_bits[idx_vf].size = byte_size;
+
+		AMDGV_DEBUG("Set VF[%d] acc_bits, offset=0x%x, size=0x%x\n", idx_vf,
+			   amdgv_fb_size_to_byte_size(fb_offset, dirty_page_size),
+			   amdgv_fb_size_to_byte_size(fb_size, dirty_page_size));
+	}
+
+	return 0;
+}
+
+void amdgv_dirtybit_destroy_vf_acc_bits(struct amdgv_adapter *adapt)
+{
+	uint32_t idx_vf;
+
+	for (idx_vf = 0; idx_vf < adapt->num_vf; idx_vf++) {
+		adapt->dirtybit.acc_bits[idx_vf].ptr = NULL;
+		adapt->dirtybit.acc_bits[idx_vf].size = 0;
+	}
+}
+
+static void amdgv_dirtybit_set_vf_acc_bits(struct amdgv_adapter *adapt, uint32_t idx_vf, char pattern)
+{
+	if (adapt->dirtybit.acc_bits[idx_vf].ptr == NULL)
+		return;
+
+	oss_memset(adapt->dirtybit.acc_bits[idx_vf].ptr, pattern, adapt->dirtybit.acc_bits[idx_vf].size);
+}
+
+void amdgv_dirtybit_set_vfs_acc_bits(struct amdgv_adapter *adapt, char pattern)
+{
+	uint32_t idx_vf;
+
+	for (idx_vf = 0; idx_vf < adapt->num_vf; idx_vf++)
+		amdgv_dirtybit_set_vf_acc_bits(adapt, idx_vf, pattern);
+}
+
+/*
+ * Update the bitmap from the acc bits to data->dbit_plane_data_buffer, or vise versa
+ * data: the query dirty bit data
+ * to_acc_bits: true if update to acc bits, false if update to data->dbit_plane_data_buffer
+ */
+static int amdgv_dirtybit_merge_bitmap(struct amdgv_adapter *adapt,
+				 struct amdgv_query_dirty_bit_data *data,
+				 bool to_acc_bits)
+{
+	uint32_t idx_vf = data->idx_vf;
+	void *acc_bits = adapt->dirtybit.acc_bits[idx_vf].ptr;
+	void *bitmap = data->dbit_plane_data_buffer;
+	uint32_t *src, *dst;
+	int i = 0;
+	uint32_t dirty_page_size = 0;
+	uint32_t byte_offset;
+	uint32_t byte_size;
+
+	if (acc_bits == NULL)
+		return 0;
+
+	if (acc_bits == bitmap) {
+		return 0;
+	}
+
+	if (amdgv_dirtybit_get_dirty_page_size(adapt, &dirty_page_size)) {
+		AMDGV_ERROR("Failed to get dirty page size.\n");
+		return AMDGV_FAILURE;
+	}
+
+	byte_size = amdgv_fb_size_to_byte_size(data->query_size, dirty_page_size);
+	byte_offset = amdgv_fb_size_to_byte_size(data->query_fb_offset, dirty_page_size);
+
+	acc_bits = (char *)acc_bits + byte_offset;
+
+	if (to_acc_bits) {
+		src = bitmap;
+		dst = acc_bits;
+	} else {
+		src = acc_bits;
+		dst = bitmap;
+	}
+
+	for (i = 0; i < byte_size / sizeof(uint32_t); i++) {
+		if (src[i] != 0)
+			dst[i] |= src[i];
+	}
+
+	src += i;
+	dst += i;
+
+	for (i = 0; i < byte_size % sizeof(uint32_t); i++) {
+		if (*((char *)src + i) != 0)
+			*((char *)dst + i) |= *((char *)src + i);
+	}
+
+	return 0;
+}
+
+static inline int amdgv_merge_new_bits_to_acc_bits(struct amdgv_adapter *adapt,
+				     struct amdgv_query_dirty_bit_data *data)
+{
+	return amdgv_dirtybit_merge_bitmap(adapt, data, true);
+}
+
+int amdgv_merge_acc_bits_to_new_bits(struct amdgv_adapter *adapt,
+			     struct amdgv_query_dirty_bit_data *data)
+{
+	return amdgv_dirtybit_merge_bitmap(adapt, data, false);
+}
+
 int amdgv_dirtybit_querydata(struct amdgv_adapter *adapt,
 				struct amdgv_query_dirty_bit_data *data)
 {
@@ -79,54 +211,95 @@ int amdgv_dirtybit_querydata(struct amdgv_adapter *adapt,
 	if (adapt->dirtybit.funcs &&
 		adapt->dirtybit.funcs->query_data) {
 		ret = adapt->dirtybit.funcs->query_data(adapt, data);
+		if (ret == 0) {
+			/* HW Dbit may be lost due to VF FLR, LM failure, etc.
+			 * We need to record all the Dbits to ensure the success
+			 * of incoming LM.
+			 */
+			if (amdgv_merge_new_bits_to_acc_bits(adapt, data)) {
+				AMDGV_ERROR("Failed to merge bitmap to acc bits\n");
+				AMDGV_WARN("Set VF[%d] whole fb to dirty\n", data->idx_vf);
+				amdgv_dirtybit_set_vf_acc_bits(adapt, data->idx_vf, 0xff);
+			}
+		} else {
+			AMDGV_WARN("Set VF[%d] whole fb to dirty\n", data->idx_vf);
+			amdgv_dirtybit_set_vf_acc_bits(adapt, data->idx_vf, 0xff);
+		}
 	} else {
 		AMDGV_ERROR("query_data is not properly defined.");
+		AMDGV_WARN("Set VF[%d] whole fb to dirty\n", data->idx_vf);
+		amdgv_dirtybit_set_vf_acc_bits(adapt, data->idx_vf, 0xff);
 		ret = AMDGV_FAILURE;
 	}
 
 	return ret;
 }
 
-int amdgv_dirtybit_clear_fb_dbit(struct amdgv_adapter *adapt,  uint32_t idx_vf)
+static inline void amdgv_dirtybit_prepare_query_params(struct amdgv_adapter *adapt,
+					     struct amdgv_query_dirty_bit_data *data,
+					     uint32_t idx_vf,
+					     uint64_t fb_offset,
+					     uint64_t fb_size,
+					     void *bitmap,
+					     uint32_t size,
+					     bool preserve)
 {
-	struct amdgv_query_dirty_bit_data query_info;
-	struct amdgv_vf_device *entry = &adapt->array_vf[idx_vf];
-	uint64_t fb_size = MBYTES_TO_BYTES(entry->fb_size);
-	uint32_t dirty_page_size;
-	uint32_t bitmap_size;
-	uint32_t *bitmap_buf;
+	data->query_fb_offset = fb_offset;
+	data->query_size = fb_size;
+	data->dbit_plane_data_buffer = bitmap;
+	data->dbit_plane_data_size = size;
+	data->dbit_preserve = preserve;// clear the Dbit
+	data->idx_vf = idx_vf;
+}
 
-	if (idx_vf == AMDGV_PF_IDX)
-		return 0;
+int amdgv_dirtybit_query_vf_fb_dbit(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	uint32_t bitmap_size = 0;
+	uint32_t *bitmap = NULL;
+	uint64_t fb_size = MBYTES_TO_BYTES(adapt->array_vf[idx_vf].fb_size);
+	uint32_t dirty_page_size = 0;
+	struct amdgv_query_dirty_bit_data query_params;
+	int ret = 0;
 
 	if (amdgv_dirtybit_get_dirty_page_size(adapt, &dirty_page_size)) {
 		AMDGV_ERROR("Failed to get dirty page size.\n");
 		return AMDGV_FAILURE;
 	}
-	bitmap_size = amdgv_fb_size_to_bitmap_size(fb_size, dirty_page_size);
-	bitmap_buf = (uint32_t *)oss_zalloc(bitmap_size);
-	if (bitmap_buf == NULL) {
+
+	bitmap_size = amdgv_fb_size_to_bitmap_size_align(fb_size, dirty_page_size);
+	bitmap = (uint32_t *)oss_zalloc(bitmap_size);
+	if (bitmap == NULL) {
 		AMDGV_ERROR("Failed to allocate memory for dirty bit\n");
 		return AMDGV_FAILURE;
 	}
 
-	query_info.query_fb_offset = 0;
-	query_info.query_size = fb_size;
-	query_info.dbit_plane_data_buffer = bitmap_buf;
-	query_info.dbit_plane_data_size = bitmap_size;
-	query_info.dbit_preserve = 0;// clear the Dbit
-	query_info.idx_vf = idx_vf;
+	amdgv_dirtybit_prepare_query_params(adapt, &query_params, idx_vf,
+					    0, fb_size, bitmap, bitmap_size, false);
+	ret = amdgv_dirtybit_querydata(adapt, &query_params);
+	if (ret)
+		AMDGV_WARN("Failed to query VF[%d] FB Dbit\n", idx_vf);
 
-	/* Clear the Dbit by querying the whole VF FB,
-	 * bm_info.dbit_preserve = 0 will clear the Dbit when querying
+	oss_free(bitmap);
+
+	return ret;
+}
+
+int amdgv_dirtybit_clear_fb_dbit(struct amdgv_adapter *adapt,  uint32_t idx_vf)
+{
+	int ret = 0;
+
+	/* Clear the Dbit by querying the whole VF FB with preserve = false,
+	 * preserve = false will clear the Dbit when querying
 	 */
-	if (amdgv_dirtybit_querydata(adapt, &query_info)) {
+	if (amdgv_dirtybit_query_vf_fb_dbit(adapt, idx_vf)) {
 		AMDGV_WARN("Failed to clear VF[%d] FB dbit\n", idx_vf);
-		oss_free(bitmap_buf);
-		return AMDGV_FAILURE;
+		ret = AMDGV_FAILURE;
+	} else {
+		AMDGV_INFO("VF[%d] FB dbit cleared\n", idx_vf);
+		ret = 0;
 	}
 
-	AMDGV_INFO("VF[%d] FB dbit cleared\n", idx_vf);
-	oss_free(bitmap_buf);
-	return 0;
+	amdgv_dirtybit_set_vf_acc_bits(adapt, idx_vf, 0);
+
+	return ret;
 }

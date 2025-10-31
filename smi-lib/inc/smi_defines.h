@@ -44,6 +44,24 @@ BOOL init_smi_once(PINIT_ONCE InitOnce, PVOID Parameter, PVOID * lpContext);
 #else
 void init_smi_once(void);
 #endif
+
+#ifdef AMD_SMI_NIC_SUPPORT
+#define AMDSMI_INIT_NIC_CONTEXT \
+	do { \
+		if (!smi_req.thread->nic_init) { \
+			int ret = smi_nic_create_context(&smi_req.thread->nic_ctx); \
+			if (ret != SMI_NIC_STATUS_SUCCESS) { \
+				smi_req.thread->nic_ctx = NULL; \
+				smi_req.thread->nic_init = false; \
+				smi_mutex_unlock(&g_smi_handle.lock); \
+			} \
+			smi_req.thread->nic_init = true; \
+		} \
+	} while (0);
+#else
+#define AMDSMI_INIT_NIC_CONTEXT
+#endif
+
 #define AMDSMI_GET_HANDLE                                                                    \
 	do {                                                                                  \
 		smi_run_once(&smi_init_flag, init_smi_once);                                  \
@@ -54,9 +72,11 @@ void init_smi_once(void);
 			smi_req.thread = calloc(1, sizeof(smi_thread_ctx));                   \
 			if (smi_req.thread == NULL) {                                         \
 				smi_mutex_unlock(&g_smi_handle.lock);                         \
-				return AMDSMI_STATUS_OUT_OF_RESOURCES;                                        \
+				return AMDSMI_STATUS_OUT_OF_RESOURCES;                        \
 			}                                                                     \
+			smi_tss_set(smi_thread_key, smi_req.thread);                          \
 		}                                                                             \
+		AMDSMI_INIT_NIC_CONTEXT;                                                      \
 	} while (0)
 
 #define AMDSMI_ESCAPE_IF_NOT_INIT_ON_FINI                                                    \
@@ -94,6 +114,8 @@ void init_smi_once(void);
 			smi_tss_set(smi_thread_key, smi_req.thread);                          \
 		}                                                                             \
 																					\
+		AMDSMI_INIT_NIC_CONTEXT                                             \
+																					\
 		smi_mutex_unlock(&g_smi_handle.lock);                                         \
 	} while (0)
 
@@ -118,10 +140,28 @@ void init_smi_once(void);
 	} while (0);
 #else
 extern smi_thread_ctx g_smi_thread;
+
+#ifdef AMD_SMI_NIC_SUPPORT
+#define AMDSMI_INIT_NIC_CONTEXT_NON_THREAD_SAFE \
+	do { \
+		if (!smi_req.thread->nic_init) { \
+			int ret = smi_nic_create_context(&smi_req.thread->nic_ctx);  \
+			if (ret != SMI_NIC_STATUS_SUCCESS) { \
+				smi_req.thread->nic_ctx = NULL; \
+				smi_req.thread->nic_init = false; \
+			} \
+			smi_req.thread->nic_init = true; \
+		} \
+	} while (0);
+#else
+#define AMDSMI_INIT_NIC_CONTEXT_NON_THREAD_SAFE
+#endif
+
 #define AMDSMI_GET_HANDLE                                                                    \
 	do {                                                                                  \
 		smi_req.handle = &g_smi_handle;                                               \
 		smi_req.thread = &g_smi_thread;                                               \
+		AMDSMI_INIT_NIC_CONTEXT_NON_THREAD_SAFE;                                       \
 	} while (0)
 
 #define AMDSMI_HANDLE_UNLOCK

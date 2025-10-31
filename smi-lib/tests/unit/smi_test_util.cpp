@@ -694,3 +694,17 @@ TEST_F(AmdSmiUtilTests, parse_cpu_list_full_range)
         EXPECT_FALSE(cpu_set[i / 64] & (1ULL << (i % 64)));
     }
 }
+
+TEST_F(AmdSmiUtilTests, smi_get_vf_device_id_from_pf_not_found)
+{
+    uint64_t vf_device_id = 0;
+    int ret;
+
+    ret = smi_get_vf_device_id_from_pf(0x1234, &vf_device_id);
+    EXPECT_EQ(ret, -1);
+    EXPECT_EQ(vf_device_id, 0xFFFF);
+
+    ret = smi_get_vf_device_id_from_pf(0x0, &vf_device_id);
+    EXPECT_EQ(ret, -1);
+    EXPECT_EQ(vf_device_id, 0xFFFF);
+}

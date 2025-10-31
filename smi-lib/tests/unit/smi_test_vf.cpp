@@ -94,6 +94,9 @@ TEST_F(AmdsmiVfTests, InvalidParams)
 {
 	int ret;
 	unsigned int buf_num = 6;
+	uint32_t num_vf_enabled, num_vf_supported;
+	uint32_t num_vf = 0;
+	amdsmi_partition_info_t partition;
 
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 	amdsmi_vf_handle_t MOCK_VF_HANDLE = VF_MOCK_HANDLE;
@@ -101,7 +104,19 @@ TEST_F(AmdsmiVfTests, InvalidParams)
 	ret = amdsmi_get_num_vf(MOCK_GPU_HANDLE, NULL, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+	ret = amdsmi_get_num_vf(&NIC_MOCK_HANDLE, &num_vf_enabled, &num_vf_supported);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_set_num_vf(NULL, num_vf);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_set_num_vf(&NIC_MOCK_HANDLE, num_vf);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
 	ret = amdsmi_get_vf_partition_info(MOCK_GPU_HANDLE, buf_num, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_vf_partition_info(&NIC_MOCK_HANDLE, buf_num, &partition);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_get_vf_info(MOCK_VF_HANDLE, NULL);

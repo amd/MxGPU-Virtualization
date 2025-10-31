@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -19,9 +19,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE
 
-LIBGV_HW_NAVI3_PATH = $(LIBGV_CORE_PATH)/hw/navi3
-
-LIBGV_HW_NAVI3_LOCAL = \
+LIBGV_HW_NAVI3_FILES = \
 	navi32_reg_init.o \
 	navi32_ip_discovery.o  \
 	navi32_mem.o \
@@ -54,6 +52,3 @@ LIBGV_HW_NAVI3_LOCAL = \
 	gfx_v11_0.o \
 	navi32_dirtybit.o \
 	mmhub_v3_0.o
-
-LIBGV_HW_NAVI3_FILES = $(addprefix core/hw/navi3/,$(LIBGV_HW_NAVI3_LOCAL))
-

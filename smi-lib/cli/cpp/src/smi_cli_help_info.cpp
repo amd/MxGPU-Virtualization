@@ -17,723 +17,746 @@
  * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-#include <string>
-
 #include "smi_cli_platform.h"
 #include "smi_cli_help_info.h"
 #include "smi_cli_helpers.h"
 #include "smi_cli_exception.h"
+#include "smi_cli_help_strings.h"
+#include "smi_cli_argument.h"
 
-std::string copyright_message =
-	"Copyright 2023-2024 Advanced Micro Devices, Inc. All rights reserved.\n\n";
-std::string help_common =
-	"usage: amd-smi help \n\n"
-	"AMD System Management Interface | %s\n\n"
-	"AMD-SMI Commands:\n"
-	"                      Descriptions:\n"
-	"    version           Display version information\n"
-	"    list              List GPU information\n"
-	"    static            Gets static information about the specified GPU\n"
-	"    metric            Gets metric information about the specified GPU\n"
-	"    monitor           Monitor metrics for target devices\n";
-std::string help_command_windows_host =
-	"    bad-pages         Gets bad page information about the specified GPU\n"
-	"    event             Displays event information for the given GPU\n"
-	"    firmware          Gets firmware information about the specified GPU\n"
-	"    profile           Displays information about all profiles and current profile\n";
-std::string help_command_linux_host =
-	"    bad-pages         Gets bad page information about the specified GPU\n"
-	"    event             Displays event information for the given GPU\n"
-	"    firmware          Gets firmware information about the specified GPU\n"
-	"    set               Set options for devices\n";
-std::string help_command_bm =
-	"    firmware          Gets firmware information about the specified GPU\n"
-	"    process           Lists general process information running on the specified GPU\n"
-	"    set               Set options for devices\n"
-	"    reset             Reset options for devices\n";
-std::string help_command_guest =
-	"    process           Lists general process information running on the specified GPU\n"
-	"    set               Set options for devices\n"
-	"    reset             Reset options for devices\n";
-std::string help_command_mi30x_host =
-	"    reset             Reset options for devices\n"
-	"    xgmi              Displays xgmi information of the devices\n"
-	"    topology          Displays topology information of the devices\n"
-	"    partition         Displays partition information of the devices\n"
-	"    ras               Displays ras information of the devices\n";
-std::string help_command_mi200_host =
-	"    set               Set options for devices\n"
-	"    reset             Reset options for devices\n"
-	"    xgmi              Displays xgmi information of the devices\n"
-	"    topology          Displays topology information of the devices\n";
-std::string version_common =
-	"usage: amd-smi version [-h | --help] [--json | --csv] [--file FILE]\n\n"
-	"Display information about current version of the tool\n\n"
-	"Version arguments:\n"
-	"                      Description:\n"
-	"    -h, --help        show this help message and exit\n\n";
-std::string list_common =
-	"usage: amd-smi list [-h | --help] [--json | --csv] [--file FILE] [-g | --gpu [GPU ...]]\n\n"
-	"List all GPUs and VFs on the system and their most basic general information.\n"
-	"If no GPU is specified, returns basic information for all GPUs on the system.\n\n"
-	"List arguments:\n"
-	"                          Description:\n"
-	"    -h, --help            show this help message and exit\n"
-	"    -g, --gpu [GPU ...]   Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n\n";
-std::string usage_static_common =
-	"usage: amd-smi static [-h | --help] [-g | --gpu [GPU ...]] [--json | --csv] [--file FILE]\n"
-	"                      [-a | --asic] [-b | --bus] [-I | --ifwi] [-d | --driver]\n";
-std::string usage_static_hyperv =
-	"                      [-p | --partition] [-pd | --xgmi-plpd]\n";
-std::string usage_static_host =
-	"                      [-l | --limit] [-B | --board] [-r | --ras] [-D | --dfc-ucode] [-f | --fb-info]\n"
-	"                      [-n | --num-vf] [-v | --vram] [-c | --cache]\n";
-std::string usage_static_host_linux =
-	"                      [-l | --limit] [-B | --board] [-r | --ras] [-f | --fb-info]\n"
-	"                      [-n | --num-vf] [-v | --vram] [-c | --cache]\n";
-std::string usage_static_host_linux_mi200 =
-	"                      [-l | --limit] [-B | --board] [-f | --fb-info]\n"
-	"                      [-n | --num-vf] [-v | --vram]\n";
-std::string usage_vf_static_host =
-	"                      [--vf=<gpu_index:vf_index, vf_bdf, vf_uuid>]\n\n";
-std::string usage_static_bm =
-	"                      [-l | --limit] [-R | --process-isolation]\n\n";
-std::string static_usage_message =
-	"Gest static informations about specific GPU\n"
-	"If no GPU is provided, returns information for all GPUs on the system\n"
-	"If no static information argument is provided all static information will be displayed\n\n";
-std::string static_common =
-	"Static arguments:\n"
-	"                                                  Description:\n"
-	"    -h, --help                                    show this help message and exit\n"
-	"    -g, --gpu [GPU ...]                           Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
-	"    -a, --asic                                    All asic inforamtion\n"
-	"    -b, --bus                                     All bus information\n"
-	"    -I, --ifwi                                    All video bios/IFWI information\n"
-	"    -d, --driver                                  Displays driver version\n";
-std::string static_host_windows =
-	"    -B, --board                                   All board information\n"
-	"    -l, --limit                                   All limit metric values (i.e. power and thermal limits)\n"
-	"    -r, --ras                                     Displays ras features information\n"
-	"    -D, --dfc-ucode                               All dfc ucode table information\n"
-	"    -f, --fb-info                                 All fb information\n"
-	"    -n, --num-vf                                  Displays number of supported and enabled VFs\n"
-	"    -v, --vram                                    All vram information\n"
-	"    -c, --cache                                   All cache info\n"
-	"    -m, --virtualization-mode                     All virtualization mode info\n";
-std::string static_host_vf =
-	"    --vf=<gpu_index:vf_index, vf_bdf, vf_uuid>    Gets general information about the specified VF (e.g. timeslice, fb info)\n\n";
-std::string static_host_mi30x =
-	"    -p, --partition                               Gets current memory and accelerator partition information\n"
-	"    -pd, --xgmi-plpd                              Gets current xgmi plpd information\n"
-	"    -ps, --soc-pstate                             Gets current soc pstate information\n";
-std::string static_bm =
-	"    --limit                                       All limit metric values (i.e. power and thermal limits)\n"
-	"    --process-isolation                           The process isolation status\n\n";
-std::string static_host_linux =
-	"    -B, --board                                   All board information\n"
-	"    -l, --limit                                   All limit metric values (i.e. power and thermal limits)\n"
-	"    -r, --ras                                     Displays ras features information\n"
-	"    -f, --fb-info                                 All fb information\n"
-	"    -n, --num-vf                                  Displays number of supported and enabled VFs\n"
-	"    -v, --vram                                    All vram information\n"
-	"    -c, --cache                                   All cache info\n"
-	"    -u, --numa                                    All numa info\n";
-std::string static_host_linux_mi200 =
-	"    -B, --board                                   All board information\n"
-	"    -l, --limit                                   All limit metric values (i.e. power and thermal limits)\n"
-	"    -f, --fb-info                                 All fb information\n"
-	"    -n, --num-vf                                  Displays number of supported and enabled VFs\n"
-	"    -v, --vram                                    All vram information\n";
-std::string metric_message =
-	"Gets metric information about the specified GPU\n"
-	"If no argument is provided, returns information for all GPUs on the system\n"
-	"If no metric information argument is provided all metric information will be displayed\n\n";
-std::string metric_common =
-	"Metric arguments:\n"
-	"                                                              Description:\n"
-	"    -h, --help                                                show this help message and exit\n"
-	"    -g, --gpu [GPU ...]                                       Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
-	"    -w, --watch INTERVAL                                      Reprint the command in a loop of INTERVAL seconds\n"
-	"                                                              Looping stops by entering 'CTRL' + 'C'\n"
-	"                                                              JSON and CSV formats cannot be printed in stdout\n"
-	"    -W, --watch_time TIME                                     The total TIME to watch the given command\n"
-	"                                                              Looping stops by entering 'CTRL' + 'C'\n"
-	"                                                              If not specified the program will run indefinitely\n"
-	"    -i, --iterations ITERATIONS                               Total number of ITERATIONS to loop on the given command\n"
-	"                                                              Looping stops by entering 'CTRL' + 'C'\n"
-	"                                                              If not specified the program will run indefinitely\n"
-	"    -u, --usage                                               All usage information\n";
-std::string metric_usage_common =
-	"usage amd-smi metric [-h | --help] [-g | --gpu [GPU ...]] [--json | --csv] [--file FILE]\n"
-	"                     [-w | --watch INTERVAL] [-W | --watch_time TIME] [-i | --iterations ITERATIONS] [-u | --usage]\n";
-std::string metric_host =
-	"    -p, --power                                               All power readings information\n"
-	"    -c, --clock                                               All frequency sensor readings\n"
-	"    -t, --temperature                                         All thermal sensor readings\n"
-	"    -e, --ecc                                                 All ecc information\n"
-	"    -k, --ecc-block                                           Number of ECC errors per block\n"
-	"    -P, --pcie                                                Current pcie information\n"
-	"    -E, --energy                                              Amount of energy consumed\n"
-	"    --vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>      Gets metric information about the specified VF\n"
-	"                                                              If no metric information argument is provided all metric information will be displayed\n"
-	"        --schedule                                            All scheduling info\n"
-	"        --guard                                               All guard information\n"
-	"        --guest-data                                          All guest data information\n\n";
-std::string metric_host_mi200 =
-	"    -p, --power                                               All power readings information\n"
-	"    -c, --clock                                               All frequency sensor readings\n"
-	"    -t, --temperature                                         All thermal sensor readings\n"
-	"    -P, --pcie                                                Current pcie information\n"
-	"    --vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>      Gets metric information about the specified VF\n"
-	"                                                              If no metric information argument is provided all metric information will be displayed\n"
-	"        --schedule                                            All scheduling info\n"
-	"        --guard                                               All guard information\n"
-	"        --guest-data                                          All guest data information\n\n";
-std::string metric_host_mi3xx =
-	"    -p, --power                                               All power readings information\n"
-	"    -c, --clock                                               All frequency sensor readings\n"
-	"    -t, --temperature                                         All thermal sensor readings\n"
-	"    -e, --ecc                                                 All ecc information\n"
-	"    -k, --ecc-block                                           Number of ECC errors per block\n"
-	"    -P, --pcie                                                Current pcie information\n"
-	"    -E, --energy                                              Amount of energy consumed\n"
-	"    --vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>      Gets metric information about the specified VF\n"
-	"                                                              If no metric information argument is provided all metric information will be displayed\n"
-	"        --schedule                                            All scheduling info\n"
-	"        --guard                                               All guard information\n"
-	"        --guest-data                                          All guest data information\n"
-	"        --per-partition                                       All metric per partition information\n\n";
-std::string metric_usage_host =
-	"                     [-p | --power] [-c | --clock] [-t | --temperature] [-e | --ecc] [-P | --pcie] [-E | --energy] [--vf [VF]]\n\n";
-std::string metric_usage_host_mi200 =
-	"                     [-p | --power] [-c | --clock] [-t | --temperature] [-P | --pcie] [--vf [VF]]\n\n";
-std::string metric_guest =
-	"    -fb, --fb-usage                                           Total and used framebuffer\n\n";
-std::string metric_usage_guest =
-	"                     [-fb | --fb-usage]\n\n";
-std::string metric_bm =
-	"    -fb, --fb-usage                                           Total and used framebuffer\n"
-	"    -p, --power                                               All power readings information\n"
-	"    -c, --clock                                               All frequency sensor readings\n"
-	"    -t, --temperature                                         All thermal sensor readings\n"
-	"    -e, --ecc                                                 All ecc information\n"
-	"    -P, --pcie                                                Current pcie information\n\n";
-std::string metric_usage_bm =
-	"                     [-fb | --fb-usage] [-p | --power] [-c | --clock] [-t | --temperature] [-e | --ecc] [-P | --pcie]\n\n";
-std::string bad_pages_common = "";
-std::string bad_pages_message =
-	"usage: amd-smi bad-pages [-h | --help] [--json | --csv] [--file FILE] [-g | --gpu [GPU ...]]\n\n"
-	"Gets bad page information about the specified GPU.\n"
-	"If no GPU is specified, returns bad page information for all GPUs on the system.\n"
-	"If no argument is provided, returns information for all GPUs on the system.\n\n";
-std::string bad_pages_usage_host = "";
-std::string bad_pages_host =
-	"Bad-pages arguments:\n"
-	"                                Description:\n"
-	"    -h, --help                  show this help message and exit\n"
-	"    -g, --gpu [GPU ...]         Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n\n";
-std::string firmware_common =
-	"Firmware arguments:\n"
-	"                                                                Description:\n"
-	"    -h, --help                                                  show this help message and exit\n"
-	"    -g, --gpu [GPU ...]                                         Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n";
-
-std::string firmware_message =
-	"Gets firmware information about the specified GPU\n"
-	"If no argument is provided, returns information for all GPUs on the system\n"
-	"If no GPU is specified, returns firmware information for all GPUs on the system.\n\n";
-std::string firmware_usage_common =
-	"usage: amd-smi firmware [-h | --help] [--json | --csv] [--file FILE] [-g | --gpu [GPU ...]]\n";
-std::string firmware_usage_host =
-	"                        [--fw-list] [--error-records]\n\n";
-std::string firmware_usage_bm =
-	"                        [--fw-list]\n\n";
-std::string firmware_host =
-	"    --fw-list                                                   All firmware list information\n"
-	"    --error-records                                             All error records information\n"
-	"    --vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>        Gets firmware information about the specified VF\n"
-	"    vf arguments:\n"
-	"        --fw-list                                               All firmware list information\n\n";
-std::string firmware_bm =
-	"    --fw-list                                                   All firmware list information\n";
-std::string process_common = "";
-std::string process_usage_common = "";
-std::string process_message =
-	"Lists general process information running on the specified GPU\n"
-	"If no argument is provided, returns information for all GPUs on the system\n"
-	"If no argument is provided all process information will be displayed\n\n";
-std::string process_bm =
-	"Process arguments:\n"
-	"                                   Description:\n"
-	"    -h, --help                     show this help message and exit\n"
-	"    -g, --gpu [GPU ...]            Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
-	"    -w, --watch INTERVAL           Reprint the command in a loop of INTERVAL seconds\n"
-	"                                   Looping stops by entering 'CTRL' + 'C'\n"
-	"                                   JSON and CSV formats cannot be printed in stdout\n"
-	"    -W, --watch_time TIME          The total TIME to watch the given command\n"
-	"                                   Looping stops by entering 'CTRL' + 'C'\n"
-	"                                   If not specified the program will run indefinitely\n"
-	"    -i, --iterations ITERATIONS    Total number of ITERATIONS to loop on the given command\n"
-	"                                   Looping stops by entering 'CTRL' + 'C'\n"
-	"                                   If not specified the program will run indefinitely\n"
-	"    --general                      pid, process name, memory usage\n"
-	"    --engine                       All engine usages\n"
-	"    --pid                          Gets all process information about the specified process based on Process ID\n"
-	"                                   Multiple pid can be specified and tool will return information for all of them.\n"
-	"                                   Example amd-smi process --pid=<pid1> --pid=<pid2>\n"
-	"    --name                         Gets all process information about the specified process based on Process Name\n"
-	"                                   If multiple processes have the same name information is returned for all of them\n"
-	"                                   Multiple name can be specified and tool will return information for all of them\n"
-	"                                   Example amd-smi process --name=<name1> --name=<name2>\n\n";
-std::string process_usage_bm =
-	"usage: amd-smi process [-h | --help] [--json | --csv] [--file FILE] [-g | --gpu [GPU ...]]\n"
-	"                       [-w | --watch INTERVAL] [-W | --watch_time TIME] [-i | --iterations ITERATIONS]\n"
-	"                       [-G | --general] [-e | --engine]\n"
-	"                       [--pid PID] [--name NAME]\n\n";
-std::string profile_common = "";
-std::string profile_usage_common = "";
-std::string profile_message =
-	"Displays information about all profiles and current profile\n"
-	"If no argument is provided, returns information for all GPUs on the system\n\n";
-std::string profile_host_windows =
-	"Profile arguments:\n"
-	"                              Description:\n"
-	"    -h, --help                show this help message and exit\n"
-	"    -g, --gpu [GPU ...]       Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n";
-std::string profile_usage_host_windows =
-	"usage: amd-smi profile [-h | --help] [--json | --csv] [--file FILE] [-g | --gpu [GPU ...]]\n\n";
-std::string event_common = "";
-std::string event_host =
-	"Event arguments:\n"
-	"                                Description:\n"
-	"    -h, --help                  show this help message and exit\n"
-	"    -g, --gpu [GPU ...]         Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n\n";
-std::string event_usage_common = "";
-std::string event_usage_host =
-	"usage: amd-smi event [-h | --help] [--json | --csv] [--file FILE] [-g | --gpu [GPU ...]]\n\n"
-	"Displays event information for GPU\n"
-	"If no argument is provided, returns event informations for all GPUs on the system\n\n";
-std::string xgmi_common = "";
-std::string xgmi_usage_common = "";
-std::string xgmi_message =
-	"Displays XGMI capabilities, framebuffer sharing and metric information\n"
-	"If no argument is provided, returns information for all GPUs on the system\n\n";
-std::string xgmi_usage_host =
-	"usage: amd-smi xgmi [-h | --help] [--json] [--file FILE] [-g | --gpu [GPU ...]]\n"
-	"                    [--caps] [--fb-sharing] [--metric]\n\n";
-std::string xgmi_usage_host_mi200 =
-	"usage: amd-smi xgmi [-h | --help] [--json] [--file FILE] [-g | --gpu [GPU ...]]\n"
-	"                    [--caps] [--fb-sharing]\n\n";
-std::string xgmi_host =
-	"Xgmi arguments:\n"
-	"                                Description:\n"
-	"    -h, --help                  show this help message and exit\n"
-	"    -g, --gpu [GPU ...]         Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
-	"    --caps                      XGMI capabilities\n"
-	"    --fb-sharing                Framebuffer sharing for each mode\n"
-	"    --metric                    Metric XGMI information\n"
-	"    --source-status             Source GPU status information\n"
-	"    --link-status               XGMI link status between two GPUs in the xgmi command \n\n";
-std::string xgmi_host_mi200 =
-	"Xgmi arguments:\n"
-	"                                Description:\n"
-	"    -h, --help                  show this help message and exit\n"
-	"    -g, --gpu [GPU ...]         Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
-	"    --caps                      XGMI capabilities\n"
-	"    --fb-sharing                Framebuffer sharing for each mode\n";
-std::string topology_common = "";
-std::string topology_usage_common = "";
-std::string topology_usage_host =
-	"usage: amd-smi topology [-h | --help] [--json] [--file FILE] [-g | --gpu [GPU ...]]\n"
-	"                        [--weight] [--hops] [--fb-sharing] [--link-type] [--link-status]\n"
-	"                        [--coherent] [--atomics] [--bi-dir] [--dma]\n\n";
-std::string topology_message =
-	"Displays link topology information\n"
-	"If no argument is provided, returns information for all GPUs on the system\n\n";
-std::string topology_host =
-	"Topology arguments:\n"
-	"                                Description:\n"
-	"    -h, --help                  show this help message and exit\n"
-	"    -g, --gpu [GPU ...]         Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
-	"    --weight                    Current weight information\n"
-	"    --hops                      Current hops information\n"
-	"    --fb-sharing                Current framebuffer sharing information\n"
-	"    --link-type                 Link type information\n"
-	"    --link-status               Link status information\n\n"
-	"    --coherent                  Cache coherent information\n"
-	"    --atomics                   32 and 64-bit atomic link capability information\n"
-	"    --bi-dir                    bi-directional link capability information\n"
-	"    --dma                       dma link capability information\n";
-
-std::string set_common = "";
-std::string set_usage_common = "";
-std::string set_message = "";
-std::string set_usage_host =
-	"usage: amd-smi set [-h | --help] --num_vf=<NUM_VF> [-g=<GPU> | --gpu=<GPU>]\n\n";
-std::string set_usage_host_mi300 =
-	"usage: amd-smi set [-h | --help] [--file FILE] [-xgmi --fb-sharing-mode=[MODE] --group[<GPUx, GPUy>]]\n"
-	"                   [--memory-partition [PARTITION_MODE]] [ --accelerator-partition [PROFILE_INDEX]] [ --power-cap [POWER_CAP_VALUE]]\n"
-	"                   [--xgmi-plpd [XGMI_PLPD_VALUE]] [--num_vf=<NUM_VF> [-g=<GPU> | --gpu=<GPU>]]\n\n";
-std::string set_usage_host_mi200 =
-	"usage: amd-smi set [-h | --help] [--file FILE] [-xgmi --fb-sharing-mode=[MODE] --group[<GPUx, GPUy>]]\n";
-std::string set_usage_bm =
-	"usage: amd-smi set [-h | --help] [--json | --csv] [--file FILE]\n\n";
-std::string set_host =
-	"Set arguments:\n"
-	"                                                                                           Description:\n"
-	"    -h, --help                                                                             show this help message and exit\n"
-	"    --num_vf=<num_vf>                                                                      Sets number of VFs\n"
-	"    -g=<gpu_id>, --gpu=<gpu_id>                                                            Select a GPU ID, BDF or UUID, if not selected it will set given num of VFs for all GPUs\n";
-std::string set_host_mi300 =
-	"Set arguments:\n"
-	"                                                                                           Description:\n"
-	"    -h, --help                                                                             show this help message and exit\n"
-	"    --xgmi --fb-sharing-mode=<AmdSmiXgmiFbSharingMode> --group=\"<gpu_id1-gpu_id2>\"       Sets framebuffer sharing mode from group [\"MODE_1\", \"MODE_2\", \"MODE_4\", \"MODE_8\", \"CUSTOM\"]\n"
-	"                                                                                           Where, MODE_X represents that X GPUs will be in the same group, linked together:\n"
-	"                                                                                           MODE_1 (one GPU in a group), MODE_2 (two GPUs in a group), MODE_4 (four GPUs in a group), MODE_8 (eight GPUs in a group).\n"
-	"                                                                                           Note: This command will only work if there's no guest VM running.\n"
-	"                                                                                           All possible configurations can be seen by running the amd-smi xgmi command.\n\n"
-	"    --memory-partition=<AmdSmiMemoryPartitionSetting>                                      Sets memory partition setting\n"
-	"                                                                                           Note: This command will only work if there's no guest VM running.\n"
-	"                                                                                           Run 'amd-smi partition' to list memory-partition modes supported on current platform.\n\n"
-	"    --accelerator-partition=<profile_index>                                                Sets accelerator partition setting to a mode based on profile_index from partition command\n"
-	"                                                                                           Note: This command will only work if there's no guest VM running.\n"
-	"                                                                                           All possible configurations can be seen by running the amd-smi partition command.\n\n"
-	"    --power-cap=<power_cap_value>                                                          Sets power cap to the provided power cap value.\n"
-	"                                                                                           Note: Cap value must be between the minimum (min_power_cap) and maximum (max_power_cap) power cap values.\n"
-	"                                                                                           Range of the cap value can be seen by running the amd-smi static command.\n\n"
-	"    --num_vf=<num_vf>                                                                      Sets number of VFs\n"
-	"    --xgmi-plpd=<xgmi-plpd_value>                                                          Sets xgmi plpd setting to the provided xgmi plpd value.\n"
-	"    --soc-pstate=<soc-pstate_value>                                                        Sets soc pstate setting to the provided soc pstate value.\n"
-	"    -g=<gpu_id>, --gpu=<gpu_id>                                                            Select a GPU ID, BDF or UUID, if not selected it will set given num of VFs for all GPUs\n\n";
-std::string set_host_mi200 =
-	"Set arguments:\n"
-	"                                                                                           Description:\n"
-	"    -h, --help                                                                             show this help message and exit\n"
-	"    --xgmi --fb-sharing-mode=<AmdSmiXgmiFbSharingMode> --group=\"<gpu_id1-gpu_id2>\"         Sets framebuffer sharing mode from group [\"MODE_1\", \"MODE_2\", \"MODE_4\", \"MODE_8\", \"CUSTOM\"]\n"
-	"                                                                                           Where, MODE_X represents that X GPUs will be in the same group, linked together:\n"
-	"                                                                                           MODE_1 (one GPU in a group), MODE_2 (two GPUs in a group), MODE_4 (four GPUs in a group), MODE_8 (eight GPUs in a group).\n"
-	"                                                                                           Note: This command will only work if there's no guest VM running.\n"
-	"                                                                                           All possible configurations can be seen by running the amd-smi xgmi command.\n\n";
-std::string set_bm =
-	"Set arguments:\n"
-	"                                                                                           Description:\n"
-	"    -h, --help                                                                             show this help message and exit\n"
-	"    --process-isolation=<0 or 1>                                                           Enable or disable the GPU process isolation: 0 for disable and 1 for enable\n\n"
-	"    --power-cap=<power_cap_value>                                                          Sets power cap to the provided power cap value.\n"
-	"                                                                                           Note: Cap value must be between the minimum (min_power_cap) and maximum (max_power_cap) power cap values.\n"
-	"                                                                                           Range of the cap value can be seen by running the amd-smi static command.\n\n";
-std::string reset_common = "";
-std::string reset_usage_common = "";
-std::string reset_usage_linux =
-	"usage: amd-smi reset [-h | --help] [--file FILE] [-g | --gpu [GPU ...] <-G | --gpureset >] [--vf=<VF> <--vf-fb>]\n\n";
-std::string reset_usage_bm =
-	"usage: amd-smi reset [-h | --help] [--json | --csv] [--file FILE]\n\n";
-std::string reset_message ="";
-std::string reset_host_linux =
-	"Reset arguments:\n"
-	"                                                                 Description:\n"
-	"    -g, --gpu [GPU ...]                                          Select a GPU ID, BDF or UUID.\n"
-	"                                                                 if not selected it will return for all GPUs\n"
-	"    --gpu arguments:\n"
-	"        -G, --gpureset                                           Reset the specified GPU\n"
-	"    --vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>         Cleanup VF FB for the specified VF\n"
-	"                                                                 If no argument is provided, returns tool exception\n"
-	"    vf arguments:\n"
-	"        --vf-fb                                                  Cleanup VF FB for the specified VF\n\n";
-std::string reset_bm =
-	"Reset arguments:\n"
-	"                                                                 Description:\n"
-	"    --clean-local-data                                           Clean up data in LDS/GPRs\n\n";
-
-std::string monitor_message =
-	"Monitor a target device for the specified arguments.\n"
-	"If no arguments are provided, all arguments will be enabled.\n"
-	"Use the watch arguments to run continuously\n\n";
-std::string monitor_usage_common =
-	"usage: amd-smi monitor [-h | --help] [--json | --csv] [--file FILE]\n"
-	"                       [-w | --watch INTERVAL] [-W | --watch_time TIME] [-i | --iterations ITERATIONS]\n"
-	"                       [-u | --gfx] [-m | mem] [-n | --encode] [-e | --ecc] [-r | --pcie]\n";
-std::string monitor_usage_host =
-	"                       [-p | --power-usage] [-t | --temperature] [-d | --decoder]\n";
-std::string monitor_usage_guest =
-	"                       [-u | --vram-usage] [-q | --process]\n";
-std::string monitor_usage_bm =
-	"                       [-p | --power-usage] [-t | --temperature] [-q | --process]\n";
-std::string monitor_common =
-	"Monitor arguments:\n"
-	"                                 Description:\n"
-	"    -h, --help                   show this help message and exit\n"
-	"    -g, --gpu [GPU ...]          Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
-	"    -w, --watch INTERVAL         Reprint the command in a loop of INTERVAL seconds\n"
-	"                                 Looping stops by entering 'CTRL' + 'C'\n"
-	"                                 JSON and CSV formats cannot be printed in stdout\n"
-	"    -W, --watch_time TIME        The total TIME to watch the given command\n"
-	"                                 Looping stops by entering 'CTRL' + 'C'\n"
-	"                                 If not specified the program will run indefinitely\n"
-	"    -i, --iterations ITERATIONS  Total number of ITERATIONS to loop on the given command\n"
-	"                                 Looping stops by entering 'CTRL' + 'C'\n"
-	"                                 If not specified the program will run indefinitely\n"
-	"    -u, --gfx                    Monitor graphics utilization (%) and clock (MHz)\n"
-	"    -m, --mem                    Monitor memory utilization (%) and clock (MHz)\n"
-	"    -n, --encoder                Monitor encoder utilization (%) and clock (MHz)\n"
-	"    -e, --ecc                    Monitor ECC single bit, ECC double bit\n"
-	"    -r, --pcie                   Monitor PCIe bandwidth in Mb/s and PCIe replay error count\n";
-std::string monitor_host =
-	"    -p, --power-usage            Monitor power usage in Watts\n"
-	"    -t, --temperature            Monitor temperature in Celsius\n"
-	"    -d, --decoder                Monitor decoder utilization (%) and clock (MHz)\n\n";
-std::string monitor_guest =
-	"    -v, --vram-usage             Monitor memory usage in MB\n"
-	"    -q, --process                Include process output underneath monitor output\n\n";
-std::string monitor_bm =
-	"    -p, --power-usage            Monitor power usage in Watts\n"
-	"    -t, --temperature            Monitor temperature in Celsius\n"
-	"    -q, --process                Include process output underneath monitor output\n\n";
-std::string partition_common = "";
-std::string partition_host =
-	"Partition arguments:\n"
-	"                                 Description:\n"
-	"    -h, --help                   Show this help message and exit\n"
-	"    -g, --gpu [GPU ...]          Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
-	"    -c, --current                Displays current memory and accelerator partition mode\n"
-	"    -m, --memory                 Displays caps and current memory partition setting\n"
-	"    -a, --accelerator            Displays caps and current accelerator partition setting.\n"
-	"    -gl, --global            	  Displays global partitioning setting.\n\n";
-std::string partition_usage_common = "";
-std::string partition_usage_host =
-	"usage: amd-smi partition [-h | --help] [--file FILE] [-g | --gpu [GPU ...]]\n"
-	"                         [-c | --current] [-m | --memory] [-a | --accelerator] [-gl | --global]\n\n";
-std::string partition_message =
-	"Displays partition information about specific GPU.\n"
-	"If no GPU is provided, returns information for all GPUs on the system\n"
-	"If no partition information argument is provided all partition information will be displayed\n\n";
-std::string command_modifiers =
-	"Command Modifiers:\n"
-	"                      Description:\n"
-	"--json                Displays output in JSON format (human readable by default).\n"
-	"--csv                 Displays output in CSV format (human readable by default).\n"
-	"--file FILE           Saves output into a file on the provided path (stdout by default).\n";
-std::string xgmi_topology_modifiers =
-	"Command Modifiers:\n"
-	"                      Description:\n"
-	"--json                Displays output in JSON format (human readable by default).\n"
-	"--file FILE           Saves output into a file on the provided path (stdout by default).\n";
-std::string metric_modifiers =
-	"Command Modifiers:\n"
-	"                      Description:\n"
-	"--json                Displays output in JSON format (human readable by default).\n"
-	"--csv                 Displays output in CSV format (human readable by default).\n"
-	"                      It can be used only with one argument and cannot be used without or with more than one argument, in that case, the call will fail\n"
-	"--file FILE           Saves output into a file on the provided path (stdout by default).\n";
-std::string partition_modifiers =
-	"Command Modifiers:\n"
-	"                      Description:\n"
-	"--file FILE           Saves output into a file on the provided path (stdout by default).\n";
-
-std::string ras_usage_message =
-	"\nGets ras information. \n"
-	"For --cper operations: If no GPU is provided, returns information for all GPUs on the system\n"
-	"For --afid operations: GPU filtering is not supported (operates on CPER files)\n"
-	"A target argument (--cper or --afid) is required\n\n";
-
-std::string usage_ras_host =
-	"usage: amd-smi ras [-h | --help] [--cper] [--severity=[fatal, nonfatal-uncorrected, nonfatal-corrected, all]] [--folder=[FOLDER]] "
-	"[--file-limit=[NUMBER_OF_FILES]] [--follow] [-g | --gpu [GPU ...]] \n"
-	"       amd-smi ras [-h | --help] [--afid] [--cper-file=[FOLDER]] \n";
-
-std::string ras_host = "Ras arguments:\n"
-					   "                                                                                                    Description:\n"
-					   "    -h, --help                                                                                      show this help message and exit\n"
-					   "    -g, --gpu [GPU ...]                                                                             Select a GPU ID, BDF or UUID (only valid with --cper)\n"
-					   "    --cper --severity=<fatal, nonfatal-uncorrected, nonfatal-corrected, all> --folder=[FOLDER]      Get ras cper errors and saved in file based on severity. \n"
-					   "           --file-limit=<number_of_files> --follow                                                  Supports GPU filtering. If --folder not provided, no files dumped. \n"
-					   "                                                                                                    By default, dumps cper report currently cached in driver. \n"
-					   "                                                                                                    If --file-limit=<number> specified, CLI keeps max <number> files. \n"
-					   "                                                                                                    If --follow specified, continuous monitoring until ctrl+c pressed.\n"
-					   "    --afid --cper-file=[FILE]                                                                       Get AFID list from existing CPER file (GPU filtering not supported)\n";
-
-
-std::string usage_ras_common = "";
-std::string ras_common = "";
-
-
-
-AmdSmiHelpInfo::AmdSmiHelpInfo()
+namespace
 {
-	version_specific = "";
-	list_specific = "";
-	usage_list_specific = "";
-	usage_bad_pages_specific = "";
-	if (AmdSmiPlatform::getInstance().is_windows()) {
-		if (AmdSmiPlatform::getInstance().is_host()) {
-			if (AmdSmiPlatform::getInstance().is_mi300()) {
-				help_specific = help_command_windows_host + help_command_mi30x_host;
-				static_specific = static_host_windows + static_host_mi30x + static_host_vf;
-				usage_static_specific = usage_static_host + usage_vf_static_host;
-				xgmi_specific = xgmi_host;
-				usage_xgmi_specific = xgmi_usage_host;
-				topology_specific = topology_host;
-				usage_topology_specific = topology_usage_host;
-				set_specific = "";
-				usage_set_specific = set_usage_host_mi300;
-				reset_specific = "";
-				usage_reset_specific = "";
-				partition_specific = partition_host;
-				usage_partition_specific = partition_usage_host;
-				ras_specific = ras_host;
-				usage_ras_specific = usage_ras_host;
-			} else {
-				help_specific = help_command_windows_host;
-				static_specific = static_host_windows + static_host_vf;
-				usage_static_specific = usage_static_host + usage_vf_static_host;
-				xgmi_specific = "";
-				usage_xgmi_specific = "";
-				topology_specific = "";
-				usage_topology_specific = "";
-				set_specific = "";
-				reset_specific = "";
-				usage_set_specific = "";
-				usage_reset_specific = "";
-				usage_partition_specific = "";
-				ras_specific = "";
-				usage_ras_specific = "";
-			}
+constexpr int USAGE_COLUMNS_PER_ROW_SPECIFIC = 4;
+const std::string USAGE_LINE_BREAK = SmiCliArgument::get_usage_line_break();
 
-			bad_pages_specific = bad_pages_host;
-			firmware_specific = firmware_host;
-			usage_firmware_specific = firmware_usage_host;
-			metric_specific = metric_host;
-			usage_metric_specific = metric_usage_host;
-			process_specific = "";
-			usage_process_specific = "";
-			profile_specific = profile_host_windows;
-			usage_profile_specific = profile_usage_host_windows;
-			event_specific = event_host;
-			usage_event_specific = event_usage_host;
-			monitor_specific = monitor_host;
-			usage_monitor_specific = monitor_usage_host;
-		} else if (AmdSmiPlatform::getInstance().is_baremetal()) {
-			help_specific = help_command_bm;
-			static_specific = static_bm;
-			usage_static_specific = usage_static_bm;
-			bad_pages_specific = "";
-			usage_bad_pages_specific = "";
-			firmware_specific = firmware_bm;
-			usage_firmware_specific = firmware_usage_bm;
-			metric_specific = metric_bm;
-			usage_metric_specific = metric_usage_bm;
-			process_specific = process_bm;
-			usage_process_specific = process_usage_bm;
-			profile_specific = "";
-			usage_profile_specific = "";
-			event_specific = "";
-			xgmi_specific = "";
-			usage_xgmi_specific = "";
-			topology_specific = "";
-			usage_topology_specific = "";
-			set_specific = set_bm;
-			usage_set_specific = set_usage_bm;
-			reset_specific = reset_bm;
-			usage_reset_specific = reset_usage_bm;
-			monitor_specific = monitor_bm;
-			usage_monitor_specific = monitor_usage_bm;
+static bool is_first_group_in_sequence = true;
+
+void reset_group_sequence()
+{
+	is_first_group_in_sequence = true;
+}
+
+std::string get_device_arguments(const std::string& device_key)
+{
+	const auto* arg = SmiCliArgumentFactory::getInstance().get_argument(device_key + "_device");
+	return arg ? arg->get_arguments() : "";
+}
+
+std::string get_device_usage(const std::string& device_key)
+{
+	const auto* arg = SmiCliArgumentFactory::getInstance().get_argument(device_key + "_device");
+	return arg ? " " + arg->get_usage() : "";
+}
+
+std::string get_file_usage()
+{
+	const auto* arg = SmiCliArgumentFactory::getInstance().get_argument("file");
+	return arg ? " " + arg->get_usage() : "";
+}
+std::string get_help_arguments()
+{
+	const auto* arg = SmiCliArgumentFactory::getInstance().get_argument("help");
+	return arg ? arg->get_arguments() : "";
+}
+std::string get_help_usage()
+{
+	const auto* arg = SmiCliArgumentFactory::getInstance().get_argument("help");
+	return arg ? " " + arg->get_usage() : "";
+}
+std::string get_format_usage(const std::vector<std::string>& format_keys)
+{
+	return SmiCliArgumentFactory::getInstance().get_format_usage(format_keys);
+}
+std::string get_format_usage_by_device_type(DevicesType device_type)
+{
+	std::vector<std::string> format_keys = (device_type == NIC_TYPE) ?
+										   std::vector<std::string> {"json"} :
+										   std::vector<std::string> {"json", "csv"};
+	return get_format_usage(format_keys);
+}
+std::string get_help_commands_from_factory(const
+		std::map<std::string, std::map<std::string, std::vector<std::string>>>& vector_map,
+		const std::string& category,
+		const std::string& vector_key)
+{
+	const auto& command_names = vector_map.at(category).at(vector_key);
+	return SmiCliArgumentFactory::getInstance().get_help_commands_string(command_names);
+}
+
+std::string concat_arguments_from_factory(const
+		std::map<std::string, std::map<std::string, std::vector<std::string>>>& vector_map,
+		const std::string& category,
+		const std::string& vector_key)
+{
+	const auto& keys = vector_map.at(category).at(vector_key);
+	return SmiCliArgumentFactory::getInstance().get_arguments_string(keys);
+}
+
+std::string concat_usage_from_factory(const
+									  std::map<std::string, std::map<std::string, std::vector<std::string>>>& vector_map,
+									  const std::string& category,
+									  const std::string& vector_key,
+									  int& row_count)
+{
+	const auto& keys = vector_map.at(category).at(vector_key);
+
+	std::string result;
+
+	if (is_first_group_in_sequence && !keys.empty()) {
+		result += USAGE_LINE_BREAK;
+	} else if (row_count == 0 && !is_first_group_in_sequence && !keys.empty()) {
+		result += USAGE_LINE_BREAK;
+	}
+
+	result += SmiCliArgumentFactory::getInstance().get_usage_string_with_formatting(keys, row_count);
+
+	row_count = (row_count + static_cast<int>(keys.size())) % USAGE_COLUMNS_PER_ROW_SPECIFIC;
+
+	is_first_group_in_sequence = false;
+
+	return result;
+}
+
+std::string get_vf_usage_smart(int specific_row_count)
+{
+	std::string result{};
+	const auto* vf_arg = SmiCliArgumentFactory::getInstance().get_argument("vf_device");
+	if (vf_arg) {
+		if (specific_row_count == 0) {
+			result.append(USAGE_LINE_BREAK);
+			result.append(" ").append(vf_arg->get_usage());
+		} else if (specific_row_count <= (USAGE_COLUMNS_PER_ROW_SPECIFIC - 1)) {
+			result.append(" ").append(vf_arg->get_usage());
 		} else {
-			help_specific = help_command_guest;
-			static_specific = static_bm;
-			usage_static_specific = usage_static_bm;
-			bad_pages_specific = "";
-			firmware_specific = "";
-			usage_firmware_specific = "";
-			metric_specific = metric_guest;
-			usage_metric_specific = metric_usage_guest;
-			process_specific = process_bm;
-			usage_process_specific = process_usage_bm;
-			profile_specific = "";
-			usage_profile_specific = "";
-			event_specific = "";
-			usage_event_specific = "";
-			xgmi_specific = "";
-			usage_xgmi_specific = "";
-			topology_specific = "";
-			usage_topology_specific = "";
-			set_specific = set_bm;
-			usage_set_specific = set_usage_bm;
-			reset_specific = reset_bm;
-			usage_reset_specific = reset_usage_bm;
-			monitor_specific = monitor_guest;
-			usage_monitor_specific = monitor_usage_guest;
+			result.append(USAGE_LINE_BREAK);
+			result.append(" ").append(vf_arg->get_usage());
 		}
+	}
+	return result;
+}
+
+struct UsageConfig {
+	bool include_vf = false;
+};
+
+std::string build_usage_from_categories(const
+										std::map<std::string, std::map<std::string, std::vector<std::string>>>& vector_map,
+										const std::vector<std::pair<std::string, std::string>>& categories,
+										const UsageConfig& config = {})
+{
+	reset_group_sequence();
+	int row_count = 0;
+	std::string result;
+
+	for (const auto& [category, vector_key] : categories) {
+		result += concat_usage_from_factory(vector_map, category, vector_key, row_count);
+	}
+
+	if (config.include_vf) {
+		result += get_vf_usage_smart(row_count);
+	}
+
+	return result;
+}
+
+std::string build_help_commands_from_categories(const
+		std::map<std::string, std::map<std::string, std::vector<std::string>>>& vector_map,
+		const std::vector<std::pair<std::string, std::string>>& categories)
+{
+	std::string result;
+	for (const auto& [category, vector_key] : categories) {
+		result += get_help_commands_from_factory(vector_map, category, vector_key);
+	}
+	return result;
+}
+
+// Helper function to build arguments strings from multiple categories
+std::string build_arguments_from_categories(const
+		std::map<std::string, std::map<std::string, std::vector<std::string>>>& vector_map,
+		const std::vector<std::pair<std::string, std::string>>& categories)
+{
+	std::string result;
+	for (const auto& [category, vector_key] : categories) {
+		result += concat_arguments_from_factory(vector_map, category, vector_key);
+	}
+	return result;
+}
+
+struct CommandConfig {
+	bool include_vf = false;
+	bool include_gpu_device = false;
+	bool include_nic_device = false;
+	bool include_watch_device = false;
+	std::vector<std::string> format_keys = {"json", "csv"};
+	std::string common_prefix = "";
+};
+
+void configure_list_settings(std::string& usage_list_specific, std::string& list_specific,
+							 const CommandConfig& config = {})
+{
+
+	list_specific = config.common_prefix;
+	list_specific += get_help_arguments();
+	if (config.include_gpu_device) {
+		list_specific += get_device_arguments("gpu");
+	}
+	if (config.include_nic_device) {
+		list_specific += get_device_arguments("nic");
+	}
+}
+void configure_static_settings(const
+							   std::map<std::string, std::map<std::string, std::vector<std::string>>>& static_map,
+							   const std::vector<std::pair<std::string, std::string>>& static_categories,
+							   std::string& usage_static_specific,
+							   std::string& static_specific,
+							   const CommandConfig& config = {})
+{
+
+	usage_static_specific = build_usage_from_categories(static_map, static_categories, {.include_vf = config.include_vf});
+
+	static_specific = config.common_prefix;
+	static_specific += get_help_arguments();
+	if (config.include_gpu_device) {
+		static_specific += get_device_arguments("gpu");
+	}
+	if (config.include_nic_device) {
+		static_specific += get_device_arguments("nic");
+	}
+	static_specific += build_arguments_from_categories(static_map, static_categories);
+}
+
+void configure_metric_settings(const
+							   std::map<std::string, std::map<std::string, std::vector<std::string>>>& metric_map,
+							   const std::vector<std::pair<std::string, std::string>>& metric_categories,
+							   const std::vector<std::pair<std::string, std::string>>& vf_categories,
+							   std::string& usage_metric_specific,
+							   std::string& metric_specific,
+							   const CommandConfig& config = {})
+{
+
+	std::string usage_result;
+	if (config.include_watch_device) {
+		usage_result += get_device_usage("watch");
+	}
+	usage_result += build_usage_from_categories(metric_map, metric_categories, {.include_vf = config.include_vf});
+	usage_metric_specific = usage_result;
+
+	metric_specific = config.common_prefix;
+	metric_specific += get_help_arguments();
+	if (config.include_gpu_device) {
+		metric_specific += get_device_arguments("gpu");
+	}
+	if (config.include_nic_device) {
+		metric_specific += get_device_arguments("nic");
+	}
+	if (config.include_watch_device) {
+		metric_specific += get_device_arguments("watch");
+	}
+	metric_specific += build_arguments_from_categories(metric_map, metric_categories);
+	if (config.include_vf) {
+		metric_specific += build_arguments_from_categories(metric_map, vf_categories);
+	}
+}
+}
+
+AmdSmiHelpInfo::AmdSmiHelpInfo(Arguments arg)
+{
+	SmiCliArgumentFactory::getInstance().initialize(arg.options);
+
+	if (AmdSmiPlatform::getInstance().is_windows()) {
+		initialize_windows_platform(arg);
 	} else {
-		if (AmdSmiPlatform::getInstance().is_host()) {
-			if (AmdSmiPlatform::getInstance().is_mi300()) {
-				help_specific = help_command_linux_host + help_command_mi30x_host;
-				static_specific = static_host_linux + static_host_mi30x + static_host_vf;
-				usage_static_specific = usage_static_host_linux + usage_static_hyperv + usage_vf_static_host;
-				metric_specific = metric_host_mi3xx;
-				usage_metric_specific = metric_usage_host;
-				xgmi_specific = xgmi_host;
-				usage_xgmi_specific = xgmi_usage_host;
-				topology_specific = topology_host;
-				usage_topology_specific = topology_usage_host;
-				set_specific = set_host_mi300;
-				usage_set_specific = set_usage_host_mi300;
-				reset_specific = reset_host_linux;
-				usage_reset_specific = reset_usage_linux;
-				partition_specific = partition_host;
-				usage_partition_specific = partition_usage_host;
-				ras_specific = ras_host;
-				usage_ras_specific = usage_ras_host;
-			} else if (AmdSmiPlatform::getInstance().is_mi200()) {
-				help_specific = help_command_linux_host + help_command_mi200_host;
-				static_specific = static_host_linux_mi200 + static_host_vf;
-				usage_static_specific = usage_static_host_linux_mi200 + usage_vf_static_host;
-				metric_specific = metric_host_mi200;
-				usage_metric_specific = metric_usage_host_mi200;
-				xgmi_specific = xgmi_host_mi200;
-				usage_xgmi_specific = xgmi_usage_host_mi200;
-				topology_specific = topology_host;
-				usage_topology_specific = topology_usage_host;
-				set_specific = set_host_mi200;
-				usage_set_specific = set_usage_host_mi200;
-				reset_specific = reset_host_linux;
-				usage_reset_specific = reset_usage_linux;
-				partition_specific = "";
-				usage_partition_specific = "";
-			} else {
-				help_specific = help_command_linux_host;
-				usage_static_specific = usage_static_host_linux + usage_vf_static_host;
-				static_specific = static_host_linux + static_host_vf;
-				metric_specific = metric_host;
-				usage_metric_specific = metric_usage_host;
-				xgmi_specific = "";
-				usage_xgmi_specific = "";
-				topology_specific = "";
-				usage_topology_specific = "";
-				set_specific = set_host;
-				reset_specific = "";
-				usage_set_specific = set_usage_host;
-				usage_reset_specific = "";
-				partition_specific = "";
-				usage_partition_specific = "";
-				ras_specific = "";
-				usage_ras_specific = "";
-			}
-			bad_pages_specific = bad_pages_host;
-			firmware_specific = firmware_host;
-			usage_firmware_specific = firmware_usage_host;
-			process_specific = "";
-			usage_process_specific = "";
-			profile_specific = "";
-			usage_profile_specific = "";
-			event_specific = event_host;
-			usage_event_specific = event_usage_host;
-			monitor_specific = monitor_host;
-			usage_monitor_specific = monitor_usage_host;
+		initialize_linux_platform(arg);
+	}
+}
+
+void AmdSmiHelpInfo::initialize_windows_platform(const Arguments& arg)
+{
+	if (AmdSmiPlatform::getInstance().is_host()) {
+		set_common_windows_host_settings();
+		if (AmdSmiPlatform::getInstance().is_mi300()) {
+			configure_windows_host_mi3xx(arg);
+		} else {
+			configure_windows_host_standard(arg);
+		}
+	} else if (AmdSmiPlatform::getInstance().is_baremetal()) {
+		configure_windows_baremetal(arg);
+	} else {
+		configure_windows_guest(arg);
+	}
+}
+
+void AmdSmiHelpInfo::initialize_linux_platform(const Arguments& arg)
+{
+	if (AmdSmiPlatform::getInstance().is_host()) {
+		set_common_linux_host_settings();
+		if (AmdSmiPlatform::getInstance().is_mi300()) {
+			configure_linux_host_mi300(arg);
+		} else if (AmdSmiPlatform::getInstance().is_mi200()) {
+			configure_linux_host_mi200(arg);
+		} else {
+			configure_linux_host_standard(arg);
 		}
 	}
 }
+
+void AmdSmiHelpInfo::configure_linux_host_standard(const Arguments& arg)
+{
+	configure_device_specific_settings(arg);
+	set_specific = set_host;
+	usage_set_specific = set_usage_host;
+	reset_specific = reset_host_linux;
+	usage_reset_specific = reset_usage_linux;
+	set_empty_settings();
+}
+
+void AmdSmiHelpInfo::configure_device_specific_settings(const Arguments& arg)
+{
+	switch (arg.devices_type) {
+	case GPU_TYPE:
+		configure_list_settings(
+			usage_list_specific, list_specific,
+		{.include_gpu_device = true, .common_prefix = list_common}
+		);
+		help_specific = build_help_commands_from_categories(help_supported_command_map, {{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "linux_host"}, {"gpu", "host_spec"}});
+
+		configure_static_settings(
+			static_argument_vectors_map,
+		{{"gpu_nic_common", "common"}, {"gpu_nic_common", "host_linux"}, {"gpu", "common"}, {"gpu", "host_linux"}, {"gpu", "host_linux_spec"}, {"gpu", "host_vf"}},
+		usage_static_specific, static_specific,
+		{.include_gpu_device = true, .common_prefix = static_common}
+		);
+
+		configure_metric_settings(
+			metric_argument_vectors_map,
+		{{"gpu", "common"}, {"gpu", "host"}, {"gpu", "host_linux_spec"}, {"gpu", "host_vf"}},
+		{{"vf", "host_vf"}},
+		usage_metric_specific, metric_specific,
+		{.include_vf = true, .include_gpu_device = true, .include_watch_device = true, .common_prefix = metric_common}
+		);
+		break;
+	case NIC_TYPE:
+		configure_list_settings(
+			usage_list_specific, list_specific,
+		{.include_nic_device = true, .format_keys = {"json"}, .common_prefix = list_common}
+		);
+		help_specific = build_help_commands_from_categories(help_supported_command_map, {{"gpu_nic_common", "common"}});
+
+		configure_static_settings(
+			static_argument_vectors_map,
+		{{"gpu_nic_common", "common"}, {"gpu_nic_common", "host_linux"}, {"nic", "host_linux"}},
+		usage_static_specific, static_specific,
+		{.include_nic_device = true, .format_keys = {"json"}, .common_prefix = static_common}
+		);
+
+		configure_metric_settings(
+			metric_argument_vectors_map,
+		{{"nic", "host_linux"}}, {},
+		usage_metric_specific, metric_specific,
+		{.include_nic_device = true, .format_keys = {"json"}, .common_prefix = metric_common}
+		);
+		break;
+	case ALL_TYPE:
+		configure_list_settings(
+			usage_list_specific, list_specific,
+		{.include_gpu_device = true, .include_nic_device = true, .common_prefix = list_common}
+		);
+
+		help_specific = build_help_commands_from_categories(help_supported_command_map, {
+			{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "linux_host"},  {"gpu", "host_spec"}
+		});
+
+		usage_static_specific = build_usage_from_categories(static_argument_vectors_map, {
+			{"gpu_nic_common", "common"}, {"gpu_nic_common", "host_linux"}, {"gpu", "common"},
+			{"gpu", "host_linux"}, {"gpu", "host_linux_spec"}, {"nic", "host_linux"}, {"gpu", "host_vf"}
+		});
+
+		static_specific = static_common + get_help_arguments() +
+		build_arguments_from_categories(static_argument_vectors_map, {
+			{"gpu_nic_common", "common"}, {"gpu_nic_common", "host_linux"},
+		}) +
+		common_gpu + get_device_arguments("gpu") +
+		build_arguments_from_categories(static_argument_vectors_map, {
+			{"gpu", "common"},{"gpu", "host_linux"}, {"gpu", "host_linux_spec"}, {"gpu", "host_vf"}
+		}) + common_nic + get_device_arguments("nic") +
+		build_arguments_from_categories(static_argument_vectors_map, {{"nic", "host_linux"}});
+
+		usage_metric_specific = get_device_usage("watch") +
+		build_usage_from_categories(metric_argument_vectors_map, {
+			{"gpu", "common"}, {"gpu", "host"}, {"gpu", "host_linux_spec"}, {"nic", "host_linux"}, {"gpu", "host_vf"}
+		});
+
+		metric_specific = metric_common + get_help_arguments() + common_gpu + get_device_arguments("gpu") +
+						  get_device_arguments("watch") +
+		build_arguments_from_categories(metric_argument_vectors_map, {
+			{"gpu", "common"}, {"gpu", "host"}, {"gpu", "host_linux_spec"}, {"gpu", "host_vf"}
+		}) +
+		build_arguments_from_categories(metric_argument_vectors_map, {{"vf", "host_vf"}}) +
+		common_nic + get_device_arguments("nic") +
+		build_arguments_from_categories(metric_argument_vectors_map, {{"nic", "host_linux"}});
+		break;
+	default:
+		break;
+	}
+}
+
+void AmdSmiHelpInfo::configure_windows_host_mi3xx(const Arguments& arg)
+{
+
+	help_specific = build_help_commands_from_categories(help_supported_command_map, {{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "windows_host"}, {"gpu", "host_mi3xx"}});
+
+	configure_static_settings(
+		static_argument_vectors_map,
+	{{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "host_windows"}, {"gpu", "host_mi3xx"}, {"gpu", "host_vf"}},
+	usage_static_specific, static_specific,
+	{.include_gpu_device = true}
+	);
+
+	xgmi_specific = xgmi_host;
+	usage_xgmi_specific = xgmi_usage_host;
+	topology_specific = topology_host;
+	usage_topology_specific = topology_usage_host;
+	set_specific = set_host_mi300;
+	usage_set_specific = set_usage_host_mi300;
+	partition_specific = partition_host;
+	usage_partition_specific = partition_usage_host;
+	ras_specific = ras_host;
+	usage_ras_specific = usage_ras_host;
+
+	reset_specific = "";
+	usage_reset_specific = "";
+}
+
+void AmdSmiHelpInfo::configure_windows_host_standard(const Arguments& arg)
+{
+	help_specific = build_help_commands_from_categories(help_supported_command_map, {{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "windows_host"}});
+
+	configure_static_settings(
+		static_argument_vectors_map,
+	{{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "host_windows"}, {"gpu", "host_vf"}},
+	usage_static_specific, static_specific,
+	{.include_gpu_device = true}
+	);
+	set_specific = "";
+	usage_set_specific = "";
+	reset_specific = "";
+	usage_reset_specific = "";
+	set_empty_settings();
+}
+
+void AmdSmiHelpInfo::configure_windows_baremetal(const Arguments& arg)
+{
+	configure_list_settings(
+		usage_list_specific, list_specific,
+	{.include_gpu_device = true, .common_prefix = list_common}
+	);
+	help_specific = build_help_commands_from_categories(help_supported_command_map, {{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "bm"}});
+
+	configure_static_settings(
+		static_argument_vectors_map,
+	{{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "bm"}},
+	usage_static_specific, static_specific,
+	{.include_gpu_device = true}
+	);
+
+	configure_metric_settings(
+		metric_argument_vectors_map,
+	{{"gpu", "common"}, {"gpu", "bm"}}, {},
+	usage_metric_specific, metric_specific,
+	{.include_gpu_device = true, .include_watch_device = true}
+	);
+
+	bad_pages_specific = "";
+	usage_bad_pages_specific = "";
+	firmware_specific = firmware_bm;
+	usage_firmware_specific = firmware_usage_bm;
+	process_specific = process_bm;
+	usage_process_specific = process_usage_bm;
+	set_specific = set_bm;
+	usage_set_specific = set_usage_bm;
+	reset_specific = reset_bm;
+	usage_reset_specific = reset_usage_bm;
+
+	profile_specific = "";
+	usage_profile_specific = "";
+	event_specific = "";
+	xgmi_specific = "";
+	usage_xgmi_specific = "";
+	topology_specific = "";
+	usage_topology_specific = "";
+	monitor_specific = monitor_bm;
+	usage_monitor_specific = monitor_usage_bm;
+}
+
+void AmdSmiHelpInfo::configure_windows_guest(const Arguments& arg)
+{
+	configure_list_settings(
+		usage_list_specific, list_specific,
+	{.include_gpu_device = true, .common_prefix = list_common}
+	);
+	help_specific = build_help_commands_from_categories(help_supported_command_map, {{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "guest"}});
+
+	configure_static_settings(
+		static_argument_vectors_map,
+	{{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "bm"}},
+	usage_static_specific, static_specific,
+	{.include_gpu_device = true}
+	);
+
+	configure_metric_settings(
+		metric_argument_vectors_map,
+	{{"gpu", "common"}, {"gpu", "guest"}}, {},
+	usage_metric_specific, metric_specific,
+	{.include_gpu_device = true, .include_watch_device = true}
+	);
+
+	bad_pages_specific = "";
+	firmware_specific = "";
+	usage_firmware_specific = "";
+	process_specific = process_bm;
+	usage_process_specific = process_usage_bm;
+	set_specific = set_bm;
+	usage_set_specific = set_usage_bm;
+	reset_specific = reset_bm;
+	usage_reset_specific = reset_usage_bm;
+
+	profile_specific = "";
+	usage_profile_specific = "";
+	event_specific = "";
+	usage_event_specific = "";
+	xgmi_specific = "";
+	usage_xgmi_specific = "";
+	topology_specific = "";
+	usage_topology_specific = "";
+	monitor_specific = monitor_guest;
+	usage_monitor_specific = monitor_usage_guest;
+}
+
+void AmdSmiHelpInfo::set_common_windows_host_settings()
+{
+	configure_list_settings(
+		usage_list_specific, list_specific,
+	{.include_gpu_device = true, .common_prefix = list_common}
+	);
+	configure_metric_settings(
+		metric_argument_vectors_map,
+	{{"gpu", "common"}, {"gpu", "host"},  {"gpu", "host_linux_spec"}, {"gpu", "host_vf"}},
+	{{"vf", "host_vf"}},
+	usage_metric_specific, metric_specific,
+	{.include_vf = true,.include_gpu_device = true, .include_watch_device = true}
+	);
+
+	bad_pages_specific = bad_pages_host;
+	firmware_specific = firmware_host;
+	usage_firmware_specific = firmware_usage_host;
+	profile_specific = profile_host_windows;
+	usage_profile_specific = profile_usage_host_windows;
+	event_specific = event_host;
+	usage_event_specific = event_usage_host;
+	monitor_specific = monitor_host;
+	usage_monitor_specific = monitor_usage_host;
+	process_specific = "";
+	usage_process_specific = "";
+	usage_node_specific = usage_node;
+	node_specific = node_common;
+}
+
+void AmdSmiHelpInfo::set_empty_settings()
+{
+	xgmi_specific = "";
+	usage_xgmi_specific = "";
+	topology_specific = "";
+	usage_topology_specific = "";
+	partition_specific = "";
+	usage_partition_specific = "";
+	ras_specific = "";
+	usage_ras_specific = "";
+}
+
+std::string AmdSmiHelpInfo::append_device_usage_by_type(const Arguments& arg)
+{
+	std::string out{};
+	out.append(get_help_usage());
+	switch (arg.devices_type) {
+	case GPU_TYPE:
+		out.append(get_device_usage("gpu"));
+		break;
+	case NIC_TYPE:
+		out.append(get_device_usage("nic"));
+		break;
+	case ALL_TYPE:
+		out.append(get_device_usage("gpu"));
+		out.append(USAGE_LINE_BREAK);
+		out.append(get_device_usage("nic"));
+		break;
+	default:
+		break;
+	}
+	out.append(get_file_usage());
+	return out;
+}
+
+void AmdSmiHelpInfo::configure_linux_host_mi300(const Arguments& arg)
+{
+	switch (arg.devices_type) {
+	case GPU_TYPE:
+		configure_list_settings(
+			usage_list_specific, list_specific,
+		{.include_gpu_device = true, .common_prefix = list_common}
+		);
+		help_specific = build_help_commands_from_categories(help_supported_command_map, {{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "linux_host"}, {"gpu", "host_mi3xx"}});
+
+		configure_static_settings(
+			static_argument_vectors_map,
+		{{"gpu_nic_common", "common"}, {"gpu_nic_common", "host_linux"}, {"gpu", "common"}, {"gpu", "host_linux"}, {"gpu", "host_linux_spec"}, {"gpu", "host_mi3xx"}, {"gpu", "host_vf"}},
+		usage_static_specific, static_specific,
+		{.include_gpu_device = true, .common_prefix = static_common}
+		);
+
+		configure_metric_settings(
+			metric_argument_vectors_map,
+		{{"gpu", "common"}, {"gpu", "host"}, {"gpu", "host_linux_spec"}, {"gpu", "host_vf"}},
+		{{"vf", "host_vf"}, {"vf", "host_linux_mi3xx_vf"}},
+		usage_metric_specific, metric_specific,
+		{.include_vf = true,.include_gpu_device = true, .include_watch_device = true, .common_prefix = metric_common}
+		);
+		break;
+
+	case NIC_TYPE:
+		configure_list_settings(
+			usage_list_specific, list_specific,
+		{.include_nic_device = true, .common_prefix = list_common}
+		);
+		help_specific = build_help_commands_from_categories(help_supported_command_map, {{"gpu_nic_common", "common"}});
+
+		configure_static_settings(
+			static_argument_vectors_map,
+		{{"gpu_nic_common", "common"}, {"gpu_nic_common", "host_linux"}, {"nic", "host_linux"}},
+		usage_static_specific, static_specific,
+		{.include_nic_device = true, .common_prefix = static_common}
+		);
+
+		configure_metric_settings(
+			metric_argument_vectors_map,
+		{{"nic", "host_linux"}}, {},
+		usage_metric_specific, metric_specific,
+		{.include_nic_device = true, .common_prefix = metric_common}
+		);
+		break;
+
+	case ALL_TYPE:
+		configure_list_settings(
+			usage_list_specific, list_specific,
+		{.include_gpu_device = true, .include_nic_device = true, .common_prefix = list_common}
+		);
+
+		help_specific = build_help_commands_from_categories(help_supported_command_map, {
+			{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "linux_host"}, {"gpu", "host_mi3xx"}
+		});
+
+		usage_static_specific = build_usage_from_categories(static_argument_vectors_map, {
+			{"gpu_nic_common", "common"}, {"gpu_nic_common", "host_linux"}, {"gpu", "common"},
+			{"gpu", "host_linux"}, {"gpu", "host_linux_spec"}, {"gpu", "host_mi3xx"}, {"nic", "host_linux"}, {"gpu", "host_vf"}
+		});
+
+		static_specific = static_common + get_help_arguments() +
+		build_arguments_from_categories(static_argument_vectors_map, {
+			{"gpu_nic_common", "common"}, {"gpu_nic_common", "host_linux"}
+		}) +
+		common_gpu + get_device_arguments("gpu") +
+		build_arguments_from_categories(static_argument_vectors_map, {
+			{"gpu", "common"}, {"gpu", "host_linux"}, {"gpu", "host_linux_spec"}, {"gpu", "host_mi3xx"}, {"gpu", "host_vf"}
+		}) + common_nic + get_device_arguments("nic") +
+		build_arguments_from_categories(static_argument_vectors_map, {{"nic", "host_linux"}});
+
+		usage_metric_specific = get_device_usage("watch") +
+		build_usage_from_categories(metric_argument_vectors_map, {
+			{"gpu", "common"}, {"gpu", "host"}, {"gpu", "host_linux_spec"}, {"nic", "host_linux"}, {"gpu", "host_vf"}
+		});
+
+		metric_specific = metric_common + get_help_arguments() + common_gpu + get_device_arguments("gpu") +
+						  get_device_arguments("watch") +
+		build_arguments_from_categories(metric_argument_vectors_map, {
+			{"gpu", "common"}, {"gpu", "host"}, {"gpu", "host_linux_spec"}, {"gpu", "host_vf"}
+		}) +
+		build_arguments_from_categories(metric_argument_vectors_map, {
+			{"vf", "host_vf"}, {"vf", "host_linux_mi3xx_vf"}
+		}) +
+		common_nic + get_device_arguments("nic") +
+		build_arguments_from_categories(metric_argument_vectors_map, {{"nic", "host_linux"}});
+		break;
+
+	default:
+		break;
+	}
+
+	xgmi_specific = xgmi_host;
+	usage_xgmi_specific = xgmi_usage_host;
+	topology_specific = topology_host;
+	usage_topology_specific = topology_usage_host;
+	set_specific = set_host_mi300;
+	usage_set_specific = set_usage_host_mi300;
+	reset_specific = reset_host_linux;
+	usage_reset_specific = reset_usage_linux;
+	partition_specific = partition_host;
+	usage_partition_specific = partition_usage_host;
+	ras_specific = ras_host;
+	usage_ras_specific = usage_ras_host;
+	usage_node_specific = usage_node;
+	node_specific = node_common;
+}
+
+void AmdSmiHelpInfo::configure_linux_host_mi200(const Arguments& arg)
+{
+	configure_list_settings(
+		usage_list_specific, list_specific,
+	{.include_gpu_device = true, .common_prefix = list_common}
+	);
+	help_specific = build_help_commands_from_categories(help_supported_command_map, {{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "linux_host"}, {"gpu", "host_mi200"}});
+
+	configure_static_settings(
+		static_argument_vectors_map,
+	{{"gpu_nic_common", "common"}, {"gpu_nic_common", "host_linux"}, {"gpu", "host_linux"}, {"gpu", "host_vf"}},
+	usage_static_specific, static_specific,
+	{.include_gpu_device = true, .common_prefix = static_common}
+	);
+
+	configure_metric_settings(
+		metric_argument_vectors_map,
+	{{"gpu", "common"}, {"gpu", "host"}, {"gpu", "host_vf"}},
+	{{"vf", "host_vf"}},
+	usage_metric_specific, metric_specific,
+	{.include_vf = true, .include_gpu_device = true, .include_watch_device = true, .common_prefix = metric_common}
+	);
+
+	xgmi_specific = xgmi_host_mi200;
+	usage_xgmi_specific = xgmi_usage_host_mi200;
+	topology_specific = topology_host;
+	usage_topology_specific = topology_usage_host;
+	set_specific = set_host_mi200;
+	usage_set_specific = set_usage_host_mi200;
+	reset_specific = reset_host_linux;
+	usage_reset_specific = reset_usage_linux;
+	partition_specific = "";
+	usage_partition_specific = "";
+}
+
+void AmdSmiHelpInfo::set_common_linux_host_settings()
+{
+	bad_pages_specific = bad_pages_host;
+	firmware_specific = firmware_host;
+	usage_firmware_specific = firmware_usage_host;
+	event_specific = event_host;
+	usage_event_specific = event_usage_host;
+	monitor_specific = monitor_host;
+	usage_monitor_specific = monitor_usage_host;
+
+	process_specific = "";
+	usage_process_specific = "";
+	profile_specific = "";
+	usage_profile_specific = "";
+}
+
 bool AmdSmiHelpInfo::is_command_supported(std::string command, bool modifiers, std::string common,
 		std::string specific)
 {
@@ -742,16 +765,26 @@ bool AmdSmiHelpInfo::is_command_supported(std::string command, bool modifiers, s
 	}
 	return true;
 }
-std::string AmdSmiHelpInfo::get_list_help_message(bool modifiers = false)
+std::string AmdSmiHelpInfo::get_list_help_message(const Arguments& arg, bool modifiers = false)
 {
 	is_command_supported("list",modifiers,list_common,list_specific);
-	return copyright_message + list_common + usage_list_specific + list_specific + command_modifiers;
+	return copyright_message + usage_list_common + append_device_usage_by_type(
+			   arg) + get_format_usage_by_device_type(arg.devices_type) + usage_list_specific + "\n\n" +
+		   list_usage_message
+		   + list_specific + "\n" + command_modifiers;
 }
-std::string AmdSmiHelpInfo::get_static_help_message(bool modifiers = false)
+
+std::string AmdSmiHelpInfo::get_static_help_message(const Arguments& arg, bool modifiers = false)
 {
 	is_command_supported("static",modifiers,static_common,static_specific);
-	return  copyright_message + usage_static_common + usage_static_specific + static_usage_message +
-			static_common + static_specific +  command_modifiers;
+	std::string result = copyright_message + usage_static_common + append_device_usage_by_type(
+							 arg) + get_format_usage_by_device_type(arg.devices_type) + usage_static_specific;
+	result.append("\n")
+	.append(static_usage_message)
+	.append(static_specific)
+	.append("\n")
+	.append(command_modifiers);
+	return result;
 }
 
 std::string AmdSmiHelpInfo::get_bad_page_help_message(bool modifiers = false)
@@ -766,11 +799,17 @@ std::string AmdSmiHelpInfo::get_firmware_help_message(bool modifiers = false)
 	return copyright_message + firmware_usage_common + usage_firmware_specific + firmware_message +
 		   firmware_common + firmware_specific + command_modifiers;
 }
-std::string AmdSmiHelpInfo::get_metric_help_message(bool modifiers = false)
+std::string AmdSmiHelpInfo::get_metric_help_message(const Arguments& arg, bool modifiers = false)
 {
 	is_command_supported("metric",modifiers,metric_common,metric_specific);
-	return copyright_message + metric_usage_common + usage_metric_specific + metric_message +
-		   metric_common + metric_specific + metric_modifiers;
+	std::string result = copyright_message + usage_metric_common + append_device_usage_by_type(
+							 arg) + get_format_usage_by_device_type(arg.devices_type) + usage_metric_specific;
+	result.append("\n")
+	.append(metric_message)
+	.append(metric_specific)
+	.append("\n")
+	.append(metric_modifiers);
+	return result;
 }
 std::string AmdSmiHelpInfo::get_process_help_message(bool modifiers = false)
 {
@@ -822,7 +861,7 @@ std::string AmdSmiHelpInfo::get_reset_help_message(bool modifiers = false)
 {
 	is_command_supported("reset",modifiers,reset_common,reset_specific);
 	return copyright_message + reset_usage_common + usage_reset_specific + reset_message + reset_common
-		   + reset_specific + command_modifiers;
+		   + reset_specific;
 }
 std::string AmdSmiHelpInfo::get_monitor_help_message(bool modifiers = false)
 {
@@ -833,6 +872,7 @@ std::string AmdSmiHelpInfo::get_monitor_help_message(bool modifiers = false)
 std::string AmdSmiHelpInfo::get_help_message()
 {
 	std::string version{};
+	std::string common{};
 	version = string_format("%s version %s", AMDSMI_TOOL_NAME, AMDSMI_TOOL_VERSION_STRING);
 	std::string message{string_format(help_common, version.c_str())};
 	return copyright_message + message + help_specific + "\n";
@@ -843,4 +883,10 @@ std::string AmdSmiHelpInfo::get_ras_help_message(bool modifiers = false)
 	is_command_supported("ras", modifiers, ras_common, ras_specific);
 	return  copyright_message + usage_ras_common + usage_ras_specific + ras_usage_message +
 			ras_common + ras_specific +  command_modifiers;
+}
+
+std::string AmdSmiHelpInfo::get_node_help_message(bool modifiers = false)
+{
+	is_command_supported("node", modifiers, node_common, node_specific);
+	return copyright_message + usage_node_specific + node_specific + command_modifiers;
 }

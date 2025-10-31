@@ -248,6 +248,7 @@ struct amdgv_diag_data_gen_info {
 			/* <69:AMDGV_FIRMWARE_ID__RLC_SAVE_RESTROE_LIST> */
 			/* <70:AMDGV_FIRMWARE_ID__PSP_RAS> */
 			/* <71:AMDGV_FIRMWARE_ID__RAS_TA> */
+			/* <72:AMDGV_FIRMWARE_ID__XGMI_TA> */
 			/* <IDX MAP END> */
 			/* <name:Firmware ID; type:INT; size:4; base:10; idxmap:Firmware IDX; valmap:1;> */
 			uint32_t fw_id;

@@ -26,6 +26,7 @@ extern "C" {
 #include "amdsmi.h"
 #include "smi_utils.h"
 #include "common/smi_cmd.h"
+#include "smi_processor_handle.h"
 }
 
 #include "smi_system_mock.hpp"
@@ -37,7 +38,12 @@ using amdsmi::equal_handles;
 
 class AmdSmiRasCperTests : public amdsmi::AmdSmiTest {
 protected:
-    smi_device_handle_t GPU_MOCK_HANDLE_DIFF = { (0x1234ULL << 32) | 0x4321 };
+	struct smi_gpu_handle GPU_MOCK_HANDLE_DIFF = {
+		SMI_PROCESSOR_TYPE_AMD_GPU,
+		{ { 0x4, 0x3, 0x2, 0x2 } },
+		(0x1234ULL << 32) | 0x4321,
+		0x8765
+	};
 };
 void fill_cper_header_and_section(char* buffer, uint16_t sec_cnt, const guid_t& sec_type, uint32_t sec_offset);
 
@@ -90,6 +96,8 @@ TEST_F(AmdSmiRasCperTests, InvalidParams)
     ret = amdsmi_get_gpu_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, NULL);
     ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+    ret = amdsmi_get_gpu_cper_entries(&NIC_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
+    ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
     ret = amdsmi_get_afids_from_cper(nullptr, sizeof(cper_data), afids, &num_afids);
     ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);

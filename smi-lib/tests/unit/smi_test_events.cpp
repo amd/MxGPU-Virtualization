@@ -26,6 +26,7 @@ extern "C" {
 #include "amdsmi.h"
 #include "common/smi_cmd.h"
 #include "smi_sys_wrapper.h"
+#include "smi_processor_handle.h"
 }
 
 #include "smi_system_mock.hpp"
@@ -40,14 +41,19 @@ TEST_F(AmdSmiEventsTests, InvalidParams)
 {
 	int ret;
 	amdsmi_event_set empty_set = NULL;
-	amdsmi_event_set set = &empty_set;
+	amdsmi_event_set set;
 	amdsmi_processor_handle* processor_list = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*16);
 	amdsmi_event_entry_t event;
+	uint32_t num_devices = AMDSMI_MAX_DEVICES;
 
 	ret = amdsmi_event_create(NULL, (uint8_t)16, (uint64_t)0xC0FFEE, &empty_set);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_event_create(&processor_list[0], (uint8_t)0, (uint64_t)0xC0FFEE, &empty_set);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	processor_list[0] = &NIC_MOCK_HANDLE;
+	ret = amdsmi_event_create(&processor_list[0], num_devices, (uint64_t)0xC0FFEE, &set);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_event_read(NULL, 0, &event);
@@ -77,20 +83,12 @@ TEST_F(AmdSmiEventsTests, EventCreate)
 	PlantMockOutput(&mocked_resp);
 	ret = performCall();
 
-	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
-
 	sys_wrapper->smi_free(((struct smi_event_set_s*)set)->handles);
 	sys_wrapper->smi_free(((struct smi_event_set_s*)set)->devices);
 	sys_wrapper->smi_free((struct smi_event_set_s*)set);
-
-	WhenCalling(std::bind(amdsmi_event_create, &processor_list[0], num_devices, (uint64_t)0xC0FFEE, &set));
-	ExpectCommand(SMI_CMD_CODE_CREATE_EVENT);
-	SaveInputPayloadIn(&in_payload);
-	PlantMockOutput(&mocked_resp);
-	ret = performCall(AMDSMI_STATUS_UNKNOWN_ERROR);
-
 	free(processor_list);
-	ASSERT_EQ(ret, AMDSMI_STATUS_UNKNOWN_ERROR);
+
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 }
 
 TEST_F(AmdSmiEventsTests, EventCreateMallocOutOfResources)

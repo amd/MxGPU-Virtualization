@@ -758,7 +758,7 @@ static struct amdgv_memmgr_mem *amdgv_memmgr_alloc_unify_align(struct amdgv_memm
 		 * if so, memmgr->allocs has already contained the copied mem info,
 		 * just find it and return the mem
 		 */
-		if (adapt->opt.skip_hw_init) {
+		if (amdgv_in_live_update_seq()) {
 			/* Some mem have the same mem_id such as MEM_ECC_BAD_PAGE.
 			 * Always alloc new mem for them.
 			 */

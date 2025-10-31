@@ -33,3 +33,8 @@ set(THIRD_PARTY_INCLUDE_DIR ${PROJECT_ROOT}/utils/third_party/inc)
 set(INTERFACE_DIR ${PROJECT_ROOT}/../../interface)
 
 # ADD COMPILER AND LINKER FLAGS
+if(DEFINED AMD_SMI_NIC_SUPPORT)
+    if(AMD_SMI_NIC_SUPPORT STREQUAL "True" OR AMD_SMI_NIC_SUPPORT)
+        add_compile_definitions(AMD_SMI_NIC_SUPPORT)
+    endif()
+endif()

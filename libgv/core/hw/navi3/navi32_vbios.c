@@ -238,25 +238,6 @@ static int navi32_enable_pci_atomic_request(struct amdgv_adapter *adapt)
 	return 0;
 }
 
-static int navi32_disable_pci_atomic_request(struct amdgv_adapter *adapt)
-{
-	uint16_t val;
-	int pos;
-
-	pos = oss_pci_find_capability(adapt->dev, PCI_CAP_ID__PCIE);
-	if (!pos) {
-		AMDGV_ERROR("this device does not support capability: %x\n", PCI_CAP_ID__PCIE);
-		return AMDGV_FAILURE;
-	}
-
-	oss_pci_read_config_word(adapt->dev, pos + PCIE_DEVICE_CONTROL2, &val);
-	val &= ~(PCIE_DEVICE_CONTROL2__ATOMICOP_REQ);
-	oss_pci_write_config_word(adapt->dev, pos + PCIE_DEVICE_CONTROL2, val);
-	AMDGV_INFO("Atomic Request Disabled\n");
-
-	return 0;
-}
-
 static int navi32_disable_pci_aer(struct amdgv_adapter *adapt)
 {
 	int pos;
@@ -739,11 +720,6 @@ failed:
 
 static int navi32_vbios_hw_fini(struct amdgv_adapter *adapt)
 {
-	if (navi32_disable_pci_atomic_request(adapt)) {
-		AMDGV_ERROR("disable pci atomic request failed!\n");
-		return AMDGV_FAILURE;
-	}
-
 	amdgv_vbios_atom_hw_fini(adapt);
 
 	if (!adapt->reset.reset_state) {

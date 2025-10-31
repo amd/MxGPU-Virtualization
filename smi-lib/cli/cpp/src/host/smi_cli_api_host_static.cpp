@@ -37,6 +37,7 @@
 #include <limits.h>
 
 #define MAX_CPU_SET_SIZE 16
+#include <regex>
 
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 		amdsmi_processor_handle *);
@@ -90,13 +91,29 @@ typedef amdsmi_status_t (*AMDSMI_GET_CURR_ACCELERATOR_PARTITION)(amdsmi_processo
 typedef amdsmi_status_t (*AMDSMI_GET_MEMORY_PARTITION_CONFIG)(amdsmi_processor_handle,
 		amdsmi_memory_partition_config_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_METRICS)(amdsmi_processor_handle, uint32_t *,
-			amdsmi_metric_t *);
+		amdsmi_metric_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_VIRTUALIZATION_MODE)(amdsmi_processor_handle,
 		amdsmi_virtualization_mode_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_CPU_AFFINITY_WITH_SCOPE)(amdsmi_processor_handle,
 		uint32_t, uint64_t *, amdsmi_affinity_scope_t);
 typedef amdsmi_status_t (*AMDSMI_TOPO_GET_NUMA_NODE_NUMBER)(amdsmi_processor_handle,
 		uint32_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLES_BY_TYPE)(amdsmi_socket_handle,
+		amdsmi_processor_type_t, amdsmi_processor_handle*, uint32_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_NIC_ASIC_INFO)(amdsmi_processor_handle,
+		amdsmi_nic_asic_info_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_NIC_BUS_INFO)(amdsmi_processor_handle,
+		amdsmi_nic_bus_info_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_NIC_DRIVER_INFO)(amdsmi_processor_handle,
+		amdsmi_nic_driver_info_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_NIC_NUMA_INFO)(amdsmi_processor_handle,
+		amdsmi_nic_numa_info_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_NIC_PORT_INFO)(amdsmi_processor_handle,
+		amdsmi_nic_port_info_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_NIC_RDMA_DEV_INFO)(amdsmi_processor_handle,
+		amdsmi_nic_rdma_devices_info_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_NIC_DEVICE_BDF)(amdsmi_processor_handle,
+		amdsmi_bdf_t *);
 
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_GPU_DEVICE_BDF host_amdsmi_get_gpu_device_bdf;
@@ -137,6 +154,15 @@ extern AMDSMI_GET_GPU_VIRTUALIZATION_MODE host_amdsmi_get_gpu_virtualization_mod
 
 extern AMDSMI_GET_CPU_AFFINITY_WITH_SCOPE host_amdsmi_get_cpu_affinity_with_scope;
 extern AMDSMI_TOPO_GET_NUMA_NODE_NUMBER host_amdsmi_topo_get_numa_node_number;
+extern AMDSMI_GET_PROCESSOR_HANDLES_BY_TYPE host_amdsmi_get_processor_handles_by_type;
+extern AMDSMI_GET_NIC_ASIC_INFO host_amdsmi_get_nic_asic_info;
+extern AMDSMI_GET_NIC_BUS_INFO host_amdsmi_get_nic_bus_info;
+extern AMDSMI_GET_NIC_DRIVER_INFO host_amdsmi_get_nic_driver_info;
+extern AMDSMI_GET_NIC_NUMA_INFO host_amdsmi_get_nic_numa_info;
+extern AMDSMI_GET_NIC_PORT_INFO host_amdsmi_get_nic_port_info;
+extern AMDSMI_GET_NIC_RDMA_DEV_INFO host_amdsmi_get_nic_rdma_dev_info;
+extern AMDSMI_GET_NIC_DEVICE_BDF host_amdsmi_get_nic_device_bdf;
+
 
 const std::vector<amdsmi_gpu_block_t> ecc_blocks{AMDSMI_GPU_BLOCK_UMC, AMDSMI_GPU_BLOCK_SDMA, AMDSMI_GPU_BLOCK_GFX, AMDSMI_GPU_BLOCK_MMHUB,
 		  AMDSMI_GPU_BLOCK_ATHUB, AMDSMI_GPU_BLOCK_PCIE_BIF, AMDSMI_GPU_BLOCK_HDP, AMDSMI_GPU_BLOCK_XGMI_WAFL,
@@ -307,7 +333,8 @@ std::string host_fill_ras_info(Arguments arg, std::string value)
 				  ",%s,%s,%s", value.c_str(), value.c_str(), value.c_str());
 	} else {
 		out = string_format(
-				  staticRasTemplateHost, value.c_str(), value.c_str(), value.c_str(), value.c_str(), value.c_str(), value.c_str() );
+				  staticRasTemplateHost, value.c_str(), value.c_str(), value.c_str(), value.c_str(), value.c_str(),
+				  value.c_str() );
 	}
 
 	return out;
@@ -404,8 +431,8 @@ std::string host_fill_vram_info(Arguments arg, std::string value)
 		nlohmann::ordered_json vram_info_json = { { "vram_type", value.c_str() },
 			{ "vram_vendor", value.c_str()},
 			{ "vram_size",  vram_size},
-			{ "vram_bit_width",  value.c_str(),
-			{ "max_vram_bandwidth",  max_vram_bandwidth} }
+			{ "vram_bit_width",  value.c_str()},
+			{ "max_vram_bandwidth",  max_vram_bandwidth}
 		};
 
 		out = vram_info_json.dump(4);
@@ -580,7 +607,7 @@ std::string host_fill_soc_pstate(Arguments arg, std::string value)
 		out = dpm_info_json.dump(4);
 	} else if (arg.output == csv) {
 		out += string_format("%s,%s,%s,%s",
-			value.c_str(), value.c_str(), value.c_str(), value.c_str());
+							 value.c_str(), value.c_str(), value.c_str(), value.c_str());
 	} else {
 		out = string_format(staticPolicyHeaderTemplate, value.c_str(), value.c_str());
 		out += string_format(staticPolicyInfoTemplate, value.c_str(), value.c_str(), "[]");
@@ -1008,9 +1035,9 @@ int AmdSmiApiHost::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argumen
 	}
 
 	std::string junction_shutdown_temperature_string = junction_shutdown_temperature == UINT_MAX ?
-		"N/A" : string_format("%lld", junction_shutdown_temperature);
+			"N/A" : string_format("%lld", junction_shutdown_temperature);
 	std::string vram_shutdown_temperature_string = vram_shutdown_temperature == UINT_MAX ? "N/A" :
-		string_format("%lld", vram_shutdown_temperature);
+			string_format("%lld", vram_shutdown_temperature);
 
 	if (arg.output == json) {
 		nlohmann::ordered_json max_power{};
@@ -1109,11 +1136,11 @@ int AmdSmiApiHost::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argumen
 		std::string therm_limit_junction_string_unit = therm_limit_junction_string == "N/A" ? "" : "C";
 		std::string therm_limit_vram_string_unit = therm_limit_vram_string == "N/A" ? "" : "C";
 		std::string edge_shutdown_temperature_string_unit = edge_shutdown_temperature_string == "N/A" ? "" :
-			"C";
+				"C";
 		std::string junction_shutdown_temperature_string_unit = junction_shutdown_temperature_string ==
-			"N/A" ? "" : "C";
+				"N/A" ? "" : "C";
 		std::string vram_shutdown_temperature_string_unit = vram_shutdown_temperature_string == "N/A" ? "" :
-			"C";
+				"C";
 		formatted_string = string_format(
 							   staticLimitTemplate, max_power_cap_string.c_str(),
 							   max_power_cap_string_uint.c_str(), min_power_cap_string.c_str(),
@@ -1385,7 +1412,7 @@ int AmdSmiApiHost::amdsmi_get_dfc_info_command(uint64_t processor_bdf, Arguments
 						if (arg.output == json) {
 							if(dfc_info.data[i].black_list[k] > 0)
 								black_list_versions.push_back(
-													   string_format("0x%X", dfc_info.data[i].black_list[k]));
+									string_format("0x%X", dfc_info.data[i].black_list[k]));
 						} else if (arg.output == csv) {
 							if(dfc_info.data[i].black_list[k] > 0)
 								formatted_string.append(string_format(",%s", current_bl_ver.c_str()));
@@ -1663,7 +1690,8 @@ int AmdSmiApiHost::amdsmi_get_vram_info_command(uint64_t processor_bdf, Argument
 
 			if (ret == AMDSMI_STATUS_SUCCESS) {
 				auto it = std::find_if(metrics, metrics + metric_size, [](const amdsmi_metric_t& metric) {
-					return metric.name == AMDSMI_METRIC_NAME_MAX_DRAM_BANDWIDTH && !(metric.flags & AMDSMI_METRIC_TYPE_ACC);
+					return metric.name == AMDSMI_METRIC_NAME_MAX_DRAM_BANDWIDTH
+						   && !(metric.flags & AMDSMI_METRIC_TYPE_ACC);
 				});
 
 				if (it != metrics + metric_size) {
@@ -1995,12 +2023,12 @@ int AmdSmiApiHost::amdsmi_get_soc_pstate(uint64_t processor_bdf, Arguments arg,
 			}));
 		} else if (arg.output == csv) {
 			formatted_string += string_format(
-				",%s,%s,%s,%s\n", num_supported_str.c_str(),
-				curr_str.c_str(), policy_id_str.c_str(), dpm_description.c_str());
+									",%s,%s,%s,%s\n", num_supported_str.c_str(),
+									curr_str.c_str(), policy_id_str.c_str(), dpm_description.c_str());
 		} else {
 			formatted_string += string_format(
-				staticPolicyInfoTemplate, policy_id_str.c_str(),
-				dpm_description.c_str());
+									staticPolicyInfoTemplate, policy_id_str.c_str(),
+									dpm_description.c_str());
 		}
 	}
 
@@ -2016,7 +2044,7 @@ int AmdSmiApiHost::amdsmi_get_soc_pstate(uint64_t processor_bdf, Arguments arg,
 }
 
 int AmdSmiApiHost::amdsmi_get_plpd(uint64_t processor_bdf, Arguments arg,
-		std::string &formatted_string)
+								   std::string &formatted_string)
 {
 	int ret;
 	auto dpm_list_json = nlohmann::ordered_json::array();
@@ -2095,8 +2123,7 @@ int AmdSmiApiHost::amdsmi_get_virtualization_mode_command(uint64_t processor_bdf
 	}
 
 	std::string virtualization_mode_string;
-	switch (mode)
-	{
+	switch (mode) {
 	case AMDSMI_VIRTUALIZATION_MODE_HOST:
 		virtualization_mode_string = "HOST";
 		break;
@@ -2116,7 +2143,8 @@ int AmdSmiApiHost::amdsmi_get_virtualization_mode_command(uint64_t processor_bdf
 	} else if (arg.output == csv) {
 		formatted_string = string_format(",%s", virtualization_mode_string.c_str());
 	} else {
-		formatted_string = string_format(staticVirtualizationModeTemplate, virtualization_mode_string.c_str());
+		formatted_string = string_format(staticVirtualizationModeTemplate,
+										 virtualization_mode_string.c_str());
 	}
 
 	return ret;
@@ -2150,7 +2178,7 @@ int AmdSmiApiHost::amdsmi_get_numa_command(uint64_t processor_bdf, Arguments arg
 	uint64_t *cpu_set = (uint64_t*)calloc(cpu_set_size_loc, sizeof(uint64_t));
 	if (!cpu_set) {
 		Logger::getInstance().log(LogLevel::Error, AMDSMI_STATUS_OUT_OF_RESOURCES,
-				__FUNCTION__, __FILE__, __LINE__);
+								  __FUNCTION__, __FILE__, __LINE__);
 		return AMDSMI_STATUS_OUT_OF_RESOURCES;
 	}
 
@@ -2175,26 +2203,26 @@ int AmdSmiApiHost::amdsmi_get_numa_command(uint64_t processor_bdf, Arguments arg
 	} else {
 		for(int i = 0; i < cpu_set_size_loc; ++i) {
 			auto maskRanges = bitmaskToRangesList(cpu_set[i],
-						sizeof(cpu_set[0]) * CHAR_BIT * i);
+												  sizeof(cpu_set[0]) * CHAR_BIT * i);
 			uint64_t mask{0};
 			std::vector<std::string> ranges_vec{};
 			nlohmann::ordered_json numajson{};
 			for (const auto& [subMask, rangeStr] : maskRanges) {
 				if (arg.output == csv) {
 					formatted_substring =
-					string_format(",%016lx,%s", subMask, rangeStr.c_str());
+						string_format(",%016lx,%s", subMask, rangeStr.c_str());
 					formatted_string += string_format(",%d,%d", numa_node, i)
-					+ formatted_substring + ",N/A\n";
+										+ formatted_substring + ",N/A\n";
 				} else {
 					mask |= subMask;
 					ranges_vec.push_back(rangeStr);
 				}
 			}
 			if (arg.output == json) {
-					cpu_list.push_back(nlohmann::ordered_json::object( {
-						{ "bitmask", string_format("%016lx", mask)},
-						{ "core_range", ranges_vec}
-					}));
+				cpu_list.push_back(nlohmann::ordered_json::object( {
+					{ "bitmask", string_format("%016lx", mask)},
+					{ "core_range", ranges_vec}
+				}));
 			} else if (arg.output == human) {
 				std::string joined_range;
 				for (size_t idx = 0; idx < ranges_vec.size(); ++idx) {
@@ -2203,7 +2231,7 @@ int AmdSmiApiHost::amdsmi_get_numa_command(uint64_t processor_bdf, Arguments arg
 				}
 				joined_range = string_format("[%s]", joined_range.c_str());
 				formatted_substring += string_format(staticCpuListTemplate,
-						i, mask, joined_range.c_str());
+													 i, mask, joined_range.c_str());
 			}
 		}
 		if (arg.output == json) {
@@ -2217,11 +2245,653 @@ int AmdSmiApiHost::amdsmi_get_numa_command(uint64_t processor_bdf, Arguments arg
 			formatted_string = numa_info_json.dump(4);
 		} else if (arg.output == human) {
 			formatted_string = string_format(staticNumaTemplate,
-							numa_node,
-							formatted_substring.c_str());
+											 numa_node,
+											 formatted_substring.c_str());
 		}
 	}
 	free(cpu_set);
+
+	return ret;
+}
+std::string host_fill_nic_asic_info(Arguments arg, std::string value)
+{
+	std::string out{};
+	if (arg.output == json) {
+		nlohmann::ordered_json values_json{};
+		nlohmann::ordered_json asic_json = {
+			{ "vendor_id", value.c_str() },
+			{ "subvendor_id", value.c_str() },
+			{ "device_id", value.c_str() },
+			{ "subsystem_id", value.c_str() },
+			{ "revision", value.c_str() },
+			{ "permanent_address", value.c_str() },
+			{ "product_name", value.c_str() },
+			{ "part_number", value.c_str() },
+			{ "serial_number", value.c_str() },
+			{ "vendor_name", value.c_str() }
+		};
+
+		out = asic_json.dump(4);
+	} else if (arg.output == human) {
+		out = string_format(
+				  nicStaticAsicTemplate, value.c_str(), value.c_str(), value.c_str(), value.c_str(), value.c_str(),
+				  value.c_str(), value.c_str(), value.c_str(), value.c_str(), value.c_str());
+	}
+
+	return out;
+}
+std::string host_fill_nic_bus_info(Arguments arg, std::string value)
+{
+	std::string out{};
+	if (arg.output == json) {
+		nlohmann::ordered_json values_json{};
+		nlohmann::ordered_json max_pcie_speed{};
+		max_pcie_speed["value"] = value.c_str();
+		max_pcie_speed["unit"] = value.c_str();
+		nlohmann::ordered_json bus_json = {
+			{ "bdf", value.c_str() },
+			{ "max_pcie_width", value.c_str() },
+			{ "max_pcie_speed", max_pcie_speed },
+			{ "pcie_interface_version", value.c_str() },
+			{ "slot_type", value.c_str() }
+		};
+
+		out = bus_json.dump(4);
+	} else if (arg.output == human) {
+		out = string_format(
+				  nicStaticBusTemplate, value.c_str(), value.c_str(), value.c_str(), "", value.c_str(), value.c_str());
+	}
+
+	return out;
+}
+std::string host_fill_nic_driver_info(Arguments arg, std::string value)
+{
+	std::string out{};
+	if (arg.output == json) {
+		nlohmann::ordered_json values_json{};
+		nlohmann::ordered_json driver_json = {
+			{ "name", value.c_str() },
+			{ "version", value.c_str() }
+		};
+
+		out = driver_json.dump(4);
+	} else if (arg.output == human) {
+		out = string_format(
+				  nicStaticDriverTemplate, value.c_str(), value.c_str());
+	}
+
+	return out;
+}
+std::string host_fill_nic_numa_info(Arguments arg, std::string value)
+{
+	std::string out{};
+	if (arg.output == json) {
+		nlohmann::ordered_json values_json{};
+		nlohmann::ordered_json numa_json = {
+			{ "node", value.c_str() },
+			{ "affinity", value.c_str() }
+		};
+
+		out = numa_json.dump(4);
+	} else if (arg.output == human) {
+		out = string_format(
+				  nicStaticNumaTemplate, value.c_str(), value.c_str());
+	}
+
+	return out;
+}
+std::string host_fill_nic_port_info(Arguments arg, std::string value)
+{
+	std::string out{};
+	if (arg.output == json) {
+		auto ports_json = nlohmann::ordered_json::array();
+		nlohmann::ordered_json mtu{};
+		mtu["value"] = value.c_str();
+		mtu["unit"] = value.c_str();
+		nlohmann::ordered_json link_speed{};
+		link_speed["value"] = value.c_str();
+		link_speed["unit"] = value.c_str();
+		nlohmann::ordered_json port_json = {
+			{ "bdf", value.c_str() },
+			{ "port_num", value.c_str() },
+			{ "type", value.c_str() },
+			{ "flavour", value.c_str() },
+			{ "netdev", value.c_str() },
+			{ "ifindex", value.c_str() },
+			{ "mac_address", value.c_str() },
+			{ "carrier", value.c_str() },
+			{ "mtu", mtu },
+			{ "link_state", value.c_str() },
+			{ "link_speed", link_speed },
+			{ "active_fec", value.c_str() },
+			{ "autoneg", value.c_str() },
+			{ "pause_autoneg", value.c_str() },
+			{ "pause_rx", value.c_str() },
+			{ "pause_tx", value.c_str() }
+		};
+		ports_json.push_back(port_json);
+
+		out = ports_json.dump(4);
+	} else if (arg.output == human) {
+		out = nicStaticPortHeaderTemplate;
+		out += string_format(
+				  nicStaticPortTemplate, 0, value.c_str(), value.c_str(), value.c_str(),
+				  value.c_str(), value.c_str(), value.c_str(), value.c_str(), value.c_str(),
+				  value.c_str(), "", value.c_str(), value.c_str(), "",
+				  value.c_str(), value.c_str(), value.c_str(), value.c_str(), value.c_str());
+	}
+
+	return out;
+}
+std::string host_fill_nic_rdma_dev_info(Arguments arg, std::string value)
+{
+	std::string formatted_string{};
+	std::string out{};
+	if (arg.output == json) {
+		auto rdma_devices_json = nlohmann::ordered_json::array();
+		auto rdma_ports_json = nlohmann::ordered_json::array();
+		nlohmann::ordered_json rdma_port_json = {
+			{ "index", value.c_str() },
+			{ "netdev", value.c_str() },
+			{ "state", value.c_str() },
+			{ "rdma_port", value.c_str() },
+			{ "max_mtu", value.c_str() },
+			{ "active_mtu", value.c_str() }
+		};
+		rdma_ports_json.push_back(rdma_port_json);
+		nlohmann::ordered_json rdma_device_json = {
+			{ "rdma_dev", value.c_str() },
+			{ "node_guid", value.c_str() },
+			{ "node_type", value.c_str() },
+			{ "sys_image_guid", value.c_str() },
+			{ "fw_ver", value.c_str() },
+			{ "ports", rdma_ports_json }
+		};
+		rdma_devices_json.push_back(rdma_device_json);
+
+		out = rdma_devices_json.dump(4);
+	} else if (arg.output == human) {
+		formatted_string = nicStaticRdmaDevHeaderTemplate;
+		formatted_string.append(string_format(
+			nicStaticRdmaDevTemplate, 0, value.c_str(), value.c_str(), value.c_str(), value.c_str(), value.c_str()
+		));
+		formatted_string.append(string_format(
+			nicStaticRdmaPortTemplate, 0, value.c_str(), value.c_str(), value.c_str(), value.c_str(), value.c_str()
+		));
+		out.append(formatted_string);
+	}
+
+	return out;
+}
+int AmdSmiApiHost::amdsmi_get_nic_asic_info_command(uint64_t processor_bdf, Arguments arg,
+		std::string& out)
+{
+	int ret;
+	amdsmi_nic_asic_info_t nic_asic_info;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		return ret;
+	}
+	ret = host_amdsmi_get_nic_asic_info(processor, &nic_asic_info);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED) {
+			out = host_fill_nic_asic_info(arg, "N/A");
+			return AMDSMI_STATUS_SUCCESS;
+		}
+		out = host_fill_nic_asic_info(arg, "N/A");
+		return ret;
+	}
+	std::string vendor_id_hex = string_format("0x%X", nic_asic_info.vendor_id);
+	std::string subvendor_id_hex = string_format("0x%X", nic_asic_info.subvendor_id);
+	std::string device_id_hex = string_format("0x%X", nic_asic_info.device_id);
+	std::string subsystem_id_hex = string_format("0x%X", nic_asic_info.subsystem_id);
+	std::string revision_hex = string_format("0x%X", nic_asic_info.revision);
+
+	if (arg.output == json) {
+		nlohmann::ordered_json asic_json = {
+			{ "vendor_id", vendor_id_hex },
+			{ "subvendor_id", subvendor_id_hex },
+			{ "device_id", device_id_hex },
+			{ "subsystem_id", subsystem_id_hex },
+			{ "revision", revision_hex },
+			{ "permanent_address", nic_asic_info.permanent_address },
+			{ "product_name", nic_asic_info.product_name },
+			{ "part_number", nic_asic_info.part_number },
+			{ "serial_number", nic_asic_info.serial_number },
+			{ "vendor_name", nic_asic_info.vendor_name }
+		};
+
+		out = asic_json.dump(4);
+	} else if (arg.output == human) {
+		out = string_format(
+			nicStaticAsicTemplate, vendor_id_hex.c_str(), subvendor_id_hex.c_str(), device_id_hex.c_str(), 
+			subsystem_id_hex.c_str(), revision_hex.c_str(), nic_asic_info.permanent_address,
+			nic_asic_info.product_name, nic_asic_info.part_number, nic_asic_info.serial_number, nic_asic_info.vendor_name);
+	}
+
+	return ret;
+}
+
+int AmdSmiApiHost::amdsmi_get_nic_bus_info_command(uint64_t processor_bdf, Arguments arg,
+		std::string& out)
+{
+	int ret;
+	amdsmi_nic_bus_info_t nic_bus_info;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		return ret;
+	}
+	ret = host_amdsmi_get_nic_bus_info(processor, &nic_bus_info);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED) {
+			out = host_fill_nic_bus_info(arg, "N/A");
+			return AMDSMI_STATUS_SUCCESS;
+		}
+		out = host_fill_nic_bus_info(arg, "N/A");
+		return ret;
+	}
+	std::string pcie_interface_version_str{
+		nic_bus_info.pcie_interface_version == "" ? "N/A" : nic_bus_info.pcie_interface_version
+	};
+	std::string slot_type_str{
+		nic_bus_info.slot_type == "" ? "N/A" : nic_bus_info.slot_type
+	};
+
+	std::string max_pcie_speed_str{
+		string_format("%u", nic_bus_info.max_pcie_speed)
+	};
+
+	std::string bdf_str = convert_bdf_to_string(
+		nic_bus_info.bdf.bdf.function_number,
+		nic_bus_info.bdf.bdf.device_number,
+		nic_bus_info.bdf.bdf.bus_number,
+		nic_bus_info.bdf.bdf.domain_number
+	);
+
+	if (arg.output == json) {
+		nlohmann::ordered_json max_pcie_speed{};
+		max_pcie_speed["value"] = nic_bus_info.max_pcie_speed;
+		max_pcie_speed["unit"] = max_pcie_speed_str == "N/A" ? "N/A" : "GT/s";
+
+		nlohmann::ordered_json bus_json = {
+			{ "bdf", bdf_str },
+			{ "max_pcie_width", nic_bus_info.max_pcie_width },
+			{ "max_pcie_speed", max_pcie_speed },
+			{ "pcie_interface_version", pcie_interface_version_str.c_str() },
+			{ "slot_type", slot_type_str.c_str() }
+		};
+
+		out = bus_json.dump(4);
+	} else if (arg.output == human) {
+		std::string max_pcie_speed_str_unit{
+			max_pcie_speed_str == "N/A" ? "" : "GT/s"
+		};
+
+		std::string max_pcie_width_str {
+			string_format("%u", nic_bus_info.max_pcie_width)
+		};
+
+		out = string_format(
+			nicStaticBusTemplate, bdf_str.c_str(), max_pcie_width_str.c_str(), max_pcie_speed_str.c_str(), max_pcie_speed_str_unit.c_str(), pcie_interface_version_str.c_str(), slot_type_str.c_str()
+		);
+	}
+
+	return ret;
+}
+
+int AmdSmiApiHost::amdsmi_get_nic_driver_info_command(uint64_t processor_bdf, Arguments arg,
+		std::string& out)
+{
+	int ret;
+	amdsmi_nic_driver_info_t nic_driver_info;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		return ret;
+	}
+	ret = host_amdsmi_get_nic_driver_info(processor, &nic_driver_info);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED) {
+			out = host_fill_nic_driver_info(arg, "N/A");
+			return AMDSMI_STATUS_SUCCESS;
+		}
+		out = host_fill_nic_driver_info(arg, "N/A");
+		return ret;
+	}
+	if (arg.output == json) {
+		nlohmann::ordered_json driver_json = {
+			{ "name", nic_driver_info.name },
+			{ "version", nic_driver_info.version }
+		};
+
+		out = driver_json.dump(4);
+	} else if (arg.output == human) {
+		out = string_format(nicStaticDriverTemplate, nic_driver_info.name, nic_driver_info.version);
+	}
+
+	return ret;
+}
+
+int AmdSmiApiHost::amdsmi_get_nic_numa_info_command(uint64_t processor_bdf, Arguments arg,
+		std::string& out)
+{
+	int ret;
+	amdsmi_nic_numa_info_t nic_numa_info;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		return ret;
+	}
+	ret = host_amdsmi_get_nic_numa_info(processor, &nic_numa_info);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED) {
+			out = host_fill_nic_numa_info(arg, "N/A");
+			return AMDSMI_STATUS_SUCCESS;
+		}
+		out = host_fill_nic_numa_info(arg, "N/A");
+		return ret;
+	}
+	if (arg.output == json) {
+		auto affinity_json = nlohmann::ordered_json::array();
+		affinity_json.push_back(nic_numa_info.affinity);
+		nlohmann::ordered_json numa_json = {
+			{ "node", nic_numa_info.node },
+			{ "affinity", affinity_json }
+		};
+
+		out = numa_json.dump(4);
+	} else if (arg.output == human) {
+		std::string affinity_str{
+			string_format("[%s]", nic_numa_info.affinity)
+		};
+		std::string node_str {
+			string_format("%u", nic_numa_info.node)
+		};
+		out = string_format(nicStaticNumaTemplate, node_str.c_str(), affinity_str.c_str());
+	}
+
+	return ret;
+}
+
+int AmdSmiApiHost::amdsmi_get_nic_port_info_command(uint64_t processor_bdf, Arguments arg,
+		std::string& out)
+{
+	int ret;
+	amdsmi_nic_port_info_t nic_port_info;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	std::string bdf_str;
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		return ret;
+	}
+	ret = host_amdsmi_get_nic_port_info(processor, &nic_port_info);
+	if (ret != AMDSMI_STATUS_SUCCESS || nic_port_info.num_ports == 0) {
+		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED) {
+			out = host_fill_nic_port_info(arg, "N/A");
+			return AMDSMI_STATUS_SUCCESS;
+		}
+		out = host_fill_nic_port_info(arg, "N/A");
+		return AMDSMI_STATUS_SUCCESS;
+	}
+
+	if (arg.output == json) {
+		auto ports_json = nlohmann::ordered_json::array();
+
+		for (uint32_t i = 0; i < nic_port_info.num_ports; i++) {
+			bdf_str = convert_bdf_to_string(
+						  nic_port_info.ports[i].bdf.bdf.function_number,
+						  nic_port_info.ports[i].bdf.bdf.device_number,
+						  nic_port_info.ports[i].bdf.bdf.bus_number,
+						  nic_port_info.ports[i].bdf.bdf.domain_number
+					  );
+			nlohmann::ordered_json mtu_json;
+			if (nic_port_info.ports[i].mtu != UINT16_MAX) {
+				mtu_json = {
+					{ "value", nic_port_info.ports[i].mtu },
+					{ "unit", "B" }
+				};
+			} else {
+				mtu_json = "N/A";
+			}
+
+			nlohmann::ordered_json link_speed_json;
+			if (nic_port_info.ports[i].link_speed != UINT32_MAX) {
+				link_speed_json = {
+					{ "value", nic_port_info.ports[i].link_speed },
+					{ "unit", "Mb/s" }
+				};
+			} else {
+				link_speed_json = "N/A";
+			}
+
+			nlohmann::ordered_json port_json = {
+				{ "bdf", bdf_str },
+				{ "port_num", nic_port_info.ports[i].port_num },
+				{ "type", nic_port_info.ports[i].type },
+				{ "flavour", nic_port_info.ports[i].flavour },
+				{ "netdev", nic_port_info.ports[i].netdev },
+				{ "ifindex", nic_port_info.ports[i].ifindex },
+				{ "mac_address", nic_port_info.ports[i].mac_address },
+				{ "carrier", nic_port_info.ports[i].carrier },
+				{ "mtu", mtu_json },
+				{ "link_state", nic_port_info.ports[i].link_state },
+				{ "link_speed", link_speed_json },
+				{ "active_fec", nic_port_info.ports[i].active_fec },
+				{ "autoneg", nic_port_info.ports[i].autoneg },
+				{ "pause_autoneg", nic_port_info.ports[i].pause_autoneg },
+				{ "pause_rx", nic_port_info.ports[i].pause_rx },
+				{ "pause_tx", nic_port_info.ports[i].pause_tx }
+			};
+
+			ports_json.push_back(port_json);
+		}
+
+		out = ports_json.dump(4);
+	} else if (arg.output == human) {
+		std::string formatted_output{nicStaticPortHeaderTemplate};
+		for (uint32_t i = 0; i < nic_port_info.num_ports; i++) {
+			bdf_str = convert_bdf_to_string(
+						  nic_port_info.ports[i].bdf.bdf.function_number,
+						  nic_port_info.ports[i].bdf.bdf.device_number,
+						  nic_port_info.ports[i].bdf.bdf.bus_number,
+						  nic_port_info.ports[i].bdf.bdf.domain_number
+					  );
+			std::string port_mtu_str{
+				(nic_port_info.ports[i].mtu != UINT16_MAX) ? string_format("%u", nic_port_info.ports[i].mtu) : "N/A"
+			};
+			std::string port_mtu_str_unit{
+				port_mtu_str == "N/A" ? "" : "B"
+			};
+			std::string port_link_speed_str{
+				(nic_port_info.ports[i].link_speed != UINT32_MAX) ? string_format("%u", nic_port_info.ports[i].link_speed) : "N/A"
+			};
+			std::string port_link_speed_str_unit{
+				port_link_speed_str == "N/A" ? "" : "Mb/s"
+			};
+
+			std::string port_num_str {
+				string_format("%u", nic_port_info.ports[i].port_num)
+			};
+
+			std::string ifindex_str {
+				string_format("%u", nic_port_info.ports[i].ifindex)
+			};
+
+			std::string carrier_str {
+				string_format("%u", nic_port_info.ports[i].carrier)
+			};
+
+			std::string active_fec_str {
+				string_format("%u", nic_port_info.ports[i].active_fec)
+			};
+
+			formatted_output += string_format(
+				nicStaticPortTemplate,
+				i,
+				bdf_str.c_str(),
+				port_num_str.c_str(),
+				nic_port_info.ports[i].type,
+				nic_port_info.ports[i].flavour,
+				nic_port_info.ports[i].netdev,
+				ifindex_str.c_str(),
+				nic_port_info.ports[i].mac_address,
+				carrier_str.c_str(),
+				port_mtu_str.c_str(),
+				port_mtu_str_unit.c_str(),
+				nic_port_info.ports[i].link_state,
+				port_link_speed_str.c_str(),
+				port_link_speed_str_unit.c_str(),
+				active_fec_str.c_str(),
+				nic_port_info.ports[i].autoneg,
+				nic_port_info.ports[i].pause_autoneg,
+				nic_port_info.ports[i].pause_rx,
+				nic_port_info.ports[i].pause_tx
+			);
+		}
+
+		out = formatted_output;
+	}
+
+	return ret;
+}
+
+int AmdSmiApiHost::amdsmi_get_nic_rdma_devices_info_command(uint64_t processor_bdf, Arguments arg,
+		std::string& out)
+{
+	int ret;
+	std::string formatted_string{};
+	amdsmi_nic_rdma_devices_info_t nic_rdma_devices_info;
+	out = {};
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		return ret;
+	}
+	ret = host_amdsmi_get_nic_rdma_dev_info(processor, &nic_rdma_devices_info);
+	if (ret != AMDSMI_STATUS_SUCCESS || nic_rdma_devices_info.num_rdma_dev == 0) {
+		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED) {
+			out = host_fill_nic_rdma_dev_info(arg, "N/A");
+			return AMDSMI_STATUS_SUCCESS;
+		}
+		out = host_fill_nic_rdma_dev_info(arg, "N/A");
+		return ret;
+	}
+	std::string max_mtu_str{};
+	std::string active_mtu_str{};
+	std::string node_type_str{};
+
+	std::regex node_type_pattern(R"(\d+:\s*(.+))");
+	std::cmatch node_type_match;
+
+	if (arg.output == json) {
+		auto rdma_devices_json = nlohmann::ordered_json::array();
+		for (uint32_t i = 0; i < nic_rdma_devices_info.num_rdma_dev; ++i) {
+			auto rdma_ports_json = nlohmann::ordered_json::array();
+			for (uint32_t j = 0; j < nic_rdma_devices_info.rdma_dev_info[i].num_rdma_ports; ++j) {
+				max_mtu_str = (nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].max_mtu == UINT16_MAX) ?
+							  "N/A" :
+							  string_format(
+								  "%u", nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].max_mtu);
+				active_mtu_str = (nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].active_mtu == UINT16_MAX)
+								 ? "N/A" :
+								 string_format(
+									 "%u", nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].active_mtu);
+				nlohmann::ordered_json rdma_port_json = {
+					{ "netdev", nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].netdev },
+					{ "state", nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].state },
+					{ "rdma_port", nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].rdma_port },
+					{ "max_mtu", max_mtu_str.c_str()},
+					{ "active_mtu", active_mtu_str.c_str() }
+				};
+				rdma_ports_json.push_back(rdma_port_json);
+			}
+			if (std::regex_match(nic_rdma_devices_info.rdma_dev_info[i].node_type, node_type_match,
+								 node_type_pattern)) {
+				node_type_str = node_type_match[1];
+			} else {
+				node_type_str = "N/A";
+			}
+			nlohmann::ordered_json rdma_device_json = {
+				{ "rdma_dev", nic_rdma_devices_info.rdma_dev_info[i].rdma_dev },
+				{ "node_guid", nic_rdma_devices_info.rdma_dev_info[i].node_guid },
+				{ "node_type", node_type_str.c_str() },
+				{ "sys_image_guid", nic_rdma_devices_info.rdma_dev_info[i].sys_image_guid },
+				{ "fw_ver", nic_rdma_devices_info.rdma_dev_info[i].fw_ver },
+				{ "ports", rdma_ports_json }
+			};
+			rdma_devices_json.push_back(rdma_device_json);
+		}
+
+		out = rdma_devices_json.dump(4);
+	} else if (arg.output == human) {
+		formatted_string = nicStaticRdmaDevHeaderTemplate;
+		for (uint32_t i = 0; i < nic_rdma_devices_info.num_rdma_dev; ++i) {
+			if (std::regex_match(nic_rdma_devices_info.rdma_dev_info[i].node_type, node_type_match,
+								 node_type_pattern)) {
+				node_type_str = node_type_match[1];
+			} else {
+				node_type_str = "N/A";
+			}
+			formatted_string.append(string_format(
+								nicStaticRdmaDevTemplate,
+								i,
+								nic_rdma_devices_info.rdma_dev_info[i].rdma_dev,
+								nic_rdma_devices_info.rdma_dev_info[i].node_guid,
+								node_type_str.c_str(),
+								nic_rdma_devices_info.rdma_dev_info[i].sys_image_guid,
+								nic_rdma_devices_info.rdma_dev_info[i].fw_ver
+							));
+			for (uint32_t j = 0; j < nic_rdma_devices_info.rdma_dev_info[i].num_rdma_ports; ++j) {
+				max_mtu_str = (nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].max_mtu == UINT16_MAX) ? "N/A" :
+						string_format(
+							"%u", nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].max_mtu);
+				active_mtu_str = (nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].active_mtu == UINT16_MAX) ? "N/A" :
+						string_format(
+							"%u", nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].active_mtu);
+				std::string rdma_port_str {
+					string_format("%u", nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].rdma_port)
+				};
+
+				formatted_string.append(string_format(
+					nicStaticRdmaPortTemplate,
+					j,
+					nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].netdev,
+					nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].state,
+					rdma_port_str.c_str(),
+					max_mtu_str.c_str(),
+					active_mtu_str.c_str()
+				));
+			}
+			out.append(formatted_string);
+		}
+	}
+
 
 	return ret;
 }

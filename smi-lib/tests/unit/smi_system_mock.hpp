@@ -146,6 +146,15 @@ ACTION(FgetsPasstrough)
 	return fgets(arg0, arg1, arg2);
 }
 
+ACTION(SnprintfPasstrough)
+{
+#ifdef _WIN64
+	return sprintf_s(arg0, arg1, arg2);
+#else
+	return snprintf(arg0, arg1, "%s", arg2);
+#endif
+}
+
 ACTION_P(SaveInputHeader, in_hdr)
 {
 	std::memcpy(in_hdr, &arg0->in_hdr, sizeof(*in_hdr));
@@ -226,6 +235,7 @@ public:
 		ON_CALL(*this, Sysconf(testing::_)).WillByDefault(Return(1));
 		ON_CALL(*this, Fopen(testing::_, testing::_)).WillByDefault(FopenPasstrough());
 		ON_CALL(*this, Fgets(testing::_, testing::_, testing::_)).WillByDefault(FgetsPasstrough());
+		ON_CALL(*this, Snprintf(testing::_, testing::_, testing::_)).WillByDefault(SnprintfPasstrough());
 	}
 
 	MOCK_METHOD1(Ioctl, int(smi_ioctl_cmd *));
@@ -247,6 +257,7 @@ public:
 	MOCK_METHOD1(Sysconf, long(int));
 	MOCK_METHOD2(Fopen, FILE *(const char *, const char *));
 	MOCK_METHOD3(Fgets, char *(char *, int, FILE *));
+	MOCK_METHOD3(Snprintf, int(char *, size_t, const char *));
 
 	virtual ~SystemMock()
 	{

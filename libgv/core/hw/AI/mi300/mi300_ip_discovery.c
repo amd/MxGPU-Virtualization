@@ -1023,7 +1023,7 @@ int mi300_discover_ip(struct amdgv_adapter *adapt)
 	/* skip during live update import, it is already called during sw_init() */
 	if (adapt->status == AMDGV_STATUS_SW_INIT &&
 				!adapt->ip_discovery.enable_live_update &&
-				adapt->opt.skip_hw_init) {
+				amdgv_in_live_update_seq()) {
 		return 0;
 	}
 
@@ -1035,7 +1035,7 @@ int mi300_discover_ip(struct amdgv_adapter *adapt)
 	oss_memcpy(adapt->config.name, asic_name, AMDGV_SMI_ASIC_NAME);
 	adapt->config.caps.supported_fields_flags = supported_flags;
 
-	if (adapt->opt.skip_hw_init && adapt->ip_discovery.enable_live_update) {
+	if (amdgv_in_live_update_seq() && adapt->ip_discovery.enable_live_update) {
 		/* In live update mode, and ip discovery will be imported from the live data.*/
 		if (amdgv_import_data_by_op(adapt, AMDGV_LIVE_INFO_DATA__IP_DISCOVERY) != AMDGV_LIVE_INFO_STATUS_SUCCESS)
 			return AMDGV_FAILURE;
@@ -1162,7 +1162,7 @@ static void mi300_setup_common_timeout(struct amdgv_adapter *adapt)
 	} else {
 		/* PSP */
 		AMDGV_TIMEOUT(TIMEOUT_PSP_REG) = 1000 * 1000;
-		AMDGV_TIMEOUT(TIMEOUT_PSP_MEM) = 1000 * 1000 * 2 * 8;
+		AMDGV_TIMEOUT(TIMEOUT_PSP_MEM) = 1000 * 1000 * 2;
 		/* READ VBIOS */
 		AMDGV_TIMEOUT(TIMEOUT_READ_VBIOS) = 5 * 1000 * 1000;
 	}

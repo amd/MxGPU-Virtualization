@@ -22,11 +22,13 @@
 #include <string>
 #include <cstdint>
 
-enum class DeviceType { GPU_INDEX, VF_INDEX, BDF, UUID = 3 };
+enum class DeviceIdentifierType { INDEX, VF_INDEX, BDF, UUID = 3 };
+enum class DeviceType { GPU, NIC };
 
 class Device
 {
 private:
+	DeviceIdentifierType identifier_type;
 	DeviceType type;
 	int gpu_index;
 	int vf_index;
@@ -42,7 +44,7 @@ public:
 	 * @param[in] vf vf index
 	 * @param[in] device_type device type
 	 */
-	Device(int gpu, int vf, DeviceType device_type);
+	Device(int gpu, int vf, DeviceIdentifierType device_type, DeviceType type);
 
 	/**
 	 * @brief Construct a new Device object
@@ -50,7 +52,7 @@ public:
 	 * @param[in] gpu gpu index
 	 * @param[in] device_type device type
 	 */
-	Device(int gpu, DeviceType device_type);
+	Device(int gpu, DeviceIdentifierType device_type, DeviceType type);
 
 	/**
 	 * @brief Construct a new Device object
@@ -59,7 +61,7 @@ public:
 	 * @param[in] device_type device type
 	 * @param[in] domain domain
 	 */
-	Device(std::string device, DeviceType device_type, std::string domain);
+	Device(std::string device, DeviceIdentifierType device_type, std::string domain, DeviceType type);
 
 	/**
 	 * @brief Get the domain object
@@ -109,5 +111,15 @@ public:
 	uint64_t get_bdf()
 	{
 		return bdf;
+	}
+
+	/**
+	 * @brief Get the device type
+	 *
+	 * @return device type
+	 */
+	DeviceType get_type()
+	{
+		return type;
 	}
 };

@@ -18,7 +18,7 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 
-%define full_version %(./dkms/get-version)
+%define full_version %(./gim/dkms/get-version)
 %define version %(echo %{full_version}-0 | cut -sd- -f1)
 %define release %(echo %{full_version}-0 | cut -sd- -f2)
 
@@ -31,7 +31,7 @@ License: MIT
 URL: https://github.com/amd/mxgpu-virtualization
 Source0: ./gim-%{full_version}.tar.gz
 BuildArch: noarch
-Requires: autoconf cmake dkms g++ kernel-devel
+Requires: autoconf cmake dkms gcc-c++ kernel-devel
 
 %description
 DKMS source for GIM driver.
@@ -45,14 +45,8 @@ DKMS source for GIM driver.
 
 %install
 rm -rf %{buildroot}
-mkdir -p %{buildroot}/usr/src/gim-%{full_version}/
-mkdir -p %{buildroot}/usr/src/gim-%{full_version}/gim-coms-lib
-mkdir -p %{buildroot}/usr/src/gim-%{full_version}/smi-lib
-mkdir -p %{buildroot}/usr/src/gim-%{full_version}/libgv
-cp -r Makefile dkms gim_shim amd-vfio-pci inc %{buildroot}/usr/src/gim-%{full_version}/
-cp -r gim-coms-lib/* %{buildroot}/usr/src/gim-%{full_version}/gim-coms-lib/
-cp -r smi-lib/* %{buildroot}/usr/src/gim-%{full_version}/smi-lib/
-cp -r libgv/core libgv/inc libgv/Makefile %{buildroot}/usr/src/gim-%{full_version}/libgv/
+mkdir -p %{buildroot}/usr/src/gim-%{full_version}
+cp -r gim gim-coms-lib libgv smi-lib %{buildroot}/usr/src/gim-%{full_version}/
 sed 's/#MODULE_VERSION#/%{full_version}/g' ./package/rpm/dkms.conf > %{buildroot}/usr/src/gim-%{full_version}/dkms.conf
 echo %{full_version} > %{buildroot}/usr/src/gim-%{full_version}/VERSION
 

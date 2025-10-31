@@ -177,7 +177,7 @@ int amdgv_ih_ring_set(struct amdgv_adapter *adapt)
 		AMDGV_ERROR("Memory for interrupt manager ring not allocated\n");
 		return AMDGV_FAILURE;
 	}
-	if (!adapt->opt.skip_hw_init)
+	if (!amdgv_in_live_update_seq())
 		oss_memset((void *)adapt->irqmgr.ih.ring, 0, adapt->irqmgr.ih.ring_size + 8);
 
 	adapt->irqmgr.ih.wptr_offs = (adapt->irqmgr.ih.ring_size / 4) + 0;

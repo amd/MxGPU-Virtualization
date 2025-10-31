@@ -32,9 +32,12 @@ class IAmdSmiApi
 {
 public:
 	virtual int amdsmi_get_bdf_from_gpu_index(uint64_t &processor_bdf, int index) = 0;
+	virtual int amdsmi_get_bdf_from_nic_index(uint64_t &processor_bdf, int index) = 0;
 	virtual int amdsmi_get_bdf_from_uuid_or_bdf(uint64_t &processor_bdf, int &gpu_index,
 			std::string device, int type) = 0;
 	virtual int amdsmi_get_gpu_count(unsigned int &gpu_count) = 0;
+	virtual int amdsmi_get_device_count(unsigned int &device_count, int device_type) = 0;
+	virtual int amdsmi_get_processor_from_index_by_type(void *processor_handle, int index, int type) = 0;
 	virtual int amdsmi_get_vf_tree(std::vector<std::map<std::string, std::string>> &out) = 0;
 	virtual int amdsmi_get_error_message(int error_code, std::string& out) = 0;
 	virtual int format_link_type(const int& link_type, std::string& out) = 0;
@@ -58,6 +61,7 @@ public:
 							 std::vector<std::string>& bdf_vector) = 0;
 	virtual int csv_recursion(std::string& main_buffer,
 							  const std::vector<std::vector<std::string>> &results) = 0;
+	virtual int ThrottlerDataToString(uint64_t data, std::string& out) = 0;
 
 	virtual int initEvent() = 0;
 
@@ -100,6 +104,20 @@ public:
 	//list
 	virtual int amdsmi_get_list_command(Arguments arg, std::string& out) = 0;
 
+	// NIC static commands
+	virtual int amdsmi_get_nic_asic_info_command(uint64_t processor_bdf, Arguments arg,
+			std::string& out) = 0;
+	virtual int amdsmi_get_nic_bus_info_command(uint64_t processor_bdf, Arguments arg,
+			std::string& out) = 0;
+	virtual int amdsmi_get_nic_driver_info_command(uint64_t processor_bdf, Arguments arg,
+			std::string& out) = 0;
+	virtual int amdsmi_get_nic_numa_info_command(uint64_t processor_bdf, Arguments arg,
+			std::string& out) = 0;
+	virtual int amdsmi_get_nic_port_info_command(uint64_t processor_bdf, Arguments arg,
+			std::string& out) = 0;
+	virtual int amdsmi_get_nic_rdma_devices_info_command(uint64_t processor_bdf, Arguments arg,
+			std::string& out) = 0;
+
 	//badpage
 	virtual int amdsmi_get_bad_pages_command(uint64_t processor_bdf, Arguments arg, std::string& out,
 			std::string* gpu_id=nullptr) = 0;
@@ -138,6 +156,10 @@ public:
 	virtual int amdsmi_get_guest_data_metric_command(std::string device, Arguments arg,
 			std::string& out) = 0;
 	virtual int amdsmi_get_energy_metric_command(uint64_t processor_bdf, Arguments arg,
+			std::string& out) = 0;
+	virtual int amdsmi_get_port_netdev_command(uint64_t processor_bdf, Arguments arg,
+			std::string& out) = 0;
+	virtual int amdsmi_get_port_rdma_command(uint64_t processor_bdf, Arguments arg,
 			std::string& out) = 0;
 
 	virtual int amdsmi_get_weight_topology_command(Arguments arg,
@@ -238,5 +260,9 @@ public:
 	virtual int amdsmi_get_cper_entries_command(Arguments arg,
 			std::string &formatted_string) = 0;
 	virtual int amdsmi_get_cper_afid_command(Arguments arg,
+			std::string &formatted_string) = 0;
+	virtual int amdsmi_get_baseboard_command(uint64_t processor_bdf, Arguments arg,
+			std::string &formatted_string) = 0;
+	virtual int amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) = 0;
 };

@@ -80,7 +80,7 @@ enum psp_status navi32_psp_ring_start(struct amdgv_adapter *adapt)
 
 	/* Wait for response flag (bit 31) in C2PMSG_64 */
 	ret = amdgv_psp_wait_for_register(adapt, SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_64),
-					  0x80000000, 0x8000FFFF, false);
+					  0x80000000, 0x8000FFFF, false, AMDGV_WAIT_FLAG_FORCE_YIELD);
 
 	psp->tee_version = (RREG32(SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_64)) & GFX_CMD_TEE_VERSION_MASK) >> GFX_CMD_TEE_VERSION_SHIFT;
 
@@ -213,7 +213,7 @@ enum psp_status navi32_psp_load_keydb(struct amdgv_adapter *adapt, unsigned char
 	/* wait for C2P[35] != PSP_BL__LOAD_KEY_DATABASE */
 	if (amdgv_psp_wait_for_register(adapt, SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_35),
 					0x80000000, 0x80000000,
-					false) != PSP_STATUS__SUCCESS) {
+					false, AMDGV_WAIT_FLAG_FORCE_YIELD) != PSP_STATUS__SUCCESS) {
 		AMDGV_ERROR("PSP: Failed to load KEYDB.\n");
 		return PSP_STATUS__ERROR_GENERIC;
 	}
@@ -252,7 +252,7 @@ enum psp_status navi32_psp_load_spl(struct amdgv_adapter *adapt, unsigned char *
 	/* wait for C2P[35] != PSP_BL__LOAD_TOS_SPL_TABLE */
 	if (amdgv_psp_wait_for_register(adapt, SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_35),
 					0x80000000, 0x80000000,
-					false) != PSP_STATUS__SUCCESS) {
+					false, AMDGV_WAIT_FLAG_FORCE_YIELD) != PSP_STATUS__SUCCESS) {
 		AMDGV_ERROR("PSP: Failed to load SPL_TABLE.\n");
 		return PSP_STATUS__ERROR_GENERIC;
 	}
@@ -291,7 +291,7 @@ enum psp_status navi32_psp_load_sysdrv(struct amdgv_adapter *adapt, unsigned cha
 	/* wait for C2P[35] != PSP_BL__LOAD_SYSDRV */
 	if (amdgv_psp_wait_for_register(adapt, SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_35),
 					0x80000000, 0x80000000,
-					false) != PSP_STATUS__SUCCESS) {
+					false, AMDGV_WAIT_FLAG_FORCE_YIELD) != PSP_STATUS__SUCCESS) {
 		AMDGV_ERROR("PSP: Failed to load sysdrv.\n");
 		return PSP_STATUS__ERROR_GENERIC;
 	}
@@ -330,7 +330,7 @@ static enum psp_status navi32_psp_load_rasdrv(struct amdgv_adapter *adapt, unsig
 	/* wait for C2P[35] != PSP_BL__LOAD_RASDRV */
 	if (amdgv_psp_wait_for_register(adapt, SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_35),
 					0x80000000, 0x80000000,
-					false) != PSP_STATUS__SUCCESS) {
+					false, AMDGV_WAIT_FLAG_FORCE_YIELD) != PSP_STATUS__SUCCESS) {
 		AMDGV_ERROR("PSP: Failed to load rasdrv.\n");
 		return PSP_STATUS__ERROR_GENERIC;
 	}
@@ -368,7 +368,7 @@ enum psp_status navi32_psp_load_sos(struct amdgv_adapter *adapt, unsigned char *
 	/* Wait for C2P[35] != PSP_BL__LOAD_SOSDRV */
 	// if (amdgv_psp_wait_for_register(adapt, SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_35),
 	// 				0x80000000, 0x80000000,
-	// 				false) != PSP_STATUS__SUCCESS) {
+	// 				false, AMDGV_WAIT_FLAG_FORCE_YIELD) != PSP_STATUS__SUCCESS) {
 	// 	AMDGV_ERROR("PSP: Failed to load sos.\n");
 	// 	return PSP_STATUS__ERROR_GENERIC;
 	// }
@@ -421,7 +421,7 @@ enum psp_status navi32_psp_load_psp_ucode(struct amdgv_adapter *adapt, unsigned 
 	/* Wait for C2P[35] != bl_cmd */
 	if (amdgv_psp_wait_for_register(adapt, SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_35),
 					0x80000000, 0x80000000,
-					false) != PSP_STATUS__SUCCESS) {
+					false, AMDGV_WAIT_FLAG_FORCE_YIELD) != PSP_STATUS__SUCCESS) {
 		AMDGV_ERROR("PSP: Failed to load ucode 0x%x.\n", fw_id);
 		return PSP_STATUS__ERROR_GENERIC;
 	}
@@ -444,7 +444,8 @@ bool navi32_psp_wait_boot_complete(struct amdgv_adapter *adapt, uint32_t reg_ind
 				    AMDGV_TIMEOUT(TIMEOUT_PSP_REG), AMDGV_WAIT_CHECK_NE, 0) != 0)
 		return false;
 
-	if (amdgv_psp_wait_for_register(adapt, reg_index, 0x80000000, 0x80000000, false) !=
+	if (amdgv_psp_wait_for_register(adapt, reg_index, 0x80000000, 0x80000000,
+			false, AMDGV_WAIT_FLAG_FORCE_YIELD) !=
 	    PSP_STATUS__SUCCESS)
 		return false;
 
@@ -794,7 +795,7 @@ enum psp_status navi32_psp_get_fw_attestation_database_addr(struct amdgv_adapter
 		return ret;
 	}
 
-	if (!adapt->opt.skip_hw_init) {
+	if (!amdgv_in_live_update_seq()) {
 		// Get FW attestation GPU virtual address
 		ret = amdgv_psp_get_fw_attestation_db_add(adapt);
 
@@ -957,7 +958,7 @@ static enum psp_status navi32_exec_spi_cmd(struct amdgv_adapter *adapt, int spi_
 		return 0;
 
 	if (amdgv_psp_wait_for_register(adapt, SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_115),
-				0x80000000, 0x80000000, false) != PSP_STATUS__SUCCESS) {
+				0x80000000, 0x80000000, false, AMDGV_WAIT_FLAG_FORCE_YIELD) != PSP_STATUS__SUCCESS) {
 		AMDGV_ERROR("SPI cmd %x timed out\n", spi_cmd);
 		return PSP_STATUS__ERROR_GENERIC;
 	}
@@ -979,7 +980,7 @@ static enum psp_status navi32_psp_update_spirom(struct amdgv_adapter *adapt)
 
 	/* Confirm PSP is ready to start */
 	if (amdgv_psp_wait_for_register(adapt, SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_115),
-					0x80000000, 0x80000000, false) != PSP_STATUS__SUCCESS) {
+					0x80000000, 0x80000000, false, AMDGV_WAIT_FLAG_FORCE_YIELD) != PSP_STATUS__SUCCESS) {
 		AMDGV_ERROR("PSP: Not ready to start updating spirom, 115 value is 0x%x\n", RREG32_SOC15(MP0, 0, regMP0_SMN_C2PMSG_115));
 		return PSP_STATUS__ERROR_GENERIC;
 	}
@@ -1748,7 +1749,7 @@ static int navi32_psp_hw_fini(struct amdgv_adapter *adapt)
 	/* Wait for response flag (bit 31) in C2PMSG_64 */
 	psp_ret = amdgv_psp_wait_for_register(adapt,
 					      SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_64),
-					      0x80000000, 0x80000000, false);
+					      0x80000000, 0x80000000, false, AMDGV_WAIT_FLAG_FORCE_YIELD);
 	if (psp_ret != PSP_STATUS__SUCCESS) {
 		ret = AMDGV_FAILURE;
 		AMDGV_ERROR("PSP: Failed to DESTROY_RBI_RING.\n");
@@ -1760,7 +1761,7 @@ static int navi32_psp_hw_fini(struct amdgv_adapter *adapt)
 	/* Wait for response flag (bit 31) in C2PMSG_64 */
 	psp_ret = amdgv_psp_wait_for_register(adapt,
 					      SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_64),
-					      0x80000000, 0x80000000, false);
+					      0x80000000, 0x80000000, false, AMDGV_WAIT_FLAG_FORCE_YIELD);
 	if (psp_ret != PSP_STATUS__SUCCESS) {
 		ret = AMDGV_FAILURE;
 		AMDGV_ERROR("PSP: Failed to DESTROY_GPCOM_RING.\n");
@@ -1771,7 +1772,7 @@ static int navi32_psp_hw_fini(struct amdgv_adapter *adapt)
 	/* Wait for response flag (bit 31) in C2PMSG_64 */
 	psp_ret = amdgv_psp_wait_for_register(adapt,
 					      SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_64),
-					      0x80000000, 0x80000000, false);
+					      0x80000000, 0x80000000, false, AMDGV_WAIT_FLAG_FORCE_YIELD);
 	if (psp_ret != PSP_STATUS__SUCCESS) {
 		ret = AMDGV_FAILURE;
 		AMDGV_ERROR("PSP: Failed to DESTROY_RINGS.\n");

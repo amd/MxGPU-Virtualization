@@ -146,19 +146,6 @@ static int mi300_enable_pci_atomic_request(struct amdgv_adapter *adapt)
 	return 0;
 }
 
-static void mi300_disable_pci_atomic_request(struct amdgv_adapter *adapt)
-{
-	uint16_t val;
-	int pos;
-
-	pos = oss_pci_find_capability(adapt->dev, PCI_CAP_ID_EXP);
-
-	oss_pci_read_config_word(adapt->dev, pos + PCI_EXP_DEVCTL2, &val);
-	val &= ~(PCI_EXP_DEVCTL2_ATOMICOP_REQ);
-	oss_pci_write_config_word(adapt->dev, pos + PCI_EXP_DEVCTL2, val);
-	AMDGV_INFO("Atomic Request Disabled\n");
-}
-
 static void mi300_mc_location_setting(struct amdgv_adapter *adapt)
 {
 	adapt->mc_fb_loc_addr =
@@ -420,8 +407,6 @@ static int mi300_vbios_early_hw_fini(struct amdgv_adapter *adapt)
 	amdgv_vbios_atom_hw_fini(adapt);
 
 	if (!in_whole_gpu_reset()) {
-		mi300_disable_pci_atomic_request(adapt);
-
 		mi300_nbio_enable_doorbell_aperture(adapt, false);
 
 		if (adapt->vbios.image) {

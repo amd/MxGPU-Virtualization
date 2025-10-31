@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2017-2021 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -19,57 +19,18 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-LIBGV_BUILD_DATE := $(shell date +"%Y-%m-%d %H:%M:%S")
-
 LIBGV_PATH := $(dir $(lastword $(MAKEFILE_LIST)))
-# version decode: major.minor.subminor
-#       major: increase the major number every year
-#				2020=>2.0.0 2021=>3.0.0 2022=>4.0.0
-#       minor: increase the minor number according to roadmap
-#				2.0.0=>2.1.0=>2.2.0=>...=>2.255.0
-#       subminor: change the subminor number every week promotion
-#				2.0.0=>2.0.1=>2.0.2=>...=>2.0.255
-LIBGV_VERSION_FILE = $(LIBGV_PATH)/VERSION
 
-ifneq ("", "$(wildcard $(LIBGV_VERSION_FILE))")
-	MAJOR_NUM = $(shell cut -f1 -d. "$(LIBGV_VERSION_FILE)" | head -1)
-	MINOR_NUM = $(shell cut -f2 -d. "$(LIBGV_VERSION_FILE)" | head -1)
-	SUBMINOR_NUM = $(shell cut -f3 -d. "$(LIBGV_VERSION_FILE)" | cut -f1 -d+ | head -1)
-else
-	MAJOR_NUM = 0
-	MINOR_NUM = 0
-	SUBMINOR_NUM = 0
-endif
+LIBGV_CCFLAGS = -D MAJOR_VERSION=0 -D MINOR_VERSION=0 -D SUBMINOR_VERSION=0 -D LIBGV_BUILD_DATE='"2025-07-24 10:19:16"'
+LIBGV_CCFLAGS += -D RWLOCK
 
-ifeq ($(gen_json), true)
-#Generate JSON file for diagnosis data
-	GEN_JSON_SCRIPT = $(LIBGV_PATH)/amdgv_diag_data_gen_json.shs
-	JSON_COMPILE_FLAGS = ""
-	ifneq ("", "$(wildcard $(GEN_JSON_SCRIPT))")
-		JSON_COMPILE_FLAGS := $(shell $(GEN_JSON_SCRIPT))
-	endif
-	ifneq ($(JSON_COMPILE_FLAGS), "")
-		subdir-ccflags-y += $(JSON_COMPILE_FLAGS)
-	endif
-endif
+LIBGV_CCFLAGS += -I $(LIBGV_PATH)/inc -I $(LIBGV_PATH)/core -I $(LIBGV_PATH)/core/hw/common
 
-subdir-ccflags-y += -D MAJOR_VERSION=$(MAJOR_NUM) -D MINOR_VERSION=$(MINOR_NUM) \
-	-D SUBMINOR_VERSION=$(SUBMINOR_NUM) -D LIBGV_BUILD_DATE='"$(LIBGV_BUILD_DATE)"'
-subdir-ccflags-y += -D RWLOCK
+LIBGV_CCFLAGS += -I $(LIBGV_PATH)/core/hw/AI -I $(LIBGV_PATH)/core/hw/AI/asic_reg
+LIBGV_CCFLAGS += -I $(LIBGV_PATH)/core/hw/AI/mi200
+LIBGV_CCFLAGS += -I $(LIBGV_PATH)/core/hw/AI/mi300
 
-INCLUDE_PATH := -I $(LIBGV_PATH)/inc \
-		-I $(LIBGV_PATH)/core -I $(LIBGV_PATH)/core/hw/common/
-
-INCLUDE_PATH += -I $(LIBGV_PATH)/core/hw/AI \
-		-I $(LIBGV_PATH)/core/hw/AI/asic_reg/
-INCLUDE_PATH += -I $(LIBGV_PATH)/core/hw/AI/mi200
-INCLUDE_PATH += -I $(LIBGV_PATH)/core/hw/AI/mi300
-
-INCLUDE_PATH += -I $(LIBGV_PATH)/core/hw/navi3 \
-		-I $(LIBGV_PATH)/core/hw/navi3/asic_reg/
-
-subdir-ccflags-y += $(INCLUDE_PATH)
+LIBGV_CCFLAGS += -I $(LIBGV_PATH)/core/hw/navi3 -I $(LIBGV_PATH)/core/hw/navi3/asic_reg
 
 include $(LIBGV_PATH)/core/Makefile
-
-LIBGV_COMPILE_FILES = $(addprefix libgv/,$(LIBGV_FILES))
+LIBGV_COMPILE_FILES += $(addprefix core/,$(LIBGV_CORE_FILES))

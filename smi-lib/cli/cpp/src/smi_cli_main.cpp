@@ -38,6 +38,7 @@
 #include "smi_cli_exception.h"
 #include "smi_cli_partition_command.h"
 #include "smi_cli_ras_command.h"
+#include "smi_cli_node_command.h"
 
 int main(int argc, char **argv)
 {
@@ -100,6 +101,9 @@ int main(int argc, char **argv)
 			cmd.execute_command();
 		} else if (parsed_arguments.command == "ras") {
 			AmdSmiRasCommand cmd(parsed_arguments);
+			cmd.execute_command();
+		} else if (parsed_arguments.command == "node") {
+			AmdSmiNodeCommand cmd(parsed_arguments);
 			cmd.execute_command();
 		} else {
 			AmdSmiCommands cmd(parsed_arguments);

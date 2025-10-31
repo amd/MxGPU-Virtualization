@@ -144,19 +144,6 @@ static int mi200_enable_pci_atomic_request(struct amdgv_adapter *adapt)
 	return 0;
 }
 
-static void mi200_disable_pci_atomic_request(struct amdgv_adapter *adapt)
-{
-	uint16_t val;
-	int pos;
-
-	pos = oss_pci_find_capability(adapt->dev, PCI_CAP_ID_EXP);
-
-	oss_pci_read_config_word(adapt->dev, pos + PCI_EXP_DEVCTL2, &val);
-	val &= ~(PCI_EXP_DEVCTL2_ATOMICOP_REQ);
-	oss_pci_write_config_word(adapt->dev, pos + PCI_EXP_DEVCTL2, val);
-	AMDGV_INFO("Atomic Request Disabled\n");
-}
-
 static void mi200_disable_pci_aer(struct amdgv_adapter *adapt)
 {
 	int pos;
@@ -571,8 +558,6 @@ static int mi200_vbios_early_hw_fini(struct amdgv_adapter *adapt)
 	amdgv_vbios_atom_hw_fini(adapt);
 
 	if (!in_whole_gpu_reset()) {
-		mi200_disable_pci_atomic_request(adapt);
-
 		gfxhub_v1_0_gart_fini(adapt);
 
 		mmhub_v1_7_fini(adapt);

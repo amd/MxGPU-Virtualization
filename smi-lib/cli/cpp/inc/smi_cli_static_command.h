@@ -32,6 +32,13 @@ public:
 	void static_command_human();
 	void static_command_csv();
 
+	int static_command_nic_asic(uint64_t processors, std::string &formatted_string);
+	int static_command_nic_bus(uint64_t processors, std::string &formatted_string);
+	int static_command_nic_driver(uint64_t processors, std::string &formatted_string);
+	int static_command_nic_numa(uint64_t processors, std::string &formatted_string);
+	int static_command_nic_port(uint64_t processors, std::string &formatted_string);
+	int static_command_nic_rdma_devices(uint64_t processors, std::string &formatted_string);
+
 	int static_command_asic(uint64_t processors, std::string &formatted_string);
 	int static_command_bus(uint64_t processors,
 						   std::string &formatted_string);

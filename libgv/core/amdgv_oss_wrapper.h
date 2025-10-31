@@ -23,20 +23,12 @@
 #ifndef AMDGV_OSS_WRAPPER_H
 #define AMDGV_OSS_WRAPPER_H
 
-
-/* because linux kernel and common toolchain use different macro for stdarg.h
- * use this logic to avoid re-define issue */
-#if !defined(_LINUX_STDARG_H) && !defined(_STDARG_H)
+#ifdef HAVE_LINUX_STDARG_H
+#include <linux/stdarg.h>
+#else
 #include <stdarg.h>
-/* no matter which stdarg.h is included, define the other one */
-#ifndef _LINUX_STDARG_H
-#define _LINUX_STDARG_H
-#endif
-#ifndef _STDARG_H
-#define _STDARG_H
 #endif
 
-#endif
 #include "amdgv.h"
 #include "amdgv_oss.h"
 

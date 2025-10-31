@@ -42,6 +42,10 @@ typedef int smi_file_handle;
 #include "smi_thread.h"
 #endif
 
+#ifdef AMD_SMI_NIC_SUPPORT
+#include "smi_nic_interface.h"
+#endif
+
 typedef struct smi_req_ctx_s smi_req_ctx;
 
 typedef struct {
@@ -56,6 +60,10 @@ typedef struct {
 
 typedef struct {
 	smi_ioctl_cmd ioctl_cmd;
+#ifdef AMD_SMI_NIC_SUPPORT
+	smi_nic_ctx_t nic_ctx;
+	bool nic_init;
+#endif
 } smi_thread_ctx;
 
 struct smi_req_ctx_s {

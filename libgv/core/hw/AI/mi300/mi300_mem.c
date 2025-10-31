@@ -117,11 +117,56 @@ static void gmc_v9_0_set_gmc_funcs(struct amdgv_adapter *adapt)
 	adapt->gmc.funcs = &gmc_v9_0_gmc_funcs;
 }
 
+static int mi300_mem_gart_sw_init(struct amdgv_adapter *adapt)
+{
+	uint32_t ptb_table_size;
+
+	if (amdgv_wb_memory_init(adapt)) {
+		AMDGV_ERROR("Failed to init GPU FB WB memory\n");
+		goto wb_fail;
+	}
+
+	AMDGV_DEBUG("Alloc memory for gart table\n");
+
+	/* alloccate 4K dma memory for pdb0 */
+	adapt->pdb0_mem = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, 0x1000,
+							 PAGE_SIZE, MEM_GART_MEM_PDB0);
+	if (!adapt->pdb0_mem) {
+		AMDGV_ERROR("Failed to allocate DMA memory for pdb0!\n");
+		goto pdb0_mem_fail;
+	}
+
+	/* each PTE is 8 bytes */
+	ptb_table_size = (adapt->gart_size >> AMDGV_GPU_PAGE_SHIFT) * 8;
+	adapt->ptb_mem = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, ptb_table_size,
+							 PAGE_SIZE, MEM_GART_MEM_PTB);
+	if (!adapt->ptb_mem) {
+		AMDGV_ERROR("Failed to allocate DMA memory for ptb!\n");
+		goto ptb_mem_fail;
+	}
+
+	return 0;
+
+ptb_mem_fail:
+	amdgv_memmgr_free(adapt->pdb0_mem);
+pdb0_mem_fail:
+	amdgv_wb_memory_fini(adapt);
+wb_fail:
+	return AMDGV_FAILURE;
+}
+
+static int mi300_mem_gart_sw_fini(struct amdgv_adapter *adapt)
+{
+	amdgv_memmgr_free(adapt->pdb0_mem);
+	amdgv_memmgr_free(adapt->ptb_mem);
+	amdgv_wb_memory_fini(adapt);
+	return 0;
+}
+
 static int mi300_mem_sw_init(struct amdgv_adapter *adapt)
 {
 	uint64_t libgv_res_fb_offset;
 	uint64_t libgv_res_fb_size;
-	uint32_t ptb_table_size;
 
 	gfxhub_v1_2_init(adapt);
 	mmhub_v1_8_init(adapt);
@@ -143,11 +188,6 @@ static int mi300_mem_sw_init(struct amdgv_adapter *adapt)
 		goto pf_fail;
 	}
 
-	if (amdgv_wb_memory_init(adapt)) {
-		AMDGV_ERROR("Failed to init GPU FB WB memory\n");
-		goto wb_fail;
-	}
-
 	adapt->gart_size = GART_SIZE;
 
 	if (amdgv_memmgr_init(adapt, &adapt->memmgr_sys, GART_START, adapt->gart_size,
@@ -163,35 +203,11 @@ static int mi300_mem_sw_init(struct amdgv_adapter *adapt)
 			goto gpu_fail;
 	}
 
-	AMDGV_DEBUG("Alloc memory for gart table\n");
-
-	/* alloccate 4K dma memory for pdb0 */
-	adapt->pdb0_mem = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, 0x1000,
-							 PAGE_SIZE, MEM_GART_MEM_PDB0);
-	if (!adapt->pdb0_mem != 0) {
-		AMDGV_ERROR("Failed to allocate DMA memory for pdb0!\n");
-		goto pdb0_mem_fail;
-	}
-
-	/* each PTE is 8 bytes */
-	ptb_table_size = (adapt->gart_size >> AMDGV_GPU_PAGE_SHIFT) * 8;
-	adapt->ptb_mem = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, ptb_table_size,
-							 PAGE_SIZE, MEM_GART_MEM_PTB);
-	if (!adapt->ptb_mem) {
-		AMDGV_ERROR("Failed to allocate DMA memory for ptb!\n");
-		goto ptb_mem_fail;
-	}
 	return 0;
 
-ptb_mem_fail:
-	amdgv_memmgr_free(adapt->pdb0_mem);
-pdb0_mem_fail:
-	amdgv_memmgr_fini(adapt, &adapt->memmgr_gpu);
 gpu_fail:
 	amdgv_memmgr_fini(adapt, &adapt->memmgr_sys);
 sys_fail:
-	amdgv_wb_memory_fini(adapt);
-wb_fail:
 	amdgv_memmgr_fini(adapt, &adapt->memmgr_pf);
 pf_fail:
 	return AMDGV_FAILURE;
@@ -199,9 +215,6 @@ pf_fail:
 
 static int mi300_mem_sw_fini(struct amdgv_adapter *adapt)
 {
-	amdgv_memmgr_free(adapt->pdb0_mem);
-	amdgv_memmgr_free(adapt->ptb_mem);
-	amdgv_wb_memory_fini(adapt);
 	amdgv_memmgr_fini(adapt, &adapt->memmgr_pf);
 	amdgv_memmgr_fini(adapt, &adapt->memmgr_sys);
 	amdgv_memmgr_fini(adapt, &adapt->memmgr_gpu);
@@ -291,11 +304,16 @@ const struct amdgv_init_func mi300_mem_func = {
 	.hw_live_fini = mi300_mem_hw_live_fini
 };
 
+const struct amdgv_init_func mi300_gart_func = {
+	.name = "mi300_gart_func",
+	.sw_init = mi300_mem_gart_sw_init,
+	.sw_fini = mi300_mem_gart_sw_fini,
+};
+
 static int mi350_mem_sw_init(struct amdgv_adapter *adapt)
 {
 	uint64_t libgv_res_fb_offset;
 	uint64_t libgv_res_fb_size;
-	uint32_t ptb_table_size;
 
 	gfxhub_v1_2_init(adapt);
 	mmhub_v1_8_init(adapt);
@@ -318,11 +336,6 @@ static int mi350_mem_sw_init(struct amdgv_adapter *adapt)
 		goto pf_fail;
 	}
 
-	if (amdgv_wb_memory_init(adapt)) {
-		AMDGV_ERROR("Failed to init GPU FB WB memory\n");
-		goto wb_fail;
-	}
-
 	adapt->gart_size = GART_SIZE;
 
 	if (amdgv_memmgr_init(adapt, &adapt->memmgr_sys, GART_START, adapt->gart_size,
@@ -338,34 +351,11 @@ static int mi350_mem_sw_init(struct amdgv_adapter *adapt)
 			goto gpu_fail;
 	}
 
-	AMDGV_DEBUG("Store attributes for gart table, the memory allocation is deferred until we get bp info.\n");
-	/* alloccate 4K dma memory for pdb0 */
-	adapt->pdb0_mem = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, 0x1000,
-							 PAGE_SIZE, MEM_GART_MEM_PDB0);
-	if (!adapt->pdb0_mem) {
-		AMDGV_ERROR("Failed to store attributes for pdb0!\n");
-		goto pdb0_mem_fail;
-	}
-
-	/* each PTE is 8 bytes */
-	ptb_table_size = (adapt->gart_size >> AMDGV_GPU_PAGE_SHIFT) * 8;
-	adapt->ptb_mem = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, ptb_table_size,
-							 PAGE_SIZE, MEM_GART_MEM_PTB);
-	if (!adapt->ptb_mem) {
-		AMDGV_ERROR("Failed to store attributes for ptb!\n");
-		goto ptb_mem_fail;
-	}
 	return 0;
 
-ptb_mem_fail:
-	amdgv_memmgr_free(adapt->pdb0_mem);
-pdb0_mem_fail:
-	amdgv_memmgr_fini(adapt, &adapt->memmgr_gpu);
 gpu_fail:
 	amdgv_memmgr_fini(adapt, &adapt->memmgr_sys);
 sys_fail:
-	amdgv_wb_memory_fini(adapt);
-wb_fail:
 	amdgv_memmgr_fini(adapt, &adapt->memmgr_pf);
 pf_fail:
 	return AMDGV_FAILURE;
@@ -373,9 +363,6 @@ pf_fail:
 
 static int mi350_mem_sw_fini(struct amdgv_adapter *adapt)
 {
-	amdgv_memmgr_free(adapt->pdb0_mem);
-	amdgv_memmgr_free(adapt->ptb_mem);
-	amdgv_wb_memory_fini(adapt);
 	amdgv_memmgr_fini(adapt, &adapt->memmgr_pf);
 	amdgv_memmgr_fini(adapt, &adapt->memmgr_sys);
 	amdgv_memmgr_fini(adapt, &adapt->memmgr_gpu);

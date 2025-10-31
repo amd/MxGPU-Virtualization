@@ -111,6 +111,11 @@ static char* fgets(char* str, int count, FILE* stream)
 	return GetSystemMock()->Fgets(str, count, stream);
 }
 
+static int snprintf(char* str, size_t size, const char* format, ...)
+{
+	return GetSystemMock()->Snprintf(str, size, format);
+}
+
 } // namespace amdsmi
 
 static system_wrapper wrapper = {
@@ -121,7 +126,7 @@ static system_wrapper wrapper = {
 	(smi_file_handle (*)(enum smi_file_access_mode))amdsmi::open,
 	(int (*)(void))amdsmi::access,
 	(int (*)(smi_file_handle))amdsmi::close,
-	(int (*)(struct smi_event_set_s *, amdsmi_event_entry_t *, int64_t))amdsmi::poll,
+	(int (*)(struct smi_event_set_s *, struct smi_event_entry *, int64_t))amdsmi::poll,
 	(void *(*)(smi_event_handle_t *, uint32_t))amdsmi::poll_alloc,
 	NULL,
 	(void *(*)(void**, size_t, size_t))amdsmi::aligned_alloc,
@@ -129,7 +134,8 @@ static system_wrapper wrapper = {
 	(int (*)(char *, size_t, const char *, size_t))amdsmi::strncpy,
 	(long (*)(int))amdsmi::sysconf,
 	(FILE *(*)(const char *, const char *))amdsmi::fopen,
-	(char *(*)(char *, int, FILE *))amdsmi::fgets
+	(char *(*)(char *, int, FILE *))amdsmi::fgets,
+	(int (*)(char *, size_t, const char *, ...))amdsmi::snprintf
 };
 
 extern "C" {

@@ -1965,50 +1965,55 @@ static int amdgv_vfmgr_update_vf2vf_ras_caps(struct amdgv_adapter *adapt,
 					     struct amd_sriov_msg_pf2vf_info *pf2vf_msg,
 					     uint32_t idx_vf)
 {
-	/* Only allow RAS telemetry on MCA enabled GPUs */
-	pf2vf_msg->feature_flags.flags.ras_caps = 1;
+	pf2vf_msg->feature_flags.flags.ras_caps = 0;
 	pf2vf_msg->ras_en_caps.all = 0;
 
-	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__UMC))
-		pf2vf_msg->ras_en_caps.bits.block_umc = 1;
-	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__SDMA))
-		pf2vf_msg->ras_en_caps.bits.block_sdma = 1;
-	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__GFX))
-		pf2vf_msg->ras_en_caps.bits.block_gfx = 1;
-	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__MMHUB))
-		pf2vf_msg->ras_en_caps.bits.block_mmhub = 1;
-	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__ATHUB))
-		pf2vf_msg->ras_en_caps.bits.block_athub = 1;
-	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__PCIE_BIF))
-		pf2vf_msg->ras_en_caps.bits.block_pcie_bif = 1;
-	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__HDP))
-		pf2vf_msg->ras_en_caps.bits.block_hdp = 1;
-	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__XGMI_WAFL))
-		pf2vf_msg->ras_en_caps.bits.block_xgmi_wafl = 1;
-	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__DF))
-		pf2vf_msg->ras_en_caps.bits.block_df = 1;
-	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__SMN))
-		pf2vf_msg->ras_en_caps.bits.block_smn = 1;
-	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__SEM))
-		pf2vf_msg->ras_en_caps.bits.block_sem = 1;
-	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__MP0))
-		pf2vf_msg->ras_en_caps.bits.block_mp0 = 1;
-	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__MP1))
-		pf2vf_msg->ras_en_caps.bits.block_mp1 = 1;
-	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__FUSE))
-		pf2vf_msg->ras_en_caps.bits.block_fuse = 1;
-	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__MCA))
-		pf2vf_msg->ras_en_caps.bits.block_mca = 1;
-	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__VCN))
-		pf2vf_msg->ras_en_caps.bits.block_vcn = 1;
-	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__JPEG))
-		pf2vf_msg->ras_en_caps.bits.block_jpeg = 1;
-	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__IH))
-		pf2vf_msg->ras_en_caps.bits.block_ih = 1;
-	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__MPIO))
-		pf2vf_msg->ras_en_caps.bits.block_mpio = 1;
-	if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__MMSCH))
-		pf2vf_msg->ras_en_caps.bits.block_mmsch = 1;
+	/* Only allow RAS telemetry on MCA enabled GPUs */
+	if (adapt->ecc.ras_cap) {
+
+		pf2vf_msg->feature_flags.flags.ras_caps = 1;
+
+		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__UMC))
+			pf2vf_msg->ras_en_caps.bits.block_umc = 1;
+		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__SDMA))
+			pf2vf_msg->ras_en_caps.bits.block_sdma = 1;
+		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__GFX))
+			pf2vf_msg->ras_en_caps.bits.block_gfx = 1;
+		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__MMHUB))
+			pf2vf_msg->ras_en_caps.bits.block_mmhub = 1;
+		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__ATHUB))
+			pf2vf_msg->ras_en_caps.bits.block_athub = 1;
+		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__PCIE_BIF))
+			pf2vf_msg->ras_en_caps.bits.block_pcie_bif = 1;
+		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__HDP))
+			pf2vf_msg->ras_en_caps.bits.block_hdp = 1;
+		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__XGMI_WAFL))
+			pf2vf_msg->ras_en_caps.bits.block_xgmi_wafl = 1;
+		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__DF))
+			pf2vf_msg->ras_en_caps.bits.block_df = 1;
+		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__SMN))
+			pf2vf_msg->ras_en_caps.bits.block_smn = 1;
+		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__SEM))
+			pf2vf_msg->ras_en_caps.bits.block_sem = 1;
+		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__MP0))
+			pf2vf_msg->ras_en_caps.bits.block_mp0 = 1;
+		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__MP1))
+			pf2vf_msg->ras_en_caps.bits.block_mp1 = 1;
+		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__FUSE))
+			pf2vf_msg->ras_en_caps.bits.block_fuse = 1;
+		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__MCA))
+			pf2vf_msg->ras_en_caps.bits.block_mca = 1;
+		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__VCN))
+			pf2vf_msg->ras_en_caps.bits.block_vcn = 1;
+		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__JPEG))
+			pf2vf_msg->ras_en_caps.bits.block_jpeg = 1;
+		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__IH))
+			pf2vf_msg->ras_en_caps.bits.block_ih = 1;
+		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__MPIO))
+			pf2vf_msg->ras_en_caps.bits.block_mpio = 1;
+		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__MMSCH))
+			pf2vf_msg->ras_en_caps.bits.block_mmsch = 1;
+	}
 
 	if (adapt->ecc.supported & BIT(AMDGV_RAS_POISON_ECC_SUPPORT))
 		pf2vf_msg->ras_en_caps.bits.poison_propogation_mode = 1;
@@ -2482,6 +2487,9 @@ int amdgv_vfmgr_update_pf2vf_message(struct amdgv_adapter *adapt, uint32_t idx_v
 		adapt->array_vf[idx_vf].mes_info_dump_enabled = false;
 	}
 
+	pf2vf_msg->feature_flags.flags.xgmi_ta_ext_peer_link =
+		 amdgv_xgmi_is_guest_ext_peer_link_ta_cmd_supported(adapt);
+
 	amdgv_vfmgr_get_adapt_uuid(adapt, &pf2vf_msg->uuid);
 
 	oss_memcpy(&pf2vf_msg->uuid_info, &entry->uuid_info,
@@ -2799,6 +2807,70 @@ void amdgv_vfmgr_get_xgmi_info(struct amdgv_adapter *adapt, union amdgv_dev_info
 	}
 }
 
+enum amdgv_live_info_status amdgv_vfmgr_export_live_data_crit_region(struct amdgv_adapter *adapt, struct amdgv_live_info_vf_crit_region *vf_crit_region)
+{
+	uint32_t idx_live_data, idx_vf;
+
+	for (idx_live_data = 0; idx_live_data < adapt->num_vf + 1; idx_live_data++) {
+		if (idx_live_data >= AMDGV_MAX_VF_LIVE) {
+			AMDGV_ERROR("VF MGR export live data error, slot# %u, %u live update slots\n", idx_live_data, AMDGV_MAX_VF_LIVE);
+			return AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
+		}
+
+		idx_vf = idx_live_data;
+		if (idx_live_data == adapt->num_vf)
+			idx_vf = AMDGV_PF_IDX;
+		oss_memcpy(&vf_crit_region[idx_live_data].vf_table_offsets,
+				   &adapt->array_vf[idx_vf].vf_table_offsets,
+				   sizeof(adapt->array_vf[idx_vf].vf_table_offsets));
+		oss_memcpy(&vf_crit_region[idx_live_data].vf_table_sizes_kb,
+				   &adapt->array_vf[idx_vf].vf_table_sizes_kb,
+				   sizeof(adapt->array_vf[idx_vf].vf_table_sizes_kb));
+		vf_crit_region[idx_live_data].vf_crit_region = adapt->array_vf[idx_vf].vf_crit_region;
+		vf_crit_region[idx_live_data].host_crit_region_caps = adapt->array_vf[idx_vf].host_crit_region_caps;
+		vf_crit_region[idx_live_data].guest_crit_region_caps = adapt->array_vf[idx_vf].guest_crit_region_caps;
+		vf_crit_region[idx_live_data].guest_gpu_init_flags = adapt->array_vf[idx_vf].guest_gpu_init_flags;
+	}
+
+	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
+}
+
+enum amdgv_live_info_status amdgv_vfmgr_import_live_data_crit_region(struct amdgv_adapter *adapt, struct amdgv_live_info_vf_crit_region *vf_crit_region)
+{
+	uint32_t idx_live_data, idx_vf;
+
+	for (idx_live_data = 0; idx_live_data < adapt->num_vf + 1; idx_live_data++) {
+		if (idx_live_data >= AMDGV_MAX_VF_LIVE) {
+			AMDGV_ERROR("VF MGR import live data error, slot# %u, %u live update slots\n", idx_live_data, AMDGV_MAX_VF_LIVE);
+			return AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
+		}
+
+		idx_vf = idx_live_data;
+		if (idx_live_data == adapt->num_vf)
+			idx_vf = AMDGV_PF_IDX;
+		oss_memcpy(&adapt->array_vf[idx_vf].vf_table_offsets,
+				   &vf_crit_region[idx_live_data].vf_table_offsets,
+				   sizeof(adapt->array_vf[idx_vf].vf_table_offsets));
+		oss_memcpy(&adapt->array_vf[idx_vf].vf_table_sizes_kb,
+				   &vf_crit_region[idx_live_data].vf_table_sizes_kb,
+				   sizeof(adapt->array_vf[idx_vf].vf_table_sizes_kb));
+		adapt->array_vf[idx_vf].vf_crit_region = vf_crit_region[idx_live_data].vf_crit_region;
+		adapt->array_vf[idx_vf].host_crit_region_caps = vf_crit_region[idx_live_data].host_crit_region_caps;
+		adapt->array_vf[idx_vf].guest_crit_region_caps = vf_crit_region[idx_live_data].guest_crit_region_caps;
+		adapt->array_vf[idx_vf].guest_gpu_init_flags = vf_crit_region[idx_live_data].guest_gpu_init_flags;
+
+		// Only supports V1 crit region, reset to V1
+		if (!adapt->umc.is_pmfw_managed_eeprom) {
+			adapt->array_vf[idx_vf].host_crit_region_caps = 0b1;
+			adapt->array_vf[idx_vf].vf_crit_region = GPU_CRIT_REGION_V1;
+			adapt->array_vf[idx_vf].guest_crit_region_caps = GPU_CRIT_REGION_V1;
+			amdgv_vfmgr_init_crit_region(adapt, idx_vf);
+		}
+	}
+
+	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
+}
+
 enum amdgv_live_info_status amdgv_vfmgr_export_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_vf *vf_info)
 {
 	uint32_t idx_live_data, idx_vf;
@@ -2869,21 +2941,17 @@ enum amdgv_live_info_status amdgv_vfmgr_export_live_data(struct amdgv_adapter *a
 		if (idx_vf != AMDGV_PF_IDX) {
 			oss_put_dev(adapt->array_vf[idx_vf].dev);
 			adapt->array_vf[idx_vf].dev = AMDGV_INVALID_HANDLE;
-
-			oss_memcpy(&vf_info[idx_live_data].crit_region_data.vf_table_offsets,
-				   &adapt->array_vf[idx_vf].vf_table_offsets,
-				   sizeof(adapt->array_vf[idx_vf].vf_table_offsets));
-			oss_memcpy(&vf_info[idx_live_data].crit_region_data.vf_table_sizes_kb,
-				   &adapt->array_vf[idx_vf].vf_table_sizes_kb,
-				   sizeof(adapt->array_vf[idx_vf].vf_table_sizes_kb));
-			vf_info[idx_live_data].crit_region_data.vf_crit_region = adapt->array_vf[idx_vf].vf_crit_region;
-			vf_info[idx_live_data].crit_region_data.host_crit_region_caps = adapt->array_vf[idx_vf].host_crit_region_caps;
-			vf_info[idx_live_data].crit_region_data.guest_crit_region_caps = adapt->array_vf[idx_vf].guest_crit_region_caps;
-			vf_info[idx_live_data].crit_region_data.guest_gpu_init_flags = adapt->array_vf[idx_vf].guest_gpu_init_flags;
 		}
 	}
 
 	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
+}
+
+static void amdgv_live_info_get_vf_real_fb_size(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_t *real_fb_size)
+{
+	uint32_t fb_offset, fb_size;
+
+	amdgv_gpuiov_get_vf_fb(adapt, idx_vf, &fb_offset, &fb_size, real_fb_size);
 }
 
 enum amdgv_live_info_status amdgv_vfmgr_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_vf *vf_info)
@@ -2905,16 +2973,6 @@ enum amdgv_live_info_status amdgv_vfmgr_import_live_data(struct amdgv_adapter *a
 			adapt->array_vf[idx_vf].idx_vf = AMDGV_PF_IDX;
 		} else {
 			adapt->array_vf[idx_vf].dev = oss_get_dev_from_bdf(adapt->array_vf[idx_vf].bdf);
-			oss_memcpy(&adapt->array_vf[idx_vf].vf_table_offsets,
-				   &vf_info[idx_live_data].crit_region_data.vf_table_offsets,
-				   sizeof(adapt->array_vf[idx_vf].vf_table_offsets));
-			oss_memcpy(&adapt->array_vf[idx_vf].vf_table_sizes_kb,
-				   &vf_info[idx_live_data].crit_region_data.vf_table_sizes_kb,
-				   sizeof(adapt->array_vf[idx_vf].vf_table_sizes_kb));
-			adapt->array_vf[idx_vf].vf_crit_region = vf_info[idx_live_data].crit_region_data.vf_crit_region;
-			adapt->array_vf[idx_vf].host_crit_region_caps = vf_info[idx_live_data].crit_region_data.host_crit_region_caps;
-			adapt->array_vf[idx_vf].guest_crit_region_caps = vf_info[idx_live_data].crit_region_data.guest_crit_region_caps;
-			adapt->array_vf[idx_vf].guest_gpu_init_flags = vf_info[idx_live_data].crit_region_data.guest_gpu_init_flags;
 		}
 
 		adapt->array_vf[idx_vf].configured = vf_info[idx_live_data].configured;
@@ -2959,6 +3017,10 @@ enum amdgv_live_info_status amdgv_vfmgr_import_live_data(struct amdgv_adapter *a
 		adapt->sched.array_vf[idx_vf].fb_dirty = true;
 		adapt->sched.array_vf[idx_vf].is_cond_avail = vf_info[idx_live_data].is_cond_avail;
 		adapt->array_vf[idx_vf].real_fb_size = vf_info[idx_live_data].real_fb_size;
+		// If real_fb_size is not exported previously, try to retrieve it from the device
+		if (adapt->array_vf[idx_vf].configured &&
+				!adapt->array_vf[idx_vf].real_fb_size)
+				amdgv_live_info_get_vf_real_fb_size(adapt, idx_vf, &adapt->array_vf[idx_vf].real_fb_size);
 
 		amdgv_sched_update_time_slice(adapt, AMDGV_SCHED_BLOCK_ALL, idx_vf);
 

@@ -25,6 +25,7 @@
 extern "C" {
 #include "amdsmi.h"
 #include "common/smi_cmd.h"
+#include "smi_processor_handle.h"
 }
 
 #include "smi_system_mock.hpp"
@@ -36,8 +37,13 @@ using amdsmi::SetResponseStatus;
 
 class AmdSmiXgmiTest : public amdsmi::AmdSmiTest {
 protected:
+	struct smi_gpu_handle GPU_MOCK_HANDLE_DIFF = {
+		SMI_PROCESSOR_TYPE_AMD_GPU,
+		{ { 0x4, 0x3, 0x2, 0x2 } },
+		(0x1234ULL << 32) | 0x4321,
+		0x8765
+	};
 	AmdSmiXgmiTest() : amdsmi::AmdSmiTest(AMDSMI_MAX_DEVICES) {};
-	smi_device_handle_t GPU_MOCK_HANDLE_DIFF = { (0x1234ULL << 32) | 0x4321 };
 	::testing::AssertionResult equal_link_metrics(smi_link_metrics expect,
 						      amdsmi_link_metrics_t actual)
 	{
@@ -140,30 +146,52 @@ TEST_F(AmdSmiXgmiTest, InvalidParams)
 	uint32_t num_processors = 0;
 	amdsmi_link_type_t link_type;
 	amdsmi_p2p_capability_t p2p_capability;
+	amdsmi_link_metrics_t link_metrics;
+	amdsmi_xgmi_fb_sharing_caps_t caps;
+	amdsmi_processor_handle *processor_list = NULL;
+	amdsmi_dpm_policy_t xgmi_plpd;
+
+	processor_list = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*1);
+	processor_list[0] = &NIC_MOCK_HANDLE;
 
 	ASSERT_EQ(amdsmi_get_link_metrics(&GPU_MOCK_HANDLE, NULL), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_link_metrics(&NIC_MOCK_HANDLE, &link_metrics), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_xgmi_fb_sharing_caps(&GPU_MOCK_HANDLE, NULL), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_xgmi_fb_sharing_caps(&NIC_MOCK_HANDLE, &caps), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_link_topology(&GPU_MOCK_HANDLE, NULL, &topology_info), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_link_topology(NULL, &GPU_MOCK_HANDLE, &topology_info), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_link_topology(&NIC_MOCK_HANDLE, &GPU_MOCK_HANDLE, &topology_info), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_link_topology(&GPU_MOCK_HANDLE, &NIC_MOCK_HANDLE, &topology_info), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_link_topology(&GPU_MOCK_HANDLE, &GPU_MOCK_HANDLE, NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_link_topology_nearest(NULL, AMDSMI_LINK_TYPE_XGMI, &topology_nearest_info), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_link_topology_nearest(&GPU_MOCK_HANDLE, AMDSMI_LINK_TYPE_XGMI, NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_link_topology_nearest(&GPU_MOCK_HANDLE, (amdsmi_link_type_t)invalid_link_min, &topology_nearest_info), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_link_topology_nearest(&GPU_MOCK_HANDLE, (amdsmi_link_type_t)invalid_link_max , &topology_nearest_info), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_link_topology_nearest(&GPU_MOCK_HANDLE, AMDSMI_LINK_TYPE_INTERNAL, &topology_nearest_info), AMDSMI_STATUS_NOT_SUPPORTED);
+	ASSERT_EQ(amdsmi_get_link_topology_nearest(&NIC_MOCK_HANDLE, AMDSMI_LINK_TYPE_XGMI, &topology_nearest_info), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_xgmi_fb_sharing_mode_info(&GPU_MOCK_HANDLE, &GPU_MOCK_HANDLE, AMDSMI_XGMI_FB_SHARING_MODE_4, NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_xgmi_fb_sharing_mode_info(NULL, &GPU_MOCK_HANDLE, AMDSMI_XGMI_FB_SHARING_MODE_4, &fb_sharing), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_xgmi_fb_sharing_mode_info(&GPU_MOCK_HANDLE, NULL, AMDSMI_XGMI_FB_SHARING_MODE_4, &fb_sharing), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_xgmi_fb_sharing_mode_info(&NIC_MOCK_HANDLE, &GPU_MOCK_HANDLE, AMDSMI_XGMI_FB_SHARING_MODE_4, &fb_sharing), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_xgmi_fb_sharing_mode_info(&GPU_MOCK_HANDLE, &NIC_MOCK_HANDLE, AMDSMI_XGMI_FB_SHARING_MODE_4, &fb_sharing), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_set_xgmi_fb_sharing_mode(NULL, AMDSMI_XGMI_FB_SHARING_MODE_4), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_set_xgmi_fb_sharing_mode(&NIC_MOCK_HANDLE, AMDSMI_XGMI_FB_SHARING_MODE_4), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_set_xgmi_fb_sharing_mode_v2(NULL, num_processors, AMDSMI_XGMI_FB_SHARING_MODE_4), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_set_xgmi_fb_sharing_mode_v2(processor_list, 1, AMDSMI_XGMI_FB_SHARING_MODE_4), AMDSMI_STATUS_INVAL);
 
 	ASSERT_EQ(amdsmi_topo_get_p2p_status(NULL, &GPU_MOCK_HANDLE_DIFF, &link_type, &p2p_capability), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_topo_get_p2p_status(&GPU_MOCK_HANDLE, NULL, &link_type, &p2p_capability), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_topo_get_p2p_status(&GPU_MOCK_HANDLE, &GPU_MOCK_HANDLE_DIFF, NULL, &p2p_capability), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_topo_get_p2p_status(&GPU_MOCK_HANDLE, &GPU_MOCK_HANDLE_DIFF, &link_type, NULL), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_topo_get_p2p_status(&GPU_MOCK_HANDLE, &NIC_MOCK_HANDLE, &link_type, &p2p_capability), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_topo_get_p2p_status(&NIC_MOCK_HANDLE, &GPU_MOCK_HANDLE, &link_type, &p2p_capability), AMDSMI_STATUS_INVAL);
 
 	ASSERT_EQ(amdsmi_get_xgmi_plpd(&GPU_MOCK_HANDLE, NULL), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_xgmi_plpd(&NIC_MOCK_HANDLE, &xgmi_plpd), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_set_xgmi_plpd(NULL, 0), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_set_xgmi_plpd(&NIC_MOCK_HANDLE, 0), AMDSMI_STATUS_INVAL);
+
+	free(processor_list);
 }
 
 TEST_F(AmdSmiXgmiTest, GetLinkMetrics)
@@ -249,6 +277,25 @@ TEST_F(AmdSmiXgmiTest, GetLinkTopologyNotSupported)
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 }
 
+TEST_F(AmdSmiXgmiTest, GetLinkTopologyDevIdNotSupported)
+{
+	int ret;
+	amdsmi_link_topology_t link_topology;
+	struct smi_gpu_handle gpu_handle;
+
+	gpu_handle.type = GPU_MOCK_HANDLE.type;
+	gpu_handle.handle = GPU_MOCK_HANDLE.handle;
+	gpu_handle.dev_id = 0x7410;
+
+	ret = amdsmi_get_link_topology(&gpu_handle, &GPU_MOCK_HANDLE_DIFF,
+			      &link_topology);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+
+	ret = amdsmi_get_link_topology(&GPU_MOCK_HANDLE, &gpu_handle,
+			      &link_topology);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+}
+
 TEST_F(AmdSmiXgmiTest, GetLinkTopologyGpuItself)
 {
 	int ret;
@@ -323,6 +370,25 @@ TEST_F(AmdSmiXgmiTest, GetFbSharingModeInfoItself)
 
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(fb_sharing, 1);
+}
+
+TEST_F(AmdSmiXgmiTest, GetFbSharingModeDevIdNotSupported)
+{
+	int ret;
+	uint8_t fb_sharing;
+	struct smi_gpu_handle gpu_handle;
+
+	gpu_handle.type = GPU_MOCK_HANDLE.type;
+	gpu_handle.handle = GPU_MOCK_HANDLE.handle;
+	gpu_handle.dev_id = 0x7410;
+
+	ret = amdsmi_get_xgmi_fb_sharing_mode_info(&gpu_handle, &GPU_MOCK_HANDLE_DIFF,
+				AMDSMI_XGMI_FB_SHARING_MODE_4, &fb_sharing);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+
+	ret = amdsmi_get_xgmi_fb_sharing_mode_info(&GPU_MOCK_HANDLE, &gpu_handle,
+				AMDSMI_XGMI_FB_SHARING_MODE_4, &fb_sharing);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 }
 
 TEST_F(AmdSmiXgmiTest, SetFbSharingMode)
@@ -472,6 +538,26 @@ TEST_F(AmdSmiXgmiTest, GetP2pStatusNotSupported)
 	ret = amdsmi_topo_get_p2p_status(&GPU_MOCK_HANDLE, &GPU_MOCK_HANDLE_DIFF, &link_type,
 			      &p2p_capability);
 
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+}
+
+TEST_F(AmdSmiXgmiTest, GetP2pStatusDevIdNotSupported)
+{
+	int ret;
+	amdsmi_p2p_capability_t p2p_capability;
+	amdsmi_link_type_t link_type;
+	struct smi_gpu_handle gpu_handle;
+
+	gpu_handle.type = GPU_MOCK_HANDLE.type;
+	gpu_handle.handle = GPU_MOCK_HANDLE.handle;
+	gpu_handle.dev_id = 0x73AE;
+
+	ret = amdsmi_topo_get_p2p_status(&gpu_handle, &GPU_MOCK_HANDLE_DIFF,
+			      &link_type, &p2p_capability);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+
+	ret = amdsmi_topo_get_p2p_status(&GPU_MOCK_HANDLE, &gpu_handle,
+			      &link_type, &p2p_capability);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 }
 

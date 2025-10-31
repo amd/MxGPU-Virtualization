@@ -23,6 +23,7 @@ BUILD_DIR := build
 BUILD_PLATFORM ?=
 BUILD_TYPE ?= release
 PREFIX ?= /usr/local
+AMD_SMI_NIC_SUPPORT ?= True
 
 ifeq ($(BUILD_PLATFORM),windows)
 	PLATFORM := windows
@@ -67,7 +68,8 @@ ifeq ($(PLATFORM),windows)
 endif
 
 BUILD_FLAGS := \
-	-DBUILD_TYPE=$(BUILD_TYPE)
+	-DBUILD_TYPE=$(BUILD_TYPE) \
+	-DAMD_SMI_NIC_SUPPORT=$(AMD_SMI_NIC_SUPPORT)
 
 default: $(CMAKE_PATH)/CMakeLists.txt
 ifeq ($(PLATFORM),linux)

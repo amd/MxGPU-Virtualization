@@ -29,8 +29,8 @@ ASTYLE_OPTIONS = ["--style=kr", "--suffix=none", "--indent=force-tab=4", "--max-
 EXCLUDE_H_FILES = {"amdsmi.h", "json.h"}
 
 # Folder paths for .cpp and .h files
-CPP_FOLDER = "src"
-HEADER_FOLDER = "include"
+CPP_FOLDER = "../../src"
+HEADER_FOLDER = "../../inc"
 
 def format_files(folder, extensions):
     for root, _, files in os.walk(folder):

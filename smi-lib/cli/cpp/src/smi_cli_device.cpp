@@ -21,10 +21,13 @@
 #include "smi_cli_helpers.h"
 #include "smi_cli_api_base.h"
 
-Device::Device(int gpu, int vf, DeviceType device_type)
-	: gpu_index(gpu), vf_index(vf), type(device_type)
+Device::Device(int gpu, int vf, DeviceIdentifierType device_type, DeviceType type)
+	: gpu_index(gpu), vf_index(vf), identifier_type(device_type), type(type)
 {
-	if (type != DeviceType::VF_INDEX) {
+	if (type != DeviceType::GPU)
+		//error
+		exit(1);
+	if (identifier_type != DeviceIdentifierType::VF_INDEX) {
 		//error
 	} else {
 		domain = "--vf";
@@ -32,24 +35,38 @@ Device::Device(int gpu, int vf, DeviceType device_type)
 	}
 }
 
-Device::Device(int gpu, DeviceType device_type) : gpu_index(gpu), type(device_type)
+Device::Device(int gpu, DeviceIdentifierType device_type, DeviceType type) : gpu_index(gpu),
+	identifier_type(device_type), type(type)
 {
-	if (type != DeviceType::GPU_INDEX) {
+	int ret = 0;
+	if (identifier_type != DeviceIdentifierType::INDEX) {
 		//error
 		exit(1);
 	} else {
-		domain = "--gpu";
-		int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_bdf_from_gpu_index(bdf, gpu);
+		if (type == DeviceType::GPU) {
+			domain = "--gpu";
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_bdf_from_gpu_index(bdf, gpu);
+		} else if (type == DeviceType::NIC) {
+			domain = "--nic";
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_bdf_from_nic_index(bdf, gpu);
+		} else {
+			//error
+			exit(1);
+		}
 	}
 }
 
-Device::Device(std::string device, DeviceType device_type, std::string domain)
-	: value(device), type(device_type), domain(domain)
+Device::Device(std::string device, DeviceIdentifierType device_type, std::string domain,
+			   DeviceType type)
+	: value(device), identifier_type(device_type), domain(domain), type(type)
 {
-	if ((type != DeviceType::BDF) && (type != DeviceType::UUID)) {
+	if (type != DeviceType::GPU)
+		//error
+		exit(1);
+	if ((identifier_type != DeviceIdentifierType::BDF) && (identifier_type != DeviceIdentifierType::UUID)) {
 		//error
 	}
 
 	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_bdf_from_uuid_or_bdf(bdf, gpu_index,
-			  device, static_cast<int>(type));
+			  device, static_cast<int>(identifier_type));
 }

@@ -32,6 +32,9 @@ LIB_DIR := $(BUILD_DIR)/amdsmi/$(BUILD_TYPE)
 LIB_NAME := libamdsmi.so
 
 TEST_SRCS := smi_integration_tests.cpp
+ifeq ($(AMD_SMI_NIC_SUPPORT), True)
+TEST_SRCS += smi_integration_nic_tests.cpp
+endif
 
 OBJSCPP := $(addprefix $(OUTPUT_DIR)/,$(TEST_SRCS:.cpp=.cpp.o))
 

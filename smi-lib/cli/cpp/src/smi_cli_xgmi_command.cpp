@@ -178,7 +178,7 @@ void AmdSmiXgmiCommand::xgmi_command_json()
 void AmdSmiXgmiCommand::execute_command()
 {
 	unsigned int gpu_count;
-	AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_gpu_count(gpu_count);
+	AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
 	if ((AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200())
 			&& AmdSmiPlatform::getInstance().getInstance().is_host()) {
 		if (gpu_count > 1) {

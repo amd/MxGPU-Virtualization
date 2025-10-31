@@ -291,8 +291,8 @@ c__EA_amdsmi_status_t = ctypes.c_uint32 # enum
 amdsmi_status_t = c__EA_amdsmi_status_t
 amdsmi_status_t__enumvalues = c__EA_amdsmi_status_t__enumvalues
 
-# values for enumeration 'c__EA_processor_type_t'
-c__EA_processor_type_t__enumvalues = {
+# values for enumeration 'c__EA_amdsmi_processor_type_t'
+c__EA_amdsmi_processor_type_t__enumvalues = {
     0: 'AMDSMI_PROCESSOR_TYPE_UNKNOWN',
     1: 'AMDSMI_PROCESSOR_TYPE_AMD_GPU',
     2: 'AMDSMI_PROCESSOR_TYPE_AMD_CPU',
@@ -300,6 +300,7 @@ c__EA_processor_type_t__enumvalues = {
     4: 'AMDSMI_PROCESSOR_TYPE_NON_AMD_CPU',
     5: 'AMDSMI_PROCESSOR_TYPE_AMD_CPU_CORE',
     6: 'AMDSMI_PROCESSOR_TYPE_AMD_APU',
+    7: 'AMDSMI_PROCESSOR_TYPE_AMD_NIC',
 }
 AMDSMI_PROCESSOR_TYPE_UNKNOWN = 0
 AMDSMI_PROCESSOR_TYPE_AMD_GPU = 1
@@ -308,9 +309,10 @@ AMDSMI_PROCESSOR_TYPE_NON_AMD_GPU = 3
 AMDSMI_PROCESSOR_TYPE_NON_AMD_CPU = 4
 AMDSMI_PROCESSOR_TYPE_AMD_CPU_CORE = 5
 AMDSMI_PROCESSOR_TYPE_AMD_APU = 6
-c__EA_processor_type_t = ctypes.c_uint32 # enum
-processor_type_t = c__EA_processor_type_t
-processor_type_t__enumvalues = c__EA_processor_type_t__enumvalues
+AMDSMI_PROCESSOR_TYPE_AMD_NIC = 7
+c__EA_amdsmi_processor_type_t = ctypes.c_uint32 # enum
+amdsmi_processor_type_t = c__EA_amdsmi_processor_type_t
+amdsmi_processor_type_t__enumvalues = c__EA_amdsmi_processor_type_t__enumvalues
 
 # values for enumeration 'c__EA_amdsmi_memory_partition_type_t'
 c__EA_amdsmi_memory_partition_type_t__enumvalues = {
@@ -368,6 +370,7 @@ c__EA_amdsmi_vram_type_t__enumvalues = {
     21: 'AMDSMI_VRAM_TYPE_GDDR5',
     22: 'AMDSMI_VRAM_TYPE_GDDR6',
     23: 'AMDSMI_VRAM_TYPE_GDDR7',
+    23: 'AMDSMI_VRAM_TYPE__MAX',
 }
 AMDSMI_VRAM_TYPE_UNKNOWN = 0
 AMDSMI_VRAM_TYPE_HBM = 1
@@ -385,6 +388,7 @@ AMDSMI_VRAM_TYPE_GDDR4 = 20
 AMDSMI_VRAM_TYPE_GDDR5 = 21
 AMDSMI_VRAM_TYPE_GDDR6 = 22
 AMDSMI_VRAM_TYPE_GDDR7 = 23
+AMDSMI_VRAM_TYPE__MAX = 23
 c__EA_amdsmi_vram_type_t = ctypes.c_uint32 # enum
 amdsmi_vram_type_t = c__EA_amdsmi_vram_type_t
 amdsmi_vram_type_t__enumvalues = c__EA_amdsmi_vram_type_t__enumvalues
@@ -453,7 +457,55 @@ c__EA_amdsmi_temperature_type_t__enumvalues = {
     5: 'AMDSMI_TEMPERATURE_TYPE_HBM_2',
     6: 'AMDSMI_TEMPERATURE_TYPE_HBM_3',
     7: 'AMDSMI_TEMPERATURE_TYPE_PLX',
-    7: 'AMDSMI_TEMPERATURE_TYPE__MAX',
+    100: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_FIRST',
+    100: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_RETIMER_X',
+    101: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_OAM_X_IBC',
+    102: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_OAM_X_IBC_2',
+    103: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_OAM_X_VDD18_VR',
+    104: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_OAM_X_04_HBM_B_VR',
+    105: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_OAM_X_04_HBM_D_VR',
+    149: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_LAST',
+    150: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VR_FIRST',
+    150: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_VDD0',
+    151: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_VDD1',
+    152: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_VDD2',
+    153: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_VDD3',
+    154: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_SOC_A',
+    155: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_SOC_C',
+    156: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_SOCIO_A',
+    157: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_SOCIO_C',
+    158: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDD_085_HBM',
+    159: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_11_HBM_B',
+    160: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_11_HBM_D',
+    161: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDD_USR',
+    162: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDIO_11_E32',
+    199: 'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VR_LAST',
+    200: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_FIRST',
+    200: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_FPGA',
+    201: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_FRONT',
+    202: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_BACK',
+    203: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_OAM7',
+    204: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_IBC',
+    205: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_UFPGA',
+    206: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_OAM1',
+    207: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_OAM_0_1_HSC',
+    208: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_OAM_2_3_HSC',
+    209: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_OAM_4_5_HSC',
+    210: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_OAM_6_7_HSC',
+    211: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_FPGA_0V72_VR',
+    212: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_FPGA_3V3_VR',
+    213: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_RETIMER_0_1_2_3_1V2_VR',
+    214: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_RETIMER_4_5_6_7_1V2_VR',
+    215: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_RETIMER_0_1_0V9_VR',
+    216: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_RETIMER_4_5_0V9_VR',
+    217: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_RETIMER_2_3_0V9_VR',
+    218: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_RETIMER_6_7_0V9_VR',
+    219: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_OAM_0_1_2_3_3V3_VR',
+    220: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_OAM_4_5_6_7_3V3_VR',
+    221: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_IBC_HSC',
+    222: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_IBC',
+    249: 'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_LAST',
+    249: 'AMDSMI_TEMPERATURE_TYPE__MAX',
 }
 AMDSMI_TEMPERATURE_TYPE_EDGE = 0
 AMDSMI_TEMPERATURE_TYPE_FIRST = 0
@@ -465,7 +517,55 @@ AMDSMI_TEMPERATURE_TYPE_HBM_1 = 4
 AMDSMI_TEMPERATURE_TYPE_HBM_2 = 5
 AMDSMI_TEMPERATURE_TYPE_HBM_3 = 6
 AMDSMI_TEMPERATURE_TYPE_PLX = 7
-AMDSMI_TEMPERATURE_TYPE__MAX = 7
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_FIRST = 100
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_RETIMER_X = 100
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_OAM_X_IBC = 101
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_OAM_X_IBC_2 = 102
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_OAM_X_VDD18_VR = 103
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_OAM_X_04_HBM_B_VR = 104
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_OAM_X_04_HBM_D_VR = 105
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_LAST = 149
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VR_FIRST = 150
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_VDD0 = 150
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_VDD1 = 151
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_VDD2 = 152
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_VDD3 = 153
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_SOC_A = 154
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_SOC_C = 155
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_SOCIO_A = 156
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_SOCIO_C = 157
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDD_085_HBM = 158
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_11_HBM_B = 159
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_11_HBM_D = 160
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDD_USR = 161
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDIO_11_E32 = 162
+AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VR_LAST = 199
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_FIRST = 200
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_FPGA = 200
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_FRONT = 201
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_BACK = 202
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_OAM7 = 203
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_IBC = 204
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_UFPGA = 205
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_OAM1 = 206
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_OAM_0_1_HSC = 207
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_OAM_2_3_HSC = 208
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_OAM_4_5_HSC = 209
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_OAM_6_7_HSC = 210
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_FPGA_0V72_VR = 211
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_FPGA_3V3_VR = 212
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_RETIMER_0_1_2_3_1V2_VR = 213
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_RETIMER_4_5_6_7_1V2_VR = 214
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_RETIMER_0_1_0V9_VR = 215
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_RETIMER_4_5_0V9_VR = 216
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_RETIMER_2_3_0V9_VR = 217
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_RETIMER_6_7_0V9_VR = 218
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_OAM_0_1_2_3_3V3_VR = 219
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_OAM_4_5_6_7_3V3_VR = 220
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_IBC_HSC = 221
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_IBC = 222
+AMDSMI_TEMPERATURE_TYPE_BASEBOARD_LAST = 249
+AMDSMI_TEMPERATURE_TYPE__MAX = 249
 c__EA_amdsmi_temperature_type_t = ctypes.c_uint32 # enum
 amdsmi_temperature_type_t = c__EA_amdsmi_temperature_type_t
 amdsmi_temperature_type_t__enumvalues = c__EA_amdsmi_temperature_type_t__enumvalues
@@ -1263,10 +1363,25 @@ amdsmi_dpm_policy_t = struct_c__SA_amdsmi_dpm_policy_t
 class struct_c__SA_amdsmi_ras_feature_t(Structure):
     pass
 
+class struct_c__SA_amdsmi_ras_feature_t_0(Structure):
+    pass
+
+struct_c__SA_amdsmi_ras_feature_t_0._pack_ = 1 # source:False
+struct_c__SA_amdsmi_ras_feature_t_0._fields_ = [
+    ('dram_ecc', ctypes.c_uint32, 1),
+    ('sram_ecc', ctypes.c_uint32, 1),
+    ('poisoning', ctypes.c_uint32, 1),
+    ('rsvd', ctypes.c_uint32, 29),
+]
+
 struct_c__SA_amdsmi_ras_feature_t._pack_ = 1 # source:False
 struct_c__SA_amdsmi_ras_feature_t._fields_ = [
+    ('ras_info', struct_c__SA_amdsmi_ras_feature_t_0),
+    ('needs_reboot', ctypes.c_bool),
+    ('PADDING_0', ctypes.c_ubyte * 3),
     ('ras_eeprom_version', ctypes.c_uint32),
     ('ecc_correction_schema_flag', ctypes.c_uint32),
+    ('reserved', ctypes.c_uint32 * 4),
 ]
 
 amdsmi_ras_feature_t = struct_c__SA_amdsmi_ras_feature_t
@@ -2049,6 +2164,21 @@ c__EA_amdsmi_event_xgmi_t = ctypes.c_uint32 # enum
 amdsmi_event_xgmi_t = c__EA_amdsmi_event_xgmi_t
 amdsmi_event_xgmi_t__enumvalues = c__EA_amdsmi_event_xgmi_t__enumvalues
 
+# values for enumeration 'c__EA_amdsmi_pp_throttler_type_t'
+c__EA_amdsmi_pp_throttler_type_t__enumvalues = {
+    1: 'AMDSMI_EVENT_THROTTLER_PROCHOT',
+    4: 'AMDSMI_EVENT_THROTTLER_SOCKET',
+    8: 'AMDSMI_EVENT_THROTTLER_VR',
+    16: 'AMDSMI_EVENT_THROTTLER_HBM',
+}
+AMDSMI_EVENT_THROTTLER_PROCHOT = 1
+AMDSMI_EVENT_THROTTLER_SOCKET = 4
+AMDSMI_EVENT_THROTTLER_VR = 8
+AMDSMI_EVENT_THROTTLER_HBM = 16
+c__EA_amdsmi_pp_throttler_type_t = ctypes.c_uint32 # enum
+amdsmi_pp_throttler_type_t = c__EA_amdsmi_pp_throttler_type_t
+amdsmi_pp_throttler_type_t__enumvalues = c__EA_amdsmi_pp_throttler_type_t__enumvalues
+
 # values for enumeration 'c__EA_amdsmi_ecc_correction_schema_support_t'
 c__EA_amdsmi_ecc_correction_schema_support_t__enumvalues = {
     1: 'AMDSMI_RAS_ECC_SUPPORT_PARITY',
@@ -2702,10 +2832,11 @@ struct_c__SA_amdsmi_event_entry_t._fields_ = [
     ('category', ctypes.c_uint32),
     ('subcode', ctypes.c_uint32),
     ('level', ctypes.c_uint32),
-    ('date', ctypes.c_char * 256),
+    ('date', ctypes.c_char * 32),
     ('message', ctypes.c_char * 256),
     ('PADDING_0', ctypes.c_ubyte * 4),
-    ('reserved', ctypes.c_uint64 * 6),
+    ('processor_handle', ctypes.POINTER(None)),
+    ('reserved', ctypes.c_uint64 * 37),
 ]
 
 amdsmi_event_entry_t = struct_c__SA_amdsmi_event_entry_t
@@ -3096,6 +3227,165 @@ struct_c__SA_amdsmi_accelerator_partition_profile_config_global_t._fields_ = [
 ]
 
 amdsmi_accelerator_partition_profile_config_global_t = struct_c__SA_amdsmi_accelerator_partition_profile_config_global_t
+class struct_c__SA_amdsmi_nic_stat_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_nic_stat_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_nic_stat_t._fields_ = [
+    ('name', ctypes.c_char * 256),
+    ('value', ctypes.c_uint64),
+]
+
+amdsmi_nic_stat_t = struct_c__SA_amdsmi_nic_stat_t
+class struct_c__SA_amdsmi_nic_asic_info_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_nic_asic_info_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_nic_asic_info_t._fields_ = [
+    ('vendor_id', ctypes.c_uint16),
+    ('subvendor_id', ctypes.c_uint16),
+    ('device_id', ctypes.c_uint16),
+    ('subsystem_id', ctypes.c_uint16),
+    ('revision', ctypes.c_ubyte),
+    ('permanent_address', ctypes.c_char * 256),
+    ('product_name', ctypes.c_char * 256),
+    ('part_number', ctypes.c_char * 256),
+    ('serial_number', ctypes.c_char * 256),
+    ('vendor_name', ctypes.c_char * 256),
+    ('PADDING_0', ctypes.c_ubyte),
+]
+
+amdsmi_nic_asic_info_t = struct_c__SA_amdsmi_nic_asic_info_t
+class struct_c__SA_amdsmi_nic_bus_info_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_nic_bus_info_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_nic_bus_info_t._fields_ = [
+    ('bdf', amdsmi_bdf_t),
+    ('max_pcie_width', ctypes.c_ubyte),
+    ('PADDING_0', ctypes.c_ubyte * 3),
+    ('max_pcie_speed', ctypes.c_uint32),
+    ('pcie_interface_version', ctypes.c_char * 256),
+    ('slot_type', ctypes.c_char * 256),
+]
+
+amdsmi_nic_bus_info_t = struct_c__SA_amdsmi_nic_bus_info_t
+class struct_c__SA_amdsmi_nic_numa_info_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_nic_numa_info_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_nic_numa_info_t._fields_ = [
+    ('node', ctypes.c_ubyte),
+    ('affinity', ctypes.c_char * 256),
+]
+
+amdsmi_nic_numa_info_t = struct_c__SA_amdsmi_nic_numa_info_t
+class struct_c__SA_amdsmi_nic_fw_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_nic_fw_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_nic_fw_t._fields_ = [
+    ('name', ctypes.c_char * 256),
+    ('version', ctypes.c_char * 256),
+]
+
+amdsmi_nic_fw_t = struct_c__SA_amdsmi_nic_fw_t
+class struct_c__SA_amdsmi_nic_fw_info_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_nic_fw_info_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_nic_fw_info_t._fields_ = [
+    ('num_fw', ctypes.c_uint32),
+    ('fw', struct_c__SA_amdsmi_nic_fw_t * 16),
+]
+
+amdsmi_nic_fw_info_t = struct_c__SA_amdsmi_nic_fw_info_t
+class struct_c__SA_amdsmi_nic_port_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_nic_port_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_nic_port_t._fields_ = [
+    ('bdf', amdsmi_bdf_t),
+    ('port_num', ctypes.c_uint32),
+    ('type', ctypes.c_char * 256),
+    ('flavour', ctypes.c_char * 256),
+    ('netdev', ctypes.c_char * 256),
+    ('ifindex', ctypes.c_ubyte),
+    ('mac_address', ctypes.c_char * 256),
+    ('carrier', ctypes.c_ubyte),
+    ('mtu', ctypes.c_uint16),
+    ('link_state', ctypes.c_char * 256),
+    ('link_speed', ctypes.c_uint32),
+    ('active_fec', ctypes.c_uint32),
+    ('autoneg', ctypes.c_char * 256),
+    ('pause_autoneg', ctypes.c_char * 256),
+    ('pause_rx', ctypes.c_char * 256),
+    ('pause_tx', ctypes.c_char * 256),
+]
+
+amdsmi_nic_port_t = struct_c__SA_amdsmi_nic_port_t
+class struct_c__SA_amdsmi_nic_port_info_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_nic_port_info_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_nic_port_info_t._fields_ = [
+    ('num_ports', ctypes.c_uint32),
+    ('PADDING_0', ctypes.c_ubyte * 4),
+    ('ports', struct_c__SA_amdsmi_nic_port_t * 32),
+]
+
+amdsmi_nic_port_info_t = struct_c__SA_amdsmi_nic_port_info_t
+class struct_c__SA_amdsmi_nic_driver_info_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_nic_driver_info_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_nic_driver_info_t._fields_ = [
+    ('name', ctypes.c_char * 256),
+    ('version', ctypes.c_char * 256),
+]
+
+amdsmi_nic_driver_info_t = struct_c__SA_amdsmi_nic_driver_info_t
+class struct_c__SA_amdsmi_nic_rdma_port_info_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_nic_rdma_port_info_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_nic_rdma_port_info_t._fields_ = [
+    ('netdev', ctypes.c_char * 256),
+    ('state', ctypes.c_char * 256),
+    ('rdma_port', ctypes.c_ubyte),
+    ('PADDING_0', ctypes.c_ubyte),
+    ('max_mtu', ctypes.c_uint16),
+    ('active_mtu', ctypes.c_uint16),
+]
+
+amdsmi_nic_rdma_port_info_t = struct_c__SA_amdsmi_nic_rdma_port_info_t
+class struct_c__SA_amdsmi_nic_rdma_dev_info_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_nic_rdma_dev_info_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_nic_rdma_dev_info_t._fields_ = [
+    ('rdma_dev', ctypes.c_char * 256),
+    ('node_guid', ctypes.c_char * 256),
+    ('node_type', ctypes.c_char * 256),
+    ('sys_image_guid', ctypes.c_char * 256),
+    ('fw_ver', ctypes.c_char * 256),
+    ('num_rdma_ports', ctypes.c_ubyte),
+    ('PADDING_0', ctypes.c_ubyte),
+    ('rdma_port_info', struct_c__SA_amdsmi_nic_rdma_port_info_t * 32),
+]
+
+amdsmi_nic_rdma_dev_info_t = struct_c__SA_amdsmi_nic_rdma_dev_info_t
+class struct_c__SA_amdsmi_nic_rdma_devices_info_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_nic_rdma_devices_info_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_nic_rdma_devices_info_t._fields_ = [
+    ('num_rdma_dev', ctypes.c_ubyte),
+    ('PADDING_0', ctypes.c_ubyte),
+    ('rdma_dev_info', struct_c__SA_amdsmi_nic_rdma_dev_info_t * 32),
+]
+
+amdsmi_nic_rdma_devices_info_t = struct_c__SA_amdsmi_nic_rdma_devices_info_t
 uint64_t = ctypes.c_uint64
 amdsmi_init = _libraries['libamdsmi.so'].amdsmi_init
 amdsmi_init.restype = amdsmi_status_t
@@ -3105,7 +3395,7 @@ amdsmi_shut_down.restype = amdsmi_status_t
 amdsmi_shut_down.argtypes = []
 amdsmi_get_processor_type = _libraries['libamdsmi.so'].amdsmi_get_processor_type
 amdsmi_get_processor_type.restype = amdsmi_status_t
-amdsmi_get_processor_type.argtypes = [amdsmi_processor_handle, ctypes.POINTER(c__EA_processor_type_t)]
+amdsmi_get_processor_type.argtypes = [amdsmi_processor_handle, ctypes.POINTER(c__EA_amdsmi_processor_type_t)]
 uint32_t = ctypes.c_uint32
 amdsmi_get_processor_handle_from_index = _libraries['libamdsmi.so'].amdsmi_get_processor_handle_from_index
 amdsmi_get_processor_handle_from_index.restype = amdsmi_status_t
@@ -3129,6 +3419,9 @@ amdsmi_get_processor_handle_from_bdf.argtypes = [amdsmi_bdf_t, ctypes.POINTER(ct
 amdsmi_get_gpu_device_bdf = _libraries['libamdsmi.so'].amdsmi_get_gpu_device_bdf
 amdsmi_get_gpu_device_bdf.restype = amdsmi_status_t
 amdsmi_get_gpu_device_bdf.argtypes = [amdsmi_processor_handle, ctypes.POINTER(union_c__UA_amdsmi_bdf_t)]
+amdsmi_get_processor_bdf = _libraries['libamdsmi.so'].amdsmi_get_processor_bdf
+amdsmi_get_processor_bdf.restype = amdsmi_status_t
+amdsmi_get_processor_bdf.argtypes = [amdsmi_processor_handle, ctypes.POINTER(union_c__UA_amdsmi_bdf_t)]
 amdsmi_get_processor_handle_from_uuid = _libraries['libamdsmi.so'].amdsmi_get_processor_handle_from_uuid
 amdsmi_get_processor_handle_from_uuid.restype = amdsmi_status_t
 amdsmi_get_processor_handle_from_uuid.argtypes = [ctypes.POINTER(ctypes.c_char), ctypes.POINTER(ctypes.POINTER(None))]
@@ -3156,6 +3449,12 @@ amdsmi_get_vf_bdf.argtypes = [amdsmi_vf_handle_t, ctypes.POINTER(union_c__UA_amd
 amdsmi_get_vf_uuid = _libraries['libamdsmi.so'].amdsmi_get_vf_uuid
 amdsmi_get_vf_uuid.restype = amdsmi_status_t
 amdsmi_get_vf_uuid.argtypes = [amdsmi_vf_handle_t, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_char)]
+amdsmi_get_nic_device_bdf = _libraries['libamdsmi.so'].amdsmi_get_nic_device_bdf
+amdsmi_get_nic_device_bdf.restype = amdsmi_status_t
+amdsmi_get_nic_device_bdf.argtypes = [amdsmi_processor_handle, ctypes.POINTER(union_c__UA_amdsmi_bdf_t)]
+amdsmi_get_processor_handles_by_type = _libraries['libamdsmi.so'].amdsmi_get_processor_handles_by_type
+amdsmi_get_processor_handles_by_type.restype = amdsmi_status_t
+amdsmi_get_processor_handles_by_type.argtypes = [amdsmi_socket_handle, amdsmi_processor_type_t, ctypes.POINTER(ctypes.POINTER(None)), ctypes.POINTER(ctypes.c_uint32)]
 amdsmi_get_lib_version = _libraries['libamdsmi.so'].amdsmi_get_lib_version
 amdsmi_get_lib_version.restype = amdsmi_status_t
 amdsmi_get_lib_version.argtypes = [ctypes.POINTER(struct_c__SA_amdsmi_version_t)]
@@ -3343,6 +3642,33 @@ amdsmi_clear_vf_fb.argtypes = [amdsmi_vf_handle_t]
 amdsmi_set_num_vf = _libraries['libamdsmi.so'].amdsmi_set_num_vf
 amdsmi_set_num_vf.restype = amdsmi_status_t
 amdsmi_set_num_vf.argtypes = [amdsmi_processor_handle, uint32_t]
+amdsmi_get_nic_driver_info = _libraries['libamdsmi.so'].amdsmi_get_nic_driver_info
+amdsmi_get_nic_driver_info.restype = amdsmi_status_t
+amdsmi_get_nic_driver_info.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_c__SA_amdsmi_nic_driver_info_t)]
+amdsmi_get_nic_asic_info = _libraries['libamdsmi.so'].amdsmi_get_nic_asic_info
+amdsmi_get_nic_asic_info.restype = amdsmi_status_t
+amdsmi_get_nic_asic_info.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_c__SA_amdsmi_nic_asic_info_t)]
+amdsmi_get_nic_bus_info = _libraries['libamdsmi.so'].amdsmi_get_nic_bus_info
+amdsmi_get_nic_bus_info.restype = amdsmi_status_t
+amdsmi_get_nic_bus_info.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_c__SA_amdsmi_nic_bus_info_t)]
+amdsmi_get_nic_numa_info = _libraries['libamdsmi.so'].amdsmi_get_nic_numa_info
+amdsmi_get_nic_numa_info.restype = amdsmi_status_t
+amdsmi_get_nic_numa_info.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_c__SA_amdsmi_nic_numa_info_t)]
+amdsmi_get_nic_port_info = _libraries['libamdsmi.so'].amdsmi_get_nic_port_info
+amdsmi_get_nic_port_info.restype = amdsmi_status_t
+amdsmi_get_nic_port_info.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_c__SA_amdsmi_nic_port_info_t)]
+amdsmi_get_nic_rdma_dev_info = _libraries['libamdsmi.so'].amdsmi_get_nic_rdma_dev_info
+amdsmi_get_nic_rdma_dev_info.restype = amdsmi_status_t
+amdsmi_get_nic_rdma_dev_info.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_c__SA_amdsmi_nic_rdma_devices_info_t)]
+amdsmi_get_nic_port_statistics = _libraries['libamdsmi.so'].amdsmi_get_nic_port_statistics
+amdsmi_get_nic_port_statistics.restype = amdsmi_status_t
+amdsmi_get_nic_port_statistics.argtypes = [amdsmi_processor_handle, uint32_t, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(struct_c__SA_amdsmi_nic_stat_t)]
+amdsmi_get_nic_vendor_statistics = _libraries['libamdsmi.so'].amdsmi_get_nic_vendor_statistics
+amdsmi_get_nic_vendor_statistics.restype = amdsmi_status_t
+amdsmi_get_nic_vendor_statistics.argtypes = [amdsmi_processor_handle, uint32_t, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(struct_c__SA_amdsmi_nic_stat_t)]
+amdsmi_get_nic_rdma_port_statistics = _libraries['libamdsmi.so'].amdsmi_get_nic_rdma_port_statistics
+amdsmi_get_nic_rdma_port_statistics.restype = amdsmi_status_t
+amdsmi_get_nic_rdma_port_statistics.argtypes = [amdsmi_processor_handle, uint32_t, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(struct_c__SA_amdsmi_nic_stat_t)]
 __all__ = \
     ['AMDSMI_ACCELERATOR_DECODER', 'AMDSMI_ACCELERATOR_DMA',
     'AMDSMI_ACCELERATOR_ENCODER', 'AMDSMI_ACCELERATOR_JPEG',
@@ -3580,6 +3906,8 @@ __all__ = \
     'AMDSMI_EVENT_SCHED_SAVE_GPU_STATE_FAIL',
     'AMDSMI_EVENT_SCHED_SHUTDOWN_VF_FAIL',
     'AMDSMI_EVENT_SCHED_WORLD_SWITCH_FAIL', 'AMDSMI_EVENT_SCHED__MAX',
+    'AMDSMI_EVENT_THROTTLER_HBM', 'AMDSMI_EVENT_THROTTLER_PROCHOT',
+    'AMDSMI_EVENT_THROTTLER_SOCKET', 'AMDSMI_EVENT_THROTTLER_VR',
     'AMDSMI_EVENT_VBIOS_CHECKSUM_ERR',
     'AMDSMI_EVENT_VBIOS_GET_FW_INFO_FAIL',
     'AMDSMI_EVENT_VBIOS_GET_TBL_REVISION_FAIL',
@@ -3824,11 +4152,9 @@ __all__ = \
     'AMDSMI_METRIC_UNIT_PCIE_GEN', 'AMDSMI_METRIC_UNIT_PCIE_LANES',
     'AMDSMI_METRIC_UNIT_PERCENT', 'AMDSMI_METRIC_UNIT_UINT',
     'AMDSMI_METRIC_UNIT_UNKNOWN', 'AMDSMI_METRIC_UNIT_WATT',
-    'AMDSMI_MM_UVD', 'AMDSMI_MM_VCE', 'AMDSMI_MM_VCN',
-    'AMDSMI_MM__MAX', 'AMDSMI_PROCESSOR_TYPE_AMD_APU',
-    'AMDSMI_PROCESSOR_TYPE_AMD_CPU',
+    'AMDSMI_PROCESSOR_TYPE_AMD_APU', 'AMDSMI_PROCESSOR_TYPE_AMD_CPU',
     'AMDSMI_PROCESSOR_TYPE_AMD_CPU_CORE',
-    'AMDSMI_PROCESSOR_TYPE_AMD_GPU',
+    'AMDSMI_PROCESSOR_TYPE_AMD_GPU', 'AMDSMI_PROCESSOR_TYPE_AMD_NIC',
     'AMDSMI_PROCESSOR_TYPE_NON_AMD_CPU',
     'AMDSMI_PROCESSOR_TYPE_NON_AMD_GPU',
     'AMDSMI_PROCESSOR_TYPE_UNKNOWN',
@@ -3868,7 +4194,55 @@ __all__ = \
     'AMDSMI_STATUS_SETTING_UNAVAILABLE', 'AMDSMI_STATUS_SUCCESS',
     'AMDSMI_STATUS_TIMEOUT', 'AMDSMI_STATUS_UNEXPECTED_DATA',
     'AMDSMI_STATUS_UNEXPECTED_SIZE', 'AMDSMI_STATUS_UNKNOWN_ERROR',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_FIRST',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_IBC',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_IBC_HSC',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_LAST',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_OAM_0_1_2_3_3V3_VR',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_OAM_0_1_HSC',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_OAM_2_3_HSC',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_OAM_4_5_6_7_3V3_VR',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_OAM_4_5_HSC',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_OAM_6_7_HSC',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_RETIMER_0_1_0V9_VR',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_RETIMER_0_1_2_3_1V2_VR',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_RETIMER_2_3_0V9_VR',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_RETIMER_4_5_0V9_VR',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_RETIMER_4_5_6_7_1V2_VR',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_RETIMER_6_7_0V9_VR',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_BACK',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_FPGA',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_FPGA_0V72_VR',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_FPGA_3V3_VR',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_FRONT',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_IBC',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_OAM1',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_OAM7',
+    'AMDSMI_TEMPERATURE_TYPE_BASEBOARD_UBB_UFPGA',
     'AMDSMI_TEMPERATURE_TYPE_EDGE', 'AMDSMI_TEMPERATURE_TYPE_FIRST',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_FIRST',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_LAST',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_OAM_X_04_HBM_B_VR',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_OAM_X_04_HBM_D_VR',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_OAM_X_IBC',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_OAM_X_IBC_2',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_OAM_X_VDD18_VR',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_RETIMER_X',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_11_HBM_B',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_11_HBM_D',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_SOCIO_A',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_SOCIO_C',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_SOC_A',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_SOC_C',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_VDD0',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_VDD1',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_VDD2',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDCR_VDD3',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDDIO_11_E32',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDD_085_HBM',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VDD_USR',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VR_FIRST',
+    'AMDSMI_TEMPERATURE_TYPE_GPUBOARD_VR_LAST',
     'AMDSMI_TEMPERATURE_TYPE_HBM_0', 'AMDSMI_TEMPERATURE_TYPE_HBM_1',
     'AMDSMI_TEMPERATURE_TYPE_HBM_2', 'AMDSMI_TEMPERATURE_TYPE_HBM_3',
     'AMDSMI_TEMPERATURE_TYPE_HOTSPOT',
@@ -3910,9 +4284,9 @@ __all__ = \
     'AMDSMI_VRAM_TYPE_GDDR7', 'AMDSMI_VRAM_TYPE_HBM',
     'AMDSMI_VRAM_TYPE_HBM2', 'AMDSMI_VRAM_TYPE_HBM2E',
     'AMDSMI_VRAM_TYPE_HBM3', 'AMDSMI_VRAM_TYPE_HBM3E',
-    'AMDSMI_VRAM_TYPE_UNKNOWN', 'AMDSMI_XGMI_FB_SHARING_MODE_1',
-    'AMDSMI_XGMI_FB_SHARING_MODE_2', 'AMDSMI_XGMI_FB_SHARING_MODE_4',
-    'AMDSMI_XGMI_FB_SHARING_MODE_8',
+    'AMDSMI_VRAM_TYPE_UNKNOWN', 'AMDSMI_VRAM_TYPE__MAX',
+    'AMDSMI_XGMI_FB_SHARING_MODE_1', 'AMDSMI_XGMI_FB_SHARING_MODE_2',
+    'AMDSMI_XGMI_FB_SHARING_MODE_4', 'AMDSMI_XGMI_FB_SHARING_MODE_8',
     'AMDSMI_XGMI_FB_SHARING_MODE_CUSTOM',
     'AMDSMI_XGMI_FB_SHARING_MODE_UNKNOWN',
     'amdsmi_accelerator_partition_profile_config_global_t',
@@ -3986,17 +4360,25 @@ __all__ = \
     'amdsmi_get_guest_data', 'amdsmi_get_index_from_processor_handle',
     'amdsmi_get_lib_version', 'amdsmi_get_link_metrics',
     'amdsmi_get_link_topology', 'amdsmi_get_link_topology_nearest',
-    'amdsmi_get_num_vf', 'amdsmi_get_partition_profile_info',
-    'amdsmi_get_pcie_info', 'amdsmi_get_power_cap_info',
-    'amdsmi_get_power_info', 'amdsmi_get_processor_handle_from_bdf',
+    'amdsmi_get_nic_asic_info', 'amdsmi_get_nic_bus_info',
+    'amdsmi_get_nic_device_bdf', 'amdsmi_get_nic_driver_info',
+    'amdsmi_get_nic_numa_info', 'amdsmi_get_nic_port_info',
+    'amdsmi_get_nic_port_statistics', 'amdsmi_get_nic_rdma_dev_info',
+    'amdsmi_get_nic_rdma_port_statistics',
+    'amdsmi_get_nic_vendor_statistics', 'amdsmi_get_num_vf',
+    'amdsmi_get_partition_profile_info', 'amdsmi_get_pcie_info',
+    'amdsmi_get_power_cap_info', 'amdsmi_get_power_info',
+    'amdsmi_get_processor_bdf',
+    'amdsmi_get_processor_handle_from_bdf',
     'amdsmi_get_processor_handle_from_index',
     'amdsmi_get_processor_handle_from_uuid',
-    'amdsmi_get_processor_handles', 'amdsmi_get_processor_type',
-    'amdsmi_get_soc_pstate', 'amdsmi_get_socket_handles',
-    'amdsmi_get_socket_info', 'amdsmi_get_temp_metric',
-    'amdsmi_get_vf_bdf', 'amdsmi_get_vf_data',
-    'amdsmi_get_vf_fw_info', 'amdsmi_get_vf_handle_from_bdf',
-    'amdsmi_get_vf_handle_from_uuid',
+    'amdsmi_get_processor_handles',
+    'amdsmi_get_processor_handles_by_type',
+    'amdsmi_get_processor_type', 'amdsmi_get_soc_pstate',
+    'amdsmi_get_socket_handles', 'amdsmi_get_socket_info',
+    'amdsmi_get_temp_metric', 'amdsmi_get_vf_bdf',
+    'amdsmi_get_vf_data', 'amdsmi_get_vf_fw_info',
+    'amdsmi_get_vf_handle_from_bdf', 'amdsmi_get_vf_handle_from_uuid',
     'amdsmi_get_vf_handle_from_vf_index', 'amdsmi_get_vf_info',
     'amdsmi_get_vf_partition_info', 'amdsmi_get_vf_uuid',
     'amdsmi_get_xgmi_fb_sharing_caps',
@@ -4026,10 +4408,19 @@ __all__ = \
     'amdsmi_metric_res_subgroup_t__enumvalues', 'amdsmi_metric_t',
     'amdsmi_metric_type_t', 'amdsmi_metric_type_t__enumvalues',
     'amdsmi_metric_unit_t', 'amdsmi_metric_unit_t__enumvalues',
+    'amdsmi_nic_asic_info_t', 'amdsmi_nic_bus_info_t',
+    'amdsmi_nic_driver_info_t', 'amdsmi_nic_fw_info_t',
+    'amdsmi_nic_fw_t', 'amdsmi_nic_numa_info_t',
+    'amdsmi_nic_port_info_t', 'amdsmi_nic_port_t',
+    'amdsmi_nic_rdma_dev_info_t', 'amdsmi_nic_rdma_devices_info_t',
+    'amdsmi_nic_rdma_port_info_t', 'amdsmi_nic_stat_t',
     'amdsmi_nps_caps_t', 'amdsmi_p2p_capability_t',
     'amdsmi_partition_info_t', 'amdsmi_pcie_info_t',
     'amdsmi_pf_fb_info_t', 'amdsmi_power_cap_info_t',
-    'amdsmi_power_info_t', 'amdsmi_processor_handle',
+    'amdsmi_power_info_t', 'amdsmi_pp_throttler_type_t',
+    'amdsmi_pp_throttler_type_t__enumvalues',
+    'amdsmi_processor_handle', 'amdsmi_processor_type_t',
+    'amdsmi_processor_type_t__enumvalues',
     'amdsmi_profile_capability_type_t',
     'amdsmi_profile_capability_type_t__enumvalues',
     'amdsmi_profile_caps_info_t', 'amdsmi_profile_info_t',
@@ -4085,6 +4476,8 @@ __all__ = \
     'c__EA_amdsmi_metric_res_group_t',
     'c__EA_amdsmi_metric_res_subgroup_t',
     'c__EA_amdsmi_metric_type_t', 'c__EA_amdsmi_metric_unit_t',
+    'c__EA_amdsmi_pp_throttler_type_t',
+    'c__EA_amdsmi_processor_type_t',
     'c__EA_amdsmi_profile_capability_type_t',
     'c__EA_amdsmi_sched_block_t', 'c__EA_amdsmi_status_t',
     'c__EA_amdsmi_temperature_metric_t',
@@ -4092,9 +4485,8 @@ __all__ = \
     'c__EA_amdsmi_vf_config_flags_t', 'c__EA_amdsmi_vf_mode_t',
     'c__EA_amdsmi_vf_sched_state_t',
     'c__EA_amdsmi_virtualization_mode_t', 'c__EA_amdsmi_vram_type_t',
-    'c__EA_amdsmi_xgmi_fb_sharing_mode_t', 'c__EA_processor_type_t',
-    'int64_t', 'processor_type_t', 'processor_type_t__enumvalues',
-    'size_t', 'struct__links', 'struct_bdf_',
+    'c__EA_amdsmi_xgmi_fb_sharing_mode_t', 'int64_t', 'size_t',
+    'struct__links', 'struct_bdf_',
     'struct_c__SA_amdsmi_accelerator_partition_profile_config_global_t',
     'struct_c__SA_amdsmi_accelerator_partition_profile_config_t',
     'struct_c__SA_amdsmi_accelerator_partition_profile_global_t',
@@ -4131,6 +4523,18 @@ __all__ = \
     'struct_c__SA_amdsmi_link_topology_t',
     'struct_c__SA_amdsmi_memory_partition_config_t',
     'struct_c__SA_amdsmi_metric_t',
+    'struct_c__SA_amdsmi_nic_asic_info_t',
+    'struct_c__SA_amdsmi_nic_bus_info_t',
+    'struct_c__SA_amdsmi_nic_driver_info_t',
+    'struct_c__SA_amdsmi_nic_fw_info_t',
+    'struct_c__SA_amdsmi_nic_fw_t',
+    'struct_c__SA_amdsmi_nic_numa_info_t',
+    'struct_c__SA_amdsmi_nic_port_info_t',
+    'struct_c__SA_amdsmi_nic_port_t',
+    'struct_c__SA_amdsmi_nic_rdma_dev_info_t',
+    'struct_c__SA_amdsmi_nic_rdma_devices_info_t',
+    'struct_c__SA_amdsmi_nic_rdma_port_info_t',
+    'struct_c__SA_amdsmi_nic_stat_t',
     'struct_c__SA_amdsmi_p2p_capability_t',
     'struct_c__SA_amdsmi_partition_info_t',
     'struct_c__SA_amdsmi_pcie_info_t',
@@ -4141,6 +4545,7 @@ __all__ = \
     'struct_c__SA_amdsmi_profile_info_t',
     'struct_c__SA_amdsmi_profile_info_t_0',
     'struct_c__SA_amdsmi_ras_feature_t',
+    'struct_c__SA_amdsmi_ras_feature_t_0',
     'struct_c__SA_amdsmi_sched_info_t',
     'struct_c__SA_amdsmi_topology_nearest_t',
     'struct_c__SA_amdsmi_vbios_info_t',

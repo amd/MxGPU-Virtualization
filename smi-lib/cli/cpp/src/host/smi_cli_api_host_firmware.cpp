@@ -287,7 +287,7 @@ int AmdSmiApiHost::amdsmi_firmware_vf_fw_list_command(std::string device, Argume
 	host_amdsmi_get_vf_handle_from_bdf(vf_bdf, &vf_handle);
 
 	if (arg.output == human) {
-		out_put += fwListTemplate;
+		out_put += fwListVfTemplate;
 	}
 
 	ret = host_amdsmi_get_vf_fw_info(vf_handle, &fw_info);
@@ -320,7 +320,7 @@ int AmdSmiApiHost::amdsmi_firmware_vf_fw_list_command(std::string device, Argume
 							   fw_version_str.c_str());
 			} else {
 				out_put += string_format(
-							   fwTemplate, fw_iterator, fw_name_str.c_str(),
+							   fwVfTemplate, fw_iterator, fw_name_str.c_str(),
 							   fw_version_str.c_str());
 			}
 		}

@@ -18,7 +18,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#include "interface/amdsmi.h"
+#include "amdsmi_guest.h"
 #include "smi_cli_api_guest.h"
 #include "smi_cli_helpers.h"
 #include "smi_cli_parser.h"
@@ -72,6 +72,8 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_ACTIVITY)(amdsmi_processor_handle,
 		amdsmi_engine_usage_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_POWER_INFO)(amdsmi_processor_handle,
 		amdsmi_power_info_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_POWER_CAP_INFO)(amdsmi_processor_handle,
+		 uint32_t, amdsmi_power_cap_info_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_CLOCK_INFO)(amdsmi_processor_handle, amdsmi_clk_type_t,
 		amdsmi_clk_info_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_TEMP_METRIC)(amdsmi_processor_handle,
@@ -107,6 +109,7 @@ AMDSMI_GET_PCIE_INFO guest_amdsmi_get_pcie_info;
 AMDSMI_GET_GPU_RAS_FEATURE_INFO guest_amdsmi_get_gpu_ras_feature_info;
 AMDSMI_GET_GPU_ACTIVITY guest_amdsmi_get_gpu_activity;
 AMDSMI_GET_POWER_INFO guest_amdsmi_get_power_info;
+AMDSMI_GET_POWER_CAP_INFO guest_amdsmi_get_power_cap_info;
 AMDSMI_GET_CLOCK_INFO guest_amdsmi_get_clock_info;
 AMDSMI_GET_TEMP_METRIC guest_amdsmi_get_temp_metric;
 AMDSMI_GET_GPU_TOTAL_ECC_COUNT guest_amdsmi_get_gpu_total_ecc_count;
@@ -173,6 +176,8 @@ AmdSmiApiGuest::AmdSmiApiGuest()
 		(AMDSMI_GET_GPU_ACTIVITY)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_gpu_activity");
 	guest_amdsmi_get_power_info =
 		(AMDSMI_GET_POWER_INFO)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_power_info");
+	guest_amdsmi_get_power_cap_info =
+		(AMDSMI_GET_POWER_CAP_INFO)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_power_cap_info");
 	guest_amdsmi_get_clock_info =
 		(AMDSMI_GET_CLOCK_INFO)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_clock_info");
 	guest_amdsmi_get_temp_metric =

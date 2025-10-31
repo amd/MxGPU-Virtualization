@@ -86,14 +86,26 @@ protected:
 TEST_F(AmdSmiFirmwareVbiosTests, InvalidParams)
 {
 	int ret;
+	amdsmi_vbios_info_t vbios;
+	amdsmi_board_info_t board;
+	amdsmi_fw_info_t fw;
 
 	ret = amdsmi_get_gpu_vbios_info(&GPU_MOCK_HANDLE, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_gpu_vbios_info(&NIC_MOCK_HANDLE, &vbios);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_get_gpu_board_info(&GPU_MOCK_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+	ret = amdsmi_get_gpu_board_info(&NIC_MOCK_HANDLE, &board);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
 	ret = amdsmi_get_fw_info(&GPU_MOCK_HANDLE, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_fw_info(&NIC_MOCK_HANDLE, &fw);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
 

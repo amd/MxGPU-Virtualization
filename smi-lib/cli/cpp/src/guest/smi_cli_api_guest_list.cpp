@@ -19,7 +19,7 @@
  * SOFTWARE.
  */
 
-#include "interface/amdsmi.h"
+#include "amdsmi_guest.h"
 #include "smi_cli_api_guest.h"
 #include "smi_cli_helpers.h"
 #include "smi_cli_parser.h"

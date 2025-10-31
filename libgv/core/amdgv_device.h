@@ -574,6 +574,7 @@ struct amdgv_vmhub {
 #define AMDGV_WS_MODE_MANUAL	1
 #define AMDGV_WS_MODE_AUTO	2
 
+#define amdgv_in_live_update_seq() (adapt->opt.skip_hw_init)
 
 struct amdgv_ip_map_info {
 	/* Map of logical to actual dev instances */

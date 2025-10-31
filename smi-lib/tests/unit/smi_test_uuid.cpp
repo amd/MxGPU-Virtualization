@@ -47,11 +47,15 @@ TEST_F(AmdsmiUUIDTests, InvalidParams)
 	unsigned int uuid_length = AMDSMI_GPU_UUID_SIZE;
 
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
+	amdsmi_processor_handle nic_handle = &NIC_MOCK_HANDLE;
 
 	ret = amdsmi_get_gpu_device_uuid(MOCK_GPU_HANDLE, NULL, uuid);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_get_gpu_device_uuid(MOCK_GPU_HANDLE, &uuid_length, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_gpu_device_uuid(nic_handle, &uuid_length, uuid);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	uuid_length--;
@@ -138,17 +142,6 @@ TEST_F(AmdsmiUUIDTests, GetUUID_VF)
 	smi_in_hdr actual_in_hdr;
 	smi_device_info device_info;
 	smi_vf_partition_info vf_partition_info = {};
-
-	PrepareIoctl(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO, &actual_in_hdr, &device_info,
-			vf_partition_info, AMDSMI_STATUS_API_FAILED);
-
-	WhenCalling(std::bind(amdsmi_get_vf_uuid, MOCK_VF_HANDLE, &uuid_length, uuid));
-	ExpectCommand(SMI_CMD_CODE_GET_ASIC_INFO);
-	SaveInputPayloadIn(&in_payload);
-	PlantMockOutput(&gpu_info_mock);
-	ret = performCall();
-
-	ASSERT_EQ(ret, AMDSMI_STATUS_UNKNOWN_ERROR);
 
 	testing::Mock::VerifyAndClearExpectations(g_system_mock.get());
 

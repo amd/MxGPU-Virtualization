@@ -17,7 +17,7 @@
  * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-#include "interface/amdsmi.h"
+#include "amdsmi_guest.h"
 #include "smi_cli_api_guest.h"
 #include "smi_cli_parser.h"
 #include "smi_cli_device.h"
