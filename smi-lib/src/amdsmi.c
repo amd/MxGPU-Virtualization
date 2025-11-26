@@ -4276,6 +4276,7 @@ amdsmi_status_t amdsmi_get_xgmi_plpd(amdsmi_processor_handle processor_handle,
 	uint32_t i;
 	enum smi_processor_type type;
 	struct smi_gpu_handle *dev_handle = NULL;
+	system_wrapper *sys_wrapper = get_system_wrapper();
 
 	AMDSMI_ESCAPE_IF_NOT_INIT;
 
@@ -4314,8 +4315,10 @@ amdsmi_status_t amdsmi_get_xgmi_plpd(amdsmi_processor_handle processor_handle,
 #ifdef _WIN64
 	strncpy_s(xgmi_plpd->policies[i].policy_description, sizeof(xgmi_plpd->policies[i].policy_description), dpm_policy->policies[i].policy_description, AMDSMI_MAX_STRING_LENGTH);
 #else
-	strncpy(xgmi_plpd->policies[i].policy_description, dpm_policy->policies[i].policy_description, AMDSMI_MAX_STRING_LENGTH);
-	xgmi_plpd->policies[i].policy_description[sizeof(xgmi_plpd->policies[i].policy_description) - 1] = '\0';
+	sys_wrapper->smi_strncpy(xgmi_plpd->policies[i].policy_description,
+					 sizeof(xgmi_plpd->policies[i].policy_description),
+					 dpm_policy->policies[i].policy_description,
+					 AMDSMI_MAX_STRING_LENGTH);
 #endif
 	}
 

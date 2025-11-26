@@ -3324,12 +3324,4 @@ int amdgv_error_ring_buffer_dump(amdgv_dev_t dev, char *buf, int len);
  * true for yes, false for not.
  */
 bool amdgv_is_service_vm_enabled(amdgv_dev_t dev);
-
-/*
- * amdgv_reset_vf_arbiters - reset vf arbiters
- *
- * @dev:	amdgv device handle
- *
- */
-int amdgv_reset_vf_arbiters(amdgv_dev_t dev, uint32_t idx_vf);
 #endif

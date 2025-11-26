@@ -2243,6 +2243,9 @@ static bool amdgv_psp_is_error_injection_valid(struct amdgv_adapter *adapt,
 	case TA_RAS_BLOCK__MMHUB:
 	case TA_RAS_BLOCK__XGMI_WAFL:
 	case TA_RAS_BLOCK__PCIE_BIF:
+	case TA_RAS_BLOCK__VCN:
+	case TA_RAS_BLOCK__JPEG:
+	case TA_RAS_BLOCK__MMSCH:
 		ret = true;
 		break;
 	default:
@@ -2755,6 +2758,7 @@ enum psp_status amdgv_psp_xgmi_get_peer_link_info(struct amdgv_adapter *adapt,
 	}
 
 	/* Copy peer info */
+	link_info->num_links = 0;
 	for (i = 0; i < peer_link_info->num_nodes; i++) {
 		if (peer_link_info->nodes[i].num_links > TA_XGMI__MAX_PORT_NUM) {
 			AMDGV_ERROR("Invalid XGMI Link Info on node %d\n", i);

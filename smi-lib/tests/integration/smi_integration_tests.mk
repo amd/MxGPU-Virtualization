@@ -49,6 +49,11 @@ CXXFLAGS = -std=c++17 $(DEFAULT_CXXFLAGS) $(INCLUDE) -pthread
 LDPATH = $(addprefix -L,$(BUILD_DIR)/amdsmi/$(BUILD_TYPE))
 LDFLAGS = -lgtest -lgtest_main -pthread -lamdsmi
 
+GCC_MAJOR := $(shell $(CXX) -dumpversion | cut -d. -f1)
+ifeq ($(shell test $(GCC_MAJOR) -lt 9; echo $$?),0)
+    LDFLAGS += -lstdc++fs
+endif
+
 ifeq ($(BUILD_TYPE), Debug)
 	CXXFLAGS += -g
 else

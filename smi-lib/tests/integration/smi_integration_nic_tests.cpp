@@ -139,8 +139,10 @@ TEST_F(AmdSmiNicIntegrationTests, NicBusInfoTest)
 		if (ret == AMDSMI_STATUS_SUCCESS) {
 			std::cout << "NIC " << i << " Bus Info:" << std::endl;
 			printf("  BDF: %04x:%02x:%02x.%1x\n", 
-				(unsigned int)bus_info.bdf.bdf.domain_number, bus_info.bdf.bdf.bus_number,
-				bus_info.bdf.bdf.device_number, bus_info.bdf.bdf.function_number);
+				(unsigned int)bus_info.bdf.bdf.domain_number,
+				(unsigned int)bus_info.bdf.bdf.bus_number,
+				(unsigned int)bus_info.bdf.bdf.device_number,
+				(unsigned int)bus_info.bdf.bdf.function_number);
 			std::cout << "  Max PCIe Width: " << (int)bus_info.max_pcie_width << std::endl;
 			std::cout << "  Max PCIe Speed: " << bus_info.max_pcie_speed << " GT/s" << std::endl;
 
@@ -453,8 +455,10 @@ static void nic_walkthrough_test(amdsmi_processor_handle *nic_processors, uint32
 		ASSERT_EQ(amdsmi_get_nic_bus_info(nic_processors[i], &bus_info), AMDSMI_STATUS_SUCCESS);
 		if (verbose) {
 			printf("       BDF: %04x:%02x:%02x.%1x\n",
-				(unsigned int)bus_info.bdf.bdf.domain_number, bus_info.bdf.bdf.bus_number,
-				bus_info.bdf.bdf.device_number, bus_info.bdf.bdf.function_number);
+				(unsigned int)bus_info.bdf.bdf.domain_number,
+				(unsigned int)bus_info.bdf.bdf.bus_number,
+				(unsigned int)bus_info.bdf.bdf.device_number,
+				(unsigned int)bus_info.bdf.bdf.function_number);
 			std::cout << "       Max PCIe Width: " << (int)bus_info.max_pcie_width << " lanes" << std::endl;
 			std::cout << "       Max PCIe Speed: " << bus_info.max_pcie_speed << " GT/s" << std::endl;
 		}

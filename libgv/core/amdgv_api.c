@@ -4272,20 +4272,3 @@ int AMDGV_API amdgv_unmap_sysmem(amdgv_dev_t dev,
 	oss_mutex_unlock(adapt->api_lock);
 	return ret;
 }
-
-int AMDGV_API amdgv_reset_vf_arbiters(amdgv_dev_t dev, uint32_t idx_vf)
-{
-	struct amdgv_adapter *adapt;
-	int ret = 0;
-
-	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
-
-	oss_mutex_lock(adapt->api_lock);
-
-	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->reset_vf_arbiters)
-		ret = adapt->pp.pp_funcs->reset_vf_arbiters(adapt, idx_vf);
-
-	oss_mutex_unlock(adapt->api_lock);
-
-	return ret;
-}

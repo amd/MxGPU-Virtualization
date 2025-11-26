@@ -27,6 +27,7 @@ THREAD_SANITIZER ?= False
 ADDRESS_SANITIZER ?= False
 CPPTOOL_BUILD ?= False
 ENABLE_GCOV ?= False
+
 ifeq ($(BUILD_TYPE), Debug)
   LOGGING = True
 endif
@@ -80,6 +81,11 @@ VERSION_LIB := AMDSMI_VERSION_MAJOR=$(VERSION_MAJOR) AMDSMI_VERSION_MINOR=$(VERS
 DYNAMICLIB_FLAGS = -Wl,-soname,libamdsmi.so
 DYNAMICLIB_FLAGS += -Wl,-rpath,'$$ORIGIN:/usr/local/lib'
 DYNAMICLIB_FLAGS += $(HOST_DYNAMIC_FLAGS)
+GCC_MAJOR := $(shell $(CXX) -dumpversion | cut -d. -f1)
+ifeq ($(shell test $(GCC_MAJOR) -lt 9; echo $$?),0)
+    DYNAMICLIB_FLAGS += -lstdc++fs
+endif
+
 ifeq ($(THREAD_SAFE), True)
   CFLAGS  += -DTHREAD_SAFE -pthread
   ifeq ($(THREAD_SANITIZER), True)

@@ -205,6 +205,7 @@ int amdgv_int_ras_trigger_error(struct amdgv_adapter *adapt, struct amdgv_smi_ra
 			break;
 		case TA_RAS_BLOCK__VCN:
 		case TA_RAS_BLOCK__JPEG:
+		case TA_RAS_BLOCK__MMSCH:
 			dev_mask = GET_MASK(VCN, instance_mask);
 			break;
 		default:

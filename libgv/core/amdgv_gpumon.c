@@ -1180,6 +1180,9 @@ int amdgv_gpumon_get_ras_policy_info(amdgv_dev_t dev, struct amdgv_gpumon_ras_po
 
 	if (!info)
 		return AMDGV_FAILURE;
+	/* Only supported when PMFW managed EEPROM is enabled*/
+	if (!adapt->umc.is_pmfw_managed_eeprom)
+		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
 
 	control = &adapt->eeprom_control;
 
@@ -3531,10 +3534,6 @@ int amdgv_gpumon_handle_sched_event(struct amdgv_adapter *adapt,
 			adapt->array_vf[event->data.gpumon_data.val].fb_size = 0;
 			adapt->array_vf[event->data.gpumon_data.val].fb_offset_tmr = 0;
 			adapt->array_vf[event->data.gpumon_data.val].fb_size_tmr = 0;
-
-			/* VF arbiters reset */
-			if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->reset_vf_arbiters)
-				adapt->pp.pp_funcs->reset_vf_arbiters(adapt, event->data.gpumon_data.val);
 		}
 		*event->data.gpumon_data.result = ret;
 		break;

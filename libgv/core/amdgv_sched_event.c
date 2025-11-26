@@ -1512,9 +1512,6 @@ static int amdgv_sched_handle_rel_gpu_fini(struct amdgv_adapter *adapt, uint32_t
 	adapt->array_vf[idx_vf].vf_status = AMDGV_VF_STATUS_END_UNINIT;
 	set_to_avail_vf(idx_vf);
 
-	// Attempt VF arbiters reset (covers guest driver unload)
-	amdgv_reset_vf_arbiters(adapt, idx_vf);
-
 	return ret;
 }
 
