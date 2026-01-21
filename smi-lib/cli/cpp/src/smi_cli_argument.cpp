@@ -378,6 +378,7 @@ void SmiCliArgumentFactory::initialize_help_commands()
 						   "Displays partition information of the devices (GPU only)"));
 	help_commands_.emplace("ras", SmiCliHelpCommand("ras",
 						   "Displays ras information of the devices (GPU only)"));
+	help_commands_.emplace("node", SmiCliHelpCommand("node", "Displays node information of the devices (GPU only)"));
 }
 
 // Updates the description of the argument with the given key.

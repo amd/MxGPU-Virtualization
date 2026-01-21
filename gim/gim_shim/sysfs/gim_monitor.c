@@ -156,8 +156,8 @@ static ssize_t gim_mon_psp_vbflash_show(struct file *filp, struct kobject *kobj,
 static const struct bin_attribute psp_vbflash_bin_attr = {
 	.attr = {.name = "psp_vbflash", .mode = 0664},
 	.size = 0,
-	.write = gim_mon_psp_vbflash_store,
-	.read = gim_mon_psp_vbflash_show,
+	.write = (void *)gim_mon_psp_vbflash_store,
+	.read = (void *)gim_mon_psp_vbflash_show,
 };
 
 static ssize_t gim_mon_psp_vbflash_status(struct device *dev,

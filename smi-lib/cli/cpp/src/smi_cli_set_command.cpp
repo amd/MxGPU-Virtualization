@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -100,7 +100,7 @@ void AmdSmiSetCommand::set_command()
 		std::string param{"xgmi fb-sharing-mode"};
 		int error;
 
-		if ((!AmdSmiPlatform::getInstance().is_mi300() && !AmdSmiPlatform::getInstance().is_mi200())
+		if ((!AmdSmiPlatform::getInstance().is_mi300() && !AmdSmiPlatform::getInstance().is_mi200() && !AmdSmiPlatform::getInstance().is_mi350())
 				|| !AmdSmiPlatform::getInstance().is_host()) {
 			throw SmiToolParameterNotSupportedException(param);
 		}

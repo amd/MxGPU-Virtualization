@@ -258,6 +258,11 @@ struct amdgv_gpumon_funcs {
 	int (*get_num_static_metrics_ext_entries)(struct amdgv_adapter *adapt,
 			uint32_t *entries);
 	int (*get_npm_info)(struct amdgv_adapter *adapt, struct amdgv_gpumon_npm_info *npm_info);
+	int (*ptl_query_status)(struct amdgv_adapter *adapt,
+				struct amdgv_ptl_status_info *info);
+	int (*ptl_enable)(struct amdgv_adapter *adapt,
+			  struct amdgv_ptl_enable_info *info);
+	int (*ptl_disable)(struct amdgv_adapter *adapt);
 };
 
 struct amdgv_gpumon {

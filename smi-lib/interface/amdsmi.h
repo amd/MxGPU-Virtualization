@@ -139,7 +139,7 @@ typedef enum {
     AMDSMI_PROCESSOR_TYPE_AMD_CPU_CORE,  //!< AMD CPU-Core processor type
     AMDSMI_PROCESSOR_TYPE_AMD_APU,       //!< AMD Accelerated processor type (GPU and CPU)
     AMDSMI_PROCESSOR_TYPE_AMD_NIC        //!< AMD Network Interface Card processor type
-} amdsmi_processor_type_t;
+} processor_type_t;
 
 /**
  * @brief Common defines
@@ -194,6 +194,13 @@ typedef enum {
  */
 #define AMDSMI_TIME_FORMAT "%02d:%02d:%02d.%03d"                //!< Time format string
 #define AMDSMI_DATE_FORMAT "%04d-%02d-%02d:%02d:%02d:%02d.%03d" //!< Date format string
+
+/**
+ * @brief opaque handler point to underlying implementation
+ *
+ * @cond @tag{gpu_bm_linux} @tag{host} @endcond
+ */
+typedef void *amdsmi_node_handle;
 
 /**
  * @brief Memory Partitions
@@ -606,6 +613,16 @@ typedef enum {
 } amdsmi_affinity_scope_t;
 
 /**
+ * @brief NPM status
+ *
+ * @cond @tag{gpu_bm_linux} @tag{host} @endcond
+ */
+typedef enum  {
+    AMDSMI_NPM_STATUS_DISABLED,
+    AMDSMI_NPM_STATUS_ENABLED
+} amdsmi_npm_status_t;
+
+/**
  * @brief Link Status
  *
  * @cond @tag{gpu_bm_linux} @tag{host} @endcond
@@ -924,6 +941,17 @@ typedef struct {
 } amdsmi_p2p_capability_t;
 
 /**
+ * @brief NPM info
+ *
+ * @cond @tag{gpu_bm_linux} @tag{host} @endcond
+ */
+typedef struct {
+    amdsmi_npm_status_t status; //!< NPM status (enabled/disabled).
+    uint64_t            limit;  //!< Node-level power limit in Watts.
+    uint64_t            reserved[6];
+} amdsmi_npm_info_t;
+
+/**
  * @brief GPU Cache Information
  *
  * @cond @tag{gpu_bm_linux} @tag{host} @endcond
@@ -1032,6 +1060,31 @@ typedef enum {
     AMDSMI_CPER_NOTIFY_TYPE_PEI  = 0x4214520409A9D5AC,          //!< Platform Error Interface
     AMDSMI_CPER_NOTIFY_TYPE_CXL_COMPONENT = 0x49A341DF69293BC9  //!< Compute Express Link Component Error
 } amdsmi_cper_notify_type_t;
+
+/**
+ * @brief Ras policy v4.0
+ *
+ * @cond @tag{gpu_bm_linux} @tag{host} @endcond
+ */
+typedef struct {
+    uint16_t dram_non_critical_region_threshold;    //!< Non-critical region UCE threshold
+    uint16_t dram_critical_region_threshold;        //!< Critical region UCE threshold
+} amdsmi_gpu_ras_policy_v4_0_t;
+
+/**
+ * @brief Ras policy info structure for storing version and different ras
+ *        policy version structures
+ *
+ * @cond @tag{gpu_bm_linux} @tag{host} @endcond
+ */
+typedef struct {
+    uint8_t major_version;
+    uint8_t minor_version;
+    union {
+        amdsmi_gpu_ras_policy_v4_0_t v4_0;
+        uint64_t info[5]; //!< total size of the EEPROM that can be used by the policy is 40bytes
+    } policy_data;
+} amdsmi_gpu_ras_policy_info_t;
 
 #pragma pack(push, 1)
 
@@ -2472,6 +2525,23 @@ typedef struct {
 /**
  * @brief NIC port information
  *
+ * Active FEC Modes:
+ * The active_fec field provides a bitmask representation of Active FEC (Active Forward Error Correction) modes.
+ * The bitmask values are derived from the `ethtool_fecparam` structure, specifically
+ * the `active_fec` field. Below are examples of the defined FEC modes:
+ *
+ * Examples:
+ * - ETHTOOL_FEC_NONE  (0x01)
+ * - ETHTOOL_FEC_AUTO  (0x02)
+ * - ETHTOOL_FEC_RS    (0x04)
+ * - ETHTOOL_FEC_BASER (0x08)
+ * - ETHTOOL_FEC_LLRS  (0x10)
+ * - ETHTOOL_FEC_OFF   (0x20)
+ *
+ * Note: These definitions are based on the latest available ethtool information. Users should
+ * verify if there are any updates or changes to these definitions in the relevant ethtool
+ * structure or field before implementing them in their code.
+ *
  * @cond @tag{gpu_bm_linux} @tag{host} @endcond
  */
 typedef struct {
@@ -2486,7 +2556,7 @@ typedef struct {
     uint16_t mtu;
     char link_state[AMDSMI_MAX_STRING_LENGTH];
     uint32_t link_speed;
-    uint32_t active_fec;
+    uint32_t active_fec;   //!< Active FEC modes bitmask (see about FEC modes in the description)
     char autoneg[AMDSMI_MAX_STRING_LENGTH];
     char pause_autoneg[AMDSMI_MAX_STRING_LENGTH];
     char pause_rx[AMDSMI_MAX_STRING_LENGTH];
@@ -2617,14 +2687,14 @@ amdsmi_status_t amdsmi_shut_down(void);
  *
  *  @param[in] processor_handle a processor handle
  *
- *  @param[out] processor_type a pointer to ::amdsmi_processor_type_t to which the processor type
+ *  @param[out] processor_type a pointer to ::processor_type_t to which the processor type
  *  will be written. If this parameter is nullptr, this function will return
  *  ::AMDSMI_STATUS_INVAL.
  *
  *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
  */
 amdsmi_status_t amdsmi_get_processor_type(amdsmi_processor_handle processor_handle,
-                                          amdsmi_processor_type_t *processor_type);
+                                          processor_type_t *processor_type);
 
 /**
  *  @brief Returns the processor handle from the given processor index
@@ -2897,6 +2967,27 @@ amdsmi_status_t amdsmi_get_cpu_affinity_with_scope(amdsmi_processor_handle proce
             uint32_t cpu_set_size, uint64_t *cpu_set, amdsmi_affinity_scope_t scope);
 
 /**
+ *  @brief Get the node handle associated with processor handle.
+ *
+ *  @ingroup tagProcDiscovery
+ *
+ *  @platform{gpu_bm_linux} @platform{host}
+ *
+ *  @details This function retrieves the node handle of a processor handler. The
+ *  @p processor_handle must be provided for the processor.
+ *  Currently, only AMD GPUs are supported.
+ *
+ *  @param[in] processor_handle A pointer to a ::amdsmi_processor_handle values
+ *  will be written.
+ *
+ *  @param[out] amdsmi_node_handle* A pointer to a block of memory where amdsmi_node_handle
+ *  will be written.
+ *
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
+ */
+amdsmi_status_t amdsmi_get_node_handle(amdsmi_processor_handle processor_handle, amdsmi_node_handle *node_handle);
+
+/**
  *  @brief Returns VF handle from the given BDF
  *
  *  @ingroup tagProcDiscovery
@@ -3006,7 +3097,7 @@ amdsmi_status_t amdsmi_get_nic_device_bdf(amdsmi_processor_handle processor_hand
  *
  *  @param[in] socket_handle The socket to query.
  *
- *  @param[in] processor_type The type of processor to query (see ::amdsmi_processor_type_t).
+ *  @param[in] processor_type The type of processor to query (see ::processor_type_t).
  *
  *  @param[out] processor_handles Reference to list of processor handles returned by
  *  the library. Buffer must be allocated by user.
@@ -3018,7 +3109,7 @@ amdsmi_status_t amdsmi_get_nic_device_bdf(amdsmi_processor_handle processor_hand
  *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
  */
 amdsmi_status_t amdsmi_get_processor_handles_by_type(amdsmi_socket_handle socket_handle,
-                                                     amdsmi_processor_type_t processor_type,
+                                                     processor_type_t processor_type,
                                                      amdsmi_processor_handle* processor_handles,
                                                      uint32_t* processor_count);
 
@@ -4145,6 +4236,25 @@ amdsmi_status_t amdsmi_get_afids_from_cper(char *cper_buffer, uint32_t buf_size,
 amdsmi_status_t amdsmi_get_gpu_ras_feature_info(amdsmi_processor_handle processor_handle, amdsmi_ras_feature_t *ras_feature);
 
 /**
+ * @brief Get the RAS policy info for a device
+ *
+ * @ingroup tagRasInfo
+ *
+ * @platform{gpu_bm_linux} @platform{host}
+ *
+ * @details Given a processor handle @p processor_handle, this function will retrieve
+ * the RAS policy information for the device.
+ *
+ * @param[in] processor_handle PF of a processor for which to query
+ *
+ * @param[out] policy_info RAS policy info for the device. Must be allocated by user.
+ *
+ * @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
+ */
+amdsmi_status_t amdsmi_get_gpu_ras_policy_info(amdsmi_processor_handle processor_handle,
+                                               amdsmi_gpu_ras_policy_info_t *info);
+
+/**
  *  @brief Returns the bad page info.
  *
  *  @ingroup tagRasInfo
@@ -4176,12 +4286,15 @@ amdsmi_status_t amdsmi_get_gpu_bad_page_info(amdsmi_processor_handle processor_h
  */
 
 /**
- *  @brief Reset the gpu associated with the device with provided processor handle. It is not
- *  supported on virtual machine guest
+ *  @brief Triggers a chain that resets all GPUs. It is not supported on virtual machine guest
  *
  *  @ingroup tagClkPowerPerfQuery
  *
  *  @platform{gpu_bm_linux} @platform{host}
+ *
+ *  @note After this function returns, the caller must wait a few seconds before calling
+ *  any other AMD SMI API functions to allow the GPU reset to complete. Calling other APIs
+ *  too soon may result in AMDSMI_STATUS_BUSY or undefined behavior.
  *
  *  @details Given a processor handle @p processor_handle, this function will reset the GPU
  *
@@ -4192,6 +4305,31 @@ amdsmi_status_t amdsmi_get_gpu_bad_page_info(amdsmi_processor_handle processor_h
 amdsmi_status_t amdsmi_reset_gpu(amdsmi_processor_handle processor_handle);
 
 /** @} End tagClkPowerPerfQuery */
+
+/** @defgroup tagNodeInfo Node Information
+ *  @{
+ */
+
+/**
+ * @brief Retrieves node power management (NPM) status and power limit for the specified node.
+ *
+ * @ingroup tagNodeInfo
+ *
+ * @platform{gpu_bm_linux} @platform{host}
+ *
+ * @details This function queries the NPM controller for the given node and returns whether NPM is enabled,
+ * along with the current node-level power limit in Watts. The NPM status and limit are set out-of-band
+ * and reported via this API.
+ *
+ * @param[in]  node_handle Handle to the Node to query.
+ * @param[out] info Pointer to amdsmi_npm_info_t structure to receive NPM status and limit.
+ *             Must be allocated by the user.
+ *
+ * @return ::AMDSMI_STATUS_SUCCESS on success, non-zero on failure.
+ */
+amdsmi_status_t amdsmi_get_npm_info(amdsmi_node_handle node_handle, amdsmi_npm_info_t *info);
+
+/** @} End tagNodeInfo */
 
 /*****************************************************************************/
 /** @defgroup tagVFFBPartitionQuery VF and FB partitioning queries

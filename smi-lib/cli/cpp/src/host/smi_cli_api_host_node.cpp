@@ -44,12 +44,34 @@ typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 		amdsmi_processor_handle *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_METRICS)(amdsmi_processor_handle, uint32_t *,
 		amdsmi_metric_t *);
-
+typedef amdsmi_status_t (*AMDSMI_GET_NODE_HANDLE)(amdsmi_processor_handle, amdsmi_node_handle*);
+typedef amdsmi_status_t (*AMDSMI_GET_NPM_INFO)(amdsmi_node_handle, amdsmi_npm_info_t *);
 
 extern AMDSMI_GET_PROCESSOR_HANDLES host_amdsmi_get_processor_handles;
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_GPU_METRICS host_amdsmi_get_gpu_metrics;
+extern AMDSMI_GET_NODE_HANDLE host_amdsmi_get_node_handle;
+extern AMDSMI_GET_NPM_INFO host_amdsmi_get_npm_info;
 
+std::string host_fill_node_npm_info(Arguments arg, std::string value = "N/A")
+{
+	std::string out{};
+
+	if (arg.output == json) {
+		nlohmann::ordered_json npm_info_json = {
+			{ "limit", value },
+			{ "status", value }
+		};
+
+		out = npm_info_json.dump(4);
+	} else if (arg.output == csv) {
+		out = string_format("%s,%s", value.c_str(), value.c_str());
+	} else {
+		out = string_format(nodePowerManagementTemplate, value.c_str(), value.c_str());
+	}
+
+	return out;
+}
 
 int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string)
@@ -1095,4 +1117,59 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 	} else {
 		return AMDSMI_STATUS_NOT_SUPPORTED;
 	}
+}
+
+int AmdSmiApiHost::amdsmi_get_node_npm_info_command(uint64_t processor_bdf, Arguments arg, std::string &formatted_string)
+{
+	int ret;
+	amdsmi_node_handle node;
+	amdsmi_npm_info_t npm_info;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		return ret;
+	}
+
+	ret = host_amdsmi_get_node_handle(processor, &node);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		formatted_string = host_fill_node_npm_info(arg, "N/A");
+		return ret;
+	}
+
+	ret = host_amdsmi_get_npm_info(node, &npm_info);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		formatted_string = host_fill_node_npm_info(arg, "N/A");
+		return ret;
+	}
+
+	std::string npm_status_string = npm_info.status == 0 ? "DISABLED" : "ENABLED";
+	std::string npm_limit_string = string_format("%d", npm_info.limit);
+
+	if (arg.output == json) {
+		nlohmann::ordered_json npm_limit{};
+		if(npm_info.limit == UINT64_MAX) {
+			npm_limit["value"] = "N/A";
+			npm_limit["unit"] = "N/A";
+		} else {
+			npm_limit["value"] = npm_info.limit;
+			npm_limit["unit"] = "W";
+		}
+
+		nlohmann::ordered_json npm_info_json = {
+			{ "limit", npm_limit },
+			{ "status", npm_status_string.c_str() }
+		};
+
+		formatted_string = npm_info_json.dump(4);
+	} else if (arg.output == csv) {
+		formatted_string = string_format("%s,%s", npm_limit_string.c_str(), npm_status_string.c_str());
+	} else {
+		formatted_string = string_format(nodePowerManagementTemplate, npm_limit_string.c_str(), npm_status_string.c_str());
+	}
+
+	return ret;
 }

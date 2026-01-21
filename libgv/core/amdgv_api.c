@@ -2762,15 +2762,19 @@ int amdgv_get_migration_ctx(amdgv_dev_t dev, uint32_t idx_vf, struct amdgv_migra
 		uint32_t libgv_major_version, libgv_minor_version;
 
 		/* 0. Device ID */
-		ctx->gpu.device_id = adapt->dev_id;
+		ctx->gpu.device_id = (uint16_t)adapt->dev_id;
 		AMDGV_DEBUG("migration ctx: device_id = %u\n", ctx->gpu.device_id);
 
-		/* 1. Get libgv version */
+		/* 1. Get context version */
+		ctx->gpu.context_version = adapt->live_migration.context_version;
+		AMDGV_DEBUG("migration ctx: context_version = %u\n", ctx->gpu.context_version);
+
+		/* 2. Get libgv version */
 		amdgv_get_version((int *)&libgv_major_version, (int *)&libgv_minor_version);
 		ctx->gpu.libgv_version = libgv_major_version << 16 | libgv_minor_version;
 		AMDGV_DEBUG("migration ctx: libgv_version = %u\n", ctx->gpu.libgv_version);
 
-		/* 2. Get vbios version */
+		/* 3. Get vbios version */
 		oss_memset(&vbios_info, 0, sizeof(vbios_info));
 		if (amdgv_gpumon_get_vbios_info(dev, &vbios_info)) {
 			AMDGV_ERROR("failed to get vbios info\n");
@@ -2780,7 +2784,7 @@ int amdgv_get_migration_ctx(amdgv_dev_t dev, uint32_t idx_vf, struct amdgv_migra
 		ctx->gpu.vbios_version = vbios_info.version;
 		AMDGV_DEBUG("migration ctx: vbios_version = %u\n", ctx->gpu.vbios_version);
 
-		/*3. Get migration version from PSP */
+		/*4. Get migration version from PSP */
 		ctx->gpu.migration_version = 0;
 		if (amdgv_migration_get_migration_version(adapt,
 							  &ctx->gpu.migration_version)) {
@@ -2791,7 +2795,7 @@ int amdgv_get_migration_ctx(amdgv_dev_t dev, uint32_t idx_vf, struct amdgv_migra
 		AMDGV_DEBUG("migration ctx: migration_version = %u\n",
 			    ctx->gpu.migration_version);
 
-		/* 4. Get fw info */
+		/* 5. Get fw info */
 		if (adapt->psp.fw_info == NULL) {
 			AMDGV_ERROR("failed to get fw info\n");
 			ret = AMDGV_FAILURE;
@@ -2815,12 +2819,14 @@ int amdgv_get_migration_ctx(amdgv_dev_t dev, uint32_t idx_vf, struct amdgv_migra
 		switch (adapt->live_migration.context_version) {
 		case AMDGV_MIGRATION_CONTEXT_VERSION_V2:
 			ctx->gpu.nps_mode = adapt->mcp.memory_partition_mode;
+			ctx->gpu.cps_mode = adapt->mcp.accelerator_partition_mode;
 			ctx->gpu.xgmi_state = amdgv_xgmi_node_fb_sharing_allowed(adapt);
 			ctx->gpu.cu_num = adapt->config.gfx.active_cu_count;
 			ctx->gpu.num_vf = adapt->num_vf;
 			ctx->gpu.gpu_ordinate = adapt->xgmi.phy_node_id;
 
 			AMDGV_DEBUG("migration ctx: nps mode = %d\n", ctx->gpu.nps_mode);
+			AMDGV_DEBUG("migration ctx: cps mode = %d\n", ctx->gpu.cps_mode);
 			AMDGV_DEBUG("migration ctx: xgmi state = %d\n", ctx->gpu.xgmi_state);
 			AMDGV_DEBUG("migration ctx: cu num = %d\n", ctx->gpu.cu_num);
 			AMDGV_DEBUG("migration ctx: num vf = %d\n", ctx->gpu.num_vf);
@@ -4273,19 +4279,119 @@ int AMDGV_API amdgv_unmap_sysmem(amdgv_dev_t dev,
 	return ret;
 }
 
-int AMDGV_API amdgv_reset_vf_arbiters(amdgv_dev_t dev, uint32_t idx_vf)
+bool amdgv_compare_mig_ctx(amdgv_dev_t dev, uint32_t idx_vf,
+			   struct amdgv_migration_ctx *remote_ctx)
 {
-	struct amdgv_adapter *adapt;
-	int ret = 0;
+	struct amdgv_adapter *adapt = (struct amdgv_adapter *)dev;
+	bool match = true;
+	char field_name_buffer[64];
+	int i;
 
-	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+	struct amdgv_migration_ctx *local_ctx = NULL;
 
-	oss_mutex_lock(adapt->api_lock);
+	local_ctx =
+		(struct amdgv_migration_ctx *)oss_zalloc(sizeof(struct amdgv_migration_ctx));
+	if (!local_ctx) {
+		AMDGV_ERROR("failed to allocate buffer to do ctx compare.\n");
+		return false;
+	}
 
-	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->reset_vf_arbiters)
-		ret = adapt->pp.pp_funcs->reset_vf_arbiters(adapt, idx_vf);
+	if (amdgv_get_migration_ctx(dev, idx_vf, local_ctx)) {
+		AMDGV_ERROR("failed to get local migration ctx.\n");
+		match = false;
+		goto exit;
+	}
+#define FIELD_MISMATCH(field_name, local_value, remote_value) \
+	do { \
+		AMDGV_ERROR("local_ctx.%s (0x%llx) != remote_ctx.%s (0x%llx)\n", field_name, \
+			    (uint64_t)(local_value), field_name, (uint64_t)(remote_value)); \
+		match = false; \
+		goto exit; \
+	} while (0)
 
-	oss_mutex_unlock(adapt->api_lock);
+#define COMPARE_FIELD(field) \
+	do { \
+		if (local_ctx->field != remote_ctx->field) { \
+			FIELD_MISMATCH(#field, local_ctx->field, remote_ctx->field); \
+		} \
+	} while (0)
 
-	return ret;
+#define COMPARE_STRUCT_ARRAY_FIELD_FOREACH(array_field) \
+	for (i = 0; i < ARRAY_SIZE(local_ctx->array_field); i++)
+
+#define COMPARE_STRUCT_ARRAY_FIELD_SUBFIELD(array_field,subfield) \
+	do { \
+		if (local_ctx->array_field[i].subfield != remote_ctx->array_field[i].subfield) { \
+			oss_memset(field_name_buffer, 0, sizeof(field_name_buffer)); \
+			oss_vsnprintf(field_name_buffer, sizeof(field_name_buffer), #array_field "[%d]." #subfield, i); \
+			FIELD_MISMATCH(field_name_buffer, local_ctx->array_field[i].subfield, \
+				remote_ctx->array_field[i].subfield); \
+		} \
+	} while (0)
+
+	COMPARE_FIELD(gpu.device_id);
+	COMPARE_FIELD(gpu.context_version);
+	COMPARE_FIELD(gpu.libgv_version);
+	COMPARE_FIELD(gpu.vbios_version);
+	COMPARE_FIELD(gpu.migration_version);
+	COMPARE_FIELD(gpu.num_fw);
+
+	if (local_ctx->gpu.context_version == AMDGV_MIGRATION_CONTEXT_VERSION_V2) {
+		COMPARE_FIELD(gpu.gpu_ordinate);
+		COMPARE_FIELD(gpu.num_vf);
+		COMPARE_FIELD(gpu.xgmi_state);
+		COMPARE_FIELD(gpu.cu_num);
+		COMPARE_FIELD(gpu.nps_mode);
+		COMPARE_FIELD(gpu.cps_mode);
+	}
+
+	COMPARE_STRUCT_ARRAY_FIELD_FOREACH(gpu.fw)
+	{
+		COMPARE_STRUCT_ARRAY_FIELD_SUBFIELD(gpu.fw, id);
+		COMPARE_STRUCT_ARRAY_FIELD_SUBFIELD(gpu.fw, version);
+	}
+
+	COMPARE_FIELD(vf.version);
+	COMPARE_FIELD(vf.vf_index);
+
+	switch (local_ctx->gpu.context_version) {
+	case AMDGV_MIGRATION_CONTEXT_VERSION_V1: {
+		COMPARE_FIELD(vf.v1_0.vf_fb_size_mb);
+		COMPARE_FIELD(vf.v1_0.gfx_timeslice_us);
+		COMPARE_FIELD(vf.v1_0.mm_timeslice_us);
+		COMPARE_FIELD(vf.v1_0.vcn_engine_bitmask);
+		COMPARE_FIELD(vf.v1_0.jpeg_engine_bitmask);
+		COMPARE_FIELD(vf.v1_0.partition_config);
+		break;
+	}
+	case AMDGV_MIGRATION_CONTEXT_VERSION_V2: {
+		COMPARE_FIELD(vf.v2_0.vf_fb_size_mb);
+		COMPARE_FIELD(vf.v2_0.partition_config);
+		COMPARE_FIELD(vf.v2_0.sdma_engine_bitmask);
+		COMPARE_FIELD(vf.v2_0.hw_sched_engine_bitmask);
+		COMPARE_FIELD(vf.v2_0.timeslice_gfx);
+		COMPARE_FIELD(vf.v2_0.timeslice_uvd);
+		COMPARE_FIELD(vf.v2_0.timeslice_vce);
+		COMPARE_FIELD(vf.v2_0.timeslice_uvd1);
+		COMPARE_FIELD(vf.v2_0.timeslice_vcn);
+		COMPARE_FIELD(vf.v2_0.timeslice_vcn1);
+		COMPARE_FIELD(vf.v2_0.timeslice_jpeg);
+		break;
+	}
+	default:
+		AMDGV_ERROR("unsupported vf context version %d\n", local_ctx->gpu.context_version);
+		match = false;
+		goto exit;
+	}
+
+	COMPARE_FIELD(vf_status);
+
+#undef COMPARE_STRUCT_ARRAY_FIELD_SUBFIELD
+#undef COMPARE_STRUCT_ARRAY_FIELD_FOREACH
+#undef COMPARE_FIELD
+#undef FIELD_MISMATCH
+
+exit:
+	oss_free(local_ctx);
+	return match;
 }

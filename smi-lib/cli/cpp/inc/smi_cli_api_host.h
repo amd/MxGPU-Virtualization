@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -66,6 +66,7 @@ public:
 	virtual int csv_recursion(std::string& main_buffer,
 							  const std::vector<std::vector<std::string>> &results) override;
 	virtual int ThrottlerDataToString(uint64_t data, std::string& out) override;
+	virtual int FecModesToString(uint32_t fec, std::string& out) override;
 
 	virtual int initEvent() override;
 
@@ -200,7 +201,7 @@ public:
 
 	virtual int amdsmi_get_profile_command(uint64_t processor, Arguments arg, int gpu_index,
 										   std::string &out_string) override;
-	virtual int amdsmi_get_version_command(Arguments arg, std::string &out_string) override;
+	virtual int amdsmi_get_version_command(uint64_t processor_bdf, Arguments arg, std::string &out_string) override;
 	virtual int amdsmi_reset_command(std::string vf_bdf, Arguments arg) override;
 	virtual int amdsmi_set_xgmi_fb_sharing_mode_command(std::vector<uint64_t> bfd_list,
 			Arguments arg) override;
@@ -251,5 +252,10 @@ public:
 	virtual int amdsmi_get_baseboard_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) override;
 	virtual int amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments arg,
+			std::string &formatted_string) override;
+	virtual int amdsmi_get_policy_command(uint64_t processor_bdf, Arguments arg,
+			std::string &formatted_string) override;
+
+	virtual int amdsmi_get_node_npm_info_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) override;
 };

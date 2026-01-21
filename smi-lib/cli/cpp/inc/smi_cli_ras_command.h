@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -28,8 +28,11 @@ public:
 	AmdSmiRasCommand(Arguments args) : AmdSmiCommands(args) {};
 	void execute_command();
 	void ras_command_human();
+	void ras_command_json();
+	void ras_command_csv();
 
 	int ras_command_cper(std::string &formatted_string);
 	int ras_command_afid(std::string &formatted_string);
+	int ras_command_policy(uint64_t processors, std::string &formatted_string);
 
 };

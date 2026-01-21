@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2019-2025 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -260,9 +260,9 @@ int smi_get_gpu_vbios_info(struct smi_ctx *ctx, void *inb,
 	smi_oss_funcs->memcpy(
 		info->part_number, vbios.vbios_pn, STRLEN_VERYLONG);
 	smi_oss_funcs->memcpy(
-		info->version, vbios.vbios_version_string, STRLEN_VERYLONG);
+		info->version, "N/A", STRLEN_VERYLONG);
 	smi_oss_funcs->memcpy(
-		info->boot_firmware, "N/A", STRLEN_VERYLONG);
+		info->boot_firmware, vbios.vbios_version_string, STRLEN_VERYLONG);
 end:
 	smi_put_handle(adev, ctx);
 	return smi_convert_ret_value(ERROR_OTHER, ret);
@@ -416,6 +416,7 @@ int smi_get_gpu_vram_info(struct smi_ctx *ctx, void *inb,
 		info->vram_type = smi_map_vram_type(vram_info.vram_type);
 		smi_oss_funcs->memcpy(info->vram_vendor, smi_map_vram_vendor(vram_info.vram_vendor),
 			smi_oss_funcs->strlen(smi_map_vram_vendor(vram_info.vram_vendor)));
+		info->vram_bit_width = vram_info.vram_bit_width;
 	} else if (ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED) {
 		info->vram_size = SMI_NOT_SUPPORTED;
 		info->vram_bit_width = SMI_NOT_SUPPORTED;
@@ -2983,6 +2984,115 @@ int smi_set_xgmi_plpd(struct smi_ctx *ctx, void *inb,
 
 	ret = amdgv_gpumon_set_pm_policy_level(adev, AMDGV_PP_PM_POLICY_XGMI_PLPD, id->policy_id);
 
+	smi_put_handle(adev, ctx);
+
+	return smi_convert_ret_value(ERROR_OTHER, ret);
+}
+
+int smi_get_node_handle(struct smi_ctx *ctx, void *inb,
+	void *outb, uint16_t in_len, uint16_t out_len)
+{
+	amdgv_dev_t *adev = NULL;
+	amdgv_dev_t node_dev = NULL;
+	bool dev_busy = false;
+	struct smi_device_info *id;
+	struct smi_node_info *node;
+	int ret = SMI_STATUS_SUCCESS;
+
+	if ((in_len != sizeof(struct smi_device_info)) ||
+		(out_len != sizeof(struct smi_node_info))) {
+		return SMI_STATUS_INVAL;
+	}
+
+	id = (struct smi_device_info *) inb;
+	node = (struct smi_node_info *) outb;
+
+	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
+
+	if (!adev)
+		return SMI_STATUS_NOT_FOUND;
+	if (dev_busy)
+		return SMI_STATUS_BUSY;
+
+	ret = amdgv_gpumon_get_node_handle(adev, &node_dev);
+	if (ret)
+	{
+		goto end;
+	}
+
+	node->node.handle = (uint64_t)node_dev;
+
+end:
+	smi_put_handle(adev, ctx);
+
+	return smi_convert_ret_value(ERROR_OTHER, ret);
+}
+
+int smi_get_npm_info(struct smi_ctx *ctx, void *inb,
+	void *outb, uint16_t in_len, uint16_t out_len)
+{
+	struct smi_node_info *node;
+	struct smi_npm_info *npm_info = NULL;
+	struct amdgv_gpumon_npm_info gpumon_npm_info;
+	int ret = SMI_STATUS_SUCCESS;
+
+	if ((in_len != sizeof(struct smi_node_info)) ||
+		(out_len != sizeof(struct smi_npm_info))) {
+		return SMI_STATUS_INVAL;
+	}
+
+	npm_info = (struct smi_npm_info *) outb;
+	node = (struct smi_node_info *) inb;
+
+	ret = amdgv_gpumon_get_npm_info((amdgv_dev_t)node->node.handle, &gpumon_npm_info);
+	if (ret)
+		goto end;
+
+	npm_info->status = smi_map_npm_status(gpumon_npm_info.npm_status);
+	npm_info->limit = gpumon_npm_info.npm_limit;
+end:
+	return smi_convert_ret_value(ERROR_OTHER, ret);
+}
+
+int smi_get_ras_policy_info(struct smi_ctx *ctx, void *inb,
+			    void *outb, uint16_t in_len, uint16_t out_len)
+{
+	amdgv_dev_t *adev = NULL;
+	bool dev_busy = false;
+	struct smi_device_info *id;
+	struct smi_gpu_ras_policy_info *ras_policy = NULL;
+	struct amdgv_gpumon_ras_policy_info ras_policy_info;
+	int ret = SMI_STATUS_SUCCESS;
+
+	/* Check version */
+	if ((in_len != sizeof(struct smi_device_info)) ||
+	    (out_len != sizeof(struct smi_gpu_ras_policy_info))) {
+		return SMI_STATUS_INVAL;
+	}
+
+	ras_policy = (struct smi_gpu_ras_policy_info *) outb;
+	id = (struct smi_device_info *) inb;
+
+	smi_oss_funcs->memset(ras_policy, 0, sizeof(*ras_policy));
+
+	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
+	if (!adev) {
+		return SMI_STATUS_NOT_FOUND;
+	}
+	if (dev_busy)
+		return SMI_STATUS_BUSY;
+
+	ret = amdgv_gpumon_get_ras_policy_info(adev, &ras_policy_info);
+	if (ret)
+		goto end;
+
+	ras_policy->major_version = ras_policy_info.major_version;
+	ras_policy->minor_version = ras_policy_info.minor_version;
+
+	smi_oss_funcs->memcpy(&ras_policy->policy_data,
+			(uint8_t*)&ras_policy_info + SMI_RAS_POLICY_HEADER_SIZE,
+			sizeof(ras_policy_info) - SMI_RAS_POLICY_HEADER_SIZE);
+end:
 	smi_put_handle(adev, ctx);
 
 	return smi_convert_ret_value(ERROR_OTHER, ret);

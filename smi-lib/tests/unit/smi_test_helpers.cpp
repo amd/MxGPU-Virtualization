@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -36,15 +36,20 @@ amdsmi_bdf_t MOCK_BDF = { { 0x4, 0x3, 0x2, 0x1 } }; // 0001:02:03.04
 const char *GPU_MOCK_UUID{"9aff0003-0000-1000-801f-188c37cb1ee6"};
 const char *VF_MOCK_UUID{"9a0174b5-0000-1000-801f-188c37cb1ee6"};
 struct smi_gpu_handle GPU_MOCK_HANDLE = {
-	SMI_PROCESSOR_TYPE_AMD_GPU,
+	SMI_HANDLE_TYPE_AMD_GPU,
 	{ { 0x4, 0x3, 0x2, 0x1 } },
 	(0x1234ULL << 32) | 0x1234,
 	0x5678
 };
 amdsmi_vf_handle_t VF_MOCK_HANDLE = { (0x1234ULL << 32) | 0x4567 };
 struct smi_nic_handle NIC_MOCK_HANDLE = {
-	SMI_PROCESSOR_TYPE_AMD_NIC,
+	SMI_HANDLE_TYPE_AMD_NIC,
 	{ { 0x4, 0x3, 0x2, 0x1 } }
+};
+
+struct smi_node_handle NODE_MOCK_HANDLE = {
+	SMI_HANDLE_TYPE_NODE,
+	(0x1234ULL << 32) | 0x1235
 };
 
 namespace amdsmi

@@ -28,12 +28,25 @@
 
 #include "json/json.h"
 
-auto constexpr baseboard_csv_header {"baseboard_temperature_ubb_fpga,baseboard_temperature_ubb_front,baseboard_temperature_ubb_back,baseboard_temperature_ubb_oam7,baseboard_temperature_ubb_ibc,baseboard_temperature_ubb_ufpga,baseboard_temperature_ubb_oam1,baseboard_temperature_oam_0_1_hsc,baseboard_temperature_oam_2_3_hsc,baseboard_temperature_oam_4_5_hsc,baseboard_temperature_oam_6_7_hsc,baseboard_temperature_ubb_fpga_0v72_vr,baseboard_temperature_ubb_fpga_3v3_vr,baseboard_temperature_retimer_0_1_2_3_1v2_vr,baseboard_temperature_retimer_4_5_6_7_1v2_vr,baseboard_temperature_retimer_0_1_0v9_vr,baseboard_temperature_retimer_4_5_0v9_vr,baseboard_temperature_retimer_2_3_0v9_vr,baseboard_temperature_retimer_6_7_0v9_vr,baseboard_temperature_oam_0_1_2_3_3v3_vr,baseboard_temperature_oam_4_5_6_7_3v3_vr,baseboard_temperature_ibc_hsc,baseboard_temperature_ibc"};
+auto constexpr baseboard_csv_header {"baseboard_temperature_ubb_fpga,baseboard_temperature_ubb_front,baseboard_temperature_ubb_back,"
+	"baseboard_temperature_ubb_oam7,baseboard_temperature_ubb_ibc,baseboard_temperature_ubb_ufpga,baseboard_temperature_ubb_oam1,"
+	"baseboard_temperature_oam_0_1_hsc,baseboard_temperature_oam_2_3_hsc,baseboard_temperature_oam_4_5_hsc,baseboard_temperature_oam_6_7_hsc,"
+	"baseboard_temperature_ubb_fpga_0v72_vr,baseboard_temperature_ubb_fpga_3v3_vr,baseboard_temperature_retimer_0_1_2_3_1v2_vr,"
+	"baseboard_temperature_retimer_4_5_6_7_1v2_vr,baseboard_temperature_retimer_0_1_0v9_vr,baseboard_temperature_retimer_4_5_0v9_vr,"
+	"baseboard_temperature_retimer_2_3_0v9_vr,baseboard_temperature_retimer_6_7_0v9_vr,baseboard_temperature_oam_0_1_2_3_3v3_vr,"
+	"baseboard_temperature_oam_4_5_6_7_3v3_vr,baseboard_temperature_ibc_hsc,baseboard_temperature_ibc"};
+auto constexpr node_header_csv {"node, power_management_limit, power_management_status"};
 
 int AmdSmiNodeCommand::node_command_baseboard(uint64_t processor, std::string &formatted_string)
 {
 	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_baseboard_command(processor,
 			  arg, formatted_string);
+	return ret;
+}
+
+int AmdSmiNodeCommand::node_command_npm(uint64_t processor, std::string &formatted_string)
+{
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_node_npm_info_command(processor, arg, formatted_string);
 	return ret;
 }
 
@@ -45,6 +58,21 @@ void AmdSmiNodeCommand::node_command_human()
 	std::string out{};
 
 	out += NodeHeaderTemplate;
+
+	if ((std::find(arg.options.begin(), arg.options.end(), "power-management") != arg.options.end()) ||
+			(std::find(arg.options.begin(), arg.options.end(), "p") != arg.options.end()) ||
+		arg.all_arguments) {
+		uint64_t gpu_bdf = arg.devices[0]->get_bdf();
+		ret = node_command_npm(gpu_bdf, formatted_string);
+		is_supported = (ret == 0);
+		std::string param{"power-management"};
+		int error = handle_exceptions(ret, param, arg);
+		if (error == 0) {
+			out += formatted_string;
+			formatted_string.clear();
+		}
+		formatted_string.clear();
+	}
 
 	for (unsigned int i = 0; i < arg.devices.size(); i++) {
 		uint64_t gpu_bdf = arg.devices[i]->get_bdf();
@@ -63,11 +91,6 @@ void AmdSmiNodeCommand::node_command_human()
 		}
 	}
 
-	if (!is_supported) {
-		std::string command{"node"};
-		throw SmiToolCommandNotSupportedException(command);
-	}
-
 	if (arg.is_file) {
 		write_to_file(arg.file_path, out);
 	} else {
@@ -84,14 +107,33 @@ void AmdSmiNodeCommand::node_command_json()
 	nlohmann::ordered_json json;
 	std::string out{};
 	std::string result{};
-	for (i = 0; i < arg.devices.size(); i++) {
-		json = {};
-		nlohmann::ordered_json values_json;
-		uint64_t gpu_bdf = arg.devices[i]->get_bdf();
 
+	if ((std::find(arg.options.begin(), arg.options.end(), "power-management") != arg.options.end()) ||
+		(std::find(arg.options.begin(), arg.options.end(), "p") != arg.options.end()) ||
+		arg.all_arguments) {
+		nlohmann::ordered_json values_json;
+		uint64_t gpu_bdf = arg.devices[0]->get_bdf();
+
+		ret = node_command_npm(gpu_bdf, out);
+		is_supported = (ret == 0);
+		std::string param{"power-management"};
+		int error = handle_exceptions(ret, param, arg);
+		if (error == 0) {
+			values_json = nlohmann::ordered_json::parse(out);
+			json["power_management"] = values_json;
+			out.clear();
+		}
+		json_format.insert(json_format.end(), json);
+	}
+
+	for (i = 0; i < arg.devices.size(); i++) {
 		if ((std::find(arg.options.begin(), arg.options.end(), "baseboard") != arg.options.end()) ||
 				(std::find(arg.options.begin(), arg.options.end(), "b") != arg.options.end()) ||
 				arg.all_arguments) {
+			json = {};
+			nlohmann::ordered_json values_json;
+			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
+
 			std::string param{"baseboard"};
 			ret = node_command_baseboard(gpu_bdf, out);
 			is_supported = (ret == 0);
@@ -102,13 +144,11 @@ void AmdSmiNodeCommand::node_command_json()
 				out.clear();
 			}
 			out.clear();
+			if (!json.empty()) {
+				json_format.insert(json_format.end(), json);
+			}
 		}
-		json_format.insert(json_format.end(), json);
-	}
-
-	if (!is_supported) {
-		std::string command{"node"};
-		throw SmiToolCommandNotSupportedException(command);
+		json.clear();
 	}
 
 	nlohmann::ordered_json result_json;
@@ -132,6 +172,24 @@ void AmdSmiNodeCommand::node_command_csv()
 
 	std::vector<std::vector<std::string>> results;
 	std::string output_buffer{};
+	std::string node_id{"0,"};
+
+	uint64_t gpu_bdf = arg.devices[0]->get_bdf();
+	if ((std::find(arg.options.begin(), arg.options.end(), "power-management") != arg.options.end()) ||
+			(std::find(arg.options.begin(), arg.options.end(), "p") != arg.options.end()) ||
+			arg.all_arguments) {
+		ret = node_command_npm(gpu_bdf, formatted_string);
+		is_supported = (ret == 0);
+		std::string param{"n"};
+		int error = handle_exceptions(ret, param, arg);
+		if (error == 0) {
+			header.append(node_header_csv);
+			results.push_back({formatted_string});
+			formatted_string.clear();
+		}
+		formatted_string.clear();
+	}
+
 	for (unsigned int i = 0; i < arg.devices.size(); i++) {
 		uint64_t gpu_bdf = arg.devices[i]->get_bdf();
 		int gpu_id = arg.devices[i]->get_gpu_index();
@@ -154,14 +212,10 @@ void AmdSmiNodeCommand::node_command_csv()
 			out.append("\n");
 		}
 		csv_recursion(output_buffer, results);
+		out.append(node_id);
 		out.append(output_buffer);
 		results.clear();
 		output_buffer.clear();
-	}
-
-	if (!is_supported) {
-		std::string command{"node"};
-		throw SmiToolCommandNotSupportedException(command);
 	}
 
 	if (arg.is_file) {
@@ -176,8 +230,7 @@ void AmdSmiNodeCommand::node_command_csv()
 
 void AmdSmiNodeCommand::execute_command()
 {
-	if ((AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200())
-			&& AmdSmiPlatform::getInstance().getInstance().is_host()) {
+	if (AmdSmiPlatform::getInstance().is_mi350() && AmdSmiPlatform::getInstance().getInstance().is_host()) {
 		if (arg.output == human) {
 			node_command_human();
 		} else if (arg.output == json) {

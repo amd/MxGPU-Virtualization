@@ -19,17 +19,24 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-CC = gcc
-CFLAGS = -Wall -I. -I../../interface
-LDFLAGS = -L../../build/amdsmi/Release -lamdsmi
-TARGET = amdsmi_nic
-SRC = nic.c
+include ../../make/linux/defines.mk
 
-all: $(TARGET)
+BUILD_TYPE ?= Release
+HEADER  = -I$(INTERFACE_DIR)
+SO_PATH = -L$(BUILD_DIR)/amdsmi/$(BUILD_TYPE)/
+SO_FILE = -lamdsmi -pthread
+FLAGS   = $(DEFAULT_CFLAGS)
+FLAGS += -Wl,-rpath,/usr/local/lib
 
-$(TARGET): $(SRC)
-	$(CC) -c $(CFLAGS) $(SRC) -o nic.o
-	$(CXX) $(CFLAGS) -o $(TARGET) nic.o $(LDFLAGS)
+ifeq ($(BUILD_TYPE), Debug)
+  FLAGS += -fsanitize=address
+endif
 
+INCLUDE = $(HEADER) $(SO_PATH) $(SO_FILE)
+
+all:
+	$(CC) amdsmi_nic.c -o amdsmi_nic $(FLAGS) $(INCLUDE)
+
+.PHONY: clean
 clean:
-	rm -f $(TARGET) nic.o
+	$(RM) -rf amdsmi_nic

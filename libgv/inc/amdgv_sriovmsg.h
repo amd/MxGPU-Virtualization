@@ -35,7 +35,7 @@
  * 0           1KB         64KB        65KB        66KB           68KB                   132KB
  * |  INITD_H  |   VBIOS   |   PF2VF   |   VF2PF   |   Bad Page   | RAS Telemetry Region | ...
  * |   1KB     |   64KB    |   1KB     |   1KB     |   2KB        | 64KB                 | ...
- * 
+ *
  * Note: PF2VF + VF2PF + Bad Page = DataExchange region (allocated contiguously)
  */
 
@@ -128,7 +128,8 @@ union amd_sriov_msg_feature_flags {
 		uint32_t ras_telemetry		: 1;
 		uint32_t ras_cper		: 1;
 		uint32_t xgmi_ta_ext_peer_link	: 1;
-		uint32_t reserved		: 19;
+		uint32_t ptl_support		: 1;
+		uint32_t reserved		: 18;
 	} flags;
 	uint32_t all;
 };
@@ -242,7 +243,7 @@ struct amd_sriov_msg_pf2vf_info_header {
 	uint32_t reserved[2];
 };
 
-#define AMD_SRIOV_MSG_PF2VF_INFO_FILLED_SIZE (55)
+#define AMD_SRIOV_MSG_PF2VF_INFO_FILLED_SIZE (58)
 struct amd_sriov_msg_pf2vf_info {
 	/* header contains size and version */
 	struct amd_sriov_msg_pf2vf_info_header header;
@@ -300,6 +301,10 @@ struct amd_sriov_msg_pf2vf_info {
 	uint32_t more_bp;	//Reserved for future use.
 	union amd_sriov_ras_caps ras_en_caps;
 	union amd_sriov_ras_caps ras_telemetry_en_caps;
+	/* PTL status response for guest */
+	uint32_t ptl_enabled;        // PTL enable status: 0=disabled, 1=enabled
+	uint32_t ptl_pref_format1;   // Current preferred format 1
+	uint32_t ptl_pref_format2;   // Current preferred format 2
 
 	/* reserved */
 	uint32_t reserved[256 - AMD_SRIOV_MSG_PF2VF_INFO_FILLED_SIZE];
@@ -314,7 +319,7 @@ struct amd_sriov_msg_vf2pf_info_header {
 	uint32_t reserved[2];
 };
 
-#define AMD_SRIOV_MSG_VF2PF_INFO_FILLED_SIZE (73)
+#define AMD_SRIOV_MSG_VF2PF_INFO_FILLED_SIZE (77)
 struct amd_sriov_msg_vf2pf_info {
 	/* header contains size and version */
 	struct amd_sriov_msg_vf2pf_info_header header;
@@ -361,6 +366,11 @@ struct amd_sriov_msg_vf2pf_info {
 	/* FB allocated for guest MES to record UQ info */
 	uint64_t mes_info_addr;
 	uint32_t mes_info_size;
+	/* PTL control requested by guest */
+	uint32_t ptl_req_code;       // PSP_PTL_PERF_MON_QUERY or PSP_PTL_PERF_MON_SET
+	uint32_t ptl_state;          // 0: disable, 1: enable (for SET operation)
+	uint32_t ptl_pref_format1;   // format 1
+	uint32_t ptl_pref_format2;   // format 2
 	/* reserved */
 	uint32_t reserved[256 - AMD_SRIOV_MSG_VF2PF_INFO_FILLED_SIZE];
 };
@@ -389,6 +399,7 @@ enum amd_sriov_mailbox_request_message {
 	MB_REQ_RAS_CPER_DUMP = 204,
 	MB_REQ_RAS_BAD_PAGES = 205,
 	MB_REQ_RAS_CHK_CRITI = 206,
+	MB_REQ_MSG_PTL_UPDATE = 208,
 
 	MB_REQ_MSG_REQ_GPU_DEBUG = 300,
 	MB_REQ_MSG_REL_GPU_DEBUG = 301,
@@ -415,6 +426,8 @@ enum amd_sriov_mailbox_response_message {
 	MB_RES_MSG_RAS_BAD_PAGES_NOTIFICATION = 16,
 	MB_RES_MSG_UNRECOV_ERR_NOTIFICATION = 17,
 	MB_RES_RAS_CHK_CRITI_READY		= 18,
+	MB_RES_RAS_REMOTE_CMD_READY		= 19,
+	MB_RES_MSG_PTL_UPDATE_READY		= 20,
 	MB_RES_MSG_TEXT_MESSAGE			= 255
 };
 

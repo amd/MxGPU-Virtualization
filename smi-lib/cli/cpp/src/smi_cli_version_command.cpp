@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -24,11 +24,11 @@
 
 #include "json/json.h"
 
-auto constexpr version_header {"tool_name,tool_version,lib_version"};
+auto constexpr version_header {"tool_name,tool_version,lib_version,driver_version"};
 
-int AmdSmiVersionCommand::version_command(std::string &out)
+int AmdSmiVersionCommand::version_command(uint64_t processor_bdf, Arguments arg, std::string &out)
 {
-	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_version_command(arg, out);
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_version_command(processor_bdf, arg, out);
 	return ret;
 }
 
@@ -47,7 +47,8 @@ void AmdSmiVersionCommand::version_command_json()
 			arg.options.end()) ||
 			arg.all_arguments) {
 		std::string param{"version"};
-		ret = version_command(out);
+		uint64_t processor_bdf = arg.devices[0]->get_bdf();
+		ret = version_command(processor_bdf, arg, out);
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {
 			values_json = nlohmann::ordered_json::parse(out);
@@ -77,7 +78,8 @@ void AmdSmiVersionCommand::version_command_human()
 			std::find(arg.options.begin(), arg.options.end(), "v") !=
 			arg.options.end()) ||
 			arg.all_arguments) {
-		ret = version_command(formatted_string);
+		uint64_t processor_bdf = arg.devices[0]->get_bdf();
+		ret = version_command(processor_bdf, arg, formatted_string);
 		std::string param{"version"};
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {
@@ -108,7 +110,8 @@ void AmdSmiVersionCommand::version_command_csv()
 			(std::find(arg.options.begin(), arg.options.end(), "v") !=
 			 arg.options.end()) ||
 			arg.all_arguments) {
-		ret = version_command(formatted_string);
+		uint64_t processor_bdf = arg.devices[0]->get_bdf();
+		ret = version_command(processor_bdf, arg, formatted_string);
 		std::string param{"version"};
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {

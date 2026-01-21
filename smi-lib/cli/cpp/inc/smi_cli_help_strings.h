@@ -42,6 +42,7 @@ help_supported_command_map = {
 			{"bm", {"firmware", "process", "set", "reset"}},
 			{"guest", {"process", "set", "reset"}},
 			{"host_mi3xx", {"set", "reset", "xgmi", "topology", "partition", "ras"}},
+			{"host_mi350", {"node"}},
 			{"host_mi200", {"set", "reset", "xgmi", "topology"}},
 			{"host_spec", {"set", "reset"}}
 		}
@@ -154,12 +155,12 @@ std::string bad_pages_host =
 	"Bad-pages arguments:\n"
 	"                                                       Description:\n"
 	"    -h, --help                                         show this help message and exit\n"
-	"    -g, --gpu <gpu_index | gpu_bdf | gpu_uuid>         Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n\n";
+	"    -g, --gpu=<gpu_index | gpu_bdf | gpu_uuid>         Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n\n";
 std::string firmware_common =
 	"Firmware arguments:\n"
 	"                                                                Description:\n"
 	"    -h, --help                                                  show this help message and exit\n"
-	"    -g, --gpu <gpu_index | gpu_bdf | gpu_uuid>                  Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n";
+	"    -g, --gpu=<gpu_index | gpu_bdf | gpu_uuid>                  Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n";
 
 std::string firmware_message =
 	"Gets firmware information about the specified GPU\n"
@@ -189,7 +190,7 @@ std::string process_bm =
 	"Process arguments:\n"
 	"                                                          Description:\n"
 	"    -h, --help                                            show this help message and exit\n"
-	"    -g, --gpu <gpu_index | gpu_bdf | gpu_uuid>            Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
+	"    -g, --gpu=<gpu_index | gpu_bdf | gpu_uuid>            Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
 	"    -w, --watch INTERVAL                                  Reprint the command in a loop of INTERVAL seconds\n"
 	"                                                          Looping stops by entering 'CTRL' + 'C'\n"
 	"                                                          JSON and CSV formats cannot be printed in stdout\n"
@@ -222,7 +223,7 @@ std::string profile_host_windows =
 	"Profile arguments:\n"
 	"                                                     Description:\n"
 	"    -h, --help                                       show this help message and exit\n"
-	"    -g, --gpu <gpu_index | gpu_bdf | gpu_uuid>       Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n";
+	"    -g, --gpu=<gpu_index | gpu_bdf | gpu_uuid>       Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n";
 std::string profile_usage_host_windows =
 	"usage: amd-smi profile [-h | --help] [--json | --csv] [--file FILE] [-g | --gpu <gpu_index | gpu_bdf | gpu_uuid>]\n\n";
 std::string event_common = "";
@@ -230,7 +231,7 @@ std::string event_host =
 	"Event arguments:\n"
 	"                                                       Description:\n"
 	"    -h, --help                                         show this help message and exit\n"
-	"    -g, --gpu <gpu_index | gpu_bdf | gpu_uuid>         Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n\n";
+	"    -g, --gpu=<gpu_index | gpu_bdf | gpu_uuid>         Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n\n";
 std::string event_usage_common = "";
 std::string event_usage_host =
 	"usage: amd-smi event [-h | --help] [--json | --csv] [--file FILE] [-g | --gpu <gpu_index | gpu_bdf | gpu_uuid>]\n\n"
@@ -251,7 +252,7 @@ std::string xgmi_host =
 	"Xgmi arguments:\n"
 	"                                                       Description:\n"
 	"    -h, --help                                         show this help message and exit\n"
-	"    -g, --gpu <gpu_index | gpu_bdf | gpu_uuid>         Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
+	"    -g, --gpu=<gpu_index | gpu_bdf | gpu_uuid>         Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
 	"    --caps                                             XGMI capabilities\n"
 	"    --fb-sharing                                       Framebuffer sharing for each mode\n"
 	"    --metric                                           Metric XGMI information\n"
@@ -261,14 +262,14 @@ std::string xgmi_host_mi200 =
 	"Xgmi arguments:\n"
 	"                                                       Description:\n"
 	"    -h, --help                                         show this help message and exit\n"
-	"    -g, --gpu <gpu_index | gpu_bdf | gpu_uuid>         Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
+	"    -g, --gpu=<gpu_index | gpu_bdf | gpu_uuid>         Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
 	"    --caps                                             XGMI capabilities\n"
 	"    --fb-sharing                                       Framebuffer sharing for each mode\n";
 std::string topology_common = "";
 std::string topology_usage_common = "";
 std::string topology_usage_host =
 	"usage: amd-smi topology [-h | --help] [--json] [--file FILE] [-g | --gpu <gpu_index | gpu_bdf | gpu_uuid>]\n"
-	"                        [--weight] [--hops] [--fb-sharing] [--link-type] [--link-status]\n"
+	"                        [--weight] [--hops] [--fb-sharing] [--link-type]\n"
 	"                        [--coherent] [--atomics] [--bi-dir] [--dma]\n\n";
 std::string topology_message =
 	"Displays link topology information\n"
@@ -277,12 +278,11 @@ std::string topology_host =
 	"Topology arguments:\n"
 	"                                                       Description:\n"
 	"    -h, --help                                         show this help message and exit\n"
-	"    -g, --gpu <gpu_index | gpu_bdf | gpu_uuid>         Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
+	"    -g, --gpu=<gpu_index | gpu_bdf | gpu_uuid>         Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
 	"    --weight                                           Current weight information\n"
 	"    --hops                                             Current hops information\n"
 	"    --fb-sharing                                       Current framebuffer sharing information\n"
 	"    --link-type                                        Link type information\n"
-	"    --link-status                                      Link status information\n\n"
 	"    --coherent                                         Cache coherent information\n"
 	"    --atomics                                          32 and 64-bit atomic link capability information\n"
 	"    --bi-dir                                           bi-directional link capability information\n"
@@ -333,7 +333,7 @@ std::string set_host_mi200 =
 	"Set arguments:\n"
 	"                                                                                           Description:\n"
 	"    -h, --help                                                                             show this help message and exit\n"
-	"    --xgmi --fb-sharing-mode=<AmdSmiXgmiFbSharingMode> --group=\"<gpu_id1-gpu_id2>\"         Sets framebuffer sharing mode from group [\"MODE_1\", \"MODE_2\", \"MODE_4\", \"MODE_8\", \"CUSTOM\"]\n"
+	"    --xgmi --fb-sharing-mode=<AmdSmiXgmiFbSharingMode> --group=\"<gpu_id1-gpu_id2>\"       Sets framebuffer sharing mode from group [\"MODE_1\", \"MODE_2\", \"MODE_4\", \"MODE_8\", \"CUSTOM\"]\n"
 	"                                                                                           Where, MODE_X represents that X GPUs will be in the same group, linked together:\n"
 	"                                                                                           MODE_1 (one GPU in a group), MODE_2 (two GPUs in a group), MODE_4 (four GPUs in a group), MODE_8 (eight GPUs in a group).\n"
 	"                                                                                           Note: This command will only work if there's no guest VM running.\n"
@@ -356,10 +356,10 @@ std::string reset_message ="";
 std::string reset_host_linux =
 	"Reset arguments:\n"
 	"                                                                 Description:\n"
-	"    -g, --gpu <gpu_index | gpu_bdf | gpu_uuid>                   Select a GPU ID, BDF or UUID.\n"
+	"    -g, --gpu=<gpu_index | gpu_bdf | gpu_uuid>                   Select a GPU ID, BDF or UUID.\n"
 	"                                                                 if not selected it will return for all GPUs\n"
 	"    --gpu arguments:\n"
-	"        -G, --gpureset                                           Reset the specified GPU\n"
+	"        -G, --gpureset                                           Reset all GPUs\n"
 	"    --vf=<gpu_index:vf_index | vf_bdf | vf_uuid>                 Cleanup VF FB for the specified VF\n"
 	"                                                                 If no argument is provided, returns tool exception\n"
 	"    vf arguments:\n"
@@ -387,7 +387,7 @@ std::string monitor_common =
 	"Monitor arguments:\n"
 	"                                                        Description:\n"
 	"    -h, --help                                          show this help message and exit\n"
-	"    -g, --gpu <gpu_index | gpu_bdf | gpu_uuid>          Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
+	"    -g, --gpu=<gpu_index | gpu_bdf | gpu_uuid>          Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
 	"    -w, --watch INTERVAL                                Reprint the command in a loop of INTERVAL seconds\n"
 	"                                                        Looping stops by entering 'CTRL' + 'C'\n"
 	"                                                        JSON and CSV formats cannot be printed in stdout\n"
@@ -418,7 +418,7 @@ std::string partition_host =
 	"Partition arguments:\n"
 	"                                                        Description:\n"
 	"    -h, --help                                          Show this help message and exit\n"
-	"    -g, --gpu <gpu_index | gpu_bdf | gpu_uuid>          Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
+	"    -g, --gpu=<gpu_index | gpu_bdf | gpu_uuid>          Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
 	"    -c, --current                                       Displays current memory and accelerator partition mode\n"
 	"    -m, --memory                                        Displays caps and current memory partition setting\n"
 	"    -a, --accelerator                                   Displays caps and current accelerator partition setting.\n"
@@ -458,32 +458,36 @@ std::string ras_usage_message =
 	"\nGets ras information. \n"
 	"For --cper operations: If no GPU is provided, returns information for all GPUs on the system\n"
 	"For --afid operations: GPU filtering is not supported (operates on CPER files)\n"
-	"A target argument (--cper or --afid) is required\n\n";
+	"The use of command modifiers is not supported for afid and cper\n\n";
 
 std::string usage_ras_host =
 	"usage: amd-smi ras [-h | --help] [--cper] [--severity=[fatal, nonfatal-uncorrected, nonfatal-corrected, all]] [--folder=[FOLDER]] "
 	"[--file-limit=[NUMBER_OF_FILES]] [--follow] [-g | --gpu <gpu_index | gpu_bdf | gpu_uuid>] \n"
-	"       amd-smi ras [-h | --help] [--afid] [--cper-file=[FOLDER]] \n";
+	"       amd-smi ras [-h | --help] [--afid] [--cper-file=[FILE]] \n"
+	"       amd-smi ras [-h | --help] [--policy] \n";
 
 std::string ras_host = "Ras arguments:\n"
 	"                                                                                                    Description:\n"
 	"    -h, --help                                                                                      show this help message and exit\n"
-	"    -g, --gpu <gpu_index | gpu_bdf | gpu_uuid>                                                      Select a GPU ID, BDF or UUID (only valid with --cper)\n"
+	"    -g, --gpu=<gpu_index | gpu_bdf | gpu_uuid>                                                      Select a GPU ID, BDF or UUID (only valid with --cper)\n"
 	"    --cper --severity=<fatal, nonfatal-uncorrected, nonfatal-corrected, all> --folder=[FOLDER]      Get ras cper errors and saved in file based on severity. \n"
 	"           --file-limit=<number_of_files> --follow                                                  Supports GPU filtering. If --folder not provided, no files dumped. \n"
 	"                                                                                                    By default, dumps cper report currently cached in driver. \n"
 	"                                                                                                    If --file-limit=<number> specified, CLI keeps max <number> files. \n"
 	"                                                                                                    If --follow specified, continuous monitoring until ctrl+c pressed.\n"
-	"    --afid --cper-file=[FILE]                                                                       Get AFID list from existing CPER file (GPU filtering not supported)\n";
-
+	"    --afid --cper-file=[FILE]                                                                       Get AFID list from existing CPER file (GPU filtering not supported)\n"
+	"    --policy                                                                                        Ras policy information(GPU filtering is supported)\n";
 
 std::string usage_ras_common = "";
 std::string ras_common = "";
-std::string node_common =
+std::string node_common = "";
+std::string node_mi350 =
 	"Node arguments:\n"
 	"                                 Description:\n"
 	"    -h, --help                   Show this help message and exit\n"
-	"    -b, --baseboard              Show baseboard information\n\n";
-std::string usage_node =
+	"    -b, --baseboard              Show baseboard information\n"
+	"    -p, --power-management       Show power management information\n\n";
+std::string usage_node = "";
+std::string usage_node_mi350 =
 	"usage: amd-smi node [-h | --help] [--json | --csv] [--file FILE]\n"
-	"                    [--b] [--baseboard]\n\n";
+	"                    [--b] [--baseboard]  [-p] [--power-management]\n\n";

@@ -1890,3 +1890,81 @@ const struct amdgv_init_func mi300_psp_func = {
 	.hw_init = mi300_psp_hw_init,
 	.hw_fini = mi300_psp_hw_fini,
 };
+
+/**
+ * mi300_psp_send_perf_hw_cmd - Send performance monitoring HW command to PSP
+ * @adapt: AMD GPU adapter handle
+ * @req: Request structure containing command parameters
+ * @resp: Response structure to receive PSP response
+ *
+ * This function sends a performance monitoring hardware command to PSP firmware.
+ * It is used for PTL (Peak TOPS Limiter) operations to get/set PTL state and
+ * preferred data type formats.
+ *
+ * Return: PSP_STATUS__SUCCESS on success, error code on failure
+ */
+enum psp_status mi300_psp_send_perf_hw_cmd(struct amdgv_adapter *adapt,
+					    struct psp_gfx_cmd_req_perf_hw *req,
+					    struct psp_gfx_cmd_resp_perf_hw *resp)
+{
+	enum psp_status ret = PSP_STATUS__SUCCESS;
+	struct psp_cmd_km psp_cmd = { 0 };
+	struct psp_gfx_resp psp_resp = { 0 };
+
+	if (!adapt || !req || !resp) {
+		AMDGV_ERROR("Invalid parameters for PSP performance HW command\n");
+		return PSP_STATUS__ERROR_INVALID_PARAMS;
+	}
+
+	/* Validate request type */
+	if (req->req != PSP_PTL_PERF_MON_QUERY &&
+	    req->req != PSP_PTL_PERF_MON_SET) {
+		AMDGV_ERROR("Invalid PSP performance HW request type: 0x%x\n", req->req);
+		return PSP_STATUS__ERROR_INVALID_PARAMS;
+	}
+
+	/* For SET operation, validate PTL state and format parameters */
+	if (req->req == PSP_PTL_PERF_MON_SET) {
+		if (req->ptl_state > 1) {
+			AMDGV_ERROR("Invalid PTL state: %u (must be 0 or 1)\n", req->ptl_state);
+			return PSP_STATUS__ERROR_INVALID_PARAMS;
+		}
+
+		/* Validate format types (only when enabling PTL) */
+		if (req->ptl_state == 1) {
+			if (req->pref_format1 > GFX_FTYPE_F64 ||
+			    req->pref_format2 > GFX_FTYPE_F64) {
+				AMDGV_ERROR("Invalid format types: format1=0x%x, format2=0x%x\n",
+					req->pref_format1, req->pref_format2);
+				return PSP_STATUS__ERROR_INVALID_PARAMS;
+			}
+		}
+	}
+
+	psp_cmd.cmd_id = GFX_CMD_ID_PERF_HW;
+	psp_cmd.cmd.perf_hw.req = req->req;
+	psp_cmd.cmd.perf_hw.ptl_state = req->ptl_state;
+	psp_cmd.cmd.perf_hw.pref_format1 = req->pref_format1;
+	psp_cmd.cmd.perf_hw.pref_format2 = req->pref_format2;
+
+	psp_resp.status = 0xdeadbeef;
+
+	ret = amdgv_psp_cmd_km_submit(adapt, &psp_cmd, &psp_resp);
+
+	if (ret != PSP_STATUS__SUCCESS) {
+		AMDGV_ERROR("Failed to submit PSP performance HW command, ret=%d\n", ret);
+		return ret;
+	}
+
+	if (psp_resp.status != PSP_KM_TEE_SUCCESS) {
+		AMDGV_ERROR("PSP performance HW command failed, TEE error=0x%08x\n", psp_resp.status);
+		return PSP_STATUS__ERROR_GENERIC;
+	}
+
+	resp->resp = psp_resp.status;
+	resp->ptl_state = psp_resp.uresp.perf_hw.ptl_state;
+	resp->pref_format1 = psp_resp.uresp.perf_hw.pref_format1;
+	resp->pref_format2 = psp_resp.uresp.perf_hw.pref_format2;
+
+	return PSP_STATUS__SUCCESS;
+}

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -27,5 +27,9 @@ typedef struct device_handle {
 	uint64_t handle;
 	uint64_t device_id;
 } smi_device_handle_t;
+
+typedef struct node_handle {
+	uint64_t handle;
+} smi_node_handle_t;
 
 #endif // __SMI_DEVICE_HANDLE_H__

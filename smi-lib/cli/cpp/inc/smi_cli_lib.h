@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -134,6 +134,12 @@ typedef amdsmi_status_t (*AMDSMI_GET_AFIDS_FROM_CPER)(amdsmi_get_afids_from_cper
 
 typedef amdsmi_status_t (*AMDSMI_RESET_GPU)(amdsmi_processor_handle);
 
+typedef amdsmi_status_t (*AMDSMI_GET_NODE_HANDLE)(amdsmi_processor_handle, amdsmi_node_handle*);
+typedef amdsmi_status_t (*AMDSMI_GET_NPM_INFO)(amdsmi_node_handle, amdsmi_npm_info_t *);
+
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_RAS_POLICY_INFO)(amdsmi_processor_handle,
+		amdsmi_gpu_ras_policy_info_t *);
+
 class AmdSmiLibHost
 {
 private:
@@ -215,6 +221,9 @@ public:
 	AMDSMI_TOPO_GET_NUMA_NODE_NUMBER amdsmi_topo_get_numa_node_number;
 
 	AMDSMI_RESET_GPU amdsmi_reset_gpu;
+
+	AMDSMI_GET_NODE_HANDLE amdsmi_get_node_handle;
+	AMDSMI_GET_NPM_INFO amdsmi_get_npm_info;
 
 	HMODULE amdSmiDll;
 

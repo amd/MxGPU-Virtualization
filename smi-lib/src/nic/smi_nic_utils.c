@@ -23,7 +23,7 @@
 #include "smi_nic_utils.h"
 
 
-amdsmi_status_t smi_map_nic_status(smi_nic_status status)
+amdsmi_status_t smi_map_nic_status(smi_nic_status_t status)
 {
 	int status_code = AMDSMI_STATUS_MAP_ERROR;
 
@@ -59,4 +59,3 @@ amdsmi_status_t smi_map_nic_status(smi_nic_status status)
 
 	return status_code;
 }
-

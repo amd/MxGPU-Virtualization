@@ -23,12 +23,12 @@ If no arguments are provided, all GPU events are displayed. If the category valu
   export LD_LIBRARY_PATH=/path/to/libamdsmi/library:$LD_LIBRARY_PATH
   ```
 
-event_monitor <category> <severity>
+amdsmi_event_monitor <category> <severity>
 
 Here, `<category>` specifies the GPU event category (0-15), and `<severity>` defines the severity level (0-4) for filtering events.
 
 ```bash
-event_monitor <category> <severity>
+amdsmi_event_monitor <category> <severity>
 ```
 
 ### Arguments
@@ -71,11 +71,11 @@ event_monitor <category> <severity>
 ### System-installed library
 
 ```bash
-sudo ./event_monitor 2 1
+sudo ./amdsmi_event_monitor 2 1
 ```
 
 ### Custom library path
 
 ```bash
-sudo LD_LIBRARY_PATH=/path/to/libamdsmi/library/ ./event_monitor 2 1
+sudo LD_LIBRARY_PATH=/path/to/libamdsmi/library/ ./amdsmi_event_monitor 2 1
 ```

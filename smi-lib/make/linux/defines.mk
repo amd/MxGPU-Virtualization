@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) 2019-2025 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -19,7 +19,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-PROJECT_ROOT		:= $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
+PROJECT_ROOT		:= $(realpath $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))/../..)
 VERSION_FILE_PATH	:= \"$(PROJECT_ROOT)/VERSION\"
 BUILD_DIR		:= $(PROJECT_ROOT)/build
 SOURCE_DIR		:= $(PROJECT_ROOT)/src
@@ -37,7 +37,7 @@ endif
 
 include $(PROJECT_ROOT)/../gim-coms-lib/Makefile
 
-include $(PROJECT_ROOT)/define_$(HOST).mk
+include $(PROJECT_ROOT)/make/$(HOST)/define_$(HOST).mk
 
 INTERFACE_DIR		:= $(PROJECT_ROOT)/interface
 EXAMPLES_DIR		:= $(PROJECT_ROOT)/examples

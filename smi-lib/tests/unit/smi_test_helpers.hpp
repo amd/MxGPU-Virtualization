@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -38,6 +38,7 @@ extern const char *VF_MOCK_UUID;
 extern struct smi_gpu_handle GPU_MOCK_HANDLE;
 extern amdsmi_vf_handle_t VF_MOCK_HANDLE;
 extern struct smi_nic_handle NIC_MOCK_HANDLE;
+extern struct smi_node_handle NODE_MOCK_HANDLE;
 
 namespace amdsmi
 {

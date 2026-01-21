@@ -30,6 +30,8 @@
 #include "amdgv_notify.h"
 #include "amdgv_psp_gfx_if.h"
 #include "amdgv_gpumon_internal.h"
+#include "amdgv_gpumon.h"
+#include "amdgv_sriovmsg.h"
 #include "amdgv_irqmgr.h"
 #include "amdgv_ras_eeprom.h"
 #include "amdgv_xgmi.h"
@@ -74,6 +76,8 @@ static const char *amdgv_event_name(uint32_t event)
 		return "REQ_GPU_RESET";
 	case AMDGV_EVENT_REQ_GPU_INIT_DATA:
 		return "REQ_GPU_INIT_DATA";
+	case AMDGV_EVENT_VF_REQ_PTL_UPDATE:
+		return "VF_REQ_PTL_UPDATE";
 	case AMDGV_EVENT_SCHED_FORCE_RESET_VF:
 		return "SCHED_FORCE_RESET_VF";
 	case AMDGV_EVENT_SCHED_RESET_VF:
@@ -771,6 +775,7 @@ static void amdgv_sched_event_arrange_event_list(struct amdgv_adapter *adapt,
 		case AMDGV_EVENT_REQ_GPU_DEBUG:
 		case AMDGV_EVENT_SCHED_VF_REQ_RAS_BAD_PAGES:
 		case AMDGV_EVENT_SCHED_VF_REQ_RAS_CHK_CRITI_REGION:
+		case AMDGV_EVENT_VF_REQ_PTL_UPDATE:
 			amdgv_sched_remove_duplicated_event(adapt, AMDGV_SCHED_EVENT_LIST_4,
 							    entry);
 
@@ -970,6 +975,7 @@ static void amdgv_sched_push_back_event(struct amdgv_adapter *adapt,
 	case AMDGV_EVENT_REQ_GPU_RESET:
 	case AMDGV_EVENT_REQ_GPU_INIT_DATA:
 	case AMDGV_EVENT_REQ_GPU_DEBUG:
+	case AMDGV_EVENT_VF_REQ_PTL_UPDATE:
 		adapt->sched.curr_event_list_idx = AMDGV_SCHED_EVENT_LIST_4;
 		amdgv_list_add(&entry->list,
 			       &adapt->sched.event_list[AMDGV_SCHED_EVENT_LIST_4]);
@@ -1189,6 +1195,145 @@ int amdgv_sched_handle_req_gpu_init_data(struct amdgv_adapter *adapt, uint32_t i
 		adapt->pp.pp_funcs->reset_vf_arbiters(adapt, idx_vf);
 
 	return 0;
+}
+
+static void amdgv_sched_notify_vf_ptl_update_ready(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	uint32_t msg_data[MAILBOX_DATA_LEN_3] = { 0 };
+
+	msg_data[0] = MB_RES_MSG_PTL_UPDATE_READY;
+	msg_data[2] = 0;
+	amdgv_mailbox_send_msg(adapt, idx_vf, msg_data, MAILBOX_DATA_LEN_3, true);
+}
+
+static void amdgv_sched_handle_vf_ptl_update(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	struct amd_sriov_msg_vf2pf_info *vf2pf_info;
+	struct amd_sriov_msg_pf2vf_info *pf2vf_msg;
+	struct amdgv_ptl_enable_info ptl_info;
+	struct amdgv_ptl_status_info ptl_status;
+	uint32_t msg_data[MAILBOX_DATA_LEN_1];
+	uint32_t req_code, ptl_state;
+	int ret;
+
+	if (!adapt->ptl_supported) {
+		AMDGV_WARN("PTL not supported, dropping request from %s\n",
+			   amdgv_idx_to_str(idx_vf));
+		return;
+	}
+
+	vf2pf_info = oss_zalloc(sizeof(struct amd_sriov_msg_vf2pf_info));
+	if (!vf2pf_info) {
+		AMDGV_ERROR("Failed to allocate memory for VF2PF message\n");
+		msg_data[0] = MB_RES_MSG_FAIL;
+		amdgv_mailbox_send_msg(adapt, idx_vf, msg_data, MAILBOX_DATA_LEN_1, true);
+		return;
+	}
+
+	ret = amdgv_vfmgr_retrieve_vf2pf_message(adapt, idx_vf, vf2pf_info);
+	if (ret != 0) {
+		AMDGV_ERROR("Failed to retrieve VF2PF message for %s\n", amdgv_idx_to_str(idx_vf));
+		goto send_fail;
+	}
+
+	req_code = vf2pf_info->ptl_req_code;
+	ptl_state = vf2pf_info->ptl_state;
+
+	pf2vf_msg = adapt->pf2vf_msg;
+	if (!pf2vf_msg) {
+		AMDGV_ERROR("PF2VF message not available\n");
+		goto send_fail;
+	}
+
+	switch (req_code) {
+	case PSP_PTL_PERF_MON_QUERY:
+		ret = amdgv_gpumon_ptl_query_status((amdgv_dev_t)adapt, &ptl_status);
+		if (ret == AMDGV_NOT_SUPPORTED) {
+			pf2vf_msg->ptl_enabled = 0;
+			pf2vf_msg->ptl_pref_format1 = AMDGV_PTL_FORMAT_INVALID;
+			pf2vf_msg->ptl_pref_format2 = AMDGV_PTL_FORMAT_INVALID;
+		} else if (ret != 0) {
+			AMDGV_ERROR("PTL query failed for %s: ret=%d\n",
+				    amdgv_idx_to_str(idx_vf), ret);
+			goto send_fail;
+		} else {
+			pf2vf_msg->ptl_enabled = ptl_status.ptl_enabled ? 1 : 0;
+			pf2vf_msg->ptl_pref_format1 = ptl_status.pref_format1;
+			pf2vf_msg->ptl_pref_format2 = ptl_status.pref_format2;
+			AMDGV_DEBUG("PTL status for %s: enabled=%u, fmt1=%u, fmt2=%u\n",
+				    amdgv_idx_to_str(idx_vf), pf2vf_msg->ptl_enabled,
+				    pf2vf_msg->ptl_pref_format1, pf2vf_msg->ptl_pref_format2);
+		}
+		break;
+
+	case PSP_PTL_PERF_MON_SET:
+		if (ptl_state) {
+			ptl_info.pref_format1 = vf2pf_info->ptl_pref_format1;
+			ptl_info.pref_format2 = vf2pf_info->ptl_pref_format2;
+
+			if (ptl_info.pref_format1 >= AMDGV_PTL_FORMAT_INVALID ||
+			    ptl_info.pref_format2 >= AMDGV_PTL_FORMAT_INVALID) {
+				AMDGV_ERROR("Invalid PTL format from %s: fmt1=%u, fmt2=%u\n",
+					    amdgv_idx_to_str(idx_vf),
+					    ptl_info.pref_format1, ptl_info.pref_format2);
+				goto send_fail;
+			}
+
+			if (ptl_info.pref_format1 == ptl_info.pref_format2) {
+				AMDGV_ERROR("Duplicate PTL formats from %s: fmt1=%u, fmt2=%u\n",
+					    amdgv_idx_to_str(idx_vf),
+					    ptl_info.pref_format1, ptl_info.pref_format2);
+				goto send_fail;
+			}
+
+			ret = amdgv_gpumon_ptl_enable((amdgv_dev_t)adapt, &ptl_info);
+			if (ret == AMDGV_NOT_SUPPORTED) {
+				AMDGV_WARN("PTL not supported on this device for %s\n",
+					   amdgv_idx_to_str(idx_vf));
+				goto send_fail;
+			} else if (ret != 0) {
+				AMDGV_ERROR("PTL enable failed for %s: ret=%d\n",
+					    amdgv_idx_to_str(idx_vf), ret);
+				goto send_fail;
+			}
+
+			AMDGV_DEBUG("PTL enabled for %s: fmt1=%u, fmt2=%u\n",
+				    amdgv_idx_to_str(idx_vf),
+				    ptl_info.pref_format1, ptl_info.pref_format2);
+		} else {
+			ret = amdgv_gpumon_ptl_disable((amdgv_dev_t)adapt);
+			if (ret == AMDGV_NOT_SUPPORTED) {
+				AMDGV_WARN("PTL not supported on this device for %s\n",
+					   amdgv_idx_to_str(idx_vf));
+				goto send_fail;
+			} else if (ret != 0) {
+				AMDGV_ERROR("PTL disable failed for %s: ret=%d\n",
+					    amdgv_idx_to_str(idx_vf), ret);
+				goto send_fail;
+			}
+
+			AMDGV_DEBUG("PTL disabled for %s\n", amdgv_idx_to_str(idx_vf));
+		}
+		break;
+
+	default:
+		AMDGV_ERROR("Invalid PTL req_code from %s: %u\n",
+			    amdgv_idx_to_str(idx_vf), req_code);
+		goto send_fail;
+	}
+
+	oss_free(vf2pf_info);
+
+	if (amdgv_vfmgr_update_pf2vf_message(adapt, idx_vf))
+		AMDGV_WARN("Failed to update pf2vf message for %s\n", amdgv_idx_to_str(idx_vf));
+
+	amdgv_sched_notify_vf_ptl_update_ready(adapt, idx_vf);
+	return;
+
+send_fail:
+	oss_free(vf2pf_info);
+	msg_data[0] = MB_RES_MSG_FAIL;
+	amdgv_mailbox_send_msg(adapt, idx_vf, msg_data, MAILBOX_DATA_LEN_1, true);
 }
 
 static void amdgv_sched_notify_vf_ras_poison_ready(struct amdgv_adapter *adapt, uint32_t idx_vf)
@@ -1511,9 +1656,6 @@ static int amdgv_sched_handle_rel_gpu_fini(struct amdgv_adapter *adapt, uint32_t
 
 	adapt->array_vf[idx_vf].vf_status = AMDGV_VF_STATUS_END_UNINIT;
 	set_to_avail_vf(idx_vf);
-
-	// Attempt VF arbiters reset (covers guest driver unload)
-	amdgv_reset_vf_arbiters(adapt, idx_vf);
 
 	return ret;
 }
@@ -2620,6 +2762,7 @@ static int handle_event_in_full_access(struct amdgv_adapter *adapt,
 	     (event->id != AMDGV_EVENT_SCHED_SET_VF_COND_AVAIL) &&
 	     (event->id != AMDGV_EVENT_SCHED_INIT_VF_FB) &&
 	     (event->id != AMDGV_EVENT_SCHED_RAS_UMC) &&
+	     (event->id != AMDGV_EVENT_SCHED_RAS_FED) &&
 	     (event->id != AMDGV_EVENT_SCHED_RAS_POISON_CONSUMPTION) &&
 	     (event->id != AMDGV_EVENT_SCHED_RAS_POISON_CREATION) &&
 	     (event->id != AMDGV_EVENT_SCHED_SUSPEND) &&
@@ -2639,7 +2782,8 @@ static int handle_event_in_full_access(struct amdgv_adapter *adapt,
 	     (event->id != AMDGV_EVENT_SCHED_VF_REQ_RAS_ERROR_COUNT) &&
 	     (event->id != AMDGV_EVENT_SCHED_VF_REQ_RAS_BAD_PAGES) &&
 	     (event->id != AMDGV_EVENT_SCHED_VF_REQ_RAS_CPER_DUMP) &&
-	     (event->id != AMDGV_EVENT_SCHED_VF_REQ_RAS_CHK_CRITI_REGION)))
+	     (event->id != AMDGV_EVENT_SCHED_VF_REQ_RAS_CHK_CRITI_REGION) &&
+	     (event->id != AMDGV_EVENT_VF_REQ_PTL_UPDATE)))
 		return 0;
 
 	/*
@@ -2974,7 +3118,8 @@ static int handle_event_in_full_access(struct amdgv_adapter *adapt,
 		ret = AMDGV_EVENT_STOP_AND_KEEP;
 		break;
 	case AMDGV_EVENT_SCHED_RAS_FED:
-		amdgv_sched_handle_fed(adapt, event);
+		amdgv_sched_push_back_event(adapt, event);
+		ret = AMDGV_EVENT_STOP_AND_KEEP;
 		break;
 	case AMDGV_EVENT_CUR_VF_CTX_EMPTY:
 	case AMDGV_EVENT_SCHED_UPDATE_TOPOLOGY:
@@ -2996,6 +3141,9 @@ static int handle_event_in_full_access(struct amdgv_adapter *adapt,
 	case AMDGV_EVENT_SCHED_VF_REQ_RAS_CHK_CRITI_REGION:
 		ret = amdgv_sched_handle_vf_chk_critical_region(adapt, event->idx_vf,
 								event->data.chk_criti.addr);
+		break;
+	case AMDGV_EVENT_VF_REQ_PTL_UPDATE:
+		amdgv_sched_handle_vf_ptl_update(adapt, event->idx_vf);
 		break;
 	default:
 		break;
@@ -3164,6 +3312,9 @@ set_to_cond_avail:
 		amdgv_sched_event_set_vf_cond_avail(adapt, event->idx_vf);
 		amdgv_sched_queue_set_vf_cond_avail(adapt, event->idx_vf);
 		ret = AMDGV_EVENT_STOP_AND_RELEASE;
+		break;
+	case AMDGV_EVENT_VF_REQ_PTL_UPDATE:
+		amdgv_sched_handle_vf_ptl_update(adapt, event->idx_vf);
 		break;
 	case AMDGV_EVENT_REQ_GPU_FINI:
 		/* only active VF can do FINI */

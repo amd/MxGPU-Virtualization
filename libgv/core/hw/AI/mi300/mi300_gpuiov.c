@@ -1144,12 +1144,9 @@ static int mi300_gpuiov_hw_init(struct amdgv_adapter *adapt)
 
 	} else {
 		/* Need to disable VF, before enabling it back */
-		if (adapt->asic_type == CHIP_MI350X) {
+		if (adapt->asic_type == CHIP_MI350X)
 			oss_pci_write_config_dword(adapt->dev,
 					adapt->sriov_cap_pos + PCIE_EXT_SRIOV_CTRL, 0);
-			/* Delay of 1 Sec to give PMFW time to execute VF Disable */
-			oss_usleep(100000);
-		}
 		amdgv_reset_restore_sriov(adapt);
 	}
 

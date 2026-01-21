@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -88,7 +88,7 @@ public:
 	virtual int amdsmi_get_engine_process_command(uint64_t processor, Arguments arg,
 			std::string &out_string, int &proc_num, int gpu_id) override;
 
-	virtual int amdsmi_get_version_command(Arguments arg, std::string &out_string) override;
+	virtual int amdsmi_get_version_command(uint64_t processor_bdf, Arguments arg, std::string &out_string) override;
 
 	virtual int amdsmi_set_process_isolation_command(uint64_t processor_bdf, Arguments arg) override;
 	virtual int amdsmi_reset_local_data_command(uint64_t processor_bdf, Arguments arg) override;

@@ -37,10 +37,9 @@
  * @param[in] unit The enum value representing NIC library status.
  * @return The enum value representing the corresponding mapped AMDSMI library status.
  *
- * @note This function assumes that the enum values for both enums (amdsmi_status_t and smi_nic_status)
+ * @note This function assumes that the enum values for both enums (amdsmi_status_t and smi_nic_status_t)
  * are compatible and represent similar concepts.
 */
-amdsmi_status_t smi_map_nic_status(smi_nic_status status);
-
+amdsmi_status_t smi_map_nic_status(smi_nic_status_t status);
 
 #endif // __SMI_NIC_UTILS_H__

@@ -37,6 +37,7 @@
 #include "mi300_gfx.h"
 #include "mi300_fru.h"
 #include "mi300_psp.h"
+#include "mi300_smu_pmfw.h"
 
 #define MAX(a, b)	((a) > (b) ? (a) : (b))
 #define adapt_to_smu(adapt)	      ((struct smu_context *)((adapt)->pp.smu_backend))
@@ -1237,7 +1238,7 @@ static int mi300_gpumon_smu_set_pm_policy_level(struct amdgv_adapter *adapt,
 
 static int mi300_get_npm_info(struct amdgv_adapter *adapt, struct amdgv_gpumon_npm_info *npm_info)
 {
-	int ret = AMDGV_FAILURE;
+	int ret = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
 
 	if (adapt->pp.pp_funcs->get_npm_info) {
 		ret = adapt->pp.pp_funcs->get_npm_info(adapt, npm_info);
@@ -1596,6 +1597,227 @@ static int mi300_get_ecc_correction_schema(struct amdgv_adapter *adapt,
 	return 0;
 }
 
+/* PTL (Peak TOPS Limiter) implementation */
+
+/**
+ * mi300_gpumon_ptl_query_status - Query PTL status and data formats
+ * @adapt: Adapter handle
+ * @info: Output structure to receive PTL status
+ *
+ * Return: 0 on success, AMDGV_NOT_SUPPORTED if PTL is not supported,
+ *         AMDGV_FAILURE on other errors
+ */
+static int mi300_gpumon_ptl_query_status(struct amdgv_adapter *adapt,
+					 struct amdgv_ptl_status_info *info)
+{
+	struct psp_gfx_cmd_req_perf_hw req = {0};
+	struct psp_gfx_cmd_resp_perf_hw resp = {0};
+	enum psp_status ret;
+
+	if (!adapt || !info) {
+		AMDGV_ERROR("Invalid parameters\n");
+		return AMDGV_FAILURE;
+	}
+
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->get_smu_cap_supported) {
+		if (!adapt->pp.pp_funcs->get_smu_cap_supported(adapt, SMU_CAP_PTL)) {
+			return AMDGV_NOT_SUPPORTED;
+		}
+	}
+
+	req.req = PSP_PTL_PERF_MON_QUERY;
+	req.ptl_state = 0;
+	req.pref_format1 = 0;
+	req.pref_format2 = 0;
+
+	ret = mi300_psp_send_perf_hw_cmd(adapt, &req, &resp);
+	if (ret != PSP_STATUS__SUCCESS) {
+		AMDGV_ERROR("Failed to query PTL status, psp_ret=%d\n", ret);
+		return AMDGV_FAILURE;
+	}
+
+	info->ptl_enabled = resp.ptl_state;
+	info->pref_format1 = resp.pref_format1;
+	info->pref_format2 = resp.pref_format2;
+
+	return 0;
+}
+
+/**
+ * mi300_gpumon_ptl_format_to_str - Convert PTL format enum to string
+ * @format: PTL format enum value
+ *
+ * Return: String representation of the format
+ */
+static const char *mi300_gpumon_ptl_format_to_str(uint32_t format)
+{
+	switch (format) {
+	case AMDGV_PTL_FORMAT_I8:
+		return "I8";
+	case AMDGV_PTL_FORMAT_F16:
+		return "F16";
+	case AMDGV_PTL_FORMAT_BF16:
+		return "BF16";
+	case AMDGV_PTL_FORMAT_F32:
+		return "F32";
+	case AMDGV_PTL_FORMAT_F64:
+		return "F64";
+	default:
+		return "INVALID";
+	}
+}
+
+/**
+ * mi300_gpumon_ptl_enable - Enable PTL with specified data formats
+ * @adapt: Adapter handle
+ * @info: Input structure containing preferred data formats
+ *
+ * Return: 0 on success, AMDGV_NOT_SUPPORTED if PTL is not supported,
+ *         AMDGV_FAILURE on other errors
+ */
+static int mi300_gpumon_ptl_enable(struct amdgv_adapter *adapt,
+				   struct amdgv_ptl_enable_info *info)
+{
+	struct psp_gfx_cmd_req_perf_hw req = {0};
+	struct psp_gfx_cmd_resp_perf_hw resp = {0};
+	enum psp_status ret;
+
+	if (!adapt || !info) {
+		AMDGV_ERROR("Invalid parameters\n");
+		return AMDGV_FAILURE;
+	}
+
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->get_smu_cap_supported) {
+		if (!adapt->pp.pp_funcs->get_smu_cap_supported(adapt, SMU_CAP_PTL)) {
+			return AMDGV_NOT_SUPPORTED;
+		}
+	}
+
+	if (info->pref_format1 > AMDGV_PTL_FORMAT_F64 ||
+	    info->pref_format2 > AMDGV_PTL_FORMAT_F64) {
+		AMDGV_ERROR("Invalid PTL format types: %u, %u\n",
+			    info->pref_format1, info->pref_format2);
+		return AMDGV_FAILURE;
+	}
+
+	if (info->pref_format1 == info->pref_format2) {
+		AMDGV_ERROR("PTL formats must be different\n");
+		return AMDGV_FAILURE;
+	}
+
+	req.req = PSP_PTL_PERF_MON_SET;
+	req.ptl_state = 1;  /* Enable */
+	req.pref_format1 = info->pref_format1;
+	req.pref_format2 = info->pref_format2;
+
+	ret = mi300_psp_send_perf_hw_cmd(adapt, &req, &resp);
+	if (ret != PSP_STATUS__SUCCESS) {
+		AMDGV_ERROR("Failed to enable PTL, psp_ret=%d\n", ret);
+		return AMDGV_FAILURE;
+	}
+
+	/* Save PTL configuration for restore after reset */
+	adapt->ptl_saved_config.enabled = true;
+	adapt->ptl_saved_config.pref_format1 = info->pref_format1;
+	adapt->ptl_saved_config.pref_format2 = info->pref_format2;
+
+	AMDGV_INFO("PTL enabled successfully: format1=%u(%s), format2=%u(%s)\n",
+		   info->pref_format1, mi300_gpumon_ptl_format_to_str(info->pref_format1),
+		   info->pref_format2, mi300_gpumon_ptl_format_to_str(info->pref_format2));
+
+	return 0;
+}
+
+/**
+ * mi300_gpumon_ptl_disable - Disable PTL
+ * @adapt: Adapter handle
+ *
+ * Return: 0 on success, AMDGV_NOT_SUPPORTED if PTL is not supported,
+ *         AMDGV_FAILURE on other errors
+ */
+static int mi300_gpumon_ptl_disable(struct amdgv_adapter *adapt)
+{
+	struct psp_gfx_cmd_req_perf_hw req = {0};
+	struct psp_gfx_cmd_resp_perf_hw resp = {0};
+	enum psp_status ret;
+
+	if (!adapt) {
+		AMDGV_ERROR("Invalid parameters\n");
+		return AMDGV_FAILURE;
+	}
+
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->get_smu_cap_supported) {
+		if (!adapt->pp.pp_funcs->get_smu_cap_supported(adapt, SMU_CAP_PTL)) {
+			return AMDGV_NOT_SUPPORTED;
+		}
+	}
+
+	req.req = PSP_PTL_PERF_MON_SET;
+	req.ptl_state = 0;  /* Disable */
+	req.pref_format1 = 0;
+	req.pref_format2 = 0;
+
+	ret = mi300_psp_send_perf_hw_cmd(adapt, &req, &resp);
+	if (ret != PSP_STATUS__SUCCESS) {
+		AMDGV_ERROR("Failed to disable PTL, psp_ret=%d\n", ret);
+		return AMDGV_FAILURE;
+	}
+
+	adapt->ptl_saved_config.enabled = false;
+
+	AMDGV_INFO("PTL disabled successfully\n");
+
+	return 0;
+}
+
+/**
+ * mi300_gpumon_ptl_restore - Restore PTL configuration after reset
+ * @adapt: Adapter handle
+ *
+ * This function is called after GPU reset to restore the PTL configuration
+ * that was active before the reset.
+ *
+ * Return: 0 on success, AMDGV_NOT_SUPPORTED if PTL is not supported,
+ *         negative on other errors
+ */
+int mi300_gpumon_ptl_restore(struct amdgv_adapter *adapt)
+{
+	struct amdgv_ptl_enable_info info = {0};
+	int ret;
+
+	if (!adapt) {
+		AMDGV_ERROR("Invalid parameters\n");
+		return AMDGV_FAILURE;
+	}
+
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->get_smu_cap_supported) {
+		if (!adapt->pp.pp_funcs->get_smu_cap_supported(adapt, SMU_CAP_PTL)) {
+			return AMDGV_NOT_SUPPORTED;
+		}
+	}
+
+	/* Check if PTL was enabled before reset */
+	if (!adapt->ptl_saved_config.enabled) {
+		AMDGV_DEBUG("PTL was not enabled before reset, skipping restore\n");
+		return 0;
+	}
+
+	/* Restore PTL configuration */
+	info.pref_format1 = adapt->ptl_saved_config.pref_format1;
+	info.pref_format2 = adapt->ptl_saved_config.pref_format2;
+
+	ret = mi300_gpumon_ptl_enable(adapt, &info);
+	if (ret) {
+		AMDGV_ERROR("Failed to restore PTL configuration after reset, ret=%d\n", ret);
+		return ret;
+	}
+
+	AMDGV_INFO("PTL configuration restored after reset: format1=%u, format2=%u\n",
+		   info.pref_format1, info.pref_format2);
+
+	return 0;
+}
+
 static const struct amdgv_gpumon_funcs mi300_gpumon_funcs = {
 	.get_asic_temperature = mi300_get_asic_temperature,
 	.get_gpu_power_usage = mi300_get_gpu_power_usage,
@@ -1660,6 +1882,9 @@ static const struct amdgv_gpumon_funcs mi300_gpumon_funcs = {
 	.get_static_metrics_ext = mi300_get_static_metrics_ext,
 	.get_num_static_metrics_ext_entries = mi300_get_num_static_metrics_ext_entries,
 	.get_npm_info = mi300_get_npm_info,
+	.ptl_query_status = mi300_gpumon_ptl_query_status,
+	.ptl_enable = mi300_gpumon_ptl_enable,
+	.ptl_disable = mi300_gpumon_ptl_disable,
 };
 
 static int mi300_gpumon_sw_init(struct amdgv_adapter *adapt)
@@ -1673,6 +1898,11 @@ static int mi300_gpumon_sw_init(struct amdgv_adapter *adapt)
 		return AMDGV_FAILURE;
 	}
 
+	/* Initialize PTL saved config with default formats */
+	adapt->ptl_saved_config.enabled = false;
+	adapt->ptl_saved_config.pref_format1 = AMDGV_PTL_FORMAT_I8;
+	adapt->ptl_saved_config.pref_format2 = AMDGV_PTL_FORMAT_BF16;
+
 	return 0;
 }
 
@@ -1685,14 +1915,49 @@ static int mi300_gpumon_sw_fini(struct amdgv_adapter *adapt)
 	return 0;
 }
 
+static void mi300_ptl_hw_init(struct amdgv_adapter *adapt)
+{
+	int ret;
+	struct amdgv_ptl_enable_info ptl_info;
+
+	if (adapt->ptl_saved_config.enabled) {
+		ret = mi300_gpumon_ptl_restore(adapt);
+		if (ret != 0)
+			AMDGV_WARN("Failed to restore PTL after reset: %d\n", ret);
+	} else {
+		ptl_info.pref_format1 = AMDGV_PTL_FORMAT_I8;
+		ptl_info.pref_format2 = AMDGV_PTL_FORMAT_BF16;
+		ret = mi300_gpumon_ptl_enable(adapt, &ptl_info);
+		if (ret != 0) {
+			AMDGV_WARN("Failed to auto-enable PTL during init: %d\n", ret);
+		} else {
+			AMDGV_INFO("PTL auto-enabled with default formats (I8 + BF16)\n");
+		}
+	}
+}
+
 static int mi300_gpumon_hw_init(struct amdgv_adapter *adapt)
 {
 	mi300_get_vbios_cache(adapt);
+
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->get_smu_cap_supported) {
+		if (adapt->pp.pp_funcs->get_smu_cap_supported(adapt, SMU_CAP_PTL)) {
+			mi300_ptl_hw_init(adapt);
+		}
+	}
+
 	return 0;
 }
 
 static int mi300_gpumon_hw_fini(struct amdgv_adapter *adapt)
 {
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->get_smu_cap_supported) {
+		if (adapt->pp.pp_funcs->get_smu_cap_supported(adapt, SMU_CAP_PTL)) {
+			if (adapt->ptl_saved_config.enabled)
+				mi300_gpumon_ptl_disable(adapt);
+		}
+	}
+
 	return 0;
 }
 

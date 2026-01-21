@@ -7,7 +7,7 @@ include /usr/share/dpkg/pkg-info.mk
 
 override_dh_install:
 	dh_install gim gim-coms-lib libgv smi-lib usr/src/gim-$(DEB_VERSION)/
-	echo $(DEB_VERSION) > ./debian/$(DEB_SOURCE)/usr/src/gim-$(DEB_VERSION)/VERSION
+	echo $(DEB_VERSION) > ./debian/$(DEB_SOURCE)/usr/src/gim-$(DEB_VERSION)/gim/dkms/VERSION
 
 override_dh_dkms:
 	dh_dkms -V $(DEB_VERSION)

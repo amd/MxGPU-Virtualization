@@ -42,16 +42,14 @@ template int smi_ethtool_ioctl<ethtool_perm_addr>(const std::string& device, eth
 template <typename T>
 int smi_ethtool_ioctl(const std::string& device, T* data)
 {
-	struct ifreq ifr;
-	memset(&ifr, 0, sizeof(ifr));
+	struct ifreq ifr{};
 
 	int sock = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sock < 0) {
 		return -1;
 	}
 
-	std::strncpy(ifr.ifr_name, device.c_str(), IFNAMSIZ - 1);
-	ifr.ifr_name[IFNAMSIZ - 1] = '\0';
+	device.copy(ifr.ifr_name, IFNAMSIZ - 1);
 	ifr.ifr_data = reinterpret_cast<char*>(data);
 
 	if (ioctl(sock, SIOCETHTOOL, &ifr) == -1) {

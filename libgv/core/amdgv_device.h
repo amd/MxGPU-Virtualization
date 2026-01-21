@@ -895,6 +895,14 @@ struct amdgv_adapter {
 	struct amdgv_diag_data diag_data;
 	struct amdgv_live_migration live_migration;
 	struct amdgv_dirtybit dirtybit;
+
+	/* PTL (Peak TOPS Limiter) saved configuration for restore after reset */
+	struct {
+		bool enabled;           /* PTL is currently enabled */
+		uint32_t pref_format1;  /* Preferred data format 1 */
+		uint32_t pref_format2;  /* Preferred data format 2 */
+	} ptl_saved_config;
+	bool ptl_supported;     /* PTL feature is supported by hardware */
 	bool sriov_restore;
 
 	/* used for live update to store and compare the hash */

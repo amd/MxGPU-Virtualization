@@ -3633,7 +3633,7 @@ except AmdSmiException as e:
 ```
 
 ### amdsmi_reset_gpu
-Description: Reset the GPU associated with the device with provided processor handle.
+Description: Triggers a chain that resets all GPUs.
 
 Input parameters: GPU device handle
 * `processor_handle`
@@ -3904,6 +3904,21 @@ Field | Content
 `pause_rx` | Receive pause frame status
 `pause_tx` | Transmit pause frame status
 
+Active FEC Modes:
+
+The `active_fec` field provides a bitmask representation of Active FEC (Active Forward Error Correction) modes.
+The bitmask values are derived from the `ethtool_fecparam` structure, specifically the `active_fec` field.
+Below are examples of the defined FEC modes:
+
+* `ETHTOOL_FEC_NONE` (0x01)
+* `ETHTOOL_FEC_AUTO` (0x02)
+* `ETHTOOL_FEC_RS` (0x04)
+* `ETHTOOL_FEC_BASER` (0x08)
+* `ETHTOOL_FEC_LLRS` (0x10)
+* `ETHTOOL_FEC_OFF` (0x20)
+
+Note: These definitions are based on the latest available ethtool information. Users should verify if there are any updates or changes to these definitions in the relevant ethtool structure or field before implementing them in their code.
+
 Exceptions that can be thrown by `amdsmi_get_nic_port_info` function:
 
 * `AmdSmiParameterException`
@@ -4113,6 +4128,98 @@ try:
             rdma_stats = amdsmi_get_nic_rdma_port_statistics(nic, rdma_port_index)
             for stat in rdma_stats:
                 print(f"{stat['name']}: {stat['value']}")
+except AmdSmiException as e:
+    print(e)
+```
+### amdsmi_get_node_handle
+
+Description: Get the node handle associated with processor handle.
+Note: This function retrieves the node handle of a processor handle. The
+      processor_handle must be provided for the processor. Currently,
+      only AMD GPUs are supported.
+
+Input parameters:
+* `processor handle` PF of a GPU device
+
+Output: Node handle
+
+Exceptions that can be thrown by `amdsmi_get_node_handle` function:
+
+* `AmdSmiLibraryException`
+
+Example:
+
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            node = amdsmi_get_node_handle(processor)
+            print(node)
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_npm_info
+
+Description: Returns node power management (NPM) status and limit for specific node.
+
+Note: This function queries the NPM controller for the given node and  returns whether NPM is enabled,
+ * along with the current node-level power limit in Watts. The NPM status and limit are set out-of-band
+ * and reported via this API.
+
+Input parameters:
+* `processor handle` PF of a GPU device
+
+Output:
+* `npm info` NPM AmdSmiNpmStatus structure
+
+Field | Description
+---|---
+`status` | NPM status
+`limit` | currently set limit
+
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            node = amdsmi_get_node_handle(processor)
+            npm_info = amdsmi_get_npm_info(node)
+            print(npm_info)
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_gpu_ras_policy_info
+Description: Retrieve the Reliability, Availability, and Serviceability (RAS) policy information for a specified GPU device.
+
+Input parameters:
+
+processor_handle: The handle for the GPU device for which policy information is to be retrieved.
+
+Output: A dictionary containing RAS policy information including version, major and minor versions, and thresholds for DRAM regions.
+
+Exceptions that can be thrown by `amdsmi_get_gpu_ras_policy_info` function:
+
+* `AmdSmiLibraryException`
+* `AmdSmiRetryException`
+* `AmdSmiParameterException`
+
+Example:
+```python
+try:
+    devices = amdsmi_get_processor_handles()
+    if len(devices) == 0:
+        print("No GPUs on the machine")
+    else:
+        for device in devices:
+            ras_policy_info = amdsmi_get_gpu_ras_policy_info(device)
+            print(ras_policy_info)
 except AmdSmiException as e:
     print(e)
 ```

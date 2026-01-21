@@ -97,4 +97,17 @@ mi300_psp_set_accelerator_partition_mode(struct amdgv_adapter *adapt,
 enum psp_status
 mi300_psp_set_memory_partition_mode(struct amdgv_adapter *adapt,
 					enum amdgv_memory_partition_mode memory_partition_mode);
+
+/* PTL (Peak TOPS Limiter) Support */
+/*
+ * Note: PTL-related definitions are in common headers:
+ * - PSP_PERF_HW_REQ_* and TEE_ERROR_* in amdgv_psp_gfx_if.h
+ * - psp_gfx_format_type, psp_gfx_cmd_req_perf_hw, psp_gfx_cmd_resp_perf_hw in amdgv_psp.h
+ */
+
+/* PTL function prototypes */
+enum psp_status mi300_psp_send_perf_hw_cmd(struct amdgv_adapter *adapt,
+					    struct psp_gfx_cmd_req_perf_hw *req,
+					    struct psp_gfx_cmd_resp_perf_hw *resp);
+
 #endif

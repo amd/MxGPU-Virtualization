@@ -39,7 +39,7 @@ using amdsmi::equal_handles;
 class AmdSmiRasCperTests : public amdsmi::AmdSmiTest {
 protected:
 	struct smi_gpu_handle GPU_MOCK_HANDLE_DIFF = {
-		SMI_PROCESSOR_TYPE_AMD_GPU,
+		SMI_HANDLE_TYPE_AMD_GPU,
 		{ { 0x4, 0x3, 0x2, 0x2 } },
 		(0x1234ULL << 32) | 0x4321,
 		0x8765

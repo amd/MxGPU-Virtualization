@@ -1665,7 +1665,10 @@ enum amdgv_migration_context_version {
 struct amdgv_gpu_identifier {
 
 	/* PCI device ID of the GPU */
-	uint32_t device_id;
+	uint16_t device_id;
+
+	/* update context_version if the amdgv_migration_ctx structure definition is changed */
+	uint16_t context_version;
 
 	uint32_t libgv_version;
 	uint32_t vbios_version;
@@ -1678,6 +1681,7 @@ struct amdgv_gpu_identifier {
 	bool xgmi_state;
 	uint32_t cu_num;
 	uint32_t nps_mode;
+	uint32_t cps_mode;
 	struct {
 
 		/* from AMDGV_FW_enum */
@@ -3325,11 +3329,18 @@ int amdgv_error_ring_buffer_dump(amdgv_dev_t dev, char *buf, int len);
  */
 bool amdgv_is_service_vm_enabled(amdgv_dev_t dev);
 
-/*
- * amdgv_reset_vf_arbiters - reset vf arbiters
+/**
+ * amdgv_compare_mig_ctx - compare two migration contexts
  *
- * @dev:	amdgv device handle
+ * @dev: amdgv device handle
+ * @idx_vf: source VF index
+ * @remote_ctx: remote migration context
  *
+ * Compare two migration contexts and log differences.
+ *
+ * Returns:
+ * true if contexts are identical, false otherwise.
  */
-int amdgv_reset_vf_arbiters(amdgv_dev_t dev, uint32_t idx_vf);
+bool amdgv_compare_mig_ctx(amdgv_dev_t dev, uint32_t idx_vf,
+			   struct amdgv_migration_ctx *remote_ctx);
 #endif

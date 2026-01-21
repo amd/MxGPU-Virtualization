@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -506,6 +506,7 @@ std::string host_fill_metric_nic_rdma_dev_info(Arguments arg, std::string value)
 	if (arg.output == json) {
 		auto rdma_devices_json = nlohmann::ordered_json::array();
 		auto rdma_ports_json = nlohmann::ordered_json::array();
+		nlohmann::ordered_json result_json;
 		nlohmann::ordered_json rdma_port_json = {
 			{"statistics", value.c_str()}
 		};
@@ -516,8 +517,8 @@ std::string host_fill_metric_nic_rdma_dev_info(Arguments arg, std::string value)
 			{"ports", rdma_ports_json}
 		};
 		rdma_devices_json.push_back(rdma_device_json);
-
-		out = rdma_devices_json.dump(4);
+		result_json["rdma_devices"] = rdma_devices_json;
+		out = result_json.dump(4);
 	} else if (arg.output == csv) {
 
 	} else {
@@ -542,9 +543,6 @@ std::string host_fill_nic_port_netdev_info(Arguments arg, std::string value)
 			{"statistics", value.c_str()}
 		};
 		ports_json.push_back(port_json);
-
-		std::string rdma_fill_output = host_fill_metric_nic_rdma_dev_info(arg, value);
-		nlohmann::ordered_json rdma_devices_array = nlohmann::ordered_json::parse(rdma_fill_output);
 
 		nlohmann::ordered_json result_json = {
 			{"ports", ports_json}
@@ -598,7 +596,7 @@ int AmdSmiApiHost::amdsmi_get_usage_metric_command(uint64_t processor_bdf, Argum
 	std::vector<amdsmi_metric_t> mem_chiplet{};
 	std::vector<amdsmi_metric_t> gfx_chiplet{};
 
-	if ((AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200())
+	if ((AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200() || AmdSmiPlatform::getInstance().is_mi350())
 			&& arg.watch == -1) {
 		amdsmi_metric_t *metrics;
 		uint32_t metric_size = AMDSMI_MAX_NUM_METRICS;
@@ -1868,7 +1866,7 @@ int AmdSmiApiHost::amdsmi_get_clock_metric_command(uint64_t processor_bdf, Argum
 	amdsmi_status_t ret;
 	bool use_metric{false};
 
-	if ((AmdSmiPlatform::getInstance().is_mi300())
+	if ((AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi350())
 			&& arg.watch == -1) {
 		use_metric = true;
 	}
@@ -4286,7 +4284,6 @@ int AmdSmiApiHost::amdsmi_get_port_netdev_command(uint64_t processor_bdf, Argume
 	int ret;
 	amdsmi_bdf_t tmp_bdf;
 	tmp_bdf.as_uint = processor_bdf;
-
 	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		out = host_fill_nic_port_netdev_info(arg, "N/A");
@@ -4410,17 +4407,17 @@ int AmdSmiApiHost::amdsmi_get_port_rdma_command(uint64_t processor_bdf, Argument
 
 	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
-		out = host_fill_nic_port_netdev_info(arg, "N/A");
+		out = host_fill_metric_nic_rdma_dev_info(arg, "N/A");
 		return ret;
 	}
 
 	ret = host_amdsmi_get_nic_port_info(processor, &nic_port_info);
 	if (ret != AMDSMI_STATUS_SUCCESS || nic_port_info.num_ports == 0) {
 		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED) {
-			out = host_fill_nic_port_netdev_info(arg, "N/A");
+			out = host_fill_metric_nic_rdma_dev_info(arg, "N/A");
 			return AMDSMI_STATUS_SUCCESS;
 		}
-		out = host_fill_nic_port_netdev_info(arg, "N/A");
+		out = host_fill_metric_nic_rdma_dev_info(arg, "N/A");
 		return ret != AMDSMI_STATUS_SUCCESS ? ret : AMDSMI_STATUS_SUCCESS;
 	}
 
@@ -4430,8 +4427,7 @@ int AmdSmiApiHost::amdsmi_get_port_rdma_command(uint64_t processor_bdf, Argument
 		nlohmann::ordered_json result_json;
 		if (ret != AMDSMI_STATUS_SUCCESS || nic_rdma_devices_info.num_rdma_dev == 0) {
 			if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED) {
-				std::string rdma_fill_output = host_fill_metric_nic_rdma_dev_info(arg, "N/A");
-				result_json["rdma_devices"] = nlohmann::ordered_json::parse(rdma_fill_output);
+				result_json = nlohmann::ordered_json::parse(host_fill_metric_nic_rdma_dev_info(arg, "N/A"));
 			}
 		} else {
 			nlohmann::ordered_json rdma_devices_array = nlohmann::ordered_json::array();

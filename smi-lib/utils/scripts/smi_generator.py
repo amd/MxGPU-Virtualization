@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2022-2023 Advanced Micro Devices. All rights reserved.
+# Copyright (C) 2022-2025 Advanced Micro Devices. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy of
 # this software and associated documentation files (the "Software"), to deal in
@@ -31,7 +31,7 @@ from ctypeslib.clang2py import main as clangToPy
 HEADER = \
 """
 #
-# Copyright (C) 2019-2023 Advanced Micro Devices. All rights reserved.
+# Copyright (C) 2019-2025 Advanced Micro Devices. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy of
 # this software and associated documentation files (the "Software"), to deal in
@@ -63,9 +63,11 @@ def parseArgument():
                         nargs='+', help='The input file name')
     parser.add_argument('-l', '--library', type=str, required=True,
                         help='Loading dynamic link libraries')
+    parser.add_argument('-c', '--clang', type=str, required=False,
+                        default='clang', help='Path to clang executable')
     args = vars(parser.parse_args())
 
-    return args['output'], args['input'], args['library']
+    return args['output'], args['input'], args['library'], args['clang']
 
 
 def replace_line(full_path_file_name, string_to_repalce, new_string):
@@ -82,16 +84,16 @@ def replace_line(full_path_file_name, string_to_repalce, new_string):
 
 
 def main():
-    output_file, input_files, library =  parseArgument()
+    output_file, input_files, library, clang_path =  parseArgument()
 
     library_name = os.path.basename(library)
 
     clang_include_dir = \
-        run(["clang", "--print-resource-dir"], stdout=PIPE, stderr=PIPE, encoding="utf-8").stdout.strip()
+        run([clang_path, "--print-resource-dir"], stdout=PIPE, stderr=PIPE, encoding="utf-8").stdout.strip()
 
     os_platform = platform.system()
     if os_platform == "Windows":
-        clang_include_dir += "\include"
+        clang_include_dir += "\\include"
         if "Program Files(x86)" in clang_include_dir:
             clang_include_dir = clang_include_dir.replace("Program Files(x86)", "Progra~2")
         elif "Program Files" in clang_include_dir:

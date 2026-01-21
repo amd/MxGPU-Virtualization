@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -26,6 +26,9 @@
 #include "smi_cli_templates.h"
 #include "smi_cli_device.h"
 #include "smi_cli_exception.h"
+#ifdef __linux__
+#include <linux/ethtool.h>
+#endif
 
 #include <sstream>
 #include <cstring>
@@ -48,7 +51,7 @@ struct EnumToString {
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLES)(amdsmi_socket_handle, uint32_t *,
 		amdsmi_processor_handle *);
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLES_BY_TYPE)(amdsmi_socket_handle,
-		amdsmi_processor_type_t, amdsmi_processor_handle*, uint32_t*);
+		processor_type_t, amdsmi_processor_handle*, uint32_t*);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_DEVICE_BDF)(amdsmi_processor_handle, amdsmi_bdf_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_DEVICE_UUID)(amdsmi_processor_handle, unsigned int *,
 		char *);
@@ -144,7 +147,7 @@ int AmdSmiApiHost::amdsmi_get_processor_from_index_by_type(void *processor_handl
 	amdsmi_socket_handle socket = NULL;
 	amdsmi_processor_handle *processors;
 	amdsmi_bdf_t tmp_bdf;
-	amdsmi_processor_type_t processor_type;
+	processor_type_t processor_type;
 	switch (type) {
 	case static_cast<int>(DeviceType::GPU):
 		processor_type = AMDSMI_PROCESSOR_TYPE_AMD_GPU;
@@ -278,7 +281,7 @@ int AmdSmiApiHost::amdsmi_get_gpu_count(unsigned int &gpu_count)
 int AmdSmiApiHost::amdsmi_get_device_count(unsigned int &device_count, int device_type)
 {
 	amdsmi_socket_handle socket = NULL;
-	amdsmi_processor_type_t processor_type;
+	processor_type_t processor_type;
 	switch (device_type) {
 	case static_cast<int>(DeviceType::GPU):
 		processor_type = AMDSMI_PROCESSOR_TYPE_AMD_GPU;
@@ -966,4 +969,42 @@ int AmdSmiApiHost::ThrottlerDataToString(uint64_t data, std::string& out)
 	}
 
 	return AMDSMI_STATUS_SUCCESS;
+}
+
+int AmdSmiApiHost::FecModesToString(uint32_t fec, std::string& out)
+{
+	int ret = AMDSMI_STATUS_NOT_SUPPORTED;
+#ifdef __linux__
+	std::vector<std::string> fec_modes;
+
+	if(fec & ETHTOOL_FEC_NONE) {
+		fec_modes.push_back("NONE");
+	}
+	if(fec & ETHTOOL_FEC_OFF) {
+		fec_modes.push_back("OFF");
+	}
+	if(fec & ETHTOOL_FEC_AUTO) {
+		fec_modes.push_back("AUTO");
+	}
+	if(fec & ETHTOOL_FEC_BASER) {
+		fec_modes.push_back("BASER");
+	}
+	if(fec & ETHTOOL_FEC_RS) {
+		fec_modes.push_back("RS");
+	}
+	if(fec & ETHTOOL_FEC_LLRS) {
+		fec_modes.push_back("LLRS");
+	}
+
+	out = "";
+	for (size_t i = 0; i < fec_modes.size(); i++) {
+		out += fec_modes[i];
+		if (i < fec_modes.size() - 1) {
+			out += ", ";
+		}
+	}
+	ret = AMDSMI_STATUS_SUCCESS;
+#endif
+
+	return ret;
 }

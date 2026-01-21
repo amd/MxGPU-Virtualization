@@ -25,6 +25,18 @@ BUILD_TYPE ?= release
 PREFIX ?= /usr/local
 AMD_SMI_NIC_SUPPORT ?= True
 
+# Auto-detect VIRT  based on current path
+ifeq ($(VIRT),)
+	CURRENT_PATH := $(shell pwd)
+	ifneq (,$(findstring /drivers/smi_lib/cli/cpp,$(CURRENT_PATH)))
+		VIRT := GUEST
+	else
+		VIRT := HOST
+	endif
+else
+	VIRT ?= HOST
+endif
+
 ifeq ($(BUILD_PLATFORM),windows)
 	PLATFORM := windows
 else ifeq ($(BUILD_PLATFORM),linux)
@@ -42,6 +54,13 @@ else ifeq ($(BUILD_PLATFORM),)
 endif
 else
 	$(warning Unknown platform)
+endif
+
+# Normalize VIRT value
+ifneq ($(VIRT),GUEST)
+	override VIRT := HOST
+else
+	override VIRT := GUEST
 endif
 
 CMAKE_PATH := cmake/$(PLATFORM)
@@ -69,7 +88,8 @@ endif
 
 BUILD_FLAGS := \
 	-DBUILD_TYPE=$(BUILD_TYPE) \
-	-DAMD_SMI_NIC_SUPPORT=$(AMD_SMI_NIC_SUPPORT)
+	-DAMD_SMI_NIC_SUPPORT=$(AMD_SMI_NIC_SUPPORT) \
+	-DVIRT=$(VIRT)
 
 default: $(CMAKE_PATH)/CMakeLists.txt
 ifeq ($(PLATFORM),linux)
@@ -77,7 +97,7 @@ ifeq ($(PLATFORM),linux)
 	cmake --build $(BUILD_DIR) -- -j$(shell nproc)
 	$(MAKE) clean_cmake
 else ifeq ($(PLATFORM),windows)
-	$(MAKE) -C $(CMAKE_PATH) $(OS_TARGET).$(BUILD_TYPE)
+	$(MAKE) -C $(CMAKE_PATH) $(OS_TARGET).$(BUILD_TYPE) VIRT=$(VIRT)
 endif
 
 cmake_config:
@@ -90,17 +110,17 @@ endif
 
 .PHONY: wNow64a.rel wNow64a.dbg
 wNow64a.rel:
-	$(MAKE) -C $(CMAKE_PATH) wNow64a.rel
+	$(MAKE) -C $(CMAKE_PATH) wNow64a.rel VIRT=$(VIRT)
 
 wNow64a.dbg:
-	$(MAKE) -C $(CMAKE_PATH) wNow64a.dbg
+	$(MAKE) -C $(CMAKE_PATH) wNow64a.dbg VIRT=$(VIRT)
 
 .PHONY: wNxt64a.rel wNxt64a.dbg
 wNxt64a.rel:
-	$(MAKE) -C $(CMAKE_PATH) wNxt64a.rel
+	$(MAKE) -C $(CMAKE_PATH) wNxt64a.rel VIRT=$(VIRT)
 
 wNxt64a.dbg:
-	$(MAKE) -C $(CMAKE_PATH) wNxt64a.dbg
+	$(MAKE) -C $(CMAKE_PATH) wNxt64a.dbg VIRT=$(VIRT)
 
 .PHONY: clean_cmake
 clean_cmake:

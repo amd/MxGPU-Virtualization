@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) 2019-2025 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -18,7 +18,7 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
-include defines.mk
+include make/linux/defines.mk
 export ASAN_OPTIONS=verify_asan_link_order=0
 BUILD_TYPE ?= Release
 THREAD_SAFE ?= True
@@ -27,6 +27,7 @@ THREAD_SANITIZER ?= False
 ADDRESS_SANITIZER ?= False
 CPPTOOL_BUILD ?= False
 ENABLE_GCOV ?= False
+
 ifeq ($(BUILD_TYPE), Debug)
   LOGGING = True
 endif
@@ -47,7 +48,8 @@ OUTPUT_DIR := $(AMDSMI_BUILD_DIR)/$(BUILD_TYPE)
 PACKAGE_OUTPUT_DIR := $(AMDSMI_BUILD_DIR)/package/$(BUILD_TYPE)/amdsmi
 DOCS_OUTPUT_DIR := $(AMDSMI_BUILD_DIR)/docs
 DOXYGEN_OUTPUT_DIR := $(DOCS_OUTPUT_DIR)/doxygen
-HOOKS_DIR=../.git/modules/smi-lib/hooks
+HOOKS_DIR := $(PROJECT_ROOT)/../.git/hooks
+HOOKS_SRC_DIR := $(PROJECT_ROOT)/utils/hooks
 ifeq ($(PREFIX),)
   PREFIX := /usr/local
 endif
@@ -80,6 +82,11 @@ VERSION_LIB := AMDSMI_VERSION_MAJOR=$(VERSION_MAJOR) AMDSMI_VERSION_MINOR=$(VERS
 DYNAMICLIB_FLAGS = -Wl,-soname,libamdsmi.so
 DYNAMICLIB_FLAGS += -Wl,-rpath,'$$ORIGIN:/usr/local/lib'
 DYNAMICLIB_FLAGS += $(HOST_DYNAMIC_FLAGS)
+GCC_MAJOR := $(shell $(CXX) -dumpversion | cut -d. -f1)
+ifeq ($(shell test $(GCC_MAJOR) -lt 9; echo $$?),0)
+    DYNAMICLIB_FLAGS += -lstdc++fs
+endif
+
 ifeq ($(THREAD_SAFE), True)
   CFLAGS  += -DTHREAD_SAFE -pthread
   ifeq ($(THREAD_SANITIZER), True)
@@ -200,14 +207,17 @@ endif
 install-hooks:
 	@if [ -d $(HOOKS_DIR) ]; then \
 		echo "Installing git hooks..."; \
-		if [ -f $(HOOKS_DIR)/pre-commit ]; then \
-			echo "Removing outdated pre-commit hook..."; \
-			rm $(HOOKS_DIR)/pre-commit; \
-		fi; \
-		cp pre-commit $(HOOKS_DIR)/pre-commit; \
-		chmod +x $(HOOKS_DIR)/pre-commit; \
+		for hook in pre-commit post-rewrite version-check.sh; do \
+			if [ -f $(HOOKS_DIR)/$$hook ]; then \
+				echo "Removing outdated $$hook hook..."; \
+				rm $(HOOKS_DIR)/$$hook; \
+			fi; \
+			cp $(HOOKS_SRC_DIR)/$$hook $(HOOKS_DIR)/$$hook; \
+			chmod +x $(HOOKS_DIR)/$$hook; \
+		done; \
 		echo "Git hooks installed."; \
 	fi
+
 .PHONY: clean
 clean:
 	$(RM) -rf $(OBJS) $(AMDSMI_BUILD_DIR) $(DEPS)
@@ -216,9 +226,13 @@ clean:
 ifeq ($(AMD_SMI_NIC_SUPPORT), True)
 	$(MAKE) -C $(NIC_DIR)/ clean
 endif
-	@if [ -f $(HOOKS_DIR)/pre-commit ]; then \
-		echo "Removing pre-commit hook..."; \
-		rm $(HOOKS_DIR)/pre-commit; \
+	@if [ -d $(HOOKS_DIR) ]; then \
+		for hook in pre-commit post-rewrite version-check.sh; do \
+			if [ -f $(HOOKS_DIR)/$$hook ]; then \
+				echo "Removing $$hook hook..."; \
+				rm $(HOOKS_DIR)/$$hook; \
+			fi; \
+		done; \
 	fi
 install: $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET)
 	install -d $(DESTDIR)$(PREFIX)/lib/

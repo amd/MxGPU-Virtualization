@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -99,7 +99,7 @@ typedef amdsmi_status_t (*AMDSMI_GET_CPU_AFFINITY_WITH_SCOPE)(amdsmi_processor_h
 typedef amdsmi_status_t (*AMDSMI_TOPO_GET_NUMA_NODE_NUMBER)(amdsmi_processor_handle,
 		uint32_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLES_BY_TYPE)(amdsmi_socket_handle,
-		amdsmi_processor_type_t, amdsmi_processor_handle*, uint32_t*);
+		processor_type_t, amdsmi_processor_handle*, uint32_t*);
 typedef amdsmi_status_t (*AMDSMI_GET_NIC_ASIC_INFO)(amdsmi_processor_handle,
 		amdsmi_nic_asic_info_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_NIC_BUS_INFO)(amdsmi_processor_handle,
@@ -1678,7 +1678,7 @@ int AmdSmiApiHost::amdsmi_get_vram_info_command(uint64_t processor_bdf, Argument
 	std::string max_vram_bw_str{"N/A"};
 	std::string max_vram_bw_unit{""};
 	uint64_t max_vram_bw{UINT_MAX};
-	if (AmdSmiPlatform::getInstance().is_mi300()) {
+	if (AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi350()) {
 		std::vector<amdsmi_metric_t> max_bw{};
 		amdsmi_metric_t *metrics;
 		uint32_t metric_size = AMDSMI_MAX_NUM_METRICS;
@@ -2639,6 +2639,7 @@ int AmdSmiApiHost::amdsmi_get_nic_port_info_command(uint64_t processor_bdf, Argu
 	amdsmi_processor_handle processor;
 	amdsmi_bdf_t tmp_bdf;
 	std::string bdf_str;
+	std::string active_fec_modes_str{};
 	tmp_bdf.as_uint = processor_bdf;
 
 	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
@@ -2686,6 +2687,8 @@ int AmdSmiApiHost::amdsmi_get_nic_port_info_command(uint64_t processor_bdf, Argu
 				link_speed_json = "N/A";
 			}
 
+			active_fec_modes_str = ::FecModesToString(nic_port_info.ports[i].active_fec);
+
 			nlohmann::ordered_json port_json = {
 				{ "bdf", bdf_str },
 				{ "port_num", nic_port_info.ports[i].port_num },
@@ -2698,7 +2701,7 @@ int AmdSmiApiHost::amdsmi_get_nic_port_info_command(uint64_t processor_bdf, Argu
 				{ "mtu", mtu_json },
 				{ "link_state", nic_port_info.ports[i].link_state },
 				{ "link_speed", link_speed_json },
-				{ "active_fec", nic_port_info.ports[i].active_fec },
+				{ "active_fec", active_fec_modes_str },
 				{ "autoneg", nic_port_info.ports[i].autoneg },
 				{ "pause_autoneg", nic_port_info.ports[i].pause_autoneg },
 				{ "pause_rx", nic_port_info.ports[i].pause_rx },
@@ -2710,6 +2713,7 @@ int AmdSmiApiHost::amdsmi_get_nic_port_info_command(uint64_t processor_bdf, Argu
 
 		out = ports_json.dump(4);
 	} else if (arg.output == human) {
+		std::string active_fec_modes_str{};
 		std::string formatted_output{nicStaticPortHeaderTemplate};
 		for (uint32_t i = 0; i < nic_port_info.num_ports; i++) {
 			bdf_str = convert_bdf_to_string(
@@ -2743,9 +2747,8 @@ int AmdSmiApiHost::amdsmi_get_nic_port_info_command(uint64_t processor_bdf, Argu
 				string_format("%u", nic_port_info.ports[i].carrier)
 			};
 
-			std::string active_fec_str {
-				string_format("%u", nic_port_info.ports[i].active_fec)
-			};
+			active_fec_modes_str = ::FecModesToString(nic_port_info.ports[i].active_fec);
+
 
 			formatted_output += string_format(
 				nicStaticPortTemplate,
@@ -2763,7 +2766,7 @@ int AmdSmiApiHost::amdsmi_get_nic_port_info_command(uint64_t processor_bdf, Argu
 				nic_port_info.ports[i].link_state,
 				port_link_speed_str.c_str(),
 				port_link_speed_str_unit.c_str(),
-				active_fec_str.c_str(),
+				active_fec_modes_str.c_str(),
 				nic_port_info.ports[i].autoneg,
 				nic_port_info.ports[i].pause_autoneg,
 				nic_port_info.ports[i].pause_rx,
@@ -2804,10 +2807,6 @@ int AmdSmiApiHost::amdsmi_get_nic_rdma_devices_info_command(uint64_t processor_b
 	}
 	std::string max_mtu_str{};
 	std::string active_mtu_str{};
-	std::string node_type_str{};
-
-	std::regex node_type_pattern(R"(\d+:\s*(.+))");
-	std::cmatch node_type_match;
 
 	if (arg.output == json) {
 		auto rdma_devices_json = nlohmann::ordered_json::array();
@@ -2831,16 +2830,10 @@ int AmdSmiApiHost::amdsmi_get_nic_rdma_devices_info_command(uint64_t processor_b
 				};
 				rdma_ports_json.push_back(rdma_port_json);
 			}
-			if (std::regex_match(nic_rdma_devices_info.rdma_dev_info[i].node_type, node_type_match,
-								 node_type_pattern)) {
-				node_type_str = node_type_match[1];
-			} else {
-				node_type_str = "N/A";
-			}
 			nlohmann::ordered_json rdma_device_json = {
 				{ "rdma_dev", nic_rdma_devices_info.rdma_dev_info[i].rdma_dev },
 				{ "node_guid", nic_rdma_devices_info.rdma_dev_info[i].node_guid },
-				{ "node_type", node_type_str.c_str() },
+				{ "node_type", nic_rdma_devices_info.rdma_dev_info[i].node_type },
 				{ "sys_image_guid", nic_rdma_devices_info.rdma_dev_info[i].sys_image_guid },
 				{ "fw_ver", nic_rdma_devices_info.rdma_dev_info[i].fw_ver },
 				{ "ports", rdma_ports_json }
@@ -2852,18 +2845,12 @@ int AmdSmiApiHost::amdsmi_get_nic_rdma_devices_info_command(uint64_t processor_b
 	} else if (arg.output == human) {
 		formatted_string = nicStaticRdmaDevHeaderTemplate;
 		for (uint32_t i = 0; i < nic_rdma_devices_info.num_rdma_dev; ++i) {
-			if (std::regex_match(nic_rdma_devices_info.rdma_dev_info[i].node_type, node_type_match,
-								 node_type_pattern)) {
-				node_type_str = node_type_match[1];
-			} else {
-				node_type_str = "N/A";
-			}
 			formatted_string.append(string_format(
 								nicStaticRdmaDevTemplate,
 								i,
 								nic_rdma_devices_info.rdma_dev_info[i].rdma_dev,
 								nic_rdma_devices_info.rdma_dev_info[i].node_guid,
-								node_type_str.c_str(),
+								nic_rdma_devices_info.rdma_dev_info[i].node_type,
 								nic_rdma_devices_info.rdma_dev_info[i].sys_image_guid,
 								nic_rdma_devices_info.rdma_dev_info[i].fw_ver
 							));

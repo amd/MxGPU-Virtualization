@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -19,7 +19,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-include ../defines.mk
+include ../make/linux/defines.mk
 
 GEN_COVERAGE ?= NO
 THREAD_SAFE ?= True
@@ -63,6 +63,8 @@ TEST_SRCS += smi_test_version.cpp
 TEST_SRCS += smi_test_partitions.cpp
 TEST_SRCS += smi_test_ras_cper.cpp
 TEST_SRCS += smi_test_numa_info.cpp
+TEST_SRCS += smi_test_node.cpp
+TEST_SRCS += smi_test_ras_policy.cpp
 
 TEST_SRCS += smi_fake_sys_wrapper.cpp
 TEST_SRCS += smi_test_helpers.cpp

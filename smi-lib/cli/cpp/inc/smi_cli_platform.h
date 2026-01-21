@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -32,6 +32,7 @@ private:
 	bool is_linux_{ false };
 	bool is_windows_{ false };
 	bool is_mi300_{ false };
+	bool is_mi350_{ false };
 	bool is_nv_ { false };
 	bool is_mi200_ { false };
 	/**
@@ -88,6 +89,12 @@ public:
 	 * @return true if it is mi300 gpu
 	 */
 	bool is_mi300();
+	/**
+	 * @brief Check if it is mi350 gpu
+	 *
+	 * @return true if it is mi350 gpu
+	 */
+	bool is_mi350();
 	/**
 	 * @brief Check if it is nv32 gpu
 	 *

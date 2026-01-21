@@ -1,7 +1,7 @@
 Source: gim-dkms
 Section: kernel
 Priority: optional
-Maintainer: AMD <sriov@amd.com>
+Maintainer: AMD <gim-maintainer@amd.com>
 Standards-Version: 4.7.0
 Build-Depends: debhelper-compat (= 13), dh-dkms | dkms
 

@@ -4,7 +4,7 @@ This example demonstrates how to display basic GPU information using the AMD Sys
 
 ## Overview
 
-The `monitor` application displays the following GPU information:
+The `amdsmi_monitor` application displays the following GPU information:
 
 - BDF (Bus, Device, Function) identifier
 - Driver information
@@ -23,12 +23,12 @@ The `monitor` application displays the following GPU information:
 
 ## Usage
 
-To compile the `monitor` example, simply run `make` inside the `monitor` directory:
+To compile the `amdsmi_monitor` example, simply run `make` inside the `monitor` directory:
 
 ```bash
 make
 
 Usage examples:
 
-* If `libamdsmi.so` is installed to system path like `/lib`, `/usr/lib` or `/usr/local/lib`, the following command is sufficient: `sudo ./monitor`
-* Otherwise the command should contain the path to `libamdsmi.so`: `sudo LD_LIBRARY_PATH=/path/to/libamdsmi/library/ ./monitor`
+* If `libamdsmi.so` is installed to system path like `/lib`, `/usr/lib` or `/usr/local/lib`, the following command is sufficient: `sudo ./amdsmi_monitor`
+* Otherwise the command should contain the path to `libamdsmi.so`: `sudo LD_LIBRARY_PATH=/path/to/libamdsmi/library/ ./amdsmi_monitor`

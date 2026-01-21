@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@ BUILD_TYPE ?= Release
 THREAD_SAFE ?= True
 
 HEAP_MEMORY_CHECK := False
-include ../defines.mk
+include ../make/linux/defines.mk
 
 MODUL_NAME := integration_tests
 OUTPUT_DIR := $(BUILD_DIR)/amdsmi/$(MODUL_NAME)/$(BUILD_TYPE)
@@ -48,6 +48,11 @@ INCLUDE := $(addprefix -I,\
 CXXFLAGS = -std=c++17 $(DEFAULT_CXXFLAGS) $(INCLUDE) -pthread
 LDPATH = $(addprefix -L,$(BUILD_DIR)/amdsmi/$(BUILD_TYPE))
 LDFLAGS = -lgtest -lgtest_main -pthread -lamdsmi
+
+GCC_MAJOR := $(shell $(CXX) -dumpversion | cut -d. -f1)
+ifeq ($(shell test $(GCC_MAJOR) -lt 9; echo $$?),0)
+    LDFLAGS += -lstdc++fs
+endif
 
 ifeq ($(BUILD_TYPE), Debug)
 	CXXFLAGS += -g

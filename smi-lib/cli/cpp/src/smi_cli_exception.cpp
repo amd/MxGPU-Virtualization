@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -258,7 +258,7 @@ void print_errors(SmiToolException &e, OutputFormat format, std::string file_pat
 int handle_exceptions(int ret, std::string param, Arguments arg)
 {
 	if (ret == PARAM_NOT_SUPPORTED_ON_PLATFORM || ret == 2) {
-		if (arg.all_arguments) {
+		if (arg.all_arguments && arg.command != "ras") {
 			return PARAM_NOT_SUPPORTED_ON_PLATFORM;
 		} else {
 			throw SmiToolParameterNotSupportedException(param);

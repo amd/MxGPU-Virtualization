@@ -1,4 +1,4 @@
-/* * Copyright (C) 2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2024-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -356,7 +356,7 @@ int AmdSmiApiHost::amdsmi_get_gfx_monitor_command(uint64_t processor_bdf, Argume
 		return ret;
 	}
 
-	if (AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200()) {
+	if (AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200() || AmdSmiPlatform::getInstance().is_mi350()) {
 		amdsmi_metric_t *metrics;
 		uint32_t metric_size = AMDSMI_MAX_NUM_METRICS;
 
@@ -492,7 +492,7 @@ int AmdSmiApiHost::amdsmi_get_mem_monitor_command(uint64_t processor_bdf, Argume
 		return ret;
 	}
 
-	if (AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200()) {
+	if (AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200() || AmdSmiPlatform::getInstance().is_mi350()) {
 		amdsmi_metric_t *metrics;
 		uint32_t metric_size = AMDSMI_MAX_NUM_METRICS;
 
@@ -631,7 +631,7 @@ int AmdSmiApiHost::amdsmi_get_encoder_monitor_command(uint64_t processor_bdf, Ar
 		return ret;
 	}
 
-	if (AmdSmiPlatform::getInstance().is_mi300()) {
+	if (AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi350()) {
 		amdsmi_metric_t *metrics;
 		uint32_t metric_size = AMDSMI_MAX_NUM_METRICS;
 
@@ -789,7 +789,7 @@ int AmdSmiApiHost::amdsmi_get_decoder_monitor_command(uint64_t processor_bdf, Ar
 		return ret;
 	}
 
-	if (AmdSmiPlatform::getInstance().is_mi300()) {
+	if (AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi350()) {
 		amdsmi_metric_t *metrics;
 		uint32_t metric_size = AMDSMI_MAX_NUM_METRICS;
 

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -19,7 +19,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-include ../../defines.mk
+include ../../make/linux/defines.mk
 
 BUILD_TYPE ?= Release
 HEADER  = -I$(INTERFACE_DIR)
@@ -46,8 +46,8 @@ endif
 INCLUDE = $(HEADER) $(SO_PATH) $(SO_FILE)
 
 all:
-	$(CC) monitor.c -o monitor $(FLAGS) $(DEFS) $(INCLUDE)
+	$(CC) amdsmi_monitor.c -o amdsmi_monitor $(FLAGS) $(DEFS) $(INCLUDE)
 
 .PHONY: clean
 clean:
-	$(RM) -rf monitor
+	$(RM) -rf amdsmi_monitor

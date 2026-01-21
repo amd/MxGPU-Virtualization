@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -32,5 +32,5 @@ public:
 	void version_command_human();
 	void version_command_csv();
 
-	int version_command(std::string &out_string);
+	int version_command(uint64_t processor_bdf, Arguments arg, std::string &out_string);
 };

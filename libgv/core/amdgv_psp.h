@@ -96,7 +96,15 @@ enum { PSP_KM_CMD_MAX_NUM = 16 }; /*16 CMD Buffers*/
 enum { PSP_KM_CMD_INVALID_INDEX = 0xFFFFFFFF };
 enum { MC_VM_FB_LOCATION__FB_ADDRESS__SHIFT = 0x00000018 };
 
-enum { PSP_KM_TEE_ERROR_NOT_SUPPORTED = 0xFFFF000A };
+/* TEE (Trusted Execution Environment) error codes */
+enum {
+	PSP_KM_TEE_SUCCESS                 = 0x00000000,
+	PSP_KM_TEE_ERROR_CANCEL            = 0xFFFF0002,
+	PSP_KM_TEE_ERROR_BAD_PARAMETERS    = 0xFFFF0006,
+	PSP_KM_TEE_ERROR_NOT_SUPPORTED     = 0xFFFF000A,
+	PSP_KM_TEE_ERROR_AMD_SMU_TIMEOUT   = 0x80000306,
+	PSP_KM_TEE_ERROR_AMD_PERF_HW_BUSY  = 0x80000313,
+};
 
 struct psp_fw_image_header {
 	uint32_t reserved1[24];
@@ -123,7 +131,36 @@ enum psp_status {
 	PSP_STATUS__ERROR_INVALID_PARAMS,
 	PSP_STATUS__ERROR_GENERIC,
 	PSP_STATUS__ERROR_OUT_OF_MEMORY,
-	PSP_STATUS__ERROR_UNSUPPORTED_FEATURE
+	PSP_STATUS__ERROR_UNSUPPORTED_FEATURE,
+	PSP_STATUS__ERROR_TIMEOUT,
+	PSP_STATUS__ERROR_BUSY
+};
+
+/**
+ * PTL (Peak TOPS Limiter) Data Format Types
+ * Used to specify which data types should be optimized for peak performance
+ */
+enum psp_gfx_format_type {
+	GFX_FTYPE_I8          = 0x00000000,
+	GFX_FTYPE_F16         = 0x00000001,
+	GFX_FTYPE_BF16        = 0x00000002,
+	GFX_FTYPE_F32         = 0x00000003,
+	GFX_FTYPE_F64         = 0x00000004,
+	GFX_FTYPE_INVALID     = 0xFFFFFFFF,
+};
+
+struct psp_gfx_cmd_req_perf_hw {
+	uint32_t req;
+	uint32_t ptl_state;
+	uint32_t pref_format1;
+	uint32_t pref_format2;
+};
+
+struct psp_gfx_cmd_resp_perf_hw {
+	uint32_t resp;
+	uint32_t ptl_state;
+	uint32_t pref_format1;
+	uint32_t pref_format2;
 };
 
 enum psp_ring_type {

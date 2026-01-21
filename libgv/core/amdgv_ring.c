@@ -396,11 +396,11 @@ int amdgv_ring_init_set(struct amdgv_adapter *adapt, struct amdgv_ring *ring)
 
 	// Clear the ring
 	amdgv_ring_clear_ring(ring);
-
-	ring->wptr = 0;
-	if (ring->wptr_cpu_addr)
-		*((volatile uint64_t *)(ring->wptr_cpu_addr)) = 0;
-
+	if (!amdgv_in_live_update_seq()) {
+		ring->wptr = 0;
+		if (ring->wptr_cpu_addr)
+			*((volatile uint64_t *)(ring->wptr_cpu_addr)) = 0;
+	}
 	return 0;
 }
 

@@ -106,7 +106,7 @@ The commands and their descriptions are the following:
 * reset
 
     Cleanup VF FB for the specified VF or reset memory and accelerator
-    parittion to default mode (GPU only)
+    partition to default mode or resets all GPU's (GPU only)
 
 * set
 
@@ -314,7 +314,7 @@ Commands that do and their arguments are:
   * `--clean-local-data`
         Clean up data in LDS/GPRs.
     * `--resetgpu`
-        Reset GPU.
+        Reset all GPUs.
 
 ### set
 

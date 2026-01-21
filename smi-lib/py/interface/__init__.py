@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 #
-# Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -105,6 +105,9 @@ from .amdsmi_interface import amdsmi_get_cpu_affinity_with_scope
 from .amdsmi_interface import amdsmi_topo_get_numa_node_number
 from .amdsmi_interface import amdsmi_get_xgmi_plpd
 from .amdsmi_interface import amdsmi_set_xgmi_plpd
+from .amdsmi_interface import amdsmi_get_node_handle
+from .amdsmi_interface import amdsmi_get_npm_info
+from .amdsmi_interface import amdsmi_get_gpu_ras_policy_info
 
 from .amdsmi_interface import AmdSmiTemperatureType
 from .amdsmi_interface import AmdSmiTemperatureMetric
@@ -150,6 +153,7 @@ from .amdsmi_interface import AmdSmiCperErrorSeverity
 from .amdsmi_interface import AmdSmiAffinityScope
 from .amdsmi_interface import AmdSmiVirtualizationMode
 from .amdsmi_interface import AmdSmiDriverModelType
+from .amdsmi_interface import AmdSmiNpmStatus
 
 # AMD SMI NIC
 from .amdsmi_nic_interface import amdsmi_get_nic_driver_info

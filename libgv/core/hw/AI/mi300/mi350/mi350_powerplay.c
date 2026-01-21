@@ -1751,7 +1751,7 @@ static void mi350_pp_smu_init_gpu_xcp_metrics(struct amdgv_adapter *adapt,
 
 	if (mi350_smu_cap_supported(adapt, SMU_CAP_TEMP_INST_METRICS)) {
 		ADD_DRV_METRICS_EXT_ENTRY(MI350_TEMP_XCD, vf_mask, xcp_id,
-					  Q10_32, (void *)&metrics_table->XcdTemperature[xcc_id]);
+					  UINT_32, (void *)&metrics_table->XcdTemperature[xcc_id]);
 	}
 }
 
@@ -1810,7 +1810,7 @@ static void mi350_pp_smu_init_gpu_aid_metrics(struct amdgv_adapter *adapt,
 
 	if (mi350_smu_cap_supported(adapt, SMU_CAP_TEMP_INST_METRICS)) {
 		ADD_DRV_METRICS_EXT_ENTRY(MI350_TEMP_AID, vf_mask, aid_id,
-					  Q10_32, (void *)&(metrics_table->HbmTemperature[aid_id]));
+					  UINT_32, (void *)&(metrics_table->AidTemperature[aid_id]));
 	}
 }
 
@@ -1822,7 +1822,7 @@ static void mi350_pp_smu_init_gpu_aid_hbm_metrics(struct amdgv_adapter *adapt,
 	uint32_t vf_mask = amdgv_mcp_get_vf_mask_by_aid(adapt, idx / 2);
 
 	if (mi350_smu_cap_supported(adapt, SMU_CAP_TEMP_INST_METRICS)) {
-		ADD_DRV_METRICS_EXT_ENTRY(MI350_TEMP_HBM, vf_mask, idx / MI350_HBM_PER_AID, Q10_32,
+		ADD_DRV_METRICS_EXT_ENTRY(MI350_TEMP_HBM, vf_mask, idx / MI350_HBM_PER_AID, UINT_32,
 					(void *)&(metrics_table->HbmTemperature[idx]));
 	}
 }
@@ -3236,20 +3236,22 @@ static int mi350_smu_reset_vf_arbiters(struct amdgv_adapter *adapt, uint32_t idx
 	return ret;
 }
 
-#define MI350_SMU_PMME_READY_RETRY_ATTEMPTS 5
+#define MI350_SMU_PMME_READY_RETRY_ATTEMPTS 25
 
 static bool mi350_smu_is_pmme_ready(struct amdgv_adapter *adapt)
 {
 	int ret = 0, resp = 0;
 	int retry_count = 1;
 
+	/* 1 second timeout should be long enough for PMFW to finish EEPROM initialization */
 	while (retry_count <= MI350_SMU_PMME_READY_RETRY_ATTEMPTS) {
 		ret = mi350_smu_send_msg_with_resp(adapt, PPSMC_MSG_GetBadPageCount, 0, NULL, &resp);
 
 		if (ret == 0 && resp == PPSMC_Result_OK)
 			return true;
 
-		/* Managed but not ready yet: retry after short delay */
+		/* PMFW Managed EEPROM is supported, but EEPROM initialization may not complete yet:
+		 * retry after short delay */
 		if (resp == PPSMC_Result_CmdRejectedBusy) {
 			retry_count++;
 			oss_msleep(40);

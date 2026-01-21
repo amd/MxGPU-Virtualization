@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -48,7 +48,7 @@ typedef amdsmi_status_t (*AMDSMI_GET_NUM_VF)(amdsmi_processor_handle, uint32_t *
 typedef amdsmi_status_t (*AMDSMI_GET_VF_PARTITION_INFO)(amdsmi_processor_handle, unsigned int,
 		amdsmi_partition_info_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLES_BY_TYPE)(amdsmi_socket_handle,
-		amdsmi_processor_type_t, amdsmi_processor_handle*, uint32_t*);
+		processor_type_t, amdsmi_processor_handle*, uint32_t*);
 typedef amdsmi_status_t (*AMDSMI_GET_NIC_ASIC_INFO)(amdsmi_processor_handle,
 		amdsmi_nic_asic_info_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_NIC_BUS_INFO)(amdsmi_processor_handle,

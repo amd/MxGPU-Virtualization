@@ -1,4 +1,4 @@
-/* * Copyright (C) 2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2024-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -69,12 +69,14 @@ void AmdSmiResetCommand::reset_command()
 	if ((std::find(arg.options.begin(), arg.options.end(), "gpureset") != arg.options.end()) ||
 			(std::find(arg.options.begin(), arg.options.end(), "G") != arg.options.end()) ||
 			arg.all_arguments) {
-		for (unsigned int i = 0; i < arg.devices.size(); i++) {
-			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
-			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_reset_gpu_command(gpu_bdf, arg);
-			std::string param{"gpureset"};
-			int error = handle_exceptions(ret, param, arg);
-			if (error == 0) {
+		unsigned int gpu_count;
+		AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
+		uint64_t gpu_bdf = arg.devices[0]->get_bdf();
+		ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_reset_gpu_command(gpu_bdf, arg);
+		std::string param{"gpureset"};
+		int error = handle_exceptions(ret, param, arg);
+		if (error == 0) {
+			for (unsigned int i = 0; i < gpu_count; i++) {
 				std::cout << "GPU: " << arg.devices[i]->get_gpu_index() << std::endl;
 				std::cout << "    GPU_RESET: Successfully reset GPU" << std::endl;
 			}

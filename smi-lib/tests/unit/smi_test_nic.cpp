@@ -27,6 +27,7 @@ extern "C" {
 #include "common/smi_cmd.h"
 #include "smi_processor_handle.h"
 #include "smi_nic_interface.h"
+#include "smi_nic_utils.h"
 }
 
 #include "smi_system_mock.hpp"
@@ -36,11 +37,11 @@ extern "C" {
 class AmdSmiNicTests : public amdsmi::AmdSmiTest {
 public:
 	struct statusPair {
-		smi_nic_status nic_status;
+		smi_nic_status_t nic_status;
 		amdsmi_status_t amdsmi_status;
 	};
 
-	statusPair map_status[8] = {
+	statusPair map_status[9] = {
 		{SMI_NIC_STATUS_SUCCESS, AMDSMI_STATUS_SUCCESS},
 		{SMI_NIC_STATUS_ERROR, AMDSMI_STATUS_API_FAILED},
 		{SMI_NIC_STATUS_WRONG_PARAM, AMDSMI_STATUS_INVAL},
@@ -48,20 +49,21 @@ public:
 		{SMI_NIC_STATUS_NO_RESOURCE, AMDSMI_STATUS_OUT_OF_RESOURCES},
 		{SMI_NIC_STATUS_NOT_SUPPORTED, AMDSMI_STATUS_NOT_SUPPORTED},
 		{SMI_NIC_STATUS_NOT_INIT, AMDSMI_STATUS_NOT_INIT},
-		{SMI_NIC_STATUS_NO_DATA, AMDSMI_STATUS_NO_DATA}
+		{SMI_NIC_STATUS_NO_DATA, AMDSMI_STATUS_NO_DATA},
+		{SMI_NIC_STATUS_DRIVER_NOT_LOADED, AMDSMI_STATUS_DRIVER_NOT_LOADED}
 	};
 };
 
 TEST_F(AmdSmiNicTests, GetNicDriverInfo) {
 	amdsmi_nic_driver_info_t driver_info;
 	int ret;
-	smi_nic_status status;
+	smi_nic_status_t status;
 	int num_status_codes = 0;
 
 	status = get_nic_api_status();
 	num_status_codes = sizeof(map_status)/sizeof(map_status[0]);
 	for (int i = SMI_NIC_STATUS_SUCCESS; i < num_status_codes; i++) {
-		set_nic_api_status((smi_nic_status)i);
+		set_nic_api_status((smi_nic_status_t)i);
 		ret = amdsmi_get_nic_driver_info(&NIC_MOCK_HANDLE, &driver_info);
 		ASSERT_EQ(ret, map_status[i].amdsmi_status);
 		if (i == SMI_NIC_STATUS_SUCCESS) {
@@ -77,7 +79,7 @@ TEST_F(AmdSmiNicTests, GetNicDriverInfo) {
 	ret = amdsmi_get_nic_driver_info(&NIC_MOCK_HANDLE, nullptr);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-	struct smi_gpu_handle gpu_handle = {SMI_PROCESSOR_TYPE_AMD_GPU, {0}};
+	struct smi_gpu_handle gpu_handle = {SMI_HANDLE_TYPE_AMD_GPU, {0}};
 	ret = amdsmi_get_nic_driver_info(&gpu_handle, &driver_info);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
@@ -85,13 +87,13 @@ TEST_F(AmdSmiNicTests, GetNicDriverInfo) {
 TEST_F(AmdSmiNicTests, GetNicAsicInfo) {
 	amdsmi_nic_asic_info_t asic_info;
 	int ret;
-	smi_nic_status status;
+	smi_nic_status_t status;
 	int num_status_codes = 0;
 
 	status = get_nic_api_status();
 	num_status_codes = sizeof(map_status)/sizeof(map_status[0]);
 	for (int i = SMI_NIC_STATUS_SUCCESS; i < num_status_codes; i++) {
-		set_nic_api_status((smi_nic_status)i);
+		set_nic_api_status((smi_nic_status_t)i);
 		ret = amdsmi_get_nic_asic_info(&NIC_MOCK_HANDLE, &asic_info);
 		ASSERT_EQ(ret, map_status[i].amdsmi_status);
 		if (i == SMI_NIC_STATUS_SUCCESS) {
@@ -115,7 +117,7 @@ TEST_F(AmdSmiNicTests, GetNicAsicInfo) {
 	ret = amdsmi_get_nic_asic_info(&NIC_MOCK_HANDLE, nullptr);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-	struct smi_gpu_handle gpu_handle = {SMI_PROCESSOR_TYPE_AMD_GPU, {0}};
+	struct smi_gpu_handle gpu_handle = {SMI_HANDLE_TYPE_AMD_GPU, {0}};
 	ret = amdsmi_get_nic_asic_info(&gpu_handle, &asic_info);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
@@ -123,13 +125,13 @@ TEST_F(AmdSmiNicTests, GetNicAsicInfo) {
 TEST_F(AmdSmiNicTests, GetNicBusInfo) {
 	amdsmi_nic_bus_info_t bus_info;
 	int ret;
-	smi_nic_status status;
+	smi_nic_status_t status;
 	int num_status_codes = 0;
 
 	status = get_nic_api_status();
 	num_status_codes = sizeof(map_status)/sizeof(map_status[0]);
 	for (int i = SMI_NIC_STATUS_SUCCESS; i < num_status_codes; i++) {
-		set_nic_api_status((smi_nic_status)i);
+		set_nic_api_status((smi_nic_status_t)i);
 		ret = amdsmi_get_nic_bus_info(&NIC_MOCK_HANDLE, &bus_info);
 		ASSERT_EQ(ret, map_status[i].amdsmi_status);
 		if (i == SMI_NIC_STATUS_SUCCESS) {
@@ -149,7 +151,7 @@ TEST_F(AmdSmiNicTests, GetNicBusInfo) {
 	ret = amdsmi_get_nic_bus_info(&NIC_MOCK_HANDLE, nullptr);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-	struct smi_gpu_handle gpu_handle = {SMI_PROCESSOR_TYPE_AMD_GPU, {0}};
+	struct smi_gpu_handle gpu_handle = {SMI_HANDLE_TYPE_AMD_GPU, {0}};
 	ret = amdsmi_get_nic_bus_info(&gpu_handle, &bus_info);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
@@ -157,13 +159,13 @@ TEST_F(AmdSmiNicTests, GetNicBusInfo) {
 TEST_F(AmdSmiNicTests, GetNicNumaInfo) {
 	amdsmi_nic_numa_info_t numa_info;
 	int ret;
-	smi_nic_status status;
+	smi_nic_status_t status;
 	int num_status_codes = 0;
 
 	status = get_nic_api_status();
 	num_status_codes = sizeof(map_status)/sizeof(map_status[0]);
 	for (int i = SMI_NIC_STATUS_SUCCESS; i < num_status_codes; i++) {
-		set_nic_api_status((smi_nic_status)i);
+		set_nic_api_status((smi_nic_status_t)i);
 		ret = amdsmi_get_nic_numa_info(&NIC_MOCK_HANDLE, &numa_info);
 		ASSERT_EQ(ret, map_status[i].amdsmi_status);
 		if (i == SMI_NIC_STATUS_SUCCESS) {
@@ -179,7 +181,7 @@ TEST_F(AmdSmiNicTests, GetNicNumaInfo) {
 	ret = amdsmi_get_nic_numa_info(&NIC_MOCK_HANDLE, nullptr);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-	struct smi_gpu_handle gpu_handle = {SMI_PROCESSOR_TYPE_AMD_GPU, {0}};
+	struct smi_gpu_handle gpu_handle = {SMI_HANDLE_TYPE_AMD_GPU, {0}};
 	ret = amdsmi_get_nic_numa_info(&gpu_handle, &numa_info);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
@@ -187,13 +189,13 @@ TEST_F(AmdSmiNicTests, GetNicNumaInfo) {
 TEST_F(AmdSmiNicTests, GetNicPortInfo) {
 	amdsmi_nic_port_info_t port_info;
 	int ret;
-	smi_nic_status status;
+	smi_nic_status_t status;
 	int num_status_codes = 0;
 
 	status = get_nic_api_status();
 	num_status_codes = sizeof(map_status)/sizeof(map_status[0]);
 	for (int i = SMI_NIC_STATUS_SUCCESS; i < num_status_codes; i++) {
-		set_nic_api_status((smi_nic_status)i);
+		set_nic_api_status((smi_nic_status_t)i);
 		ret = amdsmi_get_nic_port_info(&NIC_MOCK_HANDLE, &port_info);
 		ASSERT_EQ(ret, map_status[i].amdsmi_status);
 		if (i == SMI_NIC_STATUS_SUCCESS) {
@@ -208,7 +210,7 @@ TEST_F(AmdSmiNicTests, GetNicPortInfo) {
 			EXPECT_STREQ(port_info.ports[0].link_state, "UP");
 			EXPECT_EQ(port_info.ports[0].link_speed, 10000);
 			EXPECT_EQ(port_info.ports[0].active_fec, 1);
-			EXPECT_STREQ(port_info.ports[0].autoneg, "ENABLED");
+			EXPECT_STREQ(port_info.ports[0].autoneg, "ON");
 			EXPECT_STREQ(port_info.ports[0].pause_autoneg, "ON");
 			EXPECT_STREQ(port_info.ports[0].pause_rx, "ON");
 			EXPECT_STREQ(port_info.ports[0].pause_tx, "ON");
@@ -222,7 +224,7 @@ TEST_F(AmdSmiNicTests, GetNicPortInfo) {
 	ret = amdsmi_get_nic_port_info(&NIC_MOCK_HANDLE, nullptr);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-	struct smi_gpu_handle gpu_handle = {SMI_PROCESSOR_TYPE_AMD_GPU, {0}};
+	struct smi_gpu_handle gpu_handle = {SMI_HANDLE_TYPE_AMD_GPU, {0}};
 	ret = amdsmi_get_nic_port_info(&gpu_handle, &port_info);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
@@ -231,13 +233,13 @@ TEST_F(AmdSmiNicTests, GetNicVendorStatistics) {
 	uint32_t num_stats;
 	amdsmi_nic_stat_t *stats;
 	int ret;
-	smi_nic_status status;
+	smi_nic_status_t status;
 	int num_status_codes = 0;
 
 	status = get_nic_api_status();
 	num_status_codes = sizeof(map_status)/sizeof(map_status[0]);
 	for (int i = SMI_NIC_STATUS_SUCCESS; i < num_status_codes; i++) {
-		set_nic_api_status((smi_nic_status)i);
+		set_nic_api_status((smi_nic_status_t)i);
 
 		ret = amdsmi_get_nic_vendor_statistics(&NIC_MOCK_HANDLE, 0, &num_stats, nullptr);
 		ASSERT_EQ(ret, map_status[i].amdsmi_status);
@@ -245,16 +247,16 @@ TEST_F(AmdSmiNicTests, GetNicVendorStatistics) {
 			EXPECT_EQ(num_stats, 7);
 		}
 
+		stats = (amdsmi_nic_stat_t*)malloc(7 * sizeof(amdsmi_nic_stat_t));
+		uint32_t actual_count = 7;
+		ret = amdsmi_get_nic_vendor_statistics(&NIC_MOCK_HANDLE, 0, &actual_count, stats);
+		ASSERT_EQ(ret, map_status[i].amdsmi_status);
 		if (i == SMI_NIC_STATUS_SUCCESS) {
-			stats = (amdsmi_nic_stat_t*)malloc(num_stats * sizeof(amdsmi_nic_stat_t));
-			uint32_t actual_count = num_stats;
-			ret = amdsmi_get_nic_vendor_statistics(&NIC_MOCK_HANDLE, 0, &actual_count, stats);
-			ASSERT_EQ(ret, map_status[i].amdsmi_status);
 			EXPECT_EQ(actual_count, 7);
 			EXPECT_STREQ(stats[0].name, "vendor_stat1");
 			EXPECT_EQ(stats[0].value, 300);
-			free(stats);
 		}
+		free(stats);
 	}
 	set_nic_api_status(status);
 
@@ -264,7 +266,7 @@ TEST_F(AmdSmiNicTests, GetNicVendorStatistics) {
 	ret = amdsmi_get_nic_vendor_statistics(&NIC_MOCK_HANDLE, 0, nullptr, nullptr);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-	struct smi_gpu_handle gpu_handle = {SMI_PROCESSOR_TYPE_AMD_GPU, {0}};
+	struct smi_gpu_handle gpu_handle = {SMI_HANDLE_TYPE_AMD_GPU, {0}};
 	ret = amdsmi_get_nic_vendor_statistics(&gpu_handle, 0, &num_stats, nullptr);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
@@ -273,13 +275,13 @@ TEST_F(AmdSmiNicTests, GetNicPortStatistics) {
 	uint32_t num_stats;
 	amdsmi_nic_stat_t *stats;
 	int ret;
-	smi_nic_status status;
+	smi_nic_status_t status;
 	int num_status_codes = 0;
 
 	status = get_nic_api_status();
 	num_status_codes = sizeof(map_status)/sizeof(map_status[0]);
 	for (int i = SMI_NIC_STATUS_SUCCESS; i < num_status_codes; i++) {
-		set_nic_api_status((smi_nic_status)i);
+		set_nic_api_status((smi_nic_status_t)i);
 
 		ret = amdsmi_get_nic_port_statistics(&NIC_MOCK_HANDLE, 0, &num_stats, nullptr);
 		ASSERT_EQ(ret, map_status[i].amdsmi_status);
@@ -287,16 +289,16 @@ TEST_F(AmdSmiNicTests, GetNicPortStatistics) {
 			EXPECT_EQ(num_stats, 7);
 		}
 
+		stats = (amdsmi_nic_stat_t*)malloc(7 * sizeof(amdsmi_nic_stat_t));
+		uint32_t actual_count = 7;
+		ret = amdsmi_get_nic_port_statistics(&NIC_MOCK_HANDLE, 0, &actual_count, stats);
+		ASSERT_EQ(ret, map_status[i].amdsmi_status);
 		if (i == SMI_NIC_STATUS_SUCCESS) {
-			stats = (amdsmi_nic_stat_t*)malloc(num_stats * sizeof(amdsmi_nic_stat_t));
-			uint32_t actual_count = num_stats;
-			ret = amdsmi_get_nic_port_statistics(&NIC_MOCK_HANDLE, 0, &actual_count, stats);
-			ASSERT_EQ(ret, map_status[i].amdsmi_status);
 			EXPECT_EQ(actual_count, 7);
 			EXPECT_STREQ(stats[0].name, "port_stat1");
 			EXPECT_EQ(stats[0].value, 300);
-			free(stats);
 		}
+		free(stats);
 	}
 	set_nic_api_status(status);
 
@@ -306,7 +308,7 @@ TEST_F(AmdSmiNicTests, GetNicPortStatistics) {
 	ret = amdsmi_get_nic_port_statistics(&NIC_MOCK_HANDLE, 0, nullptr, nullptr);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-	struct smi_gpu_handle gpu_handle = {SMI_PROCESSOR_TYPE_AMD_GPU, {0}};
+	struct smi_gpu_handle gpu_handle = {SMI_HANDLE_TYPE_AMD_GPU, {0}};
 	ret = amdsmi_get_nic_port_statistics(&gpu_handle, 0, &num_stats, nullptr);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
@@ -314,18 +316,18 @@ TEST_F(AmdSmiNicTests, GetNicPortStatistics) {
 TEST_F(AmdSmiNicTests, GetNicRdmaDevInfo) {
 	amdsmi_nic_rdma_devices_info_t rdma_info;
 	int ret;
-	smi_nic_status status;
+	smi_nic_status_t status;
 	int num_status_codes = 0;
 
 	status = get_nic_api_status();
 	num_status_codes = sizeof(map_status)/sizeof(map_status[0]);
 	for (int i = SMI_NIC_STATUS_SUCCESS; i < num_status_codes; i++) {
-		set_nic_api_status((smi_nic_status)i);
+		set_nic_api_status((smi_nic_status_t)i);
 		ret = amdsmi_get_nic_rdma_dev_info(&NIC_MOCK_HANDLE, &rdma_info);
 		ASSERT_EQ(ret, map_status[i].amdsmi_status);
 		if (i == SMI_NIC_STATUS_SUCCESS) {
 			EXPECT_EQ(rdma_info.num_rdma_dev, 1);
-			EXPECT_STREQ(rdma_info.rdma_dev_info[0].rdma_dev, "mlx5_0");
+			EXPECT_STREQ(rdma_info.rdma_dev_info[0].rdma_dev, "ionic_0");
 			EXPECT_STREQ(rdma_info.rdma_dev_info[0].node_guid, "0x1234567890abcdef");
 			EXPECT_STREQ(rdma_info.rdma_dev_info[0].node_type, "CA");
 			EXPECT_STREQ(rdma_info.rdma_dev_info[0].sys_image_guid, "0xfedcba0987654321");
@@ -346,7 +348,7 @@ TEST_F(AmdSmiNicTests, GetNicRdmaDevInfo) {
 	ret = amdsmi_get_nic_rdma_dev_info(&NIC_MOCK_HANDLE, nullptr);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-	struct smi_gpu_handle gpu_handle = {SMI_PROCESSOR_TYPE_AMD_GPU, {0}};
+	struct smi_gpu_handle gpu_handle = {SMI_HANDLE_TYPE_AMD_GPU, {0}};
 	ret = amdsmi_get_nic_rdma_dev_info(&gpu_handle, &rdma_info);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
@@ -355,13 +357,13 @@ TEST_F(AmdSmiNicTests, GetNicRdmaPortStatistics) {
 	uint32_t num_stats;
 	amdsmi_nic_stat_t *stats;
 	int ret;
-	smi_nic_status status;
+	smi_nic_status_t status;
 	int num_status_codes = 0;
 
 	status = get_nic_api_status();
 	num_status_codes = sizeof(map_status)/sizeof(map_status[0]);
 	for (int i = SMI_NIC_STATUS_SUCCESS; i < num_status_codes; i++) {
-		set_nic_api_status((smi_nic_status)i);
+		set_nic_api_status((smi_nic_status_t)i);
 
 		ret = amdsmi_get_nic_rdma_port_statistics(&NIC_MOCK_HANDLE, 0, &num_stats, nullptr);
 		ASSERT_EQ(ret, map_status[i].amdsmi_status);
@@ -369,16 +371,16 @@ TEST_F(AmdSmiNicTests, GetNicRdmaPortStatistics) {
 			EXPECT_EQ(num_stats, 7);
 		}
 
+		stats = (amdsmi_nic_stat_t*)malloc(7 * sizeof(amdsmi_nic_stat_t));
+		uint32_t actual_count = 7;
+		ret = amdsmi_get_nic_rdma_port_statistics(&NIC_MOCK_HANDLE, 0, &actual_count, stats);
+		ASSERT_EQ(ret, map_status[i].amdsmi_status);
 		if (i == SMI_NIC_STATUS_SUCCESS) {
-			stats = (amdsmi_nic_stat_t*)malloc(num_stats * sizeof(amdsmi_nic_stat_t));
-			uint32_t actual_count = num_stats;
-			ret = amdsmi_get_nic_rdma_port_statistics(&NIC_MOCK_HANDLE, 0, &actual_count, stats);
-			ASSERT_EQ(ret, map_status[i].amdsmi_status);
 			EXPECT_EQ(actual_count, 7);
 			EXPECT_STREQ(stats[0].name, "rdma_stat1");
 			EXPECT_EQ(stats[0].value, 300);
-			free(stats);
 		}
+		free(stats);
 	}
 	set_nic_api_status(status);
 
@@ -389,7 +391,14 @@ TEST_F(AmdSmiNicTests, GetNicRdmaPortStatistics) {
 	ret = amdsmi_get_nic_rdma_port_statistics(&NIC_MOCK_HANDLE, 0, nullptr, nullptr);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-	struct smi_gpu_handle gpu_handle = {SMI_PROCESSOR_TYPE_AMD_GPU, {0}};
+	struct smi_gpu_handle gpu_handle = {SMI_HANDLE_TYPE_AMD_GPU, {0}};
 	ret = amdsmi_get_nic_rdma_port_statistics(&gpu_handle, 0, &num_stats, nullptr);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+}
+
+TEST_F(AmdSmiNicTests, MapNicStatus) {
+	for (int i = 0; i < (int)(sizeof(map_status)/sizeof(map_status[0])); i++) {
+		amdsmi_status_t result = smi_map_nic_status(map_status[i].nic_status);
+		ASSERT_EQ(result, map_status[i].amdsmi_status);
+	}
 }

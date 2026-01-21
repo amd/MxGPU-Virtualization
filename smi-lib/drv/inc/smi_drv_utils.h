@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -406,5 +406,21 @@ enum smi_accelerator_partition_resource_type smi_map_resource_type(enum amdgv_gp
 /*
 */
 enum smi_vf_sched_state smi_map_sched_state(enum amdgv_sched_state state);
+
+/**
+ * @brief Maps an enum representing a LibGV npm status to an enum representing an SMI npm status.
+ *
+ * This function takes an enum value representing a LibGV npm status and maps it to an
+ * equivalent enum value representing an SMI npm status. The mapping is performed based on
+ * predefined set of rules. If the provided LibGV npm status does not match any of the
+ * predefined values, it is mapped to 0xFFFFFFFF.
+ *
+ * @param[in] amdgv_npm_status The enum value representing LibGV npm status.
+ * @return The enum value representing the corresponding mapped SMI npm status.
+ *
+ * @note This function assumes that the enum values for both enums (smi_npm_status and AMDGV_GPU_NPM_STATUS)
+ * are compatible and represent similar concepts.
+ */
+enum smi_npm_status smi_map_npm_status(enum AMDGV_GPU_NPM_STATUS amdgv_npm_status);
 
 #endif // __SMI_DRV_UTILS_H__

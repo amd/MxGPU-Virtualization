@@ -1,4 +1,4 @@
-/* * Copyright (C) 2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2024-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -91,6 +91,7 @@ private:
 
 	// Linux platform sub-methods
 	void configure_linux_host_mi300(const Arguments& arg);
+	void configure_linux_host_mi350(const Arguments& arg);
 	void configure_linux_host_mi200(const Arguments& arg);
 	void configure_linux_host_standard(const Arguments& arg);
 	void set_common_linux_host_settings();

@@ -744,6 +744,28 @@ struct amdgv_gpumon_ras_policy_info {
 	uint32_t reserved[8];
 };
 
+/* PTL (Peak TOPS Limiter) structures and functions */
+
+enum amdgv_ptl_format_type {
+	AMDGV_PTL_FORMAT_I8          = 0x00000000,
+	AMDGV_PTL_FORMAT_F16         = 0x00000001,
+	AMDGV_PTL_FORMAT_BF16        = 0x00000002,
+	AMDGV_PTL_FORMAT_F32         = 0x00000003,
+	AMDGV_PTL_FORMAT_F64         = 0x00000004,
+	AMDGV_PTL_FORMAT_INVALID     = 0xFFFFFFFF,
+};
+
+struct amdgv_ptl_status_info {
+	uint32_t ptl_enabled;
+	enum amdgv_ptl_format_type pref_format1;
+	enum amdgv_ptl_format_type pref_format2;
+};
+
+struct amdgv_ptl_enable_info {
+	enum amdgv_ptl_format_type pref_format1;
+	enum amdgv_ptl_format_type pref_format2;
+};
+
 /* VF Query Functions */
 int amdgv_gpumon_get_metrics(amdgv_dev_t dev, struct amdgv_gpumon_metrics *metrics);
 int amdgv_gpumon_get_gpu_power_usage(amdgv_dev_t dev, int *val);
@@ -945,5 +967,10 @@ int amdgv_gpumon_get_num_static_metrics_ext_entries(amdgv_dev_t dev,
 		uint32_t *entries);
 int amdgv_gpumon_get_npm_info(amdgv_dev_t dev, struct amdgv_gpumon_npm_info *npm_info);
 int amdgv_gpumon_get_node_handle(amdgv_dev_t dev, void **node_handle);
+
+/* PTL APIs */
+int amdgv_gpumon_ptl_query_status(amdgv_dev_t dev, struct amdgv_ptl_status_info *info);
+int amdgv_gpumon_ptl_enable(amdgv_dev_t dev, struct amdgv_ptl_enable_info *info);
+int amdgv_gpumon_ptl_disable(amdgv_dev_t dev);
 
 #endif // __AMDGV_GPUMON_H__

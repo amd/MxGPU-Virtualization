@@ -125,6 +125,13 @@ int amdgv_vfmgr_init_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, bool mb
 
 	/* FB content is already cleared during whole GPU reset (BACO/MODE1). */
 	if (!adapt->reset.reset_state) {
+		/* For VM destroy sequence, add delay to allow all devices to finish
+		 * FLR sequence before starting FB cleaning.
+		 */
+		if ((adapt->asic_type == CHIP_MI350X) && (flag == AMDGV_VF_FB_CLEAR_DIRTY)) {
+			oss_msleep(800);
+		}
+
 		/* clear VF FB at VM allocation before copy_ip_data */
 		tmp_ret = amdgv_misc_clear_vf_fb(adapt, idx_vf, pattern);
 		if (tmp_ret)
@@ -2243,6 +2250,19 @@ static int amdgv_vfmgr_init_v2_crit_region_tables(struct amdgv_adapter *adapt, u
 	amdgv_vfmgr_init_v2_crit_region_table_sizes(adapt, idx_vf);
 	fb_offset = MBYTES_TO_BYTES(adapt->array_vf[idx_vf].fb_offset);
 
+	if (adapt->array_vf[idx_vf].memmgr_vf.is_init) {
+		AMDGV_INFO("VF%d memmgr already initialized, cleaning up first\n", idx_vf);
+
+		for (tb_idx = 0; tb_idx < AMD_SRIOV_MSG_MAX_TABLE_ID; tb_idx++) {
+			amdgv_memmgr_free_by_id(&adapt->array_vf[idx_vf].memmgr_vf,
+						amdgv_vfmgr_table_id_to_memmgr_id(tb_idx));
+		}
+
+		amdgv_memmgr_free_by_id(&adapt->array_vf[idx_vf].memmgr_vf, MEM_ECC_BAD_PAGE);
+
+		amdgv_memmgr_fini(adapt, &adapt->array_vf[idx_vf].memmgr_vf);
+	}
+
 	/* Allocate a memory manager for the VF new critical region (incl. bad pages) */
 	if (amdgv_memmgr_init(adapt, &adapt->array_vf[idx_vf].memmgr_vf, fb_offset,
 			      AMDGV_V2_CRIT_REGION_SIZE_BYTES, 0, false)) {
@@ -2489,6 +2509,9 @@ int amdgv_vfmgr_update_pf2vf_message(struct amdgv_adapter *adapt, uint32_t idx_v
 
 	pf2vf_msg->feature_flags.flags.xgmi_ta_ext_peer_link =
 		 amdgv_xgmi_is_guest_ext_peer_link_ta_cmd_supported(adapt);
+
+	/* PTL support flag is set by chip-specific code in adapt->ptl_supported */
+	pf2vf_msg->feature_flags.flags.ptl_support = adapt->ptl_supported ? 1 : 0;
 
 	amdgv_vfmgr_get_adapt_uuid(adapt, &pf2vf_msg->uuid);
 

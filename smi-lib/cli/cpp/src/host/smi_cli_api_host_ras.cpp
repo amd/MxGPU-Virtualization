@@ -35,6 +35,7 @@
 #include <string>
 #include <filesystem>
 #include <string>
+#include <climits>
 
 #ifdef _WIN32
 #include <direct.h>
@@ -87,12 +88,15 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_CPER_ENTRIES)(amdsmi_processor_handle, 
 		amdsmi_cper_hdr_t**, uint64_t *, uint64_t *);
 
 typedef amdsmi_status_t (*AMDSMI_GET_AFIDS_FROM_CPER)(char*cper_buffer, uint32_t buf_size, uint64_t *afids, uint32_t *num_afids);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_RAS_POLICY_INFO)(amdsmi_processor_handle,
+		amdsmi_gpu_ras_policy_info_t *);
 
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_GPU_DEVICE_BDF host_amdsmi_get_gpu_device_bdf;
 extern AMDSMI_GET_GPU_CPER_ENTRIES host_amdsmi_get_gpu_cper_entries;
 extern AMDSMI_GET_PROCESSOR_HANDLES host_amdsmi_get_processor_handles;
 extern AMDSMI_GET_AFIDS_FROM_CPER host_amdsmi_get_afids_from_cper;
+extern AMDSMI_GET_GPU_RAS_POLICY_INFO host_amdsmi_get_gpu_ras_policy_info;
 
 #define GUID_INIT(a, b, c, d0, d1, d2, d3, d4, d5, d6, d7)                 \
 { { (a) & 0xff, ((a) >> 8) & 0xff, ((a) >> 16) & 0xff, ((a) >> 24) & 0xff, \
@@ -446,6 +450,10 @@ int AmdSmiApiHost::amdsmi_get_cper_afid_command(Arguments arg, std::string& out)
 
 	std::vector<char> buffer(fileSize);
 
+	if (fileSize <= 0 || fileSize == LLONG_MAX) {
+		throw SmiToolInvalidFilePathException(arg.cper_file_path);
+	}
+
 	if (!file.read(buffer.data(), fileSize)) {
 		throw SmiToolInvalidFilePathException(arg.cper_file_path);
 	}
@@ -462,5 +470,66 @@ int AmdSmiApiHost::amdsmi_get_cper_afid_command(Arguments arg, std::string& out)
 	out += "\n";
 
 	return ret;
+}
+
+int AmdSmiApiHost::amdsmi_get_policy_command(uint64_t processor_bdf, Arguments arg, std::string& out_string)
+{
+	int ret = 0;
+	amdsmi_gpu_ras_policy_info_t ras_policy_info;
+	nlohmann::ordered_json json_out;
+	uint8_t major_version = 0;
+	uint8_t minor_version = 0;
+	uint16_t dram_non_critical_region_threshold = 0;
+	uint16_t dram_critical_region_threshold = 0;
+	std::string major_version_str{};
+	std::string minor_version_str{};
+	std::string dram_non_critical_region_threshold_str{};
+	std::string dram_critical_region_threshold_str{};
+
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		return ret;
+	}
+	ret = host_amdsmi_get_gpu_ras_policy_info(processor, &ras_policy_info);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		return ret;
+	}
+	major_version = ras_policy_info.major_version;
+	minor_version = ras_policy_info.minor_version;
+
+	if(ras_policy_info.major_version == 4 && ras_policy_info.minor_version == 0) {
+		dram_non_critical_region_threshold = ras_policy_info.policy_data.v4_0.dram_non_critical_region_threshold;
+		dram_critical_region_threshold = ras_policy_info.policy_data.v4_0.dram_critical_region_threshold;
+		major_version_str = string_format("%u", major_version);
+		minor_version_str = string_format("%u", minor_version);
+		dram_non_critical_region_threshold_str = string_format("%u", dram_non_critical_region_threshold);
+		dram_critical_region_threshold_str = string_format("%u", dram_critical_region_threshold);
+	}
+
+	if (arg.output == json) {
+		json_out = {
+			{"major_version", major_version},
+			{"minor_version", minor_version},
+			{"dram_non_critical_region_threshold", dram_non_critical_region_threshold},
+			{"dram_critical_region_threshold", dram_critical_region_threshold}
+		};
+		out_string = json_out.dump(4);
+	} else if (arg.output == csv) {
+		out_string = string_format(",%s,%s,%s,%s", major_version_str.c_str(),
+						     minor_version_str.c_str(),
+						     dram_non_critical_region_threshold_str.c_str(),
+						     dram_critical_region_threshold_str.c_str());
+	} else {
+		out_string = string_format(rasPolicyTemplate, major_version_str.c_str(),
+							minor_version_str.c_str(),
+							dram_non_critical_region_threshold_str.c_str(),
+							dram_critical_region_threshold_str.c_str());
+	}
+
+	return AMDSMI_STATUS_SUCCESS;
 }
 

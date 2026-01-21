@@ -21,40 +21,23 @@
  */
 
 #include "smi_nic.h"
-#include "smi_sysfs.h"
-#include "smi_ethtool_ioctl.h"
-#include <linux/ethtool.h>
+
+#include <cstring>
+
 #include <filesystem>
 #include <algorithm>
 #include <fstream>
 #include <string>
 #include <memory>
-#include <cstring>
 #include <array>
 #include <sstream>
 #include <iomanip>
+#include <unordered_map>
 
-static int get_type_value(const std::string& text, const std::string& substring)
-{
-    size_t pos = text.find(substring);
-    if (pos != std::string::npos) {
-        pos += substring.length();
-
-		if (std::isspace(text[pos])) {
-			++pos;
-		} else {
-			return 0;
-		}
-
-        std::string remainingText = text.substr(pos);
-        std::stringstream ss(remainingText);
-        int value;
-        ss >> value;
-
-        return value;
-    }
-    return 0;
-}
+#include <linux/ethtool.h>
+#include <linux/if_arp.h>
+#include "smi_sysfs.h"
+#include "smi_ethtool_ioctl.h"
 
 static std::string nic_type_to_string(NicType type)
 {
@@ -101,13 +84,12 @@ SmiNicPort::SmiNicPort(const std::string& iface, const std::string& bdf, const s
 	: iface_(iface), bdf_(bdf), sysfs_class_path_(sysfs_class_path), sysfs_bus_path_(sysfs_bus_path)
 {
 	port_num_ = get_sysfs_data<uint32_t>(sysfs_class_path_ + "/dev_port");
-	auto type_str = get_sysfs_data<std::string>(sysfs_class_path_ + "/type");
+	auto type_value = get_sysfs_data<int>(sysfs_class_path_ + "/type");
 
-	if (type_str.has_value()) {
-		const std::string& type_value = type_str.value();
-		if (type_value == "1") {
+	if (type_value.has_value()) {
+		if (type_value.value() == ARPHRD_ETHER) {
 			type_ = NicType::Ethernet;
-		} else if (type_value == "32") {
+		} else if (type_value.value() == ARPHRD_INFINIBAND) {
 			type_ = NicType::InfiniBand;
 		} else {
 			type_ = NicType::Unknown;
@@ -304,9 +286,7 @@ void SmiNicPort::collect_vendor_statistics()
 
 	size_t strings_len = sizeof(ethtool_gstrings) + stats_num * ETH_GSTRING_LEN;
 	std::unique_ptr<ethtool_gstrings, decltype(&free)> strings(
-		static_cast<ethtool_gstrings*>(std::malloc(strings_len)), &free);
-
-	std::memset(strings.get(), 0, strings_len);
+		static_cast<ethtool_gstrings*>(std::calloc(1, strings_len)), &free);
 	strings->cmd = ETHTOOL_GSTRINGS;
 	strings->string_set = ETH_SS_STATS;
 	strings->len = static_cast<__u32>(stats_num);
@@ -318,8 +298,7 @@ void SmiNicPort::collect_vendor_statistics()
 
 	size_t stats_len = sizeof(ethtool_stats) + stats_num * sizeof(uint64_t);
 	std::unique_ptr<ethtool_stats, decltype(&free)> stats(
-		static_cast<ethtool_stats*>(std::malloc(stats_len)), &free);
-	std::memset(stats.get(), 0, stats_len);
+		static_cast<ethtool_stats*>(std::calloc(1, stats_len)), &free);
 	stats->cmd = ETHTOOL_GSTATS;
 	stats->n_stats = static_cast<__u32>(stats_num);
 
@@ -353,7 +332,7 @@ const std::map<std::string, uint64_t>& SmiNicPort::get_vendor_stats_map() const
 
 void SmiNicPort::collect_standard_statistics()
 {
-	std::string stats_path = "/sys/class/net/" + iface_ + "/statistics";
+	std::string stats_path = sysfs_class_path_ + "/statistics";
 
 	if (!std::filesystem::exists(stats_path) || !std::filesystem::is_directory(stats_path)) {
 		return;
@@ -391,28 +370,20 @@ std::optional<std::string> SmiNicPort::read_vpd_content() const
 
 std::string SmiNicPort::map_vendor_stat_to_string(SmiVendorStat stat) const
 {
-	switch (stat) {
-		case SmiVendorStat::TX_PACKETS:
-			return "tx_packets";
-		case SmiVendorStat::RX_PACKETS:
-			return "rx_packets";
-		case SmiVendorStat::TX_BYTES:
-			return "tx_bytes";
-		case SmiVendorStat::RX_BYTES:
-			return "rx_bytes";
-		case SmiVendorStat::TX_CSUM_NONE:
-			return "tx_csum_none";
-		case SmiVendorStat::RX_CSUM_NONE:
-			return "rx_csum_none";
-		case SmiVendorStat::TX_CSUM:
-			return "tx_csum";
-		case SmiVendorStat::TX_TSO:
-			return "tx_tso";
-		case SmiVendorStat::TX_TSO_BYTES:
-			return "tx_tso_bytes";
-		default:
-			return "";
-	}
+	static const std::unordered_map<SmiVendorStat, std::string> stat_map = {
+		{SmiVendorStat::TX_PACKETS, "tx_packets"},
+		{SmiVendorStat::RX_PACKETS, "rx_packets"},
+		{SmiVendorStat::TX_BYTES, "tx_bytes"},
+		{SmiVendorStat::RX_BYTES, "rx_bytes"},
+		{SmiVendorStat::TX_CSUM_NONE, "tx_csum_none"},
+		{SmiVendorStat::RX_CSUM_NONE, "rx_csum_none"},
+		{SmiVendorStat::TX_CSUM, "tx_csum"},
+		{SmiVendorStat::TX_TSO, "tx_tso"},
+		{SmiVendorStat::TX_TSO_BYTES, "tx_tso_bytes"}
+	};
+
+	auto it = stat_map.find(stat);
+	return (it != stat_map.end()) ? it->second : "";
 }
 
 bool SmiNicPort::vendor_stat_allowed(const std::string& stat_name) const
@@ -455,7 +426,19 @@ std::optional<uint8_t> SmiInfiniBandPort::port_num() const
 
 std::optional<std::string> SmiInfiniBandPort::state() const
 {
-	return get_sysfs_data<std::string>(sysfs_path_ + "/state");
+	auto raw_state = get_sysfs_data<std::string>(sysfs_path_ + "/state");
+	if (!raw_state.has_value()) {
+		return std::nullopt;
+	}
+
+	const std::string& state = raw_state.value();
+	auto pos = state.find(": ");
+
+	if (pos != std::string::npos) {
+		return state.substr(pos + 2);
+	}
+
+	return state;
 }
 
 std::optional<uint16_t> SmiInfiniBandPort::max_mtu() const
@@ -511,7 +494,19 @@ std::optional<std::string> SmiInfiniBand::node_guid() const
 
 std::optional<std::string> SmiInfiniBand::node_type() const
 {
-	return get_sysfs_data<std::string>(sysfs_path_ + "/node_type");
+	auto raw_node_type = get_sysfs_data<std::string>(sysfs_path_ + "/node_type");
+	if (!raw_node_type.has_value()) {
+		return std::nullopt;
+	}
+
+	const std::string& node_type = raw_node_type.value();
+	auto pos = node_type.find(": ");
+
+	if (pos != std::string::npos) {
+		return node_type.substr(pos + 2);
+	}
+
+	return node_type;
 }
 
 std::optional<std::string> SmiInfiniBand::sys_image_guid() const
@@ -542,8 +537,10 @@ uint8_t SmiInfiniBand::ports_num() const
 // **** SmiNic ****
 
 SmiNic::SmiNic(const std::string& iface, const std::string& bdf, NicType type,
-	 const std::string& sysfs_class_path,  const std::string& sysfs_bus_path)
-	: iface_(iface), bdf_(bdf), type_(type), sysfs_class_path_(sysfs_class_path), sysfs_bus_path_(sysfs_bus_path)
+	       const std::string& sysfs_class_path, const std::string& sysfs_bus_path,
+	       NicVendor vendor, NicProduct product)
+	: iface_(iface), bdf_(bdf), type_(type), vendor_(vendor), product_(product),
+	  sysfs_class_path_(sysfs_class_path), sysfs_bus_path_(sysfs_bus_path)
 {
 }
 
@@ -560,6 +557,16 @@ const std::string& SmiNic::bdf() const
 NicType SmiNic::type() const
 {
 	return type_;
+}
+
+NicVendor SmiNic::vendor() const
+{
+	return vendor_;
+}
+
+NicProduct SmiNic::product() const
+{
+	return product_;
 }
 
 const std::string SmiNic::port_type() const
@@ -651,7 +658,59 @@ std::optional<uint32_t> SmiNic::pcie_class() const
 	return get_sysfs_data<uint32_t>(sysfs_bus_path_ + "/class");
 }
 
+std::optional<uint8_t> SmiNic::max_pcie_width() const {
+	return get_sysfs_data<uint8_t>(sysfs_bus_path_ + "/max_link_width");
+}
+
+std::optional<uint32_t> SmiNic::max_pcie_speed() const {
+	return get_sysfs_data<uint32_t>(sysfs_bus_path_ + "/max_link_speed");
+}
+
+std::optional<uint8_t> SmiNic::numa_node() const {
+	return get_sysfs_data<uint8_t>(sysfs_bus_path_ + "/numa_node");
+}
+
+std::optional<std::string> SmiNic::numa_affinity(uint8_t node) const
+{
+	std::string path = "/sys/devices/system/node/node" + std::to_string(node) + "/cpulist";
+	return get_sysfs_data<std::string>(path);
+}
+
 std::optional<std::string> SmiNic::product_name() const
+{
+	return std::nullopt;
+}
+
+std::optional<std::string> SmiNic::part_number() const
+{
+	return std::nullopt;
+}
+
+std::optional<std::string> SmiNic::serial_number() const
+{
+	return std::nullopt;
+}
+
+std::optional<std::string> SmiNic::vendor_name() const
+{
+	return std::nullopt;
+}
+
+// **** SmiNicPensando ****
+
+SmiNicPensando::SmiNicPensando(const std::string& iface, const std::string& bdf, NicType type,
+			       const std::string& sysfs_class_path, const std::string& sysfs_bus_path,
+			       NicVendor vendor, NicProduct product)
+	: SmiNic(iface, bdf, type, sysfs_class_path, sysfs_bus_path, vendor, product)
+{
+}
+
+std::optional<std::string> SmiNicPensando::vendor_name() const
+{
+	return std::string("AMD Pensando Systems, Inc.");
+}
+
+std::optional<std::string> SmiNicPensando::product_name() const
 {
 	if (ports_.empty()) {
 		return std::nullopt;
@@ -675,7 +734,7 @@ std::optional<std::string> SmiNic::product_name() const
 	return std::nullopt;
 }
 
-std::optional<std::string> SmiNic::part_number() const
+std::optional<std::string> SmiNicPensando::part_number() const
 {
 	if (ports_.empty()) {
 		return std::nullopt;
@@ -700,7 +759,7 @@ std::optional<std::string> SmiNic::part_number() const
 	return std::nullopt;
 }
 
-std::optional<std::string> SmiNic::serial_number() const
+std::optional<std::string> SmiNicPensando::serial_number() const
 {
 	if (ports_.empty()) {
 		return std::nullopt;
@@ -725,36 +784,35 @@ std::optional<std::string> SmiNic::serial_number() const
 	return std::nullopt;
 }
 
-std::optional<std::string> SmiNic::vendor_name() const
+// **** SmiNicBroadcom ****
+
+SmiNicBroadcom::SmiNicBroadcom(const std::string& iface, const std::string& bdf, NicType type,
+			       const std::string& sysfs_class_path, const std::string& sysfs_bus_path,
+			       NicVendor vendor, NicProduct product)
+	: SmiNic(iface, bdf, type, sysfs_class_path, sysfs_bus_path, vendor, product)
 {
-	return std::string("AMD Pensando Systems, Inc.");
 }
 
-std::optional<uint8_t> SmiNic::max_pcie_width() const {
-	return get_sysfs_data<uint8_t>(sysfs_bus_path_ + "/max_link_width");
-}
-
-std::optional<uint32_t> SmiNic::max_pcie_speed() const {
-	return get_sysfs_data<uint32_t>(sysfs_bus_path_ + "/max_link_speed");
-}
-
-std::optional<uint8_t> SmiNic::numa_node() const {
-	return get_sysfs_data<uint8_t>(sysfs_bus_path_ + "/numa_node");
-}
-
-std::optional<std::string> SmiNic::numa_affinity(uint8_t node) const
+std::optional<std::string> SmiNicBroadcom::vendor_name() const
 {
-	std::string path = "/sys/devices/system/node/node" + std::to_string(node) + "/cpulist";
-	return get_sysfs_data<std::string>(path);
+	// TODO: broadcom - get vendor name
+	return std::string("Broadcom Inc.");
 }
 
-std::optional<int> SmiNic::topo_get_nic_link_type(uint8_t nic_numa_info, uint8_t processor_numa_info) const {
-	std::string path = "/sys/class/kfd/kfd/topology/nodes/" + std::to_string(nic_numa_info) + "/io_links/"
-					   + std::to_string(processor_numa_info) + "/properties";
+std::optional<std::string> SmiNicBroadcom::product_name() const
+{
+	// TODO: broadcom - get product name
+	return std::nullopt;
+}
 
-	auto properties = get_sysfs_data<std::string>(path);
-	if (!properties.has_value()) {
-		return 0;
-	}
-	return get_type_value(properties.value(), "type");
+std::optional<std::string> SmiNicBroadcom::part_number() const
+{
+	// TODO: broadcom - get part number
+	return std::nullopt;
+}
+
+std::optional<std::string> SmiNicBroadcom::serial_number() const
+{
+	// TODO: broadcom - get serial number
+	return std::nullopt;
 }

@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -173,7 +173,7 @@ int AmdSmiMetricCommand::metric_command_fb_usage(uint64_t processor,
 int AmdSmiMetricCommand::metric_command_energy(uint64_t processor,
 		std::string &formatted_string)
 {
-	if (!(AmdSmiPlatform::getInstance().is_host() && AmdSmiPlatform::getInstance().is_mi300()))
+	if (!(AmdSmiPlatform::getInstance().is_host() && (AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi350())))
 		return 2;
 
 	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_energy_metric_command(processor,
@@ -184,7 +184,7 @@ int AmdSmiMetricCommand::metric_command_energy(uint64_t processor,
 int AmdSmiMetricCommand::metric_command_gpuboard(uint64_t processor,
 		std::string &formatted_string)
 {
-	if (!(AmdSmiPlatform::getInstance().is_host() && AmdSmiPlatform::getInstance().is_mi300()))
+	if (!(AmdSmiPlatform::getInstance().is_host() && (AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi350())))
 		return 2;
 
 	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_gpuboard_command(processor, arg, formatted_string);
@@ -878,7 +878,7 @@ void AmdSmiMetricCommand::metric_command_csv_gpu(int gpu_index, uint64_t gpu_bdf
 		std::string param{"clock"};
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {
-			if (AmdSmiPlatform::getInstance().is_host() && AmdSmiPlatform::getInstance().is_mi300()) {
+			if (AmdSmiPlatform::getInstance().is_host() && (AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi350())) {
 				headers.append(clock_header_csv_mi);
 			} else if (AmdSmiPlatform::getInstance().is_host()) {
 				headers.append(clock_header_csv);
@@ -1515,7 +1515,7 @@ void AmdSmiMetricCommand::execute_command()
 	} else if (arg.output == json) {
 		metric_command_json();
 	} else if (arg.output == csv) {
-		if ((arg.options.size() > 1 || arg.all_arguments) && AmdSmiPlatform::getInstance().is_mi300()) {
+		if ((arg.options.size() > 1 || arg.all_arguments) && (AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi350())) {
 			std::string cmd_name{"metric --csv"};
 			throw SmiToolCommandNotSupportedException(cmd_name);
 		} else {

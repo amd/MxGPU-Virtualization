@@ -28,6 +28,7 @@
 #include <cstdint>
 #include <vector>
 #include <map>
+
 #include "smi_ethtool_ioctl.h"
 
 enum class NicType {
@@ -35,6 +36,19 @@ enum class NicType {
 	PCIBridge,
 	Ethernet,
 	InfiniBand,
+};
+
+enum class NicVendor {
+	Unknown,
+	AMD,
+	Broadcom
+};
+
+// TODO: broadcom - update enum with the right products
+enum class NicProduct {
+	Unknown,
+	AINIC,  // AMD Pensando AINIC
+	Thor,   // Broadcom Thor
 };
 
 class SmiInfiniBandPort {
@@ -145,11 +159,15 @@ private:
 class SmiNic {
 public:
 	SmiNic(const std::string& iface, const std::string& bdf, NicType type = NicType::Unknown,
-		const std::string& sysfs_class_path = "", const std::string& sysfs_bus_path = "");
+	       const std::string& sysfs_class_path = "", const std::string& sysfs_bus_path = "",
+	       NicVendor vendor = NicVendor::Unknown, NicProduct product = NicProduct::Unknown);
+	virtual ~SmiNic() = default;
 
 	const std::string& interface() const;
 	const std::string& bdf() const;
 	NicType type() const;
+	NicVendor vendor() const;
+	NicProduct product() const;
 	const std::string port_type() const;
 	const std::string& sysfs_class_path() const;
 	const std::string& sysfs_bus_path() const;
@@ -169,19 +187,45 @@ public:
 	std::optional<uint32_t> max_pcie_speed() const;
 	std::optional<uint8_t> numa_node() const;
 	std::optional<std::string> numa_affinity(uint8_t node) const;
-	std::optional<int> topo_get_nic_link_type(uint8_t nic_numa_info, uint8_t processor_numa_info) const;
-	std::optional<std::string> product_name() const;
-	std::optional<std::string> vendor_name() const;
-	std::optional<std::string> part_number() const;
-	std::optional<std::string> serial_number() const;
+	// Vendor specific
+	virtual std::optional<std::string> product_name() const;
+	virtual std::optional<std::string> vendor_name() const;
+	virtual std::optional<std::string> part_number() const;
+	virtual std::optional<std::string> serial_number() const;
 
-private:
+protected:
 	std::string iface_;
 	std::string bdf_;
 	NicType type_;
+	NicVendor vendor_;
+	NicProduct product_;
 	std::string sysfs_class_path_;
 	std::string sysfs_bus_path_;
 	std::vector<SmiNicPort> ports_;
+};
+
+class SmiNicPensando : public SmiNic {
+public:
+	SmiNicPensando(const std::string& iface, const std::string& bdf, NicType type = NicType::Unknown,
+		       const std::string& sysfs_class_path = "", const std::string& sysfs_bus_path = "",
+		       NicVendor vendor = NicVendor::AMD, NicProduct product = NicProduct::AINIC);
+
+	std::optional<std::string> vendor_name() const override;
+	std::optional<std::string> product_name() const override;
+	std::optional<std::string> part_number() const override;
+	std::optional<std::string> serial_number() const override;
+};
+
+class SmiNicBroadcom : public SmiNic {
+public:
+	SmiNicBroadcom(const std::string& iface, const std::string& bdf, NicType type = NicType::Unknown,
+		       const std::string& sysfs_class_path = "", const std::string& sysfs_bus_path = "",
+		       NicVendor vendor = NicVendor::Broadcom, NicProduct product = NicProduct::Thor);
+
+	std::optional<std::string> vendor_name() const override;
+	std::optional<std::string> product_name() const override;
+	std::optional<std::string> part_number() const override;
+	std::optional<std::string> serial_number() const override;
 };
 
 #endif // __SMI_NIC_H__

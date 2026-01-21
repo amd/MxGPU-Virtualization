@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -232,7 +232,7 @@ public:
 		ON_CALL(*this, AlignedFree(testing::_)).WillByDefault(AlignedFreePasstrough());
 		ON_CALL(*this, GetDriverMode()).WillByDefault(Return(0));
 		ON_CALL(*this, Strncpy(testing::_, testing::_,testing::_, testing::_)).WillByDefault(StrncpyPasstrough());
-		ON_CALL(*this, Sysconf(testing::_)).WillByDefault(Return(1));
+		ON_CALL(*this, Sysconf(testing::_)).WillByDefault(Return(4096));
 		ON_CALL(*this, Fopen(testing::_, testing::_)).WillByDefault(FopenPasstrough());
 		ON_CALL(*this, Fgets(testing::_, testing::_, testing::_)).WillByDefault(FgetsPasstrough());
 		ON_CALL(*this, Snprintf(testing::_, testing::_, testing::_)).WillByDefault(SnprintfPasstrough());

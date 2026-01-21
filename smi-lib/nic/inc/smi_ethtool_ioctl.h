@@ -23,14 +23,16 @@
 #ifndef __SMI_ETHTOOL_IOCTL_H__
 #define __SMI_ETHTOOL_IOCTL_H__
 
+#include <unistd.h>
+#include <cstring>
+
 #include <iostream>
 #include <fcntl.h>
-#include <unistd.h>
 #include <sys/ioctl.h>
+#include <string>
+
 #include <linux/ethtool.h>
 #include <net/if.h>
-#include <cstring>
-#include <string>
 
 /**
  * @brief Generic template function to perform ethtool ioctl on network devices.

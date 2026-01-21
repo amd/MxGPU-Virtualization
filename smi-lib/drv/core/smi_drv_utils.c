@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2024-2025 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -442,6 +442,25 @@ enum smi_link_status smi_map_link_status(enum amdgv_gpumon_link_status amdgv_lin
 	}
 
 	return link_status;
+}
+
+enum smi_npm_status smi_map_npm_status(enum AMDGV_GPU_NPM_STATUS amdgv_npm_status)
+{
+	int npm_status;
+
+	switch (amdgv_npm_status) {
+	case AMDGPUMON_NPM_DISABLED:
+		npm_status = SMI_NPM_STATUS_DISABLED;
+		break;
+	case AMDGPUMON_NPM_ENABLED:
+		npm_status = SMI_NPM_STATUS_ENABLED;
+		break;
+	default:
+		npm_status = 0xFFFFFFFF;
+		break;
+	}
+
+	return npm_status;
 }
 
 enum smi_link_type smi_map_link_type(enum amdgv_gpumon_link_type amdgv_link_type)

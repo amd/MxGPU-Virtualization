@@ -14,7 +14,7 @@ This example demonstrates how to retrieve RAS (Reliability, Availability, and Se
 ## Usage
 
 ```bash
-ras_cper
+amdsmi_ras_cper
 ```
 
 ## Examples
@@ -24,7 +24,7 @@ ras_cper
 If `libamdsmi.so` is installed to a system path (e.g., `/lib` or `/usr/lib`):
 
 ```bash
-sudo ./ras_cper
+sudo ./amdsmi_ras_cper
 ```
 
 ### Custom Library Path
@@ -32,7 +32,7 @@ sudo ./ras_cper
 If the library is in a custom location:
 
 ```bash
-sudo LD_LIBRARY_PATH=/path/to/libamdsmi/library/ ./ras_cper
+sudo LD_LIBRARY_PATH=/path/to/libamdsmi/library/ ./amdsmi_ras_cper
 ```
 
 ## Building

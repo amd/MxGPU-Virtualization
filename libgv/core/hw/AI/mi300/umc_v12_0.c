@@ -138,6 +138,18 @@ static bool umc_v12_0_is_uncorrectable_acparity_error(struct amdgv_adapter *adap
 	return (REG_GET_FIELD(mc_umc_status, MCA_UMC_UMC0_MCUMC_STATUST0, ErrorCodeExt) == 4);
 }
 
+static bool umc_v12_0_is_uncorrectable_odecc_error(struct amdgv_adapter *adapt,
+						      uint64_t mc_umc_status)
+{
+	return (REG_GET_FIELD(mc_umc_status, MCA_UMC_UMC0_MCUMC_STATUST0, ErrorCodeExt) == 0x0);
+}
+
+static bool umc_v12_0_is_uncorrectable_crc_error(struct amdgv_adapter *adapt,
+						      uint64_t mc_umc_status)
+{
+	return (REG_GET_FIELD(mc_umc_status, MCA_UMC_UMC0_MCUMC_STATUST0, ErrorCodeExt) == 0xf);
+}
+
 static void umc_v12_0_query_ras_error_count(struct amdgv_adapter *adapt,
 					    void *ras_error_status)
 {
@@ -615,7 +627,10 @@ static void umc_v12_0_query_error_address(struct amdgv_adapter *adapt,
 			if (mc_umc_status &&
 				(umc_v12_0_is_deferred_error(adapt, mc_umc_status) ||
 				(umc_v12_0_is_uncorrectable_error(adapt, mc_umc_status) &&
-				 !umc_v12_0_is_uncorrectable_acparity_error(adapt, mc_umc_status)))) {
+				 !umc_v12_0_is_uncorrectable_acparity_error(adapt, mc_umc_status) &&
+				 !umc_v12_0_is_uncorrectable_odecc_error(adapt, mc_umc_status) &&
+				 !umc_v12_0_is_uncorrectable_crc_error(adapt, mc_umc_status)))) {
+
 				uint64_t mca_addr, err_addr, mca_ipid;
 				uint32_t InstanceIdHi, InstanceIdLo;
 

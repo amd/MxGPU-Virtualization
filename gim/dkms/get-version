@@ -34,7 +34,14 @@ if $is_git_repo; then
     # Expect tags like 8.5.0.K, 8.5.0.K-dev, 8.4.0.K-rc1
     desc="$(git -C "$repo_root" describe --tags --long --abbrev=10 --match "[0-9]*.[0-9]*.[0-9]*.K*" 2>/dev/null || true)"
     if [ -n "$desc" ]; then
-        desc="$(echo "$desc" | sed -E 's/-g([0-9a-f]{10})$/-\1/')"
+        # Check if it's a formal tag (X.Y.Z.K without suffix) and we're exactly on it (0 commits ahead)
+        if echo "$desc" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.K-0-g[0-9a-f]{10}$'; then
+            # For formal tags, strip the -0-<hash> suffix
+            desc="$(echo "$desc" | sed -E 's/-0-g[0-9a-f]{10}$//')"
+        else
+            # For non-formal tags or commits ahead, keep commits and hash
+            desc="$(echo "$desc" | sed -E 's/-g([0-9a-f]{10})$/-\1/')"
+        fi
         echo "$desc"
         exit
     fi

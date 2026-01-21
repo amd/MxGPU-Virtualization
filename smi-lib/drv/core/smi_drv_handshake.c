@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -270,6 +270,18 @@ int smi_cmd_handshake(struct smi_ctx *ctx, void *inb, void *outb,
 			smi_set_xgmi_plpd,
 			sizeof(struct smi_set_dpm_policy),
 			0);
+		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_NODE_HANDLE,
+			smi_get_node_handle,
+			sizeof(struct smi_device_info),
+			sizeof(struct smi_node_info));
+		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_GPU_NPM_INFO,
+			smi_get_npm_info,
+			sizeof(struct smi_node_info),
+			sizeof(struct smi_npm_info));
+		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_RAS_POLICY_INFO,
+			smi_get_ras_policy_info,
+			sizeof(struct smi_device_info),
+			sizeof(struct smi_gpu_ras_policy_info));
 		/* Set max num of commands
 		 * This needs to be set to the number of functions
 		 * defined here

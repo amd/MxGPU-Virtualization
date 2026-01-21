@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -136,4 +136,8 @@ int smi_get_xgmi_plpd(struct smi_ctx *ctx, void *inb,
 			  void *outb, uint16_t in_len, uint16_t out_len);
 int smi_set_xgmi_plpd(struct smi_ctx *ctx, void *inb,
 			  void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_ras_policy_info(struct smi_ctx *ctx, void *inb,
+			  void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_node_handle(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_npm_info(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
 #endif // __SMI_DRV_CMD_H__

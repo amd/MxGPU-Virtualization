@@ -427,4 +427,5 @@ struct amdgv_init_func amdgv_migration_func = {
 	.sw_fini = amdgv_migration_sw_fini,
 	.hw_init = amdgv_migration_hw_init,
 	.hw_fini = amdgv_migration_hw_fini,
+	.hw_live_init = amdgv_migration_hw_init,
 };

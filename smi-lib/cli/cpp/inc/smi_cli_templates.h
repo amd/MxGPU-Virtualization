@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -38,7 +38,7 @@ inline std::string nicListTemplate{
 	"    VENDOR_NAME: %s\n"
 };
 
-inline std::string versionTemplate{ "VERSION: \n    TOOL_NAME: %s \n    TOOL_VERSION: %s \n    LIB_VERSION: %s \n" };
+inline std::string versionTemplate{ "VERSION: \n    TOOL_NAME: %s \n    TOOL_VERSION: %s \n    LIB_VERSION: %s \n    DRIVER_VERSION: %s \n" };
 
 inline std::string staticAsicTemplate{
 	"    ASIC: \n        MARKET_NAME: %s \n        VENDOR_ID: %s \n        VENDOR_NAME: %s \n        SUBVENDOR_ID: %s \n        DEVICE_ID: %s "
@@ -754,3 +754,17 @@ inline std::string metricNicRdmaDeviceTemplate {
 inline std::string metricNicRdmaPortTemplate {
 	"                    PORT_%u:\n"
 	"                        STATISTICS:\n"};
+
+inline std::string rasPolicyTemplate{
+	"    POLICY:\n"
+	"        MAJOR_VERSION: %s \n"
+	"        MINOR_VERSION: %s \n"
+	"        DRAM_NON_CRITICAL_REGION_THRESHOLD: %s \n"
+	"        DRAM_CRITICAL_REGION_THRESHOLD: %s \n"
+};
+
+inline std::string nodePowerManagementTemplate {
+	"    POWER_MANAGEMENT: \n"
+	"        LIMIT: %s W\n"
+	"        STATUS: %s \n"
+};

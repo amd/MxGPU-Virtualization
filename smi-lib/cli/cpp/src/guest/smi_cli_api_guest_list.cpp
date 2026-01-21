@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -19,7 +19,7 @@
  * SOFTWARE.
  */
 
-#include "amdsmi_guest.h"
+#include "interface/amdsmi.h"
 #include "smi_cli_api_guest.h"
 #include "smi_cli_helpers.h"
 #include "smi_cli_parser.h"

@@ -340,6 +340,9 @@ enum amdgv_sched_event_id amdgv_mailbox_get_valid_vf_event(struct amdgv_adapter 
 	case MB_REQ_RAS_CHK_CRITI:
 		sched_event = AMDGV_EVENT_SCHED_VF_REQ_RAS_CHK_CRITI_REGION;
 		break;
+	case MB_REQ_MSG_PTL_UPDATE:
+		sched_event = AMDGV_EVENT_VF_REQ_PTL_UPDATE;
+		break;
 	default:
 		sched_event = AMDGV_EVENT_INVALID_EVENT;
 	}

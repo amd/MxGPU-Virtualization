@@ -1392,11 +1392,14 @@ static void *gim_timer_init(oss_callback_t timer_cb, void *context)
 
 	t->timer_cb = timer_cb;
 	t->context = context;
-
+#if defined(HAVE_HRTIMER_SETUP)
+	hrtimer_setup(&t->timer, gim_timer_callback_wrapper, 
+			CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+#else
 	hrtimer_init(&t->timer, CLOCK_MONOTONIC,
 			HRTIMER_MODE_REL);
 	t->timer.function = gim_timer_callback_wrapper;
-
+#endif
 	return (void *)t;
 }
 
@@ -1411,11 +1414,14 @@ static void *gim_timer_init_ex(oss_callback_t timer_cb, void *context,
 
 	t->timer_cb = timer_cb;
 	t->context = context;
-
+#if defined(HAVE_HRTIMER_SETUP)
+	hrtimer_setup(&t->timer, gim_timer_callback_wrapper, 
+			CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+#else
 	hrtimer_init(&t->timer, CLOCK_MONOTONIC,
 			HRTIMER_MODE_REL);
 	t->timer.function = gim_timer_callback_wrapper;
-
+#endif
 	return (void *)t;
 }
 

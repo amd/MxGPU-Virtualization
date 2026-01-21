@@ -1,4 +1,4 @@
-/* * Copyright (C) 2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2024-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -426,7 +426,7 @@ void AmdSmiMonitorCommand::monitor_command_human()
 				std::vector<std::string> cells{};
 				cells = split_string(formatted_string, ',');
 
-				if (AmdSmiPlatform::getInstance().is_mi300()) {
+				if (AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi350()) {
 					header.push_back("ENC_UTIL");
 					header.push_back("VCLK");
 				} else {
@@ -453,7 +453,7 @@ void AmdSmiMonitorCommand::monitor_command_human()
 				std::vector<std::string> cells{};
 				cells = split_string(formatted_string, ',');
 
-				if (AmdSmiPlatform::getInstance().is_mi300()) {
+				if (AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi350()) {
 					header.push_back("DEC_UTIL");
 					header.push_back("DCLK");
 				} else {

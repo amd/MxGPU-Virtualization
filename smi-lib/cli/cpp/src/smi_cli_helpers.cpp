@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -119,7 +119,7 @@ std::string transform_fw(int fw_block_id, uint32_t uversion)
 	std::string uversion_str;
 	switch(fw_block_id) {
 	case 1: //"SMU"
-		if (AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200()) {
+		if (AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200() || AmdSmiPlatform::getInstance().is_mi350()) {
 			uversion_str += string_format("%d.%d.%d.%d",(uversion >> 24) & 0xFF,
 										  (uversion >> 16) & 0xFF,
 										  (uversion >> 8) & 0xFF,
@@ -557,5 +557,11 @@ std::vector<std::pair<uint64_t, std::string>> bitmaskToRangesList(uint64_t mask,
 std::string ThrottlerDataToString(uint64_t data) {
 	std::string out;
 	AmdSmiApiBase::CreateAmdSmiApiObject().ThrottlerDataToString(data, out);
+	return out;
+}
+
+std::string FecModesToString(uint32_t fec) {
+	std::string out;
+	AmdSmiApiBase::CreateAmdSmiApiObject().FecModesToString(fec, out);
 	return out;
 }

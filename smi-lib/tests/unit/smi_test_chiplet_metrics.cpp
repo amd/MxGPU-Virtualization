@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -38,7 +38,7 @@ using amdsmi::SetResponseStatus;
 class AmdSmiMetricsTest : public amdsmi::AmdSmiTest {
 protected:
 	struct smi_gpu_handle GPU_MOCK_HANDLE_DIFF = {
-		SMI_PROCESSOR_TYPE_AMD_GPU,
+		SMI_HANDLE_TYPE_AMD_GPU,
 		{ { 0x4, 0x3, 0x2, 0x2 } },
 		(0x1234ULL << 32) | 0x4321,
 		0x8765

@@ -308,7 +308,15 @@ struct amdgv_live_info_fw_info {
 	uint32_t fw_info_psp_spl;
 	uint32_t smu_fw_version;
 	uint32_t fw_info_pldm;
-	uint8_t reserved[96]; // 0x100 align
+	uint32_t fw_info_psp_bl;
+	uint32_t fw_info_reg_access_whitelist;
+	uint32_t fw_info_p2s_table;
+	uint32_t fw_info_psp_soc;
+	uint32_t fw_info_psp_dbg;
+	uint32_t fw_info_psp_intf;
+	uint32_t fw_info_psp_ras;
+	uint32_t fw_info_xgmi_ta;
+	uint8_t reserved[64]; // 0x100 align
 };
 
 /* Memory allocation node info */
@@ -401,7 +409,11 @@ struct amdgv_live_info_powerplay {
 	uint32_t socclk;
 	uint32_t dcefclk;
 	uint64_t supported_caps;
-	uint8_t reserved[79]; // 0x80 align
+	uint32_t ptl_supported;
+	uint32_t ptl_enabled;
+	uint32_t ptl_pref_format1;
+	uint32_t ptl_pref_format2;
+	uint8_t reserved[63]; // 0x80 align
 };
 
 struct amdgv_live_info_sched_event {

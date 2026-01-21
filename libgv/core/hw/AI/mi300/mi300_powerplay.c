@@ -942,22 +942,6 @@ static void mi300_smu_notify_throttler_error(struct amdgv_adapter *adapt,
 	amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_PP_THROTTLER_EVENT, throttler_event);
 }
 
-static int mi300_smu_reset_vf_arbiters(struct amdgv_adapter *adapt, uint32_t idx_vf)
-{
-	int ret = 0;
-
-	/* MI300X and MI325X */
-	if (mi300_smu_cap_supported(adapt, SMU_CAP_RESET_VF_ARBITERS)) {
-		ret = mi300_smu_send_msg_with_param(adapt,
-						    PPSMC_MSG_ResetVfArbitersByIndex,
-						    idx_vf, NULL);
-		if (ret)
-			AMDGV_ERROR("Failed to reset VF arbiters for VF %d\n", idx_vf);
-	}
-
-	return ret;
-}
-
 static int mi300_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv_entry *entry)
 {
 	int ret = 0;
@@ -1007,9 +991,6 @@ static int mi300_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv_
 				}
 			}
 
-			/* Reset VF arbiters on config space FLR */
-			mi300_smu_reset_vf_arbiters(adapt, i);
-			
 			amdgv_sched_clear_dirty_vf_fb(adapt, i);
 			amdgv_live_info_prepare_reset(adapt);
 		}
@@ -1458,6 +1439,15 @@ static int mi300_smu_init_supported_caps(struct amdgv_adapter *adapt)
 	    (adapt->asic_type == CHIP_MI308X)) {
 		smu->supported_caps |= SMU_CAPS(SUM_CAP_XGMI_PLPD);
 	}
+
+	/* TODO: Enable PTL support when FW is ready */
+	if (0) {
+		smu->supported_caps |= SMU_CAPS(SMU_CAP_PTL);
+		adapt->ptl_supported = true;
+	} else {
+		adapt->ptl_supported = false;
+	}
+
 	return 0;
 }
 
@@ -2177,12 +2167,26 @@ static int mi300_smu_hw_fini(struct amdgv_adapter *adapt)
 	return mi300_smu_feature_control(adapt, false);
 }
 
+static int mi300_smu_hw_live_init(struct amdgv_adapter *adapt)
+{
+	int ret;
+
+	ret = mi300_smu_init_supported_caps(adapt);
+	if (ret) {
+		AMDGV_ERROR("Failed to reinitialize SMU caps during live update\n");
+		return ret;
+	}
+
+	return 0;
+}
+
 const struct amdgv_init_func mi300_smu_func = {
 	.name = "mi300_smu_func",
 	.sw_init = mi300_smu_sw_init,
 	.sw_fini = mi300_smu_sw_fini,
 	.hw_init = mi300_smu_hw_init,
 	.hw_fini = mi300_smu_hw_fini,
+	.hw_live_init = mi300_smu_hw_live_init,
 };
 
 static int mi300_smu_pp_get_power_capacity(struct amdgv_adapter *adapt, int *val)
@@ -3052,6 +3056,20 @@ static int mi300_smu_read_mca_bank_reg32(struct amdgv_adapter *adapt,
 	param = ((idx & 0xffff) << 16) | (offset & 0xfffc);
 
 	return mi300_smu_send_msg_with_param(adapt, msg, param, val);
+}
+
+static int mi300_smu_reset_vf_arbiters(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	int ret = 0;
+
+	/* MI300 & MI325 */
+	if (mi300_smu_cap_supported(adapt, SMU_CAP_RESET_VF_ARBITERS)) {
+		ret = mi300_smu_send_msg_with_param(adapt,
+						    PPSMC_MSG_ResetVfArbitersByIndex,
+						    idx_vf, NULL);
+	}
+
+	return ret;
 }
 
 static const struct amdgv_pp_funcs mi300_amdgv_pp_funcs = {

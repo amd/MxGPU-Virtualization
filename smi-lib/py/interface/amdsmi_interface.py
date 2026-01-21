@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 #
-# Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -908,6 +908,9 @@ class AmdSmiAffinityScope(IntEnum):
     NUMA_SCOPE = amdsmi_wrapper.AMDSMI_AFFINITY_SCOPE_NODE
     SOCKET_SCOPE = amdsmi_wrapper.AMDSMI_AFFINITY_SCOPE_SOCKET
 
+class AmdSmiNpmStatus(IntEnum):
+    DISABLED = amdsmi_wrapper.AMDSMI_NPM_STATUS_DISABLED
+    ENABLED = amdsmi_wrapper.AMDSMI_NPM_STATUS_ENABLED
 
 _AMDSMI_MAX_MM_IP_COUNT = 8
 _GPU_UUID_SIZE = 38
@@ -2711,3 +2714,46 @@ def amdsmi_set_xgmi_plpd(processor_handle, policy_id):
     _check_res(amdsmi_wrapper.amdsmi_set_xgmi_plpd(
             processor_handle, policy_id))
 
+def amdsmi_get_node_handle(processor_handle):
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+
+    node_handle = amdsmi_wrapper.amdsmi_node_handle()
+    _check_res(amdsmi_wrapper.amdsmi_get_node_handle(processor_handle, ctypes.byref(node_handle)))
+    return node_handle
+
+def amdsmi_get_npm_info(node_handle):
+    if not isinstance(node_handle, amdsmi_wrapper.amdsmi_node_handle):
+        raise AmdSmiParameterException(
+            node_handle, amdsmi_wrapper.amdsmi_node_handle)
+
+    npm_info = amdsmi_wrapper.amdsmi_npm_info_t()
+    _check_res(amdsmi_wrapper.amdsmi_get_npm_info(node_handle, ctypes.byref(npm_info)))
+    return {
+        "status": AmdSmiNpmStatus(npm_info.status).name,
+        "limit": npm_info.limit,
+    }
+def amdsmi_get_gpu_ras_policy_info(processor_handle):
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+
+    policy_info = amdsmi_wrapper.amdsmi_gpu_ras_policy_info_t()
+
+    _check_res(amdsmi_wrapper.amdsmi_get_gpu_ras_policy_info(
+        processor_handle, ctypes.byref(policy_info)))
+
+    ras_policy_info = {
+        "major_version": policy_info.major_version,
+        "minor_version": policy_info.minor_version
+    }
+
+    match (policy_info.major_version, policy_info.minor_version):
+        case (4, 0):
+            ras_policy_info.update({
+                "dram_non_critical_region_threshold": policy_info.policy_data.v4_0.dram_non_critical_region_threshold,
+                "dram_critical_region_threshold": policy_info.policy_data.v4_0.dram_critical_region_threshold
+            })
+
+    return { "ras_policy_info": ras_policy_info }

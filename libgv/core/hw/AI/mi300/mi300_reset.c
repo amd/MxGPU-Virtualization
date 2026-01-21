@@ -38,6 +38,7 @@
 #include "mi300_reset.h"
 #include "mi300_powerplay.h"
 #include "mi300_clockgating.h"
+#include "mi300_gpumon.h"
 #include "mi350/mi350_powerplay.h"
 
 #include "mi300/NBIO/nbio_7_9_0_offset.h"
@@ -689,6 +690,13 @@ static int mi300_reset_trigger_vf_flr(struct amdgv_adapter *adapt,
 
 	ret = amdgv_sched_reset(adapt, idx_vf, AMDGV_SCHED_BLOCK_ALL);
 
+	if (!ret) {
+		int ptl_ret = mi300_gpumon_ptl_restore(adapt);
+		if (ptl_ret != 0 && ptl_ret != AMDGV_NOT_SUPPORTED) {
+			AMDGV_WARN("Failed to restore PTL after VF FLR: %d\n", ptl_ret);
+		}
+	}
+
 	if (!ret)
 		AMDGV_INFO("completed %s FLR succesfully\n", amdgv_idx_to_str(idx_vf));
 
@@ -945,6 +953,13 @@ static int mi300_reset_trigger_pf_soft_flr(struct amdgv_adapter *adapt)
 
 	ret = amdgv_sched_reset(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_ALL);
 
+	if (!ret) {
+		int ptl_ret = mi300_gpumon_ptl_restore(adapt);
+		if (ptl_ret != 0 && ptl_ret != AMDGV_NOT_SUPPORTED) {
+			AMDGV_WARN("Failed to restore PTL after PF Soft FLR: %d\n", ptl_ret);
+		}
+	}
+
 	if (!ret)
 		AMDGV_INFO("completed PF Soft FLR succesfully\n");
 
@@ -1009,6 +1024,13 @@ int mi300_reset_trigger_whole_gpu_reset(struct amdgv_adapter *adapt)
 
 	/* restore mmio protection info after PF_FLR or WHOLE_GPU_RESET */
 	mi300_reset_restore_access_info(adapt, &access_info);
+
+	if (!ret) {
+		int ptl_ret = mi300_gpumon_ptl_restore(adapt);
+		if (ptl_ret != 0 && ptl_ret != AMDGV_NOT_SUPPORTED) {
+			AMDGV_WARN("Failed to restore PTL after whole GPU reset: %d\n", ptl_ret);
+		}
+	}
 
 exit:
 	oss_free(reset_state);

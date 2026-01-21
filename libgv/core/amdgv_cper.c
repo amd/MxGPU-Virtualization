@@ -293,7 +293,10 @@ int amdgv_cper_entry_fill_bad_page_thr_section(struct amdgv_adapter *adapt,
 	section->hdr.pcie_devid = adapt->dev_id;
 	section->hdr.pldm_bndl = adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PLDM_VERSION];
 	section->info.error_type = RUNTIME;
+	section->info.valid_bits.ms_chk = 1;
 	section->info.ms_chk_bits.err_type_valid = 1;
+	section->info.ms_chk_bits.err_type = 1;
+	section->info.ms_chk_bits.pcc = 1;
 	section->ctx.reg_ctx_type = CPER_CTX_TYPE_CRASH; /* 1 */
 	section->ctx.reg_arr_size = sizeof(section->ctx.reg_dump);
 

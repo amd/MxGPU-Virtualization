@@ -48,7 +48,7 @@ rm -rf %{buildroot}
 mkdir -p %{buildroot}/usr/src/gim-%{full_version}
 cp -r gim gim-coms-lib libgv smi-lib %{buildroot}/usr/src/gim-%{full_version}/
 sed 's/#MODULE_VERSION#/%{full_version}/g' ./package/rpm/dkms.conf > %{buildroot}/usr/src/gim-%{full_version}/dkms.conf
-echo %{full_version} > %{buildroot}/usr/src/gim-%{full_version}/VERSION
+echo %{full_version} > %{buildroot}/usr/src/gim-%{full_version}/gim/dkms/VERSION
 
 %post
 dkms add -m gim/%{full_version} --rpm_safe_upgrade
@@ -64,5 +64,5 @@ dkms remove -m gim/%{full_version} --all --rpm_safe_upgrade
 /usr/src/gim-%{full_version}
 
 %changelog
-* Mon Mar 17 2025 AMD <sriov@amd.com>
+* Mon Mar 17 2025 AMD <gim-maintainer@amd.com>
 - Placeholder

@@ -56,7 +56,18 @@ set(DEFAULT_CXXFLAGS
 
 include_directories(${INCLUDE_DIR} ${INTERFACE_DIR} ${THIRD_PARTY_INCLUDE_DIR})
 
+if(NOT DEFINED VIRT)
+  set(VIRT "HOST")
+endif()
+
+if(VIRT STREQUAL "GUEST")
+  message(FATAL_ERROR "Cannot build CLI tool for guest on Linux")
+endif()
+
 file(GLOB SOURCES ${SOURCE_DIR}/*.cpp ${SOURCE_DIR}/host/*.cpp)
+file(GLOB HPPS "${INCLUDE_DIR}/*.h")
+list(FILTER HPPS EXCLUDE REGEX ".*smi_cli_api_guest\\.h$")
+
 
 string(TOLOWER "${BUILD_TYPE}" BUILD_TYPE)
 if(NOT (BUILD_TYPE STREQUAL "debug" OR BUILD_TYPE STREQUAL "release"))
@@ -70,8 +81,8 @@ set(CMAKE_EXE_LINKER_FLAGS
     "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,relro,-z,noexecstack,-z,noexecheap -Wl,--strip-debug -Wl,--strip-all"
 )
 
-file(GLOB_RECURSE HPPS "${INCLUDE_DIR}/*.h")
-file(GLOB_RECURSE HPPS "${THIRD_PARTY_INCLUDE_DIR}/*.h")
+file(GLOB_RECURSE THIRD_PARTY_HPPS "${THIRD_PARTY_INCLUDE_DIR}/*.h")
+list(APPEND HPPS ${THIRD_PARTY_HPPS})
 
 add_definitions(-pthread)
 add_executable(amd-smi ${SOURCES} ${HPPS})

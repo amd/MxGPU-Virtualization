@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -782,6 +782,7 @@ TEST(amdsmiIntegrationTests, ECCTests)
 	amdsmi_ras_feature_t ras_feature;
 	uint64_t enabled_blocks = 0;
 	amdsmi_asic_info_t asic_info;
+	amdsmi_gpu_ras_policy_info_t policy_info;
 	int ret;
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
@@ -805,6 +806,19 @@ TEST(amdsmiIntegrationTests, ECCTests)
 			  	AMDSMI_STATUS_SUCCESS);
 			std::cout << "RAS EEPROM version:      " << ras_feature.ras_eeprom_version << std::endl;
 			std::cout << "ECC correction schema:      " << ras_feature.ecc_correction_schema_flag << std::endl;
+		}
+
+		ret = amdsmi_get_gpu_ras_policy_info(processors[i], &policy_info);
+
+		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+
+		if (ret == AMDSMI_STATUS_SUCCESS) {
+			if(policy_info.major_version == 4 && policy_info.minor_version == 0) {
+				std::cout << "RAS policy major version:      " << policy_info.major_version << std::endl;
+				std::cout << "RAS policy minor version:      " << policy_info.minor_version << std::endl;
+				std::cout << "DRAM non critical region threshold:      " << policy_info.policy_data.v4_0.dram_non_critical_region_threshold << std::endl;
+				std::cout << "DRAM critical region threshold:      " << policy_info.policy_data.v4_0.dram_critical_region_threshold << std::endl;
+			}
 		}
 
 		ret = amdsmi_get_gpu_total_ecc_count(processors[i], &ec);
@@ -1512,13 +1526,12 @@ TEST(amdsmiIntegrationTests, ResetGpuTest)
 	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
 	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, processors), AMDSMI_STATUS_SUCCESS);
 
-	for (uint32_t i = 0; i < dev_cnt; i++) {
-		ASSERT_EQ(amdsmi_reset_gpu(processors[i]), AMDSMI_STATUS_SUCCESS);
-	}
+	ASSERT_EQ(amdsmi_reset_gpu(processors[0]), AMDSMI_STATUS_SUCCESS);
+
+	std::this_thread::sleep_for(std::chrono::seconds(18));
 
 	free(processors);
 	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
-
 }
 
 TEST(amdsmiIntegrationTests, WrongParamsTests)
@@ -1677,6 +1690,7 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 	ASSERT_EQ(amdsmi_get_gpu_cper_entries(processors[0], severity_mask, cper_data, &buf_size, cper_hdrs, NULL, &cursor), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_gpu_cper_entries(processors[0], severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, NULL), AMDSMI_STATUS_INVAL);
 
+	ASSERT_EQ(amdsmi_get_gpu_ras_policy_info(processors[0], NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_reset_gpu(NULL), AMDSMI_STATUS_INVAL);
 
 	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
@@ -1725,4 +1739,42 @@ TEST(amdsmiIntegrationTests, NumaInfoTest)
 	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
 	free(processors);
 }
+
+TEST(amdsmiIntegrationTests, NodeInfoTest)
+{
+	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
+	amdsmi_socket_handle socket = NULL;
+
+	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
+
+	ASSERT_EQ(amdsmi_get_processor_handles(socket, &dev_cnt, NULL), AMDSMI_STATUS_SUCCESS);
+	ASSERT_GE(dev_cnt, (unsigned)1);
+	ASSERT_LE(dev_cnt, (unsigned)AMDSMI_MAX_DEVICES);
+
+	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	ASSERT_EQ(amdsmi_get_processor_handles(socket, &dev_cnt, &processors[0]), AMDSMI_STATUS_SUCCESS);
+
+	amdsmi_node_handle node_handle;
+	int ret = amdsmi_get_node_handle(processors[0], &node_handle);
+	ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+
+	if (ret == AMDSMI_STATUS_SUCCESS) {
+		amdsmi_npm_info_t npm_info;
+		ret = amdsmi_get_npm_info(node_handle, &npm_info);
+		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+		if (ret == AMDSMI_STATUS_SUCCESS) {
+			std::cout << "Node NPM info: \n    status: " << npm_info.status << " ("
+					<< (npm_info.limit == 0 ? "DISABLED" : "ENABLED") << ")"
+					<< "\n    limit: " << npm_info.limit << " W\n";
+		} else if (ret == AMDSMI_STATUS_NOT_SUPPORTED) {
+			std::cout << "Node NPM info: NOT SUPPORTED\n";
+		} else {
+			std::cout << "Node NPM info: ERROR (ret=" << ret << ")\n";
+		}
+	}
+
+	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
+	free(processors);
+}
+
 #endif

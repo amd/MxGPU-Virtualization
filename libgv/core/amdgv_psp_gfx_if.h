@@ -63,6 +63,7 @@ enum psp_cmd_km_type {
 	PSP_CMD_KM_TYPE__MIGRATION_IMPORT		= 0x27,
 	PSP_CMD_KM_TYPE__VF_RELAY        = 0x00000045, /* PSP VF Command Replay*/
 	PSP_CMD_KM_TYPE__NPS_MODE = 0x00000048,
+	PSP_CMD_KM_TYPE__PERF_HW = 0x0000004C, /* Performance HW (PTL) */
 };
 
 /* TEE Gfx Command IDs for the ring buffer interface. */
@@ -102,6 +103,7 @@ enum psp_gfx_cmd_id {
 	GFX_CMD_ID_MIGRATION_IMPORT			= 0x00000033,
 	GFX_CMD_ID_VF_RELAY         = 0x00000045, /* Host informs PSP about VF command replay*/
 	GFX_CMD_ID_NPS_MODE = 0x00000048, /* Change memory NPS mode on next mode-1 reset */
+	GFX_CMD_ID_PERF_HW = 0x0000004C, /* Performance HW (PTL) */
 };
 
 /* TEE Gfx Command IDs for the register interface.
@@ -481,6 +483,14 @@ struct psp_gfx_uresp_fw_attestation_db_info {
 	uint32_t        FwAttestationDbAddrHi;
 };
 
+/* PTL (Peak TOPS Limiter) response structure */
+struct psp_gfx_uresp_perf_hw {
+	uint32_t resp;
+	uint32_t ptl_state;
+	uint32_t pref_format1;
+	uint32_t pref_format2;
+};
+
 /* Command-specific responses for GPCOM ring */
 union psp_gfx_uresp {
 	struct psp_gfx_uresp_vfgate vfgate;
@@ -489,6 +499,7 @@ union psp_gfx_uresp {
 	struct psp_gfx_uresp_bootcfg		bootcfg;
 	struct psp_gfx_migration_info		migration_info;
 	struct psp_gfx_migration_export		migration_export;
+	struct psp_gfx_uresp_perf_hw		perf_hw;
 };
 
 /* SRIOV mailbox response fields */
@@ -814,6 +825,7 @@ union psp_gfx_commands {
 	struct psp_gfx_cmd_migration_get_psp_info	cmd_migration_get_psp_info;
 	struct psp_gfx_cmd_migration_export			cmd_migration_export;
 	struct psp_gfx_cmd_migration_import			cmd_migration_import;
+	struct psp_gfx_cmd_req_perf_hw cmd_req_perf_hw;
 };
 
 struct psp_gfx_cmd_resp {
@@ -1005,6 +1017,14 @@ struct psp_cmd_km_migration_import
 	uint32_t target_vfid;
 };
 
+/* PTL (Peak TOPS Limiter) command structure */
+struct psp_cmd_km_perf_hw {
+	uint32_t req;
+	uint32_t ptl_state;
+	uint32_t pref_format1;
+	uint32_t pref_format2;
+};
+
 union psp_cmd_km_commands {
 	struct psp_cmd_km_load_ta     load_ta;
 	struct psp_cmd_km_unload_ta   unload_ta;
@@ -1026,6 +1046,7 @@ union psp_cmd_km_commands {
 	struct psp_cmd_km_migration_get_psp_info	migration_get_psp_info;
 	struct psp_cmd_km_migration_export			migration_export;
 	struct psp_cmd_km_migration_import			migration_import;
+	struct psp_cmd_km_perf_hw					perf_hw;
 };
 
 struct psp_cmd_km {
@@ -1183,4 +1204,12 @@ enum psp_status amdgv_psp_update_spirom(struct amdgv_adapter *adapt);
 enum psp_status amdgv_psp_vbflash_status(struct amdgv_adapter *adapt, uint32_t *status);
 enum psp_status amdgv_psp_sw_init(struct amdgv_adapter *adapt);
 enum psp_status amdgv_psp_sw_fini(struct amdgv_adapter *adapt);
+
+/**
+ * PSP Performance Monitoring HW Request Types
+ * Used for PTL (Peak TOPS Limiter) control
+ */
+#define PSP_PTL_PERF_MON_QUERY 0xA0000000
+#define PSP_PTL_PERF_MON_SET   0xA0000001
+
 #endif /* AMDGV_PSP_GFX_IF_H */

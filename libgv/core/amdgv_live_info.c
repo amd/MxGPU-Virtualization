@@ -393,6 +393,13 @@ int amdgv_live_info_export_data(struct amdgv_adapter *adapt, uint32_t data_op,
 		powerplay->socclk = table_context->boot_values.socclk;
 		powerplay->dcefclk = table_context->boot_values.dcefclk;
 		powerplay->supported_caps = smu->supported_caps;
+
+		// PTL support flag and saved configuration
+		powerplay->ptl_supported = adapt->ptl_supported;
+		powerplay->ptl_enabled = adapt->ptl_saved_config.enabled;
+		powerplay->ptl_pref_format1 = adapt->ptl_saved_config.pref_format1;
+		powerplay->ptl_pref_format2 = adapt->ptl_saved_config.pref_format2;
+
 		*status = AMDGV_LIVE_INFO_STATUS_SUCCESS;
 
 		break;
@@ -652,6 +659,13 @@ int amdgv_live_info_import_data(struct amdgv_adapter *adapt, uint32_t data_op,
 		table_context->boot_values.socclk = powerplay->socclk;
 		table_context->boot_values.dcefclk = powerplay->dcefclk;
 		smu->supported_caps = powerplay->supported_caps;
+
+		// PTL support flag and saved configuration
+		adapt->ptl_supported = powerplay->ptl_supported;
+		adapt->ptl_saved_config.enabled = powerplay->ptl_enabled;
+		adapt->ptl_saved_config.pref_format1 = powerplay->ptl_pref_format1;
+		adapt->ptl_saved_config.pref_format2 = powerplay->ptl_pref_format2;
+
 		*status = AMDGV_LIVE_INFO_STATUS_SUCCESS;
 		break;
 	}

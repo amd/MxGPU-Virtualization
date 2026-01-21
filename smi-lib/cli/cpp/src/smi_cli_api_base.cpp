@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -35,7 +35,7 @@ IAmdSmiApi& AmdSmiApiBase::CreateAmdSmiApiObject()
 			static AmdSmiApiHost host;
 			return host;
 		}
-#ifdef _WIN64
+#ifdef VIRTUALIZATION_GUEST
 		if (AmdSmiPlatform::getInstance().is_guest() || AmdSmiPlatform::getInstance().is_baremetal())
 		{
 			static AmdSmiApiGuest guest;
@@ -559,7 +559,7 @@ int AmdSmiApiBase::amdsmi_get_engine_process_command(uint64_t processor, Argumen
 	return 2;
 }
 
-int AmdSmiApiBase::amdsmi_get_version_command(Arguments arg, std::string &out_string)
+int AmdSmiApiBase::amdsmi_get_version_command(uint64_t processor_bdf, Arguments arg, std::string &out_string)
 {
 	return 2;
 }
@@ -732,6 +732,23 @@ int AmdSmiApiBase::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments
 }
 
 int AmdSmiApiBase::ThrottlerDataToString(uint64_t data, std::string& out)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::FecModesToString(uint32_t fec, std::string& out)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_get_node_npm_info_command(uint64_t processor_bdf, Arguments arg,
+	std::string &formatted_string)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_get_policy_command(uint64_t processor_bdf, Arguments arg,
+		std::string &formatted_string)
 {
 	return 2;
 }

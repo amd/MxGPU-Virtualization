@@ -162,26 +162,13 @@ static bool gim_mig_msg_check(struct gim_mig_file *migf)
 
 static bool gim_mig_ctx_check(struct gim_mig_vf_ctx *vf_ctx, struct amdgv_migration_ctx *ctx)
 {
-	struct amdgv_migration_ctx *ctx_local;
 	bool ret = true;
 
-	ctx_local = (struct amdgv_migration_ctx *)gim_kzalloc(sizeof(struct amdgv_migration_ctx), GFP_KERNEL);
-	if (ctx_local == NULL) {
-		gim_warn("failed to allocate buffer to do ctx compare, skip it.\n");
-		return true;
-	}
-	if (amdgv_get_migration_ctx(vf_ctx->gdev->pf_data->adev, vf_ctx->vf_idx, ctx_local)) {
+	if (!amdgv_compare_mig_ctx(vf_ctx->gdev->pf_data->adev, vf_ctx->vf_idx, ctx)) {
 		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
 		ret = false;
-		goto exit;
 	}
 
-	if (memcmp(ctx, ctx_local, sizeof(struct amdgv_migration_ctx))) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
-		ret = false;
-	}
-exit:
-	gim_kfree(ctx_local);
 	return ret;
 }
 
@@ -1641,6 +1628,10 @@ static int gim_mig_get_state_size(struct vfio_device *vdev,
 	if (!migf->enabled)
 		*stop_copy_length = vf_ctx->fb_size;
 	else {
+		ret = gim_mig_validate_vf_sched_state(container_of(migf, struct gim_mig_vf_ctx, migf));
+		if (ret <= 0)
+			goto exit;
+
 		if (gim_mig_update_shadow_dirtybit(&vf_ctx->migf, &shadow_dirty_fb_len)) {
 			gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
 			amdgv_migration_set_abort(adev, vf_ctx->vf_idx);

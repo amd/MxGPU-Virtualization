@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -356,7 +356,7 @@ TEST_F(AmdSmiDeviceTests, GetGpuDeviceBdf)
 	int ret;
 	amdsmi_bdf_t bdf;
 	struct smi_gpu_handle GPU_MOCK_HANDLE_WRONG = {
-		SMI_PROCESSOR_TYPE_AMD_GPU,
+		SMI_HANDLE_TYPE_AMD_GPU,
 		{ { 0x4, 0x3, 0x2, 0x2 } },
 		(0x1234ULL << 32) | 0x4321
 	};
@@ -375,7 +375,7 @@ TEST_F(AmdSmiDeviceTests, GetNicDeviceBdf)
 	int ret;
 	amdsmi_bdf_t bdf;
 	struct smi_nic_handle NIC_MOCK_HANDLE_WRONG = {
-		SMI_PROCESSOR_TYPE_AMD_NIC,
+		SMI_HANDLE_TYPE_AMD_NIC,
 		{ { 0x4, 0x3, 0x2, 0x2 } }
 	};
 
@@ -450,7 +450,7 @@ TEST_F(AmdSmiDeviceTests, GetProcessorBdfWrongType)
 	int ret;
 	amdsmi_bdf_t bdf;
 	struct smi_gpu_handle UNKNOWN_HANDLE = {
-		SMI_PROCESSOR_TYPE_UNKNOWN,
+		SMI_HANDLE_TYPE_UNKNOWN,
 		{ { 0x4, 0x3, 0x2, 0x1 } },
 		(0x1234ULL << 32) | 0x1234
 	};
@@ -574,7 +574,7 @@ TEST_F(AmdSmiDeviceTests, GetGpuIndex)
 TEST_F(AmdSmiDeviceTests, GetGpuIndexDeviceNotFound)
 {
 	uint32_t processor_index = AMDSMI_MAX_DEVICES;
-	struct smi_gpu_handle MOCK_GPU_HANDLE_BAD = { SMI_PROCESSOR_TYPE_AMD_GPU, { 0 }, ( GPU_MOCK_HANDLE.handle << 32) | 0x0003, 0x5678 };
+	struct smi_gpu_handle MOCK_GPU_HANDLE_BAD = { SMI_HANDLE_TYPE_AMD_GPU, { 0 }, ( GPU_MOCK_HANDLE.handle << 32) | 0x0003, 0x5678 };
 	int ret = amdsmi_get_index_from_processor_handle(&MOCK_GPU_HANDLE_BAD, &processor_index);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_FOUND);
 }
@@ -583,7 +583,7 @@ TEST_F(AmdSmiDeviceTests, GetNicIndexDeviceNotFound)
 {
 	uint32_t processor_index = AMDSMI_MAX_DEVICES;
 	struct smi_nic_handle NIC_MOCK_HANDLE_BAD = {
-		SMI_PROCESSOR_TYPE_AMD_NIC,
+		SMI_HANDLE_TYPE_AMD_NIC,
 		{ { 0x1, 0x2, 0x3, 0x4 } }
 	};
 	int ret = amdsmi_get_index_from_processor_handle(&NIC_MOCK_HANDLE_BAD, &processor_index);
@@ -604,7 +604,7 @@ TEST_F(AmdSmiDeviceTests, GetIndexFromNicDeviceNotFound)
 {
 	uint32_t processor_index = AMDSMI_MAX_DEVICES;
 	struct smi_nic_handle NIC_MOCK_HANDLE_BAD = {
-		SMI_PROCESSOR_TYPE_AMD_NIC,
+		SMI_HANDLE_TYPE_AMD_NIC,
 		{ 0x7, 0x6, 0x5, 0x4 }
 	};
 	int ret = amdsmi_get_index_from_processor_handle(&NIC_MOCK_HANDLE_BAD, &processor_index);
@@ -614,7 +614,7 @@ TEST_F(AmdSmiDeviceTests, GetIndexFromNicDeviceNotFound)
 TEST_F(AmdSmiDeviceTests, GetIndexFromDeviceUnknownType)
 {
 	uint32_t processor_index = AMDSMI_MAX_DEVICES;
-	struct smi_gpu_handle unknown_handle = { SMI_PROCESSOR_TYPE_UNKNOWN, 0 };
+	struct smi_gpu_handle unknown_handle = { SMI_HANDLE_TYPE_UNKNOWN, 0 };
 	int ret = amdsmi_get_index_from_processor_handle(&unknown_handle, &processor_index);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
@@ -762,23 +762,23 @@ TEST_F(AmdSmiDeviceTests, GetVfHandleForUUID)
 TEST_F(AmdSmiDeviceTests, GetProcessorType)
 {
 	int ret;
-	amdsmi_processor_type_t processor_type;
-	
+	processor_type_t processor_type;
+
 	ret = amdsmi_get_processor_type(NULL, &processor_type);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
-	
+
 	ret = amdsmi_get_processor_type(&GPU_MOCK_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
-	
+
 	ret = amdsmi_get_processor_type(&GPU_MOCK_HANDLE, &processor_type);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(processor_type, AMDSMI_PROCESSOR_TYPE_AMD_GPU);
-	
+
 	ret = amdsmi_get_processor_type(&NIC_MOCK_HANDLE, &processor_type);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(processor_type, AMDSMI_PROCESSOR_TYPE_AMD_NIC);
-	
-	struct smi_gpu_handle unknown_handle = { SMI_PROCESSOR_TYPE_UNKNOWN, 0 };
+
+	struct smi_gpu_handle unknown_handle = { SMI_HANDLE_TYPE_UNKNOWN, 0 };
 	ret = amdsmi_get_processor_type(&unknown_handle, &processor_type);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(processor_type, AMDSMI_PROCESSOR_TYPE_UNKNOWN);

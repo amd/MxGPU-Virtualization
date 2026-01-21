@@ -1,4 +1,4 @@
-/* * Copyright (C) 2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2024-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -243,7 +243,7 @@ void AmdSmiPartitionCommand::partition_command_human()
 
 void AmdSmiPartitionCommand::execute_command()
 {
-	if (AmdSmiPlatform::getInstance().is_mi300()
+	if ((AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi350())
 			&& AmdSmiPlatform::getInstance().getInstance().is_host()) {
 		if (arg.output == json) {
 			throw SmiToolInvalidParameterException("--json");

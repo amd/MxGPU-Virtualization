@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -172,7 +172,7 @@ private:
 	};
 
 	std::vector<std::string> NODE_SUPPORTED_ARGS = {
-		"--baseboard", "-b"
+		"--baseboard", "-b", "--power-management", "-p"
 	};
 
 	std::map<std::string, std::vector<std::string> > PARTITION_SUPPORTED_ARGUMENTS = {
@@ -246,7 +246,7 @@ private:
 	};
 
 	std::vector<std::string> RAS_SUPPORTED_ARGS_GPU = {
-		"--cper", "--afid"
+		"--cper", "--afid", "--policy"
 	};
 
 	std::vector<std::string> CPER_SUPPORTED_ARGS_GPU = {

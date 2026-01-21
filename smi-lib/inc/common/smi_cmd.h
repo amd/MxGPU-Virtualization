@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -102,6 +102,9 @@ enum smi_cmd_code {
 	SMI_CMD_CODE_GET_XGMI_PLPD					= SMI_IOCTL | 0x00000035,
 	SMI_CMD_CODE_SET_XGMI_PLPD					= SMI_IOCTL | 0x00000036,
 	SMI_CMD_CODE_GET_ACCELERATOR_PARTITION_PROFILE_CONFIG_GLOBAL	= SMI_IOCTL | 0x00000037,
+	SMI_CMD_CODE_GET_NODE_HANDLE				= SMI_IOCTL | 0x00000038,
+	SMI_CMD_CODE_GET_GPU_NPM_INFO				= SMI_IOCTL | 0x00000039,
+	SMI_CMD_CODE_GET_RAS_POLICY_INFO				= SMI_IOCTL | 0x00000040,
 	SMI_CMD_CODE__MAX					= 0xffffffff
 };
 
@@ -180,6 +183,9 @@ enum smi_cmd_code {
 
 #define SMI_MAX_CPER_SIZE (128*1024)
 #define SMI_MAX_CPER_HDRS 128
+
+#define SMI_RAS_POLICY_HEADER_SIZE 4    //!< minor(1) + major(1) + padding(2)
+
 
 // >>>>>>>>>>>>>>>>>>>> ENUM TYPE DEFINITIONS >>>>>>>>>>>>>>>>>>>>
 
@@ -754,6 +760,11 @@ enum smi_data_query_type {
 	SMI_RAS_CAPS
 };
 
+enum smi_npm_status {
+	SMI_NPM_STATUS_DISABLED,
+	SMI_NPM_STATUS_ENABLED
+};
+
 // >>>>>>>>>>>>>>>>>>>> INPUT/OUTPUT STRUCTS >>>>>>>>>>>>>>>>>>>>
 
 // Mapped AMDSMI library structures and unions
@@ -1171,6 +1182,12 @@ struct smi_dpm_policy_entry {
 	uint64_t reserved[3];
 };
 
+struct smi_npm_info {
+	enum smi_npm_status status;
+	uint64_t limit;
+	uint64_t reserved[6];
+};
+
 struct smi_dpm_policy {
 	/**
 	 * The number of supported policies
@@ -1203,6 +1220,10 @@ struct smi_device_info {
 struct smi_device_info_ex {
 	smi_device_handle_t dev_id;
 	uint64_t reserved[3];
+};
+
+struct smi_node_info {
+	smi_node_handle_t node;
 };
 
 struct smi_device_pair_info {
@@ -1493,9 +1514,24 @@ struct smi_set_dpm_policy {
 	uint32_t reserved[3];
 };
 
+struct smi_gpu_ras_policy_v4_0 {
+	uint16_t dram_non_critical_region_threshold;	//Non-critical region UCE threshold
+	uint16_t dram_critical_region_threshold;	//Critical region UCE threshold
+	uint32_t reserved[8];
+};
+
+struct smi_gpu_ras_policy_info {
+	uint8_t minor_version;
+	uint8_t major_version;
+	union {
+		struct smi_gpu_ras_policy_v4_0 v4_0;
+		uint64_t info[5];
+	} policy_data;
+};
+
 #pragma pack(push, 1)
 struct smi_cper_guid{
-    unsigned char b[16];
+	unsigned char b[16];
 };
 
 enum smi_cper_error_severity{

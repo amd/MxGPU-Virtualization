@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -31,15 +31,15 @@
 // Major version should be changed when making incompatible changes to the command interface:
 // - Deprecating or removing existing commands
 // - Modifying input/output format of commands
-#define AMDSMI_TOOL_VERSION_MAJOR 32
+#define AMDSMI_TOOL_VERSION_MAJOR 34
 // Minor version should be incremented for backward-compatible command changes:
 // - Adding new commands
 // - Improvements to existing commands
 // - Adding new options to existing commands without changing the basic input/output format
-#define AMDSMI_TOOL_VERSION_MINOR 4
+#define AMDSMI_TOOL_VERSION_MINOR 0
 // Release version should be incremented for minor issue fixes and maintenance updates
 // that don't add features or change command behavior
-#define AMDSMI_TOOL_VERSION_RELEASE 0
+#define AMDSMI_TOOL_VERSION_RELEASE 3
 
 
 #define AMDSMI_TOOL_VERSION_CREATE_STRING(MAJOR, MINOR, RELEASE) (#MAJOR "." #MINOR "." #RELEASE)
@@ -297,3 +297,5 @@ bool is_UUID(std::string s);
 std::vector<std::pair<uint64_t, std::string>> bitmaskToRangesList(uint64_t mask, int bitOffset);
 
 std::string ThrottlerDataToString(uint64_t data);
+
+std::string FecModesToString(uint32_t fec);

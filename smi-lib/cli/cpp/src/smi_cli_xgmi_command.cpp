@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -51,7 +51,7 @@ int AmdSmiXgmiCommand::metric_command_xgmi(std::string &formatted_string)
 {
 	int ret = PARAM_NOT_SUPPORTED_ON_PLATFORM;
 	if (AmdSmiPlatform::getInstance().is_host() && (AmdSmiPlatform::getInstance().is_mi300()
-			|| AmdSmiPlatform::getInstance().is_mi200())) {
+			|| AmdSmiPlatform::getInstance().is_mi200() || AmdSmiPlatform::getInstance().is_mi350())) {
 		ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_xgmi_metric_command(arg, formatted_string);
 	}
 	return ret;
@@ -61,7 +61,7 @@ int AmdSmiXgmiCommand::source_gpu_status_command_xgmi(std::string &formatted_str
 {
 	int ret = PARAM_NOT_SUPPORTED_ON_PLATFORM;
 	if (AmdSmiPlatform::getInstance().is_host() && (AmdSmiPlatform::getInstance().is_mi300()
-			|| AmdSmiPlatform::getInstance().is_mi200())) {
+			|| AmdSmiPlatform::getInstance().is_mi200() || AmdSmiPlatform::getInstance().is_mi350())) {
 		ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_source_gpu_xgmi_status_command(arg, formatted_string);
 	}
 	return ret;
@@ -71,7 +71,7 @@ int AmdSmiXgmiCommand::xgmi_link_status_command(std::string &formatted_string)
 {
 	int ret = PARAM_NOT_SUPPORTED_ON_PLATFORM;
 	if (AmdSmiPlatform::getInstance().is_host() && (AmdSmiPlatform::getInstance().is_mi300()
-			|| AmdSmiPlatform::getInstance().is_mi200())) {
+			|| AmdSmiPlatform::getInstance().is_mi200() || AmdSmiPlatform::getInstance().is_mi350())) {
 		ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_xgmi_link_status_command(arg, formatted_string);
 	}
 	return ret;
@@ -179,7 +179,7 @@ void AmdSmiXgmiCommand::execute_command()
 {
 	unsigned int gpu_count;
 	AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
-	if ((AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200())
+	if ((AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200() || AmdSmiPlatform::getInstance().is_mi350())
 			&& AmdSmiPlatform::getInstance().getInstance().is_host()) {
 		if (gpu_count > 1) {
 			if (arg.output == human) {

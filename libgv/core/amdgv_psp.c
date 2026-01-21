@@ -392,6 +392,14 @@ enum psp_status amdgv_psp_cmd_km_buf_prep(struct psp_context *psp, struct psp_cm
 			km_cmd->cmd.sriov_copy_vf_chiplet_regs.source_vfid;
 		break;
 
+	case PSP_CMD_KM_TYPE__PERF_HW:
+		gfx_cmd->cmd_id = GFX_CMD_ID_PERF_HW;
+		gfx_cmd->cmd.cmd_req_perf_hw.req = km_cmd->cmd.perf_hw.req;
+		gfx_cmd->cmd.cmd_req_perf_hw.ptl_state = km_cmd->cmd.perf_hw.ptl_state;
+		gfx_cmd->cmd.cmd_req_perf_hw.pref_format1 = km_cmd->cmd.perf_hw.pref_format1;
+		gfx_cmd->cmd.cmd_req_perf_hw.pref_format2 = km_cmd->cmd.perf_hw.pref_format2;
+		break;
+
 	default:
 		ret = PSP_STATUS__ERROR_GENERIC;
 		break;
@@ -2243,6 +2251,9 @@ static bool amdgv_psp_is_error_injection_valid(struct amdgv_adapter *adapt,
 	case TA_RAS_BLOCK__MMHUB:
 	case TA_RAS_BLOCK__XGMI_WAFL:
 	case TA_RAS_BLOCK__PCIE_BIF:
+	case TA_RAS_BLOCK__VCN:
+	case TA_RAS_BLOCK__JPEG:
+	case TA_RAS_BLOCK__MMSCH:
 		ret = true;
 		break;
 	default:
@@ -2721,6 +2732,7 @@ enum psp_status amdgv_psp_xgmi_get_peer_link_info(struct amdgv_adapter *adapt,
 	uint32_t i = 0, j = 0;
 	uint32_t link_idx = 0;
 	struct amdgv_adapter *tmp_adapt = NULL;
+	uint32_t num_bdfs_copied = 0;
 
 	xgmi_cmd = (struct ta_xgmi_shared_memory *)(amdgv_memmgr_get_cpu_addr(
 		xgmi_context->shared_buffer.mem));
@@ -2755,6 +2767,7 @@ enum psp_status amdgv_psp_xgmi_get_peer_link_info(struct amdgv_adapter *adapt,
 	}
 
 	/* Copy peer info */
+	link_info->num_links = 0;
 	for (i = 0; i < peer_link_info->num_nodes; i++) {
 		if (peer_link_info->nodes[i].num_links > TA_XGMI__MAX_PORT_NUM) {
 			AMDGV_ERROR("Invalid XGMI Link Info on node %d\n", i);
@@ -2781,11 +2794,17 @@ enum psp_status amdgv_psp_xgmi_get_peer_link_info(struct amdgv_adapter *adapt,
 		link_info->num_links = 0;
 
 	/* Discover BDF info */
-	for (i = 0; i < link_info->num_links; i++) {
+	for (i = 0; i < AMDGV_XGMI_MAX_NUM_LINKS && num_bdfs_copied < link_info->num_links; i++) {
+
+		/* skip unused ports */
+		if (link_info->link[i].dest_node_id == 0)
+			continue;
+
 		amdgv_list_for_each_entry(tmp_adapt, &hive->adapt_list,
 						struct amdgv_adapter, xgmi.head) {
 			if (tmp_adapt->xgmi.node_id == link_info->link[i].dest_node_id) {
 				link_info->link[i].dest_bdf = tmp_adapt->bdf;
+				num_bdfs_copied++;
 				break;
 			}
 		}
@@ -3314,7 +3333,17 @@ enum amdgv_live_info_status amdgv_psp_fw_info_export_live_data(struct amdgv_adap
 	fw_info->fw_info_psp_toc = adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_TOC];
 	fw_info->fw_info_psp_keydb = adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_KEYDB];
 	fw_info->fw_info_dfc_fw = adapt->psp.fw_info[AMDGV_FIRMWARE_ID__DFC_FW];
+	fw_info->fw_info_psp_bl = adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_BL];
 	fw_info->fw_info_psp_spl = adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_SPL];
+	fw_info->fw_info_reg_access_whitelist =
+		adapt->psp.fw_info[AMDGV_FIRMWARE_ID__REG_ACCESS_WHITELIST];
+	fw_info->fw_info_p2s_table =
+		adapt->psp.fw_info[AMDGV_FIRMWARE_ID__P2S_TABLE];
+	fw_info->fw_info_psp_soc = adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_SOC];
+	fw_info->fw_info_psp_dbg = adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_DBG];
+	fw_info->fw_info_psp_intf = adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_INTF];
+	fw_info->fw_info_psp_ras = adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_RAS];
+	fw_info->fw_info_xgmi_ta = adapt->psp.fw_info[AMDGV_FIRMWARE_ID__XGMI_TA];
 	fw_info->smu_fw_version = adapt->pp.smu_fw_version;
 	fw_info->fw_info_pldm = adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PLDM_VERSION];
 
@@ -3361,7 +3390,16 @@ enum amdgv_live_info_status amdgv_psp_fw_info_import_live_data(struct amdgv_adap
 	adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_TOC] = fw_info->fw_info_psp_toc;
 	adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_KEYDB] = fw_info->fw_info_psp_keydb;
 	adapt->psp.fw_info[AMDGV_FIRMWARE_ID__DFC_FW] = fw_info->fw_info_dfc_fw;
+	adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_BL] = fw_info->fw_info_psp_bl;
 	adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_SPL] = fw_info->fw_info_psp_spl;
+	adapt->psp.fw_info[AMDGV_FIRMWARE_ID__REG_ACCESS_WHITELIST] =
+		fw_info->fw_info_reg_access_whitelist;
+	adapt->psp.fw_info[AMDGV_FIRMWARE_ID__P2S_TABLE] = fw_info->fw_info_p2s_table;
+	adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_SOC] = fw_info->fw_info_psp_soc;
+	adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_DBG] = fw_info->fw_info_psp_dbg;
+	adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_INTF] = fw_info->fw_info_psp_intf;
+	adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_RAS] = fw_info->fw_info_psp_ras;
+	adapt->psp.fw_info[AMDGV_FIRMWARE_ID__XGMI_TA] = fw_info->fw_info_xgmi_ta;
 	adapt->pp.smu_fw_version = fw_info->smu_fw_version;
 	adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PLDM_VERSION] = fw_info->fw_info_pldm;
 

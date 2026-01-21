@@ -172,7 +172,7 @@ The commands and respective arguments that they accept are described as follows:
 
     **GPU Parameters:**
     - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`: Parameters for a specific GPU
-      - `--gpureset`: Reset GPU.
+      - `--gpureset`: Reset all GPUs.
 
     **VF Parameters:**
     - `--vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>`: Parameters for a specific VF (requires SR-IOV)
@@ -220,11 +220,19 @@ The commands and respective arguments that they accept are described as follows:
     **Note:** The partition command does not support the `--csv` or `--json` format modifiers.
 
 15. **ras**
-    Retrieves RAS (Reliability, Availability, Serviceability) error information. (MI300 host systems only, human-readable output only)
+    Retrieves RAS (Reliability, Availability, Serviceability) error information. (MI300 host systems only, human-readable output only - cper|afid, all formats allowed - policy)
 
     RAS arguments (mutually exclusive):
     - `--cper --severity=<fatal|nonfatal-uncorrected|nonfatal-corrected|all> [--folder=FOLDER] [--file-limit=NUMBER] [--follow]`: Get CPER (Common Platform Error Record) entries based on severity level. Supports GPU filtering with `--gpu`. Optional folder saves error files. File limit controls maximum saved files. Follow enables continuous monitoring.
     - `--afid --cper-file=FILE`: Extract AFID (AMD Field ID) list from existing CPER file. GPU filtering not supported.
+    - `--policy`:  Get RAS policy information. Supports GPU filtering with `--gpu`.
+
+16. **node**
+    Displays baseboard informations and node power management informations for a NODE. (MI350 host system only).
+
+    Node arguments are the following:
+    - `-b, --baseboard`: Show baseboard information.
+    - `-p, --power-management`: Show power management information.
 
 ## Basic Usage
 
@@ -250,24 +258,25 @@ Copyright 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
 
 usage: amd-smi help
 
-AMD System Management Interface | AMD SMI tool version 29.0.0
+AMD System Management Interface | AMD SMI tool version 32.6.0
 
 AMD-SMI Commands:
-                      Descriptions:
-    version           Display version information
-    list              List GPU information
-    static            Gets static information about the specified GPU
-    metric            Gets metric information about the specified GPU
-    monitor           Monitor metrics for target devices
-    bad-pages         Gets bad page information about the specified GPU
-    event             Displays event information for the given GPU
-    firmware          Gets firmware information about the specified GPU
-    set               Set options for devices
-    reset             Reset options for devices
-    xgmi              Displays xgmi information of the devices
-    topology          Displays topology information of the devices
-    partition         Displays partition information of the devices
-    ras               Displays ras information of the devices
+                          Descriptions
+    list                  List device information
+    static                Gets static information about the specified device
+    metric                Gets metric information about the specified device
+    version               Display version information (GPU only)
+    monitor               Monitor metrics for target devices (GPU only)
+    bad-pages             Gets bad page information about the specified device (GPU only)
+    event                 Displays event information for the given device (GPU only)
+    firmware              Gets firmware information about the specified device (GPU only)
+    set                   Set options for devices (GPU only)
+    reset                 Reset options for devices (GPU only)
+    xgmi                  Displays xgmi information of the devices (GPU only)
+    topology              Displays topology information of the devices (GPU only)
+    partition             Displays partition information of the devices (GPU only)
+    ras                   Displays ras information of the devices (GPU only)
+    node                  Displays node information of the devices (GPU only)
 ```
 
 From help message you can see which subcommands are supported on the system and a short description for each command.
@@ -288,7 +297,7 @@ If no GPU is specified, returns basic information for all GPUs on the system.
 List arguments:
                           Description:
     -h, --help            show this help message and exit
-    -g, --gpu [GPU ...]   Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs
+    -g, --gpu=[GPU ...]   Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs
 
 Command Modifiers:
                       Description:
@@ -1079,6 +1088,21 @@ $ sudo amd-smi ras --afid --cper-file=/tmp/ras_logs/fatal-2.cper
 24 29
 ```
 
+**Get RAS policy info:**
+
+```shell-session
+$ sudo amd-smi ras [--policy]
+```
+
+**Output:**
+```
+POLICY:
+  MINOR_VERSION: 4
+  MAJOR_VERSION: 0
+  DRAM_NON_CRITICAL_REGION_THRESHOLD: int(val)
+  DRAM_CRITICAL_REGION_THRESHOLD: int(val)
+```
+
 ### 14. JSON and CSV Format Examples
 
 **JSON format for metrics:**
@@ -1833,6 +1857,16 @@ NIC: 0
                     MAX_MTU: N/A
                     ACTIVE_MTU: N/A
 ```
+
+### 16. NODE informatins
+
+```shell-session
+$ sudo amd-smi node -p
+
+NODE:
+    POWER_MANAGEMENT:
+        LIMIT: 7000 W
+        STATUS: ENABLED
 
 ## Use Case Scenarios
 

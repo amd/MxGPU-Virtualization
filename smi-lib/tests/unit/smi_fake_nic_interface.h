@@ -89,16 +89,16 @@ void set_nic_long_interface_name(bool flag);
 /**
  * @brief Get the current NIC API status code.
  *
- * @return status code from smi_nic_status enum
+ * @return status code from smi_nic_status_t enum
  */
-smi_nic_status get_nic_api_status();
+smi_nic_status_t get_nic_api_status();
 
 /**
  * @brief Set NIC API return status code.
  *
  * @param status code to simulate return status of NIC API
  */
-void set_nic_api_status(smi_nic_status status);
+void set_nic_api_status(smi_nic_status_t status);
 
 #ifdef __cplusplus
 }

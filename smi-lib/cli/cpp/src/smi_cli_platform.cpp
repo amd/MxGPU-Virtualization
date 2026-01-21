@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2024 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -32,9 +32,11 @@
 #pragma comment(lib, "wbemuuid.lib")
 #endif
 
-const std::vector<std::string> dev_id_list_mi30x = {"74A0", "74A1", "74A2", "74B6", "74A9", "74BD", "74A5", "74B9", "74A8", "74BC", "75A0", "75A1", "75A3", "75B0", "75B1", "75B3"};
+const std::vector<std::string> dev_id_list_mi30x = {"74A0", "74A1", "74A2", "74B6", "74A9", "74BD", "74A5", "74B9", "74A8", "74BC"};
+const std::vector<std::string> dev_id_list_mi350 = {"75A0", "75A1", "75A3", "75B0", "75B1", "75B3"};
 const std::vector<std::string> dev_id_list_mi2plus = {"7410"};
 const std::vector<std::string> dev_id_list_nv = {"73C4", "73C5", "73C8", "7460", "7461", "73A1","73AE" };
+
 
 bool check_if_mi30x(std::string output)
 {
@@ -47,6 +49,19 @@ bool check_if_mi30x(std::string output)
 		}
 	}
 	return is_mi300;
+}
+
+bool check_if_mi350(std::string output)
+{
+	std::string::size_type n;
+	bool is_mi350{false};
+	for (auto x : dev_id_list_mi350) {
+		n = output.find(x);
+		if (std::string::npos != n) {
+			is_mi350 = true;
+		}
+	}
+	return is_mi350;
 }
 
 bool check_if_nv(std::string output)
@@ -321,6 +336,7 @@ AmdSmiPlatform::AmdSmiPlatform()
 
 		is_nv_ = check_if_nv(gpu_id_list);
 		is_mi300_ = check_if_mi30x(gpu_id_list);
+		is_mi350_ = check_if_mi350(gpu_id_list);
 		is_mi200_ = check_if_mi200(gpu_id_list);
 
 		if (linux_output_gim_loaded.empty() && linux_output_amdgpu_loaded.empty()
@@ -392,6 +408,10 @@ bool AmdSmiPlatform::is_linux()
 bool AmdSmiPlatform::is_mi300()
 {
 	return is_mi300_;
+}
+bool AmdSmiPlatform::is_mi350()
+{
+	return is_mi350_;
 }
 bool AmdSmiPlatform::is_nv()
 {

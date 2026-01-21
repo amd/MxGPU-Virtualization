@@ -31,6 +31,8 @@ AC_DEFUN([AC_CRYPTO_HASH_DIGEST], [
                         #include <crypto/hash.h>
                 ], [
                         crypto_hash_digest(NULL, NULL, 0,0);
+                        struct hash_desc desc;
+                        desc.flags = CRYPTO_TFM_REQ_MAY_SLEEP;
                 ], [
                         AC_DEFINE(HAVE_CRYPTO_HASH_DIGEST, 1,
                                 [crypto_hash_digest is available])
