@@ -54,7 +54,7 @@ public:
 											std::string &formatted_string) override;
 	virtual int amdsmi_get_ras_info_command(uint64_t processor_bdf, Arguments arg,
 											std::string &formatted_string) override;
-	virtual int amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments arg,
+	virtual int amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments &arg,
 			std::string &formatted_string) override;
 	virtual int amdsmi_get_process_isolation(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) override;

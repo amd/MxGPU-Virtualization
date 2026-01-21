@@ -412,7 +412,7 @@ int AmdSmiApiGuest::amdsmi_get_vbios_info_command(uint64_t processor_bdf, Argume
 	return ret;
 }
 
-int AmdSmiApiGuest::amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments arg,
+int AmdSmiApiGuest::amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments &arg,
 		std::string &formatted_string)
 {
 	if (AmdSmiPlatform::getInstance().is_guest()) {

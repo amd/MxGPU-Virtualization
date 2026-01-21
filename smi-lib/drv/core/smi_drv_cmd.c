@@ -3097,3 +3097,139 @@ end:
 
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
+
+int smi_get_gpu_ptl_state(struct smi_ctx *ctx, void *inb,
+			  void *outb, uint16_t in_len, uint16_t out_len)
+{
+	struct smi_device_info *id = NULL;
+	struct smi_get_gpu_ptl_state *ptl_out = NULL;
+	struct amdgv_ptl_status_info info;
+	amdgv_dev_t *adev = NULL;
+	bool dev_busy = false;
+	int ret = SMI_STATUS_SUCCESS;
+
+	/* Check version */
+	if ((in_len != sizeof(struct smi_device_info)) ||
+	    (out_len != sizeof(struct smi_get_gpu_ptl_state))) {
+		return SMI_STATUS_INVAL;
+	}
+
+	ptl_out = (struct smi_get_gpu_ptl_state *) outb;
+	id = (struct smi_device_info *) inb;
+
+	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
+	if (!adev) {
+		return SMI_STATUS_NOT_FOUND;
+	}
+	if (dev_busy)
+		return SMI_STATUS_BUSY;
+
+	ret = amdgv_gpumon_ptl_query(adev, &info);
+	if (ret == 0) {
+		ptl_out->enabled = info.ptl_enabled;
+	}
+
+	smi_put_handle(adev, ctx);
+
+	return smi_convert_ret_value(ERROR_OTHER, ret);
+}
+
+int smi_set_gpu_ptl_state(struct smi_ctx *ctx, void *inb,
+			  void *outb, uint16_t in_len, uint16_t out_len)
+{
+	struct smi_set_gpu_ptl_state *ptl = NULL;
+	amdgv_dev_t *adev = NULL;
+	bool dev_busy = false;
+	int ret = SMI_STATUS_SUCCESS;
+
+	/* Check version */
+	if ((in_len != sizeof(struct smi_set_gpu_ptl_state)) ||
+	    (out_len != 0)) {
+		return SMI_STATUS_INVAL;
+	}
+
+	ptl = (struct smi_set_gpu_ptl_state *) inb;
+
+	adev = smi_get_handle(ctx, &ptl->dev_id, NULL, &dev_busy);
+	if (!adev) {
+		return SMI_STATUS_NOT_FOUND;
+	}
+	if (dev_busy)
+		return SMI_STATUS_BUSY;
+
+	ret = amdgv_gpumon_ptl_set_state(adev, ptl->enable, NULL);
+
+	smi_put_handle(adev, ctx);
+
+	return smi_convert_ret_value(ERROR_OTHER, ret);
+}
+
+int smi_get_gpu_ptl_formats(struct smi_ctx *ctx, void *inb,
+			    void *outb, uint16_t in_len, uint16_t out_len)
+{
+	struct smi_device_info *id = NULL;
+	struct smi_get_gpu_ptl_formats *ptl_out = NULL;
+	struct amdgv_ptl_status_info info;
+	amdgv_dev_t *adev = NULL;
+	bool dev_busy = false;
+	int ret = SMI_STATUS_SUCCESS;
+
+	/* Check version */
+	if ((in_len != sizeof(struct smi_device_info)) ||
+	    (out_len != sizeof(struct smi_get_gpu_ptl_formats))) {
+		return SMI_STATUS_INVAL;
+	}
+
+	id = (struct smi_device_info *) inb;
+	ptl_out = (struct smi_get_gpu_ptl_formats *) outb;
+
+	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
+	if (!adev) {
+		return SMI_STATUS_NOT_FOUND;
+	}
+	if (dev_busy)
+		return SMI_STATUS_BUSY;
+
+	ret = amdgv_gpumon_ptl_query(adev, &info);
+	if (ret == 0) {
+		ptl_out->data_format1 = smi_map_ptl_format(info.pref_format1);
+		ptl_out->data_format2 = smi_map_ptl_format(info.pref_format2);
+	}
+
+	smi_put_handle(adev, ctx);
+
+	return smi_convert_ret_value(ERROR_OTHER, ret);
+}
+
+int smi_set_gpu_ptl_formats(struct smi_ctx *ctx, void *inb,
+			    void *outb, uint16_t in_len, uint16_t out_len)
+{
+	struct smi_set_gpu_ptl_formats *ptl = NULL;
+	struct amdgv_ptl_enable_info info;
+	amdgv_dev_t *adev = NULL;
+	bool dev_busy = false;
+	int ret = SMI_STATUS_SUCCESS;
+
+	/* Check version */
+	if ((in_len != sizeof(struct smi_set_gpu_ptl_formats)) ||
+	    (out_len != 0)) {
+		return SMI_STATUS_INVAL;
+	}
+
+	ptl = (struct smi_set_gpu_ptl_formats *) inb;
+
+	adev = smi_get_handle(ctx, &ptl->dev_id, NULL, &dev_busy);
+	if (!adev) {
+		return SMI_STATUS_NOT_FOUND;
+	}
+	if (dev_busy)
+		return SMI_STATUS_BUSY;
+
+	info.pref_format1 = ptl->data_format1;
+	info.pref_format2 = ptl->data_format2;
+	ret = amdgv_gpumon_ptl_set_state(adev, true, &info);
+
+	smi_put_handle(adev, ctx);
+
+	return smi_convert_ret_value(ERROR_OTHER, ret);
+}

@@ -127,6 +127,14 @@ class AmdSmiVramType(IntEnum):
     GDDR6 = amdsmi_wrapper.AMDSMI_VRAM_TYPE_GDDR6
     GDDR7 = amdsmi_wrapper.AMDSMI_VRAM_TYPE_GDDR7
 
+class AmdSmiPtlDataFormat(IntEnum):
+    I8 = amdsmi_wrapper.AMDSMI_PTL_DATA_FORMAT_I8
+    F16 = amdsmi_wrapper.AMDSMI_PTL_DATA_FORMAT_F16
+    BF16 = amdsmi_wrapper.AMDSMI_PTL_DATA_FORMAT_BF16
+    F32 = amdsmi_wrapper.AMDSMI_PTL_DATA_FORMAT_F32
+    F64 = amdsmi_wrapper.AMDSMI_PTL_DATA_FORMAT_F64
+    INVALID = amdsmi_wrapper.AMDSMI_PTL_DATA_FORMAT_INVALID
+
 class AmdSmiCacheProperty(IntEnum):
     ENABLED = amdsmi_wrapper.AMDSMI_CACHE_PROPERTY_ENABLED
     DATA_CACHE = amdsmi_wrapper.AMDSMI_CACHE_PROPERTY_DATA_CACHE
@@ -2734,6 +2742,7 @@ def amdsmi_get_npm_info(node_handle):
         "status": AmdSmiNpmStatus(npm_info.status).name,
         "limit": npm_info.limit,
     }
+
 def amdsmi_get_gpu_ras_policy_info(processor_handle):
     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
         raise AmdSmiParameterException(
@@ -2757,3 +2766,58 @@ def amdsmi_get_gpu_ras_policy_info(processor_handle):
             })
 
     return { "ras_policy_info": ras_policy_info }
+
+def amdsmi_get_gpu_ptl_state(processor_handle):
+
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+
+    enabled = ctypes.c_bool()
+    _check_res(amdsmi_wrapper.amdsmi_get_gpu_ptl_state(
+        processor_handle, ctypes.byref(enabled)))
+
+    return enabled.value
+
+def amdsmi_set_gpu_ptl_state(processor_handle, enable):
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+
+    if not isinstance(enable, bool):
+        raise AmdSmiParameterException(enable, bool)
+
+    _check_res(amdsmi_wrapper.amdsmi_set_gpu_ptl_state(
+        processor_handle, ctypes.c_bool(enable)))
+
+def amdsmi_get_gpu_ptl_formats(processor_handle):
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+
+    format1 = amdsmi_wrapper.amdsmi_ptl_data_format_t()
+    format2 = amdsmi_wrapper.amdsmi_ptl_data_format_t()
+    _check_res(amdsmi_wrapper.amdsmi_get_gpu_ptl_formats(
+        processor_handle, ctypes.byref(format1), ctypes.byref(format2)))
+
+    fmt1_enum = AmdSmiPtlDataFormat(format1.value)
+    fmt2_enum = AmdSmiPtlDataFormat(format2.value)
+
+    return (fmt1_enum, fmt2_enum)
+
+def amdsmi_set_gpu_ptl_formats(processor_handle, data_format1, data_format2):
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+
+    if not isinstance(data_format1, AmdSmiPtlDataFormat):
+        raise AmdSmiParameterException(data_format1, AmdSmiPtlDataFormat)
+
+    if not isinstance(data_format2, AmdSmiPtlDataFormat):
+        raise AmdSmiParameterException(data_format2, AmdSmiPtlDataFormat)
+
+    _check_res(amdsmi_wrapper.amdsmi_set_gpu_ptl_formats(
+        processor_handle,
+        amdsmi_wrapper.amdsmi_ptl_data_format_t(data_format1.value),
+        amdsmi_wrapper.amdsmi_ptl_data_format_t(data_format2.value)))
+

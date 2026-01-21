@@ -212,7 +212,7 @@ bool AmdSmiParser::is_option_argument(std::string option, Arguments &parsed_argu
 	if (option == "--csv") {
 		return true;
 	}
-	if (option.substr(0, 6) == "--file") {
+	if ((option.substr(0, 6) == "--file") && (option.substr(0, 12) != "--file-limit")) {
 		if (parsed_arguments.command == "reset") {
 			throw SmiToolInvalidParameterException(option);
 		}
@@ -497,6 +497,34 @@ bool AmdSmiParser::is_option_argument(std::string option, Arguments &parsed_argu
 		return true;
 	}
 
+	if (option.substr(0, 12) == "--ptl-status") {
+		if (parsed_arguments.command != "set") {
+			throw SmiToolInvalidParameterException(option.substr(0, 12));
+		}
+		does_option_have_value(option, 12);
+		try {
+			parsed_arguments.options.push_back("ptl-status");
+			parsed_arguments.ptl_status_set = option.substr(13);
+		} catch (...) {
+			throw SmiToolMissingParameterValueException(option.substr(0, 12));
+		}
+		return true;
+	}
+
+	if (option.substr(0, 12) == "--ptl-format") {
+		if (parsed_arguments.command != "set") {
+			throw SmiToolInvalidParameterException(option.substr(0, 12));
+		}
+		does_option_have_value(option, 12);
+		try {
+			parsed_arguments.options.push_back("ptl-format");
+			parsed_arguments.ptl_format_set = option.substr(13);
+		} catch (...) {
+			throw SmiToolMissingParameterValueException(option.substr(0, 12));
+		}
+		return true;
+	}
+
 	if (option.substr(0, 3) == "-pc") {
 		if (parsed_arguments.command != "set") {
 			throw SmiToolInvalidParameterException(option.substr(0, 3));
@@ -676,10 +704,10 @@ void AmdSmiParser::parse_arguments(std::vector<std::string> command_argument_lis
 	if (command_argument_list[0] == "ras") {
 		bool has_afid = is_argument_present(command_argument_list, "--afid");
 		bool has_cper = is_argument_present(command_argument_list, "--cper");
-		bool has_file = is_argument_present(command_argument_list, "--file");
+		bool has_policy = is_argument_present(command_argument_list, "--policy");
 
-		if(has_file && (has_cper || has_afid)) {
-			throw SmiToolInvalidParameterException("--file");
+		if(has_policy && (has_cper || has_afid)) {
+			throw SmiToolInvalidParameterException("--policy");
 		}
 
 		if (has_afid && !parsed_arguments.device_format[DevicesType::GPU_TYPE].empty()) {
@@ -734,7 +762,9 @@ void AmdSmiParser::parse_arguments(std::vector<std::string> command_argument_lis
 						|| command_argument_list[i] == "-ps"
 						|| command_argument_list[i] == "--num-vf"
 						|| command_argument_list[i] == "--xgmi-plpd"
-						|| command_argument_list[i] == "-pd") {
+						|| command_argument_list[i] == "-pd"
+						|| command_argument_list[i] == "--ptl-status"
+						|| command_argument_list[i] == "--ptl-format") {
 					if (!is_option_argument(command_argument_list[i], parsed_arguments)) {
 						throw SmiToolInvalidParameterException(std::string(command_argument_list[i]));
 					}
@@ -842,7 +872,9 @@ void AmdSmiParser::parse_arguments(std::vector<std::string> command_argument_lis
 				!is_argument_present(command_argument_list, "-pc") &&
 				!is_argument_present(command_argument_list, "--xgmi-plpd") &&
 				!is_argument_present(command_argument_list, "-pd") &&
-				!is_argument_present(command_argument_list, "--num-vf")) {
+				!is_argument_present(command_argument_list, "--num-vf") &&
+				!is_argument_present(command_argument_list, "--ptl-status") &&
+				!is_argument_present(command_argument_list, "--ptl-format")) {
 			throw SmiToolRequiredCommandException("set");
 		} else {
 			if (parsed_arguments.fb_sharing_mode != "CUSTOM") {

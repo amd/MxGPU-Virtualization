@@ -369,33 +369,58 @@ static int __gim_mig_validate_vf_sched_state(enum amdgv_sched_state current_stat
  * Return values:
  *  GIM_MIG_VF_MIGRATION_PROCESSED (value: 1): migrate the vf
  *  GIM_MIG_VF_MIGRATION_SKIPPED (value: 0): finish migration and skip VF data transfer.
- *  GIM_MIG_VF_MIGRATION_FAILED (value: -EFAULT): fail the migration
+ *  negetive (-EFAULT/-ENOMEM): abort migration
  *
- * State transitions allowed during migration:
- *  - ACTIVE -> SUSPENDED
+ * Allowed state transitions during migration:
+ *  - ACTIVE  -> ACTIVE/SUSPEND
+ *  - SUSPEND -> SUSPEND
+ *  - AVAIL   -> AVAIL   (skip)
+ *  - UNAVAL  -> UNAVAL  (skip)
  */
 static int gim_mig_validate_vf_sched_state(struct gim_mig_vf_ctx *vf_ctx)
 {
 	union amdgv_vf_info *info;
-	int ret;
-
+	amdgv_dev_t adev = vf_ctx->gdev->pf_data->adev;
+	int validate_result = 0;
+	int ret = 0;
 	info = (union amdgv_vf_info *)gim_kzalloc(sizeof(union amdgv_vf_info), GFP_KERNEL);
-	if (info == NULL)
-		return -ENOMEM;
+	if (info == NULL) {
+		ret = -ENOMEM;
+		goto err_exit;
+	}
 
-	if (amdgv_get_vf_info(vf_ctx->gdev->pf_data->adev,
-			vf_ctx->vf_idx, AMDGV_GET_VF_SCHED_STATE, info)) {
+	if (amdgv_get_vf_info(vf_ctx->gdev->pf_data->adev, vf_ctx->vf_idx,
+			      AMDGV_GET_VF_SCHED_STATE, info)) {
+		ret = -EFAULT;
 		gim_kfree(info);
-		return -EFAULT;
+		goto err_exit;
 	}
 
 	if (vf_ctx->vf_sched_state == GIM_MIG_VF_MIGRATION_INVALID)
 		vf_ctx->vf_sched_state = info->sched.state;
 
-	ret = __gim_mig_validate_vf_sched_state((enum amdgv_sched_state)vf_ctx->vf_sched_state, info->sched.state);
+	validate_result = __gim_mig_validate_vf_sched_state(
+		(enum amdgv_sched_state)vf_ctx->vf_sched_state, info->sched.state);
 	vf_ctx->vf_sched_state = info->sched.state;
 
 	gim_kfree(info);
+
+	switch (validate_result) {
+	case GIM_MIG_VF_MIGRATION_FAILED:
+		ret = GIM_MIG_VF_MIGRATION_FAILED;
+		goto err_exit;
+	case GIM_MIG_VF_MIGRATION_SKIPPED:
+		return 0;
+	case GIM_MIG_VF_MIGRATION_PROCESSED:
+		return 1;
+	default:
+		ret = -EFAULT;
+		goto err_exit;
+	}
+
+err_exit:
+	gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
+	amdgv_migration_set_abort(adev, vf_ctx->vf_idx);
 	return ret;
 }
 
@@ -408,12 +433,13 @@ static int gim_mig_update_msg_copy_info(struct gim_mig_file *migf,
 	struct gim_mig_vf_ctx *vf_ctx = container_of(migf, struct gim_mig_vf_ctx, migf);
 	amdgv_dev_t adev = vf_ctx->gdev->pf_data->adev;
 
-	ret = gim_mig_validate_vf_sched_state(container_of(migf, struct gim_mig_vf_ctx, migf));
+	ret = gim_mig_validate_vf_sched_state(vf_ctx);
 	if (ret <= 0)
 		return ret;
 
 	if (!migf->enabled) {
 		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
+		amdgv_migration_set_abort(adev, vf_ctx->vf_idx);
 		return -ENODEV;
 	}
 
@@ -560,7 +586,7 @@ retry:
 
 			ret = gim_mig_wait_with_timeout(migf, &timeout);
 			if (ret < 0)
-				return ret;
+				goto exit;
 
 			goto retry;
 		}
@@ -571,7 +597,7 @@ retry:
 		if (pending) {
 			ret = gim_mig_wait_with_timeout(migf, &timeout);
 			if (ret < 0)
-				return ret;
+				goto exit;
 
 			goto retry;
 		}
@@ -582,17 +608,20 @@ retry:
 		migf->left_bytes_fd -= copied_size;
 	}
 
-	if (migf->left_bytes_fd > 0)
+	if (migf->left_bytes_fd > 0) {
 		wake_up(&migf->ring.copy_thread_wq);
+		if (copied_size == 0) {
+			ret = gim_mig_wait_with_timeout(migf, &timeout);
+			if (ret < 0)
+				goto exit;
 
-	/* all data has been copied in current loop */
-	if (migf->left_bytes_fd == 0) {
-		*pos = 0;
-		if (migf->next_copy_mask != 0) {
-			migf->ring.state = GIM_MIG_THREAD_RUNNING;
-			wake_up(&migf->ring.copy_thread_wq);
+			goto retry;
 		}
 	}
+
+	/* all data has been copied in current loop */
+	if (migf->left_bytes_fd == 0)
+		*pos = 0;
 
 	ret = copied_size;
 exit:
@@ -699,8 +728,11 @@ static long gim_migf_save_ioctl(struct file *filp, unsigned int cmd, unsigned lo
 	initial_bytes = 0;
 	dirty_bytes = 0;
 	ret = gim_mig_update_msg_copy_info(migf, &initial_bytes, &dirty_bytes, false, false);
-	if (ret < 0)
+	if (ret < 0) {
+		/* If a non-zero value is returned, QEMU will treat the data size as 100 GB */
+		ret = 0;
 		goto exit;
+	}
 
 	info.initial_bytes += initial_bytes;
 	info.dirty_bytes += dirty_bytes;
@@ -1290,11 +1322,7 @@ static void gim_mig_finish_copy(struct gim_mig_vf_ctx *vf_ctx)
 
 static int gim_mig_stop_copy_device(struct gim_mig_vf_ctx *vf_ctx, enum vfio_device_mig_state state)
 {
-	int ret;
-
-	ret = gim_mig_update_msg_copy_info(&vf_ctx->migf, NULL, NULL, true, true);
-	if (ret < 0)
-		return ret;
+	gim_mig_update_msg_copy_info(&vf_ctx->migf, NULL, NULL, true, true);
 
 	return 0;
 }
@@ -1607,6 +1635,14 @@ static int gim_mig_get_state(struct vfio_device *vdev,
 	return ret;
 }
 
+/*
+ * QEMU calls this function from vfio_query_stop_copy_size.
+ * If a non-zero value is returned, QEMU will treat the data size as 100 GB.
+ *
+ * However, if we truly want to abort migration, we should make
+ * gim_migf_save_read() fail instead of relying on any other migration interface.
+ * Therefore, the return value of this function is not important.
+ */
 static int gim_mig_get_state_size(struct vfio_device *vdev,
 			unsigned long *stop_copy_length)
 {
@@ -1628,11 +1664,13 @@ static int gim_mig_get_state_size(struct vfio_device *vdev,
 	if (!migf->enabled)
 		*stop_copy_length = vf_ctx->fb_size;
 	else {
-		ret = gim_mig_validate_vf_sched_state(container_of(migf, struct gim_mig_vf_ctx, migf));
-		if (ret <= 0)
+		ret = gim_mig_validate_vf_sched_state(vf_ctx);
+		if (ret <= 0) {
 			goto exit;
+		}
 
-		if (gim_mig_update_shadow_dirtybit(&vf_ctx->migf, &shadow_dirty_fb_len)) {
+		ret = gim_mig_update_shadow_dirtybit(&vf_ctx->migf, &shadow_dirty_fb_len);
+		if (ret) {
 			gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
 			amdgv_migration_set_abort(adev, vf_ctx->vf_idx);
 			goto exit;

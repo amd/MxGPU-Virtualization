@@ -108,12 +108,17 @@ from .amdsmi_interface import amdsmi_set_xgmi_plpd
 from .amdsmi_interface import amdsmi_get_node_handle
 from .amdsmi_interface import amdsmi_get_npm_info
 from .amdsmi_interface import amdsmi_get_gpu_ras_policy_info
+from .amdsmi_interface import amdsmi_get_gpu_ptl_state
+from .amdsmi_interface import amdsmi_set_gpu_ptl_state
+from .amdsmi_interface import amdsmi_get_gpu_ptl_formats
+from .amdsmi_interface import amdsmi_set_gpu_ptl_formats
 
 from .amdsmi_interface import AmdSmiTemperatureType
 from .amdsmi_interface import AmdSmiTemperatureMetric
 from .amdsmi_interface import AmdSmiClkType
 from .amdsmi_interface import AmdSmiGuardState
 from .amdsmi_interface import AmdSmiVramType
+from .amdsmi_interface import AmdSmiPtlDataFormat
 from .amdsmi_interface import AmdSmiGuardType
 from .amdsmi_interface import AmdSmiVfState
 from .amdsmi_interface import AmdSmiFwBlock

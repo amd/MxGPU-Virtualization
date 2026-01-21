@@ -61,6 +61,7 @@ public:
 
 	virtual int get_string_from_enum_driver_model(int driver_model, std::string& out) override;
 	virtual int get_string_from_enum_cper_severity_mask(int severity_mask, std::string& out) override;
+	virtual int get_string_from_enum_ptl_format(int format, std::string& out);
 	virtual int initTopology(std::vector<std::shared_ptr<Device> > devices,
 							 std::vector<std::string>& bdf_vector) override;
 	virtual int csv_recursion(std::string& main_buffer,
@@ -79,7 +80,7 @@ public:
 			std::string &formatted_string);
 	virtual int amdsmi_get_board_info_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string);
-	virtual int amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments arg,
+	virtual int amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments &arg,
 			std::string &formatted_string);
 	virtual int amdsmi_get_driver_info_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string);
@@ -98,9 +99,9 @@ public:
 	virtual int amdsmi_get_vf_info_static_command(std::string device, Arguments arg,
 			std::string& out) override;
 	virtual int amdsmi_get_soc_pstate(uint64_t processor_bdf, Arguments arg,
-									  std::string &formatted_string);
+			std::string &formatted_string);
 	virtual int amdsmi_get_plpd(uint64_t processor_bdf, Arguments arg,
-								std::string &formatted_string);
+			std::string &formatted_string);
 
 	virtual int amdsmi_get_list_command(Arguments arg, std::string& out) override;
 	virtual int amdsmi_get_bad_pages_command(uint64_t processor_bdf, Arguments arg, std::string& out,
@@ -208,6 +209,8 @@ public:
 	virtual int amdsmi_reset_gpu_command(uint64_t processor, Arguments arg) override;
 	virtual int amdsmi_set_soc_pstate_command(uint64_t processor_bdf, Arguments arg) override;
 	virtual int amdsmi_set_power_cap_command(uint64_t processor_bdf, Arguments arg) override;
+	virtual int amdsmi_set_ptl_status_command(uint64_t processor_bdf, Arguments arg) override;
+	virtual int amdsmi_set_ptl_format_command(uint64_t processor_bdf, Arguments arg) override;
 	virtual int amdsmi_get_virtualization_mode_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) override;
 	virtual int amdsmi_get_numa_command(uint64_t processor_bdf, Arguments arg,

@@ -1247,8 +1247,8 @@ static void amdgv_sched_handle_vf_ptl_update(struct amdgv_adapter *adapt, uint32
 
 	switch (req_code) {
 	case PSP_PTL_PERF_MON_QUERY:
-		ret = amdgv_gpumon_ptl_query_status((amdgv_dev_t)adapt, &ptl_status);
-		if (ret == AMDGV_NOT_SUPPORTED) {
+		ret = amdgv_gpumon_ptl_query_status(adapt, &ptl_status);
+		if (ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED) {
 			pf2vf_msg->ptl_enabled = 0;
 			pf2vf_msg->ptl_pref_format1 = AMDGV_PTL_FORMAT_INVALID;
 			pf2vf_msg->ptl_pref_format2 = AMDGV_PTL_FORMAT_INVALID;
@@ -1270,49 +1270,15 @@ static void amdgv_sched_handle_vf_ptl_update(struct amdgv_adapter *adapt, uint32
 		if (ptl_state) {
 			ptl_info.pref_format1 = vf2pf_info->ptl_pref_format1;
 			ptl_info.pref_format2 = vf2pf_info->ptl_pref_format2;
-
-			if (ptl_info.pref_format1 >= AMDGV_PTL_FORMAT_INVALID ||
-			    ptl_info.pref_format2 >= AMDGV_PTL_FORMAT_INVALID) {
-				AMDGV_ERROR("Invalid PTL format from %s: fmt1=%u, fmt2=%u\n",
-					    amdgv_idx_to_str(idx_vf),
-					    ptl_info.pref_format1, ptl_info.pref_format2);
-				goto send_fail;
-			}
-
-			if (ptl_info.pref_format1 == ptl_info.pref_format2) {
-				AMDGV_ERROR("Duplicate PTL formats from %s: fmt1=%u, fmt2=%u\n",
-					    amdgv_idx_to_str(idx_vf),
-					    ptl_info.pref_format1, ptl_info.pref_format2);
-				goto send_fail;
-			}
-
-			ret = amdgv_gpumon_ptl_enable((amdgv_dev_t)adapt, &ptl_info);
-			if (ret == AMDGV_NOT_SUPPORTED) {
-				AMDGV_WARN("PTL not supported on this device for %s\n",
-					   amdgv_idx_to_str(idx_vf));
-				goto send_fail;
-			} else if (ret != 0) {
-				AMDGV_ERROR("PTL enable failed for %s: ret=%d\n",
-					    amdgv_idx_to_str(idx_vf), ret);
-				goto send_fail;
-			}
-
-			AMDGV_DEBUG("PTL enabled for %s: fmt1=%u, fmt2=%u\n",
-				    amdgv_idx_to_str(idx_vf),
-				    ptl_info.pref_format1, ptl_info.pref_format2);
+			ret = amdgv_gpumon_ptl_enable(adapt, &ptl_info);
 		} else {
-			ret = amdgv_gpumon_ptl_disable((amdgv_dev_t)adapt);
-			if (ret == AMDGV_NOT_SUPPORTED) {
-				AMDGV_WARN("PTL not supported on this device for %s\n",
-					   amdgv_idx_to_str(idx_vf));
-				goto send_fail;
-			} else if (ret != 0) {
-				AMDGV_ERROR("PTL disable failed for %s: ret=%d\n",
-					    amdgv_idx_to_str(idx_vf), ret);
-				goto send_fail;
-			}
-
-			AMDGV_DEBUG("PTL disabled for %s\n", amdgv_idx_to_str(idx_vf));
+			ret = amdgv_gpumon_ptl_disable(adapt);
+		}
+		if (ret != 0) {
+			AMDGV_ERROR("PTL %s failed for %s: ret=%d\n",
+				    ptl_state ? "enable" : "disable",
+				    amdgv_idx_to_str(idx_vf), ret);
+			goto send_fail;
 		}
 		break;
 

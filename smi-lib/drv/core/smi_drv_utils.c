@@ -1246,3 +1246,21 @@ enum smi_vf_sched_state smi_map_sched_state(enum amdgv_sched_state state)
 		return SMI_VF_STATE_UNAVAILABLE;
 	}
 }
+
+enum smi_ptl_data_format smi_map_ptl_format(enum amdgv_ptl_format_type drv_fmt)
+{
+    switch (drv_fmt) {
+    case AMDGV_PTL_FORMAT_I8:
+        return SMI_PTL_DATA_FORMAT_I8;
+    case AMDGV_PTL_FORMAT_F16:
+        return SMI_PTL_DATA_FORMAT_F16;
+    case AMDGV_PTL_FORMAT_BF16:
+        return SMI_PTL_DATA_FORMAT_BF16;
+    case AMDGV_PTL_FORMAT_F32:
+        return SMI_PTL_DATA_FORMAT_F32;
+    case AMDGV_PTL_FORMAT_F64:
+        return SMI_PTL_DATA_FORMAT_F64;
+    default:
+        return SMI_PTL_DATA_FORMAT_INVALID;
+    }
+}

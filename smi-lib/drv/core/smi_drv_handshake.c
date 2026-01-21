@@ -282,6 +282,22 @@ int smi_cmd_handshake(struct smi_ctx *ctx, void *inb, void *outb,
 			smi_get_ras_policy_info,
 			sizeof(struct smi_device_info),
 			sizeof(struct smi_gpu_ras_policy_info));
+		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_GPU_PTL_STATE,
+			smi_get_gpu_ptl_state,
+			sizeof(struct smi_device_info),
+			sizeof(struct smi_get_gpu_ptl_state));
+		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_SET_GPU_PTL_STATE,
+			smi_set_gpu_ptl_state,
+			sizeof(struct smi_set_gpu_ptl_state),
+			0);
+		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_GPU_PTL_FORMATS,
+			smi_get_gpu_ptl_formats,
+			sizeof(struct smi_device_info),
+			sizeof(struct smi_get_gpu_ptl_formats));
+		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_SET_GPU_PTL_FORMATS,
+			smi_set_gpu_ptl_formats,
+			sizeof(struct smi_set_gpu_ptl_formats),
+			0);
 		/* Set max num of commands
 		 * This needs to be set to the number of functions
 		 * defined here

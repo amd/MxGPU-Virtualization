@@ -4502,6 +4502,178 @@ amdsmi_status_t amdsmi_get_gpu_ras_policy_info(amdsmi_processor_handle processor
 	return AMDSMI_STATUS_SUCCESS;
 }
 
+amdsmi_status_t amdsmi_get_gpu_ptl_state(amdsmi_processor_handle processor_handle, bool *enabled)
+{
+	#pragma SMI_EXPORT
+	smi_device_handle_t pf;
+	struct smi_device_info *dev = NULL;
+	struct smi_gpu_handle *gpu = NULL;
+	enum smi_handle_type type;
+	smi_req_ctx smi_req;
+	struct smi_get_gpu_ptl_state *ptl_state = NULL;
+
+	AMDSMI_ESCAPE_IF_NOT_INIT;
+
+	if (processor_handle == NULL || enabled == NULL) {
+		SMI_ERROR("Nullpointer given as input. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	type = *((enum smi_handle_type *)processor_handle);
+	if (type != SMI_HANDLE_TYPE_AMD_GPU) {
+		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	gpu = (struct smi_gpu_handle *)processor_handle;
+	pf.handle = gpu->handle;
+	dev = (struct smi_device_info *)&smi_req.thread->ioctl_cmd.payload;
+	dev->dev_id.handle = pf.handle;
+	const int code = amdsmi_request(&smi_req, (uint32_t)SMI_CMD_CODE_GET_GPU_PTL_STATE,
+					sizeof(struct smi_device_info),
+					sizeof(struct smi_get_gpu_ptl_state));
+	if (code != AMDSMI_STATUS_SUCCESS) {
+		SMI_ERROR("Ioctl call failed. Return code: %d", code);
+		return code;
+	}
+	ptl_state = (struct smi_get_gpu_ptl_state *)&smi_req.thread->ioctl_cmd.payload;
+	*enabled = ptl_state->enabled;
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+amdsmi_status_t amdsmi_set_gpu_ptl_state(amdsmi_processor_handle processor_handle, bool enable)
+{
+	#pragma SMI_EXPORT
+	smi_device_handle_t pf;
+	struct smi_gpu_handle *gpu = NULL;
+	enum smi_handle_type type;
+	smi_req_ctx smi_req;
+	struct smi_set_gpu_ptl_state *ptl_state = NULL;
+
+	AMDSMI_ESCAPE_IF_NOT_INIT;
+
+	if (processor_handle == NULL) {
+		SMI_ERROR("Nullpointer given as input. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	type = *((enum smi_handle_type *)processor_handle);
+	if (type != SMI_HANDLE_TYPE_AMD_GPU) {
+		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	gpu = (struct smi_gpu_handle *)processor_handle;
+	pf.handle = gpu->handle;
+	ptl_state = (struct smi_set_gpu_ptl_state *)&smi_req.thread->ioctl_cmd.payload;
+	ptl_state->dev_id = pf;
+	ptl_state->enable = enable;
+
+	const int code = amdsmi_request(&smi_req, (uint32_t)SMI_CMD_CODE_SET_GPU_PTL_STATE,
+					sizeof(struct smi_set_gpu_ptl_state), 0);
+
+	if (code != AMDSMI_STATUS_SUCCESS) {
+		SMI_ERROR("Ioctl call failed. Return code: %d", code);
+		return code;
+	}
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+amdsmi_status_t amdsmi_get_gpu_ptl_formats(amdsmi_processor_handle processor_handle,
+					   amdsmi_ptl_data_format_t *data_format1,
+					   amdsmi_ptl_data_format_t *data_format2)
+{
+	#pragma SMI_EXPORT
+	smi_device_handle_t pf;
+	struct smi_device_info *dev = NULL;
+	struct smi_gpu_handle *gpu = NULL;
+	enum smi_handle_type type;
+	smi_req_ctx smi_req;
+	struct smi_get_gpu_ptl_formats *ptl_formats = NULL;
+
+	AMDSMI_ESCAPE_IF_NOT_INIT;
+
+	if (processor_handle == NULL || data_format1 == NULL || data_format2 == NULL) {
+		SMI_ERROR("Nullpointer given as input. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	type = *((enum smi_handle_type *)processor_handle);
+	if (type != SMI_HANDLE_TYPE_AMD_GPU) {
+		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	gpu = (struct smi_gpu_handle *)processor_handle;
+	pf.handle = gpu->handle;
+	dev = (struct smi_device_info *)&smi_req.thread->ioctl_cmd.payload;
+	dev->dev_id.handle = pf.handle;
+
+	const int code = amdsmi_request(&smi_req, (uint32_t)SMI_CMD_CODE_GET_GPU_PTL_FORMATS,
+					sizeof(struct smi_device_info),
+					sizeof(struct smi_get_gpu_ptl_formats));
+
+	if (code != AMDSMI_STATUS_SUCCESS) {
+		SMI_ERROR("Ioctl call failed. Return code: %d", code);
+		return code;
+	}
+
+	ptl_formats = (struct smi_get_gpu_ptl_formats *)&smi_req.thread->ioctl_cmd.payload;
+	*data_format1 = (amdsmi_ptl_data_format_t)ptl_formats->data_format1;
+	*data_format2 = (amdsmi_ptl_data_format_t)ptl_formats->data_format2;
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+amdsmi_status_t amdsmi_set_gpu_ptl_formats(amdsmi_processor_handle processor_handle,
+					   amdsmi_ptl_data_format_t data_format1,
+					   amdsmi_ptl_data_format_t data_format2)
+{
+	#pragma SMI_EXPORT
+	smi_device_handle_t pf;
+	struct smi_gpu_handle *gpu = NULL;
+	enum smi_handle_type type;
+	smi_req_ctx smi_req;
+	struct smi_set_gpu_ptl_formats *ptl_formats = NULL;
+
+	AMDSMI_ESCAPE_IF_NOT_INIT;
+
+	if (processor_handle == NULL) {
+		SMI_ERROR("Nullpointer given as input. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	type = *((enum smi_handle_type *)processor_handle);
+	if (type != SMI_HANDLE_TYPE_AMD_GPU) {
+		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	if (data_format1 == data_format2) {
+		SMI_ERROR("Both PTL formats are identical. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	gpu = (struct smi_gpu_handle *)processor_handle;
+	pf.handle = gpu->handle;
+	ptl_formats = (struct smi_set_gpu_ptl_formats *)&smi_req.thread->ioctl_cmd.payload;
+	ptl_formats->dev_id = pf;
+	ptl_formats->data_format1 = (enum smi_ptl_data_format)data_format1;
+	ptl_formats->data_format2 = (enum smi_ptl_data_format)data_format2;
+
+	const int code = amdsmi_request(&smi_req, (uint32_t)SMI_CMD_CODE_SET_GPU_PTL_FORMATS,
+					sizeof(struct smi_set_gpu_ptl_formats), 0);
+
+	if (code != AMDSMI_STATUS_SUCCESS) {
+		SMI_ERROR("Ioctl call failed. Return code: %d", code);
+		return code;
+	}
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
 #ifdef __linux__
 #pragma GCC diagnostic pop
 #endif

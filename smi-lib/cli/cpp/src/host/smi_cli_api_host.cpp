@@ -113,6 +113,13 @@ typedef amdsmi_status_t (*AMDSMI_GET_XGMI_PLPD)(amdsmi_processor_handle,
 		amdsmi_dpm_policy_t *);
 typedef amdsmi_status_t (*AMDSMI_SET_XGMI_PLPD)(amdsmi_processor_handle,
 		uint32_t);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_PTL_STATE)(amdsmi_processor_handle, bool *);
+typedef amdsmi_status_t (*AMDSMI_SET_GPU_PTL_STATE)(amdsmi_processor_handle, bool);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_PTL_FORMATS)(amdsmi_processor_handle,
+		amdsmi_ptl_data_format_t *, amdsmi_ptl_data_format_t *);
+typedef amdsmi_status_t (*AMDSMI_SET_GPU_PTL_FORMATS)(amdsmi_processor_handle,
+		amdsmi_ptl_data_format_t, amdsmi_ptl_data_format_t);
+
 
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_ECC_COUNT)(amdsmi_processor_handle, amdsmi_gpu_block_t,
 		amdsmi_error_count_t *);
@@ -266,6 +273,10 @@ AMDSMI_SET_SOC_PSTATE host_amdsmi_set_soc_pstate;
 AMDSMI_GET_XGMI_PLPD host_amdsmi_get_xgmi_plpd;
 AMDSMI_SET_XGMI_PLPD host_amdsmi_set_xgmi_plpd;
 AMDSMI_GET_GPU_TOTAL_ECC_COUNT host_amdsmi_get_gpu_total_ecc_count;
+AMDSMI_GET_GPU_PTL_STATE host_amdsmi_get_gpu_ptl_state;
+AMDSMI_SET_GPU_PTL_STATE host_amdsmi_set_gpu_ptl_state;
+AMDSMI_GET_GPU_PTL_FORMATS host_amdsmi_get_gpu_ptl_formats;
+AMDSMI_SET_GPU_PTL_FORMATS host_amdsmi_set_gpu_ptl_formats;
 
 AMDSMI_GET_GPU_ECC_COUNT host_amdsmi_get_gpu_ecc_count;
 AMDSMI_GET_GPU_ECC_ENABLED host_amdsmi_get_gpu_ecc_enabled;
@@ -434,6 +445,14 @@ AmdSmiApiHost::AmdSmiApiHost()
 		(AMDSMI_SET_XGMI_PLPD)LOAD_SYM(amdSmiLibHandle, "amdsmi_set_xgmi_plpd");
 	host_amdsmi_get_gpu_total_ecc_count = (AMDSMI_GET_GPU_TOTAL_ECC_COUNT)LOAD_SYM(
 			amdSmiLibHandle, "amdsmi_get_gpu_total_ecc_count");
+	host_amdsmi_get_gpu_ptl_state =
+		(AMDSMI_GET_GPU_PTL_STATE)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_gpu_ptl_state");
+	host_amdsmi_set_gpu_ptl_state =
+		(AMDSMI_SET_GPU_PTL_STATE)LOAD_SYM(amdSmiLibHandle, "amdsmi_set_gpu_ptl_state");
+	host_amdsmi_get_gpu_ptl_formats =
+		(AMDSMI_GET_GPU_PTL_FORMATS)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_gpu_ptl_formats");
+	host_amdsmi_set_gpu_ptl_formats =
+		(AMDSMI_SET_GPU_PTL_FORMATS)LOAD_SYM(amdSmiLibHandle, "amdsmi_set_gpu_ptl_formats");
 
 	host_amdsmi_get_gpu_ecc_count = (AMDSMI_GET_GPU_ECC_COUNT)LOAD_SYM(
 										amdSmiLibHandle, "amdsmi_get_gpu_ecc_count");

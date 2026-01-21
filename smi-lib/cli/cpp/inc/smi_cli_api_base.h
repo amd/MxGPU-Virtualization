@@ -67,7 +67,7 @@ public:
 	virtual int amdsmi_get_bus_info_command(uint64_t processor_bdf, Arguments arg,  std::string &out);
 	virtual int amdsmi_get_vbios_info_command(uint64_t processor_bdf, Arguments arg,  std::string &out);
 	virtual int amdsmi_get_board_info_command(uint64_t processor_bdf, Arguments arg,  std::string &out);
-	virtual int amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments arg,  std::string &out);
+	virtual int amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments &arg,  std::string &out);
 	virtual int amdsmi_get_driver_info_command(uint64_t processor_bdf, Arguments arg,
 			std::string &out);
 	virtual int amdsmi_get_ras_info_command(uint64_t processor_bdf, Arguments arg,  std::string &out);
@@ -240,8 +240,7 @@ public:
 	virtual int amdsmi_get_virtualization_mode_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) override;
 	virtual int amdsmi_get_numa_command(uint64_t processor_bdf, Arguments arg,
-										std::string &formatted_string) override;
-
+			std::string &formatted_string) override;
 	virtual int amdsmi_get_cper_entries_command(Arguments arg,
 			std::string &formatted_string) override;
 
@@ -257,4 +256,6 @@ public:
 	virtual int amdsmi_get_node_npm_info_command(uint64_t processor_bdf, Arguments arg, std::string &formatted_string) override;
 	virtual int amdsmi_get_policy_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) override;
+	virtual int amdsmi_set_ptl_status_command(uint64_t processor_bdf, Arguments arg) override;
+	virtual int amdsmi_set_ptl_format_command(uint64_t processor_bdf, Arguments arg) override;
 };

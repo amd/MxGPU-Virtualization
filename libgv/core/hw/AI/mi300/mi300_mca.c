@@ -24,6 +24,7 @@
 #include "amdgv_device.h"
 #include "amdgv_mca.h"
 #include "amdgv_powerplay.h"
+#include "amdgv_powerplay_swsmu.h"
 #include "mi300_mca.h"
 #include "mi300_smu_ppsmc.h"
 #include "mi300_smu_pmfw.h"

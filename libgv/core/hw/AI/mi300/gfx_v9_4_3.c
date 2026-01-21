@@ -27,6 +27,8 @@
 #include "mi_gfx.h"
 #include "gfx_v9_4_3.h"
 #include <amdgv_powerplay.h>
+#include <amdgv_gpumon.h>
+#include "mi300_gpumon.h"
 
 static const uint32_t this_block = AMDGV_GFX_BLOCK;
 

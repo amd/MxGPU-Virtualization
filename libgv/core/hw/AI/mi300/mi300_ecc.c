@@ -37,6 +37,7 @@
 #include "mi300_psp.h"
 #include "amdgv_cper.h"
 
+
 static const uint32_t this_block = AMDGV_MEMORY_BLOCK;
 
 static int mi300_umc_update_uc_error_count(struct amdgv_adapter *adapt,
@@ -427,11 +428,17 @@ static void mi300_ecc_find_poison(struct amdgv_adapter *adapt,
 static int mi300_ecc_poison_creation(struct amdgv_adapter *adapt,
 				     struct amdgv_sched_event *event)
 {
+	int i = 0;
 
 	mi300_ecc_find_poison(adapt, event->idx_vf, true);
 
-	if (amdgv_ras_eeprom_is_gpu_bad(adapt)) {
-		amdgv_device_handle_bad_gpu(adapt);
+	/* Wait for EEPROM update with early exit if GPU is marked bad */
+	for (i = AMDGV_RAS_MAX_BAD_GPU_CHECK_RETRY; i > 0; i--) {
+		if (amdgv_ras_eeprom_is_gpu_bad(adapt)) {
+			amdgv_device_handle_bad_gpu(adapt);
+			break;
+		}
+		oss_msleep(1);
 	}
 
 	return 0;

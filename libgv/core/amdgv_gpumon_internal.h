@@ -89,6 +89,7 @@ enum amdgv_gpumon_type {
 	GPUMON_GET_NUM_STATIC_METRICS_EXT_ENTRIES,
 	GPUMON_GET_GFX_CONFIG,
 	GPUMON_GET_NPM_INFO,
+	GPUMON_PTL_QUERY_STATUS,
 
 	/* -- SETTERS -- */
 
@@ -111,6 +112,7 @@ enum amdgv_gpumon_type {
 	GPUMON_RAS_TA_UNLOAD,
 	GPUMON_RESET_ALL_ERROR_COUNTS,
 	GPUMON_SET_PM_POLICY_LEVEL,
+	GPUMON_PTL_SET_STATE,
 	GPUMON_MAX_TYPE
 };
 
@@ -291,5 +293,10 @@ int amdgv_set_memory_partition_mode(struct amdgv_adapter *adapt,
 
 uint32_t amdgv_gpumon_get_vf_count(struct amdgv_adapter *adapt);
 uint32_t amdgv_gpumon_get_hive_vf_count(struct amdgv_adapter *adapt);
+
+/* PTL internal functions - used by sched_event for VF requests */
+int amdgv_gpumon_ptl_query_status(struct amdgv_adapter *adapt, struct amdgv_ptl_status_info *info);
+int amdgv_gpumon_ptl_enable(struct amdgv_adapter *adapt, struct amdgv_ptl_enable_info *info);
+int amdgv_gpumon_ptl_disable(struct amdgv_adapter *adapt);
 
 #endif

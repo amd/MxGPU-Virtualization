@@ -102,9 +102,13 @@ enum smi_cmd_code {
 	SMI_CMD_CODE_GET_XGMI_PLPD					= SMI_IOCTL | 0x00000035,
 	SMI_CMD_CODE_SET_XGMI_PLPD					= SMI_IOCTL | 0x00000036,
 	SMI_CMD_CODE_GET_ACCELERATOR_PARTITION_PROFILE_CONFIG_GLOBAL	= SMI_IOCTL | 0x00000037,
-	SMI_CMD_CODE_GET_NODE_HANDLE				= SMI_IOCTL | 0x00000038,
-	SMI_CMD_CODE_GET_GPU_NPM_INFO				= SMI_IOCTL | 0x00000039,
-	SMI_CMD_CODE_GET_RAS_POLICY_INFO				= SMI_IOCTL | 0x00000040,
+	SMI_CMD_CODE_GET_NODE_HANDLE					= SMI_IOCTL | 0x00000038,
+	SMI_CMD_CODE_GET_GPU_NPM_INFO					= SMI_IOCTL | 0x00000039,
+	SMI_CMD_CODE_GET_RAS_POLICY_INFO				= SMI_IOCTL | 0x0000003A,
+	SMI_CMD_CODE_GET_GPU_PTL_STATE					= SMI_IOCTL | 0x0000003B,
+	SMI_CMD_CODE_SET_GPU_PTL_STATE					= SMI_IOCTL | 0x0000003C,
+	SMI_CMD_CODE_GET_GPU_PTL_FORMATS				= SMI_IOCTL | 0x0000003D,
+	SMI_CMD_CODE_SET_GPU_PTL_FORMATS				= SMI_IOCTL | 0x0000003E,
 	SMI_CMD_CODE__MAX					= 0xffffffff
 };
 
@@ -763,6 +767,15 @@ enum smi_data_query_type {
 enum smi_npm_status {
 	SMI_NPM_STATUS_DISABLED,
 	SMI_NPM_STATUS_ENABLED
+};
+
+enum smi_ptl_data_format {
+	SMI_PTL_DATA_FORMAT_I8 = 0x0,
+	SMI_PTL_DATA_FORMAT_F16 = 0x1,
+	SMI_PTL_DATA_FORMAT_BF16 = 0x2,
+	SMI_PTL_DATA_FORMAT_F32 = 0x3,
+	SMI_PTL_DATA_FORMAT_F64 = 0x4,
+	SMI_PTL_DATA_FORMAT_INVALID = 0xFFFFFFFF
 };
 
 // >>>>>>>>>>>>>>>>>>>> INPUT/OUTPUT STRUCTS >>>>>>>>>>>>>>>>>>>>
@@ -1616,6 +1629,31 @@ struct smi_event_entry {
 	char			message[SMI_EVENT_MSG_SIZE];
 	smi_device_handle_t	processor_handle;
 	uint64_t		reserved[36];
+};
+
+struct smi_get_gpu_ptl_state {
+	smi_device_handle_t dev_id;
+	bool enabled;
+	uint64_t reserved[1];
+};
+
+struct smi_set_gpu_ptl_state {
+	smi_device_handle_t dev_id;
+	bool enable;
+	uint64_t reserved[1];
+};
+
+struct smi_get_gpu_ptl_formats {
+	enum smi_ptl_data_format data_format1;
+	enum smi_ptl_data_format data_format2;
+	uint64_t reserved[1];
+};
+
+struct smi_set_gpu_ptl_formats {
+	smi_device_handle_t dev_id;
+	enum smi_ptl_data_format data_format1;
+	enum smi_ptl_data_format data_format2;
+	uint64_t reserved[1];
 };
 
 #ifndef __linux__

@@ -296,7 +296,10 @@ std::string set_usage_host =
 std::string set_usage_host_mi300 =
 	"usage: amd-smi set [-h | --help] [-xgmi --fb-sharing-mode=[MODE] --group[<GPUx, GPUy>]]\n"
 	"                   [--memory-partition [PARTITION_MODE]] [ --accelerator-partition [PROFILE_INDEX]] [ --power-cap [POWER_CAP_VALUE]]\n"
-	"                   [--xgmi-plpd [XGMI_PLPD_VALUE]] [--num-vf=<NUM_VF> [-g=<GPU> | --gpu=<GPU>]] [ --soc-pstate [SOC_PSTATE_VALUE]]\n\n";
+	"                   [--xgmi-plpd [XGMI_PLPD_VALUE]] [--num-vf=<NUM_VF> [-g=<GPU> | --gpu=<GPU>]] [ --soc-pstate [SOC_PSTATE_VALUE]]\n";
+
+std::string set_usage_host_mi308 =
+	"                   [--ptl-status=<STATUS> [-g=<GPU> | --gpu=<GPU>]] [--ptl-format=<FRMT1,FRMT2> [-g=<GPU> | --gpu=<GPU>]]\n\n";
 std::string set_usage_host_mi200 =
 	"usage: amd-smi set [-h | --help] [-xgmi --fb-sharing-mode=[MODE] --group[<GPUx, GPUy>]]\n";
 std::string set_usage_bm =
@@ -311,6 +314,7 @@ std::string set_host_mi300 =
 	"Set arguments:\n"
 	"                                                                                           Description:\n"
 	"    -h, --help                                                                             show this help message and exit\n"
+	"    -g=<gpu_id>, --gpu=<gpu_id>                                                            Select a GPU ID, BDF or UUID, if not selected it will set given num of VFs for all GPUs\n\n"
 	"    --xgmi --fb-sharing-mode=<AmdSmiXgmiFbSharingMode> --group=\"<gpu_id1-gpu_id2>\"       Sets framebuffer sharing mode from group [\"MODE_1\", \"MODE_2\", \"MODE_4\", \"MODE_8\", \"CUSTOM\"]\n"
 	"                                                                                           Where, MODE_X represents that X GPUs will be in the same group, linked together:\n"
 	"                                                                                           MODE_1 (one GPU in a group), MODE_2 (two GPUs in a group), MODE_4 (four GPUs in a group), MODE_8 (eight GPUs in a group).\n"
@@ -327,8 +331,12 @@ std::string set_host_mi300 =
 	"                                                                                           Range of the cap value can be seen by running the amd-smi static command.\n\n"
 	"    --num-vf=<num_vf>                                                                      Sets number of VFs\n"
 	"    --xgmi-plpd=<xgmi-plpd_value>                                                          Sets xgmi plpd setting to the provided xgmi plpd value.\n"
-	"    --soc-pstate=<soc-pstate_value>                                                        Sets soc pstate setting to the provided soc pstate value.\n"
-	"    -g=<gpu_id>, --gpu=<gpu_id>                                                            Select a GPU ID, BDF or UUID, if not selected it will set given num of VFs for all GPUs\n\n";
+	"    --soc-pstate=<soc-pstate_value>                                                        Sets soc pstate setting to the provided soc pstate value.\n";
+
+std::string set_host_mi308 =
+	"    --ptl-status=<STATUS>                                                                  Enable or disable the PTL on a GPU processor (ENABLED/DISABLED)\n"
+	"    --ptl-format=<FRMT1,FRMT2>                                                             Set the PTL format on a GPU processor. For example, --ptl-format I8,F32\n";
+
 std::string set_host_mi200 =
 	"Set arguments:\n"
 	"                                                                                           Description:\n"
@@ -344,6 +352,8 @@ std::string set_bm =
 	"    -h, --help                                                                             show this help message and exit\n"
 	"    --process-isolation=<0 or 1>                                                           Enable or disable the GPU process isolation: 0 for disable and 1 for enable\n\n"
 	"    --power-cap=<power_cap_value>                                                          Sets power cap to the provided power cap value.\n"
+	"    --ptl-status=<STATUS>                                                                  Enable or disable the PTL on a GPU processor (ENABLED/DISABLED)\n"
+	"    --ptl-format=<FRMT1,FRMT2>                                                             Set the PTL format on a GPU processor. For example, --ptl-format=I8,F32\n"
 	"                                                                                           Note: Cap value must be between the minimum (min_power_cap) and maximum (max_power_cap) power cap values.\n"
 	"                                                                                           Range of the cap value can be seen by running the amd-smi static command.\n\n";
 std::string reset_common = "";

@@ -1440,8 +1440,7 @@ static int mi300_smu_init_supported_caps(struct amdgv_adapter *adapt)
 		smu->supported_caps |= SMU_CAPS(SUM_CAP_XGMI_PLPD);
 	}
 
-	/* TODO: Enable PTL support when FW is ready */
-	if (0) {
+	if (adapt->pp.smu_fw_version >= 0x05551c02 && adapt->asic_type == CHIP_MI308X) {
 		smu->supported_caps |= SMU_CAPS(SMU_CAP_PTL);
 		adapt->ptl_supported = true;
 	} else {
@@ -2740,7 +2739,7 @@ static int mi300_smu_pp_get_link_metrics(struct amdgv_adapter *adapt,
 		link_metrics->links[i].width = metrics_table->XgmiWidth;
 		link_metrics->links[i].speed = metrics_table->XgmiBitrate;
 
-		switch (amdgv_xgmi_get_link_status(adapt, i)) {
+		switch (amdgv_xgmi_get_link_status(adapt, port_id)) {
 		case AMDGV_XGMI_LINK_STATUS__ACTIVE:
 			link_metrics->links[i].status = AMDGV_GPUMON_LINK_STATUS_ENABLED;
 			break;

@@ -249,7 +249,6 @@ int AmdSmiStaticCommand::static_command_xgmi_plpd(uint64_t processor, std::strin
 	return ret;
 }
 
-
 void AmdSmiStaticCommand::static_command_json()
 {
 	int ret;
@@ -1027,6 +1026,9 @@ void AmdSmiStaticCommand::static_command_csv()
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					header.append(limit_csv_header);
+					if(arg.ptl_supported) {
+						header.append(",ptl,ptl_format");
+					}
 					results.push_back({formatted_string});
 					formatted_string.clear();
 				}

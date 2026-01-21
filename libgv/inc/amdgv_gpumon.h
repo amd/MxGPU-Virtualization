@@ -968,9 +968,8 @@ int amdgv_gpumon_get_num_static_metrics_ext_entries(amdgv_dev_t dev,
 int amdgv_gpumon_get_npm_info(amdgv_dev_t dev, struct amdgv_gpumon_npm_info *npm_info);
 int amdgv_gpumon_get_node_handle(amdgv_dev_t dev, void **node_handle);
 
-/* PTL APIs */
-int amdgv_gpumon_ptl_query_status(amdgv_dev_t dev, struct amdgv_ptl_status_info *info);
-int amdgv_gpumon_ptl_enable(amdgv_dev_t dev, struct amdgv_ptl_enable_info *info);
-int amdgv_gpumon_ptl_disable(amdgv_dev_t dev);
+/* PTL APIs - all operations go through scheduler events */
+int amdgv_gpumon_ptl_set_state(amdgv_dev_t dev, bool enable, struct amdgv_ptl_enable_info *info);
+int amdgv_gpumon_ptl_query(amdgv_dev_t dev, struct amdgv_ptl_status_info *info);
 
 #endif // __AMDGV_GPUMON_H__

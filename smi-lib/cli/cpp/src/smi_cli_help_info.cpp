@@ -790,6 +790,10 @@ void AmdSmiHelpInfo::configure_linux_host_mi300(const Arguments& arg)
 	usage_topology_specific = topology_usage_host;
 	set_specific = set_host_mi300;
 	usage_set_specific = set_usage_host_mi300;
+	if(AmdSmiPlatform::getInstance().is_mi308()) {
+		set_specific += set_host_mi308;
+		usage_set_specific += set_usage_host_mi308;
+	}
 	reset_specific = reset_host_linux;
 	usage_reset_specific = reset_usage_linux;
 	partition_specific = partition_host;

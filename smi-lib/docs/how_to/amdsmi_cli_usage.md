@@ -190,6 +190,8 @@ The commands and respective arguments that they accept are described as follows:
     - `--num-vf=<number_of_vfs>`: Sets the number of Virtual Functions (VFs) to be enabled on the specified GPU. The number must be within the supported range for the GPU. Use `amd-smi static --gpu=<gpu> --num-vf` to check current VF configuration and supported limits.
     - `--soc-pstate=<pstate_level>`: Sets the SOC (System on Chip) performance state level to control power and performance characteristics.
     - `--xgmi --fb-sharing-mode=<AmdSmiXgmiFbSharingMode>`: Sets framebuffer sharing mode from list ["MODE_1", "MODE_2", "MODE_4", "MODE_8"] where, MODE_X represents that X GPUs will be in the same group, linked together: MODE_1 (one GPU in a group), MODE_2 (two GPUs in a group), MODE_4 (four GPUs in a group), MODE_8 (eight GPUs in a group). All possible configurations can be seen by running the `amd-smi xgmi` command, not all of them are supported on all systems.
+    - `--ptl-status=<STATUS>`: Enable or disable the PTL on a GPU processor (ENABLED/DISABLED).
+    - `--ptl-format=<FRMT1,FRMT2>`: Set the PTL format on a GPU processor. For example, --ptl-format I8,F32.
 
 13. **monitor**
     Monitor target devices for the specified arguments. If no arguments are provided, all arguments will be enabled. Use the watch arguments to run continuously.
@@ -424,6 +426,8 @@ GPU: 0
         SHUTDOWN_EDGE_TEMPERATURE: N/A C
         SHUTDOWN_HOTSPOT_TEMPERATURE: 110 C
         SHUTDOWN_MEM_TEMPERATURE: 105 C
+        PTL: ENABLED
+        PTL_FORMAT: I8,BF16
     VRAM:
         TYPE: HBM3
         VENDOR: HYNIX
@@ -462,6 +466,8 @@ GPU: 0
         SHUTDOWN_EDGE_TEMPERATURE: N/A
         SHUTDOWN_HOTSPOT_TEMPERATURE: 110 C
         SHUTDOWN_MEM_TEMPERATURE: 120 C
+        PTL: ENABLED
+        PTL_FORMAT: I8,BF16
 ```
 
 ### 3. Metric Information
@@ -1006,6 +1012,30 @@ GPU: 7
 
 ```
 
+**Set PTL format**
+
+```shell-session
+$ sudo amd-smi set --ptl-format=I8,F32 --gpu=0
+```
+
+**Output**
+```
+GPU: 0
+    PTL_FORMAT: Successfully set PTL preferred formats to I8,F32
+```
+
+**Set PTL status**
+
+```shell-session
+$ sudo amd-smi set --ptl-status=DISABLED --gpu=0
+```
+
+**Output**
+```
+GPU: 0
+    PTL_STATUS: Successfully set PTL status to DISABLED
+```
+
 **Set XGMI FB Sharing Mode**
 
 ```shell-session
@@ -1382,6 +1412,8 @@ GPU: 0
         SHUTDOWN_EDGE_TEMPERATURE: N/A
         SHUTDOWN_HOTSPOT_TEMPERATURE: 110 C
         SHUTDOWN_MEM_TEMPERATURE: 125 C
+        PTL: ENABLED
+        PTL_FORMAT: I8,BF16
     DRIVER:
         NAME: libgv
         VERSION: 8.6.0.K-dev-107-1dfb7bfa73
@@ -1533,6 +1565,8 @@ GPU: 1
         SHUTDOWN_EDGE_TEMPERATURE: N/A
         SHUTDOWN_HOTSPOT_TEMPERATURE: 110 C
         SHUTDOWN_MEM_TEMPERATURE: 125 C
+        PTL: ENABLED
+        PTL_FORMAT: I8,BF16
     DRIVER:
         NAME: libgv
         VERSION: 8.6.0.K-dev-107-1dfb7bfa73
@@ -1684,6 +1718,8 @@ GPU: 2
         SHUTDOWN_EDGE_TEMPERATURE: N/A
         SHUTDOWN_HOTSPOT_TEMPERATURE: 110 C
         SHUTDOWN_MEM_TEMPERATURE: 125 C
+        PTL: ENABLED
+        PTL_FORMAT: I8,BF16
     DRIVER:
         NAME: libgv
         VERSION: 8.6.0.K-dev-107-1dfb7bfa73

@@ -423,4 +423,20 @@ enum smi_vf_sched_state smi_map_sched_state(enum amdgv_sched_state state);
  */
 enum smi_npm_status smi_map_npm_status(enum AMDGV_GPU_NPM_STATUS amdgv_npm_status);
 
+/**
+ * @brief Maps an enum representing a LibGV ptl format type to an enum representing an SMI ptl format type.
+ *
+ * This function takes an enum value representing a LibGV ptl format type and maps it to an
+ * equivalent enum value representing an SMI ptl format type. The mapping is performed based on
+ * predefined set of rules. If the provided LibGV resource type does not match any of the
+ * predefined values, it is mapped to SMI_PTL_DATA_FORMAT_INVALID.
+ *
+ * @param[in] unit The enum value representing LibGV ptl format type.
+ * @return The enum value representing the corresponding mapped SMI ptl format type.
+ *
+ * @note This function assumes that the enum values for both enums (smi_ptl_data_format and amdgv_ptl_format_type)
+ * are compatible and represent similar concepts.
+ */
+enum smi_ptl_data_format smi_map_ptl_format(enum amdgv_ptl_format_type drv_fmt);
+
 #endif // __SMI_DRV_UTILS_H__

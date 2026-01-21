@@ -77,7 +77,7 @@ void AmdSmiResetCommand::reset_command()
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {
 			for (unsigned int i = 0; i < gpu_count; i++) {
-				std::cout << "GPU: " << arg.devices[i]->get_gpu_index() << std::endl;
+				std::cout << "GPU: " << i << std::endl;
 				std::cout << "    GPU_RESET: Successfully reset GPU" << std::endl;
 			}
 		}

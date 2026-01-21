@@ -65,6 +65,7 @@ TEST_SRCS += smi_test_ras_cper.cpp
 TEST_SRCS += smi_test_numa_info.cpp
 TEST_SRCS += smi_test_node.cpp
 TEST_SRCS += smi_test_ras_policy.cpp
+TEST_SRCS += smi_test_ptl.cpp
 
 TEST_SRCS += smi_fake_sys_wrapper.cpp
 TEST_SRCS += smi_test_helpers.cpp

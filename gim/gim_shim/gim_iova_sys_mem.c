@@ -137,7 +137,7 @@ static struct scatterlist *gim_iova_alloc_sg_pages(struct gim_iova_mem_info *iov
 			pg = virt_to_page(va);
 		sg_set_page(&sg[i], pg, PAGE_SIZE, 0);
 
-		if (iova_info->alloc_new && set_memory_wc((unsigned long)va, 1)) {
+		if (iova_info->alloc_new && set_pages_array_wc(&pg, 1)) {
 			gim_put_error(AMDGV_ERROR_DRIVER_SET_MEM_ATTRIBUTE_FAIL, 0);
 			goto error_out;
 		}
@@ -158,11 +158,17 @@ error_out:
 static void gim_iova_free_sg_pages(struct gim_iova_mem_info *iova_info)
 {
 	int i = 0;
+	struct page *pg;
 
 	if (iova_info->alloc_new && iova_info->va_ptr) {
 		for (i = 0; i < iova_info->nr_pages; i++) {
 			void *va = iova_info->va_ptr + i * PAGE_SIZE;
-			if (set_memory_wb((unsigned long)va, 1))
+			if (is_vmalloc_addr(va))
+				pg = vmalloc_to_page(va);
+			else
+				pg = virt_to_page(va);
+
+			if (set_pages_array_wb(&pg, 1))
 				gim_put_error(AMDGV_ERROR_DRIVER_SET_MEM_ATTRIBUTE_FAIL, 0);
 		}
 

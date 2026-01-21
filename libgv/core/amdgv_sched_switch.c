@@ -24,6 +24,7 @@
 #include "amdgv_oss_wrapper.h"
 #include "amdgv_sched_internal.h"
 #include "amdgv_gpumon_internal.h"
+#include "amdgv_gpumon.h"
 #include "amdgv_list.h"
 #include "amdgv_gpuiov.h"
 #include "amdgv_vfmgr.h"
@@ -175,6 +176,7 @@ static int amdgv_init_world_context(struct amdgv_adapter *adapt, uint32_t idx_vf
 					struct amdgv_sched_world_switch *world_switch)
 {
 	bool mark_bad = false;
+	struct amdgv_ptl_enable_info ptl_info;
 
 	AMDGV_ASSERT(world_switch->curr_vf_state == AMDGV_VF_CONTEXT_SAVED ||
 			 world_switch->curr_vf_state == AMDGV_VF_CONTEXT_CLEAR);
@@ -195,6 +197,20 @@ static int amdgv_init_world_context(struct amdgv_adapter *adapt, uint32_t idx_vf
 	if (adapt->vbios.golden_init)
 		adapt->vbios.golden_init(adapt);
 
+	/* Enable PTL after GFX init run */
+	if (world_switch->sched_block == AMDGV_SCHED_BLOCK_GFX &&
+	    adapt->ptl_supported &&
+	    adapt->ptl_saved_config.enabled &&
+	    adapt->gpumon.funcs && adapt->gpumon.funcs->ptl_enable) {
+		AMDGV_DEBUG("init_world PTL enable: %s, fmt1=%u, fmt2=%u\n",
+			    amdgv_idx_to_str(idx_vf),
+			    adapt->ptl_saved_config.pref_format1,
+			    adapt->ptl_saved_config.pref_format2);
+		ptl_info.pref_format1 = adapt->ptl_saved_config.pref_format1;
+		ptl_info.pref_format2 = adapt->ptl_saved_config.pref_format2;
+		adapt->gpumon.funcs->ptl_enable(adapt, &ptl_info);
+	}
+
 	world_switch->curr_vf_state = AMDGV_VF_CONTEXT_LOADED;
 
 	if (mark_bad)
@@ -210,6 +226,8 @@ failed:
 static int amdgv_load_world_context(struct amdgv_adapter *adapt, uint32_t idx_vf,
 					struct amdgv_sched_world_switch *world_switch)
 {
+	struct amdgv_ptl_enable_info ptl_info;
+
 	AMDGV_ASSERT(world_switch->curr_vf_state == AMDGV_VF_CONTEXT_SAVED ||
 			 world_switch->curr_vf_state == AMDGV_VF_CONTEXT_CLEAR);
 
@@ -223,6 +241,20 @@ static int amdgv_load_world_context(struct amdgv_adapter *adapt, uint32_t idx_vf
 
 	if (amdgv_logical_sched_state_run(adapt, idx_vf, world_switch))
 		goto failed;
+
+	/* Enable PTL after GFX load run */
+	if (world_switch->sched_block == AMDGV_SCHED_BLOCK_GFX &&
+	    adapt->ptl_supported &&
+	    adapt->ptl_saved_config.enabled &&
+	    adapt->gpumon.funcs && adapt->gpumon.funcs->ptl_enable) {
+		AMDGV_DEBUG("load_world PTL enable: %s, fmt1=%u, fmt2=%u\n",
+			    amdgv_idx_to_str(idx_vf),
+			    adapt->ptl_saved_config.pref_format1,
+			    adapt->ptl_saved_config.pref_format2);
+		ptl_info.pref_format1 = adapt->ptl_saved_config.pref_format1;
+		ptl_info.pref_format2 = adapt->ptl_saved_config.pref_format2;
+		adapt->gpumon.funcs->ptl_enable(adapt, &ptl_info);
+	}
 
 	world_switch->curr_vf_state = AMDGV_VF_CONTEXT_LOADED;
 	return 0;
@@ -247,6 +279,16 @@ static int amdgv_save_world_context(struct amdgv_adapter *adapt,
 	idx_vf = world_switch->curr_idx_vf;
 
 	if (world_switch->curr_vf_state == AMDGV_VF_CONTEXT_LOADED) {
+		/* Disable PTL before GFX idle save (temporary, keeps enabled flag) */
+		if (world_switch->sched_block == AMDGV_SCHED_BLOCK_GFX &&
+		    adapt->ptl_supported &&
+		    adapt->ptl_saved_config.enabled &&
+		    adapt->gpumon.funcs && adapt->gpumon.funcs->ptl_disable) {
+			AMDGV_DEBUG("save_world PTL disable: %s, config_enabled=%d\n",
+				    amdgv_idx_to_str(idx_vf),
+				    adapt->ptl_saved_config.enabled);
+			adapt->gpumon.funcs->ptl_disable(adapt);
+		}
 
 		if (amdgv_logical_sched_state_pause(adapt, idx_vf, world_switch))
 			goto failed;

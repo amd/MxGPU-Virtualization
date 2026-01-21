@@ -837,6 +837,23 @@ int AmdSmiApiHost::get_string_from_enum_cper_severity_mask(int severity_mask, st
 	return AMDSMI_STATUS_SUCCESS;
 }
 
+int AmdSmiApiHost::get_string_from_enum_ptl_format(int format, std::string& out)
+{
+	EnumToString<amdsmi_ptl_data_format_t> enum_ptl_format;
+	enum_ptl_format.data = {
+		{AMDSMI_PTL_DATA_FORMAT_I8, "I8"},
+		{AMDSMI_PTL_DATA_FORMAT_F16, "F16"},
+		{AMDSMI_PTL_DATA_FORMAT_BF16, "BF16"},
+		{AMDSMI_PTL_DATA_FORMAT_F32, "F32"},
+		{AMDSMI_PTL_DATA_FORMAT_F64, "F64"},
+		{AMDSMI_PTL_DATA_FORMAT_INVALID, "INVALID"}
+	};
+
+	out = enum_ptl_format((amdsmi_ptl_data_format_t)format);
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+
 std::vector<std::string> splitString(const std::string& s,
 									 const std::string& delimiter, bool skipEmptyParts)
 {
@@ -930,42 +947,19 @@ int AmdSmiApiHost::csv_recursion(std::string& main_buffer,
 
 int AmdSmiApiHost::ThrottlerDataToString(uint64_t data, std::string& out)
 {
-	uint64_t data_prochot = AMDSMI_EVENT_THROTTLER_PROCHOT & data;
-	uint64_t data_socket = AMDSMI_EVENT_THROTTLER_SOCKET & data;
-	uint64_t data_vr = AMDSMI_EVENT_THROTTLER_VR & data;
-	uint64_t data_hbm = AMDSMI_EVENT_THROTTLER_HBM & data;
-
-	std::vector<std::string> throttlers;
-
-	if(AMDSMI_EVENT_THROTTLER_PROCHOT == data_prochot) {
-		throttlers.push_back("PROCHOT");
-	}
-	if(AMDSMI_EVENT_THROTTLER_SOCKET == data_socket) {
-		throttlers.push_back("SOCKET");
-	}
-	if(AMDSMI_EVENT_THROTTLER_VR == data_vr) {
-		throttlers.push_back("VR");
-	}
-	if(AMDSMI_EVENT_THROTTLER_HBM == data_hbm) {
-		throttlers.push_back("HBM");
-	}
-
 	out = "";
-	if (throttlers.size() == 0) {
-		// No throttlers active
-	} else if (throttlers.size() == 1) {
-		out = throttlers[0];
-	} else if (throttlers.size() == 2) {
-		out = throttlers[0] + " and " + throttlers[1];
-	} else {
-		for (size_t i = 0; i < throttlers.size(); i++) {
-			out += throttlers[i];
-			if (i < throttlers.size() - 2) {
-				out += ", ";
-			} else if (i == throttlers.size() - 2) {
-				out += " and ";
-			}
-		}
+
+	if(AMDSMI_EVENT_THROTTLER_PROCHOT == data) {
+		out = "PROCHOT";
+	}
+	if(AMDSMI_EVENT_THROTTLER_SOCKET == data) {
+		out = "SOCKET";
+	}
+	if(AMDSMI_EVENT_THROTTLER_VR == data) {
+		out = "VR";
+	}
+	if(AMDSMI_EVENT_THROTTLER_HBM == data) {
+		out = "HBM";
 	}
 
 	return AMDSMI_STATUS_SUCCESS;

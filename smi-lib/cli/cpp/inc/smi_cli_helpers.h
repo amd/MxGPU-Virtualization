@@ -36,10 +36,10 @@
 // - Adding new commands
 // - Improvements to existing commands
 // - Adding new options to existing commands without changing the basic input/output format
-#define AMDSMI_TOOL_VERSION_MINOR 0
+#define AMDSMI_TOOL_VERSION_MINOR 1
 // Release version should be incremented for minor issue fixes and maintenance updates
 // that don't add features or change command behavior
-#define AMDSMI_TOOL_VERSION_RELEASE 3
+#define AMDSMI_TOOL_VERSION_RELEASE 1
 
 
 #define AMDSMI_TOOL_VERSION_CREATE_STRING(MAJOR, MINOR, RELEASE) (#MAJOR "." #MINOR "." #RELEASE)

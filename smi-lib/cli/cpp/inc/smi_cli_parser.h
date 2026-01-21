@@ -66,6 +66,9 @@ public:
 	std::string cper_file_path;
 	std::string plpd_set;
 	std::string num_vf;
+	bool ptl_supported{ false };
+	std::string ptl_status_set;
+	std::string ptl_format_set;
 	DevicesType devices_type{ ALL_TYPE };
 	std::map<DevicesType, std::vector<std::string>> device_format{};
 	Arguments() {};
@@ -164,7 +167,7 @@ private:
 	std::vector<std::string> SET_SUPPORTED_ARGS_GPU = {
 		"--xgmi", "--fb-sharing-mode", "--group", "--memory-partition", "--accelerator-partition",
 		"process-isolation", "-R", "--soc-pstate", "-ps", "--power-cap", "-pc",
-		"--xgmi-plpd", "-pd", "--num-vf"
+		"--xgmi-plpd", "-pd", "--num-vf", "--ptl-status", "--ptl-format"
 	};
 
 	std::vector<std::string> PARTITION_SUPPORTED_ARGS_GPU = {

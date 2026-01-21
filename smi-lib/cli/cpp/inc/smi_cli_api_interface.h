@@ -77,7 +77,7 @@ public:
 			std::string &out) = 0;
 	virtual int amdsmi_get_board_info_command(uint64_t processor_bdf, Arguments arg,
 			std::string &out) = 0;
-	virtual int amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments arg,
+	virtual int amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments &arg,
 			std::string &out) = 0;
 	virtual int amdsmi_get_driver_info_command(uint64_t processor_bdf, Arguments arg,
 			std::string &out) = 0;
@@ -220,6 +220,8 @@ public:
 			Arguments arg) = 0;
 	virtual int amdsmi_set_soc_pstate_command(uint64_t processor_bdf, Arguments arg) = 0;
 	virtual int amdsmi_set_power_cap_command(uint64_t processor_bdf, Arguments arg) = 0;
+	virtual int amdsmi_set_ptl_status_command(uint64_t processor_bdf, Arguments arg) = 0;
+	virtual int amdsmi_set_ptl_format_command(uint64_t processor_bdf, Arguments arg) = 0;
 	virtual int amdsmi_get_virtualization_mode_command(uint64_t processor_bdf, Arguments arg,
 			std::string &out) = 0;
 	virtual int amdsmi_get_numa_command(uint64_t processor_bdf, Arguments arg,

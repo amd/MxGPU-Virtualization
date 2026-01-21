@@ -4223,3 +4223,138 @@ try:
 except AmdSmiException as e:
     print(e)
 ```
+
+### amdsmi_get_gpu_ptl_state
+Description: Gets the PTL (Peak Tops Limiter) enable/disable state for the processor
+
+Input parameters:
+* `processor handle` processor handle
+
+Output:
+* True if PTL is enabled, False if PTL is disabled
+
+Exceptions that can be thrown by `amdsmi_get_gpu_ptl_state` function:
+* `AmdSmiLibraryException`
+* `AmdSmiParameterException`
+
+Example:
+
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            enabled = amdsmi_get_gpu_ptl_state(processor)
+            print(f"PTL Enabled: {enabled}")
+
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_set_gpu_ptl_state
+Description: Sets the PTL (Peak Tops Limiter) enable/disable state for the processor
+
+Input parameters:
+* `processor handle` processor handle
+* `enable` (bool) True to enable PTL with default formats, False to disable PTL
+
+Exceptions that can be thrown by `amdsmi_set_gpu_ptl_state` function:
+* `AmdSmiLibraryException`
+* `AmdSmiParameterException`
+
+Example:
+
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            # Enable PTL
+            amdsmi_set_gpu_ptl_state(processor, True)
+
+            # Disable PTL
+            # amdsmi_set_gpu_ptl_state(processor, False)
+
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_gpu_ptl_formats
+Description: Gets the current PTL (Peak Tops Limiter) preferred data formats for the processor
+
+Input parameters:
+* `processor handle` processor handle
+
+Output:
+* tuple(AmdSmiPtlDataFormat, AmdSmiPtlDataFormat): an ordered pair of enums representing the two preferred formats
+Example usage: fmt1, fmt2 = amdsmi_get_gpu_ptl_formats(handle)
+
+Note:
+* If fmt1 == fmt2 == AmdSmiPtlDataFormat.I8 (value 0),
+this indicates that PTL has not been enabled yet on that system and the PTL state is disabled
+
+Available data formats (AmdSmiPtlDataFormat):
+* `I8` - Integer 8-bit format
+* `F16` - Float 16-bit format
+* `BF16` - Brain Float 16-bit format
+* `F32` - Float 32-bit format
+* `F64` - Float 64-bit format
+
+Exceptions that can be thrown by `amdsmi_get_gpu_ptl_formats` function:
+* `AmdSmiLibraryException`
+* `AmdSmiParameterException`
+
+Example:
+
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            format1, format2 = amdsmi_get_gpu_ptl_formats(processor)
+            print(f"PTL Format 1: {format1.name}")
+            print(f"PTL Format 2: {format2.name}")
+
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_set_gpu_ptl_formats
+Description: Sets the PTL (Peak Tops Limiter) with specified preferred data format pair. PTL must be enabled first before calling this function using amdsmi_set_gpu_ptl_state.
+
+Input parameters:
+* `processor handle` processor handle
+* `data_format1` (AmdSmiPtlDataFormat) First preferred data format
+* `data_format2` (AmdSmiPtlDataFormat) Second preferred data format (must be different from data_format1)
+
+The two specified formats will receive accurate performance monitoring and peak performance. F8 and XF32 formats always receive peak performance regardless of this setting.
+
+Exceptions that can be thrown by `amdsmi_set_gpu_ptl_formats` function:
+* `AmdSmiLibraryException`
+* `AmdSmiParameterException`
+
+Example:
+
+```python
+try:
+    from amdsmi import AmdSmiPtlDataFormat
+
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            # Set PTL formats
+            amdsmi_set_gpu_ptl_formats(processor,
+                                      AmdSmiPtlDataFormat.F16,
+                                      AmdSmiPtlDataFormat.BF16)
+
+except AmdSmiException as e:
+    print(e)
+```

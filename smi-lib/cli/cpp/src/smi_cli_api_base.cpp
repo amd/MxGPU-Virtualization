@@ -237,7 +237,7 @@ int AmdSmiApiBase::amdsmi_get_board_info_command(uint64_t processor_bdf, Argumen
 	return 2;
 }
 
-int AmdSmiApiBase::amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments arg,
+int AmdSmiApiBase::amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments &arg,
 		std::string &out)
 {
 	return 2;
@@ -625,6 +625,16 @@ int AmdSmiApiBase::amdsmi_get_plpd(uint64_t processor_bdf, Arguments arg,
 int AmdSmiApiBase::amdsmi_set_plpd_command(uint64_t processor_bdf, Arguments arg)
 {
 	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_set_ptl_status_command(uint64_t processor_bdf, Arguments arg)
+{
+       return 2;
+}
+
+int AmdSmiApiBase::amdsmi_set_ptl_format_command(uint64_t processor_bdf, Arguments arg)
+{
+       return 2;
 }
 
 int AmdSmiApiBase::amdsmi_set_num_vf_command(uint64_t processor_bdf, Arguments arg)

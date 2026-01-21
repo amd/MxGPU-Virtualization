@@ -34,6 +34,23 @@
 
 extern struct gim_error_ring_buffer *gim_error_rb;
 
+struct gim_guard_threshold_entry {
+	const char *name;
+	uint32_t event_id;
+};
+
+static const struct gim_guard_threshold_entry gim_guard_threshold_map[] = {
+	{ "flr",     AMDGV_GUARD_EVENT_FLR },
+	{ "ex",      AMDGV_GUARD_EVENT_EXCLUSIVE_MOD },
+	{ "ext",     AMDGV_GUARD_EVENT_EXCLUSIVE_TIMEOUT },
+	{ "int",     AMDGV_GUARD_EVENT_ALL_INT },
+	{ "ras_err", AMDGV_GUARD_EVENT_RAS_ERR_COUNT },
+	{ "ras_cper", AMDGV_GUARD_EVENT_RAS_CPER_DUMP },
+	{ "ras_bp",  AMDGV_GUARD_EVENT_RAS_BAD_PAGES },
+	{ "wgr",     AMDGV_GUARD_EVENT_WGR },
+	{ "ras_chk", AMDGV_GUARD_EVENT_RAS_CHK_CRITI },
+};
+
 static ssize_t gim_guard_adapt_guard_status_show(struct device *dev,
 				struct device_attribute *attr,
 				char *buf)
@@ -123,38 +140,111 @@ static ssize_t gim_guard_adapt_threshold_show(struct device *dev,
 	return size;
 }
 
+static int gim_guard_parse_thresholds(const char *buf,
+				      size_t count,
+				      uint32_t threshold[AMDGV_GUARD_EVENT_MAX],
+				      bool threshold_set[AMDGV_GUARD_EVENT_MAX])
+{
+	char *tmp;
+	char *p;
+	char *token;
+	bool any = false;
+	int ret = 0;
+
+	if (!buf || count == 0)
+		return -EINVAL;
+
+	tmp = kmemdup_nul(buf, count, GFP_KERNEL);
+	if (!tmp)
+		return -ENOMEM;
+
+	p = strchr(tmp, '\n');
+	if (p)
+		*p = '\0';
+
+	p = tmp;
+	while ((token = strsep(&p, ",")) != NULL) {
+		char *eq;
+		const char *key;
+		const char *val_str;
+		unsigned int value;
+		bool matched = false;
+		size_t i;
+
+		if (!token[0]) {
+			ret = -EINVAL;
+			goto out;
+		}
+
+		eq = strchr(token, '=');
+		if (!eq || eq == token || !eq[1]) {
+			ret = -EINVAL;
+			goto out;
+		}
+
+		*eq = '\0';
+		key = token;
+		val_str = eq + 1;
+
+		ret = kstrtouint(val_str, 0, &value);
+		if (ret) {
+			ret = -EINVAL;
+			goto out;
+		}
+
+		for (i = 0; i < ARRAY_SIZE(gim_guard_threshold_map); i++) {
+			if (strcmp(key, gim_guard_threshold_map[i].name) == 0) {
+				uint32_t event_id = gim_guard_threshold_map[i].event_id;
+				threshold[event_id] = (uint32_t)value;
+				threshold_set[event_id] = true;
+				matched = true;
+				break;
+			}
+		}
+
+		if (!matched) {
+			ret = -EINVAL;
+			goto out;
+		}
+
+		any = true;
+	}
+
+	ret = any ? 0 : -EINVAL;
+
+out:
+	kfree(tmp);
+	return ret;
+}
+
 static ssize_t gim_guard_adapt_threshold_store(struct device *dev,
 				struct device_attribute *attr,
 				const char *buf,
 				size_t count)
 {
-	int ret;
 	int idx_vf;
 	int type;
+	int ret;
 	struct pci_dev *pf_pdev;
 	struct gim_dev_data *data;
 	struct amdgv_guard_info info;
-	uint32_t threshold[AMDGV_GUARD_EVENT_MAX];
+	uint32_t threshold[AMDGV_GUARD_EVENT_MAX] = {0};
+	bool threshold_set[AMDGV_GUARD_EVENT_MAX] = {false};
 
-	ret = sscanf(buf, "flr=%x,ex=%x,ext=%x,int=%x",
-		&threshold[AMDGV_GUARD_EVENT_FLR],
-		&threshold[AMDGV_GUARD_EVENT_EXCLUSIVE_MOD],
-		&threshold[AMDGV_GUARD_EVENT_EXCLUSIVE_TIMEOUT],
-		&threshold[AMDGV_GUARD_EVENT_ALL_INT]);
-
-	if (ret != 4) {
-		pr_warn("invalid parameter\n");
-		return count;
-	}
+	ret = gim_guard_parse_thresholds(buf, count, threshold, threshold_set);
+	if (ret)
+		return ret;
 
 	pf_pdev = to_pci_dev(dev);
-
 	data = pci_get_drvdata(pf_pdev);
+
 	for (idx_vf = 0; idx_vf < data->vf_num; idx_vf++) {
 		for (type = 0; type < AMDGV_GUARD_EVENT_MAX; type++) {
+			if (!threshold_set[type])
+				continue;
+
 			info.type = type;
 			amdgv_get_guard_info(data->adev, idx_vf, &info);
-
 			info.parm.event.threshold = threshold[type];
 			amdgv_set_guard_config(data->adev, idx_vf, &info);
 		}
@@ -316,38 +406,33 @@ static ssize_t gim_guard_platform_threshold_store(struct device_driver *drv,
 					const char *buf,
 					size_t count)
 {
-	int ret;
 	int idx_vf;
 	int type;
+	int ret;
 	struct gim_dev_data *data;
 	struct amdgv_guard_info info;
-	uint32_t threshold[AMDGV_GUARD_EVENT_MAX];
+	uint32_t threshold[AMDGV_GUARD_EVENT_MAX] = {0};
+	bool threshold_set[AMDGV_GUARD_EVENT_MAX] = {false};
 
-	ret = sscanf(buf, "flr=%x,ex=%x,ext=%x,int=%x",
-		&threshold[AMDGV_GUARD_EVENT_FLR],
-		&threshold[AMDGV_GUARD_EVENT_EXCLUSIVE_MOD],
-		&threshold[AMDGV_GUARD_EVENT_EXCLUSIVE_TIMEOUT],
-		&threshold[AMDGV_GUARD_EVENT_ALL_INT]);
-
-	if (ret != 4) {
-		pr_warn("invalid parameter\n");
-		return count;
-	}
+	ret = gim_guard_parse_thresholds(buf, count, threshold, threshold_set);
+	if (ret)
+		return ret;
 
 	list_for_each_entry(data, &gim_device_list, list) {
 		for (idx_vf = 0; idx_vf < data->vf_num; idx_vf++) {
 			for (type = 0; type < AMDGV_GUARD_EVENT_MAX; type++) {
+				if (!threshold_set[type])
+					continue;
+
 				info.type = type;
 				amdgv_get_guard_info(data->adev, idx_vf, &info);
-
 				info.parm.event.threshold = threshold[type];
-				amdgv_set_guard_config(data->adev, idx_vf,
-							&info);
+				amdgv_set_guard_config(data->adev, idx_vf, &info);
 			}
 		}
 	}
 
-	return ret;
+	return count;
 }
 
 static struct driver_attribute driver_attr_guard_threshold =

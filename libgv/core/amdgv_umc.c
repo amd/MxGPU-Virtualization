@@ -592,18 +592,29 @@ bool amdgv_umc_check_bad_page(struct amdgv_adapter *adapt, uint64_t addr)
 	int i;
 	bool ret = false;
 	uint64_t page_addr;
+	uint64_t local_addr = addr;
+	uint64_t xgmi_offset = 0;
 
 	oss_mutex_lock(adapt->ecc.recovery_lock);
 	if (!data)
 		goto out;
 
-	page_addr = addr >> AMDGV_GPU_PAGE_SHIFT;
-	for (i = 0; i < data->count; i++)
+	/* Translate the global err offset to local offset according to xgmi config */
+	if (adapt->xgmi.phy_nodes_num > 1) {
+		xgmi_offset = adapt->xgmi.phy_node_id * adapt->xgmi.node_segment_size;
+
+		if (addr >= xgmi_offset)
+			local_addr = addr - xgmi_offset;
+	}
+
+	page_addr = local_addr >> AMDGV_GPU_PAGE_SHIFT;
+	for (i = 0; i < data->count; i++) {
 		if (page_addr == data->bps[i].retired_page) {
-			AMDGV_ERROR("Address (0x%llx) found in an EEPROM entry as a retired page!\n", addr);
+			AMDGV_ERROR("Global address (0x%llx) found in an EEPROM entry as a retired page!\n", addr);
 			ret = true;
 			goto out;
 		}
+	}
 
 out:
 	oss_mutex_unlock(adapt->ecc.recovery_lock);

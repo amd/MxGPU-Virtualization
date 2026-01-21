@@ -245,6 +245,12 @@ union amdgv_sched_event_data {
 				uint32_t spatial_partition_num;
 			} sp;
 			struct {
+				bool enable;
+				uint32_t pref_format1;
+				uint32_t pref_format2;
+				struct amdgv_ptl_status_info *status_info; /* for query */
+			} ptl;
+			struct {
 				uint32_t idx_config;
 				struct amdgv_gpumon_partition_config *partition_config;
 			} partition_config_info;

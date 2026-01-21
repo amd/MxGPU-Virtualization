@@ -635,6 +635,23 @@ typedef enum {
 } amdsmi_link_status_t;
 
 /**
+ * @brief PTL (Peak Tops Limiter) data format types
+ * These correspond to the hardware data types used in matrix operations.
+ * Only F8 and XF32 are always supported at full performance. From the remaining
+ * five types, only two can be supported at peak performance simultaneously.
+ *
+ * @cond @tag{gpu_bm_linux} @tag{host} @endcond
+ */
+typedef enum {
+    AMDSMI_PTL_DATA_FORMAT_I8 = 0x0,             //!< Integer 8-bit format
+    AMDSMI_PTL_DATA_FORMAT_F16 = 0x1,            //!< Float 16-bit format
+    AMDSMI_PTL_DATA_FORMAT_BF16 = 0x2,           //!< Brain Float 16-bit format
+    AMDSMI_PTL_DATA_FORMAT_F32 = 0x3,            //!< Float 32-bit format
+    AMDSMI_PTL_DATA_FORMAT_F64 = 0x4,            //!< Float 64-bit format
+    AMDSMI_PTL_DATA_FORMAT_INVALID = 0xFFFFFFFF  //!< Invalid format
+} amdsmi_ptl_data_format_t;
+
+/**
  * @brief bdf types
  *
  * @cond @tag{gpu_bm_linux} @tag{host} @tag{guest_windows} @endcond
@@ -1647,22 +1664,15 @@ typedef enum {
 } amdsmi_event_xgmi_t;
 
 /**
- * @brief  This enum represents bit mask positions for PP Throttler events.
- *
- * These values represent bit positions in the @ref amdsmi_event_entry_t data field
- * for PP throttler events:
- * - If bit 0 is active then a PP throttler PROCHOT event occurs.
- * - If bit 2 is active then a PP throttler socket event occurs.
- * - If bit 3 is active then a PP throttler VR event occurs.
- * - If bit 4 is active then a PP throttler HBM event occurs.
+ * @brief This enum determines which type of PP throttler event occurred
  *
  * @cond @tag{host} @endcond
  */
 typedef enum {
-    AMDSMI_EVENT_THROTTLER_PROCHOT = (1 << 0),
-    AMDSMI_EVENT_THROTTLER_SOCKET = (1 << 2),
-    AMDSMI_EVENT_THROTTLER_VR = (1 << 3),
-    AMDSMI_EVENT_THROTTLER_HBM = (1 << 4)
+    AMDSMI_EVENT_THROTTLER_PROCHOT = 0,
+    AMDSMI_EVENT_THROTTLER_SOCKET,
+    AMDSMI_EVENT_THROTTLER_VR,
+    AMDSMI_EVENT_THROTTLER_HBM
 } amdsmi_pp_throttler_type_t;
 
 /**
@@ -4330,6 +4340,112 @@ amdsmi_status_t amdsmi_reset_gpu(amdsmi_processor_handle processor_handle);
 amdsmi_status_t amdsmi_get_npm_info(amdsmi_node_handle node_handle, amdsmi_npm_info_t *info);
 
 /** @} End tagNodeInfo */
+
+/*****************************************************************************/
+/** @defgroup tagPTL PTL (Peak Tops Limiter) control and formats
+ *  @{
+ */
+
+/**
+ *  @brief Get PTL enable/disable state
+ *
+ *  @ingroup tagPTL
+ *
+ *  @platform{gpu_bm_linux} @platform{host}
+ *
+ *  @details This function retrieves whether PTL (Peak Tops Limiter) is currently
+ *  enabled or disabled for the specified processor. This is a simple state query
+ *  that returns the current PTL operational state without detailed configuration.
+ *
+ *  @param[in] processor_handle Device which to query
+ *
+ *  @param[out] enabled Pointer to boolean that will be set to true if PTL is
+ *  enabled, false if PTL is disabled
+ *
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success,
+ *          ::AMDSMI_STATUS_NOT_SUPPORTED if PTL is not supported on this device,
+ *          non-zero on other failures
+ */
+amdsmi_status_t
+amdsmi_get_gpu_ptl_state(amdsmi_processor_handle processor_handle, bool *enabled);
+
+/**
+ *  @brief Set PTL enable/disable state
+ *
+ *  @ingroup tagPTL
+ *
+ *  @platform{gpu_bm_linux} @platform{host}
+ *
+ *  @details This function enables or disables PTL (Peak Tops Limiter) operation.
+ *  Use amdsmi_set_gpu_ptl_enable_with_formats()
+ *  for more control over the preferred data formats when enabling.
+ *
+ *  @param[in] processor_handle Device to configure
+ *
+ *  @param[in] enable Boolean flag: true to enable PTL with default formats,
+ *  false to disable PTL
+ *
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
+ */
+amdsmi_status_t amdsmi_set_gpu_ptl_state(amdsmi_processor_handle processor_handle, bool enable);
+
+/**
+ *  @brief Get PTL (Peak Tops Limiter) formats for the processor
+ *
+ *  @ingroup tagPTL
+ *
+ *  @platform{gpu_bm_linux} @platform{host}
+ *
+ *  @details This function retrieves the current PTL formats
+ *  for the specified processor. PTL prevents the product to never deliver more
+ *  than a specified TOPS/second. If function returns 0 for both formats,
+ *  PTL was never enabled before on that system.
+ *
+ *  @param[in] processor_handle Device which to query
+*
+ *  @param[out] data_format1 Pointer to first preferred data format that receives peak performance
+ *
+ *  @param[out] data_format2 Pointer to second preferred data format that receives peak performance
+ *
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success,
+ *          ::AMDSMI_STATUS_NOT_SUPPORTED if PTL is not supported on this device,
+ *          non-zero on other failures
+ */
+amdsmi_status_t
+amdsmi_get_gpu_ptl_formats(amdsmi_processor_handle processor_handle,
+                        amdsmi_ptl_data_format_t *data_format1,
+                        amdsmi_ptl_data_format_t *data_format2);
+
+/**
+ *  @brief Set PTL with specified preferred data formats
+ *
+ *  @ingroup tagPTL
+ *
+ *  @platform{gpu_bm_linux} @platform{host}
+ *
+ *  @details This function sets PTL with the specified preferred data format pair.
+ *  PTL must be enabled first before calling this function using amdsmi_set_gpu_ptl_state.
+ *  The two specified formats will receive accurate performance monitoring and peak
+ *  performance. F8 and XF32 formats always receive peak performance regardless of this setting.
+ *
+ *  @param[in] processor_handle Device to configure
+ *
+ *  @param[in] data_format1 First preferred data format (must be from the limited set:
+ *  I8, F16, BF16, F32, F64)
+ *
+ *  @param[in] data_format2 Second preferred data format (must be from the limited set:
+ *  I8, F16, BF16, F32, F64, and different from data_format1)
+ *
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success,
+ *          ::AMDSMI_STATUS_NOT_SUPPORTED if PTL is not supported on this device,
+ *          non-zero on other failures
+ **/
+amdsmi_status_t
+amdsmi_set_gpu_ptl_formats(amdsmi_processor_handle processor_handle,
+                          amdsmi_ptl_data_format_t data_format1,
+                          amdsmi_ptl_data_format_t data_format2);
+
+/** @} End tagPTL */
 
 /*****************************************************************************/
 /** @defgroup tagVFFBPartitionQuery VF and FB partitioning queries

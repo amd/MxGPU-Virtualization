@@ -2510,9 +2510,6 @@ int amdgv_vfmgr_update_pf2vf_message(struct amdgv_adapter *adapt, uint32_t idx_v
 	pf2vf_msg->feature_flags.flags.xgmi_ta_ext_peer_link =
 		 amdgv_xgmi_is_guest_ext_peer_link_ta_cmd_supported(adapt);
 
-	/* PTL support flag is set by chip-specific code in adapt->ptl_supported */
-	pf2vf_msg->feature_flags.flags.ptl_support = adapt->ptl_supported ? 1 : 0;
-
 	amdgv_vfmgr_get_adapt_uuid(adapt, &pf2vf_msg->uuid);
 
 	oss_memcpy(&pf2vf_msg->uuid_info, &entry->uuid_info,
