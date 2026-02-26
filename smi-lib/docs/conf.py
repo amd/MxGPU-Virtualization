@@ -1,6 +1,6 @@
 
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -31,8 +31,6 @@ html_context = {}
 if os.environ.get("READTHEDOCS", "") == "True":
     html_context["READTHEDOCS"] = True
 
-sys.path.append(str(Path('_extension').resolve()))
-
 def get_version_info(filepath):
     version_major = None
     version_minor = None
@@ -58,9 +56,9 @@ version_major, version_minor, version_release = get_version_info("../VERSION")
 version_number = "{}.{}.{}".format(version_major, version_minor, version_release)
 
 # project info
-project = "AMD SMI"
+project = "AMD SMI (virtualization)"
 author = "Advanced Micro Devices, Inc."
-copyright = "Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved."
+copyright = "Copyright (c) %Y Advanced Micro Devices, Inc. All rights reserved."
 version = version_number
 release = version_number
 
@@ -70,7 +68,7 @@ html_theme_options = {
     "repository_provider": "github",
     "repository_url": "https://github.com/amd/MxGPU-Virtualization",
     "link_main_doc": True,
-    "announcement": "This page documents AMD-SMI for virtualization hosts only. Please see the standard <a href='https://rocm.docs.amd.com/projects/amdsmi/en/latest/'>AMD-SMI</a> site for all other uses.",
+    "announcement": "This page documents AMD SMI for virtualization hosts only. See the <a href='https://rocm.docs.amd.com/projects/amdsmi/en/latest/'>AMD SMI</a> site for all other uses.",
     "nav_secondary_items": {
         "Community": "https://github.com/ROCm/ROCm/discussions",
         "Blogs": "https://rocm.blogs.amd.com/",
@@ -83,7 +81,7 @@ html_title = "AMD SMI {} documentation".format(version_number)
 suppress_warnings = ["etoc.toctree"]
 external_toc_path = "./sphinx/_toc.yml"
 
-external_projects_current_project = "amdsmi"
+external_projects_current_project = "amdsmi-virt"
 extensions = ["rocm_docs", "rocm_docs.doxygen"]
 
 doxygen_root = "doxygen"
