@@ -56,7 +56,7 @@ version_major, version_minor, version_release = get_version_info("../VERSION")
 version_number = "{}.{}.{}".format(version_major, version_minor, version_release)
 
 # project info
-project = "AMD SMI (virtualization)"
+project = "AMD SMI for Virtualization"
 author = "Advanced Micro Devices, Inc."
 copyright = "Copyright (c) %Y Advanced Micro Devices, Inc. All rights reserved."
 version = version_number
@@ -70,6 +70,7 @@ html_theme_options = {
     "link_main_doc": True,
     "announcement": "This page documents AMD SMI for virtualization hosts only. See the <a href='https://rocm.docs.amd.com/projects/amdsmi/en/latest/'>AMD SMI</a> site for all other uses.",
     "nav_secondary_items": {
+        "GitHub": "https://github.com/amd/MxGPU-Virtualization/tree/staging/smi-lib",
         "Community": "https://github.com/ROCm/ROCm/discussions",
         "Blogs": "https://rocm.blogs.amd.com/",
         "ROCm&#8482 Docs": "https://rocm.docs.amd.com",
@@ -77,7 +78,7 @@ html_theme_options = {
     },
     "show_toc_level": 4
 }
-html_title = "AMD SMI {} documentation".format(version_number)
+html_title = f"AMD SMI for Virtualization {version_number}"
 suppress_warnings = ["etoc.toctree"]
 external_toc_path = "./sphinx/_toc.yml"
 
@@ -85,8 +86,7 @@ external_projects_current_project = "amdsmi-virt"
 extensions = ["rocm_docs", "rocm_docs.doxygen"]
 
 doxygen_root = "doxygen"
-doxysphinx_enabled = True
 doxygen_project = {
-    "name": "AMD SMI C API reference",
+    "name": "AMD SMI C/C++ API reference",
     "path": "doxygen/doxy_build/xml",
 }

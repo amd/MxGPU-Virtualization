@@ -7,67 +7,81 @@ myst:
 
 <a id="amd-smi-library-build"></a>
 
-# AMD SMI LIBRARY AND TOOL BUILD
+# Build the AMD SMI library (virtualization)
 
 ## Requirements
 
-Before building the integration and unit tests, ensure that `gtest` and `gmock` are installed on your system. These libraries are required for building and running the tests. You can install them using your system's package manager or build them from source. Additionally, ensure that the `lcov` package is installed on your system before running the gen_coverage command, as it is necessary for generating code coverage reports.
+Before building the integration and unit tests, ensure that `gtest` and `gmock`
+are installed on your system. These libraries are required to build and
+run the tests. You can install them using your system's package manager or
+build them from source.
 
-Minimum supported `lcov` version is 1.15.
+Additionally, ensure that the `lcov` package is installed on your system before
+running the `gen_coverage` command, as it is necessary for generating code
+coverage reports. Minimum supported `lcov` version is 1.15.
 
 ## Build commands
 
 ### AMD SMI library build
 
-When running make inside the gim folder, the AMD SMI library is built as well. Here are some useful commands for building the AMD SMI library:
+Running `make` inside the `gim/` folder builds the AMD SMI library as well. Here are some useful commands for building the AMD SMI library:
 
-- Run `make` in the smi-lib folder to build the library.
+- Run `make` in the `smi-lib/` folder to build the library.
+
 - Run `make package` to create the AMD SMI Python package.
-- Run `make test` to build and run the integration and unit tests.
-- Run `make all` to build everything mentioned above.
-- Run `make gen_coverage` to calculate the code coverage of the AMD SMI library.
-- If any changes are made to the interface folder, regenerate the Python wrapper by running `make python_wrapper` and replace the `amdsmi_wrapper.py` file in the py/interface folder with the one generated in the build folder `build/amdsmi/amdsmi_wrapper/amdsmi_wrapper.py`.
 
-## AMD SMI LIBRARY Build Options
+- Run `make test` to build and run the integration and unit tests.
+
+- Run `make all` to build everything mentioned above.
+
+- Run `make gen_coverage` to calculate the code coverage of the AMD SMI
+  library.
+
+- If any changes are made to the `interface/` folder, regenerate the Python
+  wrapper by running `make python_wrapper` and replace the `amdsmi_wrapper.py`
+  file in the py/interface folder with the one generated in the build folder
+  `build/amdsmi/amdsmi_wrapper/amdsmi_wrapper.py`.
+
+## Build options
 
 These options allow you to customize the build process, such as specifying the build type, enabling thread safety, enabling logging, and using the Thread Sanitizer.
 
-- BUILD_TYPE:
+- `BUILD_TYPE`
 
-This option specifies the type of build you want to perform. Common values are Release and Debug.
-Release builds are optimized for performance and do not include debugging information.
-Debug builds include debugging information and are not optimized, making them suitable for development and debugging.
-Default: Release
+   This option specifies the type of build you want to perform. Common values are `Release` and `Debug`.
+   Release builds are optimized for performance and do not include debugging information.
+   Debug builds include debugging information and are not optimized, making them suitable for development and debugging.
+   Default: `Release`
 
-- THREAD_SAFE:
+- `THREAD_SAFE`
 
-This option indicates whether the build should include thread safety features.
-When set to True, thread safety mechanisms (e.g., mutexes, locks) are enabled.
-When set to False, thread safety mechanisms are disabled, which might improve performance but can lead to race conditions in multi-threaded environments.
-Default: True
+   This option indicates whether the build should include thread safety features.
+   When set to `True`, thread safety mechanisms (for example, mutexes, locks) are enabled.
+   When set to `False`, thread safety mechanisms are disabled, which might improve performance but can lead to race conditions in multi-threaded environments.
+   Default: `True`
 
-- LOGGING:
+- `LOGGING`
 
-This option controls whether logging is enabled in the build.
-When set to True, logging code is included, which can help with debugging and monitoring.
-When set to False, logging code is excluded, which might improve performance.
-Default: False
+   This option controls whether logging is enabled in the build.
+   When set to `True`, logging code is included, which can help with debugging and monitoring.
+   When set to `False`, logging code is excluded, which might improve performance.
+   Default: `False`
 
-- THREAD_SANITIZER:
+- `THREAD_SANITIZER`
 
-This option indicates whether the Thread Sanitizer should be enabled.
-Thread Sanitizer is a tool that detects data races in multi-threaded programs.
-When set to True, the build includes Thread Sanitizer instrumentation.
-When set to False, Thread Sanitizer is not included.
-Default: False
+   This option indicates whether the Thread Sanitizer should be enabled.
+   Thread Sanitizer is a tool that detects data races in multi-threaded programs.
+   When set to `True`, the build includes Thread Sanitizer instrumentation.
+   When set to `False`, Thread Sanitizer is not included.
+   Default: `False`
 
-- ADDRESS_SANITIZER:
+- `ADDRESS_SANITIZER`
 
-This option indicates whether the Address Sanitizer should be enabled.
-Address Sanitizer is a tool that detects memory errors such as buffer overflows, use-after-free, and memory leaks.
-When set to True, the build includes Address Sanitizer instrumentation.
-When set to False, Address Sanitizer is not included.
-Default: False
+   This option indicates whether the Address Sanitizer should be enabled.
+   Address Sanitizer is a tool that detects memory errors such as buffer overflows, use-after-free, and memory leaks.
+   When set to `True`, the build includes Address Sanitizer instrumentation.
+   When set to `False`, Address Sanitizer is not included.
+   Default: `False`
 
 ## Folder structure
 
@@ -104,11 +118,11 @@ AMD SMI stack contains a wrapper around C SMI Library. The Python API is a one-t
 
 ### Code
 
-The Python Wrapper source code can be found in smi-lib/py/interface folder.
+The Python Wrapper source code can be found in `smi-lib/py/interface` folder.
 
 ### Build
 
-The wrapper is built together with the SMI Library. For detailed instructions, refer to the [AMD SMI LIBRARY BUILD](#amd-smi-library-build) section.
+The wrapper is built together with the AMD SMI library. For detailed instructions, refer to the [AMD SMI LIBRARY BUILD](#amd-smi-library-build) section.
 
 ### Code style
 
@@ -150,25 +164,26 @@ The CLI tool source code is organized in a structured hierarchy designed for mai
 ##### Folder Structure
 
 ```text
-cli/
-└── cpp/
-    ├── cmake/                # Contains all CMake files used in the build
-    │   └── linux/
-    ├── docs/
-    │   └── external/         # Contains documents
-    ├── inc/                  # Internal include files
-    ├── src/                  # Source files
-    │   ├── guest/            # Windows Guest-specific source files
-    │   └── host/             # Host-specific source files
-    └── utils/
-        ├── scripts/          # Utility scripts
-        └── third_party/
-            └── inc/          # Third-party libraries
-                ├── json/
-                └── tabulate/
+smi-lib/
+└── cli/
+    └── cpp/
+        ├── cmake/                # Contains all CMake files used in the build
+        │   └── linux/
+        ├── docs/
+        │   └── external/         # Contains documents
+        ├── inc/                  # Internal include files
+        ├── src/                  # Source files
+        │   ├── guest/            # Windows Guest-specific source files
+        │   └── host/             # Host-specific source files
+        └── utils/
+            ├── scripts/          # Utility scripts
+            └── third_party/
+                └── inc/          # Third-party libraries
+                    ├── json/
+                    └── tabulate/
 ```
 
-##### Key Components
+##### Key components
 
 **Include files (`inc/`)**
 Contains all header files that define the CLI tool's interfaces, including:
@@ -190,7 +205,7 @@ Contains all header files that define the CLI tool's interfaces, including:
 - **`tabulate/`**: Table formatting library for structured output. Handles the alignment, spacing, and visual formatting of tabular data (like the monitor command output showing GPU metrics in neat columns).
 
 
-#### Build Requirements
+#### Build requirements
 
 **Prerequisites**
 - Modern C++ compiler (g++11)

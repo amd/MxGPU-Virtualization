@@ -2,12 +2,12 @@
 myst:
   html_meta:
     "description lang=en": "Get started with the AMD SMI C library. Basic usage and examples."
-    "keywords": "api, smi, lib, c, system, management, interface"
+    "keywords": "api, smi, lib, c, system, management, interface, cpp"
 ---
 
-# AMD SMI C library usage and examples
+# AMD SMI C/C++ library usage and examples
 
-This section is dedicated to explaining how to use the AMD System Management Interface (SMI) C library. It provides guidance on the basic setup and teardown of the library, which is essential for interacting with AMD hardware through the SMI API.
+This section is dedicated to explaining how to use the AMD System Management Interface (SMI) C/C++ library. It provides guidance on the basic setup and teardown of the library, which is essential for interacting with AMD hardware through the SMI API.
 
 The AMD SMI C library allows developers to query and control various aspects of AMD hardware, such as monitoring power usage, temperature, and performance metrics. To effectively use the library, it is important to follow the correct initialization and cleanup procedures.
 

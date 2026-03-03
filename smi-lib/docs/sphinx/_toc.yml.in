@@ -4,24 +4,24 @@ root: index
 subtrees:
 - caption: Install
   entries:
+  - file: install/install.md
+    title: Install the library and CLI
   - file: install/build.md
     title: Build from source
-  - file: install/install.md
-    title: Library and CLI tool installation
 
 - caption: How to
   entries:
   - file: how_to/amdsmi_c_lib.md
-    title: C library usage
+    title: Use the C/C++ library
   - file: how_to/amdsmi_py_lib.md
-    title: Python library usage
+    title: Use the Python library
   - file: how_to/amdsmi_cli_usage.md
-    title: CLI tool usage
+    title: Use the amd-smi CLI
 
 - caption: Reference
   entries:
-  - file: reference/amdsmi_c_api.md
-    title: C API
+  - file: reference/amdsmi_c_api/index.md
+    title: C/C++ API
     entries:
     - file: doxygen/doxy_build/html/files
       title: Files
@@ -34,12 +34,10 @@ subtrees:
   - file: reference/amdsmi_py_api.md
     title: Python API
 
-- caption: General
-  entries:
-  - file: general/versioning.md
-    title: Library and CLI tool versioning
-
 - caption: About
   entries:
+  - file: about/versioning.md
+    title: Versioning
   - file: license.rst
+    title: License
 
