@@ -1,5 +1,5 @@
 dnl *
-dnl * Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+dnl * Copyright (c) 2024 Advanced Micro Devices, Inc. All rights reserved.
 dnl *
 dnl * Permission is hereby granted, free of charge, to any person obtaining a copy
 dnl * of this software and associated documentation files (the "Software"), to deal
@@ -21,18 +21,23 @@ dnl * THE SOFTWARE
 dnl *
 
 dnl #
-dnl # v5.8-9635-g453431a54934
-dnl # mm, treewide: rename kzfree() to kfree_sensitive()
+dnl # commit ce4b4657ff18925c315855aa290e93c5fa652d96
+dnl # vfio: Replace the DMA unmapping notifier with a callback
 dnl #
-AC_DEFUN([AC_KFREE_SENSITIVE], [
+dnl # The vfio_register_notifier/vfio_unregister_notifier API was replaced
+dnl # with a dma_unmap callback in struct vfio_device_ops.
+dnl #
+AC_DEFUN([AC_VFIO_DMA_UNMAP], [
 	AC_KERNEL_DO_BACKGROUND([
 		AC_KERNEL_TRY_COMPILE([
-			#include <linux/slab.h>
+			#include <linux/vfio.h>
 		], [
-			kfree_sensitive(NULL);
+			struct vfio_device_ops ops;
+			ops.dma_unmap = NULL;
 		], [
-			AC_DEFINE(HAVE_KFREE_SENSITIVE, 1,
-				[kfree_sensitive is available])
+			AC_DEFINE(HAVE_VFIO_DMA_UNMAP, 1,
+				[vfio_device_ops has dma_unmap callback])
 		])
 	])
 ])
+

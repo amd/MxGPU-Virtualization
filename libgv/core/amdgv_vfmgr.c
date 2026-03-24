@@ -125,13 +125,6 @@ int amdgv_vfmgr_init_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, bool mb
 
 	/* FB content is already cleared during whole GPU reset (BACO/MODE1). */
 	if (!adapt->reset.reset_state) {
-		/* For VM destroy sequence, add delay to allow all devices to finish
-		 * FLR sequence before starting FB cleaning.
-		 */
-		if ((adapt->asic_type == CHIP_MI350X) && (flag == AMDGV_VF_FB_CLEAR_DIRTY)) {
-			oss_msleep(800);
-		}
-
 		/* clear VF FB at VM allocation before copy_ip_data */
 		tmp_ret = amdgv_misc_clear_vf_fb(adapt, idx_vf, pattern);
 		if (tmp_ret)

@@ -126,7 +126,7 @@ enum psp_status mi300_psp_ring_start(struct amdgv_adapter *adapt)
 }
 
 static enum psp_status
-mi300_psp_bootloader_load_component(struct amdgv_adapter *adapt, unsigned char *fw_image,
+mi300_psp_bootloader_load_component(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				    uint32_t fw_image_size,
 				    enum psp_bootloader_command_list bl_cmd)
 {
@@ -154,7 +154,7 @@ mi300_psp_bootloader_load_component(struct amdgv_adapter *adapt, unsigned char *
 	return PSP_STATUS__SUCCESS;
 }
 
-enum psp_status mi300_psp_load_key_db(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status mi300_psp_load_key_db(struct amdgv_adapter *adapt, unsigned const char *fw_image,
 				      uint32_t fw_image_size)
 {
 	enum psp_status ret;
@@ -175,7 +175,7 @@ enum psp_status mi300_psp_load_key_db(struct amdgv_adapter *adapt, unsigned char
 	return ret;
 }
 
-enum psp_status mi300_psp_load_sys_drv(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status mi300_psp_load_sys_drv(struct amdgv_adapter *adapt, unsigned const char *fw_image,
 				       uint32_t fw_image_size)
 {
 	enum psp_status ret;
@@ -197,7 +197,7 @@ enum psp_status mi300_psp_load_sys_drv(struct amdgv_adapter *adapt, unsigned cha
 }
 
 enum psp_status mi300_psp_load_ras_drv(struct amdgv_adapter *adapt,
-			unsigned char *fw_image, uint32_t fw_image_size)
+			unsigned const char *fw_image, uint32_t fw_image_size)
 {
 	enum psp_status ret;
 	uint32_t fw_ver;
@@ -219,7 +219,7 @@ enum psp_status mi300_psp_load_ras_drv(struct amdgv_adapter *adapt,
 	return ret;
 }
 
-enum psp_status mi300_psp_load_soc_drv(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status mi300_psp_load_soc_drv(struct amdgv_adapter *adapt, unsigned const char *fw_image,
 				       uint32_t fw_image_size)
 {
 	enum psp_status ret;
@@ -240,7 +240,7 @@ enum psp_status mi300_psp_load_soc_drv(struct amdgv_adapter *adapt, unsigned cha
 	return ret;
 }
 
-enum psp_status mi300_psp_load_intf_drv(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status mi300_psp_load_intf_drv(struct amdgv_adapter *adapt, unsigned const char *fw_image,
 					uint32_t fw_image_size)
 {
 	enum psp_status ret;
@@ -261,7 +261,7 @@ enum psp_status mi300_psp_load_intf_drv(struct amdgv_adapter *adapt, unsigned ch
 	return ret;
 }
 
-enum psp_status mi300_psp_load_dbg_drv(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status mi300_psp_load_dbg_drv(struct amdgv_adapter *adapt, unsigned const char *fw_image,
 				       uint32_t fw_image_size)
 {
 	enum psp_status ret;
@@ -282,7 +282,7 @@ enum psp_status mi300_psp_load_dbg_drv(struct amdgv_adapter *adapt, unsigned cha
 	return ret;
 }
 
-enum psp_status mi300_psp_load_sos(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status mi300_psp_load_sos(struct amdgv_adapter *adapt, unsigned const char *fw_image,
 				   uint32_t fw_image_size)
 {
 	struct psp_context *psp = &adapt->psp;
@@ -1477,7 +1477,7 @@ static enum psp_status mi300_psp_parse_psp_info(struct amdgv_adapter *adapt)
 	return PSP_STATUS__SUCCESS;
 }
 
-static void get_xgmi_fw_info(struct amdgv_adapter *adapt, unsigned char **fw_image,
+static void get_xgmi_fw_info(struct amdgv_adapter *adapt, unsigned const char **fw_image,
 	uint32_t *fw_image_size)
 {
 	*fw_image = psp_xgmi_tee3_sbin;
@@ -1910,6 +1910,8 @@ enum psp_status mi300_psp_send_perf_hw_cmd(struct amdgv_adapter *adapt,
 	enum psp_status ret = PSP_STATUS__SUCCESS;
 	struct psp_cmd_km psp_cmd = { 0 };
 	struct psp_gfx_resp psp_resp = { 0 };
+	int retry;
+	const int max_retries = 2;
 
 	if (!adapt || !req || !resp) {
 		AMDGV_ERROR("Invalid parameters for PSP performance HW command\n");
@@ -1947,9 +1949,17 @@ enum psp_status mi300_psp_send_perf_hw_cmd(struct amdgv_adapter *adapt,
 	psp_cmd.cmd.perf_hw.pref_format1 = req->pref_format1;
 	psp_cmd.cmd.perf_hw.pref_format2 = req->pref_format2;
 
-	psp_resp.status = 0xdeadbeef;
+	for (retry = 0; retry <= max_retries; retry++) {
+		psp_resp.status = 0xdeadbeef;
+		ret = amdgv_psp_cmd_km_submit(adapt, &psp_cmd, &psp_resp);
 
-	ret = amdgv_psp_cmd_km_submit(adapt, &psp_cmd, &psp_resp);
+		if (psp_resp.status != PSP_KM_TEE_ERROR_AMD_SMU_TIMEOUT)
+			break;
+
+		if (retry < max_retries)
+			AMDGV_DEBUG("PSP perf HW cmd SMU timeout, retry %d/%d\n",
+				   retry + 1, max_retries);
+	}
 
 	if (ret != PSP_STATUS__SUCCESS) {
 		AMDGV_ERROR("Failed to submit PSP performance HW command, ret=%d\n", ret);

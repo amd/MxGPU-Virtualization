@@ -62,11 +62,11 @@ enum psp_status psp_v13_set_sriov_mode(struct amdgv_adapter *adapt);
 enum psp_status psp_v13_apply_security_policy(
 				struct amdgv_adapter *adapt);
 enum psp_status psp_v13_load_sysdrv(struct amdgv_adapter *adapt,
-			unsigned char *fw_image, uint32_t fw_image_size);
+			const unsigned char *fw_image, uint32_t fw_image_size);
 enum psp_status psp_v13_load_sos(struct amdgv_adapter *adapt,
-			unsigned char *fw_image, uint32_t fw_image_size);
+			const unsigned char *fw_image, uint32_t fw_image_size);
 enum psp_status psp_v13_load_key_db(struct amdgv_adapter *adapt,
-			unsigned char *fw_image, uint32_t fw_image_size);
+			const unsigned char *fw_image, uint32_t fw_image_size);
 
 enum psp_status psp_v13_program_guest_mc_settings(struct amdgv_adapter *adapt,
 			uint32_t idx_vf);

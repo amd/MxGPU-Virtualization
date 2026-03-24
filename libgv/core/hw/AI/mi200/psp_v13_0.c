@@ -92,7 +92,7 @@ enum psp_status psp_v13_ring_start(struct amdgv_adapter *adapt)
 }
 
 enum psp_status psp_v13_load_key_db(struct amdgv_adapter *adapt,
-		unsigned char *fw_image, uint32_t fw_image_size)
+		const unsigned char *fw_image, uint32_t fw_image_size)
 {
 	struct psp_context *psp = &adapt->psp;
 	struct psp_local_memory psp_key_db_load_mem = psp->private_fw_memory;
@@ -129,7 +129,7 @@ enum psp_status psp_v13_load_key_db(struct amdgv_adapter *adapt,
 }
 
 enum psp_status psp_v13_load_sysdrv(struct amdgv_adapter *adapt,
-				unsigned char *fw_image, uint32_t fw_image_size)
+				const unsigned char *fw_image, uint32_t fw_image_size)
 {
 	struct psp_context *psp = &adapt->psp;
 	struct psp_local_memory psp_sysdrv_load_mem = psp->private_fw_memory;
@@ -167,7 +167,7 @@ enum psp_status psp_v13_load_sysdrv(struct amdgv_adapter *adapt,
 }
 
 enum psp_status psp_v13_load_sos(struct amdgv_adapter *adapt,
-				unsigned char *fw_image, uint32_t fw_image_size)
+				const unsigned char *fw_image, uint32_t fw_image_size)
 {
 	struct psp_context *psp = &adapt->psp;
 	struct psp_local_memory psp_sos_load_mem = psp->private_fw_memory;

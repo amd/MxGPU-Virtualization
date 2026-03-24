@@ -579,23 +579,57 @@ static int mi300_reset_pf_allowed(struct amdgv_adapter *adapt, uint32_t active_v
 	return true;
 }
 
+/* Prevents CP DMA and FLR from running concurrently. */
+static void mi300_flr_enter(struct amdgv_adapter *adapt)
+{
+	struct amdgv_hive_info *hive;
+
+	if (adapt->asic_type != CHIP_MI350X)
+		return;
+
+	hive = amdgv_get_xgmi_hive(adapt);
+	if (!hive)
+		return;
+
+	shared_exclusion_enter(adapt, &hive->flr_cp_dma_lock, SHARED_EXCLUSION_GROUP_FLR);
+}
+
+static void mi300_flr_exit(struct amdgv_adapter *adapt)
+{
+	struct amdgv_hive_info *hive;
+
+	if (adapt->asic_type != CHIP_MI350X)
+		return;
+
+	hive = amdgv_get_xgmi_hive(adapt);
+	if (!hive)
+		return;
+
+	shared_exclusion_exit(adapt, &hive->flr_cp_dma_lock, SHARED_EXCLUSION_GROUP_FLR);
+}
+
 static int mi300_reset_trigger_vf_flr(struct amdgv_adapter *adapt,
 		uint32_t idx_vf)
 {
 	int ret = 0;
-	struct mi300_vf_flr_state vf_state;
+	struct mi300_vf_flr_state vf_state = { 0 };
 	struct mi300_reset_access_info access_info;
 	int sdma_id;
 	int doorbell_index;
 
+	mi300_flr_enter(adapt);
+
 	/* need SMU FW loaded and responding to do FLR */
 	if (!mi300_smu_get_fw_loaded_status(adapt)) {
 		AMDGV_ERROR("SMU FW not responding. Unable to do FLR\n");
-		return AMDGV_FAILURE;
+		ret = AMDGV_FAILURE;
+		goto failed;
 	}
 
-	if (idx_vf == AMDGV_PF_IDX)
+	if (idx_vf == AMDGV_PF_IDX) {
+		mi300_flr_exit(adapt);
 		return mi300_reset_trigger_pf_soft_flr(adapt);
+	}
 
 	AMDGV_INFO("start %s FLR\n", amdgv_idx_to_str(idx_vf));
 
@@ -603,7 +637,8 @@ static int mi300_reset_trigger_vf_flr(struct amdgv_adapter *adapt,
 	if (!vf_state.pci_cfg) {
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 			PCI_CONFIG_SIZE);
-		return AMDGV_FAILURE;
+		ret = AMDGV_FAILURE;
+		goto failed;
 	}
 
 	vf_state.idx_vf = idx_vf;
@@ -694,7 +729,12 @@ static int mi300_reset_trigger_vf_flr(struct amdgv_adapter *adapt,
 		AMDGV_INFO("completed %s FLR succesfully\n", amdgv_idx_to_str(idx_vf));
 
 failed:
-	oss_free(vf_state.pci_cfg);
+	mi300_flr_exit(adapt);
+
+	if (vf_state.pci_cfg) {
+		oss_free(vf_state.pci_cfg);
+	}
+
 	return ret;
 }
 

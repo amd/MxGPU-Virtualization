@@ -377,19 +377,19 @@ struct psp_context {
 					  bool enable);
 	enum psp_status (*get_mb_int_status)(struct amdgv_adapter *adapt, uint32_t idx_vf,
 					  struct psp_mb_status *mb_status);
-	enum psp_status (*load_keydb)(struct amdgv_adapter *adapt, unsigned char *fw_image,
+	enum psp_status (*load_keydb)(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 					  uint32_t fw_image_size);
-	enum psp_status (*load_spl)(struct amdgv_adapter *adapt, unsigned char *fw_image,
+	enum psp_status (*load_spl)(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 					uint32_t fw_image_size);
-	enum psp_status (*load_sysdrv)(struct amdgv_adapter *adapt, unsigned char *fw_image,
+	enum psp_status (*load_sysdrv)(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 					   uint32_t fw_image_size);
-	enum psp_status (*load_rasdrv)(struct amdgv_adapter *adapt, unsigned char *fw_image,
+	enum psp_status (*load_rasdrv)(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 					   uint32_t fw_image_size);
-	enum psp_status (*load_sosdrv)(struct amdgv_adapter *adapt, unsigned char *fw_image,
+	enum psp_status (*load_sosdrv)(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 					   uint32_t fw_image_size);
 	enum psp_status (*clear_vf_fw)(struct amdgv_adapter *adapt,
 					  uint32_t idx_vf);
-	enum psp_status (*load_psp_ucode)(struct amdgv_adapter *adapt, unsigned char *fw_image,
+	enum psp_status (*load_psp_ucode)(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 					   uint32_t fw_image_size, uint32_t fw_id);
 	enum psp_status (*fw_attestation_support)(struct amdgv_adapter *adapt);
 	enum psp_status (*get_fw_attestation_info)(struct amdgv_adapter *adapt, uint32_t vf_id);
@@ -409,7 +409,7 @@ struct psp_context {
 	enum psp_status(*dfc_check_guest_version)(struct amdgv_adapter *adapter,
 		char *driver_version);
 	enum psp_status(*tmr_init)(struct amdgv_adapter *adapt, uint32_t allocated_tmr_size);
-	void (*get_xgmi_fw_info)(struct amdgv_adapter *adapt, unsigned char **fw_image,
+	void (*get_xgmi_fw_info)(struct amdgv_adapter *adapt, unsigned const char **fw_image,
 							uint32_t *fw_image_size);
 	enum psp_status (*transfer_manifest_data)(struct amdgv_adapter *adapt,
 						uint32_t idx_vf, uint64_t data_addr, uint32_t size,

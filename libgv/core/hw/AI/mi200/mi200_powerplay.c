@@ -783,7 +783,7 @@ static int mi200_smu_13_0_read_pptable_from_vbios(struct amdgv_adapter *adapt)
 	void *table = NULL;
 	struct smu_context *smu = NULL;
 	struct smu_table_context *table_context = NULL;
-	unsigned char *soft_tb = NULL;
+	const unsigned char *soft_tb = NULL;
 	uint32_t soft_tb_size = 0;
 
 	smu = (struct smu_context *)(adapt->pp.smu_backend);

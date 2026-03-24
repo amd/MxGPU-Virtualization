@@ -1139,21 +1139,21 @@ enum psp_status amdgv_psp_wait_for_register(struct amdgv_adapter *adapt, uint32_
 					    uint32_t reg_value, uint32_t reg_mask,
 					    bool check_changed, uint32_t wait_flag);
 void amdgv_psp_get_fw_info(uint32_t image_version, char *info, uint32_t size, uint32_t fw_id);
-enum psp_status amdgv_psp_load_np_fw(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status amdgv_psp_load_np_fw(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				     uint32_t fw_image_size, uint32_t fw_id);
-enum psp_status amdgv_psp_load_toc(struct amdgv_adapter *adapt, unsigned char *toc_image,
+enum psp_status amdgv_psp_load_toc(struct amdgv_adapter *adapt, const unsigned char *toc_image,
 				   uint32_t toc_size);
-enum psp_status amdgv_psp_load_fw(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status amdgv_psp_load_fw(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				  uint32_t fw_image_size, enum amdgv_firmware_id ucode_id);
 enum psp_status amdgv_psp_load_local_fw(struct amdgv_adapter *adapt,
-					enum amdgv_firmware_id ucode_id, unsigned char *embedded_fw_image);
+					enum amdgv_firmware_id ucode_id, const unsigned char *embedded_fw_image);
 enum psp_status amdgv_psp_live_update_fw(struct amdgv_adapter *adapt,
 					 enum amdgv_firmware_id fw_id);
 enum psp_status amdgv_psp_start_rlc_autoload(struct amdgv_adapter *adapt);
 enum psp_status amdgv_psp_asd_load(struct amdgv_adapter *adapt);
 enum psp_status amdgv_psp_asd_unload(struct amdgv_adapter *adapt);
 enum psp_status amdgv_psp_ras_initialize(struct amdgv_adapter *adapt,
-					unsigned char *ras_image, uint32_t ras_size);
+					const unsigned char *ras_image, uint32_t ras_size);
 enum psp_status amdgv_psp_ras_terminate(struct amdgv_adapter *adapt);
 enum psp_status amdgv_psp_ras_trigger_error(struct amdgv_adapter *adapt,
 					    struct ta_ras_trigger_error_input *info);
@@ -1181,7 +1181,7 @@ enum psp_status amdgv_psp_xgmi_get_topology_info(struct amdgv_adapter *adapt,
 enum psp_status amdgv_psp_xgmi_get_peer_link_info(struct amdgv_adapter *adapt,
 	struct amdgv_hive_info *hive, struct amdgv_xgmi_psp_link_info *link_info);
 
-enum psp_status amdgv_psp_load_fw_work(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status amdgv_psp_load_fw_work(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				       uint32_t fw_image_size,
 				       enum amdgv_firmware_id ucode_id);
 
@@ -1195,7 +1195,7 @@ enum psp_status amdgv_psp_get_fw_attestation_db_add(struct amdgv_adapter *adapt)
 enum psp_status amdgv_psp_get_fw_attestation_info(struct amdgv_adapter *adapt, uint32_t idx_vf);
 void amdgv_psp_save_mb_error_record(struct amdgv_adapter *adapt, uint32_t idx_vf,
 						struct psp_mb_status *mb_status);
-void amdgv_psp_record_loaded_fw(struct amdgv_adapter *adapt, unsigned char *fw_image, uint32_t fw_id);
+void amdgv_psp_record_loaded_fw(struct amdgv_adapter *adapt, const unsigned char *fw_image, uint32_t fw_id);
 enum psp_status amdgv_psp_get_runtime_db_entry(struct amdgv_adapter *adapt,
 	enum psp_runtime_entry_type entry_type, void *db_entry);
 enum psp_status amdgv_psp_load_vbflash_bin(struct amdgv_adapter *adapt,

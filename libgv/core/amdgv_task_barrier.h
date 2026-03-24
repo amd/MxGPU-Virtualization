@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2019-2026 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -98,4 +98,39 @@ static inline void task_barrier_full(struct task_barrier *tb, uint32_t count)
 	task_barrier_enter(tb, count);
 	task_barrier_exit(tb, count);
 }
+
+/*
+ * Shared Exclusion Lock
+ *
+ * Usage:
+ *   // Define group IDs
+ *   #define GROUP_A  0
+ *   #define GROUP_B  1
+ *
+ *   // In group A code:
+ *   shared_exclusion_enter(adapt, &lock, GROUP_A);
+ *   // ... do group A work ...
+ *   shared_exclusion_exit(adapt, &lock, GROUP_A);
+ *
+ *   // In group B code:
+ *   shared_exclusion_enter(adapt, &lock, GROUP_B);
+ *   // ... do group B work ...
+ *   shared_exclusion_exit(adapt, &lock, GROUP_B);
+ */
+
+#define SHARED_EXCLUSION_NUM_GROUPS 2
+
+struct shared_exclusion_lock {
+	void *sem;                                  /* Main semaphore for mutual exclusion */
+	void *gate[SHARED_EXCLUSION_NUM_GROUPS];    /* Gate semaphores for each group */
+	atomic_t count[SHARED_EXCLUSION_NUM_GROUPS]; /* Number of threads in each group */
+	bool active[SHARED_EXCLUSION_NUM_GROUPS];   /* True when group owns the semaphore */
+	mutex_t lock;                               /* Mutex to protect all fields */
+};
+
+int shared_exclusion_init(struct amdgv_adapter *adapt, struct shared_exclusion_lock *sel);
+void shared_exclusion_fini(struct amdgv_adapter *adapt, struct shared_exclusion_lock *sel);
+void shared_exclusion_enter(struct amdgv_adapter *adapt, struct shared_exclusion_lock *sel, uint8_t group);
+void shared_exclusion_exit(struct amdgv_adapter *adapt, struct shared_exclusion_lock *sel, uint8_t group);
+
 #endif

@@ -100,6 +100,11 @@ int amdgv_xgmi_init_hive(struct amdgv_adapter *adapt)
 	oss_atomic_set(&hive->ecc_recovery, 0);
 	oss_atomic_set(&hive->psp_mb_cmd_ref_cnt, 0);
 
+	if (shared_exclusion_init(adapt, &hive->flr_cp_dma_lock) != 0) {
+		AMDGV_ERROR("Failed to init flr_cp_dma_lock\n");
+		goto fail;
+	}
+
 	oss_mutex_unlock(adapt->hive_lock);
 
 	return 0;
@@ -113,6 +118,8 @@ fail:
 
 	if (hive->chain_reset_lock)
 		oss_spin_lock_fini(hive->chain_reset_lock);
+
+	shared_exclusion_fini(adapt, &hive->flr_cp_dma_lock);
 
 	amdgv_list_del(&hive->adapt_list);
 
@@ -473,6 +480,7 @@ int amdgv_xgmi_remove_from_hive(struct amdgv_adapter *adapt)
 		task_barrier_fini(&hive->tb_drv_init);
 		oss_mutex_fini(hive->mcm_hive_lock);
 		oss_spin_lock_fini(hive->chain_reset_lock);
+		shared_exclusion_fini(adapt, &hive->flr_cp_dma_lock);
 		amdgv_list_del(&hive->adapt_list);
 		oss_memset(hive, 0, sizeof(struct amdgv_hive_info));
 		hive_count--;
