@@ -517,6 +517,7 @@ struct amdgv_gfx_funcs {
 	int  (*dump_cu_data)(struct amdgv_adapter *adapt);
 	int  (*alloc_dump_cu_resource_memory)(struct amdgv_adapter *adapt, struct amdgv_dump_cu_resource_size *resource_size,
 			struct amdgv_dump_cu_resource_memory *resource_mem);
+	void (*free_dump_cu_resource_memory)(struct amdgv_adapter *adapt);
 	int  (*hw_init_internal_set)(struct amdgv_adapter *adapt);
 };
 
@@ -689,17 +690,17 @@ struct amdgv_cu_info {
 };
 
 struct amdgv_cu_dump_data_info {
-	struct amdgv_cu_info    cu_info;
-	/* the handle of CU data dump thread */
-	thread_t                cu_dump_thread;
-	/* the event for awaking CU data dump*/
-	event_t                 cu_dump_event;
-	enum AMDGV_CU_DATA_TYPE cu_dump_type;
-	uint32_t                cu_dump_size;
-	const char              *cu_data;
-	const char              *cu_data_flags;
+	/* deprecated */
+	struct amdgv_cu_info cu_info;
 
-	bool                    cu_dump_finished;
+	uint32_t xcc_id;
+	enum AMDGV_CU_DATA_TYPE cu_dump_type;
+
+	/* 
+	 * Due to architectural constraints, dumping SGPRs on GFX9 requires launching
+	 * 2 compute queues running different shaders simultaneously and synchronizing them.
+	 */
+	bool use_extra_ring;
 };
 
 struct amdgv_dump_cu_memmgr_mem_group {
@@ -709,6 +710,14 @@ struct amdgv_dump_cu_memmgr_mem_group {
 	struct amdgv_memmgr_mem *out_flag;
 	struct amdgv_memmgr_mem *packet;
 	struct amdgv_memmgr_mem *signal_obj;
+
+	/* The fields below are used to dump SGPRs on GFX9. */
+	struct amdgv_memmgr_mem *extra_kernelobj;
+	struct amdgv_memmgr_mem *extra_kernelarg;
+	struct amdgv_memmgr_mem *extra_packet;
+	struct amdgv_memmgr_mem *sync_signal_obj;
+	struct amdgv_memmgr_mem *extra_signal_obj;
+	struct amdgv_memmgr_mem *dev_data;
 };
 
 typedef struct {
@@ -873,7 +882,7 @@ struct amdgv_gfx {
 
 	struct amdgv_cu_dump_data_info cu_dump_data_info;
 	struct amdgv_dump_cu_memmgr_mem_group *dump_cu_memmgr_mem_group;
-	hsa_kernel_dispatch_packet_t *packet_addr;
+	hsa_kernel_dispatch_packet_t *dump_cu_packets[2];
 
 	/* reset mask */
 	uint32_t            grbm_soft_reset;
@@ -999,8 +1008,11 @@ void amdgv_gfx_ras_error_func(struct amdgv_adapter *adapt,
 int amdgv_gfx_get_compute_cap(struct amdgv_adapter *adapt, bool min, uint32_t *compute_cap);
 void amdgv_gfx_rlc_enter_safe_mode(struct amdgv_adapter *adapt, int xcc_id);
 void amdgv_gfx_rlc_exit_safe_mode(struct amdgv_adapter *adapt, int xcc_id);
-
+void amdgv_gfx_init_dump_cu_packet(struct amdgv_adapter *adapt,
+	hsa_kernel_dispatch_packet_t *packet, struct amdgv_dump_cu_resource_size *resource_size,
+	hsa_signal_t signal, struct amdgv_memmgr_mem *kernelobj, struct amdgv_memmgr_mem *kernelarg);
 int amdgv_gfx_alloc_dump_cu_resource_memory(struct amdgv_adapter *adapt, struct amdgv_dump_cu_resource_size *resource_size,
 			struct amdgv_dump_cu_resource_memory *resource_mem);
+void amdgv_gfx_free_dump_cu_resource_memory(struct amdgv_adapter *adapt);
 int amdgv_gfx_dump_cu_data(struct amdgv_adapter *adapt);
 #endif

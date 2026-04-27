@@ -79,6 +79,8 @@ public:
 								std::string &formatted_string);
 	int metric_command_energy(uint64_t processor,
 							  std::string &formatted_string);
+	int metric_command_throttle(uint64_t processor,
+								std::string &formatted_string);
 
 	int metric_command_gpuboard(uint64_t processor,
 							 std::string &formatted_string);

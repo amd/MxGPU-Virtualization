@@ -103,6 +103,9 @@ void amdgv_dirtybit_destroy_vf_acc_bits(struct amdgv_adapter *adapt)
 
 static void amdgv_dirtybit_set_vf_acc_bits(struct amdgv_adapter *adapt, uint32_t idx_vf, char pattern)
 {
+	if (idx_vf >= AMDGV_MAX_VF_NUM)
+		return;
+
 	if (adapt->dirtybit.acc_bits[idx_vf].ptr == NULL)
 		return;
 
@@ -188,6 +191,46 @@ int amdgv_merge_acc_bits_to_new_bits(struct amdgv_adapter *adapt,
 	return amdgv_dirtybit_merge_bitmap(adapt, data, false);
 }
 
+/*
+ * Mark every dirty page in the current query as dirty in dbit_plane_data_buffer.
+ * One bit per dirty page; query_size need not be page-aligned (partial tail counts
+ * as an extra page). Only the bits for those pages are set; the rest of the buffer
+ * is cleared. Query-relative layout (bit 0 = first page in the query window).
+ */
+static int amdgv_dirtybit_set_bitmap_query_buffer_to_dirty(struct amdgv_adapter *adapt,
+						struct amdgv_query_dirty_bit_data *data)
+{
+	uint32_t dirty_page_size = 0;
+	uint64_t num_bits;
+	uint64_t full_bytes;
+	uint32_t rem_bits;
+	uint8_t *buf = (uint8_t *)data->dbit_plane_data_buffer;
+
+	if (amdgv_dirtybit_get_dirty_page_size(adapt, &dirty_page_size)) {
+		AMDGV_ERROR("Failed to get dirty page size for forced-dirty bitmap\n");
+		return AMDGV_FAILURE;
+	}
+
+	num_bits = DIV_ROUND_UP(data->query_size, dirty_page_size);
+	full_bytes = num_bits / 8ULL;
+	rem_bits = (uint32_t)(num_bits % 8ULL);
+
+	/* Need room for full 0xff bytes plus optional partial byte at buf[full_bytes] */
+	if (full_bytes + (rem_bits != 0 ? 1ULL : 0ULL) > data->dbit_plane_data_size) {
+		AMDGV_ERROR("dirty bitmap buffer too small: need %llu bytes, have %llu\n",
+			    (unsigned long long)(full_bytes + (rem_bits != 0 ? 1ULL : 0ULL)),
+			    (unsigned long long)data->dbit_plane_data_size);
+		return AMDGV_FAILURE;
+	}
+
+	if (full_bytes)
+		oss_memset(buf, 0xff, full_bytes);
+	if (rem_bits != 0)
+		buf[full_bytes] = (uint8_t)((1U << rem_bits) - 1U);
+
+	return 0;
+}
+
 int amdgv_dirtybit_querydata(struct amdgv_adapter *adapt,
 				struct amdgv_query_dirty_bit_data *data)
 {
@@ -206,6 +249,11 @@ int amdgv_dirtybit_querydata(struct amdgv_adapter *adapt,
 	if (data->dbit_plane_data_buffer == NULL) {
 		AMDGV_ERROR("dbit_plane_data_buffer is NULL\n");
 		return AMDGV_FAILURE;
+	}
+
+	if (amdgv_xgmi_node_fb_sharing_allowed(adapt)) {
+		AMDGV_INFO("FB sharing mode is enabled, set queried FB range dirty in bitmap\n");
+		return amdgv_dirtybit_set_bitmap_query_buffer_to_dirty(adapt, data);
 	}
 
 	if (adapt->dirtybit.funcs &&
@@ -288,6 +336,11 @@ int amdgv_dirtybit_clear_fb_dbit(struct amdgv_adapter *adapt,  uint32_t idx_vf)
 {
 	int ret = 0;
 
+	if (idx_vf >= AMDGV_MAX_VF_NUM) {
+		AMDGV_ERROR("Invalid idx_vf %u for dirty bit clear\n", idx_vf);
+		return AMDGV_FAILURE;
+	}
+
 	/* Clear the Dbit by querying the whole VF FB with preserve = false,
 	 * preserve = false will clear the Dbit when querying
 	 */
@@ -302,4 +355,31 @@ int amdgv_dirtybit_clear_fb_dbit(struct amdgv_adapter *adapt,  uint32_t idx_vf)
 	amdgv_dirtybit_set_vf_acc_bits(adapt, idx_vf, 0);
 
 	return ret;
+}
+
+int amdgv_dirtybit_export_live_data(struct amdgv_adapter *adapt,
+				    struct amdgv_live_info_acc_bits *data)
+{
+	if (adapt->dirtybit.acc_bits_whole_fb != NULL) {
+		oss_memcpy(data->acc_bits_whole_fb, adapt->dirtybit.acc_bits_whole_fb,
+			   AMDGV_DIRTYBIT_BUFFER_SIZE);
+	}
+	return 0;
+}
+
+int amdgv_dirtybit_import_live_data(struct amdgv_adapter *adapt,
+				    struct amdgv_live_info_acc_bits *data)
+{
+	if (adapt->dirtybit.acc_bits_whole_fb == NULL)
+		return 0;
+
+	oss_memcpy(adapt->dirtybit.acc_bits_whole_fb, data->acc_bits_whole_fb,
+		   AMDGV_DIRTYBIT_BUFFER_SIZE);
+
+	if (amdgv_dirtybit_assgin_acc_bits_to_vf(adapt)) {
+		AMDGV_ERROR("Failed to assign acc bits to VF\n");
+		return AMDGV_FAILURE;
+	}
+
+	return 0;
 }

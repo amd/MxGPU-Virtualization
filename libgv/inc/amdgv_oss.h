@@ -56,6 +56,11 @@ enum oss_memremap_type {
 	OSS_MEMREMAP_WC = 1 << 2,
 };
 
+enum oss_dma_direction {
+	OSS_DMA_DIR_FROM_MEMORY = 0, /* CPU wrote, device will read */
+	OSS_DMA_DIR_TO_MEMORY   = 1, /* device wrote, CPU will read */
+};
+
 struct oss_dma_mem_info {
 	/* the bus address of allocated dma memory */
 	uint64_t bus_addr;
@@ -293,6 +298,8 @@ struct oss_interface {
 	int (*alloc_dma_mem)(oss_dev_t dev, uint32_t size, enum oss_dma_mem_type type,
 			     struct oss_dma_mem_info *dma_mem_info);
 	void (*free_dma_mem)(void *handle);
+	void (*flush_dma_mem)(struct oss_dma_mem_info *dma_mem_info,
+			      enum oss_dma_direction dir, uint64_t offset, uint64_t size);
 	uint64_t (*sg_dma_address)(void *handle, uint32_t page);
 
 	void *(*memremap)(uint64_t offset, uint32_t size, uint32_t flags);
@@ -495,6 +502,11 @@ struct oss_interface {
 
 	/* Check if running in a virtual machine */
 	bool  (*in_virtual_machine)(void);
+
+	/* get global device list in the system
+	 */
+	void (*get_device_list)(oss_dev_t *dev_list, int *size);
+
 };
 
 #endif

@@ -1460,7 +1460,7 @@ static int navi32_reset_sw_fini(struct amdgv_adapter *adapt)
 
 static int navi32_reset_hw_init(struct amdgv_adapter *adapt)
 {
-	adapt->reset.saved_rlcv_state = false;
+	amdgv_gpuiov_reset_saved_rlcv_state(adapt);
 	return 0;
 }
 

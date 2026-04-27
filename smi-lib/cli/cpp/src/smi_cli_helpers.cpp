@@ -565,3 +565,15 @@ std::string FecModesToString(uint32_t fec) {
 	AmdSmiApiBase::CreateAmdSmiApiObject().FecModesToString(fec, out);
 	return out;
 }
+
+std::string get_string_from_enum_nic_topo_link_type(int nic_link_type)
+{
+	std::string out;
+	AmdSmiApiBase::CreateAmdSmiApiObject().get_string_from_enum_nic_topo_link_type(nic_link_type, out);
+	return out;
+}
+
+int get_index_from_main_gpu(int &gpu_index)
+{
+	return AmdSmiApiBase::CreateAmdSmiApiObject().get_index_from_main_gpu(gpu_index);
+}

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2024 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2014-2026 Advanced Micro Devices, Inc. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -23,9 +23,15 @@
 #ifndef AMDGV_XGMI_H
 #define AMDGV_XGMI_H
 
+#include "amdgv_task_barrier.h"
+
 #define AMDGV_MAX_XGMI_HIVE 8
 #define AMDGV_XGMI_MAX_CONNECTED_NODES 64
 #define AMDGV_XGMI_MAX_NUM_LINKS 64
+
+/* Group IDs for flr_cp_dma_lock */
+#define SHARED_EXCLUSION_GROUP_FLR     0
+#define SHARED_EXCLUSION_GROUP_CP_DMA  1
 
 enum amdgv_xgmi_link_status {
 	AMDGV_XGMI_LINK_STATUS__ACTIVE = 0,
@@ -70,6 +76,8 @@ struct amdgv_hive_info {
 	/* reference counter for sending psp mb cmd
 	 * only for GPU which enables xgmi.set_mb_in_hive */
 	atomic_t psp_mb_cmd_ref_cnt;
+
+	struct shared_exclusion_lock flr_cp_dma_lock;
 };
 
 struct amdgv_xgmi_psp_link_info {

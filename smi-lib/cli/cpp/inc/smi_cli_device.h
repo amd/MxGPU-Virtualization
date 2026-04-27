@@ -23,7 +23,7 @@
 #include <cstdint>
 
 enum class DeviceIdentifierType { INDEX, VF_INDEX, BDF, UUID = 3 };
-enum class DeviceType { GPU, NIC };
+enum class DeviceType { GPU, NIC, BRCM_NIC };
 
 class Device
 {

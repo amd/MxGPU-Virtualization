@@ -45,9 +45,19 @@ TARGET := amdsmi_integration_tests
 INCLUDE := $(addprefix -I,\
   $(INTERFACE_DIR))
 
-CXXFLAGS = -std=c++17 $(DEFAULT_CXXFLAGS) $(INCLUDE) -pthread
+CXXFLAGS = -std=c++17 $(DEFAULT_CXXFLAGS) $(INCLUDE) $(CXX_HOST_FLAGS) -pthread
 LDPATH = $(addprefix -L,$(BUILD_DIR)/amdsmi/$(BUILD_TYPE))
 LDFLAGS = -lgtest -lgtest_main -pthread -lamdsmi
+LINK_OBJS := $(OBJSCPP)
+
+ifeq ($(HOST),esxi)
+  GTEST_PREFIX ?= /usr/local
+  CXXFLAGS = -std=c++17 $(DEFAULT_CXXFLAGS) $(INCLUDE) -I$(GTEST_PREFIX)/include $(CXX_HOST_FLAGS) -pthread
+  LDFLAGS := -pthread -lamdsmi -lgtest -lgtest_main
+  LDPATH += -L$(GTEST_PREFIX)/lib -L$(GTEST_PREFIX)/lib64
+endif
+
+CXXFLAGS += -Wno-sign-compare
 
 GCC_MAJOR := $(shell $(CXX) -dumpversion | cut -d. -f1)
 ifeq ($(shell test $(GCC_MAJOR) -lt 9; echo $$?),0)
@@ -96,8 +106,8 @@ $(OUTPUT_DIR)/$(LIB_NAME): $(LIB_DIR)/$(LIB_NAME) | $(OUTPUT_DIR)
 $(OUTPUT_DIR)/%.cpp.o: %.cpp Makefile | $(OUTPUT_DIR)
 	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
-$(OUTPUT_DIR)/$(TARGET): $(OBJSCPP)| $(OUTPUT_DIR) $(OUTPUT_DIR)/$(LIB_NAME)
-	$(CXX) -o $@ $^ $(LDPATH) $(LDFLAGS)
+$(OUTPUT_DIR)/$(TARGET): $(LINK_OBJS) | $(OUTPUT_DIR) $(OUTPUT_DIR)/$(LIB_NAME)
+	$(CXX) $(CXX_HOST_FLAGS) -o $@ $(LINK_OBJS) $(LDPATH) $(LDFLAGS)
 
 $(OUTPUT_DIR):
 	mkdir -p $(OUTPUT_DIR)

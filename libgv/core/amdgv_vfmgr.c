@@ -125,13 +125,6 @@ int amdgv_vfmgr_init_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, bool mb
 
 	/* FB content is already cleared during whole GPU reset (BACO/MODE1). */
 	if (!adapt->reset.reset_state) {
-		/* For VM destroy sequence, add delay to allow all devices to finish
-		 * FLR sequence before starting FB cleaning.
-		 */
-		if ((adapt->asic_type == CHIP_MI350X) && (flag == AMDGV_VF_FB_CLEAR_DIRTY)) {
-			oss_msleep(800);
-		}
-
 		/* clear VF FB at VM allocation before copy_ip_data */
 		tmp_ret = amdgv_misc_clear_vf_fb(adapt, idx_vf, pattern);
 		if (tmp_ret)
@@ -2510,8 +2503,9 @@ int amdgv_vfmgr_update_pf2vf_message(struct amdgv_adapter *adapt, uint32_t idx_v
 	pf2vf_msg->feature_flags.flags.xgmi_ta_ext_peer_link =
 		 amdgv_xgmi_is_guest_ext_peer_link_ta_cmd_supported(adapt);
 
-	/* PTL support flag is set by chip-specific code in adapt->ptl_supported */
-	pf2vf_msg->feature_flags.flags.ptl_support = adapt->ptl_supported ? 1 : 0;
+	/* PTL is only exposed to guest in single-VF mode */
+	pf2vf_msg->feature_flags.flags.ptl_support =
+		(adapt->ptl_supported && adapt->num_vf == 1) ? 1 : 0;
 
 	amdgv_vfmgr_get_adapt_uuid(adapt, &pf2vf_msg->uuid);
 
@@ -2583,6 +2577,7 @@ retry:
 		    amd_sriov_msg_checksum(vf2pf_msg, vf2pf_size, msg_key, checksum) != checksum) {
 			AMDGV_WARN("VF2PF message checksum mismatch, retry remaining %d\n", retry_cnt);
 			retry_cnt--;
+			oss_msleep(1);
 			goto retry;
 		}
 

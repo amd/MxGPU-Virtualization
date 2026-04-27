@@ -867,8 +867,7 @@ int AmdSmiApiHost::amdsmi_get_all_xgmi_command(Arguments arg, std::string& out)
 				link_metric_object["write"]["value"] = "SELF";
 				link_metric_object["write"]["unit"] = "SELF";
 
-				json["link_metrics"]["links"].insert(json["link_metrics"]["links"].end(),
-													 link_metric_object);
+				json["link_metrics"]["links"].insert(json["link_metrics"]["links"].end(), link_metric_object);
 
 
 				uint32_t num_links = link_metrics.num_links;
@@ -891,8 +890,7 @@ int AmdSmiApiHost::amdsmi_get_all_xgmi_command(Arguments arg, std::string& out)
 						link_metric_object["write"]["unit"] = "KB";
 					}
 
-					json["link_metrics"]["links"].insert(json["link_metrics"]["links"].end(),
-														 link_metric_object);
+					json["link_metrics"]["links"].insert(json["link_metrics"]["links"].end(), link_metric_object);
 				}
 			}
 		}
@@ -941,7 +939,7 @@ int AmdSmiApiHost::amdsmi_get_all_xgmi_command(Arguments arg, std::string& out)
 		if (std::find(arg.options.begin(), arg.options.end(), "fb-sharing") != arg.options.end() ||
 				arg.all_arguments) {
 			json["link_metrics"]["fb_sharing"] = nlohmann::ordered_json::array();
-			for(j = 0 ; j < gpu_count; j++) {
+			for (j = 0; j < gpu_count; j++) {
 				amdsmi_processor_handle destination = processors[j];
 				uint8_t mode1_enabled{0};
 				uint8_t mode2_enabled{0};
@@ -982,9 +980,8 @@ int AmdSmiApiHost::amdsmi_get_all_xgmi_command(Arguments arg, std::string& out)
 				}
 
 				json["link_metrics"]["fb_sharing"].insert(json["link_metrics"]["fb_sharing"].end(),
-						fb_sharing_element);
+					fb_sharing_element);
 			}
-			output.insert(output.end(), json);
 		}
 
 		if (std::find(arg.options.begin(), arg.options.end(), "source-status") != arg.options.end() ||
@@ -999,14 +996,15 @@ int AmdSmiApiHost::amdsmi_get_all_xgmi_command(Arguments arg, std::string& out)
 			if (error == 0) {
 				json["port_status"] = nlohmann::ordered_json::array();
 				std::string link_status_string;
-				for(int j=0; j<link_metrics.num_links; j++) {
+				for (int j=0; j < link_metrics.num_links; j++) {
 					format_link_status(link_metrics.links[j].link_status, true, link_status_string);
 					json["port_status"].insert(json["port_status"].end(), link_status_string.c_str());
 				}
 			}
-			output.insert(output.end(), json);
 		}
 
+		// Add the json object for this GPU to the output array
+		output.insert(output.end(), json);
 	}
 
 	out = output.dump(4);

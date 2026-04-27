@@ -136,6 +136,7 @@ enum amdgv_sched_event_id {
 	AMDGV_EVENT_SCHED_VF_REQ_RAS_BAD_PAGES,
 	AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA,
 	AMDGV_EVENT_VF_FB_COPY,
+	AMDGV_EVENT_VF_FB_COPY_ASYNC,
 	AMDGV_EVENT_QUERY_DIRTYBIT_DATA,
 	AMDGV_EVENT_SET_VF_MIGRATION_STATE,
 	AMDGV_EVENT_VF_MIGRATION_SET_ABORT,
@@ -245,6 +246,12 @@ union amdgv_sched_event_data {
 				uint32_t spatial_partition_num;
 			} sp;
 			struct {
+				bool enable;
+				uint32_t pref_format1;
+				uint32_t pref_format2;
+				struct amdgv_ptl_status_info *status_info; /* for query */
+			} ptl;
+			struct {
 				uint32_t idx_config;
 				struct amdgv_gpumon_partition_config *partition_config;
 			} partition_config_info;
@@ -330,6 +337,9 @@ union amdgv_sched_event_data {
 		void *vaddr;
 		bool to_fb;
 		int *result;
+		enum amdgv_buf_transfer_state *buf_transfer_state;
+		struct amdgv_fb_copy_entry *entries;
+		uint32_t num_entries;
 	} vf_fb_copy_data;
 	struct {
 		struct amdgv_query_dirty_bit_data data;
@@ -342,6 +352,15 @@ union amdgv_sched_event_data {
 	struct {
 		uint64_t addr;
 	} chk_criti;
+	struct {
+		bool reset;
+	} vf_arbiters;
+	struct {
+		uint32_t req_code;      /* PSP_PTL_PERF_MON_QUERY or PSP_PTL_PERF_MON_SET */
+		uint32_t ptl_state;     /* 0: disable, 1: enable */
+		uint32_t pref_format1;  /* Preferred data format 1 */
+		uint32_t pref_format2;  /* Preferred data format 2 */
+	} ptl;
 };
 
 enum amdgv_event_status {
@@ -526,6 +545,10 @@ struct amdgv_sched_world_switch {
 		/* handle run time self switch on/off */
 		bool self_switch_trigger;
 
+		int (*amdgv_schedule_vfs) (struct amdgv_sched_world_switch *world_switch,
+			struct amdgv_list_head *active_list,
+			int *vf_idx, uint64_t *ts);
+
 	} manual;
 	struct {
 		/* handle run time self switch on/off */
@@ -620,6 +643,9 @@ struct amdgv_sched {
 
 	/* the handle of record flush thread */
 	thread_t record_thread;
+
+	/* the signal of which the record thread waiting for */
+	event_t record_event;
 #endif
 	/* priority event list */
 	struct amdgv_list_head event_list[AMDGV_SCHED_EVENT_LIST_MAX];

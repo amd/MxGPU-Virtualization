@@ -38,6 +38,7 @@ extern const char *VF_MOCK_UUID;
 extern struct smi_gpu_handle GPU_MOCK_HANDLE;
 extern amdsmi_vf_handle_t VF_MOCK_HANDLE;
 extern struct smi_nic_handle NIC_MOCK_HANDLE;
+extern struct smi_nic_handle BRCM_NIC_MOCK_HANDLE;
 extern struct smi_node_handle NODE_MOCK_HANDLE;
 
 namespace amdsmi

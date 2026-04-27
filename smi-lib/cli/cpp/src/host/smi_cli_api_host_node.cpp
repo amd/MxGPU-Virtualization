@@ -60,7 +60,7 @@ std::string host_fill_node_npm_info(Arguments arg, std::string value = "N/A")
 	if (arg.output == json) {
 		nlohmann::ordered_json npm_info_json = {
 			{ "limit", value },
-			{ "status", value }
+			{ "status", value },
 		};
 
 		out = npm_info_json.dump(4);
@@ -107,6 +107,8 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 	std::vector<amdsmi_metric_t> system_temp_oam_4_5_6_7_3v3_vr{};
 	std::vector<amdsmi_metric_t> system_temp_ibc_hsc{};
 	std::vector<amdsmi_metric_t> system_temp_ibc{};
+	std::vector<amdsmi_metric_t> system_ubb_power{};
+	std::vector<amdsmi_metric_t> system_ubb_power_threshold{};
 
 	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
@@ -199,6 +201,12 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 				case AMDSMI_METRIC_NAME_SYSTEM_TEMP_IBC:
 					system_temp_ibc.push_back(metrics[i]);
 					break;
+				case AMDSMI_METRIC_NAME_SYSTEM_POWER_UBB_POWER:
+					system_ubb_power.push_back(metrics[i]);
+					break;
+				case AMDSMI_METRIC_NAME_SYSTEM_POWER_UBB_POWER_THRESHOLD:
+					system_ubb_power_threshold.push_back(metrics[i]);
+					break;
 				default:
 					break;
 			}
@@ -209,16 +217,19 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 
 	if (arg.output == json) {
 		nlohmann::ordered_json baseboard_json;
+		nlohmann::ordered_json temperature_json;
+		nlohmann::ordered_json power_json;
+
 		if (system_temp_ubb_fpga.size() == 0) {
-			baseboard_json["ubb_fpga"] = {
+			temperature_json["ubb_fpga"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_ubb_fpga.size(); i++) {
 				if (system_temp_ubb_fpga[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_ubb_fpga[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["ubb_fpga"] = {
+					temperature_json["ubb_fpga"] = {
 						{"value", system_temp_ubb_fpga[i].val},
 						{"unit", system_temp_ubb_fpga[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -227,15 +238,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_ubb_front.size() == 0) {
-			baseboard_json["ubb_front"] = {
+			temperature_json["ubb_front"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_ubb_front.size(); i++) {
 				if (system_temp_ubb_front[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_ubb_front[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["ubb_front"] = {
+					temperature_json["ubb_front"] = {
 						{"value", system_temp_ubb_front[i].val},
 						{"unit", system_temp_ubb_front[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -244,15 +255,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_ubb_back.size() == 0) {
-			baseboard_json["ubb_back"] = {
+			temperature_json["ubb_back"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_ubb_back.size(); i++) {
 				if (system_temp_ubb_back[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_ubb_back[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["ubb_back"] = {
+					temperature_json["ubb_back"] = {
 						{"value", system_temp_ubb_back[i].val},
 						{"unit", system_temp_ubb_back[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -261,15 +272,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_ubb_oam7.size() == 0) {
-			baseboard_json["ubb_oam7"] = {
+			temperature_json["ubb_oam7"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_ubb_oam7.size(); i++) {
 				if (system_temp_ubb_oam7[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_ubb_oam7[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["ubb_oam7"] = {
+					temperature_json["ubb_oam7"] = {
 						{"value", system_temp_ubb_oam7[i].val},
 						{"unit", system_temp_ubb_oam7[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -278,15 +289,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_ubb_ibc.size() == 0) {
-			baseboard_json["ubb_ibc"] = {
+			temperature_json["ubb_ibc"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_ubb_ibc.size(); i++) {
 				if (system_temp_ubb_ibc[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_ubb_ibc[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["ubb_ibc"] = {
+					temperature_json["ubb_ibc"] = {
 						{"value", system_temp_ubb_ibc[i].val},
 						{"unit", system_temp_ubb_ibc[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -295,15 +306,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_ubb_ufpga.size() == 0) {
-			baseboard_json["ubb_ufpga"] = {
+			temperature_json["ubb_ufpga"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_ubb_ufpga.size(); i++) {
 				if (system_temp_ubb_ufpga[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_ubb_ufpga[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["ubb_ufpga"] = {
+					temperature_json["ubb_ufpga"] = {
 						{"value", system_temp_ubb_ufpga[i].val},
 						{"unit", system_temp_ubb_ufpga[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -312,15 +323,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_ubb_oam1.size() == 0) {
-			baseboard_json["ubb_oam1"] = {
+			temperature_json["ubb_oam1"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_ubb_oam1.size(); i++) {
 				if (system_temp_ubb_oam1[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_ubb_oam1[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["ubb_oam1"] = {
+					temperature_json["ubb_oam1"] = {
 						{"value", system_temp_ubb_oam1[i].val},
 						{"unit", system_temp_ubb_oam1[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -329,15 +340,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_oam_0_1_hsc.size() == 0) {
-			baseboard_json["oam_0_1_hsc"] = {
+			temperature_json["oam_0_1_hsc"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_oam_0_1_hsc.size(); i++) {
 				if (system_temp_oam_0_1_hsc[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_oam_0_1_hsc[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["oam_0_1_hsc"] = {
+					temperature_json["oam_0_1_hsc"] = {
 						{"value", system_temp_oam_0_1_hsc[i].val},
 						{"unit", system_temp_oam_0_1_hsc[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -346,15 +357,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_oam_2_3_hsc.size() == 0) {
-			baseboard_json["oam_2_3_hsc"] = {
+			temperature_json["oam_2_3_hsc"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_oam_2_3_hsc.size(); i++) {
 				if (system_temp_oam_2_3_hsc[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_oam_2_3_hsc[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["oam_2_3_hsc"] = {
+					temperature_json["oam_2_3_hsc"] = {
 						{"value", system_temp_oam_2_3_hsc[i].val},
 						{"unit", system_temp_oam_2_3_hsc[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -363,15 +374,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_oam_4_5_hsc.size() == 0) {
-			baseboard_json["oam_4_5_hsc"] = {
+			temperature_json["oam_4_5_hsc"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_oam_4_5_hsc.size(); i++) {
 				if (system_temp_oam_4_5_hsc[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_oam_4_5_hsc[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["oam_4_5_hsc"] = {
+					temperature_json["oam_4_5_hsc"] = {
 						{"value", system_temp_oam_4_5_hsc[i].val},
 						{"unit", system_temp_oam_4_5_hsc[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -380,15 +391,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_oam_6_7_hsc.size() == 0) {
-			baseboard_json["oam_6_7_hsc"] = {
+			temperature_json["oam_6_7_hsc"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_oam_6_7_hsc.size(); i++) {
 				if (system_temp_oam_6_7_hsc[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_oam_6_7_hsc[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["oam_6_7_hsc"] = {
+					temperature_json["oam_6_7_hsc"] = {
 						{"value", system_temp_oam_6_7_hsc[i].val},
 						{"unit", system_temp_oam_6_7_hsc[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -397,15 +408,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_ubb_fpga_0v72_vr.size() == 0) {
-			baseboard_json["ubb_fpga_0v72_vr"] = {
+			temperature_json["ubb_fpga_0v72_vr"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_ubb_fpga_0v72_vr.size(); i++) {
 				if (system_temp_ubb_fpga_0v72_vr[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_ubb_fpga_0v72_vr[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["ubb_fpga_0v72_vr"] = {
+					temperature_json["ubb_fpga_0v72_vr"] = {
 						{"value", system_temp_ubb_fpga_0v72_vr[i].val},
 						{"unit", system_temp_ubb_fpga_0v72_vr[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -414,15 +425,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_ubb_fpga_3v3_vr.size() == 0) {
-			baseboard_json["ubb_fpga_3v3_vr"] = {
+			temperature_json["ubb_fpga_3v3_vr"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_ubb_fpga_3v3_vr.size(); i++) {
 				if (system_temp_ubb_fpga_3v3_vr[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_ubb_fpga_3v3_vr[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["ubb_fpga_3v3_vr"] = {
+					temperature_json["ubb_fpga_3v3_vr"] = {
 						{"value", system_temp_ubb_fpga_3v3_vr[i].val},
 						{"unit", system_temp_ubb_fpga_3v3_vr[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -431,15 +442,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_retimer_0_1_2_3_1v2_vr.size() == 0) {
-			baseboard_json["retimer_0_1_2_3_1v2_vr"] = {
+			temperature_json["retimer_0_1_2_3_1v2_vr"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_retimer_0_1_2_3_1v2_vr.size(); i++) {
 				if (system_temp_retimer_0_1_2_3_1v2_vr[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_retimer_0_1_2_3_1v2_vr[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["retimer_0_1_2_3_1v2_vr"] = {
+					temperature_json["retimer_0_1_2_3_1v2_vr"] = {
 						{"value", system_temp_retimer_0_1_2_3_1v2_vr[i].val},
 						{"unit", system_temp_retimer_0_1_2_3_1v2_vr[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -448,15 +459,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_retimer_4_5_6_7_1v2_vr.size() == 0) {
-			baseboard_json["retimer_4_5_6_7_1v2_vr"] = {
+			temperature_json["retimer_4_5_6_7_1v2_vr"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_retimer_4_5_6_7_1v2_vr.size(); i++) {
 				if (system_temp_retimer_4_5_6_7_1v2_vr[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_retimer_4_5_6_7_1v2_vr[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["retimer_4_5_6_7_1v2_vr"] = {
+					temperature_json["retimer_4_5_6_7_1v2_vr"] = {
 						{"value", system_temp_retimer_4_5_6_7_1v2_vr[i].val},
 						{"unit", system_temp_retimer_4_5_6_7_1v2_vr[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -465,15 +476,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_retimer_0_1_0v9_vr.size() == 0) {
-			baseboard_json["retimer_0_1_0v9_vr"] = {
+			temperature_json["retimer_0_1_0v9_vr"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_retimer_0_1_0v9_vr.size(); i++) {
 				if (system_temp_retimer_0_1_0v9_vr[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_retimer_0_1_0v9_vr[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["retimer_0_1_0v9_vr"] = {
+					temperature_json["retimer_0_1_0v9_vr"] = {
 						{"value", system_temp_retimer_0_1_0v9_vr[i].val},
 						{"unit", system_temp_retimer_0_1_0v9_vr[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -482,15 +493,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_retimer_4_5_0v9_vr.size() == 0) {
-			baseboard_json["retimer_4_5_0v9_vr"] = {
+			temperature_json["retimer_4_5_0v9_vr"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_retimer_4_5_0v9_vr.size(); i++) {
 				if (system_temp_retimer_4_5_0v9_vr[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_retimer_4_5_0v9_vr[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["retimer_4_5_0v9_vr"] = {
+					temperature_json["retimer_4_5_0v9_vr"] = {
 						{"value", system_temp_retimer_4_5_0v9_vr[i].val},
 						{"unit", system_temp_retimer_4_5_0v9_vr[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -499,15 +510,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_retimer_2_3_0v9_vr.size() == 0) {
-			baseboard_json["retimer_2_3_0v9_vr"] = {
+			temperature_json["retimer_2_3_0v9_vr"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_retimer_2_3_0v9_vr.size(); i++) {
 				if (system_temp_retimer_2_3_0v9_vr[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_retimer_2_3_0v9_vr[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["retimer_2_3_0v9_vr"] = {
+					temperature_json["retimer_2_3_0v9_vr"] = {
 						{"value", system_temp_retimer_2_3_0v9_vr[i].val},
 						{"unit", system_temp_retimer_2_3_0v9_vr[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -516,15 +527,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_retimer_6_7_0v9_vr.size() == 0) {
-			baseboard_json["retimer_6_7_0v9_vr"] = {
+			temperature_json["retimer_6_7_0v9_vr"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_retimer_6_7_0v9_vr.size(); i++) {
 				if (system_temp_retimer_6_7_0v9_vr[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_retimer_6_7_0v9_vr[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["retimer_6_7_0v9_vr"] = {
+					temperature_json["retimer_6_7_0v9_vr"] = {
 						{"value", system_temp_retimer_6_7_0v9_vr[i].val},
 						{"unit", system_temp_retimer_6_7_0v9_vr[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -533,15 +544,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_oam_0_1_2_3_3v3_vr.size() == 0) {
-			baseboard_json["oam_0_1_2_3_3v3_vr"] = {
+			temperature_json["oam_0_1_2_3_3v3_vr"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_oam_0_1_2_3_3v3_vr.size(); i++) {
 				if (system_temp_oam_0_1_2_3_3v3_vr[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_oam_0_1_2_3_3v3_vr[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["oam_0_1_2_3_3v3_vr"] = {
+					temperature_json["oam_0_1_2_3_3v3_vr"] = {
 						{"value", system_temp_oam_0_1_2_3_3v3_vr[i].val},
 						{"unit", system_temp_oam_0_1_2_3_3v3_vr[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -550,15 +561,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_oam_4_5_6_7_3v3_vr.size() == 0) {
-			baseboard_json["oam_4_5_6_7_3v3_vr"] = {
+			temperature_json["oam_4_5_6_7_3v3_vr"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_oam_4_5_6_7_3v3_vr.size(); i++) {
 				if (system_temp_oam_4_5_6_7_3v3_vr[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_oam_4_5_6_7_3v3_vr[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["oam_4_5_6_7_3v3_vr"] = {
+					temperature_json["oam_4_5_6_7_3v3_vr"] = {
 						{"value", system_temp_oam_4_5_6_7_3v3_vr[i].val},
 						{"unit", system_temp_oam_4_5_6_7_3v3_vr[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -567,15 +578,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_ibc_hsc.size() == 0) {
-			baseboard_json["ibc_hsc"] = {
+			temperature_json["ibc_hsc"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_ibc_hsc.size(); i++) {
 				if (system_temp_ibc_hsc[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_ibc_hsc[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["ibc_hsc"] = {
+					temperature_json["ibc_hsc"] = {
 						{"value", system_temp_ibc_hsc[i].val},
 						{"unit", system_temp_ibc_hsc[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -584,15 +595,15 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 		}
 
 		if (system_temp_ibc.size() == 0) {
-			baseboard_json["ibc"] = {
+			temperature_json["ibc"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < system_temp_ibc.size(); i++) {
 				if (system_temp_ibc[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_ibc[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					baseboard_json["ibc"] = {
+					temperature_json["ibc"] = {
 						{"value", system_temp_ibc[i].val},
 						{"unit", system_temp_ibc[i].unit == AMDSMI_METRIC_UNIT_CELSIUS ? "C" : ""}
 					};
@@ -600,15 +611,65 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 			}
 		}
 
+		if (system_ubb_power.size() == 0) {
+			power_json["ubb"] = {
+				{"value", "N/A"},
+				{"unit", "N/A"}
+			};
+		} else {
+			for (uint32_t i = 0; i < system_ubb_power.size(); i++) {
+				if (system_ubb_power[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_ubb_power[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
+					is_supported = true;
+					if (system_ubb_power[i].val == UINT64_MAX) {
+						power_json["ubb"] = {
+							{"value", "N/A"},
+							{"unit", "N/A"}
+						};
+					} else {
+						power_json["ubb"] = {
+							{"value", system_ubb_power[i].val},
+							{"unit", "W"}
+						};
+					}
+				}
+			}
+		}
+
+		if (system_ubb_power_threshold.size() == 0) {
+			power_json["ubb_threshold"] = {
+				{"value", "N/A"},
+				{"unit", "N/A"}
+			};
+		} else {
+			for (uint32_t i = 0; i < system_ubb_power_threshold.size(); i++) {
+				if (system_ubb_power_threshold[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_ubb_power_threshold[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
+					is_supported = true;
+					if (system_ubb_power_threshold[i].val == UINT64_MAX) {
+						power_json["ubb_threshold"] = {
+							{"value", "N/A"},
+							{"unit", "N/A"}
+						};
+					} else {
+						power_json["ubb_threshold"] = {
+							{"value", system_ubb_power_threshold[i].val},
+							{"unit", "W"}
+						};
+					}
+				}
+			}
+		}
+
+		baseboard_json["temperature"] = temperature_json;
+		baseboard_json["power"] = power_json;
 		formatted_string = baseboard_json.dump(4);
 	} else if (arg.output == csv) {
 		if (system_temp_ubb_fpga.size() == 0) {
-			formatted_string += string_format("%s", "N/A");
+			formatted_string += string_format(",%s", "N/A");
 		} else {
 			for (uint32_t i = 0; i < system_temp_ubb_fpga.size(); i++) {
 				if (system_temp_ubb_fpga[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_temp_ubb_fpga[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					formatted_string += string_format("%d", system_temp_ubb_fpga[i].val);
+					formatted_string += string_format(",%d", system_temp_ubb_fpga[i].val);
 				}
 			}
 		}
@@ -832,8 +893,31 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 				}
 			}
 		}
+		if (system_ubb_power.size() == 0) {
+			formatted_string += string_format(",%s", "N/A");
+		} else {
+			for (uint32_t i = 0; i < system_ubb_power.size(); i++) {
+				if (system_ubb_power[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_ubb_power[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
+					is_supported = true;
+					std::string system_ubb_power_val = system_ubb_power[i].val == UINT64_MAX ? "N/A" : string_format("%lld", system_ubb_power[i].val);
+					formatted_string += string_format(",%s", system_ubb_power_val.c_str());
+				}
+			}
+		}
+		if (system_ubb_power_threshold.size() == 0) {
+			formatted_string += string_format(",%s", "N/A");
+		} else {
+			for (uint32_t i = 0; i < system_ubb_power_threshold.size(); i++) {
+				if (system_ubb_power_threshold[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_ubb_power_threshold[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
+					is_supported = true;
+					std::string system_ubb_power_threshold_val = system_ubb_power_threshold[i].val == UINT64_MAX ? "N/A" : string_format("%lld", system_ubb_power_threshold[i].val);
+					formatted_string += string_format(",%s", system_ubb_power_threshold_val.c_str());
+				}
+			}
+		}
 	} else {
 		formatted_string = BaseBoardHeaderTemplate;
+		formatted_string += BaseBoardTemperatureHeaderTemplate;
 		if (system_temp_ubb_fpga.size() == 0) {
 			formatted_string += string_format(baseboardSystemTempUbbFpgaTemplate, "N/A", "");
 		} else {
@@ -1110,6 +1194,31 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 				}
 			}
 		}
+		formatted_string += BaseBoardPowerHeaderTemplate;
+		if (system_ubb_power.size() == 0) {
+			formatted_string += string_format(baseboardSystemPowerUbbPowerTemplate, "N/A", "");
+		} else {
+			for (uint32_t i = 0; i < system_ubb_power.size(); i++) {
+				if (system_ubb_power[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_ubb_power[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
+					is_supported = true;
+					std::string system_ubb_power_val = system_ubb_power[i].val == UINT64_MAX ? "N/A" : string_format("%d", system_ubb_power[i].val);
+					std::string system_ubb_power_unit = system_ubb_power_val == "N/A" ? "" : "W";
+					formatted_string += string_format(baseboardSystemPowerUbbPowerTemplate, system_ubb_power_val.c_str(), system_ubb_power_unit.c_str());
+				}
+			}
+		}
+		if (system_ubb_power_threshold.size() == 0) {
+			formatted_string += string_format(baseboardSystemPowerUbbPowerThresholdTemplate, "N/A", "");
+		} else {
+			for (uint32_t i = 0; i < system_ubb_power_threshold.size(); i++) {
+				if (system_ubb_power_threshold[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_ubb_power_threshold[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
+					is_supported = true;
+					std::string system_ubb_power_threshold_val = system_ubb_power_threshold[i].val == UINT64_MAX ? "N/A" : string_format("%d", system_ubb_power_threshold[i].val);
+					std::string system_ubb_power_threshold_unit = system_ubb_power_threshold_val == "N/A" ? "" : "W";
+					formatted_string += string_format(baseboardSystemPowerUbbPowerThresholdTemplate, system_ubb_power_threshold_val.c_str(), system_ubb_power_threshold_unit.c_str());
+				}
+			}
+		}
 	}
 
 	if (is_supported) {
@@ -1166,9 +1275,11 @@ int AmdSmiApiHost::amdsmi_get_node_npm_info_command(uint64_t processor_bdf, Argu
 
 		formatted_string = npm_info_json.dump(4);
 	} else if (arg.output == csv) {
-		formatted_string = string_format("%s,%s", npm_limit_string.c_str(), npm_status_string.c_str());
+		formatted_string = string_format("%s,%s", npm_limit_string.c_str(),
+				npm_status_string.c_str());
 	} else {
-		formatted_string = string_format(nodePowerManagementTemplate, npm_limit_string.c_str(), npm_status_string.c_str());
+		formatted_string = string_format(nodePowerManagementTemplate, npm_limit_string.c_str(),
+				npm_status_string.c_str());
 	}
 
 	return ret;

@@ -28,6 +28,7 @@ LIBGV_HW_MI200_LOCAL = mi200_gpuiov.o mi200_powerplay.o mi200_reset.o \
 	smuio_v13_0.o gfx_v9_4_2.o sdma_v4_4.o nbio_v7_4.o gfx_v9_0.o df_v3_6.o \
 	vcn_v2_6.o mi200_diag_data.o mi200_diag_data_reg.o \
 	mi200_live_migration_reg.o gfxhub_v1_0.o mi200_mailbox.o mi200_misc.o
+LIBGV_HW_AI_FILES += $(addprefix mi200/,$(LIBGV_HW_MI200_LOCAL))
 
 LIBGV_HW_MI300_LOCAL = mi300_gpuiov.o mi300_powerplay.o mi300_fru.o \
 	mi300_reset.o mi300_sched.o mi300_vbios.o mi300_vcn.o mi300_reg_init.o \
@@ -42,7 +43,6 @@ LIBGV_HW_MI308_LOCAL = mi308_ucode.o mi308_mcp.o
 
 LIBGV_HW_MI350_LOCAL = mi350_ucode.o mi350_powerplay.o mi350_vcn.o
 
-LIBGV_HW_AI_FILES += $(addprefix mi200/,$(LIBGV_HW_MI200_LOCAL))
 LIBGV_HW_AI_FILES += $(addprefix mi300/,$(LIBGV_HW_MI300_LOCAL))
 LIBGV_HW_AI_FILES += $(addprefix mi300/mi308/,$(LIBGV_HW_MI308_LOCAL))
 LIBGV_HW_AI_FILES += $(addprefix mi300/mi350/,$(LIBGV_HW_MI350_LOCAL))

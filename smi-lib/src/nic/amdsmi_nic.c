@@ -57,7 +57,7 @@ amdsmi_status_t amdsmi_get_nic_driver_info(amdsmi_processor_handle processor_han
 	}
 
 	type = *((enum smi_handle_type *)processor_handle);
-	if (type != SMI_HANDLE_TYPE_AMD_NIC) {
+	if (type != SMI_HANDLE_TYPE_AMD_NIC && type != SMI_HANDLE_TYPE_BRCM_NIC) {
 		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
 		return AMDSMI_STATUS_INVAL;
 	}
@@ -95,7 +95,7 @@ amdsmi_status_t amdsmi_get_nic_asic_info(amdsmi_processor_handle processor_handl
 	}
 
 	type = *((enum smi_handle_type *)processor_handle);
-	if (type != SMI_HANDLE_TYPE_AMD_NIC) {
+	if (type != SMI_HANDLE_TYPE_AMD_NIC && type != SMI_HANDLE_TYPE_BRCM_NIC) {
 		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
 		return AMDSMI_STATUS_INVAL;
 	}
@@ -141,7 +141,7 @@ amdsmi_status_t amdsmi_get_nic_bus_info(amdsmi_processor_handle processor_handle
 	}
 
 	type = *((enum smi_handle_type *)processor_handle);
-	if (type != SMI_HANDLE_TYPE_AMD_NIC) {
+	if (type != SMI_HANDLE_TYPE_AMD_NIC && type != SMI_HANDLE_TYPE_BRCM_NIC) {
 		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
 		return AMDSMI_STATUS_INVAL;
 	}
@@ -181,7 +181,7 @@ amdsmi_status_t amdsmi_get_nic_numa_info(amdsmi_processor_handle processor_handl
 	}
 
 	type = *((enum smi_handle_type *)processor_handle);
-	if (type != SMI_HANDLE_TYPE_AMD_NIC) {
+	if (type != SMI_HANDLE_TYPE_AMD_NIC && type != SMI_HANDLE_TYPE_BRCM_NIC) {
 		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
 		return AMDSMI_STATUS_INVAL;
 	}
@@ -218,7 +218,7 @@ amdsmi_status_t amdsmi_get_nic_port_info(amdsmi_processor_handle processor_handl
 	}
 
 	type = *((enum smi_handle_type *)processor_handle);
-	if (type != SMI_HANDLE_TYPE_AMD_NIC) {
+	if (type != SMI_HANDLE_TYPE_AMD_NIC && type != SMI_HANDLE_TYPE_BRCM_NIC) {
 		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
 		return AMDSMI_STATUS_INVAL;
 	}
@@ -247,7 +247,7 @@ amdsmi_status_t amdsmi_get_nic_port_info(amdsmi_processor_handle processor_handl
 		info->ports[i].mtu = port->mtu;
 
 		sys_wrapper->smi_strncpy(info->ports[i].link_state, sizeof(info->ports[i].link_state),
-			((strcmp(port->link_state, "yes") == 0) ? "UP" : "DOWN"), AMDSMI_MAX_STRING_LENGTH);
+			((strcmp(port->link_state, "up") == 0) ? "UP" : "DOWN"), AMDSMI_MAX_STRING_LENGTH);
 
 		info->ports[i].link_speed = port->link_speed;
 		info->ports[i].active_fec = port->active_fec;
@@ -266,7 +266,7 @@ amdsmi_status_t amdsmi_get_nic_port_info(amdsmi_processor_handle processor_handl
 }
 
 amdsmi_status_t amdsmi_get_nic_vendor_statistics(amdsmi_processor_handle processor_handle, uint32_t port_index,
-						uint32_t *num_stats, amdsmi_nic_stat_t *stats)
+						 uint32_t *num_stats, amdsmi_nic_stat_t *stats)
 {
 	#pragma SMI_EXPORT
 	smi_req_ctx smi_req;
@@ -283,7 +283,7 @@ amdsmi_status_t amdsmi_get_nic_vendor_statistics(amdsmi_processor_handle process
 	}
 
 	type = *((enum smi_handle_type *)processor_handle);
-	if (type != SMI_HANDLE_TYPE_AMD_NIC) {
+	if (type != SMI_HANDLE_TYPE_AMD_NIC && type != SMI_HANDLE_TYPE_BRCM_NIC) {
 		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
 		return AMDSMI_STATUS_INVAL;
 	}
@@ -316,7 +316,7 @@ amdsmi_status_t amdsmi_get_nic_vendor_statistics(amdsmi_processor_handle process
 }
 
 amdsmi_status_t amdsmi_get_nic_port_statistics(amdsmi_processor_handle processor_handle, uint32_t port_index,
-					uint32_t *num_stats, amdsmi_nic_stat_t *stats)
+					       uint32_t *num_stats, amdsmi_nic_stat_t *stats)
 {
 	#pragma SMI_EXPORT
 	smi_req_ctx smi_req;
@@ -333,7 +333,7 @@ amdsmi_status_t amdsmi_get_nic_port_statistics(amdsmi_processor_handle processor
 	}
 
 	type = *((enum smi_handle_type *)processor_handle);
-	if (type != SMI_HANDLE_TYPE_AMD_NIC) {
+	if (type != SMI_HANDLE_TYPE_AMD_NIC && type != SMI_HANDLE_TYPE_BRCM_NIC) {
 		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
 		return AMDSMI_STATUS_INVAL;
 	}
@@ -382,7 +382,7 @@ amdsmi_status_t amdsmi_get_nic_rdma_dev_info(amdsmi_processor_handle processor_h
 	}
 
 	type = *((enum smi_handle_type *)processor_handle);
-	if (type != SMI_HANDLE_TYPE_AMD_NIC) {
+	if (type != SMI_HANDLE_TYPE_AMD_NIC && type != SMI_HANDLE_TYPE_BRCM_NIC) {
 		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
 		return AMDSMI_STATUS_INVAL;
 	}
@@ -447,7 +447,7 @@ amdsmi_status_t amdsmi_get_nic_rdma_port_statistics(amdsmi_processor_handle proc
 	}
 
 	type = *((enum smi_handle_type *)processor_handle);
-	if (type != SMI_HANDLE_TYPE_AMD_NIC) {
+	if (type != SMI_HANDLE_TYPE_AMD_NIC && type != SMI_HANDLE_TYPE_BRCM_NIC) {
 		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
 		return AMDSMI_STATUS_INVAL;
 	}
@@ -476,6 +476,53 @@ amdsmi_status_t amdsmi_get_nic_rdma_port_statistics(amdsmi_processor_handle proc
 		}
 	}
 
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+amdsmi_status_t amdsmi_topo_get_nic_link_type(amdsmi_processor_handle nic_handle,
+					amdsmi_processor_handle processor_handle,
+					amdsmi_nic_link_type_t *type)
+{
+	#pragma SMI_EXPORT
+	smi_req_ctx smi_req;
+	struct smi_nic_handle *nic = NULL;
+	enum smi_handle_type handle_type;
+	amdsmi_bdf_t gpu_bdf;
+	int ret = 0;
+	smi_nic_link_type_t link_type;
+	AMDSMI_ESCAPE_IF_NOT_INIT;
+
+	if (nic_handle == NULL || processor_handle == NULL || type == NULL) {
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	handle_type = *((enum smi_handle_type *)nic_handle);
+	if (handle_type != SMI_HANDLE_TYPE_AMD_NIC && handle_type != SMI_HANDLE_TYPE_BRCM_NIC) {
+		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	handle_type = *((enum smi_handle_type *)processor_handle);
+	if (handle_type != SMI_HANDLE_TYPE_AMD_GPU) {
+		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	nic = ((struct smi_nic_handle *)nic_handle);
+
+	ret = amdsmi_get_gpu_device_bdf(processor_handle, &gpu_bdf);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		SMI_ERROR("Failed to get GPU BDF. Return code: %d", ret);
+		return ret;
+	}
+
+	ret = smi_topo_get_nic_link_type(smi_req.thread->nic_ctx, nic->bdf.as_uint, gpu_bdf.as_uint, &link_type);
+	if (ret != SMI_NIC_STATUS_SUCCESS) {
+		SMI_ERROR("Failed to get GPU-NIC link type. Return code: %d", ret);
+		return smi_map_nic_status(ret);
+	}
+
+	*type = (amdsmi_nic_link_type_t)link_type;
 	return AMDSMI_STATUS_SUCCESS;
 }
 

@@ -93,24 +93,6 @@ typedef enum {
 /*41*/  NUM_FEATURES                        = 41
 } FEATURE_LIST_e;
 
-typedef enum {
-	SMU_CAP_STATIC_METRICS,
-	SMU_CAP_PLDM_VERSION,
-	SMU_CAP_PCIE_METRICS,
-	SMU_CAP_STATIC_PCIE_METRICS,
-	SMU_CAP_JPEG_VCN_USAGE,
-	SMU_CAP_PER_INST_METRICS,
-	SMU_CAP_CTF_LIMIT,
-	SMU_CAP_RMA_MSG,
-	SMU_CAP_ACA_SYND,
-	SMU_CAP_HST_LIMIT_METRICS,
-	SUM_CAP_XGMI_PLPD,
-	SMU_CAP_RESET_VF_ARBITERS,
-	SMU_CAP_BOARD_METRICS,
-	SMU_CAP_TEMP_INST_METRICS,
-	SMU_CAP_ALL,
-} SMU_CAPS_LIST_e;
-
 //enum for MPIO PCIe gen speed msgs
 typedef enum {
   PCIE_LINK_SPEED_INDEX_TABLE_RESERVED,
@@ -208,9 +190,16 @@ typedef enum {
   SVI_MAX_TEMP_ENTRIES,   // 13
 } SVI_TEMP_e;
 
+typedef enum{
+  SYSTEM_POWER_UBB_POWER,
+  SYSTEM_POWER_UBB_POWER_THRESHOLD,
+  SYSTEM_POWER_MAX_ENTRIES_WO_RESERVED,
+  SYSTEM_POWER_MAX_ENTRIES  = 4
+} SYSTEM_POWER_e;
+
 #define SMU_METRICS_TABLE_VERSION 0x14
 
-#define SMU_SYSTEM_METRICS_TABLE_VERSION 0x0
+#define SMU_SYSTEM_METRICS_TABLE_VERSION 0x1
 
 #pragma pack(push, 4)
 typedef struct {
@@ -334,6 +323,7 @@ typedef struct {
   uint32_t NodePower;
   uint32_t GlobalPPTResidencyAcc;
 
+  uint16_t SystemPower[SYSTEM_POWER_MAX_ENTRIES];           // UBB Current Power and Power Threshold push by SMC
 } SystemMetricsTable_t;
 #pragma pack(pop)
 

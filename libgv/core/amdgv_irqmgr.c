@@ -284,9 +284,17 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 
 			if (sched_event == AMDGV_EVENT_TEXT_MESSAGE) {
 				char *buf = (char *)&msg_data[2];
+				int j;
 
 				/* guarantee the buffer terminated with '\0' */
 				buf[7] = '\0';
+				for (j = 0; j < 7; j++) {
+					if (buf[j] == '\0')
+						break;
+					// replace non-printable characters
+					if (buf[j] < ' ' || buf[j] > '~')
+						buf[j] = '.';
+				}
 
 				AMDGV_INFO("%s driver message: %s\n", amdgv_idx_to_str(idx_vf),
 					   buf);
@@ -338,6 +346,14 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 			} else if (sched_event == AMDGV_EVENT_SCHED_VF_REQ_RAS_CHK_CRITI_REGION) {
 				event_data.chk_criti.addr = ((uint64_t)msg_data[1] << 32) |
 							    msg_data[2];
+				amdgv_sched_queue_event_ex(adapt, idx_vf, sched_event,
+							   AMDGV_SCHED_BLOCK_ALL, event_data);
+			} else if (sched_event == AMDGV_EVENT_VF_REQ_PTL_UPDATE) {
+				/* Parse PTL request: req_code, ptl_state, packed formats */
+				event_data.ptl.req_code = msg_data[1];
+				event_data.ptl.ptl_state = msg_data[2];
+				event_data.ptl.pref_format1 = AMD_SRIOV_PTL_UNPACK_FMT1(msg_data[3]);
+				event_data.ptl.pref_format2 = AMD_SRIOV_PTL_UNPACK_FMT2(msg_data[3]);
 				amdgv_sched_queue_event_ex(adapt, idx_vf, sched_event,
 							   AMDGV_SCHED_BLOCK_ALL, event_data);
 			} else {
@@ -712,19 +728,19 @@ int amdgv_irqmgr_sw_init(struct amdgv_adapter *adapt)
 	bool alloc_ring_in_sysmem = adapt->flags & AMDGV_FLAG_ALLOC_IV_RING_IN_SYSMEM;
 
 	/* todo: check level 0 later */
-	adapt->irqmgr.hv_event_lock = oss_spin_lock_init(0);
+	adapt->irqmgr.hv_event_lock = oss_spin_lock_init(AMDGV_SPIN_LOCK_LOWEST_RANK);
 	if (adapt->irqmgr.hv_event_lock == OSS_INVALID_HANDLE) {
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
 		return AMDGV_FAILURE;
 	}
 
-	adapt->irqmgr.ih_event_lock = oss_spin_lock_init(AMDGV_SPIN_LOCK_HIGHEST_RANK);
+	adapt->irqmgr.ih_event_lock = oss_spin_lock_init(AMDGV_SPIN_LOCK_LOWEST_RANK);
 	if (adapt->irqmgr.ih_event_lock == OSS_INVALID_HANDLE) {
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
 		return AMDGV_FAILURE;
 	}
 
-	adapt->irqmgr.ih_handler3_lock = oss_spin_lock_init(AMDGV_SPIN_LOCK_HIGHEST_RANK);
+	adapt->irqmgr.ih_handler3_lock = oss_spin_lock_init(AMDGV_SPIN_LOCK_LOWEST_RANK);
 	if (adapt->irqmgr.ih_handler3_lock == OSS_INVALID_HANDLE) {
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
 		return AMDGV_FAILURE;

@@ -50,8 +50,12 @@ struct EnumToString {
 
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLES)(amdsmi_socket_handle, uint32_t *,
 		amdsmi_processor_handle *);
+typedef amdsmi_status_t (*AMDSMI_GET_NIC_PROCESSOR_HANDLES)(amdsmi_socket_handle, uint32_t *,
+		amdsmi_processor_handle *);
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLES_BY_TYPE)(amdsmi_socket_handle,
 		processor_type_t, amdsmi_processor_handle*, uint32_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_TYPE)(amdsmi_processor_handle,
+		processor_type_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_DEVICE_BDF)(amdsmi_processor_handle, amdsmi_bdf_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_DEVICE_UUID)(amdsmi_processor_handle, unsigned int *,
 		char *);
@@ -62,9 +66,13 @@ typedef amdsmi_status_t (*AMDSMI_GET_VF_PARTITION_INFO)(amdsmi_processor_handle,
 		amdsmi_partition_info_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_NIC_DEVICE_BDF)(amdsmi_processor_handle,
 		amdsmi_bdf_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_ASIC_INFO)(amdsmi_processor_handle,
+		amdsmi_asic_info_t *);
 
 extern AMDSMI_GET_PROCESSOR_HANDLES host_amdsmi_get_processor_handles;
+extern AMDSMI_GET_NIC_PROCESSOR_HANDLES host_amdsmi_get_nic_processor_handles;
 extern AMDSMI_GET_PROCESSOR_HANDLES_BY_TYPE host_amdsmi_get_processor_handles_by_type;
+extern AMDSMI_GET_PROCESSOR_TYPE host_amdsmi_get_processor_type;
 extern AMDSMI_GET_GPU_DEVICE_BDF host_amdsmi_get_gpu_device_bdf;
 extern AMDSMI_GET_GPU_DEVICE_UUID host_amdsmi_get_gpu_device_uuid;
 extern AMDSMI_GET_VF_BDF host_amdsmi_get_vf_bdf;
@@ -72,6 +80,7 @@ extern AMDSMI_GET_VF_UUID host_amdsmi_get_vf_uuid;
 extern AMDSMI_GET_NUM_VF host_amdsmi_get_num_vf;
 extern AMDSMI_GET_VF_PARTITION_INFO host_amdsmi_get_vf_partition_info;
 extern AMDSMI_GET_NIC_DEVICE_BDF host_amdsmi_get_nic_device_bdf;
+extern AMDSMI_GET_GPU_ASIC_INFO host_amdsmi_get_gpu_asic_info;
 
 
 int AmdSmiApiHost::amdsmi_get_bdf_from_gpu_index(uint64_t &processor_bdf, int index)
@@ -110,20 +119,18 @@ int AmdSmiApiHost::amdsmi_get_bdf_from_nic_index(uint64_t &processor_bdf, int in
 	amdsmi_processor_handle *processors{NULL};
 	amdsmi_bdf_t tmp_bdf;
 
-	int ret = host_amdsmi_get_processor_handles_by_type(socket, AMDSMI_PROCESSOR_TYPE_AMD_NIC, NULL,
-			  &nic_count);
+	int ret = host_amdsmi_get_nic_processor_handles(socket, &nic_count, NULL);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		return ret;
 	}
 	if (index >= nic_count) {
-		exit(1);
+		return AMDSMI_STATUS_INVAL;
 	}
 	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*nic_count);
 	if (processors == NULL) {
 		throw SmiToolNotEnoughMemException();
 	}
-	ret = host_amdsmi_get_processor_handles_by_type(socket, AMDSMI_PROCESSOR_TYPE_AMD_NIC, processors,
-			&nic_count);
+	ret = host_amdsmi_get_nic_processor_handles(socket, &nic_count, &processors[0]);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		free(processors);
 		return ret;
@@ -133,44 +140,83 @@ int AmdSmiApiHost::amdsmi_get_bdf_from_nic_index(uint64_t &processor_bdf, int in
 	ret = host_amdsmi_get_nic_device_bdf(nic_handle, &tmp_bdf);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		free(processors);
-		exit(1);
+		return ret;
 	}
 	processor_bdf = tmp_bdf.as_uint;
 	free(processors);
 	return 0;
 }
 
-int AmdSmiApiHost::amdsmi_get_processor_from_index_by_type(void *processor_handle, int index,
-		int type)
+int AmdSmiApiHost::amdsmi_get_all_nic_devices(std::vector<std::pair<DeviceType, int>>& nic_devices)
 {
-	unsigned int nic_count;
-	amdsmi_socket_handle socket = NULL;
-	amdsmi_processor_handle *processors;
-	amdsmi_bdf_t tmp_bdf;
-	processor_type_t processor_type;
-	switch (type) {
-	case static_cast<int>(DeviceType::GPU):
-		processor_type = AMDSMI_PROCESSOR_TYPE_AMD_GPU;
-		break;
-	case static_cast<int>(DeviceType::NIC):
-		processor_type = AMDSMI_PROCESSOR_TYPE_AMD_NIC;
-		break;
-	default:
-		exit(1);
-	}
+	nic_devices.clear();
+#if defined(__linux__) && defined(AMD_SMI_NIC_SUPPORT)
+	amdsmi_socket_handle socket{NULL};
+	uint32_t nic_count = 0;
+	amdsmi_processor_handle *processors{NULL};
 
-	int ret = host_amdsmi_get_processor_handles_by_type(socket, processor_type, NULL, &nic_count);
+	int ret = host_amdsmi_get_nic_processor_handles(socket, &nic_count, NULL);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
+		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED || ret == AMDSMI_STATUS_NOT_FOUND) {
+			/* No NIC driver loaded or no NICs found - return empty list, not an error */
+			return AMDSMI_STATUS_SUCCESS;
+		}
 		return ret;
 	}
-	if (index >= nic_count) {
-		exit(1);
+	if (nic_count == 0) {
+		return AMDSMI_STATUS_SUCCESS;
 	}
 	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*nic_count);
 	if (processors == NULL) {
 		throw SmiToolNotEnoughMemException();
 	}
-	ret = host_amdsmi_get_processor_handles_by_type(socket, processor_type, processors, &nic_count);
+	ret = host_amdsmi_get_nic_processor_handles(socket, &nic_count, &processors[0]);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		free(processors);
+		return ret;
+	}
+
+	for (uint32_t i = 0; i < nic_count; i++) {
+		processor_type_t processor_type;
+		int ret_type = host_amdsmi_get_processor_type(processors[i], &processor_type);
+		if (ret_type != AMDSMI_STATUS_SUCCESS) {
+			continue;
+		}
+
+		if (processor_type == AMDSMI_PROCESSOR_TYPE_AMD_NIC) {
+			nic_devices.push_back(std::make_pair(DeviceType::NIC, static_cast<int>(i)));
+		} else if (processor_type == AMDSMI_PROCESSOR_TYPE_BRCM_NIC) {
+			nic_devices.push_back(std::make_pair(DeviceType::BRCM_NIC, static_cast<int>(i)));
+		}
+
+	}
+
+	free(processors);
+	return AMDSMI_STATUS_SUCCESS;
+#else
+	return AMDSMI_STATUS_NOT_SUPPORTED;
+#endif
+}
+
+int AmdSmiApiHost::amdsmi_get_nic_processor_from_index(void *processor_handle, int index)
+{
+	unsigned int nic_count;
+	unsigned int processors_count;
+	amdsmi_socket_handle socket = NULL;
+	amdsmi_processor_handle *processors;
+
+	int ret = host_amdsmi_get_nic_processor_handles(socket, &nic_count, NULL);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		return ret;
+	}
+	if (index < 0 || index >= static_cast<int>(nic_count)) {
+		return AMDSMI_STATUS_INVAL;
+	}
+	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*nic_count);
+	if (processors == nullptr) {
+		throw SmiToolNotEnoughMemException();
+	}
+	ret = host_amdsmi_get_nic_processor_handles(socket, &nic_count, &processors[0]);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		free(processors);
 		return ret;
@@ -219,7 +265,7 @@ int AmdSmiApiHost::amdsmi_get_bdf_from_uuid_or_bdf(uint64_t &processor_bdf, int 
 				return c == ':' || c == '.';
 			}), device_id_parsed.end());
 
-			if (bdf_string == " ") {
+			if (bdf_string.empty()) {
 				free(processors);
 				exit(1);
 			}
@@ -268,6 +314,67 @@ int AmdSmiApiHost::amdsmi_get_bdf_from_uuid_or_bdf(uint64_t &processor_bdf, int 
 	return AMDSMI_STATUS_SUCCESS;
 }
 
+int AmdSmiApiHost::amdsmi_get_bdf_from_bdf_nic(uint64_t &processor_bdf, int &nic_index,
+		std::string device)
+{
+	unsigned int nic_count;
+	amdsmi_socket_handle socket = NULL;
+	amdsmi_processor_handle *processors;
+	amdsmi_bdf_t tmp_bdf;
+	int ret = host_amdsmi_get_nic_processor_handles(socket, &nic_count, NULL);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		return ret;
+	}
+	if (nic_count == 0) {
+		throw SmiToolDeviceNotFoundException(device);
+	}
+	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*nic_count);
+	if (processors == NULL) {
+		throw SmiToolNotEnoughMemException();
+	}
+	ret = host_amdsmi_get_nic_processor_handles(socket, &nic_count, &processors[0]);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		free(processors);
+		return ret;
+	}
+
+	for (unsigned int i = 0; i < nic_count; i++) {
+		amdsmi_bdf_t bdf;
+		ret = host_amdsmi_get_nic_device_bdf(processors[i], &bdf);
+		if (ret != AMDSMI_STATUS_SUCCESS) {
+			free(processors);
+			return ret;
+		}
+
+		std::string bdf_string = string_format(
+									 "%04x%02x%02x%01x", bdf.bdf.domain_number, bdf.bdf.bus_number, bdf.bdf.device_number,
+									 bdf.bdf.function_number);
+		std::string device_id_parsed = device;
+		device_id_parsed.erase(std::remove_if(device_id_parsed.begin(), device_id_parsed.end(),
+		[](char c) {
+			return c == ':' || c == '.';
+		}), device_id_parsed.end());
+
+		if (bdf_string.empty()) {
+			free(processors);
+			return AMDSMI_STATUS_INVAL;
+		}
+		if (strcmp(bdf_string.c_str(), device_id_parsed.c_str()) == 0) {
+			nic_index = i;
+			ret = host_amdsmi_get_nic_device_bdf(processors[i], &tmp_bdf);
+			if (ret != AMDSMI_STATUS_SUCCESS) {
+				free(processors);
+				return ret;
+			}
+			processor_bdf = tmp_bdf.as_uint;
+			free(processors);
+			return AMDSMI_STATUS_SUCCESS;
+		}
+	}
+	free(processors);
+	throw SmiToolDeviceNotFoundException(device);
+}
+
 int AmdSmiApiHost::amdsmi_get_gpu_count(unsigned int &gpu_count)
 {
 	amdsmi_socket_handle socket = NULL;
@@ -288,6 +395,9 @@ int AmdSmiApiHost::amdsmi_get_device_count(unsigned int &device_count, int devic
 		break;
 	case static_cast<int>(DeviceType::NIC):
 		processor_type = AMDSMI_PROCESSOR_TYPE_AMD_NIC;
+		break;
+	case static_cast<int>(DeviceType::BRCM_NIC):
+		processor_type = AMDSMI_PROCESSOR_TYPE_BRCM_NIC;
 		break;
 	default:
 		exit(1);
@@ -837,6 +947,25 @@ int AmdSmiApiHost::get_string_from_enum_cper_severity_mask(int severity_mask, st
 	return AMDSMI_STATUS_SUCCESS;
 }
 
+int AmdSmiApiHost::get_string_from_enum_ptl_format(int format, std::string& out)
+{
+	EnumToString<amdsmi_ptl_data_format_t> enum_ptl_format;
+	enum_ptl_format.data = {
+		{AMDSMI_PTL_DATA_FORMAT_I8, "I8"},
+		{AMDSMI_PTL_DATA_FORMAT_F16, "F16"},
+		{AMDSMI_PTL_DATA_FORMAT_BF16, "BF16"},
+		{AMDSMI_PTL_DATA_FORMAT_F32, "F32"},
+		{AMDSMI_PTL_DATA_FORMAT_F64, "F64"},
+		{AMDSMI_PTL_DATA_FORMAT_F8, "F8"},
+		{AMDSMI_PTL_DATA_FORMAT_VECTOR, "VECTOR"},
+		{AMDSMI_PTL_DATA_FORMAT_INVALID, "INVALID"}
+	};
+
+	out = enum_ptl_format((amdsmi_ptl_data_format_t)format);
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+
 std::vector<std::string> splitString(const std::string& s,
 									 const std::string& delimiter, bool skipEmptyParts)
 {
@@ -930,42 +1059,19 @@ int AmdSmiApiHost::csv_recursion(std::string& main_buffer,
 
 int AmdSmiApiHost::ThrottlerDataToString(uint64_t data, std::string& out)
 {
-	uint64_t data_prochot = AMDSMI_EVENT_THROTTLER_PROCHOT & data;
-	uint64_t data_socket = AMDSMI_EVENT_THROTTLER_SOCKET & data;
-	uint64_t data_vr = AMDSMI_EVENT_THROTTLER_VR & data;
-	uint64_t data_hbm = AMDSMI_EVENT_THROTTLER_HBM & data;
-
-	std::vector<std::string> throttlers;
-
-	if(AMDSMI_EVENT_THROTTLER_PROCHOT == data_prochot) {
-		throttlers.push_back("PROCHOT");
-	}
-	if(AMDSMI_EVENT_THROTTLER_SOCKET == data_socket) {
-		throttlers.push_back("SOCKET");
-	}
-	if(AMDSMI_EVENT_THROTTLER_VR == data_vr) {
-		throttlers.push_back("VR");
-	}
-	if(AMDSMI_EVENT_THROTTLER_HBM == data_hbm) {
-		throttlers.push_back("HBM");
-	}
-
 	out = "";
-	if (throttlers.size() == 0) {
-		// No throttlers active
-	} else if (throttlers.size() == 1) {
-		out = throttlers[0];
-	} else if (throttlers.size() == 2) {
-		out = throttlers[0] + " and " + throttlers[1];
-	} else {
-		for (size_t i = 0; i < throttlers.size(); i++) {
-			out += throttlers[i];
-			if (i < throttlers.size() - 2) {
-				out += ", ";
-			} else if (i == throttlers.size() - 2) {
-				out += " and ";
-			}
-		}
+
+	if(AMDSMI_EVENT_THROTTLER_PROCHOT == data) {
+		out = "PROCHOT";
+	}
+	if(AMDSMI_EVENT_THROTTLER_SOCKET == data) {
+		out = "SOCKET";
+	}
+	if(AMDSMI_EVENT_THROTTLER_VR == data) {
+		out = "VR";
+	}
+	if(AMDSMI_EVENT_THROTTLER_HBM == data) {
+		out = "HBM";
 	}
 
 	return AMDSMI_STATUS_SUCCESS;
@@ -974,7 +1080,7 @@ int AmdSmiApiHost::ThrottlerDataToString(uint64_t data, std::string& out)
 int AmdSmiApiHost::FecModesToString(uint32_t fec, std::string& out)
 {
 	int ret = AMDSMI_STATUS_NOT_SUPPORTED;
-#ifdef __linux__
+#if defined(__linux__) && defined(AMD_SMI_NIC_SUPPORT)
 	std::vector<std::string> fec_modes;
 
 	if(fec & ETHTOOL_FEC_NONE) {
@@ -1007,4 +1113,59 @@ int AmdSmiApiHost::FecModesToString(uint32_t fec, std::string& out)
 #endif
 
 	return ret;
+}
+
+int AmdSmiApiHost::get_string_from_enum_nic_topo_link_type(int nic_link_type, std::string& out)
+{
+	EnumToString<amdsmi_nic_link_type_t> nic_link_types;
+	nic_link_types.data = {
+		{AMDSMI_NIC_LINK_TYPE_UNKNOWN, "UNKNOWN"},
+		{AMDSMI_NIC_LINK_TYPE_PCIE, "PCIE"},
+		{AMDSMI_NIC_LINK_TYPE_NUMA, "NUMA"},
+		{AMDSMI_NIC_LINK_TYPE_X_NUMA, "X-NUMA"}
+	};
+
+	out = nic_link_types((amdsmi_nic_link_type_t)nic_link_type);
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+int AmdSmiApiHost::get_index_from_main_gpu(int &gpu_index)
+{
+	int ret;
+	amdsmi_processor_handle *processors;
+	unsigned int gpu_count;
+	amdsmi_socket_handle socket = NULL;
+
+	ret = amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		return ret;
+	}
+
+	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*gpu_count);
+	if (processors == NULL) {
+		throw SmiToolNotEnoughMemException();
+	}
+
+	ret = host_amdsmi_get_processor_handles_by_type(socket, AMDSMI_PROCESSOR_TYPE_AMD_GPU, &processors[0], &gpu_count);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		free(processors);
+		return ret;
+	}
+
+	for (unsigned int i = 0; i < gpu_count; i++) {
+		amdsmi_asic_info_t asic_info;
+		ret = host_amdsmi_get_gpu_asic_info(processors[i], &asic_info);
+		if (ret != AMDSMI_STATUS_SUCCESS) {
+			free(processors);
+			return ret;
+		}
+		if (asic_info.oam_id == 0) {
+			gpu_index = i;
+			free(processors);
+			return AMDSMI_STATUS_SUCCESS;
+		}
+	}
+
+	free(processors);
+	return AMDSMI_STATUS_NOT_SUPPORTED;
 }

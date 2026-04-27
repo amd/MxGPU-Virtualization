@@ -18777,6 +18777,12 @@
 #define MMEA4_CE_ERR_STATUS_HI__POISON_MASK                                                                   0x04000000L
 #define MMEA4_CE_ERR_STATUS_HI__RESERVED_FIELD1_MASK                                                          0xF8000000L
 
+//MMEA5_MAM_CTRL
+#define MMEA5_MAM_CTRL__ADRAM_MODE__SHIFT                                                                     0x0
+#define MMEA5_MAM_CTRL__MAM_DISABLE__SHIFT                                                                    0x16
+#define MMEA5_MAM_CTRL__ADRAM_MODE_MASK                                                                       0x00000003L
+#define MMEA5_MAM_CTRL__MAM_DISABLE_MASK                                                                      0x00400000L
+
 // addressBlock: aid_mmhub_pctldec0
 //PCTL0_CTRL
 #define PCTL0_CTRL__PG_ENABLE__SHIFT                                                                          0x0

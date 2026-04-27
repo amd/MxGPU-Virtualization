@@ -64,7 +64,6 @@ protected:
 
 		return ::testing::AssertionSuccess();
 	}
-
 	::testing::AssertionResult equal_power_measure(smi_power_info expect,
 						       amdsmi_power_info_t actual)
 	{
@@ -75,8 +74,6 @@ protected:
 
 		return ::testing::AssertionSuccess();
 	}
-
-
 
 	::testing::AssertionResult equal_clock_measure(smi_clock_measure expect,
 						       amdsmi_clk_info_t actual,
@@ -177,6 +174,7 @@ TEST_F(AmdsmiGpuMonitoring, InvalidParams)
 	int ret;
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 	amdsmi_pcie_info_t pcie;
+	amdsmi_pcie_bandwidth_t pcie_bw;
 	amdsmi_engine_usage_t engine;
 	amdsmi_power_info_t power;
 	bool pwr_mngmt;
@@ -231,6 +229,12 @@ TEST_F(AmdsmiGpuMonitoring, InvalidParams)
 	ret = amdsmi_get_pcie_info(&NIC_MOCK_HANDLE, &pcie);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+	ret = amdsmi_get_gpu_pci_bandwidth(MOCK_GPU_HANDLE, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_gpu_pci_bandwidth(&NIC_MOCK_HANDLE, &pcie_bw);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
 	ret = amdsmi_get_gpu_cache_info(MOCK_GPU_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
@@ -266,6 +270,7 @@ TEST_F(AmdsmiGpuMonitoring, IoctlFailed)
 	int64_t temperature_limit_res;
 	amdsmi_gpu_cache_info_t cache_res;
 	amdsmi_pcie_info_t pcie_info;
+	amdsmi_pcie_bandwidth_t pcie_bw;
 	amdsmi_dpm_policy_t dpm_policy_info;
 
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
@@ -295,6 +300,9 @@ TEST_F(AmdsmiGpuMonitoring, IoctlFailed)
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 
 	ret = amdsmi_get_pcie_info(MOCK_GPU_HANDLE, &pcie_info);
+	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
+
+	ret = amdsmi_get_gpu_pci_bandwidth(MOCK_GPU_HANDLE, &pcie_bw);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 
 	ret = amdsmi_get_soc_pstate(MOCK_GPU_HANDLE, &dpm_policy_info);
@@ -696,6 +704,119 @@ TEST_F(AmdsmiGpuMonitoring, GetPcieInfoFail)
 	ret = performCall();
 
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
+}
+
+TEST_F(AmdsmiGpuMonitoring, GetGpuPciBandwidth)
+{
+	int ret;
+	smi_device_info in_payload;
+	amdsmi_pcie_bandwidth_t bandwidth;
+	struct smi_pcie_info mocked_resp = {};
+
+	mocked_resp.pcie_static.num_pcie_levels = 3;
+	mocked_resp.pcie_static.pcie_levels[0].gen_speed = 0;
+	mocked_resp.pcie_static.pcie_levels[0].lane_count = 1;
+	mocked_resp.pcie_static.pcie_levels[1].gen_speed = 2;
+	mocked_resp.pcie_static.pcie_levels[1].lane_count = 3;
+	mocked_resp.pcie_static.pcie_levels[2].gen_speed = 3;
+	mocked_resp.pcie_static.pcie_levels[2].lane_count = 6;
+
+	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
+	WhenCalling(std::bind(amdsmi_get_gpu_pci_bandwidth, MOCK_GPU_HANDLE, &bandwidth));
+	ExpectCommand(SMI_CMD_CODE_GET_PCIE_INFO);
+	SaveInputPayloadIn(&in_payload);
+	PlantMockOutput(&mocked_resp);
+	ret = performCall();
+
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_TRUE(amdsmi::equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
+	ASSERT_EQ(bandwidth.transfer_rate.num_supported, 3u);
+	ASSERT_EQ(bandwidth.transfer_rate.has_deep_sleep, false);
+	ASSERT_EQ(bandwidth.transfer_rate.frequency[0], 2500000000ULL);
+	ASSERT_EQ(bandwidth.transfer_rate.frequency[1], 8000000000ULL);
+	ASSERT_EQ(bandwidth.transfer_rate.frequency[2], 16000000000ULL);
+	ASSERT_EQ(bandwidth.lanes[0], 1u);
+	ASSERT_EQ(bandwidth.lanes[1], 4u);
+	ASSERT_EQ(bandwidth.lanes[2], 16u);
+}
+
+TEST_F(AmdsmiGpuMonitoring, GetGpuPciBandwidthAllGens)
+{
+	int ret;
+	smi_device_info in_payload;
+	amdsmi_pcie_bandwidth_t bandwidth;
+	struct smi_pcie_info mocked_resp = {};
+
+	mocked_resp.pcie_static.num_pcie_levels = 4;
+	mocked_resp.pcie_static.pcie_levels[0].gen_speed = 1;
+	mocked_resp.pcie_static.pcie_levels[0].lane_count = 2;
+	mocked_resp.pcie_static.pcie_levels[1].gen_speed = 4;
+	mocked_resp.pcie_static.pcie_levels[1].lane_count = 4;
+	mocked_resp.pcie_static.pcie_levels[2].gen_speed = 0;
+	mocked_resp.pcie_static.pcie_levels[2].lane_count = 5;
+	mocked_resp.pcie_static.pcie_levels[3].gen_speed = 2;
+	mocked_resp.pcie_static.pcie_levels[3].lane_count = 6;
+
+	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
+	WhenCalling(std::bind(amdsmi_get_gpu_pci_bandwidth, MOCK_GPU_HANDLE, &bandwidth));
+	ExpectCommand(SMI_CMD_CODE_GET_PCIE_INFO);
+	SaveInputPayloadIn(&in_payload);
+	PlantMockOutput(&mocked_resp);
+	ret = performCall();
+
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(bandwidth.transfer_rate.num_supported, 4u);
+	ASSERT_EQ(bandwidth.transfer_rate.frequency[0], 5000000000ULL);
+	ASSERT_EQ(bandwidth.transfer_rate.frequency[1], 32000000000ULL);
+	ASSERT_EQ(bandwidth.transfer_rate.frequency[2], 2500000000ULL);
+	ASSERT_EQ(bandwidth.transfer_rate.frequency[3], 8000000000ULL);
+	ASSERT_EQ(bandwidth.lanes[0], 2u);
+	ASSERT_EQ(bandwidth.lanes[1], 8u);
+	ASSERT_EQ(bandwidth.lanes[2], 12u);
+	ASSERT_EQ(bandwidth.lanes[3], 16u);
+}
+
+TEST_F(AmdsmiGpuMonitoring, GetGpuPciBandwidthNotSupported)
+{
+	int ret;
+	smi_device_info in_payload;
+	amdsmi_pcie_bandwidth_t bandwidth;
+	struct smi_pcie_info mocked_resp = {};
+
+	mocked_resp.pcie_static.num_pcie_levels = 0;
+
+	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
+	WhenCalling(std::bind(amdsmi_get_gpu_pci_bandwidth, MOCK_GPU_HANDLE, &bandwidth));
+	ExpectCommand(SMI_CMD_CODE_GET_PCIE_INFO);
+	SaveInputPayloadIn(&in_payload);
+	PlantMockOutput(&mocked_resp);
+	ret = performCall();
+
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+}
+
+TEST_F(AmdsmiGpuMonitoring, GetGpuPciBandwidthDefaultCases)
+{
+	int ret;
+	smi_device_info in_payload;
+	amdsmi_pcie_bandwidth_t bandwidth;
+	struct smi_pcie_info mocked_resp = {};
+
+	mocked_resp.pcie_static.num_pcie_levels = 1;
+	mocked_resp.pcie_static.pcie_levels[0].gen_speed = 255;
+	mocked_resp.pcie_static.pcie_levels[0].lane_count = 255;
+
+	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
+	WhenCalling(std::bind(amdsmi_get_gpu_pci_bandwidth, MOCK_GPU_HANDLE, &bandwidth));
+	ExpectCommand(SMI_CMD_CODE_GET_PCIE_INFO);
+	SaveInputPayloadIn(&in_payload);
+	PlantMockOutput(&mocked_resp);
+	ret = performCall();
+
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(bandwidth.transfer_rate.num_supported, 1u);
+	ASSERT_EQ(bandwidth.transfer_rate.frequency[0], 0ULL);
+	ASSERT_EQ(bandwidth.lanes[0], 0u);
 }
 
 TEST_F(AmdsmiGpuMonitoring, TestPcieLinkSpeedConversion)

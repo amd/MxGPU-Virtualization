@@ -156,6 +156,21 @@ amdsmi_status_t amdsmi_get_nic_rdma_port_statistics(amdsmi_processor_handle proc
 	return AMDSMI_STATUS_NOT_SUPPORTED;
 }
 
+/**
+ * @brief Stub implementation for amdsmi_topo_get_nic_link_type
+ * @return AMDSMI_STATUS_NOT_SUPPORTED
+ */
+amdsmi_status_t amdsmi_topo_get_nic_link_type(amdsmi_processor_handle nic_handle,
+                                              amdsmi_processor_handle processor_handle,
+                                              amdsmi_nic_link_type_t *type)
+{
+	#pragma SMI_EXPORT
+	(void)nic_handle;
+	(void)processor_handle;
+	(void)type;
+	return AMDSMI_STATUS_NOT_SUPPORTED;
+}
+
 #ifdef __linux__
 #pragma GCC diagnostic pop
 #endif

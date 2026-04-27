@@ -125,6 +125,9 @@
 #define MB_TO_16MB(x)	      ((x) >> 4)
 #define TO_256BYTES(x)	      ((x) >> 8)
 
+/* This indicates size of accumulated dirty bitmap is always 32KB */
+#define AMDGV_DIRTYBIT_BUFFER_SIZE KBYTES_TO_BYTES(32)
+
 typedef void *amdgv_dev_t;
 
 struct oss_interface;
@@ -462,6 +465,9 @@ struct gpuv_engine_queue_data {
 /* the flag indicates if libgv does whole gpu reset when vf hang detected */
 #define AMDGV_FLAG_VF_HANG_GPU_RESET (1 << 6)
 
+/* the flag indicates use OS framebuffer mapping for large offset*/
+#define AMDGV_FLAG_USE_OS_MAPPING_FB (1 << 7)
+
 /*
  * This flag is used to decide whether to use legacy VF FLR sequence.
  * The new sequence only works with RLCV 92 onwards.
@@ -580,6 +586,9 @@ struct gpuv_engine_queue_data {
 
 /*it indicates if libgv should enable service vm or not*/
 #define AMDGV_FLAG_ENABLE_SVM ((uint64_t)1 << 48)
+
+/*it indicates that dynamic VF number change is not supported */
+#define AMDGV_FLAG_NO_DYNAMIC_VF_NUM ((uint64_t)1 << 49)
 
 /*
  * AMDGV_SCHED_SOLID_MODE – RLCV will be in charge of VF world switch.
@@ -950,7 +959,8 @@ enum amdgv_dev_info_type {
 	AMDGV_GET_PSP_VBFLASH_SUPPORT,
 	AMDGV_GET_XGMI_INFO,
 	AMDGV_GET_OAM_IDX,
-	AMDGV_GET_COMPUTE_PROFILE
+	AMDGV_GET_COMPUTE_PROFILE,
+	AMDGV_GET_BASIC_INFO
 };
 
 /* device infomation that can not be configured by shim */
@@ -995,6 +1005,15 @@ union amdgv_dev_info {
 		uint32_t min;
 		uint32_t max;
 	} compute_cap;
+
+	struct {
+		uint32_t vendor_id;
+		uint32_t device_id;
+		uint32_t revision_id;
+		uint32_t sub_system_id;
+		uint32_t sub_vendor_id;
+		uint32_t bdf;
+	} basic_info;
 };
 
 /* get and set general conf paramters */
@@ -1609,6 +1628,7 @@ enum amdgv_live_info_status {
 	AMDGV_LIVE_INFO_STATUS_SIZE_UNMATCH = 4,
 };
 
+#define AMDGV_MIGRATION_VERSION_UNINITIALIZED (-1)
 /* Hardcoded to be AMDGV_AGP_APERTURE_SIZE for now,
    TODO: dynamically fetch the agp allocated size */
 #define AMDGV_MIGRATION_VF_FB_COPY_BLOCK_SIZE	1LL << 24
@@ -1752,6 +1772,7 @@ struct amdgv_dump_cu_resource_memory {
 	uint32_t *kernelobj_addr;
 	uint32_t *out_data_addr;
 	uint32_t *out_flag_addr;
+	uint32_t *extra_kernelobj_addr;
 };
 
 struct amdgv_dump_cu_resource_size {
@@ -1766,6 +1787,7 @@ struct amdgv_dump_cu_resource_size {
 	uint32_t grid_size_y;
 	uint32_t grid_size_z;
 	uint32_t private_segment_size;
+	uint32_t extra_kernelobj_size;
 };
 
 struct amdgv_perf_log_info {
@@ -2834,6 +2856,47 @@ int amdgv_migration_set_abort(amdgv_dev_t dev, uint32_t idx_vf);
 int amdgv_vf_fb_copy(amdgv_dev_t dev, uint32_t idx_vf, uint64_t fb_offset,
 			     uint64_t size, uint64_t gpu_addr, bool to_fb, void *vaddr);
 
+enum amdgv_buf_transfer_state {
+	AMDGV_BUF_TRANSFER_IDLE,
+	AMDGV_BUF_TRANSFER_IN_PROGRESS,
+	AMDGV_BUF_TRANSFER_READY_READ_FOR_OS,
+	AMDGV_BUF_TRANSFER_READY_WRITE_FOR_OS,
+	AMDGV_BUF_TRANSFER_READY_READ_FOR_GPU,
+	AMDGV_BUF_TRANSFER_READY_WRITE_FOR_GPU,
+	AMDGV_BUF_TRANSFER_ERROR,
+};
+
+struct amdgv_fb_copy_entry {
+	uint64_t fb_offset;
+	uint64_t size;
+	uint64_t gpu_addr;
+	void *vaddr;
+};
+
+/*
+ * amdgv_vf_fb_copy_async - async copy VF FB data to/from VF FB.
+ *
+ * Sends the copy requests to the event queue and returns immediately
+ * without blocking the caller. Accepts an array of entries so that
+ * non-contiguous dirty regions can be copied in a single call.
+ * The caller polls buf_transfer_state to check completion:
+ *   to_fb == true  success: AMDGV_BUF_TRANSFER_READY_WRITE_FOR_OS
+ *   to_fb == false success: AMDGV_BUF_TRANSFER_READY_READ_FOR_OS
+ *   failure:                AMDGV_BUF_TRANSFER_ERROR
+ *
+ * @dev:		amdgv device handle
+ * @idx_vf:		target VF
+ * @entries:		array of fb_offset / size / gpu_addr / vaddr tuples
+ * @num_entries:	number of elements in @entries
+ * @to_fb:		true to copy to VF FB, false to copy from VF FB
+ * @buf_transfer_state:	caller-owned state; set to IN_PROGRESS on queue,
+ *			updated by event handler on completion
+ */
+int amdgv_vf_fb_copy_async(amdgv_dev_t dev, uint32_t idx_vf,
+			    struct amdgv_fb_copy_entry *entries,
+			    uint32_t num_entries, bool to_fb,
+			    enum amdgv_buf_transfer_state *buf_transfer_state);
+
 /*
  * amdgv_read_vbios - read vbios from libgv.
  *
@@ -3196,6 +3259,17 @@ int amdgv_set_bp_mode(amdgv_dev_t dev, int mode);
 int amdgv_get_bp_mode(amdgv_dev_t dev);
 
 /*
+ * amdgv_set_dump_cu_info - set CU data dump type and xcc id
+ *
+ * @dev:	amdgv device handle
+ * @cu_dump_type:	CU data type LDS/SGPRs/VGPRs
+ * @xcc_id:	xcc id
+ * @use_extra_ring: whether to use extra kernelobj
+ */
+ int amdgv_set_dump_cu_info(amdgv_dev_t dev, enum AMDGV_CU_DATA_TYPE cu_dump_type,
+		uint32_t xcc_id, bool use_extra_ring);
+
+/*
  * amdgv_alloc_dump_cu_resource_memory - allocate memory for CU data dump
  *
  * @dev:	amdgv device handle
@@ -3343,4 +3417,11 @@ bool amdgv_is_service_vm_enabled(amdgv_dev_t dev);
  */
 bool amdgv_compare_mig_ctx(amdgv_dev_t dev, uint32_t idx_vf,
 			   struct amdgv_migration_ctx *remote_ctx);
+/*
+ * amdgv_reset_vf_arbiters - reset vf arbiters
+ *
+ * @dev:	amdgv device handle
+ *
+ */
+int amdgv_reset_vf_arbiters(amdgv_dev_t dev, uint32_t idx_vf);
 #endif

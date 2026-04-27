@@ -30,6 +30,7 @@
 #include "smi_cli_reset_command.h"
 #include "smi_cli_api_base.h"
 #include "smi_cli_exception.h"
+#include "smi_cli_platform.h"
 
 void AmdSmiResetCommand::reset_command()
 {
@@ -70,15 +71,28 @@ void AmdSmiResetCommand::reset_command()
 			(std::find(arg.options.begin(), arg.options.end(), "G") != arg.options.end()) ||
 			arg.all_arguments) {
 		unsigned int gpu_count;
-		AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
-		uint64_t gpu_bdf = arg.devices[0]->get_bdf();
-		ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_reset_gpu_command(gpu_bdf, arg);
-		std::string param{"gpureset"};
-		int error = handle_exceptions(ret, param, arg);
-		if (error == 0) {
-			for (unsigned int i = 0; i < gpu_count; i++) {
-				std::cout << "GPU: " << arg.devices[i]->get_gpu_index() << std::endl;
-				std::cout << "    GPU_RESET: Successfully reset GPU" << std::endl;
+		if (AmdSmiPlatform::getInstance().is_nv() == true) {
+			for (unsigned int i = 0; i < arg.devices.size(); i++) {
+				uint64_t gpu_bdf = arg.devices[i]->get_bdf();
+				ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_reset_gpu_command(gpu_bdf, arg);
+				std::string param{"gpureset"};
+				int error = handle_exceptions(ret, param, arg);
+				if (error == 0) {
+					std::cout << "GPU: " << arg.devices[i]->get_gpu_index() << std::endl;
+					std::cout << "    GPU_RESET: Successfully reset GPU" << std::endl;
+				}
+			}
+		} else {
+			AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
+			uint64_t gpu_bdf = arg.devices[0]->get_bdf();
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_reset_gpu_command(gpu_bdf, arg);
+			std::string param{"gpureset"};
+			int error = handle_exceptions(ret, param, arg);
+			if (error == 0) {
+				for (unsigned int i = 0; i < gpu_count; i++) {
+					std::cout << "GPU: " << i << std::endl;
+					std::cout << "    GPU_RESET: Successfully reset GPU" << std::endl;
+				}
 			}
 		}
 	}

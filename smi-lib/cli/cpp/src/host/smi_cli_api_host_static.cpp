@@ -46,6 +46,8 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_ASIC_INFO)(amdsmi_processor_handle,
 		amdsmi_asic_info_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_PCIE_INFO)(amdsmi_processor_handle,
 		amdsmi_pcie_info_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_PCI_BANDWIDTH)(amdsmi_processor_handle,
+		amdsmi_pcie_bandwidth_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_FB_LAYOUT)(amdsmi_processor_handle,
 		amdsmi_pf_fb_info_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_VBIOS_INFO)(amdsmi_processor_handle,
@@ -79,6 +81,12 @@ typedef amdsmi_status_t (*AMDSMI_GET_XGMI_PLPD)(amdsmi_processor_handle,
 		amdsmi_dpm_policy_t *);
 typedef amdsmi_status_t (*AMDSMI_SET_XGMI_PLPD)(amdsmi_processor_handle,
 		uint32_t);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_PTL_STATE)(amdsmi_processor_handle, bool *);
+typedef amdsmi_status_t (*AMDSMI_SET_GPU_PTL_STATE)(amdsmi_processor_handle, bool);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_PTL_FORMATS)(amdsmi_processor_handle,
+		amdsmi_ptl_data_format_t *, amdsmi_ptl_data_format_t *);
+typedef amdsmi_status_t (*AMDSMI_SET_GPU_PTL_FORMATS)(amdsmi_processor_handle,
+		amdsmi_ptl_data_format_t, amdsmi_ptl_data_format_t);
 typedef amdsmi_status_t (*AMDSMI_GET_VF_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 		amdsmi_vf_handle_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_VF_INFO)(amdsmi_vf_handle_t, amdsmi_vf_info_t *);
@@ -120,6 +128,7 @@ extern AMDSMI_GET_GPU_DEVICE_BDF host_amdsmi_get_gpu_device_bdf;
 
 extern AMDSMI_GET_GPU_ASIC_INFO host_amdsmi_get_gpu_asic_info;
 extern AMDSMI_GET_PCIE_INFO host_amdsmi_get_pcie_info;
+extern AMDSMI_GET_GPU_PCI_BANDWIDTH host_amdsmi_get_gpu_pci_bandwidth;
 extern AMDSMI_GET_FB_LAYOUT host_amdsmi_get_fb_layout;
 extern AMDSMI_GET_GPU_VBIOS_INFO host_amdsmi_get_gpu_vbios_info;
 extern AMDSMI_GET_GPU_BOARD_INFO host_amdsmi_get_gpu_board_info;
@@ -139,6 +148,10 @@ extern AMDSMI_GET_SOC_PSTATE host_amdsmi_get_soc_pstate;
 extern AMDSMI_SET_SOC_PSTATE host_amdsmi_set_soc_pstate;
 extern AMDSMI_GET_XGMI_PLPD host_amdsmi_get_xgmi_plpd;
 extern AMDSMI_SET_XGMI_PLPD host_amdsmi_set_xgmi_plpd;
+extern AMDSMI_GET_GPU_PTL_STATE host_amdsmi_get_gpu_ptl_state;
+extern AMDSMI_SET_GPU_PTL_STATE host_amdsmi_set_gpu_ptl_state;
+extern AMDSMI_GET_GPU_PTL_FORMATS host_amdsmi_get_gpu_ptl_formats;
+extern AMDSMI_SET_GPU_PTL_FORMATS host_amdsmi_set_gpu_ptl_formats;
 
 extern AMDSMI_GET_VF_HANDLE_FROM_BDF host_amdsmi_get_vf_handle_from_bdf;
 extern AMDSMI_GET_VF_INFO host_amdsmi_get_vf_info;
@@ -804,6 +817,9 @@ int AmdSmiApiHost::amdsmi_get_bus_info_command(uint64_t processor_bdf, Arguments
 		string_format("%d", pcie_info.pcie_static.max_pcie_speed / 1000)
 	};
 
+	amdsmi_pcie_bandwidth_t pcie_bw;
+	int bw_ret = host_amdsmi_get_gpu_pci_bandwidth(processor, &pcie_bw);
+
 	if (arg.output == json) {
 		nlohmann::ordered_json max_pcie_speed{};
 		max_pcie_speed["value"] = pcie_info.pcie_static.max_pcie_speed / 1000;
@@ -816,17 +832,58 @@ int AmdSmiApiHost::amdsmi_get_bus_info_command(uint64_t processor_bdf, Arguments
 			{ "max_pcie_interface_version", max_pcie_interface_version }
 		};
 
+		if (bw_ret == AMDSMI_STATUS_SUCCESS && pcie_bw.transfer_rate.num_supported > 0) {
+			nlohmann::ordered_json levels_json = nlohmann::ordered_json::array();
+			for (uint32_t i = 0; i < pcie_bw.transfer_rate.num_supported; i++) {
+				double rate_gts = pcie_bw.transfer_rate.frequency[i] / 1000000000.0;
+				nlohmann::ordered_json pcie_speed{};
+				pcie_speed["value"] = rate_gts;
+				pcie_speed["unit"] = "GT/s";
+				nlohmann::ordered_json level = {
+					{ "level", i },
+					{ "speed", pcie_speed },
+					{ "width", pcie_bw.lanes[i] }
+				};
+				levels_json.push_back(level);
+			}
+			bus_json["pcie_levels"] = levels_json;
+		}
+
 		formatted_string = bus_json.dump(4);
 	} else if (arg.output == csv) {
-		formatted_string = string_format(",%s,%s,%s,%s,%s,%s", bdf_string.c_str(),
-										 pcie_lanes.c_str(),pcie_info_GTs_value_string.c_str(),
+		std::string base_csv = string_format(",%s,%s,%s,%s,%s,%s", bdf_string.c_str(),
+										 pcie_lanes.c_str(), pcie_info_GTs_value_string.c_str(),
 										 pcie_interface_version.c_str(), pcie_slot_type.c_str(), max_pcie_interface_version.c_str());
+		if (bw_ret == AMDSMI_STATUS_SUCCESS && pcie_bw.transfer_rate.num_supported > 0) {
+			for (uint32_t i = 0; i < pcie_bw.transfer_rate.num_supported; i++) {
+				double rate_gts = pcie_bw.transfer_rate.frequency[i] / 1000000000.0;
+				if (i == 0) {
+					formatted_string = string_format("%s,%u,%g,%u", base_csv.c_str(),
+						i, rate_gts, pcie_bw.lanes[i]);
+				} else {
+					formatted_string += "\n";
+					formatted_string += string_format("%s,%u,%g,%u", base_csv.c_str(),
+						i, rate_gts, pcie_bw.lanes[i]);
+				}
+			}
+		} else {
+			formatted_string = base_csv;
+		}
 	} else {
 		std::string pcie_info_GTs_value_string_unit = pcie_info_GTs_value_string == "N/A" ? "" : "GT/s";
 		formatted_string = string_format(
 							   staticBusTemplate, bdf_string.c_str(), pcie_lanes.c_str(),
 							   pcie_info_GTs_value_string.c_str(), pcie_info_GTs_value_string_unit.c_str(),
 							   pcie_interface_version.c_str(), pcie_slot_type.c_str(), max_pcie_interface_version.c_str());
+
+		if (bw_ret == AMDSMI_STATUS_SUCCESS && pcie_bw.transfer_rate.num_supported > 0) {
+			formatted_string += "        PCIE_LEVELS:\n";
+			for (uint32_t i = 0; i < pcie_bw.transfer_rate.num_supported; i++) {
+				double rate_gts = pcie_bw.transfer_rate.frequency[i] / 1000000000.0;
+				formatted_string += string_format(
+					"            %d: %g GT/s x%u\n", i, rate_gts, pcie_bw.lanes[i]);
+			}
+		}
 	}
 
 	return ret;
@@ -927,7 +984,7 @@ int AmdSmiApiHost::amdsmi_get_board_info_command(uint64_t processor_bdf, Argumen
 	return ret;
 }
 
-int AmdSmiApiHost::amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments arg,
+int AmdSmiApiHost::amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments &arg,
 		std::string &formatted_string)
 {
 	int ret;
@@ -941,6 +998,11 @@ int AmdSmiApiHost::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argumen
 	int64_t edge_shutdown_temperature;
 	int64_t junction_shutdown_temperature;
 	int64_t vram_shutdown_temperature;
+
+	bool ptl_enabled = false;
+	bool ptl_supported = false;
+	amdsmi_ptl_data_format_t format1, format2;
+	std::string format1_str, format2_str;
 
 	amdsmi_processor_handle processor;
 	amdsmi_bdf_t tmp_bdf;
@@ -998,6 +1060,7 @@ int AmdSmiApiHost::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argumen
 		host_fill_limit_info(arg, "N/A");
 		return ret;
 	}
+
 	std::string power_cap_string = power_cap_info.power_cap == -1 ?
 								   "N/A" :
 								   string_format("%lld", power_cap_info.power_cap);
@@ -1038,6 +1101,37 @@ int AmdSmiApiHost::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argumen
 			"N/A" : string_format("%lld", junction_shutdown_temperature);
 	std::string vram_shutdown_temperature_string = vram_shutdown_temperature == UINT_MAX ? "N/A" :
 			string_format("%lld", vram_shutdown_temperature);
+
+	std::string ptl_status_str{};
+	std::string ptl_formats_str{};
+
+	ret = host_amdsmi_get_gpu_ptl_state(processor, &ptl_enabled);
+	if (ret == AMDSMI_STATUS_SUCCESS) {
+		arg.ptl_supported = true;
+		ptl_supported = true;
+		ptl_status_str = ptl_enabled ? "ENABLED" : "DISABLED";
+
+		if (ptl_enabled) {
+			ret = host_amdsmi_get_gpu_ptl_formats(processor, &format1, &format2);
+			if (ret == AMDSMI_STATUS_SUCCESS) {
+				get_string_from_enum_ptl_format(format1, format1_str);
+				get_string_from_enum_ptl_format(format2, format2_str);
+				if (arg.output == csv) {
+					ptl_formats_str = string_format("[%s,%s]", format1_str.c_str(), format2_str.c_str());
+				} else {
+					ptl_formats_str = string_format("%s,%s", format1_str.c_str(), format2_str.c_str());
+				}
+			} else {
+				return ret;
+			}
+		} else {
+			ptl_formats_str = "N/A";
+		}
+	} else if (ret == AMDSMI_STATUS_NOT_SUPPORTED) {
+		ret = AMDSMI_STATUS_SUCCESS;
+	} else {
+		return ret;
+	}
 
 	if (arg.output == json) {
 		nlohmann::ordered_json max_power{};
@@ -1109,6 +1203,7 @@ int AmdSmiApiHost::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argumen
 		shutdown_vram_temperature["unit"] = vram_shutdown_temperature_string == "N/A" ? "N/A" : "C";
 
 		nlohmann::ordered_json limit_json = { { "max_power",  max_power} };
+
 		limit_json["min_power"] = min_power;
 		limit_json["socket_power"] = socket_power;
 		limit_json["slowdown_edge_temperature"] = slowdown_edge_temperature;
@@ -1117,6 +1212,11 @@ int AmdSmiApiHost::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argumen
 		limit_json["shutdown_edge_temperature"] = shutdown_edge_temperature;
 		limit_json["shutdown_hotspot_temperature"] = shutdown_hotspot_temperature;
 		limit_json["shutdown_mem_temperature"] = shutdown_vram_temperature;
+
+		if (ptl_supported) {
+			limit_json["ptl"] = ptl_status_str;
+			limit_json["ptl_format"] = ptl_formats_str;
+		}
 		formatted_string = limit_json.dump(4);
 	} else if (arg.output == csv) {
 		formatted_string = string_format(
@@ -1127,7 +1227,10 @@ int AmdSmiApiHost::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argumen
 							   therm_limit_vram_string.c_str(),
 							   edge_shutdown_temperature_string.c_str(),
 							   junction_shutdown_temperature_string.c_str(),
-							   vram_shutdown_temperature_string.c_str() );
+							   vram_shutdown_temperature_string.c_str());
+		if (ptl_supported) {
+			formatted_string += string_format(",%s,%s", ptl_status_str.c_str(), ptl_formats_str.c_str());
+		}
 	} else {
 		std::string max_power_cap_string_uint = max_power_cap_string == "N/A" ? "" : "W";
 		std::string min_power_cap_string_uint = min_power_cap_string == "N/A" ? "" : "W";
@@ -1151,7 +1254,10 @@ int AmdSmiApiHost::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argumen
 							   therm_limit_vram_string.c_str(),therm_limit_vram_string_unit.c_str(),
 							   edge_shutdown_temperature_string.c_str(),edge_shutdown_temperature_string_unit.c_str(),
 							   junction_shutdown_temperature_string.c_str(), junction_shutdown_temperature_string_unit.c_str(),
-							   vram_shutdown_temperature_string.c_str(),vram_shutdown_temperature_string_unit.c_str() );
+							   vram_shutdown_temperature_string.c_str(),vram_shutdown_temperature_string_unit.c_str());
+		if (ptl_supported) {
+			formatted_string += string_format("        PTL: %s\n        PTL_FORMAT: %s\n", ptl_status_str.c_str(), ptl_formats_str.c_str());
+		}
 	}
 
 	return ret;
@@ -2391,7 +2497,6 @@ std::string host_fill_nic_rdma_dev_info(Arguments arg, std::string value)
 		auto rdma_devices_json = nlohmann::ordered_json::array();
 		auto rdma_ports_json = nlohmann::ordered_json::array();
 		nlohmann::ordered_json rdma_port_json = {
-			{ "index", value.c_str() },
 			{ "netdev", value.c_str() },
 			{ "state", value.c_str() },
 			{ "rdma_port", value.c_str() },
@@ -2439,9 +2544,8 @@ int AmdSmiApiHost::amdsmi_get_nic_asic_info_command(uint64_t processor_bdf, Argu
 	}
 	ret = host_amdsmi_get_nic_asic_info(processor, &nic_asic_info);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
-		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED) {
-			out = host_fill_nic_asic_info(arg, "N/A");
-			return AMDSMI_STATUS_SUCCESS;
+		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED && arg.options.size() <= 1 && !arg.all_arguments) {
+			return ret;
 		}
 		out = host_fill_nic_asic_info(arg, "N/A");
 		return ret;
@@ -2493,9 +2597,8 @@ int AmdSmiApiHost::amdsmi_get_nic_bus_info_command(uint64_t processor_bdf, Argum
 	}
 	ret = host_amdsmi_get_nic_bus_info(processor, &nic_bus_info);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
-		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED) {
-			out = host_fill_nic_bus_info(arg, "N/A");
-			return AMDSMI_STATUS_SUCCESS;
+		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED && arg.options.size() <= 1 && !arg.all_arguments) {
+			return ret;
 		}
 		out = host_fill_nic_bus_info(arg, "N/A");
 		return ret;
@@ -2565,9 +2668,8 @@ int AmdSmiApiHost::amdsmi_get_nic_driver_info_command(uint64_t processor_bdf, Ar
 	}
 	ret = host_amdsmi_get_nic_driver_info(processor, &nic_driver_info);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
-		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED) {
-			out = host_fill_nic_driver_info(arg, "N/A");
-			return AMDSMI_STATUS_SUCCESS;
+		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED && arg.options.size() <= 1 && !arg.all_arguments) {
+			return ret;
 		}
 		out = host_fill_nic_driver_info(arg, "N/A");
 		return ret;
@@ -2602,9 +2704,8 @@ int AmdSmiApiHost::amdsmi_get_nic_numa_info_command(uint64_t processor_bdf, Argu
 	}
 	ret = host_amdsmi_get_nic_numa_info(processor, &nic_numa_info);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
-		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED) {
-			out = host_fill_nic_numa_info(arg, "N/A");
-			return AMDSMI_STATUS_SUCCESS;
+		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED && arg.options.size() <= 1 && !arg.all_arguments) {
+			return ret;
 		}
 		out = host_fill_nic_numa_info(arg, "N/A");
 		return ret;
@@ -2649,9 +2750,8 @@ int AmdSmiApiHost::amdsmi_get_nic_port_info_command(uint64_t processor_bdf, Argu
 	}
 	ret = host_amdsmi_get_nic_port_info(processor, &nic_port_info);
 	if (ret != AMDSMI_STATUS_SUCCESS || nic_port_info.num_ports == 0) {
-		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED) {
-			out = host_fill_nic_port_info(arg, "N/A");
-			return AMDSMI_STATUS_SUCCESS;
+		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED && arg.options.size() <= 1 && !arg.all_arguments) {
+			return ret;
 		}
 		out = host_fill_nic_port_info(arg, "N/A");
 		return AMDSMI_STATUS_SUCCESS;
@@ -2702,10 +2802,10 @@ int AmdSmiApiHost::amdsmi_get_nic_port_info_command(uint64_t processor_bdf, Argu
 				{ "link_state", nic_port_info.ports[i].link_state },
 				{ "link_speed", link_speed_json },
 				{ "active_fec", active_fec_modes_str },
-				{ "autoneg", nic_port_info.ports[i].autoneg },
-				{ "pause_autoneg", nic_port_info.ports[i].pause_autoneg },
-				{ "pause_rx", nic_port_info.ports[i].pause_rx },
-				{ "pause_tx", nic_port_info.ports[i].pause_tx }
+				{ "autoneg", strcmp(nic_port_info.ports[i].autoneg, "on") == 0 ? "ON" : strcmp(nic_port_info.ports[i].autoneg, "off") == 0 ? "OFF" : "N/A" },
+				{ "pause_autoneg", strcmp(nic_port_info.ports[i].pause_autoneg, "on") == 0 ? "ON" : strcmp(nic_port_info.ports[i].pause_autoneg, "off") == 0 ? "OFF" : "N/A" },
+				{ "pause_rx", strcmp(nic_port_info.ports[i].pause_rx, "on") == 0 ? "ON" : strcmp(nic_port_info.ports[i].pause_rx, "off") == 0 ? "OFF" : "N/A" },
+				{ "pause_tx", strcmp(nic_port_info.ports[i].pause_tx, "on") == 0 ? "ON" : strcmp(nic_port_info.ports[i].pause_tx, "off") == 0 ? "OFF" : "N/A" }
 			};
 
 			ports_json.push_back(port_json);
@@ -2767,10 +2867,10 @@ int AmdSmiApiHost::amdsmi_get_nic_port_info_command(uint64_t processor_bdf, Argu
 				port_link_speed_str.c_str(),
 				port_link_speed_str_unit.c_str(),
 				active_fec_modes_str.c_str(),
-				nic_port_info.ports[i].autoneg,
-				nic_port_info.ports[i].pause_autoneg,
-				nic_port_info.ports[i].pause_rx,
-				nic_port_info.ports[i].pause_tx
+				strcmp(nic_port_info.ports[i].autoneg, "on") == 0 ? "ON" : strcmp(nic_port_info.ports[i].autoneg, "off") == 0 ? "OFF" : "N/A",
+				strcmp(nic_port_info.ports[i].pause_autoneg, "on") == 0 ? "ON" : strcmp(nic_port_info.ports[i].pause_autoneg, "off") == 0 ? "OFF" : "N/A",
+				strcmp(nic_port_info.ports[i].pause_rx, "on") == 0 ? "ON" : strcmp(nic_port_info.ports[i].pause_rx, "off") == 0 ? "OFF" : "N/A",
+				strcmp(nic_port_info.ports[i].pause_tx, "on") == 0 ? "ON" : strcmp(nic_port_info.ports[i].pause_tx, "off") == 0 ? "OFF" : "N/A"
 			);
 		}
 
@@ -2798,12 +2898,11 @@ int AmdSmiApiHost::amdsmi_get_nic_rdma_devices_info_command(uint64_t processor_b
 	}
 	ret = host_amdsmi_get_nic_rdma_dev_info(processor, &nic_rdma_devices_info);
 	if (ret != AMDSMI_STATUS_SUCCESS || nic_rdma_devices_info.num_rdma_dev == 0) {
-		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED) {
-			out = host_fill_nic_rdma_dev_info(arg, "N/A");
-			return AMDSMI_STATUS_SUCCESS;
+		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED && arg.options.size() <= 1 && !arg.all_arguments) {
+			return ret;
 		}
 		out = host_fill_nic_rdma_dev_info(arg, "N/A");
-		return ret;
+		return AMDSMI_STATUS_SUCCESS;
 	}
 	std::string max_mtu_str{};
 	std::string active_mtu_str{};

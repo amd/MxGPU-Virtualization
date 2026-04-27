@@ -36,6 +36,7 @@ AC_DEFUN([AC_CONFIG_KERNEL], [
 	AC_SHASH_DESC_FLAGS
 	AC_DCORE_IOVA_VM_CTX_VFIO_DEVICE
 	AC_DCORE_IOVA_VM_CTX_PAGE_ARRAY
+	AC_VFIO_DMA_UNMAP
 	AC_VPRINTK_EMIT_5_ARG
 	AC_FTRACE_REGS_OPS
 	AC_DEVNODE_CONST
@@ -45,16 +46,12 @@ AC_DEFUN([AC_CONFIG_KERNEL], [
 	AC_KFREE_SENSITIVE
 	AC_GET_USER_PAGES_REMOTE_6_ARG
 	AC_GET_USER_PAGES_REMOTE_7_ARG
+	AC_GET_USER_PAGES_REMOTE_8_ARG
 	AC_UP_DOWN_READ
 	AC_MAX_PAGE_ORDER
 	AC_SUPPORT_LIVE_MIGRATION
 	AC_HRTIMER_SETUP
 	AC_KERNEL_WAIT
-	AS_IF([test "$LINUX_OBJ" != "$LINUX"], [
-		KERNEL_MAKE="$KERNEL_MAKE O=$LINUX_OBJ"
-	])
-
-	AC_SUBST(KERNEL_MAKE)
 ])
 
 dnl #
@@ -271,7 +268,14 @@ AC_DEFUN([AC_KERNEL_TMP_BUILD_DIR], [
 	cd $build_dir
 	$1
 	AS_IF([test -s confdefs.h], [
-		cat confdefs.h >>$build_dir_root/confdefs.h
+		# Multiple background jobs may try to append to the shared confdefs.h.
+		# Take a simple lock to avoid interleaved writes.
+		confdefs_lockdir="$build_dir_root/.confdefs.lockdir"
+		while ! mkdir "$confdefs_lockdir" 2>/dev/null; do
+			sleep 0.05
+		done
+		cat confdefs.h >>"$build_dir_root/confdefs.h"
+		rmdir "$confdefs_lockdir"
 	])
 	cd $build_dir_root
 	rm -rf $build_dir
@@ -294,23 +298,6 @@ AC_DEFUN([AC_KERNEL_TRY_COMPILE_MODULE],
 ])
 
 dnl #
-dnl # AC_KERNEL_COMPILE_IFELSE / like AC_COMPILE_IFELSE
-dnl # $1: contents to be filled in conftest.c
-dnl # $2: user defined commands. It "AND" the make command to check the result. If true, expands to $4. Otherwise $5.
-dnl # $3: run it if make & $3 pass.
-dnl # $4: run it if make & $3 fail.
-dnl # $5: contents to be filled in conftest.h. Could be null.
-dnl #
-AC_DEFUN([AC_KERNEL_COMPILE_IFELSE], [
-	m4_ifvaln([$1], [AC_KERNEL_CONFTEST_C([$1])])
-	m4_ifvaln([$5], [AC_KERNEL_CONFTEST_H([$5])], [AC_KERNEL_CONFTEST_H([])])
-	AS_IF(
-		[AC_TRY_COMMAND(eval $CC $CFLAGS) > /dev/null && AC_TRY_COMMAND([$2])],
-		[$3],
-		[_AC_MSG_LOG_CONFTEST m4_ifvaln([$4],[$4])]
-	)
-])
-dnl #
 dnl # AC_KERNEL_TRY_COMPILE like AC_TRY_COMPILE
 dnl # $1: Prologue for conftest.c. including header files, extends, etc
 dnl # $2: Body for conftest.c.
@@ -318,8 +305,10 @@ dnl # $3: run it if compile pass.
 dnl # $4: run it if compile fail.
 dnl #
 AC_DEFUN([AC_KERNEL_TRY_COMPILE],
-	[AC_KERNEL_COMPILE_IFELSE(
+	target='conftest.o'
+	[AC_KERNEL_COMPILE_MODULE_IFELSE(
 	[AC_LANG_SOURCE([AC_KERNEL_LANG_PROGRAM([[$1]], [[$2]])])],
+	[$target],
 	[test -s conftest.o || test -s .tmp_conftest.o],
 	[$3], [$4])
 ])
@@ -421,15 +410,6 @@ AC_DEFUN([AC_KERNEL_TEST_HEADER_FILE_EXIST], [
 	], [
 		$3
 	])
-])
-
-dnl #
-dnl # AC_KERNEL_CHECK_HEADERS
-dnl # check whether header file(s) is(are) present
-dnl # $1: header filei(s) to check
-dnl #
-AC_DEFUN([AC_KERNEL_CHECK_HEADERS], [
-	AC_CHECK_HEADERS([$1],[AS_TR_CPP([HAVE_$1])=1],,[-])
 ])
 
 dnl #

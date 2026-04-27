@@ -140,4 +140,12 @@ int smi_get_ras_policy_info(struct smi_ctx *ctx, void *inb,
 			  void *outb, uint16_t in_len, uint16_t out_len);
 int smi_get_node_handle(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
 int smi_get_npm_info(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_gpu_ptl_state(struct smi_ctx *ctx, void *inb,
+			  void *outb, uint16_t in_len, uint16_t out_len);
+int smi_set_gpu_ptl_state(struct smi_ctx *ctx, void *inb,
+			  void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_gpu_ptl_formats(struct smi_ctx *ctx, void *inb,
+			    void *outb, uint16_t in_len, uint16_t out_len);
+int smi_set_gpu_ptl_formats(struct smi_ctx *ctx, void *inb,
+			    void *outb, uint16_t in_len, uint16_t out_len);
 #endif // __SMI_DRV_CMD_H__

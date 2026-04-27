@@ -266,6 +266,8 @@ uint64_t mi350_drv_metric_code[MI350_METRIC_NAME_COUNT] = {
 	[MI350__SYSTEM_TEMP_OAM_4_5_6_7_3V3_VR]		= METRIC_EXT_CODE(SYS_BASEBOARD_TEMP,	SYSTEM_TEMP_OAM_4_5_6_7_3V3_VR,		CELSIUS,		SYSTEM,	BASEBOARD,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
 	[MI350__SYSTEM_TEMP_IBC_HSC]			= METRIC_EXT_CODE(SYS_BASEBOARD_TEMP,	SYSTEM_TEMP_IBC_HSC,			CELSIUS,		SYSTEM,	BASEBOARD,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
 	[MI350__SYSTEM_TEMP_IBC]			= METRIC_EXT_CODE(SYS_BASEBOARD_TEMP,	SYSTEM_TEMP_IBC,			CELSIUS,		SYSTEM,	BASEBOARD,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI350__SYSTEM_POWER_UBB_POWER]			= METRIC_EXT_CODE(SYS_BASEBOARD_POWER,	SYSTEM_POWER_UBB_POWER,			WATT,			SYSTEM,	BASEBOARD,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
+	[MI350__SYSTEM_POWER_UBB_POWER_THRESHOLD]	= METRIC_EXT_CODE(SYS_BASEBOARD_POWER,	SYSTEM_POWER_UBB_POWER_THRESHOLD,	WATT,			SYSTEM,	BASEBOARD,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
 	[MI350__NODE_TEMP_RETIMER]			= METRIC_EXT_CODE(SYS_GPUBOARD_TEMP,	NODE_TEMP_RETIMER,			CELSIUS,		SYSTEM,	GPUBOARD,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
 	[MI350__NODE_TEMP_IBC_TEMP]			= METRIC_EXT_CODE(SYS_GPUBOARD_TEMP,	NODE_TEMP_IBC_TEMP,			CELSIUS,		SYSTEM,	GPUBOARD,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
 	[MI350__NODE_TEMP_IBC_2_TEMP]			= METRIC_EXT_CODE(SYS_GPUBOARD_TEMP,	NODE_TEMP_IBC_2_TEMP,			CELSIUS,		SYSTEM,	GPUBOARD,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
@@ -517,9 +519,11 @@ bool mi350_smu_get_fw_loaded_status(struct amdgv_adapter *adapt)
 	return true;
 }
 
-int mi350_gpu_mode1_reset(struct amdgv_adapter *adapt)
+int mi350_gpu_mode1_reset(struct amdgv_adapter *adapt, bool is_unload)
 {
 	uint32_t fatal_err = 0, param;
+	struct amdgv_hive_info *hive;
+	hive = amdgv_get_xgmi_hive(adapt);
 
 	/* send mode1 reset command to SMU (MP1) */
 	AMDGV_DEBUG("sending mode1_reset command to SMU ...\n");
@@ -537,10 +541,16 @@ int mi350_gpu_mode1_reset(struct amdgv_adapter *adapt)
 	 */
 	mi350_smu_send_msg_nocheck(adapt, PPSMC_MSG_GfxDriverReset, param);
 
-	/* allow time for all blocks to complete RESET */
-	if (mi300_psp_wait_for_bootloader_steady(adapt) != PSP_STATUS__SUCCESS) {
-		AMDGV_ERROR("mode1_reset timed out\n");
-		return AMDGV_FAILURE;
+	/* if not unload, wait steady state.
+	 * if no hive, wait steady state;
+	 * if has hvie, wait steady state on the last gpu fini.
+	 */
+	if ((!is_unload) || (hive == NULL) || ((hive != NULL) && (hive->number_adapters == 0))) {
+		/* allow time for all blocks to complete RESET */
+		if (mi300_psp_wait_for_bootloader_steady(adapt) != PSP_STATUS__SUCCESS) {
+			AMDGV_ERROR("mode1_reset timed out\n");
+			return AMDGV_FAILURE;
+			}
 	}
 
 	oss_atomic_set(adapt->in_sync_flood, 0);
@@ -721,8 +731,8 @@ static int mi350_smu_set_xgmi_plpd_mode(struct amdgv_adapter *adapt, int mode)
 	uint32_t msg = 0, param = 0;
 
 	if (!mi350_smu_feature_is_enabled(adapt, FEATURE_XGMI_PER_LINK_PWR_DOWN)) {
-		AMDGV_WARN("the feature FEATURE_XGMI_PER_LINK_PWR_DOWN feature isn't enabled, skip to set XGMI PLPD mode!\n");
-		return 0;
+		AMDGV_DEBUG("the feature FEATURE_XGMI_PER_LINK_PWR_DOWN isn't enabled, skip to set XGMI PLPD mode!\n");
+		return AMDGV_NOT_SUPPORTED;
 	}
 
 	/* NOTE: the PMFW is allowed set PLPD mode from different clients,
@@ -856,6 +866,10 @@ static int mi350_smu_get_pm_policy(struct amdgv_adapter *adapt,
 	int ret = AMDGV_NOT_SUPPORTED;
 	int i = 0;
 
+	if (!mi350_smu_feature_is_enabled(adapt, FEATURE_XGMI_PER_LINK_PWR_DOWN)) {
+		return ret;
+	}
+
 	if (!policy_ctxt || !(policy_ctxt->policy_mask & BIT(p_type)))
 		return ret;
 
@@ -907,10 +921,12 @@ static void mi350_smu_restore_pm_policy(struct amdgv_adapter *adapt,
 					enum amdgv_pp_pm_policy p_type)
 {
 	struct pp_smu_dpm_policy *policy;
+	int ret;
 
 	if (mi350_smu_get_pm_policy(adapt, p_type, &policy))
 		return;
-	if (mi350_smu_set_pm_policy(adapt, policy, policy->current_level))
+	ret = mi350_smu_set_pm_policy(adapt, policy, policy->current_level);
+	if (ret && (ret != AMDGV_NOT_SUPPORTED))
 		AMDGV_ERROR("Failed to restore PM Policy");
 
 	return;
@@ -1341,6 +1357,48 @@ static void mi350_smu_dump_feature_state(struct amdgv_adapter *adapt, uint64_t f
 	}
 }
 
+static int mi350_smu_send_unload_to_hive(struct amdgv_adapter *adapt)
+{
+	int tmp_ret = 0, ret = 0;
+	struct amdgv_adapter *next_adapt;
+	struct amdgv_hive_info *hive;
+
+	hive = amdgv_get_xgmi_hive(adapt);
+
+	AMDGV_DEBUG("acquire hive lock in mi350_smu_send_unload_to_hive\n");
+	oss_mutex_lock(adapt->hive_lock);
+
+	if (adapt->unload_cmd_sent) {
+		oss_mutex_unlock(adapt->hive_lock);
+		return 0;
+	}
+
+	ret = mi350_smu_send_msg(adapt, PPSMC_MSG_PrepareForDriverUnload, NULL);
+	if (ret) {
+		AMDGV_ERROR("PrepareForDriverUnload failed, C2PMSG_90 = 0x%x, adapt bdf 0x%x\n",
+			RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90)), adapt->bdf);
+	} else {
+		adapt->unload_cmd_sent = true;
+	}
+
+	if (hive) {
+		amdgv_list_for_each_entry(next_adapt, &hive->adapt_list, struct amdgv_adapter, xgmi.head) {
+			if (!next_adapt->unload_cmd_sent) {
+				tmp_ret = mi350_smu_send_msg(next_adapt, PPSMC_MSG_PrepareForDriverUnload, NULL);
+				if (tmp_ret) {
+					AMDGV_ERROR("PrepareForDriverUnload failed, C2PMSG_90 = 0x%x, next_adapt bdf 0x%x\n",
+						amdgv_mm_rreg(next_adapt, (SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90)), false), next_adapt->bdf);
+				} else {
+					next_adapt->unload_cmd_sent = true;
+				}
+			}
+		}
+	}
+
+	oss_mutex_unlock(adapt->hive_lock);
+	return ret;
+}
+
 static int mi350_smu_feature_control(struct amdgv_adapter *adapt, bool enable)
 {
 	struct smu_context *smu = adapt_to_smu(adapt);
@@ -1357,7 +1415,7 @@ static int mi350_smu_feature_control(struct amdgv_adapter *adapt, bool enable)
 		mi350_smu_dump_feature_state(adapt, smu->features);
 	} else {
 		if (!in_whole_gpu_reset()) {
-			ret = mi350_smu_send_msg(adapt, PPSMC_MSG_PrepareForDriverUnload, NULL);
+			ret = mi350_smu_send_unload_to_hive(adapt);
 			if (ret)
 				return ret;
 		}
@@ -1385,6 +1443,9 @@ static int mi350_smu_init_supported_caps(struct amdgv_adapter *adapt)
 	if ((adapt->pp.smu_fw_version >= 0x04560700)) {
 		smu->supported_caps |= SMU_CAPS(SMU_CAP_TEMP_INST_METRICS);
 	}
+
+	if (adapt->pp.smu_fw_version >= MI350_PMFW_MIN_VERSION_LIVE_MIGRATION)
+		smu->supported_caps |= SMU_CAPS(SMU_CAP_LIVE_MIGRATION);
 
 	return 0;
 }
@@ -2153,6 +2214,14 @@ static int mi350_pp_smu_init_system_metrics_ext(struct amdgv_adapter *adapt)
 	mi350_pp_smu_init_system_metric(adapt, MI350__VR_TEMP_VDDIO_11_E32, drv_metrics_ext,
 					(void *)&(metrics_table->VrTemperatures[SVI_VDDIO_11_E32_TEMP]));
 
+	/* System power metrics are only reported by the main node */
+	if (adapt->xgmi.phy_node_id == 0) {
+		mi350_pp_smu_init_system_metric(adapt, MI350__SYSTEM_POWER_UBB_POWER, drv_metrics_ext,
+						(void *)&(metrics_table->SystemPower[SYSTEM_POWER_UBB_POWER]));
+
+		mi350_pp_smu_init_system_metric(adapt, MI350__SYSTEM_POWER_UBB_POWER_THRESHOLD, drv_metrics_ext,
+						(void *)&(metrics_table->SystemPower[SYSTEM_POWER_UBB_POWER_THRESHOLD]));
+	}
 	return 0;
 }
 
@@ -3507,6 +3576,12 @@ static int mi350_smu_erase_ras_table(struct amdgv_adapter *adapt, uint32_t *stat
 	return ret;
 }
 
+static bool mi350_smu_migration_is_supported(struct amdgv_adapter *adapt)
+{
+	struct smu_context *smu = adapt_to_smu(adapt);
+	return (smu->supported_caps & SMU_CAPS(SMU_CAP_LIVE_MIGRATION)) != 0;
+}
+
 static const struct amdgv_pp_funcs mi350_amdgv_pp_funcs = {
 	.handle_smu_irq = mi350_smu_pp_handle_irq,
 	.i2c_eeprom_xfer = mi350_smu_pp_i2c_eeprom_i2c_xfer,
@@ -3541,6 +3616,7 @@ static const struct amdgv_pp_funcs mi350_amdgv_pp_funcs = {
 	.get_num_static_metrics_ext_entries = mi350_pp_smu_get_num_static_metrics_ext_entries,
 	.get_smu_cap_supported = mi350_smu_cap_supported,
 	.init_drv_metrics_ext = mi350_pp_smu_init_drv_metrics_ext,
+	.migration_smu_is_supported = mi350_smu_migration_is_supported,
 };
 
 static const struct amdgv_pmme_funcs mi350_amdgv_pmme_funcs = {
@@ -3700,7 +3776,9 @@ static int mi350_powerplay_hw_init(struct amdgv_adapter *adapt)
 		return ret;
 
 	ret = mi350_smu_set_xgmi_plpd_mode(adapt, PP_XGMI_PLPD_MODE_ENABLE);
-	if (ret)
+	if (ret == AMDGV_NOT_SUPPORTED)
+		AMDGV_INFO("SMU feature FEATURE_XGMI_PER_LINK_PWR_DOWN is not supported.");
+	else if (ret)
 		return ret;
 
 	if (in_whole_gpu_reset())

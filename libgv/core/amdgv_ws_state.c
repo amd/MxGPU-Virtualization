@@ -54,7 +54,8 @@ static int amdgv_world_switch_do_enable_auto_sched(struct amdgv_adapter *adapt,
 		/* If cannot set debug dump by sysnode, automatically enable it when enable_auto_sched. */
 		if (adapt->flags & AMDGV_FLAG_USE_PF &&
 			adapt->flags & AMDGV_FLAG_DEBUG_DUMP_ENABLE) {
-			amdgv_sched_set_auto_sched_log_feature(adapt, hw_sched_id, AMDGV_AUTO_SCHED_DEBUG_DUMP, true);
+			if (IS_HW_SCHED_TYPE_GFX(hw_sched_id))
+				amdgv_sched_set_auto_sched_log_feature(adapt, hw_sched_id, AMDGV_AUTO_SCHED_DEBUG_DUMP, true);
 		}
 		if (amdgv_gpuiov_enable_auto_sched(adapt, hw_sched_id)) {
 			AMDGV_ERROR("WSSM: Failed to move from %s to AUTO state for VF%d\n",
@@ -188,6 +189,7 @@ int world_switch_bulk_goto_state_manual(struct amdgv_adapter *adapt, uint32_t ta
 	uint64_t wait_start, wait_delta, wait_left;
 	uint32_t wait_hw_sched_mask;
 	uint32_t completed_hw_sched_id = 0;
+	uint32_t sched_count = 0;
 
 #if DEBUG_WS_STATE_MACHINE_MANUAL_LOG
 	for_each_id(hw_sched_id, hw_sched_mask) {
@@ -303,16 +305,22 @@ next_goto_state:
 			bad_hw_sched_mask |= wait_hw_sched_mask;
 			hw_sched_mask &= ~(wait_hw_sched_mask);
 
+			sched_count = 0;
 			for_each_id(hw_sched_id, wait_hw_sched_mask) {
-				AMDGV_ERROR(
-					"WSSM: %s Timeout moving from VF%d(%s) to VF%d(%s)\n",
-					amdgv_hw_sched_id_to_name(adapt, hw_sched_id),
-					adapt->sched.hw_state_machine[hw_sched_id].cur_vf_id,
-					amdgv_gpuiov_cmd_to_name(
-						adapt, adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state, hw_sched_id),
-					next_vf[hw_sched_id],
-					amdgv_gpuiov_cmd_to_name(adapt, next_state[hw_sched_id], hw_sched_id));
+				sched_count++;
+				if (!in_whole_gpu_reset() && !adapt->reset.in_xgmi_chain_reset)
+					AMDGV_INFO(
+						"WSSM: %s Timeout moving from VF%d(%s) to VF%d(%s)\n",
+						amdgv_hw_sched_id_to_name(adapt, hw_sched_id),
+						adapt->sched.hw_state_machine[hw_sched_id].cur_vf_id,
+						amdgv_gpuiov_cmd_to_name(
+							adapt, adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state, hw_sched_id),
+						next_vf[hw_sched_id],
+						amdgv_gpuiov_cmd_to_name(adapt, next_state[hw_sched_id], hw_sched_id));
 			}
+
+			AMDGV_ERROR("WSSM: %d scheduler(s) timeout, mask=0x%x\n", sched_count,
+				    wait_hw_sched_mask);
 
 			amdgv_sched_dump_gpu_state(adapt);
 			goto wait_out;
@@ -329,28 +337,30 @@ next_goto_state:
 			next_state[completed_hw_sched_id], histogram_time_start[completed_hw_sched_id]);
 
 #ifdef WS_RECORD
-		switch (next_state[completed_hw_sched_id]) {
-		case AMDGV_IDLE_GPU:
-			amdgv_gpuiov_record_queue_push(adapt, next_vf[completed_hw_sched_id], completed_hw_sched_id, AMDGV_RECORD_IDLE_END);
-			break;
-		case AMDGV_RUN_GPU:
-			amdgv_gpuiov_record_queue_push(adapt, next_vf[completed_hw_sched_id], completed_hw_sched_id, AMDGV_RECORD_RUN_END);
-			break;
-		case AMDGV_SAVE_GPU_STATE:
-			amdgv_gpuiov_record_queue_push(adapt, next_vf[completed_hw_sched_id], completed_hw_sched_id, AMDGV_RECORD_SAVE_END);
-			break;
-		case AMDGV_INIT_GPU:
-			amdgv_gpuiov_record_queue_push(adapt, next_vf[completed_hw_sched_id], completed_hw_sched_id, AMDGV_RECORD_INIT_END);
-			break;
-		case AMDGV_LOAD_GPU_STATE:
-			amdgv_gpuiov_record_queue_push(adapt, next_vf[completed_hw_sched_id], completed_hw_sched_id, AMDGV_RECORD_LOAD_END);
-			break;
-		case AMDGV_SHUTDOWN_GPU:
-			amdgv_gpuiov_record_queue_push(adapt, next_vf[completed_hw_sched_id], completed_hw_sched_id, AMDGV_RECORD_SHUTDOWN_END);
-			break;
-		default:
-			AMDGV_ERROR("Invalid WS record entry\n");
-			break;
+		if (adapt->flags & AMDGV_FLAG_WS_RECORD) {
+			switch (next_state[completed_hw_sched_id]) {
+			case AMDGV_IDLE_GPU:
+				amdgv_gpuiov_record_queue_push(adapt, next_vf[completed_hw_sched_id], completed_hw_sched_id, AMDGV_RECORD_IDLE_END);
+				break;
+			case AMDGV_RUN_GPU:
+				amdgv_gpuiov_record_queue_push(adapt, next_vf[completed_hw_sched_id], completed_hw_sched_id, AMDGV_RECORD_RUN_END);
+				break;
+			case AMDGV_SAVE_GPU_STATE:
+				amdgv_gpuiov_record_queue_push(adapt, next_vf[completed_hw_sched_id], completed_hw_sched_id, AMDGV_RECORD_SAVE_END);
+				break;
+			case AMDGV_INIT_GPU:
+				amdgv_gpuiov_record_queue_push(adapt, next_vf[completed_hw_sched_id], completed_hw_sched_id, AMDGV_RECORD_INIT_END);
+				break;
+			case AMDGV_LOAD_GPU_STATE:
+				amdgv_gpuiov_record_queue_push(adapt, next_vf[completed_hw_sched_id], completed_hw_sched_id, AMDGV_RECORD_LOAD_END);
+				break;
+			case AMDGV_SHUTDOWN_GPU:
+				amdgv_gpuiov_record_queue_push(adapt, next_vf[completed_hw_sched_id], completed_hw_sched_id, AMDGV_RECORD_SHUTDOWN_END);
+				break;
+			default:
+				AMDGV_ERROR("Invalid WS record entry\n");
+				break;
+			}
 		}
 #endif
 
@@ -944,8 +954,10 @@ load_gpu:
 				}
 				/* If cannot set debug dump by sysnode, automatically disable it when disable_auto_sched. */
 				if (adapt->flags & AMDGV_FLAG_USE_PF &&
-					adapt->flags & AMDGV_FLAG_DEBUG_DUMP_ENABLE)
-					amdgv_sched_set_auto_sched_log_feature(adapt, hw_sched_id, AMDGV_AUTO_SCHED_DEBUG_DUMP, false);
+					adapt->flags & AMDGV_FLAG_DEBUG_DUMP_ENABLE) {
+					if (IS_HW_SCHED_TYPE_GFX(hw_sched_id))
+						amdgv_sched_set_auto_sched_log_feature(adapt, hw_sched_id, AMDGV_AUTO_SCHED_DEBUG_DUMP, false);
+				}
 				/*
 				 * Cur VF is not known after leaving AUTO switch state
 				 * Need to ask hardware

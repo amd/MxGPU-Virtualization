@@ -46,11 +46,6 @@ struct amdgv_reset {
 	bool reset_state;
 	bool in_xgmi_chain_reset;
 
-	/*
-	 * Flag to know whether it is safe to call load rlcv state
-	 * Should be reset on driver re-init and whole gpu reset
-	 */
-	bool saved_rlcv_state;
 	event_t pf_rel_gpu_init;
 	bool reset_notify_vf_pending;
 	uint32_t reset_mode;

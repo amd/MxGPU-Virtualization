@@ -170,6 +170,17 @@ private:
 	std::string message;
 };
 
+class SmiToolInvalidPlatformException : public SmiToolException
+{
+public:
+	SmiToolInvalidPlatformException();
+	int get_error_code();
+	std::string get_message();
+private:
+	int error_code{-12};
+	std::string message;
+};
+
 class SmiToolUnknownErrorException : public SmiToolException
 {
 public:

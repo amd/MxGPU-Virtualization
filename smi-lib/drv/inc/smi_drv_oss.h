@@ -62,7 +62,7 @@ struct smi_shim_interface {
 
 	void (*generate_date_string)(char *buf, uint64_t ktime);
 	int (*create_event)(struct smi_ctx *smi, amdgv_dev_t *adev, struct smi_event_set_config *config);
-	int (*read_event)(struct smi_ctx *smi, amdgv_dev_t *adev, uint64_t dev_id, struct smi_event_entry *event);
+	int (*read_event)(struct smi_ctx *smi, amdgv_dev_t *adev, uint64_t dev_id, struct smi_event_entry *event, int64_t timeout_usec);
 	int (*destroy_event)(struct smi_ctx *smi, amdgv_dev_t *adev, uint64_t dev_id);
 	void (*put_handle)(amdgv_dev_t adev, struct smi_ctx *ctx);
 	int (*get_pcie_confs)(amdgv_dev_t dev, int *speed, int *width, int *max_vf);

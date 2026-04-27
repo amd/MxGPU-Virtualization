@@ -47,8 +47,13 @@
 #endif
 
 #define CPER_DATA_BUFFER_SIZE 4096
-#define CPER_RAW_DATA_BUFFER_SIZE (1024 * 1024)
-#define CPER_HDRS_ARRAY_SIZE 1024
+#ifdef SMI_ESXI_BUILD
+	#define CPER_RAW_DATA_BUFFER_SIZE (1024 * 128)
+	#define CPER_HDRS_ARRAY_SIZE 128
+#else
+	#define CPER_RAW_DATA_BUFFER_SIZE (1024 * 1024)
+	#define CPER_HDRS_ARRAY_SIZE 1024
+#endif
 
 struct CperEntryInfo {
 	std::string timestamp;
@@ -532,4 +537,3 @@ int AmdSmiApiHost::amdsmi_get_policy_command(uint64_t processor_bdf, Arguments a
 
 	return AMDSMI_STATUS_SUCCESS;
 }
-

@@ -112,6 +112,7 @@ The commands and respective arguments that they accept are described as follows:
    - `--ecc-block`: Number of ECC errors per block.
    - `--pcie`: Current pcie information.
    - `--energy`: Amount of energy consumed.
+   - `--throttle`: Displays throttle violation accumulators, activity percentages, and status.
 
    **VF Parameters:**
    - `--vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>`: Parameters for a specific VF
@@ -139,20 +140,31 @@ The commands and respective arguments that they accept are described as follows:
     **Note:** The watch, watch_time and iterations modifiers are not supported for the event command.
 
 9. **topology**
-    - `--gpu= <gpu_index from list, gpu_bdf, gpu_uuid>`:
-    Displays link topology information. If no argument is provided, returns information for all GPUs on the system.
+   Displays link topology information. If no target is specified, returns information for all devices on the system.
 
-    Topology arguments for the GPU are the following:
-      - `--weight`: Current weight information.
-      - `--hops`: Current hops information.
-      - `--fb-sharing`: Current framebuffer sharing information.
-      - `--link-type`: Link type information.
-      - `--coherent`: Cache coherent information.
-      - `--atomics`: 32 and 64-bit atomic link capability information.
-      - `--bi-dir`: bi-directional link capability information.
-      - `--dma`: dma link capability information.
+   **GPU Parameters:**
+   - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`: Parameters for a specific GPU
+   - `--weight`: Current weight information.
+   - `--hops`: Current hops information.
+   - `--fb-sharing`: Current framebuffer sharing information.
+   - `--link-type`: Link type information.
+   - `--coherent`: Cache coherent information.
+   - `--atomics`: 32 and 64-bit atomic link capability information.
+   - `--bi-dir`: bi-directional link capability information.
+   - `--dma`: dma link capability information.
 
-    **Note:** The topology command does not support the `--csv` format modifier.
+   **NIC Parameters:**
+     - `--nic=<nic_index from list, nic_bdf>`: Parameters for a specific NIC
+     - `--link-type`: Link type between NICs and GPUs (PCIE, NUMA, X_NUMA, UNKNOWN).
+     - `--numa`: NUMA node and CPU AFFINITY information for NICs.
+
+   **Link Type Definitions:**
+   - `PCIE`: Two processors connect via the same PCIe switch.
+   - `NUMA`: Two processors connect via different PCIe switches but on the same CPU.
+   - `X_NUMA`: Two processors connect via different PCIe switches on different CPUs (NUMA nodes).
+   - `UNKNOWN`: Unknown link type.
+
+   **Note:** The topology command does not support the `--csv` format modifier.
 
 10. **xgmi**
     - `--gpu= <gpu_index from list, gpu_bdf, gpu_uuid>`:
@@ -190,6 +202,8 @@ The commands and respective arguments that they accept are described as follows:
     - `--num-vf=<number_of_vfs>`: Sets the number of Virtual Functions (VFs) to be enabled on the specified GPU. The number must be within the supported range for the GPU. Use `amd-smi static --gpu=<gpu> --num-vf` to check current VF configuration and supported limits.
     - `--soc-pstate=<pstate_level>`: Sets the SOC (System on Chip) performance state level to control power and performance characteristics.
     - `--xgmi --fb-sharing-mode=<AmdSmiXgmiFbSharingMode>`: Sets framebuffer sharing mode from list ["MODE_1", "MODE_2", "MODE_4", "MODE_8"] where, MODE_X represents that X GPUs will be in the same group, linked together: MODE_1 (one GPU in a group), MODE_2 (two GPUs in a group), MODE_4 (four GPUs in a group), MODE_8 (eight GPUs in a group). All possible configurations can be seen by running the `amd-smi xgmi` command, not all of them are supported on all systems.
+    - `--ptl-status=<STATUS>`: Enable or disable the PTL on a GPU processor (ENABLED/DISABLED).
+    - `--ptl-format=<FRMT1,FRMT2>`: Set the PTL format on a GPU processor. For example, --ptl-format I8,F32.
 
 13. **monitor**
     Monitor target devices for the specified arguments. If no arguments are provided, all arguments will be enabled. Use the watch arguments to run continuously.
@@ -228,7 +242,7 @@ The commands and respective arguments that they accept are described as follows:
     - `--policy`:  Get RAS policy information. Supports GPU filtering with `--gpu`.
 
 16. **node**
-    Displays baseboard informations and node power management informations for a NODE. (MI350 host system only).
+    Displays baseboard information and node power management information for a NODE. (MI350 host system only).
 
     Node arguments are the following:
     - `-b, --baseboard`: Show baseboard information.
@@ -273,7 +287,7 @@ AMD-SMI Commands:
     set                   Set options for devices (GPU only)
     reset                 Reset options for devices (GPU only)
     xgmi                  Displays xgmi information of the devices (GPU only)
-    topology              Displays topology information of the devices (GPU only)
+    topology              Displays topology information of the devices
     partition             Displays partition information of the devices (GPU only)
     ras                   Displays ras information of the devices (GPU only)
     node                  Displays node information of the devices (GPU only)
@@ -424,6 +438,8 @@ GPU: 0
         SHUTDOWN_EDGE_TEMPERATURE: N/A C
         SHUTDOWN_HOTSPOT_TEMPERATURE: 110 C
         SHUTDOWN_MEM_TEMPERATURE: 105 C
+        PTL: ENABLED
+        PTL_FORMAT: I8,BF16
     VRAM:
         TYPE: HBM3
         VENDOR: HYNIX
@@ -462,6 +478,8 @@ GPU: 0
         SHUTDOWN_EDGE_TEMPERATURE: N/A
         SHUTDOWN_HOTSPOT_TEMPERATURE: 110 C
         SHUTDOWN_MEM_TEMPERATURE: 120 C
+        PTL: ENABLED
+        PTL_FORMAT: I8,BF16
 ```
 
 ### 3. Metric Information
@@ -539,6 +557,49 @@ GPU: 0
             DEEP_SLEEP: DISABLED
 ```
 
+**Get throttle violation metrics:**
+
+```shell-session
+$ sudo amd-smi metric --gpu=0 --throttle
+```
+
+**Output:**
+```
+GPU: 0
+    THROTTLE:
+        ACCUMULATION_COUNTER: 4872059
+        PROCHOT_VIOLATION_ACCUMULATED: 0
+        PROCHOT_VIOLATION_ACTIVITY: 0 %
+        PROCHOT_VIOLATION_STATUS: FALSE
+        PPT_VIOLATION_ACCUMULATED: 0
+        PPT_VIOLATION_ACTIVITY: 0 %
+        PPT_VIOLATION_STATUS: FALSE
+        SOCKET_THERMAL_VIOLATION_ACCUMULATED: 0
+        SOCKET_THERMAL_VIOLATION_ACTIVITY: 0 %
+        SOCKET_THERMAL_VIOLATION_STATUS: FALSE
+        VR_THERMAL_VIOLATION_ACCUMULATED: 0
+        VR_THERMAL_VIOLATION_ACTIVITY: 0 %
+        VR_THERMAL_VIOLATION_STATUS: FALSE
+        HBM_THERMAL_VIOLATION_ACCUMULATED: 0
+        HBM_THERMAL_VIOLATION_ACTIVITY: 0 %
+        HBM_THERMAL_VIOLATION_STATUS: FALSE
+
+```
+
+**Note:** The throttle command takes two snapshots of the violation accumulators and computes deltas to determine the violation activity percentage and status. The reported fields are:
+
+- **ACCUMULATION_COUNTER**: A monotonically increasing reference counter that tracks the total observation window. It serves as the denominator when computing violation activity percentages.
+- **\*_VIOLATION_ACCUMULATED**: The raw accumulated counter for a specific violation type (e.g. PROCHOT, PPT, SOCKET_THERMAL, VR_THERMAL, HBM_THERMAL). This value represents the cumulative time the GPU has spent in that throttling condition.
+- **\*_VIOLATION_ACTIVITY**: The percentage of time the violation was active between the two snapshots. It is computed using the following formula:
+
+  \`VIOLATION_ACTIVITY = ((accumulated_t2 - accumulated_t1) / (accumulation_counter_t2 - accumulation_counter_t1)) * 100\`
+
+  Where `t1` and `t2` are the first and second snapshots respectively.
+- **\*_VIOLATION_STATUS**: `TRUE` if the violation was actively occurring during the measurement window, `FALSE` otherwise. This is derived from the activity percentage being greater than zero.
+
+A violation status of `TRUE` indicates an active throttling condition, which may impact GPU performance. For example, `PPT_VIOLATION_STATUS: TRUE` means the GPU is being throttled because it is hitting its power limit.
+
+All violation counters (both the accumulation counter and the per-violation accumulated counters) are reset to zero on server reboot, GIM driver unload, GPU reset, or memory partition change.
 
 ### 4. Firmware Information
 
@@ -676,6 +737,34 @@ WEIGHT_TABLE:
 0000:df:00.0 15           15           15           15           15           15           15           0
 ```
 
+#### NIC to GPU Link Type
+
+```shell-session
+$ sudo amd-smi topology --nic --link-type
+```
+
+**Output:**
+```
+NIC_LINK_TYPE_TABLE:
+             0000:0c:00.0 0000:22:00.0 0000:38:00.0 0000:5c:00.0 0000:9f:00.0 0000:af:00.0 0000:bf:00.0 0000:df:00.0
+0000:51:00.0 NUMA         NUMA         NUMA         PCIE         X_NUMA       X_NUMA       X_NUMA       X_NUMA
+0000:d6:00.0 X_NUMA       X_NUMA       X_NUMA       X_NUMA       NUMA         NUMA         NUMA         PCIE
+```
+
+#### NUMA Node Information
+
+```shell-session
+$ sudo amd-smi topology --numa
+```
+
+**Output:**
+```
+NIC_NUMA_TABLE:
+             NUMA         CPU AFFINITY
+0000:51:00.0 0            [0-63]
+0000:d6:00.0 1            [64-127]
+```
+
 ### 8. XGMI Information
 
 ```shell-session
@@ -734,6 +823,8 @@ GPU: 0
                 CLK_SCLK_MAX_LIMIT: 1142 MHz
                 VCN_ACTIVITY: 0 %
                 JPEG_ACTIVITY: [0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %]
+                TEMPERATURE: 37 C
+                HBM_TEMPERATURE: [35 C, 34 C]
             AID_1:
                 CLK_VCLK: 29 MHz
                 CLK_VCLK_MIN_LIMIT: 914 MHz
@@ -746,6 +837,8 @@ GPU: 0
                 CLK_SCLK_MAX_LIMIT: 1142 MHz
                 VCN_ACTIVITY: 0 %
                 JPEG_ACTIVITY: [0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %]
+                TEMPERATURE: 36 C
+                HBM_TEMPERATURE: [34 C, 33 C]
             AID_2:
                 CLK_VCLK: 29 MHz
                 CLK_VCLK_MIN_LIMIT: 914 MHz
@@ -758,6 +851,8 @@ GPU: 0
                 CLK_SCLK_MAX_LIMIT: 1142 MHz
                 VCN_ACTIVITY: 0 %
                 JPEG_ACTIVITY: [0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %]
+                TEMPERATURE: 35 C
+                HBM_TEMPERATURE: [33 C, 32 C]
             AID_3:
                 CLK_VCLK: 29 MHz
                 CLK_VCLK_MIN_LIMIT: 914 MHz
@@ -770,54 +865,160 @@ GPU: 0
                 CLK_SCLK_MAX_LIMIT: 1142 MHz
                 VCN_ACTIVITY: 0 %
                 JPEG_ACTIVITY: [0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %]
+                TEMPERATURE: 36 C
+                HBM_TEMPERATURE: [34 C, 33 C]
             XCP_0:
                 GFX_CLK: [132 MHz]
                 GFX_MIN_CLK: [500 MHz]
                 GFX_MAX_CLK: [2100 MHz]
                 GFX_CLK_LOCKED: [DISABLED]
                 GFX_USAGE: [0 %]
+                TEMPERATURE: [34 C]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_ACCUMULATED: [0]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_ACTIVITY: [0 %]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_STATUS: [INACTIVE]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_ACCUMULATED: [0]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_ACTIVITY: [0 %]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_STATUS: [INACTIVE]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_ACCUMULATED: [0]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_ACTIVITY: [0 %]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_STATUS: [INACTIVE]
+                LOW_UTILIZATION_VIOLATION_ACCUMULATED: [0]
+                LOW_UTILIZATION_VIOLATION_ACTIVITY: [0 %]
+                LOW_UTILIZATION_VIOLATION_STATUS: [INACTIVE]
             XCP_1:
                 GFX_CLK: [132 MHz]
                 GFX_MIN_CLK: [500 MHz]
                 GFX_MAX_CLK: [2100 MHz]
                 GFX_CLK_LOCKED: [DISABLED]
                 GFX_USAGE: [0 %]
+                TEMPERATURE: [34 C]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_ACCUMULATED: [0]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_ACTIVITY: [0 %]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_STATUS: [INACTIVE]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_ACCUMULATED: [0]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_ACTIVITY: [0 %]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_STATUS: [INACTIVE]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_ACCUMULATED: [0]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_ACTIVITY: [0 %]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_STATUS: [INACTIVE]
+                LOW_UTILIZATION_VIOLATION_ACCUMULATED: [0]
+                LOW_UTILIZATION_VIOLATION_ACTIVITY: [0 %]
+                LOW_UTILIZATION_VIOLATION_STATUS: [INACTIVE]
             XCP_2:
                 GFX_CLK: [132 MHz]
                 GFX_MIN_CLK: [500 MHz]
                 GFX_MAX_CLK: [2100 MHz]
                 GFX_CLK_LOCKED: [DISABLED]
                 GFX_USAGE: [0 %]
+                TEMPERATURE: [34 C]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_ACCUMULATED: [0]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_ACTIVITY: [0 %]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_STATUS: [INACTIVE]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_ACCUMULATED: [0]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_ACTIVITY: [0 %]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_STATUS: [INACTIVE]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_ACCUMULATED: [0]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_ACTIVITY: [0 %]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_STATUS: [INACTIVE]
+                LOW_UTILIZATION_VIOLATION_ACCUMULATED: [0]
+                LOW_UTILIZATION_VIOLATION_ACTIVITY: [0 %]
+                LOW_UTILIZATION_VIOLATION_STATUS: [INACTIVE]
             XCP_3:
                 GFX_CLK: [132 MHz]
                 GFX_MIN_CLK: [500 MHz]
                 GFX_MAX_CLK: [2100 MHz]
                 GFX_CLK_LOCKED: [DISABLED]
                 GFX_USAGE: [0 %]
+                TEMPERATURE: [34 C]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_ACCUMULATED: [0]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_ACTIVITY: [0 %]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_STATUS: [INACTIVE]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_ACCUMULATED: [0]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_ACTIVITY: [0 %]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_STATUS: [INACTIVE]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_ACCUMULATED: [0]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_ACTIVITY: [0 %]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_STATUS: [INACTIVE]
+                LOW_UTILIZATION_VIOLATION_ACCUMULATED: [0]
+                LOW_UTILIZATION_VIOLATION_ACTIVITY: [0 %]
+                LOW_UTILIZATION_VIOLATION_STATUS: [INACTIVE]
             XCP_4:
                 GFX_CLK: [132 MHz]
                 GFX_MIN_CLK: [500 MHz]
                 GFX_MAX_CLK: [2100 MHz]
                 GFX_CLK_LOCKED: [DISABLED]
                 GFX_USAGE: [0 %]
+                TEMPERATURE: [34 C]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_ACCUMULATED: [0]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_ACTIVITY: [0 %]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_STATUS: [INACTIVE]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_ACCUMULATED: [0]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_ACTIVITY: [0 %]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_STATUS: [INACTIVE]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_ACCUMULATED: [0]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_ACTIVITY: [0 %]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_STATUS: [INACTIVE]
+                LOW_UTILIZATION_VIOLATION_ACCUMULATED: [0]
+                LOW_UTILIZATION_VIOLATION_ACTIVITY: [0 %]
+                LOW_UTILIZATION_VIOLATION_STATUS: [INACTIVE]
             XCP_5:
                 GFX_CLK: [132 MHz]
                 GFX_MIN_CLK: [500 MHz]
                 GFX_MAX_CLK: [2100 MHz]
                 GFX_CLK_LOCKED: [DISABLED]
                 GFX_USAGE: [0 %]
+                TEMPERATURE: [34 C]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_ACCUMULATED: [0]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_ACTIVITY: [0 %]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_STATUS: [INACTIVE]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_ACCUMULATED: [0]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_ACTIVITY: [0 %]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_STATUS: [INACTIVE]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_ACCUMULATED: [0]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_ACTIVITY: [0 %]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_STATUS: [INACTIVE]
+                LOW_UTILIZATION_VIOLATION_ACCUMULATED: [0]
+                LOW_UTILIZATION_VIOLATION_ACTIVITY: [0 %]
+                LOW_UTILIZATION_VIOLATION_STATUS: [INACTIVE]
             XCP_6:
                 GFX_CLK: [132 MHz]
                 GFX_MIN_CLK: [500 MHz]
                 GFX_MAX_CLK: [2100 MHz]
                 GFX_CLK_LOCKED: [DISABLED]
                 GFX_USAGE: [0 %]
+                TEMPERATURE: [34 C]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_ACCUMULATED: [0]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_ACTIVITY: [0 %]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_STATUS: [INACTIVE]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_ACCUMULATED: [0]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_ACTIVITY: [0 %]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_STATUS: [INACTIVE]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_ACCUMULATED: [0]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_ACTIVITY: [0 %]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_STATUS: [INACTIVE]
+                LOW_UTILIZATION_VIOLATION_ACCUMULATED: [0]
+                LOW_UTILIZATION_VIOLATION_ACTIVITY: [0 %]
+                LOW_UTILIZATION_VIOLATION_STATUS: [INACTIVE]
             XCP_7:
                 GFX_CLK: [132 MHz]
                 GFX_MIN_CLK: [500 MHz]
                 GFX_MAX_CLK: [2100 MHz]
                 GFX_CLK_LOCKED: [DISABLED]
                 GFX_USAGE: [0 %]
+                TEMPERATURE: [34 C]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_ACCUMULATED: [0]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_ACTIVITY: [0 %]
+                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_STATUS: [INACTIVE]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_ACCUMULATED: [0]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_ACTIVITY: [0 %]
+                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_STATUS: [INACTIVE]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_ACCUMULATED: [0]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_ACTIVITY: [0 %]
+                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_STATUS: [INACTIVE]
+                LOW_UTILIZATION_VIOLATION_ACCUMULATED: [0]
+                LOW_UTILIZATION_VIOLATION_ACTIVITY: [0 %]
+                LOW_UTILIZATION_VIOLATION_STATUS: [INACTIVE]
 ```
 
 
@@ -1004,6 +1205,30 @@ GPU: 6
 GPU: 7
     SOC_PSTATE: Successfully set dpm soc pstate policy to 0
 
+```
+
+**Set PTL format**
+
+```shell-session
+$ sudo amd-smi set --ptl-format=I8,F32 --gpu=0
+```
+
+**Output**
+```
+GPU: 0
+    PTL_FORMAT: Successfully set PTL preferred formats to I8,F32
+```
+
+**Set PTL status**
+
+```shell-session
+$ sudo amd-smi set --ptl-status=DISABLED --gpu=0
+```
+
+**Output**
+```
+GPU: 0
+    PTL_STATUS: Successfully set PTL status to DISABLED
 ```
 
 **Set XGMI FB Sharing Mode**
@@ -1382,6 +1607,8 @@ GPU: 0
         SHUTDOWN_EDGE_TEMPERATURE: N/A
         SHUTDOWN_HOTSPOT_TEMPERATURE: 110 C
         SHUTDOWN_MEM_TEMPERATURE: 125 C
+        PTL: ENABLED
+        PTL_FORMAT: I8,BF16
     DRIVER:
         NAME: libgv
         VERSION: 8.6.0.K-dev-107-1dfb7bfa73
@@ -1533,6 +1760,8 @@ GPU: 1
         SHUTDOWN_EDGE_TEMPERATURE: N/A
         SHUTDOWN_HOTSPOT_TEMPERATURE: 110 C
         SHUTDOWN_MEM_TEMPERATURE: 125 C
+        PTL: ENABLED
+        PTL_FORMAT: I8,BF16
     DRIVER:
         NAME: libgv
         VERSION: 8.6.0.K-dev-107-1dfb7bfa73
@@ -1684,6 +1913,8 @@ GPU: 2
         SHUTDOWN_EDGE_TEMPERATURE: N/A
         SHUTDOWN_HOTSPOT_TEMPERATURE: 110 C
         SHUTDOWN_MEM_TEMPERATURE: 125 C
+        PTL: ENABLED
+        PTL_FORMAT: I8,BF16
     DRIVER:
         NAME: libgv
         VERSION: 8.6.0.K-dev-107-1dfb7bfa73
@@ -1858,17 +2089,49 @@ NIC: 0
                     ACTIVE_MTU: N/A
 ```
 
-### 16. NODE informatins
+**Get NIC topology link type:**
+
+```shell-session
+$ sudo amd-smi topology --nic --link-type
+```
+
+**Output:**
+```
+NIC_LINK_TYPE_TABLE:
+             0000:0c:00.0 0000:22:00.0 0000:38:00.0 0000:5c:00.0 0000:9f:00.0 0000:af:00.0 0000:bf:00.0 0000:df:00.0
+0000:41:00.0 NUMA         NUMA         NUMA         PCIE         X_NUMA       X_NUMA       X_NUMA       X_NUMA
+0000:d6:00.0 X_NUMA       X_NUMA       X_NUMA       X_NUMA       NUMA         NUMA         NUMA         PCIE
+```
+
+**Get NIC topology NUMA information:**
+
+```shell-session
+$ sudo amd-smi topology --nic --numa
+```
+
+**Output:**
+```
+NIC_NUMA_TABLE:
+             NUMA         CPU AFFINITY
+0000:41:00.0 0            [0-63]
+0000:d6:00.0 1            [64-127]
+```
+
+### 16. NODE information
 
 ```shell-session
 $ sudo amd-smi node -p
+```
 
+**Output:**
+```
 NODE:
     POWER_MANAGEMENT:
         LIMIT: 7000 W
         STATUS: ENABLED
+```
 
-## Use Case Scenarios
+### Use Case Scenarios
 
 This section provides practical workflows for common administrative tasks using **amd-smi**.
 

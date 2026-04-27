@@ -151,7 +151,7 @@ int main(int argc, char *argv[])
 		/* wait 10 sec for event */
 		ret = amdsmi_event_read(monitor, 1000 * 1000 * 10, &event);
 
-		if (ret == AMDSMI_STATUS_TIMEOUT) {
+		if (ret == AMDSMI_STATUS_TIMEOUT || ret == AMDSMI_STATUS_NO_DATA) {
 			/* if timeout, let's quit */
 			printf("No more events\n");
 			ret = AMDSMI_STATUS_SUCCESS;

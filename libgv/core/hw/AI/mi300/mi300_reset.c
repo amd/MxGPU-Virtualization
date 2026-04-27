@@ -579,23 +579,57 @@ static int mi300_reset_pf_allowed(struct amdgv_adapter *adapt, uint32_t active_v
 	return true;
 }
 
+/* Prevents CP DMA and FLR from running concurrently. */
+static void mi300_flr_enter(struct amdgv_adapter *adapt)
+{
+	struct amdgv_hive_info *hive;
+
+	if (adapt->asic_type != CHIP_MI350X)
+		return;
+
+	hive = amdgv_get_xgmi_hive(adapt);
+	if (!hive)
+		return;
+
+	shared_exclusion_enter(adapt, &hive->flr_cp_dma_lock, SHARED_EXCLUSION_GROUP_FLR);
+}
+
+static void mi300_flr_exit(struct amdgv_adapter *adapt)
+{
+	struct amdgv_hive_info *hive;
+
+	if (adapt->asic_type != CHIP_MI350X)
+		return;
+
+	hive = amdgv_get_xgmi_hive(adapt);
+	if (!hive)
+		return;
+
+	shared_exclusion_exit(adapt, &hive->flr_cp_dma_lock, SHARED_EXCLUSION_GROUP_FLR);
+}
+
 static int mi300_reset_trigger_vf_flr(struct amdgv_adapter *adapt,
 		uint32_t idx_vf)
 {
 	int ret = 0;
-	struct mi300_vf_flr_state vf_state;
+	struct mi300_vf_flr_state vf_state = { 0 };
 	struct mi300_reset_access_info access_info;
 	int sdma_id;
 	int doorbell_index;
 
+	mi300_flr_enter(adapt);
+
 	/* need SMU FW loaded and responding to do FLR */
 	if (!mi300_smu_get_fw_loaded_status(adapt)) {
 		AMDGV_ERROR("SMU FW not responding. Unable to do FLR\n");
-		return AMDGV_FAILURE;
+		ret = AMDGV_FAILURE;
+		goto failed;
 	}
 
-	if (idx_vf == AMDGV_PF_IDX)
+	if (idx_vf == AMDGV_PF_IDX) {
+		mi300_flr_exit(adapt);
 		return mi300_reset_trigger_pf_soft_flr(adapt);
+	}
 
 	AMDGV_INFO("start %s FLR\n", amdgv_idx_to_str(idx_vf));
 
@@ -603,7 +637,8 @@ static int mi300_reset_trigger_vf_flr(struct amdgv_adapter *adapt,
 	if (!vf_state.pci_cfg) {
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 			PCI_CONFIG_SIZE);
-		return AMDGV_FAILURE;
+		ret = AMDGV_FAILURE;
+		goto failed;
 	}
 
 	vf_state.idx_vf = idx_vf;
@@ -690,18 +725,16 @@ static int mi300_reset_trigger_vf_flr(struct amdgv_adapter *adapt,
 
 	ret = amdgv_sched_reset(adapt, idx_vf, AMDGV_SCHED_BLOCK_ALL);
 
-	if (!ret) {
-		int ptl_ret = mi300_gpumon_ptl_restore(adapt);
-		if (ptl_ret != 0 && ptl_ret != AMDGV_NOT_SUPPORTED) {
-			AMDGV_WARN("Failed to restore PTL after VF FLR: %d\n", ptl_ret);
-		}
-	}
-
 	if (!ret)
 		AMDGV_INFO("completed %s FLR succesfully\n", amdgv_idx_to_str(idx_vf));
 
 failed:
-	oss_free(vf_state.pci_cfg);
+	mi300_flr_exit(adapt);
+
+	if (vf_state.pci_cfg) {
+		oss_free(vf_state.pci_cfg);
+	}
+
 	return ret;
 }
 
@@ -953,13 +986,6 @@ static int mi300_reset_trigger_pf_soft_flr(struct amdgv_adapter *adapt)
 
 	ret = amdgv_sched_reset(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_ALL);
 
-	if (!ret) {
-		int ptl_ret = mi300_gpumon_ptl_restore(adapt);
-		if (ptl_ret != 0 && ptl_ret != AMDGV_NOT_SUPPORTED) {
-			AMDGV_WARN("Failed to restore PTL after PF Soft FLR: %d\n", ptl_ret);
-		}
-	}
-
 	if (!ret)
 		AMDGV_INFO("completed PF Soft FLR succesfully\n");
 
@@ -968,7 +994,7 @@ failed:
 	return ret;
 }
 
-int mi300_reset_trigger_whole_gpu_reset(struct amdgv_adapter *adapt)
+int mi300_reset_trigger_whole_gpu_reset(struct amdgv_adapter *adapt, bool is_unload)
 {
 	int ret = 0;
 	uint32_t tmp;
@@ -1000,7 +1026,7 @@ int mi300_reset_trigger_whole_gpu_reset(struct amdgv_adapter *adapt)
 	WREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_SBIOS_SCRATCH_3), tmp);
 
 	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->gpu_mode1_reset)
-		ret = adapt->pp.pp_funcs->gpu_mode1_reset(adapt);
+		ret = adapt->pp.pp_funcs->gpu_mode1_reset(adapt, is_unload);
 	if (ret)
 		goto exit;
 
@@ -1024,13 +1050,6 @@ int mi300_reset_trigger_whole_gpu_reset(struct amdgv_adapter *adapt)
 
 	/* restore mmio protection info after PF_FLR or WHOLE_GPU_RESET */
 	mi300_reset_restore_access_info(adapt, &access_info);
-
-	if (!ret) {
-		int ptl_ret = mi300_gpumon_ptl_restore(adapt);
-		if (ptl_ret != 0 && ptl_ret != AMDGV_NOT_SUPPORTED) {
-			AMDGV_WARN("Failed to restore PTL after whole GPU reset: %d\n", ptl_ret);
-		}
-	}
 
 exit:
 	oss_free(reset_state);
@@ -1129,7 +1148,7 @@ static int mi300_reset_whole_gpu_reset(struct amdgv_adapter *adapt)
 		task_barrier_enter(&hive->tb_chain_reset, hive->number_adapters);
 
 		if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->gpu_mode1_reset)
-			ret = adapt->pp.pp_funcs->gpu_mode1_reset(adapt);
+			ret = adapt->pp.pp_funcs->gpu_mode1_reset(adapt, false);
 
 		task_barrier_exit(&hive->tb_chain_reset, hive->number_adapters);
 		if (ret)
@@ -1139,7 +1158,7 @@ static int mi300_reset_whole_gpu_reset(struct amdgv_adapter *adapt)
 
 	} else {
 		if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->gpu_mode1_reset)
-			ret = adapt->pp.pp_funcs->gpu_mode1_reset(adapt);
+			ret = adapt->pp.pp_funcs->gpu_mode1_reset(adapt, false);
 		if (ret)
 			goto exit;
 	}
@@ -1309,6 +1328,7 @@ static int mi300_reset_sw_fini(struct amdgv_adapter *adapt)
 
 static int mi300_reset_hw_init(struct amdgv_adapter *adapt)
 {
+	amdgv_gpuiov_reset_saved_rlcv_state(adapt);
 	return 0;
 }
 

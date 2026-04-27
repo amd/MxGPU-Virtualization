@@ -2435,6 +2435,9 @@
 #define regMMEA4_CE_ERR_STATUS_HI                                                                       0x0916
 #define regMMEA4_CE_ERR_STATUS_HI_BASE_IDX                                                              0
 
+#define regMMEA5_MAM_CTRL                                                                               0x0a41
+#define regMMEA5_MAM_CTRL_BASE_IDX                                                                      0
+
 // addressBlock: aid_mmhub_pctldec0
 // base address: 0x62a00
 #define regPCTL0_CTRL                                                                                   0x0a80

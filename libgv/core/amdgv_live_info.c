@@ -247,6 +247,9 @@ enum amdgv_live_info_status amdgv_live_info_init_metadata(struct amdgv_adapter *
 			case AMDGV_LIVE_INFO_DATA__VF_CRIT_REGION:
 				header->structure_size = sizeof(struct amdgv_live_info_vf_crit_region) * AMDGV_MAX_VF_LIVE;
 				break;
+			case AMDGV_LIVE_INFO_DATA__ACC_BITS:
+				header->structure_size = sizeof(struct amdgv_live_info_acc_bits);
+				break;
 			default:
 				AMDGV_DEBUG("No live data struct for op %d in amdgv_live_info_data.\n", data_op);
 				break;
@@ -457,6 +460,14 @@ int amdgv_live_info_export_data(struct amdgv_adapter *adapt, uint32_t data_op,
 	}
 	case AMDGV_LIVE_INFO_DATA__VF_CRIT_REGION: {
 		*status = amdgv_vfmgr_export_live_data_crit_region(adapt, (struct amdgv_live_info_vf_crit_region *)data);
+		break;
+	}
+	case AMDGV_LIVE_INFO_DATA__ACC_BITS: {
+		if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)) {
+			*status = AMDGV_LIVE_INFO_STATUS_SUCCESS;
+			break;
+		}
+		*status = amdgv_dirtybit_export_live_data(adapt, (struct amdgv_live_info_acc_bits *)data);
 		break;
 	}
 	default:
@@ -728,6 +739,14 @@ int amdgv_live_info_import_data(struct amdgv_adapter *adapt, uint32_t data_op,
 	}
 	case AMDGV_LIVE_INFO_DATA__VF_CRIT_REGION: {
 		*status = amdgv_vfmgr_import_live_data_crit_region(adapt, (struct amdgv_live_info_vf_crit_region *)data);
+		break;
+	}
+	case AMDGV_LIVE_INFO_DATA__ACC_BITS: {
+		if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)) {
+			*status = AMDGV_LIVE_INFO_STATUS_SUCCESS;
+			break;
+		}
+		*status = amdgv_dirtybit_import_live_data(adapt, (struct amdgv_live_info_acc_bits *)data);
 		break;
 	}
 	default:

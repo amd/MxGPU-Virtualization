@@ -27,7 +27,7 @@
 #define MAX_UMC_CHANNEL_NUM 32
 #define BAD_PAGE_RECORD_THRESHOLD ((adapt->ecc.bad_page_record_threshold) ? adapt->ecc.bad_page_record_threshold : 10)
 
-#define MAX_IN_BAND_QUERY_ECC_CNT  100
+#define MAX_IN_BAND_QUERY_ECC_CNT  500
 #define MAX_BAD_PAGE_THRESHOLD 256
 
 #define AMDGV_ECC_FLAG__SKIP_ROW_RMA		(1 << 0)

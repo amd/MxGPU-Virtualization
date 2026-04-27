@@ -316,6 +316,42 @@ inline std::string metricJpegUsagePerPartitionHeaderTemplate{
 inline std::string metricTempPerPartitionHeaderTemplate{
 	"                TEMPERATURE: ["};
 
+inline std::string metricGfxClkBelowHostLimitPowerAccPerPartitionHeaderTemplate{
+	"                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_ACCUMULATED: ["};
+
+inline std::string metricGfxClkBelowHostLimitThermalAccPerPartitionHeaderTemplate{
+	"                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_ACCUMULATED: ["};
+
+inline std::string metricTotalGfxClkBelowHostLimitAccPerPartitionHeaderTemplate{
+	"                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_ACCUMULATED: ["};
+
+inline std::string metricLowUtilizationAccPerPartitionHeaderTemplate{
+	"                LOW_UTILIZATION_VIOLATION_ACCUMULATED: ["};
+
+inline std::string metricGfxClkBelowHostLimitPowerStatusPerPartitionHeaderTemplate{
+	"                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_STATUS: ["};
+
+inline std::string metricGfxClkBelowHostLimitThermalStatusPerPartitionHeaderTemplate{
+	"                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_STATUS: ["};
+
+inline std::string metricTotalGfxClkBelowHostLimitStatusPerPartitionHeaderTemplate{
+	"                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_STATUS: ["};
+
+inline std::string metricLowUtilizationStatusPerPartitionHeaderTemplate{
+	"                LOW_UTILIZATION_VIOLATION_STATUS: ["};
+
+inline std::string metricGfxClkBelowHostLimitPowerActivityPerPartitionHeaderTemplate{
+	"                GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_ACTIVITY: ["};
+
+inline std::string metricGfxClkBelowHostLimitThermalActivityPerPartitionHeaderTemplate{
+	"                GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_ACTIVITY: ["};
+
+inline std::string metricTotalGfxClkBelowHostLimitActivityPerPartitionHeaderTemplate{
+	"                TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_ACTIVITY: ["};
+
+inline std::string metricLowUtilizationActivityPerPartitionHeaderTemplate{
+	"                LOW_UTILIZATION_VIOLATION_ACTIVITY: ["};
+
 inline std::string metricHbmTempPerPartitionHeaderTemplate{
 	"                HBM_TEMPERATURE: ["};
 
@@ -363,6 +399,9 @@ inline std::string GFXUsagePerPartitionTemplate{
 
 inline std::string TempXcdPerPartitionTemplate{
 	"%s %s"};
+
+inline std::string AccXcdPerPartitionTemplate{
+	"%s"};
 
 inline std::string metricJpegUsageFooterTemplate{
 	"]\n"};
@@ -677,30 +716,36 @@ inline std::string setSuccessfullyTemplate {
 inline std::string NodeHeaderTemplate {	"NODE: \n"};
 
 inline std::string BaseBoardHeaderTemplate{ "    BASEBOARD:\n" };
+inline std::string BaseBoardTemperatureHeaderTemplate{ "        TEMPERATURE:\n" };
 
-inline std::string baseboardSystemTempUbbFpgaTemplate{ "        UBB_FPGA: %s %s\n" };
-inline std::string baseboardSystemTempUbbFrontTemplate{ "        UBB_FRONT: %s %s\n" };
-inline std::string baseboardSystemTempUbbBackTemplate{ "        UBB_BACK: %s %s\n" };
-inline std::string baseboardSystemTempUbbOam7Template{ "        UBB_OAM7: %s %s\n" };
-inline std::string baseboardSystemTempUbbIbcTemplate{ "        UBB_IBC: %s %s\n" };
-inline std::string baseboardSystemTempUbbUfpgaTemplate{ "        UBB_UFPGA: %s %s\n" };
-inline std::string baseboardSystemTempUbbOam1Template{ "        UBB_OAM1: %s %s\n" };
-inline std::string baseboardSystemTempOam01HscTemplate{ "        OAM_0_1_HSC: %s %s\n" };
-inline std::string baseboardSystemTempOam23HscTemplate{ "        OAM_2_3_HSC: %s %s\n" };
-inline std::string baseboardSystemTempOam45HscTemplate{ "        OAM_4_5_HSC: %s %s\n" };
-inline std::string baseboardSystemTempOam67HscTemplate{ "        OAM_6_7_HSC: %s %s\n" };
-inline std::string baseboardSystemTempUbbFpga0v72VrTemplate{ "        UBB_FPGA_0V72_VR: %s %s\n" };
-inline std::string baseboardSystemTempUbbFpga3v3VrTemplate{ "        UBB_FPGA_3V3_VR: %s %s\n" };
-inline std::string baseboardSystemTempRetimer01231v2VrTemplate{ "        RETIMER_0_1_2_3_1V2_VR: %s %s\n" };
-inline std::string baseboardSystemTempRetimer45671v2VrTemplate{ "        RETIMER_4_5_6_7_1V2_VR: %s %s\n" };
-inline std::string baseboardSystemTempRetimer010v9VrTemplate{ "        RETIMER_0_1_0V9_VR: %s %s\n" };
-inline std::string baseboardSystemTempRetimer450v9VrTemplate{ "        RETIMER_4_5_0V9_VR: %s %s\n" };
-inline std::string baseboardSystemTempRetimer230v9VrTemplate{ "        RETIMER_2_3_0V9_VR: %s %s\n" };
-inline std::string baseboardSystemTempRetimer670v9VrTemplate{ "        RETIMER_6_7_0V9_VR: %s %s\n" };
-inline std::string baseboardSystemTempOam01233v3VrTemplate{ "        OAM_0_1_2_3_3V3_VR: %s %s\n" };
-inline std::string baseboardSystemTempOam45673v3VrTemplate{ "        OAM_4_5_6_7_3V3_VR: %s %s\n" };
-inline std::string baseboardSystemTempIbcHscTemplate{ "        IBC_HSC: %s %s\n" };
-inline std::string baseboardSystemTempIbcTemplate{ "        IBC: %s %s\n" };
+inline std::string baseboardSystemTempUbbFpgaTemplate{ "            UBB_FPGA: %s %s\n" };
+inline std::string baseboardSystemTempUbbFrontTemplate{ "            UBB_FRONT: %s %s\n" };
+inline std::string baseboardSystemTempUbbBackTemplate{ "            UBB_BACK: %s %s\n" };
+inline std::string baseboardSystemTempUbbOam7Template{ "            UBB_OAM7: %s %s\n" };
+inline std::string baseboardSystemTempUbbIbcTemplate{ "            UBB_IBC: %s %s\n" };
+inline std::string baseboardSystemTempUbbUfpgaTemplate{ "            UBB_UFPGA: %s %s\n" };
+inline std::string baseboardSystemTempUbbOam1Template{ "            UBB_OAM1: %s %s\n" };
+inline std::string baseboardSystemTempOam01HscTemplate{ "            OAM_0_1_HSC: %s %s\n" };
+inline std::string baseboardSystemTempOam23HscTemplate{ "            OAM_2_3_HSC: %s %s\n" };
+inline std::string baseboardSystemTempOam45HscTemplate{ "            OAM_4_5_HSC: %s %s\n" };
+inline std::string baseboardSystemTempOam67HscTemplate{ "            OAM_6_7_HSC: %s %s\n" };
+inline std::string baseboardSystemTempUbbFpga0v72VrTemplate{ "            UBB_FPGA_0V72_VR: %s %s\n" };
+inline std::string baseboardSystemTempUbbFpga3v3VrTemplate{ "            UBB_FPGA_3V3_VR: %s %s\n" };
+inline std::string baseboardSystemTempRetimer01231v2VrTemplate{ "            RETIMER_0_1_2_3_1V2_VR: %s %s\n" };
+inline std::string baseboardSystemTempRetimer45671v2VrTemplate{ "            RETIMER_4_5_6_7_1V2_VR: %s %s\n" };
+inline std::string baseboardSystemTempRetimer010v9VrTemplate{ "            RETIMER_0_1_0V9_VR: %s %s\n" };
+inline std::string baseboardSystemTempRetimer450v9VrTemplate{ "            RETIMER_4_5_0V9_VR: %s %s\n" };
+inline std::string baseboardSystemTempRetimer230v9VrTemplate{ "            RETIMER_2_3_0V9_VR: %s %s\n" };
+inline std::string baseboardSystemTempRetimer670v9VrTemplate{ "            RETIMER_6_7_0V9_VR: %s %s\n" };
+inline std::string baseboardSystemTempOam01233v3VrTemplate{ "            OAM_0_1_2_3_3V3_VR: %s %s\n" };
+inline std::string baseboardSystemTempOam45673v3VrTemplate{ "            OAM_4_5_6_7_3V3_VR: %s %s\n" };
+inline std::string baseboardSystemTempIbcHscTemplate{ "            IBC_HSC: %s %s\n" };
+inline std::string baseboardSystemTempIbcTemplate{ "            IBC: %s %s\n" };
+
+inline std::string BaseBoardPowerHeaderTemplate{ "        POWER:\n" };
+
+inline std::string baseboardSystemPowerUbbPowerTemplate{ "            UBB: %s %s\n" };
+inline std::string baseboardSystemPowerUbbPowerThresholdTemplate{ "            UBB_THRESHOLD: %s %s\n" };
 
 inline std::string GpuBoardHeaderTemplate{ "    GPUBOARD:\n" };
 
@@ -768,3 +813,27 @@ inline std::string nodePowerManagementTemplate {
 	"        LIMIT: %s W\n"
 	"        STATUS: %s \n"
 };
+
+inline std::string topologyNicLinkTypeTemplate{ "NIC_LINK_TYPE_TABLE:\n" };
+
+inline std::string topologyNumaTemplate{ "NIC_NUMA_TABLE:\n" };
+
+inline std::string ThrottleInfoHeaderTemplate{ "    THROTTLE:\n"
+	"        ACCUMULATION_COUNTER: %s\n"
+	"        PROCHOT_VIOLATION_ACCUMULATED: %s\n"
+	"        PROCHOT_VIOLATION_ACTIVITY: %s %s\n"
+	"        PROCHOT_VIOLATION_STATUS: %s\n"
+	"        PPT_VIOLATION_ACCUMULATED: %s\n"
+	"        PPT_VIOLATION_ACTIVITY: %s %s\n"
+	"        PPT_VIOLATION_STATUS: %s\n"
+	"        SOCKET_THERMAL_VIOLATION_ACCUMULATED: %s\n"
+	"        SOCKET_THERMAL_VIOLATION_ACTIVITY: %s %s\n"
+	"        SOCKET_THERMAL_VIOLATION_STATUS: %s\n"
+	"        VR_THERMAL_VIOLATION_ACCUMULATED: %s\n"
+	"        VR_THERMAL_VIOLATION_ACTIVITY: %s %s\n"
+	"        VR_THERMAL_VIOLATION_STATUS: %s\n"
+	"        HBM_THERMAL_VIOLATION_ACCUMULATED: %s\n"
+	"        HBM_THERMAL_VIOLATION_ACTIVITY: %s %s\n"
+	"        HBM_THERMAL_VIOLATION_STATUS: %s\n"
+};
+

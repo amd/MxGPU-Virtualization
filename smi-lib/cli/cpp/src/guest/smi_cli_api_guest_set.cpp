@@ -64,6 +64,10 @@ int AmdSmiApiGuest::amdsmi_set_process_isolation_command(uint64_t processor_bdf,
 	}
 
 	ret = guest_amdsmi_set_gpu_process_isolation(processor, mode);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		return ret;
+	}
 
 	return ret;
 }

@@ -21,14 +21,13 @@
  */
 #include "amdgv.h"
 #include "amdgv_device.h"
+#include "amdgv_sched_internal.h"
 #include "mi300_dirtybit.h"
 #include "gfx_v9_4_3.h"
 #include "mmhub_v1_8.h"
 #include "sdma_v4_4_2.h"
 
 static const uint32_t this_block = AMDGV_GFX_BLOCK;
-
-#define MI300_DIRTYBIT_BUFFER_SIZE KBYTES_TO_BYTES(16)
 
 static int mi300_dirtybit_control(struct amdgv_adapter *adapt, bool enable)
 {
@@ -40,30 +39,25 @@ static int mi300_dirtybit_control(struct amdgv_adapter *adapt, bool enable)
 
 static int mi300_dirtybit_query_dirty_page_size(struct amdgv_adapter *adapt, uint32_t *dirty_page_size)
 {
-	if (dirty_page_size != NULL) {
-		switch (adapt->dirtybit.mam_adram_mode) {
-		case MI300_MAM_ADRAM_MODE_256KB:
-			*dirty_page_size = 256 * 1024;
-			break;
-		case MI300_MAM_ADRAM_MODE_512KB:
-			*dirty_page_size = 512 * 1024;
-			break;
-		case MI300_MAM_ADRAM_MODE_1MB:
-			*dirty_page_size = 1 * 1024 * 1024;
-			break;
-		case MI300_MAM_ADRAM_MODE_2MB:
-			*dirty_page_size = 2 * 1024 * 1024;
-			break;
-		default:
-			*dirty_page_size = -1;
-			return AMDGV_FAILURE;
-			break;
-		}
-	} else {
+	int ret = 0;
+
+	if (dirty_page_size == NULL)
 		return AMDGV_FAILURE;
+
+	switch (adapt->asic_type) {
+	case CHIP_MI350X:
+		*dirty_page_size = MI350_4MB_DIRTY_PAGE_SIZE;
+		break;
+	case CHIP_MI308X:
+		*dirty_page_size = MI308_2MB_DIRTY_PAGE_SIZE;
+		break;
+	default:
+		*dirty_page_size = -1;
+		ret = AMDGV_FAILURE;
+		break;
 	}
 
-	return 0;
+	return ret;
 }
 
 static inline uint64_t mi300_dirtybit_get_total_bitmap_size(struct amdgv_adapter *adapt, uint64_t fb_size, uint32_t page_size)
@@ -88,20 +82,30 @@ static uint64_t mi300_dirtybit_get_usable_fb_bitmap_size(struct amdgv_adapter *a
 	return mi300_dirtybit_get_total_bitmap_size(adapt, fb_size, page_size);
 }
 
+static struct amdgv_ring* mi300_dirtybit_get_available_ring(struct amdgv_adapter *adapt, int aid, int index)
+{
+	if (adapt->sdma.num_pf_dedicated_inst != 0) {
+		return amdgv_sdma_get_pf_dedicated_ring(adapt, aid, index);
+	} else {
+		return amdgv_sdma_get_pfvf_shared_ring(adapt, aid, index);
+	}
+}
+
 static int mi300_dirtybit_query_data_sdma(struct amdgv_adapter *adapt, uint64_t mc_addr, struct amdgv_query_dirty_bit_data *data)
 {
 	int page_size = 0;
 	struct amdgv_ring *ring;
-	int ring_index = -1;
+	int ring_index = 0;
 	uint32_t seq[16] = {0};
 	uint32_t *query_bitmap_vaddr = (uint32_t *)data->dbit_plane_data_buffer;
-	uint32_t query_bitmap_size;
+	uint32_t query_bitmap_size, bitmap_mem_offset;
 	uint32_t query_bitmap_size_total;
 	void *bitmap_vaddr;
 	uint64_t bitmap_gpu_addr;
 	uint64_t nr_pages;
-	int aid, dagb, xcc_id, ea_per_aid;
+	int aid, dagb, xcc_id, xcc_per_aid, ring_index_in_aid;
 	int i, ret = 0;
+	uint32_t cur_idx_vf = AMDGV_INVALID_IDX_VF;
 
 	if (adapt->sdma.query_dirtybit == NULL) {
 		AMDGV_ERROR("query_dirtybit is not set\n");
@@ -128,10 +132,11 @@ static int mi300_dirtybit_query_data_sdma(struct amdgv_adapter *adapt, uint64_t 
 		return AMDGV_FAILURE;
 	}
 
+	bitmap_mem_offset = 0;
 	nr_pages = DIV_ROUND_UP(data->query_size, page_size);
 	nr_pages = nr_pages == 0 ? 1 : nr_pages;
 	query_bitmap_size = amdgv_fb_size_to_bitmap_size_align(data->query_size, page_size);
-	ea_per_aid = adapt->mcp.num_dagb + (adapt->mcp.gfx.num_xcc / adapt->mcp.num_aid);
+	xcc_per_aid = adapt->mcp.gfx.num_xcc / adapt->mcp.num_aid;
 	query_bitmap_size_total = mi300_dirtybit_get_total_bitmap_size(adapt, data->query_size, page_size);
 	if (query_bitmap_size > data->dbit_plane_data_size) {
 		AMDGV_ERROR("dbit_plane_data_size is not enough\n");
@@ -145,57 +150,102 @@ static int mi300_dirtybit_query_data_sdma(struct amdgv_adapter *adapt, uint64_t 
 
 	oss_memset(bitmap_vaddr, 0, query_bitmap_size_total);
 
-	for (xcc_id = 0; xcc_id < adapt->mcp.gfx.num_xcc; xcc_id++) {
-		aid = GET_INST(GC, xcc_id) / 2;
-		/* Get the SDMA ring in aid #N */
-		ring = amdgv_sdma_get_pf_dedicated_ring(adapt, aid, ++ring_index);
-		if (ring == NULL) {
-			AMDGV_ERROR("failed to get ring at aid=%d, index=%d\n", aid, ring_index);
-			return AMDGV_FAILURE;
-		}
+	amdgv_gpuiov_get_active_vf_idx(adapt, AMDGV_SCHED_BLOCK_GFX, &cur_idx_vf);
 
-		/* Submit the SDMA pkg to query dirty bit in GFXHUB in aid #N */
+	if (!IS_DEDICATED_SDMA_RING_AVAILABLE(adapt))
+		amdgv_sched_context_switch_to_vf(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX);
+
+	/* Submit GFXHUB queries for all xccs */
+	for (xcc_id = 0; xcc_id < adapt->mcp.gfx.num_xcc; xcc_id++) {
+		/* Calculate which aid this xcc belongs to */
+		aid = GET_INST(GC, xcc_id) / 2;
+		/* Calculate the available SDMA ring index in aid */
+		ring_index_in_aid = xcc_id % xcc_per_aid;
+		/* Get the SDMA ring for this xcc */
+		ring = mi300_dirtybit_get_available_ring(adapt, aid, ring_index_in_aid);
+		if (ring == NULL) {
+			AMDGV_ERROR("failed to get ring at xcc=%d, aid=%d, index=%d\n", xcc_id, aid, ring_index);
+			ret = AMDGV_FAILURE;
+			goto out;
+		}
+		/* Submit the SDMA pkg to query dirty bit in GFXHUB for this xcc */
 		amdgv_sdma_ring_query_dirtybit(ring, mc_addr, nr_pages,
-			bitmap_gpu_addr + ea_per_aid * aid * query_bitmap_size,
+			bitmap_gpu_addr + bitmap_mem_offset,
 			aid, GET_INST(GC, xcc_id) & 0x1, 0,
 			!data->dbit_preserve);
+		AMDGV_DEBUG("[GFXHUB][AID%d][XCC%d]bitmap_gpu_addr: 0x%llx, size: 0x%llx, ring_index=%d, ring_name=%s\n",
+					aid, GET_INST(GC, xcc_id),
+					bitmap_gpu_addr + bitmap_mem_offset, query_bitmap_size, ring_index, ring->name);
+		bitmap_mem_offset += query_bitmap_size;
+		if (bitmap_mem_offset > query_bitmap_size_total) {
+			AMDGV_ERROR("Required memory exceeded allocated memory size\n");
+			ret = AMDGV_FAILURE;
+			goto out;
+		}
 		amdgv_fence_emit_polling(ring, &seq[ring_index], SDMA_MAX_TIMEOUT);
+		ring_index++;
 		amdgv_ring_commit(ring);
+	}
 
-		 /* Get the SDMA ring in aid #N */
-		ring = amdgv_sdma_get_pf_dedicated_ring(adapt, aid, ++ring_index);
+	/* Submit MMHUB queries for all aids */
+	for (aid = 0; aid < adapt->mcp.num_aid; aid++) {
+		/* We've used the first #xcc_per_aid rings in aid for GFXHUB queries
+		 * so the next ring index is #xcc_per_aid for MMHUB queries
+		 */
+		ring_index_in_aid = xcc_per_aid;
+		/* Get the SDMA ring in aid #N */
+		ring = mi300_dirtybit_get_available_ring(adapt, aid, ring_index_in_aid);
 		if (ring == NULL) {
 			AMDGV_ERROR("failed to get ring at aid=%d, index=%d\n", aid, ring_index);
-			return AMDGV_FAILURE;
+			ret = AMDGV_FAILURE;
+			goto out;
 		}
 		/* Submit the SDMA pkg to query dirty bit in all the MMHUB instances in aid #N */
 		for (dagb = 0; dagb < adapt->mcp.num_dagb; dagb++) {
 			amdgv_sdma_ring_query_dirtybit(ring, mc_addr, nr_pages,
-				bitmap_gpu_addr + query_bitmap_size * (ea_per_aid * aid + dagb + 1),
-				aid, 2, dagb, !data->dbit_preserve);
+				bitmap_gpu_addr + bitmap_mem_offset, aid, 2, dagb, !data->dbit_preserve);
+			AMDGV_DEBUG("[MMHUB][AID%d][DAGB%d]bitmap_gpu_addr: 0x%llx, size: 0x%llx, ring_index=%d, ring_name=%s\n",
+						aid, dagb,
+						bitmap_gpu_addr + bitmap_mem_offset, query_bitmap_size, ring_index, ring->name);
+			bitmap_mem_offset += query_bitmap_size;
+			if (bitmap_mem_offset > query_bitmap_size_total) {
+				AMDGV_ERROR("Required memory exceeded allocated memory size\n");
+				ret = AMDGV_FAILURE;
+				goto out;
+			}
 		}
 
 		amdgv_fence_emit_polling(ring, &seq[ring_index], SDMA_MAX_TIMEOUT);
+		ring_index++;
 		amdgv_ring_commit(ring);
 	}
 
-	ring_index = -1;
+	/* Wait for GFXHUB queries to complete for all xccs */
+	ring_index = 0;
 	for (xcc_id = 0; xcc_id < adapt->mcp.gfx.num_xcc; xcc_id++) {
 		int r;
-
+		/* Calculate which aid this xcc belongs to */
 		aid = GET_INST(GC, xcc_id) / 2;
-		ring = amdgv_sdma_get_pf_dedicated_ring(adapt, aid, ++ring_index);
-		/* Wait for the GFXHUB query is done in aid #N */
+		ring_index_in_aid = xcc_id % xcc_per_aid;
+		ring = mi300_dirtybit_get_available_ring(adapt, aid, ring_index_in_aid);
 		r = amdgv_fence_wait_polling(ring, seq[ring_index], SDMA_MAX_TIMEOUT);
+		ring_index++;
 		if (r <= 0) {
-			AMDGV_ERROR("gc ring wait polling failed, aid=%d, index=%d\n", aid, ring_index);
+			AMDGV_ERROR("gc ring wait polling failed, xcc=%d, aid=%d, index=%d\n", xcc_id, aid, ring_index);
 			ret = AMDGV_FAILURE;
 			goto out;
 		}
+	}
 
-		ring = amdgv_sdma_get_pf_dedicated_ring(adapt, aid, ++ring_index);
+	/* Wait for MMHUB queries to complete for all aids */
+	for (aid = 0; aid < adapt->mcp.num_aid; aid++) {
+		int r;
+
+		ring_index_in_aid = xcc_per_aid;
+		ring = mi300_dirtybit_get_available_ring(adapt, aid, ring_index_in_aid);
 		/* Wait for the MMHUB query is done in aid #N */
 		r = amdgv_fence_wait_polling(ring, seq[ring_index], SDMA_MAX_TIMEOUT);
+		ring_index++;
 		if (r <= 0) {
 			AMDGV_ERROR("mm ring wait polling failed, aid=%d, index=%d\n", aid, ring_index);
 			ret = AMDGV_FAILURE;
@@ -215,6 +265,9 @@ static int mi300_dirtybit_query_data_sdma(struct amdgv_adapter *adapt, uint64_t 
 	}
 	ret = 0;
 out:
+	if (!IS_DEDICATED_SDMA_RING_AVAILABLE(adapt))
+		amdgv_sched_context_switch_to_vf(adapt, cur_idx_vf, AMDGV_SCHED_BLOCK_GFX);
+
 	return ret;
 }
 
@@ -255,19 +308,29 @@ static const struct amdgv_dirtybit_funcs mi300_db_funcs = {
 static int mi300_dirtybit_sw_init(struct amdgv_adapter *adapt)
 {
 	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)) {
-		adapt->dirtybit.mam_adram_mode = MI300_MAM_ADRAM_MODE_MAX;
+		adapt->dirtybit.mam_adram_mode = MAM_ADRAM_MODE_INVALID;
 		return 0;
 	}
 
 	adapt->dirtybit.funcs = &mi300_db_funcs;
-	adapt->dirtybit.mam_adram_mode = MI300_MAM_ADRAM_MODE_2MB;
+	switch (adapt->asic_type) {
+	case CHIP_MI308X:
+		adapt->dirtybit.mam_adram_mode = MI308_2MB_MAM_ADRAM_MODE;
+		break;
+	case CHIP_MI350X:
+		adapt->dirtybit.mam_adram_mode = MI350_4MB_MAM_ADRAM_MODE;
+		break;
+	default:
+		AMDGV_WARN("Invalid asic_type: %d, set mam_adram_mode to default:0\n", adapt->asic_type);
+		break;
+	}
 
-	adapt->dirtybit.acc_bits_whole_fb = oss_malloc(MI300_DIRTYBIT_BUFFER_SIZE);
+	adapt->dirtybit.acc_bits_whole_fb = oss_malloc(AMDGV_DIRTYBIT_BUFFER_SIZE);
 	if (adapt->dirtybit.acc_bits_whole_fb == NULL) {
 		AMDGV_ERROR("failed to allocate acc_bits_whole_fb\n");
 		return AMDGV_FAILURE;
 	}
-	oss_memset(adapt->dirtybit.acc_bits_whole_fb, 0, MI300_DIRTYBIT_BUFFER_SIZE);
+	oss_memset(adapt->dirtybit.acc_bits_whole_fb, 0, AMDGV_DIRTYBIT_BUFFER_SIZE);
 
 	return 0;
 }

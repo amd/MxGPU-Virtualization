@@ -1,4 +1,4 @@
-/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
+/* * Copyright (C) 2023-2026 Advanced Micro Devices. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -27,6 +27,8 @@
 #include <map>
 #include <fstream>
 #include <memory>
+#include <cinttypes>
+#include <cstdint>
 
 // Major version should be changed when making incompatible changes to the command interface:
 // - Deprecating or removing existing commands
@@ -36,7 +38,7 @@
 // - Adding new commands
 // - Improvements to existing commands
 // - Adding new options to existing commands without changing the basic input/output format
-#define AMDSMI_TOOL_VERSION_MINOR 0
+#define AMDSMI_TOOL_VERSION_MINOR 12
 // Release version should be incremented for minor issue fixes and maintenance updates
 // that don't add features or change command behavior
 #define AMDSMI_TOOL_VERSION_RELEASE 3
@@ -69,6 +71,44 @@ std::string string_format(const std::string &format, Args... args)
 	std::snprintf(buf.get(), size, format.c_str(), args...);
 	return std::string(buf.get(),
 					   buf.get() + size - 1); // We don't want the '\0' inside
+}
+
+/**
+ * @brief Compute violation percentage from two snapshots' accumulators.
+ *
+ * Primary path uses acc_counter delta as denominator.
+ * Fallback uses reference_timestamp delta (in uS) when acc_counter is unsupported.
+ */
+inline std::string violation_compute_pct(uint64_t acc_a, uint64_t acc_b,
+					 uint64_t cnt_a, uint64_t cnt_b,
+					 uint64_t ts_delta_us)
+{
+	if (acc_a == UINT64_MAX || acc_b == UINT64_MAX)
+		return "N/A";
+	if (acc_b < acc_a)
+		return "N/A";
+	uint64_t d_acc = acc_b - acc_a;
+	if (cnt_a != UINT64_MAX && cnt_b != UINT64_MAX) {
+		if (cnt_b < cnt_a)
+			return "N/A";
+		uint64_t d_cnt = cnt_b - cnt_a;
+		if (d_cnt == 0)
+			return "0";
+		return string_format("%" PRIu64, d_acc * 100 / d_cnt);
+	}
+	if (ts_delta_us == 0)
+		return "0";
+	return string_format("%" PRIu64, d_acc * 100000 / ts_delta_us);
+}
+
+/**
+ * @brief Determine if a violation was active between two snapshots.
+ */
+inline std::string violation_is_active(uint64_t acc_a, uint64_t acc_b)
+{
+	if (acc_a == UINT64_MAX || acc_b == UINT64_MAX)
+		return "N/A";
+	return (acc_b > acc_a) ? "TRUE" : "FALSE";
 }
 
 /**
@@ -299,3 +339,19 @@ std::vector<std::pair<uint64_t, std::string>> bitmaskToRangesList(uint64_t mask,
 std::string ThrottlerDataToString(uint64_t data);
 
 std::string FecModesToString(uint32_t fec);
+
+/**
+ * @brief Retrieve string value for a specified link type
+ *
+ * @param nic_link_type amdsmi_nic_link_type_t structure
+ * @return std::string of amdsmi_nic_link_type_t
+ */
+std::string get_string_from_enum_nic_topo_link_type(int nic_link_type);
+
+/**
+ * @brief Get the index of the main GPU
+ *
+ * @param gpu_index index of the main GPU
+ * @return int AMDSMI_STATUS_SUCCESS if successful, otherwise an error code
+ */
+int get_index_from_main_gpu(int &gpu_index);

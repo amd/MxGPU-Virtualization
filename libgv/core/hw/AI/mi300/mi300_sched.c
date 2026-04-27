@@ -24,6 +24,8 @@
 #include <amdgv_mcp.h>
 #include <amdgv_sched.h>
 #include <amdgv_sched_internal.h>
+#include <amdgv_gpumon.h>
+#include <amdgv_reset.h>
 
 #include "mi300.h"
 #include "mi300/GC/gc_9_4_3_offset.h"
@@ -370,18 +372,9 @@ static int mi300_sched_copy_static_spatial_part_table(struct amdgv_adapter *adap
 
 static int mi300_sched_reconfig_mapping_tables(struct amdgv_adapter *adapt, uint32_t num_vf)
 {
-	AMDGV_ERROR("MI300 CANNOT DYNAMICALLY CHANGE VF NUMBER YET!\n");
+	AMDGV_WARN("MI300 series does not support dynamic VF number change\n");
 
-	return AMDGV_FAILURE;
-
-	// if (mi300_sched_copy_static_spatial_part_table(adapt, num_vf))
-	// 	return AMDGV_FAILURE;
-
-	// if (amdgv_sched_world_switch_remap_vf_assignment(adapt))
-	// 	return AMDGV_FAILURE;
-
-	// if (amdgv_sched_part_mapping_init(adapt))
-	// 	return AMDGV_FAILURE;
+	return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
 }
 
 static int mi300_sched_sw_init(struct amdgv_adapter *adapt)
@@ -395,6 +388,9 @@ static int mi300_sched_sw_init(struct amdgv_adapter *adapt)
 
 	/* enable bar protection scheme */
 	adapt->flags |= AMDGV_FLAG_VF_FB_PROTECTION;
+
+	/* MI300 series does not support dynamic VF number change */
+	adapt->flags |= AMDGV_FLAG_NO_DYNAMIC_VF_NUM;
 
 	/* enable (by default) clearing vf fb region for Mi300 */
 	if (!(adapt->flags & AMDGV_FLAG_USE_PF))
@@ -435,7 +431,23 @@ static int mi300_sched_hw_init_early(struct amdgv_adapter *adapt)
 
 static int mi300_sched_hw_init_late(struct amdgv_adapter *adapt)
 {
-	return amdgv_sched_init_pf_state_late(adapt);
+	int ret;
+
+	ret = amdgv_sched_init_pf_state_late(adapt);
+	if (ret)
+		return ret;
+
+	if (adapt->ptl_supported &&
+	    adapt->gpumon.funcs && adapt->gpumon.funcs->ptl_enable &&
+	    adapt->ptl_saved_config.enabled) {
+		struct amdgv_ptl_enable_info ptl_info;
+
+		ptl_info.pref_format1 = adapt->ptl_saved_config.pref_format1;
+		ptl_info.pref_format2 = adapt->ptl_saved_config.pref_format2;
+		adapt->gpumon.funcs->ptl_enable(adapt, &ptl_info);
+	}
+
+	return 0;
 }
 
 
@@ -450,7 +462,19 @@ static int mi300_sched_hw_fini_early(struct amdgv_adapter *adapt) { return mi300
 
 static int mi300_sched_sw_init_late(struct amdgv_adapter *adapt) { return 0; }
 static int mi300_sched_sw_fini_late(struct amdgv_adapter *adapt) { return mi300_sched_sw_fini(adapt); }
-static int mi300_sched_hw_fini_late(struct amdgv_adapter *adapt) { return 0; }
+static int mi300_sched_hw_fini_late(struct amdgv_adapter *adapt)
+{
+	/* Disable PTL during unload */
+	if (adapt->ptl_supported && adapt->ptl_saved_config.enabled &&
+	    adapt->gpumon.funcs && adapt->gpumon.funcs->ptl_disable) {
+		adapt->gpumon.funcs->ptl_disable(adapt);
+
+		if (!in_whole_gpu_reset())
+			adapt->ptl_saved_config.enabled = false;
+	}
+
+	return 0;
+}
 
 struct amdgv_init_func mi300_sched_early_func = {
     .name = "mi300_sched_func_early",

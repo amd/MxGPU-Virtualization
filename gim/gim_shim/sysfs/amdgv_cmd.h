@@ -327,18 +327,25 @@ struct amdgv_cmd_dump_cu_resource_size {
     uint32_t grid_size_y;
     uint32_t grid_size_z;
     uint32_t private_segment_size;
+    uint32_t extra_kernelobj_size;
 };
 
 struct amdgv_cmd_dump_cu_resource_memory {
     uint32_t *kernelobj_addr;
     uint32_t *out_data_addr;
     uint32_t *out_flag_addr;
+    uint32_t *extra_kernelobj_addr;
 };
 
 struct amdgv_cmd_dump_cu_data_req {
     struct amdgv_cmd_dev_handle dev;
     struct amdgv_cmd_dump_cu_resource_size resource_size;
     struct amdgv_cmd_dump_cu_resource_memory resource_mem;
+    enum amdgv_cu_data_type data_type;
+
+    uint32_t xcc_id;
+    /* Only used for dumping SGPRs on GFX9 */
+    bool use_extra_ring;
 };
 
 /* Break Point Debug Mode:

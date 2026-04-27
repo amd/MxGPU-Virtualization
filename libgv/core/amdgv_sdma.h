@@ -85,6 +85,7 @@ struct amdgv_sdma {
 			bool clear_dbit);
 };
 
+#define IS_DEDICATED_SDMA_RING_AVAILABLE(adapt) ((adapt)->sdma.num_pf_dedicated_inst != 0)
 #define AMDGV_SDMA_PF_DECIDATED_RING_START_INDEX(adapt) ((adapt)->sdma.num_instances)
 #define AMDGV_SDMA_PF_DECIDATED_RING_END_INDEX(adapt) \
 		(AMDGV_SDMA_PF_DECIDATED_RING_START_INDEX(adapt) + (adapt)->sdma.num_pf_dedicated_inst)
@@ -106,4 +107,5 @@ int amdgv_sdma_ring_copy(struct amdgv_ring *ring, uint64_t src, uint64_t size, u
 int amdgv_sdma_alloc_bitmap_mem(struct amdgv_adapter *adapt, uint64_t bitmap_size);
 int amdgv_sdma_free_bitmap_mem(struct amdgv_adapter *adapt);
 struct amdgv_ring *amdgv_sdma_get_pf_dedicated_ring(struct amdgv_adapter *adapt, int aid, int index);
+struct amdgv_ring *amdgv_sdma_get_pfvf_shared_ring(struct amdgv_adapter *adapt, int aid, int index);
 #endif

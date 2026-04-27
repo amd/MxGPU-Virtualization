@@ -130,6 +130,24 @@ amdsmi_status_t amdsmi_ioctl_get_vf_dynamic_info(smi_req_ctx *smi_req, smi_devic
 amdsmi_status_t amdsmi_get_pcie_speed_from_pcie_type(uint32_t pcie_type, uint32_t *pcie_speed, uint64_t dev_id);
 
 /**
+ *  \brief  Converts PCIe generation speed index to transfer rate in T/s.
+ *
+ *  \param [in] gen_speed - PCIe generation index (0=Gen1, 1=Gen2, ..., 4=Gen5, 5=Gen6).
+ *
+ *  \return Transfer rate in T/s, or 0 if unknown.
+ */
+uint64_t pcie_gen_to_transfer_rate(uint8_t gen_speed);
+
+/**
+ *  \brief  Converts encoded lane count to actual number of PCIe lanes.
+ *
+ *  \param [in] lane_count - Encoded lane count (1=x1, 2=x2, 3=x4, 4=x8, 5=x12, 6=x16).
+ *
+ *  \return Number of lanes, or 0 if unknown.
+ */
+uint32_t pcie_lane_count_to_lanes(uint8_t lane_count);
+
+/**
  *  \brief  Util function for converting status from code to coresponding string message.
  *
  *  \param [in] status - Status code.
@@ -433,6 +451,21 @@ int make_sysfs_pci_device_prefix(amdsmi_bdf_t bdf, char *out_path, size_t out_pa
  *  \return 0 on success, error code otherwise.
  */
 int parse_cpu_list(const char *cpu_list, uint64_t *cpu_set, uint32_t cpu_set_size);
+
+#ifdef SMI_ESXI_BUILD
+/**
+ *  \brief  Gets NUMA node number from ESXi vsish command for a given BDF.
+ *
+ *  \details This function executes vsish command to query PCI configuration header
+ *           and extracts the NUMA node number from the output.
+ *
+ *  \param [in] bdf - BDF of the PCI device.
+ *  \param [out] numa_node - Pointer to store the NUMA node number.
+ *
+ *  \return 0 on success, error code otherwise.
+ */
+int get_numa_node_from_vsish(amdsmi_bdf_t bdf, uint32_t *numa_node);
+#endif /* SMI_ESXI_BUILD */
 
 /**
  *  \brief  Checks if a command is supported for a given device ID.

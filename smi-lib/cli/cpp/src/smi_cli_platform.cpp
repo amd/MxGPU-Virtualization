@@ -33,6 +33,7 @@
 #endif
 
 const std::vector<std::string> dev_id_list_mi30x = {"74A0", "74A1", "74A2", "74B6", "74A9", "74BD", "74A5", "74B9", "74A8", "74BC"};
+const std::vector<std::string> dev_id_list_mi308 = {"74A2", "74A8"};
 const std::vector<std::string> dev_id_list_mi350 = {"75A0", "75A1", "75A3", "75B0", "75B1", "75B3"};
 const std::vector<std::string> dev_id_list_mi2plus = {"7410"};
 const std::vector<std::string> dev_id_list_nv = {"73C4", "73C5", "73C8", "7460", "7461", "73A1","73AE" };
@@ -49,6 +50,19 @@ bool check_if_mi30x(std::string output)
 		}
 	}
 	return is_mi300;
+}
+
+bool check_if_mi308(std::string output)
+{
+	std::string::size_type n;
+	bool is_mi308{false};
+	for (auto x : dev_id_list_mi308) {
+		n = output.find(x);
+		if (std::string::npos != n) {
+			is_mi308 = true;
+		}
+	}
+	return is_mi308;
 }
 
 bool check_if_mi350(std::string output)
@@ -186,49 +200,151 @@ std::string get_device_ids()
 	return all_device_ids;
 }
 
-//function to check if the vmcompute process is running
-bool is_vm_compute_running()
+//function to check if system has access to hypervisor virtualization namespace
+//only hypervisor host has access to ROOT\virtualization\v2; guests and bare metal don't
+bool can_access_hyperv_namespace()
 {
-	//connect to WMI and execute query
+	HRESULT hres;
+	//initialize COM interface
+	CoInitializeEx(0, COINIT_MULTITHREADED);
+	//set COM security levels
+	CoInitializeSecurity(NULL, -1, NULL, NULL, RPC_C_AUTHN_LEVEL_DEFAULT, 
+						 RPC_C_IMP_LEVEL_IMPERSONATE, NULL, EOAC_NONE, NULL);
+
+	//connect to WMI locator
+	IWbemLocator *locator = 0;
+	hres = CoCreateInstance(CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER, 
+							IID_IWbemLocator, (LPVOID *)&locator);
+	if (FAILED(hres)) {
+		CoUninitialize();
+		return false;
+	}
+
+	//attempt to connect to hypervisor virtualization namespace
+	//only hosts have access to this namespace
+	IWbemServices *services = 0;
+	BSTR networkResource = SysAllocString(L"ROOT\\virtualization\\v2");
+	hres = locator->ConnectServer(networkResource, NULL, NULL, 0, NULL, 0, 0, &services);
+
+	SysFreeString(networkResource);
+	locator->Release();
+
+	if (FAILED(hres)) {
+		//no access to virtualization namespace - not a host
+		CoUninitialize();
+		return false;
+	}
+
+	//successfully connected to virtualization namespace - this is a host
+	services->Release();
+	CoUninitialize();
+	return true;
+}
+
+//function to check if vmcompute.exe process is running
+bool is_vmcompute_running()
+{
 	IWbemServices* services = connect_to_wmi();
 	if (services == NULL) {
 		CoUninitialize();
-		throw std::runtime_error("Failed to connect to WMI service.");
+		return false;
 	}
-	IEnumWbemClassObject* enumerator = execute_wmi_query(services, L"SELECT * FROM Win32_Process");
+
+	IEnumWbemClassObject* enumerator = execute_wmi_query(services,
+									   L"SELECT Name FROM Win32_Process WHERE Name='vmcompute.exe'");
 	if (enumerator == NULL) {
 		services->Release();
 		CoUninitialize();
-		throw std::runtime_error("Failed to execute WMI query.");
+		return false;
 	}
 
-	//get the results
+	//check if any process was found
 	IWbemClassObject *result = NULL;
 	ULONG returned_count = 0;
-	bool is_running = false;
-	while (enumerator->Next(WBEM_INFINITE, 1, &result, &returned_count) == WBEM_S_NO_ERROR) {
-		//get the caption property
-		VARIANT caption;
-		result->Get(L"Caption", 0, &caption, 0, 0);
+	HRESULT hres = enumerator->Next(WBEM_INFINITE, 1, &result, &returned_count);
 
-		//check if the caption is "vmcompute"
-		if (wcsncmp(caption.bstrVal, L"vmcompute", 9) == 0) {
-			is_running = true;
-			VariantClear(&caption);
-			break;
-		}
+	bool found = (hres == WBEM_S_NO_ERROR && returned_count > 0);
 
-		//clean up
-		VariantClear(&caption);
+	if (result) {
 		result->Release();
 	}
-
-	//clean up
 	enumerator->Release();
 	services->Release();
 	CoUninitialize();
 
-	return is_running;
+	return found;
+}
+
+//function to get computer system properties (Manufacturer, Model, HypervisorPresent)
+struct ComputerSystemInfo {
+	std::string manufacturer;
+	std::string model;
+	bool hypervisor_present;
+};
+
+ComputerSystemInfo get_computer_system_info()
+{
+	ComputerSystemInfo info = {"", "", false};
+
+	IWbemServices* services = connect_to_wmi();
+	if (services == NULL) {
+		CoUninitialize();
+		return info;
+	}
+
+	IEnumWbemClassObject* enumerator = execute_wmi_query(services,
+									   L"SELECT Manufacturer, Model, HypervisorPresent FROM Win32_ComputerSystem");
+	if (enumerator == NULL) {
+		services->Release();
+		CoUninitialize();
+		return info;
+	}
+
+	IWbemClassObject *result = NULL;
+	ULONG returned_count = 0;
+	enumerator->Next(WBEM_INFINITE, 1, &result, &returned_count);
+
+	if (returned_count > 0) {
+		// Get Manufacturer
+		VARIANT manufacturer;
+		if (SUCCEEDED(result->Get(L"Manufacturer", 0, &manufacturer, 0, 0))) {
+			if (manufacturer.vt == VT_BSTR && manufacturer.bstrVal) {
+				int length = WideCharToMultiByte(CP_UTF8, 0, manufacturer.bstrVal, -1, NULL, 0, NULL, NULL);
+				info.manufacturer.resize(length - 1);
+				WideCharToMultiByte(CP_UTF8, 0, manufacturer.bstrVal, -1, &info.manufacturer[0], length, NULL, NULL);
+			}
+			VariantClear(&manufacturer);
+		}
+
+		// Get Model
+		VARIANT model;
+		if (SUCCEEDED(result->Get(L"Model", 0, &model, 0, 0))) {
+			if (model.vt == VT_BSTR && model.bstrVal) {
+				int length = WideCharToMultiByte(CP_UTF8, 0, model.bstrVal, -1, NULL, 0, NULL, NULL);
+				info.model.resize(length - 1);
+				WideCharToMultiByte(CP_UTF8, 0, model.bstrVal, -1, &info.model[0], length, NULL, NULL);
+			}
+			VariantClear(&model);
+		}
+
+		// Get HypervisorPresent
+		VARIANT hypervisor_present;
+		if (SUCCEEDED(result->Get(L"HypervisorPresent", 0, &hypervisor_present, 0, 0))) {
+			if (hypervisor_present.vt == VT_BOOL) {
+				info.hypervisor_present = (hypervisor_present.boolVal == VARIANT_TRUE);
+			}
+			VariantClear(&hypervisor_present);
+		}
+	}
+
+	if (result) {
+		result->Release();
+	}
+	enumerator->Release();
+	services->Release();
+	CoUninitialize();
+
+	return info;
 }
 
 std::string is_virtualization_host()
@@ -265,7 +381,9 @@ std::string is_virtualization_host()
 	}
 
 	// Clean up
-	result->Release();
+	if (result) {
+		result->Release();
+	}
 	enumerator->Release();
 	services->Release();
 	CoUninitialize();
@@ -286,63 +404,106 @@ AmdSmiPlatform::AmdSmiPlatform()
 	operating_system = "unknown";
 #endif
 	if(is_windows_) {
-		std::string diskpart_out = exec("diskpart /?");
-		if (diskpart_out.find("MININT") != std::string::npos) {
-			is_baremetal_ = true;
-			is_nv_ = true;
-			return;
-		}
 #ifdef _WIN64
+		char* sys_root = nullptr;
+		size_t sys_root_len = 0;
+		_dupenv_s(&sys_root, &sys_root_len, "SYSTEMROOT");
+		if (sys_root != nullptr) {
+			std::string sys_root_str(sys_root);
+			free(sys_root);
+			std::transform(sys_root_str.begin(), sys_root_str.end(),
+						   sys_root_str.begin(), ::toupper);
+			if (sys_root_str.find("MININT") != std::string::npos) {
+				is_baremetal_ = true;
+				is_nv_ = true;
+				return;
+			}
+		}
 		std::string output = get_device_ids();
 		is_mi300_ = check_if_mi30x(output);
 		is_nv_ = check_if_nv(output);
 		is_mi200_ = check_if_mi200(output);
 
-		if (is_vm_compute_running()) {
-			is_host_ = true;
-		}
+		// Collect all detection information
+		bool has_hyperv_access = can_access_hyperv_namespace();
+		bool vmcompute_running = is_vmcompute_running();
+		ComputerSystemInfo sys_info = get_computer_system_info();
 
-		if(!is_host_) {
-			std::string status = is_virtualization_host();
-			if (status == "TRUE") {
-				is_guest_os_ = true;
-			} else if (status == "FALSE") {
-				is_baremetal_ = true;
+		// Normalize Model for comparison
+		std::string model_upper = sys_info.model;
+		std::transform(model_upper.begin(), model_upper.end(),
+					   model_upper.begin(), ::toupper);
+
+		// Check if this is a VM (guest) by Model
+		// This is the most reliable way to distinguish guest from host
+		bool is_vm = (model_upper.find("VIRTUAL") != std::string::npos);
+
+		// Detection logic:
+		// 1. If Model contains "Virtual Machine" -> GUEST
+		// 2. If HypervisorPresent = TRUE but NOT a VM -> HOST (host running a hypervisor)
+		// 3. If HypervisorPresent = TRUE and IS a VM -> GUEST
+		// 4. If HypervisorPresent = FALSE and vmcompute running -> HOST
+		// 5. If HypervisorPresent = FALSE and no vmcompute -> BAREMETAL
+
+		if (is_vm) {
+			// Virtual Machine detected - this is a guest
+			is_guest_os_ = true;
+		} else if (sys_info.hypervisor_present) {
+			// HypervisorPresent = TRUE but NOT a VM
+			// This means the system is running a hypervisor (host), not running under one (guest)
+			if (vmcompute_running) {
+				is_host_ = true;
 			} else {
-				std::string diskpart_out = exec("diskpart /?");
-				if (diskpart_out.find("MININT") != std::string::npos) {
-					is_baremetal_ = true;
+				// HypervisorPresent but no vmcompute - could be host or guest
+				// Prefer host if we can access namespace
+				if (has_hyperv_access) {
+					is_host_ = true;
 				} else {
-					unknown_platform = true;
+					is_guest_os_ = true;
 				}
+			}
+		} else {
+			// No hypervisor present - determine if host or bare metal
+			if (vmcompute_running) {
+				is_host_ = true;
+			} else {
+				is_baremetal_ = true;
 			}
 		}
 #endif
 	}
 	if(is_linux_) {
 		std::string hypervisor_str = "hypervisor";
-		std::string linux_output = exec("lscpu");
+		std::string linux_output = exec("lscpu 2>/dev/null");
 		std::string gpu_id_list = exec("lspci -nn | awk -F'[][]' "
 									   "'/Display/ {print $6} "
 									   "/Processing/ {print $6}"
 									   "/Processing/ {print $8}' | "
 									   "awk -F':' '{print $2}'");
-		std::string linux_output_gim_loaded = exec("lsmod | grep gim");
-		std::string linux_output_amdgpu_loaded = exec("lsmod | grep amdgpu");
+		std::string linux_output_gim_loaded = exec("lsmod 2>/dev/null | grep gim");
+		std::string linux_output_amdgpu_loaded = exec("lsmod 2>/dev/null | grep amdgpu");
 		std::string linux_output_gim_user_mode = exec("pgrep gim_user_mode");
+		std::string linux_output_amdgpuv = exec("vmkload_mod -l 2>/dev/null | grep amdgpuv | awk '{print $1}'");
+		linux_output_amdgpuv.erase(std::remove(linux_output_amdgpuv.begin(), linux_output_amdgpuv.end(), '\n'),linux_output_amdgpuv.end());
+
+		if (linux_output_amdgpuv == "amdgpuv") {
+			is_esxi_ = true;
+			gpu_id_list = exec("lspci -p | grep amdgpuv | grep -oi '1002:[0-9a-fA-F]*' | cut -d: -f2 | sort -u");
+		}
 
 		transform(gpu_id_list.begin(), gpu_id_list.end(), gpu_id_list.begin(),
 				  ::toupper);
 
 		is_nv_ = check_if_nv(gpu_id_list);
 		is_mi300_ = check_if_mi30x(gpu_id_list);
+		is_mi308_ = check_if_mi308(gpu_id_list);
 		is_mi350_ = check_if_mi350(gpu_id_list);
 		is_mi200_ = check_if_mi200(gpu_id_list);
 
 		if (linux_output_gim_loaded.empty() && linux_output_amdgpu_loaded.empty()
-				&& linux_output_gim_user_mode.empty()) {
+				&& linux_output_gim_user_mode.empty() && linux_output_amdgpuv.empty()) {
 			throw SmiToolSMILIBErrorException(34);
-		} else if (!linux_output_gim_loaded.empty() || !linux_output_gim_user_mode.empty()) {
+		} else if (!linux_output_gim_loaded.empty() || !linux_output_gim_user_mode.empty() || !linux_output_amdgpuv.empty()) {
 			is_host_ = true;
 		} else if (!linux_output.empty() && linux_output.find(hypervisor_str) == std::string::npos) {
 			is_baremetal_ = true;
@@ -405,9 +566,17 @@ bool AmdSmiPlatform::is_linux()
 {
 	return is_linux_;
 }
+bool AmdSmiPlatform::is_esxi()
+{
+	return is_esxi_;
+}
 bool AmdSmiPlatform::is_mi300()
 {
 	return is_mi300_;
+}
+bool AmdSmiPlatform::is_mi308()
+{
+	return is_mi308_;
 }
 bool AmdSmiPlatform::is_mi350()
 {
@@ -420,4 +589,26 @@ bool AmdSmiPlatform::is_nv()
 bool AmdSmiPlatform::is_mi200()
 {
 	return is_mi200_;
+}
+std::string AmdSmiPlatform::get_platform()
+{
+	std::string os = "Unknown";
+	if (is_windows() == true) {
+		os = "Windows";
+	} else if (is_esxi() == true) {
+		os = "ESXi";
+	} else if (is_linux() == true) {
+		os = "Linux";
+	}
+
+	std::string platform = "Unknown";
+	if (is_host() == true) {
+		platform = "Host";
+	} else if (is_guest() == true) {
+		platform = "Guest";
+	} else if (is_baremetal() == true) {
+		platform = "Bare Metal";
+	}
+
+	return os + " " + platform;
 }

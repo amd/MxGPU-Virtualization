@@ -773,6 +773,7 @@ struct amdgv_adapter {
 	mutex_t psp_lock;
 	mutex_t set_vf_access_lock;
 	mutex_t bp_lock;
+	mutex_t mmio_lock;
 
 	bool customized_vf_config_mode;
 	struct amd_sriov_msg_pf2vf_info *pf2vf_msg;
@@ -990,6 +991,7 @@ struct amdgv_adapter {
 	/* psp mb int status, for xgmi.set_mb_in_hive feature to sync hive status */
 	bool psp_mb_int_status;
 	struct amdgv_gmc gmc;
+	bool unload_cmd_sent;
 };
 
 #ifdef WS_RECORD

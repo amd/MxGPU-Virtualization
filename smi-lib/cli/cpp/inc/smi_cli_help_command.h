@@ -39,7 +39,7 @@ public:
 	std::string get_version_help_message(AmdSmiHelpInfo &info_helper);
 	std::string get_event_help_message(AmdSmiHelpInfo &info_helper);
 	std::string get_xgmi_help_message(AmdSmiHelpInfo &info_helper);
-	std::string get_topology_help_message(AmdSmiHelpInfo &info_helper);
+	std::string get_topology_help_message(AmdSmiHelpInfo &info_helper, Arguments arg);
 	std::string get_partition_help_message(AmdSmiHelpInfo &info_helper);
 	std::string get_reset_help_message(AmdSmiHelpInfo &info_helper);
 	std::string get_set_help_message(AmdSmiHelpInfo &info_helper);

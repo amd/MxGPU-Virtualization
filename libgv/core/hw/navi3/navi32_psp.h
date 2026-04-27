@@ -69,15 +69,15 @@ bool navi32_psp_wait_sos_loaded_status(struct amdgv_adapter *adapt);
 enum psp_status navi32_psp_wait_for_memory(struct amdgv_adapter *adapt,
 					  uint32_t *memory_address, uint32_t memory_value);
 
-enum psp_status navi32_psp_load_keydb(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status navi32_psp_load_keydb(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				     uint32_t fw_image_size);
-enum psp_status navi32_psp_load_spl(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status navi32_psp_load_spl(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				   uint32_t fw_image_size);
-enum psp_status navi32_psp_load_sysdrv(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status navi32_psp_load_sysdrv(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				      uint32_t fw_image_size);
-enum psp_status navi32_psp_load_sos(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status navi32_psp_load_sos(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				   uint32_t fw_image_size);
-enum psp_status navi32_psp_load_psp_ucode(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status navi32_psp_load_psp_ucode(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				   uint32_t fw_image_size, uint32_t fw_id);
 
 enum psp_status navi32_psp_wait_rlcg_ready(struct amdgv_adapter *adapt);

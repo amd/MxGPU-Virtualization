@@ -206,6 +206,8 @@ struct amdgv_init_func *mi350x_init_table[] = {
 	&mi300_misc_func,
 	&amdgv_vfmgr_func,
 	&mi300_sched_early_func,
+	&amdgv_migration_func,
+	&mi300_dirtybit_func,
 	&mi300_sdma_v4_4_2_func,
 	&mi300_gfx_v9_4_3_func,
 	&mi300_sched_late_func,

@@ -36,6 +36,13 @@ from .amdsmi_exception import *
 from .amdsmi_interface import _check_res, _format_bdf
 
 
+class AmdSmiNicLinkType(IntEnum):
+    UNKNOWN = amdsmi_wrapper.AMDSMI_NIC_LINK_TYPE_UNKNOWN
+    PCIE = amdsmi_wrapper.AMDSMI_NIC_LINK_TYPE_PCIE
+    NUMA = amdsmi_wrapper.AMDSMI_NIC_LINK_TYPE_NUMA
+    X_NUMA = amdsmi_wrapper.AMDSMI_NIC_LINK_TYPE_X_NUMA
+
+
 def amdsmi_get_nic_driver_info(processor_handle):
     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
@@ -234,3 +241,25 @@ def amdsmi_get_nic_rdma_port_statistics(processor_handle, rdma_port_index):
         })
 
     return stats
+
+
+def amdsmi_topo_get_nic_link_type(nic_handle, processor_handle):
+    if not isinstance(nic_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            nic_handle, amdsmi_wrapper.amdsmi_processor_handle
+        )
+
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle, amdsmi_wrapper.amdsmi_processor_handle
+        )
+
+    link_type = amdsmi_wrapper.amdsmi_nic_link_type_t()
+
+    _check_res(
+        amdsmi_wrapper.amdsmi_topo_get_nic_link_type(
+            nic_handle, processor_handle, ctypes.byref(link_type)
+        )
+    )
+
+    return AmdSmiNicLinkType(link_type.value)

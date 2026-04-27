@@ -71,6 +71,7 @@ auto constexpr vf_guest_data_header {",driver_version,fb_usage"};
 auto constexpr fb_usage_header_csv {",fb_total,fb_used"};
 auto constexpr energy_header_csv {",energy"};
 auto constexpr gpuboard_csv_header {",gpuboard_node_temp_retimer,gpuboard_node_temp_ibc_temp,gpuboard_node_temp_ibc_2_temp,gpuboard_node_temp_vdd18_vr_temp,gpuboard_node_temp_04_hbm_b_vr_temp,gpuboard_node_temp_04_hbm_d_vr_temp,gpuboard_vr_temp_vddcr_vdd0,gpuboard_vr_temp_vddcr_vdd1,gpuboard_vr_temp_vddcr_vdd2,gpuboard_vr_temp_vddcr_vdd3,gpuboard_vr_temp_vddcr_soc_a,gpuboard_vr_temp_vddcr_soc_c,gpuboard_vr_temp_vddcr_socio_a,gpuboard_vr_temp_vddcr_socio_c,gpuboard_vr_temp_vdd_085_hbm,gpuboard_vr_temp_vddcr_11_hbm_b,gpuboard_vr_temp_vddcr_11_hbm_d,gpuboard_vr_temp_vdd_usr,gpuboard_vr_temp_vddio_11_e32"};
+auto constexpr throttle_header_csv {",accumulation_counter,prochot_violation_accumulated,prochot_violation_activity,prochot_violation_status,ppt_violation_accumulated,ppt_violation_activity,ppt_violation_status,socket_thermal_violation_accumulated,socket_thermal_violation_activity,socket_thermal_violation_status,vr_thermal_violation_accumulated,vr_thermal_violation_activity,vr_thermal_violation_status,hbm_thermal_violation_accumulated,hbm_thermal_violation_activity,hbm_thermal_violation_status"};
 
 int AmdSmiMetricCommand::metric_command_usage(uint64_t processor,
 		std::string &formatted_string)
@@ -201,6 +202,14 @@ int AmdSmiMetricCommand::metric_command_port_netdev(uint64_t processor, std::str
 int AmdSmiMetricCommand::metric_command_rdma_devices(uint64_t processor, std::string &formatted_string)
 {
 	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_port_rdma_command(processor,
+			  arg, formatted_string);
+	return ret;
+}
+
+int AmdSmiMetricCommand::metric_command_throttle(uint64_t processor,
+		std::string &formatted_string)
+{
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_throttle_metric_command(processor,
 			  arg, formatted_string);
 	return ret;
 }
@@ -402,6 +411,20 @@ void AmdSmiMetricCommand::metric_command_json_gpu(int gpu_index, uint64_t gpu_bd
 		if (error == 0) {
 			values_json = nlohmann::ordered_json::parse(out);
 			option_json["gpuboard"] = values_json;
+			out.clear();
+		}
+		out.clear();
+	}
+
+	if ((std::find(arg.options.begin(), arg.options.end(), "throttle") != arg.options.end()) ||
+			(std::find(arg.options.begin(), arg.options.end(), "th") != arg.options.end()) ||
+			arg.all_arguments) {
+		std::string param{"throttle"};
+		ret = metric_command_throttle(gpu_bdf, out);
+		int error = handle_exceptions(ret, param, arg);
+		if (error == 0) {
+			values_json = nlohmann::ordered_json::parse(out);
+			option_json["throttle"] = values_json;
 			out.clear();
 		}
 		out.clear();
@@ -657,10 +680,6 @@ void AmdSmiMetricCommand::metric_command_human_gpu(int gpu_index, uint64_t gpu_b
 		}
 		formatted_string.clear();
 	}
-	if (!options_string.empty()) {
-		out += string_format(gpuTemplate, gpu_index);
-		out += options_string;
-	}
 
 	if ((std::find(arg.options.begin(), arg.options.end(), "gpuboard") != arg.options.end()) ||
 			(std::find(arg.options.begin(), arg.options.end(), "G") != arg.options.end()) ||
@@ -669,10 +688,28 @@ void AmdSmiMetricCommand::metric_command_human_gpu(int gpu_index, uint64_t gpu_b
 		std::string param{"gpuboard"};
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {
-			out += formatted_string;
+			options_string += formatted_string;
 			formatted_string.clear();
 		}
 		formatted_string.clear();
+	}
+
+	if ((std::find(arg.options.begin(), arg.options.end(), "throttle") != arg.options.end()) ||
+			(std::find(arg.options.begin(), arg.options.end(), "th") != arg.options.end()) ||
+			arg.all_arguments) {
+		ret = metric_command_throttle(gpu_bdf, formatted_string);
+		std::string param{"throttle"};
+		int error = handle_exceptions(ret, param, arg);
+		if (error == 0) {
+			options_string += formatted_string;
+			formatted_string.clear();
+		}
+		formatted_string.clear();
+	}
+
+	if (!options_string.empty()) {
+		out += string_format(gpuTemplate, gpu_index);
+		out += options_string;
 	}
 }
 
@@ -999,6 +1036,19 @@ void AmdSmiMetricCommand::metric_command_csv_gpu(int gpu_index, uint64_t gpu_bdf
 			results.push_back({formatted_string});
 			formatted_string.clear();
 		}
+	}
+
+	if ((std::find(arg.options.begin(), arg.options.end(), "throttle") != arg.options.end()) ||
+			(std::find(arg.options.begin(), arg.options.end(), "th") != arg.options.end()) ||
+			arg.all_arguments) {
+		ret = metric_command_throttle(gpu_bdf, formatted_string);
+		std::string param{"throttle"};
+		int error = handle_exceptions(ret, param, arg);
+		if (error == 0) {
+			headers.append(throttle_header_csv);
+			results.push_back({formatted_string});
+		}
+		formatted_string.clear();
 	}
 }
 
@@ -1501,6 +1551,11 @@ void AmdSmiMetricCommand::execute_command()
 	if ((std::find(arg.options.begin(), arg.options.end(), "per-partition") != arg.options.end())
 			|| (std::find(arg.options.begin(), arg.options.end(), "pp") != arg.options.end())) {
 		is_per_partition = true;
+	}
+
+	// CSV output is not supported for per-partition metrics
+	if (is_per_partition && arg.output == csv) {
+		throw SmiToolParameterNotSupportedException("per-partition --csv");
 	}
 
 	if (arg.watch > -1) {

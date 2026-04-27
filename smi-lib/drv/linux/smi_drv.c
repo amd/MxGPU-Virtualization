@@ -233,9 +233,9 @@ static int gim_create_event(struct smi_ctx *ctx, amdgv_dev_t *adev, struct smi_e
 	return smi_create_event(ctx, adev, config);
 }
 
-static int gim_read_event(struct smi_ctx *ctx, amdgv_dev_t *adev, uint64_t dev_id, struct smi_event_entry *event)
+static int gim_read_event(struct smi_ctx *ctx, amdgv_dev_t *adev, uint64_t dev_id, struct smi_event_entry *event, int64_t timeout_usec)
 {
-	return smi_read_event(ctx, adev, dev_id, event);
+	return smi_read_event(ctx, adev, dev_id, event, timeout_usec);
 }
 
 static int gim_destroy_event(struct smi_ctx *ctx, amdgv_dev_t *adev, uint64_t dev_id)

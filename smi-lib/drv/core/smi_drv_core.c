@@ -234,7 +234,9 @@ int smi_core_release(file_t filp)
 	smi_oss_funcs->mutex_unlock(ctx->ioctl_mutex);
 
 	smi_oss_funcs->free_small_memory(ctx->vf_map);
-	smi_oss_funcs->free_small_memory(ctx->event_ctx);
+	if (ctx->event_ctx) {
+		smi_oss_funcs->free_small_memory(ctx->event_ctx);
+	}
 	smi_oss_funcs->mutex_fini(ctx->ioctl_mutex);
 
 	smi_oss_funcs->free_small_memory(ctx);
@@ -275,6 +277,11 @@ int smi_core_ioctl_handler(file_t filp, unsigned int cmd, void *arg)
 					|| ctx->in_command.hdr.code == SMI_CMD_CODE_DESTROY_EVENT) {
 		ctx->mutex_flag=false;
 		smi_oss_funcs->mutex_unlock(ctx->ioctl_mutex);
+	}
+
+	if (ctx->in_command.hdr.in_len < 0 || ctx->in_command.hdr.out_len < 0) {
+		ret = -SMI_EINVAL;
+		goto unlock_mutex;
 	}
 
 	/* check privilege level */
@@ -357,7 +364,7 @@ int smi_core_ioctl_handler(file_t filp, unsigned int cmd, void *arg)
 			ctx->in_command.hdr.in_len,
 			ctx->in_command.hdr.out_len);
 
-	if (ctx->out_response.hdr.status) {
+	if (ctx->out_response.hdr.status && ctx->out_response.hdr.status != SMI_STATUS_NO_DATA) {
 		ret = -SMI_EIO;
 		goto return_status;
 	}

@@ -1070,8 +1070,8 @@ int AmdSmiApiGuest::amdsmi_get_fb_usage_command(uint64_t processor_bdf, Argument
 		return ret;
 	}
 
-	std::string vram_total_str{ string_format("%lld", vram_usage.vram_total) };
-	std::string vram_used_str{ string_format("%lld", vram_usage.vram_used) };
+	std::string vram_total_str{ string_format("%u", vram_usage.vram_total) };
+	std::string vram_used_str{ string_format("%u", vram_usage.vram_used) };
 
 	if (arg.watch > -1) {
 		out = string_format("%s,%s", vram_total_str.c_str(), vram_used_str.c_str());

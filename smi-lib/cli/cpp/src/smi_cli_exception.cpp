@@ -185,6 +185,19 @@ std::string SmiToolPermissionDeniedException::get_message()
 	return message;
 }
 
+SmiToolInvalidPlatformException::SmiToolInvalidPlatformException()
+{
+	message = "Host SMI tool detected. This platform is unsupported. Use the AMD-SMI build that matches this environment";
+}
+int SmiToolInvalidPlatformException::get_error_code()
+{
+	return error_code;
+}
+std::string SmiToolInvalidPlatformException::get_message()
+{
+	return message;
+}
+
 SmiToolNotEnoughMemException::SmiToolNotEnoughMemException()
 {
 	message = "Not enough memory.";

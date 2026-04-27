@@ -135,6 +135,9 @@ void SmiCliArgumentFactory::initialize(std::vector<std::string> options)
 		} else if (option == "metric") {
 			initialize_metric_arguments();
 			break;
+		} else if (option == "topology") {
+			initialize_topology_arguments();
+			break;
 		}
 	}
 	initialize_device_arguments();
@@ -293,6 +296,7 @@ void SmiCliArgumentFactory::initialize_metric_arguments()
 	arguments_.emplace("pcie", SmiCliArgument("-P", "--pcie", "Current pcie information"));
 	arguments_.emplace("fb-usage", SmiCliArgument("-fb", "--fb-usage", "Total and used framebuffer"));
 	arguments_.emplace("energy", SmiCliArgument("-E", "--energy", "Amount of energy consumed"));
+	arguments_.emplace("throttle", SmiCliArgument("-th", "--throttle", "Displays throttle accumulators"));
 	arguments_.emplace("port", SmiCliArgument("-po", "--port", "All port information"));
 	arguments_.emplace("rdma-devices", SmiCliArgument("-rd", "--rdma-devices",
 					   "All RDMA devices information"));
@@ -321,6 +325,23 @@ void SmiCliArgumentFactory::initialize_metric_arguments()
 					   "Looping stops by entering 'CTRL' + 'C'" + SmiCliArgument::get_description_continuation_indent() +
 					   "If not specified the program will run indefinitely",
 					   "ITERATIONS", true));
+}
+
+void SmiCliArgumentFactory::initialize_topology_arguments()
+{
+	arguments_.emplace("weight", SmiCliArgument("", "--weight", "Current weight information"));
+	arguments_.emplace("hops", SmiCliArgument("", "--hops", "Current hops information"));
+	arguments_.emplace("fb-sharing", SmiCliArgument("", "--fb-sharing",
+					   "Current framebuffer sharing information"));
+	arguments_.emplace("link-type", SmiCliArgument("", "--link-type", "Link type information"));
+	arguments_.emplace("coherent", SmiCliArgument("", "--coherent", "Cache coherent information"));
+	arguments_.emplace("atomics", SmiCliArgument("", "--atomics",
+					   "32 and 64-bit atomic link capability information"));
+	arguments_.emplace("bi-dir", SmiCliArgument("", "--bi-dir",
+					   "bi-directional link capability information"));
+	arguments_.emplace("dma", SmiCliArgument("", "--dma", "dma link capability information"));
+	arguments_.emplace("numa", SmiCliArgument("", "--numa",
+					   "NUMA node information"));
 }
 
 void SmiCliArgumentFactory::initialize_device_arguments()
@@ -373,7 +394,7 @@ void SmiCliArgumentFactory::initialize_help_commands()
 	help_commands_.emplace("xgmi", SmiCliHelpCommand("xgmi",
 						   "Displays xgmi information of the devices (GPU only)"));
 	help_commands_.emplace("topology", SmiCliHelpCommand("topology",
-						   "Displays topology information of the devices (GPU only)"));
+					   "Displays topology information of the devices"));
 	help_commands_.emplace("partition", SmiCliHelpCommand("partition",
 						   "Displays partition information of the devices (GPU only)"));
 	help_commands_.emplace("ras", SmiCliHelpCommand("ras",

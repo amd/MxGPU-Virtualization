@@ -114,29 +114,58 @@ out:
 	return ret;
 }
 
-static bool amdgv_umc_is_dup_record(struct amdgv_adapter *adapt,
+/* Returns true if bad page record should be skipped (invalid or duplicate) */
+static bool amdgv_umc_check_invalid_bp(struct amdgv_adapter *adapt,
 			struct eeprom_table_record *record, bool from_eeprom)
 {
 	struct ras_err_handler_data *data = adapt->ecc.eh_data;
-	uint64_t pa_pfn;
+	uint64_t pa_pfn, rec_pa;
+	uint64_t err_addr_pf, total_fb;
+	uint32_t total_fb_in_mb;
 	int i;
 
 	if (from_eeprom) {
+		if (record->ts == 0) {
+			AMDGV_WARN("Bad page record skipped: EEPROM record has zero timestamp\n");
+			return true;
+		}
 		if (adapt->umc.funcs && adapt->umc.funcs->eeprom_record_to_soc_pa) {
 			adapt->umc.funcs->eeprom_record_to_soc_pa(adapt, record, &pa_pfn);
-			if (adapt->umc.eeprom_version == EEPROM_TABLE_VER_V3 || adapt->umc.is_pmfw_managed_eeprom)
+			if (adapt->umc.eeprom_version == EEPROM_TABLE_VER_V3)
 				record->retired_page =
 					set_nps_to_pa(pa_pfn, get_nps_from_pa(record->retired_page));
 			else
 				record->retired_page = pa_pfn;
 		}
-		return false;
 	}
 
-	for (i = 0; i < data->rom_data.count; i++) {
-		if (set_nps_to_pa(data->rom_data.bps[i].retired_page,
-				AMDGV_MEMORY_PARTITION_MODE_UNKNOWN) == record->retired_page)
+	/* Reject address outside GPU framebuffer */
+	amdgv_gpuiov_get_total_avail_fb_size(adapt, &total_fb_in_mb);
+	if (total_fb_in_mb) {
+		total_fb = MBYTES_TO_BYTES(total_fb_in_mb);
+		err_addr_pf = set_nps_to_pa(record->retired_page,
+				AMDGV_MEMORY_PARTITION_MODE_UNKNOWN) << AMDGV_GPU_PAGE_SHIFT;
+		if (err_addr_pf >= total_fb) {
+			AMDGV_WARN("Bad page record skipped: address 0x%llx outside framebuffer (total_fb 0x%llx)\n",
+				   err_addr_pf, total_fb);
 			return true;
+		}
+	}
+
+	/* Duplicate check: only for PMFW-managed EEPROM  or runtime records.
+	 * Compare normalized PAs so that nps-encoded record matches stored.
+	 */
+	if (!from_eeprom || adapt->umc.is_pmfw_managed_eeprom) {
+		rec_pa = set_nps_to_pa(record->retired_page,
+				AMDGV_MEMORY_PARTITION_MODE_UNKNOWN);
+		for (i = 0; i < data->rom_data.count; i++) {
+			if (set_nps_to_pa(data->rom_data.bps[i].retired_page,
+					AMDGV_MEMORY_PARTITION_MODE_UNKNOWN) == rec_pa) {
+				AMDGV_WARN("Duplicate bad page record: PA=0x%llx from %s\n",
+					   record->retired_page, from_eeprom ? "EEPROM" : "runtime");
+				return true;
+			}
+		}
 	}
 
 	return false;
@@ -239,7 +268,7 @@ int amdgv_umc_add_bad_pages(struct amdgv_adapter *adapt,
 			goto out;
 		}
 
-		if (amdgv_umc_is_dup_record(adapt, &bps[i], from_eeprom))
+		if (amdgv_umc_check_invalid_bp(adapt, &bps[i], from_eeprom))
 			continue;
 
 		if (adapt->umc.is_pmfw_managed_eeprom ||
@@ -293,14 +322,14 @@ int amdgv_umc_save_bad_pages(struct amdgv_adapter *adapt)
 		return 0;
 
 	control = &adapt->eeprom_control;
-	save_count = data->rom_data.count - control->num_recs;
-	/* only new entries are saved */
+	save_count = data->rom_data.count - data->rom_data.num_recs_synced;
 	if (save_count > 0) {
-		if (amdgv_ras_eeprom_process_records(
-			    adapt, control, &data->rom_data.bps[control->num_recs], true, save_count)) {
+		if (amdgv_ras_eeprom_process_records(adapt, control,
+			    &data->rom_data.bps[data->rom_data.num_recs_synced], true, save_count)) {
 			AMDGV_ERROR("Failed to save EEPROM table data!\n");
 			return AMDGV_FAILURE;
 		}
+		data->rom_data.num_recs_synced = data->rom_data.count;
 
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_EEPROM_APPEND,
 				AMDGV_ERROR_32_32(save_count, control->num_recs));
@@ -335,7 +364,6 @@ static int amdgv_umc_add_bad_pages_across_nps(struct amdgv_adapter *adapt,
 {
 	int ret = 0;
 	int i = 0;
-	uint64_t pa_pfn = 0;
 
 	if (adapt->ecc.bad_page_detection_mode & BIT(AMDGV_RAS_ECC_FLAG_SKIP_BAD_PAGE_OPS))
 		return 0;
@@ -355,15 +383,11 @@ static int amdgv_umc_add_bad_pages_across_nps(struct amdgv_adapter *adapt,
 			goto out;
 		}
 
-		/* Emit checking for duplicate records as it's from EEPROM */
-		if (adapt->umc.funcs && adapt->umc.funcs->eeprom_record_to_soc_pa) {
-			pa_pfn = 0;
-			/* Get un-nps-masked PA in pa_pfn*/
-			adapt->umc.funcs->eeprom_record_to_soc_pa(adapt, &bps[i], &pa_pfn);
-		}
+		if (amdgv_umc_check_invalid_bp(adapt, &bps[i], true))
+			continue;
 
-		/* Convert to nps-masked pa_pfn */
-		bps[i].retired_page = set_nps_to_pa(pa_pfn, nps);
+		/* retired_page already converted in amdgv_umc_check_invalid_bp; apply caller's nps */
+		bps[i].retired_page = set_nps_to_pa(bps[i].retired_page, nps);
 
 		ret = amdgv_umc_update_eeprom_rom_data(adapt, &bps[i], &data->rom_data);
 		if (ret)
@@ -429,6 +453,10 @@ int amdgv_umc_load_bad_pages_across_nps(struct amdgv_adapter *adapt)
 			ret = AMDGV_FAILURE;
 	}
 
+	if (data) {
+		for (i = 0; i < supported_nps_count; i++)
+			data[i].rom_data.num_recs_synced = data[i].rom_data.count;
+	}
 out:
 	oss_free(temp_bps);
 	return ret;
@@ -484,6 +512,9 @@ int amdgv_umc_load_bad_pages(struct amdgv_adapter *adapt)
 	if (amdgv_umc_add_bad_pages(adapt, bps, control->num_recs, true))
 		ret = AMDGV_FAILURE;
 
+	if (data)
+		data->rom_data.num_recs_synced = data->rom_data.count;
+
 	if (adapt->umc.eeprom_version >= EEPROM_TABLE_VER_V3) {
 		if (control->tbl_hdr.version < EEPROM_TABLE_VER_V3) {
 			if (adapt->nbio.funcs &&
@@ -504,6 +535,7 @@ int amdgv_umc_load_bad_pages(struct amdgv_adapter *adapt)
 			adapt->ecc.eh_data->last_retired_pfn = AMDGV_RAS_INV_MEM_PFN;
 			if (data && data->rom_data.bps && data->rom_data.count) {
 				data->rom_data.count = 0;
+				data->rom_data.num_recs_synced = 0;
 				new_count = data->count / 16;
 				for (i = 0; i < new_count; i++) {
 					ret = amdgv_umc_update_eeprom_rom_data(adapt, &(data->bps[i * 16]), &data->rom_data);
@@ -518,6 +550,7 @@ int amdgv_umc_load_bad_pages(struct amdgv_adapter *adapt)
 					ret =  AMDGV_FAILURE;
 					goto out;
 				}
+				data->rom_data.num_recs_synced = data->rom_data.count;
 			}
 			oss_mutex_unlock(adapt->ecc.recovery_lock);
 		}
@@ -592,18 +625,29 @@ bool amdgv_umc_check_bad_page(struct amdgv_adapter *adapt, uint64_t addr)
 	int i;
 	bool ret = false;
 	uint64_t page_addr;
+	uint64_t local_addr = addr;
+	uint64_t xgmi_offset = 0;
 
 	oss_mutex_lock(adapt->ecc.recovery_lock);
 	if (!data)
 		goto out;
 
-	page_addr = addr >> AMDGV_GPU_PAGE_SHIFT;
-	for (i = 0; i < data->count; i++)
+	/* Translate the global err offset to local offset according to xgmi config */
+	if (adapt->xgmi.phy_nodes_num > 1) {
+		xgmi_offset = adapt->xgmi.phy_node_id * adapt->xgmi.node_segment_size;
+
+		if (addr >= xgmi_offset)
+			local_addr = addr - xgmi_offset;
+	}
+
+	page_addr = local_addr >> AMDGV_GPU_PAGE_SHIFT;
+	for (i = 0; i < data->count; i++) {
 		if (page_addr == data->bps[i].retired_page) {
-			AMDGV_ERROR("Address (0x%llx) found in an EEPROM entry as a retired page!\n", addr);
+			AMDGV_ERROR("Global address (0x%llx) found in an EEPROM entry as a retired page!\n", addr);
 			ret = true;
 			goto out;
 		}
+	}
 
 out:
 	oss_mutex_unlock(adapt->ecc.recovery_lock);
@@ -1266,6 +1310,7 @@ int amdgv_umc_across_nps_err_data_fini(struct amdgv_adapter *adapt)
 			data->count = 0;
 			data->last_reserved = 0;
 			data->rom_data.count = 0;
+			data->rom_data.num_recs_synced = 0;
 
 			if (data->rom_data.bps) {
 				oss_memset(data->rom_data.bps, 0,
@@ -1316,6 +1361,7 @@ int amdgv_umc_sw_fini(struct amdgv_adapter *adapt)
 		data->count = 0;
 		data->last_reserved = 0;
 		data->rom_data.count = 0;
+		data->rom_data.num_recs_synced = 0;
 
 		if (data->rom_data.bps) {
 			oss_memset(data->rom_data.bps, 0,
@@ -1580,8 +1626,10 @@ int amdgv_umc_clean_bad_page_records(struct amdgv_adapter *adapt)
 		oss_memset(adapt->ecc.eh_data->sorted_bps, 0,
 			  adapt->ecc.eh_data->sorted_bps_cap * sizeof(uint64_t));
 	}
-	if (data && data->rom_data.bps && data->rom_data.count)
+	if (data && data->rom_data.bps && data->rom_data.count) {
 		data->rom_data.count = 0;
+		data->rom_data.num_recs_synced = 0;
+	}
 
 	if (data && data->count && data->bps && data->bps_mem) {
 		data->count = 0;

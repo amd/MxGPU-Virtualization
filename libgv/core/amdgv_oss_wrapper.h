@@ -340,6 +340,13 @@ INLINE void oss_free_dma_mem(void *handle)
 	amdgv_oss_funcs->free_dma_mem(handle);
 }
 
+INLINE void oss_flush_dma_mem(struct oss_dma_mem_info *dma_mem_info,
+			      enum oss_dma_direction dir, uint64_t offset, uint64_t size)
+{
+	if (amdgv_oss_funcs->flush_dma_mem)
+		amdgv_oss_funcs->flush_dma_mem(dma_mem_info, dir, offset, size);
+}
+
 INLINE unsigned long oss_sg_dma_address(void *handle, uint32_t page)
 {
 	if (amdgv_oss_funcs->sg_dma_address)
@@ -1151,4 +1158,11 @@ INLINE void oss_mb(void)
 	if (amdgv_oss_funcs->mb)
 		amdgv_oss_funcs->mb();
 }
+
+INLINE void oss_get_device_list(oss_dev_t *dev_list, int *size)
+{
+	if (amdgv_oss_funcs->get_device_list)
+		amdgv_oss_funcs->get_device_list(dev_list, size);
+}
+
 #endif

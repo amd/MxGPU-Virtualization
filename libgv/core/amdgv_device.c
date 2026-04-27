@@ -35,7 +35,6 @@
 
 #include "hw/AI/ai.h"
 #include "hw/navi3/navi32_device.h"
-
 static const uint32_t this_block = AMDGV_COMMUNICATION_BLOCK;
 
 /* common register offset for all asics*/
@@ -49,7 +48,6 @@ static const uint32_t this_block = AMDGV_COMMUNICATION_BLOCK;
 #define MI200_CAPS (AMDGV_CAP_MANUAL_SCHED | AMDGV_CAP_HUNG_HW_DETECT)
 #define MI300_CAPS (AMDGV_CAP_MANUAL_SCHED | AMDGV_CAP_HUNG_HW_DETECT)
 #define NAVI32_CAPS (AMDGV_CAP_MANUAL_SCHED | AMDGV_CAP_HUNG_HW_DETECT)
-
 static const struct amdgv_asic_entry amdgv_sriov_device_table[] = {
 /* dev_id, sub_dev_id, rev_id, caps,
 	 * init function table, mitigation table,
@@ -544,7 +542,7 @@ int amdgv_acquire_fb_virtual_addr(struct amdgv_adapter *adapt, uint64_t gpu_vir,
 	offset = (gpu_vir > mc_base) ? (gpu_vir - mc_base) : (mc_base - gpu_vir);
 
 	// Map GPU physical address to CPU virtual address
-	if ((adapt->flags & AMDGV_FLAG_USE_PF) && (offset >= MAX_OS_FB_MAPPING_SIZE)) {
+	if ((adapt->flags & AMDGV_FLAG_USE_OS_MAPPING_FB) && (offset >= MAX_OS_FB_MAPPING_SIZE)) {
 		// OS does not support fb address mapping exceeds 4Gb
 		gpu_phy = (gpu_vir > mc_base) ? (adapt->fb_pa + offset) :
 						(adapt->fb_pa - offset);
@@ -578,7 +576,7 @@ int amdgv_release_fb_virtual_addr(struct amdgv_adapter *adapt, void *addr, uint6
 		return AMDGV_FAILURE;
 	}
 
-	if ((adapt->flags & AMDGV_FLAG_USE_PF) && (offset >= MAX_OS_FB_MAPPING_SIZE)) {
+	if ((adapt->flags & AMDGV_FLAG_USE_OS_MAPPING_FB) && (offset >= MAX_OS_FB_MAPPING_SIZE)) {
 		if (oss_unmap_framebuffer(adapt->dev, addr) < 0) {
 			AMDGV_ERROR("Unmap frame buffer address failed.\n");
 			ret = AMDGV_FAILURE;
@@ -1633,6 +1631,11 @@ static void amdgv_device_cleanup(struct amdgv_adapter *adapt)
 		adapt->bp_lock = OSS_INVALID_HANDLE;
 	}
 
+	if (adapt->mmio_lock != OSS_INVALID_HANDLE) {
+		oss_mutex_fini(adapt->mmio_lock);
+		adapt->mmio_lock = OSS_INVALID_HANDLE;
+	}
+
 	for (i = 0; i < AMDGV_MAX_NUM_HW_SCHED; ++i) {
 		if (adapt->sched.hw_state_machine[i].ws_lock != OSS_INVALID_HANDLE) {
 			oss_rwsema_fini(adapt->sched.hw_state_machine[i].ws_lock);
@@ -1647,8 +1650,10 @@ static void amdgv_device_cleanup(struct amdgv_adapter *adapt)
 		hive->mcm_hive_lock = OSS_INVALID_HANDLE;
 	}
 #ifdef WS_RECORD
-	oss_free(adapt->record_buf);
-	oss_free(adapt->auto_ws_record_buf);
+	if (adapt->record_buf)
+		oss_free(adapt->record_buf);
+	if (adapt->auto_ws_record_buf)
+		oss_free(adapt->auto_ws_record_buf);
 #endif
 	oss_free(adapt);
 }
@@ -1676,12 +1681,12 @@ struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_da
 	adapt->record_buf = (char *)oss_zalloc(MAX_RECORD_LENGTH);
 	if (adapt->record_buf == NULL) {
 		AMDGV_PRINT("Cannot allocate memory for ws_record buffer during device initialization\n");
-		return NULL;
+		goto fail;
 	}
 	adapt->auto_ws_record_buf = (char *)oss_zalloc(MAX_RECORD_LENGTH);
 	if (adapt->auto_ws_record_buf == NULL) {
 		AMDGV_PRINT("Cannot allocate memory for ws_record buffer during device initialization\n");
-		return NULL;
+		goto fail;
 	}
 #endif
 
@@ -1777,6 +1782,12 @@ struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_da
 
 	adapt->bp_lock = oss_mutex_init();
 	if (adapt->bp_lock == OSS_INVALID_HANDLE) {
+		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
+		goto fail;
+	}
+
+	adapt->mmio_lock = oss_mutex_init();
+	if (adapt->mmio_lock == OSS_INVALID_HANDLE) {
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
 		goto fail;
 	}

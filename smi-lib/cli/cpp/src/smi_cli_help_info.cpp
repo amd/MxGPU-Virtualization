@@ -257,6 +257,26 @@ void configure_metric_settings(const
 		metric_specific += build_arguments_from_categories(metric_map, vf_categories);
 	}
 }
+
+void configure_topology_settings(const
+								std::map<std::string, std::map<std::string, std::vector<std::string>>>& topology_map,
+								const std::vector<std::pair<std::string, std::string>>& topology_categories,
+								std::string& usage_topology_specific,
+								std::string& topology_specific,
+								const CommandConfig& config = {})
+{
+	usage_topology_specific = build_usage_from_categories(topology_map, topology_categories);
+
+	topology_specific = config.common_prefix;
+	topology_specific += get_help_arguments();
+	if (config.include_gpu_device) {
+		topology_specific += get_device_arguments("gpu");
+	}
+	if (config.include_nic_device) {
+		topology_specific += get_device_arguments("nic");
+	}
+	topology_specific += build_arguments_from_categories(topology_map, topology_categories);
+}
 }
 
 AmdSmiHelpInfo::AmdSmiHelpInfo(Arguments arg)
@@ -439,6 +459,9 @@ void AmdSmiHelpInfo::configure_windows_host_mi3xx(const Arguments& arg)
 {
 	CommandConfig staticConfig = {};
 	staticConfig.include_gpu_device = true;
+	CommandConfig topologyConfig = {};
+	topologyConfig.include_gpu_device = true;
+	topologyConfig.common_prefix = topology_common;
 
 	help_specific = build_help_commands_from_categories(help_supported_command_map, {{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "windows_host"}, {"gpu", "host_mi3xx"}});
 
@@ -449,10 +472,15 @@ void AmdSmiHelpInfo::configure_windows_host_mi3xx(const Arguments& arg)
 	staticConfig
 	);
 
+	configure_topology_settings(
+		topology_argument_vectors_map,
+	{{"gpu_nic_common", "host"}, {"gpu", "host"}},
+	usage_topology_specific, topology_specific,
+	topologyConfig
+	);
+
 	xgmi_specific = xgmi_host;
 	usage_xgmi_specific = xgmi_usage_host;
-	topology_specific = topology_host;
-	usage_topology_specific = topology_usage_host;
 	set_specific = set_host_mi300;
 	usage_set_specific = set_usage_host_mi300;
 	partition_specific = partition_host;
@@ -676,6 +704,10 @@ void AmdSmiHelpInfo::configure_linux_host_mi300(const Arguments& arg)
 		metricConfig.include_gpu_device = true;
 		metricConfig.include_watch_device = true;
 		metricConfig.common_prefix = metric_common;
+		CommandConfig topologyConfig = {};
+		topologyConfig.include_gpu_device = true;
+		topologyConfig.common_prefix = topology_common;
+
 		configure_list_settings(
 			usage_list_specific, list_specific,
 		listConfig
@@ -696,6 +728,13 @@ void AmdSmiHelpInfo::configure_linux_host_mi300(const Arguments& arg)
 		usage_metric_specific, metric_specific,
 		metricConfig
 		);
+
+		configure_topology_settings(
+			topology_argument_vectors_map,
+		{{"gpu_nic_common", "host"}, {"gpu", "host"}},
+		usage_topology_specific, topology_specific,
+		topologyConfig
+		);
 		}
 		break;
 
@@ -710,11 +749,14 @@ void AmdSmiHelpInfo::configure_linux_host_mi300(const Arguments& arg)
 		CommandConfig metricConfig = {};
 		metricConfig.include_nic_device = true;
 		metricConfig.common_prefix = metric_common;
+		CommandConfig topologyConfig = {};
+		topologyConfig.include_nic_device = true;
+		topologyConfig.common_prefix = topology_common;
 		configure_list_settings(
 			usage_list_specific, list_specific,
 		listConfig
 		);
-		help_specific = build_help_commands_from_categories(help_supported_command_map, {{"gpu_nic_common", "common"}});
+		help_specific = build_help_commands_from_categories(help_supported_command_map, {{"gpu_nic_common", "common"}, {"nic", "host_mi3xx"}});
 
 		configure_static_settings(
 			static_argument_vectors_map,
@@ -728,6 +770,13 @@ void AmdSmiHelpInfo::configure_linux_host_mi300(const Arguments& arg)
 		{{"nic", "host_linux"}}, {},
 		usage_metric_specific, metric_specific,
 		metricConfig
+		);
+
+		configure_topology_settings(
+			topology_argument_vectors_map,
+		{{"gpu_nic_common", "host"}, {"nic", "host_linux"}},
+		usage_topology_specific, topology_specific,
+		topologyConfig
 		);
 		}
 		break;
@@ -777,6 +826,17 @@ void AmdSmiHelpInfo::configure_linux_host_mi300(const Arguments& arg)
 		}) +
 		common_nic + get_device_arguments("nic") +
 		build_arguments_from_categories(metric_argument_vectors_map, {{"nic", "host_linux"}});
+
+		usage_topology_specific = build_usage_from_categories(topology_argument_vectors_map, {
+			{"gpu_nic_common", "host"}, {"gpu", "host"}, {"nic", "host_linux"}
+		});
+
+		topology_specific = topology_common + get_help_arguments() +
+		build_arguments_from_categories(topology_argument_vectors_map, {{"gpu_nic_common", "host"}}) +
+		common_gpu + get_device_arguments("gpu") +
+		build_arguments_from_categories(topology_argument_vectors_map, {{"gpu", "host"}}) +
+		common_nic + get_device_arguments("nic") +
+		build_arguments_from_categories(topology_argument_vectors_map, {{"nic", "host_linux"}});
 		}
 		break;
 
@@ -786,10 +846,12 @@ void AmdSmiHelpInfo::configure_linux_host_mi300(const Arguments& arg)
 
 	xgmi_specific = xgmi_host;
 	usage_xgmi_specific = xgmi_usage_host;
-	topology_specific = topology_host;
-	usage_topology_specific = topology_usage_host;
 	set_specific = set_host_mi300;
 	usage_set_specific = set_usage_host_mi300;
+	if(AmdSmiPlatform::getInstance().is_mi308()) {
+		set_specific += set_host_mi308;
+		usage_set_specific += set_usage_host_mi308;
+	}
 	reset_specific = reset_host_linux;
 	usage_reset_specific = reset_usage_linux;
 	partition_specific = partition_host;
@@ -801,8 +863,19 @@ void AmdSmiHelpInfo::configure_linux_host_mi300(const Arguments& arg)
 void AmdSmiHelpInfo::configure_linux_host_mi350(const Arguments& arg)
 {
 	configure_linux_host_mi300(arg);
+	switch (arg.devices_type) {
+	case GPU_TYPE:
+	case ALL_TYPE:
+		help_specific = build_help_commands_from_categories(help_supported_command_map, {{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "linux_host"}, {"gpu", "host_mi3xx"}, {"gpu", "host_mi350"}});
+		break;
+	default:
+		break;
+	}
 
-	help_specific = build_help_commands_from_categories(help_supported_command_map, {{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "linux_host"}, {"gpu", "host_mi3xx"}, {"gpu", "host_mi350"}});
+	if (AmdSmiPlatform::getInstance().is_esxi()) {
+		set_specific = set_host_mi300_esxi;
+		usage_set_specific = set_usage_host_mi300_esxi;
+	}
 
 	usage_node_specific = usage_node_mi350;
 	node_specific = node_mi350;
@@ -821,6 +894,10 @@ void AmdSmiHelpInfo::configure_linux_host_mi200(const Arguments& arg)
 	metricConfig.include_gpu_device = true;
 	metricConfig.include_watch_device = true;
 	metricConfig.common_prefix = metric_common;
+	CommandConfig topologyConfig = {};
+	topologyConfig.include_gpu_device = true;
+	topologyConfig.common_prefix = topology_common;
+
 	configure_list_settings(
 		usage_list_specific, list_specific,
 		listConfig
@@ -842,10 +919,15 @@ void AmdSmiHelpInfo::configure_linux_host_mi200(const Arguments& arg)
 	metricConfig
 	);
 
+	configure_topology_settings(
+		topology_argument_vectors_map,
+	{{"gpu_nic_common", "host"}, {"gpu", "host"}},
+	usage_topology_specific, topology_specific,
+	topologyConfig
+	);
+
 	xgmi_specific = xgmi_host_mi200;
 	usage_xgmi_specific = xgmi_usage_host_mi200;
-	topology_specific = topology_host;
-	usage_topology_specific = topology_usage_host;
 	set_specific = set_host_mi200;
 	usage_set_specific = set_usage_host_mi200;
 	reset_specific = reset_host_linux;
@@ -950,13 +1032,22 @@ std::string AmdSmiHelpInfo::get_xgmi_help_message(bool modifiers = false)
 {
 	is_command_supported("xgmi",modifiers,xgmi_common,xgmi_specific);
 	return copyright_message + xgmi_usage_common + usage_xgmi_specific + xgmi_message + xgmi_common +
-		   xgmi_specific + xgmi_topology_modifiers;
+		   xgmi_specific + xgmi_modifiers;
 }
-std::string AmdSmiHelpInfo::get_topology_help_message(bool modifiers = false)
+std::string AmdSmiHelpInfo::get_topology_help_message(const Arguments& arg, bool modifiers = false)
 {
 	is_command_supported("topology",modifiers,topology_common,topology_specific);
-	return copyright_message + topology_usage_common + usage_topology_specific + topology_message +
-		   topology_common + topology_specific + xgmi_topology_modifiers;
+	std::string result = copyright_message + topology_usage_common + append_device_usage_by_type(arg);
+	if (arg.devices_type != NIC_TYPE) {
+		result.append(get_format_usage_by_device_type(arg.devices_type));
+	}
+	result.append(usage_topology_specific);
+	result.append("\n")
+	.append(topology_message)
+	.append(topology_specific)
+	.append("\n")
+	.append(xgmi_modifiers);
+	return result;
 }
 std::string AmdSmiHelpInfo::get_partition_help_message(bool modifiers = false)
 {

@@ -26,7 +26,7 @@ HEADER  = -I$(INTERFACE_DIR)
 SO_PATH = -L$(BUILD_DIR)/amdsmi/$(BUILD_TYPE)/
 SO_FILE = -lamdsmi -pthread
 FLAGS   = $(DEFAULT_CFLAGS)
-FLAGS += -Wl,-rpath,/usr/local/lib
+FLAGS += -Wl,-rpath,$(LIB_INSTALL_PATH)
 
 ifeq ($(BUILD_TYPE), Debug)
   FLAGS += -fsanitize=address

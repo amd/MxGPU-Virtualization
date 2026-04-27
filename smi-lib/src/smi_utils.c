@@ -30,6 +30,7 @@
 #include <errno.h>
 #include <ctype.h>
 #include <inttypes.h>
+#include <stdio.h>
 
 amdsmi_status_t amdsmi_request(smi_req_ctx *smi_req, uint32_t cmd_code, size_t input_size, size_t output_size)
 {
@@ -157,6 +158,32 @@ amdsmi_status_t amdsmi_get_pcie_speed_from_pcie_type(uint32_t pcie_type, uint32_
 		return AMDSMI_STATUS_API_FAILED;
 	}
 	return AMDSMI_STATUS_SUCCESS;
+}
+
+uint64_t pcie_gen_to_transfer_rate(uint8_t gen_speed)
+{
+	switch (gen_speed) {
+	case 0: return 2500000000ULL;
+	case 1: return 5000000000ULL;
+	case 2: return 8000000000ULL;
+	case 3: return 16000000000ULL;
+	case 4: return 32000000000ULL;
+	case 5: return 64000000000ULL;
+	default: return 0;
+	}
+}
+
+uint32_t pcie_lane_count_to_lanes(uint8_t lane_count)
+{
+	switch (lane_count) {
+	case 1: return 1;
+	case 2: return 2;
+	case 3: return 4;
+	case 4: return 8;
+	case 5: return 12;
+	case 6: return 16;
+	default: return 0;
+	}
 }
 
 amdsmi_status_t amdsmi_get_string_from_status_enum(amdsmi_status_t status, const char **out)
@@ -571,3 +598,51 @@ amdsmi_status_t is_cmd_supported(uint64_t device_id)
 
 	return AMDSMI_STATUS_SUCCESS;
 }
+
+#ifdef SMI_ESXI_BUILD
+int get_numa_node_from_vsish(amdsmi_bdf_t bdf, uint32_t *numa_node)
+{
+	system_wrapper *sys_wrapper = get_system_wrapper();
+	char cmd[AMDSMI_MAX_STRING_LENGTH];
+	char buf[AMDSMI_MAX_STRING_LENGTH];
+	FILE *fp;
+	int found = 0;
+
+	if (numa_node == NULL) {
+		return -1;
+	}
+
+	/* Build vsish command: vsish -e get /hardware/pci/seg/X/bus/Y/slot/Z/func/W/pciConfigHeader */
+	sys_wrapper->snprintf(cmd, sizeof(cmd),
+		"vsish -e get /hardware/pci/seg/%llu/bus/%d/slot/%d/func/%d/pciConfigHeader 2>/dev/null",
+		(unsigned long long)bdf.bdf.domain_number,
+		bdf.bdf.bus_number,
+		bdf.bdf.device_number,
+		bdf.bdf.function_number);
+
+	fp = popen(cmd, "r");
+	if (!fp) {
+		return -1;
+	}
+
+	/* Parse output to find "Numa node:" line */
+	while (sys_wrapper->fgets(buf, sizeof(buf), fp) != NULL) {
+		char *numa_line = strstr(buf, "Numa node:");
+		if (numa_line) {
+			/* Extract the number after "Numa node:" */
+			char *value_str = numa_line + strlen("Numa node:");
+			/* Skip whitespace */
+			while (*value_str == ' ' || *value_str == '\t') {
+				value_str++;
+			}
+			*numa_node = (uint32_t)strtoul(value_str, NULL, 10);
+			found = 1;
+			break;
+		}
+	}
+
+	pclose(fp);
+
+	return found ? 0 : -1;
+}
+#endif /* SMI_ESXI_BUILD */

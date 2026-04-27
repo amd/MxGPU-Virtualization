@@ -479,20 +479,43 @@ static void amdgv_gfx_set_aql_comp_ring_info(struct amdgv_adapter *adapt,
 	aql_compute_ring->max_dw = AQL_COMP_RING_MAX_DWORD;
 }
 
+void amdgv_gfx_init_dump_cu_packet(struct amdgv_adapter *adapt,
+				   hsa_kernel_dispatch_packet_t *packet,
+				   struct amdgv_dump_cu_resource_size *resource_size,
+				   hsa_signal_t signal, struct amdgv_memmgr_mem *kernelobj,
+				   struct amdgv_memmgr_mem *kernelarg)
+{
+	packet->header |= HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE;
+	packet->header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE;
+	packet->header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE;
+	packet->setup = 1 << HSA_KERNEL_DISPATCH_PACKET_SETUP_DIMENSIONS;
+	packet->workgroup_size_x = resource_size->workgroup_size_x;
+	packet->workgroup_size_y = resource_size->workgroup_size_y;
+	packet->workgroup_size_z = resource_size->workgroup_size_z;
+	packet->grid_size_x = resource_size->grid_size_x;
+	packet->grid_size_y = resource_size->grid_size_y;
+	packet->grid_size_z = resource_size->grid_size_z;
+	packet->private_segment_size = resource_size->private_segment_size;
+	packet->group_segment_size = resource_size->group_segment_size;
+	packet->kernel_object = amdgv_memmgr_get_gpu_addr(kernelobj);
+	packet->kernarg_address = (void *)(amdgv_memmgr_get_gpu_addr(kernelarg));
+	packet->completion_signal = signal;
+}
+
 int amdgv_gfx_alloc_dump_cu_resource_memory(struct amdgv_adapter *adapt, struct amdgv_dump_cu_resource_size *resource_size,
 											struct amdgv_dump_cu_resource_memory *resource_mem)
 {
 	struct amdgv_memmgr_mem *kernelobj, *kernelarg, *out_data, *out_flag, *packet, *signal_obj;
-	uint32_t out_data_size, out_flag_size, kernelobj_size;
+	uint32_t out_data_size, out_flag_size;
 	hsa_signal_t signal;
-	uint64_t *kernarg_addr;
+
+	uint64_t *kernarg_cpua, *signal_obj_cpua;
 	void *out_data_cpua = NULL;
 	void *out_flag_cpua = NULL;
 	uint64_t out_data_gpua, out_flag_gpua;
 
 	out_data_size = resource_size->out_data_size;
 	out_flag_size = resource_size->out_flag_size;
-	kernelobj_size = resource_size->kernelobj_size;
 
 	// Allocate the memory:
 	// kernelarg: hold address of out_data and out_flag
@@ -501,32 +524,32 @@ int amdgv_gfx_alloc_dump_cu_resource_memory(struct amdgv_adapter *adapt, struct 
 	// out_flag: dump flag which indicates the valid data position
 	// signal_obj: completion signal
 	// packet: aql packet
-	kernelarg = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, 256, 256, MEM_GFX_IB);
+	kernelarg = amdgv_memmgr_alloc_align_zero(&adapt->memmgr_pf, 256, 256, MEM_GFX_IB);
 	if (!kernelarg) {
 		AMDGV_WARN("failed to create kernelarg.\n");
 		return AMDGV_FAILURE;
 	}
-	out_data = amdgv_memmgr_alloc_sys_align(&adapt->memmgr_sys, out_data_size, PAGE_SIZE, &out_data_gpua, out_data_cpua);
+	out_data = amdgv_memmgr_alloc_sys_align_zero(&adapt->memmgr_sys, out_data_size, PAGE_SIZE, &out_data_gpua, out_data_cpua);
 	if (!out_data) {
 		AMDGV_WARN("failed to create out_data.\n");
 		goto free_kernelarg;
 	}
-	out_flag = amdgv_memmgr_alloc_sys_align(&adapt->memmgr_sys, out_flag_size, PAGE_SIZE, &out_flag_gpua, out_flag_cpua);
+	out_flag = amdgv_memmgr_alloc_sys_align_zero(&adapt->memmgr_sys, out_flag_size, PAGE_SIZE, &out_flag_gpua, out_flag_cpua);
 	if (!out_flag) {
 		AMDGV_WARN("failed to create out_flag.\n");
 		goto free_out_data;
 	}
-	kernelobj = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, kernelobj_size, 256, MEM_GFX_IB);
+	kernelobj = amdgv_memmgr_alloc_align_zero(&adapt->memmgr_pf, resource_size->kernelobj_size, 256, MEM_GFX_IB);
 	if (!kernelobj) {
 		AMDGV_WARN("failed to create kernelobj.\n");
 		goto free_out_flag;
 	}
-	signal_obj = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, 256, 256, MEM_GFX_IB);
+	signal_obj = amdgv_memmgr_alloc_align_zero(&adapt->memmgr_pf, 256, 256, MEM_GFX_IB);
 	if (!signal_obj) {
 		AMDGV_WARN("failed to create signal_obj.\n");
 		goto free_kernelobj;
 	}
-	packet = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, sizeof(hsa_kernel_dispatch_packet_t), 256, MEM_GFX_IB);
+	packet = amdgv_memmgr_alloc_align_zero(&adapt->memmgr_pf, sizeof(hsa_kernel_dispatch_packet_t), 256, MEM_GFX_IB);
 	if (!packet) {
 		AMDGV_WARN("failed to create packet.\n");
 		goto free_signalobj;
@@ -542,38 +565,23 @@ int amdgv_gfx_alloc_dump_cu_resource_memory(struct amdgv_adapter *adapt, struct 
 	resource_mem->out_flag_addr = (uint32_t *)out_flag_cpua;
 
 	signal.handle = amdgv_memmgr_get_gpu_addr(signal_obj);
-	oss_memset((uint64_t *)amdgv_memmgr_get_cpu_addr(signal_obj), 0, 256);
-	oss_memset(resource_mem->kernelobj_addr, 0, kernelobj_size);
+	signal_obj_cpua = (uint64_t *)amdgv_memmgr_get_cpu_addr(signal_obj);
 	oss_memset((uint64_t *)out_data_cpua, 2, out_data_size);
-	oss_memset((uint64_t *)out_flag_cpua, 0, out_flag_size);
+	kernarg_cpua = (uint64_t *)amdgv_memmgr_get_cpu_addr(kernelarg);
 
-	kernarg_addr = (uint64_t *)amdgv_memmgr_get_cpu_addr(kernelarg);
-	kernarg_addr[0] = out_data_gpua;
-	kernarg_addr[1] = out_flag_gpua;
+	kernarg_cpua[0] = out_data_gpua;
+	kernarg_cpua[1] = out_flag_gpua;
 
-	adapt->gfx.packet_addr = (hsa_kernel_dispatch_packet_t *)amdgv_memmgr_get_cpu_addr(packet);
-	oss_memset(adapt->gfx.packet_addr, 0, sizeof(hsa_kernel_dispatch_packet_t));
-
-	adapt->gfx.packet_addr->header |= HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE;
-	adapt->gfx.packet_addr->header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE;
-	adapt->gfx.packet_addr->header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE;
-	adapt->gfx.packet_addr->setup = 1 << HSA_KERNEL_DISPATCH_PACKET_SETUP_DIMENSIONS;
-	adapt->gfx.packet_addr->workgroup_size_x = resource_size->workgroup_size_x;
-	adapt->gfx.packet_addr->workgroup_size_y = resource_size->workgroup_size_y;
-	adapt->gfx.packet_addr->workgroup_size_z = resource_size->workgroup_size_z;
-	adapt->gfx.packet_addr->grid_size_x = resource_size->grid_size_x;
-	adapt->gfx.packet_addr->grid_size_y = resource_size->grid_size_y;
-	adapt->gfx.packet_addr->grid_size_z = resource_size->grid_size_z;
-	adapt->gfx.packet_addr->private_segment_size = resource_size->private_segment_size;
-	adapt->gfx.packet_addr->group_segment_size = resource_size->group_segment_size;
-	adapt->gfx.packet_addr->kernel_object = amdgv_memmgr_get_gpu_addr(kernelobj);
-	adapt->gfx.packet_addr->kernarg_address = (void *)(amdgv_memmgr_get_gpu_addr(kernelarg));
-	adapt->gfx.packet_addr->completion_signal = signal;
+	adapt->gfx.dump_cu_packets[0] =
+		(hsa_kernel_dispatch_packet_t *)amdgv_memmgr_get_cpu_addr(packet);
+	amdgv_gfx_init_dump_cu_packet(adapt, adapt->gfx.dump_cu_packets[0], resource_size,
+				      signal, kernelobj, kernelarg);
 
 	adapt->gfx.dump_cu_memmgr_mem_group =
-			(struct amdgv_dump_cu_memmgr_mem_group *)(oss_alloc_memory(sizeof(struct amdgv_dump_cu_memmgr_mem_group)));
-	if (!adapt->gfx.dump_cu_memmgr_mem_group)
-		goto free_all;
+			(struct amdgv_dump_cu_memmgr_mem_group *)(oss_zalloc(sizeof(struct amdgv_dump_cu_memmgr_mem_group)));
+	if (!adapt->gfx.dump_cu_memmgr_mem_group) {
+		goto free_packet;
+	}
 
 	adapt->gfx.dump_cu_memmgr_mem_group->kernelobj = kernelobj;
 	adapt->gfx.dump_cu_memmgr_mem_group->kernelarg = kernelarg;
@@ -584,7 +592,8 @@ int amdgv_gfx_alloc_dump_cu_resource_memory(struct amdgv_adapter *adapt, struct 
 
 	return 0;
 
-free_all:
+free_packet:
+	adapt->gfx.dump_cu_packets[0] = NULL;
 	amdgv_memmgr_free(packet);
 free_signalobj:
 	amdgv_memmgr_free(signal_obj);
@@ -598,6 +607,26 @@ free_kernelarg:
 	amdgv_memmgr_free(kernelarg);
 
 	return AMDGV_FAILURE;
+}
+
+void amdgv_gfx_free_dump_cu_resource_memory(struct amdgv_adapter *adapt)
+{
+	struct amdgv_dump_cu_memmgr_mem_group *mem_group = adapt->gfx.dump_cu_memmgr_mem_group;
+
+	if (!mem_group)
+		return;
+
+	amdgv_memmgr_free(mem_group->kernelobj);
+	amdgv_memmgr_free(mem_group->kernelarg);
+	amdgv_memmgr_free(mem_group->out_data);
+	amdgv_memmgr_free(mem_group->out_flag);
+	amdgv_memmgr_free(mem_group->signal_obj);
+	amdgv_memmgr_free(mem_group->packet);
+
+	oss_free(mem_group);
+	adapt->gfx.dump_cu_memmgr_mem_group = NULL;
+	adapt->gfx.dump_cu_packets[0] = NULL;
+	adapt->gfx.dump_cu_packets[1] = NULL;
 }
 
 int amdgv_gfx_dump_cu_data(struct amdgv_adapter *adapt)
@@ -632,7 +661,7 @@ int amdgv_gfx_dump_cu_data(struct amdgv_adapter *adapt)
 	}
 
 	for (i = 0; i < sizeof(hsa_kernel_dispatch_packet_t)/sizeof(uint32_t); i++) {
-		amdgv_ring_write(mec_ring, ((uint32_t *)adapt->gfx.packet_addr)[i]);
+		amdgv_ring_write(mec_ring, ((uint32_t *)adapt->gfx.dump_cu_packets[0])[i]);
 	}
 
 	amdgv_ring_commit(mec_ring);

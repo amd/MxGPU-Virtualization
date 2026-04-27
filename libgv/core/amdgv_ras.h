@@ -406,6 +406,10 @@ struct eeprom_data_record {
 	int count;
 	/* capacity of bad page records array*/
 	uint32_t bps_cap;
+	/* number of valid entries already in EEPROM used when
+	 * invalid EEPROM records are skipped during load
+	 */
+	int num_recs_synced;
 };
 
 /* In the legacy driver, multiple bad pages records(16 pages on mi300)

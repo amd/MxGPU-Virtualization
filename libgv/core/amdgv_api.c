@@ -101,6 +101,7 @@ const char *const amdgv_inf_name[] = {
 	"free_memory",
 	"alloc_dma_mem",
 	"free_dma_mem",
+	"flush_dma_mem",
 	"sg_dma_address",
 	"memremap",
 	"memunmap",
@@ -218,6 +219,7 @@ const char *const amdgv_inf_name[] = {
 	"bh_queue",
 	"bh_fini",
 	"in_virtual_machine",
+	"get_device_list",
 };
 
 int AMDGV_API amdgv_init(struct oss_interface *funcs, uint16_t *dev_id_array, uint32_t flags)
@@ -648,6 +650,23 @@ int AMDGV_API amdgv_set_all_vf(amdgv_dev_t dev)
 	return 0;
 }
 
+int AMDGV_API amdgv_set_dump_cu_info(amdgv_dev_t dev, enum AMDGV_CU_DATA_TYPE cu_dump_type,
+				     uint32_t xcc_id, bool use_extra_ring)
+{
+	struct amdgv_adapter *adapt;
+	int ret;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	oss_mutex_lock(adapt->bp_lock);
+
+	ret = amdgv_int_set_dump_cu_info(adapt, cu_dump_type, xcc_id, use_extra_ring);
+
+	oss_mutex_unlock(adapt->bp_lock);
+
+	return ret;
+}
+
 int AMDGV_API amdgv_alloc_dump_cu_resource_memory(amdgv_dev_t dev,
 				struct amdgv_dump_cu_resource_size *dump_cu_resource_size, struct amdgv_dump_cu_resource_memory *output_data)
 {
@@ -834,6 +853,14 @@ int AMDGV_API amdgv_get_dev_info(amdgv_dev_t dev, enum amdgv_dev_info_type type,
 		if (!ret)
 			ret = amdgv_gfx_get_compute_cap(adapt, false, &(info->compute_cap.max));
 		break;
+	case AMDGV_GET_BASIC_INFO:
+		info->basic_info.vendor_id = adapt->vendor_id;
+		info->basic_info.device_id = adapt->dev_id;
+		info->basic_info.revision_id = adapt->rev_id;
+		info->basic_info.sub_system_id = adapt->sub_sys_id;
+		info->basic_info.sub_vendor_id = adapt->sub_vnd_id;
+		info->basic_info.bdf = adapt->bdf;
+		break;
 	default:
 		ret = AMDGV_FAILURE;
 		break;
@@ -908,6 +935,11 @@ int AMDGV_API amdgv_set_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 		if (conf->flag_switch) {
 			AMDGV_INFO("ws record enabled\n");
 			adapt->flags |= AMDGV_FLAG_WS_RECORD;
+
+			/* Signal event to wake record thread */
+			if (adapt->sched.record_event != OSS_INVALID_HANDLE) {
+				oss_signal_event(adapt->sched.record_event);
+			}
 		} else {
 			AMDGV_INFO("ws record disabled\n");
 			adapt->flags &= ~AMDGV_FLAG_WS_RECORD;
@@ -1800,13 +1832,13 @@ int AMDGV_API amdgv_vf_read_mmio(amdgv_dev_t dev, uint32_t idx_vf, void *buffer,
 	int r = 0;
 	struct amdgv_adapter *adapt = (struct amdgv_adapter *)dev;
 
-	oss_mutex_lock(adapt->api_lock);
+	oss_mutex_lock(adapt->mmio_lock);
 
 	if ((!AMDGV_IS_IDX_INVALID(idx_vf)) && (buffer != NULL)) {
 		r = amdgv_vfmgr_read_mmio(adapt, idx_vf, buffer, offset, length);
 	}
 
-	oss_mutex_unlock(adapt->api_lock);
+	oss_mutex_unlock(adapt->mmio_lock);
 
 	return r;
 }
@@ -1817,13 +1849,13 @@ int AMDGV_API amdgv_vf_write_mmio(amdgv_dev_t dev, uint32_t idx_vf, void *buffer
 	int r = 0;
 	struct amdgv_adapter *adapt = (struct amdgv_adapter *)dev;
 
-	oss_mutex_lock(adapt->api_lock);
+	oss_mutex_lock(adapt->mmio_lock);
 
 	if ((!AMDGV_IS_IDX_INVALID(idx_vf)) && (buffer != NULL)) {
 		r = amdgv_vfmgr_write_mmio(adapt, idx_vf, buffer, offset, length);
 	}
 
-	oss_mutex_unlock(adapt->api_lock);
+	oss_mutex_unlock(adapt->mmio_lock);
 
 	return r;
 }
@@ -2694,6 +2726,48 @@ int amdgv_vf_fb_copy(amdgv_dev_t dev, uint32_t idx_vf, uint64_t fb_offset,
 
 	oss_mutex_unlock(adapt->api_lock);
 	return ret;
+}
+
+int amdgv_vf_fb_copy_async(amdgv_dev_t dev, uint32_t idx_vf,
+				 struct amdgv_fb_copy_entry *entries,
+				 uint32_t num_entries, bool to_fb,
+				 enum amdgv_buf_transfer_state *buf_transfer_state)
+{
+	struct amdgv_adapter *adapt;
+	union amdgv_sched_event_data data = {0};
+	uint32_t i;
+	int ret;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (!buf_transfer_state || !entries || num_entries == 0)
+		return AMDGV_FAILURE;
+
+	for (i = 0; i < num_entries; i++) {
+		if (!amdgv_buffer_check(adapt, entries[i].gpu_addr,
+					entries[i].size)) {
+			AMDGV_ERROR("Invalid buffer address for entry %u, exit.\n", i);
+			*buf_transfer_state = AMDGV_BUF_TRANSFER_ERROR;
+			return AMDGV_FAILURE;
+		}
+	}
+
+	data.vf_fb_copy_data.entries = entries;
+	data.vf_fb_copy_data.num_entries = num_entries;
+	data.vf_fb_copy_data.to_fb = to_fb;
+	data.vf_fb_copy_data.buf_transfer_state = buf_transfer_state;
+	*buf_transfer_state = AMDGV_BUF_TRANSFER_IN_PROGRESS;
+
+	ret = amdgv_sched_queue_event_ex(adapt, idx_vf,
+					 AMDGV_EVENT_VF_FB_COPY_ASYNC,
+					 AMDGV_SCHED_BLOCK_ALL, data);
+
+	if (ret) {
+		*buf_transfer_state = AMDGV_BUF_TRANSFER_ERROR;
+		return ret;
+	}
+
+	return 0;
 }
 
 static void amdgv_get_vf_identifier_v1(struct amdgv_adapter *adapt, uint32_t idx_vf, struct amdgv_vf_identifier *vf_id)
@@ -4394,4 +4468,21 @@ bool amdgv_compare_mig_ctx(amdgv_dev_t dev, uint32_t idx_vf,
 exit:
 	oss_free(local_ctx);
 	return match;
+}
+
+int AMDGV_API amdgv_reset_vf_arbiters(amdgv_dev_t dev, uint32_t idx_vf)
+{
+	struct amdgv_adapter *adapt;
+	int ret = 0;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	oss_mutex_lock(adapt->api_lock);
+
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->reset_vf_arbiters)
+		ret = adapt->pp.pp_funcs->reset_vf_arbiters(adapt, idx_vf);
+
+	oss_mutex_unlock(adapt->api_lock);
+
+	return ret;
 }

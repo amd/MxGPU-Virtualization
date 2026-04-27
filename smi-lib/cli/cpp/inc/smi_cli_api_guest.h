@@ -54,7 +54,7 @@ public:
 											std::string &formatted_string) override;
 	virtual int amdsmi_get_ras_info_command(uint64_t processor_bdf, Arguments arg,
 											std::string &formatted_string) override;
-	virtual int amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments arg,
+	virtual int amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments &arg,
 			std::string &formatted_string) override;
 	virtual int amdsmi_get_process_isolation(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) override;
@@ -110,4 +110,23 @@ public:
 			std::string &formatted_string) override;
 	virtual int amdsmi_get_pcie_info_monitor_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) override;
+
+	virtual int amdsmi_get_default_version_command(uint64_t processor_bdf, Arguments arg,
+			std::string &formatted_string) override;
+	virtual int amdsmi_get_default_bdf_command(uint64_t index, Arguments arg,
+			std::string &formatted_string) override;
+	virtual int amdsmi_get_default_gpu_name_oam_id_command(uint64_t processor_bdf,
+			Arguments arg, std::string &formatted_string) override;
+	virtual int amdsmi_get_default_partition_mode_command(uint64_t processor_bdf,
+			Arguments arg, std::string &formatted_string) override;
+	virtual int amdsmi_get_default_uec_command(uint64_t processor_bdf, Arguments arg,
+			std::string &formatted_string) override;
+	virtual int amdsmi_get_default_utilization_command(uint64_t processor_bdf, Arguments arg,
+			std::string &formatted_string) override;
+	virtual int amdsmi_get_default_pcie_info_command(uint64_t processor_bdf, Arguments arg,
+			std::string &formatted_string) override;
+	virtual int amdsmi_get_default_fb_usage_command(uint64_t processor_bdf, Arguments arg,
+			std::string &formatted_string) override;
+	virtual int amdsmi_get_default_process_info_command(uint64_t processor_bdf, Arguments arg,
+			std::string &formatted_string, int &proc_num, int gpu_id) override;
 };

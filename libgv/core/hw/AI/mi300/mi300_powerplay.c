@@ -452,9 +452,11 @@ bool mi300_smu_get_fw_loaded_status(struct amdgv_adapter *adapt)
 	return true;
 }
 
-int mi300_gpu_mode1_reset(struct amdgv_adapter *adapt)
+int mi300_gpu_mode1_reset(struct amdgv_adapter *adapt, bool is_unload)
 {
 	uint32_t fatal_err = 0, param;
+	struct amdgv_hive_info *hive;
+	hive = amdgv_get_xgmi_hive(adapt);
 
 	/* send mode1 reset command to SMU (MP1) */
 	AMDGV_DEBUG("sending mode1_reset command to SMU ...\n");
@@ -472,10 +474,16 @@ int mi300_gpu_mode1_reset(struct amdgv_adapter *adapt)
 	 */
 	mi300_smu_send_msg_nocheck(adapt, PPSMC_MSG_GfxDriverReset, param);
 
-	/* allow time for all blocks to complete RESET */
-	if (mi300_psp_wait_for_bootloader_steady(adapt) != PSP_STATUS__SUCCESS) {
-		AMDGV_ERROR("mode1_reset timed out\n");
-		return AMDGV_FAILURE;
+	/* if not unload, wait steady state.
+	 * if no hive, wait steady state;
+	 * if has hvie, wait steady state on the last gpu fini.
+	 */
+	if ((!is_unload) || (hive == NULL) || ((hive != NULL) && (hive->number_adapters == 0))) {
+		/* allow time for all blocks to complete RESET */
+		if (mi300_psp_wait_for_bootloader_steady(adapt) != PSP_STATUS__SUCCESS) {
+			AMDGV_ERROR("mode1_reset timed out\n");
+			return AMDGV_FAILURE;
+		}
 	}
 
 	oss_atomic_set(adapt->in_sync_flood, 0);
@@ -694,14 +702,14 @@ static int mi300_smu_set_xgmi_plpd_mode(struct amdgv_adapter *adapt, int mode)
 	uint32_t msg = 0, param = 0, version = 0;
 
 	if (!mi300_smu_feature_is_enabled(adapt, FEATURE_XGMI_PER_LINK_PWR_DOWN)) {
-		AMDGV_WARN("the feature FEATURE_XGMI_PER_LINK_PWR_DOWN feature isn't enabled, skip to set XGMI PLPD mode!\n");
-		return 0;
+		AMDGV_DEBUG("the feature FEATURE_XGMI_PER_LINK_PWR_DOWN feature isn't enabled, skip to set XGMI PLPD mode!\n");
+		return AMDGV_NOT_SUPPORTED;
 	}
 
 	/* NOTE: PLPD feature is enabled after PMFW 85.73.0 */
 	if (!mi300_smu_cap_supported(adapt, SUM_CAP_XGMI_PLPD)) {
-		AMDGV_WARN("the current SMU PMFW (0x%08x) doesn't support XGMI PLPD feature\n", version);
-		return 0;
+		AMDGV_DEBUG("the current SMU PMFW (0x%08x) doesn't support XGMI PLPD feature\n", version);
+		return AMDGV_NOT_SUPPORTED;
 	}
 
 	/* NOTE: the PMFW is allowed set PLPD mode from different clients,
@@ -840,6 +848,11 @@ static int mi300_smu_get_pm_policy(struct amdgv_adapter *adapt,
 	int ret = AMDGV_FAILURE;
 	int i = 0;
 
+	if (!mi300_smu_feature_is_enabled(adapt, FEATURE_XGMI_PER_LINK_PWR_DOWN) ||
+	    !mi300_smu_cap_supported(adapt, SUM_CAP_XGMI_PLPD)) {
+		return ret;
+	}
+
 	if (!policy_ctxt || !(policy_ctxt->policy_mask & BIT(p_type)))
 		return ret;
 
@@ -890,10 +903,12 @@ static void mi300_smu_restore_pm_policy(struct amdgv_adapter *adapt,
 					enum amdgv_pp_pm_policy p_type)
 {
 	struct pp_smu_dpm_policy *policy;
+	int ret;
 
 	if (mi300_smu_get_pm_policy(adapt, p_type, &policy))
 		return;
-	if (mi300_smu_set_pm_policy(adapt, policy, policy->current_level))
+	ret = mi300_smu_set_pm_policy(adapt, policy, policy->current_level);
+	if (ret && (ret != AMDGV_NOT_SUPPORTED))
 		AMDGV_ERROR("Failed to restore PM Policy");
 
 	return;
@@ -942,6 +957,22 @@ static void mi300_smu_notify_throttler_error(struct amdgv_adapter *adapt,
 	amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_PP_THROTTLER_EVENT, throttler_event);
 }
 
+static int mi300_smu_reset_vf_arbiters(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	int ret = 0;
+
+	/* MI300X and MI325X */
+	if (mi300_smu_cap_supported(adapt, SMU_CAP_RESET_VF_ARBITERS)) {
+		ret = mi300_smu_send_msg_with_param(adapt,
+						    PPSMC_MSG_ResetVfArbitersByIndex,
+						    idx_vf, NULL);
+		if (ret)
+			AMDGV_ERROR("Failed to reset VF arbiters for VF %d\n", idx_vf);
+	}
+
+	return ret;
+}
+
 static int mi300_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv_entry *entry)
 {
 	int ret = 0;
@@ -950,6 +981,7 @@ static int mi300_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv_
 	uint32_t vf_flr_intr_sts;
 	uint32_t i;
 	uint64_t curr_time, throttle_delta;
+	union amdgv_sched_event_data data;
 
 	if (entry->client_id != IH_IV_CLIENTID_MP1 ||
 	    entry->src_id != IH_INTERRUPT_ID_TO_DRIVER)
@@ -975,14 +1007,17 @@ static int mi300_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv_
 		 */
 		vf_flr_intr_sts = entry->src_data[1];
 
+		/* Only for KVM, data for vf arbiters reset on config space FLR */
+		data.vf_arbiters.reset = true;
+
 		/* Only for KVM, only trigger FLR if VF is active */
 		for_each_id(i, vf_flr_intr_sts) {
 			if (i >= adapt->num_vf)
 				break;
 
 			if (adapt->sched.array_vf[i].state == AMDGV_SCHED_ACTIVE) {
-				ret = amdgv_sched_queue_event(
-						adapt, i, AMDGV_EVENT_SCHED_FORCE_RESET_VF, AMDGV_SCHED_BLOCK_ALL);
+				ret = amdgv_sched_queue_event_ex(
+						adapt, i, AMDGV_EVENT_SCHED_FORCE_RESET_VF, AMDGV_SCHED_BLOCK_ALL, data);
 
 				if (ret) {
 					AMDGV_ERROR("Failed to trigger VFFLR for VF %d\n", i);
@@ -1440,8 +1475,7 @@ static int mi300_smu_init_supported_caps(struct amdgv_adapter *adapt)
 		smu->supported_caps |= SMU_CAPS(SUM_CAP_XGMI_PLPD);
 	}
 
-	/* TODO: Enable PTL support when FW is ready */
-	if (0) {
+	if (adapt->pp.smu_fw_version >= 0x05551E00 && adapt->asic_type == CHIP_MI308X) {
 		smu->supported_caps |= SMU_CAPS(SMU_CAP_PTL);
 		adapt->ptl_supported = true;
 	} else {
@@ -2740,7 +2774,7 @@ static int mi300_smu_pp_get_link_metrics(struct amdgv_adapter *adapt,
 		link_metrics->links[i].width = metrics_table->XgmiWidth;
 		link_metrics->links[i].speed = metrics_table->XgmiBitrate;
 
-		switch (amdgv_xgmi_get_link_status(adapt, i)) {
+		switch (amdgv_xgmi_get_link_status(adapt, port_id)) {
 		case AMDGV_XGMI_LINK_STATUS__ACTIVE:
 			link_metrics->links[i].status = AMDGV_GPUMON_LINK_STATUS_ENABLED;
 			break;
@@ -3058,20 +3092,6 @@ static int mi300_smu_read_mca_bank_reg32(struct amdgv_adapter *adapt,
 	return mi300_smu_send_msg_with_param(adapt, msg, param, val);
 }
 
-static int mi300_smu_reset_vf_arbiters(struct amdgv_adapter *adapt, uint32_t idx_vf)
-{
-	int ret = 0;
-
-	/* MI300 & MI325 */
-	if (mi300_smu_cap_supported(adapt, SMU_CAP_RESET_VF_ARBITERS)) {
-		ret = mi300_smu_send_msg_with_param(adapt,
-						    PPSMC_MSG_ResetVfArbitersByIndex,
-						    idx_vf, NULL);
-	}
-
-	return ret;
-}
-
 static const struct amdgv_pp_funcs mi300_amdgv_pp_funcs = {
 	.handle_smu_irq = mi300_smu_pp_handle_irq,
 	.i2c_eeprom_xfer = mi300_smu_pp_i2c_eeprom_i2c_xfer,
@@ -3150,7 +3170,9 @@ static int mi300_powerplay_hw_init(struct amdgv_adapter *adapt)
 		return ret;
 
 	ret = mi300_smu_set_xgmi_plpd_mode(adapt, PP_XGMI_PLPD_MODE_ENABLE);
-	if (ret)
+	if (ret == AMDGV_NOT_SUPPORTED)
+		AMDGV_INFO("SMU feature FEATURE_XGMI_PER_LINK_PWR_DOWN is not supported.");
+	else if (ret)
 		return ret;
 
 	if (in_whole_gpu_reset())

@@ -126,7 +126,7 @@ enum mi300_metric_name {
 struct amdgv_adapter;
 
 bool mi300_smu_get_fw_loaded_status(struct amdgv_adapter *adapt);
-int mi300_gpu_mode1_reset(struct amdgv_adapter *adapt);
+int mi300_gpu_mode1_reset(struct amdgv_adapter *adapt, bool is_unload);
 int mi300_wait_gpu_reset_completion(struct amdgv_adapter *adapt);
 
 uint32_t mi300_smu_read_arg(struct amdgv_adapter *adapt);

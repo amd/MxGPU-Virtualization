@@ -212,6 +212,40 @@ void AmdSmiSetCommand::set_command()
 		}
 	}
 
+	if (std::find(arg.options.begin(), arg.options.end(), "ptl-status") != arg.options.end()) {
+		for (unsigned int i = 0; i < arg.devices.size(); i++) {
+			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_ptl_status_command(gpu_bdf,
+				arg);
+			std::string param{"ptl-status"};
+			int error = handle_exceptions(ret, param, arg);
+			if (error == 0) {
+				std::cout << string_format(setSuccessfullyTemplate,
+							   arg.devices[i]->get_gpu_index(),
+							   "PTL_STATUS",
+							   "PTL status",
+							   (arg.ptl_status_set).c_str());
+			}
+		}
+	}
+
+	if (std::find(arg.options.begin(), arg.options.end(), "ptl-format") != arg.options.end()) {
+		for (unsigned int i = 0; i < arg.devices.size(); i++) {
+			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_ptl_format_command(gpu_bdf,
+				arg);
+			std::string param{"ptl-format"};
+			int error = handle_exceptions(ret, param, arg);
+			if (error == 0) {
+				std::cout << string_format(setSuccessfullyTemplate,
+							   arg.devices[i]->get_gpu_index(),
+							   "PTL_FORMAT",
+							   "PTL preferred formats",
+							   (arg.ptl_format_set).c_str());
+			}
+		}
+	}
+
 	if (std::find(arg.options.begin(), arg.options.end(), "num-vf") != arg.options.end()) {
 		for (unsigned int i = 0; i < arg.devices.size(); i++) {
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();

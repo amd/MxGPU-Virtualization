@@ -51,6 +51,7 @@ TODO: Fix memory layout for these structures:
 	X(amdsmi_link_metrics_t) \
 	X(amdsmi_vram_info_t) \
 	X(amdsmi_dpm_policy_t) \
+	X(amdsmi_npm_info_t)
 
 #define AMD_SMI_STRUCTURES_32 \
 	X(amdsmi_clk_info_t) \

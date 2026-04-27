@@ -27,6 +27,14 @@
 
 #include "amdsmi.h"
 
+#ifdef SMI_ESXI_BUILD
+	#define CPER_RAW_DATA_BUFFER_SIZE (1024 * 10)
+	#define CPER_HDRS_ARRAY_SIZE 10
+#else
+	#define CPER_RAW_DATA_BUFFER_SIZE (1024 * 1024)
+	#define CPER_HDRS_ARRAY_SIZE 1024
+#endif
+
 void print_cper_timestamp(amdsmi_cper_timestamp_t *timestamp);
 void print_cper_timestamp(amdsmi_cper_timestamp_t *timestamp) {
 	if (timestamp == NULL) {
@@ -44,11 +52,11 @@ int main(void)
 	amdsmi_socket_handle socket = NULL;
 	unsigned int gpu_count;
 
-	char cper_data[1024*1024];   // the buffer to hold the raw cper data
-	amdsmi_cper_hdr_t* cper_hdrs[1024];  // the buffer to hold the parsed cper headers
+	char cper_data[CPER_RAW_DATA_BUFFER_SIZE];   // the buffer to hold the raw cper data
+	amdsmi_cper_hdr_t* cper_hdrs[CPER_HDRS_ARRAY_SIZE];  // the buffer to hold the parsed cper headers
 	uint32_t severity_mask = 3;
 	uint64_t buf_size = sizeof(cper_data);
-	uint64_t entry_count = 1024; //sizeof(cper_hdrs) / sizeof(cper_hdrs[0]);
+	uint64_t entry_count = CPER_HDRS_ARRAY_SIZE;
 
 	uint64_t cursor = 0;  // The cursor to get more data
 

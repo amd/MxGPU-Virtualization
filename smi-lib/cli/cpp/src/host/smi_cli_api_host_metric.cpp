@@ -40,6 +40,10 @@
 
 #include <limits.h>
 #include <vector>
+#include <algorithm>
+#include <chrono>
+#include <thread>
+#include <cinttypes>
 
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 		amdsmi_processor_handle *);
@@ -499,6 +503,67 @@ std::string host_fill_energy(Arguments arg, std::string value)
 	return out;
 }
 
+std::string host_fill_throttle(Arguments arg, std::string value)
+{
+	std::string out{};
+	std::string unit_str = value == "N/A" ? "" : "%";
+	std::string json_unit_str = value == "N/A" ? "N/A" : "%";
+	std::string pct_str = string_format("%s %s", value.c_str(), unit_str.c_str());
+	if (arg.watch > -1) {
+		out = string_format(
+				  "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",
+				  value.c_str(),
+				  value.c_str(), pct_str.c_str(), value.c_str(),
+				  value.c_str(), pct_str.c_str(), value.c_str(),
+				  value.c_str(), pct_str.c_str(), value.c_str(),
+				  value.c_str(), pct_str.c_str(), value.c_str(),
+				  value.c_str(), pct_str.c_str(), value.c_str());
+	} else if (arg.output == json) {
+		nlohmann::ordered_json activity_json;
+		activity_json["value"] = value.c_str();
+		activity_json["unit"] = json_unit_str.c_str();
+
+		nlohmann::ordered_json throttle_json;
+		throttle_json["accumulation_counter"] = value.c_str();
+		throttle_json["prochot_violation_accumulated"] = value.c_str();
+		throttle_json["prochot_violation_activity"] = activity_json;
+		throttle_json["prochot_violation_status"] = value.c_str();
+		throttle_json["ppt_violation_accumulated"] = value.c_str();
+		throttle_json["ppt_violation_activity"] = activity_json;
+		throttle_json["ppt_violation_status"] = value.c_str();
+		throttle_json["socket_thermal_violation_accumulated"] = value.c_str();
+		throttle_json["socket_thermal_violation_activity"] = activity_json;
+		throttle_json["socket_thermal_violation_status"] = value.c_str();
+		throttle_json["vr_thermal_violation_accumulated"] = value.c_str();
+		throttle_json["vr_thermal_violation_activity"] = activity_json;
+		throttle_json["vr_thermal_violation_status"] = value.c_str();
+		throttle_json["hbm_thermal_violation_accumulated"] = value.c_str();
+		throttle_json["hbm_thermal_violation_activity"] = activity_json;
+		throttle_json["hbm_thermal_violation_status"] = value.c_str();
+
+		out = throttle_json.dump(4);
+	} else if (arg.output == csv) {
+		out = string_format(
+				  ",%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",
+				  value.c_str(),
+				  value.c_str(), value.c_str(), value.c_str(),
+				  value.c_str(), value.c_str(), value.c_str(),
+				  value.c_str(), value.c_str(), value.c_str(),
+				  value.c_str(), value.c_str(), value.c_str(),
+				  value.c_str(), value.c_str(), value.c_str());
+	} else {
+		out = string_format(
+				  ThrottleInfoHeaderTemplate, value.c_str(),
+				  value.c_str(), value.c_str(), unit_str.c_str(), value.c_str(),
+				  value.c_str(), value.c_str(), unit_str.c_str(), value.c_str(),
+				  value.c_str(), value.c_str(), unit_str.c_str(), value.c_str(),
+				  value.c_str(), value.c_str(), unit_str.c_str(), value.c_str(),
+				  value.c_str(), value.c_str(), unit_str.c_str(), value.c_str());
+	}
+
+	return out;
+}
+
 std::string host_fill_metric_nic_rdma_dev_info(Arguments arg, std::string value)
 {
 	std::string out{};
@@ -524,7 +589,7 @@ std::string host_fill_metric_nic_rdma_dev_info(Arguments arg, std::string value)
 	} else {
 		out += metricNicRdmaStatsHeaderTemplate;
 		out += string_format(metricNicRdmaDeviceTemplate, 0, value.c_str());
-		out += string_format("                    PORT_0:\n");
+		out += "                    PORT_0:\n";
 		out += string_format("                        STATISTICS: %s\n", value.c_str());
 	}
 
@@ -838,11 +903,11 @@ int AmdSmiApiHost::amdsmi_get_power_metric_command(uint64_t processor_bdf, Argum
 								  string_format(
 									  "%lld", power_info.mem_voltage);
 	std::string socket_power_str{ string_format(
-									  "%lld", power_info.socket_power) };
+		"%lld", power_info.socket_power) };
 
 	std::string is_power_management_enabled_str;
 	ret = host_amdsmi_is_gpu_power_management_enabled(processor,
-			&is_power_management_enabled);
+		&is_power_management_enabled);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		is_power_management_enabled_str = "N/A";
 	} else
@@ -1401,6 +1466,9 @@ amdsmi_status_t get_metric_ext_clock_data(uint64_t processor_bdf, Arguments arg,
 	ret = host_amdsmi_get_gpu_metrics(processor, &metric_size, NULL);
 	if (ret == AMDSMI_STATUS_SUCCESS) {
 		metrics = (amdsmi_metric_t *)malloc(sizeof(amdsmi_metric_t)*metric_size);
+		if (metrics == NULL) {
+			throw SmiToolNotEnoughMemException();
+		}
 		ret = host_amdsmi_get_gpu_metrics(processor, &metric_size, &metrics[0]);
 		if (ret != AMDSMI_STATUS_SUCCESS) {
 			free(metrics);
@@ -1469,23 +1537,10 @@ amdsmi_status_t get_metric_ext_clock_data(uint64_t processor_bdf, Arguments arg,
 		return ret;
 	}
 
-	std::vector<std::size_t> gfx_chiplet_size = { gfx_chiplet["clk"].size(), gfx_chiplet["min_clk"].size(), gfx_chiplet["max_clk"].size(),
-												  gfx_chiplet["clk_locked"].size(), gfx_chiplet["deep_sleep"].size()
-												};
-	std::vector<std::size_t> mem_chiplet_size = { mem_chiplet["clk"].size(), mem_chiplet["min_clk"].size(), mem_chiplet["max_clk"].size(),
-												  mem_chiplet["deep_sleep"].size()
-												};
-	std::vector<std::size_t> vclk_chiplet_size = { vclk_chiplet["clk"].size(), vclk_chiplet["min_clk"].size(), vclk_chiplet["max_clk"].size(),
-												   vclk_chiplet["deep_sleep"].size()
-												 };
-	std::vector<std::size_t> dclk_chiplet_size = { dclk_chiplet["clk"].size(), dclk_chiplet["min_clk"].size(), dclk_chiplet["max_clk"].size(),
-												   dclk_chiplet["deep_sleep"].size()
-												 };
-
-	std::size_t gfx_cur_size = gfx_chiplet_size[0];
-	std::size_t mem_cur_size = mem_chiplet_size[0];
-	std::size_t vclk_cur_size = vclk_chiplet_size[0];
-	std::size_t dclk_cur_size = dclk_chiplet_size[0];
+	std::size_t gfx_cur_size = std::min({gfx_chiplet["clk"].size(), gfx_chiplet["min_clk"].size(), gfx_chiplet["max_clk"].size()});
+	std::size_t mem_cur_size = std::min({mem_chiplet["clk"].size(), mem_chiplet["min_clk"].size(), mem_chiplet["max_clk"].size()});
+	std::size_t vclk_cur_size = std::min({vclk_chiplet["clk"].size(), vclk_chiplet["min_clk"].size(), vclk_chiplet["max_clk"].size()});
+	std::size_t dclk_cur_size = std::min({dclk_chiplet["clk"].size(), dclk_chiplet["min_clk"].size(), dclk_chiplet["max_clk"].size()});
 
 	if (arg.output == json) {
 		nlohmann::ordered_json result{};
@@ -2584,6 +2639,12 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 	std::vector<amdsmi_metric_t> gfx_usage_chiplet_per_partition{};
 	std::vector<amdsmi_metric_t> temp_xcd_chiplet_per_partition{};
 
+	std::vector<amdsmi_metric_t> throttle_ppt_a{}, throttle_ppt_b{};
+	std::vector<amdsmi_metric_t> throttle_thm_a{}, throttle_thm_b{};
+	std::vector<amdsmi_metric_t> throttle_total_a{}, throttle_total_b{};
+	std::vector<amdsmi_metric_t> throttle_util_a{}, throttle_util_b{};
+	uint64_t acc_counter_a = UINT64_MAX, acc_counter_b = UINT64_MAX;
+
 	amdsmi_metric_t *metrics;
 	uint32_t metric_size = AMDSMI_MAX_NUM_METRICS;
 
@@ -2668,9 +2729,83 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 					break;
 			}
 		}
+		switch (metrics[i].name) {
+		case AMDSMI_METRIC_NAME_METRIC_ACC_COUNTER:
+			acc_counter_a = metrics[i].val;
+			break;
+		case AMDSMI_METRIC_NAME_GFX_CLK_BELOW_HOST_LIMIT_PPT:
+			if (metrics[i].res_group == AMDSMI_METRIC_RES_GROUP_XCP
+					&& metrics[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC)
+				throttle_ppt_a.push_back(metrics[i]);
+			break;
+		case AMDSMI_METRIC_NAME_GFX_CLK_BELOW_HOST_LIMIT_THM:
+			if (metrics[i].res_group == AMDSMI_METRIC_RES_GROUP_XCP
+					&& metrics[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC)
+				throttle_thm_a.push_back(metrics[i]);
+			break;
+		case AMDSMI_METRIC_NAME_GFX_CLK_BELOW_HOST_LIMIT_TOTAL:
+			if (metrics[i].res_group == AMDSMI_METRIC_RES_GROUP_XCP
+					&& metrics[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC)
+				throttle_total_a.push_back(metrics[i]);
+			break;
+		case AMDSMI_METRIC_NAME_GFX_CLK_LOW_UTILIZATION:
+			if (metrics[i].res_group == AMDSMI_METRIC_RES_GROUP_XCP
+					&& metrics[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC)
+				throttle_util_a.push_back(metrics[i]);
+			break;
+		default:
+			break;
+		}
 	}
 	free(metrics);
 	metrics = NULL;
+
+	auto violation_ts_start = std::chrono::steady_clock::now();
+	uint64_t violation_ts_delta_us = 0;
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+	uint32_t metric_size_b = AMDSMI_MAX_NUM_METRICS;
+	if (host_amdsmi_get_gpu_metrics(processor, &metric_size_b, NULL) == AMDSMI_STATUS_SUCCESS) {
+		amdsmi_metric_t *metrics_b = (amdsmi_metric_t *)malloc(sizeof(amdsmi_metric_t) * metric_size_b);
+		if (metrics_b != NULL) {
+			if (host_amdsmi_get_gpu_metrics(processor, &metric_size_b, &metrics_b[0]) == AMDSMI_STATUS_SUCCESS) {
+				for (uint32_t i = 0; i < metric_size_b; i++) {
+					switch (metrics_b[i].name) {
+					case AMDSMI_METRIC_NAME_METRIC_ACC_COUNTER:
+						acc_counter_b = metrics_b[i].val;
+						break;
+					case AMDSMI_METRIC_NAME_GFX_CLK_BELOW_HOST_LIMIT_PPT:
+						if (metrics_b[i].res_group == AMDSMI_METRIC_RES_GROUP_XCP
+								&& metrics_b[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC)
+							throttle_ppt_b.push_back(metrics_b[i]);
+						break;
+					case AMDSMI_METRIC_NAME_GFX_CLK_BELOW_HOST_LIMIT_THM:
+						if (metrics_b[i].res_group == AMDSMI_METRIC_RES_GROUP_XCP
+								&& metrics_b[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC)
+							throttle_thm_b.push_back(metrics_b[i]);
+						break;
+					case AMDSMI_METRIC_NAME_GFX_CLK_BELOW_HOST_LIMIT_TOTAL:
+						if (metrics_b[i].res_group == AMDSMI_METRIC_RES_GROUP_XCP
+								&& metrics_b[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC)
+							throttle_total_b.push_back(metrics_b[i]);
+						break;
+					case AMDSMI_METRIC_NAME_GFX_CLK_LOW_UTILIZATION:
+						if (metrics_b[i].res_group == AMDSMI_METRIC_RES_GROUP_XCP
+								&& metrics_b[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC)
+							throttle_util_b.push_back(metrics_b[i]);
+						break;
+					default:
+						break;
+					}
+				}
+				auto violation_ts_end = std::chrono::steady_clock::now();
+				violation_ts_delta_us = std::chrono::duration_cast<std::chrono::microseconds>(
+					violation_ts_end - violation_ts_start).count();
+			}
+			free(metrics_b);
+		}
+	}
 
 	if (arg.output == json) {
 		nlohmann::ordered_json result_json;
@@ -2795,7 +2930,7 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 					} else {
 						aid_json["temperature"] = {
 							{"value", "N/A"},
-							{"unit", ""}
+							{"unit", "N/A"}
 						};
 					}
 					// HBM Temp metrics (can be multiple)
@@ -2814,7 +2949,7 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 					} else {
 						hbm_temp_metrics_array.push_back({
 							{"value", "N/A"},
-							{"unit", ""}
+							{"unit", "N/A"}
 						});
 					}
 					if (!hbm_temp_metrics_array.empty()) {
@@ -2889,8 +3024,85 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 					} else {
 						nlohmann::ordered_json temp_json;
 						temp_json["value"] = "N/A";
-						temp_json["unit"] = "";
+						temp_json["unit"] = "N/A";
 						xcp_json["temperature"].push_back(temp_json);
+					}
+					std::vector<const amdsmi_metric_t*> m_ppt_a, m_ppt_b;
+					std::vector<const amdsmi_metric_t*> m_thm_a, m_thm_b;
+					std::vector<const amdsmi_metric_t*> m_total_a, m_total_b;
+					std::vector<const amdsmi_metric_t*> m_util_a, m_util_b;
+					for (const auto& m : throttle_ppt_a) { if (m.res_instance == xcp_id) m_ppt_a.push_back(&m); }
+					for (const auto& m : throttle_ppt_b) { if (m.res_instance == xcp_id) m_ppt_b.push_back(&m); }
+					for (const auto& m : throttle_thm_a) { if (m.res_instance == xcp_id) m_thm_a.push_back(&m); }
+					for (const auto& m : throttle_thm_b) { if (m.res_instance == xcp_id) m_thm_b.push_back(&m); }
+					for (const auto& m : throttle_total_a) { if (m.res_instance == xcp_id) m_total_a.push_back(&m); }
+					for (const auto& m : throttle_total_b) { if (m.res_instance == xcp_id) m_total_b.push_back(&m); }
+					for (const auto& m : throttle_util_a) { if (m.res_instance == xcp_id) m_util_a.push_back(&m); }
+					for (const auto& m : throttle_util_b) { if (m.res_instance == xcp_id) m_util_b.push_back(&m); }
+					amdsmi_metric_t dummy_metric{};
+					dummy_metric.val = UINT64_MAX;
+					if (m_ppt_a.empty()) { m_ppt_a.push_back(&dummy_metric); m_ppt_b.push_back(&dummy_metric); }
+					if (m_thm_a.empty()) { m_thm_a.push_back(&dummy_metric); m_thm_b.push_back(&dummy_metric); }
+					if (m_total_a.empty()) { m_total_a.push_back(&dummy_metric); m_total_b.push_back(&dummy_metric); }
+					if (m_util_a.empty()) { m_util_a.push_back(&dummy_metric); m_util_b.push_back(&dummy_metric); }
+					uint32_t num_violations = static_cast<uint32_t>(
+						std::max({m_ppt_a.size(), m_thm_a.size(), m_total_a.size(), m_util_a.size()}));
+					auto pad_to = [&dummy_metric](std::vector<const amdsmi_metric_t*> &v, uint32_t n) {
+						while (v.size() < n) v.push_back(&dummy_metric);
+					};
+					pad_to(m_ppt_a, num_violations); pad_to(m_ppt_b, num_violations);
+					pad_to(m_thm_a, num_violations); pad_to(m_thm_b, num_violations);
+					pad_to(m_total_a, num_violations); pad_to(m_total_b, num_violations);
+					pad_to(m_util_a, num_violations); pad_to(m_util_b, num_violations);
+
+					auto to_json_acc = [](uint64_t v) -> nlohmann::ordered_json {
+						if (v == UINT64_MAX) return "N/A";
+						return v;
+					};
+					auto to_json_pct_obj = [](const std::string &s) -> nlohmann::ordered_json {
+						nlohmann::ordered_json obj{};
+						if (s == "N/A") {
+							obj["value"] = "N/A";
+							obj["unit"] = "N/A";
+						} else {
+							obj["value"] = std::stoull(s);
+							obj["unit"] = "%";
+						}
+						return obj;
+					};
+
+					for (uint32_t i = 0; i < num_violations; i++) {
+						std::string pwr_pct = violation_compute_pct(m_ppt_a[i]->val,
+							m_ppt_b[i]->val, acc_counter_a, acc_counter_b, violation_ts_delta_us);
+						xcp_json["gfx_clk_below_host_limit_power_violation_accumulated"].push_back(
+							to_json_acc(m_ppt_b[i]->val));
+						xcp_json["gfx_clk_below_host_limit_power_violation_activity"].push_back(to_json_pct_obj(pwr_pct));
+						xcp_json["gfx_clk_below_host_limit_power_violation_status"].push_back(
+							violation_is_active(m_ppt_a[i]->val, m_ppt_b[i]->val));
+
+						std::string thm_pct = violation_compute_pct(m_thm_a[i]->val,
+							m_thm_b[i]->val, acc_counter_a, acc_counter_b, violation_ts_delta_us);
+						xcp_json["gfx_clk_below_host_limit_thermal_violation_accumulated"].push_back(
+							to_json_acc(m_thm_b[i]->val));
+						xcp_json["gfx_clk_below_host_limit_thermal_violation_activity"].push_back(to_json_pct_obj(thm_pct));
+						xcp_json["gfx_clk_below_host_limit_thermal_violation_status"].push_back(
+							violation_is_active(m_thm_a[i]->val, m_thm_b[i]->val));
+
+						std::string total_pct = violation_compute_pct(m_total_a[i]->val,
+							m_total_b[i]->val, acc_counter_a, acc_counter_b, violation_ts_delta_us);
+						xcp_json["total_gfx_clk_below_host_limit_violation_accumulated"].push_back(
+							to_json_acc(m_total_b[i]->val));
+						xcp_json["total_gfx_clk_below_host_limit_violation_activity"].push_back(to_json_pct_obj(total_pct));
+						xcp_json["total_gfx_clk_below_host_limit_violation_status"].push_back(
+							violation_is_active(m_total_a[i]->val, m_total_b[i]->val));
+
+						std::string low_pct = violation_compute_pct(m_util_a[i]->val,
+							m_util_b[i]->val, acc_counter_a, acc_counter_b, violation_ts_delta_us);
+						xcp_json["low_utilization_violation_accumulated"].push_back(
+							to_json_acc(m_util_b[i]->val));
+						xcp_json["low_utilization_violation_activity"].push_back(to_json_pct_obj(low_pct));
+						xcp_json["low_utilization_violation_status"].push_back(
+							violation_is_active(m_util_a[i]->val, m_util_b[i]->val));
 					}
 					if (!xcp_json.empty()) {
 						result_json[string_format("xcp_%d", xcp_id)] = xcp_json;
@@ -3023,7 +3235,7 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 							}
 						}
 					} else {
-						out += string_format(TemperaturePerPartitionTemplate, "N/A", "");
+						out += "                TEMPERATURE: N/A\n";
 					}
 
 					out += metricHbmTempPerPartitionHeaderTemplate;
@@ -3048,7 +3260,7 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 							}
 						}
 					} else {
-						out += string_format(metricHbmTempPerPartitionTemplate, "N/A", "");
+						out += "N/A";
 					}
 					out += metricJpegUsageFooterTemplate;
 				}
@@ -3186,9 +3398,131 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 							}
 						}
 					} else {
-						out += string_format(TempXcdPerPartitionTemplate, "N/A", "");
+						out += "N/A";
 					}
 					out += metricJpegUsageFooterTemplate;
+
+					std::vector<const amdsmi_metric_t*> m_ppt_a, m_ppt_b;
+					std::vector<const amdsmi_metric_t*> m_thm_a, m_thm_b;
+					std::vector<const amdsmi_metric_t*> m_total_a, m_total_b;
+					std::vector<const amdsmi_metric_t*> m_util_a, m_util_b;
+					for (const auto& m : throttle_ppt_a) { if (m.res_instance == xcp_id) m_ppt_a.push_back(&m); }
+					for (const auto& m : throttle_ppt_b) { if (m.res_instance == xcp_id) m_ppt_b.push_back(&m); }
+					for (const auto& m : throttle_thm_a) { if (m.res_instance == xcp_id) m_thm_a.push_back(&m); }
+					for (const auto& m : throttle_thm_b) { if (m.res_instance == xcp_id) m_thm_b.push_back(&m); }
+					for (const auto& m : throttle_total_a) { if (m.res_instance == xcp_id) m_total_a.push_back(&m); }
+					for (const auto& m : throttle_total_b) { if (m.res_instance == xcp_id) m_total_b.push_back(&m); }
+					for (const auto& m : throttle_util_a) { if (m.res_instance == xcp_id) m_util_a.push_back(&m); }
+					for (const auto& m : throttle_util_b) { if (m.res_instance == xcp_id) m_util_b.push_back(&m); }
+					amdsmi_metric_t dummy_metric{};
+					dummy_metric.val = UINT64_MAX;
+					if (m_ppt_a.empty()) { m_ppt_a.push_back(&dummy_metric); m_ppt_b.push_back(&dummy_metric); }
+					if (m_thm_a.empty()) { m_thm_a.push_back(&dummy_metric); m_thm_b.push_back(&dummy_metric); }
+					if (m_total_a.empty()) { m_total_a.push_back(&dummy_metric); m_total_b.push_back(&dummy_metric); }
+					if (m_util_a.empty()) { m_util_a.push_back(&dummy_metric); m_util_b.push_back(&dummy_metric); }
+					uint32_t num_violations = static_cast<uint32_t>(
+						std::max({m_ppt_a.size(), m_thm_a.size(), m_total_a.size(), m_util_a.size()}));
+					auto pad_to = [&dummy_metric](std::vector<const amdsmi_metric_t*> &v, uint32_t n) {
+						while (v.size() < n) v.push_back(&dummy_metric);
+					};
+					pad_to(m_ppt_a, num_violations); pad_to(m_ppt_b, num_violations);
+					pad_to(m_thm_a, num_violations); pad_to(m_thm_b, num_violations);
+					pad_to(m_total_a, num_violations); pad_to(m_total_b, num_violations);
+					pad_to(m_util_a, num_violations); pad_to(m_util_b, num_violations);
+					std::string val;
+
+					std::string pwr_acc_str = metricGfxClkBelowHostLimitPowerAccPerPartitionHeaderTemplate;
+					std::string thm_acc_str = metricGfxClkBelowHostLimitThermalAccPerPartitionHeaderTemplate;
+					std::string total_acc_str = metricTotalGfxClkBelowHostLimitAccPerPartitionHeaderTemplate;
+					std::string util_acc_str = metricLowUtilizationAccPerPartitionHeaderTemplate;
+
+					std::string pwr_status_str = metricGfxClkBelowHostLimitPowerStatusPerPartitionHeaderTemplate;
+					std::string thm_status_str = metricGfxClkBelowHostLimitThermalStatusPerPartitionHeaderTemplate;
+					std::string total_status_str = metricTotalGfxClkBelowHostLimitStatusPerPartitionHeaderTemplate;
+					std::string util_status_str = metricLowUtilizationStatusPerPartitionHeaderTemplate;
+
+					std::string pwr_activity_str = metricGfxClkBelowHostLimitPowerActivityPerPartitionHeaderTemplate;
+					std::string thm_activity_str = metricGfxClkBelowHostLimitThermalActivityPerPartitionHeaderTemplate;
+					std::string total_activity_str = metricTotalGfxClkBelowHostLimitActivityPerPartitionHeaderTemplate;
+					std::string util_activity_str = metricLowUtilizationActivityPerPartitionHeaderTemplate;
+
+					for (uint32_t i = 0; i < num_violations; i++) {
+						val = (m_ppt_b[i]->val == UINT64_MAX) ? "N/A" :
+							string_format("%" PRIu64, m_ppt_b[i]->val);
+						std::string pwr_pct = violation_compute_pct(m_ppt_a[i]->val,
+							m_ppt_b[i]->val, acc_counter_a, acc_counter_b, violation_ts_delta_us);
+						std::string pwr_active = violation_is_active(m_ppt_a[i]->val, m_ppt_b[i]->val);
+						pwr_acc_str += string_format(AccXcdPerPartitionTemplate, val.c_str());
+						pwr_status_str += (pwr_active == "N/A") ? "N/A" : ((pwr_active == "TRUE") ? "ACTIVE" : "INACTIVE");
+						pwr_activity_str += (pwr_pct == "N/A") ? "N/A" : string_format("%s %%", pwr_pct.c_str());
+
+						val = (m_thm_b[i]->val == UINT64_MAX) ? "N/A" :
+							string_format("%" PRIu64, m_thm_b[i]->val);
+						std::string thm_pct = violation_compute_pct(m_thm_a[i]->val,
+							m_thm_b[i]->val, acc_counter_a, acc_counter_b, violation_ts_delta_us);
+						std::string thm_active = violation_is_active(m_thm_a[i]->val, m_thm_b[i]->val);
+						thm_acc_str += string_format(AccXcdPerPartitionTemplate, val.c_str());
+						thm_status_str += (thm_active == "N/A") ? "N/A" : ((thm_active == "TRUE") ? "ACTIVE" : "INACTIVE");
+						thm_activity_str += (thm_pct == "N/A") ? "N/A" : string_format("%s %%", thm_pct.c_str());
+
+						val = (m_total_b[i]->val == UINT64_MAX) ? "N/A" :
+							string_format("%" PRIu64, m_total_b[i]->val);
+						std::string total_pct = violation_compute_pct(m_total_a[i]->val,
+							m_total_b[i]->val, acc_counter_a, acc_counter_b, violation_ts_delta_us);
+						std::string total_active = violation_is_active(m_total_a[i]->val, m_total_b[i]->val);
+						total_acc_str += string_format(AccXcdPerPartitionTemplate, val.c_str());
+						total_status_str += (total_active == "N/A") ? "N/A" : ((total_active == "TRUE") ? "ACTIVE" : "INACTIVE");
+						total_activity_str += (total_pct == "N/A") ? "N/A" : string_format("%s %%", total_pct.c_str());
+
+						val = (m_util_b[i]->val == UINT64_MAX) ? "N/A" :
+							string_format("%" PRIu64, m_util_b[i]->val);
+						std::string util_pct = violation_compute_pct(m_util_a[i]->val,
+							m_util_b[i]->val, acc_counter_a, acc_counter_b, violation_ts_delta_us);
+						std::string util_active = violation_is_active(m_util_a[i]->val, m_util_b[i]->val);
+						util_acc_str += string_format(AccXcdPerPartitionTemplate, val.c_str());
+						util_status_str += (util_active == "N/A") ? "N/A" : ((util_active == "TRUE") ? "ACTIVE" : "INACTIVE");
+						util_activity_str += (util_pct == "N/A") ? "N/A" : string_format("%s %%", util_pct.c_str());
+
+						if (i + 1 < num_violations) {
+							pwr_acc_str += commaTemplate;
+							thm_acc_str += commaTemplate;
+							total_acc_str += commaTemplate;
+							util_acc_str += commaTemplate;
+							pwr_status_str += commaTemplate;
+							thm_status_str += commaTemplate;
+							total_status_str += commaTemplate;
+							util_status_str += commaTemplate;
+							pwr_activity_str += commaTemplate;
+							thm_activity_str += commaTemplate;
+							total_activity_str += commaTemplate;
+							util_activity_str += commaTemplate;
+						}
+					}
+					pwr_acc_str += metricJpegUsageFooterTemplate;
+					thm_acc_str += metricJpegUsageFooterTemplate;
+					total_acc_str += metricJpegUsageFooterTemplate;
+					util_acc_str += metricJpegUsageFooterTemplate;
+					pwr_status_str += metricJpegUsageFooterTemplate;
+					thm_status_str += metricJpegUsageFooterTemplate;
+					total_status_str += metricJpegUsageFooterTemplate;
+					util_status_str += metricJpegUsageFooterTemplate;
+					pwr_activity_str += metricJpegUsageFooterTemplate;
+					thm_activity_str += metricJpegUsageFooterTemplate;
+					total_activity_str += metricJpegUsageFooterTemplate;
+					util_activity_str += metricJpegUsageFooterTemplate;
+
+					out += pwr_acc_str;
+					out += pwr_activity_str;
+					out += pwr_status_str;
+					out += thm_acc_str;
+					out += thm_activity_str;
+					out += thm_status_str;
+					out += total_acc_str;
+					out += total_activity_str;
+					out += total_status_str;
+					out += util_acc_str;
+					out += util_activity_str;
+					out += util_status_str;
 				}
 			}
 		}
@@ -3487,7 +3821,7 @@ int AmdSmiApiHost::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments
 		if (node_temp_retimer.size() == 0) {
 			gpuboard_json["node_temp_retimer"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < node_temp_retimer.size(); i++) {
@@ -3504,7 +3838,7 @@ int AmdSmiApiHost::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments
 		if (node_temp_ibc_temp.size() == 0) {
 			gpuboard_json["node_temp_ibc_temp"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < node_temp_ibc_temp.size(); i++) {
@@ -3521,7 +3855,7 @@ int AmdSmiApiHost::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments
 		if (node_temp_ibc_2_temp.size() == 0) {
 			gpuboard_json["node_temp_ibc_2_temp"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < node_temp_ibc_2_temp.size(); i++) {
@@ -3538,7 +3872,7 @@ int AmdSmiApiHost::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments
 		if (node_temp_vdd18_vr_temp.size() == 0) {
 			gpuboard_json["node_temp_vdd18_vr_temp"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < node_temp_vdd18_vr_temp.size(); i++) {
@@ -3555,7 +3889,7 @@ int AmdSmiApiHost::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments
 		if (node_temp_04_hbm_b_vr_temp.size() == 0) {
 			gpuboard_json["node_temp_04_hbm_b_vr_temp"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < node_temp_04_hbm_b_vr_temp.size(); i++) {
@@ -3572,7 +3906,7 @@ int AmdSmiApiHost::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments
 		if (node_temp_04_hbm_d_vr_temp.size() == 0) {
 			gpuboard_json["node_temp_04_hbm_d_vr_temp"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < node_temp_04_hbm_d_vr_temp.size(); i++) {
@@ -3589,7 +3923,7 @@ int AmdSmiApiHost::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments
 		if (vr_temp_vddcr_vdd0.size() == 0) {
 			gpuboard_json["vr_temp_vddcr_vdd0"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < vr_temp_vddcr_vdd0.size(); i++) {
@@ -3606,7 +3940,7 @@ int AmdSmiApiHost::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments
 		if (vr_temp_vddcr_vdd1.size() == 0) {
 			gpuboard_json["vr_temp_vddcr_vdd1"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < vr_temp_vddcr_vdd1.size(); i++) {
@@ -3623,7 +3957,7 @@ int AmdSmiApiHost::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments
 		if (vr_temp_vddcr_vdd2.size() == 0) {
 			gpuboard_json["vr_temp_vddcr_vdd2"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < vr_temp_vddcr_vdd2.size(); i++) {
@@ -3640,7 +3974,7 @@ int AmdSmiApiHost::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments
 		if (vr_temp_vddcr_vdd3.size() == 0) {
 			gpuboard_json["vr_temp_vddcr_vdd3"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < vr_temp_vddcr_vdd3.size(); i++) {
@@ -3657,7 +3991,7 @@ int AmdSmiApiHost::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments
 		if (vr_temp_vddcr_soc_a.size() == 0) {
 			gpuboard_json["vr_temp_vddcr_soc_a"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < vr_temp_vddcr_soc_a.size(); i++) {
@@ -3674,7 +4008,7 @@ int AmdSmiApiHost::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments
 		if (vr_temp_vddcr_soc_c.size() == 0) {
 			gpuboard_json["vr_temp_vddcr_soc_c"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < vr_temp_vddcr_soc_c.size(); i++) {
@@ -3691,7 +4025,7 @@ int AmdSmiApiHost::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments
 		if (vr_temp_vddcr_socio_a.size() == 0) {
 			gpuboard_json["vr_temp_vddcr_socio_a"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < vr_temp_vddcr_socio_a.size(); i++) {
@@ -3708,7 +4042,7 @@ int AmdSmiApiHost::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments
 		if (vr_temp_vddcr_socio_c.size() == 0) {
 			gpuboard_json["vr_temp_vddcr_socio_c"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < vr_temp_vddcr_socio_c.size(); i++) {
@@ -3725,7 +4059,7 @@ int AmdSmiApiHost::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments
 		if (vr_temp_vdd_085_hbm.size() == 0) {
 			gpuboard_json["vr_temp_vdd_085_hbm"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < vr_temp_vdd_085_hbm.size(); i++) {
@@ -3742,7 +4076,7 @@ int AmdSmiApiHost::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments
 		if (vr_temp_vddcr_11_hbm_b.size() == 0) {
 			gpuboard_json["vr_temp_vddcr_11_hbm_b"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < vr_temp_vddcr_11_hbm_b.size(); i++) {
@@ -3759,7 +4093,7 @@ int AmdSmiApiHost::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments
 		if (vr_temp_vddcr_11_hbm_d.size() == 0) {
 			gpuboard_json["vr_temp_vddcr_11_hbm_d"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < vr_temp_vddcr_11_hbm_d.size(); i++) {
@@ -3776,7 +4110,7 @@ int AmdSmiApiHost::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments
 		if (vr_temp_vdd_usr.size() == 0) {
 			gpuboard_json["vr_temp_vdd_usr"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < vr_temp_vdd_usr.size(); i++) {
@@ -3793,7 +4127,7 @@ int AmdSmiApiHost::amdsmi_get_gpuboard_command(uint64_t processor_bdf, Arguments
 		if (vr_temp_vddio_11_e32.size() == 0) {
 			gpuboard_json["vr_temp_vddio_11_e32"] = {
 				{"value", "N/A"},
-				{"unit", ""}
+				{"unit", "N/A"}
 			};
 		} else {
 			for (uint32_t i = 0; i < vr_temp_vddio_11_e32.size(); i++) {
@@ -4292,9 +4626,8 @@ int AmdSmiApiHost::amdsmi_get_port_netdev_command(uint64_t processor_bdf, Argume
 
 	ret = host_amdsmi_get_nic_port_info(processor, &nic_port_info);
 	if (ret != AMDSMI_STATUS_SUCCESS || nic_port_info.num_ports == 0) {
-		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED) {
-			out = host_fill_nic_port_netdev_info(arg, "N/A");
-			return AMDSMI_STATUS_SUCCESS;
+		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED && arg.options.size() <= 1 && !arg.all_arguments) {
+			return ret;
 		}
 		out = host_fill_nic_port_netdev_info(arg, "N/A");
 		return ret != AMDSMI_STATUS_SUCCESS ? ret : AMDSMI_STATUS_SUCCESS;
@@ -4413,97 +4746,291 @@ int AmdSmiApiHost::amdsmi_get_port_rdma_command(uint64_t processor_bdf, Argument
 
 	ret = host_amdsmi_get_nic_port_info(processor, &nic_port_info);
 	if (ret != AMDSMI_STATUS_SUCCESS || nic_port_info.num_ports == 0) {
-		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED) {
-			out = host_fill_metric_nic_rdma_dev_info(arg, "N/A");
-			return AMDSMI_STATUS_SUCCESS;
+		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED && arg.options.size() <= 1 && !arg.all_arguments) {
+			return ret;
 		}
 		out = host_fill_metric_nic_rdma_dev_info(arg, "N/A");
-		return ret != AMDSMI_STATUS_SUCCESS ? ret : AMDSMI_STATUS_SUCCESS;
+		return ret;
 	}
 
 	ret = host_amdsmi_get_nic_rdma_dev_info(processor, &nic_rdma_devices_info);
-
+	if (ret != AMDSMI_STATUS_SUCCESS || nic_rdma_devices_info.num_rdma_dev == 0) {
+		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED && arg.options.size() <= 1 && !arg.all_arguments) {
+			return ret;
+		}
+		out = host_fill_metric_nic_rdma_dev_info(arg, "N/A");
+		return ret;
+	}
 	if (arg.output == json) {
 		nlohmann::ordered_json result_json;
-		if (ret != AMDSMI_STATUS_SUCCESS || nic_rdma_devices_info.num_rdma_dev == 0) {
-			if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED) {
-				result_json = nlohmann::ordered_json::parse(host_fill_metric_nic_rdma_dev_info(arg, "N/A"));
-			}
-		} else {
-			nlohmann::ordered_json rdma_devices_array = nlohmann::ordered_json::array();
-			for (uint32_t rdma_dev_idx = 0; rdma_dev_idx < nic_rdma_devices_info.num_rdma_dev; rdma_dev_idx++) {
-				nlohmann::ordered_json rdma_device_json;
-				rdma_device_json["rdma_dev"] = nic_rdma_devices_info.rdma_dev_info[rdma_dev_idx].rdma_dev;
+		nlohmann::ordered_json rdma_devices_array = nlohmann::ordered_json::array();
+		for (uint32_t rdma_dev_idx = 0; rdma_dev_idx < nic_rdma_devices_info.num_rdma_dev; rdma_dev_idx++) {
+			nlohmann::ordered_json rdma_device_json;
+			rdma_device_json["rdma_dev"] = nic_rdma_devices_info.rdma_dev_info[rdma_dev_idx].rdma_dev;
 
-				nlohmann::ordered_json rdma_ports_array = nlohmann::ordered_json::array();
-				for (uint32_t rdma_port_idx = 0;
-						rdma_port_idx < nic_rdma_devices_info.rdma_dev_info[rdma_dev_idx].num_rdma_ports; rdma_port_idx++) {
-					nlohmann::ordered_json rdma_port_json;
+			nlohmann::ordered_json rdma_ports_array = nlohmann::ordered_json::array();
+			for (uint32_t rdma_port_idx = 0;
+					rdma_port_idx < nic_rdma_devices_info.rdma_dev_info[rdma_dev_idx].num_rdma_ports; rdma_port_idx++) {
+				nlohmann::ordered_json rdma_port_json;
 
-					nlohmann::ordered_json rdma_port_statistics_json;
-					uint8_t rdma_port_num =
-						nic_rdma_devices_info.rdma_dev_info[rdma_dev_idx].rdma_port_info[rdma_port_idx].rdma_port;
+				nlohmann::ordered_json rdma_port_statistics_json;
+				uint8_t rdma_port_num =
+					nic_rdma_devices_info.rdma_dev_info[rdma_dev_idx].rdma_port_info[rdma_port_idx].rdma_port;
 
-					uint32_t num_rdma_stats = 0;
-					ret = host_amdsmi_get_nic_rdma_port_statistics(processor, rdma_port_idx, &num_rdma_stats, nullptr);
-					if (ret == AMDSMI_STATUS_SUCCESS && num_rdma_stats > 0) {
-						std::vector<amdsmi_nic_stat_t> rdma_stats(num_rdma_stats);
-						uint32_t actual_stats = num_rdma_stats;
+				uint32_t num_rdma_stats = 0;
+				ret = host_amdsmi_get_nic_rdma_port_statistics(processor, rdma_port_idx, &num_rdma_stats, nullptr);
+				if (ret == AMDSMI_STATUS_SUCCESS && num_rdma_stats > 0) {
+					std::vector<amdsmi_nic_stat_t> rdma_stats(num_rdma_stats);
+					uint32_t actual_stats = num_rdma_stats;
 
-						ret = host_amdsmi_get_nic_rdma_port_statistics(processor, rdma_port_idx, &actual_stats,
-								rdma_stats.data());
-						if (ret == AMDSMI_STATUS_SUCCESS) {
-							for (uint32_t i = 0; i < actual_stats; i++) {
-								std::string stat_name = rdma_stats[i].name;
-								std::transform(stat_name.begin(), stat_name.end(), stat_name.begin(), ::tolower);
-								rdma_port_statistics_json[stat_name] = rdma_stats[i].value;
-							}
+					ret = host_amdsmi_get_nic_rdma_port_statistics(processor, rdma_port_idx, &actual_stats,
+							rdma_stats.data());
+					if (ret == AMDSMI_STATUS_SUCCESS) {
+						for (uint32_t i = 0; i < actual_stats; i++) {
+							std::string stat_name = rdma_stats[i].name;
+							std::transform(stat_name.begin(), stat_name.end(), stat_name.begin(), ::tolower);
+							rdma_port_statistics_json[stat_name] = rdma_stats[i].value;
 						}
 					}
-					rdma_port_json["statistics"] = rdma_port_statistics_json;
-					rdma_ports_array.push_back(rdma_port_json);
 				}
-				rdma_device_json["ports"] = rdma_ports_array;
-				rdma_devices_array.push_back(rdma_device_json);
+				rdma_port_json["statistics"] = rdma_port_statistics_json;
+				rdma_ports_array.push_back(rdma_port_json);
 			}
-			result_json["rdma_devices"] = rdma_devices_array;
+			rdma_device_json["ports"] = rdma_ports_array;
+			rdma_devices_array.push_back(rdma_device_json);
 		}
-
+		result_json["rdma_devices"] = rdma_devices_array;
 		out = result_json.dump(4);
 	} else if (arg.output == human) {
-		if (nic_rdma_devices_info.num_rdma_dev > 0) {
-			out.append(metricNicRdmaStatsHeaderTemplate);
-			for (uint32_t rdma_dev_idx = 0; rdma_dev_idx < nic_rdma_devices_info.num_rdma_dev; rdma_dev_idx++) {
-				out.append(string_format(metricNicRdmaDeviceTemplate, rdma_dev_idx,
-										 nic_rdma_devices_info.rdma_dev_info[rdma_dev_idx].rdma_dev));
+		out.append(metricNicRdmaStatsHeaderTemplate);
+		for (uint32_t rdma_dev_idx = 0; rdma_dev_idx < nic_rdma_devices_info.num_rdma_dev; rdma_dev_idx++) {
+			out.append(string_format(metricNicRdmaDeviceTemplate, rdma_dev_idx,
+										nic_rdma_devices_info.rdma_dev_info[rdma_dev_idx].rdma_dev));
 
-				for (uint32_t rdma_port_idx = 0;
-						rdma_port_idx < nic_rdma_devices_info.rdma_dev_info[rdma_dev_idx].num_rdma_ports; rdma_port_idx++) {
-					uint8_t rdma_port_num =
-						nic_rdma_devices_info.rdma_dev_info[rdma_dev_idx].rdma_port_info[rdma_port_idx].rdma_port;
-					out.append(string_format(metricNicRdmaPortTemplate, rdma_port_idx));
+			for (uint32_t rdma_port_idx = 0;
+					rdma_port_idx < nic_rdma_devices_info.rdma_dev_info[rdma_dev_idx].num_rdma_ports; rdma_port_idx++) {
+				uint8_t rdma_port_num =
+					nic_rdma_devices_info.rdma_dev_info[rdma_dev_idx].rdma_port_info[rdma_port_idx].rdma_port;
+				out.append(string_format(metricNicRdmaPortTemplate, rdma_port_idx));
 
-					uint32_t num_rdma_stats = 0;
-					ret = host_amdsmi_get_nic_rdma_port_statistics(processor, rdma_port_idx, &num_rdma_stats, nullptr);
-					if (ret == AMDSMI_STATUS_SUCCESS && num_rdma_stats > 0) {
-						std::vector<amdsmi_nic_stat_t> rdma_stats(num_rdma_stats);
-						uint32_t actual_stats = num_rdma_stats;
-						ret = host_amdsmi_get_nic_rdma_port_statistics(processor, rdma_port_idx, &actual_stats,
-								rdma_stats.data());
+				uint32_t num_rdma_stats = 0;
+				ret = host_amdsmi_get_nic_rdma_port_statistics(processor, rdma_port_idx, &num_rdma_stats, nullptr);
+				if (ret == AMDSMI_STATUS_SUCCESS && num_rdma_stats > 0) {
+					std::vector<amdsmi_nic_stat_t> rdma_stats(num_rdma_stats);
+					uint32_t actual_stats = num_rdma_stats;
+					ret = host_amdsmi_get_nic_rdma_port_statistics(processor, rdma_port_idx, &actual_stats,
+							rdma_stats.data());
 
-						if (ret == AMDSMI_STATUS_SUCCESS) {
-							for (uint32_t i = 0; i < actual_stats; i++) {
-								std::string stat_name = rdma_stats[i].name;
-								std::transform(stat_name.begin(), stat_name.end(), stat_name.begin(), ::toupper);
-								std::string value_str = string_format("%llu", rdma_stats[i].value);
-								out.append(string_format("                            %s: %s\n", stat_name.c_str(),
-														 value_str.c_str()));
-							}
+					if (ret == AMDSMI_STATUS_SUCCESS) {
+						for (uint32_t i = 0; i < actual_stats; i++) {
+							std::string stat_name = rdma_stats[i].name;
+							std::transform(stat_name.begin(), stat_name.end(), stat_name.begin(), ::toupper);
+							std::string value_str = string_format("%llu", rdma_stats[i].value);
+							out.append(string_format("                            %s: %s\n", stat_name.c_str(),
+														value_str.c_str()));
 						}
 					}
 				}
 			}
 		}
+	}
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+int AmdSmiApiHost::amdsmi_get_throttle_metric_command(uint64_t processor_bdf, Arguments arg,
+		std::string& out)
+{
+	amdsmi_status_t ret;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		out = host_fill_throttle(arg, "N/A");
+		return ret;
+	}
+
+	auto find_metric = [](const amdsmi_metric_t *metrics, uint32_t count,
+			amdsmi_metric_name_t name) -> uint64_t {
+		for (uint32_t i = 0; i < count; i++) {
+			if (metrics[i].name == name)
+				return metrics[i].val;
+		}
+		return UINT64_MAX;
+	};
+
+	uint32_t metric_size_a = AMDSMI_MAX_NUM_METRICS;
+	ret = host_amdsmi_get_gpu_metrics(processor, &metric_size_a, NULL);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		out = host_fill_throttle(arg, "N/A");
+		return ret;
+	}
+	amdsmi_metric_t *metrics_a = (amdsmi_metric_t *)malloc(sizeof(amdsmi_metric_t) * metric_size_a);
+	if (metrics_a == NULL) {
+		throw SmiToolNotEnoughMemException();
+	}
+	ret = host_amdsmi_get_gpu_metrics(processor, &metric_size_a, &metrics_a[0]);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		free(metrics_a);
+		out = host_fill_throttle(arg, "N/A");
+		return ret;
+	}
+	uint64_t acc_counter_a = find_metric(metrics_a, metric_size_a, AMDSMI_METRIC_NAME_METRIC_ACC_COUNTER);
+	uint64_t prochot_a = find_metric(metrics_a, metric_size_a, AMDSMI_METRIC_NAME_THROTTLE_PROCHOT_ACTIVE);
+	uint64_t ppt_a = find_metric(metrics_a, metric_size_a, AMDSMI_METRIC_NAME_THROTTLE_PPT_ACTIVE);
+	uint64_t socket_a = find_metric(metrics_a, metric_size_a, AMDSMI_METRIC_NAME_THROTTLE_SOCKET_ACTIVE);
+	uint64_t vr_a = find_metric(metrics_a, metric_size_a, AMDSMI_METRIC_NAME_THROTTLE_VR_ACTIVE);
+	uint64_t hbm_a = find_metric(metrics_a, metric_size_a, AMDSMI_METRIC_NAME_THROTTLE_MEM_ACTIVE);
+	free(metrics_a);
+
+	auto ts_start = std::chrono::steady_clock::now();
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+	uint32_t metric_size_b = AMDSMI_MAX_NUM_METRICS;
+	ret = host_amdsmi_get_gpu_metrics(processor, &metric_size_b, NULL);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		out = host_fill_throttle(arg, "N/A");
+		return ret;
+	}
+	amdsmi_metric_t *metrics_b = (amdsmi_metric_t *)malloc(sizeof(amdsmi_metric_t) * metric_size_b);
+	if (metrics_b == NULL) {
+		throw SmiToolNotEnoughMemException();
+	}
+	ret = host_amdsmi_get_gpu_metrics(processor, &metric_size_b, &metrics_b[0]);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		free(metrics_b);
+		out = host_fill_throttle(arg, "N/A");
+		return ret;
+	}
+	uint64_t acc_counter_b = find_metric(metrics_b, metric_size_b, AMDSMI_METRIC_NAME_METRIC_ACC_COUNTER);
+	uint64_t prochot_b = find_metric(metrics_b, metric_size_b, AMDSMI_METRIC_NAME_THROTTLE_PROCHOT_ACTIVE);
+	uint64_t ppt_b = find_metric(metrics_b, metric_size_b, AMDSMI_METRIC_NAME_THROTTLE_PPT_ACTIVE);
+	uint64_t socket_b = find_metric(metrics_b, metric_size_b, AMDSMI_METRIC_NAME_THROTTLE_SOCKET_ACTIVE);
+	uint64_t vr_b = find_metric(metrics_b, metric_size_b, AMDSMI_METRIC_NAME_THROTTLE_VR_ACTIVE);
+	uint64_t hbm_b = find_metric(metrics_b, metric_size_b, AMDSMI_METRIC_NAME_THROTTLE_MEM_ACTIVE);
+	free(metrics_b);
+
+	auto ts_end = std::chrono::steady_clock::now();
+	uint64_t ts_delta_us = std::chrono::duration_cast<std::chrono::microseconds>(ts_end - ts_start).count();
+
+	std::string accumulation_counter = (acc_counter_b == UINT64_MAX) ? "N/A" :
+		string_format("%" PRIu64, acc_counter_b);
+
+	std::string prochot_pct = violation_compute_pct(prochot_a, prochot_b,
+		acc_counter_a, acc_counter_b, ts_delta_us);
+	std::string ppt_pct = violation_compute_pct(ppt_a, ppt_b,
+		acc_counter_a, acc_counter_b, ts_delta_us);
+	std::string socket_pct = violation_compute_pct(socket_a, socket_b,
+		acc_counter_a, acc_counter_b, ts_delta_us);
+	std::string vr_pct = violation_compute_pct(vr_a, vr_b,
+		acc_counter_a, acc_counter_b, ts_delta_us);
+	std::string hbm_pct = violation_compute_pct(hbm_a, hbm_b,
+		acc_counter_a, acc_counter_b, ts_delta_us);
+
+	std::string prochot_active = violation_is_active(prochot_a, prochot_b);
+	std::string ppt_active = violation_is_active(ppt_a, ppt_b);
+	std::string socket_active = violation_is_active(socket_a, socket_b);
+	std::string vr_active = violation_is_active(vr_a, vr_b);
+	std::string hbm_active = violation_is_active(hbm_a, hbm_b);
+
+	std::string prochot_acc = (prochot_b == UINT64_MAX) ? "N/A" :
+		string_format("%" PRIu64, prochot_b);
+	std::string ppt_acc = (ppt_b == UINT64_MAX) ? "N/A" :
+		string_format("%" PRIu64, ppt_b);
+	std::string socket_acc = (socket_b == UINT64_MAX) ? "N/A" :
+		string_format("%" PRIu64, socket_b);
+	std::string vr_acc = (vr_b == UINT64_MAX) ? "N/A" :
+		string_format("%" PRIu64, vr_b);
+	std::string hbm_acc = (hbm_b == UINT64_MAX) ? "N/A" :
+		string_format("%" PRIu64, hbm_b);
+
+	std::string prochot_pct_unit = prochot_pct == "N/A" ? "" : "%";
+	std::string ppt_pct_unit = ppt_pct == "N/A" ? "" : "%";
+	std::string socket_pct_unit = socket_pct == "N/A" ? "" : "%";
+	std::string vr_pct_unit = vr_pct == "N/A" ? "" : "%";
+	std::string hbm_pct_unit = hbm_pct == "N/A" ? "" : "%";
+
+	if (arg.watch > -1) {
+		out = string_format(
+				  "%s,%s,%s %s,%s,%s,%s %s,%s,%s,%s %s,%s,%s,%s %s,%s,%s,%s %s,%s",
+				  accumulation_counter.c_str(),
+				  prochot_acc.c_str(), prochot_pct.c_str(), prochot_pct_unit.c_str(), prochot_active.c_str(),
+				  ppt_acc.c_str(), ppt_pct.c_str(), ppt_pct_unit.c_str(), ppt_active.c_str(),
+				  socket_acc.c_str(), socket_pct.c_str(), socket_pct_unit.c_str(), socket_active.c_str(),
+				  vr_acc.c_str(), vr_pct.c_str(), vr_pct_unit.c_str(), vr_active.c_str(),
+				  hbm_acc.c_str(), hbm_pct.c_str(), hbm_pct_unit.c_str(), hbm_active.c_str());
+	} else if (arg.output == json) {
+		nlohmann::ordered_json throttle_json;
+
+		if (acc_counter_b == UINT64_MAX) {
+			throttle_json["accumulation_counter"] = "N/A";
+		} else {
+			throttle_json["accumulation_counter"] = acc_counter_b;
+		}
+
+		auto to_json_val = [](const std::string &v) -> nlohmann::ordered_json {
+			if (v == "N/A") return "N/A";
+			return std::stoull(v);
+		};
+
+		auto make_activity_pct = [](const std::string &pct) {
+			nlohmann::ordered_json obj{};
+			if (pct == "N/A") {
+				obj["value"] = "N/A";
+				obj["unit"] = "N/A";
+			} else {
+				obj["value"] = std::stoull(pct);
+				obj["unit"] = "%";
+			}
+			return obj;
+		};
+
+		throttle_json["prochot_violation_accumulated"] = to_json_val(prochot_acc);
+		throttle_json["prochot_violation_activity"] = make_activity_pct(prochot_pct);
+		throttle_json["prochot_violation_status"] = prochot_active;
+		throttle_json["ppt_violation_accumulated"] = to_json_val(ppt_acc);
+		throttle_json["ppt_violation_activity"] = make_activity_pct(ppt_pct);
+		throttle_json["ppt_violation_status"] = ppt_active;
+		throttle_json["socket_thermal_violation_accumulated"] = to_json_val(socket_acc);
+		throttle_json["socket_thermal_violation_activity"] = make_activity_pct(socket_pct);
+		throttle_json["socket_thermal_violation_status"] = socket_active;
+		throttle_json["vr_thermal_violation_accumulated"] = to_json_val(vr_acc);
+		throttle_json["vr_thermal_violation_activity"] = make_activity_pct(vr_pct);
+		throttle_json["vr_thermal_violation_status"] = vr_active;
+		throttle_json["hbm_thermal_violation_accumulated"] = to_json_val(hbm_acc);
+		throttle_json["hbm_thermal_violation_activity"] = make_activity_pct(hbm_pct);
+		throttle_json["hbm_thermal_violation_status"] = hbm_active;
+
+		out = throttle_json.dump(4);
+	} else if (arg.output == csv) {
+		out = string_format(
+				  ",%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",
+				  accumulation_counter.c_str(),
+				  prochot_acc.c_str(), prochot_pct.c_str(), prochot_active.c_str(),
+				  ppt_acc.c_str(), ppt_pct.c_str(), ppt_active.c_str(),
+				  socket_acc.c_str(), socket_pct.c_str(), socket_active.c_str(),
+				  vr_acc.c_str(), vr_pct.c_str(), vr_active.c_str(),
+				  hbm_acc.c_str(), hbm_pct.c_str(), hbm_active.c_str());
+	} else {
+		out = string_format(
+				  ThrottleInfoHeaderTemplate, accumulation_counter.c_str(),
+				  prochot_acc.c_str(),
+				  prochot_pct.c_str(), prochot_pct_unit.c_str(),
+				  prochot_active.c_str(),
+				  ppt_acc.c_str(),
+				  ppt_pct.c_str(), ppt_pct_unit.c_str(),
+				  ppt_active.c_str(),
+				  socket_acc.c_str(),
+				  socket_pct.c_str(), socket_pct_unit.c_str(),
+				  socket_active.c_str(),
+				  vr_acc.c_str(),
+				  vr_pct.c_str(), vr_pct_unit.c_str(),
+				  vr_active.c_str(),
+				  hbm_acc.c_str(),
+				  hbm_pct.c_str(), hbm_pct_unit.c_str(),
+				  hbm_active.c_str());
 	}
 
 	return AMDSMI_STATUS_SUCCESS;

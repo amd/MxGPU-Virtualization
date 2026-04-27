@@ -46,7 +46,7 @@ Device::Device(int gpu, DeviceIdentifierType device_type, DeviceType type) : gpu
 		if (type == DeviceType::GPU) {
 			domain = "--gpu";
 			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_bdf_from_gpu_index(bdf, gpu);
-		} else if (type == DeviceType::NIC) {
+		} else if ((type == DeviceType::NIC) || (type == DeviceType::BRCM_NIC)) {
 			domain = "--nic";
 			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_bdf_from_nic_index(bdf, gpu);
 		} else {
@@ -60,13 +60,25 @@ Device::Device(std::string device, DeviceIdentifierType device_type, std::string
 			   DeviceType type)
 	: value(device), identifier_type(device_type), domain(domain), type(type)
 {
-	if (type != DeviceType::GPU)
-		//error
-		exit(1);
-	if ((identifier_type != DeviceIdentifierType::BDF) && (identifier_type != DeviceIdentifierType::UUID)) {
-		//error
-	}
-
-	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_bdf_from_uuid_or_bdf(bdf, gpu_index,
+	int ret = 0;
+	if (identifier_type == DeviceIdentifierType::UUID) {
+		if (type != DeviceType::GPU) {
+			//error
+			exit(1);
+		}
+		ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_bdf_from_uuid_or_bdf(bdf, gpu_index,
 			  device, static_cast<int>(identifier_type));
+	}
+	else if (identifier_type == DeviceIdentifierType::BDF) {
+		if (type == DeviceType::GPU) {
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_bdf_from_uuid_or_bdf(bdf, gpu_index,
+				device, static_cast<int>(identifier_type));
+		} else if ((type == DeviceType::NIC) || (type == DeviceType::BRCM_NIC)) {
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_bdf_from_bdf_nic(bdf, gpu_index,
+				device);
+		} else {
+			//error
+			exit(1);
+		}
+	}
 }

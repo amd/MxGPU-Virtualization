@@ -37,6 +37,11 @@ endif
 
 include $(PROJECT_ROOT)/../gim-coms-lib/Makefile
 
+DEFAULT_CXXFLAGS = -Wall -Wextra -Werror \
+			-Wno-missing-field-initializers \
+			-Wmissing-declarations \
+			-Werror=conversion \
+
 include $(PROJECT_ROOT)/make/$(HOST)/define_$(HOST).mk
 
 INTERFACE_DIR		:= $(PROJECT_ROOT)/interface
@@ -46,11 +51,6 @@ TEST_UNIT_DIR		:= $(TEST_DIR)/unit
 TEST_INTEGRATION_DIR	:= $(TEST_DIR)/integration
 PY_DIR			:= $(PROJECT_ROOT)/py
 PY_INTERFACE_DIR	:= $(PY_DIR)/interface
-
-DEFAULT_CXXFLAGS = -Wall -Wextra -Werror \
-			-Wno-missing-field-initializers \
-			-Wmissing-declarations \
-			-Werror=conversion \
 
 # Flags supported from GCC version 6
 GCC_VER_GE6      := $(shell echo `$(CC) -dumpversion | cut -f1-2 -d.`\>=6 | bc)

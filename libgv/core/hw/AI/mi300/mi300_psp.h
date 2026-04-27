@@ -48,19 +48,19 @@ enum psp_status mi300_psp_ring_km_submit(struct amdgv_adapter *adapt, uint64_t c
 					 uint64_t fence_mc_addr, uint32_t fence_value);
 enum psp_status mi300_psp_set_sriov_mode(struct amdgv_adapter *adapt);
 enum psp_status mi300_psp_apply_security_policy(struct amdgv_adapter *adapt);
-enum psp_status mi300_psp_load_sys_drv(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status mi300_psp_load_sys_drv(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				      uint32_t fw_image_size);
-enum psp_status mi300_psp_load_ras_drv(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status mi300_psp_load_ras_drv(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				      uint32_t fw_image_size);
-enum psp_status mi300_psp_load_sos(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status mi300_psp_load_sos(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				      uint32_t fw_image_size);
-enum psp_status mi300_psp_load_key_db(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status mi300_psp_load_key_db(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				      uint32_t fw_image_size);
-enum psp_status mi300_psp_load_soc_drv(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status mi300_psp_load_soc_drv(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				      uint32_t fw_image_size);
-enum psp_status mi300_psp_load_intf_drv(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status mi300_psp_load_intf_drv(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				      uint32_t fw_image_size);
-enum psp_status mi300_psp_load_dbg_drv(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status mi300_psp_load_dbg_drv(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				      uint32_t fw_image_size);
 
 enum psp_status mi300_psp_program_guest_mc_settings(struct amdgv_adapter *adapt,

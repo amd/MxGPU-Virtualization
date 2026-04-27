@@ -100,18 +100,19 @@ std::string guest_fill_asic_info(Arguments arg, std::string value)
 			{ "subsystem_id", value.c_str() },
 			{ "rev_id", value.c_str() },
 			{ "asic_serial", value.c_str() },
-			{ "oam_id", value.c_str() }
+			{ "oam_id", value.c_str() },
+			{ "num_of_compute_units", value.c_str() }
 		};
 
 		out = asic_json.dump(4);
 	} else if (arg.output == csv) {
 		out = string_format("%s,%s,%s,%s,%s,%s", value.c_str(),
 							value.c_str(),value.c_str(), value.c_str(), value.c_str(), value.c_str(),
-							value.c_str(), value.c_str(), value.c_str());
+							value.c_str(), value.c_str(), value.c_str(), value.c_str());
 	} else {
 		out = string_format(staticAsicTemplate, value.c_str(),
 							value.c_str(),value.c_str(), value.c_str(), value.c_str(), value.c_str(),
-							value.c_str(), value.c_str(), value.c_str());
+							value.c_str(), value.c_str(), value.c_str(), value.c_str());
 	}
 
 	return out;
@@ -176,19 +177,20 @@ std::string guest_fill_bus_info(Arguments arg, std::string value)
 		nlohmann::ordered_json bus_json = { { "bdf", value.c_str() },
 			{ "max_pcie_lanes", value.c_str() },
 			{ "max_pcie_speed", max_pcie_speed },
-			{ "pcie_interface_version", "N/A" },
-			{ "slot_type", "N/A" }
+			{ "pcie_interface_version", value.c_str() },
+			{ "slot_type", value.c_str() },
+			{ "max_pcie_interface_version", value.c_str() }
 		};
 
 		out = bus_json.dump(4);
 	} else if (arg.output == csv) {
 		out = string_format(",%s,%s,%s,%s,%s", value.c_str(),
 							value.c_str(), value.c_str(),
-							"N/A", "N/A");
+							value.c_str(), value.c_str(), value.c_str());
 	} else {
 		out = string_format(
 				  staticBusTemplate, value.c_str(), value.c_str(),
-				  value.c_str(), "N/A", "N/A", "N/A");
+				  value.c_str(), value.c_str(), value.c_str(), value.c_str(), value.c_str());
 	}
 
 	return out;
@@ -328,7 +330,9 @@ int AmdSmiApiGuest::amdsmi_get_asic_info_command(uint64_t processor_bdf, Argumen
 		string_format("0x%X", asic.rev_id);
 	std::string serial_id_hex =
 		decimal_string_to_hex(asic.asic_serial);
-	std::string oam_id{"N/A"};
+	std::string oam_id = asic.oam_id == -1 ? "N/A" : string_format("%d", asic.oam_id);
+	std::string num_of_compute_units = asic.num_of_compute_units == -1 ? "N/A" : string_format("%d", asic.num_of_compute_units);
+	std::string subsystem_id = asic.subsystem_id == -1 ? "N/A" : string_format("%d", asic.subsystem_id);
 
 	std::string subvendor_id{};
 	if (asic.subvendor_id == UINT_MAX) {
@@ -344,22 +348,23 @@ int AmdSmiApiGuest::amdsmi_get_asic_info_command(uint64_t processor_bdf, Argumen
 			{ "vendor_name", asic.vendor_name },
 			{ "subvendor_id", subvendor_id.c_str() },
 			{ "device_id", device_id_hex },
-			{ "subsystem_id", "N/A" },
+			{ "subsystem_id", subsystem_id.c_str() },
 			{ "rev_id", rev_id_hex },
 			{ "asic_serial", serial_id_hex },
-			{ "oam_id", oam_id }
+			{ "oam_id", oam_id.c_str() },
+			{ "num_of_compute_units", num_of_compute_units.c_str() }
 		};
 
 		out = asic_json.dump(4);
 	} else if (arg.output == csv) {
 		out = string_format(",%s,%s,%s,%s,%s,%s,%s,%s",asic.market_name,
 							vendor_id_hex.c_str(), asic.vendor_name, subvendor_id.c_str(), device_id_hex.c_str(),
-							"N/A", rev_id_hex.c_str(),
-							serial_id_hex.c_str(), oam_id.c_str());
+							subsystem_id.c_str(), rev_id_hex.c_str(),
+							serial_id_hex.c_str(), oam_id.c_str(), num_of_compute_units.c_str());
 	} else {
 		out = string_format(
 				  staticAsicTemplate, asic.market_name, vendor_id_hex.c_str(), asic.vendor_name, subvendor_id.c_str(),
-				  device_id_hex.c_str(), "N/A", rev_id_hex.c_str(), serial_id_hex.c_str(), oam_id.c_str());
+				  device_id_hex.c_str(), subsystem_id.c_str(), rev_id_hex.c_str(), serial_id_hex.c_str(), oam_id.c_str(), num_of_compute_units.c_str());
 	}
 
 	return ret;
@@ -412,7 +417,7 @@ int AmdSmiApiGuest::amdsmi_get_vbios_info_command(uint64_t processor_bdf, Argume
 	return ret;
 }
 
-int AmdSmiApiGuest::amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments arg,
+int AmdSmiApiGuest::amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments &arg,
 		std::string &formatted_string)
 {
 	if (AmdSmiPlatform::getInstance().is_guest()) {
@@ -537,21 +542,23 @@ int AmdSmiApiGuest::amdsmi_get_driver_info_command(uint64_t processor_bdf, Argum
 		return ret;
 	}
 
+	std::string driver_model = "N/A";
+
 	if (arg.output == json) {
 		nlohmann::ordered_json values_json{};
 
 		nlohmann::ordered_json driver_json = { { "name", driver_info.driver_name }, { "version", driver_info.driver_version },
-			{ "date", driver_info.driver_date }
+			{ "date", driver_info.driver_date }, { "model", driver_model.c_str() }
 		};
 
 		formatted_string = driver_json.dump(4);
 	} else if (arg.output == csv) {
 		formatted_string = string_format(
-							   ",%s,%s,%s", driver_info.driver_name, driver_info.driver_version, driver_info.driver_date);
+							   ",%s,%s,%s,%s", driver_info.driver_name, driver_info.driver_version, driver_info.driver_date, driver_model.c_str());
 	} else {
 		formatted_string = string_format(
 							   driverHostInfoTemplate, driver_info.driver_name, driver_info.driver_version,
-							   driver_info.driver_date);
+							   driver_info.driver_date, driver_model.c_str());
 	}
 
 	return ret;
@@ -589,11 +596,29 @@ int AmdSmiApiGuest::amdsmi_get_bus_info_command(uint64_t processor_bdf, Argument
 	std::string bdf_string = string_format(
 								 "%04x:%02x:%02x.%01x", bdf.domain_number, bdf.bus_number, bdf.device_number,
 								 bdf.function_number);
-	std::string pcie_width{ string_format(
+	std::string max_pcie_width{ string_format(
 								"%d", pcie_info.pcie_static.max_pcie_width) };
 	std::string pcie_info_GTs_value_string{
 		string_format("%d", pcie_info.pcie_static.max_pcie_speed / 1000)
 	};
+
+	std::string pcie_interface_version;
+	if (pcie_info.pcie_static.pcie_interface_version != -1)
+		pcie_interface_version = string_format("%d", pcie_info.pcie_static.pcie_interface_version);
+	else
+		pcie_interface_version = "N/A";
+
+	std::string slot_type;
+	if (pcie_info.pcie_static.slot_type != AMDSMI_CARD_FORM_FACTOR_UNKNOWN)
+		slot_type = string_format("%d", pcie_info.pcie_static.slot_type);
+	else
+		slot_type = "N/A";
+
+	std::string max_pcie_interface_version;
+	if (pcie_info.pcie_static.max_pcie_interface_version != -1)
+		max_pcie_interface_version = string_format("%d", pcie_info.pcie_static.max_pcie_interface_version);
+	else
+		max_pcie_interface_version = "N/A";
 
 	if (arg.output == json) {
 		nlohmann::ordered_json values_json{};
@@ -603,21 +628,24 @@ int AmdSmiApiGuest::amdsmi_get_bus_info_command(uint64_t processor_bdf, Argument
 		nlohmann::ordered_json bus_json = { { "bdf", bdf_string },
 			{ "max_pcie_width", pcie_info.pcie_static.max_pcie_width },
 			{ "max_pcie_speed", max_pcie_speed },
-			{ "pcie_interface_version", "N/A" },
-			{ "slot_type", "N/A" }
+			{ "pcie_interface_version", pcie_info.pcie_static.pcie_interface_version },
+			{ "slot_type", pcie_info.pcie_static.slot_type },
+			{ "max_pcie_interface_version", pcie_info.pcie_static.max_pcie_interface_version }
 		};
 
 		formatted_string = bus_json.dump(4);
 	} else if (arg.output == csv) {
 		formatted_string = string_format(",%s,%s,%s,%s,%s", bdf_string.c_str(),
-										 pcie_width.c_str(),pcie_info_GTs_value_string.c_str(),
-										 "N/A", "N/A");
+										 max_pcie_width.c_str(),pcie_info_GTs_value_string.c_str(),
+										 pcie_interface_version.c_str(), slot_type.c_str(),
+										 max_pcie_interface_version.c_str());
 	} else {
 		std::string pcie_info_GTs_value_string_unit = pcie_info_GTs_value_string == "N/A" ? "" : "GT/s";
 		formatted_string = string_format(
-							   staticBusTemplate, bdf_string.c_str(), pcie_width.c_str(),
-							   pcie_info_GTs_value_string.c_str(), pcie_info_GTs_value_string_unit.c_str(), "N/A",
-							   "N/A");
+							   staticBusTemplate, bdf_string.c_str(), max_pcie_width.c_str(),
+							   pcie_info_GTs_value_string.c_str(), pcie_info_GTs_value_string_unit.c_str(),
+							   pcie_interface_version.c_str(), slot_type.c_str(),
+							   max_pcie_interface_version.c_str());
 	}
 
 	return ret;

@@ -105,6 +105,7 @@ static bool gim_iova_check_mem_attribute_wc(unsigned long va)
 static struct scatterlist *gim_iova_alloc_sg_pages(struct gim_iova_mem_info *iova_info)
 {
 	struct page *pg;
+	struct page **pages = NULL;
 	struct scatterlist *sg = NULL;
 	int i = 0;
 
@@ -128,6 +129,13 @@ static struct scatterlist *gim_iova_alloc_sg_pages(struct gim_iova_mem_info *iov
 		goto error_out;
 	}
 
+	if (iova_info->alloc_new) {
+		pages = gim_vzalloc(iova_info->nr_pages * sizeof(*pages));
+		if (!pages) {
+			gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL, 0);
+		}
+	}
+
 	sg_init_table(sg, iova_info->nr_pages);
 	for (i = 0; i < iova_info->nr_pages; i++) {
 		void *va = iova_info->va_ptr + i * PAGE_SIZE;
@@ -137,12 +145,27 @@ static struct scatterlist *gim_iova_alloc_sg_pages(struct gim_iova_mem_info *iov
 			pg = virt_to_page(va);
 		sg_set_page(&sg[i], pg, PAGE_SIZE, 0);
 
-		if (iova_info->alloc_new && set_memory_wc((unsigned long)va, 1)) {
-			gim_put_error(AMDGV_ERROR_DRIVER_SET_MEM_ATTRIBUTE_FAIL, 0);
-			goto error_out;
+		if (iova_info->alloc_new) {
+			if (pages) {
+				pages[i] = pg;
+			} else {
+				if (set_pages_array_wc(&pg, 1)) {
+					gim_put_error(
+						AMDGV_ERROR_DRIVER_SET_MEM_ATTRIBUTE_FAIL, 0);
+					goto error_out;
+				}
+			}
 		}
 	}
-
+	if (iova_info->alloc_new) {
+		if (pages) {
+			if (set_pages_array_wc(pages, iova_info->nr_pages)) {
+				gim_put_error(AMDGV_ERROR_DRIVER_SET_MEM_ATTRIBUTE_FAIL, 0);
+				goto error_out;
+			}
+			gim_vfree(pages);
+		}
+	}
 	return sg;
 error_out:
 	if (iova_info->alloc_new && iova_info->va_ptr) {
@@ -150,6 +173,8 @@ error_out:
 		iova_info->va_ptr = NULL;
 		iova_info->alloc_new = false;
 	}
+	if (pages)
+		gim_vfree(pages);
 	if (sg)
 		gim_vfree(sg);
 	return NULL;
@@ -158,14 +183,34 @@ error_out:
 static void gim_iova_free_sg_pages(struct gim_iova_mem_info *iova_info)
 {
 	int i = 0;
+	struct page *pg;
+	struct page **pages = NULL;
 
 	if (iova_info->alloc_new && iova_info->va_ptr) {
+		pages = gim_vzalloc(iova_info->nr_pages * sizeof(*pages));
+		if (!pages) {
+			gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL, 0);
+		}
 		for (i = 0; i < iova_info->nr_pages; i++) {
 			void *va = iova_info->va_ptr + i * PAGE_SIZE;
-			if (set_memory_wb((unsigned long)va, 1))
-				gim_put_error(AMDGV_ERROR_DRIVER_SET_MEM_ATTRIBUTE_FAIL, 0);
-		}
+			if (is_vmalloc_addr(va))
+				pg = vmalloc_to_page(va);
+			else
+				pg = virt_to_page(va);
 
+			if (pages)
+				pages[i] = pg;
+			else {
+				if (set_pages_array_wb(&pg, 1))
+					gim_put_error(
+						AMDGV_ERROR_DRIVER_SET_MEM_ATTRIBUTE_FAIL, 0);
+			}
+		}
+		if (pages) {
+			if (set_pages_array_wb(pages, iova_info->nr_pages))
+				gim_put_error(AMDGV_ERROR_DRIVER_SET_MEM_ATTRIBUTE_FAIL, 0);
+			gim_vfree(pages);
+		}
 		gim_vfree(iova_info->va_ptr);
 		iova_info->va_ptr = NULL;
 		iova_info->alloc_new = false;

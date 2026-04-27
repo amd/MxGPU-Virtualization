@@ -21,6 +21,7 @@
  */
 
 #include <amdgv_device.h>
+#include <amdgv_gfx.h>
 #include <amdgv_gpuiov.h>
 #include <amdgv_misc.h>
 #include "mi300.h"
@@ -85,6 +86,35 @@ static int mi300_wait_for_cp_dma_pio_cb(void *context)
 	return !(dma_pio_count < 2 && !dma_pio_full);
 }
 
+/* Prevents CP DMA and FLR from running concurrently. */
+static void mi300_cp_dma_enter(struct amdgv_adapter *adapt)
+{
+	struct amdgv_hive_info *hive;
+
+	if (adapt->asic_type != CHIP_MI350X)
+		return;
+
+	hive = amdgv_get_xgmi_hive(adapt);
+	if (!hive)
+		return;
+
+	shared_exclusion_enter(adapt, &hive->flr_cp_dma_lock, SHARED_EXCLUSION_GROUP_CP_DMA);
+}
+
+static void mi300_cp_dma_exit(struct amdgv_adapter *adapt)
+{
+	struct amdgv_hive_info *hive;
+
+	if (adapt->asic_type != CHIP_MI350X)
+		return;
+
+	hive = amdgv_get_xgmi_hive(adapt);
+	if (!hive)
+		return;
+
+	shared_exclusion_exit(adapt, &hive->flr_cp_dma_lock, SHARED_EXCLUSION_GROUP_CP_DMA);
+}
+
 static int mi300_cp_dma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, bool fill_mode,
 			      uint64_t src, uint64_t dst, uint64_t size, uint64_t *size_copied)
 {
@@ -99,6 +129,7 @@ static int mi300_cp_dma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, bool 
 	uint32_t xcc_id;
 	uint32_t hw_sched_id;
 	struct mi300_wait_for_cp_dma_pio_cb_ctx ctx = { 0 };
+	int ret = 0;
 
 	/*
 	 * to use CP_DMA copy, need to make sure GFX is switched to PF
@@ -115,6 +146,13 @@ static int mi300_cp_dma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, bool 
 		if (curr_idx_vf != AMDGV_PF_IDX)
 			return AMDGV_FAILURE;
 	}
+
+	/* WORKAROUND */
+	/* Remove wrapping CP DMA in RLC safe mode after PMFW provides fix */
+	for_each_id (xcc_id, amdgv_sched_get_xcc_mask_by_vf(adapt, idx_vf))
+		amdgv_gfx_rlc_enter_safe_mode(adapt, xcc_id);
+
+	mi300_cp_dma_enter(adapt);
 
 	/* NOTE: for regCP_DMA_PIO_CONTROL
 	 * CP_DMA_PIO_CONTROL[30:29] => SRC_SELECT: 0 (use SAS in COMMAND)
@@ -229,7 +267,8 @@ static int mi300_cp_dma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, bool 
 					"DMA not ready (at pf_mc_addr=0x%llx) after "
 					"%d usec, dma_cntl = 0x%08x (pio_count=%d)\n",
 					GET_INST(GC, xcc_id), dst, AMDGV_TIMEOUT(TIMEOUT_CP_DMA), dma_temp, dma_pio_count);
-				return AMDGV_FAILURE;
+				ret = AMDGV_FAILURE;
+				goto exit_cp_dma;
 			}
 		}
 	}
@@ -252,10 +291,17 @@ static int mi300_cp_dma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, bool 
 		AMDGV_WARN("DMA on inst %u failed to complete after %d usec, "
 			"cp_stat = 0x%08x (CP_BUSY or DMA_BUSY)\n",
 			GET_INST(GC, xcc_id), AMDGV_TIMEOUT(TIMEOUT_CP_DMA), dma_temp);
-		return AMDGV_FAILURE;
+		ret = AMDGV_FAILURE;
+		goto exit_cp_dma;
 	}
 
-	return 0;
+exit_cp_dma:
+	mi300_cp_dma_exit(adapt);
+
+	for_each_id (xcc_id, amdgv_sched_get_xcc_mask_by_vf(adapt, idx_vf))
+		amdgv_gfx_rlc_exit_safe_mode(adapt, xcc_id);
+
+	return ret;
 }
 
 static int mi300_misc_sw_init(struct amdgv_adapter *adapt)

@@ -27,6 +27,8 @@
 #include "mi_gfx.h"
 #include "gfx_v9_4_3.h"
 #include <amdgv_powerplay.h>
+#include <amdgv_gpumon.h>
+#include "mi300_gpumon.h"
 
 static const uint32_t this_block = AMDGV_GFX_BLOCK;
 
@@ -544,6 +546,11 @@ static int gfx_v9_4_3_hw_init_internal_set(struct amdgv_adapter *adapt)
 						continue;
 
 					ring = &adapt->gfx.compute_ring[xcc_id * adapt->gfx.num_compute_rings + ring_id];
+					if (!xcc_id && (adapt->flags & AMDGV_FLAG_ENABLE_COMPUTE_PAGING)) {
+						ring->aql_enable = (ring_id == adapt->gfx.compute_paging_queue_id) ? false : true;
+					} else {
+						ring->aql_enable = true;
+					}
 					r = amdgv_ring_init_set(adapt, ring);
 					if (r)
 						return r;
@@ -802,6 +809,8 @@ static int gfx_v9_4_3_xcc_mqd_init(struct amdgv_ring *ring, int xcc_id)
 	mqd->compute_static_thread_mgmt_se2 = 0xffffffff;
 	mqd->compute_static_thread_mgmt_se3 = 0xffffffff;
 	mqd->compute_misc_reserved = 0x00000003;
+	if (ring->aql_enable)
+		mqd->cp_hqd_aql_control = 1 << CP_HQD_AQL_CONTROL__CONTROL0__SHIFT;
 
 	mqd->dynamic_cu_mask_addr_lo =
 		lower_32_bits(ring->mqd_gpu_addr
@@ -1448,6 +1457,221 @@ static void gfx_v9_4_3_set_ring_funcs(struct amdgv_adapter *adapt)
 	}
 }
 
+static int
+gfx_v9_4_3_alloc_dump_cu_resource_memory(struct amdgv_adapter *adapt,
+					 struct amdgv_dump_cu_resource_size *resource_size,
+					 struct amdgv_dump_cu_resource_memory *resource_mem)
+{
+	int ret = 0;
+	struct amdgv_memmgr_mem *extra_kernelarg, *extra_kernelobj, *extra_packet,
+		*extra_signal_obj, *sync_signal_obj, *dev_data;
+	uint64_t *kernelarg_cpua, *extra_kernelarg_cpua;
+	hsa_signal_t extra_signal;
+	hsa_kernel_dispatch_packet_t *packet0, *packet1;
+	int num_xcc = 0;
+	int cu_count_per_xcc = 0;
+	num_xcc = adapt->mcp.gfx.num_xcc ? adapt->mcp.gfx.num_xcc : 1;
+	cu_count_per_xcc = adapt->config.gfx.active_cu_count / num_xcc;
+
+	if (adapt->gfx.cu_dump_data_info.cu_dump_type == AMDGV_CU_DATA_TYPE__SGPRs &&
+	    !adapt->gfx.cu_dump_data_info.use_extra_ring) {
+		AMDGV_ERROR("Dumping SGPRs for GFX9 without extra ring is not supported\n");
+		return AMDGV_FAILURE;
+	}
+
+	ret = amdgv_gfx_alloc_dump_cu_resource_memory(adapt, resource_size, resource_mem);
+	if (ret)
+		return ret;
+
+	if (adapt->gfx.cu_dump_data_info.use_extra_ring) {
+		extra_kernelarg = amdgv_memmgr_alloc_align_zero(&adapt->memmgr_pf, 256, 256, MEM_GFX_IB);
+		if (!extra_kernelarg) {
+			AMDGV_WARN("failed to create extra_kernelarg.\n");
+			goto free_resource_memory;
+		}
+		extra_kernelobj = amdgv_memmgr_alloc_align_zero(&adapt->memmgr_pf, resource_size->extra_kernelobj_size, 256, MEM_GFX_IB);
+		if (!extra_kernelobj) {
+			AMDGV_WARN("failed to create extra_kernelobj.\n");
+			goto free_extra_kernelarg;
+		}
+		extra_signal_obj = amdgv_memmgr_alloc_align_zero(&adapt->memmgr_pf, 256, 256, MEM_GFX_IB);
+		if (!extra_signal_obj) {
+			AMDGV_WARN("failed to create extra_signal_obj.\n");
+			goto free_extra_kernelobj;
+		}
+		extra_packet = amdgv_memmgr_alloc_align_zero(&adapt->memmgr_pf, sizeof(hsa_kernel_dispatch_packet_t), 256, MEM_GFX_IB);
+		if (!extra_packet) {
+			AMDGV_WARN("failed to create extra_packet.\n");
+			goto free_extra_signal_obj;
+		}
+		sync_signal_obj = amdgv_memmgr_alloc_align_zero(&adapt->memmgr_pf, 256, 256, MEM_GFX_IB);
+		if (!sync_signal_obj) {
+			AMDGV_WARN("failed to create sync_signal_obj.\n");
+			goto free_extra_packet;
+		}
+		dev_data = amdgv_memmgr_alloc_align_zero(&adapt->memmgr_pf, 4096, 256, MEM_GFX_IB);
+		if (!dev_data) {
+			AMDGV_WARN("failed to create device data.\n");
+			goto free_sync_signal_obj;
+		}
+
+		resource_mem->extra_kernelobj_addr = (uint32_t *)amdgv_memmgr_get_cpu_addr(extra_kernelobj);
+
+		extra_signal.handle = amdgv_memmgr_get_gpu_addr(extra_signal_obj);
+
+		adapt->gfx.dump_cu_packets[1] = (hsa_kernel_dispatch_packet_t *)amdgv_memmgr_get_cpu_addr(
+				extra_packet);
+		packet0 = adapt->gfx.dump_cu_packets[0];
+		packet1 = adapt->gfx.dump_cu_packets[1];
+
+		amdgv_gfx_init_dump_cu_packet(adapt, packet1, resource_size, extra_signal,
+					      extra_kernelobj, extra_kernelarg);
+
+		adapt->gfx.dump_cu_memmgr_mem_group->extra_packet = extra_packet;
+		adapt->gfx.dump_cu_memmgr_mem_group->extra_kernelobj = extra_kernelobj;
+		adapt->gfx.dump_cu_memmgr_mem_group->extra_kernelarg = extra_kernelarg;
+		adapt->gfx.dump_cu_memmgr_mem_group->extra_signal_obj = extra_signal_obj;
+		adapt->gfx.dump_cu_memmgr_mem_group->sync_signal_obj = sync_signal_obj;
+		adapt->gfx.dump_cu_memmgr_mem_group->dev_data = dev_data;
+
+		kernelarg_cpua = amdgv_memmgr_get_cpu_addr(
+			adapt->gfx.dump_cu_memmgr_mem_group->kernelarg);
+		extra_kernelarg_cpua = amdgv_memmgr_get_cpu_addr(extra_kernelarg);
+		oss_memset(kernelarg_cpua, 0, sizeof(uint64_t) * 6);
+
+		kernelarg_cpua[0] = amdgv_memmgr_get_gpu_addr(dev_data);
+		kernelarg_cpua[1] = cu_count_per_xcc;
+		kernelarg_cpua[2] = amdgv_memmgr_get_gpu_addr(sync_signal_obj);
+		kernelarg_cpua[3] = cu_count_per_xcc * 3;
+		kernelarg_cpua[4] = amdgv_memmgr_get_gpu_addr(adapt->gfx.dump_cu_memmgr_mem_group->out_data);
+		kernelarg_cpua[5] = amdgv_memmgr_get_gpu_addr(adapt->gfx.dump_cu_memmgr_mem_group->out_flag);
+		oss_memcpy(extra_kernelarg_cpua, kernelarg_cpua, sizeof(uint64_t) * 6);
+
+		packet0->workgroup_size_x = 64 * 8;
+		packet0->grid_size_x = cu_count_per_xcc * packet0->workgroup_size_x;
+
+		packet1->workgroup_size_x = 64 * 12;
+		packet1->grid_size_x = 2 * cu_count_per_xcc * packet1->workgroup_size_x;
+	} else {
+		adapt->gfx.dump_cu_packets[0]->grid_size_x =
+			cu_count_per_xcc * adapt->gfx.dump_cu_packets[0]->workgroup_size_x;
+	}
+	return 0;
+
+free_sync_signal_obj:
+	amdgv_memmgr_free(sync_signal_obj);
+free_extra_packet:
+	amdgv_memmgr_free(extra_packet);
+free_extra_signal_obj:
+	amdgv_memmgr_free(extra_signal_obj);
+free_extra_kernelobj:
+	amdgv_memmgr_free(extra_kernelobj);
+free_extra_kernelarg:
+	amdgv_memmgr_free(extra_kernelarg);
+free_resource_memory:
+	amdgv_gfx_free_dump_cu_resource_memory(adapt);
+	return AMDGV_FAILURE;
+}
+
+static void gfx_v9_4_3_free_dump_cu_resource_memory(struct amdgv_adapter *adapt)
+{
+	struct amdgv_dump_cu_memmgr_mem_group *mem_group = adapt->gfx.dump_cu_memmgr_mem_group;
+	if (!mem_group)
+		return;
+
+	if (adapt->gfx.cu_dump_data_info.use_extra_ring) {
+		adapt->gfx.dump_cu_packets[1] = NULL;
+		amdgv_memmgr_free(mem_group->dev_data);
+		amdgv_memmgr_free(mem_group->sync_signal_obj);
+		amdgv_memmgr_free(mem_group->extra_packet);
+		amdgv_memmgr_free(mem_group->extra_signal_obj);
+		amdgv_memmgr_free(mem_group->extra_kernelobj);
+		amdgv_memmgr_free(mem_group->extra_kernelarg);
+		adapt->gfx.cu_dump_data_info.use_extra_ring = false;
+	}
+	amdgv_gfx_free_dump_cu_resource_memory(adapt);
+}
+
+static int gfx_v9_4_3_dump_cu_data(struct amdgv_adapter *adapt)
+{
+	int i;
+	int r = 0;
+	struct amdgv_ring *mec_ring = NULL;
+	struct amdgv_ring *extra_mec_ring = NULL;
+	int xcc_id = adapt->gfx.cu_dump_data_info.xcc_id;
+	int ring_idx = xcc_id * adapt->gfx.num_compute_rings + XCC_QUEUE_INDEX__AQL;
+	int extra_ring_idx = ring_idx + 1;
+	bool use_extra_ring = adapt->gfx.cu_dump_data_info.use_extra_ring;
+	uint64_t *sync_signal_addr;
+	AMDGV_DEBUG("Dumping CU data on XCC %d, ring %d%s.\n", xcc_id, ring_idx,
+		   use_extra_ring ? " with extra ring" : "");
+	if (adapt->flags & AMDGV_FLAG_DISABLE_COMPUTE_ENGINE ||
+	    adapt->flags & AMDGV_FLAG_ENABLE_COMPUTE_PAGING) {
+		AMDGV_WARN("Mi3XX cannot dump CU data when compute engine is disabled.\n");
+		return AMDGV_FAILURE;
+	}
+
+	r = amdgv_gfx_map_kcq(adapt, xcc_id, XCC_QUEUE_INDEX__AQL);
+	if (r) {
+		AMDGV_WARN("failed to map KCQ XCC %d, ring %d.\n", xcc_id, XCC_QUEUE_INDEX__AQL);
+		return AMDGV_FAILURE;
+	}
+
+	mec_ring = &(adapt->gfx.compute_ring[ring_idx]);
+
+	if (use_extra_ring) {
+		r = amdgv_gfx_map_kcq(adapt, xcc_id, XCC_QUEUE_INDEX__AQL + 1);
+		if (r) {
+			AMDGV_WARN("failed to map KCQ XCC %d, ring %d.\n", xcc_id, XCC_QUEUE_INDEX__AQL + 1);
+			r = AMDGV_FAILURE;
+			goto unmap_ring;
+		}
+		extra_mec_ring = &(adapt->gfx.compute_ring[extra_ring_idx]);
+
+		sync_signal_addr = (uint64_t *)amdgv_memmgr_get_cpu_addr(
+			adapt->gfx.dump_cu_memmgr_mem_group->sync_signal_obj);
+		sync_signal_addr[1] = 1;
+	}
+
+	if (amdgv_ring_alloc(mec_ring,
+			     sizeof(hsa_kernel_dispatch_packet_t) / sizeof(uint32_t))) {
+		AMDGV_WARN("failed to allocate ring.\n");
+		goto unmap_extra_ring;
+	}
+
+	if (use_extra_ring) {
+		if (amdgv_ring_alloc(extra_mec_ring, sizeof(hsa_kernel_dispatch_packet_t) /
+							     sizeof(uint32_t))) {
+			AMDGV_WARN("failed to allocate extra ring.\n");
+			r = AMDGV_FAILURE;
+			goto unmap_extra_ring;
+		}
+	}
+
+	for (i = 0; i < sizeof(hsa_kernel_dispatch_packet_t) / sizeof(uint32_t); i++) {
+		amdgv_ring_write(mec_ring, ((uint32_t *)adapt->gfx.dump_cu_packets[0])[i]);
+	}
+	oss_mb();
+	amdgv_ring_commit(mec_ring);
+	oss_msleep(200);
+
+	if (use_extra_ring) {
+		for (i = 0; i < sizeof(hsa_kernel_dispatch_packet_t) / sizeof(uint32_t); i++) {
+			amdgv_ring_write(extra_mec_ring,
+					 ((uint32_t *)adapt->gfx.dump_cu_packets[1])[i]);
+		}
+		amdgv_ring_commit(extra_mec_ring);
+		oss_msleep(200);
+	}
+unmap_extra_ring:
+	if (use_extra_ring) {
+		amdgv_gfx_unmap_kcq(adapt, xcc_id, XCC_QUEUE_INDEX__AQL + 1);
+	}
+unmap_ring:
+	amdgv_gfx_unmap_kcq(adapt, xcc_id, XCC_QUEUE_INDEX__AQL);
+	return r;
+}
+
 static int gfx_v9_4_3_early_init(struct amdgv_adapter *adapt)
 {
 	adapt->gfx.num_gfx_rings = 0;
@@ -1456,6 +1680,10 @@ static int gfx_v9_4_3_early_init(struct amdgv_adapter *adapt)
 	gfx_v9_4_3_set_ring_funcs(adapt);
 	gfx_v9_4_3_set_kiq_pm4_funcs(adapt);
 	gfx_v9_4_3_set_rlc_funcs(adapt);
+
+	adapt->gfx.funcs->dump_cu_data = gfx_v9_4_3_dump_cu_data;
+	adapt->gfx.funcs->alloc_dump_cu_resource_memory = gfx_v9_4_3_alloc_dump_cu_resource_memory;
+	adapt->gfx.funcs->free_dump_cu_resource_memory = gfx_v9_4_3_free_dump_cu_resource_memory;
 
 	return 0;
 }

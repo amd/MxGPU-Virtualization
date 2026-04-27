@@ -56,8 +56,6 @@ int amdgv_live_migration_set_vf_mig_state(struct amdgv_adapter *adapt, uint32_t 
 
 	AMDGV_ASSERT(idx_vf < AMDGV_MAX_VF_NUM);
 
-	adapt->live_migration.mig_state[idx_vf].state = state;
-
 	switch (state) {
 	case AMDGV_MIGRATION_VF_STATE_DEFAULT:
 		AMDGV_MIGRATION_CLEAR_ABORT(adapt, idx_vf);
@@ -66,9 +64,16 @@ int amdgv_live_migration_set_vf_mig_state(struct amdgv_adapter *adapt, uint32_t 
 	case AMDGV_MIGRATION_VF_STATE_PRE_COPY:
 		/* Always have pre_copy */
 		adapt->dirtybit.acc_bits[idx_vf].is_first_query = true;
+		break;
+	case AMDGV_MIGRATION_VF_STATE_STOP_COPY:
+		if (adapt->live_migration.mig_state[idx_vf].state != AMDGV_MIGRATION_VF_STATE_PRE_COPY)
+			adapt->dirtybit.acc_bits[idx_vf].is_first_query = true;
+		break;
 	default:
 		break;
 	}
+
+	adapt->live_migration.mig_state[idx_vf].state = state;
 
 	return 0;
 }
@@ -128,6 +133,14 @@ void amdgv_live_migration_abort_check(struct amdgv_adapter *adapt, uint32_t idx_
 
 static int amdgv_migration_get_migration_info(struct amdgv_adapter *adapt)
 {
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->migration_smu_is_supported) {
+		/* Check if PMFW support live migration. */
+		if (!adapt->pp.pp_funcs->migration_smu_is_supported(adapt)){
+			AMDGV_ERROR("Migration SMU is not supported.\n");
+			return PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
+		}
+	}
+
 	return (adapt->psp.get_migration_info) ?
 		adapt->psp.get_migration_info(adapt) :
 		PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
@@ -290,19 +303,8 @@ int amdgv_migration_transfer_manifest_data(struct amdgv_adapter *adapt, struct a
 		oss_memcpy(amdgv_memmgr_get_cpu_addr(mem), data_addr, size);
 		ret = amdgv_psp_transfer_manifest_data(adapt, idx_vf,
 					amdgv_memmgr_get_gpu_addr(mem), size, PSP_MIGRATION_IMPORT_DYNAMIC_DATA);
-
-		if (amdgv_gpuiov_transfer_vf_data(adapt, idx_vf, false))
-			goto exit;
-
 		if (ret) {
 			AMDGV_ERROR("Failed to do migration psp dynamic import.\n");
-			goto exit;
-		}
-
-		AMDGV_DEBUG("Migration Import: Idle/save PF\n");
-		if (amdgv_sched_context_save(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_ALL)) {
-			AMDGV_DEBUG("Failed to idle/save PF on all blocks.\n");
-			ret = AMDGV_FAILURE;
 			goto exit;
 		}
 
@@ -380,6 +382,7 @@ static int amdgv_migration_sw_init(struct amdgv_adapter *adapt)
 		}
 	}
 
+	adapt->live_migration.migration_version = AMDGV_MIGRATION_VERSION_UNINITIALIZED;
 	return 0;
 }
 
@@ -410,7 +413,8 @@ static int amdgv_migration_hw_init(struct amdgv_adapter *adapt)
 	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION))
 		return 0;
 
-	return amdgv_migration_get_migration_info(adapt);
+	amdgv_migration_get_migration_info(adapt);
+	return 0;
 }
 
 static int amdgv_migration_hw_fini(struct amdgv_adapter *adapt)

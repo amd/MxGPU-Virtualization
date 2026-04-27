@@ -209,11 +209,14 @@ static int mi300_ih_process(struct amdgv_adapter *adapt, struct amdgv_iv_entry *
 			adapt->irqmgr.ih_submission_interrupt_handler(adapt->irqmgr.ih_submission_interrupt_context);
 			return 0;
 		}
-	} else if (MI300_IH_IV_CLIENTID_SDMA0 == entry->client_id) {
+	} else if (MI300_IH_IV_CLIENTID_SDMA0 == entry->client_id ||
+		   MI300_IH_IV_CLIENTID_SDMA1 == entry->client_id ||
+		   MI300_IH_IV_CLIENTID_SDMA2 == entry->client_id ||
+		   MI300_IH_IV_CLIENTID_SDMA3 == entry->client_id) {
 		if (MI300_IH_IV_SRCID_SDMA_CTXEMPTY == entry->src_id) {
 			return 0; // ignore it
 		} else if (MI300_IH_IV_SRCID_SDMA_TRAP == entry->src_id &&
-				 adapt->irqmgr.ih_submission_interrupt_handler) {
+			   adapt->irqmgr.ih_submission_interrupt_handler) {
 			adapt->irqmgr.ih_submission_interrupt_handler(adapt->irqmgr.ih_submission_interrupt_context);
 			return 0;
 		}

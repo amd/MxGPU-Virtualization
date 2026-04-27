@@ -52,6 +52,7 @@ protected:
 		SMI_ASSERT_EQ(expect.num_of_compute_units, actual.num_of_compute_units);
 		SMI_ASSERT_EQ(expect.target_graphics_version, actual.target_graphics_version);
 		SMI_ASSERT_EQ(expect.subsystem_id, actual.subsystem_id);
+		SMI_ASSERT_EQ(expect.flags, actual.flags);
 
 		return ::testing::AssertionSuccess();
 	}
@@ -139,6 +140,9 @@ TEST_F(AmdSmiBoardTests, InvalidParams)
 	ret = amdsmi_get_pcie_info(&GPU_MOCK_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+	ret = amdsmi_get_gpu_pci_bandwidth(&GPU_MOCK_HANDLE, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
 	ret = amdsmi_get_gpu_virtualization_mode(NULL, &mode);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
@@ -194,6 +198,7 @@ TEST_F(AmdSmiBoardTests, GetAsicInfo)
 	strcpy(gpu_info_mock.asic_serial, "1234567");
 #endif
 	gpu_info_mock.oam_id = 0;
+	gpu_info_mock.flags = (uint64_t)-1;
 
 	amdsmi_asic_info_t asic_info;
 	WhenCalling(std::bind(amdsmi_get_gpu_asic_info, &GPU_MOCK_HANDLE, &asic_info));
@@ -331,4 +336,17 @@ TEST_F(AmdSmiBoardTests, GetVirtualizationMode_Sucess)
 	ret = amdsmi_get_gpu_virtualization_mode(&GPU_MOCK_HANDLE, &mode);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(mode, AMDSMI_VIRTUALIZATION_MODE_HOST);
+}
+
+TEST_F(AmdSmiBoardTests, GetSupportedPowerCapNotYetImplemented)
+{
+	// TODO: power_cap - test amdsmi_get_supported_power_cap API when implemented
+	int ret;
+	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
+	uint32_t sensor_count = 1;
+	uint32_t sensor_inds[1] = {0};
+	amdsmi_power_cap_type_t sensor_types[1] = {AMDSMI_POWER_CAP_TYPE_PPT0};
+
+	ret = amdsmi_get_supported_power_cap(MOCK_GPU_HANDLE, &sensor_count, sensor_inds, sensor_types);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_YET_IMPLEMENTED);
 }

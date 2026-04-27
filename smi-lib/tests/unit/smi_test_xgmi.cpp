@@ -306,7 +306,7 @@ TEST_F(AmdSmiXgmiTest, GetLinkTopologyGpuItself)
 
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(link_topology.weight, 0);
-	ASSERT_EQ(link_topology.link_status, AMDSMI_LINK_STATUS_ENABLED);
+	ASSERT_EQ(link_topology.link_status, AMDSMI_LINK_STATUS_DISABLED);
 	ASSERT_EQ(link_topology.link_type, AMDSMI_LINK_TYPE_NOT_APPLICABLE);
 	ASSERT_EQ(link_topology.num_hops, 0);
 	ASSERT_EQ(link_topology.fb_sharing, 1);

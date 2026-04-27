@@ -31,7 +31,7 @@
 #define PPTABLE_TOKEN_ID_SIZE 32
 #define PPTABLE_SIGNATURE_SIZE 256
 
- static unsigned char softPowerPlayTable9999_signed[] = {
+ static const unsigned char softPowerPlayTable9999_signed[] = {
 /*
  *   pptable_size = 4804
  *   table_revision = 2

@@ -46,8 +46,12 @@
 typedef amdsmi_status_t (*AMDSMI_INIT)(uint64_t);
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLES)(amdsmi_socket_handle, uint32_t *,
 		amdsmi_processor_handle *);
+typedef amdsmi_status_t (*AMDSMI_GET_NIC_PROCESSOR_HANDLES)(amdsmi_socket_handle, uint32_t *,
+		amdsmi_processor_handle *);
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLES_BY_TYPE)(amdsmi_socket_handle,
 		processor_type_t, amdsmi_processor_handle*, uint32_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_TYPE)(amdsmi_processor_handle,
+		processor_type_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 		amdsmi_processor_handle *);
 typedef amdsmi_status_t (*AMDSMI_GET_VF_HANDLE_FROM_BDF)(amdsmi_bdf_t,
@@ -77,6 +81,8 @@ typedef amdsmi_status_t (*AMDSMI_GET_POWER_CAP_INFO)(amdsmi_processor_handle, ui
 // 						     amdsmi_pcie_info_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_PCIE_INFO)(amdsmi_processor_handle,
 		amdsmi_pcie_info_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_PCI_BANDWIDTH)(amdsmi_processor_handle,
+		amdsmi_pcie_bandwidth_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_FB_LAYOUT)(amdsmi_processor_handle,
 		amdsmi_pf_fb_info_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_VBIOS_INFO)(amdsmi_processor_handle,
@@ -113,6 +119,13 @@ typedef amdsmi_status_t (*AMDSMI_GET_XGMI_PLPD)(amdsmi_processor_handle,
 		amdsmi_dpm_policy_t *);
 typedef amdsmi_status_t (*AMDSMI_SET_XGMI_PLPD)(amdsmi_processor_handle,
 		uint32_t);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_PTL_STATE)(amdsmi_processor_handle, bool *);
+typedef amdsmi_status_t (*AMDSMI_SET_GPU_PTL_STATE)(amdsmi_processor_handle, bool);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_PTL_FORMATS)(amdsmi_processor_handle,
+		amdsmi_ptl_data_format_t *, amdsmi_ptl_data_format_t *);
+typedef amdsmi_status_t (*AMDSMI_SET_GPU_PTL_FORMATS)(amdsmi_processor_handle,
+		amdsmi_ptl_data_format_t, amdsmi_ptl_data_format_t);
+
 
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_ECC_COUNT)(amdsmi_processor_handle, amdsmi_gpu_block_t,
 		amdsmi_error_count_t *);
@@ -225,12 +238,17 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_RAS_POLICY_INFO)(amdsmi_processor_handl
 		amdsmi_gpu_ras_policy_info_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_NODE_HANDLE)(amdsmi_processor_handle, amdsmi_node_handle*);
 typedef amdsmi_status_t (*AMDSMI_GET_NPM_INFO)(amdsmi_node_handle, amdsmi_npm_info_t *);
+typedef amdsmi_status_t (*AMDSMI_TOPO_GET_NIC_LINK_TYPE)(amdsmi_processor_handle,
+		amdsmi_processor_handle,
+		amdsmi_nic_link_type_t *);
 /////
 /////
 /////
 
 AMDSMI_INIT host_amdsmi_init;
 AMDSMI_GET_PROCESSOR_HANDLES host_amdsmi_get_processor_handles;
+AMDSMI_GET_PROCESSOR_TYPE host_amdsmi_get_processor_type;
+AMDSMI_GET_NIC_PROCESSOR_HANDLES host_amdsmi_get_nic_processor_handles;
 AMDSMI_GET_PROCESSOR_HANDLES_BY_TYPE host_amdsmi_get_processor_handles_by_type;
 AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
 AMDSMI_GET_VF_HANDLE_FROM_BDF host_amdsmi_get_vf_handle_from_bdf;
@@ -247,6 +265,7 @@ AMDSMI_GET_GPU_DRIVER_MODEL host_amdsmi_get_gpu_driver_model;
 AMDSMI_GET_POWER_CAP_INFO host_amdsmi_get_power_cap_info;
 // AMDSMI_GET_PCIE_LINK_CAPS amdsmi_get_pcie_link_caps;
 AMDSMI_GET_PCIE_INFO host_amdsmi_get_pcie_info;
+AMDSMI_GET_GPU_PCI_BANDWIDTH host_amdsmi_get_gpu_pci_bandwidth;
 AMDSMI_GET_FB_LAYOUT host_amdsmi_get_fb_layout;
 AMDSMI_GET_GPU_VBIOS_INFO host_amdsmi_get_gpu_vbios_info;
 AMDSMI_GET_GPU_BOARD_INFO host_amdsmi_get_gpu_board_info;
@@ -266,6 +285,10 @@ AMDSMI_SET_SOC_PSTATE host_amdsmi_set_soc_pstate;
 AMDSMI_GET_XGMI_PLPD host_amdsmi_get_xgmi_plpd;
 AMDSMI_SET_XGMI_PLPD host_amdsmi_set_xgmi_plpd;
 AMDSMI_GET_GPU_TOTAL_ECC_COUNT host_amdsmi_get_gpu_total_ecc_count;
+AMDSMI_GET_GPU_PTL_STATE host_amdsmi_get_gpu_ptl_state;
+AMDSMI_SET_GPU_PTL_STATE host_amdsmi_set_gpu_ptl_state;
+AMDSMI_GET_GPU_PTL_FORMATS host_amdsmi_get_gpu_ptl_formats;
+AMDSMI_SET_GPU_PTL_FORMATS host_amdsmi_set_gpu_ptl_formats;
 
 AMDSMI_GET_GPU_ECC_COUNT host_amdsmi_get_gpu_ecc_count;
 AMDSMI_GET_GPU_ECC_ENABLED host_amdsmi_get_gpu_ecc_enabled;
@@ -320,6 +343,7 @@ AMDSMI_GET_NIC_DEVICE_BDF host_amdsmi_get_nic_device_bdf;
 AMDSMI_GET_NIC_PORT_STATISTICS host_amdsmi_get_nic_port_statistics;
 AMDSMI_GET_NIC_RDMA_PORT_STATISTICS host_amdsmi_get_nic_rdma_port_statistics;
 AMDSMI_GET_NIC_VENDOR_STATISTICS host_amdsmi_get_nic_vendor_statistics;
+AMDSMI_TOPO_GET_NIC_LINK_TYPE host_amdsmi_topo_get_nic_link_type;
 
 AMDSMI_GET_NODE_HANDLE host_amdsmi_get_node_handle;
 AMDSMI_GET_NPM_INFO host_amdsmi_get_npm_info;
@@ -357,8 +381,12 @@ AmdSmiApiHost::AmdSmiApiHost()
 	host_amdsmi_init = (AMDSMI_INIT)LOAD_SYM(amdSmiLibHandle, "amdsmi_init");
 	host_amdsmi_get_processor_handles = (AMDSMI_GET_PROCESSOR_HANDLES)LOAD_SYM(
 											amdSmiLibHandle, "amdsmi_get_processor_handles");
+	host_amdsmi_get_nic_processor_handles = (AMDSMI_GET_PROCESSOR_HANDLES)LOAD_SYM(
+											amdSmiLibHandle, "amdsmi_get_nic_processor_handles");
 	host_amdsmi_get_processor_handles_by_type = (AMDSMI_GET_PROCESSOR_HANDLES_BY_TYPE)LOAD_SYM(
 				amdSmiLibHandle, "amdsmi_get_processor_handles_by_type");
+	host_amdsmi_get_processor_type = (AMDSMI_GET_PROCESSOR_TYPE)LOAD_SYM(
+				amdSmiLibHandle, "amdsmi_get_processor_type");
 	host_amdsmi_get_processor_handle_from_bdf =
 		(AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)LOAD_SYM(
 			amdSmiLibHandle, "amdsmi_get_processor_handle_from_bdf");
@@ -393,6 +421,8 @@ AmdSmiApiHost::AmdSmiApiHost()
 	// 	amdSmiLibHandle, "amdsmi_get_pcie_link_caps");
 	host_amdsmi_get_pcie_info = (AMDSMI_GET_PCIE_INFO)LOAD_SYM(
 									amdSmiLibHandle, "amdsmi_get_pcie_info");
+	host_amdsmi_get_gpu_pci_bandwidth = (AMDSMI_GET_GPU_PCI_BANDWIDTH)LOAD_SYM(
+									amdSmiLibHandle, "amdsmi_get_gpu_pci_bandwidth");
 	host_amdsmi_get_fb_layout =
 		(AMDSMI_GET_FB_LAYOUT)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_fb_layout");
 	host_amdsmi_get_gpu_vbios_info = (AMDSMI_GET_GPU_VBIOS_INFO)LOAD_SYM(
@@ -434,6 +464,14 @@ AmdSmiApiHost::AmdSmiApiHost()
 		(AMDSMI_SET_XGMI_PLPD)LOAD_SYM(amdSmiLibHandle, "amdsmi_set_xgmi_plpd");
 	host_amdsmi_get_gpu_total_ecc_count = (AMDSMI_GET_GPU_TOTAL_ECC_COUNT)LOAD_SYM(
 			amdSmiLibHandle, "amdsmi_get_gpu_total_ecc_count");
+	host_amdsmi_get_gpu_ptl_state =
+		(AMDSMI_GET_GPU_PTL_STATE)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_gpu_ptl_state");
+	host_amdsmi_set_gpu_ptl_state =
+		(AMDSMI_SET_GPU_PTL_STATE)LOAD_SYM(amdSmiLibHandle, "amdsmi_set_gpu_ptl_state");
+	host_amdsmi_get_gpu_ptl_formats =
+		(AMDSMI_GET_GPU_PTL_FORMATS)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_gpu_ptl_formats");
+	host_amdsmi_set_gpu_ptl_formats =
+		(AMDSMI_SET_GPU_PTL_FORMATS)LOAD_SYM(amdSmiLibHandle, "amdsmi_set_gpu_ptl_formats");
 
 	host_amdsmi_get_gpu_ecc_count = (AMDSMI_GET_GPU_ECC_COUNT)LOAD_SYM(
 										amdSmiLibHandle, "amdsmi_get_gpu_ecc_count");
@@ -552,6 +590,7 @@ AmdSmiApiHost::AmdSmiApiHost()
 	host_amdsmi_get_node_handle = (AMDSMI_GET_NODE_HANDLE)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_node_handle");
 	host_amdsmi_get_npm_info = (AMDSMI_GET_NPM_INFO)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_npm_info");
 
+	host_amdsmi_topo_get_nic_link_type = (AMDSMI_TOPO_GET_NIC_LINK_TYPE)LOAD_SYM(amdSmiLibHandle, "amdsmi_topo_get_nic_link_type");
 	int ret = host_amdsmi_init(AMDSMI_INIT_AMD_GPUS);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		throw SmiToolPermissionDeniedException();

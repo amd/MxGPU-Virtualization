@@ -1200,9 +1200,11 @@ static void dcore_iova_vma_close(struct vm_area_struct *vma)
 	/* unpin pages */
 	vfio_unpin_pages(ctx->vdev, ctx->guest_pfn, page_cnt);
 
+#if !defined(HAVE_VFIO_DMA_UNMAP)
 	/* unregister notifier */
 	vfio_unregister_notifier(ctx->vdev, VFIO_IOMMU_NOTIFY,
 			&ctx->vfio_notifier);
+#endif
 #else
 	/* unpin pages */
 	vfio_unpin_pages(&ctx->pdev->dev, ctx->guest_pfn, page_cnt);
@@ -1240,11 +1242,14 @@ static struct vm_operations_struct dcore_vma_ops = {
 	.close = dcore_iova_vma_close,
 	.fault = dcore_iova_vma_fault
 };
+
+#if !defined(HAVE_VFIO_DMA_UNMAP)
 static int dcore_vfio_iommu_notifier(struct notifier_block *nb,
 		unsigned long action, void *opaque)
 {
 	return NOTIFY_OK;
 }
+#endif
 
 int dcore_iova_mmap(struct file *filp, struct vm_area_struct *vma)
 {
@@ -1296,19 +1301,25 @@ int dcore_iova_mmap(struct file *filp, struct vm_area_struct *vma)
 
 #if defined(HAVE_DCORE_IOVA_VM_CTX_VFIO_DEVICE)
 	vm_ctx->vdev = &vpdev->vdev;
+#if !defined(HAVE_VFIO_DMA_UNMAP)
 	vm_ctx->vfio_events = VFIO_IOMMU_NOTIFY_DMA_UNMAP;
+#endif
 #else
 	vm_ctx->vfio_events = VFIO_GROUP_NOTIFY_SET_KVM;
 #endif
 	vm_ctx->host_pfn = host_pfn;
+#if !defined(HAVE_VFIO_DMA_UNMAP)
 	vm_ctx->vfio_notifier.notifier_call = dcore_vfio_iommu_notifier;
+#endif
 	vm_ctx->pdev = pdev;
 	vm_ctx->guest_pfn = guest_pfn;
 
 #if defined(HAVE_DCORE_IOVA_VM_CTX_VFIO_DEVICE)
+#if !defined(HAVE_VFIO_DMA_UNMAP)
 	/* we need to register a dummy notifier, otherwise the pin pages won't work */
 	ret = vfio_register_notifier(vm_ctx->vdev, VFIO_IOMMU_NOTIFY,
 			&vm_ctx->vfio_events, &vm_ctx->vfio_notifier);
+#endif
 
 	/* pin pages */
 	ret = vfio_pin_pages(vm_ctx->vdev, guest_pfn, page_cnt, IOMMU_READ, host_pfn);
@@ -1334,8 +1345,10 @@ int dcore_iova_mmap(struct file *filp, struct vm_area_struct *vma)
 
 unreg:
 #if defined(HAVE_DCORE_IOVA_VM_CTX_VFIO_DEVICE)
+#if !defined(HAVE_VFIO_DMA_UNMAP)
 	vfio_unregister_notifier(vm_ctx->vdev, VFIO_IOMMU_NOTIFY,
 			&vm_ctx->vfio_notifier);
+#endif
 #else
 	vfio_unregister_notifier(&vm_ctx->pdev->dev, VFIO_IOMMU_NOTIFY,
 			&vm_ctx->vfio_notifier);

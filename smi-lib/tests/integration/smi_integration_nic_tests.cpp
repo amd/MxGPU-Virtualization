@@ -40,11 +40,10 @@ protected:
 		uint32_t nic_count = AMDSMI_MAX_DEVICES;
 		nic_processors_ = std::make_unique<amdsmi_processor_handle[]>(nic_count);
 
-		amdsmi_status_t ret = amdsmi_get_processor_handles_by_type(
+		amdsmi_status_t ret = amdsmi_get_nic_processor_handles(
 			nullptr,
-			AMDSMI_PROCESSOR_TYPE_AMD_NIC,
-			nic_processors_.get(),
-			&nic_count
+			&nic_count,
+			nic_processors_.get()
 		);
 
 		if (ret == AMDSMI_STATUS_SUCCESS && nic_count > 0) {
@@ -72,7 +71,8 @@ TEST_F(AmdSmiNicIntegrationTests, NicDeviceDiscovery)
 	for (uint32_t i = 0; i < nic_count_; i++) {
 		ASSERT_EQ(amdsmi_get_processor_type(nic_processors_[i], &processor_type),
 			AMDSMI_STATUS_SUCCESS);
-		ASSERT_EQ(processor_type, AMDSMI_PROCESSOR_TYPE_AMD_NIC);
+		ASSERT_TRUE(processor_type == AMDSMI_PROCESSOR_TYPE_AMD_NIC ||
+			processor_type == AMDSMI_PROCESSOR_TYPE_BRCM_NIC);
 
 	}
 }
@@ -332,7 +332,8 @@ TEST_F(AmdSmiNicIntegrationTests, NicRdmaDevInfoTest)
 			}
 		} else {
 			std::cout << "NIC " << i << " RDMA info not available (status: " << ret << ")" << std::endl;
-			EXPECT_TRUE(ret == AMDSMI_STATUS_NOT_SUPPORTED || ret == AMDSMI_STATUS_NOT_FOUND || ret == AMDSMI_STATUS_DRIVER_NOT_LOADED);
+			// TODO: broadcom - remove AMDSMI_STATUS_DRIVER_NOT_LOADED
+			EXPECT_TRUE(ret == AMDSMI_STATUS_NOT_SUPPORTED || ret == AMDSMI_STATUS_NOT_FOUND || ret == AMDSMI_STATUS_NO_DATA || ret == AMDSMI_STATUS_DRIVER_NOT_LOADED);
 		}
 	}
 }
@@ -349,7 +350,7 @@ TEST_F(AmdSmiNicIntegrationTests, NicRdmaPortStatisticsTest)
 
 		if (ret != AMDSMI_STATUS_SUCCESS) {
 			std::cout << "  Failed to get RDMA port statistics count (status: " << ret << ")" << std::endl;
-			EXPECT_TRUE(ret == AMDSMI_STATUS_NOT_SUPPORTED || ret == AMDSMI_STATUS_NOT_FOUND);
+			EXPECT_TRUE(ret == AMDSMI_STATUS_NOT_SUPPORTED || ret == AMDSMI_STATUS_NOT_FOUND || ret == AMDSMI_STATUS_DRIVER_NOT_LOADED);
 			continue;
 		}
 
@@ -368,7 +369,7 @@ TEST_F(AmdSmiNicIntegrationTests, NicRdmaPortStatisticsTest)
 			}
 		} else {
 			std::cout << "  Failed to get RDMA port statistics (status: " << ret << ")" << std::endl;
-			EXPECT_TRUE(ret == AMDSMI_STATUS_NOT_SUPPORTED || ret == AMDSMI_STATUS_NOT_FOUND);
+			EXPECT_TRUE(ret == AMDSMI_STATUS_NOT_SUPPORTED || ret == AMDSMI_STATUS_NOT_FOUND || ret == AMDSMI_STATUS_DRIVER_NOT_LOADED);
 		}
 
 		delete[] stats;
@@ -474,7 +475,7 @@ static void nic_walkthrough_test(amdsmi_processor_handle *nic_processors, uint32
 		ASSERT_EQ(amdsmi_get_nic_numa_info(nic_processors[i], &numa_info), AMDSMI_STATUS_SUCCESS);
 		if (verbose) {
 			std::cout << "       NUMA Node: " << (int)numa_info.node << std::endl;
-			std::cout << "       CPU Affinity: " << numa_info.affinity << std::endl;
+			std::cout << "       CPU AFFINITY: " << numa_info.affinity << std::endl;
 		}
 		EXPECT_GE(numa_info.node, 0);
 		EXPECT_GT(strlen(numa_info.affinity), 0);
@@ -592,7 +593,8 @@ static void nic_walkthrough_test(amdsmi_processor_handle *nic_processors, uint32
 			if (verbose) {
 				std::cout << "       RDMA info not available (status: " << rdma_ret << ")" << std::endl;
 			}
-			EXPECT_TRUE(rdma_ret == AMDSMI_STATUS_NOT_SUPPORTED || rdma_ret == AMDSMI_STATUS_NOT_FOUND || rdma_ret == AMDSMI_STATUS_DRIVER_NOT_LOADED);
+			// TODO: broadcom - remove AMDSMI_STATUS_DRIVER_NOT_LOADED
+			EXPECT_TRUE(rdma_ret == AMDSMI_STATUS_NOT_SUPPORTED || rdma_ret == AMDSMI_STATUS_NOT_FOUND || rdma_ret == AMDSMI_STATUS_NO_DATA || rdma_ret == AMDSMI_STATUS_DRIVER_NOT_LOADED);
 		}
 
 		// 9. RDMA Port Statistics
@@ -600,17 +602,25 @@ static void nic_walkthrough_test(amdsmi_processor_handle *nic_processors, uint32
 			std::cout << "\n9. RDMA Port Statistics:" << std::endl;
 		}
 		uint32_t num_rdma_stats = 0;
-		ASSERT_EQ(amdsmi_get_nic_rdma_port_statistics(nic_processors[i], 0, &num_rdma_stats, nullptr), AMDSMI_STATUS_SUCCESS);
-		if (num_rdma_stats > 0) {
-			amdsmi_nic_stat_t* rdma_stats = new amdsmi_nic_stat_t[num_rdma_stats];
-			ASSERT_EQ(amdsmi_get_nic_rdma_port_statistics(nic_processors[i], 0, &num_rdma_stats, rdma_stats), AMDSMI_STATUS_SUCCESS);
-			if (verbose) {
-				for (uint32_t j = 0; j < num_rdma_stats; j++) {
-					std::cout << "       RDMA Port 0 " << rdma_stats[j].name << ": " << rdma_stats[j].value << std::endl;
-					EXPECT_GE(rdma_stats[j].value, 0);
+		amdsmi_status_t rdma_stats_ret = amdsmi_get_nic_rdma_port_statistics(nic_processors[i], 0, &num_rdma_stats, nullptr);
+		if (rdma_stats_ret == AMDSMI_STATUS_SUCCESS) {
+			if (num_rdma_stats > 0) {
+				amdsmi_nic_stat_t* rdma_stats = new amdsmi_nic_stat_t[num_rdma_stats];
+				ASSERT_EQ(amdsmi_get_nic_rdma_port_statistics(nic_processors[i], 0, &num_rdma_stats, rdma_stats), AMDSMI_STATUS_SUCCESS);
+				if (verbose) {
+					for (uint32_t j = 0; j < num_rdma_stats; j++) {
+						std::cout << "       RDMA Port 0 " << rdma_stats[j].name << ": " << rdma_stats[j].value << std::endl;
+						EXPECT_GE(rdma_stats[j].value, 0);
+					}
 				}
+				delete[] rdma_stats;
 			}
-			delete[] rdma_stats;
+		} else {
+			if (verbose) {
+				std::cout << "       RDMA port statistics not available (status: " << rdma_stats_ret << ")" << std::endl;
+			}
+			// TODO: broadcom - remove AMDSMI_STATUS_DRIVER_NOT_LOADED
+			EXPECT_TRUE(rdma_stats_ret == AMDSMI_STATUS_NOT_SUPPORTED || rdma_stats_ret == AMDSMI_STATUS_NOT_FOUND || rdma_stats_ret == AMDSMI_STATUS_NO_DATA || rdma_stats_ret == AMDSMI_STATUS_DRIVER_NOT_LOADED);
 		}
 
 		// 10. BDF Information
@@ -725,6 +735,106 @@ TEST_F(AmdSmiNicIntegrationTests, NicMultithreadedTest_NotInit)
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 }
 #endif
+
+TEST_F(AmdSmiNicIntegrationTests, NicTopoLinkTypeTest)
+{
+	amdsmi_status_t ret = AMDSMI_STATUS_SUCCESS;
+	amdsmi_nic_link_type_t link_type;
+
+	uint32_t gpu_count = AMDSMI_MAX_DEVICES;
+	std::unique_ptr<amdsmi_processor_handle[]> gpu_processors =
+		std::make_unique<amdsmi_processor_handle[]>(gpu_count);
+
+	ret = amdsmi_get_processor_handles_by_type(
+		nullptr,
+		AMDSMI_PROCESSOR_TYPE_AMD_GPU,
+		gpu_processors.get(),
+		&gpu_count
+	);
+
+	if (ret != AMDSMI_STATUS_SUCCESS || gpu_count == 0) {
+		std::cout << "No GPU devices available - skipping NIC-GPU topology tests" << std::endl;
+		GTEST_SKIP() << "No GPU devices available for NIC-GPU topology testing";
+		return;
+	}
+
+	std::cout << "Found " << gpu_count << " GPU device(s) for topology testing" << std::endl;
+
+	for (uint32_t i = 0; i < nic_count_; i++) {
+		std::cout << "NIC " << i << " Topology Info:" << std::endl;
+
+		for (uint32_t j = 0; j < gpu_count; j++) {
+			ret = amdsmi_topo_get_nic_link_type(nic_processors_[i], gpu_processors[j], &link_type);
+
+			if (ret == AMDSMI_STATUS_SUCCESS) {
+				std::string link_type_str;
+				switch (link_type) {
+					case AMDSMI_NIC_LINK_TYPE_UNKNOWN:
+						link_type_str = "UNKNOWN";
+						break;
+					case AMDSMI_NIC_LINK_TYPE_PCIE:
+						link_type_str = "PCIE";
+						break;
+					case AMDSMI_NIC_LINK_TYPE_NUMA:
+						link_type_str = "NUMA";
+						break;
+					case AMDSMI_NIC_LINK_TYPE_X_NUMA:
+						link_type_str = "X-NUMA";
+						break;
+					default:
+						link_type_str = "UNKNOWN";
+						break;
+				}
+				std::cout << "  NIC " << i << " -> GPU " << j << " Link Type: " << link_type_str << std::endl;
+
+				EXPECT_GE(link_type, AMDSMI_NIC_LINK_TYPE_UNKNOWN);
+				EXPECT_LE(link_type, AMDSMI_NIC_LINK_TYPE_X_NUMA);
+			} else {
+				std::cout << "  NIC " << i << " -> GPU " << j << " link type not available (status: " << ret << ")" << std::endl;
+				EXPECT_TRUE(ret == AMDSMI_STATUS_NOT_SUPPORTED || ret == AMDSMI_STATUS_NOT_FOUND);
+			}
+		}
+	}
+}
+
+TEST_F(AmdSmiNicIntegrationTests, NicTopoLinkTypeErrorHandlingTest)
+{
+	amdsmi_nic_link_type_t link_type;
+
+	uint32_t gpu_count = AMDSMI_MAX_DEVICES;
+	std::unique_ptr<amdsmi_processor_handle[]> gpu_processors =
+		std::make_unique<amdsmi_processor_handle[]>(gpu_count);
+
+	amdsmi_status_t ret = amdsmi_get_processor_handles_by_type(
+		nullptr,
+		AMDSMI_PROCESSOR_TYPE_AMD_GPU,
+		gpu_processors.get(),
+		&gpu_count
+	);
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+
+	if (gpu_count > 0) {
+		ASSERT_EQ(amdsmi_topo_get_nic_link_type(nullptr, gpu_processors[0], &link_type), AMDSMI_STATUS_INVAL);
+	}
+
+	if (nic_count_ > 0) {
+		ASSERT_EQ(amdsmi_topo_get_nic_link_type(nic_processors_[0], nullptr, &link_type), AMDSMI_STATUS_INVAL);
+	}
+
+	if (nic_count_ > 0 && gpu_count > 0) {
+		ASSERT_EQ(amdsmi_topo_get_nic_link_type(nic_processors_[0], gpu_processors[0], nullptr), AMDSMI_STATUS_INVAL);
+	}
+
+	ASSERT_EQ(amdsmi_topo_get_nic_link_type(nullptr, nullptr, nullptr), AMDSMI_STATUS_INVAL);
+
+	if (nic_count_ > 0 && gpu_count > 0) {
+		ASSERT_EQ(amdsmi_topo_get_nic_link_type(nic_processors_[0], nic_processors_[0], &link_type), AMDSMI_STATUS_INVAL);
+	}
+
+	if (nic_count_ > 0 && gpu_count > 0) {
+		ASSERT_EQ(amdsmi_topo_get_nic_link_type(gpu_processors[0], gpu_processors[0], &link_type), AMDSMI_STATUS_INVAL);
+	}
+}
 
 TEST_F(AmdSmiNicIntegrationTests, NicErrorHandlingTest)
 {

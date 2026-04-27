@@ -125,6 +125,7 @@ private:
 
 	void initialize_static_arguments();
 	void initialize_metric_arguments();
+	void initialize_topology_arguments();
 	void initialize_device_arguments();
 	void initialize_help_commands();
 };

@@ -40,7 +40,12 @@ endif
 all: targets
 
 .PHONY: targets
+ifeq ($(HOST),esxi)
+targets: integration_tests
+	@echo "Skipping unit tests for HOST=esxi"
+else
 targets: util_test unit_tests integration_tests lnx_wrapper_tests
+endif
 
 .PHONY: util_test
 util_test:
@@ -59,10 +64,15 @@ integration_tests:
 	$(MAKE) -f $(INTEGRATION_TEST_MK) AMDSMI_VERSION_MAJOR=$(AMDSMI_VERSION_MAJOR) AMDSMI_VERSION_MINOR=$(AMDSMI_VERSION_MINOR) AMDSMI_VERSION_RELEASE=$(AMDSMI_VERSION_RELEASE)
 
 .PHONY: run
+ifeq ($(HOST),esxi)
+run: targets
+	@echo "Skipping unit/util/lnx_wrapper run."
+else
 run: targets
 	$(MAKE) -f $(UNIT_UTIL_TEST_MK) run AMDSMI_VERSION_MAJOR=$(AMDSMI_VERSION_MAJOR) AMDSMI_VERSION_MINOR=$(AMDSMI_VERSION_MINOR) AMDSMI_VERSION_RELEASE=$(AMDSMI_VERSION_RELEASE)
 	$(MAKE) -f $(UNIT_TEST_MK) run AMDSMI_VERSION_MAJOR=$(AMDSMI_VERSION_MAJOR) AMDSMI_VERSION_MINOR=$(AMDSMI_VERSION_MINOR) AMDSMI_VERSION_RELEASE=$(AMDSMI_VERSION_RELEASE)
 	$(MAKE) -f $(UNIT_LNX_WRAP_TEST_MK) run AMDSMI_VERSION_MAJOR=$(AMDSMI_VERSION_MAJOR) AMDSMI_VERSION_MINOR=$(AMDSMI_VERSION_MINOR) AMDSMI_VERSION_RELEASE=$(AMDSMI_VERSION_RELEASE)
+endif
 
 # ...existing code...
 

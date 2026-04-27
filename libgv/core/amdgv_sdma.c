@@ -51,13 +51,16 @@ int amdgv_sdma_ring_copy(struct amdgv_ring *ring, uint64_t src, uint64_t size, u
 	int ret = 0;
 
 	if (ring && adapt->sdma.sdma_copy) {
-		if (ring->shared_type == AMDGV_RING_PFVF_SHARED)
-			amdgv_sched_context_load(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX);
+		int cur_idx_vf = AMDGV_INVALID_IDX_VF;
 
+		if (ring->shared_type == AMDGV_RING_PFVF_SHARED) {
+			amdgv_gpuiov_get_active_vf_idx(adapt, AMDGV_SCHED_BLOCK_GFX, &cur_idx_vf);
+			amdgv_sched_context_switch_to_vf(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX);
+		}
 		ret = adapt->sdma.sdma_copy(ring, src, size, dst);
-
-		if (ring->shared_type == AMDGV_RING_PFVF_SHARED)
-			amdgv_sched_context_save(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX);
+		if (ring->shared_type == AMDGV_RING_PFVF_SHARED) {
+			amdgv_sched_context_switch_to_vf(adapt, cur_idx_vf, AMDGV_SCHED_BLOCK_GFX);
+		}
 	}
 
 	return ret;
@@ -87,6 +90,17 @@ struct amdgv_ring *amdgv_sdma_get_pf_dedicated_ring(struct amdgv_adapter *adapt,
 		return NULL;
 
 	return &adapt->sdma.sdma_ring[instance];;
+}
+
+struct amdgv_ring *amdgv_sdma_get_pfvf_shared_ring(struct amdgv_adapter *adapt, int aid, int index)
+{
+	uint32_t instance = 0;
+
+	instance = aid * adapt->sdma.num_inst_per_aid + (index % adapt->sdma.num_inst_per_aid);
+	if (instance >= adapt->sdma.num_instances)
+		return NULL;
+
+	return &adapt->sdma.sdma_ring[instance];
 }
 
 int amdgv_sdma_alloc_bitmap_mem(struct amdgv_adapter *adapt, uint64_t bitmap_size)

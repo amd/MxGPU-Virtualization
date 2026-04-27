@@ -80,8 +80,10 @@ struct dcore_iova_vm_ctx {
 #if defined(HAVE_DCORE_IOVA_VM_CTX_PAGE_ARRAY)
 	struct page **page_array;
 #else
+#if !defined(HAVE_VFIO_DMA_UNMAP)
 	struct notifier_block vfio_notifier;
 	unsigned long vfio_events;
+#endif
 	unsigned long *host_pfn;
 #endif
 	unsigned long *guest_pfn;

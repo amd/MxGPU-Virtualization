@@ -50,6 +50,11 @@
 
 #define PLDM_VERSION_NOT_SUPPORTED 0xffffffff
 
+/*
+ * Minimum SMU/PMFW version (adapt->pp.smu_fw_version) for live migration support on MI350.
+ */
+#define MI350_PMFW_MIN_VERSION_LIVE_MIGRATION 0x04561101U
+
 // This DS threshold was calculated based on MI300 characteristics using the formula
 // max GFXCLK/GFX DS clock divider =  (2250/16) ~= 140
 #define MI350_GPUMON_DS_THRESHOLD 140
@@ -171,6 +176,8 @@ enum mi350_metric_name {
 	MI350__VR_TEMP_VDDCR_11_HBM_D,
 	MI350__VR_TEMP_VDD_USR,
 	MI350__VR_TEMP_VDDIO_11_E32,
+	MI350__SYSTEM_POWER_UBB_POWER,
+	MI350__SYSTEM_POWER_UBB_POWER_THRESHOLD,
 
 	MI350_METRIC_NAME_COUNT,
 };
@@ -178,7 +185,7 @@ enum mi350_metric_name {
 struct amdgv_adapter;
 
 bool mi350_smu_get_fw_loaded_status(struct amdgv_adapter *adapt);
-int mi350_gpu_mode1_reset(struct amdgv_adapter *adapt);
+int mi350_gpu_mode1_reset(struct amdgv_adapter *adapt, bool is_unload);
 int mi350_wait_gpu_reset_completion(struct amdgv_adapter *adapt);
 
 uint32_t mi350_smu_read_arg(struct amdgv_adapter *adapt);

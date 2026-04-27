@@ -691,13 +691,13 @@ static int umc_v12_0_get_ras_vf_safe_range(struct amdgv_adapter *adapt,
 
 	if (idx_vf == AMDGV_PF_IDX) {
 		if (amdgv_vfmgr_configured_vf_num(adapt)) {
-			*offset = 0;
-			*size = 0;
-		} else {
 			/* All usable FB outside of PF region is considered safe */
 			entry = &adapt->array_vf[idx_vf];
 			*offset = MBYTES_TO_BYTES(entry->fb_size);
 			*size = MBYTES_TO_BYTES(adapt->gpuiov.total_fb_usable) - MBYTES_TO_BYTES(entry->fb_size);
+		} else {
+			*offset = 0;
+			*size = 0;
 		}
 	} else {
 		entry = &adapt->array_vf[idx_vf];
@@ -727,6 +727,25 @@ static int umc_v12_0_get_ras_vf_safe_range(struct amdgv_adapter *adapt,
 
 
 	return 0;
+}
+
+static int umc_v12_0_get_ras_all_vf_safe_range(struct amdgv_adapter *adapt,
+		uint64_t *offset, uint64_t *size, uint32_t max_entry_num)
+{
+	uint32_t entry_idx = 0;
+	uint32_t idx_vf;
+
+	for (idx_vf = 0; idx_vf < adapt->num_vf && idx_vf < max_entry_num; idx_vf++) {
+		umc_v12_0_get_ras_vf_safe_range(adapt, &offset[entry_idx], &size[entry_idx], idx_vf);
+		entry_idx++;
+	}
+
+	if (max_entry_num >= AMDGV_MAX_VF_SLOT) {
+		umc_v12_0_get_ras_vf_safe_range(adapt, &offset[entry_idx], &size[entry_idx], AMDGV_PF_IDX);
+		entry_idx++;
+	}
+
+	return entry_idx;
 }
 
 static int umc_12_0_soc_pa_to_bank(struct amdgv_adapter *adapt,
@@ -824,7 +843,7 @@ const struct amdgv_umc_funcs umc_v12_0_funcs = {
 	.query_ras_poison_mode = umc_v12_0_query_ras_poison_mode,
 	.get_eeprom_i2c_params = umc_v12_0_get_eeprom_i2c_params,
 	.set_eeprom_table_version = umc_v12_0_set_eeprom_table_version,
-	.get_ras_vf_safe_range = umc_v12_0_get_ras_vf_safe_range,
+	.get_ras_vf_safe_range = umc_v12_0_get_ras_all_vf_safe_range,
 	.bank_to_soc_pa = umc_12_0_bank_to_soc_pa,
 	.soc_pa_to_bank = umc_12_0_soc_pa_to_bank,
 	.eeprom_record_to_soc_pa = umc_v12_0_eeprom_record_to_pa,

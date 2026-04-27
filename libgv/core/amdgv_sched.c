@@ -108,15 +108,26 @@ int amdgv_sched_part_mapping_init(struct amdgv_adapter *adapt)
 int amdgv_sched_init(struct amdgv_adapter *adapt)
 {
 	uint32_t idx_vf;
+#ifdef WS_RECORD
+	uint32_t i;
+#endif
 
 	AMDGV_INFO("Number of VFs per GFX scheduler block: 0x%x\n",
 		   adapt->sched.num_vf_per_gfx_sched);
 
+#ifdef WS_RECORD
 	if (adapt->flags & AMDGV_FLAG_USE_PF &&
-		adapt->flags & AMDGV_FLAG_WS_RECORD &&
-		adapt->opt.gfx_sched_mode > AMDGV_SCHED_BEGIN &&
-		adapt->opt.gfx_sched_mode <= AMDGV_SCHED_MAX_HW_SCHED_MODE)
-		adapt->flags |= AMDGV_FLAG_DEBUG_DUMP_ENABLE;
+		adapt->flags & AMDGV_FLAG_WS_RECORD) {
+		for (i = 0; i < adapt->gpuiov.num_ctrl_blocks; i++) {
+			if (adapt->gpuiov.ctrl_blocks[i].sched_block == AMDGV_SCHED_BLOCK_GFX &&
+				adapt->gpuiov.ctrl_blocks[i].sched_mode > AMDGV_SCHED_BEGIN &&
+				adapt->gpuiov.ctrl_blocks[i].sched_mode <= AMDGV_SCHED_MAX_HW_SCHED_MODE) {
+				adapt->flags |= AMDGV_FLAG_DEBUG_DUMP_ENABLE;
+				break;
+			}
+		}
+	}
+#endif
 
 	for (idx_vf = 0; idx_vf < AMDGV_MAX_VF_SLOT; idx_vf++) {
 		adapt->sched.array_vf[idx_vf].state = AMDGV_SCHED_UNAVAL;
@@ -732,6 +743,11 @@ int amdgv_sched_set_vf_num(struct amdgv_adapter *adapt, uint32_t num_vf)
 	uint32_t idx_vf;
 	uint32_t world_switch_id;
 	struct amdgv_sched_world_switch *world_switch;
+	int ret;
+
+	/* Check if dynamic VF number change is supported on this platform */
+	if (adapt->flags & AMDGV_FLAG_NO_DYNAMIC_VF_NUM)
+		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
 
 	/* set vf number should not count PF in */
 	for (idx_vf = 0; idx_vf < AMDGV_MAX_VF_NUM; idx_vf++) {
@@ -742,8 +758,9 @@ int amdgv_sched_set_vf_num(struct amdgv_adapter *adapt, uint32_t num_vf)
 		}
 	}
 
-	if (amdgv_sched_reconfig_mapping_tables(adapt, num_vf))
-		return AMDGV_FAILURE;
+	ret = amdgv_sched_reconfig_mapping_tables(adapt, num_vf);
+	if (ret)
+		return ret;
 
 	for (world_switch_id = 0; world_switch_id < adapt->sched.num_world_switch;
 	     world_switch_id++) {
@@ -794,6 +811,12 @@ bool amdgv_sched_is_state_ok(struct amdgv_adapter *adapt, uint32_t idx_vf)
 
 int amdgv_sched_init_pf_state_early(struct amdgv_adapter *adapt)
 {
+#ifdef WS_RECORD
+	if ((adapt->flags & AMDGV_FLAG_WS_RECORD) &&
+	    (adapt->sched.record_event != OSS_INVALID_HANDLE))
+		oss_signal_event(adapt->sched.record_event);
+#endif
+
 	AMDGV_INFO("Init PF: Start Engine Inits.\n");
 	if (amdgv_sched_context_init(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_ALL))
 			return AMDGV_FAILURE;
@@ -1295,7 +1318,7 @@ int amdgv_sched_read_perf_log_data(struct amdgv_adapter *adapt)
 
 #ifdef WS_RECORD
 static const char *const amdgv_auto_ws_record_names[] = {
-	"IDLE_S", "SAVE_S", "LOAD_S", "RUN_S", "RUN_F" };
+	"UNKNOWN", "IDLE_S", "SAVE_S", "LOAD_S", "RUN_S", "RUN_F" };
 
 void amdgv_sched_debug_dump_data_flush(struct amdgv_adapter *adapt)
 {
@@ -1333,7 +1356,7 @@ void amdgv_sched_debug_dump_data_flush(struct amdgv_adapter *adapt)
 		ret = oss_vsnprintf(adapt->auto_ws_record_buf + cursor, MAX_RECORD_LENGTH - cursor,
 					"%10lld %20lld %10s %30s\n", index,
 					timestamp, amdgv_idx_to_str(idx_vf),
-					status < AMDGV_AUTO_WS_MAX ? amdgv_auto_ws_record_names[status - 1] : "Unknown");
+					status < AMDGV_AUTO_WS_MAX ? amdgv_auto_ws_record_names[status] : amdgv_auto_ws_record_names[0]);
 		index++;
 
 		last_timestamp = timestamp;

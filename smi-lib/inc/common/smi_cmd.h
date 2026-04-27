@@ -102,9 +102,13 @@ enum smi_cmd_code {
 	SMI_CMD_CODE_GET_XGMI_PLPD					= SMI_IOCTL | 0x00000035,
 	SMI_CMD_CODE_SET_XGMI_PLPD					= SMI_IOCTL | 0x00000036,
 	SMI_CMD_CODE_GET_ACCELERATOR_PARTITION_PROFILE_CONFIG_GLOBAL	= SMI_IOCTL | 0x00000037,
-	SMI_CMD_CODE_GET_NODE_HANDLE				= SMI_IOCTL | 0x00000038,
-	SMI_CMD_CODE_GET_GPU_NPM_INFO				= SMI_IOCTL | 0x00000039,
-	SMI_CMD_CODE_GET_RAS_POLICY_INFO				= SMI_IOCTL | 0x00000040,
+	SMI_CMD_CODE_GET_NODE_HANDLE					= SMI_IOCTL | 0x00000038,
+	SMI_CMD_CODE_GET_GPU_NPM_INFO					= SMI_IOCTL | 0x00000039,
+	SMI_CMD_CODE_GET_RAS_POLICY_INFO				= SMI_IOCTL | 0x0000003A,
+	SMI_CMD_CODE_GET_GPU_PTL_STATE					= SMI_IOCTL | 0x0000003B,
+	SMI_CMD_CODE_SET_GPU_PTL_STATE					= SMI_IOCTL | 0x0000003C,
+	SMI_CMD_CODE_GET_GPU_PTL_FORMATS				= SMI_IOCTL | 0x0000003D,
+	SMI_CMD_CODE_SET_GPU_PTL_FORMATS				= SMI_IOCTL | 0x0000003E,
 	SMI_CMD_CODE__MAX					= 0xffffffff
 };
 
@@ -322,6 +326,8 @@ enum smi_metric_name {
 	SMI_METRIC_NAME_THROTTLE_SOCKET_ACTIVE,
 	SMI_METRIC_NAME_THROTTLE_VR_ACTIVE,
 	SMI_METRIC_NAME_THROTTLE_MEM_ACTIVE,
+	SMI_METRIC_NAME_THROTTLE_PROCHOT_ACTIVE,
+	SMI_METRIC_NAME_THROTTLE_PPT_ACTIVE,
 
 	SMI_METRIC_NAME_PCIE_BANDWIDTH,
 	SMI_METRIC_NAME_PCIE_L0_TO_RECOVERY_COUNT,
@@ -409,6 +415,8 @@ enum smi_metric_name {
 	SMI_METRIC_NAME_VR_TEMP_VDDCR_11_HBM_D,
 	SMI_METRIC_NAME_VR_TEMP_VDD_USR,
 	SMI_METRIC_NAME_VR_TEMP_VDDIO_11_E32,
+	SMI_METRIC_NAME_SYSTEM_POWER_UBB_POWER,
+	SMI_METRIC_NAME_SYSTEM_POWER_UBB_POWER_THRESHOLD,
 
 	SMI_METRIC_NAME_UNKNOWN
 };
@@ -426,6 +434,7 @@ enum smi_metric_category {
 	SMI_METRIC_CATEGORY_SYS_ACC_COUNTER,
 	SMI_METRIC_CATEGORY_SYS_BASEBOARD_TEMP,
 	SMI_METRIC_CATEGORY_SYS_GPUBOARD_TEMP,
+	SMI_METRIC_CATEGORY_SYS_BASEBOARD_POWER,
 	SMI_METRIC_CATEGORY_UNKNOWN
 };
 
@@ -765,6 +774,17 @@ enum smi_npm_status {
 	SMI_NPM_STATUS_ENABLED
 };
 
+enum smi_ptl_data_format {
+	SMI_PTL_DATA_FORMAT_I8 = 0x0,
+	SMI_PTL_DATA_FORMAT_F16 = 0x1,
+	SMI_PTL_DATA_FORMAT_BF16 = 0x2,
+	SMI_PTL_DATA_FORMAT_F32 = 0x3,
+	SMI_PTL_DATA_FORMAT_F64 = 0x4,
+	SMI_PTL_DATA_FORMAT_F8 = 0x5,
+	SMI_PTL_DATA_FORMAT_VECTOR = 0x6,
+	SMI_PTL_DATA_FORMAT_INVALID = 0xFFFFFFFF
+};
+
 // >>>>>>>>>>>>>>>>>>>> INPUT/OUTPUT STRUCTS >>>>>>>>>>>>>>>>>>>>
 
 // Mapped AMDSMI library structures and unions
@@ -777,6 +797,14 @@ struct smi_vram_info {
 	uint64_t reserved[37];
 };
 
+#define SMI_MAX_PCIE_DPM_LEVELS 4
+
+struct smi_pcie_dpm_level {
+	uint8_t gen_speed;   //!< 0=gen1, 1=gen2, 2=gen3, 3=gen4
+	uint8_t lane_count;  //!< encoded: 1=x1, 2=x2, 3=x4, 4=x8, 5=x12, 6=x16
+	uint16_t lclk_freq;  //!< LCLK frequency in MHz
+};
+
 struct smi_pcie_info {
 	struct pcie_static__ {
 		uint16_t max_pcie_width; //!< maximum number of PCIe lanes
@@ -784,7 +812,9 @@ struct smi_pcie_info {
 		uint32_t pcie_interface_version; //!< PCIe interface version
 		enum smi_card_form_factor slot_type; //!< card form factor
 		uint32_t max_pcie_interface_version; //!< maximum PCIe link generation
-		uint64_t reserved[9];
+		uint8_t num_pcie_levels; //!< number of PCIe DPM levels (0 if not supported)
+		struct smi_pcie_dpm_level pcie_levels[SMI_MAX_PCIE_DPM_LEVELS]; //!< PCIe DPM levels
+		uint64_t reserved[7];
 	} pcie_static;
 	struct pcie_metric__ {
 		uint16_t pcie_width; //!< current PCIe width
@@ -840,8 +870,9 @@ struct smi_asic_info {
 	uint32_t oam_id;       //!< 0xFFFF if not supported
 	uint32_t num_of_compute_units;     //!< 0xFFFFFFFF if not supported
 	uint64_t target_graphics_version;  //!< 0xFFFFFFFFFFFFFFFF if not supported
-	uint32_t subsystem_id;
-	uint32_t reserved[21];  //!< The subsystem device id
+	uint32_t subsystem_id;	//!< The subsystem device id
+	uint64_t flags;  //!< Chip flags
+   	uint32_t reserved[18];
 };
 
 struct smi_board_info {
@@ -1224,6 +1255,11 @@ struct smi_device_info_ex {
 
 struct smi_node_info {
 	smi_node_handle_t node;
+};
+
+struct smi_event_read_request {
+	smi_device_handle_t dev_id;
+	int64_t timeout_usec;  /* Timeout in microseconds (-1 = infinite, 0 = non-blocking) */
 };
 
 struct smi_device_pair_info {
@@ -1616,6 +1652,31 @@ struct smi_event_entry {
 	char			message[SMI_EVENT_MSG_SIZE];
 	smi_device_handle_t	processor_handle;
 	uint64_t		reserved[36];
+};
+
+struct smi_get_gpu_ptl_state {
+	smi_device_handle_t dev_id;
+	bool enabled;
+	uint64_t reserved[1];
+};
+
+struct smi_set_gpu_ptl_state {
+	smi_device_handle_t dev_id;
+	bool enable;
+	uint64_t reserved[1];
+};
+
+struct smi_get_gpu_ptl_formats {
+	enum smi_ptl_data_format data_format1;
+	enum smi_ptl_data_format data_format2;
+	uint64_t reserved[1];
+};
+
+struct smi_set_gpu_ptl_formats {
+	smi_device_handle_t dev_id;
+	enum smi_ptl_data_format data_format1;
+	enum smi_ptl_data_format data_format2;
+	uint64_t reserved[1];
 };
 
 #ifndef __linux__

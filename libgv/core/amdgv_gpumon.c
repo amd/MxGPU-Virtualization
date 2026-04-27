@@ -193,6 +193,12 @@ static const char *amdgv_gpumon_event_name(enum amdgv_gpumon_type type)
 		return "GPUMON_GET_NUM_STATIC_METRICS_EXT_ENTRIES";
 	case GPUMON_GET_NPM_INFO:
 		return "GPUMON_GET_NPM_INFO";
+	case GPUMON_PTL_SET_STATE:
+		return "GPUMON_PTL_SET_STATE";
+	case GPUMON_PTL_QUERY_STATUS:
+		return "GPUMON_PTL_QUERY_STATUS";
+	case GPUMON_GET_PCIE_DPM_LEVELS:
+		return "GPUMON_GET_PCIE_DPM_LEVELS";
 	default:
 		break;
 	}
@@ -2986,6 +2992,36 @@ int amdgv_gpumon_get_gpu_max_pcie_link_generation(amdgv_dev_t dev,
 	return ret;
 }
 
+int amdgv_gpumon_get_pcie_dpm_levels(amdgv_dev_t dev,
+			struct amdgv_gpumon_pcie_levels *pcie_levels)
+{
+	struct amdgv_adapter *adapt;
+	union amdgv_sched_event_data data;
+	int ret = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+	int event_ret = 0;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (!pcie_levels)
+		return AMDGV_FAILURE;
+
+	data.gpumon_data.ptr = pcie_levels;
+	data.gpumon_data.type = GPUMON_GET_PCIE_DPM_LEVELS;
+	data.gpumon_data.result = &event_ret;
+
+	if (adapt->gpumon.funcs &&
+		adapt->gpumon.funcs->get_pcie_dpm_levels &&
+		pcie_levels) {
+		ret = amdgv_sched_queue_event_and_wait_ex(adapt, AMDGV_PF_IDX,
+							  AMDGV_EVENT_SCHED_GPUMON,
+							  AMDGV_SCHED_BLOCK_ALL, data);
+		if (!ret)
+			ret = event_ret;
+	}
+
+	return ret;
+}
+
 
 int amdgv_gpumon_get_ras_safe_fb_addr_ranges(amdgv_dev_t dev,
 	struct amdgv_gpumon_ras_safe_fb_address_ranges *ranges)
@@ -3534,6 +3570,10 @@ int amdgv_gpumon_handle_sched_event(struct amdgv_adapter *adapt,
 			adapt->array_vf[event->data.gpumon_data.val].fb_size = 0;
 			adapt->array_vf[event->data.gpumon_data.val].fb_offset_tmr = 0;
 			adapt->array_vf[event->data.gpumon_data.val].fb_size_tmr = 0;
+
+			/* VF arbiters reset */
+			if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->reset_vf_arbiters)
+				adapt->pp.pp_funcs->reset_vf_arbiters(adapt, event->data.gpumon_data.val);
 		}
 		*event->data.gpumon_data.result = ret;
 		break;
@@ -3778,6 +3818,45 @@ int amdgv_gpumon_handle_sched_event(struct amdgv_adapter *adapt,
 		ret = adapt->gpumon.funcs->get_npm_info(adapt, npm_info);
 		*event->data.gpumon_data.result = ret;
 		break;
+	case GPUMON_PTL_SET_STATE:
+		if (event->data.gpumon_data.ptl.enable) {
+			if (adapt->gpumon.funcs && adapt->gpumon.funcs->ptl_enable) {
+				struct amdgv_ptl_enable_info ptl_info;
+				ptl_info.pref_format1 = event->data.gpumon_data.ptl.pref_format1;
+				ptl_info.pref_format2 = event->data.gpumon_data.ptl.pref_format2;
+				ret = adapt->gpumon.funcs->ptl_enable(adapt, &ptl_info);
+			} else {
+				ret = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+			}
+		} else {
+			if (adapt->gpumon.funcs && adapt->gpumon.funcs->ptl_disable) {
+				ret = adapt->gpumon.funcs->ptl_disable(adapt);
+				if (ret == 0)
+					adapt->ptl_saved_config.enabled = false;
+			} else {
+				ret = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+			}
+		}
+		*event->data.gpumon_data.result = ret;
+		break;
+	case GPUMON_PTL_QUERY_STATUS:
+		if (adapt->gpumon.funcs && adapt->gpumon.funcs->ptl_query_status) {
+			ret = adapt->gpumon.funcs->ptl_query_status(adapt,
+					event->data.gpumon_data.ptl.status_info);
+		} else {
+			ret = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		}
+		*event->data.gpumon_data.result = ret;
+		break;
+	case GPUMON_GET_PCIE_DPM_LEVELS:
+		if (adapt->gpumon.funcs && adapt->gpumon.funcs->get_pcie_dpm_levels) {
+			ret = adapt->gpumon.funcs->get_pcie_dpm_levels(adapt,
+					event->data.gpumon_data.ptr);
+		} else {
+			ret = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		}
+		*event->data.gpumon_data.result = ret;
+		break;
 	default:
 		AMDGV_WARN("Unsupported GPU monitoring function %d\n",
 			   event->data.gpumon_data.type);
@@ -3915,48 +3994,43 @@ int amdgv_gpumon_translate_fb_address(amdgv_dev_t dev,
 	return ret;
 }
 
-/* PTL (Peak TOPS Limiter) functions */
+/* PTL (Peak TOPS Limiter) internal functions - used by sched_event for VF requests */
 
 /**
- * amdgv_gpumon_ptl_query_status - Query PTL status and data formats
- * @dev: Device handle
+ * amdgv_gpumon_ptl_query_status - Query PTL status and data formats (internal)
+ * @adapt: Adapter pointer
  * @info: Output structure to receive PTL status
  *
- * Return: AMDGV_SUCCESS on success, AMDGV_NOT_SUPPORTED if PTL is not supported,
+ * Return: AMDGV_SUCCESS on success, AMDGV_ERROR_GPUMON_NOT_SUPPORTED if PTL is not supported,
  *         AMDGV_FAILURE on other errors
  */
-int amdgv_gpumon_ptl_query_status(amdgv_dev_t dev, struct amdgv_ptl_status_info *info)
+int amdgv_gpumon_ptl_query_status(struct amdgv_adapter *adapt, struct amdgv_ptl_status_info *info)
 {
-	struct amdgv_adapter *adapt;
-
-	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
-
-	if (!info)
+	if (!adapt || !info)
 		return AMDGV_FAILURE;
 
 	if (adapt->gpumon.funcs && adapt->gpumon.funcs->ptl_query_status)
 		return adapt->gpumon.funcs->ptl_query_status(adapt, info);
 
-	AMDGV_ERROR("PTL is not supported on this platform\n");
-	return AMDGV_NOT_SUPPORTED;
+	return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
 }
 
 /**
- * amdgv_gpumon_ptl_enable - Enable PTL with specified data formats
- * @dev: Device handle
+ * amdgv_gpumon_ptl_enable - Enable PTL with specified data formats (internal)
+ * @adapt: Adapter pointer
  * @info: Input structure containing preferred data formats, or NULL to use saved formats
  *
  * If info is NULL, uses the formats stored in ptl_saved_config.
  *
- * Return: AMDGV_SUCCESS on success, AMDGV_NOT_SUPPORTED if PTL is not supported,
+ * Return: AMDGV_SUCCESS on success, AMDGV_ERROR_GPUMON_NOT_SUPPORTED if PTL is not supported,
  *         AMDGV_FAILURE on other errors
  */
-int amdgv_gpumon_ptl_enable(amdgv_dev_t dev, struct amdgv_ptl_enable_info *info)
+int amdgv_gpumon_ptl_enable(struct amdgv_adapter *adapt, struct amdgv_ptl_enable_info *info)
 {
-	struct amdgv_adapter *adapt;
 	struct amdgv_ptl_enable_info saved_info;
 
-	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+	if (!adapt)
+		return AMDGV_FAILURE;
 
 	/* If info is NULL, use saved formats from ptl_saved_config */
 	if (!info) {
@@ -3968,26 +4042,108 @@ int amdgv_gpumon_ptl_enable(amdgv_dev_t dev, struct amdgv_ptl_enable_info *info)
 	if (adapt->gpumon.funcs && adapt->gpumon.funcs->ptl_enable)
 		return adapt->gpumon.funcs->ptl_enable(adapt, info);
 
-	AMDGV_ERROR("PTL is not supported on this platform\n");
-	return AMDGV_NOT_SUPPORTED;
+	return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
 }
 
 /**
- * amdgv_gpumon_ptl_disable - Disable PTL
- * @dev: Device handle
+ * amdgv_gpumon_ptl_disable - Disable PTL (internal)
+ * @adapt: Adapter pointer
  *
- * Return: AMDGV_SUCCESS on success, AMDGV_NOT_SUPPORTED if PTL is not supported,
+ * Return: AMDGV_SUCCESS on success, AMDGV_ERROR_GPUMON_NOT_SUPPORTED if PTL is not supported,
  *         AMDGV_FAILURE on other errors
  */
-int amdgv_gpumon_ptl_disable(amdgv_dev_t dev)
+int amdgv_gpumon_ptl_disable(struct amdgv_adapter *adapt)
+{
+	int ret;
+
+	if (!adapt)
+		return AMDGV_FAILURE;
+
+	if (adapt->gpumon.funcs && adapt->gpumon.funcs->ptl_disable) {
+		ret = adapt->gpumon.funcs->ptl_disable(adapt);
+		if (ret == 0)
+			adapt->ptl_saved_config.enabled = false;
+		return ret;
+	}
+
+	return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+}
+
+/* PTL (Peak TOPS Limiter) external APIs - all use scheduler events */
+
+/**
+ * amdgv_gpumon_ptl_set_state - Set PTL state via scheduler event
+ * @dev: Device handle
+ * @enable: true to enable, false to disable
+ * @info: PTL enable info (NULL to use saved config)
+ *
+ * Return: 0 on success, error code on failure
+ */
+int amdgv_gpumon_ptl_set_state(amdgv_dev_t dev, bool enable, struct amdgv_ptl_enable_info *info)
 {
 	struct amdgv_adapter *adapt;
+	union amdgv_sched_event_data data;
+	int event_ret = 0;
+	int ret;
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
-	if (adapt->gpumon.funcs && adapt->gpumon.funcs->ptl_disable)
-		return adapt->gpumon.funcs->ptl_disable(adapt);
+	if (!adapt->ptl_supported)
+		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
 
-	AMDGV_ERROR("PTL is not supported on this platform\n");
-	return AMDGV_NOT_SUPPORTED;
+	data.gpumon_data.type = GPUMON_PTL_SET_STATE;
+	data.gpumon_data.ptl.enable = enable;
+	if (enable) {
+		if (info) {
+			data.gpumon_data.ptl.pref_format1 = info->pref_format1;
+			data.gpumon_data.ptl.pref_format2 = info->pref_format2;
+		} else {
+			data.gpumon_data.ptl.pref_format1 = adapt->ptl_saved_config.pref_format1;
+			data.gpumon_data.ptl.pref_format2 = adapt->ptl_saved_config.pref_format2;
+		}
+	}
+	data.gpumon_data.result = &event_ret;
+
+	ret = amdgv_sched_queue_event_and_wait_ex(adapt, AMDGV_PF_IDX,
+						  AMDGV_EVENT_SCHED_GPUMON,
+						  AMDGV_SCHED_BLOCK_ALL, data);
+	if (!ret)
+		ret = event_ret;
+
+	return ret;
+}
+
+/**
+ * amdgv_gpumon_ptl_query - Query PTL status via scheduler event
+ * @dev: Device handle
+ * @info: Output structure to receive PTL status
+ *
+ * Return: 0 on success, error code on failure
+ */
+int amdgv_gpumon_ptl_query(amdgv_dev_t dev, struct amdgv_ptl_status_info *info)
+{
+	struct amdgv_adapter *adapt;
+	union amdgv_sched_event_data data;
+	int event_ret = 0;
+	int ret;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (!info)
+		return AMDGV_FAILURE;
+
+	if (!adapt->ptl_supported)
+		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+
+	data.gpumon_data.type = GPUMON_PTL_QUERY_STATUS;
+	data.gpumon_data.ptl.status_info = info;
+	data.gpumon_data.result = &event_ret;
+
+	ret = amdgv_sched_queue_event_and_wait_ex(adapt, AMDGV_PF_IDX,
+						  AMDGV_EVENT_SCHED_GPUMON,
+						  AMDGV_SCHED_BLOCK_ALL, data);
+	if (!ret)
+		ret = event_ret;
+
+	return ret;
 }

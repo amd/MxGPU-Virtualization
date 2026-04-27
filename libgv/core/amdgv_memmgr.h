@@ -194,6 +194,10 @@ struct amdgv_memmgr_mem *amdgv_memmgr_alloc_align(struct amdgv_memmgr *memmgr, u
 						  uint64_t align, enum amdgv_mem_id id);
 struct amdgv_memmgr_mem *amdgv_memmgr_alloc_sys_align(struct amdgv_memmgr *memmgr, uint64_t len,
 							uint64_t align, uint64_t *gpu_addr, void *va_ptr);
+struct amdgv_memmgr_mem *amdgv_memmgr_alloc_align_zero(struct amdgv_memmgr *memmgr, uint64_t len,
+							uint64_t align, enum amdgv_mem_id id);
+struct amdgv_memmgr_mem *amdgv_memmgr_alloc_sys_align_zero(struct amdgv_memmgr *memmgr, uint64_t len,
+							uint64_t align, uint64_t *gpu_addr, void *va_ptr);
 struct amdgv_memmgr_mem *amdgv_memmgr_alloc_align_at(struct amdgv_memmgr *memmgr,
 						     uint64_t offset, uint64_t len,
 						     enum amdgv_mem_id id);

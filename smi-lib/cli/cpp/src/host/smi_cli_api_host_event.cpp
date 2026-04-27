@@ -87,13 +87,19 @@ void thread_func_human(char *stopped, amdsmi_event_set set, Arguments arg)
 	std::string event_msg{};
 
 	while(*stopped != 'q') {
+#ifdef SMI_ESXI_BUILD
+		ret = host_amdsmi_event_read(set, 500*1000, &event);
+		if (ret == AMDSMI_STATUS_TIMEOUT || ret == AMDSMI_STATUS_NO_DATA)
+			continue;
+#else
 		ret = host_amdsmi_event_read(set, 10*1000*1000, &event);
 		if (ret == AMDSMI_STATUS_TIMEOUT)
 			continue;
+#endif
 		if ((ret == AMDSMI_STATUS_SUCCESS) && (event.category != AMDSMI_EVENT_CATEGORY_NON_USED)) {
 			for (unsigned int i = 0; i < arg.devices.size(); i++) {
-				if (processors[i] == event.processor_handle) {
-					gpu_index = arg.devices[i]->get_gpu_index();
+				gpu_index = arg.devices[i]->get_gpu_index();
+				if (processors[gpu_index] == event.processor_handle) {
 					if ((event.category == AMDSMI_EVENT_CATEGORY_PP) &&
 						(event.subcode == AMDSMI_EVENT_PP_THROTTLER_EVENT)) {
 						std::string base_msg = std::string(event.message);
@@ -115,12 +121,13 @@ void thread_func_human(char *stopped, amdsmi_event_set set, Arguments arg)
 										   eventMessageTemplate, gpu_index, event_msg.c_str(), EVENT_CATEGORY_STR[unsigned(event.category)],
 										   event.date);
 					formatted_string.append("\n");
+					if (arg.is_file) {
+						write_to_file(arg.file_path, formatted_string, true);
+					} else {
+						std::cout << formatted_string.c_str();
+					}
+					break;
 				}
-			}
-			if (arg.is_file) {
-				write_to_file(arg.file_path, formatted_string, true);
-			} else {
-				std::cout << formatted_string.c_str();
 			}
 		}
 		event = {};
@@ -136,13 +143,19 @@ void thread_func_json(char *stopped, amdsmi_event_set set, Arguments arg)
 	std::string event_msg{};
 
 	while(*stopped != 'q') {
+#ifdef SMI_ESXI_BUILD
+		ret = host_amdsmi_event_read(set, 500*1000, &event);
+		if (ret == AMDSMI_STATUS_TIMEOUT || ret == AMDSMI_STATUS_NO_DATA)
+			continue;
+#else
 		ret = host_amdsmi_event_read(set, 10*1000*1000, &event);
 		if (ret == AMDSMI_STATUS_TIMEOUT)
 			continue;
+#endif
 		if ((ret == AMDSMI_STATUS_SUCCESS) && (event.category != AMDSMI_EVENT_CATEGORY_NON_USED)) {
 			for (unsigned int i = 0; i < arg.devices.size(); i++) {
-				if (processors[i] == event.processor_handle) {
-					gpu_index = arg.devices[i]->get_gpu_index();
+				gpu_index = arg.devices[i]->get_gpu_index();
+				if (processors[gpu_index] == event.processor_handle) {
 					if ((event.category == AMDSMI_EVENT_CATEGORY_PP) &&
 						(event.subcode == AMDSMI_EVENT_PP_THROTTLER_EVENT)) {
 						std::string base_msg = std::string(event.message);
@@ -168,12 +181,13 @@ void thread_func_json(char *stopped, amdsmi_event_set set, Arguments arg)
 					};
 					formatted_string = event_json.dump(4);
 					formatted_string.append("\n");
+					if (arg.is_file) {
+						write_to_file(arg.file_path, formatted_string, true);
+					} else {
+						std::cout << formatted_string.c_str();
+					}
+					break;
 				}
-			}
-			if (arg.is_file) {
-				write_to_file(arg.file_path, formatted_string, true);
-			} else {
-				std::cout << formatted_string.c_str();
 			}
 		}
 		event = {};
@@ -185,19 +199,23 @@ void thread_func_csv(char *stopped, amdsmi_event_set set, Arguments arg)
 	amdsmi_status_t ret;
 	amdsmi_event_entry_t event;
 	std::string formatted_string{};
-	std::string out{};
 	int gpu_index;
 	std::string event_msg{};
 
 	while(*stopped != 'q') {
+#ifdef SMI_ESXI_BUILD
+		ret = host_amdsmi_event_read(set, 500*1000, &event);
+		if (ret == AMDSMI_STATUS_TIMEOUT || ret == AMDSMI_STATUS_NO_DATA)
+			continue;
+#else
 		ret = host_amdsmi_event_read(set, 10*1000*1000, &event);
 		if (ret == AMDSMI_STATUS_TIMEOUT)
 			continue;
+#endif
 		if ((ret == AMDSMI_STATUS_SUCCESS) && (event.category != AMDSMI_EVENT_CATEGORY_NON_USED)) {
-			out.append(event_csv_header).append("\n");
 			for (unsigned int i = 0; i < arg.devices.size(); i++) {
-				if (processors[i] == event.processor_handle) {
-					gpu_index = arg.devices[i]->get_gpu_index();
+				gpu_index = arg.devices[i]->get_gpu_index();
+				if (processors[gpu_index] == event.processor_handle) {
 					if ((event.category == AMDSMI_EVENT_CATEGORY_PP) &&
 						(event.subcode == AMDSMI_EVENT_PP_THROTTLER_EVENT)) {
 						std::string base_msg = std::string(event.message);
@@ -216,15 +234,15 @@ void thread_func_csv(char *stopped, amdsmi_event_set set, Arguments arg)
 						event_msg = std::string(event.message);
 					}
 					event_msg = std::regex_replace(event_msg, std::regex("\n"), " ");
-					formatted_string = string_format("%d,%s,%s,%s", gpu_index,
+					formatted_string = string_format("%s\n%d,%s,%s,%s\n", event_csv_header, gpu_index,
 													 event_msg.c_str(), EVENT_CATEGORY_STR[unsigned(event.category)], event.date);
-					out.append(formatted_string).append("\n");
+					if (arg.is_file) {
+						write_to_file(arg.file_path, formatted_string, true);
+					} else {
+						std::cout << formatted_string.c_str();
+					}
+					break;
 				}
-			}
-			if (arg.is_file) {
-				write_to_file(arg.file_path, formatted_string, true);
-			} else {
-				std::cout << out.c_str() << std::endl;
 			}
 		}
 		event = {};
@@ -238,6 +256,21 @@ int AmdSmiApiHost::amdsmi_get_event_command(Arguments arg, char &stop,
 	amdsmi_status_t ret;
 	std::string out{};
 
+#ifdef SMI_ESXI_BUILD
+	/* ESXi: Create only ONE thread to read events for ALL devices */
+	/* shared event_id allows any GPU event to wake up the single blocking thread */
+	if (arg.output == csv) {
+		std::thread thread_object(thread_func_csv, &stop, set, arg);
+		threads.push_back(move(thread_object));
+	} else if (arg.output == json) {
+		std::thread thread_object(thread_func_json, &stop, set, arg);
+		threads.push_back(move(thread_object));
+	} else {
+		std::thread thread_object(thread_func_human, &stop, set, arg);
+		threads.push_back(move(thread_object));
+	}
+#else
+	/* Linux/Windows: Create one thread per device for poll-based mechanism */
 	for (unsigned int i = 0; i < arg.devices.size(); i++) {
 		if (arg.output == csv) {
 			std::thread thread_object(thread_func_csv, &stop, set, arg);
@@ -250,6 +283,7 @@ int AmdSmiApiHost::amdsmi_get_event_command(Arguments arg, char &stop,
 			threads.push_back(move(thread_object));
 		}
 	}
+#endif
 
 	out.append("Press q and hit ENTER when you want to stop\n\n");
 	out.append(eventTemplate);

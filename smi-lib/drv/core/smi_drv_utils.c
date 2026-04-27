@@ -689,6 +689,9 @@ enum smi_metric_category smi_map_metric_category(enum amdgv_gpumon_metric_ext_ca
 	case AMDGV_GPUMON_METRIC_EXT_CATEGORY__SYS_GPUBOARD_TEMP:
 		metric_category = SMI_METRIC_CATEGORY_SYS_GPUBOARD_TEMP;
 		break;
+	case AMDGV_GPUMON_METRIC_EXT_CATEGORY__SYS_BASEBOARD_POWER:
+		metric_category = SMI_METRIC_CATEGORY_SYS_BASEBOARD_POWER;
+		break;
 	default:
 		metric_category = SMI_METRIC_CATEGORY_UNKNOWN;
 		break;
@@ -794,6 +797,12 @@ enum smi_metric_name smi_map_metric_name(enum amdgv_gpumon_metric_ext_name name)
 		break;
 	case AMDGV_GPUMON_METRIC_EXT_NAME__THROTTLE_MEM_ACTIVE:
 		metric_name = SMI_METRIC_NAME_THROTTLE_MEM_ACTIVE;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__THROTTLE_PROCHOT_ACTIVE:
+		metric_name = SMI_METRIC_NAME_THROTTLE_PROCHOT_ACTIVE;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__THROTTLE_PPT_ACTIVE:
+		metric_name = SMI_METRIC_NAME_THROTTLE_PPT_ACTIVE;
 		break;
 	case AMDGV_GPUMON_METRIC_EXT_NAME__PCIE_BANDWIDTH:
 		metric_name = SMI_METRIC_NAME_PCIE_BANDWIDTH;
@@ -1029,6 +1038,12 @@ enum smi_metric_name smi_map_metric_name(enum amdgv_gpumon_metric_ext_name name)
 	case AMDGV_GPUMON_METRIC_EXT_NAME__VR_TEMP_VDDIO_11_E32:
 		metric_name = SMI_METRIC_NAME_VR_TEMP_VDDIO_11_E32;
 		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_POWER_UBB_POWER:
+		metric_name = SMI_METRIC_NAME_SYSTEM_POWER_UBB_POWER;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_POWER_UBB_POWER_THRESHOLD:
+		metric_name = SMI_METRIC_NAME_SYSTEM_POWER_UBB_POWER_THRESHOLD;
+		break;
 	default:
 		metric_name = SMI_METRIC_NAME_UNKNOWN;
 		break;
@@ -1245,4 +1260,26 @@ enum smi_vf_sched_state smi_map_sched_state(enum amdgv_sched_state state)
 	default:
 		return SMI_VF_STATE_UNAVAILABLE;
 	}
+}
+
+enum smi_ptl_data_format smi_map_ptl_format(enum amdgv_ptl_format_type drv_fmt)
+{
+    switch (drv_fmt) {
+    case AMDGV_PTL_FORMAT_I8:
+        return SMI_PTL_DATA_FORMAT_I8;
+    case AMDGV_PTL_FORMAT_F16:
+        return SMI_PTL_DATA_FORMAT_F16;
+    case AMDGV_PTL_FORMAT_BF16:
+        return SMI_PTL_DATA_FORMAT_BF16;
+    case AMDGV_PTL_FORMAT_F32:
+        return SMI_PTL_DATA_FORMAT_F32;
+    case AMDGV_PTL_FORMAT_F64:
+        return SMI_PTL_DATA_FORMAT_F64;
+    case AMDGV_PTL_FORMAT_F8:
+        return SMI_PTL_DATA_FORMAT_F8;
+    case AMDGV_PTL_FORMAT_VECTOR:
+        return SMI_PTL_DATA_FORMAT_VECTOR;
+    default:
+        return SMI_PTL_DATA_FORMAT_INVALID;
+    }
 }

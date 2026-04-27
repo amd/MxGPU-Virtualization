@@ -31,7 +31,9 @@ private:
 	bool unknown_platform { false };
 	bool is_linux_{ false };
 	bool is_windows_{ false };
+	bool is_esxi_ { false };
 	bool is_mi300_{ false };
+	bool is_mi308_{ false };
 	bool is_mi350_{ false };
 	bool is_nv_ { false };
 	bool is_mi200_ { false };
@@ -84,11 +86,23 @@ public:
 	 */
 	bool is_linux();
 	/**
+	 * @brief Check if it is operating system ESXi
+	 *
+	 * @return true if operating system is ESXi else false
+	 */
+	bool is_esxi();
+	/**
 	 * @brief Check if it is mi300 gpu
 	 *
 	 * @return true if it is mi300 gpu
 	 */
 	bool is_mi300();
+	/**
+	 * @brief Check if it is mi308 gpu
+	 *
+	 * @return true if it is mi308 gpu
+	 */
+	bool is_mi308();
 	/**
 	 * @brief Check if it is mi350 gpu
 	 *
@@ -107,4 +121,10 @@ public:
 	 * @return true if it is mi200 gpu
 	 */
 	bool is_mi200();
+	/**
+	 * @brief Get the platform string
+	 *
+	 * @return platform string
+	 */
+	std::string get_platform();
 };

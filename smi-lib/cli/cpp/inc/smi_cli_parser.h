@@ -66,6 +66,9 @@ public:
 	std::string cper_file_path;
 	std::string plpd_set;
 	std::string num_vf;
+	bool ptl_supported{ false };
+	std::string ptl_status_set;
+	std::string ptl_format_set;
 	DevicesType devices_type{ ALL_TYPE };
 	std::map<DevicesType, std::vector<std::string>> device_format{};
 	Arguments() {};
@@ -83,12 +86,15 @@ class AmdSmiParser
 private:
 	unsigned int gpu_count = 0;
 	unsigned int nic_count = 0;
+	unsigned int brcm_nic_count = 0;
 	std::vector<std::string> SUPPORTED_COMMANDS = { "help",	     "list",	"static",
 		"discovery", "ucode",	"firmware",
 		"bad-pages", "metric",	"process",
 		"profile",   "version", "event", "topology", "xgmi", "reset", "set", "monitor", "partition",
 		"ras", "set", "node"
 	};
+
+	std::vector<std::string> COMMANDS_REQUIRING_OPTIONS = { "reset", "set" };
 
 	std::vector<std::string> FW_SUPPORTED_ARGS_GPU = {
 		"--ucode-list", "--fw-list", "-f", "--error-records", "-e"
@@ -128,7 +134,7 @@ private:
 	std::vector<std::string> METRIC_SUPPORTED_ARGS_GPU = {
 		"--usage", "-u", "--power", "-p", "--clock", "-c", "--temperature",
 		"-t", "--ecc", "-e", "--ecc-block", "-k", "--pcie", "-P", "--fb-usage", "--energy", "-E",
-		"--gpuboard", "-G"
+		"--gpuboard", "-G", "--throttle", "-th"
 	};
 
 	std::vector<std::string> METRIC_SUPPORTED_ARGS_VF = {
@@ -149,6 +155,10 @@ private:
 		"--coherent", "--atomics", "--dma", "--bi-dir"
 	};
 
+	std::vector<std::string> TOPOLOGY_SUPPORTED_ARGS_NIC = {
+		"--link-type", "--numa"
+	};
+
 	std::vector<std::string> PROCESS_SUPPORTED_ARGS_GPU = {
 		"--general", "--engine"
 	};
@@ -164,7 +174,7 @@ private:
 	std::vector<std::string> SET_SUPPORTED_ARGS_GPU = {
 		"--xgmi", "--fb-sharing-mode", "--group", "--memory-partition", "--accelerator-partition",
 		"process-isolation", "-R", "--soc-pstate", "-ps", "--power-cap", "-pc",
-		"--xgmi-plpd", "-pd", "--num-vf"
+		"--xgmi-plpd", "-pd", "--num-vf", "--ptl-status", "--ptl-format"
 	};
 
 	std::vector<std::string> PARTITION_SUPPORTED_ARGS_GPU = {
@@ -200,7 +210,9 @@ private:
 
 	std::map<std::string, std::vector<std::string> > TOPOLOGY_SUPPORTED_ARGUMENTS = {
 		{ "--gpu", TOPOLOGY_SUPPORTED_ARGS_GPU },
-		{ "-g", TOPOLOGY_SUPPORTED_ARGS_GPU }
+		{ "-g", TOPOLOGY_SUPPORTED_ARGS_GPU },
+		{ "--nic", TOPOLOGY_SUPPORTED_ARGS_NIC },
+		{ "-n", TOPOLOGY_SUPPORTED_ARGS_NIC }
 	};
 
 	std::vector<std::string> XGMI_SUPPORTED_ARGS_GPU = {

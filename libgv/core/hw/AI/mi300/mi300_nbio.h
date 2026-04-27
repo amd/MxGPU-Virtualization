@@ -63,6 +63,7 @@ bool mi300_nbio_is_partition_mode_combination_supported(
 int mi300_nbio_get_pcie_replay_count(struct amdgv_adapter *adapt);
 void nbio_v7_9_set_ras_funcs(struct amdgv_adapter *adapt);
 void mi300_hdp_flush(struct amdgv_adapter *adapt);
+const struct amdgv_nps_compute_combination *mi300_nbio_get_asic_nps_caps(struct amdgv_adapter *adapt);
 
 struct mi300_nps_combination_cap_entry {
 	enum amd_asic_type asic_type;

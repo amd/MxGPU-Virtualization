@@ -92,7 +92,7 @@ enum psp_status psp_v13_ring_start(struct amdgv_adapter *adapt)
 }
 
 enum psp_status psp_v13_load_key_db(struct amdgv_adapter *adapt,
-		unsigned char *fw_image, uint32_t fw_image_size)
+		const unsigned char *fw_image, uint32_t fw_image_size)
 {
 	struct psp_context *psp = &adapt->psp;
 	struct psp_local_memory psp_key_db_load_mem = psp->private_fw_memory;
@@ -129,7 +129,7 @@ enum psp_status psp_v13_load_key_db(struct amdgv_adapter *adapt,
 }
 
 enum psp_status psp_v13_load_sysdrv(struct amdgv_adapter *adapt,
-				unsigned char *fw_image, uint32_t fw_image_size)
+				const unsigned char *fw_image, uint32_t fw_image_size)
 {
 	struct psp_context *psp = &adapt->psp;
 	struct psp_local_memory psp_sysdrv_load_mem = psp->private_fw_memory;
@@ -167,7 +167,7 @@ enum psp_status psp_v13_load_sysdrv(struct amdgv_adapter *adapt,
 }
 
 enum psp_status psp_v13_load_sos(struct amdgv_adapter *adapt,
-				unsigned char *fw_image, uint32_t fw_image_size)
+				const unsigned char *fw_image, uint32_t fw_image_size)
 {
 	struct psp_context *psp = &adapt->psp;
 	struct psp_local_memory psp_sos_load_mem = psp->private_fw_memory;
@@ -701,17 +701,16 @@ static enum psp_status psp_v13_get_migration_version(struct amdgv_adapter *adapt
 			amdgv_put_error(AMDGV_PF_IDX,
 				AMDGV_ERROR_FW_NOT_SUPPORTED_FEATURE, 0);
 			ret = PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
-		}
-		else {
+		} else {
 			amdgv_put_error(AMDGV_PF_IDX,
 				AMDGV_ERROR_FW_MIGRATION_GET_PSP_INFO_FAIL,
 				psp_resp.status);
 		}
+	} else {
+		*migration_version =
+			psp_resp.uresp.migration_info.migration_version;
+		AMDGV_DEBUG("Live Migration Version: 0x%x\n", *migration_version);
 	}
-
-	*migration_version =
-		psp_resp.uresp.migration_info.migration_version;
-	AMDGV_DEBUG("Live Migration Version: 0x%x\n", *migration_version);
 
 	return ret;
 }

@@ -41,6 +41,9 @@ ifeq ($(BUILD_PLATFORM),windows)
 	PLATFORM := windows
 else ifeq ($(BUILD_PLATFORM),linux)
 	PLATFORM := linux
+else ifeq ($(BUILD_PLATFORM),esxi)
+	PLATFORM := esxi
+	AMD_SMI_NIC_SUPPORT := False
 else ifeq ($(BUILD_PLATFORM),)
 	ifeq ($(OS),Windows_NT)
 		PLATFORM := windows
@@ -86,18 +89,29 @@ ifeq ($(PLATFORM),windows)
     OS_TARGET := wNow64a
 endif
 
+ifeq ($(PLATFORM),esxi)
+	ifneq ($(BUILD_TYPE),release)
+		ifneq ($(BUILD_TYPE),debug)
+			$(warning Unknown build type)
+			override BUILD_TYPE := unknown
+		endif
+	endif
+endif
+
 BUILD_FLAGS := \
 	-DBUILD_TYPE=$(BUILD_TYPE) \
 	-DAMD_SMI_NIC_SUPPORT=$(AMD_SMI_NIC_SUPPORT) \
 	-DVIRT=$(VIRT)
 
-default: $(CMAKE_PATH)/CMakeLists.txt
+default:
 ifeq ($(PLATFORM),linux)
 	$(MAKE) cmake_config
 	cmake --build $(BUILD_DIR) -- -j$(shell nproc)
 	$(MAKE) clean_cmake
 else ifeq ($(PLATFORM),windows)
 	$(MAKE) -C $(CMAKE_PATH) $(OS_TARGET).$(BUILD_TYPE) VIRT=$(VIRT)
+else ifeq ($(PLATFORM),esxi)
+	$(MAKE) -C $(CMAKE_PATH)
 endif
 
 cmake_config:
@@ -158,3 +172,4 @@ endif
 .PHONY: clean
 clean:
 	@rm -rf $(BUILD_DIR)
+	@if [ -f $(CMAKE_PATH)/Makefile ]; then $(MAKE) -C $(CMAKE_PATH) clean; fi

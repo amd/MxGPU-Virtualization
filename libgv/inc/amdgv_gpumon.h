@@ -53,6 +53,8 @@
 
 #define AMDGV_GPUMON_MAX_NUM_METRICS_EXT	512
 
+#define AMDGV_GPUMON_MAX_PCIE_DPM_LEVELS 4
+
 #define AMDGV_GPUMON_METRIC_EXT_UNIT_SHIFT		0ULL
 #define AMDGV_GPUMON_METRIC_EXT_NAME_SHIFT		16ULL
 #define AMDGV_GPUMON_METRIC_EXT_CATEGORY_SHIFT		32ULL
@@ -234,6 +236,17 @@ struct amdgv_gpumon_vram_info {
 	enum amdgv_gpumon_vram_vendor vram_vendor;
 	uint32_t vram_size_mb;
 	uint32_t vram_bit_width;
+};
+
+struct amdgv_gpumon_pcie_level {
+	uint8_t gen_speed;
+	uint8_t lane_count;
+	uint16_t lclk_freq;
+};
+
+struct amdgv_gpumon_pcie_levels {
+	uint8_t num_levels;
+	struct amdgv_gpumon_pcie_level levels[AMDGV_GPUMON_MAX_PCIE_DPM_LEVELS];
 };
 
 enum amdgv_pp_pm_policy {
@@ -534,6 +547,7 @@ enum amdgv_gpumon_metric_ext_category {
 	AMDGV_GPUMON_METRIC_EXT_CATEGORY__SYS_ACC_COUNTER	= 9ULL,
 	AMDGV_GPUMON_METRIC_EXT_CATEGORY__SYS_BASEBOARD_TEMP	= 10ULL,
 	AMDGV_GPUMON_METRIC_EXT_CATEGORY__SYS_GPUBOARD_TEMP	= 11ULL,
+	AMDGV_GPUMON_METRIC_EXT_CATEGORY__SYS_BASEBOARD_POWER	= 12ULL,
 };
 
 enum amdgv_gpumon_metric_ext_name {
@@ -650,6 +664,8 @@ enum amdgv_gpumon_metric_ext_name {
 	AMDGV_GPUMON_METRIC_EXT_NAME__VR_TEMP_VDDCR_11_HBM_D			= 108ULL,
 	AMDGV_GPUMON_METRIC_EXT_NAME__VR_TEMP_VDD_USR				= 109ULL,
 	AMDGV_GPUMON_METRIC_EXT_NAME__VR_TEMP_VDDIO_11_E32			= 110ULL,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_POWER_UBB_POWER			= 111ULL,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_POWER_UBB_POWER_THRESHOLD		= 112ULL,
 };
 
 enum amdgv_gpumon_metric_ext_unit {
@@ -752,6 +768,8 @@ enum amdgv_ptl_format_type {
 	AMDGV_PTL_FORMAT_BF16        = 0x00000002,
 	AMDGV_PTL_FORMAT_F32         = 0x00000003,
 	AMDGV_PTL_FORMAT_F64         = 0x00000004,
+	AMDGV_PTL_FORMAT_F8          = 0x00000005,
+	AMDGV_PTL_FORMAT_VECTOR      = 0x00000006,
 	AMDGV_PTL_FORMAT_INVALID     = 0xFFFFFFFF,
 };
 
@@ -967,10 +985,11 @@ int amdgv_gpumon_get_num_static_metrics_ext_entries(amdgv_dev_t dev,
 		uint32_t *entries);
 int amdgv_gpumon_get_npm_info(amdgv_dev_t dev, struct amdgv_gpumon_npm_info *npm_info);
 int amdgv_gpumon_get_node_handle(amdgv_dev_t dev, void **node_handle);
+int amdgv_gpumon_get_pcie_dpm_levels(amdgv_dev_t dev,
+			struct amdgv_gpumon_pcie_levels *pcie_levels);
 
-/* PTL APIs */
-int amdgv_gpumon_ptl_query_status(amdgv_dev_t dev, struct amdgv_ptl_status_info *info);
-int amdgv_gpumon_ptl_enable(amdgv_dev_t dev, struct amdgv_ptl_enable_info *info);
-int amdgv_gpumon_ptl_disable(amdgv_dev_t dev);
+/* PTL APIs - all operations go through scheduler events */
+int amdgv_gpumon_ptl_set_state(amdgv_dev_t dev, bool enable, struct amdgv_ptl_enable_info *info);
+int amdgv_gpumon_ptl_query(amdgv_dev_t dev, struct amdgv_ptl_status_info *info);
 
 #endif // __AMDGV_GPUMON_H__

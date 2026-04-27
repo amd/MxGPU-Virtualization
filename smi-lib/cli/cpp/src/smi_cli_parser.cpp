@@ -32,10 +32,14 @@ AmdSmiParser::AmdSmiParser()
 	if (ret != 0) {
 		throw SmiToolSMILIBErrorException(ret);
 	}
-#ifdef AMD_SMI_NIC_SUPPORT
+#if defined(__linux__) && defined(AMD_SMI_NIC_SUPPORT)
 	ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_device_count(nic_count, static_cast<int>(DeviceType::NIC));
 	if (ret != 0) {
 		nic_count = 0;
+	}
+	ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_device_count(brcm_nic_count, static_cast<int>(DeviceType::BRCM_NIC));
+	if (ret != 0) {
+		brcm_nic_count = 0;
 	}
 #endif
 }
@@ -113,7 +117,8 @@ std::shared_ptr<Device> AmdSmiParser::get_device_from_input(std::string device, 
 			param = "--gpu=";
 			break;
 		case DeviceType::NIC:
-			device_count = nic_count;
+		case DeviceType::BRCM_NIC:
+			device_count = nic_count + brcm_nic_count;
 			param = "--nic=";
 			break;
 		default:
@@ -123,16 +128,18 @@ std::shared_ptr<Device> AmdSmiParser::get_device_from_input(std::string device, 
 		throw SmiToolMissingParameterValueException(param);
 	}
 	if (is_number(device)) {
-		unsigned int device_count = (device_type == DeviceType::GPU) ? gpu_count : nic_count;
 		if (std::stoi(device) >= device_count) {
 			throw SmiToolDeviceNotFoundException(device);
 		} else {
 			return std::shared_ptr<Device>(new Device(std::stoi(device), DeviceIdentifierType::INDEX, device_type));
 		}
 	} else if (is_BDF(device)) {
-		return std::shared_ptr<Device>(new Device(device, DeviceIdentifierType::BDF, "--gpu", device_type));
+		return std::shared_ptr<Device>(new Device(device, DeviceIdentifierType::BDF, param, device_type));
 	} else if (is_UUID(device)) {
-		return std::shared_ptr<Device>(new Device(device, DeviceIdentifierType::UUID, "--gpu", device_type));
+		if (device_type != DeviceType::GPU) {
+			throw SmiToolInvalidParameterValueException(device);
+		}
+		return std::shared_ptr<Device>(new Device(device, DeviceIdentifierType::UUID, param, device_type));
 	} else {
 		throw SmiToolInvalidParameterValueException(device);
 	}
@@ -141,7 +148,10 @@ std::shared_ptr<Device> AmdSmiParser::get_device_from_input(std::string device, 
 void AmdSmiParser::parse_command_object(std::vector<std::string> command_argument_list,
 										Arguments &parsed_arguments)
 {
-	if (command_argument_list.size() == 0 || command_argument_list[0] == "help") {
+	if (command_argument_list.size() == 0) {
+		parsed_arguments.command = "default";
+		return;
+	} else if ( command_argument_list[0] == "help") {
 		parsed_arguments.command = "help";
 		if (COMMAND_SUPPORTED_ARGUMENTS.count("help") != 1) {
 			throw SmiToolInvalidParameterException(std::string("help"));
@@ -155,7 +165,7 @@ void AmdSmiParser::parse_command_object(std::vector<std::string> command_argumen
 		}
 		return;
 	} else if (command_argument_list.size() == 1) {
-		if(command_argument_list[0] == "set") {
+		if(command_argument_list[0] == "set" || command_argument_list[0] == "reset") {
 			throw SmiToolRequiredCommandException(command_argument_list[0]);
 		}
 	}
@@ -212,7 +222,7 @@ bool AmdSmiParser::is_option_argument(std::string option, Arguments &parsed_argu
 	if (option == "--csv") {
 		return true;
 	}
-	if (option.substr(0, 6) == "--file") {
+	if ((option.substr(0, 6) == "--file") && (option.substr(0, 12) != "--file-limit")) {
 		if (parsed_arguments.command == "reset") {
 			throw SmiToolInvalidParameterException(option);
 		}
@@ -305,11 +315,15 @@ bool AmdSmiParser::is_option_argument(std::string option, Arguments &parsed_argu
 			throw SmiToolInvalidParameterException(option.substr(0, 5));
 		}
 		does_option_have_value(option, 5);
+		std::string pid_value = option.substr(6);
+		if (!is_number(pid_value)) {
+			throw SmiToolInvalidParameterValueException(pid_value);
+		}
 		try {
 			parsed_arguments.options.push_back("pid");
-			parsed_arguments.process_map[option.substr(6)] = ProcessType::pid;
+			parsed_arguments.process_map[pid_value] = ProcessType::pid;
 		} catch (...) {
-			throw SmiToolInvalidParameterValueException(option.substr(6));
+			throw SmiToolInvalidParameterValueException(pid_value);
 		}
 		return true;
 	}
@@ -386,6 +400,7 @@ bool AmdSmiParser::is_option_argument(std::string option, Arguments &parsed_argu
 		}
 		does_option_have_value(option, 19);
 		try {
+			parsed_arguments.options.push_back("process-isolation");
 			parsed_arguments.process_isolation_set = option.substr(20);
 		} catch (...) {
 			throw SmiToolInvalidParameterValueException(option.substr(20));
@@ -399,6 +414,7 @@ bool AmdSmiParser::is_option_argument(std::string option, Arguments &parsed_argu
 		}
 		does_option_have_value(option, 2);
 		try {
+			parsed_arguments.options.push_back("process-isolation");
 			parsed_arguments.process_isolation_set = option.substr(3);
 		} catch (...) {
 			throw SmiToolInvalidParameterValueException(option.substr(3));
@@ -493,6 +509,34 @@ bool AmdSmiParser::is_option_argument(std::string option, Arguments &parsed_argu
 			parsed_arguments.options.push_back("power-cap");
 		} catch (...) {
 			throw SmiToolInvalidParameterValueException(option.substr(12));
+		}
+		return true;
+	}
+
+	if (option.substr(0, 12) == "--ptl-status") {
+		if (parsed_arguments.command != "set") {
+			throw SmiToolInvalidParameterException(option.substr(0, 12));
+		}
+		does_option_have_value(option, 12);
+		try {
+			parsed_arguments.options.push_back("ptl-status");
+			parsed_arguments.ptl_status_set = option.substr(13);
+		} catch (...) {
+			throw SmiToolMissingParameterValueException(option.substr(0, 12));
+		}
+		return true;
+	}
+
+	if (option.substr(0, 12) == "--ptl-format") {
+		if (parsed_arguments.command != "set") {
+			throw SmiToolInvalidParameterException(option.substr(0, 12));
+		}
+		does_option_have_value(option, 12);
+		try {
+			parsed_arguments.options.push_back("ptl-format");
+			parsed_arguments.ptl_format_set = option.substr(13);
+		} catch (...) {
+			throw SmiToolMissingParameterValueException(option.substr(0, 12));
 		}
 		return true;
 	}
@@ -617,9 +661,19 @@ void AmdSmiParser::add_all_gpus(Arguments &parsed_arguments)
 
 void AmdSmiParser::add_all_nics(Arguments &parsed_arguments)
 {
-	for (int i = 0; i < nic_count; i++) {
-		parsed_arguments.nic_devices.push_back(get_device_from_input(std::to_string(i), DeviceType::NIC));
+#if defined(__linux__) && defined(AMD_SMI_NIC_SUPPORT)
+	int ret = 0;
+	std::vector<std::pair<DeviceType, int>> nic_devices;
+	ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_all_nic_devices(nic_devices);
+	if (ret != 0) {
+		throw SmiToolSMILIBErrorException(ret);
 	}
+
+	for (const auto& nic : nic_devices) {
+		parsed_arguments.nic_devices.push_back(
+			get_device_from_input(std::to_string(nic.second), nic.first));
+	}
+#endif
 }
 
 bool is_argument_full_present(const std::vector<std::string>& command_arguments,
@@ -631,7 +685,14 @@ void AmdSmiParser::parse_arguments(std::vector<std::string> command_argument_lis
 								   Arguments &parsed_arguments)
 {
 
+	if (command_argument_list.empty()) {
+		return;
+	}
 	if (command_argument_list.size() == 1) {
+		if (std::find(COMMANDS_REQUIRING_OPTIONS.begin(), COMMANDS_REQUIRING_OPTIONS.end(),
+				command_argument_list[0]) != COMMANDS_REQUIRING_OPTIONS.end()) {
+			throw SmiToolRequiredCommandException(command_argument_list[0]);
+		}
 		parsed_arguments.all_arguments = true;
 		return;
 	}
@@ -676,10 +737,10 @@ void AmdSmiParser::parse_arguments(std::vector<std::string> command_argument_lis
 	if (command_argument_list[0] == "ras") {
 		bool has_afid = is_argument_present(command_argument_list, "--afid");
 		bool has_cper = is_argument_present(command_argument_list, "--cper");
-		bool has_file = is_argument_present(command_argument_list, "--file");
+		bool has_policy = is_argument_present(command_argument_list, "--policy");
 
-		if(has_file && (has_cper || has_afid)) {
-			throw SmiToolInvalidParameterException("--file");
+		if(has_policy && (has_cper || has_afid)) {
+			throw SmiToolInvalidParameterException("--policy");
 		}
 
 		if (has_afid && !parsed_arguments.device_format[DevicesType::GPU_TYPE].empty()) {
@@ -704,7 +765,7 @@ void AmdSmiParser::parse_arguments(std::vector<std::string> command_argument_lis
 			if (gpu_count != 0 && COMMAND_SUPPORTED_ARGUMENTS.at(command_argument_list[0]).count("--gpu") == 1) {
 				command_arguments = COMMAND_SUPPORTED_ARGUMENTS.at(command_argument_list[0]).at("--gpu");
 			}
-			if (nic_count != 0 && COMMAND_SUPPORTED_ARGUMENTS.at(command_argument_list[0]).count("--nic") == 1) {
+			if ((nic_count + brcm_nic_count) != 0 && COMMAND_SUPPORTED_ARGUMENTS.at(command_argument_list[0]).count("--nic") == 1) {
 				const auto& nic_args = COMMAND_SUPPORTED_ARGUMENTS.at(command_argument_list[0]).at("--nic");
 				command_arguments.insert(command_arguments.end(), nic_args.begin(), nic_args.end());
 			}
@@ -734,7 +795,9 @@ void AmdSmiParser::parse_arguments(std::vector<std::string> command_argument_lis
 						|| command_argument_list[i] == "-ps"
 						|| command_argument_list[i] == "--num-vf"
 						|| command_argument_list[i] == "--xgmi-plpd"
-						|| command_argument_list[i] == "-pd") {
+						|| command_argument_list[i] == "-pd"
+						|| command_argument_list[i] == "--ptl-status"
+						|| command_argument_list[i] == "--ptl-format") {
 					if (!is_option_argument(command_argument_list[i], parsed_arguments)) {
 						throw SmiToolInvalidParameterException(std::string(command_argument_list[i]));
 					}
@@ -842,7 +905,9 @@ void AmdSmiParser::parse_arguments(std::vector<std::string> command_argument_lis
 				!is_argument_present(command_argument_list, "-pc") &&
 				!is_argument_present(command_argument_list, "--xgmi-plpd") &&
 				!is_argument_present(command_argument_list, "-pd") &&
-				!is_argument_present(command_argument_list, "--num-vf")) {
+				!is_argument_present(command_argument_list, "--num-vf") &&
+				!is_argument_present(command_argument_list, "--ptl-status") &&
+				!is_argument_present(command_argument_list, "--ptl-format")) {
 			throw SmiToolRequiredCommandException("set");
 		} else {
 			if (parsed_arguments.fb_sharing_mode != "CUSTOM") {
@@ -859,9 +924,6 @@ void AmdSmiParser::parse_arguments(std::vector<std::string> command_argument_lis
 
 	if (parsed_arguments.options.size() == 0) {
 		parsed_arguments.all_arguments = true;
-		if(command_argument_list[0] == "reset") {
-			throw SmiToolRequiredCommandException("reset");
-		}
 	}
 
 	if (parsed_arguments.options.size() == 1 && command_argument_list[0] == "monitor"
@@ -902,19 +964,24 @@ void AmdSmiParser::parse_device_type(std::vector<std::string> &command_argument_
 	std::regex is_gpu("--gpu");
 	std::regex is_g("-g");
 	std::regex is_specific_nic("--nic=.*");
-	std::regex is_specific_n("--n=.*");
+	std::regex is_specific_n("-n=.*");
 	std::regex is_nic("--nic");
-	std::regex is_n("--n");
+	std::regex is_n("-n");
 
-	if (gpu_count > 0 && nic_count > 0) {
+	if (gpu_count > 0 && (nic_count + brcm_nic_count) > 0) {
 		parsed_arguments.devices_type = DevicesType::ALL_TYPE;
 	} else if (gpu_count > 0) {
 		parsed_arguments.devices_type = DevicesType::GPU_TYPE;
-	} else if (nic_count > 0) {
+	} else if ((nic_count + brcm_nic_count) > 0) {
 		parsed_arguments.devices_type = DevicesType::NIC_TYPE;
 	}
 	if(parsed_arguments.command == "node") {
-		parsed_arguments.devices.push_back(get_device_from_input(std::to_string(0), DeviceType::GPU));
+		int gpu_index;
+		int ret = get_index_from_main_gpu(gpu_index);
+		if (ret != 0) {
+			throw SmiToolCommandNotSupportedException(parsed_arguments.command);
+		}
+		parsed_arguments.devices.push_back(get_device_from_input(std::to_string(gpu_index), DeviceType::GPU));
 		parsed_arguments.devices_type = DevicesType::GPU_TYPE;
 		return;
 	}
@@ -946,12 +1013,12 @@ void AmdSmiParser::parse_device_type(std::vector<std::string> &command_argument_
 				if(!AmdSmiPlatform::getInstance().is_host()) {
 					throw SmiToolParameterNotSupportedException(command_argument_list[i].substr(0, 5));
 				}
-				if (parsed_arguments.command == "version" || nic_count == 0) {
+				if (parsed_arguments.command == "version" || (nic_count + brcm_nic_count) == 0) {
 					throw SmiToolInvalidParameterException(command_argument_list[i]);
 				}
 				if (!(parsed_arguments.command == "help" || parsed_arguments.command == "list" ||
 					parsed_arguments.command == "discovery" || parsed_arguments.command == "static" ||
-					parsed_arguments.command == "metric")) {
+					parsed_arguments.command == "metric" || parsed_arguments.command == "topology")) {
 					throw SmiToolInvalidParameterException(command_argument_list[i]);
 				}
 				if (parsed_arguments.output == csv) {
@@ -984,11 +1051,6 @@ void AmdSmiParser::parse_device_type(std::vector<std::string> &command_argument_
 void AmdSmiParser::parse_arg(int argc, char **argv, Arguments &ret)
 {
 	std::vector<std::string> command_argument_list(argv + 1, argv + argc);
-
-	if (argc == 1) {
-		ret.command = "help";
-		return;
-	}
 
 	parse_output_format(command_argument_list, ret);
 	parse_command_object(command_argument_list, ret);

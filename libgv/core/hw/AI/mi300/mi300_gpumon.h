@@ -31,7 +31,8 @@ int mi300_get_mm_activity(struct amdgv_adapter *adapt, int *val);
 int mi300_get_volt_soc(struct amdgv_adapter *adapt, int *val);
 int mi300_get_volt_mem(struct amdgv_adapter *adapt, int *val);
 
-/* PTL (Peak TOPS Limiter) restore function */
-int mi300_gpumon_ptl_restore(struct amdgv_adapter *adapt);
+/* PTL (Peak TOPS Limiter) functions */
+int mi300_gpumon_ptl_enable(struct amdgv_adapter *adapt,
+			    struct amdgv_ptl_enable_info *info);
 
 #endif

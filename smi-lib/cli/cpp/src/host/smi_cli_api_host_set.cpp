@@ -49,7 +49,9 @@ typedef amdsmi_status_t (*AMDSMI_SET_POWER_CAP)(amdsmi_processor_handle, uint32_
 		uint64_t);
 typedef amdsmi_status_t (*AMDSMI_SET_XGMI_PLPD)(amdsmi_processor_handle,
 		uint32_t);
-
+typedef amdsmi_status_t (*AMDSMI_SET_GPU_PTL_STATE)(amdsmi_processor_handle, bool);
+typedef amdsmi_status_t (*AMDSMI_SET_GPU_PTL_FORMATS)(amdsmi_processor_handle,
+		amdsmi_ptl_data_format_t, amdsmi_ptl_data_format_t);
 typedef amdsmi_status_t (*AMDSMI_GET_XGMI_FB_SHARING_MODE_INFO)(amdsmi_processor_handle,
 		amdsmi_processor_handle,
 		amdsmi_xgmi_fb_sharing_mode_t, uint8_t *);
@@ -67,6 +69,8 @@ extern AMDSMI_SET_MEMORY_PARTITION host_amdsmi_set_gpu_memory_partition_command;
 extern AMDSMI_SET_SOC_PSTATE host_amdsmi_set_soc_pstate;
 extern AMDSMI_SET_POWER_CAP host_amdsmi_set_power_cap;
 extern AMDSMI_SET_XGMI_PLPD host_amdsmi_set_xgmi_plpd;
+extern AMDSMI_SET_GPU_PTL_STATE host_amdsmi_set_gpu_ptl_state;
+extern AMDSMI_SET_GPU_PTL_FORMATS host_amdsmi_set_gpu_ptl_formats;
 extern AMDSMI_GET_XGMI_FB_SHARING_MODE_INFO host_amdsmi_get_xgmi_fb_sharing_mode_info;
 extern AMDSMI_GET_LINK_TOPOLOGY host_amdsmi_get_link_topology;
 extern AMDSMI_SET_NUM_VF host_amdsmi_set_num_vf;
@@ -294,6 +298,86 @@ int AmdSmiApiHost::amdsmi_set_plpd_command(uint64_t processor_bdf, Arguments arg
 	}
 
 	ret = host_amdsmi_set_xgmi_plpd(processor, mode);
+
+	return ret;
+}
+
+int AmdSmiApiHost::amdsmi_set_ptl_status_command(uint64_t processor_bdf, Arguments arg)
+{
+	int ret;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	bool enable;
+
+	tmp_bdf.as_uint = processor_bdf;
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		return ret;
+	}
+
+	// Convert string to bool
+	std::string status_lower = arg.ptl_status_set;
+	std::transform(status_lower.begin(), status_lower.end(), status_lower.begin(), ::tolower);
+
+	if (status_lower == "enabled" || status_lower == "enable" || status_lower == "1" || status_lower == "true") {
+		enable = true;
+	} else if (status_lower == "disabled" || status_lower == "disable" || status_lower == "0" || status_lower == "false") {
+		enable = false;
+	} else {
+		throw SmiToolInvalidParameterValueException(arg.ptl_status_set);
+	}
+
+	ret = host_amdsmi_set_gpu_ptl_state(processor, enable);
+
+	return ret;
+}
+
+int AmdSmiApiHost::amdsmi_set_ptl_format_command(uint64_t processor_bdf, Arguments arg)
+{
+	int ret;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	amdsmi_ptl_data_format_t format1, format2;
+
+	tmp_bdf.as_uint = processor_bdf;
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		return ret;
+	}
+
+	// Parse format string "FORMAT1,FORMAT2"
+	size_t comma_pos = arg.ptl_format_set.find(',');
+	if (comma_pos == std::string::npos) {
+		throw SmiToolInvalidParameterValueException(arg.ptl_format_set);
+	}
+
+	std::string format1_str = arg.ptl_format_set.substr(0, comma_pos);
+	std::string format2_str = arg.ptl_format_set.substr(comma_pos + 1);
+
+	// Convert strings to uppercase for comparison
+	std::transform(format1_str.begin(), format1_str.end(), format1_str.begin(), ::toupper);
+	std::transform(format2_str.begin(), format2_str.end(), format2_str.begin(), ::toupper);
+
+	// Map format strings to enum
+	auto parse_format = [](const std::string& fmt) -> amdsmi_ptl_data_format_t {
+		if (fmt == "I8") return AMDSMI_PTL_DATA_FORMAT_I8;
+		if (fmt == "F16") return AMDSMI_PTL_DATA_FORMAT_F16;
+		if (fmt == "BF16") return AMDSMI_PTL_DATA_FORMAT_BF16;
+		if (fmt == "F32") return AMDSMI_PTL_DATA_FORMAT_F32;
+		if (fmt == "F64") return AMDSMI_PTL_DATA_FORMAT_F64;
+		if (fmt == "F8") return AMDSMI_PTL_DATA_FORMAT_F8;
+		if (fmt == "VECTOR") return AMDSMI_PTL_DATA_FORMAT_VECTOR;
+		return AMDSMI_PTL_DATA_FORMAT_INVALID;
+	};
+
+	format1 = parse_format(format1_str);
+	format2 = parse_format(format2_str);
+
+	if (format1 == AMDSMI_PTL_DATA_FORMAT_INVALID || format2 == AMDSMI_PTL_DATA_FORMAT_INVALID) {
+		throw SmiToolInvalidParameterValueException(arg.ptl_format_set);
+	}
+
+	ret = host_amdsmi_set_gpu_ptl_formats(processor, format1, format2);
 
 	return ret;
 }

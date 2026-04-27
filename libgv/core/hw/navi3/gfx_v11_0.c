@@ -1478,6 +1478,11 @@ static int gfx_v11_alloc_dump_cu_resource_memory(struct amdgv_adapter *adapt,
 	return amdgv_gfx_alloc_dump_cu_resource_memory(adapt, resource_size, resource_mem);
 }
 
+static void gfx_v11_free_dump_cu_resource_memory(struct amdgv_adapter *adapt)
+{
+	amdgv_gfx_free_dump_cu_resource_memory(adapt);
+}
+
 static int gfx_v11_dump_cu_data(struct amdgv_adapter *adapt)
 {
 	if (amdgv_gfx_dump_cu_data(adapt))
@@ -1566,7 +1571,7 @@ static int gfx_v11_early_init(struct amdgv_adapter *adapt)
 	gfx_v11_set_kiq_pm4_funcs(adapt);
 	adapt->gfx.funcs->dump_cu_data = gfx_v11_dump_cu_data;
 	adapt->gfx.funcs->alloc_dump_cu_resource_memory = gfx_v11_alloc_dump_cu_resource_memory;
-
+	adapt->gfx.funcs->free_dump_cu_resource_memory = gfx_v11_free_dump_cu_resource_memory;
 	return 0;
 }
 

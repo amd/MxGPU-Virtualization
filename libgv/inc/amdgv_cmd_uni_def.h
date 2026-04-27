@@ -77,8 +77,9 @@ enum amdgv_cmd_asic_type {
 	AMDGV_CMD_CHIP_MI308X = 11,
 	AMDGV_CMD_CHIP_MI350X = 12,
 	AMDGV_CMD_CHIP_MI325X = 13,
-	AMDGV_CMD_CHIP_UNKNOWN,
-	AMDGV_CMD_CHIP_LAST,
+	AMDGV_CMD_CHIP_MI355X = 14,
+	AMDGV_CMD_CHIP_UNKNOWN = 0xFFFF,
+	AMDGV_CMD_CHIP_LAST = AMDGV_CMD_CHIP_UNKNOWN,
 };
 
 enum amdgv_ras_ta_load_status {
@@ -274,8 +275,8 @@ struct amdgv_cmd_req_bad_pages_group {
 };
 
 struct amdgv_get_cper_records_input {
+	struct amdgv_cmd_dev_handle device;
 	uint8_t *buf;
-	uint64_t dev_handle;
 	uint64_t buf_size;
 	uint64_t rptr;
 };
@@ -341,6 +342,6 @@ struct amdgv_cmd_ras_policy_info {
 	uint32_t reserved[8];
 };
 
-uint8_t amdgv_handle_uni_cmd(void *data, struct amdgv_uni_cmd *cmd);
+uint8_t amdgv_handle_uni_cmd(struct amdgv_uni_cmd *cmd);
 
 #endif

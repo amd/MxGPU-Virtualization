@@ -254,6 +254,12 @@ struct amdgv_gpuiov_ctrl_block {
 		enum amdgv_gpuiov_cmd_status last_status : 8;
 		uint32_t last_status_reg;
 	};
+
+	/*
+	 * Per-XCC gate for LOAD_RLCV_STATE set by successful SAVE_RLCV_STATE 
+	 * on each hw_sched_id. Cleared on driver re-init and whole gpu reset
+	 */
+	bool saved_rlcv_state;
 };
 
 struct amdgv_gpuiov_hw_sched_static_config {
@@ -356,6 +362,7 @@ int amdgv_gpuiov_load_rlcv_state(struct amdgv_adapter *adapt, uint32_t idx_vf,
 				 uint32_t hw_sched_id);
 int amdgv_gpuiov_save_rlcv_state(struct amdgv_adapter *adapt, uint32_t idx_vf,
 				 uint32_t hw_sched_id);
+void amdgv_gpuiov_reset_saved_rlcv_state(struct amdgv_adapter *adapt);
 int amdgv_gpuiov_shutdown_vf(struct amdgv_adapter *adapt, uint32_t idx_vf,
 			     uint32_t hw_sched_id);
 int amdgv_gpuiov_config_auto_sched_mode(struct amdgv_adapter *adapt,

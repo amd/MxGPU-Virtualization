@@ -2169,6 +2169,20 @@ static void gim_mb (void)
 	mb();
 }
 
+static void gim_get_device_list(oss_dev_t *dev_list, int *size)
+{
+	struct gim_dev_data *dev_data;
+	uint8_t i = 0;
+
+	mutex_lock(&gim_device_list_lock);
+
+	list_for_each_entry(dev_data, &gim_device_list, list)
+		dev_list[i++] = (oss_dev_t)dev_data->adev;
+	*size = i;
+
+	mutex_unlock(&gim_device_list_lock);
+}
+
 struct oss_interface gim_oss_interfaces = {
 	.get_vf_dev_from_bdf = gim_get_vf_dev_from_bdf,
 	.put_vf_dev = gim_put_vf_dev,
@@ -2321,4 +2335,5 @@ struct oss_interface gim_oss_interfaces = {
 	.schedule_work = gim_schedule_work,
 	.in_virtual_machine = gim_in_virtual_machine,
 	.mb = gim_mb,
+	.get_device_list = gim_get_device_list,
 };

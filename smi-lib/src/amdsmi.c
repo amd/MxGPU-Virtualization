@@ -42,6 +42,10 @@
 #include "smi_nic_interface.h"
 #endif
 
+#ifdef ENABLE_GCOV
+extern void __gcov_dump(void);
+#endif
+
 #ifdef __linux__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunknown-pragmas"
@@ -132,43 +136,79 @@ static int smi_get_nic_devices(smi_req_ctx *smi_req)
 	if (ret == SMI_NIC_STATUS_SUCCESS) {
 		g_nic_device_handles.num_nics = discovery.count;
 		for (uint32_t i = 0; i < discovery.count; i++) {
-			g_nic_device_handles.nics[i].type = SMI_HANDLE_TYPE_AMD_NIC;
 			sscanf(discovery.devices[i].bdf, "%04lx:%02lx:%02lx.%1lx",
 					&domain_number,
 					&bus_number,
 					&device_number,
 					&function_number);
 			g_nic_device_handles.nics[i].bdf.as_uint = (domain_number << 16) | (bus_number << 8) | (device_number << 3) | function_number;
+
+			if (discovery.devices[i].vendor == SMI_NIC_VENDOR_AMD) {
+				g_nic_device_handles.nics[i].type = SMI_HANDLE_TYPE_AMD_NIC;
+			} else if (discovery.devices[i].vendor == SMI_NIC_VENDOR_BROADCOM) {
+				g_nic_device_handles.nics[i].type = SMI_HANDLE_TYPE_BRCM_NIC;
+			} else {
+				g_nic_device_handles.nics[i].type = SMI_HANDLE_TYPE_UNKNOWN;
+			}
 		}
 	} else {
 		g_nic_device_handles.num_nics = 0;
 		return AMDSMI_STATUS_API_FAILED;
 	}
-
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-static amdsmi_status_t smi_get_nic_handles(amdsmi_processor_handle *nic_handles, uint32_t *nic_count)
+static amdsmi_status_t smi_get_nic_handles(enum smi_handle_type handle_type, amdsmi_processor_handle *nic_handles, uint32_t *nic_count)
 {
+	uint32_t idx = 0;
+	uint32_t count = 0;
+	smi_nic_status_t status;
+
 	if (nic_count == NULL) {
 		SMI_ERROR("Nullpointer given as input. Return code: %d", AMDSMI_STATUS_INVAL);
 		return AMDSMI_STATUS_INVAL;
 	}
 
-	if (nic_handles == NULL) {
-		*nic_count = g_nic_device_handles.num_nics;
-		return AMDSMI_STATUS_SUCCESS;
+	if (handle_type != SMI_HANDLE_TYPE_AMD_NIC && handle_type != SMI_HANDLE_TYPE_BRCM_NIC) {
+		SMI_ERROR("Wrong handle type. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
 	}
 
-	if (g_nic_device_handles.num_nics == 0) {
+	if (handle_type == SMI_HANDLE_TYPE_AMD_NIC) {
+		status = smi_nic_driver_loaded(SMI_NIC_VENDOR_AMD);
+		if (status != SMI_NIC_STATUS_SUCCESS) {
+			SMI_ERROR("AMD NIC driver not loaded. Return code: %d", AMDSMI_STATUS_DRIVER_NOT_LOADED);
+			return AMDSMI_STATUS_DRIVER_NOT_LOADED;
+		}
+	} else if (handle_type == SMI_HANDLE_TYPE_BRCM_NIC) {
+		status = smi_nic_driver_loaded(SMI_NIC_VENDOR_BROADCOM);
+		if (status != SMI_NIC_STATUS_SUCCESS) {
+			SMI_ERROR("Broadcom NIC driver not loaded. Return code: %d", AMDSMI_STATUS_DRIVER_NOT_LOADED);
+			return AMDSMI_STATUS_DRIVER_NOT_LOADED;
+		}
+	}
+
+	for (uint32_t i = 0; i < g_nic_device_handles.num_nics; i++) {
+		if (g_nic_device_handles.nics[i].type == handle_type) {
+			count++;
+		}
+	}
+
+	if (count == 0) {
 		return AMDSMI_STATUS_NOT_FOUND;
 	}
 
-	*nic_count = *nic_count >= g_nic_device_handles.num_nics ? g_nic_device_handles.num_nics : *nic_count;
+	if (nic_handles == NULL) {
+		*nic_count = count;
+		return AMDSMI_STATUS_SUCCESS;
+	}
 
+	*nic_count = *nic_count >= count ? count : *nic_count;
 	memset(nic_handles, 0, (*nic_count)*sizeof(amdsmi_processor_handle));
-	for (uint32_t i = 0; i < *nic_count; i++) {
-		nic_handles[i] = &g_nic_device_handles.nics[i];
+	for (uint32_t i = 0; i < g_nic_device_handles.num_nics && idx < *nic_count; i++) {
+		if (g_nic_device_handles.nics[i].type == handle_type) {
+			nic_handles[idx++] = &g_nic_device_handles.nics[i];
+		}
 	}
 
 	return AMDSMI_STATUS_SUCCESS;
@@ -286,6 +326,7 @@ amdsmi_status_t amdsmi_shut_down(void)
 		smi_req.thread->nic_ctx = NULL;
 		smi_req.thread->nic_init = false;
 	}
+	memset(&g_nic_device_handles, 0, sizeof(g_nic_device_handles));
 #endif
 
 	if ((int)(intptr_t)smi_req.handle->fd != (int)(intptr_t)SMI_INVAL_HANDLE) {
@@ -306,6 +347,10 @@ amdsmi_status_t amdsmi_shut_down(void)
 #endif
 
 	AMDSMI_HANDLE_UNLOCK;
+
+#ifdef ENABLE_GCOV
+	__gcov_dump();
+#endif
 	return AMDSMI_STATUS_SUCCESS;
 }
 
@@ -354,6 +399,67 @@ amdsmi_status_t amdsmi_get_processor_handles(amdsmi_socket_handle socket_handle,
 	return AMDSMI_STATUS_SUCCESS;
 }
 
+amdsmi_status_t amdsmi_get_nic_processor_handles(amdsmi_socket_handle socket_handle,
+						  uint32_t *processor_count,
+						  amdsmi_processor_handle *processor_handles)
+{
+	#pragma SMI_EXPORT
+	AMDSMI_UNUSED(socket_handle);
+	smi_req_ctx smi_req;
+
+	AMDSMI_ESCAPE_IF_NOT_INIT;
+
+	if (processor_count == NULL) {
+		SMI_ERROR("Nullpointer given as input. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+#ifdef AMD_SMI_NIC_SUPPORT
+	smi_nic_status_t status1;
+	smi_nic_status_t status2;
+	uint32_t available_nics = 0;
+	uint32_t idx = 0;
+
+	status1 = smi_nic_driver_loaded(SMI_NIC_VENDOR_AMD);
+	status2 = smi_nic_driver_loaded(SMI_NIC_VENDOR_BROADCOM);
+	if (status1 != SMI_NIC_STATUS_SUCCESS && status2 != SMI_NIC_STATUS_SUCCESS) {
+		SMI_ERROR("No NIC driver loaded. Return code: %d", AMDSMI_STATUS_DRIVER_NOT_LOADED);
+		return AMDSMI_STATUS_DRIVER_NOT_LOADED;
+	}
+
+	for (uint32_t i = 0; i < g_nic_device_handles.num_nics; i++) {
+		if ((g_nic_device_handles.nics[i].type == SMI_HANDLE_TYPE_AMD_NIC && status1 == SMI_NIC_STATUS_SUCCESS) ||
+		    (g_nic_device_handles.nics[i].type == SMI_HANDLE_TYPE_BRCM_NIC && status2 == SMI_NIC_STATUS_SUCCESS)) {
+			available_nics++;
+		}
+	}
+
+	if (processor_handles == NULL) {
+		*processor_count = available_nics;
+		return AMDSMI_STATUS_SUCCESS;
+	}
+
+	if (available_nics == 0) {
+		return AMDSMI_STATUS_NOT_FOUND;
+	}
+
+	*processor_count = *processor_count >= available_nics ? available_nics : *processor_count;
+
+	memset(processor_handles, 0, (*processor_count)*sizeof(amdsmi_processor_handle));
+	for (uint32_t i = 0; i < g_nic_device_handles.num_nics && idx < *processor_count; i++) {
+		if ((g_nic_device_handles.nics[i].type == SMI_HANDLE_TYPE_AMD_NIC && status1 == SMI_NIC_STATUS_SUCCESS) ||
+		    (g_nic_device_handles.nics[i].type == SMI_HANDLE_TYPE_BRCM_NIC && status2 == SMI_NIC_STATUS_SUCCESS)) {
+			processor_handles[idx++] = &g_nic_device_handles.nics[i];
+		}
+	}
+
+	return AMDSMI_STATUS_SUCCESS;
+#else
+	AMDSMI_UNUSED(processor_handles);
+	return AMDSMI_STATUS_NOT_SUPPORTED;
+#endif
+}
+
 amdsmi_status_t amdsmi_get_processor_type(amdsmi_processor_handle processor_handle, processor_type_t *processor_type)
 {
 	#pragma SMI_EXPORT
@@ -374,6 +480,9 @@ amdsmi_status_t amdsmi_get_processor_type(amdsmi_processor_handle processor_hand
 		break;
 	case SMI_HANDLE_TYPE_AMD_NIC:
 		*processor_type = AMDSMI_PROCESSOR_TYPE_AMD_NIC;
+		break;
+	case SMI_HANDLE_TYPE_BRCM_NIC:
+		*processor_type = AMDSMI_PROCESSOR_TYPE_BRCM_NIC;
 		break;
 	default:
 		*processor_type = AMDSMI_PROCESSOR_TYPE_UNKNOWN;
@@ -399,7 +508,13 @@ amdsmi_status_t amdsmi_get_processor_handles_by_type(amdsmi_socket_handle socket
 		return smi_get_gpu_handles(processor_handles, processor_count);
 	case AMDSMI_PROCESSOR_TYPE_AMD_NIC:
 #ifdef AMD_SMI_NIC_SUPPORT
-		return smi_get_nic_handles(processor_handles, processor_count);
+		return smi_get_nic_handles(SMI_HANDLE_TYPE_AMD_NIC, processor_handles, processor_count);
+#else
+		return AMDSMI_STATUS_NOT_SUPPORTED;
+#endif
+	case AMDSMI_PROCESSOR_TYPE_BRCM_NIC:
+#ifdef AMD_SMI_NIC_SUPPORT
+		return smi_get_nic_handles(SMI_HANDLE_TYPE_BRCM_NIC, processor_handles, processor_count);
 #else
 		return AMDSMI_STATUS_NOT_SUPPORTED;
 #endif
@@ -408,11 +523,11 @@ amdsmi_status_t amdsmi_get_processor_handles_by_type(amdsmi_socket_handle socket
 	case AMDSMI_PROCESSOR_TYPE_NON_AMD_CPU:
 	case AMDSMI_PROCESSOR_TYPE_AMD_CPU_CORE:
 	case AMDSMI_PROCESSOR_TYPE_AMD_APU:
+	case AMDSMI_PROCESSOR_TYPE_BRCM_SWITCH:
 		return AMDSMI_STATUS_NOT_SUPPORTED;
 	case AMDSMI_PROCESSOR_TYPE_UNKNOWN:
 		return AMDSMI_STATUS_INVAL;
 	}
-
 	return ret;
 }
 
@@ -420,6 +535,7 @@ amdsmi_status_t amdsmi_get_processor_handle_from_bdf(amdsmi_bdf_t bdf, amdsmi_pr
 {
 	#pragma SMI_EXPORT
 	smi_req_ctx smi_req;
+	int ret = 0;
 
 	AMDSMI_ESCAPE_IF_NOT_INIT;
 
@@ -431,7 +547,7 @@ amdsmi_status_t amdsmi_get_processor_handle_from_bdf(amdsmi_bdf_t bdf, amdsmi_pr
 	memset(processor_handle, 0, sizeof(amdsmi_processor_handle));
 	for (uint32_t i = 0; i < g_gpu_device_handles.num_gpus; i++) {
 		amdsmi_bdf_t temp_bdf;
-		int ret = amdsmi_get_gpu_device_bdf(&g_gpu_device_handles.gpus[i], &temp_bdf);
+		ret = amdsmi_get_gpu_device_bdf(&g_gpu_device_handles.gpus[i], &temp_bdf);
 		if (ret != AMDSMI_STATUS_SUCCESS) {
 			return ret;
 		}
@@ -441,17 +557,29 @@ amdsmi_status_t amdsmi_get_processor_handle_from_bdf(amdsmi_bdf_t bdf, amdsmi_pr
 		}
 	}
 
+#ifdef AMD_SMI_NIC_SUPPORT
 	for (uint32_t i = 0; i < g_nic_device_handles.num_nics; i++) {
-		amdsmi_bdf_t temp_bdf;
-		int ret = amdsmi_get_nic_device_bdf(&g_nic_device_handles.nics[i], &temp_bdf);
-		if (ret != AMDSMI_STATUS_SUCCESS) {
-			return ret;
+		smi_nic_status_t status;
+		if (g_nic_device_handles.nics[i].bdf.as_uint != bdf.as_uint) {
+			continue;
 		}
-		if (temp_bdf.as_uint == bdf.as_uint) {
-			*processor_handle = &g_nic_device_handles.nics[i];
-			return AMDSMI_STATUS_SUCCESS;
+		if (g_nic_device_handles.nics[i].type == SMI_HANDLE_TYPE_AMD_NIC) {
+			status = smi_nic_driver_loaded(SMI_NIC_VENDOR_AMD);
+			if (status != SMI_NIC_STATUS_SUCCESS) {
+				SMI_ERROR("AMD NIC driver not loaded. Return code: %d", AMDSMI_STATUS_DRIVER_NOT_LOADED);
+				return AMDSMI_STATUS_DRIVER_NOT_LOADED;
+			}
+		} else if (g_nic_device_handles.nics[i].type == SMI_HANDLE_TYPE_BRCM_NIC) {
+			status = smi_nic_driver_loaded(SMI_NIC_VENDOR_BROADCOM);
+			if (status != SMI_NIC_STATUS_SUCCESS) {
+				SMI_ERROR("Broadcom NIC driver not loaded. Return code: %d", AMDSMI_STATUS_DRIVER_NOT_LOADED);
+				return AMDSMI_STATUS_DRIVER_NOT_LOADED;
+			}
 		}
+		*processor_handle = &g_nic_device_handles.nics[i];
+		return AMDSMI_STATUS_SUCCESS;
 	}
+#endif
 
 	return AMDSMI_STATUS_NOT_FOUND;
 }
@@ -481,12 +609,16 @@ amdsmi_status_t amdsmi_get_index_from_processor_handle(amdsmi_processor_handle p
 			}
 		}
 		return AMDSMI_STATUS_NOT_FOUND;
-	} else if (type == SMI_HANDLE_TYPE_AMD_NIC) {
+	} else if (type == SMI_HANDLE_TYPE_AMD_NIC || type == SMI_HANDLE_TYPE_BRCM_NIC) {
+		nic = ((struct smi_nic_handle *)processor_handle);
+		uint32_t filtered_index = 0;
 		for (uint32_t i = 0; i < g_nic_device_handles.num_nics; i++) {
-			nic = ((struct smi_nic_handle *)processor_handle);
-			if (nic->bdf.as_uint == g_nic_device_handles.nics[i].bdf.as_uint) {
-				*processor_index = i;
-				return AMDSMI_STATUS_SUCCESS;
+			if (g_nic_device_handles.nics[i].type == type) {
+				if (nic->bdf.as_uint == g_nic_device_handles.nics[i].bdf.as_uint) {
+					*processor_index = filtered_index;
+					return AMDSMI_STATUS_SUCCESS;
+				}
+				filtered_index++;
 			}
 		}
 		return AMDSMI_STATUS_NOT_FOUND;
@@ -587,9 +719,11 @@ amdsmi_status_t amdsmi_get_gpu_device_bdf(amdsmi_processor_handle processor_hand
 amdsmi_status_t amdsmi_get_nic_device_bdf(amdsmi_processor_handle processor_handle, amdsmi_bdf_t *bdf)
 {
 	#pragma SMI_EXPORT
+#ifdef AMD_SMI_NIC_SUPPORT
 	enum smi_handle_type type;
 	struct smi_nic_handle *nic = NULL;
 	smi_req_ctx smi_req;
+	smi_nic_status_t status;
 
 	AMDSMI_ESCAPE_IF_NOT_INIT;
 
@@ -599,9 +733,23 @@ amdsmi_status_t amdsmi_get_nic_device_bdf(amdsmi_processor_handle processor_hand
 	}
 
 	type = *((enum smi_handle_type *)processor_handle);
-	if (type != SMI_HANDLE_TYPE_AMD_NIC) {
+	if (type != SMI_HANDLE_TYPE_AMD_NIC && type != SMI_HANDLE_TYPE_BRCM_NIC) {
 		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
 		return AMDSMI_STATUS_INVAL;
+	}
+
+	if (type == SMI_HANDLE_TYPE_AMD_NIC) {
+		status = smi_nic_driver_loaded(SMI_NIC_VENDOR_AMD);
+		if (status != SMI_NIC_STATUS_SUCCESS) {
+			SMI_ERROR("AMD NIC driver not loaded. Return code: %d", AMDSMI_STATUS_DRIVER_NOT_LOADED);
+			return AMDSMI_STATUS_DRIVER_NOT_LOADED;
+		}
+	} else if (type == SMI_HANDLE_TYPE_BRCM_NIC) {
+		status = smi_nic_driver_loaded(SMI_NIC_VENDOR_BROADCOM);
+		if (status != SMI_NIC_STATUS_SUCCESS) {
+			SMI_ERROR("Broadcom NIC driver not loaded. Return code: %d", AMDSMI_STATUS_DRIVER_NOT_LOADED);
+			return AMDSMI_STATUS_DRIVER_NOT_LOADED;
+		}
 	}
 
 	for (uint32_t i = 0; i < g_nic_device_handles.num_nics; i++) {
@@ -613,6 +761,11 @@ amdsmi_status_t amdsmi_get_nic_device_bdf(amdsmi_processor_handle processor_hand
 	}
 
 	return AMDSMI_STATUS_NOT_FOUND;
+#else
+	(void)processor_handle;
+	(void)bdf;
+	return AMDSMI_STATUS_NOT_SUPPORTED;
+#endif
 }
 
 amdsmi_status_t amdsmi_get_processor_bdf(amdsmi_processor_handle processor_handle, amdsmi_bdf_t *bdf)
@@ -633,6 +786,7 @@ amdsmi_status_t amdsmi_get_processor_bdf(amdsmi_processor_handle processor_handl
 	case SMI_HANDLE_TYPE_AMD_GPU:
 		return amdsmi_get_gpu_device_bdf(processor_handle, bdf);
 	case SMI_HANDLE_TYPE_AMD_NIC:
+	case SMI_HANDLE_TYPE_BRCM_NIC:
 		return amdsmi_get_nic_device_bdf(processor_handle, bdf);
 	default:
 		return AMDSMI_STATUS_API_FAILED;
@@ -945,7 +1099,7 @@ amdsmi_status_t amdsmi_get_gpu_asic_info(amdsmi_processor_handle processor_handl
 	info->num_of_compute_units = gpu_info->num_of_compute_units;
 	info->target_graphics_version = gpu_info->target_graphics_version;
 	info->subsystem_id = gpu_info->subsystem_id;
-
+	info->flags = gpu_info->flags;
 	return AMDSMI_STATUS_SUCCESS;
 }
 
@@ -1215,6 +1369,7 @@ amdsmi_status_t amdsmi_get_pcie_info(amdsmi_processor_handle processor_handle, a
 		info->pcie_static.pcie_interface_version = 5;
 	else
 		info->pcie_static.pcie_interface_version = 4;
+
 	// metric PCIe info
 	info->pcie_metric.pcie_width = (uint16_t)pcie->pcie_metric.pcie_width;
 	info->pcie_metric.pcie_bandwidth = pcie->pcie_metric.pcie_bandwidth;
@@ -1230,6 +1385,68 @@ amdsmi_status_t amdsmi_get_pcie_info(amdsmi_processor_handle processor_handle, a
 	if (ret) {
 		SMI_ERROR("Get pcie speed from pcie type failed. Return code: %d", ret);
 		return ret;
+	}
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+amdsmi_status_t amdsmi_get_gpu_pci_bandwidth(amdsmi_processor_handle processor_handle, amdsmi_pcie_bandwidth_t *bandwidth)
+{
+	#pragma SMI_EXPORT
+	smi_device_handle_t pf;
+	struct smi_device_info *dev = NULL;
+	smi_req_ctx smi_req;
+	struct smi_pcie_info *pcie = NULL;
+	struct smi_gpu_handle *gpu = NULL;
+	enum smi_handle_type type;
+
+	AMDSMI_ESCAPE_IF_NOT_INIT;
+
+	if (processor_handle == NULL || bandwidth == NULL) {
+		SMI_ERROR("Nullpointer given as input. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	type = *((enum smi_handle_type *)processor_handle);
+	if (type != SMI_HANDLE_TYPE_AMD_GPU) {
+		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	gpu = (struct smi_gpu_handle *)processor_handle;
+	pf.handle = gpu->handle;
+	dev = (struct smi_device_info *)&smi_req.thread->ioctl_cmd.payload;
+	dev->dev_id = pf;
+	int code = amdsmi_request(&smi_req, (uint32_t)SMI_CMD_CODE_GET_PCIE_INFO,
+				sizeof(struct smi_device_info),
+				sizeof(struct smi_pcie_info));
+	if (code != AMDSMI_STATUS_SUCCESS) {
+		SMI_ERROR("Ioctl call failed. Return code: %d", code);
+		return code;
+	}
+
+	pcie = (struct smi_pcie_info *)&smi_req.thread->ioctl_cmd.payload;
+
+	memset(bandwidth, 0, sizeof(amdsmi_pcie_bandwidth_t));
+
+	if (pcie->pcie_static.num_pcie_levels == 0)
+		return AMDSMI_STATUS_NOT_SUPPORTED;
+
+	uint8_t num_levels = pcie->pcie_static.num_pcie_levels;
+	if (num_levels > SMI_MAX_PCIE_DPM_LEVELS)
+		num_levels = SMI_MAX_PCIE_DPM_LEVELS;
+	if (num_levels > AMDSMI_MAX_NUM_FREQUENCIES)
+		num_levels = AMDSMI_MAX_NUM_FREQUENCIES;
+
+	bandwidth->transfer_rate.num_supported = num_levels;
+	bandwidth->transfer_rate.current = 0;
+	bandwidth->transfer_rate.has_deep_sleep = false;
+
+	for (uint8_t i = 0; i < num_levels; i++) {
+		bandwidth->transfer_rate.frequency[i] =
+			pcie_gen_to_transfer_rate(pcie->pcie_static.pcie_levels[i].gen_speed);
+		bandwidth->lanes[i] =
+			pcie_lane_count_to_lanes(pcie->pcie_static.pcie_levels[i].lane_count);
 	}
 
 	return AMDSMI_STATUS_SUCCESS;
@@ -1670,6 +1887,23 @@ amdsmi_status_t amdsmi_set_power_cap(amdsmi_processor_handle processor_handle, u
 	}
 
 	return AMDSMI_STATUS_SUCCESS;
+}
+
+amdsmi_status_t amdsmi_get_supported_power_cap(amdsmi_processor_handle processor_handle,
+                                               uint32_t *sensor_count,
+                                               uint32_t *sensor_inds,
+                                               amdsmi_power_cap_type_t *sensor_types)
+{
+	// TODO: power_cap - get supported power cap
+	#pragma SMI_EXPORT
+	AMDSMI_UNUSED(processor_handle);
+	AMDSMI_UNUSED(sensor_count);
+	AMDSMI_UNUSED(sensor_inds);
+	AMDSMI_UNUSED(sensor_types);
+
+	SMI_ERROR("amdsmi_get_supported_power_cap is not yet implemented. Return code: %d",
+	          AMDSMI_STATUS_NOT_YET_IMPLEMENTED);
+	return AMDSMI_STATUS_NOT_YET_IMPLEMENTED;
 }
 
 amdsmi_status_t amdsmi_is_gpu_power_management_enabled(amdsmi_processor_handle processor_handle, bool *enabled)
@@ -2563,70 +2797,80 @@ amdsmi_status_t amdsmi_event_create(amdsmi_processor_handle *processor_list, uin
 amdsmi_status_t amdsmi_event_read(amdsmi_event_set set, int64_t timeout_usec, amdsmi_event_entry_t *event)
 {
 	#pragma SMI_EXPORT
+#if !defined(__linux__) || defined(SMI_ESXI_BUILD)
+	/* Windows and ESXi use ioctl-based event reading */
+	struct smi_event_set_s *event_set = (struct smi_event_set_s *)set;
+	struct smi_event_entry *info = NULL;
+	smi_req_ctx smi_req;
+	AMDSMI_ESCAPE_IF_NOT_INIT;
+#else
+	/* Linux uses poll-based event reading */
 	system_wrapper *sys_wrapper = get_system_wrapper();
 	struct smi_event_set_s *event_set = (struct smi_event_set_s *)set;
 	struct smi_event_entry *info = NULL;
-#ifdef _WIN64
-	struct smi_device_info *gpu = NULL;
-	smi_req_ctx smi_req;
-	uint32_t signaled_device_index;
-	AMDSMI_ESCAPE_IF_NOT_INIT;
-#else
 	struct smi_event_entry event_entry;
 	memset(&event_entry, 0, sizeof(struct smi_event_entry));
 	info = &event_entry;
 #endif
-
 
 	if (set == NULL || event == NULL) {
 		SMI_ERROR("Nullpointer given as input. Return code: %d", AMDSMI_STATUS_INVAL);
 		return AMDSMI_STATUS_INVAL;
 	}
 
+#if !defined(__linux__) || defined(SMI_ESXI_BUILD)
+	/* Windows/ESXi: Use ioctl to read event */
+	struct smi_event_read_request *req = (struct smi_event_read_request *)&smi_req.thread->ioctl_cmd.payload;
+	memset(req, 0, sizeof(struct smi_event_read_request));
+	req->dev_id.handle = event_set->devices[0].handle;
+	req->timeout_usec = timeout_usec;
+
+	const int code = amdsmi_request(&smi_req, SMI_CMD_CODE_READ_EVENT,
+									sizeof(struct smi_event_read_request),
+									sizeof(struct smi_event_entry));
+
+	if (code == AMDSMI_STATUS_SUCCESS) {
+		/* Event found - copy to output */
+		info = (struct smi_event_entry *)&smi_req.thread->ioctl_cmd.payload;
+#else
+	/* Linux: Use poll mechanism */
 	int poll_res = sys_wrapper->smi_poll(event_set, info, timeout_usec);
 
 	if (poll_res == AMDSMI_STATUS_TIMEOUT) {
 		SMI_ERROR("Result of poll call is AMDSMI_STATUS_TIMEOUT. Return code: %d", AMDSMI_STATUS_TIMEOUT);
 		return AMDSMI_STATUS_TIMEOUT;
-	} else if (poll_res != AMDSMI_STATUS_SUCCESS) {
+	} else if (poll_res == AMDSMI_STATUS_SUCCESS) {
+#endif
+		memset(event, 0, sizeof(amdsmi_event_entry_t));
+		event->timestamp = info->timestamp;
+		event->category = info->category;
+		event->subcode = info->subcode;
+		event->level = info->level;
+		event->data = info->data;
+		event->fcn_id.handle = info->fcn_id.handle;
+		event->dev_id = info->dev_id;
+		memcpy(event->date, info->date, sizeof(info->date));
+		memcpy(event->message, info->message, sizeof(info->message));
+
+		/* Find and set processor_handle from global GPU handles */
+		for (uint32_t i = 0; i < g_gpu_device_handles.num_gpus; ++i) {
+			if (info->processor_handle.handle == g_gpu_device_handles.gpus[i].handle) {
+				event->processor_handle = &(g_gpu_device_handles.gpus[i]);
+				break;
+			}
+		}
+
+		return AMDSMI_STATUS_SUCCESS;
+#if !defined(__linux__) || defined(SMI_ESXI_BUILD)
+	}
+
+	return code;
+#else
+	} else {
 		SMI_ERROR("Poll call failed. Return code: %d", AMDSMI_STATUS_API_FAILED);
 		return AMDSMI_STATUS_API_FAILED;
 	}
-#ifdef _WIN64
-	gpu = (struct smi_device_info *)&smi_req.thread->ioctl_cmd.payload;
-	signaled_device_index = event_set->signaled_device_index;
-	gpu->dev_id.handle = event_set->devices[signaled_device_index].handle;
-
-	const int code = amdsmi_request(&smi_req, SMI_CMD_CODE_READ_EVENT,
-						sizeof(struct smi_device_info),
-						sizeof(struct smi_event_entry));
-
-	if (code != AMDSMI_STATUS_SUCCESS) {
-		SMI_ERROR("Ioctl call failed. Return code: %d", code);
-		return code;
-	}
-
-	info = (struct smi_event_entry *)&smi_req.thread->ioctl_cmd.payload;
 #endif
-
-	memset(event, 0, sizeof(amdsmi_event_entry_t));
-	event->timestamp = info->timestamp;
-	event->category = info->category;
-	event->subcode = info->subcode;
-	event->level = info->level;
-	event->data = info->data;
-	event->fcn_id.handle = info->fcn_id.handle;
-	memcpy(event->date, info->date, sizeof(info->date));
-	memcpy(event->message, info->message, sizeof(info->message));
-	for (uint32_t i = 0; i < g_gpu_device_handles.num_gpus; ++i) {
-		if (info->processor_handle.handle == g_gpu_device_handles.gpus[i].handle) {
-			event->processor_handle = &(g_gpu_device_handles.gpus[i]);
-			event->dev_id = g_gpu_device_handles.gpus[i].dev_id;
-			break;
-		}
-	}
-
-	return AMDSMI_STATUS_SUCCESS;
 }
 
 amdsmi_status_t amdsmi_event_destroy(amdsmi_event_set set)
@@ -2634,7 +2878,8 @@ amdsmi_status_t amdsmi_event_destroy(amdsmi_event_set set)
 	#pragma SMI_EXPORT
 	system_wrapper *sys_wrapper = get_system_wrapper();
 	struct smi_event_set_s *amdsmi_event_set = (struct smi_event_set_s *)set;
-#ifdef _WIN64
+#if !defined(__linux__) || defined(SMI_ESXI_BUILD)
+	/* Windows and ESXi need ioctl for event destruction */
 	struct smi_device_info *gpu = NULL;
 	smi_req_ctx smi_req;
 	AMDSMI_ESCAPE_IF_NOT_INIT;
@@ -2644,7 +2889,8 @@ amdsmi_status_t amdsmi_event_destroy(amdsmi_event_set set)
 	}
 
 	for (uint32_t i = 0; i < amdsmi_event_set->num_handles; ++i) {
-#ifdef _WIN64
+#if !defined(__linux__) || defined(SMI_ESXI_BUILD)
+		/* Windows/ESXi: Destroy event via ioctl */
 		gpu = (struct smi_device_info *)&smi_req.thread->ioctl_cmd.payload;
 		gpu->dev_id.handle = amdsmi_event_set->devices[i].handle;
 		const int code = amdsmi_request(&smi_req, SMI_CMD_CODE_DESTROY_EVENT,
@@ -2655,13 +2901,17 @@ amdsmi_status_t amdsmi_event_destroy(amdsmi_event_set set)
 			SMI_ERROR("Ioctl call failed. Return code: %d", code);
 			return code;
 		}
-#endif
+#else
+		/* Linux: Close file descriptor */
 		sys_wrapper->smi_close(amdsmi_event_set->handles[i].fd);
+#endif
 	}
 
 	sys_wrapper->smi_free(amdsmi_event_set->devices);
 	sys_wrapper->smi_free(amdsmi_event_set->handles);
-	sys_wrapper->smi_free(amdsmi_event_set->_private);
+	if (amdsmi_event_set->_private != NULL) {
+		sys_wrapper->smi_free(amdsmi_event_set->_private);
+	}
 	sys_wrapper->smi_free(amdsmi_event_set);
 
 	return AMDSMI_STATUS_SUCCESS;
@@ -2906,7 +3156,7 @@ amdsmi_status_t amdsmi_get_link_topology(amdsmi_processor_handle processor_handl
 
 	if (src_gpu->handle == dst_gpu->handle) {
 		topology_info->weight = 0;
-		topology_info->link_status = AMDSMI_LINK_STATUS_ENABLED;
+		topology_info->link_status = AMDSMI_LINK_STATUS_DISABLED;
 		topology_info->link_type = AMDSMI_LINK_TYPE_NOT_APPLICABLE;
 		topology_info->num_hops = 0;
 		topology_info->fb_sharing = 1;
@@ -3127,6 +3377,11 @@ amdsmi_status_t amdsmi_set_xgmi_fb_sharing_mode(amdsmi_processor_handle processo
 						amdsmi_xgmi_fb_sharing_mode_t mode)
 {
 	#pragma SMI_EXPORT
+#ifdef SMI_ESXI_BUILD
+	AMDSMI_UNUSED(processor_handle);
+	AMDSMI_UNUSED(mode);
+	return AMDSMI_STATUS_NOT_SUPPORTED;
+#else
 	smi_req_ctx smi_req;
 	smi_device_handle_t pf;
 	struct smi_gpu_handle *gpu = NULL;
@@ -3161,12 +3416,19 @@ amdsmi_status_t amdsmi_set_xgmi_fb_sharing_mode(amdsmi_processor_handle processo
 	}
 
 	return AMDSMI_STATUS_SUCCESS;
+#endif
 }
 
 amdsmi_status_t amdsmi_set_xgmi_fb_sharing_mode_v2(amdsmi_processor_handle *processor_list, uint32_t num_processors,
 						amdsmi_xgmi_fb_sharing_mode_t mode)
 {
 	#pragma SMI_EXPORT
+#ifdef SMI_ESXI_BUILD
+	AMDSMI_UNUSED(processor_list);
+	AMDSMI_UNUSED(num_processors);
+	AMDSMI_UNUSED(mode);
+	return AMDSMI_STATUS_NOT_SUPPORTED;
+#else
 	smi_req_ctx smi_req;
 	struct smi_set_xgmi_fb_custom_sharing_mode *xgmi_share_mode = NULL;
 	struct smi_gpu_handle *gpu = NULL;
@@ -3228,6 +3490,7 @@ amdsmi_status_t amdsmi_set_xgmi_fb_sharing_mode_v2(amdsmi_processor_handle *proc
 	}
 
 	return AMDSMI_STATUS_SUCCESS;
+#endif
 }
 
 amdsmi_status_t amdsmi_get_gpu_metrics(amdsmi_processor_handle processor_handle, uint32_t *metrics_size,
@@ -4055,6 +4318,13 @@ amdsmi_status_t amdsmi_get_afids_from_cper(char *cper_buffer, uint32_t buf_size,
 		return AMDSMI_STATUS_INVAL;
 	}
 
+	for (uint32_t i = 0; i < g_gpu_device_handles.num_gpus; i++) {
+		if (is_cmd_supported(g_gpu_device_handles.gpus[i].dev_id) == AMDSMI_STATUS_NOT_SUPPORTED) {
+			SMI_ERROR("Command not supported for device. Return code: %d", AMDSMI_STATUS_NOT_SUPPORTED);
+			return AMDSMI_STATUS_NOT_SUPPORTED;
+		}
+	}
+
 	amdsmi_cper_hdr_t *cper = (amdsmi_cper_hdr_t *)(cper_buffer);
 	if(cper->record_length > buf_size) {
 		return AMDSMI_STATUS_INVAL;
@@ -4185,7 +4455,7 @@ amdsmi_status_t amdsmi_get_cpu_affinity_with_scope(amdsmi_processor_handle proce
 	f = sys_wrapper->fopen(path, "r");
 	if (!f) {
 		SMI_ERROR("Cannot open %s: %s\n", path, strerror(errno));
-		return AMDSMI_STATUS_NOT_FOUND;
+		return AMDSMI_STATUS_NOT_SUPPORTED;
 	}
 
 	if (sys_wrapper->fgets(buf, sizeof(buf), f) == NULL) {
@@ -4212,11 +4482,6 @@ amdsmi_status_t amdsmi_topo_get_numa_node_number(amdsmi_processor_handle process
 {
 	#pragma SMI_EXPORT
 #ifdef __linux__
-	char prefix[AMDSMI_MAX_STRING_LENGTH/2];
-	char path[AMDSMI_MAX_STRING_LENGTH];
-	FILE *f;
-	char buf[AMDSMI_MAX_STRING_LENGTH];
-	system_wrapper *sys_wrapper = get_system_wrapper();
 	enum smi_handle_type type;
 	struct smi_gpu_handle *gpu = NULL;
 
@@ -4232,6 +4497,21 @@ amdsmi_status_t amdsmi_topo_get_numa_node_number(amdsmi_processor_handle process
 	}
 
 	gpu = (struct smi_gpu_handle *)processor_handle;
+
+#ifdef SMI_ESXI_BUILD
+	if (get_numa_node_from_vsish(gpu->bdf, numa_node) != 0) {
+		SMI_ERROR("Failed to get NUMA node from vsish\n");
+		return AMDSMI_STATUS_NOT_SUPPORTED;
+	}
+
+	return AMDSMI_STATUS_SUCCESS;
+#else
+	char prefix[AMDSMI_MAX_STRING_LENGTH/2];
+	char path[AMDSMI_MAX_STRING_LENGTH];
+	FILE *f;
+	char buf[AMDSMI_MAX_STRING_LENGTH];
+	system_wrapper *sys_wrapper = get_system_wrapper();
+
 	if (make_sysfs_pci_device_prefix(gpu->bdf, prefix, sizeof(prefix)) != 0) {
 		SMI_ERROR("Failed to create sysfs prefix\n");
 		return AMDSMI_STATUS_API_FAILED;
@@ -4242,7 +4522,7 @@ amdsmi_status_t amdsmi_topo_get_numa_node_number(amdsmi_processor_handle process
 	f = sys_wrapper->fopen(path, "r");
 	if (!f) {
 		SMI_ERROR("Cannot open %s: %s\n", path, strerror(errno));
-		return AMDSMI_STATUS_NOT_FOUND;
+		return AMDSMI_STATUS_NOT_SUPPORTED;
 	}
 
 	if (sys_wrapper->fgets(buf, sizeof(buf), f) == NULL) {
@@ -4258,14 +4538,17 @@ amdsmi_status_t amdsmi_topo_get_numa_node_number(amdsmi_processor_handle process
 	fclose(f);
 
 	return AMDSMI_STATUS_SUCCESS;
+#endif /* SMI_ESXI_BUILD */
+
 #else
 	AMDSMI_UNUSED(processor_handle);
 	AMDSMI_UNUSED(numa_node);
 
 	return AMDSMI_STATUS_NOT_SUPPORTED;
-#endif
+#endif /* __linux__ */
 
 }
+
 amdsmi_status_t amdsmi_get_xgmi_plpd(amdsmi_processor_handle processor_handle,
 					amdsmi_dpm_policy_t *xgmi_plpd)
 {
@@ -4498,6 +4781,178 @@ amdsmi_status_t amdsmi_get_gpu_ras_policy_info(amdsmi_processor_handle processor
 	policy_info->minor_version = ras_policy_info->minor_version;
 	memcpy(&policy_info->policy_data, (uint8_t *)&ras_policy_info->policy_data,
 		sizeof(ras_policy_info->policy_data));
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+amdsmi_status_t amdsmi_get_gpu_ptl_state(amdsmi_processor_handle processor_handle, bool *enabled)
+{
+	#pragma SMI_EXPORT
+	smi_device_handle_t pf;
+	struct smi_device_info *dev = NULL;
+	struct smi_gpu_handle *gpu = NULL;
+	enum smi_handle_type type;
+	smi_req_ctx smi_req;
+	struct smi_get_gpu_ptl_state *ptl_state = NULL;
+
+	AMDSMI_ESCAPE_IF_NOT_INIT;
+
+	if (processor_handle == NULL || enabled == NULL) {
+		SMI_ERROR("Nullpointer given as input. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	type = *((enum smi_handle_type *)processor_handle);
+	if (type != SMI_HANDLE_TYPE_AMD_GPU) {
+		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	gpu = (struct smi_gpu_handle *)processor_handle;
+	pf.handle = gpu->handle;
+	dev = (struct smi_device_info *)&smi_req.thread->ioctl_cmd.payload;
+	dev->dev_id.handle = pf.handle;
+	const int code = amdsmi_request(&smi_req, (uint32_t)SMI_CMD_CODE_GET_GPU_PTL_STATE,
+					sizeof(struct smi_device_info),
+					sizeof(struct smi_get_gpu_ptl_state));
+	if (code != AMDSMI_STATUS_SUCCESS) {
+		SMI_ERROR("Ioctl call failed. Return code: %d", code);
+		return code;
+	}
+	ptl_state = (struct smi_get_gpu_ptl_state *)&smi_req.thread->ioctl_cmd.payload;
+	*enabled = ptl_state->enabled;
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+amdsmi_status_t amdsmi_set_gpu_ptl_state(amdsmi_processor_handle processor_handle, bool enable)
+{
+	#pragma SMI_EXPORT
+	smi_device_handle_t pf;
+	struct smi_gpu_handle *gpu = NULL;
+	enum smi_handle_type type;
+	smi_req_ctx smi_req;
+	struct smi_set_gpu_ptl_state *ptl_state = NULL;
+
+	AMDSMI_ESCAPE_IF_NOT_INIT;
+
+	if (processor_handle == NULL) {
+		SMI_ERROR("Nullpointer given as input. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	type = *((enum smi_handle_type *)processor_handle);
+	if (type != SMI_HANDLE_TYPE_AMD_GPU) {
+		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	gpu = (struct smi_gpu_handle *)processor_handle;
+	pf.handle = gpu->handle;
+	ptl_state = (struct smi_set_gpu_ptl_state *)&smi_req.thread->ioctl_cmd.payload;
+	ptl_state->dev_id = pf;
+	ptl_state->enable = enable;
+
+	const int code = amdsmi_request(&smi_req, (uint32_t)SMI_CMD_CODE_SET_GPU_PTL_STATE,
+					sizeof(struct smi_set_gpu_ptl_state), 0);
+
+	if (code != AMDSMI_STATUS_SUCCESS) {
+		SMI_ERROR("Ioctl call failed. Return code: %d", code);
+		return code;
+	}
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+amdsmi_status_t amdsmi_get_gpu_ptl_formats(amdsmi_processor_handle processor_handle,
+					   amdsmi_ptl_data_format_t *data_format1,
+					   amdsmi_ptl_data_format_t *data_format2)
+{
+	#pragma SMI_EXPORT
+	smi_device_handle_t pf;
+	struct smi_device_info *dev = NULL;
+	struct smi_gpu_handle *gpu = NULL;
+	enum smi_handle_type type;
+	smi_req_ctx smi_req;
+	struct smi_get_gpu_ptl_formats *ptl_formats = NULL;
+
+	AMDSMI_ESCAPE_IF_NOT_INIT;
+
+	if (processor_handle == NULL || data_format1 == NULL || data_format2 == NULL) {
+		SMI_ERROR("Nullpointer given as input. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	type = *((enum smi_handle_type *)processor_handle);
+	if (type != SMI_HANDLE_TYPE_AMD_GPU) {
+		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	gpu = (struct smi_gpu_handle *)processor_handle;
+	pf.handle = gpu->handle;
+	dev = (struct smi_device_info *)&smi_req.thread->ioctl_cmd.payload;
+	dev->dev_id.handle = pf.handle;
+
+	const int code = amdsmi_request(&smi_req, (uint32_t)SMI_CMD_CODE_GET_GPU_PTL_FORMATS,
+					sizeof(struct smi_device_info),
+					sizeof(struct smi_get_gpu_ptl_formats));
+
+	if (code != AMDSMI_STATUS_SUCCESS) {
+		SMI_ERROR("Ioctl call failed. Return code: %d", code);
+		return code;
+	}
+
+	ptl_formats = (struct smi_get_gpu_ptl_formats *)&smi_req.thread->ioctl_cmd.payload;
+	*data_format1 = (amdsmi_ptl_data_format_t)ptl_formats->data_format1;
+	*data_format2 = (amdsmi_ptl_data_format_t)ptl_formats->data_format2;
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+amdsmi_status_t amdsmi_set_gpu_ptl_formats(amdsmi_processor_handle processor_handle,
+					   amdsmi_ptl_data_format_t data_format1,
+					   amdsmi_ptl_data_format_t data_format2)
+{
+	#pragma SMI_EXPORT
+	smi_device_handle_t pf;
+	struct smi_gpu_handle *gpu = NULL;
+	enum smi_handle_type type;
+	smi_req_ctx smi_req;
+	struct smi_set_gpu_ptl_formats *ptl_formats = NULL;
+
+	AMDSMI_ESCAPE_IF_NOT_INIT;
+
+	if (processor_handle == NULL) {
+		SMI_ERROR("Nullpointer given as input. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	type = *((enum smi_handle_type *)processor_handle);
+	if (type != SMI_HANDLE_TYPE_AMD_GPU) {
+		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	if (data_format1 == data_format2) {
+		SMI_ERROR("Both PTL formats are identical. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	gpu = (struct smi_gpu_handle *)processor_handle;
+	pf.handle = gpu->handle;
+	ptl_formats = (struct smi_set_gpu_ptl_formats *)&smi_req.thread->ioctl_cmd.payload;
+	ptl_formats->dev_id = pf;
+	ptl_formats->data_format1 = (enum smi_ptl_data_format)data_format1;
+	ptl_formats->data_format2 = (enum smi_ptl_data_format)data_format2;
+
+	const int code = amdsmi_request(&smi_req, (uint32_t)SMI_CMD_CODE_SET_GPU_PTL_FORMATS,
+					sizeof(struct smi_set_gpu_ptl_formats), 0);
+
+	if (code != AMDSMI_STATUS_SUCCESS) {
+		SMI_ERROR("Ioctl call failed. Return code: %d", code);
+		return code;
+	}
 
 	return AMDSMI_STATUS_SUCCESS;
 }

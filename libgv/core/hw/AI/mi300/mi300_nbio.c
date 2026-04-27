@@ -588,14 +588,33 @@ static const struct mi300_nps_combination_cap_entry mi300_nps_combination_cap_ta
 			.combinations = {
 				{AMDGV_MEMORY_PARTITION_MODE_NPS1, AMDGV_ACCELERATOR_PARTITION_MODE_SPX},
 				{AMDGV_MEMORY_PARTITION_MODE_NPS2, AMDGV_ACCELERATOR_PARTITION_MODE_DPX},
+				{AMDGV_MEMORY_PARTITION_MODE_NPS2, AMDGV_ACCELERATOR_PARTITION_MODE_QPX},
 				{AMDGV_MEMORY_PARTITION_MODE_NPS2, AMDGV_ACCELERATOR_PARTITION_MODE_CPX},
 				}
-			}
+			},
+			{
+			.vf_num = 2,
+			.combinations = {
+				{AMDGV_MEMORY_PARTITION_MODE_NPS2, AMDGV_ACCELERATOR_PARTITION_MODE_DPX},
+				}
+			},
+			{
+			.vf_num = 4,
+			.combinations = {
+				{AMDGV_MEMORY_PARTITION_MODE_NPS2, AMDGV_ACCELERATOR_PARTITION_MODE_QPX},
+				}
+			},
+			{
+			.vf_num = 8,
+			.combinations = {
+				{AMDGV_MEMORY_PARTITION_MODE_NPS2, AMDGV_ACCELERATOR_PARTITION_MODE_CPX},
+				}
+			},
 		}
 	},
 };
 
-static const struct amdgv_nps_compute_combination *mi300_nbio_get_asic_nps_caps(struct amdgv_adapter *adapt)
+const struct amdgv_nps_compute_combination *mi300_nbio_get_asic_nps_caps(struct amdgv_adapter *adapt)
 {
 	int i, j;
 
@@ -740,6 +759,8 @@ enum amdgv_accelerator_partition_mode
 		switch (memory_partition_mode) {
 		case AMDGV_MEMORY_PARTITION_MODE_NPS1:
 			return 2;
+		case AMDGV_MEMORY_PARTITION_MODE_NPS2:
+			return 2;
 		default:
 			return 0;
 		}
@@ -747,6 +768,11 @@ enum amdgv_accelerator_partition_mode
 		switch (memory_partition_mode) {
 		case AMDGV_MEMORY_PARTITION_MODE_NPS1:
 			return 4;
+		case AMDGV_MEMORY_PARTITION_MODE_NPS2:
+			if (adapt->asic_type == CHIP_MI350X)
+				return 4;
+			else
+				return 0;
 		case AMDGV_MEMORY_PARTITION_MODE_NPS4:
 			return 4;
 		default:
@@ -756,6 +782,11 @@ enum amdgv_accelerator_partition_mode
 		switch (memory_partition_mode) {
 		case AMDGV_MEMORY_PARTITION_MODE_NPS1:
 			return 8;
+		case AMDGV_MEMORY_PARTITION_MODE_NPS2:
+			if (adapt->asic_type == CHIP_MI350X)
+				return 8;
+			else
+				return 0;
 		case AMDGV_MEMORY_PARTITION_MODE_NPS4:
 			return 8;
 		default:

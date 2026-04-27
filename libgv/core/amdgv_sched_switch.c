@@ -24,15 +24,13 @@
 #include "amdgv_oss_wrapper.h"
 #include "amdgv_sched_internal.h"
 #include "amdgv_gpumon_internal.h"
+#include "amdgv_gpumon.h"
 #include "amdgv_list.h"
 #include "amdgv_gpuiov.h"
 #include "amdgv_vfmgr.h"
 
 static const uint32_t this_block = AMDGV_SCHEDULER_BLOCK;
 
-int (*amdgv_schedule_vfs) (struct amdgv_sched_world_switch *world_switch,
-			struct amdgv_list_head *active_list,
-			int *vf_idx, uint64_t *ts);
 
 #define MAX_VF_SKIP_CNT (8)
 #define HLIQUID_ALL_VF_IDLE_MIN_TS (500)
@@ -175,6 +173,7 @@ static int amdgv_init_world_context(struct amdgv_adapter *adapt, uint32_t idx_vf
 					struct amdgv_sched_world_switch *world_switch)
 {
 	bool mark_bad = false;
+	struct amdgv_ptl_enable_info ptl_info;
 
 	AMDGV_ASSERT(world_switch->curr_vf_state == AMDGV_VF_CONTEXT_SAVED ||
 			 world_switch->curr_vf_state == AMDGV_VF_CONTEXT_CLEAR);
@@ -195,6 +194,20 @@ static int amdgv_init_world_context(struct amdgv_adapter *adapt, uint32_t idx_vf
 	if (adapt->vbios.golden_init)
 		adapt->vbios.golden_init(adapt);
 
+	/* Enable PTL after GFX init run */
+	if (world_switch->sched_block == AMDGV_SCHED_BLOCK_GFX &&
+	    adapt->ptl_supported &&
+	    adapt->ptl_saved_config.enabled &&
+	    adapt->gpumon.funcs && adapt->gpumon.funcs->ptl_enable) {
+		AMDGV_DEBUG("init_world PTL enable: %s, fmt1=%u, fmt2=%u\n",
+			    amdgv_idx_to_str(idx_vf),
+			    adapt->ptl_saved_config.pref_format1,
+			    adapt->ptl_saved_config.pref_format2);
+		ptl_info.pref_format1 = adapt->ptl_saved_config.pref_format1;
+		ptl_info.pref_format2 = adapt->ptl_saved_config.pref_format2;
+		adapt->gpumon.funcs->ptl_enable(adapt, &ptl_info);
+	}
+
 	world_switch->curr_vf_state = AMDGV_VF_CONTEXT_LOADED;
 
 	if (mark_bad)
@@ -210,6 +223,8 @@ failed:
 static int amdgv_load_world_context(struct amdgv_adapter *adapt, uint32_t idx_vf,
 					struct amdgv_sched_world_switch *world_switch)
 {
+	struct amdgv_ptl_enable_info ptl_info;
+
 	AMDGV_ASSERT(world_switch->curr_vf_state == AMDGV_VF_CONTEXT_SAVED ||
 			 world_switch->curr_vf_state == AMDGV_VF_CONTEXT_CLEAR);
 
@@ -223,6 +238,20 @@ static int amdgv_load_world_context(struct amdgv_adapter *adapt, uint32_t idx_vf
 
 	if (amdgv_logical_sched_state_run(adapt, idx_vf, world_switch))
 		goto failed;
+
+	/* Enable PTL after GFX load run */
+	if (world_switch->sched_block == AMDGV_SCHED_BLOCK_GFX &&
+	    adapt->ptl_supported &&
+	    adapt->ptl_saved_config.enabled &&
+	    adapt->gpumon.funcs && adapt->gpumon.funcs->ptl_enable) {
+		AMDGV_DEBUG("load_world PTL enable: %s, fmt1=%u, fmt2=%u\n",
+			    amdgv_idx_to_str(idx_vf),
+			    adapt->ptl_saved_config.pref_format1,
+			    adapt->ptl_saved_config.pref_format2);
+		ptl_info.pref_format1 = adapt->ptl_saved_config.pref_format1;
+		ptl_info.pref_format2 = adapt->ptl_saved_config.pref_format2;
+		adapt->gpumon.funcs->ptl_enable(adapt, &ptl_info);
+	}
 
 	world_switch->curr_vf_state = AMDGV_VF_CONTEXT_LOADED;
 	return 0;
@@ -247,6 +276,16 @@ static int amdgv_save_world_context(struct amdgv_adapter *adapt,
 	idx_vf = world_switch->curr_idx_vf;
 
 	if (world_switch->curr_vf_state == AMDGV_VF_CONTEXT_LOADED) {
+		/* Disable PTL before GFX idle save (temporary, keeps enabled flag) */
+		if (world_switch->sched_block == AMDGV_SCHED_BLOCK_GFX &&
+		    adapt->ptl_supported &&
+		    adapt->ptl_saved_config.enabled &&
+		    adapt->gpumon.funcs && adapt->gpumon.funcs->ptl_disable) {
+			AMDGV_DEBUG("save_world PTL disable: %s, config_enabled=%d\n",
+				    amdgv_idx_to_str(idx_vf),
+				    adapt->ptl_saved_config.enabled);
+			adapt->gpumon.funcs->ptl_disable(adapt);
+		}
 
 		if (amdgv_logical_sched_state_pause(adapt, idx_vf, world_switch))
 			goto failed;
@@ -582,7 +621,7 @@ static int amdgv_sched_manual_switch_process(void *context)
 
 		/* pick up the next vf to be loading to GPU */
 	if (adapt->force_switch_vf_idx >= AMDGV_MAX_VF_SLOT) {
-		if (amdgv_schedule_vfs(world_switch,
+		if (world_switch->manual.amdgv_schedule_vfs(world_switch,
 			&world_switch->manual.active_vf_list, &idx_vf, &time_slice))
 			goto out;
 	} else {
@@ -909,10 +948,10 @@ static int amdgv_sched_manual_switch_init(struct amdgv_adapter *adapt,
 
 	if (world_switch->sched_mode == AMDGV_SCHED_HYBRID_LIQUID_MODE) {
 		AMDGV_INFO("hybrid liquid mode enabled\n");
-		amdgv_schedule_vfs = amdgv_schedule_vfs_liquid;
+		world_switch->manual.amdgv_schedule_vfs = amdgv_schedule_vfs_liquid;
 	}
 	else
-		amdgv_schedule_vfs = amdgv_schedule_vfs_default;
+		world_switch->manual.amdgv_schedule_vfs = amdgv_schedule_vfs_default;
 
 	world_switch->manual.switch_thread =
 		oss_create_thread(amdgv_sched_manual_switch_work_thread, (void *)world_switch,
@@ -2160,7 +2199,7 @@ int amdgv_sched_world_switch_reset(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	int tmp_idx_vf;
 	enum amdgv_sched_block sched_block = world_switch->sched_block;
 
-	if (adapt->reset.saved_rlcv_state && (sched_block == AMDGV_SCHED_BLOCK_GFX)) {
+	if (sched_block == AMDGV_SCHED_BLOCK_GFX) {
 		for_each_id(hw_sched_id, world_switch->hw_sched_mask) {
 			ret = amdgv_gpuiov_load_rlcv_state(adapt, idx_vf, hw_sched_id);
 			if (ret) {
@@ -2302,9 +2341,10 @@ int amdgv_sched_world_switch_signal_vf_idle(struct amdgv_adapter *adapt)
 		if (world_switch->sched_block != AMDGV_SCHED_BLOCK_GFX)
 			continue;
 
-		if (world_switch->switch_running) {
-			oss_timer_pause(world_switch->manual.timer);
-			oss_signal_event(world_switch->manual.switch_event);
+		if (world_switch->switch_running &&
+			world_switch->sched_mode == AMDGV_SCHED_HYBRID_LIQUID_MODE) {
+				oss_timer_pause(world_switch->manual.timer);
+				oss_signal_event(world_switch->manual.switch_event);
 		}
 	}
 

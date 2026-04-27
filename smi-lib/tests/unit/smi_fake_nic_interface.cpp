@@ -113,6 +113,12 @@ smi_nic_status_t smi_nic_destroy_context(smi_nic_ctx_t ctx)
 	return SMI_NIC_STATUS_SUCCESS;
 }
 
+smi_nic_status_t smi_nic_driver_loaded(smi_nic_vendor_t vendor)
+{
+	(void)vendor;
+	return SMI_NIC_STATUS_SUCCESS;
+}
+
 smi_nic_status_t smi_discover_nics(smi_nic_ctx_t ctx, smi_nic_discovery_t *discovery)
 {
 	(void)ctx;
@@ -125,12 +131,18 @@ smi_nic_status_t smi_discover_nics(smi_nic_ctx_t ctx, smi_nic_discovery_t *disco
 	}
 
 	memset(discovery, 0, sizeof(smi_nic_discovery_t));
-	discovery->count = 1;
+	discovery->count = 2;
 
-	const char* mock_bdf = "0001:02:03.4";
+	const char* mock_bdf_amd = "0001:02:03.4";
+	const char* mock_bdf_broadcom = "0001:02:04.6";
 
-		std::snprintf(discovery->devices[0].bdf, SMI_NIC_MAX_STRING_LENGTH,
-			"%s", mock_bdf);
+	std::snprintf(discovery->devices[0].bdf, SMI_NIC_MAX_STRING_LENGTH,
+		"%s", mock_bdf_amd);
+	discovery->devices[0].vendor = SMI_NIC_VENDOR_AMD;
+
+	std::snprintf(discovery->devices[1].bdf, SMI_NIC_MAX_STRING_LENGTH,
+		"%s", mock_bdf_broadcom);
+	discovery->devices[1].vendor = SMI_NIC_VENDOR_BROADCOM;
 
 	return SMI_NIC_STATUS_SUCCESS;
 }
@@ -207,7 +219,7 @@ smi_nic_status_t smi_get_nic_port_info(smi_nic_ctx_t ctx, uint64_t device, smi_n
 		std::snprintf(port->mac_address, SMI_NIC_MAX_STRING_LENGTH, "%s", "aa:bb:cc:dd:ee:ff");
 		port->carrier = 1;
 		port->mtu = 1500;
-		std::snprintf(port->link_state, SMI_NIC_MAX_STRING_LENGTH, "%s", "yes");
+		std::snprintf(port->link_state, SMI_NIC_MAX_STRING_LENGTH, "%s", "up");
 		port->link_speed = 10000;
 		port->active_fec = 1;
 		std::snprintf(port->autoneg, SMI_NIC_MAX_STRING_LENGTH, "%s", "ON");
@@ -353,6 +365,17 @@ smi_nic_status_t smi_get_nic_rdma_port_statistics_list(smi_nic_ctx_t ctx, uint64
 		stats->stats[5].value = 305;
 		std::snprintf(stats->stats[6].name, SMI_NIC_MAX_STRING_LENGTH, "%s", "rdma_stat7");
 		stats->stats[6].value = 306;
+	}
+	return g_nic_api_status_code;
+}
+
+smi_nic_status_t smi_topo_get_nic_link_type(smi_nic_ctx_t ctx, uint64_t device_src, uint64_t device_dst, smi_nic_link_type_t *type)
+{
+	(void)ctx;
+	(void)device_src;
+	(void)device_dst;
+	if (type) {
+		*type = SMI_NIC_LINK_TYPE_PCIE; // Return PCIE link type by default
 	}
 	return g_nic_api_status_code;
 }

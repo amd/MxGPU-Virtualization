@@ -93,7 +93,7 @@ The commands and their descriptions are the following:
 
 * topology
 
-    Displays link topology information. (GPU only)
+    Displays link topology information.
 
 * xgmi
 
@@ -264,6 +264,14 @@ Commands that do and their arguments are:
             bi-directional link capability information
     *   `--dma`
             dma link capability information
+
+* `--nic=<nic_index from list, nic_bdf>`
+    Displays NIC-GPU link topology information
+    If no argument is provided, returns information for all NICs on the system
+  * `--link-type`
+            NIC-GPU link type (PCIE, NUMA, X-NUMA, or UNKNOWN)
+  * `--numa`
+            NUMA node information for NICs
 
 ### xgmi
 

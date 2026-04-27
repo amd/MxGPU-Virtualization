@@ -83,6 +83,16 @@
 
 #define is_unavail_vf(idx_vf) (adapt->sched.array_vf[(idx_vf)].state == AMDGV_SCHED_UNAVAL)
 
+#define USED_TIME_FULL_ACCESS(adapt, idx_vf) \
+	(*((adapt)->sched.enable_per_partition_full_access ? \
+	&((adapt)->sched.array_vf[(idx_vf)].used_time_full_access) : \
+	&((adapt)->sched.used_time_full_access)))
+
+#define START_TIME_FULL_ACCESS(adapt, idx_vf) \
+	(*((adapt)->sched.enable_per_partition_full_access ? \
+	&((adapt)->sched.array_vf[(idx_vf)].start_time_full_access) : \
+	&((adapt)->sched.start_time_full_access)))
+
 INLINE uint32_t amdgv_sched_active_vf_num(struct amdgv_adapter *adapt)
 {
 	uint32_t idx_vf, count = 0;

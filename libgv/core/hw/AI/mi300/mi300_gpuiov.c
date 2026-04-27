@@ -35,6 +35,8 @@
 
 static const int this_block = AMDGV_COMMUNICATION_BLOCK;
 
+extern const struct amdgv_mmsch_funcs mi350_mmsch_funcs;
+
 /* the size is in units of 256K */
 #define CSA_SIZE_PER_VF 1
 #define UNIT_256KB	(1 << 18)
@@ -1022,6 +1024,9 @@ static int mi300_gpuiov_sw_init(struct amdgv_adapter *adapt)
 		adapt->flags |= AMDGV_FLAG_SKIP_DIAG_DATA;
 	}
 
+	if (adapt->asic_type == CHIP_MI350X)
+		adapt->mmsch.mmsch_funcs = &mi350_mmsch_funcs;
+
 	return amdgv_gpuiov_ctrl_block_setup(adapt, mi300_hw_sched_static_config, ARRAY_SIZE(mi300_hw_sched_static_config));
 }
 
@@ -1046,9 +1051,14 @@ static int mi300_gpuiov_hw_fini(struct amdgv_adapter *adapt)
 
 	if (oss_atomic_read(adapt->in_sync_flood)) {
 		AMDGV_INFO("in_sync_flood.gpuiov_hw_fini toggle_vf_mse to false and exit\n");
-		if (adapt->vf_rebar_en)
+		if (adapt->asic_type == CHIP_MI350X || adapt->vf_rebar_en)
 			mi300_gpuiov_toggle_vf_mse(adapt, false);
 		return 0;
+	}
+
+	if (adapt->asic_type == CHIP_MI350X) {
+		AMDGV_INFO("Set mi300_gpuiov_toggle_vf_mse to false\n");
+		mi300_gpuiov_toggle_vf_mse(adapt, false);
 	}
 
 	/* disable sriov */
@@ -1106,6 +1116,8 @@ static int mi300_gpuiov_hw_init(struct amdgv_adapter *adapt)
 	}
 
 	mi300_gpuiov_get_sch_offset(adapt);
+
+	amdgv_mmsch_check_enabled_features(adapt);
 
 	if (adapt->xgmi.phy_nodes_num > 1) {
 		xgmi_enable = BIT(31);

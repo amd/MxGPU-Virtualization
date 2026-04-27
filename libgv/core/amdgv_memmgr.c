@@ -881,6 +881,26 @@ struct amdgv_memmgr_mem *amdgv_memmgr_alloc_align(struct amdgv_memmgr *memmgr, u
 	return amdgv_memmgr_alloc_unify_align(memmgr, len, align, id, NULL, NULL);
 }
 
+struct amdgv_memmgr_mem *amdgv_memmgr_alloc_sys_align_zero(struct amdgv_memmgr *memmgr, uint64_t len,
+	uint64_t align, uint64_t *gpu_addr, void *va_ptr)
+{
+	struct amdgv_memmgr_mem *mem = amdgv_memmgr_alloc_sys_align(memmgr, len, align, gpu_addr, va_ptr);
+	if (mem)
+		oss_memset(amdgv_memmgr_get_cpu_addr(mem), 0, len);
+
+	return mem;
+}
+
+struct amdgv_memmgr_mem *amdgv_memmgr_alloc_align_zero(struct amdgv_memmgr *memmgr, uint64_t len,
+	uint64_t align, enum amdgv_mem_id id)
+{
+	struct amdgv_memmgr_mem *mem = amdgv_memmgr_alloc_align(memmgr, len, align, id);
+	if (mem)
+		oss_memset(amdgv_memmgr_get_cpu_addr(mem), 0, len);
+
+	return mem;
+}
+
 static struct amdgv_memmgr_mem *amdgv_memmgr_find_size_at(struct amdgv_memmgr *memmgr,
 							  uint64_t offset, uint64_t size,
 							  uint64_t align)

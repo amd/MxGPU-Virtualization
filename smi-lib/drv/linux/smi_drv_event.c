@@ -238,10 +238,12 @@ static unsigned smi_event_poll(smi_process_handle filep,
 	return events;
 }
 
-int smi_read_event(struct smi_ctx *ctx, amdgv_dev_t *adev, uint64_t dev_id, struct smi_event_entry *event)
+int smi_read_event(struct smi_ctx *ctx, amdgv_dev_t *adev, uint64_t dev_id, struct smi_event_entry *event, int64_t timeout_usec)
 {
+	(void)timeout_usec;
 	return 0;
 }
+
 int smi_destroy_event(struct smi_ctx *ctx, amdgv_dev_t *adev, uint64_t dev_id)
 {
 	return 0;

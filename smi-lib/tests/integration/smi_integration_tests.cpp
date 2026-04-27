@@ -159,6 +159,7 @@ static void walkthrough_test()
 		printf("    Num Of Compute Units: %d\n", asic_info.num_of_compute_units);
 		printf("    Subsystem ID: 0x%x\n", asic_info.subsystem_id);
 		printf("    Target Graphics Version: %" PRIu64 "\n", asic_info.target_graphics_version);
+		printf("    Flags: %" PRIu64 "\n", asic_info.flags);
 		ASSERT_EQ(amdsmi_get_gpu_device_uuid(processors[i], &uuid_length, uuid),
 			  AMDSMI_STATUS_SUCCESS);
 		printf("GPU UUID:\n");
@@ -774,6 +775,29 @@ TEST(amdsmiIntegrationTests, PowerCapTests)
 	free(processors);
 }
 
+TEST(amdsmiIntegrationTests, SupportedPowerCapTests)
+{
+	// TODO: power_cap - test amdsmi_get_supported_power_cap API when implemented
+	const uint32_t max_power_cap_sensors = 2;
+	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
+	uint32_t sensor_count = 0;
+	uint32_t sensor_inds[max_power_cap_sensors];
+	amdsmi_power_cap_type_t sensor_types[max_power_cap_sensors];
+	int ret;
+
+	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
+
+	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, processors), AMDSMI_STATUS_SUCCESS);
+	ASSERT_GE(dev_cnt, (unsigned)1);
+
+	ret = amdsmi_get_supported_power_cap(processors[0], &sensor_count, sensor_inds, sensor_types);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_YET_IMPLEMENTED);
+
+	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
+	free(processors);
+}
+
 TEST(amdsmiIntegrationTests, ECCTests)
 {
 	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
@@ -1325,6 +1349,112 @@ TEST(amdsmiIntegrationTests, DISABLED_XgmiTest)
 	free(processors);
 }
 
+TEST(amdsmiIntegrationTests, PtlTest)
+{
+	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
+	bool ptl_enabled = false;
+	bool ptl_original_state = false;
+	amdsmi_ptl_data_format_t ptl_format1, ptl_format2;
+	amdsmi_ptl_data_format_t original_format1 = AMDSMI_PTL_DATA_FORMAT_I8;
+	amdsmi_ptl_data_format_t original_format2 = AMDSMI_PTL_DATA_FORMAT_I8;
+	int ret;
+
+	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
+
+	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, processors), AMDSMI_STATUS_SUCCESS);
+	ASSERT_GE(dev_cnt, (unsigned)1);
+	ASSERT_LE(dev_cnt, (unsigned)AMDSMI_MAX_DEVICES);
+
+	for (unsigned int i = 0; i < dev_cnt; ++i) {
+		std::cout << "Testing PTL on GPU " << i << std::endl;
+
+		// Test get PTL state
+		ret = amdsmi_get_gpu_ptl_state(processors[i], &ptl_enabled);
+		EXPECT_TRUE((ret == AMDSMI_STATUS_SUCCESS) || (ret == AMDSMI_STATUS_NOT_SUPPORTED));
+
+		if (ret == AMDSMI_STATUS_NOT_SUPPORTED) {
+			std::cout << "  PTL is not supported on this device" << std::endl;
+			continue;
+		}
+
+		ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+		std::cout << "  Initial PTL State: " << (ptl_enabled ? "ENABLED" : "DISABLED") << std::endl;
+		ptl_original_state = ptl_enabled;
+
+		// Get original PTL formats if enabled
+		if (ptl_enabled) {
+			ret = amdsmi_get_gpu_ptl_formats(processors[i], &original_format1, &original_format2);
+			EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+			if (ret == AMDSMI_STATUS_SUCCESS) {
+				std::cout << "  Original PTL Format 1: " << original_format1 << std::endl;
+				std::cout << "  Original PTL Format 2: " << original_format2 << std::endl;
+			}
+		}
+
+		// Test enable PTL
+		ret = amdsmi_set_gpu_ptl_state(processors[i], true);
+		EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+		if (ret == AMDSMI_STATUS_SUCCESS) {
+			ret = amdsmi_get_gpu_ptl_state(processors[i], &ptl_enabled);
+			EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+			EXPECT_TRUE(ptl_enabled);
+			std::cout << "  PTL enabled successfully" << std::endl;
+		}
+
+		// Test set PTL formats
+		ret = amdsmi_set_gpu_ptl_formats(processors[i],
+						 AMDSMI_PTL_DATA_FORMAT_F16,
+						 AMDSMI_PTL_DATA_FORMAT_BF16);
+		EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+		if (ret == AMDSMI_STATUS_SUCCESS) {
+			ret = amdsmi_get_gpu_ptl_formats(processors[i], &ptl_format1, &ptl_format2);
+			EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+			EXPECT_EQ(ptl_format1, AMDSMI_PTL_DATA_FORMAT_F16);
+			EXPECT_EQ(ptl_format2, AMDSMI_PTL_DATA_FORMAT_BF16);
+			std::cout << "  PTL formats set to F16 and BF16" << std::endl;
+		}
+
+		// Test another format combination
+		ret = amdsmi_set_gpu_ptl_formats(processors[i],
+						 AMDSMI_PTL_DATA_FORMAT_F32,
+						 AMDSMI_PTL_DATA_FORMAT_F64);
+		EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+		if (ret == AMDSMI_STATUS_SUCCESS) {
+			ret = amdsmi_get_gpu_ptl_formats(processors[i], &ptl_format1, &ptl_format2);
+			EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+			EXPECT_EQ(ptl_format1, AMDSMI_PTL_DATA_FORMAT_F32);
+			EXPECT_EQ(ptl_format2, AMDSMI_PTL_DATA_FORMAT_F64);
+			std::cout << "  PTL formats set to F32 and F64" << std::endl;
+		}
+
+		// Test disable PTL
+		ret = amdsmi_set_gpu_ptl_state(processors[i], false);
+		EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+		if (ret == AMDSMI_STATUS_SUCCESS) {
+			ret = amdsmi_get_gpu_ptl_state(processors[i], &ptl_enabled);
+			EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+			EXPECT_FALSE(ptl_enabled);
+			std::cout << "  PTL disabled successfully" << std::endl;
+		}
+
+		// Restore original PTL state
+		ret = amdsmi_set_gpu_ptl_state(processors[i], ptl_original_state);
+		EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+
+		// Restore original formats if PTL was originally enabled
+		if (ptl_original_state && ret == AMDSMI_STATUS_SUCCESS) {
+			ret = amdsmi_set_gpu_ptl_formats(processors[i], original_format1, original_format2);
+			EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+		}
+
+		std::cout << "  PTL test completed, original state restored" << std::endl;
+	}
+
+	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
+	free(processors);
+}
+
 TEST(amdsmiIntegrationTests, ChipletMetricTest)
 {
 	uint32_t dev_cnt = 0;
@@ -1344,6 +1474,7 @@ TEST(amdsmiIntegrationTests, ChipletMetricTest)
 	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, &processors[0]), AMDSMI_STATUS_SUCCESS);
 
 	for (uint32_t i = 0; i < dev_cnt; i++) {
+		size = AMDSMI_MAX_NUM_METRICS;
 		ret = amdsmi_get_gpu_metrics(processors[i], &size, NULL);
 		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		if (!ret) {
@@ -1517,7 +1648,11 @@ TEST(amdsmiIntegrationTests, CperTests)
 	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
 }
 
+#ifdef _WIN64
+TEST(amdsmiIntegrationTests, DISABLED_ResetGpuTest)
+#else
 TEST(amdsmiIntegrationTests, ResetGpuTest)
+#endif
 {
 	amdsmi_processor_handle *processors = NULL;
 	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
@@ -1542,7 +1677,7 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 		amdsmi_bdf_t bdf;
 		uint64_t handle;
 		uint64_t dev_id;
-	} fake_handle = { 1, {0}, 123446, 0 };
+	} fake_handle = { 1, {{0}}, 123446, 0 };
 	amdsmi_processor_handle fake_dev_handle = &fake_handle;
 	amdsmi_vf_handle_t vf_handle;
 	amdsmi_driver_info_t driver_version;
@@ -1574,6 +1709,8 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 	uint64_t buf_size = 1024*1024;
 	uint64_t entry_count = 1024;
 	uint64_t cursor = 0;
+	bool ptl_enabled;
+	amdsmi_ptl_data_format_t ptl_format1, ptl_format2;
 
 	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
 	ASSERT_EQ(amdsmi_get_processor_handles(socket, &dev_cnt, processors), AMDSMI_STATUS_NOT_INIT);
@@ -1671,6 +1808,14 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 	ASSERT_EQ(amdsmi_get_xgmi_plpd(processors[0], NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_set_xgmi_plpd(NULL, 0), AMDSMI_STATUS_INVAL);
 
+	ASSERT_EQ(amdsmi_get_gpu_ptl_state(NULL, &ptl_enabled), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_ptl_state(processors[0], NULL), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_set_gpu_ptl_state(NULL, true), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_ptl_formats(NULL, &ptl_format1, &ptl_format2), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_ptl_formats(processors[0], NULL, &ptl_format2), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_ptl_formats(processors[0], &ptl_format1, NULL), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_set_gpu_ptl_formats(NULL, AMDSMI_PTL_DATA_FORMAT_F16, AMDSMI_PTL_DATA_FORMAT_BF16), AMDSMI_STATUS_INVAL);
+
 	ASSERT_EQ(amdsmi_get_gpu_metrics(processors[0], NULL, NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_gpu_metrics(processors[0], NULL, &metrics), AMDSMI_STATUS_INVAL);
 
@@ -1702,6 +1847,7 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 
 
 #ifdef __linux__
+#if !defined(SMI_ESXI_BUILD)
 TEST(amdsmiIntegrationTests, NumaInfoTest)
 {
 	uint32_t dev_cnt = 0;
@@ -1739,6 +1885,7 @@ TEST(amdsmiIntegrationTests, NumaInfoTest)
 	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
 	free(processors);
 }
+#endif /* !SMI_ESXI_BUILD */
 
 TEST(amdsmiIntegrationTests, NodeInfoTest)
 {

@@ -23,29 +23,10 @@
 #ifndef __SMI_THREAD_H__
 #define __SMI_THREAD_H__
 
-#if defined(__linux__)
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201102L) &&                             \
-	(!defined(__STDC_NO_THREADS__))
-
-#include <threads.h>
-
-typedef once_flag smi_once_t;
-typedef tss_t	  smi_tss_t;
-typedef mtx_t	  smi_mutex_t;
-
-#define SMI_DEFINE_ONCE(a) smi_once_t a = ONCE_FLAG_INIT
-
-#define smi_run_once	     call_once
-#define smi_tss_create	     tss_create
-#define smi_tss_exit	     thrd_exit
-#define smi_tss_get	     tss_get
-#define smi_tss_set	     tss_set
-#define smi_mutex_init(a)    mtx_init(a, mtx_plain);
-#define smi_mutex_lock(a)    mtx_lock(a)
-#define smi_mutex_unlock(a)  mtx_unlock(a)
-#define smi_mutex_destroy(a) mtx_destroy(a)
-
-#else
+/* ESXi build (on CentOS7) or Linux without C11 threads use pthread */
+#if defined(SMI_ESXI_BUILD) || \
+    (defined(__linux__) && \
+     (!defined(__STDC_VERSION__) || (__STDC_VERSION__ < 201102L) || defined(__STDC_NO_THREADS__)))
 
 #include <pthread.h>
 
@@ -65,7 +46,28 @@ typedef pthread_mutex_t smi_mutex_t;
 #define smi_mutex_unlock(a)  pthread_mutex_unlock(a)
 #define smi_mutex_destroy(a) pthread_mutex_destroy(a)
 
-#endif // __threads__
+/* Linux with C11 threads support */
+#elif defined(__linux__)
+
+#include <threads.h>
+
+typedef once_flag smi_once_t;
+typedef tss_t	  smi_tss_t;
+typedef mtx_t	  smi_mutex_t;
+
+#define SMI_DEFINE_ONCE(a) smi_once_t a = ONCE_FLAG_INIT
+
+#define smi_run_once	     call_once
+#define smi_tss_create	     tss_create
+#define smi_tss_exit	     thrd_exit
+#define smi_tss_get	     tss_get
+#define smi_tss_set	     tss_set
+#define smi_mutex_init(a)    mtx_init(a, mtx_plain);
+#define smi_mutex_lock(a)    mtx_lock(a)
+#define smi_mutex_unlock(a)  mtx_unlock(a)
+#define smi_mutex_destroy(a) mtx_destroy(a)
+
+/* Windows */
 #else
 
 #include "smi_os_defines.h"

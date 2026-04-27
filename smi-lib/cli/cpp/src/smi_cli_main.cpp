@@ -39,6 +39,7 @@
 #include "smi_cli_partition_command.h"
 #include "smi_cli_ras_command.h"
 #include "smi_cli_node_command.h"
+#include "smi_cli_default_command.h"
 
 int main(int argc, char **argv)
 {
@@ -106,7 +107,7 @@ int main(int argc, char **argv)
 			AmdSmiNodeCommand cmd(parsed_arguments);
 			cmd.execute_command();
 		} else {
-			AmdSmiCommands cmd(parsed_arguments);
+			AmdSmiDefaultCommand cmd(parsed_arguments);
 			cmd.execute_command();
 		}
 	} catch (SmiToolException &e) {

@@ -117,6 +117,11 @@ int amdgv_int_set_vf_number(struct amdgv_adapter *adapt, uint32_t num_vf)
 	int opt_err;
 	uint32_t i;
 
+	/* Check if dynamic VF number change is supported on this platform */
+	if (adapt->flags & AMDGV_FLAG_NO_DYNAMIC_VF_NUM) {
+		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+	}
+
 	/* all VFs must be in avail or unavail state */
 	for (i = 0; i < adapt->num_vf; i++) {
 		if (!is_unavail_vf(i) && !is_avail_vf(i)) {
@@ -294,25 +299,35 @@ int amdgv_int_dump_cu_data(struct amdgv_adapter *adapt)
 	return ret;
 }
 
+int amdgv_int_set_dump_cu_info(struct amdgv_adapter *adapt,
+			       enum AMDGV_CU_DATA_TYPE cu_dump_type, uint32_t xcc_id,
+			       bool use_extra_ring)
+{
+	uint32_t num_xcc;
+	switch (cu_dump_type) {
+	case AMDGV_CU_DATA_TYPE__LDS:	/* Fallthrough */
+	case AMDGV_CU_DATA_TYPE__SGPRs: /* Fallthrough */
+	case AMDGV_CU_DATA_TYPE__VGPRs:
+		break;
+	default:
+		AMDGV_ERROR("Invalid CU dump type %d\n", cu_dump_type);
+		return AMDGV_FAILURE;
+	}
+
+	num_xcc = adapt->mcp.gfx.num_xcc ? adapt->mcp.gfx.num_xcc : 1;
+	if (xcc_id >= num_xcc) {
+		AMDGV_ERROR("Invalid XCC ID %d, max is %d\n", xcc_id, num_xcc - 1);
+		return AMDGV_FAILURE;
+	}
+
+	adapt->gfx.cu_dump_data_info.cu_dump_type = cu_dump_type;
+	adapt->gfx.cu_dump_data_info.xcc_id = xcc_id;
+	adapt->gfx.cu_dump_data_info.use_extra_ring = use_extra_ring;
+
+	return 0;
+}
+
 void amdgv_int_free_dump_cu_resource_memory(struct amdgv_adapter *adapt)
 {
-	if (!adapt->gfx.dump_cu_memmgr_mem_group)
-		return;
-
-	if (adapt->gfx.dump_cu_memmgr_mem_group->packet)
-		amdgv_memmgr_free(adapt->gfx.dump_cu_memmgr_mem_group->packet);
-	if (adapt->gfx.dump_cu_memmgr_mem_group->signal_obj)
-		amdgv_memmgr_free(adapt->gfx.dump_cu_memmgr_mem_group->signal_obj);
-	if (adapt->gfx.dump_cu_memmgr_mem_group->kernelarg)
-		amdgv_memmgr_free(adapt->gfx.dump_cu_memmgr_mem_group->kernelarg);
-	if (adapt->gfx.dump_cu_memmgr_mem_group->kernelobj)
-		amdgv_memmgr_free(adapt->gfx.dump_cu_memmgr_mem_group->kernelobj);
-	if (adapt->gfx.dump_cu_memmgr_mem_group->out_flag)
-		amdgv_memmgr_free(adapt->gfx.dump_cu_memmgr_mem_group->out_flag);
-	if (adapt->gfx.dump_cu_memmgr_mem_group->out_data)
-		amdgv_memmgr_free(adapt->gfx.dump_cu_memmgr_mem_group->out_data);
-
-	oss_free_memory(adapt->gfx.dump_cu_memmgr_mem_group);
-
-	return;
+	adapt->gfx.funcs->free_dump_cu_resource_memory(adapt);
 }

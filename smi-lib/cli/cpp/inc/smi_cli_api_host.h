@@ -36,9 +36,12 @@ public:
 	virtual int amdsmi_get_bdf_from_nic_index(uint64_t &processor_bdf, int index) override;
 	virtual int amdsmi_get_bdf_from_uuid_or_bdf(uint64_t &processor_bdf, int &gpu_index,
 			std::string device, int type) override;
+	virtual int amdsmi_get_bdf_from_bdf_nic(uint64_t &processor_bdf, int &nic_index,
+			std::string device) override;
 	virtual int amdsmi_get_gpu_count(unsigned int &gpu_count) override;
 	virtual int amdsmi_get_device_count(unsigned int &device_count, int device_type) override;
-	virtual int amdsmi_get_processor_from_index_by_type(void *processor_handle, int index, int type) override;
+	int amdsmi_get_nic_processor_from_index(void *processor_handle, int index);
+	virtual int amdsmi_get_all_nic_devices(std::vector<std::pair<DeviceType, int>>& nic_devices) override;
 	int list_command(int format, unsigned int gpu_index, std::string bdf, char *uuid,
 					 std::string &formatted_string);
 	virtual int amdsmi_get_vf_tree(std::vector<std::map<std::string, std::string>> &out) override;
@@ -59,10 +62,13 @@ public:
 	virtual int get_string_from_enum_mp_setting(int mp_setting, std::string& out) override;
 	virtual int get_string_from_enum_resource_type(int resource_type, std::string& out) override;
 
+	virtual int get_index_from_main_gpu(int &gpu_index) override;
 	virtual int get_string_from_enum_driver_model(int driver_model, std::string& out) override;
 	virtual int get_string_from_enum_cper_severity_mask(int severity_mask, std::string& out) override;
-	virtual int initTopology(std::vector<std::shared_ptr<Device> > devices,
-							 std::vector<std::string>& bdf_vector) override;
+	virtual int get_string_from_enum_ptl_format(int format, std::string& out);
+	virtual int get_string_from_enum_nic_topo_link_type(int nic_link_type, std::string& out) override;
+	virtual int initTopology(Arguments arg,
+							 std::vector<std::string>& bdf_vector, std::vector<std::string>& nic_bdf_vector) override;
 	virtual int csv_recursion(std::string& main_buffer,
 							  const std::vector<std::vector<std::string>> &results) override;
 	virtual int ThrottlerDataToString(uint64_t data, std::string& out) override;
@@ -79,7 +85,7 @@ public:
 			std::string &formatted_string);
 	virtual int amdsmi_get_board_info_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string);
-	virtual int amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments arg,
+	virtual int amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments &arg,
 			std::string &formatted_string);
 	virtual int amdsmi_get_driver_info_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string);
@@ -98,9 +104,9 @@ public:
 	virtual int amdsmi_get_vf_info_static_command(std::string device, Arguments arg,
 			std::string& out) override;
 	virtual int amdsmi_get_soc_pstate(uint64_t processor_bdf, Arguments arg,
-									  std::string &formatted_string);
+			std::string &formatted_string);
 	virtual int amdsmi_get_plpd(uint64_t processor_bdf, Arguments arg,
-								std::string &formatted_string);
+			std::string &formatted_string);
 
 	virtual int amdsmi_get_list_command(Arguments arg, std::string& out) override;
 	virtual int amdsmi_get_bad_pages_command(uint64_t processor_bdf, Arguments arg, std::string& out,
@@ -121,6 +127,10 @@ public:
 			std::string& out) override;
 	virtual int amdsmi_get_nic_rdma_devices_info_command(uint64_t processor_bdf, Arguments arg,
 			std::string& out) override;
+	virtual int amdsmi_get_nic_link_type_topology_command(Arguments arg,
+			std::vector<std::string> bdf_vector, std::vector<std::string> nic_bdf_vector, std::string& out) override;
+	virtual int amdsmi_get_nic_numa_topology_command(Arguments arg,
+			std::vector<std::string> bdf_vector, std::vector<std::string> nic_bdf_vector, std::string& out) override;
 
 	//firmware
 	virtual int amdsmi_firmware_fw_list_command(uint64_t processor_bdf, Arguments arg, std::string &out,
@@ -155,6 +165,8 @@ public:
 	virtual int amdsmi_get_guest_data_metric_command(std::string device, Arguments arg,
 			std::string& out) override;
 	virtual int amdsmi_get_energy_metric_command(uint64_t processor_bdf, Arguments arg,
+			std::string& out) override;
+	virtual int amdsmi_get_throttle_metric_command(uint64_t processor_bdf, Arguments arg,
 			std::string& out) override;
 	virtual int amdsmi_get_port_netdev_command(uint64_t processor_bdf, Arguments arg,
 			std::string& out) override;
@@ -208,6 +220,8 @@ public:
 	virtual int amdsmi_reset_gpu_command(uint64_t processor, Arguments arg) override;
 	virtual int amdsmi_set_soc_pstate_command(uint64_t processor_bdf, Arguments arg) override;
 	virtual int amdsmi_set_power_cap_command(uint64_t processor_bdf, Arguments arg) override;
+	virtual int amdsmi_set_ptl_status_command(uint64_t processor_bdf, Arguments arg) override;
+	virtual int amdsmi_set_ptl_format_command(uint64_t processor_bdf, Arguments arg) override;
 	virtual int amdsmi_get_virtualization_mode_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) override;
 	virtual int amdsmi_get_numa_command(uint64_t processor_bdf, Arguments arg,
@@ -257,5 +271,24 @@ public:
 			std::string &formatted_string) override;
 
 	virtual int amdsmi_get_node_npm_info_command(uint64_t processor_bdf, Arguments arg,
+			std::string &formatted_string) override;
+
+	virtual int amdsmi_get_default_version_command(uint64_t processor_bdf, Arguments arg,
+			std::string &formatted_string) override;
+	virtual int amdsmi_get_default_bdf_command(uint64_t index, Arguments arg,
+			std::string &formatted_string) override;
+	virtual int amdsmi_get_default_vf_data_command(uint64_t index, Arguments arg,
+			uint64_t &num_vfs, std::vector<std::vector<std::string>> &vf_data) override;
+	virtual int amdsmi_get_default_gpu_name_oam_id_command(uint64_t processor_bdf, Arguments arg,
+			std::string &formatted_string) override;
+	virtual int amdsmi_get_default_partition_mode_command(uint64_t processor_bdf, Arguments arg,
+			std::string &formatted_string) override;
+	virtual int amdsmi_get_default_uec_command(uint64_t processor_bdf, Arguments arg,
+			std::string &formatted_string) override;
+	virtual int amdsmi_get_default_temperature_command(uint64_t processor_bdf, Arguments arg,
+			std::string &formatted_string) override;
+	virtual int amdsmi_get_default_power_usage_command(uint64_t processor_bdf, Arguments arg,
+			std::string &formatted_string) override;
+	virtual int amdsmi_get_default_utilization_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) override;
 };

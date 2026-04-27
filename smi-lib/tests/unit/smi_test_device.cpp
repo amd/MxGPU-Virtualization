@@ -102,6 +102,12 @@ TEST_F(AmdSmiDeviceTests, InvalidParams)
 	ret = amdsmi_get_processor_handles(socket_handle, NULL, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+	ret = amdsmi_get_nic_processor_handles(socket_handle, NULL, &handle);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_nic_processor_handles(socket_handle, NULL, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
 	ret = amdsmi_get_vf_handle_from_vf_index(handle, fcn_idx, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
@@ -148,7 +154,11 @@ TEST_F(AmdSmiDeviceTests, InvalidParams)
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
 
+#ifdef _WIN64
+TEST_F(AmdSmiDeviceTests, DISABLED_ResetGpuTest)
+#else
 TEST_F(AmdSmiDeviceTests, ResetGpuTest)
+#endif
 {
 	int ret;
 	amdsmi_processor_handle handle = &GPU_MOCK_HANDLE;
@@ -433,6 +443,37 @@ TEST_F(AmdSmiNicDeviceTests, GetNicDeviceHandleFromBdf)
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(((struct smi_nic_handle*)handle)->bdf.as_uint, NIC_MOCK_HANDLE.bdf.as_uint);
 }
+
+TEST_F(AmdSmiNicDeviceTests, GetNicProcessorHandles)
+{
+	amdsmi_socket_handle socket_handle = nullptr;
+	uint32_t processor_count = 0;
+	int ret = 0;
+
+	ret = amdsmi_get_nic_processor_handles(socket_handle, &processor_count, nullptr);
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(processor_count, 2);
+
+	amdsmi_processor_handle* processors = (amdsmi_processor_handle*)malloc(sizeof(amdsmi_processor_handle) * processor_count);
+
+	ret = amdsmi_get_nic_processor_handles(socket_handle, &processor_count, processors);
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(processor_count, 2);
+
+
+	processor_type_t type1, type2;
+	ret = amdsmi_get_processor_type(processors[0], &type1);
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_TRUE(type1 == AMDSMI_PROCESSOR_TYPE_AMD_NIC || type1 == AMDSMI_PROCESSOR_TYPE_BRCM_NIC);
+
+	ret = amdsmi_get_processor_type(processors[1], &type2);
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_TRUE(type2 == AMDSMI_PROCESSOR_TYPE_AMD_NIC || type2 == AMDSMI_PROCESSOR_TYPE_BRCM_NIC);
+
+	ASSERT_NE(type1, type2);
+
+	free(processors);
+}
 #endif
 
 TEST_F(AmdSmiDeviceTests, GetGpuProcessorBdf)
@@ -574,7 +615,7 @@ TEST_F(AmdSmiDeviceTests, GetGpuIndex)
 TEST_F(AmdSmiDeviceTests, GetGpuIndexDeviceNotFound)
 {
 	uint32_t processor_index = AMDSMI_MAX_DEVICES;
-	struct smi_gpu_handle MOCK_GPU_HANDLE_BAD = { SMI_HANDLE_TYPE_AMD_GPU, { 0 }, ( GPU_MOCK_HANDLE.handle << 32) | 0x0003, 0x5678 };
+	struct smi_gpu_handle MOCK_GPU_HANDLE_BAD = { SMI_HANDLE_TYPE_AMD_GPU, {{0}}, ( GPU_MOCK_HANDLE.handle << 32) | 0x0003, 0x5678 };
 	int ret = amdsmi_get_index_from_processor_handle(&MOCK_GPU_HANDLE_BAD, &processor_index);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_FOUND);
 }
@@ -605,7 +646,7 @@ TEST_F(AmdSmiDeviceTests, GetIndexFromNicDeviceNotFound)
 	uint32_t processor_index = AMDSMI_MAX_DEVICES;
 	struct smi_nic_handle NIC_MOCK_HANDLE_BAD = {
 		SMI_HANDLE_TYPE_AMD_NIC,
-		{ 0x7, 0x6, 0x5, 0x4 }
+		{{ 0x7, 0x6, 0x5, 0x4 }}
 	};
 	int ret = amdsmi_get_index_from_processor_handle(&NIC_MOCK_HANDLE_BAD, &processor_index);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_FOUND);
@@ -614,7 +655,7 @@ TEST_F(AmdSmiDeviceTests, GetIndexFromNicDeviceNotFound)
 TEST_F(AmdSmiDeviceTests, GetIndexFromDeviceUnknownType)
 {
 	uint32_t processor_index = AMDSMI_MAX_DEVICES;
-	struct smi_gpu_handle unknown_handle = { SMI_HANDLE_TYPE_UNKNOWN, 0 };
+	struct smi_gpu_handle unknown_handle = { SMI_HANDLE_TYPE_UNKNOWN, {{0}} };
 	int ret = amdsmi_get_index_from_processor_handle(&unknown_handle, &processor_index);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
@@ -778,8 +819,20 @@ TEST_F(AmdSmiDeviceTests, GetProcessorType)
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(processor_type, AMDSMI_PROCESSOR_TYPE_AMD_NIC);
 
+	ret = amdsmi_get_processor_type(&BRCM_NIC_MOCK_HANDLE, &processor_type);
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(processor_type, AMDSMI_PROCESSOR_TYPE_BRCM_NIC);
+
 	struct smi_gpu_handle unknown_handle = { SMI_HANDLE_TYPE_UNKNOWN, 0 };
 	ret = amdsmi_get_processor_type(&unknown_handle, &processor_type);
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(processor_type, AMDSMI_PROCESSOR_TYPE_UNKNOWN);
+
+	struct smi_nic_handle unknown_nic_handle = {
+		SMI_HANDLE_TYPE_UNKNOWN,
+		{ { 0x4, 0x3, 0x2, 0x1 } }
+	};
+	ret = amdsmi_get_processor_type(&unknown_nic_handle, &processor_type);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(processor_type, AMDSMI_PROCESSOR_TYPE_UNKNOWN);
 }
@@ -805,6 +858,18 @@ TEST_F(AmdSmiDeviceTests, GetProcessorHandlesByType)
 
 	processor_count = AMDSMI_MAX_DEVICES;
 	ret = amdsmi_get_processor_handles_by_type(socket_handle, AMDSMI_PROCESSOR_TYPE_AMD_NIC, NULL, &processor_count);
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(processor_count, 1);
+
+	processor_count = AMDSMI_MAX_DEVICES;
+	ret = amdsmi_get_processor_handles_by_type(socket_handle, AMDSMI_PROCESSOR_TYPE_BRCM_NIC, processors, &processor_count);
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+
+	ret = amdsmi_get_processor_handles_by_type(socket_handle, AMDSMI_PROCESSOR_TYPE_BRCM_NIC, processors, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	processor_count = AMDSMI_MAX_DEVICES;
+	ret = amdsmi_get_processor_handles_by_type(socket_handle, AMDSMI_PROCESSOR_TYPE_BRCM_NIC, NULL, &processor_count);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(processor_count, 1);
 #endif

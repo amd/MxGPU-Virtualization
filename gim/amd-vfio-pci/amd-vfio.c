@@ -117,6 +117,18 @@ static struct vfio_migration_ops amd_vfio_migration_ops = {
 	.migration_get_data_size = amd_vfio_pci_migration_get_data_size,
 };
 
+#if defined(HAVE_VFIO_DMA_UNMAP)
+/*
+ * Dummy dma_unmap callback required by the new VFIO API.
+ * This replaces the old vfio_register_notifier mechanism.
+ */
+static void amd_vfio_pci_dma_unmap(struct vfio_device *vdev, u64 iova,
+				   u64 length)
+{
+	/* No action needed - this is a dummy handler to satisfy VFIO core */
+}
+#endif
+
 static int amd_vfio_pci_open_device(struct vfio_device *vdev)
 {
 	int ret;
@@ -157,6 +169,8 @@ static int amd_vfio_pci_open_device(struct vfio_device *vdev)
 
 static const struct pci_device_id amd_vfio_pci_table[] = { { 0x1002, 0x74B6, PCI_ANY_ID,
 							     PCI_ANY_ID, 0, 0, 11 },
+							    { 0x1002, 0x75B0, PCI_ANY_ID,
+							     PCI_ANY_ID, 0, 0, 11 },
 							   {} };
 
 static const struct vfio_device_ops amd_vfio_pci_ops = {
@@ -172,6 +186,9 @@ static const struct vfio_device_ops amd_vfio_pci_ops = {
 	.mmap = vfio_pci_core_mmap,
 	.request = vfio_pci_core_request,
 	.match = vfio_pci_core_match,
+#if defined(HAVE_VFIO_DMA_UNMAP)
+	.dma_unmap = amd_vfio_pci_dma_unmap,
+#endif
 	.bind_iommufd = vfio_iommufd_physical_bind,
 	.unbind_iommufd = vfio_iommufd_physical_unbind,
 	.attach_ioas = vfio_iommufd_physical_attach_ioas,

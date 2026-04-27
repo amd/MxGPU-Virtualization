@@ -522,7 +522,151 @@ static uint8_t amdgv_get_ras_policy_info(amdgv_dev_t adev, struct amdgv_uni_cmd 
 	return AMDGV_CMD__SUCCESS;
 }
 
+static enum amdgv_cmd_asic_type amd_asic_type_to_amdgv_cmd_asic_type(enum amd_asic_type asic_type, uint32_t dev_id)
+{
+	switch (asic_type) {
+	case CHIP_MI200:
+		return AMDGV_CMD_CHIP_MI200;
+	case CHIP_NAVI32:
+		return AMDGV_CMD_CHIP_NAVI32;
+	case CHIP_MI300X:
+		if (dev_id == 0x74A5)
+			return AMDGV_CMD_CHIP_MI325X;
+		else
+			return AMDGV_CMD_CHIP_MI300X;
+	case CHIP_MI308X:
+		return AMDGV_CMD_CHIP_MI308X;
+	case CHIP_MI350X:
+		if (dev_id == 0x75A3)
+			return AMDGV_CMD_CHIP_MI355X;
+		else
+			return AMDGV_CMD_CHIP_MI350X;
+	case CHIP_LAST:
+		return AMDGV_CMD_CHIP_LAST;
+	default:
+		return AMDGV_CMD_CHIP_UNKNOWN;
+	}
+}
+
+static amdgv_dev_t amdgv_get_dev_by_handle(uint64_t dev_handle)
+{
+	uint64_t dev_uuid;
+	amdgv_dev_t adev = NULL;
+	amdgv_dev_t dev_list[AMDGV_CMD_MAX_GPU_NUM];
+	int i, dev_num = 0;
+
+	oss_get_device_list(dev_list, &dev_num);
+
+	for (i = 0; i < dev_num; i++) {
+		if (amdgv_gpumon_get_dev_uuid(dev_list[i], &dev_uuid)) {
+			adev = NULL;
+			continue;
+		}
+		if (dev_handle == dev_uuid) {
+			adev = dev_list[i];
+			break;
+		}
+	}
+
+	return adev;
+}
+
+static int __amdgv_get_device_info_v1(amdgv_dev_t dev, struct amdgv_cmd_dev_info *amdgv_dev)
+{
+	union amdgv_dev_info dev_info = {0};
+	uint32_t asic_type;
+
+	if (!amdgv_get_dev_info(dev, AMDGV_GET_BASIC_INFO, &dev_info) &&
+		!amdgv_gpumon_get_asic_type(dev, &asic_type)) {
+		amdgv_dev->asic_type = amd_asic_type_to_amdgv_cmd_asic_type(asic_type, dev_info.basic_info.device_id);
+		amdgv_dev->bdf = dev_info.basic_info.bdf;
+	} else {
+		amdgv_dev->asic_type = AMDGV_CMD_CHIP_UNKNOWN;
+		amdgv_dev->bdf = 0;
+	}
+
+	if (!amdgv_get_dev_info(dev, AMDGV_GET_ENABLED_VF_NUM, &dev_info))
+		amdgv_dev->vf_num = dev_info.vf.num_enabled_vf;
+	else
+		amdgv_dev->vf_num =  0;
+
+	if (amdgv_gpumon_get_dev_uuid(dev, &amdgv_dev->dev_handle))
+		amdgv_dev->dev_handle = 0;
+
+	if (amdgv_gpumon_get_ecc_support_flag(dev, &amdgv_dev->ecc_enabled,
+			&amdgv_dev->ecc_supported)) {
+				amdgv_dev->ecc_enabled = 0;
+				amdgv_dev->ecc_supported = 0;
+	}
+
+	return 0;
+}
+
+static int __amdgv_get_device_info_v2(amdgv_dev_t dev, struct amdgv_cmd_dev_info *amdgv_dev,
+					struct amdgv_cmd_dev_info_ex *amdgv_dev_ex)
+{
+	union amdgv_dev_info dev_info = {0};
+
+	__amdgv_get_device_info_v1(dev, amdgv_dev);
+
+	if (!amdgv_get_dev_info(dev, AMDGV_GET_OAM_IDX, &dev_info))
+		amdgv_dev_ex->oam_id = dev_info.oam.oam_idx;
+
+	if (amdgv_gpumon_get_ras_eeprom_version(dev, &amdgv_dev_ex->ras_eeprom_version))
+		amdgv_dev_ex->ras_eeprom_version = 0;
+
+	return 0;
+}
+
+static uint8_t amdgv_get_devices_info(amdgv_dev_t adev, struct amdgv_uni_cmd *cmd)
+{
+	struct amdgv_cmd_devices_info *output_data =
+		(struct amdgv_cmd_devices_info *)cmd->output_buff_raw;
+	amdgv_dev_t dev_list[AMDGV_CMD_MAX_GPU_NUM];
+	int dev_num = 0;
+	uint8_t i = 0;
+
+	if (cmd->version != AMDGV_CMD_VERSION_V1 && cmd->version != AMDGV_CMD_VERSION_V2)
+		return AMDGV_CMD__ERROR_INVALID_INPUT;
+
+	oss_get_device_list(dev_list, &dev_num);
+
+	for (i = 0; i < dev_num; i++) {
+		if (cmd->version == AMDGV_CMD_VERSION_V1)
+			__amdgv_get_device_info_v1(dev_list[i], &output_data->devs[i]);
+		else
+			__amdgv_get_device_info_v2(dev_list[i], &output_data->devs[i], &output_data->devs_ex[i]);
+	}
+	output_data->dev_num = dev_num;
+
+	if (cmd->version == AMDGV_CMD_VERSION_V1)
+		cmd->output_size = sizeof(struct amdgv_cmd_devices_info) -
+			AMDGV_CMD_MAX_GPU_NUM * sizeof(struct amdgv_cmd_dev_info_ex);
+	else
+		cmd->output_size = sizeof(struct amdgv_cmd_devices_info);
+
+	return AMDGV_CMD__SUCCESS;
+}
+
+static uint8_t amdgv_query_interface_version(amdgv_dev_t adev, struct amdgv_uni_cmd *cmd)
+{
+	struct amdgv_query_interface_version_rsp *rsp =
+		(struct amdgv_query_interface_version_rsp *)cmd->output_buff_raw;
+
+	if (cmd->input_size != sizeof(struct amdgv_query_interface_version_req) ||
+			cmd->version != AMDGV_CMD_VERSION_V1)
+		return AMDGV_CMD__ERROR_INVALID_INPUT;
+
+	rsp->major_ver = AMDGV_INTERFACE_MAJOR_VERSION;
+	rsp->minor_ver = AMDGV_INTERFACE_MINOR_VERSION;
+
+	cmd->output_size = sizeof(struct amdgv_query_interface_version_rsp);
+	return AMDGV_CMD__SUCCESS;
+}
+
 static amdgv_cmd_func_map amdgv_ras_func[] = {
+	{AMDGV_CMD_QUERY_INTERFACE_VERSION, amdgv_query_interface_version},
+	{AMDGV_CMD_GET_DEVICES_INFO, amdgv_get_devices_info},
 	{AMDGV_CMD_GET_BLOCK_ECC_STATUS, amdgv_get_block_ecc_info},
 	{AMDGV_CMD_RAS_INJECT_ERROR, amdgv_ras_ecc_inject},
 	{AMDGV_CMD_GET_BAD_PAGES, amdgv_get_bad_pages},
@@ -536,14 +680,24 @@ static amdgv_cmd_func_map amdgv_ras_func[] = {
 	{AMDGV_CMD_GET_RAS_POLICY_INFO, amdgv_get_ras_policy_info},
 };
 
-uint8_t amdgv_handle_uni_cmd(void *data, struct amdgv_uni_cmd *cmd)
+uint8_t amdgv_handle_uni_cmd(struct amdgv_uni_cmd *cmd)
 {
 	static amdgv_cmd_func_map *func = amdgv_ras_func;
 	int i;
+	amdgv_dev_t adev = NULL;
+
+	if (cmd->cmd_id != AMDGV_CMD_QUERY_INTERFACE_VERSION &&
+		cmd->cmd_id != AMDGV_CMD_GET_DEVICES_INFO) {
+		struct amdgv_cmd_dev_handle *input_data  =
+			(struct amdgv_cmd_dev_handle *)cmd->input_buff_raw;
+		adev = amdgv_get_dev_by_handle(input_data->dev_handle);
+		if (!adev)
+			return AMDGV_CMD__ERROR_GENERIC;
+	}
 
 	for (i = 0; i < ARRAY_SIZE(amdgv_ras_func); i++)
 		if (func[i].cmd_id == cmd->cmd_id)
-			return func[i].func((amdgv_dev_t *)data, cmd);
+			return func[i].func(adev, cmd);
 
 	return AMDGV_CMD__ERROR_UKNOWN_CMD;
 }

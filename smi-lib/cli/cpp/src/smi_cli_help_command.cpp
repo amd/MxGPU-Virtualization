@@ -74,9 +74,9 @@ std::string AmdSmiHelpCommand::get_xgmi_help_message(AmdSmiHelpInfo &info_helper
 	return formatted_string;
 }
 
-std::string AmdSmiHelpCommand::get_topology_help_message(AmdSmiHelpInfo &info_helper)
+std::string AmdSmiHelpCommand::get_topology_help_message(AmdSmiHelpInfo &info_helper, Arguments arg)
 {
-	std::string formatted_string = info_helper.get_topology_help_message(true);
+	std::string formatted_string = info_helper.get_topology_help_message(arg, true);
 	return formatted_string;
 }
 
@@ -192,7 +192,7 @@ void AmdSmiHelpCommand::execute_command()
 			},
 			{"topology", [this](AmdSmiHelpInfo& info, Arguments arg)
 				{
-					return get_topology_help_message(info);
+					return get_topology_help_message(info, arg);
 				}
 			},
 			{"partition", [this](AmdSmiHelpInfo& info, Arguments arg)

@@ -56,7 +56,7 @@ int AmdSmiApiGuest::amdsmi_reset_local_data_command(uint64_t processor_bdf, Argu
 	ret = guest_amdsmi_clean_gpu_local_data(processor);
 
 	if (ret == AMDSMI_STATUS_NO_PERM) {
-		throw SmiToolPermissionDeniedException();
+		throw SmiToolSMILIBErrorException(ret);
 	}
 
 	return ret;

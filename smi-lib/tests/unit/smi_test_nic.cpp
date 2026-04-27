@@ -402,3 +402,46 @@ TEST_F(AmdSmiNicTests, MapNicStatus) {
 		ASSERT_EQ(result, map_status[i].amdsmi_status);
 	}
 }
+
+TEST_F(AmdSmiNicTests, GetNicTopoLinkType) {
+	amdsmi_nic_link_type_t link_type;
+	int ret;
+	smi_nic_status_t status;
+	int num_status_codes = 0;
+
+	status = get_nic_api_status();
+	num_status_codes = sizeof(map_status)/sizeof(map_status[0]);
+	for (int i = SMI_NIC_STATUS_SUCCESS; i < num_status_codes; i++) {
+		set_nic_api_status((smi_nic_status_t)i);
+		ret = amdsmi_topo_get_nic_link_type(&NIC_MOCK_HANDLE, &GPU_MOCK_HANDLE, &link_type);
+		ASSERT_EQ(ret, map_status[i].amdsmi_status);
+		if (i == SMI_NIC_STATUS_SUCCESS) {
+			EXPECT_EQ(link_type, AMDSMI_NIC_LINK_TYPE_PCIE);
+		}
+	}
+	set_nic_api_status(status);
+
+	ret = amdsmi_topo_get_nic_link_type(nullptr, &GPU_MOCK_HANDLE, &link_type);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_topo_get_nic_link_type(&NIC_MOCK_HANDLE, nullptr, &link_type);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_topo_get_nic_link_type(&NIC_MOCK_HANDLE, &GPU_MOCK_HANDLE, nullptr);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	struct smi_gpu_handle gpu_handle = {SMI_HANDLE_TYPE_AMD_GPU, {0}};
+	ret = amdsmi_topo_get_nic_link_type(&gpu_handle, &GPU_MOCK_HANDLE, &link_type);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_topo_get_nic_link_type(&NIC_MOCK_HANDLE, &NIC_MOCK_HANDLE, &link_type);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	struct smi_gpu_handle GPU_MOCK_HANDLE_WRONG = {
+		SMI_HANDLE_TYPE_AMD_GPU,
+		{ { 0x4, 0x3, 0x2, 0x2 } },
+		(0x1234ULL << 32) | 0x4321
+	};
+	ret = amdsmi_topo_get_nic_link_type(&NIC_MOCK_HANDLE, &GPU_MOCK_HANDLE_WRONG, &link_type);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_FOUND);
+}

@@ -21,7 +21,7 @@
 #include "smi_cli_argument.h"
 
 std::string copyright_message =
-	"Copyright 2025 Advanced Micro Devices, Inc. All rights reserved.\n\n";
+	"Copyright 2026 Advanced Micro Devices, Inc. All rights reserved.\n\n";
 std::string help_common =
 	"usage: amd-smi help \n\n"
 	"AMD System Management Interface | %s\n\n"
@@ -45,6 +45,11 @@ help_supported_command_map = {
 			{"host_mi350", {"node"}},
 			{"host_mi200", {"set", "reset", "xgmi", "topology"}},
 			{"host_spec", {"set", "reset"}}
+		}
+	},
+	{
+		"nic", {
+			{"host_mi3xx", {"topology"}}
 		}
 	}
 };
@@ -126,7 +131,7 @@ metric_argument_vectors_map = {
 			{"common", {"watch_time", "iterations", "usage"}},
 			{"host", {"power", "clock", "temperature", "pcie"}},
 			{"host_vf", {"vf"}},
-			{"host_linux_spec", {"ecc", "ecc-block", "energy"}},
+			{"host_linux_spec", {"ecc", "ecc-block", "energy", "throttle"}},
 			{"guest", {"fb-usage"}},
 			{"bm", {"fb-usage", "power", "clock", "temperature", "ecc", "pcie"}}
 		}
@@ -265,28 +270,33 @@ std::string xgmi_host_mi200 =
 	"    -g, --gpu=<gpu_index | gpu_bdf | gpu_uuid>         Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
 	"    --caps                                             XGMI capabilities\n"
 	"    --fb-sharing                                       Framebuffer sharing for each mode\n";
-std::string topology_common = "";
-std::string topology_usage_common = "";
-std::string topology_usage_host =
-	"usage: amd-smi topology [-h | --help] [--json] [--file FILE] [-g | --gpu <gpu_index | gpu_bdf | gpu_uuid>]\n"
-	"                        [--weight] [--hops] [--fb-sharing] [--link-type]\n"
-	"                        [--coherent] [--atomics] [--bi-dir] [--dma]\n\n";
+std::string topology_common =
+	"Topology arguments:" +
+	SmiCliArgument::get_description_continuation_indent() + "Description\n";
+std::string topology_usage_common =
+	"usage: amd-smi topology";
+static const std::map<std::string, std::map<std::string, std::vector<std::string>>>
+topology_argument_vectors_map = {
+	{
+		"gpu_nic_common", {
+			{"host", {"link-type"}}
+		}
+	},
+	{
+		"gpu", {
+			{"host", {"weight", "hops", "fb-sharing", "coherent", "atomics", "bi-dir", "dma"}}
+		}
+	},
+	{
+		"nic", {
+			{"host_linux", {"numa"}}
+		}
+	}
+};
 std::string topology_message =
-	"Displays link topology information\n"
-	"If no argument is provided, returns information for all GPUs on the system\n\n";
-std::string topology_host =
-	"Topology arguments:\n"
-	"                                                       Description:\n"
-	"    -h, --help                                         show this help message and exit\n"
-	"    -g, --gpu=<gpu_index | gpu_bdf | gpu_uuid>         Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
-	"    --weight                                           Current weight information\n"
-	"    --hops                                             Current hops information\n"
-	"    --fb-sharing                                       Current framebuffer sharing information\n"
-	"    --link-type                                        Link type information\n"
-	"    --coherent                                         Cache coherent information\n"
-	"    --atomics                                          32 and 64-bit atomic link capability information\n"
-	"    --bi-dir                                           bi-directional link capability information\n"
-	"    --dma                                              dma link capability information\n";
+	"\nDisplays link topology information\n"
+	"If no argument is provided, returns information for all devices on the system\n"
+	"If no topology information argument is provided all topology information will be displayed\n\n";
 
 std::string set_common = "";
 std::string set_usage_common = "";
@@ -296,7 +306,10 @@ std::string set_usage_host =
 std::string set_usage_host_mi300 =
 	"usage: amd-smi set [-h | --help] [-xgmi --fb-sharing-mode=[MODE] --group[<GPUx, GPUy>]]\n"
 	"                   [--memory-partition [PARTITION_MODE]] [ --accelerator-partition [PROFILE_INDEX]] [ --power-cap [POWER_CAP_VALUE]]\n"
-	"                   [--xgmi-plpd [XGMI_PLPD_VALUE]] [--num-vf=<NUM_VF> [-g=<GPU> | --gpu=<GPU>]] [ --soc-pstate [SOC_PSTATE_VALUE]]\n\n";
+	"                   [--xgmi-plpd [XGMI_PLPD_VALUE]] [ --soc-pstate [SOC_PSTATE_VALUE]]\n";
+
+std::string set_usage_host_mi308 =
+	"                   [--ptl-status=<STATUS> [-g=<GPU> | --gpu=<GPU>]] [--ptl-format=<FRMT1,FRMT2> [-g=<GPU> | --gpu=<GPU>]]\n\n";
 std::string set_usage_host_mi200 =
 	"usage: amd-smi set [-h | --help] [-xgmi --fb-sharing-mode=[MODE] --group[<GPUx, GPUy>]]\n";
 std::string set_usage_bm =
@@ -311,6 +324,7 @@ std::string set_host_mi300 =
 	"Set arguments:\n"
 	"                                                                                           Description:\n"
 	"    -h, --help                                                                             show this help message and exit\n"
+	"    -g=<gpu_id>, --gpu=<gpu_id>                                                            Select a GPU ID, BDF or UUID, if not selected it will set given num of VFs for all GPUs\n\n"
 	"    --xgmi --fb-sharing-mode=<AmdSmiXgmiFbSharingMode> --group=\"<gpu_id1-gpu_id2>\"       Sets framebuffer sharing mode from group [\"MODE_1\", \"MODE_2\", \"MODE_4\", \"MODE_8\", \"CUSTOM\"]\n"
 	"                                                                                           Where, MODE_X represents that X GPUs will be in the same group, linked together:\n"
 	"                                                                                           MODE_1 (one GPU in a group), MODE_2 (two GPUs in a group), MODE_4 (four GPUs in a group), MODE_8 (eight GPUs in a group).\n"
@@ -325,10 +339,13 @@ std::string set_host_mi300 =
 	"    --power-cap=<power_cap_value>                                                          Sets power cap to the provided power cap value.\n"
 	"                                                                                           Note: Cap value must be between the minimum (min_power_cap) and maximum (max_power_cap) power cap values.\n"
 	"                                                                                           Range of the cap value can be seen by running the amd-smi static command.\n\n"
-	"    --num-vf=<num_vf>                                                                      Sets number of VFs\n"
 	"    --xgmi-plpd=<xgmi-plpd_value>                                                          Sets xgmi plpd setting to the provided xgmi plpd value.\n"
-	"    --soc-pstate=<soc-pstate_value>                                                        Sets soc pstate setting to the provided soc pstate value.\n"
-	"    -g=<gpu_id>, --gpu=<gpu_id>                                                            Select a GPU ID, BDF or UUID, if not selected it will set given num of VFs for all GPUs\n\n";
+	"    --soc-pstate=<soc-pstate_value>                                                        Sets soc pstate setting to the provided soc pstate value.\n";
+
+std::string set_host_mi308 =
+	"    --ptl-status=<STATUS>                                                                  Enable or disable the PTL on a GPU processor (ENABLED/DISABLED)\n"
+	"    --ptl-format=<FRMT1,FRMT2>                                                             Set the PTL format on a GPU processor. For example, --ptl-format I8,F32\n";
+
 std::string set_host_mi200 =
 	"Set arguments:\n"
 	"                                                                                           Description:\n"
@@ -338,12 +355,34 @@ std::string set_host_mi200 =
 	"                                                                                           MODE_1 (one GPU in a group), MODE_2 (two GPUs in a group), MODE_4 (four GPUs in a group), MODE_8 (eight GPUs in a group).\n"
 	"                                                                                           Note: This command will only work if there's no guest VM running.\n"
 	"                                                                                           All possible configurations can be seen by running the amd-smi xgmi command.\n\n";
+
+std::string set_host_mi300_esxi =
+	"Set arguments:\n"
+	"                                                                                           Description:\n"
+	"    -h, --help                                                                             show this help message and exit\n"
+	"    -g=<gpu_id>, --gpu=<gpu_id>                                                            Select a GPU ID, BDF or UUID, if not selected it will set given num of VFs for all GPUs\n\n"
+	"    --memory-partition=<AmdSmiMemoryPartitionSetting>                                      Sets memory partition setting\n"
+	"                                                                                           Note: This command will only work if there's no guest VM running.\n"
+	"                                                                                           Run 'amd-smi partition' to list memory-partition modes supported on current platform.\n\n"
+	"    --accelerator-partition=<profile_index>                                                Sets accelerator partition setting to a mode based on profile_index from partition command\n"
+	"                                                                                           Note: This command will only work if there's no guest VM running.\n"
+	"                                                                                           All possible configurations can be seen by running the amd-smi partition command.\n\n"
+	"    --power-cap=<power_cap_value>                                                          Sets power cap to the provided power cap value.\n"
+	"                                                                                           Note: Cap value must be between the minimum (min_power_cap) and maximum (max_power_cap) power cap values.\n"
+	"                                                                                           Range of the cap value can be seen by running the amd-smi static command.\n\n"
+	"    --xgmi-plpd=<xgmi-plpd_value>                                                          Sets xgmi plpd setting to the provided xgmi plpd value.\n"
+	"    --soc-pstate=<soc-pstate_value>                                                        Sets soc pstate setting to the provided soc pstate value.\n";
+std::string set_usage_host_mi300_esxi =
+	"usage: amd-smi set [-h | --help] [--memory-partition [PARTITION_MODE]] [ --accelerator-partition [PROFILE_INDEX]] [ --power-cap [POWER_CAP_VALUE]]\n"
+	"                   [--xgmi-plpd [XGMI_PLPD_VALUE]] [ --soc-pstate [SOC_PSTATE_VALUE]]\n";
 std::string set_bm =
 	"Set arguments:\n"
 	"                                                                                           Description:\n"
 	"    -h, --help                                                                             show this help message and exit\n"
 	"    --process-isolation=<0 or 1>                                                           Enable or disable the GPU process isolation: 0 for disable and 1 for enable\n\n"
 	"    --power-cap=<power_cap_value>                                                          Sets power cap to the provided power cap value.\n"
+	"    --ptl-status=<STATUS>                                                                  Enable or disable the PTL on a GPU processor (ENABLED/DISABLED)\n"
+	"    --ptl-format=<FRMT1,FRMT2>                                                             Set the PTL format on a GPU processor. For example, --ptl-format=I8,F32\n"
 	"                                                                                           Note: Cap value must be between the minimum (min_power_cap) and maximum (max_power_cap) power cap values.\n"
 	"                                                                                           Range of the cap value can be seen by running the amd-smi static command.\n\n";
 std::string reset_common = "";
@@ -437,7 +476,7 @@ std::string command_modifiers =
 	"--json                Displays output in JSON format (human readable by default).\n"
 	"--csv                 Displays output in CSV format (human readable by default, GPU only).\n"
 	"--file FILE           Saves output into a file on the provided path (stdout by default).\n";
-std::string xgmi_topology_modifiers =
+std::string xgmi_modifiers =
 	"Command Modifiers:\n"
 	"                      Description:\n"
 	"--json                Displays output in JSON format (human readable by default).\n"

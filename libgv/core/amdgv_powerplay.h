@@ -214,7 +214,7 @@ struct amdgv_pp_funcs {
 		int type, uint32_t *count);
 	int (*read_mca_bank_reg32)(struct amdgv_adapter *adapt,
 		int type, int idx, int offset, uint32_t *val);
-	int (*gpu_mode1_reset)(struct amdgv_adapter *adapt);
+	int (*gpu_mode1_reset)(struct amdgv_adapter *adapt, bool is_unload);
 	int (*smu_get_pm_policy)(struct amdgv_adapter *adapt,
 			    enum amdgv_pp_pm_policy p_type,
 			    struct pp_smu_dpm_policy **policy_int);
@@ -234,6 +234,7 @@ struct amdgv_pp_funcs {
 	int (*init_drv_metrics_ext)(struct amdgv_adapter *adapt);
 	bool (*get_smu_cap_supported)(struct amdgv_adapter *adapt, int cap);
 	int (*get_npm_info)(struct amdgv_adapter *adapt, struct amdgv_gpumon_npm_info *npm_info);
+	bool (*migration_smu_is_supported)(struct amdgv_adapter *adapt);
 };
 
 struct amdgv_pmme_funcs {

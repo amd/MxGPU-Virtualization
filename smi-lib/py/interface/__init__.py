@@ -25,7 +25,9 @@
 from .amdsmi_interface import amdsmi_init
 from .amdsmi_interface import amdsmi_shut_down
 from .amdsmi_interface import amdsmi_get_processor_handles
+from .amdsmi_interface import amdsmi_get_nic_processor_handles
 from .amdsmi_interface import amdsmi_get_processor_handles_by_type
+from .amdsmi_interface import amdsmi_get_processor_type
 from .amdsmi_interface import amdsmi_get_processor_handle_from_bdf
 from .amdsmi_interface import amdsmi_get_index_from_processor_handle
 from .amdsmi_interface import amdsmi_get_processor_handle_from_index
@@ -51,11 +53,13 @@ from .amdsmi_interface import amdsmi_get_bad_page_threshold
 from .amdsmi_interface import amdsmi_get_gpu_bad_page_info
 from .amdsmi_interface import amdsmi_get_gpu_asic_info
 from .amdsmi_interface import amdsmi_get_pcie_info
+from .amdsmi_interface import amdsmi_get_gpu_pci_bandwidth
 from .amdsmi_interface import amdsmi_get_power_cap_info
 from .amdsmi_interface import amdsmi_get_fb_layout
 from .amdsmi_interface import amdsmi_get_gpu_activity
 from .amdsmi_interface import amdsmi_get_power_info
 from .amdsmi_interface import amdsmi_set_power_cap
+from .amdsmi_interface import amdsmi_get_supported_power_cap
 from .amdsmi_interface import amdsmi_get_temp_metric
 from .amdsmi_interface import amdsmi_get_gpu_cache_info
 from .amdsmi_interface import amdsmi_get_clock_info
@@ -108,15 +112,21 @@ from .amdsmi_interface import amdsmi_set_xgmi_plpd
 from .amdsmi_interface import amdsmi_get_node_handle
 from .amdsmi_interface import amdsmi_get_npm_info
 from .amdsmi_interface import amdsmi_get_gpu_ras_policy_info
+from .amdsmi_interface import amdsmi_get_gpu_ptl_state
+from .amdsmi_interface import amdsmi_set_gpu_ptl_state
+from .amdsmi_interface import amdsmi_get_gpu_ptl_formats
+from .amdsmi_interface import amdsmi_set_gpu_ptl_formats
 
 from .amdsmi_interface import AmdSmiTemperatureType
 from .amdsmi_interface import AmdSmiTemperatureMetric
 from .amdsmi_interface import AmdSmiClkType
 from .amdsmi_interface import AmdSmiGuardState
 from .amdsmi_interface import AmdSmiVramType
+from .amdsmi_interface import AmdSmiPtlDataFormat
 from .amdsmi_interface import AmdSmiGuardType
 from .amdsmi_interface import AmdSmiVfState
 from .amdsmi_interface import AmdSmiFwBlock
+from .amdsmi_interface import AmdSmiPowerCapType
 from .amdsmi_interface import AmdSmiEventReader
 from .amdsmi_interface import AmdSmiEventCategory
 from .amdsmi_interface import AmdSmiEventCategoryGpu
@@ -165,6 +175,9 @@ from .amdsmi_nic_interface import amdsmi_get_nic_rdma_dev_info
 from .amdsmi_nic_interface import amdsmi_get_nic_port_statistics
 from .amdsmi_nic_interface import amdsmi_get_nic_vendor_statistics
 from .amdsmi_nic_interface import amdsmi_get_nic_rdma_port_statistics
+from .amdsmi_nic_interface import amdsmi_topo_get_nic_link_type
+from .amdsmi_nic_interface import AmdSmiNicLinkType
+
 
 # AMD SMI Exception
 from .amdsmi_exception import AmdSmiLibraryException

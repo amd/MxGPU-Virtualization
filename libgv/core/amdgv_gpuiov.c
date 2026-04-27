@@ -21,6 +21,7 @@
  */
 
 #include "amdgv_device.h"
+#include "amdgv_reset.h"
 
 static const uint32_t this_block = AMDGV_COMMUNICATION_BLOCK;
 
@@ -458,7 +459,7 @@ int wait_for_first_cmd_complete(struct amdgv_adapter *adapt,
 
 	if (!if_gfx_engine_in_mask(adapt, hw_sched_mask) || !adapt->gfx.hang_detection_supported)
 		wait_ret = amdgv_wait_for(adapt, wait_for_first_cmd_complete_cb, (void *)&wc, timeout,
-			AMDGV_WAIT_FLAG_USLEEP);
+			AMDGV_WAIT_FLAG_USLEEP | AMDGV_WAIT_FLAG_NO_WARNING);
 	else
 		wait_ret = amdgv_wait_detect_hang(adapt, wait_for_first_cmd_complete_cb, (void *)&wc, timeout);
 
@@ -468,8 +469,10 @@ int wait_for_first_cmd_complete(struct amdgv_adapter *adapt,
 			AMDGV_DIAG_DATA_TRACE_LOG_GPUIOV_CMD_END(idx_vf, hw_sched_id,
 				adapt->gpuiov.ctrl_blocks[hw_sched_id].last_cmd,
 				adapt->gpuiov.ctrl_blocks[hw_sched_id].last_status, wait_ret);
-			amdgv_put_error(idx_vf, AMDGV_ERROR_IOV_CMD_TIMEOUT, timeout);
-			amdgv_dump_gpuiov_cmd_status(adapt, hw_sched_id);
+			if (!in_whole_gpu_reset() && !adapt->reset.in_xgmi_chain_reset) {
+				amdgv_put_error(idx_vf, AMDGV_ERROR_IOV_CMD_TIMEOUT, timeout);
+				amdgv_dump_gpuiov_cmd_status(adapt, hw_sched_id);
+			}
 
 			if (adapt->bp_mode == AMDGV_BP_MODE_2 && !(adapt->is_user_ws_cmd)) {
 				amdgv_bp_mode_wait(adapt, idx_vf, hw_sched_id,
@@ -543,7 +546,8 @@ int amdgv_gpuiov_init_vf_no_wait(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	adapt->gpuiov.funcs->set_cmd(adapt, AMDGV_INIT_GPU, hw_sched_id, idx_vf,
 				     AMDGV_INVALID_IDX_VF);
 #ifdef WS_RECORD
-	amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id, AMDGV_RECORD_INIT_START);
+	if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+		amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id, AMDGV_RECORD_INIT_START);
 #endif
 
 	return 0;
@@ -557,7 +561,8 @@ int amdgv_gpuiov_init_vf(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_t 
 
 	ret = wait_cmd_complete(adapt, idx_vf, hw_sched_id, cmd_allow_time());
 #ifdef WS_RECORD
-	amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id, AMDGV_RECORD_INIT_END);
+	if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+		amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id, AMDGV_RECORD_INIT_END);
 #endif
 	if (!ret)
 		adapt->sched.array_vf[idx_vf].cur_vf_state[hw_sched_id] = AMDGV_INIT_GPU;
@@ -576,7 +581,8 @@ int amdgv_gpuiov_load_vf_no_wait(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	adapt->gpuiov.funcs->set_cmd(adapt, AMDGV_LOAD_GPU_STATE, hw_sched_id, idx_vf,
 				     AMDGV_INVALID_IDX_VF);
 #ifdef WS_RECORD
-	amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id, AMDGV_RECORD_LOAD_START);
+	if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+		amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id, AMDGV_RECORD_LOAD_START);
 #endif
 
 	return 0;
@@ -592,8 +598,9 @@ int amdgv_gpuiov_load_vf(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_t 
 
 	if (wait_cmd_complete(adapt, idx_vf, hw_sched_id, cmd_allow_time()) != AMDGV_FAILURE) {
 #ifdef WS_RECORD
-		amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
-					       AMDGV_RECORD_LOAD_END);
+		if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+			amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
+						       AMDGV_RECORD_LOAD_END);
 #endif
 		amdgv_update_histogram(adapt, idx_vf, hw_sched_id, AMDGV_LOAD_GPU_STATE,
 				       load_time_start);
@@ -620,7 +627,8 @@ int amdgv_gpuiov_idle_vf_no_wait(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	adapt->gpuiov.funcs->set_cmd(adapt, AMDGV_IDLE_GPU, hw_sched_id, idx_vf,
 				     AMDGV_INVALID_IDX_VF);
 #ifdef WS_RECORD
-	amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id, AMDGV_RECORD_IDLE_START);
+	if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+		amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id, AMDGV_RECORD_IDLE_START);
 #endif
 
 	return 0;
@@ -636,8 +644,9 @@ int amdgv_gpuiov_idle_vf(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_t 
 
 	if (wait_cmd_complete(adapt, idx_vf, hw_sched_id, cmd_allow_time()) != AMDGV_FAILURE) {
 #ifdef WS_RECORD
-		amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
-					       AMDGV_RECORD_IDLE_END);
+		if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+			amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
+						       AMDGV_RECORD_IDLE_END);
 #endif
 		if (idx_vf >= AMDGV_MAX_VF_SLOT) {
 			AMDGV_ERROR("The VF %d exceeds the boudary", idx_vf);
@@ -666,7 +675,8 @@ int amdgv_gpuiov_save_vf_no_wait(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	adapt->gpuiov.funcs->set_cmd(adapt, AMDGV_SAVE_GPU_STATE, hw_sched_id, idx_vf,
 				     AMDGV_INVALID_IDX_VF);
 #ifdef WS_RECORD
-	amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id, AMDGV_RECORD_SAVE_START);
+	if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+		amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id, AMDGV_RECORD_SAVE_START);
 #endif
 
 	return 0;
@@ -682,8 +692,9 @@ int amdgv_gpuiov_save_vf(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_t 
 
 	if (wait_cmd_complete(adapt, idx_vf, hw_sched_id, cmd_allow_time()) != AMDGV_FAILURE) {
 #ifdef WS_RECORD
-		amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
-					       AMDGV_RECORD_SAVE_END);
+		if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+			amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
+						       AMDGV_RECORD_SAVE_END);
 #endif
 		amdgv_update_histogram(adapt, idx_vf, hw_sched_id, AMDGV_SAVE_GPU_STATE,
 				       save_time_start);
@@ -706,7 +717,8 @@ int amdgv_gpuiov_run_vf_no_wait(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	adapt->gpuiov.funcs->set_cmd(adapt, AMDGV_RUN_GPU, hw_sched_id, idx_vf,
 				     AMDGV_INVALID_IDX_VF);
 #ifdef WS_RECORD
-	amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id, AMDGV_RECORD_RUN_START);
+	if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+		amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id, AMDGV_RECORD_RUN_START);
 #endif
 
 	return 0;
@@ -722,8 +734,9 @@ int amdgv_gpuiov_run_vf(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_t h
 
 	if (wait_cmd_complete(adapt, idx_vf, hw_sched_id, cmd_allow_time()) != AMDGV_FAILURE) {
 #ifdef WS_RECORD
-		amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
-					       AMDGV_RECORD_RUN_END);
+		if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+			amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
+						       AMDGV_RECORD_RUN_END);
 #endif
 		amdgv_update_histogram(adapt, idx_vf, hw_sched_id, AMDGV_RUN_GPU,
 				       run_time_start);
@@ -750,16 +763,21 @@ int amdgv_gpuiov_load_rlcv_state(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	if (adapt->flags & AMDGV_FLAG_USE_LEGACY_FLR_SEQUENCE)
 		return 0;
 
+	if (!adapt->gpuiov.ctrl_blocks[hw_sched_id].saved_rlcv_state)
+		return 0;
+
 	adapt->gpuiov.funcs->set_cmd(adapt, AMDGV_LOAD_RLCV_STATE, hw_sched_id, idx_vf,
 				     AMDGV_INVALID_IDX_VF);
 #ifdef WS_RECORD
-	amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
-				       AMDGV_RECORD_LOAD_RLCV_STATE_START);
+	if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+		amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
+					       AMDGV_RECORD_LOAD_RLCV_STATE_START);
 #endif
 	ret = wait_cmd_complete(adapt, idx_vf, hw_sched_id, cmd_allow_time());
 #ifdef WS_RECORD
-	amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
-				       AMDGV_RECORD_LOAD_RLCV_STATE_END);
+	if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+		amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
+					       AMDGV_RECORD_LOAD_RLCV_STATE_END);
 #endif
 	return ret;
 }
@@ -782,22 +800,31 @@ int amdgv_gpuiov_save_rlcv_state(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	    adapt->gpuiov.ctrl_blocks[hw_sched_id].last_cmd != AMDGV_RUN_GPU)
 		return 0;
 
-	adapt->reset.saved_rlcv_state = true;
+	adapt->gpuiov.ctrl_blocks[hw_sched_id].saved_rlcv_state = true;
 
 	adapt->gpuiov.funcs->set_cmd(adapt, AMDGV_SAVE_RLCV_STATE, hw_sched_id, idx_vf,
 				     AMDGV_INVALID_IDX_VF);
 #ifdef WS_RECORD
-	amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
-				       AMDGV_RECORD_SAVE_RLCV_STATE_START);
+	if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+		amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
+					       AMDGV_RECORD_SAVE_RLCV_STATE_START);
 #endif
 	ret = wait_cmd_complete(adapt, idx_vf, hw_sched_id, cmd_allow_time());
 #ifdef WS_RECORD
-	amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
-				       AMDGV_RECORD_SAVE_RLCV_STATE_END);
+	if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+		amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
+					       AMDGV_RECORD_SAVE_RLCV_STATE_END);
 #endif
 	return ret;
 }
 
+void amdgv_gpuiov_reset_saved_rlcv_state(struct amdgv_adapter *adapt)
+{
+	uint32_t i;
+
+	for (i = 0; i < adapt->gpuiov.num_ctrl_blocks; i++)
+		adapt->gpuiov.ctrl_blocks[i].saved_rlcv_state = false;
+}
 
 static int amdgv_gpuiov_wait_transfer_vf_data_done(struct amdgv_adapter *adapt,
 			uint32_t idx_vf, uint32_t hw_sched_id, bool to_export)
@@ -847,7 +874,9 @@ int amdgv_gpuiov_shutdown_vf_no_wait(struct amdgv_adapter *adapt, uint32_t idx_v
 		adapt->gpuiov.funcs->set_cmd(adapt, AMDGV_SHUTDOWN_GPU, hw_sched_id, idx_vf,
 				     AMDGV_INVALID_IDX_VF);
 #ifdef WS_RECORD
-		amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id, AMDGV_RECORD_SHUTDOWN_START);
+		if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+			amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
+						       AMDGV_RECORD_SHUTDOWN_START);
 #endif
 	}
 
@@ -872,13 +901,15 @@ int amdgv_gpuiov_shutdown_vf(struct amdgv_adapter *adapt, uint32_t idx_vf,
 		adapt->gpuiov.funcs->set_cmd(adapt, AMDGV_SHUTDOWN_GPU, hw_sched_id, idx_vf,
 					     AMDGV_INVALID_IDX_VF);
 #ifdef WS_RECORD
-		amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
-					       AMDGV_RECORD_SHUTDOWN_START);
+		if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+			amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
+						       AMDGV_RECORD_SHUTDOWN_START);
 #endif
 		ret = wait_cmd_complete(adapt, idx_vf, hw_sched_id, cmd_allow_time());
 #ifdef WS_RECORD
-		amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
-					       AMDGV_RECORD_SHUTDOWN_END);
+		if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+			amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
+						       AMDGV_RECORD_SHUTDOWN_END);
 #endif
 	}
 
@@ -898,14 +929,16 @@ int amdgv_gpuiov_event_notification(struct amdgv_adapter *adapt, uint32_t idx_vf
 		ret = adapt->gpuiov.funcs->set_event_notification(adapt, hw_sched_id, idx_vf,
 								  event_id, value);
 #ifdef WS_RECORD
-		amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
-					       AMDGV_RECORD_EVENT_NOTIFICATION_START);
+		if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+			amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
+						       AMDGV_RECORD_EVENT_NOTIFICATION_START);
 #endif
 		if (!ret)
 			ret = wait_cmd_complete(adapt, idx_vf, hw_sched_id, cmd_allow_time());
 #ifdef WS_RECORD
-		amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
-					       AMDGV_RECORD_EVENT_NOTIFICATION_END);
+		if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+			amdgv_gpuiov_record_queue_push(adapt, idx_vf, hw_sched_id,
+						       AMDGV_RECORD_EVENT_NOTIFICATION_END);
 #endif
 	} else {
 		AMDGV_WARN("Event Notification is not supported.\n");
@@ -990,12 +1023,14 @@ int amdgv_gpuiov_enable_auto_sched(struct amdgv_adapter *adapt, uint32_t hw_sche
 	adapt->gpuiov.funcs->set_cmd(adapt, AMDGV_ENABLE_AUTO_HW_SWITCH, hw_sched_id,
 				     AMDGV_INVALID_IDX_VF, AMDGV_INVALID_IDX_VF);
 #ifdef WS_RECORD
-	amdgv_gpuiov_record_queue_push(adapt, AMDGV_PF_IDX, hw_sched_id,
+	if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+		amdgv_gpuiov_record_queue_push(adapt, AMDGV_PF_IDX, hw_sched_id,
 				       AMDGV_RECORD_ENABLE_AUTO_SCHED_START);
 #endif
 	ret = wait_cmd_complete(adapt, AMDGV_PF_IDX, hw_sched_id, cmd_allow_time());
 #ifdef WS_RECORD
-	amdgv_gpuiov_record_queue_push(adapt, AMDGV_PF_IDX, hw_sched_id,
+	if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+		amdgv_gpuiov_record_queue_push(adapt, AMDGV_PF_IDX, hw_sched_id,
 				       AMDGV_RECORD_ENABLE_AUTO_SCHED_END);
 #endif
 	return ret;
@@ -1007,12 +1042,14 @@ int amdgv_gpuiov_disable_auto_sched(struct amdgv_adapter *adapt, uint32_t hw_sch
 	adapt->gpuiov.funcs->set_cmd(adapt, AMDGV_DISABLE_AUTO_HW_SCHED, hw_sched_id,
 				     AMDGV_INVALID_IDX_VF, AMDGV_INVALID_IDX_VF);
 #ifdef WS_RECORD
-	amdgv_gpuiov_record_queue_push(adapt, AMDGV_PF_IDX, hw_sched_id,
+	if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+		amdgv_gpuiov_record_queue_push(adapt, AMDGV_PF_IDX, hw_sched_id,
 				       AMDGV_RECORD_DISABLE_AUTO_SCHED_START);
 #endif
 	ret = wait_cmd_complete(adapt, AMDGV_PF_IDX, hw_sched_id, cmd_allow_time());
 #ifdef WS_RECORD
-	amdgv_gpuiov_record_queue_push(adapt, AMDGV_PF_IDX, hw_sched_id,
+	if (adapt->flags & AMDGV_FLAG_WS_RECORD)
+		amdgv_gpuiov_record_queue_push(adapt, AMDGV_PF_IDX, hw_sched_id,
 				       AMDGV_RECORD_DISABLE_AUTO_SCHED_END);
 #endif
 	return ret;

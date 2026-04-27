@@ -186,6 +186,32 @@ except AmdSmiException as e:
     print(e)
 ```
 
+### amdsmi_get_nic_processor_handles
+
+Description: Returns list of NIC device handle objects on current machine
+
+Input parameters: `None`
+
+Output: List of NIC device handles
+
+Exceptions that can be thrown by `amdsmi_get_nic_processor_handles` function:
+
+* `AmdSmiLibraryException`
+
+Example:
+
+```python
+try:
+    nic_handles = amdsmi_get_nic_processor_handles()
+    if len(nic_handles) == 0:
+        print("No NICs on machine")
+    else:
+        for nic in nic_handles:
+            print(amdsmi_get_nic_asic_info(nic))
+except AmdSmiException as e:
+    print(e)
+```
+
 ### amdsmi_get_processor_handles_by_type
 
 Description: Returns a list of processor handles of the specified type in the system.
@@ -204,6 +230,8 @@ Field | Description
 `AMD_CPU_CORE` | AMD CPU core (**_Not supported yet_**)
 `AMD_APU` | AMD Accelerated Processing Unit (APU) (**_Not supported yet_**)
 `AMD_NIC` | AMD Network Interface Card (NIC)
+`BRCM_NIC` | Broadcom Network Interface Card (NIC)
+`BRCM_SWITCH` | Broadcom switch
 
 Output: List of processor handles of the chosen type
 
@@ -380,6 +408,51 @@ try:
     else:
         for processor in processors:
             print("Processor's index:", amdsmi_get_index_from_processor_handle(processor))
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_processor_type
+
+Description: Returns the processor type of the given processor handle
+
+Input parameters:
+
+* `processor_handle` processor handle for which to query
+
+Output: `AmdSmiProcessorType` enum value indicating the processor type
+
+`AmdSmiProcessorType` enum values:
+
+Field | Description
+---|---
+`UNKNOWN` | Unknown processor type
+`AMD_GPU` | AMD GPU processor
+`AMD_CPU` | AMD CPU processor
+`NON_AMD_GPU` | Non-AMD GPU processor
+`NON_AMD_CPU` | Non-AMD CPU processor
+`AMD_CPU_CORE` | AMD CPU core processor
+`AMD_APU` | AMD APU processor
+`AMD_NIC` | AMD NIC processor
+`BRCM_NIC` | Broadcom NIC processor
+`BRCM_SWITCH` | Broadcom switch processor
+
+Exceptions that can be thrown by `amdsmi_get_processor_type` function:
+
+* `AmdSmiParameterException`
+* `AmdSmiLibraryException`
+
+Example:
+
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No processors on machine")
+    else:
+        for processor in processors:
+            type = amdsmi_get_processor_type(processor)
+            print(type)
 except AmdSmiException as e:
     print(e)
 ```
@@ -970,9 +1043,10 @@ Field | Content
 `rev_id` |  revision id
 `asic_serial` | asic serial
 `oam_id` | xgmi physical id
-`num_of_compute_units` | num of compute units (**_Not supported yet, currently hardcoded to 0_**)
-`target_graphics_version` | target graphics version (**_Not supported yet, currently hardcoded to 0_**)
+`num_of_compute_units` | number of compute units
+`target_graphics_version` | target graphics version (**_Not supported yet, currently hardcoded to -1_**)
 `subsystem_id` | subsystem device id
+`flags` | chip flags (**_Not supported yet, currently hardcoded to -1_**)
 
 Exceptions that can be thrown by `amdsmi_get_gpu_asic_info` function:
 
@@ -1001,6 +1075,7 @@ try:
             print(asic_info['oam_id'])
             print(asic_info['num_of_compute_units'])
             print(asic_info['target_graphics_version'])
+            print(asic_info['flags'])
 except AmdSmiException as e:
     print(e)
 ```
@@ -1050,6 +1125,46 @@ try:
             print(pcie_info['pcie_metric']['pcie_nak_sent_count'])
             print(pcie_info['pcie_metric']['pcie_nak_received_count'])
             print(pcie_info['pcie_metric']['pcie_lc_perf_other_end_recovery_count'])
+
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_gpu_pci_bandwidth
+
+Description: Returns the list of possible PCIe bandwidths including transfer rates and lane widths
+
+Input parameters:
+
+* `processor_handle` GPU device which to query
+
+Output: Dictionary with fields
+
+Field | Content
+---|---
+`transfer_rate` | <table> <thead><tr><th> Subfield </th><th>Description</th></tr></thead><tbody><tr><td>`num_supported`</td><td> Number of supported PCIe bandwidth levels</td></tr><tr><td>`current`</td><td> Current frequency index</td></tr><tr><td>`frequency`</td><td> List of transfer rates in T/s</td></tr></tbody></table>
+`lanes` | List of lane widths for each corresponding transfer rate
+
+Exceptions that can be thrown by `amdsmi_get_gpu_pci_bandwidth` function:
+
+* `AmdSmiLibraryException`
+* `AmdSmiRetryException`
+* `AmdSmiParameterException`
+
+Example:
+
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            pcie_bw = amdsmi_get_gpu_pci_bandwidth(processor)
+            print(pcie_bw['transfer_rate']['num_supported'])
+            for i in range(pcie_bw['transfer_rate']['num_supported']):
+                print(pcie_bw['transfer_rate']['frequency'][i])
+                print(pcie_bw['lanes'][i])
 
 except AmdSmiException as e:
     print(e)
@@ -1258,6 +1373,45 @@ try:
             power_info = amdsmi_get_power_cap_info(processor)
             power_limit = random.randint(power_info['min_power_cap'], power_info['max_power_cap'])
             amdsmi_set_power_cap(processor, sensor_ind, power_limit)
+
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_supported_power_cap
+
+Description: Returns the supported power cap sensors and their types for a device.
+
+**Note:** This function is not yet implemented and will raise `AmdSmiLibraryException` with error code `AMDSMI_STATUS_NOT_YET_IMPLEMENTED`.
+
+Input parameters:
+
+* `processor_handle` GPU device which to query
+
+Output: Dictionary with fields
+
+Field | Description
+---|---
+`sensor_inds` | list of sensor indices
+`sensor_types` | list of sensor types (AmdSmiPowerCapType: PPT0, PPT1)
+
+Exceptions that can be thrown by `amdsmi_get_supported_power_cap` function:
+
+* `AmdSmiLibraryException`
+* `AmdSmiRetryException`
+* `AmdSmiParameterException`
+
+Example:
+
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            supported_caps = amdsmi_get_supported_power_cap(processor)
+            print(supported_caps)
 
 except AmdSmiException as e:
     print(e)
@@ -2645,6 +2799,8 @@ Field | Description
 `THROTTLE_SOCKET_ACTIVE` | active socket throttle
 `THROTTLE_VR_ACTIVE` | active vr throttle
 `THROTTLE_MEM_ACTIVE` | active memory throttle
+`THROTTLE_PROCHOT_ACTIVE` | active prochot throttle
+`THROTTLE_PPT_ACTIVE` | active ppt throttle
 `PCIE_BANDWIDTH` | pcie bandwidth
 `PCIE_L0_TO_RECOVERY_COUNT` | pcie l0 recovery count
 `PCIE_REPLAY_COUNT` | pcie replay count
@@ -2723,6 +2879,8 @@ Field | Description
 `VR_TEMP_VDDCR_11_HBM_D` | vr temperature vddcr 11 hbm d
 `VR_TEMP_VDD_USR` | vr temperature vdd usr
 `VR_TEMP_VDDIO_11_E32` | vr temperature vddio 11 e32
+`SYSTEM_POWER_UBB_POWER` | system power ubb power
+`SYSTEM_POWER_UBB_POWER_THRESHOLD` | system power ubb power threshold
 `UNKNOWN` | unknown name
 
 `AmdSmiMetricCategory` enum:
@@ -2741,6 +2899,7 @@ Field | Description
 `SYS_ACC_COUNTER` | system accumulated counter
 `SYS_BASEBOARD_TEMP` | system baseboard temperature
 `SYS_GPUBOARD_TEMP` | system gpu board temperature
+`SYS_BASEBOARD_POWER` | system baseboard power
 `UNKNOWN` | unknown category
 
 `AmdSmiMetricType` enum:
@@ -3813,8 +3972,8 @@ Field | Description
 `bdf` | bus
 `max_pcie_width` | maximum supported PCIe link width
 `max_pcie_speed` | maximum supported PCIe link speed
-`pcie_interface_version` | PCIe interface version (**_Not supported yet, currently hardcoded to 0_**)
-`slot_type` | physical slot type (**_Not supported yet, currently hardcoded to 0_**)
+`pcie_interface_version` | PCIe interface version
+`slot_type` | physical slot type
 
 Exceptions that can be thrown by `amdsmi_get_nic_bus_info` function:
 
@@ -3848,7 +4007,7 @@ Output: Dictionary with fields
 Field | Content
 ---|---
 `node` | NUMA (Non-Uniform Memory Access) node identifier associated with the device.
-`affinity` | CPU affinity mask for the device
+`affinity` | CPU AFFINITY mask for the device
 
 Exceptions that can be thrown by `amdsmi_get_nic_numa_info` function:
 
@@ -4131,6 +4290,52 @@ try:
 except AmdSmiException as e:
     print(e)
 ```
+
+### amdsmi_topo_get_nic_link_type
+
+Description: Get the link topology type between a NIC and another processor (e.g., GPU).
+
+This function determines the connectivity relationship between a NIC and another processor based on their PCIe topology and NUMA node placement.
+
+Input parameters:
+* `nic_handle` NIC processor handle
+* `processor_handle` Target processor handle (e.g., GPU)
+
+Output: `AmdSmiNicLinkType` enum value
+
+`AmdSmiNicLinkType` enum values:
+
+Value | Description
+---|---
+`UNKNOWN` | Unknown link type
+`PCIE` | Both processors connect via same PCIe switch
+`NUMA` | Processors connect via different PCIe switches but on the same CPU/NUMA node
+`X_NUMA` | Processors connect via different PCIe switches on different CPUs/NUMA nodes
+
+Exceptions that can be thrown by `amdsmi_topo_get_nic_link_type` function:
+
+* `AmdSmiLibraryException`
+* `AmdSmiParameterException`
+
+Example:
+
+```python
+try:
+    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    gpu_handles = amdsmi_get_processor_handles()
+    if len(nic_handles) == 0:
+        print("No NICs on machine")
+    elif len(gpu_handles) == 0:
+        print("No GPUs on machine")
+    else:
+        for nic in nic_handles:
+            for gpu in gpu_handles:
+                link_type = amdsmi_topo_get_nic_link_type(nic, gpu)
+                print(f"NIC to GPU link type: {link_type}")
+except AmdSmiException as e:
+    print(e)
+```
+
 ### amdsmi_get_node_handle
 
 Description: Get the node handle associated with processor handle.
@@ -4220,6 +4425,141 @@ try:
         for device in devices:
             ras_policy_info = amdsmi_get_gpu_ras_policy_info(device)
             print(ras_policy_info)
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_gpu_ptl_state
+Description: Gets the PTL (Peak Tops Limiter) enable/disable state for the processor
+
+Input parameters:
+* `processor handle` processor handle
+
+Output:
+* True if PTL is enabled, False if PTL is disabled
+
+Exceptions that can be thrown by `amdsmi_get_gpu_ptl_state` function:
+* `AmdSmiLibraryException`
+* `AmdSmiParameterException`
+
+Example:
+
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            enabled = amdsmi_get_gpu_ptl_state(processor)
+            print(f"PTL Enabled: {enabled}")
+
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_set_gpu_ptl_state
+Description: Sets the PTL (Peak Tops Limiter) enable/disable state for the processor
+
+Input parameters:
+* `processor handle` processor handle
+* `enable` (bool) True to enable PTL with default formats, False to disable PTL
+
+Exceptions that can be thrown by `amdsmi_set_gpu_ptl_state` function:
+* `AmdSmiLibraryException`
+* `AmdSmiParameterException`
+
+Example:
+
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            # Enable PTL
+            amdsmi_set_gpu_ptl_state(processor, True)
+
+            # Disable PTL
+            # amdsmi_set_gpu_ptl_state(processor, False)
+
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_gpu_ptl_formats
+Description: Gets the current PTL (Peak Tops Limiter) preferred data formats for the processor
+
+Input parameters:
+* `processor handle` processor handle
+
+Output:
+* tuple(AmdSmiPtlDataFormat, AmdSmiPtlDataFormat): an ordered pair of enums representing the two preferred formats
+Example usage: fmt1, fmt2 = amdsmi_get_gpu_ptl_formats(handle)
+
+Note:
+* If fmt1 == fmt2 == AmdSmiPtlDataFormat.I8 (value 0),
+this indicates that PTL has not been enabled yet on that system and the PTL state is disabled
+
+Available data formats (AmdSmiPtlDataFormat):
+* `I8` - Integer 8-bit format
+* `F16` - Float 16-bit format
+* `BF16` - Brain Float 16-bit format
+* `F32` - Float 32-bit format
+* `F64` - Float 64-bit format
+
+Exceptions that can be thrown by `amdsmi_get_gpu_ptl_formats` function:
+* `AmdSmiLibraryException`
+* `AmdSmiParameterException`
+
+Example:
+
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            format1, format2 = amdsmi_get_gpu_ptl_formats(processor)
+            print(f"PTL Format 1: {format1.name}")
+            print(f"PTL Format 2: {format2.name}")
+
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_set_gpu_ptl_formats
+Description: Sets the PTL (Peak Tops Limiter) with specified preferred data format pair. PTL must be enabled first before calling this function using amdsmi_set_gpu_ptl_state.
+
+Input parameters:
+* `processor handle` processor handle
+* `data_format1` (AmdSmiPtlDataFormat) First preferred data format
+* `data_format2` (AmdSmiPtlDataFormat) Second preferred data format (must be different from data_format1)
+
+The two specified formats will receive accurate performance monitoring and peak performance. F8 and XF32 formats always receive peak performance regardless of this setting.
+
+Exceptions that can be thrown by `amdsmi_set_gpu_ptl_formats` function:
+* `AmdSmiLibraryException`
+* `AmdSmiParameterException`
+
+Example:
+
+```python
+try:
+    from amdsmi import AmdSmiPtlDataFormat
+
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            # Set PTL formats
+            amdsmi_set_gpu_ptl_formats(processor,
+                                      AmdSmiPtlDataFormat.F16,
+                                      AmdSmiPtlDataFormat.BF16)
+
 except AmdSmiException as e:
     print(e)
 ```

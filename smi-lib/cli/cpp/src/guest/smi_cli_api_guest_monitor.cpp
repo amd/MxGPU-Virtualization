@@ -620,7 +620,7 @@ int AmdSmiApiGuest::amdsmi_get_vram_usage_monitor_command(uint64_t processor_bdf
 
 	vram_total = vram_usage.vram_total / 1024;
 	vram_used = vram_usage.vram_used / 1024;
-	std::string vram_usage_str{ string_format("%lld/%lld", vram_used, vram_total) };
+	std::string vram_usage_str{ string_format("%u/%u", vram_used, vram_total) };
 
 	if (arg.output == json) {
 		nlohmann::ordered_json vram_total_json{};

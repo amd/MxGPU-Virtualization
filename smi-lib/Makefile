@@ -112,7 +112,7 @@ ifeq ($(BUILD_TYPE), Release)
 	DYNAMICLIB_FLAGS += -Wl,-z,relro,-z,noexecstack,-z,noexecheap -Wl,--strip-debug -Wl,--strip-all
 endif
 ifeq ($(ENABLE_GCOV), True)
-	CFLAGS += -coverage
+	CFLAGS += -coverage -DENABLE_GCOV
 	DYNAMICLIB_FLAGS += -lgcov
 endif
 DEFAULT_DEPS := $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET)

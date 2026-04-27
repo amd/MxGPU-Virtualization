@@ -89,9 +89,9 @@ static inline int smi_event_create(struct smi_ctx *smi, amdgv_dev_t *adev, struc
     return smi_shim_funcs->create_event(smi, adev, config);
 }
 
-static inline int smi_event_read(struct smi_ctx *smi, amdgv_dev_t *adev, uint64_t dev_id, struct smi_event_entry *event)
+static inline int smi_event_read(struct smi_ctx *smi, amdgv_dev_t *adev, uint64_t dev_id, struct smi_event_entry *event, int64_t timeout_usec)
 {
-    return smi_shim_funcs->read_event(smi, adev, dev_id, event);
+    return smi_shim_funcs->read_event(smi, adev, dev_id, event, timeout_usec);
 }
 
 static inline int smi_event_destroy(struct smi_ctx *smi, amdgv_dev_t *adev, uint64_t dev_id)

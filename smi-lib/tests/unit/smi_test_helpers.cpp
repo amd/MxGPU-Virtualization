@@ -47,6 +47,11 @@ struct smi_nic_handle NIC_MOCK_HANDLE = {
 	{ { 0x4, 0x3, 0x2, 0x1 } }
 };
 
+struct smi_nic_handle BRCM_NIC_MOCK_HANDLE = {
+	SMI_HANDLE_TYPE_BRCM_NIC,
+	{ { 0x4, 0x3, 0x2, 0x1 } }
+};
+
 struct smi_node_handle NODE_MOCK_HANDLE = {
 	SMI_HANDLE_TYPE_NODE,
 	(0x1234ULL << 32) | 0x1235

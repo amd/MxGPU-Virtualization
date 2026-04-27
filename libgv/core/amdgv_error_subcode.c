@@ -302,6 +302,8 @@ error_category(FW) = {
 	add_entry(AMDGV_ERROR_FW_RAS_BOOT_REG_READ_FAIL, ERROR_DATA_ARG_32_32,
 			AMDGV_ERROR_SEVERITY_ERROR_HIGH, "Firmware boot failed, MP0_SMN_C2PMSG_126 read fail, boot error: 0x%x, fw status: 0x%x"),
 
+	add_entry(AMDGV_ERROR_FW_MIGRATION_VF_CP_NOT_SUPPORTED, ERROR_DATA_ARG_64,
+			AMDGV_ERROR_SEVERITY_ERROR_LOW, "VF %llu CP firmware doesn't support migration"),
 	/* this one is the MAX */
 	add_entry(AMDGV_ERROR_FW_MAX, ERROR_DATA_ARG_64, AMDGV_ERROR_SEVERITY_INFO,
 		  "This is error log collect test for FW component (test count %llu)."),

@@ -34,16 +34,34 @@
 #endif
 
 typedef amdsmi_status_t (*AMDSMI_GET_LIB_VERSION)(amdsmi_version_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_DRIVER_INFO)(amdsmi_processor_handle,
+	amdsmi_driver_info_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
+	amdsmi_processor_handle *);
 
 extern AMDSMI_GET_LIB_VERSION guest_amdsmi_get_lib_version;
+extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF guest_amdsmi_get_processor_handle_from_bdf;
+extern AMDSMI_GET_GPU_DRIVER_INFO guest_amdsmi_get_gpu_driver_info;
 
-int AmdSmiApiGuest::amdsmi_get_version_command(Arguments arg,
-		std::string &out_string)
+
+int AmdSmiApiGuest::amdsmi_get_version_command(uint64_t processor_bdf,
+        Arguments arg, std::string &out_string)
 {
 	std::string out{};
 	amdsmi_version_t version;
 	amdsmi_status_t ret;
 	nlohmann::ordered_json json_out;
+	amdsmi_driver_info_t driver_info;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = guest_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		return ret;
+	}
+
 	ret = guest_amdsmi_get_lib_version(&version);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		return ret;
@@ -52,22 +70,32 @@ int AmdSmiApiGuest::amdsmi_get_version_command(Arguments arg,
 	std::string amdsmi_lib_ver_str = string_format("%ld.%ld.%ld", version.major,
 									 version.minor, version.release);
 
+	std::string driver_version{};
+	ret = guest_amdsmi_get_gpu_driver_info(processor, &driver_info);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		driver_version = "N/A";
+	}
+	driver_version = driver_info.driver_version;
+
 	if (arg.output == json) {
 		json_out = {
-			{"tool_name", AMDSMI_TOOL_NAME},
-			{"tool_version", AMDSMI_TOOL_VERSION_STRING},
-			{"lib_version", amdsmi_lib_ver_str.c_str()}
+			{"tool_name", AMDSMI_TOOL_NAME },
+			{"tool_version", AMDSMI_TOOL_VERSION_STRING },
+			{"lib_version", amdsmi_lib_ver_str.c_str() },
+			{"driver_version", driver_version.c_str() }
 		};
 	} else if (arg.output == csv) {
 		out += string_format(
-				   "%s,%s,%s", AMDSMI_TOOL_NAME,
+				   "%s,%s,%s,%s", AMDSMI_TOOL_NAME,
 				   AMDSMI_TOOL_VERSION_STRING,
-				   amdsmi_lib_ver_str.c_str());
+				   amdsmi_lib_ver_str.c_str(),
+				   driver_version.c_str());
 	} else {
 		out += string_format(
 				   versionTemplate, AMDSMI_TOOL_NAME,
 				   AMDSMI_TOOL_VERSION_STRING,
-				   amdsmi_lib_ver_str.c_str());
+				   amdsmi_lib_ver_str.c_str(),
+				   driver_version.c_str());
 	}
 
 	if (arg.output == json) {

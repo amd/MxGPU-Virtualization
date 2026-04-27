@@ -191,7 +191,7 @@ enum psp_status navi32_psp_program_guest_mc_settings(struct amdgv_adapter *adapt
 	return PSP_STATUS__SUCCESS;
 }
 
-enum psp_status navi32_psp_load_keydb(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status navi32_psp_load_keydb(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				     uint32_t fw_image_size)
 {
 	enum psp_status ret = PSP_STATUS__SUCCESS;
@@ -230,7 +230,7 @@ enum psp_status navi32_psp_load_keydb(struct amdgv_adapter *adapt, unsigned char
 	return ret;
 }
 
-enum psp_status navi32_psp_load_spl(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status navi32_psp_load_spl(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				   uint32_t fw_image_size)
 {
 	enum psp_status ret = PSP_STATUS__SUCCESS;
@@ -268,7 +268,7 @@ enum psp_status navi32_psp_load_spl(struct amdgv_adapter *adapt, unsigned char *
 	return ret;
 }
 
-enum psp_status navi32_psp_load_sysdrv(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status navi32_psp_load_sysdrv(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				      uint32_t fw_image_size)
 {
 	enum psp_status ret = PSP_STATUS__SUCCESS;
@@ -307,7 +307,7 @@ enum psp_status navi32_psp_load_sysdrv(struct amdgv_adapter *adapt, unsigned cha
 	return ret;
 }
 
-static enum psp_status navi32_psp_load_rasdrv(struct amdgv_adapter *adapt, unsigned char *fw_image,
+static enum psp_status navi32_psp_load_rasdrv(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				      uint32_t fw_image_size)
 {
 	enum psp_status ret = PSP_STATUS__SUCCESS;
@@ -346,7 +346,7 @@ static enum psp_status navi32_psp_load_rasdrv(struct amdgv_adapter *adapt, unsig
 	return ret;
 }
 
-enum psp_status navi32_psp_load_sos(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status navi32_psp_load_sos(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				   uint32_t fw_image_size)
 {
 	enum psp_status ret = PSP_STATUS__SUCCESS;
@@ -384,7 +384,7 @@ enum psp_status navi32_psp_load_sos(struct amdgv_adapter *adapt, unsigned char *
 	return ret;
 }
 
-enum psp_status navi32_psp_load_psp_ucode(struct amdgv_adapter *adapt, unsigned char *fw_image,
+enum psp_status navi32_psp_load_psp_ucode(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 				   uint32_t fw_image_size, uint32_t fw_id)
 {
 	enum psp_status ret = PSP_STATUS__SUCCESS;
@@ -1032,7 +1032,7 @@ enum psp_status navi32_psp_vf_cmd_relay(struct amdgv_adapter *adapt, uint32_t vf
 enum psp_status navi32_psp_load_asd_fw_to_mem(struct amdgv_adapter *adapt,
 						struct psp_local_memory *asd_bin_mem, uint32_t *size)
 {
-	unsigned char *fw_image;
+	const unsigned char *fw_image;
 	uint32_t fw_image_size;
 
 	if (!asd_bin_mem || !size) {
@@ -1065,7 +1065,6 @@ static enum psp_status navi32_psp_get_migration_version(struct amdgv_adapter *ad
 	struct psp_cmd_km *migration_get_psp_info_cmd = NULL;
 	struct psp_gfx_resp psp_resp = { 0 };
 
-	*migration_version = 0;
 	migration_get_psp_info_cmd = adapt->psp.psp_cmd_km_mem;
 	if (!migration_get_psp_info_cmd) {
 		amdgv_put_error(AMDGV_PF_IDX,
@@ -1087,13 +1086,11 @@ static enum psp_status navi32_psp_get_migration_version(struct amdgv_adapter *ad
 				AMDGV_ERROR_FW_MIGRATION_GET_PSP_INFO_FAIL,
 				psp_resp.status);
 		}
-		AMDGV_WARN("Live Migration get version not supported, fallback to default\n");
-		return 0;
+	} else {
+		*migration_version =
+			psp_resp.uresp.migration_info.migration_version;
+		AMDGV_DEBUG("Live Migration Version: 0x%x\n", *migration_version);
 	}
-
-	*migration_version =
-		psp_resp.uresp.migration_info.migration_version;
-	AMDGV_DEBUG("Live Migration Version: 0x%x\n", *migration_version);
 
 	return ret;
 }

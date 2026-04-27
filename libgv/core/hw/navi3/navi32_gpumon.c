@@ -26,9 +26,11 @@
 #include <amdgv_sched_internal.h>
 #include <amdgv_oss_wrapper.h>
 #include <amdgv_powerplay.h>
+#include <amdgv_powerplay_swsmu.h>
 
 #include "navi32_reg_inc.h"
 #include "navi32_powerplay.h"
+#include "navi32_powerplay_swsmu.h"
 #include "navi32_nbio.h"
 
 #define FUSE_DATA_248 (0x174F8)
@@ -405,6 +407,42 @@ static int navi32_get_ecc_correction_schema(struct amdgv_adapter *adapt,
 	return 0;
 }
 
+static int navi32_get_pcie_dpm_levels(struct amdgv_adapter *adapt,
+	struct amdgv_gpumon_pcie_levels *pcie_levels)
+{
+	struct smu_context *smu;
+	struct smu_table_context *table_context;
+	struct smu_13_0_0_powerplay_table *powerplay_table;
+	SkuTable_t *sku;
+	int i;
+
+	if (!pcie_levels)
+		return AMDGV_FAILURE;
+
+	smu = (struct smu_context *)(adapt->pp.smu_backend);
+	if (!smu)
+		return AMDGV_FAILURE;
+
+	table_context = (struct smu_table_context *)(smu->smu_table_context);
+	if (!table_context || !table_context->power_play_table)
+		return AMDGV_FAILURE;
+
+	powerplay_table = (struct smu_13_0_0_powerplay_table *)table_context->power_play_table;
+	sku = &powerplay_table->smc_pptable.SkuTable;
+
+	pcie_levels->num_levels = NUM_LINK_LEVELS;
+	if (pcie_levels->num_levels > AMDGV_GPUMON_MAX_PCIE_DPM_LEVELS)
+		pcie_levels->num_levels = AMDGV_GPUMON_MAX_PCIE_DPM_LEVELS;
+
+	for (i = 0; i < pcie_levels->num_levels; i++) {
+		pcie_levels->levels[i].gen_speed = sku->PcieGenSpeed[i];
+		pcie_levels->levels[i].lane_count = sku->PcieLaneCount[i];
+		pcie_levels->levels[i].lclk_freq = sku->LclkFreq[i];
+	}
+
+	return 0;
+}
+
 static const struct amdgv_gpumon_funcs navi32_gpumon_funcs = {
 	.get_asic_temperature = navi32_get_asic_temperature,
 	.get_gpu_power_usage = navi32_get_gpu_power_usage,
@@ -441,6 +479,7 @@ static const struct amdgv_gpumon_funcs navi32_gpumon_funcs = {
 	.get_gfx_config = navi32_get_gfx_config,
 	.get_ras_eeprom_version = navi32_get_ras_eeprom_version,
 	.get_ecc_correction_schema = navi32_get_ecc_correction_schema,
+	.get_pcie_dpm_levels = navi32_get_pcie_dpm_levels,
 };
 
 static int navi32_gpumon_sw_init(struct amdgv_adapter *adapt)

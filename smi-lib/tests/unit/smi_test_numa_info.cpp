@@ -102,7 +102,7 @@ TEST_F(AmdSmiNumaTests, GetCpuAffinityWithScope_FOpenFailure)
 
 	ret = amdsmi_get_cpu_affinity_with_scope(&GPU_MOCK_HANDLE, 4, cpu_set, AMDSMI_AFFINITY_SCOPE_NODE);
 
-	EXPECT_EQ(ret, AMDSMI_STATUS_NOT_FOUND);
+	EXPECT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 }
 
 TEST_F(AmdSmiNumaTests, TopoGetNumaNodeNum_FOpenFailure)
@@ -115,7 +115,7 @@ TEST_F(AmdSmiNumaTests, TopoGetNumaNodeNum_FOpenFailure)
 
 	ret = amdsmi_topo_get_numa_node_number(&GPU_MOCK_HANDLE, &numa_node);
 
-	EXPECT_EQ(ret, AMDSMI_STATUS_NOT_FOUND);
+	EXPECT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 }
 
 TEST_F(AmdSmiNumaTests, GetCpuAffinityWithScope_Success)
@@ -189,7 +189,7 @@ TEST_F(AmdSmiNumaTests, GetCpuAffinityWithScope_NotFound)
 
 	ret = amdsmi_get_cpu_affinity_with_scope(&GPU_MOCK_HANDLE, 4, cpu_set, AMDSMI_AFFINITY_SCOPE_NODE);
 
-	EXPECT_EQ(ret, AMDSMI_STATUS_NOT_FOUND);
+	EXPECT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 }
 
 TEST_F(AmdSmiNumaTests, TopoGetNumaNodeNum_NotFound)
@@ -199,7 +199,7 @@ TEST_F(AmdSmiNumaTests, TopoGetNumaNodeNum_NotFound)
 
 	ret = amdsmi_topo_get_numa_node_number(&GPU_MOCK_HANDLE, &numa_node);
 
-	EXPECT_EQ(ret, AMDSMI_STATUS_NOT_FOUND);
+	EXPECT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 }
 #else
 TEST_F(AmdSmiNumaTests, OtherPlatforms_NotSupported)

@@ -558,11 +558,14 @@ static int mi300_parse_ip_discovery(struct amdgv_adapter *adapt)
 	case (0x74A5): /* MI325 */
 	case (0x74A8): /* MI308X */
 	case (0x74A9): /* MI300X HC */
+		adapt->mcp.num_aid = 4;
+		adapt->mcp.num_dagb = 5;
+		break;
 	case (0x75A0): /* MI350X */
 	case (0x75A1): /* MI350X LC 1.2 Kw*/
 	case (0x75A3): /* MI350X LC 1.4 Kw*/
 		adapt->mcp.num_aid = 4;
-		adapt->mcp.num_dagb = 5;
+		adapt->mcp.num_dagb = 6;
 		break;
 	default:
 		AMDGV_ERROR("not getting proper num_aid setting.\n");
@@ -1167,7 +1170,7 @@ static void mi300_setup_common_timeout(struct amdgv_adapter *adapt)
 		AMDGV_TIMEOUT(TIMEOUT_READ_VBIOS) = 5 * 1000 * 1000;
 	}
 	/* SMU */
-	AMDGV_TIMEOUT(TIMEOUT_SMU_REG) = 200 * 1000;
+	AMDGV_TIMEOUT(TIMEOUT_SMU_REG) = 2000 * 1000;
 	AMDGV_TIMEOUT(TIMEOUT_SMU_IND_REG) = 200 * 1000;
 	/* RESET */
 	AMDGV_TIMEOUT(TIMEOUT_RESET) = 100 * 1000;

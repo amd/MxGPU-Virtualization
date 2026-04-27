@@ -51,8 +51,9 @@ struct smi_vf_entry {
 };
 
 struct smi_event_ctx {
-		void *handle;
-		struct amdgv_error_notifier *notifier;
+	void *handle;
+	struct amdgv_error_notifier *notifier;
+	uint64_t event_id;  /* ESXi event ID*/
 };
 
 struct smi_ctx {
@@ -79,7 +80,8 @@ struct smi_ctx {
 	uint32_t padding_3;
 	struct smi_event_ctx *event_ctx;
 	bool mutex_flag;
-	uint8_t padding_4[7];
+	uint64_t shared_event_id;  /* ESXi: shared event ID */
+	uint8_t padding_4[3];
 };
 
 #define SMI_ASSIGN_FUNC(ctx, i, c, f, ins, outs) do {\

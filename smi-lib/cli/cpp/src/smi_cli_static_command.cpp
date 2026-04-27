@@ -39,6 +39,8 @@ auto constexpr
 asic_csv_header {",asic_market_name,asic_vendor_id,asic_vendor_name,asic_subvendor_id,asic_device_id,asic_subsystem_id,asic_rev_id,asic_serial,oam_id,num_of_compute_units"};
 auto constexpr
 bus_csv_header {",bus_bdf,max_pcie_width,max_pcie_speed,pcie_interface_version,slot_type,max_pcie_interface_version"};
+auto constexpr
+bus_csv_header_pcie {",bus_bdf,max_pcie_width,max_pcie_speed,pcie_interface_version,slot_type,max_pcie_interface_version,pcie_level,pcie_speed,pcie_width"};
 auto constexpr ifwi_csv_header {",ifwi_name,ifwi_build_date,ifwi_part_number,ifwi_version,ifwi_boot_firmware"};
 auto constexpr
 board_csv_header {",board_model_number,board_product_serial,board_fru_id,board_manufacturer_name,board_product_name"};
@@ -248,7 +250,6 @@ int AmdSmiStaticCommand::static_command_xgmi_plpd(uint64_t processor, std::strin
 			  arg, formatted_string);
 	return ret;
 }
-
 
 void AmdSmiStaticCommand::static_command_json()
 {
@@ -864,80 +865,80 @@ void AmdSmiStaticCommand::static_command_human()
 			}
 			options_string.clear();
 		}
-	}
-	for (unsigned int i = 0; i < arg.nic_devices.size(); i++) {
-		int nic_index = arg.nic_devices[i]->get_gpu_index();
-		uint64_t nic_bdf = arg.nic_devices[i]->get_bdf();
-		if ((std::find(arg.options.begin(), arg.options.end(), "asic") != arg.options.end()) ||
-				(std::find(arg.options.begin(), arg.options.end(), "a") != arg.options.end()) ||
-				arg.all_arguments) {
-			ret = static_command_nic_asic(nic_bdf, formatted_string);
-			std::string param{"nic_asic"};
-			int error = handle_exceptions(ret, param, arg);
-			if (error == 0) {
-				options_string += formatted_string;
+		for (unsigned int i = 0; i < arg.nic_devices.size(); i++) {
+			int nic_index = arg.nic_devices[i]->get_gpu_index();
+			uint64_t nic_bdf = arg.nic_devices[i]->get_bdf();
+			if ((std::find(arg.options.begin(), arg.options.end(), "asic") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "a") != arg.options.end()) ||
+					arg.all_arguments) {
+				ret = static_command_nic_asic(nic_bdf, formatted_string);
+				std::string param{"nic_asic"};
+				int error = handle_exceptions(ret, param, arg);
+				if (error == 0) {
+					options_string += formatted_string;
+				}
+				formatted_string.clear();
 			}
-			formatted_string.clear();
-		}
-		if ((std::find(arg.options.begin(), arg.options.end(), "bus") != arg.options.end()) ||
-				(std::find(arg.options.begin(), arg.options.end(), "b") != arg.options.end()) ||
-				arg.all_arguments) {
-			ret = static_command_nic_bus(nic_bdf, formatted_string);
-			std::string param{"nic_bus"};
-			int error = handle_exceptions(ret, param, arg);
-			if (error == 0) {
-				options_string += formatted_string;
+			if ((std::find(arg.options.begin(), arg.options.end(), "bus") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "b") != arg.options.end()) ||
+					arg.all_arguments) {
+				ret = static_command_nic_bus(nic_bdf, formatted_string);
+				std::string param{"nic_bus"};
+				int error = handle_exceptions(ret, param, arg);
+				if (error == 0) {
+					options_string += formatted_string;
+				}
+				formatted_string.clear();
 			}
-			formatted_string.clear();
-		}
-		if ((std::find(arg.options.begin(), arg.options.end(), "driver") != arg.options.end()) ||
-				(std::find(arg.options.begin(), arg.options.end(), "d") != arg.options.end()) ||
-				arg.all_arguments) {
-			ret = static_command_nic_driver(nic_bdf, formatted_string);
-			std::string param{"nic_driver"};
-			int error = handle_exceptions(ret, param, arg);
-			if (error == 0) {
-				options_string += formatted_string;
+			if ((std::find(arg.options.begin(), arg.options.end(), "driver") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "d") != arg.options.end()) ||
+					arg.all_arguments) {
+				ret = static_command_nic_driver(nic_bdf, formatted_string);
+				std::string param{"nic_driver"};
+				int error = handle_exceptions(ret, param, arg);
+				if (error == 0) {
+					options_string += formatted_string;
+				}
+				formatted_string.clear();
 			}
-			formatted_string.clear();
-		}
-		if ((std::find(arg.options.begin(), arg.options.end(), "numa") != arg.options.end()) ||
-				(std::find(arg.options.begin(), arg.options.end(), "u") != arg.options.end()) ||
-				arg.all_arguments) {
-			ret = static_command_nic_numa(nic_bdf, formatted_string);
-			std::string param{"nic_numa"};
-			int error = handle_exceptions(ret, param, arg);
-			if (error == 0) {
-				options_string += formatted_string;
+			if ((std::find(arg.options.begin(), arg.options.end(), "numa") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "u") != arg.options.end()) ||
+					arg.all_arguments) {
+				ret = static_command_nic_numa(nic_bdf, formatted_string);
+				std::string param{"nic_numa"};
+				int error = handle_exceptions(ret, param, arg);
+				if (error == 0) {
+					options_string += formatted_string;
+				}
+				formatted_string.clear();
 			}
-			formatted_string.clear();
-		}
-		if ((std::find(arg.options.begin(), arg.options.end(), "port") != arg.options.end()) ||
-				(std::find(arg.options.begin(), arg.options.end(), "po") != arg.options.end()) ||
-				arg.all_arguments) {
-			ret = static_command_nic_port(nic_bdf, formatted_string);
-			std::string param{"nic_port"};
-			int error = handle_exceptions(ret, param, arg);
-			if (error == 0) {
-				options_string += formatted_string;
+			if ((std::find(arg.options.begin(), arg.options.end(), "port") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "po") != arg.options.end()) ||
+					arg.all_arguments) {
+				ret = static_command_nic_port(nic_bdf, formatted_string);
+				std::string param{"nic_port"};
+				int error = handle_exceptions(ret, param, arg);
+				if (error == 0) {
+					options_string += formatted_string;
+				}
+				formatted_string.clear();
 			}
-			formatted_string.clear();
-		}
-		if ((std::find(arg.options.begin(), arg.options.end(), "rdma-devices") != arg.options.end()) ||
-				(std::find(arg.options.begin(), arg.options.end(), "rd") != arg.options.end()) ||
-				arg.all_arguments) {
-			ret = static_command_nic_rdma_devices(nic_bdf, formatted_string);
-			std::string param{"nic_rdma_devices"};
-			int error = handle_exceptions(ret, param, arg);
-			if (error == 0) {
-				options_string += formatted_string;
+			if ((std::find(arg.options.begin(), arg.options.end(), "rdma-devices") != arg.options.end()) ||
+					(std::find(arg.options.begin(), arg.options.end(), "rd") != arg.options.end()) ||
+					arg.all_arguments) {
+				ret = static_command_nic_rdma_devices(nic_bdf, formatted_string);
+				std::string param{"nic_rdma_devices"};
+				int error = handle_exceptions(ret, param, arg);
+				if (error == 0) {
+					options_string += formatted_string;
+				}
+				formatted_string.clear();
 			}
-			formatted_string.clear();
-		}
-		if (!options_string.empty()) {
-			out += string_format("NIC: %d\n", nic_index);
-			out += options_string;
-			options_string.clear();
+			if (!options_string.empty()) {
+				out += string_format("NIC: %d\n", nic_index);
+				out += options_string;
+				options_string.clear();
+			}
 		}
 	}
 	if (arg.is_file) {
@@ -1000,8 +1001,21 @@ void AmdSmiStaticCommand::static_command_csv()
 				std::string param{"bus"};
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
-					header.append(bus_csv_header);
-					results.push_back({formatted_string});
+					if (formatted_string.find('\n') != std::string::npos) {
+						header.append(bus_csv_header_pcie);
+						std::vector<std::string> bus_data{split_string(formatted_string, '\n')};
+						std::vector<std::string> bus_rows{};
+						while (!bus_data.empty()) {
+							std::string first{};
+							first = bus_data.front();
+							bus_data.erase(bus_data.begin());
+							bus_rows.push_back(first);
+						}
+						results.push_back(bus_rows);
+					} else {
+						header.append(bus_csv_header);
+						results.push_back({formatted_string});
+					}
 					formatted_string.clear();
 				}
 			}
@@ -1027,6 +1041,9 @@ void AmdSmiStaticCommand::static_command_csv()
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					header.append(limit_csv_header);
+					if(arg.ptl_supported) {
+						header.append(",ptl,ptl_format");
+					}
 					results.push_back({formatted_string});
 					formatted_string.clear();
 				}

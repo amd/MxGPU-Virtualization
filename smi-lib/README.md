@@ -1,7 +1,7 @@
 # AMD SMI LIB
 
 ## What is AMD SMI LIB
-[AMD SMI LIB](https://github.com/amd/MxGPU-Virtualization/tree/mainline/smi-lib/#) is a library that enables you to manage and monitor AMD Virtualization Enabled GPUs. It is a thread safe, extensible C based library. The library exposes both C and Python API interface. Some of the features that are exposed in the library are:
+**AMD SMI LIB** is a library that enables you to manage and monitor AMD Virtualization Enabled GPUs. It is a thread safe, extensible C based library. The library exposes both C and Python API interface. Some of the features that are exposed in the library are:
  * Query static information about the GPU (ASIC, framebuffer etc.)
  * Query information about the FW on the physical function
  * Query information about the virtual functions on the GPU

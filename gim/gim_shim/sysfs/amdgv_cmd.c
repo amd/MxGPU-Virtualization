@@ -578,6 +578,9 @@ static int amdgv_ioctl_dump_cu_data(struct amdgv_cmd_dump_cu_data_req *input_dat
 
 	if (input_data->resource_size.kernelobj_size > AMDGV_CMD_MAX_KERNELOBJ_SIZE)
 		return AMDGV_CMD__ERROR_INVALID_INPUT;
+	if (amdgv_set_dump_cu_info(adev, input_data->data_type, input_data->xcc_id,
+				   input_data->use_extra_ring))
+		return AMDGV_CMD__ERROR_INVALID_INPUT;
 
 	if (amdgv_alloc_dump_cu_resource_memory(adev, (struct amdgv_dump_cu_resource_size *)(&(input_data->resource_size)), &resource_mem)) {
 		gim_warn("Failed to allocate dump cu resource memory from kernel\n");
@@ -591,6 +594,17 @@ static int amdgv_ioctl_dump_cu_data(struct amdgv_cmd_dump_cu_data_req *input_dat
 		ret = AMDGV_CMD__ERROR_GENERIC;
 		gim_warn("Failed to copy data from user\n");
 		goto free_mem;
+	}
+
+	if (input_data->use_extra_ring) {
+		ret = copy_from_user(resource_mem.extra_kernelobj_addr,
+							input_data->resource_mem.extra_kernelobj_addr,
+							input_data->resource_size.extra_kernelobj_size);
+		if (ret) {
+			ret = AMDGV_CMD__ERROR_GENERIC;
+			gim_warn("Failed to copy extra kernel obj data from user\n");
+			goto free_mem;
+		}
 	}
 
 	if (amdgv_dump_cu_data(adev, 0)) {

@@ -28,6 +28,6 @@ all:
 	$(MAKE) -C $(KERNELDIR) M=$(SRC_PATH) modules
 
 clean:
-	cd $(SRC_PATH)/dkms; rm -rf autom4te.cache aclocal.m4 config.* configure .*.d
+	cd $(SRC_PATH)/dkms; rm -rf aclocal.m4 configure confdefs.h *.cache build_* config.* .*.d
 	$(MAKE) -C $(KERNELDIR) M=$(SRC_PATH) clean
 	find $(SRC_PATH)/../ \( -name '.*.cmd' -o -name '*.o' -o -name '*.ko' \) -delete

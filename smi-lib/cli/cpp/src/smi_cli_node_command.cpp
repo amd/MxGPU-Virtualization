@@ -19,6 +19,7 @@
  */
 #include <iostream>
 
+#include "amdsmi.h"
 #include "smi_cli_platform.h"
 #include "smi_cli_exception.h"
 #include "smi_cli_node_command.h"
@@ -28,14 +29,16 @@
 
 #include "json/json.h"
 
-auto constexpr baseboard_csv_header {"baseboard_temperature_ubb_fpga,baseboard_temperature_ubb_front,baseboard_temperature_ubb_back,"
+auto constexpr baseboard_csv_header {",baseboard_temperature_ubb_fpga,baseboard_temperature_ubb_front,baseboard_temperature_ubb_back,"
 	"baseboard_temperature_ubb_oam7,baseboard_temperature_ubb_ibc,baseboard_temperature_ubb_ufpga,baseboard_temperature_ubb_oam1,"
 	"baseboard_temperature_oam_0_1_hsc,baseboard_temperature_oam_2_3_hsc,baseboard_temperature_oam_4_5_hsc,baseboard_temperature_oam_6_7_hsc,"
 	"baseboard_temperature_ubb_fpga_0v72_vr,baseboard_temperature_ubb_fpga_3v3_vr,baseboard_temperature_retimer_0_1_2_3_1v2_vr,"
 	"baseboard_temperature_retimer_4_5_6_7_1v2_vr,baseboard_temperature_retimer_0_1_0v9_vr,baseboard_temperature_retimer_4_5_0v9_vr,"
 	"baseboard_temperature_retimer_2_3_0v9_vr,baseboard_temperature_retimer_6_7_0v9_vr,baseboard_temperature_oam_0_1_2_3_3v3_vr,"
-	"baseboard_temperature_oam_4_5_6_7_3v3_vr,baseboard_temperature_ibc_hsc,baseboard_temperature_ibc"};
-auto constexpr node_header_csv {"node, power_management_limit, power_management_status"};
+	"baseboard_temperature_oam_4_5_6_7_3v3_vr,baseboard_temperature_ibc_hsc,baseboard_temperature_ibc,"
+	"baseboard_power_ubb,baseboard_power_ubb_threshold"};
+auto constexpr node_header_csv {"node"};
+auto constexpr power_management_header_csv {",power_management_limit,power_management_status"};
 
 int AmdSmiNodeCommand::node_command_baseboard(uint64_t processor, std::string &formatted_string)
 {
@@ -123,7 +126,9 @@ void AmdSmiNodeCommand::node_command_json()
 			json["power_management"] = values_json;
 			out.clear();
 		}
-		json_format.insert(json_format.end(), json);
+		if (!json.empty()) {
+			json_format.insert(json_format.end(), json);
+		}
 	}
 
 	for (i = 0; i < arg.devices.size(); i++) {
@@ -140,7 +145,7 @@ void AmdSmiNodeCommand::node_command_json()
 			int error = handle_exceptions(ret, param, arg);
 			if (error == 0) {
 				values_json = nlohmann::ordered_json::parse(out);
-				json[string_format("baseboard_%d", arg.devices[i]->get_gpu_index())] = values_json;
+				json["baseboard"] = values_json;
 				out.clear();
 			}
 			out.clear();
@@ -172,7 +177,8 @@ void AmdSmiNodeCommand::node_command_csv()
 
 	std::vector<std::vector<std::string>> results;
 	std::string output_buffer{};
-	std::string node_id{"0,"};
+	std::string node_id{"0"};
+	header.append(node_header_csv);
 
 	uint64_t gpu_bdf = arg.devices[0]->get_bdf();
 	if ((std::find(arg.options.begin(), arg.options.end(), "power-management") != arg.options.end()) ||
@@ -183,7 +189,7 @@ void AmdSmiNodeCommand::node_command_csv()
 		std::string param{"n"};
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {
-			header.append(node_header_csv);
+			header.append(power_management_header_csv);
 			results.push_back({formatted_string});
 			formatted_string.clear();
 		}
@@ -231,6 +237,26 @@ void AmdSmiNodeCommand::node_command_csv()
 void AmdSmiNodeCommand::execute_command()
 {
 	if (AmdSmiPlatform::getInstance().is_mi350() && AmdSmiPlatform::getInstance().getInstance().is_host()) {
+		// Check if at least one node feature is available before proceeding
+		if (arg.all_arguments) {
+			std::string output{};
+			uint64_t gpu_bdf = arg.devices[0]->get_bdf();
+			int npm_ret = node_command_npm(gpu_bdf, output);
+			int baseboard_ret = node_command_baseboard(gpu_bdf, output);
+
+			// Check if both features return "not supported" status
+			bool npm_not_supported = (npm_ret == AMDSMI_STATUS_NOT_SUPPORTED ||
+									  npm_ret == PARAM_NOT_SUPPORTED_ON_PLATFORM);
+			bool baseboard_not_supported = (baseboard_ret == AMDSMI_STATUS_NOT_SUPPORTED ||
+											baseboard_ret == PARAM_NOT_SUPPORTED_ON_PLATFORM);
+
+			// If both features are not supported, the whole command is not supported
+			if (npm_not_supported && baseboard_not_supported) {
+				std::string command{"node"};
+				throw SmiToolCommandNotSupportedException(command);
+			}
+		}
+
 		if (arg.output == human) {
 			node_command_human();
 		} else if (arg.output == json) {

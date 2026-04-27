@@ -26,6 +26,7 @@ class AmdSmiTopologyCommand : public AmdSmiCommands
 {
 private:
 	std::vector<std::string> bdf_vector;
+	std::vector<std::string> nic_bdf_vector;
 public:
 	AmdSmiTopologyCommand(Arguments args);
 	void execute_command();
@@ -43,4 +44,7 @@ public:
 	int p2p_capability_command_bi_directional(std::string &formatted_string);
 
 	int topology_command_all_status(std::string &formatted_string);
+
+	int nic_topology_command_link_type(std::string &formatted_string);
+	int nic_topology_command_numa(std::string &formatted_string);
 };

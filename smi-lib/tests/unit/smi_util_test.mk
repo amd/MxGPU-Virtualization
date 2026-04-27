@@ -137,7 +137,7 @@ gen_coverage: run
 	@mv $(OUTPUT_DIR)/coverage_filtered.info $(OUTPUT_DIR)/coverage.info
 
 -include $(DEPS)
-CXXFLAGS_ACA := $(filter-out $(DEFAULT_CFLAGS), $(CXXFLAGS))
+CXXFLAGS_ACA := $(filter-out $(DEFAULT_CFLAGS), $(CXXFLAGS)) $(CXX_HOST_FLAGS)
 
 $(OUTPUT_DIR)/%.c.o: %.c Makefile | $(OUTPUT_DIR)
 	$(CC) $(CFLAGS) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@

@@ -68,7 +68,6 @@ dnl #
 dnl # commit v5.8-12463-g64019a2e467a
 dnl # mm/gup: remove task_struct pointer for all gup code
 dnl #
-
 AC_DEFUN([AC_GET_USER_PAGES_REMOTE_8_ARG], [
 	AC_KERNEL_DO_BACKGROUND([
                 AC_KERNEL_TRY_COMPILE([

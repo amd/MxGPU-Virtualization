@@ -25,6 +25,8 @@
 
 #include "amdgv.h"
 
+struct amdgv_live_info_acc_bits;
+
 #define amdgv_fb_size_to_bitmap_size_align(fb_size, page_size) \
 	(roundup((fb_size / page_size / 8) == 0 ? \
 		  PAGE_SIZE : (fb_size / page_size / 8), \
@@ -69,4 +71,6 @@ int amdgv_dirtybit_assgin_acc_bits_to_vf(struct amdgv_adapter *adapt);
 void amdgv_dirtybit_destroy_vf_acc_bits(struct amdgv_adapter *adapt);
 void amdgv_dirtybit_set_vfs_acc_bits(struct amdgv_adapter *adapt, char pattern);
 int amdgv_dirtybit_query_vf_fb_dbit(struct amdgv_adapter *adapt, uint32_t idx_vf);
+int amdgv_dirtybit_export_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_acc_bits *data);
+int amdgv_dirtybit_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_acc_bits *data);
 #endif

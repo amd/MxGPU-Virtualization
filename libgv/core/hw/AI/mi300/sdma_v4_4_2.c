@@ -38,28 +38,16 @@ static const uint32_t this_block = AMDGV_MEMORY_BLOCK;
 
 static int sdma_v4_4_2_get_dbit_page_size_config(struct amdgv_adapter *adapt)
 {
-	uint32_t pg_config = 0;
-
-	switch (adapt->dirtybit.mam_adram_mode) {
-	case MI300_MAM_ADRAM_MODE_256KB:
-		pg_config = SDMA_V4_4_2_DBIT_PAGE_SIZE_CONFIG_256KB;
-		break;
-	case MI300_MAM_ADRAM_MODE_512KB:
-		pg_config = SDMA_V4_4_2_DBIT_PAGE_SIZE_CONFIG_512KB;
-		break;
-	case MI300_MAM_ADRAM_MODE_1MB:
-		pg_config = SDMA_V4_4_2_DBIT_PAGE_SIZE_CONFIG_1MB;
-		break;
-	case MI300_MAM_ADRAM_MODE_2MB:
-		pg_config = SDMA_V4_4_2_DBIT_PAGE_SIZE_CONFIG_2MB;
-		break;
+	switch (adapt->asic_type) {
+	case CHIP_MI308X:
+		return SDMA_V4_4_2_DBIT_PAGE_SIZE_CONFIG_2MB_MI308;
+	case CHIP_MI350X:
+		return SDMA_V4_4_2_DBIT_PAGE_SIZE_CONFIG_4MB_MI350;
 	default:
-		AMDGV_WARN("Invalid mam_adram_mode: %d, set page size config to default:0\n", adapt->dirtybit.mam_adram_mode);
-		pg_config = 0;
+		AMDGV_WARN("Invalid asic_type: %d, set page size config to default:0\n", adapt->asic_type);
+		return 0;
 		break;
 	}
-
-	return pg_config;
 }
 
 static void sdma_v4_4_2_ring_query_dirtybit(struct amdgv_ring *ring,
@@ -329,9 +317,13 @@ static int mi300_sdma_sw_init(struct amdgv_adapter *adapt)
 		adapt->sdma.num_sdma_rings = 1;
 	}
 
-	if ((adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION) && (adapt->asic_type == CHIP_MI308X)) {
-		adapt->sdma.num_pf_dedicated_inst = adapt->sdma.harvest_instances;
+	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION) {
 		adapt->sdma.page_size_config = sdma_v4_4_2_get_dbit_page_size_config(adapt);
+
+		if (adapt->asic_type == CHIP_MI350X)
+			adapt->sdma.num_sdma_rings = adapt->sdma.num_instances;
+		else if (adapt->asic_type == CHIP_MI308X)
+			adapt->sdma.num_pf_dedicated_inst = adapt->sdma.harvest_instances;
 	}
 
 	adapt->sdma.sdma_copy = sdma_v4_4_2_sdma_copy;
@@ -458,9 +450,11 @@ static int mi300_enable_sdma(struct amdgv_adapter *adapt, uint32_t instance)
 	data = REG_SET_FIELD(data, SDMA_GFX_RB_CNTL, RB_PRIV, 1);
 	WREG32_SOC15(SDMA0, GET_INST(SDMA0, instance), regSDMA_GFX_RB_CNTL, data);
 
-	if ((adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION) && (adapt->asic_type == CHIP_MI308X))
+	if ((adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION) &&
+	    (adapt->asic_type == CHIP_MI308X || adapt->asic_type == CHIP_MI350X)) {
 		WREG32_SOC15(SDMA0, GET_INST(SDMA0, instance), regSDMA_HBM_PAGE_CONFIG,
 			     adapt->sdma.page_size_config);
+	}
 
 	return 0;
 }

@@ -33,7 +33,7 @@ struct amdgv_ib;
 struct amdgv_live_info_ring;
 
 /* max number of rings */
-#define AMDGV_MAX_RINGS		28
+#define AMDGV_MAX_RINGS		64
 #define AMDGV_MAX_HWIP_RINGS	8
 #define AMDGV_MAX_GFX_RINGS		1
 #define AMDGV_MAX_COMPUTE_RINGS	2
