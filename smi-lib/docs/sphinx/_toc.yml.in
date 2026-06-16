@@ -4,10 +4,10 @@ root: index
 subtrees:
 - caption: Install
   entries:
+  - file: install/install.md
+    title: Install AMD SMI on Linux SR-IOV hosts
   - file: install/build.md
     title: Build from source
-  - file: install/install.md
-    title: Library and CLI tool installation
 
 - caption: How to
   entries:
@@ -20,26 +20,21 @@ subtrees:
 
 - caption: Reference
   entries:
-  - file: reference/amdsmi_c_api.md
-    title: C API
+  - file: reference/amdsmi_c_api/index.md
+    title: C/C++ API
     entries:
-    - file: doxygen/doxy_build/html/files
-      title: Files
-    - file: doxygen/doxy_build/html/globals
-      title: Globals
-    - file: doxygen/doxy_build/html/annotated
-      title: Data structures
-    - file: doxygen/doxy_build/html/functions_data_fields
-      title: Data fields
+    - file: reference/amdsmi_c_api/functions.md
+      title: Functions
+    - file: reference/amdsmi_c_api/types.md
+      title: Types
+    - file: reference/amdsmi_c_api/defines.md
+      title: Defines
   - file: reference/amdsmi_py_api.md
     title: Python API
 
 - caption: General
   entries:
   - file: general/versioning.md
-    title: Library and CLI tool versioning
-
-- caption: About
-  entries:
+    title: Versioning
   - file: license.rst
 
