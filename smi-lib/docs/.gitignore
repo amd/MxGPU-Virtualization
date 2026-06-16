@@ -1,0 +1,8 @@
+__pycache__/
+
+# documentation artifacts
+_build/
+
+_out/
+_toc.yml
+Doxyfile

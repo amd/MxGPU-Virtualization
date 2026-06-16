@@ -25,13 +25,19 @@ import re
 import sys
 import os
 from pathlib import Path
+from sphinx.errors import ConfigError
+
+DOCS_DIR = Path(__file__).parent.resolve()
+DOXYGEN_DIR = DOCS_DIR / "doxygen"
+AMDSMI_DIR = DOCS_DIR.parent
+AMDSMI_H = AMDSMI_DIR / "interface" / "amdsmi.h"
 
 html_baseurl = os.environ.get("READTHEDOCS_CANONICAL_URL", "instinct.docs.amd.com")
 html_context = {}
 if os.environ.get("READTHEDOCS", "") == "True":
     html_context["READTHEDOCS"] = True
 
-sys.path.append(str(Path('_extension').resolve()))
+sys.path.append(str(DOCS_DIR / "extension"))
 
 def get_version_info(filepath):
     version_major = None
@@ -58,9 +64,9 @@ version_major, version_minor, version_release = get_version_info("../VERSION")
 version_number = "{}.{}.{}".format(version_major, version_minor, version_release)
 
 # project info
-project = "AMD SMI"
+project = "AMD SMI (SR-IOV host)"
 author = "Advanced Micro Devices, Inc."
-copyright = "Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved."
+copyright = "Copyright (c) %Y Advanced Micro Devices, Inc. All rights reserved."
 version = version_number
 release = version_number
 
@@ -79,16 +85,47 @@ html_theme_options = {
     },
     "show_toc_level": 4
 }
-html_title = "AMD SMI {} documentation".format(version_number)
+html_title = "AMD SMI {} (SR-IOV host)".format(version_number)
 suppress_warnings = ["etoc.toctree"]
 external_toc_path = "./sphinx/_toc.yml"
 
 external_projects_current_project = "amdsmi"
-extensions = ["rocm_docs", "rocm_docs.doxygen"]
+extensions = ["rocm_docs", "rocm_docs.doxygen", "amdsmi_docs.doxygen"]
 
-doxygen_root = "doxygen"
-doxysphinx_enabled = True
-doxygen_project = {
-    "name": "AMD SMI C API reference",
-    "path": "doxygen/doxy_build/xml",
-}
+# Doxygen-related settings
+doxygen_root = DOCS_DIR / "doxygen"
+breathe_projects = {"amdsmi-virt": doxygen_root / "_out" / "xml"}
+breathe_default_project = "amdsmi-virt"
+breathe_domain_by_extension = {"h": "c"}
+amdsmi_doxygen_tagfile = doxygen_root / "_out" / "tagfile.xml"
+doxysphinx_enabled = False
+
+
+# Make Doxyfile consistent with this Sphinx config
+def generate_doxyfile(_app, _config):
+    doxyfile_in = doxygen_root / "Doxyfile.in"
+    doxyfile_out = doxygen_root / "Doxyfile"
+
+    if not doxyfile_in.exists():
+        raise ConfigError(f"Missing Doxyfile.in at {doxyfile_in}")
+
+    replacements = {
+        "@PROJECT_NUMBER@": version,
+        "@INPUT@": str(AMDSMI_H),
+        "@OUTPUT_DIRECTORY@": str(doxygen_root / "_out"),
+        "@GENERATE_TAGFILE@": str(amdsmi_doxygen_tagfile),
+    }
+
+    def _replace(m):
+        key = m.group(0)
+        if key not in replacements:
+            raise ConfigError(f"Unknown template variable {key} in Doxyfile.in")
+        return replacements[key]
+
+    content = re.sub(r"@\w+@", _replace, doxyfile_in.read_text())
+    doxyfile_out.write_text(content)
+
+
+def setup(app):
+    app.connect("config-inited", generate_doxyfile, priority=100)
+    return {"parallel_read_safe": True, "parallel_write_safe": True}
