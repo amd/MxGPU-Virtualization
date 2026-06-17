@@ -7,7 +7,7 @@ myst:
 
 <a id="amd-smi-library-build"></a>
 
-# AMD SMI LIBRARY AND TOOL BUILD
+# Build from source
 
 ## Requirements
 
@@ -28,32 +28,32 @@ When running make inside the gim folder, the AMD SMI library is built as well. H
 - Run `make gen_coverage` to calculate the code coverage of the AMD SMI library.
 - If any changes are made to the interface folder, regenerate the Python wrapper by running `make python_wrapper` and replace the `amdsmi_wrapper.py` file in the py/interface folder with the one generated in the build folder `build/amdsmi/amdsmi_wrapper/amdsmi_wrapper.py`.
 
-## AMD SMI LIBRARY Build Options
+## AMD SMI library build options
 
 These options allow you to customize the build process, such as specifying the build type, enabling thread safety, enabling logging, and using the Thread Sanitizer.
 
-- BUILD_TYPE:
+- `BUILD_TYPE`:
 
 This option specifies the type of build you want to perform. Common values are Release and Debug.
 Release builds are optimized for performance and do not include debugging information.
 Debug builds include debugging information and are not optimized, making them suitable for development and debugging.
 Default: Release
 
-- THREAD_SAFE:
+- `THREAD_SAFE`:
 
 This option indicates whether the build should include thread safety features.
 When set to True, thread safety mechanisms (e.g., mutexes, locks) are enabled.
 When set to False, thread safety mechanisms are disabled, which might improve performance but can lead to race conditions in multi-threaded environments.
 Default: True
 
-- LOGGING:
+- `LOGGING`:
 
 This option controls whether logging is enabled in the build.
 When set to True, logging code is included, which can help with debugging and monitoring.
 When set to False, logging code is excluded, which might improve performance.
 Default: False
 
-- THREAD_SANITIZER:
+- `THREAD_SANITIZER`:
 
 This option indicates whether the Thread Sanitizer should be enabled.
 Thread Sanitizer is a tool that detects data races in multi-threaded programs.
@@ -61,7 +61,7 @@ When set to True, the build includes Thread Sanitizer instrumentation.
 When set to False, Thread Sanitizer is not included.
 Default: False
 
-- ADDRESS_SANITIZER:
+- `ADDRESS_SANITIZER`:
 
 This option indicates whether the Address Sanitizer should be enabled.
 Address Sanitizer is a tool that detects memory errors such as buffer overflows, use-after-free, and memory leaks.
@@ -143,11 +143,11 @@ On a Linux platform, go to the smi-lib directory `gim/smi-lib/` and run the foll
 
 The AMD SMI CLI tool is a command line utility built in C++ that utilizes AMD SMI Library APIs to monitor and configure AMD GPUs and NICs on Linux host systems.
 
-#### Tool Source Code Structure
+#### Tool source code structure
 
 The CLI tool source code is organized in a structured hierarchy designed for maintainability and platform-specific implementations.
 
-##### Folder Structure
+##### Folder structure
 
 ```text
 cli/
@@ -243,11 +243,11 @@ make AMD_SMI_NIC_SUPPORT=False ..
 **Notes:**
 - When NIC support is disabled (`AMD_SMI_NIC_SUPPORT=False`), all NIC-related commands and functionality will be excluded from the build
 
-#### Output Location
+#### Output location
 
 After successful compilation, the `amd-smi` binary will be generated in: `smi-lib/cli/cpp/build/` (build directory).
 
-#### Runtime Requirements
+#### Runtime requirements
 
 **Library dependencies**
 The CLI tool requires the AMD SMI Library (`libamdsmi.so`) to be available either:
@@ -263,7 +263,7 @@ The CLI tool requires the AMD SMI Library (`libamdsmi.so`) to be available eithe
 - AMD Pensando NIC drivers must be installed and loaded
 - Appropriate permissions for network device access
 
-#### Development Notes
+#### Development notes
 
 **Code organization**
 - Each command is implemented as a separate class inheriting from a base command interface

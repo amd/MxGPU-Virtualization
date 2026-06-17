@@ -14,13 +14,13 @@ The AMD SMI C library allows developers to query and control various aspects of 
 ## Key Steps for Using the AMD SMI C Library
 
 1. **Initialization**:
-  Before making any calls to the AMD SMI API, the library must be initialized using the `amdsmi_init()` function. This function sets up the necessary internal data structures and prepares the library for use.
+  Before making any calls to the AMD SMI API, the library must be initialized using the {c:func}`amdsmi_init()` function. This function sets up the necessary internal data structures and prepares the library for use.
 
 2. **Performing Operations**:
   Once the library is initialized, you can use the various API functions provided by AMD SMI to interact with the hardware. These functions allow you to retrieve system information, monitor hardware metrics, and perform other management tasks.
 
 3. **Cleanup**:
-  After completing all operations, it is crucial to call `amdsmi_shut_down()` to properly release resources and close the connection to the driver.
+  After completing all operations, it is crucial to call {c:func}`amdsmi_shut_down()` to properly release resources and close the connection to the driver.
 
 By following these steps, you can ensure that your application interacts with AMD hardware efficiently and safely.
 
@@ -28,13 +28,13 @@ For a detailed example, refer to the code snippet in the next section, which dem
 
 ## AMD SMI C example
 
-An application using AMD SMI must call `amdsmi_init()` to initialize the AMD SMI
+An application using AMD SMI must call {c:func}`amdsmi_init()` to initialize the AMD SMI
 library before all other calls. This call initializes the internal data
 structures required for subsequent AMD SMI operations. In the call, a flag can
 be passed to indicate if the application is interested in a specific device
 type.
 
-`amdsmi_shut_down()` must be the last call to properly close connection to
+{c:func}`amdsmi_shut_down()` must be the last call to properly close connection to
 driver and make sure that any resources held by AMD SMI are released.
 
 Example:

@@ -5,12 +5,12 @@ myst:
     "keywords": "amdsmi, lib, cli, system, management, interface, admin, sys"
 ---
 
-# AMD SMI documentation
+# AMD SMI (SR-IOV host) documentation
 
-AMD SMI LIB is a library that enables you to manage and monitor AMD Virtualization Enabled GPUs. It is a thread safe, extensible C based library. The library exposes both C and Python API interface.
+AMD SMI is a library that enables you to manage and monitor AMD virtualization-enabled GPUs. It is a thread safe, extensible C-based library. The library exposes both C and Python API interface.
 
-```{note}
-This is the AMD SMI for SR-IOV Linux host only. If you are looking for Linux baremetal or SR-IOV Linux guest AMD SMI, please go to the [AMD SMI documentation](https://rocm.docs.amd.com/projects/amdsmi/en/latest/index.html).
+```{important}
+This is the AMD SMI for SR-IOV Linux host only. If you are looking for Linux bare metal or SR-IOV Linux guest AMD SMI, please go to the [AMD SMI documentation](https://rocm.docs.amd.com/projects/amdsmi/en/latest/index.html).
 ```
 
 Some of the features that are exposed in the library are:
@@ -60,50 +60,23 @@ For additional information on build, installation, usage, versioning and API ref
 
 :::{grid-item-card} How to
 
-- [C library usage](./how_to/amdsmi_c_lib.md)
+- [C/C++ library usage](./how_to/amdsmi_c_lib.md)
 - [Python library usage](./how_to/amdsmi_py_lib.md)
 - [CLI tool usage](./how_to/amdsmi_cli_usage.md)
 :::
 
 :::{grid-item-card} Reference
 
-- [C API](./reference/amdsmi_c_api.md)
-  - [Files](../doxygen/doxy_build/html/files)
-  - [Globals](../doxygen/doxy_build/html/globals)
-  - [Data structures](../doxygen/doxy_build/html/annotated)
-  - [Data fields](../doxygen/doxy_build/html/functions_data_fields)
+- [C/C++ API](./reference/amdsmi_c_api/index.md)
+  - [Functions](./reference/amdsmi_c_api/functions.md)
+  - [Types](./reference/amdsmi_c_api/types.md)
+  - [Defines](./reference/amdsmi_c_api/defines.md)
 - [Python API](./reference/amdsmi_py_api.md)
 :::
 
 :::{grid-item-card} General
 
-- [Library and CLI tool versioning](./general/versioning.md)
+- [Versioning](./general/versioning.md)
 :::
 
 ::::
-
-<style>
-#disclaimer {
-    font-size: 0.8rem;
-}
-</style>
-
-<div id="disclaimer">
-The information contained herein is for informational purposes only, and is
-subject to change without notice. While every precaution has been taken in the
-preparation of this document, it may contain technical inaccuracies, omissions
-and typographical errors, and AMD is under no obligation to update or otherwise
-correct this information. Advanced Micro Devices, Inc. makes no representations
-or warranties with respect to the accuracy or completeness of the contents of
-this document, and assumes no liability of any kind, including the implied
-warranties of noninfringement, merchantability or fitness for particular
-purposes, with respect to the operation or use of AMD hardware, software or
-other products described herein.
-
-AMD, the AMD Arrow logo, and combinations thereof are trademarks of Advanced
-Micro Devices, Inc. Other product names used in this publication are for
-identification purposes only and may be trademarks of their respective
-companies.
-
-Copyright &copy; 2025 Advanced Micro Devices, Inc. All rights reserved.
-</div>

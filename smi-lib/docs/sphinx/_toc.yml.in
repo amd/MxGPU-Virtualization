@@ -5,14 +5,14 @@ subtrees:
 - caption: Install
   entries:
   - file: install/install.md
-    title: Install AMD SMI on Linux SR-IOV hosts
+    title: Install on Linux SR-IOV hosts
   - file: install/build.md
     title: Build from source
 
 - caption: How to
   entries:
   - file: how_to/amdsmi_c_lib.md
-    title: C library usage
+    title: C/C++ library usage
   - file: how_to/amdsmi_py_lib.md
     title: Python library usage
   - file: how_to/amdsmi_cli_usage.md
@@ -32,7 +32,7 @@ subtrees:
   - file: reference/amdsmi_py_api.md
     title: Python API
 
-- caption: General
+- caption: About
   entries:
   - file: general/versioning.md
     title: Versioning

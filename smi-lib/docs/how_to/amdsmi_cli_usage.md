@@ -9,7 +9,7 @@ myst:
 
 ## Overview
 
-**AMD SMI tool** is a command line utility that utilizes AMD SMI Library APIs to monitor and configure AMD GPUs and NICs on Linux host systems. The tool is used to monitor AMD GPUs and NICs status in virtualization environments, providing comprehensive GPU management capabilities for host administrators. The tool outputs GPU and NIC information in plain text, in JSON, or in CSV formats while it can also show the info in the console or save to the specified output file.
+`amd-smi` is a command line utility that utilizes the AMD SMI library to monitor and configure AMD GPUs and NICs on Linux host systems. The tool is used to monitor AMD GPUs and NICs status in virtualization environments, providing comprehensive GPU management capabilities for host administrators. The tool outputs GPU and NIC information in plain text, in JSON, or in CSV formats while it can also show the info in the console or save to the specified output file.
 
 ## Return Codes
 
