@@ -1,23 +1,7 @@
 /*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <cstring>
@@ -32,7 +16,9 @@
 #include <limits>
 
 #include "smi_sysfs.h"
+#include "smi_utils.h"
 #include "smi_ethtool_ioctl.h"
+#include "smi_devlink.h"
 #include "smi_nic_interface.h"
 #include "smi_nic_system.h"
 
@@ -324,7 +310,14 @@ smi_nic_status_t smi_get_nic_bus_info(smi_nic_ctx_t ctx, uint64_t device, smi_ni
 	info->bdf = device;
 	info->max_pcie_width = nic->max_pcie_width().value_or(std::numeric_limits<uint8_t>::max());
 	info->max_pcie_speed = nic->max_pcie_speed().value_or(std::numeric_limits<uint32_t>::max());
-	std::snprintf(info->pcie_interface_version, SMI_NIC_MAX_STRING_LENGTH, "%s", "N/A");
+
+	auto pcie_gen = smi_utils::get_pcie_link_gen(nic->bdf());
+	if (pcie_gen.has_value()) {
+		std::snprintf(info->pcie_interface_version, SMI_NIC_MAX_STRING_LENGTH, "%u",
+			static_cast<unsigned>(pcie_gen.value()));
+	} else {
+		std::snprintf(info->pcie_interface_version, SMI_NIC_MAX_STRING_LENGTH, "%s", "N/A");
+	}
 	std::snprintf(info->slot_type, SMI_NIC_MAX_STRING_LENGTH, "%s", "N/A");
 
 	return SMI_NIC_STATUS_SUCCESS;
@@ -569,6 +562,82 @@ smi_nic_status_t smi_get_nic_rdma_dev_info(smi_nic_ctx_t ctx, uint64_t device, s
 	return SMI_NIC_STATUS_SUCCESS;
 }
 
+smi_nic_status_t smi_get_nic_fw_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_fw_info_t *info)
+{
+	if (!ctx || !info) {
+		return SMI_NIC_STATUS_WRONG_PARAM;
+	}
+
+	std::lock_guard<std::mutex> lock(ctx->ctx_mutex);
+	auto* nic_system = get_nic_system_from_context(ctx);
+	if (!nic_system) {
+		return SMI_NIC_STATUS_NOT_INIT;
+	}
+
+	const SmiNic *nic = nic_system->get_nic_by_bdf(device);
+	if (!nic) {
+		return SMI_NIC_STATUS_NOT_FOUND;
+	}
+
+	const auto& ports = nic->nic_ports();
+	if (ports.empty()) {
+		return SMI_NIC_STATUS_DRIVER_NOT_LOADED;
+	}
+	if (nic->vendor() == NicVendor::AMD) {
+		if (!nic_system->driver_loaded(ports[0].bdf(), DriverType::IONIC)) {
+			return SMI_NIC_STATUS_DRIVER_NOT_LOADED;
+		}
+	} else if (nic->vendor() == NicVendor::Broadcom) {
+		if (!nic_system->driver_loaded(ports[0].bdf(), DriverType::BNXT_EN)) {
+			return SMI_NIC_STATUS_DRIVER_NOT_LOADED;
+		}
+	}
+
+	const std::string& devlink_bdf = ports[0].bdf();
+
+	*info = {};
+
+	SmiDevlink devlink;
+	int rc = devlink.open(devlink_bdf);
+	if (rc != SMI_NIC_STATUS_SUCCESS) {
+		return static_cast<smi_nic_status_t>(rc);
+	}
+
+	std::vector<FwVersion> versions;
+	rc = devlink.get_fw_versions(versions);
+	if (rc != SMI_NIC_STATUS_SUCCESS) {
+		return static_cast<smi_nic_status_t>(rc);
+	}
+
+	uint32_t count = 0;
+	for (const auto& v : versions) {
+		if (count >= SMI_NIC_MAX_FW_VERSIONS) {
+			break;
+		}
+
+		std::snprintf(info->versions[count].name,
+			      SMI_NIC_MAX_STRING_LENGTH, "%s", v.name.c_str());
+		std::snprintf(info->versions[count].version,
+			      SMI_NIC_MAX_STRING_LENGTH, "%s", v.version.c_str());
+
+		switch (v.type) {
+		case FwVersionType::Fixed:
+			info->versions[count].type = SMI_NIC_FW_VERSION_TYPE_FIXED;
+			break;
+		case FwVersionType::Running:
+			info->versions[count].type = SMI_NIC_FW_VERSION_TYPE_RUNNING;
+			break;
+		case FwVersionType::Stored:
+			info->versions[count].type = SMI_NIC_FW_VERSION_TYPE_STORED;
+			break;
+		}
+		count++;
+	}
+
+	info->count = count;
+	return SMI_NIC_STATUS_SUCCESS;
+}
+
 smi_nic_status_t smi_topo_get_nic_link_type(smi_nic_ctx_t ctx, uint64_t device_src, uint64_t device_dst, smi_nic_link_type_t *type)
 {
 	if (!ctx || !type) {
@@ -694,7 +763,7 @@ smi_nic_status_t smi_get_nic_port_statistics_list(smi_nic_ctx_t ctx, uint64_t de
 		return SMI_NIC_STATUS_NO_DATA;
 	}
 
-	stats->count = static_cast<uint32_t>(std::min(stats_map.size(), (size_t)SMI_NIC_MAX_STATISTICS));
+	stats->count = static_cast<uint32_t>(std::min(stats_map.size(), static_cast<size_t>(SMI_NIC_MAX_STATISTICS)));
 	uint32_t i = 0;
 	for (const auto& stat_pair : stats_map) {
 		if (i >= stats->count) {
@@ -792,7 +861,7 @@ smi_nic_status_t smi_get_nic_vendor_statistics_list(smi_nic_ctx_t ctx, uint64_t 
 		return SMI_NIC_STATUS_NO_DATA;
 	}
 
-	stats->count = static_cast<uint32_t>(std::min(stats_map.size(), (size_t)SMI_NIC_MAX_STATISTICS));
+	stats->count = static_cast<uint32_t>(std::min(stats_map.size(), static_cast<size_t>(SMI_NIC_MAX_STATISTICS)));
 	uint32_t i = 0;
 	for (const auto& stat_pair : stats_map) {
 		if (i >= stats->count) {
@@ -839,16 +908,15 @@ smi_nic_status_t smi_get_nic_rdma_port_statistics_count(smi_nic_ctx_t ctx, uint6
 		if (!nic_system->driver_loaded(ports[port_index].bdf(), DriverType::BNXT_RE)) {
 			return SMI_NIC_STATUS_DRIVER_NOT_LOADED;
 		}
-		return SMI_NIC_STATUS_NOT_SUPPORTED;
 	}
 
 	const auto& ibs = ports[port_index].infiniband();
-	if (ib_index >= (uint32_t)ibs.size()) {
+	if (ib_index >= static_cast<uint32_t>(ibs.size())) {
 		return SMI_NIC_STATUS_NOT_FOUND;
 	}
 
 	const auto& ib_ports = ibs[ib_index].ports();
-	if (rdma_port_index >= (uint32_t)ib_ports.size()) {
+	if (rdma_port_index >= static_cast<uint32_t>(ib_ports.size())) {
 		return SMI_NIC_STATUS_WRONG_PARAM;
 	}
 
@@ -892,16 +960,15 @@ smi_nic_status_t smi_get_nic_rdma_port_statistics_list(smi_nic_ctx_t ctx, uint64
 		if (!nic_system->driver_loaded(ports[port_index].bdf(), DriverType::BNXT_RE)) {
 			return SMI_NIC_STATUS_DRIVER_NOT_LOADED;
 		}
-		return SMI_NIC_STATUS_NOT_SUPPORTED;
 	}
 
 	const auto& ibs = ports[port_index].infiniband();
-	if (ib_index >= (uint32_t)ibs.size()) {
+	if (ib_index >= static_cast<uint32_t>(ibs.size())) {
 		return SMI_NIC_STATUS_NOT_FOUND;
 	}
 
 	const auto& ib_ports = ibs[ib_index].ports();
-	if (rdma_port_index >= (uint32_t)ib_ports.size()) {
+	if (rdma_port_index >= static_cast<uint32_t>(ib_ports.size())) {
 		return SMI_NIC_STATUS_NOT_FOUND;
 	}
 
@@ -912,7 +979,7 @@ smi_nic_status_t smi_get_nic_rdma_port_statistics_list(smi_nic_ctx_t ctx, uint64
 		return SMI_NIC_STATUS_NO_DATA;
 	}
 
-	stats->count = static_cast<uint32_t>(std::min(stats_map.size(), (size_t)SMI_NIC_MAX_STATISTICS));
+	stats->count = static_cast<uint32_t>(std::min(stats_map.size(), static_cast<size_t>(SMI_NIC_MAX_STATISTICS)));
 	uint32_t i = 0;
 	for (const auto& stat_pair : stats_map) {
 		if (i >= stats->count) {

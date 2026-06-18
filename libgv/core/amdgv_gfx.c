@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2018-2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_device.h"
@@ -431,35 +414,85 @@ int amdgv_gfx_get_compute_cap(struct amdgv_adapter *adapt, bool min, uint32_t *c
 		}
 	}
 	*compute_cap = (adapt->config.gfx.active_cu_count * clk_mhz * threads_per_cu) / 1000;
-	AMDGV_INFO("COMPUTE CAP: %08x\n", *compute_cap);
+	AMDGV_DEBUG("COMPUTE CAP: %08x\n", *compute_cap);
 
 	return ret;
 }
 
-void amdgv_gfx_rlc_enter_safe_mode(struct amdgv_adapter *adapt, int xcc_id)
+int amdgv_gfx_rlc_enter_safe_mode(struct amdgv_adapter *adapt, int xcc_id)
 {
-	if (adapt->gfx.rlc.in_safe_mode[xcc_id])
-		return;
+	int ret;
 
-	/* if RLC is not enabled, do nothing */
+	if (!adapt->gfx.rlc.funcs ||
+	    !adapt->gfx.rlc.funcs->is_rlc_enabled ||
+	    !adapt->gfx.rlc.funcs->set_safe_mode)
+		return 0;
+
 	if (!adapt->gfx.rlc.funcs->is_rlc_enabled(adapt))
-		return;
+		return AMDGV_FAILURE;
 
-	adapt->gfx.rlc.funcs->set_safe_mode(adapt, xcc_id);
-	adapt->gfx.rlc.in_safe_mode[xcc_id] = true;
+	if (adapt->gfx.rlc.safe_mode_count[xcc_id]) {
+		adapt->gfx.rlc.safe_mode_count[xcc_id]++;
+		return 0;
+	}
+
+	ret = adapt->gfx.rlc.funcs->set_safe_mode(adapt, xcc_id);
+	if (ret)
+		return ret;
+
+	adapt->gfx.rlc.safe_mode_count[xcc_id] = 1;
+	return 0;
 }
 
-void amdgv_gfx_rlc_exit_safe_mode(struct amdgv_adapter *adapt, int xcc_id)
+int amdgv_gfx_rlc_exit_safe_mode(struct amdgv_adapter *adapt, int xcc_id)
 {
-	if (!(adapt->gfx.rlc.in_safe_mode[xcc_id]))
-		return;
+	int ret;
 
-	/* if RLC is not enabled, do nothing */
+	if (!adapt->gfx.rlc.funcs ||
+	    !adapt->gfx.rlc.funcs->is_rlc_enabled ||
+	    !adapt->gfx.rlc.funcs->unset_safe_mode)
+		return 0;
+
 	if (!adapt->gfx.rlc.funcs->is_rlc_enabled(adapt))
-		return;
+		return AMDGV_FAILURE;
 
-	adapt->gfx.rlc.funcs->unset_safe_mode(adapt, xcc_id);
-	adapt->gfx.rlc.in_safe_mode[xcc_id] = false;
+	if (!adapt->gfx.rlc.safe_mode_count[xcc_id])
+		return 0;
+
+	adapt->gfx.rlc.safe_mode_count[xcc_id]--;
+	if (adapt->gfx.rlc.safe_mode_count[xcc_id])
+		return 0;
+
+	ret = adapt->gfx.rlc.funcs->unset_safe_mode(adapt, xcc_id);
+	if (ret) {
+		adapt->gfx.rlc.safe_mode_count[xcc_id] = 1;
+		return ret;
+	}
+
+	return 0;
+}
+
+int amdgv_gfx_rlc_safe_mode(struct amdgv_adapter *adapt, bool enable)
+{
+	uint32_t xcc_id, num_xcc;
+	int ret;
+
+	num_xcc = adapt->mcp.gfx.num_xcc ? adapt->mcp.gfx.num_xcc : 1;
+
+	for (xcc_id = 0; xcc_id < num_xcc; xcc_id++) {
+		if (enable)
+			ret = amdgv_gfx_rlc_enter_safe_mode(adapt, xcc_id);
+		else
+			ret = amdgv_gfx_rlc_exit_safe_mode(adapt, xcc_id);
+
+		if (ret) {
+			AMDGV_WARN("failed to %s RLC safe mode on XCC%d\n",
+				   enable ? "enter" : "exit", xcc_id);
+			return ret;
+		}
+	}
+
+	return 0;
 }
 
 static void amdgv_gfx_set_aql_comp_ring_info(struct amdgv_adapter *adapt,
@@ -677,4 +710,34 @@ clean:
 		oss_free_memory(aql_comp_rb_info);
 
 	return r;
+}
+
+bool amdgv_gfx_is_gfx_off(struct amdgv_adapter *adapt)
+{
+	if (adapt->gfx.funcs && adapt->gfx.funcs->is_gfx_off) {
+		return adapt->gfx.funcs->is_gfx_off(adapt);
+	} else {
+		AMDGV_ERROR("is_gfx_off callback not implemented!\n");
+		return true;
+	}
+}
+
+int amdgv_gfx_check_rlc_autoload_complete(struct amdgv_adapter *adapt)
+{
+	if (adapt->gfx.funcs && adapt->gfx.funcs->check_rlc_autoload_complete)
+		return adapt->gfx.funcs->check_rlc_autoload_complete(adapt);
+	else {
+		AMDGV_ERROR("check_rlc_autoload_complete callback not implemented!\n");
+		return AMDGV_FAILURE;
+	}
+}
+
+int amdgv_gfx_set_clockgating_state(struct amdgv_adapter *adapt, bool enable)
+{
+	if (adapt->gfx.funcs && adapt->gfx.funcs->set_clockgating_state)
+		return adapt->gfx.funcs->set_clockgating_state(adapt, enable);
+	else {
+		AMDGV_ERROR("set_clockgating_state callback not implemented!\n");
+		return AMDGV_FAILURE;
+	}
 }

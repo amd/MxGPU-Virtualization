@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2018-2019 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include <linux/module.h>
@@ -83,6 +66,19 @@ static int ffbm_permission_get(char *permission)
 		per = permissions[++i].permission;
 	}
 	return -1;
+}
+
+static int gim_debugfs_copy_user_cmd(const char __user *from, size_t count,
+				     char *buf, size_t buf_size)
+{
+	if (count >= buf_size)
+		return -EFAULT;
+
+	if (copy_from_user(buf, from, count))
+		return -EFAULT;
+
+	buf[count] = '\0';
+	return 0;
 }
 
 static int attr_force_reset_set(void *data, u64 val)
@@ -517,10 +513,7 @@ static ssize_t asymmetric_timeslice_write(struct file *file,
 
 	dev_data = file->private_data;
 
-	if (count > 64)
-		return -EFAULT;
-
-	if (copy_from_user(buf, user_buf, count))
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
 	if (sscanf(buf, "%d,%d", &vf_idx, &timeslice) == 2) {
@@ -603,10 +596,7 @@ static ssize_t force_switch_vf_debug_all_write(struct file *file,
 	struct gim_dev_data *dev_data;
 	union amdgv_dev_conf conf;
 
-	if (count > 16)
-		return -EFAULT;
-
-	if (copy_from_user(buf, user_buf, count))
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
 	if (sscanf(buf, "%x", &val) != 1) {
@@ -693,10 +683,7 @@ static ssize_t hang_debug_all_write(struct file *file,
 	struct gim_dev_data *dev_data;
 	union amdgv_dev_conf conf;
 
-	if (count > 16)
-		return -EFAULT;
-
-	if (copy_from_user(buf, user_buf, count))
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
 	if (sscanf(buf, "%d", &val) != 1) {
@@ -768,10 +755,7 @@ static ssize_t skip_page_retirement_all_write(struct file *file,
 	struct gim_dev_data *dev_data;
 	union amdgv_dev_conf conf;
 
-	if (count > 16)
-		return -EFAULT;
-
-	if (copy_from_user(buf, user_buf, count))
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
 	if (sscanf(buf, "%d", &val) != 1) {
@@ -839,10 +823,7 @@ static ssize_t disable_mmio_protection_all_write(struct file *file,
 	struct gim_dev_data *dev_data;
 	union amdgv_dev_conf conf;
 
-	if (count > 16)
-		return -EFAULT;
-
-	if (copy_from_user(buf, user_buf, count))
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
 	if (sscanf(buf, "%d", &val) != 1) {
@@ -910,10 +891,7 @@ static ssize_t disable_psp_vf_gate_all_write(struct file *file,
 	struct gim_dev_data *dev_data;
 	union amdgv_dev_conf conf;
 
-	if (count > 16)
-		return -EFAULT;
-
-	if (copy_from_user(buf, user_buf, count))
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
 	if (sscanf(buf, "%d", &val) != 1) {
@@ -989,10 +967,7 @@ static ssize_t disable_dcore_debug_all_write(struct file *file,
 	struct gim_dev_data *dev_data;
 	union amdgv_dev_conf conf;
 
-	if (count > 16)
-		return -EFAULT;
-
-	if (copy_from_user(buf, user_buf, count))
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
 	if (sscanf(buf, "%d", &val) != 1) {
@@ -1114,10 +1089,7 @@ static ssize_t put_error_set_all_write(struct file *file,
 	struct gim_dev_data *dev_data;
 	union amdgv_dev_conf conf;
 
-	if (count > 8)
-		return -EFAULT;
-
-	if (copy_from_user(buf, user_buf, count))
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
 	if (sscanf(buf, "%d", &val) != 1) {
@@ -1266,10 +1238,7 @@ static ssize_t log_all_write(struct file *file,
 	struct gim_dev_data *dev_data;
 	union amdgv_dev_conf conf;
 
-	if (count > 64)
-		return -EFAULT;
-
-	if (copy_from_user(buf, user_buf, count))
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
 	if (sscanf(buf, "0x%x 0x%x 0x%x",
@@ -1335,10 +1304,7 @@ static ssize_t cmd_tmo_all_write(struct file *file,
 	struct gim_dev_data *dev_data;
 	union amdgv_dev_conf conf;
 
-	if (count > 16)
-		return -EFAULT;
-
-	if (copy_from_user(buf, user_buf, count))
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
 	if (sscanf(buf, "%u", &val) == 0) {
@@ -1401,10 +1367,7 @@ static ssize_t log_write(struct file *file,
 	struct gim_dev_data *dev_data;
 	union amdgv_dev_conf conf;
 
-	if (count > 64)
-		return -EFAULT;
-
-	if (copy_from_user(buf, user_buf, count))
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
 	dev_data = file->private_data;
@@ -1440,13 +1403,8 @@ static ssize_t ffbm_operations_write (struct file *file,
 	uint64_t gpa, size, spa;
 	struct gim_dev_data *dev_data;
 
-	if (count > 64) {
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
-	}
-
-	if (copy_from_user(buf, user_buf, count)) {
-		return -EFAULT;
-	}
 
 	dev_data = file->private_data;
 
@@ -1454,7 +1412,7 @@ static ssize_t ffbm_operations_write (struct file *file,
 		amdgv_ffbm_print_spa_list(dev_data->adev);
 	} else if (sscanf(buf, "clear vf%u", &vf_idx) == 1) {
 		amdgv_ffbm_clear_vf_mapping(dev_data->adev, vf_idx);
-	} else if (sscanf(buf, "map vf%u 0x%llx 0x%llx 0x%llx %s", &vf_idx, &gpa, &size, &spa, permission) == 5) {
+	} else if (sscanf(buf, "map vf%u 0x%llx 0x%llx 0x%llx %2s", &vf_idx, &gpa, &size, &spa, permission) == 5) {
 		per = ffbm_permission_get(permission);
 		if (per == -1) {
 			pr_warn("invalid permission value\n");
@@ -1536,7 +1494,7 @@ static ssize_t auto_sched_perf_log_set(struct file *file,
 
 	dev_data = file->private_data;
 
-	if (copy_from_user(buf, user_buf, count))
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
 	if (sscanf(buf, "%d", &val) != 1) {
@@ -1552,7 +1510,11 @@ static ssize_t auto_sched_perf_log_set(struct file *file,
 	ret = amdgv_set_dev_conf(dev_data->adev,
 			AMDGV_CONF_PERF_LOG_FLAG, &conf);
 
-	if (ret) {
+	if (ret == AMDGV_ALREADY_SET) {
+		pr_info("perf log already %s for [%s]\n",
+				conf.flag_switch ? "enabled" : "disabled",
+				dev_name(&dev_data->pdev->dev));
+	} else if (ret) {
 		pr_warn("Failed to enable/disable perf log for [%s]\n",
 				dev_name(&dev_data->pdev->dev));
 	}
@@ -1644,7 +1606,7 @@ static ssize_t auto_sched_debug_dump_set(struct file *file,
 
 	dev_data = file->private_data;
 
-	if (copy_from_user(buf, user_buf, count))
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
 	if (sscanf(buf, "%d", &val) != 1) {
@@ -1660,7 +1622,11 @@ static ssize_t auto_sched_debug_dump_set(struct file *file,
 	ret = amdgv_set_dev_conf(dev_data->adev,
 			AMDGV_CONF_DEBUG_DUMP_FLAG, &conf);
 
-	if (ret) {
+	if (ret == AMDGV_ALREADY_SET) {
+		pr_info("debug dump already %s for [%s]\n",
+				conf.flag_switch ? "enabled" : "disabled",
+				dev_name(&dev_data->pdev->dev));
+	} else if (ret) {
 		pr_warn("Failed to enable/disable debug dump for [%s]\n",
 				dev_name(&dev_data->pdev->dev));
 	}
@@ -1710,7 +1676,7 @@ static ssize_t hang_detection_threshold_set(struct file *file,
 
 	dev_data = file->private_data;
 
-	if (copy_from_user(buf, user_buf, count))
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
 	if (sscanf(buf, "%d", &val) != 1) {
@@ -1772,7 +1738,7 @@ static ssize_t hang_detection_duration_set(struct file *file,
 
 	dev_data = file->private_data;
 
-	if (copy_from_user(buf, user_buf, count))
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
 	if (sscanf(buf, "%d", &val) != 1) {
@@ -1831,10 +1797,7 @@ static ssize_t trigger_manual_dump_all_write(struct file *file,
 	char buf[16];
 	struct gim_dev_data *dev_data;
 
-	if (count > 16)
-		return -EFAULT;
-
-	if (copy_from_user(buf, user_buf, count))
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
 	if (sscanf(buf, "%d", &idx_vf) != 1) {
@@ -1894,10 +1857,7 @@ static ssize_t trigger_manual_dump_write(struct file *file,
 	struct gim_dev_data *dev_data;
 	struct gim_dev_data *dev_data_incoming;
 	dev_data_incoming = file->private_data;
-	if (count > 16)
-		return -EFAULT;
-
-	if (copy_from_user(buf, user_buf, count))
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
 	if (sscanf(buf, "%d", &idx_vf) != 1) {
@@ -1963,10 +1923,7 @@ static ssize_t mes_info_dump_all_write(struct file *file,
 	bool enable = 0;
 	int ret = 0;
 
-	if (count > 16)
-		return -EFAULT;
-
-	if (copy_from_user(buf, user_buf, count))
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
 	if (sscanf(buf, "%d", &val) != 1) {
@@ -2071,10 +2028,7 @@ static ssize_t mes_info_dump_write(struct file *file,
 	bool enable = false;
 	int ret = 0;
 
-	if (count > 16)
-		return -EFAULT;
-
-	if (copy_from_user(buf, user_buf, count))
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
 	if (sscanf(buf, "%d", &val) != 1) {
@@ -2186,10 +2140,7 @@ static ssize_t asymmetric_fb_write(struct file *file,
 
 	dev_data = file->private_data;
 
-	if (count > 64)
-		return -EFAULT;
-
-	if (copy_from_user(buf, user_buf, count))
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
 	if (sscanf(buf, "%d,%d", &vf_idx, &vf_fb_size) == 2) {
@@ -2234,10 +2185,7 @@ static ssize_t fb_defragment_write(struct file *file,
 
 	dev_data = file->private_data;
 
-	if (count > 64)
-		return -EFAULT;
-
-	if (copy_from_user(buf, user_buf, count))
+	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
 	if (sscanf(buf, "%d", &val) != 1 || !val) {

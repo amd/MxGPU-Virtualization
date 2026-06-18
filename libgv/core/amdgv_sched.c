@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_device.h"
@@ -112,9 +95,6 @@ int amdgv_sched_init(struct amdgv_adapter *adapt)
 	uint32_t i;
 #endif
 
-	AMDGV_INFO("Number of VFs per GFX scheduler block: 0x%x\n",
-		   adapt->sched.num_vf_per_gfx_sched);
-
 #ifdef WS_RECORD
 	if (adapt->flags & AMDGV_FLAG_USE_PF &&
 		adapt->flags & AMDGV_FLAG_WS_RECORD) {
@@ -134,10 +114,8 @@ int amdgv_sched_init(struct amdgv_adapter *adapt)
 		adapt->sched.array_vf[idx_vf].is_cond_avail = false;
 	}
 #ifdef WS_RECORD
-	if (amdgv_sched_record_queue_process_init(adapt)) {
-		AMDGV_ERROR("record process init failed\n");
+	if (amdgv_sched_record_queue_process_init(adapt))
 		amdgv_sched_record_queue_process_fini(adapt);
-	}
 #endif
 
 	if (amdgv_sched_world_switch_init(adapt)) {
@@ -228,7 +206,7 @@ int amdgv_sched_queue_init_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf)
 int amdgv_sched_queue_force_reset_gpu(struct amdgv_adapter *adapt)
 {
 	if (adapt->xgmi.master_adapt) {
-		AMDGV_INFO("Forwarding reset event to master adapter:0x%x\n",
+		AMDGV_DEBUG("Forwarding reset event to master adapter:0x%x\n",
 			   adapt->xgmi.master_adapt->bdf);
 		adapt = adapt->xgmi.master_adapt;
 	}
@@ -309,12 +287,8 @@ int amdgv_sched_queue_set_vf_cond_avail(struct amdgv_adapter *adapt, uint32_t id
 							     entry->xgmi.phy_node_id,
 							     adapt->xgmi.fb_sharing_mode)) {
 				tmp_ret = amdgv_sched_queue_set_vf_cond_avail_event(entry, 0);
-				if (tmp_ret) {
-					AMDGV_ERROR("Scheduling VF cond avail event"
-						    " failed on node %d with return code %d\n",
-						    entry->xgmi.phy_node_id, tmp_ret);
+				if (tmp_ret)
 					ret = tmp_ret;
-				}
 			}
 		}
 	}
@@ -360,7 +334,6 @@ uint32_t amdgv_sched_get_hw_sched_mask_by_sched_block(struct amdgv_adapter *adap
 		return adapt->sched.array_vf[idx_vf].block_map[sched_block].hw_sched_mask;
 }
 
-/* TODO: Provide this mapping if it's utilised often */
 int amdgv_sched_get_world_switch_by_hw_sched_id(struct amdgv_adapter *adapt, uint32_t hw_sched_id,
 					    struct amdgv_sched_world_switch **world_switch)
 {
@@ -714,6 +687,27 @@ int amdgv_sched_add_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	uint32_t world_switch_id;
 	struct amdgv_sched_world_switch *world_switch;
 
+	/* Special case: 1VF mode, no self switch and want to add PF
+	 * Need to enable self switch so that PF can also get time slice
+	 * Ensure PF has timeslice after adding PF to scheduler
+	 */
+	if (adapt->num_vf == 1 && (adapt->flags & AMDGV_FLAG_USE_PF)) {
+
+		if ((is_active_vf(0) && idx_vf == AMDGV_PF_IDX) || (is_active_vf(AMDGV_PF_IDX) && idx_vf == 0)) {
+
+			if (adapt->flags & AMDGV_FLAG_DISABLE_SELF_SWITCH) {
+				adapt->sched.self_switch_enabled = false;
+
+				adapt->flags &= ~AMDGV_FLAG_DISABLE_SELF_SWITCH;
+			} else {
+				adapt->sched.self_switch_enabled = true;
+			}
+
+			AMDGV_INFO("amdgv_sched_add_vf special case, enable self switch.\n");
+			amdgv_sched_setup_self_switch(adapt, true);
+		}
+	}
+
 	for_each_id(world_switch_id, amdgv_sched_get_world_switch_mask(adapt, idx_vf)) {
 		world_switch = &adapt->sched.world_switch[world_switch_id];
 		amdgv_sched_world_switch_add_vf(adapt, idx_vf, world_switch);
@@ -727,6 +721,27 @@ int amdgv_sched_remove_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	int ret = 0;
 	uint32_t world_switch_id;
 	struct amdgv_sched_world_switch *world_switch;
+	
+	/* Special case: 1VF mode with PF active
+	 * Need to restore the original self switch status
+	 * Case 1: original self switch status is false, we disable self switch
+	 * Case 2: original self switch status is true, we reenable self switch
+	 *         to update the correct time slice
+	 */
+
+	if (adapt->num_vf == 1 && (adapt->flags & AMDGV_FLAG_USE_PF)) {
+		// case 1: after lm restore, vf is resumed, and we remove PF
+		// case 2: before lm save mutable, PF is active and we remove VF
+		if ((is_active_vf(0) && idx_vf == AMDGV_PF_IDX) || (is_active_vf(AMDGV_PF_IDX) && idx_vf == 0)) {
+			AMDGV_INFO("amdgv_sched_remove_vf special case, restore self switch to %s.\n", adapt->sched.self_switch_enabled? "ENABLE": "DISABLE");
+			if (!adapt->sched.self_switch_enabled) {
+				adapt->flags |= AMDGV_FLAG_DISABLE_SELF_SWITCH;
+				amdgv_sched_setup_self_switch(adapt, false);
+			} else {
+				amdgv_sched_setup_self_switch(adapt, true);
+			}
+		}
+	}
 
 	for_each_id(world_switch_id, amdgv_sched_get_world_switch_mask(adapt, idx_vf)) {
 		world_switch = &adapt->sched.world_switch[world_switch_id];
@@ -817,7 +832,6 @@ int amdgv_sched_init_pf_state_early(struct amdgv_adapter *adapt)
 		oss_signal_event(adapt->sched.record_event);
 #endif
 
-	AMDGV_INFO("Init PF: Start Engine Inits.\n");
 	if (amdgv_sched_context_init(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_ALL))
 			return AMDGV_FAILURE;
 
@@ -1028,18 +1042,10 @@ int amdgv_sched_lock(struct amdgv_adapter *adapt)
 	if (is_any_vf_in_full_access())
 		AMDGV_WARN("Warning: a VF is in full access.\n");
 
-	AMDGV_INFO("Stop world switch.\n");
-
 	ret = amdgv_sched_queue_suspend(adapt);
-	if (ret) {
-		AMDGV_INFO("Failed to suspend scheduler\n");
-	}
 
 	/* switch to PF for all blocks */
-	if (amdgv_sched_context_switch_to_vf(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_ALL) == 0)
-		AMDGV_INFO("Switch to PF OK.\n");
-	else
-		AMDGV_INFO("Switch to PF Fail.\n");
+	amdgv_sched_context_switch_to_vf(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_ALL);
 
 	/* stop disptimer2 if we're in live update SAVE*/
 	if (adapt->live_update_state == AMDGV_LIVE_UPDATE_SAVE)
@@ -1176,9 +1182,6 @@ int amdgv_sched_set_hliquid_min_ts(struct amdgv_adapter *adapt, int hliquid_min_
 			AMDGV_ERROR("The VF minimum time slice is range from 0 to %d\n", vf_ts);
 			ret = AMDGV_FAILURE;
 		} else {
-			AMDGV_INFO("Round down, set VF minimum time slice to %d\n",
-					(hliquid_min_ts / 100) * 100);
-
 			world_switch->hliquid_min_ts = (hliquid_min_ts / 100) * 100;
 			ret = 0;
 		}
@@ -1189,7 +1192,6 @@ int amdgv_sched_set_hliquid_min_ts(struct amdgv_adapter *adapt, int hliquid_min_
 
 int amdgv_sched_set_auto_sched_log_feature(struct amdgv_adapter *adapt, uint32_t hw_sched_id, enum amdgv_auto_sched_log_op op, bool enable)
 {
-	int ret = 0;
 	int event = 0;
 
 	switch (op) {
@@ -1204,13 +1206,7 @@ int amdgv_sched_set_auto_sched_log_feature(struct amdgv_adapter *adapt, uint32_t
 	}
 
 	/* debug dump/perf log mem should have been configured already */
-	ret = amdgv_gpuiov_event_notification(adapt, AMDGV_PF_IDX, hw_sched_id,
-						event, enable);
-	if (ret)
-		AMDGV_ERROR("failed to send event notification\n");
-
-
-	return ret;
+	return amdgv_gpuiov_event_notification(adapt, AMDGV_PF_IDX, hw_sched_id, event, enable);
 }
 
 int amdgv_sched_toggle_perflog(struct amdgv_adapter *adapt, bool enable, uint32_t hw_sched_id)
@@ -1222,15 +1218,14 @@ int amdgv_sched_toggle_perflog(struct amdgv_adapter *adapt, bool enable, uint32_
 		 * skip toggle otherwize.
 		**/
 		if (!(adapt->flags & AMDGV_FLAG_PERF_LOG_ENABLE)) {
-			if (!adapt->sched.perf_log_enabled || enable) {
-				AMDGV_INFO("perf log disabled, skip toggle.\n");
+			if (!adapt->sched.perf_log_enabled[hw_sched_id] || enable) {
 				ret = 0;
 				break;
 			}
 		}
 
-		if (adapt->sched.perf_log_enabled == enable) {
-			ret = AMDGV_FAILURE;
+		if (adapt->sched.perf_log_enabled[hw_sched_id] == enable) {
+			ret = AMDGV_ALREADY_SET;
 			break;
 		}
 		AMDGV_DEBUG("toggle %s perf log in rlcv auto scheduler\n", enable ? "on" : "off");
@@ -1238,7 +1233,7 @@ int amdgv_sched_toggle_perflog(struct amdgv_adapter *adapt, bool enable, uint32_
 		ret = amdgv_sched_set_auto_sched_log_feature(adapt, hw_sched_id, AMDGV_AUTO_SCHED_PERF_LOG, enable);
 		if (ret)
 			break;
-		adapt->sched.perf_log_enabled = enable;
+		adapt->sched.perf_log_enabled[hw_sched_id] = enable;
 
 		if (!enable) {
 			if (amdgv_sched_read_perf_log_data(adapt))
@@ -1260,57 +1255,57 @@ int amdgv_sched_read_perf_log_data(struct amdgv_adapter *adapt)
 	uint64_t timestamp;
 	uint32_t i;
 
-	perf_log_info->vf_num = adapt->num_vf;
-
 	perf_log_mem = adapt->gpuiov.perf_log_mem;
-	if (perf_log_mem) {
-		fb_offset = amdgv_memmgr_get_gpu_addr(perf_log_mem) - adapt->memmgr_pf.mc_base;
-
-		for (i = 0; i < AMDGV_MAX_VF_SLOT; i++) {
-			timestamp = READ_FB32(fb_offset + 4);
-			timestamp <<= 32;
-			timestamp += READ_FB32(fb_offset);
-
-			if (i < adapt->num_vf) {
-				perf_log_info->vf_perf_log_info[i].vf_idx = i;
-				perf_log_info->vf_perf_log_info[i].time_quanta = timestamp;
-			} else if (i == AMDGV_PF_IDX) {
-				perf_log_info->vf_perf_log_info[adapt->num_vf].vf_idx = AMDGV_PF_IDX;
-				perf_log_info->vf_perf_log_info[adapt->num_vf].time_quanta = timestamp;
-			}
-
-			fb_offset += 8;
-		}
-
-		for (i = 0; i < AMDGV_MAX_VF_SLOT; i++) {
-			if (i < adapt->num_vf)
-				perf_log_info->vf_perf_log_info[i].ws_cycle_cnt = READ_FB32(fb_offset);
-			else if (i == AMDGV_PF_IDX)
-				perf_log_info->vf_perf_log_info[adapt->num_vf].ws_cycle_cnt = READ_FB32(fb_offset);
-
-			fb_offset += 4;
-		}
-
-		for (i = 0; i < AMDGV_MAX_VF_SLOT; i++) {
-			if (i < adapt->num_vf)
-				perf_log_info->vf_perf_log_info[i].skipped_cycle_cnt = READ_FB32(fb_offset);
-			else if (i == AMDGV_PF_IDX)
-				perf_log_info->vf_perf_log_info[adapt->num_vf].skipped_cycle_cnt = READ_FB32(fb_offset);
-
-			fb_offset += 4;
-		}
-
-		for (i = 0; i < AMDGV_MAX_VF_SLOT; i++) {
-			if (i < adapt->num_vf)
-				perf_log_info->vf_perf_log_info[i].yield_cnt = READ_FB32(fb_offset);
-			else if (i == AMDGV_PF_IDX)
-				perf_log_info->vf_perf_log_info[adapt->num_vf].yield_cnt = READ_FB32(fb_offset);
-
-			fb_offset += 4;
-		}
-	} else {
+	if (!perf_log_mem) {
 		AMDGV_ERROR("Private csa fb memory not allocated\n");
 		return AMDGV_FAILURE;
+	}
+
+	perf_log_info->vf_num = adapt->num_vf;
+
+	fb_offset = amdgv_memmgr_get_gpu_addr(perf_log_mem) - adapt->memmgr_pf.mc_base;
+
+	for (i = 0; i < AMDGV_MAX_VF_SLOT; i++) {
+		timestamp = READ_FB32(fb_offset + 4);
+		timestamp <<= 32;
+		timestamp += READ_FB32(fb_offset);
+
+		if (i < adapt->num_vf) {
+			perf_log_info->vf_perf_log_info[i].vf_idx = i;
+			perf_log_info->vf_perf_log_info[i].time_quanta = timestamp;
+		} else if (i == AMDGV_PF_IDX) {
+			perf_log_info->vf_perf_log_info[adapt->num_vf].vf_idx = AMDGV_PF_IDX;
+			perf_log_info->vf_perf_log_info[adapt->num_vf].time_quanta = timestamp;
+		}
+
+		fb_offset += 8;
+	}
+
+	for (i = 0; i < AMDGV_MAX_VF_SLOT; i++) {
+		if (i < adapt->num_vf)
+			perf_log_info->vf_perf_log_info[i].ws_cycle_cnt = READ_FB32(fb_offset);
+		else if (i == AMDGV_PF_IDX)
+			perf_log_info->vf_perf_log_info[adapt->num_vf].ws_cycle_cnt = READ_FB32(fb_offset);
+
+		fb_offset += 4;
+	}
+
+	for (i = 0; i < AMDGV_MAX_VF_SLOT; i++) {
+		if (i < adapt->num_vf)
+			perf_log_info->vf_perf_log_info[i].skipped_cycle_cnt = READ_FB32(fb_offset);
+		else if (i == AMDGV_PF_IDX)
+			perf_log_info->vf_perf_log_info[adapt->num_vf].skipped_cycle_cnt = READ_FB32(fb_offset);
+
+		fb_offset += 4;
+	}
+
+	for (i = 0; i < AMDGV_MAX_VF_SLOT; i++) {
+		if (i < adapt->num_vf)
+			perf_log_info->vf_perf_log_info[i].yield_cnt = READ_FB32(fb_offset);
+		else if (i == AMDGV_PF_IDX)
+			perf_log_info->vf_perf_log_info[adapt->num_vf].yield_cnt = READ_FB32(fb_offset);
+
+		fb_offset += 4;
 	}
 
 	return 0;
@@ -1494,7 +1489,6 @@ bool amdgv_sched_is_unrecov_err(struct amdgv_adapter *adapt)
 void amdgv_sched_clear_dirty_vf_fb(struct amdgv_adapter *adapt, int vf_idx)
 {
     union amdgv_sched_event_data data;
-    int ret;
 
 	if (adapt->status == AMDGV_STATUS_HW_RMA || adapt->status == AMDGV_STATUS_HW_HIVE_RMA) {
 		AMDGV_DEBUG("Device already in RMA state, any incoming event is dropped.\n");
@@ -1505,10 +1499,8 @@ void amdgv_sched_clear_dirty_vf_fb(struct amdgv_adapter *adapt, int vf_idx)
 	data.vf_fb_data.pattern = 0x0;
 	data.vf_fb_data.flag = AMDGV_VF_FB_CLEAR_DIRTY;
 
-	ret = amdgv_sched_queue_event_ex(adapt, vf_idx,
+	amdgv_sched_queue_event_ex(adapt, vf_idx,
 			AMDGV_EVENT_SCHED_INIT_VF_FB, AMDGV_SCHED_BLOCK_ALL, data);
-	if (ret)
-		AMDGV_ERROR("Failed to clear VF FB for VF %d\n", vf_idx);
 }
 
 int amdgv_sched_set_ws_log_op(struct amdgv_adapter *adapt,

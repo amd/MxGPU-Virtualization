@@ -1,24 +1,6 @@
-/*
- * Copyright 2020-2023 Advanced Micro Devices, Inc.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
- * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- * OTHER DEALINGS IN THE SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_live_info.h"
@@ -139,7 +121,7 @@ enum amdgv_live_info_status amdgv_export_data(struct amdgv_adapter *adapt)
 			amdgv_live_info_export_data(adapt, data_op, (void *)header, &status);
 			if (status) {
 				adapt->fini_opt.export_status = false;
-				AMDGV_INFO("Export %d data fail\n", data_op);
+				AMDGV_ERROR("Failed to export %d data\n", data_op);
 				return status;
 			}
 		}
@@ -304,6 +286,7 @@ int amdgv_live_info_export_data(struct amdgv_adapter *adapt, uint32_t data_op,
 		param_info->log_level = adapt->log_level;
 		param_info->log_mask = adapt->log_mask;
 		param_info->flags = adapt->flags;
+		param_info->vf_hbm_mgmt_mode = adapt->vf_hbm_mgmt_mode;
 
 		param_info->allow_time_full_access = adapt->sched.allow_time_full_access;
 		param_info->perf_mon_enable = adapt->opt.perf_mon_enable;
@@ -516,6 +499,7 @@ int amdgv_live_info_import_data(struct amdgv_adapter *adapt, uint32_t data_op,
 		adapt->log_level = param_info->log_level;
 		adapt->log_mask = param_info->log_mask;
 		adapt->flags = param_info->flags;
+		adapt->vf_hbm_mgmt_mode = param_info->vf_hbm_mgmt_mode;
 
 		adapt->sched.allow_time_full_access = param_info->allow_time_full_access;
 		adapt->opt.perf_mon_enable = param_info->perf_mon_enable;
@@ -570,6 +554,17 @@ int amdgv_live_info_import_data(struct amdgv_adapter *adapt, uint32_t data_op,
 
 		if (adapt->ip_discovery.enable_live_update) {
 			struct amdgv_live_info_ip_discovery *ip_discovery = data;
+
+			if (ip_discovery->ip_discovery_info_data_size > AMDGV_IP_DISCOVERY_SIZE ||
+			    ip_discovery->ip_discovery_info_data_size > sizeof(ip_discovery->ip_discovery_info_data)) {
+				AMDGV_ERROR("ip_discovery live-info data_size ERROR - greater than buffer size:"
+					    " data_size=%d, buffer size=%d, src size=%d\n",
+					    ip_discovery->ip_discovery_info_data_size,
+					    AMDGV_IP_DISCOVERY_SIZE,
+					    (int)sizeof(ip_discovery->ip_discovery_info_data));
+				*status = AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
+				return AMDGV_FAILURE;
+			}
 
 			oss_memcpy(adapt->ip_discovery.pf_copy.data, ip_discovery->ip_discovery_info_data, ip_discovery->ip_discovery_info_data_size);
 			oss_memcpy(adapt->ip_discovery.origin_pf_copy.data, ip_discovery->ip_discovery_info_data, ip_discovery->ip_discovery_info_data_size);
@@ -724,6 +719,13 @@ int amdgv_live_info_import_data(struct amdgv_adapter *adapt, uint32_t data_op,
 	}
 	case AMDGV_LIVE_INFO_DATA__RAS_EEPROM_DATA: {
 		struct amdgv_live_info_ras_eeprom_data *eeprom_data = (struct amdgv_live_info_ras_eeprom_data *)data;
+
+		if (eeprom_data->data_len > sizeof(eeprom_data->data_buffer)) {
+			AMDGV_ERROR("RAS EEPROM live-info data_len %u exceeds inline buffer size %zu, rejecting corrupt blob\n",
+				    eeprom_data->data_len, sizeof(eeprom_data->data_buffer));
+			*status = AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
+			break;
+		}
 
 		if (eeprom_data->data_len > 0) {
 			adapt->ecc.ras_eerpom_raw_data.data_buf = oss_zalloc(eeprom_data->data_len);

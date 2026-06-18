@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_device.h"
@@ -270,6 +253,9 @@ static bool is_gpaess_valid(struct amdgv_adapter *adapt, uint64_t size, uint64_t
 	uint64_t previous_end = 0, current_start = 0;
 	struct amdgv_ffbm_pte_block *pteb;
 	bool ret = false;
+
+	if (size == 0 || gpa + size < gpa)
+		return ret;
 
 	if ((gpa >= MBYTES_TO_BYTES(AMDGV_FFBM_FB_TMR_OFFSET) &&
 		gpa < MBYTES_TO_BYTES(adapt->tmr_size + AMDGV_FFBM_FB_TMR_OFFSET)) ||
@@ -832,7 +818,7 @@ int amdgv_ffbm_page_table_update_by_fcn(struct amdgv_adapter *adapt, uint32_t vf
 					    MBYTES_TO_BYTES(adapt->array_vf[vf_idx].fb_offset),
 					    0, AMDGV_FFBM_MEM_TYPE_PF);
 		/* TMR region is alredy mappped in hw init*/
-		AMDGV_INFO("FFBM tmr size: %d MB, left pf size %d MB\n", adapt->tmr_size,
+		AMDGV_DEBUG("FFBM tmr size: %d MB, left pf size %d MB\n", adapt->tmr_size,
 			   adapt->array_vf[vf_idx].fb_size - AMDGV_FFBM_FB_TMR_OFFSET -
 				   adapt->tmr_size + adapt->array_vf[vf_idx].fb_offset);
 		ret = amdgv_ffbm_manual_map(
@@ -1024,7 +1010,7 @@ void amdgv_ffbm_read_page_table(struct amdgv_adapter *adapt, char *page_table_co
 	amdgv_list_for_each_entry(pteb, &adapt->ffbm.spa_list, struct amdgv_ffbm_pte_block,
 				   spa_list_node) {
 		if (length >= restore_length) {
-			AMDGV_INFO("FFBM list exceeds 4 KB\n");
+			AMDGV_WARN("FFBM list exceeds 4 KB\n");
 			dump_table = true;
 			break;
 		}

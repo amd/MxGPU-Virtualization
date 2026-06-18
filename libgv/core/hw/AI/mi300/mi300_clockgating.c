@@ -1,27 +1,11 @@
-/*
- * Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv.h>
 #include <amdgv_device.h>
+#include <amdgv_gfx.h>
 
 #include "mi300/GC/gc_9_4_3_offset.h"
 #include "mi300/GC/gc_9_4_3_sh_mask.h"
@@ -49,33 +33,6 @@ static void mi300_gc_set_clock_gating_feature_flag(struct amdgv_adapter *adapt)
 	flags.bits.gc_clockgating_support_gfx_cgls = 1;
 
 	gc->clock_gating_flags.u32All = flags.u32All;
-}
-
-static int mi300_gc_enter_rlc_safe_mode(struct amdgv_adapter *adapt, int xcc_id)
-{
-	uint32_t data;
-	int ret;
-
-	data = RLC_SAFE_MODE__CMD_MASK;
-	data = REG_SET_FIELD(data, RLC_SAFE_MODE, MESSAGE, 1);
-	WREG32_SOC15(GC, GET_INST(GC, xcc_id), regRLC_SAFE_MODE, data);
-
-	ret = amdgv_wait_for_register(
-		adapt, SOC15_REG_OFFSET(GC, GET_INST(GC, xcc_id), regRLC_SAFE_MODE),
-		RLC_SAFE_MODE__CMD_MASK, 0, AMDGV_TIMEOUT(TIMEOUT_STATUS_REG),
-		AMDGV_WAIT_CHECK_EQ, AMDGV_WAIT_FLAG_FORCE_YIELD);
-
-	return ret ? AMDGV_FAILURE : 0;
-}
-
-static int mi300_gc_exit_rlc_safe_mode(struct amdgv_adapter *adapt, int xcc_id)
-{
-	uint32_t data;
-
-	data = RLC_SAFE_MODE__CMD_MASK;
-	WREG32_SOC15(GC, GET_INST(GC, xcc_id), regRLC_SAFE_MODE, data);
-
-	return 0;
 }
 
 static void mi300_clockgating_mgcg_control(struct amdgv_adapter *adapt, int xcc_id,
@@ -223,6 +180,20 @@ static void mi300_clockgating_sram_fgcg(struct amdgv_adapter *adapt, int xcc_id,
 		WREG32_SOC15(GC, GET_INST(GC, xcc_id), regRLC_CLK_CNTL, data);
 }
 
+void mi300_clockgating_spm_mgcg(struct amdgv_adapter *adapt, int xcc_id, bool enable)
+{
+	uint32_t def, data;
+	struct gc_context *gc = adapt->cg.gc;
+
+	if (!gc->clock_gating_flags.bits.gc_clockgating_support_gfx_mgcg)
+		return;
+
+	def = data = RREG32_SOC15(GC, GET_INST(GC, xcc_id), regRLC_CLK_CNTL);
+	data = REG_SET_FIELD(data, RLC_CLK_CNTL, RLC_SPM_CLK_CNTL, enable ? 0x3 : 0x0);
+	if (def != data)
+		WREG32_SOC15(GC, GET_INST(GC, xcc_id), regRLC_CLK_CNTL, data);
+}
+
 static void mi300_clockgating_repeater_fgcg(struct amdgv_adapter *adapt, int xcc_id,
 					    bool enable)
 {
@@ -251,11 +222,12 @@ static int mi300_gc_control_power_features(struct amdgv_adapter *adapt, int xcc_
 	if (enable)
 		mi300_clockgating_cp_int_cntl(adapt, xcc_id, enable);
 
-	ret = mi300_gc_enter_rlc_safe_mode(adapt, xcc_id);
+	ret = amdgv_gfx_rlc_enter_safe_mode(adapt, xcc_id);
 	if (ret)
 		return ret;
 
 	if (enable) {
+		mi300_clockgating_spm_mgcg(adapt, xcc_id, enable);
 		mi300_clockgating_sram_fgcg(adapt, xcc_id, enable);
 		mi300_clockgating_repeater_fgcg(adapt, xcc_id, enable);
 		mi300_clockgating_mgcg_control(adapt, xcc_id, enable);
@@ -265,9 +237,10 @@ static int mi300_gc_control_power_features(struct amdgv_adapter *adapt, int xcc_
 		mi300_clockgating_mgcg_control(adapt, xcc_id, enable);
 		mi300_clockgating_sram_fgcg(adapt, xcc_id, enable);
 		mi300_clockgating_repeater_fgcg(adapt, xcc_id, enable);
+		mi300_clockgating_spm_mgcg(adapt, xcc_id, enable);
 	}
 
-	ret = mi300_gc_exit_rlc_safe_mode(adapt, xcc_id);
+	ret = amdgv_gfx_rlc_exit_safe_mode(adapt, xcc_id);
 	if (!enable)
 		mi300_clockgating_cp_int_cntl(adapt, xcc_id, enable);
 	if (ret)

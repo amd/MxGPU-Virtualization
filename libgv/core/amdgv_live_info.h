@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2020-2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef AMDGV_LIVE_INFO_H
@@ -125,7 +108,9 @@ enum amdgv_mem_id {
 	MEM_PSP_TMR                  = 0x14,
 	MEM_PSP_XGMI                 = 0x15,
 	MEM_PSP_VBFLASH              = 0x16,
-	MEM_PSP_DUMMY                = 0x17,
+	MEM_PSP_SRIOV_DRV            = 0x17,
+	MEM_PSP_DUMMY                = 0x18,
+	MEM_PSP_UAL                  = 0x19,
 	/* SMU */
 	MEM_SMC_PPTABLE              = 0x100,
 	MEM_SMC_WATERMARK_TABLE      = 0x101,
@@ -192,6 +177,10 @@ enum amdgv_mem_id {
 	MEM_SDMA0_MQD                = 0x640,
 	MEM_SDMA1_MQD                = 0x641,
 
+	MEM_MES_RING                 = 0x642,
+	MEM_MES_EOP                  = 0x643,
+	MEM_MES_MQD                  = 0x644,
+
 	/* FW */
 	MEM_PFP_FW                   = 0x700,
 	MEM_ME_FW                    = 0x701,
@@ -206,13 +195,15 @@ enum amdgv_mem_id {
 	MEM_RS64_ME_DATA             = 0x70a,
 	MEM_RS64_MEC1_UCODE          = 0x70b,
 	MEM_RS64_MEC1_DATA           = 0x70c,
-
+	MEM_TOC_FW                   = 0x70d,
+	MEM_IP_DISCOVERY             = 0x70e,
 	/* Live Migration */
 	MEM_MIGRATION_PSP_STATIC_DATA  = 0x800,
 	MEM_MIGRATION_PSP_DYNAMIC_DATA = 0x801,
 	MEM_GC_DIRTY_BIT_PLANE         = 0X802,
-	MEM_GART_MEM_PDB0 = 0x803,
-	MEM_GART_MEM_PTB = 0x804,
+	MEM_GART_MEM_PDB0              = 0x803,
+	MEM_GART_MEM_PTB               = 0x804,
+	MEM_MM_DIRTY_BIT_PLANE         = 0X805,
 
 	/* VF critical region allocation */
 	MEM_VF_IPD_TABLE		= 0x900,
@@ -260,7 +251,8 @@ struct amdgv_live_info_param {
 	uint32_t bad_page_record_threshold;
 	uint32_t max_cper_count;
 	int32_t ras_vf_telemetry_policy;
-	uint8_t reserved[39]; // 0x80 align
+	uint32_t vf_hbm_mgmt_mode;
+	uint8_t reserved[35]; // 0x80 align
 };
 
 struct amdgv_live_info_vbios {

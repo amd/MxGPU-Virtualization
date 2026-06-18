@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2019 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include <linux/module.h>
@@ -45,6 +28,10 @@
 #include <linux/namei.h>
 #include <linux/cpumask.h>
 #include <linux/workqueue.h>
+#include <linux/xarray.h>
+#include <linux/mm.h>
+#include <linux/highmem.h>
+#include <linux/pfn.h>
 
 #if defined(HAVE_LINUX_DMA_DIRECT_H)
 #include <linux/dma-direct.h>
@@ -63,11 +50,16 @@
 #include "dcore_drv.h"
 #endif
 
+
+
 #include "amdgv_oss.h"
 #include "gim_debug.h"
 #include "gim_config.h"
 #include "gim.h"
 #include "gim_iova_sys_mem.h"
+
+#include "gim_hbm_dax.h"
+#include "gim_hbm_drv_mgmt.h"
 
 extern struct gim_error_ring_buffer *gim_error_rb;
 
@@ -94,6 +86,115 @@ extern struct gim_error_ring_buffer *gim_error_rb;
 #define PCIE_SRIOV_VF_BASE_ADDR_3	0x0360
 #define PCIE_SRIOV_VF_BASE_ADDR_4	0x0364
 #define PCIE_SRIOV_VF_BASE_ADDR_5	0x0368
+
+#include <asm/mce.h>
+#define MAX_GPU_INSTANCE		64
+static int gim_mce_notifier(struct notifier_block *nb, unsigned long val, void *data);
+struct gim_mce_dev {
+	void *dev;
+	mce_notifier dev_notifier;
+};
+struct gim_mce_mgr {
+	struct gim_mce_dev devs[MAX_GPU_INSTANCE];
+	atomic_t ref_count;
+	struct notifier_block nb;
+	mce_notifier notifier;
+};
+
+struct gim_mce_mgr  g_gim_mce_mgr = {
+	.nb = {
+		.notifier_call = gim_mce_notifier,
+		.priority = MCE_PRIO_UC,
+	},
+};
+
+/*
+ * MCE slot lifetime and ordering (register / gim_mce_notifier / unregister):
+ *
+ * Register: claim dev with cmpxchg(NULL -> dev), then publish the callback with
+ * smp_store_release(dev_notifier). A concurrent gim_mce_notifier must not call
+ * into half-published state: it uses READ_ONCE(mce_dev->dev) and
+ * smp_load_acquire(dev_notifier) before invoking the notifier.
+ *
+ * Unregister: clear dev with cmpxchg(dev -> NULL) so gim_mce_notifier stops
+ * treating the slot as live, then clear dev_notifier and fence before dropping
+ * ref_count and possibly removing the MCE decode chain.
+ */
+static int gim_mce_notifier(struct notifier_block *nb, unsigned long val, void *data)
+{
+	struct gim_mce_mgr *mce_mgr = container_of(nb, struct gim_mce_mgr, nb);
+	struct gim_mce_dev *mce_dev;
+	void *registered_dev;
+	int i;
+
+	if (!data)
+		return NOTIFY_DONE;
+
+	for (i = 0; i < MAX_GPU_INSTANCE; i++) {
+		mce_dev = &mce_mgr->devs[i];
+		registered_dev = READ_ONCE(mce_dev->dev);
+		if (registered_dev &&
+		    smp_load_acquire(&mce_dev->dev_notifier))
+			mce_dev->dev_notifier(registered_dev, i, val, data);
+	}
+
+	return NOTIFY_DONE;
+}
+
+static int gim_register_mce_notifier(void *dev, mce_notifier notifier)
+{
+	struct gim_mce_mgr *mce_mgr = &g_gim_mce_mgr;
+	struct gim_mce_dev *mce_dev;
+	void *old;
+	int i;
+
+	if (!dev || !notifier)
+		return -EINVAL;
+
+	for (i = 0; i < MAX_GPU_INSTANCE; i++) {
+		mce_dev = &mce_mgr->devs[i];
+		old = cmpxchg(&mce_dev->dev, NULL, dev);
+		if (old == NULL) {
+			smp_store_release(&mce_dev->dev_notifier, notifier);
+			if (atomic_inc_return(&mce_mgr->ref_count) == 1)
+				mce_register_decode_chain(&mce_mgr->nb);
+			return 0;
+		}
+		if (old == dev) {
+			smp_store_release(&mce_dev->dev_notifier, notifier);
+			return 0;
+		}
+	}
+
+	return -ENOMEM;
+}
+
+static int gim_unregister_mce_notifier(void *dev)
+{
+	struct gim_mce_mgr *mce_mgr = &g_gim_mce_mgr;
+	struct gim_mce_dev *mce_dev;
+	void *old;
+	int i;
+	bool found = false;
+
+	if (!dev)
+		return -EINVAL;
+
+	for (i = 0; i < MAX_GPU_INSTANCE; i++) {
+		mce_dev = &mce_mgr->devs[i];
+		old = cmpxchg(&mce_dev->dev, dev, NULL);
+		if (old == dev) {
+			WRITE_ONCE(mce_dev->dev_notifier, NULL);
+			smp_wmb();
+			if (atomic_dec_return(&mce_mgr->ref_count) == 0)
+				mce_unregister_decode_chain(&mce_mgr->nb);
+			found = true;
+			break;
+		}
+	}
+
+	return found ? 0 : -ENOENT;
+}
 
 static oss_dev_t gim_get_vf_dev_from_bdf(uint32_t bdf)
 {
@@ -141,22 +242,25 @@ static int gim_map_vf_dev_res(oss_dev_t dev, struct oss_dev_res *res)
 
 	res->mmio_size = pci_resource_len(pdev, i);
 
-	/* map framebuffer BAR */
-	gim_info("Map region 0x%llx for length %lld\n",
-		pci_resource_start(pdev, 0),
-		 pci_resource_len(pdev, 0));
-
-	res->fb = ioremap(pci_resource_start(pdev, 0),
-				pci_resource_len(pdev, 0));
-	if (res->fb == NULL) {
-		gim_info("Failed to map fb region 0x%llx for length %lld\n",
+	if (pci_resource_len(pdev, 0) != 0) {
+		/* map framebuffer BAR */
+		gim_info("Map region 0x%llx for length %lld\n",
 			pci_resource_start(pdev, 0),
 			pci_resource_len(pdev, 0));
-		gim_put_error(AMDGV_ERROR_DRIVER_MMIO_FAIL, 0);
-		goto failed;
+
+		res->fb = ioremap(pci_resource_start(pdev, 0),
+					pci_resource_len(pdev, 0));
+		if (res->fb == NULL) {
+			gim_info("Failed to map fb region 0x%llx for length %lld\n",
+				pci_resource_start(pdev, 0),
+				pci_resource_len(pdev, 0));
+			gim_put_error(AMDGV_ERROR_DRIVER_MMIO_FAIL, 0);
+			goto failed;
+		}
+
+		res->fb_size = pci_resource_len(pdev, 0);
 	}
 
-	res->fb_size = pci_resource_len(pdev, 0);
 	return 0;
 
 failed:
@@ -1022,6 +1126,24 @@ static void gim_spin_lock_fini(void *p)
 	gim_kfree(p);
 }
 
+static void gim_spin_lock_init_raw(void *lock)
+{
+	spin_lock_init((spinlock_t *)lock);
+}
+
+static void gim_spin_lock_irqsave_raw(void *lock, unsigned long *f)
+{
+	unsigned long flags = 0;
+
+	spin_lock_irqsave((spinlock_t *)lock, flags);
+	*f = flags;
+}
+
+static void gim_spin_unlock_irqrestore_raw(void *lock, unsigned long f)
+{
+	spin_unlock_irqrestore((spinlock_t *)lock, f);
+}
+
 static void *gim_mutex_init(void)
 {
 	struct mutex *p = gim_kmalloc(sizeof(struct mutex), GFP_KERNEL);
@@ -1030,6 +1152,11 @@ static void *gim_mutex_init(void)
 		mutex_init(p);
 
 	return p;
+}
+
+static void gim_mutex_init_raw(void *mutex)
+{
+	mutex_init((struct mutex *)mutex);
 }
 
 static void gim_mutex_lock(void *p)
@@ -1047,6 +1174,12 @@ static void gim_mutex_fini(void *p)
 	mutex_destroy((struct mutex *)p);
 	gim_kfree(p);
 }
+
+static void gim_mutex_destroy_raw(void *mutex)
+{
+	mutex_destroy((struct mutex *)mutex);
+}
+
 static void *gim_rwlock_init(void)
 {
 	rwlock_t *p =
@@ -1301,6 +1434,11 @@ static void gim_atomic_dec(void *p)
 	atomic64_dec((atomic64_t *)p);
 }
 
+static void gim_atomic_sub(int val, void *atomic)
+{
+	atomic_sub(val, atomic);
+}
+
 static uint64_t gim_atomic_inc_return(void *p)
 {
 	return atomic64_inc_return((atomic64_t *)p);
@@ -1393,7 +1531,7 @@ static void *gim_timer_init(oss_callback_t timer_cb, void *context)
 	t->timer_cb = timer_cb;
 	t->context = context;
 #if defined(HAVE_HRTIMER_SETUP)
-	hrtimer_setup(&t->timer, gim_timer_callback_wrapper, 
+	hrtimer_setup(&t->timer, gim_timer_callback_wrapper,
 			CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 #else
 	hrtimer_init(&t->timer, CLOCK_MONOTONIC,
@@ -1415,7 +1553,7 @@ static void *gim_timer_init_ex(oss_callback_t timer_cb, void *context,
 	t->timer_cb = timer_cb;
 	t->context = context;
 #if defined(HAVE_HRTIMER_SETUP)
-	hrtimer_setup(&t->timer, gim_timer_callback_wrapper, 
+	hrtimer_setup(&t->timer, gim_timer_callback_wrapper,
 			CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 #else
 	hrtimer_init(&t->timer, CLOCK_MONOTONIC,
@@ -1602,8 +1740,11 @@ static int gim_store_dump(const char *buf, uint32_t bdf)
 	}
 
 	ret = gim_kernel_write(file, buf, strlen(buf), pos);
-	if (ret != strlen(buf))
+	if (ret != strlen(buf)) {
+		filp_close(file, NULL);
+		gim_kfree(path);
 		return (int)ret == 0 ? -EINVAL : (int)ret;
+	}
 
 	filp_close(file, NULL);
 	gim_kfree(path);
@@ -1676,12 +1817,37 @@ static int gim_store_rlcv_timestamp(const char *buf, uint32_t size, uint32_t bdf
 	}
 
 	ret = gim_kernel_write(csa_file, buf, size, pos);
-	if (ret != size)
+	if (ret != size) {
+		filp_close(csa_file, NULL);
+		gim_kfree(path);
 		return (int)ret == 0 ? -EINVAL : (int)ret;
+	}
 
 	filp_close(csa_file, NULL);
 	gim_kfree(path);
 	return 0;
+}
+
+static void *gim_oss_hbm_dax_init(const char *dev_name,
+				uint64_t phy_addr, uint64_t phy_size)
+{
+	return gim_hbm_dax_init(dev_name, phy_addr, phy_size);
+}
+
+static void gim_oss_hbm_dax_fini(void *hbm_dax)
+{
+	gim_hbm_dax_fini(hbm_dax);
+}
+
+static void *gim_oss_hbm_drv_mgmt_init(const char *hbm_name, int numa_id,
+				uint64_t *phy_addr, uint64_t *phy_size)
+{
+	return gim_hbm_drv_mgmt_init(hbm_name, numa_id, phy_addr, phy_size);
+}
+
+static void gim_oss_hbm_drv_mgmt_fini(void *hbm_drv_mgmt)
+{
+	gim_hbm_drv_mgmt_fini(hbm_drv_mgmt);
 }
 
 static int gim_notifier_wakeup(void *notifier, uint64_t count)
@@ -1820,12 +1986,23 @@ free:
 static int gim_ucode_validate(const struct firmware *fw)
 {
 	const struct common_firmware_header *hdr =
-		(const struct common_firmware_header *)fw->data;
+			(const struct common_firmware_header *)fw->data;
+	uint32_t ucode_size;
+	uint32_t ucode_offset;
 
-	if (fw->size == le32_to_cpu(hdr->size_bytes))
-		return 0;
+	if (fw->size < sizeof(struct common_firmware_header))
+		return -EINVAL;
 
-	return -EINVAL;
+	if (fw->size != le32_to_cpu(hdr->size_bytes))
+		return -EINVAL;
+
+	ucode_size = le32_to_cpu(hdr->ucode_size_bytes);
+	ucode_offset = le32_to_cpu(hdr->ucode_array_offset_bytes);
+
+	if (ucode_size > fw->size || ucode_offset > fw->size - ucode_size)
+		return -EINVAL;
+
+	return 0;
 }
 
 static int gim_get_firmware_name(enum amdgv_firmware_id fw_id,
@@ -1917,13 +2094,15 @@ static int gim_get_discovery_binary(oss_dev_t dev, enum amd_asic_type asic_type,
 	ret = request_firmware(&fw, fw_name, &pdev->dev);
 	if (ret)
 		return ret;
-	if (fw->size > binary_size_max)
+	if (fw->size > binary_size_max) {
+		ret = -EINVAL;
 		goto out;
+	}
 
 	memcpy(binary, (uint32_t *)fw->data, fw->size);
 out:
 	release_firmware(fw);
-	return 0;
+	return ret;
 }
 
 static int gim_dfc_validate(enum amd_asic_type asic_type,
@@ -1991,8 +2170,10 @@ static int gim_get_firmware(oss_dev_t dev, enum amdgv_firmware_id fw_id,
 	ret = request_firmware(&fw_entry, fw_name, &pdev->dev);
 	if (ret)
 		return ret;
-	if (fw_entry->size > fw_size_max)
+	if (fw_entry->size > fw_size_max) {
+		ret = -EINVAL;
 		goto out;
+	}
 
 	ret = gim_ucode_validate(fw_entry);
 	if (ret)
@@ -2017,6 +2198,11 @@ out:
 static void gim_dump_stack(void)
 {
 	dump_stack();
+}
+
+static int gim_access_ok(const void *ptr, unsigned long size)
+{
+	return access_ok(ptr, size);
 }
 
 static int gim_copy_from_user(void *to, const void *from, uint32_t size)
@@ -2099,8 +2285,11 @@ static int gim_store_gfx_dump_data(const char *buf, uint32_t size, char *filenam
 	}
 
 	ret = gim_kernel_write(csa_file, buf, size, pos);
-	if (ret != size)
+	if (ret != size) {
+		filp_close(csa_file, NULL);
+		gim_kfree(path);
 		return (int)ret == 0 ? -EINVAL : (int)ret;
+	}
 
 	filp_close(csa_file, NULL);
 	gim_kfree(path);
@@ -2115,6 +2304,11 @@ static int gim_save_accelerator_partition_mode(oss_dev_t dev, uint32_t accelerat
 static int gim_save_memory_partition_mode(oss_dev_t dev, uint32_t memory_partition_mode)
 {
 	return gim_conf_set_memory_partition_mode_opt(memory_partition_mode);
+}
+
+static int gim_save_cc_mode(oss_dev_t dev, uint32_t cc_mode)
+{
+	return gim_conf_set_cc_mode_opt(cc_mode);
 }
 
 static int gim_clear_conf_file(oss_dev_t dev)
@@ -2164,11 +2358,6 @@ static int gim_schedule_work(oss_dev_t dev, oss_callback_t fn, void *context)
 	return 0;
 }
 
-static void gim_mb (void)
-{
-	mb();
-}
-
 static void gim_get_device_list(oss_dev_t *dev_list, int *size)
 {
 	struct gim_dev_data *dev_data;
@@ -2176,12 +2365,341 @@ static void gim_get_device_list(oss_dev_t *dev_list, int *size)
 
 	mutex_lock(&gim_device_list_lock);
 
-	list_for_each_entry(dev_data, &gim_device_list, list)
+	list_for_each_entry(dev_data, &gim_device_list, list) {
+		if (i >= AMDGV_MAX_GPU_NUM) {
+			gim_warn("device list exceeds AMDGV_MAX_GPU_NUM(%u); truncating\n",
+				 AMDGV_MAX_GPU_NUM);
+			break;
+		}
 		dev_list[i++] = (oss_dev_t)dev_data->adev;
-	*size = i;
+	}
+	if (size)
+		*size = i;
 
 	mutex_unlock(&gim_device_list_lock);
 }
+
+static void gim_mb (void)
+{
+	mb();
+}
+
+#if !defined(HAVE_PAGE_FOLIO)
+struct folio;
+#endif
+
+static inline struct folio *gim_page_folio(struct page *page)
+{
+#if defined(HAVE_PAGE_FOLIO)
+	return page_folio(page);
+#else
+	return (struct folio *)compound_head(page);
+#endif
+}
+
+static inline unsigned long gim_folio_pfn(struct folio *folio)
+{
+#if defined(HAVE_PAGE_FOLIO)
+	return folio_pfn(folio);
+#else
+	return page_to_pfn((struct page *)folio);
+#endif
+}
+
+static inline size_t gim_folio_size(struct folio *folio)
+{
+#if defined(HAVE_PAGE_FOLIO)
+	return folio_size(folio);
+#else
+	return (size_t)PAGE_SIZE << compound_order((struct page *)folio);
+#endif
+}
+
+static inline struct page *gim_folio_page_at_offset(struct folio *folio,
+						    uint64_t offset)
+{
+#if defined(HAVE_PAGE_FOLIO)
+	return folio_page(folio, offset >> PAGE_SHIFT);
+#else
+	return nth_page((struct page *)folio, offset >> PAGE_SHIFT);
+#endif
+}
+
+struct gpa_chunk {
+	struct folio *folio;
+	uint64_t offset;
+	size_t size;
+};
+
+struct gpa_access_ctx {
+	struct pci_dev *pdev;
+	struct iommu_domain *dom;
+	uint64_t gpa_base;
+	size_t size;
+
+	struct xarray chunks;
+};
+
+static int gim_init_gpa_chunks(struct gpa_access_ctx *ctx)
+{
+	uint64_t current_gpa = ctx->gpa_base;
+	uint64_t end_gpa = ctx->gpa_base + ctx->size;
+	uint32_t idx = 0;
+	phys_addr_t phys_addr;
+	unsigned long pfn;
+	size_t chunk_size;
+	struct gpa_chunk *chunk;
+	struct folio *folio;
+
+	xa_init(&ctx->chunks);
+
+	while (current_gpa < end_gpa) {
+		phys_addr = iommu_iova_to_phys(ctx->dom, current_gpa);
+		if (!phys_addr) {
+			gim_warn("Failed to translate GPA 0x%llx to physical address\n", current_gpa);
+			return -1;
+		}
+
+		pfn = PHYS_PFN(phys_addr);
+		if (!pfn_valid(pfn)) {
+			gim_warn("GPA 0x%llx maps to invalid PFN 0x%lx (phys=0x%llx)\n",
+				current_gpa, pfn, phys_addr);
+			return -1;
+		}
+
+		folio = gim_page_folio(pfn_to_page(pfn));
+
+		chunk = gim_kmalloc(sizeof(struct gpa_chunk), GFP_KERNEL);
+		if (!chunk) {
+			gim_warn("Failed to allocate gpa_chunk\n");
+			return -1;
+		}
+
+		chunk->folio = folio;
+		chunk->offset = phys_addr - PFN_PHYS(gim_folio_pfn(folio));
+
+		chunk_size = gim_folio_size(folio) - chunk->offset;
+
+		chunk->size = (current_gpa + chunk_size > end_gpa) ? end_gpa - current_gpa :
+								     chunk_size;
+
+		if (xa_store(&ctx->chunks, idx, chunk, GFP_KERNEL) != NULL) {
+			gim_warn("Failed to store chunk in xarray\n");
+			gim_kfree(chunk);
+			return -1;
+		}
+
+		current_gpa += chunk_size;
+		idx++;
+	}
+
+	return 0;
+}
+
+static void gim_fini_vf_sysmem_xchg(oss_dev_t dev, void *context)
+{
+	struct gpa_access_ctx *ctx = (struct gpa_access_ctx *)context;
+	struct gpa_chunk *chunk;
+	long unsigned int index;
+
+	if (!context)
+		return;
+
+	xa_for_each(&ctx->chunks, index, chunk)
+		gim_kfree(chunk);
+
+	xa_destroy(&ctx->chunks);
+
+	gim_kfree(context);
+}
+
+static void *gim_init_vf_sysmem_xchg(oss_dev_t dev, uint32_t idx_vf, uint64_t gpa_base,
+			   uint32_t size)
+{
+	struct gim_dev_data *data = NULL;
+	struct gpa_access_ctx *ctx = NULL;
+
+	list_for_each_entry(data, &gim_device_list, list)
+		if (data && data->pdev == (struct pci_dev *)dev)
+			break;
+
+	if (!data || data->pdev != (struct pci_dev *)dev)
+		return NULL;
+
+	if (idx_vf >= data->vf_num) {
+		gim_warn("GPA exchange init: invalid VF index %u (max %u)\n",
+			idx_vf, data->vf_num ? data->vf_num - 1 : 0);
+		return NULL;
+	}
+
+	if (!data->vf_map[idx_vf].pdev) {
+		gim_warn("GPA exchange init: VF%u has no PCI device\n", idx_vf);
+		return NULL;
+	}
+
+
+	ctx = gim_kmalloc(sizeof(struct gpa_access_ctx), GFP_KERNEL);
+	if (!ctx) {
+		gim_warn("GPA exchange init: failed to allocate context\n");
+		return NULL;
+	}
+
+	ctx->pdev = data->vf_map[idx_vf].pdev;
+	ctx->dom = iommu_get_domain_for_dev(&ctx->pdev->dev);
+	if (!ctx->dom) {
+		gim_warn("GPA exchange init: no IOMMU domain for VF%u\n", idx_vf);
+		gim_kfree(ctx);
+		return NULL;
+	}
+
+	ctx->gpa_base = gpa_base;
+	ctx->size = size;
+
+	if (gim_init_gpa_chunks(ctx) != 0) {
+		gim_warn("GPA exchange init: failed to map GPA range 0x%llx size %u\n",
+			gpa_base, size);
+		gim_fini_vf_sysmem_xchg(dev, ctx);
+		return NULL;
+	}
+
+	return ctx;
+}
+
+static int gim_access_vf_sysmem_xchg(struct gpa_access_ctx *ctx, char *buf,
+				  uint32_t offset, uint32_t size, bool is_write)
+{
+	struct gpa_chunk *chunk;
+	long unsigned int index;
+	uint32_t current_offset = 0;
+	uint32_t copied = 0;
+	uint32_t chunk_offset;
+	uint32_t available;
+	uint32_t copy_size;
+	void *base;
+	char *mapped;
+
+	xa_for_each(&ctx->chunks, index, chunk) {
+		if (current_offset + chunk->size <= offset) {
+			current_offset += chunk->size;
+			continue;
+		}
+
+		chunk_offset = (current_offset < offset) ? (offset - current_offset) : 0;
+
+		available = chunk->size - chunk_offset;
+		copy_size = (size - copied < available) ? (size - copied) : available;
+
+		while (copy_size) {
+			uint64_t map_offset = chunk->offset + chunk_offset;
+			uint32_t page_offset = offset_in_page(map_offset);
+			uint32_t page_copy = min_t(uint32_t, copy_size,
+						 PAGE_SIZE - page_offset);
+
+#if defined(HAVE_KMAP_LOCAL_FOLIO)
+			base = kmap_local_folio(chunk->folio, map_offset);
+			mapped = base;
+#else
+			base = kmap_atomic(gim_folio_page_at_offset(chunk->folio,
+								    map_offset));
+			mapped = base ? (char *)base + page_offset : NULL;
+#endif
+			if (!mapped) {
+				gim_warn("GPA exchange %s: failed to map chunk at GPA offset %u\n",
+					is_write ? "write" : "read", offset + copied);
+				return -1;
+			}
+
+			if (is_write)
+				memcpy(mapped, buf + copied, page_copy);
+			else
+				memcpy(buf + copied, mapped, page_copy);
+
+#if defined(HAVE_KMAP_LOCAL_FOLIO)
+			kunmap_local(base);
+#else
+			kunmap_atomic(base);
+#endif
+
+			copied += page_copy;
+			chunk_offset += page_copy;
+			copy_size -= page_copy;
+		}
+
+		current_offset += chunk->size;
+
+		if (copied >= size)
+			break;
+	}
+
+	return (copied == size) ? 0 : -1;
+}
+
+static int gim_write_vf_sysmem_xchg(oss_dev_t dev, void *context, char *buf, uint32_t offset,
+			uint32_t size)
+{
+	struct gpa_access_ctx *ctx = (struct gpa_access_ctx *)context;
+
+	if (!context || !buf) {
+		gim_warn("GPA exchange write: invalid context or buffer\n");
+		return -1;
+	}
+
+	if (offset + size > ctx->size) {
+		gim_warn("GPA exchange write: out of range (offset=%u size=%u max=%zu)\n",
+			offset, size, ctx->size);
+		return -1;
+	}
+
+	return gim_access_vf_sysmem_xchg(ctx, buf, offset, size, true);
+}
+
+static int gim_read_vf_sysmem_xchg(oss_dev_t dev, void *context, char *buf, uint32_t offset,
+			uint32_t size)
+{
+	struct gpa_access_ctx *ctx = (struct gpa_access_ctx *)context;
+
+	if (!context || !buf) {
+		gim_warn("GPA exchange read: invalid context or buffer\n");
+		return -1;
+	}
+
+	if (offset + size > ctx->size) {
+		gim_warn("GPA exchange read: out of range (offset=%u size=%u max=%zu)\n",
+			offset, size, ctx->size);
+		return -1;
+	}
+
+	return gim_access_vf_sysmem_xchg(ctx, buf, offset, size, false);
+}
+
+static int gim_vf_sysmem_xchg_gpa_to_spa(oss_dev_t dev, void *context, uint32_t idx, struct oss_spa_range *entry)
+{
+	struct gpa_access_ctx *ctx = (struct gpa_access_ctx *)context;
+	struct gpa_chunk *chunk;
+
+	if (!context || !entry) {
+		gim_warn("GPA exchange gpa2spa: invalid context or entry\n");
+		return -1;
+	}
+
+	chunk = xa_load(&ctx->chunks, idx);
+	if (!chunk)
+		return -1;
+
+	entry->base = PFN_PHYS(gim_folio_pfn(chunk->folio));
+	entry->base += chunk->offset;
+	entry->size = chunk->size;
+
+	return 0;
+}
+
+static int gim_set_dma_mask(oss_dev_t dev, uint32_t bits)
+{
+	struct pci_dev *pdev = dev;
+
+	return dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(bits));
+}
+
 
 struct oss_interface gim_oss_interfaces = {
 	.get_vf_dev_from_bdf = gim_get_vf_dev_from_bdf,
@@ -2244,10 +2762,15 @@ struct oss_interface gim_oss_interfaces = {
 	.spin_lock_irq = gim_spin_lock_irq,
 	.spin_unlock_irq = gim_spin_unlock_irq,
 	.spin_lock_fini = gim_spin_lock_fini,
+	.spin_lock_init_raw = gim_spin_lock_init_raw,
+	.spin_lock_irqsave_raw = gim_spin_lock_irqsave_raw,
+	.spin_unlock_irqrestore_raw = gim_spin_unlock_irqrestore_raw,
 	.mutex_init = gim_mutex_init,
+	.mutex_init_raw = gim_mutex_init_raw,
 	.mutex_lock = gim_mutex_lock,
 	.mutex_unlock = gim_mutex_unlock,
 	.mutex_fini = gim_mutex_fini,
+	.mutex_destroy_raw = gim_mutex_destroy_raw,
 	.rwlock_init = gim_rwlock_init,
 	.rwlock_read_lock = gim_rwlock_read_lock,
 	.rwlock_read_unlock = gim_rwlock_read_unlock,
@@ -2276,6 +2799,7 @@ struct oss_interface gim_oss_interfaces = {
 	.atomic_set = gim_atomic_set,
 	.atomic_inc = gim_atomic_inc,
 	.atomic_dec = gim_atomic_dec,
+	.atomic_sub = gim_atomic_sub,
 	.atomic_inc_return = gim_atomic_inc_return,
 	.atomic_dec_return = gim_atomic_dec_return,
 	.atomic_cmpxchg = gim_atomic_cmpxchg,
@@ -2308,6 +2832,7 @@ struct oss_interface gim_oss_interfaces = {
 	.sema_down = gim_sema_down,
 	.sema_init = gim_sema_init,
 	.sema_fini = gim_sema_fini,
+	.access_ok = gim_access_ok,
 	.copy_from_user = gim_copy_from_user,
 	.copy_to_user = gim_copy_to_user,
 	.strnstr = gim_strnstr,
@@ -2321,6 +2846,10 @@ struct oss_interface gim_oss_interfaces = {
 	.store_record = gim_store_record,
 #endif
 	.store_rlcv_timestamp = gim_store_rlcv_timestamp,
+	.hbm_dax_init = gim_oss_hbm_dax_init,
+	.hbm_dax_fini = gim_oss_hbm_dax_fini,
+	.hbm_drv_mgmt_init = gim_oss_hbm_drv_mgmt_init,
+	.hbm_drv_mgmt_fini = gim_oss_hbm_drv_mgmt_fini,
 #ifndef EXCLUDE_DCORE_DEBUG
 	.signal_reset_happened = dcore_signal_reset_happened,
 	.signal_diag_data_ready = dcore_signal_diag_data_ready,
@@ -2331,9 +2860,18 @@ struct oss_interface gim_oss_interfaces = {
 	.save_fb_sharing_mode = gim_save_fb_sharing_mode,
 	.save_accelerator_partition_mode = gim_save_accelerator_partition_mode,
 	.save_memory_partition_mode = gim_save_memory_partition_mode,
+	.save_cc_mode = gim_save_cc_mode,
 	.clear_conf_file = gim_clear_conf_file,
 	.schedule_work = gim_schedule_work,
 	.in_virtual_machine = gim_in_virtual_machine,
 	.mb = gim_mb,
 	.get_device_list = gim_get_device_list,
+	.init_vf_sysmem_xchg = gim_init_vf_sysmem_xchg,
+	.fini_vf_sysmem_xchg = gim_fini_vf_sysmem_xchg,
+	.write_vf_sysmem_xchg = gim_write_vf_sysmem_xchg,
+	.read_vf_sysmem_xchg = gim_read_vf_sysmem_xchg,
+	.vf_sysmem_xchg_gpa_to_spa = gim_vf_sysmem_xchg_gpa_to_spa,
+	.set_dma_mask = gim_set_dma_mask,
+	.register_mce_notifier = gim_register_mce_notifier,
+	.unregister_mce_notifier = gim_unregister_mce_notifier,
 };

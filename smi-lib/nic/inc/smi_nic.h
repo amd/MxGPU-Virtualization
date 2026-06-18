@@ -1,23 +1,7 @@
 /*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef __SMI_NIC_H__
@@ -59,7 +43,8 @@ enum class NicLinkType {
 
 class SmiInfiniBandPort {
 public:
-	SmiInfiniBandPort(const std::string& netdev, const std::string& name, const std::string& sysfs_path_);
+	SmiInfiniBandPort(const std::string& netdev, const std::string& rdma_dev,
+			  const std::string& name, const std::string& sysfs_path);
 
 	const std::string& netdev() const;
 	const std::string& name() const;
@@ -72,9 +57,12 @@ public:
 
 private:
 	std::string netdev_;
+	std::string rdma_dev_;
 	std::string name_;
 	std::string sysfs_path_;
 	std::map<std::string, uint64_t> hw_counters_map_;
+	std::optional<uint16_t> max_mtu_;
+	std::optional<uint16_t> active_mtu_;
 };
 
 class SmiInfiniBand {
@@ -100,7 +88,8 @@ private:
 
 class SmiNicPort {
 public:
-	SmiNicPort(const std::string& iface, const std::string& bdf, const std::string& sysfs_class_path, const std::string& sysfs_bus_path);
+	SmiNicPort(const std::string& iface, const std::string& bdf, const std::string& sysfs_class_path, const std::string& sysfs_bus_path,
+		   NicVendor vendor = NicVendor::Unknown);
 
 	const std::string& interface() const;
 	const std::string& bdf() const;
@@ -116,7 +105,8 @@ public:
 	std::optional<uint32_t> link_speed() const;
 
 	const std::string port_type() const;
-	std::string flavour() const;
+	const std::string& flavour() const;
+	void set_flavour(const std::string& flavour);
 
 	std::optional<uint32_t> active_fec() const;
 	std::optional<std::string> autoneg() const;
@@ -136,23 +126,12 @@ public:
 	std::optional<std::string> read_vpd_content() const;
 
 private:
-	enum class SmiVendorStat {
-		TX_PACKETS,
-		RX_PACKETS,
-		TX_BYTES,
-		RX_BYTES,
-		TX_CSUM_NONE,
-		RX_CSUM_NONE,
-		TX_CSUM,
-		TX_TSO,
-		TX_TSO_BYTES
-	};
-
-	std::string map_vendor_stat_to_string(SmiVendorStat stat) const;
-	bool vendor_stat_allowed(const std::string& stat_name) const;
+	bool vendor_stat_supported(const std::string& stat_name) const;
 
 	std::string iface_;
 	std::string bdf_;
+	std::string flavour_;
+	NicVendor vendor_;
 	NicType type_;
 	std::string sysfs_class_path_;
 	std::string sysfs_bus_path_;

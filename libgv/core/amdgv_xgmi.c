@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_device.h"
@@ -86,12 +69,12 @@ int amdgv_xgmi_init_hive(struct amdgv_adapter *adapt)
 	}
 
 	if (!task_barrier_init(&hive->tb_drv_init)) {
-		AMDGV_ERROR("task_barrier_init tb_drv_init init failed");
+		AMDGV_ERROR("failed to init task barrier\n");
 		goto fail;
 	}
 
 	if (!task_barrier_init(&hive->tb_chain_reset)) {
-		AMDGV_ERROR("task_barrier_init tb_chain_reset init failed");
+		AMDGV_ERROR("failed to init task barrier\n");
 		goto fail;
 	}
 
@@ -331,12 +314,8 @@ int amdgv_xgmi_update_topology(struct amdgv_adapter *adapt)
 	if (adapt->xgmi.phy_nodes_num > 1) {
 
 		hive = amdgv_get_xgmi_hive(adapt);
-		if (!hive) {
-			AMDGV_ERROR("XGMI: node 0x%llx, can not match hive "
-				    "0x%llx in the hive list.\n",
-				    adapt->xgmi.node_id, adapt->xgmi.hive_id);
+		if (!hive)
 			return AMDGV_FAILURE;
-		}
 
 		ret = amdgv_psp_xgmi_set_topology_info(adapt, hive);
 		if (ret)
@@ -354,7 +333,7 @@ int amdgv_xgmi_update_topology(struct amdgv_adapter *adapt)
 	}
 
 	adapt->xgmi.topology_status = AMDGV_XGMI_PSP_TOPOLOGY_STATUS__DONE;
-	AMDGV_DEBUG("Device successfully updated XGMI Topology.");
+	AMDGV_DEBUG("Device successfully updated XGMI Topology.\n");
 	return ret;
 
 failed:
@@ -374,12 +353,8 @@ int amdgv_xgmi_update_topology_with_fb_sharing_mode(struct amdgv_adapter *adapt,
 
 	if (adapt->xgmi.phy_nodes_num > 1) {
 		hive = amdgv_get_xgmi_hive(adapt);
-		if (!hive) {
-			AMDGV_ERROR("XGMI: node 0x%llx, can not match hive "
-					"0x%llx in the hive list.\n",
-					adapt->xgmi.node_id, adapt->xgmi.hive_id);
+		if (!hive)
 			return AMDGV_FAILURE;
-		}
 
 		/* if one GPU is under spartial partition senario, disallow change fb_sharing_mode */
 		amdgv_list_for_each_entry(tmp_adapt, &hive->adapt_list,
@@ -423,7 +398,7 @@ bool amdgv_xgmi_is_fb_sharing_allowed(struct amdgv_adapter *adapt,
 	if (adapt->xgmi.fb_sharing_mode == AMDGV_XGMI_FB_SHARING_MODE_DEFAULT) {
 		return true;
 	} else {
-		AMDGV_ERROR("Unsupported XGMI FB sharing config");
+		AMDGV_ERROR("Unsupported XGMI FB sharing config\n");
 		return false;
 	}
 }
@@ -483,7 +458,7 @@ int amdgv_xgmi_remove_from_hive(struct amdgv_adapter *adapt)
 	hive->number_adapters--;
 
 	if (hive->master_adapt == adapt)
-		AMDGV_WARN("Master adapter has been removed from the hive!");
+		AMDGV_WARN("Master adapter has been removed from the hive!\n");
 
 	if (!hive->number_adapters) {
 		task_barrier_fini(&hive->tb_chain_reset);

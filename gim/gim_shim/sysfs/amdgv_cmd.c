@@ -1,29 +1,13 @@
-/*
- * Copyright (c) 2018-2019 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include <linux/fs.h>
 #include <linux/module.h>
 #include <linux/vmalloc.h>
 #include <linux/cdev.h>
+#include <linux/capability.h>
 #include <linux/uaccess.h>
 #include <linux/fs.h>
 #include <linux/string.h>
@@ -109,6 +93,7 @@ static void __amdgv_get_device_info(struct gim_dev_data *dev_data, struct amdgv_
 {
 	union amdgv_dev_info dev_info;
 	uint32_t asic_type;
+	uint64_t ecc_feature_mask = 0;
 
 	amdgv_dev->bdf = dev_data->init_data.info.bdf;
 	amdgv_dev->dev_handle =
@@ -124,11 +109,14 @@ static void __amdgv_get_device_info(struct gim_dev_data *dev_data, struct amdgv_
 	else
 		amdgv_dev->vf_num =  0;
 
-	if (amdgv_gpumon_get_ecc_support_flag(dev_data->adev, &amdgv_dev->ecc_enabled,
-			&amdgv_dev->ecc_supported)) {
+	if (amdgv_gpumon_get_ecc_support_flag(dev_data->adev, &amdgv_dev->ecc_supported,
+			&ecc_feature_mask)) {
 				amdgv_dev->ecc_enabled = 0;
 				amdgv_dev->ecc_supported = 0;
+	} else {
+		amdgv_dev->ecc_enabled = (uint32_t)ecc_feature_mask;
 	}
+
 }
 
 static int amdgv_get_devices_info(struct amdgv_cmd_devices_info *output_data)
@@ -137,8 +125,14 @@ static int amdgv_get_devices_info(struct amdgv_cmd_devices_info *output_data)
 	uint8_t i = 0;
 
 	mutex_lock(&gim_device_list_lock);
-	list_for_each_entry(dev_data, &gim_device_list, list)
+	list_for_each_entry(dev_data, &gim_device_list, list) {
+		if (i >= AMDGV_CMD_MAX_GPU_NUM) {
+			gim_warn("device list exceeds AMDGV_CMD_MAX_GPU_NUM(%u); truncating\n",
+				 AMDGV_CMD_MAX_GPU_NUM);
+			break;
+		}
 		__amdgv_get_device_info(dev_data, &output_data->devs[i++]);
+	}
 
 	mutex_unlock(&gim_device_list_lock);
 	output_data->dev_num = i;
@@ -265,6 +259,11 @@ static int amdgv_load_ras_ta(struct amdgv_cmd_ras_ta_load_req *input_data,
 	if (!ras_ta_load_req.version || !ras_ta_load_req.data_len || !ras_ta_load_req.data_addr) {
 		gim_warn("Invaild ras ta parameter: version:0x%x, data_len:0x%x, data_addr:0x%llx\n",
 			ras_ta_load_req.version, ras_ta_load_req.data_len, ras_ta_load_req.data_addr);
+		return AMDGV_CMD__ERROR_GENERIC;
+	}
+
+	if (ras_ta_load_req.data_len > AMDGV_FW_SIZE_MAX) {
+		gim_warn("RAS TA data_len out of range: 0x%x\n", ras_ta_load_req.data_len);
 		return AMDGV_CMD__ERROR_GENERIC;
 	}
 
@@ -504,7 +503,8 @@ static int amdgv_get_debug_data(struct amdgv_cmd_debug_data_dir_path *input_data
 		strncpy(dir_save_path, input_data->abs_dir_path, len);
 		dir_save_path[len] = '\0';
 	} else {
-		return -EINVAL;
+		ret = -EINVAL;
+		goto out;
 	}
 
 	mutex_lock(&gim_device_list_lock);
@@ -520,7 +520,7 @@ static int amdgv_get_debug_data(struct amdgv_cmd_debug_data_dir_path *input_data
 			goto out;
 
 		if (debug_data_size) {
-			snprintf(save_path, strlen(dir_save_path) + 30, "%s/%s_%02x_%02x_%02x",
+			snprintf(save_path, AMDGV_CMD_PATH_LEN, "%s/%s_%02x_%02x_%02x",
 					dir_save_path, "gim_debug_data_gpu", bdf >> 8 & 0xff, bdf >> 3 & 0x1f, bdf & 0x7);
 
 			file = filp_open(save_path, O_CREAT | O_WRONLY, 0444);
@@ -691,6 +691,7 @@ static void __amdgv_get_device_ex_info(struct gim_dev_data *dev_data, struct amd
 {
 	union amdgv_dev_info dev_info;
 	uint32_t asic_type;
+	uint64_t ecc_feature_mask = 0;
 
 	amdgv_dev->bdf = dev_data->init_data.info.bdf;
 	amdgv_dev->dev_handle =
@@ -711,10 +712,12 @@ static void __amdgv_get_device_ex_info(struct gim_dev_data *dev_data, struct amd
 	else
 		amdgv_dev->oam_id = -1;
 
-	if (amdgv_gpumon_get_ecc_support_flag(dev_data->adev, &amdgv_dev->ecc_enabled,
-			&amdgv_dev->ecc_supported)) {
+	if (amdgv_gpumon_get_ecc_support_flag(dev_data->adev, &amdgv_dev->ecc_supported,
+			&ecc_feature_mask)) {
 				amdgv_dev->ecc_enabled = 0;
 				amdgv_dev->ecc_supported = 0;
+	} else {
+		amdgv_dev->ecc_enabled = (uint32_t)ecc_feature_mask;
 	}
 
 	if (amdgv_gpumon_get_ras_eeprom_version(dev_data->adev, &amdgv_dev->ras_eeprom_version))
@@ -727,8 +730,14 @@ static int amdgv_get_devices_ex_info(struct amdgv_cmd_devices_ex_info *output_da
 	uint8_t i = 0;
 
 	mutex_lock(&gim_device_list_lock);
-	list_for_each_entry(dev_data, &gim_device_list, list)
+	list_for_each_entry(dev_data, &gim_device_list, list) {
+		if (i >= AMDGV_CMD_MAX_GPU_NUM) {
+			gim_warn("device list exceeds AMDGV_CMD_MAX_GPU_NUM(%u); truncating\n",
+				 AMDGV_CMD_MAX_GPU_NUM);
+			break;
+		}
 		__amdgv_get_device_ex_info(dev_data, &output_data->devs[i++]);
+	}
 
 	mutex_unlock(&gim_device_list_lock);
 	output_data->dev_num = i;
@@ -741,6 +750,13 @@ static uint8_t amdgv_get_cper_records(struct amdgv_get_cper_records_input *input
 	amdgv_dev_t *adev;
 	uint8_t *buffer;
 	int r;
+
+	if (input_data->buf_size == 0 ||
+	    input_data->buf_size > AMDGV_CPER_DUMP_MAX_BYTES) {
+		gim_warn("Rejecting CPER request with invalid buf_size = %lld\n",
+			 input_data->buf_size);
+		return AMDGV_CMD__ERROR_INVALID_INPUT;
+	}
 
 	buffer = gim_kzalloc(input_data->buf_size, GFP_KERNEL);
 	if (!buffer) {
@@ -800,6 +816,9 @@ static const struct file_operations amdgv_cmd_file_ops = {
 static long amdgv_ioctl_handler(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct amdgv_cmd *amdgv_cmd;
+
+	if (!capable(CAP_SYS_ADMIN))
+		return -EPERM;
 
 	if (amdgv_is_uni_cmd(cmd)) {
 		return amdgv_uni_cmd_handler((void *) arg);
@@ -1026,4 +1045,5 @@ void gim_cmd_handler_fini(void)
 	class_destroy(amdgv_class);
 	unregister_chrdev_region(amdgv_dev, AMDGV_CMD_MINOR_COUNT);
 }
+
 

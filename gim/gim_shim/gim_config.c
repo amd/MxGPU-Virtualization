@@ -1,24 +1,8 @@
-/*
- * Copyright (c) 2014-2019 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
+
 #include <linux/ctype.h>
 #include <linux/module.h>
 #include <linux/vmalloc.h>
@@ -164,6 +148,15 @@ struct gim_conf_opt conf_opts[] = {
 					.def = MEMORY_PARTITION_MODE__DEFAULT,
 					.persistent = true,
 					.array = false },
+	/* Only support single mode for whole hive */
+	[CONF_OPT_CC_MODE] = {	.name = CC_MODE__KEY,
+					.value  = {CC_MODE__DEFAULT},
+					.repeat_val_idx = 1,
+					.min = CC_MODE__START,
+					.max = CC_MODE__MAX,
+					.def = CC_MODE__DEFAULT,
+					.persistent = true,
+					.array = false },
 	/* control per partition full access*/
 	[CONF_OPT_PARTITION_FULL_ACCESS_EN] = {	.name = PARTITION_FULL_ACCESS_ENABLE__KEY,
 					.value = {PARTITION_FULL_ACCESS_ENABLE__DEFAULT},
@@ -264,6 +257,14 @@ struct gim_conf_opt conf_opts[] = {
 					.max = THERMAL_THROTTLE_RATE_LIMIT__MAX,
 					.def = THERMAL_THROTTLE_RATE_LIMIT__DEFAULT,
 					.array = true },
+	/* HBM Memory Management Mode */
+	[CONF_OPT_VF_HBM_MGMT_MODE] = { .name = VF_HBM_MGMT_MODE__KEY,
+		.value = { VF_HBM_MGMT_MODE__DEFAULT },
+		.repeat_val_idx = 1,
+		.min = VF_HBM_MGMT_MODE__START,
+		.max = VF_HBM_MGMT_MODE__MAX,
+		.def = VF_HBM_MGMT_MODE__DEFAULT,
+		.array = false },
 };
 
 #define MAX_OPTION (sizeof(conf_opts)/sizeof(struct gim_conf_opt))
@@ -533,6 +534,13 @@ MODULE_PARM_DESC(thermal_throttle_rate_limit, "Thermal throttle notification rat
 				"thermal_throttle_rate_limit=[D0[,D1[...[,Dx]]]]\n\t"
 				"0 <= Dx <= 60000000;\n\t");
 
+uint vf_hbm_mgmt_mode;
+module_param(vf_hbm_mgmt_mode, uint, 0444);
+MODULE_PARM_DESC(vf_hbm_mgmt_mode, "VF HBM Memory Management Mode\n\t"
+				"0(default): Driver Managed\n\t"
+				"1: DAX\n\t"
+				"2: Disabled\n\t");
+
 static int gim_conf_search_config_key(char *key)
 {
 	int index;
@@ -616,8 +624,10 @@ static void gim_conf_create_conf_file(void)
 {
 	struct file *config;
 	config = filp_open(GIM_CONFIG_PATH, O_CREAT, 0444);
-	if (IS_ERR_OR_NULL(config))
+	if (IS_ERR_OR_NULL(config)) {
 		gim_warn("failed to create config file.");
+		return;
+	}
 
 	filp_close(config, NULL);
 }
@@ -1087,6 +1097,16 @@ int gim_conf_init(void)
 				thermal_throttle_rate_limit, thermal_throttle_rate_limit_size);
 	}
 
+	if (vf_hbm_mgmt_mode > 0) {
+		if (gim_conf_valid_opt(CONF_OPT_VF_HBM_MGMT_MODE, vf_hbm_mgmt_mode)) {
+			gim_warn("invalid token (vf_hbm_mgmt_mode) value: %d\n",
+				vf_hbm_mgmt_mode);
+			vf_hbm_mgmt_mode = VF_HBM_MGMT_MODE__DEFAULT;
+		}
+		for (j = 0; j < AMDGV_MAX_GPU_NUM; j++)
+			conf_opts[CONF_OPT_VF_HBM_MGMT_MODE].value[j] = vf_hbm_mgmt_mode;
+	}
+
 	gim_conf_clear_saved_persist_config(config_file_created);
 
 	/* save options to config file. */
@@ -1214,6 +1234,14 @@ uint32_t gim_conf_get_memory_partition_mode_opt(uint32_t id)
 	return conf_opts[CONF_OPT_MEMORY_PARTITION_MODE].value[0];
 }
 
+uint32_t gim_conf_get_cc_mode_opt(uint32_t id)
+{
+	if (id >= AMDGV_MAX_GPU_NUM)
+		id = AMDGV_MAX_GPU_NUM - 1;
+
+	return conf_opts[CONF_OPT_CC_MODE].value[0];
+}
+
 uint32_t gim_conf_get_partition_full_access_enable_opt(uint32_t id)
 {
 	if (id >= AMDGV_MAX_GPU_NUM)
@@ -1270,7 +1298,7 @@ uint64_t gim_conf_get_pf_fb_size_opt(uint32_t id)
 	return conf_opts[CONF_OPT_PF_FB_SIZE].value[id];
 }
 
-uint32_t gim_conf_get_bad_page_record_threshold_opt(uint32_t id)
+int gim_conf_get_bad_page_record_threshold_opt(uint32_t id)
 {
 	if (id >= AMDGV_MAX_GPU_NUM)
 		id = AMDGV_MAX_GPU_NUM - 1;
@@ -1320,6 +1348,14 @@ uint32_t gim_conf_get_thermal_throttle_rate_limit_opt(uint32_t id)
 	return conf_opts[CONF_OPT_THERMAL_THROTTLE_RATE_LIMIT].value[id];
 }
 
+uint32_t gim_conf_get_vf_hbm_mgmt_mode_opt(uint32_t id)
+{
+	if (id >= AMDGV_MAX_GPU_NUM)
+		id = AMDGV_MAX_GPU_NUM - 1;
+
+	return conf_opts[CONF_OPT_VF_HBM_MGMT_MODE].value[id];
+}
+
 uint32_t gim_conf_set_vf_num_opt(int value)
 {
 	return gim_conf_set_opt(CONF_OPT_VF_NUMBER, value);
@@ -1333,6 +1369,11 @@ uint32_t gim_conf_set_accelerator_partition_mode_opt(int value)
 uint32_t gim_conf_set_memory_partition_mode_opt(int value)
 {
 	return gim_conf_set_opt(CONF_OPT_MEMORY_PARTITION_MODE, value);
+}
+
+uint32_t gim_conf_set_cc_mode_opt(int value)
+{
+	return gim_conf_set_opt(CONF_OPT_CC_MODE, value);
 }
 
 uint32_t gim_conf_clear_conf_file(void)
@@ -1360,3 +1401,4 @@ uint32_t gim_conf_set_opt(int index, int value)
 
 	return res;
 }
+

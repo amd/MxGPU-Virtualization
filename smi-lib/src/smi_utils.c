@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "smi_utils.h"
@@ -31,6 +14,9 @@
 #include <ctype.h>
 #include <inttypes.h>
 #include <stdio.h>
+#ifdef SMI_ESXI_BUILD
+#include <unistd.h>   /* access()/F_OK for get_numa_node_from_vsish (ESXi-only) */
+#endif
 
 amdsmi_status_t amdsmi_request(smi_req_ctx *smi_req, uint32_t cmd_code, size_t input_size, size_t output_size)
 {
@@ -602,19 +588,43 @@ amdsmi_status_t is_cmd_supported(uint64_t device_id)
 #ifdef SMI_ESXI_BUILD
 int get_numa_node_from_vsish(amdsmi_bdf_t bdf, uint32_t *numa_node)
 {
+	/*
+	 * Absolute locations for vsish. ESXi layouts differ across versions:
+	 * vsish lives at /bin/vsish on some and /sbin/vsish on others.
+	 */
+	static const char * const vsish_paths[] = {
+		"/bin/vsish",
+		"/sbin/vsish",
+	};
 	system_wrapper *sys_wrapper = get_system_wrapper();
 	char cmd[AMDSMI_MAX_STRING_LENGTH];
 	char buf[AMDSMI_MAX_STRING_LENGTH];
+	const char *vsish = NULL;
 	FILE *fp;
 	int found = 0;
+	size_t i;
 
 	if (numa_node == NULL) {
 		return -1;
 	}
 
-	/* Build vsish command: vsish -e get /hardware/pci/seg/X/bus/Y/slot/Z/func/W/pciConfigHeader */
+	/*
+	 * Resolve vsish to an absolute path from the fixed allowlist above;
+	 * use the first that exists and never fall back to a bare name.
+	 */
+	for (i = 0; i < sizeof(vsish_paths) / sizeof(vsish_paths[0]); i++) {
+		if (access(vsish_paths[i], F_OK) == 0) {
+			vsish = vsish_paths[i];
+			break;
+		}
+	}
+	if (vsish == NULL) {
+		return -1;
+	}
+
 	sys_wrapper->snprintf(cmd, sizeof(cmd),
-		"vsish -e get /hardware/pci/seg/%llu/bus/%d/slot/%d/func/%d/pciConfigHeader 2>/dev/null",
+		"%s -e get /hardware/pci/seg/%llu/bus/%d/slot/%d/func/%d/pciConfigHeader 2>/dev/null",
+		vsish,
 		(unsigned long long)bdf.bdf.domain_number,
 		bdf.bdf.bus_number,
 		bdf.bdf.device_number,

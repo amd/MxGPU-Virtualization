@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv_device.h>
@@ -30,25 +13,19 @@
 #include "atombios/atomfirmware.h"
 #include "amdgv_nps.h"
 
-const uint32_t this_block = AMDGV_MEMORY_BLOCK;
+static const uint32_t this_block = AMDGV_MEMORY_BLOCK;
 
 bool mi300_nbio_vbios_need_post(struct amdgv_adapter *adapt)
 {
 	uint32_t val;
-	const uint32_t this_block = AMDGV_SECURITY_BLOCK;
 
 	val = RREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BIOS_SCRATCH_7));
 
-	AMDGV_INFO("BIOS_SCRATCH_7 = 0x%08x\n", val);
-
 	val &= ATOM_ASIC_INIT_COMPLETE;
 
-	if (val) {
-		AMDGV_INFO("ATOM_ASIC_POSTED\n");
+	if (val)
 		return false;
-	}
 
-	AMDGV_INFO("ATOM_ASIC_NEED_POST\n");
 	return true;
 }
 
@@ -517,7 +494,7 @@ int mi300_nbio_pcie_curr_link_width(struct amdgv_adapter *adapt)
 			     NEGOTIATED_LINK_WIDTH);
 }
 
-static const struct mi300_nps_combination_cap_entry mi300_nps_combination_cap_table[] = {
+static const struct amdgv_nps_combination_cap_entry mi300_nps_combination_cap_table[] = {
 	/* MI300X supports 1/2/4/8VFs */
 	{CHIP_MI300X, .vf_nps =
 		{
@@ -614,7 +591,8 @@ static const struct mi300_nps_combination_cap_entry mi300_nps_combination_cap_ta
 	},
 };
 
-const struct amdgv_nps_compute_combination *mi300_nbio_get_asic_nps_caps(struct amdgv_adapter *adapt)
+static int mi300_nbio_get_asic_nps_caps(struct amdgv_adapter *adapt,
+				const struct amdgv_nps_compute_combination **combination)
 {
 	int i, j;
 
@@ -623,18 +601,20 @@ const struct amdgv_nps_compute_combination *mi300_nbio_get_asic_nps_caps(struct 
 			const struct amdgv_vf_nps_combination *vf_nps_list = mi300_nps_combination_cap_table[i].vf_nps;
 
 			for (j = 0; j < AMDGV_VF_NPS_MAX_COMBINATIONS; j++) {
-				if (vf_nps_list[j].vf_num == adapt->num_vf)
-					return vf_nps_list[j].combinations;
+				if (vf_nps_list[j].vf_num == adapt->num_vf) {
+					*combination = vf_nps_list[j].combinations;
+					return 0;
+				}
 			}
 		}
 	}
 
 	AMDGV_ERROR("dev_id 0x%x with num_vf %d not found in NPS cap table!\n",
 				adapt->dev_id, adapt->num_vf);
-	return NULL;
+	return AMDGV_FAILURE;
 }
 
-int mi300_nbio_get_supported_memory_partition_mode(struct amdgv_adapter *adapt,
+static int mi300_nbio_get_supported_memory_partition_mode(struct amdgv_adapter *adapt,
 			enum amdgv_memory_partition_mode *supported_nps, int *supported_nps_count)
 {
 	int i, j, k;
@@ -655,7 +635,7 @@ int mi300_nbio_get_supported_memory_partition_mode(struct amdgv_adapter *adapt,
 						case AMDGV_MEMORY_PARTITION_MODE_NPS2:
 						case AMDGV_MEMORY_PARTITION_MODE_NPS4:
 						case AMDGV_MEMORY_PARTITION_MODE_NPS8:
-							cap = 1 << (comb[k].nps_mode);
+							cap = 1ULL << (comb[k].nps_mode);
 							if ((mask & cap) == 0) {
 								mask |= cap;
 								supported_nps[count] = comb[k].nps_mode;
@@ -674,7 +654,7 @@ int mi300_nbio_get_supported_memory_partition_mode(struct amdgv_adapter *adapt,
 	return 0;
 }
 
-int mi300_nbio_get_nps_mode(struct amdgv_adapter *adapt,
+static int mi300_nbio_get_nps_mode(struct amdgv_adapter *adapt,
 			    enum amdgv_memory_partition_mode *memory_partition_mode)
 {
 	uint32_t mem_status;
@@ -707,7 +687,8 @@ int mi300_nbio_get_nps_mode(struct amdgv_adapter *adapt,
 	return 0;
 }
 
-enum amdgv_accelerator_partition_mode mi300_nbio_get_accelerator_partition_mode(struct amdgv_adapter *adapt)
+static enum amdgv_accelerator_partition_mode
+mi300_nbio_get_accelerator_partition_mode(struct amdgv_adapter *adapt)
 {
 	uint32_t num_xcc_in_xcp;
 
@@ -738,9 +719,8 @@ enum amdgv_accelerator_partition_mode mi300_nbio_get_accelerator_partition_mode(
  * 4VF		CPX-4/QPX	X			CPX-4/QPX
  * 8VF		CPX			X			CPX
  */
-enum amdgv_accelerator_partition_mode
-	mi300_nbio_get_accelerator_partition_mode_default_setting(
-	struct amdgv_adapter *adapt,
+static enum amdgv_accelerator_partition_mode
+mi300_nbio_get_accelerator_partition_mode_default_setting(struct amdgv_adapter *adapt,
 	enum amdgv_memory_partition_mode memory_partition_mode)
 {
 	switch (adapt->num_vf) {
@@ -803,17 +783,15 @@ enum amdgv_accelerator_partition_mode
  * 2. accelerator partition mode to the default mode for the vf_num and memory
  *    partition mode
  */
-bool mi300_nbio_is_partition_mode_combination_supported(
+static bool mi300_nbio_is_partition_mode_combination_supported(
 	struct amdgv_adapter *adapt,
 	enum amdgv_memory_partition_mode memory_partition_mode,
 	enum amdgv_accelerator_partition_mode accelerator_partition_mode)
 {
 	int i;
+	const struct amdgv_nps_compute_combination *combinations;
 
-	/* Get supported combinations based on asic and VF num */
-	const struct amdgv_nps_compute_combination *combinations =
-		mi300_nbio_get_asic_nps_caps(adapt);
-	if (!combinations)
+	if (mi300_nbio_get_asic_nps_caps(adapt, &combinations))
 		return false;
 
 	/* Check if the combination is supported in the capability table */
@@ -929,13 +907,17 @@ void mi300_hdp_flush(struct amdgv_adapter *adapt)
 const struct amdgv_nbio_funcs mi300_nbio_funcs = {
 	.hdp_flush = mi300_hdp_flush,
 	.get_nps_mode = mi300_nbio_get_nps_mode,
+	.get_accel_partition_mode = mi300_nbio_get_accelerator_partition_mode,
+	.get_default_accel_partition_mode = mi300_nbio_get_accelerator_partition_mode_default_setting,
+	.is_partition_mode_supported = mi300_nbio_is_partition_mode_combination_supported,
+	.get_supported_memory_partition_mode = mi300_nbio_get_supported_memory_partition_mode,
+	.get_asic_nps_caps = mi300_nbio_get_asic_nps_caps,
 };
 
 const struct amdgv_nbio_ras nbio_v7_9_ras = {
 	.handle_ras_controller_intr_no_bifring = nbio_v7_9_handle_ras_controller_intr_no_bifring,
 	.handle_ras_err_event_athub_intr_no_bifring = nbio_v7_9_handle_ras_err_event_athub_intr_no_bifring,
 	.set_ras_err_event_athub_irq_state = nbio_v7_9_set_ras_err_event_athub_irq_state,
-	.get_supported_memory_partition_mode = mi300_nbio_get_supported_memory_partition_mode,
 };
 
 void nbio_v7_9_set_ras_funcs(struct amdgv_adapter *adapt)

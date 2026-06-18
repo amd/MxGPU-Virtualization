@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "gtest/gtest.h"
@@ -48,6 +31,24 @@ TEST_F(AmdSmiNicStubTests, GetNicDriverInfoStub)
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 
 	ret = amdsmi_get_nic_driver_info(nullptr, nullptr);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+}
+
+TEST_F(AmdSmiNicStubTests, GetNicFwInfoStub)
+{
+	amdsmi_nic_fw_info_t fw_info;
+	amdsmi_status_t ret;
+
+	ret = amdsmi_get_nic_fw_info(&NIC_MOCK_HANDLE, &fw_info);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+
+	ret = amdsmi_get_nic_fw_info(nullptr, &fw_info);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+
+	ret = amdsmi_get_nic_fw_info(&NIC_MOCK_HANDLE, nullptr);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+
+	ret = amdsmi_get_nic_fw_info(nullptr, nullptr);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 }
 
@@ -212,25 +213,4 @@ TEST_F(AmdSmiNicStubTests, GetNicRdmaPortStatisticsStub)
 	ret = amdsmi_get_nic_rdma_port_statistics(&NIC_MOCK_HANDLE, rdma_port_index, &num_stats, stats);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 	free(stats);
-}
-
-TEST_F(AmdSmiNicStubTests, TopoGetNicLinkTypeStub)
-{
-	amdsmi_nic_link_type_t link_type;
-	amdsmi_status_t ret;
-
-	ret = amdsmi_topo_get_nic_link_type(&NIC_MOCK_HANDLE, &GPU_MOCK_HANDLE, &link_type);
-	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
-
-	ret = amdsmi_topo_get_nic_link_type(nullptr, &GPU_MOCK_HANDLE, &link_type);
-	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
-
-	ret = amdsmi_topo_get_nic_link_type(&NIC_MOCK_HANDLE, nullptr, &link_type);
-	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
-
-	ret = amdsmi_topo_get_nic_link_type(&NIC_MOCK_HANDLE, &GPU_MOCK_HANDLE, nullptr);
-	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
-
-	ret = amdsmi_topo_get_nic_link_type(nullptr, nullptr, nullptr);
-	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 }

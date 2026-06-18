@@ -1,23 +1,8 @@
-/* * Copyright (C) 2025 Advanced Micro Devices. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #include "amdsmi.h"
 #include "smi_cli_api_host.h"
 #include "smi_cli_helpers.h"
@@ -899,8 +884,11 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 			for (uint32_t i = 0; i < system_ubb_power.size(); i++) {
 				if (system_ubb_power[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_ubb_power[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					std::string system_ubb_power_val = system_ubb_power[i].val == UINT64_MAX ? "N/A" : string_format("%lld", system_ubb_power[i].val);
-					formatted_string += string_format(",%s", system_ubb_power_val.c_str());
+					if (system_ubb_power[i].val == UINT64_MAX) {
+						formatted_string += string_format(",%s", "N/A");
+					} else {
+						formatted_string += string_format(",%d", system_ubb_power[i].val);
+					}
 				}
 			}
 		}
@@ -910,8 +898,11 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 			for (uint32_t i = 0; i < system_ubb_power_threshold.size(); i++) {
 				if (system_ubb_power_threshold[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_ubb_power_threshold[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					std::string system_ubb_power_threshold_val = system_ubb_power_threshold[i].val == UINT64_MAX ? "N/A" : string_format("%lld", system_ubb_power_threshold[i].val);
-					formatted_string += string_format(",%s", system_ubb_power_threshold_val.c_str());
+					if (system_ubb_power_threshold[i].val == UINT64_MAX) {
+						formatted_string += string_format(",%s", "N/A");
+					} else {
+						formatted_string += string_format(",%d", system_ubb_power_threshold[i].val);
+					}
 				}
 			}
 		}
@@ -1201,9 +1192,12 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 			for (uint32_t i = 0; i < system_ubb_power.size(); i++) {
 				if (system_ubb_power[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_ubb_power[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					std::string system_ubb_power_val = system_ubb_power[i].val == UINT64_MAX ? "N/A" : string_format("%d", system_ubb_power[i].val);
-					std::string system_ubb_power_unit = system_ubb_power_val == "N/A" ? "" : "W";
-					formatted_string += string_format(baseboardSystemPowerUbbPowerTemplate, system_ubb_power_val.c_str(), system_ubb_power_unit.c_str());
+					if (system_ubb_power[i].val == UINT64_MAX) {
+						formatted_string += string_format(baseboardSystemPowerUbbPowerTemplate, "N/A", "");
+					} else {
+						std::string system_ubb_power_val = string_format("%d", system_ubb_power[i].val);
+						formatted_string += string_format(baseboardSystemPowerUbbPowerTemplate, system_ubb_power_val.c_str(), "W");
+					}
 				}
 			}
 		}
@@ -1213,9 +1207,12 @@ int AmdSmiApiHost::amdsmi_get_baseboard_command(uint64_t processor_bdf, Argument
 			for (uint32_t i = 0; i < system_ubb_power_threshold.size(); i++) {
 				if (system_ubb_power_threshold[i].res_group == AMDSMI_METRIC_RES_GROUP_SYSTEM && system_ubb_power_threshold[i].res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_BASEBOARD) {
 					is_supported = true;
-					std::string system_ubb_power_threshold_val = system_ubb_power_threshold[i].val == UINT64_MAX ? "N/A" : string_format("%d", system_ubb_power_threshold[i].val);
-					std::string system_ubb_power_threshold_unit = system_ubb_power_threshold_val == "N/A" ? "" : "W";
-					formatted_string += string_format(baseboardSystemPowerUbbPowerThresholdTemplate, system_ubb_power_threshold_val.c_str(), system_ubb_power_threshold_unit.c_str());
+					if (system_ubb_power_threshold[i].val == UINT64_MAX) {
+						formatted_string += string_format(baseboardSystemPowerUbbPowerThresholdTemplate, "N/A", "");
+					} else {
+						std::string system_ubb_power_threshold_val = string_format("%d", system_ubb_power_threshold[i].val);
+						formatted_string += string_format(baseboardSystemPowerUbbPowerThresholdTemplate, system_ubb_power_threshold_val.c_str(), "W");
+					}
 				}
 			}
 		}

@@ -1,25 +1,7 @@
-/*
- * Copyright (c) 2021-2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
-
 
 #include <amdgv_device.h>
 #include "amdgv_vbios.h"
@@ -53,6 +35,34 @@ static const uint8_t mi200_smu_throttler_event_map[] = {
 	[THROTTLER_THERMAL_VR_BIT] = AMDGV_PP_THROTTLER_EVENT__VR,
 };
 
+#define MI200_SMU_MB_CONTEXT_REGS_NUM	3
+static struct amdgv_reg_dump_info mi200_smu_mb_context_regs[MI200_SMU_MB_CONTEXT_REGS_NUM] = {
+	{
+		.name = "regMP1_SMN_C2PMSG_90 (resp)",
+		.hwip = MP1_HWIP,
+		.seg = regMP1_SMN_C2PMSG_90_BASE_IDX,
+		.logical_inst = 0,
+		.offset_hwip = regMP1_SMN_C2PMSG_90,
+		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
+	},
+	{
+		.name = "regMP1_SMN_C2PMSG_82 (param)",
+		.hwip = MP1_HWIP,
+		.seg = regMP1_SMN_C2PMSG_82_BASE_IDX,
+		.logical_inst = 0,
+		.offset_hwip = regMP1_SMN_C2PMSG_82,
+		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
+	},
+	{
+		.name = "regMP1_SMN_C2PMSG_66 (msg)",
+		.hwip = MP1_HWIP,
+		.seg = regMP1_SMN_C2PMSG_66_BASE_IDX,
+		.logical_inst = 0,
+		.offset_hwip = regMP1_SMN_C2PMSG_66,
+		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
+	}
+};
+
 static int mi200_smu_13_0_send_msg_without_waiting(struct amdgv_adapter *adapt,
 	uint16_t msg)
 {
@@ -72,15 +82,16 @@ static int mi200_smu_13_0_read_arg(struct amdgv_adapter *adapt, uint32_t *arg)
 	return 0;
 }
 
-static int mi200_smu_13_0_wait_for_response(struct amdgv_adapter *adapt,
-					    uint32_t *val)
+static int mi200_smu_13_0_wait_for_response(struct amdgv_adapter *adapt, uint32_t *val,
+					    enum amdgv_wait_for_types wait_type)
 {
 	int wait_ret;
 
-	wait_ret = amdgv_wait_for_register(
-	    adapt, SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90),
+	wait_ret = amdgv_wait_for_smu_msg_resp(
+	    adapt, SOC15_REG_OFFSET_NAME(MP1, 0, regMP1_SMN_C2PMSG_90),
 	    MP1_SMN_C2PMSG_90__CONTENT_MASK, 0, AMDGV_TIMEOUT(TIMEOUT_SMU_REG),
-	    AMDGV_WAIT_CHECK_NE, 0);
+	    AMDGV_WAIT_CHECK_NE, wait_type, mi200_smu_mb_context_regs,
+	    MI200_SMU_MB_CONTEXT_REGS_NUM);
 
 	/* read as return value */
 	*val = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90));
@@ -91,7 +102,6 @@ static int mi200_smu_13_0_wait_for_response(struct amdgv_adapter *adapt,
 
 	/* timeout means wrong logic */
 	if (wait_ret) {
-		AMDGV_ERROR("SMU TIMEOUT!\n");
 		return AMDGV_FAILURE;
 	}
 
@@ -120,8 +130,8 @@ static int mi200_smu_13_0_send_test_msg(struct amdgv_adapter *adapt)
 	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_MSG_END, 0, regMP1_SMN_C2PMSG_66,
 		RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_66)));
 
-	if (mi200_smu_13_0_wait_for_response(adapt, &resp) == AMDGV_FAILURE) {
-		AMDGV_ERROR("TIMEOUT waiting for SMU response\n");
+	if (mi200_smu_13_0_wait_for_response(adapt, &resp,
+					     AMDGV_WAIT_FOR_SMU_CHECK_HANG) == AMDGV_FAILURE) {
 		return AMDGV_FAILURE; /* SMU not ready */
 	}
 	/* the response will be the argument you pass + 1 */
@@ -141,7 +151,7 @@ static int mi200_smu_13_0_send_msg(struct amdgv_adapter *adapt, uint16_t msg)
 	int ret = 0;
 	uint32_t resp = 0;
 
-	if (mi200_smu_13_0_wait_for_response(adapt, &resp) != 0)
+	if (mi200_smu_13_0_wait_for_response(adapt, &resp, AMDGV_WAIT_FOR_SMU_CHECK_HANG) != 0)
 		if (mi200_smu_13_0_send_test_msg(adapt) != 0)
 			return AMDGV_FAILURE;
 
@@ -149,10 +159,14 @@ static int mi200_smu_13_0_send_msg(struct amdgv_adapter *adapt, uint16_t msg)
 
 	mi200_smu_13_0_send_msg_without_waiting(adapt, msg);
 
-	ret = mi200_smu_13_0_wait_for_response(adapt, &resp);
-	if (ret == AMDGV_FAILURE || resp != PPSMC_Result_OK) {
-		AMDGV_ERROR("Failed to send message 0x%x, response 0x%x\n", msg,
-			resp);
+	ret = mi200_smu_13_0_wait_for_response(adapt, &resp, AMDGV_WAIT_FOR_SMU_MSG_RESPONSE);
+	if (ret)
+		return AMDGV_FAILURE;
+
+	if (resp != PPSMC_Result_OK) {
+		AMDGV_REG_DUMP(ERROR, "SMU responded with failure. SMU Mailbox contents:",
+			       mi200_smu_mb_context_regs,
+			       MI200_SMU_MB_CONTEXT_REGS_NUM);
 		return AMDGV_FAILURE;
 	}
 
@@ -165,7 +179,7 @@ static int mi200_smu_13_0_send_msg_with_param(struct amdgv_adapter *adapt,
 	int ret = 0;
 	uint32_t resp = 0;
 
-	if (mi200_smu_13_0_wait_for_response(adapt, &resp) != 0)
+	if (mi200_smu_13_0_wait_for_response(adapt, &resp, AMDGV_WAIT_FOR_SMU_CHECK_HANG) != 0)
 		if (mi200_smu_13_0_send_test_msg(adapt) != 0)
 			return AMDGV_FAILURE;
 
@@ -182,10 +196,14 @@ static int mi200_smu_13_0_send_msg_with_param(struct amdgv_adapter *adapt,
 
 	mi200_smu_13_0_send_msg_without_waiting(adapt, msg);
 
-	ret = mi200_smu_13_0_wait_for_response(adapt, &resp);
-	if (ret == AMDGV_FAILURE || resp != PPSMC_Result_OK) {
-		AMDGV_ERROR("Failed to send message 0x%x, response 0x%x\n", msg,
-			resp);
+	ret = mi200_smu_13_0_wait_for_response(adapt, &resp, AMDGV_WAIT_FOR_SMU_MSG_RESPONSE);
+	if (ret)
+		return ret;
+
+	if (resp != PPSMC_Result_OK) {
+		AMDGV_REG_DUMP(ERROR, "SMU responded with failure. SMU Mailbox contents:",
+			       mi200_smu_mb_context_regs,
+			       MI200_SMU_MB_CONTEXT_REGS_NUM);
 		return AMDGV_FAILURE;
 	}
 
@@ -761,7 +779,8 @@ static int mi200_smu_v13_0_atom_get_smu_clockinfo(struct amdgv_adapter *adapt,
 	index = get_index_into_master_table(atom_master_list_of_command_functions_v2_1,
 					    getsmuclockinfo);
 
-	ret = amdgv_atom_execute_table(ctx, index, (uint32_t *)&input);
+	ret = amdgv_atom_execute_table(ctx, index, (uint32_t *)&input,
+				       sizeof(input) / sizeof(uint32_t));
 	if (ret) {
 		AMDGV_ERROR("amdgv_atom_execute_table() failed!\n");
 		return AMDGV_FAILURE;
@@ -2047,7 +2066,8 @@ int mi200_mode1_reset(struct amdgv_adapter *adapt)
 
 	param |= (fatal_err << 16);
 
-	if (mi200_smu_13_0_wait_for_response(adapt, &resp) != 0)
+	if (mi200_smu_13_0_wait_for_response(adapt, &resp,
+					     AMDGV_WAIT_FOR_SMU_MSG_RESPONSE) != 0)
 		if (mi200_smu_13_0_send_test_msg(adapt) != 0)
 			return AMDGV_FAILURE;
 
@@ -2074,11 +2094,14 @@ int mi200_wait_mode1_reset_completion(struct amdgv_adapter *adapt)
 	int ret = 0;
 	uint32_t resp = 0;
 
-	ret = mi200_smu_13_0_wait_for_response(adapt, &resp);
-	if (ret == AMDGV_FAILURE || resp != PPSMC_Result_OK) {
-		AMDGV_ERROR(
-		    "Failed to send mode1 reset message 0x%x, response 0x%x\n",
-		    PPSMC_MSG_GfxDriverReset, resp);
+	ret = mi200_smu_13_0_wait_for_response(adapt, &resp, AMDGV_WAIT_FOR_SMU_MSG_RESPONSE);
+	if (ret)
+		return ret;
+
+	if (resp != PPSMC_Result_OK) {
+		AMDGV_REG_DUMP(ERROR, "SMU responded with failure. SMU Mailbox contents:",
+			       mi200_smu_mb_context_regs,
+			       MI200_SMU_MB_CONTEXT_REGS_NUM);
 		return AMDGV_FAILURE;
 	}
 

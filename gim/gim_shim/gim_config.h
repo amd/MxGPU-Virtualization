@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2014-2019 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef _GPU_IOV_MODULE__CONFIG_H
@@ -100,6 +83,11 @@
 #define MEMORY_PARTITION_MODE__DEFAULT AMDGV_MEMORY_PARTITION_MODE_UNKNOWN
 #define MEMORY_PARTITION_MODE__MAX     AMDGV_MEMORY_PARTITION_MODE_MAX
 
+#define CC_MODE__KEY     "cc_mode"
+#define CC_MODE__START   AMDGV_CC_MODE_OFF
+#define CC_MODE__DEFAULT AMDGV_CC_MODE_MAX
+#define CC_MODE__MAX     AMDGV_CC_MODE_MAX
+
 #define PARTITION_FULL_ACCESS_ENABLE__KEY                 "per_partition_fullaccess_enable"
 #define PARTITION_FULL_ACCESS_ENABLE__START               0
 #define PARTITION_FULL_ACCESS_ENABLE__DEFAULT             1
@@ -143,8 +131,8 @@
 #define PF_FB_SIZE__MAX      1024
 
 #define BAD_PAGE_RECORD_THRESHOLD__KEY      "bad_page_record_threshold"
-#define BAD_PAGE_RECORD_THRESHOLD__START    10
-#define BAD_PAGE_RECORD_THRESHOLD__DEFAULT  0 // 0 indicates adapter will use default bad page threshold defined in ecc_sw_init
+#define BAD_PAGE_RECORD_THRESHOLD__START    -2
+#define BAD_PAGE_RECORD_THRESHOLD__DEFAULT  -1
 #define BAD_PAGE_RECORD_THRESHOLD__MAX      256
 
 #define RAS_TELEMETRY_POLICY__KEY     "ras_vf_telemetry_policy"
@@ -177,6 +165,11 @@
 #define THERMAL_THROTTLE_RATE_LIMIT__DEFAULT  60000000 // Rate-limit thermal throttling events to every 60 seconds
 #define THERMAL_THROTTLE_RATE_LIMIT__MAX      60000000
 
+#define VF_HBM_MGMT_MODE__KEY                "vf_hbm_mgmt_mode"
+#define VF_HBM_MGMT_MODE__START              AMDGV_VF_HBM_MGMT_MODE_DRIVER_MANAGED
+#define VF_HBM_MGMT_MODE__DEFAULT            AMDGV_VF_HBM_MGMT_MODE_DRIVER_MANAGED
+#define VF_HBM_MGMT_MODE__MAX                AMDGV_VF_HBM_MGMT_MODE_DISABLED
+
 enum gim_conf_opt_idx {
 	CONF_OPT_START = 0,
 	CONF_OPT_VF_NUMBER = CONF_OPT_START,
@@ -196,6 +189,7 @@ enum gim_conf_opt_idx {
 	CONF_OPT_FB_SHARING_MODE,
 	CONF_OPT_ACCELERATOR_PARTITION_MODE,
 	CONF_OPT_MEMORY_PARTITION_MODE,
+	CONF_OPT_CC_MODE,
 	CONF_OPT_PARTITION_FULL_ACCESS_EN,
 	CONF_OPT_DEBUG_DUMP_RESERVE_SIZE,
 	CONF_OPT_HANG_DETECTION_MODE,
@@ -210,6 +204,7 @@ enum gim_conf_opt_idx {
 	CONF_OPT_SENTINEL_MODE,
 	CONF_OPT_ENABLE_LIVE_MIGRATION,
 	CONF_OPT_THERMAL_THROTTLE_RATE_LIMIT,
+	CONF_OPT_VF_HBM_MGMT_MODE,
 	CONF_OPT_MAX
 };
 
@@ -229,16 +224,19 @@ uint32_t gim_conf_get_perf_mon_enable_opt(uint32_t id);
 uint32_t gim_conf_get_hangdump_timeout_opt(uint32_t id);
 #endif
 uint32_t gim_conf_get_fb_sharing_mode_opt(uint32_t id);
+uint32_t gim_conf_get_vf_hbm_mgmt_mode_opt(uint32_t id);
 uint32_t gim_conf_get_accelerator_partition_mode_opt(uint32_t id);
 uint32_t gim_conf_get_memory_partition_mode_opt(uint32_t id);
+uint32_t gim_conf_get_cc_mode_opt(uint32_t id);
 uint32_t gim_conf_get_partition_full_access_enable_opt(uint32_t id);
 uint32_t gim_conf_get_hang_detection_mode_opt(uint32_t id);
 uint32_t gim_conf_get_asymmetric_fb_mode_opt(uint32_t id);
 uint32_t gim_conf_get_debug_dump_reserve_size_opt(uint32_t id);
-uint32_t gim_conf_get_bad_page_record_threshold_opt(uint32_t id);
+int gim_conf_get_bad_page_record_threshold_opt(uint32_t id);
 uint32_t gim_conf_set_vf_num_opt(int value);
 uint32_t gim_conf_set_accelerator_partition_mode_opt(int value);
 uint32_t gim_conf_set_memory_partition_mode_opt(int value);
+uint32_t gim_conf_set_cc_mode_opt(int value);
 uint32_t gim_conf_get_ras_vf_telemetry_policy_opt(uint32_t id);
 uint32_t gim_conf_get_max_cper_count_opt(uint32_t id);
 uint32_t gim_conf_get_sentinel_mode_opt(void);
@@ -285,3 +283,4 @@ uint64_t gim_conf_get_pf_fb_size_opt(uint32_t id);
 uint32_t gim_conf_get_debug_mode_opt(uint32_t id);
 uint32_t gim_conf_get_enable_live_migration_opt(void);
 #endif
+

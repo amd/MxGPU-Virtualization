@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "gtest/gtest.h"
@@ -81,6 +64,7 @@ TEST_F(AmdSmiDeviceTests, InvalidParams)
 	ret = amdsmi_get_gpu_device_bdf(&NIC_MOCK_HANDLE, &bdf);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+#ifdef AMD_SMI_NIC_SUPPORT
 	ret = amdsmi_get_nic_device_bdf(&NIC_MOCK_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
@@ -89,6 +73,16 @@ TEST_F(AmdSmiDeviceTests, InvalidParams)
 
 	ret = amdsmi_get_nic_device_bdf(&GPU_MOCK_HANDLE, &bdf);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+#else
+	ret = amdsmi_get_nic_device_bdf(&NIC_MOCK_HANDLE, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+
+	ret = amdsmi_get_nic_device_bdf(NULL, &bdf);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+
+	ret = amdsmi_get_nic_device_bdf(&GPU_MOCK_HANDLE, &bdf);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+#endif
 
 	ret = amdsmi_get_processor_bdf(&GPU_MOCK_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
@@ -147,27 +141,36 @@ TEST_F(AmdSmiDeviceTests, InvalidParams)
 	ret = amdsmi_get_vf_handle_from_uuid(NULL, &vf_handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+#ifdef _WIN64
+	ret = amdsmi_reset_gpu(NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+
+	ret = amdsmi_reset_gpu(&NIC_MOCK_HANDLE);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+#else
 	ret = amdsmi_reset_gpu(NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_reset_gpu(&NIC_MOCK_HANDLE);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+#endif
 }
 
-#ifdef _WIN64
-TEST_F(AmdSmiDeviceTests, DISABLED_ResetGpuTest)
-#else
 TEST_F(AmdSmiDeviceTests, ResetGpuTest)
-#endif
 {
 	int ret;
 	amdsmi_processor_handle handle = &GPU_MOCK_HANDLE;
 
+#ifdef _WIN64
+	ret = amdsmi_reset_gpu(handle);
+	EXPECT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+#else
 	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_RESET_GPU)))
 		.WillRepeatedly(amdsmi::SetResponseStatus(AMDSMI_STATUS_SUCCESS));
 
 	ret = amdsmi_reset_gpu(handle);
 	EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+#endif
 }
 
 TEST_F(AmdSmiDeviceTests, WrongUUIDCharSequence)

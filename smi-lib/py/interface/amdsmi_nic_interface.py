@@ -1,25 +1,9 @@
 #!/usr/bin/env python3
 
+# Copyright Advanced Micro Devices, Inc.
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
+# SPDX-License-Identifier: MIT
+
 
 """
 AMD SMI NIC Interface Module
@@ -36,11 +20,10 @@ from .amdsmi_exception import *
 from .amdsmi_interface import _check_res, _format_bdf
 
 
-class AmdSmiNicLinkType(IntEnum):
-    UNKNOWN = amdsmi_wrapper.AMDSMI_NIC_LINK_TYPE_UNKNOWN
-    PCIE = amdsmi_wrapper.AMDSMI_NIC_LINK_TYPE_PCIE
-    NUMA = amdsmi_wrapper.AMDSMI_NIC_LINK_TYPE_NUMA
-    X_NUMA = amdsmi_wrapper.AMDSMI_NIC_LINK_TYPE_X_NUMA
+class AmdSmiNicFwVersionType(IntEnum):
+    FIXED = amdsmi_wrapper.AMDSMI_NIC_FW_VERSION_TYPE_FIXED
+    RUNNING = amdsmi_wrapper.AMDSMI_NIC_FW_VERSION_TYPE_RUNNING
+    STORED = amdsmi_wrapper.AMDSMI_NIC_FW_VERSION_TYPE_STORED
 
 
 def amdsmi_get_nic_driver_info(processor_handle):
@@ -54,6 +37,28 @@ def amdsmi_get_nic_driver_info(processor_handle):
     return {
         'name': driver_info.name.decode("utf-8"),
         'version': driver_info.version.decode("utf-8")
+    }
+
+
+def amdsmi_get_nic_fw_info(processor_handle):
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+
+    fw_info = amdsmi_wrapper.amdsmi_nic_fw_info_t()
+    _check_res(amdsmi_wrapper.amdsmi_get_nic_fw_info(
+        processor_handle, ctypes.byref(fw_info)))
+
+    fw_list = []
+    for i in range(fw_info.num_fw):
+        fw_entry = fw_info.fw[i]
+        fw_list.append({
+            'type': AmdSmiNicFwVersionType(fw_entry.type),
+            'name': fw_entry.fw.name.decode("utf-8"),
+            'version': fw_entry.fw.version.decode("utf-8")
+        })
+
+    return {
+        'fw': fw_list
     }
 
 
@@ -243,23 +248,3 @@ def amdsmi_get_nic_rdma_port_statistics(processor_handle, rdma_port_index):
     return stats
 
 
-def amdsmi_topo_get_nic_link_type(nic_handle, processor_handle):
-    if not isinstance(nic_handle, amdsmi_wrapper.amdsmi_processor_handle):
-        raise AmdSmiParameterException(
-            nic_handle, amdsmi_wrapper.amdsmi_processor_handle
-        )
-
-    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
-        raise AmdSmiParameterException(
-            processor_handle, amdsmi_wrapper.amdsmi_processor_handle
-        )
-
-    link_type = amdsmi_wrapper.amdsmi_nic_link_type_t()
-
-    _check_res(
-        amdsmi_wrapper.amdsmi_topo_get_nic_link_type(
-            nic_handle, processor_handle, ctypes.byref(link_type)
-        )
-    )
-
-    return AmdSmiNicLinkType(link_type.value)

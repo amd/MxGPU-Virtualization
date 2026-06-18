@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_device.h"
@@ -649,11 +632,11 @@ int amdgv_cper_export_live_data(struct amdgv_adapter *adapt,
 			idx_vf = AMDGV_PF_IDX;
 
 		cper->vf_cper[idx_live_data].caps =
-			adapt->array_vf[idx_vf].ras.caps.all;
+			adapt->array_vf[idx_vf].xchg.ras.caps.all;
 		cper->vf_cper[idx_live_data].start_rptr =
-			adapt->array_vf[idx_vf].ras.cper.start_rptr;
+			adapt->array_vf[idx_vf].xchg.ras.cper.start_rptr;
 		cper->vf_cper[idx_live_data].prev_host_wptr =
-			adapt->array_vf[idx_vf].ras.cper.prev_host_wptr;
+			adapt->array_vf[idx_vf].xchg.ras.cper.prev_host_wptr;
 	}
 
 	cper->next_uid = oss_atomic_read(&adapt->cper.next_uid);
@@ -668,7 +651,6 @@ int amdgv_cper_import_live_data(struct amdgv_adapter *adapt,
 				struct amdgv_live_info_cper *cper)
 {
 	uint32_t idx_live_data, idx_vf;
-	int i;
 
 	for (idx_live_data = 0; idx_live_data < adapt->num_vf + 1; idx_live_data++) {
 		if (idx_live_data >= AMDGV_MAX_VF_LIVE) {
@@ -680,22 +662,24 @@ int amdgv_cper_import_live_data(struct amdgv_adapter *adapt,
 		if (idx_live_data == adapt->num_vf)
 			idx_vf = AMDGV_PF_IDX;
 
-		adapt->array_vf[idx_vf].ras.caps.all =
+		adapt->array_vf[idx_vf].xchg.ras.caps.all =
 			cper->vf_cper[idx_live_data].caps;
-		adapt->array_vf[idx_vf].ras.cper.start_rptr =
+		adapt->array_vf[idx_vf].xchg.ras.cper.start_rptr =
 			cper->vf_cper[idx_live_data].start_rptr;
-		adapt->array_vf[idx_vf].ras.cper.prev_host_wptr =
+		adapt->array_vf[idx_vf].xchg.ras.cper.prev_host_wptr =
 			cper->vf_cper[idx_live_data].prev_host_wptr;
 	}
 
 	oss_atomic_set(&adapt->cper.next_uid, cper->next_uid);
-	adapt->cper.max_count = cper->max_count;
+
+	if (cper->max_count > 0 &&
+	    cper->max_count <= AMDGV_CPER_MAX_ALLOWED_COUNT)
+		adapt->cper.max_count = cper->max_count;
+	else
+		adapt->cper.max_count = AMDGV_CPER_MAX_ALLOWED_COUNT;
+
 	adapt->cper.count = cper->count;
 	adapt->cper.wptr = cper->wptr;
-
-	/* reset missing entries to NULL to avoid invalid memory access */
-	for (i = 0; i < adapt->cper.wptr; i++)
-		adapt->cper.ring[i] = NULL;
 
 	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
 }

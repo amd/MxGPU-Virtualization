@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS INL684
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv.h"
@@ -371,6 +354,16 @@ static int ras_eeprom_v2_1_init_sw_control(struct amdgv_adapter *adapt, struct a
 	if (control->tbl_hdr.version == EEPROM_TABLE_VER_V2_1 ||
 	    control->tbl_hdr.version == EEPROM_TABLE_VER_V3 ||
 	    control->tbl_hdr.version == EEPROM_TABLE_VER_V4) {
+		/* tbl_size is EEPROM-sourced; reject sizes smaller than the
+		 * header + extra info so the unsigned subtraction below cannot
+		 * wrap around (CWE-191) and yield a bogus num_recs.
+		 */
+		if (control->tbl_hdr.tbl_size < EEPROM_TABLE_HEADER_SIZE +
+						EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE) {
+			AMDGV_ERROR("Invalid EEPROM table size 0x%x for V2_1\n",
+				    control->tbl_hdr.tbl_size);
+			return AMDGV_FAILURE;
+		}
 		control->num_recs = (control->tbl_hdr.tbl_size - EEPROM_TABLE_HEADER_SIZE - EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE) /
 				EEPROM_TABLE_RECORD_SIZE;
 		control->next_addr = EEPROM_RECORD_START_V2_1;
@@ -378,6 +371,14 @@ static int ras_eeprom_v2_1_init_sw_control(struct amdgv_adapter *adapt, struct a
 				EEPROM_TABLE_RECORD_SIZE;
 		control->tbl_byte_sum = __calc_hdr_byte_sum(control) + __calc_extra_info_byte_sum(control);
 	} else if (control->tbl_hdr.version == EEPROM_TABLE_VER_V2) {
+		/* Guard against an EEPROM-sourced tbl_size that would underflow
+		 * the unsigned subtraction below (CWE-191).
+		 */
+		if (control->tbl_hdr.tbl_size < EEPROM_TABLE_HEADER_SIZE) {
+			AMDGV_ERROR("Invalid EEPROM table size 0x%x for V2\n",
+				    control->tbl_hdr.tbl_size);
+			return AMDGV_FAILURE;
+		}
 		control->num_recs = (control->tbl_hdr.tbl_size - EEPROM_TABLE_HEADER_SIZE) /
 				EEPROM_TABLE_RECORD_SIZE;
 		control->next_addr = EEPROM_RECORD_START_V2;
@@ -385,6 +386,14 @@ static int ras_eeprom_v2_1_init_sw_control(struct amdgv_adapter *adapt, struct a
 				EEPROM_TABLE_RECORD_SIZE;
 		control->tbl_byte_sum = __calc_hdr_byte_sum(control);
 	} else if (control->tbl_hdr.version == EEPROM_TABLE_VER_V1) {
+		/* Guard against an EEPROM-sourced tbl_size that would underflow
+		 * the unsigned subtraction below (CWE-191).
+		 */
+		if (control->tbl_hdr.tbl_size < EEPROM_TABLE_HEADER_SIZE) {
+			AMDGV_ERROR("Invalid EEPROM table size 0x%x for V1\n",
+				    control->tbl_hdr.tbl_size);
+			return AMDGV_FAILURE;
+		}
 		control->num_recs = (control->tbl_hdr.tbl_size - EEPROM_TABLE_HEADER_SIZE) /
 				EEPROM_TABLE_RECORD_SIZE;
 		control->next_addr = EEPROM_RECORD_START;
@@ -635,10 +644,8 @@ static int ras_eeprom_v2_1_fix_and_upgrade_table(struct amdgv_adapter *adapt,
 	}
 
 	if (valid_v2_1_tbl) {
-		AMDGV_INFO("Valid EEPROM V2_1 table detected.\n");
 		force_overwrite = false;
 	} else if (valid_legacy_tbl) {
-		AMDGV_INFO("Upgrading EEPROM table.\n");
 		force_overwrite = true;
 	} else {
 		ret = AMDGV_FAILURE;
@@ -750,6 +757,18 @@ static int ras_eeprom_v2_1_init(struct amdgv_adapter *adapt,
 		ret = ras_eeprom_v2_1_init_sw_control(adapt, control);
 		if (ret)
 			return ret;
+
+		/* num_recs is derived from EEPROM-sourced tbl_size and can
+		 * decode far above device capacity; bound it before
+		 * fix_and_upgrade_table allocates bp_cache sized by num_recs,
+		 * where the 32-bit num_recs * record-size product would
+		 * overflow (CWE-190).
+		 */
+		if (control->num_recs > control->max_record_num) {
+			AMDGV_ERROR("EEPROM record count %u exceeds max %u\n",
+				    control->num_recs, control->max_record_num);
+			goto reset_eeprom;
+		}
 
 		ret = ras_eeprom_v2_1_fix_and_upgrade_table(adapt, control);
 		if (ret)

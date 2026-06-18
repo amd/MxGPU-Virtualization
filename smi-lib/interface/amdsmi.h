@@ -1,23 +1,6 @@
-/*
- * Copyright (c) Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef __AMDSMI_H__
@@ -37,6 +20,7 @@ extern "C" {
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <time.h>
 
 /**
  * @brief Initialization flags
@@ -80,7 +64,18 @@ typedef enum {
     AMDSMI_PROCESSOR_TYPE_AMD_NIC,       //!< AMD Network Interface Card processor type
     AMDSMI_PROCESSOR_TYPE_BRCM_NIC,      //!< Broadcom Network Interface Card processor type
     AMDSMI_PROCESSOR_TYPE_BRCM_SWITCH    //!< Broadcom Switch processor type
-} processor_type_t;
+} amdsmi_processor_type_t;
+
+/**
+ * @brief Backward-compatibility alias for ::amdsmi_processor_type_t.
+ *
+ * The unprefixed ::processor_type_t name is preserved for source-compatibility
+ * with callers written before the type was renamed. New code should use
+ * ::amdsmi_processor_type_t, which follows the ``amdsmi_`` typedef prefix
+ * convention used throughout this header and is less likely to collide with
+ * identifiers defined by other system-management libraries.
+ */
+typedef amdsmi_processor_type_t processor_type_t;
 
 /**
  * @brief Error codes returned by amdsmi functions
@@ -113,6 +108,7 @@ typedef enum {
     AMDSMI_STATUS_INIT_ERROR = 18,          //!< An error occurred when initializing internal data structures
     AMDSMI_STATUS_REFCOUNT_OVERFLOW = 19,   //!< An internal reference counter exceeded INT32_MAX
     AMDSMI_STATUS_DIRECTORY_NOT_FOUND = 20, //!< Error when a directory is not found, maps to ENOTDIR
+    AMDSMI_STATUS_IPC_ERROR = 21,           //!< IPC communication error occurred
     // Processor related errors
     AMDSMI_STATUS_BUSY = 30,                //!< Processor busy
     AMDSMI_STATUS_NOT_FOUND = 31,           //!< Processor Not found
@@ -140,7 +136,7 @@ typedef enum {
     AMDSMI_STATUS_SETTING_UNAVAILABLE = 55, //!< Setting is not available
     AMDSMI_STATUS_CORRUPTED_EEPROM = 56,    //!< EEPROM is corrupted
     // General errors
-    AMDSMI_STATUS_MAP_ERROR = 0xFFFFFFFE,     //!< The internal library error did not map to a status code
+    AMDSMI_STATUS_MAP_ERROR = 0xFFFFFFFE,     //!< Library error did not map to a status code
     AMDSMI_STATUS_UNKNOWN_ERROR = 0xFFFFFFFF, //!< An unknown error occurred
 } amdsmi_status_t;
 
@@ -337,8 +333,8 @@ typedef enum {
 
     // GPU Board Node temperature
     AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_FIRST = 100,
-    AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_RETIMER_X
-      = AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_FIRST,         //!< Retimer X temperature
+    AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_RETIMER_X =
+      AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_FIRST,         //!< Retimer X temperature
     AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_OAM_X_IBC,         //!< OAM X IBC temperature
     AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_OAM_X_IBC_2,       //!< OAM X IBC 2 temperature
     AMDSMI_TEMPERATURE_TYPE_GPUBOARD_NODE_OAM_X_VDD18_VR,    //!< OAM X VDD 1.8V voltage regulator temperature
@@ -452,7 +448,9 @@ typedef enum {
     AMDSMI_LINK_TYPE_PCIE = 1,            //!< Peripheral Component Interconnect Express Link Type
     AMDSMI_LINK_TYPE_XGMI = 2,            //!< GPU Memory Interconnect (multi GPU communication)
     AMDSMI_LINK_TYPE_NOT_APPLICABLE = 3,  //!< Not Applicable Link Type
-    AMDSMI_LINK_TYPE_UNKNOWN = 4          //!< Unknown Link Type
+    AMDSMI_LINK_TYPE_UNKNOWN = 4,         //!< Unknown Link Type
+    AMDSMI_LINK_TYPE_NUMA = 5,            //!< Two processors connect via different PCIe switches but on the same CPU (NIC-to-GPU only)
+    AMDSMI_LINK_TYPE_XNUMA = 6            //!< Two processors connect via different PCIe switches on different CPUs (NIC-to-GPU only)
 } amdsmi_link_type_t;
 
 /**
@@ -832,6 +830,7 @@ typedef struct {
     uint64_t soc_voltage;           //!< SOC voltage measurement in mV {@linux_bm} or V {@host}
     uint64_t mem_voltage;           //!< MEM voltage measurement in mV {@linux_bm} or V {@host}
     uint32_t power_limit;           //!< The power limit in W {@linux_bm}, Linux only
+    uint32_t ubb_power;             //!< The UBB node power in W, MI350X+
     uint64_t reserved[18];
 } amdsmi_power_info_t;
 
@@ -974,7 +973,8 @@ typedef struct {
 typedef struct {
     uint32_t num_profiles;           //!< The length of profiles array
     uint32_t num_resource_profiles;
-    amdsmi_accelerator_partition_resource_profile_t resource_profiles[AMDSMI_MAX_CP_PROFILE_RESOURCES];
+    amdsmi_accelerator_partition_resource_profile_t
+        resource_profiles[AMDSMI_MAX_CP_PROFILE_RESOURCES];
     uint32_t default_profile_index;  //!< The index of the default profile in the profiles array
     amdsmi_accelerator_partition_profile_t profiles[AMDSMI_MAX_ACCELERATOR_PROFILE];
     uint64_t reserved[30];
@@ -1014,8 +1014,9 @@ typedef struct {
  */
 typedef struct {
     amdsmi_npm_status_t status; //!< NPM status (enabled/disabled).
-    uint64_t            limit;  //!< Node-level power limit in Watts.
-    uint64_t            reserved[6];
+    uint64_t limit;  //!< Maximum allowed node-level power draw in Watts.
+    uint32_t ubb_power_threshold;  //!< The UBB node power threshold (upper limit) in Watts.
+    uint64_t reserved[5];
 } amdsmi_npm_info_t;
 
 /**
@@ -1124,7 +1125,8 @@ typedef enum {
     AMDSMI_CPER_NOTIFY_TYPE_SEA  = 0x11E4BBE89A78788A,          //!< System Error Architecture
     AMDSMI_CPER_NOTIFY_TYPE_SEI  = 0x4E87B0AE5C284C81,          //!< System Error Interface
     AMDSMI_CPER_NOTIFY_TYPE_PEI  = 0x4214520409A9D5AC,          //!< Platform Error Interface
-    AMDSMI_CPER_NOTIFY_TYPE_CXL_COMPONENT = 0x49A341DF69293BC9  //!< Compute Express Link Component Error
+    AMDSMI_CPER_NOTIFY_TYPE_CXL_COMPONENT = 0x49A341DF69293BC9  /**< Compute Express Link
+                                                                     Component Error */
 } amdsmi_cper_notify_type_t;
 
 /**
@@ -1268,6 +1270,17 @@ typedef struct {
 #define AMDSMI_MAX_BAD_PAGE_RECORD_V1 512
 #define AMDSMI_MAX_BAD_PAGE_RECORD_V2 16384
 #define AMDSMI_MAX_BAD_PAGE_RECORD AMDSMI_MAX_BAD_PAGE_RECORD_V2
+
+#define AMDSMI_FABRIC_PPOD_ID_SIZE   16  //!< Physical PoD Identifier size in bytes (128-bit UUID)
+
+/**
+ * @brief Helpers to extract the major / minor parts of the UAL interface
+ * version returned in @ref amdsmi_fabric_info_ver_t::version.
+ *
+ * Encoding: [31:16] major, [15:0] minor.
+ */
+#define AMDSMI_FABRIC_VERSION_MAJOR(v) ((uint16_t)(((v) >> 16) & 0xFFFFu))
+#define AMDSMI_FABRIC_VERSION_MINOR(v) ((uint16_t)((v) & 0xFFFFu))
 
 /**
  * @brief Maximum size definitions for date strings
@@ -1916,6 +1929,9 @@ typedef enum {
     AMDSMI_METRIC_CATEGORY_SYS_BASEBOARD_TEMP,
     AMDSMI_METRIC_CATEGORY_SYS_GPUBOARD_TEMP,
     AMDSMI_METRIC_CATEGORY_SYS_BASEBOARD_POWER,
+    AMDSMI_METRIC_CATEGORY_STATIC_FREQUENCY,
+    AMDSMI_METRIC_CATEGORY_STATIC_TEMPERATURE,
+    AMDSMI_METRIC_CATEGORY_STATIC_THROTTLE,
     AMDSMI_METRIC_CATEGORY_UNKNOWN
 } amdsmi_metric_category_t;
 
@@ -2051,6 +2067,46 @@ typedef enum {
     AMDSMI_METRIC_NAME_VR_TEMP_VDDCR_11_HBM_D,
     AMDSMI_METRIC_NAME_VR_TEMP_VDD_USR,
     AMDSMI_METRIC_NAME_VR_TEMP_VDDIO_11_E32,
+
+    AMDSMI_METRIC_NAME_TEMP_MID,
+    AMDSMI_METRIC_NAME_CLK_FCLK,
+    AMDSMI_METRIC_NAME_CLK_FCLK_MAX_LIMIT,
+    AMDSMI_METRIC_NAME_CLK_FCLK_MIN_LIMIT,
+    AMDSMI_METRIC_NAME_CLK_FCLK_DS_DISABLED,
+    AMDSMI_METRIC_NAME_CLK_LCLK,
+    AMDSMI_METRIC_NAME_CLK_LCLK_MAX_LIMIT,
+    AMDSMI_METRIC_NAME_CLK_LCLK_MIN_LIMIT,
+    AMDSMI_METRIC_NAME_CLK_LCLK_DS_DISABLED,
+    AMDSMI_METRIC_NAME_PCIE_OTHER_END_RECOVERY_COUNT,
+    AMDSMI_METRIC_NAME_TEMP_SHUTDOWN_XCD,
+    AMDSMI_METRIC_NAME_TEMP_SHUTDOWN_AID,
+    AMDSMI_METRIC_NAME_TEMP_SHUTDOWN_MID,
+    AMDSMI_METRIC_NAME_TEMP_SHUTDOWN_HBM,
+    AMDSMI_METRIC_NAME_TEMP_THROTTLE_XCD,
+    AMDSMI_METRIC_NAME_TEMP_THROTTLE_AID,
+    AMDSMI_METRIC_NAME_TEMP_THROTTLE_MID,
+    AMDSMI_METRIC_NAME_TEMP_THROTTLE_HBM,
+    AMDSMI_METRIC_NAME_SVI_PLANE_VDDCR_X0_TEMP,
+    AMDSMI_METRIC_NAME_SVI_PLANE_VDDCR_X1_TEMP,
+    AMDSMI_METRIC_NAME_SVI_PLANE_VDDIO_HBM_B_TEMP,
+    AMDSMI_METRIC_NAME_SVI_PLANE_VDDIO_HBM_D_TEMP,
+    AMDSMI_METRIC_NAME_SVI_PLANE_VDDIO_04_HBM_B_TEMP,
+    AMDSMI_METRIC_NAME_SVI_PLANE_VDDIO_04_HBM_D_TEMP,
+    AMDSMI_METRIC_NAME_SVI_PLANE_VDDCR_HBM_B_TEMP,
+    AMDSMI_METRIC_NAME_SVI_PLANE_VDDCR_HBM_D_TEMP,
+    AMDSMI_METRIC_NAME_SVI_PLANE_VDDCR_075_HBM_B_TEMP,
+    AMDSMI_METRIC_NAME_SVI_PLANE_VDDCR_075_HBM_D_TEMP,
+    AMDSMI_METRIC_NAME_SVI_PLANE_VDDIO_11_GTA_A_TEMP,
+    AMDSMI_METRIC_NAME_SVI_PLANE_VDDIO_11_GTA_C_TEMP,
+    AMDSMI_METRIC_NAME_SVI_PLANE_VDDAN_075_GTA_A_TEMP,
+    AMDSMI_METRIC_NAME_SVI_PLANE_VDDAN_075_GTA_C_TEMP,
+    AMDSMI_METRIC_NAME_SVI_PLANE_VDDCR_075_UCIE_TEMP,
+    AMDSMI_METRIC_NAME_SVI_PLANE_VDDIO_065_UCIEAA_TEMP,
+    AMDSMI_METRIC_NAME_SVI_PLANE_VDDIO_065_UCIEAM_A_TEMP,
+    AMDSMI_METRIC_NAME_SVI_PLANE_VDDIO_065_UCIEAM_C_TEMP,
+    AMDSMI_METRIC_NAME_SVI_PLANE_VDDCR_SOCIO_A_TEMP,
+    AMDSMI_METRIC_NAME_SVI_PLANE_VDDCR_SOCIO_C_TEMP,
+    AMDSMI_METRIC_NAME_SVI_PLANE_VDDAN_075_TEMP,
     AMDSMI_METRIC_NAME_SYSTEM_POWER_UBB_POWER,
     AMDSMI_METRIC_NAME_SYSTEM_POWER_UBB_POWER_THRESHOLD,
 
@@ -2131,6 +2187,68 @@ typedef enum {
     AMDSMI_DRIVER_MODEL_TYPE_MCDM = 2,
     AMDSMI_DRIVER_MODEL_TYPE__MAX = 3,
 } amdsmi_driver_model_type_t;
+
+#define AMDSMI_FABRIC_ACTIVE_ACCELERATORS_BITMAP_SIZE 32
+#define AMDSMI_FABRIC_MAX_LOCAL_GPUS 8
+
+/**
+* @brief Fabric type
+*
+* @cond @tag{gpu_bm_linux} @tag{host} @endcond
+*/
+typedef enum {
+    AMDSMI_FABRIC_TYPE_UALOE,    //!< UALink-over-Ethernet fabric
+    AMDSMI_FABRIC_TYPE_UALINK,   //!< Native UALink fabric
+    AMDSMI_FABRIC_TYPE_UNKNOWN   //!< Unknown fabric type
+} amdsmi_fabric_type_t;
+
+/**
+* @brief Fabric NPA address mode
+*
+* @cond @tag{gpu_bm_linux} @tag{host} @endcond
+*/
+typedef enum {
+    AMDSMI_FABRIC_NPA_ADDRESS_MODE_SOURCE_ALIASING,         //!< NPA uses source aliasing: source IDs are remapped/aliased per vPoD
+    AMDSMI_FABRIC_NPA_ADDRESS_MODE_SOURCE_IDENTIFICATION,   //!< NPA uses source identification: original source IDs are preserved
+    AMDSMI_FABRIC_NPA_ADDRESS_MODE_UNKNOWN,                 //!< Unknown address mode
+} amdsmi_fabric_npa_address_mode_t;
+
+/**
+* @brief Fabric accelerator vPoD state
+*
+* @cond @tag{gpu_bm_linux} @tag{host} @endcond
+*/
+typedef enum {
+    AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_UNCONFIGURED,  //!< Accelerator is not yet assigned to a vPoD
+    AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_CONFIGURED,    //!< Accelerator has been assigned to a vPoD but is not yet ready for traffic
+    AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_READY,         //!< Accelerator is configured and ready, awaiting activation
+    AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_ACTIVE,        //!< Accelerator is live and participating in the vPoD
+    AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_ERROR,         //!< Accelerator is in an error state and cannot serve the vPoD
+    AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_UNKNOWN,       //!< Unknown accelerator vPoD state
+} amdsmi_fabric_accelerator_vpod_state_t;
+
+/**
+ * @brief TDI state enumeration
+ *
+ * @cond @tag{host} @endcond
+ */
+typedef enum {
+    AMDSMI_TDI_STATE_UNLOCKED,  //!< TDI (TEE Device Interface) is unlocked;
+    AMDSMI_TDI_STATE_LOCKED,    //!< TDI (TEE Device Interface) is locked
+    AMDSMI_TDI_STATE_RUN,       //!< TDI (TEE Device Interface) is actively running
+    AMDSMI_TDI_STATE_ERROR      //!< TDI (TEE Device Interface) is in an error state and cannot be used
+} amdsmi_tdi_state_t;
+
+/**
+ * @brief CC mode enumeration
+ *
+ * @cond @tag{host} @endcond
+ */
+ typedef enum {
+	AMDSMI_CC_MODE_OFF,  //!< Confidential Compute disabled
+	AMDSMI_CC_MODE_ON,   //!< Confidential Compute enabled
+	AMDSMI_CC_MODE_DEV,  //!< Confidential Compute enabled in developer mode
+} amdsmi_cc_mode_t;
 
 /**
  * @brief  VF Handle
@@ -2237,6 +2355,19 @@ typedef struct {
     uint32_t gfx_timeslice;  //!< Graphics timeslice in us, maximum value is 1000 ms
     uint64_t reserved[27];
 } amdsmi_vf_info_t;
+
+/**
+ * @brief VF HBM Information
+ *
+ * @cond @tag{host} @endcond
+ */
+typedef struct {
+    uint64_t phy_addr;
+    uint64_t phy_size;  //!< physical size represented in bytes
+    uint32_t numa_id;   //!< NUMA node for driver-managed VF HBM, 0xFFFFFFFF when no NUMA association exists (e.g. DAX mode)
+    char name[AMDSMI_MAX_STRING_LENGTH];
+    uint64_t reserved[29];
+} amdsmi_vf_hbm_info_t;
 
 /**
  * @brief Schedule Information
@@ -2505,26 +2636,154 @@ typedef struct {
 } amdsmi_accelerator_partition_profile_config_global_t;
 
 /**
+* @brief Fabric telemetry categories
+*
+* @cond @tag{gpu_bm_linux} @tag{host} @endcond
+*/
+typedef enum {
+    AMDSMI_FABRIC_TELEMETRY_CATEGORY_UALOE           = 0, //!< UALOE telemetry
+    AMDSMI_FABRIC_TELEMETRY_CATEGORY_SWITCH          = 1, //!< Switch telemetry
+    AMDSMI_FABRIC_TELEMETRY_CATEGORY_CRYPTO          = 2, //!< Crypto telemetry
+    AMDSMI_FABRIC_TELEMETRY_CATEGORY_PFC             = 3, //!< PFC telemetry
+    AMDSMI_FABRIC_TELEMETRY_CATEGORY_NETPORT         = 4, //!< Network Port telemetry
+    AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_UALOE   = 5, //!< Derived UALOE telemetry
+    AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_NETPORT = 6, //!< Derived Network Port telemetry
+    AMDSMI_FABRIC_TELEMETRY_CATEGORY_MAX             = 7, //!< Maximum number of categories
+    AMDSMI_FABRIC_TELEMETRY_CATEGORY_INVALID         = 0xFFFFFFFF, //!< Unknown telemetry
+} amdsmi_fabric_telemetry_category_t;
+
+/**
+* @brief Fabric telemetry category bitmask constructor
+*
+* @cond @tag{gpu_bm_linux} @tag{host} @endcond
+*/
+#define AMDSMI_FABRIC_TELEMETRY_CATEGORY_MASK_UALOE             (1U << AMDSMI_FABRIC_TELEMETRY_CATEGORY_UALOE)
+#define AMDSMI_FABRIC_TELEMETRY_CATEGORY_MASK_SWITCH            (1U << AMDSMI_FABRIC_TELEMETRY_CATEGORY_SWITCH)
+#define AMDSMI_FABRIC_TELEMETRY_CATEGORY_MASK_CRYPTO            (1U << AMDSMI_FABRIC_TELEMETRY_CATEGORY_CRYPTO)
+#define AMDSMI_FABRIC_TELEMETRY_CATEGORY_MASK_PFC               (1U << AMDSMI_FABRIC_TELEMETRY_CATEGORY_PFC)
+#define AMDSMI_FABRIC_TELEMETRY_CATEGORY_MASK_NETPORT           (1U << AMDSMI_FABRIC_TELEMETRY_CATEGORY_NETPORT)
+#define AMDSMI_FABRIC_TELEMETRY_CATEGORY_MASK_DERIVED_UALOE     (1U << AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_UALOE)
+#define AMDSMI_FABRIC_TELEMETRY_CATEGORY_MASK_DERIVED_NETPORT   (1U << AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_NETPORT)
+
+/**
+* @brief Fabric telemetry item structure
+*
+* @cond @tag{gpu_bm_linux} @tag{host} @endcond
+*/
+typedef struct {
+    uint64_t id;      //!< Identifier of the telemetry item
+    uint64_t value;   //!< Value of the telemetry item
+} amdsmi_fabric_telemetry_item_t;
+
+/**
+* @brief Fabric textual label structure
+*
+* Labels must be null terminated
+*
+* @cond @tag{gpu_bm_linux} @tag{host} @endcond
+*/
+typedef struct {
+    char text[32];  //!< Textual label content
+} amdsmi_fabric_label_t;
+
+/**
+* @brief Fabric telemetry instance structure
+*
+* Collection of telemetry data items for an instance of a category of telemetry
+*
+* @cond @tag{gpu_bm_linux} @tag{host} @endcond
+*/
+typedef struct {
+    amdsmi_fabric_label_t name;              //!< Name for this instance
+    unsigned logical_idx;                    //!< Logical index for this instance
+    unsigned item_count;                     //!< Number of telemetry items in the set
+    amdsmi_fabric_telemetry_item_t *items;   //!< Pointer to array of telemetry items
+} amdsmi_fabric_telemetry_instance_t;
+
+/**
+* @brief Fabric telemetry dataset structure
+*
+* Contains all telemetry for one category
+*
+* @cond @tag{gpu_bm_linux} @tag{host} @endcond
+*/
+typedef struct {
+    amdsmi_fabric_telemetry_category_t category;     //!< Telemetry category
+    uint64_t generation_count;                       //!< Sequence number incremented each time telemetry is written
+    struct timespec timestamp;                       //!< UTC timestamp seconds since epoch
+    unsigned instance_count;                         //!< Number of instances for this category
+    amdsmi_fabric_telemetry_instance_t *instances;   //!< Array of pointers to instances
+} amdsmi_fabric_telemetry_dataset_t;
+
+/**
+* @brief Fabric telemetry structure
+*
+* Top level structure defining telemetry data for Fabric. Contains datasets
+* for each category of telemetry. A null pointer means no telemetry is
+* available for that category.
+*
+* @cond @tag{gpu_bm_linux} @tag{host} @endcond
+*/
+typedef struct {
+    amdsmi_fabric_telemetry_dataset_t *datasets[AMDSMI_FABRIC_TELEMETRY_CATEGORY_MAX]; //!< Dataset for each telemetry category
+} amdsmi_fabric_telemetry_t;
+
+/**
+* @brief Fabric device configuration information (version 1)
+*
+* @cond @tag{gpu_bm_linux} @tag{host} @endcond
+*/
+typedef struct {
+    uint32_t accelerator_id; //!< Accelerator identifier (range 0 to 1023)
+    amdsmi_fabric_type_t fabric_type; //!< UALOE or UALLINK
+    uint32_t bandwidth; //!< Station bandwidth share in Mb/s
+    uint32_t latency; //!< Latency in nanoseconds (depends on switch presence and type)
+    uint8_t ppod_id[AMDSMI_FABRIC_PPOD_ID_SIZE];  //!< Physical PoD Identifier (128-bit UUID)
+    uint32_t ppod_size; //!< Physical PoD size
+    uint32_t vpod_id; //!< Virtual PoD Identifier
+    uint32_t vpod_size; //!< Virtual PoD size
+    uint32_t vpod_active_accelerators[AMDSMI_FABRIC_ACTIVE_ACCELERATORS_BITMAP_SIZE]; //!< 1024-bit list (32 x 32-bit words): bit N set = accelerator ID N is active
+    uint32_t local_accelerators[AMDSMI_FABRIC_MAX_LOCAL_GPUS]; //!< Local Accelerator IDs
+    amdsmi_fabric_npa_address_mode_t addr_mode; //!< Source aliasing or identification mode
+    amdsmi_fabric_accelerator_vpod_state_t accel_state; //!< Accelerator vPoD State
+} amdsmi_fabric_info_v1_t;
+
+typedef struct {
+    uint32_t version; //!< [31:16] major version, [15:0] minor version
+    union {
+        amdsmi_fabric_info_v1_t v1;
+    } fabric_info;
+} amdsmi_fabric_info_ver_t;
+
+/**
+ * @brief Fabric device information structure
+ *
+ */
+typedef struct {
+    amdsmi_bdf_t bdf;      //!< BDF (Bus, Device, Function) of the Fabric device
+    amdsmi_fabric_info_ver_t info;
+    uint32_t reserved[15]; //!< Reserved for union expansion
+} amdsmi_fabric_info_t;
+
+/**
  * @brief Maximum size definitions AMDSMI NIC
  *
  * @cond @tag{gpu_bm_linux} @tag{host} @endcond
  */
 #define AMDSMI_MAX_NIC_PORTS              32  //!< Maximum number of NIC ports
 #define AMDSMI_MAX_NIC_RDMA_DEV           32  //!< Maximum number of NIC RDMA devices
-#define AMDSMI_MAX_NIC_FW                 16  //!< Maximum number of NIC firmwares
+#define AMDSMI_MAX_NIC_FW                 64  //!< Maximum number of NIC firmwares
 
 /**
- * @brief NIC Link Types. This enum is used to identify the link type between
- * NIC and GPU processors based on their PCIe and NUMA connectivity.
+ * @brief NIC firmware version types
  *
  * @cond @tag{gpu_bm_linux} @tag{host} @endcond
  */
 typedef enum {
-    AMDSMI_NIC_LINK_TYPE_UNKNOWN,  //!< unknown type.
-    AMDSMI_NIC_LINK_TYPE_PCIE,     //!< two processors connect via same PCIe
-    AMDSMI_NIC_LINK_TYPE_NUMA,     //!< two processors connect via different PCIe switches but on the same CPU
-    AMDSMI_NIC_LINK_TYPE_X_NUMA,   //!< two processors connect via  different  PCIe switches but on different CPUs
- } amdsmi_nic_link_type_t;
+    AMDSMI_NIC_FW_VERSION_TYPE_FIXED,    //!< Fixed (hardware) firmware version
+    AMDSMI_NIC_FW_VERSION_TYPE_RUNNING,  //!< Currently running firmware version
+    AMDSMI_NIC_FW_VERSION_TYPE_STORED    //!< Stored (pending) firmware version
+} amdsmi_nic_fw_version_type_t;
 
 /**
  * @brief Structure for NIC statistic name-value pairs
@@ -2580,7 +2839,7 @@ typedef struct {
 } amdsmi_nic_numa_info_t;
 
 /**
- * @brief NIC firmware information
+ * @brief NIC firmware
  *
  * @cond @tag{gpu_bm_linux} @tag{host} @endcond
  */
@@ -2590,13 +2849,23 @@ typedef struct {
 } amdsmi_nic_fw_t;
 
 /**
- * @brief NIC firmware information collection
+ * @brief NIC firmware entry
+ *
+ * @cond @tag{gpu_bm_linux} @tag{host} @endcond
+ */
+typedef struct {
+    amdsmi_nic_fw_version_type_t type;
+    amdsmi_nic_fw_t fw;
+} amdsmi_nic_fw_entry_t;
+
+/**
+ * @brief NIC firmware information
  *
  * @cond @tag{gpu_bm_linux} @tag{host} @endcond
  */
 typedef struct {
     uint32_t num_fw;
-    amdsmi_nic_fw_t fw[AMDSMI_MAX_NIC_FW];
+    amdsmi_nic_fw_entry_t fw[AMDSMI_MAX_NIC_FW];
 } amdsmi_nic_fw_info_t;
 
 /**
@@ -2618,6 +2887,10 @@ typedef struct {
  * Note: These definitions are based on the latest available ethtool information. Users should
  * verify if there are any updates or changes to these definitions in the relevant ethtool
  * structure or field before implementing them in their code.
+ *
+ * @note The `flavour` field depends on libmnl. If libmnl is not installed
+ * on the system, this field is reported
+ * as the string "N/A". All other fields in this struct are unaffected.
  *
  * @cond @tag{gpu_bm_linux} @tag{host} @endcond
  */
@@ -2663,14 +2936,19 @@ typedef struct {
 /**
  * @brief NIC RDMA port information
  *
+ * @note The `max_mtu` and `active_mtu` fields are populated via libibverbs at runtime.
+ * If libibverbs was unavailable at build time, cannot be loaded at runtime, or the
+ * port query fails, these fields are reported as UINT16_MAX.
+ * All other fields in this struct are unaffected.
+ *
  * @cond @tag{gpu_bm_linux} @tag{host} @endcond
  */
 typedef struct {
     char netdev[AMDSMI_MAX_STRING_LENGTH];
     char state[AMDSMI_MAX_STRING_LENGTH];
     uint8_t rdma_port;
-    uint16_t max_mtu;
-    uint16_t active_mtu;
+    uint16_t max_mtu;    //!< Maximum MTU in bytes
+    uint16_t active_mtu; //!< Active MTU in bytes
 } amdsmi_nic_rdma_port_info_t;
 
 /**
@@ -3865,6 +4143,9 @@ amdsmi_status_t amdsmi_get_link_metrics(amdsmi_processor_handle processor_handle
  *  @param[in] processor_handle The identifier of the given device.
  *
  *  @param[in] link_type The amdsmi_link_type_t level to search for nearest GPUs.
+ *                       Only ::AMDSMI_LINK_TYPE_INTERNAL, ::AMDSMI_LINK_TYPE_PCIE
+ *                       and ::AMDSMI_LINK_TYPE_XGMI are supported; any other
+ *                       value returns ::AMDSMI_STATUS_INVAL.
  *
  *  @param[in,out] topology_nearest_info
  *                 .count;
@@ -3931,11 +4212,66 @@ amdsmi_status_t amdsmi_topo_get_p2p_status(amdsmi_processor_handle processor_han
 amdsmi_status_t amdsmi_topo_get_numa_node_number(amdsmi_processor_handle processor_handle, uint32_t *numa_node);
 
 /**
+ *  @brief Retrieve the hops and the connection type between 2 processors
+ *
+ *  @ingroup tagHWTopology
+ *
+ *  @platform{gpu_bm_linux} @platform{host}
+ *
+ *  @details Given a source processor handle @p processor_handle_src and
+ *  a destination processor handle @p processor_handle_dst, this function
+ *  writes the connection type to @p type.  If @p hops is non-NULL, the
+ *  number of hops for the connection is also written.
+ *
+ *  For GPU-to-GPU queries, @p type returns one of INTERNAL, PCIE, XGMI,
+ *  NOT_APPLICABLE, or UNKNOWN, and @p hops returns the hop count.
+ *
+ *  For queries involving a NIC processor (NIC-to-GPU or NIC-to-NIC),
+ *  @p type returns one of PCIE (same PCIe switch), NUMA (same NUMA node,
+ *  different PCIe switch), XNUMA (different NUMA nodes), or UNKNOWN.  The
+ *  @p hops parameter is not meaningful for NIC queries; callers should pass
+ *  NULL.  If non-NULL, @p hops is set to UINT64_MAX.
+ *
+ *  @note This is a lightweight query that returns only the link type and
+ *  hop count, and is available on both @platform{gpu_bm_linux} and
+ *  @platform{host} for GPU-to-GPU, NIC-to-GPU and NIC-to-NIC pairs.  On
+ *  @platform{host}, ::amdsmi_get_link_topology returns a richer
+ *  GPU-to-GPU-only description (link weight, HW link status and framebuffer
+ *  sharing flag in addition to link type and hop count).
+ *
+ *  @see amdsmi_get_link_topology
+ *
+ *  @param[in] processor_handle_src the source processor handle
+ *
+ *  @param[in] processor_handle_dst the destination processor handle
+ *
+ *  @param[in,out] hops A pointer to uint64_t to receive the hop count,
+ *  or NULL if hop count is not needed.
+ *
+ *  @param[in,out] type A pointer to an ::amdsmi_link_type_t to receive
+ *  the link type.  Must not be NULL.
+ *
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
+ */
+amdsmi_status_t amdsmi_topo_get_link_type(amdsmi_processor_handle processor_handle_src,
+                                          amdsmi_processor_handle processor_handle_dst,
+                                          uint64_t *hops, amdsmi_link_type_t *type);
+
+/**
  *  @brief Return link topology information between two connected processors
  *
  *  @ingroup tagHWTopology
  *
  *  @platform{host}
+ *
+ *  @details Returns the full GPU-to-GPU link description (weight, HW link
+ *  status, link type, hop count, framebuffer sharing flag) between the two
+ *  given processors.  For a lightweight query that only retrieves the link
+ *  type and hop count, and that is also available on @platform{gpu_bm_linux}
+ *  and supports NIC-to-GPU and NIC-to-NIC pairs, see
+ *  ::amdsmi_topo_get_link_type.
+ *
+ *  @see amdsmi_topo_get_link_type
  *
  *  @param[in] processor_handle_src Source PF of a processor for which to query
  *
@@ -4345,8 +4681,7 @@ amdsmi_get_gpu_cper_entries(amdsmi_processor_handle processor_handle, uint32_t s
  *
  *  @ingroup tagRasInfo
  *
- *  @platform{gpu_bm_linux} @platform{host} @platform{guest_1vf}
- *  @platform{guest_mvf}
+ *  @platform{gpu_bm_linux} @platform{host} @platform{guest_1vf} @platform{guest_mvf}
  *
  *  @details A utility function which retrieves the AFIDs from the CPER record.
  *
@@ -4393,12 +4728,11 @@ amdsmi_status_t amdsmi_get_gpu_ras_feature_info(amdsmi_processor_handle processo
  *
  *  @param[in] processor_handle PF of a processor to query.
  *
- *  @param[in] array_length Length of the array where the library will
- *  copy the data.
+ *  @param[in,out] bad_page_size On input, length of the @p bad_pages array
+ *  allocated by the caller. On output, the number of bad page records
+ *  written by the library.
  *
- *  @param[out] bad_page_count Number of bad page records.
- *
- *  @param[out] info Reference to the eeprom table record structure.
+ *  @param[out] bad_pages Reference to the eeprom table record structure.
  *  Must be allocated by user.
  *
  *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
@@ -4437,8 +4771,6 @@ amdsmi_status_t amdsmi_get_gpu_ras_policy_info(amdsmi_processor_handle processor
  * with device @p processor_handle and store the value at location pointed to by
  * @p threshold.
  *
- * @note This function requires the admin/sudo privileges on @platform{gpu_bm_linux}
- *
  * @param[in] processor_handle a processor handle
  *
  * @param[in,out] threshold pointer to location where  bad page threshold value will
@@ -4451,6 +4783,43 @@ amdsmi_status_t amdsmi_get_gpu_ras_policy_info(amdsmi_processor_handle processor
  * @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
  */
 amdsmi_status_t amdsmi_get_bad_page_threshold(amdsmi_processor_handle processor_handle, uint32_t *threshold);
+
+/**
+ *  @brief Retrieve CPER entries for UALoE fabric events
+ *
+ *  @ingroup tagRasInfo
+ *
+ *  @platform{gpu_bm_linux} @platform{host}
+ *
+ *  @details Returns CPER-formatted error records for UALoE netport link events.
+ *  Uses the same CPER format and calling conventions as
+ *  amdsmi_get_gpu_cper_entries() so callers can handle both GPU and
+ *  fabric CPERs with identical code paths.
+ *
+ *  @param[in] processor_handle GPU processor handle.
+ *  @param[in] severity_mask The severity mask of the entries to be retrieved.
+ *
+ *  @param[in,out] cper_data Caller-allocated buffer for raw CPER data.
+ *                 Records are packed back-to-back.
+ *
+ *  @param[in,out] buf_size [in] size of cper_data buffer in bytes.
+ *                 [out] actual bytes written.
+ *
+ *  @param[in,out] cper_hdrs Array of pointers into cper_data, one per
+ *                 returned entry. Caller allocates the array.
+ *
+ *  @param[out] entry_count Number of CPER entries returned.
+ *
+ *  @param[in,out] cursor [in] cursor from previous call (0 = start).
+ *                 [out] cursor for next call.
+ *
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success,
+ *          ::AMDSMI_STATUS_MORE_DATA if entries returned but more remain,
+ *          non-zero on fail
+ */
+amdsmi_status_t
+amdsmi_get_fabric_cper_entries(amdsmi_processor_handle processor_handle, uint32_t severity_mask, char *cper_data,
+                               uint64_t *buf_size, amdsmi_cper_hdr_t** cper_hdrs, uint64_t *entry_count, uint64_t *cursor);
 
 /** @} End tagRasInfo */
 
@@ -4721,6 +5090,21 @@ amdsmi_get_vf_info(amdsmi_vf_handle_t vf_handle, amdsmi_vf_info_t *config);
 amdsmi_status_t
 amdsmi_get_vf_data(amdsmi_vf_handle_t vf_handle, amdsmi_vf_data_t *info);
 
+/**
+ *  @brief Returns the HBM information for a VF.
+ *
+ *  @ingroup tagVFConfig
+ *
+ *  @platform{host}
+ *
+ *  @param[in] vf_handle Handle of the VF to query.
+ *
+ *  @param[out] info Reference to the HBM info. Must be allocated by user.
+ *
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
+ */
+amdsmi_status_t amdsmi_get_vf_hbm_info(amdsmi_vf_handle_t vf_handle, amdsmi_vf_hbm_info_t *info);
+
 /** @} End tagVFConfig */
 
 /*****************************************************************************/
@@ -4899,6 +5283,145 @@ amdsmi_status_t amdsmi_set_num_vf(amdsmi_processor_handle processor_handle, uint
 /** @} End tagVFManagement */
 
 /*****************************************************************************/
+/** @defgroup tagConfidentialCompute Confidential Compute
+ *  @{
+ */
+
+/**
+ * @brief Gets TDI (TEE(Trusted Execution Environment) Device Interface) state
+ *
+ * @ingroup tagConfidentialCompute
+ *
+ * @platform{host}
+ *
+ * @param[in] vf_handle VF handle for which to query
+ *
+ * @param[out] state Enum representing TDI state
+ *
+ * @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
+ */
+amdsmi_status_t amdsmi_get_tdi_state(amdsmi_vf_handle_t vf_handle, amdsmi_tdi_state_t *state);
+
+/**
+ * @brief Gets CC (Confidential Compute) mode
+ *
+ * @ingroup tagConfidentialCompute
+ *
+ * @platform{host}
+ *
+ * @param[in] processor_handle PF of a processor for which to query
+ *
+ * @param[out] mode Enum representing confidential compute mode
+ *
+ * @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
+ */
+amdsmi_status_t amdsmi_get_cc_mode(amdsmi_processor_handle processor_handle, amdsmi_cc_mode_t *mode);
+
+/**
+ * @brief Sets CC (Confidential Compute) mode
+ *
+ * @ingroup tagConfidentialCompute
+ *
+ * @platform{host}
+ *
+ * @param[in] processor_handle PF of a processor for which to query
+ *
+ * @param[in] mode Enum representing confidential compute mode to set
+ *
+ * @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
+ */
+amdsmi_status_t amdsmi_set_cc_mode(amdsmi_processor_handle processor_handle, amdsmi_cc_mode_t mode);
+
+/** @} End tagConfidentialCompute */
+
+/*****************************************************************************/
+/** @defgroup tagFabric Fabric (The Fabric used for scale up networking)
+ *  @{
+ */
+
+/**
+ *  @brief Get Fabric device information
+ *
+ *  @ingroup tagFabric
+ *
+ *  @platform{gpu_bm_linux} @platform{host}
+ *
+ *  @details This function retrieves Fabric device information for the specified
+ *  processor handle, including the BDF (Bus, Device, Function) identifier.
+ *
+ *  @param[in] processor_handle - Handle for the target processor
+ *
+ *  @param[out] info - Pointer to Fabric information structure to be populated.
+ *  Must be allocated by user.
+ *
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
+ */
+amdsmi_status_t amdsmi_get_gpu_fabric_info(amdsmi_processor_handle processor_handle,
+                                           amdsmi_fabric_info_t *info);
+
+/**
+ *  @brief Allocate storage for Fabric telemetry data
+ *
+ *  @ingroup tagFabric
+ *
+ *  @platform{gpu_bm_linux} @platform{host}
+ *
+ *  @details This function allocates storage for Fabric telemetry data for the
+ *  specified categories. The allocated storage can be reused for multiple
+ *  telemetry retrievals.
+ *
+ *  @param[in] processor_handle - Handle for the target processor
+ *
+ *  @param[in] category_mask - Bitmask of telemetry categories to allocate,
+ *  constructed using AMDSMI_FABRIC_TELEMETRY_CATEGORY_MASK(cat)
+ *
+ *  @param[out] telemetry - Pointer to allocated telemetry structure
+ *
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
+ */
+amdsmi_status_t amdsmi_alloc_fabric_telemetry(amdsmi_processor_handle processor_handle,
+                                              uint32_t category_mask, amdsmi_fabric_telemetry_t **telemetry);
+
+/**
+ *  @brief Get Fabric telemetry data
+ *
+ *  @ingroup tagFabric
+ *
+ *  @platform{gpu_bm_linux} @platform{host}
+ *
+ *  @details This function retrieves the latest Fabric telemetry data snapshot
+ *  into pre-allocated storage.
+ *
+ *  @param[in] processor_handle - Handle for the target processor
+ *
+ *  @param[in,out] telemetry - Pre-allocated telemetry structure to populate
+ *
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
+ */
+amdsmi_status_t amdsmi_get_fabric_telemetry_data(amdsmi_processor_handle processor_handle,
+                                                 amdsmi_fabric_telemetry_t *telemetry);
+
+/**
+ *  @brief Free Fabric telemetry storage
+ *
+ *  @ingroup tagFabric
+ *
+ *  @platform{gpu_bm_linux} @platform{host}
+ *
+ *  @details This function frees the storage allocated for Fabric telemetry data.
+ *
+ *  @param[in] processor_handle - Handle for the target processor
+ *
+ *  @param[in] telemetry - Telemetry structure to free
+ *
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
+ */
+amdsmi_status_t amdsmi_free_fabric_telemetry(amdsmi_processor_handle processor_handle,
+                                             amdsmi_fabric_telemetry_t *telemetry);
+
+/** @} End tagFabric */
+
+/*****************************************************************************/
 /** @defgroup tagNicInfo NIC Information
  *  @{
  */
@@ -4918,6 +5441,25 @@ amdsmi_status_t amdsmi_set_num_vf(amdsmi_processor_handle processor_handle, uint
  *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
  */
 amdsmi_status_t amdsmi_get_nic_driver_info(amdsmi_processor_handle processor_handle, amdsmi_nic_driver_info_t *info);
+
+/**
+ *  @brief Retrieves firmware version information for the NIC
+ *
+ *  @ingroup tagNicInfo
+ *
+ *  @platform{host} @platform{gpu_bm_linux}
+ *
+ *  @note This API depends on libmnl. If libmnl is not installed on the
+ *  system, this function returns ::AMDSMI_STATUS_NOT_SUPPORTED.
+ *
+ *  @param[in] processor_handle NIC for which to query
+ *
+ *  @param[out] info reference to the nic firmware info struct.
+ *  Must be allocated by user.
+ *
+ *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
+ */
+amdsmi_status_t amdsmi_get_nic_fw_info(amdsmi_processor_handle processor_handle, amdsmi_nic_fw_info_t *info);
 
 /**
  *  @brief Retrieves ASIC information for the NIC
@@ -5077,25 +5619,6 @@ amdsmi_status_t amdsmi_get_nic_vendor_statistics(amdsmi_processor_handle process
  */
 amdsmi_status_t amdsmi_get_nic_rdma_port_statistics(amdsmi_processor_handle processor_handle, uint32_t rdma_port_index,
                                                     uint32_t *num_stats, amdsmi_nic_stat_t *stats);
-
-/**
- *  @brief Retrieve the link topology type information between nic and processor
- *
- *  @ingroup tagNicInfo
- *
- *  @platform{host} @platform{gpu_bm_linux}
- *
- *  @param[in] nic_handle NIC for which to query
- *
- *  @param[in] processor_handle PF of a processor for which to query
- *
- *  @param[out] type reference of the link topology type enum.
- *  Must be allocated by user.
- *
- *  @return ::amdsmi_status_t | ::AMDSMI_STATUS_SUCCESS on success, non-zero on fail
- */
-amdsmi_status_t amdsmi_topo_get_nic_link_type(amdsmi_processor_handle nic_handle,
-                                              amdsmi_processor_handle processor_handle, amdsmi_nic_link_type_t *type);
 
 /** @} End tagNicInfo */
 

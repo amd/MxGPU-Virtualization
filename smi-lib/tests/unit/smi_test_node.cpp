@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "gtest/gtest.h"
@@ -41,6 +24,7 @@ protected:
 	{
 		SMI_ASSERT_EQ(static_cast<int>(expect.status), static_cast<int>(actual.status));
 		SMI_ASSERT_EQ(expect.limit, actual.limit);
+		SMI_ASSERT_EQ(expect.ubb_power_threshold, actual.ubb_power_threshold);
 
 		return ::testing::AssertionSuccess();
 	}
@@ -142,6 +126,7 @@ TEST_F(AmdSmiNodeTests, GetNpmInfoMockedSuccess)
 	smi_npm_info mocked_npm_info;
 	mocked_npm_info.status = SMI_NPM_STATUS_ENABLED;
 	mocked_npm_info.limit = 100;
+	mocked_npm_info.ubb_power_threshold = 500;
 
 	WhenCalling(std::bind(&amdsmi_get_npm_info, &NODE_MOCK_HANDLE, &npm_info));
 	ExpectCommand(SMI_CMD_CODE_GET_GPU_NPM_INFO);

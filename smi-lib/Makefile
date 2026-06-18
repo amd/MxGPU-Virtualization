@@ -1,23 +1,7 @@
+# Copyright Advanced Micro Devices, Inc.
 #
-# Copyright (c) 2019-2025 Advanced Micro Devices, Inc. All rights reserved.
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
+# SPDX-License-Identifier: MIT
+
 include make/linux/defines.mk
 export ASAN_OPTIONS=verify_asan_link_order=0
 BUILD_TYPE ?= Release
@@ -27,6 +11,19 @@ THREAD_SANITIZER ?= False
 ADDRESS_SANITIZER ?= False
 CPPTOOL_BUILD ?= False
 ENABLE_GCOV ?= False
+
+# Auto-detect UALOE support based on presence of the ualoe-lib/ source tree.
+# When present (and netlink libs are installed) we build the real fabric
+# telemetry implementation; otherwise we fall back to src/amdsmi_ualoe_stub.c
+# which makes the fabric telemetry APIs return AMDSMI_STATUS_NOT_SUPPORTED.
+HAS_UALOE := $(if $(wildcard ualoe-lib/ualoe_lib),True,False)
+ifeq ($(HAS_UALOE), True)
+  HAS_NETLINK := $(shell pkg-config --exists libnl-3.0 libnl-genl-3.0 libmnl 2>/dev/null && echo True)
+  ifneq ($(HAS_NETLINK), True)
+    $(warning UALOE source tree present but netlink dev packages (libnl-3.0, libnl-genl-3.0, libmnl) not installed; building without fabric telemetry support. Install the netlink dev packages to enable it.)
+    HAS_UALOE := False
+  endif
+endif
 
 ifeq ($(BUILD_TYPE), Debug)
   LOGGING = True
@@ -43,9 +40,16 @@ endif
 $(info SMI-LIB BUILD_TYPE: $(BUILD_TYPE))
 $(info SMI-LIB THREAD_SAFE: $(THREAD_SAFE))
 $(info SMI-Lib LOGGING: $(LOGGING))
+$(info SMI-Lib NIC support: $(AMD_SMI_NIC_SUPPORT))
+$(info SMI-Lib UALOE support (auto-detected): $(HAS_UALOE))
 AMDSMI_BUILD_DIR := $(BUILD_DIR)/amdsmi
 OUTPUT_DIR := $(AMDSMI_BUILD_DIR)/$(BUILD_TYPE)
 PACKAGE_OUTPUT_DIR := $(AMDSMI_BUILD_DIR)/package/$(BUILD_TYPE)/amdsmi
+
+# Configuration tracking - automatically rebuild when config changes
+CONFIG_STAMP := $(OUTPUT_DIR)/.config.stamp
+CONFIG_VARS := HAS_UALOE=$(HAS_UALOE) BUILD_TYPE=$(BUILD_TYPE) THREAD_SAFE=$(THREAD_SAFE) AMD_SMI_NIC_SUPPORT=$(AMD_SMI_NIC_SUPPORT)
+
 DOCS_OUTPUT_DIR := $(AMDSMI_BUILD_DIR)/docs
 DOXYGEN_OUTPUT_DIR := $(DOCS_OUTPUT_DIR)/doxygen
 HOOKS_DIR := $(PROJECT_ROOT)/../.git/hooks
@@ -56,21 +60,42 @@ endif
 ifeq ($(AMD_SMI_NIC_SUPPORT), True)
 EXCLUDE_SRCS := amdsmi_nic_stub.c
 endif
+ifeq ($(HAS_UALOE), True)
+EXCLUDE_SRCS += amdsmi_ualoe_stub.c
+endif
 SRCS := $(filter-out $(EXCLUDE_SRCS),$(notdir $(wildcard $(SOURCE_DIR)/*.c)))
 SRCS_ACA := $(filter-out $(EXCLUDE_SRCS),$(notdir $(wildcard $(SOURCE_DIR)/aca-decode/*.c)))
+ifeq ($(HAS_UALOE), True)
+SRCS_UALOE := $(notdir $(wildcard ualoe-lib/ualoe_lib/*.c))
+SRCS_UALOE += $(notdir $(wildcard $(SOURCE_DIR)/ualoe/*.c))
+else
+SRCS_UALOE :=
+endif
 SRCS += $(addprefix $(LIN_HOST_FOLDER)/,$(notdir $(wildcard $(LIN_SOURCE_DIR)/*.c)))
 ifeq ($(AMD_SMI_NIC_SUPPORT), True)
 SRCS += $(filter-out $(EXCLUDE_SRCS),$(notdir $(wildcard $(SOURCE_DIR)/nic/*.c)))
 endif
 OBJS := $(addprefix ${OUTPUT_DIR}/,$(SRCS:.c=.c.o))
 OBJS += $(addprefix ${OUTPUT_DIR}/,$(SRCS_ACA:.c=.c.o))
+OBJS += $(addprefix ${OUTPUT_DIR}/,$(SRCS_UALOE:.c=.c.o))
 OBJS  += $(GIM_COMS_OBJS)
 DEPS := $(OBJS:.o=.d)
 LIBNAME := libamdsmi
 DYNAMICLIB_TARGET := $(LIBNAME).so
 INCLUDE := $(addprefix -I,$(INCLUDE_DIR) $(INCLUDE_DIR)/aca-decode/ $(INTERFACE_DIR) $(LIN_HOST_INCLUDE_DIR) $(GIM_COMS_INCLUDE_DIR) $(NIC_INCLUDE_DIR) $(NIC_INTERFACE_DIR) $(SOURCE_DIR)/nic)
+ifeq ($(HAS_UALOE), True)
+INCLUDE += $(addprefix -I,ualoe-lib/ualoe_lib ualoe-lib/include $(SOURCE_DIR)/ualoe)
+endif
 INCLUDE += $(HOST_INCLUDE_FLAGS)
 CFLAGS  = $(DEFAULT_CFLAGS) $(INCLUDE) -fPIC
+ifeq ($(HAS_UALOE), True)
+# Add libnl dependencies for ualoe
+CFLAGS += $(shell pkg-config --cflags libnl-3.0 libnl-genl-3.0 libmnl)
+CFLAGS += -DENABLE_UALOE
+UALOE_LIBS := $(shell pkg-config --libs libnl-3.0 libnl-genl-3.0 libmnl)
+else
+UALOE_LIBS :=
+endif
 VERSION_FILE := VERSION
 VERSION_MAJOR := $(shell grep 'major=' $(VERSION_FILE) | cut -d '=' -f 2)
 VERSION_MINOR := $(shell grep 'minor=' $(VERSION_FILE) | cut -d '=' -f 2)
@@ -82,6 +107,7 @@ VERSION_LIB := AMDSMI_VERSION_MAJOR=$(VERSION_MAJOR) AMDSMI_VERSION_MINOR=$(VERS
 DYNAMICLIB_FLAGS = -Wl,-soname,libamdsmi.so
 DYNAMICLIB_FLAGS += -Wl,-rpath,'$$ORIGIN:/usr/local/lib'
 DYNAMICLIB_FLAGS += $(HOST_DYNAMIC_FLAGS)
+DYNAMICLIB_FLAGS += $(UALOE_LIBS)
 GCC_MAJOR := $(shell $(CXX) -dumpversion | cut -d. -f1)
 ifeq ($(shell test $(GCC_MAJOR) -lt 9; echo $$?),0)
     DYNAMICLIB_FLAGS += -lstdc++fs
@@ -134,8 +160,24 @@ endif
 # Build everything
 .PHONY: all
 all: $(ALL_DEPS)
+ifeq ($(HAS_UALOE), True)
+vpath %.c $(SOURCE_DIR) $(SOURCE_DIR)/aca-decode/ $(SOURCE_DIR)/nic/ $(SOURCE_DIR)/ualoe/ ualoe-lib/ualoe_lib
+else
 vpath %.c $(SOURCE_DIR) $(SOURCE_DIR)/aca-decode/ $(SOURCE_DIR)/nic/
-$(OBJS): Makefile
+endif
+
+# Configuration stamp file rule - detects config changes and forces rebuild
+$(CONFIG_STAMP): | $(OUTPUT_DIR)
+	@echo "$(CONFIG_VARS)" > $@.tmp
+	@if ! cmp -s $@.tmp $@ 2>/dev/null; then \
+		echo "Configuration changed, forcing rebuild..."; \
+		$(RM) -rf $(OBJS) $(DEPS); \
+		mv $@.tmp $@; \
+	else \
+		$(RM) $@.tmp; \
+	fi
+
+$(OBJS): Makefile $(CONFIG_STAMP)
 -include $(DEPS)
 ifeq ($(AMD_SMI_NIC_SUPPORT), True)
 $(NIC_DIR)/build/libamdsminic.a:
@@ -145,13 +187,26 @@ $(OUTPUT_DIR)/%.c.o: $(SOURCE_DIR)/%.c | $(OUTPUT_DIR)
 	$(CC) $(CFLAGS) -DBUILD_TYPE=$(BUILD_TYPE) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
 $(OUTPUT_DIR)/%.c.o: $(SOURCE_DIR)/aca-decode/%.c | $(OUTPUT_DIR)
 	$(CC) $(CFLAGS) -DBUILD_TYPE=$(BUILD_TYPE) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
+ifeq ($(HAS_UALOE), True)
+$(OUTPUT_DIR)/%.c.o: ualoe-lib/ualoe_lib/%.c | $(OUTPUT_DIR)
+	$(CC) $(CFLAGS) -DUALOE_NETLINK -DCFG_MOCK -Wno-unused-variable -Wno-unused-parameter -Wno-conversion -Wno-enum-conversion -Wno-sign-compare -Wno-stringop-truncation -DBUILD_TYPE=$(BUILD_TYPE) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
+$(OUTPUT_DIR)/%.c.o: $(SOURCE_DIR)/ualoe/%.c | $(OUTPUT_DIR)
+	$(CC) $(CFLAGS) -DBUILD_TYPE=$(BUILD_TYPE) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
+endif
 ifeq ($(AMD_SMI_NIC_SUPPORT), True)
 $(OUTPUT_DIR)/%.c.o: $(SOURCE_DIR)/nic/%.c | $(OUTPUT_DIR)
 	$(CC) $(CFLAGS) -DBUILD_TYPE=$(BUILD_TYPE) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
 endif
 ifeq ($(AMD_SMI_NIC_SUPPORT), True)
+SMI_NL_LIB := $(NIC_DIR)/build/nl/build/libnl.a
+LIBMNL_AVAILABLE := $(shell pkg-config --exists libmnl 2>/dev/null && echo yes || echo no)
+SMI_NIC_LINK_LIBS := $(NIC_DIR)/build/libamdsminic.a $(SMI_NL_LIB)
+ifeq ($(LIBMNL_AVAILABLE), yes)
+SMI_NIC_LINK_LIBS += -lmnl
+endif
+SMI_NIC_LINK_LIBS += -ldl
 $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET): $(OBJS) $(NIC_DIR)/build/libamdsminic.a | $(OUTPUT_DIR)
-	$(CXX) -shared -o $@ $^ $(DYNAMICLIB_FLAGS) $(NIC_DIR)/build/libamdsminic.a
+	$(CXX) -shared -o $@ $^ $(DYNAMICLIB_FLAGS) $(SMI_NIC_LINK_LIBS)
 else
 $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET): $(OBJS) | $(OUTPUT_DIR)
 	$(CXX) -shared -o $@ $^ $(DYNAMICLIB_FLAGS)
@@ -220,7 +275,7 @@ install-hooks:
 
 .PHONY: clean
 clean:
-	$(RM) -rf $(OBJS) $(AMDSMI_BUILD_DIR) $(DEPS)
+	$(RM) -rf $(OBJS) $(AMDSMI_BUILD_DIR) $(DEPS) $(CONFIG_STAMP)
 	$(MAKE) -C $(TEST_DIR)/ clean AMD_SMI_NIC_SUPPORT=$(AMD_SMI_NIC_SUPPORT)
 	$(MAKE) -C $(EXAMPLES_DIR)/ clean AMD_SMI_NIC_SUPPORT=$(AMD_SMI_NIC_SUPPORT)
 ifeq ($(AMD_SMI_NIC_SUPPORT), True)

@@ -170,6 +170,10 @@ Commands that do and their arguments are:
   * `--fw-list`
           All firmware list information
 
+* `--nic=<nic_index from list, nic_bdf>`
+    Gets firmware information about the specified NIC
+    If no argument is provided, returns information for all NICs on the system
+
 ### bad-pages
 
 * `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`
@@ -269,7 +273,7 @@ Commands that do and their arguments are:
     Displays NIC-GPU link topology information
     If no argument is provided, returns information for all NICs on the system
   * `--link-type`
-            NIC-GPU link type (PCIE, NUMA, X-NUMA, or UNKNOWN)
+            NIC-GPU link type (PCIE, NUMA, XNUMA, or UNKNOWN)
   * `--numa`
             NUMA node information for NICs
 

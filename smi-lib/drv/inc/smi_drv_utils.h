@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2024-2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef __SMI_DRV_UTILS_H__
@@ -28,6 +11,7 @@
 #include "smi_drv_core.h"
 #include "smi_drv_core_api.h"
 #include "amdgv_gpumon.h"
+
 
 /* Bad page timestamp format
  * yy[31:27] mm[26:23] day[22:17] hh[16:12] mm[11:6] ss[5:0]
@@ -424,6 +408,51 @@ enum smi_vf_sched_state smi_map_sched_state(enum amdgv_sched_state state);
 enum smi_npm_status smi_map_npm_status(enum AMDGV_GPU_NPM_STATUS amdgv_npm_status);
 
 /**
+ * @brief Maps an enum representing a LibGV TDI state to an int representing an SMI TDI state.
+ *
+ * This function takes an enum value representing a LibGV TDI (Trusted Device Interface) state and maps it to an
+ * equivalent int value representing an SMI TDI state. The mapping is performed based on
+ * predefined set of rules. If the provided LibGV TDI state does not match any of the
+ * predefined values, it returns INT_MAX.
+ *
+ * @param[in] state The enum value representing LibGV TDI state.
+ * @return The int value representing the corresponding mapped SMI TDI state, or INT_MAX if no match.
+ *
+ * @note This function returns INT_MAX for unrecognized TDI states to avoid returning an invalid value.
+ */
+int smi_map_tdi_state(enum amdgv_tdi_state state);
+
+/**
+ * @brief Maps an enum representing a LibGV CC mode to an int representing an SMI CC mode.
+ *
+ * This function takes an enum value representing a LibGV CC mode and maps it to an
+ * equivalent int value representing an SMI CC mode. The mapping is performed based on
+ * predefined set of rules. If the provided LibGV CC mode does not match any of the
+ * predefined values, it returns INT_MAX.
+ *
+ * @param[in] mode The enum value representing LibGV CC mode.
+ * @return The int value representing the corresponding mapped SMI CC mode, or INT_MAX if no match.
+ *
+ * @note This function returns INT_MAX for unrecognized CC modes to avoid returning an invalid value.
+ */
+int smi_map_cc_mode(enum amdgv_cc_mode mode);
+
+/**
+ * @brief Maps an enum representing an SMI CC mode to an enum representing a LibGV CC mode.
+ *
+ * This function takes an enum value representing an SMI CC mode and maps it to an
+ * equivalent int value representing a LibGV CC mode. The mapping is performed based on
+ * predefined set of rules. If the provided SMI CC mode does not match any of the
+ * predefined values, it returns INT_MAX.
+ *
+ * @param[in] mode The int value representing SMI CC mode.
+ * @return The int value representing the corresponding mapped LibGV CC mode, or INT_MAX if no match.
+ *
+ * @note This function returns INT_MAX for unrecognized CC modes to avoid returning an invalid value.
+ */
+int smi_map_cc_mode_reverse(enum smi_cc_mode_t mode);
+
+/**
  * @brief Maps an enum representing a LibGV ptl format type to an enum representing an SMI ptl format type.
  *
  * This function takes an enum value representing a LibGV ptl format type and maps it to an
@@ -438,5 +467,41 @@ enum smi_npm_status smi_map_npm_status(enum AMDGV_GPU_NPM_STATUS amdgv_npm_statu
  * are compatible and represent similar concepts.
  */
 enum smi_ptl_data_format smi_map_ptl_format(enum amdgv_ptl_format_type drv_fmt);
+
+/**
+ * @brief Maps a LibGV UAL link type to an SMI fabric type.
+ *
+ * If the provided LibGV value does not match any known link type, it is
+ * mapped to SMI_FABRIC_TYPE_UNKNOWN.
+ *
+ * @param[in] type The LibGV UAL link type.
+ * @return The corresponding SMI fabric type.
+ */
+enum smi_fabric_type smi_map_fabric_type(enum amdgv_gpumon_ual_link_type type);
+
+/**
+ * @brief Maps a LibGV UAL NPA address mode to an SMI fabric NPA address mode.
+ *
+ * If the provided LibGV value does not match any known address mode, it is
+ * mapped to SMI_FABRIC_NPA_ADDRESS_MODE_UNKNOWN.
+ *
+ * @param[in] mode The LibGV UAL NPA address mode.
+ * @return The corresponding SMI fabric NPA address mode.
+ */
+enum smi_fabric_npa_address_mode smi_map_fabric_npa_address_mode(
+	enum amdgv_gpumon_ual_npa_address_mode mode);
+
+/**
+ * @brief Maps a LibGV UAL accelerator vPoD state to an SMI fabric
+ * accelerator vPoD state.
+ *
+ * If the provided LibGV value does not match any known state, it is mapped
+ * to SMI_FABRIC_ACCELERATOR_VPOD_STATE_UNKNOWN.
+ *
+ * @param[in] state The LibGV UAL accelerator vPoD state.
+ * @return The corresponding SMI fabric accelerator vPoD state.
+ */
+enum smi_fabric_accelerator_vpod_state smi_map_fabric_accelerator_vpod_state(
+	enum amdgv_gpumon_ual_accelerator_vpod_state state);
 
 #endif // __SMI_DRV_UTILS_H__

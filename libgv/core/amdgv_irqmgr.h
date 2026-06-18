@@ -1,27 +1,12 @@
-/*
- * Copyright (c) 2017-2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef AMDGV_IRQMGR_H
 #define AMDGV_IRQMGR_H
+
+#include "amdgv_api.h"
 
 /* src_id */
 #define IH_IV_SRCID_DF			   0x0 // 0
@@ -29,17 +14,22 @@
 #define IH_IV_SRCID_BIF_PF_VF_MSGBUF_ACK   0x00000088 // 136
 #define IH_IV_SRCID_BIF_VF_PF_MSGBUF_VALID 0x00000089 // 137
 #define IH_IV_SRCID_BIF_VF_PF_MSGBUF_ACK   0x0000008a // 138
-#define IH_IV_SRCID_DF_MCA_INT		   0xFF0003aa // 1170
+#define IH_IV_SRCID_MP0_IH_SW_INT	   	   0x000000FF	//255
+#define IH_IV_SRCID_DF_MCA_INT		   	   0xFF0003aa // 1170
 
 #define IH_IV_SRCID_RLC_GC_FED_INTERRUPT   0x80
+
+#define IH_IV_SRCID_RLC_GC_FED_COOKIE     0xCB
 
 #define IH_IV_CLIENTID_DF    0x17
 #define IH_IV_CLIENTID_VMC   0x12
 #define IH_IV_CLIENTID_UTCL2 0x1B
+#define IH_IV_CLIENTID_MP0	 0x1E
 #define IH_IV_CLIENTID_MP1   0x1F
 
 /* ClientID for SOC21 */
 #define IH_IV_CLIENTID_GFX   0xA
+#define IH_IV_CLIENTID_RLC   0x7
 
 struct amdgv_ih_ring {
 	volatile uint32_t       *ring;
@@ -107,6 +97,11 @@ struct amdgv_ih_funcs {
 	void (*start_gpu_timer)(struct amdgv_adapter *adapt, uint64_t micro_seconds);
 };
 
+struct amdgv_virtualized_interrupt_info {
+	uint8_t table_entry_update;
+	uint32_t *msix_tab;
+};
+
 struct amdgv_irqmgr {
 	bool			    disable_parse_ih;
 	struct oss_intr_regrt_info *intr_regrt_info;
@@ -133,6 +128,11 @@ struct amdgv_irqmgr {
 	uint32_t ih_queue_rptr; /* rptr ih queue */
 	uint32_t ih_queue_wptr; /* wptr ih queue */
 	struct amdgv_iv_entry *ih_queue; /* ih queue, default is 256 entries */
+
+	void (*write_virtualized_interrupt)(struct amdgv_adapter *adapt, uint32_t vfIndex, uint32_t tableIndex, uint64_t messageAddress, uint32_t messageData, uint32_t vectorControl, bool is_direct_write);
+	void (*update_virtualized_interrupt)(struct amdgv_adapter *adapt, uint32_t vfIndex);
+
+	struct amdgv_virtualized_interrupt_info virtualized_interrupt_info_db[AMDGV_MAX_VF_NUM];
 };
 
 int amdgv_ih_ring_init(struct amdgv_adapter *adapt, unsigned ring_size, bool use_bus_addr);
@@ -170,5 +170,11 @@ void amdgv_irqmgr_register_gpu_timer_handler(struct amdgv_adapter *adapt, void *
 
 void amdgv_irqmgr_enable_hw_interrupt(struct amdgv_adapter *adapt);
 void amdgv_irqmgr_disable_hw_interrupt(struct amdgv_adapter *adapt);
+
+void amdgv_irqmgr_decode_iv(struct amdgv_adapter *adapt, struct amdgv_iv_entry *entry);
+
+int amdgv_irqmgr_write_virtualized_interrupt(struct amdgv_adapter *adapt, uint32_t vfIndex, uint32_t tableIndex,
+		uint64_t messageAddress, uint32_t messageData, uint32_t vectorControl, bool is_direct_write);
+void amdgv_irqmgr_update_virtualized_interrupt(struct amdgv_adapter *adapt, uint32_t vfIndex);
 
 #endif

@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <stdio.h>
@@ -32,6 +15,7 @@
 #include <netinet/ip.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
+#include <dirent.h>
 #include <sys/socket.h>
 
 #include "gim_ioctl.h"
@@ -269,12 +253,74 @@ static int gim_kernel_mode_close(int fd)
 	return 0;
 }
 
+/* Detect a running process by name by reading /proc/<pid>/comm directly. */
+static bool gim_is_process_running(const char *name)
+{
+	DIR *proc_dir;
+	struct dirent *entry;
+	char comm_path[MAX_BUFFER_SIZE];
+	char comm[MAX_BUFFER_SIZE];
+	FILE *fp;
+	bool found = false;
+
+	proc_dir = opendir("/proc");
+	if (proc_dir == NULL)
+		return false;
+
+	while ((entry = readdir(proc_dir)) != NULL) {
+		if (entry->d_name[0] < '0' || entry->d_name[0] > '9')
+			continue;
+
+		snprintf(comm_path, sizeof(comm_path), "/proc/%s/comm",
+			entry->d_name);
+		fp = fopen(comm_path, "r");
+		if (fp == NULL)
+			continue;
+
+		if (fgets(comm, sizeof(comm), fp) != NULL) {
+			comm[strcspn(comm, "\n")] = '\0';
+			if (strcmp(comm, name) == 0)
+				found = true;
+		}
+		fclose(fp);
+
+		if (found)
+			break;
+	}
+
+	closedir(proc_dir);
+	return found;
+}
+
+/* Detect a loaded kernel module by name by reading /proc/modules directly. */
+static bool gim_is_module_loaded(const char *name)
+{
+	FILE *fp;
+	char line[MAX_BUFFER_SIZE];
+	char mod_name[MAX_BUFFER_SIZE];
+	bool found = false;
+
+	fp = fopen("/proc/modules", "r");
+	if (fp == NULL)
+		return false;
+
+	while (fgets(line, sizeof(line), fp) != NULL) {
+		if (sscanf(line, "%1023s", mod_name) != 1)
+			continue;
+		/* Match the whole module name; a substring match would
+		 * falsely match names that merely contain it (e.g. "gim_foo"). */
+		if (strcmp(mod_name, name) == 0) {
+			found = true;
+			break;
+		}
+	}
+
+	fclose(fp);
+	return found;
+}
+
 struct gim_ioctl *gim_get_ioctl(void)
 {
-	char command[MAX_BUFFER_SIZE];
-	char output[MAX_BUFFER_SIZE];
-	FILE *fp;
-	char *result;
 	static struct gim_ioctl *ioctl_wrapper = NULL;
 
 	static struct gim_ioctl user_mode_ioctl = {
@@ -295,32 +341,14 @@ struct gim_ioctl *gim_get_ioctl(void)
 
 	if (ioctl_wrapper == NULL) {
 		/* check if gim user mode application is loaded */
-		snprintf(command, sizeof(command), "pgrep %s", GIM_USER_MODE_DRIVER);
-		fp = popen(command, "r");
-		if (fp != NULL) {
-			result = fgets(output, sizeof(output), fp);
-			if (result != NULL) {
-				if (strlen(output) > 0) {
-					pclose(fp);
-					ioctl_wrapper = &user_mode_ioctl;
-					goto exit_end;
-				}
-			}
-			pclose(fp);
+		if (gim_is_process_running(GIM_USER_MODE_DRIVER)) {
+			ioctl_wrapper = &user_mode_ioctl;
+			goto exit_end;
 		}
 
 		/* check if gim kernel mode driver is loaded */
-		snprintf(command, sizeof(command), "lsmod | grep %s",
-			GIM_KERNEL_MODE_DRIVER);
-		fp = popen(command, "r");
-		if (fp != NULL) {
-			result = fgets(output, sizeof(output), fp);
-			if (result != NULL) {
-				if (strlen(output) > 0)
-					ioctl_wrapper = &kernel_mode_ioctl;
-			}
-			pclose(fp);
-		}
+		if (gim_is_module_loaded(GIM_KERNEL_MODE_DRIVER))
+			ioctl_wrapper = &kernel_mode_ioctl;
 	}
 
 exit_end:

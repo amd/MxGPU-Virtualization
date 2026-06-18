@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_device.h"
@@ -81,7 +64,7 @@ int amdgv_guard_dec_active_event(struct amdgv_adapter *adapt, uint32_t idx_vf,
 		event->active--;
 	oss_spin_unlock_irq(event->lock);
 
-	AMDGV_INFO("Decremented active event %s for %s\n", event->name,
+	AMDGV_DEBUG("Decremented active event %s for %s\n", event->name,
 		   amdgv_idx_to_str(idx_vf));
 
 	return 0;
@@ -176,6 +159,10 @@ static void amdgv_guard_set_event_default_interval(struct amdgv_monitor_event *e
 	case AMDGV_GUARD_EVENT_RAS_CHK_CRITI:
 		event->interval = AMDGV_DEFAULT_RAS_TELEMETRY_INTERVAL;
 		break;
+
+	case AMDGV_GUARD_EVENT_RAS_REMOTE_CMD:
+		event->interval = AMDGV_DEFAULT_RAS_REMOTE_CMD_INTERVAL;
+		break;
 	}
 }
 
@@ -218,6 +205,10 @@ static void amdgv_guard_set_event_default_threshold(struct amdgv_monitor_event *
 	case AMDGV_GUARD_EVENT_RAS_CHK_CRITI:
 		event->threshold = AMDGV_DEFAULT_RAS_TELEMETRY_THRESHOLD;
 		break;
+
+	case AMDGV_GUARD_EVENT_RAS_REMOTE_CMD:
+		event->threshold = AMDGV_DEFAULT_RAS_REMOTE_CMD_THRESHOLD;
+		break;
 	}
 }
 
@@ -259,6 +250,9 @@ static void amdgv_guard_set_event_name(struct amdgv_monitor_event *event, uint32
 	case AMDGV_GUARD_EVENT_RAS_CHK_CRITI:
 		oss_memcpy(event->name, "RAS_CHK_CRITI", 14);
 		break;
+	case AMDGV_GUARD_EVENT_RAS_REMOTE_CMD:
+		oss_memcpy(event->name, "RAS_REMOTE_CMD", 15);
+		break;
 	}
 }
 
@@ -293,6 +287,9 @@ static uint32_t amdgv_guard_get_max_threshold(uint32_t event_id)
 		break;
 	case AMDGV_GUARD_EVENT_RAS_CHK_CRITI:
 		max_threshold = AMDGV_GUARD_MAX_RAS_TELEMETRY;
+		break;
+	case AMDGV_GUARD_EVENT_RAS_REMOTE_CMD:
+		max_threshold = AMDGV_GUARD_MAX_RAS_REMOTE_CMD;
 		break;
 	default:
 		max_threshold = 0;

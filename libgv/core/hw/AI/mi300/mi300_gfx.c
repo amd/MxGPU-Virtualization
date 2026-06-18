@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv_device.h>
@@ -185,7 +168,7 @@ int mi300_gfx_wait_for_grbm(struct amdgv_adapter *adapt, uint16_t idx_vf)
 	for_each_id (xcc_id, amdgv_sched_get_xcc_mask_by_vf(adapt, idx_vf)) {
 		/* wait for a clean state */
 		wait_ret = amdgv_wait_for_register(
-			adapt, SOC15_REG_OFFSET(GC, GET_INST(GC, xcc_id), regGRBM_STATUS2),
+			adapt, SOC15_REG_OFFSET_NAME(GC, GET_INST(GC, xcc_id), regGRBM_STATUS2),
 			GRBM_STATUS2__EA_BUSY_MASK | GRBM_STATUS2__EA_LINK_BUSY_MASK |
 				GRBM_STATUS2__RLC_BUSY_MASK,
 			0, AMDGV_TIMEOUT(TIMEOUT_GRBM_STATUS), AMDGV_WAIT_CHECK_EQ,
@@ -271,7 +254,7 @@ int mi300_gfx_wait_rlc_idle(struct amdgv_adapter *adapt, uint16_t phys_xcc_id)
 	int wait_ret;
 
 	wait_ret =
-		amdgv_wait_for_register(adapt, SOC15_REG_OFFSET(GC, phys_xcc_id, regRLC_STAT),
+		amdgv_wait_for_register(adapt, SOC15_REG_OFFSET_NAME(GC, phys_xcc_id, regRLC_STAT),
 					0, 0, AMDGV_TIMEOUT(TIMEOUT_STATUS_REG),
 					AMDGV_WAIT_CHECK_EQ, AMDGV_WAIT_FLAG_FORCE_YIELD);
 

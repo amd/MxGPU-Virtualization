@@ -1,28 +1,14 @@
-/*
- * Copyright (c) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_device.h"
 #include "amdgv_gpumon.h"
 #include "amdgv_gpumon_internal.h"
+
+#define MIXING_K      31   /* coprime to 255 */
+#define MIXING_K_INV 181   /* 31^(-1) mod 255 */
 
 enum amdgv_gpumon_type gpumon_unrecov_err_whitelist[] = {
 	GPUMON_CPER_GET_ENTRIES,
@@ -80,4 +66,51 @@ int amdgv_set_memory_partition_mode(struct amdgv_adapter *adapt,
 		ret = event_ret;
 
 	return ret;
+}
+
+int amdgv_set_cc_mode(struct amdgv_adapter *adapt,
+	    enum amdgv_cc_mode cc_mode)
+{
+	int ret;
+	int event_ret = 0;
+	union amdgv_sched_event_data data;
+
+	data.gpumon_data.cc_mode = cc_mode;
+	data.gpumon_data.type = GPUMON_SET_CC_MODE;
+	data.gpumon_data.result = &event_ret;
+	if (!(adapt->gpumon.funcs &&
+	      adapt->gpumon.funcs->set_cc_mode)) {
+		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+	}
+
+	ret = amdgv_sched_queue_event_and_wait_ex(adapt, AMDGV_PF_IDX,
+						AMDGV_EVENT_SCHED_GPUMON,
+						AMDGV_SCHED_BLOCK_ALL, data);
+	if (!ret)
+		ret = event_ret;
+
+	return ret;
+}
+
+
+/**
+ * amdgv_gpumon_fcn_ref_id_encode - Encode a per-VF function reference ID (unit ID)
+ * @serial:   64-bit GPU serial number used as a per-card salt
+ * @vf_index: VF index on this card (0 .. num_vf-1)
+ *
+ * Generates an 8-bit "unit ID" that uniquely identifies a (card, VF) pair in
+ * the range [1, 255]:
+ *
+ *
+ * Return: encoded unit ID in the range [1, 255].
+ */
+
+uint8_t amdgv_gpumon_fcn_ref_id_encode(uint64_t serial, uint8_t vf_index)
+{
+	uint8_t h;
+	if (vf_index == 0xff)
+		return 0;
+
+	h = (uint8_t)((serial ^ (serial >> 32)) % 255);
+	return (uint8_t)((vf_index * MIXING_K + h) % 255 + 1);
 }

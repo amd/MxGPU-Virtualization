@@ -1,25 +1,8 @@
-/*
- * Copyright 2023 Advanced Micro Devices, Inc.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
- * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- * OTHER DEALINGS IN THE SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
+
 #include "umc_v12_0.h"
 #include "amdgv_ras.h"
 #include "mi300.h"
@@ -446,7 +429,7 @@ static int lookup_bad_pages_in_a_row(struct amdgv_adapter *adapt,
 		row = ((column >> 3) << flip_row_bit) | row_lower;
 
 		if (dump)
-			AMDGV_INFO("Error Address(PA):0x%-10llx Row:0x%-4x Col:0x%-2x Bank:0x%x Channel:0x%x\n",
+			AMDGV_DEBUG("Error Address(PA):0x%-10llx Row:0x%-4x Col:0x%-2x Bank:0x%x Channel:0x%x\n",
 				soc_pa, row, col, pa->bank, pa->channel_idx);
 
 		if (pfns && (idx < num))
@@ -468,7 +451,7 @@ static int umc_v12_0_convert_ma_to_pa(struct amdgv_adapter *adapt,
 	if (!err_data)
 		return AMDGV_FAILURE;
 
-	ret = mi300_nbio_get_nps_mode(adapt, &nps);
+	ret = amdgv_nbio_get_nps_mode(adapt, &nps);
 	if (ret)
 		return AMDGV_FAILURE;
 
@@ -504,9 +487,10 @@ static int convert_eeprom_record_to_mem_addr(struct amdgv_adapter *adapt,
 	uint64_t mask_pa;
 	uint32_t ret;
 
-	ret = mi300_nbio_get_nps_mode(adapt, &nps);
+	ret = amdgv_nbio_get_nps_mode(adapt, &nps);
 	if (ret)
 		return AMDGV_FAILURE;
+
 	save_nps = get_nps_from_pa(record->retired_page);
 
 	if (oss_atomic_read(&adapt->ecc.in_cross_nps_handling))
@@ -566,10 +550,12 @@ static int umc_v12_0_set_eeprom_record(struct amdgv_adapter *adapt,
 	uint32_t ret;
 	uint64_t mca_address, mca_ipid, mask_pa;
 
-	if (!record || !bp_info)
+	if (!record || !bp_info) {
+		AMDGV_ERROR("Missing eeprom record info\n");
 		return AMDGV_FAILURE;
+	}
 
-	ret = mi300_nbio_get_nps_mode(adapt, &nps);
+	ret = amdgv_nbio_get_nps_mode(adapt, &nps);
 	if (ret)
 		return AMDGV_FAILURE;
 
@@ -641,7 +627,7 @@ static void umc_v12_0_query_error_address(struct amdgv_adapter *adapt,
 				InstanceIdHi = REG_GET_FIELD(mca_ipid, MCMP1_IPIDT0, InstanceIdHi);
 				InstanceIdLo = REG_GET_FIELD(mca_ipid, MCMP1_IPIDT0, InstanceIdLo);
 
-				AMDGV_INFO("UMC:IPID:0x%llx, ipid_aid:%d, inst:%d, ch:%d, aid:%d, err_addr:0x%x\n",
+				AMDGV_DEBUG("UMC:IPID:0x%llx, ipid_aid:%d, inst:%d, ch:%d, aid:%d, err_addr:0x%x\n",
 					mca_ipid,
 					MCA_IPID_HI_2_UMC_AID(InstanceIdHi),
 					MCA_IPID_LO_2_UMC_INST(InstanceIdLo),
@@ -702,7 +688,7 @@ static int umc_v12_0_get_ras_vf_safe_range(struct amdgv_adapter *adapt,
 	} else {
 		entry = &adapt->array_vf[idx_vf];
 		if (entry->configured) {
-			if (entry->vf_crit_region == GPU_CRIT_REGION_V2) {
+			if (entry->xchg.vf_crit_region == GPU_CRIT_REGION_V2) {
 				/* right now, just leave as [shared memory region end offset, end of vf fb] */
 				*offset = MBYTES_TO_BYTES(entry->fb_offset) + AMDGV_V2_CRIT_REGION_SIZE_BYTES;
 				*size =  MBYTES_TO_BYTES(entry->real_fb_size) - AMDGV_V2_CRIT_REGION_SIZE_BYTES;
@@ -829,7 +815,7 @@ static int umc_v12_0_pages_in_a_row(struct amdgv_adapter *adapt, uint64_t pa, ui
 	struct umc_mca_addr mca_addr = {0};
 	struct umc_phy_addr phy_addr = {0};
 
-	if (mi300_nbio_get_nps_mode(adapt, &nps))
+	if (amdgv_nbio_get_nps_mode(adapt, &nps))
 		return AMDGV_FAILURE;
 
 	phy_addr.pa = pa;

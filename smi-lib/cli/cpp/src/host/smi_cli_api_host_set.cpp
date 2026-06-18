@@ -1,23 +1,8 @@
-/* * Copyright (C) 2024-2025 Advanced Micro Devices. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #include "amdsmi.h"
 #include "smi_cli_api_host.h"
 #include "smi_cli_parser.h"
@@ -59,6 +44,8 @@ typedef amdsmi_status_t (*AMDSMI_GET_LINK_TOPOLOGY)(amdsmi_processor_handle,
 		amdsmi_processor_handle,
 		amdsmi_link_topology_t *);
 typedef amdsmi_status_t (*AMDSMI_SET_NUM_VF)(amdsmi_processor_handle, uint32_t);
+typedef amdsmi_status_t (*AMDSMI_SET_CC_MODE)(amdsmi_processor_handle,
+		amdsmi_cc_mode_t);
 
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_PROCESSOR_HANDLES host_amdsmi_get_processor_handles;
@@ -74,6 +61,7 @@ extern AMDSMI_SET_GPU_PTL_FORMATS host_amdsmi_set_gpu_ptl_formats;
 extern AMDSMI_GET_XGMI_FB_SHARING_MODE_INFO host_amdsmi_get_xgmi_fb_sharing_mode_info;
 extern AMDSMI_GET_LINK_TOPOLOGY host_amdsmi_get_link_topology;
 extern AMDSMI_SET_NUM_VF host_amdsmi_set_num_vf;
+extern AMDSMI_SET_CC_MODE host_amdsmi_set_cc_mode;
 
 
 
@@ -396,6 +384,34 @@ int AmdSmiApiHost::amdsmi_set_num_vf_command(uint64_t processor_bdf, Arguments a
 	}
 
 	ret = host_amdsmi_set_num_vf(processor, num_vf);
+
+	return ret;
+}
+
+int AmdSmiApiHost::amdsmi_set_cc_mode_command(uint64_t processor_bdf, Arguments arg)
+{
+	int ret;
+	amdsmi_bdf_t tmp_bdf;
+	amdsmi_processor_handle processor;
+	amdsmi_cc_mode_t mode;
+	tmp_bdf.as_uint = processor_bdf;
+
+	if (arg.cc_mode_setting == "OFF") {
+		mode = AMDSMI_CC_MODE_OFF;
+	} else if (arg.cc_mode_setting == "ON") {
+		mode = AMDSMI_CC_MODE_ON;
+	} else if(arg.cc_mode_setting == "DEV") {
+		mode = AMDSMI_CC_MODE_DEV;
+	} else {
+		throw SmiToolInvalidParameterValueException(arg.cc_mode_setting);
+	}
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		return ret;
+	}
+
+	ret = host_amdsmi_set_cc_mode(processor, mode);
 
 	return ret;
 }

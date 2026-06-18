@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "gtest/gtest.h"
@@ -65,12 +48,13 @@ protected:
 		return ::testing::AssertionSuccess();
 	}
 	::testing::AssertionResult equal_power_measure(smi_power_info expect,
-						       amdsmi_power_info_t actual)
+					       amdsmi_power_info_t actual)
 	{
 		SMI_ASSERT_EQ(expect.socket_power, actual.socket_power);
 		SMI_ASSERT_EQ(expect.gfx_voltage, actual.gfx_voltage);
 		SMI_ASSERT_EQ(expect.soc_voltage, actual.soc_voltage);
 		SMI_ASSERT_EQ(expect.mem_voltage, actual.mem_voltage);
+		SMI_ASSERT_EQ((uint32_t)expect.ubb_power, actual.ubb_power);
 
 		return ::testing::AssertionSuccess();
 	}
@@ -352,6 +336,7 @@ TEST_F(AmdsmiGpuMonitoring, GetPowerMeasure)
 	mocked_resp.power.gfx_voltage = 800;
 	mocked_resp.power.soc_voltage = 61;
 	mocked_resp.power.mem_voltage = 62;
+	mocked_resp.power.ubb_power = 350;
 
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 	WhenCalling(std::bind(amdsmi_get_power_info, MOCK_GPU_HANDLE, &power_info));

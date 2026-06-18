@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2018-2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef AMDGV_SRIOV_MSG__H_
@@ -128,8 +111,10 @@ union amd_sriov_msg_feature_flags {
 		uint32_t ras_telemetry		: 1;
 		uint32_t ras_cper		: 1;
 		uint32_t xgmi_ta_ext_peer_link	: 1;
+		uint32_t xgmi_connected_to_cpu  : 1;
 		uint32_t ptl_support		: 1;
-		uint32_t reserved		: 18;
+		uint32_t unitid_support		: 1;
+		uint32_t reserved		: 16;
 	} flags;
 	uint32_t all;
 };
@@ -170,8 +155,19 @@ union amd_sriov_ras_caps {
 		uint64_t block_mmsch		: 1;
 		uint64_t poison_propogation_mode	: 1;
 		uint64_t reserved			: 43;
+
 	} bits;
 	uint64_t all;
+};
+
+/*
+ * PF2VF RAS capability words (16 bytes, layout matches legacy fields):
+ */
+union amd_sriov_msg_pf2vf_ras_caps {
+	struct {
+		union amd_sriov_ras_caps ras_en_caps;
+		union amd_sriov_ras_caps ras_telemetry_en_caps;
+	};
 };
 
 union amd_sriov_msg_os_info {
@@ -243,7 +239,7 @@ struct amd_sriov_msg_pf2vf_info_header {
 	uint32_t reserved[2];
 };
 
-#define AMD_SRIOV_MSG_PF2VF_INFO_FILLED_SIZE (58)
+#define AMD_SRIOV_MSG_PF2VF_INFO_FILLED_SIZE (59)
 struct amd_sriov_msg_pf2vf_info {
 	/* header contains size and version */
 	struct amd_sriov_msg_pf2vf_info_header header;
@@ -280,7 +276,7 @@ struct amd_sriov_msg_pf2vf_info {
 	uint32_t vf2pf_update_interval_ms;
 	/* identification in ROCm SMI */
 	uint64_t uuid;
-	uint32_t fcn_idx;
+	uint32_t pad;
 	/* flags to indicate which register access method VF should use */
 	union amd_sriov_reg_access_flags reg_access_flags;
 	/* MM BW management */
@@ -299,13 +295,13 @@ struct amd_sriov_msg_pf2vf_info {
 	/* vf bdf on host pci tree for debug only */
 	uint32_t bdf_on_host;
 	uint32_t more_bp;	//Reserved for future use.
-	union amd_sriov_ras_caps ras_en_caps;
-	union amd_sriov_ras_caps ras_telemetry_en_caps;
+	union amd_sriov_msg_pf2vf_ras_caps pf2vf_ras_caps;
 	/* PTL status response for guest */
 	uint32_t ptl_enabled;        // PTL enable status: 0=disabled, 1=enabled
 	uint32_t ptl_pref_format1;   // Current preferred format 1
 	uint32_t ptl_pref_format2;   // Current preferred format 2
-
+	uint8_t unitid;
+	uint8_t padding[3];  //use the 3 bytes to align
 	/* reserved */
 	uint32_t reserved[256 - AMD_SRIOV_MSG_PF2VF_INFO_FILLED_SIZE];
 };
@@ -384,52 +380,54 @@ enum amd_sriov_hvvm_mb_request_message {
 
 /* mailbox message send from guest to host  */
 enum amd_sriov_mailbox_request_message {
-	MB_REQ_MSG_REQ_GPU_INIT_ACCESS = 1,
-	MB_REQ_MSG_REL_GPU_INIT_ACCESS,
-	MB_REQ_MSG_REQ_GPU_FINI_ACCESS,
-	MB_REQ_MSG_REL_GPU_FINI_ACCESS,
-	MB_REQ_MSG_REQ_GPU_RESET_ACCESS,
-	MB_REQ_MSG_REQ_GPU_INIT_DATA,
-	MB_REQ_MSG_PSP_VF_CMD_RELAY,
+	MB_REQ_MSG_REQ_GPU_INIT_ACCESS		= 1,
+	MB_REQ_MSG_REL_GPU_INIT_ACCESS		= 2,
+	MB_REQ_MSG_REQ_GPU_FINI_ACCESS		= 3,
+	MB_REQ_MSG_REL_GPU_FINI_ACCESS		= 4,
+	MB_REQ_MSG_REQ_GPU_RESET_ACCESS		= 5,
+	MB_REQ_MSG_REQ_GPU_INIT_DATA		= 6,
+	MB_REQ_MSG_PSP_VF_CMD_RELAY		= 7,
+	MB_REQ_MSG_REQ_GPU_INIT_XCHG_REGION	= 8,
 
-	MB_REQ_MSG_LOG_VF_ERROR = 200,
-	MB_REQ_MSG_READY_TO_RESET = 201,
-	MB_REQ_MSG_RAS_POISON = 202,
-	MB_REQ_RAS_ERROR_COUNT = 203,
-	MB_REQ_RAS_CPER_DUMP = 204,
-	MB_REQ_RAS_BAD_PAGES = 205,
-	MB_REQ_RAS_CHK_CRITI = 206,
-	MB_REQ_RAS_REMOTE_CMD = 207,
-	MB_REQ_MSG_PTL_UPDATE = 208,
-
-	MB_REQ_MSG_REQ_GPU_DEBUG = 300,
-	MB_REQ_MSG_REL_GPU_DEBUG = 301,
+	MB_REQ_MSG_LOG_VF_ERROR			= 200,
+	MB_REQ_MSG_READY_TO_RESET		= 201,
+	MB_REQ_MSG_RAS_POISON			= 202,
+	MB_REQ_RAS_ERROR_COUNT			= 203,
+	MB_REQ_RAS_CPER_DUMP			= 204,
+	MB_REQ_RAS_BAD_PAGES			= 205,
+	MB_REQ_RAS_CHK_CRITI			= 206,
+	MB_REQ_RAS_REMOTE_CMD			= 207,
+	MB_REQ_MSG_PTL_UPDATE			= 208,
+	MB_REQ_MSG_REQ_GPU_DEBUG		= 300,
+	MB_REQ_MSG_REL_GPU_DEBUG		= 301,
 };
 
 /* mailbox message send from host to guest  */
 enum amd_sriov_mailbox_response_message {
-	MB_RES_MSG_CLR_MSG_BUF			= 0,
-	MB_RES_MSG_READY_TO_ACCESS_GPU		= 1,
-	MB_RES_MSG_FLR_NOTIFICATION		= 2,
-	MB_RES_MSG_FLR_NOTIFICATION_COMPLETION  = 3,
-	MB_RES_MSG_SUCCESS			= 4,
-	MB_RES_MSG_FAIL				= 5,
-	MB_RES_MSG_QUERY_ALIVE			= 6,
-	MB_RES_MSG_GPU_INIT_DATA_READY		= 7,
-	MB_RES_MSG_RAS_POISON_READY		= 8,
-	MB_RES_MSG_PF_SOFT_FLR_NOTIFICATION	= 9,
-	MB_RES_MSG_GPU_RMA			= 10,
-	MB_RES_MSG_RAS_ERROR_COUNT_READY	= 11,
-	MB_RES_MSG_GPU_DEBUG_NOTIFICATION = 12,
-	MB_RES_MSG_GPU_DEBUG_NOTIFICATION_COMPLETION = 13,
-	MB_RES_RAS_CPER_DUMP_READY		= 14,
-	MB_RES_MSG_RAS_BAD_PAGES_READY = 15,
-	MB_RES_MSG_RAS_BAD_PAGES_NOTIFICATION = 16,
-	MB_RES_MSG_UNRECOV_ERR_NOTIFICATION = 17,
-	MB_RES_RAS_CHK_CRITI_READY		= 18,
-	MB_RES_RAS_REMOTE_CMD_READY		= 19,
-	MB_RES_MSG_PTL_UPDATE_READY		= 20,
-	MB_RES_MSG_TEXT_MESSAGE			= 255
+	MB_RES_MSG_CLR_MSG_BUF				= 0,
+	MB_RES_MSG_READY_TO_ACCESS_GPU			= 1,
+	MB_RES_MSG_FLR_NOTIFICATION			= 2,
+	MB_RES_MSG_FLR_NOTIFICATION_COMPLETION		= 3,
+	MB_RES_MSG_SUCCESS				= 4,
+	MB_RES_MSG_FAIL					= 5,
+	MB_RES_MSG_QUERY_ALIVE				= 6,
+	MB_RES_MSG_GPU_INIT_DATA_READY			= 7,
+	MB_RES_MSG_RAS_POISON_READY			= 8,
+	MB_RES_MSG_PF_SOFT_FLR_NOTIFICATION		= 9,
+	MB_RES_MSG_GPU_RMA				= 10,
+	MB_RES_MSG_RAS_ERROR_COUNT_READY		= 11,
+	MB_RES_MSG_GPU_DEBUG_NOTIFICATION		= 12,
+	MB_RES_MSG_GPU_DEBUG_NOTIFICATION_COMPLETION	= 13,
+	MB_RES_RAS_CPER_DUMP_READY			= 14,
+	MB_RES_MSG_RAS_BAD_PAGES_READY			= 15,
+	MB_RES_MSG_RAS_BAD_PAGES_NOTIFICATION		= 16,
+	MB_RES_MSG_UNRECOV_ERR_NOTIFICATION		= 17,
+	MB_RES_RAS_CHK_CRITI_READY			= 18,
+	MB_RES_RAS_REMOTE_CMD_READY			= 19,
+	MB_RES_MSG_PTL_UPDATE_READY			= 20,
+	MB_RES_MSG_REQ_GPU_INIT_XCHG_REGION_READY	= 21,
+
+	MB_RES_MSG_TEXT_MESSAGE				= 255
 };
 
 /*
@@ -519,10 +517,16 @@ struct amdsriov_ras_telemetry {
 };
 
 /* version data stored in MAILBOX_MSGBUF_RCV_DW1 for future expansion */
-/* if bumping the version to >2 please ensure to check where this version is read and update accordingly */
+/* if bumping the version, please ensure to check where this version is read and update accordingly */
 enum amd_sriov_crit_region_version {
 	GPU_CRIT_REGION_V1 = 1,
 	GPU_CRIT_REGION_V2 = 2,
+	/* Same table layout as V2. However, the exchange table location is defined by guest driver.
+	 * This location must be in system memory (for example, SPM in A+A case).
+	 * Guest must share the base address of the exchange region using the INIT_XCHG_REGION message. */
+	GPU_CRIT_REGION_V3 = 3,
+
+	GPU_CRIT_REGION_MAX,
 };
 
 #pragma pack(pop) // Restore previous packing option

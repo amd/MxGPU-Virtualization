@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <smi_drv.h>
@@ -270,6 +253,10 @@ int smi_cmd_handshake(struct smi_ctx *ctx, void *inb, void *outb,
 			smi_set_xgmi_plpd,
 			sizeof(struct smi_set_dpm_policy),
 			0);
+		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_VF_HBM_INFO,
+			smi_get_vf_hbm_info,
+			sizeof(struct smi_device_info),
+			sizeof(struct smi_vf_hbm_info));
 		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_NODE_HANDLE,
 			smi_get_node_handle,
 			sizeof(struct smi_device_info),
@@ -282,6 +269,22 @@ int smi_cmd_handshake(struct smi_ctx *ctx, void *inb, void *outb,
 			smi_get_ras_policy_info,
 			sizeof(struct smi_device_info),
 			sizeof(struct smi_gpu_ras_policy_info));
+		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_FABRIC_INFO,
+			smi_get_gpu_fabric_info,
+			sizeof(struct smi_device_info),
+			sizeof(struct smi_fabric_info_ver));
+		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_TDI_STATE,
+			smi_get_tdi_state,
+			sizeof(struct smi_device_info),
+			sizeof(struct smi_tdi_state));
+		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_CC_MODE,
+			smi_get_cc_mode,
+			sizeof(struct smi_device_info),
+			sizeof(struct smi_cc_mode));
+		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_SET_CC_MODE,
+			smi_set_cc_mode,
+			sizeof(struct smi_set_cc_mode),
+			0);
 		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_GPU_PTL_STATE,
 			smi_get_gpu_ptl_state,
 			sizeof(struct smi_device_info),

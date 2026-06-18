@@ -1,22 +1,8 @@
-/* * Copyright (C) 2025 Advanced Micro Devices. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #include "smi_cli_argument.h"
 #include <sstream>
 #include <iomanip>
@@ -262,9 +248,11 @@ void SmiCliArgumentFactory::initialize_static_arguments()
 	arguments_.emplace("ras", SmiCliArgument("-r", "--ras", "Displays ras features information"));
 	arguments_.emplace("dfc-ucode", SmiCliArgument("-D", "--dfc-ucode",
 					   "All dfc ucode table information"));
-	arguments_.emplace("fb-info", SmiCliArgument("-f", "--fb-info", "All fb information"));
+	arguments_.emplace("fb-info", SmiCliArgument("-f", "--fb-info", "All fb information (GPU)"));
+	arguments_.emplace("hbm-info", SmiCliArgument("-hbm", "--hbm-info", "All hbm information"));
+	arguments_.emplace("vf-fb-info", SmiCliArgument("-f", "--fb-info", "All fb information (VF)"));
 	arguments_.emplace("num-vf", SmiCliArgument("-nv", "--num-vf",
-					   "Displays number of supported and enabled VFs"));
+				   "Displays number of supported and enabled VFs"));
 	arguments_.emplace("vram", SmiCliArgument("-v", "--vram", "All vram information"));
 	arguments_.emplace("cache", SmiCliArgument("-c", "--cache", "All cache info"));
 	arguments_.emplace("partition", SmiCliArgument("-p", "--partition",
@@ -279,8 +267,9 @@ void SmiCliArgumentFactory::initialize_static_arguments()
 	arguments_.emplace("rdma-devices", SmiCliArgument("-rd", "--rdma-devices",
 					   "All RDMA devices information"));
 	arguments_.emplace("vf", SmiCliArgument("", "--vf",
-					   "Gets general information about the specified VF (e.g. timeslice, fb info)",
-					   "<gpu_index:vf_index | vf_bdf | vf_uuid>"));
+				   "Gets general information about the specified VF" +
+				   SmiCliArgument::get_description_continuation_indent() +
+				   "<gpu_index:vf_index | vf_bdf | vf_uuid>"));
 }
 
 void SmiCliArgumentFactory::initialize_metric_arguments()
@@ -297,9 +286,14 @@ void SmiCliArgumentFactory::initialize_metric_arguments()
 	arguments_.emplace("fb-usage", SmiCliArgument("-fb", "--fb-usage", "Total and used framebuffer"));
 	arguments_.emplace("energy", SmiCliArgument("-E", "--energy", "Amount of energy consumed"));
 	arguments_.emplace("throttle", SmiCliArgument("-th", "--throttle", "Displays throttle accumulators"));
-	arguments_.emplace("port", SmiCliArgument("-po", "--port", "All port information"));
+	arguments_.emplace("port", SmiCliArgument("-po", "--port",
+					   "All port information (NIC vendor statistics are limited by default; "
+					   "use --extended / -ex for the extended set)"));
 	arguments_.emplace("rdma-devices", SmiCliArgument("-rd", "--rdma-devices",
 					   "All RDMA devices information"));
+	arguments_.emplace("extended", SmiCliArgument("-ex", "--extended",
+					   "Show the extended NIC vendor statistics set "
+					   "(default output is limited to a curated subset)"));
 	arguments_.emplace("vf", SmiCliArgument("", "--vf",
 					   "Gets metric information about the specified VF" +
 					   SmiCliArgument::get_description_continuation_indent() +
@@ -397,6 +391,8 @@ void SmiCliArgumentFactory::initialize_help_commands()
 					   "Displays topology information of the devices"));
 	help_commands_.emplace("partition", SmiCliHelpCommand("partition",
 						   "Displays partition information of the devices (GPU only)"));
+	help_commands_.emplace("fabric", SmiCliHelpCommand("fabric",
+						   "Displays fabric information of the devices (GPU only)"));
 	help_commands_.emplace("ras", SmiCliHelpCommand("ras",
 						   "Displays ras information of the devices (GPU only)"));
 	help_commands_.emplace("node", SmiCliHelpCommand("node", "Displays node information of the devices (GPU only)"));

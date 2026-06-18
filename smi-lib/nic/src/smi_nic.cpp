@@ -1,23 +1,7 @@
 /*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "smi_nic.h"
@@ -34,17 +18,19 @@
 #include <array>
 #include <sstream>
 #include <iomanip>
-#include <unordered_map>
 
 #include <linux/ethtool.h>
 #include <linux/if_arp.h>
 #include "smi_ethtool_ioctl.h"
+#include "smi_nic_stats.h"
+#include "smi_ibverbs.h"
 #include "smi_utils.h"
 
 // **** SmiNicPort ****
 
-SmiNicPort::SmiNicPort(const std::string& iface, const std::string& bdf, const std::string& sysfs_class_path, const std::string& sysfs_bus_path)
-	: iface_(iface), bdf_(bdf), sysfs_class_path_(sysfs_class_path), sysfs_bus_path_(sysfs_bus_path)
+SmiNicPort::SmiNicPort(const std::string& iface, const std::string& bdf, const std::string& sysfs_class_path, const std::string& sysfs_bus_path,
+		       NicVendor vendor)
+	: iface_(iface), bdf_(bdf), vendor_(vendor), sysfs_class_path_(sysfs_class_path), sysfs_bus_path_(sysfs_bus_path)
 {
 	port_num_ = smi_utils::get_sysfs_data<uint32_t>(sysfs_class_path_ + "/dev_port");
 	auto type_value = smi_utils::get_sysfs_data<int>(sysfs_class_path_ + "/type");
@@ -122,9 +108,14 @@ const std::string SmiNicPort::port_type() const
 	return smi_utils::nic_type_to_string(type_);
 }
 
-std::string SmiNicPort::flavour() const
+const std::string& SmiNicPort::flavour() const
 {
-	return "N/A";
+	return flavour_;
+}
+
+void SmiNicPort::set_flavour(const std::string& flavour)
+{
+	flavour_ = flavour;
 }
 
 std::optional<uint32_t> SmiNicPort::active_fec() const
@@ -221,7 +212,7 @@ void SmiNicPort::discover_infiniband()
 					if (port_entry.is_directory()) {
 						std::string port_name = port_entry.path().filename().string();
 						std::string port_sysfs_path = port_entry.path().string();
-						SmiInfiniBandPort port(iface_, port_name, port_sysfs_path);
+						SmiInfiniBandPort port(iface_, name, port_name, port_sysfs_path);
 						port.collect_hw_counters();
 						ib.add_port(port);
 					}
@@ -295,7 +286,7 @@ void SmiNicPort::add_vendor_statistic(struct ethtool_gstrings *strings, struct e
 	for (unsigned int i = 0; i < stats->n_stats; ++i) {
 		std::string key(reinterpret_cast<char*>(&strings->data[i * ETH_GSTRING_LEN]), ETH_GSTRING_LEN);
 		key.erase(std::find(key.begin(), key.end(), '\0'), key.end());
-		if (vendor_stat_allowed(key)) {
+		if (vendor_stat_supported(key)) {
 			uint64_t value = stats->data[i];
 			vendor_stats_map_[key] = value;
 		}
@@ -345,41 +336,33 @@ std::optional<std::string> SmiNicPort::read_vpd_content() const
 	return content;
 }
 
-std::string SmiNicPort::map_vendor_stat_to_string(SmiVendorStat stat) const
+bool SmiNicPort::vendor_stat_supported(const std::string& stat_name) const
 {
-	static const std::unordered_map<SmiVendorStat, std::string> stat_map = {
-		{SmiVendorStat::TX_PACKETS, "tx_packets"},
-		{SmiVendorStat::RX_PACKETS, "rx_packets"},
-		{SmiVendorStat::TX_BYTES, "tx_bytes"},
-		{SmiVendorStat::RX_BYTES, "rx_bytes"},
-		{SmiVendorStat::TX_CSUM_NONE, "tx_csum_none"},
-		{SmiVendorStat::RX_CSUM_NONE, "rx_csum_none"},
-		{SmiVendorStat::TX_CSUM, "tx_csum"},
-		{SmiVendorStat::TX_TSO, "tx_tso"},
-		{SmiVendorStat::TX_TSO_BYTES, "tx_tso_bytes"}
-	};
-
-	auto it = stat_map.find(stat);
-	return (it != stat_map.end()) ? it->second : "";
-}
-
-bool SmiNicPort::vendor_stat_allowed(const std::string& stat_name) const
-{
-	for (int i = static_cast<int>(SmiVendorStat::TX_PACKETS);
-	     i <= static_cast<int>(SmiVendorStat::TX_TSO_BYTES); i++) {
-		SmiVendorStat stat = static_cast<SmiVendorStat>(i);
-		if (map_vendor_stat_to_string(stat) == stat_name) {
-			return true;
-		}
+	switch (vendor_) {
+	case NicVendor::AMD:
+		return smi_nic_stats::pensando_vendor_stats.count(stat_name) > 0;
+	case NicVendor::Broadcom:
+		return smi_nic_stats::broadcom_vendor_stats.count(stat_name) > 0;
+	case NicVendor::Unknown:
+	default:
+		return false;
 	}
-	return false;
 }
 
 // **** SmiInfiniBandPort ****
 
-SmiInfiniBandPort::SmiInfiniBandPort(const std::string& netdev, const std::string& name, const std::string& sysfs_path)
-	: netdev_(netdev), name_(name), sysfs_path_(sysfs_path)
+SmiInfiniBandPort::SmiInfiniBandPort(const std::string& netdev, const std::string& rdma_dev,
+				     const std::string& name, const std::string& sysfs_path)
+	: netdev_(netdev), rdma_dev_(rdma_dev), name_(name), sysfs_path_(sysfs_path)
 {
+	auto port = port_num();
+	if (port.has_value()) {
+		auto info = smi_ibverbs::query_port_mtu(rdma_dev_, port.value());
+		if (info.has_value()) {
+			max_mtu_ = info->max_mtu;
+			active_mtu_ = info->active_mtu;
+		}
+	}
 }
 
 const std::string& SmiInfiniBandPort::name() const
@@ -420,12 +403,12 @@ std::optional<std::string> SmiInfiniBandPort::state() const
 
 std::optional<uint16_t> SmiInfiniBandPort::max_mtu() const
 {
-	return smi_utils::get_sysfs_data<uint16_t>(sysfs_path_ + "/max_mtu");
+	return max_mtu_;
 }
 
 std::optional<uint16_t> SmiInfiniBandPort::active_mtu() const
 {
-	return smi_utils::get_sysfs_data<uint16_t>(sysfs_path_ + "/active_mtu");
+	return active_mtu_;
 }
 
 void SmiInfiniBandPort::collect_hw_counters()

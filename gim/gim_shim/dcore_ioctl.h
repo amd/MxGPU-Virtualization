@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2014-2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef DCORE_IOCTL_H
@@ -45,6 +28,7 @@ enum rdl_cmd_code {
 	RDL_CMD_STOP_TRAP_GPU_HANG = 0x00000004,	  /* Used when host try to stop the monitor thread */
 	RDL_CMD_GET_FFBM_DATA = 0x00000005,			  /* Used when copy ffbm spa data */
 	RDL_CMD_GET_MES_DBG_INFO = 0x00000006,		/* used to get mes debug ram address and size */
+	RDL_CMD_TOGGLE_HW_ACCESS = 0x00000007,		/* used to toggle VF hw access (MMIO/FB/doorbell) */
 	RDL_CMD_CODE_MAX
 };
 
@@ -102,6 +86,13 @@ struct dbglib_mes_dbg_info_block {
 	uint64_t dbg_addr;
 };
 
+/* args for RDL_CMD_TOGGLE_HW_ACCESS */
+struct dbglib_toggle_hw_access_block {
+	uint32_t dbsf;              /* VF dbsf (full BDF, including function bits) */
+	uint32_t vf_access_select;  /* bitmask: AMDGV_VF_ACCESS_FB / DOORBELL / MMIO_REG_WRITE */
+	uint32_t allow_access;      /* 1 = grant access, 0 = revoke access */
+};
+
 #define GIM_IOC_START_TRAP_GPU_HANG                                                                                    \
 	GIM_IOC(GIM_IOC_READWRITE, GIM_IOC_BASE, (GIM_COMMAND_BASE + RDL_CMD_START_TRAP_GPU_HANG),                     \
 		sizeof(struct dbglib_trap_gpu_info))
@@ -123,6 +114,10 @@ struct dbglib_mes_dbg_info_block {
 #define GIM_IOC_GET_MES_DBG_INFO                                                              				\
 	GIM_IOC(GIM_IOC_READWRITE, GIM_IOC_BASE, (GIM_COMMAND_BASE + RDL_CMD_GET_MES_DBG_INFO), 				\
 		sizeof(struct dbglib_mes_dbg_info_block))
+
+#define GIM_IOC_TOGGLE_HW_ACCESS                                                                \
+	GIM_IOC(GIM_IOC_READWRITE, GIM_IOC_BASE, (GIM_COMMAND_BASE + RDL_CMD_TOGGLE_HW_ACCESS), \
+		sizeof(struct dbglib_toggle_hw_access_block))
 
 #endif //EXCLUDE_DCORE_DEBUG
 #endif

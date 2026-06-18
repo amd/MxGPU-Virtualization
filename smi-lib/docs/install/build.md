@@ -2,7 +2,7 @@
 myst:
   html_meta:
     "description lang=en": "How to build AMD SMI from source."
-    "keywords": "system, management, interface, contribute, contributing, develop, testing, C, Python"
+    "keywords": "system, management, interface, contribute, contributing, develop, testing, C, Python, Go"
 ---
 
 <a id="amd-smi-library-build"></a>
@@ -69,6 +69,37 @@ When set to True, the build includes Address Sanitizer instrumentation.
 When set to False, Address Sanitizer is not included.
 Default: False
 
+**Fabric telemetry (UALOE):**
+
+Fabric telemetry support is auto-detected at build time. When the UALOE
+source tree is present and the netlink system libraries (`libnl-3.0`,
+`libnl-genl-3.0`, `libmnl`) are installed, the fabric telemetry APIs
+(`amdsmi_alloc_fabric_telemetry`, `amdsmi_get_fabric_telemetry_data`,
+`amdsmi_free_fabric_telemetry`) are compiled in. Otherwise those APIs
+return `AMDSMI_STATUS_NOT_SUPPORTED` (fabric topology information is
+still available). No build flag is required.
+
+**NIC optional dependencies:**
+
+The NIC subsystem (built when `AMD_SMI_NIC_SUPPORT=True`) has two optional
+third-party dependencies that are auto-detected by CMake. The build always
+succeeds without them; only the affected NIC APIs degrade.
+
+| Package | Used by | Behaviour when missing |
+|---------|---------|------------------------|
+| `libmnl` (`libmnl-dev` / `libmnl-devel`) | `amdsmi_get_nic_fw_info`, `amdsmi_get_nic_port_info` (devlink netlink, via the internal `nl/` helper library) | `amdsmi_get_nic_fw_info` returns `AMDSMI_STATUS_NOT_SUPPORTED`; `amdsmi_get_nic_port_info` still succeeds but reports devlink-sourced data as `"N/A"`. Other NIC APIs are unaffected. |
+| `libibverbs` (`libibverbs-dev` / `libibverbs-devel`, plus `libibverbs.so.1` at runtime) | `amdsmi_get_nic_port_info` (RDMA query via `dlopen` of the hardcoded SONAME `libibverbs.so.1`) | `amdsmi_get_nic_port_info` still succeeds but reports RDMA-sourced data as N/A. Other NIC APIs are unaffected. |
+
+Install both packages to enable the full NIC feature set:
+
+```bash
+# Debian/Ubuntu
+sudo apt install libmnl-dev libibverbs-dev libibverbs1
+
+At configure time CMake prints `libmnl found -- netlink is supported`
+or `libibverbs headers found` when each library is detected; otherwise
+a `WARNING` line indicates which NIC features will be unavailable.
+
 ## Folder structure
 
 Library folder structure is shown below:
@@ -84,13 +115,24 @@ smi-lib/
 │   ├── inc/              # Driver SMI headers
 │   └── linux/            # Linux platform-specific driver code
 ├── examples/             # Examples of using C APIs
+├── go/                   # Go bindings and example program
+│   ├── amdsmi/           # Go interface (CGO wrappers) around C APIs
+│   └── examples/         # Examples of using the Go API
 ├── inc/                  # Internal include files
 │   ├── common/           # Interface between driver and SMI library
 │   └── linux/            # Header files specific to the Linux platform
 ├── interface/            # C API interface for clients
+├── nic/                  # NIC library (C++)
+│   ├── interface/        # C wrapper bridging the host library and NIC library
+│   ├── inc/              # Internal NIC headers
+│   └── src/              # NIC implementation (sysfs, ethtool, devlink)
+├── nl/                   # Netlink helper library used by the NIC subsystem
+│   ├── include/          # Netlink headers
+│   └── src/              # Netlink implementation
 ├── py/
 │   └── interface/        # Python interface and wrapper around C APIs
 ├── src/                  # C implementation
+│   └── nic/              # C API NIC wrapper around the NIC library
 ├── tests/                # Library gtest/gmock tests
 │   ├── integration/      # Integration tests
 │   └── unit/             # Unit tests
@@ -138,6 +180,58 @@ On a Linux platform, go to the smi-lib directory `gim/smi-lib/` and run the foll
 
 `make clean` - cleaning build/ directory
 `make package -j$(nproc)` - building AMD SMI library and getting AMD SMI Python package on the following path: `gim/smi-lib/build/amdsmi/package/Release/amdsmi`
+
+## Go bindings
+
+AMD SMI also provides Go bindings that expose the C library to Go applications via CGO. The Go API is a thin, idiomatic mapping over the C interface, allowing developers to build management and monitoring tools in Go.
+
+### Code
+
+The Go bindings source code can be found in the `smi-lib/go/` folder:
+
+* `smi-lib/go/amdsmi/amdsmi_interface.go` - AMD SMI library Go interface (types, constants, functions)
+* `smi-lib/go/examples/usage.go` - Example program demonstrating the API
+* `smi-lib/go/go.mod` - Go module definition (`module: smi-lib/go`)
+
+### Build
+
+The Go bindings link against the AMD SMI C library at run time. There is no separate Makefile target to build the Go module; instead, Go's own toolchain is used.
+
+To run the example program from the `smi-lib/go/` directory:
+
+```bash
+sudo go run examples/usage.go
+```
+
+If `libamdsmi.so` is not in a standard library path (e.g. `/usr/local/lib`), point `LD_LIBRARY_PATH` at its location:
+
+```bash
+export LD_LIBRARY_PATH=/path/to/libamdsmi:$LD_LIBRARY_PATH
+sudo go run examples/usage.go
+```
+
+To build a standalone Go binary that depends on the AMD SMI library:
+
+```bash
+cd smi-lib/go
+go build -o amdsmi_demo ./examples
+```
+
+### Code style
+
+The code style follows standard Go conventions; run `gofmt` (or `go fmt ./...`) before submitting changes.
+
+### Dependencies
+
+* Requires Go 1.18+ (64-bit).
+* CGO must be enabled (default when a C toolchain such as `gcc` is present).
+* The AMD SMI C library (`libamdsmi.so`) must be built and discoverable at link/run time (e.g. on `LD_LIBRARY_PATH` or in `/usr/local/lib`).
+
+### Flow
+
+1. The flow starts with the C library `libamdsmi.so`, which contains the functionality to be used in Go.
+2. The Go package `smi-lib/go/amdsmi` (defined in `amdsmi_interface.go`) calls into the C library directly via CGO.
+3. Application code imports `smi-lib/go/amdsmi` and uses the idiomatic Go API (typed structs, `error` returns) on top of the C interface.
 
 ## AMD SMI tool build
 
@@ -260,7 +354,8 @@ The CLI tool requires the AMD SMI Library (`libamdsmi.so`) to be available eithe
 - For SRIOV functionality: SR-IOV must be enabled in the system
 
 **NIC support requirements**
-- AMD Pensando NIC drivers must be installed and loaded
+- Currently supported NICs: AMD AI NIC Pensando Pollara 400 (`ionic`, `ionic_rdma` drivers) and Broadcom Thor2 / BCM57608 (`bnxt_en`, `bnxt_re` drivers)
+- The corresponding NIC drivers must be installed and loaded
 - Appropriate permissions for network device access
 
 #### Development Notes
@@ -288,5 +383,5 @@ To add new commands or features:
 - **Driver issues**: Verify AMD SR-IOV Host driver is properly installed and loaded
 
 **NIC-related issues**
-- **NIC not detected**: Verify AMD Pensando NIC drivers are installed and loaded
+- **NIC not detected**: Verify the NIC drivers are installed and loaded - AMD Pensando (`ionic`, `ionic_rdma`) or Broadcom (`bnxt_en`, `bnxt_re`)
 - **Network permission errors**: Ensure proper network device access permissions

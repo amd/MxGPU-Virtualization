@@ -1,22 +1,6 @@
-/*
- * Copyright (C) 2021  Advanced Micro Devices, Inc.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included
- * in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
- * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE COPYRIGHT HOLDER(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
- * IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv_device.h>
@@ -142,7 +126,7 @@ static int mi300_ucode_individual_load(struct amdgv_adapter *adapt, uint32_t uco
 			ucode_id);
 		break;
 	default:
-		AMDGV_INFO("Unsupported FW id 0x%x. Skipping ..\n", ucode_id);
+		AMDGV_DEBUG("Unsupported FW id 0x%x. Skipping...\n", ucode_id);
 		break;
 	}
 
@@ -204,7 +188,7 @@ static int mi325_ucode_load(struct amdgv_adapter *adapt, enum amdgv_firmware_id 
 				ucode_id_list[i]);
 			break;
 		default:
-			AMDGV_INFO("Unsupported FW id 0x%x. Skipping ..\n", ucode_id_list[i]);
+			AMDGV_DEBUG("Unsupported FW id 0x%x. Skipping...\n", ucode_id_list[i]);
 			break;
 		}
 
@@ -217,10 +201,10 @@ static int mi325_ucode_load(struct amdgv_adapter *adapt, enum amdgv_firmware_id 
 static int mi300_ucode_sw_init(struct amdgv_adapter *adapt)
 {
 	if (adapt->dev_id == 0x74A5) {
-		AMDGV_INFO("set to Mi325 FW loading function\n");
+		AMDGV_DEBUG("set to Mi325 FW loading function\n");
 		adapt->ucode.load = mi325_ucode_load;
 	} else {
-		AMDGV_INFO("set to Mi300 FW loading function\n");
+		AMDGV_DEBUG("set to Mi300 FW loading function\n");
 		adapt->ucode.load = mi300_ucode_load;
 	}
 

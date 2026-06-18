@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef MI300_NBIO_H
@@ -48,26 +31,7 @@ void mi300_nbio_assign_vcn_to_vf(struct amdgv_adapter *adapt);
 void mi300_nbio_dump_partition_config(struct amdgv_adapter *adapt);
 int mi300_nbio_pcie_curr_link_speed(struct amdgv_adapter *adapt);
 int mi300_nbio_pcie_curr_link_width(struct amdgv_adapter *adapt);
-int mi300_nbio_get_supported_memory_partition_mode(struct amdgv_adapter *adapt,
-			enum amdgv_memory_partition_mode *supported_nps, int *supported_nps_count);
-int mi300_nbio_get_nps_mode(struct amdgv_adapter *adapt,
-			    enum amdgv_memory_partition_mode *memory_partition_mode);
-enum amdgv_accelerator_partition_mode mi300_nbio_get_accelerator_partition_mode(struct amdgv_adapter *adapt);
-enum amdgv_accelerator_partition_mode mi300_nbio_get_accelerator_partition_mode_default_setting(
-	struct amdgv_adapter *adapt,
-	enum amdgv_memory_partition_mode memory_partition_mode);
-bool mi300_nbio_is_partition_mode_combination_supported(
-	struct amdgv_adapter *adapt,
-	enum amdgv_memory_partition_mode memory_partition_mode,
-	enum amdgv_accelerator_partition_mode accelerator_partition_mode);
 int mi300_nbio_get_pcie_replay_count(struct amdgv_adapter *adapt);
 void nbio_v7_9_set_ras_funcs(struct amdgv_adapter *adapt);
 void mi300_hdp_flush(struct amdgv_adapter *adapt);
-const struct amdgv_nps_compute_combination *mi300_nbio_get_asic_nps_caps(struct amdgv_adapter *adapt);
-
-struct mi300_nps_combination_cap_entry {
-	enum amd_asic_type asic_type;
-	struct amdgv_vf_nps_combination vf_nps[AMDGV_VF_NPS_MAX_COMBINATIONS];
-};
-
 #endif

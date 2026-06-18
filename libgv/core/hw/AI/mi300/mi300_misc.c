@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv_device.h>
@@ -115,6 +98,74 @@ static void mi300_cp_dma_exit(struct amdgv_adapter *adapt)
 	shared_exclusion_exit(adapt, &hive->flr_cp_dma_lock, SHARED_EXCLUSION_GROUP_CP_DMA);
 }
 
+#define DMA_COPY_CONTEXT_REGS 8
+static struct amdgv_reg_dump_info dma_copy_context_regs[DMA_COPY_CONTEXT_REGS] = {
+	{
+		.name = "CP_DMA_CNTL",
+		.hwip = GC_HWIP,
+		.seg = regCP_DMA_CNTL_BASE_IDX,
+		.logical_inst = 0,
+		.offset_hwip = regCP_DMA_CNTL,
+		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
+	},
+	{
+		.name = "CP_DMA_CNTL",
+		.hwip = GC_HWIP,
+		.seg = regCP_DMA_CNTL_BASE_IDX,
+		.logical_inst = 1,
+		.offset_hwip = regCP_DMA_CNTL,
+		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
+	},
+	{
+		.name = "CP_DMA_CNTL",
+		.hwip = GC_HWIP,
+		.seg = regCP_DMA_CNTL_BASE_IDX,
+		.logical_inst = 2,
+		.offset_hwip = regCP_DMA_CNTL,
+		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
+	},
+	{
+		.name = "CP_DMA_CNTL",
+		.hwip = GC_HWIP,
+		.seg = regCP_DMA_CNTL_BASE_IDX,
+		.logical_inst = 3,
+		.offset_hwip = regCP_DMA_CNTL,
+		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
+	},
+	{
+		.name = "CP_DMA_CNTL",
+		.hwip = GC_HWIP,
+		.seg = regCP_DMA_CNTL_BASE_IDX,
+		.logical_inst = 4,
+		.offset_hwip = regCP_DMA_CNTL,
+		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
+	},
+	{
+		.name = "CP_DMA_CNTL",
+		.hwip = GC_HWIP,
+		.seg = regCP_DMA_CNTL_BASE_IDX,
+		.logical_inst = 5,
+		.offset_hwip = regCP_DMA_CNTL,
+		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
+	},
+	{
+		.name = "CP_DMA_CNTL",
+		.hwip = GC_HWIP,
+		.seg = regCP_DMA_CNTL_BASE_IDX,
+		.logical_inst = 6,
+		.offset_hwip = regCP_DMA_CNTL,
+		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
+	},
+	{
+		.name = "CP_DMA_CNTL",
+		.hwip = GC_HWIP,
+		.seg = regCP_DMA_CNTL_BASE_IDX,
+		.logical_inst = 7,
+		.offset_hwip = regCP_DMA_CNTL,
+		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
+	},
+};
+
 static int mi300_cp_dma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, bool fill_mode,
 			      uint64_t src, uint64_t dst, uint64_t size, uint64_t *size_copied)
 {
@@ -122,7 +173,6 @@ static int mi300_cp_dma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, bool 
 	uint32_t dma_cmd;
 	uint32_t dma_size;
 	uint32_t dma_temp;
-	uint32_t dma_pio_count;
 	uint32_t dma_busy_flag;
 	uint32_t curr_idx_vf;
 	int wait_ret;
@@ -130,10 +180,14 @@ static int mi300_cp_dma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, bool 
 	uint32_t hw_sched_id;
 	struct mi300_wait_for_cp_dma_pio_cb_ctx ctx = { 0 };
 	int ret = 0;
+	struct amdgv_wait_for_cb_context cb_context = { 0 };
 
-	/*
-	 * to use CP_DMA copy, need to make sure GFX is switched to PF
-	 */
+	ctx.adapt = adapt;
+	cb_context.type = AMDGV_WAIT_FOR_CP_DMA_PIO;
+	cb_context.ctx_ext = dma_copy_context_regs;
+	cb_context.num_ctx_ext = min(DMA_COPY_CONTEXT_REGS, adapt->mcp.gfx.num_xcc);
+
+	/* to use CP_DMA copy, need to make sure GFX is switched to PF */
 	*size_copied = 0;
 
 	/* check if PF is the active fcn on GFX HW scheds */
@@ -222,9 +276,9 @@ static int mi300_cp_dma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, bool 
 	*size_copied = 0;
 	while ((*size_copied) < size) {
 		for_each_id (xcc_id, amdgv_sched_get_xcc_mask_by_vf(adapt, idx_vf)) {
-			ctx.adapt = adapt;
 			ctx.xcc_id = xcc_id;
-			wait_ret = amdgv_wait_for(adapt, mi300_wait_for_cp_dma_pio_cb, (void *)&ctx, AMDGV_TIMEOUT(TIMEOUT_CP_DMA), 0);
+			cb_context.ctx = (void *)&ctx;
+			wait_ret = amdgv_wait_for(adapt, mi300_wait_for_cp_dma_pio_cb, &cb_context, AMDGV_TIMEOUT(TIMEOUT_CP_DMA), 0);
 
 			if (!wait_ret) {
 				WREG32(SOC15_REG_OFFSET(GC, GET_INST(GC, xcc_id), regCP_DMA_PIO_CONTROL), dma_cntl);
@@ -261,12 +315,6 @@ static int mi300_cp_dma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, bool 
 					src = src + dma_size;
 				dst = dst + dma_size;
 			} else {
-				dma_temp = RREG32(SOC15_REG_OFFSET(GC, GET_INST(GC, xcc_id), regCP_DMA_CNTL));
-				dma_pio_count = REG_GET_FIELD(dma_temp, CP_DMA_CNTL, PIO_COUNT);
-				AMDGV_WARN("DMA on inst %u failed! no room for another command! "
-					"DMA not ready (at pf_mc_addr=0x%llx) after "
-					"%d usec, dma_cntl = 0x%08x (pio_count=%d)\n",
-					GET_INST(GC, xcc_id), dst, AMDGV_TIMEOUT(TIMEOUT_CP_DMA), dma_temp, dma_pio_count);
 				ret = AMDGV_FAILURE;
 				goto exit_cp_dma;
 			}
@@ -280,7 +328,7 @@ static int mi300_cp_dma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, bool 
 			((uint32_t)0x1 << CP_STAT__DMA_BUSY__SHIFT);
 	/* wait_dma_complete for all CP inst used */
 	for_each_id (xcc_id, amdgv_sched_get_xcc_mask_by_vf(adapt, idx_vf)) {
-		wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET(GC, GET_INST(GC, xcc_id), regCP_STAT),
+		wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET_NAME(GC, GET_INST(GC, xcc_id), regCP_STAT),
 						dma_busy_flag, 0, AMDGV_TIMEOUT(TIMEOUT_CP_DMA),
 						AMDGV_WAIT_CHECK_EQ, 0);
 

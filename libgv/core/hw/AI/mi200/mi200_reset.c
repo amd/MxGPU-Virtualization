@@ -1,25 +1,7 @@
-/*
- * Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
-
 
 #include <amdgv_device.h>
 #include <amdgv_pci_def.h>
@@ -38,16 +20,9 @@
 #include "mi200_reset.h"
 #include "mi200_powerplay.h"
 
-#define PCI_CONFIG_SIZE 1024
 #define MI200_MAX_VF_NUM 16
 
 static const uint32_t this_block = AMDGV_SECURITY_BLOCK;
-
-struct pf_pcie_restore {
-	int   offset;
-	int   size;
-	char *name;
-};
 
 struct mi200_whole_gpu_reset_state {
 	uint32_t bif_bx_strap0;
@@ -407,7 +382,7 @@ static int mi200_wait_rlc_idle(struct amdgv_adapter *adapt)
 	int wait_ret;
 
 	wait_ret = amdgv_wait_for_register(
-	    adapt, SOC15_REG_OFFSET(GC, 0, mmRLC_STAT), 0, 0,
+	    adapt, SOC15_REG_OFFSET_NAME(GC, 0, mmRLC_STAT), 0, 0,
 	    AMDGV_TIMEOUT(TIMEOUT_STATUS_REG), AMDGV_WAIT_CHECK_EQ,
 	    AMDGV_WAIT_FLAG_FORCE_YIELD);
 
@@ -522,7 +497,7 @@ static int mi200_reset_wait_for_grbm(struct amdgv_adapter *adapt)
 
 	/* wait for a clean state */
 	wait_ret = amdgv_wait_for_register(
-	    adapt, SOC15_REG_OFFSET(GC, 0, mmGRBM_STATUS2),
+	    adapt, SOC15_REG_OFFSET_NAME(GC, 0, mmGRBM_STATUS2),
 	    GRBM_STATUS2__EA_BUSY_MASK | GRBM_STATUS2__EA_LINK_BUSY_MASK |
 		GRBM_STATUS2__RLC_BUSY_MASK,
 	    0, AMDGV_TIMEOUT(TIMEOUT_GRBM_STATUS), AMDGV_WAIT_CHECK_EQ,
@@ -674,8 +649,6 @@ static int mi200_reset_trigger_vf_flr(struct amdgv_adapter *adapt,
 		AMDGV_DEBUG("program %s mc settings\n",
 			    amdgv_idx_to_str(idx_vf));
 		if (adapt->psp.psp_program_guest_mc_settings(adapt, idx_vf)) {
-			AMDGV_ERROR("program %s mc settings failed\n",
-				    amdgv_idx_to_str(idx_vf));
 			ret = AMDGV_FAILURE;
 		}
 	}
@@ -1050,12 +1023,8 @@ static int mi200_reset_whole_gpu_reset(struct amdgv_adapter *adapt)
 
 	if (adapt->reset.in_xgmi_chain_reset) {
 		hive = amdgv_get_xgmi_hive(adapt);
-		if (!hive) {
-			AMDGV_ERROR("XGMI: node 0x%llx, can not match hive "
-				    "0x%llx in the hive list.\n",
-				    adapt->xgmi.node_id, adapt->xgmi.hive_id);
+		if (!hive)
 			goto exit;
-		}
 		task_barrier_full(&hive->tb_chain_reset, hive->number_adapters);
 		ret = mi200_mode1_reset(adapt);
 		if (ret) {
@@ -1127,7 +1096,7 @@ exit:
 struct amdgv_gpu_reset_funcs mi200_reset_funcs = {
 	.save_vddgfx_state = mi200_reset_save_vddgfx_state,
 	.trigger_vf_flr = mi200_reset_trigger_vf_flr,
-	.trigger_gpu_reset = mi200_reset_whole_gpu_reset,
+	.gpu_reset_and_reinit = mi200_reset_whole_gpu_reset,
 };
 
 static int mi200_reset_sw_init(struct amdgv_adapter *adapt)
@@ -1155,12 +1124,8 @@ static int mi200_reset_hw_init(struct amdgv_adapter *adapt)
 	if (adapt->xgmi.phy_nodes_num > 1) {
 
 		hive = amdgv_get_xgmi_hive(adapt);
-		if (!hive) {
-			AMDGV_ERROR("XGMI: node 0x%llx, can not match hive "
-				    "0x%llx in the hive list.\n",
-				    adapt->xgmi.node_id, adapt->xgmi.hive_id);
+		if (!hive)
 			return AMDGV_FAILURE;
-		}
 
 		if (!adapt->reset.in_xgmi_chain_reset) {
 			/* Sync counter to get the last adapt that passed */
@@ -1168,7 +1133,7 @@ static int mi200_reset_hw_init(struct amdgv_adapter *adapt)
 				/* reset counter after the last adapt is identified */
 				while (oss_atomic_dec_return(&hive->tb_drv_init.thread_count) > 0)
 					;
-				AMDGV_INFO("Last initialized device in hive initiating XGMI Topology update.");
+				AMDGV_INFO("Last initialized device in hive initiating XGMI Topology update.\n");
 				amdgv_list_for_each_entry(entry, &hive->adapt_list,
 					struct amdgv_adapter, xgmi.head) {
 						if (entry->status == AMDGV_STATUS_HW_INIT)

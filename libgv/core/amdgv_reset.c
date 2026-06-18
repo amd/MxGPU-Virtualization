@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_device.h"
@@ -109,8 +92,6 @@ int amdgv_reset_program_vf_mc_settings(struct amdgv_adapter *adapt)
 				AMDGV_DEBUG("program %s mc settings\n",
 					    amdgv_idx_to_str(idx_vf));
 				if (adapt->psp.psp_program_guest_mc_settings(adapt, idx_vf)) {
-					AMDGV_WARN("Failed to reset mc settings for %s\n",
-						   amdgv_idx_to_str(idx_vf));
 					ret = AMDGV_FAILURE;
 				}
 			}
@@ -129,7 +110,15 @@ int amdgv_reset_notify_engine_status(struct amdgv_adapter *adapt, uint32_t idx_v
 	return 0;
 }
 
-int amdgv_reset_gpu(struct amdgv_adapter *adapt)
+int amdgv_reset_trigger_gpu_hw_reset(struct amdgv_adapter *adapt, bool is_unload)
+{
+	if (adapt->reset.funcs && adapt->reset.funcs->trigger_gpu_hw_reset)
+		return adapt->reset.funcs->trigger_gpu_hw_reset(adapt, is_unload);
+	else
+		return AMDGV_FAILURE;
+}
+
+int amdgv_reset_gpu_and_reinit(struct amdgv_adapter *adapt)
 {
 	int ret = 0;
 	uint32_t idx_vf, i;
@@ -143,9 +132,9 @@ int amdgv_reset_gpu(struct amdgv_adapter *adapt)
 
 	funcs = adapt->reset.funcs;
 
-	if ((adapt->reset.reset_mode != AMDGV_RESET_PF_FLR)) {
-		if (funcs->trigger_gpu_reset) {
-			ret = funcs->trigger_gpu_reset(adapt);
+	if (adapt->reset.reset_mode != AMDGV_RESET_PF_FLR) {
+		if (funcs && funcs->gpu_reset_and_reinit) {
+			ret = funcs->gpu_reset_and_reinit(adapt);
 
 			if (ret) {
 				amdgv_device_set_status(adapt, AMDGV_STATUS_HW_LOST);
@@ -153,9 +142,13 @@ int amdgv_reset_gpu(struct amdgv_adapter *adapt)
 				amdgv_irqmgr_mbox_enable(adapt, false);
 				AMDGV_DEBUG("Disabled interrupts\n");
 			}
+		} else {
+			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_RESET_GPU_FAILED, 0);
 		}
 	} else {
 		ret = AMDGV_FAILURE;
+		if (!adapt->mcp.mem_mode_switch_requested)
+			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_RESET_GPU_FAILED, 0);
 	}
 
 	adapt->reset.reset_state = false;
@@ -184,20 +177,23 @@ int amdgv_reset_gpu(struct amdgv_adapter *adapt)
 
 int amdgv_reset_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
-	int ret = 0;
+	int ret = 0, i;
 	const struct amdgv_gpu_reset_funcs *funcs;
 
 	amdgv_put_error(idx_vf, AMDGV_ERROR_RESET_FLR, idx_vf);
 
-	/* VF FLR will clear the Dbit in HW,
-	 * so query the Dbit and merge to acc bits before VF FLR
-	 */
-	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)
-		amdgv_dirtybit_query_vf_fb_dbit(adapt, idx_vf);
+	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION) {
+		if (!IS_DEDICATED_SDMA_RING_AVAILABLE(adapt)) {
+			amdgv_dirtybit_set_vf_acc_bits(adapt, idx_vf, 0xff);
+			AMDGV_INFO("Set VF[%d] acc bits to all-dirty before VF FLR (no PF SDMA ring)\n", idx_vf);
+		} else {
+			amdgv_dirtybit_query_vf_fb_dbit(adapt, idx_vf);
+		}
+	}
 
+	// During GPUV live update bootup, need PF FLR, so ignore whether force reset flag is set
 	if ((adapt->flags & AMDGV_FLAG_VF_HANG_GPU_RESET) && !amdgv_in_live_update_seq()) {
-		// During GPUV live update bootup, need PF FLR, so ignore whether force reset flag is set
-		AMDGV_INFO("return flr failure because of force reset flag\n");
+		AMDGV_INFO("FLR is disabled\n");
 		return AMDGV_FAILURE;
 	}
 
@@ -205,18 +201,17 @@ int amdgv_reset_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 
 	funcs = adapt->reset.funcs;
 
-	if (adapt->sched.rlc_safe_mode)
-		adapt->sched.rlc_safe_mode(adapt, true);
+	amdgv_gfx_rlc_safe_mode(adapt, true);
 
-	if (funcs->trigger_vf_flr)
+	if (funcs && funcs->trigger_vf_flr)
 		ret = funcs->trigger_vf_flr(adapt, idx_vf);
 
-	if (adapt->sched.rlc_safe_mode)
-		adapt->sched.rlc_safe_mode(adapt, false);
+	amdgv_gfx_rlc_safe_mode(adapt, false);
 
 	adapt->array_vf[idx_vf].gpu_init_data_ready = false;
 	/* perf log is reset to disable state after flr */
-	adapt->sched.perf_log_enabled = false;
+	for (i = 0; i < adapt->gpuiov.num_ctrl_blocks; i++)
+		adapt->sched.perf_log_enabled[i] = false;
 
 	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)
 		amdgv_dirtybit_control(adapt, true);

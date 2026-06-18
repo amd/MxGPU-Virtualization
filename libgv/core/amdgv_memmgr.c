@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv.h"
@@ -28,12 +11,21 @@
 #include "amdgv_memmgr.h"
 #include "amdgv_wb_memory.h"
 #include "amdgv_gart.h"
+#include "amdgv_reset.h"
 
 static const uint32_t this_block = AMDGV_MEMORY_BLOCK;
 
 #define DEFAULT_ALIGN_SHIFT		12
 #define DEFAULT_SIZE			(0x1ULL << 36)
 #define AMDGV_MEMMGR_ALIGN(addr, align) (((addr) + (align)-1) & ~(align - 1))
+#define DEFAULT_MEMORY_MANAGER_SIZE (256 << 20)
+
+struct amdgv_mem_reservation {
+	uint64_t start;
+	uint64_t size;
+	struct amdgv_memmgr_mem *rsv_mem;
+	struct amdgv_list_head blocks;
+};
 
 static const char *amdgv_mem_id_name(uint32_t id)
 {
@@ -150,6 +142,12 @@ static const char *amdgv_mem_id_name(uint32_t id)
 		return "MEM_SDMA0_MQD";
 	case MEM_SDMA1_MQD:
 		return "MEM_SDMA1_MQD";
+	case MEM_MES_RING:
+		return "MEM_MES_RING";
+	case MEM_MES_EOP:
+		return "MEM_MES_EOP";
+	case MEM_MES_MQD:
+		return "MEM_MES_MQD";
 
 	/* Live migration */
 	case MEM_MIGRATION_PSP_STATIC_DATA:
@@ -199,8 +197,18 @@ int amdgv_memmgr_init(struct amdgv_adapter *adapt, struct amdgv_memmgr *memmgr,
 	if (!memmgr->allocs) {
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				sizeof(struct amdgv_memmgr_mem));
+		goto allocs_fail;
+	}
+
+	AMDGV_INIT_LIST_HEAD(&memmgr->reservations_pending);
+	AMDGV_INIT_LIST_HEAD(&memmgr->reserved_pages);
+	memmgr->rsv_lock = oss_mutex_init();
+	if (memmgr->rsv_lock == OSS_INVALID_HANDLE) {
+		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
 		oss_mutex_fini(memmgr->lock);
 		memmgr->lock = OSS_INVALID_HANDLE;
+		oss_free(memmgr->allocs);
+		memmgr->allocs = NULL;
 		return AMDGV_FAILURE;
 	}
 
@@ -213,9 +221,7 @@ int amdgv_memmgr_init(struct amdgv_adapter *adapt, struct amdgv_memmgr *memmgr,
 	if (!memmgr->reserves) {
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_RESERVE_SYSTEM_MEM_FAIL,
 				sizeof(struct amdgv_memmgr_mem));
-		oss_mutex_fini(memmgr->lock);
-		memmgr->lock = OSS_INVALID_HANDLE;
-		return AMDGV_FAILURE;
+		goto reserves_fail;
 	}
 
 	AMDGV_INIT_LIST_HEAD(&memmgr->reserves->node);
@@ -234,6 +240,15 @@ int amdgv_memmgr_init(struct amdgv_adapter *adapt, struct amdgv_memmgr *memmgr,
 		    memmgr->size);
 
 	return 0;
+
+reserves_fail:
+	oss_free(memmgr->allocs);
+	memmgr->allocs = NULL;
+allocs_fail:
+	oss_mutex_fini(memmgr->lock);
+	memmgr->lock = OSS_INVALID_HANDLE;
+	return AMDGV_FAILURE;
+
 }
 
 static struct amdgv_memmgr_mem *amdgv_memmgr_find_size(struct amdgv_memmgr *memmgr,
@@ -332,7 +347,7 @@ static int amdgv_memmgr_export_mem_allocs(struct amdgv_memmgr *memmgr,
 	head = &memmgr->allocs->node;
 
 	if (amdgv_list_empty(head)) {
-		AMDGV_INFO("No memmgr allocs to export\n");
+		AMDGV_DEBUG("No memmgr allocs to export\n");
 		return 0;
 	}
 
@@ -505,9 +520,38 @@ int amdgv_memmgr_fini(struct amdgv_adapter *adapt, struct amdgv_memmgr *memmgr)
 	struct amdgv_list_head *rhead;
 	struct amdgv_memmgr_mem *alloc, *tmp;
 	struct amdgv_memmgr_mem *reserve, *rtmp;
+	struct amdgv_mem_reservation *rsv, *temp;
 
 	if (!memmgr)
 		return 0;
+
+	/* Same lock as query/reserve: serialize teardown vs list walkers. */
+	if (memmgr->rsv_lock)
+		oss_mutex_lock(memmgr->rsv_lock);
+
+	if (!amdgv_list_empty(&memmgr->reservations_pending)) {
+		amdgv_list_for_each_entry_safe(rsv, temp,
+			&memmgr->reservations_pending, struct amdgv_mem_reservation, blocks) {
+			amdgv_list_del(&rsv->blocks);
+			oss_free(rsv);
+		}
+	}
+
+	if (!amdgv_list_empty(&memmgr->reserved_pages)) {
+		amdgv_list_for_each_entry_safe(rsv, temp,
+			&memmgr->reserved_pages, struct amdgv_mem_reservation, blocks) {
+			amdgv_list_del(&rsv->blocks);
+			if (rsv->rsv_mem)
+				amdgv_memmgr_free(rsv->rsv_mem);
+			oss_free(rsv);
+		}
+	}
+
+	if (memmgr->rsv_lock) {
+		oss_mutex_unlock(memmgr->rsv_lock);
+		oss_mutex_fini(memmgr->rsv_lock);
+		memmgr->rsv_lock = OSS_INVALID_HANDLE;
+	}
 
 	if (memmgr->lock)
 		oss_mutex_lock(memmgr->lock);
@@ -665,14 +709,18 @@ struct amdgv_memmgr_mem *amdgv_memmgr_alloc(struct amdgv_memmgr *memmgr, uint64_
 
 static int amdgv_map_mem_gart(struct amdgv_memmgr_mem *mem, enum amdgv_map_op map_op)
 {
+	struct amdgv_adapter *adapt = mem->memmgr->adapt;
 	int pages, offset, ret = 0;
 	uint64_t i;
 
 	pages = mem->len >> AMDGV_GPU_PAGE_SHIFT;
 	offset = amdgv_memmgr_get_offset(mem);
 	for (i = 0; i < pages; i++)
-		amdgv_gart_map(mem->memmgr->adapt, offset + (i << AMDGV_GPU_PAGE_SHIFT), 1,
+		amdgv_gart_map(adapt, offset + (i << AMDGV_GPU_PAGE_SHIFT), 1,
 			map_op == AMDGV_UNMAP ? 0 : oss_sg_dma_address(mem->sys_mem.handle, i));
+
+	if (!in_whole_gpu_reset())
+		amdgv_gart_invalidate_tlb(adapt);
 
 	return ret;
 }
@@ -736,7 +784,8 @@ out:
 
 static struct amdgv_memmgr_mem *amdgv_memmgr_alloc_unify_align(struct amdgv_memmgr *memmgr, uint64_t len,
 						  uint64_t align, enum amdgv_mem_id id,
-						  uint64_t *gpu_addr, void *va_ptr)
+						  uint64_t *gpu_addr, void *va_ptr,
+						  enum oss_page_attr page_attr)
 {
 	struct amdgv_adapter *adapt = memmgr->adapt;
 	struct amdgv_memmgr_mem *prev, *new;
@@ -821,11 +870,13 @@ alloc_new:
 		 */
 		len = roundup(len, AMDGV_GPU_PAGE_SIZE);
 		align = roundup(align, AMDGV_GPU_PAGE_SIZE);
-		if (oss_alloc_dma_mem(adapt->dev, len, OSS_DMA_ALLOW_DMA_NOT_CONTIGUOUS,
-			&new->sys_mem) != 0) {
+
+		if (oss_alloc_dma_mem_with_attr(adapt->dev, len, OSS_DMA_ALLOW_DMA_NOT_CONTIGUOUS,
+			page_attr, &new->sys_mem) != 0) {
 			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_DMA_MEM_FAIL, len);
 			goto alloc_fail;
 		}
+
 		if (gpu_addr)
 			*gpu_addr = amdgv_memmgr_get_gpu_addr(new);
 
@@ -861,10 +912,12 @@ alloc_fail:
 	return NULL;
 }
 
-struct amdgv_memmgr_mem *amdgv_memmgr_alloc_sys_align(struct amdgv_memmgr *memmgr, uint64_t len,
-						  uint64_t align, uint64_t *gpu_addr, void *va_ptr)
+struct amdgv_memmgr_mem *amdgv_memmgr_alloc_sys_align_with_attr(struct amdgv_memmgr *memmgr,
+						  uint64_t len, uint64_t align,
+						  enum oss_page_attr page_attr,
+						  uint64_t *gpu_addr, void *va_ptr)
 {
-	return amdgv_memmgr_alloc_unify_align(memmgr, len, align, 0, gpu_addr, va_ptr);
+	return amdgv_memmgr_alloc_unify_align(memmgr, len, align, 0, gpu_addr, va_ptr, page_attr);
 }
 
 struct amdgv_memmgr_mem *amdgv_memmgr_alloc_align(struct amdgv_memmgr *memmgr, uint64_t len,
@@ -878,13 +931,15 @@ struct amdgv_memmgr_mem *amdgv_memmgr_alloc_align(struct amdgv_memmgr *memmgr, u
 			return amdgv_memmgr_reserve_attrs(memmgr, len, align, id);
 	}
 
-	return amdgv_memmgr_alloc_unify_align(memmgr, len, align, id, NULL, NULL);
+	return amdgv_memmgr_alloc_unify_align(memmgr, len, align, id, NULL, NULL,
+					OSS_PAGE_READWRITE | OSS_PAGE_WRITECOMBINE);
 }
 
 struct amdgv_memmgr_mem *amdgv_memmgr_alloc_sys_align_zero(struct amdgv_memmgr *memmgr, uint64_t len,
 	uint64_t align, uint64_t *gpu_addr, void *va_ptr)
 {
-	struct amdgv_memmgr_mem *mem = amdgv_memmgr_alloc_sys_align(memmgr, len, align, gpu_addr, va_ptr);
+	struct amdgv_memmgr_mem *mem = amdgv_memmgr_alloc_unify_align(memmgr, len, align, 0, gpu_addr, va_ptr,
+					OSS_PAGE_READWRITE | OSS_PAGE_WRITECOMBINE);
 	if (mem)
 		oss_memset(amdgv_memmgr_get_cpu_addr(mem), 0, len);
 
@@ -974,7 +1029,7 @@ struct amdgv_memmgr_mem *amdgv_memmgr_alloc_align_at(struct amdgv_memmgr *memmgr
 	mem_id = amdgv_memmgr_mem_id_add(adapt, id);
 	if (mem_id == MEM_ID_NOT_AVAILABLE) {
 		AMDGV_ERROR("Fail to add %s to the mem_id list\n", amdgv_mem_id_name(id));
-		return NULL;
+		goto alloc_fail;
 	}
 	/* Allocations fail if not enough space is available from the TOM
 	 * to the end of allocable space
@@ -1039,7 +1094,7 @@ static int amdgv_memmgr_fill_reserved_bad_pages(struct amdgv_memmgr *memmgr,
 	head = &memmgr->allocs->node;
 
 	if (amdgv_list_empty(head)) {
-		AMDGV_INFO("No memmgr allocs\n");
+		AMDGV_DEBUG("No memmgr allocs\n");
 		return 0;
 	}
 
@@ -1087,6 +1142,114 @@ int amdgv_memmgr_fill_reserved_bad_pages_all(struct amdgv_adapter *adapt,
 	ret = amdgv_memmgr_fill_reserved_bad_pages(&adapt->memmgr_pf, bps_mem, &idx);
 	if (!ret)
 		ret = amdgv_memmgr_fill_reserved_bad_pages(&adapt->memmgr_gpu, bps_mem, &idx);
+
+	return ret;
+}
+
+static int amdgv_memmgr_page_reserve_status_locked(struct amdgv_memmgr *mgr,
+						   uint64_t pfn)
+{
+	struct amdgv_mem_reservation *rsv;
+	uint64_t addr;
+
+	addr = pfn << AMDGV_GPU_PAGE_SHIFT;
+
+	if (!amdgv_list_empty(&mgr->reservations_pending)) {
+		amdgv_list_for_each_entry(rsv, &mgr->reservations_pending,
+				struct amdgv_mem_reservation, blocks) {
+			if (rsv->start <= addr &&
+			    (addr < (rsv->start + rsv->size)))
+				return AMDGV_ERR_BUSY;
+		}
+	}
+
+	if (!amdgv_list_empty(&mgr->reserved_pages)) {
+		amdgv_list_for_each_entry(rsv, &mgr->reserved_pages,
+				struct amdgv_mem_reservation, blocks) {
+			if (rsv->start <= addr &&
+			    (addr < (rsv->start + rsv->size)))
+				return 0;
+		}
+	}
+
+	return AMDGV_FAILURE;
+}
+
+int amdgv_memmgr_query_page_reserve_status(struct amdgv_adapter *adapt,
+		struct amdgv_memmgr *mgr, uint64_t pfn)
+{
+	int ret;
+
+	oss_mutex_lock(mgr->rsv_lock);
+	ret = amdgv_memmgr_page_reserve_status_locked(mgr, pfn);
+	oss_mutex_unlock(mgr->rsv_lock);
+
+	return ret;
+}
+
+int amdgv_memmgr_reserve_page(struct amdgv_adapter *adapt, struct amdgv_memmgr *mgr,
+				uint64_t pfn)
+{
+	struct amdgv_mem_reservation *rsv;
+	struct amdgv_memmgr_mem *mem;
+	int ret;
+
+	oss_mutex_lock(mgr->rsv_lock);
+
+	ret = amdgv_memmgr_page_reserve_status_locked(mgr, pfn);
+	if (ret != AMDGV_FAILURE) {
+		oss_mutex_unlock(mgr->rsv_lock);
+		return ret;
+	}
+
+	rsv = oss_zalloc(sizeof(*rsv));
+	if (!rsv) {
+		oss_mutex_unlock(mgr->rsv_lock);
+		return AMDGV_FAILURE;
+	}
+
+	AMDGV_INIT_LIST_HEAD(&rsv->blocks);
+	rsv->start = pfn << AMDGV_GPU_PAGE_SHIFT;
+	rsv->size = AMDGV_GPU_PAGE_SIZE;
+
+	mem = amdgv_memmgr_alloc_align_at(mgr,
+			rsv->start, rsv->size, MEM_ECC_BAD_PAGE);
+	if (mem) {
+		AMDGV_INFO("Reservation 0x%llx - %lld, Succeeded\n",
+			rsv->start, rsv->size);
+		rsv->rsv_mem = mem;
+		amdgv_list_add_tail(&rsv->blocks, &mgr->reserved_pages);
+		ret = 0;
+	} else {
+		amdgv_list_add_tail(&rsv->blocks, &mgr->reservations_pending);
+		ret = AMDGV_ERR_BUSY;
+	}
+	oss_mutex_unlock(mgr->rsv_lock);
+
+	return ret;
+}
+
+bool amdgv_memmgr_check_critical_address(struct amdgv_adapter *adapt,
+		uint64_t address)
+{
+	struct amdgv_memmgr *memmgr = &adapt->memmgr_pf;
+	struct amdgv_list_head *head;
+	struct amdgv_memmgr_mem *alloc;
+	bool ret = false;
+
+	head = &memmgr->allocs->node;
+	if (amdgv_list_empty(head))
+		return false;
+
+	oss_mutex_lock(memmgr->lock);
+	amdgv_list_for_each_entry (alloc, head, struct amdgv_memmgr_mem, node) {
+		if (((alloc->alloc_off - alloc->len) <= address) &&
+		    (address < alloc->alloc_off)) {
+			ret = true;
+			break;
+		}
+	}
+	oss_mutex_unlock(memmgr->lock);
 
 	return ret;
 }
@@ -1369,6 +1532,38 @@ uint64_t amdgv_memmgr_get_align(struct amdgv_memmgr_mem *mem)
 	return mem->align;
 }
 
+int amdgv_memmgr_pf_init(struct amdgv_adapter *adapt)
+{
+	uint64_t libgv_res_fb_offset;
+	uint64_t libgv_res_fb_size;
+
+	/* Use hypervisor's configuration to allocate FB for PF memmgr */
+	if (adapt->opt.libgv_res_fb_size != AMDGV_USE_DEFAULT_MEMMGR) {
+		libgv_res_fb_offset = adapt->opt.libgv_res_fb_offset;
+		libgv_res_fb_size = adapt->opt.libgv_res_fb_size;
+	} else {
+		libgv_res_fb_offset = 0x0;
+		libgv_res_fb_size = DEFAULT_MEMORY_MANAGER_SIZE;
+	}
+
+	/* Allocate a memory manager for the PF Framebuffer */
+	if (amdgv_memmgr_init(adapt, &adapt->memmgr_pf, libgv_res_fb_offset, libgv_res_fb_size,
+			      0, false)) {
+		AMDGV_ERROR("Failed to init PF FB memory manager\n");
+		return AMDGV_FAILURE;
+	}
+
+	return 0;
+}
+
+int amdgv_memmgr_pf_fini(struct amdgv_adapter *adapt)
+{
+	if (!adapt->memmgr_pf.is_init)
+		return 0;
+
+	return amdgv_memmgr_fini(adapt, &adapt->memmgr_pf);
+}
+
 enum amdgv_live_info_status amdgv_memmgr_export_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_memmgr *memmgr_info)
 {
 	uint32_t ret = 0;
@@ -1578,4 +1773,24 @@ int amdgv_memmgr_alloc_deferred_region(struct amdgv_memmgr *memmgr)
 		return AMDGV_FAILURE;
 
 	return 0;
+}
+
+bool amdgv_memmgr_addr_in_range(struct amdgv_adapter *adapt, struct amdgv_memmgr *memmgr, uint64_t addr)
+{
+	uint64_t memmgr_start, memmgr_end;
+	uint64_t limit;
+	uint64_t config_memsize;
+
+	amdgv_memmgr_get_limit(memmgr, &limit);
+	config_memsize = MBYTES_TO_BYTES(amdgv_nbio_get_memsize(adapt));
+
+	if (memmgr->down) {
+		memmgr_start = config_memsize - limit;
+		memmgr_end = config_memsize;
+	} else {
+		memmgr_start = 0;
+		memmgr_end = limit;
+	}
+
+	return (addr >= memmgr_start && addr < memmgr_end);
 }

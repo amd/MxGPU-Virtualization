@@ -1,23 +1,7 @@
 /*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef __SMI_UTILS_H__
@@ -89,12 +73,34 @@ std::optional<int> get_numa_node_from_bdf(const std::string& bdf);
 std::optional<std::string> get_pcie_parent_bdf(const std::string& bdf);
 
 /**
+ * @brief Get the current PCIe link generation directly from config space
+ *
+ * Reads the negotiated Current Link Speed from the PCIe Capability Link Status
+ * register, which is encoded as the PCIe generation. This is the currently
+ * negotiated generation, not the maximum capability of the device or slot.
+ *
+ * @param bdf BDF string of the PCI device
+ * @return PCIe generation number, or nullopt if not available
+ */
+std::optional<uint8_t> get_pcie_link_gen(const std::string& bdf);
+
+/**
  * @brief Convert NicType enum to string representation
  *
  * @param type NicType enum value
  * @return String representation of the NIC type
  */
 std::string nic_type_to_string(NicType type);
+
+#ifdef LIBMNL_INSTALLED
+/**
+ * @brief Convert devlink port flavour to string representation
+ *
+ * @param flavour Devlink port flavour value
+ * @return String representation of the port flavour
+ */
+const char *flavour_to_string(uint16_t flavour);
+#endif
 
 /**
  * @brief Read data from sysfs path and return as specified type

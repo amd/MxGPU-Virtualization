@@ -1,23 +1,8 @@
-/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #include "amdsmi.h"
 #include "smi_cli_api_host.h"
 #include "smi_cli_helpers.h"
@@ -46,9 +31,9 @@ typedef amdsmi_status_t (*AMDSMI_GET_LINK_TOPOLOGY)(amdsmi_processor_handle,
 		amdsmi_link_topology_t *);
 typedef amdsmi_status_t (*AMDSMI_TOPO_GET_P2P_STATUS)(amdsmi_processor_handle,amdsmi_processor_handle,
 		amdsmi_link_type_t*, amdsmi_p2p_capability_t*);
-typedef amdsmi_status_t (*AMDSMI_TOPO_GET_NIC_LINK_TYPE)(amdsmi_processor_handle,
+typedef amdsmi_status_t (*AMDSMI_TOPO_GET_LINK_TYPE)(amdsmi_processor_handle,
 		amdsmi_processor_handle,
-		amdsmi_nic_link_type_t *);
+		uint64_t *, amdsmi_link_type_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_NIC_DEVICE_BDF)(amdsmi_processor_handle,
 		amdsmi_bdf_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_AI_NIC_NUMA_INFO)(amdsmi_processor_handle,
@@ -65,7 +50,7 @@ extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_fro
 extern AMDSMI_GET_GPU_DEVICE_BDF host_amdsmi_get_gpu_device_bdf;
 extern AMDSMI_GET_LINK_TOPOLOGY host_amdsmi_get_link_topology;
 extern AMDSMI_TOPO_GET_P2P_STATUS host_amdsmi_topo_get_p2p_status;
-extern AMDSMI_TOPO_GET_NIC_LINK_TYPE host_amdsmi_topo_get_nic_link_type;
+extern AMDSMI_TOPO_GET_LINK_TYPE host_amdsmi_topo_get_link_type;
 extern AMDSMI_GET_NIC_DEVICE_BDF host_amdsmi_get_nic_device_bdf;
 extern AMDSMI_GET_AI_NIC_NUMA_INFO host_amdsmi_get_nic_numa_info;
 extern AMDSMI_TOPO_GET_NUMA_NODE_NUMBER host_amdsmi_topo_get_numa_node_number;
@@ -73,7 +58,7 @@ extern AMDSMI_GET_CPU_AFFINITY_WITH_SCOPE host_amdsmi_get_cpu_affinity_with_scop
 
 
 std::vector<std::vector<amdsmi_link_topology_t>> topology;
-std::vector<std::vector<amdsmi_nic_link_type_t>> nic_topology;
+std::vector<std::vector<amdsmi_link_type_t>> nic_topology;
 std::vector<std::vector<amdsmi_p2p_capability_t>> p2p_capability;
 
 amdsmi_link_topology_t get_empty_topology_info() {
@@ -85,8 +70,8 @@ amdsmi_link_topology_t get_empty_topology_info() {
 	return info;
 }
 
-amdsmi_nic_link_type_t get_empty_nic_topology_info() {
-	return AMDSMI_NIC_LINK_TYPE_UNKNOWN;
+amdsmi_link_type_t get_empty_nic_topology_info() {
+	return AMDSMI_LINK_TYPE_UNKNOWN;
 }
 
 amdsmi_p2p_capability_t get_empty_p2p_capability_info() {
@@ -104,8 +89,8 @@ int AmdSmiApiHost::initTopology(Arguments arg,
 {
 	amdsmi_link_topology_t topology_info;
 	amdsmi_link_topology_t topology_empty_info = get_empty_topology_info();
-	amdsmi_nic_link_type_t nic_topology_info;
-	amdsmi_nic_link_type_t nic_topology_empty_info = get_empty_nic_topology_info();
+	amdsmi_link_type_t nic_topology_info;
+	amdsmi_link_type_t nic_topology_empty_info = get_empty_nic_topology_info();
 	amdsmi_p2p_capability_t p2p_capability_info;
 	amdsmi_p2p_capability_t p2p_capability_empty_info = get_empty_p2p_capability_info();
 	amdsmi_link_type_t p2p_link_type;
@@ -152,7 +137,7 @@ int AmdSmiApiHost::initTopology(Arguments arg,
 
 	if (arg.nic_devices.size() > 0)	{
 		for (unsigned int i = 0; i < arg.nic_devices.size(); i++) {
-			std::vector<amdsmi_nic_link_type_t> nic_inner_vector;
+			std::vector<amdsmi_link_type_t> nic_inner_vector;
 			unsigned int nic_index = arg.nic_devices[i]->get_gpu_index();
 
 			ret = amdsmi_get_nic_processor_from_index(&nic_handle, nic_index);
@@ -175,7 +160,7 @@ int AmdSmiApiHost::initTopology(Arguments arg,
 								nic_bdf.bdf.function_number);
 			nic_bdf_vector.push_back(nic_bdf_string);
 			for (unsigned int j = 0; j < gpu_count; j++) {
-				ret = host_amdsmi_topo_get_nic_link_type(nic_handle, processors[j], &nic_topology_info);
+				ret = host_amdsmi_topo_get_link_type(nic_handle, processors[j], nullptr, &nic_topology_info);
 				if (ret != AMDSMI_STATUS_SUCCESS) {
 					Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__,
 												__LINE__);

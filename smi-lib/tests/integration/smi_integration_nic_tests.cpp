@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <iostream>
@@ -93,6 +76,35 @@ TEST_F(AmdSmiNicIntegrationTests, NicDriverInfoTest)
 			EXPECT_GT(strlen(driver_info.version), 0);
 		} else {
 			std::cout << "NIC " << i << " driver info not available (status: " << ret << ")" << std::endl;
+			EXPECT_TRUE(ret == AMDSMI_STATUS_NOT_SUPPORTED || ret == AMDSMI_STATUS_NOT_FOUND);
+		}
+	}
+}
+
+TEST_F(AmdSmiNicIntegrationTests, NicFwInfoTest)
+{
+	amdsmi_nic_fw_info_t fw_info;
+	amdsmi_status_t ret = AMDSMI_STATUS_SUCCESS;
+
+	for (uint32_t i = 0; i < nic_count_; i++) {
+		ret = amdsmi_get_nic_fw_info(nic_processors_[i], &fw_info);
+
+		if (ret == AMDSMI_STATUS_SUCCESS) {
+			std::cout << "NIC " << i << " Firmware Info (" << fw_info.num_fw << " entries):" << std::endl;
+			for (uint32_t j = 0; j < fw_info.num_fw; j++) {
+				const char *type_str = "unknown";
+				switch (fw_info.fw[j].type) {
+				case AMDSMI_NIC_FW_VERSION_TYPE_FIXED:   type_str = "fixed";   break;
+				case AMDSMI_NIC_FW_VERSION_TYPE_RUNNING: type_str = "running"; break;
+				case AMDSMI_NIC_FW_VERSION_TYPE_STORED:  type_str = "stored";  break;
+				}
+				std::cout << "  [" << type_str << "] " << fw_info.fw[j].fw.name
+					  << ": " << fw_info.fw[j].fw.version << std::endl;
+			}
+
+			EXPECT_GT(fw_info.num_fw, 0u);
+		} else {
+			std::cout << "NIC " << i << " firmware info not available (status: " << ret << ")" << std::endl;
 			EXPECT_TRUE(ret == AMDSMI_STATUS_NOT_SUPPORTED || ret == AMDSMI_STATUS_NOT_FOUND);
 		}
 	}
@@ -332,8 +344,7 @@ TEST_F(AmdSmiNicIntegrationTests, NicRdmaDevInfoTest)
 			}
 		} else {
 			std::cout << "NIC " << i << " RDMA info not available (status: " << ret << ")" << std::endl;
-			// TODO: broadcom - remove AMDSMI_STATUS_DRIVER_NOT_LOADED
-			EXPECT_TRUE(ret == AMDSMI_STATUS_NOT_SUPPORTED || ret == AMDSMI_STATUS_NOT_FOUND || ret == AMDSMI_STATUS_NO_DATA || ret == AMDSMI_STATUS_DRIVER_NOT_LOADED);
+			EXPECT_TRUE(ret == AMDSMI_STATUS_NOT_SUPPORTED || ret == AMDSMI_STATUS_NOT_FOUND || ret == AMDSMI_STATUS_NO_DATA);
 		}
 	}
 }
@@ -427,7 +438,28 @@ static void nic_walkthrough_test(amdsmi_processor_handle *nic_processors, uint32
 		EXPECT_GT(strlen(driver_info.name), 0);
 		EXPECT_GT(strlen(driver_info.version), 0);
 
-		// 2. ASIC Information
+		// 2. Firmware Information
+		if (verbose) {
+			std::cout << "\n2b. Firmware Information:" << std::endl;
+		}
+		amdsmi_nic_fw_info_t fw_info;
+		ASSERT_EQ(amdsmi_get_nic_fw_info(nic_processors[i], &fw_info), AMDSMI_STATUS_SUCCESS);
+		if (verbose) {
+			std::cout << "       Firmware entries: " << fw_info.num_fw << std::endl;
+			for (uint32_t j = 0; j < fw_info.num_fw; j++) {
+				const char *type_str = "unknown";
+				switch (fw_info.fw[j].type) {
+				case AMDSMI_NIC_FW_VERSION_TYPE_FIXED:   type_str = "fixed";   break;
+				case AMDSMI_NIC_FW_VERSION_TYPE_RUNNING: type_str = "running"; break;
+				case AMDSMI_NIC_FW_VERSION_TYPE_STORED:  type_str = "stored";  break;
+				}
+				std::cout << "       [" << type_str << "] " << fw_info.fw[j].fw.name
+						<< ": " << fw_info.fw[j].fw.version << std::endl;
+			}
+		}
+		EXPECT_GT(fw_info.num_fw, 0u);
+
+		// 3. ASIC Information
 		if (verbose) {
 			std::cout << "\n2. ASIC Information:" << std::endl;
 		}
@@ -448,7 +480,8 @@ static void nic_walkthrough_test(amdsmi_processor_handle *nic_processors, uint32
 		EXPECT_NE(asic_info.vendor_id, 0);
 		EXPECT_NE(asic_info.device_id, 0);
 
-		// 3. Bus Information
+
+		// 4. Bus Information
 		if (verbose) {
 			std::cout << "\n3. Bus Information:" << std::endl;
 		}
@@ -467,7 +500,7 @@ static void nic_walkthrough_test(amdsmi_processor_handle *nic_processors, uint32
 		EXPECT_GT(bus_info.max_pcie_width, 0);
 		EXPECT_GT(bus_info.max_pcie_speed, 0);
 
-		// 4. NUMA Information
+		// 5. NUMA Information
 		if (verbose) {
 			std::cout << "\n4. NUMA Information:" << std::endl;
 		}
@@ -480,7 +513,7 @@ static void nic_walkthrough_test(amdsmi_processor_handle *nic_processors, uint32
 		EXPECT_GE(numa_info.node, 0);
 		EXPECT_GT(strlen(numa_info.affinity), 0);
 
-		// 5. Port Information
+		// 6. Port Information
 		if (verbose) {
 			std::cout << "\n5. Port Information:" << std::endl;
 		}
@@ -513,7 +546,7 @@ static void nic_walkthrough_test(amdsmi_processor_handle *nic_processors, uint32
 			EXPECT_GT(strlen(port_info.ports[0].type), 0);
 		}
 
-		// 6. Device Statistics
+		// 7. Device Statistics
 		if (verbose) {
 			std::cout << "\n6. Device Statistics:" << std::endl;
 		}
@@ -531,7 +564,7 @@ static void nic_walkthrough_test(amdsmi_processor_handle *nic_processors, uint32
 			delete[] vendor_stats;
 		}
 
-		// 7. Port Statistics
+		// 8. Port Statistics
 		if (verbose) {
 			std::cout << "\n7. Port Statistics:" << std::endl;
 		}
@@ -549,7 +582,7 @@ static void nic_walkthrough_test(amdsmi_processor_handle *nic_processors, uint32
 			delete[] port_stats;
 		}
 
-		// 8. RDMA Device Information
+		// 9. RDMA Device Information
 		if (verbose) {
 			std::cout << "\n8. RDMA Device Information:" << std::endl;
 		}
@@ -593,11 +626,10 @@ static void nic_walkthrough_test(amdsmi_processor_handle *nic_processors, uint32
 			if (verbose) {
 				std::cout << "       RDMA info not available (status: " << rdma_ret << ")" << std::endl;
 			}
-			// TODO: broadcom - remove AMDSMI_STATUS_DRIVER_NOT_LOADED
-			EXPECT_TRUE(rdma_ret == AMDSMI_STATUS_NOT_SUPPORTED || rdma_ret == AMDSMI_STATUS_NOT_FOUND || rdma_ret == AMDSMI_STATUS_NO_DATA || rdma_ret == AMDSMI_STATUS_DRIVER_NOT_LOADED);
+			EXPECT_TRUE(rdma_ret == AMDSMI_STATUS_NOT_SUPPORTED || rdma_ret == AMDSMI_STATUS_NOT_FOUND || rdma_ret == AMDSMI_STATUS_NO_DATA);
 		}
 
-		// 9. RDMA Port Statistics
+		// 10. RDMA Port Statistics
 		if (verbose) {
 			std::cout << "\n9. RDMA Port Statistics:" << std::endl;
 		}
@@ -619,11 +651,10 @@ static void nic_walkthrough_test(amdsmi_processor_handle *nic_processors, uint32
 			if (verbose) {
 				std::cout << "       RDMA port statistics not available (status: " << rdma_stats_ret << ")" << std::endl;
 			}
-			// TODO: broadcom - remove AMDSMI_STATUS_DRIVER_NOT_LOADED
-			EXPECT_TRUE(rdma_stats_ret == AMDSMI_STATUS_NOT_SUPPORTED || rdma_stats_ret == AMDSMI_STATUS_NOT_FOUND || rdma_stats_ret == AMDSMI_STATUS_NO_DATA || rdma_stats_ret == AMDSMI_STATUS_DRIVER_NOT_LOADED);
+			EXPECT_TRUE(rdma_stats_ret == AMDSMI_STATUS_NOT_SUPPORTED || rdma_stats_ret == AMDSMI_STATUS_NOT_FOUND || rdma_stats_ret == AMDSMI_STATUS_NO_DATA);
 		}
 
-		// 10. BDF Information
+		// 11. BDF Information
 		if (verbose) {
 			std::cout << "\n10. BDF Information:" << std::endl;
 		}
@@ -664,82 +695,77 @@ TEST_F(AmdSmiNicIntegrationTests, NicWalkthroughTestMultithreaded)
 
 TEST_F(AmdSmiNicIntegrationTests, NicMultithreadedTest_Success)
 {
-	std::vector<std::thread> threads;
+	if (nic_count_ == 0) {
+		GTEST_SKIP() << "No NIC devices available";
+	}
 
-	// All threads call amdsmi_init before API usage
-	auto safe_api_thread = [](amdsmi_processor_handle *nic_processors, uint32_t nic_count) {
-		amdsmi_status_t init_result = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
-		EXPECT_EQ(init_result, AMDSMI_STATUS_SUCCESS);
+	constexpr int kIterationsPerThread = 8;
+	constexpr int kThreadCount = 8;
 
-		if (nic_count > 0) {
+	auto safe_api_thread = [](amdsmi_processor_handle *nic_processors) {
+		for (int i = 0; i < kIterationsPerThread; ++i) {
 			amdsmi_bdf_t bdf;
-			amdsmi_status_t bdf_result = amdsmi_get_nic_device_bdf(nic_processors[0], &bdf);
-			EXPECT_EQ(bdf_result, AMDSMI_STATUS_SUCCESS);
+			EXPECT_EQ(amdsmi_get_nic_device_bdf(nic_processors[0], &bdf),
+				AMDSMI_STATUS_SUCCESS);
 
 			amdsmi_nic_bus_info_t bus_info;
-			amdsmi_status_t bus_result = amdsmi_get_nic_bus_info(nic_processors[0], &bus_info);
-			EXPECT_EQ(bus_result, AMDSMI_STATUS_SUCCESS);
+			EXPECT_EQ(amdsmi_get_nic_bus_info(nic_processors[0], &bus_info),
+				AMDSMI_STATUS_SUCCESS);
 		}
-
-		amdsmi_status_t shutdown_result = amdsmi_shut_down();
-		EXPECT_EQ(shutdown_result, AMDSMI_STATUS_SUCCESS);
 	};
 
-	for (int i = 0; i < 8; ++i) {
-		threads.emplace_back(safe_api_thread, nic_processors_.get(), nic_count_);
+	std::vector<std::thread> threads;
+	threads.reserve(kThreadCount);
+	for (int i = 0; i < kThreadCount; ++i) {
+		threads.emplace_back(safe_api_thread, nic_processors_.get());
 	}
 	for (auto& t : threads) t.join();
 }
 
 TEST_F(AmdSmiNicIntegrationTests, NicMultithreadedTest_NotInit)
 {
-	// First shut down the library to test not-initialized scenarios
+	if (nic_count_ == 0) {
+		GTEST_SKIP() << "No NIC devices available";
+	}
+
+	constexpr int kThreadCount = 8;
+
 	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
 
-	std::vector<std::thread> threads;
-
-	// Half threads call init, half do not
-	auto mixed_api_thread = [](amdsmi_processor_handle *nic_processors, uint32_t nic_count, int thread_id) {
-		bool do_init = (thread_id % 2 == 0);
-		bool init_succeeded = false;
-
-		if (do_init) {
-			amdsmi_status_t init_result = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
-			if (init_result == AMDSMI_STATUS_SUCCESS) {
-				init_succeeded = true;
-			}
-		}
-
-		if (nic_count > 0) {
-			amdsmi_bdf_t bdf;
-			amdsmi_status_t result = amdsmi_get_nic_device_bdf(nic_processors[0], &bdf);
-			if (do_init) {
-				EXPECT_EQ(result, AMDSMI_STATUS_SUCCESS);
-			} else {
-				EXPECT_EQ(result, AMDSMI_STATUS_NOT_INIT);
-			}
-		}
-
-		if (init_succeeded) {
-			amdsmi_status_t shutdown_result = amdsmi_shut_down();
-			EXPECT_EQ(shutdown_result, AMDSMI_STATUS_SUCCESS);
-		}
+	auto expect_not_init = [](amdsmi_processor_handle *nic_processors) {
+		amdsmi_bdf_t bdf;
+		EXPECT_EQ(amdsmi_get_nic_device_bdf(nic_processors[0], &bdf),
+			AMDSMI_STATUS_NOT_INIT);
 	};
 
-	for (int i = 0; i < 8; ++i) {
-		threads.emplace_back(mixed_api_thread, nic_processors_.get(), nic_count_, i);
+	std::vector<std::thread> threads;
+	threads.reserve(kThreadCount);
+	for (int i = 0; i < kThreadCount; ++i) {
+		threads.emplace_back(expect_not_init, nic_processors_.get());
 	}
 	for (auto& t : threads) t.join();
 
-	// Reinitialize for subsequent tests in the suite
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
+
+	auto expect_success = [](amdsmi_processor_handle *nic_processors) {
+		amdsmi_bdf_t bdf;
+		EXPECT_EQ(amdsmi_get_nic_device_bdf(nic_processors[0], &bdf),
+			AMDSMI_STATUS_SUCCESS);
+	};
+
+	threads.clear();
+	threads.reserve(kThreadCount);
+	for (int i = 0; i < kThreadCount; ++i) {
+		threads.emplace_back(expect_success, nic_processors_.get());
+	}
+	for (auto& t : threads) t.join();
 }
 #endif
 
 TEST_F(AmdSmiNicIntegrationTests, NicTopoLinkTypeTest)
 {
 	amdsmi_status_t ret = AMDSMI_STATUS_SUCCESS;
-	amdsmi_nic_link_type_t link_type;
+	amdsmi_link_type_t link_type;
 
 	uint32_t gpu_count = AMDSMI_MAX_DEVICES;
 	std::unique_ptr<amdsmi_processor_handle[]> gpu_processors =
@@ -764,22 +790,22 @@ TEST_F(AmdSmiNicIntegrationTests, NicTopoLinkTypeTest)
 		std::cout << "NIC " << i << " Topology Info:" << std::endl;
 
 		for (uint32_t j = 0; j < gpu_count; j++) {
-			ret = amdsmi_topo_get_nic_link_type(nic_processors_[i], gpu_processors[j], &link_type);
+			ret = amdsmi_topo_get_link_type(nic_processors_[i], gpu_processors[j], nullptr, &link_type);
 
 			if (ret == AMDSMI_STATUS_SUCCESS) {
 				std::string link_type_str;
 				switch (link_type) {
-					case AMDSMI_NIC_LINK_TYPE_UNKNOWN:
+					case AMDSMI_LINK_TYPE_UNKNOWN:
 						link_type_str = "UNKNOWN";
 						break;
-					case AMDSMI_NIC_LINK_TYPE_PCIE:
+					case AMDSMI_LINK_TYPE_PCIE:
 						link_type_str = "PCIE";
 						break;
-					case AMDSMI_NIC_LINK_TYPE_NUMA:
+					case AMDSMI_LINK_TYPE_NUMA:
 						link_type_str = "NUMA";
 						break;
-					case AMDSMI_NIC_LINK_TYPE_X_NUMA:
-						link_type_str = "X-NUMA";
+					case AMDSMI_LINK_TYPE_XNUMA:
+						link_type_str = "XNUMA";
 						break;
 					default:
 						link_type_str = "UNKNOWN";
@@ -787,8 +813,10 @@ TEST_F(AmdSmiNicIntegrationTests, NicTopoLinkTypeTest)
 				}
 				std::cout << "  NIC " << i << " -> GPU " << j << " Link Type: " << link_type_str << std::endl;
 
-				EXPECT_GE(link_type, AMDSMI_NIC_LINK_TYPE_UNKNOWN);
-				EXPECT_LE(link_type, AMDSMI_NIC_LINK_TYPE_X_NUMA);
+				EXPECT_TRUE(link_type == AMDSMI_LINK_TYPE_UNKNOWN ||
+						link_type == AMDSMI_LINK_TYPE_PCIE ||
+						link_type == AMDSMI_LINK_TYPE_NUMA ||
+						link_type == AMDSMI_LINK_TYPE_XNUMA);
 			} else {
 				std::cout << "  NIC " << i << " -> GPU " << j << " link type not available (status: " << ret << ")" << std::endl;
 				EXPECT_TRUE(ret == AMDSMI_STATUS_NOT_SUPPORTED || ret == AMDSMI_STATUS_NOT_FOUND);
@@ -799,7 +827,7 @@ TEST_F(AmdSmiNicIntegrationTests, NicTopoLinkTypeTest)
 
 TEST_F(AmdSmiNicIntegrationTests, NicTopoLinkTypeErrorHandlingTest)
 {
-	amdsmi_nic_link_type_t link_type;
+	amdsmi_link_type_t link_type;
 
 	uint32_t gpu_count = AMDSMI_MAX_DEVICES;
 	std::unique_ptr<amdsmi_processor_handle[]> gpu_processors =
@@ -814,25 +842,22 @@ TEST_F(AmdSmiNicIntegrationTests, NicTopoLinkTypeErrorHandlingTest)
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 
 	if (gpu_count > 0) {
-		ASSERT_EQ(amdsmi_topo_get_nic_link_type(nullptr, gpu_processors[0], &link_type), AMDSMI_STATUS_INVAL);
+		ASSERT_EQ(amdsmi_topo_get_link_type(nullptr, gpu_processors[0], nullptr, &link_type), AMDSMI_STATUS_INVAL);
 	}
 
 	if (nic_count_ > 0) {
-		ASSERT_EQ(amdsmi_topo_get_nic_link_type(nic_processors_[0], nullptr, &link_type), AMDSMI_STATUS_INVAL);
+		ASSERT_EQ(amdsmi_topo_get_link_type(nic_processors_[0], nullptr, nullptr, &link_type), AMDSMI_STATUS_INVAL);
 	}
 
 	if (nic_count_ > 0 && gpu_count > 0) {
-		ASSERT_EQ(amdsmi_topo_get_nic_link_type(nic_processors_[0], gpu_processors[0], nullptr), AMDSMI_STATUS_INVAL);
+		ASSERT_EQ(amdsmi_topo_get_link_type(nic_processors_[0], gpu_processors[0], nullptr, nullptr), AMDSMI_STATUS_INVAL);
 	}
 
-	ASSERT_EQ(amdsmi_topo_get_nic_link_type(nullptr, nullptr, nullptr), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_topo_get_link_type(nullptr, nullptr, nullptr, nullptr), AMDSMI_STATUS_INVAL);
 
-	if (nic_count_ > 0 && gpu_count > 0) {
-		ASSERT_EQ(amdsmi_topo_get_nic_link_type(nic_processors_[0], nic_processors_[0], &link_type), AMDSMI_STATUS_INVAL);
-	}
-
-	if (nic_count_ > 0 && gpu_count > 0) {
-		ASSERT_EQ(amdsmi_topo_get_nic_link_type(gpu_processors[0], gpu_processors[0], &link_type), AMDSMI_STATUS_INVAL);
+	// NIC->NIC is now supported (same NIC -> PCIE, different NICs -> NUMA/XNUMA depending on topology)
+	if (nic_count_ > 0) {
+		ASSERT_EQ(amdsmi_topo_get_link_type(nic_processors_[0], nic_processors_[0], nullptr, &link_type), AMDSMI_STATUS_SUCCESS);
 	}
 }
 

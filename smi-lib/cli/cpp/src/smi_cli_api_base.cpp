@@ -1,23 +1,8 @@
-/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #include "smi_cli_api_base.h"
 #include "smi_cli_api_host.h"
 #include "smi_cli_api_guest.h"
@@ -181,6 +166,21 @@ int AmdSmiApiBase::get_string_from_enum_cper_severity_mask(int severity_mask, st
 	return 2;
 }
 
+int AmdSmiApiBase::get_string_from_enum_tdi_state(int tdi_state, std::string& out)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::get_string_from_enum_cc_mode(int cc_mode, std::string& out)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::get_string_from_enum_nic_fw_type(int nic_fw_type, std::string& out)
+{
+	return 2;
+}
+
 int AmdSmiApiBase::amdsmi_get_nic_asic_info_command(uint64_t processor_bdf, Arguments arg,
 		std::string& out)
 {
@@ -212,6 +212,12 @@ int AmdSmiApiBase::amdsmi_get_nic_port_info_command(uint64_t processor_bdf, Argu
 }
 
 int AmdSmiApiBase::amdsmi_get_nic_rdma_devices_info_command(uint64_t processor_bdf, Arguments arg,
+		std::string& out)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_get_nic_fw_info_command(uint64_t processor_bdf, Arguments arg,
 		std::string& out)
 {
 	return 2;
@@ -540,6 +546,12 @@ int AmdSmiApiBase::amdsmi_get_vf_info_static_command(std::string device, Argumen
 	return 2;
 }
 
+int AmdSmiApiBase::amdsmi_get_vf_hbm_info_command(std::string device, Arguments arg,
+		std::string& formatted_string)
+{
+	return 2;
+}
+
 int AmdSmiApiBase::amdsmi_get_process_isolation(uint64_t processor_bdf, Arguments arg,
 		std::string &out)
 {
@@ -774,6 +786,12 @@ int AmdSmiApiBase::FecModesToString(uint32_t fec, std::string& out)
 	return 2;
 }
 
+int AmdSmiApiBase::amdsmi_get_vf_tdi_state_command(std::string vf_bdf, Arguments arg,
+		std::string &formatted_string)
+{
+	return 2;
+}
+
 int AmdSmiApiBase::amdsmi_get_node_npm_info_command(uint64_t processor_bdf, Arguments arg,
 	std::string &formatted_string)
 {
@@ -786,6 +804,28 @@ int AmdSmiApiBase::amdsmi_get_policy_command(uint64_t processor_bdf, Arguments a
 	return 2;
 }
 
+int AmdSmiApiBase::amdsmi_get_fabric_topology_command(uint64_t processor_bdf, Arguments arg,
+		std::string &formatted_string)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_get_cc_mode_command(uint64_t processor_bdf, Arguments arg,
+		std::string &formatted_string)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_set_cc_mode_command(uint64_t processor_bdf, Arguments arg)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_get_fabric_telemetry_command(uint64_t processor_bdf, Arguments arg,
+	std::string &formatted_string)
+{
+	return 2;
+}
 int AmdSmiApiBase::get_string_from_enum_nic_topo_link_type(int nic_link_type, std::string& out)
 {
 	return 2;

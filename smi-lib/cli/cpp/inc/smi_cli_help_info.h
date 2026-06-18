@@ -1,22 +1,8 @@
-/* * Copyright (C) 2024-2025 Advanced Micro Devices. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #pragma once
 
 #include <string>
@@ -39,12 +25,14 @@ public:
 	std::string event_specific{};
 	std::string xgmi_specific{};
 	std::string topology_specific{};
+	std::string fabric_specific{};
 	std::string partition_specific{};
 	std::string set_specific{};
 	std::string reset_specific{};
 	std::string monitor_specific{};
 	std::string ras_specific{};
 	std::string node_specific{};
+	std::string confidential_compute_specific{};
 
 	std::string usage_list_specific{};
 	std::string usage_version_specific{};
@@ -57,12 +45,14 @@ public:
 	std::string usage_event_specific{};
 	std::string usage_xgmi_specific{};
 	std::string usage_topology_specific{};
+	std::string usage_fabric_specific{};
 	std::string usage_partition_specific{};
 	std::string usage_set_specific{};
 	std::string usage_reset_specific{};
 	std::string usage_monitor_specific{};
 	std::string usage_ras_specific{};
 	std::string usage_node_specific{};
+	std::string usage_confidential_compute_specific{};
 	AmdSmiHelpInfo(Arguments arg);
 	std::string get_help_message();
 	bool is_command_supported(std::string command, bool modifiers, std::string common,
@@ -77,6 +67,7 @@ private:
 	void initialize_linux_platform(const Arguments& arg);
 
 	// Windows platform sub-methods
+	void configure_windows_host_mixxx(const Arguments& arg);
 	void configure_windows_host_mi3xx(const Arguments& arg);
 	void configure_windows_host_standard(const Arguments& arg);
 	void configure_windows_baremetal(const Arguments& arg);
@@ -90,6 +81,7 @@ private:
 	std::string append_device_usage_by_type(const Arguments& arg);
 
 	// Linux platform sub-methods
+	void configure_linux_host_mixxx(const Arguments& arg);
 	void configure_linux_host_mi300(const Arguments& arg);
 	void configure_linux_host_mi350(const Arguments& arg);
 	void configure_linux_host_mi200(const Arguments& arg);
@@ -107,6 +99,7 @@ public:
 	std::string get_version_help_message(bool modifiers);
 	std::string get_event_help_message(bool modifiers);
 	std::string get_xgmi_help_message(bool modifiers);
+	std::string get_fabric_help_message(bool modifiers);
 	std::string get_topology_help_message(const Arguments& arg, bool modifiers);
 	std::string get_partition_help_message(bool modifiers);
 	std::string get_set_help_message(bool modifiers);
@@ -114,4 +107,5 @@ public:
 	std::string get_monitor_help_message(bool modifiers);
 	std::string get_ras_help_message(bool modifiers);
 	std::string get_node_help_message(bool modifiers);
+	std::string get_confidential_compute_help_message(bool modifiers);
 };

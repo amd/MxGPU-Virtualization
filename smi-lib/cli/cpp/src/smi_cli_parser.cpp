@@ -1,22 +1,8 @@
-/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #include "smi_cli_parser.h"
 #include "smi_cli_api_base.h"
 #include "smi_cli_exception.h"
@@ -640,6 +626,20 @@ bool AmdSmiParser::is_option_argument(std::string option, Arguments &parsed_argu
 		return true;
 	}
 
+	if (option.substr(0, 9) == "--cc-mode") {
+		if (parsed_arguments.command != "set") {
+			throw SmiToolInvalidParameterException(option.substr(0, 9));
+		}
+		does_option_have_value(option, 9);
+		try {
+			parsed_arguments.options.push_back("cc-mode");
+			parsed_arguments.cc_mode_setting = option.substr(10);
+		} catch (...) {
+			throw SmiToolInvalidParameterValueException(option.substr(10));
+		}
+		return true;
+	}
+
 	return false;
 }
 
@@ -796,6 +796,7 @@ void AmdSmiParser::parse_arguments(std::vector<std::string> command_argument_lis
 						|| command_argument_list[i] == "--num-vf"
 						|| command_argument_list[i] == "--xgmi-plpd"
 						|| command_argument_list[i] == "-pd"
+						|| command_argument_list[i] == "--cc-mode"
 						|| command_argument_list[i] == "--ptl-status"
 						|| command_argument_list[i] == "--ptl-format") {
 					if (!is_option_argument(command_argument_list[i], parsed_arguments)) {
@@ -884,10 +885,14 @@ void AmdSmiParser::parse_arguments(std::vector<std::string> command_argument_lis
 				}
 			}
 
-			if (command_argument_list[i].at(1) == '-') {
-				parsed_arguments.options.push_back(command_argument_list[i].substr(2));
+			std::string opt_name = (command_argument_list[i].at(1) == '-')
+								   ? command_argument_list[i].substr(2)
+								   : command_argument_list[i].substr(1);
+
+			if (opt_name == "extended" || opt_name == "ex") {
+				parsed_arguments.is_extended = true;
 			} else {
-				parsed_arguments.options.push_back(command_argument_list[i].substr(1));
+				parsed_arguments.options.push_back(opt_name);
 			}
 		}
 	}
@@ -906,6 +911,7 @@ void AmdSmiParser::parse_arguments(std::vector<std::string> command_argument_lis
 				!is_argument_present(command_argument_list, "--xgmi-plpd") &&
 				!is_argument_present(command_argument_list, "-pd") &&
 				!is_argument_present(command_argument_list, "--num-vf") &&
+				!is_argument_present(command_argument_list, "--cc-mode") &&
 				!is_argument_present(command_argument_list, "--ptl-status") &&
 				!is_argument_present(command_argument_list, "--ptl-format")) {
 			throw SmiToolRequiredCommandException("set");
@@ -1018,7 +1024,8 @@ void AmdSmiParser::parse_device_type(std::vector<std::string> &command_argument_
 				}
 				if (!(parsed_arguments.command == "help" || parsed_arguments.command == "list" ||
 					parsed_arguments.command == "discovery" || parsed_arguments.command == "static" ||
-					parsed_arguments.command == "metric" || parsed_arguments.command == "topology")) {
+					parsed_arguments.command == "metric" || parsed_arguments.command == "topology" ||
+					parsed_arguments.command == "firmware" || parsed_arguments.command == "ucode")) {
 					throw SmiToolInvalidParameterException(command_argument_list[i]);
 				}
 				if (parsed_arguments.output == csv) {

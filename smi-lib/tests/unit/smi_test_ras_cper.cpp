@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "gtest/gtest.h"
@@ -248,4 +231,187 @@ TEST_F(AmdSmiRasCperTests, AfidSectionTypeCrashdump) {
     int ret = amdsmi_get_afids_from_cper(buffer, sizeof(buffer), afids, &num_afids);
     ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
     ASSERT_EQ(num_afids, 1);
+}
+
+TEST_F(AmdSmiRasCperTests, FabricCperInvalidParams)
+{
+    int ret;
+    char cper_data[1024];
+    uint64_t buf_size = sizeof(cper_data);
+    amdsmi_cper_hdr_t *cper_hdrs[10];
+    uint64_t entry_count = 10;
+    uint64_t cursor = 0;
+    uint32_t severity_mask = 0;
+
+    ret = amdsmi_get_fabric_cper_entries(NULL, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
+    ASSERT_TRUE(ret == AMDSMI_STATUS_INVAL || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+
+    ret = amdsmi_get_fabric_cper_entries(&GPU_MOCK_HANDLE, severity_mask, NULL, &buf_size, cper_hdrs, &entry_count, &cursor);
+    ASSERT_TRUE(ret == AMDSMI_STATUS_INVAL || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+
+    ret = amdsmi_get_fabric_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, NULL, cper_hdrs, &entry_count, &cursor);
+    ASSERT_TRUE(ret == AMDSMI_STATUS_INVAL || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+
+    ret = amdsmi_get_fabric_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, NULL, &entry_count, &cursor);
+    ASSERT_TRUE(ret == AMDSMI_STATUS_INVAL || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+
+    ret = amdsmi_get_fabric_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, NULL, &cursor);
+    ASSERT_TRUE(ret == AMDSMI_STATUS_INVAL || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+
+    ret = amdsmi_get_fabric_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, NULL);
+    ASSERT_TRUE(ret == AMDSMI_STATUS_INVAL || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+
+    ret = amdsmi_get_fabric_cper_entries(&NIC_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
+    ASSERT_TRUE(ret == AMDSMI_STATUS_INVAL || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+}
+
+TEST_F(AmdSmiRasCperTests, FabricCperNotSupported)
+{
+    int ret;
+    char cper_data[1024];
+    uint64_t buf_size = sizeof(cper_data);
+    amdsmi_cper_hdr_t *cper_hdrs[10];
+    uint64_t entry_count = 10;
+    uint64_t cursor = 0;
+    uint32_t severity_mask = (1U << AMDSMI_CPER_SEV_NUM);
+
+    ret = amdsmi_get_fabric_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
+    ASSERT_TRUE(ret == AMDSMI_STATUS_NOT_SUPPORTED || ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_MORE_DATA);
+}
+
+/*
+ * Disabled tests below require a mock for ualoe_cper_get_entries.
+ * Enable once the UALOE CPER implementation is delivered and a
+ * mock/shim is wired into the test harness.
+ * Run with: --gtest_also_run_disabled_tests
+ */
+
+TEST_F(AmdSmiRasCperTests, DISABLED_FabricCperSeverityFiltering)
+{
+    /* UALOE returns entries with mixed severities.
+     * Verify only entries matching severity_mask appear in output. */
+    int ret;
+    char cper_data[4096];
+    uint64_t buf_size = sizeof(cper_data);
+    amdsmi_cper_hdr_t *cper_hdrs[10];
+    uint64_t entry_count = 10;
+    uint64_t cursor = 0;
+    uint32_t severity_mask = (1U << AMDSMI_CPER_SEV_NON_FATAL_CORRECTED);
+
+    ret = amdsmi_get_fabric_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
+    ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_MORE_DATA);
+
+    for (uint64_t i = 0; i < entry_count; i++) {
+        ASSERT_EQ(cper_hdrs[i]->error_severity, AMDSMI_CPER_SEV_NON_FATAL_CORRECTED);
+    }
+}
+
+TEST_F(AmdSmiRasCperTests, DISABLED_FabricCperCursorAdvancement)
+{
+    /* Verify cursor = input_cursor + entries_consumed + overflow_count
+     * after a successful call. */
+    int ret;
+    char cper_data[4096];
+    uint64_t buf_size = sizeof(cper_data);
+    amdsmi_cper_hdr_t *cper_hdrs[10];
+    uint64_t entry_count = 10;
+    uint64_t cursor = 0;
+    uint32_t severity_mask = (1U << AMDSMI_CPER_SEV_NUM);
+
+    ret = amdsmi_get_fabric_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
+    ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_MORE_DATA);
+    ASSERT_GT(cursor, (uint64_t)0);
+}
+
+TEST_F(AmdSmiRasCperTests, DISABLED_FabricCperMoreDataLoop)
+{
+    /* Mock left_size > 0 on first call, verify MORE_DATA is returned.
+     * Call again with updated cursor, verify SUCCESS when left_size == 0. */
+    int ret;
+    char cper_data[4096];
+    uint64_t buf_size;
+    amdsmi_cper_hdr_t *cper_hdrs[10];
+    uint64_t entry_count;
+    uint64_t cursor = 0;
+    uint32_t severity_mask = (1U << AMDSMI_CPER_SEV_NUM);
+    int calls = 0;
+
+    do {
+        buf_size = sizeof(cper_data);
+        entry_count = 10;
+        ret = amdsmi_get_fabric_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
+        ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_MORE_DATA);
+        calls++;
+        ASSERT_LT(calls, 100);
+    } while (ret == AMDSMI_STATUS_MORE_DATA);
+
+    ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+}
+
+TEST_F(AmdSmiRasCperTests, DISABLED_FabricCperOverflow)
+{
+    /* Mock overflow_count > 0, verify cursor skips lost entries
+     * and returned entries are still valid. */
+    int ret;
+    char cper_data[4096];
+    uint64_t buf_size = sizeof(cper_data);
+    amdsmi_cper_hdr_t *cper_hdrs[10];
+    uint64_t entry_count = 10;
+    uint64_t cursor = 0;
+    uint32_t severity_mask = (1U << AMDSMI_CPER_SEV_NUM);
+
+    ret = amdsmi_get_fabric_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
+    ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_MORE_DATA);
+    /* cursor should account for overflowed entries even though they aren't returned */
+    ASSERT_GE(cursor, entry_count);
+}
+
+TEST_F(AmdSmiRasCperTests, DISABLED_FabricCperUserBufferFull)
+{
+    /* Provide a small output buffer. Verify MORE_DATA is returned and
+     * cursor only advances past entries we walked, not all of write_count. */
+    int ret;
+    char cper_data[256];
+    uint64_t buf_size = sizeof(cper_data);
+    amdsmi_cper_hdr_t *cper_hdrs[10];
+    uint64_t entry_count = 10;
+    uint64_t cursor = 0;
+    uint32_t severity_mask = (1U << AMDSMI_CPER_SEV_NUM);
+
+    ret = amdsmi_get_fabric_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
+    ASSERT_TRUE(ret == AMDSMI_STATUS_MORE_DATA || ret == AMDSMI_STATUS_SUCCESS);
+}
+
+TEST_F(AmdSmiRasCperTests, DISABLED_FabricCperAllocFailure)
+{
+    /* Mock smi_calloc returning NULL, verify OUT_OF_RESOURCES. */
+    int ret;
+    char cper_data[1024];
+    uint64_t buf_size = sizeof(cper_data);
+    amdsmi_cper_hdr_t *cper_hdrs[10];
+    uint64_t entry_count = 10;
+    uint64_t cursor = 0;
+    uint32_t severity_mask = (1U << AMDSMI_CPER_SEV_NUM);
+
+    EXPECT_CALL(*g_system_mock, Calloc(testing::_, testing::_))
+                .WillOnce(testing::Return(nullptr));
+
+    ret = amdsmi_get_fabric_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
+    ASSERT_EQ(ret, AMDSMI_STATUS_OUT_OF_RESOURCES);
+}
+
+TEST_F(AmdSmiRasCperTests, DISABLED_FabricCperUaloeError)
+{
+    /* Mock ualoe_cper_get_entries returning an errno,
+     * verify correct amdsmi_status_t mapping. */
+    int ret;
+    char cper_data[1024];
+    uint64_t buf_size = sizeof(cper_data);
+    amdsmi_cper_hdr_t *cper_hdrs[10];
+    uint64_t entry_count = 10;
+    uint64_t cursor = 0;
+    uint32_t severity_mask = (1U << AMDSMI_CPER_SEV_NUM);
+
+    ret = amdsmi_get_fabric_cper_entries(&GPU_MOCK_HANDLE, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
+    ASSERT_NE(ret, AMDSMI_STATUS_SUCCESS);
 }

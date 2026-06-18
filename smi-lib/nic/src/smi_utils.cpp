@@ -1,23 +1,7 @@
 /*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "smi_utils.h"
@@ -26,6 +10,10 @@
 #include <filesystem>
 #include <sstream>
 #include <iomanip>
+
+#ifdef LIBMNL_INSTALLED
+#include <linux/devlink.h>
+#endif
 
 static const std::string SYSFS_PCI_BUS_PATH = "/sys/bus/pci/devices/";
 
@@ -102,6 +90,64 @@ std::optional<std::string> get_pcie_parent_bdf(const std::string& bdf)
 	return std::nullopt;
 }
 
+std::optional<uint8_t> get_pcie_link_gen(const std::string& bdf)
+{
+	static constexpr uint8_t PCI_CAP_LIST_PTR = 0x34;
+	static constexpr uint8_t PCI_CAP_ID_PCIE = 0x10;
+	static constexpr uint8_t PCIE_LNKSTA = 0x12;
+	static constexpr uint8_t LINK_SPEED_MASK = 0x0F;
+	static constexpr uint8_t CAP_PTR_MASK = 0xFC;
+	static constexpr int MAX_CAP_WALK = 48;
+
+	if (!is_valid_bdf(bdf)) {
+		return std::nullopt;
+	}
+
+	const std::string config_path = SYSFS_PCI_BUS_PATH + bdf + "/config";
+
+	uint8_t offset = 0;
+	if (SmiSysfsReader::readBytes(config_path, PCI_CAP_LIST_PTR, &offset, sizeof(offset)) !=
+	    SmiSysfsReader::SysfsStatus::Success) {
+		return std::nullopt;
+	}
+	offset &= CAP_PTR_MASK;
+
+	for (int i = 0; offset >= 0x40 && i < MAX_CAP_WALK; i++) {
+		uint8_t cap_header[2] = { 0, 0 };
+		if (SmiSysfsReader::readBytes(config_path, offset, cap_header, sizeof(cap_header)) !=
+		    SmiSysfsReader::SysfsStatus::Success) {
+			return std::nullopt;
+		}
+
+		if (cap_header[0] == PCI_CAP_ID_PCIE) {
+			if ((static_cast<uint16_t>(offset) + PCIE_LNKSTA) > 0xFF) {
+				return std::nullopt;
+			}
+			const auto link_off = static_cast<uint16_t>(offset) + PCIE_LNKSTA;
+			uint8_t link_val = 0;
+			if (SmiSysfsReader::readBytes(config_path, link_off, &link_val, sizeof(link_val)) !=
+			    SmiSysfsReader::SysfsStatus::Success) {
+				return std::nullopt;
+			}
+
+			// Current Link Speed is encoded
+			// as an index into the Supported Link Speeds Vector. For Gen 1-6 that
+			// index equals the generation number (1=2.5, 2=5.0, ... 6=64.0 GT/s),
+			// so we return it directly. If a future generation breaks this 1:1
+			// mapping, this must be replaced with an explicit lookup. 0 = reserved.
+			const uint8_t gen = link_val & LINK_SPEED_MASK;
+			if (gen == 0) {
+				return std::nullopt;
+			}
+			return gen;
+		}
+
+		offset = static_cast<uint8_t>(cap_header[1] & CAP_PTR_MASK);
+	}
+
+	return std::nullopt;
+}
+
 std::string nic_type_to_string(NicType type)
 {
 	switch (type) {
@@ -112,9 +158,35 @@ std::string nic_type_to_string(NicType type)
 	case NicType::InfiniBand:
 		return "InfiniBand";
 	default:
-		return "Unknown";
+		return "";
 	}
 }
+
+#ifdef LIBMNL_INSTALLED
+const char *flavour_to_string(uint16_t flavour)
+{
+	switch (flavour) {
+	case DEVLINK_PORT_FLAVOUR_PHYSICAL:
+		return "physical";
+	case DEVLINK_PORT_FLAVOUR_CPU:
+		return "cpu";
+	case DEVLINK_PORT_FLAVOUR_DSA:
+		return "dsa";
+	case DEVLINK_PORT_FLAVOUR_PCI_PF:
+		return "pci_pf";
+	case DEVLINK_PORT_FLAVOUR_PCI_VF:
+		return "pci_vf";
+	case DEVLINK_PORT_FLAVOUR_VIRTUAL:
+		return "virtual";
+	case DEVLINK_PORT_FLAVOUR_UNUSED:
+		return "unused";
+	case DEVLINK_PORT_FLAVOUR_PCI_SF:
+		return "pci_sf";
+	default:
+		return "";
+	}
+}
+#endif
 
 } // namespace smi_utils
 

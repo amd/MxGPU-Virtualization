@@ -1,22 +1,6 @@
-/*
- * Copyright (C) 2021-2021  Advanced Micro Devices, Inc.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included
- * in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
- * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE COPYRIGHT HOLDER(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
- * IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv_device.h>
@@ -1044,7 +1028,7 @@ static int navi32_gpuiov_wait_auto_sched_stop(struct amdgv_adapter *adapt,
 		timeout = AMDGV_TIMEOUT(TIMEOUT_AUTO_SWITCH_MM);
 
 	if  (hw_sched_id ==  NAVI32_HW_SCHED_BLOCK_JPEG_SCH0_MMSCH) {
-		wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET(VCN, 0, regJPEG_GPUIOV_ACTIVE_FUNCTION_ID),
+		wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET_NAME(VCN, 0, regJPEG_GPUIOV_ACTIVE_FUNCTION_ID),
 										REG_GPUIOV_VF_STATUS_MASK, 0, timeout, AMDGV_WAIT_CHECK_EQ, 0);
 	} else {
 		offset = navi32_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
@@ -1276,7 +1260,8 @@ static int navi32_gpuiov_transfer_vf_data(struct amdgv_adapter *adapt,
 	data = (cmd & 0x0F) | CMD_EXECUTE | (func_id << 8) | (next_func_id << 16);
 
 	AMDGV_DEBUG("send offset 0x%x with command 0x%x\n", offset, data);
-	oss_pci_write_config_dword(adapt->dev, offset, data);
+	if (navi32_gpuiov_write_cmd_data(adapt, hw_sched_id, idx_vf, data))
+		return AMDGV_FAILURE;
 
 	adapt->gpuiov.ctrl_blocks[hw_sched_id].last_cmd = cmd;
 	adapt->gpuiov.ctrl_blocks[hw_sched_id].last_status = AMDGV_CMD_STATUS_PENDING_EXECUTE;
@@ -1532,7 +1517,7 @@ static int navi32_gpuiov_hw_init(struct amdgv_adapter *adapt)
 				    adapt->num_vf, ret);
 			return AMDGV_FAILURE;
 		}
-		AMDGV_INFO("PCI_ENABLE_SRIOV(num_vf=%d)\n", adapt->num_vf);
+		AMDGV_DEBUG("PCI_ENABLE_SRIOV(num_vf=%d)\n", adapt->num_vf);
 		/* readback cntx_size for csa offset calculation */
 		offset = adapt->gpuiov.pos + PCI_GPUIOV_CNTXT;
 		oss_pci_read_config_dword(adapt->dev, offset, &data);

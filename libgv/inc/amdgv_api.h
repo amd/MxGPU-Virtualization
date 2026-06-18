@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef AMDGV_API_H
@@ -38,6 +21,9 @@
 
 #define AMDGV_FAILURE -1
 #define AMDGV_NOT_SUPPORTED -2
+#define AMDGV_ALREADY_SET -3
+#define AMDGV_ERR_NOENT -4
+#define AMDGV_ERR_BUSY  -16
 
 #define AMDGV_INVALID_HANDLE NULL
 
@@ -70,9 +56,6 @@
 
 /* Default min size for PF when it is not used. Unit in MB */
 #define AMDGV_MIN_PF_SIZE 16
-
-/* FB alignment is 16 MB */
-#define AMDGV_FUNCTION_FB_ALIGNMENT 16
 
 /* Maximum partition profile option count */
 #define AMDGV_MAX_PARTITION_PROFILE_OPTIONS 16
@@ -128,6 +111,8 @@
 /* This indicates size of accumulated dirty bitmap is always 32KB */
 #define AMDGV_DIRTYBIT_BUFFER_SIZE KBYTES_TO_BYTES(32)
 
+#define VF_HBM_MGMT_NAME_LEN 32
+
 typedef void *amdgv_dev_t;
 
 struct oss_interface;
@@ -139,6 +124,8 @@ struct amdgv_init_device_info {
 	uint32_t         domain; // not used
 	/* the PF bdf */
 	uint32_t         bdf;
+	/* the PF NUMA node id */
+	int32_t          pf_numa_id;
 
 	/* PF's vendor and device information */
 	uint32_t         vendor_id;
@@ -213,6 +200,8 @@ enum {
 	AMDGV_SECURITY_BLOCK		= (1 << 9),
 	AMDGV_XGMI_BLOCK		= (1 << 10),
 	AMDGV_SDMA_BLOCK		= (1 << 11),
+	AMDGV_SRIOV_DRV_BLOCK		= (1 << 12),
+	AMDGV_UAL_BLOCK			= (1 << 13),
 	AMDGV_MAX_LOG_BLOCK
 };
 #define AMDGV_ALL_BLOCK		(((AMDGV_MAX_LOG_BLOCK - 1) << 1) - 1)
@@ -590,6 +579,9 @@ struct gpuv_engine_queue_data {
 /*it indicates that dynamic VF number change is not supported */
 #define AMDGV_FLAG_NO_DYNAMIC_VF_NUM ((uint64_t)1 << 49)
 
+/* This flag is used to enable RAS poison interrupt routing to PF */
+#define AMDGV_FLAG_RAS_POISON_INTERRUPT_TO_PF ((uint64_t)1 << 51)
+
 /*
  * AMDGV_SCHED_SOLID_MODE – RLCV will be in charge of VF world switch.
  *   Each VF will get fixed time slice (e.g. 7ms) no matter such VF has
@@ -719,10 +711,31 @@ enum amdgv_accelerator_partition_mode {
 	AMDGV_ACCELERATOR_PARTITION_MODE_MAX
 };
 
+enum amdgv_vf_hbm_mgmt_mode {
+	AMDGV_VF_HBM_MGMT_MODE_DRIVER_MANAGED = 0,
+	AMDGV_VF_HBM_MGMT_MODE_DAX = 1,
+	AMDGV_VF_HBM_MGMT_MODE_DISABLED = 2,
+};
+
 enum amdgv_hang_detection_mode {
 	AMDGV_HANG_DETECTION_DISABLED = 0,
 	AMDGV_HANG_DETECTION_ENABLED = 1,
 	AMDGV_HANG_DETECTION_MODE_MAX
+};
+
+enum amdgv_cc_mode {
+	AMDGV_CC_MODE_OFF = 0,
+	AMDGV_CC_MODE_ON = 1,
+	AMDGV_CC_MODE_DEV = 2,
+	AMDGV_CC_MODE_MAX
+};
+
+enum amdgv_tdi_state {
+	AMDGV_TDI_STATE_UNLOCKED = 0,
+	AMDGV_TDI_STATE_LOCKED   = 1,
+	AMDGV_TDI_STATE_RUN      = 2,
+	AMDGV_TDI_STATE_ERROR    = 3,
+	AMDGV_TDI_STATE_MAX
 };
 
 enum amdgv_live_migration_mode {
@@ -764,6 +777,9 @@ enum amdgv_ras_vf_telemetry_policy {
 };
 
 #define AMDGV_CPER_MAX_ALLOWED_COUNT 0x1000
+#define AMDGV_CPER_MAX_RECORD_LEN    0x2000ULL
+#define AMDGV_CPER_DUMP_MAX_BYTES \
+	((uint64_t)AMDGV_CPER_MAX_ALLOWED_COUNT * AMDGV_CPER_MAX_RECORD_LEN)
 
 struct amdgv_init_config_opt {
 	/* the amount of vf to be enabled;
@@ -856,15 +872,19 @@ struct amdgv_init_config_opt {
 	enum amdgv_mm_bandwidth_policy mm_policy;
 
 	enum amdgv_xgmi_fb_sharing_mode fb_sharing_mode;
+
+	enum amdgv_vf_hbm_mgmt_mode vf_hbm_mgmt_mode;
+
 	enum amdgv_accelerator_partition_mode accelerator_partition_mode;
 	enum amdgv_memory_partition_mode memory_partition_mode;
+	enum amdgv_cc_mode cc_mode;
 	uint32_t partition_full_access_enable;
 
 	uint32_t bp_debug_mode;
 	uint32_t hang_detection_mode;
 	uint32_t live_migration_mode;
 
-	uint32_t bad_page_record_threshold;
+	int bad_page_record_threshold;
 	bool use_legacy_eeprom_format;
 
 	uint32_t debug_mode;
@@ -1013,6 +1033,7 @@ union amdgv_dev_info {
 		uint32_t sub_system_id;
 		uint32_t sub_vendor_id;
 		uint32_t bdf;
+		uint64_t dsn;
 	} basic_info;
 };
 
@@ -1090,9 +1111,11 @@ union amdgv_dev_conf {
 enum amdgv_vf_info_type {
 	AMDGV_GET_VF_BDF = 1,
 	AMDGV_GET_VF_FB,
+	AMDGV_GET_VF_HBM_MGMT,
 	AMDGV_GET_VF_SCHED_STATE,
 	AMDGV_GET_VF_TIME_LOG,
 	AMDGV_GET_VF_FFBM_MAP_LIST,
+	AMDGV_GET_VF_UNITID,
 };
 
 struct amdgv_histogram {
@@ -1184,6 +1207,13 @@ struct amdgv_vf_ffbm_map_list {
 	struct ffbm_map_entry entry[FFBM_MAP_ENTRY_MAX_COUNT];
 };
 
+struct amdgv_vf_hbm_mgmt {
+	uint64_t phy_addr;
+	uint64_t phy_size;
+	int numa_id; // driver-managed mode: numa id of the VF, dax mode: -1
+	char name[VF_HBM_MGMT_NAME_LEN];
+};
+
 enum amdgv_dev_status {
 	AMDGV_STATUS_INVALID = 0,
 	AMDGV_STATUS_SW_INIT,
@@ -1211,6 +1241,9 @@ union amdgv_vf_info {
 		uint32_t fb_size;
 	} fb;
 
+	/* type AMDGV_GET_VF_HBM_MGMT */
+	struct amdgv_vf_hbm_mgmt vf_hbm_mgmt;
+
 	/* type AMDGV_GET_VF_SCHED_STATE */
 	struct {
 		enum amdgv_sched_state state;
@@ -1221,6 +1254,7 @@ union amdgv_vf_info {
 
 	// type AMDGV_GET_VF_FFBM_MAP_LIST
 	struct amdgv_vf_ffbm_map_list vf_ffbm_map_list;
+	uint8_t unitid;
 };
 
 /*
@@ -1245,6 +1279,7 @@ enum amdgv_guard_type {
 	AMDGV_GUARD_EVENT_RAS_BAD_PAGES	    = 6,
 	AMDGV_GUARD_EVENT_WGR               = 7,
 	AMDGV_GUARD_EVENT_RAS_CHK_CRITI     = 8,
+	AMDGV_GUARD_EVENT_RAS_REMOTE_CMD    = 9,
 	AMDGV_GUARD_EVENT_MAX,
 
 	AMDGV_GUARD_ALL,
@@ -1263,6 +1298,7 @@ enum amdgv_guard_type {
 #define AMDGV_GUARD_MAX_EXCLUSIVE_TIMEOUT (3)
 #define AMDGV_GUARD_MAX_ALL_INT		  (57)
 #define AMDGV_GUARD_MAX_RAS_TELEMETRY	  (15)
+#define AMDGV_GUARD_MAX_RAS_REMOTE_CMD	  (30)
 
 struct amdgv_guard_info {
 	enum amdgv_guard_type type;
@@ -2008,8 +2044,6 @@ int amdgv_allocate_vf(amdgv_dev_t dev, struct amdgv_vf_option *option);
  * @idx_vf: the vf to be freed
  *
  * De-commit and remove a VF from world switch cycle.
- * If the last customized vf is freed, libgv reset all vf's configuration
- * to the default value.
  *
  * Returns:
  * 0 for success, errors for failure.
@@ -2657,17 +2691,6 @@ int amdgv_get_fb_regions_info(amdgv_dev_t dev, uint32_t idx_vf,
 			      struct amdgv_fb_regions *fb_regions_info);
 
 /*
- * amdgv_dump_sriov_msg - dump the vf2pf and pf2vf message for review
- *
- * Data is printed to kernel log
- *
- * @dev:        amdgv device handle
- * @idx_vf:     target VF
- *
- */
-void amdgv_dump_sriov_msg(amdgv_dev_t dev, uint32_t idx_vf);
-
-/*
  * amdgv_fw_live_update - live update specific firmware
  *
  * @dev:        amdgv device handle
@@ -2741,6 +2764,30 @@ int amdgv_copy_migration_vf_fb(amdgv_dev_t dev, uint32_t idx_vf,
  */
 int amdgv_get_migration_ctx(amdgv_dev_t dev, uint32_t idx_vf,
 	struct amdgv_migration_ctx *ctx);
+
+/*
+ * amdgv_is_migration_supported - check if migration is supported
+ *
+ * @dev:	amdgv device handle
+ *
+ * Returns:
+ * true if migration is supported, false otherwise
+ */
+bool amdgv_is_migration_supported(amdgv_dev_t dev);
+
+/*
+ * amdgv_migration_pre_copy_supported - query whether pre-copy live migration
+ *					is supported on this adapter
+ *
+ * @dev:	amdgv device handle
+ *
+ * Check if pre-copy live migration is supported on this adapter.
+ *
+ * Returns:
+ * true  - pre-copy migration is supported on @dev.
+ * false - not supported, or @dev is invalid / not in HW_INIT.
+ */
+bool amdgv_migration_pre_copy_supported(amdgv_dev_t dev);
 
 /*
  * amdgv_migration_export - export PSP package for migration
@@ -3372,6 +3419,24 @@ void *amdgv_map_sysmem(amdgv_dev_t dev, uint64_t len, void **va_ptr,
 			     uint64_t *gpu_addr);
 
 /*
+ * amdgv_map_sysmem_with_attr - same as amdgv_map_sysmem, but with caller-supplied
+ *			page attribute bitmask (enum oss_page_attr, defined
+ *			in amdgv_oss.h).
+ *
+ * @dev:		device handle
+ * @len:		size of system memory to allocate
+ * @page_attr:		bitmask of OSS_PAGE_* flags (one access bit + one
+ *			cache bit) forwarded to the OS backend
+ * @va_ptr:		input/output cpu virtual address (see amdgv_map_sysmem)
+ * @gpu_addr:		output gpu mc address
+ *
+ * Returns: handle for amdgv_unmap_sysmem, or NULL on failure (incl. invalid attr).
+ */
+void *amdgv_map_sysmem_with_attr(amdgv_dev_t dev, uint64_t len,
+				 enum oss_page_attr page_attr,
+				 void **va_ptr, uint64_t *gpu_addr);
+
+/*
  * amdgv_unmap_sysmem - unmap system memory
  *
  * @dev_id:			device id
@@ -3402,6 +3467,23 @@ int amdgv_error_ring_buffer_dump(amdgv_dev_t dev, char *buf, int len);
  * true for yes, false for not.
  */
 bool amdgv_is_service_vm_enabled(amdgv_dev_t dev);
+
+/**
+ * amdgv_write_virtualized_interrupt
+ *
+ * @dev: amdgv device handle
+ * @idx_vf: vf index
+ * @idx_table: table index
+ * @message_address: message address
+ * @message_data: message data
+ * @vector_control: vector control
+ *
+ * caches message address, message data, vector control of VF's interrupt table.
+ *
+ * Returns:
+ * 0 for success, errors for failure.
+ */
+int amdgv_write_virtualized_interrupt(amdgv_dev_t dev, uint32_t idx_vf, uint32_t idx_table, uint64_t message_address, uint32_t message_data, uint32_t vector_control, bool is_direct_write);
 
 /**
  * amdgv_compare_mig_ctx - compare two migration contexts

@@ -1,21 +1,6 @@
-/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #pragma once
@@ -46,6 +31,7 @@ public:
 	std::vector<std::shared_ptr<Device> > devices;
 	std::vector<std::shared_ptr<Device> > nic_devices;
 	bool all_arguments{ false };
+	bool is_extended{ false };
 	int watch{ -1 };
 	int watch_time{ -1 };
 	int iterations{ -1 };
@@ -56,6 +42,7 @@ public:
 	std::string fb_sharing_mode;
 	uint32_t accelerator_partition_setting;
 	std::string memory_partition_setting;
+	std::string cc_mode_setting;
 	std::vector<std::vector<uint64_t>> groups;
 	std::string pstate_set;
 	uint64_t power_cap_set;
@@ -91,7 +78,7 @@ private:
 		"discovery", "ucode",	"firmware",
 		"bad-pages", "metric",	"process",
 		"profile",   "version", "event", "topology", "xgmi", "reset", "set", "monitor", "partition",
-		"ras", "set", "node"
+		"ras", "set", "node", "confidential-compute", "fabric"
 	};
 
 	std::vector<std::string> COMMANDS_REQUIRING_OPTIONS = { "reset", "set" };
@@ -103,7 +90,9 @@ private:
 	std::map<std::string, std::vector<std::string> > FW_SUPPORTED_ARGUMENTS = {
 		{ "--gpu", FW_SUPPORTED_ARGS_GPU },
 		{ "-g", FW_SUPPORTED_ARGS_GPU },
-		{ "--vf", { "--ucode-list", "--fw-list", "-f" } }
+		{ "--vf", { "--ucode-list", "--fw-list", "-f" } },
+		{ "--nic", {} },
+		{ "-n", {} }
 	};
 
 	std::map<std::string, std::vector<std::string> > BAD_PAGES_SUPPORTED_ARGUMENTS = {
@@ -143,7 +132,7 @@ private:
 	};
 
 	std::vector<std::string> METRIC_SUPPORTED_ARGS_NIC = {
-		"--port", "-po", "--rdma-devices", "-rd"
+		"--port", "-po", "--rdma-devices", "-rd", "--extended", "-ex"
 	};
 
 	std::vector<std::string> WATCH_SUPPORTED_ARGS = {
@@ -174,7 +163,7 @@ private:
 	std::vector<std::string> SET_SUPPORTED_ARGS_GPU = {
 		"--xgmi", "--fb-sharing-mode", "--group", "--memory-partition", "--accelerator-partition",
 		"process-isolation", "-R", "--soc-pstate", "-ps", "--power-cap", "-pc",
-		"--xgmi-plpd", "-pd", "--num-vf", "--ptl-status", "--ptl-format"
+		"--xgmi-plpd", "-pd", "--num-vf", "--ptl-status", "--ptl-format", "--cc-mode"
 	};
 
 	std::vector<std::string> PARTITION_SUPPORTED_ARGS_GPU = {
@@ -185,15 +174,23 @@ private:
 		"--baseboard", "-b", "--power-management", "-p"
 	};
 
+	std::vector<std::string> FABRIC_SUPPORTED_ARGS_GPU = {
+		"--telemetry", "-t", "--topology", "-T"
+	};
+
 	std::map<std::string, std::vector<std::string> > PARTITION_SUPPORTED_ARGUMENTS = {
 		{ "--gpu", PARTITION_SUPPORTED_ARGS_GPU },
 		{ "-g", PARTITION_SUPPORTED_ARGS_GPU }
 	};
 
+	std::vector<std::string> STATIC_SUPPORTED_ARGS_VF = {
+		"--fb-info", "-f", "--hbm-info", "-hbm"
+	};
+
 	std::map<std::string, std::vector<std::string> > STATIC_SUPPORTED_ARGUMENTS = {
 		{ "--gpu", STATIC_SUPPORTED_ARGS_GPU },
 		{ "-g", STATIC_SUPPORTED_ARGS_GPU },
-		{ "--vf", {} },
+		{ "--vf", STATIC_SUPPORTED_ARGS_VF },
 		{ "--nic", STATIC_SUPPORTED_ARGS_NIC },
 		{ "-n", STATIC_SUPPORTED_ARGS_NIC }
 	};
@@ -276,6 +273,17 @@ private:
 		{ "--afid", AFID_SUPPORTED_ARGS_GPU }
 	};
 
+	std::map<std::string, std::vector<std::string> > FABRIC_SUPPORTED_ARGUMENTS = {
+		{ "--gpu", FABRIC_SUPPORTED_ARGS_GPU },
+		{ "-g", FABRIC_SUPPORTED_ARGS_GPU }
+	};
+
+	std::map<std::string, std::vector<std::string> > CC_SUPPORTED_ARGUMENTS = {
+		{ "--gpu", {} },
+		{ "-g", {} },
+		{ "--vf", {} }
+	};
+
 	std::map<std::string, std::map<std::string, std::vector<std::string> > >
 	COMMAND_SUPPORTED_ARGUMENTS = {
 		{ "help", {} },
@@ -297,7 +305,9 @@ private:
 		{ "monitor", MONITOR_SUPPORTED_ARGUMENTS },
 		{ "partition", PARTITION_SUPPORTED_ARGUMENTS},
 		{ "ras", RAS_SUPPORTED_ARGUMENTS },
-		{ "node", { { "", NODE_SUPPORTED_ARGS } } }
+		{ "node", { { "", NODE_SUPPORTED_ARGS } } },
+		{ "confidential-compute", CC_SUPPORTED_ARGUMENTS },
+		{ "fabric", FABRIC_SUPPORTED_ARGUMENTS }
 	};
 
 	/**

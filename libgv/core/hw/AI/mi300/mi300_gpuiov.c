@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv_device.h>
@@ -278,7 +261,7 @@ static int mi300_gpuiov_set_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	uint32_t offset =
 		adapt->gpuiov.pos + PCI_GPUIOV_VF0_FB_SIZE + idx_vf * sizeof(uint32_t);
 
-	AMDGV_INFO("idx_vf = 0x%x, fb_offset = %d MB, fb_size = %d MB\n", idx_vf, fb_offset,
+	AMDGV_DEBUG("idx_vf = 0x%x, fb_offset = %d MB, fb_size = %d MB\n", idx_vf, fb_offset,
 		   fb_size);
 
 	adapt->array_vf[idx_vf].real_fb_size = fb_size;
@@ -1050,14 +1033,14 @@ static int mi300_gpuiov_hw_fini(struct amdgv_adapter *adapt)
 	}
 
 	if (oss_atomic_read(adapt->in_sync_flood)) {
-		AMDGV_INFO("in_sync_flood.gpuiov_hw_fini toggle_vf_mse to false and exit\n");
+		AMDGV_DEBUG("in_sync_flood.gpuiov_hw_fini toggle_vf_mse to false and exit\n");
 		if (adapt->asic_type == CHIP_MI350X || adapt->vf_rebar_en)
 			mi300_gpuiov_toggle_vf_mse(adapt, false);
 		return 0;
 	}
 
 	if (adapt->asic_type == CHIP_MI350X) {
-		AMDGV_INFO("Set mi300_gpuiov_toggle_vf_mse to false\n");
+		AMDGV_DEBUG("Set mi300_gpuiov_toggle_vf_mse to false\n");
 		mi300_gpuiov_toggle_vf_mse(adapt, false);
 	}
 
@@ -1079,14 +1062,12 @@ static int mi300_gpuiov_hw_init(struct amdgv_adapter *adapt)
 {
 	int ret;
 	uint32_t xgmi_enable;
-	uint32_t i;
 	uint32_t strap4;
 	uint32_t cap;
 	uint16_t tmp;
 	uint32_t offset;
 
 	if (oss_atomic_read(adapt->in_ecc_recovery)) {
-		AMDGV_INFO("in_ecc_recovery. mi300_gpuiov_hw_fini first followed by init\n");
 		mi300_gpuiov_hw_fini(adapt);
 		oss_msleep(500);
 	}
@@ -1144,7 +1125,7 @@ static int mi300_gpuiov_hw_init(struct amdgv_adapter *adapt)
 					"ret = %d.\n", adapt->num_vf, ret);
 			return AMDGV_FAILURE;
 		}
-		AMDGV_INFO("PCI_ENABLE_SRIOV(num_vf=%d)\n", adapt->num_vf);
+		AMDGV_DEBUG("PCI_ENABLE_SRIOV(num_vf=%d)\n", adapt->num_vf);
 
 		oss_pci_read_config_dword(adapt->dev, adapt->sriov_cap_pos + PCIE_EXT_SRIOV_CAP, &cap);
 		if (cap & PCIE_EXT_SRIOV_CAP_VF_10BIT_TAG) {
@@ -1162,10 +1143,8 @@ static int mi300_gpuiov_hw_init(struct amdgv_adapter *adapt)
 		amdgv_reset_restore_sriov(adapt);
 	}
 
-	AMDGV_INFO("AID%d: L1 security is %s\n", 0, RREG32(SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_91)) & 0x4000 ? "ENABLED" : "DISABLED");
-	for (i = 1; i < adapt->mcp.num_aid; i++) {
-		AMDGV_DEBUG("AID%d: L1 security is %s\n", i, RREG32(SOC15_REG_OFFSET(MP0, i, regMP0_SMN_C2PMSG_91)) & 0x4000 ? "ENABLED" : "DISABLED");
-	}
+	if (!(RREG32(SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_91)) & 0x4000))
+		AMDGV_INFO("L1 security is DISABLED\n");
 
 	return 0;
 }

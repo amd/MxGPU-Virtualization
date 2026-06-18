@@ -1,5 +1,5 @@
 /******************************************************************************\
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright Advanced Micro Devices, Inc. All rights reserved.
 \******************************************************************************/
 
 #ifndef DFC_FW_H

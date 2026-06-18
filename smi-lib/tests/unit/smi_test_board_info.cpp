@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "gtest/gtest.h"
@@ -88,6 +71,7 @@ protected:
 		SMI_ASSERT_STR_EQ(expect.vram_vendor, actual.vram_vendor);
 		SMI_ASSERT_EQ(expect.vram_size, actual.vram_size);
 		SMI_ASSERT_EQ(expect.vram_bit_width, actual.vram_bit_width);
+		SMI_ASSERT_EQ(expect.vram_max_bandwidth, actual.vram_max_bandwidth);
 
 		return ::testing::AssertionSuccess();
 	}
@@ -226,6 +210,7 @@ TEST_F(AmdSmiBoardTests, GetVramInfo)
 #endif
 	gpu_info_mock.vram_size = 512;
 	gpu_info_mock.vram_bit_width = 8192;
+	gpu_info_mock.vram_max_bandwidth = 1024;
 
 	amdsmi_vram_info_t vram_info;
 	WhenCalling(std::bind(amdsmi_get_gpu_vram_info, &GPU_MOCK_HANDLE, &vram_info));

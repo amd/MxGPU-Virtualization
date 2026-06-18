@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "atombios/atom.h"
@@ -126,7 +109,7 @@ static int amdgv_vbios_get_info(struct amdgv_adapter *adapt, uint8_t *img)
 		}
 
 		if (j == sizeof(anchor)) {
-			AMDGV_INFO("found anchor at %d\n", i);
+			AMDGV_DEBUG("found anchor at %d\n", i);
 
 			for (k = 0; k < 128; k++) {
 				if (img[i + j + k] == '\\')
@@ -295,8 +278,6 @@ int amdgv_vbios_atom_sw_init(struct amdgv_adapter *adapt)
 		atom_card_info->ioreg_read = cail_ioreg_read;
 		atom_card_info->ioreg_write = cail_ioreg_write;
 	} else {
-		AMDGV_INFO("PCI I/O BAR is not found. Using MMIO "
-			   "to access ATOM BIOS\n");
 		atom_card_info->ioreg_read = cail_reg_read;
 		atom_card_info->ioreg_write = cail_reg_write;
 	}
@@ -379,18 +360,6 @@ static int amdgv_vbios_image_checksum(struct amdgv_adapter *adapt)
 	return 0;
 }
 
-static void amdgv_vbios_print_vbios_header_info(struct amdgv_adapter *adapt)
-{
-	uint32_t idx;
-	struct amdgv_vbios *vbios = &adapt->vbios;
-
-	AMDGV_INFO("vbios starts: 0x%x, 0x%x\n", vbios->image[0], vbios->image[1]);
-
-	idx = vbios->image[0x18] + ((uint16_t)vbios->image[0x19] << 8);
-	AMDGV_INFO("vbios version major 0x%x minor 0x%x\n", (uint16_t)vbios->image[idx + 0x13],
-		   (uint16_t)vbios->image[idx + 0x12]);
-}
-
 static int amdgv_vbios_fill_guest_image(struct amdgv_adapter *adapt)
 {
 	struct amdgv_vbios *vbios = &adapt->vbios;
@@ -443,8 +412,6 @@ static int amdgv_vbios_read_vbios_images(struct amdgv_adapter *adapt, bool prelo
 					    true /*do_checksum*/))
 		return AMDGV_FAILURE;
 
-	amdgv_vbios_print_vbios_header_info(adapt);
-
 	return amdgv_vbios_fill_guest_image(adapt);
 }
 
@@ -487,6 +454,7 @@ static int amdgv_vbios_wait_read_cb(void *context)
 
 int amdgv_vbios_read_img(struct amdgv_adapter *adapt)
 {
+	struct amdgv_wait_for_cb_context cb_context = { 0 };
 	adapt->vbios.timeout = false;
 	adapt->vbios.finish_read = false;
 	adapt->vbios.read_vbios_success = false;
@@ -498,22 +466,19 @@ int amdgv_vbios_read_img(struct amdgv_adapter *adapt)
 		return AMDGV_FAILURE;
 	}
 
+	cb_context.ctx = (void *)&adapt->vbios.finish_read;
+	cb_context.type = AMDGV_WAIT_FOR_VBIOS_READ_IMG;
+
 	/* just wait, will check another value after wait */
-	amdgv_wait_for(adapt, amdgv_vbios_wait_read_cb, (void *)&adapt->vbios.finish_read,
+	amdgv_wait_for(adapt, amdgv_vbios_wait_read_cb, &cb_context,
 		       AMDGV_TIMEOUT(TIMEOUT_READ_VBIOS), 0);
 
 	if (!adapt->vbios.read_vbios_success) {
-		if (!adapt->vbios.finish_read) {
+		if (!adapt->vbios.finish_read)
 			adapt->vbios.timeout = true;
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_VBIOS_TIMEOUT, 0);
-			oss_close_thread(adapt->vbios.read_vbios_thread);
-			adapt->vbios.read_vbios_thread = OSS_INVALID_HANDLE;
-			return AMDGV_FAILURE;
-		} else {
-			oss_close_thread(adapt->vbios.read_vbios_thread);
-			adapt->vbios.read_vbios_thread = OSS_INVALID_HANDLE;
-			return AMDGV_FAILURE;
-		}
+		oss_close_thread(adapt->vbios.read_vbios_thread);
+		adapt->vbios.read_vbios_thread = OSS_INVALID_HANDLE;
+		return AMDGV_FAILURE;
 	}
 
 	oss_close_thread(adapt->vbios.read_vbios_thread);
@@ -531,7 +496,8 @@ static int amdgv_vbios_update_guest_checksum(struct amdgv_adapter *adapt, uint8_
 	adapt->vbios.byte_sum = sum;
 	rom_header->CheckSum[0] = 0x100 - (uint8_t)sum;
 
-	AMDGV_INFO("update guest vbios checksum to 0x%02x after updating offsets\n", rom_header->CheckSum[0]);
+	AMDGV_DEBUG("update guest vbios checksum to 0x%02x after updating offsets\n",
+		    rom_header->CheckSum[0]);
 
 	return 0;
 }
@@ -549,7 +515,7 @@ static int amdgv_vbios_update_image_offset(struct amdgv_adapter *adapt, uint32_t
 	int index = get_index_into_master_table(atom_master_list_of_data_tables_v2_1,
 						vram_usagebyfirmware);
 
-	if (!adapt->umc.is_pmfw_managed_eeprom || adapt->array_vf[idx_vf].vf_crit_region != GPU_CRIT_REGION_V2)
+	if (adapt->array_vf[idx_vf].xchg.vf_crit_region <= GPU_CRIT_REGION_V1)
 		return 0;
 
 	if (amdgv_atom_parse_data_header(ctx, index, &size, &frev, &crev, &data_offset)) {
@@ -591,6 +557,12 @@ static int amdgv_vbios_update_image_offset(struct amdgv_adapter *adapt, uint32_t
 
 int amdgv_vbios_upload_image_to_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
+	if (!adapt->vbios.image || !adapt->vbios.guest_image) {
+		AMDGV_WARN("vbios.image= 0x%llx, vbios.guest_image= 0x%llx\n",
+			adapt->vbios.image, adapt->vbios.guest_image);
+		return 0;
+	}
+
 	/* check if guest_image is valid, live update gim does not migrate guest_image,
 	 * need to generate guest_image when first time it's used
 	 */
@@ -602,8 +574,9 @@ int amdgv_vbios_upload_image_to_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 
 	amdgv_vbios_update_image_offset(adapt, idx_vf);
 
-	return amdgv_vfmgr_copy_to_vf_fb(adapt, idx_vf, GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, VBIOS_IMG),
-					 adapt->vbios.guest_image, adapt->vbios.image_size);
+	return amdgv_vfmgr_copy_to_vf_xchg_table(adapt, idx_vf, AMD_SRIOV_MSG_VBIOS_IMG_TABLE_ID,
+						 0, adapt->vbios.guest_image,
+						 adapt->vbios.image_size);
 }
 
 unsigned char *amdgv_vbios_find_str_in_rom(struct amdgv_adapter *adapt, char *str, int start,
@@ -842,6 +815,9 @@ int amdgv_vbios_export_live_data(struct amdgv_adapter *adapt, struct amdgv_live_
 
 int amdgv_vbios_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_vbios *vbios_info)
 {
+	if (vbios_info->image_size == 0 || vbios_info->image_size > VBIOS_IMAGE_BYTE_SIZE)
+		return AMDGV_LIVE_INFO_STATUS_SIZE_UNMATCH;
+
 	oss_memcpy(adapt->vbios.image, vbios_info->image, vbios_info->image_size);
 	adapt->vbios.image_size = vbios_info->image_size;
 	adapt->vbios.sec_version = vbios_info->sec_version;

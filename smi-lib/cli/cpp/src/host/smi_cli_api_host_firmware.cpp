@@ -1,23 +1,8 @@
-/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #include "amdsmi.h"
 #include "smi_cli_api_host.h"
 #include "smi_cli_parser.h"
@@ -27,6 +12,7 @@
 
 #include "json/json.h"
 
+#include <algorithm>
 #include <sstream>
 #ifdef _WIN64
 #include <windows.h>
@@ -41,12 +27,15 @@ typedef amdsmi_status_t (*AMDSMI_GET_FW_ERROR_RECORDS)(amdsmi_processor_handle,
 typedef amdsmi_status_t (*AMDSMI_GET_VF_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 		amdsmi_vf_handle_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_VF_FW_INFO)(amdsmi_vf_handle_t, amdsmi_fw_info_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_NIC_FW_INFO)(amdsmi_processor_handle,
+		amdsmi_nic_fw_info_t *);
 
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_FW_INFO host_amdsmi_get_fw_info;
 extern AMDSMI_GET_FW_ERROR_RECORDS host_amdsmi_get_fw_error_records;
 extern AMDSMI_GET_VF_HANDLE_FROM_BDF host_amdsmi_get_vf_handle_from_bdf;
 extern AMDSMI_GET_VF_FW_INFO host_amdsmi_get_vf_fw_info;
+extern AMDSMI_GET_NIC_FW_INFO host_amdsmi_get_nic_fw_info;
 
 std::string host_fill_fw_list(Arguments arg, std::string value)
 {
@@ -336,4 +325,63 @@ int AmdSmiApiHost::amdsmi_firmware_vf_fw_list_command(std::string device, Argume
 	}
 
 	return AMDSMI_STATUS_SUCCESS;
+}
+
+int AmdSmiApiHost::amdsmi_get_nic_fw_info_command(uint64_t processor_bdf, Arguments arg,
+		std::string& out)
+{
+	int ret;
+	amdsmi_nic_fw_info_t nic_fw_info;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		return ret;
+	}
+	ret = host_amdsmi_get_nic_fw_info(processor, &nic_fw_info);
+	if (ret != AMDSMI_STATUS_SUCCESS || nic_fw_info.num_fw == 0) {
+		if (ret == AMDSMI_STATUS_DRIVER_NOT_LOADED && arg.options.size() <= 1 && !arg.all_arguments) {
+			Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+			return ret;
+		}
+		out = "";
+		return ret;
+	}
+
+	std::string fw_type_str;
+
+	if (arg.output == json) {
+		auto fw_list_json = nlohmann::ordered_json::array();
+
+		for (uint32_t i = 0; i < nic_fw_info.num_fw; ++i) {
+			get_string_from_enum_nic_fw_type(nic_fw_info.fw[i].type, fw_type_str);
+			std::transform(fw_type_str.begin(), fw_type_str.end(), fw_type_str.begin(), ::tolower);
+			fw_list_json.push_back(nlohmann::ordered_json::object({
+				{ "type", fw_type_str.c_str() },
+				{ "name", nic_fw_info.fw[i].fw.name },
+				{ "version", nic_fw_info.fw[i].fw.version }
+			}));
+		}
+
+		out = fw_list_json.dump(4);
+	} else if (arg.output == human) {
+		std::string formatted_output{fwNicListTemplate};
+
+		for (uint32_t i = 0; i < nic_fw_info.num_fw; ++i) {
+			get_string_from_enum_nic_fw_type(nic_fw_info.fw[i].type, fw_type_str);
+			std::string fw_name_str{nic_fw_info.fw[i].fw.name};
+			std::transform(fw_name_str.begin(), fw_name_str.end(), fw_name_str.begin(), ::toupper);
+			formatted_output += string_format(fwNicTemplate, i,
+				fw_type_str.c_str(),
+				fw_name_str.c_str(),
+				nic_fw_info.fw[i].fw.version);
+		}
+
+		out = formatted_output;
+	}
+
+	return ret;
 }

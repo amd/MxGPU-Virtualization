@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv.h>
@@ -81,7 +64,7 @@ static int gmc_v9_0_flush_gpu_tlb(struct amdgv_adapter *adapt, uint32_t vmid,
 	AMDGV_DEBUG("req:%x, ack:%x, inv_req:%x\n", req, ack, inv_req);
 
 	ret = amdgv_wait_for_register(
-				adapt, ack,
+				adapt, ack, "VM_INVALIDATE_ENG_ACK",
 				0xFFFFFFFF, 1 << vmid,
 				AMDGV_TIMEOUT(TIMEOUT_STATUS_REG), AMDGV_WAIT_CHECK_EQ,
 				AMDGV_WAIT_FLAG_AUTO);
@@ -226,10 +209,10 @@ static int mi300_mem_gart_enable(struct amdgv_adapter *adapt)
 {
 	int ret = 0;
 
-	AMDGV_INFO("pdb0: VA: %p PA: %llx BA: %llx\n", amdgv_memmgr_get_cpu_addr(adapt->pdb0_mem),
+	AMDGV_DEBUG("pdb0: VA: %p PA: %llx BA: %llx\n", amdgv_memmgr_get_cpu_addr(adapt->pdb0_mem),
 	    amdgv_memmgr_get_gpu_pa(adapt->pdb0_mem), amdgv_memmgr_get_gpu_addr(adapt->pdb0_mem));
 
-	AMDGV_INFO("ptb: VA: %p PA: %llx BA: %llx\n", amdgv_memmgr_get_cpu_addr(adapt->ptb_mem),
+	AMDGV_DEBUG("ptb: VA: %p PA: %llx BA: %llx\n", amdgv_memmgr_get_cpu_addr(adapt->ptb_mem),
 	    amdgv_memmgr_get_gpu_pa(adapt->ptb_mem), amdgv_memmgr_get_gpu_addr(adapt->ptb_mem));
 
 	amdgv_gart_init_pdb0(adapt);

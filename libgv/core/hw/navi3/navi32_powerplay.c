@@ -1,23 +1,6 @@
-/*
- * Copyright (C) 2021 - 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv_device.h>
@@ -49,6 +32,34 @@ static const uint32_t this_block = AMDGV_POWER_BLOCK;
 
 #define NAVI32_UMC_CHANNEL_NUM  16
 
+#define NAVI32_SMU_MB_CONTEXT_REGS_NUM	3
+static struct amdgv_reg_dump_info navi32_smu_mb_context_regs[NAVI32_SMU_MB_CONTEXT_REGS_NUM] = {
+	{
+		.name = "regMP1_SMN_C2PMSG_90 (resp)",
+		.hwip = MP1_HWIP,
+		.seg = regMP1_SMN_C2PMSG_90_BASE_IDX,
+		.logical_inst = 0,
+		.offset_hwip = regMP1_SMN_C2PMSG_90,
+		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
+	},
+	{
+		.name = "regMP1_SMN_C2PMSG_82 (param)",
+		.hwip = MP1_HWIP,
+		.seg = regMP1_SMN_C2PMSG_82_BASE_IDX,
+		.logical_inst = 0,
+		.offset_hwip = regMP1_SMN_C2PMSG_82,
+		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
+	},
+	{
+		.name = "regMP1_SMN_C2PMSG_66 (msg)",
+		.hwip = MP1_HWIP,
+		.seg = regMP1_SMN_C2PMSG_66_BASE_IDX,
+		.logical_inst = 0,
+		.offset_hwip = regMP1_SMN_C2PMSG_66,
+		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
+	}
+};
+
 static int navi32_powerplay_send_msg_without_waiting(struct amdgv_adapter *adapt, uint16_t msg)
 {
 	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_MSG_START, 0, regMP1_SMN_C2PMSG_66, msg);
@@ -67,14 +78,15 @@ static int navi32_powerplay_read_arg(struct amdgv_adapter *adapt, uint32_t *arg)
 	return 0;
 }
 
-static int navi32_powerplay_wait_for_response(struct amdgv_adapter *adapt,
-uint32_t *val)
+static int navi32_powerplay_wait_for_response(struct amdgv_adapter *adapt, uint32_t *val,
+					      enum amdgv_wait_for_types wait_type)
 {
 	int wait_ret;
 
-	wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90),
-					   MP1_C2PMSG_90__CONTENT_MASK, 0,
-					   AMDGV_TIMEOUT(TIMEOUT_SMU_REG), AMDGV_WAIT_CHECK_NE, 0);
+	wait_ret = amdgv_wait_for_smu_msg_resp(adapt, SOC15_REG_OFFSET_NAME(MP1, 0, regMP1_SMN_C2PMSG_90),
+					       MP1_C2PMSG_90__CONTENT_MASK, 0,
+					       AMDGV_TIMEOUT(TIMEOUT_SMU_REG), AMDGV_WAIT_CHECK_NE,
+					       wait_type, navi32_smu_mb_context_regs, NAVI32_SMU_MB_CONTEXT_REGS_NUM);
 
 	/* read as return value */
 	*val = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90));
@@ -83,7 +95,6 @@ uint32_t *val)
 	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_READ_RESP, wait_ret, regMP1_SMN_C2PMSG_90,
 		RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90)));
 
-	/* timeout means wrong logic */
 	if (wait_ret)
 		return AMDGV_FAILURE;
 
@@ -96,12 +107,11 @@ int navi32_powerplay_send_msg(struct amdgv_adapter *adapt, uint16_t msg)
 	uint32_t resp = 0;
 
 	oss_mutex_lock(adapt->pp.smu_lock);
-	ret = navi32_powerplay_wait_for_response(adapt, &resp);
+	ret = navi32_powerplay_wait_for_response(adapt, &resp, AMDGV_WAIT_FOR_SMU_CHECK_HANG);
 
 	if (ret == AMDGV_FAILURE) {
 		if (navi32_powerplay_wait_idle(adapt, 0)) {
 			oss_mutex_unlock(adapt->pp.smu_lock);
-			AMDGV_WARN("SMU failed to go idle.\n");
 			return AMDGV_FAILURE;
 		}
 	}
@@ -110,14 +120,25 @@ int navi32_powerplay_send_msg(struct amdgv_adapter *adapt, uint16_t msg)
 
 	navi32_powerplay_send_msg_without_waiting(adapt, msg);
 
-	ret = navi32_powerplay_wait_for_response(adapt, &resp);
-	oss_mutex_unlock(adapt->pp.smu_lock);
+	ret = navi32_powerplay_wait_for_response(adapt, &resp, AMDGV_WAIT_FOR_SMU_MSG_RESPONSE);
+	if (ret) {
+		oss_mutex_unlock(adapt->pp.smu_lock);
+		return ret;
+	}
 
-	if (ret == AMDGV_FAILURE || resp != PPSMC_Result_OK) {
-		AMDGV_ERROR("Failed to send message 0x%x, response 0x%x\n", msg,
-			resp);
+	if (resp != PPSMC_Result_OK) {
+		AMDGV_REG_DUMP(ERROR, "SMU responded with failure. SMU Mailbox contents:",
+			       navi32_smu_mb_context_regs,
+			       NAVI32_SMU_MB_CONTEXT_REGS_NUM);
+		oss_mutex_unlock(adapt->pp.smu_lock);
 		return AMDGV_FAILURE;
 	}
+
+	AMDGV_REG_DUMP(DEBUG, "SMU responded with success. SMU Mailbox contents:",
+			navi32_smu_mb_context_regs,
+			NAVI32_SMU_MB_CONTEXT_REGS_NUM);
+
+	oss_mutex_unlock(adapt->pp.smu_lock);
 
 	return 0;
 }
@@ -129,12 +150,11 @@ int navi32_powerplay_send_msg_with_param(struct amdgv_adapter *adapt, uint16_t m
 	uint32_t resp = 0;
 
 	oss_mutex_lock(adapt->pp.smu_lock);
-	ret = navi32_powerplay_wait_for_response(adapt, &resp);
+	ret = navi32_powerplay_wait_for_response(adapt, &resp, AMDGV_WAIT_FOR_SMU_CHECK_HANG);
 
 	if (ret == AMDGV_FAILURE) {
 		if (navi32_powerplay_wait_idle(adapt, 0)) {
 			oss_mutex_unlock(adapt->pp.smu_lock);
-			AMDGV_WARN("SMU failed to go idle.\n");
 			return AMDGV_FAILURE;
 		}
 	}
@@ -152,14 +172,25 @@ int navi32_powerplay_send_msg_with_param(struct amdgv_adapter *adapt, uint16_t m
 
 	navi32_powerplay_send_msg_without_waiting(adapt, msg);
 
-	ret = navi32_powerplay_wait_for_response(adapt,  &resp);
-	oss_mutex_unlock(adapt->pp.smu_lock);
+	ret = navi32_powerplay_wait_for_response(adapt,  &resp, AMDGV_WAIT_FOR_SMU_MSG_RESPONSE);
+	if (ret) {
+		oss_mutex_unlock(adapt->pp.smu_lock);
+		return ret;
+	}
 
-	if (ret == AMDGV_FAILURE || resp != PPSMC_Result_OK) {
-		AMDGV_WARN("Failed to send message 0x%x, response 0x%x\n", msg,
-			resp);
+	if (resp != PPSMC_Result_OK) {
+		AMDGV_REG_DUMP(ERROR, "SMU responded with failure. SMU Mailbox contents:",
+			       navi32_smu_mb_context_regs,
+			       NAVI32_SMU_MB_CONTEXT_REGS_NUM);
+		oss_mutex_unlock(adapt->pp.smu_lock);
 		return AMDGV_FAILURE;
 	}
+
+	AMDGV_REG_DUMP(DEBUG, "SMU responded with success. SMU Mailbox contents:",
+			navi32_smu_mb_context_regs,
+			NAVI32_SMU_MB_CONTEXT_REGS_NUM);
+
+	oss_mutex_unlock(adapt->pp.smu_lock);
 
 	return 0;
 }
@@ -1822,7 +1853,7 @@ int navi32_enter_baco(struct amdgv_adapter *adapt)
 	oss_msleep(100);
 
 	/* Wait for SMU to enter BACO */
-	wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BACO_CNTL),
+	wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET_NAME(NBIO, 0, regBIF_BX0_BACO_CNTL),
 					   BACO_CNTL__BACO_MODE_MASK, 0,
 					   AMDGV_TIMEOUT(TIMEOUT_RESET), AMDGV_WAIT_CHECK_NE, 0);
 
@@ -1858,7 +1889,7 @@ int navi32_exit_baco(struct amdgv_adapter *adapt)
 	oss_msleep(100);
 
 	/* Wait for SMU to exit BACO */
-	wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BACO_CNTL),
+	wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET_NAME(NBIO, 0, regBIF_BX0_BACO_CNTL),
 					   BACO_CNTL__BACO_MODE_MASK, 0,
 					   AMDGV_TIMEOUT(TIMEOUT_RESET), AMDGV_WAIT_CHECK_EQ, 0);
 
@@ -1902,7 +1933,7 @@ int navi32_wait_mode1_reset_completion(struct amdgv_adapter *adapt)
 	uint32_t resp = 0;
 
 	/* note that, C2PMSG_54 is debug port, it is different from msg port */
-	ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_54),
+	ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET_NAME(MP1, 0, regMP1_SMN_C2PMSG_54),
 					   MP1_C2PMSG_54__CONTENT_MASK, 0,
 					   AMDGV_TIMEOUT(TIMEOUT_SMU_REG), AMDGV_WAIT_CHECK_NE, 0);
 
@@ -1953,8 +1984,7 @@ int navi32_powerplay_wait_idle(struct amdgv_adapter *adapt, int timeout)
 	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_MSG_END, 0, regMP1_SMN_C2PMSG_66,
 		RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_66)));
 
-	if (navi32_powerplay_wait_for_response(adapt, &rd)) {
-		AMDGV_WARN("TIMEOUT waiting for SMU response (SMU busy)\n");
+	if (navi32_powerplay_wait_for_response(adapt, &rd, AMDGV_WAIT_FOR_SMU_CHECK_HANG)) {
 		return 1; /* This may not be error! (depends on caller) */
 	}
 	rd = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82));
@@ -2708,7 +2738,7 @@ static int navi32_smu_hw_init(struct amdgv_adapter *adapt)
 	}
 
 	/* Poll on IMU Start before start HW init */
-	ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET(GC, 0, regGFX_IMU_MSG_FLAGS), 0x1, 0x1,
+	ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET_NAME(GC, 0, regGFX_IMU_MSG_FLAGS), 0x1, 0x1,
 				AMDGV_TIMEOUT(TIMEOUT_STATUS_REG), AMDGV_WAIT_CHECK_EQ, AMDGV_WAIT_FLAG_AUTO);
 	if (ret) {
 		AMDGV_ERROR("GFX_IMU_MSG_FLAGS=0x%x\n",

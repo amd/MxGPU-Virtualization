@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright Advanced Micro Devices, Inc. All rights reserved.
 #ifndef RS64_MES_P0_DATA_H
 #define RS64_MES_P0_DATA_H
 

@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv_device.h>
@@ -46,7 +29,6 @@
 #include "mi300_xgmi.h"
 #include "gfxhub_v1_2.h"
 
-#define PCI_CONFIG_SIZE 1024
 #define MI300_MAX_VF_NUM 8
 
 #define smnBIF_CFG_DEV0_EPF0_VF0_VENDOR_ID 0x10160000
@@ -89,12 +71,6 @@
 
 static const uint32_t this_block = AMDGV_SECURITY_BLOCK;
 static int mi300_reset_trigger_pf_soft_flr(struct amdgv_adapter *adapt);
-
-struct pf_pcie_restore {
-	int offset;
-	int size;
-	char *name;
-};
 
 struct mi300_whole_gpu_reset_state {
 	uint32_t bif_bx_strap0;
@@ -570,8 +546,8 @@ static int mi300_reset_pf_allowed(struct amdgv_adapter *adapt, uint32_t active_v
 
 	for_each_id(idx_vf, active_vf_mask) {
 		if (pf_xcc_mask & amdgv_sched_get_xcc_mask_by_vf(adapt, idx_vf)) {
-			AMDGV_INFO("PF and VF %d share the same xcc mask %x, "
-						"promote PF Soft FLR to Mode1 reset\n", idx_vf, pf_xcc_mask);
+			AMDGV_WARN("PF and VF %d share the same xcc mask %x, "
+				   "promote PF Soft FLR to Mode1 reset\n", idx_vf, pf_xcc_mask);
 			return false;
 		}
 	}
@@ -616,6 +592,7 @@ static int mi300_reset_trigger_vf_flr(struct amdgv_adapter *adapt,
 	struct mi300_reset_access_info access_info;
 	int sdma_id;
 	int doorbell_index;
+	uint32_t xcc_id;
 
 	mi300_flr_enter(adapt);
 
@@ -666,10 +643,8 @@ static int mi300_reset_trigger_vf_flr(struct amdgv_adapter *adapt,
 		AMDGV_DEBUG("program %s mc settings\n",
 				amdgv_idx_to_str(idx_vf));
 		ret = adapt->psp.psp_program_guest_mc_settings(adapt, idx_vf);
-		if (ret) {
-			AMDGV_ERROR("program %s mc settings failed\n", amdgv_idx_to_str(idx_vf));
+		if (ret)
 			goto failed;
-		}
 	}
 
 	/* restore SDMA golden register settings */
@@ -722,6 +697,10 @@ static int mi300_reset_trigger_vf_flr(struct amdgv_adapter *adapt,
 
 	amdgv_gpuiov_set_vf_fb(adapt, idx_vf, adapt->array_vf[idx_vf].fb_offset,
 					adapt->array_vf[idx_vf].fb_size);
+
+	/* re-enable SPM clock gating for this VF's XCCs after FLR */
+	for_each_id (xcc_id, amdgv_sched_get_xcc_mask_by_vf(adapt, idx_vf))
+		mi300_clockgating_spm_mgcg(adapt, xcc_id, true);
 
 	ret = amdgv_sched_reset(adapt, idx_vf, AMDGV_SCHED_BLOCK_ALL);
 
@@ -932,10 +911,8 @@ static int mi300_reset_trigger_pf_soft_flr(struct amdgv_adapter *adapt)
 
 	if (adapt->psp.psp_program_guest_mc_settings) {
 		ret = adapt->psp.psp_program_guest_mc_settings(adapt, AMDGV_PF_IDX);
-		if (ret) {
-			AMDGV_ERROR("program PF MC settings failed\n");
+		if (ret)
 			goto failed;
-		}
 	}
 
 	/* restore SDMA golden register settings */
@@ -1134,12 +1111,8 @@ static int mi300_reset_whole_gpu_reset(struct amdgv_adapter *adapt)
 
 	if (adapt->reset.in_xgmi_chain_reset) {
 		hive = amdgv_get_xgmi_hive(adapt);
-		if (!hive) {
-			AMDGV_ERROR("XGMI: node 0x%llx, can not match hive "
-				    "0x%llx in the hive list.\n",
-				    adapt->xgmi.node_id, adapt->xgmi.hive_id);
+		if (!hive)
 			goto exit;
-		}
 
 		/* Only 1 GPU should perform XGMI FB sharing sanity check */
 		if (adapt->xgmi.phy_node_id == 0)
@@ -1304,7 +1277,8 @@ static int mi300_reset_notify_engine_status(struct amdgv_adapter *adapt, uint32_
 struct amdgv_gpu_reset_funcs mi300_reset_funcs = {
 	.save_vddgfx_state = mi300_reset_save_vddgfx_state,
 	.trigger_vf_flr = mi300_reset_trigger_vf_flr,
-	.trigger_gpu_reset = mi300_reset_whole_gpu_reset,
+	.trigger_gpu_hw_reset = mi300_reset_trigger_whole_gpu_reset,
+	.gpu_reset_and_reinit = mi300_reset_whole_gpu_reset,
 	.notify_engine_status = mi300_reset_notify_engine_status,
 	.reset_pf_allowed = mi300_reset_pf_allowed
 };

@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2014-2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_device.h"
@@ -63,21 +46,30 @@ static void amdgv_error_list_sanity_test(struct amdgv_adapter *adapt)
 int amdgv_error_alloc_new_notifier(amdgv_dev_t dev, uint64_t event_mask, void *priv,
 				   struct amdgv_error_notifier **ctx)
 {
-	struct amdgv_error_notifier *notifier;
-	struct amdgv_error_ring_buffer *err_rb;
+	struct amdgv_error_notifier *notifier = OSS_INVALID_HANDLE;
+	struct amdgv_error_ring_buffer *err_rb = OSS_INVALID_HANDLE;
 	struct amdgv_adapter *adapt;
 
 	adapt = (struct amdgv_adapter *)dev;
+
+	oss_mutex_lock(adapt->notifier_list_lock);
+	if (adapt->error_notifier_count >= AMDGV_MAX_ERROR_NOTIFIER_COUNT) {
+		oss_mutex_unlock(adapt->notifier_list_lock);
+		AMDGV_WARN("Error notifier count has reached the max limit, current count: %u, max limit: %u\n",
+			   adapt->error_notifier_count, AMDGV_MAX_ERROR_NOTIFIER_COUNT);
+		return AMDGV_FAILURE;
+	}
+	adapt->error_notifier_count++;
+	oss_mutex_unlock(adapt->notifier_list_lock);
+
 	notifier = oss_malloc(sizeof(struct amdgv_error_notifier));
 	if (notifier == OSS_INVALID_HANDLE)
-		return AMDGV_FAILURE;
+		goto fail;
 
 	err_rb = oss_zalloc(sizeof(struct amdgv_error_ring_buffer));
 	if (err_rb == OSS_INVALID_HANDLE)
-		return AMDGV_FAILURE;
+		goto fail;
 
-	notifier = (struct amdgv_error_notifier *)notifier;
-	err_rb = (struct amdgv_error_ring_buffer *)err_rb;
 	AMDGV_INIT_LIST_HEAD(&notifier->head);
 	notifier->event_mask = event_mask;
 	notifier->error_ring_buffer = err_rb;
@@ -91,6 +83,22 @@ int amdgv_error_alloc_new_notifier(amdgv_dev_t dev, uint64_t event_mask, void *p
 	oss_signal_event(adapt->new_error_event);
 
 	return 0;
+
+fail:
+	oss_mutex_lock(adapt->notifier_list_lock);
+	if (adapt->error_notifier_count > 0)
+		adapt->error_notifier_count--;
+	else
+		AMDGV_WARN("Error notifier count is already 0 when failed to allocate new notifier.\n");
+	oss_mutex_unlock(adapt->notifier_list_lock);
+
+	if (err_rb != OSS_INVALID_HANDLE)
+		oss_free(err_rb);
+
+	if (notifier != OSS_INVALID_HANDLE)
+		oss_free(notifier);
+
+	return AMDGV_FAILURE;
 }
 
 void amdgv_error_delete_notifier(amdgv_dev_t dev, struct amdgv_error_notifier *notifier)
@@ -104,6 +112,10 @@ void amdgv_error_delete_notifier(amdgv_dev_t dev, struct amdgv_error_notifier *n
 
 	oss_mutex_lock(adapt->notifier_list_lock);
 	amdgv_list_del(&notifier->head);
+	if (adapt->error_notifier_count > 0)
+		adapt->error_notifier_count--;
+	else
+		AMDGV_WARN("Error notifier count is already 0 when deleting notifier.\n");
 	oss_mutex_unlock(adapt->notifier_list_lock);
 
 	oss_free(notifier->error_ring_buffer);
@@ -138,6 +150,13 @@ static bool amdgv_error_check_mask(uint32_t error_code, uint64_t event_mask)
 
 	uint64_t mask_category = AMDGV_ERROR_MASK_CATEGORY(event_mask);
 	uint8_t mask_level = AMDGV_ERROR_MASK_SEVERITY(event_mask);
+
+	if ((error_category == AMDGV_ERROR_CATEGORY_NON_USED) ||
+	    (error_category >= AMDGV_ERROR_CATEGORY_MAX))
+		return false;
+
+	if (error_sub_code >= amdgv_error_list[error_category].count)
+		return false;
 
 	error_text = &amdgv_error_list[error_category].error_msg[error_sub_code];
 	error_level = AMDGV_SHIFT_ERROR_SEVERITY_LEVEL(error_text->severity);
@@ -272,6 +291,7 @@ int amdgv_error_init(struct amdgv_adapter *adapt)
 	adapt->notifier_list_lock = OSS_INVALID_HANDLE;
 	adapt->error_process_thread = OSS_INVALID_HANDLE;
 	AMDGV_INIT_LIST_HEAD(&adapt->notifier_list.head);
+	adapt->error_notifier_count = 0;
 
 	adapt->error_ring_buffer = (struct amdgv_error_ring_buffer *)oss_zalloc(
 		sizeof(struct amdgv_error_ring_buffer));
@@ -341,6 +361,8 @@ void amdgv_error_fini(struct amdgv_adapter *adapt)
 			amdgv_list_del(&notifier->head);
 		}
 	}
+	adapt->error_notifier_count = 0;
+
 	if (adapt->notifier_list_lock)
 		oss_mutex_unlock(adapt->notifier_list_lock);
 
@@ -382,6 +404,7 @@ int amdgv_error_get_error_text(uint32_t error_code, uint64_t data, char *buf, ui
 	uint16_t error_sub_code = AMDGV_ERROR_SUBCODE(error_code);
 	const struct error_text *error_text;
 	const char *text_ptr;
+	uint32_t len;
 
 	if ((error_category == AMDGV_ERROR_CATEGORY_NON_USED) ||
 	    (error_category >= AMDGV_ERROR_CATEGORY_MAX))
@@ -423,7 +446,9 @@ int amdgv_error_get_error_text(uint32_t error_code, uint64_t data, char *buf, ui
 	}
 
 	/* skip the last \n */
-	buf[oss_strlen(buf) - 1] = 0;
+	len = oss_strlen(buf);
+	if (len)
+		buf[len - 1] = 0;
 
 	return oss_strlen(buf);
 }
@@ -434,6 +459,7 @@ int amdgv_error_get_error_text_ext(uint32_t error_code, uint64_t data, char *buf
 	uint16_t error_sub_code = AMDGV_ERROR_SUBCODE(error_code);
 	const struct error_text *error_text;
 	const char *text_ptr;
+	uint32_t len;
 
 	if ((error_category == AMDGV_ERROR_CATEGORY_NON_USED) ||
 	    (error_category >= AMDGV_ERROR_CATEGORY_MAX))
@@ -464,7 +490,9 @@ int amdgv_error_get_error_text_ext(uint32_t error_code, uint64_t data, char *buf
 		return 0;
 	}
 	/* skip the last \n */
-	buf[oss_strlen(buf) - 1] = 0;
+	len = oss_strlen(buf);
+	if (len)
+		buf[len - 1] = 0;
 	return oss_strlen(buf);
 }
 
@@ -734,6 +762,14 @@ static void amdgv_error_dump_stack(struct amdgv_adapter *adapt, uint8_t error_le
 	}
 
 	filter_list = adapt->error_dump_stack_filter_list;
+
+	if ((error_category == AMDGV_ERROR_CATEGORY_NON_USED) ||
+	    (error_category >= AMDGV_ERROR_CATEGORY_MAX))
+		return;
+
+	if (error_sub_code >= amdgv_error_list[error_category].count)
+		return;
+
 	error_text = &amdgv_error_list[error_category].error_msg[error_sub_code];
 
 	for (index = 0; index < AMDGV_ERROR_FILTER_LIST_SIZE_MAX; ++index) {

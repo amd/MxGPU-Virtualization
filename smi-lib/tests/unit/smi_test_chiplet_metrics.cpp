@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "gtest/gtest.h"
@@ -152,12 +135,12 @@ TEST_F(AmdSmiMetricsTest, SysconfFailed)
 #endif
 }
 
-TEST_F(AmdSmiMetricsTest, DISABLED_GetChipletMetricsWrongSize)
+TEST_F(AmdSmiMetricsTest, GetChipletMetricsWrongSize)
 {
 	int ret;
 	amdsmi_metric_t *metrics;
 	uint32_t size = 6;
-	struct smi_metrics_table in_payload;
+	struct smi_metrics_table in_payload{};
 	struct smi_metrics *metrics_table;
 
 #ifdef _WIN64
@@ -165,13 +148,6 @@ TEST_F(AmdSmiMetricsTest, DISABLED_GetChipletMetricsWrongSize)
 #else
 	metrics_table = (struct smi_metrics*)amdsmi::mem_aligned_alloc((void**)&metrics_table, 4096, sizeof(struct smi_metrics));
 #endif
-	metrics_table->num_metric = 7;
-
-	for (unsigned int i = 0; i < metrics_table->num_metric; i++) {
-		metrics_table->metric[i].metric_union.code = i;
-		metrics_table->metric[i].val = i*2;
-		metrics_table->metric[i].vf_mask = i*3;
-	}
 
 #ifdef _WIN64
 	EXPECT_CALL(*g_system_mock, Calloc(testing::_, testing::_)).WillOnce(testing::Return(metrics_table));
@@ -179,13 +155,28 @@ TEST_F(AmdSmiMetricsTest, DISABLED_GetChipletMetricsWrongSize)
 	EXPECT_CALL(*g_system_mock, AlignedAlloc(testing::_, testing::_, testing::_)).WillOnce(testing::Return(metrics_table));
 #endif
 
+	// Simulate the driver populating num_metric=7 during the ioctl,
+	// after the library zeroes the buffer with memset. Use Invoke so the
+	// payload's metrics pointer set by the caller is not clobbered, while
+	// still capturing the input payload and verifying the ioctl header.
+	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_METRICS_TABLE)))
+		.WillOnce(testing::Invoke([metrics_table, &in_payload](smi_ioctl_cmd *cmd) -> int {
+			std::memcpy(&in_payload, cmd->payload, sizeof(in_payload));
+			EXPECT_EQ(cmd->in_hdr.code, (uint32_t)SMI_CMD_CODE_GET_METRICS_TABLE);
+			EXPECT_EQ(cmd->in_hdr.in_len, sizeof(struct smi_metrics_table));
+			metrics_table->num_metric = 7;
+			for (unsigned int i = 0; i < metrics_table->num_metric; i++) {
+				metrics_table->metric[i].metric_union.code = i;
+				metrics_table->metric[i].val = i * 2;
+				metrics_table->metric[i].vf_mask = i * 3;
+			}
+			cmd->out_hdr.status = AMDSMI_STATUS_SUCCESS;
+			return 0;
+		}));
+
 	metrics = (amdsmi_metric_t *)malloc(sizeof(amdsmi_metric_t) * size);
 
-	WhenCalling(std::bind(amdsmi_get_gpu_metrics, &GPU_MOCK_HANDLE,
-			      &size, metrics));
-	ExpectCommand(SMI_CMD_CODE_GET_METRICS_TABLE);
-	SaveInputPayloadIn(&in_payload);
-	ret = performCall();
+	ret = amdsmi_get_gpu_metrics(&GPU_MOCK_HANDLE, &size, metrics);
 
 	free(metrics);
 	ASSERT_EQ(ret, AMDSMI_STATUS_OUT_OF_RESOURCES);

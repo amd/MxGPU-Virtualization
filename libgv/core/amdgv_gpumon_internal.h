@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef AMDGV_GPUMON_INTERNAL_H
@@ -26,6 +9,24 @@
 #include "amdgv_basetypes.h"
 #include "amdgv_api.h"
 #include "amdgv_gpumon.h"
+struct amdgv_gpumon_cper {
+	union {
+		struct {
+			uint64_t rptr;
+			uint64_t *wptr;
+			uint64_t *avail_count;
+			uint64_t *size;
+		} get_count;
+		struct {
+			void *buf;
+			uint64_t rptr;
+			uint64_t buf_size;
+			uint64_t *write_count;
+			uint64_t *overflow_count;
+			uint64_t *left_size;
+		} get_entries;
+	};
+};
 
 enum amdgv_gpumon_type {
 	/* GETTERS */
@@ -89,8 +90,18 @@ enum amdgv_gpumon_type {
 	GPUMON_GET_NUM_STATIC_METRICS_EXT_ENTRIES,
 	GPUMON_GET_GFX_CONFIG,
 	GPUMON_GET_NPM_INFO,
+	GPUMON_GET_CC_MODE,
 	GPUMON_PTL_QUERY_STATUS,
+	GPUMON_UAL_GET_INTERFACE_VERSION,
+	GPUMON_UAL_GET_CONFIG,
 	GPUMON_GET_PCIE_DPM_LEVELS,
+	GPUMON_GET_BAD_PAGE_COUNT,
+	GPUMON_GET_BAD_PAGE_INFO,
+	GPUMON_GET_BAD_PAGE_THRESHOLD,
+	GPUMON_GET_RAS_EEPROM_VERSION,
+	GPUMON_GET_ECC_CAP,
+	GPUMON_GET_ECC_CORRECTION_SCHEMA,
+	GPUMON_GET_RAS_POLICY_INFO,
 
 	/* -- SETTERS -- */
 
@@ -113,7 +124,14 @@ enum amdgv_gpumon_type {
 	GPUMON_RAS_TA_UNLOAD,
 	GPUMON_RESET_ALL_ERROR_COUNTS,
 	GPUMON_SET_PM_POLICY_LEVEL,
+	GPUMON_SET_CC_MODE,
 	GPUMON_PTL_SET_STATE,
+	GPUMON_UAL_SET_PPOD_CONFIG,
+	GPUMON_UAL_SET_VPOD_CONFIG,
+	GPUMON_UAL_SET_STATION_CONFIG,
+	GPUMON_UAL_PAUSE,
+	GPUMON_UAL_RESUME,
+	GPUMON_UAL_TRIGGER_MODE2,
 	GPUMON_MAX_TYPE
 };
 
@@ -261,11 +279,25 @@ struct amdgv_gpumon_funcs {
 	int (*get_num_static_metrics_ext_entries)(struct amdgv_adapter *adapt,
 			uint32_t *entries);
 	int (*get_npm_info)(struct amdgv_adapter *adapt, struct amdgv_gpumon_npm_info *npm_info);
+	int (*get_cc_mode)(struct amdgv_adapter *adapt, enum amdgv_cc_mode *cc_mode);
+	int (*set_cc_mode)(struct amdgv_adapter *adapt, enum amdgv_cc_mode cc_mode);
 	int (*ptl_query_status)(struct amdgv_adapter *adapt,
 				struct amdgv_ptl_status_info *info);
 	int (*ptl_enable)(struct amdgv_adapter *adapt,
 			  struct amdgv_ptl_enable_info *info);
 	int (*ptl_disable)(struct amdgv_adapter *adapt);
+	int (*ual_get_interface_version)(struct amdgv_adapter *adapt, uint32_t *version);
+	int (*ual_get_config)(struct amdgv_adapter *adapt,
+			struct amdgv_gpumon_get_config_rsp_ual_v1 *config);
+	int (*ual_set_ppod_config)(struct amdgv_adapter *adapt,
+			struct amdgv_gpumon_set_ppod_config_req_ual_v1 *config);
+	int (*ual_set_vpod_config)(struct amdgv_adapter *adapt,
+			struct amdgv_gpumon_set_vpod_config_req_ual_v1 *config);
+	int (*ual_set_station_config)(struct amdgv_adapter *adapt,
+			struct amdgv_gpumon_set_station_config_req_ual_v1 *config);
+	int (*ual_pause)(struct amdgv_adapter *adapt);
+	int (*ual_resume)(struct amdgv_adapter *adapt);
+	int (*ual_trigger_mode2)(struct amdgv_adapter *adapt);
 	int (*get_pcie_dpm_levels)(struct amdgv_adapter *adapt,
 			struct amdgv_gpumon_pcie_levels *pcie_levels);
 };
@@ -293,6 +325,8 @@ int amdgv_set_accelerator_partition_profile(struct amdgv_adapter *adapt,
 
 int amdgv_set_memory_partition_mode(struct amdgv_adapter *adapt,
 		enum amdgv_memory_partition_mode memory_partition_mode);
+int amdgv_set_cc_mode(struct amdgv_adapter *adapt,
+		enum amdgv_cc_mode cc_mode);
 
 uint32_t amdgv_gpumon_get_vf_count(struct amdgv_adapter *adapt);
 uint32_t amdgv_gpumon_get_hive_vf_count(struct amdgv_adapter *adapt);
@@ -301,5 +335,6 @@ uint32_t amdgv_gpumon_get_hive_vf_count(struct amdgv_adapter *adapt);
 int amdgv_gpumon_ptl_query_status(struct amdgv_adapter *adapt, struct amdgv_ptl_status_info *info);
 int amdgv_gpumon_ptl_enable(struct amdgv_adapter *adapt, struct amdgv_ptl_enable_info *info);
 int amdgv_gpumon_ptl_disable(struct amdgv_adapter *adapt);
+uint8_t amdgv_gpumon_fcn_ref_id_encode(uint64_t serial, uint8_t vf_index);
 
 #endif

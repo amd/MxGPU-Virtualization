@@ -1,24 +1,8 @@
-/*
- * Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
+
 #ifndef EXCLUDE_DCORE_DEBUG
 
 #include <linux/kobject.h>
@@ -968,6 +952,11 @@ static int dcore_get_mes_dbg_info(struct file *filp, void *user_buf)
 	struct gim_dev_data *dev_data;
 	amdgv_dev_t adev = NULL;
 	int idx_vf = -1;
+	uint64_t mes_addr;
+	uint64_t mes_size;
+	union amdgv_vf_info *vf_info = NULL;
+	uint64_t vf_fb_start;
+	uint64_t vf_fb_end;
 
 	if (copy_from_user(&mes_dbg_block, user_buf, sizeof(struct dbglib_mes_dbg_info_block))) {
 		ret = -EINVAL;
@@ -977,6 +966,12 @@ static int dcore_get_mes_dbg_info(struct file *filp, void *user_buf)
 	vf2pf_msg = (struct amd_sriov_msg_vf2pf_info *)gim_vmalloc(sizeof(struct amd_sriov_msg_vf2pf_info));
 	if (vf2pf_msg == NULL) {
 		ret = AMDGV_FAILURE;
+		goto out;
+	}
+
+	vf_info = (union amdgv_vf_info *)gim_kzalloc(sizeof(union amdgv_vf_info), GFP_KERNEL);
+	if (vf_info == NULL) {
+		ret = -ENOMEM;
 		goto out;
 	}
 
@@ -1001,8 +996,25 @@ static int dcore_get_mes_dbg_info(struct file *filp, void *user_buf)
 
 	ret = amdgv_get_vf2pf_info(adev, (uint32_t)idx_vf, vf2pf_msg);
 	if (ret == 0 && vf2pf_msg->mes_info_addr) {
-		mes_dbg_block.dbg_addr = vf2pf_msg->mes_info_addr;
-		mes_dbg_block.dbg_size = vf2pf_msg->mes_info_size;
+		mes_addr = vf2pf_msg->mes_info_addr;
+		mes_size = vf2pf_msg->mes_info_size;
+
+		 /* Check that mes_info_addr and mes_info_size are within the VF's framebuffer */
+		if (amdgv_get_vf_info(adev, (uint32_t)idx_vf, AMDGV_GET_VF_FB, vf_info) == 0) {
+			vf_fb_start = MBYTES_TO_BYTES(vf_info->fb.fb_offset);
+			vf_fb_end   = vf_fb_start + MBYTES_TO_BYTES(vf_info->fb.fb_size);
+
+			if (mes_size == 0 || mes_addr < vf_fb_start || mes_addr + mes_size < mes_addr || mes_addr + mes_size > vf_fb_end) {
+				DCORE_WARN("VF%d supplied MES info range [0x%llx, +0x%llx) outside VF FB [0x%llx, 0x%llx); ignoring\n",
+					   idx_vf, mes_addr, mes_size,
+					   vf_fb_start, vf_fb_end);
+			} else {
+				mes_dbg_block.dbg_addr = mes_addr;
+				mes_dbg_block.dbg_size = (uint32_t)mes_size;
+			}
+		} else {
+			DCORE_WARN("Failed to query VF%d FB layout; ignoring MES dbg info\n", idx_vf);
+		}
 	}
 	mutex_unlock(&gim_device_list_lock);
 
@@ -1011,9 +1023,54 @@ out:
 		ret = -EINVAL;
 	if (vf2pf_msg)
 		gim_vfree(vf2pf_msg);
+	if (vf_info)
+		gim_kfree(vf_info);
 	if (ret)
 		DCORE_WARN("Failed to get mes_dbg_info\n");
 
+	return ret;
+}
+
+static int dcore_toggle_hw_access(struct file *file, void *user_buf)
+{
+	struct dbglib_toggle_hw_access_block args = {0};
+	struct gim_dev_data *dev_data;
+	amdgv_dev_t adev = NULL;
+	int idx_vf = -1;
+	int ret = -ENODEV;
+
+	if (copy_from_user(&args, user_buf, sizeof(struct dbglib_toggle_hw_access_block)))
+		return -EFAULT;
+
+	if (!args.vf_access_select ||
+	    (args.vf_access_select & ~AMDGV_VF_ACCESS_ALL))
+		return -EINVAL;
+
+	if (args.allow_access > 1)
+		return -EINVAL;
+
+	mutex_lock(&gim_device_list_lock);
+
+	list_for_each_entry(dev_data, &gim_device_list, list) {
+		idx_vf = gim_dbdf_to_vf_idx(args.dbsf, dev_data);
+		if (idx_vf != -1) {
+			adev = dev_data->adev;
+			break;
+		}
+	}
+
+	if (!adev) {
+		DCORE_WARN("can't find device by bdf 0x%x\n", args.dbsf);
+		ret = -EINVAL;
+		goto out;
+	}
+
+	ret = amdgv_toggle_mmio_access(adev, (uint32_t)idx_vf,
+				       args.vf_access_select,
+				       (bool)args.allow_access);
+
+out:
+	mutex_unlock(&gim_device_list_lock);
 	return ret;
 }
 
@@ -1041,6 +1098,9 @@ static long dcore_ioctl_handler(struct file *filp, unsigned int ioctl_num,
 		break;
 	case GIM_IOC_GET_MES_DBG_INFO:
 		ret = dcore_get_mes_dbg_info(filp, (void *)arg);
+		break;
+	case GIM_IOC_TOGGLE_HW_ACCESS:
+		ret = dcore_toggle_hw_access(filp, (void *)arg);
 		break;
 	case GIM_IOC_STOP_TRAP_GPU_HANG:
 		ret = dcore_stop_trap_gpu_hang(filp, (void *)arg);

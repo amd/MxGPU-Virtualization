@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_device.h"
@@ -46,6 +29,7 @@ static int amdgv_sched_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf,
 			      enum amdgv_sched_block sched_block, bool notify_vf)
 {
 	int ret = 0;
+	struct amdgv_wait_for_cb_context cb_context = { 0 };
 
 	amdgv_debug_test_and_hang_flr(adapt);
 
@@ -82,8 +66,12 @@ static int amdgv_sched_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf,
 		/* it's safer to wait guest to response,
 		   but no matter it responsed or not, we need to go on reset */
 		adapt->array_vf[idx_vf].ready_to_reset = false;
+
+		cb_context.ctx = (void *)&adapt->array_vf[idx_vf].ready_to_reset;
+		cb_context.type = AMDGV_WAIT_FOR_GUEST_RESET_READY;
+
 		ret = amdgv_wait_for(adapt, amdgv_wait_guest_reset_ready_cb,
-				     (void *)&adapt->array_vf[idx_vf].ready_to_reset,
+				     &cb_context,
 				     AMDGV_TIMEOUT(TIMEOUT_GUEST_IDH_RESP), 0);
 	}
 
@@ -151,6 +139,7 @@ static int amdgv_sched_whole_gpu_reset(struct amdgv_adapter *adapt, uint32_t tri
 	uint32_t idx_vf, i;
 	uint32_t hw_sched_id;
 	int ret = 0;
+	struct amdgv_wait_for_cb_context cb_context = { 0 };
 
 	/* Query all ras block ecc errors in ecc gpu reset */
 	if (oss_atomic_read(adapt->in_ecc_recovery)) {
@@ -198,14 +187,16 @@ static int amdgv_sched_whole_gpu_reset(struct amdgv_adapter *adapt, uint32_t tri
 	if (!oss_atomic_read(adapt->in_ecc_recovery)) {
 		/* it's safer to wait guest to response,
 			but no matter it responsed or not, we need to go on reset */
-		amdgv_wait_for(adapt, amdgv_wait_all_guest_reset_ready_cb, (void *)adapt,
+		cb_context.ctx = (void *)adapt;
+		cb_context.type = AMDGV_WAIT_FOR_GUEST_RESET_READY;
+		amdgv_wait_for(adapt, amdgv_wait_all_guest_reset_ready_cb, &cb_context,
 				AMDGV_TIMEOUT(TIMEOUT_GUEST_IDH_RESP_GPU_RESET), 0);
 	}
 
 	amdgv_sched_world_context_clear_state_rst(adapt);
 
 	/* reset the whole GPU */
-	ret = amdgv_reset_gpu(adapt);
+	ret = amdgv_reset_gpu_and_reinit(adapt);
 
 	/* event guard will be triggered for WGR*/
 	if (triggered_idx_vf != AMDGV_PF_IDX) {
@@ -279,12 +270,8 @@ static int amdgv_sched_gpu_chain_reset(struct amdgv_adapter *adapt, bool reset_a
 	int ret = 0;
 
 	hive = amdgv_get_xgmi_hive(adapt);
-	if (!hive) {
-		AMDGV_ERROR("XGMI: node 0x%llx, can not match hive "
-			    "0x%llx in the hive list.\n",
-			    adapt->xgmi.node_id, adapt->xgmi.hive_id);
+	if (!hive)
 		return AMDGV_FAILURE;
-	}
 
 	if (reset_all) {
 		/* set hive->in_chain_reset at the first chain reset request */
@@ -306,8 +293,8 @@ static int amdgv_sched_gpu_chain_reset(struct amdgv_adapter *adapt, bool reset_a
 			adapt_next->reset.in_xgmi_chain_reset = true;
 			if (amdgv_sched_queue_event(adapt_next, AMDGV_PF_IDX,
 						    AMDGV_EVENT_SCHED_FORCE_RESET_GPU_INTERNAL, 0))
-				AMDGV_WARN("notify chain reset on node 0x%llx failed\n",
-					   adapt_next->xgmi.node_id);
+				AMDGV_ERROR("notify chain reset on node 0x%llx failed\n",
+					    adapt_next->xgmi.node_id);
 		}
 	}
 
@@ -502,7 +489,7 @@ int amdgv_sched_reset_vf_auto(struct amdgv_adapter *adapt)
 	struct amdgv_sched_world_switch *world_switch;
 
 	if (adapt->flags & AMDGV_FLAG_VF_HANG_GPU_RESET) {
-		AMDGV_INFO("force reset enabled! Trigger whole_gpu_reset\n");
+		AMDGV_INFO("FLR is disabled\n");
 		goto whole_gpu_reset__auto;
 	}
 
@@ -529,7 +516,7 @@ int amdgv_sched_reset_vf_auto(struct amdgv_adapter *adapt)
 	}
 
 	if (!abnormal_world_switch) {
-		AMDGV_INFO("No engine in abnormal state, skip reset here\n");
+		AMDGV_WARN("No engine in abnormal state, skip reset.\n");
 		return 0;
 	}
 
@@ -549,11 +536,11 @@ int amdgv_sched_reset_vf_auto(struct amdgv_adapter *adapt)
 		amdgv_time_log_note_vf_reset_start(adapt, abnormal_idx_vf);
 
 	if (!(adapt->flags & AMDGV_FLAG_USE_PF) && (abnormal_idx_vf == AMDGV_PF_IDX)) {
-		AMDGV_INFO("PF is currently the active FCN on hung engine\n");
+		AMDGV_WARN("PF is currently the active FCN on hung engine. Perform Whole GPU Reset\n");
 		goto whole_gpu_reset__auto;
 	}
 	if (AMDGV_IS_IDX_INVALID(abnormal_idx_vf)) {
-		AMDGV_INFO("INVALID VFID on hung engine\n");
+		AMDGV_WARN("INVALID VFID on hung engine\n");
 		goto whole_gpu_reset__auto;
 	}
 
@@ -570,12 +557,8 @@ int amdgv_sched_reset_vf_auto(struct amdgv_adapter *adapt)
 			continue;
 
 		if (amdgv_sched_world_context_switch_to_vf(adapt, abnormal_idx_vf,
-							   world_switch)) {
-			AMDGV_INFO("Unable to context_switch to %s on %s engine\n",
-				   amdgv_idx_to_str(abnormal_idx_vf),
-				   amdgv_sched_block_to_name(world_switch->sched_block));
+							   world_switch))
 			goto whole_gpu_reset__auto;
-		}
 	}
 
 	/* always notify VM of FLR start and completion
@@ -583,14 +566,12 @@ int amdgv_sched_reset_vf_auto(struct amdgv_adapter *adapt)
 	 * on different "sched_id". So make sure VF that will be FLR knows
 	 */
 	ret = amdgv_sched_vf_flr(adapt, abnormal_idx_vf, AMDGV_SCHED_BLOCK_ALL, true);
-
 	amdgv_notify_shim(adapt->dev, AMDGV_NOTIFICATION_ERROR_RESET_VF,
 			  "Reset %s initiated from reset_vf_auto on %s",
 			  amdgv_idx_to_str(abnormal_idx_vf),
 			  amdgv_sched_block_to_name(AMDGV_SCHED_BLOCK_ALL));
-
 	if (ret) {
-		AMDGV_INFO("amdgv_sched_vf_flr() returned error %d\n", ret);
+		AMDGV_INFO("failed %s FLR\n", amdgv_idx_to_str(abnormal_idx_vf));
 		goto whole_gpu_reset__auto;
 	}
 
@@ -618,10 +599,8 @@ int amdgv_sched_reset_vf_auto(struct amdgv_adapter *adapt)
 									&curr_vf_state))
 				continue;
 			if (curr_vf_state == AMDGV_VF_CONTEXT_LOADED) {
-				if (amdgv_sched_world_context_save(adapt, world_switch)) {
-					AMDGV_INFO("failed to save vf after FLR\n");
+				if (amdgv_sched_world_context_save(adapt, world_switch))
 					goto whole_gpu_reset__auto;
-				}
 			}
 		}
 	}

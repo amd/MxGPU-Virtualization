@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_device.h"
@@ -37,6 +20,8 @@
 #include "amdgv_xgmi.h"
 #include "amdgv_mca.h"
 #include "amdgv_gart.h"
+#include "amdgv_ual.h"
+#include "amdgv_ras.h"
 
 static const uint32_t this_block = AMDGV_SCHEDULER_BLOCK;
 
@@ -98,6 +83,10 @@ static const char *amdgv_event_name(uint32_t event)
 		return "SCHED_STOP_VF";
 	case AMDGV_EVENT_SCHED_INIT_VF_FB:
 		return "SCHED_INIT_VF_FB";
+	case AMDGV_EVENT_SCHED_RAS_EVENT:
+		return "SCHED_RAS_EVENT";
+	case AMDGV_EVENT_SCHED_VF_RAS_REMOTE_CMD:
+		return "AMDGV_EVENT_SCHED_VF_RAS_REMOTE_CMD";
 	case AMDGV_EVENT_SCHED_RAS_UMC:
 		return "SCHED_RAS_UMC";
 	case AMDGV_EVENT_SCHED_SUSPEND:
@@ -172,6 +161,12 @@ static const char *amdgv_event_name(uint32_t event)
 		return "SCHED_VF_REQ_RAS_CHK_CRITI_REGION";
 	case AMDGV_EVENT_SCHED_SET_VF_COND_AVAIL:
 		return "SET_VF_COND_AVAIL";
+	case AMDGV_EVENT_SCHED_VF_REQ_GPU_INIT_XCHG_REGION:
+		return "VF_REQ_GPU_INIT_XCHG_REGION";
+	case AMDGV_EVENT_SCHED_UAL_PAUSE_REQ:
+		return "SCHED_UAL_PAUSE_REQ";
+	case AMDGV_EVENT_SCHED_UAL_RESUME_REQ:
+		return "SCHED_UAL_RESUME_REQ";
 	default:
 		break;
 	}
@@ -230,17 +225,13 @@ static int amdgv_sched_psp_set_mb_int_in_hive(struct amdgv_adapter *adapt, int c
 	uint32_t tmp_idx_vf;
 	uint32_t vf_select;
 	int ret;
-	int wait_ret = 0;
 	bool send_event = false;
 	bool execute_cmd = false;
+	struct amdgv_wait_for_cb_context cb_context = { 0 };
 
 	hive = amdgv_get_xgmi_hive(adapt);
-	if (!hive) {
-		AMDGV_ERROR("XGMI: node 0x%llx, can not match hive "
-			    "0x%llx in the hive list.\n",
-			    adapt->xgmi.node_id, adapt->xgmi.hive_id);
+	if (!hive)
 		return AMDGV_FAILURE;
-	}
 
 	/* because of the sync problem, here is the priciple to make the VF gate status sync in hive
 	 * 1. we don't wait the events to return, no matter it is to enable or to disable, otherwise there may have deadlock
@@ -303,11 +294,10 @@ static int amdgv_sched_psp_set_mb_int_in_hive(struct amdgv_adapter *adapt, int c
 
 	/* enable case, need wait */
 	if (enable) {
-		wait_ret = amdgv_wait_for(adapt, wait_psp_mb_int_status_in_hive, hive, AMDGV_TIMEOUT(TIMEOUT_PSP_REG), 0);
-		if (wait_ret) {
-			AMDGV_WARN("XGMI: wait for psp mailbox interrupt status timed out\n");
-			return 0;	/* this probably not a big issue, let's continue */
-		}
+		cb_context.ctx = (void *)hive;
+		cb_context.type = AMDGV_WAIT_FOR_PSP_MB_INT;
+		/* if this times out it's probably not a big issue, let's continue */
+		amdgv_wait_for(adapt, wait_psp_mb_int_status_in_hive, &cb_context, AMDGV_TIMEOUT(TIMEOUT_PSP_REG), 0);
 	}
 
 	return 0;
@@ -444,6 +434,8 @@ static bool amdgv_sched_event_print_log_in_info(enum amdgv_sched_event_id event_
 	case AMDGV_EVENT_SCHED_VF_REQ_RAS_ERROR_COUNT:
 	case AMDGV_EVENT_SCHED_VF_REQ_RAS_CPER_DUMP:
 	case AMDGV_EVENT_SCHED_VF_REQ_RAS_CHK_CRITI_REGION:
+	case AMDGV_EVENT_QUERY_DIRTYBIT_DATA:
+	case AMDGV_EVENT_SCHED_RAS_EVENT:
 		ret = false;
 		break;
 	default:
@@ -489,8 +481,9 @@ static int amdgv_sched_event_queue_push_ex(struct amdgv_adapter *adapt, uint32_t
 		AMDGV_DEBUG4("queue %s request from %s for %s\n", amdgv_event_name(event_id),
 			    amdgv_idx_to_str(idx_vf), amdgv_sched_block_to_name(sched_block));
 
+	// Do not use vf_idx other than PF index to perform certain actions
 	if (amdgv_sched_event_is_event_invalid(adapt, idx_vf, event_id, sched_block)) {
-		AMDGV_ERROR("Event %s request from %s for %s is pushed with incorrect parameters\n",
+		AMDGV_WARN("Event %s request from %s for %s is pushed with incorrect parameters\n",
 				amdgv_event_name(event_id), amdgv_idx_to_str(idx_vf),
 				amdgv_sched_block_to_name(sched_block));
 	}
@@ -750,6 +743,8 @@ static void amdgv_sched_event_arrange_event_list(struct amdgv_adapter *adapt,
 		switch (entry->event.id) {
 		case AMDGV_EVENT_SCHED_FORCE_RESET_GPU:
 		case AMDGV_EVENT_SCHED_FORCE_RESET_GPU_INTERNAL:
+		case AMDGV_EVENT_SCHED_RAS_EVENT:
+		case AMDGV_EVENT_SCHED_VF_RAS_REMOTE_CMD:
 		case AMDGV_EVENT_SCHED_RAS_UMC:
 		case AMDGV_EVENT_EXIT_POWER_SAVING:
 		case AMDGV_EVENT_ENTER_POWER_SAVING:
@@ -821,6 +816,7 @@ static void amdgv_sched_event_arrange_event_list(struct amdgv_adapter *adapt,
 		case AMDGV_EVENT_SCHED_VF_REQ_RAS_BAD_PAGES:
 		case AMDGV_EVENT_SCHED_VF_REQ_RAS_CHK_CRITI_REGION:
 		case AMDGV_EVENT_VF_REQ_PTL_UPDATE:
+		case AMDGV_EVENT_SCHED_VF_REQ_GPU_INIT_XCHG_REGION:
 			amdgv_sched_remove_duplicated_event(adapt, AMDGV_SCHED_EVENT_LIST_4,
 							    entry);
 
@@ -833,6 +829,8 @@ static void amdgv_sched_event_arrange_event_list(struct amdgv_adapter *adapt,
 		case AMDGV_EVENT_SCHED_GET_TOPOLOGY:
 		case AMDGV_EVENT_VF_MIGRATION_SET_ABORT:
 		case AMDGV_EVENT_SET_VF_MIGRATION_STATE:
+		case AMDGV_EVENT_SCHED_UAL_PAUSE_REQ:
+		case AMDGV_EVENT_SCHED_UAL_RESUME_REQ:
 			amdgv_list_move_tail(
 				&entry->list,
 				&adapt->sched.event_list[AMDGV_SCHED_EVENT_LIST_5]);
@@ -964,6 +962,8 @@ static void amdgv_sched_push_back_event(struct amdgv_adapter *adapt,
 	switch (entry->event.id) {
 	case AMDGV_EVENT_SCHED_FORCE_RESET_GPU:
 	case AMDGV_EVENT_SCHED_FORCE_RESET_GPU_INTERNAL:
+	case AMDGV_EVENT_SCHED_RAS_EVENT:
+	case AMDGV_EVENT_SCHED_VF_RAS_REMOTE_CMD:
 	case AMDGV_EVENT_SCHED_RAS_UMC:
 	case AMDGV_EVENT_EXIT_POWER_SAVING:
 	case AMDGV_EVENT_ENTER_POWER_SAVING:
@@ -1022,6 +1022,7 @@ static void amdgv_sched_push_back_event(struct amdgv_adapter *adapt,
 	case AMDGV_EVENT_REQ_GPU_INIT_DATA:
 	case AMDGV_EVENT_REQ_GPU_DEBUG:
 	case AMDGV_EVENT_VF_REQ_PTL_UPDATE:
+	case AMDGV_EVENT_SCHED_VF_REQ_GPU_INIT_XCHG_REGION:
 		adapt->sched.curr_event_list_idx = AMDGV_SCHED_EVENT_LIST_4;
 		amdgv_list_add(&entry->list,
 			       &adapt->sched.event_list[AMDGV_SCHED_EVENT_LIST_4]);
@@ -1031,6 +1032,8 @@ static void amdgv_sched_push_back_event(struct amdgv_adapter *adapt,
 	case AMDGV_EVENT_SCHED_GET_TOPOLOGY:
 	case AMDGV_EVENT_VF_MIGRATION_SET_ABORT:
 	case AMDGV_EVENT_SET_VF_MIGRATION_STATE:
+	case AMDGV_EVENT_SCHED_UAL_PAUSE_REQ:
+	case AMDGV_EVENT_SCHED_UAL_RESUME_REQ:
 		adapt->sched.curr_event_list_idx = AMDGV_SCHED_EVENT_LIST_5;
 		amdgv_list_add(&entry->list,
 			       &adapt->sched.event_list[AMDGV_SCHED_EVENT_LIST_5]);
@@ -1165,9 +1168,10 @@ static int amdgv_sched_record_queue_flush(struct amdgv_adapter *adapt)
 
 static void amdgv_sched_notify_vf_full_access(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
-	uint32_t msg_data[MAILBOX_DATA_LEN_3];
+	uint32_t msg_data[MAILBOX_DATA_LEN_3] = { 0 };
 
 	msg_data[0] = AMDGV_EVENT_READY_TO_ACCESS_GPU;
+	msg_data[1] = (uint32_t)GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, INITD_H);
 	/* checksum key */
 	msg_data[2] = 0;
 	amdgv_mailbox_send_msg(adapt, idx_vf, msg_data, MAILBOX_DATA_LEN_3, true);
@@ -1183,11 +1187,8 @@ static int amdgv_sched_handle_req_gpu_reset(struct amdgv_adapter *adapt, uint32_
 	amdgv_sched_context_init(adapt, idx_vf, AMDGV_SCHED_BLOCK_ALL);
 
 	if (AMDGV_PF_IDX != idx_vf) {
-		if (amdgv_vbios_upload_image_to_vf(adapt, idx_vf))
-			AMDGV_WARN("upload vbios image to vf failed\n");
-
-		if (amdgv_vfmgr_update_pf2vf_message(adapt, idx_vf))
-			AMDGV_WARN("update pf2vf message failed\n");
+		amdgv_vbios_upload_image_to_vf(adapt, idx_vf);
+		amdgv_vfmgr_update_pf2vf_message(adapt, idx_vf);
 	}
 
 	return 0;
@@ -1197,7 +1198,12 @@ static void amdgv_sched_notify_vf_init_data_ready(struct amdgv_adapter *adapt, u
 {
 	uint32_t msg_data[MAILBOX_DATA_LEN_4];
 
-	if (adapt->array_vf[idx_vf].vf_crit_region == GPU_CRIT_REGION_V2) {
+	if (adapt->array_vf[idx_vf].xchg.vf_crit_region == GPU_CRIT_REGION_V3) {
+		msg_data[0] = MB_RES_MSG_GPU_INIT_DATA_READY;
+		msg_data[1] = GPU_CRIT_REGION_V3;
+		msg_data[2] = amdgv_vfmgr_calc_crit_region_pool_size(adapt, idx_vf);
+		msg_data[3] = 0;
+	} else if (adapt->array_vf[idx_vf].xchg.vf_crit_region == GPU_CRIT_REGION_V2) {
 		msg_data[0] = MB_RES_MSG_GPU_INIT_DATA_READY;
 		msg_data[1] = GPU_CRIT_REGION_V2;
 		msg_data[2] = (uint32_t) GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, INITD_H);
@@ -1214,21 +1220,19 @@ static void amdgv_sched_notify_vf_init_data_ready(struct amdgv_adapter *adapt, u
 
 int amdgv_sched_handle_req_gpu_init_data(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
-	if (amdgv_vfmgr_copy_ip_data_to_vf(adapt, idx_vf, false))
-		AMDGV_WARN("upload IP discovery data to vf failed\n");
+	/* Host does not know where VF exchange region is located. Delay
+	 * the copy until guest provides the info. */
+	if (!adapt->use_vf_sysmem_xchg) {
+		amdgv_vfmgr_copy_ip_data_to_vf(adapt, idx_vf, false);
 
-	if (adapt->fw_load_type == AMDGV_FW_LOAD_BY_GIM_PHASE_2) {
-		if (amdgv_host_upload_fw_to_vf(adapt, idx_vf))
-			AMDGV_WARN("upload FW image to vf failed\n");
+		if (adapt->fw_load_type == AMDGV_FW_LOAD_BY_GIM_PHASE_2)
+			amdgv_host_upload_fw_to_vf(adapt, idx_vf);
+
+		amdgv_vbios_upload_image_to_vf(adapt, idx_vf);
+		amdgv_vfmgr_update_pf2vf_message(adapt, idx_vf);
+
+		adapt->array_vf[idx_vf].gpu_init_data_ready = true;
 	}
-
-	if (amdgv_vbios_upload_image_to_vf(adapt, idx_vf))
-		AMDGV_WARN("upload vbios image to vf failed\n");
-
-	if (amdgv_vfmgr_update_pf2vf_message(adapt, idx_vf))
-		AMDGV_WARN("update pf2vf message failed\n");
-
-	adapt->array_vf[idx_vf].gpu_init_data_ready = true;
 
 	amdgv_mca_cache_notify_event(adapt,
 				     MCA_CACHE_EVENT_GUEST_LOAD,
@@ -1393,7 +1397,7 @@ static void amdgv_sched_notify_vf_req_bad_pages_ready(struct amdgv_adapter *adap
 }
 
 static void amdgv_sched_notify_vf_bad_pages(struct amdgv_adapter *adapt,
-						      uint32_t idx_vf)
+					    uint32_t idx_vf)
 {
 	uint32_t msg_data[MAILBOX_DATA_LEN_3] = { 0 };
 
@@ -1402,6 +1406,17 @@ static void amdgv_sched_notify_vf_bad_pages(struct amdgv_adapter *adapt,
 	msg_data[2] = 0;
 	amdgv_mailbox_send_msg(adapt, idx_vf, msg_data, MAILBOX_DATA_LEN_3, true);
 	amdgv_mailbox_wait_trn_msg_ack(adapt);
+}
+
+void amdgv_sched_notify_vfs_bad_pages_at_poison_creation(struct amdgv_adapter *adapt)
+{
+	unsigned int i;
+
+	if (!adapt->ffbm.enabled && !amdgv_ras_eeprom_is_gpu_bad(adapt)) {
+		for (i = 0; i < adapt->num_vf; i++)
+			if (is_active_vf(i))
+				amdgv_sched_notify_vf_bad_pages(adapt, i);
+	}
 }
 
 static void amdgv_sched_notify_vf_chk_criti_ready(struct amdgv_adapter *adapt, uint32_t idx_vf)
@@ -1434,8 +1449,7 @@ static int amdgv_sched_handle_ras_poison_consumption(struct amdgv_adapter *adapt
 	if (adapt->ecc.poison_consumption)
 		ret = adapt->ecc.poison_consumption(adapt, event);
 
-	if (amdgv_vfmgr_update_pf2vf_message(adapt, event->idx_vf))
-		AMDGV_WARN("update pf2vf message failed\n");
+	amdgv_vfmgr_update_pf2vf_message(adapt, event->idx_vf);
 
 	amdgv_sched_notify_vf_ras_poison_ready(adapt, event->idx_vf);
 
@@ -1445,16 +1459,11 @@ static int amdgv_sched_handle_ras_poison_consumption(struct amdgv_adapter *adapt
 static int amdgv_sched_handle_ras_poison_creation(struct amdgv_adapter *adapt, struct amdgv_sched_event *event)
 {
 	int ret = AMDGV_FAILURE;
-	unsigned int i = 0;
 
 	if (adapt->ecc.poison_creation)
 		ret = adapt->ecc.poison_creation(adapt, event);
 
-	if (!adapt->ffbm.enabled && !amdgv_ras_eeprom_is_gpu_bad(adapt)) {
-		for (i = 0; i < adapt->num_vf; i++)
-			if (is_active_vf(i))
-				amdgv_sched_notify_vf_bad_pages(adapt, i);
-	}
+	amdgv_sched_notify_vfs_bad_pages_at_poison_creation(adapt);
 
 	return ret;
 }
@@ -1580,6 +1589,51 @@ static int amdgv_sched_handle_vf_chk_critical_region(struct amdgv_adapter *adapt
 	return 0;
 }
 
+static void amdgv_sched_notify_vf_xchg_region_ready(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	uint32_t msg_data[MAILBOX_DATA_LEN_4];
+
+	if (adapt->array_vf[idx_vf].xchg.vf_crit_region == GPU_CRIT_REGION_V3) {
+		msg_data[0] = MB_RES_MSG_REQ_GPU_INIT_XCHG_REGION_READY;
+		msg_data[1] = GPU_CRIT_REGION_V3;
+		msg_data[2] = (uint32_t) GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, INITD_H);
+		msg_data[3] = GET_VF_TABLE_SIZE_KB_BY_ID(adapt, idx_vf, INITD_H);
+
+		amdgv_mailbox_send_msg(adapt, idx_vf, msg_data, MAILBOX_DATA_LEN_4, true);
+	}
+
+}
+
+static void amdgv_sched_init_xchg_region(struct amdgv_adapter *adapt, uint32_t idx_vf,
+					uint64_t gpa_base, uint32_t size)
+{
+
+	if (!adapt->use_vf_sysmem_xchg)
+		return;
+
+	if (amdgv_vfmgr_init_xchg_region(adapt, idx_vf, gpa_base, size)) {
+		amdgv_sched_notify_vf_fail(adapt, idx_vf);
+		return;
+	}
+
+	if (amdgv_vfmgr_init_crit_region(adapt, idx_vf)) {
+		amdgv_sched_queue_set_vf_cond_avail(adapt, idx_vf);
+		return;
+	}
+
+	amdgv_vfmgr_copy_ip_data_to_vf(adapt, idx_vf, false);
+
+	if (adapt->fw_load_type == AMDGV_FW_LOAD_BY_GIM_PHASE_2)
+		amdgv_host_upload_fw_to_vf(adapt, idx_vf);
+
+	amdgv_vbios_upload_image_to_vf(adapt, idx_vf);
+	amdgv_vfmgr_update_pf2vf_message(adapt, idx_vf);
+
+	adapt->array_vf[idx_vf].gpu_init_data_ready = true;
+
+	amdgv_sched_notify_vf_xchg_region_ready(adapt, idx_vf);
+}
+
 static int amdgv_sched_handle_req_gpu_init(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
 	adapt->array_vf[idx_vf].vf_status = AMDGV_VF_STATUS_START_INIT;
@@ -1590,19 +1644,12 @@ static int amdgv_sched_handle_req_gpu_init(struct amdgv_adapter *adapt, uint32_t
 		return AMDGV_FAILURE;
 
 	if (!(adapt->array_vf[idx_vf].gpu_init_data_ready)) {
-		if (adapt->fw_load_type == AMDGV_FW_LOAD_BY_GIM_PHASE_2) {
-			if (amdgv_host_upload_fw_to_vf(adapt, idx_vf))
-				AMDGV_WARN("upload vbios image to vf failed\n");
-		}
+		if (adapt->fw_load_type == AMDGV_FW_LOAD_BY_GIM_PHASE_2)
+			amdgv_host_upload_fw_to_vf(adapt, idx_vf);
 
-		if (amdgv_vfmgr_copy_ip_data_to_vf(adapt, idx_vf, false))
-			AMDGV_WARN("upload IP discovery data to vf failed\n");
-
-		if (amdgv_vbios_upload_image_to_vf(adapt, idx_vf))
-			AMDGV_WARN("upload vbios image to vf failed\n");
-
-		if (amdgv_vfmgr_update_pf2vf_message(adapt, idx_vf))
-			AMDGV_WARN("update pf2vf message failed\n");
+		amdgv_vfmgr_copy_ip_data_to_vf(adapt, idx_vf, false);
+		amdgv_vbios_upload_image_to_vf(adapt, idx_vf);
+		amdgv_vfmgr_update_pf2vf_message(adapt, idx_vf);
 	}
 
 	adapt->array_vf[idx_vf].gpu_init_data_ready = false;
@@ -1618,7 +1665,7 @@ static int amdgv_sched_handle_req_gpu_fini(struct amdgv_adapter *adapt, uint32_t
 		amdgv_sched_notify_vf_full_access(adapt, idx_vf);
 		/* normally we should not enter this code path, in case some
 		 * corner case, add warning here */
-		AMDGV_WARN("Attempt to requst fini for inactive VF, skip\n");
+		AMDGV_WARN("Attempt to request fini for inactive VF, skip\n");
 		return AMDGV_FAILURE;
 	}
 
@@ -1701,14 +1748,14 @@ static enum amdgv_sched_full_access_status amdgv_sched_full_access_left_time(str
 		return SCHED_FULL_ACCESS_TIMED_OUT;
 	}
 
+	AMDGV_DEBUG("now: %llu, start: %llu\n", oss_get_time_stamp(),
+		    adapt->sched.start_time_full_access);
+
 	/* Skip timeout check when VM is paused (used_time was saved during pause) */
 	if (USED_TIME_FULL_ACCESS(adapt, idx_vf) != 0) {
 		*time_remain = adapt->sched.allow_time_full_access;
 		return SCHED_FULL_ACCESS_ON_GOING;
 	}
-
-	AMDGV_DEBUG("now: %llu, start: %llu\n", oss_get_time_stamp(),
-		    adapt->sched.start_time_full_access);
 
 	if (adapt->sched.enable_per_partition_full_access)
 		used_time = oss_get_time_stamp() - adapt->sched.array_vf[idx_vf].start_time_full_access;
@@ -1784,6 +1831,27 @@ static int amdgv_sched_handle_orphan_vf(struct amdgv_adapter *adapt, uint32_t id
 	return 0;
 }
 
+static int amdgv_sched_event_set_vf_cond_avail(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	/* VF cannot init but is recoverable */
+	AMDGV_ERROR("VF%d hit an unexpected error! Shutting down VF and"
+		    " setting state to conditionally available.\n", idx_vf);
+
+	amdgv_sched_notify_vf_unrecov_err(adapt, idx_vf);
+	amdgv_gpuiov_set_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_FB, false);
+	amdgv_gpuiov_set_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_DOORBELL, false);
+	amdgv_gpuiov_set_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_MMIO_REG_WRITE, false);
+	amdgv_gpuiov_toggle_rlcg_vf_interface(adapt, idx_vf, false);
+
+	if (is_active_vf(idx_vf)) {
+		amdgv_sched_remove_vf(adapt, idx_vf);
+		amdgv_sched_shutdown_vf(adapt, idx_vf);
+	}
+	set_to_cond_avail_vf(idx_vf);
+
+	return 0;
+}
+
 static int amdgv_sched_enter_full_access(struct amdgv_adapter *adapt,
 					 struct amdgv_sched_event *event)
 {
@@ -1814,7 +1882,6 @@ static int amdgv_sched_enter_full_access(struct amdgv_adapter *adapt,
 				abnormal_world_switch->curr_idx_vf,
 				abnormal_world_switch->sched_block);
 		}
-
 
 		/*
 		 * if the VF requested GPU_FINI causes the FLR,
@@ -1847,7 +1914,6 @@ static int amdgv_sched_enter_full_access(struct amdgv_adapter *adapt,
 	if ((event->id == AMDGV_EVENT_REQ_GPU_INIT) ||
 	    (event->id == AMDGV_EVENT_REQ_GPU_RESET)) {
 		if (amdgv_sched_handle_orphan_vf(adapt, event->idx_vf)) {
-			AMDGV_WARN("Failed to reset orphan VF\n");
 			amdgv_sched_reset_vf_auto(adapt);
 			return AMDGV_FAILURE;
 		}
@@ -1882,14 +1948,11 @@ static int amdgv_sched_enter_full_access(struct amdgv_adapter *adapt,
 
 	adapt->sched.array_vf[event->idx_vf].fb_dirty = true;
 
-	if (adapt->sched.rlc_safe_mode)
-		adapt->sched.rlc_safe_mode(adapt, true);
+	amdgv_gfx_rlc_safe_mode(adapt, true);
 
 	switch (event->id) {
 	case AMDGV_EVENT_REQ_GPU_INIT:
-		ret = amdgv_mmsch_config_vf(adapt, event->idx_vf);
-		if (ret)
-			AMDGV_WARN("Failed to config mmsch features. Performance may be impacted\n");
+		amdgv_mmsch_config_vf(adapt, event->idx_vf);
 
 		if (adapt->flags & AMDGV_FLAG_USE_PF) {
 			ret = amdgv_misc_load_dfc(adapt);
@@ -1897,8 +1960,23 @@ static int amdgv_sched_enter_full_access(struct amdgv_adapter *adapt,
 				break;
 		}
 
+		if (adapt->array_vf[event->idx_vf].xchg.crit_region_realloc_needed) {
+			AMDGV_INFO("Re-allocating crit region for VF%d after bad page FLR\n", event->idx_vf);
+			adapt->array_vf[event->idx_vf].xchg.crit_region_realloc_needed = false;
+
+			if (amdgv_vfmgr_init_crit_region(adapt, event->idx_vf)) {
+				AMDGV_ERROR("Critical region re-allocation failed for VF%d, setting to cond_avail\n",
+								event->idx_vf);
+				amdgv_sched_event_set_vf_cond_avail(adapt, event->idx_vf);
+				amdgv_sched_queue_set_vf_cond_avail(adapt, event->idx_vf);
+				ret = AMDGV_FAILURE;
+				break;
+			}
+		}
+
 		ret = amdgv_sched_handle_req_gpu_init(adapt, event->idx_vf);
 		amdgv_misc_reprogram_golden_settings(adapt, event->idx_vf);
+		amdgv_irqmgr_update_virtualized_interrupt(adapt, event->idx_vf);
 		break;
 	case AMDGV_EVENT_REQ_GPU_RESET:
 		/* enable VF FB access */
@@ -1907,10 +1985,7 @@ static int amdgv_sched_enter_full_access(struct amdgv_adapter *adapt,
 						   true);
 
 		if (event->idx_vf != AMDGV_PF_IDX)
-			ret = amdgv_mmsch_config_vf(adapt, event->idx_vf);
-
-		if (ret)
-			AMDGV_WARN("Failed to config mmsch features. Performance may be impacted\n");
+			amdgv_mmsch_config_vf(adapt, event->idx_vf);
 
 		ret = amdgv_sched_handle_req_gpu_reset(adapt, event->idx_vf);
 
@@ -1926,8 +2001,7 @@ static int amdgv_sched_enter_full_access(struct amdgv_adapter *adapt,
 	}
 
 	if ((ret != 0) || !amdgv_sched_is_state_ok(adapt, event->idx_vf)) {
-		if (adapt->sched.rlc_safe_mode)
-			adapt->sched.rlc_safe_mode(adapt, false);
+		amdgv_gfx_rlc_safe_mode(adapt, false);
 
 		/* Disable all VF gates, this device failed to be granted full
 		 * access mode
@@ -2011,8 +2085,7 @@ static void amdgv_sched_exit_full_access(struct amdgv_adapter *adapt,
 	    (adapt->sched.num_vf_per_gfx_sched == 1))
 		one_vf = true;
 
-	if (adapt->sched.rlc_safe_mode)
-		adapt->sched.rlc_safe_mode(adapt, false);
+	amdgv_gfx_rlc_safe_mode(adapt, false);
 
 	switch (event->id) {
 	case AMDGV_EVENT_REL_GPU_INIT:
@@ -2119,10 +2192,8 @@ static void amdgv_sched_exit_full_access(struct amdgv_adapter *adapt,
 
 	if (!one_vf) {
 		/* one time loop for active vfs */
-		if (!adapt->lock_world_switch) {
-			if (amdgv_sched_context_one_time_loop(adapt, event->idx_vf) != 0)
-				AMDGV_WARN("one time loop failed\n");
-		}
+		if (!adapt->lock_world_switch)
+			amdgv_sched_context_one_time_loop(adapt, event->idx_vf);
 	}
 
 	amdgv_sched_toggle_skip_next_punish(adapt, event->idx_vf, true);
@@ -2169,8 +2240,7 @@ static void amdgv_sched_exit_full_access_timeout(struct amdgv_adapter *adapt, ui
 
 	set_to_avail_vf(idx_vf);
 
-	if (adapt->sched.rlc_safe_mode)
-		adapt->sched.rlc_safe_mode(adapt, false);
+	amdgv_gfx_rlc_safe_mode(adapt, false);
 
 	/* disable doorbell and MMIO register write VF access */
 	amdgv_gpuiov_set_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_DOORBELL, false);
@@ -2209,10 +2279,8 @@ static void amdgv_sched_exit_full_access_timeout(struct amdgv_adapter *adapt, ui
 
 	/* one time loop */
 	ret = amdgv_sched_context_one_time_loop(adapt, idx_vf);
-	if (ret) {
-		AMDGV_WARN("one time loop failed\n");
+	if (ret)
 		goto out;
-	}
 
 out:
 	if (adapt->xgmi.phy_nodes_num > 1 && adapt->xgmi.set_mb_in_hive)
@@ -2261,14 +2329,12 @@ static int amdgv_sched_toggle_full_access_for_debug(struct amdgv_adapter *adapt,
 		/* enable MMIO register write, FB, DOORBELL VF access */
 		ret = amdgv_gpuiov_set_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_ALL, enable);
 
-		if (adapt->sched.rlc_safe_mode)
-			ret = adapt->sched.rlc_safe_mode(adapt, enable);
+		ret = amdgv_gfx_rlc_safe_mode(adapt, enable);
 
 		/* enable rlcg vfgate*/
 		ret = amdgv_gpuiov_toggle_rlcg_vf_interface(adapt, idx_vf, enable);
 	} else {
-		if (adapt->sched.rlc_safe_mode)
-			ret = adapt->sched.rlc_safe_mode(adapt, enable);
+		ret = amdgv_gfx_rlc_safe_mode(adapt, enable);
 
 		/* simulate vf full access mode before it enters live update save */
 		ret = amdgv_sched_psp_set_mb_int(adapt, idx_vf, enable);
@@ -2364,10 +2430,11 @@ static void amdgv_sched_check_vf2pf_data(struct amdgv_adapter *adapt,
 	if (vf2pf_info == NULL)
 		AMDGV_WARN("Failed to allocate vf2pf_info\n");
 	else {
-		if (amdgv_vfmgr_retrieve_vf2pf_message(adapt, idx_vf, vf2pf_info))
-			AMDGV_WARN("retrieve vf2pf message failed\n");
-		else
-			amdgv_vfmgr_print_vf2pf_message(adapt, idx_vf, vf2pf_info);
+		if (amdgv_vfmgr_retrieve_vf2pf_message(adapt, idx_vf, vf2pf_info)) {
+			oss_free(vf2pf_info);
+			return;
+		}
+		amdgv_vfmgr_print_vf2pf_message(adapt, idx_vf, vf2pf_info);
 
 		if (adapt->psp.dfc_check_guest_version &&
 			adapt->psp.dfc_check_guest_version(adapt, vf2pf_info->driver_version)) {
@@ -2608,27 +2675,6 @@ static int amdgv_find_bad_page_range(struct ras_err_handler_data *data,
 	return 0;
 }
 
-static int amdgv_sched_event_set_vf_cond_avail(struct amdgv_adapter *adapt, uint32_t idx_vf)
-{
-	/* VF cannot init but is recoverable */
-	AMDGV_ERROR("VF%d hit an unexpected error! Shutting down VF and"
-		    " setting state to conditionally available.\n", idx_vf);
-
-	amdgv_sched_notify_vf_unrecov_err(adapt, idx_vf);
-	amdgv_gpuiov_set_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_FB, false);
-	amdgv_gpuiov_set_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_DOORBELL, false);
-	amdgv_gpuiov_set_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_MMIO_REG_WRITE, false);
-	amdgv_gpuiov_toggle_rlcg_vf_interface(adapt, idx_vf, false);
-
-	if (is_active_vf(idx_vf)) {
-		amdgv_sched_remove_vf(adapt, idx_vf);
-		amdgv_sched_shutdown_vf(adapt, idx_vf);
-	}
-	set_to_cond_avail_vf(idx_vf);
-
-	return 0;
-}
-
 static int amdgv_perform_segmented_fb_copy(struct amdgv_adapter *adapt, int idx_vf,
 					  struct ras_err_handler_data *data,
 					  uint64_t src, uint64_t dst, uint64_t total_size,
@@ -2779,6 +2825,7 @@ static int handle_event_in_full_access(struct amdgv_adapter *adapt,
 	uint32_t i = 0;
 	uint32_t world_switch_id = 0;
 	struct amdgv_sched_vf_info *vf_info;
+	struct amdgv_vf_device *entry = &adapt->array_vf[event->idx_vf];
 
 	if (is_unavail_vf(event->idx_vf) &&
 	    ((event->id != AMDGV_EVENT_SCHED_FORCE_RESET_GPU) &&
@@ -2786,6 +2833,8 @@ static int handle_event_in_full_access(struct amdgv_adapter *adapt,
 	     (event->id != AMDGV_EVENT_SCHED_RMA) &&
 	     (event->id != AMDGV_EVENT_SCHED_SET_VF_COND_AVAIL) &&
 	     (event->id != AMDGV_EVENT_SCHED_INIT_VF_FB) &&
+		 (event->id != AMDGV_EVENT_SCHED_RAS_EVENT) &&
+		 (event->id != AMDGV_EVENT_SCHED_VF_RAS_REMOTE_CMD) &&
 	     (event->id != AMDGV_EVENT_SCHED_RAS_UMC) &&
 	     (event->id != AMDGV_EVENT_SCHED_RAS_FED) &&
 	     (event->id != AMDGV_EVENT_SCHED_RAS_POISON_CONSUMPTION) &&
@@ -2850,6 +2899,7 @@ static int handle_event_in_full_access(struct amdgv_adapter *adapt,
 	case AMDGV_EVENT_SCHED_MMSCH_GENERAL_NOTIFICATION:
 	case AMDGV_EVENT_SCHED_UPDATE_MCA_BANKS:
 	case AMDGV_EVENT_REQ_GPU_DEBUG:
+	case AMDGV_EVENT_SCHED_VF_REQ_GPU_INIT_XCHG_REGION:
 		/* If in full access, wait until current fullaccess is exited */
 		if ((adapt->flags & AMDGV_FLAG_USE_PF) && (event->idx_vf == AMDGV_PF_IDX) &&
 		    (event->id == AMDGV_EVENT_REQ_GPU_RESET) &&
@@ -2905,10 +2955,7 @@ static int handle_event_in_full_access(struct amdgv_adapter *adapt,
 				amdgv_sched_reset_vf_auto(adapt);
 
 			/* switch to PF for all blocks */
-			if (0 == amdgv_sched_context_switch_to_vf(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_ALL))
-				AMDGV_INFO("Switch to PF OK.\n");
-			else
-				AMDGV_ERROR("Switch to PF Fail.\n");
+			amdgv_sched_context_switch_to_vf(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_ALL);
 		}
 
 		ret = AMDGV_EVENT_STOP_AND_RELEASE;
@@ -3021,10 +3068,9 @@ static int handle_event_in_full_access(struct amdgv_adapter *adapt,
 			 * If we are already in PF full access,
 			 * program the settings here and initialize VF FB
 			 */
-			if (amdgv_vfmgr_init_vf_fb(adapt, event->idx_vf, false,
-						   event->data.vf_fb_data.pattern,
-						   event->data.vf_fb_data.flag))
-				AMDGV_WARN("Failed to init vf fb in full access\n");
+			amdgv_vfmgr_init_vf_fb(adapt, event->idx_vf, false,
+					       event->data.vf_fb_data.pattern,
+					       event->data.vf_fb_data.flag);
 		} else {
 			/* push the event back to event list,
 			 * wait to exit full access.
@@ -3093,10 +3139,8 @@ static int handle_event_in_full_access(struct amdgv_adapter *adapt,
 			amdgv_sched_add_vf(adapt, event->idx_vf);
 			set_to_active_vf(event->idx_vf);
 
-			if (AMDGV_PF_IDX != event->idx_vf) {
-				if (amdgv_vfmgr_update_pf2vf_message(adapt, event->idx_vf))
-					AMDGV_WARN("update pf2vf message failed\n");
-			}
+			if (AMDGV_PF_IDX != event->idx_vf)
+				amdgv_vfmgr_update_pf2vf_message(adapt, event->idx_vf);
 		}
 		break;
 
@@ -3120,7 +3164,7 @@ static int handle_event_in_full_access(struct amdgv_adapter *adapt,
 		/* if the VF is active VF, move VF out of world switching. */
 		if (is_active_vf(event->idx_vf)) {
 			AMDGV_INFO("In fullaccess set stop VF%d event \n", event->idx_vf);
-			adapt->array_vf[event->idx_vf].unshutdown = true;
+			entry->unshutdown = true;
 			amdgv_sched_event_queue_push_ex(adapt, event->idx_vf,
 							AMDGV_EVENT_HANDLE_CRASH,
 							AMDGV_SCHED_BLOCK_ALL,
@@ -3205,9 +3249,9 @@ static int handle_event_in_non_full_access(struct amdgv_adapter *adapt,
 {
 	int ret = 0;
 	struct amdgv_sched_world_switch *world_switch;
-	uint32_t vf_id;
+	uint32_t vf_id, has_bps = 0;
 	uint32_t world_switch_id = 0;
-	uint32_t has_bps = 0;
+	struct amdgv_vf_device *entry = &adapt->array_vf[event->idx_vf];
 
 	if (is_unavail_vf(event->idx_vf) &&
 	    ((event->id != AMDGV_EVENT_SCHED_FORCE_RESET_GPU) &&
@@ -3215,6 +3259,8 @@ static int handle_event_in_non_full_access(struct amdgv_adapter *adapt,
 	     (event->id != AMDGV_EVENT_SCHED_RMA) &&
 	     (event->id != AMDGV_EVENT_SCHED_SET_VF_COND_AVAIL) &&
 	     (event->id != AMDGV_EVENT_SCHED_INIT_VF_FB) &&
+		 (event->id != AMDGV_EVENT_SCHED_RAS_EVENT) &&
+		 (event->id != AMDGV_EVENT_SCHED_VF_RAS_REMOTE_CMD) &&
 	     (event->id != AMDGV_EVENT_SCHED_RAS_UMC) &&
 	     (event->id != AMDGV_EVENT_SCHED_RAS_POISON_CONSUMPTION) &&
 	     (event->id != AMDGV_EVENT_SCHED_RAS_POISON_CREATION) &&
@@ -3272,6 +3318,11 @@ static int handle_event_in_non_full_access(struct amdgv_adapter *adapt,
 	}
 
 	switch (event->id) {
+	case AMDGV_EVENT_SCHED_VF_REQ_GPU_INIT_XCHG_REGION:
+		amdgv_sched_init_xchg_region(adapt, event->idx_vf,
+					    event->data.vf_xchg_region.gpa_base,
+					    event->data.vf_xchg_region.size);
+		break;
 	case AMDGV_EVENT_REQ_GPU_INIT_DATA:
 		if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION) {
 			amdgv_dirtybit_clear_fb_dbit(adapt, event->idx_vf);
@@ -3286,67 +3337,52 @@ static int handle_event_in_non_full_access(struct amdgv_adapter *adapt,
 						   true);
 		adapt->sched.array_vf[event->idx_vf].fb_dirty = true;
 
-		ret = amdgv_mmsch_preconfig_vf(adapt, event->idx_vf);
-		if (ret)
-			AMDGV_WARN("Failed to pre-config mmsch features. Performance may be impacted\n");
+		amdgv_mmsch_preconfig_vf(adapt, event->idx_vf);
 
-		if (adapt->umc.is_pmfw_managed_eeprom) {
+		/* Init PF-VF critical regions depending on highest supporting caps */
+		/* Host/guest both supports GPU_CRIT_REGION_V3 */
+		if (CRIT_CAP_HAS(entry->xchg.host_crit_region_caps, GPU_CRIT_REGION_V3) &&
+		    CRIT_CAP_HAS(entry->xchg.guest_crit_region_caps, GPU_CRIT_REGION_V3)) {
+			AMDGV_INFO("Init v3 critical region for VF%d\n", event->idx_vf);
+			entry->xchg.vf_crit_region = GPU_CRIT_REGION_V3;
+		/* Host/guest both supports GPU_CRIT_REGION_V2 */
+		} else if (CRIT_CAP_HAS(entry->xchg.host_crit_region_caps, GPU_CRIT_REGION_V2) &&
+			   CRIT_CAP_HAS(entry->xchg.guest_crit_region_caps, GPU_CRIT_REGION_V2)) {
 			/* Use v2 table alloc if guest supports it, else fall back to static v1 table alloc.
 			 * If host_crit_region_caps reports it doesn't support v1 alloc, then there is a bad page
-			 * in the v1 critical region, and if guest doesn't support v2 then it must be shut down.
-			 */
-			if ((adapt->array_vf[event->idx_vf].host_crit_region_caps & GPU_CRIT_REGION_V2) &&
-			    (adapt->array_vf[event->idx_vf].guest_crit_region_caps & GPU_CRIT_REGION_V2)) {
-				AMDGV_INFO("Using v2 critical region init for VF%d\n", event->idx_vf);
-				adapt->array_vf[event->idx_vf].vf_crit_region = GPU_CRIT_REGION_V2;
+			 * in the v1 critical region, and if guest doesn't support v2 then it must be shut down. */
+			AMDGV_INFO("Init v2 critical region for VF%d\n", event->idx_vf);
+			entry->xchg.vf_crit_region = GPU_CRIT_REGION_V2;
 
-				if (amdgv_vfmgr_init_crit_region(adapt, event->idx_vf)) {
-					AMDGV_ERROR("Init v2 critical region init failed on VF%d!\n", event->idx_vf);
-					goto set_to_cond_avail;
-				}
-			} else if ((adapt->array_vf[event->idx_vf].host_crit_region_caps & GPU_CRIT_REGION_V1) &&
-				 (adapt->array_vf[event->idx_vf].guest_crit_region_caps & GPU_CRIT_REGION_V1)) {
-				AMDGV_INFO("Using v1 critical region init for VF%d\n", event->idx_vf);
-				adapt->array_vf[event->idx_vf].vf_crit_region = GPU_CRIT_REGION_V1;
-				if (amdgv_vfmgr_init_crit_region(adapt, event->idx_vf)) {
-					AMDGV_ERROR("Init v1 critical region init failed on VF%d!\n", event->idx_vf);
-					goto set_to_cond_avail;
-				}
+			if (amdgv_vfmgr_init_crit_region(adapt, event->idx_vf))
+				goto set_to_cond_avail;
+		/* Host/guest both supports GPU_CRIT_REGION_V1 */
+		} else if (CRIT_CAP_HAS(entry->xchg.host_crit_region_caps, GPU_CRIT_REGION_V1) &&
+			   CRIT_CAP_HAS(entry->xchg.guest_crit_region_caps, GPU_CRIT_REGION_V1)) {
+			AMDGV_INFO("Init v1 critical region for VF%d\n", event->idx_vf);
+			entry->xchg.vf_crit_region = GPU_CRIT_REGION_V1;
+			if (amdgv_vfmgr_init_crit_region(adapt, event->idx_vf))
+				goto set_to_cond_avail;
 
-				ret = amdgv_vfmgr_check_existing_bps_in_crit_region(adapt, event->idx_vf, &has_bps);
-
-				if (ret) {
-					AMDGV_ERROR("Failed to check bps in critical regions on VF%d!\n", event->idx_vf);
-					goto set_to_cond_avail;
-				}
-
-				if (has_bps) {
-					AMDGV_ERROR("A bad page was found in critical regions on VF%d!\n", event->idx_vf);
-
-					adapt->array_vf[event->idx_vf].host_crit_region_caps =
-					    adapt->array_vf[event->idx_vf].host_crit_region_caps & ~BIT(0);
-					goto set_to_cond_avail;
-				}
-			} else {
-				AMDGV_ERROR("Guest reported critical region init capability 0x%x"
-					    " which host mask 0x%x does not support!\n",
-					    adapt->array_vf[event->idx_vf].guest_crit_region_caps,
-					    adapt->array_vf[event->idx_vf].host_crit_region_caps);
+			if (amdgv_vfmgr_check_existing_bps_in_crit_region(adapt, event->idx_vf, &has_bps))
+				goto set_to_cond_avail;
+			if (has_bps) {
+				CRIT_CAP_CLEAR(entry->xchg.host_crit_region_caps, GPU_CRIT_REGION_V1);
+				AMDGV_ERROR("Found bad page in V1 crit region on VF%d\n", event->idx_vf);
 				goto set_to_cond_avail;
 			}
+
+		/* All other host/guest caps combination are unsupported so we fail the VF init */
 		} else {
-			AMDGV_INFO("PMFW managed EEPROM not detected, using v1 critical region init"
-				   " for VF%d\n",
-				   event->idx_vf);
-			adapt->array_vf[event->idx_vf].vf_crit_region = GPU_CRIT_REGION_V1;
-			if (amdgv_vfmgr_init_crit_region(adapt, event->idx_vf)) {
-				AMDGV_ERROR("Init v1 critical region init failed on VF%d!\n", event->idx_vf);
-				goto set_to_cond_avail;
-			}
+			AMDGV_ERROR("Guest reported critical region init capability 0x%x"
+				" which host mask 0x%x does not support!\n",
+				entry->xchg.guest_crit_region_caps,
+				entry->xchg.host_crit_region_caps);
+			goto set_to_cond_avail;
 		}
 
 		if (is_cond_avail_vf(event->idx_vf)) {
-			AMDGV_INFO("VF passed critical region init, setting to available...\n");
+			AMDGV_INFO("Update VF%d from cond_avail to available.\n", event->idx_vf);
 			set_to_avail_vf_force(event->idx_vf);
 		}
 
@@ -3471,10 +3507,7 @@ set_to_cond_avail:
 
 		if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_UPDATE) {
 			/* switch to PF for all blocks */
-			if (0 == amdgv_sched_context_switch_to_vf(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_ALL))
-				AMDGV_INFO("Switch to PF OK.\n");
-			else
-				AMDGV_ERROR("Switch to PF Fail.\n");
+			amdgv_sched_context_switch_to_vf(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_ALL);
 		}
 
 		ret = AMDGV_EVENT_STOP_AND_RELEASE;
@@ -3498,8 +3531,7 @@ set_to_cond_avail:
 				/* re-enter VF full access mode */
 				amdgv_sched_psp_set_mb_int(adapt, adapt->sched.idx_vf_full_access, true);
 				amdgv_gpuiov_set_vf_access(adapt, adapt->sched.idx_vf_full_access, AMDGV_VF_ACCESS_ALL, true);
-				if (adapt->sched.rlc_safe_mode)
-					adapt->sched.rlc_safe_mode(adapt, true);
+				amdgv_gfx_rlc_safe_mode(adapt, true);
 				amdgv_gpuiov_toggle_rlcg_vf_interface(adapt, adapt->sched.idx_vf_full_access, true);
 			}
 		} else {
@@ -3530,11 +3562,9 @@ set_to_cond_avail:
 			if (amdgv_sched_context_switch_gfx_to_pf(adapt, event->idx_vf) != 0)
 				amdgv_sched_reset_vf_auto(adapt);
 
-			if (amdgv_vfmgr_init_vf_fb(adapt, event->idx_vf, false,
-						event->data.vf_fb_data.pattern,
-						event->data.vf_fb_data.flag))
-				AMDGV_WARN("Failed to init vf fb in non-full access\n");
-			else
+			if (!amdgv_vfmgr_init_vf_fb(adapt, event->idx_vf, false,
+						    event->data.vf_fb_data.pattern,
+						    event->data.vf_fb_data.flag))
 				adapt->sched.array_vf[event->idx_vf].fb_dirty = false;
 
 			if (amdgv_sched_context_save(adapt, event->idx_vf, AMDGV_SCHED_BLOCK_GFX))
@@ -3658,10 +3688,8 @@ set_to_cond_avail:
 			amdgv_sched_add_vf(adapt, event->idx_vf);
 			set_to_active_vf(event->idx_vf);
 
-			if (AMDGV_PF_IDX != event->idx_vf) {
-				if (amdgv_vfmgr_update_pf2vf_message(adapt, event->idx_vf))
-					AMDGV_WARN("update pf2vf message failed\n");
-			}
+			if (AMDGV_PF_IDX != event->idx_vf)
+				amdgv_vfmgr_update_pf2vf_message(adapt, event->idx_vf);
 
 			if (amdgv_gpuiov_get_vf_access(adapt, event->idx_vf, AMDGV_VF_ACCESS_MMIO_REG_WRITE))
 				amdgv_gpuiov_set_vf_access(adapt, event->idx_vf, AMDGV_VF_ACCESS_MMIO_REG_WRITE, false);
@@ -3716,7 +3744,7 @@ set_to_cond_avail:
 		else if (is_suspend_vf(event->idx_vf)) {
 			amdgv_sched_shutdown_vf(adapt, event->idx_vf);
 		}
-		adapt->array_vf[event->idx_vf].unshutdown = false;
+		entry->unshutdown = false;
 		set_to_avail_vf(event->idx_vf);
 		break;
 
@@ -3731,13 +3759,11 @@ set_to_cond_avail:
 			amdgv_sched_reset_vf(adapt, event->idx_vf, AMDGV_SCHED_BLOCK_ALL);
 
 		if (amdgv_sched_handle_orphan_vf(adapt, event->idx_vf)) {
-			AMDGV_WARN("Failed to reset orphan VF\n");
 			amdgv_sched_reset_vf_auto(adapt);
 			return AMDGV_FAILURE;
 		}
-		adapt->array_vf[event->idx_vf].unshutdown = false;
+		entry->unshutdown = false;
 		break;
-
 	case AMDGV_EVENT_SCHED_RAS_UMC:
 		amdgv_irqmgr_dump_temperature(adapt);
 		amdgv_ecc_check_for_errors(adapt, event);
@@ -3876,9 +3902,7 @@ set_to_cond_avail:
 			break;
 		}
 
-		if (event->data.lm.type == AMDGV_MIGRATION_IMPORT_PREPARE ||
-			event->data.lm.type == AMDGV_MIGRATION_IMPORT_DYNAMIC_DATA ||
-		    event->data.lm.type == AMDGV_MIGRATION_EXPORT_DYNAMIC_DATA)
+		if (amdgv_sched_active_vf_ex_pf_num(adapt) > 0)
 			amdgv_sched_stop(adapt, event->idx_vf);
 
 		*event->data.lm.result =
@@ -3890,6 +3914,9 @@ set_to_cond_avail:
 			*event->data.vf_fb_copy_data.result = AMDGV_FAILURE;
 			break;
 		}
+
+		if (amdgv_sched_active_vf_ex_pf_num(adapt) > 0)
+			amdgv_sched_stop(adapt, event->idx_vf);
 		*event->data.vf_fb_copy_data.result =
 			amdgv_sched_event_vf_fb_copy(adapt, event->idx_vf, &event->data);
 
@@ -3904,7 +3931,8 @@ set_to_cond_avail:
 				AMDGV_BUF_TRANSFER_ERROR;
 			break;
 		}
-
+		if (amdgv_sched_active_vf_ex_pf_num(adapt) > 0)
+			amdgv_sched_stop(adapt, event->idx_vf);
 		for (i = 0; i < event->data.vf_fb_copy_data.num_entries; i++) {
 			struct amdgv_fb_copy_entry *entry =
 				&event->data.vf_fb_copy_data.entries[i];
@@ -3938,8 +3966,10 @@ set_to_cond_avail:
 			*event->data.dirtybit_query_data.result = AMDGV_FAILURE;
 			break;
 		}
+		if (amdgv_sched_active_vf_ex_pf_num(adapt) > 0)
+			amdgv_sched_stop(adapt, event->idx_vf);
 		*event->data.dirtybit_query_data.result =
-			amdgv_dirtybit_querydata(adapt, &event->data.dirtybit_query_data.data);
+			amdgv_dirtybit_query_and_accumulate(adapt, &event->data.dirtybit_query_data.data);
 
 		if (*event->data.dirtybit_query_data.result == 0) {
 			if (adapt->dirtybit.acc_bits[event->idx_vf].is_first_query) {
@@ -3963,9 +3993,7 @@ set_to_cond_avail:
 		    event->data.migration_state.state == AMDGV_MIGRATION_VF_STATE_DEFAULT &&
 		    adapt->live_migration.mig_state[event->idx_vf].is_target) {
 			AMDGV_DEBUG("Updating PF2VF message with target machine bad pages after live migration for VF%d\n", event->idx_vf);
-			if (amdgv_vfmgr_update_pf2vf_message(adapt, event->idx_vf)) {
-				AMDGV_WARN("Failed to update PF2VF message after live migration for VF%d\n", event->idx_vf);
-			}
+			amdgv_vfmgr_update_pf2vf_message(adapt, event->idx_vf);
 			adapt->live_migration.mig_state[event->idx_vf].is_target = false;
 		}
 		break;
@@ -3974,6 +4002,12 @@ set_to_cond_avail:
 		break;
 	case AMDGV_EVENT_SCHED_SET_VF_COND_AVAIL:
 		ret = amdgv_sched_event_set_vf_cond_avail(adapt, event->idx_vf);
+		break;
+	case AMDGV_EVENT_SCHED_UAL_PAUSE_REQ:
+		ret = amdgv_ual_pause(adapt, true);
+		break;
+	case AMDGV_EVENT_SCHED_UAL_RESUME_REQ:
+		ret = amdgv_ual_resume(adapt, true);
 		break;
 	default:
 		break;
@@ -4287,7 +4321,7 @@ static int amdgv_sched_event_process_thread(void *context)
 	}
 
 	oss_mutex_unlock(adapt->sched.event_thread_lock);
-	AMDGV_INFO("event process thread exiting!\n");
+	AMDGV_DEBUG("event process thread exiting!\n");
 
 	adapt->sched.event_thread = OSS_INVALID_HANDLE;
 	return 0;
@@ -4414,8 +4448,11 @@ static int amdgv_sched_sanitize_queue_event(struct amdgv_adapter *adapt, uint32_
 	int ret = 0;
 
 	if (amdgv_sched_is_unrecov_err(adapt) &&
-	    !amdgv_sched_allow_queue_in_unrecov_err(adapt, event_id, data))
+	    !amdgv_sched_allow_queue_in_unrecov_err(adapt, event_id, data)) {
+		AMDGV_ERROR("dropping event %s from %s: adapter in unrecoverable error state\n",
+			    amdgv_event_name(event_id), amdgv_idx_to_str(idx_vf));
 		return AMDGV_FAILURE;
+	}
 
 	/* VF Guard */
 	if (AMDGV_EVENT_REQ_GPU_INIT <= event_id &&
@@ -4593,7 +4630,7 @@ int amdgv_sched_event_queue_process_init(struct amdgv_adapter *adapt)
 		adapt->sched.allow_time_full_access =
 			adapt->sched.allow_time_full_access * 1000;
 
-	AMDGV_INFO("allowed time for full access is %dms\n",
+	AMDGV_DEBUG("allowed time for full access is %dms\n",
 		   adapt->sched.allow_time_full_access / 1000);
 
 	/* create event process thread */
@@ -4710,7 +4747,7 @@ int amdgv_sched_export_unprocessed_event_size(struct amdgv_adapter *adapt,
 	struct amdgv_list_head *event_list = NULL;
 
 	if (unprocessed_event_count == NULL) {
-		AMDGV_INFO("unprocessed_event_count is NULL!.\n");
+		AMDGV_ERROR("unprocessed_event_count is NULL!\n");
 		return AMDGV_FAILURE;
 	}
 
@@ -4736,7 +4773,7 @@ int amdgv_sched_export_unprocessed_event_size(struct amdgv_adapter *adapt,
 		}
 	}
 
-	AMDGV_INFO("Unprocessed event count is %d.\n", *unprocessed_event_count);
+	AMDGV_DEBUG("Unprocessed event count is %d.\n", *unprocessed_event_count);
 
 	return 0;
 }
@@ -4749,7 +4786,7 @@ enum amdgv_live_info_status amdgv_sched_export_unprocessed_event(struct amdgv_ad
 	uint32_t i = 0;
 
 	if (event_info == NULL) {
-		AMDGV_INFO("event_info is NULL!\n");
+		AMDGV_ERROR("event_info is NULL!\n");
 		return AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
 	}
 
@@ -4759,7 +4796,7 @@ enum amdgv_live_info_status amdgv_sched_export_unprocessed_event(struct amdgv_ad
 	 * pushed into the list when exporting the unprocessed event size
 	 */
 	while ((event = amdgv_sched_pick_up_next_event(adapt)) != NULL) {
-		AMDGV_INFO("save %s request from %s for %s\n", amdgv_event_name(event->id),
+		AMDGV_DEBUG("save %s request from %s for %s\n", amdgv_event_name(event->id),
 			   amdgv_idx_to_str(event->idx_vf),
 			   amdgv_sched_block_to_name(event->sched_block));
 		if (event->signal != OSS_INVALID_HANDLE)
@@ -4786,7 +4823,7 @@ enum amdgv_live_info_status amdgv_sched_export_unprocessed_event(struct amdgv_ad
 	event_info->unprocessed_event_count = i;
 
 	if (!amdgv_sched_event_queue_empty(adapt))
-		AMDGV_INFO("New events detected after saving!.\n");
+		AMDGV_WARN("New events detected after saving!\n");
 
 	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
 }

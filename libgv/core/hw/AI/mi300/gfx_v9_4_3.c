@@ -1,25 +1,8 @@
-/*
- * Copyright 2022-2024 Advanced Micro Devices, Inc.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
- * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- * OTHER DEALINGS IN THE SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
+
 #include "amdgv.h"
 #include "amdgv_device.h"
 #include "mi300/GC/gc_9_4_3_offset.h"
@@ -96,21 +79,6 @@ struct amdgv_gfx_funcs gfx_v9_4_3_mi300_funcs = {
 void gfx_v9_4_3_set_funcs(struct amdgv_adapter *adapt)
 {
 	adapt->gfx.funcs = &gfx_v9_4_3_mi300_funcs;
-}
-
-/* Enable KIQ and set CP_RLC_SCHEDULER on PF */
-static unsigned int order_base_2(unsigned int size_of_dwords)
-{
-	unsigned int i, size_of_log2 = 0;
-
-	for (i = 0; i < 32; i++) {
-		if (size_of_dwords == (1U << i)) {
-			size_of_log2 = i;
-			break;
-		}
-	}
-
-	return size_of_log2;
 }
 
 static void gfx_v9_4_3_kiq_set_resources(struct amdgv_ring *kiq_ring, uint64_t queue_mask)
@@ -600,6 +568,8 @@ static int gfx_v9_4_3_sw_init(struct amdgv_adapter *adapt)
 {
 	int ret = 0;
 
+	gfx_v9_4_3_set_funcs(adapt);
+
 	if (!(adapt->flags & AMDGV_FLAG_DISABLE_COMPUTE_ENGINE)) {
 		ret = gfx_v9_4_3_sw_init_internal(adapt);
 	}
@@ -653,46 +623,60 @@ static void gfx_v9_4_3_xcc_enable_interrupt(struct amdgv_adapter *adapt,
 
 static int gfx_v9_4_3_xcc_rlc_resume(struct amdgv_adapter *adapt, int xcc_id)
 {
-	amdgv_gfx_rlc_enter_safe_mode(adapt, xcc_id);
+	int ret;
+
+	ret = amdgv_gfx_rlc_enter_safe_mode(adapt, xcc_id);
+	if (ret)
+		return ret;
+
 	gfx_v9_4_3_xcc_init_pg(adapt, xcc_id);
-	amdgv_gfx_rlc_exit_safe_mode(adapt, xcc_id);
+	ret = amdgv_gfx_rlc_exit_safe_mode(adapt, xcc_id);
 
 	return 0;
 }
 
 static int gfx_v9_4_3_rlc_resume(struct amdgv_adapter *adapt)
 {
-	int i;
+	int i, ret;
 
-	for (i = 0; i < adapt->mcp.gfx.num_xcc; i++)
-		gfx_v9_4_3_xcc_rlc_resume(adapt, i);
+	for (i = 0; i < adapt->mcp.gfx.num_xcc; i++) {
+		ret = gfx_v9_4_3_xcc_rlc_resume(adapt, i);
+		if (ret)
+			return ret;
+	}
 
 	return 0;
 }
 
-static void gfx_v9_4_3_xcc_set_safe_mode(struct amdgv_adapter *adapt, int xcc_id)
+static int gfx_v9_4_3_xcc_set_safe_mode(struct amdgv_adapter *adapt, int xcc_id)
 {
 	uint32_t data;
-	unsigned i;
+	int ret;
 
 	data = RLC_SAFE_MODE__CMD_MASK;
 	data |= (1 << RLC_SAFE_MODE__MESSAGE__SHIFT);
 	WREG32_SOC15(GC, GET_INST(GC, xcc_id), regRLC_SAFE_MODE, data);
 
-	/* wait for RLC_SAFE_MODE */
-	for (i = 0; i < AMDGV_GFX_MAX_USEC_TIMEOUT; i++) {
-		if (!REG_GET_FIELD(RREG32_SOC15(GC, GET_INST(GC, xcc_id), regRLC_SAFE_MODE), RLC_SAFE_MODE, CMD))
-			break;
-		oss_udelay(1);
+	ret = amdgv_wait_for_register(
+		adapt, SOC15_REG_OFFSET_NAME(GC, GET_INST(GC, xcc_id), regRLC_SAFE_MODE),
+		RLC_SAFE_MODE__CMD_MASK, 0, AMDGV_TIMEOUT(TIMEOUT_STATUS_REG),
+		AMDGV_WAIT_CHECK_EQ, AMDGV_WAIT_FLAG_FORCE_YIELD);
+
+	if (ret) {
+		return AMDGV_FAILURE;
 	}
+
+	return 0;
 }
 
-static void gfx_v9_4_3_xcc_unset_safe_mode(struct amdgv_adapter *adapt, int xcc_id)
+static int gfx_v9_4_3_xcc_unset_safe_mode(struct amdgv_adapter *adapt, int xcc_id)
 {
 	uint32_t data;
 
 	data = RLC_SAFE_MODE__CMD_MASK;
 	WREG32_SOC15(GC, GET_INST(GC, xcc_id), regRLC_SAFE_MODE, data);
+
+	return 0;
 }
 
 static bool gfx_v9_4_3_is_rlc_enabled(struct amdgv_adapter *adapt)

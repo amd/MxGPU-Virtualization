@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv_device.h>
@@ -228,10 +211,9 @@ static bool mi300_xgmi_is_fb_sharing_allowed(struct amdgv_adapter *adapt,
 		struct amdgv_hive_info *hive;
 		struct amdgv_adapter *next_adapt;
 		hive = amdgv_get_xgmi_hive(adapt);
-		if (!hive) {
-			AMDGV_ERROR("Failed to get XGMI hive when checking sharing setting.\n");
+		if (!hive)
 			return false;
-		}
+
 		amdgv_list_for_each_entry(next_adapt, &hive->adapt_list,
 					struct amdgv_adapter, xgmi.head) {
 			if (next_adapt->xgmi.phy_node_id == src_phy_node_id) {
@@ -360,12 +342,8 @@ static int mi300_xgmi_late_hw_init(struct amdgv_adapter *adapt)
 			return AMDGV_FAILURE;
 
 		hive = amdgv_get_xgmi_hive(adapt);
-		if (!hive) {
-			AMDGV_ERROR("XGMI: node 0x%llx, can not match hive "
-				    "0x%llx in the hive list.\n",
-				    adapt->xgmi.node_id, adapt->xgmi.hive_id);
+		if (!hive)
 			return AMDGV_FAILURE;
-		}
 
 		if (!adapt->reset.in_xgmi_chain_reset) {
 			/* Sync counter to get the last adapt that passed
@@ -390,7 +368,7 @@ static int mi300_xgmi_late_hw_init(struct amdgv_adapter *adapt)
 				* unconditionally at the end of HW_INIT and this event will be processed.
 				*/
 				mi300_xgmi_sanitize_hive_fb_sharing_config(adapt, hive);
-				AMDGV_DEBUG("Last initialized device in hive initiating XGMI Topology update.");
+				AMDGV_DEBUG("Last initialized device in hive initiating XGMI Topology update.\n");
 				amdgv_list_for_each_entry_safe(entry, tmp, &hive->adapt_list,
 						struct amdgv_adapter, xgmi.head) {
 					if (entry == adapt)

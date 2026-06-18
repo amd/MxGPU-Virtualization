@@ -1,23 +1,6 @@
-/*
- * Copyright (C) 2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv_device.h>
@@ -111,6 +94,15 @@ static const char *hw_id_names[HW_ID_MAX] = {
 	[MP0_HWID]		= "MP0",
 };
 
+/* hw_id comes from the (firmware/file-sourced) IP-discovery blob and is only
+ * container-validated, so it may exceed HW_ID_MAX or point at an unmapped slot.
+ * Guard the lookup to avoid an out-of-bounds / NULL %s dereference (CWE-125).
+ */
+static const char *hwid_name(uint16_t hw_id)
+{
+	return (hw_id < HW_ID_MAX && hw_id_names[hw_id]) ? hw_id_names[hw_id] : "?";
+}
+
 static int hw_id_map[MAX_HWIP] = {
 	[GC_HWIP]	= GC_HWID,
 	[HDP_HWIP]	= HDP_HWID,
@@ -155,18 +147,29 @@ static int navi32_ip_discovery_table_checksum(struct amdgv_adapter *adapt,
 	uint8_t *data;
 	uint16_t checksum;
 	uint32_t size;
+	uint32_t offset;
 
 	for (i = 0; i <= HARVEST_INFO; i++) {
-		data = (uint8_t *)copy->data + copy->bhdr->table_list[i].offset;
-		size = copy->bhdr->table_list[i].size;
+		offset = copy->bhdr->v1.table_list[i].offset;
+		size = copy->bhdr->v1.table_list[i].size;
 
+		/* table entry must lie fully within the mapped discovery region */
+		if (offset >= AMDGV_IP_DISCOVERY_SIZE ||
+		    size > AMDGV_IP_DISCOVERY_SIZE - offset) {
+			AMDGV_ERROR("ip_discovery_table[%d]_checksum ERROR - entry out of"
+				    " range: offset=%u, size=%u, buffer size=%d",
+				    i, offset, size, AMDGV_IP_DISCOVERY_SIZE);
+			return AMDGV_FAILURE;
+		}
+
+		data = (uint8_t *)copy->data + offset;
 		checksum = navi32_ip_discovery_get_checksum(data, size);
 		if (opt == UPDATE) {
-			copy->bhdr->table_list[i].checksum = checksum;
-		} else if (copy->bhdr->table_list[i].checksum != checksum) {
+			copy->bhdr->v1.table_list[i].checksum = checksum;
+		} else if (copy->bhdr->v1.table_list[i].checksum != checksum) {
 			AMDGV_ERROR("ip_discovery_table[%d]_checksum MISMATCH"
 				    " expected=0x%08x readback=0x%08x\n",
-				    i, checksum, copy->bhdr->table_list[i].checksum);
+				    i, checksum, copy->bhdr->v1.table_list[i].checksum);
 			return AMDGV_FAILURE;
 		}
 	}
@@ -219,14 +222,14 @@ static void navi32_ip_discovery_map(struct amdgv_adapter *adapt,
 
 	copy->bhdr = (struct amdgv_binary_header *)addr;
 
-	addr = base + copy->bhdr->table_list[IP_DISCOVERY].offset;
+	addr = base + copy->bhdr->v1.table_list[IP_DISCOVERY].offset;
 	copy->ihdr = (struct amdgv_ip_discovery_header *)addr;
 
-	addr = base + copy->bhdr->table_list[GC].offset;
+	addr = base + copy->bhdr->v1.table_list[GC_INFO].offset;
 	copy->gchdr = (struct amdgv_gpu_info_header *)addr;
 
-	addr = base + copy->bhdr->table_list[HARVEST_INFO].offset;
-	copy->htbl = (struct amdgv_harvest_table *)addr;
+	addr = base + copy->bhdr->v1.table_list[HARVEST_INFO].offset;
+	copy->htbl = (union amdgv_harvest_table *)addr;
 }
 
 static int navi32_parse_gc_table(struct amdgv_adapter *adapt)
@@ -250,22 +253,22 @@ static int navi32_parse_gc_table(struct amdgv_adapter *adapt)
 	adapt->config.gfx.max_waves_per_simd = gc_info->gc_max_waves_per_simd;
 	adapt->config.gfx.wave_size = gc_info->gc_wave_size;
 
-	AMDGV_INFO("+gc_num_se          : %d\n", gc_info->gc_num_se);
-	AMDGV_INFO("+gc_num_wgp0_per_sa : %d\n", gc_info->gc_num_wgp0_per_sa);
-	AMDGV_INFO("+gc_num_wgp1_per_sa : %d\n", gc_info->gc_num_wgp1_per_sa);
-	AMDGV_INFO("+gc_num_sa_per_se   : %d\n", gc_info->gc_num_sa_per_se);
+	AMDGV_DEBUG("+gc_num_se          : %d\n", gc_info->gc_num_se);
+	AMDGV_DEBUG("+gc_num_wgp0_per_sa : %d\n", gc_info->gc_num_wgp0_per_sa);
+	AMDGV_DEBUG("+gc_num_wgp1_per_sa : %d\n", gc_info->gc_num_wgp1_per_sa);
+	AMDGV_DEBUG("+gc_num_sa_per_se   : %d\n", gc_info->gc_num_sa_per_se);
 
 	navi32_gfx_atc_ats_invalidate(adapt);
 
 	adapt->config.gfx.active_cu_count = navi32_gfx_cu_count(adapt);
-	AMDGV_INFO("+gc_num_active_cu   : %d\n", adapt->config.gfx.active_cu_count);
+	AMDGV_DEBUG("+gc_num_active_cu   : %d\n", adapt->config.gfx.active_cu_count);
 
 	return 0;
 }
 
 static int navi32_parse_harvest_table(struct amdgv_adapter *adapt)
 {
-	struct amdgv_harvest_table *htbl = NULL;
+	union amdgv_harvest_table *htbl = NULL;
 	uint32_t i = 0, umc_harvest_config = 0;
 	uint32_t hw_ip;
 
@@ -275,12 +278,12 @@ static int navi32_parse_harvest_table(struct amdgv_adapter *adapt)
 			switch (hw_ip) {
 			case AMDGV_HEVC_ENGINE:
 			case AMDGV_VCN_ENGINE:
-				AMDGV_INFO("MM Engine VCN count: %d\n",
-					   adapt->config.mm.count[hw_ip]);
+				AMDGV_DEBUG("MM Engine VCN count: %d\n",
+					    adapt->config.mm.count[hw_ip]);
 				break;
 			case AMDGV_VCE_ENGINE:
-				AMDGV_INFO("MM Engine VCE count: %d\n",
-					   adapt->config.mm.count[hw_ip]);
+				AMDGV_DEBUG("MM Engine VCE count: %d\n",
+					    adapt->config.mm.count[hw_ip]);
 				break;
 			default:
 				break;
@@ -291,11 +294,11 @@ static int navi32_parse_harvest_table(struct amdgv_adapter *adapt)
 	htbl = adapt->ip_discovery.pf_copy.htbl;
 	/* find harvest umc instance */
 	for (i = 0; i < 32; i++) {
-		if (htbl->list[i].hw_id == UMC_HWID) {
+		if (htbl->v1.list[i].hw_id == UMC_HWID) {
 			adapt->umc.num_umc--;
 			umc_harvest_config |=
-				1 << htbl->list[i].number_instance;
-		} else if (htbl->list[i].hw_id == 0)
+				1 << htbl->v1.list[i].number_instance;
+		} else if (htbl->v1.list[i].hw_id == 0)
 			break;
 	}
 
@@ -309,8 +312,13 @@ static void navi32_hw_ip_map(struct amdgv_adapter *adapt, struct amdgv_ip *ip)
 	uint32_t hw_ip, ipn;
 
 	for (hw_ip = 0; hw_ip < MAX_HWIP; hw_ip++) {
-		if (hw_id_map[hw_ip] == ip->hw_id) {
+		if (hw_id_map[hw_ip] == ip->hw_id && hw_id_map[hw_ip] != 0) {
 			ipn = ip->instance_number;
+			if (ipn >= HWIP_MAX_INSTANCE) {
+				AMDGV_WARN("IP instance %u for hw_ip %u exceeds HWIP_MAX_INSTANCE (%d), skipping\n",
+					   ipn, hw_ip, HWIP_MAX_INSTANCE);
+				continue;
+			}
 			adapt->reg_offset[hw_ip][ipn] = ip->base_address;
 			switch (ip->hw_id) {
 			case VCE_HWID:
@@ -350,6 +358,17 @@ static int navi32_parse_ip_discovery(struct amdgv_adapter *adapt)
 		return AMDGV_FAILURE;
 	}
 
+	/* ihdr is mapped at an untrusted table offset; the discovery header must
+	 * fit within the mapped region before any field is dereferenced */
+	if (pf_copy->bhdr->v1.table_list[IP_DISCOVERY].offset >= AMDGV_IP_DISCOVERY_SIZE ||
+	    sizeof(struct amdgv_ip_discovery_header) >
+		    AMDGV_IP_DISCOVERY_SIZE - pf_copy->bhdr->v1.table_list[IP_DISCOVERY].offset) {
+		AMDGV_ERROR("ip_discovery_header out of range - offset=%u, buffer size=%d",
+			    (uint32_t)pf_copy->bhdr->v1.table_list[IP_DISCOVERY].offset,
+			    AMDGV_IP_DISCOVERY_SIZE);
+		return AMDGV_FAILURE;
+	}
+
 	if (pf_copy->ihdr->signature != DISCOVERY_TABLE_SIGNATURE) {
 		AMDGV_ERROR("ip_discovery_table_signature MISMATCH"
 			    " expected=0x%08x readback=0x%08x\n",
@@ -366,9 +385,9 @@ static int navi32_parse_ip_discovery(struct amdgv_adapter *adapt)
 	/* Parse IP discovery table */
 
 	AMDGV_INFO("IP discovery version: 0x%x\n", pf_copy->ihdr->version);
-	AMDGV_INFO("IP discovery table size: %u bytes\n", pf_copy->ihdr->size);
-	AMDGV_INFO("IP discovery id: 0x%x\n", pf_copy->ihdr->id);
-	AMDGV_INFO("IP discovery num dies: %d\n", pf_copy->ihdr->num_dies);
+	AMDGV_DEBUG("IP discovery table size: %u bytes\n", pf_copy->ihdr->size);
+	AMDGV_DEBUG("IP discovery id: 0x%x\n", pf_copy->ihdr->id);
+	AMDGV_DEBUG("IP discovery num dies: %d\n", pf_copy->ihdr->num_dies);
 
 	start = (uint8_t *)pf_copy->data;
 
@@ -377,7 +396,7 @@ static int navi32_parse_ip_discovery(struct amdgv_adapter *adapt)
 		forEachIP(j, ip, dhdr) {
 			AMDGV_DEBUG("ip %s [hwid=%d, inst=%d]"
 				    "\tv%d.%d rev(%d)\t@%08x\n",
-				    hw_id_names[ip->hw_id], ip->hw_id, ip->instance_number,
+				    hwid_name(ip->hw_id), ip->hw_id, ip->instance_number,
 				    ip->major, ip->minor, ip->revision, ip->base_address[0]);
 			navi32_hw_ip_map(adapt, ip);
 		}
@@ -390,7 +409,7 @@ static int navi32_ip_discovery_vf_add_harvest_entry(struct amdgv_adapter *adapt,
 									struct amdgv_ip_discovery_info *vf_copy,
 									uint16_t hw_id, uint8_t number_instance)
 {
-	struct amdgv_harvest_table *htbl = NULL;
+	union amdgv_harvest_table *htbl = NULL;
 	uint32_t i = 0;
 
 	if (vf_copy != NULL && vf_copy->htbl != NULL) {
@@ -399,15 +418,15 @@ static int navi32_ip_discovery_vf_add_harvest_entry(struct amdgv_adapter *adapt,
 
 		for (i = 0; i < 32; i++) {
 			// In order to prevent the insertion of duplicate entries
-			if (htbl->list[i].hw_id == hw_id && htbl->list[i].number_instance == number_instance) {
+			if (htbl->v1.list[i].hw_id == hw_id && htbl->v1.list[i].number_instance == number_instance) {
 				goto fail;
-			} else if (htbl->list[i].hw_id == 0)
+			} else if (htbl->v1.list[i].hw_id == 0)
 				break;
 		}
 
 		if (i < 32) {
-			htbl->list[i].hw_id = hw_id;
-			htbl->list[i].number_instance = number_instance;
+			htbl->v1.list[i].hw_id = hw_id;
+			htbl->v1.list[i].number_instance = number_instance;
 			return 0;
 		}
 	}
@@ -529,7 +548,8 @@ int navi32_copy_ip_data_to_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	else
 		offset = ((uint64_t)vf->fb_size << 20) - AMDGV_IP_DISCOVERY_OFFSET;
 
-	ret = amdgv_vfmgr_copy_to_vf_fb(adapt, idx_vf, offset, vf_copy.data, AMDGV_IP_DISCOVERY_SIZE);
+	ret = amdgv_vfmgr_copy_to_vf_fb_abs(adapt, idx_vf, offset, vf_copy.data,
+					    AMDGV_IP_DISCOVERY_SIZE);
 
 	oss_free_memory(vf_copy.data);
 

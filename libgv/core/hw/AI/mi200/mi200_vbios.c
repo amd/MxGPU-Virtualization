@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2021-2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv_device.h>
@@ -90,7 +73,7 @@ static int mi200_vbios_read_rom_from_reg(struct amdgv_adapter *adapt,
 	vbios_rom = (uint32_t *)bios;
 	length_in_dword = length_bytes / 4;
 
-	AMDGV_INFO("Reading VBios from ROM\n");
+	AMDGV_DEBUG("Reading VBIOS from ROM\n");
 
 	WREG32(SOC15_REG_OFFSET(SMUIO, 0, regROM_INDEX), 0);
 
@@ -149,6 +132,10 @@ static void mi200_disable_pci_aer(struct amdgv_adapter *adapt)
 	int pos;
 
 	pos = oss_pci_find_ext_cap(adapt->dev, PCI_EXT_CAP_ID_ERR);
+	if (!pos) {
+		AMDGV_ERROR("this device does not support ext capability: %x\n", PCI_EXT_CAP_ID_ERR);
+		return;
+	}
 	oss_pci_write_config_dword(adapt->dev, pos + PCI_ERR_UNCOR_MASK,
 				0xffffffff);
 	AMDGV_INFO("Disable pci aer\n");
@@ -542,10 +529,9 @@ static int mi200_vbios_late_hw_init(struct amdgv_adapter *adapt)
 	mmhub_v1_7_init(adapt);
 
 	r = mi200_enable_pci_atomic_request(adapt);
-	if (r) {
-		AMDGV_ERROR("enable pci atomic request failed!\n");
+	if (r)
 		return r;
-	}
+
 	mi200_disable_pci_aer(adapt);
 
 	return 0;

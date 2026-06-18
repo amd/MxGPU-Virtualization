@@ -1,23 +1,8 @@
-/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #include "amdsmi.h"
 #include "smi_cli_api_host.h"
 #include "smi_cli_helpers.h"
@@ -56,6 +41,8 @@ typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 		amdsmi_processor_handle *);
 typedef amdsmi_status_t (*AMDSMI_GET_VF_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 		amdsmi_vf_handle_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_VF_HANDLE_FROM_VF_INDEX)(amdsmi_processor_handle,
+		uint32_t, amdsmi_vf_handle_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_ASIC_INFO)(amdsmi_processor_handle,
 		amdsmi_asic_info_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_VRAM_INFO)(amdsmi_processor_handle,
@@ -199,6 +186,9 @@ typedef amdsmi_status_t (*AMDSMI_GET_MEMORY_PARTITION_CONFIG)(amdsmi_processor_h
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_CPER_ENTRIES)(amdsmi_processor_handle, uint32_t, char*,
 		uint64_t *,
 		amdsmi_cper_hdr_t**, uint64_t *, uint64_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_FABRIC_CPER_ENTRIES)(amdsmi_processor_handle, uint32_t, char*,
+		uint64_t *,
+		amdsmi_cper_hdr_t**, uint64_t *, uint64_t *);
 typedef amdsmi_status_t (*AMDSMI_TOPO_GET_P2P_STATUS)(amdsmi_processor_handle,
 		amdsmi_processor_handle,
 		amdsmi_link_type_t*, amdsmi_p2p_capability_t*);
@@ -211,6 +201,8 @@ typedef amdsmi_status_t (*AMDSMI_TOPO_GET_NUMA_NODE_NUMBER)(amdsmi_processor_han
 typedef amdsmi_status_t (*AMDSMI_GET_AFIDS_FROM_CPER)(char*cper_buffer, uint32_t buf_size,
 		uint64_t *afids,
 		uint32_t *num_afids);
+typedef amdsmi_status_t (*AMDSMI_GET_VF_HBM_INFO)(amdsmi_vf_handle_t,
+			amdsmi_vf_hbm_info_t *);
 
 typedef amdsmi_status_t (*AMDSMI_RESET_GPU)(amdsmi_processor_handle);
 
@@ -226,6 +218,8 @@ typedef amdsmi_status_t (*AMDSMI_GET_NIC_PORT_INFO)(amdsmi_processor_handle,
 		amdsmi_nic_port_info_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_NIC_RDMA_DEV_INFO)(amdsmi_processor_handle,
 		amdsmi_nic_rdma_devices_info_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_NIC_FW_INFO)(amdsmi_processor_handle,
+		amdsmi_nic_fw_info_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_NIC_DEVICE_BDF)(amdsmi_processor_handle,
 		amdsmi_bdf_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_NIC_PORT_STATISTICS)(amdsmi_processor_handle, uint32_t,
@@ -234,13 +228,26 @@ typedef amdsmi_status_t (*AMDSMI_GET_NIC_VENDOR_STATISTICS)(amdsmi_processor_han
 		uint32_t *, amdsmi_nic_stat_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_NIC_RDMA_PORT_STATISTICS)(amdsmi_processor_handle, uint32_t,
 		uint32_t *, amdsmi_nic_stat_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_TDI_STATE)(amdsmi_vf_handle_t,
+		amdsmi_tdi_state_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_RAS_POLICY_INFO)(amdsmi_processor_handle,
 		amdsmi_gpu_ras_policy_info_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_NODE_HANDLE)(amdsmi_processor_handle, amdsmi_node_handle*);
 typedef amdsmi_status_t (*AMDSMI_GET_NPM_INFO)(amdsmi_node_handle, amdsmi_npm_info_t *);
-typedef amdsmi_status_t (*AMDSMI_TOPO_GET_NIC_LINK_TYPE)(amdsmi_processor_handle,
+typedef amdsmi_status_t (*AMDSMI_GET_FABRIC_INFO)(amdsmi_processor_handle, amdsmi_fabric_info_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_CC_MODE)(amdsmi_processor_handle,
+		amdsmi_cc_mode_t *);
+typedef amdsmi_status_t (*AMDSMI_SET_CC_MODE)(amdsmi_processor_handle,
+		amdsmi_cc_mode_t);
+typedef amdsmi_status_t (*AMDSMI_ALLOC_FABRIC_TELEMETRY)(amdsmi_processor_handle,
+		uint32_t, amdsmi_fabric_telemetry_t **);
+typedef amdsmi_status_t (*AMDSMI_GET_FABRIC_TELEMETRY_DATA)(amdsmi_processor_handle,
+		amdsmi_fabric_telemetry_t *);
+typedef amdsmi_status_t (*AMDSMI_FREE_FABRIC_TELEMETRY)(amdsmi_processor_handle,
+		amdsmi_fabric_telemetry_t *);
+typedef amdsmi_status_t (*AMDSMI_TOPO_GET_LINK_TYPE)(amdsmi_processor_handle,
 		amdsmi_processor_handle,
-		amdsmi_nic_link_type_t *);
+		uint64_t *, amdsmi_link_type_t *);
 /////
 /////
 /////
@@ -252,6 +259,7 @@ AMDSMI_GET_NIC_PROCESSOR_HANDLES host_amdsmi_get_nic_processor_handles;
 AMDSMI_GET_PROCESSOR_HANDLES_BY_TYPE host_amdsmi_get_processor_handles_by_type;
 AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
 AMDSMI_GET_VF_HANDLE_FROM_BDF host_amdsmi_get_vf_handle_from_bdf;
+AMDSMI_GET_VF_HANDLE_FROM_VF_INDEX host_amdsmi_get_vf_handle_from_vf_index;
 AMDSMI_GET_GPU_ASIC_INFO host_amdsmi_get_gpu_asic_info;
 AMDSMI_GET_GPU_VRAM_INFO host_amdsmi_get_gpu_vram_info;
 AMDSMI_SHUT_DOWN host_amdsmi_shut_down;
@@ -325,12 +333,17 @@ AMDSMI_SET_ACCELERATOR_PARTITION host_amdsmi_set_gpu_accelerator_partition_comma
 AMDSMI_SET_MEMORY_PARTITION host_amdsmi_set_gpu_memory_partition_command;
 AMDSMI_GET_MEMORY_PARTITION_CONFIG host_amdsmi_get_gpu_memory_partition_config;
 AMDSMI_GET_GPU_CPER_ENTRIES host_amdsmi_get_gpu_cper_entries;
+AMDSMI_GET_FABRIC_CPER_ENTRIES host_amdsmi_get_fabric_cper_entries;
 AMDSMI_TOPO_GET_P2P_STATUS host_amdsmi_topo_get_p2p_status;
 AMDSMI_GET_GPU_VIRTUALIZATION_MODE host_amdsmi_get_gpu_virtualization_mode;
 AMDSMI_GET_CPU_AFFINITY_WITH_SCOPE host_amdsmi_get_cpu_affinity_with_scope;
 AMDSMI_TOPO_GET_NUMA_NODE_NUMBER host_amdsmi_topo_get_numa_node_number;
 AMDSMI_GET_AFIDS_FROM_CPER host_amdsmi_get_afids_from_cper;
 AMDSMI_RESET_GPU host_amdsmi_reset_gpu;
+AMDSMI_GET_VF_HBM_INFO host_amdsmi_get_vf_hbm_info;
+AMDSMI_GET_TDI_STATE host_amdsmi_get_tdi_state;
+AMDSMI_GET_CC_MODE host_amdsmi_get_cc_mode;
+AMDSMI_SET_CC_MODE host_amdsmi_set_cc_mode;
 AMDSMI_GET_GPU_RAS_POLICY_INFO host_amdsmi_get_gpu_ras_policy_info;
 
 AMDSMI_GET_NIC_ASIC_INFO host_amdsmi_get_nic_asic_info;
@@ -339,14 +352,20 @@ AMDSMI_GET_NIC_DRIVER_INFO host_amdsmi_get_nic_driver_info;
 AMDSMI_GET_NIC_NUMA_INFO host_amdsmi_get_nic_numa_info;
 AMDSMI_GET_NIC_PORT_INFO host_amdsmi_get_nic_port_info;
 AMDSMI_GET_NIC_RDMA_DEV_INFO host_amdsmi_get_nic_rdma_dev_info;
+AMDSMI_GET_NIC_FW_INFO host_amdsmi_get_nic_fw_info;
 AMDSMI_GET_NIC_DEVICE_BDF host_amdsmi_get_nic_device_bdf;
 AMDSMI_GET_NIC_PORT_STATISTICS host_amdsmi_get_nic_port_statistics;
 AMDSMI_GET_NIC_RDMA_PORT_STATISTICS host_amdsmi_get_nic_rdma_port_statistics;
 AMDSMI_GET_NIC_VENDOR_STATISTICS host_amdsmi_get_nic_vendor_statistics;
-AMDSMI_TOPO_GET_NIC_LINK_TYPE host_amdsmi_topo_get_nic_link_type;
+AMDSMI_TOPO_GET_LINK_TYPE host_amdsmi_topo_get_link_type;
 
 AMDSMI_GET_NODE_HANDLE host_amdsmi_get_node_handle;
 AMDSMI_GET_NPM_INFO host_amdsmi_get_npm_info;
+AMDSMI_GET_FABRIC_INFO host_amdsmi_get_gpu_fabric_info;
+
+AMDSMI_ALLOC_FABRIC_TELEMETRY host_amdsmi_alloc_fabric_telemetry;
+AMDSMI_GET_FABRIC_TELEMETRY_DATA host_amdsmi_get_fabric_telemetry_data;
+AMDSMI_FREE_FABRIC_TELEMETRY host_amdsmi_free_fabric_telemetry;
 
 AmdSmiApiHost::AmdSmiApiHost()
 {
@@ -552,6 +571,8 @@ AmdSmiApiHost::AmdSmiApiHost()
 
 	host_amdsmi_get_gpu_cper_entries = (AMDSMI_GET_GPU_CPER_ENTRIES)LOAD_SYM(
 										   amdSmiLibHandle, "amdsmi_get_gpu_cper_entries");
+	host_amdsmi_get_fabric_cper_entries = (AMDSMI_GET_FABRIC_CPER_ENTRIES)LOAD_SYM(
+										   amdSmiLibHandle, "amdsmi_get_fabric_cper_entries");
 
 	host_amdsmi_topo_get_p2p_status = (AMDSMI_TOPO_GET_P2P_STATUS)LOAD_SYM(amdSmiLibHandle,
 									  "amdsmi_topo_get_p2p_status");
@@ -576,21 +597,36 @@ AmdSmiApiHost::AmdSmiApiHost()
 	host_amdsmi_get_nic_port_info = (AMDSMI_GET_NIC_PORT_INFO)LOAD_SYM(amdSmiLibHandle,
 									"amdsmi_get_nic_port_info");
 	host_amdsmi_get_nic_rdma_dev_info = (AMDSMI_GET_NIC_RDMA_DEV_INFO)LOAD_SYM(amdSmiLibHandle,
-										"amdsmi_get_nic_rdma_dev_info");
+									"amdsmi_get_nic_rdma_dev_info");
+	host_amdsmi_get_nic_fw_info = (AMDSMI_GET_NIC_FW_INFO)LOAD_SYM(amdSmiLibHandle,
+									"amdsmi_get_nic_fw_info");
 	host_amdsmi_get_nic_device_bdf = (AMDSMI_GET_NIC_DEVICE_BDF)LOAD_SYM(
-										 amdSmiLibHandle, "amdsmi_get_nic_device_bdf");
+									 amdSmiLibHandle, "amdsmi_get_nic_device_bdf");
 	host_amdsmi_get_nic_port_statistics = (AMDSMI_GET_NIC_PORT_STATISTICS)LOAD_SYM(amdSmiLibHandle,
 										  "amdsmi_get_nic_port_statistics");
 	host_amdsmi_get_nic_vendor_statistics = (AMDSMI_GET_NIC_VENDOR_STATISTICS)LOAD_SYM(amdSmiLibHandle,
 											"amdsmi_get_nic_vendor_statistics");
 	host_amdsmi_get_nic_rdma_port_statistics = (AMDSMI_GET_NIC_RDMA_PORT_STATISTICS)LOAD_SYM(
 				amdSmiLibHandle, "amdsmi_get_nic_rdma_port_statistics");
+	host_amdsmi_get_vf_hbm_info = (AMDSMI_GET_VF_HBM_INFO)LOAD_SYM(amdSmiLibHandle,
+										"amdsmi_get_vf_hbm_info");
+	host_amdsmi_get_tdi_state = (AMDSMI_GET_TDI_STATE)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_tdi_state");
+	host_amdsmi_get_cc_mode = (AMDSMI_GET_CC_MODE)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_cc_mode");
+	host_amdsmi_set_cc_mode = (AMDSMI_SET_CC_MODE)LOAD_SYM(amdSmiLibHandle, "amdsmi_set_cc_mode");
 	host_amdsmi_get_gpu_ras_policy_info = (AMDSMI_GET_GPU_RAS_POLICY_INFO)LOAD_SYM(
 				amdSmiLibHandle, "amdsmi_get_gpu_ras_policy_info");
 	host_amdsmi_get_node_handle = (AMDSMI_GET_NODE_HANDLE)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_node_handle");
 	host_amdsmi_get_npm_info = (AMDSMI_GET_NPM_INFO)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_npm_info");
+	host_amdsmi_get_gpu_fabric_info = (AMDSMI_GET_FABRIC_INFO)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_gpu_fabric_info");
 
-	host_amdsmi_topo_get_nic_link_type = (AMDSMI_TOPO_GET_NIC_LINK_TYPE)LOAD_SYM(amdSmiLibHandle, "amdsmi_topo_get_nic_link_type");
+	host_amdsmi_alloc_fabric_telemetry = (AMDSMI_ALLOC_FABRIC_TELEMETRY)LOAD_SYM(
+		amdSmiLibHandle, "amdsmi_alloc_fabric_telemetry");
+	host_amdsmi_get_fabric_telemetry_data = (AMDSMI_GET_FABRIC_TELEMETRY_DATA)LOAD_SYM(
+		amdSmiLibHandle, "amdsmi_get_fabric_telemetry_data");
+	host_amdsmi_free_fabric_telemetry = (AMDSMI_FREE_FABRIC_TELEMETRY)LOAD_SYM(
+		amdSmiLibHandle, "amdsmi_free_fabric_telemetry");
+
+	host_amdsmi_topo_get_link_type = (AMDSMI_TOPO_GET_LINK_TYPE)LOAD_SYM(amdSmiLibHandle, "amdsmi_topo_get_link_type");
 	int ret = host_amdsmi_init(AMDSMI_INIT_AMD_GPUS);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		throw SmiToolPermissionDeniedException();

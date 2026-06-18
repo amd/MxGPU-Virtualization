@@ -1,24 +1,6 @@
-/*
- * Copyright 2022-2024 Advanced Micro Devices, Inc.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
- * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- * OTHER DEALINGS IN THE SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_live_info.h"
@@ -64,10 +46,37 @@ inline void amdgv_ring_write(struct amdgv_ring *ring, uint32_t v)
 	struct amdgv_adapter *adapt = ring->adapt;
 
 	if (ring->count_dw <= 0)
-		AMDGV_ERROR("amdgv: writing more dwords to the ring than expected!\n");
+		AMDGV_ERROR("Requested more dwords than expected! remaining: %d, requested: %u)\n",
+			    ring->count_dw, 1);
 	ring->ring[ring->wptr++ & ring->buf_mask] = v;
 	ring->wptr &= ring->ptr_mask;
 	ring->count_dw--;
+}
+
+void amdgv_ring_write_multiple(struct amdgv_ring *ring,
+					uint32_t *src, uint32_t count_dw)
+{
+	struct amdgv_adapter *adapt = ring->adapt;
+	unsigned occupied, chunk1, chunk2;
+
+	if (ring->count_dw < (int)count_dw)
+		AMDGV_ERROR("Requested more dwords than expected! remaining: %d, requested: %u)\n",
+			    ring->count_dw, count_dw);
+
+	occupied = ring->wptr & ring->buf_mask;
+	chunk1 = ring->buf_mask + 1 - occupied;
+	chunk1 = (chunk1 >= count_dw) ? count_dw : chunk1;
+	chunk2 = count_dw - chunk1;
+
+	if (chunk1)
+		oss_memcpy((char *)&ring->ring[occupied], (char *)src, chunk1 << 2);
+
+	if (chunk2)
+		oss_memcpy((char *)ring->ring, (char *)(src + chunk1), chunk2 << 2);
+
+	ring->wptr += count_dw;
+	ring->wptr &= ring->ptr_mask;
+	ring->count_dw -= count_dw;
 }
 
 /**
@@ -288,34 +297,24 @@ int amdgv_ring_init(struct amdgv_adapter *adapt, struct amdgv_ring *ring, uint32
 	}
 
 	r = amdgv_wb_memory_get(adapt, &ring->rptr_offs);
-	if (r) {
-		AMDGV_ERROR("(%d) ring rptr_offs wb alloc failed\n", r);
+	if (r)
 		return r;
-	}
 
 	r = amdgv_wb_memory_get(adapt, &ring->wptr_offs);
-	if (r) {
-		AMDGV_ERROR("(%d) ring wptr_offs wb alloc failed\n", r);
+	if (r)
 		return r;
-	}
 
 	r = amdgv_wb_memory_get(adapt, &ring->fence_offs);
-	if (r) {
-		AMDGV_ERROR("(%d) ring fence_offs wb alloc failed\n", r);
+	if (r)
 		return r;
-	}
 
 	r = amdgv_wb_memory_get(adapt, &ring->trail_fence_offs);
-	if (r) {
-		AMDGV_ERROR("(%d) ring trail_fence_offs wb alloc failed\n", r);
+	if (r)
 		return r;
-	}
 
 	r = amdgv_wb_memory_get(adapt, &ring->cond_exe_offs);
-	if (r) {
-		AMDGV_ERROR("(%d) ring cond_exec_polling wb alloc failed\n", r);
+	if (r)
 		return r;
-	}
 
 	ring_buffer_dword_size = frame_dword_size * sched_hw_submission;
 	if (ring_buffer_dword_size >= 0x1000000) {
@@ -417,15 +416,15 @@ void amdgv_ring_fini(struct amdgv_ring *ring)
 	if (!(ring->adapt) || (!ring->is_mes_queue && !(ring->adapt->rings[ring->idx])))
 		return;
 
-	if (!ring->is_mes_queue) {
-		amdgv_wb_memory_free(ring->adapt, ring->rptr_offs);
-		amdgv_wb_memory_free(ring->adapt, ring->wptr_offs);
+	amdgv_wb_memory_free(ring->adapt, ring->rptr_offs);
+	amdgv_wb_memory_free(ring->adapt, ring->wptr_offs);
 
-		amdgv_wb_memory_free(ring->adapt, ring->cond_exe_offs);
-		amdgv_wb_memory_free(ring->adapt, ring->fence_offs);
+	amdgv_wb_memory_free(ring->adapt, ring->cond_exe_offs);
+	amdgv_wb_memory_free(ring->adapt, ring->fence_offs);
+	amdgv_wb_memory_free(ring->adapt, ring->trail_fence_offs);
 
-		amdgv_memmgr_free(ring->ring_obj);
-	}
+	amdgv_memmgr_free(ring->ring_obj);
+	ring->ring_obj = NULL;
 
 	ring->me = 0;
 

@@ -1,24 +1,8 @@
-/*
- * Copyright (C) 2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
+
 #include <amdgv_device.h>
 #include "navi32_smu_driver_if.h"
 #include "navi32_fru.h"
@@ -106,6 +90,9 @@ static int navi32_fru_read_product_info(struct amdgv_adapter *adapt, uint16_t da
 	/* The size returned by the i2c is 7bits in size */
 	size = cmd_buff[2] & NAVI32_FRU_PRODUCT_INFO_SIZE_MASK;
 
+	if ((I2C_ADDR_SIZE) + size > I2C_CMD_BUFFER_SIZE)
+		return AMDGV_FAILURE;
+
 	/* second read for actual data */
 	data_addr += 1;
 	cmd_buff[0] = data_addr >> 8;
@@ -171,7 +158,7 @@ int navi32_fru_get_product_info(struct amdgv_adapter *adapt)
 	 * |                  |<---   msg.len - 2   -->|
 	 * |<--------------  msg.len  ---------------->|
 	 *
-	 * max size 64 bytes is good enough for all kind of data
+	 * I2C_CMD_BUFFER_SIZE bytes is good enough for all kind of data
 	 */
 	uint8_t *cmd_buff = adapt->i2c_cmd_buffer;
 	uint8_t data_size = 0;
@@ -190,7 +177,8 @@ int navi32_fru_get_product_info(struct amdgv_adapter *adapt)
 	}
 
 	if (cmd_buff == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL, 64);
+		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+				I2C_CMD_BUFFER_SIZE);
 		return AMDGV_FAILURE;
 	}
 
@@ -216,7 +204,7 @@ int navi32_fru_get_product_info(struct amdgv_adapter *adapt)
 
 	/* we have a version, a length and a langurage byte before the actual product data */
 	addrptr += NAVI32_FRU_PRODUCT_INFO_SKIP_ADDR;
-	AMDGV_INFO("FRU product addrptr is at 0x%04X\n", addrptr);
+	AMDGV_DEBUG("FRU product addrptr is at 0x%04X\n", addrptr);
 
 	/*
 	 * RM FRU data has variable-length fields.
@@ -255,6 +243,6 @@ int navi32_fru_get_product_info(struct amdgv_adapter *adapt)
 	adapt->product_info.visit = true;
 
 clear:
-	oss_memset(adapt->i2c_cmd_buffer, 0, 64);
+	oss_memset(adapt->i2c_cmd_buffer, 0, I2C_CMD_BUFFER_SIZE);
 	return ret;
 }

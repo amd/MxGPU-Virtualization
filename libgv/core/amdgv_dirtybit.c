@@ -1,24 +1,7 @@
-/*
-* Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
-*
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in
-* all copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-* THE SOFTWARE.
-*/
+/* Copyright Advanced Micro Devices, Inc.
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 #include "amdgv_device.h"
 #include "amdgv_dirtybit.h"
@@ -101,7 +84,7 @@ void amdgv_dirtybit_destroy_vf_acc_bits(struct amdgv_adapter *adapt)
 	}
 }
 
-static void amdgv_dirtybit_set_vf_acc_bits(struct amdgv_adapter *adapt, uint32_t idx_vf, char pattern)
+void amdgv_dirtybit_set_vf_acc_bits(struct amdgv_adapter *adapt, uint32_t idx_vf, char pattern)
 {
 	if (idx_vf >= AMDGV_MAX_VF_NUM)
 		return;
@@ -231,11 +214,9 @@ static int amdgv_dirtybit_set_bitmap_query_buffer_to_dirty(struct amdgv_adapter 
 	return 0;
 }
 
-int amdgv_dirtybit_querydata(struct amdgv_adapter *adapt,
+static int amdgv_dirtybit_querydata(struct amdgv_adapter *adapt,
 				struct amdgv_query_dirty_bit_data *data)
 {
-	int ret = 0;
-
 	if (data->query_size == 0) {
 		AMDGV_ERROR("query_size is 0\n");
 		return AMDGV_FAILURE;
@@ -252,34 +233,45 @@ int amdgv_dirtybit_querydata(struct amdgv_adapter *adapt,
 	}
 
 	if (amdgv_xgmi_node_fb_sharing_allowed(adapt)) {
-		AMDGV_INFO("FB sharing mode is enabled, set queried FB range dirty in bitmap\n");
+		AMDGV_DEBUG("FB sharing mode is enabled, set queried FB range dirty in bitmap\n");
 		return amdgv_dirtybit_set_bitmap_query_buffer_to_dirty(adapt, data);
 	}
 
 	if (adapt->dirtybit.funcs &&
 		adapt->dirtybit.funcs->query_data) {
-		ret = adapt->dirtybit.funcs->query_data(adapt, data);
-		if (ret == 0) {
-			/* HW Dbit may be lost due to VF FLR, LM failure, etc.
-			 * We need to record all the Dbits to ensure the success
-			 * of incoming LM.
-			 */
-			if (amdgv_merge_new_bits_to_acc_bits(adapt, data)) {
-				AMDGV_ERROR("Failed to merge bitmap to acc bits\n");
-				AMDGV_WARN("Set VF[%d] whole fb to dirty\n", data->idx_vf);
-				amdgv_dirtybit_set_vf_acc_bits(adapt, data->idx_vf, 0xff);
-			}
-		} else {
-			AMDGV_WARN("Set VF[%d] whole fb to dirty\n", data->idx_vf);
-			amdgv_dirtybit_set_vf_acc_bits(adapt, data->idx_vf, 0xff);
-		}
-	} else {
-		AMDGV_ERROR("query_data is not properly defined.");
-		AMDGV_WARN("Set VF[%d] whole fb to dirty\n", data->idx_vf);
-		amdgv_dirtybit_set_vf_acc_bits(adapt, data->idx_vf, 0xff);
-		ret = AMDGV_FAILURE;
+		return adapt->dirtybit.funcs->query_data(adapt, data);
 	}
 
+	AMDGV_ERROR("query_data is not properly defined.");
+	return AMDGV_FAILURE;
+}
+
+/*
+ * Query Dbit and accumulate the result into acc_bits.
+ * HW Dbit may be lost due to VF FLR, LM failure, etc.
+ * We need to record all the Dbits to ensure the success of incoming LM.
+ * On any failure, the VF's acc_bits are set to all-dirty as a safe fallback.
+ */
+int amdgv_dirtybit_query_and_accumulate(struct amdgv_adapter *adapt,
+				struct amdgv_query_dirty_bit_data *data)
+{
+	int ret;
+
+	ret = amdgv_dirtybit_querydata(adapt, data);
+	if (ret)
+		goto dbit_fail;
+
+	ret = amdgv_merge_new_bits_to_acc_bits(adapt, data);
+	if (ret) {
+		AMDGV_ERROR("Failed to merge bitmap to acc bits\n");
+		goto dbit_fail;
+	}
+
+	return ret;
+
+dbit_fail:
+	AMDGV_WARN("Set VF[%d] whole fb to dirty\n", data->idx_vf);
+	amdgv_dirtybit_set_vf_acc_bits(adapt, data->idx_vf, 0xff);
 	return ret;
 }
 
@@ -300,7 +292,8 @@ static inline void amdgv_dirtybit_prepare_query_params(struct amdgv_adapter *ada
 	data->idx_vf = idx_vf;
 }
 
-int amdgv_dirtybit_query_vf_fb_dbit(struct amdgv_adapter *adapt, uint32_t idx_vf)
+static int amdgv_dirtybit_query_vf_fb_dbit_common(struct amdgv_adapter *adapt,
+						  uint32_t idx_vf, bool to_acc)
 {
 	uint32_t bitmap_size = 0;
 	uint32_t *bitmap = NULL;
@@ -323,13 +316,19 @@ int amdgv_dirtybit_query_vf_fb_dbit(struct amdgv_adapter *adapt, uint32_t idx_vf
 
 	amdgv_dirtybit_prepare_query_params(adapt, &query_params, idx_vf,
 					    0, fb_size, bitmap, bitmap_size, false);
-	ret = amdgv_dirtybit_querydata(adapt, &query_params);
-	if (ret)
-		AMDGV_WARN("Failed to query VF[%d] FB Dbit\n", idx_vf);
+	if (to_acc)
+		ret = amdgv_dirtybit_query_and_accumulate(adapt, &query_params);
+	else
+		ret = amdgv_dirtybit_querydata(adapt, &query_params);
 
 	oss_free(bitmap);
 
 	return ret;
+}
+
+int amdgv_dirtybit_query_vf_fb_dbit(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	return amdgv_dirtybit_query_vf_fb_dbit_common(adapt, idx_vf, true);
 }
 
 int amdgv_dirtybit_clear_fb_dbit(struct amdgv_adapter *adapt,  uint32_t idx_vf)
@@ -344,11 +343,11 @@ int amdgv_dirtybit_clear_fb_dbit(struct amdgv_adapter *adapt,  uint32_t idx_vf)
 	/* Clear the Dbit by querying the whole VF FB with preserve = false,
 	 * preserve = false will clear the Dbit when querying
 	 */
-	if (amdgv_dirtybit_query_vf_fb_dbit(adapt, idx_vf)) {
+	if (amdgv_dirtybit_query_vf_fb_dbit_common(adapt, idx_vf, false)) {
 		AMDGV_WARN("Failed to clear VF[%d] FB dbit\n", idx_vf);
 		ret = AMDGV_FAILURE;
 	} else {
-		AMDGV_INFO("VF[%d] FB dbit cleared\n", idx_vf);
+		AMDGV_DEBUG("VF[%d] FB dbit cleared\n", idx_vf);
 		ret = 0;
 	}
 

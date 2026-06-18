@@ -1,22 +1,8 @@
-/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #include <iostream>
 #include <sstream>
 #include <regex>
@@ -57,7 +43,8 @@ auto constexpr
 fb_info_csv_header {",total_fb_size,pf_fb_reserved,pf_fb_offset,fb_alignment,max_vf_fb_usable,min_vf_fb_usable"};
 auto constexpr num_vf_csv_header {",num_vf_supported,num_vf_enabled"};
 auto constexpr vram_csv_header {",vram_type,vram_vendor,vram_size,vram_bit_width,vram_max_bandwidth"};
-auto constexpr vf_nested_csv_header {"gpu,vf,fb_offset,fb_size,gfx_timeslice"};
+auto constexpr vf_nested_csv_header {",fb_offset,fb_size,gfx_timeslice"};
+auto constexpr vf_hbm_info_csv_header {",phy_addr,phy_size,numa_id,name"};
 auto constexpr
 header_cache {",cache,cache_properties,cache_size,cache_level,max_num_cu_shared,num_cache_instance"};
 auto constexpr header_process_isolation {",process_isolation"};
@@ -183,6 +170,13 @@ int AmdSmiStaticCommand::static_command_fb_info(uint64_t processor, std::string 
 	return ret;
 }
 
+int AmdSmiStaticCommand::static_command_vf_hbm_info(std::string vf_handle, std::string &formatted_string)
+{
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_vf_hbm_info_command(vf_handle, arg,
+			  formatted_string);
+	return ret;
+}
+
 int AmdSmiStaticCommand::static_command_num_vf(uint64_t processor, std::string &formatted_string)
 {
 	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_num_vf_command(processor, arg,
@@ -265,13 +259,43 @@ void AmdSmiStaticCommand::static_command_json()
 		std::string vf_bdf;
 		std::tuple<std::string, std::string, std::string> indexes =
 			getGpuVfIndexFromVfId(arg.vf_id);
-		out += string_format(
-				   vfNestedTemplate, std::get<0>(indexes).c_str(),
-				   std::get<1>(indexes).c_str());
 		vf_bdf = std::get<2>(indexes).c_str();
-		ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_vf_info_static_command(vf_bdf,
-			  arg, out);
-		json = nlohmann::ordered_json::parse(out);
+		uint64_t gpu_index = static_cast<uint64_t>(std::stoi(std::get<0>(indexes)));
+		uint64_t vf_index = static_cast<uint64_t>(std::stoi(std::get<1>(indexes)));
+
+		json = {};
+		json["gpu"] = gpu_index;
+		json["vf"] = vf_index;
+
+		if ((std::find(arg.options.begin(), arg.options.end(), "fb-info") != arg.options.end()) ||
+				(std::find(arg.options.begin(), arg.options.end(), "f") != arg.options.end()) ||
+				arg.all_arguments) {
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_vf_info_static_command(vf_bdf,
+				  arg, out);
+			if (ret == 0) {
+				nlohmann::ordered_json values_json = nlohmann::ordered_json::parse(out);
+				if (values_json.contains("fb_info")) {
+					json["fb_info"] = values_json["fb_info"];
+				}
+			}
+			out.clear();
+		}
+
+		if ((std::find(arg.options.begin(), arg.options.end(), "hbm-info") != arg.options.end()) ||
+				(std::find(arg.options.begin(), arg.options.end(), "hbm") != arg.options.end()) ||
+				arg.all_arguments) {
+			ret = static_command_vf_hbm_info(vf_bdf, out);
+			std::string param{"hbm-info"};
+			int error = handle_exceptions(ret, param, arg);
+			if (error == 0) {
+				nlohmann::ordered_json values_json = nlohmann::ordered_json::parse(out);
+				if (values_json.contains("hbm_info")) {
+					json["hbm_info"] = values_json["hbm_info"];
+				}
+			}
+			out.clear();
+		}
+
 		json_format.insert(json_format.end(), json);
 		out = json_format.dump(4);
 		if (arg.is_file) {
@@ -650,8 +674,27 @@ void AmdSmiStaticCommand::static_command_human()
 				   vfNestedTemplate, std::get<0>(indexes).c_str(),
 				   std::get<1>(indexes).c_str());
 		vf_bdf = std::get<2>(indexes).c_str();
-		ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_vf_info_static_command(vf_bdf,
-			  arg, out);
+
+		if ((std::find(arg.options.begin(), arg.options.end(), "fb-info") != arg.options.end()) ||
+				(std::find(arg.options.begin(), arg.options.end(), "f") != arg.options.end()) ||
+				arg.all_arguments) {
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_vf_info_static_command(vf_bdf,
+				  arg, formatted_string);
+			out += formatted_string;
+			formatted_string.clear();
+		}
+
+		if ((std::find(arg.options.begin(), arg.options.end(), "hbm-info") != arg.options.end()) ||
+				(std::find(arg.options.begin(), arg.options.end(), "hbm") != arg.options.end()) ||
+				arg.all_arguments) {
+			ret = static_command_vf_hbm_info(vf_bdf, formatted_string);
+			std::string param{"hbm-info"};
+			int error = handle_exceptions(ret, param, arg);
+			if (error == 0) {
+				out += formatted_string;
+			}
+			formatted_string.clear();
+		}
 	} else {
 		for (unsigned int i = 0; i < arg.devices.size(); i++) {
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
@@ -963,16 +1006,42 @@ void AmdSmiStaticCommand::static_command_csv()
 		std::string vf_bdf;
 		std::tuple<std::string, std::string, std::string> indexes =
 			getGpuVfIndexFromVfId(arg.vf_id);
-		formatted_string += string_format(
-								"%s,%s", std::get<0>(indexes).c_str(),
-								std::get<1>(indexes).c_str());
 		vf_bdf = std::get<2>(indexes).c_str();
-		ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_vf_info_static_command(vf_bdf,
-			  arg, formatted_string);
-		header.append(vf_nested_csv_header);
-		values.append(formatted_string);
-		out.append(header).append("\n");
-		out.append(values).append("\n");
+
+		header.append("gpu,vf");
+		std::string gpu_vf_str = string_format("%s,%s", std::get<0>(indexes).c_str(),
+											   std::get<1>(indexes).c_str());
+		results.push_back({gpu_vf_str});
+
+		if ((std::find(arg.options.begin(), arg.options.end(), "fb-info") != arg.options.end()) ||
+				(std::find(arg.options.begin(), arg.options.end(), "f") != arg.options.end()) ||
+				arg.all_arguments) {
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_vf_info_static_command(vf_bdf,
+				  arg, formatted_string);
+			header.append(vf_nested_csv_header);
+			results.push_back({formatted_string});
+			formatted_string.clear();
+		}
+
+		if ((std::find(arg.options.begin(), arg.options.end(), "hbm-info") != arg.options.end()) ||
+				(std::find(arg.options.begin(), arg.options.end(), "hbm") != arg.options.end()) ||
+				arg.all_arguments) {
+			ret = static_command_vf_hbm_info(vf_bdf, formatted_string);
+			std::string param{"hbm-info"};
+			int error = handle_exceptions(ret, param, arg);
+			if (error == 0) {
+				header.append(vf_hbm_info_csv_header);
+				results.push_back({formatted_string});
+			}
+			formatted_string.clear();
+		}
+
+		out.append(header);
+		out.append("\n");
+		csv_recursion(output_buffer, results);
+		out.append(output_buffer);
+		results.clear();
+		output_buffer.clear();
 	} else {
 		header.append("gpu");
 		for (unsigned int i = 0; i < arg.devices.size(); i++) {

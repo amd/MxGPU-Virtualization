@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_oss_wrapper.h"
@@ -38,10 +21,12 @@ static struct amdgv_id_name amdgv_mailbox_rcv_names[] = {
 	{ MB_REQ_MSG_RAS_POISON, "RAS_POISON" },
 	{ MB_REQ_RAS_ERROR_COUNT, "REQ_RAS_ERROR_COUNT" },
 	{ MB_REQ_RAS_CPER_DUMP, "REQ_RAS_CPER_DUMP" },
+	{ MB_REQ_RAS_REMOTE_CMD, "REQ_RAS_REMOTE_CMD" },
 	{ MB_REQ_RAS_BAD_PAGES, "REQ_RAS_BAD_PAGES" },
 	{ MB_REQ_MSG_REQ_GPU_DEBUG, "REQ_GPU_DEBUG" },
 	{ MB_REQ_MSG_REL_GPU_DEBUG, "REL_GPU_DEBUG" },
 	{ MB_REQ_RAS_CHK_CRITI, "RAS_CHK_CRITI_REGION" },
+	{ MB_REQ_MSG_REQ_GPU_INIT_XCHG_REGION, "REQ_GPU_INIT_XCHG_REGION" },
 };
 
 static struct amdgv_id_name amdgv_mailbox_trn_names[] = {
@@ -54,6 +39,7 @@ static struct amdgv_id_name amdgv_mailbox_trn_names[] = {
 	{ MB_RES_MSG_GPU_RMA, "GPU_RMA" },
 	{ MB_RES_MSG_GPU_DEBUG_NOTIFICATION, "GPU_DEBUG_NOTIFICATION" },
 	{ MB_RES_MSG_GPU_DEBUG_NOTIFICATION_COMPLETION, "GPU_DEBUG_NOTIFICATION_COMPLETION" },
+	{ MB_RES_MSG_REQ_GPU_INIT_XCHG_REGION_READY, "REQ_GPU_INIT_XCHG_REGION" },
 };
 
 static const uint32_t this_block = AMDGV_COMMUNICATION_BLOCK;
@@ -328,6 +314,9 @@ enum amdgv_sched_event_id amdgv_mailbox_get_valid_vf_event(struct amdgv_adapter 
 	case MB_REQ_RAS_BAD_PAGES:
 		sched_event = AMDGV_EVENT_SCHED_VF_REQ_RAS_BAD_PAGES;
 		break;
+	case MB_REQ_RAS_REMOTE_CMD:
+		sched_event = AMDGV_EVENT_SCHED_VF_RAS_REMOTE_CMD;
+		break;
 	case MB_REQ_MSG_REQ_GPU_DEBUG:
 		// req_gpu_debug & rel_gpu_debug are only valid when debug_mode is multi-vf case
 		if (is_debug_mode_multi_vf())
@@ -342,6 +331,9 @@ enum amdgv_sched_event_id amdgv_mailbox_get_valid_vf_event(struct amdgv_adapter 
 		break;
 	case MB_REQ_MSG_PTL_UPDATE:
 		sched_event = AMDGV_EVENT_VF_REQ_PTL_UPDATE;
+		break;
+	case MB_REQ_MSG_REQ_GPU_INIT_XCHG_REGION:
+		sched_event = AMDGV_EVENT_SCHED_VF_REQ_GPU_INIT_XCHG_REGION;
 		break;
 	default:
 		sched_event = AMDGV_EVENT_INVALID_EVENT;
@@ -448,10 +440,27 @@ static int amdgv_mailbox_wait_trn_msg_ack_cb(void *context)
 int amdgv_mailbox_wait_trn_msg_ack(struct amdgv_adapter *adapt)
 {
 	uint32_t wait_flag = 0;
+	struct amdgv_wait_for_cb_context cb_context = { 0 };
 
 	if (!adapt->mailbox.funcs->peek_ack) {
 		return AMDGV_FAILURE;
 	}
-	return amdgv_wait_for(adapt, amdgv_mailbox_wait_trn_msg_ack_cb, (void *)adapt,
+
+	cb_context.ctx = (void *)adapt;
+	cb_context.type = AMDGV_WAIT_FOR_MB_TRN_MSG_ACK;
+
+	return amdgv_wait_for(adapt, amdgv_mailbox_wait_trn_msg_ack_cb, &cb_context,
 				 AMDGV_TIMEOUT(TIMEOUT_CMD_RESP), wait_flag);
+}
+
+int amdgv_mailbox_irq_source_enable(struct amdgv_adapter *adapt, bool enable)
+{
+	if (!adapt->mailbox.funcs->irq_source_enable) {
+		AMDGV_ERROR("Unable to enable IRQ source\n");
+		return AMDGV_FAILURE;
+	} else {
+		adapt->mailbox.funcs->irq_source_enable(adapt, enable);
+	}
+
+	return 0;
 }

@@ -1,22 +1,6 @@
-/*
- * Copyright (C) 2021  Advanced Micro Devices, Inc.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included
- * in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
- * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE COPYRIGHT HOLDER(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
- * IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv_device.h>
@@ -25,6 +9,7 @@
 #include <amdgv_oss_wrapper.h>
 #include <amdgv_irqmgr.h>
 #include <amdgv_sched.h>
+#include <amdgv_sched_internal.h>
 #include <amdgv_guard.h>
 
 #include "navi32_reg_inc.h"
@@ -33,6 +18,9 @@
 #include "navi32_gpuiov.h"
 #define CONFIG_HVVM_MAILBOX
 static const uint32_t this_block = AMDGV_COMMUNICATION_BLOCK;
+
+#define NAVI32_MSIX_TABLE_ENTRY_SIZE_DWORD 4
+#define NAVI32_MSIX_TABLE_ENTRY_COUNT 4
 
 static const char *gfxhub_client_ids[] = {
 	"CB/DB",
@@ -567,7 +555,7 @@ static int navi32_hv_event_process(struct amdgv_adapter *adapt)
 	oss_spin_unlock(adapt->irqmgr.hv_event_lock);
 
 	if (sta_bits != 0)
-		AMDGV_INFO("some interrupts 0x%x(mask:0x%x) not handled\n", sta_bits, intr_bits);
+		AMDGV_WARN("some interrupts 0x%x(mask:0x%x) not handled\n", sta_bits, intr_bits);
 
 	return OSS_IRQ_HANDLED;
 }
@@ -849,6 +837,115 @@ static int navi32_irqmgr_disable_interrupt(struct amdgv_adapter *adapt)
 	return 0;
 }
 
+static void navi32_write_virtualized_interrupt(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_t idx_table, uint64_t message_address, 
+	uint32_t message_data, uint32_t vector_control, bool is_direct_write)
+{
+	uint32_t offset, *tab;
+	struct amdgv_vf_device *vf;
+	uint32_t messageAddressLow = (uint32_t)(message_address & 0xFFFFFFFF);
+	uint32_t messageAddressHigh = (uint32_t)(message_address >> 32);
+	struct amdgv_virtualized_interrupt_info *vf_irq_info;
+
+	if (idx_vf >= AMDGV_MAX_VF_NUM)
+		return;
+
+	if(idx_table >= NAVI32_MSIX_TABLE_ENTRY_COUNT)
+	{
+		AMDGV_ERROR("Error!!! idx_table is greater than NAVI32_MSIX_TABLE_ENTRY_COUNT\n");
+		return;
+	}
+
+	/* if is_direct_write is true, write the interrupt table directly to the VF */
+	if (is_direct_write) {
+		vf = &adapt->array_vf[idx_vf];
+
+		/* enable MMIO register write, FB, DOORBELL VF access */
+		if (amdgv_gpuiov_get_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_MMIO_REG_WRITE) != true)
+		{
+			AMDGV_INFO("MMIO access was disabled,enable MMIO register write for VF %d\n", idx_vf);
+			amdgv_gpuiov_set_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_MMIO_REG_WRITE, true);
+		}
+
+		offset = SOC15_REG_OFFSET_NBIO_BLOCK(NBIO, 0, idx_vf, RCC, GFXMSIX_VECT0_ADDR_LO);
+		AMDGV_INFO("GFXMSIX_VECT0_ADDR_LO offset: 0x%x\n", offset);
+		tab = (uint32_t *)vf->res.mmio + offset + idx_table * NAVI32_MSIX_TABLE_ENTRY_SIZE_DWORD;
+		oss_mm_write32(tab + 0, messageAddressLow);
+		oss_mm_write32(tab + 1, messageAddressHigh);
+		oss_mm_write32(tab + 2, message_data);
+		oss_mm_write32(tab + 3, vector_control);
+
+		tab = (uint32_t *)vf->res.mmio + offset + idx_table * NAVI32_MSIX_TABLE_ENTRY_SIZE_DWORD;
+		AMDGV_INFO("Read back interrupt table entry %d: 0x%x, 0x%x, 0x%x, 0x%x\n", idx_table,
+			oss_mm_read32(tab + 0), oss_mm_read32(tab + 1), 
+			oss_mm_read32(tab + 2), oss_mm_read32(tab + 3));
+		return;
+
+	} else {
+		vf_irq_info = &adapt->irqmgr.virtualized_interrupt_info_db[idx_vf];
+		if (vf_irq_info->msix_tab == NULL)
+		{
+			vf_irq_info->msix_tab = oss_zalloc(NAVI32_MSIX_TABLE_ENTRY_COUNT * NAVI32_MSIX_TABLE_ENTRY_SIZE_DWORD * sizeof(uint32_t));
+			if (vf_irq_info->msix_tab == NULL)
+				return;
+		}
+
+		vf_irq_info->table_entry_update |= 1 << idx_table;
+		vf_irq_info->msix_tab[idx_table * NAVI32_MSIX_TABLE_ENTRY_SIZE_DWORD] = messageAddressLow;
+		vf_irq_info->msix_tab[idx_table * NAVI32_MSIX_TABLE_ENTRY_SIZE_DWORD + 1] = messageAddressHigh;
+		vf_irq_info->msix_tab[idx_table * NAVI32_MSIX_TABLE_ENTRY_SIZE_DWORD + 2] = message_data;
+		vf_irq_info->msix_tab[idx_table * NAVI32_MSIX_TABLE_ENTRY_SIZE_DWORD + 3] = vector_control;
+	}
+}
+
+static void navi32_update_virtualized_interrupt(struct amdgv_adapter *adapt, uint32_t idx_vf) 
+{
+	struct amdgv_virtualized_interrupt_info *vf_irq_info;
+	int i, entry;
+	uint32_t offset, *tab;
+	struct amdgv_vf_device *vf;
+
+	if (idx_vf >= AMDGV_MAX_VF_NUM)
+		return;
+
+	vf_irq_info = &adapt->irqmgr.virtualized_interrupt_info_db[idx_vf];
+	if (vf_irq_info->msix_tab == NULL)
+		return;
+
+	vf = &adapt->array_vf[idx_vf];
+
+	/* enable MMIO register write, FB, DOORBELL VF access */
+	if (amdgv_gpuiov_get_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_MMIO_REG_WRITE) != true)
+	{
+		AMDGV_INFO("MMIO access was disabled, enable MMIO register write for VF %d\n", idx_vf);
+		amdgv_gpuiov_set_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_MMIO_REG_WRITE, true);
+	}
+
+	offset = SOC15_REG_OFFSET_NBIO_BLOCK(NBIO, 0, idx_vf, RCC, GFXMSIX_VECT0_ADDR_LO);
+	AMDGV_INFO("GFXMSIX_VECT0_ADDR_LO offset: 0x%x\n", offset);
+
+	for (i = 0, entry = 0; i < NAVI32_MSIX_TABLE_ENTRY_COUNT; i++, entry += 4) {
+		tab = (uint32_t *)vf->res.mmio + entry + offset;
+		if (vf_irq_info->table_entry_update & (1 << i)) {
+			oss_mm_write32(tab + 0, vf_irq_info->msix_tab[entry + 0]);
+			oss_mm_write32(tab + 1, vf_irq_info->msix_tab[entry + 1]);
+			oss_mm_write32(tab + 2, vf_irq_info->msix_tab[entry + 2]);
+			oss_mm_write32(tab + 3, vf_irq_info->msix_tab[entry + 3]);
+		}
+	}
+
+	for (i = 0, entry = 0; i < NAVI32_MSIX_TABLE_ENTRY_COUNT; i++, entry += 4) {
+		tab = (uint32_t *)vf->res.mmio + entry + offset;
+		AMDGV_INFO("Table entry count: %d table offset: 0x%x\n", entry, tab);
+		AMDGV_INFO("Read back interrupt table entry %d: 0x%x, 0x%x, 0x%x, 0x%x\n", i, 
+			oss_mm_read32(tab + 0), oss_mm_read32(tab + 1), 
+			oss_mm_read32(tab + 2), oss_mm_read32(tab + 3));
+	}
+
+	// clear this VF's pending interrupt info
+	vf_irq_info->table_entry_update = 0;
+	oss_memset(vf_irq_info->msix_tab, 0, NAVI32_MSIX_TABLE_ENTRY_COUNT * NAVI32_MSIX_TABLE_ENTRY_SIZE_DWORD * sizeof(uint32_t));
+}
+
 static int navi32_irqmgr_sw_init(struct amdgv_adapter *adapt)
 {
 	if (amdgv_irqmgr_sw_init(adapt))
@@ -860,6 +957,9 @@ static int navi32_irqmgr_sw_init(struct amdgv_adapter *adapt)
 	adapt->irqmgr.ih.use_doorbell = true;
 	adapt->irqmgr.ih.doorbell_index = (adapt->doorbell_index.ih) << 1;
 
+	adapt->irqmgr.write_virtualized_interrupt = navi32_write_virtualized_interrupt;
+	adapt->irqmgr.update_virtualized_interrupt = navi32_update_virtualized_interrupt;
+
 	/* register interrupt handler */
 	if (!amdgv_in_live_update_seq()) {
 		if (navi32_register_interrupt(adapt) < 0) {
@@ -867,7 +967,7 @@ static int navi32_irqmgr_sw_init(struct amdgv_adapter *adapt)
 			return AMDGV_FAILURE;
 		}
 	} else {
-		AMDGV_INFO("skip interrupt register for live update.\n");
+		AMDGV_WARN("skip interrupt register for live update.\n");
 		return 0;
 	}
 
@@ -879,8 +979,19 @@ static int navi32_irqmgr_sw_init(struct amdgv_adapter *adapt)
 
 static int navi32_irqmgr_sw_fini(struct amdgv_adapter *adapt)
 {
+	uint32_t idx_vf;
 	adapt->irqmgr.enable_hw_interrupt = NULL;
 	adapt->irqmgr.disable_hw_interrupt = NULL;
+	adapt->irqmgr.write_virtualized_interrupt = NULL;
+	adapt->irqmgr.update_virtualized_interrupt = NULL;
+
+	for (idx_vf = 0; idx_vf < AMDGV_MAX_VF_NUM; idx_vf++) {
+		if (adapt->irqmgr.virtualized_interrupt_info_db[idx_vf].msix_tab) {
+			oss_free(adapt->irqmgr.virtualized_interrupt_info_db[idx_vf].msix_tab);
+			adapt->irqmgr.virtualized_interrupt_info_db[idx_vf].msix_tab = NULL;
+		}
+	}
+	
 	navi32_unregister_interrupt(adapt);
 
 	return amdgv_irqmgr_sw_fini(adapt);

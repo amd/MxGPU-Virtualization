@@ -1,27 +1,11 @@
-/*
- * Copyright (c) 2017-2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef AMDGV_PSP_H
 #define AMDGV_PSP_H
+//#include <amdgv_device.h>
 
 /* All Trusted Applications have properties buffer starting at 2048-byte offset
  * from beginning of signed binary
@@ -33,8 +17,16 @@
 #define MAX_VF_DB_SIZE				(64 * 16)
 #define ATTESTATION_TABLE_COOKIE	0x143b6a37
 
+#define regMP0_C2PMSG_64 0x16080
+#define regMP0_C2PMSG_69 0x16085
+#define regMP0_C2PMSG_70 0x16086
+#define regMP0_C2PMSG_71 0x16087
+
 struct amdgv_live_info_psp;
 struct amdgv_live_info_fw_info;
+
+/* Forward declaration to avoid circular dependency with amdgv_oss_wrapper.h */
+typedef void *mutex_t;
 
 /* FW Attestation Record structure*/
 struct FW_ATTESTATION_RECORD {
@@ -190,6 +182,9 @@ enum psp_ih_reg {
 
 	// VM_IOMMU_CONTROL_REGISTER.IOMMUEN update by PSP
 	VM_IOMMU_CONTROL_WA = 26,
+
+	RCC_CONFIG_MEMSIZE = 27,
+	RCC_CONFIG_RESERVED = 28,
 };
 
 struct psp_local_memory {
@@ -222,6 +217,7 @@ struct psp_cmd_km_context {
 	struct psp_local_memory km_fence_mem_handle;
 	uint32_t		next_avail_cmd_buf_index;
 	uint32_t		km_fence_count;
+	mutex_t lock;
 };
 
 struct psp_xgmi_context {
@@ -363,8 +359,11 @@ struct psp_context {
 
 	struct dfc_fw *dfc_fw;
 	uint32_t vf_relay_wtr_ptr[AMDGV_MAX_VF_NUM];
+	/* Upper bound for vf_relay_wtr_ptr; 0 will cause all VF relay requests to be dropped. */
+	uint32_t vf_relay_wtr_ptr_max;
 	enum psp_gfx_tee_version tee_version;
 	bool skip_ta_fw_version;
+	mutex_t psp_gfx_cmd_lock;
 
 	bool (*fw_id_support)(uint32_t fw_id);
 	enum psp_status (*program_register)(struct amdgv_adapter *adapt, uint32_t idx_vf,
@@ -417,6 +416,9 @@ struct psp_context {
 						uint32_t idx_vf, uint64_t data_addr, uint32_t size,
 						enum psp_migration_manifest_data_type type);
 	enum psp_status (*get_migration_info)(struct amdgv_adapter *adapt);
+	enum psp_status (*migration_rlc_autoload)(struct amdgv_adapter *adapt, uint32_t idx_vf);
+	int (*enable_interrupt)(struct amdgv_adapter *adapt, bool enable);
+	int (*handle_irq)(struct amdgv_adapter *adapt, struct amdgv_iv_entry *entry);
 	bool (*vf_cp_migration_is_supported)(struct amdgv_adapter *adapt, uint32_t idx_vf);
 };
 
@@ -443,11 +445,16 @@ struct app_prop_buff {
 	struct app_property Property[1]; // first property in structure
 };
 
+enum psp_status amdgv_psp_get_migration_data_size(struct amdgv_adapter *adapt,
+				uint32_t pkg_type, uint32_t *data_size);
+enum psp_status amdgv_psp_check_migration_data_sizes(struct amdgv_adapter *adapt);
+
 enum amdgv_live_info_status amdgv_psp_export_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_psp *psp_info);
 enum amdgv_live_info_status amdgv_psp_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_psp *psp_info);
 enum amdgv_live_info_status amdgv_psp_fw_info_export_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_fw_info *fw_info);
 enum amdgv_live_info_status amdgv_psp_fw_info_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_fw_info *fw_info);
-
+enum psp_status amdgv_psp_read_ip_discovery(struct amdgv_adapter *adapt,
+						struct amdgv_memmgr_mem *ip_mem);
 #define amdgv_psp_transfer_manifest_data(adapt, idx_vf, data_addr, size, type) \
 		((adapt->psp.transfer_manifest_data) ? \
 		 adapt->psp.transfer_manifest_data(adapt, idx_vf, data_addr, size, type) : \

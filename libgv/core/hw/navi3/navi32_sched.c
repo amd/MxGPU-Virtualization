@@ -1,22 +1,6 @@
-/*
- * Copyright (C) 2022  Advanced Micro Devices, Inc.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included
- * in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
- * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE COPYRIGHT HOLDER(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
- * IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv_device.h>
@@ -360,7 +344,8 @@ static int navi32_sched_sw_init_early(struct amdgv_adapter *adapt)
 			if (adapt->gpuiov.ctrl_blocks[i].sched_mode <= AMDGV_SCHED_MAX_HW_SCHED_MODE)
 				adapt->flags |= AMDGV_FLAG_PERF_LOG_ENABLE;
 	}
-	adapt->sched.perf_log_enabled = false;
+	for (i = 0; i < adapt->gpuiov.num_ctrl_blocks; i++)
+		adapt->sched.perf_log_enabled[i] = false;
 
 	if (adapt->opt.allow_time_full_access == 0 && adapt->sched.num_vf_per_gfx_sched > 1) {
 		adapt->sched.allow_time_full_access = 3000 * 1000;
@@ -397,8 +382,9 @@ static int navi32_sched_hw_fini_early(struct amdgv_adapter *adapt)
 
 static int navi32_sched_hw_init_late(struct amdgv_adapter *adapt)
 {
-	int ret;
-	adapt->sched.perf_log_enabled = false;
+	int ret, i;
+	for (i = 0; i < adapt->gpuiov.num_ctrl_blocks; i++)
+		adapt->sched.perf_log_enabled[i] = false;
 	ret = amdgv_sched_init_pf_state_late(adapt);
 	if (ret)
 		return ret;

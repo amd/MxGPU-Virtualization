@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2007-2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "atom.h"
@@ -29,7 +12,7 @@ static const uint32_t this_block = AMDGV_SECURITY_BLOCK;
 
 uint32_t amdgv_atombios_get_fw_offset(struct amdgv_adapter *adapt, uint8_t fw_type)
 {
-	uint32_t i, fw_offset = 0;
+	uint32_t i, fw_offset = 0, total_entries;
 	uint16_t offset;
 	int index;
 	bool ret;
@@ -75,7 +58,13 @@ uint32_t amdgv_atombios_get_fw_offset(struct amdgv_adapter *adapt, uint8_t fw_ty
 		psp_dir = (PSP_DIRECTORY *)&psptable_2_1->psp_directory;
 	}
 
-	for (i = 0; i < psp_dir->Header.TotalEntries; i++) {
+	/* TotalEntries comes from the VBIOS image; clamp it to the fixed
+	 * pspEntry[] capacity to avoid an out-of-bounds read (CWE-125).
+	 */
+	total_entries = min(psp_dir->Header.TotalEntries,
+			    (uint32_t)PSP_DIRECTORY_MAX_ENTRIES);
+
+	for (i = 0; i < total_entries; i++) {
 		if (psp_dir->pspEntry[i].u32Type == fw_type) {
 			fw_offset = psp_dir->pspEntry[i].Location;
 		}
@@ -204,13 +193,13 @@ int amdgv_atombios_get_fw_usage_fb(struct amdgv_adapter *adapt)
 
 		resv_info = &fw_usage->asFirmwareVramReserveInfo[0];
 
-		AMDGV_INFO("atom firmware requested %08x %dkb\n",
+		AMDGV_DEBUG("atom firmware requested %08x %dkb\n",
 			   resv_info->ulStartAddrUsedByFirmware, resv_info->usFirmwareUseInKb);
 
 		adapt->vbios.vram_usage_start_addr =
 			(uint64_t)resv_info->ulStartAddrUsedByFirmware;
 
-		AMDGV_INFO("vram used by fw start addr=0x%llx\n",
+		AMDGV_DEBUG("vram used by fw start addr=0x%llx\n",
 			   adapt->vbios.vram_usage_start_addr);
 	}
 

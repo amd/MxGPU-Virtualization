@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <linux/kobject.h>
@@ -43,6 +26,7 @@
 #include <linux/completion.h>
 #include <linux/eventfd.h>
 #include <linux/poll.h>
+#include <linux/capability.h>
 
 #include <linux/rtc.h>
 #include <linux/hash.h>
@@ -92,8 +76,18 @@ static void gim_get_device_list(struct smi_device_data *dev_list, int *size)
 	int j = 0;
 
 	tmp_dev_list = gim_kmalloc(SMI_MAX_DEVICES * sizeof(struct smi_device_data), GFP_KERNEL);
+	if (!tmp_dev_list) {
+		gim_warn("failed to allocate tmp_dev_list\n");
+		*size = 0;
+		return;
+	}
 
 	list_for_each_entry(dev_data, &gim_device_list, list) {
+		if (i >= SMI_MAX_DEVICES) {
+			gim_warn("device list exceeds SMI_MAX_DEVICES(%u); truncating\n",
+				 SMI_MAX_DEVICES);
+			break;
+		}
 		memcpy(&tmp_dev_list[i].init_data, &dev_data->init_data, sizeof(struct amdgv_init_data));
 		tmp_dev_list[i].adev = dev_data->adev;
 		tmp_dev_list[i].parent = dev_data->parent;
@@ -117,6 +111,7 @@ static void gim_get_device_list(struct smi_device_data *dev_list, int *size)
 static void gim_get_device_data(amdgv_dev_t adev, struct smi_device_data *ret_dev_data, bool *dev_busy, struct smi_ctx *ctx)
 {
 	struct gim_dev_data *dev_data = NULL;
+	struct gim_dev_data *found = NULL;
 	bool m_ret = false;
 	unsigned long timeout = jiffies + 60*HZ; //60 seconds from start
 
@@ -124,28 +119,35 @@ static void gim_get_device_data(amdgv_dev_t adev, struct smi_device_data *ret_de
 
 	mutex_lock(&gim_device_list_lock);
 	list_for_each_entry(dev_data, &gim_device_list, list) {
-		if (adev == dev_data->adev)
+		if (adev == dev_data->adev) {
+			found = dev_data;
 			break;
+		}
 	}
 	mutex_unlock(&gim_device_list_lock);
-	if (ret_dev_data) {
-		memcpy(&ret_dev_data->init_data, &dev_data->init_data, sizeof(struct amdgv_init_data));
-		ret_dev_data->adev = dev_data->adev;
-		ret_dev_data->parent = dev_data->parent;
+
+	if (!found) {
+		if (ret_dev_data)
+			ret_dev_data->adev = NULL;
+		return;
 	}
 
-	if (&dev_data->list != &gim_device_list) {
-		m_ret = mutex_trylock(&dev_data->dev_lock);
-		while (time_before(jiffies, timeout)) {
-			if (!m_ret) {
-				m_ret = mutex_trylock(&dev_data->dev_lock);
-			} else {
-				break;
-			}
-		}
+	if (ret_dev_data) {
+		memcpy(&ret_dev_data->init_data, &found->init_data, sizeof(struct amdgv_init_data));
+		ret_dev_data->adev = found->adev;
+		ret_dev_data->parent = found->parent;
+	}
+
+	m_ret = mutex_trylock(&found->dev_lock);
+	while (time_before(jiffies, timeout)) {
 		if (!m_ret) {
-			*dev_busy = true;
+			m_ret = mutex_trylock(&found->dev_lock);
+		} else {
+			break;
 		}
+	}
+	if (!m_ret) {
+		*dev_busy = true;
 	}
 }
 
@@ -168,15 +170,23 @@ static int gim_get_pcie_confs(amdgv_dev_t adev,
 {
 	int ret = 0;
 	struct gim_dev_data *dev_data = NULL;
+	struct gim_dev_data *found = NULL;
 
 	mutex_lock(&gim_device_list_lock);
 	list_for_each_entry(dev_data, &gim_device_list, list) {
-		if (adev == dev_data->adev)
+		if (adev == dev_data->adev) {
+			found = dev_data;
 			break;
+		}
 	}
 	mutex_unlock(&gim_device_list_lock);
 
-	ret = amdgv_gpumon_get_pcie_confs(adev, dev_data, gim_gpumon_get_pcie_confs, speed,
+	if (!found) {
+		gim_warn("device data not found for adev=%p\n", adev);
+		return -EIO;
+	}
+
+	ret = amdgv_gpumon_get_pcie_confs(adev, found, gim_gpumon_get_pcie_confs, speed,
 				width, max_vf_num);
 
 	return ret;
@@ -296,47 +306,54 @@ static int gim_get_driver_model(amdgv_dev_t adev, enum smi_driver_model_type *dr
 	return SMI_STATUS_NOT_SUPPORTED;
 }
 
-static int gim_get_metric_table(struct smi_metrics_table *metrics_table, uint16_t size,
-				struct amdgv_gpumon_metrics_ext *gpumon_metrics_table)
+/*
+ * Pin and map a page-aligned user buffer of buffer_size bytes into kernel
+ * space. On success the caller owns the returned mapping and must release it
+ * with smi_unmap_user_buf(); mmap_lock is held read across that lifetime.
+ * Invariant: the buffer is fully pinned (no partial pin) and the address is
+ * page-aligned, so the caller never dereferences unmapped or NULL memory.
+ */
+static int smi_map_user_buf(void *user_ptr, size_t buffer_size,
+			void **kva, struct page ***pages, long *num_pages)
 {
-	struct smi_metrics *metrics = NULL;
-	long num_pages = 0;
-	unsigned int gup_flags = 0;
-	struct mm_struct *mm = NULL;
-	size_t buffer_size = 0;
-	unsigned long nr_pages = 0;
-	struct page **pages = NULL;
-	uint32_t i = 0;
+	struct mm_struct *mm = current->mm;
+	unsigned long nr_pages = (buffer_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
+	unsigned int gup_flags = FOLL_WRITE;
+	struct page **pg = NULL;
+	long npages = 0;
+	void *addr = NULL;
+	long i = 0;
 
-	mm = current->mm; // Get memory management structure
+	if (!user_ptr || !PAGE_ALIGNED((unsigned long)user_ptr)) {
+		return SMI_STATUS_INVAL;
+	}
 
-	// Calculate the number of pages needed to map the entire metrics table
-	buffer_size = sizeof(struct smi_metrics);
-	nr_pages = (buffer_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
-
-	pages = gim_kmalloc(nr_pages * sizeof(struct page *), GFP_KERNEL);
-	if (!pages) {
+	pg = gim_kmalloc(nr_pages * sizeof(struct page *), GFP_KERNEL);
+	if (!pg) {
 		return SMI_STATUS_OUT_OF_RESOURCES;
 	}
 
 #if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
-    down_read(&current->mm->mmap_lock);
+	down_read(&current->mm->mmap_lock);
 #else
-    down_read(&current->mm->mmap_sem);
+	down_read(&current->mm->mmap_sem);
 #endif
-	gup_flags = FOLL_WRITE;
-	// Map user space buffer containing metrics table into kernel space
-	// by creating memory pages
 #if defined(HAVE_GET_USER_PAGES_REMOTE_6_ARG)
-	num_pages = get_user_pages_remote(mm, (unsigned long)metrics_table->metrics, nr_pages, gup_flags, pages, NULL);
+	npages = get_user_pages_remote(mm, (unsigned long)user_ptr, nr_pages, gup_flags, pg, NULL);
 #elif defined(HAVE_GET_USER_PAGES_REMOTE_7_ARG)
-    num_pages = get_user_pages_remote(mm, (unsigned long)metrics_table->metrics, nr_pages, gup_flags, pages, NULL, NULL);
+	npages = get_user_pages_remote(mm, (unsigned long)user_ptr, nr_pages, gup_flags, pg, NULL, NULL);
+#elif defined(HAVE_GET_USER_PAGES_REMOTE_8_ARG)
+	npages = get_user_pages_remote(current, mm, (unsigned long)user_ptr, nr_pages, gup_flags, pg, NULL, NULL);
 #else
-    num_pages = get_user_pages_remote(NULL, mm, (unsigned long)metrics_table->metrics, nr_pages, gup_flags, pages, NULL, NULL);
+	npages = get_user_pages_remote(NULL, mm, (unsigned long)user_ptr, nr_pages, gup_flags, pg, NULL, NULL);
 #endif
-	if (num_pages <= 0) {
-		gim_kfree(pages);
-		pages = NULL;
+	if (npages != nr_pages) {
+		if (npages > 0) {
+			for (i = 0; i < npages; i++) {
+				put_page(pg[i]);
+			}
+		}
+		gim_kfree(pg);
 #if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
 		up_read(&current->mm->mmap_lock);
 #else
@@ -344,9 +361,66 @@ static int gim_get_metric_table(struct smi_metrics_table *metrics_table, uint16_
 #endif
 		return SMI_STATUS_API_FAILED;
 	}
-	// Access mapped metrics table in kernel space
-	// map array of pages into virtual contiguous memory
-	metrics = (struct smi_metrics *) vmap(pages, num_pages, VM_MAP, PAGE_KERNEL);
+
+	addr = vmap(pg, npages, VM_MAP, PAGE_KERNEL);
+	if (!addr) {
+		for (i = 0; i < npages; i++) {
+			put_page(pg[i]);
+		}
+		gim_kfree(pg);
+#if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
+		up_read(&current->mm->mmap_lock);
+#else
+		up_read(&current->mm->mmap_sem);
+#endif
+		return SMI_STATUS_API_FAILED;
+	}
+
+	*kva = addr;
+	*pages = pg;
+	*num_pages = npages;
+
+	return SMI_STATUS_SUCCESS;
+}
+
+/*
+ * Tear down a mapping created by smi_map_user_buf(): unmap, mark the pinned
+ * pages dirty, drop the pins, free the page array and release mmap_lock.
+ */
+static void smi_unmap_user_buf(void *kva, struct page **pages, long num_pages)
+{
+	long i = 0;
+
+	vunmap(kva);
+	for (i = 0; i < num_pages; i++) {
+		if (!PageReserved(pages[i])) {
+			SetPageDirty(pages[i]);
+		}
+		put_page(pages[i]);
+	}
+	gim_kfree(pages);
+#if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
+	up_read(&current->mm->mmap_lock);
+#else
+	up_read(&current->mm->mmap_sem);
+#endif
+}
+
+static int gim_get_metric_table(struct smi_metrics_table *metrics_table, uint16_t size,
+				struct amdgv_gpumon_metrics_ext *gpumon_metrics_table)
+{
+	struct smi_metrics *metrics = NULL;
+	struct page **pages = NULL;
+	long num_pages = 0;
+	int status = 0;
+	uint32_t i = 0;
+
+	status = smi_map_user_buf(metrics_table->metrics, sizeof(struct smi_metrics),
+				(void **)&metrics, &pages, &num_pages);
+	if (status != SMI_STATUS_SUCCESS) {
+		return status;
+	}
+
 	metrics->num_metric = gpumon_metrics_table->num_metric;
 
 	//out of bound check
@@ -371,23 +445,8 @@ static int gim_get_metric_table(struct smi_metrics_table *metrics_table, uint16_
 				metrics->metric[i].val = (gpumon_metrics_table->metric[i].val * 15625) / 1000000;
 		}
 	}
-	// Unmap and release mapped pages and
-	// free the virtual contiguous memory
-	vunmap(metrics);
-	for (i = 0; i < num_pages; i++) {
-		if (!PageReserved(pages[i])) {
-			SetPageDirty(pages[i]);
-		}
-		put_page(pages[i]);
-	}
 
-	gim_kfree(pages);
-	pages = NULL;
-#if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
-	up_read(&current->mm->mmap_lock);
-#else
-	up_read(&current->mm->mmap_sem);
-#endif
+	smi_unmap_user_buf(metrics, pages, num_pages);
 
 	return SMI_STATUS_SUCCESS;
 }
@@ -396,54 +455,18 @@ static int gim_get_partition(struct smi_profile_configs *profile_configs,
 				struct amdgv_gpumon_accelerator_partition_profile_config *caps)
 {
 	struct smi_accelerator_partition_profile_config *partition_profile_configs = NULL;
-	long num_pages = 0;
-	unsigned int gup_flags = 0;
-	struct mm_struct *mm = NULL;
-	size_t buffer_size = 0;
-	unsigned long nr_pages = 0;
 	struct page **pages = NULL;
+	long num_pages = 0;
+	int status = 0;
 	uint32_t i;
 	uint32_t j, k;
 
-	mm = current->mm; // Get memory management structure
-
-	// Calculate the number of pages needed to map the entire partition config
-	buffer_size = sizeof(struct smi_accelerator_partition_profile_config);
-	nr_pages = (buffer_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
-
-	pages = gim_kmalloc(nr_pages * sizeof(struct page *), GFP_KERNEL);
-	if (!pages) {
-		return SMI_STATUS_OUT_OF_RESOURCES;
+	status = smi_map_user_buf(profile_configs->profile_configs,
+				sizeof(struct smi_accelerator_partition_profile_config),
+				(void **)&partition_profile_configs, &pages, &num_pages);
+	if (status != SMI_STATUS_SUCCESS) {
+		return status;
 	}
-
-#if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
-	down_read(&current->mm->mmap_lock);
-#else
-	down_read(&current->mm->mmap_sem);
-#endif
-	gup_flags = FOLL_WRITE;
-	// Map user space buffer containing accelerator partition config into kernel space
-	// by creating memory pages
-#if defined(HAVE_GET_USER_PAGES_REMOTE_8_ARG)
-	num_pages = get_user_pages_remote(current, mm, (unsigned long)profile_configs->profile_configs, nr_pages, gup_flags, pages, NULL);
-#elif defined(HAVE_GET_USER_PAGES_REMOTE_7_ARG)
-	num_pages = get_user_pages_remote(mm, (unsigned long)profile_configs->profile_configs, nr_pages, gup_flags, pages, NULL, NULL);
-#elif defined(HAVE_GET_USER_PAGES_REMOTE_6_ARG)
-	num_pages = get_user_pages_remote(mm, (unsigned long)profile_configs->profile_configs, nr_pages, gup_flags, pages, NULL);
-#endif
-	if (num_pages <= 0) {
-		gim_kfree(pages);
-		pages = NULL;
-#if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
-		up_read(&current->mm->mmap_lock);
-#else
-		up_read(&current->mm->mmap_sem);
-#endif
-		return SMI_STATUS_API_FAILED;
-	}
-	// Access mapped accelerator partition config in kernel space
-	// map array of pages into virtual contiguous memory
-	partition_profile_configs = (struct smi_accelerator_partition_profile_config *) vmap(pages, num_pages, VM_MAP, PAGE_KERNEL);
 
 	partition_profile_configs->num_resource_profiles = caps->number_of_resource_profiles;
 	partition_profile_configs->num_profiles = caps->number_of_profiles;
@@ -469,24 +492,7 @@ static int gim_get_partition(struct smi_profile_configs *profile_configs,
 		}
 	};
 
-	// Unmap and release mapped pages and
-	// free the virtual contiguous memory
-	vunmap(partition_profile_configs);
-	for (i = 0; i < num_pages; i++) {
-		if (!PageReserved(pages[i])) {
-			SetPageDirty(pages[i]);
-		}
-		put_page(pages[i]);
-	}
-
-
-	gim_kfree(pages);
-	pages = NULL;
-#if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
-	up_read(&current->mm->mmap_lock);
-#else
-	up_read(&current->mm->mmap_sem);
-#endif
+	smi_unmap_user_buf(partition_profile_configs, pages, num_pages);
 
 	return SMI_STATUS_SUCCESS;
 }
@@ -495,42 +501,17 @@ static int gim_get_partition_global(struct smi_profile_configs_global *profile_c
 				struct amdgv_gpumon_accelerator_partition_profile_config *caps)
 {
 	struct smi_accelerator_partition_profile_config_global *partition_profile_configs_global = NULL;
+	struct page **pages = NULL;
 	long num_pages = 0;
-	unsigned int gup_flags;
-	struct mm_struct *mm;
-	size_t buffer_size;
-	unsigned long nr_pages;
-	struct page **pages;
+	int status = 0;
 	uint32_t i, j, k;
 
-	mm = current->mm; // Get memory management structure
-
-	// Calculate the number of pages needed to map the entire partition config
-	buffer_size = sizeof(struct smi_accelerator_partition_profile_config_global);
-	nr_pages = (buffer_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
-
-	pages = kmalloc(nr_pages * sizeof(struct page *), GFP_KERNEL);
-	if (!pages) {
-		return SMI_STATUS_OUT_OF_RESOURCES;
+	status = smi_map_user_buf(profile_configs_global->profile_configs,
+				sizeof(struct smi_accelerator_partition_profile_config_global),
+				(void **)&partition_profile_configs_global, &pages, &num_pages);
+	if (status != SMI_STATUS_SUCCESS) {
+		return status;
 	}
-
-	down_read(&current->mm->mmap_lock);
-	gup_flags = FOLL_WRITE;
-	// Map user space buffer containing accelerator partition config into kernel space
-	// by creating memory pages
-#if !defined(HAVE_GET_USER_PAGES_REMOTE_6_ARG)
-	num_pages = get_user_pages_remote(mm, (unsigned long)profile_configs_global->profile_configs, nr_pages, gup_flags, pages, NULL, NULL);
-#else
-	num_pages = get_user_pages_remote(mm, (unsigned long)profile_configs_global->profile_configs, nr_pages, gup_flags, pages, NULL);
-#endif
-	if (num_pages <= 0) {
-		kfree(pages);
-		up_read(&current->mm->mmap_lock);
-		return SMI_STATUS_API_FAILED;
-	}
-	// Access mapped accelerator partition config in kernel space
-	// map array of pages into virtual contiguous memory
-	partition_profile_configs_global = (struct smi_accelerator_partition_profile_config_global *) vmap(pages, num_pages, VM_MAP, PAGE_KERNEL);
 
 	partition_profile_configs_global->num_profiles = caps->number_of_profiles;
 	partition_profile_configs_global->num_resource_profiles = caps->number_of_resource_profiles;
@@ -557,19 +538,7 @@ static int gim_get_partition_global(struct smi_profile_configs_global *profile_c
 		partition_profile_configs_global->profiles[i].vf_mode = caps->profiles[i].support_vf_num;
 	};
 
-	// Unmap and release mapped pages and
-	// free the virtual contiguous memory
-	vunmap(partition_profile_configs_global);
-	for (i = 0; i < num_pages; i++) {
-		if (!PageReserved(pages[i])) {
-			SetPageDirty(pages[i]);
-		}
-		put_page(pages[i]);
-	}
-
-
-	kfree(pages);
-	up_read(&current->mm->mmap_lock);
+	smi_unmap_user_buf(partition_profile_configs_global, pages, num_pages);
 
 	return SMI_STATUS_SUCCESS;
 }
@@ -578,54 +547,17 @@ static int gim_get_eeprom_table(struct smi_bad_page_info *eeprom_table, uint16_t
 				   struct amdgv_smi_ras_eeprom_table_record *gpumon_eeprom_table)
 {
 	struct smi_bad_page_record *bad_pages = NULL;
-	long num_pages = 0;
-	unsigned int gup_flags = 0;
-	struct mm_struct *mm = NULL;
-	size_t buffer_size = 0;
-	unsigned long nr_pages = 0;
 	struct page **pages = NULL;
+	long num_pages = 0;
+	int status = 0;
 	uint32_t i = 0;
 
-	mm = current->mm; // Get memory management structure
-
-	// Calculate the number of pages needed to map the entire eeprom table
-	buffer_size = sizeof(struct smi_bad_page_record);
-	nr_pages = (buffer_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
-
-	pages = gim_kmalloc(nr_pages * sizeof(struct page *), GFP_KERNEL);
-	if (!pages) {
-		return SMI_STATUS_OUT_OF_RESOURCES;
+	status = smi_map_user_buf(eeprom_table->bad_pages, sizeof(struct smi_bad_page_record),
+				(void **)&bad_pages, &pages, &num_pages);
+	if (status != SMI_STATUS_SUCCESS) {
+		return status;
 	}
 
-#if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
-	down_read(&current->mm->mmap_lock);
-#else
-	down_read(&current->mm->mmap_sem);
-#endif
-	gup_flags = FOLL_WRITE;
-	// Map user space buffer containing eeprom table into kernel space
-	// by creating memory pages
-#if defined(HAVE_GET_USER_PAGES_REMOTE_6_ARG)
-	num_pages = get_user_pages_remote(mm, (unsigned long)eeprom_table->bad_pages, nr_pages, gup_flags, pages, NULL);
-#elif defined(HAVE_GET_USER_PAGES_REMOTE_7_ARG)
-	num_pages = get_user_pages_remote(mm, (unsigned long)eeprom_table->bad_pages, nr_pages, gup_flags, pages, NULL, NULL);
-#else
-	num_pages = get_user_pages_remote(NULL, mm, (unsigned long)eeprom_table->bad_pages, nr_pages, gup_flags, pages, NULL, NULL);
-#endif
-
-	if (num_pages <= 0) {
-		gim_kfree(pages);
-		pages = NULL;
-#if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
-		up_read(&current->mm->mmap_lock);
-#else
-		up_read(&current->mm->mmap_sem);
-#endif
-		return SMI_STATUS_API_FAILED;
-	}
-	// Access mapped eeprom table in kernel space
-	// map array of pages into virtual contiguous memory
-	bad_pages = (struct smi_bad_page_record *) vmap(pages, num_pages, VM_MAP, PAGE_KERNEL);
 	bad_pages->num_bad_page = bp_cnt;
 	for (i = 0; i < bp_cnt; i++) {
 		bad_pages->bad_page[i].retired_page = gpumon_eeprom_table[i].retired_page;
@@ -636,23 +568,8 @@ static int gim_get_eeprom_table(struct smi_bad_page_info *eeprom_table, uint16_t
 		bad_pages->bad_page[i].mem_channel = gpumon_eeprom_table[i].mem_channel;
 		bad_pages->bad_page[i].mcumc_id = gpumon_eeprom_table[i].mcumc_id;
 	}
-	// Unmap and release mapped pages and
-	// free the virtual contiguous memory
-	vunmap(bad_pages);
-	for (i = 0; i < num_pages; i++) {
-		if (!PageReserved(pages[i])) {
-			SetPageDirty(pages[i]);
-		}
-		put_page(pages[i]);
-	}
 
-	gim_kfree(pages);
-	pages = NULL;
-#if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
-	up_read(&current->mm->mmap_lock);
-#else
-	up_read(&current->mm->mmap_sem);
-#endif
+	smi_unmap_user_buf(bad_pages, pages, num_pages);
 
 	return SMI_STATUS_SUCCESS;
 }
@@ -661,52 +578,16 @@ static inline int gim_get_cper_data(struct smi_cper_config *cper_config, uint16_
 									uint32_t *smi_cper_hdrs, uint64_t overflow_count)
 {
 	struct smi_cper *cper = NULL;
+	struct page **pages = NULL;
 	long num_pages = 0;
-	unsigned int gup_flags;
-	struct mm_struct *mm;
-	size_t buffer_size;
-	unsigned long nr_pages;
-	struct page **pages;
+	int status = 0;
 	uint32_t i = 0;
 
-	mm = current->mm; // Get memory management structure
-
-	// Calculate the number of pages needed to map the entire metrics table
-	buffer_size = sizeof(struct smi_cper);
-	nr_pages = (buffer_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
-
-	pages = gim_kmalloc(nr_pages * sizeof(struct page *), GFP_KERNEL);
-	if (!pages) {
-		return SMI_STATUS_OUT_OF_RESOURCES;
+	status = smi_map_user_buf(cper_config->cper, sizeof(struct smi_cper),
+				(void **)&cper, &pages, &num_pages);
+	if (status != SMI_STATUS_SUCCESS) {
+		return status;
 	}
-
-#if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
-	down_read(&current->mm->mmap_lock);
-#else
-	down_read(&current->mm->mmap_sem);
-#endif
-	gup_flags = FOLL_WRITE;
-	// Map user space buffer containing metrics table into kernel space
-	// by creating memory pages
-#if defined(HAVE_GET_USER_PAGES_REMOTE_6_ARG)
-	num_pages = get_user_pages_remote(mm, (unsigned long)cper_config->cper, nr_pages, gup_flags, pages, NULL);
-#elif defined(HAVE_GET_USER_PAGES_REMOTE_7_ARG)
-	num_pages = get_user_pages_remote(mm, (unsigned long)cper_config->cper, nr_pages, gup_flags, pages, NULL, NULL);
-#else
-	num_pages = get_user_pages_remote(NULL, mm, (unsigned long)cper_config->cper, nr_pages, gup_flags, pages, NULL, NULL);
-#endif
-	if (num_pages <= 0) {
-		gim_kfree(pages);
-#if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
-		up_read(&current->mm->mmap_lock);
-#else
-		up_read(&current->mm->mmap_sem);
-#endif
-		return SMI_STATUS_API_FAILED;
-	}
-	// Access mapped metrics table in kernel space
-	// map array of pages into virtual contiguous memory
-	cper = (struct smi_cper *) vmap(pages, num_pages, VM_MAP, PAGE_KERNEL);
 
 	memcpy(cper->cper_data, buffer, size);
 	cper->entry_count = write_count;
@@ -717,22 +598,7 @@ static inline int gim_get_cper_data(struct smi_cper_config *cper_config, uint16_
 	cper->cursor = cper_config->input_cursor;
 	cper->overflow_count = overflow_count;
 
-	// Unmap and release mapped pages and
-	// free the virtual contiguous memory
-	vunmap(cper);
-	for (i = 0; i < num_pages; i++) {
-		if (!PageReserved(pages[i])) {
-			SetPageDirty(pages[i]);
-		}
-		put_page(pages[i]);
-	}
-
-	gim_kfree(pages);
-#if defined(HAVE_UP_DOWN_READ_MMAP_LOCK_ARG)
-	up_read(&current->mm->mmap_lock);
-#else
-	up_read(&current->mm->mmap_sem);
-#endif
+	smi_unmap_user_buf(cper, pages, num_pages);
 
 	return SMI_STATUS_SUCCESS;
 }
@@ -765,7 +631,7 @@ struct smi_shim_interface gim_smi_interface = {
 	.get_eeprom_table = gim_get_eeprom_table,
 	.get_partition = gim_get_partition,
 	.get_partition_global = gim_get_partition_global,
-	.get_cper_data = gim_get_cper_data
+	.get_cper_data = gim_get_cper_data,
 };
 
 /* Prototypes for device functions */
@@ -867,7 +733,10 @@ void smi_cleanup(void)
 
 static int smi_lnx_drv_open(struct inode *inode, smi_process_handle file)
 {
-	return smi_core_open((file_t) file, (file->f_mode & FMODE_WRITE) == FMODE_WRITE);
+	bool is_privileged = ((file->f_mode & FMODE_WRITE) == FMODE_WRITE) &&
+			    		 capable(CAP_SYS_ADMIN);
+
+	return smi_core_open((file_t) file, is_privileged);
 }
 
 static int smi_lnx_drv_release(struct inode *inode, smi_process_handle file)

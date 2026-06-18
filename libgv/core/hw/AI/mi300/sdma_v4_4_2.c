@@ -1,25 +1,8 @@
-/*
- * Copyright 2022 Advanced Micro Devices, Inc.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
- * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- * OTHER DEALINGS IN THE SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
+
 #include "amdgv.h"
 #include "amdgv_device.h"
 #include "amdgv_misc.h"
@@ -156,10 +139,8 @@ static int sdma_v4_4_2_ring_test_ring(struct amdgv_ring *ring)
 
 	tmp = 0xCAFEDEAD;
 	r = amdgv_wb_memory_get(adapt, &index);
-	if (r) {
-		AMDGV_ERROR("Failed to allocate wb\n");
+	if (r)
 		return r;
-	}
 
 	gpu_addr = adapt->wb.gpu_addr + (index * 4);
 	adapt->wb.wb[index] = cpu_to_le32(tmp);
@@ -415,7 +396,6 @@ static int mi300_enable_sdma(struct amdgv_adapter *adapt, uint32_t instance)
 	WREG32_SOC15(SDMA0, GET_INST(SDMA0, instance), regSDMA_GFX_RB_WPTR_POLL_ADDR_HI, data);
 
 	data = RREG32_SOC15(SDMA0, GET_INST(SDMA0, instance), regSDMA_GFX_RB_WPTR_POLL_CNTL);
-	data = REG_SET_FIELD(data, SDMA_GFX_RB_WPTR_POLL_CNTL, ENABLE, 1);
 	data = REG_SET_FIELD(data, SDMA_GFX_RB_WPTR_POLL_CNTL, F32_POLL_ENABLE, 1);
 	WREG32_SOC15(SDMA0, GET_INST(SDMA0, instance), regSDMA_GFX_RB_WPTR_POLL_CNTL, data);
 

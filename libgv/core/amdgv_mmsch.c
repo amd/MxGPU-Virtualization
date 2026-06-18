@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv_device.h>
@@ -498,10 +481,8 @@ int amdgv_mmsch_sram_dump(struct amdgv_adapter *adapt)
 
 	/* index VF does not matter here */
 	ret = amdgv_mmsch_submit_cmd(adapt, AMDGV_MMSCH_CMD_TYPE_SRAM_DUMP, AMDGV_PF_IDX);
-	if (ret) {
-		AMDGV_ERROR("Failed to perform MMSCH SRAM DUMP\n");
-		return AMDGV_FAILURE;
-	}
+	if (ret)
+		return ret;
 
 	/* wait a bit for MMSCH to dump sram */
 	oss_msleep(200);
@@ -533,19 +514,11 @@ int amdgv_mmsch_preconfig_vf(struct amdgv_adapter *adapt, uint32_t libgv_idx_vf)
 int amdgv_mmsch_config_vf(struct amdgv_adapter *adapt, uint32_t libgv_idx_vf)
 {
 	int ret;
-	int cmd_ret;
 
 	ret = amdgv_mmsch_preconfig_vf(adapt, libgv_idx_vf);
 	if (!ret) {
-		cmd_ret = amdgv_mmsch_submit_cmd(adapt, AMDGV_MMSCH_CMD_TYPE_BANDWIDTH_CONFIG, libgv_idx_vf);
-		if (cmd_ret)
-			AMDGV_WARN("failed to submit BW config. This will result limited BW management\n");
-		ret = cmd_ret;
-
-		cmd_ret = amdgv_mmsch_submit_cmd(adapt, AMDGV_MMSCH_CMD_TYPE_RB_DECOUPLE, libgv_idx_vf);
-		if (cmd_ret)
-			AMDGV_WARN("failed to enable RB decouple. This will result limited decode performance\n");
-		ret |= cmd_ret;
+		ret = amdgv_mmsch_submit_cmd(adapt, AMDGV_MMSCH_CMD_TYPE_BANDWIDTH_CONFIG, libgv_idx_vf);
+		ret |= amdgv_mmsch_submit_cmd(adapt, AMDGV_MMSCH_CMD_TYPE_RB_DECOUPLE, libgv_idx_vf);
 	}
 
 	return ret;
@@ -563,10 +536,7 @@ int amdgv_mmsch_reconfig_vf(struct amdgv_adapter *adapt, uint32_t libgv_idx_vf,
 		AMDGV_INFO("Guest OS has MM multiqueue\n");
 
 		adapt->mmsch.rb_decouple.enabled_vfs &= ~(1 << mmsch_idx_vf);
-		if (amdgv_mmsch_submit_cmd(adapt, AMDGV_MMSCH_CMD_TYPE_RB_DECOUPLE, libgv_idx_vf)) {
-			AMDGV_ERROR("failed to disable RB decouple\n");
-			ret = AMDGV_FAILURE;
-		}
+		ret = amdgv_mmsch_submit_cmd(adapt, AMDGV_MMSCH_CMD_TYPE_RB_DECOUPLE, libgv_idx_vf);
 	}
 	return ret;
 }

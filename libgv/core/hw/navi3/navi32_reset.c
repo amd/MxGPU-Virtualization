@@ -1,22 +1,6 @@
-/*
- * Copyright (C) 2022  Advanced Micro Devices, Inc.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included
- * in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
- * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE COPYRIGHT HOLDER(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
- * IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv.h>
@@ -53,7 +37,6 @@ struct navi32_reset_pci_info {
 	char *name;
 };
 
-#define PCI_CONFIG_SIZE 1024
 #define MSIX_TAB_COUNT	12
 
 #define NAVI32_ME1_MAX_PIPE_PER_ME 4
@@ -588,18 +571,18 @@ static int navi32_reset_wait_smu_flr_complete(struct amdgv_adapter *adapt, int t
 {
 	int wait_ret;
 
-	wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_GFX_RST_CNTL),
+	wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET_NAME(NBIO, 0, regBIF_BX0_GFX_RST_CNTL),
 					BIF_BX0_GFX_RST_CNTL__GFX_RST_FINISH_INDICATION_MASK, 1, timeout, AMDGV_WAIT_CHECK_EQ, 0);
 	if (wait_ret) {
-		AMDGV_ERROR("TIMEOUT after %d ms waiting for SMU to complete FLR\n");
+		AMDGV_ERROR("TIMEOUT after %d ms waiting for SMU to complete FLR\n", timeout);
 		AMDGV_ERROR("GFX_RST_CNTL is %llx", RREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_GFX_RST_CNTL)));
 		return AMDGV_FAILURE;
 	}
 
-	wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET(GC, 0, regGFX_IMU_RLC_STATUS),
+	wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET_NAME(GC, 0, regGFX_IMU_RLC_STATUS),
 					GFX_IMU_RLC_STATUS__RLC_ALIVE_MASK, 0, timeout, AMDGV_WAIT_CHECK_NE, 0);
 	if (wait_ret) {
-		AMDGV_ERROR("TIMEOUT after %d ms waiting for SMU to complete FLR\n");
+		AMDGV_ERROR("TIMEOUT after %d ms waiting for SMU to complete FLR\n", timeout);
 		return AMDGV_FAILURE;
 	}
 
@@ -1293,7 +1276,8 @@ int navi32_reset_grbm_soft_reset_stage_1(struct amdgv_adapter *adapt, bool gl2c_
 	reg_data &= 0xffc3ffff;
 	WREG32_SOC15(GC, 0, regCP_INT_CNTL, reg_data);
 	/* 2-3. enter safe mode */
-	adapt->sched.rlc_safe_mode(adapt, true);
+	if (amdgv_gfx_rlc_safe_mode(adapt, true))
+		AMDGV_WARN("Failed to enter RLC safe mode\n");
 	/* 4. Write GRBM_GFX_CNTL with MEID/PipeID/QueueID for each compute and MES queue
 		* Write CP_HQD_DEQUEUE_REQUEST to 0x2
 		* Write SPI_COMPUTE_QUEUE_RESET to 0x1, only for compute queues, not MES since MES has no such connection */
@@ -1323,11 +1307,12 @@ int navi32_reset_grbm_soft_reset_stage_1(struct amdgv_adapter *adapt, bool gl2c_
 		reg_data = RREG32_SOC15(GC, 0, regRLC_FED_DRVR_STATUS);
 		reg_data = REG_SET_FIELD(reg_data, RLC_FED_DRVR_STATUS, PENDING, 0x2);
 		WREG32_SOC15(GC, 0, regRLC_FED_DRVR_STATUS, reg_data);
-		ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET(GC, 0, regRLC_FED_DRVR_STATUS),
+		ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET_NAME(GC, 0, regRLC_FED_DRVR_STATUS),
 				REG_FIELD_MASK(RLC_FED_DRVR_STATUS, PENDING), 0x1,
 				AMDGV_TIMEOUT(TIMEOUT_STATUS_REG), AMDGV_WAIT_CHECK_EQ, 0);
 		if (ret) {
-			adapt->sched.rlc_safe_mode(adapt, false);
+			if (amdgv_gfx_rlc_safe_mode(adapt, false))
+				AMDGV_WARN("Failed to exit RLC safe mode\n");
 			return AMDGV_FAILURE;
 		}
 	}
@@ -1413,7 +1398,7 @@ int navi32_reset_grbm_soft_reset_stage_2(struct amdgv_adapter *adapt)
 	/* 17. Write mmCP_MEC_CNTL=0x0 */
 	WREG32_SOC15(GC, 0, regCP_MEC_CNTL, 0);
 	/* 18. wait CP_VMID_RESET to be 0 */
-	wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET(GC, 0, regCP_VMID_RESET),
+	wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET_NAME(GC, 0, regCP_VMID_RESET),
 		0, 0, AMDGV_TIMEOUT(TIMEOUT_STATUS_REG), AMDGV_WAIT_CHECK_EQ, 0);
 	if (wait_ret)
 		AMDGV_ERROR("Soft reset failed to wait VMID_RESET to be 0\n");
@@ -1430,7 +1415,8 @@ int navi32_reset_grbm_soft_reset_stage_2(struct amdgv_adapter *adapt)
 	reg_data |= 0x3c0000;
 	WREG32_SOC15(GC, 0, regCP_INT_CNTL, reg_data);
 	/* 21. exit safe mode */
-	adapt->sched.rlc_safe_mode(adapt, false);
+	if (amdgv_gfx_rlc_safe_mode(adapt, false))
+		AMDGV_WARN("Failed to exit RLC safe mode\n");
 
 	return 0;
 }
@@ -1438,7 +1424,7 @@ int navi32_reset_grbm_soft_reset_stage_2(struct amdgv_adapter *adapt)
 struct amdgv_gpu_reset_funcs navi32_reset_funcs = {
 	.save_vddgfx_state = navi32_reset_save_vddgfx_state,
 	.trigger_vf_flr = navi32_reset_trigger_vf_flr,
-	.trigger_gpu_reset = navi32_reset_trigger_whole_gpu_reset,
+	.gpu_reset_and_reinit = navi32_reset_trigger_whole_gpu_reset,
 };
 
 static int navi32_reset_sw_init(struct amdgv_adapter *adapt)

@@ -1,23 +1,8 @@
-/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #include "interface/amdsmi.h"
 #include "smi_cli_api_guest.h"
 #include "smi_cli_parser.h"
@@ -330,7 +315,7 @@ int AmdSmiApiGuest::amdsmi_get_asic_info_command(uint64_t processor_bdf, Argumen
 		string_format("0x%X", asic.rev_id);
 	std::string serial_id_hex =
 		decimal_string_to_hex(asic.asic_serial);
-	std::string oam_id = asic.oam_id == -1 ? "N/A" : string_format("%d", asic.oam_id);
+	std::string oam_id = static_cast<int32_t>(asic.oam_id) == -1 ? "N/A" : string_format("%d", asic.oam_id);
 	std::string num_of_compute_units = asic.num_of_compute_units == -1 ? "N/A" : string_format("%d", asic.num_of_compute_units);
 	std::string subsystem_id = asic.subsystem_id == -1 ? "N/A" : string_format("%d", asic.subsystem_id);
 

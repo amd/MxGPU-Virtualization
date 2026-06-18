@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv.h>
@@ -67,8 +50,6 @@ static int mi300_vbios_special_version_check(struct amdgv_adapter *adapt, uint8_
 		}
 
 		if (j == sizeof(anchor)) {
-			AMDGV_INFO("found anchor at %d\n", i);
-
 			for (k = 0; k < 128; k++) {
 				if (img[i + j + k] == '\\' || img[i + j + k] == 0x0)
 					break;
@@ -83,11 +64,11 @@ static int mi300_vbios_special_version_check(struct amdgv_adapter *adapt, uint8_
 			if (k < 128) {
 				oss_memcpy(build_num, img + i - BUILD_NUM_MAX_LENGTH,
 					   build_num_length);
-				AMDGV_INFO("build num: %s\n", build_num);
+				AMDGV_INFO("VBIOS build num: %s\n", build_num);
 				oss_memcpy(part_info, img + i + j, k);
-				AMDGV_INFO("part info: %s\n", part_info);
+				AMDGV_INFO("VBIOS part info: %s\n", part_info);
 				oss_memcpy(build_date, img + 0x50, BUILD_DATA_LENGTH);
-				AMDGV_INFO("build date: %s\n", build_date);
+				AMDGV_INFO("VBIOS build date: %s\n", build_date);
 				return 0;
 			}
 		}
@@ -290,7 +271,7 @@ static int mi300_vbios_early_hw_init(struct amdgv_adapter *adapt)
 
 	/* post vbios */
 	if (!mi300_nbio_vbios_need_post(adapt)) {
-		if (mi300_psp_wait_sos_loaded_status(adapt)) {
+		if (mi300_psp_wait_sos_loaded_status(adapt, AMDGV_WAIT_FLAG_NO_WARNING)) {
 			if (((adapt->asic_type == CHIP_MI350X) && mi350_smu_get_fw_loaded_status(adapt)) ||
 					((adapt->asic_type != CHIP_MI350X) && mi300_smu_get_fw_loaded_status(adapt))) {
 				if (adapt->xgmi.phy_nodes_num > 1) {
@@ -319,8 +300,6 @@ static int mi300_vbios_early_hw_init(struct amdgv_adapter *adapt)
 	if (r)
 		goto failed;
 
-	AMDGV_INFO("VBIOS posted successfully.\n");
-
 	mi300_clear_dummy_mode_after_reset(adapt);
 
 	adapt->flags |= AMDGV_FLAG_GC_REG_RLC_EN;
@@ -331,7 +310,6 @@ static int mi300_vbios_early_hw_init(struct amdgv_adapter *adapt)
 
 	if (((adapt->asic_type == CHIP_MI350X) && mi350_smu_get_fw_loaded_status(adapt)) ||
 		((adapt->asic_type != CHIP_MI350X) && mi300_smu_get_fw_loaded_status(adapt))) {
-		AMDGV_INFO("SMU fw ready and responding\n");
 		/* RLCg needs to handshake with MP5(XCD) firmware if SMU is alived */
 		if (adapt->flags & AMDGV_FLAG_EMU_MODE)
 			mi300_gfx_rlc_smu_handshake_cntl(adapt, false);

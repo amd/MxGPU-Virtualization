@@ -1,24 +1,8 @@
-/*
- * Copyright (c) 2017-2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #include "amdgv_device.h"
 #include "amdgv_vfmgr.h"
 #include "amdgv_sched.h"
@@ -35,6 +19,7 @@
 #include "amdgv_gfx.h"
 #include "amdgv_marketing_name.h"
 #include "amdgv_gart.h"
+#include "amdgv_live_migration.h"
 
 #define AMDGV_API
 
@@ -100,6 +85,7 @@ const char *const amdgv_inf_name[] = {
 	"alloc_memory",
 	"free_memory",
 	"alloc_dma_mem",
+	"alloc_dma_mem_with_attr",
 	"free_dma_mem",
 	"flush_dma_mem",
 	"sg_dma_address",
@@ -109,7 +95,6 @@ const char *const amdgv_inf_name[] = {
 	"memcpy",
 	"memcmp",
 	"strncmp",
-	"get_assigned_vf_count",
 	"strlen",
 	"strnlen",
 	"do_div",
@@ -119,10 +104,15 @@ const char *const amdgv_inf_name[] = {
 	"spin_lock_irq",
 	"spin_unlock_irq",
 	"spin_lock_fini",
+	"spin_lock_init_raw",
+	"spin_lock_irqsave_raw",
+	"spin_unlock_irqrestore_raw",
 	"mutex_init",
+	"mutex_init_raw",
 	"mutex_lock",
 	"mutex_unlock",
 	"mutex_fini",
+	"mutex_destroy_raw",
 	"rwlock_init",
 	"rwlock_read_lock",
 	"rwlock_read_trylock",
@@ -152,6 +142,7 @@ const char *const amdgv_inf_name[] = {
 	"atomic_set",
 	"atomic_inc",
 	"atomic_dec",
+	"atomic_sub",
 	"atomic_inc_return",
 	"atomic_dec_return",
 	"atomic_cmpxchg",
@@ -167,6 +158,7 @@ const char *const amdgv_inf_name[] = {
 	"pause_timer",
 	"try_pause_timer",
 	"close_timer",
+	"get_assigned_vf_count",
 	"udelay",
 	"msleep",
 	"usleep",
@@ -185,6 +177,7 @@ const char *const amdgv_inf_name[] = {
 	"sema_down",
 	"sema_init",
 	"sema_fini",
+	"access_ok",
 	"copy_from_user",
 	"copy_to_user",
 	"strnstr",
@@ -198,6 +191,10 @@ const char *const amdgv_inf_name[] = {
 	"store_record",
 #endif
 	"store_rlcv_timestamp",
+	"hbm_dax_init",
+	"hbm_dax_fini",
+	"hbm_drv_mgmt_init",
+	"hbm_drv_mgmt_fini",
 	"get_ih_rb_info",
 #ifndef EXCLUDE_DCORE_DEBUG
 	"signal_reset_happened",
@@ -209,9 +206,10 @@ const char *const amdgv_inf_name[] = {
 	"save_fb_sharing_mode",
 	"save_accelerator_partition_mode",
 	"save_memory_partition_mode",
+	"save_cc_mode",
 	"clear_conf_file",
-	"mb",
 	"schedule_work",
+	"mb",
 	"notify_shim_ext",
 	"store_gfx_dump_data",
 	"map_queue",
@@ -220,6 +218,14 @@ const char *const amdgv_inf_name[] = {
 	"bh_fini",
 	"in_virtual_machine",
 	"get_device_list",
+	"init_vf_sysmem_xchg",
+	"fini_vf_sysmem_xchg",
+	"write_vf_sysmem_xchg",
+	"read_vf_sysmem_xchg",
+	"vf_sysmem_xchg_gpa_to_spa",
+	"set_dma_mask",
+	"register_mce_notifier",
+	"unregister_mce_notifier",
 };
 
 int AMDGV_API amdgv_init(struct oss_interface *funcs, uint16_t *dev_id_array, uint32_t flags)
@@ -311,16 +317,61 @@ void amdgv_get_version(int *major, int *minor)
 	*minor = (MINOR_VERSION << 8) | SUBMINOR_VERSION;
 }
 
+static const char *libgv_build_date(void)
+{
+	/* "YYYY-MM-DD HH:MM:SS\0" = 20 bytes */
+	static char date_buf[20];
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdate-time"
+	const char *d = __DATE__;	/* "Mmm dd yyyy" */
+	const char *t = __TIME__;	/* "hh:mm:ss" */
+#pragma GCC diagnostic pop
+	int month;
+
+	switch (d[0]) {
+	case 'J':
+		month = (d[1] == 'a') ? 1 : (d[2] == 'n') ? 6 : 7;
+		break;
+	case 'F': month = 2; break;
+	case 'M': month = (d[2] == 'r') ? 3 : 5; break;
+	case 'A': month = (d[1] == 'p') ? 4 : 8; break;
+	case 'S': month = 9; break;
+	case 'O': month = 10; break;
+	case 'N': month = 11; break;
+	case 'D': month = 12; break;
+	default:  month = 0; break;
+	}
+
+	date_buf[0]  = d[7];
+	date_buf[1]  = d[8];
+	date_buf[2]  = d[9];
+	date_buf[3]  = d[10];
+	date_buf[4]  = '-';
+	date_buf[5]  = '0' + (month / 10);
+	date_buf[6]  = '0' + (month % 10);
+	date_buf[7]  = '-';
+	date_buf[8]  = (d[4] == ' ') ? '0' : d[4];
+	date_buf[9]  = d[5];
+	date_buf[10] = ' ';
+	date_buf[11] = t[0];
+	date_buf[12] = t[1];
+	date_buf[13] = ':';
+	date_buf[14] = t[3];
+	date_buf[15] = t[4];
+	date_buf[16] = ':';
+	date_buf[17] = t[6];
+	date_buf[18] = t[7];
+	date_buf[19] = '\0';
+
+	return date_buf;
+}
+
 void amdgv_get_date(char *str)
 {
 	int len_min;
 	int date_len;
-
-#ifdef LIBGV_BUILD_DATE
-	const char *build_date = LIBGV_BUILD_DATE;
-#else
-	const char *build_date = "--N/A--";
-#endif
+	const char *build_date = libgv_build_date();
 
 	date_len = oss_strlen(build_date);
 	len_min = date_len < (STRLEN_NORMAL - 1) ? date_len : (STRLEN_NORMAL - 1);
@@ -441,7 +492,7 @@ int AMDGV_API amdgv_free_vf(amdgv_dev_t dev, uint32_t idx_vf)
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
-	if (idx_vf == AMDGV_PF_IDX)
+	if (idx_vf >= adapt->num_vf)
 		return AMDGV_ERROR_GPUMON_INVALID_VF_INDEX;
 
 	oss_mutex_lock(adapt->api_lock);
@@ -843,10 +894,19 @@ int AMDGV_API amdgv_get_dev_info(amdgv_dev_t dev, enum amdgv_dev_info_type type,
 		break;
 
 	case AMDGV_GET_OAM_IDX:
-		if (adapt->xgmi.phy_nodes_num > 1)
-			info->oam.oam_idx = adapt->xgmi.phy_node_id;
+		/*
+		 * The OAM ID identifies the GPU's physical OAM slot on the
+		 * baseboard and is read from SMUIO_MCM_CONFIG.SOCKET_ID.
+		 * It is valid for any ASIC populated on an OAM-class board,
+		 * including single-GPU configurations that are not part of an
+		 * XGMI hive. ASICs without an OAM concept (e.g. consumer parts)
+		 * do not register a get_socket_id callback and report -1.
+		 */
+		if (adapt->smuio.funcs && adapt->smuio.funcs->get_socket_id)
+			info->oam.oam_idx =
+				adapt->smuio.funcs->get_socket_id(adapt);
 		else
-			info->oam.oam_idx = 0;
+			info->oam.oam_idx = -1;
 		break;
 	case AMDGV_GET_COMPUTE_PROFILE:
 		ret = amdgv_gfx_get_compute_cap(adapt, true, &(info->compute_cap.min));
@@ -860,6 +920,7 @@ int AMDGV_API amdgv_get_dev_info(amdgv_dev_t dev, enum amdgv_dev_info_type type,
 		info->basic_info.sub_system_id = adapt->sub_sys_id;
 		info->basic_info.sub_vendor_id = adapt->sub_vnd_id;
 		info->basic_info.bdf = adapt->bdf;
+		info->basic_info.dsn = adapt->serial;
 		break;
 	default:
 		ret = AMDGV_FAILURE;
@@ -1021,6 +1082,11 @@ int AMDGV_API amdgv_set_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 		break;
 
 	case AMDGV_CONF_FORCE_SWITCH_VF_FLAG:
+		if (AMDGV_IS_IDX_INVALID(conf->switch_vf_idx)) {
+			AMDGV_ERROR("Invalid VF index\n");
+			ret = AMDGV_FAILURE;
+			break;
+		}
 		adapt->force_switch_vf_idx = conf->switch_vf_idx;
 		AMDGV_INFO("set force switch vf to %llu\n", adapt->force_switch_vf_idx);
 		amdgv_force_switch_idx_vf(adapt, adapt->force_switch_vf_idx);
@@ -1091,7 +1157,7 @@ int AMDGV_API amdgv_set_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 		if (conf->flag_switch) {
 			AMDGV_INFO("enable perf log in rlcv auto scheduler\n");
 			if (adapt->flags & AMDGV_FLAG_PERF_LOG_ENABLE)
-				ret = AMDGV_FAILURE;
+				ret = AMDGV_ALREADY_SET;
 			else
 				adapt->flags |= AMDGV_FLAG_PERF_LOG_ENABLE;
 		} else {
@@ -1099,7 +1165,7 @@ int AMDGV_API amdgv_set_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 			if (adapt->flags & AMDGV_FLAG_PERF_LOG_ENABLE)
 				adapt->flags &= ~AMDGV_FLAG_PERF_LOG_ENABLE;
 			else
-				ret = AMDGV_FAILURE;
+				ret = AMDGV_ALREADY_SET;
 		}
 		if (!ret)
 			ret = amdgv_sched_set_ws_log_op(adapt, AMDGV_AUTO_SCHED_PERF_LOG, !!conf->flag_switch);
@@ -1112,8 +1178,7 @@ int AMDGV_API amdgv_set_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 				AMDGV_INFO("No fb size reserved for debug dump when loading driver.\n");
 				ret = AMDGV_FAILURE;
 			} else if (adapt->flags & AMDGV_FLAG_DEBUG_DUMP_ENABLE) {
-				AMDGV_INFO("Feature already enabled.\n");
-				ret = AMDGV_FAILURE;
+				ret = AMDGV_ALREADY_SET;
 			} else {
 				adapt->flags |= AMDGV_FLAG_DEBUG_DUMP_ENABLE;
 			}
@@ -1122,7 +1187,7 @@ int AMDGV_API amdgv_set_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 			if (adapt->flags & AMDGV_FLAG_DEBUG_DUMP_ENABLE)
 				adapt->flags &= ~AMDGV_FLAG_DEBUG_DUMP_ENABLE;
 			else
-				ret = AMDGV_FAILURE;
+				ret = AMDGV_ALREADY_SET;
 		}
 		if (!ret)
 			ret = amdgv_sched_set_ws_log_op(adapt, AMDGV_AUTO_SCHED_DEBUG_DUMP, !!conf->flag_switch);
@@ -1377,7 +1442,9 @@ int AMDGV_API amdgv_get_vf_info(amdgv_dev_t dev, uint32_t idx_vf, enum amdgv_vf_
 		ret = amdgv_vfmgr_get_vf_fb(adapt, idx_vf, &info->fb.fb_offset,
 					    &info->fb.fb_size);
 		break;
-
+	case AMDGV_GET_VF_HBM_MGMT:
+		ret = amdgv_vfmgr_get_vf_hbm_mgmt(adapt, idx_vf, &info->vf_hbm_mgmt);
+		break;
 	case AMDGV_GET_VF_SCHED_STATE:
 		if (idx_vf == AMDGV_PF_IDX)
 			info->sched.state = AMDGV_SCHED_AVAIL;
@@ -1411,7 +1478,9 @@ int AMDGV_API amdgv_get_vf_info(amdgv_dev_t dev, uint32_t idx_vf, enum amdgv_vf_
 	case AMDGV_GET_VF_FFBM_MAP_LIST:
 		ret = amdgv_get_vf_fb_mapping_list(adapt, idx_vf, &info->vf_ffbm_map_list, false);
 		break;
-
+	case AMDGV_GET_VF_UNITID:
+		ret = amdgv_vfmgr_get_vf_unitid(adapt, idx_vf, &info->unitid);
+		break;
 	default:
 		ret = AMDGV_FAILURE;
 		break;
@@ -1533,6 +1602,7 @@ static int default_threshold[AMDGV_GUARD_EVENT_MAX] = {
 	[AMDGV_GUARD_EVENT_RAS_CPER_DUMP] = AMDGV_DEFAULT_RAS_TELEMETRY_THRESHOLD,
 	[AMDGV_GUARD_EVENT_RAS_BAD_PAGES] = AMDGV_DEFAULT_RAS_TELEMETRY_THRESHOLD,
 	[AMDGV_GUARD_EVENT_RAS_CHK_CRITI] = AMDGV_DEFAULT_RAS_TELEMETRY_THRESHOLD,
+	[AMDGV_GUARD_EVENT_RAS_REMOTE_CMD] = AMDGV_DEFAULT_RAS_REMOTE_CMD_THRESHOLD,
 };
 
 static int default_interval[AMDGV_GUARD_EVENT_MAX] = {
@@ -1545,6 +1615,7 @@ static int default_interval[AMDGV_GUARD_EVENT_MAX] = {
 	[AMDGV_GUARD_EVENT_RAS_CPER_DUMP] = AMDGV_DEFAULT_RAS_TELEMETRY_INTERVAL,
 	[AMDGV_GUARD_EVENT_RAS_BAD_PAGES] = AMDGV_DEFAULT_RAS_TELEMETRY_INTERVAL,
 	[AMDGV_GUARD_EVENT_RAS_CHK_CRITI] = AMDGV_DEFAULT_RAS_TELEMETRY_INTERVAL,
+	[AMDGV_GUARD_EVENT_RAS_REMOTE_CMD] = AMDGV_DEFAULT_RAS_REMOTE_CMD_INTERVAL,
 };
 
 int amdgv_reset_guard_config(amdgv_dev_t dev, uint32_t idx_vf)
@@ -1688,10 +1759,8 @@ int amdgv_get_smi_info(amdgv_dev_t dev, enum amdgv_smi_query_type type,
 		break;
 
 	case AMDGV_SMI_VBIOS:
-		if (amdgv_gpumon_get_vbios_info(dev, &vbios_info)) {
-			AMDGV_ERROR("Error: failed to get vbios info\n");
+		if (amdgv_gpumon_get_vbios_info(dev, &vbios_info))
 			ret = AMDGV_FAILURE;
-		}
 
 		info->vbios_info.version = vbios_info.version;
 
@@ -1751,29 +1820,18 @@ int amdgv_get_smi_info(amdgv_dev_t dev, enum amdgv_smi_query_type type,
 			break;
 		}
 
-		if (amdgv_gpumon_get_max_mclk(dev, (int *)&info->gpu_perf_info.max_mclk) !=
-		    0) {
-			AMDGV_ERROR("Error: failed to get max mclk\n");
+		if (amdgv_gpumon_get_max_mclk(dev, (int *)&info->gpu_perf_info.max_mclk))
 			ret = AMDGV_FAILURE;
-		}
 
-		if (amdgv_gpumon_get_gpu_power_usage(
-			    dev, (int *)&info->gpu_perf_info.power_usage) != 0) {
-			AMDGV_ERROR("Error: failed to get power usage\n");
+		if (amdgv_gpumon_get_gpu_power_usage(dev, (int *)&info->gpu_perf_info.power_usage))
 			ret = AMDGV_FAILURE;
-		}
 
-		if (amdgv_gpumon_get_gpu_power_capacity(
-			    dev, (int *)&info->gpu_perf_info.power_capacity) != 0) {
-			AMDGV_ERROR("Error: failed to get power capacity\n");
+		if (amdgv_gpumon_get_gpu_power_capacity(dev,
+							(int *)&info->gpu_perf_info.power_capacity))
 			ret = AMDGV_FAILURE;
-		}
 
-		if (amdgv_gpumon_get_asic_temperature(
-			    dev, (int *)&info->gpu_perf_info.temperature) != 0) {
-			AMDGV_ERROR("Error: failed to ge temperature\n");
+		if (amdgv_gpumon_get_asic_temperature(dev, (int *)&info->gpu_perf_info.temperature))
 			ret = AMDGV_FAILURE;
-		}
 
 		break;
 	case AMDGV_SMI_ASIC:
@@ -1813,12 +1871,12 @@ int amdgv_get_smi_info(amdgv_dev_t dev, enum amdgv_smi_query_type type,
 		if (adapt->psp.dfc_fw != NULL) {
 			oss_memcpy(&info->dfc_fw, adapt->psp.dfc_fw, sizeof(struct dfc_fw));
 		} else {
-			AMDGV_ERROR("Error: failed to get dfc fw\n");
+			AMDGV_ERROR("No DFC FW\n");
 			ret = AMDGV_FAILURE;
 		}
 		break;
 	default:
-		AMDGV_ERROR("Error: invalid query type\n");
+		AMDGV_ERROR("Invalid query type\n");
 		ret = AMDGV_FAILURE;
 		break;
 	}
@@ -2336,7 +2394,6 @@ int amdgv_get_pf2vf_info(amdgv_dev_t dev, uint32_t idx_vf,
 {
 	struct amdgv_adapter *adapt;
 	int ret;
-	uint64_t msg_offset;
 	uint32_t size = sizeof(struct amd_sriov_msg_pf2vf_info);
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
@@ -2344,167 +2401,13 @@ int amdgv_get_pf2vf_info(amdgv_dev_t dev, uint32_t idx_vf,
 	if (AMDGV_IS_IDX_INVALID(idx_vf))
 		return AMDGV_FAILURE;
 
-	msg_offset = GET_PF2VF_OFFSET(adapt, idx_vf);
-
-	ret = amdgv_vfmgr_copy_from_vf_fb(adapt, idx_vf, msg_offset, pf2vf_info, size);
+	ret = amdgv_vfmgr_copy_from_vf_xchg_table(adapt, idx_vf,
+						  AMD_SRIOV_MSG_DATAEXCHANGE_TABLE_ID,
+						  0, pf2vf_info, size);
 	if (ret)
 		return AMDGV_FAILURE;
 
 	return 0;
-}
-
-void amdgv_dump_sriov_msg(amdgv_dev_t dev, uint32_t idx_vf)
-{
-	struct amdgv_adapter *adapt = (struct amdgv_adapter *)dev;
-	struct amd_sriov_msg_pf2vf_info *pf2vf_info;
-	struct amd_sriov_msg_vf2pf_info *vf2pf_info;
-	uint32_t checksum;
-	int i;
-
-	pf2vf_info = oss_zalloc(1024);
-	if (pf2vf_info == NULL) {
-		AMDGV_PRINT("Failed to allocate memory for pf2vf info during dump sriov message\n");
-		return;
-	}
-	vf2pf_info = oss_zalloc(1024);
-	if (vf2pf_info == NULL) {
-		oss_free(pf2vf_info);
-		AMDGV_PRINT("Failed to allocate memory for vf2pf info during dump sriov message\n");
-		return;
-	}
-
-	AMDGV_PRINT("*************** Dump msg for VF%d\n", idx_vf);
-	if (amdgv_vfmgr_update_pf2vf_message(adapt, idx_vf)) {
-		AMDGV_PRINT("Failed to update pf2vf msg for VF%d\n", idx_vf);
-	}
-
-	if (amdgv_vfmgr_copy_from_vf_fb(adapt, idx_vf,
-					GET_PF2VF_OFFSET(adapt, idx_vf),
-					pf2vf_info, sizeof(struct amd_sriov_msg_pf2vf_info))) {
-		AMDGV_PRINT("Failed to copy from VF FB pf2vf\n");
-	}
-
-	if (amdgv_vfmgr_copy_from_vf_fb(adapt, idx_vf,
-					GET_VF2PF_OFFSET(adapt, idx_vf),
-					vf2pf_info, sizeof(struct amd_sriov_msg_vf2pf_info))) {
-		AMDGV_PRINT("Failed to copy from VF FB vf2pf\n");
-	}
-
-	AMDGV_PRINT("*************** PF\n");
-	AMDGV_PRINT("header.size     = %d[byte]\n", pf2vf_info->header.size);
-	AMDGV_PRINT("header.version  = %d\n", pf2vf_info->header.version);
-	AMDGV_PRINT("header.resv[0]  = %d\n", pf2vf_info->header.reserved[0]);
-	AMDGV_PRINT("header.resv[1]  = %d\n", pf2vf_info->header.reserved[1]);
-
-	AMDGV_PRINT("body.checksum   = %u\n", pf2vf_info->checksum);
-	AMDGV_PRINT("body.flag       = 0x%x\n", pf2vf_info->feature_flags.all);
-	AMDGV_PRINT("body.hevc_mbps  = %d\n", pf2vf_info->hevc_enc_max_mb_per_second);
-	AMDGV_PRINT("body.hevc_mbpf  = %d\n", pf2vf_info->hevc_enc_max_mb_per_frame);
-	AMDGV_PRINT("body.avc_mbps   = %d\n", pf2vf_info->avc_enc_max_mb_per_second);
-	AMDGV_PRINT("body.avc_mbpf   = %d\n", pf2vf_info->avc_enc_max_mb_per_frame);
-
-	AMDGV_PRINT("body.mec_off    = 0x%llx\n", pf2vf_info->mecfw_offset);
-	AMDGV_PRINT("body.mec_size   = %d[byte]\n", pf2vf_info->mecfw_size);
-	AMDGV_PRINT("body.uvd_off    = 0x%llx\n", pf2vf_info->uvdfw_offset);
-	AMDGV_PRINT("body.uvd_size   = %d[byte]\n", pf2vf_info->uvdfw_size);
-	AMDGV_PRINT("body.vce_off    = 0x%llx\n", pf2vf_info->vcefw_offset);
-	AMDGV_PRINT("body.vce_size   = %d[byte]\n", pf2vf_info->vcefw_size);
-	AMDGV_PRINT("body.bp_off_low = 0x%x\n", pf2vf_info->bp_block_offset_low);
-	AMDGV_PRINT("body.bp_off_hgh = 0x%x\n", pf2vf_info->bp_block_offset_high);
-	AMDGV_PRINT("body.bp_size    = %d[byte]\n", pf2vf_info->bp_block_size);
-
-	AMDGV_PRINT("body.interval   = %d[msec]\n", pf2vf_info->vf2pf_update_interval_ms);
-
-	AMDGV_PRINT("body.uuid       = %lld\n", pf2vf_info->uuid);
-	AMDGV_PRINT("body.fcn_idx    = %d\n", pf2vf_info->fcn_idx);
-
-	AMDGV_PRINT("body.reg_flags  = 0x%x\n", pf2vf_info->reg_access_flags);
-
-	for (i = 0; i < AMD_SRIOV_MSG_RESERVE_VCN_INST; i++) {
-		AMDGV_PRINT("body.mm%d.decdim = %d\n", i,
-			    pf2vf_info->mm_bw_management[i].decode_max_dimension_pixels);
-		AMDGV_PRINT("body.mm%d.decfrm = %d\n", i,
-			    pf2vf_info->mm_bw_management[i].decode_max_frame_pixels);
-		AMDGV_PRINT("body.mm%d.encdim = %d\n", i,
-			    pf2vf_info->mm_bw_management[i].encode_max_dimension_pixels);
-		AMDGV_PRINT("body.mm%d.encfrm = %d\n", i,
-			    pf2vf_info->mm_bw_management[i].encode_max_frame_pixels);
-	}
-
-	AMDGV_PRINT("body.uuid_info.time_low      = 0x%x\n", pf2vf_info->uuid_info.time_low);
-	AMDGV_PRINT("body.uuid_info.time_mid      = 0x%x\n", pf2vf_info->uuid_info.time_mid);
-	AMDGV_PRINT("body.uuid_info.time_high     = 0x%x\n", pf2vf_info->uuid_info.time_high);
-	AMDGV_PRINT("body.uuid_info.version       = 0x%x\n", pf2vf_info->uuid_info.version);
-	AMDGV_PRINT("body.uuid_info.clk_seq_hi    = 0x%x\n", pf2vf_info->uuid_info.clk_seq_hi);
-	AMDGV_PRINT("body.uuid_info.variant       = 0x%x\n", pf2vf_info->uuid_info.variant);
-	AMDGV_PRINT("body.uuid_info.clk_seq_low   = 0x%x\n", pf2vf_info->uuid_info.clk_seq_low);
-	AMDGV_PRINT("body.uuid_info.asic_4        = 0x%x\n", pf2vf_info->uuid_info.asic_4);
-	AMDGV_PRINT("body.uuid_info.asic_0        = 0x%x\n", pf2vf_info->uuid_info.asic_0);
-
-	for (i = 0; i < 256 - AMD_SRIOV_MSG_PF2VF_INFO_FILLED_SIZE; i++) {
-		if (pf2vf_info->reserved[i] != 0)
-			AMDGV_PRINT("Corrupted at reserved[%d]!\n", i);
-	}
-	AMDGV_PRINT("body.reserved checked\n");
-
-	checksum = amd_sriov_msg_checksum(pf2vf_info, pf2vf_info->header.size, 0,
-					  pf2vf_info->checksum);
-	if (checksum != pf2vf_info->checksum)
-		AMDGV_PRINT("Check sum incorrect! 0x%0x\n", checksum);
-	else
-		AMDGV_PRINT("body.checksum correct\n");
-
-	AMDGV_PRINT("*************** VF\n");
-	AMDGV_PRINT("header.size     = %d[byte]\n", vf2pf_info->header.size);
-	AMDGV_PRINT("header.version  = %d\n", vf2pf_info->header.version);
-	AMDGV_PRINT("header.reserved = %d\n", vf2pf_info->header.reserved[0]);
-	AMDGV_PRINT("header.reserved = %d\n", vf2pf_info->header.reserved[1]);
-
-	AMDGV_PRINT("body.checksum   = %d\n", vf2pf_info->checksum);
-	vf2pf_info->driver_version[63] = 0;
-	AMDGV_PRINT("body.drv_ver    = |%s|\n", vf2pf_info->driver_version);
-	AMDGV_PRINT("body.drv_cert   = %d\n", vf2pf_info->driver_cert);
-	AMDGV_PRINT("body.os         = 0x%x\n", vf2pf_info->os_info.all);
-
-	AMDGV_PRINT("body.fb_usage   = %d\n", vf2pf_info->fb_usage);
-	AMDGV_PRINT("body.gfx_usage  = %d\n", vf2pf_info->gfx_usage);
-	AMDGV_PRINT("body.gfx_health = %d\n", vf2pf_info->gfx_health);
-	AMDGV_PRINT("body.cmp_usage  = %d\n", vf2pf_info->compute_usage);
-	AMDGV_PRINT("body.cmp_health = %d\n", vf2pf_info->compute_health);
-	AMDGV_PRINT("body.avc_usage  = %d\n", vf2pf_info->avc_enc_usage);
-	AMDGV_PRINT("body.avc_health = %d\n", vf2pf_info->avc_enc_health);
-	AMDGV_PRINT("body.hvc_usage  = %d\n", vf2pf_info->hevc_enc_usage);
-	AMDGV_PRINT("body.hvc_health = %d\n", vf2pf_info->hevc_enc_health);
-
-	AMDGV_PRINT("body.enc_usage  = %d\n", vf2pf_info->encode_usage);
-	AMDGV_PRINT("body.dec_usage  = %d\n", vf2pf_info->decode_usage);
-
-	AMDGV_PRINT("body.ver_req    = %d\n", vf2pf_info->pf2vf_version_required);
-
-	AMDGV_PRINT("body.fb_v_usage = %d\n", vf2pf_info->fb_vis_usage);
-	AMDGV_PRINT("body.fb_v_size  = %d[mbyte]\n", vf2pf_info->fb_vis_size);
-	AMDGV_PRINT("body.fb_size    = %d[mbyte]\n", vf2pf_info->fb_size);
-
-	for (i = 0; i < AMD_SRIOV_MSG_RESERVE_UCODE; i++) {
-		AMDGV_PRINT("body.ucode_id   = %d idx(%d)\n", vf2pf_info->ucode_info[i].id, i);
-		AMDGV_PRINT("body.ucode_ver  = 0x%x\n", vf2pf_info->ucode_info[i].version);
-	}
-
-	for (i = 0; i < 256 - AMD_SRIOV_MSG_VF2PF_INFO_FILLED_SIZE; i++) {
-		if (vf2pf_info->reserved[i] != 0)
-			AMDGV_PRINT("Corrupted at reserved[%d]!\n", i);
-	}
-	AMDGV_PRINT("body.reserved checked\n");
-
-	checksum = amd_sriov_msg_checksum(vf2pf_info, vf2pf_info->header.size, 0,
-					  vf2pf_info->checksum);
-	if (checksum != vf2pf_info->checksum)
-		AMDGV_PRINT("Check sum incorrect!\n");
-	else
-		AMDGV_PRINT("body.checksum correct\n");
-
-	oss_free(pf2vf_info);
-	oss_free(vf2pf_info);
 }
 
 int amdgv_fw_live_update(amdgv_dev_t dev, enum amdgv_firmware_id fw_id)
@@ -2542,6 +2445,9 @@ int amdgv_toggle_mmio_access(amdgv_dev_t dev, uint32_t idx_vf, uint32_t vf_acces
 	int ret = 0;
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (AMDGV_IS_IDX_INVALID(idx_vf))
+		return AMDGV_FAILURE;
 
 	ret = amdgv_gpuiov_set_vf_access(adapt, idx_vf, vf_access_select, enable);
 
@@ -2608,6 +2514,9 @@ int amdgv_set_vf_migration_state(amdgv_dev_t dev, uint32_t idx_vf, enum amdgv_mi
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
+	if (AMDGV_IS_IDX_INVALID(idx_vf))
+		return AMDGV_FAILURE;
+
 	data.migration_state.state = state;
 	data.migration_state.result = &result;
 
@@ -2627,10 +2536,16 @@ int amdgv_set_vf_migration_state(amdgv_dev_t dev, uint32_t idx_vf, enum amdgv_mi
 static inline bool amdgv_buffer_do_check(uint64_t addr, uint64_t size,
 					uint64_t aperture_start, uint64_t aperture_size)
 {
-	if (addr >= aperture_start && addr + size <= aperture_start + aperture_size)
-		return true;
+	if (addr < aperture_start)
+		return false;
 
-	return false;
+	if (size > aperture_size)
+		return false;
+
+	if (addr - aperture_start > aperture_size - size)
+		return false;
+
+	return true;
 }
 
 static bool amdgv_buffer_check(struct amdgv_adapter *adapt, uint64_t gpu_addr, uint64_t size)
@@ -2663,6 +2578,9 @@ int amdgv_copy_migration_vf_fb(amdgv_dev_t dev, uint32_t idx_vf, uint32_t idx_fb
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
+	if (AMDGV_IS_IDX_INVALID(idx_vf))
+		return AMDGV_FAILURE;
+
 	if (!adapt->sys_mem_info.va_ptr)
 		return AMDGV_FAILURE;
 
@@ -2676,7 +2594,7 @@ int amdgv_copy_migration_vf_fb(amdgv_dev_t dev, uint32_t idx_vf, uint32_t idx_fb
 
 	if (!amdgv_buffer_check(adapt, data.vf_fb_copy_data.gpu_addr,
 					data.vf_fb_copy_data.size)) {
-		AMDGV_ERROR("Invalid buffer address, exit.\n");
+		AMDGV_ERROR("Invalid buffer address.\n");
 		return AMDGV_FAILURE;
 	}
 
@@ -2703,6 +2621,9 @@ int amdgv_vf_fb_copy(amdgv_dev_t dev, uint32_t idx_vf, uint64_t fb_offset,
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
+	if (AMDGV_IS_IDX_INVALID(idx_vf))
+		return AMDGV_FAILURE;
+
 	data.vf_fb_copy_data.fb_offset = fb_offset;
 	data.vf_fb_copy_data.size = size;
 	data.vf_fb_copy_data.gpu_addr = gpu_addr;
@@ -2712,7 +2633,7 @@ int amdgv_vf_fb_copy(amdgv_dev_t dev, uint32_t idx_vf, uint64_t fb_offset,
 
 	if (!amdgv_buffer_check(adapt, data.vf_fb_copy_data.gpu_addr,
 					data.vf_fb_copy_data.size)) {
-		AMDGV_ERROR("Invalid buffer address, exit.\n");
+		AMDGV_ERROR("Invalid buffer address.\n");
 		return AMDGV_FAILURE;
 	}
 
@@ -2740,13 +2661,21 @@ int amdgv_vf_fb_copy_async(amdgv_dev_t dev, uint32_t idx_vf,
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
+	if (AMDGV_IS_IDX_INVALID(idx_vf))
+		return AMDGV_FAILURE;
+
 	if (!buf_transfer_state || !entries || num_entries == 0)
 		return AMDGV_FAILURE;
+
+	if (AMDGV_IS_IDX_INVALID(idx_vf)) {
+		*buf_transfer_state = AMDGV_BUF_TRANSFER_ERROR;
+		return AMDGV_FAILURE;
+	}
 
 	for (i = 0; i < num_entries; i++) {
 		if (!amdgv_buffer_check(adapt, entries[i].gpu_addr,
 					entries[i].size)) {
-			AMDGV_ERROR("Invalid buffer address for entry %u, exit.\n", i);
+			AMDGV_ERROR("Invalid buffer address for entry %u.\n", i);
 			*buf_transfer_state = AMDGV_BUF_TRANSFER_ERROR;
 			return AMDGV_FAILURE;
 		}
@@ -2772,6 +2701,9 @@ int amdgv_vf_fb_copy_async(amdgv_dev_t dev, uint32_t idx_vf,
 
 static void amdgv_get_vf_identifier_v1(struct amdgv_adapter *adapt, uint32_t idx_vf, struct amdgv_vf_identifier *vf_id)
 {
+	if (AMDGV_IS_IDX_INVALID(idx_vf))
+		return;
+
 	vf_id->version = 0;
 	vf_id->v1_0.vf_fb_size_mb = adapt->array_vf[idx_vf].fb_size;
 	vf_id->v1_0.gfx_timeslice_us = adapt->array_vf[idx_vf].time_slice[AMDGV_SCHED_BLOCK_GFX];
@@ -2787,6 +2719,9 @@ static void amdgv_get_vf_identifier_v1(struct amdgv_adapter *adapt, uint32_t idx
 
 static void amdgv_get_vf_identifier_v2(struct amdgv_adapter *adapt, uint32_t idx_vf, struct amdgv_vf_identifier *vf_id)
 {
+	if (AMDGV_IS_IDX_INVALID(idx_vf))
+		return;
+
 	vf_id->vf_index = idx_vf;
 	vf_id->version = LIBGV_VF_VERSION;
 	vf_id->v2_0.vf_fb_size_mb = adapt->array_vf[idx_vf].fb_size;
@@ -2825,6 +2760,11 @@ int amdgv_get_migration_ctx(amdgv_dev_t dev, uint32_t idx_vf, struct amdgv_migra
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
+	if (!amdgv_is_migration_supported(dev)) {
+		AMDGV_WARN("Live migration is not supported\n");
+		return AMDGV_FAILURE;
+	}
+
 	oss_mutex_lock(adapt->api_lock);
 
 	if (AMDGV_IS_IDX_INVALID(idx_vf)) {
@@ -2851,7 +2791,6 @@ int amdgv_get_migration_ctx(amdgv_dev_t dev, uint32_t idx_vf, struct amdgv_migra
 		/* 3. Get vbios version */
 		oss_memset(&vbios_info, 0, sizeof(vbios_info));
 		if (amdgv_gpumon_get_vbios_info(dev, &vbios_info)) {
-			AMDGV_ERROR("failed to get vbios info\n");
 			ret = AMDGV_FAILURE;
 			goto out;
 		}
@@ -2862,7 +2801,6 @@ int amdgv_get_migration_ctx(amdgv_dev_t dev, uint32_t idx_vf, struct amdgv_migra
 		ctx->gpu.migration_version = 0;
 		if (amdgv_migration_get_migration_version(adapt,
 							  &ctx->gpu.migration_version)) {
-			AMDGV_ERROR("failed to get migration version.\n");
 			ret = AMDGV_FAILURE;
 			goto out;
 		}
@@ -2919,6 +2857,40 @@ out:
 	return ret;
 }
 
+bool amdgv_is_migration_supported(amdgv_dev_t dev)
+{
+	struct amdgv_adapter *adapt;
+	bool ret;
+
+	if (dev == AMDGV_INVALID_HANDLE)
+		return false;
+
+	adapt = (struct amdgv_adapter *)dev;
+	if (adapt->status != AMDGV_STATUS_HW_INIT)
+		return false;
+
+	oss_mutex_lock(adapt->api_lock);
+	ret = (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION) &&
+		(adapt->live_migration.migration_version != AMDGV_MIGRATION_VERSION_UNINITIALIZED);
+	oss_mutex_unlock(adapt->api_lock);
+
+	return ret;
+}
+
+bool amdgv_migration_pre_copy_supported(amdgv_dev_t dev)
+{
+	struct amdgv_adapter *adapt;
+
+	if (dev == AMDGV_INVALID_HANDLE)
+		return false;
+
+	adapt = (struct amdgv_adapter *)dev;
+	if (adapt->status != AMDGV_STATUS_HW_INIT)
+		return false;
+
+	return !amdgv_xgmi_node_fb_sharing_allowed(adapt);
+}
+
 int amdgv_get_migration_data_size(amdgv_dev_t dev, uint32_t idx_vf, uint64_t *size,
 				  enum amdgv_migration_data_section section)
 {
@@ -2928,13 +2900,15 @@ int amdgv_get_migration_data_size(amdgv_dev_t dev, uint32_t idx_vf, uint64_t *si
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
+	if (AMDGV_IS_IDX_INVALID(idx_vf))
+		return AMDGV_FAILURE;
+
 	oss_mutex_lock(adapt->api_lock);
 
 	switch (section) {
 	case AMDGV_MIGRATION_CONTENT_VF_HW_STATIC_DATA:
 	case AMDGV_MIGRATION_CONTENT_VF_HW_DYNAMIC_DATA:
 		if (amdgv_migration_get_psp_data_size(adapt, size, section)) {
-			AMDGV_ERROR("failed to manifest data size.\n");
 			ret = AMDGV_FAILURE;
 			goto out;
 		}
@@ -2942,7 +2916,6 @@ int amdgv_get_migration_data_size(amdgv_dev_t dev, uint32_t idx_vf, uint64_t *si
 
 	case AMDGV_MIGRATION_CONTENT_VF_FB_DATA:
 		if (amdgv_vfmgr_get_vf_fb(adapt, idx_vf, &fb_offset, &fb_size)) {
-			AMDGV_ERROR("failed to get VF%d info", idx_vf);
 			ret = AMDGV_FAILURE;
 			goto out;
 		}
@@ -2970,6 +2943,9 @@ static int amdgv_migration_transfer_manifest_data_event(amdgv_dev_t dev, uint32_
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
+	if (AMDGV_IS_IDX_INVALID(idx_vf))
+		return AMDGV_FAILURE;
+
 	oss_mutex_lock(adapt->api_lock);
 
 	data.lm.type = type;
@@ -2981,9 +2957,7 @@ static int amdgv_migration_transfer_manifest_data_event(amdgv_dev_t dev, uint32_
 
 	oss_mutex_unlock(adapt->api_lock);
 
-	if (ret)
-		AMDGV_ERROR("Queue Migration transfer manifest data event failed .\n");
-	else
+	if (ret == 0)
 		ret = result;
 
 	return ret;
@@ -3071,7 +3045,6 @@ int amdgv_get_migration_static_package(amdgv_dev_t dev, void *buf, uint64_t *siz
 	}
 	if (amdgv_migration_get_psp_data_size(adapt, &size_return,
 					      AMDGV_MIGRATION_CONTENT_VF_HW_STATIC_DATA)) {
-		AMDGV_ERROR("Failed to get static data size.\n");
 		ret = AMDGV_FAILURE;
 		goto out;
 	}
@@ -3116,7 +3089,6 @@ int amdgv_get_migration_dynamic_package(amdgv_dev_t dev, void *buf, uint64_t *si
 	}
 	if (amdgv_migration_get_psp_data_size(adapt, &size_return,
 					      AMDGV_MIGRATION_CONTENT_VF_HW_DYNAMIC_DATA)) {
-		AMDGV_ERROR("Failed to get dynamic data size.\n");
 		ret = AMDGV_FAILURE;
 		goto out;
 	}
@@ -3182,6 +3154,9 @@ int amdgv_migration_query_abort(amdgv_dev_t dev, uint32_t idx_vf, bool *should_a
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
+	if (AMDGV_IS_IDX_INVALID(idx_vf))
+		return AMDGV_FAILURE;
+
 	oss_mutex_lock(adapt->api_lock);
 	*should_abort = AMDGV_MIGRATION_SHOULD_ABORT(adapt, idx_vf);
 	oss_mutex_unlock(adapt->api_lock);
@@ -3197,6 +3172,9 @@ int amdgv_migration_set_abort(amdgv_dev_t dev, uint32_t idx_vf)
 	int ret = 0;
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (AMDGV_IS_IDX_INVALID(idx_vf))
+		return AMDGV_FAILURE;
 
 	oss_mutex_lock(adapt->api_lock);
 	ret = amdgv_sched_queue_event_and_wait_ex(adapt, idx_vf,
@@ -3690,10 +3668,8 @@ int AMDGV_API amdgv_ffbm_vf_mapping(amdgv_dev_t dev, uint32_t vf_idx, uint64_t s
 
 	oss_mutex_lock(adapt->api_lock);
 	ret = amdgv_ffbm_manual_map(adapt, vf_idx, size, gpa, spa, permission, AMDGV_FFBM_MEM_TYPE_VF);
-	if (ret) {
-		AMDGV_ERROR("FFBM manual map failed\n");
+	if (ret)
 		goto unlock;
-	}
 	ret = amdgv_ffbm_apply_page_table(adapt);
 
 unlock:
@@ -3882,35 +3858,20 @@ int AMDGV_API amdgv_get_timeslice(amdgv_dev_t dev, uint32_t vf_idx,
 
 int AMDGV_API amdgv_disable_ras_feature(amdgv_dev_t dev)
 {
-	int ret = 0;
 	struct amdgv_adapter *adapt;
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
-	ret = amdgv_ecc_disable_ras_feature(adapt);
-
-	if (ret != 0) {
-		AMDGV_ERROR("Disable ras feature failed\n");
-	}
-
-	return ret;
+	return amdgv_ecc_disable_ras_feature(adapt);
 }
 
 int AMDGV_API amdgv_enable_ras_feature(amdgv_dev_t dev)
 {
-
-	int ret = 0;
 	struct amdgv_adapter *adapt;
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
-	ret = amdgv_ecc_enable_ras_feature(adapt);
-
-	if (ret != 0) {
-		AMDGV_ERROR("Enable ras feature failed\n");
-	}
-
-	return ret;
+	return amdgv_ecc_enable_ras_feature(adapt);
 }
 
 int AMDGV_API amdgv_copy_ip_discovery_data_to_vf(amdgv_dev_t dev, uint32_t vf_idx)
@@ -3920,13 +3881,12 @@ int AMDGV_API amdgv_copy_ip_discovery_data_to_vf(amdgv_dev_t dev, uint32_t vf_id
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
+	if (AMDGV_IS_IDX_INVALID(vf_idx))
+		return AMDGV_FAILURE;
+
 	oss_mutex_lock(adapt->api_lock);
 	ret = amdgv_vfmgr_copy_ip_data_to_vf(adapt, vf_idx, false);
 	oss_mutex_unlock(adapt->api_lock);
-
-	if (ret != 0) {
-		AMDGV_ERROR("Copy IP discovery data to vf[%d] failed\n", vf_idx);
-	}
 
 	return ret;
 }
@@ -4125,13 +4085,17 @@ int AMDGV_API amdgv_get_current_bp(amdgv_dev_t dev, struct amdgv_bp_info *bp_inf
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 	oss_mutex_lock(adapt->bp_lock);
-	if (adapt->bp_mode == AMDGV_BP_MODE_1)
-		return AMDGV_FAILURE;
+	if (adapt->bp_mode == AMDGV_BP_MODE_1) {
+		ret = AMDGV_FAILURE;
+		goto unlock;
+	}
 
 	if (adapt->bp_info.is_in_bp)
 		oss_memcpy(bp_info, &(adapt->bp_info), sizeof(struct amdgv_bp_info));
 	else
 		bp_info->is_in_bp = false;
+
+unlock:
 	oss_mutex_unlock(adapt->bp_lock);
 
 	return ret;
@@ -4144,6 +4108,21 @@ int AMDGV_API amdgv_send_ws_cmd(amdgv_dev_t dev, uint32_t ws_event, uint32_t hw_
 	int ret = 0;
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	switch (ws_event) {
+	case AMDGV_IDLE_GPU:
+	case AMDGV_SAVE_GPU_STATE:
+	case AMDGV_LOAD_GPU_STATE:
+	case AMDGV_RUN_GPU:
+	case AMDGV_INIT_GPU:
+	case AMDGV_SHUTDOWN_GPU:
+		if (AMDGV_IS_IDX_INVALID(idx_vf))
+			return AMDGV_FAILURE;
+		break;
+	default:
+		break;
+	}
+
 	oss_mutex_lock(adapt->bp_lock);
 	adapt->is_user_ws_cmd = true;
 	switch (ws_event) {
@@ -4190,6 +4169,10 @@ int AMDGV_API amdgv_dump_asymmetric_timeslice(amdgv_dev_t dev, uint32_t idx_vf, 
 	struct amdgv_vf_device *entry;
 	int ret = 0;
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (AMDGV_IS_IDX_INVALID(idx_vf))
+		return AMDGV_FAILURE;
+
 	oss_mutex_lock(adapt->api_lock);
 
 	if (!adapt->sched.setup_vf_timeslice)
@@ -4267,6 +4250,22 @@ int amdgv_gpu_timer(amdgv_dev_t dev, uint64_t micro_seconds)
 	return result;
 }
 
+int AMDGV_API amdgv_write_virtualized_interrupt(amdgv_dev_t dev, uint32_t idx_vf, uint32_t idx_table, uint64_t message_address,
+			uint32_t message_data, uint32_t vector_control, bool is_direct_write)
+{
+	struct amdgv_adapter *adapt;
+	int ret = 0;
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (AMDGV_IS_IDX_INVALID(idx_vf))
+		return AMDGV_FAILURE;
+
+	oss_mutex_lock(adapt->api_lock);
+	ret = amdgv_irqmgr_write_virtualized_interrupt(adapt, idx_vf, idx_table, message_address, message_data, vector_control, is_direct_write);
+	oss_mutex_unlock(adapt->api_lock);
+	return ret;
+}
+
 int AMDGV_API amdgv_error_ring_buffer_dump(amdgv_dev_t dev, char *buf, int buf_size)
 {
 	struct amdgv_adapter *adapt;
@@ -4306,6 +4305,15 @@ int AMDGV_API amdgv_set_product_info_invalid(amdgv_dev_t dev)
 
 void *AMDGV_API amdgv_map_sysmem(amdgv_dev_t dev, uint64_t len, void **va_ptr, uint64_t *gpu_addr)
 {
+	return amdgv_map_sysmem_with_attr(dev, len,
+				OSS_PAGE_READWRITE | OSS_PAGE_WRITECOMBINE,
+				va_ptr, gpu_addr);
+}
+
+void *AMDGV_API amdgv_map_sysmem_with_attr(amdgv_dev_t dev, uint64_t len,
+					   enum oss_page_attr page_attr,
+					   void **va_ptr, uint64_t *gpu_addr)
+{
 	struct amdgv_adapter *adapt;
 	struct amdgv_memmgr_mem *mem;
 
@@ -4319,8 +4327,9 @@ void *AMDGV_API amdgv_map_sysmem(amdgv_dev_t dev, uint64_t len, void **va_ptr, u
 		return NULL;
 
 	oss_mutex_lock(adapt->api_lock);
-	mem = amdgv_memmgr_alloc_sys_align(&adapt->memmgr_sys, len,
-						  PAGE_SIZE, gpu_addr, *va_ptr);
+	mem = amdgv_memmgr_alloc_sys_align_with_attr(&adapt->memmgr_sys, len,
+						     PAGE_SIZE, page_attr,
+						     gpu_addr, *va_ptr);
 
 	if (!mem) {
 		oss_mutex_unlock(adapt->api_lock);
@@ -4476,6 +4485,9 @@ int AMDGV_API amdgv_reset_vf_arbiters(amdgv_dev_t dev, uint32_t idx_vf)
 	int ret = 0;
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (AMDGV_IS_IDX_INVALID(idx_vf))
+		return AMDGV_FAILURE;
 
 	oss_mutex_lock(adapt->api_lock);
 

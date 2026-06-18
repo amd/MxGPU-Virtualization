@@ -1,25 +1,7 @@
-/*
- * Copyright (c) 2021-2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
-
 
 #include <amdgv.h>
 #include <amdgv_device.h>
@@ -325,7 +307,6 @@ static int mi200_get_xgmi_fb_sharing_mode_info(struct amdgv_adapter *src_adapt,
 		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
 
 	hive = amdgv_get_xgmi_hive(src_adapt);
-
 	if (hive && amdgv_xgmi_is_node_in_hive(hive, dest_adapt)) {
 		*is_sharing_enabled = amdgv_xgmi_is_fb_sharing_allowed(
 			src_adapt, src_adapt->xgmi.phy_node_id, dest_adapt->xgmi.phy_node_id,
@@ -427,7 +408,6 @@ static int mi200_get_link_topology(struct amdgv_adapter *adapt,
 	topology_info->is_fb_sharing_enabled = false;
 
 	hive = amdgv_get_xgmi_hive(adapt);
-
 	if (hive && amdgv_xgmi_is_node_in_hive(hive, dest_adapt)) {
 
 		topology_info->link_type = AMDGV_GPUMON_LINK_TYPE_XGMI3;

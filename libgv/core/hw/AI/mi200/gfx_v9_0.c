@@ -1,24 +1,6 @@
-/*
- * Copyright 2022-2024 Advanced Micro Devices, Inc.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
- * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- * OTHER DEALINGS IN THE SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv.h"
@@ -36,20 +18,6 @@
 static const uint32_t this_block = AMDGV_GFX_BLOCK;
 
 #define GFX9_MEC_HPD_SIZE 4096
-
-static unsigned int order_base_2(unsigned int size_of_dwords)
-{
-	unsigned int i, size_of_log2 = 0;
-
-	for (i = 0; i < 32; i++) {
-		if (size_of_dwords == (1U << i)) {
-			size_of_log2 = i;
-			break;
-		}
-	}
-
-	return size_of_log2;
-}
 
 static void gfx_v9_0_kiq_set_resources(struct amdgv_ring *kiq_ring,
 				uint64_t queue_mask)
@@ -641,7 +609,7 @@ static void gfx_v9_0_wait_for_rlc_serdes(struct amdgv_adapter *adapt)
 				mi200_gfx_select_se_sh(adapt, 0xffffffff,
 						      0xffffffff, 0xffffffff);
 				oss_mutex_unlock(adapt->grbm_idx_mutex);
-				AMDGV_INFO(
+				AMDGV_ERROR(
 					"Timeout wait for RLC serdes %u,%u\n",
 					 i, j);
 				return;

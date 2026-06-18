@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_device.h"
@@ -475,7 +458,7 @@ static int amdgv_diag_data_host_driver_collect_gen_info(
 	file_data->last_blk_hdr->checksum = amd_sriov_msg_checksum(info, info_blk_size, 0, 0);
 	file_data->cur_offset += info_blk_size;
 
-	AMDGV_INFO("Host driver info of size:%d added\n", info_blk_size);
+	AMDGV_DEBUG("Host driver info of size:%d added\n", info_blk_size);
 
 	return 0;
 }
@@ -634,7 +617,7 @@ static int amdgv_diag_data_host_driver_collect_error_log(
 		return AMDGV_FAILURE;
 	}
 
-	AMDGV_INFO("Error dump of size:%d added\n", host_drv->error_dump.mem_blk.used_size);
+	AMDGV_DEBUG("Error dump of size:%d added\n", host_drv->error_dump.mem_blk.used_size);
 
 	return 0;
 }
@@ -697,7 +680,7 @@ static int amdgv_diag_data_host_driver_collect_trace_log(
 		amd_sriov_msg_checksum((uint8_t *)file_data->buff + trace_log_offset,
 				       host_drv->trace_log.mem_blk.used_size, 0, 0);
 
-	AMDGV_INFO("Trace log of size:%d added\n", host_drv->trace_log.mem_blk.used_size);
+	AMDGV_DEBUG("Trace log of size:%d added\n", host_drv->trace_log.mem_blk.used_size);
 
 	return 0;
 }
@@ -716,7 +699,7 @@ static int amdgv_diag_data_host_driver_collect_vbios_post_log(
 
 	vpost_log = &host_drv->vbios_post_log;
 	if (vpost_log->mem_blk.vaddr == NULL) {
-		AMDGV_INFO("VBIOS Post Log not avilable\n");
+		AMDGV_DEBUG("VBIOS Post Log not available\n");
 		return AMDGV_FAILURE;
 	}
 
@@ -733,7 +716,7 @@ static int amdgv_diag_data_host_driver_collect_vbios_post_log(
 		return AMDGV_FAILURE;
 	}
 
-	AMDGV_INFO("VBPOST log of size:%d added\n", vpost_log->mem_blk.used_size);
+	AMDGV_DEBUG("VBPOST log of size:%d added\n", vpost_log->mem_blk.used_size);
 
 	return 0;
 }
@@ -816,7 +799,7 @@ static int amdgv_diag_data_host_driver_collect_ih_ring_log(
 	file_data->last_blk_hdr->checksum =
 		amd_sriov_msg_checksum(blk_data, blk_data_len, 0, 0);
 
-	AMDGV_INFO("IH RB log of size:%d added\n", blk_data_len);
+	AMDGV_DEBUG("IH RB log of size:%d added\n", blk_data_len);
 
 	return 0;
 }

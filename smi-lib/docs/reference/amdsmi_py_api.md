@@ -244,19 +244,23 @@ Example:
 
 ```python
 try:
-    processor_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_GPU)
-    if len(processor_handles) == 0:
+    # Get AMD GPU handles
+    gpu_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_GPU)
+    if len(gpu_handles) == 0:
         print("No GPUs on machine")
     else:
-        for processor in processor_handles:
-            print(amdsmi_get_gpu_device_uuid(processor))
+        for gpu in gpu_handles:
+            print(amdsmi_get_gpu_device_uuid(gpu))
 
-    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
-    if len(nic_handles) == 0:
-        print("No NICs on machine")
-    else:
-        for nic in nic_handles:
-            print(amdsmi_get_nic_asic_info(nic))
+    # Get AMD NIC handles
+    amd_nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    for nic in amd_nic_handles:
+        print(amdsmi_get_nic_asic_info(nic))
+
+    # Get BRCM NIC handles
+    brcm_nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.BRCM_NIC)
+    for nic in brcm_nic_handles:
+        print(amdsmi_get_nic_asic_info(nic))
 except AmdSmiException as e:
     print(e)
 ```
@@ -1316,6 +1320,7 @@ Note: socket_power can rarely spike above the socket power limit in some cases
 `gfx_voltage` | gfx voltage
 `soc_voltage` | socket voltage
 `mem_voltage` | memory voltage
+`ubb_power` | UBB node power in W (MI350X+)
 
 Exceptions that can be thrown by `amdsmi_get_power_info` function:
 
@@ -1337,6 +1342,7 @@ try:
             print(power_info['gfx_voltage'])
             print(power_info['soc_voltage'])
             print(power_info['mem_voltage'])
+            print(power_info['ubb_power'])
 except AmdSmiException as e:
     print(e)
 ```
@@ -1681,9 +1687,10 @@ Output: Dictionary with fields
 Field | Description
 ---|---
 `vram_type` | VRAM type from `AmdSmiVramType` enum
-`vram_vendor` | VRAM vendor from `AmdSmiVranVendor` enum
+`vram_vendor` | VRAM vendor name
 `vram_size` | VRAM size in MB
 `vram_bit_width` | VRAM bit width
+`vram_max_bandwidth` | VRAM max bandwidth at current memory clock (GB/s)
 
 `AmdSmiVramType` enum:
 
@@ -1698,6 +1705,7 @@ Field | Description
 `DDR2` | DDR2 VRAM type
 `DDR3` | DDR3 VRAM type
 `DDR4` | DDR4 VRAM type
+`DDR5` | DDR5 VRAM type
 `GDDR1` | GDDR1 VRAM type
 `GDDR2` | GDDR2 VRAM type
 `GDDR3` | GDDR3 VRAM type
@@ -1705,22 +1713,8 @@ Field | Description
 `GDDR5` | GDDR5 VRAM type
 `GDDR6` | GDDR6 VRAM type
 `GDDR7` | GDDR7 VRAM type
-
-`AmdSmiVramVendor` enum:
-
-Field | Description
----|---
-`SAMSUNG` | SAMSUNG VRAM vendor
-`INFINEON` | INFINEON VRAM vendor
-`ELPIDA` | ELPIDA VRAM vendor
-`ETRON` | ETRON VRAM vendor
-`NANYA` | NANYA VRAM vendor
-`HYNIX` | HYNIX VRAM vendor
-`MOSEL` | MOSEL VRAM vendor
-`WINBOND` | WINBOND VRAM vendor
-`ESMT` | ESMT VRAM vendor
-`MICRON` | MICRON VRAM vendor
-`UNKNOWN` | UNKNOWN VRAM vendor
+`LPDDR4` | LPDDR4 VRAM type
+`LPDDR5` | LPDDR5 VRAM type
 
 Exceptions that can be thrown by `amdsmi_get_gpu_vram_info` function:
 
@@ -2623,6 +2617,17 @@ except AmdSmiException as e:
 Description: Sets framebuffer sharing mode
 
 Note: This API will only work if there's no guest VM running.
+      If all processors in the list are not located within the same NUMA node,
+      the API must be called separately for each NUMA node, as the set operation only applies to processors within a single NUMA node.
+      To determine how many times the set operation needs to be called, it is essential to first invoke the set API for the
+      first processor in the list.
+      After this, you should retrieve the configuration for the selected mode using amdsmi_get_xgmi_fb_sharing_mode_info and verify
+      the settings with amdsmi_get_link_topology.
+      We need to compare the is_fb_sharing_enabled status for each GPU pair to gather the necessary information,
+      alongside topology_info.fb_sharing to verify the link topology between them.
+      If these two values differ, it indicates that the processors are in different NUMA nodes,
+      suggesting that the initial set operation did not complete the intended configuration.
+      In this case, the set API should be invoked again for each NUMA node to ensure that the proper settings are applied.
 
 Input parameters:
 
@@ -2900,6 +2905,9 @@ Field | Description
 `SYS_BASEBOARD_TEMP` | system baseboard temperature
 `SYS_GPUBOARD_TEMP` | system gpu board temperature
 `SYS_BASEBOARD_POWER` | system baseboard power
+`STATIC_FREQUENCY` | static frequency
+`STATIC_TEMPERATURE` | static temperature
+`STATIC_THROTTLE` | static throttle
 `UNKNOWN` | unknown category
 
 `AmdSmiMetricType` enum:
@@ -3722,7 +3730,7 @@ except AmdSmiException as e:
     print(e)
 ```
 
-### amdsmi_get_p2p_status
+### amdsmi_topo_get_p2p_status
 
 Description: Retrieve the connection type and P2P capabilities between 2 GPUs
 
@@ -3738,7 +3746,7 @@ Fields | Description
 `type` | AmdSmiLinkType
 `cap` | <table><thead><tr> <th> Subfield </th> <th> Description</th> </tr></thead><tbody><tr><td>`is_iolink_coherent`</td><td>1 == True; 0 == False; Uint_max = Undefined</td></tr><tr><td>`is_iolink_atomics_32bit`</td><td>Supports 32bit atomics</td></tr><tr><td>`is_iolink_atomics_64bit`</td><td>Supports 64bit atomics</td></tr><tr><td>`is_iolink_dma`</td><td>Supports DMA</td></tr><tr><td>`is_iolink_bi_directional`</td><td>Is the IOLink Bidirectional</td></tr></tbody></table>
 
-Exceptions that can be thrown by `amdsmi_get_p2p_status` function:
+Exceptions that can be thrown by `amdsmi_topo_get_p2p_status` function:
 
 * `AmdSmiLibraryException`
 * `AmdSmiRetryException`
@@ -3754,7 +3762,7 @@ try:
     else:
         processor_handle_src = processors[0]
         processor_handle_dest = processors[1]
-        link_type = amdsmi_get_p2p_status(processor_handle_src, processor_handle_dest)
+        link_type = amdsmi_topo_get_p2p_status(processor_handle_src, processor_handle_dest)
         print(link_type['type'])
         print(link_type['caps'])
 except AmdSmiException as e:
@@ -3905,12 +3913,57 @@ Example:
 
 ```python
 try:
-    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    # Get all NIC handles (AMD and BRCM)
+    nic_handles = amdsmi_get_nic_processor_handles()
     if len(nic_handles) == 0:
         print("No NICs on machine")
     else:
         for nic in nic_handles:
             print(amdsmi_get_nic_driver_info(nic))
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_nic_fw_info
+
+Description: Retrieves firmware version information for the NIC
+
+**Note:** This API depends on `libmnl`. If `libmnl` is not installed on the
+system, this function raises `AmdSmiLibraryException` with status `AMDSMI_STATUS_NOT_SUPPORTED`.
+
+Input parameters:
+
+* `processor_handle` NIC for which to query
+
+Output: Dictionary with fields
+
+Field | Description
+---|---
+`fw` | list of firmware entries, each containing `type`, `name`, and `version`
+
+Each firmware entry contains:
+
+Field | Description
+---|---
+`type` | firmware version type from `AmdSmiNicFwVersionType`
+`name` | firmware component name
+`version` | firmware version string
+
+Exceptions that can be thrown by `amdsmi_get_nic_fw_info` function:
+
+* `AmdSmiParameterException`
+* `AmdSmiLibraryException`
+
+Example:
+
+```python
+try:
+    nic_handles = amdsmi_get_nic_processor_handles()
+    if len(nic_handles) == 0:
+        print("No NICs on machine")
+    else:
+        for nic in nic_handles:
+            print(amdsmi_get_nic_fw_info(nic))
 except AmdSmiException as e:
     print(e)
 ```
@@ -3947,7 +4000,8 @@ Example:
 
 ```python
 try:
-    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    # Get all NIC handles (AMD and BRCM)
+    nic_handles = amdsmi_get_nic_processor_handles()
     if len(nic_handles) == 0:
         print("No NICs on machine")
     else:
@@ -3984,7 +4038,8 @@ Example:
 
 ```python
 try:
-    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    # Get all NIC handles (AMD and BRCM)
+    nic_handles = amdsmi_get_nic_processor_handles()
     if len(nic_handles) == 0:
         print("No NICs on machine")
     else:
@@ -4018,7 +4073,8 @@ Example:
 
 ```python
 try:
-    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    # Get all NIC handles (AMD and BRCM)
+    nic_handles = amdsmi_get_nic_processor_handles()
     if len(nic_handles) == 0:
         print("No NICs on machine")
     else:
@@ -4049,7 +4105,7 @@ Field | Content
 `bdf` | BDF of the port
 `port_num` | Port number
 `type` | Type of the port
-`flavour` | Port flavour
+`flavour` | Port flavour (resolved via devlink; see note below)
 `netdev` | Associated network device name
 `ifindex` | Interface index of the port
 `mac_address` | MAC address assigned to the port
@@ -4078,6 +4134,8 @@ Below are examples of the defined FEC modes:
 
 Note: These definitions are based on the latest available ethtool information. Users should verify if there are any updates or changes to these definitions in the relevant ethtool structure or field before implementing them in their code.
 
+**Note on `flavour`:** The `flavour` field depends on `libmnl`. If `libmnl` is not installed on the system, `flavour` is reported as the string `"N/A"`. All other fields in the port dictionary are unaffected.
+
 Exceptions that can be thrown by `amdsmi_get_nic_port_info` function:
 
 * `AmdSmiParameterException`
@@ -4087,7 +4145,8 @@ Example:
 
 ```python
 try:
-    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    # Get all NIC handles (AMD and BRCM)
+    nic_handles = amdsmi_get_nic_processor_handles()
     if len(nic_handles) == 0:
         print("No NICs on machine")
     else:
@@ -4160,7 +4219,8 @@ Example:
 
 ```python
 try:
-    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    # Get all NIC handles (AMD and BRCM)
+    nic_handles = amdsmi_get_nic_processor_handles()
     if len(nic_handles) == 0:
         print("No NICs on machine")
     else:
@@ -4208,7 +4268,8 @@ Example:
 
 ```python
 try:
-    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    # Get all NIC handles (AMD and BRCM)
+    nic_handles = amdsmi_get_nic_processor_handles()
     if len(nic_handles) == 0:
         print("No NICs on machine")
     else:
@@ -4245,7 +4306,8 @@ Example:
 
 ```python
 try:
-    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    # Get all NIC handles (AMD and BRCM)
+    nic_handles = amdsmi_get_nic_processor_handles()
     if len(nic_handles) == 0:
         print("No NICs on machine")
     else:
@@ -4278,7 +4340,8 @@ Example:
 
 ```python
 try:
-    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    # Get all NIC handles (AMD and BRCM)
+    nic_handles = amdsmi_get_nic_processor_handles()
     if len(nic_handles) == 0:
         print("No NICs on machine")
     else:
@@ -4291,28 +4354,85 @@ except AmdSmiException as e:
     print(e)
 ```
 
-### amdsmi_topo_get_nic_link_type
+### amdsmi_get_vf_hbm_info
 
-Description: Get the link topology type between a NIC and another processor (e.g., GPU).
-
-This function determines the connectivity relationship between a NIC and another processor based on their PCIe topology and NUMA node placement.
+Description: Returns HBM information for the given VF.
 
 Input parameters:
-* `nic_handle` NIC processor handle
-* `processor_handle` Target processor handle (e.g., GPU)
 
-Output: `AmdSmiNicLinkType` enum value
+* `VF handle` VF of a GPU device for which to query
 
-`AmdSmiNicLinkType` enum values:
+Output: Dictionary with fields
+
+Field | Description
+---|---
+`phy_addr` | Physical address (64-bit unsigned integer)
+`phy_size` | Physical size in bytes (64-bit unsigned integer)
+`numa_id` | NUMA node index for driver-managed VF HBM
+`name` | HBM device name (string)
+
+Exceptions that can be thrown by `amdsmi_get_vf_hbm_info` function:
+
+* `AmdSmiLibraryException`
+* `AmdSmiRetryException`
+* `AmdSmiParameterException`
+
+Example:
+
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            partitions = amdsmi_get_vf_partition_info(processor)
+            hbm_info = amdsmi_get_vf_hbm_info(partitions[0]['vf_id'])
+            print("Physical Address:", hex(hbm_info['phy_addr']))
+            print("Physical Size:", hbm_info['phy_size'])
+            print("NUMA id:", hbm_info['numa_id'])
+            print("HBM Name:", hbm_info['name'])
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_topo_get_link_type
+
+Description: Retrieve the hops and the connection type between two processors.
+
+For GPU-to-GPU queries, returns one of `INTERNAL`, `PCIE`, `XGMI`,
+`NOT_APPLICABLE`, or `UNKNOWN`, and the hop count.
+
+For queries that involve at least one NIC (NIC-to-GPU, GPU-to-NIC, or
+NIC-to-NIC), returns one of `PCIE` (same PCIe switch), `NUMA` (same NUMA
+node, different PCIe switch), `XNUMA` (different NUMA nodes), or `UNKNOWN`.
+The `hops` value is not meaningful for NIC queries and is set to
+`UINT64_MAX` in that case.
+
+Input parameters:
+* `processor_handle_src` Source processor handle
+* `processor_handle_dst` Destination processor handle
+
+Output: dictionary with fields:
+
+Field | Description
+---|---
+`hops` | Hop count for GPU-to-GPU; `UINT64_MAX` for NIC-to-GPU
+`type` | `AmdSmiLinkType` enum value
+
+`AmdSmiLinkType` enum values:
 
 Value | Description
 ---|---
+`INTERNAL` | Internal link, within chip
+`PCIE` | Peripheral Component Interconnect Express link
+`XGMI` | GPU Memory Interconnect (multi GPU communication)
+`NOT_APPLICABLE` | Not applicable link type
 `UNKNOWN` | Unknown link type
-`PCIE` | Both processors connect via same PCIe switch
-`NUMA` | Processors connect via different PCIe switches but on the same CPU/NUMA node
-`X_NUMA` | Processors connect via different PCIe switches on different CPUs/NUMA nodes
+`NUMA` | Two processors connect via different PCIe switches but on the same CPU (NIC topology queries)
+`XNUMA` | Two processors connect via different PCIe switches on different CPUs (NIC topology queries)
 
-Exceptions that can be thrown by `amdsmi_topo_get_nic_link_type` function:
+Exceptions that can be thrown by `amdsmi_topo_get_link_type` function:
 
 * `AmdSmiLibraryException`
 * `AmdSmiParameterException`
@@ -4321,7 +4441,7 @@ Example:
 
 ```python
 try:
-    nic_handles = amdsmi_get_processor_handles_by_type(AmdSmiProcessorType.AMD_NIC)
+    nic_handles = amdsmi_get_nic_processor_handles()
     gpu_handles = amdsmi_get_processor_handles()
     if len(nic_handles) == 0:
         print("No NICs on machine")
@@ -4330,8 +4450,8 @@ try:
     else:
         for nic in nic_handles:
             for gpu in gpu_handles:
-                link_type = amdsmi_topo_get_nic_link_type(nic, gpu)
-                print(f"NIC to GPU link type: {link_type}")
+                link_info = amdsmi_topo_get_link_type(nic, gpu)
+                print(f"NIC to GPU link type: {link_info['type']}")
 except AmdSmiException as e:
     print(e)
 ```
@@ -4385,6 +4505,7 @@ Field | Description
 ---|---
 `status` | NPM status
 `limit` | currently set limit
+`ubb_power_threshold` | UBB node power threshold (upper limit) in W
 
 ```python
 try:
@@ -4395,18 +4516,20 @@ try:
         for processor in processors:
             node = amdsmi_get_node_handle(processor)
             npm_info = amdsmi_get_npm_info(node)
-            print(npm_info)
+            print(npm_info['status'])
+            print(npm_info['limit'])
+            print(npm_info['ubb_power_threshold'])
 except AmdSmiException as e:
     print(e)
 ```
 
 ### amdsmi_get_gpu_ras_policy_info
+
 Description: Retrieve the Reliability, Availability, and Serviceability (RAS) policy information for a specified GPU device.
 
 Input parameters:
 
 processor_handle: The handle for the GPU device for which policy information is to be retrieved.
-
 Output: A dictionary containing RAS policy information including version, major and minor versions, and thresholds for DRAM regions.
 
 Exceptions that can be thrown by `amdsmi_get_gpu_ras_policy_info` function:
@@ -4429,16 +4552,200 @@ except AmdSmiException as e:
     print(e)
 ```
 
+### amdsmi_get_gpu_fabric_info
+
+Description: Retrieve Fabric device information for the specified GPU processor handle
+
+Input parameters:
+
+* `processor_handle` - Handle for the target GPU processor
+
+Output: A dictionary containing Fabric information including:
+
+Field | Description
+---|---
+`bdf` | BDF (Bus, Device, Function) identifier formatted as domain:bus:device.function
+`version` | UAL interface version as a `"major.minor"` string
+`version_major` | Major component of the UAL interface version
+`version_minor` | Minor component of the UAL interface version
+`accelerator_id` | Accelerator identifier (version 1)
+`fabric_type` | Type of fabric (version 1) - enum value of type `AmdSmiFabricType`
+`bandwidth` | Fabric bandwidth in Mb/s (version 1)
+`latency` | Fabric latency in nanoseconds (version 1)
+`ppod_id` | Physical PoD (Pod of Devices) ID as a 128-bit UUID hex string (version 1)
+`ppod_size` | Physical PoD size (version 1)
+`vpod_id` | Virtual PoD ID (version 1)
+`vpod_size` | Virtual PoD size (version 1)
+`vpod_active_accelerators` | List of active accelerators in the virtual PoD (version 1)
+`local_accelerators` | List of all local accelerator ID slots returned by the driver (version 1).
+`addr_mode` | Address mode (version 1) - enum value of type `AmdSmiFabricNpaAddressMode`
+`accel_state` | Accelerator state (version 1) - enum value of type `AmdSmiFabricAcceleratorVpodState`
+
+Exceptions that can be thrown by `amdsmi_get_gpu_fabric_info` function:
+
+* `AmdSmiLibraryException`
+* `AmdSmiRetryException`
+* `AmdSmiParameterException`
+
+Example:
+
+```python
+try:
+    devices = amdsmi_get_processor_handles()
+    if len(devices) == 0:
+        print("No GPUs on machine")
+    else:
+        for device in devices:
+            fabric_info = amdsmi_get_gpu_fabric_info(device)
+            print(f"BDF: {fabric_info['bdf']}")
+            print(f"Version: {fabric_info['version']}")
+            if fabric_info['version_major'] == 1:
+                print(f"Accelerator ID: {fabric_info['accelerator_id']}")
+                print(f"Fabric Type: {fabric_info['fabric_type']}")
+                print(f"Bandwidth: {fabric_info['bandwidth']} Mb/s")
+                print(f"Latency: {fabric_info['latency']} ns")
+                print(f"Physical PoD ID: {fabric_info['ppod_id']}")
+                print(f"Virtual PoD ID: {fabric_info['vpod_id']}")
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_tdi_state
+
+Description: Gets the TDI (TEE(Trusted Execution Environment) Device Interface) state for the specified VF
+
+Input parameters:
+
+* `vf_handle` VF handle for which to query
+
+Output:
+
+* TDI state from `AmdSmiTDIState` enum
+
+`AmdSmiTDIState` enum:
+
+Field | Description
+---|---
+`AmdSmiTDIState.UNLOCKED: 0` | TDI is unlocked
+`AmdSmiTDIState.LOCKED: 1` | TDI is locked
+`AmdSmiTDIState.RUN: 2` | TDI is in run state
+`AmdSmiTDIState.ERROR: 3` | TDI is in error state
+
+Exceptions that can be thrown by `amdsmi_get_tdi_state` function:
+
+* `AmdSmiParameterException`
+
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            # Get VF handle from processor
+            vf_handle = amdsmi_get_vf_handle_from_vf_index(processor, 0)
+            tdi_state = amdsmi_get_tdi_state(vf_handle)
+            print(f"TDI State: {tdi_state.name}")
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_cc_mode
+
+Description: Gets the CC (Confidential Compute) mode for the specified GPU
+
+Input parameters:
+
+* `processor_handle` GPU device for which to query
+
+Output:
+
+* CC mode from `amdsmi_cc_mode_t` enum
+
+`AmdSmiCCMode` enum:
+
+Field | Description
+---|---
+`AmdSmiCCMode.OFF: 0` | Confidential Compute is disabled
+`AmdSmiCCMode.ON: 1` | Confidential Compute is enabled
+`AmdSmiCCMode.DEV: 2` | Confidential Compute is in development mode
+
+Exceptions that can be thrown by `amdsmi_get_cc_mode` function:
+
+* `AmdSmiParameterException`
+* `AmdSmiLibraryException`
+
+Example:
+
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            cc_mode = amdsmi_get_cc_mode(processor)
+            print(f"Confidential Compute Mode: {cc_mode}")
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_set_cc_mode
+
+Description: Sets the CC (Confidential Compute) mode for the specified GPU
+
+Input parameters:
+
+* `processor_handle` GPU device for which to set
+* `mode` CC mode value from `AmdSmiCCMode` enum to set
+
+`AmdSmiCCMode` enum:
+
+Field | Description
+---|---
+`AmdSmiCCMode.OFF: 0` | Confidential Compute is disabled
+`AmdSmiCCMode.ON: 1` | Confidential Compute is enabled
+`AmdSmiCCMode.DEV: 2` | Confidential Compute is in development mode
+
+Output:
+
+* `None`
+
+Exceptions that can be thrown by `amdsmi_set_cc_mode` function:
+
+* `AmdSmiParameterException`
+* `AmdSmiLibraryException`
+
+Example:
+
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            # Set Confidential Compute to ON mode
+            amdsmi_set_cc_mode(processor, AmdSmiCCMode.ON)
+            print("Confidential Compute mode set to ON")
+except AmdSmiException as e:
+    print(e)
+```
+
 ### amdsmi_get_gpu_ptl_state
+
 Description: Gets the PTL (Peak Tops Limiter) enable/disable state for the processor
 
 Input parameters:
+
 * `processor handle` processor handle
 
 Output:
+
 * True if PTL is enabled, False if PTL is disabled
 
 Exceptions that can be thrown by `amdsmi_get_gpu_ptl_state` function:
+
 * `AmdSmiLibraryException`
 * `AmdSmiParameterException`
 
@@ -4459,9 +4766,11 @@ except AmdSmiException as e:
 ```
 
 ### amdsmi_set_gpu_ptl_state
+
 Description: Sets the PTL (Peak Tops Limiter) enable/disable state for the processor
 
 Input parameters:
+
 * `processor handle` processor handle
 * `enable` (bool) True to enable PTL with default formats, False to disable PTL
 
@@ -4489,12 +4798,15 @@ except AmdSmiException as e:
 ```
 
 ### amdsmi_get_gpu_ptl_formats
+
 Description: Gets the current PTL (Peak Tops Limiter) preferred data formats for the processor
 
 Input parameters:
+
 * `processor handle` processor handle
 
 Output:
+
 * tuple(AmdSmiPtlDataFormat, AmdSmiPtlDataFormat): an ordered pair of enums representing the two preferred formats
 Example usage: fmt1, fmt2 = amdsmi_get_gpu_ptl_formats(handle)
 
@@ -4531,9 +4843,11 @@ except AmdSmiException as e:
 ```
 
 ### amdsmi_set_gpu_ptl_formats
+
 Description: Sets the PTL (Peak Tops Limiter) with specified preferred data format pair. PTL must be enabled first before calling this function using amdsmi_set_gpu_ptl_state.
 
 Input parameters:
+
 * `processor handle` processor handle
 * `data_format1` (AmdSmiPtlDataFormat) First preferred data format
 * `data_format2` (AmdSmiPtlDataFormat) Second preferred data format (must be different from data_format1)
@@ -4559,6 +4873,104 @@ try:
             amdsmi_set_gpu_ptl_formats(processor,
                                       AmdSmiPtlDataFormat.F16,
                                       AmdSmiPtlDataFormat.BF16)
+
+except AmdSmiException as e:
+    print(e)
+```
+
+### amdsmi_get_fabric_telemetry
+
+Description: Get fabric telemetry data (convenience function that allocates, retrieves, and frees telemetry in a single call)
+
+**Note:** Fabric telemetry support is auto-detected at build time. On systems
+where the UALOE source tree or required netlink libraries are not available,
+this function will raise an `AmdSmiLibraryException` with `AMDSMI_STATUS_NOT_SUPPORTED`.
+
+Input parameters:
+* `processor_handle` - Handle for the target processor (GPU)
+* `categories` - (Optional) List of category names to query. Default: all categories
+
+Available categories:
+* `UALOE`, `SWITCH`, `CRYPTO`, `PFC`, `NETPORT`, `DERIVED_IFOE`, `DERIVED_NETPORT`
+
+Output: Dictionary containing telemetry data for each requested category
+
+Each category contains:
+* `category` - Category name
+* `generation_count` - Generation counter
+* `timestamp` - Timestamp with `tv_sec` and `tv_nsec`
+* `instance_count` - Number of instances
+* `instances` - List of instance data with `name`, `logical_idx`, `item_count`, and `items`
+
+Exceptions that can be thrown by `amdsmi_get_fabric_telemetry` function:
+* `AmdSmiLibraryException`
+* `AmdSmiParameterException`
+
+Example:
+
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    if len(processors) == 0:
+        print("No GPUs on machine")
+    else:
+        for processor in processors:
+            # Get all categories
+            telemetry = amdsmi_get_fabric_telemetry(processor)
+            print(telemetry)
+
+            # Get specific categories
+            telemetry = amdsmi_get_fabric_telemetry(processor, categories=['UALOE', 'SWITCH'])
+            print(telemetry['datasets']['UALOE'])
+
+except AmdSmiException as e:
+    print(e)
+```
+
+### AmdSmiFabricTelemetry (Class-based API)
+
+Description: Context-managed class for fabric telemetry that handles allocation and cleanup automatically. Recommended for repeated queries to avoid reallocation overhead.
+
+**Constructor:**
+* `processor_handle` - Handle for the target processor (GPU)
+* `categories` - (Optional) List of category names to monitor. Default: all categories
+
+**Methods:**
+* `get()` - Retrieve current telemetry data (can be called multiple times)
+* `close()` - Manually free telemetry resources (automatic with context manager)
+
+**Usage as context manager (recommended):**
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+
+    for processor in processors:
+        # Automatic resource management with 'with' statement
+        with AmdSmiFabricTelemetry(processor, categories=['UALOE', 'SWITCH']) as telemetry:
+            # Query multiple times without reallocating
+            data1 = telemetry.get()
+            print(f"First query: {data1['datasets']['UALOE']['generation_count']}")
+            data2 = telemetry.get()
+            print(f"Second query: {data2['datasets']['UALOE']['generation_count']}")
+
+        # Resources automatically freed when exiting 'with' block
+
+except AmdSmiException as e:
+    print(e)
+```
+
+**Manual management (if context manager cannot be used):**
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+
+    for processor in processors:
+        telemetry = AmdSmiFabricTelemetry(processor)
+        try:
+            data = telemetry.get()
+            print(data)
+        finally:
+            telemetry.close()  # Must manually free
 
 except AmdSmiException as e:
     print(e)

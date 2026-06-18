@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_basetypes.h"
@@ -30,6 +13,7 @@
 #include "amdgv_guard.h"
 #include "amdgv_vfmgr.h"
 #include "amdgv_psp_gfx_if.h"
+#include "amdgv_ip_discovery.h"
 #include "amdgv_ras.h"
 #include "amdgv_xgmi.h"
 
@@ -48,6 +32,8 @@ static const uint32_t this_block = AMDGV_COMMUNICATION_BLOCK;
 #define MI200_CAPS (AMDGV_CAP_MANUAL_SCHED | AMDGV_CAP_HUNG_HW_DETECT)
 #define MI300_CAPS (AMDGV_CAP_MANUAL_SCHED | AMDGV_CAP_HUNG_HW_DETECT)
 #define NAVI32_CAPS (AMDGV_CAP_MANUAL_SCHED | AMDGV_CAP_HUNG_HW_DETECT)
+#define COMMON_CAPS (AMDGV_CAP_MANUAL_SCHED | AMDGV_CAP_HUNG_HW_DETECT)
+
 static const struct amdgv_asic_entry amdgv_sriov_device_table[] = {
 /* dev_id, sub_dev_id, rev_id, caps,
 	 * init function table, mitigation table,
@@ -212,7 +198,51 @@ static const struct amdgv_asic_entry amdgv_sriov_device_table[] = {
 		&navi32_mitigation_table,
 		navi32_reg_base_init,
 	},
+	{
+		CHIP_IP_DISCOVERY,
+		ANY_ID,
+		ANY_ID,
+		ANY_ID,
+		COMMON_CAPS,
+		NULL,
+		NULL,
+		NULL,
+		NULL,   /* reg_base_init: not needed for IP discovery (handled separately) */
+	},
 };
+
+static struct amdgv_id_name wait_for_type_name[] = {
+	{ AMDGV_WAIT_FOR_REGISTER,		"WAIT_FOR_REGISTER" },
+	{ AMDGV_WAIT_FOR_PSP_RING_RESPONSE,	"WAIT_FOR_PSP_RING_RESPONSE" },
+	{ AMDGV_WAIT_FOR_PCI_CFG, 		"WAIT_FOR_PCI_CFG" },
+	{ AMDGV_WAIT_FOR_IRQ_HANDLER,		"WAIT_FOR_IRQ_HANDLER" },
+	{ AMDGV_WAIT_FOR_PSP_MB_INT,		"WAIT_FOR_PSP_MB_INT" },
+	{ AMDGV_WAIT_FOR_RAS_INTR,		"WAIT_FOR_RAS_INTR" },
+	{ AMDGV_WAIT_FOR_WS_FIRST_CMD_COMPLETE,	"WAIT_FOR_WS_FIRST_CMD_COMPLETE" },
+	{ AMDGV_WAIT_FOR_WS_CMD_COMPLETE,	"WAIT_FOR_WS_CMD_COMPLETE" },
+	{ AMDGV_WAIT_FOR_VBIOS_READ_IMG,	"WAIT_FOR_VBIOS_READ_IMG" },
+	{ AMDGV_WAIT_FOR_MB_TRN_MSG_ACK,	"WAIT_FOR_MB_TRN_MSG_ACK" },
+	{ AMDGV_WAIT_FOR_GUEST_RESET_READY,	"WAIT_FOR_GUEST_RESET_READY" },
+	{ AMDGV_WAIT_FOR_PSP_TOS_LOADED_STATUS,	"WAIT_FOR_PSP_TOS_LOADED_STATUS" },
+	{ AMDGV_WAIT_FOR_PSP_BOOT_COMPLETE,	"WAIT_FOR_PSP_BOOT_COMPLETE" },
+	{ AMDGV_WAIT_FOR_RLC_AUTOLOAD_COMPLETE,	"WAIT_FOR_RLC_AUTOLOAD_COMPLETE" },
+	{ AMDGV_WAIT_FOR_LSDMA_PIO,		"WAIT_FOR_LSDMA_PIO" },
+	{ AMDGV_WAIT_FOR_CP_DMA_PIO,		"WAIT_FOR_CP_DMA_PIO" },
+	{ AMDGV_WAIT_FOR_SMU_CHECK_HANG,	"WAIT_FOR_SMU_CHECK_HANG" },
+	{ AMDGV_WAIT_FOR_SMU_MSG_RESPONSE,	"WAIT_FOR_SMU_MSG_RESPONSE" },
+};
+
+const char *amdgv_wait_for_type_to_name(enum amdgv_wait_for_types type)
+{
+	int i, count;
+
+	count = ARRAY_SIZE(wait_for_type_name);
+	for (i = 0; i < count; ++i) {
+		if (wait_for_type_name[i].id == type)
+			return wait_for_type_name[i].name;
+	}
+	return "UNKNOWN WAIT_FOR TYPE";
+}
 
 uint32_t amdgv_mm_rreg(struct amdgv_adapter *adapt, uint32_t reg, bool always_indirect)
 {
@@ -612,6 +642,196 @@ static uint64_t amdgv_wait_get_timeout(uint64_t start, uint64_t timeout_all,
 	return now + ((timeout_phase < time_left) ? timeout_phase : time_left);
 }
 
+static void amdgv_wait_for_timeout_print(struct amdgv_adapter *adapt, struct amdgv_wait_for_cb_context *cb_context,
+					 uint64_t elapsed)
+{
+	struct amdgv_wait_for_register_context *reg_context;
+	struct amdgv_wait_for_psp_ring_response_context *mem_context;
+	struct amdgv_wait_for_pci_cfg_context *cfg_context;
+	struct amdgv_gpuiov_wait_context *gpuiov_context;
+
+	switch (cb_context->type) {
+	case AMDGV_WAIT_FOR_REGISTER:
+		reg_context = (struct amdgv_wait_for_register_context *)cb_context->ctx;
+		AMDGV_WARN("Timeout: %s %s [0x%x]. Expect val_mask%s0x%08x. Actual val=0x%08x. Elapsed=%ld\n",
+			    amdgv_wait_for_type_to_name(cb_context->type),
+			    reg_context->name,
+			    reg_context->offset,
+			    reg_context->check_flag ? "!=" : "==",
+			    reg_context->value & reg_context->mask,
+			    reg_context->last_read,
+			    elapsed);
+		break;
+	case AMDGV_WAIT_FOR_PSP_RING_RESPONSE:
+		mem_context = (struct amdgv_wait_for_psp_ring_response_context *)cb_context->ctx;
+		if (cb_context->psp_cmd)
+			amdgv_psp_put_cmd_error(adapt, cb_context->psp_cmd, NULL, true);
+		else
+			AMDGV_WARN("Timeout: %s [%p]. Elapsed=%ld\n",
+				   amdgv_wait_for_type_to_name(cb_context->type),
+				   mem_context->address,
+				   elapsed);
+		break;
+	case AMDGV_WAIT_FOR_PCI_CFG:
+		cfg_context = (struct amdgv_wait_for_pci_cfg_context *)cb_context->ctx;
+		AMDGV_WARN("Timeout: %s [0x%x]. Expect val_mask%s0x%08x. Actual val=0x%08x. Elapsed=%ld\n",
+			    amdgv_wait_for_type_to_name(cb_context->type),
+			    cfg_context->offset,
+			    cfg_context->check_flag ? "!=" : "==",
+			    cfg_context->value & cfg_context->mask,
+			    cfg_context->last_read,
+			    elapsed);
+		break;
+
+	case AMDGV_WAIT_FOR_WS_FIRST_CMD_COMPLETE:
+		AMDGV_ERROR("Timeout: %s Mask=0x%08x. Elapsed=%ld\n",
+			    amdgv_wait_for_type_to_name(cb_context->type),
+			    ((struct amdgv_gpuiov_wait_for_first_context *)cb_context->ctx)->hw_sched_mask,
+			    elapsed);
+		break;
+	case AMDGV_WAIT_FOR_WS_CMD_COMPLETE:
+		gpuiov_context = (struct amdgv_gpuiov_wait_context *)cb_context->ctx;
+		AMDGV_ERROR("Timeout: %s. Sched=%s. Elapsed=%ld\n",
+			    amdgv_wait_for_type_to_name(cb_context->type),
+			    amdgv_hw_sched_id_to_name(adapt, gpuiov_context->hw_sched_id),
+			    elapsed);
+		break;
+	case AMDGV_WAIT_FOR_SMU_CHECK_HANG:
+		if (cb_context->ctx_ext && cb_context->num_ctx_ext > 0)
+			AMDGV_REG_DUMP(ERROR, "SMU in hung State. SMU mailbox contents:",
+				       cb_context->ctx_ext,
+				       cb_context->num_ctx_ext);
+		else
+			AMDGV_ERROR("Timeout: %s. Elapsed=%ld\n",
+				    amdgv_wait_for_type_to_name(cb_context->type),
+				    elapsed);
+		break;
+	case AMDGV_WAIT_FOR_SMU_MSG_RESPONSE:
+		if (cb_context->ctx_ext && cb_context->num_ctx_ext > 0)
+			AMDGV_REG_DUMP(ERROR, "SMU Timeout. SMU mailbox contents:",
+				       cb_context->ctx_ext,
+				       cb_context->num_ctx_ext);
+		else
+			AMDGV_ERROR("Timeout: %s. Elapsed=%ld\n",
+				    amdgv_wait_for_type_to_name(cb_context->type),
+				    elapsed);
+		break;
+	case AMDGV_WAIT_FOR_IRQ_HANDLER:
+	case AMDGV_WAIT_FOR_PSP_MB_INT:
+	case AMDGV_WAIT_FOR_RAS_INTR:
+	case AMDGV_WAIT_FOR_VBIOS_READ_IMG:
+	case AMDGV_WAIT_FOR_PSP_TOS_LOADED_STATUS:
+	case AMDGV_WAIT_FOR_PSP_BOOT_COMPLETE:
+	case AMDGV_WAIT_FOR_RLC_AUTOLOAD_COMPLETE:
+		AMDGV_ERROR("Timeout: %s. Elapsed=%ld\n",
+			amdgv_wait_for_type_to_name(cb_context->type),
+			elapsed);
+		break;
+	case AMDGV_WAIT_FOR_GUEST_RESET_READY:
+	case AMDGV_WAIT_FOR_MB_TRN_MSG_ACK:
+		AMDGV_WARN("Timeout: %s. Elapsed=%ld\n",
+			amdgv_wait_for_type_to_name(cb_context->type),
+			elapsed);
+		break;
+	case AMDGV_WAIT_FOR_LSDMA_PIO:
+		if (cb_context->ctx_ext && cb_context->num_ctx_ext > 0)
+			AMDGV_REG_DUMP(ERROR, "Timeout: LSDMA PIO. Context:",
+				       cb_context->ctx_ext,
+				       cb_context->num_ctx_ext);
+		else
+			AMDGV_ERROR("Timeout: %s. Elapsed=%ld\n",
+				    amdgv_wait_for_type_to_name(cb_context->type),
+				    elapsed);
+		break;
+	case AMDGV_WAIT_FOR_CP_DMA_PIO:
+		if (cb_context->ctx_ext && cb_context->num_ctx_ext > 0)
+			AMDGV_REG_DUMP(ERROR, "Timeout: CP DMA. Context:",
+				       cb_context->ctx_ext,
+				       cb_context->num_ctx_ext);
+		else
+			AMDGV_ERROR("Timeout: %s. Elapsed=%ld\n",
+				    amdgv_wait_for_type_to_name(cb_context->type),
+				    elapsed);
+		break;
+	default:
+		AMDGV_WARN("Wait For timeout. Elapsed=%ld\n", elapsed);
+		break;
+	}
+}
+
+static void amdgv_wait_for_start_print(struct amdgv_adapter *adapt,
+				      struct amdgv_wait_for_cb_context *cb_context,
+				      uint64_t timeout_us)
+{
+	struct amdgv_wait_for_register_context *reg_context;
+	struct amdgv_wait_for_psp_ring_response_context *mem_context;
+	struct amdgv_wait_for_pci_cfg_context *cfg_context;
+	struct amdgv_gpuiov_wait_context *gpuiov_context;
+
+	switch (cb_context->type) {
+	case AMDGV_WAIT_FOR_REGISTER:
+		reg_context = (struct amdgv_wait_for_register_context *)cb_context->ctx;
+		AMDGV_DEBUG("Start %s %s [0x%x]. Expect val_mask%s0x%08x. Timeout=%ld\n",
+			    amdgv_wait_for_type_to_name(cb_context->type),
+			    reg_context->name,
+			    reg_context->offset,
+			    reg_context->check_flag ? "!=" : "==",
+			    reg_context->value & reg_context->mask,
+			    timeout_us);
+		break;
+	case AMDGV_WAIT_FOR_PSP_RING_RESPONSE:
+		mem_context = (struct amdgv_wait_for_psp_ring_response_context *)cb_context->ctx;
+		AMDGV_DEBUG("Start %s [%p]: Expect val=0x%08x. Timeout=%ld\n",
+			    amdgv_wait_for_type_to_name(cb_context->type),
+			    mem_context->address,
+			    mem_context->value,
+			    timeout_us);
+		break;
+	case AMDGV_WAIT_FOR_PCI_CFG:
+		cfg_context = (struct amdgv_wait_for_pci_cfg_context *)cb_context->ctx;
+		AMDGV_DEBUG("Start %s [0x%x]: Expect val_mask%s0x%08x. Timeout=%ld\n",
+			    amdgv_wait_for_type_to_name(cb_context->type),
+			    cfg_context->offset,
+			    cfg_context->check_flag ? "!=" : "==",
+			    cfg_context->value & cfg_context->mask,
+			    timeout_us);
+		break;
+	case AMDGV_WAIT_FOR_WS_FIRST_CMD_COMPLETE:
+		AMDGV_DEBUG("Start %s Mask=0x%08x. Timeout=%ld\n",
+			    amdgv_wait_for_type_to_name(cb_context->type),
+			    ((struct amdgv_gpuiov_wait_for_first_context *)cb_context->ctx)->hw_sched_mask,
+			    timeout_us);
+		break;
+	case AMDGV_WAIT_FOR_WS_CMD_COMPLETE:
+		gpuiov_context = (struct amdgv_gpuiov_wait_context *)cb_context->ctx;
+		AMDGV_DEBUG("Start %s Sched=%s. Timeout=%ld\n",
+			    amdgv_wait_for_type_to_name(cb_context->type),
+			    amdgv_hw_sched_id_to_name(adapt, gpuiov_context->hw_sched_id),
+			    timeout_us);
+		break;
+	case AMDGV_WAIT_FOR_IRQ_HANDLER:
+	case AMDGV_WAIT_FOR_PSP_MB_INT:
+	case AMDGV_WAIT_FOR_RAS_INTR:
+	case AMDGV_WAIT_FOR_VBIOS_READ_IMG:
+	case AMDGV_WAIT_FOR_MB_TRN_MSG_ACK:
+	case AMDGV_WAIT_FOR_GUEST_RESET_READY:
+	case AMDGV_WAIT_FOR_PSP_TOS_LOADED_STATUS:
+	case AMDGV_WAIT_FOR_PSP_BOOT_COMPLETE:
+	case AMDGV_WAIT_FOR_RLC_AUTOLOAD_COMPLETE:
+	case AMDGV_WAIT_FOR_LSDMA_PIO:
+	case AMDGV_WAIT_FOR_CP_DMA_PIO:
+	case AMDGV_WAIT_FOR_SMU_CHECK_HANG:
+	case AMDGV_WAIT_FOR_SMU_MSG_RESPONSE:
+		AMDGV_DEBUG("Start %s. Timeout=%ld\n",
+			    amdgv_wait_for_type_to_name(cb_context->type),
+			    timeout_us);
+		break;
+	default:
+		AMDGV_WARN("Unknown wait type!");
+		break;
+	}
+}
+
 /*
 	amdgv_wait_for : wait for cb_func to return 0 or timeout.
 	input:
@@ -623,22 +843,25 @@ static uint64_t amdgv_wait_get_timeout(uint64_t start, uint64_t timeout_all,
 	output:
 		return: 0 as succeeded, AMDGV_WAIT_RET_TIMED_OUT as timed out, AMDGV_WAIT_RET_INVALID as invalid parameter.
 */
-int amdgv_wait_for(struct amdgv_adapter *adapt, amdgv_wait_cb_t cb_func, void *cb_context,
+int amdgv_wait_for(struct amdgv_adapter *adapt, amdgv_wait_cb_t cb_func, struct amdgv_wait_for_cb_context *cb_context,
 		   uint64_t timeout_us, uint32_t wait_flag)
 {
 	int interval;
 	uint64_t start, now, phase_timeout, sub_timeout, time_left;
 	start = now = oss_get_time_stamp();
 
+	if (adapt && adapt->log_level >= AMDGV_DEBUG_LEVEL)
+		amdgv_wait_for_start_print(adapt, cb_context, timeout_us);
+
 	/* 2 special timeout values */
 	if (timeout_us == 0) {
 		if (adapt)
 			AMDGV_ERROR("timeout argument should not be 0\n");
 		else
-			AMDGV_PRINT("[Wait Error]timeout argument should not be 0\n");
+			AMDGV_PRINT("[Wait Error] timeout argument should not be 0\n");
 		return AMDGV_WAIT_RET_INVALID;
 	} else if (timeout_us == 1) {
-		if (cb_func(cb_context) == 0)
+		if (cb_func(cb_context->ctx) == 0)
 			goto success;
 		else
 			return AMDGV_WAIT_RET_TIMED_OUT;
@@ -655,7 +878,7 @@ int amdgv_wait_for(struct amdgv_adapter *adapt, amdgv_wait_cb_t cb_func, void *c
 							 AMDGV_WAIT_PHASE1_LOOP_TIMEOUT(interval));
 
 		while (now < sub_timeout && now < phase_timeout) {
-			if (cb_func(cb_context) == 0)
+			if (cb_func(cb_context->ctx) == 0)
 				goto success;
 			if ((interval > 10) && (wait_flag & AMDGV_WAIT_FLAG_USLEEP))
 				oss_usleep(interval);
@@ -683,7 +906,7 @@ int amdgv_wait_for(struct amdgv_adapter *adapt, amdgv_wait_cb_t cb_func, void *c
 			   time_left / AMDGV_WAIT_CYCLE :
 			   AMDGV_WAIT_MIN_SLEEP_US;
 	while (now < phase_timeout) {
-		if (cb_func(cb_context) == 0)
+		if (cb_func(cb_context->ctx) == 0)
 			goto success;
 
 		if (wait_flag & AMDGV_WAIT_FLAG_FORCE_DELAY) {
@@ -701,21 +924,21 @@ int amdgv_wait_for(struct amdgv_adapter *adapt, amdgv_wait_cb_t cb_func, void *c
 		now = oss_get_time_stamp();
 	}
 	/* check again if last sleep successes */
-	if (cb_func(cb_context) == 0)
+	if (cb_func(cb_context->ctx) == 0)
 		goto success;
+
 	if (!(wait_flag & AMDGV_WAIT_FLAG_NO_WARNING)) {
 		if (adapt)
-			AMDGV_WARN("wait timed out after %ld us, timeout=%ld us\n", now - start,
-				   timeout_us);
+			amdgv_wait_for_timeout_print(adapt, cb_context, now - start);
 		else
-			AMDGV_PRINT("[Wait Warning]wait timed out after %ld us, timeout=%ld us\n",
-					now - start, timeout_us);
+			AMDGV_PRINT("wait timed out after %ld us, timeout=%ld us\n",
+				    now - start, timeout_us);
 	}
 	return AMDGV_WAIT_RET_TIMED_OUT;
 success:
 	time_left = oss_get_time_stamp() - start;
 	if (adapt)
-		AMDGV_DEBUG("wait passed after %d us in %d us' timeout\n", time_left,
+		AMDGV_DEBUG4("wait passed after %d us in %d us' timeout\n", time_left,
 				timeout_us);
 	return 0;
 }
@@ -736,11 +959,12 @@ static int amdgv_wait_for_register_cb(void *context)
 		mask = ~mask;
 
 	/* we need to return 0 if hit, otherwise non 0 */
+	reg_context->last_read = RREG32(offset);
 	switch (check_flag) {
 	case AMDGV_WAIT_CHECK_EQ:
-		return !((RREG32(offset) & mask) == value);
+		return !((reg_context->last_read & mask) == value);
 	case AMDGV_WAIT_CHECK_NE:
-		return !((RREG32(offset) & mask) != value);
+		return !((reg_context->last_read & mask) != value);
 	default:
 		AMDGV_ERROR("Wrong check flag\n");
 		return AMDGV_FAILURE;
@@ -754,45 +978,80 @@ int amdgv_wait_for_irq_handler(void *context)
 	return adapt->irqmgr.ih.irq_processing;
 }
 
-/* function to wait for a register value */
-int amdgv_wait_for_register(struct amdgv_adapter *adapt, uint32_t offset, uint32_t mask,
-				uint32_t value, uint64_t timeout_us, uint32_t check_flag,
-				uint32_t wait_flag)
+/**
+ * function to wait for a register value
+ *
+ * SOC15_REG_OFFSET_NAME() macro can be used to provide the offset
+ * and name arguments.
+ */
+int amdgv_wait_for_register(struct amdgv_adapter *adapt, uint32_t offset, const char *name,
+				uint32_t mask, uint32_t value, uint64_t timeout_us,
+				uint32_t check_flag, uint32_t wait_flag)
 {
 	struct amdgv_wait_for_register_context reg_context;
+	struct amdgv_wait_for_cb_context cb_context = { 0 };
 
 	reg_context.adapt = adapt;
 	reg_context.offset = offset;
 	reg_context.mask = mask;
 	reg_context.value = value;
 	reg_context.check_flag = check_flag;
-	if (adapt)
-		AMDGV_DEBUG("start wait for register 0x%x in timeout %ld us\n", offset,
-				timeout_us);
-	return amdgv_wait_for(adapt, amdgv_wait_for_register_cb, (void *)&reg_context,
-				  timeout_us, wait_flag);
+	reg_context.name = name;
+
+	cb_context.ctx = (void *)&reg_context;
+	cb_context.type = AMDGV_WAIT_FOR_REGISTER;
+
+	return amdgv_wait_for(adapt, amdgv_wait_for_register_cb, &cb_context, timeout_us,
+			      wait_flag);
+}
+
+int amdgv_wait_for_smu_msg_resp(struct amdgv_adapter *adapt, uint32_t offset, const char *name,
+				uint32_t mask, uint32_t value, uint64_t timeout_us,
+				uint32_t check_flag, enum amdgv_wait_for_types wait_type,
+				struct amdgv_reg_dump_info *ctx_ext, uint8_t num_ctx_ext)
+{
+	struct amdgv_wait_for_register_context reg_context;
+	struct amdgv_wait_for_cb_context cb_context = { 0 };
+
+	reg_context.adapt = adapt;
+	reg_context.offset = offset;
+	reg_context.mask = mask;
+	reg_context.value = value;
+	reg_context.check_flag = check_flag;
+	reg_context.name = name;
+
+	cb_context.ctx = (void *)&reg_context;
+	cb_context.type = wait_type;
+	cb_context.ctx_ext = ctx_ext;
+	cb_context.num_ctx_ext = num_ctx_ext;
+
+	return amdgv_wait_for(adapt, amdgv_wait_for_register_cb, &cb_context, timeout_us, 0);
 }
 
 /* callback to check register values */
-static int amdgv_wait_for_memory_cb(void *context)
+static int amdgv_wait_for_psp_ring_response_cb(void *context)
 {
-	struct amdgv_wait_for_memory_context *mm_context =
-		(struct amdgv_wait_for_memory_context *)context;
+	struct amdgv_wait_for_psp_ring_response_context *mm_context =
+		(struct amdgv_wait_for_psp_ring_response_context *)context;
 
-	return !(*mm_context->address == mm_context->value);
+	mm_context->last_read = *mm_context->address;
+	return !(mm_context->last_read == mm_context->value);
 }
 
-int amdgv_wait_for_memory(struct amdgv_adapter *adapt, uint32_t *addr, uint32_t value,
-			  uint64_t timeout_us)
+int amdgv_wait_for_psp_ring_response(struct amdgv_adapter *adapt, uint32_t *addr, uint32_t value,
+				    uint64_t timeout_us, struct psp_cmd_km *psp_cmd)
 {
-	struct amdgv_wait_for_memory_context mm_context;
+	struct amdgv_wait_for_psp_ring_response_context mem_context;
+	struct amdgv_wait_for_cb_context cb_context = { 0 };
 
-	mm_context.address = (volatile uint32_t *)addr;
-	mm_context.value = value;
-	if (adapt)
-		AMDGV_DEBUG("start wait for memory %p in timeout %ld us\n", addr, timeout_us);
-	return amdgv_wait_for(adapt, amdgv_wait_for_memory_cb, (void *)&mm_context, timeout_us,
-				  0);
+	mem_context.address = (volatile uint32_t *)addr;
+	mem_context.value = value;
+
+	cb_context.ctx = (void *)&mem_context;
+	cb_context.type = AMDGV_WAIT_FOR_PSP_RING_RESPONSE;
+	cb_context.psp_cmd = psp_cmd;
+
+	return amdgv_wait_for(adapt, amdgv_wait_for_psp_ring_response_cb, &cb_context, timeout_us, 0);
 }
 
 static int amdgv_wait_for_pci_cfg_cb(void *context)
@@ -842,6 +1101,7 @@ static int amdgv_wait_for_pci_cfg_cb(void *context)
 		}
 	}
 
+	cfg_context->last_read = rd;
 	/* we need to return 0 if hit, otherwise non 0 */
 	switch (check_flag) {
 	case AMDGV_WAIT_CHECK_EQ:
@@ -859,6 +1119,7 @@ int amdgv_wait_for_pci_cfg(struct amdgv_adapter *adapt, oss_dev_t dev, uint32_t 
 			   uint64_t timeout_us, uint32_t check_flag, uint32_t wait_flag)
 {
 	struct amdgv_wait_for_pci_cfg_context cfg_context;
+	struct amdgv_wait_for_cb_context cb_context = { 0 };
 
 	cfg_context.adapt = adapt;
 	cfg_context.offset = offset;
@@ -867,11 +1128,12 @@ int amdgv_wait_for_pci_cfg(struct amdgv_adapter *adapt, oss_dev_t dev, uint32_t 
 	cfg_context.value = value;
 	cfg_context.byte_len = byte_len;
 	cfg_context.check_flag = check_flag;
-	if (adapt)
-		AMDGV_DEBUG("start wait for pci cfg %p in timeout %ld us\n", offset,
-				timeout_us);
-	return amdgv_wait_for(adapt, amdgv_wait_for_pci_cfg_cb, (void *)&cfg_context,
-				  timeout_us, wait_flag);
+
+	cb_context.ctx = (void *)&cfg_context;
+	cb_context.type = AMDGV_WAIT_FOR_PCI_CFG;
+
+	return amdgv_wait_for(adapt, amdgv_wait_for_pci_cfg_cb, &cb_context, timeout_us,
+			      wait_flag);
 }
 
 static struct amdgv_asic_entry *amdgv_match_asic_table(uint32_t dev_id, uint32_t rev_id)
@@ -887,6 +1149,8 @@ static struct amdgv_asic_entry *amdgv_match_asic_table(uint32_t dev_id, uint32_t
 			/* found a valid asic entry in device support table */
 			if (asic_entry->rev_id == ANY_ID || asic_entry->rev_id == rev_id)
 				return asic_entry;
+		} else if (asic_entry->asic_type == CHIP_IP_DISCOVERY) {
+			return asic_entry;
 		}
 	}
 
@@ -907,6 +1171,7 @@ static void amdgv_fill_device_info(struct amdgv_adapter *adapt,
 {
 	adapt->dev = init_data->info.dev;
 	adapt->bdf = init_data->info.bdf;
+	adapt->pf_numa_id = init_data->info.pf_numa_id;
 	adapt->vendor_id = init_data->info.vendor_id;
 	adapt->dev_id = init_data->info.dev_id;
 	adapt->rev_id = init_data->info.rev_id;
@@ -1071,8 +1336,11 @@ static int amdgv_parse_config_opt(struct amdgv_adapter *adapt)
 	if (adapt->opt.ras_vf_telemetry_policy < AMDGV_RAS_VF_TELEMETRY_POLICY_COUNT)
 		adapt->mca.vf_policy = adapt->opt.ras_vf_telemetry_policy;
 
+	adapt->vf_hbm_mgmt_mode = adapt->opt.vf_hbm_mgmt_mode;
+
 	adapt->mcp.memory_partition_mode = adapt->opt.memory_partition_mode;
 	adapt->mcp.accelerator_partition_mode = adapt->opt.accelerator_partition_mode;
+	adapt->mcp.cc_mode = adapt->opt.cc_mode;
 
 	if (adapt->opt.hang_detection_mode) {
 		adapt->flags |= AMDGV_FLAG_ENABLE_HANG_DETECTION;
@@ -1132,7 +1400,7 @@ void amdgv_print_failed_init_name(struct amdgv_adapter *adapt, bool is_sw,
 {
 	const char *type = is_sw ? "sw" : "hw";
 
-	AMDGV_PRINT("failed to %s_init of %s\n", type, func_name);
+	AMDGV_ERROR("failed to %s_init of %s\n", type, func_name);
 }
 
 static const uint32_t amdgv_ranges[] = {
@@ -1334,10 +1602,13 @@ static int amdgv_device_func_sw_init(struct amdgv_adapter *adapt)
 		return AMDGV_FAILURE;
 	}
 
+	for (i = 0; i < adapt->num_funcs; i++)
+		AMDGV_INFO("Added GPU Init Function [%d]: %s\n", i, adapt->init_funcs[i]->name);
+
 	/* sw init */
 	for (i = 0; i < adapt->num_funcs; i++) {
 		init_func = adapt->init_funcs[i];
-		AMDGV_INFO("start sw_init of %s\n", init_func->name);
+		AMDGV_DEBUG("start sw_init of %s\n", init_func->name);
 		if (init_func->sw_init && init_func->sw_init(adapt) < 0) {
 			amdgv_print_failed_init_name(adapt, true, init_func->name);
 			goto init_fail;
@@ -1353,7 +1624,7 @@ static int amdgv_device_func_sw_init(struct amdgv_adapter *adapt)
 		}
 
 		if (!amdgv_in_live_update_seq() && init_func->hw_priority) {
-			AMDGV_INFO("start hw_init of %s\n", init_func->name);
+			AMDGV_DEBUG("start hw_init of %s\n", init_func->name);
 			if (init_func->hw_init && init_func->hw_init(adapt) < 0) {
 				amdgv_print_failed_init_name(adapt, false, init_func->name);
 				goto init_fail;
@@ -1372,7 +1643,7 @@ init_fail:
 		/* hw fini */
 		if (adapt->init_funcs[j]->hw_priority && hw_init_complete[j]) {
 			if (adapt->init_funcs[j]->hw_fini) {
-				AMDGV_INFO("start hw_fini of %s\n",
+				AMDGV_DEBUG("start hw_fini of %s\n",
 					   adapt->init_funcs[j]->name);
 				adapt->init_funcs[j]->hw_fini(adapt);
 				hw_init_complete[j] = false;
@@ -1380,7 +1651,7 @@ init_fail:
 		}
 		/* sw fini */
 		if (adapt->init_funcs[j]->sw_fini && sw_init_complete[j]) {
-			AMDGV_INFO("start sw_fini of %s\n", adapt->init_funcs[j]->name);
+			AMDGV_DEBUG("start sw_fini of %s\n", adapt->init_funcs[j]->name);
 			adapt->init_funcs[j]->sw_fini(adapt);
 			sw_init_complete[j] = false;
 		}
@@ -1402,11 +1673,7 @@ static int amdgv_device_func_hw_init(struct amdgv_adapter *adapt)
 		uint32_t hw_sched_id;
 		struct amdgv_sched_world_switch *world_switch;
 
-		AMDGV_INFO("Skip hw init for live update.\n");
-
 		if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_UPDATE) {
-
-			AMDGV_INFO("Enable SRIOV for GPUV.\n");
 			ret = oss_pci_enable_sriov(adapt->dev, adapt->num_vf);
 			if (ret)
 				AMDGV_ERROR("Enable SRIOV for GPUV failed\n");
@@ -1425,9 +1692,6 @@ static int amdgv_device_func_hw_init(struct amdgv_adapter *adapt)
 
 			ret = amdgv_sched_shutdown_vf(adapt, AMDGV_PF_IDX);
 			ret = amdgv_sched_init_pf_state(adapt);
-
-			if (ret)
-				AMDGV_ERROR("Init PF state failed after GPUV live update, status: 0x%x\n", ret);
 		} else {
 			amdgv_device_func_hw_live_init(adapt);
 		}
@@ -1443,7 +1707,7 @@ static int amdgv_device_func_hw_init(struct amdgv_adapter *adapt)
 			continue;
 
 		if (init_func->hw_init) {
-			AMDGV_INFO("start hw_init of %s\n", init_func->name);
+			AMDGV_DEBUG("start hw_init of %s\n", init_func->name);
 			if (init_func->hw_init(adapt) < 0) {
 				amdgv_print_failed_init_name(adapt, false, init_func->name);
 				goto hw_init_fail;
@@ -1459,12 +1723,11 @@ static int amdgv_device_func_hw_init(struct amdgv_adapter *adapt)
 hw_init_fail:
 	amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_HW_INIT_FAIL, 0);
 	/* Collect the diagnosis data logs */
-	if (amdgv_diag_data_cache_dump(adapt, AMDGV_PF_IDX,
-						AMDGV_DIAG_DATA_LOG_COLLECT_CACHE_INIT_FAIL))
-		AMDGV_WARN("Can't collect HW init fail debug log\n");
+	amdgv_diag_data_cache_dump(adapt, AMDGV_PF_IDX,
+				   AMDGV_DIAG_DATA_LOG_COLLECT_CACHE_INIT_FAIL);
 	for (j = j - 1; j >= 0; j--) {
 		if (adapt->init_funcs[j]->hw_fini) {
-			AMDGV_INFO("start hw_fini of %s\n", adapt->init_funcs[j]->name);
+			AMDGV_DEBUG("start hw_fini of %s\n", adapt->init_funcs[j]->name);
 			adapt->init_funcs[j]->hw_fini(adapt);
 		}
 	}
@@ -1479,7 +1742,7 @@ static void amdgv_device_func_sw_fini(struct amdgv_adapter *adapt)
 	/* sw fini */
 	for (i = adapt->num_funcs - 1; i >= 0; i--) {
 		if (adapt->init_funcs[i]->sw_fini) {
-			AMDGV_INFO("start sw_fini of %s\n", adapt->init_funcs[i]->name);
+			AMDGV_DEBUG("start sw_fini of %s\n", adapt->init_funcs[i]->name);
 			adapt->init_funcs[i]->sw_fini(adapt);
 		}
 	}
@@ -1494,7 +1757,7 @@ static void amdgv_device_func_hw_fini(struct amdgv_adapter *adapt)
 	/* hw fini */
 	for (i = adapt->num_funcs - 1; i >= 0; i--) {
 		if (adapt->init_funcs[i]->hw_fini) {
-			AMDGV_INFO("start hw_fini of %s\n", adapt->init_funcs[i]->name);
+			AMDGV_DEBUG("start hw_fini of %s\n", adapt->init_funcs[i]->name);
 			adapt->init_funcs[i]->hw_fini(adapt);
 		}
 	}
@@ -1509,7 +1772,7 @@ int amdgv_device_func_hw_engine_init(struct amdgv_adapter *adapt)
 	for (i = 0; i < adapt->num_funcs; i++) {
 		init_func = adapt->init_funcs[i];
 		if (init_func->is_engine && init_func->hw_init) {
-			AMDGV_INFO("start hw_engine_init of %s\n", init_func->name);
+			AMDGV_DEBUG("start hw_engine_init of %s\n", init_func->name);
 			ret = init_func->hw_init(adapt);
 			if (ret < 0) {
 				amdgv_print_failed_init_name(adapt, false, init_func->name);
@@ -1527,7 +1790,7 @@ void amdgv_device_func_hw_engine_fini(struct amdgv_adapter *adapt)
 	/* hw engine fini */
 	for (i = adapt->num_funcs - 1; i >= 0; i--) {
 		if (adapt->init_funcs[i]->is_engine && adapt->init_funcs[i]->hw_fini) {
-			AMDGV_INFO("start hw_engine_fini of %s\n", adapt->init_funcs[i]->name);
+			AMDGV_DEBUG("start hw_engine_fini of %s\n", adapt->init_funcs[i]->name);
 			adapt->init_funcs[i]->hw_fini(adapt);
 		}
 	}
@@ -1542,7 +1805,7 @@ int amdgv_device_func_hw_live_init(struct amdgv_adapter *adapt)
 	for (i = 0; i < adapt->num_funcs; i++) {
 		init_func = adapt->init_funcs[i];
 		if (init_func->hw_live_init) {
-			AMDGV_INFO("start hw_live_init of %s\n", init_func->name);
+			AMDGV_DEBUG("start hw_live_init of %s\n", init_func->name);
 			ret = init_func->hw_live_init(adapt);
 			if (ret < 0) {
 				amdgv_print_failed_init_name(adapt, false, init_func->name);
@@ -1562,7 +1825,7 @@ int amdgv_device_func_hw_live_fini(struct amdgv_adapter *adapt)
 	for (i = 0; i < adapt->num_funcs; i++) {
 		init_func = adapt->init_funcs[i];
 		if (init_func->hw_live_fini) {
-			AMDGV_INFO("start hw_live_fini of %s\n", init_func->name);
+			AMDGV_DEBUG("start hw_live_fini of %s\n", init_func->name);
 			ret = init_func->hw_live_fini(adapt);
 			if (ret < 0) {
 				amdgv_print_failed_init_name(adapt, false, init_func->name);
@@ -1656,6 +1919,30 @@ static void amdgv_device_cleanup(struct amdgv_adapter *adapt)
 		oss_free(adapt->auto_ws_record_buf);
 #endif
 	oss_free(adapt);
+}
+
+/* Legacy entries with known BDF */
+static void amdgv_device_init_funcs_table(struct amdgv_adapter *adapt,
+					 struct amdgv_asic_entry *entry)
+{
+	if (entry->init_funcs) {
+		adapt->init_funcs = *(entry->init_funcs);
+		adapt->num_funcs = amdgv_count_array(adapt->init_funcs);
+	} else {
+		adapt->num_funcs = 0;
+	}
+
+	if (entry->live_info_funcs)
+		adapt->live_info_funcs = *(entry->live_info_funcs);
+
+	if (entry->miti_table) {
+		adapt->miti_table = *(entry->miti_table);
+		adapt->num_miti = amdgv_count_array(adapt->miti_table);
+	} else {
+		adapt->num_miti = 0;
+	}
+
+	adapt->reg_base_init	= entry->reg_base_init;
 }
 
 struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_data)
@@ -1801,18 +2088,10 @@ struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_da
 		}
 	}
 
-	adapt->init_funcs = *(asic_entry->init_funcs);
-	adapt->num_funcs = amdgv_count_array(adapt->init_funcs);
-
-	adapt->live_info_funcs = *(asic_entry->live_info_funcs);
-
-	adapt->miti_table = *(asic_entry->miti_table);
-	adapt->num_miti = amdgv_count_array(adapt->miti_table);
-
 	adapt->reg_base_init = asic_entry->reg_base_init;
+
 	adapt->asic_type = asic_entry->asic_type;
 
-	adapt->ip_discovery.size = DEFAULT_IP_DISCOVERY_SIZE;
 
 	adapt->in_sync_flood = &adapt->sync_flood;
 	adapt->in_ecc_recovery = &adapt->ecc_recovery;
@@ -1832,19 +2111,31 @@ struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_da
 		goto fail;
 	}
 	adapt->hash_addr = LIVE_INFO_HASH_ADDR;
-	/* clear the hash_addr data */
 	oss_pci_write_config_dword(adapt->dev, adapt->hash_addr, 0);
-	/* reg base init first */
-	if (adapt->reg_base_init != NULL)
-		adapt->reg_base_init(adapt);
-	else {
-		AMDGV_WARN("please add reg_base_init() for your ASIC\n");
-		goto fail;
-	}
+
 	/* set mapped_fb_size */
 	adapt->mapped_fb_size = adapt->fb_size;
 	if ((adapt->flags & AMDGV_FLAG_USE_PF) && adapt->fb_size > MAX_OS_FB_MAPPING_SIZE)
 		adapt->mapped_fb_size = MAX_OS_FB_MAPPING_SIZE;
+
+	if (adapt->asic_type == CHIP_IP_DISCOVERY) {
+		adapt->ip_discovery.size = CHIP_IP_DISCOVERY_SIZE;
+	}
+	else
+	{
+		adapt->ip_discovery.size = DEFAULT_IP_DISCOVERY_SIZE;
+	}
+
+	/* func table init through static BDF */
+	amdgv_device_init_funcs_table(adapt, asic_entry);
+
+	/* reg base init first */
+	if (adapt->reg_base_init != NULL)
+		adapt->reg_base_init(adapt);
+	else if (adapt->asic_type != CHIP_IP_DISCOVERY) {
+		AMDGV_WARN("please add reg_base_init() for your ASIC\n");
+		goto fail;
+	}
 
 	/* diagnosis data initialization */
 	if (amdgv_diag_data_init(adapt) < 0)
@@ -1859,13 +2150,13 @@ struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_da
 
 	amdgv_import_data_by_op(adapt, AMDGV_LIVE_INFO_DATA__MODULE_PARAM_PRE);
 
+	adapt->use_vf_sysmem_xchg = false;
+
 	/* device function initialization */
 	if (amdgv_device_func_sw_init(adapt) < 0) {
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_SW_INIT_FAIL, 0);
 		goto fail;
 	}
-
-	AMDGV_INFO("IP Discovery Size being used: %d\n", adapt->ip_discovery.size);
 
 	amdgv_device_set_status(adapt, AMDGV_STATUS_SW_INIT);
 
@@ -1896,9 +2187,8 @@ struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_da
 
 fail:
 	/* Collect the diagnosis data logs */
-	if (amdgv_diag_data_cache_dump(adapt, AMDGV_PF_IDX,
-						AMDGV_DIAG_DATA_LOG_COLLECT_CACHE_INIT_FAIL))
-		AMDGV_WARN("Unable to collect diagnosis data log on VF FLR\n");
+	amdgv_diag_data_cache_dump(adapt, AMDGV_PF_IDX,
+				   AMDGV_DIAG_DATA_LOG_COLLECT_CACHE_INIT_FAIL);
 	/* Check within the API if the diagnosis data has initialized */
 	amdgv_diag_data_fini(adapt);
 	/* Check within the API if the diagnosis data has initialized */
@@ -1924,7 +2214,7 @@ static void amdgv_device_live_update_pre_fini(struct amdgv_adapter *adapt)
 		return;
 	}
 
-	AMDGV_INFO("Wait for all adapters idle...\n");
+	AMDGV_DEBUG("Wait for all adapters idle...\n");
 	while (1) {
 		all_gpu_idle = 1;
 		/* Wait until all adapters event threads are IDLE
@@ -1961,7 +2251,6 @@ static void amdgv_device_live_update_pre_fini(struct amdgv_adapter *adapt)
 			}
 
 			if (all_gpu_idle) {
-				AMDGV_INFO("Start doing live update...\n");
 				break;
 			}
 
@@ -2007,7 +2296,6 @@ void amdgv_device_internal_fini(struct amdgv_adapter *adapt,
 			adapt->status = AMDGV_STATUS_HW_FINI;
 			amdgv_device_func_hw_fini(adapt);
 		} else {
-			AMDGV_INFO("Skip HW fini.\n");
 			amdgv_device_func_hw_live_fini(adapt);
 		}
 	}
@@ -2224,6 +2512,32 @@ void amdgv_device_set_status(struct amdgv_adapter *adapt, enum amdgv_dev_status 
 bool amdgv_device_is_gpu_lost(struct amdgv_adapter *adapt)
 {
 	return (adapt->status == AMDGV_STATUS_HW_LOST);
+}
+
+void amdgv_device_program_register_sequence(struct amdgv_adapter *adapt,
+					    uint32_t *registers,
+					    uint32_t array_size)
+{
+	uint32_t tmp, reg, and_mask, or_mask;
+	int i;
+
+	if (array_size % 3)
+		return;
+
+	for (i = 0; i < array_size; i += 3) {
+		reg = registers[i + 0];
+		and_mask = registers[i + 1];
+		or_mask = registers[i + 2];
+
+		if (and_mask == 0xffffffff) {
+			tmp = or_mask;
+		} else {
+			tmp = RREG32(reg);
+			tmp &= ~and_mask;
+			tmp |= (or_mask & and_mask);
+		}
+		WREG32(reg, tmp);
+	}
 }
 
 enum amdgv_gpumon_vram_type vram_type_to_gpumon_vram_type(enum amdgv_vram_type vram_type)

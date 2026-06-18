@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2018-2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_device.h"
@@ -83,10 +66,14 @@ static uint64_t amdgv_misc_do_clear_vf_fb(struct amdgv_adapter *adapt, uint32_t 
 			uint32_t chunk_size;
 			uint64_t hdp_mc_base;
 
-			if (adapt->misc.get_hdp_nonsurface_base == NULL)
+			if (adapt->misc.get_hdp_nonsurface_base == NULL) {
+				AMDGV_ERROR("get_hdp_nonsurface_base not set, cannot clear VF FB\n");
 				return AMDGV_FAILURE;
-			if (adapt->misc.set_hdp_nonsurface_base == NULL)
+			}
+			if (adapt->misc.set_hdp_nonsurface_base == NULL) {
+				AMDGV_ERROR("set_hdp_nonsurface_base not set, cannot clear VF FB\n");
 				return AMDGV_FAILURE;
+			}
 
 			/* save HDP_NONSURFACE_BASE */
 			amdgv_misc_get_hdp_nonsurface_base(adapt, &hdp_mc_base);
@@ -171,8 +158,10 @@ int amdgv_misc_clear_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, uint8_t
 		return 0;
 
 	entry = &adapt->array_vf[idx_vf];
-	if (!entry->configured)
+	if (!entry->configured) {
+		AMDGV_ERROR("Cannot clean non configured VF%d FB", idx_vf);
 		return AMDGV_FAILURE;
+	}
 
 	fb_offset = MBYTES_TO_BYTES(entry->fb_offset);
 	fb_size = MBYTES_TO_BYTES(entry->fb_size);
@@ -204,7 +193,7 @@ int amdgv_misc_clear_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, uint8_t
 
 	entry->gpu_init_data_ready = false;
 
-	AMDGV_INFO("%s, fb_offset=0x%llx fb_size_cleared=0x%llx pattern[%u]\n",
+	AMDGV_DEBUG("%s, fb_offset=0x%llx fb_size_cleared=0x%llx pattern[%u]\n",
 		   amdgv_idx_to_str(idx_vf), fb_offset, filled_size, pattern);
 	return 0;
 }
@@ -219,15 +208,13 @@ int amdgv_misc_load_dfc(struct amdgv_adapter *adapt)
 	int ret = 0;
 
 	if (oss_detect_fw(adapt->dev, AMDGV_FIRMWARE_ID__DFC_FW, adapt->asic_type)) {
-		AMDGV_INFO("Patched DFC not found.\n");
+		AMDGV_DEBUG("Patched DFC not found.\n");
 	}
 
 	/* switch to PF for GFX block */
 	if (amdgv_sched_context_switch_to_vf(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX) !=
-	    0) {
-		AMDGV_ERROR("switch to pf failed\n");
+	    0)
 		return AMDGV_FAILURE;
-	}
 
 	fw_id = AMDGV_FIRMWARE_ID__DFC_FW;
 
@@ -238,10 +225,8 @@ int amdgv_misc_load_dfc(struct amdgv_adapter *adapt)
 		ret = AMDGV_FAILURE;
 	}
 
-	if (amdgv_sched_context_save(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX) != 0) {
-		AMDGV_ERROR("save pf failed\n");
+	if (amdgv_sched_context_save(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX) != 0)
 		return AMDGV_FAILURE;
-	}
 
 	return ret;
 }

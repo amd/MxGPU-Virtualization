@@ -1,23 +1,8 @@
-/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #include "amdsmi.h"
 #include "smi_cli_api_host.h"
 #include "smi_cli_helpers.h"
@@ -947,6 +932,32 @@ int AmdSmiApiHost::get_string_from_enum_cper_severity_mask(int severity_mask, st
 	return AMDSMI_STATUS_SUCCESS;
 }
 
+int AmdSmiApiHost::get_string_from_enum_tdi_state(int tdi_state, std::string& out)
+{
+	EnumToString<amdsmi_tdi_state_t> enum_tdi_state;
+	enum_tdi_state.data = {
+		{AMDSMI_TDI_STATE_UNLOCKED, "UNLOCKED"},
+		{AMDSMI_TDI_STATE_LOCKED, "LOCKED"},
+		{AMDSMI_TDI_STATE_RUN, "RUN"},
+		{AMDSMI_TDI_STATE_ERROR, "ERROR"}
+	};
+
+	out = enum_tdi_state((amdsmi_tdi_state_t)tdi_state);
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+int AmdSmiApiHost::get_string_from_enum_cc_mode(int cc_mode, std::string& out)
+{
+	EnumToString<amdsmi_cc_mode_t> enum_cc_mode;
+	enum_cc_mode.data = {
+		{AMDSMI_CC_MODE_OFF, "OFF"},
+		{AMDSMI_CC_MODE_ON, "ON"},
+		{AMDSMI_CC_MODE_DEV, "DEV"}
+	};
+
+	out = enum_cc_mode((amdsmi_cc_mode_t)cc_mode);
+	return AMDSMI_STATUS_SUCCESS;
+}
 int AmdSmiApiHost::get_string_from_enum_ptl_format(int format, std::string& out)
 {
 	EnumToString<amdsmi_ptl_data_format_t> enum_ptl_format;
@@ -1117,15 +1128,28 @@ int AmdSmiApiHost::FecModesToString(uint32_t fec, std::string& out)
 
 int AmdSmiApiHost::get_string_from_enum_nic_topo_link_type(int nic_link_type, std::string& out)
 {
-	EnumToString<amdsmi_nic_link_type_t> nic_link_types;
+	EnumToString<amdsmi_link_type_t> nic_link_types;
 	nic_link_types.data = {
-		{AMDSMI_NIC_LINK_TYPE_UNKNOWN, "UNKNOWN"},
-		{AMDSMI_NIC_LINK_TYPE_PCIE, "PCIE"},
-		{AMDSMI_NIC_LINK_TYPE_NUMA, "NUMA"},
-		{AMDSMI_NIC_LINK_TYPE_X_NUMA, "X-NUMA"}
+		{AMDSMI_LINK_TYPE_UNKNOWN, "UNKNOWN"},
+		{AMDSMI_LINK_TYPE_PCIE, "PCIE"},
+		{AMDSMI_LINK_TYPE_NUMA, "NUMA"},
+		{AMDSMI_LINK_TYPE_XNUMA, "XNUMA"}
 	};
 
-	out = nic_link_types((amdsmi_nic_link_type_t)nic_link_type);
+	out = nic_link_types((amdsmi_link_type_t)nic_link_type);
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+int AmdSmiApiHost::get_string_from_enum_nic_fw_type(int nic_fw_type, std::string& out)
+{
+	EnumToString<amdsmi_nic_fw_version_type_t> nic_fw_types;
+	nic_fw_types.data = {
+		{AMDSMI_NIC_FW_VERSION_TYPE_FIXED, "FIXED"},
+		{AMDSMI_NIC_FW_VERSION_TYPE_RUNNING, "RUNNING"},
+		{AMDSMI_NIC_FW_VERSION_TYPE_STORED, "STORED"}
+	};
+
+	out = nic_fw_types((amdsmi_nic_fw_version_type_t)nic_fw_type);
 	return AMDSMI_STATUS_SUCCESS;
 }
 

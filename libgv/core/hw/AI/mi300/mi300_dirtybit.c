@@ -1,24 +1,8 @@
-/*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #include "amdgv.h"
 #include "amdgv_device.h"
 #include "amdgv_sched_internal.h"
@@ -105,7 +89,6 @@ static int mi300_dirtybit_query_data_sdma(struct amdgv_adapter *adapt, uint64_t 
 	uint64_t nr_pages;
 	int aid, dagb, xcc_id, xcc_per_aid, ring_index_in_aid;
 	int i, ret = 0;
-	uint32_t cur_idx_vf = AMDGV_INVALID_IDX_VF;
 
 	if (adapt->sdma.query_dirtybit == NULL) {
 		AMDGV_ERROR("query_dirtybit is not set\n");
@@ -150,8 +133,6 @@ static int mi300_dirtybit_query_data_sdma(struct amdgv_adapter *adapt, uint64_t 
 
 	oss_memset(bitmap_vaddr, 0, query_bitmap_size_total);
 
-	amdgv_gpuiov_get_active_vf_idx(adapt, AMDGV_SCHED_BLOCK_GFX, &cur_idx_vf);
-
 	if (!IS_DEDICATED_SDMA_RING_AVAILABLE(adapt))
 		amdgv_sched_context_switch_to_vf(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX);
 
@@ -165,8 +146,7 @@ static int mi300_dirtybit_query_data_sdma(struct amdgv_adapter *adapt, uint64_t 
 		ring = mi300_dirtybit_get_available_ring(adapt, aid, ring_index_in_aid);
 		if (ring == NULL) {
 			AMDGV_ERROR("failed to get ring at xcc=%d, aid=%d, index=%d\n", xcc_id, aid, ring_index);
-			ret = AMDGV_FAILURE;
-			goto out;
+			return AMDGV_FAILURE;
 		}
 		/* Submit the SDMA pkg to query dirty bit in GFXHUB for this xcc */
 		amdgv_sdma_ring_query_dirtybit(ring, mc_addr, nr_pages,
@@ -179,8 +159,7 @@ static int mi300_dirtybit_query_data_sdma(struct amdgv_adapter *adapt, uint64_t 
 		bitmap_mem_offset += query_bitmap_size;
 		if (bitmap_mem_offset > query_bitmap_size_total) {
 			AMDGV_ERROR("Required memory exceeded allocated memory size\n");
-			ret = AMDGV_FAILURE;
-			goto out;
+			return AMDGV_FAILURE;
 		}
 		amdgv_fence_emit_polling(ring, &seq[ring_index], SDMA_MAX_TIMEOUT);
 		ring_index++;
@@ -197,8 +176,7 @@ static int mi300_dirtybit_query_data_sdma(struct amdgv_adapter *adapt, uint64_t 
 		ring = mi300_dirtybit_get_available_ring(adapt, aid, ring_index_in_aid);
 		if (ring == NULL) {
 			AMDGV_ERROR("failed to get ring at aid=%d, index=%d\n", aid, ring_index);
-			ret = AMDGV_FAILURE;
-			goto out;
+			return AMDGV_FAILURE;
 		}
 		/* Submit the SDMA pkg to query dirty bit in all the MMHUB instances in aid #N */
 		for (dagb = 0; dagb < adapt->mcp.num_dagb; dagb++) {
@@ -210,8 +188,7 @@ static int mi300_dirtybit_query_data_sdma(struct amdgv_adapter *adapt, uint64_t 
 			bitmap_mem_offset += query_bitmap_size;
 			if (bitmap_mem_offset > query_bitmap_size_total) {
 				AMDGV_ERROR("Required memory exceeded allocated memory size\n");
-				ret = AMDGV_FAILURE;
-				goto out;
+				return AMDGV_FAILURE;
 			}
 		}
 
@@ -232,8 +209,7 @@ static int mi300_dirtybit_query_data_sdma(struct amdgv_adapter *adapt, uint64_t 
 		ring_index++;
 		if (r <= 0) {
 			AMDGV_ERROR("gc ring wait polling failed, xcc=%d, aid=%d, index=%d\n", xcc_id, aid, ring_index);
-			ret = AMDGV_FAILURE;
-			goto out;
+			return AMDGV_FAILURE;
 		}
 	}
 
@@ -248,8 +224,7 @@ static int mi300_dirtybit_query_data_sdma(struct amdgv_adapter *adapt, uint64_t 
 		ring_index++;
 		if (r <= 0) {
 			AMDGV_ERROR("mm ring wait polling failed, aid=%d, index=%d\n", aid, ring_index);
-			ret = AMDGV_FAILURE;
-			goto out;
+			return AMDGV_FAILURE;
 		}
 	}
 
@@ -263,10 +238,6 @@ static int mi300_dirtybit_query_data_sdma(struct amdgv_adapter *adapt, uint64_t 
 				query_bitmap_vaddr[j] |= ptr[j];
 		}
 	}
-	ret = 0;
-out:
-	if (!IS_DEDICATED_SDMA_RING_AVAILABLE(adapt))
-		amdgv_sched_context_switch_to_vf(adapt, cur_idx_vf, AMDGV_SCHED_BLOCK_GFX);
 
 	return ret;
 }

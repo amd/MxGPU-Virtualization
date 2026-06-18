@@ -1,25 +1,8 @@
-/*
- * Copyright 2022 Advanced Micro Devices, Inc.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
- * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- * OTHER DEALINGS IN THE SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
+
 #ifndef __AMDGV_RING_H__
 #define __AMDGV_RING_H__
 
@@ -281,6 +264,7 @@ struct amdgv_ring {
 	/* used for mes */
 	bool			is_mes_queue;
 	uint32_t		hw_queue_id;
+	bool            is_sched_queue_ready;
 	enum amdgv_ring_shared_type	shared_type;
 };
 
@@ -332,6 +316,8 @@ int amdgv_ring_test_helper(struct amdgv_ring *ring);
 
 int amdgv_ring_init_set(struct amdgv_adapter *adapt, struct amdgv_ring *ring);
 void amdgv_ring_write(struct amdgv_ring *ring, uint32_t v);
+void amdgv_ring_write_multiple(struct amdgv_ring *ring,
+					uint32_t *src, uint32_t count_dw);
 void amdgv_ring_clear_ring(struct amdgv_ring *ring);
 
 int amdgv_ib_get(struct amdgv_adapter *adapt,

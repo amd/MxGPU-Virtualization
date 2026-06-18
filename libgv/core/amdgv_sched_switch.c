@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_device.h"
@@ -1340,6 +1323,7 @@ static int amdgv_sched_auto_switch_start(struct amdgv_adapter *adapt,
 					 struct amdgv_sched_world_switch *world_switch)
 {
 	uint32_t hw_sched_id = 0;
+	uint32_t gfx_time_slice = 0;
 	int ret = 0;
 
 	if (adapt->force_switch_vf_idx < AMDGV_MAX_VF_SLOT) {
@@ -1377,9 +1361,17 @@ static int amdgv_sched_auto_switch_start(struct amdgv_adapter *adapt,
 			 * case 3: flag is TRIGGER_DISABLE -> do SAVE(DISABLE AUTO_SCHED) first and then reconfig time quanta
 			 */
 			if (adapt->sched.num_vf_per_gfx_sched == 1 && world_switch->auto_sched.self_switch_trigger != DEFAULT_DISABLE) {
+				gfx_time_slice = GET_GFX_TIME_SLICE(adapt, adapt->sched.num_vf_per_gfx_sched);
+
 				if (world_switch->auto_sched.self_switch_trigger == TRIGGER_DISABLED)
 					adapt->sched.hw_state_machine[hw_sched_id].goto_state(adapt, -1, hw_sched_id, AMDGV_VF_CONTEXT_SAVED);
-				amdgv_sched_setup_vf_timeslice(adapt, 0, GET_GFX_TIME_SLICE(adapt, adapt->sched.num_vf_per_gfx_sched), AMDGV_SCHED_BLOCK_GFX);
+					
+				/* Special case for 1VF and PF is active. Need to update time slice for PF again,
+				 * as the time slice updated during add_vf is not correct cause PF is not set to active yet.
+				 */
+				amdgv_sched_setup_vf_timeslice(adapt, AMDGV_PF_IDX, gfx_time_slice, AMDGV_SCHED_BLOCK_GFX);
+
+				amdgv_sched_setup_vf_timeslice(adapt, 0, gfx_time_slice, AMDGV_SCHED_BLOCK_GFX);
 				world_switch->auto_sched.self_switch_trigger = DEFAULT_DISABLE;
 			}
 			/* Always reconfig auto sched mode so that RLCV won't need to save/restore config.
@@ -1557,7 +1549,7 @@ static int amdgv_sched_world_switch_init_sw_config(struct amdgv_adapter *adapt)
 
 	for (idx_part = 0; idx_part < adapt->sched.num_spatial_partitions; idx_part++) {
 		if (idx >= AMDGV_MAX_NUM_WORLD_SWITCH) {
-			AMDGV_ERROR("world_switch array is full. Unable to createanymore logical schedulers\n");
+			AMDGV_ERROR("world_switch array is full. Unable to create additional logical schedulers\n");
 			return AMDGV_FAILURE;
 		}
 
@@ -1743,13 +1735,7 @@ int amdgv_sched_world_switch_shutdown_vf(struct amdgv_adapter *adapt, uint32_t i
 	if (!world_switch->enabled)
 		return 0;
 
-	if (amdgv_logical_sched_state_shutdown(adapt, idx_vf, world_switch)) {
-		AMDGV_ERROR("Cannot shutdown VF%d on sched_block %s\n",
-			idx_vf, amdgv_sched_block_to_name(world_switch->sched_block));
-		return AMDGV_FAILURE;
-	}
-
-	return 0;
+	return amdgv_logical_sched_state_shutdown(adapt, idx_vf, world_switch);
 }
 
 int amdgv_sched_world_switch_add_vf(struct amdgv_adapter *adapt, uint32_t idx_vf,
@@ -2202,10 +2188,8 @@ int amdgv_sched_world_switch_reset(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	if (sched_block == AMDGV_SCHED_BLOCK_GFX) {
 		for_each_id(hw_sched_id, world_switch->hw_sched_mask) {
 			ret = amdgv_gpuiov_load_rlcv_state(adapt, idx_vf, hw_sched_id);
-			if (ret) {
-				AMDGV_ERROR("failed to load RLCV state\n");
+			if (ret)
 				goto out;
-			}
 		}
 	}
 
@@ -2213,11 +2197,9 @@ int amdgv_sched_world_switch_reset(struct amdgv_adapter *adapt, uint32_t idx_vf,
 		(sched_block == AMDGV_SCHED_BLOCK_GFX)) {
 		for_each_id(hw_sched_id, world_switch->hw_sched_mask) {
 			ret = amdgv_gpuiov_event_notification(adapt, idx_vf, hw_sched_id,
-								  AMDGV_EVENT_GFX_FLR, 0);
-			if (ret) {
-				AMDGV_ERROR("failed to send event notification\n");
+							      AMDGV_EVENT_GFX_FLR, 0);
+			if (ret)
 				goto out;
-			}
 		}
 	}
 
@@ -2262,7 +2244,7 @@ int amdgv_sched_world_context_sync_abnormal_sched(struct amdgv_adapter *adapt,
 	uint8_t status;
 
 	if (!world_switch->hw_sched_mask) {
-		AMDGV_ERROR("Invalid logical scheduler\n");
+		AMDGV_WARN("Abnormal Scheduler is not configured\n");
 		return 0;
 	}
 
@@ -2298,13 +2280,11 @@ int amdgv_sched_world_context_sync_abnormal_sched(struct amdgv_adapter *adapt,
 
 		amdgv_gpuiov_get_active_vf_idx(adapt, hw_sched_id, &curr_idx_vf);
 
-		if ((curr_vf_state == AMDGV_VF_CONTEXT_ABNORMAL) &&
-			curr_idx_vf != abnormal_idx_vf) {
+		if ((curr_vf_state == AMDGV_VF_CONTEXT_ABNORMAL) && curr_idx_vf != abnormal_idx_vf) {
 			//Multiple engines are in abnormal state on different active VFs.
 			//It is not possible to perform sync.
-			AMDGV_ERROR(
-				"Multiple VFs are in an abnormal state. Cannot perform HW sched sync\n");
-			goto failed;
+			AMDGV_ERROR("Multiple VFs are in an abnormal state. Cannot perform HW sched sync\n");
+			return AMDGV_FAILURE;
 		}
 
 		if (curr_idx_vf == abnormal_idx_vf)
@@ -2324,8 +2304,6 @@ int amdgv_sched_world_context_sync_abnormal_sched(struct amdgv_adapter *adapt,
 	return 0;
 
 failed:
-	AMDGV_ERROR("Failed to synchronize all hw schedulers in logical sched block=%s",
-			amdgv_sched_block_to_name(world_switch->sched_block));
 	return AMDGV_FAILURE;
 }
 

@@ -1,25 +1,8 @@
-/*
- * Copyright 2025 Advanced Micro Devices, Inc.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
- * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- * OTHER DEALINGS IN THE SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
+
 #include "amdgv_device.h"
 #include "amdgv_sdma.h"
 
@@ -51,16 +34,10 @@ int amdgv_sdma_ring_copy(struct amdgv_ring *ring, uint64_t src, uint64_t size, u
 	int ret = 0;
 
 	if (ring && adapt->sdma.sdma_copy) {
-		int cur_idx_vf = AMDGV_INVALID_IDX_VF;
-
 		if (ring->shared_type == AMDGV_RING_PFVF_SHARED) {
-			amdgv_gpuiov_get_active_vf_idx(adapt, AMDGV_SCHED_BLOCK_GFX, &cur_idx_vf);
 			amdgv_sched_context_switch_to_vf(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX);
 		}
 		ret = adapt->sdma.sdma_copy(ring, src, size, dst);
-		if (ring->shared_type == AMDGV_RING_PFVF_SHARED) {
-			amdgv_sched_context_switch_to_vf(adapt, cur_idx_vf, AMDGV_SCHED_BLOCK_GFX);
-		}
 	}
 
 	return ret;
@@ -105,8 +82,8 @@ struct amdgv_ring *amdgv_sdma_get_pfvf_shared_ring(struct amdgv_adapter *adapt, 
 
 int amdgv_sdma_alloc_bitmap_mem(struct amdgv_adapter *adapt, uint64_t bitmap_size)
 {
-	adapt->sdma.bitmap_mem = amdgv_memmgr_alloc_sys_align(&adapt->memmgr_sys,
-					bitmap_size, PAGE_SIZE, 0, NULL);
+	adapt->sdma.bitmap_mem = amdgv_memmgr_alloc_sys_align_zero(&adapt->memmgr_sys,
+					bitmap_size, PAGE_SIZE, NULL, NULL);
 	if (adapt->sdma.bitmap_mem == NULL) {
 		AMDGV_WARN("Failed to allocate dma memory\n");
 		return AMDGV_FAILURE;

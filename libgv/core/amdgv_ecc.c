@@ -1,24 +1,8 @@
-/*
- * Copyright (c) 2018-2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #include "amdgv_device.h"
 #include "amdgv_notify.h"
 #include "amdgv_ecc.h"
@@ -376,23 +360,24 @@ void amdgv_ecc_query_ras_errors(struct amdgv_adapter *adapt)
 	}
 }
 
-void amdgv_ecc_check_global_ras_errors(struct amdgv_adapter *adapt)
+int amdgv_ecc_check_global_ras_errors(struct amdgv_adapter *adapt)
 {
 	adapt->reset.reset_mode = adapt->umc.reset_mode;
 	if (adapt->reset.reset_mode == AMDGV_RESET_MODE1)
 		oss_atomic_set(adapt->in_ecc_recovery, 1);
 
 	if (oss_atomic_cmpxchg(&amdgv_ras_in_intr, 0, 1))
-		return;
+		return AMDGV_ERR_BUSY;
 
 	amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_FATAL_ERROR, 0);
 
 	if (adapt->xgmi.master_adapt) {
-		AMDGV_INFO("Forwarding reset event to master adapter:0x%x\n",
+		AMDGV_DEBUG("Forwarding reset event to master adapter:0x%x\n",
 			   adapt->xgmi.master_adapt->bdf);
 		adapt = adapt->xgmi.master_adapt;
 	}
-	amdgv_sched_queue_event(adapt, AMDGV_PF_IDX, AMDGV_EVENT_SCHED_FORCE_RESET_GPU, 0);
+
+	return amdgv_sched_queue_event(adapt, AMDGV_PF_IDX, AMDGV_EVENT_SCHED_FORCE_RESET_GPU, 0);
 }
 int amdgv_ecc_enable_ras_feature(struct amdgv_adapter *adapt)
 {
@@ -439,8 +424,7 @@ int amdgv_ecc_disable_ras_feature(struct amdgv_adapter *adapt)
 		.error_type = TA_RAS_ERROR__MULTI_UNCORRECTABLE,
 	};
 
-	if (amdgv_psp_ras_set_feature(adapt, info, false) !=
-	    PSP_STATUS__SUCCESS)
+	if (amdgv_psp_ras_set_feature(adapt, info, false) != PSP_STATUS__SUCCESS)
 		ret = AMDGV_FAILURE;
 
 	if (info)

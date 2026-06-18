@@ -1,24 +1,6 @@
-/*
- * Copyright 2022-2023 Advanced Micro Devices, Inc.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
- * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- * OTHER DEALINGS IN THE SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_device.h"
@@ -33,6 +15,12 @@
 #include "amdgv_guard.h"
 
 static const uint32_t this_block = AMDGV_LIVE_MIGRATION_BLOCK;
+
+static int amdgv_migration_rlc_autoload(struct amdgv_adapter *adapt, uint32_t vf_idx)
+{
+       return (adapt->psp.migration_rlc_autoload) ?
+               adapt->psp.migration_rlc_autoload(adapt, vf_idx) : 0;
+}
 
 void amdgv_live_migration_set_abort_all(struct amdgv_adapter *adapt)
 {
@@ -119,6 +107,7 @@ void amdgv_live_migration_abort_check(struct amdgv_adapter *adapt, uint32_t idx_
 	case AMDGV_EVENT_SCHED_FW_LIVE_UPDATE_DFC:
 	case AMDGV_EVENT_HANDLE_CRASH:
 	case AMDGV_EVENT_SCHED_RAS_POISON_CONSUMPTION:
+	case AMDGV_EVENT_SCHED_VF_REQ_GPU_INIT_XCHG_REGION:
 		if (adapt->live_migration.mig_state[idx_vf].state == AMDGV_MIGRATION_VF_STATE_PRE_COPY ||
 			adapt->live_migration.mig_state[idx_vf].state == AMDGV_MIGRATION_VF_STATE_STOP_COPY) {
 			AMDGV_DEBUG("VF[%d] migration aborted by event %d\n", idx_vf, event_id);
@@ -206,10 +195,8 @@ int amdgv_migration_transfer_manifest_data(struct amdgv_adapter *adapt, struct a
 
 		ret = amdgv_psp_transfer_manifest_data(adapt, idx_vf,
 					amdgv_memmgr_get_gpu_addr(mem), size, PSP_MIGRATION_EXPORT_STATIC_DATA);
-		if (ret) {
-			AMDGV_ERROR("Failed to do migration psp static export.\n");
+		if (ret)
 			goto exit;
-		}
 
 		oss_memcpy(data_addr, amdgv_memmgr_get_cpu_addr(mem), size);
 		break;
@@ -228,25 +215,19 @@ int amdgv_migration_transfer_manifest_data(struct amdgv_adapter *adapt, struct a
 
 		ret = amdgv_psp_transfer_manifest_data(adapt, idx_vf,
 					amdgv_memmgr_get_gpu_addr(mem), size, PSP_MIGRATION_EXPORT_DYNAMIC_DATA);
-		if (ret) {
-			AMDGV_ERROR("Failed to do migration psp static export.\n");
+		if (ret)
 			goto exit;
-		}
 
 		oss_memcpy(data_addr, amdgv_memmgr_get_cpu_addr(mem), size);
 		break;
 	case AMDGV_MIGRATION_IMPORT_PREPARE:
 		ret = amdgv_misc_clear_vf_fb(adapt, idx_vf, 0x00);
-		if (ret) {
-			AMDGV_ERROR("Failed to clear VF%d FB.\n", idx_vf);
+		if (ret)
 			return ret;
-		}
 
 		ret = amdgv_dirtybit_clear_fb_dbit(adapt, idx_vf);
-		if (ret) {
-			AMDGV_ERROR("Failed to clear VF%d dirty bit.\n", idx_vf);
+		if (ret)
 			return ret;
-		}
 
 		/* Save current PF, init VF on all blocks */
 		AMDGV_DEBUG("Migration Import: Init target VF on all blocks\n");
@@ -285,10 +266,8 @@ int amdgv_migration_transfer_manifest_data(struct amdgv_adapter *adapt, struct a
 		oss_memcpy(amdgv_memmgr_get_cpu_addr(mem), data_addr, size);
 		ret = amdgv_psp_transfer_manifest_data(adapt, idx_vf,
 					amdgv_memmgr_get_gpu_addr(mem), size, PSP_MIGRATION_IMPORT_STATIC_DATA);
-		if (ret) {
-			AMDGV_ERROR("Failed to do migration psp dynamic import.\n");
+		if (ret)
 			goto exit;
-		}
 		set_to_suspend_vf(idx_vf);
 		break;
 	case AMDGV_MIGRATION_IMPORT_DYNAMIC_DATA:
@@ -303,14 +282,19 @@ int amdgv_migration_transfer_manifest_data(struct amdgv_adapter *adapt, struct a
 		oss_memcpy(amdgv_memmgr_get_cpu_addr(mem), data_addr, size);
 		ret = amdgv_psp_transfer_manifest_data(adapt, idx_vf,
 					amdgv_memmgr_get_gpu_addr(mem), size, PSP_MIGRATION_IMPORT_DYNAMIC_DATA);
-		if (ret) {
-			AMDGV_ERROR("Failed to do migration psp dynamic import.\n");
+		if (ret)
 			goto exit;
-		}
 
 		AMDGV_DEBUG("Migration Import: Send TRANSFER_VF_DATA to MMSCH and RLCV\n");
 		if (amdgv_gpuiov_transfer_vf_data(adapt, idx_vf, false)) {
 			ret = AMDGV_FAILURE;
+			goto exit;
+		}
+
+		// Autoload rlc
+		ret = amdgv_migration_rlc_autoload(adapt, idx_vf);
+		if (ret) {
+			AMDGV_ERROR("Failed to do migration psp rlc autoload.\n");
 			goto exit;
 		}
 
@@ -328,6 +312,11 @@ exit:
 
 static int amdgv_migration_sw_init(struct amdgv_adapter *adapt)
 {
+	if (adapt->asic_type == CHIP_NAVI32 || adapt->asic_type == CHIP_MI350X)
+		adapt->live_migration.mig_data_size_cap = true;
+	else
+		adapt->live_migration.mig_data_size_cap = false;
+
 	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION))
 		return 0;
 
@@ -357,7 +346,7 @@ static int amdgv_migration_sw_init(struct amdgv_adapter *adapt)
 			}
 		}
 
-		AMDGV_INFO("Migration mem init: static_size=%lu, dynamic_size=%lu\n",
+		AMDGV_DEBUG("Migration mem init: static_size=%lu, dynamic_size=%lu\n",
 				adapt->live_migration.static_data_size,
 				adapt->live_migration.dynamic_data_size);
 	} else {
@@ -412,6 +401,11 @@ static int amdgv_migration_hw_init(struct amdgv_adapter *adapt)
 {
 	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION))
 		return 0;
+
+	if (amdgv_ual_is_supported(adapt)) {
+		AMDGV_ERROR("Live migration is not supported with UALoE / UALINK enabled.\n");
+		return AMDGV_FAILURE;
+	}
 
 	amdgv_migration_get_migration_info(adapt);
 	return 0;

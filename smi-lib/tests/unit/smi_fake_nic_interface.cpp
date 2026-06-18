@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 extern "C" {
@@ -34,6 +17,7 @@ static bool g_nic_cleanup_flag = true;
 static bool g_nic_discovery_flag = true;
 static bool g_use_long_interface_name = false;
 static smi_nic_status_t g_nic_api_status_code = SMI_NIC_STATUS_SUCCESS;
+static smi_nic_link_type_t g_nic_link_type = SMI_NIC_LINK_TYPE_PCIE;
 
 extern "C" {
 
@@ -80,6 +64,11 @@ smi_nic_status_t get_nic_api_status()
 void set_nic_api_status(smi_nic_status_t status)
 {
 	g_nic_api_status_code = status;
+}
+
+void set_nic_link_type(smi_nic_link_type_t link_type)
+{
+	g_nic_link_type = link_type;
 }
 
 smi_nic_status_t smi_nic_create_context(smi_nic_ctx_t *ctx)
@@ -154,6 +143,22 @@ smi_nic_status_t smi_get_nic_driver_info(smi_nic_ctx_t ctx, uint64_t device, smi
 	if (info) {
 		std::snprintf(info->name, SMI_NIC_MAX_STRING_LENGTH, "%s", "driver_mock");
 		std::snprintf(info->version, SMI_NIC_MAX_STRING_LENGTH, "%s", "1.0.0");
+	}
+	return g_nic_api_status_code;
+}
+
+smi_nic_status_t smi_get_nic_fw_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_fw_info_t *info)
+{
+	(void)ctx;
+	(void)device;
+	if (info) {
+		info->count = 2;
+		info->versions[0].type = SMI_NIC_FW_VERSION_TYPE_FIXED;
+		std::snprintf(info->versions[0].name, SMI_NIC_MAX_STRING_LENGTH, "%s", "fw.mgmt");
+		std::snprintf(info->versions[0].version, SMI_NIC_MAX_STRING_LENGTH, "%s", "22.39.1002");
+		info->versions[1].type = SMI_NIC_FW_VERSION_TYPE_RUNNING;
+		std::snprintf(info->versions[1].name, SMI_NIC_MAX_STRING_LENGTH, "%s", "fw.app");
+		std::snprintf(info->versions[1].version, SMI_NIC_MAX_STRING_LENGTH, "%s", "1.2.3");
 	}
 	return g_nic_api_status_code;
 }
@@ -375,7 +380,7 @@ smi_nic_status_t smi_topo_get_nic_link_type(smi_nic_ctx_t ctx, uint64_t device_s
 	(void)device_src;
 	(void)device_dst;
 	if (type) {
-		*type = SMI_NIC_LINK_TYPE_PCIE; // Return PCIE link type by default
+		*type = g_nic_link_type;
 	}
 	return g_nic_api_status_code;
 }

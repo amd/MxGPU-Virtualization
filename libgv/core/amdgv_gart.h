@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef _AMDGV_GART_H_
@@ -25,6 +8,8 @@
 
 #define GART_START	(0ULL)
 #define GART_SIZE	(512 << 20) /* 512M */
+#define AMDGV_PDE0_PAGE_SHIFT	33
+#define AMDGV_PDE0_PAGE_SIZE	(1ULL << AMDGV_PDE0_PAGE_SHIFT) /* 8G */
 
 #define AMDGV_PTE_VALID		(1ULL << 0)
 #define AMDGV_PTE_SYSTEM	(1ULL << 1)
@@ -35,6 +20,23 @@
 
 #define AMDGV_PTE_READABLE	(1ULL << 5)
 #define AMDGV_PTE_WRITEABLE	(1ULL << 6)
+
+#define AMDGV_PTE_FRAG(x)	(((x) & 0x1fULL) << 7)
+
+/* PDE is handled as PTE for gfx v9 */
+#define AMDGV_PDE_PTE		(1ULL << 54)
+/* PDE is handled as PTE for gfx v12 */
+#define AMDGV_PDE_PTE_GFX12		(1ULL << 63)
+
+#define AMDGV_PDE_PTE_FLAG(adapt)	\
+	((adapt->ip_versions[GC_HWIP][0] >= IP_VERSION(12, 0, 0)) ? AMDGV_PDE_PTE_GFX12 : AMDGV_PDE_PTE)
+
+/* PDE Block Fragment Size for GFX9 */
+#define AMDGV_PDE_BFS(a)		((unsigned long long)(a) << 59)
+/* PDE Block Fragment Size for GFX12 */
+#define AMDGV_PDE_BFS_GFX12(a)		((unsigned long long)((a) & 0x1fULL) << 58)
+#define AMDGV_PDE_BFS_FLAG(adapt, a)	\
+	((adapt->ip_versions[GC_HWIP][0] >= IP_VERSION(12, 0, 0)) ? AMDGV_PDE_BFS_GFX12(a) : AMDGV_PDE_BFS(a))
 
 typedef enum MTYPE {
 	MTYPE_NC = 0x00000000,

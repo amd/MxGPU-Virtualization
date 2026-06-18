@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2008-2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #define ATOM_DEBUG
@@ -58,6 +41,7 @@
 typedef struct {
 	struct atom_context *ctx;
 	uint32_t *ps, *ws;
+	uint32_t ps_size, ws_size;	/* element counts of ps[]/ws[] for OOB guard */
 	int ps_shift;
 	uint16_t start;
 	unsigned last_jump;
@@ -76,8 +60,9 @@ typedef struct {
 
 int amdgv_atom_debug = 0;
 static int amdgv_atom_execute_table_locked(struct atom_context *ctx, int index,
-					   uint32_t *params);
-int amdgv_atom_execute_table(struct atom_context *ctx, int index, uint32_t *params);
+					   uint32_t *params, uint32_t params_size);
+int amdgv_atom_execute_table(struct atom_context *ctx, int index, uint32_t *params,
+			     uint32_t params_size);
 
 static uint32_t atom_arg_mask[8] = { 0xFFFFFFFF, 0xFFFF, 0xFFFF00, 0xFFFF0000,
 				     0xFF,	 0xFF00, 0xFF0000, 0xFF000000 };
@@ -225,6 +210,13 @@ static uint32_t atom_get_src_int(atom_exec_context *ctx, uint8_t attr, int *ptr,
 	case ATOM_ARG_PS:
 		idx = U8(*ptr);
 		(*ptr)++;
+		/* idx comes from VBIOS bytecode (0..255); guard against OOB */
+		if (idx >= ctx->ps_size) {
+			pr_err("ATOM: PS read index 0x%02X out of bounds (size %u)\n",
+			       idx, ctx->ps_size);
+			ctx->abort = true;
+			break;
+		}
 		/* get_unaligned_le32 avoids unaligned accesses from atombios
 		 * tables, noticed on a DEC Alpha. */
 		val = get_unaligned_le32((uint32_t *)&ctx->ps[idx]);
@@ -265,6 +257,13 @@ static uint32_t atom_get_src_int(atom_exec_context *ctx, uint8_t attr, int *ptr,
 			val = gctx->reg_block;
 			break;
 		default:
+			/* idx from VBIOS bytecode; ws[] holds ws_size elements */
+			if (idx >= ctx->ws_size) {
+				pr_err("ATOM: WS read index 0x%02X out of bounds (size %u)\n",
+				       idx, ctx->ws_size);
+				ctx->abort = true;
+				break;
+			}
 			val = ctx->ws[idx];
 		}
 		break;
@@ -498,6 +497,13 @@ static void atom_put_dst(atom_exec_context *ctx, int arg, uint8_t attr, int *ptr
 		idx = U8(*ptr);
 		(*ptr)++;
 		ADEBUG("PS[0x%02X]", idx);
+		/* idx comes from VBIOS bytecode (0..255); guard against OOB */
+		if (idx >= ctx->ps_size) {
+			pr_err("ATOM: PS write index 0x%02X out of bounds (size %u)\n",
+			       idx, ctx->ps_size);
+			ctx->abort = true;
+			break;
+		}
 		ctx->ps[idx] = cpu_to_le32(val);
 		break;
 	case ATOM_ARG_WS:
@@ -530,6 +536,13 @@ static void atom_put_dst(atom_exec_context *ctx, int arg, uint8_t attr, int *ptr
 			gctx->reg_block = val;
 			break;
 		default:
+			/* idx from VBIOS bytecode; ws[] holds ws_size elements */
+			if (idx >= ctx->ws_size) {
+				pr_err("ATOM: WS write index 0x%02X out of bounds (size %u)\n",
+				       idx, ctx->ws_size);
+				ctx->abort = true;
+				break;
+			}
 			ctx->ws[idx] = val;
 		}
 		break;
@@ -621,13 +634,19 @@ static void atom_op_calltable(atom_exec_context *ctx, int *ptr, int arg)
 {
 	int idx = U8((*ptr)++);
 	int ret = 0;
+	uint32_t sub_ps_size = 0;
 
 	if (idx < ATOM_TABLE_NAMES_CNT)
 		SDEBUG("   table: %d (%s)\n", idx, atom_table_names[idx]);
 	else
 		SDEBUG("   table: %d\n", idx);
+	/* the callee reuses our ps[] starting at ps_shift, so pass the
+	 * remaining element count to keep its ps[] bounds check correct */
+	if ((uint32_t)ctx->ps_shift < ctx->ps_size)
+		sub_ps_size = ctx->ps_size - (uint32_t)ctx->ps_shift;
 	if (U16(ctx->ctx->cmd_table + 4 + 2 * idx))
-		ret = amdgv_atom_execute_table_locked(ctx->ctx, idx, ctx->ps + ctx->ps_shift);
+		ret = amdgv_atom_execute_table_locked(ctx->ctx, idx,
+						      ctx->ps + ctx->ps_shift, sub_ps_size);
 	if (ret) {
 		ctx->abort = true;
 	}
@@ -1210,7 +1229,7 @@ static struct {
 #define ATOM_OPCODE_JUMP_MAX	74
 
 static int amdgv_atom_execute_table_locked(struct atom_context *ctx, int index,
-					   uint32_t *params)
+					   uint32_t *params, uint32_t params_size)
 {
 	int base = CU16(ctx->cmd_table + 4 + 2 * index);
 	int len, ws, ps, ptr;
@@ -1247,6 +1266,8 @@ static int amdgv_atom_execute_table_locked(struct atom_context *ctx, int index,
 	ectx.ps_shift = ps / 4;
 	ectx.start = base;
 	ectx.ps = params;
+	ectx.ps_size = params_size;
+	ectx.ws_size = ws;
 	ectx.abort = false;
 	ectx.last_jump = 0;
 	if (ws)
@@ -1317,7 +1338,7 @@ static int amdgv_atom_execute_table_locked(struct atom_context *ctx, int index,
 		if (ectx.abort) {
 			i = 0;
 			tmp = buf;
-			while (i < ectx.ps_shift) {
+			while (i < ectx.ps_shift && (uint32_t)i < ectx.ps_size) {
 				tmp += oss_vsnprintf(tmp, 16, " 0x%08x ", params[i]);
 				i++;
 			}
@@ -1350,7 +1371,8 @@ free:
 	return ret;
 }
 
-int amdgv_atom_execute_table(struct atom_context *ctx, int index, uint32_t *params)
+int amdgv_atom_execute_table(struct atom_context *ctx, int index, uint32_t *params,
+			     uint32_t params_size)
 {
 	int ret;
 	uint64_t t;
@@ -1368,7 +1390,7 @@ int amdgv_atom_execute_table(struct atom_context *ctx, int index, uint32_t *para
 	ctx->divmul[0] = 0;
 	ctx->divmul[1] = 0;
 	t = oss_get_time_stamp();
-	ret = amdgv_atom_execute_table_locked(ctx, index, params);
+	ret = amdgv_atom_execute_table_locked(ctx, index, params, params_size);
 	pr_info("atom post costs %d usec\n", oss_get_time_stamp() - t);
 	oss_mutex_unlock(ctx->mutex);
 	return ret;
@@ -1378,11 +1400,16 @@ static int atom_iio_len[] = { 1, 2, 3, 3, 3, 3, 4, 4, 4, 3 };
 
 static void atom_index_iio(struct atom_context *ctx, int base)
 {
+	int op;
+
 	while (CU8(base) == ATOM_IIO_START) {
 		ctx->iio[CU8(base + 1)] = base + 2;
 		base += 2;
-		while (CU8(base) != ATOM_IIO_END)
-			base += atom_iio_len[CU8(base)];
+		while ((op = CU8(base)) != ATOM_IIO_END) {
+			if (op >= (int)ARRAY_SIZE(atom_iio_len))
+				break;
+			base += atom_iio_len[op];
+		}
 		base += 3;
 	}
 }

@@ -70,7 +70,9 @@ The commands and respective arguments that they accept are described as follows:
    - `--numa`: All NUMA information.
 
    **VF Parameters:**
-   - `--vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>`: Gets general information about the specified VF (e.g. timeslice, fb info)
+   - `--vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>`: Gets general information about the specified VF
+   - `--fb-info`: Displays framebuffer information for the VF (size, offset, timeslice).
+   - `--hbm-info`: Displays HBM (High Bandwidth Memory) information for the VF (physical address, size, name).
 
    **NIC Parameters:**
    - `--nic=<nic_index from list, nic_bdf>`: Parameters for a specific NIC
@@ -93,6 +95,9 @@ The commands and respective arguments that they accept are described as follows:
    **VF Parameters:**
    - `--vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>`: Parameters for a specific VF
    - `--fw-list`: All firmware list information.
+
+   **NIC Parameters:**
+   - `--nic=<nic_index from list, nic_bdf>`: Gets firmware information about the specified NIC.
 
 
 
@@ -126,11 +131,6 @@ The commands and respective arguments that they accept are described as follows:
      - `--port`: All port information.
      - `--rdma-devices`: All RDMA devices information.
 
-   **NIC Parameters:**
-   - `--nic=<nic_index from list, nic_bdf>`: Parameters for a specific NIC
-     - `--port`: All port information.
-     - `--rdma-devices`: All RDMA devices information.
-
    **Note:** When using the `--csv` format modifier with the metric command, only one argument is supported per command (e.g., metric --usage). For all other formats (plain text and json), multiple arguments are supported. The per-partition command does not support the `--csv` format modifier.
 
 8. **event**
@@ -155,13 +155,13 @@ The commands and respective arguments that they accept are described as follows:
 
    **NIC Parameters:**
      - `--nic=<nic_index from list, nic_bdf>`: Parameters for a specific NIC
-     - `--link-type`: Link type between NICs and GPUs (PCIE, NUMA, X_NUMA, UNKNOWN).
+     - `--link-type`: Link type between NICs and GPUs (PCIE, NUMA, XNUMA, UNKNOWN).
      - `--numa`: NUMA node and CPU AFFINITY information for NICs.
 
    **Link Type Definitions:**
    - `PCIE`: Two processors connect via the same PCIe switch.
    - `NUMA`: Two processors connect via different PCIe switches but on the same CPU.
-   - `X_NUMA`: Two processors connect via different PCIe switches on different CPUs (NUMA nodes).
+   - `XNUMA`: Two processors connect via different PCIe switches on different CPUs (NUMA nodes).
    - `UNKNOWN`: Unknown link type.
 
    **Note:** The topology command does not support the `--csv` format modifier.
@@ -202,6 +202,7 @@ The commands and respective arguments that they accept are described as follows:
     - `--num-vf=<number_of_vfs>`: Sets the number of Virtual Functions (VFs) to be enabled on the specified GPU. The number must be within the supported range for the GPU. Use `amd-smi static --gpu=<gpu> --num-vf` to check current VF configuration and supported limits.
     - `--soc-pstate=<pstate_level>`: Sets the SOC (System on Chip) performance state level to control power and performance characteristics.
     - `--xgmi --fb-sharing-mode=<AmdSmiXgmiFbSharingMode>`: Sets framebuffer sharing mode from list ["MODE_1", "MODE_2", "MODE_4", "MODE_8"] where, MODE_X represents that X GPUs will be in the same group, linked together: MODE_1 (one GPU in a group), MODE_2 (two GPUs in a group), MODE_4 (four GPUs in a group), MODE_8 (eight GPUs in a group). All possible configurations can be seen by running the `amd-smi xgmi` command, not all of them are supported on all systems.
+    - `--cc-mode=<cc_mode_value>`: Sets Confidential Compute (CC) mode. Valid values: OFF, ON, DEV. Current CC mode can be checked with `amd-smi confidential-compute`.
     - `--ptl-status=<STATUS>`: Enable or disable the PTL on a GPU processor (ENABLED/DISABLED).
     - `--ptl-format=<FRMT1,FRMT2>`: Set the PTL format on a GPU processor. For example, --ptl-format I8,F32.
 
@@ -218,8 +219,6 @@ The commands and respective arguments that they accept are described as follows:
       - `--power-usage`: Monitor power usage in Watts.
       - `--temperature`: Monitor temperature in Celsius.
       - `--decoder`: Monitor decoder utilization (%) and clock (MHz).
-
-
 
 14. **partition**
     - `--gpu= <gpu_index from list, gpu_bdf, gpu_uuid>`:
@@ -248,6 +247,26 @@ The commands and respective arguments that they accept are described as follows:
     - `-b, --baseboard`: Show baseboard information.
     - `-p, --power-management`: Show power management information.
 
+17. **confidential-compute**
+    Displays Confidential Compute and security information for the specified GPU or VF. If no target is specified, returns information for all GPUs on the system.
+
+    **GPU Parameters:**
+    - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`: Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs.
+      - Displays Confidential Compute mode (OFF, ON, or DEV) - PF only.
+
+    **VF Parameters:**
+    - `--vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>`: Select a VF to query TDI state.
+      - Displays TEE (Trusted Execution Environment) Device Interface state (UNLOCKED, LOCKED, RUN, or ERROR) - supports VF.
+
+18. **fabric**
+    - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`:
+    Displays fabric topology and configuration information for the specified GPU. If no argument is provided, returns information for all GPUs on the system.
+
+    Fabric arguments for the GPU are the following:
+      - `-T, --topology`: Displays fabric topology information.
+
+    **Note:** The fabric command supports `--json` and `--csv` format modifiers.
+
 ## Basic Usage
 
 ### Command Syntax
@@ -268,7 +287,8 @@ Simply run tool without arguments or with command help.
 ```shell-session
 $ sudo amd-smi help
 
-Copyright 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
+Copyright Advanced Micro Devices, Inc.
+SPDX-License-Identifier: MIT
 
 usage: amd-smi help
 
@@ -291,6 +311,8 @@ AMD-SMI Commands:
     partition             Displays partition information of the devices (GPU only)
     ras                   Displays ras information of the devices (GPU only)
     node                  Displays node information of the devices (GPU only)
+    confidential-compute  Displays confidential-compute information of the devices
+    fabric                Displays fabric topology information of the devices
 ```
 
 From help message you can see which subcommands are supported on the system and a short description for each command.
@@ -301,7 +323,7 @@ For example, if you want to get help for "list" command you can use the tool the
 ```shell-session
 $ sudo amd-smi list --help
 
-Copyright 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
+Copyright Advanced Micro Devices, Inc. All rights reserved.
 
 usage: amd-smi list [-h | --help] [--json | --csv] [--file FILE] [-g | --gpu [GPU ...]]
 
@@ -747,8 +769,8 @@ $ sudo amd-smi topology --nic --link-type
 ```
 NIC_LINK_TYPE_TABLE:
              0000:0c:00.0 0000:22:00.0 0000:38:00.0 0000:5c:00.0 0000:9f:00.0 0000:af:00.0 0000:bf:00.0 0000:df:00.0
-0000:51:00.0 NUMA         NUMA         NUMA         PCIE         X_NUMA       X_NUMA       X_NUMA       X_NUMA
-0000:d6:00.0 X_NUMA       X_NUMA       X_NUMA       X_NUMA       NUMA         NUMA         NUMA         PCIE
+0000:51:00.0 NUMA         NUMA         NUMA         PCIE         XNUMA        XNUMA        XNUMA        XNUMA
+0000:d6:00.0 XNUMA        XNUMA        XNUMA        XNUMA        NUMA         NUMA         NUMA         PCIE
 ```
 
 #### NUMA Node Information
@@ -1458,6 +1480,38 @@ NIC: 0
                     ACTIVE_MTU: N/A
 ```
 
+**Get NIC firmware information:**
+
+```shell-session
+$ sudo amd-smi firmware --nic=0
+```
+
+**Output:**
+```
+NIC: 0
+    FW:
+        FW_0:
+            TYPE: RUNNING
+            NAME: FW
+            VERSION: 1.117.5-a-77
+        FW_1:
+            TYPE: RUNNING
+            NAME: FW.HEARTBEAT
+            VERSION: 0x141fdc29
+        FW_2:
+            TYPE: RUNNING
+            NAME: FW.STATUS
+            VERSION: 0x1
+        FW_3:
+            TYPE: FIXED
+            NAME: ASIC.ID
+            VERSION: 0x4
+        FW_4:
+            TYPE: FIXED
+            NAME: ASIC.REV
+            VERSION: 0x0
+```
+
 **Get NIC RDMA devices statistics:**
 
 ```shell-session
@@ -1523,48 +1577,57 @@ NIC: 0
 $ sudo amd-smi metric --nic=0 --port
 ```
 
-**Output:**
+By default `VENDOR_STATISTICS` shows a curated per-vendor subset focused on the
+most useful counters (up to 32 stats per port for Pensando (`ionic`) and
+Broadcom (`bnxt_en`)). Pass `--extended` (or `-ex`) to show the full per-vendor
+set. The flag affects human output only; `--json` always returns the full
+per-vendor set.
+
+**Output (default, Pensando):**
 ```
 NIC: 0
     PORTS:
         PORT_0:
             NETDEV: enp153s0
             VENDOR_STATISTICS:
-                    RX_BYTES: 0
-                    RX_CSUM_NONE: 0
-                    RX_PACKETS: 0
-                    TX_BYTES: 0
-                    TX_CSUM: 0
-                    TX_CSUM_NONE: 0
-                    TX_PACKETS: 0
-                    TX_TSO: 0
-                    TX_TSO_BYTES: 0
+                    FRAMES_RX_OK: 0
+                    FRAMES_RX_ALL: 0
+                    FRAMES_RX_BAD_FCS: 0
+                    FRAMES_RX_BAD_ALL: 0
+                    OCTETS_RX_OK: 0
+                    OCTETS_RX_ALL: 0
+                    FRAMES_RX_UNICAST: 0
+                    FRAMES_RX_MULTICAST: 0
+                    FRAMES_RX_BROADCAST: 0
+                    FRAMES_RX_PAUSE: 0
+                    FRAMES_RX_DROPPED: 0
+                    FRAMES_TX_OK: 0
+                    FRAMES_TX_ALL: 0
+                    FRAMES_TX_BAD: 0
+                    OCTETS_TX_OK: 0
+                    OCTETS_TX_TOTAL: 0
+                    FRAMES_TX_UNICAST: 0
+                    FRAMES_TX_MULTICAST: 0
+                    FRAMES_TX_BROADCAST: 0
+                    FRAMES_TX_PAUSE: 0
+                    FRAMES_TX_TRUNCATED: 0
+                    ...
             STATISTICS:
                     COLLISIONS: 0
                     MULTICAST: 0
                     RX_BYTES: 0
-                    RX_COMPRESSED: 0
-                    RX_CRC_ERRORS: 0
-                    RX_DROPPED: 0
-                    RX_ERRORS: 0
-                    RX_FIFO_ERRORS: 0
-                    RX_FRAME_ERRORS: 0
-                    RX_LENGTH_ERRORS: 0
-                    RX_MISSED_ERRORS: 0
-                    RX_NOHANDLER: 0
-                    RX_OVER_ERRORS: 0
                     RX_PACKETS: 0
-                    TX_ABORTED_ERRORS: 0
                     TX_BYTES: 0
-                    TX_CARRIER_ERRORS: 0
-                    TX_COMPRESSED: 0
-                    TX_DROPPED: 0
-                    TX_ERRORS: 0
-                    TX_FIFO_ERRORS: 0
-                    TX_HEARTBEAT_ERRORS: 0
                     TX_PACKETS: 0
-                    TX_WINDOW_ERRORS: 0
+                    ...
 ```
+
+**Show extended vendor statistics:**
+
+```shell-session
+$ sudo amd-smi metric --nic=0 --port --extended
+```
+
 **Get NIC and GPU static information:**
 
 ```shell-session
@@ -2099,8 +2162,8 @@ $ sudo amd-smi topology --nic --link-type
 ```
 NIC_LINK_TYPE_TABLE:
              0000:0c:00.0 0000:22:00.0 0000:38:00.0 0000:5c:00.0 0000:9f:00.0 0000:af:00.0 0000:bf:00.0 0000:df:00.0
-0000:41:00.0 NUMA         NUMA         NUMA         PCIE         X_NUMA       X_NUMA       X_NUMA       X_NUMA
-0000:d6:00.0 X_NUMA       X_NUMA       X_NUMA       X_NUMA       NUMA         NUMA         NUMA         PCIE
+0000:41:00.0 NUMA         NUMA         NUMA         PCIE         XNUMA        XNUMA        XNUMA        XNUMA
+0000:d6:00.0 XNUMA        XNUMA        XNUMA        XNUMA        NUMA         NUMA         NUMA         PCIE
 ```
 
 **Get NIC topology NUMA information:**

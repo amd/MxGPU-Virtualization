@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef AMDGV_OSS_H
@@ -48,6 +31,16 @@ enum oss_dma_mem_type {
 	OSS_DMA_MEM_CACHEABLE = (1 << 0),
 	OSS_DMA_PA_CONTIGUOUS = (1 << 1),
 	OSS_DMA_ALLOW_DMA_NOT_CONTIGUOUS = (1 << 2),
+	OSS_DMA_MEM_NONCACHED = (1 << 3),
+	OSS_DMA_MEM_WRITE_COMBINED = (1 << 4),
+};
+
+enum oss_page_attr {
+	OSS_PAGE_READONLY      = (1 << 0),
+	OSS_PAGE_READWRITE     = (1 << 1),
+	OSS_PAGE_UNCACHED      = (1 << 2),
+	OSS_PAGE_WRITECOMBINE  = (1 << 3),
+	OSS_PAGE_CACHEABLE     = (1 << 4),
 };
 
 enum oss_memremap_type {
@@ -62,9 +55,9 @@ enum oss_dma_direction {
 };
 
 struct oss_dma_mem_info {
-	/* the bus address of allocated dma memory */
+	/* the bus address of allocated dma memory, logical address after iommu map */
 	uint64_t bus_addr;
-	/* the mapped pointer of dma memory */
+	/* the mapped pointer of dma memory, virtual address */
 	void	*va_ptr;
 	/* the physical address of dma memory */
 	uint64_t phys_addr;
@@ -212,6 +205,41 @@ struct oss_bh_info {
 	void                *arg2;
 };
 
+struct oss_spa_range {
+	uint64_t base;
+	uint64_t size;
+};
+
+struct oss_mce {
+	uint64_t status;		/* Bank's MCi_STATUS MSR */
+	uint64_t misc;		/* Bank's MCi_MISC MSR */
+	uint64_t addr;		/* Bank's MCi_ADDR MSR */
+	uint64_t mcgstatus;	/* Machine Check Global Status MSR */
+	uint64_t ip;		/* Instruction Pointer when the error happened */
+	uint64_t tsc;		/* CPU time stamp counter */
+	uint64_t time;		/* Wall time_t when error was detected */
+	uint8_t  cpuvendor;	/* Kernel's X86_VENDOR enum */
+	uint8_t  inject_flags;	/* Software inject flags */
+	uint8_t  severity;		/* Error severity */
+	uint8_t  pad;
+	uint32_t cpuid;		/* CPUID 1 EAX */
+	uint8_t  cs;		/* Code segment */
+	uint8_t  bank;		/* Machine check bank reporting the error */
+	uint8_t  cpu;		/* CPU number; obsoleted by extcpu */
+	uint8_t  finished;		/* Entry is valid */
+	uint32_t extcpu;		/* Linux CPU number that detected the error */
+	uint32_t socketid;		/* CPU socket ID */
+	uint32_t apicid;		/* CPU initial APIC ID */
+	uint64_t mcgcap;		/* MCGCAP MSR: machine check capabilities of CPU */
+	uint64_t synd;		/* MCA_SYND MSR: only valid on SMCA systems */
+	uint64_t ipid;		/* MCA_IPID MSR: only valid on SMCA systems */
+	uint64_t ppin;		/* Protected Processor Inventory Number */
+	uint32_t microcode;	/* Microcode revision */
+	uint64_t kflags;		/* Internal kernel use */
+};
+
+typedef int (*mce_notifier)(void *dev, unsigned int id, unsigned long val, void *data);
+
 struct oss_interface {
 	/* get the vf device handle of shim drv */
 	oss_dev_t (*get_vf_dev_from_bdf)(uint32_t bdf);
@@ -297,6 +325,12 @@ struct oss_interface {
 	/* allocate and map physical system memory */
 	int (*alloc_dma_mem)(oss_dev_t dev, uint32_t size, enum oss_dma_mem_type type,
 			     struct oss_dma_mem_info *dma_mem_info);
+	/* Same as alloc_dma_mem, but with a caller-supplied per-page attribute
+	 * bitmask (see enum oss_page_attr above). */
+	int (*alloc_dma_mem_with_attr)(oss_dev_t dev, uint32_t size,
+				       enum oss_dma_mem_type type,
+				       enum oss_page_attr page_attr,
+				       struct oss_dma_mem_info *dma_mem_info);
 	void (*free_dma_mem)(void *handle);
 	void (*flush_dma_mem)(struct oss_dma_mem_info *dma_mem_info,
 			      enum oss_dma_direction dir, uint64_t offset, uint64_t size);
@@ -330,11 +364,17 @@ struct oss_interface {
 	void (*spin_unlock_irq)(void *lock);
 	void (*spin_lock_fini)(void *lock);
 
+	void (*spin_lock_init_raw)(void *lock);
+	void (*spin_lock_irqsave_raw)(void *lock, unsigned long *f);
+	void (*spin_unlock_irqrestore_raw)(void *lock, unsigned long f);
+
 	/* mutext operations */
 	void *(*mutex_init)(void);
+	void (*mutex_init_raw)(void *mutex);
 	void (*mutex_lock)(void *mutex);
 	void (*mutex_unlock)(void *mutex);
 	void (*mutex_fini)(void *mutex);
+	void (*mutex_destroy_raw)(void *mutex);
 
 	/* rwlock operations */
 	void *(*rwlock_init)(void);
@@ -372,6 +412,7 @@ struct oss_interface {
 	void (*atomic_set)(void *atomic, uint64_t val);
 	void (*atomic_inc)(void *atomic);
 	void (*atomic_dec)(void *atomic);
+	void (*atomic_sub)(int val, void *atomic);
 	uint64_t (*atomic_inc_return)(void *atomic);
 	uint64_t (*atomic_dec_return)(void *atomic);
 	int64_t (*atomic_cmpxchg)(void *atomic, int64_t comperand, int64_t exchange);
@@ -439,6 +480,7 @@ struct oss_interface {
 	void *(*sema_init)(int32_t val);
 	void (*sema_fini)(void *sema);
 
+	int (*access_ok)(const void *ptr, unsigned long size);
 	int (*copy_from_user)(void *to, const void *from, uint32_t size);
 	int (*copy_to_user)(void *to, const void *from, uint32_t size);
 
@@ -467,6 +509,11 @@ struct oss_interface {
 #endif
 
 	int (*store_rlcv_timestamp)(const char *buf, uint32_t size, uint32_t bdf);
+	void *(*hbm_dax_init)(const char *dev_name, uint64_t phy_addr, uint64_t phy_size);
+	void (*hbm_dax_fini)(void *hbm_dax);
+	void *(*hbm_drv_mgmt_init)(const char *hbm_name, int numa_id,
+				   uint64_t *phy_addr, uint64_t *phy_size);
+	void (*hbm_drv_mgmt_fini)(void *hbm_drv_mgmt);
 	bool (*get_ih_rb_info)(oss_dev_t dev, uint32_t ih_index, struct oss_ih_rb_info *p_ih_rb_info);
 
 #ifndef EXCLUDE_DCORE_DEBUG
@@ -481,7 +528,8 @@ struct oss_interface {
 	int (*save_accelerator_partition_mode)(
 		oss_dev_t dev, uint32_t accelerator_partition_mode);
 	int (*save_memory_partition_mode)(oss_dev_t dev,
-					  uint32_t memory_partition_mode);
+		uint32_t memory_partition_mode);
+	int (*save_cc_mode)(oss_dev_t dev, uint32_t cc_mode);
 	int (*clear_conf_file)(oss_dev_t dev);
 
 	/* Run fn as a passive level work item */
@@ -503,10 +551,28 @@ struct oss_interface {
 	/* Check if running in a virtual machine */
 	bool  (*in_virtual_machine)(void);
 
-	/* get global device list in the system
-	 */
 	void (*get_device_list)(oss_dev_t *dev_list, int *size);
+	void *(*init_vf_sysmem_xchg)(oss_dev_t dev, uint32_t idx_vf, uint64_t gpa_base,
+				uint32_t size);
+	void (*fini_vf_sysmem_xchg)(oss_dev_t dev, void *context);
+	int (*write_vf_sysmem_xchg)(oss_dev_t dev, void *context, char *buf, uint32_t offset,
+				uint32_t size);
+	int (*read_vf_sysmem_xchg)(oss_dev_t dev, void *context, char *buf, uint32_t offset,
+				uint32_t size);
+	int (*vf_sysmem_xchg_gpa_to_spa)(oss_dev_t dev, void *context, uint32_t idx,
+				struct oss_spa_range *entry);
 
+	int (*set_dma_mask)(oss_dev_t dev, uint32_t bits);
+	/*
+	 * register_mce_notifier: 0 on success; -EINVAL if dev or notifier is NULL;
+	 * -ENOMEM if no free slot. Re-registering the same dev updates the notifier.
+	 *
+	 * unregister_mce_notifier: 0 on success; -EINVAL if dev is NULL; -ENOENT
+	 * if dev was not registered (wrong pointer, never registered, or already
+	 * unregistered).
+	 */
+	int (*register_mce_notifier)(void *dev, mce_notifier notifier);
+	int (*unregister_mce_notifier)(void *dev);
 };
 
 #endif

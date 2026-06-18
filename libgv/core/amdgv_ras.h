@@ -1,30 +1,18 @@
-/*
- * Copyright (c) 2018-2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #ifndef _AMDGV_RAS_H
 #define _AMDGV_RAS_H
 
 #include "amdgv.h"
 #include "ta_ras_if.h"
 #include "amdgv_ras_eeprom.h"
+#include "amdgv_list.h"
+
+struct amdgv_sched_event;
+struct amd_sriov_msg_pf2vf_info;
 
 #define BITS_PER_BYTE 8
 #define BITS_PER_TYPE(type) (sizeof(type) * BITS_PER_BYTE)
@@ -151,7 +139,6 @@ enum amdgv_ras_ret {
 	AMDGV_RAS_CE,
 	AMDGV_RAS_PT,
 };
-
 
 enum amdgv_ras_gfx_subblock {
 	/* CPC */
@@ -564,4 +551,10 @@ static inline enum amdgv_smi_ras_block amdgv_ras_block_to_smi_ras_block(enum amd
 		return AMDGV_SMI_NUM_BLOCK_MAX;
 	}
 }
+
+struct amdgv_smi_ras_caps {
+	uint32_t ecc_type;
+	uint64_t ras_block_mask;
+};
+
 #endif

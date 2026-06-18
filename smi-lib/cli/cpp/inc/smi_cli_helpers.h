@@ -1,23 +1,8 @@
-/* * Copyright (C) 2023-2026 Advanced Micro Devices. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #pragma once
 
 #include <string>
@@ -33,15 +18,15 @@
 // Major version should be changed when making incompatible changes to the command interface:
 // - Deprecating or removing existing commands
 // - Modifying input/output format of commands
-#define AMDSMI_TOOL_VERSION_MAJOR 34
+#define AMDSMI_TOOL_VERSION_MAJOR 36
 // Minor version should be incremented for backward-compatible command changes:
 // - Adding new commands
 // - Improvements to existing commands
 // - Adding new options to existing commands without changing the basic input/output format
-#define AMDSMI_TOOL_VERSION_MINOR 12
+#define AMDSMI_TOOL_VERSION_MINOR 1
 // Release version should be incremented for minor issue fixes and maintenance updates
 // that don't add features or change command behavior
-#define AMDSMI_TOOL_VERSION_RELEASE 3
+#define AMDSMI_TOOL_VERSION_RELEASE 2
 
 
 #define AMDSMI_TOOL_VERSION_CREATE_STRING(MAJOR, MINOR, RELEASE) (#MAJOR "." #MINOR "." #RELEASE)
@@ -203,6 +188,22 @@ std::string get_string_from_enum_mp_setting(int mp_setting);
 std::string get_string_from_enum_resource_type(int resource_type);
 
 /**
+ * @brief Converts enum name to string
+ *
+ * @param tdi_state amdsmi_tdi_state_t structure
+ * @return std::string of amdsmi_tdi_state_t
+ */
+std::string get_string_from_enum_tdi_state(int tdi_state);
+
+/**
+ * @brief Converts enum name to string
+ *
+ * @param cc_mode amdsmi_cc_mode_t structure
+ * @return std::string of amdsmi_cc_mode_t
+ */
+std::string get_string_from_enum_cc_mode(int cc_mode);
+
+/**
  * @brief Decodes memory partition settings
  *
  * @param[in] nps_cap_mask a 32-bit integer mask representing NPS setting
@@ -343,10 +344,18 @@ std::string FecModesToString(uint32_t fec);
 /**
  * @brief Retrieve string value for a specified link type
  *
- * @param nic_link_type amdsmi_nic_link_type_t structure
- * @return std::string of amdsmi_nic_link_type_t
+ * @param nic_link_type amdsmi_link_type_t value (NIC-to-GPU connection type)
+ * @return std::string of amdsmi_link_type_t
  */
 std::string get_string_from_enum_nic_topo_link_type(int nic_link_type);
+
+/**
+ * @brief Converts enum name to string
+ *
+ * @param nic_fw_type amdsmi_nic_fw_version_type_t structure
+ * @return std::string of amdsmi_nic_fw_version_type_t
+ */
+std::string get_string_from_enum_nic_fw_type(int nic_fw_type);
 
 /**
  * @brief Get the index of the main GPU

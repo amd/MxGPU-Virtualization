@@ -1,22 +1,8 @@
-/* * Copyright (C) 2024-2025 Advanced Micro Devices. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #include "smi_cli_platform.h"
 #include "smi_cli_help_info.h"
 #include "smi_cli_helpers.h"
@@ -294,7 +280,9 @@ void AmdSmiHelpInfo::initialize_windows_platform(const Arguments& arg)
 {
 	if (AmdSmiPlatform::getInstance().is_host()) {
 		set_common_windows_host_settings();
-		if (AmdSmiPlatform::getInstance().is_mi300()) {
+		if (AmdSmiPlatform::getInstance().is_mixxx()) {
+			configure_windows_host_mixxx(arg);
+		} else if (AmdSmiPlatform::getInstance().is_mi300()) {
 			configure_windows_host_mi3xx(arg);
 		} else {
 			configure_windows_host_standard(arg);
@@ -310,7 +298,9 @@ void AmdSmiHelpInfo::initialize_linux_platform(const Arguments& arg)
 {
 	if (AmdSmiPlatform::getInstance().is_host()) {
 		set_common_linux_host_settings();
-		if (AmdSmiPlatform::getInstance().is_mi300()) {
+		if (AmdSmiPlatform::getInstance().is_mixxx()) {
+			configure_linux_host_mixxx(arg);
+		} else if (AmdSmiPlatform::getInstance().is_mi300()) {
 			configure_linux_host_mi300(arg);
 		} else if (AmdSmiPlatform::getInstance().is_mi350()) {
 			configure_linux_host_mi350(arg);
@@ -356,15 +346,15 @@ void AmdSmiHelpInfo::configure_device_specific_settings(const Arguments& arg)
 
 		configure_static_settings(
 			static_argument_vectors_map,
-		{{"gpu_nic_common", "common"}, {"gpu_nic_common", "host_linux"}, {"gpu", "common"}, {"gpu", "host_linux"}, {"gpu", "host_linux_spec"}, {"gpu", "host_vf"}},
+		{{"gpu_nic_common", "common"}, {"gpu_nic_common", "host_linux"}, {"gpu", "common"}, {"gpu", "host_linux"}, {"gpu", "host_linux_spec"}},
 		usage_static_specific, static_specific,
 		staticConfig
 		);
 
 		configure_metric_settings(
 			metric_argument_vectors_map,
-		{{"gpu", "common"}, {"gpu", "host"}, {"gpu", "host_linux_spec"}, {"gpu", "host_vf"}},
-		{{"vf", "host_vf"}},
+		{{"gpu", "common"}, {"gpu", "host"}, {"gpu", "host_linux_spec"}},
+		{},
 		usage_metric_specific, metric_specific,
 		metricConfig
 		);
@@ -422,7 +412,7 @@ void AmdSmiHelpInfo::configure_device_specific_settings(const Arguments& arg)
 
 		usage_static_specific = build_usage_from_categories(static_argument_vectors_map, {
 			{"gpu_nic_common", "common"}, {"gpu_nic_common", "host_linux"}, {"gpu", "common"},
-			{"gpu", "host_linux"}, {"gpu", "host_linux_spec"}, {"nic", "host_linux"}, {"gpu", "host_vf"}
+			{"gpu", "host_linux"}, {"gpu", "host_linux_spec"}, {"nic", "host_linux"}
 		});
 
 		static_specific = static_common + get_help_arguments() +
@@ -431,21 +421,20 @@ void AmdSmiHelpInfo::configure_device_specific_settings(const Arguments& arg)
 		}) +
 		common_gpu + get_device_arguments("gpu") +
 		build_arguments_from_categories(static_argument_vectors_map, {
-			{"gpu", "common"},{"gpu", "host_linux"}, {"gpu", "host_linux_spec"}, {"gpu", "host_vf"}
+			{"gpu", "common"},{"gpu", "host_linux"}, {"gpu", "host_linux_spec"}
 		}) + common_nic + get_device_arguments("nic") +
 		build_arguments_from_categories(static_argument_vectors_map, {{"nic", "host_linux"}});
 
 		usage_metric_specific = get_device_usage("watch") +
 		build_usage_from_categories(metric_argument_vectors_map, {
-			{"gpu", "common"}, {"gpu", "host"}, {"gpu", "host_linux_spec"}, {"nic", "host_linux"}, {"gpu", "host_vf"}
+			{"gpu", "common"}, {"gpu", "host"}, {"gpu", "host_linux_spec"}, {"nic", "host_linux"}
 		});
 
 		metric_specific = metric_common + get_help_arguments() + common_gpu + get_device_arguments("gpu") +
 						  get_device_arguments("watch") +
 		build_arguments_from_categories(metric_argument_vectors_map, {
-			{"gpu", "common"}, {"gpu", "host"}, {"gpu", "host_linux_spec"}, {"gpu", "host_vf"}
+			{"gpu", "common"}, {"gpu", "host"}, {"gpu", "host_linux_spec"}
 		}) +
-		build_arguments_from_categories(metric_argument_vectors_map, {{"vf", "host_vf"}}) +
 		common_nic + get_device_arguments("nic") +
 		build_arguments_from_categories(metric_argument_vectors_map, {{"nic", "host_linux"}});
 		}
@@ -467,7 +456,7 @@ void AmdSmiHelpInfo::configure_windows_host_mi3xx(const Arguments& arg)
 
 	configure_static_settings(
 		static_argument_vectors_map,
-	{{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "host_windows"}, {"gpu", "host_mi3xx"}, {"gpu", "host_vf"}},
+	{{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "host_windows"}, {"gpu", "host_mi3xx"}, {"gpu", "host_vf"}, {"gpu", "host_vf_mixxx"}},
 	usage_static_specific, static_specific,
 	staticConfig
 	);
@@ -492,6 +481,37 @@ void AmdSmiHelpInfo::configure_windows_host_mi3xx(const Arguments& arg)
 	usage_reset_specific = "";
 }
 
+void AmdSmiHelpInfo::configure_windows_host_mixxx(const Arguments& arg)
+{
+
+	help_specific = build_help_commands_from_categories(help_supported_command_map, {{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "windows_host"}, {"gpu", "host_mixxx"}});
+
+	configure_static_settings(
+		static_argument_vectors_map,
+	{{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "host_windows"}, {"gpu", "host_mi3xx"}, {"gpu", "host_vf"}},
+	usage_static_specific, static_specific,
+	{.include_gpu_device = true}
+	);
+
+	xgmi_specific = xgmi_host;
+	usage_xgmi_specific = xgmi_usage_host;
+	topology_specific = topology_host;
+	usage_topology_specific = topology_usage_host;
+	fabric_specific = fabric_host;
+	usage_fabric_specific = fabric_usage_host;
+	set_specific = set_host_mixxx;
+	usage_set_specific = set_usage_host_mixxx;
+	partition_specific = partition_host;
+	usage_partition_specific = partition_usage_host;
+	ras_specific = ras_host;
+	usage_ras_specific = usage_ras_host;
+	confidential_compute_specific = confidential_compute_host;
+	usage_confidential_compute_specific = confidential_compute_usage_host;
+
+	reset_specific = "";
+	usage_reset_specific = "";
+}
+
 void AmdSmiHelpInfo::configure_windows_host_standard(const Arguments& arg)
 {
 	CommandConfig staticConfig = {};
@@ -501,7 +521,7 @@ void AmdSmiHelpInfo::configure_windows_host_standard(const Arguments& arg)
 
 	configure_static_settings(
 		static_argument_vectors_map,
-	{{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "host_windows"}, {"gpu", "host_vf"}},
+	{{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "host_windows"}},
 	usage_static_specific, static_specific,
 	staticConfig
 	);
@@ -659,6 +679,8 @@ void AmdSmiHelpInfo::set_empty_settings()
 	usage_xgmi_specific = "";
 	topology_specific = "";
 	usage_topology_specific = "";
+	fabric_specific = "";
+	usage_fabric_specific = "";
 	partition_specific = "";
 	usage_partition_specific = "";
 	ras_specific = "";
@@ -795,12 +817,12 @@ void AmdSmiHelpInfo::configure_linux_host_mi300(const Arguments& arg)
 		help_specific = build_help_commands_from_categories(help_supported_command_map, {
 			{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "linux_host"}, {"gpu", "host_mi3xx"}
 		});
-
+	
 		usage_static_specific = build_usage_from_categories(static_argument_vectors_map, {
 			{"gpu_nic_common", "common"}, {"gpu_nic_common", "host_linux"}, {"gpu", "common"},
 			{"gpu", "host_linux"}, {"gpu", "host_linux_spec"}, {"gpu", "host_mi3xx"}, {"nic", "host_linux"}, {"gpu", "host_vf"}
 		});
-
+	
 		static_specific = static_common + get_help_arguments() +
 		build_arguments_from_categories(static_argument_vectors_map, {
 			{"gpu_nic_common", "common"}, {"gpu_nic_common", "host_linux"}
@@ -881,6 +903,150 @@ void AmdSmiHelpInfo::configure_linux_host_mi350(const Arguments& arg)
 	node_specific = node_mi350;
 }
 
+void AmdSmiHelpInfo::configure_linux_host_mixxx(const Arguments& arg)
+{
+switch (arg.devices_type) {
+case GPU_TYPE:
+	{
+	CommandConfig listConfig = {};
+	listConfig.include_gpu_device = true;
+	listConfig.common_prefix = list_common;
+	CommandConfig staticConfig = {};
+	staticConfig.include_gpu_device = true;
+	staticConfig.common_prefix = static_common;
+	CommandConfig metricConfig = {};
+	metricConfig.include_vf = true;
+	metricConfig.include_gpu_device = true;
+	metricConfig.include_watch_device = true;
+	metricConfig.common_prefix = metric_common;
+	configure_list_settings(
+		usage_list_specific, list_specific,
+		listConfig
+	);
+	help_specific = build_help_commands_from_categories(help_supported_command_map, {{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "linux_host"}, {"gpu", "host_mixxx"}});
+
+	configure_static_settings(
+		static_argument_vectors_map,
+	{{"gpu_nic_common", "common"}, {"gpu_nic_common", "host_linux"}, {"gpu", "common"}, {"gpu", "host_linux"}, {"gpu", "host_linux_spec"}, {"gpu", "host_mi3xx"}, {"gpu", "host_vf"}, {"gpu", "host_vf_mixxx"}},
+	usage_static_specific, static_specific,
+	staticConfig
+	);
+
+	configure_metric_settings(
+		metric_argument_vectors_map,
+	{{"gpu", "common"}, {"gpu", "host"}, {"gpu", "host_linux_spec"}, {"gpu", "host_vf"}},
+	{{"vf", "host_vf"}, {"vf", "host_linux_mi3xx_vf"}},
+	usage_metric_specific, metric_specific,
+	metricConfig
+	);
+	}
+	break;
+
+case NIC_TYPE:
+	{
+	CommandConfig listConfig = {};
+	listConfig.include_nic_device = true;
+	listConfig.common_prefix = list_common;
+	CommandConfig staticConfig = {};
+	staticConfig.include_nic_device = true;
+	staticConfig.common_prefix = static_common;
+	CommandConfig metricConfig = {};
+	metricConfig.include_nic_device = true;
+	metricConfig.common_prefix = metric_common;
+	configure_list_settings(
+		usage_list_specific, list_specific,
+	listConfig
+	);
+	help_specific = build_help_commands_from_categories(help_supported_command_map, {{"gpu_nic_common", "common"}});
+
+	configure_static_settings(
+		static_argument_vectors_map,
+	{{"gpu_nic_common", "common"}, {"gpu_nic_common", "host_linux"}, {"nic", "host_linux"}},
+	usage_static_specific, static_specific,
+	staticConfig
+	);
+
+	configure_metric_settings(
+		metric_argument_vectors_map,
+	{{"nic", "host_linux"}}, {},
+	usage_metric_specific, metric_specific,
+	metricConfig
+	);
+	}
+	break;
+
+case ALL_TYPE:
+	{
+	CommandConfig listConfig = {};
+	listConfig.include_gpu_device = true;
+	listConfig.include_nic_device = true;
+	listConfig.common_prefix = list_common;
+	configure_list_settings(
+		usage_list_specific, list_specific,
+	listConfig
+	);
+
+	help_specific = build_help_commands_from_categories(help_supported_command_map, {
+		{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "linux_host"}, {"gpu", "host_mixxx"}
+	});
+
+	usage_static_specific = build_usage_from_categories(static_argument_vectors_map, {
+		{"gpu_nic_common", "common"}, {"gpu_nic_common", "host_linux"}, {"gpu", "common"},
+		{"gpu", "host_linux"}, {"gpu", "host_linux_spec"}, {"gpu", "host_mi3xx"}, {"nic", "host_linux"}, {"gpu", "host_vf"}, {"gpu", "host_vf_mixxx"}
+	});
+
+	static_specific = static_common + get_help_arguments() +
+	build_arguments_from_categories(static_argument_vectors_map, {
+		{"gpu_nic_common", "common"}, {"gpu_nic_common", "host_linux"}
+	}) +
+	common_gpu + get_device_arguments("gpu") +
+	build_arguments_from_categories(static_argument_vectors_map, {
+		{"gpu", "common"}, {"gpu", "host_linux"}, {"gpu", "host_linux_spec"}, {"gpu", "host_mi3xx"}, {"gpu", "host_vf"}, {"gpu", "host_vf_mixxx"}
+	}) + common_nic + get_device_arguments("nic") +
+	build_arguments_from_categories(static_argument_vectors_map, {{"nic", "host_linux"}});
+
+	usage_metric_specific = get_device_usage("watch") +
+	build_usage_from_categories(metric_argument_vectors_map, {
+		{"gpu", "common"}, {"gpu", "host"}, {"gpu", "host_linux_spec"}, {"nic", "host_linux"}, {"gpu", "host_vf"}
+	});
+
+	metric_specific = metric_common + get_help_arguments() + common_gpu + get_device_arguments("gpu") +
+					  get_device_arguments("watch") +
+	build_arguments_from_categories(metric_argument_vectors_map, {
+		{"gpu", "common"}, {"gpu", "host"}, {"gpu", "host_linux_spec"}, {"gpu", "host_vf"}
+	}) +
+	build_arguments_from_categories(metric_argument_vectors_map, {
+		{"vf", "host_vf"}, {"vf", "host_linux_mi3xx_vf"}
+	}) +
+	common_nic + get_device_arguments("nic") +
+	build_arguments_from_categories(metric_argument_vectors_map, {{"nic", "host_linux"}});
+	}
+	break;
+
+	default:
+		break;
+	}
+
+	xgmi_specific = xgmi_host;
+	usage_xgmi_specific = xgmi_usage_host;
+	topology_specific = topology_host;
+	usage_topology_specific = topology_usage_host;
+	fabric_specific = fabric_host;
+	usage_fabric_specific = fabric_usage_host;
+	set_specific = set_host_mixxx;
+	usage_set_specific = set_usage_host_mixxx;
+	reset_specific = reset_host_linux;
+	usage_reset_specific = reset_usage_linux;
+	partition_specific = partition_host;
+	usage_partition_specific = partition_usage_host;
+	ras_specific = ras_host;
+	usage_ras_specific = usage_ras_host;
+	usage_node_specific = usage_node;
+	node_specific = node_common;
+	confidential_compute_specific = confidential_compute_host;
+	usage_confidential_compute_specific = confidential_compute_usage_host;
+}
+
 void AmdSmiHelpInfo::configure_linux_host_mi200(const Arguments& arg)
 {
 	CommandConfig listConfig = {};
@@ -906,15 +1072,15 @@ void AmdSmiHelpInfo::configure_linux_host_mi200(const Arguments& arg)
 
 	configure_static_settings(
 		static_argument_vectors_map,
-	{{"gpu_nic_common", "common"}, {"gpu_nic_common", "host_linux"}, {"gpu", "host_linux"}, {"gpu", "host_vf"}},
+	{{"gpu_nic_common", "common"}, {"gpu_nic_common", "host_linux"}, {"gpu", "host_linux"}},
 	usage_static_specific, static_specific,
 	staticConfig
 	);
 
 	configure_metric_settings(
 		metric_argument_vectors_map,
-	{{"gpu", "common"}, {"gpu", "host"}, {"gpu", "host_vf"}},
-	{{"vf", "host_vf"}},
+	{{"gpu", "common"}, {"gpu", "host"}},
+	{},
 	usage_metric_specific, metric_specific,
 	metricConfig
 	);
@@ -939,8 +1105,8 @@ void AmdSmiHelpInfo::configure_linux_host_mi200(const Arguments& arg)
 void AmdSmiHelpInfo::set_common_linux_host_settings()
 {
 	bad_pages_specific = bad_pages_host;
-	firmware_specific = firmware_host;
-	usage_firmware_specific = firmware_usage_host;
+	firmware_specific = firmware_host_linux;
+	usage_firmware_specific = firmware_usage_host_linux;
 	event_specific = event_host;
 	usage_event_specific = event_usage_host;
 	monitor_specific = monitor_host;
@@ -1039,7 +1205,7 @@ std::string AmdSmiHelpInfo::get_topology_help_message(const Arguments& arg, bool
 	is_command_supported("topology",modifiers,topology_common,topology_specific);
 	std::string result = copyright_message + topology_usage_common + append_device_usage_by_type(arg);
 	if (arg.devices_type != NIC_TYPE) {
-		result.append(get_format_usage_by_device_type(arg.devices_type));
+		result.append(get_format_usage({"json"}));
 	}
 	result.append(usage_topology_specific);
 	result.append("\n")
@@ -1048,6 +1214,12 @@ std::string AmdSmiHelpInfo::get_topology_help_message(const Arguments& arg, bool
 	.append("\n")
 	.append(xgmi_modifiers);
 	return result;
+}
+std::string AmdSmiHelpInfo::get_fabric_help_message(bool modifiers = false)
+{
+	is_command_supported("fabric",modifiers,fabric_common,fabric_specific);
+	return copyright_message + fabric_usage_common + usage_fabric_specific + fabric_message +
+		   fabric_common + fabric_specific + command_modifiers;
 }
 std::string AmdSmiHelpInfo::get_partition_help_message(bool modifiers = false)
 {
@@ -1093,4 +1265,10 @@ std::string AmdSmiHelpInfo::get_node_help_message(bool modifiers = false)
 {
 	is_command_supported("node", modifiers, node_common, node_specific);
 	return copyright_message + usage_node_specific + node_specific + command_modifiers;
+}
+
+std::string AmdSmiHelpInfo::get_confidential_compute_help_message(bool modifiers = false)
+{
+	is_command_supported("confidential-compute", modifiers, confidential_compute_common, confidential_compute_specific);
+	return copyright_message + usage_confidential_compute_specific + confidential_compute_message + confidential_compute_common + confidential_compute_specific + command_modifiers;
 }

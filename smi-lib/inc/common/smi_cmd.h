@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef __SMI_CMD_H__
@@ -109,6 +92,11 @@ enum smi_cmd_code {
 	SMI_CMD_CODE_SET_GPU_PTL_STATE					= SMI_IOCTL | 0x0000003C,
 	SMI_CMD_CODE_GET_GPU_PTL_FORMATS				= SMI_IOCTL | 0x0000003D,
 	SMI_CMD_CODE_SET_GPU_PTL_FORMATS				= SMI_IOCTL | 0x0000003E,
+	SMI_CMD_CODE_GET_CC_MODE				= SMI_IOCTL | 0x0000003F,
+	SMI_CMD_CODE_SET_CC_MODE				= SMI_IOCTL | 0x00000040,
+	SMI_CMD_CODE_GET_TDI_STATE				= SMI_IOCTL | 0x00000041,
+	SMI_CMD_CODE_GET_VF_HBM_INFO				= SMI_IOCTL | 0x00000042,
+	SMI_CMD_CODE_GET_FABRIC_INFO				= SMI_IOCTL | 0x00000043,
 	SMI_CMD_CODE__MAX					= 0xffffffff
 };
 
@@ -189,6 +177,10 @@ enum smi_cmd_code {
 #define SMI_MAX_CPER_HDRS 128
 
 #define SMI_RAS_POLICY_HEADER_SIZE 4    //!< minor(1) + major(1) + padding(2)
+
+#define SMI_FABRIC_ACTIVE_ACCELERATORS_BITMAP_SIZE 32
+#define SMI_FABRIC_PPOD_ID_SIZE 16
+#define SMI_FABRIC_MAX_LOCAL_GPUS 8
 
 
 // >>>>>>>>>>>>>>>>>>>> ENUM TYPE DEFINITIONS >>>>>>>>>>>>>>>>>>>>
@@ -415,6 +407,46 @@ enum smi_metric_name {
 	SMI_METRIC_NAME_VR_TEMP_VDDCR_11_HBM_D,
 	SMI_METRIC_NAME_VR_TEMP_VDD_USR,
 	SMI_METRIC_NAME_VR_TEMP_VDDIO_11_E32,
+
+	SMI_METRIC_NAME_TEMP_MID,
+	SMI_METRIC_NAME_CLK_FCLK,
+	SMI_METRIC_NAME_CLK_FCLK_MAX_LIMIT,
+	SMI_METRIC_NAME_CLK_FCLK_MIN_LIMIT,
+	SMI_METRIC_NAME_CLK_FCLK_DS_DISABLED,
+	SMI_METRIC_NAME_CLK_LCLK,
+	SMI_METRIC_NAME_CLK_LCLK_MAX_LIMIT,
+	SMI_METRIC_NAME_CLK_LCLK_MIN_LIMIT,
+	SMI_METRIC_NAME_CLK_LCLK_DS_DISABLED,
+	SMI_METRIC_NAME_PCIE_OTHER_END_RECOVERY_COUNT,
+	SMI_METRIC_NAME_TEMP_SHUTDOWN_XCD,
+	SMI_METRIC_NAME_TEMP_SHUTDOWN_AID,
+	SMI_METRIC_NAME_TEMP_SHUTDOWN_MID,
+	SMI_METRIC_NAME_TEMP_SHUTDOWN_HBM,
+	SMI_METRIC_NAME_THROTTLE_TEMP_XCD,
+	SMI_METRIC_NAME_THROTTLE_TEMP_AID,
+	SMI_METRIC_NAME_THROTTLE_TEMP_MID,
+	SMI_METRIC_NAME_THROTTLE_TEMP_HBM,
+	SMI_METRIC_NAME_SVI_PLANE_VDDCR_X0_TEMP,
+	SMI_METRIC_NAME_SVI_PLANE_VDDCR_X1_TEMP,
+	SMI_METRIC_NAME_SVI_PLANE_VDDIO_HBM_B_TEMP,
+	SMI_METRIC_NAME_SVI_PLANE_VDDIO_HBM_D_TEMP,
+	SMI_METRIC_NAME_SVI_PLANE_VDDIO_04_HBM_B_TEMP,
+	SMI_METRIC_NAME_SVI_PLANE_VDDIO_04_HBM_D_TEMP,
+	SMI_METRIC_NAME_SVI_PLANE_VDDCR_HBM_B_TEMP,
+	SMI_METRIC_NAME_SVI_PLANE_VDDCR_HBM_D_TEMP,
+	SMI_METRIC_NAME_SVI_PLANE_VDDCR_075_HBM_B_TEMP,
+	SMI_METRIC_NAME_SVI_PLANE_VDDCR_075_HBM_D_TEMP,
+	SMI_METRIC_NAME_SVI_PLANE_VDDIO_11_GTA_A_TEMP,
+	SMI_METRIC_NAME_SVI_PLANE_VDDIO_11_GTA_C_TEMP,
+	SMI_METRIC_NAME_SVI_PLANE_VDDAN_075_GTA_A_TEMP,
+	SMI_METRIC_NAME_SVI_PLANE_VDDAN_075_GTA_C_TEMP,
+	SMI_METRIC_NAME_SVI_PLANE_VDDCR_075_UCIE_TEMP,
+	SMI_METRIC_NAME_SVI_PLANE_VDDIO_065_UCIEAA_TEMP,
+	SMI_METRIC_NAME_SVI_PLANE_VDDIO_065_UCIEAM_A_TEMP,
+	SMI_METRIC_NAME_SVI_PLANE_VDDIO_065_UCIEAM_C_TEMP,
+	SMI_METRIC_NAME_SVI_PLANE_VDDCR_SOCIO_A_TEMP,
+	SMI_METRIC_NAME_SVI_PLANE_VDDCR_SOCIO_C_TEMP,
+	SMI_METRIC_NAME_SVI_PLANE_VDDAN_075_TEMP,
 	SMI_METRIC_NAME_SYSTEM_POWER_UBB_POWER,
 	SMI_METRIC_NAME_SYSTEM_POWER_UBB_POWER_THRESHOLD,
 
@@ -435,6 +467,9 @@ enum smi_metric_category {
 	SMI_METRIC_CATEGORY_SYS_BASEBOARD_TEMP,
 	SMI_METRIC_CATEGORY_SYS_GPUBOARD_TEMP,
 	SMI_METRIC_CATEGORY_SYS_BASEBOARD_POWER,
+	SMI_METRIC_CATEGORY_STATIC_FREQUENCY,
+	SMI_METRIC_CATEGORY_STATIC_TEMPERATURE,
+	SMI_METRIC_CATEGORY_STATIC_THROTTLE,
 	SMI_METRIC_CATEGORY_UNKNOWN
 };
 
@@ -741,6 +776,19 @@ enum smi_driver {
 	SMI_DRIVER__MAX
 };
 
+enum smi_tdi_state_t {
+	SMI_TDI_STATE_UNLOCKED = 0,
+	SMI_TDI_STATE_LOCKED = 1,
+	SMI_TDI_STATE_RUN = 2,
+	SMI_TDI_STATE_ERROR = 3,
+};
+
+enum smi_cc_mode_t {
+	SMI_CC_MODE_OFF = 0,
+	SMI_CC_MODE_ON = 1,
+	SMI_CC_MODE_DEV = 2,
+};
+
 // IOCTL input/output enums
 
 enum smi_debug_level {
@@ -772,6 +820,27 @@ enum smi_data_query_type {
 enum smi_npm_status {
 	SMI_NPM_STATUS_DISABLED,
 	SMI_NPM_STATUS_ENABLED
+};
+
+enum smi_fabric_type {
+	SMI_FABRIC_TYPE_UALOE,
+	SMI_FABRIC_TYPE_UALINK,
+	SMI_FABRIC_TYPE_UNKNOWN
+};
+
+enum smi_fabric_npa_address_mode {
+	SMI_FABRIC_NPA_ADDRESS_MODE_SOURCE_ALIASING,
+	SMI_FABRIC_NPA_ADDRESS_MODE_SOURCE_IDENTIFICATION,
+	SMI_FABRIC_NPA_ADDRESS_MODE_UNKNOWN
+};
+
+enum smi_fabric_accelerator_vpod_state {
+	SMI_FABRIC_ACCELERATOR_VPOD_STATE_UNCONFIGURED,
+	SMI_FABRIC_ACCELERATOR_VPOD_STATE_CONFIGURED,
+	SMI_FABRIC_ACCELERATOR_VPOD_STATE_READY,
+	SMI_FABRIC_ACCELERATOR_VPOD_STATE_ACTIVE,
+	SMI_FABRIC_ACCELERATOR_VPOD_STATE_ERROR,
+	SMI_FABRIC_ACCELERATOR_VPOD_STATE_UNKNOWN
 };
 
 enum smi_ptl_data_format {
@@ -918,6 +987,28 @@ union smi_bdf {
 	uint64_t as_uint;
 };
 
+struct smi_fabric_info_v1 {
+	uint32_t accelerator_id;
+	enum smi_fabric_type fabric_type;
+	uint32_t bandwidth;
+	uint32_t latency;
+	uint8_t ppod_id[SMI_FABRIC_PPOD_ID_SIZE];
+	uint32_t ppod_size;
+	uint32_t vpod_id;
+	uint32_t vpod_size;
+	uint32_t vpod_active_accelerators[SMI_FABRIC_ACTIVE_ACCELERATORS_BITMAP_SIZE];
+	uint32_t local_accelerators[SMI_FABRIC_MAX_LOCAL_GPUS];
+	enum smi_fabric_npa_address_mode addr_mode;
+	enum smi_fabric_accelerator_vpod_state accel_state;
+};
+
+struct smi_fabric_info_ver {
+	uint32_t version;
+	union {
+		struct smi_fabric_info_v1 v1;
+	} fabric_info;
+};
+
 struct smi_vf_handle {
 	uint64_t handle;
 };
@@ -991,7 +1082,8 @@ struct smi_power_info {
 	uint64_t gfx_voltage; //!< GFX voltage measurement in mV
 	uint64_t soc_voltage; //!< SOC voltage measurement in mV
 	uint64_t mem_voltage; //!< MEM voltage measurement in mV
-	uint64_t reserved[4];
+	uint64_t ubb_power; //!< UBB power measurement in W
+	uint64_t reserved[3];
 };
 
 struct smi_error_count {
@@ -1216,7 +1308,8 @@ struct smi_dpm_policy_entry {
 struct smi_npm_info {
 	enum smi_npm_status status;
 	uint64_t limit;
-	uint64_t reserved[6];
+	uint32_t ubb_power_threshold;
+	uint64_t reserved[5];
 };
 
 struct smi_dpm_policy {
@@ -1682,5 +1775,29 @@ struct smi_set_gpu_ptl_formats {
 #ifndef __linux__
 #pragma pack(pop)
 #endif
+
+struct smi_vf_hbm_info {
+	uint64_t phy_addr;
+	uint64_t phy_size;
+	uint32_t numa_id;       //!< NUMA node for driver-managed VF HBM, 0xFFFFFFFF if not supported (DAX mode)
+	char name[SMI_MAX_STRING_LENGTH];
+	uint64_t reserved[29];
+};
+
+struct smi_tdi_state {
+	enum smi_tdi_state_t state;
+	uint64_t reserved[3];
+};
+
+struct smi_cc_mode {
+	enum smi_cc_mode_t mode;
+	uint64_t reserved[3];
+};
+
+struct smi_set_cc_mode {
+	smi_device_handle_t dev_id;
+	enum smi_cc_mode_t mode;
+	uint32_t reserved[3];
+};
 
 #endif // __SMI_CMD_H__

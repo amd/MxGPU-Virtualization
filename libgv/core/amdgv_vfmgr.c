@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_device.h"
@@ -30,8 +13,12 @@
 #include "amdgv_misc.h"
 #include "amdgv_mmsch.h"
 #include "amdgv_psp_gfx_if.h"
+#include "amdgv_ras.h"
 
 #include "ai.h"
+
+#define UPPER_32_BITS(n) ((uint32_t)((n) >> 32))
+#define LOWER_32_BITS(n) ((uint32_t)((n) & 0xffffffff))
 
 static const uint32_t this_block = AMDGV_MEMORY_BLOCK;
 
@@ -58,8 +45,10 @@ static void amdgv_vfmgr_parse_mm_bandwidth(struct amdgv_adapter *adapt, uint32_t
 		adapt, AMDGV_HEVC1_ENGINE, entry->mm_bandwidth[AMDGV_HEVC1_ENGINE]);
 }
 
-static inline void amdgv_vfmgr_map_vf_dev_res(struct amdgv_adapter *adapt, struct amdgv_vf_device *entry)
+void amdgv_vfmgr_map_vf_dev_res(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
+	struct amdgv_vf_device *entry = &adapt->array_vf[idx_vf];
+
 	if ((entry->dev != AMDGV_INVALID_HANDLE) && (!entry->res_mapped)) {
 		entry->res_mapped = !oss_map_vf_dev_res(entry->dev, &entry->res);
 		entry->mapped_fb_size = entry->res.fb_size;
@@ -91,8 +80,10 @@ int amdgv_vfmgr_copy_ip_data_to_vf(struct amdgv_adapter *adapt, uint32_t idx_vf,
 		return AMDGV_FAILURE;
 
 	ret = adapt->ip_discovery.copy_to_vf(adapt, idx_vf);
-	if (ret)
+	if (ret) {
+		AMDGV_WARN("upload IP discovery data to VF%d failed\n", idx_vf);
 		return AMDGV_FAILURE;
+	}
 
 	if (mbox_resp) {
 		msg[0] = AMDGV_EVENT_IP_DATA_READY;
@@ -106,6 +97,9 @@ int amdgv_vfmgr_init_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, bool mb
 {
 	int tmp_ret, ret = 0;
 	uint8_t pattern = pattern_data;
+	struct amdgv_vf_device *entry = &adapt->array_vf[idx_vf];
+	uint64_t fb_offset = MBYTES_TO_BYTES(entry->fb_offset);
+	uint64_t fb_size = MBYTES_TO_BYTES(entry->fb_size);
 
 	/*
 	 * Program MC_VM_FB_LOCATION_* registers and HDP for the VF
@@ -120,6 +114,53 @@ int amdgv_vfmgr_init_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, bool mb
 			ret = tmp_ret;
 	}
 
+	if (adapt->vf_hbm_mgmt_mode == AMDGV_VF_HBM_MGMT_MODE_DRIVER_MANAGED) {
+		oss_vsnprintf(entry->vf_hbm_mgmt.name, sizeof(entry->vf_hbm_mgmt.name), "GIM-VF%d", idx_vf);
+		entry->vf_hbm_mgmt.numa_id = adapt->pf_numa_id + idx_vf + 1;
+		entry->vf_hbm_mgmt.phy_addr = adapt->fb_pa + fb_offset;
+		entry->vf_hbm_mgmt.phy_size = fb_size;
+		entry->hbm_mgmt_handle = oss_hbm_drv_mgmt_init(entry->vf_hbm_mgmt.name,
+			entry->vf_hbm_mgmt.numa_id,
+			&entry->vf_hbm_mgmt.phy_addr,
+			&entry->vf_hbm_mgmt.phy_size);
+		if (entry->hbm_mgmt_handle == NULL) {
+			AMDGV_ERROR("failed to create hbm mgmt interface %s for fb at 0x%llx size=0x%llx\n",
+				entry->vf_hbm_mgmt.name,
+				entry->vf_hbm_mgmt.phy_addr,
+				entry->vf_hbm_mgmt.phy_size);
+			return AMDGV_FAILURE;
+		}
+		AMDGV_INFO("created hbm mgmt interface %s for fb at 0x%llx size=0x%llx\n",
+			entry->vf_hbm_mgmt.name,
+			entry->vf_hbm_mgmt.phy_addr,
+			entry->vf_hbm_mgmt.phy_size);
+	} else if (adapt->vf_hbm_mgmt_mode == AMDGV_VF_HBM_MGMT_MODE_DAX) {
+		oss_vsnprintf(entry->vf_hbm_mgmt.name,
+			sizeof(entry->vf_hbm_mgmt.name),
+			"vf_hbm_%04x.%02x.%02x.%01x",
+			(entry->bdf >> 16) & 0xFFFF,
+			(entry->bdf >> 8) & 0xFF,
+			(entry->bdf >> 3) & 0x1F,
+			entry->bdf & 0x7);
+		entry->vf_hbm_mgmt.phy_addr = adapt->fb_pa + fb_offset;
+		entry->vf_hbm_mgmt.phy_size = fb_size;
+		entry->vf_hbm_mgmt.numa_id = -1; /* DAX mode doesn't support numa id */
+		entry->hbm_mgmt_handle = oss_hbm_dax_init(entry->vf_hbm_mgmt.name,
+			entry->vf_hbm_mgmt.phy_addr,
+			entry->vf_hbm_mgmt.phy_size);
+		if (entry->hbm_mgmt_handle == NULL) {
+			AMDGV_ERROR("failed to create dax interface /dev/%s for fb at 0x%llx size=0x%llx\n",
+				entry->vf_hbm_mgmt.name,
+				entry->vf_hbm_mgmt.phy_addr,
+				entry->vf_hbm_mgmt.phy_size);
+			return AMDGV_FAILURE;
+		}
+		AMDGV_INFO("created dax interface /dev/%s for fb at 0x%llx size=0x%llx\n",
+			entry->vf_hbm_mgmt.name,
+			entry->vf_hbm_mgmt.phy_addr,
+			entry->vf_hbm_mgmt.phy_size);
+	}
+
 	/* Copy VF's GPUVM settings to master AID */
 	amdgv_psp_copy_vf_chiplet_regs(adapt, idx_vf);
 
@@ -130,6 +171,7 @@ int amdgv_vfmgr_init_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, bool mb
 		if (tmp_ret)
 			ret = tmp_ret;
 	}
+
 	return ret;
 }
 
@@ -179,8 +221,7 @@ static void amdgv_vfmgr_set_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf)
 
 	amdgv_ffbm_page_table_update_by_fcn(adapt, idx_vf);
 
-	if (amdgv_vfmgr_init_vf_fb(adapt, idx_vf, false, 0x00, 0))
-		AMDGV_WARN("Failed to init vf fb\n");
+	amdgv_vfmgr_init_vf_fb(adapt, idx_vf, false, 0x00, 0);
 
 	/* Only re-check when FFBM is not enabled.
 	 * Under FFBM, these page have already been reserved, so it is
@@ -216,7 +257,7 @@ static void amdgv_vfmgr_gen_uuid_info(struct amd_sriov_msg_uuid_info *uuid_info,
 		uuid_info->did = did;
 
 		/* Step3: insert vf idx */
-		uuid_info->fcn = idx;
+		uuid_info->fcn = amdgv_gpumon_fcn_ref_id_encode(serial, idx);
 
 		/* Step4: insert serial */
 		uuid_info->asic_0 = (uint32_t)serial;
@@ -459,10 +500,8 @@ int amdgv_vfmgr_divide_fb_block(struct amdgv_adapter *adapt, struct amdgv_vf_fb_
 	fb_block->fb_size_tlb = amdgv_vfmgr_calculate_fb_size_tlb(adapt, fb_size);
 	new_block = amdgv_vfmgr_create_fb_block(adapt, AMDGV_INVALID_IDX_VF, fb_block->fb_offset_tlb + fb_block->fb_size_tlb,
 						fb_size_left, true);
-	if (!new_block) {
-		AMDGV_ERROR("Could not create new block\n");
+	if (!new_block)
 		return AMDGV_FAILURE;
-	}
 
 	amdgv_vfmgr_merge_free_blocks(adapt, new_block);
 
@@ -531,7 +570,6 @@ static int amdgv_vfmgr_asymmetric_fb_reconfig(struct amdgv_adapter *adapt, uint3
 int amdgv_vfmgr_vf_fb_resize(struct amdgv_adapter *adapt, uint32_t idx_vf, uint64_t fb_size)
 {
 	int ret = 0;
-	struct amdgv_vf_device *entry = &adapt->array_vf[idx_vf];
 
 	if (!adapt->asymmetric_fb_enabled || !adapt->sched.asymmetric_fb_reconfig) {
 		AMDGV_ERROR("Asymmetric FB is not supported on current asic.\n");
@@ -552,7 +590,7 @@ int amdgv_vfmgr_vf_fb_resize(struct amdgv_adapter *adapt, uint32_t idx_vf, uint6
 		amdgv_vfmgr_set_vf_fb(adapt, idx_vf);
 
 		if (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM))
-			amdgv_vfmgr_map_vf_dev_res(adapt, entry);
+			amdgv_vfmgr_map_vf_dev_res(adapt, idx_vf);
 	}
 
 	return ret;
@@ -624,7 +662,7 @@ int amdgv_vfmgr_vf_fb_defragment(struct amdgv_adapter *adapt)
 	amdgv_ffbm_apply_page_table(adapt);
 	amdgv_sched_start_all(adapt);
 
-	AMDGV_INFO("Defragment completed\n");
+	AMDGV_DEBUG("Defragment completed\n");
 
 	return ret;
 }
@@ -635,7 +673,6 @@ static void amdgv_vfmgr_init_vfs_fb_config_tmr(struct amdgv_adapter *adapt)
 	uint32_t vf_fb_offset_tmr, vf_fb_size_tmr, pf_fb_size, vf_fb_offset, vf_fb_size;
 	uint32_t total_usable_fb, total_vf_fb_size;
 	struct amdgv_vf_device *entry;
-	struct amdgv_vf_fb_block *fb_block;
 
 	amdgv_gpuiov_get_usable_fb_size(adapt, &total_usable_fb);
 
@@ -672,9 +709,7 @@ static void amdgv_vfmgr_init_vfs_fb_config_tmr(struct amdgv_adapter *adapt)
 
 		if (adapt->asymmetric_fb_enabled) {
 			amdgv_vfmgr_remove_fb_block(adapt, amdgv_vfmgr_find_fb_block_by_fcn(adapt, idx_vf));
-			fb_block = amdgv_vfmgr_create_fb_block(adapt, idx_vf, entry->fb_offset_tmr, entry->fb_size, false);
-			if (!fb_block)
-				AMDGV_ERROR("Could not create fb block for vf %d\n", idx_vf);
+			amdgv_vfmgr_create_fb_block(adapt, idx_vf, entry->fb_offset_tmr, entry->fb_size, false);
 		}
 
 		AMDGV_INFO(
@@ -682,6 +717,32 @@ static void amdgv_vfmgr_init_vfs_fb_config_tmr(struct amdgv_adapter *adapt)
 			idx_vf, entry->fb_offset_tmr, entry->fb_size_tmr,
 			adapt->tmr_size);
 	}
+}
+
+static int amdgv_vfmgr_init_crit_region_caps(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	struct amdgv_vf_device *entry = &adapt->array_vf[idx_vf];
+
+	/* A+A sets the version later via REQ_GPU_INIT_XCHG_REGION; reset keeps
+	 * the negotiated version since the guest does not renegotiate.
+	 */
+	if (!in_whole_gpu_reset())
+		entry->xchg.vf_crit_region =
+			adapt->use_vf_sysmem_xchg ? 0 : GPU_CRIT_REGION_V1;
+
+	if (adapt->use_vf_sysmem_xchg)
+		/* For A+A host, V3 is the only option */
+		entry->xchg.host_crit_region_caps = CRIT_CAP_BIT(GPU_CRIT_REGION_V3);
+	else if (adapt->asic_type == CHIP_IP_DISCOVERY)
+		/* For newer ASICs, only dynamic allocation of critical region is supported. */
+		entry->xchg.host_crit_region_caps = CRIT_CAP_BIT(GPU_CRIT_REGION_V2);
+	 else if (adapt->umc.is_pmfw_managed_eeprom)
+		entry->xchg.host_crit_region_caps = CRIT_CAP_BIT(GPU_CRIT_REGION_V2) |
+											CRIT_CAP_BIT(GPU_CRIT_REGION_V1);
+	 else
+		entry->xchg.host_crit_region_caps = CRIT_CAP_BIT(GPU_CRIT_REGION_V1);
+
+	return 0;
 }
 
 void amdgv_vfmgr_init_vfs_config_tmr(struct amdgv_adapter *adapt, bool vf_configured)
@@ -718,6 +779,7 @@ void amdgv_vfmgr_init_vfs_config_tmr(struct amdgv_adapter *adapt, bool vf_config
 						  (uint16_t)adapt->dev_id, (uint8_t)idx_vf);
 
 			entry->configured = vf_configured;
+			amdgv_vfmgr_init_crit_region_caps(adapt, idx_vf);
 		}
 	} else {
 		amdgv_vfmgr_init_vfs_fb_config_tmr(adapt);
@@ -738,6 +800,7 @@ void amdgv_vfmgr_init_vfs_config_tmr(struct amdgv_adapter *adapt, bool vf_config
 			amdgv_vfmgr_gen_uuid_info(&entry->uuid_info, adapt->serial,
 						  (uint16_t)adapt->dev_id, (uint8_t)idx_vf);
 			entry->configured = vf_configured;
+			amdgv_vfmgr_init_crit_region_caps(adapt, idx_vf);
 		}
 	}
 }
@@ -748,7 +811,6 @@ void amdgv_vfmgr_init_vfs_config(struct amdgv_adapter *adapt)
 	uint32_t idx_vf, pf_fb_size, vf_fb_offset = 0;
 	uint32_t numa_node_size, numa_fb_size = 0, tmr_ip_data_size = 0, vf_fb_size = 0;
 	uint32_t total_usable_fb, total_vf_fb_size = 0;
-	struct amdgv_vf_fb_block *fb_block;
 	struct amdgv_vf_device *entry;
 
 	if (adapt->customized_vf_config_mode) {
@@ -775,6 +837,8 @@ void amdgv_vfmgr_init_vfs_config(struct amdgv_adapter *adapt)
 						  (uint16_t)adapt->dev_id, (uint8_t)idx_vf);
 
 			entry->configured = true;
+
+			amdgv_vfmgr_init_crit_region_caps(adapt, idx_vf);
 		}
 	} else {
 		amdgv_gpuiov_get_usable_fb_size(adapt, &total_usable_fb);
@@ -827,6 +891,7 @@ void amdgv_vfmgr_init_vfs_config(struct amdgv_adapter *adapt)
 			vf_fb_offset = roundup(pf_fb_size, AMDGV_FUNCTION_FB_ALIGNMENT);
 			vf_fb_size = rounddown(vf_fb_size, AMDGV_FUNCTION_FB_ALIGNMENT);
 		}
+
 		AMDGV_INFO("total vf fb size: %d MB\n", total_vf_fb_size);
 		AMDGV_INFO("vf fb starts at: %d MB, vf fb size: %d MB\n", vf_fb_offset,
 			   vf_fb_size);
@@ -843,9 +908,7 @@ void amdgv_vfmgr_init_vfs_config(struct amdgv_adapter *adapt)
 
 			if (adapt->asymmetric_fb_enabled) {
 				amdgv_vfmgr_remove_fb_block(adapt, amdgv_vfmgr_find_fb_block_by_fcn(adapt, idx_vf));
-				fb_block = amdgv_vfmgr_create_fb_block(adapt, idx_vf, entry->fb_offset, entry->fb_size, false);
-				if (!fb_block)
-					AMDGV_ERROR("Could not create fb block for vf %d\n", idx_vf);
+				amdgv_vfmgr_create_fb_block(adapt, idx_vf, entry->fb_offset, entry->fb_size, false);
 			}
 
 			/* assign default time slice for gfx engine */
@@ -869,6 +932,8 @@ void amdgv_vfmgr_init_vfs_config(struct amdgv_adapter *adapt)
 				vf_fb_offset = numa_fb_size / adapt->num_vf * (idx_vf + 1);
 			else
 				vf_fb_offset += vf_fb_size;
+
+			amdgv_vfmgr_init_crit_region_caps(adapt, idx_vf);
 		}
 	}
 }
@@ -896,7 +961,7 @@ static void amdgv_vfmgr_reset_vfs_to_default_config(struct amdgv_adapter *adapt)
 		if (!entry->configured)
 			continue;
 		if (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM))
-			amdgv_vfmgr_map_vf_dev_res(adapt, entry);
+			amdgv_vfmgr_map_vf_dev_res(adapt, idx_vf);
 
 		/* add configured vf to the scheduler */
 		amdgv_sched_update_time_slice(adapt, AMDGV_SCHED_BLOCK_ALL, idx_vf);
@@ -986,7 +1051,14 @@ static void amdgv_vfmgr_remove_configured_vfs(struct amdgv_adapter *adapt)
 				oss_unmap_vf_dev_res(entry->dev, &entry->res);
 			}
 		}
-
+		if (entry->hbm_mgmt_handle) {
+			if (adapt->vf_hbm_mgmt_mode == AMDGV_VF_HBM_MGMT_MODE_DRIVER_MANAGED) {
+				oss_hbm_drv_mgmt_fini(entry->hbm_mgmt_handle);
+			} else if (adapt->vf_hbm_mgmt_mode == AMDGV_VF_HBM_MGMT_MODE_DAX) {
+				oss_hbm_dax_fini(entry->hbm_mgmt_handle);
+			}
+			entry->hbm_mgmt_handle = NULL;
+		}
 		oss_put_dev(entry->dev);
 		entry->dev = AMDGV_INVALID_HANDLE;
 		entry->fb_offset_os = 0;
@@ -1008,7 +1080,7 @@ static void amdgv_vfmgr_remove_configured_vfs(struct amdgv_adapter *adapt)
 		/* set its framebuffer to 0 */
 		amdgv_gpuiov_set_vf_fb(adapt, idx_vf, 0, 0);
 
-		amdgv_memmgr_fini(adapt, &adapt->array_vf[idx_vf].memmgr_vf);
+		amdgv_memmgr_fini(adapt, &adapt->array_vf[idx_vf].xchg.memmgr_vf);
 	}
 }
 
@@ -1019,7 +1091,8 @@ int amdgv_vfmgr_copy_and_calc_checksum_to_vf_fb(struct amdgv_adapter *adapt, uin
 	if (checksum)
 		*checksum += amd_sriov_msg_checksum(buf, size, 0, 0);
 
-	return amdgv_vfmgr_copy_to_vf_fb(adapt, idx_vf, offset, buf, size);
+	return amdgv_vfmgr_copy_to_vf_xchg_table(adapt, idx_vf, AMD_SRIOV_MSG_MAX_TABLE_ID, offset,
+						 buf, size);
 }
 
 static inline enum amd_sriov_ras_telemetry_gpu_block
@@ -1101,10 +1174,10 @@ int amdgv_vfmgr_dump_ras_error_counts(struct amdgv_adapter *adapt, uint32_t idx_
 			continue;
 
 		ret = amdgv_mca_count_cache_client_get(adapt, &ce_count, &ue_count, &de_count,
-						     &ce_overflow_count,
-						     &ue_overflow_count,
-						     &de_overflow_count,
-						     ras_blk, idx_vf);
+					     &ce_overflow_count,
+					     &ue_overflow_count,
+					     &de_overflow_count,
+					     ras_blk, idx_vf);
 		if (ret)
 			goto fail;
 
@@ -1122,9 +1195,9 @@ int amdgv_vfmgr_dump_ras_error_counts(struct amdgv_adapter *adapt, uint32_t idx_
 					sizeof(struct amd_sriov_ras_telemetry_error_count),
 					0, 0);
 
-	ret = amdgv_vfmgr_copy_to_vf_fb(adapt, idx_vf,
-					GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, RAS_TELEMETRY),
-					telemetry, sizeof(*telemetry));
+	ret = amdgv_vfmgr_copy_to_vf_xchg_table(adapt, idx_vf,
+						AMD_SRIOV_MSG_RAS_TELEMETRY_TABLE_ID, 0,
+						telemetry, sizeof(*telemetry));
 
 fail:
 	oss_free(telemetry);
@@ -1157,7 +1230,7 @@ static bool amdgv_vfmgr_cper_is_section_allowed(struct amdgv_adapter *adapt, uin
 	if (sriov_blk >= RAS_TELEMETRY_GPU_BLOCK_COUNT)
 		return false;
 
-	return (adapt->array_vf[idx_vf].ras.caps.all) & (uint32_t)BIT64(sriov_blk);
+	return (adapt->array_vf[idx_vf].xchg.ras.caps.all) & (uint32_t)BIT64(sriov_blk);
 }
 
 static void amdgv_vfmgr_cper_get_allowed_list(struct amdgv_adapter *adapt, uint32_t idx_vf,
@@ -1209,9 +1282,11 @@ int amdgv_vfmgr_dump_cpers(struct amdgv_adapter *adapt, uint32_t idx_vf, uint64_
 	struct amd_sriov_ras_telemetry_header hdr = { 0 };
 	struct amd_sriov_ras_cper_dump cper_dump = { 0 };
 	struct cper_hdr *cper_hdr = NULL;
-	struct amdgv_vf_ras *vf_ras = &adapt->array_vf[idx_vf].ras;
-	uint64_t rptr = vf_ras->cper.start_rptr + vf_rptr;
+	struct amdgv_vf_ras *vf_ras = &adapt->array_vf[idx_vf].xchg.ras;
+	uint64_t start_rptr = vf_ras->cper.start_rptr;
 	uint64_t wptr = adapt->cper.wptr;
+	uint64_t max_offset = (wptr >= start_rptr) ? (wptr - start_rptr) : 0;
+	uint64_t rptr;
 	uint64_t buf_offset =  offsetof(struct amdsriov_ras_telemetry, body.cper_dump) +
 			       offsetof(struct amd_sriov_ras_cper_dump, buf);
 	uint64_t fb_offset = GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, RAS_TELEMETRY) +
@@ -1221,11 +1296,20 @@ int amdgv_vfmgr_dump_cpers(struct amdgv_adapter *adapt, uint32_t idx_vf, uint64_
 	if (adapt->mca.vf_policy == AMDGV_RAS_VF_TELEMETRY_DISABLE)
 		return AMDGV_FAILURE;
 
-	/* sanitize VF rptr & calculate overflow */
-	if (rptr > wptr) {
+	/* Sanitize guest-supplied vf_rptr & calculate overflow.
+	 *
+	 * vf_rptr arrives as a 64-bit value from the MB_REQ_RAS_CPER_DUMP
+	 * mailbox and is fully guest-controlled. Clamp it in the per-VF
+	 * logical offset space [0, wptr - start_rptr] BEFORE adding
+	 * start_rptr, so the uint64_t sum cannot wrap below start_rptr and
+	 * read other tenants' CPER records out of the global ring
+	 * (cross-tenant info-leak hardening).
+	 */
+	if (vf_rptr >= max_offset) {
 		rptr = wptr;
 		cper_dump.overflow_count = 0;
 	} else {
+		rptr = start_rptr + vf_rptr;
 		cper_dump.overflow_count = CPER_MOVE_TO_FIRST_VALID(rptr) - rptr;
 		rptr = CPER_MOVE_TO_FIRST_VALID(rptr);
 	}
@@ -1258,7 +1342,7 @@ int amdgv_vfmgr_dump_cpers(struct amdgv_adapter *adapt, uint32_t idx_vf, uint64_
 		cper_dump.more = true;
 	}
 
-	cper_dump.wptr = rptr - vf_ras->cper.start_rptr;
+	cper_dump.wptr = rptr - start_rptr;
 
 	hdr.checksum  += amd_sriov_msg_checksum(&cper_dump,
 					       offsetof(struct amd_sriov_ras_cper_dump, buf),
@@ -1267,18 +1351,19 @@ int amdgv_vfmgr_dump_cpers(struct amdgv_adapter *adapt, uint32_t idx_vf, uint64_
 			GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, RAS_TELEMETRY));
 
 	/* Copy static sized cper_dump fields */
-	ret = amdgv_vfmgr_copy_to_vf_fb(adapt, idx_vf,
-					GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, RAS_TELEMETRY) +
-					sizeof(struct amd_sriov_ras_telemetry_header),
-					&cper_dump,
-					offsetof(struct amd_sriov_ras_cper_dump, buf));
+	ret = amdgv_vfmgr_copy_to_vf_xchg_table(adapt, idx_vf,
+						AMD_SRIOV_MSG_RAS_TELEMETRY_TABLE_ID,
+						sizeof(struct amd_sriov_ras_telemetry_header),
+						&cper_dump,
+						offsetof(struct amd_sriov_ras_cper_dump, buf));
 
 	/* Copy header */
 	if (!ret)
-		ret = amdgv_vfmgr_copy_to_vf_fb(adapt, idx_vf,
-					GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, RAS_TELEMETRY),
-					&hdr,
-					sizeof(struct amd_sriov_ras_telemetry_header));
+		ret = amdgv_vfmgr_copy_to_vf_xchg_table(adapt, idx_vf,
+							AMD_SRIOV_MSG_RAS_TELEMETRY_TABLE_ID,
+							0,
+							&hdr,
+							sizeof(struct amd_sriov_ras_telemetry_header));
 
 	/* Guest should be consuming records up to wptr. If not, then do not decrement
 	 * the event guard, even if more CPERs are pending. */
@@ -1296,8 +1381,8 @@ fail:
 
 static void amdgv_vfmgr_cper_rptr_init(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
-	adapt->array_vf[idx_vf].ras.cper.start_rptr = adapt->cper.wptr;
-	adapt->array_vf[idx_vf].ras.cper.prev_host_wptr = 0;
+	adapt->array_vf[idx_vf].xchg.ras.cper.start_rptr = adapt->cper.wptr;
+	adapt->array_vf[idx_vf].xchg.ras.cper.prev_host_wptr = 0;
 }
 
 int amdgv_vfmgr_cper_notify_event(struct amdgv_adapter *adapt, enum amdgv_vfmgr_cper_event event,
@@ -1344,9 +1429,9 @@ int amdgv_vfmgr_ras_vf_chk_criti_region(struct amdgv_adapter *adapt, uint32_t id
 					sizeof(struct amd_sriov_ras_chk_criti),
 					0, 0);
 
-	ret = amdgv_vfmgr_copy_to_vf_fb(adapt, idx_vf,
-					GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, RAS_TELEMETRY),
-					telemetry, sizeof(*telemetry));
+	ret = amdgv_vfmgr_copy_to_vf_xchg_table(adapt, idx_vf, AMD_SRIOV_MSG_RAS_TELEMETRY_TABLE_ID,
+						0, telemetry, sizeof(*telemetry));
+
 
 fail:
 	oss_free(telemetry);
@@ -1359,17 +1444,17 @@ int amdgv_vfmgr_sw_init(struct amdgv_adapter *adapt)
 	uint32_t idx_vf;
 	struct amdgv_vf_device *entry;
 
+	if (adapt->sriov_vf_stride != 1) {
+		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_IOV_SRIOV_STRIDE_ERROR, 0);
+		return AMDGV_FAILURE;
+	}
+
 	adapt->pf2vf_msg = (struct amd_sriov_msg_pf2vf_info *)oss_zalloc(
 		sizeof(struct amd_sriov_msg_pf2vf_info));
 
 	if (adapt->pf2vf_msg == NULL) {
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				sizeof(struct amd_sriov_msg_pf2vf_info));
-		return AMDGV_FAILURE;
-	}
-
-	if (adapt->sriov_vf_stride != 1) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_IOV_SRIOV_STRIDE_ERROR, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -1409,11 +1494,15 @@ int amdgv_vfmgr_sw_fini(struct amdgv_adapter *adapt)
 	return 0;
 }
 
+static void amdgv_vfmgr_init_vf_hbm_mgmt_mode(struct amdgv_adapter *adapt)
+{
+	adapt->vf_hbm_mgmt_mode = (adapt->xgmi.connected_to_cpu) ?
+		adapt->vf_hbm_mgmt_mode : AMDGV_VF_HBM_MGMT_MODE_DISABLED;
+}
+
 int amdgv_vfmgr_hw_init(struct amdgv_adapter *adapt)
 {
 	uint32_t idx_vf;
-	uint32_t has_bps = 0;
-	int ret = 0;
 	struct amdgv_vf_device *entry;
 
 	if (!in_whole_gpu_reset()) {
@@ -1426,8 +1515,11 @@ int amdgv_vfmgr_hw_init(struct amdgv_adapter *adapt)
 			amdgv_vfmgr_init_vfs_config_tmr(adapt, true);
 	}
 
+	/* init vf hbm mgmt mode */
+	amdgv_vfmgr_init_vf_hbm_mgmt_mode(adapt);
+
 	if (!(adapt->ffbm.enabled && adapt->ffbm.share_tmr))
-			amdgv_vfmgr_init_vfs_config(adapt);
+		amdgv_vfmgr_init_vfs_config(adapt);
 
 	/* write pf fb settings to hardware */
 	amdgv_vfmgr_set_pf_fb(adapt);
@@ -1442,46 +1534,12 @@ int amdgv_vfmgr_hw_init(struct amdgv_adapter *adapt)
 			continue;
 		amdgv_vfmgr_set_vf_fb(adapt, idx_vf);
 
-		if (in_whole_gpu_reset() && adapt->umc.is_pmfw_managed_eeprom) {
-			/* recheck tables, if bp falls in any of them, set the VF and all peers to
-			 * conditionally available state. */
-			ret = amdgv_vfmgr_check_existing_bps_in_crit_region(adapt, idx_vf, &has_bps);
-
-			if (ret) {
-				AMDGV_ERROR("Failed to check bps in critical regions on VF%d!\n", idx_vf);
-				return AMDGV_FAILURE;
-			}
-
-			adapt->array_vf[idx_vf].host_crit_region_caps =
-				has_bps ? adapt->array_vf[idx_vf].host_crit_region_caps & ~BIT(0) :
-				adapt->array_vf[idx_vf].host_crit_region_caps;
-
-			if (has_bps) {
-				AMDGV_ERROR("A bad page was found in critical regions on VF%d!\n", idx_vf);
-				amdgv_sched_queue_set_vf_cond_avail(adapt, idx_vf);
-			}
-		} else if (adapt->umc.is_pmfw_managed_eeprom) {
-			/* init host dynamic table capability */
-			adapt->array_vf[idx_vf].host_crit_region_caps = 0b11;
-
-			/* Init v1 crit region at first to determine if we can support v2 */
-			adapt->array_vf[idx_vf].vf_crit_region = GPU_CRIT_REGION_V1;
-			amdgv_vfmgr_init_crit_region(adapt, idx_vf);
-
-			ret = amdgv_vfmgr_check_existing_bps_in_crit_region(adapt, idx_vf, &has_bps);
-			if (ret) {
-				AMDGV_ERROR("Failed to check bps in critical regions on VF%d!\n", idx_vf);
-				return AMDGV_FAILURE;
-			} else {
-				adapt->array_vf[idx_vf].host_crit_region_caps =
-					has_bps ? adapt->array_vf[idx_vf].host_crit_region_caps & ~BIT(0) :
-					adapt->array_vf[idx_vf].host_crit_region_caps;
-			}
-		} else {
-			adapt->array_vf[idx_vf].host_crit_region_caps = 0b1;
-			adapt->array_vf[idx_vf].vf_crit_region = GPU_CRIT_REGION_V1;
-			amdgv_vfmgr_init_crit_region(adapt, idx_vf);
-		}
+		/* Guests that never negotiate rely on these defaults; without
+		 * them VBIOS and data exchange both land at offset 0.
+		 */
+		if (!adapt->use_vf_sysmem_xchg &&
+		    amdgv_vfmgr_init_crit_region(adapt, idx_vf))
+			AMDGV_WARN("crit region init failed on VF%d\n", idx_vf);
 	}
 
 	if (adapt->ffbm.enabled)
@@ -1516,7 +1574,7 @@ int amdgv_vfmgr_hw_init(struct amdgv_adapter *adapt)
 		}
 
 		if (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM))
-			amdgv_vfmgr_map_vf_dev_res(adapt, entry);
+			amdgv_vfmgr_map_vf_dev_res(adapt, idx_vf);
 
 		/* add configured vf to the scheduler */
 		amdgv_sched_update_time_slice(adapt, AMDGV_SCHED_BLOCK_ALL, idx_vf);
@@ -1659,12 +1717,10 @@ int amdgv_vfmgr_alloc_vf(struct amdgv_adapter *adapt, struct amdgv_vf_option *op
 	amdgv_time_log_clear_vf(adapt, opt->idx_vf);
 
 	if (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM))
-		amdgv_vfmgr_map_vf_dev_res(adapt, entry);
+		amdgv_vfmgr_map_vf_dev_res(adapt, idx_vf);
 
-	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_UPDATE) || (adapt->live_update_state != AMDGV_LIVE_UPDATE_RESTORE)) {
-		if (amdgv_vfmgr_init_vf_fb(adapt, idx_vf, false, 0, 0))
-			AMDGV_WARN("Failed to init vf fb\n");
-	}
+	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_UPDATE) || (adapt->live_update_state != AMDGV_LIVE_UPDATE_RESTORE))
+		amdgv_vfmgr_init_vf_fb(adapt, idx_vf, false, 0, 0);
 
 	/* make the vf available to scheduler */
 	if (adapt->live_update_state != AMDGV_LIVE_UPDATE_RESTORE) {
@@ -1876,62 +1932,30 @@ int amdgv_vfmgr_get_vf_bdf(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_
 	return 0;
 }
 
-int amdgv_vfmgr_copy_to_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, uint64_t offset,
-			      void *buf, uint32_t size)
+int amdgv_vfmgr_get_vf_hbm_mgmt(struct amdgv_adapter *adapt, uint32_t idx_vf, struct amdgv_vf_hbm_mgmt *vf_hbm_mgmt)
 {
 	struct amdgv_vf_device *entry = &adapt->array_vf[idx_vf];
-	uint64_t vf_fb_offset = MBYTES_TO_BYTES(entry->fb_offset);
-	int ret = 0;
 
-	if (!entry->configured ||
-		(!(adapt->flags & AMDGV_FLAG_ENABLE_SVM) && entry->dev == AMDGV_INVALID_HANDLE))
-		return AMDGV_FAILURE;
+	/* On ASICs without an XGMI link to the CPU (e.g. MI300X and other
+	 * discrete SKUs), vf_hbm_mgmt_mode is forced to DISABLED and
+	 * entry->vf_hbm_mgmt is never populated. Report NOT_SUPPORTED in
+	 * that case so callers don't mistake an empty struct for valid data.
+	 */
+	if (adapt->vf_hbm_mgmt_mode == AMDGV_VF_HBM_MGMT_MODE_DISABLED)
+		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
 
-	if (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM))
-		amdgv_vfmgr_map_vf_dev_res(adapt, entry);
+	*vf_hbm_mgmt = entry->vf_hbm_mgmt;
 
-	if (entry->res_mapped && (entry->mapped_fb_size >= offset + size)
-			 && amdgv_gpuiov_get_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_FB)) {
-		oss_memcpy((uint8_t *)entry->res.fb + offset, buf, size);
-	} else if (adapt->ffbm.enabled) {
-		ret = amdgv_ffbm_copy_to_gpa(adapt, buf, idx_vf, offset, size);
-	} else {
-		if (adapt->mapped_fb_size >= vf_fb_offset + offset + size)
-			oss_memcpy((uint8_t *)adapt->fb + vf_fb_offset + offset, buf, size);
-		else
-			amdgv_mm_copy_to_fb(adapt, vf_fb_offset + offset, (uint64_t)buf, size);
-	}
-
-	return ret;
+	return 0;
 }
 
-int amdgv_vfmgr_copy_from_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, uint64_t offset,
-				void *buf, uint32_t size)
+int amdgv_vfmgr_get_vf_unitid(struct amdgv_adapter *adapt, uint32_t idx_vf, uint8_t *unitid)
 {
 	struct amdgv_vf_device *entry = &adapt->array_vf[idx_vf];
-	uint64_t vf_fb_offset = MBYTES_TO_BYTES(entry->fb_offset);
-	int ret = 0;
 
-	if (!entry->configured ||
-		(!(adapt->flags & AMDGV_FLAG_ENABLE_SVM) && entry->dev == AMDGV_INVALID_HANDLE))
-		return AMDGV_FAILURE;
+	*unitid = entry->unitid;
 
-	if (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM))
-		amdgv_vfmgr_map_vf_dev_res(adapt, entry);
-
-	if (entry->res_mapped && (entry->mapped_fb_size >= offset + size)
-			 && amdgv_gpuiov_get_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_FB)) {
-		oss_memcpy(buf, ((uint8_t *)entry->res.fb) + offset, size);
-	} else if (adapt->ffbm.enabled) {
-		ret = amdgv_ffbm_copy_from_gpa(adapt, buf, idx_vf, offset, size);
-	} else {
-		if (adapt->mapped_fb_size >= vf_fb_offset + offset + size)
-			oss_memcpy(buf, (uint8_t *)adapt->fb + vf_fb_offset + offset, size);
-		else
-			amdgv_mm_copy_from_fb(adapt, (uint64_t)buf, vf_fb_offset + offset, size);
-	}
-
-	return ret;
+	return 0;
 }
 
 int amdgv_vfmgr_copy_bp_entry_to_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf,
@@ -1966,7 +1990,7 @@ static int amdgv_vfmgr_update_vf2vf_ras_caps(struct amdgv_adapter *adapt,
 					     uint32_t idx_vf)
 {
 	pf2vf_msg->feature_flags.flags.ras_caps = 0;
-	pf2vf_msg->ras_en_caps.all = 0;
+	pf2vf_msg->pf2vf_ras_caps.ras_en_caps.all = 0;
 
 	/* Only allow RAS telemetry on MCA enabled GPUs */
 	if (adapt->ecc.ras_cap) {
@@ -1974,49 +1998,49 @@ static int amdgv_vfmgr_update_vf2vf_ras_caps(struct amdgv_adapter *adapt,
 		pf2vf_msg->feature_flags.flags.ras_caps = 1;
 
 		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__UMC))
-			pf2vf_msg->ras_en_caps.bits.block_umc = 1;
+			pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_umc = 1;
 		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__SDMA))
-			pf2vf_msg->ras_en_caps.bits.block_sdma = 1;
+			pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_sdma = 1;
 		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__GFX))
-			pf2vf_msg->ras_en_caps.bits.block_gfx = 1;
+			pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_gfx = 1;
 		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__MMHUB))
-			pf2vf_msg->ras_en_caps.bits.block_mmhub = 1;
+			pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_mmhub = 1;
 		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__ATHUB))
-			pf2vf_msg->ras_en_caps.bits.block_athub = 1;
+			pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_athub = 1;
 		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__PCIE_BIF))
-			pf2vf_msg->ras_en_caps.bits.block_pcie_bif = 1;
+			pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_pcie_bif = 1;
 		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__HDP))
-			pf2vf_msg->ras_en_caps.bits.block_hdp = 1;
+			pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_hdp = 1;
 		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__XGMI_WAFL))
-			pf2vf_msg->ras_en_caps.bits.block_xgmi_wafl = 1;
+			pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_xgmi_wafl = 1;
 		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__DF))
-			pf2vf_msg->ras_en_caps.bits.block_df = 1;
+			pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_df = 1;
 		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__SMN))
-			pf2vf_msg->ras_en_caps.bits.block_smn = 1;
+			pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_smn = 1;
 		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__SEM))
-			pf2vf_msg->ras_en_caps.bits.block_sem = 1;
+			pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_sem = 1;
 		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__MP0))
-			pf2vf_msg->ras_en_caps.bits.block_mp0 = 1;
+			pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_mp0 = 1;
 		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__MP1))
-			pf2vf_msg->ras_en_caps.bits.block_mp1 = 1;
+			pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_mp1 = 1;
 		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__FUSE))
-			pf2vf_msg->ras_en_caps.bits.block_fuse = 1;
+			pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_fuse = 1;
 		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__MCA))
-			pf2vf_msg->ras_en_caps.bits.block_mca = 1;
+			pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_mca = 1;
 		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__VCN))
-			pf2vf_msg->ras_en_caps.bits.block_vcn = 1;
+			pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_vcn = 1;
 		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__JPEG))
-			pf2vf_msg->ras_en_caps.bits.block_jpeg = 1;
+			pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_jpeg = 1;
 		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__IH))
-			pf2vf_msg->ras_en_caps.bits.block_ih = 1;
+			pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_ih = 1;
 		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__MPIO))
-			pf2vf_msg->ras_en_caps.bits.block_mpio = 1;
+			pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_mpio = 1;
 		if (adapt->ecc.ras_cap & BIT(AMDGV_RAS_BLOCK__MMSCH))
-			pf2vf_msg->ras_en_caps.bits.block_mmsch = 1;
+			pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_mmsch = 1;
 	}
 
 	if (adapt->ecc.supported & BIT(AMDGV_RAS_POISON_ECC_SUPPORT))
-		pf2vf_msg->ras_en_caps.bits.poison_propogation_mode = 1;
+		pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.poison_propogation_mode = 1;
 
 	if (!adapt->mca.enabled)
 		return 0;
@@ -2031,31 +2055,31 @@ static int amdgv_vfmgr_update_vf2vf_ras_caps(struct amdgv_adapter *adapt,
 	AMDGV_DEBUG("Host Supports VF RAS Telemetry\n");
 
 	pf2vf_msg->feature_flags.flags.ras_telemetry = 1;
-	pf2vf_msg->ras_telemetry_en_caps.all = 0;
+	pf2vf_msg->pf2vf_ras_caps.ras_telemetry_en_caps.all = 0;
 
 	if (adapt->cper.enabled)
 		pf2vf_msg->feature_flags.flags.ras_cper = 1;
 
 	if (amdgv_xgmi_all_nodes_fb_sharing(adapt)) {
-		if (pf2vf_msg->ras_en_caps.bits.block_xgmi_wafl)
-			pf2vf_msg->ras_telemetry_en_caps.bits.block_xgmi_wafl = 1;
-		if (pf2vf_msg->ras_en_caps.bits.block_df)
-			pf2vf_msg->ras_telemetry_en_caps.bits.block_df = 1;
+		if (pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_xgmi_wafl)
+			pf2vf_msg->pf2vf_ras_caps.ras_telemetry_en_caps.bits.block_xgmi_wafl = 1;
+		if (pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_df)
+			pf2vf_msg->pf2vf_ras_caps.ras_telemetry_en_caps.bits.block_df = 1;
 	}
 
-	if (pf2vf_msg->ras_en_caps.bits.block_gfx)
-		pf2vf_msg->ras_telemetry_en_caps.bits.block_gfx = 1;
-	if (pf2vf_msg->ras_en_caps.bits.block_umc)
-		pf2vf_msg->ras_telemetry_en_caps.bits.block_umc = 1;
-	if (pf2vf_msg->ras_en_caps.bits.block_pcie_bif)
-		pf2vf_msg->ras_telemetry_en_caps.bits.block_pcie_bif = 1;
-	if (pf2vf_msg->ras_en_caps.bits.block_mmhub)
-		pf2vf_msg->ras_telemetry_en_caps.bits.block_mmhub = 1;
+	if (pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_gfx)
+		pf2vf_msg->pf2vf_ras_caps.ras_telemetry_en_caps.bits.block_gfx = 1;
+	if (pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_umc)
+		pf2vf_msg->pf2vf_ras_caps.ras_telemetry_en_caps.bits.block_umc = 1;
+	if (pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_pcie_bif)
+		pf2vf_msg->pf2vf_ras_caps.ras_telemetry_en_caps.bits.block_pcie_bif = 1;
+	if (pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_mmhub)
+		pf2vf_msg->pf2vf_ras_caps.ras_telemetry_en_caps.bits.block_mmhub = 1;
 
-	if (pf2vf_msg->ras_en_caps.bits.block_sdma)
-		pf2vf_msg->ras_telemetry_en_caps.bits.block_sdma = 1;
+	if (pf2vf_msg->pf2vf_ras_caps.ras_en_caps.bits.block_sdma)
+		pf2vf_msg->pf2vf_ras_caps.ras_telemetry_en_caps.bits.block_sdma = 1;
 
-	adapt->array_vf[idx_vf].ras.caps = pf2vf_msg->ras_telemetry_en_caps;
+	adapt->array_vf[idx_vf].xchg.ras.caps = pf2vf_msg->pf2vf_ras_caps.ras_telemetry_en_caps;
 
 	return 0;
 }
@@ -2102,37 +2126,124 @@ static bool amdgv_vfmgr_check_bp_in_v2_crit_region(struct amdgv_adapter *adapt, 
 	return false;
 }
 
+static bool amdgv_vfmgr_check_bp_in_v3_crit_region(struct amdgv_adapter *adapt, uint32_t idx_vf,
+						   uint64_t err_addr)
+{
+	struct amdgv_vf_device *entry = &adapt->array_vf[idx_vf];
+	struct oss_spa_range range;
+	uint32_t tb_idx, chunk_idx = 0;
+	uint64_t bp_crit_regn_offset, cumulative_crit_regn_offset = 0;
+
+	if (!entry->xchg.gpa_ctx)
+		return false;
+
+	while (!oss_vf_sysmem_xchg_gpa_to_spa(adapt->dev, entry->xchg.gpa_ctx,
+					       chunk_idx, &range)) {
+		if (err_addr >= range.base && err_addr < range.base + range.size) {
+			bp_crit_regn_offset = cumulative_crit_regn_offset + (err_addr - range.base);
+
+			for (tb_idx = 0; tb_idx < AMD_SRIOV_MSG_MAX_TABLE_ID; tb_idx++) {
+				if (BP_IN_RANGE(bp_crit_regn_offset,
+						GET_VF_TABLE_OFFSET(adapt, idx_vf, tb_idx),
+						KBYTES_TO_BYTES(GET_VF_TABLE_SIZE_KB(adapt, idx_vf, tb_idx))))
+					return true;
+			}
+			return false;
+		}
+		cumulative_crit_regn_offset += range.size;
+		chunk_idx++;
+	}
+
+	return false;
+}
+
 bool amdgv_vfmgr_check_bp_in_crit_region(struct amdgv_adapter *adapt, uint32_t idx_vf,
 					 uint64_t err_addr)
 {
-	if (adapt->array_vf[idx_vf].vf_crit_region == GPU_CRIT_REGION_V2)
+	switch (adapt->array_vf[idx_vf].xchg.vf_crit_region) {
+	case GPU_CRIT_REGION_V3:
+		return amdgv_vfmgr_check_bp_in_v3_crit_region(adapt, idx_vf, err_addr);
+	case GPU_CRIT_REGION_V2:
 		return amdgv_vfmgr_check_bp_in_v2_crit_region(adapt, idx_vf, err_addr);
-	else
+	case GPU_CRIT_REGION_V1:
 		return amdgv_vfmgr_check_bp_in_v1_crit_region(adapt, idx_vf, err_addr);
+	default:
+		if (!adapt->array_vf[idx_vf].xchg.vf_crit_region) {
+			AMDGV_WARN("VF%d critical region is not initialized\n", idx_vf);
+			return false;
+		}
+		AMDGV_ERROR("Invalid critical region version %d\n",
+			adapt->array_vf[idx_vf].xchg.vf_crit_region);
+		return false;
+	}
+}
 
+void amdgv_vfmgr_handle_bp_in_crit_region(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	if (adapt->array_vf[idx_vf].xchg.vf_crit_region > GPU_CRIT_REGION_V1 &&
+	    is_active_vf(idx_vf)) {
+
+		switch (adapt->array_vf[idx_vf].xchg.vf_crit_region) {
+		case GPU_CRIT_REGION_V3:
+			AMDGV_INFO("Found bad page on VF%d critical region V3, send VF-FLR to reset the region.\n",
+						idx_vf);
+
+			adapt->array_vf[idx_vf].xchg.crit_region_realloc_needed = true;
+			amdgv_sched_queue_event(adapt, idx_vf,
+								AMDGV_EVENT_SCHED_FORCE_RESET_VF,
+								AMDGV_SCHED_BLOCK_ALL);
+			break;
+		case GPU_CRIT_REGION_V2:
+		default:
+			AMDGV_INFO("Found bad page on VF%d critical region V%d, set VF to cond_avail.\n",
+						idx_vf, adapt->array_vf[idx_vf].xchg.vf_crit_region);
+
+			amdgv_sched_queue_set_vf_cond_avail(adapt, idx_vf);
+			CRIT_CAP_CLEAR(adapt->array_vf[idx_vf].xchg.host_crit_region_caps,
+					GPU_CRIT_REGION_V1);
+			break;
+		}
+	} else if (adapt->array_vf[idx_vf].xchg.vf_crit_region == GPU_CRIT_REGION_V1) {
+		amdgv_sched_queue_set_vf_cond_avail(adapt, idx_vf);
+		CRIT_CAP_CLEAR(adapt->array_vf[idx_vf].xchg.host_crit_region_caps,
+			       GPU_CRIT_REGION_V1);
+		AMDGV_WARN("Disabling critical region V1 cap on VF%d due to detected bad page.\n",
+				idx_vf);
+	}
 }
 
 int amdgv_vfmgr_check_existing_bps_in_crit_region(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	uint32_t *has_bps)
 {
-	struct ras_err_handler_data *data = adapt->ecc.eh_data;
+	struct ras_err_handler_data *data = NULL;
 	uint64_t *bp_offsets = NULL;
+	int bp_count = 0;
 	uint32_t i = 0;
 	int ret = 0;
+
+	if (!adapt->ecc.enabled) {
+		*has_bps = false;
+		return 0;
+	}
 
 	if (has_bps == NULL)
 		return AMDGV_FAILURE;
 
-	if (!data->count) {
-		AMDGV_INFO("No bad pages found on idx_vf %d\n", idx_vf);
+	data = adapt->ecc.eh_data;
+	if (!data || !data->count) {
 		*has_bps = false;
-		return ret;
+		return 0;
 	}
-
+	bp_count = data->count;
 	if (amdgv_umc_fetch_and_sort_bps(adapt, &bp_offsets))
 		return AMDGV_FAILURE;
 
-	for (i = 0; i < data->count; i++) {
+	if (!bp_count) {
+		*has_bps = false;
+		return 0;
+	}
+
+	for (i = 0; i < bp_count; i++) {
 		if (amdgv_vfmgr_check_bp_in_crit_region(adapt, idx_vf, bp_offsets[i])) {
 			*has_bps = 1;
 			goto free_offsets;
@@ -2146,7 +2257,7 @@ free_offsets:
 	return ret;
 }
 
-static int amdgv_vfmgr_init_v1_crit_region(struct amdgv_adapter *adapt, uint32_t idx_vf)
+static int amdgv_vfmgr_init_static_crit_region(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
 	SET_VF_TABLE_SIZE_KB(adapt, idx_vf, AMD_SRIOV_MSG_VBIOS_IMG_TABLE_ID,
 		AMD_SRIOV_MSG_VBIOS_SIZE_KB_V1);
@@ -2173,7 +2284,7 @@ static int amdgv_vfmgr_init_v1_crit_region(struct amdgv_adapter *adapt, uint32_t
 	return 0;
 }
 
-static void amdgv_vfmgr_init_v2_crit_region_table_sizes(struct amdgv_adapter *adapt, uint32_t idx_vf)
+static void amdgv_vfmgr_init_dynamic_crit_region_table_sizes(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
 	SET_VF_TABLE_SIZE_KB(adapt, idx_vf, AMD_SRIOV_MSG_INITD_H_TABLE_ID,
 		AMDGV_INIT_DATA_HEADER_SIZE_KB_V2);
@@ -2231,60 +2342,127 @@ static const char *amdgv_vfmgr_table_name(enum amd_sriov_msg_table_id_enum id)
 	}
 }
 
-static int amdgv_vfmgr_init_v2_crit_region_tables(struct amdgv_adapter *adapt, uint32_t idx_vf)
+uint32_t amdgv_vfmgr_calc_crit_region_pool_size(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
-	uint64_t *bp_offsets = NULL;
-	uint64_t fb_offset;
-	uint64_t tb_offset;
-	struct ras_err_handler_data *data = adapt->ecc.eh_data;
-	int ret = 0, bp_idx = 0, tb_idx = 0;
-	struct amdgv_memmgr_mem *alloc = NULL;
+	uint32_t table_sizes = 0;
+	uint32_t pool_size;
+	int tb_idx;
 
-	amdgv_vfmgr_init_v2_crit_region_table_sizes(adapt, idx_vf);
+	for (tb_idx = 0; tb_idx < AMD_SRIOV_MSG_MAX_TABLE_ID; tb_idx++)
+		table_sizes += KBYTES_TO_BYTES(GET_VF_TABLE_SIZE_KB(adapt, idx_vf, tb_idx));
+
+	/* TODO: re-visit the formula when PMFW support is confirmed */
+	pool_size = table_sizes +
+		    (AMDGV_CRIT_REGION_BP_THRESHOLD * 16 * PAGE_SIZE);
+
+	if (pool_size < AMDGV_V2_CRIT_REGION_SIZE_BYTES)
+		pool_size = AMDGV_V2_CRIT_REGION_SIZE_BYTES;
+
+	return pool_size;
+}
+
+static int amdgv_vfmgr_init_dynamic_crit_region_tables(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	struct amdgv_vf_device *entry = &adapt->array_vf[idx_vf];
+	struct ras_err_handler_data *data = NULL;
+	struct amdgv_memmgr_mem *alloc = NULL;
+	struct oss_spa_range range;
+	uint64_t *bp_offsets = NULL;
+	uint64_t fb_offset, tb_offset;
+	uint64_t bp_crit_regn_offset, cumulative_crit_regn_offset = 0;
+	uint32_t bp_idx, chunk_idx = 0;
+	int bp_count = 0;
+	int ret = 0, tb_idx = 0;
+
+	amdgv_vfmgr_init_dynamic_crit_region_table_sizes(adapt, idx_vf);
+
 	fb_offset = MBYTES_TO_BYTES(adapt->array_vf[idx_vf].fb_offset);
 
-	if (adapt->array_vf[idx_vf].memmgr_vf.is_init) {
-		AMDGV_INFO("VF%d memmgr already initialized, cleaning up first\n", idx_vf);
+	if (entry->xchg.memmgr_vf.is_init) {
+		AMDGV_DEBUG("VF%d memmgr already initialized, cleaning up first\n", idx_vf);
 
 		for (tb_idx = 0; tb_idx < AMD_SRIOV_MSG_MAX_TABLE_ID; tb_idx++) {
-			amdgv_memmgr_free_by_id(&adapt->array_vf[idx_vf].memmgr_vf,
+			amdgv_memmgr_free_by_id(&entry->xchg.memmgr_vf,
 						amdgv_vfmgr_table_id_to_memmgr_id(tb_idx));
 		}
 
-		amdgv_memmgr_free_by_id(&adapt->array_vf[idx_vf].memmgr_vf, MEM_ECC_BAD_PAGE);
-
-		amdgv_memmgr_fini(adapt, &adapt->array_vf[idx_vf].memmgr_vf);
+		amdgv_memmgr_free_by_id(&entry->xchg.memmgr_vf, MEM_ECC_BAD_PAGE);
+		amdgv_memmgr_fini(adapt, &entry->xchg.memmgr_vf);
 	}
 
 	/* Allocate a memory manager for the VF new critical region (incl. bad pages) */
-	if (amdgv_memmgr_init(adapt, &adapt->array_vf[idx_vf].memmgr_vf, fb_offset,
-			      AMDGV_V2_CRIT_REGION_SIZE_BYTES, 0, false)) {
+	if (amdgv_memmgr_init(adapt, &entry->xchg.memmgr_vf, fb_offset,
+			      amdgv_vfmgr_calc_crit_region_pool_size(adapt, idx_vf), 0, false)) {
 		AMDGV_ERROR("Failed to init vf critical region memory manager\n");
 		return AMDGV_FAILURE;
 	}
 
-	if (amdgv_umc_fetch_and_sort_bps(adapt, &bp_offsets))
+	data = adapt->ecc.eh_data;
+	if (!data || !data->count)
+		goto skip_bp_reservation;
+
+	bp_count = data->count;
+
+	if (amdgv_umc_fetch_and_sort_bps(adapt, &bp_offsets)) {
+		AMDGV_ERROR("Failed to fetch and sort bad page offsets\n");
 		return AMDGV_FAILURE;
+	}
 
-	for (bp_idx = 0; bp_idx < data->count; bp_idx++) {
-		if (bp_offsets[bp_idx] + PAGE_SIZE < fb_offset)
-			continue;
-		else if (bp_offsets[bp_idx] >= fb_offset + adapt->array_vf[idx_vf].fb_size)
-			break;
+	if (!bp_count)
+		goto skip_bp_reservation;
 
-		alloc = amdgv_memmgr_alloc_align_at(&adapt->array_vf[idx_vf].memmgr_vf,
-						    bp_offsets[bp_idx], PAGE_SIZE,
-						    MEM_ECC_BAD_PAGE);
-		if (!alloc) {
-			AMDGV_ERROR("Allocate bad page into VF critical region failed!\n");
-
+	if (adapt->use_vf_sysmem_xchg) {
+		if (!entry->xchg.gpa_ctx) {
 			ret = AMDGV_FAILURE;
 			goto free_offsets;
 		}
+
+		while (!oss_vf_sysmem_xchg_gpa_to_spa(adapt->dev, entry->xchg.gpa_ctx,
+						       chunk_idx, &range)) {
+			for (bp_idx = 0; bp_idx < bp_count; bp_idx++) {
+				bp_crit_regn_offset = 0;
+
+				if (bp_offsets[bp_idx] < range.base)
+					continue;
+				if (bp_offsets[bp_idx] >= range.base + range.size)
+					continue;
+
+				bp_crit_regn_offset = cumulative_crit_regn_offset +
+					      (bp_offsets[bp_idx] - range.base);
+				alloc = amdgv_memmgr_alloc_align_at(
+						&entry->xchg.memmgr_vf,
+						fb_offset + bp_crit_regn_offset,
+						PAGE_SIZE, MEM_ECC_BAD_PAGE);
+				if (!alloc) {
+					AMDGV_ERROR("Reserve bad page in V3 xchg region failed!\n");
+					ret = AMDGV_FAILURE;
+					goto free_offsets;
+				}
+			}
+			cumulative_crit_regn_offset += range.size;
+			chunk_idx++;
+		}
+	} else {
+		for (bp_idx = 0; bp_idx < bp_count; bp_idx++) {
+			if (bp_offsets[bp_idx] + PAGE_SIZE < fb_offset)
+				continue;
+			else if (bp_offsets[bp_idx] >= fb_offset + entry->xchg.memmgr_vf.size)
+				break;
+
+			alloc = amdgv_memmgr_alloc_align_at(&entry->xchg.memmgr_vf,
+							    bp_offsets[bp_idx], PAGE_SIZE,
+							    MEM_ECC_BAD_PAGE);
+			if (!alloc) {
+				AMDGV_ERROR("Allocate bad page into VF critical region V2 failed!\n");
+				ret = AMDGV_FAILURE;
+				goto free_offsets;
+			}
+		}
 	}
 
+skip_bp_reservation:
 	for (tb_idx = 0; tb_idx < AMD_SRIOV_MSG_MAX_TABLE_ID; tb_idx++) {
-		alloc = amdgv_memmgr_alloc(&adapt->array_vf[idx_vf].memmgr_vf,
+		alloc = amdgv_memmgr_alloc(&adapt->array_vf[idx_vf].xchg.memmgr_vf,
 					   KBYTES_TO_BYTES(GET_VF_TABLE_SIZE_KB(adapt, idx_vf, tb_idx)),
 					   amdgv_vfmgr_table_id_to_memmgr_id(tb_idx));
 		if (!alloc) {
@@ -2298,8 +2476,8 @@ static int amdgv_vfmgr_init_v2_crit_region_tables(struct amdgv_adapter *adapt, u
 			    KBYTES_TO_BYTES(GET_VF_TABLE_SIZE_KB(adapt, idx_vf, tb_idx));
 
 		SET_VF_TABLE_OFFSET(adapt, idx_vf, tb_idx, tb_offset);
-		AMDGV_INFO("V2 critical region init: set %s offset: 0x%lx size: 0x%lx\n",
-			   amdgv_vfmgr_table_name(tb_idx), tb_offset,
+		AMDGV_INFO("V%d critical region init: set %s offset: 0x%lx size: 0x%lx\n",
+			   entry->xchg.vf_crit_region, amdgv_vfmgr_table_name(tb_idx), tb_offset,
 			   KBYTES_TO_BYTES(GET_VF_TABLE_SIZE_KB(adapt, idx_vf, tb_idx)));
 	}
 
@@ -2323,12 +2501,12 @@ static uint8_t amdgv_vfmgr_calc_checksum(uint8_t *buf_start, uint8_t *buf_end)
 	return 0xffffffff - sum;
 }
 
-static int amdgv_vfmgr_init_v2_crit_region(struct amdgv_adapter *adapt, uint32_t idx_vf)
+static int amdgv_vfmgr_init_dynamic_crit_region(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
 	int ret;
 	struct amd_sriov_msg_init_data_header hdr = {0};
 
-	ret = amdgv_vfmgr_init_v2_crit_region_tables(adapt, idx_vf);
+	ret = amdgv_vfmgr_init_dynamic_crit_region_tables(adapt, idx_vf);
 	if (ret)
 		return ret;
 
@@ -2336,9 +2514,9 @@ static int amdgv_vfmgr_init_v2_crit_region(struct amdgv_adapter *adapt, uint32_t
 	hdr.signature[1]	= 'N';
 	hdr.signature[2]	= 'D';
 	hdr.signature[3]	= 'A';
-	hdr.version = adapt->array_vf[idx_vf].vf_crit_region;
+	hdr.version = adapt->array_vf[idx_vf].xchg.vf_crit_region;
 	hdr.initdata_offset = AMDGV_V2_CRIT_REGION_OFFSET;
-	hdr.initdata_size_in_kb = TO_KBYTES(AMDGV_V2_CRIT_REGION_SIZE_BYTES);
+	hdr.initdata_size_in_kb = TO_KBYTES(adapt->array_vf[idx_vf].xchg.memmgr_vf.size);
 	hdr.valid_tables = 1 << AMD_SRIOV_MSG_INITD_H_TABLE_ID |
 			   1 << AMD_SRIOV_MSG_VBIOS_IMG_TABLE_ID |
 			   1 << AMD_SRIOV_MSG_RAS_TELEMETRY_TABLE_ID |
@@ -2358,20 +2536,29 @@ static int amdgv_vfmgr_init_v2_crit_region(struct amdgv_adapter *adapt, uint32_t
 	hdr.checksum = amdgv_vfmgr_calc_checksum((uint8_t *)&(hdr.initdata_offset),
 						 (uint8_t *)&(hdr) + sizeof(struct amd_sriov_msg_init_data_header));
 
-	AMDGV_INFO("update v2 critical region init header checksum to 0x%02x \n", hdr.checksum);
+	AMDGV_INFO("update v%d critical region init header checksum to 0x%02x \n",
+		   adapt->array_vf[idx_vf].xchg.vf_crit_region, hdr.checksum);
 
-	ret = amdgv_vfmgr_copy_to_vf_fb(adapt, idx_vf, GET_VF_TABLE_OFFSET_BY_ID(adapt, idx_vf, INITD_H),
-					&hdr, sizeof(struct amd_sriov_msg_init_data_header));
+	ret = amdgv_vfmgr_copy_to_vf_xchg_table(adapt, idx_vf, AMD_SRIOV_MSG_INITD_H_TABLE_ID,
+						0, &hdr,
+						sizeof(struct amd_sriov_msg_init_data_header));
 
 	return ret;
 }
 
 int amdgv_vfmgr_init_crit_region(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
-	if (adapt->array_vf[idx_vf].vf_crit_region == GPU_CRIT_REGION_V2)
-		return amdgv_vfmgr_init_v2_crit_region(adapt, idx_vf);
+	int ret;
+
+	if (adapt->array_vf[idx_vf].xchg.vf_crit_region > GPU_CRIT_REGION_V1)
+		ret = amdgv_vfmgr_init_dynamic_crit_region(adapt, idx_vf);
 	else
-		return amdgv_vfmgr_init_v1_crit_region(adapt, idx_vf);
+		ret = amdgv_vfmgr_init_static_crit_region(adapt, idx_vf);
+
+	if (ret)
+		AMDGV_WARN("init critical region for VF%d failed\n", idx_vf);
+
+	return ret;
 }
 
 static int amdgv_vfmgr_update_pf2vf_bad_pages(struct amdgv_adapter *adapt,
@@ -2387,7 +2574,6 @@ static int amdgv_vfmgr_update_pf2vf_bad_pages(struct amdgv_adapter *adapt,
 					KBYTES_TO_BYTES(GET_VF_TABLE_SIZE_KB_BY_ID(adapt, idx_vf, BAD_PAGE_INFO)),
 					&pf2vf_msg->bp_block_size,
 					&tmp_more_bp);
-
 	/* Do not support extended bad page query for now */
 	if (tmp_more_bp)
 		AMDGV_DEBUG("Not all bad pages fit into PF2VF region\n");
@@ -2515,16 +2701,20 @@ int amdgv_vfmgr_update_pf2vf_message(struct amdgv_adapter *adapt, uint32_t idx_v
 	amdgv_mmsch_update_pf2vf_msg(adapt, idx_vf);
 	amdgv_vfmgr_update_vf2vf_ras_caps(adapt, pf2vf_msg, idx_vf);
 
-	pf2vf_msg->fcn_idx = idx_vf;
+	pf2vf_msg->feature_flags.flags.unitid_support = adapt->unitid_support;
+	if (adapt->unitid_support)
+		pf2vf_msg->unitid = adapt->array_vf[idx_vf].unitid;
+	else
+		pf2vf_msg->unitid = 0;
+
 	pf2vf_msg->bdf_on_host = adapt->array_vf[idx_vf].bdf;
 
 	pf2vf_msg->checksum = amd_sriov_msg_checksum(
 		pf2vf_msg, sizeof(struct amd_sriov_msg_pf2vf_info), 0, 0);
 
-	ret = amdgv_vfmgr_copy_to_vf_fb(adapt, idx_vf,
-					GET_PF2VF_OFFSET(adapt, idx_vf),
-					pf2vf_msg, sizeof(struct amd_sriov_msg_pf2vf_info));
-
+	ret = amdgv_vfmgr_copy_to_vf_xchg_table(adapt, idx_vf, AMD_SRIOV_MSG_DATAEXCHANGE_TABLE_ID,
+						0, pf2vf_msg,
+						sizeof(struct amd_sriov_msg_pf2vf_info));
 	if (ret == 0) {
 		AMDGV_DEBUG("PF2VF message succeed with feature flags(0x%x).\n",
 			   pf2vf_msg->feature_flags.all);
@@ -2562,13 +2752,18 @@ int amdgv_vfmgr_retrieve_vf2pf_message(struct amdgv_adapter *adapt, uint32_t idx
 		vf2pf_msg = output;
 
 retry:
-	ret = amdgv_vfmgr_copy_from_vf_fb(adapt, idx_vf,
-			GET_VF2PF_OFFSET(adapt, idx_vf),
-		vf2pf_msg, sizeof(struct amd_sriov_msg_vf2pf_info));
+	ret = amdgv_vfmgr_copy_from_vf_xchg_table(adapt, idx_vf,
+						  AMD_SRIOV_MSG_DATAEXCHANGE_TABLE_ID,
+						  (uint64_t)AMD_SRIOV_MSG_PF2VF_SIZE_KB_V1 << 10,
+						  vf2pf_msg,
+						  sizeof(struct amd_sriov_msg_vf2pf_info));
 
 	if (ret == 0) {
 		vf2pf_version = vf2pf_msg->header.version;
 		vf2pf_size = vf2pf_msg->header.size;
+		if (vf2pf_size < sizeof(vf2pf_msg->header) ||
+		    vf2pf_size > sizeof(*vf2pf_msg))
+		    return AMDGV_FAILURE;
 		vf2pf_drv_ver = vf2pf_msg->driver_version;
 		vf2pf_drv_ver[63] = '\0';
 		checksum = vf2pf_msg->checksum;
@@ -2584,6 +2779,7 @@ retry:
 		if (vf2pf_size > KBYTES_TO_BYTES(GET_VF2PF_SIZE_KB(adapt, idx_vf)) ||
 		    amd_sriov_msg_checksum(vf2pf_msg, vf2pf_size, msg_key, checksum) != checksum) {
 			AMDGV_ERROR("Untrustworthy guest information in VF2PF msg. Drop request\n");
+			oss_memset(vf2pf_msg, 0, sizeof(*vf2pf_msg));
 			return AMDGV_FAILURE;
 		}
 	}
@@ -2669,22 +2865,27 @@ int amdgv_host_upload_fw_to_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
 	int ret;
 
-	ret = amdgv_vfmgr_copy_to_vf_fb(adapt, idx_vf, adapt->mecfw_offset, adapt->mecfw_image,
+	if (adapt->use_vf_sysmem_xchg) {
+		AMDGV_ERROR("Cannot upload FW to VF\n");
+		return AMDGV_FAILURE;
+	}
+
+	ret = amdgv_vfmgr_copy_to_vf_fb_abs(adapt, idx_vf, adapt->mecfw_offset, adapt->mecfw_image,
 					adapt->mecfw_size);
 	if (ret) {
-		AMDGV_INFO("Upload mec failed\n");
+		AMDGV_ERROR("Upload mec failed\n");
 		return AMDGV_FAILURE;
 	}
-	ret = amdgv_vfmgr_copy_to_vf_fb(adapt, idx_vf, adapt->uvdfw_offset, adapt->uvdfw_image,
+	ret = amdgv_vfmgr_copy_to_vf_fb_abs(adapt, idx_vf, adapt->uvdfw_offset, adapt->uvdfw_image,
 					adapt->uvdfw_size);
 	if (ret) {
-		AMDGV_INFO("Upload uvd failed\n");
+		AMDGV_ERROR("Upload uvd failed\n");
 		return AMDGV_FAILURE;
 	}
-	ret = amdgv_vfmgr_copy_to_vf_fb(adapt, idx_vf, adapt->vcefw_offset, adapt->vcefw_image,
+	ret = amdgv_vfmgr_copy_to_vf_fb_abs(adapt, idx_vf, adapt->vcefw_offset, adapt->vcefw_image,
 					adapt->vcefw_size);
 	if (ret) {
-		AMDGV_INFO("Upload vce failed\n");
+		AMDGV_ERROR("Upload vce failed\n");
 		return AMDGV_FAILURE;
 	}
 	return ret;
@@ -2808,19 +3009,13 @@ void amdgv_vfmgr_get_xgmi_info(struct amdgv_adapter *adapt, union amdgv_dev_info
 
 	if (adapt->xgmi.phy_nodes_num > 1) {
 		hive = amdgv_get_xgmi_hive(adapt);
-		if (!hive) {
-			AMDGV_ERROR("XGMI: node 0x%llx, can not match hive "
-				    "0x%llx in the hive list.\n",
-				    adapt->xgmi.node_id, adapt->xgmi.hive_id);
+		if (!hive)
 			return;
-		}
-
-
 
 		info->xgmi_info.node_id = adapt->xgmi.node_id;
 		info->xgmi_info.hive_id = hive->hive_id;
 		info->xgmi_info.hive_index = hive->hive_index;
-		info->xgmi_info.number_adapters = hive->number_adapters;
+		info->xgmi_info.number_adapters = adapt->xgmi.phy_nodes_num;
 		info->xgmi_info.phy_node_id = adapt->xgmi.phy_node_id;
 	}
 }
@@ -2839,15 +3034,15 @@ enum amdgv_live_info_status amdgv_vfmgr_export_live_data_crit_region(struct amdg
 		if (idx_live_data == adapt->num_vf)
 			idx_vf = AMDGV_PF_IDX;
 		oss_memcpy(&vf_crit_region[idx_live_data].vf_table_offsets,
-				   &adapt->array_vf[idx_vf].vf_table_offsets,
-				   sizeof(adapt->array_vf[idx_vf].vf_table_offsets));
+				   &adapt->array_vf[idx_vf].xchg.vf_table_offsets,
+				   sizeof(adapt->array_vf[idx_vf].xchg.vf_table_offsets));
 		oss_memcpy(&vf_crit_region[idx_live_data].vf_table_sizes_kb,
-				   &adapt->array_vf[idx_vf].vf_table_sizes_kb,
-				   sizeof(adapt->array_vf[idx_vf].vf_table_sizes_kb));
-		vf_crit_region[idx_live_data].vf_crit_region = adapt->array_vf[idx_vf].vf_crit_region;
-		vf_crit_region[idx_live_data].host_crit_region_caps = adapt->array_vf[idx_vf].host_crit_region_caps;
-		vf_crit_region[idx_live_data].guest_crit_region_caps = adapt->array_vf[idx_vf].guest_crit_region_caps;
-		vf_crit_region[idx_live_data].guest_gpu_init_flags = adapt->array_vf[idx_vf].guest_gpu_init_flags;
+				   &adapt->array_vf[idx_vf].xchg.vf_table_sizes_kb,
+				   sizeof(adapt->array_vf[idx_vf].xchg.vf_table_sizes_kb));
+		vf_crit_region[idx_live_data].vf_crit_region = adapt->array_vf[idx_vf].xchg.vf_crit_region;
+		vf_crit_region[idx_live_data].host_crit_region_caps = adapt->array_vf[idx_vf].xchg.host_crit_region_caps;
+		vf_crit_region[idx_live_data].guest_crit_region_caps = adapt->array_vf[idx_vf].xchg.guest_crit_region_caps;
+		vf_crit_region[idx_live_data].guest_gpu_init_flags = adapt->array_vf[idx_vf].xchg.guest_gpu_init_flags;
 	}
 
 	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
@@ -2866,22 +3061,23 @@ enum amdgv_live_info_status amdgv_vfmgr_import_live_data_crit_region(struct amdg
 		idx_vf = idx_live_data;
 		if (idx_live_data == adapt->num_vf)
 			idx_vf = AMDGV_PF_IDX;
-		oss_memcpy(&adapt->array_vf[idx_vf].vf_table_offsets,
+		oss_memcpy(&adapt->array_vf[idx_vf].xchg.vf_table_offsets,
 				   &vf_crit_region[idx_live_data].vf_table_offsets,
-				   sizeof(adapt->array_vf[idx_vf].vf_table_offsets));
-		oss_memcpy(&adapt->array_vf[idx_vf].vf_table_sizes_kb,
+				   sizeof(adapt->array_vf[idx_vf].xchg.vf_table_offsets));
+		oss_memcpy(&adapt->array_vf[idx_vf].xchg.vf_table_sizes_kb,
 				   &vf_crit_region[idx_live_data].vf_table_sizes_kb,
-				   sizeof(adapt->array_vf[idx_vf].vf_table_sizes_kb));
-		adapt->array_vf[idx_vf].vf_crit_region = vf_crit_region[idx_live_data].vf_crit_region;
-		adapt->array_vf[idx_vf].host_crit_region_caps = vf_crit_region[idx_live_data].host_crit_region_caps;
-		adapt->array_vf[idx_vf].guest_crit_region_caps = vf_crit_region[idx_live_data].guest_crit_region_caps;
-		adapt->array_vf[idx_vf].guest_gpu_init_flags = vf_crit_region[idx_live_data].guest_gpu_init_flags;
+				   sizeof(adapt->array_vf[idx_vf].xchg.vf_table_sizes_kb));
+		adapt->array_vf[idx_vf].xchg.vf_crit_region = vf_crit_region[idx_live_data].vf_crit_region;
+		adapt->array_vf[idx_vf].xchg.host_crit_region_caps = vf_crit_region[idx_live_data].host_crit_region_caps;
+		adapt->array_vf[idx_vf].xchg.guest_crit_region_caps = vf_crit_region[idx_live_data].guest_crit_region_caps;
+		adapt->array_vf[idx_vf].xchg.guest_gpu_init_flags = vf_crit_region[idx_live_data].guest_gpu_init_flags;
 
 		// Only supports V1 crit region, reset to V1
+		// TODO: revisit after asic back
 		if (!adapt->umc.is_pmfw_managed_eeprom) {
-			adapt->array_vf[idx_vf].host_crit_region_caps = 0b1;
-			adapt->array_vf[idx_vf].vf_crit_region = GPU_CRIT_REGION_V1;
-			adapt->array_vf[idx_vf].guest_crit_region_caps = GPU_CRIT_REGION_V1;
+			adapt->array_vf[idx_vf].xchg.host_crit_region_caps = BIT((GPU_CRIT_REGION_V1 - 1));
+			adapt->array_vf[idx_vf].xchg.guest_crit_region_caps = BIT((GPU_CRIT_REGION_V1 - 1));
+			adapt->array_vf[idx_vf].xchg.vf_crit_region = GPU_CRIT_REGION_V1;
 			amdgv_vfmgr_init_crit_region(adapt, idx_vf);
 		}
 	}
@@ -3045,7 +3241,7 @@ enum amdgv_live_info_status amdgv_vfmgr_import_live_data(struct amdgv_adapter *a
 		if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_UPDATE) && !(adapt->flags & AMDGV_FLAG_ENABLE_SVM)) {
 			if (idx_vf != AMDGV_PF_IDX) {
 				entry = &adapt->array_vf[idx_vf];
-				amdgv_vfmgr_map_vf_dev_res(adapt, entry);
+				amdgv_vfmgr_map_vf_dev_res(adapt, idx_vf);
 			}
 		}
 
@@ -3053,6 +3249,7 @@ enum amdgv_live_info_status amdgv_vfmgr_import_live_data(struct amdgv_adapter *a
 
 	amdgv_vfmgr_init_pf_config(adapt);
 	amdgv_vfmgr_init_vfs_fb_config_tmr(adapt);
+	amdgv_vfmgr_init_vf_hbm_mgmt_mode(adapt);
 
 	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
 }
@@ -3122,4 +3319,72 @@ enum amdgv_live_info_status amdgv_restore_ultralite_vf_data(struct amdgv_adapter
 		entry->dev = oss_get_dev_from_bdf(entry->bdf);
 	}
 	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
+}
+
+int amdgv_vfmgr_copy_to_vf_fb_abs(struct amdgv_adapter *adapt, uint32_t idx_vf, uint64_t offset,
+				  void *buf, uint32_t size)
+{
+	struct amdgv_vf_device *entry = &adapt->array_vf[idx_vf];
+	uint64_t vf_fb_offset = MBYTES_TO_BYTES(entry->fb_offset);
+	int ret = 0;
+
+	if (adapt->use_vf_sysmem_xchg) {
+		AMDGV_ERROR("Cannot write to arbitrary VF memory\n");
+		return AMDGV_FAILURE;
+	}
+
+	if (!entry->configured ||
+		(!(adapt->flags & AMDGV_FLAG_ENABLE_SVM) && entry->dev == AMDGV_INVALID_HANDLE))
+		return AMDGV_FAILURE;
+
+	if (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM))
+		amdgv_vfmgr_map_vf_dev_res(adapt, idx_vf);
+
+	if (entry->res_mapped && (entry->mapped_fb_size >= offset + size)
+			 && amdgv_gpuiov_get_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_FB)) {
+		oss_memcpy((uint8_t *)entry->res.fb + offset, buf, size);
+	} else if (adapt->ffbm.enabled) {
+		ret = amdgv_ffbm_copy_to_gpa(adapt, buf, idx_vf, offset, size);
+	} else {
+		if (adapt->mapped_fb_size >= vf_fb_offset + offset + size)
+			oss_memcpy((uint8_t *)adapt->fb + vf_fb_offset + offset, buf, size);
+		else
+			amdgv_mm_copy_to_fb(adapt, vf_fb_offset + offset, (uint64_t)buf, size);
+	}
+
+	return ret;
+}
+
+int amdgv_vfmgr_copy_from_vf_fb_abs(struct amdgv_adapter *adapt, uint32_t idx_vf, uint64_t offset,
+				    void *buf, uint32_t size)
+{
+	struct amdgv_vf_device *entry = &adapt->array_vf[idx_vf];
+	uint64_t vf_fb_offset = MBYTES_TO_BYTES(entry->fb_offset);
+	int ret = 0;
+
+	if (adapt->use_vf_sysmem_xchg) {
+		AMDGV_ERROR("Cannot read from arbitrary VF memory\n");
+		return AMDGV_FAILURE;
+	}
+
+	if (!entry->configured ||
+		(!(adapt->flags & AMDGV_FLAG_ENABLE_SVM) && entry->dev == AMDGV_INVALID_HANDLE))
+		return AMDGV_FAILURE;
+
+	if (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM))
+		amdgv_vfmgr_map_vf_dev_res(adapt, idx_vf);
+
+	if (entry->res_mapped && (entry->mapped_fb_size >= offset + size)
+				&& amdgv_gpuiov_get_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_FB)) {
+		oss_memcpy(buf, ((uint8_t *)entry->res.fb) + offset, size);
+	} else if (adapt->ffbm.enabled) {
+		ret = amdgv_ffbm_copy_from_gpa(adapt, buf, idx_vf, offset, size);
+	} else {
+		if (adapt->mapped_fb_size >= vf_fb_offset + offset + size)
+			oss_memcpy(buf, (uint8_t *)adapt->fb + vf_fb_offset + offset, size);
+		else
+			amdgv_mm_copy_from_fb(adapt, (uint64_t)buf, vf_fb_offset + offset, size);
+	}
+
+	return ret;
 }

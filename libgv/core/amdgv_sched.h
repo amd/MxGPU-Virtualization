@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef AMDGV_SCHED_H
@@ -142,6 +125,11 @@ enum amdgv_sched_event_id {
 	AMDGV_EVENT_VF_MIGRATION_SET_ABORT,
 	AMDGV_EVENT_SCHED_VF_REQ_RAS_CHK_CRITI_REGION,
 	AMDGV_EVENT_SCHED_SET_VF_COND_AVAIL,
+	AMDGV_EVENT_SCHED_UAL_PAUSE_REQ      = 0xff80,
+	AMDGV_EVENT_SCHED_UAL_RESUME_REQ     = 0xff81,
+	AMDGV_EVENT_SCHED_VF_REQ_GPU_INIT_XCHG_REGION,
+	AMDGV_EVENT_SCHED_RAS_EVENT,
+	AMDGV_EVENT_SCHED_VF_RAS_REMOTE_CMD,
 	AMDGV_EVENT_INVALID_EVENT = 0xffffffff,
 };
 
@@ -245,6 +233,7 @@ union amdgv_sched_event_data {
 			struct {
 				uint32_t spatial_partition_num;
 			} sp;
+			enum amdgv_cc_mode cc_mode;
 			struct {
 				bool enable;
 				uint32_t pref_format1;
@@ -255,6 +244,13 @@ union amdgv_sched_event_data {
 				uint32_t idx_config;
 				struct amdgv_gpumon_partition_config *partition_config;
 			} partition_config_info;
+			struct {
+				uint32_t *version;
+				struct amdgv_gpumon_get_config_rsp_ual_v1 *get_config;
+				struct amdgv_gpumon_set_ppod_config_req_ual_v1 *set_ppod_config;
+				struct amdgv_gpumon_set_vpod_config_req_ual_v1 *set_vpod_config;
+				struct amdgv_gpumon_set_station_config_req_ual_v1 *set_station_config;
+			} ual;
 			struct {
 				union {
 					struct {
@@ -296,7 +292,6 @@ union amdgv_sched_event_data {
 	} mca_bank;
 	struct {
 		enum amdgv_ras_fed_src src;
-		/* not used for now in gc poison */
 		uint32_t idx_vf;
 		union {
 			struct {
@@ -317,6 +312,10 @@ union amdgv_sched_event_data {
 	struct {
 		uint64_t rptr;
 	} cper_vf;
+	struct {
+		uint64_t gpa_addr;
+		uint32_t gpa_size;
+	} remote_ras;
 	struct {
 		union {
 			struct {
@@ -361,6 +360,10 @@ union amdgv_sched_event_data {
 		uint32_t pref_format1;  /* Preferred data format 1 */
 		uint32_t pref_format2;  /* Preferred data format 2 */
 	} ptl;
+	struct {
+		uint64_t gpa_base;
+		uint32_t size;
+	} vf_xchg_region;
 };
 
 enum amdgv_event_status {
@@ -666,7 +669,9 @@ struct amdgv_sched {
 	/* Flag to enable parallel hw scheduler switching of logical scheduler */
 	bool enable_bulk_goto_state;
 	/* perf log status in runtime */
-	bool perf_log_enabled;
+	bool perf_log_enabled[AMDGV_MAX_NUM_HW_SCHED];
+
+	bool self_switch_enabled;
 
 	uint32_t num_world_switch;
 	uint32_t num_vf_per_gfx_sched;
@@ -692,8 +697,6 @@ struct amdgv_sched {
 	uint32_t (*cp_sched_state)(struct amdgv_adapter *adapt, uint32_t idx_vf);
 	/* Enable/Disable CG */
 	int (*cg_control)(struct amdgv_adapter *adapt, bool enable);
-	/* Safe Mode RLC */
-	int (*rlc_safe_mode)(struct amdgv_adapter *adapt, bool enable);
 	void (*unhalt_gpu_state)(struct amdgv_adapter *adapt, uint32_t hw_sched_id);
 	int (*reconfig_mapping_tables)(struct amdgv_adapter *adapt, uint32_t num_vf);
 	int (*reconfig_gfx_time_quantion_option)(struct amdgv_adapter *adapt);
@@ -769,6 +772,7 @@ int amdgv_sched_update_time_slice(struct amdgv_adapter *adapt, enum amdgv_sched_
 enum amdgv_sched_state amdgv_sched_get_vf_status(struct amdgv_adapter *adapt, uint32_t idx_vf);
 
 void amdgv_sched_notify_vf_unrecov_err(struct amdgv_adapter *adapt, uint32_t idx_vf);
+void amdgv_sched_notify_vfs_bad_pages_at_poison_creation(struct amdgv_adapter *adapt);
 
 int amdgv_sched_queue_event(struct amdgv_adapter *adapt, uint32_t idx_vf,
 			    enum amdgv_sched_event_id event_id,

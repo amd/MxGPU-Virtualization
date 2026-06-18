@@ -1,23 +1,6 @@
-/*
- * Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv_device.h>
@@ -163,19 +146,22 @@ int navi32_gfx_check_rlc_autoload_complete(struct amdgv_adapter *adapt)
 	uint32_t rlc_status = 0;
 	uint32_t cp_status = 0;
 	int wait_ret;
+	struct amdgv_wait_for_cb_context cb_context = { 0 };
 
 	/* Wait for IMU to exit GFXOFF then touch the RLC_STAT */
-	wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET(GC, 0, regGFX_IMU_MSG_FLAGS), 0x6, 0x6,
+	wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET_NAME(GC, 0, regGFX_IMU_MSG_FLAGS), 0x6, 0x6,
 										AMDGV_TIMEOUT(TIMEOUT_STATUS_REG), AMDGV_WAIT_CHECK_EQ, AMDGV_WAIT_FLAG_AUTO);
 
 	if (wait_ret) {
-		AMDGV_INFO("PSP: Can't wait for IMU to exit GFXOFF,"
+		AMDGV_ERROR("PSP: Can't wait for IMU to exit GFXOFF,"
 					"GFX_IMU_MSG_FLAGS=0x%x\n",
 					RREG32(SOC15_REG_OFFSET(GC, 0, regGFX_IMU_MSG_FLAGS)));
 		return AMDGV_FAILURE;
 	}
 
-	wait_ret = amdgv_wait_for(adapt, navi32_wait_for_autoload_complete_cb, (void *)adapt,
+	cb_context.ctx = (void *)adapt;
+	cb_context.type = AMDGV_WAIT_FOR_RLC_AUTOLOAD_COMPLETE;
+	wait_ret = amdgv_wait_for(adapt, navi32_wait_for_autoload_complete_cb, &cb_context,
 								AMDGV_TIMEOUT(TIMEOUT_STATUS_REG), AMDGV_WAIT_FLAG_FORCE_YIELD);
 	bootload_status = RREG32(SOC15_REG_OFFSET(GC, 0, regRLC_RLCS_BOOTLOAD_STATUS));
 
@@ -192,7 +178,7 @@ int navi32_gfx_check_rlc_autoload_complete(struct amdgv_adapter *adapt)
 		return AMDGV_FAILURE;
 	}
 
-	AMDGV_INFO("PSP: RLC Autoload OK. RLC_RLCS_BOOTLOAD_STATUS=0x%x\n",
+	AMDGV_DEBUG("PSP: RLC Autoload OK. RLC_RLCS_BOOTLOAD_STATUS=0x%x\n",
 			bootload_status);
 
 	return 0;
@@ -513,7 +499,8 @@ static bool navi32_gfx_is_gpu_hang(struct amdgv_adapter *adapt)
 	return false;
 }
 
-static int navi32_gfx_wait_detect_hang(struct amdgv_adapter *adapt, amdgv_wait_cb_t cb_func, void *cb_context, uint64_t timeout)
+static int navi32_gfx_wait_detect_hang(struct amdgv_adapter *adapt, amdgv_wait_cb_t cb_func,
+				       struct amdgv_wait_for_cb_context *cb_context, uint64_t timeout)
 {
 	int wait_ret = 0;
 	uint32_t hang_detection_threshold = adapt->gfx.hang_detection_threshold_us;

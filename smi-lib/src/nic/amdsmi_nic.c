@@ -1,24 +1,7 @@
-/*
-* Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
-*
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in
-* all copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-* THE SOFTWARE.
-*/
+/* Copyright Advanced Micro Devices, Inc.
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 #include <inttypes.h>
 #include <stdlib.h>
@@ -73,6 +56,54 @@ amdsmi_status_t amdsmi_get_nic_driver_info(amdsmi_processor_handle processor_han
 
 	sys_wrapper->smi_strncpy(info->name, sizeof(info->name), driver_info.name, AMDSMI_MAX_STRING_LENGTH);
 	sys_wrapper->smi_strncpy(info->version, sizeof(info->version), driver_info.version, AMDSMI_MAX_STRING_LENGTH);
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+
+amdsmi_status_t amdsmi_get_nic_fw_info(amdsmi_processor_handle processor_handle, amdsmi_nic_fw_info_t *info)
+{
+	#pragma SMI_EXPORT
+	smi_req_ctx smi_req;
+	struct smi_nic_handle *nic = NULL;
+	enum smi_handle_type type;
+	smi_nic_fw_info_t fw_info;
+	system_wrapper *sys_wrapper = get_system_wrapper();
+	int ret = 0;
+
+	AMDSMI_ESCAPE_IF_NOT_INIT;
+
+	if (processor_handle == NULL || info == NULL) {
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	type = *((enum smi_handle_type *)processor_handle);
+	if (type != SMI_HANDLE_TYPE_AMD_NIC && type != SMI_HANDLE_TYPE_BRCM_NIC) {
+		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	memset(info, 0, sizeof(amdsmi_nic_fw_info_t));
+	nic = ((struct smi_nic_handle *)processor_handle);
+
+	ret = smi_get_nic_fw_info(smi_req.thread->nic_ctx, nic->bdf.as_uint, &fw_info);
+	if (ret != SMI_NIC_STATUS_SUCCESS) {
+		SMI_ERROR("Failed to get NIC firmware info. Return code: %d", ret);
+		return smi_map_nic_status(ret);
+	}
+
+	info->num_fw = fw_info.count;
+	if (info->num_fw > AMDSMI_MAX_NIC_FW) {
+		info->num_fw = AMDSMI_MAX_NIC_FW;
+	}
+
+	for (uint32_t i = 0; i < info->num_fw; i++) {
+		info->fw[i].type = (amdsmi_nic_fw_version_type_t)fw_info.versions[i].type;
+		sys_wrapper->smi_strncpy(info->fw[i].fw.name, sizeof(info->fw[i].fw.name),
+					 fw_info.versions[i].name, AMDSMI_MAX_STRING_LENGTH);
+		sys_wrapper->smi_strncpy(info->fw[i].fw.version, sizeof(info->fw[i].fw.version),
+					 fw_info.versions[i].version, AMDSMI_MAX_STRING_LENGTH);
+	}
 
 	return AMDSMI_STATUS_SUCCESS;
 }
@@ -476,53 +507,6 @@ amdsmi_status_t amdsmi_get_nic_rdma_port_statistics(amdsmi_processor_handle proc
 		}
 	}
 
-	return AMDSMI_STATUS_SUCCESS;
-}
-
-amdsmi_status_t amdsmi_topo_get_nic_link_type(amdsmi_processor_handle nic_handle,
-					amdsmi_processor_handle processor_handle,
-					amdsmi_nic_link_type_t *type)
-{
-	#pragma SMI_EXPORT
-	smi_req_ctx smi_req;
-	struct smi_nic_handle *nic = NULL;
-	enum smi_handle_type handle_type;
-	amdsmi_bdf_t gpu_bdf;
-	int ret = 0;
-	smi_nic_link_type_t link_type;
-	AMDSMI_ESCAPE_IF_NOT_INIT;
-
-	if (nic_handle == NULL || processor_handle == NULL || type == NULL) {
-		return AMDSMI_STATUS_INVAL;
-	}
-
-	handle_type = *((enum smi_handle_type *)nic_handle);
-	if (handle_type != SMI_HANDLE_TYPE_AMD_NIC && handle_type != SMI_HANDLE_TYPE_BRCM_NIC) {
-		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
-		return AMDSMI_STATUS_INVAL;
-	}
-
-	handle_type = *((enum smi_handle_type *)processor_handle);
-	if (handle_type != SMI_HANDLE_TYPE_AMD_GPU) {
-		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
-		return AMDSMI_STATUS_INVAL;
-	}
-
-	nic = ((struct smi_nic_handle *)nic_handle);
-
-	ret = amdsmi_get_gpu_device_bdf(processor_handle, &gpu_bdf);
-	if (ret != AMDSMI_STATUS_SUCCESS) {
-		SMI_ERROR("Failed to get GPU BDF. Return code: %d", ret);
-		return ret;
-	}
-
-	ret = smi_topo_get_nic_link_type(smi_req.thread->nic_ctx, nic->bdf.as_uint, gpu_bdf.as_uint, &link_type);
-	if (ret != SMI_NIC_STATUS_SUCCESS) {
-		SMI_ERROR("Failed to get GPU-NIC link type. Return code: %d", ret);
-		return smi_map_nic_status(ret);
-	}
-
-	*type = (amdsmi_nic_link_type_t)link_type;
 	return AMDSMI_STATUS_SUCCESS;
 }
 

@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef __SMI_DRV_CMD_H__
@@ -135,6 +118,16 @@ int smi_reset_gpu(struct smi_ctx *ctx, void *inb,
 int smi_get_xgmi_plpd(struct smi_ctx *ctx, void *inb,
 			  void *outb, uint16_t in_len, uint16_t out_len);
 int smi_set_xgmi_plpd(struct smi_ctx *ctx, void *inb,
+			  void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_vf_hbm_info(struct smi_ctx *ctx, void *inb,
+				void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_gpu_fabric_info(struct smi_ctx *ctx, void *inb,
+			  void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_tdi_state(struct smi_ctx *ctx, void *inb,
+			  void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_cc_mode(struct smi_ctx *ctx, void *inb,
+			  void *outb, uint16_t in_len, uint16_t out_len);
+int smi_set_cc_mode(struct smi_ctx *ctx, void *inb,
 			  void *outb, uint16_t in_len, uint16_t out_len);
 int smi_get_ras_policy_info(struct smi_ctx *ctx, void *inb,
 			  void *outb, uint16_t in_len, uint16_t out_len);

@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv_device.h>
@@ -289,14 +272,44 @@ uint64_t mi350_drv_metric_code[MI350_METRIC_NAME_COUNT] = {
 	[MI350__VR_TEMP_VDDIO_11_E32]			= METRIC_EXT_CODE(SYS_GPUBOARD_TEMP,	VR_TEMP_VDDIO_11_E32,			CELSIUS,		SYSTEM,	GPUBOARD,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
 };
 
-static int mi350_smu_wait_for_response(struct amdgv_adapter *adapt, uint32_t *val)
+#define MI350_SMU_MB_CONTEXT_REGS_NUM	3
+static struct amdgv_reg_dump_info mi350_smu_mb_context_regs[MI350_SMU_MB_CONTEXT_REGS_NUM] = {
+	{
+		.name = "regMP1_SMN_C2PMSG_90 (resp)",
+		.hwip = MP1_HWIP,
+		.seg = regMP1_SMN_C2PMSG_90_BASE_IDX,
+		.logical_inst = 0,
+		.offset_hwip = regMP1_SMN_C2PMSG_90,
+		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
+	},
+	{
+		.name = "regMP1_SMN_C2PMSG_82 (param)",
+		.hwip = MP1_HWIP,
+		.seg = regMP1_SMN_C2PMSG_82_BASE_IDX,
+		.logical_inst = 0,
+		.offset_hwip = regMP1_SMN_C2PMSG_82,
+		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
+	},
+	{
+		.name = "regMP1_SMN_C2PMSG_66 (msg)",
+		.hwip = MP1_HWIP,
+		.seg = regMP1_SMN_C2PMSG_66_BASE_IDX,
+		.logical_inst = 0,
+		.offset_hwip = regMP1_SMN_C2PMSG_66,
+		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
+	}
+};
+
+static int mi350_smu_wait_for_response(struct amdgv_adapter *adapt, uint32_t *val,
+				       enum amdgv_wait_for_types wait_type)
 {
 	int ret;
 	uint32_t tmp;
 
-	ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90),
-				      MP1_SMN_C2PMSG_90__CONTENT_MASK, 0,
-				      AMDGV_TIMEOUT(TIMEOUT_SMU_REG), AMDGV_WAIT_CHECK_NE, 0);
+	ret = amdgv_wait_for_smu_msg_resp(adapt, SOC15_REG_OFFSET_NAME(MP1, 0, regMP1_SMN_C2PMSG_90),
+					  MP1_SMN_C2PMSG_90__CONTENT_MASK, 0,
+					  AMDGV_TIMEOUT(TIMEOUT_SMU_REG), AMDGV_WAIT_CHECK_NE,
+					  wait_type, mi350_smu_mb_context_regs, MI350_SMU_MB_CONTEXT_REGS_NUM);
 
 	tmp = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90));
 	if (val)
@@ -374,20 +387,16 @@ static int mi350_smu_send_msg_internal(struct amdgv_adapter *adapt, uint32_t msg
 
 	oss_mutex_lock(adapt->pp.smu_lock);
 
-	ret = mi350_smu_wait_for_response(adapt, resp);
+	ret = mi350_smu_wait_for_response(adapt, resp, AMDGV_WAIT_FOR_SMU_CHECK_HANG);
 	if (ret) {
-		AMDGV_ERROR(
-			"smu is already hang before send msg:0x%x param:0x%08x resp value:%08x\n",
-			msg, param, *resp);
 		ret = AMDGV_FAILURE;
 		goto end;
 	}
 
 	mi350_smu_send_msg_nocheck(adapt, msg, param);
 
-	ret = mi350_smu_wait_for_response(adapt, resp);
+	ret = mi350_smu_wait_for_response(adapt, resp, AMDGV_WAIT_FOR_SMU_MSG_RESPONSE);
 	if (ret && (*resp == 0)) {
-		AMDGV_ERROR("Driver timed out waiting for msg:0x%x param:0x%08x. Resp value:%08x\n", msg, param, *resp);
 		ret = AMDGV_FAILURE;
 		goto end;
 	}
@@ -563,10 +572,14 @@ int mi350_wait_gpu_reset_completion(struct amdgv_adapter *adapt)
 	int ret = 0;
 	uint32_t resp = 0;
 
-	ret = mi350_smu_wait_for_response(adapt, &resp);
-	if (ret == AMDGV_FAILURE || resp != PPSMC_Result_OK) {
-		AMDGV_ERROR("Failed to send mode1 reset message 0x%x, response 0x%x\n",
-			    PPSMC_MSG_GfxDriverReset, resp);
+	ret = mi350_smu_wait_for_response(adapt, &resp, AMDGV_WAIT_FOR_SMU_MSG_RESPONSE);
+	if (ret)
+		return ret;
+
+	if (resp != PPSMC_Result_OK) {
+		AMDGV_REG_DUMP(ERROR, "SMU responded with failure. SMU Mailbox contents:",
+			       mi350_smu_mb_context_regs,
+			       MI350_SMU_MB_CONTEXT_REGS_NUM);
 		return AMDGV_FAILURE;
 	}
 
@@ -2873,9 +2886,9 @@ static int mi350_smu_pp_get_npm_info(struct amdgv_adapter *adapt,
 	if (npm_info == NULL)
 		return AMDGV_FAILURE;
 
-	AMDGV_INFO("NPM info request on node: %02x\n", adapt->xgmi.phy_node_id);
+	AMDGV_DEBUG("NPM info request on node: %02x\n", adapt->xgmi.phy_node_id);
 	if (!mi350_smu_feature_is_enabled(adapt, FEATURE_GLOBAL_DPM)) {
-		AMDGV_INFO("GLOBAL_DPM Feature is not enabled for NPM\n");
+		AMDGV_DEBUG("GLOBAL_DPM Feature is not enabled for NPM\n");
 		npm_info->npm_status = AMDGPUMON_NPM_DISABLED;
 		npm_info->npm_limit = 0;
 		return 0;
@@ -2892,7 +2905,7 @@ static int mi350_smu_pp_get_npm_info(struct amdgv_adapter *adapt,
 		npm_info->npm_limit = 0;
 	}
 
-	AMDGV_INFO("NPM info limit:%d status:%d\n", npm_info->npm_limit, npm_info->npm_status);
+	AMDGV_DEBUG("NPM info limit:%d status:%d\n", npm_info->npm_limit, npm_info->npm_status);
 	return ret;
 }
 
@@ -3049,9 +3062,6 @@ static int mi350_smu_i2c_eeprom_read_data(struct amdgv_adapter *adapt, uint8_t a
 		oss_msleep(200);
 	}
 
-	if ((ret == 0) && (retry_count != 1))
-		AMDGV_INFO("i2c_eeprom_read_data - success @ :%dth try\n", retry_count);
-
 	if (ret) {
 		AMDGV_WARN("i2c_eeprom_read_data - error occurred :%x\n", ret);
 		return ret;
@@ -3086,9 +3096,6 @@ static int mi350_smu_i2c_eeprom_write_data(struct amdgv_adapter *adapt, uint8_t 
 		retry_count++;
 		oss_msleep(200);
 	}
-
-	if ((ret == 0) && (retry_count != 1))
-		AMDGV_INFO("i2c_eeprom_write_data - success @ :%dth try\n", retry_count);
 
 	if (ret) {
 		AMDGV_WARN("i2c_write- error occurred :%x\n", ret);
@@ -3409,7 +3416,7 @@ static int mi350_smu_get_bad_page_count(struct amdgv_adapter *adapt,
 	if (ret)
 		AMDGV_ERROR("Failed to get bad page count\n");
 
-	AMDGV_INFO("Get %d bad page count.\n", *bad_page_count);
+	AMDGV_DEBUG("Get %d bad page count.\n", *bad_page_count);
 
 	return ret;
 }
@@ -3582,6 +3589,41 @@ static bool mi350_smu_migration_is_supported(struct amdgv_adapter *adapt)
 	return (smu->supported_caps & SMU_CAPS(SMU_CAP_LIVE_MIGRATION)) != 0;
 }
 
+static const uint32_t mi350_smu_ras_msg_maps[PP_SMU_RAS_MSG_MAX] = {
+	[PP_SMU_RAS_MSG_GetRasTableVersion] = PPSMC_MSG_GetRasTableVersion,
+	[PP_SMU_RAS_MSG_GetRmaStatus] = PPSMC_MSG_GetRmaStatus,
+	[PP_SMU_RAS_MSG_GetBadPageCount] = PPSMC_MSG_GetBadPageCount,
+	[PP_SMU_RAS_MSG_GetBadPageMcaAddr] = PPSMC_MSG_GetBadPageMcaAddress,
+	[PP_SMU_RAS_MSG_GetBadPagePaAddr] = PPSMC_MSG_GetBadPagePaAddress,
+	[PP_SMU_RAS_MSG_SetTimestamp] = PPSMC_MSG_SetTimestamp,
+	[PP_SMU_RAS_MSG_GetTimestamp] = PPSMC_MSG_GetTimestamp,
+	[PP_SMU_RAS_MSG_GetRasPolicy] = PPSMC_MSG_GetRasPolicy,
+	[PP_SMU_RAS_MSG_GetBadPageIpId] = PPSMC_MSG_GetBadPageIpIdLoHi,
+	[PP_SMU_RAS_MSG_EraseRasTable] = PPSMC_MSG_EraseRasTable,
+};
+
+static int mi350_smu_send_msg_with_params(struct amdgv_adapter *adapt, uint32_t msg,
+		uint32_t *params, uint32_t num_params, uint32_t *read_args, uint32_t num_read_args)
+{
+	return 0;
+}
+
+static int mi350_smu_send_ras_msg(struct amdgv_adapter *adapt, enum pp_smu_ras_msg msg,
+		uint32_t *params, uint32_t num_params, uint32_t *read_args, uint32_t num_read_args)
+{
+	uint32_t smu_msg;
+
+	if (msg >= PP_SMU_RAS_MSG_MAX)
+		return AMDGV_FAILURE;
+
+	smu_msg = mi350_smu_ras_msg_maps[msg];
+	if (!smu_msg)
+		return AMDGV_FAILURE;
+
+	return mi350_smu_send_msg_with_params(adapt, smu_msg,
+				params, num_params, read_args, num_read_args);
+}
+
 static const struct amdgv_pp_funcs mi350_amdgv_pp_funcs = {
 	.handle_smu_irq = mi350_smu_pp_handle_irq,
 	.i2c_eeprom_xfer = mi350_smu_pp_i2c_eeprom_i2c_xfer,
@@ -3617,6 +3659,7 @@ static const struct amdgv_pp_funcs mi350_amdgv_pp_funcs = {
 	.get_smu_cap_supported = mi350_smu_cap_supported,
 	.init_drv_metrics_ext = mi350_pp_smu_init_drv_metrics_ext,
 	.migration_smu_is_supported = mi350_smu_migration_is_supported,
+	.smu_send_ras_msg = mi350_smu_send_ras_msg,
 };
 
 static const struct amdgv_pmme_funcs mi350_amdgv_pmme_funcs = {
@@ -3777,7 +3820,7 @@ static int mi350_powerplay_hw_init(struct amdgv_adapter *adapt)
 
 	ret = mi350_smu_set_xgmi_plpd_mode(adapt, PP_XGMI_PLPD_MODE_ENABLE);
 	if (ret == AMDGV_NOT_SUPPORTED)
-		AMDGV_INFO("SMU feature FEATURE_XGMI_PER_LINK_PWR_DOWN is not supported.");
+		AMDGV_INFO("SMU feature FEATURE_XGMI_PER_LINK_PWR_DOWN is not supported.\n");
 	else if (ret)
 		return ret;
 

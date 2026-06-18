@@ -1,23 +1,6 @@
-/*
- * Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef NAVI32_PSP_H
@@ -36,8 +19,8 @@
 #define C2PMSG_CMD_SPI_UPDATE_FLASH_IMAGE 0x4
 
 //TODO: get the size from psp pkg
-#define NAVI32_MIGRATION_PSP_STATIC_DATA_SIZE		(12 * 1024 * 1024)
-#define NAVI32_MIGRATION_PSP_DYNAMIC_DATA_SIZE		(4 * 1024 * 1024)
+#define NAVI32_MIGRATION_PSP_STATIC_DATA_SIZE		(10 * 1024 * 1024)
+#define NAVI32_MIGRATION_PSP_DYNAMIC_DATA_SIZE		(20 * 1024 * 1024)
 
 enum { PSP_TMR_INC_SIZE = 0x200000 }; /* 2M */
 
@@ -62,7 +45,7 @@ bool navi32_psp_check_register_response(struct amdgv_adapter *adapt, uint32_t re
 
 bool navi32_psp_check_memory_response(uint32_t *memory_address, uint32_t memory_value);
 
-bool navi32_psp_wait_boot_complete(struct amdgv_adapter *adapt, uint32_t reg_index);
+bool navi32_psp_wait_boot_complete(struct amdgv_adapter *adapt, uint32_t offset, const char *name);
 
 bool navi32_psp_wait_sos_loaded_status(struct amdgv_adapter *adapt);
 

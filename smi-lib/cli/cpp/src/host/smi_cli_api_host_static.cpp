@@ -1,23 +1,8 @@
-/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #include "amdsmi.h"
 #include "smi_cli_api_host.h"
 #include "smi_cli_parser.h"
@@ -35,6 +20,8 @@
 #include <sysinfoapi.h>
 #endif
 #include <limits.h>
+#include <cstdint>
+#include <cinttypes>
 
 #define MAX_CPU_SET_SIZE 16
 #include <regex>
@@ -98,8 +85,6 @@ typedef amdsmi_status_t (*AMDSMI_GET_CURR_ACCELERATOR_PARTITION)(amdsmi_processo
 		amdsmi_accelerator_partition_profile_t *, uint32_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_MEMORY_PARTITION_CONFIG)(amdsmi_processor_handle,
 		amdsmi_memory_partition_config_t *);
-typedef amdsmi_status_t (*AMDSMI_GET_GPU_METRICS)(amdsmi_processor_handle, uint32_t *,
-		amdsmi_metric_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_VIRTUALIZATION_MODE)(amdsmi_processor_handle,
 		amdsmi_virtualization_mode_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_CPU_AFFINITY_WITH_SCOPE)(amdsmi_processor_handle,
@@ -122,6 +107,8 @@ typedef amdsmi_status_t (*AMDSMI_GET_NIC_RDMA_DEV_INFO)(amdsmi_processor_handle,
 		amdsmi_nic_rdma_devices_info_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_NIC_DEVICE_BDF)(amdsmi_processor_handle,
 		amdsmi_bdf_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_VF_HBM_INFO)(amdsmi_vf_handle_t,
+			amdsmi_vf_hbm_info_t *);
 
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_GPU_DEVICE_BDF host_amdsmi_get_gpu_device_bdf;
@@ -155,13 +142,12 @@ extern AMDSMI_SET_GPU_PTL_FORMATS host_amdsmi_set_gpu_ptl_formats;
 
 extern AMDSMI_GET_VF_HANDLE_FROM_BDF host_amdsmi_get_vf_handle_from_bdf;
 extern AMDSMI_GET_VF_INFO host_amdsmi_get_vf_info;
+extern AMDSMI_GET_VF_HBM_INFO host_amdsmi_get_vf_hbm_info;
 
 extern AMDSMI_GET_GPU_ECC_ENABLED host_amdsmi_get_gpu_ecc_enabled;
 
 extern AMDSMI_GET_CURR_ACCELERATOR_PARTITION host_amdsmi_get_partition_profile;
 extern AMDSMI_GET_MEMORY_PARTITION_CONFIG host_amdsmi_get_gpu_memory_partition_config;
-
-extern AMDSMI_GET_GPU_METRICS host_amdsmi_get_gpu_metrics;
 
 extern AMDSMI_GET_GPU_VIRTUALIZATION_MODE host_amdsmi_get_gpu_virtualization_mode;
 
@@ -502,6 +488,37 @@ std::string host_fill_vf_info(Arguments arg, std::string value)
 	return out;
 }
 
+std::string host_fill_vf_hbm_info(Arguments arg, std::string value)
+{
+	std::string out{};
+
+	if (arg.output == json) {
+		nlohmann::ordered_json phy_size{};
+		phy_size["value"] = value.c_str();
+		phy_size["unit"] = "N/A";
+		nlohmann::ordered_json hbm_info_content{};
+		hbm_info_content["phy_addr"] = value.c_str();
+		hbm_info_content["phy_size"] = phy_size;
+		hbm_info_content["numa_id"] = value.c_str();
+		hbm_info_content["name"] = value.c_str();
+		nlohmann::ordered_json hbm_info_json = {
+			{ "gpu", "N/A" }, { "vf", "N/A" },
+			{ "hbm_info", hbm_info_content }
+		};
+		out = hbm_info_json.dump(4);
+	} else if (arg.output == csv) {
+		out += string_format(
+				   ",%s,%s,%s,%s",
+				   value.c_str(), value.c_str(), value.c_str(), value.c_str());
+	} else {
+		out += string_format(
+				   statichbmInfoTemplate, value.c_str(), value.c_str(), "", value.c_str(),
+				   value.c_str());
+	}
+
+	return out;
+}
+
 std::string host_fill_limit_info(Arguments arg, std::string value)
 {
 	std::string out{};
@@ -709,12 +726,8 @@ int AmdSmiApiHost::amdsmi_get_asic_info_command(uint64_t processor_bdf, Argument
 		subsystem_id_hex = string_format("0x%X", asic.subsystem_id);
 	}
 
-	std::string oam_id{};
-	if (asic.oam_id == UINT_MAX) {
-		oam_id = "N/A";
-	} else {
-		oam_id = string_format("%ld", asic.oam_id);
-	}
+	std::string oam_id{static_cast<int32_t>(asic.oam_id) == -1 ? "N/A" : string_format("%ld", asic.oam_id)};
+
 	std::string num_of_compute_units{};
 	if (asic.num_of_compute_units == UINT_MAX) {
 		num_of_compute_units = "N/A";
@@ -736,7 +749,7 @@ int AmdSmiApiHost::amdsmi_get_asic_info_command(uint64_t processor_bdf, Argument
 			{ "num_of_compute_units", num_of_compute_units.c_str()}
 		};
 
-		if (asic.oam_id == UINT_MAX) {
+		if (static_cast<int32_t>(asic.oam_id) == -1) {
 			asic_json["oam_id"] = oam_id;
 		} else {
 			asic_json["oam_id"] = asic.oam_id;
@@ -1783,32 +1796,12 @@ int AmdSmiApiHost::amdsmi_get_vram_info_command(uint64_t processor_bdf, Argument
 
 	std::string max_vram_bw_str{"N/A"};
 	std::string max_vram_bw_unit{""};
-	uint64_t max_vram_bw{UINT_MAX};
-	if (AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi350()) {
-		std::vector<amdsmi_metric_t> max_bw{};
-		amdsmi_metric_t *metrics;
-		uint32_t metric_size = AMDSMI_MAX_NUM_METRICS;
-
-		ret = host_amdsmi_get_gpu_metrics(processor, &metric_size, NULL);
-		if (ret == AMDSMI_STATUS_SUCCESS) {
-			metrics = (amdsmi_metric_t *)malloc(sizeof(amdsmi_metric_t)*metric_size);
-			ret = host_amdsmi_get_gpu_metrics(processor, &metric_size, &metrics[0]);
-
-			if (ret == AMDSMI_STATUS_SUCCESS) {
-				auto it = std::find_if(metrics, metrics + metric_size, [](const amdsmi_metric_t& metric) {
-					return metric.name == AMDSMI_METRIC_NAME_MAX_DRAM_BANDWIDTH
-						   && !(metric.flags & AMDSMI_METRIC_TYPE_ACC);
-				});
-
-				if (it != metrics + metric_size) {
-					max_vram_bw = it->val;
-					max_vram_bw_str = string_format("%d", max_vram_bw);
-					max_vram_bw_unit = "GB/s";
-				}
-
-			}
-			free(metrics);
-		}
+	uint64_t max_vram_bw{UINT64_MAX};
+	if (vram_info.vram_max_bandwidth != UINT64_MAX &&
+	    vram_info.vram_max_bandwidth != 0) {
+		max_vram_bw = vram_info.vram_max_bandwidth;
+		max_vram_bw_str = string_format("%lu", max_vram_bw);
+		max_vram_bw_unit = "GB/s";
 	}
 
 	if (arg.output == json) {
@@ -1816,7 +1809,7 @@ int AmdSmiApiHost::amdsmi_get_vram_info_command(uint64_t processor_bdf, Argument
 		vram_size["value"] = vram_info.vram_size;
 		vram_size["unit"] = vram_size_mb_string == "N/A" ? "N/A" : "MB";
 		nlohmann::ordered_json vram_max_bandwidth{};
-		if (max_vram_bw != UINT_MAX) {
+		if (max_vram_bw != UINT64_MAX) {
 			vram_max_bandwidth["value"] = max_vram_bw;
 			vram_max_bandwidth["unit"] = max_vram_bw_unit;
 		} else {
@@ -1998,14 +1991,16 @@ int AmdSmiApiHost::amdsmi_get_vf_info_static_command(std::string device, Argumen
 		nlohmann::ordered_json timeslice{};
 		timeslice["value"] = gfx_timeslice_us_str.c_str();
 		timeslice["unit"] = gfx_timeslice_us_str == "N/A" ? "N/A" : "us";
+		nlohmann::ordered_json fb_info{};
+		fb_info["fb_offset"] = fb_offset;
+		fb_info["fb_size"] = fb_size;
+		fb_info["gfx_timeslice"] = timeslice;
 		static_vf_json = { { "gpu", std::stoul(std::get<0>(indexes).c_str()) }, { "vf", std::stoul(std::get<1>(indexes).c_str()) },
-			{ "fb_offset", fb_offset },
-			{ "fb_size", fb_size  },
-			{ "gfx_timeslice", timeslice  }
+			{ "fb_info", fb_info }
 		};
 		out = static_vf_json.dump(4);
 	} else if (arg.output == csv) {
-		out += string_format(
+		out = string_format(
 				   ",%s,%s,%s",
 				   fb_offset_str.c_str(), fb_size_str.c_str(), gfx_timeslice_us_str.c_str());
 	} else {
@@ -2016,6 +2011,68 @@ int AmdSmiApiHost::amdsmi_get_vf_info_static_command(std::string device, Argumen
 				   staticVfTemplate, fb_offset_str.c_str(), fb_offset_str_unit.c_str(), fb_size_str.c_str(),
 				   fb_size_str_unit.c_str(),
 				   gfx_timeslice_us_str.c_str(), gfx_timeslice_us_str_unit.c_str());
+	}
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+int AmdSmiApiHost::amdsmi_get_vf_hbm_info_command(std::string device, Arguments arg,
+		std::string &formatted_string)
+{
+	int ret;
+	amdsmi_bdf_t vf_bdf;
+	amdsmi_vf_handle_t vf_handle;
+	amdsmi_vf_hbm_info_t hbm_info;
+
+	vf_bdf.bdf.domain_number = std::stoi(device.substr(0, 4), nullptr, 16);
+	vf_bdf.bdf.bus_number = std::stoi(device.substr(5, 2), nullptr, 16);
+	vf_bdf.bdf.device_number = std::stoi(device.substr(8, 2), nullptr, 16);
+	vf_bdf.bdf.function_number = std::stoi(device.substr(11), nullptr, 16);
+
+	ret = host_amdsmi_get_vf_handle_from_bdf(vf_bdf, &vf_handle);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		return ret;
+	}
+
+	ret = host_amdsmi_get_vf_hbm_info(vf_handle, &hbm_info);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		formatted_string = host_fill_vf_hbm_info(arg, "N/A");
+		return ret;
+	}
+
+	std::string phy_addr_str = string_format("0x%" PRIx64, hbm_info.phy_addr);
+	std::string phy_size_str = string_format("%" PRIu64, hbm_info.phy_size);
+	std::string numa_id_str = hbm_info.numa_id == UINT32_MAX ?
+			"N/A" : string_format("%" PRIu32, hbm_info.numa_id);
+	std::string name_str = hbm_info.name;
+
+	std::tuple<std::string, std::string, std::string> indexes =
+		getGpuVfIndexFromVfId(device);
+
+	if (arg.output == json) {
+		nlohmann::ordered_json phy_size_json{};
+		phy_size_json["value"] = hbm_info.phy_size;
+		phy_size_json["unit"] = "B";
+		nlohmann::ordered_json hbm_info_content{};
+		hbm_info_content["phy_addr"] = hbm_info.phy_addr;
+		hbm_info_content["phy_size"] = phy_size_json;
+		hbm_info_content["numa_id"] = hbm_info.numa_id == UINT32_MAX ?
+				nlohmann::ordered_json("N/A") : nlohmann::ordered_json(hbm_info.numa_id);
+		hbm_info_content["name"] = name_str;
+		nlohmann::ordered_json hbm_info_json = {
+			{ "gpu", std::stoul(std::get<0>(indexes).c_str()) },
+			{ "vf", std::stoul(std::get<1>(indexes).c_str()) },
+			{ "hbm_info", hbm_info_content }
+		};
+		formatted_string = hbm_info_json.dump(4);
+	} else if (arg.output == csv) {
+		std::string phy_size_str_with_unit = string_format("%" PRIu64, hbm_info.phy_size);
+		formatted_string = string_format(",%s,%s,%s,%s", phy_addr_str.c_str(),
+				phy_size_str_with_unit.c_str(), numa_id_str.c_str(), name_str.c_str());
+	} else {
+		formatted_string = string_format(statichbmInfoTemplate, phy_addr_str.c_str(),
+				phy_size_str.c_str(), "B", numa_id_str.c_str(), name_str.c_str());
 	}
 
 	return AMDSMI_STATUS_SUCCESS;
@@ -2295,17 +2352,30 @@ int AmdSmiApiHost::amdsmi_get_numa_command(uint64_t processor_bdf, Arguments arg
 		return ret;
 	}
 
-	ret = host_amdsmi_topo_get_numa_node_number(processor, &numa_node);
-	if (ret != AMDSMI_STATUS_SUCCESS) {
+	int node_ret = host_amdsmi_topo_get_numa_node_number(processor, &numa_node);
+	bool node_ok = (node_ret == AMDSMI_STATUS_SUCCESS);
+	bool node_valid = node_ok && (numa_node != UINT32_MAX);
+	std::string node_str = node_valid ? string_format("%u", numa_node) : "N/A";
+
+	int aff_ret = host_amdsmi_get_cpu_affinity_with_scope(processor, cpu_set_size_loc,
+														  cpu_set, scope);
+	bool aff_ok = (aff_ret == AMDSMI_STATUS_SUCCESS);
+
+	if (!node_ok && !aff_ok) {
 		formatted_string = host_fill_numa(arg, "N/A");
 		free(cpu_set);
-
-		return ret;
+		if (arg.all_arguments) {
+			return AMDSMI_STATUS_SUCCESS;
+		}
+		Logger::getInstance().log(LogLevel::Error, node_ret, __FUNCTION__,
+								  __FILE__, __LINE__);
+		return node_ret;
 	}
 
-	ret = host_amdsmi_get_cpu_affinity_with_scope(processor, cpu_set_size_loc, cpu_set, scope);
-	if (ret != AMDSMI_STATUS_SUCCESS) {
-		formatted_string = host_fill_numa(arg, string_format("%d", numa_node));
+	ret = AMDSMI_STATUS_SUCCESS;
+
+	if (!aff_ok) {
+		formatted_string = host_fill_numa(arg, node_str);
 	} else {
 		for(int i = 0; i < cpu_set_size_loc; ++i) {
 			auto maskRanges = bitmaskToRangesList(cpu_set[i],
@@ -2317,7 +2387,7 @@ int AmdSmiApiHost::amdsmi_get_numa_command(uint64_t processor_bdf, Arguments arg
 				if (arg.output == csv) {
 					formatted_substring =
 						string_format(",%016lx,%s", subMask, rangeStr.c_str());
-					formatted_string += string_format(",%d,%d", numa_node, i)
+					formatted_string += string_format(",%s,%d", node_str.c_str(), i)
 										+ formatted_substring + ",N/A\n";
 				} else {
 					mask |= subMask;
@@ -2344,14 +2414,18 @@ int AmdSmiApiHost::amdsmi_get_numa_command(uint64_t processor_bdf, Arguments arg
 			nlohmann::ordered_json numa_info_json{};
 			nlohmann::ordered_json cpu_affinity{};
 			cpu_affinity["cpu_list"] = cpu_list;
-			numa_info_json["node"] = numa_node;
+			if (node_valid) {
+				numa_info_json["node"] = numa_node;
+			} else {
+				numa_info_json["node"] = "N/A";
+			}
 			numa_info_json["cpu_affinity"] = cpu_affinity;
 			numa_info_json["socket_affinity"] = "N/A";
 
 			formatted_string = numa_info_json.dump(4);
 		} else if (arg.output == human) {
 			formatted_string = string_format(staticNumaTemplate,
-											 numa_node,
+											 node_str.c_str(),
 											 formatted_substring.c_str());
 		}
 	}
@@ -2359,6 +2433,7 @@ int AmdSmiApiHost::amdsmi_get_numa_command(uint64_t processor_bdf, Arguments arg
 
 	return ret;
 }
+
 std::string host_fill_nic_asic_info(Arguments arg, std::string value)
 {
 	std::string out{};
@@ -2496,12 +2571,18 @@ std::string host_fill_nic_rdma_dev_info(Arguments arg, std::string value)
 	if (arg.output == json) {
 		auto rdma_devices_json = nlohmann::ordered_json::array();
 		auto rdma_ports_json = nlohmann::ordered_json::array();
+		nlohmann::ordered_json max_mtu{};
+		max_mtu["value"] = value.c_str();
+		max_mtu["unit"] = value.c_str();
+		nlohmann::ordered_json active_mtu{};
+		active_mtu["value"] = value.c_str();
+		active_mtu["unit"] = value.c_str();
 		nlohmann::ordered_json rdma_port_json = {
 			{ "netdev", value.c_str() },
 			{ "state", value.c_str() },
 			{ "rdma_port", value.c_str() },
-			{ "max_mtu", value.c_str() },
-			{ "active_mtu", value.c_str() }
+			{ "max_mtu", max_mtu },
+			{ "active_mtu", active_mtu }
 		};
 		rdma_ports_json.push_back(rdma_port_json);
 		nlohmann::ordered_json rdma_device_json = {
@@ -2521,7 +2602,8 @@ std::string host_fill_nic_rdma_dev_info(Arguments arg, std::string value)
 			nicStaticRdmaDevTemplate, 0, value.c_str(), value.c_str(), value.c_str(), value.c_str(), value.c_str()
 		));
 		formatted_string.append(string_format(
-			nicStaticRdmaPortTemplate, 0, value.c_str(), value.c_str(), value.c_str(), value.c_str(), value.c_str()
+			nicStaticRdmaPortTemplate, 0, value.c_str(), value.c_str(), value.c_str(),
+			value.c_str(), "", value.c_str(), ""
 		));
 		out.append(formatted_string);
 	}
@@ -2603,11 +2685,15 @@ int AmdSmiApiHost::amdsmi_get_nic_bus_info_command(uint64_t processor_bdf, Argum
 		out = host_fill_nic_bus_info(arg, "N/A");
 		return ret;
 	}
+	std::string pcie_interface_version_raw{ nic_bus_info.pcie_interface_version };
 	std::string pcie_interface_version_str{
-		nic_bus_info.pcie_interface_version == "" ? "N/A" : nic_bus_info.pcie_interface_version
+		pcie_interface_version_raw.empty() || pcie_interface_version_raw == "N/A"
+		? "N/A"
+		: "Gen " + pcie_interface_version_raw
 	};
+	std::string slot_type_raw{ nic_bus_info.slot_type };
 	std::string slot_type_str{
-		nic_bus_info.slot_type == "" ? "N/A" : nic_bus_info.slot_type
+		slot_type_raw.empty() ? "N/A" : slot_type_raw
 	};
 
 	std::string max_pcie_speed_str{
@@ -2912,20 +2998,32 @@ int AmdSmiApiHost::amdsmi_get_nic_rdma_devices_info_command(uint64_t processor_b
 		for (uint32_t i = 0; i < nic_rdma_devices_info.num_rdma_dev; ++i) {
 			auto rdma_ports_json = nlohmann::ordered_json::array();
 			for (uint32_t j = 0; j < nic_rdma_devices_info.rdma_dev_info[i].num_rdma_ports; ++j) {
-				max_mtu_str = (nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].max_mtu == UINT16_MAX) ?
-							  "N/A" :
-							  string_format(
-								  "%u", nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].max_mtu);
-				active_mtu_str = (nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].active_mtu == UINT16_MAX)
-								 ? "N/A" :
-								 string_format(
-									 "%u", nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].active_mtu);
+				nlohmann::ordered_json max_mtu_json;
+				if (nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].max_mtu != UINT16_MAX) {
+					max_mtu_json = {
+						{ "value", nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].max_mtu },
+						{ "unit", "B" }
+					};
+				} else {
+					max_mtu_json = "N/A";
+				}
+
+				nlohmann::ordered_json active_mtu_json;
+				if (nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].active_mtu != UINT16_MAX) {
+					active_mtu_json = {
+						{ "value", nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].active_mtu },
+						{ "unit", "B" }
+					};
+				} else {
+					active_mtu_json = "N/A";
+				}
+
 				nlohmann::ordered_json rdma_port_json = {
 					{ "netdev", nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].netdev },
 					{ "state", nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].state },
 					{ "rdma_port", nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].rdma_port },
-					{ "max_mtu", max_mtu_str.c_str()},
-					{ "active_mtu", active_mtu_str.c_str() }
+					{ "max_mtu", max_mtu_json },
+					{ "active_mtu", active_mtu_json }
 				};
 				rdma_ports_json.push_back(rdma_port_json);
 			}
@@ -2957,9 +3055,15 @@ int AmdSmiApiHost::amdsmi_get_nic_rdma_devices_info_command(uint64_t processor_b
 				max_mtu_str = (nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].max_mtu == UINT16_MAX) ? "N/A" :
 						string_format(
 							"%u", nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].max_mtu);
+				std::string max_mtu_str_unit{
+					max_mtu_str == "N/A" ? "" : "B"
+				};
 				active_mtu_str = (nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].active_mtu == UINT16_MAX) ? "N/A" :
 						string_format(
 							"%u", nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].active_mtu);
+				std::string active_mtu_str_unit{
+					active_mtu_str == "N/A" ? "" : "B"
+				};
 				std::string rdma_port_str {
 					string_format("%u", nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].rdma_port)
 				};
@@ -2971,7 +3075,9 @@ int AmdSmiApiHost::amdsmi_get_nic_rdma_devices_info_command(uint64_t processor_b
 					nic_rdma_devices_info.rdma_dev_info[i].rdma_port_info[j].state,
 					rdma_port_str.c_str(),
 					max_mtu_str.c_str(),
-					active_mtu_str.c_str()
+					max_mtu_str_unit.c_str(),
+					active_mtu_str.c_str(),
+					active_mtu_str_unit.c_str()
 				));
 			}
 			out.append(formatted_string);

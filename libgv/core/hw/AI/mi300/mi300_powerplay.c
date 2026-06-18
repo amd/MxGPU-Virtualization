@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_powerplay_swsmu.h"
@@ -221,14 +204,44 @@ uint64_t mi300_drv_metric_code[MI300_METRIC_NAME_COUNT] = {
 					       mi300_drv_metric_code[drv_metric_code],		\
 					       encoding, addr, vf_mask, res_instance)
 
-static int mi300_smu_wait_for_response(struct amdgv_adapter *adapt, uint32_t *val)
+#define MI300_SMU_MB_CONTEXT_REGS_NUM	3
+static struct amdgv_reg_dump_info mi300_smu_mb_context_regs[MI300_SMU_MB_CONTEXT_REGS_NUM] = {
+	{
+		.name = "regMP1_SMN_C2PMSG_90 (resp)",
+		.hwip = MP1_HWIP,
+		.seg = regMP1_SMN_C2PMSG_90_BASE_IDX,
+		.logical_inst = 0,
+		.offset_hwip = regMP1_SMN_C2PMSG_90,
+		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
+	},
+	{
+		.name = "regMP1_SMN_C2PMSG_82 (param)",
+		.hwip = MP1_HWIP,
+		.seg = regMP1_SMN_C2PMSG_82_BASE_IDX,
+		.logical_inst = 0,
+		.offset_hwip = regMP1_SMN_C2PMSG_82,
+		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
+	},
+	{
+		.name = "regMP1_SMN_C2PMSG_66 (msg)",
+		.hwip = MP1_HWIP,
+		.seg = regMP1_SMN_C2PMSG_66_BASE_IDX,
+		.logical_inst = 0,
+		.offset_hwip = regMP1_SMN_C2PMSG_66,
+		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
+	}
+};
+
+static int mi300_smu_wait_for_response(struct amdgv_adapter *adapt, uint32_t *val,
+				       enum amdgv_wait_for_types wait_type)
 {
 	int ret;
 	uint32_t tmp;
 
-	ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90),
-				      MP1_SMN_C2PMSG_90__CONTENT_MASK, 0,
-				      AMDGV_TIMEOUT(TIMEOUT_SMU_REG), AMDGV_WAIT_CHECK_NE, 0);
+	ret = amdgv_wait_for_smu_msg_resp(adapt, SOC15_REG_OFFSET_NAME(MP1, 0, regMP1_SMN_C2PMSG_90),
+				          MP1_SMN_C2PMSG_90__CONTENT_MASK, 0,
+				          AMDGV_TIMEOUT(TIMEOUT_SMU_REG), AMDGV_WAIT_CHECK_NE,
+				          wait_type, mi300_smu_mb_context_regs, MI300_SMU_MB_CONTEXT_REGS_NUM);
 
 	tmp = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90));
 	if (val)
@@ -302,39 +315,34 @@ int mi300_smu_send_msg_with_param(struct amdgv_adapter *adapt, uint32_t msg, uin
 
 	oss_mutex_lock(adapt->pp.smu_lock);
 
-	ret = mi300_smu_wait_for_response(adapt, &resp);
+	ret = mi300_smu_wait_for_response(adapt, &resp, AMDGV_WAIT_FOR_SMU_CHECK_HANG);
 	if (ret) {
-		AMDGV_ERROR(
-			"smu is already hang before send msg:0x%x param:0x%08x resp value:%08x\n",
-			msg, param, resp);
 		ret = AMDGV_FAILURE;
 		goto end;
 	}
 
 	mi300_smu_send_msg_nocheck(adapt, msg, param);
 
-	ret = mi300_smu_wait_for_response(adapt, &resp);
-
-	if (ret && (resp == 0)) {
-		AMDGV_ERROR("Driver timed out waiting for msg:0x%x param:0x%08x. Resp value:%08x\n", msg, param, resp);
+	ret = mi300_smu_wait_for_response(adapt, &resp, AMDGV_WAIT_FOR_SMU_MSG_RESPONSE);
+	if (ret) {
 		ret = AMDGV_FAILURE;
 		goto end;
 	}
 
-	if (ret && (resp != PPSMC_Result_OK)) {
-		AMDGV_ERROR("smu responds with failure to msg:0x%x param:0x%08x. Resp value:%08x\n", msg, param, resp);
+	if (resp != PPSMC_Result_OK) {
+		AMDGV_REG_DUMP(ERROR, "SMU responded with failure. SMU Mailbox contents:",
+			       mi300_smu_mb_context_regs,
+			       MI300_SMU_MB_CONTEXT_REGS_NUM);
 		ret = AMDGV_FAILURE;
 		goto end;
 	}
 
-	if (arg) {
+	if (arg)
 		*arg = mi300_smu_read_arg(adapt);
-		AMDGV_DEBUG("smu send msg:%d param:0x%08x readback:0x%08x success\n", msg,
-			    param, *arg);
-	} else {
-		AMDGV_DEBUG("smu send msg:%d param:0x%08x success\n", msg, param);
-	}
 
+	AMDGV_REG_DUMP(DEBUG, "SMU responded with success. SMU Mailbox contents:",
+			mi300_smu_mb_context_regs,
+			MI300_SMU_MB_CONTEXT_REGS_NUM);
 end:
 	oss_mutex_unlock(adapt->pp.smu_lock);
 
@@ -496,10 +504,14 @@ int mi300_wait_gpu_reset_completion(struct amdgv_adapter *adapt)
 	int ret = 0;
 	uint32_t resp = 0;
 
-	ret = mi300_smu_wait_for_response(adapt, &resp);
-	if (ret == AMDGV_FAILURE || resp != PPSMC_Result_OK) {
-		AMDGV_ERROR("Failed to send mode1 reset message 0x%x, response 0x%x\n",
-		    PPSMC_MSG_GfxDriverReset, resp);
+	ret = mi300_smu_wait_for_response(adapt, &resp, AMDGV_WAIT_FOR_SMU_MSG_RESPONSE);
+	if (ret)
+		return ret;
+
+	if (resp != PPSMC_Result_OK) {
+		AMDGV_REG_DUMP(ERROR, "SMU responded with failure. SMU Mailbox contents:",
+			       mi300_smu_mb_context_regs,
+			       MI300_SMU_MB_CONTEXT_REGS_NUM);
 		return AMDGV_FAILURE;
 	}
 
@@ -955,22 +967,6 @@ static void mi300_smu_notify_throttler_error(struct amdgv_adapter *adapt,
 	AMDGV_DEBUG("mi300 smu notify throttler status 0x%08x, throttler_event 0x%016llx\n",
 		    throttler_status, throttler_event);
 	amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_PP_THROTTLER_EVENT, throttler_event);
-}
-
-static int mi300_smu_reset_vf_arbiters(struct amdgv_adapter *adapt, uint32_t idx_vf)
-{
-	int ret = 0;
-
-	/* MI300X and MI325X */
-	if (mi300_smu_cap_supported(adapt, SMU_CAP_RESET_VF_ARBITERS)) {
-		ret = mi300_smu_send_msg_with_param(adapt,
-						    PPSMC_MSG_ResetVfArbitersByIndex,
-						    idx_vf, NULL);
-		if (ret)
-			AMDGV_ERROR("Failed to reset VF arbiters for VF %d\n", idx_vf);
-	}
-
-	return ret;
 }
 
 static int mi300_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv_entry *entry)
@@ -2880,9 +2876,6 @@ static int mi300_smu_i2c_eeprom_read_data(struct amdgv_adapter *adapt, uint8_t a
 		oss_msleep(200);
 	}
 
-	if ((ret == 0) && (retry_count != 1))
-		AMDGV_INFO("i2c_eeprom_read_data - success @ :%dth try\n", retry_count);
-
 	if (ret) {
 		AMDGV_WARN("i2c_eeprom_read_data - error occurred :%x\n", ret);
 		return ret;
@@ -2917,9 +2910,6 @@ static int mi300_smu_i2c_eeprom_write_data(struct amdgv_adapter *adapt, uint8_t 
 		retry_count++;
 		oss_msleep(200);
 	}
-
-	if ((ret == 0) && (retry_count != 1))
-		AMDGV_INFO("i2c_eeprom_write_data - success @ :%dth try\n", retry_count);
 
 	if (ret) {
 		AMDGV_WARN("i2c_write- error occurred :%x\n", ret);
@@ -3092,6 +3082,20 @@ static int mi300_smu_read_mca_bank_reg32(struct amdgv_adapter *adapt,
 	return mi300_smu_send_msg_with_param(adapt, msg, param, val);
 }
 
+static int mi300_smu_reset_vf_arbiters(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	int ret = 0;
+
+	/* MI300 & MI325 */
+	if (mi300_smu_cap_supported(adapt, SMU_CAP_RESET_VF_ARBITERS)) {
+		ret = mi300_smu_send_msg_with_param(adapt,
+						    PPSMC_MSG_ResetVfArbitersByIndex,
+						    idx_vf, NULL);
+	}
+
+	return ret;
+}
+
 static const struct amdgv_pp_funcs mi300_amdgv_pp_funcs = {
 	.handle_smu_irq = mi300_smu_pp_handle_irq,
 	.i2c_eeprom_xfer = mi300_smu_pp_i2c_eeprom_i2c_xfer,
@@ -3171,7 +3175,7 @@ static int mi300_powerplay_hw_init(struct amdgv_adapter *adapt)
 
 	ret = mi300_smu_set_xgmi_plpd_mode(adapt, PP_XGMI_PLPD_MODE_ENABLE);
 	if (ret == AMDGV_NOT_SUPPORTED)
-		AMDGV_INFO("SMU feature FEATURE_XGMI_PER_LINK_PWR_DOWN is not supported.");
+		AMDGV_DEBUG("SMU feature FEATURE_XGMI_PER_LINK_PWR_DOWN is not supported.\n");
 	else if (ret)
 		return ret;
 
@@ -3181,7 +3185,6 @@ static int mi300_powerplay_hw_init(struct amdgv_adapter *adapt)
 	/* Always query on init for CPER generation */
 	if (!adapt->product_info.visit)
 		mi300_fru_get_product_info(adapt);
-
 
 	return 0;
 }

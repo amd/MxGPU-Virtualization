@@ -1,22 +1,8 @@
-/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #include <iostream>
 #include <functional>
 
@@ -122,6 +108,18 @@ std::string AmdSmiHelpCommand::get_node_help_message(AmdSmiHelpInfo &info_helper
 	return formatted_string;
 }
 
+std::string AmdSmiHelpCommand::get_fabric_help_message(AmdSmiHelpInfo &info_helper)
+{
+	std::string formatted_string = info_helper.get_fabric_help_message(true);
+	return formatted_string;
+}
+
+std::string AmdSmiHelpCommand::get_confidential_compute_help_message(AmdSmiHelpInfo &info_helper)
+{
+	std::string formatted_string = info_helper.get_confidential_compute_help_message(true);
+	return formatted_string;
+}
+
 void AmdSmiHelpCommand::execute_command()
 {
 	AmdSmiHelpInfo info_helper(arg);
@@ -220,9 +218,19 @@ void AmdSmiHelpCommand::execute_command()
 					return get_ras_help_message(info);
 				}
 			},
+			{"confidential-compute", [this](AmdSmiHelpInfo& info, Arguments arg)
+				{
+					return get_confidential_compute_help_message(info);
+				}
+			},
 			{"node", [this](AmdSmiHelpInfo& info, Arguments arg)
 				{
 					return get_node_help_message(info);
+				}
+			},
+			{"fabric", [this](AmdSmiHelpInfo& info, Arguments arg)
+				{
+					return get_fabric_help_message(info);
 				}
 			},
 		};

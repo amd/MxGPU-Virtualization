@@ -1,22 +1,8 @@
-/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #include <iostream>
 #include <sstream>
 #include <regex>
@@ -67,6 +53,14 @@ int AmdSmiFirmwareCommand::firmware_command_vf_fw_list(std::string vf_handle,
 
 	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_firmware_vf_fw_list_command(vf_handle,
 			  arg, gpu_id, vf_id, out_string);
+	return ret;
+}
+
+int AmdSmiFirmwareCommand::firmware_command_nic_fw(uint64_t processor_bdf,
+		std::string &out_string)
+{
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_nic_fw_info_command(processor_bdf,
+			  arg, out_string);
 	return ret;
 }
 
@@ -152,6 +146,25 @@ void AmdSmiFirmwareCommand::firmware_command_json()
 			json_format.insert(json_format.end(), json);
 			json.clear();
 		}
+		for (i = 0; i < arg.nic_devices.size(); i++) {
+			json["nic"] = arg.nic_devices[i]->get_gpu_index();
+			nlohmann::ordered_json values_json;
+			uint64_t nic_bdf = arg.nic_devices[i]->get_bdf();
+
+			std::string param{"nic-firmware"};
+			ret = firmware_command_nic_fw(nic_bdf, out);
+			int error = handle_exceptions(ret, param, arg);
+			if (error == 0 && !out.empty()) {
+				values_json = nlohmann::ordered_json::parse(out);
+				out.clear();
+				json["fw"] = values_json;
+			}
+			out.clear();
+			if (json.size() > 1) {
+				json_format.insert(json_format.end(), json);
+			}
+			json.clear();
+		}
 		result = json_format.dump(4);
 	}
 	if (arg.is_file) {
@@ -224,6 +237,18 @@ void AmdSmiFirmwareCommand::firmware_command_human()
 					formatted_string.clear();
 				}
 			}
+		}
+		for (unsigned int i = 0; i < arg.nic_devices.size(); i++) {
+			uint64_t nic_bdf = arg.nic_devices[i]->get_bdf();
+			ret = firmware_command_nic_fw(nic_bdf, formatted_string);
+			std::string param{"nic-firmware"};
+			int error = handle_exceptions(ret, param, arg);
+			if (error == 0 && !formatted_string.empty()) {
+				out += string_format(nicTemplate, arg.nic_devices[i]->get_gpu_index());
+				out += formatted_string;
+				formatted_string.clear();
+			}
+			formatted_string.clear();
 		}
 	}
 

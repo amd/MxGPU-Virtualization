@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2021-2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv.h"
@@ -96,7 +79,7 @@ static int mi300_get_error_count(struct amdgv_adapter *adapt,
 }
 
 static const struct mi300_ras_cap_entry mi300_ras_cap_table[] = {
-    {0x74A1, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
+	{0x74A1, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
 		 BIT(AMDGV_RAS_BLOCK__GFX) |
 		 BIT(AMDGV_RAS_BLOCK__SDMA) |
 		 BIT(AMDGV_RAS_BLOCK__MMHUB) |
@@ -104,57 +87,48 @@ static const struct mi300_ras_cap_entry mi300_ras_cap_table[] = {
 		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF) |
 		 BIT(AMDGV_RAS_BLOCK__VCN) |
 		 BIT(AMDGV_RAS_BLOCK__JPEG)},
-    {0x74A2, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
+	{0x74A2, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
 		 BIT(AMDGV_RAS_BLOCK__GFX) |
 		 BIT(AMDGV_RAS_BLOCK__SDMA) |
 		 BIT(AMDGV_RAS_BLOCK__MMHUB) |
 		 BIT(AMDGV_RAS_BLOCK__XGMI_WAFL) |
 		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF)},
-    {0x74A8, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
+	{0x74A8, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
 		 BIT(AMDGV_RAS_BLOCK__GFX) |
 		 BIT(AMDGV_RAS_BLOCK__SDMA) |
 		 BIT(AMDGV_RAS_BLOCK__MMHUB) |
 		 BIT(AMDGV_RAS_BLOCK__XGMI_WAFL) |
 		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF)},
-    {0x74A5, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
+	{0x74A5, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
 		 BIT(AMDGV_RAS_BLOCK__GFX) |
 		 BIT(AMDGV_RAS_BLOCK__SDMA) |
 		 BIT(AMDGV_RAS_BLOCK__MMHUB) |
 		 BIT(AMDGV_RAS_BLOCK__XGMI_WAFL) |
 		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF)},
-    {0x74A9, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
+	{0x74A9, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
 		 BIT(AMDGV_RAS_BLOCK__GFX) |
 		 BIT(AMDGV_RAS_BLOCK__SDMA) |
 		 BIT(AMDGV_RAS_BLOCK__MMHUB) |
 		 BIT(AMDGV_RAS_BLOCK__XGMI_WAFL) |
 		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF)},
-    {0x75A0, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
+	{0x75A0, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
 		 BIT(AMDGV_RAS_BLOCK__GFX) |
 		 BIT(AMDGV_RAS_BLOCK__SDMA) |
 		 BIT(AMDGV_RAS_BLOCK__MMHUB) |
 		 BIT(AMDGV_RAS_BLOCK__XGMI_WAFL) |
-		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF) |
-		 BIT(AMDGV_RAS_BLOCK__VCN) |
-		 BIT(AMDGV_RAS_BLOCK__JPEG) |
-		 BIT(AMDGV_RAS_BLOCK__MMSCH)},
-    {0x75A1, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
+		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF)},
+	{0x75A1, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
 		 BIT(AMDGV_RAS_BLOCK__GFX) |
 		 BIT(AMDGV_RAS_BLOCK__SDMA) |
 		 BIT(AMDGV_RAS_BLOCK__MMHUB) |
 		 BIT(AMDGV_RAS_BLOCK__XGMI_WAFL) |
-		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF) |
-		 BIT(AMDGV_RAS_BLOCK__VCN) |
-		 BIT(AMDGV_RAS_BLOCK__JPEG) |
-		 BIT(AMDGV_RAS_BLOCK__MMSCH)},
-    {0x75A3, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
+		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF)},
+	{0x75A3, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
 		 BIT(AMDGV_RAS_BLOCK__GFX) |
 		 BIT(AMDGV_RAS_BLOCK__SDMA) |
 		 BIT(AMDGV_RAS_BLOCK__MMHUB) |
 		 BIT(AMDGV_RAS_BLOCK__XGMI_WAFL) |
-		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF) |
-		 BIT(AMDGV_RAS_BLOCK__VCN) |
-		 BIT(AMDGV_RAS_BLOCK__JPEG) |
-		 BIT(AMDGV_RAS_BLOCK__MMSCH)},
+		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF)},
 };
 
 static uint32_t mi300_get_asic_ras_caps(struct amdgv_adapter *adapt)
@@ -337,13 +311,16 @@ void mi300_ras_query_boot_status(struct amdgv_adapter *adapt, uint32_t num_insta
 	uint32_t reg_data;
 	uint32_t inst_pending_mask;
 	void *context[2];
+	struct amdgv_wait_for_cb_context cb_context = { 0 };
 
 	inst_pending_mask = BIT(num_instances) - 1;
 	context[0] = (void *)adapt;
 	context[1] = (void *)&inst_pending_mask;
 
+	cb_context.ctx = context;
+	cb_context.type = AMDGV_WAIT_FOR_PSP_BOOT_COMPLETE;
 	wait_ret = amdgv_wait_for(adapt, mi300_psp_wait_for_boot_complete_cb,
-				  (void *)context, AMDGV_TIMEOUT(TIMEOUT_RAS_BOOT_STATUS),
+				  &cb_context, AMDGV_TIMEOUT(TIMEOUT_RAS_BOOT_STATUS),
 				  0);
 
 	for (i = 0; i < num_instances; i++) {
@@ -507,7 +484,6 @@ static int mi300_ecc_sw_init(struct amdgv_adapter *adapt)
 	umc_v12_0_set_umc_funcs(adapt);
 	nbio_v7_9_set_ras_funcs(adapt);
 
-	gfx_v9_4_3_set_funcs(adapt);
 	mmhub_v1_8_set_ras_funcs(adapt);
 
 	sdma_v4_4_2_set_ras_funcs(adapt);
@@ -655,10 +631,49 @@ static int mi300_ecc_hw_fini(struct amdgv_adapter *adapt)
 	return 0;
 }
 
-struct amdgv_init_func mi300_ecc_func = {
-	.name = "mi300_ecc_func",
+struct amdgv_init_func mi300_legacy_ecc_func = {
+	.name = "mi300_legacy_ecc_func",
 	.sw_init = mi300_ecc_sw_init,
 	.sw_fini = mi300_ecc_sw_fini,
 	.hw_init = mi300_ecc_hw_init,
 	.hw_fini = mi300_ecc_hw_fini,
+};
+
+static int mi300_ecc_sw_init_ext(struct amdgv_adapter *adapt)
+{
+	struct amdgv_init_func *init_func = &mi300_legacy_ecc_func;
+
+	return init_func->sw_init(adapt);
+}
+
+static int mi300_ecc_sw_fini_ext(struct amdgv_adapter *adapt)
+{
+	struct amdgv_init_func *init_func = &mi300_legacy_ecc_func;
+
+
+	return init_func->sw_fini(adapt);
+}
+
+static int mi300_ecc_hw_init_ext(struct amdgv_adapter *adapt)
+{
+	struct amdgv_init_func *init_func = &mi300_legacy_ecc_func;
+
+
+	return init_func->hw_init(adapt);
+}
+
+static int mi300_ecc_hw_fini_ext(struct amdgv_adapter *adapt)
+{
+	struct amdgv_init_func *init_func = &mi300_legacy_ecc_func;
+
+
+	return init_func->hw_fini(adapt);
+}
+
+struct amdgv_init_func mi300_ecc_func = {
+	.name = "mi300_ecc_func",
+	.sw_init = mi300_ecc_sw_init_ext,
+	.sw_fini = mi300_ecc_sw_fini_ext,
+	.hw_init = mi300_ecc_hw_init_ext,
+	.hw_fini = mi300_ecc_hw_fini_ext,
 };

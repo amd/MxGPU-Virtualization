@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_basetypes.h"
@@ -183,7 +166,7 @@ static uint8_t amdgv_get_safe_fb_addr_ranges(amdgv_dev_t adev, struct amdgv_uni_
 	else
 		rsp_buff->num_ranges = libgv_safe_ranges->num_ranges;
 
-	for (i = 0; i < libgv_safe_ranges->num_ranges; i++) {
+	for (i = 0; i < rsp_buff->num_ranges; i++) {
 		rsp_buff->range[i].start = libgv_safe_ranges->range[i].start;
 		rsp_buff->range[i].size = libgv_safe_ranges->range[i].size;
 	}
@@ -310,10 +293,19 @@ static uint8_t amdgv_get_cper_records(amdgv_dev_t adev, struct amdgv_uni_cmd *cm
 			cmd->version != AMDGV_CMD_VERSION_V1 || !adev)
 		return AMDGV_CMD__ERROR_INVALID_INPUT;
 
+	if (input_data->buf_size == 0 ||
+			input_data->buf_size > AMDGV_CPER_DUMP_MAX_BYTES)
+		return AMDGV_CMD__ERROR_INVALID_INPUT;
+
 	buffer = oss_alloc_memory(input_data->buf_size);
 	if (!buffer) {
 		return AMDGV_CMD__ERROR_GENERIC;
 	}
+
+	/* oss_alloc_memory() does not zero; the CPER fill below writes only the
+	 * bytes actually used, so the unwritten tail copied out at buf_size would
+	 * otherwise leak uninitialised kernel heap to userspace (CWE-200). */
+	oss_memset(buffer, 0, input_data->buf_size);
 
 	r = amdgv_gpumon_cper_get_entries(adev, input_data->rptr, buffer, input_data->buf_size,
 					  &output_data->write_count, &output_data->overflow_count,
@@ -323,7 +315,10 @@ static uint8_t amdgv_get_cper_records(amdgv_dev_t adev, struct amdgv_uni_cmd *cm
 		goto out;
 	}
 
-	oss_copy_to_user(input_data->buf, buffer, input_data->buf_size);
+	if (oss_copy_to_user(input_data->buf, buffer, input_data->buf_size)) {
+		r = AMDGV_CMD__ERROR_GENERIC;
+		goto out;
+	}
 
 	cmd->output_size = sizeof(struct amdgv_get_cper_records_output);
 
@@ -352,12 +347,16 @@ static uint8_t amdgv_load_ras_ta(amdgv_dev_t adev, struct amdgv_uni_cmd *cmd)
 		return AMDGV_CMD__ERROR_GENERIC;
 	}
 
+	if (input_data->data_len > AMDGV_FW_SIZE_MAX)
+		return AMDGV_CMD__ERROR_GENERIC;
+
 	buf_ptr = oss_alloc_memory(input_data->data_len);
 	if (!buf_ptr) {
 		return AMDGV_CMD__ERROR_GENERIC;
 	}
 
-	oss_copy_from_user(buf_ptr, (uint8_t *)input_data->data_addr, input_data->data_len);
+	if (oss_copy_from_user(buf_ptr, (uint8_t *)input_data->data_addr, input_data->data_len))
+		goto load_err;
 
 	if (amdgv_gpumon_ras_get_ta_version(adev, buf_ptr, &ta_version)) {
 		goto load_err;
@@ -575,6 +574,7 @@ static int __amdgv_get_device_info_v1(amdgv_dev_t dev, struct amdgv_cmd_dev_info
 {
 	union amdgv_dev_info dev_info = {0};
 	uint32_t asic_type;
+	uint64_t ecc_enabled_mask = 0;
 
 	if (!amdgv_get_dev_info(dev, AMDGV_GET_BASIC_INFO, &dev_info) &&
 		!amdgv_gpumon_get_asic_type(dev, &asic_type)) {
@@ -593,10 +593,15 @@ static int __amdgv_get_device_info_v1(amdgv_dev_t dev, struct amdgv_cmd_dev_info
 	if (amdgv_gpumon_get_dev_uuid(dev, &amdgv_dev->dev_handle))
 		amdgv_dev->dev_handle = 0;
 
-	if (amdgv_gpumon_get_ecc_support_flag(dev, &amdgv_dev->ecc_enabled,
-			&amdgv_dev->ecc_supported)) {
-				amdgv_dev->ecc_enabled = 0;
-				amdgv_dev->ecc_supported = 0;
+	{
+
+		if (amdgv_gpumon_get_ecc_support_flag(dev, &amdgv_dev->ecc_supported,
+				&ecc_enabled_mask)) {
+			amdgv_dev->ecc_enabled = 0;
+			amdgv_dev->ecc_supported = 0;
+		} else {
+			amdgv_dev->ecc_enabled = (uint32_t)ecc_enabled_mask;
+		}
 	}
 
 	return 0;
@@ -630,6 +635,9 @@ static uint8_t amdgv_get_devices_info(amdgv_dev_t adev, struct amdgv_uni_cmd *cm
 		return AMDGV_CMD__ERROR_INVALID_INPUT;
 
 	oss_get_device_list(dev_list, &dev_num);
+
+	if (dev_num > AMDGV_CMD_MAX_GPU_NUM)
+		dev_num = AMDGV_CMD_MAX_GPU_NUM;
 
 	for (i = 0; i < dev_num; i++) {
 		if (cmd->version == AMDGV_CMD_VERSION_V1)
@@ -680,7 +688,7 @@ static amdgv_cmd_func_map amdgv_ras_func[] = {
 	{AMDGV_CMD_GET_RAS_POLICY_INFO, amdgv_get_ras_policy_info},
 };
 
-uint8_t amdgv_handle_uni_cmd(struct amdgv_uni_cmd *cmd)
+uint8_t amdgv_handle_uni_cmd_ras(struct amdgv_uni_cmd *cmd)
 {
 	static amdgv_cmd_func_map *func = amdgv_ras_func;
 	int i;
@@ -700,4 +708,228 @@ uint8_t amdgv_handle_uni_cmd(struct amdgv_uni_cmd *cmd)
 			return func[i].func(adev, cmd);
 
 	return AMDGV_CMD__ERROR_UKNOWN_CMD;
+}
+
+static uint8_t amdgv_cmd_ual_get_config(amdgv_dev_t adev, struct amdgv_uni_cmd *cmd)
+{
+	struct amdgv_cmd_get_config_rsp_ual_v1 *output_data =
+			(struct amdgv_cmd_get_config_rsp_ual_v1 *)cmd->output_buff_raw;
+	struct amdgv_gpumon_get_config_rsp_ual_v1 config = {0};
+	int ret = AMDGV_CMD__ERROR_GENERIC;
+	
+	if (cmd->input_size != sizeof(struct amdgv_cmd_get_config_req_ual_v1) ||
+			cmd->version != AMDGV_CMD_VERSION_V1 || !adev)
+		return AMDGV_CMD__ERROR_INVALID_INPUT;
+
+	if (sizeof(struct amdgv_cmd_get_config_rsp_ual_v1) > sizeof(cmd->output_buff_raw))
+		return AMDGV_CMD__ERROR_INVALID_INPUT;
+
+	ret = amdgv_gpumon_ual_get_config(adev, &config);
+	if (ret)
+		return AMDGV_CMD__ERROR_GENERIC;
+
+	output_data->link_type = config.link_type;
+	output_data->accelerator_id = config.accelerator_id;
+	oss_memcpy(output_data->ppod_id, config.ppod_id, sizeof(output_data->ppod_id));
+	output_data->ppod_size = config.ppod_size;
+	output_data->bandwidth = config.bandwidth;
+	output_data->latency = config.latency;
+	output_data->vpod_id = config.vpod_id;
+	output_data->vpod_size = config.vpod_size;
+	oss_memcpy(output_data->vpod_active_accelerators,
+		config.vpod_active_accelerators,
+		sizeof(output_data->vpod_active_accelerators));
+	output_data->addr_mode = config.addr_mode;
+	output_data->accel_state = config.accel_state;
+
+	cmd->output_size = sizeof(struct amdgv_cmd_get_config_rsp_ual_v1);
+
+	return AMDGV_CMD__SUCCESS;
+}
+
+static uint8_t amdgv_cmd_ual_set_ppod_config(amdgv_dev_t adev, struct amdgv_uni_cmd *cmd)
+{
+	struct amdgv_cmd_set_ppod_config_req_ual_v1 *input_data =
+			(struct amdgv_cmd_set_ppod_config_req_ual_v1 *)cmd->input_buff_raw;
+	struct amdgv_gpumon_set_ppod_config_req_ual_v1 config = {0};
+	int ret = AMDGV_CMD__ERROR_GENERIC;
+
+	if (cmd->input_size != sizeof(struct amdgv_cmd_set_ppod_config_req_ual_v1) ||
+			cmd->version != AMDGV_CMD_VERSION_V1 || !adev)
+		return AMDGV_CMD__ERROR_INVALID_INPUT;
+
+	config.accelerator_id = input_data->accelerator_id;
+	oss_memcpy(config.ppod_id, input_data->ppod_id, sizeof(config.ppod_id));
+	config.ppod_size = input_data->ppod_size;
+	config.bandwidth = input_data->bandwidth;
+	config.latency = input_data->latency;
+	oss_memcpy(config.local_accelerators, input_data->local_accelerators,
+			sizeof(config.local_accelerators));
+
+	ret = amdgv_gpumon_ual_set_ppod_config(adev, &config);
+	if (ret)
+		return AMDGV_CMD__ERROR_GENERIC;
+
+	return AMDGV_CMD__SUCCESS;
+}
+
+static uint8_t amdgv_cmd_ual_set_vpod_config(amdgv_dev_t adev, struct amdgv_uni_cmd *cmd)
+{
+	struct amdgv_cmd_set_vpod_config_req_ual_v1 *input_data =
+		(struct amdgv_cmd_set_vpod_config_req_ual_v1 *)cmd->input_buff_raw;
+	struct amdgv_gpumon_set_vpod_config_req_ual_v1 config = {0};
+	int ret = AMDGV_CMD__ERROR_GENERIC;
+	
+	if (cmd->input_size != sizeof(struct amdgv_cmd_set_vpod_config_req_ual_v1) ||
+			cmd->version != AMDGV_CMD_VERSION_V1 || !adev)
+		return AMDGV_CMD__ERROR_INVALID_INPUT;
+
+	config.addr_mode = input_data->addr_mode;
+	config.vpod_id = input_data->vpod_id;
+	config.vpod_size = input_data->vpod_size;
+	oss_memcpy(config.vpod_active_accelerators,
+		input_data->vpod_active_accelerators,
+		sizeof(config.vpod_active_accelerators));
+
+	ret = amdgv_gpumon_ual_set_vpod_config(adev, &config);
+	if (ret)
+		return AMDGV_CMD__ERROR_GENERIC;
+
+	return AMDGV_CMD__SUCCESS;
+}
+
+static uint8_t amdgv_cmd_ual_set_station_config(amdgv_dev_t adev, struct amdgv_uni_cmd *cmd)
+{
+	struct amdgv_cmd_set_station_config_req_ual_v1 *input_data =
+		(struct amdgv_cmd_set_station_config_req_ual_v1 *)cmd->input_buff_raw;
+	struct amdgv_gpumon_set_station_config_req_ual_v1 config = {0};
+	int ret = AMDGV_CMD__ERROR_GENERIC;
+	
+	if (cmd->input_size != sizeof(struct amdgv_cmd_set_station_config_req_ual_v1) ||
+			cmd->version != AMDGV_CMD_VERSION_V1 || !adev)
+		return AMDGV_CMD__ERROR_INVALID_INPUT;
+
+	config.num_stations = input_data->num_stations;
+	config.station_flag = input_data->station_flag;
+	oss_memcpy(config.lane_en_bitmap,
+		input_data->lane_en_bitmap,
+		sizeof(config.lane_en_bitmap));
+
+	ret = amdgv_gpumon_ual_set_station_config(adev, &config);
+	if (ret)
+		return AMDGV_CMD__ERROR_GENERIC;
+
+	return AMDGV_CMD__SUCCESS;
+}
+
+static uint8_t amdgv_cmd_ual_pause(amdgv_dev_t adev, struct amdgv_uni_cmd *cmd)
+{
+	int ret = AMDGV_CMD__ERROR_GENERIC;
+
+	if (cmd->input_size != sizeof(struct amdgv_cmd_pause_req_ual_v1) ||
+			cmd->version != AMDGV_CMD_VERSION_V1 || !adev)
+		return AMDGV_CMD__ERROR_INVALID_INPUT;
+
+	ret = amdgv_gpumon_ual_pause(adev);
+	if (ret)
+		return AMDGV_CMD__ERROR_GENERIC;
+
+	return AMDGV_CMD__SUCCESS;
+}
+
+static uint8_t amdgv_cmd_ual_resume(amdgv_dev_t adev, struct amdgv_uni_cmd *cmd)
+{
+	int ret = AMDGV_CMD__ERROR_GENERIC;
+
+	if (cmd->input_size != sizeof(struct amdgv_cmd_resume_req_ual_v1) ||
+			cmd->version != AMDGV_CMD_VERSION_V1 || !adev)
+		return AMDGV_CMD__ERROR_INVALID_INPUT;
+
+	ret = amdgv_gpumon_ual_resume(adev);
+	if (ret)
+		return AMDGV_CMD__ERROR_GENERIC;
+
+	return AMDGV_CMD__SUCCESS;
+}
+
+static uint8_t amdgv_cmd_ual_trigger_mode2(amdgv_dev_t adev, struct amdgv_uni_cmd *cmd)
+{
+	int ret = AMDGV_CMD__ERROR_GENERIC;
+
+	if (cmd->input_size != sizeof(struct amdgv_cmd_trigger_mode2_req_ual_v1) ||
+			cmd->version != AMDGV_CMD_VERSION_V1 || !adev)
+		return AMDGV_CMD__ERROR_INVALID_INPUT;
+
+	ret = amdgv_gpumon_ual_trigger_mode2(adev);
+	if (ret)
+		return AMDGV_CMD__ERROR_GENERIC;
+
+	return AMDGV_CMD__SUCCESS;
+}
+
+static uint8_t amdgv_cmd_ual_query_interface_version(amdgv_dev_t adev, struct amdgv_uni_cmd *cmd)
+{
+	struct amdgv_cmd_query_interface_version_rsp_ual *ver_rsp =
+		(struct amdgv_cmd_query_interface_version_rsp_ual *)cmd->output_buff_raw;
+	int ret;
+
+	ret = amdgv_gpumon_ual_get_interface_version(adev, &ver_rsp->intf_ver);
+	if (ret)
+		return AMDGV_CMD__ERROR_GENERIC;
+
+	cmd->output_size = sizeof(struct amdgv_cmd_query_interface_version_rsp_ual);
+
+	return AMDGV_CMD__SUCCESS;
+}
+
+static uint8_t amdgv_cmd_ual_get_devices_info(amdgv_dev_t adev, struct amdgv_uni_cmd *cmd)
+{
+	return amdgv_get_devices_info(adev, cmd);
+}
+
+static amdgv_cmd_func_map amdgv_cmd_ual_func[] = {
+	{AMDGV_CMD_UAL_QUERY_INTERFACE_VERSION, amdgv_cmd_ual_query_interface_version},
+	{AMDGV_CMD_UAL_GET_DEVICES_INFO, amdgv_cmd_ual_get_devices_info},
+	{AMDGV_CMD_UAL_GET_CONFIG, amdgv_cmd_ual_get_config},
+	{AMDGV_CMD_UAL_SET_PPOD_CONFIG, amdgv_cmd_ual_set_ppod_config},
+	{AMDGV_CMD_UAL_SET_VPOD_CONFIG, amdgv_cmd_ual_set_vpod_config},
+	{AMDGV_CMD_UAL_SET_STATION_CONFIG, amdgv_cmd_ual_set_station_config},
+	{AMDGV_CMD_UAL_PAUSE, amdgv_cmd_ual_pause},
+	{AMDGV_CMD_UAL_RESUME, amdgv_cmd_ual_resume},
+	{AMDGV_CMD_UAL_TRIGGER_MODE2, amdgv_cmd_ual_trigger_mode2},
+};
+
+uint8_t amdgv_handle_uni_cmd_ual(struct amdgv_uni_cmd *cmd)
+{
+	static amdgv_cmd_func_map *func = amdgv_cmd_ual_func;
+	int i;
+	amdgv_dev_t adev = NULL;
+
+	if (cmd->cmd_id != AMDGV_CMD_UAL_GET_DEVICES_INFO) {
+		struct amdgv_cmd_dev_handle *input_data =
+			(struct amdgv_cmd_dev_handle *)cmd->input_buff_raw;
+		adev = amdgv_get_dev_by_handle(input_data->dev_handle);
+		if (!adev)
+			return AMDGV_CMD__ERROR_GENERIC;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(amdgv_cmd_ual_func); i++)
+		if (func[i].cmd_id == cmd->cmd_id)
+			return func[i].func(adev, cmd);
+
+	return AMDGV_CMD__ERROR_UKNOWN_CMD;
+}
+
+uint8_t amdgv_handle_uni_cmd(struct amdgv_uni_cmd *cmd)
+{
+	uint32_t cmd_type = cmd->cmd_id & 0xFF000000;
+
+	switch (cmd_type) {
+	case AMDGV_UNI_RAS_IOCTL:
+		return amdgv_handle_uni_cmd_ras(cmd);
+	case AMDGV_UAL_IOCTL:
+		return amdgv_handle_uni_cmd_ual(cmd);
+	default:
+		return AMDGV_CMD__ERROR_UKNOWN_CMD;
+	}
 }

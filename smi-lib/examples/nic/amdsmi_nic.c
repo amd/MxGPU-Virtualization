@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <stdio.h>
@@ -28,12 +11,13 @@
 int main(void)
 {
 	amdsmi_nic_driver_info_t driver_info;
+	amdsmi_nic_fw_info_t fw_info;
 	amdsmi_nic_asic_info_t asic_info;
 	amdsmi_nic_port_info_t port_info;
 	amdsmi_nic_bus_info_t bus_info;
 	amdsmi_nic_numa_info_t numa_info;
 	amdsmi_nic_rdma_devices_info_t nic_rdma_devices_info;
-	amdsmi_nic_link_type_t nic_link_type;
+	amdsmi_link_type_t nic_link_type;
 	amdsmi_socket_handle socket_handle = NULL;
 	uint32_t nic_count = 0;
 	uint32_t gpu_count = 0;
@@ -148,6 +132,22 @@ int main(void)
 			asic_info.vendor_name
 		);
 
+		ret = amdsmi_get_nic_fw_info(nic_handles[i], &fw_info);
+		if (ret != AMDSMI_STATUS_SUCCESS) {
+			fprintf(stderr, "Failed to get NIC firmware info for NIC %u: %d\n", i, ret);
+			continue;
+		}
+		printf("Firmware (%u entries):\n", fw_info.num_fw);
+		for (uint32_t j = 0; j < fw_info.num_fw; j++) {
+			const char *type_str = "unknown";
+			switch (fw_info.fw[j].type) {
+			case AMDSMI_NIC_FW_VERSION_TYPE_FIXED:   type_str = "fixed";   break;
+			case AMDSMI_NIC_FW_VERSION_TYPE_RUNNING: type_str = "running"; break;
+			case AMDSMI_NIC_FW_VERSION_TYPE_STORED:  type_str = "stored";  break;
+			}
+			printf("\t [%s] %s: %s\n", type_str, fw_info.fw[j].name, fw_info.fw[j].version);
+		}
+
 		ret = amdsmi_get_nic_bus_info(nic_handles[i], &bus_info);
 		if (ret != AMDSMI_STATUS_SUCCESS) {
 			fprintf(stderr, "Failed to get NIC bus info for NIC %u: %d\n", i, ret);
@@ -175,18 +175,18 @@ int main(void)
 		if (gpu_handles != NULL && gpu_count > 0) {
 			printf("NIC-GPU Link Topology:\n");
 			for (uint32_t j = 0; j < gpu_count; j++) {
-				ret = amdsmi_topo_get_nic_link_type(nic_handles[i], gpu_handles[j], &nic_link_type);
+				ret = amdsmi_topo_get_link_type(nic_handles[i], gpu_handles[j], NULL, &nic_link_type);
 				if (ret == AMDSMI_STATUS_SUCCESS) {
 					const char *link_type_str;
 					switch (nic_link_type) {
-					case AMDSMI_NIC_LINK_TYPE_PCIE:
+					case AMDSMI_LINK_TYPE_PCIE:
 						link_type_str = "PCIE";
 						break;
-					case AMDSMI_NIC_LINK_TYPE_NUMA:
+					case AMDSMI_LINK_TYPE_NUMA:
 						link_type_str = "NUMA";
 						break;
-					case AMDSMI_NIC_LINK_TYPE_X_NUMA:
-						link_type_str = "X-NUMA";
+					case AMDSMI_LINK_TYPE_XNUMA:
+						link_type_str = "XNUMA";
 						break;
 					default:
 						link_type_str = "UNKNOWN";

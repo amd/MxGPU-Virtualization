@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv.h>
@@ -61,7 +44,7 @@ int mi300_psp_ring_destroy(struct amdgv_adapter *adapt)
 
 	/* Wait for response flag (bit 31) in C2PMSG_64 */
 	wait_ret = amdgv_wait_for_register(
-		adapt, SOC15_REG_OFFSET(MP0, psp->idx, regMP0_SMN_C2PMSG_64), mask, flag,
+		adapt, SOC15_REG_OFFSET_NAME(MP0, psp->idx, regMP0_SMN_C2PMSG_64), mask, flag,
 		AMDGV_TIMEOUT(TIMEOUT_PSP_REG), AMDGV_WAIT_CHECK_EQ, 0);
 
 	if (wait_ret)
@@ -86,7 +69,7 @@ enum psp_status mi300_psp_ring_start(struct amdgv_adapter *adapt)
 	/* Wait for TOS ready for ring creation */
 	for (i = 0; i < adapt->mcp.num_aid; i++) {
 		ret = amdgv_psp_wait_for_register(
-			adapt, SOC15_REG_OFFSET(MP0, i, regMP0_SMN_C2PMSG_64), 0x80000000,
+			adapt, SOC15_REG_OFFSET_NAME(MP0, i, regMP0_SMN_C2PMSG_64), 0x80000000,
 			0x80000000, false, AMDGV_WAIT_FLAG_FORCE_YIELD);
 
 		if (ret != PSP_STATUS__SUCCESS) {
@@ -116,7 +99,7 @@ enum psp_status mi300_psp_ring_start(struct amdgv_adapter *adapt)
 
 	/* Wait for response flag (bit 31) in C2PMSG_64 */
 	ret = amdgv_psp_wait_for_register(
-		adapt, SOC15_REG_OFFSET(MP0, psp->idx, regMP0_SMN_C2PMSG_64), 0x80000000,
+		adapt, SOC15_REG_OFFSET_NAME(MP0, psp->idx, regMP0_SMN_C2PMSG_64), 0x80000000,
 		0x8000FFFF, false, AMDGV_WAIT_FLAG_FORCE_YIELD);
 
 	if (ret != PSP_STATUS__SUCCESS)
@@ -146,7 +129,7 @@ mi300_psp_bootloader_load_component(struct amdgv_adapter *adapt, const unsigned 
 
 	/* wait for loading completed */
 	if (amdgv_psp_wait_for_register(
-		    adapt, SOC15_REG_OFFSET(MP0, psp->idx, regMP0_SMN_C2PMSG_35), 0x80000000,
+		    adapt, SOC15_REG_OFFSET_NAME(MP0, psp->idx, regMP0_SMN_C2PMSG_35), 0x80000000,
 		    0x80000000, false, AMDGV_WAIT_FLAG_FORCE_YIELD) != PSP_STATUS__SUCCESS) {
 		return PSP_STATUS__ERROR_GENERIC;
 	}
@@ -304,10 +287,8 @@ enum psp_status mi300_psp_load_sos(struct amdgv_adapter *adapt, unsigned const c
 	 * PSP drv_sys and sOS are loaded, alive and ready to respond
 	 * to GFX mailbox (commands from host and VMs)
 	 */
-	if (mi300_psp_wait_sos_loaded_status(adapt) == false) {
-		AMDGV_ERROR("TIMEOUT waiting for PSP tOS sign-of-life\n");
+	if (mi300_psp_wait_sos_loaded_status(adapt, 0) == false)
 		return PSP_STATUS__ERROR_GENERIC;
-	}
 
 	fw_ver = ((struct psp_fw_image_header *)(fw_image))->image_version;
 
@@ -343,11 +324,6 @@ static enum psp_status mi300_psp_program_register(struct amdgv_adapter *adapt, u
 	program_reg_cmd->cmd.program_reg.target_vfid = idx_vf;
 
 	ret = amdgv_psp_cmd_km_submit(adapt, program_reg_cmd, NULL);
-
-	if (ret != PSP_STATUS__SUCCESS) {
-		AMDGV_ERROR("PSP: Failed to Write Register %d\n", reg_id);
-		ret = PSP_STATUS__ERROR_GENERIC;
-	}
 
 	/* Clear system memory used for Program Reg CMD */
 	oss_memset(program_reg_cmd, 0, sizeof(struct psp_cmd_km));
@@ -472,11 +448,6 @@ static enum psp_status mi300_psp_set_mb_int(struct amdgv_adapter *adapt, uint32_
 		}
 	}
 
-	if (ret != PSP_STATUS__SUCCESS) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_VFGATE_FAIL, 0);
-		ret = PSP_STATUS__ERROR_GENERIC;
-	}
-
 	/* Clear system memory used for VFGATE CMD */
 	oss_memset(vfgate_cmd, 0, sizeof(struct psp_cmd_km));
 
@@ -516,11 +487,7 @@ static enum psp_status mi300_psp_get_mb_int_status(struct amdgv_adapter *adapt,
 	vfgate_cmd->cmd.vfgate.action = GFX_SCMD_VFGATE_STATUS;
 
 	ret = amdgv_psp_cmd_km_submit(adapt, vfgate_cmd, &psp_resp);
-
-	if (ret != PSP_STATUS__SUCCESS) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_VFGATE_FAIL, 0);
-		ret = PSP_STATUS__ERROR_GENERIC;
-	} else {
+	if (ret == PSP_STATUS__SUCCESS) {
 		if (psp_resp.sriov_mbstatus & SRIOV_MBSTATUS_ISENABLED_MASK)
 				mb_status->vf_gate_enabled = true;
 		else
@@ -555,14 +522,6 @@ static enum psp_status mi300_psp_clear_vf_fw(struct amdgv_adapter *adapt, uint32
 
 	psp_resp.status = 0xdeadbeef;
 	ret = amdgv_psp_cmd_km_submit(adapt, &psp_cmd, &psp_resp);
-
-	if (ret != PSP_STATUS__SUCCESS || psp_resp.status != 0) {
-		AMDGV_INFO("PSP: failed to submit GFX_CMD_ID_CLEAR_VF_FW "
-			   "(gfx_cmd_resp=0x%08x)\n",
-			   psp_resp.status);
-		ret = PSP_STATUS__ERROR_GENERIC;
-	}
-
 	return ret;
 }
 
@@ -587,13 +546,6 @@ static enum psp_status mi300_psp_set_num_vfs(struct amdgv_adapter *adapt, uint32
 
 	psp_resp.status = 0xdeadbeef;
 	ret = amdgv_psp_cmd_km_submit(adapt, &psp_cmd, &psp_resp);
-
-	if (ret != PSP_STATUS__SUCCESS || psp_resp.status != 0) {
-		AMDGV_INFO("PSP: failed to submit GFX_CMD_ID_NUM_ENABLED_VFS "
-			   "(gfx_cmd_resp=0x%08x)\n",
-			   psp_resp.status);
-		ret = PSP_STATUS__ERROR_GENERIC;
-	}
 
 	return ret;
 }
@@ -648,12 +600,13 @@ enum psp_status mi300_psp_fb_addr_bound_check(struct amdgv_adapter *adapt, uint6
 	lower_bound = (adapt->memmgr_pf).mc_base +
 		      ((config_memsize - amdgv_vbios_get_fw_reserved_size(adapt)) << 20);
 
-	AMDGV_INFO("Calclated psp fb upper bound is %llx, Lower bound is %llx\n", upper_bound,
+	AMDGV_DEBUG("Calculated psp fb upper bound is %llx, Lower bound is %llx\n", upper_bound,
 		    lower_bound);
 
 	if ((fb_addr < lower_bound) || (fb_addr > upper_bound)) {
 		AMDGV_ERROR("Fb address 0x%llx out of bound, psp reserved fb is 0x%llx - 0x%llx.\n",
 			fb_addr, lower_bound, upper_bound);
+		return PSP_STATUS__ERROR_GENERIC;
 	}
 
 	return PSP_STATUS__SUCCESS;
@@ -675,10 +628,8 @@ enum psp_status mi300_psp_get_fw_attestation_database_addr(struct amdgv_adapter 
 
 		(adapt->psp).attestation_db_gpu_addr += adapt->mc_fb_loc_addr;
 
-		if (ret != PSP_STATUS__SUCCESS) {
-			AMDGV_ERROR("Failed to get fw attestation address.\n");
+		if (ret != PSP_STATUS__SUCCESS)
 			return PSP_STATUS__ERROR_GENERIC;
-		}
 	}
 	// FW attestation mc_address bound check
 	ret = mi300_psp_fb_addr_bound_check(adapt, (adapt->psp).attestation_db_gpu_addr,
@@ -694,9 +645,9 @@ enum psp_status mi300_psp_get_fw_attestation_database_addr(struct amdgv_adapter 
 					  roundup(sizeof(struct FWMAN_DB_HEADER), AMDGV_GPU_PAGE_SIZE),
 					  (uint64_t *)&cpu_addr) == 0) {
 		(adapt->psp).attestation_db_cpu_addr = cpu_addr;
-		AMDGV_INFO("cpu addr is %x.\n", cpu_addr);
+		AMDGV_DEBUG("cpu addr is %x.\n", cpu_addr);
 	} else {
-		AMDGV_INFO("Acquire frame buffer cpu virtual address failed, cpu virtual "
+		AMDGV_ERROR("Acquire frame buffer cpu virtual address failed, cpu virtual "
 			    "addr is NULL.\n");
 		ret = PSP_STATUS__ERROR_GENERIC;
 	}
@@ -754,10 +705,8 @@ enum psp_status mi300_psp_get_fw_attestation_info(struct amdgv_adapter *adapt, u
 	}
 
 	// Skip pf, information for pf is saved in adapt->psp.fw_info during load fw
-	if (idx_vf == AMDGV_PF_IDX) {
-		AMDGV_INFO("Skip get FW info for PF, PF info saved during load FW.\n");
+	if (idx_vf == AMDGV_PF_IDX)
 		return ret;
-	}
 
 	// Check if fw attestation database address is available
 	if (!pDb) {
@@ -850,16 +799,15 @@ mi300_psp_set_accelerator_partition_mode(struct amdgv_adapter *adapt,
 	 * 8VF		CPX			CPX			CPX
 	 */
 	if (adapt->mcp.accelerator_partition_mode == 0 ||
-		mi300_nbio_is_partition_mode_combination_supported(
+		amdgv_nbio_is_partition_mode_supported(
 			adapt, adapt->mcp.memory_partition_mode,
 			accelerator_partition_mode) == false) {
 		AMDGV_WARN("accelerator_partition_mode=%u is not supported. "
 			"setting to default mode for %uVF and NPS%u mode\n",
 			accelerator_partition_mode, adapt->num_vf,
 			adapt->mcp.memory_partition_mode);
-		accelerator_partition_mode =
-			mi300_nbio_get_accelerator_partition_mode_default_setting(adapt,
-				adapt->mcp.memory_partition_mode);
+		accelerator_partition_mode = amdgv_nbio_get_default_accel_partition_mode(adapt,
+						adapt->mcp.memory_partition_mode);
 		if (!accelerator_partition_mode) {
 			AMDGV_ERROR(
 				"failed to set default accelerator partition mode for %uVF\n",
@@ -872,15 +820,8 @@ mi300_psp_set_accelerator_partition_mode(struct amdgv_adapter *adapt,
 	psp_cmd.cmd.sriov_spatial_part.mode = accelerator_partition_mode;
 	psp_resp.status = 0xdeadbeef;
 	ret = amdgv_psp_cmd_km_submit(adapt, &psp_cmd, &psp_resp);
-
-	if (ret != PSP_STATUS__SUCCESS || psp_resp.status != 0) {
-		AMDGV_ERROR("PSP: failed to submit GFX_CMD_ID_SRIOV_SPATIAL_PART "
-				"%uVF, number_of_xcps=%u "
-				"(gfx_cmd_resp=0x%08x)\n",
-				adapt->num_vf, psp_cmd.cmd.sriov_spatial_part.mode,
-				psp_resp.status);
-		return PSP_STATUS__ERROR_GENERIC;
-	}
+	if (ret)
+		return ret;
 
 	/* save accelerator partition mode setting */
 	adapt->mcp.accelerator_partition_mode = accelerator_partition_mode;
@@ -916,15 +857,8 @@ enum psp_status mi300_psp_set_memory_partition_mode(struct amdgv_adapter *adapt,
 	psp_cmd.cmd.sriov_memory_part.num_parts = memory_partition_mode;
 	psp_resp.status = 0xdeadbeef;
 	ret = amdgv_psp_cmd_km_submit(adapt, &psp_cmd, &psp_resp);
-
-	if (ret != PSP_STATUS__SUCCESS || psp_resp.status != 0) {
-		AMDGV_ERROR("PSP: failed to submit GFX_CMD_ID_NPS_MODE "
-				"NPS%u mode "
-				"(gfx_cmd_resp=0x%08x)\n",
-				psp_cmd.cmd.sriov_memory_part.num_parts,
-				psp_resp.status);
-		return PSP_STATUS__ERROR_GENERIC;
-	}
+	if (ret)
+		return ret;
 
 	/* save the memory partition mode setting */
 	adapt->mcp.memory_partition_mode = memory_partition_mode;
@@ -932,7 +866,7 @@ enum psp_status mi300_psp_set_memory_partition_mode(struct amdgv_adapter *adapt,
 	oss_schedule_work(adapt->dev, save_memory_partition_mode,
 			(void *)adapt);
 
-	AMDGV_INFO(
+	AMDGV_DEBUG(
 		"PSP: GFX_CMD_ID_NPS_MODE NPS%u mode\n",
 		memory_partition_mode);
 
@@ -947,8 +881,7 @@ static enum psp_status mi300_psp_check_memory_partition_mode(
 	const struct amdgv_nps_compute_combination *supported_combinations_for_num_vf;
 	enum amdgv_accelerator_partition_mode default_compute_mode;
 
-	ret = mi300_nbio_get_nps_mode(
-		adapt, &curr_memory_partition_mode);
+	ret = amdgv_nbio_get_nps_mode(adapt, &curr_memory_partition_mode);
 	if (ret) {
 		AMDGV_ERROR("failed to get current NPS mode\n");
 		return PSP_STATUS__ERROR_GENERIC;
@@ -963,8 +896,8 @@ static enum psp_status mi300_psp_check_memory_partition_mode(
 		 */
 		if (adapt->mcp.accelerator_partition_mode == AMDGV_ACCELERATOR_PARTITION_MODE_MAX) {
 			adapt->mcp.accelerator_partition_mode =
-				mi300_nbio_get_accelerator_partition_mode_default_setting(
-					adapt, curr_memory_partition_mode);
+				amdgv_nbio_get_default_accel_partition_mode(adapt,
+					curr_memory_partition_mode);
 			if (!adapt->mcp.accelerator_partition_mode) {
 				AMDGV_ERROR(
 					"failed to set default accelerator partition mode for %uVF\n",
@@ -991,13 +924,12 @@ static enum psp_status mi300_psp_check_memory_partition_mode(
 	 * VFs, set it to the first supported memory partition mode for the requested accelerator
 	 * partition mode.
 	 */
-	if (mi300_nbio_is_partition_mode_combination_supported(adapt,
+	if (amdgv_nbio_is_partition_mode_supported(adapt,
 			adapt->mcp.memory_partition_mode,
 			adapt->mcp.accelerator_partition_mode) == false) {
 
 		/* Check if the combination is supported in the capability table */
-		supported_combinations_for_num_vf = mi300_nbio_get_asic_nps_caps(adapt);
-		if (!supported_combinations_for_num_vf) {
+		if (amdgv_nbio_get_asic_nps_caps(adapt, &supported_combinations_for_num_vf)) {
 			AMDGV_ERROR("No supported accelerator and memory modes found for %VF\n",
 				adapt->num_vf);
 			return PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
@@ -1020,7 +952,7 @@ static enum psp_status mi300_psp_check_memory_partition_mode(
 			 */
 			if (adapt->mcp.memory_partition_mode == AMDGV_MEMORY_PARTITION_MODE_UNKNOWN) {
 				default_compute_mode =
-					mi300_nbio_get_accelerator_partition_mode_default_setting(adapt,
+					amdgv_nbio_get_default_accel_partition_mode(adapt,
 						supported_combinations_for_num_vf[0].nps_mode);
 				AMDGV_WARN("memory partition mode=NPS%u and accelerator partition "
 					"mode=%s is not valid for %uVF. Fallback to accelerator "
@@ -1072,13 +1004,6 @@ mi300_psp_copy_vf_chiplet_regs(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	psp_resp.status = 0xdeadbeef;
 	ret = amdgv_psp_cmd_km_submit(adapt, &psp_cmd, &psp_resp);
 
-	if (ret != PSP_STATUS__SUCCESS || psp_resp.status != 0) {
-		AMDGV_INFO("PSP: failed to submit PSP_CMD_KM_TYPE__SRIOV_COPY_VF_CHIPLET_REGS "
-			   "(gfx_cmd_resp=0x%08x)\n",
-			   psp_resp.status);
-		ret = PSP_STATUS__ERROR_GENERIC;
-	}
-
 	return ret;
 }
 
@@ -1095,6 +1020,8 @@ static enum psp_status mi300_psp_dfc_check_guest_version(struct amdgv_adapter *a
 	/* GFX_FW_TYPE_DRIVER_VERSION 63 */
 	if (adapt->psp.dfc_fw != NULL) {
 		total_entries = adapt->psp.dfc_fw->header.dfc_fw_total_entries;
+		if (total_entries > DFC_FW_MAX_NUMBER_OF_ENTRIES)
+			total_entries = DFC_FW_MAX_NUMBER_OF_ENTRIES;
 		for (i = 0; i < total_entries; i++) {
 			if (adapt->psp.dfc_fw->data[i].dfc_fw_type == 63 &&
 				adapt->psp.dfc_fw->data[i].verification_enabled == 0) {
@@ -1163,11 +1090,12 @@ static int mi300_psp_wait_sos_loaded_status_cb(void *context)
 	return !((reg_val != 0 && reg_val != PSP_REGISTER_VALUE_INVALID && reg_val != *value));
 }
 
-bool mi300_psp_wait_sos_loaded_status(struct amdgv_adapter *adapt)
+bool mi300_psp_wait_sos_loaded_status(struct amdgv_adapter *adapt, uint32_t wait_flag)
 {
 	uint32_t value;
 	void *context_array[2] = { (void *)adapt, 0 }; /* param for amdgv_wait_for */
 	int wait_ret;
+	struct amdgv_wait_for_cb_context cb_context = { 0 };
 
 	/* If PSP TOS is loaded and alive, C2P 81 will be incrementing
 	 *  (PSP Sign of Life / increments once per 100ms)
@@ -1177,8 +1105,10 @@ bool mi300_psp_wait_sos_loaded_status(struct amdgv_adapter *adapt)
 
 	oss_msleep(100); /* this sleep is REQUIRED since TOS may just starting */
 
+	cb_context.ctx = context_array;
+	cb_context.type = AMDGV_WAIT_FOR_PSP_TOS_LOADED_STATUS;
 	wait_ret = amdgv_wait_for(adapt, mi300_psp_wait_sos_loaded_status_cb,
-				  (void *)context_array, AMDGV_TIMEOUT(TIMEOUT_PSP_REG), 0);
+				  &cb_context, AMDGV_TIMEOUT(TIMEOUT_PSP_REG), wait_flag);
 	if (!wait_ret)
 		return true;
 	else
@@ -1207,18 +1137,13 @@ enum psp_status mi300_psp_dump_tracelog(struct amdgv_adapter *adapt, uint64_t bu
 	dump_tracelog_cmd->cmd.dump_tracelog.size = buf_size;
 
 	ret = amdgv_psp_cmd_km_submit(adapt, dump_tracelog_cmd, &psp_resp);
-
 	if (ret == PSP_STATUS__SUCCESS)
 		*buf_used_size = psp_resp.info;
 	else {
 		*buf_used_size = 0;
-		if (psp_resp.status == PSP_KM_TEE_ERROR_NOT_SUPPORTED)
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_NOT_SUPPORTED_FEATURE, 0);
-		else
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_GET_PSP_TRACELOG_FAIL,
-					psp_resp.status);
 	}
-	AMDGV_INFO("Addr: 0x%08lx%08lx size=0x%x rsp.info=0x%x rsp.st=0x%x\n",
+
+	AMDGV_DEBUG("Addr: 0x%08lx%08lx size=0x%x rsp.info=0x%x rsp.st=0x%x\n",
 		   dump_tracelog_cmd->cmd.dump_tracelog.addr_hi,
 		   dump_tracelog_cmd->cmd.dump_tracelog.addr_lo,
 		   dump_tracelog_cmd->cmd.dump_tracelog.size, psp_resp.info, psp_resp.status);
@@ -1247,17 +1172,7 @@ enum psp_status mi300_psp_set_snapshot_addr(struct amdgv_adapter *adapt, uint64_
 
 	ret = amdgv_psp_cmd_km_submit(adapt, snapshot_set_addr_cmd, &psp_resp);
 
-	if (ret != PSP_STATUS__SUCCESS) {
-		if (psp_resp.status == PSP_KM_TEE_ERROR_NOT_SUPPORTED) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_NOT_SUPPORTED_FEATURE, 0);
-			ret = PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
-		} else {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_SET_SNAPSHOT_ADDR_FAIL,
-					psp_resp.status);
-		}
-	}
-
-	AMDGV_INFO("Addr: 0x%08lx%08lx size=0x%x rsp.info=0x%x rsp.st=0x%x\n",
+	AMDGV_DEBUG("Addr: 0x%08lx%08lx size=0x%x rsp.info=0x%x rsp.st=0x%x\n",
 		   snapshot_set_addr_cmd->cmd.dbg_snapshot_setaddr.addr_hi,
 		   snapshot_set_addr_cmd->cmd.dbg_snapshot_setaddr.addr_lo,
 		   snapshot_set_addr_cmd->cmd.dbg_snapshot_setaddr.size, psp_resp.info,
@@ -1294,21 +1209,15 @@ enum psp_status mi300_psp_trigger_snapshot(struct amdgv_adapter *adapt, uint32_t
 		*buf_used_size = psp_resp.info;
 	} else {
 		*buf_used_size = 0;
-		if (psp_resp.status == PSP_KM_TEE_ERROR_NOT_SUPPORTED) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_NOT_SUPPORTED_FEATURE, 0);
-			ret = PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
-		} else {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_SNAPSHOT_TRIGGER_FAIL,
-					psp_resp.status);
-		}
 	}
 
-	AMDGV_INFO("sections: 0x%x target_vfid=0x%x iod_mask=0x%x inst_mask=0x%x rsp.info=0x%x rsp.st=0x%x\n",
-			snapshot_trigger_cmd->cmd.dbg_snapshot_trigger.sections,
-			snapshot_trigger_cmd->cmd.dbg_snapshot_trigger.target_vfid,
-			snapshot_trigger_cmd->cmd.dbg_snapshot_trigger.aid_mask,
-			snapshot_trigger_cmd->cmd.dbg_snapshot_trigger.xcc_mask,
-			psp_resp.info, psp_resp.status);
+	AMDGV_DEBUG("sections: 0x%x target_vfid=0x%x iod_mask=0x%x inst_mask=0x%x"
+		    " rsp.info=0x%x rsp.st=0x%x\n",
+		    snapshot_trigger_cmd->cmd.dbg_snapshot_trigger.sections,
+		    snapshot_trigger_cmd->cmd.dbg_snapshot_trigger.target_vfid,
+		    snapshot_trigger_cmd->cmd.dbg_snapshot_trigger.aid_mask,
+		    snapshot_trigger_cmd->cmd.dbg_snapshot_trigger.xcc_mask,
+		    psp_resp.info, psp_resp.status);
 
 	return ret;
 }
@@ -1332,17 +1241,7 @@ static enum psp_status mi300_psp_get_migration_version(struct amdgv_adapter *ada
 	migration_get_psp_info_cmd->cmd.migration_get_psp_info.migration_version = 0;
 
 	ret = amdgv_psp_cmd_km_submit(adapt, migration_get_psp_info_cmd, &psp_resp);
-	if (ret != PSP_STATUS__SUCCESS) {
-		if (psp_resp.status == PSP_KM_TEE_ERROR_NOT_SUPPORTED) {
-			amdgv_put_error(AMDGV_PF_IDX,
-				AMDGV_ERROR_FW_NOT_SUPPORTED_FEATURE, 0);
-			ret = PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
-		} else {
-			amdgv_put_error(AMDGV_PF_IDX,
-				AMDGV_ERROR_FW_MIGRATION_GET_PSP_INFO_FAIL,
-				psp_resp.status);
-		}
-	} else {
+	if (ret == PSP_STATUS__SUCCESS) {
 		*migration_version =
 			psp_resp.uresp.migration_info.migration_version;
 		AMDGV_DEBUG("Live Migration Version: 0x%x\n", *migration_version);
@@ -1355,11 +1254,16 @@ static enum psp_status mi300_psp_get_migration_info(struct amdgv_adapter *adapt)
 {
 	int ret = 0;
 
+	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION))
+		return PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
+
 	ret = mi300_psp_get_migration_version(adapt, &adapt->live_migration.migration_version);
 	if (ret != PSP_STATUS__SUCCESS) {
 		AMDGV_ERROR("Failed to get PSP migration version.\n");
 		return ret;
 	}
+
+	ret = amdgv_psp_check_migration_data_sizes(adapt);
 
 	return ret;
 }
@@ -1453,6 +1357,9 @@ static bool mi300_vf_firmware_support_migration(struct amdgv_adapter *adapt, uin
 			break;
 		}
 	}
+	/* if mec1 is not found, keep it set to true until firmware supports attestation database migration */
+	if (mec1 == 0)
+		return true;
 
 	if (!mi300_is_two_level_jump_table(mec1))
 		return false;
@@ -1494,19 +1401,6 @@ static enum psp_status mi300_psp_transfer_manifest_data(struct amdgv_adapter *ad
 	}
 
 	ret = amdgv_psp_cmd_km_submit(adapt, migration_cmd, &psp_resp);
-	if (ret != PSP_STATUS__SUCCESS) {
-		if (psp_resp.status == PSP_KM_TEE_ERROR_NOT_SUPPORTED) {
-			amdgv_put_error(AMDGV_PF_IDX,
-				AMDGV_ERROR_FW_NOT_SUPPORTED_FEATURE, 0);
-			ret = PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
-		} else {
-			amdgv_put_error(AMDGV_PF_IDX,
-				(type == PSP_MIGRATION_EXPORT_STATIC_DATA || type == PSP_MIGRATION_EXPORT_DYNAMIC_DATA) ?
-				AMDGV_ERROR_FW_MIGRATION_EXPORT_FAIL : AMDGV_ERROR_FW_MIGRATION_IMPORT_FAIL,
-				psp_resp.status);
-			ret = PSP_STATUS__ERROR_GENERIC;
-		}
-	}
 
 	if (type == PSP_MIGRATION_EXPORT_STATIC_DATA ||
 	    type == PSP_MIGRATION_EXPORT_DYNAMIC_DATA) {
@@ -1519,7 +1413,7 @@ static enum psp_status mi300_psp_transfer_manifest_data(struct amdgv_adapter *ad
 
 			ret = AMDGV_FAILURE;
 		}
-		AMDGV_INFO("Package addr: 0x%08lx%08lx target_vfid=0x%x size=0x%x flags=0x%x rsp.info=0x%x"
+		AMDGV_DEBUG("Package addr: 0x%08lx%08lx target_vfid=0x%x size=0x%x flags=0x%x rsp.info=0x%x"
 			" rsp.st=0x%x\n",
 			migration_cmd->cmd.migration_export.pkg_addr_hi,
 			migration_cmd->cmd.migration_export.pkg_addr_lo,
@@ -1539,7 +1433,7 @@ static enum psp_status mi300_psp_transfer_manifest_data(struct amdgv_adapter *ad
 			ret = AMDGV_FAILURE;
 		}
 
-		AMDGV_INFO("Package addr: 0x%08lx%08lx target_vfid=0x%x size=0x%x rsp.info=0x%x"
+		AMDGV_DEBUG("Package addr: 0x%08lx%08lx target_vfid=0x%x size=0x%x rsp.info=0x%x"
 			" rsp.st=0x%x\n",
 			migration_cmd->cmd.migration_import.pkg_addr_hi,
 			migration_cmd->cmd.migration_import.pkg_addr_lo,
@@ -1650,7 +1544,7 @@ static int mi300_psp_load_psp_fw(struct amdgv_adapter *adapt)
 	 *    (to indicate boot process complete)
 	 */
 	if (amdgv_psp_wait_for_register(
-		    adapt, SOC15_REG_OFFSET(MP0, adapt->psp.idx, regMP0_SMN_C2PMSG_35),
+		    adapt, SOC15_REG_OFFSET_NAME(MP0, adapt->psp.idx, regMP0_SMN_C2PMSG_35),
 		    0x80000000, 0x80000000, false, AMDGV_WAIT_FLAG_FORCE_YIELD) != PSP_STATUS__SUCCESS) {
 		AMDGV_ERROR("TIMEOUT waiting for GFX mailbox to open\n");
 		return AMDGV_FAILURE;
@@ -1726,7 +1620,7 @@ static enum psp_status mi300_psp_wait_for_bootloader(struct amdgv_adapter *adapt
 
 	/* wait for PSP to indicate BL completion */
 	for (retry_loop = 0; retry_loop < PSP_WAIT_BOOTLOADER_RETRY; retry_loop++) {
-		ret = amdgv_psp_wait_for_register(adapt, reg_mmMP0_SMN_C2PMSG_33,
+		ret = amdgv_psp_wait_for_register(adapt, reg_mmMP0_SMN_C2PMSG_33, "regMP0_SMN_C2PMSG_33",
 						  0x80000000, 0xFFFFFFFF, false, AMDGV_WAIT_FLAG_FORCE_YIELD);
 		if (ret == PSP_STATUS__SUCCESS)
 			break;
@@ -1746,7 +1640,7 @@ enum psp_status mi300_psp_wait_for_bootloader_steady(struct amdgv_adapter *adapt
 	/* wait for BL steady state to accept cmd from driver */
 	for (retry_loop = 0; retry_loop < PSP_WAIT_BOOTLOADER_RETRY; retry_loop++) {
 		ret = amdgv_psp_wait_for_register(
-			adapt, reg_mmMP0_SMN_C2PMSG_35,
+			adapt, reg_mmMP0_SMN_C2PMSG_35, "regMP0_SMN_C2PMSG_35",
 			0x80000000, 0xFFFFFFFF, false,
 			AMDGV_WAIT_FLAG_FORCE_YIELD | AMDGV_WAIT_FLAG_NO_WARNING);
 		if (!ret)
@@ -1769,7 +1663,7 @@ uint32_t mi300_psp_get_bootloader_version(struct amdgv_adapter *adapt)
 
 	adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_BL] = fw_ver;
 
-	AMDGV_INFO("PSP BL version (MP0_C2PMSG_59): %X.%X.%X.%X\n",
+	AMDGV_DEBUG("PSP BL version (MP0_C2PMSG_59): %X.%X.%X.%X\n",
 		   (fw_ver >> 24) & 0xFF, (fw_ver >> 16) & 0xFF,
 		   (fw_ver >> 8) & 0xFF, fw_ver & 0xFF);
 
@@ -1808,8 +1702,7 @@ static int mi300_psp_hw_init(struct amdgv_adapter *adapt)
 		if (r)
 			goto init_fail;
 	} else {
-		if (mi300_psp_wait_sos_loaded_status(adapt) == false) {
-			AMDGV_ERROR("AID0: TIMEOUT waiting for PSP tOS sign-of-life\n");
+		if (mi300_psp_wait_sos_loaded_status(adapt, 0) == false) {
 			r = AMDGV_FAILURE;
 			goto init_fail;
 		}
@@ -1860,10 +1753,8 @@ static int mi300_psp_hw_init(struct amdgv_adapter *adapt)
 		mi300_psp_set_mb_int(adapt, i, false);
 
 	r = adapt->ucode.load(adapt, ucode_np_seq, ARRAY_SIZE(ucode_np_seq));
-	if (r) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_UCODE_LOAD_FAIL, 0);
+	if (r)
 		return r;
-	}
 
 	for (i = 0; i < adapt->mcp.gfx.num_xcc; i++) {
 		r = mi300_gfx_wait_rlc_idle(adapt, GET_INST(GC, i));
@@ -1874,7 +1765,6 @@ static int mi300_psp_hw_init(struct amdgv_adapter *adapt)
 	psp_ret = mi300_psp_get_fw_attestation_database_addr(adapt);
 	if (psp_ret != PSP_STATUS__SUCCESS) {
 		r = AMDGV_FAILURE;
-		AMDGV_INFO("Fail Getting FW Attestation Database Addr.");
 		goto init_fail;
 	}
 
@@ -1911,9 +1801,8 @@ static int mi300_psp_hw_init(struct amdgv_adapter *adapt)
 	pos = oss_pci_find_ext_cap(adapt->dev, PCIE_EXT_CAP_ID__ATS);
 	if (pos) {
 		oss_pci_read_config_word(adapt->dev, pos + PCI_ATS_CTRL, &ctrl);
-		if ((ctrl & PCI_ATS_CTRL_ENABLE) &&
-			mi300_psp_program_register(adapt, 0, 0, 0, VM_IOMMU_CONTROL_WA))
-			AMDGV_WARN("Failed to program IOMMUEN via PSP");
+		if (ctrl & PCI_ATS_CTRL_ENABLE)
+			mi300_psp_program_register(adapt, 0, 0, 0, VM_IOMMU_CONTROL_WA);
 	}
 
 init_fail:
@@ -1930,16 +1819,9 @@ static int mi300_psp_hw_fini(struct amdgv_adapter *adapt)
 	struct psp_local_memory *local_mem = &(psp->tmr_context);
 	struct psp_cmd_km tmr_km_cmd = { 0 };
 	struct psp_ras_context *ras_context = &psp->ras_context;
-	struct amdgv_hive_info *hive;
 
 	if ((adapt->xgmi.phy_nodes_num > 1) &&
 	    (!adapt->reset.in_xgmi_chain_reset)) {
-		hive = amdgv_get_xgmi_hive(adapt);
-		if (!hive) {
-			AMDGV_ERROR("XGMI: node 0x%llx, can not match hive "
-				    "0x%llx in the hive list.\n",
-				    adapt->xgmi.node_id, adapt->xgmi.hive_id);
-		}
 		amdgv_xgmi_remove_from_hive(adapt);
 	}
 
@@ -1970,11 +1852,8 @@ static int mi300_psp_hw_fini(struct amdgv_adapter *adapt)
 
 			/* Submit CMD buffer to destroy TMR */
 			ret = amdgv_psp_cmd_km_submit(adapt, &tmr_km_cmd, NULL);
-
-			if (ret != PSP_STATUS__SUCCESS) {
+			if (ret != PSP_STATUS__SUCCESS)
 				r = AMDGV_FAILURE;
-				AMDGV_ERROR("PSP: Failed to destroy TMR.\n");
-			}
 		}
 
 		if (mi300_psp_ring_destroy(adapt)) {
@@ -2065,13 +1944,7 @@ enum psp_status mi300_psp_send_perf_hw_cmd(struct amdgv_adapter *adapt,
 	}
 
 	if (ret != PSP_STATUS__SUCCESS) {
-		AMDGV_ERROR("Failed to submit PSP performance HW command, ret=%d\n", ret);
 		return ret;
-	}
-
-	if (psp_resp.status != PSP_KM_TEE_SUCCESS) {
-		AMDGV_ERROR("PSP performance HW command failed, TEE error=0x%08x\n", psp_resp.status);
-		return PSP_STATUS__ERROR_GENERIC;
 	}
 
 	resp->resp = psp_resp.status;

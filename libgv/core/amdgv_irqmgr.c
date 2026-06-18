@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_device.h"
@@ -33,20 +16,6 @@
 static const uint32_t this_block = AMDGV_COMMUNICATION_BLOCK;
 
 #define IH_WB_BUF_SIZE 8
-
-static unsigned int order_base_2(unsigned int size_of_dwords)
-{
-	unsigned int i, size_of_log2 = 0;
-
-	for (i = 0; i < 32; i++) {
-		if (size_of_dwords == (1U << i)) {
-			size_of_log2 = i;
-			break;
-		}
-	}
-
-	return size_of_log2;
-}
 
 static void amdgv_ih_dump_irq_info(struct amdgv_adapter *adapt, struct amdgv_iv_entry *entry, bool is_detail)
 {
@@ -279,6 +248,15 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 			}
 
 			if (sched_event == AMDGV_EVENT_SCHED_PSP_VF_CMD_RELAY) {
+				/* Drop request if VF relay value is out of range or if VF relay is unsupported */
+				if (!adapt->psp.vf_relay_wtr_ptr_max ||
+				    msg_data[1] >= adapt->psp.vf_relay_wtr_ptr_max) {
+					AMDGV_WARN("%s: dropping PSP_VF_CMD_RELAY; wtr_ptr=0x%x out of range (max=0x%x)\n",
+						   amdgv_idx_to_str(idx_vf),
+						   msg_data[1],
+						   adapt->psp.vf_relay_wtr_ptr_max);
+					break;
+				}
 				adapt->psp.vf_relay_wtr_ptr[idx_vf] = msg_data[1];
 			}
 
@@ -330,6 +308,15 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 			} else if (sched_event == AMDGV_EVENT_SCHED_VF_REQ_RAS_BAD_PAGES) {
 				amdgv_sched_queue_event_ex(adapt, idx_vf, sched_event,
 							   AMDGV_SCHED_BLOCK_ALL, event_data);
+			} else if (sched_event == AMDGV_EVENT_SCHED_VF_RAS_REMOTE_CMD) {
+				if (amdgv_guard_add_active_event(adapt, idx_vf,
+					AMDGV_GUARD_EVENT_RAS_REMOTE_CMD) == AMDGV_EVENT_OVERFLOW)
+					break;
+
+				event_data.remote_ras.gpa_addr = ((uint64_t)msg_data[2] << 32) | msg_data[1];
+				event_data.remote_ras.gpa_size = msg_data[3];
+				amdgv_sched_queue_event_ex(adapt, idx_vf, sched_event,
+								AMDGV_SCHED_BLOCK_ALL, event_data);
 			} else if (sched_event == AMDGV_EVENT_SCHED_RAS_POISON_CONSUMPTION) {
 				event_data.poison.consumption.block = msg_data[1];
 				amdgv_put_error(idx_vf, AMDGV_ERROR_ECC_POISON_CONSUMPTION,
@@ -337,10 +324,27 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 				amdgv_sched_queue_event_ex(adapt, idx_vf, sched_event,
 							AMDGV_SCHED_BLOCK_ALL, event_data);
 			} else if (sched_event == AMDGV_EVENT_REQ_GPU_INIT_DATA) {
-				adapt->array_vf[idx_vf].guest_gpu_init_flags = msg_data[1];
+				uint32_t guest_crit_region_ver = msg_data[2];
 
-				/* 0 recv'd by host means guest only supports v1 table allocation */
-				adapt->array_vf[idx_vf].guest_crit_region_caps = (msg_data[2] == 0) ? 0b1 : msg_data[2];
+				adapt->array_vf[idx_vf].xchg.guest_gpu_init_flags = msg_data[1];
+
+				if (guest_crit_region_ver >= GPU_CRIT_REGION_MAX) {
+					AMDGV_WARN("%s sent unsupported crit region version %u, clamping to V%u\n",
+						   amdgv_idx_to_str(idx_vf),
+						   guest_crit_region_ver,
+						   GPU_CRIT_REGION_MAX - 1);
+					guest_crit_region_ver = GPU_CRIT_REGION_MAX - 1;
+				}
+
+				/* CRIT_REGION_VERSION enums start with 0, however the
+                 * crit_region_caps expect bit 0 to be V1, need to shift
+                 * all bits by 1.
+				 * Guest sends the highest supported crit region version.
+				 * Set caps bits for that version and all lower versions,
+				 * since supporting VN implies supporting V1..VN-1. */
+				adapt->array_vf[idx_vf].xchg.guest_crit_region_caps =
+					(guest_crit_region_ver == 0 || guest_crit_region_ver > 31) ?  BIT(0) :
+					(BIT(guest_crit_region_ver) - 1);
 				amdgv_sched_queue_event_ex(adapt, idx_vf, sched_event,
 							AMDGV_SCHED_BLOCK_ALL, event_data);
 			} else if (sched_event == AMDGV_EVENT_SCHED_VF_REQ_RAS_CHK_CRITI_REGION) {
@@ -354,6 +358,12 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 				event_data.ptl.ptl_state = msg_data[2];
 				event_data.ptl.pref_format1 = AMD_SRIOV_PTL_UNPACK_FMT1(msg_data[3]);
 				event_data.ptl.pref_format2 = AMD_SRIOV_PTL_UNPACK_FMT2(msg_data[3]);
+				amdgv_sched_queue_event_ex(adapt, idx_vf, sched_event,
+							   AMDGV_SCHED_BLOCK_ALL, event_data);
+			} else if (sched_event == AMDGV_EVENT_SCHED_VF_REQ_GPU_INIT_XCHG_REGION) {
+				event_data.vf_xchg_region.gpa_base = ((uint64_t)msg_data[1] << 32) |
+								      msg_data[2];
+				event_data.vf_xchg_region.size = msg_data[3];
 				amdgv_sched_queue_event_ex(adapt, idx_vf, sched_event,
 							   AMDGV_SCHED_BLOCK_ALL, event_data);
 			} else {
@@ -430,6 +440,55 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 		}
 		break;
 
+	case IH_IV_SRCID_MP0_IH_SW_INT:
+		AMDGV_INFO("MP0 IH SW INT received\n");
+		if (entry->client_id == IH_IV_CLIENTID_MP0) {
+			amdgv_ih_dump_irq_info(adapt, entry, false);
+			if (adapt->psp.handle_irq)
+				adapt->psp.handle_irq(adapt, entry);
+			else
+				AMDGV_ERROR("PSP: handle_irq is not supported\n");
+		} else {
+			AMDGV_ERROR("Unknown/Unhandled MP0 IH SW INT Received\n");
+			amdgv_ih_dump_irq_info(adapt, entry, true);
+		}
+		break;
+
+	case IH_IV_SRCID_RLC_GC_FED_COOKIE:
+		if (entry->client_id == IH_IV_CLIENTID_RLC) {
+			/*
+			 * IH_COOKIE_7 = entry->src_data[3] = ContextID[127:96]
+			 * When route_to_pf==1 (always true when host receives
+			 * this), IH inserts {VF,2'b0,VFID[4:0]} into
+			 * ContextID[127:120].
+			 */
+			uint32_t ih_cookie_7 = entry->src_data[3];
+			bool is_vf = (ih_cookie_7 >> 7) & 0x1;
+			uint8_t src_vfid = ih_cookie_7 & 0x1F;
+
+			if (!is_vf || src_vfid >= adapt->num_vf) {
+				AMDGV_ERROR("Invalid VF received from RLC poison IH cookie: is_vf=%d vfid=%u\n",
+					is_vf, src_vfid);
+				amdgv_ih_dump_irq_info(adapt, entry, true);
+				break;
+			}
+
+			idx_vf = src_vfid;
+			event_data.poison.consumption.block = AMDGV_RAS_BLOCK__GFX;
+
+			amdgv_put_error(idx_vf, AMDGV_ERROR_ECC_POISON_CONSUMPTION,
+					AMDGV_ERROR_32_32(idx_vf, AMDGV_RAS_BLOCK__GFX));
+
+			amdgv_sched_queue_event_ex(adapt, idx_vf,
+						AMDGV_EVENT_SCHED_RAS_POISON_CONSUMPTION,
+						AMDGV_SCHED_BLOCK_ALL, event_data);
+		} else {
+			AMDGV_ERROR("Unexpected client_id 0x%x for RLC poison IH cookie\n",
+				    entry->client_id);
+			amdgv_ih_dump_irq_info(adapt, entry, true);
+		}
+		break;
+
 	default:
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_INVALID_VALUE, entry->src_id);
 		amdgv_ih_dump_irq_info(adapt, entry, true);
@@ -465,6 +524,40 @@ void amdgv_irqmgr_register_gpu_timer_handler(struct amdgv_adapter *adapt, void *
 {
 	adapt->irqmgr.ih_gpu_timer_context = context;
 	adapt->irqmgr.ih_gpu_timer_handler = handler;
+}
+
+void amdgv_irqmgr_decode_iv(struct amdgv_adapter *adapt, struct amdgv_iv_entry *entry)
+{
+	/* wptr/rptr are in bytes! */
+	uint32_t ring_index = adapt->irqmgr.ih.rptr >> 2;
+	uint32_t dw[8];
+
+	dw[0] = le32_to_cpu(adapt->irqmgr.ih.ring[ring_index + 0]);
+	dw[1] = le32_to_cpu(adapt->irqmgr.ih.ring[ring_index + 1]);
+	dw[2] = le32_to_cpu(adapt->irqmgr.ih.ring[ring_index + 2]);
+	dw[3] = le32_to_cpu(adapt->irqmgr.ih.ring[ring_index + 3]);
+	dw[4] = le32_to_cpu(adapt->irqmgr.ih.ring[ring_index + 4]);
+	dw[5] = le32_to_cpu(adapt->irqmgr.ih.ring[ring_index + 5]);
+	dw[6] = le32_to_cpu(adapt->irqmgr.ih.ring[ring_index + 6]);
+	dw[7] = le32_to_cpu(adapt->irqmgr.ih.ring[ring_index + 7]);
+
+	entry->client_id = dw[0] & 0xff;
+	entry->src_id = (dw[0] >> 8) & 0xff;
+	entry->ring_id = (dw[0] >> 16) & 0xff;
+	entry->vm_id = (dw[0] >> 24) & 0xf;
+	entry->vm_id_src = (dw[0] >> 31);
+	entry->timestamp = dw[1] | ((uint64_t)(dw[2] & 0xffff) << 32);
+	entry->timestamp_src = dw[2] >> 31;
+	entry->pas_id = dw[3] & 0xffff;
+	entry->node_id = (dw[3] >> 16) & 0xff;
+	entry->pasid_src = dw[3] >> 31;
+	entry->src_data[0] = dw[4];
+	entry->src_data[1] = dw[5];
+	entry->src_data[2] = dw[6];
+	entry->src_data[3] = dw[7];
+
+	/* wptr/rptr are in bytes! */
+	adapt->irqmgr.ih.rptr += 32;
 }
 
 /* iv ring interrupt handle */
@@ -615,6 +708,7 @@ int amdgv_irqmgr_toggle_interrupt(struct amdgv_adapter *adapt, bool enable)
 {
 	int ret = 0;
 	uint32_t idx_vf;
+	struct amdgv_wait_for_cb_context cb_context = { 0 };
 
 	if (enable && adapt->irqmgr.ih_funcs->re_arm_vf_ih_ring) {
 		// Re-arm ih ring on active vf
@@ -632,15 +726,18 @@ int amdgv_irqmgr_toggle_interrupt(struct amdgv_adapter *adapt, bool enable)
 
 	// Register mailbox interrupt with OS
 	if (enable) {
-		AMDGV_INFO("Register interrupt.\n");
+		AMDGV_DEBUG("Register interrupt.\n");
 		adapt->irqmgr.ih.enabled = true;
 		ret = amdgv_irqmgr_register_interrupt(adapt);
 	} else {
-		AMDGV_INFO("Unregister interrupt.\n");
+		AMDGV_DEBUG("Unregister interrupt.\n");
 		adapt->irqmgr.ih.enabled = false;
 
+		cb_context.ctx = (void *)adapt;
+		cb_context.type = AMDGV_WAIT_FOR_IRQ_HANDLER;
+
 		/* make sure irq handler exit */
-		ret = amdgv_wait_for(adapt, amdgv_wait_for_irq_handler, adapt, ~0, 0);
+		ret = amdgv_wait_for(adapt, amdgv_wait_for_irq_handler, &cb_context, ~0, 0);
 
 		ret = amdgv_irqmgr_unregister_interrupt(adapt);
 	}
@@ -672,41 +769,120 @@ void amdgv_irqmgr_dump_temperature(struct amdgv_adapter *adapt)
 
 int amdgv_irqmgr_register_interrupt(struct amdgv_adapter *adapt)
 {
-	int ret = 0;
+	struct oss_intr_regrt_entry *intr_entries;
+	struct oss_intr_regrt_info *intr_regrt_info;
 
+	/* Use specific callback func if exists */
 	if (adapt->irqmgr.ih_funcs->register_interrupt)
-		ret = adapt->irqmgr.ih_funcs->register_interrupt(adapt);
-	else {
-		AMDGV_INFO("register_interrupt is not properly defined.\n");
-		ret = AMDGV_FAILURE;
+		return adapt->irqmgr.ih_funcs->register_interrupt(adapt);
+
+	intr_regrt_info = oss_malloc(sizeof(struct oss_intr_regrt_info));
+	if (intr_regrt_info == NULL) {
+		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+				sizeof(struct oss_intr_regrt_info));
+		return AMDGV_FAILURE;
 	}
 
-	return ret;
+	intr_entries = oss_malloc(sizeof(struct oss_intr_regrt_entry) * 4);
+	if (intr_entries == NULL) {
+		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+				sizeof(struct oss_intr_regrt_entry) * 4);
+		oss_free(intr_regrt_info);
+		return AMDGV_FAILURE;
+	}
+
+	/* register MSI vector 0 interrupt handler */
+	intr_entries[0].idx_msi_vector = 0;
+
+	if (!adapt->irqmgr.disable_parse_ih) {
+		intr_entries[0].intr_cb_type = OSS_INTR_CB_REGULAR;
+		intr_entries[0].int_cb.interrupt_cb = amdgv_ih_process_handle;
+		intr_entries[0].context = (void *)adapt;
+	} else {
+		/* interrupt callback parameters contains decoded IH entry */
+		intr_entries[0].intr_cb_type = OSS_INTR_CB_DECODED;
+		intr_entries[0].int_cb.interrupt_cb2 = amdgv_ih_process_handle2;
+		intr_entries[0].context = (void *)adapt;
+	}
+
+	/* register MSI vector 1 interrupt handler */
+	intr_entries[1].idx_msi_vector = 1;
+	intr_entries[1].intr_cb_type = OSS_INTR_CB_REGULAR;
+	intr_entries[1].int_cb.interrupt_cb = amdgv_hv_event_handle;
+	intr_entries[1].context = (void *)adapt;
+
+	/* register MSI vector 2 interrupt handler */
+	intr_entries[2].idx_msi_vector = 2;
+	intr_entries[2].intr_cb_type = OSS_INTR_CB_REGULAR;
+	intr_entries[2].int_cb.interrupt_cb = amdgv_hv_event_handle;
+	intr_entries[2].context = (void *)adapt;
+
+	/* register MSI vector 3 interrupt handler */
+	intr_entries[3].idx_msi_vector = 3;
+	intr_entries[3].intr_cb_type = OSS_INTR_CB_REGULAR;
+	intr_entries[3].int_cb.interrupt_cb = amdgv_ras_fatal_error_handle;
+	intr_entries[3].context = (void *)adapt;
+
+	intr_regrt_info->intr_type = OSS_INTR_TYPE_MSIX;
+	intr_regrt_info->num_msi_vectors = 4;
+	intr_regrt_info->num_intr_entry = 4;
+	intr_regrt_info->intr_entries = intr_entries;
+
+	/* register interrupt handler to OS */
+	if (oss_register_interrupt(adapt->dev, intr_regrt_info) != 0) {
+		AMDGV_ERROR("failed to register interrupt handler!\n");
+		goto fail;
+	}
+
+	adapt->irqmgr.intr_regrt_info = intr_regrt_info;
+	return 0;
+
+fail:
+	/* free interrupt entries */
+	oss_free(intr_regrt_info->intr_entries);
+
+	/* free interrupt registration info */
+	oss_free(intr_regrt_info);
+
+	return AMDGV_FAILURE;
 }
 
 int amdgv_irqmgr_unregister_interrupt(struct amdgv_adapter *adapt)
 {
-	int ret = 0;
-
-	if (adapt->irqmgr.ih_funcs->unregister_interrupt)
+	if (adapt->irqmgr.ih_funcs->unregister_interrupt) {
 		adapt->irqmgr.ih_funcs->unregister_interrupt(adapt);
-	else {
-		AMDGV_INFO("unregister_interrupt is not properly defined.\n");
-		ret = AMDGV_FAILURE;
+		return 0;
 	}
 
-	return ret;
+	if (adapt->irqmgr.intr_regrt_info == NULL)
+		return 0;
+
+	/* remove interrupt handler from OS */
+	oss_unregister_interrupt(adapt->dev, adapt->irqmgr.intr_regrt_info);
+
+	/* free interrupt entries */
+	oss_free(adapt->irqmgr.intr_regrt_info->intr_entries);
+
+	/* free interrupt registration info */
+	oss_free(adapt->irqmgr.intr_regrt_info);
+
+	adapt->irqmgr.intr_regrt_info = NULL;
+	return 0;
 }
 
 int amdgv_irqmgr_disable(struct amdgv_adapter *adapt)
 {
 	int ret = 0;
+	struct amdgv_wait_for_cb_context cb_context = { 0 };
 
 	adapt->irqmgr.ih.enabled = false;
 	adapt->irqmgr.ih.rptr = 0;
 
+	cb_context.ctx = adapt;
+	cb_context.type = AMDGV_WAIT_FOR_IRQ_HANDLER;
+
 	/* make sure irq handler exit */
-	ret = amdgv_wait_for(adapt, amdgv_wait_for_irq_handler, adapt, ~0, 0);
+	ret = amdgv_wait_for(adapt, amdgv_wait_for_irq_handler, &cb_context, ~0, 0);
 
 	return ret;
 }
@@ -778,4 +954,18 @@ int amdgv_irqmgr_sw_fini(struct amdgv_adapter *adapt)
 	}
 
 	return 0;
+}
+
+int amdgv_irqmgr_write_virtualized_interrupt(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_t idx_table, uint64_t message_address, 
+			uint32_t message_data, uint32_t vector_control, bool is_direct_write)
+{
+	if (adapt->irqmgr.write_virtualized_interrupt)
+		adapt->irqmgr.write_virtualized_interrupt(adapt, idx_vf, idx_table, message_address, message_data, vector_control, is_direct_write);
+	return 0;
+}
+
+void amdgv_irqmgr_update_virtualized_interrupt(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	if (adapt->irqmgr.update_virtualized_interrupt)
+		adapt->irqmgr.update_virtualized_interrupt(adapt, idx_vf);
 }

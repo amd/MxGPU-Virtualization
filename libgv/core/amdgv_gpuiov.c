@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_device.h"
@@ -359,7 +342,8 @@ void amdgv_update_histogram(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	hist->count[bucket]++;
 }
 
-static int amdgv_wait_detect_hang(struct amdgv_adapter *adapt, amdgv_wait_cb_t cb_func, void *cb_context, uint64_t timeout)
+static int amdgv_wait_detect_hang(struct amdgv_adapter *adapt, amdgv_wait_cb_t cb_func,
+				  struct amdgv_wait_for_cb_context *cb_context, uint64_t timeout)
 {
 	if (adapt->gfx.funcs->wait_detect_hang)
 		return adapt->gfx.funcs->wait_detect_hang(adapt, cb_func, cb_context, timeout);
@@ -383,15 +367,19 @@ static int wait_cmd_complete(struct amdgv_adapter *adapt, uint32_t idx_vf,
 {
 	int wait_ret = 0;
 	struct amdgv_gpuiov_wait_context wc;
+	struct amdgv_wait_for_cb_context cb_context = { 0 };
 
 	wc.adapt = adapt;
 	wc.hw_sched_id = hw_sched_id;
 
+	cb_context.ctx = (void *)&wc;
+	cb_context.type = AMDGV_WAIT_FOR_WS_CMD_COMPLETE;
+
 	if (IS_HW_SCHED_TYPE_MM(hw_sched_id) || !adapt->gfx.hang_detection_supported)
-		wait_ret = amdgv_wait_for(adapt, wait_cmd_complete_cb, (void *)&wc, timeout,
+		wait_ret = amdgv_wait_for(adapt, wait_cmd_complete_cb, &cb_context, timeout,
 			AMDGV_WAIT_FLAG_USLEEP);
 	else
-		wait_ret = amdgv_wait_detect_hang(adapt, wait_cmd_complete_cb, (void *)&wc, timeout);
+		wait_ret = amdgv_wait_detect_hang(adapt, wait_cmd_complete_cb, &cb_context, timeout);
 
 	/* Add to diagnosis data */
 	AMDGV_DIAG_DATA_TRACE_LOG_GPUIOV_CMD_END(
@@ -406,7 +394,6 @@ static int wait_cmd_complete(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	if (!wait_ret)
 		return 0;
 
-	amdgv_put_error(idx_vf, AMDGV_ERROR_IOV_CMD_TIMEOUT, timeout);
 	amdgv_dump_gpuiov_cmd_status(adapt, hw_sched_id);
 
 	return AMDGV_FAILURE;
@@ -452,16 +439,20 @@ int wait_for_first_cmd_complete(struct amdgv_adapter *adapt,
 	uint32_t hw_sched_id;
 	uint32_t idx_vf;
 	struct amdgv_gpuiov_wait_for_first_context wc = { 0 };
+	struct amdgv_wait_for_cb_context cb_context = { 0 };
 
 	wc.adapt = adapt;
 	/* Assume all HW Schedulers are pending at the start */
 	wc.hw_sched_mask = hw_sched_mask;
 
+	cb_context.ctx = (void *)&wc;
+	cb_context.type = AMDGV_WAIT_FOR_WS_FIRST_CMD_COMPLETE;
+
 	if (!if_gfx_engine_in_mask(adapt, hw_sched_mask) || !adapt->gfx.hang_detection_supported)
-		wait_ret = amdgv_wait_for(adapt, wait_for_first_cmd_complete_cb, (void *)&wc, timeout,
+		wait_ret = amdgv_wait_for(adapt, wait_for_first_cmd_complete_cb, &cb_context, timeout,
 			AMDGV_WAIT_FLAG_USLEEP | AMDGV_WAIT_FLAG_NO_WARNING);
 	else
-		wait_ret = amdgv_wait_detect_hang(adapt, wait_for_first_cmd_complete_cb, (void *)&wc, timeout);
+		wait_ret = amdgv_wait_detect_hang(adapt, wait_for_first_cmd_complete_cb, &cb_context, timeout);
 
 	if (wait_ret) {
 		for_each_id(hw_sched_id, hw_sched_mask) {
@@ -469,10 +460,8 @@ int wait_for_first_cmd_complete(struct amdgv_adapter *adapt,
 			AMDGV_DIAG_DATA_TRACE_LOG_GPUIOV_CMD_END(idx_vf, hw_sched_id,
 				adapt->gpuiov.ctrl_blocks[hw_sched_id].last_cmd,
 				adapt->gpuiov.ctrl_blocks[hw_sched_id].last_status, wait_ret);
-			if (!in_whole_gpu_reset() && !adapt->reset.in_xgmi_chain_reset) {
-				amdgv_put_error(idx_vf, AMDGV_ERROR_IOV_CMD_TIMEOUT, timeout);
+			if (!in_whole_gpu_reset() && !adapt->reset.in_xgmi_chain_reset)
 				amdgv_dump_gpuiov_cmd_status(adapt, hw_sched_id);
-			}
 
 			if (adapt->bp_mode == AMDGV_BP_MODE_2 && !(adapt->is_user_ws_cmd)) {
 				amdgv_bp_mode_wait(adapt, idx_vf, hw_sched_id,
@@ -921,7 +910,7 @@ int amdgv_gpuiov_shutdown_vf(struct amdgv_adapter *adapt, uint32_t idx_vf,
 
 int amdgv_gpuiov_event_notification(struct amdgv_adapter *adapt, uint32_t idx_vf,
 				    uint32_t hw_sched_id, enum amdgv_gpuiov_event_id event_id,
-					uint32_t value)
+				    uint32_t value)
 {
 	int ret = AMDGV_FAILURE;
 
@@ -1340,8 +1329,6 @@ int amdgv_gpuiov_ctrl_block_setup(struct amdgv_adapter *adapt, struct amdgv_gpui
 
 	adapt->gpuiov.num_ctrl_blocks = block_num;
 
-	AMDGV_INFO("Discovered %d HW schedulers\n", adapt->gpuiov.num_ctrl_blocks);
-
 	for (i = 0; i < adapt->gpuiov.num_ctrl_blocks; i++) {
 		if (adapt->gpuiov.ctrl_blocks[i].sched_block != AMDGV_SCHED_BLOCK_GFX)
 			continue;
@@ -1350,7 +1337,7 @@ int amdgv_gpuiov_ctrl_block_setup(struct amdgv_adapter *adapt, struct amdgv_gpui
 			/* override default schedule mode with "sysfs" opt */
 			adapt->gpuiov.ctrl_blocks[i].sched_mode = adapt->opt.gfx_sched_mode;
 		} else {
-			AMDGV_INFO("GFX sched mode %d is not supported on current asic\n", adapt->opt.gfx_sched_mode);
+			AMDGV_WARN("GFX sched mode %d is not supported on current asic\n", adapt->opt.gfx_sched_mode);
 		}
 	}
 
@@ -1360,15 +1347,12 @@ int amdgv_gpuiov_ctrl_block_setup(struct amdgv_adapter *adapt, struct amdgv_gpui
 int amdgv_gpuiov_init(struct amdgv_adapter *adapt)
 {
 	if (adapt->opt.allow_time_cmd_complete == 0) {
-		if (!((adapt->flags & AMDGV_FLAG_SIM_MODE) || (adapt->flags & AMDGV_FLAG_EMU_MODE)))
-			adapt->gpuiov.allow_time_cmd_complete = 500 * 1000;
-		else
-			adapt->gpuiov.allow_time_cmd_complete = 4 * 60 * 1000 * 1000;
+		adapt->gpuiov.allow_time_cmd_complete = 500 * 1000;
 	} else
 		adapt->gpuiov.allow_time_cmd_complete =
 			(uint64_t)adapt->opt.allow_time_cmd_complete * 1000;
 
-	AMDGV_INFO("allowed time for gpuiov cmd completion is %dms\n",
+	AMDGV_DEBUG("allowed time for gpuiov cmd completion is %dms\n",
 		   adapt->gpuiov.allow_time_cmd_complete / 1000);
 
 	return 0;

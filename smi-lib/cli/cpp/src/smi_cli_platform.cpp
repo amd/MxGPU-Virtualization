@@ -1,22 +1,8 @@
-/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #include <iostream>
 #include <string>
 #include <vector>
@@ -37,6 +23,9 @@ const std::vector<std::string> dev_id_list_mi308 = {"74A2", "74A8"};
 const std::vector<std::string> dev_id_list_mi350 = {"75A0", "75A1", "75A3", "75B0", "75B1", "75B3"};
 const std::vector<std::string> dev_id_list_mi2plus = {"7410"};
 const std::vector<std::string> dev_id_list_nv = {"73C4", "73C5", "73C8", "7460", "7461", "73A1","73AE" };
+const std::vector<std::string> dev_id_list_mixxx = {"7540", "75C0", "75C1"};
+
+
 
 
 bool check_if_mi30x(std::string output)
@@ -102,6 +91,19 @@ bool check_if_mi200(std::string output)
 		}
 	}
 	return is_mi200;
+}
+
+bool check_if_mixxx(std::string output)
+{
+	std::string::size_type n;
+	bool is_mixxx{false};
+	for (auto x : dev_id_list_mixxx) {
+		n = output.find(x);
+		if (std::string::npos != n) {
+			is_mixxx = true;
+		}
+	}
+	return is_mixxx;
 }
 
 #ifdef _WIN64
@@ -423,6 +425,7 @@ AmdSmiPlatform::AmdSmiPlatform()
 		is_mi300_ = check_if_mi30x(output);
 		is_nv_ = check_if_nv(output);
 		is_mi200_ = check_if_mi200(output);
+		is_mixxx_ = check_if_mixxx(output);
 
 		// Collect all detection information
 		bool has_hyperv_access = can_access_hyperv_namespace();
@@ -475,11 +478,8 @@ AmdSmiPlatform::AmdSmiPlatform()
 	if(is_linux_) {
 		std::string hypervisor_str = "hypervisor";
 		std::string linux_output = exec("lscpu 2>/dev/null");
-		std::string gpu_id_list = exec("lspci -nn | awk -F'[][]' "
-									   "'/Display/ {print $6} "
-									   "/Processing/ {print $6}"
-									   "/Processing/ {print $8}' | "
-									   "awk -F':' '{print $2}'");
+		std::string gpu_id_list = exec("lspci -nn | grep -oiE '1002:?[0-9a-f]{4}' | "
+									   "sed -E 's/^1002:?//I'");
 		std::string linux_output_gim_loaded = exec("lsmod 2>/dev/null | grep gim");
 		std::string linux_output_amdgpu_loaded = exec("lsmod 2>/dev/null | grep amdgpu");
 		std::string linux_output_gim_user_mode = exec("pgrep gim_user_mode");
@@ -499,6 +499,7 @@ AmdSmiPlatform::AmdSmiPlatform()
 		is_mi308_ = check_if_mi308(gpu_id_list);
 		is_mi350_ = check_if_mi350(gpu_id_list);
 		is_mi200_ = check_if_mi200(gpu_id_list);
+		is_mixxx_ = check_if_mixxx(gpu_id_list);
 
 		if (linux_output_gim_loaded.empty() && linux_output_amdgpu_loaded.empty()
 				&& linux_output_gim_user_mode.empty() && linux_output_amdgpuv.empty()) {
@@ -520,6 +521,10 @@ std::string AmdSmiPlatform::exec(const char *cmd)
 #ifdef _WIN64
 	FILE *pipe = _popen(cmd, "r");
 #elif __linux__
+	/* Pin $PATH to the standard system directories so popen()'s bare helper
+	 * names (lsmod, grep, pgrep, lspci, ...) resolve deterministically. */
+	if (setenv("PATH", "/usr/sbin:/usr/bin:/sbin:/bin", 1) != 0)
+		throw std::runtime_error("setenv(PATH) failed!");
 	FILE *pipe = popen(cmd, "r");
 #endif
 
@@ -589,6 +594,10 @@ bool AmdSmiPlatform::is_nv()
 bool AmdSmiPlatform::is_mi200()
 {
 	return is_mi200_;
+}
+bool AmdSmiPlatform::is_mixxx()
+{
+	return is_mixxx_;
 }
 std::string AmdSmiPlatform::get_platform()
 {

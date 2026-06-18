@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_device.h"
@@ -261,10 +244,16 @@ error_category(FW) = {
 
 	add_entry(AMDGV_ERROR_FW_MIGRATION_GET_PSP_INFO_FAIL, ERROR_DATA_ARG_64,
 		  AMDGV_ERROR_SEVERITY_ERROR_LOW, "Failed to get migration version, status=0x%llx."),
+	add_entry(AMDGV_ERROR_FW_MIGRATION_GET_DATA_SIZE_FAIL, ERROR_DATA_ARG_64,
+		  AMDGV_ERROR_SEVERITY_ERROR_LOW, "Failed to get migration data size, status=0x%llx."),
+	add_entry(AMDGV_ERROR_FW_MIGRATION_DATA_OVERSIZE, ERROR_DATA_ARG_32_32,
+		  AMDGV_ERROR_SEVERITY_ERROR_LOW, "PSP migration data size %u exceeds allocated %u."),
 	add_entry(AMDGV_ERROR_FW_MIGRATION_EXPORT_FAIL, ERROR_DATA_ARG_64,
 		  AMDGV_ERROR_SEVERITY_ERROR_LOW, "Failed migration export, status=0x%llx."),
 	add_entry(AMDGV_ERROR_FW_MIGRATION_IMPORT_FAIL, ERROR_DATA_ARG_64,
 		  AMDGV_ERROR_SEVERITY_ERROR_LOW, "Failed migration import, status=0x%llx."),
+	add_entry(AMDGV_ERROR_FW_MIGRATION_AUTOLOAD_FAIL, ERROR_DATA_ARG_64,
+		  AMDGV_ERROR_SEVERITY_ERROR_LOW, "Failed migration autoload, status=0x%llx."),
 
 	add_entry(AMDGV_ERROR_FW_BL_FAIL, ERROR_DATA_ARG_NONE,
 		  AMDGV_ERROR_SEVERITY_ERROR_HIGH, "Timeout waiting for PSP Bootloader to finish GPU boot process"),
@@ -547,7 +536,10 @@ error_category(PP) = {
 		  AMDGV_ERROR_SEVERITY_INFO, "I2C slave at 0x%llX is not present."),
 	add_entry(AMDGV_ERROR_PP_THROTTLER_EVENT, ERROR_DATA_ARG_64,
 		  AMDGV_ERROR_SEVERITY_WARNING, "GPU device throttler event detected: 0x%016llx."),
-
+	add_entry(AMDGV_ERROR_PP_MODE2_RESET_FAIL, ERROR_DATA_ARG_NONE,
+		  AMDGV_ERROR_SEVERITY_ERROR_HIGH, "PMFW failed mode 2 reset."),
+	add_entry(AMDGV_ERROR_PP_MODE0_RESET_FAIL, ERROR_DATA_ARG_NONE,
+		  AMDGV_ERROR_SEVERITY_ERROR_HIGH, "PMFW failed mode 0 reset."),
 	/* this one is the MAX */
 	add_entry(AMDGV_ERROR_PP_MAX, ERROR_DATA_ARG_64, AMDGV_ERROR_SEVERITY_INFO,
 		  "This is error log collect test for PP component (test count %llu)."),
@@ -637,6 +629,9 @@ error_category(VF) = {
 		  AMDGV_ERROR_SEVERITY_ERROR_MED, "asic resume failed (%d)."),
 	add_entry(AMDGV_ERROR_VF_GPU_RESET_FAIL, ERROR_DATA_ARG_NONE,
 		  AMDGV_ERROR_SEVERITY_ERROR_MED, "GPU reset failed."),
+	add_entry(AMDGV_ERROR_VF_XCHG_REGION_INVALID_SIZE, ERROR_DATA_ARG_32_32,
+		  AMDGV_ERROR_SEVERITY_ERROR_HIGH,
+		  "XCHG region rejected: invalid size (requested 0x%x, max 0x%x)."),
 
 	/* this one is the MAX */
 	add_entry(AMDGV_ERROR_VF_MAX, ERROR_DATA_ARG_64, AMDGV_ERROR_SEVERITY_INFO,

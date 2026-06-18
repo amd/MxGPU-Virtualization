@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "gtest/gtest.h"
@@ -107,11 +90,19 @@ TEST_F(AmdsmiVfTests, InvalidParams)
 	ret = amdsmi_get_num_vf(&NIC_MOCK_HANDLE, &num_vf_enabled, &num_vf_supported);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+#ifdef _WIN64
+	ret = amdsmi_set_num_vf(NULL, num_vf);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+
+	ret = amdsmi_set_num_vf(&NIC_MOCK_HANDLE, num_vf);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+#else
 	ret = amdsmi_set_num_vf(NULL, num_vf);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_set_num_vf(&NIC_MOCK_HANDLE, num_vf);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+#endif
 
 	ret = amdsmi_get_vf_partition_info(MOCK_GPU_HANDLE, buf_num, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
@@ -123,6 +114,9 @@ TEST_F(AmdsmiVfTests, InvalidParams)
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_get_vf_data(MOCK_VF_HANDLE, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_vf_hbm_info(MOCK_VF_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
 
@@ -136,13 +130,19 @@ TEST_F(AmdsmiVfTests, IoctlFailed)
 	amdsmi_partition_info_t part_res;
 	amdsmi_vf_info_t config_res;
 	amdsmi_vf_data_t info_res;
+	amdsmi_vf_hbm_info_t hbm_info_res;
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 	amdsmi_vf_handle_t MOCK_VF_HANDLE = VF_MOCK_HANDLE;
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
 		.WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_API_FAILED));
 
+#ifdef _WIN64
+	ret = amdsmi_set_num_vf(MOCK_GPU_HANDLE, num_vf);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+#else
 	ret = amdsmi_set_num_vf(MOCK_GPU_HANDLE, num_vf);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
+#endif
 
 	ret = amdsmi_get_num_vf(MOCK_GPU_HANDLE, &num_vf_enabled, &num_vf_supported);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
@@ -157,6 +157,9 @@ TEST_F(AmdsmiVfTests, IoctlFailed)
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 
 	ret = amdsmi_clear_vf_fb(MOCK_VF_HANDLE);
+	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
+
+	ret = amdsmi_get_vf_hbm_info(MOCK_VF_HANDLE, &hbm_info_res);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 }
 
@@ -204,6 +207,17 @@ TEST_F(AmdsmiVfTests, GetNumVfApiFailed)
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 }
 
+#ifdef _WIN64
+TEST_F(AmdsmiVfTests, SetNumVf)
+{
+	int ret;
+	uint32_t num_vf = 4;
+	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
+
+	ret = amdsmi_set_num_vf(MOCK_GPU_HANDLE, num_vf);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+}
+#else
 TEST_F(AmdsmiVfTests, SetNumVf)
 {
 	int ret;
@@ -220,6 +234,7 @@ TEST_F(AmdsmiVfTests, SetNumVf)
 	ASSERT_TRUE(equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
 	ASSERT_EQ(in_payload.num_vf_enable, num_vf);
 }
+#endif
 
 TEST_F(AmdsmiVfTests, ClearVfFb)
 {
@@ -365,4 +380,35 @@ TEST_F(AmdsmiVfTests, GetVfData)
 	ASSERT_EQ(in_payload.dev_id.handle, VF_MOCK_HANDLE.handle);
 	ASSERT_TRUE(sched_info_equal(mocked_resp.sched, vf_data.sched));
 	ASSERT_TRUE(guard_info_equal(mocked_resp.guard, vf_data.guard));
+}
+
+TEST_F(AmdsmiVfTests, GetVfhbmInfo)
+{
+	int ret;
+	struct smi_device_info in_payload;
+	struct smi_vf_hbm_info mocked_resp = {};
+	amdsmi_vf_hbm_info_t hbm_info;
+	amdsmi_vf_handle_t MOCK_VF_HANDLE = VF_MOCK_HANDLE;
+
+	// Setup mock response data
+	mocked_resp.phy_addr = 0x123456789ABCULL;
+	mocked_resp.phy_size = 0x100000000ULL; // 4GB
+	mocked_resp.numa_id = 2;
+#ifdef _WIN64
+	strcpy_s(mocked_resp.name, sizeof(mocked_resp.name), "hbm0.0");
+#else
+	strcpy(mocked_resp.name, "hbm0.0");
+#endif
+
+	WhenCalling(std::bind(amdsmi_get_vf_hbm_info, MOCK_VF_HANDLE, &hbm_info));
+	ExpectCommand(SMI_CMD_CODE_GET_VF_HBM_INFO);
+	SaveInputPayloadIn(&in_payload);
+	PlantMockOutput(&mocked_resp);
+	ret = performCall();
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(in_payload.dev_id.handle, VF_MOCK_HANDLE.handle);
+	ASSERT_EQ(hbm_info.phy_addr, mocked_resp.phy_addr);
+	ASSERT_EQ(hbm_info.phy_size, mocked_resp.phy_size);
+	ASSERT_EQ(hbm_info.numa_id, mocked_resp.numa_id);
+	ASSERT_STREQ(hbm_info.name, mocked_resp.name);
 }

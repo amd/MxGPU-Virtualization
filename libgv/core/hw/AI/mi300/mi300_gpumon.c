@@ -1,24 +1,8 @@
-/*
- * Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
+
 #include <amdgv.h>
 #include <amdgv_device.h>
 #include <amdgv_gpumon.h>
@@ -208,13 +192,20 @@ static int mi300_get_ecc_info(struct amdgv_adapter *adapt, int *correctable_erro
 static int mi300_get_vbios_cache(struct amdgv_adapter *adapt)
 {
 	struct amdgv_vbios_info *vbiosinfo = &adapt->vbios_cache;
-
+	int i;
 	/* serial only needs to be init once */
 	if (adapt->serial == 0) {
 		if (adapt->gpumon.funcs->get_vbios_info) {
 			vbiosinfo->serial = 0;
 			adapt->gpumon.funcs->get_vbios_info(adapt, vbiosinfo);
 			adapt->serial = vbiosinfo->serial;
+
+			if (vbiosinfo->serial != 0) {
+				adapt->unitid_support = true;
+				for (i = 0; i < adapt->num_vf; i++) {
+					adapt->array_vf[i].unitid = amdgv_gpumon_fcn_ref_id_encode(adapt->serial, i);
+				}
+			}
 		}
 	}
 
@@ -587,9 +578,8 @@ static int mi300_set_memory_partition_mode(
 	enum psp_status psp_ret = PSP_STATUS__SUCCESS;
 	enum amdgv_accelerator_partition_mode default_accelerator_partition_mode;
 
-	default_accelerator_partition_mode =
-		mi300_nbio_get_accelerator_partition_mode_default_setting(
-			adapt, memory_partition_mode);
+	default_accelerator_partition_mode = amdgv_nbio_get_default_accel_partition_mode(adapt,
+						memory_partition_mode);
 	if (default_accelerator_partition_mode == 0) {
 		AMDGV_ERROR("failed to get default accelerator_partition_mode. "
 					"requested NPS%u mode is not supported\n",
@@ -597,7 +587,7 @@ static int mi300_set_memory_partition_mode(
 		return AMDGV_ERROR_GPUMON_INVALID_MODE;
 	}
 
-	if (mi300_nbio_is_partition_mode_combination_supported(adapt,
+	if (amdgv_nbio_is_partition_mode_supported(adapt,
 			memory_partition_mode,
 			default_accelerator_partition_mode) == false) {
 		AMDGV_ERROR("requested NPS%u mode is not supported\n",
@@ -955,8 +945,7 @@ static int mi300_set_accelerator_partition_profile(struct amdgv_adapter *adapt,
 		return AMDGV_FAILURE;
 	}
 
-	ret = mi300_nbio_get_nps_mode(
-		adapt, &curr_memory_partition_mode);
+	ret = amdgv_nbio_get_nps_mode(adapt, &curr_memory_partition_mode);
 	if (ret || (curr_memory_partition_mode != adapt->mcp.memory_partition_mode)) {
 		AMDGV_ERROR("failed to get current memory partition mode or memory partition mode mismatch\n");
 		return AMDGV_FAILURE;
@@ -966,7 +955,7 @@ static int mi300_set_accelerator_partition_profile(struct amdgv_adapter *adapt,
 	 * for example, if the requested compute mode is DPX, but current NPS mode is NPS4,
 	 * host driver should fail the request with indication that DPX is not supported with NPS4.
 	 */
-	if (mi300_nbio_is_partition_mode_combination_supported(adapt,
+	if (amdgv_nbio_is_partition_mode_supported(adapt,
 			curr_memory_partition_mode,
 			req_accelerator_partition_mode) == false) {
 		AMDGV_ERROR(
@@ -1012,7 +1001,7 @@ static int mi300_get_accelerator_partition_profile(
 		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
 	}
 
-	accelerator_partition_mode = mi300_nbio_get_accelerator_partition_mode(adapt);
+	accelerator_partition_mode = amdgv_nbio_get_accel_partition_mode(adapt);
 	if (!accelerator_partition_mode) {
 		AMDGV_ERROR("failed to get current accelerator_partition_mode\n");
 		return AMDGV_FAILURE;
@@ -1065,11 +1054,9 @@ static int mi300_get_memory_partition_mode(
 		return AMDGV_ERROR_GPUMON_INVALID_OPTION;
 	}
 
-	ret = mi300_nbio_get_nps_mode(adapt,
-			&memory_partition_info->memory_partition_mode);
-	if (ret) {
+	ret = amdgv_nbio_get_nps_mode(adapt, &memory_partition_info->memory_partition_mode);
+	if (ret)
 		return ret;
-	}
 
 	memory_partition_info->num_numa_ranges = adapt->mcp.numa_count;
 	for (i = 0; i < memory_partition_info->num_numa_ranges; i++) {
@@ -1880,6 +1867,11 @@ static int mi300_gpumon_hw_init(struct amdgv_adapter *adapt)
 
 static int mi300_gpumon_hw_fini(struct amdgv_adapter *adapt)
 {
+	if (adapt->ptl_supported) {
+		if (adapt->ptl_saved_config.enabled)
+			mi300_gpumon_ptl_disable(adapt);
+	}
+
 	return 0;
 }
 

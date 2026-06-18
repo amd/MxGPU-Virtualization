@@ -1,23 +1,7 @@
 /*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef __SMI_NIC_INTERFACE_H__
@@ -33,9 +17,10 @@ extern "C" {
 
 #define SMI_NIC_MAX_STRING_LENGTH 256
 #define SMI_NIC_MAX_DEVICES 64
-#define SMI_NIC_MAX_STATISTICS 64
+#define SMI_NIC_MAX_STATISTICS 256
 #define SMI_NIC_MAX_PORTS 32
 #define SMI_NIC_MAX_RDMA_DEV 32
+#define SMI_NIC_MAX_FW_VERSIONS 64
 
 /**
  * @brief NIC Link Types for topology
@@ -58,6 +43,34 @@ typedef enum {
 	SMI_NIC_STATUS_NO_DATA = 7,		//!< Requested data not found
 	SMI_NIC_STATUS_DRIVER_NOT_LOADED = 8	//!< Required driver not loaded
 } smi_nic_status_t;
+
+/**
+ * @brief Firmware version types from devlink
+ */
+typedef enum {
+	SMI_NIC_FW_VERSION_TYPE_FIXED,		//!< Fixed (hardware) firmware version
+	SMI_NIC_FW_VERSION_TYPE_RUNNING,	//!< Currently running firmware version
+	SMI_NIC_FW_VERSION_TYPE_STORED		//!< Stored (pending) firmware version
+} smi_nic_fw_version_type_t;
+
+/**
+ * @struct smi_nic_fw_version_t
+ * @brief A single firmware version entry
+ */
+typedef struct {
+	smi_nic_fw_version_type_t type;
+	char name[SMI_NIC_MAX_STRING_LENGTH];
+	char version[SMI_NIC_MAX_STRING_LENGTH];
+} smi_nic_fw_version_t;
+
+/**
+ * @struct smi_nic_fw_info_t
+ * @brief Firmware version information from devlink
+ */
+typedef struct {
+	uint32_t count;
+	smi_nic_fw_version_t versions[SMI_NIC_MAX_FW_VERSIONS];
+} smi_nic_fw_info_t;
 
 /**
  * @brief NIC vendors
@@ -452,6 +465,18 @@ smi_nic_status_t smi_get_nic_rdma_port_statistics_count(smi_nic_ctx_t ctx, uint6
  * @return ::smi_nic_status_t | ::SMI_NIC_STATUS_SUCCESS on success, non-zero on failure.
  */
 smi_nic_status_t smi_get_nic_rdma_port_statistics_list(smi_nic_ctx_t ctx, uint64_t device, uint32_t port_index, uint32_t ib_index, uint32_t rdma_port_index, smi_nic_stat_info_t *stats);
+
+/**
+ * @brief Retrieve NIC firmware version information via devlink.
+ *
+ * Returns firmware versions (fixed, running, stored) reported by devlink.
+ *
+ * @param ctx Context handle
+ * @param device BDF of the network device.
+ * @param info Pointer to smi_nic_fw_info_t structure to be filled.
+ * @return ::smi_nic_status_t | ::SMI_NIC_STATUS_SUCCESS on success, non-zero on fail
+ */
+smi_nic_status_t smi_get_nic_fw_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_fw_info_t *info);
 
 /**
  * @brief Get link type between GPU and NIC based on PCIe topology

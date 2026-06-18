@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <pthread.h>
@@ -55,6 +38,11 @@ static void gim_get_device_list(struct smi_device_data *dev_list,
 
 	SLIST_FOREACH(dev_data, &vfio_drv->head, entries)
 	{
+		if (i >= SMI_MAX_DEVICES) {
+			gim_error("device list exceeds SMI_MAX_DEVICES(%u); truncating\n",
+				  SMI_MAX_DEVICES);
+			break;
+		}
 		memcpy(&dev_list[i].init_data, &dev_data->init_data,
 			sizeof(struct amdgv_init_data));
 		dev_list[i].adev = dev_data->adev;
@@ -99,12 +87,16 @@ static void gim_get_device_data(amdgv_dev_t adev,
 	vfio_drv = gim_get_driver_instance();
 	if (vfio_drv == NULL) {
 		gim_error("vfio driver instance not found\n");
+		if (ret_dev_data)
+			ret_dev_data->adev = NULL;
 		return;
 	}
 
 	dev_data = gim_get_device_data_from_adev(vfio_drv, adev);
 	if (dev_data == NULL) {
 		gim_error("device data not found for adev=%p\n", adev);
+		if (ret_dev_data)
+			ret_dev_data->adev = NULL;
 		return;
 	}
 

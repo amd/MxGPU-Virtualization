@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv.h"
@@ -297,6 +280,17 @@ static int ras_eeprom_legacy_parse_table_hdr_extra_info(struct amdgv_adapter *ad
 	msg->buf = buff;
 
 	if (hdr->version == EEPROM_TABLE_VER_V2_1) {
+		/* tbl_size is EEPROM-sourced; reject sizes smaller than the
+		 * header + extra info so the unsigned subtraction below cannot
+		 * wrap around (CWE-191) and yield a bogus num_recs.
+		 */
+		if (hdr->tbl_size < EEPROM_TABLE_HEADER_SIZE +
+					EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE) {
+			AMDGV_ERROR("Invalid EEPROM table size 0x%x for V2_1\n",
+				    hdr->tbl_size);
+			ret = AMDGV_FAILURE;
+			goto out;
+		}
 		control->num_recs = (hdr->tbl_size -
 					EEPROM_TABLE_HEADER_SIZE -
 					EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE) /
@@ -319,6 +313,15 @@ static int ras_eeprom_legacy_parse_table_hdr_extra_info(struct amdgv_adapter *ad
 		__decode_eeprom_extra_info_from_buff(control, &buff[2]);
 		control->tbl_byte_sum += __calc_extra_info_byte_sum(control);
 	} else if (hdr->version == EEPROM_TABLE_VER_V2) {
+		/* Guard against an EEPROM-sourced tbl_size that would underflow
+		 * the unsigned subtraction below (CWE-191).
+		 */
+		if (hdr->tbl_size < EEPROM_TABLE_HEADER_SIZE) {
+			AMDGV_ERROR("Invalid EEPROM table size 0x%x for V2\n",
+				    hdr->tbl_size);
+			ret = AMDGV_FAILURE;
+			goto out;
+		}
 		control->num_recs = (hdr->tbl_size -
 				     EEPROM_TABLE_HEADER_SIZE) / EEPROM_TABLE_RECORD_SIZE;
 		control->tbl_byte_sum = __calc_hdr_byte_sum(control);
@@ -338,6 +341,15 @@ static int ras_eeprom_legacy_parse_table_hdr_extra_info(struct amdgv_adapter *ad
 
 		__decode_eeprom_extra_info_from_buff(control, &buff[2]);
 	} else if (hdr->version == EEPROM_TABLE_VER_V1) {
+		/* Guard against an EEPROM-sourced tbl_size that would underflow
+		 * the unsigned subtraction below (CWE-191).
+		 */
+		if (hdr->tbl_size < EEPROM_TABLE_HEADER_SIZE) {
+			AMDGV_ERROR("Invalid EEPROM table size 0x%x for V1\n",
+				    hdr->tbl_size);
+			ret = AMDGV_FAILURE;
+			goto out;
+		}
 		control->num_recs = (hdr->tbl_size -
 				     EEPROM_TABLE_HEADER_SIZE) / EEPROM_TABLE_RECORD_SIZE;
 		control->tbl_byte_sum = __calc_hdr_byte_sum(control);
@@ -396,6 +408,18 @@ static int ras_eeprom_legacy_init(struct amdgv_adapter *adapt,
 			goto reset_eeprom;
 
 		amdgv_ras_eeprom_set_max_record_num(adapt, control);
+
+		/* num_recs is derived from EEPROM-sourced tbl_size and can
+		 * decode far above device capacity; bound it before the umc
+		 * bad-page consumers allocate buffers sized by num_recs, where
+		 * the 32-bit num_recs * record-size product would overflow
+		 * (CWE-190).
+		 */
+		if (control->num_recs > control->max_record_num) {
+			AMDGV_ERROR("EEPROM record count %u exceeds max %u\n",
+				    control->num_recs, control->max_record_num);
+			goto reset_eeprom;
+		}
 	}
 
 	return 0;
@@ -419,7 +443,7 @@ static uint32_t __correct_eeprom_dest_address(struct amdgv_adapter *adapt,
 
 	/* When all EEPROM memory used jump back to 0 address */
 	if (next_address > EEPROM_SIZE_BYTES) {
-		AMDGV_INFO("Reached end of EEPROM memory, jumping to 0 "
+		AMDGV_WARN("Reached end of EEPROM memory, jumping to 0 "
 			   "and overriding old record\n");
 		if (adapt->eeprom_control.tbl_hdr.version == EEPROM_TABLE_VER_V1)
 			return EEPROM_RECORD_START;
@@ -538,6 +562,17 @@ int ras_eeprom_legacy_process_records(struct amdgv_adapter *adapt,
 
 	if (!num)
 		return 0;
+
+	/* Bound num to max_record_num so the 32-bit allocation arithmetic
+	 * below (num * record size) cannot overflow (CWE-190) and the per-record
+	 * loop cannot write past the allocated buffers. This guards both the
+	 * read/init (write=false) and write paths.
+	 */
+	if (num < 0 || (uint32_t)num > control->max_record_num) {
+		AMDGV_ERROR("Invalid EEPROM record count %d (max %u)\n",
+			    num, control->max_record_num);
+		return -1;
+	}
 
 	buffs = oss_zalloc(num * (EEPROM_ADDRESS_SIZE + EEPROM_TABLE_RECORD_SIZE));
 	if (!buffs) {

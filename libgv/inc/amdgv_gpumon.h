@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef __AMDGV_GPUMON_H__
@@ -548,6 +531,10 @@ enum amdgv_gpumon_metric_ext_category {
 	AMDGV_GPUMON_METRIC_EXT_CATEGORY__SYS_BASEBOARD_TEMP	= 10ULL,
 	AMDGV_GPUMON_METRIC_EXT_CATEGORY__SYS_GPUBOARD_TEMP	= 11ULL,
 	AMDGV_GPUMON_METRIC_EXT_CATEGORY__SYS_BASEBOARD_POWER	= 12ULL,
+
+	AMDGV_GPUMON_METRIC_EXT_CATEGORY__STATIC_FREQUENCY	= 13ULL,
+	AMDGV_GPUMON_METRIC_EXT_CATEGORY__STATIC_TEMPERATURE	= 14ULL,
+	AMDGV_GPUMON_METRIC_EXT_CATEGORY__STATIC_THROTTLE	= 15ULL,
 };
 
 enum amdgv_gpumon_metric_ext_name {
@@ -664,8 +651,52 @@ enum amdgv_gpumon_metric_ext_name {
 	AMDGV_GPUMON_METRIC_EXT_NAME__VR_TEMP_VDDCR_11_HBM_D			= 108ULL,
 	AMDGV_GPUMON_METRIC_EXT_NAME__VR_TEMP_VDD_USR				= 109ULL,
 	AMDGV_GPUMON_METRIC_EXT_NAME__VR_TEMP_VDDIO_11_E32			= 110ULL,
+
 	AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_POWER_UBB_POWER			= 111ULL,
 	AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_POWER_UBB_POWER_THRESHOLD		= 112ULL,
+
+	AMDGV_GPUMON_METRIC_EXT_NAME__TEMP_MID,
+	AMDGV_GPUMON_METRIC_EXT_NAME__CLK_FCLK,
+	AMDGV_GPUMON_METRIC_EXT_NAME__CLK_FCLK_MAX_LIMIT,
+	AMDGV_GPUMON_METRIC_EXT_NAME__CLK_FCLK_MIN_LIMIT,
+	AMDGV_GPUMON_METRIC_EXT_NAME__CLK_FCLK_DS_DISABLED,
+	AMDGV_GPUMON_METRIC_EXT_NAME__CLK_LCLK,
+	AMDGV_GPUMON_METRIC_EXT_NAME__CLK_LCLK_MAX_LIMIT,
+	AMDGV_GPUMON_METRIC_EXT_NAME__CLK_LCLK_MIN_LIMIT,
+	AMDGV_GPUMON_METRIC_EXT_NAME__CLK_LCLK_DS_DISABLED,
+	AMDGV_GPUMON_METRIC_EXT_NAME__PCIE_OTHER_END_RECOVERY_COUNT,
+
+	AMDGV_GPUMON_METRIC_EXT_NAME__TEMP_SHUTDOWN_XCD,
+	AMDGV_GPUMON_METRIC_EXT_NAME__TEMP_SHUTDOWN_AID,
+	AMDGV_GPUMON_METRIC_EXT_NAME__TEMP_SHUTDOWN_MID,
+	AMDGV_GPUMON_METRIC_EXT_NAME__TEMP_SHUTDOWN_HBM,
+
+	AMDGV_GPUMON_METRIC_EXT_NAME__THROTTLE_TEMP_XCD,
+	AMDGV_GPUMON_METRIC_EXT_NAME__THROTTLE_TEMP_AID,
+	AMDGV_GPUMON_METRIC_EXT_NAME__THROTTLE_TEMP_MID,
+	AMDGV_GPUMON_METRIC_EXT_NAME__THROTTLE_TEMP_HBM,
+
+	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDCR_X0_TEMP,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDCR_X1_TEMP,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDIO_HBM_B_TEMP,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDIO_HBM_D_TEMP,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDIO_04_HBM_B_TEMP,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDIO_04_HBM_D_TEMP,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDCR_HBM_B_TEMP,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDCR_HBM_D_TEMP,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDCR_075_HBM_B_TEMP,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDCR_075_HBM_D_TEMP,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDIO_11_GTA_A_TEMP,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDIO_11_GTA_C_TEMP,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDAN_075_GTA_A_TEMP,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDAN_075_GTA_C_TEMP,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDCR_075_UCIE_TEMP,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDIO_065_UCIEAA_TEMP,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDIO_065_UCIEAM_A_TEMP,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDIO_065_UCIEAM_C_TEMP,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDCR_SOCIO_A_TEMP,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDCR_SOCIO_C_TEMP,
+	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDAN_075_TEMP,
 };
 
 enum amdgv_gpumon_metric_ext_unit {
@@ -784,6 +815,106 @@ struct amdgv_ptl_enable_info {
 	enum amdgv_ptl_format_type pref_format2;
 };
 
+#define AMDGV_GPUMON_MAX_LOCAL_GPUS_UAL_V1 16
+#define AMDGV_GPUMON_UAL_MAX_STATIONS_V1 64
+
+enum amdgv_gpumon_ual_link_type {
+	AMDGV_GPUMON_UALOE = 0,
+	AMDGV_GPUMON_UALINK = 1,
+	AMDGV_GPUMON_UALMAX
+};
+
+enum amdgv_gpumon_ual_npa_address_mode {
+	AMDGV_GPUMON_UAL_NPA_ADDRESS_MODE_SOURCE_ALIASING = 0,
+	AMDGV_GPUMON_UAL_NPA_ADDRESS_MODE_SOURCE_IDENTIFICATION = 1,
+	AMDGV_GPUMON_UAL_NPA_ADDRESS_MODE_MAX
+};
+
+enum amdgv_gpumon_ual_accelerator_vpod_state {
+	AMDGV_GPUMON_UAL_ACCEL_VPOD_STATE_UNCONFIGURED = 0,	/* Accelerator is not configured */
+	AMDGV_GPUMON_UAL_ACCEL_VPOD_STATE_CONFIGURED = 1,	/* Accelerator is configured, but not added to a vPod */
+	AMDGV_GPUMON_UAL_ACCEL_VPOD_STATE_READY = 2,		/* Accelerator is part of a vPod, but not active (nHT disabled / VF driver not loaded, etc.) */
+	AMDGV_GPUMON_UAL_ACCEL_VPOD_STATE_ACTIVE = 3,		/* Accelerator is in a vPod and active */
+	AMDGV_GPUMON_UAL_ACCEL_VPOD_STATE_ERROR = 4			/* Accelerator is in error state */
+};
+
+struct amdgv_gpumon_query_interface_version_rsp_ual {
+	uint32_t intf_ver; /* [31:16] major version, [15:0] minor version */
+};
+
+struct amdgv_gpumon_get_config_rsp_ual_v1 {
+	enum amdgv_gpumon_ual_link_type link_type;
+	/* Accelerator ID - Range 0 to 1023 */
+	uint32_t accelerator_id;
+	/* Physical Pod ID - 128-bit UUID */
+	uint8_t ppod_id[16];
+	/* Physical Pod Size */
+	uint32_t ppod_size;
+	/* station bandwidth share? */
+	uint32_t bandwidth;
+	/* Latency - depending on switch presence and type */
+	uint32_t latency;
+	/* Virtual Pod ID - Range 0 to 1023 */
+	uint32_t vpod_id;
+	uint32_t vpod_size;
+	/* Active accelerators bitmap of 1024 bits */
+	uint32_t vpod_active_accelerators[32];
+	enum amdgv_gpumon_ual_npa_address_mode addr_mode;
+	/* Accelerator vPoD State */
+	enum amdgv_gpumon_ual_accelerator_vpod_state accel_state;
+};
+
+struct amdgv_gpumon_set_ppod_config_req_ual_v1 {
+	uint32_t accelerator_id;
+	/* Physical Pod ID - 128-bit UUID */
+	uint8_t ppod_id[16];
+	/* Physical Pod Size */
+	uint32_t ppod_size;
+	/* station bandwidth share? */
+	uint32_t bandwidth;
+	/* Latency - depending on switch presence and type */
+	uint32_t latency;
+	/* Local Accelerator IDs */
+	uint32_t local_accelerators[AMDGV_GPUMON_MAX_LOCAL_GPUS_UAL_V1];
+};
+
+struct amdgv_gpumon_set_vpod_config_req_ual_v1 {
+	enum amdgv_gpumon_ual_npa_address_mode addr_mode;
+	/* Virtual Pod ID - Range 0 to 1023 */
+	uint32_t vpod_id;
+	uint32_t vpod_size;
+	/* Active accelerators bitmap of 1024 bits */
+	uint32_t vpod_active_accelerators[32];
+};
+
+enum amdgv_gpumon_ual_ports_per_station {
+    AMDGV_GPUMON_UAL_PPS_1 = 1,				/* 1x 800Gbps */
+    AMDGV_GPUMON_UAL_PPS_2 = 2,				/* 2x 400Gbps */
+    AMDGV_GPUMON_UAL_PPS_4 = 4				/* 4x 200Gbps */
+};
+
+struct amdgv_gpumon_set_station_config_req_ual_v1 {
+	/**
+	 * Number of valid stations in this configuration
+	 * Only lane_en_bitmap[0..num_stations-1] will be processed.
+	 */
+	uint8_t num_stations;
+	/**
+	 * Station configuration flags
+	 *
+	 * Bit [3:0]: PortPerStation (PPS) - 1, 2, or 4
+	 * Bit [7:4]: Reserved
+	 */
+	uint8_t station_flag;
+	uint8_t reserved[2];
+	/**
+	 * Bitmap of enabled lanes for each station
+	 * in logical station order.
+	 */
+	uint8_t lane_en_bitmap[AMDGV_GPUMON_UAL_MAX_STATIONS_V1];
+};
+
+
 /* VF Query Functions */
 int amdgv_gpumon_get_metrics(amdgv_dev_t dev, struct amdgv_gpumon_metrics *metrics);
 int amdgv_gpumon_get_gpu_power_usage(amdgv_dev_t dev, int *val);
@@ -809,7 +940,7 @@ int amdgv_gpumon_get_min_dclk0(amdgv_dev_t dev, int *val);
 int amdgv_gpumon_get_min_dclk1(amdgv_dev_t dev, int *val);
 
 int amdgv_gpumon_get_ecc_enabled(amdgv_dev_t dev, bool *val);
-int amdgv_gpumon_get_ecc_support_flag(amdgv_dev_t dev, uint32_t *supported, uint32_t *enabled);
+int amdgv_gpumon_get_ecc_support_flag(amdgv_dev_t dev, uint32_t *supported, uint64_t *enabled);
 int amdgv_gpumon_ras_eeprom_clear(amdgv_dev_t dev);
 void amdgv_gpumon_get_bad_page_record_count(amdgv_dev_t dev, int *bp_cnt);
 int amdgv_gpumon_get_bad_page_info(amdgv_dev_t dev, uint32_t index,
@@ -985,11 +1116,25 @@ int amdgv_gpumon_get_num_static_metrics_ext_entries(amdgv_dev_t dev,
 		uint32_t *entries);
 int amdgv_gpumon_get_npm_info(amdgv_dev_t dev, struct amdgv_gpumon_npm_info *npm_info);
 int amdgv_gpumon_get_node_handle(amdgv_dev_t dev, void **node_handle);
+int amdgv_gpumon_get_cc_mode(amdgv_dev_t dev, enum amdgv_cc_mode *cc_mode);
+int amdgv_gpumon_set_cc_mode(amdgv_dev_t dev, enum amdgv_cc_mode cc_mode);
+int amdgv_gpumon_get_tdi_state(amdgv_dev_t dev, uint32_t idx_vf,
+			       enum amdgv_tdi_state *tdi_state);
 int amdgv_gpumon_get_pcie_dpm_levels(amdgv_dev_t dev,
 			struct amdgv_gpumon_pcie_levels *pcie_levels);
 
 /* PTL APIs - all operations go through scheduler events */
 int amdgv_gpumon_ptl_set_state(amdgv_dev_t dev, bool enable, struct amdgv_ptl_enable_info *info);
 int amdgv_gpumon_ptl_query(amdgv_dev_t dev, struct amdgv_ptl_status_info *info);
+
+bool amdgv_gpumon_ual_is_supported(amdgv_dev_t dev);
+int amdgv_gpumon_ual_get_interface_version(amdgv_dev_t dev, uint32_t *version);
+int amdgv_gpumon_ual_get_config(amdgv_dev_t dev, struct amdgv_gpumon_get_config_rsp_ual_v1 *config);
+int amdgv_gpumon_ual_set_ppod_config(amdgv_dev_t dev, struct amdgv_gpumon_set_ppod_config_req_ual_v1 *config);
+int amdgv_gpumon_ual_set_vpod_config(amdgv_dev_t dev, struct amdgv_gpumon_set_vpod_config_req_ual_v1 *config);
+int amdgv_gpumon_ual_set_station_config(amdgv_dev_t dev, struct amdgv_gpumon_set_station_config_req_ual_v1 *config);
+int amdgv_gpumon_ual_pause(amdgv_dev_t dev);
+int amdgv_gpumon_ual_resume(amdgv_dev_t dev);
+int amdgv_gpumon_ual_trigger_mode2(amdgv_dev_t dev);
 
 #endif // __AMDGV_GPUMON_H__

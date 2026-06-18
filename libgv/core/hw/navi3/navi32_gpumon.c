@@ -1,23 +1,6 @@
-/*
- * Copyright (C) 2021-2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv.h>
@@ -32,6 +15,7 @@
 #include "navi32_powerplay.h"
 #include "navi32_powerplay_swsmu.h"
 #include "navi32_nbio.h"
+#include "navi32_fru.h"
 
 #define FUSE_DATA_248 (0x174F8)
 #define FUSE_DATA_249 (0x174F9)
@@ -314,13 +298,20 @@ static int navi32_get_vbios_info(struct amdgv_adapter *adapt,
 static int navi32_gpumon_get_vbios_cache(struct amdgv_adapter *adapt)
 {
 	struct amdgv_vbios_info *vbiosinfo = &adapt->vbios_cache;
-
+	int i;
 	/* serial only needs to be init once */
 	if (adapt->serial == 0) {
 		if (adapt->gpumon.funcs->get_vbios_info) {
 			vbiosinfo->serial = 0;
 			adapt->gpumon.funcs->get_vbios_info(adapt, vbiosinfo);
 			adapt->serial = vbiosinfo->serial;
+
+			if (vbiosinfo->serial != 0) {
+				adapt->unitid_support = true;
+				for (i = 0; i < adapt->num_vf; i++) {
+					adapt->array_vf[i].unitid = amdgv_gpumon_fcn_ref_id_encode(adapt->serial, i);
+				}
+			}
 		}
 	}
 
@@ -486,9 +477,10 @@ static int navi32_gpumon_sw_init(struct amdgv_adapter *adapt)
 {
 	adapt->gpumon.funcs = &navi32_gpumon_funcs;
 
-	adapt->i2c_cmd_buffer = oss_malloc(64);
+	adapt->i2c_cmd_buffer = oss_malloc(I2C_CMD_BUFFER_SIZE);
 	if (adapt->i2c_cmd_buffer == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL, 64);
+		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+				I2C_CMD_BUFFER_SIZE);
 		return AMDGV_FAILURE;
 	}
 

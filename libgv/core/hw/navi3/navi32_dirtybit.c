@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv_device.h>
@@ -109,7 +92,7 @@ int navi32_is_segment_dirty(struct amdgv_adapter *adapt, uint64_t segment, bool 
 
 		/* wait for a query ready */
 		wait_ret = amdgv_wait_for_register(
-			adapt, SOC15_REG_OFFSET(GC, 0, regGCEA_MAM_STATUS),
+			adapt, SOC15_REG_OFFSET_NAME(GC, 0, regGCEA_MAM_STATUS),
 			REG_FIELD_MASK(GCEA_MAM_STATUS, DBIT_QUERY_RDY),
 			REG_FIELD_MASK(GCEA_MAM_STATUS, DBIT_QUERY_RDY),
 			AMDGV_TIMEOUT(TIMEOUT_STATUS_REG), AMDGV_WAIT_CHECK_EQ,
@@ -140,7 +123,7 @@ int navi32_is_segment_dirty(struct amdgv_adapter *adapt, uint64_t segment, bool 
 	if (query_type == NV32_DBIT_QUERY_GC_MM || query_type == NV32_DBIT_QUERY_MM) {
 		/* wait MM MAM query ready */
 		wait_ret = amdgv_wait_for_register(
-			adapt, SOC15_REG_OFFSET(MMHUB, 0, regDAGB0_MAM_STATUS),
+			adapt, SOC15_REG_OFFSET_NAME(MMHUB, 0, regDAGB0_MAM_STATUS),
 			REG_FIELD_MASK(DAGB0_MAM_STATUS, DBIT_QUERY_RDY),
 			REG_FIELD_MASK(DAGB0_MAM_STATUS, DBIT_QUERY_RDY),
 			AMDGV_TIMEOUT(TIMEOUT_STATUS_REG), AMDGV_WAIT_CHECK_EQ,
@@ -172,7 +155,7 @@ int navi32_is_segment_dirty(struct amdgv_adapter *adapt, uint64_t segment, bool 
 
 		/* wait for a query ready */
 		wait_ret = amdgv_wait_for_register(
-			adapt, SOC15_REG_OFFSET(GC, 0, regGCEA_MAM_STATUS),
+			adapt, SOC15_REG_OFFSET_NAME(GC, 0, regGCEA_MAM_STATUS),
 			REG_FIELD_MASK(GCEA_MAM_STATUS, DBIT_QUERY_RDY),
 			REG_FIELD_MASK(GCEA_MAM_STATUS, DBIT_QUERY_RDY),
 			AMDGV_TIMEOUT(TIMEOUT_STATUS_REG), AMDGV_WAIT_CHECK_EQ,
@@ -194,7 +177,7 @@ int navi32_is_segment_dirty(struct amdgv_adapter *adapt, uint64_t segment, bool 
 	if (query_type == NV32_DBIT_QUERY_GC_MM || query_type == NV32_DBIT_QUERY_MM) {
 		/* wait MM MAM query ready */
 		wait_ret = amdgv_wait_for_register(
-			adapt, SOC15_REG_OFFSET(MMHUB, 0, regDAGB0_MAM_STATUS),
+			adapt, SOC15_REG_OFFSET_NAME(MMHUB, 0, regDAGB0_MAM_STATUS),
 			REG_FIELD_MASK(DAGB0_MAM_STATUS, DBIT_QUERY_RDY),
 			REG_FIELD_MASK(DAGB0_MAM_STATUS, DBIT_QUERY_RDY),
 			AMDGV_TIMEOUT(TIMEOUT_STATUS_REG), AMDGV_WAIT_CHECK_EQ,
@@ -456,7 +439,7 @@ static int navi32_dirtybit_sdma_poll_dbit(struct amdgv_adapter *adapt, struct nv
 	ring->funcs->submit_frame(ring, adapt->dirtybit.query_submission_frame);
 
 	/* poll fence */
-	r = amdgv_fence_wait_polling(ring, seq, AMDGV_GFX_MAX_USEC_TIMEOUT);
+	r = amdgv_fence_wait_polling(ring, seq, AMDGV_SDMA_DBIT_MAX_USEC_TIMEOUT);
 	if (r < 1) {
 		AMDGV_ERROR("Dirty Bit: SDMA poll dbit failed\n");
 		r = AMDGV_FAILURE;
@@ -487,6 +470,7 @@ static int navi32_dirtybit_query_replaced_pages(struct amdgv_adapter *adapt,  st
 	uint32_t bit_pos;
 	uint32_t byte_pos;
 	uint8_t dbit_mask;
+
 	/* get ffbm mapping list for VF */
 	struct amdgv_vf_ffbm_map_list *vf_ffbm_map_list = oss_malloc(sizeof(struct amdgv_vf_ffbm_map_list));
 
@@ -758,7 +742,6 @@ int navi32_dirtybit_hw_init(struct amdgv_adapter *adapt)
 	uint32_t total_usable_fb;
 	uint32_t pf_fb_size;
 	uint64_t bitplane_size = 0;
-	int ret = 0;
 
 	pf_fb_size = adapt->array_vf[AMDGV_PF_IDX].fb_size;
 	amdgv_gpuiov_get_usable_fb_size(adapt, &total_usable_fb);
@@ -800,19 +783,32 @@ int navi32_dirtybit_hw_init(struct amdgv_adapter *adapt)
 
 		adapt->dirtybit.gc_dirty_bitplane = amdgv_memmgr_alloc(
 			&adapt->memmgr_pf, bitplane_size, MEM_GC_DIRTY_BIT_PLANE);
-
 		if (adapt->dirtybit.gc_dirty_bitplane == NULL)
-			ret = AMDGV_FAILURE;
+			goto gc_bitplane_fail;
+
+		adapt->dirtybit.mm_dirty_bitplane = amdgv_memmgr_alloc(
+			&adapt->memmgr_pf, bitplane_size, MEM_MM_DIRTY_BIT_PLANE);
+		if (adapt->dirtybit.mm_dirty_bitplane == NULL)
+			goto mm_bitplane_fail;
 
 		adapt->dirtybit.dirty_page_size = SEGMENT_SIZE_1M;
 	}
-	return ret;
+	return 0;
+
+mm_bitplane_fail:
+	amdgv_memmgr_free(adapt->dirtybit.gc_dirty_bitplane);
+	adapt->dirtybit.gc_dirty_bitplane = NULL;
+gc_bitplane_fail:
+	return AMDGV_FAILURE;
 }
 
 int navi32_dirtybit_hw_fini(struct amdgv_adapter *adapt)
 {
 	if (adapt->dirtybit.gc_dirty_bitplane != NULL)
 		amdgv_memmgr_free(adapt->dirtybit.gc_dirty_bitplane);
+
+	if (adapt->dirtybit.mm_dirty_bitplane != NULL)
+		amdgv_memmgr_free(adapt->dirtybit.mm_dirty_bitplane);
 
 	return 0;
 }

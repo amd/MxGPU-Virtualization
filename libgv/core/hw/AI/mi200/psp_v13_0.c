@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2021-2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv.h>
@@ -41,7 +24,7 @@ int psp_v13_ring_destroy(struct amdgv_adapter *adapt)
 	WREG32(SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_64), GFX_CTRL_CMD_ID_DESTROY_RINGS);
 
 	/* Wait for response flag (bit 31) in C2PMSG_64 */
-	wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_64),
+	wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET_NAME(MP0, 0, regMP0_SMN_C2PMSG_64),
 					   mask, flag, AMDGV_TIMEOUT(TIMEOUT_PSP_REG),
 					   AMDGV_WAIT_CHECK_EQ, 0);
 
@@ -82,7 +65,7 @@ enum psp_status psp_v13_ring_start(struct amdgv_adapter *adapt)
 
 	/* Wait for response flag (bit 31) in C2PMSG_64 */
 	ret = amdgv_psp_wait_for_register(
-	    adapt, SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_64), 0x80000000,
+	    adapt, SOC15_REG_OFFSET_NAME(MP0, 0, regMP0_SMN_C2PMSG_64), 0x80000000,
 	    0x8000FFFF, false, AMDGV_WAIT_FLAG_FORCE_YIELD);
 
 	if (ret != PSP_STATUS__SUCCESS)
@@ -114,7 +97,7 @@ enum psp_status psp_v13_load_key_db(struct amdgv_adapter *adapt,
 
 	/* wait for C2P[35] != PSP_BL__LOAD_KEY_DATABASE */
 	if (amdgv_psp_wait_for_register(
-		adapt, SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_35),
+		adapt, SOC15_REG_OFFSET_NAME(MP0, 0, regMP0_SMN_C2PMSG_35),
 		0x80000000, 0x80000000, false, AMDGV_WAIT_FLAG_FORCE_YIELD) != PSP_STATUS__SUCCESS) {
 		return PSP_STATUS__ERROR_GENERIC;
 	}
@@ -151,7 +134,7 @@ enum psp_status psp_v13_load_sysdrv(struct amdgv_adapter *adapt,
 
 	/* wait for C2P[35] != PSP_BL__LOAD_SYSDRV */
 	if (amdgv_psp_wait_for_register(
-		adapt, SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_35),
+		adapt, SOC15_REG_OFFSET_NAME(MP0, 0, regMP0_SMN_C2PMSG_35),
 		0x80000000, 0x80000000, false, AMDGV_WAIT_FLAG_FORCE_YIELD) != PSP_STATUS__SUCCESS) {
 		return PSP_STATUS__ERROR_GENERIC;
 	}
@@ -191,10 +174,8 @@ enum psp_status psp_v13_load_sos(struct amdgv_adapter *adapt,
 	 * PSP drv_sys and sOS are loaded, alive and ready to respond
 	 * to GFX mailbox (commands from host and VMs)
 	 */
-	if (psp_v13_wait_sos_loaded_status(adapt) == false) {
-		AMDGV_ERROR("TIMEOUT waiting for PSP tOS sign-of-life\n");
+	if (psp_v13_wait_sos_loaded_status(adapt) == false)
 		return PSP_STATUS__ERROR_GENERIC;
-	}
 
 	fw_ver = ((struct psp_fw_image_header *)(fw_image))->image_version;
 
@@ -233,11 +214,6 @@ static enum psp_status psp_v13_program_register(struct amdgv_adapter *adapt,
 	WREG32(SOC15_REG_OFFSET(GC, 0, mmSCRATCH_REG0), idx_vf);
 
 	ret = amdgv_psp_cmd_km_submit(adapt, program_reg_cmd, NULL);
-
-	if (ret != PSP_STATUS__SUCCESS) {
-		AMDGV_ERROR("PSP: Failed to Write Register %d\n", reg_id);
-		ret = PSP_STATUS__ERROR_GENERIC;
-	}
 
 	/* Clear system memory used for Program Reg CMD */
 	oss_memset(program_reg_cmd, 0, sizeof(struct psp_cmd_km));
@@ -366,23 +342,17 @@ static enum psp_status psp_v13_set_mb_int(struct amdgv_adapter *adapt, uint32_t 
 		vfgate_cmd->cmd.vfgate.action = GFX_SCMD_VFGATE_DISABLE;
 
 	ret = amdgv_psp_cmd_km_submit(adapt, vfgate_cmd, &psp_resp);
-
 	if (ret == PSP_STATUS__SUCCESS) {
 		resp_enable = psp_resp.sriov_mbstatus & SRIOV_MBSTATUS_ISENABLED_MASK;
 
 		if (resp_enable == enable)
-			AMDGV_INFO("psp mailbox %s for VF%d\n",
+			AMDGV_DEBUG("psp mailbox %s for VF%d\n",
 				   enable ? "enabled" : "disabled", idx_vf);
 		else {
-			AMDGV_INFO("psp mailbox failed to %s for VF%d\n",
+			AMDGV_ERROR("psp mailbox failed to %s for VF%d\n",
 				   enable ? "enable" : "disable", idx_vf);
 			ret = PSP_STATUS__ERROR_GENERIC;
 		}
-	}
-
-	if (ret != PSP_STATUS__SUCCESS) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_VFGATE_FAIL, 0);
-		ret = PSP_STATUS__ERROR_GENERIC;
 	}
 
 	/* Clear system memory used for VFGATE CMD */
@@ -418,11 +388,7 @@ static enum psp_status psp_v13_get_mb_int_status(struct amdgv_adapter *adapt,
 	vfgate_cmd->cmd.vfgate.action = GFX_SCMD_VFGATE_STATUS;
 
 	ret = amdgv_psp_cmd_km_submit(adapt, vfgate_cmd, &psp_resp);
-
-	if (ret != PSP_STATUS__SUCCESS) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_VFGATE_FAIL, 0);
-		ret = PSP_STATUS__ERROR_GENERIC;
-	} else {
+	if (ret == PSP_STATUS__SUCCESS) {
 		if (psp_resp.sriov_mbstatus & SRIOV_MBSTATUS_ISENABLED_MASK)
 				mb_status->vf_gate_enabled = true;
 		else
@@ -459,12 +425,6 @@ static enum psp_status psp_v13_clear_vf_fw(struct amdgv_adapter *adapt,
 	psp_resp.status = 0xdeadbeef;
 	ret = amdgv_psp_cmd_km_submit(adapt, &psp_cmd, &psp_resp);
 
-	if (ret != PSP_STATUS__SUCCESS || psp_resp.status != 0) {
-		  AMDGV_INFO("PSP: failed to submit GFX_CMD_ID_CLEAR_VF_FW "\
-				  "(gfx_cmd_resp=0x%08x)\n", psp_resp.status);
-		  ret = PSP_STATUS__ERROR_GENERIC;
-	}
-
 	return ret;
 }
 
@@ -490,13 +450,6 @@ static enum psp_status psp_v13_set_num_vfs(struct amdgv_adapter *adapt)
 	psp_resp.status = 0xdeadbeef;
 	ret = amdgv_psp_cmd_km_submit(adapt, &psp_cmd, &psp_resp);
 
-	if (ret != PSP_STATUS__SUCCESS || psp_resp.status != 0) {
-		AMDGV_INFO("PSP: failed to submit GFX_CMD_ID_NUM_ENABLED_VFS "
-			   "(gfx_cmd_resp=0x%08x)\n",
-			   psp_resp.status);
-		ret = PSP_STATUS__ERROR_GENERIC;
-	}
-
 	return ret;
 }
 
@@ -516,6 +469,7 @@ bool psp_v13_wait_sos_loaded_status(struct amdgv_adapter *adapt)
 	uint32_t reg_index = SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_81);
 	void *context_array[2] = {(void *)adapt, 0};	/* param for amdgv_wait_for */
 	int wait_ret;
+	struct amdgv_wait_for_cb_context cb_context = { 0 };
 
 	/* If PSP TOS is loaded and alive, C2P 81 will be incrementing
 	 *  (PSP Sign of Life / increments once per 100ms)
@@ -525,8 +479,10 @@ bool psp_v13_wait_sos_loaded_status(struct amdgv_adapter *adapt)
 
 	oss_msleep(100); /* this sleep is REQUIRED since TOS may just starting */
 
+	cb_context.ctx = context_array;
+	cb_context.type = AMDGV_WAIT_FOR_PSP_TOS_LOADED_STATUS;
 	wait_ret = amdgv_wait_for(adapt, psp_v13_wait_sos_loaded_status_cb,
-				  (void *)context_array, AMDGV_TIMEOUT(TIMEOUT_PSP_REG), 0);
+				  &cb_context, AMDGV_TIMEOUT(TIMEOUT_PSP_REG), 0);
 	if (!wait_ret)
 		return true;
 	else
@@ -561,17 +517,10 @@ enum psp_status psp_v13_dump_tracelog(struct amdgv_adapter *adapt,
 
 	if (ret == PSP_STATUS__SUCCESS)
 		*buf_used_size = psp_resp.info;
-	else {
+	else
 		*buf_used_size = 0;
-		if (psp_resp.status == PSP_KM_TEE_ERROR_NOT_SUPPORTED)
-			amdgv_put_error(AMDGV_PF_IDX,
-					AMDGV_ERROR_FW_NOT_SUPPORTED_FEATURE, 0);
-		else
-			amdgv_put_error(AMDGV_PF_IDX,
-					AMDGV_ERROR_FW_GET_PSP_TRACELOG_FAIL,
-					psp_resp.status);
-	}
-	AMDGV_INFO("Addr: 0x%08lx%08lx size=0x%x rsp.info=0x%x rsp.st=0x%x\n",
+
+	AMDGV_DEBUG("Addr: 0x%08lx%08lx size=0x%x rsp.info=0x%x rsp.st=0x%x\n",
 		       dump_tracelog_cmd->cmd.dump_tracelog.addr_hi,
 		       dump_tracelog_cmd->cmd.dump_tracelog.addr_lo,
 		       dump_tracelog_cmd->cmd.dump_tracelog.size,
@@ -606,20 +555,7 @@ enum psp_status psp_v13_set_snapshot_addr(struct amdgv_adapter *adapt,
 	snapshot_set_addr_cmd->cmd.dbg_snapshot_setaddr.size = buf_size;
 
 	ret = amdgv_psp_cmd_km_submit(adapt, snapshot_set_addr_cmd, &psp_resp);
-
-	if (ret != PSP_STATUS__SUCCESS) {
-		if (psp_resp.status == PSP_KM_TEE_ERROR_NOT_SUPPORTED) {
-			amdgv_put_error(AMDGV_PF_IDX,
-					AMDGV_ERROR_FW_NOT_SUPPORTED_FEATURE, 0);
-			ret = PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
-		} else {
-			amdgv_put_error(AMDGV_PF_IDX,
-					AMDGV_ERROR_FW_SET_SNAPSHOT_ADDR_FAIL,
-					psp_resp.status);
-		}
-	}
-
-	AMDGV_INFO("Addr: 0x%08lx%08lx size=0x%x rsp.info=0x%x rsp.st=0x%x\n",
+	AMDGV_DEBUG("Addr: 0x%08lx%08lx size=0x%x rsp.info=0x%x rsp.st=0x%x\n",
 			   snapshot_set_addr_cmd->cmd.dbg_snapshot_setaddr.addr_hi,
 			   snapshot_set_addr_cmd->cmd.dbg_snapshot_setaddr.addr_lo,
 			   snapshot_set_addr_cmd->cmd.dbg_snapshot_setaddr.size,
@@ -652,23 +588,13 @@ enum psp_status psp_v13_trigger_snapshot(struct amdgv_adapter *adapt,
 	snapshot_trigger_cmd->cmd.dbg_snapshot_trigger.sections = sections;
 
 	ret = amdgv_psp_cmd_km_submit(adapt, snapshot_trigger_cmd, &psp_resp);
-
 	if (ret == PSP_STATUS__SUCCESS) {
 		*buf_used_size = psp_resp.info;
 	} else {
 		*buf_used_size = 0;
-		if (psp_resp.status == PSP_KM_TEE_ERROR_NOT_SUPPORTED) {
-			amdgv_put_error(AMDGV_PF_IDX,
-					AMDGV_ERROR_FW_NOT_SUPPORTED_FEATURE, 0);
-			ret = PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
-		} else {
-			amdgv_put_error(AMDGV_PF_IDX,
-					AMDGV_ERROR_FW_SNAPSHOT_TRIGGER_FAIL,
-					psp_resp.status);
-		}
 	}
 
-	AMDGV_INFO("sections: 0x%x target_vfid=0x%x rsp.info=0x%x rsp.st=0x%x\n",
+	AMDGV_DEBUG("sections: 0x%x target_vfid=0x%x rsp.info=0x%x rsp.st=0x%x\n",
 			   snapshot_trigger_cmd->cmd.dbg_snapshot_trigger.sections,
 			   snapshot_trigger_cmd->cmd.dbg_snapshot_trigger.target_vfid,
 			   psp_resp.info,
@@ -696,17 +622,7 @@ static enum psp_status psp_v13_get_migration_version(struct amdgv_adapter *adapt
 	migration_get_psp_info_cmd->cmd.migration_get_psp_info.migration_version = 0;
 
 	ret = amdgv_psp_cmd_km_submit(adapt, migration_get_psp_info_cmd, &psp_resp);
-	if (ret != PSP_STATUS__SUCCESS) {
-		if (psp_resp.status == PSP_KM_TEE_ERROR_NOT_SUPPORTED) {
-			amdgv_put_error(AMDGV_PF_IDX,
-				AMDGV_ERROR_FW_NOT_SUPPORTED_FEATURE, 0);
-			ret = PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
-		} else {
-			amdgv_put_error(AMDGV_PF_IDX,
-				AMDGV_ERROR_FW_MIGRATION_GET_PSP_INFO_FAIL,
-				psp_resp.status);
-		}
-	} else {
+	if (ret == PSP_STATUS__SUCCESS) {
 		*migration_version =
 			psp_resp.uresp.migration_info.migration_version;
 		AMDGV_DEBUG("Live Migration Version: 0x%x\n", *migration_version);
@@ -806,9 +722,30 @@ static enum psp_status psp_v13_transfer_manifest_data(struct amdgv_adapter *adap
 
 	ret = amdgv_psp_cmd_km_submit(adapt, migration_cmd, &psp_resp);
 
+	if (ret != PSP_STATUS__SUCCESS) {
+		if (psp_resp.status == PSP_KM_TEE_ERROR_NOT_SUPPORTED) {
+			amdgv_put_error(AMDGV_PF_IDX,
+				AMDGV_ERROR_FW_NOT_SUPPORTED_FEATURE, 0);
+			ret = PSP_STATUS__ERROR_UNSUPPORTED_FEATURE;
+		}
+		else {
+			if (type == PSP_MIGRATION_IMPORT_DYNAMIC_DATA ||
+				type == PSP_MIGRATION_IMPORT_STATIC_DATA) {
+				amdgv_put_error(AMDGV_PF_IDX,
+					AMDGV_ERROR_FW_MIGRATION_IMPORT_FAIL,
+					psp_resp.status);
+			}
+			else {
+				amdgv_put_error(AMDGV_PF_IDX,
+					AMDGV_ERROR_FW_MIGRATION_EXPORT_FAIL,
+					psp_resp.status);
+			}
+		}
+	}
+
 	if (type == PSP_MIGRATION_EXPORT_STATIC_DATA ||
 		type == PSP_MIGRATION_EXPORT_DYNAMIC_DATA)
-		AMDGV_INFO("Package addr: 0x%08lx%08lx target_vfid=0x%x size=0x%x flags=0x%x rsp.info=0x%x"
+		AMDGV_DEBUG("Package addr: 0x%08lx%08lx target_vfid=0x%x size=0x%x flags=0x%x rsp.info=0x%x"
 			" rsp.st=0x%x\n",
 			migration_cmd->cmd.migration_export.pkg_addr_hi,
 			migration_cmd->cmd.migration_export.pkg_addr_lo,
@@ -820,7 +757,7 @@ static enum psp_status psp_v13_transfer_manifest_data(struct amdgv_adapter *adap
 
 	if (type == PSP_MIGRATION_IMPORT_DYNAMIC_DATA ||
 		type == PSP_MIGRATION_IMPORT_STATIC_DATA)
-		AMDGV_INFO("Package addr: 0x%08lx%08lx target_vfid=0x%x size=0x%x rsp.info=0x%x"
+		AMDGV_DEBUG("Package addr: 0x%08lx%08lx target_vfid=0x%x size=0x%x rsp.info=0x%x"
 			" rsp.st=0x%x\n",
 			migration_cmd->cmd.migration_import.pkg_addr_hi,
 			migration_cmd->cmd.migration_import.pkg_addr_lo,
@@ -926,7 +863,7 @@ static int psp_v13_hw_init(struct amdgv_adapter *adapt)
 	 *    (to indicate boot process complete)
 	 */
 	if (amdgv_psp_wait_for_register(
-		adapt, SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_35),
+		adapt, SOC15_REG_OFFSET_NAME(MP0, 0, regMP0_SMN_C2PMSG_35),
 		0x80000000, 0x80000000, false, AMDGV_WAIT_FLAG_FORCE_YIELD) != PSP_STATUS__SUCCESS) {
 		AMDGV_ERROR("TIMEOUT waiting for GFX mailbox to open\n");
 		return AMDGV_FAILURE;
@@ -983,14 +920,8 @@ static int psp_v13_hw_init(struct amdgv_adapter *adapt)
 
 	ucode_id = AMDGV_FIRMWARE_ID__SMU;
 	r = adapt->ucode.load(adapt, &ucode_id, 1);
-	if (r) {
-		amdgv_put_error(
-			AMDGV_PF_IDX,
-			AMDGV_ERROR_FW_UCODE_LOAD_FAIL,
-			amdgv_psp_cmd_km_fw_id_map(ucode_id)
-		);
+	if (r)
 		return r;
-	}
 	/* wait for SMU to report ready */
 	if (!mi200_smu_13_0_get_fw_loaded_status(adapt)) {
 		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_UCODE_LOAD_FAIL,
@@ -1017,14 +948,8 @@ static int psp_v13_hw_init(struct amdgv_adapter *adapt)
 		psp_v13_set_mb_int(adapt, i, false);
 
 	r = adapt->ucode.load(adapt, ucode_np_seq, ARRAY_SIZE(ucode_np_seq));
-	if (r) {
-		amdgv_put_error(
-			AMDGV_PF_IDX,
-			AMDGV_ERROR_FW_UCODE_LOAD_FAIL,
-			0
-		);
+	if (r)
 		return r;
-	}
 
 	psp_ret = amdgv_psp_xgmi_mem_init(adapt);
 	if (psp_ret != PSP_STATUS__SUCCESS) {
@@ -1064,16 +989,9 @@ static int psp_v13_hw_fini(struct amdgv_adapter *adapt)
 	struct psp_local_memory *local_mem = &(psp->tmr_context);
 	struct psp_cmd_km tmr_km_cmd = { 0 };
 	struct psp_ras_context *ras_context = &psp->ras_context;
-	struct amdgv_hive_info *hive;
 
 	if ((adapt->xgmi.phy_nodes_num > 1) &&
 	    (!adapt->reset.in_xgmi_chain_reset)) {
-		hive = amdgv_get_xgmi_hive(adapt);
-		if (!hive) {
-			AMDGV_ERROR("XGMI: node 0x%llx, can not match hive "
-				    "0x%llx in the hive list.\n",
-				    adapt->xgmi.node_id, adapt->xgmi.hive_id);
-		}
 		amdgv_xgmi_remove_from_hive(adapt);
 	}
 
@@ -1098,11 +1016,8 @@ static int psp_v13_hw_fini(struct amdgv_adapter *adapt)
 
 			/* Submit CMD buffer to destroy TMR */
 			ret = amdgv_psp_cmd_km_submit(adapt, &tmr_km_cmd, NULL);
-
-			if (ret != PSP_STATUS__SUCCESS) {
+			if (ret != PSP_STATUS__SUCCESS)
 				r = AMDGV_FAILURE;
-				AMDGV_ERROR("PSP: Failed to destroy TMR.\n");
-			}
 		}
 
 		if (psp_v13_ring_destroy(adapt)) {

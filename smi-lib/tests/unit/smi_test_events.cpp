@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "gtest/gtest.h"
@@ -146,19 +129,21 @@ TEST_F(AmdSmiEventsTests, EventCreateMallocNullPtr)
 TEST_F(AmdSmiEventsTests, EventRead)
 {
 	int ret;
-	struct smi_event_set_s set_s;
+	struct smi_event_set_s set_s = {};
 	amdsmi_event_set set = &set_s;
 	amdsmi_event_entry_t event;
-	struct smi_device_info in_payload;
+	struct smi_event_read_request in_payload;
 	struct smi_event_entry mocked_resp = {};
-
-	EXPECT_CALL(*g_system_mock, Poll(_, _, _)).WillOnce(Return(AMDSMI_STATUS_TIMEOUT));
-	ret = amdsmi_event_read(set, 0, &event);
-	ASSERT_EQ(ret, AMDSMI_STATUS_TIMEOUT);
 
 	set_s.num_handles = 1;
 	set_s.devices = (smi_device_handle_t*)malloc(sizeof(smi_device_handle_t));
+	set_s.devices[0].handle = 0;
 	set_s.signaled_device_index = 0;
+
+	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_READ_EVENT)))
+		.WillOnce(amdsmi::SetResponseStatus(AMDSMI_STATUS_TIMEOUT));
+	ret = amdsmi_event_read(set, 0, &event);
+	ASSERT_EQ(ret, AMDSMI_STATUS_TIMEOUT);
 
 	mocked_resp.timestamp = 1;
 	mocked_resp.category = 2;
@@ -174,8 +159,6 @@ TEST_F(AmdSmiEventsTests, EventRead)
 	strcpy(mocked_resp.date, "random date");
 	strcpy(mocked_resp.message, "random message");
 #endif
-
-	EXPECT_CALL(*g_system_mock, Poll(_, _, _)).WillOnce(Return(AMDSMI_STATUS_SUCCESS));
 
 	WhenCalling(std::bind(amdsmi_event_read, set, 0, &event));
 	ExpectCommand(SMI_CMD_CODE_READ_EVENT);

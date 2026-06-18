@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_device.h"
@@ -278,7 +261,7 @@ int amdgv_diag_data_host_collect_reg_dump(struct amdgv_adapter *adapt,
 	file_data->cur_offset += used_size;
 	file_data->last_blk_hdr->next_block_offset = file_data->cur_offset;
 
-	AMDGV_INFO("Register dump of size:%d added\n", used_size);
+	AMDGV_DEBUG("Register dump of size:%d added\n", used_size);
 
 	return 0;
 }
@@ -330,7 +313,7 @@ static int amdgv_diag_data_host_driver_call_trace_log(
 	/* Update the offset to reflect data which is already copied */
 	file_data->cur_offset += used_size;
 
-	AMDGV_INFO("call_trace log of size:%d added\n", used_size);
+	AMDGV_DEBUG("call_trace log of size:%d added\n", used_size);
 	return 0;
 }
 #endif /* #ifndef EXCLUDE_FTRACE */
@@ -340,6 +323,17 @@ int amdgv_diag_data_add_blk(struct amdgv_adapter *adapt,
 				    struct amdgv_diag_data_file_info *file_data,
 				    uint32_t used_size, uint32_t flag)
 {
+	/* used_size is reported by PSP firmware and is untrusted: bound it to
+	 * the source allocation before copying so a value larger than the
+	 * block does not read past mem_blk->vaddr into adjacent kernel heap
+	 * (CWE-125 out-of-bounds read).
+	 */
+	if (used_size > mem_blk->size) {
+		AMDGV_WARN("Block used size (%u) exceeds allocated size (%u)\n",
+			   used_size, mem_blk->size);
+		return AMDGV_FAILURE;
+	}
+
 	/* Generate the header */
 	if (amdgv_diag_data_gen_blk_file_hdr(adapt, file_data, mem_blk->block_id,
 						mem_blk->vaddr, used_size, flag) != 0)
@@ -365,6 +359,17 @@ int amdgv_diag_data_add_blk_without_hdr(struct amdgv_adapter *adapt,
 	/* Check if we have some data */
 	if (!used_size) {
 		AMDGV_WARN("No data available in debug memory block\n");
+		return AMDGV_FAILURE;
+	}
+
+	/* used_size is reported by PSP firmware and is untrusted: bound it to
+	 * the source allocation before copying so a value larger than the
+	 * block does not read past mem_blk->vaddr into adjacent kernel heap
+	 * (CWE-125 out-of-bounds read).
+	 */
+	if (used_size > mem_blk->size) {
+		AMDGV_WARN("Block used size (%u) exceeds allocated size (%u)\n",
+			   used_size, mem_blk->size);
 		return AMDGV_FAILURE;
 	}
 
@@ -563,7 +568,7 @@ int amdgv_diag_data_cache_dump(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	struct amdgv_diag_data_cache_buf *c_buf;
 
 	if (adapt->flags & AMDGV_FLAG_SKIP_DIAG_DATA) {
-		AMDGV_INFO("skip diag_data_cache_dump when AMDGV_FLAG_SKIP_DIAG_DATA flag is set.\n");
+		AMDGV_DEBUG("skip diag_data_cache_dump when AMDGV_FLAG_SKIP_DIAG_DATA flag is set.\n");
 		return 0;
 	}
 
@@ -656,7 +661,7 @@ int amdgv_diag_data_collect(struct amdgv_adapter *adapt, uint32_t bdf, void *buf
 	/* Copy Activity buffer to cache logs only if gpu is initialized*/
 	if (file_hdr.size == 0) {
 		if (adapt) {
-			AMDGV_INFO("Empty cache. Copy activity buf to cache\n");
+			AMDGV_DEBUG("Empty cache. Copy activity buf to cache\n");
 			if (amdgv_diag_data_cache_dump(adapt, AMDGV_PF_IDX,
 				    AMDGV_DIAG_DATA_LOG_COLLECT_ACTIVITY_BUFFER)) {
 				AMDGV_WARN("Can't copy activity buf to cache\n");

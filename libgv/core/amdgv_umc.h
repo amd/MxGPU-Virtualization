@@ -1,24 +1,8 @@
-/*
- * Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #ifndef __AMDGV_UMC_H__
 #define __AMDGV_UMC_H__
 #include "amdgv_ras.h"
@@ -167,7 +151,6 @@ int amdgv_umc_reserve_bad_pages(struct amdgv_adapter *adapt);
 int amdgv_umc_save_bad_pages(struct amdgv_adapter *adapt);
 void amdgv_umc_check_and_handle_bp_in_crit_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf);
 int amdgv_umc_reload_bp_from_rom(struct amdgv_adapter *adapt);
-void *amdgv_umc_grow_bp_buff(void *buff, uint32_t *cap, uint64_t size);
 int amdgv_umc_update_bp_buff(struct amdgv_adapter *adapt, struct eeprom_table_record **bp_buff, uint32_t pages, uint32_t *cap);
 int amdgv_umc_release_bad_pages(struct amdgv_adapter *adapt);
 int amdgv_umc_retrieve_bad_pages(struct amdgv_adapter *adapt);
@@ -202,6 +185,11 @@ int amdgv_umc_local_gpa_to_spa(struct amdgv_adapter *adapt,
 	uint64_t gpa, uint32_t idx_vf, uint64_t *spa);
 int amdgv_umc_local_spa_to_gpa(struct amdgv_adapter *adapt, uint64_t spa,
 	uint64_t *gpa, uint32_t *idx_vf);
+uint32_t amdgv_umc_calc_retired_page_vf_slot(struct amdgv_adapter *adapt,
+						    uint64_t err_addr);
+void amdgv_umc_log_bp_errors(struct amdgv_adapter *adapt, uint32_t record_id);
+bool amdgv_umc_check_bp_in_critical_region(struct amdgv_adapter *adapt,
+						  uint64_t err_addr, uint32_t idx_vf, bool log_err);
 int amdgv_umc_set_eeprom_record(struct amdgv_adapter *adapt,
 	struct eeprom_table_record *record, struct amdgv_ras_eeprom_bad_page_info *bp_info);
 int amdgv_umc_vf_chk_critical_region(struct amdgv_adapter *adapt, uint64_t err_addr,
@@ -211,6 +199,7 @@ int amdgv_umc_across_nps_err_data_init(struct amdgv_adapter *adapt);
 int amdgv_umc_across_nps_err_data_fini(struct amdgv_adapter *adapt);
 int amdgv_umc_fetch_and_sort_bps(struct amdgv_adapter *adapt, uint64_t **bp_offsets);
 int amdgv_umc_fetch_and_sort_bps_across_nps(struct amdgv_adapter *adapt, uint64_t **bp_offsets, int *bp_count);
+int amdgv_umc_sort_bp_offsets(uint64_t *bp_offsets, uint32_t num_bps);
 #endif
 
 /* Sorted bad pages management functions */

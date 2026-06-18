@@ -1,23 +1,7 @@
 /*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "smi_nic_subsystem.h"
@@ -27,6 +11,7 @@
 
 #include <filesystem>
 
+#include "smi_devlink.h"
 #include "smi_sysfs.h"
 
 namespace fs = std::filesystem;
@@ -208,6 +193,8 @@ void SmiNicSubsystemPensando::discover_ports(SmiNic& nic, const std::string& bri
 					     const std::string& pci_path, const std::string& net_path)
 {
 	std::error_code ec;
+	SmiDevlink devlink;
+	devlink.open(bridge_bdf);
 
 	for (const auto& net_entry : fs::directory_iterator(net_path, ec)) {
 		if (ec) {
@@ -226,10 +213,17 @@ void SmiNicSubsystemPensando::discover_ports(SmiNic& nic, const std::string& bri
 
 				if (port_vendor_id == VENDOR_ID && port_device_id == PORT_ID) {
 					if (downstream_port(port_bdf, bridge_bdf, pci_path)) {
-						SmiNicPort port(iface_name, port_bdf, sysfs_class_path, port_sysfs_bus_path);
+						SmiNicPort port(iface_name, port_bdf, sysfs_class_path, port_sysfs_bus_path, NicVendor::AMD);
 						port.discover_infiniband();
 						port.collect_vendor_statistics();
 						port.collect_standard_statistics();
+
+						std::string flavour;
+						if (devlink.is_open() &&
+						    (devlink.get_port_flavour(iface_name, flavour) == 0)) {
+							port.set_flavour(flavour);
+						}
+
 						nic.add_nic_port(port);
 					}
 				}
@@ -401,13 +395,14 @@ void SmiNicSubsystemBroadcom::discover_ports(SmiNic& nic, const std::string& dev
 {
 	std::error_code ec;
 	size_t dot = device_bdf.find('.');
+	SmiDevlink devlink;
+	devlink.open(device_bdf);
 
 	if (dot == std::string::npos) {
 		return;
 	}
 
 	std::string dbd = device_bdf.substr(0, dot);
-
 	for (const auto& net_entry : fs::directory_iterator(net_path, ec)) {
 		if (ec) {
 			continue;
@@ -443,10 +438,17 @@ void SmiNicSubsystemBroadcom::discover_ports(SmiNic& nic, const std::string& dev
 			continue;
 		}
 
-		SmiNicPort port(iface_name, port_bdf, sysfs_class_path, port_sysfs_bus_path);
+		SmiNicPort port(iface_name, port_bdf, sysfs_class_path, port_sysfs_bus_path, NicVendor::Broadcom);
 		port.discover_infiniband();
 		port.collect_vendor_statistics();
 		port.collect_standard_statistics();
+
+		std::string flavour;
+		if (devlink.is_open() &&
+		    (devlink.get_port_flavour(iface_name, flavour) == 0)) {
+			port.set_flavour(flavour);
+		}
+
 		nic.add_nic_port(port);
 	}
 }

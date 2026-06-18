@@ -1,59 +1,25 @@
+# Copyright Advanced Micro Devices, Inc.
 #
-# Copyright (C) 2022-2025 Advanced Micro Devices. All rights reserved.
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy of
-# this software and associated documentation files (the "Software"), to deal in
-# the Software without restriction, including without limitation the rights to
-# use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
-# the Software, and to permit persons to whom the Software is furnished to do so,
-# subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
-# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-#
+# SPDX-License-Identifier: MIT
+
 
 
 import os
 import argparse
+import glob
 import tempfile
 import shutil
 import platform
 from subprocess import run, PIPE
 from ctypeslib.clang2py import main as clangToPy
 
-HEADER = \
-"""
+HEADER = """# Copyright Advanced Micro Devices, Inc.
 #
-# Copyright (C) 2019-2025 Advanced Micro Devices. All rights reserved.
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy of
-# this software and associated documentation files (the "Software"), to deal in
-# the Software without restriction, including without limitation the rights to
-# use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
-# the Software, and to permit persons to whom the Software is furnished to do so,
-# subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
-# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-#
+# SPDX-License-Identifier: MIT
+
 
 import os
 """
-
 
 def parseArgument():
     parser = argparse.ArgumentParser(description="parse input arguments")
@@ -68,6 +34,29 @@ def parseArgument():
     args = vars(parser.parse_args())
 
     return args['output'], args['input'], args['library'], args['clang']
+
+
+def _discover_windows_dk_includes():
+    # libclang needs <time.h> (ucrt) and <vcruntime.h> (MSVC) to parse
+    # amdsmi.h on Windows. Find them under $DK_ROOT and return their parent
+    # directories. Returns [] if DK_ROOT is unset or nothing is found.
+    dk_root = os.environ.get("DK_ROOT")
+    if not dk_root:
+        return []
+    dk_root = dk_root.rstrip("/\\")
+
+    def _pick_newest(pattern):
+        matches = glob.glob(os.path.join(dk_root, *pattern))
+        return max(matches, key=os.path.getmtime) if matches else None
+
+    extras = []
+    vcruntime = _pick_newest(("vc", "*", "include", "vcruntime.h"))
+    if vcruntime:
+        extras.append(os.path.dirname(vcruntime))
+    ucrt_time = _pick_newest(("ms_wdk", "*", "Include", "10.*", "ucrt", "time.h"))
+    if ucrt_time:
+        extras.append(os.path.dirname(ucrt_time))
+    return [os.path.normpath(p) for p in extras]
 
 
 def replace_line(full_path_file_name, string_to_repalce, new_string):
@@ -92,12 +81,14 @@ def main():
         run([clang_path, "--print-resource-dir"], stdout=PIPE, stderr=PIPE, encoding="utf-8").stdout.strip()
 
     os_platform = platform.system()
+    extra_includes = []
     if os_platform == "Windows":
         clang_include_dir += "\\include"
         if "Program Files(x86)" in clang_include_dir:
             clang_include_dir = clang_include_dir.replace("Program Files(x86)", "Progra~2")
         elif "Program Files" in clang_include_dir:
             clang_include_dir = clang_include_dir.replace("Program Files", "Progra~1")
+        extra_includes = _discover_windows_dk_includes()
 
         arguments = input_files + ["-o", output_file]
         line_to_replace = "_libraries['FIXME_STUB'] = FunctionFactoryStub() #  ctypes.CDLL('FIXME_STUB')"
@@ -113,7 +104,8 @@ def main():
         print("Unknown operating system. It is only supporing Linux and Windows.")
         return
 
-    arguments.append("--clang-args=-I{} {}".format(clang_include_dir, "-DWS_RECORD"))
+    include_args = " ".join("-I{}".format(p) for p in [clang_include_dir, *extra_includes])
+    arguments.append("--clang-args={} {}".format(include_args, "-DWS_RECORD"))
     clangToPy(arguments)
 
     replace_line(output_file, line_to_replace, new_line)

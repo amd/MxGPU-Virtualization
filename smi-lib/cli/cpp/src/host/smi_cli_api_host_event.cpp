@@ -1,23 +1,8 @@
-/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #include "amdsmi.h"
 #include "smi_cli_api_host.h"
 #include "smi_cli_helpers.h"
@@ -89,13 +74,11 @@ void thread_func_human(char *stopped, amdsmi_event_set set, Arguments arg)
 	while(*stopped != 'q') {
 #ifdef SMI_ESXI_BUILD
 		ret = host_amdsmi_event_read(set, 500*1000, &event);
-		if (ret == AMDSMI_STATUS_TIMEOUT || ret == AMDSMI_STATUS_NO_DATA)
-			continue;
 #else
 		ret = host_amdsmi_event_read(set, 10*1000*1000, &event);
+#endif
 		if (ret == AMDSMI_STATUS_TIMEOUT)
 			continue;
-#endif
 		if ((ret == AMDSMI_STATUS_SUCCESS) && (event.category != AMDSMI_EVENT_CATEGORY_NON_USED)) {
 			for (unsigned int i = 0; i < arg.devices.size(); i++) {
 				gpu_index = arg.devices[i]->get_gpu_index();
@@ -145,13 +128,11 @@ void thread_func_json(char *stopped, amdsmi_event_set set, Arguments arg)
 	while(*stopped != 'q') {
 #ifdef SMI_ESXI_BUILD
 		ret = host_amdsmi_event_read(set, 500*1000, &event);
-		if (ret == AMDSMI_STATUS_TIMEOUT || ret == AMDSMI_STATUS_NO_DATA)
-			continue;
 #else
 		ret = host_amdsmi_event_read(set, 10*1000*1000, &event);
+#endif
 		if (ret == AMDSMI_STATUS_TIMEOUT)
 			continue;
-#endif
 		if ((ret == AMDSMI_STATUS_SUCCESS) && (event.category != AMDSMI_EVENT_CATEGORY_NON_USED)) {
 			for (unsigned int i = 0; i < arg.devices.size(); i++) {
 				gpu_index = arg.devices[i]->get_gpu_index();
@@ -205,13 +186,11 @@ void thread_func_csv(char *stopped, amdsmi_event_set set, Arguments arg)
 	while(*stopped != 'q') {
 #ifdef SMI_ESXI_BUILD
 		ret = host_amdsmi_event_read(set, 500*1000, &event);
-		if (ret == AMDSMI_STATUS_TIMEOUT || ret == AMDSMI_STATUS_NO_DATA)
-			continue;
 #else
 		ret = host_amdsmi_event_read(set, 10*1000*1000, &event);
+#endif
 		if (ret == AMDSMI_STATUS_TIMEOUT)
 			continue;
-#endif
 		if ((ret == AMDSMI_STATUS_SUCCESS) && (event.category != AMDSMI_EVENT_CATEGORY_NON_USED)) {
 			for (unsigned int i = 0; i < arg.devices.size(); i++) {
 				gpu_index = arg.devices[i]->get_gpu_index();

@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef AMDGV_OSS_WRAPPER_H
@@ -46,6 +29,34 @@ typedef void *event_t;
 typedef void *atomic_t;
 typedef void *thread_t;
 typedef void *timer_t;
+
+#define OSS_LOCK_STRUCT_DEFINED
+
+#ifdef OSS_LOCK_STRUCT_DEFINED
+struct oss_mutex {
+	uint64_t buf[8];
+};
+
+struct oss_radix_tree_root {
+	uint64_t buf[8];
+};
+
+typedef struct oss_spinlock {
+	uint64_t buf[8];
+} oss_spinlock_t;
+
+typedef struct oss_wait_queue_head {
+	uint64_t buf[10];
+} oss_wait_queue_head_t;
+
+struct oss_kfifo {
+	uint64_t buf[8];
+};
+
+typedef struct oss_atomic {
+	uint64_t buf[8];
+} oss_atomic_t;
+#endif
 
 typedef struct {
 	int64_t counter;
@@ -263,6 +274,14 @@ INLINE int oss_pci_bus_reset(oss_dev_t dev)
 	return amdgv_oss_funcs->pci_bus_reset(dev);
 }
 
+INLINE int oss_set_dma_mask(oss_dev_t dev, uint32_t bits)
+{
+	if (amdgv_oss_funcs->set_dma_mask)
+		return amdgv_oss_funcs->set_dma_mask(dev, bits);
+
+	return 0;
+}
+
 /* used to allocate a small buffer */
 INLINE void *oss_malloc(uint32_t size)
 {
@@ -335,19 +354,27 @@ INLINE int oss_alloc_dma_mem(oss_dev_t dev, uint32_t size, enum oss_dma_mem_type
 	return amdgv_oss_funcs->alloc_dma_mem(dev, size, type, dma_mem_info);
 }
 
+INLINE int oss_alloc_dma_mem_with_attr(oss_dev_t dev, uint32_t size,
+				       enum oss_dma_mem_type type,
+				       enum oss_page_attr page_attr,
+				       struct oss_dma_mem_info *dma_mem_info)
+{
+	if (amdgv_oss_funcs->alloc_dma_mem_with_attr)
+		return amdgv_oss_funcs->alloc_dma_mem_with_attr(dev, size, type,
+								page_attr, dma_mem_info);
+
+	if ((page_attr & OSS_PAGE_READWRITE) && (page_attr & OSS_PAGE_WRITECOMBINE))
+		return amdgv_oss_funcs->alloc_dma_mem(dev, size, type, dma_mem_info);
+	else
+		return -1;
+}
+
 INLINE void oss_free_dma_mem(void *handle)
 {
 	amdgv_oss_funcs->free_dma_mem(handle);
 }
 
-INLINE void oss_flush_dma_mem(struct oss_dma_mem_info *dma_mem_info,
-			      enum oss_dma_direction dir, uint64_t offset, uint64_t size)
-{
-	if (amdgv_oss_funcs->flush_dma_mem)
-		amdgv_oss_funcs->flush_dma_mem(dma_mem_info, dir, offset, size);
-}
-
-INLINE unsigned long oss_sg_dma_address(void *handle, uint32_t page)
+INLINE uint64_t oss_sg_dma_address(void *handle, uint32_t page)
 {
 	if (amdgv_oss_funcs->sg_dma_address)
 		return amdgv_oss_funcs->sg_dma_address(handle, page);
@@ -385,14 +412,42 @@ INLINE void oss_spin_lock_fini(spin_lock_t lock)
 	amdgv_oss_funcs->spin_lock_fini(lock);
 }
 
+INLINE void oss_spin_lock_init_raw(void *lock)
+{
+	amdgv_oss_funcs->spin_lock_init_raw(lock);
+}
+
+INLINE void spin_lock_irqsave_raw(void *lock, unsigned long *f)
+{
+	amdgv_oss_funcs->spin_lock_irqsave_raw(lock, f);
+}
+
+#define oss_spin_lock_irqsave_raw(lock, flags) \
+		spin_lock_irqsave_raw(lock, &flags)
+
+INLINE void oss_spin_unlock_irqrestore_raw(void *lock, unsigned long f)
+{
+	amdgv_oss_funcs->spin_unlock_irqrestore_raw(lock, f);
+}
+
 INLINE mutex_t oss_mutex_init(void)
 {
 	return amdgv_oss_funcs->mutex_init();
 }
 
+INLINE void oss_mutex_init_raw(void *mutex)
+{
+	amdgv_oss_funcs->mutex_init_raw(mutex);
+}
+
 INLINE void oss_mutex_lock(mutex_t mutex)
 {
 	amdgv_oss_funcs->mutex_lock(mutex);
+}
+
+INLINE void oss_mutex_destroy_raw(void *mutex)
+{
+	amdgv_oss_funcs->mutex_destroy_raw(mutex);
 }
 
 INLINE void oss_mutex_unlock(mutex_t mutex)
@@ -549,14 +604,19 @@ INLINE void oss_rwsema_fini(rwsema_t lock)
 	amdgv_oss_funcs->rwsema_fini(lock);
 }
 
-INLINE void oss_copy_to_user(void *to, const void *from, uint32_t size)
+INLINE int oss_copy_to_user(void *to, const void *from, uint32_t size)
 {
-	amdgv_oss_funcs->copy_to_user(to, from, size);
+	return amdgv_oss_funcs->copy_to_user(to, from, size);
 }
 
-INLINE void oss_copy_from_user(void *to, const void *from, uint32_t size)
+INLINE int oss_copy_from_user(void *to, const void *from, uint32_t size)
 {
-	amdgv_oss_funcs->copy_from_user(to, from, size);
+	return amdgv_oss_funcs->copy_from_user(to, from, size);
+}
+
+INLINE int oss_access_ok(const void *ptr, unsigned long size)
+{
+	return amdgv_oss_funcs->access_ok(ptr, size);
 }
 
 INLINE event_t oss_event_init(void)
@@ -699,6 +759,11 @@ INLINE void oss_atomic_inc(atomic_t atomic)
 INLINE void oss_atomic_dec(atomic_t atomic)
 {
 	amdgv_oss_funcs->atomic_dec(atomic);
+}
+
+INLINE void oss_atomic_sub(int val, void *atomic)
+{
+	amdgv_oss_funcs->atomic_sub(val, atomic);
 }
 
 INLINE uint64_t oss_atomic_inc_return(atomic_t atomic)
@@ -1029,6 +1094,34 @@ INLINE int oss_store_rlcv_timestamp(const char *buf, uint32_t size, uint32_t bdf
 	return amdgv_oss_funcs->store_rlcv_timestamp && amdgv_oss_funcs->store_rlcv_timestamp(buf, size, bdf);
 }
 
+INLINE void *oss_hbm_dax_init(const char *dev_name, uint64_t phy_addr, uint64_t phy_size)
+{
+	if (amdgv_oss_funcs->hbm_dax_init)
+		return amdgv_oss_funcs->hbm_dax_init(dev_name, phy_addr, phy_size);
+	return NULL;
+}
+
+INLINE void oss_hbm_dax_fini(void *hbm_dax)
+{
+	if (amdgv_oss_funcs->hbm_dax_fini)
+		amdgv_oss_funcs->hbm_dax_fini(hbm_dax);
+}
+
+INLINE void *oss_hbm_drv_mgmt_init(const char *hbm_name, int numa_id,
+				   uint64_t *phy_addr, uint64_t *phy_size)
+{
+	if (amdgv_oss_funcs->hbm_drv_mgmt_init)
+		return amdgv_oss_funcs->hbm_drv_mgmt_init(hbm_name, numa_id,
+							  phy_addr, phy_size);
+	return NULL;
+}
+
+INLINE void oss_hbm_drv_mgmt_fini(void *hbm_drv_mgmt)
+{
+	if (amdgv_oss_funcs->hbm_drv_mgmt_fini)
+		amdgv_oss_funcs->hbm_drv_mgmt_fini(hbm_drv_mgmt);
+}
+
 INLINE int oss_get_ih_rb_info(oss_dev_t dev, uint32_t ih_index, struct oss_ih_rb_info *p_ih_rb_info)
 {
 	if (amdgv_oss_funcs->get_ih_rb_info)
@@ -1090,6 +1183,14 @@ INLINE int oss_save_memory_partition_mode(oss_dev_t dev,
 	if (amdgv_oss_funcs->save_memory_partition_mode)
 		return amdgv_oss_funcs->save_memory_partition_mode(
 			dev, memory_partition_mode);
+
+	return 0;
+}
+
+INLINE int oss_save_cc_mode(oss_dev_t dev, uint32_t cc_mode)
+{
+	if (amdgv_oss_funcs->save_cc_mode)
+		return amdgv_oss_funcs->save_cc_mode(dev, cc_mode);
 
 	return 0;
 }
@@ -1163,6 +1264,62 @@ INLINE void oss_get_device_list(oss_dev_t *dev_list, int *size)
 {
 	if (amdgv_oss_funcs->get_device_list)
 		amdgv_oss_funcs->get_device_list(dev_list, size);
+	else if (size)
+		*size = 0;
+}
+
+INLINE void *oss_init_vf_sysmem_xchg(oss_dev_t dev, uint32_t idx_vf, uint64_t gpa_base,
+				     uint32_t size)
+{
+	if (amdgv_oss_funcs->init_vf_sysmem_xchg)
+		return amdgv_oss_funcs->init_vf_sysmem_xchg(dev, idx_vf, gpa_base, size);
+
+	return NULL;
+}
+
+INLINE void oss_fini_vf_sysmem_xchg(oss_dev_t dev, void *context)
+{
+	if (amdgv_oss_funcs->fini_vf_sysmem_xchg)
+		amdgv_oss_funcs->fini_vf_sysmem_xchg(dev, context);
+}
+
+INLINE int oss_write_vf_sysmem_xchg(oss_dev_t dev, void *context, char *buf, uint32_t offset,
+				  uint32_t size)
+{
+	if (amdgv_oss_funcs->write_vf_sysmem_xchg)
+		return amdgv_oss_funcs->write_vf_sysmem_xchg(dev, context, buf, offset, size);
+
+	return -1;
+}
+
+INLINE int oss_read_vf_sysmem_xchg(oss_dev_t dev, void *context, char *buf, uint32_t offset,
+				  uint32_t size)
+{
+	if (amdgv_oss_funcs->read_vf_sysmem_xchg)
+		return amdgv_oss_funcs->read_vf_sysmem_xchg(dev, context, buf, offset, size);
+
+	return -1;
+}
+
+INLINE int oss_vf_sysmem_xchg_gpa_to_spa(oss_dev_t dev, void *context, uint32_t idx, struct oss_spa_range *entry)
+{
+	if (amdgv_oss_funcs->vf_sysmem_xchg_gpa_to_spa)
+		return amdgv_oss_funcs->vf_sysmem_xchg_gpa_to_spa(dev, context, idx, entry);
+
+	return -1;
+}
+
+
+
+
+INLINE int oss_register_mce_notifier(void *dev, mce_notifier notifier)
+{
+	return amdgv_oss_funcs->register_mce_notifier(dev, notifier);
+}
+
+INLINE int oss_unregister_mce_notifier(void *dev)
+{
+	return amdgv_oss_funcs->unregister_mce_notifier(dev);
 }
 
 #endif

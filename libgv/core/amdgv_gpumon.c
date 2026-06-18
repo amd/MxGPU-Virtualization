@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2022 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv_device.h"
@@ -193,8 +176,14 @@ static const char *amdgv_gpumon_event_name(enum amdgv_gpumon_type type)
 		return "GPUMON_GET_NUM_STATIC_METRICS_EXT_ENTRIES";
 	case GPUMON_GET_NPM_INFO:
 		return "GPUMON_GET_NPM_INFO";
+	case GPUMON_GET_CC_MODE:
+		return "GPUMON_GET_CC_MODE";
+	case GPUMON_SET_CC_MODE:
+		return "GPUMON_SET_CC_MODE";
 	case GPUMON_PTL_SET_STATE:
 		return "GPUMON_PTL_SET_STATE";
+	case GPUMON_UAL_SET_PPOD_CONFIG:
+		return "GPUMON_UAL_SET_PPOD_CONFIG";
 	case GPUMON_PTL_QUERY_STATUS:
 		return "GPUMON_PTL_QUERY_STATUS";
 	case GPUMON_GET_PCIE_DPM_LEVELS:
@@ -685,11 +674,12 @@ int amdgv_gpumon_get_ecc_enabled(amdgv_dev_t dev, bool *val)
 	return ret;
 }
 
-int amdgv_gpumon_get_ecc_support_flag(amdgv_dev_t dev, uint32_t *supported, uint32_t *enabled)
+int amdgv_gpumon_get_ecc_support_flag(amdgv_dev_t dev, uint32_t *supported, uint64_t *enabled)
 {
 	struct amdgv_adapter *adapt;
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
 
 	if (enabled)
 		*enabled = adapt->ecc.enabled;
@@ -1115,8 +1105,10 @@ void amdgv_gpumon_get_bad_page_record_count(amdgv_dev_t dev, int *bp_cnt)
 		return;
 
 	adapt = (struct amdgv_adapter *)dev;
-	if (adapt->status == AMDGV_STATUS_HW_INIT || adapt->status == AMDGV_STATUS_HW_RMA)
+
+	if (adapt->status == AMDGV_STATUS_HW_INIT || adapt->status == AMDGV_STATUS_HW_RMA) {
 		amdgv_umc_badpages_count_read(adapt, bp_cnt);
+	}
 }
 
 /* return one bad page record at one time according to index */
@@ -1786,16 +1778,11 @@ int amdgv_gpumon_set_memory_partition_mode(
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
-	if (memory_partition_mode == AMDGV_MEMORY_PARTITION_MODE_UNKNOWN) {
-		AMDGV_ERROR("invalid memory partition mode\n");
+	if (memory_partition_mode == AMDGV_MEMORY_PARTITION_MODE_UNKNOWN)
 		return AMDGV_ERROR_GPUMON_INVALID_MODE;
-	}
 
-	if (amdgv_gpumon_get_memory_partition_mode(
-		    dev, &curr_memory_partition_info)) {
-		AMDGV_ERROR("failed to get current memory partition mode\n");
+	if (amdgv_gpumon_get_memory_partition_mode(dev, &curr_memory_partition_info))
 		return AMDGV_FAILURE;
-	}
 
 	/* check if previous set memory partition mode in progress */
 	if (adapt->mcp.mem_mode_switch_requested) {
@@ -1812,10 +1799,8 @@ int amdgv_gpumon_set_memory_partition_mode(
 		return AMDGV_ERROR_GPUMON_SET_ALREADY;
 	}
 
-	if (amdgv_gpumon_get_hive_vf_count(adapt)) {
-		AMDGV_ERROR("set memory partition mode not allowed when active VM/VFs running!\n");
+	if (amdgv_gpumon_get_hive_vf_count(adapt))
 		return AMDGV_ERROR_GPUMON_VF_BUSY;
-	}
 
 	hive = amdgv_get_xgmi_hive(adapt);
 	if (hive) {
@@ -1881,11 +1866,8 @@ int amdgv_gpumon_set_accelerator_partition_profile(
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
 	/* check if requested accelerator_partition_profile is same as current */
-	if (amdgv_gpumon_get_accelerator_partition_profile(
-		    dev, &accelerator_partition_profile)) {
-		AMDGV_ERROR("failed to get accelerator_partition_profile\n");
+	if (amdgv_gpumon_get_accelerator_partition_profile(dev, &accelerator_partition_profile))
 		return AMDGV_FAILURE;
-	}
 	if (accelerator_partition_profile.profile_index ==
 	    accelerator_partition_profile_index) {
 		AMDGV_INFO(
@@ -1894,10 +1876,8 @@ int amdgv_gpumon_set_accelerator_partition_profile(
 		return AMDGV_ERROR_GPUMON_SET_ALREADY;
 	}
 
-	if (amdgv_gpumon_get_hive_vf_count(adapt)) {
-		AMDGV_ERROR("set accelerator partition mode not allowed when active VM/VFs running!\n");
+	if (amdgv_gpumon_get_hive_vf_count(adapt))
 		return AMDGV_ERROR_GPUMON_VF_BUSY;
-	}
 
 	hive = amdgv_get_xgmi_hive(adapt);
 	if (hive) {
@@ -1925,33 +1905,26 @@ int amdgv_gpumon_reset_partition_mode(amdgv_dev_t dev)
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
 	/* reset memory partition mode to NPS1 */
-	ret = amdgv_gpumon_set_memory_partition_mode(dev,
-			AMDGV_MEMORY_PARTITION_MODE_NPS1);
-	if (ret) {
-		AMDGV_ERROR("failed to reset memory partition mode\n");
-		return AMDGV_FAILURE;
-	}
+	ret = amdgv_gpumon_set_memory_partition_mode(dev, AMDGV_MEMORY_PARTITION_MODE_NPS1);
+	if (ret)
+		return ret;
 
 	/* reset accelerator partition mode to 1VF:SPX 2VF:DPX 4VF:QPX 8VF:CPX */
 	accelerator_partition_profile_config = oss_zalloc(
 		sizeof(struct amdgv_gpumon_accelerator_partition_profile_config));
 	if (accelerator_partition_profile_config == NULL) {
-		AMDGV_ERROR("failed to allocate memory for  accelerator partition profile\n");
+		AMDGV_ERROR("failed to allocate memory for accelerator partition profile\n");
 		return AMDGV_FAILURE;
 	}
 	ret = amdgv_gpumon_get_accelerator_partition_profile_config(dev,
 			accelerator_partition_profile_config);
-	if (ret) {
-		AMDGV_ERROR("failed to get accelerator partition config\n");
+	if (ret)
 		goto out;
-	}
 	for (i = 0; i < accelerator_partition_profile_config->number_of_profiles; i++) {
 		if (accelerator_partition_profile_config->profiles[i].num_partitions == adapt->num_vf) {
 			ret = amdgv_gpumon_set_accelerator_partition_profile(dev, i);
-			if (ret != 0 && ret != AMDGV_ERROR_GPUMON_SET_ALREADY) {
-				AMDGV_ERROR("failed to reset accelerator partition mode\n");
+			if (ret != 0 && ret != AMDGV_ERROR_GPUMON_SET_ALREADY)
 				goto out;
-			}
 			break;
 		}
 	}
@@ -2474,6 +2447,9 @@ int amdgv_gpumon_get_link_metrics(amdgv_dev_t dev,
 	if (!link_metrics)
 		return AMDGV_FAILURE;
 
+	if (!amdgv_get_xgmi_hive(adapt))
+		return ret;
+
 	oss_memset(link_metrics, 0, sizeof(struct amdgv_gpumon_link_metrics));
 
 	oss_mutex_lock(adapt->gpumon_hive_lock);
@@ -2512,6 +2488,9 @@ int amdgv_gpumon_get_link_topology(amdgv_dev_t src_dev,
 	if (!topology_info)
 		return AMDGV_FAILURE;
 
+	if (!amdgv_get_xgmi_hive(src_adapt))
+		return ret;
+
 	oss_mutex_lock(src_adapt->gpumon_hive_lock);
 
 	data.gpumon_data.xgmi_node_topology.dest_adapt = dest_adapt;
@@ -2546,6 +2525,9 @@ int amdgv_gpumon_get_xgmi_fb_sharing_caps(amdgv_dev_t dev,
 
 	if (!caps)
 		return AMDGV_FAILURE;
+
+	if (!amdgv_get_xgmi_hive(adapt))
+		return ret;
 
 	oss_mutex_lock(adapt->gpumon_hive_lock);
 
@@ -2583,6 +2565,9 @@ int amdgv_gpumon_get_xgmi_fb_sharing_mode_info(amdgv_dev_t src_dev,
 
 	if (!is_sharing_enabled)
 		return AMDGV_FAILURE;
+
+	if (!amdgv_get_xgmi_hive(src_adapt))
+		return ret;
 
 	oss_mutex_lock(src_adapt->gpumon_hive_lock);
 
@@ -2623,9 +2608,8 @@ int amdgv_gpumon_set_xgmi_fb_sharing_mode(amdgv_dev_t dev,
 		return ret;
 
 	hive = amdgv_get_xgmi_hive(adapt);
-	if (!hive) {
+	if (!hive)
 		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
-	}
 
 	if (amdgv_gpumon_get_hive_vf_count(adapt)) {
 		return AMDGV_ERROR_GPUMON_VF_BUSY;
@@ -2805,9 +2789,8 @@ int amdgv_gpumon_set_xgmi_fb_custom_sharing_mode(uint32_t dev_list_size,
 	}
 
 	hive = amdgv_get_xgmi_hive(adapt);
-	if (!hive) {
+	if (!hive)
 		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
-	}
 
 	oss_mutex_lock(adapt->gpumon_hive_lock);
 
@@ -3083,8 +3066,7 @@ int amdgv_gpumon_get_ras_session_id(amdgv_dev_t dev, uint64_t *session_ptr)
 	if (ras_context->ras_initialized) {
 		*session_ptr = ras_context->ras_session_id;
 	} else {
-		AMDGV_ERROR("failed to get ras session id!\n");
-		return AMDGV_FAILURE;
+		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
 	}
 
 	return 0;
@@ -3093,17 +3075,10 @@ int amdgv_gpumon_get_ras_session_id(amdgv_dev_t dev, uint64_t *session_ptr)
 int amdgv_gpumon_ras_get_ta_version(amdgv_dev_t dev, unsigned char *fw_image, uint32_t *ver_ptr)
 {
 	struct amdgv_adapter *adapt;
-	uint32_t ret;
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
-	ret = amdgv_psp_ras_get_ta_version(adapt, (uint8_t *)fw_image, ver_ptr);
-	if (ret) {
-		AMDGV_ERROR("failed to get psp ta version!\n");
-		return AMDGV_FAILURE;
-	}
-
-	return 0;
+	return amdgv_psp_ras_get_ta_version(adapt, (uint8_t *)fw_image, ver_ptr);
 }
 
 int amdgv_gpumon_ras_get_loaded_ta_version(amdgv_dev_t dev, uint32_t *ver_ptr)
@@ -3118,8 +3093,7 @@ int amdgv_gpumon_ras_get_loaded_ta_version(amdgv_dev_t dev, uint32_t *ver_ptr)
 	if (ras_context->ras_initialized) {
 		*ver_ptr = adapt->psp.fw_info[AMDGV_FIRMWARE_ID__RAS_TA];
 	} else {
-		AMDGV_ERROR("failed to get loaded ta version!\n");
-		return AMDGV_FAILURE;
+		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
 	}
 
 	return 0;
@@ -3212,6 +3186,125 @@ int amdgv_gpumon_get_npm_info(amdgv_dev_t dev, struct amdgv_gpumon_npm_info *npm
 		if (!ret)
 			ret = event_ret;
 	}
+
+	return ret;
+}
+
+int amdgv_gpumon_get_cc_mode(amdgv_dev_t dev, enum amdgv_cc_mode *cc_mode)
+{
+	struct amdgv_adapter *adapt;
+	union amdgv_sched_event_data data;
+	int ret = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+	int event_ret = 0;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (!cc_mode)
+		return AMDGV_FAILURE;
+
+	data.gpumon_data.ptr = cc_mode;
+	data.gpumon_data.type = GPUMON_GET_CC_MODE;
+	data.gpumon_data.result = &event_ret;
+
+	if (adapt->gpumon.funcs &&
+	    adapt->gpumon.funcs->get_cc_mode) {
+		ret = amdgv_sched_queue_event_and_wait_ex(
+			adapt, AMDGV_PF_IDX, AMDGV_EVENT_SCHED_GPUMON,
+			AMDGV_SCHED_BLOCK_ALL, data);
+		if (!ret)
+			ret = event_ret;
+	}
+
+	return ret;
+}
+
+/*
+ * TDI (TEE Device Interface) state query for a given VF.
+ *
+ * No ASIC backend implements this yet, so this is a stub that returns
+ * AMDGV_ERROR_GPUMON_NOT_SUPPORTED. When an ASIC implementation lands,
+ * wire it through a gpumon vtable hook + scheduler event (see
+ * amdgv_gpumon_get_cc_mode above for the pattern).
+ */
+int amdgv_gpumon_get_tdi_state(amdgv_dev_t dev, uint32_t idx_vf,
+			       enum amdgv_tdi_state *tdi_state)
+{
+	struct amdgv_adapter *adapt;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (!tdi_state)
+		return AMDGV_FAILURE;
+
+	if (idx_vf >= adapt->num_vf && idx_vf != AMDGV_PF_IDX)
+		return AMDGV_ERROR_GPUMON_INVALID_VF_NUM;
+
+	return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+}
+
+static inline const char *amdgv_get_cc_mode_desc(enum amdgv_cc_mode cc_mode)
+{
+	switch (cc_mode) {
+	case AMDGV_CC_MODE_OFF:
+		return "OFF";
+	case AMDGV_CC_MODE_ON:
+		return "ON";
+	case AMDGV_CC_MODE_DEV:
+		return "DEV";
+	default:
+		return "UNKNOWN";
+	}
+}
+
+int amdgv_gpumon_set_cc_mode(amdgv_dev_t dev, enum amdgv_cc_mode cc_mode)
+{
+	struct amdgv_adapter *adapt;
+	struct amdgv_adapter *next_adapt;
+	struct amdgv_hive_info *hive;
+	enum amdgv_cc_mode curr_cc_mode;
+
+	bool is_need_reset = false;
+	int tmp = 0;
+	int ret = 0;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (cc_mode >= AMDGV_CC_MODE_MAX)
+		return AMDGV_ERROR_GPUMON_INVALID_MODE;
+	/* Get current CC mode */
+	if (amdgv_gpumon_get_cc_mode(dev, &curr_cc_mode))
+		return AMDGV_FAILURE;
+
+	/* check if requested CC mode is same as current */
+	if (curr_cc_mode == cc_mode) {
+		AMDGV_INFO("current CC mode is already set to %s\n",
+			   amdgv_get_cc_mode_desc(cc_mode));
+		return AMDGV_ERROR_GPUMON_SET_ALREADY;
+	}
+
+	if (amdgv_gpumon_get_hive_vf_count(adapt))
+		return AMDGV_ERROR_GPUMON_VF_BUSY;
+
+	hive = amdgv_get_xgmi_hive(adapt);
+	if (hive) {
+		oss_mutex_lock(adapt->gpumon_hive_lock);
+		amdgv_list_for_each_entry(next_adapt, &hive->adapt_list, struct amdgv_adapter, xgmi.head) {
+			tmp = amdgv_set_cc_mode(next_adapt, cc_mode);
+			if (tmp == 0)
+				is_need_reset = true;
+			ret |= tmp;
+		}
+	} else {
+		ret = amdgv_set_cc_mode(adapt, cc_mode);
+		if (ret == 0)
+			is_need_reset = true;
+	}
+
+	if (hive)
+		oss_mutex_unlock(adapt->gpumon_hive_lock);
+
+	if (is_need_reset)
+		amdgv_sched_queue_event(adapt, AMDGV_PF_IDX, AMDGV_EVENT_SCHED_FORCE_RESET_GPU, 0);
 
 	return ret;
 }
@@ -3818,6 +3911,26 @@ int amdgv_gpumon_handle_sched_event(struct amdgv_adapter *adapt,
 		ret = adapt->gpumon.funcs->get_npm_info(adapt, npm_info);
 		*event->data.gpumon_data.result = ret;
 		break;
+	case GPUMON_GET_CC_MODE:
+		if (adapt->gpumon.funcs == NULL ||
+			adapt->gpumon.funcs->get_cc_mode == NULL) {
+			*event->data.gpumon_data.result = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+			break;
+		}
+		ret = adapt->gpumon.funcs->get_cc_mode(adapt,
+			event->data.gpumon_data.ptr);
+		*event->data.gpumon_data.result = ret;
+		break;
+	case GPUMON_SET_CC_MODE:
+		if (adapt->gpumon.funcs == NULL ||
+			adapt->gpumon.funcs->set_cc_mode == NULL) {
+			*event->data.gpumon_data.result = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+			break;
+		}
+		ret = adapt->gpumon.funcs->set_cc_mode(adapt,
+			event->data.gpumon_data.cc_mode);
+		*event->data.gpumon_data.result = ret;
+		break;
 	case GPUMON_PTL_SET_STATE:
 		if (event->data.gpumon_data.ptl.enable) {
 			if (adapt->gpumon.funcs && adapt->gpumon.funcs->ptl_enable) {
@@ -3846,6 +3959,83 @@ int amdgv_gpumon_handle_sched_event(struct amdgv_adapter *adapt,
 		} else {
 			ret = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
 		}
+		*event->data.gpumon_data.result = ret;
+		break;
+	case GPUMON_UAL_GET_INTERFACE_VERSION:
+		if (adapt->gpumon.funcs == NULL ||
+			adapt->gpumon.funcs->ual_get_interface_version == NULL) {
+			*event->data.gpumon_data.result = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+			break;
+		}
+		ret = adapt->gpumon.funcs->ual_get_interface_version(adapt,
+				event->data.gpumon_data.ual.version);
+		*event->data.gpumon_data.result = ret;
+		break;
+	case GPUMON_UAL_GET_CONFIG:
+		if (adapt->gpumon.funcs == NULL ||
+			adapt->gpumon.funcs->ual_get_config == NULL) {
+			*event->data.gpumon_data.result = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+			break;
+		}
+		ret = adapt->gpumon.funcs->ual_get_config(adapt,
+				event->data.gpumon_data.ual.get_config);
+		*event->data.gpumon_data.result = ret;
+		break;
+	case GPUMON_UAL_SET_PPOD_CONFIG:
+		if (adapt->gpumon.funcs == NULL ||
+			adapt->gpumon.funcs->ual_set_ppod_config == NULL) {
+			*event->data.gpumon_data.result = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+			break;
+		}
+		ret = adapt->gpumon.funcs->ual_set_ppod_config(adapt,
+				event->data.gpumon_data.ual.set_ppod_config);
+		*event->data.gpumon_data.result = ret;
+		break;
+	case GPUMON_UAL_SET_VPOD_CONFIG:
+		if (adapt->gpumon.funcs == NULL ||
+			adapt->gpumon.funcs->ual_set_vpod_config == NULL) {
+			*event->data.gpumon_data.result = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+			break;
+		}
+		ret = adapt->gpumon.funcs->ual_set_vpod_config(adapt,
+				event->data.gpumon_data.ual.set_vpod_config);
+		*event->data.gpumon_data.result = ret;
+		break;
+	case GPUMON_UAL_SET_STATION_CONFIG:
+		if (adapt->gpumon.funcs == NULL ||
+			adapt->gpumon.funcs->ual_set_station_config == NULL) {
+			*event->data.gpumon_data.result = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+			break;
+		}
+		ret = adapt->gpumon.funcs->ual_set_station_config(adapt,
+				event->data.gpumon_data.ual.set_station_config);
+		*event->data.gpumon_data.result = ret;
+		break;
+	case GPUMON_UAL_PAUSE:
+		if (adapt->gpumon.funcs == NULL ||
+			adapt->gpumon.funcs->ual_pause == NULL) {
+			*event->data.gpumon_data.result = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+			break;
+		}
+		ret = adapt->gpumon.funcs->ual_pause(adapt);
+		*event->data.gpumon_data.result = ret;
+		break;
+	case GPUMON_UAL_RESUME:
+		if (adapt->gpumon.funcs == NULL ||
+			adapt->gpumon.funcs->ual_resume == NULL) {
+			*event->data.gpumon_data.result = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+			break;
+		}
+		ret = adapt->gpumon.funcs->ual_resume(adapt);
+		*event->data.gpumon_data.result = ret;
+		break;
+	case GPUMON_UAL_TRIGGER_MODE2:
+		if (adapt->gpumon.funcs == NULL ||
+			adapt->gpumon.funcs->ual_trigger_mode2 == NULL) {
+			*event->data.gpumon_data.result = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+			break;
+		}
+		ret = adapt->gpumon.funcs->ual_trigger_mode2(adapt);
 		*event->data.gpumon_data.result = ret;
 		break;
 	case GPUMON_GET_PCIE_DPM_LEVELS:
@@ -3952,6 +4142,7 @@ int amdgv_gpumon_translate_fb_address(amdgv_dev_t dev,
 		break;
 	case AMDGV_GPUMON_FB_ADDR_VF_PHY:
 		if (src_addr.vf_phy_addr.idx_vf == AMDGV_PF_IDX ||
+			src_addr.vf_phy_addr.idx_vf >= adapt->num_vf ||
 			!adapt->array_vf[src_addr.vf_phy_addr.idx_vf].configured)
 			return AMDGV_FAILURE;
 		ret = amdgv_umc_local_gpa_to_spa(adapt,
@@ -4137,6 +4328,223 @@ int amdgv_gpumon_ptl_query(amdgv_dev_t dev, struct amdgv_ptl_status_info *info)
 
 	data.gpumon_data.type = GPUMON_PTL_QUERY_STATUS;
 	data.gpumon_data.ptl.status_info = info;
+	data.gpumon_data.result = &event_ret;
+
+	ret = amdgv_sched_queue_event_and_wait_ex(adapt, AMDGV_PF_IDX,
+						  AMDGV_EVENT_SCHED_GPUMON,
+						  AMDGV_SCHED_BLOCK_ALL, data);
+	if (!ret)
+		ret = event_ret;
+
+	return ret;
+}
+
+bool amdgv_gpumon_ual_is_supported(amdgv_dev_t dev)
+{
+	struct amdgv_adapter *adapt = NULL;
+
+	if (dev == AMDGV_INVALID_HANDLE)
+		return false;
+
+	adapt = (struct amdgv_adapter *)dev;
+
+	if (adapt->status == AMDGV_STATUS_SW_INIT)
+		return false;
+
+	if (adapt->status != AMDGV_STATUS_HW_INIT)
+		return false;
+
+	return amdgv_ual_is_supported(adapt);
+}
+
+int amdgv_gpumon_ual_get_interface_version(amdgv_dev_t dev, uint32_t *version)
+{
+	struct amdgv_adapter *adapt = NULL;
+	union amdgv_sched_event_data data = {0};
+	int event_ret = 0;
+	int ret = AMDGV_FAILURE;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (!amdgv_ual_is_supported(adapt))
+		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+
+	data.gpumon_data.type = GPUMON_UAL_GET_INTERFACE_VERSION;
+	data.gpumon_data.ual.version = version;
+	data.gpumon_data.result = &event_ret;
+
+	ret = amdgv_sched_queue_event_and_wait_ex(adapt, AMDGV_PF_IDX,
+							AMDGV_EVENT_SCHED_GPUMON,
+							AMDGV_SCHED_BLOCK_ALL, data);
+	if (!ret)
+		ret = event_ret;
+
+	return ret;
+}
+
+int amdgv_gpumon_ual_get_config(amdgv_dev_t dev, struct amdgv_gpumon_get_config_rsp_ual_v1 *config)
+{
+	struct amdgv_adapter *adapt = NULL;
+	union amdgv_sched_event_data data = {0};
+	int event_ret = 0;
+	int ret = AMDGV_FAILURE;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (!amdgv_ual_is_supported(adapt))
+		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+
+	data.gpumon_data.type = GPUMON_UAL_GET_CONFIG;
+	data.gpumon_data.ual.get_config = config;
+	data.gpumon_data.result = &event_ret;
+
+	ret = amdgv_sched_queue_event_and_wait_ex(adapt, AMDGV_PF_IDX,
+							AMDGV_EVENT_SCHED_GPUMON,
+							AMDGV_SCHED_BLOCK_ALL, data);
+	if (!ret)
+		ret = event_ret;
+
+	return ret;
+}
+
+int amdgv_gpumon_ual_set_ppod_config(amdgv_dev_t dev, struct amdgv_gpumon_set_ppod_config_req_ual_v1 *config)
+{
+	struct amdgv_adapter *adapt = NULL;
+	union amdgv_sched_event_data data = {0};
+	int event_ret = 0;
+	int ret = AMDGV_FAILURE;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (!amdgv_ual_is_supported(adapt))
+		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+
+	data.gpumon_data.type = GPUMON_UAL_SET_PPOD_CONFIG;
+	data.gpumon_data.ual.set_ppod_config = config;
+	data.gpumon_data.result = &event_ret;
+
+	ret = amdgv_sched_queue_event_and_wait_ex(adapt, AMDGV_PF_IDX,
+						  AMDGV_EVENT_SCHED_GPUMON,
+						  AMDGV_SCHED_BLOCK_ALL, data);
+	if (!ret)
+		ret = event_ret;
+
+	return ret;
+}
+
+int amdgv_gpumon_ual_set_vpod_config(amdgv_dev_t dev, struct amdgv_gpumon_set_vpod_config_req_ual_v1 *config)
+{
+	struct amdgv_adapter *adapt = NULL;
+	union amdgv_sched_event_data data = {0};
+	int event_ret = 0;
+	int ret = AMDGV_FAILURE;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (!amdgv_ual_is_supported(adapt))
+		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+
+	data.gpumon_data.type = GPUMON_UAL_SET_VPOD_CONFIG;
+	data.gpumon_data.ual.set_vpod_config = config;
+	data.gpumon_data.result = &event_ret;
+
+	ret = amdgv_sched_queue_event_and_wait_ex(adapt, AMDGV_PF_IDX,
+						  AMDGV_EVENT_SCHED_GPUMON,
+						  AMDGV_SCHED_BLOCK_ALL, data);
+
+	if (!ret)
+		ret = event_ret;
+
+	return ret;
+}
+
+int amdgv_gpumon_ual_set_station_config(amdgv_dev_t dev, struct amdgv_gpumon_set_station_config_req_ual_v1 *config)
+{
+	struct amdgv_adapter *adapt = NULL;
+	union amdgv_sched_event_data data = {0};
+	int event_ret = 0;
+	int ret = AMDGV_FAILURE;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (!amdgv_ual_is_supported(adapt))
+		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+
+	data.gpumon_data.type = GPUMON_UAL_SET_STATION_CONFIG;
+	data.gpumon_data.ual.set_station_config = config;
+	data.gpumon_data.result = &event_ret;
+
+	ret = amdgv_sched_queue_event_and_wait_ex(adapt, AMDGV_PF_IDX,
+						  AMDGV_EVENT_SCHED_GPUMON,
+						  AMDGV_SCHED_BLOCK_ALL, data);
+
+	if (!ret)
+		ret = event_ret;
+
+	return ret;
+}
+
+int amdgv_gpumon_ual_pause(amdgv_dev_t dev)
+{
+	struct amdgv_adapter *adapt = NULL;
+	union amdgv_sched_event_data data = {0};
+	int event_ret = 0;
+	int ret = AMDGV_FAILURE;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (!amdgv_ual_is_supported(adapt))
+		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+
+	data.gpumon_data.type = GPUMON_UAL_PAUSE;
+	data.gpumon_data.result = &event_ret;
+
+	ret = amdgv_sched_queue_event_and_wait_ex(adapt, AMDGV_PF_IDX,
+						  AMDGV_EVENT_SCHED_GPUMON,
+						  AMDGV_SCHED_BLOCK_ALL, data);
+	if (!ret)
+		ret = event_ret;
+
+	return ret;
+}
+
+int amdgv_gpumon_ual_resume(amdgv_dev_t dev)
+{
+	struct amdgv_adapter *adapt = NULL;
+	union amdgv_sched_event_data data = {0};
+	int event_ret = 0;
+	int ret = AMDGV_FAILURE;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (!amdgv_ual_is_supported(adapt))
+		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+
+	data.gpumon_data.type = GPUMON_UAL_RESUME;
+	data.gpumon_data.result = &event_ret;
+
+	ret = amdgv_sched_queue_event_and_wait_ex(adapt, AMDGV_PF_IDX,
+						  AMDGV_EVENT_SCHED_GPUMON,
+						  AMDGV_SCHED_BLOCK_ALL, data);
+	if (!ret)
+		ret = event_ret;
+
+	return ret;
+}
+
+int amdgv_gpumon_ual_trigger_mode2(amdgv_dev_t dev)
+{
+	struct amdgv_adapter *adapt = NULL;
+	union amdgv_sched_event_data data = {0};
+	int event_ret = 0;
+	int ret = AMDGV_FAILURE;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (!amdgv_ual_is_supported(adapt))
+		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+
+	data.gpumon_data.type = GPUMON_UAL_TRIGGER_MODE2;
 	data.gpumon_data.result = &event_ret;
 
 	ret = amdgv_sched_queue_event_and_wait_ex(adapt, AMDGV_PF_IDX,

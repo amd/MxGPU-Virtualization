@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2020-2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <smi_drv.h>
@@ -29,6 +12,9 @@
 
 struct oss_interface *smi_oss_funcs;
 struct smi_shim_interface *smi_shim_funcs;
+
+/* ESXi only: set by smi_drain_in_flight_ioctls during unload. */
+volatile bool smi_shutting_down = false;
 
 #define smi_min(a, b) ((a) < (b) ? (a) : (b))
 
@@ -46,7 +32,7 @@ const char * const smi_shim_inf_name[] = {
 	"get_profile_info", "get_driver_date",
 	"get_driver_model",
 	"get_metric_table", "get_eeprom_table",
-	"get_partition", "get_cper_data", "get_partition_global"
+	"get_partition", "get_partition_global", "get_cper_data"
 };
 
 void smi_print(const char *fmt, ...)
@@ -221,6 +207,7 @@ failed:
 int smi_core_release(file_t filp)
 {
 	struct smi_ctx *ctx = NULL;
+	uint32_t i;
 
 	/* Recover the context from the file descriptor */
 	smi_get_file_private_data(filp, &ctx);
@@ -233,10 +220,20 @@ int smi_core_release(file_t filp)
 
 	smi_oss_funcs->mutex_unlock(ctx->ioctl_mutex);
 
-	smi_oss_funcs->free_small_memory(ctx->vf_map);
+	/* Destroy active notifiers, then free. Skip destroy on shutdown
+	 * (adev may already be torn down); always free. */
 	if (ctx->event_ctx) {
+		if (smi_shim_funcs && !smi_shutting_down) {
+			for (i = 0; i < ctx->num_devices; i++) {
+				if (ctx->event_ctx[i].notifier != NULL)
+					smi_event_destroy(ctx, ctx->devices[i].adev,
+							  ctx->devices[i].handle);
+			}
+		}
 		smi_oss_funcs->free_small_memory(ctx->event_ctx);
 	}
+
+	smi_oss_funcs->free_small_memory(ctx->vf_map);
 	smi_oss_funcs->mutex_fini(ctx->ioctl_mutex);
 
 	smi_oss_funcs->free_small_memory(ctx);
@@ -249,6 +246,13 @@ int smi_core_ioctl_handler(file_t filp, unsigned int cmd, void *arg)
 	long ret = 0;
 	struct smi_ctx *ctx = NULL;
 	unsigned int i;
+	uint32_t code = 0;
+	int16_t in_len = 0;
+	int16_t out_len = 0;
+	bool early_unlocked = false;
+	void *in_buf = NULL;
+	void *out_buf = NULL;
+	int status = 0;
 
 	struct smi_ioctl_cmd *uptr = (struct smi_ioctl_cmd *) arg;
 
@@ -272,14 +276,27 @@ int smi_core_ioctl_handler(file_t filp, unsigned int cmd, void *arg)
 		goto unlock_mutex;
 	}
 
+	/* Snapshot the input header into per-call locals. ctx->in_command is
+	 * per-fd and a concurrent ioctl on the same fd can overwrite it while
+	 * this thread blocks after the early mutex_unlock below, so every
+	 * subsequent decision based on hdr.{code,in_len,out_len} MUST use
+	 * these snapshots rather than re-reading the shared buffer — most
+	 * critically the out_len bound used to gate the out_response memset,
+	 * which would otherwise sign-extend a racing negative value into a
+	 * giant kernel-memory wipe.
+	 */
+	code = ctx->in_command.hdr.code;
+	in_len = ctx->in_command.hdr.in_len;
+	out_len = ctx->in_command.hdr.out_len;
 	ctx->mutex_flag=true;
-	if (ctx->in_command.hdr.code == SMI_CMD_CODE_CREATE_EVENT || ctx->in_command.hdr.code == SMI_CMD_CODE_READ_EVENT
-					|| ctx->in_command.hdr.code == SMI_CMD_CODE_DESTROY_EVENT) {
+	if (code == SMI_CMD_CODE_CREATE_EVENT || code == SMI_CMD_CODE_READ_EVENT
+					|| code == SMI_CMD_CODE_DESTROY_EVENT) {
 		ctx->mutex_flag=false;
+		early_unlocked = true;
 		smi_oss_funcs->mutex_unlock(ctx->ioctl_mutex);
 	}
 
-	if (ctx->in_command.hdr.in_len < 0 || ctx->in_command.hdr.out_len < 0) {
+	if (in_len < 0 || out_len < 0) {
 		ret = -SMI_EINVAL;
 		goto unlock_mutex;
 	}
@@ -294,14 +311,14 @@ int smi_core_ioctl_handler(file_t filp, unsigned int cmd, void *arg)
 	* the handshake, return error
 	*/
 	if (!ctx->tbl_cmd) {
-		if (ctx->in_command.hdr.code != SMI_CMD_CODE_HANDSHAKE) {
+		if (code != SMI_CMD_CODE_HANDSHAKE) {
 			ret = -SMI_EACCES;
 			goto unlock_mutex;
 		}
 
 		if (smi_oss_funcs->copy_from_user(&ctx->in_command.payload,
 				&uptr->payload,
-				smi_min((size_t) ctx->in_command.hdr.in_len,
+				smi_min((size_t) in_len,
 					sizeof(struct smi_handshake)))) {
 			ret = -SMI_EFAULT;
 			goto unlock_mutex;
@@ -311,8 +328,8 @@ int smi_core_ioctl_handler(file_t filp, unsigned int cmd, void *arg)
 			smi_cmd_handshake(ctx,
 				ctx->in_command.payload,
 				ctx->out_response.payload,
-				ctx->in_command.hdr.in_len,
-				ctx->in_command.hdr.out_len);
+				in_len,
+				out_len);
 
 		if (ctx->out_response.hdr.status &&
 			ctx->out_response.hdr.status !=
@@ -332,7 +349,7 @@ int smi_core_ioctl_handler(file_t filp, unsigned int cmd, void *arg)
 
 	/* find the entry */
 	for (i = 0; i < ctx->max_cmd; i++)
-		if (ctx->tbl_cmd[i].cmd == ctx->in_command.hdr.code)
+		if (ctx->tbl_cmd[i].cmd == code)
 			break;
 
 	if (i == ctx->max_cmd) {
@@ -340,51 +357,72 @@ int smi_core_ioctl_handler(file_t filp, unsigned int cmd, void *arg)
 		goto unlock_mutex;
 	}
 
+	if (out_len  > sizeof(ctx->out_response.payload)) {
+		ret = -SMI_ENOMEM;
+		goto unlock_mutex;
+	}
+
+	/* Use per-call payload buffers, not the per-fd ctx buffers. For EVENT
+	 * commands the ioctl_mutex was already dropped above, so a concurrent
+	 * ioctl on the same fd could overwrite ctx->in_command.payload /
+	 * ctx->out_response.payload while this handler runs. Private heap
+	 * buffers (4096B each — too large for the kernel stack) keep the input
+	 * arguments and output stable across the unlocked window.
+	 */
+	in_buf = smi_oss_funcs->alloc_small_zero_memory(
+			sizeof(ctx->in_command.payload));
+	out_buf = smi_oss_funcs->alloc_small_zero_memory(
+			sizeof(ctx->out_response.payload));
+	if (in_buf == NULL || out_buf == NULL) {
+		ret = -SMI_ENOMEM;
+		goto unlock_mutex;
+	}
+
 	/* copy the payload */
-	if (smi_oss_funcs->copy_from_user(&ctx->in_command.payload, &uptr->payload,
-			smi_min(ctx->in_command.hdr.in_len,
+	if (smi_oss_funcs->copy_from_user(in_buf, &uptr->payload,
+			smi_min(in_len,
 				ctx->tbl_cmd[i].in_buffer_len))) {
 		ret = -SMI_EFAULT;
 		goto unlock_mutex;
 	}
 
-	if (ctx->in_command.hdr.out_len  > sizeof(ctx->out_response.payload)) {
-		ret = -SMI_ENOMEM;
-		goto unlock_mutex;
-	}
-
-	/* clean up output buffer */
-	smi_oss_funcs->memset(&ctx->out_response.payload, 0,
-			ctx->in_command.hdr.out_len);
-
 	/* execute the command */
-	ctx->out_response.hdr.status = ctx->tbl_cmd[i].func(ctx,
-			ctx->in_command.payload,
-			ctx->out_response.payload,
-			ctx->in_command.hdr.in_len,
-			ctx->in_command.hdr.out_len);
+	status = ctx->tbl_cmd[i].func(ctx,
+			in_buf,
+			out_buf,
+			in_len,
+			out_len);
 
-	if (ctx->out_response.hdr.status && ctx->out_response.hdr.status != SMI_STATUS_NO_DATA) {
+	if (ctx->out_response.hdr.status &&
+	    ctx->out_response.hdr.status != SMI_STATUS_NO_DATA &&
+	    ctx->out_response.hdr.status != SMI_STATUS_TIMEOUT) {
 		ret = -SMI_EIO;
-		goto return_status;
+		goto generic_return_status;
 	}
 
-	if (smi_oss_funcs->copy_to_user(&uptr->payload, &ctx->out_response.payload,
-			smi_min(ctx->in_command.hdr.out_len,
+	if (smi_oss_funcs->copy_to_user(&uptr->payload, out_buf,
+			smi_min(out_len,
 				ctx->tbl_cmd[i].out_buffer_len))) {
 		ret = -SMI_EFAULT;
 		goto unlock_mutex;
 	}
+
+generic_return_status:
+	smi_oss_funcs->copy_to_user(&uptr->out_hdr.status,
+			&status, sizeof(int));
+	goto unlock_mutex;
 
 return_status:
 	smi_oss_funcs->copy_to_user(&uptr->out_hdr.status,
 			&ctx->out_response.hdr.status, sizeof(int));
 
 unlock_mutex:
-	if (ctx->in_command.hdr.code != SMI_CMD_CODE_CREATE_EVENT && ctx->in_command.hdr.code != SMI_CMD_CODE_READ_EVENT
-						&& ctx->in_command.hdr.code != SMI_CMD_CODE_DESTROY_EVENT) {
+	if (!early_unlocked)
 		smi_oss_funcs->mutex_unlock(ctx->ioctl_mutex);
-	}
+	if (in_buf)
+		smi_oss_funcs->free_small_memory(in_buf);
+	if (out_buf)
+		smi_oss_funcs->free_small_memory(out_buf);
 	return ret;
 };
 
@@ -455,7 +493,7 @@ uint64_t smi_get_vf_handle(struct smi_ctx *ctx,
 	uint64_t tmp;
 	uint32_t gpu;
 
-	if (idx_vf > SMI_MAX_VF_COUNT)
+	if (idx_vf < 0 || idx_vf >= SMI_MAX_VF_COUNT)
 		return 0;
 
 	for (gpu = 0; gpu < ctx->num_devices; gpu++) {

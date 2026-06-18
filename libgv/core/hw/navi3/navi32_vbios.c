@@ -1,22 +1,6 @@
-/*
- * Copyright (C) 2022  Advanced Micro Devices, Inc.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included
- * in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
- * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE COPYRIGHT HOLDER(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
- * IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv_device.h>
@@ -469,7 +453,7 @@ static uint32_t navi32_vbios_read_rom_data(struct amdgv_adapter *adapt, uint32_t
 
 static uint32_t navi32_atombios_get_fw_offset(struct amdgv_adapter *adapt, uint8_t fw_type)
 {
-	uint32_t i, fw_offset = 0;
+	uint32_t i, fw_offset = 0, total_entries;
 	uint16_t offset;
 	int index;
 	bool ret;
@@ -498,7 +482,13 @@ static uint32_t navi32_atombios_get_fw_offset(struct amdgv_adapter *adapt, uint8
 
 	psp_dir = (PSP_DIRECTORY *)&psptable_2_5->psp_directory;
 
-	for (i = 0; i < psp_dir->Header.TotalEntries; i++) {
+	/* TotalEntries comes from the VBIOS image; clamp it to the fixed
+	 * pspEntry[] capacity to avoid an out-of-bounds read (CWE-125).
+	 */
+	total_entries = min(psp_dir->Header.TotalEntries,
+			    (uint32_t)PSP_DIRECTORY_MAX_ENTRIES);
+
+	for (i = 0; i < total_entries; i++) {
 		if (psp_dir->pspEntry[i].u32Type == fw_type) {
 			fw_offset = psp_dir->pspEntry[i].Location;
 		}
@@ -575,7 +565,7 @@ static int navi32_vbios_hw_init(struct amdgv_adapter *adapt)
 	*    PSP BL will set bit[31] of C2PMSG_33 to 1
 	*/
 	if (navi32_psp_wait_boot_complete(
-		adapt, SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_33)) == false) {
+		adapt, SOC15_REG_OFFSET_NAME(MP0, 0, regMP0_SMN_C2PMSG_33)) == false) {
 		AMDGV_ERROR("TIMEOUT waiting PSP_BL to finish boot process\n");
 		ret = AMDGV_FAILURE;
 		goto failed;

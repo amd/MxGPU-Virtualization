@@ -1,22 +1,8 @@
-/* * Copyright (C) 2023-2025 Advanced Micro Devices. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #pragma once
 
 #include <string>
@@ -119,9 +105,10 @@ inline std::string nicStaticRdmaPortTemplate{
 	"                    NETDEV: %s \n"
 	"                    STATE: %s\n"
 	"                    RDMA_PORT: %s\n"
-	"                    MAX_MTU: %s\n"
-	"                    ACTIVE_MTU: %s\n"
+	"                    MAX_MTU: %s %s\n"
+	"                    ACTIVE_MTU: %s %s\n"
 };
+
 
 inline std::string staticDfcHeaderTemplate{
 	"    DFC: \n        HEADER: \n            VERSION: %s \n            GART_WR_GUEST_MIN: %s \n            GART_WR_GUEST_MAX: %s \n        DATA: \n"
@@ -203,7 +190,10 @@ inline std::string staticRasTemplateHost{
 inline std::string staticRasBlockTemplate{"            %s: %s\n" };
 
 inline std::string staticVfTemplate{
-	"        FB_OFFSET: %s %s\n        FB_SIZE: %s %s\n        GFX_TIMESLICE: %s %s\n"
+	"        FB_INFO:\n"
+	"            FB_OFFSET: %s %s\n"
+	"            FB_SIZE: %s %s\n"
+	"            GFX_TIMESLICE: %s %s\n"
 };
 
 inline std::string staticProcessIsolate{
@@ -211,6 +201,10 @@ inline std::string staticProcessIsolate{
 };
 
 inline std::string driverHostInfoTemplate{ "    DRIVER: \n        NAME: %s\n        VERSION: %s\n        DATE: %s\n        MODEL: %s\n" };
+
+inline std::string tdiStateTemplate{ "        TDI_STATE: %s \n" };
+
+inline std::string ccModeTemplate{ "    CC_MODE: %s \n" };
 
 inline std::string badPagesTemplate{
 	"    BAD_PAGE_%u:\n"
@@ -229,6 +223,12 @@ inline std::string fwTemplate{
 
 inline std::string fwVfTemplate{
 	"            FW_%d:\n                FW_ID: %s\n                FW_VERSION: %s\n"
+};
+
+inline std::string fwNicListTemplate{ "    FW:\n" };
+
+inline std::string fwNicTemplate{
+	"        FW_%d:\n            TYPE: %s\n            NAME: %s\n            VERSION: %s\n"
 };
 
 inline std::string gpuTemplate{ "GPU: %d\n" };
@@ -251,12 +251,26 @@ inline std::string AIDTemplate{
 inline std::string XCPTemplate{
 	"            XCP_%s:\n"};
 
+inline std::string MIDTemplate{
+	"            MID_%s:\n"};
 
 inline std::string activityPerPartitionTemplate{
 	"                VCN_ACTIVITY: %s %s\n"};
 
 inline std::string TemperaturePerPartitionTemplate{
         "                TEMPERATURE: %s %s\n"};
+
+inline std::string ShutdownTemperaturePerPartitionTemplate{
+        "                SHUTDOWN_TEMPERATURE: %s %s\n"};
+
+inline std::string ThrottleTemperaturePerPartitionTemplate{
+        "                THROTTLE_TEMPERATURE: %s %s\n"};
+
+inline std::string HbmShutdownTemperaturePerPartitionTemplate{
+        "                HBM_SHUTDOWN_TEMPERATURE: %s %s\n"};
+
+inline std::string HbmThrottleTemperaturePerPartitionTemplate{
+        "                HBM_THROTTLE_TEMPERATURE: %s %s\n"};
 
 inline std::string VCLKPerPartitionTemplate{
 	"                CLK_VCLK: %s %s\n"};
@@ -284,6 +298,33 @@ inline std::string SCLKMinPerPartitionTemplate{
 
 inline std::string SCLKMaxPerPartitionTemplate{
 	"                CLK_SCLK_MAX_LIMIT: %s %s\n"};
+
+inline std::string FCLKPerPartitionTemplate{
+	"                CLK_FCLK: %s %s\n"};
+
+inline std::string FCLKMinPerPartitionTemplate{
+	"                CLK_FCLK_MIN_LIMIT: %s %s\n"};
+
+inline std::string FCLKMaxPerPartitionTemplate{
+	"                CLK_FCLK_MAX_LIMIT: %s %s\n"};
+
+inline std::string FCLKDSPerPartitionTemplate{
+	"                CLK_FCLK_DS: %s\n"};
+
+inline std::string LCLKPerPartitionTemplate{
+	"                CLK_LCLK: %s %s\n"};
+
+inline std::string LCLKMinPerPartitionTemplate{
+	"                CLK_LCLK_MIN_LIMIT: %s %s\n"};
+
+inline std::string LCLKMaxPerPartitionTemplate{
+	"                CLK_LCLK_MAX_LIMIT: %s %s\n"};
+
+inline std::string LCLKDSPerPartitionTemplate{
+	"                CLK_LCLK_DS: %s\n"};
+
+inline std::string TempMidPerPartitionTemplate{
+	"                TEMP: %s %s\n"};
 
 inline std::string metricUsageTemplate{
 	"    USAGE:\n"
@@ -592,6 +633,7 @@ inline std::string pcieInfoHostTemplate{
 	"        REPLAY_ROLL_OVER_COUNT: %s \n"
 	"        NAK_SENT_COUNT: %s \n"
 	"        NAK_RECEIVED_COUNT: %s \n"
+	"        LC_PERF_OTHER_END_RECOVERY_COUNT: %s \n"
 };
 
 inline std::string topologyWeightTemplate{ "WEIGHT_TABLE:\n" };
@@ -649,7 +691,7 @@ inline std::string staticCpuListTemplate{
 
 inline std::string staticNumaTemplate{
 	"    NUMA:\n"
-	"        NODE: %d\n"
+	"        NODE: %s\n"
 	"        CPU_AFFINITY:\n%s"
 	"        SOCKET_AFFINITY: N/A\n" };
 
@@ -708,6 +750,14 @@ inline std::string staticPartitionTemplate {
 
 inline std::string RasCperTemplate {
 	    "%-24s %-8d %-24s %-24s %s\n"};
+
+inline std::string statichbmInfoTemplate{
+		"        HBM_INFO:\n"
+		"            PHY_ADDR: %s\n"
+		"            PHY_SIZE: %s %s\n"
+		"            NUMA_ID: %s\n"
+		"            NAME: %s\n"
+	};
 
 inline std::string setSuccessfullyTemplate {
 	"GPU: %d\n"
@@ -769,6 +819,28 @@ inline std::string gpuboardVrTempVddcr11HbmDTemplate{ "        VR_TEMP_VDDCR_11_
 inline std::string gpuboardVrTempVddUsrTemplate{ "        VR_TEMP_VDD_USR: %s %s\n" };
 inline std::string gpuboardVrTempVddio11E32Template{ "        VR_TEMP_VDDIO_11_E32: %s %s\n" };
 
+inline std::string gpuboardSviPlaneVddcrX0TempTemplate{ "        SVI_PLANE_VDDCR_X0_TEMP: %s %s\n" };
+inline std::string gpuboardSviPlaneVddcrX1TempTemplate{ "        SVI_PLANE_VDDCR_X1_TEMP: %s %s\n" };
+inline std::string gpuboardSviPlaneVddioHbmBTempTemplate{ "        SVI_PLANE_VDDIO_HBM_B_TEMP: %s %s\n" };
+inline std::string gpuboardSviPlaneVddioHbmDTempTemplate{ "        SVI_PLANE_VDDIO_HBM_D_TEMP: %s %s\n" };
+inline std::string gpuboardSviPlaneVddio04HbmBTempTemplate{ "        SVI_PLANE_VDDIO_04_HBM_B_TEMP: %s %s\n" };
+inline std::string gpuboardSviPlaneVddio04HbmDTempTemplate{ "        SVI_PLANE_VDDIO_04_HBM_D_TEMP: %s %s\n" };
+inline std::string gpuboardSviPlaneVddcrHbmBTempTemplate{ "        SVI_PLANE_VDDCR_HBM_B_TEMP: %s %s\n" };
+inline std::string gpuboardSviPlaneVddcrHbmDTempTemplate{ "        SVI_PLANE_VDDCR_HBM_D_TEMP: %s %s\n" };
+inline std::string gpuboardSviPlaneVddcr075HbmBTempTemplate{ "        SVI_PLANE_VDDCR_075_HBM_B_TEMP: %s %s\n" };
+inline std::string gpuboardSviPlaneVddcr075HbmDTempTemplate{ "        SVI_PLANE_VDDCR_075_HBM_D_TEMP: %s %s\n" };
+inline std::string gpuboardSviPlaneVddio11GtaATempTemplate{ "        SVI_PLANE_VDDIO_11_GTA_A_TEMP: %s %s\n" };
+inline std::string gpuboardSviPlaneVddio11GtaCTempTemplate{ "        SVI_PLANE_VDDIO_11_GTA_C_TEMP: %s %s\n" };
+inline std::string gpuboardSviPlaneVddan075GtaATempTemplate{ "        SVI_PLANE_VDDAN_075_GTA_A_TEMP: %s %s\n" };
+inline std::string gpuboardSviPlaneVddan075GtaCTempTemplate{ "        SVI_PLANE_VDDAN_075_GTA_C_TEMP: %s %s\n" };
+inline std::string gpuboardSviPlaneVddcr075UcieTempTemplate{ "        SVI_PLANE_VDDCR_075_UCIE_TEMP: %s %s\n" };
+inline std::string gpuboardSviPlaneVddio065UcieaaTempTemplate{ "        SVI_PLANE_VDDIO_065_UCIEAA_TEMP: %s %s\n" };
+inline std::string gpuboardSviPlaneVddio065UcieamATempTemplate{ "        SVI_PLANE_VDDIO_065_UCIEAM_A_TEMP: %s %s\n" };
+inline std::string gpuboardSviPlaneVddio065UcieamCTempTemplate{ "        SVI_PLANE_VDDIO_065_UCIEAM_C_TEMP: %s %s\n" };
+inline std::string gpuboardSviPlaneVddcrSocioATempTemplate{ "        SVI_PLANE_VDDCR_SOCIO_A_TEMP: %s %s\n" };
+inline std::string gpuboardSviPlaneVddcrSocioCTempTemplate{ "        SVI_PLANE_VDDCR_SOCIO_C_TEMP: %s %s\n" };
+inline std::string gpuboardSviPlaneVddan075TempTemplate{ "        SVI_PLANE_VDDAN_075_TEMP: %s %s\n" };
+
 inline std::string metricPortHeaderTemplate {
 	"    PORT: \n"
 	"        INDEX: %s\n"
@@ -814,6 +886,45 @@ inline std::string nodePowerManagementTemplate {
 	"        STATUS: %s \n"
 };
 
+
+inline std::string staticFabricTemplate{
+	"    TOPOLOGY: \n"
+	"        BDF: %s \n"
+	"        VERSION: %s \n"
+	"        ACCELERATOR_ID: %s \n"
+	"        FABRIC_TYPE: %s \n"
+	"        BANDWIDTH: %s %s\n"
+	"        LATENCY: %s %s\n"
+	"        PHYSICAL_POD_ID: %s \n"
+	"        PHYSICAL_POD_SIZE: %s \n"
+	"        VIRTUAL_POD_ID: %s \n"
+	"        VIRTUAL_POD_SIZE: %s \n"
+	"        VPOD_ACTIVE_ACCELERATORS: %s \n"
+	"        LOCAL_ACCELERATORS: %s \n"
+	"        ADDRESS_MODE: %s \n"
+	"        ACCELERATOR_STATE: %s \n"
+};
+
+// Fabric Telemetry Templates
+inline std::string fabricTelemetryTemplate {
+	"GPU: %s\n"
+	"    TELEMETRY:\n"};
+
+inline std::string fabricTelemetryCategoryTemplate {
+	"        CATEGORY: %s\n"
+	"            GENERATION_COUNT: %s\n"
+	"            TIMESTAMP: %s\n"
+	"            INSTANCE_COUNT: %s\n"};
+
+inline std::string fabricTelemetryInstanceTemplate {
+	"            INSTANCE_%u:\n"
+	"                LOGICAL_INDEX: %s\n"
+	"                ITEM_COUNT: %s\n"};
+
+inline std::string fabricTelemetryItemTemplate {
+	"                ITEM_%u:\n"
+	"                    ID: %s\n"
+	"                    VALUE: %s\n"};
 inline std::string topologyNicLinkTypeTemplate{ "NIC_LINK_TYPE_TABLE:\n" };
 
 inline std::string topologyNumaTemplate{ "NIC_NUMA_TABLE:\n" };

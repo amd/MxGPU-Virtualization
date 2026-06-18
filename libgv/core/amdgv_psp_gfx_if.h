@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef AMDGV_PSP_GFX_IF_H
@@ -61,9 +44,21 @@ enum psp_cmd_km_type {
 	PSP_CMD_KM_TYPE__MIGRATION_GET_PSP_INFO	= 0x25,
 	PSP_CMD_KM_TYPE__MIGRATION_EXPORT		= 0x26,
 	PSP_CMD_KM_TYPE__MIGRATION_IMPORT		= 0x27,
+	PSP_CMD_KM_TYPE__MIGRATION_GET_DATA_SIZE	= 0x28,
+	PSP_CMD_KM_TYPE__MIGRATION_RLC_AUTOLOAD = 0x37, /* Live migration RLC Autoload */
 	PSP_CMD_KM_TYPE__VF_RELAY        = 0x00000045, /* PSP VF Command Replay*/
 	PSP_CMD_KM_TYPE__NPS_MODE = 0x00000048,
+	PSP_CMD_KM_TYPE__SRIOV_DRIVER_PASSTHROUGH = 0x0000004A, /* SRIOV Driver Passthrough */
 	PSP_CMD_KM_TYPE__PERF_HW = 0x0000004C, /* Performance HW (PTL) */
+	PSP_CMD_KM_TYPE__SET_CC_MODE = 0x00000050, /* Set Confidential Compute mode */
+	PSP_CMD_KM_TYPE__GET_CC_MODE = 0x00000051, /* Get Confidential Compute mode */
+	PSP_CMD_KM_TYPE__UAL_GET_INTERFACE_VER = 0x00000053,
+	PSP_CMD_KM_TYPE__UAL_GET_CONFIG = 0x00000054,
+	PSP_CMD_KM_TYPE__UAL_SET_PPOD_CONFIG = 0x00000055,
+	PSP_CMD_KM_TYPE__UAL_SET_VPOD_CONFIG = 0x00000056,
+	PSP_CMD_KM_TYPE__UAL_SET_STATION_CONFIG = 0x00000057,
+	PSP_CMD_KM_TYPE__UAL_SET_NPA_CONFIG = 0x00000059,
+	PSP_CMD_KM_TYPE__UAL_SEND_COMPLETION = 0x0000005A,
 };
 
 /* TEE Gfx Command IDs for the ring buffer interface. */
@@ -101,9 +96,21 @@ enum psp_gfx_cmd_id {
 	GFX_CMD_ID_MIGRATION_GET_PSP_INFO	= 0x00000031,
 	GFX_CMD_ID_MIGRATION_EXPORT			= 0x00000032,
 	GFX_CMD_ID_MIGRATION_IMPORT			= 0x00000033,
+	GFX_CMD_ID_MIGRATION_RLC_AUTOLOAD   = 0x00000037, /* Live migration RLC Autoload */
+	GFX_CMD_ID_MIGRATION_GET_DATA_SIZE  = 0x00000038, /* Get static and dynamic data sizes for migration */
 	GFX_CMD_ID_VF_RELAY         = 0x00000045, /* Host informs PSP about VF command replay*/
 	GFX_CMD_ID_NPS_MODE = 0x00000048, /* Change memory NPS mode on next mode-1 reset */
+	GFX_CMD_ID_SRIOV_DRIVER_PASSTHROUGH = 0x0000004A, /* SRIOV Driver Passthrough */
 	GFX_CMD_ID_PERF_HW = 0x0000004C, /* Performance HW (PTL) */
+	GFX_CMD_ID_SET_CC_MODE = 0x00000050, /* Set Confidential Compute mode */
+	GFX_CMD_ID_GET_CC_MODE = 0x00000051, /* Get Confidential Compute mode */
+	GFX_CMD_ID_UAL_GET_INTERFACE_VER = 0x00000053,
+	GFX_CMD_ID_UAL_GET_CONFIG = 0x00000054,
+	GFX_CMD_ID_UAL_SET_PPOD_CONFIG = 0x00000055,
+	GFX_CMD_ID_UAL_SET_VPOD_CONFIG = 0x00000056,
+	GFX_CMD_ID_UAL_SET_STATION_CONFIG = 0x00000057,
+	GFX_CMD_ID_UAL_SET_NPA_CONFIG = 0x00000059,
+	GFX_CMD_ID_UAL_SEND_COMPLETION = 0x0000005A,
 };
 
 /* TEE Gfx Command IDs for the register interface.
@@ -134,6 +141,8 @@ enum psp_gfx_crtl_cmd_id {
 							       ring */
 	GFX_CTRL_CMD_ID_DESTROY_GPCOM_RING  = 0x000C0000, /* destroy GPCOM
 							       ring */
+	GFX_CTRL_CMD_ID_GET_IP_DISCOVERY    = 0x000D0000, /* Copy
+	                        IP_DISCOVERY_DATA to host-specified address */
 	GFX_CTRL_CMD_ID_MAX                 = 0x000F0000, /* max command ID */
 };
 
@@ -447,6 +456,13 @@ enum psp_bootloader_command_list {
 	PSP_BL__LOAD_TOS_SPL_TABLE                  = 0x10000000,
 };
 
+enum psp_gfx_address_type {
+	PSP_GFX_ADDR_TYPE_AUTO_DETECT = 0,
+	PSP_GFX_ADDR_TYPE_SYSTEM_PHYSICAL,
+	PSP_GFX_ADDR_TYPE_GPU_PHYSICAL,
+	PSP_GFX_ADDR_TYPE_GPU_VIRTUAL,
+};
+
 /* Command-specific response for VF gating */
 struct psp_gfx_uresp_vfgate {
 	uint32_t drv_version; /* driver version of last-attempted */
@@ -457,6 +473,11 @@ struct psp_gfx_uresp_vfgate {
 struct psp_gfx_uresp_bootcfg
 {
     uint32_t    boot_cfg;           /* boot config data */
+};
+
+struct psp_gfx_uresp_sriov_drv
+{
+	uint32_t reserved[8];
 };
 
 /* Sets size of command-specific response.
@@ -483,10 +504,20 @@ struct psp_gfx_migration_import
     uint32_t error_code;
 };
 
+struct psp_gfx_migration_get_data_size
+{
+	uint32_t    data_size;
+};
+
 /* Command-specific response for Fw Attestation Db */
 struct psp_gfx_uresp_fw_attestation_db_info {
 	uint32_t        FwAttestationDbAddrLo;
 	uint32_t        FwAttestationDbAddrHi;
+};
+
+struct psp_gfx_uresp_cc_mode {
+	uint32_t cc_mode;
+	uint32_t reserved[7];
 };
 
 /* PTL (Peak TOPS Limiter) response structure */
@@ -495,6 +526,16 @@ struct psp_gfx_uresp_perf_hw {
 	uint32_t ptl_state;
 	uint32_t pref_format1;
 	uint32_t pref_format2;
+};
+
+struct psp_gfx_uresp_get_intf_ver_ual
+{
+	uint32_t intf_ver; /* [31:16] major version, [15:0] minor version */
+};
+
+struct psp_gfx_uresp_get_config_ual_v1
+{
+	uint32_t resp_size;
 };
 
 /* Command-specific responses for GPCOM ring */
@@ -506,7 +547,12 @@ union psp_gfx_uresp {
 	struct psp_gfx_migration_info		migration_info;
 	struct psp_gfx_migration_export		migration_export;
 	struct psp_gfx_migration_import		migration_import;
+	struct psp_gfx_migration_get_data_size	migration_get_data_size;
+	struct psp_gfx_uresp_sriov_drv		sriov_drv_uresp;
+	struct psp_gfx_uresp_cc_mode		uresp_cc_mode;
 	struct psp_gfx_uresp_perf_hw		perf_hw;
+	struct psp_gfx_uresp_get_intf_ver_ual	get_intf_ver_ual;
+	struct psp_gfx_uresp_get_config_ual_v1	get_config_ual;
 };
 
 /* SRIOV mailbox response fields */
@@ -785,6 +831,20 @@ struct psp_gfx_cmd_sriov_copy_vf_chiplet_regs {
 	uint32_t source_vfid;
 };
 
+/* CC Mode defines */
+#define CC_MODE__OFF 0
+#define CC_MODE__ON  1
+#define CC_MODE__DEV 2
+
+struct psp_gfx_cmd_set_cc_mode {
+	uint32_t cc_mode;
+	uint32_t reserved[7];
+};
+
+struct psp_gfx_cmd_get_cc_mode {
+	uint32_t reserved[8];
+};
+
 /* Static data includes the FW contents of  MEC, VCN, SDMA */
 #define MIGRATION_FLAG_STATIC 0x00000001
 /* dynamic data includes MMSCH_CTX, SMU_CTX, VCN0/1_RAM, PSP_CTX, SDMA_CTX, SRL, RWL */
@@ -811,6 +871,138 @@ struct psp_gfx_cmd_migration_import
 	uint32_t target_vfid;
 };
 
+/* Package type for MIGRATION_GET_DATA_SIZE command (PSP FW spec). */
+enum psp_migration_data_pkg_type {
+	PSP_MIGRATION_DATA_PKG_TYPE_STATIC  = 1,
+	PSP_MIGRATION_DATA_PKG_TYPE_DYNAMIC = 2,
+};
+
+struct psp_gfx_cmd_migration_get_data_size
+{
+	uint32_t pkg_type;  /* enum psp_migration_data_pkg_type */
+};
+
+struct psp_sriov_drv_command_buf
+{
+	uint32_t reserved[64]; /* Can extend up to 828 Bytes */
+};
+
+struct psp_cmd_km_sriov_drv {
+	uint32_t sriov_drv_int_ver;
+	uint32_t command_id;
+	struct psp_sriov_drv_command_buf command_buf;
+};
+
+struct psp_gfx_cmd_sriov_drv {
+	uint32_t sriov_drv_int_ver;
+	uint32_t command_id;
+	struct psp_sriov_drv_command_buf command_buf;
+};
+
+#define PSP_GFX_MAX_LOCAL_GPUS_UAL_V1 16
+#define PSP_GFX_UAL_MAX_STATIONS_V1 64
+
+#define PSP_GFX_INT_CTXT_UAL_CMD_CFG_UPDATE 0x00000001
+#define PSP_GFX_INT_CTXT_UAL_CMD_PAUSE 0x00000002
+#define PSP_GFX_INT_CTXT_UAL_CMD_RESUME 0x00000003
+
+enum psp_gfx_ual_link_type {
+	PSP_GFX_UALOE = 0,
+	PSP_GFX_UALLINK = 1,
+	PSP_GFX_UALMAX
+};
+
+enum psp_gfx_ual_npa_address_mode {
+	PSP_GFX_UAL_NPA_ADDRESS_MODE_SOURCE_ALIASING = 0,
+	PSP_GFX_UAL_NPA_ADDRESS_MODE_SOURCE_IDENTIFICATION = 1,
+	PSP_GFX_UAL_NPA_ADDRESS_MODE_MAX
+};
+
+struct psp_gfx_get_config_ual_v1 {
+	enum psp_gfx_ual_link_type link_type;
+	uint32_t accelerator_id;	/* accelerator id */
+	uint8_t ppod_id[16]; 		/* physical pod id: 128-bit UUID */
+	uint32_t ppod_size;			/* physical pod size */
+	uint32_t bandwidth;			/* total bandwidth between pairs of GPUs across all links*/
+	uint32_t latency;			/* latency depends on switch presence/type, unit */
+	uint32_t vpod_id;			/* virtual pod id */
+	uint32_t vpod_size;			/* virtual pod size */
+	uint32_t vpod_active_accelerators[32]; /*list of active accelerator ids in the vpod*/
+	enum psp_gfx_ual_npa_address_mode addr_mode; /* address mode of the vpod */
+};
+
+struct psp_gfx_cmd_get_config_ual_v1
+{
+	uint32_t ual_cfg_addr_hi;
+	uint32_t ual_cfg_addr_lo;
+	uint32_t ual_cfg_size;
+	enum psp_gfx_address_type addr_type;
+};
+
+struct psp_gfx_cmd_set_ppod_config_ual_v1
+{
+	uint32_t accelerator_id;
+	uint8_t ppod_id[16]; 		/* physical pod id: 128-bit UUID */
+	uint32_t ppod_size;			/* physical pod size */
+	uint32_t bandwidth;
+	uint32_t latency;
+	uint32_t local_accelerators[PSP_GFX_MAX_LOCAL_GPUS_UAL_V1]; /* local accelerator IDs sorted in order of socket IDs */
+};
+
+struct psp_gfx_cmd_set_vpod_config_ual_v1
+{
+	uint32_t vpod_id;
+	uint32_t vpod_size;
+	uint32_t vpod_active_accelerators[32];
+	enum psp_gfx_ual_npa_address_mode addr_mode;
+};
+
+enum psp_gfx_ual_ports_per_station {
+	PSP_GFX_UAL_PPS_1 = 1,
+	PSP_GFX_UAL_PPS_2 = 2,
+	PSP_GFX_UAL_PPS_4 = 4
+};
+
+struct psp_gfx_cmd_station_config_ual_v1
+{
+	/**
+	 * Number of valid stations in this configuration
+	 * Only lane_en_bitmap[0..n_stations-1] will be processed.
+	*/
+	uint8_t num_stations;
+
+	/**
+	 * Station configuration flags
+	 * 
+	 * Bit [3:0]: PortPerStation (PPS) - 1, 2, or 4
+	 * Bit [7:4]: Reserved
+	*/
+	uint8_t station_flag;
+
+	uint8_t reserved[2]; /* Future use / alignment padding */
+
+	/**
+	 * Bitmap of enabled lanes for each station
+	 * in logical station order.
+	*/
+	uint8_t lane_en_bitmap[PSP_GFX_UAL_MAX_STATIONS_V1];
+};
+
+struct psp_gfx_cmd_set_npa_config_ual_v1 {
+	uint32_t vmid;
+	uint32_t enable_npa_translation;
+};
+
+struct psp_gfx_cmd_send_completion_ual_v1 {
+	uint32_t cmd_id;
+	uint32_t status;
+};
+
+struct psp_gfx_cmd_migration_rlc_autoload
+{
+	uint32_t target_vfid;
+};
+
 union psp_gfx_commands {
 	struct psp_gfx_cmd_load_ta    cmd_load_ta;
 	struct psp_gfx_cmd_unload_ta  cmd_unload_ta;
@@ -832,7 +1024,18 @@ union psp_gfx_commands {
 	struct psp_gfx_cmd_migration_get_psp_info	cmd_migration_get_psp_info;
 	struct psp_gfx_cmd_migration_export			cmd_migration_export;
 	struct psp_gfx_cmd_migration_import			cmd_migration_import;
+	struct psp_gfx_cmd_migration_rlc_autoload   cmd_migration_rlc_autoload;
+	struct psp_gfx_cmd_migration_get_data_size	cmd_migration_get_data_size;
+	struct psp_gfx_cmd_sriov_drv cmd_sriov_drv;
+	struct psp_gfx_cmd_set_cc_mode cmd_set_cc_mode;
+	struct psp_gfx_cmd_get_cc_mode cmd_get_cc_mode;
 	struct psp_gfx_cmd_req_perf_hw cmd_req_perf_hw;
+	struct psp_gfx_cmd_get_config_ual_v1 cmd_get_config_ual;
+	struct psp_gfx_cmd_set_ppod_config_ual_v1 cmd_set_ppod_config_ual;
+	struct psp_gfx_cmd_set_vpod_config_ual_v1 cmd_set_vpod_config_ual;
+	struct psp_gfx_cmd_station_config_ual_v1 cmd_set_station_config_ual;
+	struct psp_gfx_cmd_set_npa_config_ual_v1 cmd_set_npa_config_ual;
+	struct psp_gfx_cmd_send_completion_ual_v1 cmd_send_completion_ual;
 };
 
 struct psp_gfx_cmd_resp {
@@ -878,6 +1081,13 @@ struct psp_cmd_km_load_ip_fw {
 	enum amdgv_firmware_id fw_type;
 };
 
+enum psp_cmd_km__ta_type {
+	AMDGV_PSP_TA_UNKNOWN = 0,
+	AMDGV_PSP_TA_ASD,
+	AMDGV_PSP_TA_RAS,
+	AMDGV_PSP_TA_XGMI,
+};
+
 /* Command to load Trusted Application binary into PSP OS. */
 struct psp_cmd_km_load_ta {
 	uint32_t app_buf_addr_lo; /* bits [63:32] of the physical address of the TA binary */
@@ -894,11 +1104,17 @@ struct psp_cmd_km_load_ta {
 	 * provided for the TA. Each InvokeCommand can have dynamically mapped CMD buffer
 	 * instead of using global persistent buffer.
 	 */
+
+	/* Driver logging meta data */
+	enum psp_cmd_km__ta_type type;
 };
 
 /* Command to Unload Trusted Application binary from PSP OS. */
 struct psp_cmd_km_unload_ta {
 	uint32_t session_id; /* Session ID of the loaded TA to be unloaded */
+
+	/* Driver logging meta data */
+	enum psp_cmd_km__ta_type type;
 };
 
 struct psp_cmd_km_buf_desc {
@@ -1022,6 +1238,26 @@ struct psp_cmd_km_migration_import
 	uint32_t pkg_addr_lo;
 	uint32_t pkg_size; // Input: driver provides actual total PKG size.
 	uint32_t target_vfid;
+	uint32_t flags;
+};
+
+struct psp_cmd_km_migration_rlc_autoload
+{
+	uint32_t target_vfid;
+};
+
+struct psp_cmd_km_set_cc_mode {
+	uint32_t cc_mode;
+	uint32_t reserved[7];
+};
+
+struct psp_cmd_km_get_cc_mode {
+	uint32_t reserved[8];
+};
+
+struct psp_cmd_km_migration_get_data_size
+{
+	uint32_t pkg_type;  /* enum psp_migration_data_pkg_type */
 };
 
 /* PTL (Peak TOPS Limiter) command structure */
@@ -1030,6 +1266,81 @@ struct psp_cmd_km_perf_hw {
 	uint32_t ptl_state;
 	uint32_t pref_format1;
 	uint32_t pref_format2;
+};
+
+struct psp_km_get_config_ual_v1 {
+	enum psp_gfx_ual_link_type link_type;
+	uint32_t accelerator_id;
+	uint8_t ppod_id[16]; /* 128-bit UUID */
+	uint32_t ppod_size;
+	uint32_t bandwidth;
+	uint32_t latency;
+	uint32_t vpod_id;
+	uint32_t vpod_size;
+	uint32_t vpod_active_accelerators[32];
+	enum psp_gfx_ual_npa_address_mode addr_mode;
+};
+
+struct psp_cmd_km_get_config_ual_v1
+{
+	uint32_t ual_cfg_addr_hi;
+	uint32_t ual_cfg_addr_lo;
+	uint32_t ual_cfg_size;
+};
+
+struct psp_cmd_km_set_ppod_config_ual_v1
+{
+	uint32_t accelerator_id;
+	uint8_t ppod_id[16]; /* 128-bit UUID */
+	uint32_t ppod_size;
+	uint32_t bandwidth;
+	uint32_t latency;
+	uint32_t local_accelerators[PSP_GFX_MAX_LOCAL_GPUS_UAL_V1]; /* sorted in socket-id order */
+};
+
+struct psp_cmd_km_set_vpod_config_ual_v1
+{
+	uint32_t vpod_id;
+	uint32_t vpod_size;
+	uint32_t vpod_active_accelerators[32];
+	enum psp_gfx_ual_npa_address_mode addr_mode;
+};
+
+struct psp_cmd_km_station_config_ual_v1
+{
+    /**
+     * Number of valid stations in this configuration
+     * Only lane_en_bitmap[0..n_stations-1] will be processed.
+	*/
+	uint8_t num_stations;
+
+    /**
+     * Station configuration flags
+     * 
+     * Bit [3:0]: PortPerStation (PPS) - 1, 2, or 4
+     * Bit [7:4]: Reserved
+    */
+	 uint8_t station_flag;
+
+	uint8_t reserved[2]; /* Future use / alignment padding */
+
+	/**
+	 * Bitmap of enabled lanes for each station
+	 * in logical station order.
+	*/
+	uint8_t lane_en_bitmap[PSP_GFX_UAL_MAX_STATIONS_V1];
+ };
+
+struct psp_cmd_km_set_npa_config_ual_v1
+{
+	uint32_t vmid;
+	uint32_t enable_npa_translation;
+};
+
+struct psp_cmd_km_send_completion_ual_v1
+{
+	uint32_t cmd_id;
+	uint32_t status;
 };
 
 union psp_cmd_km_commands {
@@ -1053,7 +1364,18 @@ union psp_cmd_km_commands {
 	struct psp_cmd_km_migration_get_psp_info	migration_get_psp_info;
 	struct psp_cmd_km_migration_export			migration_export;
 	struct psp_cmd_km_migration_import			migration_import;
+	struct psp_cmd_km_migration_rlc_autoload    migration_rlc_autoload;
+	struct psp_cmd_km_migration_get_data_size	migration_get_data_size;
+	struct psp_gfx_cmd_sriov_drv cmd_sriov_drv;
+	struct psp_cmd_km_set_cc_mode set_cc_mode;
+	struct psp_cmd_km_get_cc_mode get_cc_mode;
 	struct psp_cmd_km_perf_hw					perf_hw;
+	struct psp_cmd_km_get_config_ual_v1	get_config_ual;
+	struct psp_cmd_km_set_ppod_config_ual_v1	set_ppod_config_ual;
+	struct psp_cmd_km_set_vpod_config_ual_v1	set_vpod_config_ual;
+	struct psp_cmd_km_station_config_ual_v1	set_station_config_ual;
+	struct psp_cmd_km_set_npa_config_ual_v1	set_npa_config_ual;
+	struct psp_cmd_km_send_completion_ual_v1 send_completion_ual;
 };
 
 struct psp_cmd_km {
@@ -1115,10 +1437,9 @@ enum psp_status amdgv_psp_cmd_km_release_buf(struct psp_context *psp,
 					     struct psp_cmd_km_handle *buf_handle);
 enum psp_status amdgv_psp_cmd_km_buf_prep(struct psp_context *psp, struct psp_cmd_km *km_cmd,
 					  struct psp_cmd_km_handle *km_cmd_handle);
-enum psp_status amdgv_psp_wait_for_memory(struct amdgv_adapter *adapt,
-					  uint32_t *memory_address, uint32_t memory_value);
 enum psp_status amdgv_psp_cmd_km_fence_wait(struct amdgv_adapter *adapt,
 					    struct psp_context *psp,
+					    struct psp_cmd_km *km_cmd,
 					    struct psp_cmd_km_handle *km_cmd_handle,
 					    struct psp_gfx_resp *psp_resp);
 enum psp_bootloader_command_list amdgv_psp_bl_command_map(enum amdgv_firmware_id fw_id);
@@ -1140,9 +1461,13 @@ enum psp_status amdgv_psp_ring_km_submit(struct amdgv_adapter *adapt, uint64_t c
 enum psp_status amdgv_psp_cmd_km_submit(struct amdgv_adapter *adapt,
 					struct psp_cmd_km *input_index,
 					struct psp_gfx_resp *psp_resp);
+void amdgv_psp_put_cmd_error(struct amdgv_adapter *adapt,
+			     struct psp_cmd_km *input,
+			     struct psp_gfx_resp *resp,
+			     bool is_timeout);	
 enum psp_status amdgv_psp_ring_init(struct amdgv_adapter *adapt);
 enum psp_status amdgv_psp_ring_fini(struct amdgv_adapter *adapt);
-enum psp_status amdgv_psp_wait_for_register(struct amdgv_adapter *adapt, uint32_t reg_index,
+enum psp_status amdgv_psp_wait_for_register(struct amdgv_adapter *adapt, uint32_t reg_index, const char *name,
 					    uint32_t reg_value, uint32_t reg_mask,
 					    bool check_changed, uint32_t wait_flag);
 void amdgv_psp_get_fw_info(uint32_t image_version, char *info, uint32_t size, uint32_t fw_id);

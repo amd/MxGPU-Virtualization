@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2019 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include <linux/module.h>
@@ -30,6 +13,7 @@
 #include <linux/delay.h>
 #include <linux/kthread.h>
 #include <linux/version.h>
+#include <linux/acpi.h>
 #include "gim_live_update.h"
 
 #include <linux/ftrace.h>
@@ -83,7 +67,81 @@ const char gim_driver_version[] = PACKAGE_VERSION;
 static const char gim_driver_string[] =
 		"GPU IOV MODULE";
 static const char gim_copyright[] =
-		"Copyright (c) 2014-2025 Advanced Micro Devices, Inc.";
+		"Copyright Advanced Micro Devices, Inc.";
+
+static int gim_find_gpu_memory_in_srat(struct pci_dev *pdev, int32_t pf_numa_id,
+	uint64_t *base_addr, uint64_t *length)
+{
+	struct acpi_table_header *table_header = NULL;
+	struct acpi_subtable_header *sub_header = NULL;
+	unsigned long table_end, subtable_len;
+	acpi_status status;
+	struct acpi_srat_mem_affinity *mem;
+	bool found = false;
+
+	if (pf_numa_id < 0) {
+		gim_warn("NUMA configuration is not available\n");
+		return -1;
+	}
+
+	/* Fetch the SRAT table from ACPI */
+	status = acpi_get_table(ACPI_SIG_SRAT, 0, &table_header);
+	if (status == AE_NOT_FOUND) {
+		gim_warn("SRAT table not found\n");
+		return -1;
+	} else if (ACPI_FAILURE(status)) {
+		const char *err = acpi_format_exception(status);
+		gim_warn("SRAT table error: %s\n", err);
+		return -1;
+	}
+
+	table_end = (unsigned long)table_header + table_header->length;
+
+	/* Parse all entries looking for a match memory */
+	sub_header = (struct acpi_subtable_header *)
+			((unsigned long)table_header +
+			sizeof(struct acpi_table_srat));
+	subtable_len = sub_header->length;
+
+	while (((unsigned long)sub_header) + subtable_len  <= table_end) {
+		/*
+		* If length is 0, break from this loop to avoid
+		* infinite loop.
+		*/
+		if (subtable_len == 0) {
+			gim_warn("SRAT invalid zero length\n");
+			break;
+		}
+
+		switch (sub_header->type) {
+		case ACPI_SRAT_TYPE_MEMORY_AFFINITY:
+			mem = (struct acpi_srat_mem_affinity *)sub_header;
+			if (pf_numa_id == pxm_to_node(mem->proximity_domain)) {
+				*base_addr = mem->base_address;
+				*length = mem->length;
+				found = true;
+				gim_info("SRAT: gpu base address: %llx length: %llx\n", mem->base_address, mem->length);
+			}
+			break;
+		default:
+			break;
+		}
+
+		if (found)
+			break;
+
+		sub_header = (struct acpi_subtable_header *)
+				((unsigned long)sub_header + subtable_len);
+		subtable_len = sub_header->length;
+	}
+
+	acpi_put_table(table_header);
+
+	if (found)
+		return 0;
+	else
+		return -1;
+}
 
 static int gim_map_pci_res(struct amdgv_init_data *data, struct pci_dev *pdev)
 {
@@ -95,12 +153,25 @@ static int gim_map_pci_res(struct amdgv_init_data *data, struct pci_dev *pdev)
 		return ret;
 	}
 
-	/* framebuffer bar mapping */
-	data->info.fb_pa = pci_resource_start(pdev, 0);
-	data->info.fb_size = pci_resource_len(pdev, 0);
-	data->info.fb = devm_ioremap_wc(&pdev->dev,
-					data->info.fb_pa,
-					data->info.fb_size);
+	data->info.pf_numa_id = dev_to_node(&pdev->dev);
+	gim_info("NUMA: node: %d for PF\n", data->info.pf_numa_id);
+
+	if (pci_resource_len(pdev, 0) == 0) {
+		ret = gim_find_gpu_memory_in_srat(pdev, data->info.pf_numa_id,
+				&data->info.fb_pa, &data->info.fb_size);
+		if (ret) {
+			gim_warn("Can't find GPU memory in SRAT table\n");
+			goto err;
+		}
+		data->info.fb = ioremap_cache(data->info.fb_pa, data->info.fb_size);
+	} else {
+		/* framebuffer bar mapping */
+		data->info.fb_pa = pci_resource_start(pdev, 0);
+		data->info.fb_size = pci_resource_len(pdev, 0);
+		data->info.fb = devm_ioremap_wc(&pdev->dev,
+						data->info.fb_pa,
+						data->info.fb_size);
+	}
 	if (data->info.fb == NULL) {
 		gim_put_error(AMDGV_ERROR_DRIVER_FB_MAP_FAIL, 0);
 		goto err;
@@ -151,7 +222,11 @@ static void gim_release_pci_res(struct amdgv_init_data *data,
 {
 	devm_iounmap(&pdev->dev, data->info.mmio);
 	devm_iounmap(&pdev->dev, data->info.doorbell);
-	devm_iounmap(&pdev->dev, data->info.fb);
+	if (pci_resource_len(pdev, 0) == 0) {
+		iounmap(data->info.fb);
+	} else {
+		devm_iounmap(&pdev->dev, data->info.fb);
+	}
 	if (data->info.io_mem)
 		pci_iounmap(pdev, data->info.io_mem);
 
@@ -349,8 +424,10 @@ static int gim_init_thread_func(void *context)
 
 	data->opt.fb_sharing_mode =
 		gim_conf_get_fb_sharing_mode_opt(dev_data->gpu_index);
+	data->opt.vf_hbm_mgmt_mode = gim_conf_get_vf_hbm_mgmt_mode_opt(dev_data->gpu_index);
 	data->opt.accelerator_partition_mode = gim_conf_get_accelerator_partition_mode_opt(dev_data->gpu_index);
 	data->opt.memory_partition_mode = gim_conf_get_memory_partition_mode_opt(dev_data->gpu_index);
+	data->opt.cc_mode = gim_conf_get_cc_mode_opt(dev_data->gpu_index);
 	data->opt.partition_full_access_enable = gim_conf_get_partition_full_access_enable_opt(dev_data->gpu_index);
 	data->opt.bad_page_record_threshold =
 		gim_conf_get_bad_page_record_threshold_opt(dev_data->gpu_index);
@@ -387,6 +464,9 @@ static int gim_init_thread_func(void *context)
 		if (gim_conf_set_memory_partition_mode_opt(data->opt.memory_partition_mode))
 			gim_warn("Failed to restore memory partition mode %d to gim config!\n",
 					data->opt.memory_partition_mode);
+		if (gim_conf_set_cc_mode_opt(data->opt.cc_mode))
+			gim_warn("Failed to restore CC mode %d to gim config!\n",
+					data->opt.cc_mode);
 	}
 	dev_data->adev = amdgv_device_init(data);
 	if (dev_data->adev == AMDGV_INVALID_HANDLE) {
@@ -615,7 +695,16 @@ static struct pci_driver gim_driver = {
 	.probe    = gim_probe,
 	.remove   = gim_remove,
 	.shutdown = gim_shutdown,
-	.err_handler = &gim_err_handler
+	.err_handler = &gim_err_handler,
+#if defined(HAVE_DEVICE_DRIVER_PROBE_TYPE)
+	/*
+	 * GIM does not support async probe. Kernel default (PROBE_DEFAULT_STRATEGY)
+	 * means sync or async are both OK; so force PROBE_FORCE_SYNCHRONOUS instead
+	 */
+	.driver = {
+		.probe_type = PROBE_FORCE_SYNCHRONOUS,
+	},
+#endif
 };
 
 static inline const char *gim_get_memory_partition_mode_desc(
@@ -635,6 +724,51 @@ static inline const char *gim_get_memory_partition_mode_desc(
 	}
 
 	return "UNKNOWN";
+}
+
+static inline const char *gim_get_cc_mode_desc(enum amdgv_cc_mode cc_mode)
+{
+	switch (cc_mode) {
+	case AMDGV_CC_MODE_OFF:
+		return "OFF";
+	case AMDGV_CC_MODE_ON:
+		return "ON";
+	case AMDGV_CC_MODE_DEV:
+		return "DEV";
+	default:
+		return "UNKNOWN";
+	}
+}
+
+static void gim_set_dynamic_cc_mode(void)
+{
+	struct gim_dev_data *dev_data;
+	enum amdgv_cc_mode curr_cc_mode;
+	int ret;
+
+	/* Check and set CC mode if needed */
+	list_for_each_entry(dev_data, &gim_device_list, list) {
+		dev_data->init_data.opt.cc_mode = gim_conf_get_cc_mode_opt(dev_data->gpu_index);
+		ret = amdgv_gpumon_get_cc_mode(dev_data->adev, &curr_cc_mode);
+		if (ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED) {
+			gim_dbg("CC mode is not supported on the GPU %s\n", dev_name(&dev_data->pdev->dev));
+		} else if (ret) {
+			gim_info("failed to get current CC mode of GPU %s\n", dev_name(&dev_data->pdev->dev));
+		} else if (curr_cc_mode != dev_data->init_data.opt.cc_mode &&
+			   dev_data->init_data.opt.cc_mode != AMDGV_CC_MODE_MAX) {
+
+			gim_info("CC mode mismatch. "
+				"curr_cc_mode=%s saved_cc_mode=%s\n",
+				gim_get_cc_mode_desc(curr_cc_mode),
+				gim_get_cc_mode_desc(dev_data->init_data.opt.cc_mode));
+			gim_info("force CC mode to %s\n",
+				gim_get_cc_mode_desc(dev_data->init_data.opt.cc_mode));
+
+			amdgv_gpumon_set_cc_mode(
+					dev_data->adev, dev_data->init_data.opt.cc_mode);
+			break;
+		}
+	}
 }
 
 static void gim_set_dynamic_partition_mode(void)
@@ -801,6 +935,8 @@ static int gim_init(void)
 
 	gim_set_dynamic_partition_mode();
 
+	gim_set_dynamic_cc_mode();
+
 	return 0;
 
 #ifndef EXCLUDE_DCORE_DEBUG
@@ -925,3 +1061,4 @@ MODULE_VERSION(PACKAGE_VERSION);
 MODULE_AUTHOR("Advanced Micro Devices, Inc.");
 MODULE_DESCRIPTION("GPU IOV MODULE");
 MODULE_LICENSE("Dual MIT/GPL");
+

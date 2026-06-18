@@ -1,25 +1,9 @@
 #!/usr/bin/env python3
 
+# Copyright Advanced Micro Devices, Inc.
 #
-# Copyright (c) 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
+# SPDX-License-Identifier: MIT
+
 
 # AMD SMI CORE
 from .amdsmi_interface import amdsmi_init
@@ -85,6 +69,7 @@ from .amdsmi_interface import amdsmi_is_gpu_power_management_enabled
 from .amdsmi_interface import amdsmi_get_link_metrics
 from .amdsmi_interface import amdsmi_get_link_topology
 from .amdsmi_interface import amdsmi_get_link_topology_nearest
+from .amdsmi_interface import amdsmi_topo_get_link_type
 from .amdsmi_interface import amdsmi_get_xgmi_fb_sharing_caps
 from .amdsmi_interface import amdsmi_get_xgmi_fb_sharing_mode_info
 from .amdsmi_interface import amdsmi_set_xgmi_fb_sharing_mode
@@ -101,6 +86,7 @@ from .amdsmi_interface import amdsmi_get_soc_pstate
 from .amdsmi_interface import amdsmi_set_soc_pstate
 from .amdsmi_interface import amdsmi_get_gpu_driver_model
 from .amdsmi_interface import amdsmi_get_gpu_cper_entries
+from .amdsmi_interface import amdsmi_get_fabric_cper_entries
 from .amdsmi_interface import amdsmi_topo_get_p2p_status
 from .amdsmi_interface import amdsmi_get_gpu_virtualization_mode
 from .amdsmi_interface import amdsmi_get_afids_from_cper
@@ -109,6 +95,11 @@ from .amdsmi_interface import amdsmi_get_cpu_affinity_with_scope
 from .amdsmi_interface import amdsmi_topo_get_numa_node_number
 from .amdsmi_interface import amdsmi_get_xgmi_plpd
 from .amdsmi_interface import amdsmi_set_xgmi_plpd
+from .amdsmi_interface import amdsmi_get_vf_hbm_info
+from .amdsmi_interface import amdsmi_get_gpu_fabric_info
+from .amdsmi_interface import amdsmi_get_tdi_state
+from .amdsmi_interface import amdsmi_get_cc_mode
+from .amdsmi_interface import amdsmi_set_cc_mode
 from .amdsmi_interface import amdsmi_get_node_handle
 from .amdsmi_interface import amdsmi_get_npm_info
 from .amdsmi_interface import amdsmi_get_gpu_ras_policy_info
@@ -116,6 +107,7 @@ from .amdsmi_interface import amdsmi_get_gpu_ptl_state
 from .amdsmi_interface import amdsmi_set_gpu_ptl_state
 from .amdsmi_interface import amdsmi_get_gpu_ptl_formats
 from .amdsmi_interface import amdsmi_set_gpu_ptl_formats
+from .amdsmi_interface import amdsmi_get_fabric_telemetry
 
 from .amdsmi_interface import AmdSmiTemperatureType
 from .amdsmi_interface import AmdSmiTemperatureMetric
@@ -164,9 +156,13 @@ from .amdsmi_interface import AmdSmiAffinityScope
 from .amdsmi_interface import AmdSmiVirtualizationMode
 from .amdsmi_interface import AmdSmiDriverModelType
 from .amdsmi_interface import AmdSmiNpmStatus
+from .amdsmi_interface import AmdSmiTDIState
+from .amdsmi_interface import AmdSmiCCMode
+from .amdsmi_interface import AmdSmiFabricTelemetry
 
 # AMD SMI NIC
 from .amdsmi_nic_interface import amdsmi_get_nic_driver_info
+from .amdsmi_nic_interface import amdsmi_get_nic_fw_info
 from .amdsmi_nic_interface import amdsmi_get_nic_asic_info
 from .amdsmi_nic_interface import amdsmi_get_nic_bus_info
 from .amdsmi_nic_interface import amdsmi_get_nic_numa_info
@@ -175,8 +171,7 @@ from .amdsmi_nic_interface import amdsmi_get_nic_rdma_dev_info
 from .amdsmi_nic_interface import amdsmi_get_nic_port_statistics
 from .amdsmi_nic_interface import amdsmi_get_nic_vendor_statistics
 from .amdsmi_nic_interface import amdsmi_get_nic_rdma_port_statistics
-from .amdsmi_nic_interface import amdsmi_topo_get_nic_link_type
-from .amdsmi_nic_interface import AmdSmiNicLinkType
+from .amdsmi_nic_interface import AmdSmiNicFwVersionType
 
 
 # AMD SMI Exception

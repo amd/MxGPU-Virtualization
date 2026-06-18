@@ -1,26 +1,18 @@
-/*
- * Copyright (c) 2024-2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "smi_drv_utils.h"
+#if defined(__linux__) && !defined(SMI_ESXI_BUILD) && !defined(ESX)
+	#include <linux/limits.h>
+#elif defined(SMI_ESXI_BUILD) || defined(ESX)
+	#ifndef INT_MAX
+		#define INT_MAX 2147483647
+	#endif
+#else
+	#include <limits.h>
+#endif
 
 uint64_t smi_eeprom_to_utc_format(uint64_t eeprom_timestamp)
 {
@@ -692,6 +684,15 @@ enum smi_metric_category smi_map_metric_category(enum amdgv_gpumon_metric_ext_ca
 	case AMDGV_GPUMON_METRIC_EXT_CATEGORY__SYS_BASEBOARD_POWER:
 		metric_category = SMI_METRIC_CATEGORY_SYS_BASEBOARD_POWER;
 		break;
+	case AMDGV_GPUMON_METRIC_EXT_CATEGORY__STATIC_FREQUENCY:
+		metric_category = SMI_METRIC_CATEGORY_STATIC_FREQUENCY;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_CATEGORY__STATIC_TEMPERATURE:
+		metric_category = SMI_METRIC_CATEGORY_STATIC_TEMPERATURE;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_CATEGORY__STATIC_THROTTLE:
+		metric_category = SMI_METRIC_CATEGORY_STATIC_THROTTLE;
+		break;
 	default:
 		metric_category = SMI_METRIC_CATEGORY_UNKNOWN;
 		break;
@@ -1038,6 +1039,123 @@ enum smi_metric_name smi_map_metric_name(enum amdgv_gpumon_metric_ext_name name)
 	case AMDGV_GPUMON_METRIC_EXT_NAME__VR_TEMP_VDDIO_11_E32:
 		metric_name = SMI_METRIC_NAME_VR_TEMP_VDDIO_11_E32;
 		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__TEMP_MID:
+		metric_name = SMI_METRIC_NAME_TEMP_MID;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_FCLK:
+		metric_name = SMI_METRIC_NAME_CLK_FCLK;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_FCLK_MAX_LIMIT:
+		metric_name = SMI_METRIC_NAME_CLK_FCLK_MAX_LIMIT;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_FCLK_MIN_LIMIT:
+		metric_name = SMI_METRIC_NAME_CLK_FCLK_MIN_LIMIT;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_FCLK_DS_DISABLED:
+		metric_name = SMI_METRIC_NAME_CLK_FCLK_DS_DISABLED;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_LCLK:
+		metric_name = SMI_METRIC_NAME_CLK_LCLK;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_LCLK_MAX_LIMIT:
+		metric_name = SMI_METRIC_NAME_CLK_LCLK_MAX_LIMIT;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_LCLK_MIN_LIMIT:
+		metric_name = SMI_METRIC_NAME_CLK_LCLK_MIN_LIMIT;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_LCLK_DS_DISABLED:
+		metric_name = SMI_METRIC_NAME_CLK_LCLK_DS_DISABLED;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__PCIE_OTHER_END_RECOVERY_COUNT:
+		metric_name = SMI_METRIC_NAME_PCIE_OTHER_END_RECOVERY_COUNT;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__TEMP_SHUTDOWN_XCD:
+		metric_name = SMI_METRIC_NAME_TEMP_SHUTDOWN_XCD;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__TEMP_SHUTDOWN_AID:
+		metric_name = SMI_METRIC_NAME_TEMP_SHUTDOWN_AID;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__TEMP_SHUTDOWN_MID:
+		metric_name = SMI_METRIC_NAME_TEMP_SHUTDOWN_MID;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__TEMP_SHUTDOWN_HBM:
+		metric_name = SMI_METRIC_NAME_TEMP_SHUTDOWN_HBM;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__THROTTLE_TEMP_XCD:
+		metric_name = SMI_METRIC_NAME_THROTTLE_TEMP_XCD;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__THROTTLE_TEMP_AID:
+		metric_name = SMI_METRIC_NAME_THROTTLE_TEMP_AID;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__THROTTLE_TEMP_MID:
+		metric_name = SMI_METRIC_NAME_THROTTLE_TEMP_MID;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__THROTTLE_TEMP_HBM:
+		metric_name = SMI_METRIC_NAME_THROTTLE_TEMP_HBM;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDCR_X0_TEMP:
+		metric_name = SMI_METRIC_NAME_SVI_PLANE_VDDCR_X0_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDCR_X1_TEMP:
+		metric_name = SMI_METRIC_NAME_SVI_PLANE_VDDCR_X1_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDIO_HBM_B_TEMP:
+		metric_name = SMI_METRIC_NAME_SVI_PLANE_VDDIO_HBM_B_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDIO_HBM_D_TEMP:
+		metric_name = SMI_METRIC_NAME_SVI_PLANE_VDDIO_HBM_D_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDIO_04_HBM_B_TEMP:
+		metric_name = SMI_METRIC_NAME_SVI_PLANE_VDDIO_04_HBM_B_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDIO_04_HBM_D_TEMP:
+		metric_name = SMI_METRIC_NAME_SVI_PLANE_VDDIO_04_HBM_D_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDCR_HBM_B_TEMP:
+		metric_name = SMI_METRIC_NAME_SVI_PLANE_VDDCR_HBM_B_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDCR_HBM_D_TEMP:
+		metric_name = SMI_METRIC_NAME_SVI_PLANE_VDDCR_HBM_D_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDCR_075_HBM_B_TEMP:
+		metric_name = SMI_METRIC_NAME_SVI_PLANE_VDDCR_075_HBM_B_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDCR_075_HBM_D_TEMP:
+		metric_name = SMI_METRIC_NAME_SVI_PLANE_VDDCR_075_HBM_D_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDIO_11_GTA_A_TEMP:
+		metric_name = SMI_METRIC_NAME_SVI_PLANE_VDDIO_11_GTA_A_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDIO_11_GTA_C_TEMP:
+		metric_name = SMI_METRIC_NAME_SVI_PLANE_VDDIO_11_GTA_C_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDAN_075_GTA_A_TEMP:
+		metric_name = SMI_METRIC_NAME_SVI_PLANE_VDDAN_075_GTA_A_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDAN_075_GTA_C_TEMP:
+		metric_name = SMI_METRIC_NAME_SVI_PLANE_VDDAN_075_GTA_C_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDCR_075_UCIE_TEMP:
+		metric_name = SMI_METRIC_NAME_SVI_PLANE_VDDCR_075_UCIE_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDIO_065_UCIEAA_TEMP:
+		metric_name = SMI_METRIC_NAME_SVI_PLANE_VDDIO_065_UCIEAA_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDIO_065_UCIEAM_A_TEMP:
+		metric_name = SMI_METRIC_NAME_SVI_PLANE_VDDIO_065_UCIEAM_A_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDIO_065_UCIEAM_C_TEMP:
+		metric_name = SMI_METRIC_NAME_SVI_PLANE_VDDIO_065_UCIEAM_C_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDCR_SOCIO_A_TEMP:
+		metric_name = SMI_METRIC_NAME_SVI_PLANE_VDDCR_SOCIO_A_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDCR_SOCIO_C_TEMP:
+		metric_name = SMI_METRIC_NAME_SVI_PLANE_VDDCR_SOCIO_C_TEMP;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDAN_075_TEMP:
+		metric_name = SMI_METRIC_NAME_SVI_PLANE_VDDAN_075_TEMP;
+		break;
 	case AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_POWER_UBB_POWER:
 		metric_name = SMI_METRIC_NAME_SYSTEM_POWER_UBB_POWER;
 		break;
@@ -1259,6 +1377,101 @@ enum smi_vf_sched_state smi_map_sched_state(enum amdgv_sched_state state)
 		return SMI_VF_STATE_FULLACCESS;
 	default:
 		return SMI_VF_STATE_UNAVAILABLE;
+	}
+}
+
+int smi_map_tdi_state(enum amdgv_tdi_state state)
+{
+	int state_max = INT_MAX;
+	switch (state) {
+	case AMDGV_TDI_STATE_UNLOCKED:
+		return SMI_TDI_STATE_UNLOCKED;
+	case AMDGV_TDI_STATE_LOCKED:
+		return SMI_TDI_STATE_LOCKED;
+	case AMDGV_TDI_STATE_RUN:
+		return SMI_TDI_STATE_RUN;
+	case AMDGV_TDI_STATE_ERROR:
+		return SMI_TDI_STATE_ERROR;
+	case AMDGV_TDI_STATE_MAX:
+		return state_max;
+	}
+	return state_max;
+}
+
+int smi_map_cc_mode(enum amdgv_cc_mode mode)
+{
+	int mode_max = INT_MAX;
+	switch (mode) {
+	case AMDGV_CC_MODE_OFF:
+		return SMI_CC_MODE_OFF;
+	case AMDGV_CC_MODE_ON:
+		return SMI_CC_MODE_ON;
+	case AMDGV_CC_MODE_DEV:
+		return SMI_CC_MODE_DEV;
+	case AMDGV_CC_MODE_MAX:
+		return mode_max;
+	}
+	return mode_max;
+}
+
+int smi_map_cc_mode_reverse(enum smi_cc_mode_t mode)
+{
+
+	int mode_max = INT_MAX;
+	switch (mode) {
+	case SMI_CC_MODE_OFF:
+		return AMDGV_CC_MODE_OFF;
+	case SMI_CC_MODE_ON:
+		return AMDGV_CC_MODE_ON;
+	case SMI_CC_MODE_DEV:
+		return AMDGV_CC_MODE_DEV;
+	}
+	return mode_max;
+}
+
+enum smi_fabric_type smi_map_fabric_type(enum amdgv_gpumon_ual_link_type type)
+{
+	switch (type) {
+	case AMDGV_GPUMON_UALOE:
+		return SMI_FABRIC_TYPE_UALOE;
+	case AMDGV_GPUMON_UALINK:
+		return SMI_FABRIC_TYPE_UALINK;
+	case AMDGV_GPUMON_UALMAX:
+	default:
+		return SMI_FABRIC_TYPE_UNKNOWN;
+	}
+}
+
+enum smi_fabric_npa_address_mode smi_map_fabric_npa_address_mode(
+	enum amdgv_gpumon_ual_npa_address_mode mode)
+{
+	switch (mode) {
+	case AMDGV_GPUMON_UAL_NPA_ADDRESS_MODE_SOURCE_ALIASING:
+		return SMI_FABRIC_NPA_ADDRESS_MODE_SOURCE_ALIASING;
+	case AMDGV_GPUMON_UAL_NPA_ADDRESS_MODE_SOURCE_IDENTIFICATION:
+		return SMI_FABRIC_NPA_ADDRESS_MODE_SOURCE_IDENTIFICATION;
+	case AMDGV_GPUMON_UAL_NPA_ADDRESS_MODE_MAX:
+	default:
+		return SMI_FABRIC_NPA_ADDRESS_MODE_UNKNOWN;
+	}
+}
+
+enum smi_fabric_accelerator_vpod_state smi_map_fabric_accelerator_vpod_state(
+	enum amdgv_gpumon_ual_accelerator_vpod_state state)
+{
+	switch (state) {
+	case AMDGV_GPUMON_UAL_ACCEL_VPOD_STATE_UNCONFIGURED:
+		return SMI_FABRIC_ACCELERATOR_VPOD_STATE_UNCONFIGURED;
+	case AMDGV_GPUMON_UAL_ACCEL_VPOD_STATE_CONFIGURED:
+		return SMI_FABRIC_ACCELERATOR_VPOD_STATE_CONFIGURED;
+	case AMDGV_GPUMON_UAL_ACCEL_VPOD_STATE_READY:
+		return SMI_FABRIC_ACCELERATOR_VPOD_STATE_READY;
+	case AMDGV_GPUMON_UAL_ACCEL_VPOD_STATE_ACTIVE:
+		return SMI_FABRIC_ACCELERATOR_VPOD_STATE_ACTIVE;
+	case AMDGV_GPUMON_UAL_ACCEL_VPOD_STATE_ERROR:
+		return SMI_FABRIC_ACCELERATOR_VPOD_STATE_ERROR;
+	default:
+		return SMI_FABRIC_ACCELERATOR_VPOD_STATE_UNKNOWN;
 	}
 }
 

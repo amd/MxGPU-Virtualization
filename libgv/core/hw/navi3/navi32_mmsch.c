@@ -1,22 +1,6 @@
-/*
- * Copyright (C) 2021  Advanced Micro Devices, Inc.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included
- * in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
- * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE COPYRIGHT HOLDER(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
- * IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <amdgv_device.h>
@@ -48,7 +32,7 @@ static int navi32_mmsch_send_mailbox(struct amdgv_adapter *adapt,
 	WREG32(SOC15_REG_OFFSET(VCN, 0, regMMSCH_VF_MAILBOX_1), cmd);
 
 	wait_ret = amdgv_wait_for_register(
-		adapt, reg_resp_offset,
+		adapt, SOC15_REG_OFFSET_NAME(VCN, 0, regMMSCH_VF_MAILBOX_1_RESP),
 		0xFFFFFFFF, MMSCH_HV_RESP__DONE,
 		AMDGV_TIMEOUT(TIMEOUT_CMD_RESP), AMDGV_WAIT_CHECK_EQ,
 		AMDGV_WAIT_FLAG_AUTO
@@ -161,9 +145,6 @@ static int navi32_mmsch_read_bandwidth_config(struct amdgv_adapter *adapt)
 	sw_bw_cfg = &adapt->mmsch.bandwidth_config;
 	hw_bw_cfg = (struct navi32_mmsch_bandwidth_config *)amdgv_memmgr_get_cpu_addr(adapt->mmsch.bandwidth_config_mem);
 
-	if (!hw_bw_cfg)
-		return AMDGV_FAILURE;
-
 	/* copy bandwidth config output from framebuffer to software struct */
 	for (vcn_engine_idx = 0; vcn_engine_idx < NAVI3_MMSCH_MAX_VCN_ENGINE; vcn_engine_idx++) {
 		oss_memcpy(
@@ -187,9 +168,6 @@ static int navi32_mmsch_write_bandwidth_config(struct amdgv_adapter *adapt, uint
 
 	sw_bw_cfg = &adapt->mmsch.bandwidth_config;
 	hw_bw_cfg = (struct navi32_mmsch_bandwidth_config *)amdgv_memmgr_get_cpu_addr(adapt->mmsch.bandwidth_config_mem);
-
-	if (!hw_bw_cfg)
-		return AMDGV_FAILURE;
 
 	/* copy bandwidth config input from software struct to framebuffer */
 	hw_bw_cfg->flags.allbits = sw_bw_cfg->flags.allbits;
@@ -220,9 +198,6 @@ static int navi32_mmsch_clear_bandwidth_config_vf_status(struct amdgv_adapter *a
 
 	sw_bw_cfg = &adapt->mmsch.bandwidth_config;
 	hw_bw_cfg = (struct navi32_mmsch_bandwidth_config *)amdgv_memmgr_get_cpu_addr(adapt->mmsch.bandwidth_config_mem);
-
-	if (!hw_bw_cfg)
-		return AMDGV_FAILURE;
 
 	/* clear VF status bits for re-init */
 	for (vcn_engine_idx = 0; vcn_engine_idx < NAVI3_MMSCH_MAX_VCN_ENGINE; vcn_engine_idx++) {
@@ -411,8 +386,6 @@ static int navi32_mmsch_hw_init(struct amdgv_adapter *adapt)
 	ucode_id = AMDGV_FIRMWARE_ID__MMSCH;
 	ret = adapt->ucode.load(adapt, &ucode_id, 1);
 	if (ret) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_UCODE_LOAD_FAIL,
-				ucode_id);
 		return ret;
 	}
 

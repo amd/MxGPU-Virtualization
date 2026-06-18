@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef AMDGV_MEMMGR_H
@@ -148,6 +131,10 @@ struct amdgv_memmgr {
 
 	/* is system memmory manager or not*/
 	bool is_sys;
+
+	struct amdgv_list_head reservations_pending;
+	struct amdgv_list_head reserved_pages;
+	mutex_t rsv_lock;
 };
 
 struct amdgv_mem_with_bitmap {
@@ -192,8 +179,10 @@ struct amdgv_memmgr_mem *amdgv_memmgr_alloc(struct amdgv_memmgr *memmgr, uint64_
 					    enum amdgv_mem_id id);
 struct amdgv_memmgr_mem *amdgv_memmgr_alloc_align(struct amdgv_memmgr *memmgr, uint64_t len,
 						  uint64_t align, enum amdgv_mem_id id);
-struct amdgv_memmgr_mem *amdgv_memmgr_alloc_sys_align(struct amdgv_memmgr *memmgr, uint64_t len,
-							uint64_t align, uint64_t *gpu_addr, void *va_ptr);
+struct amdgv_memmgr_mem *amdgv_memmgr_alloc_sys_align_with_attr(struct amdgv_memmgr *memmgr,
+							uint64_t len, uint64_t align,
+							enum oss_page_attr page_attr,
+							uint64_t *gpu_addr, void *va_ptr);
 struct amdgv_memmgr_mem *amdgv_memmgr_alloc_align_zero(struct amdgv_memmgr *memmgr, uint64_t len,
 							uint64_t align, enum amdgv_mem_id id);
 struct amdgv_memmgr_mem *amdgv_memmgr_alloc_sys_align_zero(struct amdgv_memmgr *memmgr, uint64_t len,
@@ -253,7 +242,18 @@ void amdgv_gmc_flush_gpu_tlb(struct amdgv_adapter *adapt, uint32_t vmid,
 					uint32_t vmhub, uint32_t flush_type);
 int amdgv_map_sys_mem_allocs(struct amdgv_memmgr *memmgr, enum amdgv_map_op map_op);
 
+int amdgv_memmgr_pf_init(struct amdgv_adapter *adapt);
+int amdgv_memmgr_pf_fini(struct amdgv_adapter *adapt);
+int amdgv_memmgr_reserve_page(struct amdgv_adapter *adapt,
+		struct amdgv_memmgr *mgr, uint64_t pfn);
+int amdgv_memmgr_query_page_reserve_status(struct amdgv_adapter *adapt,
+		struct amdgv_memmgr *mgr, uint64_t start);
+bool amdgv_memmgr_check_critical_address(struct amdgv_adapter *adapt,
+		uint64_t address);
+
 int amdgv_memmgr_assign_reserved_region(struct amdgv_memmgr_mem *reserved);
 int amdgv_memmgr_alloc_deferred_region(struct amdgv_memmgr *memmgr);
+
+bool amdgv_memmgr_addr_in_range(struct amdgv_adapter *adapt, struct amdgv_memmgr *memmgr, uint64_t addr);
 
 #endif

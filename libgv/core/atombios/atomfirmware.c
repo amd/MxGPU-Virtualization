@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2016-2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "atomfirmware.h"
@@ -42,7 +25,7 @@ static int amdgv_atomfirmware_update_checksum(struct amdgv_adapter *adapt, uint8
 	adapt->vbios.byte_sum = sum;
 	rom_header->CheckSum[0] = 0x100 - (uint8_t)sum;
 
-	AMDGV_INFO("update guest vbios checksum to 0x%02x \n", rom_header->CheckSum[0]);
+	AMDGV_DEBUG("update guest vbios checksum to 0x%02x\n", rom_header->CheckSum[0]);
 
 	return 0;
 }
@@ -210,7 +193,8 @@ int amdgv_atomfirmware_post(struct amdgv_adapter *adapt, int post_type)
 			asic_init_ps_v2_1.param.engineparam.engineflag = b3SRIOV_LOAD_UCODE;
 		}
 
-		return amdgv_atom_execute_table(ctx, index, (uint32_t *)&asic_init_ps_v2_1);
+		return amdgv_atom_execute_table(ctx, index, (uint32_t *)&asic_init_ps_v2_1,
+						sizeof(asic_init_ps_v2_1) / sizeof(uint32_t));
 	}
 
 	return AMDGV_FAILURE;
@@ -234,6 +218,9 @@ bool amdgv_atomfirmware_mem_ecc_support(struct amdgv_adapter *adapt)
 	uint8_t umc_config;
 	uint32_t umc_config1;
 	bool ecc_default_enabled = false;
+
+	if (!ctx || !ctx->bios)
+		return false;
 
 	index = get_index_into_master_table(atom_master_list_of_data_tables_v2_1,
 			umc_info);
@@ -301,6 +288,9 @@ int amdgv_atomfirmware_ras_rom_addr(struct amdgv_adapter *adapt,
 	uint16_t data_offset;
 	uint8_t frev, crev;
 
+	if (!ctx || !ctx->bios)
+		return AMDGV_FAILURE;
+
 	/* get firmwareinfo table */
 	index = get_index_into_master_table(atom_master_list_of_data_tables_v2_1,
 					    firmwareinfo);
@@ -331,6 +321,9 @@ int amdgv_atomfirmware_get_vram_info(struct amdgv_adapter *adapt)
 	uint8_t frev, crev;
 	union umc_info *umc_info;
 
+	if (!ctx || !ctx->bios)
+		return AMDGV_FAILURE;
+
 	/* get firmwareinfo table */
 	index = get_index_into_master_table(atom_master_list_of_data_tables_v2_1, umc_info);
 
@@ -348,6 +341,7 @@ int amdgv_atomfirmware_get_vram_info(struct amdgv_adapter *adapt)
 			return 0;
 		} else {
 			AMDGV_WARN("LibGV does not support umc info table %d.%d\n", frev, crev);
+			return 0;
 		}
 	}
 

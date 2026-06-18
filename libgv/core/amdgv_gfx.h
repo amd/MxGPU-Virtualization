@@ -1,24 +1,8 @@
-/*
- * Copyright (C) 2022 Advanced Micro Devices, Inc.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included
- * in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
- * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE COPYRIGHT HOLDER(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
- * DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
+
 #ifndef __AMDGV_GFX_H__
 #define __AMDGV_GFX_H__
 
@@ -31,6 +15,7 @@
 #define MAX_KIQ_REG_TRY 1000
 
 #define AMDGV_GFX_MAX_USEC_TIMEOUT		1000	/* 1 ms */
+#define AMDGV_SDMA_DBIT_MAX_USEC_TIMEOUT 500000 /* 500 ms */
 
 /* GFX current status */
 #define AMDGV_GFX_NORMAL_MODE			0x00000000L
@@ -500,10 +485,12 @@ enum {
 };
 
 typedef int (*amdgv_wait_cb_t)(void *cb_context);
+struct amdgv_wait_for_cb_context;
 
 struct amdgv_gfx_funcs {
 	/* hang detection */
-	int (*wait_detect_hang)(struct amdgv_adapter *adapt, amdgv_wait_cb_t cb_func, void *cb_context, uint64_t timeout);
+	int (*wait_detect_hang)(struct amdgv_adapter *adapt, amdgv_wait_cb_t cb_func,
+				struct amdgv_wait_for_cb_context *cb_context, uint64_t timeout);
 
 	/* legacy ecc */
 	void (*err_cnt_init)(struct amdgv_adapter *adapt);
@@ -519,6 +506,15 @@ struct amdgv_gfx_funcs {
 			struct amdgv_dump_cu_resource_memory *resource_mem);
 	void (*free_dump_cu_resource_memory)(struct amdgv_adapter *adapt);
 	int  (*hw_init_internal_set)(struct amdgv_adapter *adapt);
+
+	/* RAS poison interrupt routing */
+	int (*set_poison_interrupt_routing)(struct amdgv_adapter *adapt, bool route_to_pf);
+
+	/* autoload check */
+	int (*check_rlc_autoload_complete)(struct amdgv_adapter *adapt);
+	bool (*is_gfx_off)(struct amdgv_adapter *adapt);
+	uint32_t (*get_num_xcc_in_xcp)(struct amdgv_adapter *adapt);
+	int (*set_clockgating_state)(struct amdgv_adapter *adapt, bool enable);
 };
 
 struct amdgv_mec {
@@ -696,7 +692,7 @@ struct amdgv_cu_dump_data_info {
 	uint32_t xcc_id;
 	enum AMDGV_CU_DATA_TYPE cu_dump_type;
 
-	/* 
+	/*
 	 * Due to architectural constraints, dumping SGPRs on GFX9 requires launching
 	 * 2 compute queues running different shaders simultaneously and synchronizing them.
 	 */
@@ -758,8 +754,8 @@ struct amdgv_rlcg_reg_access_ctrl {
 
 struct amdgv_rlc_funcs {
 	bool (*is_rlc_enabled)(struct amdgv_adapter *adapt);
-	void (*set_safe_mode)(struct amdgv_adapter *adapt, int xcc_id);
-	void (*unset_safe_mode)(struct amdgv_adapter *adapt, int xcc_id);
+	int (*set_safe_mode)(struct amdgv_adapter *adapt, int xcc_id);
+	int (*unset_safe_mode)(struct amdgv_adapter *adapt, int xcc_id);
 	int  (*init)(struct amdgv_adapter *adapt);
 	uint32_t  (*get_csb_size)(struct amdgv_adapter *adapt);
 	void (*get_csb_buffer)(struct amdgv_adapter *adapt,
@@ -794,7 +790,7 @@ struct amdgv_rlc {
 	uint32_t                     cp_table_size;
 
 	/* safe mode for updating CG/PG state */
-	bool in_safe_mode[AMDGV_MAX_GC_INSTANCES];
+	uint32_t safe_mode_count[AMDGV_MAX_GC_INSTANCES];
 	const struct amdgv_rlc_funcs *funcs;
 
 	/* for firmware data */
@@ -1006,8 +1002,9 @@ void amdgv_gfx_ras_error_func(struct amdgv_adapter *adapt,
 	void (*func)(struct amdgv_adapter *adapt, void *ras_error_status,
 	int xcc_id));
 int amdgv_gfx_get_compute_cap(struct amdgv_adapter *adapt, bool min, uint32_t *compute_cap);
-void amdgv_gfx_rlc_enter_safe_mode(struct amdgv_adapter *adapt, int xcc_id);
-void amdgv_gfx_rlc_exit_safe_mode(struct amdgv_adapter *adapt, int xcc_id);
+int amdgv_gfx_rlc_enter_safe_mode(struct amdgv_adapter *adapt, int xcc_id);
+int amdgv_gfx_rlc_exit_safe_mode(struct amdgv_adapter *adapt, int xcc_id);
+int amdgv_gfx_rlc_safe_mode(struct amdgv_adapter *adapt, bool enable);
 void amdgv_gfx_init_dump_cu_packet(struct amdgv_adapter *adapt,
 	hsa_kernel_dispatch_packet_t *packet, struct amdgv_dump_cu_resource_size *resource_size,
 	hsa_signal_t signal, struct amdgv_memmgr_mem *kernelobj, struct amdgv_memmgr_mem *kernelarg);
@@ -1015,4 +1012,7 @@ int amdgv_gfx_alloc_dump_cu_resource_memory(struct amdgv_adapter *adapt, struct 
 			struct amdgv_dump_cu_resource_memory *resource_mem);
 void amdgv_gfx_free_dump_cu_resource_memory(struct amdgv_adapter *adapt);
 int amdgv_gfx_dump_cu_data(struct amdgv_adapter *adapt);
+bool amdgv_gfx_is_gfx_off(struct amdgv_adapter *adapt);
+int amdgv_gfx_check_rlc_autoload_complete(struct amdgv_adapter *adapt);
+int amdgv_gfx_set_clockgating_state(struct amdgv_adapter *adapt, bool enable);
 #endif

@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2023-2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "gtest/gtest.h"
@@ -176,6 +159,7 @@ TEST_F(AmdSmiXgmiTest, InvalidParams)
 	ASSERT_EQ(amdsmi_get_xgmi_fb_sharing_mode_info(&GPU_MOCK_HANDLE, &NIC_MOCK_HANDLE, AMDSMI_XGMI_FB_SHARING_MODE_4, &fb_sharing), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_set_xgmi_fb_sharing_mode(NULL, AMDSMI_XGMI_FB_SHARING_MODE_4), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_set_xgmi_fb_sharing_mode(&NIC_MOCK_HANDLE, AMDSMI_XGMI_FB_SHARING_MODE_4), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_set_xgmi_fb_sharing_mode(&GPU_MOCK_HANDLE, AMDSMI_XGMI_FB_SHARING_MODE_CUSTOM), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_set_xgmi_fb_sharing_mode_v2(NULL, num_processors, AMDSMI_XGMI_FB_SHARING_MODE_4), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_set_xgmi_fb_sharing_mode_v2(processor_list, 1, AMDSMI_XGMI_FB_SHARING_MODE_4), AMDSMI_STATUS_INVAL);
 
@@ -294,6 +278,67 @@ TEST_F(AmdSmiXgmiTest, GetLinkTopologyDevIdNotSupported)
 	ret = amdsmi_get_link_topology(&GPU_MOCK_HANDLE, &gpu_handle,
 			      &link_topology);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+}
+
+TEST_F(AmdSmiXgmiTest, TopoGetLinkTypeGpuToGpu)
+{
+	int ret;
+	amdsmi_link_type_t link_type;
+	uint64_t hops;
+	struct smi_io_link mocked_resp = {};
+
+	mocked_resp.link_topology.weight = 300;
+	mocked_resp.link_topology.link_status = SMI_LINK_STATUS_ENABLED;
+	mocked_resp.link_topology.link_type = SMI_LINK_TYPE_XGMI;
+	mocked_resp.link_topology.num_hops = 7;
+	mocked_resp.link_topology.fb_sharing = 1;
+
+	// Non-NULL hops
+	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_LINK_TOPOLOGY)))
+		.WillOnce(testing::DoAll(amdsmi::SetPayload(mocked_resp), testing::Return(0)));
+	hops = 0;
+	link_type = AMDSMI_LINK_TYPE_UNKNOWN;
+	ret = amdsmi_topo_get_link_type(&GPU_MOCK_HANDLE, &GPU_MOCK_HANDLE_DIFF, &hops, &link_type);
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	EXPECT_EQ(hops, 7u);
+	EXPECT_EQ(link_type, AMDSMI_LINK_TYPE_XGMI);
+
+	// NULL hops (skip hop count)
+	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_LINK_TOPOLOGY)))
+		.WillOnce(testing::DoAll(amdsmi::SetPayload(mocked_resp), testing::Return(0)));
+	link_type = AMDSMI_LINK_TYPE_UNKNOWN;
+	ret = amdsmi_topo_get_link_type(&GPU_MOCK_HANDLE, &GPU_MOCK_HANDLE_DIFF, NULL, &link_type);
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	EXPECT_EQ(link_type, AMDSMI_LINK_TYPE_XGMI);
+}
+
+TEST_F(AmdSmiXgmiTest, TopoGetLinkTypeInvalidArgs)
+{
+	amdsmi_link_type_t link_type;
+	uint64_t hops;
+
+	// NULL src
+	ASSERT_EQ(amdsmi_topo_get_link_type(NULL, &GPU_MOCK_HANDLE_DIFF, &hops, &link_type),
+		  AMDSMI_STATUS_INVAL);
+	// NULL dst
+	ASSERT_EQ(amdsmi_topo_get_link_type(&GPU_MOCK_HANDLE, NULL, &hops, &link_type),
+		  AMDSMI_STATUS_INVAL);
+	// NULL type
+	ASSERT_EQ(amdsmi_topo_get_link_type(&GPU_MOCK_HANDLE, &GPU_MOCK_HANDLE_DIFF, &hops, NULL),
+		  AMDSMI_STATUS_INVAL);
+}
+
+TEST_F(AmdSmiXgmiTest, TopoGetLinkTypeGpuToGpuIoctlFailed)
+{
+	amdsmi_link_type_t link_type;
+	uint64_t hops;
+	int ret;
+
+	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_LINK_TOPOLOGY)))
+		.WillOnce(amdsmi::SetResponseStatus(AMDSMI_STATUS_API_FAILED));
+
+	ret = amdsmi_topo_get_link_type(&GPU_MOCK_HANDLE, &GPU_MOCK_HANDLE_DIFF, &hops, &link_type);
+	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 }
 
 TEST_F(AmdSmiXgmiTest, GetLinkTopologyGpuItself)

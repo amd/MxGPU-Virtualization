@@ -1,24 +1,7 @@
-/*
-* Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
-*
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in
-* all copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-* THE SOFTWARE.
-*/
+/* Copyright Advanced Micro Devices, Inc.
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 #ifndef AMDGV_DIRTYBIT_H
 #define AMDGV_DIRTYBIT_H
@@ -63,13 +46,14 @@ struct amdgv_dirtybit_funcs {
 };
 
 int amdgv_dirtybit_control(struct amdgv_adapter *adapt, bool enable);
-int amdgv_dirtybit_querydata(struct amdgv_adapter *adapt, struct amdgv_query_dirty_bit_data *data);
+int amdgv_dirtybit_query_and_accumulate(struct amdgv_adapter *adapt, struct amdgv_query_dirty_bit_data *data);
 int amdgv_dirtybit_get_dirty_page_size(struct amdgv_adapter *adapt, uint32_t *dirty_page_size);
 int amdgv_dirtybit_clear_fb_dbit(struct amdgv_adapter *adapt,  uint32_t idx_vf);
 int amdgv_merge_acc_bits_to_new_bits(struct amdgv_adapter *adapt, struct amdgv_query_dirty_bit_data *data);
 int amdgv_dirtybit_assgin_acc_bits_to_vf(struct amdgv_adapter *adapt);
 void amdgv_dirtybit_destroy_vf_acc_bits(struct amdgv_adapter *adapt);
 void amdgv_dirtybit_set_vfs_acc_bits(struct amdgv_adapter *adapt, char pattern);
+void amdgv_dirtybit_set_vf_acc_bits(struct amdgv_adapter *adapt, uint32_t idx_vf, char pattern);
 int amdgv_dirtybit_query_vf_fb_dbit(struct amdgv_adapter *adapt, uint32_t idx_vf);
 int amdgv_dirtybit_export_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_acc_bits *data);
 int amdgv_dirtybit_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_acc_bits *data);

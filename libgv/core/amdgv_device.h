@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef AMDGV_DEVICE_H
@@ -63,14 +46,19 @@
 #include "amdgv_df.h"
 #include "amdgv_vcn.h"
 #include "amdgv_xgmi.h"
+#include "amdgv_ual.h"
 #include "amdgv_mmhub.h"
+#include "amdgv_gfxhub.h"
+#include "amdgv_memrsv.h"
 #include "amdgv_mca.h"
 #include "amdgv_debug.h"
 #include "amdgv_cper.h"
 #include "amdgv_vfmgr.h"
-
+#include "amdgv_vfmgr_xchg.h"
 #include "amdgv_ras_eeprom.h"
+#include "amdgv_sriov_drv.h"
 
+#include "amdgv_mes.h"
 
 #define AMDGV_CAP_MANUAL_SCHED	    (1 << 0)
 #define AMDGV_CAP_HUNG_HW_DETECT    (1 << 1)
@@ -99,7 +87,7 @@
 
 #define AMDGV_AGP_APERTURE_SIZE (0x10ULL << 20)
 
-#define HWIP_MAX_INSTANCE 28
+#define HWIP_MAX_INSTANCE 48
 
 #define AMDGV_NUM_VMID 16
 
@@ -120,6 +108,9 @@
 #define AMDGV_BP_MODE_DISABLE 	0
 #define AMDGV_BP_MODE_1			1
 #define AMDGV_BP_MODE_2 		2
+
+/* 16MB default alignment */
+#define AMDGV_FUNCTION_FB_ALIGNMENT (adapt->fb_alignment ? adapt->fb_alignment : 16)
 
 INLINE uint32_t amdgv_ffs(int n)
 {
@@ -229,6 +220,7 @@ enum amdgv_hw_ip_block_type {
 	NBIO_HWIP,
 	MP0_HWIP,
 	MP1_HWIP,
+	MP5_HWIP,
 	UVD_HWIP,
 	VCN_HWIP = UVD_HWIP,
 	VCE_HWIP,
@@ -243,6 +235,7 @@ enum amdgv_hw_ip_block_type {
 	UMC_HWIP,
 	RSMU_HWIP,
 	LSDMA_HWIP,
+	ATU_HWIP,
 	MAX_HWIP
 };
 
@@ -432,6 +425,34 @@ struct amdgv_vf_ras {
 	} cper;
 };
 
+struct amdgv_vf_xchg {
+	struct amdgv_vf_ras ras;
+
+	uint64_t vf_table_offsets[AMD_SRIOV_MSG_MAX_TABLE_ID];
+	uint64_t vf_table_sizes_kb[AMD_SRIOV_MSG_MAX_TABLE_ID];
+
+	/* if set to v1, use v1 offsets;
+	 * if set to v2, VF must use new allocation scheme due to bad pages */
+	enum amd_sriov_crit_region_version vf_crit_region;
+
+	/* whether the critical region needs to be reallocated */
+	bool crit_region_realloc_needed;
+
+	/* critical region init support capability.
+	 * bit 0 - version 1;
+	 * bit 1 - Version 2 */
+	uint32_t host_crit_region_caps;
+	uint32_t guest_crit_region_caps;
+
+	/* memory manager for VF critical region */
+	struct amdgv_memmgr memmgr_vf;
+
+	/* reserved variable for future use */
+	uint32_t guest_gpu_init_flags;
+
+	void *gpa_ctx;
+};
+
 struct amdgv_vf_device {
 	oss_dev_t dev;
 	bool configured;
@@ -505,25 +526,12 @@ struct amdgv_vf_device {
 	struct amdgv_time_log time_log[AMDGV_MAX_NUM_HW_SCHED];
 
 	bool mes_info_dump_enabled;
+	struct amdgv_vf_xchg xchg;
 
-	struct amdgv_vf_ras ras;
+	void *hbm_mgmt_handle;
+	struct amdgv_vf_hbm_mgmt vf_hbm_mgmt;
 
-	uint64_t vf_table_offsets[AMD_SRIOV_MSG_MAX_TABLE_ID];
-
-	uint64_t vf_table_sizes_kb[AMD_SRIOV_MSG_MAX_TABLE_ID];
-
-	/* if set to v1, use v1 offsets; if set to v2, VF must use new allocation scheme due to bad pages */
-	enum amd_sriov_crit_region_version vf_crit_region;
-
-	/* critical region init support capability. bit 0 - version 1; bit 1 - Version 2 */
-	uint32_t host_crit_region_caps;
-	uint32_t guest_crit_region_caps;
-
-	/* reserved variable for future use */
-	uint32_t guest_gpu_init_flags;
-
-	/* memory manager for VF critical region */
-	struct amdgv_memmgr memmgr_vf;
+	uint8_t unitid;
 };
 
 struct amdgv_reg_golden {
@@ -537,6 +545,7 @@ struct amdgv_reg_golden {
 
 struct amdgv_vmhub_funcs {
 	uint32_t (*get_invalidate_req)(unsigned int vmid, uint32_t flush_type);
+	void (*clear_protection_fault)(struct amdgv_adapter *adapt, uint32_t inst);
 };
 
 struct amdgv_vmhub {
@@ -547,6 +556,7 @@ struct amdgv_vmhub {
 	uint32_t vm_inv_eng0_ack;
 	uint32_t vm_context0_cntl;
 	uint32_t vm_l2_pro_fault_status;
+	uint32_t vm_l2_pro_fault_status_hi;
 	uint32_t vm_l2_pro_fault_cntl;
 
 	/*
@@ -585,12 +595,6 @@ struct amdgv_ip_map_info {
 	uint32_t (*logical_to_dev_mask)(struct amdgv_adapter *adev,
 					enum amdgv_hw_ip_block_type block,
 					uint32_t mask);
-};
-
-enum amdgv_mes_pipe {
-	AMDGV_MES_SCHED_PIPE = 0,
-	AMDGV_MES_KIQ_PIPE,
-	AMDGV_MAX_MES_PIPES = 2,
 };
 
 enum emu_type {
@@ -651,6 +655,8 @@ struct amdgv_adapter {
 	uint32_t          domain; // not used
 	uint32_t          bdf;
 
+	int32_t           pf_numa_id;
+
 	uint32_t          asic_type;
 
 	uint32_t          vendor_id;
@@ -669,6 +675,8 @@ struct amdgv_adapter {
 
 	/* register offset based on ip, instance and segment */
 	uint32_t          *reg_offset[MAX_HWIP][HWIP_MAX_INSTANCE];
+	/* Number of valid segments (base addresses) pointed to by reg_offset.*/
+	uint32_t          reg_num_segs[MAX_HWIP][HWIP_MAX_INSTANCE];
 
 	/* physical address of framebuffer */
 	uint64_t          fb_pa;
@@ -868,6 +876,7 @@ struct amdgv_adapter {
 	event_t new_error_event;
 	struct amdgv_error_notifier notifier_list;
 	mutex_t notifier_list_lock;
+	uint32_t error_notifier_count;
 	uint32_t error_dump_stack_max;
 	uint32_t error_dump_stack_count;
 	uint32_t error_dump_stack_filter_list[AMDGV_ERROR_FILTER_LIST_SIZE_MAX];
@@ -906,6 +915,8 @@ struct amdgv_adapter {
 	bool ptl_supported;     /* PTL feature is supported by hardware */
 	bool sriov_restore;
 
+	bool unitid_support;
+
 	/* used for live update to store and compare the hash */
 	uint64_t hash_addr;
 	bool in_chain_live_update;
@@ -913,7 +924,8 @@ struct amdgv_adapter {
 	struct amdgv_mmsch mmsch;
 	struct amdgv_smuio smuio;
 	struct amdgv_mmhub mmhub;
-
+	struct amdgv_gfxhub gfxhub;
+	struct amdgv_mem_rsv_info mem_rsv_info;
 	/* PCIE atomic ops support flag */
 	uint32_t pcie_atomic_ops_support_flags;
 
@@ -934,7 +946,6 @@ struct amdgv_adapter {
 
 	mutex_t srbm_mutex;
 	mutex_t grbm_idx_mutex;
-
 	struct amdgv_memmgr_mem *mem_pfp_fw;
 	struct amdgv_memmgr_mem *mem_me_fw;
 	struct amdgv_memmgr_mem *mem_mec1_fw;
@@ -965,6 +976,7 @@ struct amdgv_adapter {
 	bool asymmetric_fb_enabled;
 	struct amdgv_vf_fb_block vf_fb_block[AMDGV_MAX_FB_BLOCK_NUM];
 	struct amdgv_list_head vf_fb_block_list; // ordered by fb_offset
+	uint32_t fb_alignment;
 
 	struct {
 		struct amdgv_mem_with_bitmap mem_id_list[MEM_ID_COUNT_MAX];
@@ -991,7 +1003,21 @@ struct amdgv_adapter {
 	/* psp mb int status, for xgmi.set_mb_in_hive feature to sync hive status */
 	bool psp_mb_int_status;
 	struct amdgv_gmc gmc;
+
+	/* SR-IOV Driver Support*/
+	struct amdgv_sriov_drv sriov_drv;
+
+	/* MES */
+	struct amdgv_mes mes;
+	bool enable_mes_kiq;
+
+	struct amdgv_ual ual;
+
+	bool use_vf_sysmem_xchg;
 	bool unload_cmd_sent;
+
+	/* VF HBM Management Mode */
+	enum amdgv_vf_hbm_mgmt_mode vf_hbm_mgmt_mode;
 };
 
 #ifdef WS_RECORD
@@ -1053,6 +1079,86 @@ void amdgv_gpuiov_record_queue_push(struct amdgv_adapter *adapt, uint32_t idx_vf
 						enum amdgv_record_status status);
 #endif
 
+enum amdgv_reg_dump_access_types {
+	AMDGV_REG_DUMP_ACCESS_MMIO,
+	AMDGV_REG_DUMP_ACCESS_PCI_CFG,
+	AMDGV_REG_DUMP_ACCESS_INDIRECT_PCIE,
+
+	AMDGV_REG_DUMP_ACCESS_MAX,
+};
+
+struct amdgv_reg_dump_info {
+	const char *name;
+	/* if access_type is MMIO, calculate MMIO offset with:
+	 * offset = adapt->reg_offset[hwip][inst][seg] + offset_hwip
+	 */
+	uint32_t hwip;
+	uint32_t seg;
+	uint32_t logical_inst;
+	uint32_t offset_hwip;
+
+	uint64_t offset;
+	uint32_t phys_inst;
+	uint32_t val;
+	enum amdgv_reg_dump_access_types access_method;
+	oss_dev_t dev; /* For AMDGV_REG_DUMP_DUMP_ACCESS_PCI_CFG */
+};
+
+#define _AMDGV_REG_DUMP_FMT  " %s (0x%08x)=0x%08x\n"
+#define _AMDGV_REG_DUMP_ARGS(r, i)   (r)[i].name, (r)[i].offset, (r)[i].val
+
+#define _AMDGV_REG_DUMP_FMT_1  _AMDGV_REG_DUMP_FMT
+#define _AMDGV_REG_DUMP_FMT_2  _AMDGV_REG_DUMP_FMT_1  _AMDGV_REG_DUMP_FMT
+#define _AMDGV_REG_DUMP_FMT_3  _AMDGV_REG_DUMP_FMT_2  _AMDGV_REG_DUMP_FMT
+#define _AMDGV_REG_DUMP_FMT_4  _AMDGV_REG_DUMP_FMT_3  _AMDGV_REG_DUMP_FMT
+#define _AMDGV_REG_DUMP_FMT_5  _AMDGV_REG_DUMP_FMT_4  _AMDGV_REG_DUMP_FMT
+#define _AMDGV_REG_DUMP_FMT_6  _AMDGV_REG_DUMP_FMT_5  _AMDGV_REG_DUMP_FMT
+#define _AMDGV_REG_DUMP_FMT_7  _AMDGV_REG_DUMP_FMT_6  _AMDGV_REG_DUMP_FMT
+#define _AMDGV_REG_DUMP_FMT_8  _AMDGV_REG_DUMP_FMT_7  _AMDGV_REG_DUMP_FMT
+#define _AMDGV_REG_DUMP_FMT_9  _AMDGV_REG_DUMP_FMT_8  _AMDGV_REG_DUMP_FMT
+#define _AMDGV_REG_DUMP_FMT_10 _AMDGV_REG_DUMP_FMT_9  _AMDGV_REG_DUMP_FMT
+#define _AMDGV_REG_DUMP_FMT_11 _AMDGV_REG_DUMP_FMT_10 _AMDGV_REG_DUMP_FMT
+#define _AMDGV_REG_DUMP_FMT_12 _AMDGV_REG_DUMP_FMT_11 _AMDGV_REG_DUMP_FMT
+#define _AMDGV_REG_DUMP_FMT_13 _AMDGV_REG_DUMP_FMT_12 _AMDGV_REG_DUMP_FMT
+#define _AMDGV_REG_DUMP_FMT_14 _AMDGV_REG_DUMP_FMT_13 _AMDGV_REG_DUMP_FMT
+#define _AMDGV_REG_DUMP_FMT_15 _AMDGV_REG_DUMP_FMT_14 _AMDGV_REG_DUMP_FMT
+#define _AMDGV_REG_DUMP_FMT_16 _AMDGV_REG_DUMP_FMT_15 _AMDGV_REG_DUMP_FMT
+
+#define _AMDGV_REG_DUMP_ARGS_1(r)    _AMDGV_REG_DUMP_ARGS(r,  0)
+#define _AMDGV_REG_DUMP_ARGS_2(r)    _AMDGV_REG_DUMP_ARGS_1(r),  _AMDGV_REG_DUMP_ARGS(r,  1)
+#define _AMDGV_REG_DUMP_ARGS_3(r)    _AMDGV_REG_DUMP_ARGS_2(r),  _AMDGV_REG_DUMP_ARGS(r,  2)
+#define _AMDGV_REG_DUMP_ARGS_4(r)    _AMDGV_REG_DUMP_ARGS_3(r),  _AMDGV_REG_DUMP_ARGS(r,  3)
+#define _AMDGV_REG_DUMP_ARGS_5(r)    _AMDGV_REG_DUMP_ARGS_4(r),  _AMDGV_REG_DUMP_ARGS(r,  4)
+#define _AMDGV_REG_DUMP_ARGS_6(r)    _AMDGV_REG_DUMP_ARGS_5(r),  _AMDGV_REG_DUMP_ARGS(r,  5)
+#define _AMDGV_REG_DUMP_ARGS_7(r)    _AMDGV_REG_DUMP_ARGS_6(r),  _AMDGV_REG_DUMP_ARGS(r,  6)
+#define _AMDGV_REG_DUMP_ARGS_8(r)    _AMDGV_REG_DUMP_ARGS_7(r),  _AMDGV_REG_DUMP_ARGS(r,  7)
+#define _AMDGV_REG_DUMP_ARGS_9(r)    _AMDGV_REG_DUMP_ARGS_8(r),  _AMDGV_REG_DUMP_ARGS(r,  8)
+#define _AMDGV_REG_DUMP_ARGS_10(r)   _AMDGV_REG_DUMP_ARGS_9(r),  _AMDGV_REG_DUMP_ARGS(r,  9)
+#define _AMDGV_REG_DUMP_ARGS_11(r)   _AMDGV_REG_DUMP_ARGS_10(r), _AMDGV_REG_DUMP_ARGS(r, 10)
+#define _AMDGV_REG_DUMP_ARGS_12(r)   _AMDGV_REG_DUMP_ARGS_11(r), _AMDGV_REG_DUMP_ARGS(r, 11)
+#define _AMDGV_REG_DUMP_ARGS_13(r)   _AMDGV_REG_DUMP_ARGS_12(r), _AMDGV_REG_DUMP_ARGS(r, 12)
+#define _AMDGV_REG_DUMP_ARGS_14(r)   _AMDGV_REG_DUMP_ARGS_13(r), _AMDGV_REG_DUMP_ARGS(r, 13)
+#define _AMDGV_REG_DUMP_ARGS_15(r)   _AMDGV_REG_DUMP_ARGS_14(r), _AMDGV_REG_DUMP_ARGS(r, 14)
+#define _AMDGV_REG_DUMP_ARGS_16(r)   _AMDGV_REG_DUMP_ARGS_15(r), _AMDGV_REG_DUMP_ARGS(r, 15)
+
+#define _AMDGV_REG_PRINT(level, fmt, ...)       AMDGV_##level(fmt, ##__VA_ARGS__)
+
+#define AMDGV_REG_DUMP_1(level, hdr, r)  _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_1, _AMDGV_REG_DUMP_ARGS_1(r))
+#define AMDGV_REG_DUMP_2(level, hdr, r)  _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_2, _AMDGV_REG_DUMP_ARGS_2(r))
+#define AMDGV_REG_DUMP_3(level, hdr, r)  _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_3, _AMDGV_REG_DUMP_ARGS_3(r))
+#define AMDGV_REG_DUMP_4(level, hdr, r)  _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_4, _AMDGV_REG_DUMP_ARGS_4(r))
+#define AMDGV_REG_DUMP_5(level, hdr, r)  _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_5, _AMDGV_REG_DUMP_ARGS_5(r))
+#define AMDGV_REG_DUMP_6(level, hdr, r)  _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_6, _AMDGV_REG_DUMP_ARGS_6(r))
+#define AMDGV_REG_DUMP_7(level, hdr, r)  _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_7, _AMDGV_REG_DUMP_ARGS_7(r))
+#define AMDGV_REG_DUMP_8(level, hdr, r)  _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_8, _AMDGV_REG_DUMP_ARGS_8(r))
+#define AMDGV_REG_DUMP_9(level, hdr, r)  _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_9, _AMDGV_REG_DUMP_ARGS_9(r))
+#define AMDGV_REG_DUMP_10(level, hdr, r) _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_10, _AMDGV_REG_DUMP_ARGS_10(r))
+#define AMDGV_REG_DUMP_11(level, hdr, r) _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_11, _AMDGV_REG_DUMP_ARGS_11(r))
+#define AMDGV_REG_DUMP_12(level, hdr, r) _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_12, _AMDGV_REG_DUMP_ARGS_12(r))
+#define AMDGV_REG_DUMP_13(level, hdr, r) _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_13, _AMDGV_REG_DUMP_ARGS_13(r))
+#define AMDGV_REG_DUMP_14(level, hdr, r) _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_14, _AMDGV_REG_DUMP_ARGS_14(r))
+#define AMDGV_REG_DUMP_15(level, hdr, r) _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_15, _AMDGV_REG_DUMP_ARGS_15(r))
+#define AMDGV_REG_DUMP_16(level, hdr, r) _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_16, _AMDGV_REG_DUMP_ARGS_16(r))
 
 /* --------------- WAIT -----------------*/
 
@@ -1089,11 +1195,14 @@ struct amdgv_wait_for_register_context {
 	uint32_t mask;
 	uint32_t value;
 	uint32_t check_flag;
+	uint32_t last_read;
+	const char *name;
 };
 
-struct amdgv_wait_for_memory_context {
+struct amdgv_wait_for_psp_ring_response_context {
 	volatile uint32_t *address;
 	uint32_t value;
+	uint32_t last_read;
 };
 
 struct amdgv_wait_for_pci_cfg_context {
@@ -1104,18 +1213,60 @@ struct amdgv_wait_for_pci_cfg_context {
 	uint32_t value;
 	uint8_t byte_len;
 	uint32_t check_flag;
+	uint32_t last_read;
 };
 
+enum amdgv_wait_for_types {
+	AMDGV_WAIT_FOR_REGISTER,
+	AMDGV_WAIT_FOR_PSP_RING_RESPONSE,
+	AMDGV_WAIT_FOR_PCI_CFG,
+	AMDGV_WAIT_FOR_IRQ_HANDLER,
+	AMDGV_WAIT_FOR_PSP_MB_INT,
+	AMDGV_WAIT_FOR_RAS_INTR,
+	AMDGV_WAIT_FOR_WS_FIRST_CMD_COMPLETE,
+	AMDGV_WAIT_FOR_WS_CMD_COMPLETE,
+	AMDGV_WAIT_FOR_VBIOS_READ_IMG,
+	AMDGV_WAIT_FOR_MB_TRN_MSG_ACK,
+	AMDGV_WAIT_FOR_GUEST_RESET_READY,
+	AMDGV_WAIT_FOR_PSP_TOS_LOADED_STATUS,
+	AMDGV_WAIT_FOR_PSP_BOOT_COMPLETE,
+	AMDGV_WAIT_FOR_RLC_AUTOLOAD_COMPLETE,
+	AMDGV_WAIT_FOR_LSDMA_PIO,
+	AMDGV_WAIT_FOR_CP_DMA_PIO,
+	AMDGV_WAIT_FOR_SMU_CHECK_HANG,
+	AMDGV_WAIT_FOR_SMU_MSG_RESPONSE,
+
+	AMDGV_WAIT_FOR_MAX,
+};
+
+struct psp_cmd_km;
+
+struct amdgv_wait_for_cb_context {
+	void *ctx;
+	enum amdgv_wait_for_types type;
+	/* Context registers if more information is required */
+	uint8_t num_ctx_ext;
+	union {
+		struct amdgv_reg_dump_info *ctx_ext;
+		struct psp_cmd_km *psp_cmd;
+	};
+};
 
 typedef uint64_t (*time_stamp_src_t)(void);
 
 /* call back funtion in amdgv_wait_for, return 0 if status match, otherwise return non-zero */
 typedef int (*amdgv_wait_cb_t)(void *cb_context);
 
-int amdgv_wait_for(struct amdgv_adapter *adapt, amdgv_wait_cb_t cb_func, void *cb_context, uint64_t timeout_us, uint32_t wait_flag);
+int amdgv_wait_for(struct amdgv_adapter *adapt, amdgv_wait_cb_t cb_func, struct amdgv_wait_for_cb_context *cb_context, uint64_t timeout_us, uint32_t wait_flag);
 int amdgv_wait_for_irq_handler(void *context);
-int amdgv_wait_for_register(struct amdgv_adapter *adapt, uint32_t offset, uint32_t mask, uint32_t value, uint64_t timeout_us, uint32_t check_flag, uint32_t wait_flag);
-int amdgv_wait_for_memory(struct amdgv_adapter *adapt, uint32_t *addr, uint32_t value, uint64_t timeout_us);
+const char *amdgv_wait_for_type_to_name(enum amdgv_wait_for_types type);
+int amdgv_wait_for_register(struct amdgv_adapter *adapt, uint32_t offset, const char *name, uint32_t mask, uint32_t value, uint64_t timeout_us, uint32_t check_flag, uint32_t wait_flag);
+
+int amdgv_wait_for_smu_msg_resp(struct amdgv_adapter *adapt, uint32_t offset, const char *name,
+				uint32_t mask, uint32_t value, uint64_t timeout_us,
+				uint32_t check_flag, enum amdgv_wait_for_types wait_type,
+				struct amdgv_reg_dump_info *ctx_ext, uint8_t num_ctx_ext);
+int amdgv_wait_for_psp_ring_response(struct amdgv_adapter *adapt, uint32_t *addr, uint32_t value, uint64_t timeout_us, struct psp_cmd_km *psp_cmd);
 int amdgv_wait_for_pci_cfg(struct amdgv_adapter *adapt, oss_dev_t dev, uint32_t offset, uint32_t mask, uint32_t value, uint8_t byte_len, uint64_t timeout_us, uint32_t check_flag, uint32_t wait_flag);
 
 /* --------------- WAIT END --------------*/
@@ -1179,6 +1330,51 @@ struct amdgv_dump_reg {
 #define GET_INST(ip, inst) (adapt->ip_map.logical_to_dev_inst ? adapt->ip_map.logical_to_dev_inst(adapt, ip##_HWIP, inst) : inst)
 #define GET_MASK(ip, mask) (adapt->ip_map.logical_to_dev_mask ? adapt->ip_map.logical_to_dev_mask(adapt, ip##_HWIP, mask) : mask)
 
+#define AMDGV_REG_DUMP(level, hdr, r, n) \
+	do { \
+		int _i = 0; \
+		if (adapt->log_level < AMDGV_##level##_LEVEL) \
+			break; \
+		for (_i = 0; _i < n; _i++) { \
+			switch (r[_i].access_method){ \
+			case AMDGV_REG_DUMP_ACCESS_MMIO: \
+				r[_i].phys_inst = adapt->ip_map.logical_to_dev_inst ? adapt->ip_map.logical_to_dev_inst(adapt, r[_i].hwip, r[_i].logical_inst) : r[_i].logical_inst; \
+				r[_i].offset = adapt->reg_offset[r[_i].hwip][r[_i].phys_inst][r[_i].seg] + r[_i].offset_hwip; \
+				r[_i].val = RREG32(r[_i].offset); \
+				break; \
+			case AMDGV_REG_DUMP_ACCESS_PCI_CFG: \
+				if (r[_i].dev) \
+					oss_pci_read_config_dword(r[_i].dev, r[_i].offset, &r[_i].val); \
+				else \
+					r[_i].val = RREG32_SMN(r[_i].offset); \
+				break; \
+			case AMDGV_REG_DUMP_ACCESS_INDIRECT_PCIE: \
+				r[_i].val = amdgv_pcie_rreg_ext(adapt, r[_i].offset); break; \
+			default: break; \
+			} \
+		} \
+		switch (n) { \
+		case  1: AMDGV_REG_DUMP_1(level,  hdr, r); break; \
+		case  2: AMDGV_REG_DUMP_2(level,  hdr, r); break; \
+		case  3: AMDGV_REG_DUMP_3(level,  hdr, r); break; \
+		case  4: AMDGV_REG_DUMP_4(level,  hdr, r); break; \
+		case  5: AMDGV_REG_DUMP_5(level,  hdr, r); break; \
+		case  6: AMDGV_REG_DUMP_6(level,  hdr, r); break; \
+		case  7: AMDGV_REG_DUMP_7(level,  hdr, r); break; \
+		case  8: AMDGV_REG_DUMP_8(level,  hdr, r); break; \
+		case  9: AMDGV_REG_DUMP_9(level,  hdr, r); break; \
+		case 10: AMDGV_REG_DUMP_10(level, hdr, r); break; \
+		case 11: AMDGV_REG_DUMP_11(level, hdr, r); break; \
+		case 12: AMDGV_REG_DUMP_12(level, hdr, r); break; \
+		case 13: AMDGV_REG_DUMP_13(level, hdr, r); break; \
+		case 14: AMDGV_REG_DUMP_14(level, hdr, r); break; \
+		case 15: AMDGV_REG_DUMP_15(level, hdr, r); break; \
+		case 16: AMDGV_REG_DUMP_16(level, hdr, r); break; \
+		default: _AMDGV_REG_PRINT(level, hdr " (invalid reg count: %u)\n", (n)); break; \
+		} \
+	} while (0)
+
+
 /* register ops */
 #define SOC15_REG_OFFSET(ip, inst, reg)                                                       \
 	(adapt->reg_offset[ip##_HWIP][inst][reg##_BASE_IDX] + reg)
@@ -1200,6 +1396,9 @@ struct amdgv_dump_reg {
 	{                                                                                     \
 		ip##_HWIP, inst, reg##_BASE_IDX, reg, and_mask, or_mask                       \
 	}
+
+#define SOC15_REG_OFFSET_NAME(ip, inst, reg)                                                  \
+	(adapt->reg_offset[ip##_HWIP][inst][reg##_BASE_IDX] + reg), #reg
 
 #define RREG32(reg)    amdgv_mm_rreg(adapt, (reg), false)
 #define WREG32(reg, v) amdgv_mm_wreg(adapt, (reg), (v), false)
@@ -1326,6 +1525,15 @@ INLINE bool amdgv_after_time(uint64_t end_ts)
 	return (oss_get_time_stamp() >= end_ts) ? true : false;
 }
 
+INLINE uint32_t amdgv_ip_version(struct amdgv_adapter *adapt,
+				uint8_t ip, uint8_t inst)
+{
+	/* This considers only major/minor/rev and ignores
+	 * subrevision/variant fields.
+	 */
+	return adapt->ip_versions[ip][inst] & ~0xFFU;
+}
+
 uint32_t amdgv_internal_get_asic_type(uint32_t device_id, uint32_t revision_id);
 struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_data);
 void amdgv_device_internal_fini(struct amdgv_adapter *adapt,
@@ -1367,3 +1575,6 @@ enum amdgv_gpumon_vram_vendor vram_vendor_to_gpumon_vram_vendor(enum amdgv_vram_
 uint64_t amdgv_gpa_to_local_spa(struct amdgv_adapter *adapt, uint64_t addr, uint32_t idx_vf);
 uint64_t amdgv_gpa_to_global_spa(struct amdgv_adapter *adapt, uint64_t addr, uint32_t idx_vf);
 #endif
+void amdgv_device_program_register_sequence(struct amdgv_adapter *adapt,
+					    uint32_t *registers,
+					    uint32_t array_size);

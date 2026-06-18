@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2017-2021 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef AMDGV_POWERPLAY_H
@@ -136,6 +119,25 @@ enum pp_ras_policy_type {
 	PP_RAS_POLICY_TYPE__DRAM_NON_CRITICAL_REGION_THRESHOLD,
 };
 
+enum pp_smu_ras_msg {
+	PP_SMU_RAS_MSG_NONE,
+	PP_SMU_RAS_MSG_QueryValidMcaCount,
+	PP_SMU_RAS_MSG_McaBankDumpDW,
+	PP_SMU_RAS_MSG_QueryValidMcaCeCount,
+	PP_SMU_RAS_MSG_McaBankCeDumpDW,
+	PP_SMU_RAS_MSG_GetRasTableVersion,
+	PP_SMU_RAS_MSG_GetRmaStatus,
+	PP_SMU_RAS_MSG_GetBadPageCount,
+	PP_SMU_RAS_MSG_GetBadPageMcaAddr,
+	PP_SMU_RAS_MSG_GetBadPagePaAddr,
+	PP_SMU_RAS_MSG_SetTimestamp,
+	PP_SMU_RAS_MSG_GetTimestamp,
+	PP_SMU_RAS_MSG_GetRasPolicy,
+	PP_SMU_RAS_MSG_GetBadPageIpId,
+	PP_SMU_RAS_MSG_EraseRasTable,
+	PP_SMU_RAS_MSG_MAX,
+};
+
 enum pp_erase_ras_table_status {
 	PP_ERASE_RAS_TABLE_STATUS__SUCCESS = 0,
 	PP_ERASE_RAS_TABLE_STATUS__ASIC_BUSY,
@@ -233,7 +235,11 @@ struct amdgv_pp_funcs {
 				 uint32_t *entries);
 	int (*init_drv_metrics_ext)(struct amdgv_adapter *adapt);
 	bool (*get_smu_cap_supported)(struct amdgv_adapter *adapt, int cap);
+	int (*gpu_mode2_reset)(struct amdgv_adapter *adapt);
 	int (*get_npm_info)(struct amdgv_adapter *adapt, struct amdgv_gpumon_npm_info *npm_info);
+	int (*smu_send_ras_msg)(struct amdgv_adapter *adapt, enum pp_smu_ras_msg msg,
+		uint32_t *params, uint32_t num_params, uint32_t *read_args, uint32_t num_read_args);
+	int (*gpu_mode0_reset)(struct amdgv_adapter *adapt);
 	bool (*migration_smu_is_supported)(struct amdgv_adapter *adapt);
 };
 
@@ -315,4 +321,11 @@ int amdgv_pp_sw_init(struct amdgv_adapter *adapt);
 int amdgv_pp_hw_init(struct amdgv_adapter *adapt);
 int amdgv_pp_fini(struct amdgv_adapter *adapt);
 
+int amdgv_powerplay_mode2_reset(struct amdgv_adapter *adapt);
+int amdgv_powerplay_flr_reset(struct amdgv_adapter *adapt, uint32_t idx_vf);
+int amdgv_powerplay_mode0_reset(struct amdgv_adapter *adapt);
+
+
+int amdgv_smu_send_ras_msg(struct amdgv_adapter *adapt, enum pp_smu_ras_msg msg,
+	uint32_t *params, uint32_t num_params, uint32_t *read_args, uint32_t num_read_args);
 #endif

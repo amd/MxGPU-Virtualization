@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef AMDGV_CMD_UNI_DEF__H_
@@ -25,7 +8,7 @@
 
 #define AMDGV_RAS_MAX_NUM_SAFE_RANGES 64
 #define AMDGV_CMD_MAX_BAD_PAGES_PER_GROUP 32
-#define AMDGV_CMD_MAX_IN_SIZE 128
+#define AMDGV_CMD_MAX_IN_SIZE 256
 #define AMDGV_CMD_MAX_OUT_SIZE 1600
 #define AMDGV_INTERFACE_MAJOR_VERSION  3
 #define AMDGV_INTERFACE_MINOR_VERSION  1
@@ -33,31 +16,48 @@
 #define AMDGV_CMD_VERSION_V2 2
 #define AMDGV_CMD_MAX_GPU_NUM 32
 
+#define AMDGV_CMD_MAX_LOCAL_GPUS_UAL_V1 16
+#define AMDGV_CMD_UAL_MAX_STATIONS_V1 64
+
 enum unify_ioctl_type {
-	AMDGV_UNI_IOCTL = 2 << 24,
+	AMDGV_UNI_RAS_IOCTL = 2 << 24,
+	AMDGV_UAL_IOCTL = 3 << 24,
 };
 
 enum amdgv_cmd_ras_id {
-	AMDGV_CMD_QUERY_INTERFACE_VERSION = AMDGV_UNI_IOCTL | 0x0,
-	AMDGV_CMD_GET_DEVICES_INFO = AMDGV_UNI_IOCTL | 0x001,
-	AMDGV_CMD_GET_BLOCK_ECC_STATUS = AMDGV_UNI_IOCTL | 0x002,
-	AMDGV_CMD_RAS_INJECT_ERROR = AMDGV_UNI_IOCTL | 0x003,
-	AMDGV_CMD_RAS_ENABLE = AMDGV_UNI_IOCTL | 0x004,
-	AMDGV_CMD_GET_BAD_PAGES = AMDGV_UNI_IOCTL | 0x005,
-	AMDGV_CMD_CLEAR_BAD_PAGE_INFO = AMDGV_UNI_IOCTL | 0x006,
-	AMDGV_CMD_GPU_RESET = AMDGV_UNI_IOCTL | 0x007,
-	AMDGV_CMD_GET_FB_PF_REGIONS = AMDGV_UNI_IOCTL | 0x008,
-	AMDGV_CMD_GET_FB_VF_REGIONS = AMDGV_UNI_IOCTL | 0x009,
-	AMDGV_CMD_GET_VF_BDF = AMDGV_UNI_IOCTL | 0x00a,
-	AMDGV_CMD_RAS_TA_LOAD = AMDGV_UNI_IOCTL | 0x00b,
-	AMDGV_CMD_RAS_TA_UNLOAD = AMDGV_UNI_IOCTL | 0x00c,
-	AMDGV_CMD_RAS_GET_SAFE_FB_ADDRESS_RANGES = AMDGV_UNI_IOCTL | 0x00d,
-	AMDGV_CMD_TRANSLATE_FB_ADDRESS = AMDGV_UNI_IOCTL | 0x00e,
-	AMDGV_CMD_RAS_RESET_ALL_ERROR_COUNTS = AMDGV_UNI_IOCTL | 0x00f,
-	AMDGV_CMD_GET_LINK_TOPOLOGY = AMDGV_UNI_IOCTL | 0x011,
-	AMDGV_CMD_GET_CPER_RECORDS = AMDGV_UNI_IOCTL | 0x012,
-	AMDGV_CMD_GET_RAS_POLICY_INFO = AMDGV_UNI_IOCTL | 0x013,
-	AMDGV_CMD_SUPPORTED_MAX
+	AMDGV_CMD_QUERY_INTERFACE_VERSION = AMDGV_UNI_RAS_IOCTL | 0x0,
+	AMDGV_CMD_GET_DEVICES_INFO = AMDGV_UNI_RAS_IOCTL | 0x001,
+	AMDGV_CMD_GET_BLOCK_ECC_STATUS = AMDGV_UNI_RAS_IOCTL | 0x002,
+	AMDGV_CMD_RAS_INJECT_ERROR = AMDGV_UNI_RAS_IOCTL | 0x003,
+	AMDGV_CMD_RAS_ENABLE = AMDGV_UNI_RAS_IOCTL | 0x004,
+	AMDGV_CMD_GET_BAD_PAGES = AMDGV_UNI_RAS_IOCTL | 0x005,
+	AMDGV_CMD_CLEAR_BAD_PAGE_INFO = AMDGV_UNI_RAS_IOCTL | 0x006,
+	AMDGV_CMD_GPU_RESET = AMDGV_UNI_RAS_IOCTL | 0x007,
+	AMDGV_CMD_GET_FB_PF_REGIONS = AMDGV_UNI_RAS_IOCTL | 0x008,
+	AMDGV_CMD_GET_FB_VF_REGIONS = AMDGV_UNI_RAS_IOCTL | 0x009,
+	AMDGV_CMD_GET_VF_BDF = AMDGV_UNI_RAS_IOCTL | 0x00a,
+	AMDGV_CMD_RAS_TA_LOAD = AMDGV_UNI_RAS_IOCTL | 0x00b,
+	AMDGV_CMD_RAS_TA_UNLOAD = AMDGV_UNI_RAS_IOCTL | 0x00c,
+	AMDGV_CMD_RAS_GET_SAFE_FB_ADDRESS_RANGES = AMDGV_UNI_RAS_IOCTL | 0x00d,
+	AMDGV_CMD_TRANSLATE_FB_ADDRESS = AMDGV_UNI_RAS_IOCTL | 0x00e,
+	AMDGV_CMD_RAS_RESET_ALL_ERROR_COUNTS = AMDGV_UNI_RAS_IOCTL | 0x00f,
+	AMDGV_CMD_GET_LINK_TOPOLOGY = AMDGV_UNI_RAS_IOCTL | 0x011,
+	AMDGV_CMD_GET_CPER_RECORDS = AMDGV_UNI_RAS_IOCTL | 0x012,
+	AMDGV_CMD_GET_RAS_POLICY_INFO = AMDGV_UNI_RAS_IOCTL | 0x013,
+	AMDGV_CMD_RAS_SUPPORTED_MAX
+};
+
+enum amdgv_cmd_ual_id {
+	AMDGV_CMD_UAL_QUERY_INTERFACE_VERSION = AMDGV_UAL_IOCTL | 0x0,
+	AMDGV_CMD_UAL_GET_DEVICES_INFO = AMDGV_UAL_IOCTL | 0x001,
+	AMDGV_CMD_UAL_GET_CONFIG = AMDGV_UAL_IOCTL | 0x002,
+	AMDGV_CMD_UAL_SET_PPOD_CONFIG = AMDGV_UAL_IOCTL | 0x003,
+	AMDGV_CMD_UAL_SET_VPOD_CONFIG = AMDGV_UAL_IOCTL | 0x004,
+	AMDGV_CMD_UAL_SET_STATION_CONFIG = AMDGV_UAL_IOCTL | 0x005,
+	AMDGV_CMD_UAL_PAUSE = AMDGV_UAL_IOCTL | 0x006,
+	AMDGV_CMD_UAL_RESUME = AMDGV_UAL_IOCTL | 0x007,
+	AMDGV_CMD_UAL_TRIGGER_MODE2 = AMDGV_UAL_IOCTL | 0x008,
+	AMDGV_CMD_UAL_SUPPORTED_MAX
 };
 
 enum amdgv_cmd_response {
@@ -342,6 +342,125 @@ struct amdgv_cmd_ras_policy_info {
 	uint32_t reserved[8];
 };
 
+enum amdgv_cmd_ual_link_type {
+	AMDGV_CMD_NONE = 0,
+	AMDGV_CMD_UALOE = 1,
+	AMDGV_CMD_UALINK = 2,
+	AMDGV_CMD_UALMAX
+};
+
+
+enum amdgv_cmd_ual_npa_address_mode {
+	AMDGV_CMD_UAL_NPA_ADDRESS_MODE_SOURCE_ALIASING = 0,
+	AMDGV_CMD_UAL_NPA_ADDRESS_MODE_SOURCE_IDENTIFICATION = 1,
+	AMDGV_CMD_UAL_NPA_ADDRESS_MODE_MAX
+};
+
+enum amdgv_cmd_ual_accelerator_vpod_state {
+	AMDGV_CMD_UAL_ACCEL_VPOD_STATE_UNCONFIGURED = 0,/* Accelerator is not configured */
+	AMDGV_CMD_UAL_ACCEL_VPOD_STATE_CONFIGURED = 1,	/* Accelerator is configured, but not added to a vPod */
+	AMDGV_CMD_UAL_ACCEL_VPOD_STATE_READY = 2,		/* Accelerator is part of a vPod, but not active (nHT disabled / VF driver not loaded, etc.) */
+	AMDGV_CMD_UAL_ACCEL_VPOD_STATE_ACTIVE = 3,		/* Accelerator is in a vPod and active */
+	AMDGV_CMD_UAL_ACCEL_VPOD_STATE_ERROR = 4		/* Accelerator is in error state */
+};
+
+struct amdgv_cmd_query_interface_version_rsp_ual {
+	uint32_t intf_ver; /* [31:16] major version, [15:0] minor version */
+};
+
+struct amdgv_cmd_get_config_req_ual_v1 {
+	struct amdgv_cmd_dev_handle dev;
+};
+
+struct amdgv_cmd_get_config_rsp_ual_v1 {
+	enum amdgv_cmd_ual_link_type link_type;
+	/* Accelerator ID - Range 0 to 1023 */
+	uint32_t accelerator_id;
+	/* Physical Pod ID - 128-bit UUID */
+	uint8_t ppod_id[16];
+	/* Physical Pod Size */
+	uint32_t ppod_size;
+	/* Total bandwidth between pairs of GPUs across all links */
+	uint32_t bandwidth;
+	/* Latency depends on switch presence/type, unit */
+	uint32_t latency;
+	/* Virtual Pod ID - Range 0 to 1023 */
+	uint32_t vpod_id;
+	uint32_t vpod_size;
+	/*List of active accelerator ids in the vpod*/
+	uint32_t vpod_active_accelerators[32];
+	enum amdgv_cmd_ual_npa_address_mode addr_mode;
+	/* Accelerator vPoD State */
+	enum amdgv_cmd_ual_accelerator_vpod_state accel_state;
+};
+
+struct amdgv_cmd_set_ppod_config_req_ual_v1 {
+	struct amdgv_cmd_dev_handle dev;
+	uint32_t accelerator_id;
+	/* Physical Pod ID - 128-bit UUID */
+	uint8_t ppod_id[16];
+	/* Physical Pod Size */
+	uint32_t ppod_size;
+	/* Total bandwidth between pairs of GPUs across all links */
+	uint32_t bandwidth;
+	/* Latency depends on switch presence/type, unit */
+	uint32_t latency;
+	/* Local accelerator IDs sorted in order of socket IDs */
+	uint32_t local_accelerators[AMDGV_CMD_MAX_LOCAL_GPUS_UAL_V1];
+};
+
+struct amdgv_cmd_set_vpod_config_req_ual_v1 {
+	struct amdgv_cmd_dev_handle dev;
+	enum amdgv_cmd_ual_npa_address_mode addr_mode;
+	/* Virtual Pod ID - Range 0 to 1023 */
+	uint32_t vpod_id;
+	uint32_t vpod_size;
+	/*List of active accelerator ids in the vpod*/
+	uint32_t vpod_active_accelerators[32];
+};
+
+enum amdgv_cmd_ual_ports_per_station {
+    AMDGV_CMD_UAL_PPS_1 = 1,				/* 1x 800Gbps */
+    AMDGV_CMD_UAL_PPS_2 = 2,				/* 2x 400Gbps */
+    AMDGV_CMD_UAL_PPS_4 = 4					/* 4x 200Gbps */
+};
+
+struct amdgv_cmd_set_station_config_req_ual_v1 {
+	struct amdgv_cmd_dev_handle dev;
+	/**
+	 * Number of valid stations in this configuration
+	 * Only lane_en_bitmap[0..num_stations-1] will be processed.
+	 */
+	uint8_t num_stations;
+	/**
+	 * Station configuration flags
+	 *
+	 * Bit [3:0]: PortPerStation (PPS) - 1, 2, or 4
+	 * Bit [7:4]: Reserved
+	 */
+	uint8_t station_flag;
+	uint8_t reserved[2];
+	/**
+	 * Bitmap of enabled lanes for each station
+	 * in logical station order.
+	 */
+	uint8_t lane_en_bitmap[AMDGV_CMD_UAL_MAX_STATIONS_V1];
+};
+
+struct amdgv_cmd_pause_req_ual_v1 {
+	struct amdgv_cmd_dev_handle dev;
+};
+
+struct amdgv_cmd_resume_req_ual_v1 {
+	struct amdgv_cmd_dev_handle dev;
+};
+
+struct amdgv_cmd_trigger_mode2_req_ual_v1 {
+	struct amdgv_cmd_dev_handle dev;
+};
+
 uint8_t amdgv_handle_uni_cmd(struct amdgv_uni_cmd *cmd);
+uint8_t amdgv_handle_uni_cmd_ras(struct amdgv_uni_cmd *cmd);
+uint8_t amdgv_handle_uni_cmd_ual(struct amdgv_uni_cmd *cmd);
 
 #endif
