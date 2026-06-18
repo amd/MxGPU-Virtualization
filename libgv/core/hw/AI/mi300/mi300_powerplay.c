@@ -430,8 +430,8 @@ static int mi300_smu_check_fw_status(struct amdgv_adapter *adapt)
 	for (retries = 0; retries < retries_max; retries++) {
 		mp1_flags = RREG32_PCIE_EXT(SOC15_REG_OFFSET_SMN(MP1, 0, regMP1_FIRMWARE_FLAGS, MP1_Public));
 
-		if (mp1_flags == 0xffffffff) {
-			AMDGV_WARN("MP1_FIRMWARE_FLAGS read 0xffffffff, try again...\n");
+		if (mp1_flags == 0xffffffff || mp1_flags == 0x0) {
+			AMDGV_WARN("MP1_FIRMWARE_FLAGS=0x%x, try again...\n", mp1_flags);
 			oss_msleep(100);
 			continue;
 		}

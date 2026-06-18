@@ -296,8 +296,8 @@ static int amdgv_sched_psp_set_mb_int_in_hive(struct amdgv_adapter *adapt, int c
 	if (enable) {
 		cb_context.ctx = (void *)hive;
 		cb_context.type = AMDGV_WAIT_FOR_PSP_MB_INT;
-		/* if this times out it's probably not a big issue, let's continue */
-		amdgv_wait_for(adapt, wait_psp_mb_int_status_in_hive, &cb_context, AMDGV_TIMEOUT(TIMEOUT_PSP_REG), 0);
+		/* best-effort wait: pass NO_WARNING so a timeout does not emit an error */
+		amdgv_wait_for(adapt, wait_psp_mb_int_status_in_hive, &cb_context, AMDGV_TIMEOUT(TIMEOUT_PSP_REG), AMDGV_WAIT_FLAG_NO_WARNING);
 	}
 
 	return 0;
