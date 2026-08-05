@@ -18,15 +18,15 @@
 // Major version should be changed when making incompatible changes to the command interface:
 // - Deprecating or removing existing commands
 // - Modifying input/output format of commands
-#define AMDSMI_TOOL_VERSION_MAJOR 36
+#define AMDSMI_TOOL_VERSION_MAJOR 37
 // Minor version should be incremented for backward-compatible command changes:
 // - Adding new commands
 // - Improvements to existing commands
 // - Adding new options to existing commands without changing the basic input/output format
-#define AMDSMI_TOOL_VERSION_MINOR 1
+#define AMDSMI_TOOL_VERSION_MINOR 0
 // Release version should be incremented for minor issue fixes and maintenance updates
 // that don't add features or change command behavior
-#define AMDSMI_TOOL_VERSION_RELEASE 2
+#define AMDSMI_TOOL_VERSION_RELEASE 5
 
 
 #define AMDSMI_TOOL_VERSION_CREATE_STRING(MAJOR, MINOR, RELEASE) (#MAJOR "." #MINOR "." #RELEASE)

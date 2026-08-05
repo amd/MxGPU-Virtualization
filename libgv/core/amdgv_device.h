@@ -26,8 +26,8 @@
 #include "amdgv_ip_discovery.h"
 #include "amdgv_ucode.h"
 #include "amdgv_ecc.h"
-#include "amdgv_error.h"
-#include "amdgv_error_internal.h"
+#include "amdgv_log.h"
+#include "amdgv_log_internal.h"
 #include "amdgv_clockgating.h"
 #include "amdgv_umc.h"
 #include "amdgv_task_barrier.h"
@@ -56,7 +56,7 @@
 #include "amdgv_vfmgr.h"
 #include "amdgv_vfmgr_xchg.h"
 #include "amdgv_ras_eeprom.h"
-#include "amdgv_sriov_drv.h"
+#include "amdgv_iovm_drv.h"
 
 #include "amdgv_mes.h"
 
@@ -99,7 +99,7 @@
 #define MAX_RECORD_LENGTH (1024 * 1024) /* 1M */
 #endif
 
-#define CSA_TSL_SIZE 0x400
+#define TSL_FB_SIZE (0x400 * 16)	/* 16K could store 16 ws cycles' ts_log */
 
 /* Break Point Debug Mode:
  * 0: default value, bp_mode is off
@@ -511,6 +511,7 @@ struct amdgv_vf_device {
 
 	bool vram_lost;
 	enum amdgv_ws_auto_run auto_run;
+	bool pending_remove; /* VM gone (VF FLR notify): remove from sched, skip FLR; reinit clears state */
 
 	/* UUID Info */
 	struct amd_sriov_msg_uuid_info uuid_info;
@@ -769,6 +770,7 @@ struct amdgv_adapter {
 	uint32_t time_quanta_option[AMDGV_SCHED_BLOCK_MAX];
 
 	uint32_t log_level;
+	uint32_t sys_log_level;
 	uint32_t log_mask;
 
 	spin_lock_t mmio_idx_lock;
@@ -870,16 +872,8 @@ struct amdgv_adapter {
 	/* device status */
 	enum amdgv_dev_status status;
 
-	/* Error logging */
-	struct amdgv_error_ring_buffer *error_ring_buffer;
-	thread_t error_process_thread;
-	event_t new_error_event;
-	struct amdgv_error_notifier notifier_list;
-	mutex_t notifier_list_lock;
-	uint32_t error_notifier_count;
-	uint32_t error_dump_stack_max;
-	uint32_t error_dump_stack_count;
-	uint32_t error_dump_stack_filter_list[AMDGV_ERROR_FILTER_LIST_SIZE_MAX];
+	/* Logging subsystem */
+	struct amdgv_log log;
 
 	// PSP mailbox error record
 	uint32_t psp_mb_error_record_write_idx;
@@ -961,11 +955,6 @@ struct amdgv_adapter {
 	struct amdgv_memmgr_mem *mem_mes_p1_ucode_fw;
 	uint64_t mes_uc_start_addr[AMDGV_MAX_MES_PIPES];
 
-	bool rlcv_stamp_todo;
-	bool rlcv_stamp_status;
-	uint64_t rlcv_stamp_count;
-	uint32_t rlcv_ts_buff[CSA_TSL_SIZE / 4];
-
 	/* GART */
 	struct amdgv_memmgr_mem *pdb0_mem;
 	struct amdgv_memmgr_mem *ptb_mem;
@@ -1004,8 +993,8 @@ struct amdgv_adapter {
 	bool psp_mb_int_status;
 	struct amdgv_gmc gmc;
 
-	/* SR-IOV Driver Support*/
-	struct amdgv_sriov_drv sriov_drv;
+	/* IOVM Driver Support*/
+	struct amdgv_iovm_drv iovm_drv;
 
 	/* MES */
 	struct amdgv_mes mes;
@@ -1141,24 +1130,24 @@ struct amdgv_reg_dump_info {
 #define _AMDGV_REG_DUMP_ARGS_15(r)   _AMDGV_REG_DUMP_ARGS_14(r), _AMDGV_REG_DUMP_ARGS(r, 14)
 #define _AMDGV_REG_DUMP_ARGS_16(r)   _AMDGV_REG_DUMP_ARGS_15(r), _AMDGV_REG_DUMP_ARGS(r, 15)
 
-#define _AMDGV_REG_PRINT(level, fmt, ...)       AMDGV_##level(fmt, ##__VA_ARGS__)
+#define _AMDGV_REG_PRINT(log_level, fmt, ...)       log_level(fmt, ##__VA_ARGS__)
 
-#define AMDGV_REG_DUMP_1(level, hdr, r)  _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_1, _AMDGV_REG_DUMP_ARGS_1(r))
-#define AMDGV_REG_DUMP_2(level, hdr, r)  _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_2, _AMDGV_REG_DUMP_ARGS_2(r))
-#define AMDGV_REG_DUMP_3(level, hdr, r)  _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_3, _AMDGV_REG_DUMP_ARGS_3(r))
-#define AMDGV_REG_DUMP_4(level, hdr, r)  _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_4, _AMDGV_REG_DUMP_ARGS_4(r))
-#define AMDGV_REG_DUMP_5(level, hdr, r)  _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_5, _AMDGV_REG_DUMP_ARGS_5(r))
-#define AMDGV_REG_DUMP_6(level, hdr, r)  _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_6, _AMDGV_REG_DUMP_ARGS_6(r))
-#define AMDGV_REG_DUMP_7(level, hdr, r)  _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_7, _AMDGV_REG_DUMP_ARGS_7(r))
-#define AMDGV_REG_DUMP_8(level, hdr, r)  _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_8, _AMDGV_REG_DUMP_ARGS_8(r))
-#define AMDGV_REG_DUMP_9(level, hdr, r)  _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_9, _AMDGV_REG_DUMP_ARGS_9(r))
-#define AMDGV_REG_DUMP_10(level, hdr, r) _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_10, _AMDGV_REG_DUMP_ARGS_10(r))
-#define AMDGV_REG_DUMP_11(level, hdr, r) _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_11, _AMDGV_REG_DUMP_ARGS_11(r))
-#define AMDGV_REG_DUMP_12(level, hdr, r) _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_12, _AMDGV_REG_DUMP_ARGS_12(r))
-#define AMDGV_REG_DUMP_13(level, hdr, r) _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_13, _AMDGV_REG_DUMP_ARGS_13(r))
-#define AMDGV_REG_DUMP_14(level, hdr, r) _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_14, _AMDGV_REG_DUMP_ARGS_14(r))
-#define AMDGV_REG_DUMP_15(level, hdr, r) _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_15, _AMDGV_REG_DUMP_ARGS_15(r))
-#define AMDGV_REG_DUMP_16(level, hdr, r) _AMDGV_REG_PRINT(level, hdr "\n" _AMDGV_REG_DUMP_FMT_16, _AMDGV_REG_DUMP_ARGS_16(r))
+#define AMDGV_REG_DUMP_1(log_level, hdr, r)  _AMDGV_REG_PRINT(log_level, hdr "\n" _AMDGV_REG_DUMP_FMT_1, _AMDGV_REG_DUMP_ARGS_1(r))
+#define AMDGV_REG_DUMP_2(log_level, hdr, r)  _AMDGV_REG_PRINT(log_level, hdr "\n" _AMDGV_REG_DUMP_FMT_2, _AMDGV_REG_DUMP_ARGS_2(r))
+#define AMDGV_REG_DUMP_3(log_level, hdr, r)  _AMDGV_REG_PRINT(log_level, hdr "\n" _AMDGV_REG_DUMP_FMT_3, _AMDGV_REG_DUMP_ARGS_3(r))
+#define AMDGV_REG_DUMP_4(log_level, hdr, r)  _AMDGV_REG_PRINT(log_level, hdr "\n" _AMDGV_REG_DUMP_FMT_4, _AMDGV_REG_DUMP_ARGS_4(r))
+#define AMDGV_REG_DUMP_5(log_level, hdr, r)  _AMDGV_REG_PRINT(log_level, hdr "\n" _AMDGV_REG_DUMP_FMT_5, _AMDGV_REG_DUMP_ARGS_5(r))
+#define AMDGV_REG_DUMP_6(log_level, hdr, r)  _AMDGV_REG_PRINT(log_level, hdr "\n" _AMDGV_REG_DUMP_FMT_6, _AMDGV_REG_DUMP_ARGS_6(r))
+#define AMDGV_REG_DUMP_7(log_level, hdr, r)  _AMDGV_REG_PRINT(log_level, hdr "\n" _AMDGV_REG_DUMP_FMT_7, _AMDGV_REG_DUMP_ARGS_7(r))
+#define AMDGV_REG_DUMP_8(log_level, hdr, r)  _AMDGV_REG_PRINT(log_level, hdr "\n" _AMDGV_REG_DUMP_FMT_8, _AMDGV_REG_DUMP_ARGS_8(r))
+#define AMDGV_REG_DUMP_9(log_level, hdr, r)  _AMDGV_REG_PRINT(log_level, hdr "\n" _AMDGV_REG_DUMP_FMT_9, _AMDGV_REG_DUMP_ARGS_9(r))
+#define AMDGV_REG_DUMP_10(log_level, hdr, r) _AMDGV_REG_PRINT(log_level, hdr "\n" _AMDGV_REG_DUMP_FMT_10, _AMDGV_REG_DUMP_ARGS_10(r))
+#define AMDGV_REG_DUMP_11(log_level, hdr, r) _AMDGV_REG_PRINT(log_level, hdr "\n" _AMDGV_REG_DUMP_FMT_11, _AMDGV_REG_DUMP_ARGS_11(r))
+#define AMDGV_REG_DUMP_12(log_level, hdr, r) _AMDGV_REG_PRINT(log_level, hdr "\n" _AMDGV_REG_DUMP_FMT_12, _AMDGV_REG_DUMP_ARGS_12(r))
+#define AMDGV_REG_DUMP_13(log_level, hdr, r) _AMDGV_REG_PRINT(log_level, hdr "\n" _AMDGV_REG_DUMP_FMT_13, _AMDGV_REG_DUMP_ARGS_13(r))
+#define AMDGV_REG_DUMP_14(log_level, hdr, r) _AMDGV_REG_PRINT(log_level, hdr "\n" _AMDGV_REG_DUMP_FMT_14, _AMDGV_REG_DUMP_ARGS_14(r))
+#define AMDGV_REG_DUMP_15(log_level, hdr, r) _AMDGV_REG_PRINT(log_level, hdr "\n" _AMDGV_REG_DUMP_FMT_15, _AMDGV_REG_DUMP_ARGS_15(r))
+#define AMDGV_REG_DUMP_16(log_level, hdr, r) _AMDGV_REG_PRINT(log_level, hdr "\n" _AMDGV_REG_DUMP_FMT_16, _AMDGV_REG_DUMP_ARGS_16(r))
 
 /* --------------- WAIT -----------------*/
 
@@ -1235,7 +1224,7 @@ enum amdgv_wait_for_types {
 	AMDGV_WAIT_FOR_CP_DMA_PIO,
 	AMDGV_WAIT_FOR_SMU_CHECK_HANG,
 	AMDGV_WAIT_FOR_SMU_MSG_RESPONSE,
-
+	AMDGV_WAIT_FOR_FB_HASH_DONE,
 	AMDGV_WAIT_FOR_MAX,
 };
 
@@ -1354,23 +1343,57 @@ struct amdgv_dump_reg {
 			} \
 		} \
 		switch (n) { \
-		case  1: AMDGV_REG_DUMP_1(level,  hdr, r); break; \
-		case  2: AMDGV_REG_DUMP_2(level,  hdr, r); break; \
-		case  3: AMDGV_REG_DUMP_3(level,  hdr, r); break; \
-		case  4: AMDGV_REG_DUMP_4(level,  hdr, r); break; \
-		case  5: AMDGV_REG_DUMP_5(level,  hdr, r); break; \
-		case  6: AMDGV_REG_DUMP_6(level,  hdr, r); break; \
-		case  7: AMDGV_REG_DUMP_7(level,  hdr, r); break; \
-		case  8: AMDGV_REG_DUMP_8(level,  hdr, r); break; \
-		case  9: AMDGV_REG_DUMP_9(level,  hdr, r); break; \
-		case 10: AMDGV_REG_DUMP_10(level, hdr, r); break; \
-		case 11: AMDGV_REG_DUMP_11(level, hdr, r); break; \
-		case 12: AMDGV_REG_DUMP_12(level, hdr, r); break; \
-		case 13: AMDGV_REG_DUMP_13(level, hdr, r); break; \
-		case 14: AMDGV_REG_DUMP_14(level, hdr, r); break; \
-		case 15: AMDGV_REG_DUMP_15(level, hdr, r); break; \
-		case 16: AMDGV_REG_DUMP_16(level, hdr, r); break; \
-		default: _AMDGV_REG_PRINT(level, hdr " (invalid reg count: %u)\n", (n)); break; \
+		case  1: \
+			AMDGV_REG_DUMP_1(AMDGV_##level, hdr, r); \
+			break; \
+		case  2: \
+			AMDGV_REG_DUMP_2(AMDGV_##level, hdr, r); \
+			break; \
+		case  3: \
+			AMDGV_REG_DUMP_3(AMDGV_##level, hdr, r); \
+			break; \
+		case  4: \
+			AMDGV_REG_DUMP_4(AMDGV_##level, hdr, r); \
+			break; \
+		case  5: \
+			AMDGV_REG_DUMP_5(AMDGV_##level, hdr, r); \
+			break; \
+		case  6: \
+			AMDGV_REG_DUMP_6(AMDGV_##level, hdr, r); \
+			break; \
+		case  7: \
+			AMDGV_REG_DUMP_7(AMDGV_##level, hdr, r); \
+			break; \
+		case  8: \
+			AMDGV_REG_DUMP_8(AMDGV_##level, hdr, r); \
+			break; \
+		case  9: \
+			AMDGV_REG_DUMP_9(AMDGV_##level, hdr, r); \
+			break; \
+		case 10: \
+			AMDGV_REG_DUMP_10(AMDGV_##level, hdr, r); \
+			break; \
+		case 11: \
+			AMDGV_REG_DUMP_11(AMDGV_##level, hdr, r); \
+			break; \
+		case 12: \
+			AMDGV_REG_DUMP_12(AMDGV_##level, hdr, r); \
+			break; \
+		case 13: \
+			AMDGV_REG_DUMP_13(AMDGV_##level, hdr, r); \
+			break; \
+		case 14: \
+			AMDGV_REG_DUMP_14(AMDGV_##level, hdr, r); \
+			break; \
+		case 15: \
+			AMDGV_REG_DUMP_15(AMDGV_##level, hdr, r); \
+			break; \
+		case 16: \
+			AMDGV_REG_DUMP_16(AMDGV_##level, hdr, r); \
+			break; \
+		default: \
+			_AMDGV_REG_PRINT(AMDGV_##level, hdr " (invalid reg count: %u)\n", (n)); \
+			break; \
 		} \
 	} while (0)
 

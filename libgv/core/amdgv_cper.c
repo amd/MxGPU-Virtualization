@@ -355,7 +355,7 @@ struct cper_hdr *amdgv_cper_alloc_entry(struct amdgv_adapter *adapt,
 
 	hdr = oss_zalloc(size);
 	if (!hdr) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL, size);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL, size);
 		return 0;
 	}
 
@@ -411,6 +411,16 @@ int amdgv_cper_get_count(struct amdgv_adapter *adapt,
 	struct cper_hdr *hdr;
 	*size = 0;
 
+	/* Sanitize caller-supplied rptr.
+	 *
+	 * rptr arrives from a host-admin GPUMON IOCTL and is fully caller-
+	 * controlled. Clamp it to wptr before the unsigned arithmetic below,
+	 * so neither (wptr - rptr) nor CPER_MOVE_TO_FIRST_VALID(rptr) can wrap
+	 * when rptr > wptr and report a bogus avail_count (CWE-191).
+	 */
+	if (rptr > adapt->cper.wptr)
+		rptr = adapt->cper.wptr;
+
 	*avail_count = adapt->cper.wptr - CPER_MOVE_TO_FIRST_VALID(rptr);
 	*wptr = adapt->cper.wptr;
 
@@ -437,6 +447,15 @@ int amdgv_cper_get_entries(struct amdgv_adapter *adapt, uint64_t rptr,
 	*write_count = 0;
 	*overflow_count = 0;
 	*left_size = 0;
+
+	/* Sanitize caller-supplied rptr (see amdgv_cper_get_count). Clamp to
+	 * wptr so CPER_MOVE_TO_FIRST_VALID(rptr) - rptr cannot underflow when
+	 * the host-admin IOCTL supplies rptr > wptr (CWE-191). A wrapped
+	 * overflow_count would also corrupt the caller's CPER pagination
+	 * cursor (per the CPER API contract).
+	 */
+	if (rptr > adapt->cper.wptr)
+		rptr = adapt->cper.wptr;
 
 	*overflow_count = CPER_MOVE_TO_FIRST_VALID(rptr) - rptr;
 

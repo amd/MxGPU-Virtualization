@@ -955,8 +955,12 @@ static int dcore_get_mes_dbg_info(struct file *filp, void *user_buf)
 	uint64_t mes_addr;
 	uint64_t mes_size;
 	union amdgv_vf_info *vf_info = NULL;
+	union amdgv_dev_info *dev_info = NULL;
+	uint64_t fb_mc_base;
 	uint64_t vf_fb_start;
 	uint64_t vf_fb_end;
+	int fb_ret;
+	int layout_ret;
 
 	if (copy_from_user(&mes_dbg_block, user_buf, sizeof(struct dbglib_mes_dbg_info_block))) {
 		ret = -EINVAL;
@@ -971,6 +975,12 @@ static int dcore_get_mes_dbg_info(struct file *filp, void *user_buf)
 
 	vf_info = (union amdgv_vf_info *)gim_kzalloc(sizeof(union amdgv_vf_info), GFP_KERNEL);
 	if (vf_info == NULL) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	dev_info = (union amdgv_dev_info *)gim_kzalloc(sizeof(union amdgv_dev_info), GFP_KERNEL);
+	if (dev_info == NULL) {
 		ret = -ENOMEM;
 		goto out;
 	}
@@ -999,9 +1009,12 @@ static int dcore_get_mes_dbg_info(struct file *filp, void *user_buf)
 		mes_addr = vf2pf_msg->mes_info_addr;
 		mes_size = vf2pf_msg->mes_info_size;
 
-		 /* Check that mes_info_addr and mes_info_size are within the VF's framebuffer */
-		if (amdgv_get_vf_info(adev, (uint32_t)idx_vf, AMDGV_GET_VF_FB, vf_info) == 0) {
-			vf_fb_start = MBYTES_TO_BYTES(vf_info->fb.fb_offset);
+		/* Check that mes_info_addr and mes_info_size are within the VF's framebuffer */
+		fb_ret     = amdgv_get_vf_info(adev, (uint32_t)idx_vf, AMDGV_GET_VF_FB, vf_info);
+		layout_ret = amdgv_get_dev_info(adev, AMDGV_GET_FB_LAYOUT, dev_info);
+		if (fb_ret == 0 && layout_ret == 0) {
+			fb_mc_base  = dev_info->layout.fb_mc_address;
+			vf_fb_start = fb_mc_base + MBYTES_TO_BYTES(vf_info->fb.fb_offset);
 			vf_fb_end   = vf_fb_start + MBYTES_TO_BYTES(vf_info->fb.fb_size);
 
 			if (mes_size == 0 || mes_addr < vf_fb_start || mes_addr + mes_size < mes_addr || mes_addr + mes_size > vf_fb_end) {
@@ -1025,6 +1038,8 @@ out:
 		gim_vfree(vf2pf_msg);
 	if (vf_info)
 		gim_kfree(vf_info);
+	if (dev_info)
+		gim_kfree(dev_info);
 	if (ret)
 		DCORE_WARN("Failed to get mes_dbg_info\n");
 
@@ -1233,10 +1248,11 @@ int dcore_iova_mmap(struct file *filp, struct vm_area_struct *vma)
 		return -EINVAL;
 	}
 	dom = iommu_get_domain_for_dev(&pdev->dev);
-	if (dom != NULL)
-		pfn = iommu_iova_to_phys(dom, (vma->vm_pgoff << PAGE_SHIFT)) >> PAGE_SHIFT;
-	else
-		pfn = vma->vm_pgoff;
+	if (dom == NULL) {
+		DCORE_ERROR("dCore: no IOMMU domain. skip mapping\n");
+		return -EPERM;
+	}
+	pfn = iommu_iova_to_phys(dom, (vma->vm_pgoff << PAGE_SHIFT)) >> PAGE_SHIFT;
 
 	if (!pfn_valid(pfn)) {
 		DCORE_ERROR("dCore: PFN invalid. skip mapping\n");

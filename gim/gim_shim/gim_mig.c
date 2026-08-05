@@ -133,11 +133,11 @@ static bool gim_mig_msg_check(struct gim_mig_file *migf)
 	struct gim_mig_msg_header *hdr = (struct gim_mig_msg_header *)migf->msg.va_ptr;
 
 	if (hdr->version != MIG_VERSION) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
 		return false;
 	}
 	if (hdr->checksum != gim_mig_msg_checksum(hdr)) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
 		return false;
 	}
 
@@ -149,7 +149,7 @@ static bool gim_mig_ctx_check(struct gim_mig_vf_ctx *vf_ctx, struct amdgv_migrat
 	bool ret = true;
 
 	if (!amdgv_compare_mig_ctx(vf_ctx->gdev->pf_data->adev, vf_ctx->vf_idx, ctx)) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
 		ret = false;
 	}
 
@@ -165,7 +165,7 @@ static int gim_mig_vf_data_import(struct gim_mig_file *migf)
 	uint64_t offset, length;
 
 	if (!gim_mig_msg_check(migf)) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
 		return -EINVAL;
 	}
 
@@ -173,7 +173,7 @@ static int gim_mig_vf_data_import(struct gim_mig_file *migf)
 	if (sec->valid) {
 		if (migf->copied_mask & GIM_MIG_COPY_MASK_CTX) {
 			gim_warn("Duplicated content context in migration message.\n");
-			gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
 			return -EINVAL;
 		}
 		offset = sec->offset;
@@ -184,7 +184,7 @@ static int gim_mig_vf_data_import(struct gim_mig_file *migf)
 		if (!gim_mig_ctx_check(vf_ctx, (struct amdgv_migration_ctx *)((void *)hdr + offset)))
 			return -EINVAL;
 		if (amdgv_migration_import(gdev->pf_data->adev, vf_ctx->vf_idx, (void *)hdr + offset,
-				       AMDGV_MIGRATION_IMPORT_PHASE1_PREPARE))
+				       length, AMDGV_MIGRATION_IMPORT_PHASE1_PREPARE))
 			return -EFAULT;
 
 		migf->copied_mask |= GIM_MIG_COPY_MASK_CTX;
@@ -193,7 +193,7 @@ static int gim_mig_vf_data_import(struct gim_mig_file *migf)
 	if (sec->valid) {
 		if (migf->copied_mask & GIM_MIG_COPY_MASK_VF_HW_STATIC_DATA) {
 			gim_warn("Duplicated VF HW static data in migration message.\n");
-			gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
 			return -EINVAL;
 		}
 		offset = sec->offset;
@@ -202,7 +202,7 @@ static int gim_mig_vf_data_import(struct gim_mig_file *migf)
 			return -EINVAL;
 
 		if (amdgv_migration_import(gdev->pf_data->adev, vf_ctx->vf_idx, (void *)hdr + offset,
-				       AMDGV_MIGRATION_IMPORT_PHASE2_STATIC_DATA))
+				       length, AMDGV_MIGRATION_IMPORT_PHASE2_STATIC_DATA))
 			return -EFAULT;
 
 		migf->copied_mask |= GIM_MIG_COPY_MASK_VF_HW_STATIC_DATA;
@@ -211,7 +211,7 @@ static int gim_mig_vf_data_import(struct gim_mig_file *migf)
 	if (sec->valid) {
 		if (migf->copied_mask & GIM_MIG_COPY_MASK_VF_HW_DYNAMIC_DATA) {
 			gim_warn("Duplicated VF HW dynamic data in migration message.\n");
-			gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
 			return -EINVAL;
 		}
 		offset = sec->offset;
@@ -220,7 +220,7 @@ static int gim_mig_vf_data_import(struct gim_mig_file *migf)
 			return -EINVAL;
 
 		if (amdgv_migration_import(gdev->pf_data->adev, vf_ctx->vf_idx, (void *)hdr + offset,
-				       AMDGV_MIGRATION_IMPORT_PHASE3_DYNAMIC_DATA))
+				       length, AMDGV_MIGRATION_IMPORT_PHASE3_DYNAMIC_DATA))
 			return -EFAULT;
 
 		migf->copied_mask |= GIM_MIG_COPY_MASK_VF_HW_DYNAMIC_DATA;
@@ -233,7 +233,7 @@ static int gim_mig_vf_data_import(struct gim_mig_file *migf)
 			return -EINVAL;
 
 		if (GIM_MIG_FB_PAGE_SIZE != ((1 << sec->granularity) << PAGE_SHIFT)) {
-			gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
 			return -EINVAL;
 		}
 		migf->msg.bitmap = ((void *)hdr) + offset;
@@ -424,7 +424,7 @@ static int gim_mig_validate_vf_sched_state(struct gim_mig_vf_ctx *vf_ctx)
 	}
 
 err_exit:
-	gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
+	gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
 	amdgv_migration_set_abort(adev, vf_ctx->vf_idx);
 	return ret;
 }
@@ -443,7 +443,7 @@ static int gim_mig_update_msg_copy_info(struct gim_mig_file *migf,
 		return ret;
 
 	if (!migf->enabled) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
 		amdgv_migration_set_abort(adev, vf_ctx->vf_idx);
 		return -ENODEV;
 	}
@@ -458,7 +458,7 @@ static int gim_mig_update_msg_copy_info(struct gim_mig_file *migf,
 		migf->next_copy_mask |= GIM_MIG_COPY_MASK_VF_HW_DYNAMIC_DATA;
 
 	if (gim_mig_update_shadow_dirtybit(migf, &shadow_dirty_fb_len)) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
 		migf->next_copy_mask = 0;
 		amdgv_migration_set_abort(adev, vf_ctx->vf_idx);
 		return -EFAULT;
@@ -557,7 +557,7 @@ static ssize_t gim_migf_save_read(struct file *filp, char __user *buf,
 		return -EIO;
 
 	if (amdgv_migration_query_abort(adev, vf_ctx->vf_idx, &should_abort) || should_abort) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
 		return -EFAULT;
 	}
 
@@ -653,7 +653,7 @@ static ssize_t gim_migf_resume_write(struct file *filp, const char __user *buf,
 		return -EIO;
 
 	if (amdgv_migration_query_abort(adev, vf_ctx->vf_idx, &should_abort) || should_abort) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
 		return -EFAULT;
 	}
 
@@ -928,7 +928,7 @@ static ssize_t gim_mig_vf_dirty_fb_copy(struct gim_mig_file *migf, uint64_t gpu_
 		if (amdgv_vf_fb_copy(gdev->pf_data->adev, vf_ctx->vf_idx,
 				     (bit_cur << pg_shift) + migf->msg.off,
 				     sz, gpu_addr + copied_size, migf->is_target, NULL)) {
-			gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_IMPORT_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_IMPORT_FAIL, 0);
 			amdgv_migration_set_abort(gdev->pf_data->adev, vf_ctx->vf_idx);
 			return -EFAULT;
 		}
@@ -1206,8 +1206,8 @@ static int gim_mig_data_copy_thread(void *context)
 		if (copied_size < 0) {
 			migf->ring.state = GIM_MIG_THREAD_ABNORMAL;
 			gim_put_error(migf->is_target ?
-					AMDGV_ERROR_DRIVER_MIGRATION_IMPORT_FAIL :
-					AMDGV_ERROR_DRIVER_MIGRATION_EXPORT_FAIL, 0);
+					AMDGV_LOG_DRIVER_MIGRATION_IMPORT_FAIL :
+					AMDGV_LOG_DRIVER_MIGRATION_EXPORT_FAIL, 0);
 			/*don't exit the thread incase calltrace when release resource */
 			continue;
 		}
@@ -1237,7 +1237,7 @@ static int gim_mig_data_copy_thread_init(struct gim_mig_file *migf)
 
 	migf->ring.thread = kthread_run(gim_mig_data_copy_thread, migf, "live_migration_data_copy_thread");
 	if (IS_ERR(migf->ring.thread)) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_THREAD_INIT_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_THREAD_INIT_FAIL, 0);
 		return PTR_ERR(migf->ring.thread);
 	}
 
@@ -1269,19 +1269,19 @@ static int gim_mig_setup_copy(struct gim_mig_vf_ctx *vf_ctx, bool is_target)
 
 	ret = gim_mig_buffer_init(vf_ctx);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_SETUP_ENV_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_SETUP_ENV_FAIL, 0);
 		return ret;
 	}
 
 	ret = gim_mig_data_copy_thread_init(migf);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_SETUP_ENV_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_SETUP_ENV_FAIL, 0);
 		goto thread_error;
 	}
 
 	ret = gim_mig_get_file(migf);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_SETUP_ENV_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_SETUP_ENV_FAIL, 0);
 		goto file_error;
 	}
 
@@ -1341,7 +1341,7 @@ static int gim_mig_load_state(struct gim_mig_vf_ctx *vf_ctx)
 		gim_mig_wait_with_timeout(migf, &timeout);
 
 	if (timeout <= 0) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
 		return -EFAULT;
 	}
 
@@ -1676,7 +1676,7 @@ static int gim_mig_get_state_size(struct vfio_device *vdev,
 
 		ret = gim_mig_update_shadow_dirtybit(&vf_ctx->migf, &shadow_dirty_fb_len);
 		if (ret) {
-			gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_DATA_COPY_FAIL, 0);
 			amdgv_migration_set_abort(adev, vf_ctx->vf_idx);
 			goto exit;
 		}
@@ -1706,7 +1706,7 @@ static int gim_mig_get_vf_info(struct gim_mig_device *gdev, int vf_idx)
 
 	if (amdgv_get_migration_data_size(gdev->pf_data->adev, vf_idx, &vf_ctx->fb_size,
 		AMDGV_MIGRATION_CONTENT_VF_FB_DATA)) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_GET_MIG_INFO_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_GET_MIG_INFO_FAIL, 0);
 		return -EINVAL;
 	}
 
@@ -1724,7 +1724,7 @@ static int gim_mig_update_mig_ctx(struct gim_mig_device *gdev, int vf_idx)
 	struct amdgv_migration_ctx *ctx = &gdev->vf_ctx[vf_idx].ctx;
 
 	if (amdgv_get_migration_ctx(gdev->pf_data->adev, vf_idx, ctx)) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_GET_MIG_INFO_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_GET_MIG_INFO_FAIL, 0);
 		return -EINVAL;
 	}
 
@@ -1759,33 +1759,33 @@ int gim_mig_init(struct pci_dev *pdev)
 
 	pf_data = pci_get_drvdata(pdev);
 	if (IS_ERR(pf_data)) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_INIT_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_INIT_FAIL, 0);
 		return -ENODEV;
 	}
 
 	gdev = gim_kzalloc(sizeof(struct gim_mig_device), GFP_KERNEL);
 	if (!gdev) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_INIT_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_INIT_FAIL, 0);
 		ret = -ENOMEM;
 		goto err;
 	}
 
 	if (amdgv_migration_get_dirty_page_size(pf_data->adev, &gdev->fb_page_size)) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_INIT_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_INIT_FAIL, 0);
 		ret = -EINVAL;
 		goto err;
 	}
 
 	if (amdgv_get_migration_data_size(pf_data->adev, 0,
 			&gdev->fw_s_size, AMDGV_MIGRATION_CONTENT_VF_HW_STATIC_DATA)) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_INIT_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_INIT_FAIL, 0);
 		ret = -EINVAL;
 		goto err;
 	}
 
 	if (amdgv_get_migration_data_size(pf_data->adev, 0,
 			&gdev->fw_d_size, AMDGV_MIGRATION_CONTENT_VF_HW_DYNAMIC_DATA)) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MIGRATION_INIT_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MIGRATION_INIT_FAIL, 0);
 		ret = -EINVAL;
 		goto err;
 	}

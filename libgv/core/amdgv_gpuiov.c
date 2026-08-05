@@ -27,6 +27,7 @@ static struct amdgv_id_mask_name amdgv_gpuiov_cmd_names[] = {
 	{ AMDGV_LOAD_RLCV_STATE, AMDGV_NAME_MASK_HW_GFX, "LOAD RLCV STATE" },
 	{ AMDGV_CLEAR_VF_STATE, AMDGV_NAME_MASK_HW_ALL, "CLEAR VF STATE" },
 	{ AMDGV_SHUTDOWN_GPU, AMDGV_NAME_MASK_HW_ALL, "SHUTDOWN VF" },
+	{ AMDGV_PAUSE_VF, AMDGV_NAME_MASK_HW_ALL, "PAUSE VF" },
 	{ AMDGV_EVENT_NOTIFICATION, AMDGV_NAME_MASK_HW_ALL, "EVENT NOTIFICATION" },
 	{ AMDGV_TRANSFER_VF_DATA, AMDGV_NAME_MASK_HW_ALL, "TRANSFER VF DATA" },
 };
@@ -831,7 +832,7 @@ int amdgv_gpuiov_transfer_vf_data(struct amdgv_adapter *adapt,
 	int ret = 0;
 
 	if (adapt->gpuiov.funcs->transfer_vf_data == NULL) {
-		AMDGV_ERROR("TRANSFER_VF_DATA is not supported.\n");
+		amdgv_put_log(idx_vf, AMDGV_LOG_SCHED_LIVE_MIGRATION_NOT_SUPPORTED, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -930,7 +931,7 @@ int amdgv_gpuiov_event_notification(struct amdgv_adapter *adapt, uint32_t idx_vf
 						       AMDGV_RECORD_EVENT_NOTIFICATION_END);
 #endif
 	} else {
-		AMDGV_WARN("Event Notification is not supported.\n");
+		amdgv_put_log(idx_vf, AMDGV_LOG_IOV_EVENT_NOTIFICATION_NOT_SUPPORTED, 0);
 		return 0;
 	}
 
@@ -970,29 +971,46 @@ int amdgv_gpuiov_config_auto_sched_mode(struct amdgv_adapter *adapt, uint32_t hw
 		return 0;
 
 	sched_mem_desc->scheduler_mode = sched_mode <= AMDGV_SCHED_MAX_HW_SCHED_MODE ? sched_mode : 0;
-	sched_mem_desc->auto_config.ws_cmd_timeout = AMDGV_TIMEOUT(TIMEOUT_AUTO_SWITCH_GFX) ? AMDGV_TIMEOUT(TIMEOUT_AUTO_SWITCH_GFX) : 5 * 100000; //500 ms
-	sched_mem_desc->auto_config.max_debit = 2 * 100000;
-	if (sched_mode == AMDGV_SCHED_LIQUID_MODE) {
-		sched_mem_desc->auto_config.max_skipped_cycle = 8;
-		sched_mem_desc->auto_config.busy_check_interval = 100; // 100 us
+	sched_mem_desc->feature_flags.flags.config_perf_data_log = 0;
+	sched_mem_desc->feature_flags.flags.config_debug_dump_log = 0;
+	sched_mem_desc->feature_flags.flags.config_ts_log = 0;
+	sched_mem_desc->perf_data_log.buffer_location = 0;
+	sched_mem_desc->perf_data_log.buffer_size = 0;
+	sched_mem_desc->debug_dump_log.buffer_location = 0;
+	sched_mem_desc->debug_dump_log.buffer_size = 0;
+	sched_mem_desc->ts_log.buffer_location = 0;
+	sched_mem_desc->ts_log.buffer_size = 0;
+	if (sched_mem_desc->scheduler_mode != 0) {	// Auto scheduling mode
+		sched_mem_desc->auto_config.ws_cmd_timeout = AMDGV_TIMEOUT(TIMEOUT_AUTO_SWITCH_GFX) ? AMDGV_TIMEOUT(TIMEOUT_AUTO_SWITCH_GFX) : 5 * 100000; //500 ms
+		sched_mem_desc->auto_config.max_debit = 2 * 100000;
+		if (sched_mode == AMDGV_SCHED_LIQUID_MODE) {
+			sched_mem_desc->auto_config.max_skipped_cycle = 8;
+			sched_mem_desc->auto_config.busy_check_interval = 100; // 100 us
+		}
+
+		if (adapt->gpuiov.perf_log_mem && !sched_mem_desc->feature_flags.flags.config_perf_data_log) {
+			sched_mem_desc->feature_flags.flags.config_perf_data_log = 1;
+			sched_mem_desc->perf_data_log.buffer_location = amdgv_memmgr_get_gpu_addr(adapt->gpuiov.perf_log_mem);
+			sched_mem_desc->perf_data_log.buffer_size = amdgv_memmgr_get_size(adapt->gpuiov.perf_log_mem);
+		}
+		if (adapt->gpuiov.debug_dump_mem && !sched_mem_desc->feature_flags.flags.config_debug_dump_log) {
+			sched_mem_desc->feature_flags.flags.config_debug_dump_log = 1;
+			sched_mem_desc->debug_dump_log.buffer_location = amdgv_memmgr_get_gpu_addr(adapt->gpuiov.debug_dump_mem);
+			sched_mem_desc->debug_dump_log.buffer_size = amdgv_memmgr_get_size(adapt->gpuiov.debug_dump_mem);
+		}
 	}
 
-	if (adapt->gpuiov.perf_log_mem && !sched_mem_desc->feature_flags.flags.config_perf_data_log) {
-		sched_mem_desc->feature_flags.flags.config_perf_data_log = 1;
-		sched_mem_desc->perf_data_log.buffer_location = amdgv_memmgr_get_gpu_addr(adapt->gpuiov.perf_log_mem);
-		sched_mem_desc->perf_data_log.buffer_size = amdgv_memmgr_get_size(adapt->gpuiov.perf_log_mem);
-	}
-	if (adapt->gpuiov.debug_dump_mem && !sched_mem_desc->feature_flags.flags.config_debug_dump_log) {
-		sched_mem_desc->feature_flags.flags.config_debug_dump_log = 1;
-		sched_mem_desc->debug_dump_log.buffer_location = amdgv_memmgr_get_gpu_addr(adapt->gpuiov.debug_dump_mem);
-		sched_mem_desc->debug_dump_log.buffer_size = amdgv_memmgr_get_size(adapt->gpuiov.debug_dump_mem);
+	if (adapt->gpuiov.ts_log_mem && !sched_mem_desc->feature_flags.flags.config_ts_log) {
+		sched_mem_desc->feature_flags.flags.config_ts_log = 1;
+		sched_mem_desc->ts_log.buffer_location = amdgv_memmgr_get_gpu_addr(adapt->gpuiov.ts_log_mem);
+		sched_mem_desc->ts_log.buffer_size = amdgv_memmgr_get_size(adapt->gpuiov.ts_log_mem);
 	}
 
 	sched_mem_desc->version = SCHEDULER_DESCRIPTOR_VERSION;
 
 	/* RLCV expects sum + checksum = 0 for validation */
 	sum = amd_sriov_msg_checksum(sched_mem_desc, sizeof(struct scheduler_memory_descriptor), 0, sched_mem_desc->checksum);
-	sched_mem_desc->checksum = (0x100 - (sum & 0xFF)) & 0xFF;
+	sched_mem_desc->checksum = (sum & 0xFF) ? (0x100 - (sum & 0xFF)) : 0;
 
 	ret = amdgv_gpuiov_set_scheduler_config_descriptor(adapt, hw_sched_id, sched_mem_desc);
 	if (ret) {
@@ -1041,6 +1059,19 @@ int amdgv_gpuiov_disable_auto_sched(struct amdgv_adapter *adapt, uint32_t hw_sch
 		amdgv_gpuiov_record_queue_push(adapt, AMDGV_PF_IDX, hw_sched_id,
 				       AMDGV_RECORD_DISABLE_AUTO_SCHED_END);
 #endif
+	return ret;
+}
+
+int amdgv_gpuiov_pause_vf(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_t hw_sched_id)
+{
+	int ret = 0;
+
+	if (adapt->gpuiov.funcs->pause_vf) {
+		AMDGV_INFO("Pause_VF %s on hw_sched_id %s\n", amdgv_idx_to_str(idx_vf), amdgv_hw_sched_id_to_name(adapt, hw_sched_id));
+		adapt->gpuiov.funcs->pause_vf(adapt, idx_vf, hw_sched_id);
+	    ret =  wait_cmd_complete(adapt, idx_vf, hw_sched_id, cmd_allow_time());
+    }
+
 	return ret;
 }
 
@@ -1244,9 +1275,9 @@ int amdgv_gpuiov_set_sriov_vf_num(struct amdgv_adapter *adapt, uint32_t num_vf)
 	return 0;
 
 error:
-	amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_IOV_ENABLE_SRIOV_FAIL, 0);
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_ENABLE_SRIOV_FAIL, 0);
 
-	return AMDGV_ERROR_IOV_ENABLE_SRIOV_FAIL;
+	return AMDGV_LOG_IOV_ENABLE_SRIOV_FAIL;
 }
 
 bool amdgv_gpuiov_is_sched_mode_supported(struct amdgv_adapter *adapt,
@@ -1329,6 +1360,11 @@ int amdgv_gpuiov_ctrl_block_setup(struct amdgv_adapter *adapt, struct amdgv_gpui
 
 	adapt->gpuiov.num_ctrl_blocks = block_num;
 
+	/* mode 0 (AMDGV_SCHED_BEGIN) means no override: keep each block's
+	 * default and skip the per-block "not supported" log. */
+	if (adapt->opt.gfx_sched_mode == AMDGV_SCHED_BEGIN)
+		return 0;
+
 	for (i = 0; i < adapt->gpuiov.num_ctrl_blocks; i++) {
 		if (adapt->gpuiov.ctrl_blocks[i].sched_block != AMDGV_SCHED_BLOCK_GFX)
 			continue;
@@ -1337,7 +1373,8 @@ int amdgv_gpuiov_ctrl_block_setup(struct amdgv_adapter *adapt, struct amdgv_gpui
 			/* override default schedule mode with "sysfs" opt */
 			adapt->gpuiov.ctrl_blocks[i].sched_mode = adapt->opt.gfx_sched_mode;
 		} else {
-			AMDGV_WARN("GFX sched mode %d is not supported on current asic\n", adapt->opt.gfx_sched_mode);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_SCHED_GFX_MODE_NOT_SUPPORTED,
+				      adapt->opt.gfx_sched_mode);
 		}
 	}
 

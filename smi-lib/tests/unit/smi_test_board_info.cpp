@@ -52,6 +52,17 @@ protected:
 		return ::testing::AssertionSuccess();
 	}
 
+	::testing::AssertionResult equal_supported_power_info(smi_supported_power_cap expect,
+						    uint32_t actual_sensor_count, uint32_t actual_sensor_ind,
+						    smi_power_cap_type_t actual_sensor_type)
+	{
+		SMI_ASSERT_EQ(expect.sensor_count, actual_sensor_count);
+		SMI_ASSERT_EQ(expect.sensor_inds[0], actual_sensor_ind);
+		SMI_ASSERT_EQ(expect.sensor_types[0], actual_sensor_type);
+
+		return ::testing::AssertionSuccess();
+	}
+
 	::testing::AssertionResult equal_fb_info(smi_pf_fb_info expect,
 						 amdsmi_pf_fb_info_t actual)
 	{
@@ -109,6 +120,25 @@ TEST_F(AmdSmiBoardTests, InvalidParams)
 	ret = amdsmi_get_power_cap_info(&NIC_MOCK_HANDLE, sensor_ind, &power_cap);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
+	uint32_t sensor_count = 0;
+	uint32_t sensor_inds[2] = {0};
+	amdsmi_power_cap_type_t sensor_types[2] = {AMDSMI_POWER_CAP_TYPE_PPT0};
+
+	ret = amdsmi_get_supported_power_cap(NULL, &sensor_count, sensor_inds, sensor_types);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_supported_power_cap(&GPU_MOCK_HANDLE, NULL, sensor_inds, sensor_types);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_supported_power_cap(&GPU_MOCK_HANDLE, &sensor_count, NULL, sensor_types);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_supported_power_cap(&GPU_MOCK_HANDLE, &sensor_count, sensor_inds, NULL);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
+	ret = amdsmi_get_supported_power_cap(&NIC_MOCK_HANDLE, &sensor_count, sensor_inds, sensor_types);
+	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
+
 	ret = amdsmi_set_power_cap(NULL, sensor_ind, 0);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
@@ -153,6 +183,12 @@ TEST_F(AmdSmiBoardTests, IoctlFailed)
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 
 	ret = amdsmi_get_power_cap_info(&GPU_MOCK_HANDLE, sensor_ind, &power_res);
+	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
+
+	uint32_t sensor_count = 0;
+	uint32_t sensor_inds[2] = {0};
+	amdsmi_power_cap_type_t sensor_types[2] = {AMDSMI_POWER_CAP_TYPE_PPT0};
+	ret = amdsmi_get_supported_power_cap(&GPU_MOCK_HANDLE, &sensor_count, sensor_inds, sensor_types);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 
 	ret = amdsmi_set_power_cap(&GPU_MOCK_HANDLE, sensor_ind, 0);
@@ -247,7 +283,7 @@ TEST_F(AmdSmiBoardTests, GetPowerInfo)
 {
 	int ret;
 	struct smi_in_hdr in_hdr_enabled;
-	struct smi_device_info_ex in_dev_enabled;
+	struct smi_get_power_cap in_dev_enabled;
 	smi_power_cap_info gpu_info_mock = {};
 	uint32_t sensor_ind = 0;
 
@@ -263,6 +299,33 @@ TEST_F(AmdSmiBoardTests, GetPowerInfo)
 	ret = amdsmi_get_power_cap_info(&GPU_MOCK_HANDLE, sensor_ind, &info);
 
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_TRUE(equal_power_info(gpu_info_mock, info));
+}
+
+TEST_F(AmdSmiBoardTests, GetPowerInfoPpt1)
+{
+	int ret;
+	struct smi_in_hdr in_hdr_enabled;
+	struct smi_get_power_cap in_dev_enabled;
+	smi_power_cap_info gpu_info_mock = {};
+	uint32_t sensor_ind = 1;
+
+	/* PPT1: only power_cap is exposed by FW, the other fields come back
+	 * as SMI_NOT_SUPPORTED (see smi_get_gpu_power_cap_info()).
+	 */
+	gpu_info_mock.power_cap = 1000;
+	gpu_info_mock.dpm_cap = SMI_NOT_SUPPORTED;
+	gpu_info_mock.default_power_cap = SMI_NOT_SUPPORTED;
+	gpu_info_mock.max_power_cap = SMI_NOT_SUPPORTED;
+	gpu_info_mock.min_power_cap = SMI_NOT_SUPPORTED;
+
+	PrepareIoctl(SMI_CMD_CODE_GET_POWER_CAP_INFO, &in_hdr_enabled, &in_dev_enabled, gpu_info_mock);
+
+	amdsmi_power_cap_info_t info;
+	ret = amdsmi_get_power_cap_info(&GPU_MOCK_HANDLE, sensor_ind, &info);
+
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(in_dev_enabled.sensor_ind, sensor_ind);
 	ASSERT_TRUE(equal_power_info(gpu_info_mock, info));
 }
 
@@ -323,15 +386,51 @@ TEST_F(AmdSmiBoardTests, GetVirtualizationMode_Sucess)
 	ASSERT_EQ(mode, AMDSMI_VIRTUALIZATION_MODE_HOST);
 }
 
-TEST_F(AmdSmiBoardTests, GetSupportedPowerCapNotYetImplemented)
+TEST_F(AmdSmiBoardTests, GetSupportedPowerInfo)
 {
-	// TODO: power_cap - test amdsmi_get_supported_power_cap API when implemented
 	int ret;
-	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
-	uint32_t sensor_count = 1;
-	uint32_t sensor_inds[1] = {0};
-	amdsmi_power_cap_type_t sensor_types[1] = {AMDSMI_POWER_CAP_TYPE_PPT0};
+	struct smi_in_hdr in_hdr_enabled;
+	struct smi_device_info in_dev;
+	struct smi_supported_power_cap gpu_info_mock = {};
+	gpu_info_mock.sensor_count    = 1;
+	gpu_info_mock.sensor_inds[0]  = 0;
+	gpu_info_mock.sensor_types[0] = SMI_POWER_CAP_TYPE_PPT0;
 
-	ret = amdsmi_get_supported_power_cap(MOCK_GPU_HANDLE, &sensor_count, sensor_inds, sensor_types);
-	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_YET_IMPLEMENTED);
+	PrepareIoctl(SMI_CMD_CODE_GET_SUPPORTED_POWER_CAP, &in_hdr_enabled, &in_dev, gpu_info_mock);
+
+	uint32_t sensor_count = 0;
+	uint32_t sensor_inds[2] = {0};
+	amdsmi_power_cap_type_t sensor_types[2] = {AMDSMI_POWER_CAP_TYPE_PPT0};
+
+	ret = amdsmi_get_supported_power_cap(&GPU_MOCK_HANDLE, &sensor_count, sensor_inds, sensor_types);
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_TRUE(equal_supported_power_info(gpu_info_mock, sensor_count, sensor_inds[0],
+					       (smi_power_cap_type_t)sensor_types[0]));
+}
+
+TEST_F(AmdSmiBoardTests, GetSupportedPowerInfoBothSensors)
+{
+	int ret;
+	struct smi_in_hdr in_hdr_enabled;
+	struct smi_device_info in_dev;
+	struct smi_supported_power_cap gpu_info_mock = {};
+	gpu_info_mock.sensor_count    = 2;
+	gpu_info_mock.sensor_inds[0]  = 0;
+	gpu_info_mock.sensor_types[0] = SMI_POWER_CAP_TYPE_PPT0;
+	gpu_info_mock.sensor_inds[1]  = 1;
+	gpu_info_mock.sensor_types[1] = SMI_POWER_CAP_TYPE_PPT1;
+
+	PrepareIoctl(SMI_CMD_CODE_GET_SUPPORTED_POWER_CAP, &in_hdr_enabled, &in_dev, gpu_info_mock);
+
+	uint32_t sensor_count = 0;
+	uint32_t sensor_inds[2] = {0};
+	amdsmi_power_cap_type_t sensor_types[2] = {AMDSMI_POWER_CAP_TYPE_PPT0};
+
+	ret = amdsmi_get_supported_power_cap(&GPU_MOCK_HANDLE, &sensor_count, sensor_inds, sensor_types);
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(sensor_count, 2u);
+	ASSERT_EQ(sensor_inds[0], 0u);
+	ASSERT_EQ(sensor_types[0], AMDSMI_POWER_CAP_TYPE_PPT0);
+	ASSERT_EQ(sensor_inds[1], 1u);
+	ASSERT_EQ(sensor_types[1], AMDSMI_POWER_CAP_TYPE_PPT1);
 }

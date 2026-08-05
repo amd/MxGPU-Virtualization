@@ -47,6 +47,13 @@
 #include "ucode/navi32/psp_tos_wl_bin_navi32.h"
 #include "ucode/navi32/psp_drv_ras_navi32.h"
 
+#include "ucode/navi32/psp_sys_drv_bin_navi32_dc.h"
+#include "ucode/navi32/psp_sos_bin_navi32_dc.h"
+#include "ucode/navi32/psp_drv_soc_navi32_dc.h"
+#include "ucode/navi32/psp_drv_intf_navi32_dc.h"
+#include "ucode/navi32/psp_drv_dbg_navi32_dc.h"
+#include "ucode/navi32/psp_drv_ras_navi32_dc.h"
+#include "ucode/navi32/psp_tos_wl_bin_navi32_dc.h"
 #else
 
 #include "ucode/navi32/navi32_smu_ucode_unsigned.h"
@@ -107,6 +114,8 @@
 
 #define RLCG_UCODE_LOADING_START_ADDRESS	0x00002000L
 
+#define LM_PSP_BL_VERSION 0xDC
+
 static const uint32_t this_block = AMDGV_SECURITY_BLOCK;
 
 void navi32_log_toc_version(struct amdgv_adapter *adapt)
@@ -130,40 +139,82 @@ static int navi32_ucode_load(struct amdgv_adapter *adapt,
 				ucode_id_list[i]);
 			break;
 		case AMDGV_FIRMWARE_ID__PSP_SYS:
-			ret = amdgv_psp_load_fw(adapt,
-				psp_sys_drv_bin_navi32,
-				sizeof(psp_sys_drv_bin_navi32),
-				ucode_id_list[i]);
+			if ((adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_BL] & 0xFF) == LM_PSP_BL_VERSION) {
+				ret = amdgv_psp_load_fw(adapt,
+							psp_sys_drv_bin_navi32_dc,
+							sizeof(psp_sys_drv_bin_navi32_dc),
+							ucode_id_list[i]);
+			} else {
+				ret = amdgv_psp_load_fw(adapt,
+							psp_sys_drv_bin_navi32,
+							sizeof(psp_sys_drv_bin_navi32),
+							ucode_id_list[i]);
+			}
 			break;
 		case AMDGV_FIRMWARE_ID__PSP_RAS:
-			ret = amdgv_psp_load_fw(adapt,
-				psp_drv_ras_navi32,
-				sizeof(psp_drv_ras_navi32),
-				ucode_id_list[i]);
+			if ((adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_BL] & 0xFF) == LM_PSP_BL_VERSION) {
+				ret = amdgv_psp_load_fw(adapt,
+							psp_drv_ras_navi32_dc,
+							sizeof(psp_drv_ras_navi32_dc),
+							ucode_id_list[i]);
+			} else {
+				ret = amdgv_psp_load_fw(adapt,
+							psp_drv_ras_navi32,
+							sizeof(psp_drv_ras_navi32),
+							ucode_id_list[i]);
+			}
 			break;
 		case AMDGV_FIRMWARE_ID__PSP_SOS:
-			ret = amdgv_psp_load_fw(adapt,
-				psp_sos_bin_navi32,
-				sizeof(psp_sos_bin_navi32),
-				ucode_id_list[i]);
+			if ((adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_BL] & 0xFF) == LM_PSP_BL_VERSION) {
+				ret = amdgv_psp_load_fw(adapt,
+							psp_sos_bin_navi32_dc,
+							sizeof(psp_sos_bin_navi32_dc),
+							ucode_id_list[i]);
+			} else {
+				ret = amdgv_psp_load_fw(adapt,
+							psp_sos_bin_navi32,
+							sizeof(psp_sos_bin_navi32),
+							ucode_id_list[i]);
+			}
 			break;
 		case AMDGV_FIRMWARE_ID__PSP_SOC:
-			ret = amdgv_psp_load_fw(adapt,
-				psp_drv_soc_navi32,
-				sizeof(psp_drv_soc_navi32),
-				ucode_id_list[i]);
+			if ((adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_BL] & 0xFF) == LM_PSP_BL_VERSION) {
+				ret = amdgv_psp_load_fw(adapt,
+							psp_drv_soc_navi32_dc,
+							sizeof(psp_drv_soc_navi32_dc),
+							ucode_id_list[i]);
+			} else {
+				ret = amdgv_psp_load_fw(adapt,
+							psp_drv_soc_navi32,
+							sizeof(psp_drv_soc_navi32),
+							ucode_id_list[i]);
+			}
 			break;
 		case AMDGV_FIRMWARE_ID__PSP_INTF:
-			ret = amdgv_psp_load_fw(adapt,
-				psp_drv_intf_navi32,
-				sizeof(psp_drv_intf_navi32),
-				ucode_id_list[i]);
+			if ((adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_BL] & 0xFF) == LM_PSP_BL_VERSION) {
+				ret = amdgv_psp_load_fw(adapt,
+							psp_drv_intf_navi32_dc,
+							sizeof(psp_drv_intf_navi32_dc),
+							ucode_id_list[i]);
+			} else {
+				ret = amdgv_psp_load_fw(adapt,
+							psp_drv_intf_navi32,
+							sizeof(psp_drv_intf_navi32),
+							ucode_id_list[i]);
+			}
 			break;
 		case AMDGV_FIRMWARE_ID__PSP_DBG:
-			ret = amdgv_psp_load_fw(adapt,
-				psp_drv_dbg_navi32,
-				sizeof(psp_drv_dbg_navi32),
-				ucode_id_list[i]);
+			if ((adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_BL] & 0xFF) == LM_PSP_BL_VERSION) {
+				ret = amdgv_psp_load_fw(adapt,
+							psp_drv_dbg_navi32_dc,
+							sizeof(psp_drv_dbg_navi32_dc),
+							ucode_id_list[i]);
+			} else {
+				ret = amdgv_psp_load_fw(adapt,
+							psp_drv_dbg_navi32,
+							sizeof(psp_drv_dbg_navi32),
+							ucode_id_list[i]);
+			}
 			break;
 		case AMDGV_FIRMWARE_ID__SMU:
 			ret = amdgv_psp_load_fw(adapt,
@@ -330,10 +381,17 @@ static int navi32_ucode_load(struct amdgv_adapter *adapt,
 					(ucode_id_list[i]));
 			break;
 		case AMDGV_FIRMWARE_ID__REG_ACCESS_WHITELIST:
-			ret = amdgv_psp_load_fw(adapt,
-				(unsigned char *)psp_tos_wl_bin_navi32,
-				sizeof(psp_tos_wl_bin_navi32),
-				ucode_id_list[i]);
+			if ((adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PSP_BL] & 0xFF) == LM_PSP_BL_VERSION) {
+				ret = amdgv_psp_load_fw(adapt,
+							psp_tos_wl_bin_navi32_dc,
+							sizeof(psp_tos_wl_bin_navi32_dc),
+							ucode_id_list[i]);
+			} else {
+				ret = amdgv_psp_load_fw(adapt,
+							(unsigned char *)psp_tos_wl_bin_navi32,
+							sizeof(psp_tos_wl_bin_navi32),
+							ucode_id_list[i]);
+			}
 			break;
 		case AMDGV_FIRMWARE_ID__DFC_FW:
 			ret = amdgv_psp_load_fw(adapt,

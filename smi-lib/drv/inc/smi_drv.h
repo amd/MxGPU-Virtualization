@@ -22,6 +22,11 @@ void smi_cleanup(void);
 /* ESXi only. */
 void smi_drain_in_flight_ioctls(int timeout_ms);
 
+/* ESXi only. Drain libgv notifiers for all open SMI fds during unload. */
+#if defined(SMI_ESXI_BUILD) || defined(ESX)
+void smi_release_all_notifiers(void);
+#endif
+
 int smi_open(smi_process_handle file, bool is_privileged);
 int smi_release(smi_process_handle file);
 long smi_ioctl_handler(smi_process_handle file, unsigned int cmd, void *arg);

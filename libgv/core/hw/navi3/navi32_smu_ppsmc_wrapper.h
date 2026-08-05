@@ -78,6 +78,7 @@
 #define SMU_13_0_MSG__PREPARE_MP1_FOR_UNLOAD   PPSMC_MSG_PrepareMp1ForUnload
 #define SMU_13_0_MSG__PREPARE_MP1_FOR_RESET    PPSMC_MSG_PrepareMp1ForReset
 #define SMU_13_0_MSG__PREPARE_MP1_FOR_SHUTDOWN PPSMC_MSG_PrepareMp1ForShutdown
+#define SMU_13_0_MSG__PREPARE_FOR_VF_UNLOAD    PPSMC_MSG_PrepareForVFUnload
 
 // ACDC Power Source
 #define SMU_13_0_MSG__SET_PPT_LIMIT	       PPSMC_MSG_SetPptLimit

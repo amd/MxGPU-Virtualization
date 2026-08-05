@@ -26,7 +26,7 @@ int gim_enter_baco(amdgv_dev_t dev)
 
 	if (power_saving_mode != AMDGV_IPS_POWER_SAVING_MANUAL) {
 		gim_warn("Failed to enter baco, power saving mode not set to manual\n");
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 	}
 
 	list_for_each_entry(data, &gim_device_list, list) {
@@ -54,7 +54,7 @@ int gim_enter_baco(amdgv_dev_t dev)
 		pdev = pci_get_domain_bus_and_slot(domain, bus, devfn);
 		if (pdev && pdev->current_state != PCI_UNKNOWN) {
 			gim_warn("Failed to enter baco power saving, there is VM running\n");
-			return AMDGV_ERROR_GPUMON_VF_BUSY;
+			return AMDGV_LOG_GPUMON_VF_BUSY;
 		}
 	}
 
@@ -65,7 +65,7 @@ int gim_exit_baco(amdgv_dev_t dev)
 {
 	if (power_saving_mode != AMDGV_IPS_POWER_SAVING_MANUAL) {
 		gim_warn("Failed to exit baco, power saving mode not set to manual\n");
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 	}
 
 	return amdgv_toggle_power_saving(dev, 0);
@@ -75,7 +75,7 @@ int gim_get_baco_status(amdgv_dev_t dev, uint32_t *status)
 {
 	if (power_saving_mode != AMDGV_IPS_POWER_SAVING_MANUAL) {
 		gim_warn("Failed get baco status, power saving mode not set to manual\n");
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 	}
 
 	return amdgv_query_power_saving_status(dev, status);

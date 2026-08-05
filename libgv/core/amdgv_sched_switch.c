@@ -348,7 +348,7 @@ amdgv_sched_world_switch_calculate_time_slice(struct amdgv_adapter *adapt,
 			/* Beyond time cycle is ignored in single VF mode */
 			entry->beyond_time_cycle = 0;
 			entry->last_time_slice =
-				GET_GFX_TIME_SLICE(adapt, adapt->sched.num_vf_per_gfx_sched);
+				GET_GFX_TIME_SLICE(adapt, adapt->sched.num_vf_per_gfx_sched, entry->idx_vf);
 
 			goto out;
 		}
@@ -513,7 +513,7 @@ static int amdgv_sched_manual_switch_process(void *context)
 	long long left_ts = 0;
 	uint64_t time_slice = 0;
 
-	if (GET_GFX_TIME_SLICE(adapt, adapt->sched.num_vf_per_gfx_sched) ==
+	if (GET_GFX_TIME_SLICE(adapt, adapt->sched.num_vf_per_gfx_sched, 0) ==
 			DEFAULT_GFX_TIME_SLICE_1VF &&
 		(adapt->in_live_update))
 		return 0;
@@ -562,7 +562,7 @@ static int amdgv_sched_manual_switch_process(void *context)
 
 		if (left_ts > 0 && world_switch->curr_vf_state == AMDGV_VF_CONTEXT_LOADED) {
 			if (oss_timer_start(world_switch->manual.timer, left_ts, OSS_TIMER_TYPE_ONE_TIME))
-				amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_HRTIMER_START_FAIL, 0);
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_HRTIMER_START_FAIL, 0);
 			goto out;
 		}
 	}
@@ -573,7 +573,7 @@ static int amdgv_sched_manual_switch_process(void *context)
 	if (world_switch->curr_vf_state == AMDGV_VF_CONTEXT_LOADED) {
 		entry = &world_switch->manual.array_vf[world_switch->curr_idx_vf];
 		if (AMDGV_IS_IDX_INVALID(entry->idx_vf)) {
-			amdgv_put_error(entry->idx_vf, AMDGV_ERROR_DRIVER_INVALID_VALUE,
+			amdgv_put_log(entry->idx_vf, AMDGV_LOG_DRIVER_INVALID_VALUE,
 					entry->idx_vf);
 
 			AMDGV_ASSERT(0);
@@ -614,7 +614,7 @@ static int amdgv_sched_manual_switch_process(void *context)
 			idx_vf = entry->idx_vf;
 			if (entry->idx_vf == adapt->force_switch_vf_idx) {
 				time_slice = GET_GFX_TIME_SLICE(
-					adapt, adapt->sched.num_vf_per_gfx_sched);
+					adapt, adapt->sched.num_vf_per_gfx_sched, entry->idx_vf);
 				break;
 			}
 		}
@@ -646,7 +646,7 @@ load_fcn:
 		goto out;
 
 	if (oss_timer_start(world_switch->manual.timer, time_slice, OSS_TIMER_TYPE_ONE_TIME)) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_HRTIMER_START_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_HRTIMER_START_FAIL, 0);
 	}
 
 out:
@@ -851,20 +851,20 @@ static int amdgv_sched_manual_switch_init(struct amdgv_adapter *adapt,
 
 	world_switch->manual.switching_lock = oss_mutex_init();
 	if (world_switch->manual.switching_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_MUTEX_FAIL, 0);
 		return AMDGV_FAILURE;
 	}
 
 	world_switch->manual.timer = oss_timer_init_ex(amdgv_sched_manual_switch_timer_isr,
 							   (void *)world_switch, adapt->dev);
 	if (world_switch->manual.timer == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_TIMER_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_TIMER_FAIL, 0);
 		goto timer_failed;
 	}
 
 	world_switch->manual.switch_event = oss_event_init();
 	if (world_switch->manual.switch_event == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_EVENT_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_EVENT_FAIL, 0);
 		goto event_failed;
 	}
 
@@ -890,7 +890,7 @@ static int amdgv_sched_manual_switch_init(struct amdgv_adapter *adapt,
 				AMDGV_INIT_LIST_HEAD(&entry->list);
 				entry->idx_vf = i;
 				entry->time_slice = amdgv_sched_default_gfx_time_slice(
-					adapt, adapt->sched.num_vf_per_gfx_sched);
+					adapt, adapt->sched.num_vf_per_gfx_sched, i);
 				entry->start_ts = 0;
 				entry->beyond_time_cycle = 0;
 				entry->dummy_vf = true;
@@ -909,7 +909,7 @@ static int amdgv_sched_manual_switch_init(struct amdgv_adapter *adapt,
 		AMDGV_INIT_LIST_HEAD(&entry->list);
 		entry->idx_vf = AMDGV_PF_IDX;
 		entry->time_slice = amdgv_sched_default_gfx_time_slice(
-			adapt, adapt->sched.num_vf_per_gfx_sched);
+			adapt, adapt->sched.num_vf_per_gfx_sched, AMDGV_PF_IDX);
 		entry->start_ts = 0;
 		entry->beyond_time_cycle = 0;
 		entry->dummy_vf = false;
@@ -940,7 +940,7 @@ static int amdgv_sched_manual_switch_init(struct amdgv_adapter *adapt,
 		oss_create_thread(amdgv_sched_manual_switch_work_thread, (void *)world_switch,
 				  "sched_switch_thread");
 	if (world_switch->manual.switch_thread == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_THREAD_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_THREAD_FAIL, 0);
 		goto failed;
 	}
 
@@ -1102,7 +1102,7 @@ static int amdgv_sched_manual_switch_stop(struct amdgv_adapter *adapt,
 
 	entry = &world_switch->manual.array_vf[world_switch->curr_idx_vf];
 	if (AMDGV_IS_IDX_INVALID(entry->idx_vf)) {
-		amdgv_put_error(entry->idx_vf, AMDGV_ERROR_DRIVER_INVALID_VALUE,
+		amdgv_put_log(entry->idx_vf, AMDGV_LOG_DRIVER_INVALID_VALUE,
 				entry->idx_vf);
 
 		AMDGV_ASSERT(0);
@@ -1160,7 +1160,7 @@ static int amdgv_sched_manual_switch_set_vf_num(struct amdgv_adapter *adapt,
 				AMDGV_INIT_LIST_HEAD(&entry->list);
 				entry->idx_vf = i;
 				entry->time_slice = amdgv_sched_default_gfx_time_slice(
-					adapt, adapt->sched.num_vf_per_gfx_sched);
+					adapt, adapt->sched.num_vf_per_gfx_sched, i);
 				entry->start_ts = 0;
 				entry->beyond_time_cycle = 0;
 				entry->dummy_vf = true;
@@ -1212,7 +1212,7 @@ static int amdgv_sched_auto_switch_add_vf(struct amdgv_adapter *adapt,
 		time_quanta_option = adapt->time_quanta_option[sched_block];
 		/* use default timeslice if setup vf timeslice being used */
 		if ((sched_block == AMDGV_SCHED_BLOCK_GFX) && (adapt->sched.setup_vf_timeslice))
-			vf_quanta = ((uint8_t)(GET_GFX_TIME_SLICE(adapt, adapt->sched.num_vf_per_gfx_sched) / 1000));
+			vf_quanta = ((uint8_t)(GET_GFX_TIME_SLICE(adapt, adapt->sched.num_vf_per_gfx_sched, idx_vf) / 1000));
 		else
 			vf_quanta = ((uint8_t)(entry->time_slice[sched_block] / 1000));
 		if (vf_quanta == 0)
@@ -1310,7 +1310,7 @@ static int amdgv_sched_auto_switch_update_time_slice(struct amdgv_adapter *adapt
 	for_each_id(i, world_switch->hw_sched_mask) {
 		ret = amdgv_sched_world_switch_config_auto_sched_mode(adapt, i);
 		if (ret)
-			return ret;
+			break;
 	}
 
 	if (switch_running)
@@ -1361,7 +1361,7 @@ static int amdgv_sched_auto_switch_start(struct amdgv_adapter *adapt,
 			 * case 3: flag is TRIGGER_DISABLE -> do SAVE(DISABLE AUTO_SCHED) first and then reconfig time quanta
 			 */
 			if (adapt->sched.num_vf_per_gfx_sched == 1 && world_switch->auto_sched.self_switch_trigger != DEFAULT_DISABLE) {
-				gfx_time_slice = GET_GFX_TIME_SLICE(adapt, adapt->sched.num_vf_per_gfx_sched);
+				gfx_time_slice = GET_GFX_TIME_SLICE(adapt, adapt->sched.num_vf_per_gfx_sched, AMDGV_PF_IDX);
 
 				if (world_switch->auto_sched.self_switch_trigger == TRIGGER_DISABLED)
 					adapt->sched.hw_state_machine[hw_sched_id].goto_state(adapt, -1, hw_sched_id, AMDGV_VF_CONTEXT_SAVED);
@@ -1792,6 +1792,8 @@ int amdgv_sched_world_switch_config_auto_sched_mode(struct amdgv_adapter *adapt,
 	 uint32_t hw_sched_id)
 {
 	struct amdgv_sched_world_switch *world_switch;
+	uint32_t cur_state, cur_vf;
+	bool vf_running;
 	int ret = 0;
 
 	if (amdgv_sched_get_world_switch_by_hw_sched_id(adapt, hw_sched_id, &world_switch))
@@ -1800,13 +1802,35 @@ int amdgv_sched_world_switch_config_auto_sched_mode(struct amdgv_adapter *adapt,
 	if (!world_switch->enabled)
 		return 0;
 
-	if (adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state == AMDGV_ENABLE_AUTO_HW_SWITCH) {
-		AMDGV_WARN("hw sched enabled, skip config sched mode\n");
-		return AMDGV_FAILURE;
-	}
-
-	ret = amdgv_gpuiov_config_auto_sched_mode(adapt, hw_sched_id,
+	if (world_switch->switch_running) {
+		amdgv_sched_world_switch_stop(adapt, world_switch);
+		if (world_switch->sched_mode > AMDGV_SCHED_MAX_HW_SCHED_MODE)
+			/* only manual switch need to call config_sched_mode.
+			 * auto switch will handle config during ws_start
+			 */
+			ret = amdgv_gpuiov_config_auto_sched_mode(adapt, hw_sched_id,
 						world_switch->sched_mode);
+		amdgv_sched_world_switch_start(adapt, world_switch);
+	} else {
+		/* If world switch is not running, make sure config sched mode is called in SAVE state */
+		cur_state = adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state;
+		cur_vf = adapt->sched.hw_state_machine[hw_sched_id].cur_vf_id;
+		vf_running = is_active_vf(cur_vf) && (cur_state != AMDGV_SAVE_GPU_STATE);
+		if (vf_running)
+			ret = adapt->sched.hw_state_machine[hw_sched_id].goto_state(
+					adapt, cur_vf, hw_sched_id, AMDGV_SAVE_GPU_STATE);
+		if (!ret)
+			ret = amdgv_gpuiov_config_auto_sched_mode(adapt, hw_sched_id,
+						world_switch->sched_mode);
+		if (vf_running) {
+			int restore_ret;
+
+			restore_ret = adapt->sched.hw_state_machine[hw_sched_id].goto_state(
+					adapt, cur_vf, hw_sched_id, cur_state);
+			if (!ret)
+				ret = restore_ret;
+		}
+	}
 
 	return ret;
 }
@@ -1927,16 +1951,23 @@ int amdgv_sched_world_context_one_time_loop(struct amdgv_adapter *adapt,
 
 		ret = amdgv_sched_world_context_load(adapt, idx_vf, world_switch);
 		if (ret)
-			return ret;
+			goto reset_vf;
 
 		oss_usleep(time_slice);
 
 		ret = amdgv_sched_world_context_save(adapt, world_switch);
 		if (ret)
-			return ret;
+			goto reset_vf;
 	}
 
 	return 0;
+
+reset_vf:
+	/* WS cmd failed, curr WS is ABNORMAL now. Queue a targeted reset of the
+	 * offending VF to recover, same as manual switch. */
+	amdgv_sched_queue_event(adapt, world_switch->curr_idx_vf,
+				AMDGV_EVENT_SCHED_RESET_VF, world_switch->sched_block);
+	return ret;
 }
 int amdgv_sched_world_context_init(struct amdgv_adapter *adapt, uint32_t idx_vf,
 				   struct amdgv_sched_world_switch *world_switch)
@@ -2223,7 +2254,7 @@ int amdgv_sched_world_switch_reset(struct amdgv_adapter *adapt, uint32_t idx_vf,
 		}
 
 		if (amdgv_hw_sched_state_shutdown(adapt, idx_vf, hw_sched_id)) {
-			amdgv_put_error(idx_vf, AMDGV_ERROR_SCHED_SHUTDOWN_VF_FAIL, idx_vf);
+			amdgv_put_log(idx_vf, AMDGV_LOG_SCHED_SHUTDOWN_VF_FAIL, idx_vf);
 			ret = AMDGV_FAILURE;
 			goto out;
 		}

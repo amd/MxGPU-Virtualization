@@ -43,7 +43,7 @@ int main(void)
 
 	uint64_t cursor = 0;  // The cursor to get more data
 
-	uint64_t afids[MAX_NUMBER_OF_AFIDS_PER_RECORD];
+	uint64_t afids[AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD];
 	uint32_t num_afids = 0;
 	char *cper_buffer;
 

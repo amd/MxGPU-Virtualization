@@ -33,8 +33,8 @@ int amdgv_int_allocate_vf(struct amdgv_adapter *adapt, struct amdgv_vf_option *o
 				break;
 		}
 		if (i == adapt->num_vf) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_GPUMON_NO_AVAILABLE_SLOT, 0);
-			opt_err = AMDGV_ERROR_GPUMON_NO_AVAILABLE_SLOT;
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPUMON_NO_AVAILABLE_SLOT, 0);
+			opt_err = AMDGV_LOG_GPUMON_NO_AVAILABLE_SLOT;
 			goto unlock;
 		}
 
@@ -70,14 +70,14 @@ int amdgv_int_free_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
 	int tmp_ret, ret;
 
-	ret = AMDGV_ERROR_GPUMON_INVALID_VF_INDEX;
+	ret = AMDGV_LOG_GPUMON_INVALID_VF_INDEX;
 
 	if (!AMDGV_IS_IDX_INVALID(idx_vf)) {
 		if (is_unavail_vf(idx_vf))
 			return 0;
 
 		if (!is_avail_vf(idx_vf))
-			return AMDGV_ERROR_GPUMON_VF_BUSY;
+			return AMDGV_LOG_GPUMON_VF_BUSY;
 
 		tmp_ret = amdgv_sched_park(adapt);
 		if (tmp_ret) {
@@ -102,22 +102,22 @@ int amdgv_int_set_vf_number(struct amdgv_adapter *adapt, uint32_t num_vf)
 
 	/* Check if dynamic VF number change is supported on this platform */
 	if (adapt->flags & AMDGV_FLAG_NO_DYNAMIC_VF_NUM) {
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 	}
 
 	/* all VFs must be in avail or unavail state */
 	for (i = 0; i < adapt->num_vf; i++) {
 		if (!is_unavail_vf(i) && !is_avail_vf(i)) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_GPUMON_VF_BUSY, i);
-			opt_err = AMDGV_ERROR_GPUMON_VF_BUSY;
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPUMON_VF_BUSY, i);
+			opt_err = AMDGV_LOG_GPUMON_VF_BUSY;
 			goto out;
 		}
 	}
 
 	if (num_vf > adapt->max_num_vf || num_vf <= 0) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_GPUMON_INVALID_VF_NUM,
-				AMDGV_ERROR_32_32(num_vf, adapt->max_num_vf));
-		opt_err = AMDGV_ERROR_GPUMON_INVALID_VF_NUM;
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPUMON_INVALID_VF_NUM,
+				AMDGV_LOG_DATA_32_32(num_vf, adapt->max_num_vf));
+		opt_err = AMDGV_LOG_GPUMON_INVALID_VF_NUM;
 		goto out;
 	}
 

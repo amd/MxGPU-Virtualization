@@ -466,8 +466,8 @@ static int amdgv_diag_data_host_driver_collect_gen_info(
 /* Functions to add data in the diagnosis data log */
 void amdgv_diag_data_add_error(struct amdgv_adapter *adapt)
 {
-	struct amdgv_error_ring_buffer *err_rb;
-	struct amdgv_error_entry *r_entry;
+	struct amdgv_log_ring_buffer *err_rb;
+	struct amdgv_log_entry *r_entry;
 	uint32_t wr_diff;
 	uint32_t r_index;
 	uint32_t w_index;
@@ -491,25 +491,25 @@ void amdgv_diag_data_add_error(struct amdgv_adapter *adapt)
 			host_drv->error_dump.w_count, host_drv->error_dump.total_entries,
 			AMDGV_DIAG_DATA_ERROR_DUMP_FIRST_KEEP);
 
-	err_rb = adapt->error_ring_buffer;
-	write_count = adapt->error_ring_buffer->write_count;
+	err_rb = adapt->log.rings[AMDGV_LOG_RING_ERROR];
+	write_count = err_rb->write_count;
 
 	/* log the errors to diagnosis data */
 	while (write_count != read_count) {
 		wr_diff = write_count - read_count;
 
 		/* Shift the read_count to oldest entry if OF */
-		if (wr_diff > AMDGV_ERROR_BUF_ENTRY_SIZE) {
-			read_count = write_count - AMDGV_ERROR_BUF_ENTRY_SIZE + 1;
+		if (wr_diff > err_rb->entry_count) {
+			read_count = write_count - err_rb->entry_count + 1;
 		}
-		r_index = AMDGV_ERROR_INDEX(read_count);
+		r_index = AMDGV_LOG_INDEX(err_rb, read_count);
 		read_count++;
-		r_entry = &err_rb->error_entry_buffer[r_index];
+		r_entry = &err_rb->log_entry_buffer[r_index];
 		w_entry = host_drv->error_dump.entry + w_index;
 
 		w_entry->cpu_timestamp = r_entry->timestamp;
-		w_entry->error_data = r_entry->error_data;
-		w_entry->error_code = r_entry->error_code;
+		w_entry->error_data = r_entry->log_data;
+		w_entry->error_code = r_entry->log_code;
 		w_entry->vf_idx = r_entry->vf_idx;
 		if (adapt->diag_data.get_gpu_ref_timestamp &&
 		    adapt->status == AMDGV_STATUS_HW_INIT)

@@ -87,12 +87,19 @@ static bool gim_live_update_validate_crc(struct gim_live_update_manager *mgr)
 	if (header_version != driver_version)
 		return false;
 
-	mgr->gpu_num = file_header->gpu_num;
+	mgr->gpu_num = min_t(uint32_t, file_header->gpu_num, GIM_LIVE_UPDATE_DEFAULT_MAX_GPU);
 	if (mgr->gpu_num == 0)
 		return false;
 
 	for (i = 0; i < mgr->gpu_num; i++) {
 		gpu_data = gim_live_update_get_data_ptr(mgr, i);
+		/* This is not a tight bound but is sufficient to prevent large out of range values */
+		if (gpu_data->header.size == 0 ||
+		    gpu_data->header.size > GIM_LIVE_UPDATE_DEFAULT_SIZE) {
+			gim_warn("live update entry %u header.size %u out of range\n",
+				 i, gpu_data->header.size);
+			return false;
+		}
 		gim_calc_hash_ext("crc32", &hash, (void *)&gpu_data->header.size, gpu_data->header.size);
 		if (gpu_data->header.hash != hash)
 			return false;
@@ -289,6 +296,8 @@ static void gim_live_update_fill_compatibility(struct gim_live_update_manager *m
 		module_param->memory_partition_mode = AMDGV_MEMORY_PARTITION_MODE_NPS1;
 		module_param->accelerator_partition_mode = module_param->num_vf;
 	}
+	if (file_header->version <= LIVE_INFO_GET_HEADER_VERSION(2, 1))
+		module_param->sys_log_level = AMDGV_INFO_LEVEL;
 
 	data->opt.total_vf_num = module_param->num_vf;
 	data->opt.accelerator_partition_mode = module_param->accelerator_partition_mode;

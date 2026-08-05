@@ -15,6 +15,8 @@
 #include "gim_debugfs.h"
 
 #define DEBUGFS_MAX_BUFFER_SIZE (128 * 512) // Use for error ring dump with 512 byte per entry * 128 entries
+// Sized for the debug ring (1024) and the combined view (error+info+debug = 1280) at 512 byte/entry
+#define DEBUGFS_LOG_RING_MAX_BUFFER_SIZE (1280 * 512)
 
 extern struct gim_error_ring_buffer *gim_error_rb;
 
@@ -32,14 +34,37 @@ struct amdgv_ffbm_permission permissions[] = {
 	{NULL, -1}
 };
 
-static int attr_rlcv_timestamp_dump_set(void *data, u64 val)
+static ssize_t rlcv_timestamp_dump_set(struct file *file,
+		const char __user *user_buf,
+		size_t count, loff_t *ppos)
 {
 	int ret;
-	struct gim_dev_data *dev_data;
 	union amdgv_dev_conf conf;
+	struct gim_dev_data *dev_data;
+	char buf[64];
+	uint32_t val;
 
-	dev_data = (struct gim_dev_data *)data;
+	if (file == NULL || user_buf == NULL || ppos == NULL)
+		return -EINVAL;
 
+	dev_data = file->private_data;
+	if (dev_data == NULL)
+		return -EINVAL;
+
+	if (count == 0 || count >= sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(buf, user_buf, count))
+		return -EFAULT;
+
+	buf[count] = '\0';
+
+	if (sscanf(buf, "%d", &val) != 1) {
+		pr_warn("invalid parameter\n");
+		return -EINVAL;
+	}
+
+	/* Toggle DISABLE_SELF_SWITCH so world switch force periodic WS even on 1 VF */
 	if (val == 0)
 		conf.flag_switch = 1;
 	else
@@ -50,11 +75,62 @@ static int attr_rlcv_timestamp_dump_set(void *data, u64 val)
 	if (!ret)
 		ret = amdgv_set_rlcv_timestamp_dump(dev_data->adev, val);
 
+	if (ret) {
+		pr_warn("Failed to enable/disable rlcv timestamp log for [%s]\n",
+				dev_name(&dev_data->pdev->dev));
+		return ret < 0 ? ret : -EIO;
+	}
+
+	return count;
+}
+
+static ssize_t rlcv_timestamp_dump_get(struct file *file,
+		char __user *user_buf,
+		size_t count, loff_t *ppos)
+{
+	ssize_t ret;
+	struct gim_dev_data *dev_data;
+	char *buf;
+	int len;
+	uint32_t bdf;
+
+	if (file == NULL || user_buf == NULL || ppos == NULL)
+		return -EINVAL;
+
+	dev_data = file->private_data;
+	if (dev_data == NULL)
+		return -EINVAL;
+
+	buf = gim_oss_interfaces.alloc_memory(PATH_MAX);
+	if (buf == NULL)
+		return -ENOMEM;
+
+	bdf = PCI_DEVID(dev_data->pdev->bus->number, dev_data->pdev->devfn) | (pci_domain_nr(dev_data->pdev->bus) << 16);
+
+	if (*ppos == 0) {
+		ret = amdgv_dump_rlcv_timestamp_log(dev_data->adev);
+		if (ret) {
+			pr_warn("Failed to dump rlcv timestamp log for [%s]\n",
+					dev_name(&dev_data->pdev->dev));
+			ret = ret < 0 ? ret : -EIO;
+			goto error;
+		}
+	}
+	len = snprintf(buf, PATH_MAX, "ts_log dumped at /var/log/rlcv_timestamp_%04x_%04x_%04x", bdf >> 8 & 0xff,
+		bdf >> 3 & 0x1f, bdf & 0x7);
+	ret = simple_read_from_buffer(user_buf, count, ppos, buf, len);
+
+error:
+	gim_oss_interfaces.free_memory(buf);
 	return ret;
 }
 
-DEFINE_SIMPLE_ATTRIBUTE(rlcv_timestamp_dump_fops, NULL,
-		attr_rlcv_timestamp_dump_set, "%llu\n");
+static const struct file_operations rlcv_timestamp_dump_fops = {
+	.open		= simple_open,
+	.read		= rlcv_timestamp_dump_get,
+	.write		= rlcv_timestamp_dump_set,
+	.llseek		= default_llseek,
+};
 
 static int ffbm_permission_get(char *permission)
 {
@@ -2240,6 +2316,92 @@ static const struct file_operations error_ring_buffer_dump_fops = {
 	.llseek         = default_llseek,
 };
 
+static ssize_t info_ring_buffer_dump_read(struct file *file,
+		char __user *user_buf,
+		size_t count, loff_t *ppos)
+{
+	int len;
+	ssize_t ret;
+	char *buf;
+	struct gim_dev_data *dev_data;
+
+	dev_data = file->private_data;
+	buf = gim_oss_interfaces.alloc_memory(DEBUGFS_MAX_BUFFER_SIZE);
+	if (!buf) {
+		return -ENOMEM;
+	}
+
+	len = amdgv_info_ring_buffer_dump(dev_data->adev, buf, DEBUGFS_MAX_BUFFER_SIZE);
+
+	ret = simple_read_from_buffer(user_buf, count, ppos, buf, len);
+	gim_oss_interfaces.free_memory(buf);
+	return ret;
+}
+
+static const struct file_operations info_ring_buffer_dump_fops = {
+	.open           = simple_open,
+	.read           = info_ring_buffer_dump_read,
+	.llseek         = default_llseek,
+};
+
+static ssize_t debug_ring_buffer_dump_read(struct file *file,
+		char __user *user_buf,
+		size_t count, loff_t *ppos)
+{
+	int len;
+	ssize_t ret;
+	char *buf;
+	struct gim_dev_data *dev_data;
+
+	dev_data = file->private_data;
+	buf = gim_oss_interfaces.alloc_memory(DEBUGFS_LOG_RING_MAX_BUFFER_SIZE);
+	if (!buf) {
+		return -ENOMEM;
+	}
+
+	len = amdgv_debug_ring_buffer_dump(dev_data->adev, buf,
+			DEBUGFS_LOG_RING_MAX_BUFFER_SIZE);
+
+	ret = simple_read_from_buffer(user_buf, count, ppos, buf, len);
+	gim_oss_interfaces.free_memory(buf);
+	return ret;
+}
+
+static const struct file_operations debug_ring_buffer_dump_fops = {
+	.open           = simple_open,
+	.read           = debug_ring_buffer_dump_read,
+	.llseek         = default_llseek,
+};
+
+static ssize_t combined_ring_buffer_dump_read(struct file *file,
+		char __user *user_buf,
+		size_t count, loff_t *ppos)
+{
+	int len;
+	ssize_t ret;
+	char *buf;
+	struct gim_dev_data *dev_data;
+
+	dev_data = file->private_data;
+	buf = gim_oss_interfaces.alloc_memory(DEBUGFS_LOG_RING_MAX_BUFFER_SIZE);
+	if (!buf) {
+		return -ENOMEM;
+	}
+
+	len = amdgv_combined_ring_buffer_dump(dev_data->adev, buf,
+			DEBUGFS_LOG_RING_MAX_BUFFER_SIZE);
+
+	ret = simple_read_from_buffer(user_buf, count, ppos, buf, len);
+	gim_oss_interfaces.free_memory(buf);
+	return ret;
+}
+
+static const struct file_operations combined_ring_buffer_dump_fops = {
+	.open           = simple_open,
+	.read           = combined_ring_buffer_dump_read,
+	.llseek         = default_llseek,
+};
+
 static int set_product_info_invalid_set(void *data, u64 val)
 {
 	int ret = 0;
@@ -2269,7 +2431,7 @@ void gim_debugfs_init(void)
 	/* root debugfs dir */
 	root_dir = debugfs_create_dir("gim", NULL);
 	if (!root_dir || root_dir == ERR_PTR(-ENODEV)) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_DIR_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_DIR_FAIL, 0);
 		return;
 	}
 
@@ -2278,7 +2440,7 @@ void gim_debugfs_init(void)
 			root_dir,
 			NULL, &force_reset_all_fops);
 	if (entry == NULL) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 		goto err;
 	}
 
@@ -2286,7 +2448,7 @@ void gim_debugfs_init(void)
 			root_dir,
 			NULL, &hang_debug_all_fops);
 	if (entry == NULL) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 		goto err;
 	}
 
@@ -2294,7 +2456,7 @@ void gim_debugfs_init(void)
 			root_dir,
 			NULL, &skip_page_retirement_all_fops);
 	if (entry == NULL) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 		goto err;
 	}
 
@@ -2302,7 +2464,7 @@ void gim_debugfs_init(void)
 			root_dir,
 			NULL, &disable_mmio_protection_all_fops);
 	if (entry == NULL) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 		goto err;
 	}
 
@@ -2310,7 +2472,7 @@ void gim_debugfs_init(void)
 			root_dir,
 			NULL, &disable_psp_vf_gate_all_fops);
 	if (entry == NULL) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 		goto err;
 	}
 
@@ -2318,7 +2480,7 @@ void gim_debugfs_init(void)
 			root_dir,
 			NULL, &force_switch_vf_debug_all_fops);
 	if (entry == NULL) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 		goto err;
 	}
 
@@ -2326,7 +2488,7 @@ void gim_debugfs_init(void)
 			root_dir,
 			NULL, &log_all_fops);
 	if (entry == NULL) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 		goto err;
 	}
 
@@ -2334,7 +2496,7 @@ void gim_debugfs_init(void)
 			root_dir,
 			NULL, &put_error_set_all_fops);
 	if (entry == NULL) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 		goto err;
 	}
 
@@ -2342,7 +2504,7 @@ void gim_debugfs_init(void)
 			root_dir,
 			NULL, &cmd_tmo_all_fops);
 	if (entry == NULL) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 		goto err;
 	}
 
@@ -2351,7 +2513,7 @@ void gim_debugfs_init(void)
 			root_dir,
 			NULL, &disable_dcore_debug_all_fops);
 	if (entry == NULL) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 		goto err;
 	}
 
@@ -2359,21 +2521,21 @@ void gim_debugfs_init(void)
 			root_dir,
 			NULL, &trigger_manual_dump_all_fops);
 	if (entry == NULL) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 		goto err;
 	}
 	entry = debugfs_create_file("mes_info_dump_enable", 0200,
 			root_dir,
 			NULL, &mes_info_dump_all_fops);
 	if (entry == NULL) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 		goto err;
 	}
 	entry = debugfs_create_file("mem_overflow_check", 0200,
 			root_dir,
 			NULL, &mem_overflow_check_fops);
 	if (entry == NULL) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 		goto err;
 	}
 #endif
@@ -2382,23 +2544,23 @@ void gim_debugfs_init(void)
 		adapt_dir = debugfs_create_dir(dev_name(&dev_data->pdev->dev),
 						root_dir);
 		if (!adapt_dir || adapt_dir == ERR_PTR(-ENODEV)) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_DIR_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_DIR_FAIL, 0);
 			goto err;
 		}
 
 		/* interfaces for one GPU */
-		entry = debugfs_create_file("rlcv_timestamp_dump", 0200,
+		entry = debugfs_create_file("rlcv_timestamp_dump", 0600,
 				adapt_dir,
 				dev_data, &rlcv_timestamp_dump_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 		entry = debugfs_create_file("force_reset", 0200,
 				adapt_dir,
 				dev_data, &force_reset_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 
@@ -2406,7 +2568,7 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &hang_detection_threshold_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 
@@ -2414,7 +2576,7 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &hang_detection_duration_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 
@@ -2422,7 +2584,7 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &skip_page_retirement_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 
@@ -2430,7 +2592,7 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &hang_debug_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 #ifdef WS_RECORD
@@ -2438,7 +2600,7 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &ws_record_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 #endif
@@ -2446,7 +2608,7 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &disable_mmio_protection_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 
@@ -2454,7 +2616,7 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &disable_psp_vf_gate_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 
@@ -2462,7 +2624,7 @@ void gim_debugfs_init(void)
 			    adapt_dir,
 			    dev_data, &hliquid_min_ts_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 
@@ -2470,7 +2632,7 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &enable_access_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 
@@ -2478,7 +2640,7 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &force_switch_vf_debug_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 
@@ -2486,7 +2648,7 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &init_conf_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 
@@ -2494,7 +2656,7 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &mm_quanta_option);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 
@@ -2502,7 +2664,7 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &log_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 
@@ -2510,7 +2672,7 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &flr_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 
@@ -2518,7 +2680,7 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &put_error_conf_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 
@@ -2526,7 +2688,7 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &ffbm_operations);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 
@@ -2535,7 +2697,7 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &disable_dcore_debug_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 #endif
@@ -2544,7 +2706,7 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &auto_sched_perf_log_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 
@@ -2552,7 +2714,7 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &auto_sched_debug_dump_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 
@@ -2560,7 +2722,7 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &asymmetric_timeslice_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 
@@ -2571,7 +2733,7 @@ void gim_debugfs_init(void)
 				vf_dir = debugfs_create_dir(dev_name(&pdev_vf->dev),
 								adapt_dir);
 				if (!vf_dir || vf_dir == ERR_PTR(-ENODEV)) {
-					gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_DIR_FAIL, 0);
+					gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_DIR_FAIL, 0);
 					goto err;
 				}
 			}
@@ -2582,14 +2744,14 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &trigger_manual_dump_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 		entry = debugfs_create_file("mes_info_dump_enable", 0200,
 				adapt_dir,
 				dev_data, &mes_info_dump_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 #endif
@@ -2597,7 +2759,7 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &asymmetric_fb_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 
@@ -2605,7 +2767,7 @@ void gim_debugfs_init(void)
 			adapt_dir,
 			dev_data, &set_product_info_invalid_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 
@@ -2613,7 +2775,7 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &fb_defragment_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 
@@ -2621,7 +2783,31 @@ void gim_debugfs_init(void)
 				adapt_dir,
 				dev_data, &error_ring_buffer_dump_fops);
 		if (entry == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			goto err;
+		}
+
+		entry = debugfs_create_file("log_ring_info", 0444,
+				adapt_dir,
+				dev_data, &info_ring_buffer_dump_fops);
+		if (entry == NULL) {
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			goto err;
+		}
+
+		entry = debugfs_create_file("log_ring_debug", 0444,
+				adapt_dir,
+				dev_data, &debug_ring_buffer_dump_fops);
+		if (entry == NULL) {
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
+			goto err;
+		}
+
+		entry = debugfs_create_file("log_ring_all", 0444,
+				adapt_dir,
+				dev_data, &combined_ring_buffer_dump_fops);
+		if (entry == NULL) {
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEBUGFS_FILE_FAIL, 0);
 			goto err;
 		}
 	}

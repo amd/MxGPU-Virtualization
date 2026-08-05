@@ -7,6 +7,9 @@
 #include <limits>
 #include <cstdint>
 #include <regex>
+#include <array>
+#include <algorithm>
+#include <iterator>
 
 #include "json/json.h"
 
@@ -40,7 +43,10 @@ auto constexpr clock_header_csv_mi
 auto constexpr clock_header_csv_guest_bm
 {
 	",gfx_clk,gfx_min_clk,gfx_max_clk,gfx_clk_locked,gfx_clk_deep_sleep,mem_clk,mem_min_clk,mem_max_clk,mem_clk_locked,mem_clk_deep_sleep,"
-	"vclk_0_clk,vclk_0_min_clk,vclk_0_max_clk,vclk_0_clk_locked,vclk_0_clk_deep_sleep,vclk_1_clk,vclk_1_min_clk,vclk_1_max_clk,vclk_1_clk_locked,vclk_1_clk_deep_sleep"
+	"df_clk,df_min_clk,df_max_clk,df_clk_locked,df_clk_deep_sleep,dcef_clk,dcef_min_clk,dcef_max_clk,dcef_clk_locked,dcef_clk_deep_sleep,"
+	"soc_clk,soc_min_clk,soc_max_clk,soc_clk_locked,soc_clk_deep_sleep,"
+	"vclk_0_clk,vclk_0_min_clk,vclk_0_max_clk,vclk_0_clk_locked,vclk_0_clk_deep_sleep,vclk_1_clk,vclk_1_min_clk,vclk_1_max_clk,vclk_1_clk_locked,vclk_1_clk_deep_sleep,"
+	"dclk_0_clk,dclk_0_min_clk,dclk_0_max_clk,dclk_0_clk_locked,dclk_0_clk_deep_sleep,dclk_1_clk,dclk_1_min_clk,dclk_1_max_clk,dclk_1_clk_locked,dclk_1_clk_deep_sleep"
 };
 auto constexpr temperature_header_csv {",edge_temperature,hotspot_temperature,vram_temperature"};
 auto constexpr
@@ -58,6 +64,13 @@ auto constexpr fb_usage_header_csv {",fb_total,fb_used"};
 auto constexpr energy_header_csv {",energy"};
 auto constexpr gpuboard_csv_header {",gpuboard_node_temp_retimer,gpuboard_node_temp_ibc_temp,gpuboard_node_temp_ibc_2_temp,gpuboard_node_temp_vdd18_vr_temp,gpuboard_node_temp_04_hbm_b_vr_temp,gpuboard_node_temp_04_hbm_d_vr_temp,gpuboard_vr_temp_vddcr_vdd0,gpuboard_vr_temp_vddcr_vdd1,gpuboard_vr_temp_vddcr_vdd2,gpuboard_vr_temp_vddcr_vdd3,gpuboard_vr_temp_vddcr_soc_a,gpuboard_vr_temp_vddcr_soc_c,gpuboard_vr_temp_vddcr_socio_a,gpuboard_vr_temp_vddcr_socio_c,gpuboard_vr_temp_vdd_085_hbm,gpuboard_vr_temp_vddcr_11_hbm_b,gpuboard_vr_temp_vddcr_11_hbm_d,gpuboard_vr_temp_vdd_usr,gpuboard_vr_temp_vddio_11_e32"};
 auto constexpr throttle_header_csv {",accumulation_counter,prochot_violation_accumulated,prochot_violation_activity,prochot_violation_status,ppt_violation_accumulated,ppt_violation_activity,ppt_violation_status,socket_thermal_violation_accumulated,socket_thermal_violation_activity,socket_thermal_violation_status,vr_thermal_violation_accumulated,vr_thermal_violation_activity,vr_thermal_violation_status,hbm_thermal_violation_accumulated,hbm_thermal_violation_activity,hbm_thermal_violation_status"};
+
+auto constexpr clock_watch_fields_per_domain {5};
+auto constexpr clock_watch_domain_names {std::array<const char *, 6>{"gfx_clock", "mem_clock", "vclk_0_clock", "vclk_1_clock", "dclk_0_clock", "dclk_1_clock"}};
+auto constexpr clock_watch_domain_headers {std::array<const char *, 6>{"gcc,gmc,gmc,gcl,gcds", "mcc,mmc,mmc,mcl,mcds", "vcc,vmc,vmc,vcl,vcds", "vcc,vmc,vmc,vcl,vcds", "dcc,dmc,dmc,dcl,dcds", "dcc,dmc,dmc,dcl,dcds"}};
+auto constexpr clock_watch_domain_keys_guest_bm {std::array<const char *, 9>{"gfx", "mem", "df", "dcef", "soc", "vclk_0", "vclk_1", "dclk_0", "dclk_1"}};
+auto constexpr clock_watch_domain_names_guest_bm {std::array<const char *, 9>{"gfx_clock", "mem_clock", "df_clock", "dcef_clock", "soc_clock", "vclk_0_clock", "vclk_1_clock", "dclk_0_clock", "dclk_1_clock"}};
+auto constexpr clock_watch_domain_headers_guest_bm {std::array<const char *, 9>{"gcc,gmc,gmc,gcl,gcds", "mcc,mmc,mmc,mcl,mcds", "dfc,dfmc,dfmc,dfcl,dfcds", "dcefc,dcefmc,dcefmc,dcefcl,dcefcds", "scc,smc,smc,scl,scds", "vcc,vmc,vmc,vcl,vcds", "vcc,vmc,vmc,vcl,vcds", "dcc,dmc,dmc,dcl,dcds", "dcc,dmc,dmc,dcl,dcds"}};
 
 int AmdSmiMetricCommand::metric_command_usage(uint64_t processor,
 		std::string &formatted_string)
@@ -1255,40 +1268,55 @@ void AmdSmiMetricCommand::metric_command_watch_gpu(int gpu_index, uint64_t gpu_b
 		ret = metric_command_clock(gpu_bdf, formatted_string);
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {
-			std::vector<std::string> clocks{};
-			clocks = split_string(formatted_string, ',');
-			if (device_index == 0) {
-				first_row.push_back("gfx_clock");
-				first_row.push_back("mem_clock");
-				first_row.push_back("vclk_0_clock");
-				first_row.push_back("vclk_1_clock");
-				second_row.push_back("gcc,gmc,gmc,gcl,gcds");
-				second_row.push_back("mcc,mmc,mmc,mcl,mcds");
-				second_row.push_back("vcc,vmc,vmc,vcl,vcds");
-				second_row.push_back("vcc,vmc,vmc,vcl,vcds");
-				third_row.push_back("MHz");
-				third_row.push_back("MHz");
-				third_row.push_back("MHz");
-				third_row.push_back("MHz");
-				first_row.push_back("dclk_0_clock");
-				first_row.push_back("dclk_1_clock");
-				second_row.push_back("dcc,dmc,dmc,dcl,dcds");
-				second_row.push_back("dcc,dmc,dmc,dcl,dcds");
-				third_row.push_back("MHz");
-				third_row.push_back("MHz");
+			if (AmdSmiPlatform::getInstance().is_host()) {
+				std::vector<std::string> clocks{split_string(formatted_string, ',')};
+				size_t num_domains{clocks.size() / clock_watch_fields_per_domain};
+				if (num_domains > clock_watch_domain_names.size()) {
+					num_domains = clock_watch_domain_names.size();
+				}
+
+				for (size_t domain = 0; domain < num_domains; domain++) {
+					if (device_index == 0) {
+						first_row.push_back(clock_watch_domain_names[domain]);
+						second_row.push_back(clock_watch_domain_headers[domain]);
+						third_row.push_back("MHz");
+					}
+					size_t base{domain * clock_watch_fields_per_domain};
+					fourth_row.push_back((clocks[base] + "," + clocks[base + 1] + "," +
+										  clocks[base + 2] + "," + clocks[base + 3] + "," +
+										  clocks[base + 4]).c_str());
+				}
+			} else {
+				std::vector<std::string> blocks{split_string(formatted_string, ';')};
+				for (auto &block : blocks) {
+					if (block.empty()) {
+						continue;
+					}
+					size_t sep{block.find(':')};
+					if (sep == std::string::npos) {
+						continue;
+					}
+					std::string key{block.substr(0, sep)};
+					std::string values{block.substr(sep + 1)};
+
+					auto key_it = std::find_if(clock_watch_domain_keys_guest_bm.begin(),
+											   clock_watch_domain_keys_guest_bm.end(),
+					[&key](const char *candidate) {
+						return key == candidate;
+					});
+					if (key_it == clock_watch_domain_keys_guest_bm.end()) {
+						continue;
+					}
+					size_t domain{static_cast<size_t>(std::distance(clock_watch_domain_keys_guest_bm.begin(), key_it))};
+
+					if (device_index == 0) {
+						first_row.push_back(clock_watch_domain_names_guest_bm[domain]);
+						second_row.push_back(clock_watch_domain_headers_guest_bm[domain]);
+						third_row.push_back("MHz");
+					}
+					fourth_row.push_back(values.c_str());
+				}
 			}
-			fourth_row.push_back((clocks[0] + "," + clocks[1] + "," + clocks[2] + "," + clocks[3] + "," +
-								  clocks[4]).c_str());
-			fourth_row.push_back((clocks[5] + "," + clocks[6] + "," + clocks[7] + "," + clocks[8] + "," +
-								  clocks[9]).c_str());
-			fourth_row.push_back((clocks[10] + "," + clocks[11] + "," + clocks[12] + "," + clocks[13] + "," +
-								  clocks[14]).c_str());
-			fourth_row.push_back((clocks[15] + "," + clocks[16] + "," + clocks[17] + "," + clocks[18] + "," +
-								  clocks[19]).c_str());
-			fourth_row.push_back((clocks[20] + "," + clocks[21] + "," + clocks[22] + "," + clocks[23] + "," +
-								  clocks[24]).c_str());
-			fourth_row.push_back((clocks[25] + "," + clocks[26] + "," + clocks[27] + "," + clocks[28] + "," +
-								  clocks[29]).c_str());
 		}
 	}
 

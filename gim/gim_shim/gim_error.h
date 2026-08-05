@@ -7,7 +7,7 @@
 #define GIM_ERROR_H
 
 #include <linux/mutex.h>
-#include "amdgv_error.h"
+#include "amdgv_log.h"
 
 #define GIM_ERROR_BUF_SIZE   128
 #define GIM_ERROR_BUF_IDX(c) ((c) & (GIM_ERROR_BUF_SIZE - 1))
@@ -17,8 +17,8 @@
 
 struct gim_error_entry {
 	uint64_t timestamp;
-	uint64_t error_data;
-	uint32_t error_code;
+	uint64_t log_data;
+	uint32_t log_code;
 };
 
 struct gim_error_ring_buffer {

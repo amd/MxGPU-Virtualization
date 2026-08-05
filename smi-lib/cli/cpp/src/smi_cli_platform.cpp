@@ -22,10 +22,8 @@ const std::vector<std::string> dev_id_list_mi30x = {"74A0", "74A1", "74A2", "74B
 const std::vector<std::string> dev_id_list_mi308 = {"74A2", "74A8"};
 const std::vector<std::string> dev_id_list_mi350 = {"75A0", "75A1", "75A3", "75B0", "75B1", "75B3"};
 const std::vector<std::string> dev_id_list_mi2plus = {"7410"};
-const std::vector<std::string> dev_id_list_nv = {"73C4", "73C5", "73C8", "7460", "7461", "73A1","73AE" };
-const std::vector<std::string> dev_id_list_mixxx = {"7540", "75C0", "75C1"};
-
-
+const std::vector<std::string> dev_id_list_nv = {"73A1", "73AE", "73A8", "73BF", "744B", "744C", "73C8", "73DF", "747E", "73F0", "7480", "7499", "749F", "746F", "7550", "7551", "748F", "7590", "73C4", "73C5", "7460", "7461", "7470", "7478", "7448", "7449", "744A", "745E", "7481", "7483", "7487", "7489", "748B"};
+const std::vector<std::string> dev_id_list_apu = {"150E", "1586"};
 
 
 bool check_if_mi30x(std::string output)
@@ -80,6 +78,19 @@ bool check_if_nv(std::string output)
 	return is_nv;
 }
 
+bool check_if_apu(std::string output)
+{
+	std::string::size_type n;
+	bool is_apu{false};
+	for (auto x : dev_id_list_apu) {
+		n = output.find(x);
+		if (std::string::npos != n) {
+			is_apu = true;
+		}
+	}
+	return is_apu;
+}
+
 bool check_if_mi200(std::string output)
 {
 	std::string::size_type n;
@@ -91,19 +102,6 @@ bool check_if_mi200(std::string output)
 		}
 	}
 	return is_mi200;
-}
-
-bool check_if_mixxx(std::string output)
-{
-	std::string::size_type n;
-	bool is_mixxx{false};
-	for (auto x : dev_id_list_mixxx) {
-		n = output.find(x);
-		if (std::string::npos != n) {
-			is_mixxx = true;
-		}
-	}
-	return is_mixxx;
 }
 
 #ifdef _WIN64
@@ -349,6 +347,25 @@ ComputerSystemInfo get_computer_system_info()
 	return info;
 }
 
+//detects the MxGPU host driver by probing the device it exposes.
+bool is_host_driver_present()
+{
+	HANDLE handle = CreateFileW(L"\\\\.\\AmdGpuvSmi",
+								GENERIC_READ | GENERIC_WRITE,
+								FILE_SHARE_READ | FILE_SHARE_WRITE,
+								NULL, OPEN_EXISTING, 0, NULL);
+	if (handle != INVALID_HANDLE_VALUE) {
+		CloseHandle(handle);
+		return true;
+	}
+	//a failure other than "not found" still means the driver is present
+	DWORD err = GetLastError();
+	if (err != ERROR_FILE_NOT_FOUND && err != ERROR_PATH_NOT_FOUND) {
+		return true;
+	}
+	return false;
+}
+
 std::string is_virtualization_host()
 {
 	//connect to WMI and execute query
@@ -424,54 +441,28 @@ AmdSmiPlatform::AmdSmiPlatform()
 		std::string output = get_device_ids();
 		is_mi300_ = check_if_mi30x(output);
 		is_nv_ = check_if_nv(output);
+		is_apu_ = check_if_apu(output);
 		is_mi200_ = check_if_mi200(output);
-		is_mixxx_ = check_if_mixxx(output);
 
-		// Collect all detection information
-		bool has_hyperv_access = can_access_hyperv_namespace();
-		bool vmcompute_running = is_vmcompute_running();
+		bool host_driver_present = is_host_driver_present();
 		ComputerSystemInfo sys_info = get_computer_system_info();
 
-		// Normalize Model for comparison
+		// A "Virtual" model string is the most reliable guest signature
 		std::string model_upper = sys_info.model;
 		std::transform(model_upper.begin(), model_upper.end(),
 					   model_upper.begin(), ::toupper);
-
-		// Check if this is a VM (guest) by Model
-		// This is the most reliable way to distinguish guest from host
 		bool is_vm = (model_upper.find("VIRTUAL") != std::string::npos);
 
-		// Detection logic:
-		// 1. If Model contains "Virtual Machine" -> GUEST
-		// 2. If HypervisorPresent = TRUE but NOT a VM -> HOST (host running a hypervisor)
-		// 3. If HypervisorPresent = TRUE and IS a VM -> GUEST
-		// 4. If HypervisorPresent = FALSE and vmcompute running -> HOST
-		// 5. If HypervisorPresent = FALSE and no vmcompute -> BAREMETAL
-
-		if (is_vm) {
-			// Virtual Machine detected - this is a guest
+		// Classify by host driver first, then guest signature, else bare metal.
+		// The host driver is the only reliable host indicator; generic
+		// virtualization features are avoided since they are common on
+		// bare-metal desktops.
+		if (host_driver_present) {
+			is_host_ = true;
+		} else if (is_vm) {
 			is_guest_os_ = true;
-		} else if (sys_info.hypervisor_present) {
-			// HypervisorPresent = TRUE but NOT a VM
-			// This means the system is running a hypervisor (host), not running under one (guest)
-			if (vmcompute_running) {
-				is_host_ = true;
-			} else {
-				// HypervisorPresent but no vmcompute - could be host or guest
-				// Prefer host if we can access namespace
-				if (has_hyperv_access) {
-					is_host_ = true;
-				} else {
-					is_guest_os_ = true;
-				}
-			}
 		} else {
-			// No hypervisor present - determine if host or bare metal
-			if (vmcompute_running) {
-				is_host_ = true;
-			} else {
-				is_baremetal_ = true;
-			}
+			is_baremetal_ = true;
 		}
 #endif
 	}
@@ -495,11 +486,11 @@ AmdSmiPlatform::AmdSmiPlatform()
 				  ::toupper);
 
 		is_nv_ = check_if_nv(gpu_id_list);
+		is_apu_ = check_if_apu(gpu_id_list);
 		is_mi300_ = check_if_mi30x(gpu_id_list);
 		is_mi308_ = check_if_mi308(gpu_id_list);
 		is_mi350_ = check_if_mi350(gpu_id_list);
 		is_mi200_ = check_if_mi200(gpu_id_list);
-		is_mixxx_ = check_if_mixxx(gpu_id_list);
 
 		if (linux_output_gim_loaded.empty() && linux_output_amdgpu_loaded.empty()
 				&& linux_output_gim_user_mode.empty() && linux_output_amdgpuv.empty()) {
@@ -590,6 +581,10 @@ bool AmdSmiPlatform::is_mi350()
 bool AmdSmiPlatform::is_nv()
 {
 	return is_nv_;
+}
+bool AmdSmiPlatform::is_apu()
+{
+	return is_apu_;
 }
 bool AmdSmiPlatform::is_mi200()
 {

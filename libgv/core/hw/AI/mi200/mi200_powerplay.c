@@ -279,8 +279,12 @@ static int mi200_smu_13_0_get_dpm_level_range(struct amdgv_adapter *adapt, PPCLK
 }
 
 static int mi200_smu_13_0_get_power_capacity(struct amdgv_adapter *adapt,
-					      int *val)
+					      int *val, enum amdgv_gpumon_type ppt_type)
 {
+	/* MI200 only supports PPT0 */
+	if (ppt_type == GPUMON_GET_GPU_POWER_CAP2)
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+
 	return mi200_smu_13_0_get_arg_with_param(adapt,
 						 SMU_13_0_MSG__GET_PPT_LIMIT,
 						 0,
@@ -2248,7 +2252,7 @@ static void mi200_smu_notify_throttler_error(struct amdgv_adapter *adapt,
 
 	AMDGV_DEBUG("mi200 smu notify throttler status 0x%08x, throttler_event 0x%016llx\n",
 		    throttler_status, throttler_event);
-	amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_PP_THROTTLER_EVENT, throttler_event);
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_THROTTLER_EVENT, throttler_event);
 }
 
 static int mi200_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv_entry *entry)

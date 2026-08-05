@@ -77,6 +77,7 @@ public:
 	virtual int amdsmi_get_version_command(uint64_t processor_bdf, Arguments arg, std::string &out_string) override;
 
 	virtual int amdsmi_set_process_isolation_command(uint64_t processor_bdf, Arguments arg) override;
+	virtual int amdsmi_set_power_cap_command(uint64_t processor_bdf, Arguments arg) override;
 	virtual int amdsmi_reset_local_data_command(uint64_t processor_bdf, Arguments arg) override;
 
 	// monitor
@@ -89,8 +90,6 @@ public:
 	virtual int amdsmi_get_mem_monitor_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) override;
 	virtual int amdsmi_get_encoder_monitor_command(uint64_t processor_bdf, Arguments arg,
-			std::string &formatted_string) override;
-	virtual int amdsmi_get_ecc_monitor_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) override;
 	virtual int amdsmi_get_vram_usage_monitor_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) override;
@@ -106,6 +105,10 @@ public:
 	virtual int amdsmi_get_default_partition_mode_command(uint64_t processor_bdf,
 			Arguments arg, std::string &formatted_string) override;
 	virtual int amdsmi_get_default_uec_command(uint64_t processor_bdf, Arguments arg,
+			std::string &formatted_string) override;
+	virtual int amdsmi_get_default_temperature_command(uint64_t processor_bdf, Arguments arg,
+			std::string &formatted_string) override;
+	virtual int amdsmi_get_default_power_usage_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) override;
 	virtual int amdsmi_get_default_utilization_command(uint64_t processor_bdf, Arguments arg,
 			std::string &formatted_string) override;

@@ -358,7 +358,7 @@ static uint8_t amdgv_load_ras_ta(amdgv_dev_t adev, struct amdgv_uni_cmd *cmd)
 	if (oss_copy_from_user(buf_ptr, (uint8_t *)input_data->data_addr, input_data->data_len))
 		goto load_err;
 
-	if (amdgv_gpumon_ras_get_ta_version(adev, buf_ptr, &ta_version)) {
+	if (amdgv_gpumon_ras_get_ta_version(adev, buf_ptr, input_data->data_len, &ta_version)) {
 		goto load_err;
 	}
 
@@ -518,6 +518,26 @@ static uint8_t amdgv_get_ras_policy_info(amdgv_dev_t adev, struct amdgv_uni_cmd 
 	output_data->dram_critical_region_threshold = ras_policy_info.dram_critical_region_threshold;
 
 	cmd->output_size = sizeof(struct amdgv_cmd_ras_policy_info);
+	return AMDGV_CMD__SUCCESS;
+}
+
+static uint8_t amdgv_get_partition_info(amdgv_dev_t adev, struct amdgv_uni_cmd *cmd)
+{
+	struct amdgv_cmd_partition_info *output_data =
+			(struct amdgv_cmd_partition_info *)cmd->output_buff_raw;
+	struct amdgv_gpumon_partition_info partition_info = {0};
+
+	if (cmd->input_size != sizeof(struct amdgv_cmd_dev_handle) ||
+			cmd->version != AMDGV_CMD_VERSION_V1 || !adev)
+		return AMDGV_CMD__ERROR_INVALID_INPUT;
+
+	if (amdgv_gpumon_get_partition_info(adev, &partition_info))
+		return AMDGV_CMD__ERROR_GENERIC;
+
+	output_data->memory_partition_mode = partition_info.memory_partition_mode;
+	output_data->accelerator_partition_mode = partition_info.accelerator_partition_mode;
+
+	cmd->output_size = sizeof(struct amdgv_cmd_partition_info);
 	return AMDGV_CMD__SUCCESS;
 }
 
@@ -686,6 +706,7 @@ static amdgv_cmd_func_map amdgv_ras_func[] = {
 	{AMDGV_CMD_RAS_RESET_ALL_ERROR_COUNTS, amdgv_reset_all_error_counts},
 	{AMDGV_CMD_GET_CPER_RECORDS, amdgv_get_cper_records},
 	{AMDGV_CMD_GET_RAS_POLICY_INFO, amdgv_get_ras_policy_info},
+	{AMDGV_CMD_GET_PARTITION_INFO, amdgv_get_partition_info},
 };
 
 uint8_t amdgv_handle_uni_cmd_ras(struct amdgv_uni_cmd *cmd)
@@ -734,6 +755,9 @@ static uint8_t amdgv_cmd_ual_get_config(amdgv_dev_t adev, struct amdgv_uni_cmd *
 	output_data->ppod_size = config.ppod_size;
 	output_data->bandwidth = config.bandwidth;
 	output_data->latency = config.latency;
+	oss_memcpy(output_data->local_accelerators,
+		config.local_accelerators,
+		sizeof(output_data->local_accelerators));
 	output_data->vpod_id = config.vpod_id;
 	output_data->vpod_size = config.vpod_size;
 	oss_memcpy(output_data->vpod_active_accelerators,

@@ -60,7 +60,7 @@ enum SMU_13_0_ODFEATURE_ID {
     SMU_13_0_ODFEATURE_AUTO_UV_ENGINE       = 1 << SMU_13_0_ODCAP_AUTO_UV_ENGINE,           //Auto Under Volt GFXCLK feature
     SMU_13_0_ODFEATURE_AUTO_OC_ENGINE       = 1 << SMU_13_0_ODCAP_AUTO_OC_ENGINE,           //Auto Over Clock GFXCLK feature
     SMU_13_0_ODFEATURE_AUTO_OC_MEMORY       = 1 << SMU_13_0_ODCAP_AUTO_OC_MEMORY,           //Auto Over Clock MCLK feature
-    SMU_13_0_ODFEATURE_FAN_CURVE            = 1 << SMU_13_0_ODCAP_FAN_CURVE,                //VICTOR TODO
+    SMU_13_0_ODFEATURE_FAN_CURVE            = 1 << SMU_13_0_ODCAP_FAN_CURVE,
     SMU_13_0_ODFEATURE_COUNT                = 14,
 };
 

@@ -273,6 +273,9 @@ static int mi300_cp_dma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, bool 
 	 * so, max time out is less than 6.25 ms.
 	 * For safe margin, use Wait of 20000 usec (to cover 64MB max).
 	 */
+	AMDGV_DEBUG("CP DMA: fill=%d src=0x%llx dst=0x%llx size=0x%llx\n",
+				fill_mode, src, dst, size);
+
 	*size_copied = 0;
 	while ((*size_copied) < size) {
 		for_each_id (xcc_id, amdgv_sched_get_xcc_mask_by_vf(adapt, idx_vf)) {
@@ -301,10 +304,6 @@ static int mi300_cp_dma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, bool 
 				*/
 				WREG32(SOC15_REG_OFFSET(GC, GET_INST(GC, xcc_id), regCP_DMA_PIO_COMMAND),
 			       dma_cmd | dma_size);
-
-				AMDGV_DEBUG("dma_cntl=0x%x dma_cmd=0x%x "
-							"dma_size=0x%x src=0x%llx dst=0x%llx\n",
-							dma_cntl, dma_cmd, dma_size, src, dst);
 
 				/* Advance to next block of FB region to fill/copy */
 				*size_copied = (*size_copied) + dma_size;

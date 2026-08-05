@@ -254,12 +254,12 @@ cli/
     ├── src/                  # Source files
     │   ├── guest/            # Windows Guest-specific source files
     │   └── host/             # Host-specific source files
+    ├── third-party/
+    │   └── inc/              # Third-party libraries
+    │       ├── json/
+    │       └── tabulate/
     └── utils/
-        ├── scripts/          # Utility scripts
-        └── third_party/
-            └── inc/          # Third-party libraries
-                ├── json/
-                └── tabulate/
+        └── scripts/          # Utility scripts
 ```
 
 ##### Key Components
@@ -279,9 +279,11 @@ Contains all header files that define the CLI tool's interfaces, including:
 - **`linux/`**: Linux-specific CMake configuration files
 - Platform-specific build configurations and dependencies
 
-**Third-party libraries (`utils/third_party/`)**
+**Third-party libraries (`third-party/`)**
 - **`json/`**: JSON parsing and formatting library. Converts internal data structures to properly formatted JSON objects for machine-readable output.
 - **`tabulate/`**: Table formatting library for structured output. Handles the alignment, spacing, and visual formatting of tabular data (like the monitor command output showing GPU metrics in neat columns).
+
+> These are the only third-party components that ship in released object code (compiled into `amd-smi`). Their copyrights and licenses are enumerated in [THIRD-PARTY-NOTICES.txt](../../THIRD-PARTY-NOTICES.txt).
 
 
 #### Build Requirements

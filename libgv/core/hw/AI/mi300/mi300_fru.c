@@ -168,7 +168,7 @@ int mi300_fru_get_product_info(struct amdgv_adapter *adapt)
 	char *string;
 
 	if (cmd_buff == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 			I2C_CMD_BUFFER_SIZE);
 		return AMDGV_FAILURE;
 	}
@@ -176,9 +176,9 @@ int mi300_fru_get_product_info(struct amdgv_adapter *adapt)
 	/* ping slave controller to detect presence */
 	ret = mi300_fru_ping_rm(adapt);
 	if (ret == AMDGV_FAILURE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_PP_I2C_SLAVE_NOT_PRESENT,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_I2C_SLAVE_NOT_PRESENT,
 				I2C_RM_DEV_ADDR);
-		ret = AMDGV_ERROR_PP_I2C_SLAVE_NOT_PRESENT;
+		ret = AMDGV_LOG_PP_I2C_SLAVE_NOT_PRESENT;
 
 		adapt->product_info.valid = false;
 

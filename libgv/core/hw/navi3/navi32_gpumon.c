@@ -320,12 +320,13 @@ static int navi32_gpumon_get_vbios_cache(struct amdgv_adapter *adapt)
 	return 0;
 }
 
-static int navi32_get_gpu_power_capacity(struct amdgv_adapter *adapt, int *val)
+static int navi32_get_gpu_power_capacity(struct amdgv_adapter *adapt, int *val,
+					 enum amdgv_gpumon_type ppt_type)
 {
 	int ret = AMDGV_FAILURE;
 
 	if (adapt->pp.pp_funcs->get_power_capacity) {
-		ret = adapt->pp.pp_funcs->get_power_capacity(adapt, val);
+		ret = adapt->pp.pp_funcs->get_power_capacity(adapt, val, ppt_type);
 		if (ret != 0)
 			*val = 0;
 	}
@@ -479,8 +480,8 @@ static int navi32_gpumon_sw_init(struct amdgv_adapter *adapt)
 
 	adapt->i2c_cmd_buffer = oss_malloc(I2C_CMD_BUFFER_SIZE);
 	if (adapt->i2c_cmd_buffer == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
-				I2C_CMD_BUFFER_SIZE);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			      I2C_CMD_BUFFER_SIZE);
 		return AMDGV_FAILURE;
 	}
 

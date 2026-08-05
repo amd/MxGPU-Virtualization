@@ -22,6 +22,7 @@ private:
 	bool is_mi308_{ false };
 	bool is_mi350_{ false };
 	bool is_nv_ { false };
+	bool is_apu_ { false };
 	bool is_mi200_ { false };
 	bool is_mixxx_ { false };
 	/**
@@ -102,6 +103,12 @@ public:
 	 * @return true if it is nv32 gpu
 	 */
 	bool is_nv();
+	/**
+	 * @brief Check if it is apu
+	 *
+	 * @return true if it is apu
+	 */
+	bool is_apu();
 	/**
 	 * @brief Check if it is mi200 gpu
 	 *

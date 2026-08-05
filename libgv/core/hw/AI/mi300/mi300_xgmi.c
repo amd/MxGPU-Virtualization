@@ -62,7 +62,7 @@ static int mi300_xgmi_reset_hive_fb_sharing_config(struct amdgv_adapter *adapt,
 		entry->xgmi.fb_sharing_mode = mode;
 	}
 
-	amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_XGMI_FB_SHARING_SETTING_RESET, 0);
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_XGMI_FB_SHARING_SETTING_RESET, 0);
 	return 0;
 }
 
@@ -111,14 +111,14 @@ static int mi300_xgmi_sanitize_node_fb_sharing_config(struct amdgv_adapter *adap
 	case AMDGV_XGMI_FB_SHARING_MODE_4:
 	case AMDGV_XGMI_FB_SHARING_MODE_8:
 		if (adapt->xgmi.fb_sharing_mode > largest_mode) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_XGMI_FB_SHARING_SETTING_ERROR, adapt->xgmi.fb_sharing_mode);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_XGMI_FB_SHARING_SETTING_ERROR, adapt->xgmi.fb_sharing_mode);
 			adapt->xgmi.fb_sharing_mode = largest_mode;
 		}
 		break;
 	case AMDGV_XGMI_FB_SHARING_MODE_CUSTOM:
 		break;
 	default:
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_XGMI_FB_SHARING_SETTING_ERROR, adapt->xgmi.fb_sharing_mode);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_XGMI_FB_SHARING_SETTING_ERROR, adapt->xgmi.fb_sharing_mode);
 		adapt->xgmi.fb_sharing_mode = largest_mode;
 		break;
 	}

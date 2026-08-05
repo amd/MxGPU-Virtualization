@@ -28,11 +28,11 @@ int amdgv_set_accelerator_partition_profile(struct amdgv_adapter *adapt,
 	data.gpumon_data.type = GPUMON_SET_ACCELERATOR_PARTITION_PROFILE;
 	data.gpumon_data.result = &event_ret;
 	if (!(adapt->gpumon.funcs)) {
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 	}
 
 	if (!(adapt->gpumon.funcs->set_accelerator_partition_profile)) {
-		return AMDGV_ERROR_GPUMON_INVALID_MODE;
+		return AMDGV_LOG_GPUMON_INVALID_MODE;
 	}
 
 	ret = amdgv_sched_queue_event_and_wait_ex(adapt, AMDGV_PF_IDX,
@@ -56,7 +56,7 @@ int amdgv_set_memory_partition_mode(struct amdgv_adapter *adapt,
 	data.gpumon_data.result = &event_ret;
 	if (!(adapt->gpumon.funcs &&
 	      adapt->gpumon.funcs->set_memory_partition_mode)) {
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 	}
 
 	ret = amdgv_sched_queue_event_and_wait_ex(adapt, AMDGV_PF_IDX,
@@ -80,7 +80,7 @@ int amdgv_set_cc_mode(struct amdgv_adapter *adapt,
 	data.gpumon_data.result = &event_ret;
 	if (!(adapt->gpumon.funcs &&
 	      adapt->gpumon.funcs->set_cc_mode)) {
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 	}
 
 	ret = amdgv_sched_queue_event_and_wait_ex(adapt, AMDGV_PF_IDX,

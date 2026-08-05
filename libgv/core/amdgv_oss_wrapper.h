@@ -369,6 +369,13 @@ INLINE int oss_alloc_dma_mem_with_attr(oss_dev_t dev, uint32_t size,
 		return -1;
 }
 
+INLINE void oss_flush_dma_mem(struct oss_dma_mem_info *dma_mem_info,
+			      enum oss_dma_direction dir, uint64_t offset, uint64_t size)
+{
+	if (amdgv_oss_funcs->flush_dma_mem)
+		amdgv_oss_funcs->flush_dma_mem(dma_mem_info, dir, offset, size);
+}
+
 INLINE void oss_free_dma_mem(void *handle)
 {
 	amdgv_oss_funcs->free_dma_mem(handle);
@@ -1311,6 +1318,152 @@ INLINE int oss_vf_sysmem_xchg_gpa_to_spa(oss_dev_t dev, void *context, uint32_t 
 
 
 
+#ifdef SHIM_LAYER_OSS_RADIX_TREE
+
+INLINE void oss_radix_tree_init(void *root)
+{
+	amdgv_oss_funcs->radix_tree_init(root);
+}
+
+INLINE void  oss_radix_tree_fini(void *root)
+{
+	amdgv_oss_funcs->radix_tree_fini(root);
+}
+
+INLINE int oss_radix_tree_insert(void *root, unsigned long index, void *item)
+{
+	return amdgv_oss_funcs->radix_tree_insert(root, index, item);
+}
+
+INLINE void *oss_radix_tree_delete(void *root, unsigned long index)
+{
+	return amdgv_oss_funcs->radix_tree_delete(root, index);
+}
+
+INLINE void *oss_radix_tree_lookup(void *root, unsigned long index)
+{
+	return amdgv_oss_funcs->radix_tree_lookup(root, index);
+}
+
+INLINE unsigned int oss_radix_tree_gang_lookup_tag(void *root, void **results,
+	unsigned long first_index, unsigned int max_items, unsigned int tag)
+{
+	return amdgv_oss_funcs->radix_tree_gang_lookup_tag(root,
+			results, first_index, max_items, tag);
+}
+
+INLINE void *oss_radix_tree_tag_set(void *root, unsigned long index, unsigned int tag)
+{
+	return amdgv_oss_funcs->radix_tree_tag_set(root, index, tag);
+}
+
+INLINE void *oss_radix_tree_tag_clear(void *root, unsigned long index, unsigned int tag)
+{
+	return amdgv_oss_funcs->radix_tree_tag_clear(root, index, tag);
+}
+
+INLINE void **oss_radix_tree_iter_init(void *iter, unsigned long start)
+{
+	return amdgv_oss_funcs->radix_tree_iter_init(iter, start);
+}
+
+INLINE void **oss_radix_tree_next_chunk(void *root, void *iter, unsigned int flags)
+{
+	return amdgv_oss_funcs->radix_tree_next_chunk(root, iter, flags);
+}
+
+INLINE void **oss_radix_tree_next_slot(void **slot, void *iter, unsigned int flags)
+{
+	return amdgv_oss_funcs->radix_tree_next_slot(slot, iter, flags);
+}
+
+INLINE void *oss_radix_tree_deref_slot(void **slot)
+{
+	return amdgv_oss_funcs->radix_tree_deref_slot(slot);
+}
+
+INLINE void *oss_radix_tree_delete_iter(void *root, void *iter)
+{
+	return amdgv_oss_funcs->radix_tree_delete_iter(root, iter);
+}
+#endif
+
+
+#ifdef SHIM_LAYER_OSS_KFIFO
+
+INLINE int oss_kfifo_alloc(void *fifo, uint32_t size)
+{
+	return amdgv_oss_funcs->kfifo_alloc(fifo, size);
+}
+
+INLINE int oss_kfifo_in_spinlocked_raw(void *fifo, void *buf, uint32_t size, void *lock)
+{
+	return amdgv_oss_funcs->kfifo_in_spinlocked_raw(fifo, buf, size, lock);
+}
+
+INLINE int oss_kfifo_out_spinlocked_raw(void *fifo, void *buf, uint32_t size, void *lock)
+{
+	return amdgv_oss_funcs->kfifo_out_spinlocked_raw(fifo, buf, size, lock);
+}
+
+INLINE unsigned int oss_kfifo_out_peek(void *fifo, void *buf, unsigned int n)
+{
+	return amdgv_oss_funcs->kfifo_out_peek(fifo, buf, n);
+}
+
+INLINE unsigned int oss_kfifo_len(void *fifo)
+{
+	return amdgv_oss_funcs->kfifo_len(fifo);
+}
+
+INLINE void oss_kfifo_free(void *fifo)
+{
+	amdgv_oss_funcs->kfifo_free(fifo);
+}
+#endif
+
+#ifdef AMDGV_UNIRAS_SUPPORT
+INLINE void oss_init_waitqueue_head(void *wq)
+{
+	amdgv_oss_funcs->init_waitqueue_head(wq);
+}
+
+INLINE long oss_wait_event_interruptible_timeout(void *wq_head,
+		condition_func condition, void *param, unsigned int timeout)
+{
+	return amdgv_oss_funcs->wait_event_interruptible_timeout(wq_head,
+			condition, param, timeout);
+}
+
+INLINE unsigned long oss_msecs_to_jiffies(const unsigned int m)
+{
+	return amdgv_oss_funcs->msecs_to_jiffies(m);
+}
+#endif
+
+#ifdef SHIM_LAYER_OSS_MEMPOOL
+
+INLINE void *oss_mempool_create_kmalloc_pool(int element_nr,
+		unsigned long element_size)
+{
+	return amdgv_oss_funcs->mempool_create_kmalloc_pool(element_nr, element_size);
+}
+
+INLINE void oss_mempool_destroy(void *pool)
+{
+	amdgv_oss_funcs->mempool_destroy(pool);
+}
+
+INLINE void *oss_mempool_alloc_preallocated(void *pool)
+{
+	return amdgv_oss_funcs->mempool_alloc_preallocated(pool);
+}
+
+INLINE void oss_mempool_free(void *element, void *pool)
+{
+	amdgv_oss_funcs->mempool_free(element, pool);
+}
+#endif
 
 INLINE int oss_register_mce_notifier(void *dev, mce_notifier notifier)
 {

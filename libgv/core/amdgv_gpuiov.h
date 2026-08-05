@@ -43,6 +43,7 @@ enum amdgv_gpuiov_cmd {
 	AMDGV_DISABLE_AUTO_HW_SCHED	       = 0x0B,
 	AMDGV_DISABLE_AUTO_HW_SCHED_AND_SWITCH = 0x0C,
 	AMDGV_SHUTDOWN_GPU		       = 0x0D,
+	AMDGV_PAUSE_VF		           = 0x0E,
 	AMDGV_CONFIG_AUTO_HW_SCHED_MODE	       = 0x0F,
 	AMDGV_EVENT_NOTIFICATION           = 0x09,
 	AMDGV_TRANSFER_VF_DATA             = 0x0A,
@@ -219,8 +220,11 @@ struct amdgv_gpuiov_funcs {
 	uint32_t (*update_vf_busy_status)(struct amdgv_adapter *adapt, uint32_t hw_sched_id);
 	void (*ctx_empty_intr_control)(struct amdgv_adapter *adapt, uint32_t hw_sched_id, bool enable);
 
+	int (*setup_sched_debug_log)(struct amdgv_adapter *adapt, enum amdgv_sched_log_op op);
+
 	const char *(*cmd_to_name)(struct amdgv_adapter *adapt, uint32_t cmd, uint32_t hw_sched_id);
 	bool (*skip_ctrl_block)(struct amdgv_adapter *adapt, int idx);
+	int (*pause_vf)(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_t hw_sched_id);
 };
 
 struct amdgv_gpuiov_ctrl_block {
@@ -292,6 +296,7 @@ struct amdgv_gpuiov {
 
 	struct amdgv_memmgr_mem *debug_dump_mem;
 	struct amdgv_memmgr_mem *perf_log_mem;
+	struct amdgv_memmgr_mem *ts_log_mem;
 #ifdef WS_RECORD
 	uint32_t auto_ws_record_rptr;
 #endif
@@ -465,6 +470,8 @@ void amdgv_gpuiov_ctx_empty_intr_control(struct amdgv_adapter *adapt, uint32_t h
 
 int amdgv_gpuiov_ctrl_block_setup(struct amdgv_adapter *adapt, struct amdgv_gpuiov_hw_sched_static_config *hw_sched_config,
 					 uint32_t size);
+
+int amdgv_gpuiov_pause_vf(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_t hw_sched_id);
 
 /**
  * amdgv_gpuiov_set_vf_access - set the  vf access status

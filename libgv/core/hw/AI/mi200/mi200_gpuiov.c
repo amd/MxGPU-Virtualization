@@ -52,7 +52,7 @@ static int mi200_gpuiov_find_cap(struct amdgv_adapter *adapt)
 	}
 
 	if (!found) {
-		AMDGV_ERROR("No GPUIOV caps can be found.\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_NO_GPU_IOV_CAP, 0);
 		return 0;
 	}
 
@@ -63,8 +63,8 @@ static int mi200_gpuiov_get_sched_block_offset(struct amdgv_adapter *adapt,
 					       uint32_t hw_sched_id)
 {
 	if (hw_sched_id >= adapt->gpuiov.num_ctrl_blocks) {
-		AMDGV_ERROR("%s(%d) is an invalid scheduler for this operation\n",
-			amdgv_hw_sched_id_to_name(adapt, hw_sched_id), hw_sched_id);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_SCHED_INVALID_HW_SCHED_ID,
+			      hw_sched_id);
 		return AMDGV_FAILURE;
 	}
 
@@ -85,10 +85,8 @@ static int mi200_gpuiov_set_cmd(struct amdgv_adapter *adapt,
 	next_func_id = PCI_GPUIOV_FUNC_ID(next_idx_vf);
 
 	offset = mi200_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Get wrong offset\n");
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	offset += PCI_SCH_CMD_CONTROL;
 
@@ -110,10 +108,8 @@ static bool mi200_gpuiov_is_cmd_complete(struct amdgv_adapter *adapt,
 	int offset;
 
 	offset = mi200_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Get wrong offset\n");
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 	cmd_ctrl_offset = PCI_SCH_CMD_CONTROL + offset;
 	cmd_status_offset = PCI_SCH_CMD_STATUS + offset;
 
@@ -180,8 +176,8 @@ static int mi200_gpuiov_set_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	uint32_t offset =
 		adapt->gpuiov.pos + PCI_GPUIOV_VF0_FB_SIZE + idx_vf * sizeof(uint32_t);
 
-	AMDGV_INFO("idx_vf = 0x%x, fb_offset = %d MB, fb_size = %d MB\n", idx_vf, fb_offset,
-		   fb_size);
+	amdgv_put_log(idx_vf, AMDGV_LOG_SCHED_SET_VF_FB,
+		      AMDGV_LOG_DATA_32_32(fb_offset, fb_size));
 
 	adapt->array_vf[idx_vf].real_fb_size = fb_size;
 	return oss_pci_write_config_dword(adapt->dev, offset, data);
@@ -192,10 +188,8 @@ static int mi200_gpuiov_get_vm_busy_status(struct amdgv_adapter *adapt,
 					   uint32_t *vm_busy_status)
 {
 	int offset = mi200_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Get wrong offset\n");
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	offset += PCI_SCH_VM_BUSY_STATUS;
 
@@ -420,10 +414,8 @@ static int mi200_gpuiov_get_active_vf_idx(struct amdgv_adapter *adapt,
 	uint32_t data;
 
 	offset = mi200_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("wrong offset for hw_sched_id=%d\n", hw_sched_id);
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	offset += PCI_SCH_ACTIVE_FUNCTION_ID;
 	oss_pci_read_config_dword(adapt->dev, offset, &data);
@@ -460,10 +452,8 @@ static int mi200_gpuiov_get_active_vf_status(struct amdgv_adapter *adapt,
 	int offset;
 
 	offset = mi200_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Get wrong offset\n");
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	offset += PCI_SCH_ACTIVE_FUNCTION_ID_STATUS;
 	oss_pci_read_config_byte(adapt->dev, offset, status);
@@ -480,10 +470,8 @@ static int mi200_gpuiov_get_time_quanta_index(struct amdgv_adapter *adapt,
 	int offset;
 
 	offset = mi200_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Get wrong offset\n");
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	if (idx_vf == AMDGV_PF_IDX) {
 		offset += PCI_SCH_TIME_QUANTA_PF;
@@ -508,10 +496,8 @@ static int mi200_gpuiov_set_time_quanta_index(struct amdgv_adapter *adapt,
 	int offset;
 
 	offset = mi200_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Get wrong offset\n");
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	if (idx_vf == AMDGV_PF_IDX) {
 		offset += PCI_SCH_TIME_QUANTA_PF;
@@ -538,10 +524,8 @@ static int mi200_gpuiov_get_time_quanta_definition(struct amdgv_adapter *adapt,
 	int offset;
 
 	offset = mi200_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Get wrong offset\n");
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	offset += PCI_SCH_TIME_QUANTA_OPTION;
 	oss_pci_read_config_dword(adapt->dev, offset, &data);
@@ -558,10 +542,8 @@ static int mi200_gpuiov_set_time_quanta_definition(struct amdgv_adapter *adapt,
 	int offset;
 
 	offset = mi200_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Get wrong offset\n");
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	offset += PCI_SCH_TIME_QUANTA_OPTION;
 	oss_pci_read_config_dword(adapt->dev, offset, &data);
@@ -597,10 +579,8 @@ static int mi200_gpuiov_get_time_quanta_option(struct amdgv_adapter *adapt,
 	int offset;
 
 	offset = mi200_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Get wrong offset\n");
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	offset += PCI_SCH_TIME_QUANTA_OPTION;
 	oss_pci_read_config_dword(adapt->dev, offset, time_quanta_option);
@@ -614,10 +594,8 @@ static int mi200_gpuiov_set_time_quanta_option(struct amdgv_adapter *adapt,
 	int offset;
 
 	offset = mi200_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Get wrong offset\n");
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	offset += PCI_SCH_TIME_QUANTA_OPTION;
 	oss_pci_write_config_dword(adapt->dev, offset, time_quanta_option);
@@ -720,8 +698,8 @@ static int mi200_gpuiov_get_fb_info(struct amdgv_adapter *adapt)
 	tom = (tom + (16 << 20) - 1) & ~((16 << 20) - 1);
 	adapt->gpuiov.total_fb_usable = total_fb_avail - TO_MBYTES(tom);
 
-	AMDGV_INFO("Total FB Available = %d MB, Max usable FB size = %d MB\n", total_fb_avail,
-		   adapt->gpuiov.total_fb_usable);
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPUMON_FB_INFO,
+		      AMDGV_LOG_DATA_32_32(total_fb_avail, adapt->gpuiov.total_fb_usable));
 
 	/* compute CSA address (offset) to be sent to RLC_V and MMSCH */
 	/* need to account for CSA located at TOP (end) of FrameBuffer
@@ -730,7 +708,7 @@ static int mi200_gpuiov_get_fb_info(struct amdgv_adapter *adapt)
 	 * o but RLC_V and MMSCH expect offset from fb BASE
 	 */
 	if (!adapt->gpuiov.csa_fb_mem) {
-		AMDGV_ERROR("Private csa fb memory not allocated\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_CSA_FB_MEM_NOT_ALLOCATED, 0);
 		return AMDGV_FAILURE;
 	}
 	adapt->gpuiov.resv_addr = ((uint64_t)total_fb_avail << 20) -
@@ -798,10 +776,8 @@ static int mi200_gpuiov_transfer_vf_data(struct amdgv_adapter *adapt,
 	next_func_id = (uint32_t)export;
 
 	offset = mi200_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Get wrong offset\n");
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	offset += PCI_SCH_CMD_CONTROL;
 
@@ -877,7 +853,8 @@ static int mi200_gpuiov_sw_init(struct amdgv_adapter *adapt)
 		amdgv_memmgr_alloc_align(&adapt->memmgr_gpu, csa_mem_size, csa_mem_align,
 					 MEM_GPUIOV_CSA);
 	if (!adapt->gpuiov.csa_fb_mem) {
-		AMDGV_ERROR("Failed to reserve memory for CSA\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL,
+			      csa_mem_size);
 		return AMDGV_FAILURE;
 	}
 
@@ -938,8 +915,7 @@ static int mi200_gpuiov_hw_init(struct amdgv_adapter *adapt)
 	if (!in_whole_gpu_reset()) {
 		ret = oss_pci_enable_sriov(adapt->dev, adapt->num_vf);
 		if (ret < 0) {
-			AMDGV_ERROR("failed to enable sriov with vf num = %d, "
-					"ret = %d.\n", adapt->num_vf, ret);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_ENABLE_SRIOV_FAIL, 0);
 			return AMDGV_FAILURE;
 		}
 	} else {

@@ -25,6 +25,7 @@ extern const struct amdgv_mmsch_funcs mi350_mmsch_funcs;
 #define UNIT_256KB	(1 << 18)
 #define MI300_MAX_XCD_NUM	8
 #define MI300_SUPPORTED_GFX_SCHED_MODE ((1 << AMDGV_SCHED_FAIRNESS) | (1 << AMDGV_SCHED_ROUND_ROBIN))
+#define MI300_RESTORE_SRIOV_MAX_RETRY	3
 
 static struct amdgv_gpuiov_hw_sched_static_config mi300_hw_sched_static_config[] = {
 
@@ -68,7 +69,7 @@ static int mi300_gpuiov_find_cap(struct amdgv_adapter *adapt)
 	}
 
 	if (!found) {
-		AMDGV_ERROR("No GPUIOV caps can be found.\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_NO_GPU_IOV_CAP, 0);
 		return 0;
 	}
 
@@ -80,8 +81,7 @@ static int mi300_gpuiov_get_sched_block_offset(struct amdgv_adapter *adapt,
 {
 
 	if (hw_sched_id >= adapt->gpuiov.num_ctrl_blocks) {
-		AMDGV_ERROR("%s(%d) is an invalid scheduler for this operation\n",
-			amdgv_hw_sched_id_to_name(adapt, hw_sched_id), hw_sched_id);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_SCHED_INVALID_HW_SCHED_ID, hw_sched_id);
 		return AMDGV_FAILURE;
 	}
 
@@ -98,10 +98,8 @@ static int __mi300_gpuiov_set_cmd(struct amdgv_adapter *adapt,
 	uint64_t reg_control = 0;
 
 	offset = mi300_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Get wrong offset\n");
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	offset += PCI_SCH_CMD_CONTROL;
 
@@ -174,10 +172,8 @@ static bool mi300_gpuiov_is_cmd_complete(struct amdgv_adapter *adapt,
 		status = RREG32(reg_status) & 0xFF;
 	} else {
 		offset = mi300_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-		if (offset == AMDGV_FAILURE) {
-			AMDGV_ERROR("Get wrong offset\n");
+		if (offset == AMDGV_FAILURE)
 			return AMDGV_FAILURE;
-		}
 		cmd_ctrl_offset = PCI_SCH_CMD_CONTROL + offset;
 		cmd_status_offset = PCI_SCH_CMD_STATUS + offset;
 
@@ -261,8 +257,8 @@ static int mi300_gpuiov_set_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	uint32_t offset =
 		adapt->gpuiov.pos + PCI_GPUIOV_VF0_FB_SIZE + idx_vf * sizeof(uint32_t);
 
-	AMDGV_DEBUG("idx_vf = 0x%x, fb_offset = %d MB, fb_size = %d MB\n", idx_vf, fb_offset,
-		   fb_size);
+	amdgv_put_log(idx_vf, AMDGV_LOG_SCHED_SET_VF_FB,
+		      AMDGV_LOG_DATA_32_32(fb_offset, fb_size));
 
 	adapt->array_vf[idx_vf].real_fb_size = fb_size;
 	return oss_pci_write_config_dword(adapt->dev, offset, data);
@@ -276,8 +272,7 @@ static int mi300_gpuiov_get_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf,
 		adapt->gpuiov.pos + PCI_GPUIOV_VF0_FB_SIZE + idx_vf * sizeof(uint32_t);
 
 	if (oss_pci_read_config_dword(adapt->dev, offset, &data)) {
-		AMDGV_ERROR("Cannot read %s fb from PCIe config\n",
-			amdgv_idx_to_str(idx_vf));
+		amdgv_put_log(idx_vf, AMDGV_LOG_IOV_READ_VF_FB_FAIL, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -293,10 +288,8 @@ static int mi300_gpuiov_get_vm_busy_status(struct amdgv_adapter *adapt,
 					   uint32_t *vm_busy_status)
 {
 	int offset = mi300_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Get wrong offset\n");
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	offset += PCI_SCH_VM_BUSY_STATUS;
 
@@ -511,10 +504,8 @@ static int mi300_gpuiov_get_active_vf_idx(struct amdgv_adapter *adapt,
 	uint32_t data;
 
 	offset = mi300_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("wrong offset for hw_sched_id=%d\n", hw_sched_id);
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	offset += PCI_SCH_ACTIVE_FUNCTION_ID;
 	oss_pci_read_config_dword(adapt->dev, offset, &data);
@@ -549,10 +540,8 @@ static int mi300_gpuiov_get_active_vf_status(struct amdgv_adapter *adapt,
 	int offset;
 
 	offset = mi300_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Get wrong offset\n");
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	offset += PCI_SCH_ACTIVE_FUNCTION_ID_STATUS;
 	oss_pci_read_config_byte(adapt->dev, offset, status);
@@ -569,10 +558,8 @@ static int mi300_gpuiov_get_time_quanta_index(struct amdgv_adapter *adapt,
 	int offset;
 
 	offset = mi300_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Get wrong offset\n");
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	if (idx_vf == AMDGV_PF_IDX) {
 		offset += PCI_SCH_TIME_QUANTA_PF;
@@ -597,10 +584,8 @@ static int mi300_gpuiov_set_time_quanta_index(struct amdgv_adapter *adapt,
 	int offset;
 
 	offset = mi300_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Get wrong offset\n");
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	if (idx_vf == AMDGV_PF_IDX) {
 		offset += PCI_SCH_TIME_QUANTA_PF;
@@ -627,10 +612,8 @@ static int mi300_gpuiov_get_time_quanta_definition(struct amdgv_adapter *adapt,
 	int offset;
 
 	offset = mi300_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Get wrong offset\n");
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	offset += PCI_SCH_TIME_QUANTA_OPTION;
 	oss_pci_read_config_dword(adapt->dev, offset, &data);
@@ -647,10 +630,8 @@ static int mi300_gpuiov_set_time_quanta_definition(struct amdgv_adapter *adapt,
 	int offset;
 
 	offset = mi300_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Get wrong offset\n");
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	offset += PCI_SCH_TIME_QUANTA_OPTION;
 	oss_pci_read_config_dword(adapt->dev, offset, &data);
@@ -686,10 +667,8 @@ static int mi300_gpuiov_get_time_quanta_option(struct amdgv_adapter *adapt,
 	int offset;
 
 	offset = mi300_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Get wrong offset\n");
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	offset += PCI_SCH_TIME_QUANTA_OPTION;
 	oss_pci_read_config_dword(adapt->dev, offset, time_quanta_option);
@@ -703,10 +682,8 @@ static int mi300_gpuiov_set_time_quanta_option(struct amdgv_adapter *adapt,
 	int offset;
 
 	offset = mi300_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Get wrong offset\n");
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	offset += PCI_SCH_TIME_QUANTA_OPTION;
 	oss_pci_write_config_dword(adapt->dev, offset, time_quanta_option);
@@ -798,13 +775,13 @@ static int mi300_gpuiov_get_fb_info(struct amdgv_adapter *adapt)
 	adapt->gpuiov.total_fb_avail = mi300_nbio_get_config_memsize(adapt);
 	adapt->gpuiov.total_fb_usable = adapt->gpuiov.total_fb_avail - amdgv_vbios_get_fw_reserved_size(adapt);
 
-	AMDGV_INFO(
-		"Total FB Available = %d MB, Max usable FB size = %d MB\n",
-		adapt->gpuiov.total_fb_avail, adapt->gpuiov.total_fb_usable);
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPUMON_FB_INFO,
+		      AMDGV_LOG_DATA_32_32(adapt->gpuiov.total_fb_avail,
+					   adapt->gpuiov.total_fb_usable));
 
 	/* compute CSA address (offset) to be sent to RLC_V and MMSCH */
 	if (!adapt->gpuiov.csa_fb_mem) {
-		AMDGV_ERROR("Private csa fb memory not allocated\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_CSA_FB_MEM_NOT_ALLOCATED, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -875,19 +852,16 @@ static int mi300_gpuiov_wait_auto_sched_stop(struct amdgv_adapter *adapt,
 
 	offset = mi300_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
 
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Cannot find offset for %s scheduler in PCIe config\n",
-			amdgv_hw_sched_id_to_name(adapt, hw_sched_id));
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	offset += PCI_SCH_ACTIVE_FUNCTION_ID_STATUS;
 	wait_ret = amdgv_wait_for_pci_cfg(adapt, adapt->dev, offset,
 			0xf, 0, 1, AMDGV_TIMEOUT(TIMEOUT_AUTO_SWITCH_MM), AMDGV_WAIT_CHECK_EQ, 0);
 
 	if (wait_ret)
-		AMDGV_WARN("Fail to wait auto sched %s scheduler stop\n",
-			amdgv_hw_sched_id_to_name(adapt, hw_sched_id));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_SCHED_AUTO_SCHED_STOP_TIMEOUT,
+			      hw_sched_id);
 
 	return wait_ret;
 }
@@ -940,6 +914,36 @@ static int mi300_gpuiov_transfer_vf_data(struct amdgv_adapter *adapt,
 	next_func_id = (uint32_t)to_export;
 
 	return __mi300_gpuiov_set_cmd(adapt, AMDGV_TRANSFER_VF_DATA, sched_id, func_id, next_func_id);
+}
+
+static int mi300_gpuiov_restore_sriov_with_retry(struct amdgv_adapter *adapt)
+{
+	uint32_t sdma_vf_enable;
+	uint32_t retry;
+
+	/* Add a 100 ms delay before starting the SR-IOV disable/enable sequence
+	 * to make pmfw idle as possible */
+	oss_msleep(100);
+
+	for (retry = 0; retry < MI300_RESTORE_SRIOV_MAX_RETRY; retry++) {
+		oss_pci_write_config_dword(adapt->dev,
+				adapt->sriov_cap_pos + PCIE_EXT_SRIOV_CTRL, 0);
+		amdgv_reset_restore_sriov(adapt);
+
+		sdma_vf_enable = RREG32(SOC15_REG_OFFSET(SDMA0, 0, regSDMA_VF_ENABLE));
+		if (sdma_vf_enable)
+			break;
+		AMDGV_WARN("SDMA_VF_ENABLE is 0 after restore sriov, retry disable/restore sriov (%d/%d)\n",
+				retry + 1, MI300_RESTORE_SRIOV_MAX_RETRY);
+	}
+
+	if (sdma_vf_enable == 0) {
+		AMDGV_ERROR("SDMA_VF_ENABLE is still 0 after %d retries\n",
+				MI300_RESTORE_SRIOV_MAX_RETRY);
+		return AMDGV_FAILURE;
+	}
+
+	return 0;
 }
 
 static const struct amdgv_gpuiov_funcs mi300_gpuiov_funcs = {
@@ -998,14 +1002,13 @@ static int mi300_gpuiov_sw_init(struct amdgv_adapter *adapt)
 		amdgv_memmgr_alloc_align(&adapt->memmgr_pf, csa_mem_size, csa_mem_align,
 					MEM_GPUIOV_CSA);
 	if (!adapt->gpuiov.csa_fb_mem) {
-		AMDGV_ERROR("Failed to reserve memory for CSA\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL, csa_mem_size);
 		return AMDGV_FAILURE;
 	}
 
-	/* only mi308 support diagnosis data, skip for other series */
-	if (adapt->asic_type != CHIP_MI308X) {
+	/* only MI308 1VF supports diagnosis data, skip for other series */
+	if (adapt->asic_type != CHIP_MI308X || adapt->num_vf > 1)
 		adapt->flags |= AMDGV_FLAG_SKIP_DIAG_DATA;
-	}
 
 	if (adapt->asic_type == CHIP_MI350X)
 		adapt->mmsch.mmsch_funcs = &mi350_mmsch_funcs;
@@ -1032,16 +1035,10 @@ static int mi300_gpuiov_hw_fini(struct amdgv_adapter *adapt)
 		WREG32(SOC15_REG_OFFSET(NBIO, 0, regRCC_STRAP0_RCC_DEV0_EPF0_STRAP4), strap4);
 	}
 
-	if (oss_atomic_read(adapt->in_sync_flood)) {
-		AMDGV_DEBUG("in_sync_flood.gpuiov_hw_fini toggle_vf_mse to false and exit\n");
-		if (adapt->asic_type == CHIP_MI350X || adapt->vf_rebar_en)
-			mi300_gpuiov_toggle_vf_mse(adapt, false);
-		return 0;
-	}
+	mi300_gpuiov_toggle_vf_mse(adapt, false);
 
-	if (adapt->asic_type == CHIP_MI350X) {
-		AMDGV_DEBUG("Set mi300_gpuiov_toggle_vf_mse to false\n");
-		mi300_gpuiov_toggle_vf_mse(adapt, false);
+	if (oss_atomic_read(adapt->in_sync_flood)) {
+		return 0;
 	}
 
 	/* disable sriov */
@@ -1050,7 +1047,7 @@ static int mi300_gpuiov_hw_fini(struct amdgv_adapter *adapt)
 
 		amdgv_gpuiov_fini(adapt);
 	} else {
-		if (adapt->asic_type != CHIP_MI350X)
+		if (adapt->asic_type != CHIP_MI350X && adapt->asic_type != CHIP_MI300X)
 			oss_pci_write_config_dword(adapt->dev,
 					adapt->sriov_cap_pos + PCIE_EXT_SRIOV_CTRL, 0);
 	}
@@ -1121,8 +1118,7 @@ static int mi300_gpuiov_hw_init(struct amdgv_adapter *adapt)
 	if (!in_whole_gpu_reset()) {
 		ret = oss_pci_enable_sriov(adapt->dev, adapt->num_vf);
 		if (ret < 0) {
-			AMDGV_ERROR("failed to enable sriov with vf num = %d, "
-					"ret = %d.\n", adapt->num_vf, ret);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_ENABLE_SRIOV_FAIL, 0);
 			return AMDGV_FAILURE;
 		}
 		AMDGV_DEBUG("PCI_ENABLE_SRIOV(num_vf=%d)\n", adapt->num_vf);
@@ -1137,14 +1133,16 @@ static int mi300_gpuiov_hw_init(struct amdgv_adapter *adapt)
 
 	} else {
 		/* Need to disable VF, before enabling it back */
-		if (adapt->asic_type == CHIP_MI350X)
-			oss_pci_write_config_dword(adapt->dev,
-					adapt->sriov_cap_pos + PCIE_EXT_SRIOV_CTRL, 0);
-		amdgv_reset_restore_sriov(adapt);
+		if (adapt->asic_type == CHIP_MI350X || adapt->asic_type == CHIP_MI300X) {
+			if (mi300_gpuiov_restore_sriov_with_retry(adapt))
+				return AMDGV_FAILURE;
+		} else {
+			amdgv_reset_restore_sriov(adapt);
+		}
 	}
 
 	if (!(RREG32(SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_91)) & 0x4000))
-		AMDGV_INFO("L1 security is DISABLED\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_L1_SECURITY_DISABLED, 0);
 
 	return 0;
 }

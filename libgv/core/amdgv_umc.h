@@ -130,6 +130,7 @@ int amdgv_umc_get_badpages_record(struct amdgv_adapter *adapt, uint32_t index, v
 int amdgv_umc_badpages_read(struct amdgv_adapter *adapt, void **bp, unsigned int *count);
 bool amdgv_umc_check_bad_page(struct amdgv_adapter *adapt, uint64_t addr);
 bool amdgv_umc_check_bad_pages_in_range(struct amdgv_adapter *adapt, uint64_t fb_offset, uint64_t size);
+bool amdgv_umc_dst_check_bad_pages_in_range(struct amdgv_adapter *adapt, int idx_vf, uint64_t fb_offset, uint64_t size);
 int amdgv_umc_load_bad_pages(struct amdgv_adapter *adapt);
 int amdgv_umc_load_bad_pages_across_nps(struct amdgv_adapter *adapt);
 int amdgv_umc_clean_bad_page_records(struct amdgv_adapter *adapt);

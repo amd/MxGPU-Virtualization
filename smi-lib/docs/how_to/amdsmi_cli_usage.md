@@ -164,6 +164,9 @@ The commands and respective arguments that they accept are described as follows:
    - `XNUMA`: Two processors connect via different PCIe switches on different CPUs (NUMA nodes).
    - `UNKNOWN`: Unknown link type.
 
+   **Sorting:**
+   - `--sort=<phy_id|bdf>`: Sort GPUs in the output by physical id or PCIe BDF. Default is `bdf`.
+
    **Note:** The topology command does not support the `--csv` format modifier.
 
 10. **xgmi**
@@ -176,6 +179,7 @@ The commands and respective arguments that they accept are described as follows:
       - `--metric`: Metric XGMI information.
       - `--source-status`: Port status information.
       - `--link-status`: Link status information.
+      - `--sort=<phy_id|bdf>`: Sort GPUs in the output by physical id or PCIe BDF. Default is `phy_id`.
 
     **Note:** The xgmi command does not support the `--csv` format modifier.
 

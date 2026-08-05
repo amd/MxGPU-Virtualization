@@ -24,7 +24,17 @@
 #define FATAL_SEC_OFFSET(count, idx)	(HDR_LEN + (SEC_DESC_LEN * count) + (FATAL_SEC_LEN * idx))
 #define NONSTD_SEC_OFFSET(count, idx)	(HDR_LEN + (SEC_DESC_LEN * count) + (NONSTD_SEC_LEN * idx))
 
-#define CPER_MOVE_TO_FIRST_VALID(rptr) (((adapt->cper.wptr - rptr) > CPER_MAX_COUNT) ? adapt->cper.wptr - CPER_MAX_COUNT : rptr)
+/* Move rptr forward to the first still-cached CPER entry.
+ *
+ * wptr and rptr are uint64_t. Clamp rptr to wptr first so that, for an
+ * out-of-window rptr > wptr, neither (wptr - rptr) nor (wptr - CPER_MAX_COUNT)
+ * underflows (CWE-191). Callers must also clamp rptr (see amdgv_cper.c) as the
+ * underflowing subtractions around this macro live in the caller.
+ */
+#define CPER_MOVE_TO_FIRST_VALID(rptr) \
+	(((rptr) > adapt->cper.wptr) ? adapt->cper.wptr : \
+	 (((adapt->cper.wptr - (rptr)) > CPER_MAX_COUNT) ? \
+	  adapt->cper.wptr - CPER_MAX_COUNT : (rptr)))
 
 enum amdgv_cper_type {
 	AMDGV_CPER_TYPE_RUNTIME,

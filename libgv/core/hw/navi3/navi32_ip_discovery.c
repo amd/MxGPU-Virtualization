@@ -524,9 +524,9 @@ int navi32_copy_ip_data_to_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	/* duplicated common VF copy IP discovery data */
 	vf_copy.data = (uint32_t *)oss_alloc_memory(AMDGV_IP_DISCOVERY_SIZE);
 	if (vf_copy.data == NULL) {
-		amdgv_put_error(
+		amdgv_put_log(
 			AMDGV_PF_IDX,
-			AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 			AMDGV_IP_DISCOVERY_SIZE
 		);
 		return AMDGV_FAILURE;

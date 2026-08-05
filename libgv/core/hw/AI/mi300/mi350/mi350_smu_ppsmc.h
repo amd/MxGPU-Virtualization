@@ -105,6 +105,9 @@
 #define PPSMC_MSG_GetSystemMetricsTable             0x5C
 #define PPSMC_MSG_GetSystemMetricsVersion           0x5D
 #define PPSMC_Message_Count                         0x5E
+/* PPT1 power cap limit messages */
+#define PPSMC_MSG_SetPptLimit2                       0x5F
+#define PPSMC_MSG_GetPptLimit2                       0x60
 
 //PPSMC Reset Types for driver msg argument
 #define PPSMC_RESET_TYPE_DRIVER_MODE_1_RESET        0x1

@@ -8,7 +8,7 @@
 #include "amdgv_oss_wrapper.h"
 #include "amdgv_irqmgr.h"
 #include "amdgv_guard.h"
-#include "amdgv_error.h"
+#include "amdgv_log.h"
 #include "amdgv_sched_internal.h"
 #include "amdgv_ecc.h"
 #include "amdgv_powerplay.h"
@@ -74,7 +74,7 @@ int amdgv_ih_ring_init(struct amdgv_adapter *adapt, unsigned int ring_size, bool
 		 * add them to the end of the ring allocation.
 		 */
 		if (oss_alloc_dma_mem(adapt->dev, ih_buf_size, mem_type, &dma_mem_info) != 0) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_DMA_MEM_FAIL,
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_DMA_MEM_FAIL,
 					ih_buf_size);
 			return AMDGV_FAILURE;
 		}
@@ -89,8 +89,8 @@ int amdgv_ih_ring_init(struct amdgv_adapter *adapt, unsigned int ring_size, bool
 			adapt->irqmgr.ih.fb_mem = amdgv_memmgr_alloc(
 				&adapt->memmgr_pf, ih_buf_size, MEM_IRQMGR_IH_RING);
 			if (!adapt->irqmgr.ih.fb_mem) {
-				amdgv_put_error(AMDGV_PF_IDX,
-						AMDGV_ERROR_DRIVER_ALLOC_FB_MEM_FAIL,
+				amdgv_put_log(AMDGV_PF_IDX,
+						AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL,
 						ih_buf_size);
 				return AMDGV_FAILURE;
 			}
@@ -112,7 +112,7 @@ int amdgv_ih_ring_init(struct amdgv_adapter *adapt, unsigned int ring_size, bool
 	    adapt->irqmgr.ih_bh.handle != OSS_INVALID_HANDLE) {
 		adapt->irqmgr.ih_queue = (struct amdgv_iv_entry *)oss_zalloc(size);
 		if (!adapt->irqmgr.ih_queue) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_DMA_MEM_FAIL, size);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL, size);
 			return AMDGV_FAILURE;
 		}
 
@@ -143,7 +143,7 @@ int amdgv_ih_ring_set(struct amdgv_adapter *adapt)
 	}
 
 	if (!adapt->irqmgr.ih.ring) {
-		AMDGV_ERROR("Memory for interrupt manager ring not allocated\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_IH_RING_NOT_ALLOCATED, 0);
 		return AMDGV_FAILURE;
 	}
 	if (!amdgv_in_live_update_seq())
@@ -241,9 +241,7 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 
 			sched_event = amdgv_mailbox_get_valid_vf_event(adapt, event);
 			if (sched_event == AMDGV_EVENT_INVALID_EVENT) {
-				AMDGV_INFO("Invalid Request: %s, event = %s\n",
-					   amdgv_idx_to_str(idx_vf),
-					   amdgv_mailbox_rcv_idh_to_name(event));
+				amdgv_put_log(idx_vf, AMDGV_LOG_IOV_MB_INVALID_VF_EVENT, (uint64_t)event);
 				break;
 			}
 
@@ -251,10 +249,7 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 				/* Drop request if VF relay value is out of range or if VF relay is unsupported */
 				if (!adapt->psp.vf_relay_wtr_ptr_max ||
 				    msg_data[1] >= adapt->psp.vf_relay_wtr_ptr_max) {
-					AMDGV_WARN("%s: dropping PSP_VF_CMD_RELAY; wtr_ptr=0x%x out of range (max=0x%x)\n",
-						   amdgv_idx_to_str(idx_vf),
-						   msg_data[1],
-						   adapt->psp.vf_relay_wtr_ptr_max);
+					amdgv_put_log(idx_vf, AMDGV_LOG_IOV_PSP_VF_CMD_RELAY_OUT_OF_RANGE, AMDGV_LOG_DATA_32_32(msg_data[1], adapt->psp.vf_relay_wtr_ptr_max));
 					break;
 				}
 				adapt->psp.vf_relay_wtr_ptr[idx_vf] = msg_data[1];
@@ -283,16 +278,16 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 				uint16_t code;
 
 				data1 = msg_data[1];
-				code = AMDGV_ERROR_CODE_FROM_MAILBOX(data1);
+				code = AMDGV_LOG_CODE_FROM_MAILBOX(data1);
 
-				if (!amdgv_error_is_valid_vf_code(code))
+				if (!amdgv_log_is_valid_vf_code(code))
 					break;
 
 				data2 = msg_data[3];
 				data2 <<= 32;
 				data2 |= msg_data[2];
 
-				amdgv_put_error(idx_vf, code, data2);
+				amdgv_put_log(idx_vf, code, data2);
 			/* else if in a row since sometimes we need to break from switch */
 			} else if (sched_event == AMDGV_EVENT_READY_TO_RESET) {
 				adapt->array_vf[idx_vf].ready_to_reset = true;
@@ -319,8 +314,8 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 								AMDGV_SCHED_BLOCK_ALL, event_data);
 			} else if (sched_event == AMDGV_EVENT_SCHED_RAS_POISON_CONSUMPTION) {
 				event_data.poison.consumption.block = msg_data[1];
-				amdgv_put_error(idx_vf, AMDGV_ERROR_ECC_POISON_CONSUMPTION,
-						AMDGV_ERROR_32_32(idx_vf, msg_data[1]));
+				amdgv_put_log(idx_vf, AMDGV_LOG_ECC_POISON_CONSUMPTION,
+						AMDGV_LOG_DATA_32_32(idx_vf, msg_data[1]));
 				amdgv_sched_queue_event_ex(adapt, idx_vf, sched_event,
 							AMDGV_SCHED_BLOCK_ALL, event_data);
 			} else if (sched_event == AMDGV_EVENT_REQ_GPU_INIT_DATA) {
@@ -329,10 +324,7 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 				adapt->array_vf[idx_vf].xchg.guest_gpu_init_flags = msg_data[1];
 
 				if (guest_crit_region_ver >= GPU_CRIT_REGION_MAX) {
-					AMDGV_WARN("%s sent unsupported crit region version %u, clamping to V%u\n",
-						   amdgv_idx_to_str(idx_vf),
-						   guest_crit_region_ver,
-						   GPU_CRIT_REGION_MAX - 1);
+					amdgv_put_log(idx_vf, AMDGV_LOG_IOV_UNSUPPORTED_CRIT_REGION_VER, AMDGV_LOG_DATA_32_32(guest_crit_region_ver, GPU_CRIT_REGION_MAX - 1));
 					guest_crit_region_ver = GPU_CRIT_REGION_MAX - 1;
 				}
 
@@ -404,17 +396,21 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 	case IH_IV_SRCID_DF:
 		/* RAS DF INT process */
 		if (entry->client_id == IH_IV_CLIENTID_DF) {
-			if (amdgv_ras_is_poison_mode_supported(adapt)) {
-				amdgv_sched_queue_event_ex(adapt, AMDGV_PF_IDX,
-							   AMDGV_EVENT_SCHED_RAS_POISON_CREATION,
-							   AMDGV_SCHED_BLOCK_ALL, event_data);
+			if (amdgv_uniras_enabled(adapt)) {
+				amdgv_ras_mgr_handle_controller_interrupt(adapt, entry);
 			} else {
-				idx_vf = entry->src_data[0];
-				AMDGV_INFO("ECC RAS Error Interrupt Received\n");
-				amdgv_ih_dump_irq_info(adapt, entry, false);
-				amdgv_sched_queue_event(adapt, idx_vf,
-							AMDGV_EVENT_SCHED_RAS_UMC,
-							AMDGV_SCHED_BLOCK_ALL);
+				if (amdgv_ras_is_poison_mode_supported(adapt)) {
+					amdgv_sched_queue_event_ex(adapt, AMDGV_PF_IDX,
+								AMDGV_EVENT_SCHED_RAS_POISON_CREATION,
+								AMDGV_SCHED_BLOCK_ALL, event_data);
+				} else {
+					idx_vf = entry->src_data[0];
+					AMDGV_INFO("ECC RAS Error Interrupt Received\n");
+					amdgv_ih_dump_irq_info(adapt, entry, false);
+					amdgv_sched_queue_event(adapt, idx_vf,
+								AMDGV_EVENT_SCHED_RAS_UMC,
+								AMDGV_SCHED_BLOCK_ALL);
+				}
 			}
 		} else if ((entry->client_id == IH_IV_CLIENTID_UTCL2 ||
 			    entry->client_id == IH_IV_CLIENTID_VMC ||
@@ -476,8 +472,8 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 			idx_vf = src_vfid;
 			event_data.poison.consumption.block = AMDGV_RAS_BLOCK__GFX;
 
-			amdgv_put_error(idx_vf, AMDGV_ERROR_ECC_POISON_CONSUMPTION,
-					AMDGV_ERROR_32_32(idx_vf, AMDGV_RAS_BLOCK__GFX));
+			amdgv_put_log(idx_vf, AMDGV_LOG_ECC_POISON_CONSUMPTION,
+					AMDGV_LOG_DATA_32_32(idx_vf, AMDGV_RAS_BLOCK__GFX));
 
 			amdgv_sched_queue_event_ex(adapt, idx_vf,
 						AMDGV_EVENT_SCHED_RAS_POISON_CONSUMPTION,
@@ -490,7 +486,9 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 		break;
 
 	default:
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_INVALID_VALUE, entry->src_id);
+		/* Unhandled hardware-delivered src_id - developer diagnostic only, not a
+		 * SHIM-visible error. Keep as a raw DEBUG paired with the IH dump. */
+		AMDGV_DEBUG("Unhandled IH src_id 0x%x\n", entry->src_id);
 		amdgv_ih_dump_irq_info(adapt, entry, true);
 		break;
 	}
@@ -596,7 +594,7 @@ static enum oss_irq_return _amdgv_ih_process_handle(struct amdgv_adapter *adapt)
 			if (adapt->irqmgr.ih.use_bh) {
 				if (((adapt->irqmgr.ih_queue_wptr + 1) %
 				 AMDGV_IH_QUEUE_ENTRY_NUM) == adapt->irqmgr.ih_queue_rptr)
-					AMDGV_ERROR("IH queue is full!\n");
+					amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_IH_QUEUE_FULL, 0);
 				else {
 					/* ih entry has been decoded */
 					entry.iv_entry = NULL;
@@ -694,11 +692,17 @@ enum oss_irq_return amdgv_ras_fatal_error_handle(void *context)
 {
 	struct amdgv_adapter *adapt = context;
 
-	if (adapt->nbio.ras && adapt->status == AMDGV_STATUS_HW_INIT) {
-		if (adapt->nbio.ras->handle_ras_controller_intr_no_bifring)
-			adapt->nbio.ras->handle_ras_controller_intr_no_bifring(adapt);
-		if (adapt->nbio.ras->handle_ras_err_event_athub_intr_no_bifring)
-			adapt->nbio.ras->handle_ras_err_event_athub_intr_no_bifring(adapt);
+	if (adapt->status == AMDGV_STATUS_HW_INIT) {
+		if (amdgv_uniras_enabled(adapt)) {
+			amdgv_ras_mgr_handle_fatal_interrupt(adapt, NULL);
+		} else {
+			if (adapt->nbio.ras) {
+				if (adapt->nbio.ras->handle_ras_controller_intr_no_bifring)
+					adapt->nbio.ras->handle_ras_controller_intr_no_bifring(adapt);
+				if (adapt->nbio.ras->handle_ras_err_event_athub_intr_no_bifring)
+					adapt->nbio.ras->handle_ras_err_event_athub_intr_no_bifring(adapt);
+			}
+		}
 	}
 
 	return OSS_IRQ_HANDLED;
@@ -753,9 +757,7 @@ void amdgv_irqmgr_dump_temperature(struct amdgv_adapter *adapt)
 	oss_memset(&temp, 0, sizeof(temp));
 	if (adapt->gpumon.funcs && adapt->gpumon.funcs->get_all_temperature) {
 		ret = adapt->gpumon.funcs->get_all_temperature(adapt, &temp);
-		if (ret) {
-			AMDGV_WARN("Failed to get temperature dump\n");
-		} else {
+		if (!ret) {
 			AMDGV_INFO("Dump all temperature checkpoints:\n");
 			AMDGV_INFO("	temp_edge|asic = %d\n", temp.temp_edge);
 			AMDGV_INFO("	temp_mem = %d\n", temp.temp_mem);
@@ -778,14 +780,14 @@ int amdgv_irqmgr_register_interrupt(struct amdgv_adapter *adapt)
 
 	intr_regrt_info = oss_malloc(sizeof(struct oss_intr_regrt_info));
 	if (intr_regrt_info == NULL) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				sizeof(struct oss_intr_regrt_info));
 		return AMDGV_FAILURE;
 	}
 
 	intr_entries = oss_malloc(sizeof(struct oss_intr_regrt_entry) * 4);
 	if (intr_entries == NULL) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				sizeof(struct oss_intr_regrt_entry) * 4);
 		oss_free(intr_regrt_info);
 		return AMDGV_FAILURE;
@@ -830,7 +832,7 @@ int amdgv_irqmgr_register_interrupt(struct amdgv_adapter *adapt)
 
 	/* register interrupt handler to OS */
 	if (oss_register_interrupt(adapt->dev, intr_regrt_info) != 0) {
-		AMDGV_ERROR("failed to register interrupt handler!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_REGISTER_INTERRUPT_FAIL, 0);
 		goto fail;
 	}
 
@@ -906,19 +908,19 @@ int amdgv_irqmgr_sw_init(struct amdgv_adapter *adapt)
 	/* todo: check level 0 later */
 	adapt->irqmgr.hv_event_lock = oss_spin_lock_init(AMDGV_SPIN_LOCK_LOWEST_RANK);
 	if (adapt->irqmgr.hv_event_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
 		return AMDGV_FAILURE;
 	}
 
 	adapt->irqmgr.ih_event_lock = oss_spin_lock_init(AMDGV_SPIN_LOCK_LOWEST_RANK);
 	if (adapt->irqmgr.ih_event_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
 		return AMDGV_FAILURE;
 	}
 
 	adapt->irqmgr.ih_handler3_lock = oss_spin_lock_init(AMDGV_SPIN_LOCK_LOWEST_RANK);
 	if (adapt->irqmgr.ih_handler3_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -929,7 +931,7 @@ int amdgv_irqmgr_sw_init(struct amdgv_adapter *adapt)
 	else {
 		/* if flag is set allocates ih ring in sysmem, by default allocates in fb */
 		if (amdgv_ih_ring_init(adapt, 1 << 16, alloc_ring_in_sysmem) != 0) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_IOV_INIT_IV_RING_FAIL, 0);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_INIT_IV_RING_FAIL, 0);
 			return AMDGV_FAILURE;
 		}
 	}
@@ -968,4 +970,12 @@ void amdgv_irqmgr_update_virtualized_interrupt(struct amdgv_adapter *adapt, uint
 {
 	if (adapt->irqmgr.update_virtualized_interrupt)
 		adapt->irqmgr.update_virtualized_interrupt(adapt, idx_vf);
+}
+
+int amdgv_irqmgr_vf_disp_timer2_control(struct amdgv_adapter *adapt, uint32_t idx_vf, bool enable)
+{
+	if (adapt->irqmgr.vf_disp_timer2_control)
+		return adapt->irqmgr.vf_disp_timer2_control(adapt, idx_vf, enable);
+
+	return 0;
 }

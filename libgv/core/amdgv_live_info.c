@@ -12,29 +12,70 @@
 
 static const uint32_t this_block = AMDGV_COMMUNICATION_BLOCK;
 
+static enum amdgv_live_info_status
+amdgv_live_info_get_block(struct amdgv_adapter *adapt, uint32_t data_op,
+			      struct live_info_table_header **header_out)
+{
+	struct amdgv_gpu_data_v2 *gpu_data = adapt->sys_mem_info.va_ptr;
+	uint32_t op_num, offset;
+
+	*header_out = NULL;
+
+	if (!gpu_data) {
+		AMDGV_ERROR("live-update blob pointer is NULL\n");
+		return AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
+	}
+
+	if (data_op >= AMDGV_MAX_LIVE_INFO_DATA) {
+		AMDGV_ERROR("invalid data_op %u (max %u)\n",
+			    data_op, (uint32_t)AMDGV_MAX_LIVE_INFO_DATA);
+		return AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
+	}
+
+	op_num = gpu_data->header.op_num;
+	if (op_num > AMDGV_MAX_LIVE_INFO_DATA) {
+		AMDGV_ERROR("corrupt live-update blob: op_num %u out of range (max %u)\n",
+			    op_num, (uint32_t)AMDGV_MAX_LIVE_INFO_DATA);
+		return AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
+	}
+
+	if (data_op >= op_num)
+		return AMDGV_LIVE_INFO_STATUS_FEATURE_NOT_SUPPORTED;
+
+	offset = gpu_data->header.op_offset[data_op];
+
+	if (offset < sizeof(struct amdgv_gpu_data_header_v2) ||
+	    offset > AMDGV_GPU_DATA_V2_SIZE - sizeof(struct live_info_table_header)) {
+		AMDGV_ERROR("corrupt live-update blob: offset 0x%x for op %u out of bounds\n",
+			    offset, data_op);
+		return AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
+	}
+
+	*header_out = (struct live_info_table_header *)((char *)gpu_data + offset);
+	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
+}
+
 enum amdgv_live_info_status amdgv_import_data_by_op(struct amdgv_adapter *adapt,
 							   uint32_t data_op)
 {
-	enum amdgv_live_info_status status = AMDGV_LIVE_INFO_STATUS_FEATURE_NOT_SUPPORTED;
-	void *gpu_data;
-	struct live_info_table_header *header;
-	uint32_t offset, op_num;
+	enum amdgv_live_info_status status;
+	struct live_info_table_header *header = NULL;
 
 	if (!amdgv_in_live_update_seq())
 		return 0;
 
-	gpu_data = adapt->sys_mem_info.va_ptr;
-	offset = ((struct amdgv_gpu_data_v2 *)gpu_data)->header.op_offset[data_op];
-	op_num = ((struct amdgv_gpu_data_v2 *)gpu_data)->header.op_num;
+	status = amdgv_live_info_get_block(adapt, data_op, &header);
+	if (status == AMDGV_LIVE_INFO_STATUS_FEATURE_NOT_SUPPORTED)
+		return status;
+	if (status != AMDGV_LIVE_INFO_STATUS_SUCCESS) {
+		adapt->opt.skip_hw_init = 0;
+		return status;
+	}
 
-	header = (struct live_info_table_header *)((char *)gpu_data + offset);
-	if (data_op < op_num) {
-		amdgv_live_info_import_data(adapt, data_op, (void *)header,
-						&status);
-		if (status) {
-			AMDGV_ERROR("Import %d data fail\n", data_op);
-			adapt->opt.skip_hw_init = 0;
-		}
+	amdgv_live_info_import_data(adapt, data_op, (void *)header, &status);
+	if (status) {
+		AMDGV_ERROR("Import %d data fail\n", data_op);
+		adapt->opt.skip_hw_init = 0;
 	}
 	return status;
 }
@@ -44,16 +85,19 @@ enum amdgv_live_info_status amdgv_import_data(struct amdgv_adapter *adapt)
 	enum amdgv_live_info_status status = AMDGV_LIVE_INFO_STATUS_FEATURE_NOT_SUPPORTED;
 	void *gpu_data;
 	struct live_info_table_header *header;
-	uint32_t op_num, offset;
-	uint32_t *op_offset;
+	uint32_t op_num;
 	enum amdgv_live_info_data data_op;
 
 	if (!amdgv_in_live_update_seq())
 		return 0;
 
-	gpu_data  = adapt->sys_mem_info.va_ptr;
-	op_num    =  ((struct amdgv_gpu_data_v2 *)gpu_data)->header.op_num;
-	op_offset = &((struct amdgv_gpu_data_v2 *)gpu_data)->header.op_offset[0];
+	gpu_data = adapt->sys_mem_info.va_ptr;
+	if (!gpu_data) {
+		AMDGV_ERROR("live-update blob pointer is NULL, Enable interrupt.\n");
+		status = AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
+		goto fail;
+	}
+	op_num = ((struct amdgv_gpu_data_v2 *)gpu_data)->header.op_num;
 
 	for (data_op = AMDGV_LIVE_INFO_DATA__CRITICAL_STATE; (uint32_t)data_op < op_num; data_op++) {
 		if ((data_op != AMDGV_LIVE_INFO_DATA__MODULE_PARAM_PRE) &&
@@ -63,15 +107,18 @@ enum amdgv_live_info_status amdgv_import_data(struct amdgv_adapter *adapt)
 			(data_op != AMDGV_LIVE_INFO_DATA__XGMI) &&
 			(data_op != AMDGV_LIVE_INFO_DATA__IP_DISCOVERY || (!adapt->ip_discovery.enable_live_update))) {
 
-			offset = op_offset[data_op];
-			header = (struct live_info_table_header *)((char *)gpu_data + offset);
+			status = amdgv_live_info_get_block(adapt, data_op, &header);
+
+			if (status != AMDGV_LIVE_INFO_STATUS_SUCCESS) {
+				AMDGV_ERROR("corrupt live-update blob for op %d, Enable interrupt.\n", data_op);
+				status = AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
+				goto fail;
+			}
 			amdgv_live_info_import_data(adapt, data_op, (void *)header,
 							&status);
 			if (status) {
-				adapt->opt.skip_hw_init = 0;
 				AMDGV_ERROR("Import %d data fail, Enable interrupt.\n", data_op);
-				amdgv_toggle_interrupt(adapt, true);
-				return status;
+				goto fail;
 			}
 		}
 	}
@@ -93,11 +140,15 @@ enum amdgv_live_info_status amdgv_import_data(struct amdgv_adapter *adapt)
 	}
 
 	if (status) {
-		adapt->opt.skip_hw_init = 0;
 		AMDGV_ERROR("Get ih data fail, Enable interrupt.\n");
-		amdgv_toggle_interrupt(adapt, true);
+		goto fail;
 	}
 
+	return status;
+
+fail:
+	adapt->opt.skip_hw_init = 0;
+	amdgv_toggle_interrupt(adapt, true);
 	return status;
 }
 
@@ -284,6 +335,7 @@ int amdgv_live_info_export_data(struct amdgv_adapter *adapt, uint32_t data_op,
 		param_info->fw_load_type = adapt->fw_load_type;
 		param_info->debug_mode = adapt->debug.mode;
 		param_info->log_level = adapt->log_level;
+		param_info->sys_log_level = adapt->sys_log_level;
 		param_info->log_mask = adapt->log_mask;
 		param_info->flags = adapt->flags;
 		param_info->vf_hbm_mgmt_mode = adapt->vf_hbm_mgmt_mode;
@@ -497,6 +549,7 @@ int amdgv_live_info_import_data(struct amdgv_adapter *adapt, uint32_t data_op,
 		adapt->fw_load_type = param_info->fw_load_type;
 		amdgv_debug_set_mode(adapt, param_info->debug_mode);
 		adapt->log_level = param_info->log_level;
+		adapt->sys_log_level = param_info->sys_log_level;
 		adapt->log_mask = param_info->log_mask;
 		adapt->flags = param_info->flags;
 		adapt->vf_hbm_mgmt_mode = param_info->vf_hbm_mgmt_mode;

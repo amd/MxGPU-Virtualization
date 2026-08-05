@@ -6,7 +6,7 @@
 #include "amdgv_device.h"
 #include "amdgv_oss_wrapper.h"
 #include "amdgv_guard.h"
-#include "amdgv_error.h"
+#include "amdgv_log.h"
 
 static const uint32_t this_block = AMDGV_MEMORY_BLOCK;
 
@@ -309,7 +309,7 @@ int amdgv_guard_vf_init(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	vf = &adapt->array_vf[idx_vf];
 	vf->guard = oss_zalloc(sizeof(struct amdgv_vf_guard));
 	if (!vf->guard) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				sizeof(struct amdgv_vf_guard));
 		return AMDGV_FAILURE;
 	}
@@ -324,14 +324,14 @@ int amdgv_guard_vf_init(struct amdgv_adapter *adapt, uint32_t idx_vf)
 		max_threshold = amdgv_guard_get_max_threshold(i);
 		event->record_array = oss_zalloc(max_threshold * sizeof(int64_t));
 		if (!event->record_array) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 					max_threshold * sizeof(int64_t));
 			goto failed;
 		}
 
 		event->lock = oss_spin_lock_init(AMDGV_SPIN_LOCK_HIGHEST_RANK);
 		if (event->lock == OSS_INVALID_HANDLE) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_SPIN_LOCK_FAIL,
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_SPIN_LOCK_FAIL,
 					0);
 			goto failed;
 		}
@@ -423,7 +423,7 @@ int amdgv_guard_vf_reset(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	return 0;
 
 failed:
-	amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_GUARD_RESET_FAIL, idx_vf);
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GUARD_RESET_FAIL, idx_vf);
 	return AMDGV_FAILURE;
 }
 

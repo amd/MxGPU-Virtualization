@@ -23,7 +23,6 @@ enum engine_reg {
 	NUM_ENGINES
 };
 
-int mi300_reset_trigger_whole_gpu_reset(struct amdgv_adapter *adapt, bool is_unload);
 void mi300_clear_dummy_mode_after_reset(struct amdgv_adapter *adapt);
 
 #endif

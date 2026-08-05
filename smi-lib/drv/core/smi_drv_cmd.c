@@ -9,7 +9,7 @@
 #include "smi_drv_core_api.h"
 #include "smi_drv_cmd.h"
 #include <amdgv_gpumon.h>
-#include <amdgv_error.h>
+#include <amdgv_log.h>
 
 #include "smi_drv_oss_wrapper.h"
 #include "smi_drv_utils.h"
@@ -45,13 +45,13 @@ static int smi_convert_ret_value(enum smi_error_type type,
 	switch (libgv_error_subcode) {
 	case 0:
 		return SMI_STATUS_SUCCESS;
-	case AMDGV_ERROR_DRIVER_DEV_INIT_FAIL:
+	case AMDGV_LOG_DRIVER_DEV_INIT_FAIL:
 		return SMI_STATUS_IO;
-	case AMDGV_ERROR_GPU_NOT_INITIALIZED:
+	case AMDGV_LOG_GPU_NOT_INITIALIZED:
 		return SMI_STATUS_NOT_INIT;
-	case AMDGV_ERROR_DRIVER_GET_READ_SEMA_FAIL:
+	case AMDGV_LOG_DRIVER_GET_READ_SEMA_FAIL:
 		return SMI_STATUS_RETRY;
-	case AMDGV_ERROR_GPUMON_NOT_SUPPORTED:
+	case AMDGV_LOG_GPUMON_NOT_SUPPORTED:
 		return SMI_STATUS_NOT_SUPPORTED;
 	}
 
@@ -59,11 +59,11 @@ static int smi_convert_ret_value(enum smi_error_type type,
 	switch (type) {
 	case ERROR_OTHER:
 		switch (libgv_error_subcode) {
-		case AMDGV_ERROR_GPUMON_INVALID_MODE:
+		case AMDGV_LOG_GPUMON_INVALID_MODE:
 			return SMI_STATUS_INVAL;
-		case AMDGV_ERROR_GPUMON_SET_ALREADY:
+		case AMDGV_LOG_GPUMON_SET_ALREADY:
 			return SMI_STATUS_SUCCESS;
-		case AMDGV_ERROR_GPUMON_VF_BUSY:
+		case AMDGV_LOG_GPUMON_VF_BUSY:
 			return SMI_STATUS_BUSY;
 		default:
 			return SMI_STATUS_API_FAILED;
@@ -75,16 +75,16 @@ static int smi_convert_ret_value(enum smi_error_type type,
 		}
 	case ERROR_ALLOCATION:
 		switch (libgv_error_subcode) {
-		case AMDGV_ERROR_GPUMON_NO_AVAILABLE_SLOT:
+		case AMDGV_LOG_GPUMON_NO_AVAILABLE_SLOT:
 			return SMI_STATUS_NO_SLOT;
-		case AMDGV_ERROR_GPUMON_NO_SUITABLE_SPACE:
-		case AMDGV_ERROR_GPUMON_OVERSIZE_ALLOCATION:
-		case AMDGV_ERROR_GPUMON_OVERLAPPING_FB:
+		case AMDGV_LOG_GPUMON_NO_SUITABLE_SPACE:
+		case AMDGV_LOG_GPUMON_OVERSIZE_ALLOCATION:
+		case AMDGV_LOG_GPUMON_OVERLAPPING_FB:
 			return SMI_STATUS_OUT_OF_RESOURCES;
-		case AMDGV_ERROR_GPUMON_INVALID_FB_SIZE:
-		case AMDGV_ERROR_GPUMON_INVALID_GFX_TIMESLICE:
-		case AMDGV_ERROR_GPUMON_INVALID_MM_TIMESLICE:
-		case AMDGV_ERROR_GPUMON_INVALID_GFX_PART:
+		case AMDGV_LOG_GPUMON_INVALID_FB_SIZE:
+		case AMDGV_LOG_GPUMON_INVALID_GFX_TIMESLICE:
+		case AMDGV_LOG_GPUMON_INVALID_MM_TIMESLICE:
+		case AMDGV_LOG_GPUMON_INVALID_GFX_PART:
 		default:
 			return SMI_STATUS_INVAL;
 		}
@@ -94,9 +94,9 @@ static int smi_convert_ret_value(enum smi_error_type type,
 	case ERROR_CLEAR_VF_FB:
 	default:
 		switch (libgv_error_subcode) {
-		case AMDGV_ERROR_GPUMON_VF_BUSY:
+		case AMDGV_LOG_GPUMON_VF_BUSY:
 			return SMI_STATUS_BUSY;
-		case AMDGV_ERROR_GPUMON_NOT_SUPPORTED:
+		case AMDGV_LOG_GPUMON_NOT_SUPPORTED:
 			return SMI_STATUS_NOT_SUPPORTED;
 		default:
 			return SMI_STATUS_INVAL;
@@ -180,23 +180,24 @@ int smi_get_server_static_info(struct smi_ctx *ctx, void *inb,
 		info->devices[i].bdf.as_uint = ctx->devices[i].bdf;
 		info->devices[i].dev_id.handle = ctx->devices[i].handle;
 		info->devices[i].failed = true;
-		if ((ctx->devices[i].adev)) {
-			smi_query->status_info.status = amdgv_get_dev_status(ctx->devices[i].adev);
-			if (smi_query->status_info.status == AMDGV_STATUS_HW_INIT)
-				info->devices[i].failed = false;
-			}
-			adev = smi_get_handle(ctx, &info->devices[i].dev_id, &dev_data, &dev_busy);
-			if (!adev) {
-				smi_oss_funcs->free_small_memory(smi_query);
-				return SMI_STATUS_NOT_FOUND;
-			}
-			if (dev_busy) {
-				smi_oss_funcs->free_small_memory(smi_query);
-				return SMI_STATUS_BUSY;
-			}
-			init_data = &dev_data.init_data;
-			info->devices[i].dev_id.device_id = init_data->info.dev_id;
-			smi_put_handle(adev, ctx);
+
+		adev = smi_get_handle(ctx, &info->devices[i].dev_id, &dev_data, &dev_busy);
+		if (!adev) {
+			smi_oss_funcs->free_small_memory(smi_query);
+			return SMI_STATUS_NOT_FOUND;
+		}
+		if (dev_busy) {
+			smi_oss_funcs->free_small_memory(smi_query);
+			return SMI_STATUS_BUSY;
+		}
+
+		smi_query->status_info.status = amdgv_get_dev_status(adev);
+		if (smi_query->status_info.status == AMDGV_STATUS_HW_INIT)
+			info->devices[i].failed = false;
+
+		init_data = &dev_data.init_data;
+		info->devices[i].dev_id.device_id = init_data->info.dev_id;
+		smi_put_handle(adev, ctx);
 	}
 
 	switch (smi_get_shim_log_level()) {
@@ -284,17 +285,26 @@ int smi_get_gpu_board_info(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_OUT_OF_RESOURCES;
 	}
 	ret = amdgv_gpumon_get_product_info(adev, product);
+
+	smi_put_handle(adev, ctx);
 	if (ret || !(product->valid)) {
 		if (dev_data.parent >= 0) {
 			for (i = 0; i < ctx->num_devices; i++) {
-				if ((ctx->devices[i].parent == dev_data.parent) &&
-						(adev != ctx->devices[i].adev)) {
-					ret = amdgv_gpumon_get_product_info(ctx->devices[i].adev,
-						product);
-					if (!ret && product->valid) {
-						break;
-					}
-				}
+				smi_device_handle_t sib = { .handle = ctx->devices[i].handle };
+				amdgv_dev_t *sib_adev = NULL;
+				bool sib_busy = false;
+
+				if ((ctx->devices[i].parent != dev_data.parent) ||
+						(id->dev_id.handle == ctx->devices[i].handle))
+					continue;
+
+				sib_adev = smi_get_handle(ctx, &sib, NULL, &sib_busy);
+				if (!sib_adev || sib_busy)
+					continue;
+				ret = amdgv_gpumon_get_product_info(sib_adev, product);
+				smi_put_handle(sib_adev, ctx);
+				if (!ret && product->valid)
+					break;
 			}
 		}
 	}
@@ -311,7 +321,6 @@ int smi_get_gpu_board_info(struct smi_ctx *ctx, void *inb,
 			info->manufacturer_name, product->manufacturer_name, STRLEN_VERYLONG);
 	}
 	smi_oss_funcs->free_memory(product);
-	smi_put_handle(adev, ctx);
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
@@ -411,7 +420,7 @@ int smi_get_gpu_vram_info(struct smi_ctx *ctx, void *inb,
 		smi_oss_funcs->memcpy(info->vram_vendor, smi_map_vram_vendor(vram_info.vram_vendor),
 			smi_oss_funcs->strlen(smi_map_vram_vendor(vram_info.vram_vendor)));
 		info->vram_bit_width = vram_info.vram_bit_width;
-	} else if (ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED) {
+	} else if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->vram_size = SMI_NOT_SUPPORTED;
 		info->vram_bit_width = SMI_NOT_SUPPORTED;
 		ret = SMI_STATUS_SUCCESS;
@@ -480,41 +489,68 @@ int smi_get_gpu_driver_info(struct smi_ctx *ctx, void *inb,
 int smi_get_gpu_power_cap_info(struct smi_ctx *ctx, void *inb,
 				void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info_ex *id = NULL;
+	struct smi_get_power_cap *id = NULL;
 	struct smi_power_cap_info *info = NULL;
+	uint32_t sensor_ind = 0;
 	amdgv_dev_t *adev = NULL;
 	bool dev_busy = false;
 	int ret = 0;
+	int default_power = 0;
 	struct amdgv_gpumon_metrics_ext *gpumon_metrics_ext = NULL;
 	struct amdgv_gpumon_metric_ext *metric = NULL;
 	uint32_t i = 0;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_device_info_ex)) ||
+	if ((in_len != sizeof(struct smi_get_power_cap)) ||
 		(out_len != sizeof(struct smi_power_cap_info)))
 		return SMI_STATUS_INVAL;
 	info = (struct smi_power_cap_info *) outb;
-	id = (struct smi_device_info_ex *) inb;
+	id = (struct smi_get_power_cap *) inb;
+	sensor_ind = id->sensor_ind;
+
+	/* Cheap, ASIC-independent sanity check. Whether sensor_ind is actually
+	 * supported by this specific ASIC is determined below by attempting the
+	 * read itself (AMDGV_LOG_GPUMON_NOT_SUPPORTED), instead of probing PPT1
+	 * up front via amdgv_gpumon_get_supported_power_cap(): that would send an
+	 * extra PPT1 FW query even for a plain PPT0 (sensor_ind=0) request, and
+	 * would fail the whole call if that unrelated PPT1 probe hit a transient
+	 * error, even though PPT0 itself is unaffected.
+	 */
+	if (sensor_ind >= AMDGV_GPUMON_MAX_PPT_SENSOR_NUM)
+		return SMI_STATUS_INVAL;
+
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev)
 		return SMI_STATUS_NOT_FOUND;
 	if (dev_busy)
 		return SMI_STATUS_BUSY;
 
-	/* Initialize default_power_cap as not supported (no function available to get it) */
-	info->default_power_cap = SMI_NOT_SUPPORTED;
+	/* PPT1: only power_cap is exposed by FW */
+	if (sensor_ind != 0) {
+		info->dpm_cap = SMI_NOT_SUPPORTED;
+		info->default_power_cap = SMI_NOT_SUPPORTED;
+		info->max_power_cap = SMI_NOT_SUPPORTED;
+		info->min_power_cap = SMI_NOT_SUPPORTED;
+		ret = amdgv_gpumon_get_gpu_power_capacity(adev, sensor_ind,
+							  (int *)&info->power_cap);
+		if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
+			info->power_cap = SMI_NOT_SUPPORTED;
+			ret = SMI_STATUS_SUCCESS;
+		}
+		goto end;
+	}
 
 	/* get info from gpumon */
 	ret = amdgv_gpumon_get_dpm_cap(adev, (int *)&info->dpm_cap);
-	if (ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED) {
+	if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->dpm_cap = SMI_NOT_SUPPORTED;
 		ret = SMI_STATUS_SUCCESS;
 	} else if (ret != SMI_STATUS_SUCCESS)
 		goto end;
 
 	/* Try to get power_cap from gpumon first */
-	ret = amdgv_gpumon_get_gpu_power_capacity(adev, (int *)&info->power_cap);
-	if (ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED) {
+	ret = amdgv_gpumon_get_gpu_power_capacity(adev, sensor_ind, (int *)&info->power_cap);
+	if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		/* If not supported via gpumon, try to get it from metrics table*/
 		info->power_cap = SMI_NOT_SUPPORTED;
 		gpumon_metrics_ext = smi_oss_funcs->alloc_memory(sizeof(struct amdgv_gpumon_metrics_ext));
@@ -536,7 +572,7 @@ int smi_get_gpu_power_cap_info(struct smi_ctx *ctx, void *inb,
 		goto end;
 
 	ret = amdgv_gpumon_get_max_configurable_power_limit(adev, (int *)&info->max_power_cap);
-	if (ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED) {
+	if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->max_power_cap = SMI_NOT_SUPPORTED;
 		ret = SMI_STATUS_SUCCESS;
 	} else if (ret != SMI_STATUS_SUCCESS)
@@ -544,11 +580,63 @@ int smi_get_gpu_power_cap_info(struct smi_ctx *ctx, void *inb,
 	else
 		ret = SMI_STATUS_SUCCESS;
 	ret = amdgv_gpumon_get_min_power_limit(adev, (int *)&info->min_power_cap);
-	if (ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED) {
+	if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->min_power_cap = SMI_NOT_SUPPORTED;
 		ret = SMI_STATUS_SUCCESS;
 	} else if (ret != SMI_STATUS_SUCCESS)
 		goto end;
+
+	ret = amdgv_gpumon_get_default_power_limit(adev, &default_power);
+	if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
+		info->default_power_cap = SMI_NOT_SUPPORTED;
+		ret = SMI_STATUS_SUCCESS;
+	} else if (ret != SMI_STATUS_SUCCESS) {
+		goto end;
+	} else {
+		info->default_power_cap = (uint64_t)default_power;
+	}
+end:
+	smi_put_handle(adev, ctx);
+	return smi_convert_ret_value(ERROR_OTHER, ret);
+}
+int smi_get_supported_power_cap(struct smi_ctx *ctx, void *inb,
+				void *outb, uint16_t in_len, uint16_t out_len)
+{
+	struct smi_device_info *dev = NULL;
+	struct smi_supported_power_cap *out = NULL;
+	struct amdgv_supported_power_cap sensors_info;
+	amdgv_dev_t *adev = NULL;
+	bool dev_busy = false;
+	uint32_t i;
+	int ret = 0;
+
+	/* Check version */
+	if ((in_len != sizeof(struct smi_device_info)) ||
+		(out_len != sizeof(struct smi_supported_power_cap)))
+		return SMI_STATUS_INVAL;
+
+	out = (struct smi_supported_power_cap *) outb;
+	dev = (struct smi_device_info *) inb;
+	adev = smi_get_handle(ctx, &dev->dev_id, NULL, &dev_busy);
+	if (!adev)
+		return SMI_STATUS_NOT_FOUND;
+	if (dev_busy)
+		return SMI_STATUS_BUSY;
+
+	smi_oss_funcs->memset(out, 0, sizeof(*out));
+
+	ret = amdgv_gpumon_get_supported_power_cap(adev, &sensors_info);
+	if (ret)
+		goto end;
+
+	out->sensor_count = sensors_info.sensor_count;
+	if (out->sensor_count > SMI_MAX_PPT_SENSOR_LENGTH)
+		out->sensor_count = SMI_MAX_PPT_SENSOR_LENGTH;
+	for (i = 0; i < out->sensor_count; i++) {
+		out->sensor_inds[i] = sensors_info.sensor_inds[i];
+		out->sensor_types[i] = (smi_power_cap_type_t)sensors_info.sensor_types[i];
+	}
+
 end:
 	smi_put_handle(adev, ctx);
 	return smi_convert_ret_value(ERROR_OTHER, ret);
@@ -625,7 +713,7 @@ int smi_get_gpu_cache_info(struct smi_ctx *ctx, void *inb,
 			info->cache[i].max_num_cu_shared = gpu_cache_info.cache[i].max_num_cu_shared;
 			info->cache[i].num_cache_instance = gpu_cache_info.cache[i].num_cache_instance;
 		}
-	} else if (ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED) {
+	} else if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->num_cache_types = SMI_NOT_SUPPORTED;
 		ret = SMI_STATUS_SUCCESS;
 	}
@@ -865,9 +953,9 @@ int smi_get_gpu_performance_info(struct smi_ctx *ctx, void *inb,
 
 	mm_ret = amdgv_gpumon_get_max_vclk0(adev, &info->clock.max_clk[SMI_CLK_TYPE_VCLK0]);
 	// ret can be not supported for GPUs that don't support MM1 and MM2 domains
-	if (mm_ret && mm_ret != AMDGV_ERROR_GPUMON_NOT_SUPPORTED)
+	if (mm_ret && mm_ret != AMDGV_LOG_GPUMON_NOT_SUPPORTED)
 		goto end;
-	else if (mm_ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED){
+	else if (mm_ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->clock.max_clk[SMI_CLK_TYPE_VCLK0] = SMI_NOT_SUPPORTED;
 		ret = SMI_STATUS_SUCCESS;
 	}
@@ -875,69 +963,69 @@ int smi_get_gpu_performance_info(struct smi_ctx *ctx, void *inb,
 	mm_ret = amdgv_gpumon_get_min_vclk0(adev, &info->clock.min_clk[SMI_CLK_TYPE_VCLK0]);
 
 	// ret can be not supported for GPUs that don't support MM1 and MM2 domains
-	if (mm_ret && mm_ret != AMDGV_ERROR_GPUMON_NOT_SUPPORTED)
+	if (mm_ret && mm_ret != AMDGV_LOG_GPUMON_NOT_SUPPORTED)
 		goto end;
-	else if (mm_ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED){
+	else if (mm_ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->clock.min_clk[SMI_CLK_TYPE_VCLK0] = SMI_NOT_SUPPORTED;
 		ret = SMI_STATUS_SUCCESS;
 	}
 
 	mm_ret = amdgv_gpumon_get_max_vclk1(adev, &info->clock.max_clk[SMI_CLK_TYPE_VCLK1]);
 	// ret can be not supported for GPUs that don't support MM1 and MM2 domains
-	if (mm_ret && mm_ret != AMDGV_ERROR_GPUMON_NOT_SUPPORTED)
+	if (mm_ret && mm_ret != AMDGV_LOG_GPUMON_NOT_SUPPORTED)
 		goto end;
-	else if (mm_ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED){
+	else if (mm_ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->clock.max_clk[SMI_CLK_TYPE_VCLK1] = SMI_NOT_SUPPORTED;
 		ret = SMI_STATUS_SUCCESS;
 	}
 
 	mm_ret = amdgv_gpumon_get_min_vclk1(adev, &info->clock.min_clk[SMI_CLK_TYPE_VCLK1]);
 	// ret can be not supported for GPUs that don't support MM1 and MM2 domains
-	if (mm_ret && mm_ret != AMDGV_ERROR_GPUMON_NOT_SUPPORTED)
+	if (mm_ret && mm_ret != AMDGV_LOG_GPUMON_NOT_SUPPORTED)
 		goto end;
-	else if (mm_ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED){
+	else if (mm_ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->clock.min_clk[SMI_CLK_TYPE_VCLK1] = SMI_NOT_SUPPORTED;
 		ret = SMI_STATUS_SUCCESS;
 	}
 
 	mm_ret = amdgv_gpumon_get_max_dclk0(adev, &info->clock.max_clk[SMI_CLK_TYPE_DCLK0]);
 	// ret can be not supported for GPUs that don't support MM1 and MM2 domains
-	if (mm_ret && mm_ret != AMDGV_ERROR_GPUMON_NOT_SUPPORTED)
+	if (mm_ret && mm_ret != AMDGV_LOG_GPUMON_NOT_SUPPORTED)
 		goto end;
-	else if (mm_ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED){
+	else if (mm_ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->clock.max_clk[SMI_CLK_TYPE_DCLK0] = SMI_NOT_SUPPORTED;
 		ret = SMI_STATUS_SUCCESS;
 	}
 
 	mm_ret = amdgv_gpumon_get_min_dclk0(adev, &info->clock.min_clk[SMI_CLK_TYPE_DCLK0]);
 	// ret can be not supported for GPUs that don't support MM1 and MM2 domains
-	if (mm_ret && mm_ret != AMDGV_ERROR_GPUMON_NOT_SUPPORTED)
+	if (mm_ret && mm_ret != AMDGV_LOG_GPUMON_NOT_SUPPORTED)
 		goto end;
-	else if (mm_ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED){
+	else if (mm_ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->clock.min_clk[SMI_CLK_TYPE_DCLK0] = SMI_NOT_SUPPORTED;
 		ret = SMI_STATUS_SUCCESS;
 	}
 
 	mm_ret = amdgv_gpumon_get_max_dclk1(adev, &info->clock.max_clk[SMI_CLK_TYPE_DCLK1]);
 	// ret can be not supported for GPUs that don't support MM1 and MM2 domains
-	if (mm_ret && mm_ret != AMDGV_ERROR_GPUMON_NOT_SUPPORTED)
+	if (mm_ret && mm_ret != AMDGV_LOG_GPUMON_NOT_SUPPORTED)
 		goto end;
-	else if (mm_ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED){
+	else if (mm_ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->clock.max_clk[SMI_CLK_TYPE_DCLK1] = SMI_NOT_SUPPORTED;
 		ret = SMI_STATUS_SUCCESS;
 	}
 
 	mm_ret = amdgv_gpumon_get_min_dclk1(adev, &info->clock.min_clk[SMI_CLK_TYPE_DCLK1]);
 	// ret can be not supported for GPUs that don't support MM1 and MM2 domains
-	if (mm_ret && mm_ret != AMDGV_ERROR_GPUMON_NOT_SUPPORTED)
+	if (mm_ret && mm_ret != AMDGV_LOG_GPUMON_NOT_SUPPORTED)
 		goto end;
-	else if (mm_ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED){
+	else if (mm_ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->clock.min_clk[SMI_CLK_TYPE_DCLK1] = SMI_NOT_SUPPORTED;
 		ret = SMI_STATUS_SUCCESS;
 	}
 
 	ret = amdgv_gpumon_is_clk_locked(adev, AMDGV_PP_CLK_GFX, &info->clock.clk_locked[SMI_CLK_TYPE_GFX]);
-	if (ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED) {
+	if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->clock.clk_locked[SMI_CLK_TYPE_GFX] = SMI_NOT_SUPPORTED;
 		ret = SMI_STATUS_SUCCESS;
 	} else if (ret != SMI_STATUS_SUCCESS)
@@ -1498,11 +1586,8 @@ int smi_read_event_set(struct smi_ctx *ctx, void *inb,
 	if (res < 0)
 		return SMI_STATUS_API_FAILED;
 
-	if (res == SMI_STATUS_TIMEOUT) {
-		return SMI_STATUS_TIMEOUT;
-	}
-
-	return SMI_STATUS_SUCCESS;
+	/* Pass through shim status (TIMEOUT, NOT_SUPPORTED, etc.) on all hosts. */
+	return res;
 }
 
 int smi_destroy_event_set(struct smi_ctx *ctx, void *inb,
@@ -1958,14 +2043,14 @@ int smi_get_pcie_info(struct smi_ctx *ctx, void *inb,
 	ret = amdgv_gpumon_get_card_form_factor(adev, &type);
 	if (ret == 0) {
 		info->pcie_static.slot_type = smi_map_card_form_factor(type);
-	} else if (ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED) {
+	} else if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->pcie_static.slot_type = SMI_CARD_FORM_FACTOR_UNKNOWN;
 		ret = SMI_STATUS_SUCCESS;
 	} else {
 		goto end;
 	}
 	ret = amdgv_gpumon_get_gpu_max_pcie_link_generation(adev, &info->pcie_static.max_pcie_interface_version);
-	if (ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED) {
+	if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->pcie_static.max_pcie_interface_version = SMI_NOT_SUPPORTED;
 		ret = SMI_STATUS_SUCCESS;
 	} else if (ret) {
@@ -2519,7 +2604,7 @@ int smi_get_ras_feature_info(struct smi_ctx *ctx, void *inb,
 		goto end;
 	}
 	ret = amdgv_gpumon_get_ecc_correction_schema(adev, &ras_info->ecc_correction_schema_flag);
-	if (ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED){
+	if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		ras_info->ecc_correction_schema_flag = SMI_NOT_SUPPORTED;
 		ret = SMI_STATUS_SUCCESS;
 	}
@@ -2600,7 +2685,15 @@ int smi_get_metrics_table(struct smi_ctx *ctx, void *inb,
 
 	/* Get static metrics count and allocate */
 	ret = amdgv_gpumon_get_num_static_metrics_ext_entries(adev, &num_static_metrics);
-	if (ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED) {
+	/*
+	 * Static metrics are optional. ASICs that implement only the dynamic
+	 * metrics table (e.g. MI200/gfx90a) have no static-metrics gpumon hook,
+	 * so libgv reports AMDGV_LOG_GPUMON_NOT_SUPPORTED. Treat that as "no
+	 * static metrics" and continue returning the dynamic table instead of
+	 * failing the whole amdsmi_get_gpu_metrics() call with API_FAILED. A
+	 * genuine failure from a present hook still propagates as an error.
+	 */
+	if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		num_static_metrics = 0;
 		ret = SMI_STATUS_SUCCESS;
 	} else if (ret != SMI_STATUS_SUCCESS) {
@@ -2618,7 +2711,7 @@ int smi_get_metrics_table(struct smi_ctx *ctx, void *inb,
 		smi_oss_funcs->memset(gpumon_static_metrics_table, 0, total_alloc_size);
 
 		ret = amdgv_gpumon_get_static_metrics_ext(adev, gpumon_static_metrics_table);
-		if (ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED) {
+		if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 			num_static_metrics = 0;
 			ret = SMI_STATUS_SUCCESS;
 		} else if (ret != SMI_STATUS_SUCCESS) {

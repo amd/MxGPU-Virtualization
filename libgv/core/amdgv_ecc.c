@@ -29,14 +29,14 @@
 	uncorr_error = info.ue_count; \
 	deferred_error = info.de_count; \
 	if ((corr_error > 0) && (!adapt->mca.enabled)) { \
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_##BLOCK##_CE_TOTAL, \
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_##BLOCK##_CE_TOTAL, \
 				(CE_ERR_NUM)); \
 		amdgv_notify_shim(adapt->dev, AMDGV_NOTIFICATION_ECC_CORR_ERROR, \
 				  "%s ECC Correctable Error Detected.Count:%d", \
 				  #BLOCK, corr_error); \
 	} \
 	if ((uncorr_error > 0) && (!adapt->mca.enabled)) { \
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_##BLOCK##_UE_TOTAL, \
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_##BLOCK##_UE_TOTAL, \
 				(UE_ERR_NUM)); \
 		amdgv_notify_shim(adapt->dev, AMDGV_NOTIFICATION_ECC_UNCORR_ERROR, \
 				  "%s ECC UnCorrectable Error Detected.Count:%d", \
@@ -44,7 +44,7 @@
 	} \
 	if ((info.head.block == AMDGV_SMI_RAS_BLOCK__UMC) && \
 	    (deferred_error > 0) && (!adapt->mca.enabled)) { \
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_UMC_DE_TOTAL, \
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_UMC_DE_TOTAL, \
 				(DE_ERR_NUM)); \
 		amdgv_notify_shim(adapt->dev, AMDGV_NOTIFICATION_ECC_DFCORR_ERROR, \
 				  "%s ECC Deferred Error Detected.Count:%d", \
@@ -243,12 +243,12 @@ int amdgv_ecc_get_error_count(struct amdgv_adapter *adapt,
 		if (err_data.ce_count) {
 			adapt->ecc.gfx_correctable_error_num += err_data.ce_count;
 			if (!adapt->mca.enabled)
-				amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_GFX_CE, err_data.ce_count);
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_GFX_CE, err_data.ce_count);
 		}
 		if (err_data.ue_count) {
 			adapt->ecc.gfx_uncorrectable_error_num += err_data.ue_count;
 			if (!adapt->mca.enabled)
-				amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_GFX_UE, err_data.ue_count);
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_GFX_UE, err_data.ue_count);
 		}
 		qif->ce_count = adapt->ecc.gfx_correctable_error_num;
 		qif->ue_count = adapt->ecc.gfx_uncorrectable_error_num;
@@ -257,7 +257,7 @@ int amdgv_ecc_get_error_count(struct amdgv_adapter *adapt,
 		if (err_data.ue_count) {
 			adapt->ecc.sdma_uncorrectable_error_num += err_data.ue_count;
 			if (!adapt->mca.enabled)
-				amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_SDMA_UE, err_data.ue_count);
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_SDMA_UE, err_data.ue_count);
 		}
 		qif->ue_count = adapt->ecc.sdma_uncorrectable_error_num;
 		break;
@@ -265,12 +265,12 @@ int amdgv_ecc_get_error_count(struct amdgv_adapter *adapt,
 		if (err_data.ce_count) {
 			adapt->ecc.mmhub_correctable_error_num += err_data.ce_count;
 			if (!adapt->mca.enabled)
-				amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_MMHUB_CE, err_data.ce_count);
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_MMHUB_CE, err_data.ce_count);
 		}
 		if (err_data.ue_count) {
 			adapt->ecc.mmhub_uncorrectable_error_num += err_data.ue_count;
 			if (!adapt->mca.enabled)
-				amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_MMHUB_UE, err_data.ue_count);
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_MMHUB_UE, err_data.ue_count);
 		}
 		qif->ce_count = adapt->ecc.mmhub_correctable_error_num;
 		qif->ue_count = adapt->ecc.mmhub_uncorrectable_error_num;
@@ -279,12 +279,12 @@ int amdgv_ecc_get_error_count(struct amdgv_adapter *adapt,
 		if (err_data.ce_count) {
 			adapt->ecc.xgmi_correctable_error_num += err_data.ce_count;
 			if (!adapt->mca.enabled)
-				amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_XGMI_WAFL_CE, err_data.ce_count);
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_XGMI_WAFL_CE, err_data.ce_count);
 		}
 		if (err_data.ue_count) {
 			adapt->ecc.xgmi_uncorrectable_error_num += err_data.ue_count;
 			if (!adapt->mca.enabled)
-				amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_XGMI_WAFL_UE, err_data.ue_count);
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_XGMI_WAFL_UE, err_data.ue_count);
 		}
 		qif->ce_count = adapt->ecc.xgmi_correctable_error_num;
 		qif->ue_count = adapt->ecc.xgmi_uncorrectable_error_num;
@@ -309,7 +309,7 @@ void amdgv_ecc_check_for_errors(struct amdgv_adapter *adapt, struct amdgv_sched_
 			amdgv_ecc_get_uncorrectable_error_count(adapt, event->idx_vf);
 
 		if (corr_error > 0) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_CE,
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_CE,
 					adapt->ecc.correctable_error_num);
 			amdgv_notify_shim(adapt->dev, AMDGV_NOTIFICATION_ECC_CORR_ERROR,
 					  "ECC Correctable Error Detected.Count:%d",
@@ -320,7 +320,7 @@ void amdgv_ecc_check_for_errors(struct amdgv_adapter *adapt, struct amdgv_sched_
 			AMDGV_WARN("ECC not supported for this ASIC.\n");
 
 		if (uncorr_error > 0) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_UCE,
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_UCE,
 					adapt->ecc.uncorrectable_error_num);
 			amdgv_notify_shim(adapt->dev, AMDGV_NOTIFICATION_ECC_UNCORR_ERROR,
 					  "ECC UnCorrectable Error Detected.Count:%d",
@@ -369,7 +369,10 @@ int amdgv_ecc_check_global_ras_errors(struct amdgv_adapter *adapt)
 	if (oss_atomic_cmpxchg(&amdgv_ras_in_intr, 0, 1))
 		return AMDGV_ERR_BUSY;
 
-	amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_FATAL_ERROR, 0);
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_FATAL_ERROR, 0);
+
+	if (amdgv_uniras_enabled(adapt))
+		return 0;
 
 	if (adapt->xgmi.master_adapt) {
 		AMDGV_DEBUG("Forwarding reset event to master adapter:0x%x\n",

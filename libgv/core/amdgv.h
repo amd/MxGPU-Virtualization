@@ -52,6 +52,10 @@
 #define BIT(x) (1U << (x))
 #define BIT64(x) (1ULL << (x))
 
+/* True if every bit set in sub is also set in super, i.e. sub is a subset of
+ * super. An empty sub (0) is a subset of any mask. */
+#define BITMAP_SUBSET(sub, super) (((sub) & (super)) == (sub))
+
 #define AMDGV_ERROR(fmt, ...)                                                                 \
 	do {                                                                                  \
 		if (adapt->log_mask & this_block)                                             \

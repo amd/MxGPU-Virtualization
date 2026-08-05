@@ -61,8 +61,6 @@ enum {
  */
 
 #define NAVI32_WAIT_SMU_IDLE_MAX_RETRY 5
-#define ENABLE_RLCV_TSL  0x10119
-#define DISABLE_RLCV_TSL 0x119
 
 #define NAVI32_AUTO_SCHED_DEBUG_DUMP_MAX_SIZE	40	/* 256MB - 208MB(TMR) - Reserve */
 #define NAVI32_AUTO_SCHED_PERF_LOG_SIZE		(AMDGV_MAX_VF_SLOT * 20)	/* 5 dwords for each VF */
@@ -98,10 +96,15 @@ struct navi32_cmd_id navi32_cmd_array[] = {
 	{AMDGV_INIT_GPU,                            NAVI32_INIT_GPU_LX7,				"INIT"},
 	{AMDGV_DISABLE_AUTO_HW_SCHED,               NAVI32_DISABLE_HW_AUTO_SCHEDULING,	"DISABLE HW_AUTO_SCHED"},
 	{AMDGV_SHUTDOWN_GPU,                        NAVI32_SHUTDOWN_GPU_LX7,			"SHUTDOWN VF"},
+	{AMDGV_PAUSE_VF,                            NAVI32_PAUSE_VF,					"PAUSE VF"},
 	{AMDGV_CONFIG_AUTO_HW_SCHED_MODE,           NAVI32_CONFIG_SCHEDULER_FEATURE,	"CONFIG HW_AUTO_SCHED_MODE"},
 	{AMDGV_EVENT_NOTIFICATION,                  NAVI32_EVENT_NOTIFICATION,			"EVENT NOTIFICATION"},
 	{AMDGV_TRANSFER_VF_DATA,                    NAVI32_TRANSFER_VF_DATA,			"TRANSFER VF DATA"},
 };
+
+static int navi32_gpuiov_set_scheduler_config_descriptor(struct amdgv_adapter *adapt,
+							uint32_t hw_sched_id,
+							struct scheduler_memory_descriptor *sched_cfg);
 
 static int navi32_gpuiov_find_cap(struct amdgv_adapter *adapt)
 {
@@ -123,7 +126,7 @@ static int navi32_gpuiov_find_cap(struct amdgv_adapter *adapt)
 	}
 
 	if (!found) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_IOV_NO_GPU_IOV_CAP, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_NO_GPU_IOV_CAP, 0);
 		return 0;
 	}
 
@@ -134,8 +137,7 @@ static int navi32_gpuiov_get_sched_block_offset(struct amdgv_adapter *adapt,
 					       uint32_t hw_sched_id)
 {
 	if (hw_sched_id >= adapt->gpuiov.num_ctrl_blocks) {
-		AMDGV_ERROR("%s(%d) is an invalid scheduler for this operation\n",
-			amdgv_hw_sched_id_to_name(adapt, hw_sched_id), hw_sched_id);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_SCHED_INVALID_HW_SCHED_ID, hw_sched_id);
 		return AMDGV_FAILURE;
 	}
 
@@ -178,23 +180,6 @@ static int navi32_gpuiov_write_cmd_data(struct amdgv_adapter *adapt, uint32_t hw
 	uint32_t cmd_ctrl_offset, cmd_status_offset;
 	uint32_t offset;
 
-	if (adapt->rlcv_stamp_todo != adapt->rlcv_stamp_status) {
-		int temp_data;
-		offset = navi32_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-		cmd_ctrl_offset = PCI_SCH_CMD_CONTROL + offset;
-		if (adapt->rlcv_stamp_todo)
-			temp_data = ENABLE_RLCV_TSL;
-		else
-			temp_data = DISABLE_RLCV_TSL;
-
-		oss_pci_write_config_dword(adapt->dev, cmd_ctrl_offset, temp_data);
-		AMDGV_WARN("idx_vf=%d hw_sched_id=%d (%s) pci_write_config_dword(0x%08x, 0x%08x)\n",
-			idx_vf, hw_sched_id, amdgv_hw_sched_id_to_name(adapt, hw_sched_id),
-			cmd_ctrl_offset, temp_data);
-		oss_udelay(20);
-		adapt->rlcv_stamp_status = adapt->rlcv_stamp_todo;
-	}
-
 	if (hw_sched_id == NAVI32_HW_SCHED_BLOCK_GFX_SCH0_RLCV) {
 		/* GFX use MMIO-IOV */
 		AMDGV_DEBUG("MMIO write(0x%08x)\n", data);
@@ -205,10 +190,8 @@ static int navi32_gpuiov_write_cmd_data(struct amdgv_adapter *adapt, uint32_t hw
 		WREG32(SOC15_REG_OFFSET(VCN, 0, regJPEG_GPUIOV_CMD_CONTROL), data);
 	} else {	/* for multimedia, still use GPU-IOV */
 		offset = navi32_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-		if (offset == AMDGV_FAILURE) {
-			AMDGV_ERROR("wrong offset for hw_sched_id=%d\n", hw_sched_id);
+		if (offset == AMDGV_FAILURE)
 			return AMDGV_FAILURE;
-		}
 
 		/* clear GPUIOV CMD STATUS */
 		cmd_status_offset = PCI_SCH_CMD_STATUS + offset;
@@ -293,27 +276,13 @@ static int navi32_set_event_notification(struct amdgv_adapter *adapt,
 	return 0;
 }
 
-static void navi32_dump_rlcv_sram(struct amdgv_adapter *adapt)
-{
-	int i;
-	int ret;
-
-	WREG32(SOC15_REG_OFFSET(GC, 0, regRLC_GPU_IOV_SCRATCH_ADDR), 0x0);
-	for (i = 0; i < CSA_TSL_SIZE / 4; i++) {
-		adapt->rlcv_ts_buff[i] = RREG32(SOC15_REG_OFFSET(GC, 0, regRLC_GPU_IOV_SCRATCH_DATA));
-	}
-	ret = oss_store_rlcv_timestamp((char *)adapt->rlcv_ts_buff, CSA_TSL_SIZE, adapt->bdf);
-	if (ret)
-		AMDGV_WARN("store rlcv timestamp failed, ret=%d\n", ret);
-}
-
 static int navi32_gpuiov_setup_sched_log_mem(struct amdgv_adapter *adapt,
-	 enum amdgv_auto_sched_log_op op)
+	 enum amdgv_sched_log_op op)
 {
 	int ret = 0;
 
 	switch (op) {
-	case AMDGV_AUTO_SCHED_PERF_LOG:
+	case AMDGV_SCHED_PERF_LOG:
 		if (adapt->gpuiov.perf_log_mem)
 			break;
 
@@ -321,7 +290,8 @@ static int navi32_gpuiov_setup_sched_log_mem(struct amdgv_adapter *adapt,
 			amdgv_memmgr_alloc_align(&adapt->memmgr_pf, NAVI32_AUTO_SCHED_PERF_LOG_SIZE,
 						PAGE_SIZE, MEM_GPUIOV_SCHED_LOG);
 		if (!adapt->gpuiov.perf_log_mem) {
-			AMDGV_ERROR("Failed to allocate debug dump memory!\n");
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL,
+				      NAVI32_AUTO_SCHED_PERF_LOG_SIZE);
 			ret = AMDGV_FAILURE;
 			break;
 		}
@@ -331,7 +301,7 @@ static int navi32_gpuiov_setup_sched_log_mem(struct amdgv_adapter *adapt,
 				amdgv_memmgr_get_size(adapt->gpuiov.perf_log_mem));
 		break;
 
-	case AMDGV_AUTO_SCHED_DEBUG_DUMP:
+	case AMDGV_SCHED_DEBUG_DUMP:
 		if (adapt->gpuiov.debug_dump_mem)
 			break;
 
@@ -344,7 +314,8 @@ static int navi32_gpuiov_setup_sched_log_mem(struct amdgv_adapter *adapt,
 			amdgv_memmgr_alloc_align(&adapt->memmgr_pf, MBYTES_TO_BYTES(adapt->opt.debug_dump_reserve_size),
 						1 << 20, MEM_GPUIOV_SCHED_LOG);
 		if (!adapt->gpuiov.debug_dump_mem) {
-			AMDGV_ERROR("Failed to allocate debug dump memory!\n");
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL,
+				      MBYTES_TO_BYTES(adapt->opt.debug_dump_reserve_size));
 			ret = AMDGV_FAILURE;
 			break;
 		}
@@ -352,6 +323,24 @@ static int navi32_gpuiov_setup_sched_log_mem(struct amdgv_adapter *adapt,
 				amdgv_memmgr_get_gpu_addr(adapt->gpuiov.debug_dump_mem),
 				amdgv_memmgr_get_offset(adapt->gpuiov.debug_dump_mem),
 				amdgv_memmgr_get_size(adapt->gpuiov.debug_dump_mem));
+		break;
+
+	case AMDGV_SCHED_TS_LOG:
+		if (adapt->gpuiov.ts_log_mem)
+			return 0;
+
+		adapt->gpuiov.ts_log_mem =
+			amdgv_memmgr_alloc_align(&adapt->memmgr_pf, TSL_FB_SIZE,
+						PAGE_SIZE, MEM_GPUIOV_SCHED_LOG);
+		if (!adapt->gpuiov.ts_log_mem) {
+			AMDGV_ERROR("Failed to allocate ts log memory!\n");
+			ret = AMDGV_FAILURE;
+			break;
+		}
+		AMDGV_INFO("TS LOG MEM: GPU_ADDR=0x%llx MEM_ADDR=0x%llx MEM_SIZE=0x%llx\n",
+				amdgv_memmgr_get_gpu_addr(adapt->gpuiov.ts_log_mem),
+				amdgv_memmgr_get_offset(adapt->gpuiov.ts_log_mem),
+				amdgv_memmgr_get_size(adapt->gpuiov.ts_log_mem));
 		break;
 
 	default:
@@ -384,10 +373,8 @@ static bool navi32_gpuiov_is_cmd_complete(struct amdgv_adapter *adapt,
 		last_status_reg = RREG32(SOC15_REG_OFFSET(VCN, 0, regJPEG_GPUIOV_CMD_STATUS));
 	} else {
 		offset = navi32_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-		if (offset == AMDGV_FAILURE) {
-			AMDGV_ERROR("wrong offset for hw_sched_id=%d\n", hw_sched_id);
+		if (offset == AMDGV_FAILURE)
 			return false;
-		}
 
 		cmd_ctrl_offset = PCI_SCH_CMD_CONTROL + offset;
 		oss_pci_read_config_dword(adapt->dev, cmd_ctrl_offset, &resp);
@@ -405,15 +392,6 @@ static bool navi32_gpuiov_is_cmd_complete(struct amdgv_adapter *adapt,
 	cmd_lx7 = navi32_decode_cmd_lx7(command);
 	if (cmd_lx7 == NAVI32_INVALID_COMMAND)
 		return true;
-	if ((status == 0) && adapt->rlcv_stamp_status) {
-		if (cmd_lx7 == NAVI32_RUN_GPU_LX7) {
-			adapt->rlcv_stamp_count++;
-			if (adapt->rlcv_stamp_count > 0) {
-				navi32_dump_rlcv_sram(adapt);
-			}
-		}
-	}
-
 	if (status == 0)
 		return true;
 	else
@@ -456,8 +434,8 @@ static int navi32_gpuiov_set_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	uint32_t offset =
 		adapt->gpuiov.pos + PCI_GPUIOV_VF0_FB_SIZE + idx_vf * sizeof(uint32_t);
 
-	AMDGV_INFO("idx_vf = 0x%x, fb_offset = %d MB, fb_size = %d MB\n", idx_vf, fb_offset,
-		   fb_size);
+	amdgv_put_log(idx_vf, AMDGV_LOG_SCHED_SET_VF_FB,
+		      AMDGV_LOG_DATA_32_32(fb_offset, fb_size));
 
 	adapt->array_vf[idx_vf].real_fb_size = fb_size;
 	return oss_pci_write_config_dword(adapt->dev, offset, data);
@@ -471,8 +449,7 @@ static int navi32_gpuiov_get_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf,
 		adapt->gpuiov.pos + PCI_GPUIOV_VF0_FB_SIZE + idx_vf * sizeof(uint32_t);
 
 	if (oss_pci_read_config_dword(adapt->dev, offset, &data)) {
-		AMDGV_ERROR("Cannot read %s fb from PCIe config\n",
-			amdgv_idx_to_str(idx_vf));
+		amdgv_put_log(idx_vf, AMDGV_LOG_IOV_READ_VF_FB_FAIL, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -489,10 +466,8 @@ static int navi32_gpuiov_get_vm_busy_status(struct amdgv_adapter *adapt,
 {
 	int offset = navi32_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
 
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("wrong offset for hw_sched_id=%d\n", hw_sched_id);
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	offset += PCI_SCH_VM_BUSY_STATUS;
 
@@ -721,10 +696,8 @@ static int navi32_gpuiov_get_time_quanta_index(struct amdgv_adapter *adapt, uint
 		data = RREG32(SOC15_REG_OFFSET(VCN, 0, regJPEG_TIME_QUANTA_INDEX));
 	} else {
 		offset = navi32_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-		if (offset == AMDGV_FAILURE) {
-			AMDGV_ERROR("wrong offset for hw_sched_id=%d\n", hw_sched_id);
+		if (offset == AMDGV_FAILURE)
 			return AMDGV_FAILURE;
-		}
 
 		offset += PCI_SCH_TIME_QUANTA_INDEX(idx_vf);
 
@@ -754,10 +727,8 @@ static int navi32_gpuiov_set_time_quanta_index(struct amdgv_adapter *adapt, uint
 		WREG32(SOC15_REG_OFFSET(VCN, 0, regJPEG_TIME_QUANTA_INDEX), data);
 	} else {
 		offset = navi32_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-		if (offset == AMDGV_FAILURE) {
-			AMDGV_ERROR("wrong offset for hw_sched_id=%d\n", hw_sched_id);
+		if (offset == AMDGV_FAILURE)
 			return AMDGV_FAILURE;
-		}
 
 		offset += PCI_SCH_TIME_QUANTA_INDEX(idx_vf);
 
@@ -784,10 +755,8 @@ static int navi32_gpuiov_get_time_quanta_option(struct amdgv_adapter *adapt,
 		*time_quanta_option = RREG32(SOC15_REG_OFFSET(VCN, 0, regJPEG_TIME_QUANTA_OPTION));
 	} else {
 		offset = navi32_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-		if (offset == AMDGV_FAILURE) {
-			AMDGV_ERROR("wrong offset for hw_sched_id=%d\n", hw_sched_id);
+		if (offset == AMDGV_FAILURE)
 			return AMDGV_FAILURE;
-		}
 
 		offset += PCI_SCH_TIME_QUANTA_OPTION;
 		oss_pci_read_config_dword(adapt->dev, offset, time_quanta_option);
@@ -806,18 +775,14 @@ static int navi32_gpuiov_set_time_quanta_option(struct amdgv_adapter *adapt,
 		WREG32(SOC15_REG_OFFSET(VCN, 0, regJPEG_TIME_QUANTA_OPTION), time_quanta_option);
 	} else if (hw_sched_id ==  NAVI32_HW_SCHED_BLOCK_GFX_SCH0_RLCV) {
 		offset = navi32_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-		if (offset == AMDGV_FAILURE) {
-			AMDGV_ERROR("wrong offset for hw_sched_id=%d\n", hw_sched_id);
+		if (offset == AMDGV_FAILURE)
 			return AMDGV_FAILURE;
-		}
 		offset += PCI_SCH_TIME_QUANTA_OPTION;
 		oss_pci_write_config_dword(adapt->dev, offset, time_quanta_option);
 	} else {
 		offset = navi32_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-		if (offset == AMDGV_FAILURE) {
-			AMDGV_ERROR("wrong offset for hw_sched_id=%d\n", hw_sched_id);
+		if (offset == AMDGV_FAILURE)
 			return AMDGV_FAILURE;
-		}
 
 		offset += PCI_SCH_TIME_QUANTA_OPTION;
 		oss_pci_write_config_dword(adapt->dev, offset, time_quanta_option);
@@ -906,10 +871,8 @@ static int navi32_gpuiov_get_active_vf_idx(struct amdgv_adapter *adapt,
 		data = RREG32(SOC15_REG_OFFSET(VCN, 0, regJPEG_GPUIOV_ACTIVE_FUNCTION_ID));
 	} else {
 		offset = navi32_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-		if (offset == AMDGV_FAILURE) {
-			AMDGV_ERROR("wrong offset for hw_sched_id=%d\n", hw_sched_id);
+		if (offset == AMDGV_FAILURE)
 			return AMDGV_FAILURE;
-		}
 
 		offset += PCI_SCH_ACTIVE_FUNCTION_ID;
 		oss_pci_read_config_dword(adapt->dev, offset, &data);
@@ -963,10 +926,8 @@ static int navi32_gpuiov_get_active_vf_status(struct amdgv_adapter *adapt,
 		*status = RREG32(SOC15_REG_OFFSET(VCN, 0, regJPEG_GPUIOV_ACTIVE_FUNCTION_ID)) & REG_GPUIOV_VF_STATUS_MASK;
 	} else {
 		offset = navi32_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-		if (offset == AMDGV_FAILURE) {
-			AMDGV_ERROR("wrong offset for hw_sched_id=%d\n", hw_sched_id);
+		if (offset == AMDGV_FAILURE)
 			return AMDGV_FAILURE;
-		}
 
 		offset += PCI_SCH_ACTIVE_FUNCTION_ID_STATUS;
 		oss_pci_read_config_byte(adapt->dev, offset, status);
@@ -996,10 +957,8 @@ static int navi32_gpuiov_set_scheduler_config_descriptor(struct amdgv_adapter *a
 	 */
 	offset = navi32_gpuiov_get_sched_block_offset(adapt, hw_sched_id) +
 			PCI_SCH_TIME_QUANTA_INDEX(0);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("wrong offset for hw_sched_id=%d\n", hw_sched_id);
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	oss_pci_write_config_dword(adapt->dev, offset, fb_addr >> 12);
 
@@ -1032,11 +991,8 @@ static int navi32_gpuiov_wait_auto_sched_stop(struct amdgv_adapter *adapt,
 										REG_GPUIOV_VF_STATUS_MASK, 0, timeout, AMDGV_WAIT_CHECK_EQ, 0);
 	} else {
 		offset = navi32_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-		if (offset == AMDGV_FAILURE) {
-			AMDGV_ERROR("Cannot find offset for %s scheduler in PCIe config\n",
-				amdgv_hw_sched_id_to_name(adapt, hw_sched_id));
+		if (offset == AMDGV_FAILURE)
 			return AMDGV_FAILURE;
-		}
 
 		offset += PCI_SCH_ACTIVE_FUNCTION_ID_STATUS;
 
@@ -1044,8 +1000,7 @@ static int navi32_gpuiov_wait_auto_sched_stop(struct amdgv_adapter *adapt,
 	}
 
 	if (wait_ret)
-		AMDGV_WARN("Fail to wait auto sched %s scheduler stop\n",
-			amdgv_hw_sched_id_to_name(adapt, hw_sched_id));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_SCHED_AUTO_SCHED_STOP_TIMEOUT, hw_sched_id);
 
 	return wait_ret;
 }
@@ -1149,8 +1104,8 @@ static int navi32_gpuiov_get_fb_info(struct amdgv_adapter *adapt)
 	tom = (tom + (0x2ULL << 20) - 1) & ~((0x2ULL << 20) - 1);
 	adapt->gpuiov.total_fb_usable = total_fb_avail - (tom >> 20);
 
-	AMDGV_INFO("Total FB Available = %d MB, Max usable FB size = %d MB\n", total_fb_avail,
-		   adapt->gpuiov.total_fb_usable);
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPUMON_FB_INFO,
+		      AMDGV_LOG_DATA_32_32(total_fb_avail, adapt->gpuiov.total_fb_usable));
 
 	/* compute CSA address (offset) to be sent to RLC_V and MMSCH */
 	/* need to account for CSA located at TOP (end) of FrameBuffer
@@ -1159,7 +1114,7 @@ static int navi32_gpuiov_get_fb_info(struct amdgv_adapter *adapt)
 	 * o but RLC_V and MMSCH expect offset from fb BASE
 	 */
 	if (!adapt->gpuiov.csa_fb_mem) {
-		AMDGV_ERROR("Private csa fb memory not allocated\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_CSA_FB_MEM_NOT_ALLOCATED, 0);
 		return AMDGV_FAILURE;
 	}
 	adapt->gpuiov.resv_addr = ((uint64_t)total_fb_avail << 20) -
@@ -1219,7 +1174,7 @@ static int navi32_gpuiov_toggle_rlcg_vf_interface(struct amdgv_adapter *adapt, u
 
 static void navi32_gpuiov_ctx_empty_intr_control(struct amdgv_adapter *adapt, uint32_t hw_sched_id, bool enable)
 {
-	AMDGV_INFO("Context-empty interrupt gate from RLC %s\n", enable ? "enabled" : "disabled");
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_SCHED_CTX_EMPTY_INTR_GATE, enable);
 	if (!enable)
 		WREG32(SOC15_REG_OFFSET(GC, 0, regRLC_GPM_GENERAL_13), 0);
 	else if (adapt->gpuiov.ctrl_blocks[hw_sched_id].sched_mode ==
@@ -1239,7 +1194,7 @@ static int navi32_gpuiov_transfer_vf_data(struct amdgv_adapter *adapt,
 	int offset;
 
 	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)) {
-		AMDGV_ERROR("Live Migration not supported\n");
+		amdgv_put_log(idx_vf, AMDGV_LOG_SCHED_LIVE_MIGRATION_NOT_SUPPORTED, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -1250,10 +1205,8 @@ static int navi32_gpuiov_transfer_vf_data(struct amdgv_adapter *adapt,
 	next_func_id = (uint32_t)export;
 
 	offset = navi32_gpuiov_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE) {
-		AMDGV_ERROR("Get wrong offset\n");
+	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
-	}
 
 	offset += PCI_SCH_CMD_CONTROL;
 
@@ -1267,6 +1220,11 @@ static int navi32_gpuiov_transfer_vf_data(struct amdgv_adapter *adapt,
 	adapt->gpuiov.ctrl_blocks[hw_sched_id].last_status = AMDGV_CMD_STATUS_PENDING_EXECUTE;
 
 	return 0;
+}
+
+static int navi32_gpuiov_pause_vf(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_t hw_sched_id)
+{
+	return navi32_gpuiov_set_cmd(adapt, AMDGV_PAUSE_VF, hw_sched_id, idx_vf, AMDGV_INVALID_IDX_VF);
 }
 
 static const struct amdgv_gpuiov_funcs navi32_gpuiov_funcs = {
@@ -1306,9 +1264,11 @@ static const struct amdgv_gpuiov_funcs navi32_gpuiov_funcs = {
 	.get_config_info = navi32_gpuiov_get_config_info,
 	.toggle_rlcg_vf_interface = navi32_gpuiov_toggle_rlcg_vf_interface,
 	.set_event_notification = navi32_set_event_notification,
+	.setup_sched_debug_log = navi32_gpuiov_setup_sched_log_mem,
 	.cmd_to_name = navi32_gpuiov_cmd_to_name,
 	.ctx_empty_intr_control = navi32_gpuiov_ctx_empty_intr_control,
 	.transfer_vf_data = navi32_gpuiov_transfer_vf_data,
+	.pause_vf = navi32_gpuiov_pause_vf,
 };
 
 static int navi32_gpuiov_sw_init(struct amdgv_adapter *adapt)
@@ -1316,12 +1276,6 @@ static int navi32_gpuiov_sw_init(struct amdgv_adapter *adapt)
 	uint64_t csa_mem_size;
 	uint64_t csa_mem_align;
 	int ret = 0;
-
-	adapt->rlcv_stamp_todo = false;
-	adapt->rlcv_stamp_status = false;
-	adapt->rlcv_stamp_count = -2;
-	// Initializing to -2 is to make the data in right order. We should guarantee
-	// the data is recorded from IDLE, so bypass the first two world switch loops.
 
 	adapt->gpuiov.funcs = &navi32_gpuiov_funcs;
 
@@ -1348,7 +1302,7 @@ static int navi32_gpuiov_sw_init(struct amdgv_adapter *adapt)
 					 MEM_GPUIOV_CSA);
 
 	if (!adapt->gpuiov.csa_fb_mem) {
-		AMDGV_ERROR("Failed to reserve memory for CSA\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL, csa_mem_size);
 		return AMDGV_FAILURE;
 	}
 
@@ -1363,7 +1317,8 @@ static int navi32_gpuiov_sw_init(struct amdgv_adapter *adapt)
 		amdgv_memmgr_alloc_align(&adapt->memmgr_pf, SCHEDULER_DESCRIPTOR_SIZE * 4,
 					PAGE_SIZE, MEM_GPUIOV_SCHED_CFG_DESC);
 	if (!adapt->gpuiov.sched_cfg_mem) {
-		AMDGV_ERROR("Failed to allocate debug dump memory!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL,
+			      SCHEDULER_DESCRIPTOR_SIZE * 4);
 		return AMDGV_FAILURE;
 	}
 	AMDGV_DEBUG("SCHEDULER DESCRIPTOR MEM: GPU_ADDR=0x%llx MEM_ADDR=0x%llx MEM_SIZE=0x%llx\n",
@@ -1371,11 +1326,12 @@ static int navi32_gpuiov_sw_init(struct amdgv_adapter *adapt)
 			amdgv_memmgr_get_offset(adapt->gpuiov.sched_cfg_mem),
 			amdgv_memmgr_get_size(adapt->gpuiov.sched_cfg_mem));
 
-	ret = navi32_gpuiov_setup_sched_log_mem(adapt, AMDGV_AUTO_SCHED_PERF_LOG);
+	ret = navi32_gpuiov_setup_sched_log_mem(adapt, AMDGV_SCHED_PERF_LOG);
 	if (ret)
 		return ret;
+
 	if (adapt->opt.debug_dump_reserve_size) {
-		ret = navi32_gpuiov_setup_sched_log_mem(adapt, AMDGV_AUTO_SCHED_DEBUG_DUMP);
+		ret = navi32_gpuiov_setup_sched_log_mem(adapt, AMDGV_SCHED_DEBUG_DUMP);
 		if (ret)
 			return ret;
 	}
@@ -1404,6 +1360,10 @@ static int navi32_gpuiov_sw_fini(struct amdgv_adapter *adapt)
 	if (adapt->gpuiov.perf_log_mem) {
 		amdgv_memmgr_free(adapt->gpuiov.perf_log_mem);
 		adapt->gpuiov.perf_log_mem = NULL;
+	}
+	if (adapt->gpuiov.ts_log_mem) {
+		amdgv_memmgr_free(adapt->gpuiov.ts_log_mem);
+		adapt->gpuiov.ts_log_mem = NULL;
 	}
 	return 0;
 }
@@ -1512,9 +1472,7 @@ static int navi32_gpuiov_hw_init(struct amdgv_adapter *adapt)
 		/* enable sriov */
 		ret = oss_pci_enable_sriov(adapt->dev, adapt->num_vf);
 		if (ret < 0) {
-			AMDGV_ERROR("oss_pci_enable_sriov(num_vf=%d) failed! "
-				    "ret=%d\n",
-				    adapt->num_vf, ret);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_ENABLE_SRIOV_FAIL, 0);
 			return AMDGV_FAILURE;
 		}
 		AMDGV_DEBUG("PCI_ENABLE_SRIOV(num_vf=%d)\n", adapt->num_vf);

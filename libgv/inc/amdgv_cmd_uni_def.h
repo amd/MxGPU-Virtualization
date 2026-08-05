@@ -44,6 +44,7 @@ enum amdgv_cmd_ras_id {
 	AMDGV_CMD_GET_LINK_TOPOLOGY = AMDGV_UNI_RAS_IOCTL | 0x011,
 	AMDGV_CMD_GET_CPER_RECORDS = AMDGV_UNI_RAS_IOCTL | 0x012,
 	AMDGV_CMD_GET_RAS_POLICY_INFO = AMDGV_UNI_RAS_IOCTL | 0x013,
+	AMDGV_CMD_GET_PARTITION_INFO = AMDGV_UNI_RAS_IOCTL | 0x014,
 	AMDGV_CMD_RAS_SUPPORTED_MAX
 };
 
@@ -342,6 +343,12 @@ struct amdgv_cmd_ras_policy_info {
 	uint32_t reserved[8];
 };
 
+struct amdgv_cmd_partition_info {
+	uint32_t memory_partition_mode;		// enum amdgv_memory_partition_mode (NPS1/2/4/8)
+	uint32_t accelerator_partition_mode;	// enum amdgv_accelerator_partition_mode (SPX/DPX/QPX/CPX)
+	uint32_t reserved[8];			// reserved for future extensibility
+};
+
 enum amdgv_cmd_ual_link_type {
 	AMDGV_CMD_NONE = 0,
 	AMDGV_CMD_UALOE = 1,
@@ -384,10 +391,12 @@ struct amdgv_cmd_get_config_rsp_ual_v1 {
 	uint32_t bandwidth;
 	/* Latency depends on switch presence/type, unit */
 	uint32_t latency;
+	/* Local accelerator IDs sorted in order of socket IDs */
+	uint32_t local_accelerators[AMDGV_CMD_MAX_LOCAL_GPUS_UAL_V1];
 	/* Virtual Pod ID - Range 0 to 1023 */
 	uint32_t vpod_id;
 	uint32_t vpod_size;
-	/*List of active accelerator ids in the vpod*/
+	/* List of active accelerator ids in the vpod */
 	uint32_t vpod_active_accelerators[32];
 	enum amdgv_cmd_ual_npa_address_mode addr_mode;
 	/* Accelerator vPoD State */
@@ -415,7 +424,7 @@ struct amdgv_cmd_set_vpod_config_req_ual_v1 {
 	/* Virtual Pod ID - Range 0 to 1023 */
 	uint32_t vpod_id;
 	uint32_t vpod_size;
-	/*List of active accelerator ids in the vpod*/
+	/* List of active accelerator ids in the vpod */
 	uint32_t vpod_active_accelerators[32];
 };
 

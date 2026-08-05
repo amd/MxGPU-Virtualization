@@ -47,23 +47,23 @@ static int mi300_mca_ras_block_to_ue_chiplet_err_code(enum amdgv_ras_block block
 {
 	switch (block) {
 	case AMDGV_RAS_BLOCK__UMC:
-		return AMDGV_ERROR_ECC_UMC_CHIPLET_UE;
+		return AMDGV_LOG_ECC_UMC_CHIPLET_UE;
 	case AMDGV_RAS_BLOCK__GFX:
-		return AMDGV_ERROR_ECC_GFX_CHIPLET_UE;
+		return AMDGV_LOG_ECC_GFX_CHIPLET_UE;
 	case AMDGV_RAS_BLOCK__SDMA:
-		return AMDGV_ERROR_ECC_SDMA_CHIPLET_UE;
+		return AMDGV_LOG_ECC_SDMA_CHIPLET_UE;
 	case AMDGV_RAS_BLOCK__MMHUB:
-		return AMDGV_ERROR_ECC_MMHUB_CHIPLET_UE;
+		return AMDGV_LOG_ECC_MMHUB_CHIPLET_UE;
 	case AMDGV_RAS_BLOCK__XGMI_WAFL:
-		return AMDGV_ERROR_ECC_XGMI_WAFL_CHIPLET_UE;
+		return AMDGV_LOG_ECC_XGMI_WAFL_CHIPLET_UE;
 	case AMDGV_RAS_BLOCK__VCN:
-		return AMDGV_ERROR_ECC_VCN_CHIPLET_UE;
+		return AMDGV_LOG_ECC_VCN_CHIPLET_UE;
 	case AMDGV_RAS_BLOCK__JPEG:
-		return AMDGV_ERROR_ECC_JPEG_CHIPLET_UE;
+		return AMDGV_LOG_ECC_JPEG_CHIPLET_UE;
 	case AMDGV_RAS_BLOCK__MMSCH:
-		return AMDGV_ERROR_ECC_MMSCH_CHIPLET_UE;
+		return AMDGV_LOG_ECC_MMSCH_CHIPLET_UE;
 	default:
-		return AMDGV_ERROR_ECC_UNKNOWN_CHIPLET_UE;
+		return AMDGV_LOG_ECC_UNKNOWN_CHIPLET_UE;
 	}
 }
 
@@ -71,23 +71,23 @@ static int mi300_mca_ras_block_to_ce_chiplet_err_code(enum amdgv_ras_block block
 {
 	switch (block) {
 	case AMDGV_RAS_BLOCK__UMC:
-		return AMDGV_ERROR_ECC_UMC_CHIPLET_CE;
+		return AMDGV_LOG_ECC_UMC_CHIPLET_CE;
 	case AMDGV_RAS_BLOCK__GFX:
-		return AMDGV_ERROR_ECC_GFX_CHIPLET_CE;
+		return AMDGV_LOG_ECC_GFX_CHIPLET_CE;
 	case AMDGV_RAS_BLOCK__SDMA:
-		return AMDGV_ERROR_ECC_SDMA_CHIPLET_CE;
+		return AMDGV_LOG_ECC_SDMA_CHIPLET_CE;
 	case AMDGV_RAS_BLOCK__MMHUB:
-		return AMDGV_ERROR_ECC_MMHUB_CHIPLET_CE;
+		return AMDGV_LOG_ECC_MMHUB_CHIPLET_CE;
 	case AMDGV_RAS_BLOCK__XGMI_WAFL:
-		return AMDGV_ERROR_ECC_XGMI_WAFL_CHIPLET_CE;
+		return AMDGV_LOG_ECC_XGMI_WAFL_CHIPLET_CE;
 	case AMDGV_RAS_BLOCK__VCN:
-		return AMDGV_ERROR_ECC_VCN_CHIPLET_CE;
+		return AMDGV_LOG_ECC_VCN_CHIPLET_CE;
 	case AMDGV_RAS_BLOCK__JPEG:
-		return AMDGV_ERROR_ECC_JPEG_CHIPLET_CE;
+		return AMDGV_LOG_ECC_JPEG_CHIPLET_CE;
 	case AMDGV_RAS_BLOCK__MMSCH:
-		return AMDGV_ERROR_ECC_MMSCH_CHIPLET_CE;
+		return AMDGV_LOG_ECC_MMSCH_CHIPLET_CE;
 	default:
-		return AMDGV_ERROR_ECC_UNKNOWN_CHIPLET_CE;
+		return AMDGV_LOG_ECC_UNKNOWN_CHIPLET_CE;
 	}
 }
 
@@ -95,9 +95,9 @@ static int mi300_mca_ras_block_to_de_chiplet_err_code(enum amdgv_ras_block block
 {
 	switch (block) {
 	case AMDGV_RAS_BLOCK__UMC:
-		return AMDGV_ERROR_ECC_UMC_CHIPLET_DE;
+		return AMDGV_LOG_ECC_UMC_CHIPLET_DE;
 	default:
-		return AMDGV_ERROR_ECC_UNKNOWN_CHIPLET_DE;
+		return AMDGV_LOG_ECC_UNKNOWN_CHIPLET_DE;
 	}
 }
 
@@ -141,27 +141,27 @@ static int mi300_mca_push_chiplet_ecc_err(struct amdgv_adapter *adapt,
 	switch (type) {
 	case AMDGV_MCA_ERROR_TYPE_UE:
 		amdgv_mca_count_cache_put(adapt, 0, new_count, 0, block);
-		amdgv_put_error(AMDGV_PF_IDX,
+		amdgv_put_log(AMDGV_PF_IDX,
 				mi300_mca_ras_block_to_ue_chiplet_err_code(block),
-				AMDGV_ERROR_16_16_16_16(socket_id,
+				AMDGV_LOG_DATA_16_16_16_16(socket_id,
 							die_id,
 							new_count,
 							err_data.ue_count));
 		break;
 	case AMDGV_MCA_ERROR_TYPE_CE:
 		amdgv_mca_count_cache_put(adapt, new_count, 0, 0, block);
-		amdgv_put_error(AMDGV_PF_IDX,
+		amdgv_put_log(AMDGV_PF_IDX,
 				mi300_mca_ras_block_to_ce_chiplet_err_code(block),
-				AMDGV_ERROR_16_16_16_16(socket_id,
+				AMDGV_LOG_DATA_16_16_16_16(socket_id,
 							die_id,
 							new_count,
 							err_data.ce_count));
 		break;
 	case AMDGV_MCA_ERROR_TYPE_DE:
 		amdgv_mca_count_cache_put(adapt, 0, 0, new_count, block);
-		amdgv_put_error(AMDGV_PF_IDX,
+		amdgv_put_log(AMDGV_PF_IDX,
 				mi300_mca_ras_block_to_de_chiplet_err_code(block),
-				AMDGV_ERROR_16_16_16_16(socket_id,
+				AMDGV_LOG_DATA_16_16_16_16(socket_id,
 							die_id,
 							new_count,
 							err_data.de_count));
@@ -188,7 +188,7 @@ static void mi300_mca_umc_add_err_addr(struct amdgv_adapter *adapt,
 			return;
 	}
 
-	mca_addr = oss_alloc_memory(sizeof(*mca_addr));
+	mca_addr = oss_malloc_atomic(sizeof(*mca_addr));
 	if (!mca_addr)
 		return;
 
@@ -206,7 +206,7 @@ void mi300_mca_umc_del_err_addr(struct amdgv_adapter *adapt,
 				struct mca_err_addr *mca_addr)
 {
 	amdgv_list_del(&mca_addr->node);
-	oss_free_memory(mca_addr);
+	oss_free(mca_addr);
 }
 
 static void mi300_mca_bank_decode_ipid(struct amdgv_adapter *adapt,
@@ -228,8 +228,8 @@ static void mi300_mca_bank_decode_ipid(struct amdgv_adapter *adapt,
 	info->socket_id = ((instid & 0x1) << 2) | (instidhi & 0x03);
 
 	if (info->socket_id != adapt->xgmi.socket_id) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_WRONG_SOCKET_ID,
-			AMDGV_ERROR_32_32(info->socket_id, adapt->xgmi.socket_id));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_WRONG_SOCKET_ID,
+			AMDGV_LOG_DATA_32_32(info->socket_id, adapt->xgmi.socket_id));
 	}
 }
 
@@ -242,9 +242,9 @@ static void mi300_mca_push_unknown_bank_count(struct amdgv_adapter *adapt)
 	*/
 
 	adapt->mca.num_unknown_mca_entries++;
-	amdgv_put_error(AMDGV_PF_IDX,
-			AMDGV_ERROR_ECC_UNKNOWN,
-			AMDGV_ERROR_16_16_32(
+	amdgv_put_log(AMDGV_PF_IDX,
+			AMDGV_LOG_ECC_UNKNOWN,
+			AMDGV_LOG_DATA_16_16_32(
 			adapt->xgmi.socket_id,
 			1,
 			adapt->mca.num_unknown_mca_entries));
@@ -733,13 +733,12 @@ static int mi300_mca_bank_read_reg64(struct amdgv_adapter *adapt,
 	return 0;
 }
 
-static int mi300_mca_push_bank(struct amdgv_adapter *adapt,
+static int mi300_mca_read_bank(struct amdgv_adapter *adapt,
 				enum amdgv_mca_error_type type,
 				int idx,
 				struct mca_bank_entry *bank)
 {
 	int i, ret;
-	struct mca_bank_handler *handler;
 
 	/* NOTE: populated all mca register by default */
 	for (i = 0; i < MCA_REG_IDX_COUNT; i++) {
@@ -748,18 +747,24 @@ static int mi300_mca_push_bank(struct amdgv_adapter *adapt,
 			return ret;
 	}
 
-	amdgv_put_error_ext(AMDGV_PF_IDX, AMDGV_ERROR_ECC_ACA_DUMP,
+	/* UMC CE & DE banks are mixed together.
+	* IP Decode will patch the real bank type if nessesary */
+	bank->type = type;
+
+	return 0;
+}
+
+static int mi300_mca_push_bank(struct amdgv_adapter *adapt,
+				struct mca_bank_handler *handler,
+				struct mca_bank_entry *bank)
+{
+	amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_ECC_ACA_DUMP,
 				bank->regs[MCA_REG_IDX_STATUS],
 				bank->regs[MCA_REG_IDX_ADDR],
 				bank->regs[MCA_REG_IDX_MISC0],
 				bank->regs[MCA_REG_IDX_IPID],
 				bank->regs[MCA_REG_IDX_SYND]);
 
-	/* UMC CE & DE banks are mixed together.
-	* IP Decode will patch the real bank type if nessesary */
-	bank->type = type;
-
-	handler = mi300_mca_get_bank_handler(adapt, bank);
 	if (handler)
 		handler->push_bank_count(adapt, bank);
 	else
@@ -771,15 +776,17 @@ static int mi300_mca_push_bank(struct amdgv_adapter *adapt,
 static int mi300_mca_get_new_banks(struct amdgv_adapter *adapt,
 				enum amdgv_mca_error_type type)
 {
-	uint32_t i;
+	uint32_t i, bank_idx;
 	uint32_t count = 0;
 	uint32_t bank_size = sizeof(struct mca_bank_entry) * MI300_MCA_MAX_VALID_MCA_COUNT;
 	struct mca_bank_entry *banks = NULL;
+	struct mca_bank_entry *bank = NULL;
+	struct mca_bank_handler *handler = NULL;
 	int ret = 0;
 
 	banks = oss_zalloc(bank_size);
 	if (!banks) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL, bank_size);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL, bank_size);
 		return AMDGV_FAILURE;
 	}
 
@@ -788,14 +795,37 @@ static int mi300_mca_get_new_banks(struct amdgv_adapter *adapt,
 		goto exit;
 
 	count = min(count, MI300_MCA_MAX_VALID_MCA_COUNT);
+	bank_idx = 0;
 	for (i = 0; i < count; i++) {
-		ret = mi300_mca_push_bank(adapt, type, i, &banks[i]);
+		bank = &banks[bank_idx++];
+
+		ret = mi300_mca_read_bank(adapt, type, i, bank);
+		if (ret) {
+			AMDGV_ERROR("Failed to read MCA Bank %i\n", i);
+			continue;
+		}
+
+		handler = mi300_mca_get_bank_handler(adapt, bank);
+
+		/*
+		* Poison being consumed when injecting a UE while running background workloads,
+		* which are unexpected.
+		*/
+		if (type == AMDGV_MCA_ERROR_TYPE_UE &&
+		    MCA_REG__STATUS__POISON(bank->regs[MCA_REG_IDX_STATUS]) &&
+		    (!handler || (handler && handler->block != AMDGV_RAS_BLOCK__UMC))) {
+			oss_memset(bank, 0, sizeof(struct mca_bank_entry));
+			bank_idx--;
+			continue;
+		}
+
+		ret = mi300_mca_push_bank(adapt, handler, bank);
 		if (ret)
 			AMDGV_ERROR("Failed to decode MCA Bank %i\n", i);
 	}
 
-	if (!ret && count)
-		amdgv_mca_generate_cpers(adapt, type, banks, (uint16_t)count);
+	if (!ret && bank_idx)
+		amdgv_mca_generate_cpers(adapt, type, banks, (uint16_t)bank_idx);
 
 exit:
 	oss_free(banks);

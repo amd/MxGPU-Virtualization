@@ -31,6 +31,9 @@ static const uint32_t this_block = AMDGV_POWER_BLOCK;
 #define MI300_JPEG_PER_AID	8
 #define MI300_GPU_RES_ID	0
 
+#define MI300_SMU_RESP_RETRY_MAX	10
+#define MI300_SMU_RESP_RETRY_DELAY_MS	1
+
 /* no pptable in pmfw, add fake one */
 typedef struct Mi300_PPTable {
   uint32_t MaxGfxclkFrequency;
@@ -302,10 +305,11 @@ static int mi300_smu_msg_allowed_in_sync_flood(struct amdgv_adapter *adapt, uint
 	return ret;
 }
 
-int mi300_smu_send_msg_with_param(struct amdgv_adapter *adapt, uint32_t msg, uint32_t param,
-				  uint32_t *arg)
+static int mi300_smu_send_msg_with_param_ex(struct amdgv_adapter *adapt, uint32_t msg, uint32_t param,
+					uint32_t *arg, bool suppress_err_print)
 {
 	uint32_t resp;
+	uint32_t attempt = 0;
 	int ret = 0;
 
 	if (oss_atomic_read(adapt->in_sync_flood) && !mi300_smu_msg_allowed_in_sync_flood(adapt, msg)) {
@@ -315,10 +319,17 @@ int mi300_smu_send_msg_with_param(struct amdgv_adapter *adapt, uint32_t msg, uin
 
 	oss_mutex_lock(adapt->pp.smu_lock);
 
-	ret = mi300_smu_wait_for_response(adapt, &resp, AMDGV_WAIT_FOR_SMU_CHECK_HANG);
-	if (ret) {
-		ret = AMDGV_FAILURE;
-		goto end;
+	/* In sync flood, PMFW abandons any in-flight low-priority message, leaving
+	 * the mailbox response unchanged. Skip the pre-send hang-check for messages
+	 * still serviced in sync flood so it does not falsely abort on that stale
+	 * response; the post-send wait still validates the message. */
+	if (!(oss_atomic_read(adapt->in_sync_flood) &&
+	      mi300_smu_msg_allowed_in_sync_flood(adapt, msg))) {
+		ret = mi300_smu_wait_for_response(adapt, &resp, AMDGV_WAIT_FOR_SMU_CHECK_HANG);
+		if (ret) {
+			ret = AMDGV_FAILURE;
+			goto end;
+		}
 	}
 
 	mi300_smu_send_msg_nocheck(adapt, msg, param);
@@ -329,10 +340,26 @@ int mi300_smu_send_msg_with_param(struct amdgv_adapter *adapt, uint32_t msg, uin
 		goto end;
 	}
 
+	/* SMU can publish a premature Result_Failed before it finishes, then
+	 * self-correct to OK within ~1ms. Re-read the response to ride out that
+	 * transient instead of failing the message on the stale value.
+	 */
 	if (resp != PPSMC_Result_OK) {
-		AMDGV_REG_DUMP(ERROR, "SMU responded with failure. SMU Mailbox contents:",
-			       mi300_smu_mb_context_regs,
-			       MI300_SMU_MB_CONTEXT_REGS_NUM);
+		while (resp != PPSMC_Result_OK && attempt < MI300_SMU_RESP_RETRY_MAX) {
+			oss_msleep(MI300_SMU_RESP_RETRY_DELAY_MS);
+			attempt++;
+			resp = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90));
+		}
+
+		if (resp == PPSMC_Result_OK)
+			AMDGV_WARN("msg:0x%x recovered to OK after %u ms\n", msg, attempt);
+	}
+
+	if (resp != PPSMC_Result_OK) {
+		if (!suppress_err_print)
+			AMDGV_REG_DUMP(ERROR, "SMU responded with failure. SMU Mailbox contents:",
+					mi300_smu_mb_context_regs,
+					MI300_SMU_MB_CONTEXT_REGS_NUM);
 		ret = AMDGV_FAILURE;
 		goto end;
 	}
@@ -347,6 +374,12 @@ end:
 	oss_mutex_unlock(adapt->pp.smu_lock);
 
 	return ret;
+}
+
+int mi300_smu_send_msg_with_param(struct amdgv_adapter *adapt, uint32_t msg, uint32_t param,
+				  uint32_t *arg)
+{
+	return mi300_smu_send_msg_with_param_ex(adapt, msg, param, arg, false);
 }
 
 int mi300_smu_send_msg(struct amdgv_adapter *adapt, uint32_t msg, uint32_t *arg)
@@ -430,8 +463,8 @@ static int mi300_smu_check_fw_status(struct amdgv_adapter *adapt)
 	for (retries = 0; retries < retries_max; retries++) {
 		mp1_flags = RREG32_PCIE_EXT(SOC15_REG_OFFSET_SMN(MP1, 0, regMP1_FIRMWARE_FLAGS, MP1_Public));
 
-		if (mp1_flags == 0xffffffff) {
-			AMDGV_WARN("MP1_FIRMWARE_FLAGS read 0xffffffff, try again...\n");
+		if (mp1_flags == 0xffffffff || mp1_flags == 0x0) {
+			AMDGV_WARN("MP1_FIRMWARE_FLAGS=0x%x, try again...\n", mp1_flags);
 			oss_msleep(100);
 			continue;
 		}
@@ -966,7 +999,7 @@ static void mi300_smu_notify_throttler_error(struct amdgv_adapter *adapt,
 
 	AMDGV_DEBUG("mi300 smu notify throttler status 0x%08x, throttler_event 0x%016llx\n",
 		    throttler_status, throttler_event);
-	amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_PP_THROTTLER_EVENT, throttler_event);
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_THROTTLER_EVENT, throttler_event);
 }
 
 static int mi300_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv_entry *entry)
@@ -1106,7 +1139,7 @@ static int mi300_smu_sw_init(struct amdgv_adapter *adapt)
 
 	adapt->pp.smu_lock = oss_mutex_init();
 	if (adapt->pp.smu_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_MUTEX_FAIL, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -2219,13 +2252,18 @@ const struct amdgv_init_func mi300_smu_func = {
 	.hw_live_init = mi300_smu_hw_live_init,
 };
 
-static int mi300_smu_pp_get_power_capacity(struct amdgv_adapter *adapt, int *val)
+static int mi300_smu_pp_get_power_capacity(struct amdgv_adapter *adapt, int *val,
+					   enum amdgv_gpumon_type ppt_type)
 {
-	uint32_t tmp;
+	uint32_t tmp = 0;
 	int ret;
 
 	if (!val)
 		return AMDGV_FAILURE;
+
+	/* MI300 only supports PPT0 */
+	if (ppt_type == GPUMON_GET_GPU_POWER_CAP2)
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
 	ret = mi300_smu_get_power_limit(adapt, &tmp);
 	if (ret)
@@ -2823,7 +2861,8 @@ static void mi300_smu_fill_eeprom_i2c_req(SwI2cRequest_t *req, bool write, uint8
 }
 
 static int mi300_smu_request_i2c_transaction(struct amdgv_adapter *adapt,
-					     SwI2cRequest_t *in_req, SwI2cRequest_t *out_req)
+						SwI2cRequest_t *in_req, SwI2cRequest_t *out_req,
+						bool suppress_err_print)
 {
 	void *cpu_addr;
 	int ret;
@@ -2843,7 +2882,8 @@ static int mi300_smu_request_i2c_transaction(struct amdgv_adapter *adapt,
 	if (in_req)
 		oss_memcpy(cpu_addr, in_req, sizeof(*in_req));
 
-	ret = mi300_smu_send_msg(adapt, PPSMC_MSG_RequestI2cTransaction, NULL);
+	ret = mi300_smu_send_msg_with_param_ex(adapt, PPSMC_MSG_RequestI2cTransaction, 0, NULL,
+							suppress_err_print);
 	if (ret)
 		return ret;
 
@@ -2867,7 +2907,7 @@ static int mi300_smu_i2c_eeprom_read_data(struct amdgv_adapter *adapt, uint8_t a
 
 	/* Now read data starting with that address */
 	while (retry_count <= 5) {
-		ret = mi300_smu_request_i2c_transaction(adapt, &req, &req);
+		ret = mi300_smu_request_i2c_transaction(adapt, &req, &req, retry_count < 5);
 
 		if (ret == 0)
 			break;
@@ -2902,7 +2942,7 @@ static int mi300_smu_i2c_eeprom_write_data(struct amdgv_adapter *adapt, uint8_t 
 	mi300_smu_fill_eeprom_i2c_req(&req, true, address, i2c_port, data, numbytes);
 
 	while (retry_count <= 5) {
-		ret = mi300_smu_request_i2c_transaction(adapt, &req, NULL);
+		ret = mi300_smu_request_i2c_transaction(adapt, &req, NULL, retry_count < 5);
 
 		if (ret == 0)
 			break;

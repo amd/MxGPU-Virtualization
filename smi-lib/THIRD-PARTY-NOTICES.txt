@@ -1,0 +1,84 @@
+THIRD-PARTY NOTICES
+
+This software incorporates code or materials from third parties. AMD makes
+certain open-source software available via written request (product name: AMD
+SMI; the component name and version number for each component are
+identified in the entries below) to Advanced Micro Devices, Inc., Attn:
+Software Legal Team, 7171 Southwest Pkwy, Austin, TX, 78735. AMD may charge you
+a reasonable fee for providing the source code.
+
+The full text of each license is preserved in the corresponding source file
+header. The components below are compiled into the AMD SMI command-line tool
+(amd-smi). Several of them are amalgamated (vendored) inside the single-header
+json.h and tabulate.hpp distributions but carry their own copyright and license.
+The AMD SMI core library, driver, NIC subsystem, and language bindings bundle
+no third-party code.
+
+================================================================================
+
+[Component name] nlohmann/json (JSON for Modern C++) 3.11.2
+[Copyright]      Copyright (c) 2013-2022 Niels Lohmann <https://nlohmann.me>
+[License]        SPDX-License-Identifier: MIT
+
+--------------------------------------------------------------------------------
+
+[Component name] Hedley (amalgamated within json.h)
+[Copyright]      Copyright (c) 2016-2021 Evan Nemerson <evan@nemerson.com>
+[License]        CC0-1.0 (upstream public-domain dedication). The amalgamated
+                 copy in json.h carries an SPDX-License-Identifier: MIT tag
+                 applied by nlohmann/json.
+
+--------------------------------------------------------------------------------
+
+[Component name] Abseil string_view implementation (amalgamated within json.h)
+[Copyright]      Copyright (c) 2018 The Abseil Authors
+[License]        SPDX-License-Identifier: Apache-2.0
+
+--------------------------------------------------------------------------------
+
+[Component name] Grisu2 floating-point formatting / dtoa (amalgamated within
+                 json.h)
+[Copyright]      Copyright (c) 2009 Florian Loitsch
+                 <https://florian.loitsch.com/>
+[License]        SPDX-License-Identifier: MIT
+
+--------------------------------------------------------------------------------
+
+[Component name] UTF-8 decoder (amalgamated within json.h)
+[Copyright]      Copyright (c) 2008-2009 Björn Hoehrmann <bjoern@hoehrmann.de>
+[License]        SPDX-License-Identifier: MIT
+
+--------------------------------------------------------------------------------
+
+[Component name] tabulate (Table Maker for Modern C++)
+[Copyright]      Copyright (c) 2019 Pranav Srinivas Kumar
+                 <pranav.srinivas.kumar@gmail.com>
+[License]        SPDX-License-Identifier: MIT
+
+--------------------------------------------------------------------------------
+
+[Component name] variant-lite 1.2.2 (amalgamated within tabulate.hpp)
+[Copyright]      Copyright (c) 2016-2018 Martin Moene
+[License]        SPDX-License-Identifier: BSL-1.0
+
+--------------------------------------------------------------------------------
+
+[Component name] optional-lite 3.2.0 (amalgamated within tabulate.hpp)
+[Copyright]      Copyright (c) 2014-2018 Martin Moene
+[License]        SPDX-License-Identifier: BSL-1.0
+
+--------------------------------------------------------------------------------
+
+[Component name] string-view-lite 1.6.0 (amalgamated within tabulate.hpp)
+[Copyright]      Copyright (c) 2017-2020 Martin Moene
+[License]        SPDX-License-Identifier: BSL-1.0
+
+--------------------------------------------------------------------------------
+
+[Component name] termcolor (amalgamated within tabulate.hpp)
+[Copyright]      Copyright (c) 2013 Ihor Kalnytskyi
+[License]        SPDX-License-Identifier: BSD-3-Clause
+                 (the amalgamated header records the license as "BSD"; the full
+                 license text lives in the upstream termcolor LICENSE file)
+
+================================================================================

@@ -626,6 +626,24 @@ bool AmdSmiParser::is_option_argument(std::string option, Arguments &parsed_argu
 		return true;
 	}
 
+	if (option.substr(0, 6) == "--sort") {
+		if (parsed_arguments.command != "xgmi"
+				&& parsed_arguments.command != "topology") {
+			throw SmiToolInvalidParameterException(option.substr(0, 6));
+		}
+		does_option_have_value(option, 6);
+		std::string sort_value = option.substr(7);
+		if (sort_value == "phy_id") {
+			parsed_arguments.sort_order = SORT_PHY_ID;
+		} else if (sort_value == "bdf") {
+			parsed_arguments.sort_order = SORT_BDF;
+		} else {
+			throw SmiToolInvalidParameterValueException(sort_value);
+		}
+		parsed_arguments.sort_explicit = true;
+		return true;
+	}
+
 	if (option.substr(0, 9) == "--cc-mode") {
 		if (parsed_arguments.command != "set") {
 			throw SmiToolInvalidParameterException(option.substr(0, 9));
@@ -1063,6 +1081,11 @@ void AmdSmiParser::parse_arg(int argc, char **argv, Arguments &ret)
 	parse_command_object(command_argument_list, ret);
 	parse_device_type(command_argument_list, ret);
 	parse_arguments(command_argument_list, ret);
+
+	// topology defaults to bdf; xgmi keeps the SORT_PHY_ID initializer.
+	if (!ret.sort_explicit && ret.command == "topology") {
+		ret.sort_order = SORT_BDF;
+	}
 }
 
 void AmdSmiParser::does_option_have_value(const std::string& option, uint32_t option_len)

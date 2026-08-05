@@ -15,6 +15,8 @@ enum OutputFormat { human, json, csv = 2 };
 
 enum DevicesType { GPU_TYPE, NIC_TYPE, ALL_TYPE };
 
+enum SortOrder { SORT_PHY_ID, SORT_BDF };
+
 enum ProcessType { name, pid };
 using process_value = std::string;
 
@@ -58,6 +60,8 @@ public:
 	std::string ptl_format_set;
 	DevicesType devices_type{ ALL_TYPE };
 	std::map<DevicesType, std::vector<std::string>> device_format{};
+	SortOrder sort_order{ SORT_PHY_ID };
+	bool sort_explicit{ false };
 	Arguments() {};
 };
 

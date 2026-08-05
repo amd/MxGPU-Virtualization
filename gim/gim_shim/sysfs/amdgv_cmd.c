@@ -23,6 +23,94 @@
 #define AMDGV_CMD_MINOR_COUNT 1
 #define AMDGV_CMD _IOWR('R', 0, struct amdgv_cmd)
 
+#define AMDGV_RAS_IOCTL_BASE     'd'
+#define AMDGV_RAS_IOWR(nr, type)  _IOWR(AMDGV_RAS_IOCTL_BASE, nr, type)
+
+struct  amdgv_ras_cmd {
+	__u32 magic;
+	__u32 ras_ver;
+	__u32 ras_type;
+	__u32 ras_res;
+	__u32 reserved[8];
+	__u32 cmd_head_ver;
+	__u32 cmd_buf_size;
+	__u64 cmd_buf_ptr;
+};
+
+#define AMDGV_RAS_CMD_ID     0x5d
+#define AMDGV_RAS_COMMAND_BASE   0x40
+#define AMDGV_IOCTL_RAS  AMDGV_RAS_IOWR(AMDGV_RAS_COMMAND_BASE + AMDGV_RAS_CMD_ID, struct amdgv_ras_cmd)
+#define AMDGV_RAS_CMD AMDGV_IOCTL_RAS
+
+static int amdgv_ras_ioctl_handler(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	struct amdgv_ras_cmd  ras_ioctl_cmd;
+	uint8_t *cmd_buf = NULL;
+	int ret = 0, res = 0;
+
+	if (copy_from_user(&ras_ioctl_cmd, (void *) arg, sizeof(ras_ioctl_cmd)))
+			return -EFAULT;
+
+	if (ras_ioctl_cmd.cmd_buf_size > PAGE_SIZE) {
+		gim_warn("Invaild command buffer size 0x%x!\n", ras_ioctl_cmd.cmd_buf_size);
+		return -EINVAL;
+	}
+
+	if (ras_ioctl_cmd.cmd_buf_size &&
+	    ras_ioctl_cmd.cmd_buf_ptr &&
+	    !access_ok((void __user *)ras_ioctl_cmd.cmd_buf_ptr, ras_ioctl_cmd.cmd_buf_size)) {
+		gim_warn("Invaild command buffer memory!\n");
+		return -EINVAL;
+	}
+
+	if (ras_ioctl_cmd.cmd_buf_size && ras_ioctl_cmd.cmd_buf_ptr) {
+		cmd_buf = gim_kzalloc(PAGE_SIZE, GFP_KERNEL);
+		if (!cmd_buf)
+			return -ENOMEM;
+
+		if (copy_from_user(cmd_buf,
+		    (void __user *)ras_ioctl_cmd.cmd_buf_ptr, ras_ioctl_cmd.cmd_buf_size)) {
+			ret = -EFAULT;
+			goto out;
+		}
+	}
+
+	if (cmd_buf &&
+	    (ras_ioctl_cmd.ras_type == 0x1)) {
+		struct gim_dev_data *dev_data;
+		struct amdgv_ras_ioctl_cmd ioctl_cmd;
+
+		dev_data = list_first_entry_or_null(&gim_device_list, typeof(*dev_data), list);
+		if (!dev_data) {
+			ret = -ENODATA;
+			goto out;
+		}
+
+		memset(&ioctl_cmd, 0, sizeof(ioctl_cmd));
+		ioctl_cmd.data_len = ras_ioctl_cmd.cmd_buf_size;
+		ioctl_cmd.data_addr = (uint64_t)cmd_buf;
+		res = amdgv_handle_ras_ioctl_cmd(dev_data->adev, &ioctl_cmd);
+	}
+
+	if (ras_ioctl_cmd.cmd_buf_size &&
+	    ras_ioctl_cmd.cmd_buf_ptr &&
+		copy_to_user((void __user *)ras_ioctl_cmd.cmd_buf_ptr, cmd_buf, ras_ioctl_cmd.cmd_buf_size)) {
+		ret = -EFAULT;
+		goto out;
+	}
+
+	ras_ioctl_cmd.ras_res = res;
+
+out:
+	if (cmd_buf)
+		gim_kfree(cmd_buf);
+
+	if (copy_to_user((void *) arg, &ras_ioctl_cmd, sizeof(ras_ioctl_cmd)))
+		ret = -EFAULT;
+
+	return ret;
+}
+
 static long amdgv_ioctl_handler(struct file *, unsigned int cmd, unsigned long arg);
 
 static dev_t amdgv_dev;
@@ -81,7 +169,10 @@ static enum amdgv_cmd_asic_type amd_asic_type_to_amdgv_cmd_asic_type(enum amd_as
 	case CHIP_MI308X:
 		return AMDGV_CMD_CHIP_MI308X;
 	case CHIP_MI350X:
-		return AMDGV_CMD_CHIP_MI350X;
+		if (dev_id == 0x75A3)
+			return AMDGV_CMD_CHIP_MI355X;
+		else
+			return AMDGV_CMD_CHIP_MI350X;
 	case CHIP_LAST:
 		return AMDGV_CMD_CHIP_LAST;
 	default:
@@ -576,8 +667,11 @@ static int amdgv_ioctl_dump_cu_data(struct amdgv_cmd_dump_cu_data_req *input_dat
 	uint32_t ret = 0;
 	struct amdgv_dump_cu_resource_memory resource_mem;
 
-	if (input_data->resource_size.kernelobj_size > AMDGV_CMD_MAX_KERNELOBJ_SIZE)
+	if (input_data->resource_size.kernelobj_size > AMDGV_CMD_MAX_KERNELOBJ_SIZE ||
+	    input_data->resource_size.out_data_size > AMDGV_CMD_MAX_OUT_DATA_SIZE ||
+	    input_data->resource_size.out_flag_size > AMDGV_CMD_MAX_OUT_FLAG_SIZE)
 		return AMDGV_CMD__ERROR_INVALID_INPUT;
+
 	if (amdgv_set_dump_cu_info(adev, input_data->data_type, input_data->xcc_id,
 				   input_data->use_extra_ring))
 		return AMDGV_CMD__ERROR_INVALID_INPUT;
@@ -807,6 +901,25 @@ static uint8_t amdgv_get_ras_policy_info(struct amdgv_cmd_dev_handle *input_data
 	return AMDGV_CMD__SUCCESS;
 }
 
+static uint8_t amdgv_get_partition_info(struct amdgv_cmd_dev_handle *input_data, struct amdgv_cmd_partition_info *output_data)
+{
+	amdgv_dev_t *adev;
+	struct amdgv_gpumon_partition_info partition_info = {0};
+
+	if (!input_data || !output_data)
+		return AMDGV_CMD__ERROR_INVALID_INPUT;
+
+	adev = gim_get_dev(input_data->dev_handle);
+
+	if (amdgv_gpumon_get_partition_info(adev, &partition_info))
+		return AMDGV_CMD__ERROR_GENERIC;
+
+	output_data->memory_partition_mode = partition_info.memory_partition_mode;
+	output_data->accelerator_partition_mode = partition_info.accelerator_partition_mode;
+
+	return AMDGV_CMD__SUCCESS;
+}
+
 static const struct file_operations amdgv_cmd_file_ops = {
 	.owner                  = THIS_MODULE,
 	.unlocked_ioctl         = amdgv_ioctl_handler,
@@ -819,6 +932,10 @@ static long amdgv_ioctl_handler(struct file *file, unsigned int cmd, unsigned lo
 
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
+
+	if (cmd == AMDGV_RAS_CMD) {
+		return amdgv_ras_ioctl_handler(file, cmd, arg);
+	}
 
 	if (amdgv_is_uni_cmd(cmd)) {
 		return amdgv_uni_cmd_handler((void *) arg);
@@ -983,6 +1100,16 @@ static long amdgv_ioctl_handler(struct file *file, unsigned int cmd, unsigned lo
 							(struct amdgv_cmd_dev_handle *)
 								amdgv_cmd->input_buff_raw,
 							(struct amdgv_cmd_ras_policy_info *)
+								amdgv_cmd->output_buff_raw);
+				break;
+			case AMDGV_CMD_GET_PARTITION_INFO:
+				amdgv_cmd->output_size = sizeof(struct amdgv_cmd_partition_info);
+				if (amdgv_cmd->input_size == sizeof(struct amdgv_cmd_dev_handle))
+					amdgv_cmd->cmd_res =
+						amdgv_get_partition_info(
+							(struct amdgv_cmd_dev_handle *)
+								amdgv_cmd->input_buff_raw,
+							(struct amdgv_cmd_partition_info *)
 								amdgv_cmd->output_buff_raw);
 				break;
 			default:

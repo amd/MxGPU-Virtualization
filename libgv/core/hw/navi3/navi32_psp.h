@@ -30,6 +30,8 @@ enum { PSP_TMR_BASE_SIZE = 0xB600000 }; /* 182M */
 
 enum psp_status navi32_psp_ring_start(struct amdgv_adapter *adapt);
 
+uint32_t navi32_psp_get_bootloader_version(struct amdgv_adapter *adapt);
+
 uint32_t navi32_psp_ring_get_wptr(struct amdgv_adapter *adapt);
 
 void navi32_psp_ring_set_wptr(struct amdgv_adapter *adapt, uint32_t value);

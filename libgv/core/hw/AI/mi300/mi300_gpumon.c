@@ -237,12 +237,13 @@ static int mi300_get_vbios_info(struct amdgv_adapter *adapt,
 	return 0;
 }
 
-static int mi300_get_gpu_power_capacity(struct amdgv_adapter *adapt, int *val)
+static int mi300_get_gpu_power_capacity(struct amdgv_adapter *adapt, int *val,
+					 enum amdgv_gpumon_type ppt_type)
 {
 	int ret = AMDGV_FAILURE;
 
 	if (adapt->pp.pp_funcs->get_power_capacity) {
-		ret = adapt->pp.pp_funcs->get_power_capacity(adapt, val);
+		ret = adapt->pp.pp_funcs->get_power_capacity(adapt, val, ppt_type);
 		if (ret != 0)
 			*val = 0;
 	}
@@ -557,7 +558,7 @@ static int mi300_get_memory_partition_config(
 	union amdgv_gpumon_memory_partition_config *memory_partition_config)
 {
 	if (adapt == NULL || memory_partition_config == NULL) {
-		return AMDGV_ERROR_GPUMON_INVALID_OPTION;
+		return AMDGV_LOG_GPUMON_INVALID_OPTION;
 	}
 
 	memory_partition_config->mp_cap_mask = 0;
@@ -584,7 +585,7 @@ static int mi300_set_memory_partition_mode(
 		AMDGV_ERROR("failed to get default accelerator_partition_mode. "
 					"requested NPS%u mode is not supported\n",
 					memory_partition_mode);
-		return AMDGV_ERROR_GPUMON_INVALID_MODE;
+		return AMDGV_LOG_GPUMON_INVALID_MODE;
 	}
 
 	if (amdgv_nbio_is_partition_mode_supported(adapt,
@@ -592,7 +593,7 @@ static int mi300_set_memory_partition_mode(
 			default_accelerator_partition_mode) == false) {
 		AMDGV_ERROR("requested NPS%u mode is not supported\n",
 			    memory_partition_mode);
-		return AMDGV_ERROR_GPUMON_INVALID_MODE;
+		return AMDGV_LOG_GPUMON_INVALID_MODE;
 	}
 
 	/* Request PSP to switch memory partition mode */
@@ -621,7 +622,7 @@ static int mi300_set_memory_partition_mode(
 static int mi300_set_spatial_partition_num(struct amdgv_adapter *adapt,
 					   uint32_t spatial_partition_num)
 {
-	return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+	return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 }
 
 static struct amdgv_gpumon_accelerator_partition_profile_config
@@ -865,13 +866,13 @@ static int mi300_get_accelerator_partition_profile_config_global(
 		*profile_asic_configs;
 
 	if (adapt == NULL || profile_configs == NULL) {
-		return AMDGV_ERROR_GPUMON_INVALID_OPTION;
+		return AMDGV_LOG_GPUMON_INVALID_OPTION;
 	}
 
 	profile_asic_configs =
 		mi300_get_accelerator_partition_profile_asic_config_global(adapt);
 	if (profile_asic_configs == NULL) {
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 	}
 
 	oss_memcpy(
@@ -890,13 +891,13 @@ static int mi300_get_accelerator_partition_profile_config(
 		*profile_asic_configs;
 
 	if (adapt == NULL || profile_configs == NULL) {
-		return AMDGV_ERROR_GPUMON_INVALID_OPTION;
+		return AMDGV_LOG_GPUMON_INVALID_OPTION;
 	}
 
 	profile_asic_configs =
 		mi300_get_accelerator_partition_profile_asic_config(adapt);
 	if (profile_asic_configs == NULL) {
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 	}
 
 	oss_memcpy(
@@ -965,7 +966,7 @@ static int mi300_set_accelerator_partition_profile(struct amdgv_adapter *adapt,
 			mi300_get_memory_partition_mode_desc(
 				curr_memory_partition_mode),
 			adapt->num_vf);
-		return AMDGV_ERROR_GPUMON_INVALID_MODE;
+		return AMDGV_LOG_GPUMON_INVALID_MODE;
 	}
 
 	/* Request PSP to switch compute partition mode */
@@ -992,13 +993,13 @@ static int mi300_get_accelerator_partition_profile(
 	uint32_t i;
 
 	if (adapt == NULL || profile == NULL) {
-		return AMDGV_ERROR_GPUMON_INVALID_OPTION;
+		return AMDGV_LOG_GPUMON_INVALID_OPTION;
 	}
 
 	profile_asic_configs =
 		mi300_get_accelerator_partition_profile_asic_config(adapt);
 	if (profile_asic_configs == NULL) {
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 	}
 
 	accelerator_partition_mode = amdgv_nbio_get_accel_partition_mode(adapt);
@@ -1024,7 +1025,7 @@ static int mi300_get_accelerator_partition_profile(
 
 static int mi300_reset_spatial_partition_num(struct amdgv_adapter *adapt)
 {
-	return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+	return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 }
 
 static int mi300_get_spatial_partition_caps(
@@ -1032,7 +1033,7 @@ static int mi300_get_spatial_partition_caps(
 	struct amdgv_gpumon_spatial_partition_caps *spatial_partition_caps)
 {
 	if (adapt == NULL || spatial_partition_caps == NULL) {
-		return AMDGV_ERROR_GPUMON_INVALID_OPTION;
+		return AMDGV_LOG_GPUMON_INVALID_OPTION;
 	}
 
 	spatial_partition_caps->num_xcc = adapt->mcp.gfx.num_xcc;
@@ -1051,7 +1052,7 @@ static int mi300_get_memory_partition_mode(
 	int ret;
 
 	if (adapt == NULL || memory_partition_info == NULL) {
-		return AMDGV_ERROR_GPUMON_INVALID_OPTION;
+		return AMDGV_LOG_GPUMON_INVALID_OPTION;
 	}
 
 	ret = amdgv_nbio_get_nps_mode(adapt, &memory_partition_info->memory_partition_mode);
@@ -1235,7 +1236,7 @@ static int mi300_gpumon_smu_set_pm_policy_level(struct amdgv_adapter *adapt,
 
 static int mi300_get_npm_info(struct amdgv_adapter *adapt, struct amdgv_gpumon_npm_info *npm_info)
 {
-	int ret = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+	int ret = AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
 	if (adapt->pp.pp_funcs->get_npm_info) {
 		ret = adapt->pp.pp_funcs->get_npm_info(adapt, npm_info);
@@ -1395,7 +1396,7 @@ static int mi300_get_xgmi_fb_sharing_mode_info(struct amdgv_adapter *src_adapt,
 
 	libgv_mode = gpumon_to_xgmi_fb_sharing_mode(mode);
 	if (libgv_mode > MI300_XGMI_MAX_SUPPORTED_MODE)
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
 	if (libgv_mode == AMDGV_XGMI_FB_SHARING_MODE_CUSTOM) {
 		/* Return the same result as mode 4 for custom sharing mode
@@ -1438,7 +1439,7 @@ mi300_set_xgmi_fb_sharing_mode(struct amdgv_adapter *adapt,
 
 	libgv_mode = gpumon_to_xgmi_fb_sharing_mode(mode);
 	if (libgv_mode > MI300_XGMI_MAX_SUPPORTED_MODE)
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
 	ret = amdgv_xgmi_update_topology_with_fb_sharing_mode(adapt, libgv_mode);
 
@@ -1456,7 +1457,7 @@ static int mi300_set_xgmi_fb_sharing_mode_ex(struct amdgv_adapter *adapt,
 
 	libgv_mode = gpumon_to_xgmi_fb_sharing_mode(mode);
 	if (libgv_mode > MI300_XGMI_MAX_SUPPORTED_MODE)
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
 	if (libgv_mode == AMDGV_XGMI_FB_SHARING_MODE_CUSTOM)
 		adapt->xgmi.custom_mode_sharing_mask = sharing_mask;
@@ -1489,7 +1490,7 @@ static int mi300_get_gpu_cache_info(struct amdgv_adapter *adapt,
 
 	if (pf_copy->gchdr->version_major != 2 || pf_copy->gchdr->version_minor != 1) {
 		AMDGV_WARN("Unsupported GC version!\n");
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 	}
 
 	gc_info = GET_GC_TABLE_V2_1(pf_copy->gchdr);
@@ -1498,10 +1499,10 @@ static int mi300_get_gpu_cache_info(struct amdgv_adapter *adapt,
 	gpu_cache_info->num_cache_types = 5;
 
 	if (gpu_cache_info->num_cache_types > AMDGV_GPUMON_MAX_CACHE_TYPES)
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
 	if (adapt->asic_type != CHIP_MI300X && adapt->asic_type != CHIP_MI308X && adapt->asic_type != CHIP_MI350X)
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
 	/* vL1D (Also known as TCP, GL0, CU$). On MI300 marked as GL1 cache */
 	gpu_cache_info->cache[0].flags = (AMDGV_GPUMON_CACHE_FLAGS_ENABLED |
@@ -1601,7 +1602,7 @@ static int mi300_get_ecc_correction_schema(struct amdgv_adapter *adapt,
  * @adapt: Adapter handle
  * @info: Output structure to receive PTL status
  *
- * Return: 0 on success, AMDGV_ERROR_GPUMON_NOT_SUPPORTED if PTL is not supported,
+ * Return: 0 on success, AMDGV_LOG_GPUMON_NOT_SUPPORTED if PTL is not supported,
  *         AMDGV_FAILURE on other errors
  */
 static int mi300_gpumon_ptl_query_status(struct amdgv_adapter *adapt,
@@ -1617,7 +1618,7 @@ static int mi300_gpumon_ptl_query_status(struct amdgv_adapter *adapt,
 	}
 
 	if (!adapt->ptl_supported)
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
 	req.req = PSP_PTL_PERF_MON_QUERY;
 	req.ptl_state = 0;
@@ -1670,7 +1671,7 @@ static const char *mi300_gpumon_ptl_format_to_str(uint32_t format)
  * @adapt: Adapter handle
  * @info: Input structure containing preferred data formats
  *
- * Return: 0 on success, AMDGV_ERROR_GPUMON_NOT_SUPPORTED if PTL is not supported,
+ * Return: 0 on success, AMDGV_LOG_GPUMON_NOT_SUPPORTED if PTL is not supported,
  *         AMDGV_FAILURE on other errors
  */
 int mi300_gpumon_ptl_enable(struct amdgv_adapter *adapt,
@@ -1686,7 +1687,7 @@ int mi300_gpumon_ptl_enable(struct amdgv_adapter *adapt,
 	}
 
 	if (!adapt->ptl_supported)
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
 	if (info->pref_format1 > AMDGV_PTL_FORMAT_VECTOR ||
 	    info->pref_format2 > AMDGV_PTL_FORMAT_VECTOR) {
@@ -1727,7 +1728,7 @@ int mi300_gpumon_ptl_enable(struct amdgv_adapter *adapt,
  * mi300_gpumon_ptl_disable - Disable PTL
  * @adapt: Adapter handle
  *
- * Return: 0 on success, AMDGV_ERROR_GPUMON_NOT_SUPPORTED if PTL is not supported,
+ * Return: 0 on success, AMDGV_LOG_GPUMON_NOT_SUPPORTED if PTL is not supported,
  *         AMDGV_FAILURE on other errors
  */
 static int mi300_gpumon_ptl_disable(struct amdgv_adapter *adapt)
@@ -1742,7 +1743,7 @@ static int mi300_gpumon_ptl_disable(struct amdgv_adapter *adapt)
 	}
 
 	if (!adapt->ptl_supported)
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
 	req.req = PSP_PTL_PERF_MON_SET;
 	req.ptl_state = 0;  /* Disable */
@@ -1836,7 +1837,7 @@ static int mi300_gpumon_sw_init(struct amdgv_adapter *adapt)
 
 	adapt->i2c_cmd_buffer = oss_malloc(I2C_CMD_BUFFER_SIZE);
 	if (adapt->i2c_cmd_buffer == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 			I2C_CMD_BUFFER_SIZE);
 		return AMDGV_FAILURE;
 	}

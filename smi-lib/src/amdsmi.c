@@ -1322,10 +1322,9 @@ amdsmi_status_t amdsmi_get_gpu_driver_model(amdsmi_processor_handle processor_ha
 
 amdsmi_status_t amdsmi_get_power_cap_info(amdsmi_processor_handle processor_handle, uint32_t sensor_ind, amdsmi_power_cap_info_t *info)
 {
-	AMDSMI_UNUSED(sensor_ind);
 	#pragma SMI_EXPORT
 	struct smi_power_cap_info *gpu_info = NULL;
-	struct smi_device_info_ex *dev = NULL;
+	struct smi_get_power_cap *dev = NULL;
 	int code = 0;
 	smi_device_handle_t pf;
 	struct smi_gpu_handle *gpu = NULL;
@@ -1347,10 +1346,11 @@ amdsmi_status_t amdsmi_get_power_cap_info(amdsmi_processor_handle processor_hand
 
 	gpu = (struct smi_gpu_handle *)processor_handle;
 	pf.handle = gpu->handle;
-	dev = (struct smi_device_info_ex *)&smi_req.thread->ioctl_cmd.payload;
+	dev = (struct smi_get_power_cap *)&smi_req.thread->ioctl_cmd.payload;
 	dev->dev_id.handle = pf.handle;
+	dev->sensor_ind = sensor_ind;
 	code = amdsmi_request(&smi_req, (uint32_t)SMI_CMD_CODE_GET_POWER_CAP_INFO,
-			sizeof(struct smi_device_info_ex),
+			sizeof(struct smi_get_power_cap),
 			sizeof(struct smi_power_cap_info));
 	if (code != AMDSMI_STATUS_SUCCESS) {
 		SMI_ERROR("Ioctl call failed. Return code: %d", code);
@@ -1362,6 +1362,7 @@ amdsmi_status_t amdsmi_get_power_cap_info(amdsmi_processor_handle processor_hand
 	memset(info, 0, sizeof(amdsmi_power_cap_info_t));
 	info->power_cap = gpu_info->power_cap;
 	info->dpm_cap = gpu_info->dpm_cap;
+	info->default_power_cap = gpu_info->default_power_cap;
 	info->min_power_cap = gpu_info->min_power_cap;
 	info->max_power_cap = gpu_info->max_power_cap;
 
@@ -1949,16 +1950,51 @@ amdsmi_status_t amdsmi_get_supported_power_cap(amdsmi_processor_handle processor
                                                uint32_t *sensor_inds,
                                                amdsmi_power_cap_type_t *sensor_types)
 {
-	// TODO: power_cap - get supported power cap
 	#pragma SMI_EXPORT
-	AMDSMI_UNUSED(processor_handle);
-	AMDSMI_UNUSED(sensor_count);
-	AMDSMI_UNUSED(sensor_inds);
-	AMDSMI_UNUSED(sensor_types);
+	enum smi_handle_type type;
+	struct smi_gpu_handle *gpu = NULL;
+	struct smi_device_info *dev = NULL;
+	struct smi_supported_power_cap *supported_sensors = NULL;
+	smi_req_ctx smi_req;
+	int code;
+	int i;
 
-	SMI_ERROR("amdsmi_get_supported_power_cap is not yet implemented. Return code: %d",
-	          AMDSMI_STATUS_NOT_YET_IMPLEMENTED);
-	return AMDSMI_STATUS_NOT_YET_IMPLEMENTED;
+	AMDSMI_ESCAPE_IF_NOT_INIT;
+
+	if (processor_handle == NULL || sensor_count == NULL ||
+	    sensor_inds == NULL || sensor_types == NULL) {
+		SMI_ERROR("Nullpointer given as input. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	type = *((enum smi_handle_type *)processor_handle);
+	if (type != SMI_HANDLE_TYPE_AMD_GPU) {
+		SMI_ERROR("Wrong processor handle. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	gpu = (struct smi_gpu_handle *)processor_handle;
+	dev = (struct smi_device_info *)&smi_req.thread->ioctl_cmd.payload;
+	dev->dev_id.handle = gpu->handle;
+
+	code = amdsmi_request(&smi_req, (uint32_t)SMI_CMD_CODE_GET_SUPPORTED_POWER_CAP,
+			sizeof(struct smi_device_info),
+			sizeof(struct smi_supported_power_cap));
+	if (code != AMDSMI_STATUS_SUCCESS) {
+		SMI_ERROR("Ioctl call failed. Return code: %d", code);
+		return code;
+	}
+
+	supported_sensors = (struct smi_supported_power_cap *)&smi_req.thread->ioctl_cmd.payload;
+	*sensor_count = supported_sensors->sensor_count;
+	if (*sensor_count > SMI_MAX_PPT_SENSOR_LENGTH)
+		*sensor_count = SMI_MAX_PPT_SENSOR_LENGTH;
+	for (i = 0; i < (int)*sensor_count; i++) {
+		sensor_inds[i] = supported_sensors->sensor_inds[i];
+		sensor_types[i] = (amdsmi_power_cap_type_t)supported_sensors->sensor_types[i];
+	}
+
+	return AMDSMI_STATUS_SUCCESS;
 }
 
 amdsmi_status_t amdsmi_is_gpu_power_management_enabled(amdsmi_processor_handle processor_handle, bool *enabled)
@@ -4481,7 +4517,7 @@ amdsmi_status_t amdsmi_get_afids_from_cper(char *cper_buffer, uint32_t buf_size,
 		return AMDSMI_STATUS_INVAL;
 	}
 
-	memset(afids, 0, MAX_NUMBER_OF_AFIDS_PER_RECORD * sizeof(afids));
+	memset(afids, 0, AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD * sizeof(afids));
 
 	for (uint32_t i = 0; i < hdr->sec_cnt; ++i) {
 		struct cper_sec_desc *section;

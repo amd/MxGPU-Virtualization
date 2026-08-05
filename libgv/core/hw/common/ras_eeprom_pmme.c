@@ -34,7 +34,7 @@ static bool ras_eeprom_pmme_is_gpu_bad(struct amdgv_adapter *adapt)
 		if (ret)
 			return false;
 		if (rma_status) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_REACH_THD, BAD_PAGE_RECORD_THRESHOLD);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_REACH_THD, BAD_PAGE_RECORD_THRESHOLD);
 			return true;
 		} else
 			return false;
@@ -173,7 +173,7 @@ static int ras_eeprom_pmme_init(struct amdgv_adapter *adapt,
 		ret = adapt->pp.pmme_funcs->get_ras_table_version(adapt,
 					&control->tbl_hdr.version);
 		if (ret) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_EEPROM_VERSION_PARSE_FAILED, 0);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_VERSION_PARSE_FAILED, 0);
 			return ret;
 		}
 	}
@@ -218,11 +218,11 @@ static int ras_eeprom_pmme_reset_table(struct amdgv_adapter *adapt,
 			goto unlock;
 
 		if (status) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_EEPROM_RESET_FAILED, 0);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_RESET_FAILED, 0);
 			ret = AMDGV_FAILURE;
 			goto unlock;
 		} else {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_EEPROM_RESET, 0);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_RESET, 0);
 		}
 	}
 

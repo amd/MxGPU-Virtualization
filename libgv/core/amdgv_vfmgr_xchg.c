@@ -21,7 +21,7 @@ static int amdgv_vfmgr_write_vf_sysmem_xchg(struct amdgv_adapter *adapt, uint32_
 	struct amdgv_vf_device *entry = &adapt->array_vf[idx_vf];
 
 	if (!entry->xchg.gpa_ctx) {
-		AMDGV_ERROR("VF Exchange region is not initialized.\n");
+		amdgv_put_log(idx_vf, AMDGV_LOG_VF_XCHG_REGION_NOT_INITIALIZED, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -34,7 +34,7 @@ static int amdgv_vfmgr_read_vf_sysmem_xchg(struct amdgv_adapter *adapt, uint32_t
 	struct amdgv_vf_device *entry = &adapt->array_vf[idx_vf];
 
 	if (!entry->xchg.gpa_ctx) {
-		AMDGV_ERROR("VF Exchange region is not initialized.\n");
+		amdgv_put_log(idx_vf, AMDGV_LOG_VF_XCHG_REGION_NOT_INITIALIZED, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -58,7 +58,7 @@ int amdgv_vfmgr_copy_to_vf_xchg_table(struct amdgv_adapter *adapt, uint32_t idx_
 
 	if (!entry->configured ||
 	    (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM) && entry->dev == AMDGV_INVALID_HANDLE)) {
-		AMDGV_ERROR("VF xchg table target is invalid.\n");
+		amdgv_put_log(idx_vf, AMDGV_LOG_VF_XCHG_TABLE_TARGET_INVALID, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -97,7 +97,7 @@ int amdgv_vfmgr_copy_from_vf_xchg_table(struct amdgv_adapter *adapt, uint32_t id
 
 	if (!entry->configured ||
 		(!(adapt->flags & AMDGV_FLAG_ENABLE_SVM) && entry->dev == AMDGV_INVALID_HANDLE)) {
-		AMDGV_ERROR("VF xchg table target is invalid.\n");
+		amdgv_put_log(idx_vf, AMDGV_LOG_VF_XCHG_TABLE_TARGET_INVALID, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -130,8 +130,8 @@ int amdgv_vfmgr_init_xchg_region(struct amdgv_adapter* adapt, uint32_t idx_vf,
 
 	max_size = amdgv_vfmgr_calc_crit_region_pool_size(adapt, idx_vf);
 	if (!size || size > max_size) {
-		amdgv_put_error(idx_vf, AMDGV_ERROR_VF_XCHG_REGION_INVALID_SIZE,
-				AMDGV_ERROR_32_32(size, max_size));
+		amdgv_put_log(idx_vf, AMDGV_LOG_VF_XCHG_REGION_INVALID_SIZE,
+			      AMDGV_LOG_DATA_32_32(size, max_size));
 		return AMDGV_FAILURE;
 	}
 

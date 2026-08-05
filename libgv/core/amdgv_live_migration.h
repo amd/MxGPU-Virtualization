@@ -10,6 +10,8 @@ struct amdgv_vf_migration_state {
 	enum amdgv_migration_vf_state state;
 	bool aborted;
 	bool is_target;
+	uint64_t dst_unique_bp_count;
+	uint64_t *dst_unique_bps;
 };
 
 struct amdgv_live_migration {
@@ -22,12 +24,29 @@ struct amdgv_live_migration {
 	enum amdgv_migration_context_version context_version;
 	struct amdgv_vf_migration_state mig_state[AMDGV_MAX_VF_NUM];
 	bool mig_data_size_cap;
+	bool need_gfx_pf_ctx_switch;
 };
+
+struct amdgv_migration_bad_page_section {
+	uint64_t magic_number;
+	uint64_t sorted_bp_count;
+	uint64_t sorted_bp_offsets[];
+};
+
+#define AMDGV_MIGRATION_BAD_PAGE_MAGIC 0x5345474150444142 /* BADPAGES */
 
 #define AMDGV_MIGRATION_SHOULD_ABORT(adapt, idx_vf) \
 		(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION ? adapt->live_migration.mig_state[idx_vf].aborted : false)
 #define AMDGV_MIGRATION_SET_ABORT(adapt, idx_vf) (adapt->live_migration.mig_state[idx_vf].aborted = true)
 #define AMDGV_MIGRATION_CLEAR_ABORT(adapt, idx_vf) (adapt->live_migration.mig_state[idx_vf].aborted = false)
+
+#define AMDGV_MIGRATION_BAD_PAGES_DATA_SIZE   (MAX_BAD_PAGE_THRESHOLD * sizeof(uint64_t))
+#define AMDGV_MIGRATION_BAD_PAGE_SECTION_SIZE \
+	(sizeof(struct amdgv_migration_bad_page_section) + AMDGV_MIGRATION_BAD_PAGES_DATA_SIZE)
+
+#define AMDGV_MIGRATION_MAX_PSP_STATIC_DATA_SIZE (10 * 1024 * 1024)
+#define AMDGV_MIGRATION_STATIC_DATA_SIZE \
+	(AMDGV_MIGRATION_MAX_PSP_STATIC_DATA_SIZE + AMDGV_MIGRATION_BAD_PAGE_SECTION_SIZE)
 
 int amdgv_migration_get_migration_version(struct amdgv_adapter *adapt,
 	uint32_t *migration_version);

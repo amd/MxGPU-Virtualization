@@ -1386,9 +1386,7 @@ except AmdSmiException as e:
 
 ### amdsmi_get_supported_power_cap
 
-Description: Returns the supported power cap sensors and their types for a device.
-
-**Note:** This function is not yet implemented and will raise `AmdSmiLibraryException` with error code `AMDSMI_STATUS_NOT_YET_IMPLEMENTED`.
+Description: Returns the supported power cap sensors and their types for a device. The set of supported sensors is detected dynamically per ASIC (e.g. PPT0 only, or PPT0 + PPT1).
 
 Input parameters:
 

@@ -18,6 +18,10 @@
 #define AMDGV_CMD_VERSION 1
 #define AMDGV_CMD_VERSION_V2 3
 #define AMDGV_CMD_MAX_KERNELOBJ_SIZE 2048
+/* Upper bounds for the CU-dump output buffers. out_flag holds one uint32_t flag
+ * per out_data dword, so its bound is out_data's bound divided by sizeof(uint32_t). */
+#define AMDGV_CMD_MAX_OUT_DATA_SIZE (256 * 1024 * 1024)
+#define AMDGV_CMD_MAX_OUT_FLAG_SIZE (AMDGV_CMD_MAX_OUT_DATA_SIZE / (uint32_t)sizeof(uint32_t))
 
 #define __gim_max(a, b) ((int)(a) > (int)(b) ? (a) : (b))
 #define AMDGV_MAX_FB_REGIONS \
@@ -47,6 +51,7 @@ enum amdgv_cmd_id {
     AMDGV_CMD_GET_CPER_RECORDS,
     AMDGV_CMD_RESET_ALL_ERROR_COUNTS,
     AMDGV_CMD_GET_RAS_POLICY_INFO,
+    AMDGV_CMD_GET_PARTITION_INFO,
     AMDGV_CMD_SUPPORTED_MAX
 };
 
@@ -67,8 +72,9 @@ enum amdgv_cmd_asic_type {
 	AMDGV_CMD_CHIP_MI308X = 11,
 	AMDGV_CMD_CHIP_MI350X = 12,
 	AMDGV_CMD_CHIP_MI325X = 13,
-	AMDGV_CMD_CHIP_UNKNOWN,
-	AMDGV_CMD_CHIP_LAST,
+	AMDGV_CMD_CHIP_MI355X = 14,
+	AMDGV_CMD_CHIP_UNKNOWN = 0xFFFF,
+	AMDGV_CMD_CHIP_LAST = AMDGV_CMD_CHIP_UNKNOWN,
 };
 
 enum amdgv_ras_block {
@@ -429,5 +435,11 @@ struct amdgv_cmd_ras_policy_info {
 	uint16_t dram_non_critical_region_threshold;	// Non-critical region UCE threshold
 	uint16_t dram_critical_region_threshold;		// Critical region UCE threshold
 	uint32_t reserved[8];
+};
+
+struct amdgv_cmd_partition_info {
+	uint32_t memory_partition_mode;		// enum amdgv_memory_partition_mode (NPS1/2/4/8)
+	uint32_t accelerator_partition_mode;	// enum amdgv_accelerator_partition_mode (SPX/DPX/QPX/CPX)
+	uint32_t reserved[8];			// reserved for future extensibility
 };
 #endif

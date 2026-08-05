@@ -330,14 +330,14 @@ int amdgv_mmsch_read_all_output(struct amdgv_adapter *adapt, uint32_t idx_vf,
 
 					/* the output bit from MMSCH and only change from 0 to 1 */
 					if (vf_status_new->job_limit_not_supported != vf_status_old->job_limit_not_supported) {
-						amdgv_put_error(libgv_idx_vf,
-								AMDGV_ERROR_MMSCH_UNSUPPORTED_VCN_FW,
+						amdgv_put_log(libgv_idx_vf,
+								AMDGV_LOG_MMSCH_UNSUPPORTED_VCN_FW,
 								vcn_engine_idx);
 					}
 
 					if (vf_status_new->job_ignored != vf_status_old->job_ignored) {
-						amdgv_put_error(libgv_idx_vf,
-								AMDGV_ERROR_MMSCH_IGNORED_JOB,
+						amdgv_put_log(libgv_idx_vf,
+								AMDGV_LOG_MMSCH_IGNORED_JOB,
 								vcn_engine_idx);
 					}
 				}

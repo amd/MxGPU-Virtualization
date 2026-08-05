@@ -791,6 +791,12 @@ struct amdgv_gpumon_ras_policy_info {
 	uint32_t reserved[8];
 };
 
+struct amdgv_gpumon_partition_info {
+	uint32_t memory_partition_mode;			// enum amdgv_memory_partition_mode
+	uint32_t accelerator_partition_mode;	// enum amdgv_accelerator_partition_mode
+	uint32_t reserved[8];					// reserved for future extensibility
+};
+
 /* PTL (Peak TOPS Limiter) structures and functions */
 
 enum amdgv_ptl_format_type {
@@ -850,14 +856,16 @@ struct amdgv_gpumon_get_config_rsp_ual_v1 {
 	uint8_t ppod_id[16];
 	/* Physical Pod Size */
 	uint32_t ppod_size;
-	/* station bandwidth share? */
+	/* Total bandwidth between pairs of GPUs across all links */
 	uint32_t bandwidth;
-	/* Latency - depending on switch presence and type */
+	/* Latency depends on switch presence/type, unit */
 	uint32_t latency;
+	/* Local accelerator IDs sorted in order of socket IDs */
+	uint32_t local_accelerators[AMDGV_GPUMON_MAX_LOCAL_GPUS_UAL_V1];
 	/* Virtual Pod ID - Range 0 to 1023 */
 	uint32_t vpod_id;
 	uint32_t vpod_size;
-	/* Active accelerators bitmap of 1024 bits */
+	/* List of active accelerator ids in the vpod */
 	uint32_t vpod_active_accelerators[32];
 	enum amdgv_gpumon_ual_npa_address_mode addr_mode;
 	/* Accelerator vPoD State */
@@ -870,11 +878,11 @@ struct amdgv_gpumon_set_ppod_config_req_ual_v1 {
 	uint8_t ppod_id[16];
 	/* Physical Pod Size */
 	uint32_t ppod_size;
-	/* station bandwidth share? */
+	/* Total bandwidth between pairs of GPUs across all links */
 	uint32_t bandwidth;
-	/* Latency - depending on switch presence and type */
+	/* Latency depends on switch presence/type, unit */
 	uint32_t latency;
-	/* Local Accelerator IDs */
+	/* Local accelerator IDs sorted in order of socket IDs */
 	uint32_t local_accelerators[AMDGV_GPUMON_MAX_LOCAL_GPUS_UAL_V1];
 };
 
@@ -883,7 +891,7 @@ struct amdgv_gpumon_set_vpod_config_req_ual_v1 {
 	/* Virtual Pod ID - Range 0 to 1023 */
 	uint32_t vpod_id;
 	uint32_t vpod_size;
-	/* Active accelerators bitmap of 1024 bits */
+	/* List of active accelerator ids in the vpod */
 	uint32_t vpod_active_accelerators[32];
 };
 
@@ -915,10 +923,25 @@ struct amdgv_gpumon_set_station_config_req_ual_v1 {
 };
 
 
+#define AMDGV_GPUMON_MAX_PPT_SENSOR_NUM 2
+
+typedef enum {
+	AMDGV_POWER_CAP_TYPE_PPT0,	//!< PPT0 power cap; lower limit, filtered input
+	AMDGV_POWER_CAP_TYPE_PPT1,	//!< PPT1 power cap; higher limit, raw input
+} amdgv_power_cap_type_t;
+
+struct amdgv_supported_power_cap {
+	uint32_t sensor_count;
+	uint32_t sensor_inds[AMDGV_GPUMON_MAX_PPT_SENSOR_NUM];
+	amdgv_power_cap_type_t sensor_types[AMDGV_GPUMON_MAX_PPT_SENSOR_NUM];
+};
+
 /* VF Query Functions */
 int amdgv_gpumon_get_metrics(amdgv_dev_t dev, struct amdgv_gpumon_metrics *metrics);
 int amdgv_gpumon_get_gpu_power_usage(amdgv_dev_t dev, int *val);
-int amdgv_gpumon_get_gpu_power_capacity(amdgv_dev_t dev, int *val);
+int amdgv_gpumon_get_gpu_power_capacity(amdgv_dev_t dev, uint32_t sensor_ind, int *val);
+int amdgv_gpumon_get_supported_power_cap(amdgv_dev_t dev,
+					 struct amdgv_supported_power_cap *supported_sensors);
 int amdgv_gpumon_set_gpu_power_capacity(amdgv_dev_t dev, int val);
 int amdgv_gpumon_get_dpm_status(amdgv_dev_t dev, int *val);
 int amdgv_gpumon_get_dpm_cap(amdgv_dev_t dev, int *val);
@@ -947,6 +970,7 @@ int amdgv_gpumon_get_bad_page_info(amdgv_dev_t dev, uint32_t index,
 				   struct amdgv_smi_ras_eeprom_table_record *record);
 int amdgv_gpumon_get_bad_page_record_threshold(amdgv_dev_t dev, uint32_t *bad_page_record_threshold);
 int amdgv_gpumon_get_ras_policy_info(amdgv_dev_t dev, struct amdgv_gpumon_ras_policy_info *info);
+int amdgv_gpumon_get_partition_info(amdgv_dev_t dev, struct amdgv_gpumon_partition_info *info);
 int amdgv_gpumon_ras_error_inject(amdgv_dev_t dev,
 				  struct amdgv_smi_ras_error_inject_info *data);
 int amdgv_gpumon_turn_on_ecc_injection(amdgv_dev_t dev, const uint8_t *passphrase);
@@ -1008,6 +1032,8 @@ int amdgv_gpumon_get_accelerator_partition_profile_config(
 int amdgv_gpumon_get_accelerator_partition_profile(
 	amdgv_dev_t dev,
 	struct amdgv_gpumon_acccelerator_partition_profile *profile);
+enum amdgv_accelerator_partition_mode amdgv_gpumon_partition_type_to_mode(
+	enum amdgv_gpumon_acccelerator_partition_type type);
 int amdgv_gpumon_set_accelerator_partition_profile(amdgv_dev_t dev,
 						   uint32_t profile_index);
 int amdgv_gpumon_get_memory_partition_config(
@@ -1095,7 +1121,8 @@ int amdgv_gpumon_translate_fb_address(amdgv_dev_t dev, enum amdgv_gpumon_fb_addr
 int amdgv_gpumon_get_ras_safe_fb_addr_ranges(amdgv_dev_t dev, struct amdgv_gpumon_ras_safe_fb_address_ranges *ranges);
 int amdgv_gpumon_reset_all_error_counts(amdgv_dev_t dev);
 int amdgv_gpumon_get_ras_session_id(amdgv_dev_t dev, uint64_t *session_ptr);
-int amdgv_gpumon_ras_get_ta_version(amdgv_dev_t dev, unsigned char *fw_image, uint32_t *ver_ptr);
+int amdgv_gpumon_ras_get_ta_version(amdgv_dev_t dev, unsigned char *fw_image,
+				    uint32_t fw_size, uint32_t *ver_ptr);
 int amdgv_gpumon_ras_get_loaded_ta_version(amdgv_dev_t dev, uint32_t *ver_ptr);
 int amdgv_gpumon_get_num_active_vfs(amdgv_dev_t dev, uint32_t *num_vfs);
 

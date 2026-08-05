@@ -16,6 +16,27 @@
 
 static const uint32_t this_block = AMDGV_LIVE_MIGRATION_BLOCK;
 
+/*
+ * Copy manifest data between the PF VRAM scratch buffer and the host buffer via
+ * amdgv_sched_event_do_fb_copy(): SDMA/LSDMA when the host end is GPU-addressable
+ * (gpu_addr != 0), else pass -1 for that end to force the CPU copy.
+ * to_host: true = scratch->host (export), false = host->scratch (import).
+ */
+static int amdgv_migration_move_manifest_data(struct amdgv_adapter *adapt,
+		uint32_t idx_vf, struct amdgv_memmgr_mem *mem, void *cpu_addr,
+		uint64_t gpu_addr, uint64_t size, bool to_host)
+{
+	uint64_t scratch_gpu_addr = amdgv_memmgr_get_gpu_addr(mem);
+	void *scratch_cpu_addr = amdgv_memmgr_get_cpu_addr(mem);
+	uint64_t host_gpu_addr = gpu_addr ? gpu_addr : (uint64_t)-1;
+
+	return to_host ?
+		amdgv_sched_event_do_fb_copy(adapt, idx_vf, scratch_gpu_addr, host_gpu_addr,
+				size, scratch_cpu_addr, cpu_addr) :
+		amdgv_sched_event_do_fb_copy(adapt, idx_vf, host_gpu_addr, scratch_gpu_addr,
+				size, cpu_addr, scratch_cpu_addr);
+}
+
 static int amdgv_migration_rlc_autoload(struct amdgv_adapter *adapt, uint32_t vf_idx)
 {
        return (adapt->psp.migration_rlc_autoload) ?
@@ -166,128 +187,334 @@ int amdgv_migration_get_psp_data_size(struct amdgv_adapter *adapt, uint64_t *siz
 	return 0;
 }
 
+static int amdgv_migration_export_bad_pages(struct amdgv_adapter *adapt,
+					    void *data_addr, uint64_t data_offset)
+{
+	struct ras_err_handler_data *data;
+	struct amdgv_migration_bad_page_section *section;
+	uint64_t mc_base_pfn;
+	int i;
+
+	section = (struct amdgv_migration_bad_page_section *)((uint8_t *)data_addr + data_offset);
+	section->magic_number = AMDGV_MIGRATION_BAD_PAGE_MAGIC;
+	if (!adapt->ecc.eh_data) {
+		section->sorted_bp_count = 0;
+		return 0;
+	}
+	oss_mutex_lock(adapt->ecc.recovery_lock);
+
+	data = adapt->ecc.eh_data;
+	if (!data || !data->sorted_bps) {
+		section->sorted_bp_count = 0;
+		oss_mutex_unlock(adapt->ecc.recovery_lock);
+		return 0;
+	}
+
+	if (data->sorted_bp_count > MAX_BAD_PAGE_THRESHOLD) {
+		oss_mutex_unlock(adapt->ecc.recovery_lock);
+		AMDGV_ERROR("Bad page count %d exceeds threshold %u.\n",
+			    data->sorted_bp_count, MAX_BAD_PAGE_THRESHOLD);
+		return AMDGV_FAILURE;
+	}
+
+	mc_base_pfn = adapt->memmgr_pf.mc_base >> AMDGV_GPU_PAGE_SHIFT;
+	section->sorted_bp_count = data->sorted_bp_count;
+	for (i = 0; i < data->sorted_bp_count; i++)
+		section->sorted_bp_offsets[i] = data->sorted_bps[i] - mc_base_pfn;
+
+	oss_mutex_unlock(adapt->ecc.recovery_lock);
+	return 0;
+}
+
+static int amdgv_migration_import_bad_pages(struct amdgv_adapter *adapt,
+					    uint32_t idx_vf,
+					    void *data_addr, uint64_t data_offset)
+{
+	struct amdgv_migration_bad_page_section *section;
+	struct amdgv_vf_migration_state *mig_state;
+	struct ras_err_handler_data *data;
+	uint64_t mc_base_pfn = adapt->memmgr_pf.mc_base >> AMDGV_GPU_PAGE_SHIFT;
+	int src_idx = 0;
+	int dst_idx;
+	int unique_count = 0;
+
+	mig_state = &adapt->live_migration.mig_state[idx_vf];
+
+	section = (struct amdgv_migration_bad_page_section *)((uint8_t *)data_addr + data_offset);
+	if (section->magic_number != AMDGV_MIGRATION_BAD_PAGE_MAGIC) {
+		AMDGV_WARN("No valid bad page section (magic number: 0x%llx), skip importing bad pages.\n",
+			   section->magic_number);
+		return 0;
+	}
+
+	if (!adapt->ecc.eh_data)
+		return 0;
+
+	if (section->sorted_bp_count > MAX_BAD_PAGE_THRESHOLD) {
+		AMDGV_ERROR("Source bad page count %llu exceeds threshold %u.\n",
+			    section->sorted_bp_count, MAX_BAD_PAGE_THRESHOLD);
+		return AMDGV_FAILURE;
+	}
+
+	if (mig_state->dst_unique_bps == NULL) {
+		mig_state->dst_unique_bps = oss_zalloc(AMDGV_MIGRATION_BAD_PAGES_DATA_SIZE);
+		if (mig_state->dst_unique_bps == NULL) {
+			AMDGV_ERROR("Failed to allocate memory for destination unique bad pages.\n");
+			return AMDGV_FAILURE;
+		}
+	} else {
+		oss_memset(mig_state->dst_unique_bps, 0, AMDGV_MIGRATION_BAD_PAGES_DATA_SIZE);
+	}
+	mig_state->dst_unique_bp_count = 0;
+
+	oss_mutex_lock(adapt->ecc.recovery_lock);
+	data = adapt->ecc.eh_data;
+	if (data && data->sorted_bps) {
+
+		if (data->sorted_bp_count > MAX_BAD_PAGE_THRESHOLD) {
+			AMDGV_ERROR("Destination bad page count %d exceeds threshold %u.\n",
+				    data->sorted_bp_count, MAX_BAD_PAGE_THRESHOLD);
+			oss_mutex_unlock(adapt->ecc.recovery_lock);
+			return AMDGV_FAILURE;
+		}
+
+		for (dst_idx = 0; dst_idx < data->sorted_bp_count; dst_idx++) {
+			while (src_idx < section->sorted_bp_count &&
+			       (section->sorted_bp_offsets[src_idx] + mc_base_pfn) <
+				       data->sorted_bps[dst_idx])
+				src_idx++;
+
+			if (src_idx < section->sorted_bp_count &&
+			    (section->sorted_bp_offsets[src_idx] + mc_base_pfn) ==
+				    data->sorted_bps[dst_idx])
+				continue;
+
+			mig_state->dst_unique_bps[unique_count++] = data->sorted_bps[dst_idx];
+		}
+	}
+	mig_state->dst_unique_bp_count = unique_count;
+	oss_mutex_unlock(adapt->ecc.recovery_lock);
+
+	AMDGV_DEBUG("Migration Import: source has %llu bad pages, destination has %d unique bad pages.\n",
+		    section->sorted_bp_count, unique_count);
+	return 0;
+}
+
+static int amdgv_migration_prepare_transfer_vf_data(struct amdgv_adapter *adapt,
+						    uint32_t idx_vf)
+{
+	int ret = 0;
+
+	/*
+	 * Only ASICs that require the GFX engine in PF context for RLCV CP DMA
+	 * during TRANSFER_VF_DATA (e.g. Navi32) perform this context switch. The
+	 * capability is set during init; other ASICs skip it.
+	 */
+	if (!adapt->live_migration.need_gfx_pf_ctx_switch)
+		return 0;
+
+	/* RLCV needs PF context for CP DMA (both export and import). */
+	ret = amdgv_sched_context_switch_to_vf(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX);
+	if (ret)
+		AMDGV_ERROR("Failed to switch to PF on GFX block\n");
+
+	return ret;
+}
+
 int amdgv_migration_transfer_manifest_data(struct amdgv_adapter *adapt, struct amdgv_sched_event *event)
 {
 	int ret = AMDGV_FAILURE;
 	uint32_t idx_vf = event->idx_vf;
 	enum amdgv_migration_manifest_data_type type = event->data.lm.type;
 	void *data_addr = (void *)event->data.lm.addr;
+	uint64_t gpu_addr = event->data.lm.gpu_addr;
 	uint64_t size = 0;
 	struct amdgv_memmgr_mem *mem = NULL;
-
-	if (type == AMDGV_MIGRATION_EXPORT_STATIC_DATA || type == AMDGV_MIGRATION_IMPORT_STATIC_DATA)
-		oss_memset(amdgv_memmgr_get_cpu_addr(adapt->live_migration.static_data_mem), 0,
-				amdgv_memmgr_get_size(adapt->live_migration.static_data_mem));
-	else
-		oss_memset(amdgv_memmgr_get_cpu_addr(adapt->live_migration.dynamic_data_mem), 0,
-				amdgv_memmgr_get_size(adapt->live_migration.dynamic_data_mem));
+	struct amdgv_vf_migration_state *mig_state = &adapt->live_migration.mig_state[idx_vf];
 
 	switch (type) {
 	case AMDGV_MIGRATION_EXPORT_STATIC_DATA:
+		amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_EXPORT_STATIC, 0);
 		mem = adapt->live_migration.static_data_mem;
-		AMDGV_DEBUG("Migration Export: PSP static import MEC, VCN, SDMA FW\n");
-		if (mem == NULL)
-			goto exit;
 
-		if (amdgv_migration_get_psp_data_size(adapt, &size,
-					AMDGV_MIGRATION_CONTENT_VF_HW_STATIC_DATA))
+		AMDGV_DEBUG("Migration Export: PSP static import MEC, VCN, SDMA FW\n");
+		if (mem == NULL) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_EXPORT_STATIC_FAILED, 0);
 			goto exit;
+		}
 
 		ret = amdgv_psp_transfer_manifest_data(adapt, idx_vf,
-					amdgv_memmgr_get_gpu_addr(mem), size, PSP_MIGRATION_EXPORT_STATIC_DATA);
-		if (ret)
+					amdgv_memmgr_get_gpu_addr(mem),
+					AMDGV_MIGRATION_MAX_PSP_STATIC_DATA_SIZE,
+					PSP_MIGRATION_EXPORT_STATIC_DATA);
+		if (ret) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_EXPORT_STATIC_FAILED, 0);
 			goto exit;
+		}
 
-		oss_memcpy(data_addr, amdgv_memmgr_get_cpu_addr(mem), size);
+		ret = amdgv_migration_export_bad_pages(adapt, amdgv_memmgr_get_cpu_addr(mem),
+				AMDGV_MIGRATION_MAX_PSP_STATIC_DATA_SIZE);
+		if (ret) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_EXPORT_STATIC_FAILED, 0);
+			goto exit;
+		}
+
+		ret = amdgv_migration_move_manifest_data(adapt, idx_vf, mem, data_addr,
+				gpu_addr, AMDGV_MIGRATION_STATIC_DATA_SIZE, true);
+		if (ret) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_EXPORT_STATIC_FAILED, 0);
+			goto exit;
+		}
 		break;
 	case AMDGV_MIGRATION_EXPORT_DYNAMIC_DATA:
+		amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_EXPORT_DYNAMIC, 0);
 		mem = adapt->live_migration.dynamic_data_mem;
 		AMDGV_DEBUG("Migration Export: Send TRANSFER_VF_DATA to MMSCH and RLCV\n");
-		if (mem == NULL)
+		if (mem == NULL) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_EXPORT_DYNAMIC_FAILED, 0);
 			goto exit;
+		}
 
 		if (amdgv_migration_get_psp_data_size(adapt, &size,
-					AMDGV_MIGRATION_CONTENT_VF_HW_DYNAMIC_DATA))
+					AMDGV_MIGRATION_CONTENT_VF_HW_DYNAMIC_DATA)) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_EXPORT_DYNAMIC_FAILED, 0);
 			goto exit;
+		}
 
-		if (amdgv_gpuiov_transfer_vf_data(adapt, idx_vf, true))
+		if (amdgv_migration_prepare_transfer_vf_data(adapt, idx_vf)) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_EXPORT_DYNAMIC_FAILED, 0);
 			goto exit;
+		}
+
+		if (amdgv_gpuiov_transfer_vf_data(adapt, idx_vf, true)) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_EXPORT_DYNAMIC_FAILED, 0);
+			goto exit;
+		}
 
 		ret = amdgv_psp_transfer_manifest_data(adapt, idx_vf,
 					amdgv_memmgr_get_gpu_addr(mem), size, PSP_MIGRATION_EXPORT_DYNAMIC_DATA);
-		if (ret)
+		if (ret) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_EXPORT_DYNAMIC_FAILED, 0);
 			goto exit;
+		}
 
-		oss_memcpy(data_addr, amdgv_memmgr_get_cpu_addr(mem), size);
+		ret = amdgv_migration_move_manifest_data(adapt, idx_vf, mem, data_addr,
+				gpu_addr, size, true);
+		if (ret) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_EXPORT_DYNAMIC_FAILED, 0);
+			goto exit;
+		}
 		break;
 	case AMDGV_MIGRATION_IMPORT_PREPARE:
-		ret = amdgv_misc_clear_vf_fb(adapt, idx_vf, 0x00);
-		if (ret)
-			return ret;
-
-		ret = amdgv_dirtybit_clear_fb_dbit(adapt, idx_vf);
-		if (ret)
-			return ret;
-
-		/* Save current PF, init VF on all blocks */
-		AMDGV_DEBUG("Migration Import: Init target VF on all blocks\n");
+		amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_PREPARE, 0);
 		adapt->live_migration.mig_state[idx_vf].is_target = true;
-		ret = 0;
-		if (amdgv_sched_context_init(adapt, idx_vf, AMDGV_SCHED_BLOCK_ALL)) {
-			AMDGV_DEBUG("Failed to init VF%d WS context.\n", idx_vf);
-			ret = AMDGV_FAILURE;
+
+		ret = amdgv_sched_context_save(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX);
+		if (ret) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_PREPARE_FAILED, 0);
+			goto exit;
 		}
-		/* Switch to PF on all blocks */
+
+		ret = amdgv_mmsch_config_vf(adapt, idx_vf);
+		if (ret) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_PREPARE_FAILED, 0);
+			goto exit;
+		}
+
+		AMDGV_DEBUG("Migration Import: Init target VF on all blocks\n");
+		ret = amdgv_sched_context_init(adapt, idx_vf, AMDGV_SCHED_BLOCK_ALL);
+		if (ret) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_PREPARE_FAILED, 0);
+			goto exit;
+		}
+
 		AMDGV_DEBUG("Migration Import: Switch to PF on all blocks\n");
-		if (amdgv_sched_context_switch_to_vf(adapt, AMDGV_PF_IDX,
-						     AMDGV_SCHED_BLOCK_ALL)) {
-			AMDGV_DEBUG("Failed to switch to PF on all blocks.\n");
-			ret = AMDGV_FAILURE;
+		ret = amdgv_sched_context_switch_to_vf(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_ALL);
+		if (ret) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_PREPARE_FAILED, 0);
+			goto exit;
 		}
+
 		AMDGV_DEBUG("Migration Import: Enable fb/mmio/doorbell write access\n");
-		if (amdgv_gpuiov_set_vf_access(
-			    adapt, idx_vf,
-			    AMDGV_VF_ACCESS_ALL, true)) {
-			AMDGV_DEBUG("Failed to enable mmio/doorbell write access.\n");
-			ret = AMDGV_FAILURE;
+		ret = amdgv_gpuiov_set_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_ALL, true);
+		if (ret) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_PREPARE_FAILED, 0);
+			goto exit;
 		}
+
 		amdgv_sched_handle_req_gpu_init_data(adapt, idx_vf);
 		break;
 	case AMDGV_MIGRATION_IMPORT_STATIC_DATA:
+		amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_STATIC, 0);
 		AMDGV_DEBUG("Migration Import: PSP static import MEC, VCN, SDMA FW\n");
 		mem = adapt->live_migration.static_data_mem;
-		if (mem == NULL)
+		if (mem == NULL) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_STATIC_FAILED, 0);
 			goto exit;
+		}
 
-		if (amdgv_migration_get_psp_data_size(adapt, &size,
-					AMDGV_MIGRATION_CONTENT_VF_HW_STATIC_DATA))
+		ret = amdgv_migration_get_psp_data_size(adapt, &size, AMDGV_MIGRATION_CONTENT_VF_HW_STATIC_DATA);
+		if (ret) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_STATIC_FAILED, 0);
 			goto exit;
+		}
 
-		oss_memcpy(amdgv_memmgr_get_cpu_addr(mem), data_addr, size);
+		ret = amdgv_migration_move_manifest_data(adapt, idx_vf, mem, data_addr,
+				gpu_addr, event->data.lm.size ? event->data.lm.size : size, false);
+		if (ret) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_STATIC_FAILED, 0);
+			goto exit;
+		}
+
 		ret = amdgv_psp_transfer_manifest_data(adapt, idx_vf,
-					amdgv_memmgr_get_gpu_addr(mem), size, PSP_MIGRATION_IMPORT_STATIC_DATA);
-		if (ret)
+					amdgv_memmgr_get_gpu_addr(mem),
+					event->data.lm.size ? event->data.lm.size : size,
+					PSP_MIGRATION_IMPORT_STATIC_DATA);
+		if (ret) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_STATIC_FAILED, 0);
 			goto exit;
+		}
+
+		if (mig_state->dst_unique_bps) {
+			oss_free(mig_state->dst_unique_bps);
+			mig_state->dst_unique_bps = NULL;
+		}
+		mig_state->dst_unique_bp_count = 0;
+
+		if (!event->data.lm.size || event->data.lm.size == size) {
+			ret = amdgv_migration_import_bad_pages(adapt, idx_vf, data_addr,
+							       AMDGV_MIGRATION_MAX_PSP_STATIC_DATA_SIZE);
+			if (ret) {
+				amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_STATIC_FAILED, 0);
+				goto exit;
+			}
+		}
 		set_to_suspend_vf(idx_vf);
 		break;
 	case AMDGV_MIGRATION_IMPORT_DYNAMIC_DATA:
+		amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_DYNAMIC, 0);
 		mem = adapt->live_migration.dynamic_data_mem;
-		if (mem == NULL)
+		if (mem == NULL) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_DYNAMIC_FAILED, 0);
 			goto exit;
+		}
 
 		if (amdgv_migration_get_psp_data_size(adapt, &size,
-					AMDGV_MIGRATION_CONTENT_VF_HW_DYNAMIC_DATA))
+					AMDGV_MIGRATION_CONTENT_VF_HW_DYNAMIC_DATA)) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_DYNAMIC_FAILED, 0);
 			goto exit;
+		}
 
-		oss_memcpy(amdgv_memmgr_get_cpu_addr(mem), data_addr, size);
+		ret = amdgv_migration_move_manifest_data(adapt, idx_vf, mem, data_addr,
+				gpu_addr, size, false);
+		if (ret) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_DYNAMIC_FAILED, 0);
+			goto exit;
+		}
 		ret = amdgv_psp_transfer_manifest_data(adapt, idx_vf,
 					amdgv_memmgr_get_gpu_addr(mem), size, PSP_MIGRATION_IMPORT_DYNAMIC_DATA);
-		if (ret)
-			goto exit;
-
-		AMDGV_DEBUG("Migration Import: Send TRANSFER_VF_DATA to MMSCH and RLCV\n");
-		if (amdgv_gpuiov_transfer_vf_data(adapt, idx_vf, false)) {
-			ret = AMDGV_FAILURE;
+		if (ret) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_DYNAMIC_FAILED, 0);
 			goto exit;
 		}
 
@@ -295,8 +522,23 @@ int amdgv_migration_transfer_manifest_data(struct amdgv_adapter *adapt, struct a
 		ret = amdgv_migration_rlc_autoload(adapt, idx_vf);
 		if (ret) {
 			AMDGV_ERROR("Failed to do migration psp rlc autoload.\n");
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_DYNAMIC_FAILED, 0);
 			goto exit;
 		}
+
+		ret = amdgv_migration_prepare_transfer_vf_data(adapt, idx_vf);
+		if (ret) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_DYNAMIC_FAILED, 0);
+			goto exit;
+		}
+
+		AMDGV_DEBUG("Migration Import: Send TRANSFER_VF_DATA to MMSCH and RLCV\n");
+		ret = amdgv_gpuiov_transfer_vf_data(adapt, idx_vf, false);
+		if (ret) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_DYNAMIC_FAILED, 0);
+			goto exit;
+		}
+
 
 		break;
 	default:
@@ -304,9 +546,6 @@ int amdgv_migration_transfer_manifest_data(struct amdgv_adapter *adapt, struct a
 		break;
 	}
 exit:
-	if (mem)
-		oss_memset(amdgv_memmgr_get_cpu_addr(mem), 0, size);
-
 	return ret;
 }
 
@@ -327,8 +566,8 @@ static int amdgv_migration_sw_init(struct amdgv_adapter *adapt)
 						adapt->live_migration.static_data_size,
 						MEM_MIGRATION_PSP_STATIC_DATA);
 			if (!adapt->live_migration.static_data_mem) {
-				amdgv_put_error(AMDGV_PF_IDX,
-						AMDGV_ERROR_DRIVER_ALLOC_FB_MEM_FAIL,
+				amdgv_put_log(AMDGV_PF_IDX,
+						AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL,
 						adapt->live_migration.static_data_size);
 				return AMDGV_FAILURE;
 			}
@@ -340,7 +579,7 @@ static int amdgv_migration_sw_init(struct amdgv_adapter *adapt)
 						adapt->live_migration.dynamic_data_size,
 						MEM_MIGRATION_PSP_DYNAMIC_DATA);
 			if (!adapt->live_migration.dynamic_data_mem) {
-				amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_FB_MEM_FAIL,
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL,
 						adapt->live_migration.dynamic_data_size);
 				return AMDGV_FAILURE;
 			}
@@ -377,6 +616,8 @@ static int amdgv_migration_sw_init(struct amdgv_adapter *adapt)
 
 static int amdgv_migration_sw_fini(struct amdgv_adapter *adapt)
 {
+	int i;
+
 	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION))
 		return 0;
 
@@ -387,6 +628,14 @@ static int amdgv_migration_sw_fini(struct amdgv_adapter *adapt)
 	if (adapt->live_migration.dynamic_data_mem) {
 		amdgv_memmgr_free(adapt->live_migration.dynamic_data_mem);
 		adapt->live_migration.dynamic_data_mem = NULL;
+	}
+
+	for (i = 0; i < adapt->num_vf; i++) {
+		if (adapt->live_migration.mig_state[i].dst_unique_bps) {
+			oss_free(adapt->live_migration.mig_state[i].dst_unique_bps);
+			adapt->live_migration.mig_state[i].dst_unique_bps = NULL;
+			adapt->live_migration.mig_state[i].dst_unique_bp_count = 0;
+		}
 	}
 
 	if (adapt->sys_mem_info.handle) {

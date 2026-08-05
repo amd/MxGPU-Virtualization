@@ -416,7 +416,7 @@ static int navi32_vbios_sw_init(struct amdgv_adapter *adapt)
 
 	adapt->pp.smu_lock = oss_mutex_init();
 	if (adapt->pp.smu_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_MUTEX_FAIL, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -575,7 +575,7 @@ static int navi32_vbios_hw_init(struct amdgv_adapter *adapt)
 		if (!navi32_vbios_need_post(adapt)) {
 			ret = AMDGV_FAILURE;
 			if (navi32_psp_wait_sos_loaded_status(adapt) && navi32_vbios_smu_fw_loaded(adapt)) {
-				ret = navi32_reset_whole_gpu_reset(adapt, AMDGV_RESET_MODE1);
+				ret = amdgv_reset_hw_for_reload(adapt, false);
 				if (ret)
 					goto failed;
 			} else {

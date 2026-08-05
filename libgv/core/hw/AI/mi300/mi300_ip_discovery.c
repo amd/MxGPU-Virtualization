@@ -179,8 +179,8 @@ static int mi300_ip_discovery_table_checksum(struct amdgv_adapter *adapt,
 		if (opt == UPDATE) {
 			copy->bhdr->v1.table_list[i].checksum = checksum;
 		} else if (copy->bhdr->v1.table_list[i].checksum != checksum) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_VBIOS_IP_DISCOVERY_TABLE_CHECKSUM_FAIL,
-				AMDGV_ERROR_16_16_32(i, checksum, copy->bhdr->v1.table_list[i].checksum));
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_VBIOS_IP_DISCOVERY_TABLE_CHECKSUM_FAIL,
+				AMDGV_LOG_DATA_16_16_32(i, checksum, copy->bhdr->v1.table_list[i].checksum));
 			return AMDGV_FAILURE;
 		}
 	}
@@ -207,8 +207,8 @@ static int mi300_ip_discovery_binary_checksum(struct amdgv_adapter *adapt,
 	if (opt == UPDATE) {
 		copy->bhdr->binary_checksum = checksum;
 	} else if (copy->bhdr->binary_checksum != checksum) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_VBIOS_IP_DISCOVERY_BINARY_CHECKSUM_FAIL,
-			AMDGV_ERROR_32_32(checksum, copy->bhdr->binary_checksum));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_VBIOS_IP_DISCOVERY_BINARY_CHECKSUM_FAIL,
+			AMDGV_LOG_DATA_32_32(checksum, copy->bhdr->binary_checksum));
 		return AMDGV_FAILURE;
 	}
 	return 0;
@@ -248,7 +248,7 @@ static int mi300_read_ip_discovery(struct amdgv_adapter *adapt,
 	oss_msleep(150); /* sleep in case TOS is just starting */
 	if (mi300_psp_get_sos_loaded_status(adapt) == 0) {
 		if (mi300_psp_wait_for_bootloader_steady(adapt)) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_BL_FAIL, 0);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_BL_FAIL, 0);
 			return AMDGV_FAILURE;
 		}
 	}
@@ -1218,9 +1218,9 @@ int mi300_copy_ip_data_to_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	/* duplicated common VF copy IP discovery data */
 	vf_copy.data = (uint32_t *)oss_alloc_memory(AMDGV_IP_DISCOVERY_SIZE);
 	if (vf_copy.data == NULL) {
-		amdgv_put_error(
+		amdgv_put_log(
 			AMDGV_PF_IDX,
-			AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 			AMDGV_IP_DISCOVERY_SIZE
 		);
 		return AMDGV_FAILURE;

@@ -31,6 +31,10 @@ inline std::string staticAsicTemplate{
 	"\n        SUBSYSTEM_ID: %s \n        REV_ID: %s \n        ASIC_SERIAL: %s\n        OAM_ID: %s\n        NUM_OF_COMPUTE_UNITS: %s\n"
 };
 
+inline std::string staticAsicTargetGraphicsVersionTemplate{
+	"        TARGET_GRAPHICS_VERSION: %s\n"
+};
+
 inline std::string nicStaticAsicTemplate{
 	"    ASIC: \n"
 	"        VENDOR_ID: %s \n"
@@ -167,7 +171,15 @@ inline std::string staticBoardTemplate{
 };
 
 inline std::string staticLimitTemplate{
-	"    LIMIT: \n        MAX_POWER: %s %s\n        MIN_POWER: %s %s\n        SOCKET_POWER: %s %s\n"
+	"    LIMIT: \n"
+	"        PPT0:\n"
+	"            MAX_POWER: %s %s\n"
+	"            MIN_POWER: %s %s\n"
+	"            SOCKET_POWER: %s %s\n"
+	"        PPT1:\n"
+	"            MAX_POWER: %s %s\n"
+	"            MIN_POWER: %s %s\n"
+	"            SOCKET_POWER: %s %s\n"
 	"        SLOWDOWN_EDGE_TEMPERATURE: %s %s\n"
 	"        SLOWDOWN_HOTSPOT_TEMPERATURE: %s %s\n"
 	"        SLOWDOWN_MEM_TEMPERATURE: %s %s\n"
@@ -478,6 +490,46 @@ inline std::string metricClockMeasureHostTemplate{
 	"            DEEP_SLEEP: %s\n" };
 
 inline std::string metricClockMeasureHostHeaderTemplate{"    CLOCK:\n"};
+
+inline std::string metricGfxClockMeasureGuestTemplate{
+	"        GFX:\n"
+	"            CLK: %s %s\n"
+	"            MIN_CLK: %s %s\n"
+	"            MAX_CLK: %s %s\n"
+	"            CLK_LOCKED: %s\n"
+	"            DEEP_SLEEP: %s\n" };
+
+inline std::string metricMemClockMeasureGuestTemplate{
+	"        MEM:\n"
+	"            CLK: %s %s\n"
+	"            MIN_CLK: %s %s\n"
+	"            MAX_CLK: %s %s\n"
+	"            CLK_LOCKED: %s\n"
+	"            DEEP_SLEEP: %s\n" };
+
+inline std::string metricDFClockMeasureGuestTemplate{
+	"        DF:\n"
+	"            CLK: %s %s\n"
+	"            MIN_CLK: %s %s\n"
+	"            MAX_CLK: %s %s\n"
+	"            CLK_LOCKED: %s\n"
+	"            DEEP_SLEEP: %s\n" };
+
+inline std::string metricDCEFClockMeasureGuestTemplate{
+	"        DCEF:\n"
+	"            CLK: %s %s\n"
+	"            MIN_CLK: %s %s\n"
+	"            MAX_CLK: %s %s\n"
+	"            CLK_LOCKED: %s\n"
+	"            DEEP_SLEEP: %s\n" };
+
+inline std::string metricSOCClockMeasureGuestTemplate{
+	"        SOC:\n"
+	"            CLK: %s %s\n"
+	"            MIN_CLK: %s %s\n"
+	"            MAX_CLK: %s %s\n"
+	"            CLK_LOCKED: %s\n"
+	"            DEEP_SLEEP: %s\n" };
 
 inline std::string metricChipletGfxClockMeasureHostTemplate{
 	"        GFX_%d:\n"

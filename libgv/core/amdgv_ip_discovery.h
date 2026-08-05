@@ -497,4 +497,9 @@ struct amdgv_ip_discovery {
 	struct amdgv_memmgr_mem *ip_discovery_mem;
 };
 
+int amdgv_discover_ip(struct amdgv_adapter *adapt);
+int amdgv_ip_discovery_init(struct amdgv_adapter *adapt);
+int amdgv_ip_discovery_fini(struct amdgv_adapter *adapt);
+int amdgv_copy_ip_data_to_vf(struct amdgv_adapter *adapt, uint32_t idx_vf);
+
 #endif

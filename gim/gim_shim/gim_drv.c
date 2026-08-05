@@ -29,6 +29,7 @@
 #include "gim_error.h"
 #include "gim.h"
 #include "smi_drv_oss.h"
+#include "smi_drv_event.h"
 #include "amdgv_api.h"
 #include "amdgv_gpumon.h"
 #include "gim_memory_sentinel.h"
@@ -149,7 +150,7 @@ static int gim_map_pci_res(struct amdgv_init_data *data, struct pci_dev *pdev)
 
 	ret = pci_request_regions(pdev, gim_driver_name);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_NO_ACCESS_PCI_REGION, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_NO_ACCESS_PCI_REGION, 0);
 		return ret;
 	}
 
@@ -173,7 +174,7 @@ static int gim_map_pci_res(struct amdgv_init_data *data, struct pci_dev *pdev)
 						data->info.fb_size);
 	}
 	if (data->info.fb == NULL) {
-		gim_put_error(AMDGV_ERROR_DRIVER_FB_MAP_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_FB_MAP_FAIL, 0);
 		goto err;
 	}
 
@@ -184,7 +185,7 @@ static int gim_map_pci_res(struct amdgv_init_data *data, struct pci_dev *pdev)
 					data->info.doorbell_pa,
 					data->info.doorbell_size);
 	if (data->info.doorbell == NULL) {
-		gim_put_error(AMDGV_ERROR_DRIVER_DOORBELL_MAP_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_DOORBELL_MAP_FAIL, 0);
 		goto err;
 	}
 
@@ -206,7 +207,7 @@ static int gim_map_pci_res(struct amdgv_init_data *data, struct pci_dev *pdev)
 					data->info.mmio_pa,
 					data->info.mmio_size);
 	if (data->info.mmio == NULL) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MMIO_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MMIO_FAIL, 0);
 		goto err;
 	}
 
@@ -415,6 +416,8 @@ static int gim_init_thread_func(void *context)
 	if (gim_conf_get_enable_live_migration_opt())
 		data->opt.flags |= AMDGV_FLAG_GPUV_LIVE_MIGRATION;
 
+	data->opt.shader_hash_mode = gim_conf_get_shader_hash_mode_opt();
+
 	data->opt.libgv_res_fb_offset = 0;
 	data->opt.libgv_res_fb_size = ((uint64_t) gim_conf_get_pf_fb_size_opt(dev_data->gpu_index) << 20);
 	data->opt.debug_dump_reserve_size =
@@ -435,11 +438,12 @@ static int gim_init_thread_func(void *context)
 	data->opt.max_cper_count = gim_conf_get_max_cper_count_opt(dev_data->gpu_index);
 	data->opt.debug_mode = gim_conf_get_debug_mode_opt(dev_data->gpu_index);
 	data->opt.thermal_throttle_rate_limit = gim_conf_get_thermal_throttle_rate_limit_opt(dev_data->gpu_index);
+	data->opt.unified_ras_enabled = gim_conf_get_enable_uniras_opt(dev_data->gpu_index);
 
 	/* Initialize device and enable SRIOV */
 	if (pci_enable_device(pdev) != 0) {
 		ret = -EIO;
-		gim_put_error(AMDGV_ERROR_DRIVER_PCI_ENABLE_DEVICE_FAIL,
+		gim_put_error(AMDGV_LOG_DRIVER_PCI_ENABLE_DEVICE_FAIL,
 				PCI_DEVID(pdev->bus->number, pdev->devfn));
 		goto err_pci_unmap;
 	}
@@ -470,7 +474,7 @@ static int gim_init_thread_func(void *context)
 	}
 	dev_data->adev = amdgv_device_init(data);
 	if (dev_data->adev == AMDGV_INVALID_HANDLE) {
-		gim_put_error(AMDGV_ERROR_DRIVER_DEV_INIT_FAIL,
+		gim_put_error(AMDGV_LOG_DRIVER_DEV_INIT_FAIL,
 			PCI_DEVID(pdev->bus->number, pdev->devfn));
 	}
 	if (dev_data->adev != AMDGV_INVALID_HANDLE) {
@@ -481,7 +485,7 @@ static int gim_init_thread_func(void *context)
 
 	if ((dev_data->adev != AMDGV_INVALID_HANDLE) && !SVM_ENABLED(dev_data->adev)) {
 		if (gim_build_vfs_map(dev_data))
-			gim_put_error(AMDGV_ERROR_DRIVER_DEV_INIT_FAIL,
+			gim_put_error(AMDGV_LOG_DRIVER_DEV_INIT_FAIL,
 				PCI_DEVID(pdev->bus->number, pdev->devfn));
 	}
 
@@ -575,7 +579,7 @@ static int gim_probe(struct pci_dev *pdev,
 	gim_info("AMD GIM start to probe device %s\n", dev_name(&pdev->dev));
 
 	if (pdev->sriov == NULL) {
-		gim_put_error(AMDGV_ERROR_IOV_ASIC_NO_SRIOV_SUPPORT, 0);
+		gim_put_error(AMDGV_LOG_IOV_ASIC_NO_SRIOV_SUPPORT, 0);
 		goto err_out;
 	}
 
@@ -633,7 +637,15 @@ static void gim_remove(struct pci_dev *pdev)
 		adapt_list[dev_data->gpu_index] = NULL;
 		mutex_unlock(&gim_device_list_lock);
 
+		/* Revoke held SMI event fds bound to this device before its
+		 * notifier state is freed, or a later poll/read/close dereferences
+		 * the freed adapter. */
+		smi_revoke_device_events(dev_data->adev);
+
 		amdgv_device_fini_ex(dev_data->adev, &data->fini_opt);
+		/* Adapter is freed; drop the adev-teardown marker so a later
+		 * probe reusing this address is not refused by CREATE_EVENT. */
+		smi_clear_device_teardown(dev_data->adev);
 		gim_live_update_export_data(&update_mgr, pdev, &gim_gpu_id);
 	}
 
@@ -657,7 +669,10 @@ static void gim_shutdown(struct pci_dev *pdev)
 		return;
 
 	data = &dev_data->init_data;
+	/* Same teardown guard as gim_remove(): revoke event fds before teardown. */
+	smi_revoke_device_events(dev_data->adev);
 	amdgv_device_fini_ex(dev_data->adev, &data->fini_opt);
+	smi_clear_device_teardown(dev_data->adev);
 	gim_live_update_export_data(&update_mgr, pdev, &gim_gpu_id);
 	gim_info("AMD GIM shutdown\n");
 }
@@ -703,6 +718,7 @@ static struct pci_driver gim_driver = {
 	 */
 	.driver = {
 		.probe_type = PROBE_FORCE_SYNCHRONOUS,
+		.suppress_bind_attrs = true,
 	},
 #endif
 };
@@ -750,7 +766,7 @@ static void gim_set_dynamic_cc_mode(void)
 	list_for_each_entry(dev_data, &gim_device_list, list) {
 		dev_data->init_data.opt.cc_mode = gim_conf_get_cc_mode_opt(dev_data->gpu_index);
 		ret = amdgv_gpumon_get_cc_mode(dev_data->adev, &curr_cc_mode);
-		if (ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED) {
+		if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 			gim_dbg("CC mode is not supported on the GPU %s\n", dev_name(&dev_data->pdev->dev));
 		} else if (ret) {
 			gim_info("failed to get current CC mode of GPU %s\n", dev_name(&dev_data->pdev->dev));
@@ -785,7 +801,7 @@ static void gim_set_dynamic_partition_mode(void)
 	list_for_each_entry(dev_data, &gim_device_list, list) {
 		dev_data->init_data.opt.memory_partition_mode = gim_conf_get_memory_partition_mode_opt(dev_data->gpu_index);
 		ret = amdgv_gpumon_get_memory_partition_mode(dev_data->adev, &curr_memory_partition_info);
-		if (ret == AMDGV_ERROR_GPUMON_NOT_SUPPORTED) {
+		if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 			gim_dbg("memory partition is not supported on the GPU %s\n", dev_name(&dev_data->pdev->dev));
 		} else if (ret) {
 			gim_info("failed to get current NPS mode of GPU %s\n", dev_name(&dev_data->pdev->dev));
@@ -872,7 +888,7 @@ static int gim_init(void)
 	ret = pci_register_driver(&gim_driver);
 
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_PCI_REGISTER_DRIVER_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_PCI_REGISTER_DRIVER_FAIL, 0);
 		goto err_reg_drv;
 	}
 	init_completion(&gim_gpu_init_event);
@@ -894,7 +910,7 @@ static int gim_init(void)
 				dev_ids[i].dev_id, dev_ids[i].sub_vendor_id,
 				dev_ids[i].sub_dev_id, 0, 0, 0);
 		if (ret) {
-			gim_put_error(AMDGV_ERROR_DRIVER_NO_ACCESS_PCI_REGION,
+			gim_put_error(AMDGV_LOG_DRIVER_NO_ACCESS_PCI_REGION,
 				dev_ids[i].dev_id);
 			goto err_create_mon;
 		}
@@ -1033,9 +1049,9 @@ static void gim_exit(void)
 		gim_guard_remove_drv_sys(&gim_driver.driver);
 	gim_mon_remove_drv_sys(&gim_driver.driver);
 
-	gim_ftrace_fini();
-
 	pci_unregister_driver(&gim_driver);
+
+	gim_ftrace_fini();
 
 	amdgv_fini();
 

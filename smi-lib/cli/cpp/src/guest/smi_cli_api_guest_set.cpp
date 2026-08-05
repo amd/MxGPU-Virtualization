@@ -21,9 +21,11 @@
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 		amdsmi_processor_handle *);
 typedef amdsmi_status_t (*AMDSMI_SET_GPU_PROCESS_ISOLATION)(amdsmi_processor_handle, uint32_t);
+typedef amdsmi_status_t (*AMDSMI_SET_POWER_CAP)(amdsmi_processor_handle, uint32_t, uint64_t);
 
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF guest_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_SET_GPU_PROCESS_ISOLATION guest_amdsmi_set_gpu_process_isolation;
+extern AMDSMI_SET_POWER_CAP guest_amdsmi_set_power_cap;
 
 
 int AmdSmiApiGuest::amdsmi_set_process_isolation_command(uint64_t processor_bdf, Arguments arg)
@@ -52,6 +54,28 @@ int AmdSmiApiGuest::amdsmi_set_process_isolation_command(uint64_t processor_bdf,
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
 		return ret;
+	}
+
+	return ret;
+}
+
+int AmdSmiApiGuest::amdsmi_set_power_cap_command(uint64_t processor_bdf, Arguments arg)
+{
+	int ret;
+	uint32_t sensor_ind = 0;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = guest_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
+		return ret;
+	}
+
+	ret = guest_amdsmi_set_power_cap(processor, sensor_ind, arg.power_cap_set);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
 	}
 
 	return ret;

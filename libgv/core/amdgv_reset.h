@@ -17,7 +17,7 @@ struct amdgv_gpu_reset_funcs {
 	/* trigger VF FLR */
 	int (*trigger_vf_flr)(struct amdgv_adapter *adapt, uint32_t idx_vf);
 
-	int (*trigger_gpu_hw_reset)(struct amdgv_adapter *adapt, bool is_unload);
+	int (*reset_hw_for_reload)(struct amdgv_adapter *adapt, bool is_unload);
 	int (*gpu_reset_and_reinit)(struct amdgv_adapter *adapt);
 
 	int (*notify_engine_status)(struct amdgv_adapter *adapt, uint32_t idx_vf);
@@ -50,6 +50,6 @@ void amdgv_reset_restore_interrupt(struct amdgv_adapter *adapt);
 int amdgv_reset_notify_engine_status(struct amdgv_adapter *adapt, uint32_t idx_vf);
 
 int amdgv_reset_notify_gpu_rma(struct amdgv_adapter *adapt, uint32_t idx_vf);
-int amdgv_reset_trigger_gpu_hw_reset(struct amdgv_adapter *adapt, bool is_unload);
+int amdgv_reset_hw_for_reload(struct amdgv_adapter *adapt, bool is_unload);
 
 #endif

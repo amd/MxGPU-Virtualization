@@ -3262,9 +3262,7 @@ if len(processors) == 0 {
 
 ### GetSupportedPowerCap
 
-Description: Returns the supported power cap sensors and their types for a device.
-
-**Note:** This function is not yet implemented and will return a `*StatusError` with status `AMDSMI_STATUS_NOT_YET_IMPLEMENTED`.
+Description: Returns the supported power cap sensors and their types for a device. The set of supported sensors is detected dynamically per ASIC (for example PPT0 only, or PPT0 + PPT1).
 
 Input parameters:
 
@@ -3629,7 +3627,7 @@ for _, p := range processors {
 
 ### GetAfidsFromCper
 
-Description: Extracts AF IDs from a single CPER record buffer. Up to `MAX_NUMBER_OF_AFIDS_PER_RECORD` (12) ids are returned.
+Description: Extracts AF IDs from a single CPER record buffer. Up to `AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD` (12) ids are returned.
 
 Input parameters:
 

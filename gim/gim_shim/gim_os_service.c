@@ -50,6 +50,16 @@
 #include "dcore_drv.h"
 #endif
 
+#ifdef SHIM_LAYER_OSS_RADIX_TREE
+#include <linux/radix-tree.h>
+#endif
+#ifdef SHIM_LAYER_OSS_KFIFO
+#include <linux/kfifo.h>
+#endif
+#ifdef SHIM_LAYER_OSS_MEMPOOL
+#include <linux/mempool.h>
+#include <linux/kmemleak.h>
+#endif
 
 
 #include "amdgv_oss.h"
@@ -225,7 +235,7 @@ static int gim_map_vf_dev_res(oss_dev_t dev, struct oss_dev_res *res)
 	}
 
 	if (i == DEVICE_COUNT_RESOURCE) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MMIO_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MMIO_FAIL, 0);
 		return -1;
 	}
 
@@ -233,7 +243,7 @@ static int gim_map_vf_dev_res(oss_dev_t dev, struct oss_dev_res *res)
 	res->mmio = ioremap(pci_resource_start(pdev, i),
 				   pci_resource_len(pdev, i));
 	if (res->mmio == NULL) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MMIO_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_MMIO_FAIL, 0);
 		gim_info("Failed to map mmio region 0x%llx for length %lld\n",
 			pci_resource_start(pdev, i),
 			pci_resource_len(pdev, i));
@@ -254,7 +264,7 @@ static int gim_map_vf_dev_res(oss_dev_t dev, struct oss_dev_res *res)
 			gim_info("Failed to map fb region 0x%llx for length %lld\n",
 				pci_resource_start(pdev, 0),
 				pci_resource_len(pdev, 0));
-			gim_put_error(AMDGV_ERROR_DRIVER_MMIO_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_MMIO_FAIL, 0);
 			goto failed;
 		}
 
@@ -348,7 +358,7 @@ static int gim_pci_read_config_byte(oss_dev_t dev, int where, uint8_t *val_ptr)
 
 	ret = pci_read_config_byte((struct pci_dev *)dev, where, val_ptr);
 	if (ret)
-		gim_put_error(AMDGV_ERROR_DRIVER_NO_ACCESS_PCI_REGION, where);
+		gim_put_error(AMDGV_LOG_DRIVER_NO_ACCESS_PCI_REGION, where);
 	return ret;
 }
 
@@ -358,7 +368,7 @@ static int gim_pci_read_config_word(oss_dev_t dev, int where, uint16_t *val_ptr)
 
 	ret = pci_read_config_word((struct pci_dev *)dev, where, val_ptr);
 	if (ret)
-		gim_put_error(AMDGV_ERROR_DRIVER_NO_ACCESS_PCI_REGION, where);
+		gim_put_error(AMDGV_LOG_DRIVER_NO_ACCESS_PCI_REGION, where);
 	return ret;
 }
 
@@ -369,7 +379,7 @@ static int gim_pci_read_config_dword(oss_dev_t dev, int where,
 
 	ret = pci_read_config_dword((struct pci_dev *)dev, where, val_ptr);
 	if (ret)
-		gim_put_error(AMDGV_ERROR_DRIVER_NO_ACCESS_PCI_REGION, where);
+		gim_put_error(AMDGV_LOG_DRIVER_NO_ACCESS_PCI_REGION, where);
 	return ret;
 }
 
@@ -379,7 +389,7 @@ static int gim_pci_write_config_byte(oss_dev_t dev, int where, uint8_t val)
 
 	ret = pci_write_config_byte((struct pci_dev *)dev, where, val);
 	if (ret)
-		gim_put_error(AMDGV_ERROR_DRIVER_NO_ACCESS_PCI_REGION, where);
+		gim_put_error(AMDGV_LOG_DRIVER_NO_ACCESS_PCI_REGION, where);
 	return ret;
 }
 
@@ -389,7 +399,7 @@ static int gim_pci_write_config_word(oss_dev_t dev, int where, uint16_t val)
 
 	ret = pci_write_config_word((struct pci_dev *)dev, where, val);
 	if (ret)
-		gim_put_error(AMDGV_ERROR_DRIVER_NO_ACCESS_PCI_REGION, where);
+		gim_put_error(AMDGV_LOG_DRIVER_NO_ACCESS_PCI_REGION, where);
 	return ret;
 }
 
@@ -399,7 +409,7 @@ static int gim_pci_write_config_dword(oss_dev_t dev, int where, uint32_t val)
 
 	ret = pci_write_config_dword((struct pci_dev *)dev, where, val);
 	if (ret)
-		gim_put_error(AMDGV_ERROR_DRIVER_NO_ACCESS_PCI_REGION, where);
+		gim_put_error(AMDGV_LOG_DRIVER_NO_ACCESS_PCI_REGION, where);
 	return ret;
 }
 
@@ -522,7 +532,7 @@ static int gim_pci_resize_vf_bar(oss_dev_t dev, int bar_idx, uint32_t num_vf)
 		vf_bdf = pf_bdf + offset + id;
 		virtfn = gim_get_vf_dev_from_bdf(vf_bdf);
 		if (!virtfn) {
-			gim_put_error(AMDGV_ERROR_DRIVER_INVALID_VALUE, vf_bdf);
+			gim_put_error(AMDGV_LOG_DRIVER_INVALID_VALUE, vf_bdf);
 			return -ENODEV;
 		}
 
@@ -560,13 +570,13 @@ static int gim_pci_restore_vf_rebar(oss_dev_t dev, int bar_idx)
 	pos = pci_find_ext_capability(pdev, PCI_EXT_CAP_ID_SRIOV);
 	ret = pci_read_config_dword(pdev, pos + PCI_SRIOV_NUM_VF, &num_vf);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_NO_ACCESS_PCI_REGION, pos + PCI_SRIOV_NUM_VF);
+		gim_put_error(AMDGV_LOG_DRIVER_NO_ACCESS_PCI_REGION, pos + PCI_SRIOV_NUM_VF);
 		return ret;
 	}
 
 	ret = gim_pci_resize_vf_bar(dev, bar_idx, num_vf);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_VF_RESIZE_BAR_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_VF_RESIZE_BAR_FAIL, 0);
 		gim_info("Restore VF BAR to default size and disable SR-IOV\n");
 		gim_pci_resize_vf_bar(dev, 0, 0);
 		pci_disable_sriov((struct pci_dev *)dev);
@@ -599,7 +609,7 @@ static int gim_pci_enable_sriov(oss_dev_t dev, uint32_t num_vf)
 
 	ret = gim_pci_resize_vf_bar(dev, 0, num_vf);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_VF_RESIZE_BAR_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_VF_RESIZE_BAR_FAIL, 0);
 		gim_info("Restore VF BAR to default size and disable SR-IOV\n");
 		gim_pci_resize_vf_bar(dev, 0, 0);
 		pci_disable_sriov((struct pci_dev *)dev);
@@ -671,13 +681,13 @@ static bool gim_read_bios_from_rom_bar(struct pci_dev *pdev, unsigned char *dest
 
 	bios_io_ptr = pci_map_rom(pdev, &size);
 	if (!bios_io_ptr) {
-		gim_put_error(AMDGV_ERROR_DRIVER_NO_ACCESS_PCI_REGION, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_NO_ACCESS_PCI_REGION, 0);
 		goto end;
 	}
 
 	bios_ptr = (unsigned char *)gim_kzalloc(size, GFP_KERNEL);
 	if (!bios_ptr) {
-		gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL, size);
+		gim_put_error(AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL, size);
 		goto unmap;
 	}
 
@@ -706,13 +716,13 @@ static bool gim_read_bios_from_platform(struct pci_dev *pdev, unsigned char *des
 
 	bios_io_ptr = ioremap(pdev->rom, pdev->romlen);
 	if (!bios_io_ptr) {
-		gim_put_error(AMDGV_ERROR_DRIVER_NO_ACCESS_PCI_REGION, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_NO_ACCESS_PCI_REGION, 0);
 		goto end;
 	}
 
 	bios_ptr = gim_kzalloc(pdev->romlen, GFP_KERNEL);
 	if (!bios_ptr) {
-		gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL, pdev->romlen);
+		gim_put_error(AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL, pdev->romlen);
 		goto unmap;
 	}
 
@@ -745,7 +755,7 @@ static bool gim_pci_read_rom(oss_dev_t dev, unsigned char *dest, unsigned long *
 		goto success;
 	}
 
-	gim_put_error(AMDGV_ERROR_DRIVER_ROM_MAP_FAIL, 0);
+	gim_put_error(AMDGV_LOG_DRIVER_ROM_MAP_FAIL, 0);
 	return false;
 
 success:
@@ -809,7 +819,7 @@ static int gim_register_interrupt(oss_dev_t dev,
 	struct pci_dev *pdev = (struct pci_dev *)dev;
 
 	if (!intr_regrt_info) {
-		gim_put_error(AMDGV_ERROR_DRIVER_INVALID_VALUE, intr_regrt_info);
+		gim_put_error(AMDGV_LOG_DRIVER_INVALID_VALUE, intr_regrt_info);
 		return -1;
 	}
 
@@ -826,7 +836,7 @@ static int gim_register_interrupt(oss_dev_t dev,
 		vectors = pci_enable_msi_exact(pdev, num_msi_vectors);
 #endif
 		if (vectors != num_msi_vectors) {
-			gim_put_error(AMDGV_ERROR_DRIVER_INTERRUPT_INIT_FAIL, vectors);
+			gim_put_error(AMDGV_LOG_DRIVER_INTERRUPT_INIT_FAIL, vectors);
 			goto disable_pci_intr;
 		}
 	} else if (intr_type == OSS_INTR_TYPE_MSIX) {
@@ -835,7 +845,7 @@ static int gim_register_interrupt(oss_dev_t dev,
 				  GFP_KERNEL);
 
 		if (entries == NULL) {
-			gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			gim_put_error(AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				sizeof(struct msix_entry) * num_msi_vectors);
 			return -1;
 		}
@@ -850,11 +860,11 @@ static int gim_register_interrupt(oss_dev_t dev,
 		vectors = pci_enable_msix_range(pdev, entries, num_msi_vectors,
 						num_msi_vectors);
 		if (vectors != num_msi_vectors) {
-			gim_put_error(AMDGV_ERROR_DRIVER_INTERRUPT_INIT_FAIL, vectors);
+			gim_put_error(AMDGV_LOG_DRIVER_INTERRUPT_INIT_FAIL, vectors);
 			goto disable_pci_intr;
 		}
 	} else {
-		gim_put_error(AMDGV_ERROR_DRIVER_INVALID_VALUE, intr_type);
+		gim_put_error(AMDGV_LOG_DRIVER_INVALID_VALUE, intr_type);
 		return -1;
 	}
 
@@ -876,7 +886,7 @@ static int gim_register_interrupt(oss_dev_t dev,
 				"gim intr", intr_entry);
 
 		if (rc) {
-			gim_put_error(AMDGV_ERROR_DRIVER_INTERRUPT_INIT_FAIL, irq);
+			gim_put_error(AMDGV_LOG_DRIVER_INTERRUPT_INIT_FAIL, irq);
 			goto fail_to_request_irq;
 		}
 	}
@@ -1079,7 +1089,7 @@ static void *gim_spin_lock_init(int rank)
 		p->rank = rank;
 		spin_lock_init(&p->lock);
 	} else{
-		gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		gim_put_error(AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 			sizeof(struct gim_spin_lock));
 	}
 	return p;
@@ -1807,8 +1817,10 @@ static int gim_store_rlcv_timestamp(const char *buf, uint32_t size, uint32_t bdf
 
 	sprintf(path, GIM_RLCV_TIMESTAMP_FILE_PATH, bdf >> 8 & 0xff,
 		bdf >> 3 & 0x1f, bdf & 0x7);
-	/* record file should be create once and then always been appended */
-	csa_file = filp_open(path, O_CREAT | O_SYNC | O_WRONLY | O_APPEND, 0666);
+	/* Each dump replaces the file: O_TRUNC ensures no leftover tail from a
+	 * previous longer dump. Each FB-ring flush is a self-contained snapshot.
+	 */
+	csa_file = filp_open(path, O_CREAT | O_SYNC | O_WRONLY | O_TRUNC, 0666);
 
 	if (IS_ERR_OR_NULL(csa_file)) {
 		gim_kfree(path);
@@ -1928,7 +1940,7 @@ static void *gim_sema_init(int32_t val)
 	if (sem)
 		sema_init(sem, val);
 	else {
-		gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		gim_put_error(AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 			sizeof(struct semaphore));
 	}
 
@@ -2700,6 +2712,207 @@ static int gim_set_dma_mask(oss_dev_t dev, uint32_t bits)
 	return dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(bits));
 }
 
+#ifdef SHIM_LAYER_OSS_RADIX_TREE
+static void gim_radix_tree_init(void *root)
+{
+	INIT_RADIX_TREE(root, GFP_KERNEL);
+}
+
+static void  gim_radix_tree_fini(void *root)
+{
+	gim_kfree(root);
+}
+
+static int gim_radix_tree_insert(void *root, unsigned long index, void *item)
+{
+	return radix_tree_insert(root, index, item);
+}
+
+static void *gim_radix_tree_delete(void *root, unsigned long index)
+{
+	return radix_tree_delete(root, index);
+}
+
+static void *gim_radix_tree_lookup(void *root, unsigned long index)
+{
+	return radix_tree_lookup(root, index);
+}
+
+static unsigned int gim_radix_tree_gang_lookup_tag(void *root, void **results,
+	unsigned long first_index, unsigned int max_items, unsigned int tag)
+{
+	return radix_tree_gang_lookup_tag(root, results, first_index, max_items, tag);
+}
+
+static void *gim_radix_tree_tag_set(void *root, unsigned long index, unsigned int tag)
+{
+	return radix_tree_tag_set(root, index, tag);
+}
+
+static void *gim_radix_tree_tag_clear(void *root, unsigned long index, unsigned int tag)
+{
+	return radix_tree_tag_clear(root, index, tag);
+}
+
+static void **gim_radix_tree_iter_init(void *iter, unsigned long start)
+{
+	return radix_tree_iter_init(iter, start);
+}
+
+static void **gim_radix_tree_next_chunk(void *root, void *iter, unsigned flags)
+{
+	return radix_tree_next_chunk(root, iter, flags);
+}
+
+static void **gim_radix_tree_next_slot(void **slot, void *iter, unsigned flags)
+{
+	return radix_tree_next_slot(slot, iter, flags);
+}
+
+static void *gim_radix_tree_deref_slot(void **slot)
+{
+	return radix_tree_deref_slot(slot);
+}
+
+static void *gim_radix_tree_delete_iter(void *root, void *iter)
+{
+	return radix_tree_delete(root, ((struct radix_tree_iter *)iter)->index);
+}
+#endif
+
+#ifdef SHIM_LAYER_OSS_KFIFO
+static int gim_kfifo_alloc(void *fifo, uint32_t size)
+{
+	return kfifo_alloc((struct kfifo *)fifo, size, GFP_KERNEL);
+}
+
+static int gim_kfifo_in_spinlocked_raw(void *fifo, void *buf, uint32_t size, void *spinlock)
+{
+	return  kfifo_in_spinlocked((struct kfifo *)fifo, buf, size, (spinlock_t *)spinlock);
+}
+
+static int gim_kfifo_out_spinlocked_raw(void *fifo, void *buf, uint32_t size, void *spinlock)
+{
+	return  kfifo_out_spinlocked((struct kfifo *)fifo, buf, size, (spinlock_t *)spinlock);
+}
+
+static unsigned int gim_kfifo_out_peek(void *fifo, void *buf, unsigned int n)
+{
+	return kfifo_out_peek((struct kfifo *)fifo, buf, n);
+}
+
+static unsigned int gim_kfifo_len(void *fifo)
+{
+	return kfifo_len((struct kfifo *)fifo);
+}
+
+static void gim_kfifo_free(void *fifo)
+{
+	kfifo_free((struct kfifo *)fifo);
+}
+#endif
+
+#if defined(AMDGV_UNIRAS_SUPPORT)
+static void gim_init_waitqueue_head(void *wq_head)
+{
+	init_waitqueue_head((wait_queue_head_t *)wq_head);
+}
+
+static long gim_wait_event_interruptible_timeout(void *wq_head,
+		condition_func condition, void *param, unsigned int timeout)
+{
+	wait_queue_head_t *wq = (wait_queue_head_t *)wq_head;
+	long ret = timeout;
+
+	DEFINE_WAIT(wait);
+
+	if (condition(param))
+		return ret;
+
+	prepare_to_wait(wq, &wait, TASK_INTERRUPTIBLE);
+
+	while (1) {
+		if (condition(param)) {
+			ret = timeout;
+			break;
+		}
+
+		if (signal_pending(current)) {
+			ret = -ERESTARTSYS;
+			break;
+		}
+
+		timeout = schedule_timeout(timeout);
+		if (!timeout) {
+			ret = 0;
+			break;
+		}
+	}
+
+	finish_wait(wq, &wait);
+
+	return ret;
+}
+
+static unsigned long gim_msecs_to_jiffies(const unsigned int m)
+{
+	return msecs_to_jiffies(m);
+}
+#endif
+
+#ifdef SHIM_LAYER_OSS_MEMPOOL
+static void *gim_mempool_create_kmalloc_pool(int element_nr,
+	unsigned long element_size)
+{
+	return mempool_create_kmalloc_pool(element_nr, element_size);
+}
+
+static void gim_mempool_destroy(void *pool)
+{
+	return mempool_destroy(pool);
+}
+
+static void *remove_element(mempool_t *pool)
+{
+	void *element = pool->elements[--pool->curr_nr];
+
+	BUG_ON(pool->curr_nr < 0);
+	return element;
+}
+
+static void *mempool_alloc_preallocated_backport(mempool_t *pool)
+{
+	void *element;
+	unsigned long flags;
+
+	spin_lock_irqsave(&pool->lock, flags);
+	if (likely(pool->curr_nr)) {
+		element = remove_element(pool);
+		spin_unlock_irqrestore(&pool->lock, flags);
+		/* paired with rmb in mempool_free(), read comment there */
+		smp_wmb();
+		/*
+			* Update the allocation stack trace as this is more useful
+			* for debugging.
+			*/
+		kmemleak_update_trace(element);
+		return element;
+	}
+	spin_unlock_irqrestore(&pool->lock, flags);
+
+	return NULL;
+}
+
+static void *gim_mempool_alloc_preallocated(void *pool)
+{
+	return mempool_alloc_preallocated_backport(pool);
+}
+
+static void gim_mempool_free(void *element, void *pool)
+{
+	return mempool_free(element, pool);
+}
+#endif
 
 struct oss_interface gim_oss_interfaces = {
 	.get_vf_dev_from_bdf = gim_get_vf_dev_from_bdf,
@@ -2872,6 +3085,40 @@ struct oss_interface gim_oss_interfaces = {
 	.read_vf_sysmem_xchg = gim_read_vf_sysmem_xchg,
 	.vf_sysmem_xchg_gpa_to_spa = gim_vf_sysmem_xchg_gpa_to_spa,
 	.set_dma_mask = gim_set_dma_mask,
+#ifdef SHIM_LAYER_OSS_RADIX_TREE
+	.radix_tree_init = gim_radix_tree_init,
+	.radix_tree_fini = gim_radix_tree_fini,
+	.radix_tree_insert = gim_radix_tree_insert,
+	.radix_tree_delete = gim_radix_tree_delete,
+	.radix_tree_lookup = gim_radix_tree_lookup,
+	.radix_tree_gang_lookup_tag = gim_radix_tree_gang_lookup_tag,
+	.radix_tree_tag_set = gim_radix_tree_tag_set,
+	.radix_tree_tag_clear = gim_radix_tree_tag_clear,
+	.radix_tree_iter_init = gim_radix_tree_iter_init,
+	.radix_tree_next_chunk = gim_radix_tree_next_chunk,
+	.radix_tree_next_slot = gim_radix_tree_next_slot,
+	.radix_tree_deref_slot = gim_radix_tree_deref_slot,
+	.radix_tree_delete_iter = gim_radix_tree_delete_iter,
+#endif
+#ifdef SHIM_LAYER_OSS_KFIFO
+	.kfifo_alloc = gim_kfifo_alloc,
+	.kfifo_len = gim_kfifo_len,
+	.kfifo_in_spinlocked_raw = gim_kfifo_in_spinlocked_raw,
+	.kfifo_out_spinlocked_raw = gim_kfifo_out_spinlocked_raw,
+	.kfifo_out_peek = gim_kfifo_out_peek,
+	.kfifo_free = gim_kfifo_free,
+#endif
+#if defined(AMDGV_UNIRAS_SUPPORT)
+	.init_waitqueue_head = gim_init_waitqueue_head,
+	.wait_event_interruptible_timeout = gim_wait_event_interruptible_timeout,
+	.msecs_to_jiffies = gim_msecs_to_jiffies,
+#endif
+#ifdef SHIM_LAYER_OSS_MEMPOOL
+	.mempool_create_kmalloc_pool = gim_mempool_create_kmalloc_pool,
+	.mempool_destroy = gim_mempool_destroy,
+	.mempool_alloc_preallocated = gim_mempool_alloc_preallocated,
+	.mempool_free = gim_mempool_free,
+#endif
 	.register_mce_notifier = gim_register_mce_notifier,
 	.unregister_mce_notifier = gim_unregister_mce_notifier,
 };

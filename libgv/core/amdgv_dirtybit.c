@@ -22,6 +22,18 @@ int amdgv_dirtybit_get_dirty_page_size(struct amdgv_adapter *adapt, uint32_t *di
 		ret = AMDGV_FAILURE;
 	}
 
+	/* On ASICs where dirty_page_size is only assigned during dirtybit hw_init
+	 * (e.g. navi32), it reads back as 0 any time acc_bits are (re)assigned
+	 * before hw_init has run, such as during a multi-partition mode switch.
+	 * Reject 0 centrally here so callers (which all divide by it via
+	 * amdgv_fb_size_to_byte_size / amdgv_fb_size_to_bitmap_size_align) bail
+	 * out instead of hitting a divide-by-zero.
+	 */
+	if (ret == 0 && *dirty_page_size == 0) {
+		AMDGV_WARN("dirty_page_size is 0 (dirtybit hw not initialized yet).\n");
+		ret = AMDGV_FAILURE;
+	}
+
 	return ret;
 }
 
@@ -38,6 +50,32 @@ int amdgv_dirtybit_control(struct amdgv_adapter *adapt, bool enable)
 	}
 
 	return ret;
+}
+
+/* Common sw_init path shared by all ASICs that support live migration
+ * dirtybit tracking: allocate the acc_bits whole-FB buffer, later carved
+ * per-VF by amdgv_dirtybit_hw_init()/amdgv_dirtybit_assgin_acc_bits_to_vf()
+ * once dirty_page_size is known. Callers are expected to only invoke this
+ * when AMDGV_FLAG_GPUV_LIVE_MIGRATION is set.
+ */
+int amdgv_dirtybit_sw_init(struct amdgv_adapter *adapt)
+{
+	adapt->dirtybit.acc_bits_whole_fb = oss_malloc(AMDGV_DIRTYBIT_BUFFER_SIZE);
+	if (adapt->dirtybit.acc_bits_whole_fb == NULL) {
+		AMDGV_ERROR("failed to allocate acc_bits_whole_fb\n");
+		return AMDGV_FAILURE;
+	}
+	oss_memset(adapt->dirtybit.acc_bits_whole_fb, 0, AMDGV_DIRTYBIT_BUFFER_SIZE);
+
+	return 0;
+}
+
+void amdgv_dirtybit_free_acc_bits_whole_fb(struct amdgv_adapter *adapt)
+{
+	if (adapt->dirtybit.acc_bits_whole_fb != NULL) {
+		oss_free(adapt->dirtybit.acc_bits_whole_fb);
+		adapt->dirtybit.acc_bits_whole_fb = NULL;
+	}
 }
 
 int amdgv_dirtybit_assgin_acc_bits_to_vf(struct amdgv_adapter *adapt)
@@ -84,6 +122,18 @@ void amdgv_dirtybit_destroy_vf_acc_bits(struct amdgv_adapter *adapt)
 	}
 }
 
+/* Common hw_fini path shared by all ASICs that support live migration
+ * dirtybit tracking: disable dirtybit tracking hw and tear down the per-VF
+ * acc_bits[] pointers/sizes carved out by amdgv_dirtybit_assgin_acc_bits_to_vf().
+ * Callers are expected to only invoke this when AMDGV_FLAG_GPUV_LIVE_MIGRATION
+ * is set.
+ */
+void amdgv_dirtybit_hw_fini(struct amdgv_adapter *adapt)
+{
+	amdgv_dirtybit_control(adapt, false);
+	amdgv_dirtybit_destroy_vf_acc_bits(adapt);
+}
+
 void amdgv_dirtybit_set_vf_acc_bits(struct amdgv_adapter *adapt, uint32_t idx_vf, char pattern)
 {
 	if (idx_vf >= AMDGV_MAX_VF_NUM)
@@ -101,6 +151,26 @@ void amdgv_dirtybit_set_vfs_acc_bits(struct amdgv_adapter *adapt, char pattern)
 
 	for (idx_vf = 0; idx_vf < adapt->num_vf; idx_vf++)
 		amdgv_dirtybit_set_vf_acc_bits(adapt, idx_vf, pattern);
+}
+
+void amdgv_dirtybit_reset_vf_hash_state(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	struct amdgv_fb_hash_vf_state *vf_state;
+
+	if (idx_vf >= AMDGV_MAX_VF_NUM)
+		return;
+
+	vf_state = &adapt->dirtybit.fb_hash_state.vf[idx_vf];
+	vf_state->prev_idx = 0;
+	vf_state->initialized = false;
+}
+
+void amdgv_dirtybit_reset_all_hash_state(struct amdgv_adapter *adapt)
+{
+	uint32_t idx_vf;
+
+	for (idx_vf = 0; idx_vf < AMDGV_MAX_VF_NUM; idx_vf++)
+		amdgv_dirtybit_reset_vf_hash_state(adapt, idx_vf);
 }
 
 /*
@@ -232,7 +302,7 @@ static int amdgv_dirtybit_querydata(struct amdgv_adapter *adapt,
 		return AMDGV_FAILURE;
 	}
 
-	if (amdgv_xgmi_node_fb_sharing_allowed(adapt)) {
+	if (amdgv_xgmi_node_fb_sharing_allowed(adapt) && !adapt->dirtybit.fb_hash_support) {
 		AMDGV_DEBUG("FB sharing mode is enabled, set queried FB range dirty in bitmap\n");
 		return amdgv_dirtybit_set_bitmap_query_buffer_to_dirty(adapt, data);
 	}
@@ -381,4 +451,15 @@ int amdgv_dirtybit_import_live_data(struct amdgv_adapter *adapt,
 	}
 
 	return 0;
+}
+
+void amdgv_dirtybit_gcea_sdp_control(struct amdgv_adapter *adapt,
+	bool gcea_sdp_enable)
+{
+	if (adapt->dirtybit.funcs &&
+		adapt->dirtybit.funcs->gcea_sdp_control) {
+		adapt->dirtybit.funcs->gcea_sdp_control(adapt, gcea_sdp_enable);
+	} else {
+		AMDGV_WARN("gcea_sdp_control is not defined.");
+	}
 }

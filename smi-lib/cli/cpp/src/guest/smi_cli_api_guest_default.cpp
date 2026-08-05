@@ -198,6 +198,72 @@ int AmdSmiApiGuest::amdsmi_get_default_uec_command(uint64_t processor_bdf, Argum
 	return AMDSMI_STATUS_SUCCESS;
 }
 
+int AmdSmiApiGuest::amdsmi_get_default_temperature_command(uint64_t processor_bdf, Arguments arg, std::string &formatted_string)
+{
+	int ret;
+	int64_t junction_temperature;
+	int64_t vram_temperature;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = guest_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		formatted_string = "N/A,N/A";
+		return ret;
+	}
+
+	std::string junction_temperature_string{"N/A"};
+	ret = guest_amdsmi_get_temp_metric(processor,
+							AMDSMI_TEMPERATURE_TYPE_HOTSPOT,
+							AMDSMI_TEMP_CURRENT,
+							&junction_temperature);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		junction_temperature_string = "N/A";
+	} else {
+		junction_temperature_string = string_format("%lld", junction_temperature);
+	}
+
+	std::string vram_temperature_string{"N/A"};
+	ret = guest_amdsmi_get_temp_metric(
+			  processor, AMDSMI_TEMPERATURE_TYPE_VRAM, AMDSMI_TEMP_CURRENT, &vram_temperature);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		vram_temperature_string = "N/A";
+	} else {
+		vram_temperature_string = string_format("%lld", vram_temperature);
+	}
+
+	formatted_string = string_format("%s,%s", junction_temperature_string.c_str(), vram_temperature_string.c_str());
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+int AmdSmiApiGuest::amdsmi_get_default_power_usage_command(uint64_t processor_bdf, Arguments arg, std::string &formatted_string)
+{
+	amdsmi_status_t ret;
+
+	amdsmi_power_info_t power_info;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	std::string socket_power_str{"N/A"};
+	ret = guest_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		formatted_string = "N/A";
+		return ret;
+	}
+
+	ret = guest_amdsmi_get_power_info(processor, &power_info);
+	if (ret == AMDSMI_STATUS_SUCCESS && power_info.socket_power != UINT_MAX) {
+		socket_power_str = string_format("%lld", power_info.socket_power);
+	}
+
+	formatted_string = string_format("%s W", socket_power_str.c_str());
+
+	return AMDSMI_STATUS_SUCCESS;
+}
+
 int AmdSmiApiGuest::amdsmi_get_default_pcie_info_command(uint64_t processor_bdf, Arguments arg, std::string &formatted_string)
 {
 	int ret;

@@ -15,6 +15,24 @@ extern "C" {
 #include "amdsmi.h"
 }
 
+/* "not supported" sentinel values come back as all-bits-set; print them as
+ * N/A instead of the raw huge number, same as the other N/A cases below.
+ */
+static std::string na_u64(uint64_t val)
+{
+	return (val == UINT64_MAX) ? "N/A" : std::to_string(val);
+}
+
+static std::string na_u32(uint32_t val)
+{
+	return (val == UINT32_MAX) ? "N/A" : std::to_string(val);
+}
+
+static std::string na_u64_unit(uint64_t val, const char *unit)
+{
+	return (val == UINT64_MAX) ? "N/A" : (std::to_string(val) + unit);
+}
+
 TEST(amdsmiIntegrationTests, InitTest)
 {
 	EXPECT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
@@ -142,8 +160,8 @@ static void walkthrough_test()
 		printf("    OAM ID: %d\n", asic_info.oam_id);
 		printf("    Num Of Compute Units: %d\n", asic_info.num_of_compute_units);
 		printf("    Subsystem ID: 0x%x\n", asic_info.subsystem_id);
-		printf("    Target Graphics Version: %" PRIu64 "\n", asic_info.target_graphics_version);
-		printf("    Flags: %" PRIu64 "\n", asic_info.flags);
+		printf("    Target Graphics Version: %s\n", na_u64(asic_info.target_graphics_version).c_str());
+		printf("    Flags: %s\n", na_u64(asic_info.flags).c_str());
 		ASSERT_EQ(amdsmi_get_gpu_device_uuid(processors[i], &uuid_length, uuid),
 			  AMDSMI_STATUS_SUCCESS);
 		printf("GPU UUID:\n");
@@ -171,27 +189,27 @@ static void walkthrough_test()
 			printf("PCIe metric info:\n");
 			printf("    PCIe speed: %u\n", pcie_info.pcie_metric.pcie_speed);
 			printf("    PCIe width: %u\n", pcie_info.pcie_metric.pcie_width);
-			printf("    PCIe bandwidth: %u\n", pcie_info.pcie_metric.pcie_bandwidth);
-			printf("    PCIe replay count: %" PRIu64 "\n", pcie_info.pcie_metric.pcie_replay_count);
-			printf("    PCIe l0 to recovery count: %" PRIu64 "\n", pcie_info.pcie_metric.pcie_l0_to_recovery_count);
-			printf("    PCIe replay roll over count: %" PRIu64 "\n", pcie_info.pcie_metric.pcie_replay_roll_over_count);
-			printf("    PCIe nak sent count: %" PRIu64 "\n", pcie_info.pcie_metric.pcie_nak_sent_count);
-			printf("    PCIe nak received count: %" PRIu64 "\n", pcie_info.pcie_metric.pcie_nak_received_count);
-			printf("    PCIe lc perf other end recovery count: %u\n", pcie_info.pcie_metric.pcie_lc_perf_other_end_recovery_count);
+			printf("    PCIe bandwidth: %s\n", na_u32(pcie_info.pcie_metric.pcie_bandwidth).c_str());
+			printf("    PCIe replay count: %s\n", na_u64(pcie_info.pcie_metric.pcie_replay_count).c_str());
+			printf("    PCIe l0 to recovery count: %s\n", na_u64(pcie_info.pcie_metric.pcie_l0_to_recovery_count).c_str());
+			printf("    PCIe replay roll over count: %s\n", na_u64(pcie_info.pcie_metric.pcie_replay_roll_over_count).c_str());
+			printf("    PCIe nak sent count: %s\n", na_u64(pcie_info.pcie_metric.pcie_nak_sent_count).c_str());
+			printf("    PCIe nak received count: %s\n", na_u64(pcie_info.pcie_metric.pcie_nak_received_count).c_str());
+			printf("    PCIe lc perf other end recovery count: %s\n", na_u32(pcie_info.pcie_metric.pcie_lc_perf_other_end_recovery_count).c_str());
 		}
 
 		ASSERT_EQ(amdsmi_get_power_cap_info(processors[i], sensor_ind, &pwr_info), AMDSMI_STATUS_SUCCESS);
 
-		EXPECT_TRUE(pwr_info.default_power_cap == 0);
 		EXPECT_TRUE(pwr_info.dpm_cap <= 16);
 		EXPECT_TRUE((pwr_info.max_power_cap == UINT64_MAX) || (pwr_info.power_cap <= pwr_info.max_power_cap));
 		EXPECT_TRUE((pwr_info.min_power_cap == UINT64_MAX) || (pwr_info.power_cap >= pwr_info.min_power_cap));
 
 		printf("Power capabilities:\n");
-		printf("    DPM: %" PRIu64 "\n", pwr_info.dpm_cap);
-		printf("    Power: %" PRIu64 "W\n", pwr_info.power_cap);
-		printf("    Max power: %" PRIu64 "W\n", pwr_info.max_power_cap);
-		printf("    Min power: %" PRIu64 "W\n", pwr_info.min_power_cap);
+		printf("    DPM: %s\n", na_u64(pwr_info.dpm_cap).c_str());
+		printf("    Default power: %s\n", na_u64_unit(pwr_info.default_power_cap, "W").c_str());
+		printf("    Power: %s\n", na_u64_unit(pwr_info.power_cap, "W").c_str());
+		printf("    Max power: %s\n", na_u64_unit(pwr_info.max_power_cap, "W").c_str());
+		printf("    Min power: %s\n", na_u64_unit(pwr_info.min_power_cap, "W").c_str());
 
 		ASSERT_EQ(amdsmi_get_fb_layout(processors[i], &pf_fb_info), AMDSMI_STATUS_SUCCESS);
 
@@ -773,12 +791,11 @@ TEST(amdsmiIntegrationTests, PowerCapTests)
 
 TEST(amdsmiIntegrationTests, SupportedPowerCapTests)
 {
-	// TODO: power_cap - test amdsmi_get_supported_power_cap API when implemented
 	const uint32_t max_power_cap_sensors = 2;
 	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
 	uint32_t sensor_count = 0;
-	uint32_t sensor_inds[max_power_cap_sensors];
-	amdsmi_power_cap_type_t sensor_types[max_power_cap_sensors];
+	uint32_t sensor_inds[max_power_cap_sensors] = {0};
+	amdsmi_power_cap_type_t sensor_types[max_power_cap_sensors] = {AMDSMI_POWER_CAP_TYPE_PPT0};
 	int ret;
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
@@ -787,8 +804,21 @@ TEST(amdsmiIntegrationTests, SupportedPowerCapTests)
 	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, processors), AMDSMI_STATUS_SUCCESS);
 	ASSERT_GE(dev_cnt, (unsigned)1);
 
-	ret = amdsmi_get_supported_power_cap(processors[0], &sensor_count, sensor_inds, sensor_types);
-	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_YET_IMPLEMENTED);
+	for (uint32_t i = 0; i < dev_cnt; ++i) {
+		ret = amdsmi_get_supported_power_cap(processors[i], &sensor_count, sensor_inds, sensor_types);
+		EXPECT_TRUE((ret == AMDSMI_STATUS_SUCCESS) || (ret == AMDSMI_STATUS_NOT_SUPPORTED));
+		if (ret == AMDSMI_STATUS_SUCCESS) {
+			/* PPT1 is optional */
+			EXPECT_TRUE((sensor_count >= 1) && (sensor_count <= max_power_cap_sensors));
+			EXPECT_EQ(sensor_inds[0], 0u);
+			EXPECT_EQ(sensor_types[0], AMDSMI_POWER_CAP_TYPE_PPT0);
+			printf("Power cap supported sensors: %u\n", sensor_count);
+			for (uint32_t j = 0; j < sensor_count; ++j) {
+				printf("    SENSOR%u: index=%u type=%s\n", j, sensor_inds[j],
+				       sensor_types[j] == AMDSMI_POWER_CAP_TYPE_PPT0 ? "PPT0" : "PPT1");
+			}
+		}
+	}
 
 	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
 	free(processors);
@@ -906,6 +936,20 @@ TEST(amdsmiIntegrationTests, ECCTestsPerBlock)
 		all_blocks_not_supported = true;
 		block = AMDSMI_GPU_BLOCK_FIRST;
 		std::cout << "GPU " << i << '\n';
+
+		// Per-block ECC is not supported on MI210 (gfx90a) in the SR-IOV
+		// host configuration: amdsmi_get_gpu_ecc_enabled reports 0 enabled
+		// blocks and per-block amdsmi_get_gpu_ecc_count is unsupported. The
+		// DTP explicitly skips ECC on MI210 (see
+		// tests/DTP/lib/SMI_Lib_Host_Sanity_1.md step 38:
+		// amdsmi_get_gpu_ecc_enabled "[Skip: MI210]"). Evaluate this
+		// per-device so non-MI210 GPUs in the same system are still tested.
+		amdsmi_asic_info_t ecc_asic_info;
+		ASSERT_EQ(amdsmi_get_gpu_asic_info(processors[i], &ecc_asic_info), AMDSMI_STATUS_SUCCESS);
+		if (ecc_asic_info.device_id == 0x740F) { // MI210 (gfx90a)
+			std::cout << "Skipping per-block ECC on MI210 (unsupported per DTP)" << std::endl;
+			continue;
+		}
 
 		ASSERT_EQ(amdsmi_get_gpu_ecc_enabled(processors[i], &enabled_blocks),
 			AMDSMI_STATUS_SUCCESS);

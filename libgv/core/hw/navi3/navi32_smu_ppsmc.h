@@ -125,5 +125,7 @@
 #define PPSMC_MSG_RAS_Alarms                     0x52
 #define PPSMC_MSG_GetSvi3Voltage                 0x53
 
-#define PPSMC_Message_Count                      0x54
+#define PPSMC_MSG_PrepareForVFUnload             0x55
+
+#define PPSMC_Message_Count                      0x56
 #endif

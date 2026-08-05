@@ -35,7 +35,7 @@ struct smi_vf_entry {
 
 struct smi_event_ctx {
 	void *handle;
-	struct amdgv_error_notifier *notifier;
+	struct amdgv_log_notifier *notifier;
 	uint64_t event_id;  /* ESXi event ID*/
 };
 
@@ -65,8 +65,9 @@ struct smi_ctx {
 	bool mutex_flag;
 	uint64_t shared_event_id;  /* ESXi: shared event ID */
 	uint8_t event_readers;     /* ESXi: threads inside smi_read_event */
-	bool releasing;            /* ESXi: context teardown in progress */
+	bool releasing;            /* context teardown in progress (ESXi; Linux event revoke) */
 	uint8_t padding_4[1];
+	struct smi_ctx *next_open; /* link in the global open-ctx registry */
 };
 
 #define SMI_ASSIGN_FUNC(ctx, i, c, f, ins, outs) do {\

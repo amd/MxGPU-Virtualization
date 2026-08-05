@@ -10,6 +10,7 @@
 #include "ta_ras_if.h"
 #include "amdgv_ras_eeprom.h"
 #include "amdgv_list.h"
+#include "amdgv_ras_event.h"
 
 struct amdgv_sched_event;
 struct amd_sriov_msg_pf2vf_info;
@@ -486,34 +487,6 @@ struct ras_debug_if {
 	int op;
 };
 
-static inline enum ta_ras_block amdgv_ras_block_to_ta(enum amdgv_ras_block block)
-{
-	switch (block) {
-	case AMDGV_RAS_BLOCK__UMC:
-		return TA_RAS_BLOCK__UMC;
-	default:
-		return TA_RAS_BLOCK__UMC;
-	}
-}
-
-static inline enum ta_ras_error_type amdgv_ras_error_to_ta(enum amdgv_ras_error_type error)
-{
-	switch (error) {
-	case AMDGV_RAS_ERROR__NONE:
-		return TA_RAS_ERROR__NONE;
-	case AMDGV_RAS_ERROR__PARITY:
-		return TA_RAS_ERROR__PARITY;
-	case AMDGV_RAS_ERROR__SINGLE_CORRECTABLE:
-		return TA_RAS_ERROR__SINGLE_CORRECTABLE;
-	case AMDGV_RAS_ERROR__MULTI_UNCORRECTABLE:
-		return TA_RAS_ERROR__MULTI_UNCORRECTABLE;
-	case AMDGV_RAS_ERROR__POISON:
-		return TA_RAS_ERROR__POISON;
-	default:
-		return TA_RAS_ERROR__NONE;
-	}
-}
-
 static inline enum amdgv_smi_ras_block amdgv_ras_block_to_smi_ras_block(enum amdgv_ras_block block)
 {
 	switch (block) {
@@ -557,4 +530,148 @@ struct amdgv_smi_ras_caps {
 	uint64_t ras_block_mask;
 };
 
+#if defined(AMDGV_UNIRAS_SUPPORT)
+
+bool amdgv_uniras_enabled(struct amdgv_adapter *adapt);
+int amdgv_ras_ioctl_handler(struct amdgv_adapter *adapt,  void *cmd);
+int amdgv_ras_mgr_handle_gpumon_req(struct amdgv_adapter *adapt,
+		uint32_t type, void *input, void *output);
+int amdgv_ras_event_handler(struct amdgv_adapter *adapt,
+		struct amdgv_sched_event *event);
+int amdgv_ras_remote_cmd_handler(struct amdgv_adapter *adapt,
+		struct amdgv_sched_event *event);
+int amdgv_ras_mgr_handle_fatal_interrupt(struct amdgv_adapter *adapt, void *data);
+int amdgv_ras_mgr_handle_controller_interrupt(struct amdgv_adapter *adapt, void *data);
+int amdgv_ras_mgr_handle_consumer_interrupt(struct amdgv_adapter *adapt, void *data);
+int amdgv_ras_mgr_copy_bp_records_to_vf(struct amdgv_adapter *adapt,
+					uint32_t idx_vf, uint32_t allowed_size,
+					uint32_t *write_size, uint32_t *more);
+int amdgv_ras_mgr_get_curr_nps_mode(struct amdgv_adapter *adapt,
+		enum amdgv_memory_partition_mode *nps_mode);
+struct amdgv_init_func *amdgv_ras_mgr_get_init_func(struct amdgv_adapter *adapt);
+bool amdgv_ras_mgr_check_retired_addr(struct amdgv_adapter *adapt, uint64_t addr);
+void amdgv_ras_mgr_flush_ras_ecc_info(struct amdgv_adapter *adapt);
+void amdgv_ras_mgr_update_ras_ecc(struct amdgv_adapter *adapt);
+int amdgv_ras_mgr_query_block_ecc_data(struct amdgv_adapter *adapt,
+	    uint32_t block, uint32_t idx_vf, uint64_t *ce, uint64_t *ue, uint64_t *de);
+
+int amdgv_ras_mgr_fetch_and_sort_bps(struct amdgv_adapter *adapt,
+				uint64_t **bp_offsets, int *bp_count);
+int amdgv_ras_mgr_clear_vf_auto_list(struct amdgv_adapter *adapt,
+	uint32_t idx_vf);
+bool amdgv_ras_mgr_is_rma(struct amdgv_adapter *adapt);
+void amdgv_ras_mgr_get_ras_caps(struct amdgv_adapter *adapt,
+		struct amd_sriov_msg_pf2vf_info *pf2vf_msg);
+void amdgv_ras_mgr_vf_lifespan_init(struct amdgv_adapter *adapt, uint32_t idx_vf);
+#else
+static inline bool amdgv_uniras_enabled(struct amdgv_adapter *adapt)
+{
+	return false;
+}
+
+static inline int amdgv_ras_ioctl_handler(struct amdgv_adapter *adapt, void *cmd)
+{
+	return 0;
+}
+
+static inline int amdgv_ras_mgr_handle_gpumon_req(struct amdgv_adapter *adapt,
+		uint32_t type, void *input, void *output)
+{
+	return 0;
+}
+
+static inline int amdgv_ras_event_handler(struct amdgv_adapter *adapt,
+		struct amdgv_sched_event *event)
+{
+	return 0;
+}
+
+static inline int amdgv_ras_remote_cmd_handler(struct amdgv_adapter *adapt,
+		struct amdgv_sched_event *event)
+{
+	return 0;
+}
+
+static inline int amdgv_ras_mgr_handle_fatal_interrupt(struct amdgv_adapter *adapt, void *data)
+{
+	return 0;
+}
+
+static inline int amdgv_ras_mgr_handle_controller_interrupt(struct amdgv_adapter *adapt, void *data)
+{
+	return 0;
+}
+
+static inline int amdgv_ras_mgr_handle_consumer_interrupt(struct amdgv_adapter *adapt, void *data)
+{
+	return 0;
+}
+
+static inline int amdgv_ras_mgr_copy_bp_records_to_vf(struct amdgv_adapter *adapt,
+					uint32_t idx_vf, uint32_t allowed_size,
+					uint32_t *write_size, uint32_t *more)
+{
+	return 0;
+}
+
+static inline int amdgv_ras_mgr_get_curr_nps_mode(struct amdgv_adapter *adapt,
+		enum amdgv_memory_partition_mode *nps_mode)
+{
+	return 0;
+}
+
+static inline struct amdgv_init_func *amdgv_ras_mgr_get_init_func(struct amdgv_adapter *adapt)
+{
+	return NULL;
+}
+
+static inline bool amdgv_ras_mgr_check_retired_addr(struct amdgv_adapter *adapt, uint64_t addr)
+{
+	return true;
+}
+
+static inline void amdgv_ras_mgr_flush_ras_ecc_info(struct amdgv_adapter *adapt)
+{
+	return;
+}
+
+static inline void amdgv_ras_mgr_update_ras_ecc(struct amdgv_adapter *adapt)
+{
+	return;
+}
+
+static inline int amdgv_ras_mgr_query_block_ecc_data(struct amdgv_adapter *adapt,
+	    uint32_t block, uint32_t idx_vf, uint64_t *ce, uint64_t *ue, uint64_t *de)
+{
+	return 0;
+}
+
+static inline int amdgv_ras_mgr_fetch_and_sort_bps(struct amdgv_adapter *adapt,
+				uint64_t **bp_offsets, int *bp_count) {
+	*bp_count = 0;
+	return 0;
+}
+static inline int amdgv_ras_mgr_clear_vf_auto_list(struct amdgv_adapter *adapt,
+	uint32_t idx_vf)
+{
+	return 0;
+}
+
+static inline void amdgv_ras_mgr_get_ras_caps(struct amdgv_adapter *adapt,
+		struct amd_sriov_msg_pf2vf_info *pf2vf_msg)
+{
+	return;
+}
+
+static inline bool amdgv_ras_mgr_is_rma(struct amdgv_adapter *adapt)
+{
+	return false;
+}
+
+static inline void amdgv_ras_mgr_vf_lifespan_init(struct amdgv_adapter *adapt,
+		uint32_t idx_vf)
+{
+	return;
+}
+#endif
 #endif

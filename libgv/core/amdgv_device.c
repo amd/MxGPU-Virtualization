@@ -7,7 +7,7 @@
 #include "amdgv_api.h"
 #include "amdgv_device.h"
 #include "amdgv_oss_wrapper.h"
-#include "amdgv_error.h"
+#include "amdgv_log.h"
 #include "amdgv_powerplay_swsmu.h"
 #include "amdgv_powerplay.h"
 #include "amdgv_guard.h"
@@ -230,6 +230,7 @@ static struct amdgv_id_name wait_for_type_name[] = {
 	{ AMDGV_WAIT_FOR_CP_DMA_PIO,		"WAIT_FOR_CP_DMA_PIO" },
 	{ AMDGV_WAIT_FOR_SMU_CHECK_HANG,	"WAIT_FOR_SMU_CHECK_HANG" },
 	{ AMDGV_WAIT_FOR_SMU_MSG_RESPONSE,	"WAIT_FOR_SMU_MSG_RESPONSE" },
+	{ AMDGV_WAIT_FOR_FB_HASH_DONE,	"AMDGV_WAIT_FOR_FB_HASH_DONE" },
 };
 
 const char *amdgv_wait_for_type_to_name(enum amdgv_wait_for_types type)
@@ -723,6 +724,7 @@ static void amdgv_wait_for_timeout_print(struct amdgv_adapter *adapt, struct amd
 	case AMDGV_WAIT_FOR_PSP_TOS_LOADED_STATUS:
 	case AMDGV_WAIT_FOR_PSP_BOOT_COMPLETE:
 	case AMDGV_WAIT_FOR_RLC_AUTOLOAD_COMPLETE:
+	case AMDGV_WAIT_FOR_FB_HASH_DONE:
 		AMDGV_ERROR("Timeout: %s. Elapsed=%ld\n",
 			amdgv_wait_for_type_to_name(cb_context->type),
 			elapsed);
@@ -822,6 +824,7 @@ static void amdgv_wait_for_start_print(struct amdgv_adapter *adapt,
 	case AMDGV_WAIT_FOR_CP_DMA_PIO:
 	case AMDGV_WAIT_FOR_SMU_CHECK_HANG:
 	case AMDGV_WAIT_FOR_SMU_MSG_RESPONSE:
+	case AMDGV_WAIT_FOR_FB_HASH_DONE:
 		AMDGV_DEBUG("Start %s. Timeout=%ld\n",
 			    amdgv_wait_for_type_to_name(cb_context->type),
 			    timeout_us);
@@ -1591,8 +1594,8 @@ static int amdgv_device_func_sw_init(struct amdgv_adapter *adapt)
 	bool sw_init_complete[MAX_INIT_FUNCS] = { 0 };
 	bool hw_init_complete[MAX_INIT_FUNCS] = { 0 };
 
-	if (amdgv_error_init(adapt) == AMDGV_FAILURE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ERROR_LOGGING_FAILED, 0);
+	if (amdgv_log_init(adapt) == AMDGV_FAILURE) {
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ERROR_LOGGING_FAILED, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -1657,7 +1660,7 @@ init_fail:
 		}
 	}
 
-	amdgv_error_fini(adapt);
+	amdgv_log_fini(adapt);
 
 	return AMDGV_FAILURE;
 }
@@ -1721,7 +1724,7 @@ static int amdgv_device_func_hw_init(struct amdgv_adapter *adapt)
 	return 0;
 
 hw_init_fail:
-	amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_HW_INIT_FAIL, 0);
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_HW_INIT_FAIL, 0);
 	/* Collect the diagnosis data logs */
 	amdgv_diag_data_cache_dump(adapt, AMDGV_PF_IDX,
 				   AMDGV_DIAG_DATA_LOG_COLLECT_CACHE_INIT_FAIL);
@@ -1747,7 +1750,7 @@ static void amdgv_device_func_sw_fini(struct amdgv_adapter *adapt)
 		}
 	}
 
-	amdgv_error_fini(adapt);
+	amdgv_log_fini(adapt);
 }
 
 static void amdgv_device_func_hw_fini(struct amdgv_adapter *adapt)
@@ -1979,26 +1982,26 @@ struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_da
 
 	/* parse init data, fill in device info */
 	amdgv_fill_device_info(adapt, init_data);
-	adapt->error_dump_stack_max = 0;
-	adapt->error_dump_stack_count = 0;
-	amdgv_initialize_default_filters(adapt);
+	adapt->log.dump_stack_max = 0;
+	adapt->log.dump_stack_count = 0;
+	amdgv_log_initialize_default_filters(adapt);
 
 	/* check if the device is supported by libgv */
 	asic_entry = amdgv_match_asic_table(init_data->info.dev_id, init_data->info.rev_id);
 	if (asic_entry == NULL) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_GPU_NOT_SUPPORTED,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_NOT_SUPPORTED,
 				init_data->info.dev_id);
 		goto fail;
 	}
 
 	/* check GPU sriov capability */
 	if (init_data->info.sriov_cap_pos == 0) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_IOV_ASIC_NO_SRIOV_SUPPORT, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_ASIC_NO_SRIOV_SUPPORT, 0);
 		goto fail;
 	}
 
 	if (init_data->info.sriov_vf_stride != 1) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_IOV_SRIOV_STRIDE_ERROR, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_SRIOV_STRIDE_ERROR, 0);
 		goto fail;
 	}
 
@@ -2010,79 +2013,83 @@ struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_da
 		adapt->log_level = init_data->opt.log_level;
 		adapt->log_mask = init_data->opt.log_mask;
 	}
+	if (init_data->opt.sys_log_level < 0)
+		adapt->sys_log_level = AMDGV_INFO_LEVEL;
+	else
+		adapt->sys_log_level = init_data->opt.sys_log_level;
 
 	adapt->force_switch_vf_idx = AMDGV_MAX_VF_SLOT;
 
 	adapt->mmio_idx_lock = oss_spin_lock_init(AMDGV_SPIN_LOCK_HIGHEST_RANK);
 	if (adapt->mmio_idx_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
 		goto fail;
 	}
 
 	adapt->pcie_idx_lock = oss_spin_lock_init(AMDGV_SPIN_LOCK_HIGHEST_RANK);
 	if (adapt->pcie_idx_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
 		goto fail;
 	}
 
 	adapt->smu_msg_lock = oss_spin_lock_init(AMDGV_SPIN_LOCK_HIGHEST_RANK);
 	if (adapt->smu_msg_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
 		goto fail;
 	}
 
 	adapt->api_lock = oss_mutex_init();
 	if (adapt->api_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_MUTEX_FAIL, 0);
 		goto fail;
 	}
 
 	adapt->set_vf_access_lock = oss_mutex_init();
 	if (adapt->set_vf_access_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_MUTEX_FAIL, 0);
 		goto fail;
 	}
 
 	adapt->psp_lock = oss_mutex_init();
 	if (adapt->psp_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_MUTEX_FAIL, 0);
 		goto fail;
 	}
 
 	adapt->smu_i2c_lock = oss_mutex_init();
 	if (adapt->smu_i2c_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_MUTEX_FAIL, 0);
 		goto fail;
 	}
 
 	adapt->srbm_mutex = oss_mutex_init();
 	if (adapt->srbm_mutex == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_MUTEX_FAIL, 0);
 		goto fail;
 	}
 
 	adapt->grbm_idx_mutex = oss_mutex_init();
 	if (adapt->grbm_idx_mutex == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_MUTEX_FAIL, 0);
 		goto fail;
 	}
 
 	adapt->bp_lock = oss_mutex_init();
 	if (adapt->bp_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_MUTEX_FAIL, 0);
 		goto fail;
 	}
 
 	adapt->mmio_lock = oss_mutex_init();
 	if (adapt->mmio_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_MUTEX_FAIL, 0);
 		goto fail;
 	}
 
 	for (i = 0; i < AMDGV_MAX_NUM_HW_SCHED; ++i) {
 		adapt->sched.hw_state_machine[i].ws_lock = oss_rwsema_init();
 		if (adapt->sched.hw_state_machine[i].ws_lock == OSS_INVALID_HANDLE) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_RWSEMA_FAIL,
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_RWSEMA_FAIL,
 					0);
 			goto fail;
 		}
@@ -2105,9 +2112,15 @@ struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_da
 	if (amdgv_copy_config_opt(adapt, init_data) < 0)
 		goto fail;
 
+#ifndef EXCLUDE_GC12
+	/* GC12 only supports unified RAS - enable by default */
+	if (adapt->asic_type == CHIP_IP_DISCOVERY)
+		adapt->opt.unified_ras_enabled = true;
+#endif
+
 	/* parse config option */
 	if (amdgv_parse_config_opt(adapt) < 0) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_INIT_CONFIG_ERROR, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_INIT_CONFIG_ERROR, 0);
 		goto fail;
 	}
 	adapt->hash_addr = LIVE_INFO_HASH_ADDR;
@@ -2126,8 +2139,17 @@ struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_da
 		adapt->ip_discovery.size = DEFAULT_IP_DISCOVERY_SIZE;
 	}
 
-	/* func table init through static BDF */
-	amdgv_device_init_funcs_table(adapt, asic_entry);
+	if (adapt->asic_type == CHIP_IP_DISCOVERY) {
+		/* func table init through IP Discovery */
+		ret = amdgv_ip_discovery_init(adapt);
+		if (ret)
+			goto fail;
+	}
+	else
+	{
+		/* func table init through static BDF */
+		amdgv_device_init_funcs_table(adapt, asic_entry);
+	}
 
 	/* reg base init first */
 	if (adapt->reg_base_init != NULL)
@@ -2139,7 +2161,7 @@ struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_da
 
 	/* diagnosis data initialization */
 	if (amdgv_diag_data_init(adapt) < 0)
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_DIAG_DATA_INIT_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_DIAG_DATA_INIT_FAIL, 0);
 
 	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_UPDATE) {
 		if (amdgv_in_live_update_seq())
@@ -2154,7 +2176,7 @@ struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_da
 
 	/* device function initialization */
 	if (amdgv_device_func_sw_init(adapt) < 0) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_SW_INIT_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_SW_INIT_FAIL, 0);
 		goto fail;
 	}
 
@@ -2304,6 +2326,10 @@ void amdgv_device_internal_fini(struct amdgv_adapter *adapt,
 	amdgv_device_func_sw_fini(adapt);
 
 	amdgv_diag_data_fini(adapt);
+
+	if (adapt->asic_type == CHIP_IP_DISCOVERY) {
+		amdgv_ip_discovery_fini(adapt);
+	}
 
 	oss_memcpy(fini_opt, &adapt->fini_opt, sizeof(struct amdgv_fini_config_opt));
 
@@ -2459,7 +2485,7 @@ void amdgv_device_report_rma_to_fw(struct amdgv_adapter *adapt)
 static void amdgv_device_set_gpu_rma(struct amdgv_adapter *adapt)
 {
 	if (adapt->status != AMDGV_STATUS_HW_RMA)
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_GPU_RMA, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_RMA, 0);
 
 	adapt->status = AMDGV_STATUS_HW_RMA;
 	amdgv_sched_set_unrecov_err(adapt);
@@ -2468,7 +2494,7 @@ static void amdgv_device_set_gpu_rma(struct amdgv_adapter *adapt)
 static void amdgv_device_set_hive_rma(struct amdgv_adapter *adapt)
 {
 	if (adapt->status != AMDGV_STATUS_HW_HIVE_RMA)
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_GPU_HIVE_RMA, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_HIVE_RMA, 0);
 
 	adapt->status = AMDGV_STATUS_HW_HIVE_RMA;
 	amdgv_sched_set_unrecov_err(adapt);
@@ -2477,7 +2503,7 @@ static void amdgv_device_set_hive_rma(struct amdgv_adapter *adapt)
 static void amdgv_device_set_gpu_lost(struct amdgv_adapter *adapt)
 {
 	if (adapt->status != AMDGV_STATUS_HW_LOST)
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_GPU_DEVICE_LOST, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_DEVICE_LOST, 0);
 
 	adapt->status = AMDGV_STATUS_HW_LOST;
 	amdgv_sched_set_unrecov_err(adapt);

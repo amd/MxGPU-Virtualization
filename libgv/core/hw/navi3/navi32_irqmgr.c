@@ -390,11 +390,6 @@ static int navi32_toggle_disp_timer2(struct amdgv_adapter *adapt, bool enable)
 {
 	uint32_t interrupt_status;
 
-	if (enable)
-		AMDGV_INFO("enable disp timer2\n");
-	else
-		AMDGV_INFO("disable disp timer2\n");
-
 	interrupt_status = RREG32(SOC15_REG_OFFSET(SMUIO, 0, regPWR_IH_CONTROL));
 	interrupt_status = REG_SET_FIELD(interrupt_status,
 		PWR_IH_CONTROL,
@@ -555,7 +550,8 @@ static int navi32_hv_event_process(struct amdgv_adapter *adapt)
 	oss_spin_unlock(adapt->irqmgr.hv_event_lock);
 
 	if (sta_bits != 0)
-		AMDGV_WARN("some interrupts 0x%x(mask:0x%x) not handled\n", sta_bits, intr_bits);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_UNHANDLED_HV_INTR,
+			      AMDGV_LOG_DATA_32_32(sta_bits, intr_bits));
 
 	return OSS_IRQ_HANDLED;
 }
@@ -706,14 +702,14 @@ static int navi32_register_interrupt(struct amdgv_adapter *adapt)
 
 	intr_regrt_info = oss_malloc(sizeof(struct oss_intr_regrt_info));
 	if (intr_regrt_info == NULL) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				sizeof(struct oss_intr_regrt_info));
 		return -1;
 	}
 
 	intr_entries = oss_malloc(sizeof(struct oss_intr_regrt_entry) * 4);
 	if (intr_entries == NULL) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				sizeof(struct oss_intr_regrt_entry) * 4);
 		oss_free(intr_regrt_info);
 		return -1;
@@ -758,7 +754,7 @@ static int navi32_register_interrupt(struct amdgv_adapter *adapt)
 
 	/* register interrupt handler to OS */
 	if (oss_register_interrupt(adapt->dev, intr_regrt_info) != 0) {
-		AMDGV_ERROR("failed to register interrupt handler!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_REGISTER_INTERRUPT_FAIL, 0);
 		goto fail;
 	}
 
@@ -851,9 +847,13 @@ static void navi32_write_virtualized_interrupt(struct amdgv_adapter *adapt, uint
 
 	if(idx_table >= NAVI32_MSIX_TABLE_ENTRY_COUNT)
 	{
-		AMDGV_ERROR("Error!!! idx_table is greater than NAVI32_MSIX_TABLE_ENTRY_COUNT\n");
+		amdgv_put_log(idx_vf, AMDGV_LOG_DRIVER_INVALID_VALUE, (uint64_t)idx_table);
 		return;
 	}
+
+	/* if this is called when vf is in full access, update immediately */
+	if (is_full_access_vf(idx_vf))
+		is_direct_write = true;
 
 	/* if is_direct_write is true, write the interrupt table directly to the VF */
 	if (is_direct_write) {
@@ -862,7 +862,6 @@ static void navi32_write_virtualized_interrupt(struct amdgv_adapter *adapt, uint
 		/* enable MMIO register write, FB, DOORBELL VF access */
 		if (amdgv_gpuiov_get_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_MMIO_REG_WRITE) != true)
 		{
-			AMDGV_INFO("MMIO access was disabled,enable MMIO register write for VF %d\n", idx_vf);
 			amdgv_gpuiov_set_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_MMIO_REG_WRITE, true);
 		}
 
@@ -878,8 +877,6 @@ static void navi32_write_virtualized_interrupt(struct amdgv_adapter *adapt, uint
 		AMDGV_INFO("Read back interrupt table entry %d: 0x%x, 0x%x, 0x%x, 0x%x\n", idx_table,
 			oss_mm_read32(tab + 0), oss_mm_read32(tab + 1), 
 			oss_mm_read32(tab + 2), oss_mm_read32(tab + 3));
-		return;
-
 	} else {
 		vf_irq_info = &adapt->irqmgr.virtualized_interrupt_info_db[idx_vf];
 		if (vf_irq_info->msix_tab == NULL)
@@ -912,11 +909,12 @@ static void navi32_update_virtualized_interrupt(struct amdgv_adapter *adapt, uin
 		return;
 
 	vf = &adapt->array_vf[idx_vf];
+	if (vf == NULL)
+		return;
 
 	/* enable MMIO register write, FB, DOORBELL VF access */
 	if (amdgv_gpuiov_get_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_MMIO_REG_WRITE) != true)
 	{
-		AMDGV_INFO("MMIO access was disabled, enable MMIO register write for VF %d\n", idx_vf);
 		amdgv_gpuiov_set_vf_access(adapt, idx_vf, AMDGV_VF_ACCESS_MMIO_REG_WRITE, true);
 	}
 
@@ -946,6 +944,28 @@ static void navi32_update_virtualized_interrupt(struct amdgv_adapter *adapt, uin
 	oss_memset(vf_irq_info->msix_tab, 0, NAVI32_MSIX_TABLE_ENTRY_COUNT * NAVI32_MSIX_TABLE_ENTRY_SIZE_DWORD * sizeof(uint32_t));
 }
 
+static int navi32_vf_disp_timer2_control(struct amdgv_adapter *adapt, uint32_t idx_vf, bool enable)
+{
+	uint32_t pwr_disp_timer2_control;
+	uint32_t mmio_byte_off;
+
+	if (idx_vf == AMDGV_PF_IDX || idx_vf >= adapt->max_num_vf) {
+		AMDGV_ERROR("%s: invalid idx_vf %u\n", __func__, idx_vf);
+		return AMDGV_FAILURE;
+	}
+
+	mmio_byte_off = SOC15_REG_OFFSET(SMUIO, 0, regPWR_DISP_TIMER2_CONTROL) * 4;
+
+	pwr_disp_timer2_control = oss_mm_read32((uint8_t *)adapt->array_vf[idx_vf].res.mmio + mmio_byte_off);
+	if (enable)
+		pwr_disp_timer2_control = REG_SET_FIELD(pwr_disp_timer2_control, PWR_DISP_TIMER2_CONTROL, DISP_TIMER_INT_ENABLE, 1);
+	else
+		pwr_disp_timer2_control = REG_SET_FIELD(pwr_disp_timer2_control, PWR_DISP_TIMER2_CONTROL, DISP_TIMER_INT_DISABLE, 1);
+	oss_mm_write32((uint8_t *)adapt->array_vf[idx_vf].res.mmio + mmio_byte_off, pwr_disp_timer2_control);
+
+	return 0;
+}
+
 static int navi32_irqmgr_sw_init(struct amdgv_adapter *adapt)
 {
 	if (amdgv_irqmgr_sw_init(adapt))
@@ -960,14 +980,14 @@ static int navi32_irqmgr_sw_init(struct amdgv_adapter *adapt)
 	adapt->irqmgr.write_virtualized_interrupt = navi32_write_virtualized_interrupt;
 	adapt->irqmgr.update_virtualized_interrupt = navi32_update_virtualized_interrupt;
 
+	adapt->irqmgr.vf_disp_timer2_control = navi32_vf_disp_timer2_control;
+
 	/* register interrupt handler */
 	if (!amdgv_in_live_update_seq()) {
 		if (navi32_register_interrupt(adapt) < 0) {
-			AMDGV_ERROR("failed to register interrupt!\n");
 			return AMDGV_FAILURE;
 		}
 	} else {
-		AMDGV_WARN("skip interrupt register for live update.\n");
 		return 0;
 	}
 
@@ -984,6 +1004,7 @@ static int navi32_irqmgr_sw_fini(struct amdgv_adapter *adapt)
 	adapt->irqmgr.disable_hw_interrupt = NULL;
 	adapt->irqmgr.write_virtualized_interrupt = NULL;
 	adapt->irqmgr.update_virtualized_interrupt = NULL;
+	adapt->irqmgr.vf_disp_timer2_control = NULL;
 
 	for (idx_vf = 0; idx_vf < AMDGV_MAX_VF_NUM; idx_vf++) {
 		if (adapt->irqmgr.virtualized_interrupt_info_db[idx_vf].msix_tab) {

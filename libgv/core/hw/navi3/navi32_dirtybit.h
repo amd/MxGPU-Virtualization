@@ -43,7 +43,10 @@ enum NV32_DBIT_QUERY{
 };
 
 void navi32_select_mam_instance(struct amdgv_adapter *adapt, uint8_t mam_instance);
+void navi32_dirtybit_gcea_sdp_control(struct amdgv_adapter *adapt,
+						 bool gcea_sdp_enable);
 int navi32_dirtybit_control(struct amdgv_adapter *adapt, bool enable);
+void navi32_dirtybit_setup_sdma_hbm_page_size(struct amdgv_adapter *adapt);
 int navi32_is_segment_dirty(struct amdgv_adapter *adapt, uint64_t segment, bool dbit_preserve,
 				enum NV32_DBIT_QUERY query_type, bool *is_dirty);
 int navi32_dirtybit_query_data(struct amdgv_adapter *adapt, struct amdgv_query_dirty_bit_data *data);

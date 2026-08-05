@@ -90,7 +90,7 @@ static_argument_vectors_map = {
 			{"common", {"ifwi"}},
 			{"host_windows", {"board", "limit", "ras", "dfc-ucode", "fb-info", "num-vf", "vram", "cache", "virtualization-mode"}},
 			{"host_mi3xx", {"partition", "xgmi-plpd", "soc-pstate"}},
-			{"bm", {"limit", "process-isolation"}},
+			{"bm", {"limit", "process-isolation", "virtualization-mode"}},
 			{"host_linux", {"board", "limit", "fb-info", "num-vf", "vram"}},
 			{"host_vf", { "vf", "vf-fb-info"}},
 			{"host_vf_mixxx", {"hbm-info"}},
@@ -121,7 +121,7 @@ metric_argument_vectors_map = {
 			{"host_vf", {"vf"}},
 			{"host_linux_spec", {"ecc", "ecc-block", "energy", "throttle"}},
 			{"guest", {"fb-usage"}},
-			{"bm", {"fb-usage", "power", "clock", "temperature", "ecc", "pcie"}}
+			{"bm", {"fb-usage", "power", "clock", "temperature", "pcie"}}
 		}
 	},
 	{
@@ -246,10 +246,10 @@ std::string xgmi_message =
 	"If no argument is provided, returns information for all GPUs on the system\n\n";
 std::string xgmi_usage_host =
 	"usage: amd-smi xgmi [-h | --help] [--json] [--file FILE] [-g | --gpu <gpu_index | gpu_bdf | gpu_uuid>]\n"
-	"                    [--caps] [--fb-sharing] [--metric]\n\n";
+	"                    [--caps] [--fb-sharing] [--metric] [--sort=phy_id|bdf]\n\n";
 std::string xgmi_usage_host_mi200 =
 	"usage: amd-smi xgmi [-h | --help] [--json] [--file FILE] [-g | --gpu <gpu_index | gpu_bdf | gpu_uuid>]\n"
-	"                    [--caps] [--fb-sharing]\n\n";
+	"                    [--caps] [--fb-sharing] [--sort=phy_id|bdf]\n\n";
 std::string set_usage_host_mixxx =
 	"usage: amd-smi set [-h | --help] \n"
 	"                   [--cc-mode [CC_MODE_VALUE]]\n\n";
@@ -262,15 +262,18 @@ std::string xgmi_host =
 	"    --fb-sharing                                       Framebuffer sharing for each mode\n"
 	"    --metric                                           Metric XGMI information\n"
 	"    --source-status                                    Source GPU status information\n"
-	"    --link-status                                      XGMI link status between two GPUs in the xgmi command \n\n";
+	"    --link-status                                      XGMI link status between two GPUs in the xgmi command\n"
+	"    --sort=<phy_id|bdf>                                Sort GPUs in the output by physical id (default) or PCIe BDF\n\n";
 std::string xgmi_host_mi200 =
 	"Xgmi arguments:\n"
 	"                                                       Description:\n"
 	"    -h, --help                                         show this help message and exit\n"
 	"    -g, --gpu=<gpu_index | gpu_bdf | gpu_uuid>         Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs\n"
 	"    --caps                                             XGMI capabilities\n"
-	"    --fb-sharing                                       Framebuffer sharing for each mode\n";
-std::string topology_common =
+	"    --fb-sharing                                       Framebuffer sharing for each mode\n"
+	"    --sort=<phy_id|bdf>                                Sort GPUs in the output by physical id (default) or PCIe BDF\n";
+std::string topology_common = "";
+std::string topology_arguments_header =
 	"Topology arguments:" +
 	SmiCliArgument::get_description_continuation_indent() + "Description\n";
 std::string topology_usage_common =
@@ -284,7 +287,7 @@ topology_argument_vectors_map = {
 	},
 	{
 		"gpu", {
-			{"host", {"weight", "hops", "fb-sharing", "coherent", "atomics", "bi-dir", "dma"}}
+			{"host", {"weight", "hops", "fb-sharing", "coherent", "atomics", "bi-dir", "dma", "sort"}}
 		}
 	},
 	{
@@ -309,10 +312,12 @@ std::string topology_host =
 	"    --coherent                                         Cache coherent information\n"
 	"    --atomics                                          32 and 64-bit atomic link capability information\n"
 	"    --bi-dir                                           bi-directional link capability information\n"
-	"    --dma                                              dma link capability information\n";
+	"    --dma                                              dma link capability information\n"
+	"    --sort=<phy_id|bdf>                                Sort GPUs in the output by physical id or PCIe BDF (default)\n";
 std::string topology_usage_host =
 	"usage: amd-smi topology [-h | --help] [--json] [--file FILE] [-g | --gpu <gpu_index | gpu_bdf | gpu_uuid>]\n"
-	"                        [--weight] [--hops] [--fb-sharing] [--link-type] [--coherent] [--atomics] [--bi-dir] [--dma]\n\n";
+	"                        [--weight] [--hops] [--fb-sharing] [--link-type] [--coherent] [--atomics] [--bi-dir] [--dma]\n"
+	"                        [--sort=phy_id|bdf]\n\n";
 std::string fabric_common = "";
 std::string fabric_usage_common = "";
 std::string fabric_usage_host =
@@ -440,8 +445,6 @@ std::string set_bm =
 	"    -h, --help                                                                             show this help message and exit\n"
 	"    --process-isolation=<0 or 1>                                                           Enable or disable the GPU process isolation: 0 for disable and 1 for enable\n\n"
 	"    --power-cap=<power_cap_value>                                                          Sets power cap to the provided power cap value.\n"
-	"    --ptl-status=<STATUS>                                                                  Enable or disable the PTL on a GPU processor (ENABLED/DISABLED)\n"
-	"    --ptl-format=<FRMT1,FRMT2>                                                             Set the PTL format on a GPU processor. For example, --ptl-format=I8,F32\n"
 	"                                                                                           Note: Cap value must be between the minimum (min_power_cap) and maximum (max_power_cap) power cap values.\n"
 	"                                                                                           Range of the cap value can be seen by running the amd-smi static command.\n\n";
 std::string reset_common = "";
@@ -474,13 +477,13 @@ std::string monitor_message =
 std::string monitor_usage_common =
 	"usage: amd-smi monitor [-h | --help] [--json | --csv] [--file FILE]\n"
 	"                       [-w | --watch INTERVAL] [-W | --watch_time TIME] [-i | --iterations ITERATIONS]\n"
-	"                       [-u | --gfx] [-m | mem] [-n | --encode] [-e | --ecc] [-r | --pcie]\n";
+	"                       [-u | --gfx] [-m | mem] [-n | --encode]\n";
 std::string monitor_usage_host =
-	"                       [-p | --power-usage] [-t | --temperature] [-d | --decoder]\n";
+	"                       [-p | --power-usage] [-t | --temperature] [-r | --pcie] [-d | --decoder] [-e | --ecc]\n";
 std::string monitor_usage_guest =
 	"                       [-u | --vram-usage] [-q | --process]\n";
 std::string monitor_usage_bm =
-	"                       [-p | --power-usage] [-t | --temperature] [-q | --process]\n";
+	"                       [-p | --power-usage] [-t | --temperature] [-r | --pcie] [-q | --process]\n";
 std::string monitor_common =
 	"Monitor arguments:\n"
 	"                                                        Description:\n"
@@ -497,19 +500,20 @@ std::string monitor_common =
 	"                                                        If not specified the program will run indefinitely\n"
 	"    -u, --gfx                                           Monitor graphics utilization (%) and clock (MHz)\n"
 	"    -m, --mem                                           Monitor memory utilization (%) and clock (MHz)\n"
-	"    -n, --encoder                                       Monitor encoder utilization (%) and clock (MHz)\n"
-	"    -e, --ecc                                           Monitor ECC single bit, ECC double bit\n"
-	"    -r, --pcie                                          Monitor PCIe bandwidth in Mb/s and PCIe replay error count\n";
+	"    -n, --encoder                                       Monitor encoder utilization (%) and clock (MHz)\n";
 std::string monitor_host =
 	"    -p, --power-usage                                   Monitor power usage in Watts\n"
 	"    -t, --temperature                                   Monitor temperature in Celsius\n"
-	"    -d, --decoder                                       Monitor decoder utilization (%) and clock (MHz)\n\n";
+	"    -r, --pcie                                          Monitor PCIe bandwidth in Mb/s and PCIe replay error count\n"
+	"    -d, --decoder                                       Monitor decoder utilization (%) and clock (MHz)\n"
+	"    -e, --ecc                                           Monitor ECC single bit, ECC double bit\n\n";
 std::string monitor_guest =
 	"    -v, --vram-usage                                    Monitor memory usage in MB\n"
 	"    -q, --process                                       Include process output underneath monitor output\n\n";
 std::string monitor_bm =
 	"    -p, --power-usage                                   Monitor power usage in Watts\n"
 	"    -t, --temperature                                   Monitor temperature in Celsius\n"
+	"    -r, --pcie                                          Monitor PCIe bandwidth in Mb/s and PCIe replay error count\n"
 	"    -q, --process                                       Include process output underneath monitor output\n\n";
 std::string partition_common = "";
 std::string partition_host =

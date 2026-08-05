@@ -253,10 +253,10 @@ static int ras_eeprom_legacy_reset_table(struct amdgv_adapter *adapt,
 	oss_mutex_unlock(control->tbl_mutex);
 
 	if (ret == 1) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_EEPROM_RESET, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_RESET, 0);
 		ret = 0;
 	} else {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_EEPROM_RESET_FAILED, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_RESET_FAILED, 0);
 		ret = AMDGV_FAILURE;
 	}
 
@@ -540,7 +540,7 @@ static int ras_eeprom_legacy_update_gpu_health(struct amdgv_adapter *adapt,
 		__mark_gpu_bad(adapt);
 		ras_eeprom_legacy_mark_gpu_healthy_status(
 				adapt, GPU_RETIRED__ECC_REACH_THRESHOLD);
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_EEPROM_REACH_THD, control->max_record_num);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_REACH_THD, control->max_record_num);
 	} else {
 		ras_eeprom_legacy_calc_gpu_healthy(adapt);
 	}
@@ -576,7 +576,7 @@ int ras_eeprom_legacy_process_records(struct amdgv_adapter *adapt,
 
 	buffs = oss_zalloc(num * (EEPROM_ADDRESS_SIZE + EEPROM_TABLE_RECORD_SIZE));
 	if (!buffs) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				num * (EEPROM_ADDRESS_SIZE + EEPROM_TABLE_RECORD_SIZE));
 		return -1;
 	}
@@ -584,7 +584,7 @@ int ras_eeprom_legacy_process_records(struct amdgv_adapter *adapt,
 	oss_mutex_lock(control->tbl_mutex);
 	msgs = oss_zalloc(num * sizeof(*msgs));
 	if (!msgs) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				num * sizeof(*msgs));
 		ret = -1;
 		goto free_buff;

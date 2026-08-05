@@ -59,7 +59,7 @@
 #define AMDGV_DIAG_DATA_ERROR_DUMP_FIRST_KEEP	16
 #define AMDGV_DIAG_DATA_VPOST_POST_KEEP_ENTRIES	1
 
-/* Change this version whenever error list changes in amdgv_error */
+/* Change this version whenever error list changes in amdgv_log */
 #define AMDGV_RD_HOST_ERROR_DUMP_MAJOR_VERSION		0x01
 #define AMDGV_RD_HOST_ERROR_DUMP_MINOR_VERSION		0x00
 #define AMDGV_RD_HOST_ERROR_DUMP_VERSION \

@@ -50,19 +50,18 @@ int amdgv_mailbox_receive_msg(struct amdgv_adapter *adapt, uint32_t idx_vf, uint
 	int i;
 
 	if (!msg_data) {
-		AMDGV_ERROR("Message data storage not allocated\n", idx_vf);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_MB_MSG_BUF_NOT_ALLOCATED, 0);
 		return AMDGV_FAILURE;
 	}
 
 	if (AMDGV_IS_IDX_INVALID(idx_vf)) {
-		AMDGV_ERROR("Invalid index: index %d does not belong to any VF or PF\n",
-			    idx_vf);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_MB_INVALID_IDX, idx_vf);
 		return AMDGV_FAILURE;
 	}
 
 	if (msg_len > (int)adapt->mailbox.msg_buf_len)
-		AMDGV_WARN("Message too long: only first %d considered\n",
-			   adapt->mailbox.msg_buf_len);
+		amdgv_put_log(idx_vf, AMDGV_LOG_IOV_MB_MSG_TOO_LONG,
+			      adapt->mailbox.msg_buf_len);
 
 	oss_spin_lock_irq(adapt->mailbox.lock);
 
@@ -96,19 +95,18 @@ int amdgv_mailbox_send_msg(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_
 	int i;
 
 	if (!msg_data) {
-		AMDGV_ERROR("Message data storage not allocated\n", idx_vf);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_MB_MSG_BUF_NOT_ALLOCATED, 0);
 		return AMDGV_FAILURE;
 	}
 
 	if (AMDGV_IS_IDX_INVALID(idx_vf)) {
-		AMDGV_ERROR("Invalid index: index %d does not belong to any VF or PF\n",
-			    idx_vf);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_MB_INVALID_IDX, idx_vf);
 		return AMDGV_FAILURE;
 	}
 
 	if (msg_len > (int)adapt->mailbox.msg_buf_len)
-		AMDGV_WARN("Message too long: only first %d considered\n",
-			   adapt->mailbox.msg_buf_len);
+		amdgv_put_log(idx_vf, AMDGV_LOG_IOV_MB_MSG_TOO_LONG,
+			      adapt->mailbox.msg_buf_len);
 
 	oss_spin_lock_irq(adapt->mailbox.lock);
 
@@ -133,8 +131,7 @@ int amdgv_mailbox_clear_valid_msg(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	int i;
 
 	if (AMDGV_IS_IDX_INVALID(idx_vf)) {
-		AMDGV_ERROR("Invalid index: index %d does not belong to any VF or PF\n",
-			    idx_vf);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_MB_INVALID_IDX, idx_vf);
 		return AMDGV_FAILURE;
 	}
 
@@ -155,8 +152,7 @@ int amdgv_mailbox_clear_valid_msg(struct amdgv_adapter *adapt, uint32_t idx_vf)
 int amdgv_mailbox_save_state(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
 	if (AMDGV_IS_IDX_INVALID(idx_vf)) {
-		AMDGV_ERROR("Invalid index: index %d does not belong to any VF or PF\n",
-			    idx_vf);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_MB_INVALID_IDX, idx_vf);
 		return AMDGV_FAILURE;
 	}
 
@@ -174,8 +170,7 @@ int amdgv_mailbox_save_state(struct amdgv_adapter *adapt, uint32_t idx_vf)
 int amdgv_mailbox_restore_state(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
 	if (AMDGV_IS_IDX_INVALID(idx_vf)) {
-		AMDGV_ERROR("Invalid index: index %d does not belong to any VF or PF\n",
-			    idx_vf);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_MB_INVALID_IDX, idx_vf);
 		return AMDGV_FAILURE;
 	}
 
@@ -195,13 +190,12 @@ int amdgv_mailbox_hvvm_receive_msg(struct amdgv_adapter *adapt, uint32_t idx_vf,
 				   uint8_t *msg_data, bool need_ack)
 {
 	if (!msg_data) {
-		AMDGV_ERROR("Message data storage not allocated\n", idx_vf);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_MB_MSG_BUF_NOT_ALLOCATED, 0);
 		return AMDGV_FAILURE;
 	}
 
 	if (AMDGV_IS_IDX_INVALID(idx_vf)) {
-		AMDGV_ERROR("Invalid index: index %d does not belong to any VF or PF\n",
-			    idx_vf);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_MB_INVALID_IDX, idx_vf);
 		return AMDGV_FAILURE;
 	}
 
@@ -222,8 +216,7 @@ int amdgv_mailbox_hvvm_send_msg(struct amdgv_adapter *adapt, uint32_t idx_vf, ui
 				bool need_valid)
 {
 	if (AMDGV_IS_IDX_INVALID(idx_vf)) {
-		AMDGV_ERROR("Invalid index: index %d does not belong to any VF or PF\n",
-			    idx_vf);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_MB_INVALID_IDX, idx_vf);
 		return AMDGV_FAILURE;
 	}
 
@@ -370,12 +363,12 @@ int amdgv_mailbox_init(struct amdgv_adapter *adapt, const struct amdgv_mailbox_f
 {
 	adapt->mailbox.lock = oss_spin_lock_init(AMDGV_SPIN_LOCK_HIGHEST_RANK);
 	if (adapt->mailbox.lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
 		return AMDGV_FAILURE;
 	}
 	adapt->mailbox.hvvm_lock = oss_spin_lock_init(AMDGV_SPIN_LOCK_HIGHEST_RANK);
 	if (adapt->mailbox.hvvm_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -415,10 +408,10 @@ int amdgv_mailbox_notify_gpu_debug(struct amdgv_adapter *adapt, uint32_t idx_vf,
 		/* notify vf gpu_debug completion */
 		if (completion) {
 			msg_data[0] = MB_RES_MSG_GPU_DEBUG_NOTIFICATION_COMPLETION;
-			AMDGV_DEBUG("notify %s gpu debug notification completion\n", amdgv_idx_to_str(i));
+			amdgv_put_log(i, AMDGV_LOG_IOV_MB_NOTIFY_GPU_DEBUG, completion);
 		} else {
 			msg_data[0] = MB_RES_MSG_GPU_DEBUG_NOTIFICATION;
-			AMDGV_DEBUG("notify %s gpu debug notification\n", amdgv_idx_to_str(i));
+			amdgv_put_log(i, AMDGV_LOG_IOV_MB_NOTIFY_GPU_DEBUG, completion);
 		}
 
 		amdgv_mailbox_send_msg(adapt, i, msg_data, MAILBOX_DATA_LEN_1, true);
@@ -456,7 +449,7 @@ int amdgv_mailbox_wait_trn_msg_ack(struct amdgv_adapter *adapt)
 int amdgv_mailbox_irq_source_enable(struct amdgv_adapter *adapt, bool enable)
 {
 	if (!adapt->mailbox.funcs->irq_source_enable) {
-		AMDGV_ERROR("Unable to enable IRQ source\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_MB_IRQ_SOURCE_ENABLE_FAIL, 0);
 		return AMDGV_FAILURE;
 	} else {
 		adapt->mailbox.funcs->irq_source_enable(adapt, enable);

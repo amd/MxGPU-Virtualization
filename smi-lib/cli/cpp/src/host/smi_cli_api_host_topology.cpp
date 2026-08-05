@@ -15,6 +15,7 @@
 #include "json/json.h"
 
 #define MAX_CPU_SET_SIZE 16
+#include <algorithm>
 #include <sstream>
 #include <limits.h>
 #include <cstring>
@@ -218,21 +219,38 @@ int AmdSmiApiHost::initTopology(Arguments arg,
 	return AMDSMI_STATUS_SUCCESS;
 }
 
+// Column order for one topology sub-table; falls back to natural order on error.
+static std::vector<unsigned int> topology_column_order(const Arguments& arg,
+		unsigned int gpu_count)
+{
+	std::vector<unsigned int> column_order;
+	build_gpu_display_order(arg, column_order);
+	if (column_order.empty()) {
+		for (unsigned int k = 0; k < gpu_count; k++) {
+			column_order.push_back(k);
+		}
+	}
+	return column_order;
+}
+
 int AmdSmiApiHost::amdsmi_get_weight_topology_command(Arguments arg,
 		std::vector<std::string> bdf_vector, std::string& out)
 {
 	unsigned int i;
-	unsigned int j;
 	unsigned int gpu_count;
 
 	amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
 
+	std::vector<unsigned int> column_order = topology_column_order(arg, gpu_count);
+
 	out.append(topologyWeightTemplate);
 	out.append(string_format("%-13s", " "));
 
-	for (i = 0; i < gpu_count; i++) {
-		out.append(string_format("%-13s",
-								 bdf_vector[i].c_str()));
+	for (auto idx : column_order) {
+		if (idx < bdf_vector.size()) {
+			out.append(string_format("%-13s",
+									 bdf_vector[idx].c_str()));
+		}
 	}
 
 	out.append("\n");
@@ -241,7 +259,7 @@ int AmdSmiApiHost::amdsmi_get_weight_topology_command(Arguments arg,
 		out.append(string_format("%-13s",
 								 bdf_vector[gpu_index].c_str()));
 
-		for (j = 0; j < gpu_count; j++) {
+		for (auto j : column_order) {
 			if (topology[i][j].weight == UINT64_MAX) {
 				out.append(string_format("%-13s", "N/A"));
 			} else {
@@ -259,17 +277,20 @@ int AmdSmiApiHost::amdsmi_get_hops_topology_command(Arguments arg,
 		std::vector<std::string> bdf_vector, std::string& out)
 {
 	unsigned int i;
-	unsigned int j;
 	unsigned int gpu_count;
 
 	amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
 
+	std::vector<unsigned int> column_order = topology_column_order(arg, gpu_count);
+
 	out.append(topologyHopsTemplate);
 	out.append(string_format("%-13s", " "));
 
-	for (i = 0; i < gpu_count; i++) {
-		out.append(string_format("%-13s",
-								 bdf_vector[i].c_str()));
+	for (auto idx : column_order) {
+		if (idx < bdf_vector.size()) {
+			out.append(string_format("%-13s",
+									 bdf_vector[idx].c_str()));
+		}
 	}
 	out.append("\n");
 	for (i = 0; i < arg.devices.size(); i++) {
@@ -277,7 +298,7 @@ int AmdSmiApiHost::amdsmi_get_hops_topology_command(Arguments arg,
 		out.append(string_format("%-13s",
 								 bdf_vector[gpu_index].c_str()));
 
-		for (j = 0; j < gpu_count; j++) {
+		for (auto j : column_order) {
 			if (topology[i][j].num_hops == UINT8_MAX) {
 				out.append(string_format("%-13s", "N/A"));
 			} else {
@@ -295,18 +316,20 @@ int AmdSmiApiHost::amdsmi_get_fb_sharing_topology_command(Arguments arg,
 		std::vector<std::string> bdf_vector, std::string& out)
 {
 	unsigned int i;
-	unsigned int j;
 	unsigned int gpu_count;
 
 	amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
 
+	std::vector<unsigned int> column_order = topology_column_order(arg, gpu_count);
 
 	out.append(topologyFbSharingTemplate);
 	out.append(string_format("%-13s", " "));
 
-	for (i = 0; i < gpu_count; i++) {
-		out.append(string_format("%-13s",
-								 bdf_vector[i].c_str()));
+	for (auto idx : column_order) {
+		if (idx < bdf_vector.size()) {
+			out.append(string_format("%-13s",
+									 bdf_vector[idx].c_str()));
+		}
 	}
 	out.append("\n");
 	for (i = 0; i < arg.devices.size(); i++) {
@@ -314,7 +337,7 @@ int AmdSmiApiHost::amdsmi_get_fb_sharing_topology_command(Arguments arg,
 		out.append(string_format("%-13s",
 								 bdf_vector[gpu_index].c_str()));
 
-		for (j = 0; j < gpu_count; j++) {
+		for (auto j : column_order) {
 			if (topology[i][j].fb_sharing == UINT8_MAX) {
 				out.append(string_format("%-13s", "N/A"));
 			} else {
@@ -332,17 +355,20 @@ int AmdSmiApiHost::amdsmi_get_link_type_topology_command(Arguments arg,
 		std::vector<std::string> bdf_vector, std::string& out)
 {
 	unsigned int i;
-	unsigned int j;
 	unsigned int gpu_count;
 
 	amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
 
+	std::vector<unsigned int> column_order = topology_column_order(arg, gpu_count);
+
 	out.append(topologyLinkTypeTemplate);
 	out.append(string_format("%-13s", " "));
 
-	for (i = 0; i < gpu_count; i++) {
-		out.append(string_format("%-13s",
-								 bdf_vector[i].c_str()));
+	for (auto idx : column_order) {
+		if (idx < bdf_vector.size()) {
+			out.append(string_format("%-13s",
+									 bdf_vector[idx].c_str()));
+		}
 	}
 	out.append("\n");
 	for (i = 0; i < arg.devices.size(); i++) {
@@ -350,10 +376,10 @@ int AmdSmiApiHost::amdsmi_get_link_type_topology_command(Arguments arg,
 		out.append(string_format("%-13s",
 								 bdf_vector[gpu_index].c_str()));
 
-		for (j = 0; j < gpu_count; j++) {
+		for (auto j : column_order) {
 			std::string  link_type_string;
 			format_link_type(topology[i][j].link_type, link_type_string);
-			if (gpu_index == j) {
+			if (gpu_index == static_cast<int>(j)) {
 				link_type_string = "SELF";
 			}
 			out.append(string_format("%-13s",
@@ -370,17 +396,20 @@ int AmdSmiApiHost::amdsmi_get_coherent_p2p_capability_command(Arguments arg,
 		std::vector<std::string> bdf_vector, std::string& out)
 {
 	unsigned int i;
-	unsigned int j;
 	unsigned int gpu_count;
 
 	amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
 
+	std::vector<unsigned int> column_order = topology_column_order(arg, gpu_count);
+
 	out.append(topologyCoherentTemplate);
 	out.append(string_format("%-13s", " "));
 
-	for (i = 0; i < gpu_count; i++) {
-		out.append(string_format("%-13s",
-								 bdf_vector[i].c_str()));
+	for (auto idx : column_order) {
+		if (idx < bdf_vector.size()) {
+			out.append(string_format("%-13s",
+									 bdf_vector[idx].c_str()));
+		}
 	}
 
 	out.append("\n");
@@ -389,9 +418,9 @@ int AmdSmiApiHost::amdsmi_get_coherent_p2p_capability_command(Arguments arg,
 		out.append(string_format("%-13s",
 								 bdf_vector[gpu_index].c_str()));
 
-		for (j = 0; j < gpu_count; j++) {
+		for (auto j : column_order) {
 			std::string coherent_string;
-			if(gpu_index == j) {
+			if(gpu_index == static_cast<int>(j)) {
 				coherent_string = "SELF";
 			} else if (p2p_capability[i][j].is_iolink_coherent == UINT8_MAX) {
 				coherent_string = "N/A";
@@ -413,17 +442,20 @@ int AmdSmiApiHost::amdsmi_get_atomics_p2p_capability_command(Arguments arg,
 		std::vector<std::string> bdf_vector, std::string& out)
 {
 	unsigned int i;
-	unsigned int j;
 	unsigned int gpu_count;
 
 	amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
 
+	std::vector<unsigned int> column_order = topology_column_order(arg, gpu_count);
+
 	out.append(topologyAtomicsTemplate);
 	out.append(string_format("%-13s", " "));
 
-	for (i = 0; i < gpu_count; i++) {
-		out.append(string_format("%-13s",
-								 bdf_vector[i].c_str()));
+	for (auto idx : column_order) {
+		if (idx < bdf_vector.size()) {
+			out.append(string_format("%-13s",
+									 bdf_vector[idx].c_str()));
+		}
 	}
 
 	out.append("\n");
@@ -432,9 +464,9 @@ int AmdSmiApiHost::amdsmi_get_atomics_p2p_capability_command(Arguments arg,
 		out.append(string_format("%-13s",
 								 bdf_vector[gpu_index].c_str()));
 
-		for (j = 0; j < gpu_count; j++) {
+		for (auto j : column_order) {
 			std::string atomics_string;
-			if(gpu_index == j) {
+			if(gpu_index == static_cast<int>(j)) {
 				atomics_string = "SELF";
 			} else if (p2p_capability[i][j].is_iolink_atomics_64bit == UINT8_MAX ||
 					   p2p_capability[i][j].is_iolink_atomics_32bit == UINT8_MAX) {
@@ -462,17 +494,20 @@ int AmdSmiApiHost::amdsmi_get_dma_p2p_capability_command(Arguments arg,
 		std::vector<std::string> bdf_vector, std::string& out)
 {
 	unsigned int i;
-	unsigned int j;
 	unsigned int gpu_count;
 
 	amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
 
+	std::vector<unsigned int> column_order = topology_column_order(arg, gpu_count);
+
 	out.append(topologyDmaTemplate);
 	out.append(string_format("%-13s", " "));
 
-	for (i = 0; i < gpu_count; i++) {
-		out.append(string_format("%-13s",
-								 bdf_vector[i].c_str()));
+	for (auto idx : column_order) {
+		if (idx < bdf_vector.size()) {
+			out.append(string_format("%-13s",
+									 bdf_vector[idx].c_str()));
+		}
 	}
 
 	out.append("\n");
@@ -481,9 +516,9 @@ int AmdSmiApiHost::amdsmi_get_dma_p2p_capability_command(Arguments arg,
 		out.append(string_format("%-13s",
 								 bdf_vector[gpu_index].c_str()));
 
-		for (j = 0; j < gpu_count; j++) {
+		for (auto j : column_order) {
 			std::string dma_string;
-			if(gpu_index == j) {
+			if(gpu_index == static_cast<int>(j)) {
 				dma_string = "SELF";
 			} else if (p2p_capability[i][j].is_iolink_dma == UINT8_MAX) {
 				dma_string = "N/A";
@@ -505,17 +540,20 @@ int AmdSmiApiHost::amdsmi_get_bi_directional_p2p_capability_command(Arguments ar
 		std::vector<std::string> bdf_vector, std::string& out)
 {
 	unsigned int i;
-	unsigned int j;
 	unsigned int gpu_count;
 
 	amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
 
+	std::vector<unsigned int> column_order = topology_column_order(arg, gpu_count);
+
 	out.append(topologyBiDirectionalTemplate);
 	out.append(string_format("%-13s", " "));
 
-	for (i = 0; i < gpu_count; i++) {
-		out.append(string_format("%-13s",
-								 bdf_vector[i].c_str()));
+	for (auto idx : column_order) {
+		if (idx < bdf_vector.size()) {
+			out.append(string_format("%-13s",
+									 bdf_vector[idx].c_str()));
+		}
 	}
 
 	out.append("\n");
@@ -524,9 +562,9 @@ int AmdSmiApiHost::amdsmi_get_bi_directional_p2p_capability_command(Arguments ar
 		out.append(string_format("%-13s",
 								 bdf_vector[gpu_index].c_str()));
 
-		for (j = 0; j < gpu_count; j++) {
+		for (auto j : column_order) {
 			std::string bi_directional_string;
-			if(gpu_index == j) {
+			if(gpu_index == static_cast<int>(j)) {
 				bi_directional_string = "SELF";
 			} else if (p2p_capability[i][j].is_iolink_bi_directional == UINT8_MAX) {
 				bi_directional_string = "N/A";
@@ -555,13 +593,16 @@ int AmdSmiApiHost::amdsmi_get_all_topology_command(Arguments arg,
 
 	amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
 
+	std::vector<unsigned int> column_order = topology_column_order(arg, gpu_count);
+
 	for (int i = 0; i < arg.devices.size(); i++) {
 		json = {};
 		int gpu_index = arg.devices[i]->get_gpu_index();
 		bool option_found = false;
 		nlohmann::ordered_json links_array = nlohmann::ordered_json::array();
 
-		for (int j = 0; j < gpu_count; j++) {
+		for (auto col_idx : column_order) {
+			int j = static_cast<int>(col_idx);
 			nlohmann::ordered_json link_topology = {};
 			bool link_option_found = false;
 
@@ -694,9 +735,10 @@ int AmdSmiApiHost::amdsmi_get_nic_link_type_topology_command(Arguments arg,
 {
 	int ret = 0;
 	unsigned int i;
-	unsigned int j;
 	unsigned int gpu_count;
 	amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
+
+	std::vector<unsigned int> column_order = topology_column_order(arg, gpu_count);
 
 	if (arg.output == json) {
 		nlohmann::ordered_json output = nlohmann::ordered_json::array();
@@ -708,7 +750,7 @@ int AmdSmiApiHost::amdsmi_get_nic_link_type_topology_command(Arguments arg,
 			nic_json["bdf"] = nic_bdf_vector[i].c_str();
 			nic_json["links"] = nlohmann::ordered_json::array();
 
-			for (j = 0; j < gpu_count; j++) {
+			for (auto j : column_order) {
 				nlohmann::ordered_json link_json;
 				std::string nic_link_type_string;
 				get_string_from_enum_nic_topo_link_type(nic_topology[i][j], nic_link_type_string);
@@ -725,8 +767,10 @@ int AmdSmiApiHost::amdsmi_get_nic_link_type_topology_command(Arguments arg,
 		out.append(topologyNicLinkTypeTemplate);
 		out.append(string_format("%-13s", " "));
 
-		for (i = 0; i < gpu_count; i++) {
-			out.append(string_format("%-13s", bdf_vector[i].c_str()));
+		for (auto idx : column_order) {
+			if (idx < bdf_vector.size()) {
+				out.append(string_format("%-13s", bdf_vector[idx].c_str()));
+			}
 		}
 		out.append("\n");
 
@@ -734,7 +778,7 @@ int AmdSmiApiHost::amdsmi_get_nic_link_type_topology_command(Arguments arg,
 		for (i = 0; i < arg.nic_devices.size(); i++) {
 			out.append(string_format("%-13s", nic_bdf_vector[i].c_str()));
 
-			for (j = 0; j < gpu_count; j++) {
+			for (auto j : column_order) {
 				std::string nic_link_type_string;
 				get_string_from_enum_nic_topo_link_type(nic_topology[i][j], nic_link_type_string);
 				out.append(string_format("%-13s", nic_link_type_string.c_str()));

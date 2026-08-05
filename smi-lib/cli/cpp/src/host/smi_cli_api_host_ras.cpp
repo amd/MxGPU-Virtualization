@@ -335,7 +335,7 @@ int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg, std::string& o
 	std::vector<CperEntryInfo> all_entries_info;
 	std::unordered_map<std::string, std::string> file_timestamp_map;
 
-	uint64_t afids[MAX_NUMBER_OF_AFIDS_PER_RECORD];
+	uint64_t afids[AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD];
 	uint32_t num_afids = 0;
 	std::string out_afids = {};
 
@@ -466,8 +466,8 @@ int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg, std::string& o
 int AmdSmiApiHost::amdsmi_get_cper_afid_command(Arguments arg, std::string& out)
 {
 	int ret = 0;
-	uint64_t afids[MAX_NUMBER_OF_AFIDS_PER_RECORD];
-	uint32_t num_afids = MAX_NUMBER_OF_AFIDS_PER_RECORD;
+	uint64_t afids[AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD];
+	uint32_t num_afids = AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD;
 
 	std::ifstream file(arg.cper_file_path, std::ios::binary | std::ios::ate);
 	if (!file) {

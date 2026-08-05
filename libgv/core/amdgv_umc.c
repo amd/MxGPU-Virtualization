@@ -206,8 +206,8 @@ static int amdgv_umc_update_eeprom_ram_data(struct amdgv_adapter *adapt,
 		amdgv_umc_insert_sorted_bad_page(adapt, bps->retired_page, data);
 	}
 
-	amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_BAD_PAGE_APPEND,
-		AMDGV_ERROR_32_32(count, data->count));
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_BAD_PAGE_APPEND,
+		AMDGV_LOG_DATA_32_32(count, data->count));
 
 	return 0;
 }
@@ -307,8 +307,8 @@ int amdgv_umc_save_bad_pages(struct amdgv_adapter *adapt)
 
 		data->rom_data.num_recs_synced = data->rom_data.count;
 
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_EEPROM_APPEND,
-				AMDGV_ERROR_32_32(save_count, control->num_recs));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_APPEND,
+				AMDGV_LOG_DATA_32_32(save_count, control->num_recs));
 
 		if (adapt->pp.pp_funcs->send_hbm_bad_pages_num)
 			adapt->pp.pp_funcs->send_hbm_bad_pages_num(adapt,
@@ -652,7 +652,6 @@ bool amdgv_umc_check_bad_pages_in_range(struct amdgv_adapter *adapt, uint64_t fb
 	if (!data || !data->sorted_bps)
 		goto out;
 
-	/* Iterate through all bad pages and check if any falls within the range */
 	for (i = 0; i < data->sorted_bp_count; i++) {
 		bad_page_addr = data->sorted_bps[i] << AMDGV_GPU_PAGE_SHIFT;
 		if (amdgv_umc_is_bp_in_range(bad_page_addr, fb_offset, size)) {
@@ -664,6 +663,50 @@ bool amdgv_umc_check_bad_pages_in_range(struct amdgv_adapter *adapt, uint64_t fb
 out:
 	oss_mutex_unlock(adapt->ecc.recovery_lock);
 	return ret;
+}
+
+static bool amdgv_umc_bp_pfn_in_range(uint64_t *sorted_pfns, int count,
+				      uint64_t fb_offset, uint64_t size)
+{
+	int left = 0, right = count - 1, mid;
+	uint64_t bad_page_addr;
+
+	while (left <= right) {
+		mid = (left + right) / 2;
+		if ((sorted_pfns[mid] << AMDGV_GPU_PAGE_SHIFT) >= fb_offset)
+			right = mid - 1;
+		else
+			left = mid + 1;
+	}
+
+	if (left >= count)
+		return false;
+
+	bad_page_addr = sorted_pfns[left] << AMDGV_GPU_PAGE_SHIFT;
+	return amdgv_umc_is_bp_in_range(bad_page_addr, fb_offset, size);
+}
+
+bool amdgv_umc_dst_check_bad_pages_in_range(struct amdgv_adapter *adapt, int idx_vf,
+					    uint64_t fb_offset, uint64_t size)
+{
+	struct amdgv_vf_migration_state *mig_state =
+		&adapt->live_migration.mig_state[idx_vf];
+
+	if (mig_state->dst_unique_bps == NULL)
+		return amdgv_umc_check_bad_pages_in_range(adapt, fb_offset, size);
+
+	if (mig_state->dst_unique_bp_count == 0)
+		return false;
+
+	if (amdgv_umc_bp_pfn_in_range(mig_state->dst_unique_bps,
+				      (int)mig_state->dst_unique_bp_count,
+				      fb_offset, size)) {
+		AMDGV_INFO("Bad page found in fb range [0x%llx-0x%llx]\n",
+			   fb_offset, fb_offset + size);
+		return true;
+	}
+
+	return false;
 }
 
 uint32_t amdgv_umc_calc_retired_page_vf_slot(struct amdgv_adapter *adapt,
@@ -864,19 +907,19 @@ void amdgv_umc_log_bp_errors(struct amdgv_adapter *adapt, uint32_t record_id)
 
 	switch (adapt->bp_msg_type) {
 	case AMDGV_BP_MSG_IN_PF_FB:
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_IN_PF_FB,
-				AMDGV_ERROR_32_32(record_id, BAD_PAGE_RECORD_THRESHOLD));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_IN_PF_FB,
+				AMDGV_LOG_DATA_32_32(record_id, BAD_PAGE_RECORD_THRESHOLD));
 		break;
 	case AMDGV_BP_MSG_IN_CRITICAL_REGION:
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_IN_CRI_REG,
-				AMDGV_ERROR_32_32(record_id, BAD_PAGE_RECORD_THRESHOLD));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_IN_CRI_REG,
+				AMDGV_LOG_DATA_32_32(record_id, BAD_PAGE_RECORD_THRESHOLD));
 		break;
 	case AMDGV_BP_MSG_IN_VF_CRITICAL_REGION:
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_IN_VF_CRI,
-				AMDGV_ERROR_32_32(record_id, BAD_PAGE_RECORD_THRESHOLD));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_IN_VF_CRI,
+				AMDGV_LOG_DATA_32_32(record_id, BAD_PAGE_RECORD_THRESHOLD));
 		break;
 	case AMDGV_BP_MSG_RECORD_THRESHOLD_REACHED:
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_REACH_THD,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_REACH_THD,
 				BAD_PAGE_RECORD_THRESHOLD);
 		break;
 	default:
@@ -1425,8 +1468,8 @@ int amdgv_umc_retrieve_bad_pages(struct amdgv_adapter *adapt)
 	}
 
 	if (adapt->ecc.eh_data->count) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_BAD_PAGE_ENTRIES_FOUND,
-			AMDGV_ERROR_32_32(adapt->ecc.eh_data->count, BAD_PAGE_RECORD_THRESHOLD));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_BAD_PAGE_ENTRIES_FOUND,
+			AMDGV_LOG_DATA_32_32(adapt->ecc.eh_data->count, BAD_PAGE_RECORD_THRESHOLD));
 	}
 
 	if (adapt->ecc.bad_page_detection_mode & (1 << AMDGV_RAS_ECC_FLAG_SKIP_BAD_PAGE_OPS))
@@ -1463,7 +1506,7 @@ int amdgv_umc_process_ras_data_cb(struct amdgv_adapter *adapt, void *ras_error_s
 
 	if (err_data->ce_count) {
 		adapt->ecc.correctable_error_num += err_data->ce_count;
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_VF_CE, err_data->ce_count);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_VF_CE, err_data->ce_count);
 	}
 
 	if (err_data->ue_count) {
@@ -1602,21 +1645,21 @@ int amdgv_umc_ras_lock_init(struct amdgv_adapter *adapt)
 
 	adapt->ecc.query_err_lock = oss_spin_lock_init(AMDGV_SPIN_LOCK_HIGHEST_RANK);
 	if (adapt->ecc.query_err_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
 		ret = AMDGV_FAILURE;
 		goto out;
 	}
 
 	adapt->ecc.recovery_lock = oss_mutex_init();
 	if (adapt->ecc.recovery_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_MUTEX_FAIL, 0);
 		ret = AMDGV_FAILURE;
 		goto out;
 	}
 
 	adapt->eeprom_control.tbl_mutex = oss_mutex_init();
 	if (adapt->eeprom_control.tbl_mutex == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_MUTEX_FAIL, 0);
 		ret = AMDGV_FAILURE;
 	}
 
@@ -2129,12 +2172,17 @@ int amdgv_umc_fetch_and_sort_bps(struct amdgv_adapter *adapt, uint64_t **bp_offs
 	struct ras_err_handler_data *data = adapt->ecc.eh_data;
 	int ret = 0, i = 0;
 
-	if (bp_offsets == NULL)
+	if (bp_offsets == NULL) {
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_INVALID_VALUE, 0);
 		return AMDGV_FAILURE;
+	}
 
 	tmp_bp_offsets = oss_zalloc(data->count * sizeof(uint64_t));
-	if (!tmp_bp_offsets)
+	if (!tmp_bp_offsets) {
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			      data->count * sizeof(uint64_t));
 		return AMDGV_FAILURE;
+	}
 
 	for (i = 0; i < data->count; i++)
 		tmp_bp_offsets[i] = data->bps[i].retired_page << AMDGV_GPU_PAGE_SHIFT;

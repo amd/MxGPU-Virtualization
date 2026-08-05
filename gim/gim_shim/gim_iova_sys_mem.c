@@ -74,7 +74,7 @@ static bool gim_iova_check_mem_attribute_wc(unsigned long va)
 	pte_t *pte = lookup_address(va, &level);
 
 	if (!pte) {
-		gim_put_error(AMDGV_ERROR_DRIVER_FIND_ADDR_PTE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_FIND_ADDR_PTE_FAIL, 0);
 		return false;
 	}
 
@@ -101,7 +101,7 @@ static struct scatterlist *gim_iova_alloc_sg_pages(struct gim_iova_mem_info *iov
 	if (!iova_info->va_ptr) {
 		iova_info->va_ptr = gim_vmalloc(iova_info->nr_pages << PAGE_SHIFT);
 		if (!iova_info->va_ptr) {
-			gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL, (iova_info->nr_pages << PAGE_SHIFT));
+			gim_put_error(AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL, (iova_info->nr_pages << PAGE_SHIFT));
 			return NULL;
 		}
 		iova_info->alloc_new = true;
@@ -109,14 +109,14 @@ static struct scatterlist *gim_iova_alloc_sg_pages(struct gim_iova_mem_info *iov
 
 	sg = gim_vzalloc(iova_info->nr_pages * sizeof(*sg));
 	if (!sg) {
-		gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_SG_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_ALLOC_SG_FAIL, 0);
 		goto error_out;
 	}
 
 	if (iova_info->alloc_new) {
 		pages = gim_vzalloc(iova_info->nr_pages * sizeof(*pages));
 		if (!pages) {
-			gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL, 0);
 		}
 	}
 
@@ -135,7 +135,7 @@ static struct scatterlist *gim_iova_alloc_sg_pages(struct gim_iova_mem_info *iov
 			} else {
 				if (set_pages_array_wc(&pg, 1)) {
 					gim_put_error(
-						AMDGV_ERROR_DRIVER_SET_MEM_ATTRIBUTE_FAIL, 0);
+						AMDGV_LOG_DRIVER_SET_MEM_ATTRIBUTE_FAIL, 0);
 					goto error_out;
 				}
 			}
@@ -144,7 +144,7 @@ static struct scatterlist *gim_iova_alloc_sg_pages(struct gim_iova_mem_info *iov
 	if (iova_info->alloc_new) {
 		if (pages) {
 			if (set_pages_array_wc(pages, iova_info->nr_pages)) {
-				gim_put_error(AMDGV_ERROR_DRIVER_SET_MEM_ATTRIBUTE_FAIL, 0);
+				gim_put_error(AMDGV_LOG_DRIVER_SET_MEM_ATTRIBUTE_FAIL, 0);
 				goto error_out;
 			}
 			gim_vfree(pages);
@@ -173,7 +173,7 @@ static void gim_iova_free_sg_pages(struct gim_iova_mem_info *iova_info)
 	if (iova_info->alloc_new && iova_info->va_ptr) {
 		pages = gim_vzalloc(iova_info->nr_pages * sizeof(*pages));
 		if (!pages) {
-			gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL, 0);
 		}
 		for (i = 0; i < iova_info->nr_pages; i++) {
 			void *va = iova_info->va_ptr + i * PAGE_SIZE;
@@ -187,12 +187,12 @@ static void gim_iova_free_sg_pages(struct gim_iova_mem_info *iova_info)
 			else {
 				if (set_pages_array_wb(&pg, 1))
 					gim_put_error(
-						AMDGV_ERROR_DRIVER_SET_MEM_ATTRIBUTE_FAIL, 0);
+						AMDGV_LOG_DRIVER_SET_MEM_ATTRIBUTE_FAIL, 0);
 			}
 		}
 		if (pages) {
 			if (set_pages_array_wb(pages, iova_info->nr_pages))
-				gim_put_error(AMDGV_ERROR_DRIVER_SET_MEM_ATTRIBUTE_FAIL, 0);
+				gim_put_error(AMDGV_LOG_DRIVER_SET_MEM_ATTRIBUTE_FAIL, 0);
 			gim_vfree(pages);
 		}
 		gim_vfree(iova_info->va_ptr);
@@ -211,7 +211,7 @@ static int gim_iova_mem_alloc_dma(struct gim_iova_mem_info *iova_info, uint64_t 
 
 	iova_info->sg = gim_iova_alloc_sg_pages(iova_info);
 	if (!iova_info->sg) {
-		gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_SG_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_ALLOC_SG_FAIL, 0);
 		return -ENOMEM;
 	}
 
@@ -219,7 +219,7 @@ static int gim_iova_mem_alloc_dma(struct gim_iova_mem_info *iova_info, uint64_t 
 			iova_info->nr_pages, DMA_BIDIRECTIONAL);
 
 	if (!iova_info->sg_cnt) {
-		gim_put_error(AMDGV_ERROR_DRIVER_MAP_DMA_MEM_FAIL, (iova_info->nr_pages << PAGE_SHIFT));
+		gim_put_error(AMDGV_LOG_DRIVER_MAP_DMA_MEM_FAIL, (iova_info->nr_pages << PAGE_SHIFT));
 		goto error_map;
 	}
 
@@ -228,7 +228,7 @@ static int gim_iova_mem_alloc_dma(struct gim_iova_mem_info *iova_info, uint64_t 
 	}
 
 	if ((j >> PAGE_SHIFT) != iova_info->nr_pages) {
-		gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_IOVA_ALIGN_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_ALLOC_IOVA_ALIGN_FAIL, 0);
 		goto error_num;
 	}
 
@@ -238,7 +238,7 @@ error_num:
 			iova_info->sg_cnt, DMA_BIDIRECTIONAL);
 error_map:
 	gim_iova_free_sg_pages(iova_info);
-	gim_put_error(AMDGV_ERROR_DRIVER_ALLOC_IOVA_ALIGN_FAIL, 0);
+	gim_put_error(AMDGV_LOG_DRIVER_ALLOC_IOVA_ALIGN_FAIL, 0);
 	return -ENOMEM;
 }
 

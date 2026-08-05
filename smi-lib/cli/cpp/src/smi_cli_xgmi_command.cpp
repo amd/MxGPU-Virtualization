@@ -10,6 +10,7 @@
 #include "smi_cli_xgmi_command.h"
 #include "smi_cli_helpers.h"
 #include "smi_cli_api_base.h"
+#include "smi_cli_api_host.h"
 #include "smi_cli_templates.h"
 
 int AmdSmiXgmiCommand::xgmi_command_caps(std::string &formatted_string)
@@ -168,6 +169,7 @@ void AmdSmiXgmiCommand::execute_command()
 	if ((AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200() || AmdSmiPlatform::getInstance().is_mi350())
 			&& AmdSmiPlatform::getInstance().getInstance().is_host()) {
 		if (gpu_count > 1) {
+			sort_arg_devices_for_display(arg);
 			if (arg.output == human) {
 				xgmi_command_human();
 			} else if (arg.output == json) {

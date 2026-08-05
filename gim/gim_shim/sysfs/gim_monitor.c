@@ -12,7 +12,7 @@
 #include "gim_config.h"
 #include "gim.h"
 #include "gim_gpumon.h"
-#include "amdgv_error.h"
+#include "amdgv_log.h"
 #include "gim_monitor.h"
 #include "gim_sysfs_emit.h"
 
@@ -576,63 +576,63 @@ int gim_mon_create_dev_sys(struct gim_dev_data *data)
 
 	ret = device_create_file(dev, &dev_attr_self_switch);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
 		goto err_self_switch;
 	}
 
 	ret = device_create_file(dev, &dev_attr_reset_gpu);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
 		goto err_reset_gpu;
 	}
 
 	if (data->psp_vbflash_support) {
 		ret = device_create_file(dev, &dev_attr_psp_vbflash_status);
 		if (ret) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
 			goto err_vbflash_status;
 		}
 
 		ret = sysfs_create_bin_file(&dev->kobj, &psp_vbflash_bin_attr);
 		if (ret) {
-			gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
+			gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
 			goto err_vbflash_bin;
 		}
 	}
 
 	ret = device_create_file(dev, &dev_attr_accelerator_partition_profile);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
 		goto err_accelerator_partition_profile;
 	}
 
 	ret = device_create_file(dev, &dev_attr_memory_partition_mode);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
 		goto err_memory_partition_mode;
 	}
 
 	ret = device_create_file(dev, &dev_attr_spatial_partition_mode);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
 		goto err_spatial_partition_mode;
 	}
 
 	ret = device_create_file(dev, &dev_attr_accelerator_partition_profile_config);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
 		goto err_accelerator_partition_profile_config;
 	}
 
 	ret = device_create_file(dev, &dev_attr_memory_partition_config);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
 		goto err_memory_partition_config;
 	}
 
 	ret = device_create_file(dev, &dev_attr_spatial_partition_caps);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
 		goto err_spatial_partition_caps;
 	}
 
@@ -857,18 +857,18 @@ int gim_mon_create_drv_sys(struct device_driver *drv)
 
 	ret = driver_create_file(drv, &driver_attr_self_switch);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DRIVER_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DRIVER_FILE_FAIL, 0);
 		goto err_self_switch;
 	}
 
 	ret = driver_create_file(drv, &driver_attr_force_reset);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DRIVER_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DRIVER_FILE_FAIL, 0);
 		goto err_force_reset;
 	}
 	ret = driver_create_file(drv, &driver_attr_live_update);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DRIVER_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DRIVER_FILE_FAIL, 0);
 		goto err_live_update;
 	}
 	return ret;

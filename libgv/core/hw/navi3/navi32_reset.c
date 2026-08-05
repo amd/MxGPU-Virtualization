@@ -26,6 +26,7 @@
 #include "navi32_reset.h"
 #include "navi32_smu_ppsmc_wrapper.h"
 #include "navi32_gc.h"
+#include "navi32_dirtybit.h"
 #include "gfx_v11_0.h"
 #include "mmhub_v3_0.h"
 
@@ -512,7 +513,7 @@ static int navi32_reset_clear_all_pci_errors(struct amdgv_adapter *adapt)
 	pos = oss_pci_find_capability(adapt->dev, PCI_CAP_ID__PCIE);
 
 	if (!pos) {
-		AMDGV_ERROR("this device does not support capability: %x\n", PCI_CAP_ID__PCIE);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_PCIE_CAP_MISSING, PCI_CAP_ID__PCIE);
 		return AMDGV_FAILURE;
 	}
 
@@ -524,7 +525,7 @@ static int navi32_reset_clear_all_pci_errors(struct amdgv_adapter *adapt)
 
 	pos = oss_pci_find_ext_cap(adapt->dev, PCIE_EXT_CAP_ID__AER);
 	if (!pos) {
-		AMDGV_ERROR("this device does not support ext capability: %x\n", PCIE_EXT_CAP_ID__AER);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_PCIE_CAP_MISSING, PCIE_EXT_CAP_ID__AER);
 		return AMDGV_FAILURE;
 	}
 
@@ -573,20 +574,37 @@ static int navi32_reset_wait_smu_flr_complete(struct amdgv_adapter *adapt, int t
 
 	wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET_NAME(NBIO, 0, regBIF_BX0_GFX_RST_CNTL),
 					BIF_BX0_GFX_RST_CNTL__GFX_RST_FINISH_INDICATION_MASK, 1, timeout, AMDGV_WAIT_CHECK_EQ, 0);
-	if (wait_ret) {
-		AMDGV_ERROR("TIMEOUT after %d ms waiting for SMU to complete FLR\n", timeout);
-		AMDGV_ERROR("GFX_RST_CNTL is %llx", RREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_GFX_RST_CNTL)));
+	if (wait_ret)
 		return AMDGV_FAILURE;
-	}
 
 	wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET_NAME(GC, 0, regGFX_IMU_RLC_STATUS),
 					GFX_IMU_RLC_STATUS__RLC_ALIVE_MASK, 0, timeout, AMDGV_WAIT_CHECK_NE, 0);
-	if (wait_ret) {
-		AMDGV_ERROR("TIMEOUT after %d ms waiting for SMU to complete FLR\n", timeout);
+	if (wait_ret)
 		return AMDGV_FAILURE;
-	}
 
 	return 0;
+}
+
+/* Read each GFXHUB invalidate ACK before FLR. */
+static void navi32_reset_read_gfxhub_inv_ack(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	struct amdgv_vmhub *hub = &adapt->vmhub[AMDGV_GFXHUB_START];
+	uint32_t eng, ack;
+	bool gate_was_on;
+
+	if (!hub->vm_inv_eng0_ack)
+		return;
+
+	gate_was_on = !!(RREG32(SOC15_REG_OFFSET(GC, 0, regRLC_GPM_GENERAL_14)) & 0x1);
+	amdgv_gpuiov_toggle_rlcg_vf_interface(adapt, idx_vf, true);
+
+	for (eng = 0; eng < 18; eng++) {
+		ack = hub->vm_inv_eng0_ack + hub->eng_distance * eng;
+		gc_v11_0_3_rlcg_rreg(adapt, ack);
+	}
+
+	if (!gate_was_on)
+		amdgv_gpuiov_toggle_rlcg_vf_interface(adapt, idx_vf, false);
 }
 
 static int navi32_reset_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
@@ -607,13 +625,16 @@ static int navi32_reset_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	pos = oss_pci_find_capability(vf->dev, PCI_CAP_ID__PCIE);
 
 	if (!pos) {
-		AMDGV_ERROR("this device does not support capability: %x\n", PCI_CAP_ID__PCIE);
+		amdgv_put_log(idx_vf, AMDGV_LOG_DRIVER_PCIE_CAP_MISSING, PCI_CAP_ID__PCIE);
 		return AMDGV_FAILURE;
 	}
 #endif
 
 	/* Before trigger FLR, clear status SMU will set for FLR complete */
 	navi32_reset_clear_smu_flr_status(adapt);
+
+	/* Read each GFXHUB invalidate ACK before FLR. */
+	navi32_reset_read_gfxhub_inv_ack(adapt, idx_vf);
 
 	/* disable device bus mastering */
 #ifndef EXCLUDE_VF_DEVICE_PCI_CONFIG_ACCESS
@@ -645,7 +666,7 @@ static int navi32_reset_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 #endif
 
 	if (wait_ret)
-		AMDGV_WARN("Abort data transaction on %s for FLR\n", amdgv_idx_to_str(idx_vf));
+		amdgv_put_log(idx_vf, AMDGV_LOG_RESET_FLR_TRANS_PENDING, 0);
 
 	/* For VF_FLR & PFSoft_FLR, SMU read BIF_PF0_VF_FLR_INTR_STS.
 	 * If this register is set, then SMU apply VF_FLR sequence.
@@ -658,7 +679,7 @@ static int navi32_reset_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	/* use SMU msg to trigger FLR instead of PCIe control bit*/
 	ret = navi32_trigger_vf_flr_by_msg(adapt, 1 << idx_vf);
 	if (ret) {
-		AMDGV_ERROR("Send Trigger VF FLR msg failed\n");
+		amdgv_put_log(idx_vf, AMDGV_LOG_FW_TRIGGER_VF_FLR_FAIL, 0);
 		ret = AMDGV_FAILURE;
 	}
 
@@ -700,10 +721,10 @@ static int navi32_reset_check_utcl2_status(struct amdgv_adapter *adapt)
 	gcvm_l2_status = RREG32(SOC15_REG_OFFSET(GC, 0, regGCVM_L2_STATUS));
 
 	if (grbm_status2 & GRBM_STATUS2__UTCL2_BUSY_MASK) {
-		AMDGV_WARN("GRBM_STATUS2: 0x%lx, UTCL2 shows busy after vfflr\n", grbm_status2);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_UTCL2_BUSY, grbm_status2);
 
 		if (gcvm_l2_status & GCVM_L2_STATUS__L2_BUSY_MASK) {
-			AMDGV_ERROR("GCVM_L2_STATUS: 0x%lx, UTCL2 is likely hang after vfflr\n", gcvm_l2_status);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_UTCL2_HANG, gcvm_l2_status);
 			return AMDGV_FAILURE;
 		}
 
@@ -745,13 +766,13 @@ static int navi32_reset_trigger_vf_flr(struct amdgv_adapter *adapt, uint32_t idx
 	enum psp_status psp_ret;
 
 	if (idx_vf == AMDGV_PF_IDX)
-		AMDGV_INFO("start SOFT_PF_FLR\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_RESET_FLR_START, 0);
 	else
-		AMDGV_INFO("start %s FLR\n", amdgv_idx_to_str(idx_vf));
+		amdgv_put_log(idx_vf, AMDGV_LOG_RESET_FLR_START, 0);
 
 	/* need SMU FW loaded and responding to do VF_FLR */
 	if (navi32_powerplay_get_fw_loaded_status(adapt) == 0) {
-		AMDGV_ERROR("SMU FW not responding. Unable to do FLR\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_SMU_NOT_RESPONDING, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -759,7 +780,7 @@ static int navi32_reset_trigger_vf_flr(struct amdgv_adapter *adapt, uint32_t idx
 	pci_state.idx_vf = idx_vf;
 	ret = navi32_reset_alloc_pci_config(adapt, &pci_state);
 	if (ret != 0) {
-		AMDGV_ERROR("failed to allocate heap for save/restore\n");
+		amdgv_put_log(idx_vf, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL, PCI_CONFIG_SIZE);
 		return AMDGV_FAILURE;
 	}
 
@@ -782,11 +803,10 @@ static int navi32_reset_trigger_vf_flr(struct amdgv_adapter *adapt, uint32_t idx
 		psp_ret = navi32_gfx_check_rlc_autoload_complete(adapt);
 		if (psp_ret != PSP_STATUS__SUCCESS) {
 			navi32_reset_free_pci_config(adapt, &pci_state);
-			AMDGV_ERROR("failed at RLC_AUTOLOAD_COMPLETE\n");
 			return AMDGV_FAILURE;
 		} else if (navi32_reset_wait_for_grbm(adapt)) {
 			navi32_reset_free_pci_config(adapt, &pci_state);
-			AMDGV_ERROR("failed at GRBM_STATUS2 not clean\n");
+			amdgv_put_log(idx_vf, AMDGV_LOG_RESET_FLR_GRBM_NOT_CLEAN, 0);
 			return AMDGV_FAILURE;
 		}
 		if (navi32_reset_check_utcl2_status(adapt))
@@ -827,6 +847,8 @@ static int navi32_reset_trigger_vf_flr(struct amdgv_adapter *adapt, uint32_t idx
 	adapt->sched.cg_control(adapt, false);
 	adapt->sched.cg_control(adapt, true);
 
+	navi32_dirtybit_setup_sdma_hbm_page_size(adapt);
+
 	if (ret == 0) {
 		ret = amdgv_sched_reset(adapt, idx_vf, AMDGV_SCHED_BLOCK_ALL);
 	}
@@ -834,9 +856,9 @@ static int navi32_reset_trigger_vf_flr(struct amdgv_adapter *adapt, uint32_t idx
 	/* NOTE: if (r), failure/error message already printed */
 	if (ret == 0) {
 		if (idx_vf == AMDGV_PF_IDX)
-			AMDGV_INFO("completed SOFT_PF_FLR\n");
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_RESET_PF_SOFT_FLR_DONE, 0);
 		else
-			AMDGV_INFO("completed %s FLR\n", amdgv_idx_to_str(idx_vf));
+			amdgv_put_log(idx_vf, AMDGV_LOG_RESET_FLR_DONE, 0);
 	}
 
 	return ret;
@@ -865,15 +887,13 @@ static int navi32_reset_hardware_reset(struct amdgv_adapter *adapt, uint32_t mod
 		pci_state[idx_vf].idx_vf = idx_vf;
 		ret = navi32_reset_alloc_pci_config(adapt, &pci_state[idx_vf]);
 		if (ret) {
-			AMDGV_ERROR("failed to allocate heap for %s save/restore\n",
-				    amdgv_idx_to_str(idx_vf));
+			amdgv_put_log(idx_vf, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL, PCI_CONFIG_SIZE);
 			goto exit_whole_gpu_reset;
 		}
 	}
 
 	ret = navi32_reset_clear_all_pci_errors(adapt);
 	if (ret) {
-		AMDGV_ERROR("Failed to reset clear all pci errors\n");
 		goto exit_whole_gpu_reset;
 	}
 
@@ -925,10 +945,7 @@ static int navi32_reset_hardware_reset(struct amdgv_adapter *adapt, uint32_t mod
 	navi32_reset_restore_pci_config(adapt, &pci_state[AMDGV_PF_IDX]);
 
 	if (mode == AMDGV_RESET_MODE1) {
-		/*check mode1 reset finish after restore_pci_config*/
 		ret = navi32_wait_mode1_reset_completion(adapt);
-		if (ret)
-			AMDGV_WARN("No mode 1 completion notice from SMU.\n");
 
 		/* disable S3 engine hung state */
 		tmp = bit_s3_int & ~ATOM_S3_ASIC_GUI_ENGINE_HUNG;
@@ -956,7 +973,7 @@ static int navi32_reset_hardware_reset(struct amdgv_adapter *adapt, uint32_t mod
 			if (ret) {
 				ret = AMDGV_FAILURE;
 				amdgv_print_failed_init_name(adapt, false, adapt->init_funcs[i]->name);
-				amdgv_put_error(i, AMDGV_ERROR_DRIVER_HW_INIT_FAIL, 0);
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_HW_INIT_FAIL, 0);
 				goto exit_whole_gpu_reset;
 			}
 		}
@@ -989,12 +1006,15 @@ exit_whole_gpu_reset:
 }
 
 /* do whole gpu reset without context save&restore */
-int navi32_reset_whole_gpu_reset(struct amdgv_adapter *adapt, uint32_t mode)
+static int navi32_reset_hw_for_reload(struct amdgv_adapter *adapt, bool is_unload)
 {
 	int ret = 0;
 	uint32_t i;
 	uint32_t reg_data, tmp;
 	struct navi32_reset_access_info access_info;
+	uint32_t astate;
+	uint32_t bif_bx_strap0;
+	struct navi32_reset_pci_state pf_pci_state;
 
 	/* Disable doorbell interrupt before PF_FLR or WHOLE_GPU_RESET */
 	reg_data = RREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BIF_DOORBELL_INT_CNTL));
@@ -1007,59 +1027,53 @@ int navi32_reset_whole_gpu_reset(struct amdgv_adapter *adapt, uint32_t mode)
 	/* enable all protection before PF_FLR or WHOLE_GPU_RESET */
 	navi32_reset_enable_mmio_protection(adapt);
 
-	if (mode == AMDGV_RESET_MODE1) {
-		uint32_t astate;
-		uint32_t bif_bx_strap0;
-		struct navi32_reset_pci_state pf_pci_state;
-
-		/*save config space*/
-		pf_pci_state.idx_vf = AMDGV_PF_IDX;
-		ret = navi32_reset_alloc_pci_config(adapt, &pf_pci_state);
-		if (ret) {
-			AMDGV_ERROR("failed to allocate heap for PF save/restore\n");
-			navi32_reset_free_pci_config(adapt, &pf_pci_state);
-			return ret;
-		}
-
-		/* Save the pf pci cfg space */
-		navi32_reset_save_pci_config(adapt, &pf_pci_state);
-		amdgv_reset_save_sriov(adapt);
-
-		/* save bif_bx strap0 */
-		bif_bx_strap0 = RREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_CC_BIF_BX_STRAP0));
-
-		/* force S3 engine hung */
-		astate = RREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BIOS_SCRATCH_3));
-		tmp = astate | ATOM_S3_ASIC_GUI_ENGINE_HUNG;
-		WREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BIOS_SCRATCH_3), tmp);
-
-		ret = navi32_mode1_reset(adapt);
-
-		/* restore the pci cfg space */
-		navi32_reset_restore_pci_config(adapt, &pf_pci_state);
-
-		/*check mode1 reset finish after restore_pci_config*/
-		ret = navi32_wait_mode1_reset_completion(adapt);
-		if (ret) {
-			navi32_reset_free_pci_config(adapt, &pf_pci_state);
-			return AMDGV_FAILURE;
-		}
-
-		/* disable S3 engine hung state */
-		tmp = astate & ~ATOM_S3_ASIC_GUI_ENGINE_HUNG;
-		WREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BIOS_SCRATCH_3), tmp);
-
-		/* clear VBIOS status */
-		tmp = RREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BIOS_SCRATCH_7));
-		tmp &= ~ATOM_ASIC_INIT_COMPLETE;
-		WREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BIOS_SCRATCH_7), tmp);
-
-		/* resotre bif_bx strap0 */
-		WREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_CC_BIF_BX_STRAP0), bif_bx_strap0);
-		amdgv_reset_restore_sriov(adapt);
-
+	/*save config space*/
+	pf_pci_state.idx_vf = AMDGV_PF_IDX;
+	ret = navi32_reset_alloc_pci_config(adapt, &pf_pci_state);
+	if (ret) {
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL, PCI_CONFIG_SIZE);
 		navi32_reset_free_pci_config(adapt, &pf_pci_state);
+		return ret;
 	}
+
+	/* Save the pf pci cfg space */
+	navi32_reset_save_pci_config(adapt, &pf_pci_state);
+	amdgv_reset_save_sriov(adapt);
+
+	/* save bif_bx strap0 */
+	bif_bx_strap0 = RREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_CC_BIF_BX_STRAP0));
+
+	/* force S3 engine hung */
+	astate = RREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BIOS_SCRATCH_3));
+	tmp = astate | ATOM_S3_ASIC_GUI_ENGINE_HUNG;
+	WREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BIOS_SCRATCH_3), tmp);
+
+	ret = navi32_mode1_reset(adapt);
+
+	/* restore the pci cfg space */
+	navi32_reset_restore_pci_config(adapt, &pf_pci_state);
+
+	/*check mode1 reset finish after restore_pci_config*/
+	ret = navi32_wait_mode1_reset_completion(adapt);
+	if (ret) {
+		navi32_reset_free_pci_config(adapt, &pf_pci_state);
+		return AMDGV_FAILURE;
+	}
+
+	/* disable S3 engine hung state */
+	tmp = astate & ~ATOM_S3_ASIC_GUI_ENGINE_HUNG;
+	WREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BIOS_SCRATCH_3), tmp);
+
+	/* clear VBIOS status */
+	tmp = RREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BIOS_SCRATCH_7));
+	tmp &= ~ATOM_ASIC_INIT_COMPLETE;
+	WREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BIOS_SCRATCH_7), tmp);
+
+	/* resotre bif_bx strap0 */
+	WREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_CC_BIF_BX_STRAP0), bif_bx_strap0);
+	amdgv_reset_restore_sriov(adapt);
+
+	navi32_reset_free_pci_config(adapt, &pf_pci_state);
 
 	/* restore mmio protection info after PF_FLR or WHOLE_GPU_RESET */
 	navi32_reset_restore_access_info(adapt, &access_info);
@@ -1089,14 +1103,12 @@ int navi32_reset_whole_gpu_reset(struct amdgv_adapter *adapt, uint32_t mode)
  *  6) MSI-X table should be saved and retored for both PF and VF by GIM
  *  7) VF GPU driver should reinit GPU after reset
  */
-static int navi32_reset_trigger_whole_gpu_reset(struct amdgv_adapter *adapt)
+static int navi32_gpu_reset_and_reinit(struct amdgv_adapter *adapt)
 {
 	int ret = 0;
 	struct navi32_reset_access_info access_info;
 
-	if (adapt->log_level < AMDGV_DEBUG_LEVEL)
-		AMDGV_INFO("start whole gpu reset\n");
-	else if (adapt->reset.reset_mode == AMDGV_RESET_PF_FLR)
+	if (adapt->reset.reset_mode == AMDGV_RESET_PF_FLR)
 		AMDGV_DEBUG("start whole gpu reset(PF_FLR)\n");
 	else if (adapt->reset.reset_mode == AMDGV_RESET_MODE1)
 		AMDGV_DEBUG("start whole gpu reset(MODE1_RESET)\n");
@@ -1122,10 +1134,10 @@ static int navi32_reset_trigger_whole_gpu_reset(struct amdgv_adapter *adapt)
 	navi32_reset_restore_access_info(adapt, &access_info);
 
 	/* NOTE: if (ret), failure/error message already printed */
-	if (!ret) {
-		AMDGV_INFO("complete whole gpu reset\n");
+	if (ret) {
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_RESET_GPU_FAILED, 0);
 	} else {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_RESET_GPU_FAILED, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_RESET_GPU_DONE, 0);
 	}
 	return ret;
 }
@@ -1138,7 +1150,7 @@ int navi32_reset_enter_power_saving(struct amdgv_adapter *adapt)
 
 	/* need SMU FW loaded and responding to enter BACO */
 	if (adapt->pp.pp_funcs->get_smu_fw_loaded_status(adapt) == 0) {
-		AMDGV_ERROR("SMU FW not responding. Unable to enter power saving\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_SMU_NOT_RESPONDING, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -1149,13 +1161,12 @@ int navi32_reset_enter_power_saving(struct amdgv_adapter *adapt)
 	ret = navi32_reset_alloc_pci_config(adapt,
 		(struct navi32_reset_pci_state *)&adapt->pp.pf_pci_config);
 	if (ret) {
-		AMDGV_ERROR("failed to allocate heap for PF save/restore\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL, PCI_CONFIG_SIZE);
 		goto exit_powersaving;
 	}
 
 	ret = navi32_reset_clear_all_pci_errors(adapt);
 	if (ret) {
-		AMDGV_ERROR("Failed to reset clear all pci errors\n");
 		goto exit_powersaving;
 	}
 
@@ -1214,7 +1225,7 @@ int navi32_reset_exit_power_saving(struct amdgv_adapter *adapt)
 
 	/* need SMU FW loaded and responding to exit BACO */
 	if (adapt->pp.pp_funcs->get_smu_fw_loaded_status(adapt) == 0) {
-		AMDGV_ERROR("SMU FW not responding. Unable to exit power saving\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_SMU_NOT_RESPONDING, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -1236,7 +1247,7 @@ int navi32_reset_exit_power_saving(struct amdgv_adapter *adapt)
 				if (ret) {
 					ret = AMDGV_FAILURE;
 					amdgv_print_failed_init_name(adapt, false, adapt->init_funcs[i]->name);
-					amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_HW_INIT_FAIL, 0);
+					amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_HW_INIT_FAIL, 0);
 					break;
 				}
 			}
@@ -1276,8 +1287,7 @@ int navi32_reset_grbm_soft_reset_stage_1(struct amdgv_adapter *adapt, bool gl2c_
 	reg_data &= 0xffc3ffff;
 	WREG32_SOC15(GC, 0, regCP_INT_CNTL, reg_data);
 	/* 2-3. enter safe mode */
-	if (amdgv_gfx_rlc_safe_mode(adapt, true))
-		AMDGV_WARN("Failed to enter RLC safe mode\n");
+	(void)amdgv_gfx_rlc_safe_mode(adapt, true);
 	/* 4. Write GRBM_GFX_CNTL with MEID/PipeID/QueueID for each compute and MES queue
 		* Write CP_HQD_DEQUEUE_REQUEST to 0x2
 		* Write SPI_COMPUTE_QUEUE_RESET to 0x1, only for compute queues, not MES since MES has no such connection */
@@ -1303,7 +1313,7 @@ int navi32_reset_grbm_soft_reset_stage_1(struct amdgv_adapter *adapt, bool gl2c_
 
 	/* 6-7. GL2C */
 	if (gl2c_bit) {
-		AMDGV_WARN("gl2c error detacted.\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_GL2C_ERROR_DETECTED, 0);
 		reg_data = RREG32_SOC15(GC, 0, regRLC_FED_DRVR_STATUS);
 		reg_data = REG_SET_FIELD(reg_data, RLC_FED_DRVR_STATUS, PENDING, 0x2);
 		WREG32_SOC15(GC, 0, regRLC_FED_DRVR_STATUS, reg_data);
@@ -1311,8 +1321,7 @@ int navi32_reset_grbm_soft_reset_stage_1(struct amdgv_adapter *adapt, bool gl2c_
 				REG_FIELD_MASK(RLC_FED_DRVR_STATUS, PENDING), 0x1,
 				AMDGV_TIMEOUT(TIMEOUT_STATUS_REG), AMDGV_WAIT_CHECK_EQ, 0);
 		if (ret) {
-			if (amdgv_gfx_rlc_safe_mode(adapt, false))
-				AMDGV_WARN("Failed to exit RLC safe mode\n");
+			(void)amdgv_gfx_rlc_safe_mode(adapt, false);
 			return AMDGV_FAILURE;
 		}
 	}
@@ -1401,7 +1410,7 @@ int navi32_reset_grbm_soft_reset_stage_2(struct amdgv_adapter *adapt)
 	wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET_NAME(GC, 0, regCP_VMID_RESET),
 		0, 0, AMDGV_TIMEOUT(TIMEOUT_STATUS_REG), AMDGV_WAIT_CHECK_EQ, 0);
 	if (wait_ret)
-		AMDGV_ERROR("Soft reset failed to wait VMID_RESET to be 0\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_GC_SOFT_RESET_VMID_TIMEOUT, 0);
 
 	/* 19. set rlc drvr status to 0 */
 	reg_data = RREG32_SOC15(GC, 0, regRLC_FED_DRVR_STATUS);
@@ -1415,8 +1424,7 @@ int navi32_reset_grbm_soft_reset_stage_2(struct amdgv_adapter *adapt)
 	reg_data |= 0x3c0000;
 	WREG32_SOC15(GC, 0, regCP_INT_CNTL, reg_data);
 	/* 21. exit safe mode */
-	if (amdgv_gfx_rlc_safe_mode(adapt, false))
-		AMDGV_WARN("Failed to exit RLC safe mode\n");
+	(void)amdgv_gfx_rlc_safe_mode(adapt, false);
 
 	return 0;
 }
@@ -1424,7 +1432,8 @@ int navi32_reset_grbm_soft_reset_stage_2(struct amdgv_adapter *adapt)
 struct amdgv_gpu_reset_funcs navi32_reset_funcs = {
 	.save_vddgfx_state = navi32_reset_save_vddgfx_state,
 	.trigger_vf_flr = navi32_reset_trigger_vf_flr,
-	.gpu_reset_and_reinit = navi32_reset_trigger_whole_gpu_reset,
+	.gpu_reset_and_reinit = navi32_gpu_reset_and_reinit,
+	.reset_hw_for_reload = navi32_reset_hw_for_reload,
 };
 
 static int navi32_reset_sw_init(struct amdgv_adapter *adapt)

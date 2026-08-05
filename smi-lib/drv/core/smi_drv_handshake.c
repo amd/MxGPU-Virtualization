@@ -63,8 +63,12 @@ int smi_cmd_handshake(struct smi_ctx *ctx, void *inb, void *outb,
 			sizeof(struct smi_driver_info));
 		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_POWER_CAP_INFO,
 			smi_get_gpu_power_cap_info,
-			sizeof(struct smi_device_info_ex),
+			sizeof(struct smi_get_power_cap),
 			sizeof(struct smi_power_cap_info));
+		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_SUPPORTED_POWER_CAP,
+			smi_get_supported_power_cap,
+			sizeof(struct smi_device_info),
+			sizeof(struct smi_supported_power_cap));
 		SMI_ASSIGN_FUNC(ctx, cmd, SMI_CMD_CODE_GET_PF_FB_INFO,
 			smi_get_gpu_fb_info,
 			sizeof(struct smi_device_info),

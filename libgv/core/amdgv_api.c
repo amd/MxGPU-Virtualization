@@ -224,6 +224,40 @@ const char *const amdgv_inf_name[] = {
 	"read_vf_sysmem_xchg",
 	"vf_sysmem_xchg_gpa_to_spa",
 	"set_dma_mask",
+#ifdef SHIM_LAYER_OSS_RADIX_TREE
+	"radix_tree_init",
+	"radix_tree_fini",
+	"radix_tree_insert",
+	"radix_tree_delete",
+	"radix_tree_lookup",
+	"radix_tree_gang_lookup_tag",
+	"radix_tree_tag_set",
+	"radix_tree_tag_clear",
+	"radix_tree_iter_init",
+	"radix_tree_next_chunk",
+	"radix_tree_next_slot",
+	"radix_tree_deref_slot",
+	"radix_tree_delete_iter",
+#endif
+#ifdef SHIM_LAYER_OSS_KFIFO
+	"kfifo_alloc",
+	"kfifo_in_spinlocked_raw",
+	"kfifo_out_spinlocked_raw",
+	"kfifo_out_peek",
+	"kfifo_len",
+	"kfifo_free",
+#endif
+#ifdef AMDGV_UNIRAS_SUPPORT
+	"init_waitqueue_head",
+	"wait_event_interruptible_timeout",
+	"msecs_to_jiffies",
+#endif
+#ifdef SHIM_LAYER_OSS_MEMPOOL
+	"mempool_create_kmalloc_pool",
+	"mempool_destroy",
+	"mempool_alloc_preallocated",
+	"mempool_free",
+#endif
 	"register_mce_notifier",
 	"unregister_mce_notifier",
 };
@@ -493,7 +527,7 @@ int AMDGV_API amdgv_free_vf(amdgv_dev_t dev, uint32_t idx_vf)
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
 	if (idx_vf >= adapt->num_vf)
-		return AMDGV_ERROR_GPUMON_INVALID_VF_INDEX;
+		return AMDGV_LOG_GPUMON_INVALID_VF_INDEX;
 
 	oss_mutex_lock(adapt->api_lock);
 
@@ -532,7 +566,7 @@ int AMDGV_API amdgv_set_vf(amdgv_dev_t dev, enum amdgv_set_vf_opt_type opt_type,
 	/* extra restrictions of memory related setting */
 	if (type & AMDGV_SET_VF_FB) {
 		if (opt->idx_vf == AMDGV_PF_IDX)
-			return AMDGV_ERROR_GPUMON_VF_BUSY;
+			return AMDGV_LOG_GPUMON_VF_BUSY;
 	}
 
 	data.gpumon_data.type = GPUMON_SET_VF;
@@ -563,7 +597,7 @@ int AMDGV_API amdgv_flr_vf(amdgv_dev_t dev, uint32_t idx_vf)
 	oss_mutex_lock(adapt->api_lock);
 
 	if (idx_vf == AMDGV_PF_IDX && !(adapt->flags & AMDGV_FLAG_USE_PF)) {
-		ret = AMDGV_ERROR_GPUMON_INVALID_VF_INDEX;
+		ret = AMDGV_LOG_GPUMON_INVALID_VF_INDEX;
 		goto unlock;
 	}
 
@@ -624,7 +658,7 @@ int AMDGV_API amdgv_suspend_vf(amdgv_dev_t dev, uint32_t idx_vf)
 	oss_mutex_lock(adapt->api_lock);
 
 	if (idx_vf == AMDGV_PF_IDX && !(adapt->flags & AMDGV_FLAG_USE_PF)) {
-		ret = AMDGV_ERROR_GPUMON_INVALID_VF_INDEX;
+		ret = AMDGV_LOG_GPUMON_INVALID_VF_INDEX;
 		goto unlock;
 	}
 
@@ -649,7 +683,7 @@ int AMDGV_API amdgv_resume_vf(amdgv_dev_t dev, uint32_t idx_vf)
 	ret = AMDGV_FAILURE;
 
 	if (idx_vf == AMDGV_PF_IDX && !(adapt->flags & AMDGV_FLAG_USE_PF)) {
-		ret = AMDGV_ERROR_GPUMON_INVALID_VF_INDEX;
+		ret = AMDGV_LOG_GPUMON_INVALID_VF_INDEX;
 		goto unlock;
 	}
 
@@ -1019,7 +1053,7 @@ int AMDGV_API amdgv_set_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 				adapt->flags &= ~AMDGV_FLAG_DEBUG_DUMP_ENABLE;
 			}
 			if (!ret)
-				ret = amdgv_sched_set_ws_log_op(adapt, AMDGV_AUTO_SCHED_DEBUG_DUMP, !!conf->flag_switch);
+				ret = amdgv_sched_set_ws_log_op(adapt, AMDGV_SCHED_DEBUG_DUMP, !!conf->flag_switch);
 		}
 
 		break;
@@ -1168,7 +1202,7 @@ int AMDGV_API amdgv_set_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 				ret = AMDGV_ALREADY_SET;
 		}
 		if (!ret)
-			ret = amdgv_sched_set_ws_log_op(adapt, AMDGV_AUTO_SCHED_PERF_LOG, !!conf->flag_switch);
+			ret = amdgv_sched_set_ws_log_op(adapt, AMDGV_SCHED_PERF_LOG, !!conf->flag_switch);
 		break;
 
 	case AMDGV_CONF_DEBUG_DUMP_FLAG:
@@ -1190,7 +1224,7 @@ int AMDGV_API amdgv_set_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 				ret = AMDGV_ALREADY_SET;
 		}
 		if (!ret)
-			ret = amdgv_sched_set_ws_log_op(adapt, AMDGV_AUTO_SCHED_DEBUG_DUMP, !!conf->flag_switch);
+			ret = amdgv_sched_set_ws_log_op(adapt, AMDGV_SCHED_DEBUG_DUMP, !!conf->flag_switch);
 		break;
 	case AMDGV_CONF_ASYMMETRIC_TIMESLICE_FLAG:
 		if (conf->asymmetric.reset) {
@@ -1235,10 +1269,10 @@ int AMDGV_API amdgv_set_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 		}
 		break;
 	case AMDGV_CONF_ERROR_DUMP_STACK_MAX:
-		adapt->error_dump_stack_max = conf->error_dump_stack_max;
+		adapt->log.dump_stack_max = conf->error_dump_stack_max;
 		break;
 	case AMDGV_CONF_ERROR_DUMP_STACK_FILTER:
-		amdgv_error_dump_stack_filter_set(adapt,
+		amdgv_log_dump_stack_filter_set(adapt,
 			conf->error_dump_stack_entry, conf->error_dump_stack_add);
 		break;
 
@@ -1370,7 +1404,7 @@ int AMDGV_API amdgv_get_dev_conf(amdgv_dev_t dev, enum amdgv_dev_conf_type type,
 			ret = AMDGV_FAILURE;
 		break;
 	case AMDGV_CONF_ERROR_DUMP_STACK_MAX:
-		conf->error_dump_stack_max = adapt->error_dump_stack_max;
+		conf->error_dump_stack_max = adapt->log.dump_stack_max;
 		break;
 	default:
 		ret = AMDGV_FAILURE;
@@ -1826,7 +1860,7 @@ int amdgv_get_smi_info(amdgv_dev_t dev, enum amdgv_smi_query_type type,
 		if (amdgv_gpumon_get_gpu_power_usage(dev, (int *)&info->gpu_perf_info.power_usage))
 			ret = AMDGV_FAILURE;
 
-		if (amdgv_gpumon_get_gpu_power_capacity(dev,
+		if (amdgv_gpumon_get_gpu_power_capacity(dev, 0,
 							(int *)&info->gpu_perf_info.power_capacity))
 			ret = AMDGV_FAILURE;
 
@@ -1987,7 +2021,7 @@ int amdgv_export_live_info_data(amdgv_dev_t dev, uint32_t data_op, void *data,
 	if (dev != NULL)
 		adapt = (struct amdgv_adapter *)dev;
 	else
-		return AMDGV_ERROR_GPU_DEVICE_LOST;
+		return AMDGV_LOG_GPU_DEVICE_LOST;
 
 	oss_mutex_lock(adapt->api_lock);
 
@@ -2007,7 +2041,7 @@ int amdgv_export_all_live_info_data(amdgv_dev_t dev, void *data)
 	if (dev != NULL)
 		adapt = (struct amdgv_adapter *)dev;
 	else
-		return AMDGV_ERROR_GPU_DEVICE_LOST;
+		return AMDGV_LOG_GPU_DEVICE_LOST;
 
 	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_UPDATE) {
 		oss_mutex_lock(adapt->api_lock);
@@ -2036,7 +2070,7 @@ int amdgv_import_live_info_data(amdgv_dev_t dev, uint32_t data_op, void *data,
 	if (dev != NULL)
 		adapt = (struct amdgv_adapter *)dev;
 	else
-		return AMDGV_ERROR_GPU_DEVICE_LOST;
+		return AMDGV_LOG_GPU_DEVICE_LOST;
 
 	oss_mutex_lock(adapt->api_lock);
 	AMDGV_INFO("Importing live info data with OP#%d.\n", data_op);
@@ -2054,7 +2088,7 @@ int amdgv_restore_ultralite_data(amdgv_dev_t dev)
 	if (dev != NULL)
 		adapt = (struct amdgv_adapter*)dev;
 	else
-		return AMDGV_ERROR_GPU_DEVICE_LOST;
+		return AMDGV_LOG_GPU_DEVICE_LOST;
 
 	return amdgv_restore_ultralite_vf_data(adapt);
 }
@@ -2828,6 +2862,11 @@ int amdgv_get_migration_ctx(amdgv_dev_t dev, uint32_t idx_vf, struct amdgv_migra
 			ctx->gpu.fw[i - 1].id = i;
 		}
 
+		/* Ignore volatile firmware versions in the migration context. */
+		ctx->gpu.fw[AMDGV_FIRMWARE_ID__RAS_TA - 1].version = 0;
+		ctx->gpu.fw[AMDGV_FIRMWARE_ID__RLCV_LX7 - 1].version = 0;
+		ctx->gpu.fw[AMDGV_FIRMWARE_ID__RLC_P - 1].version = 0;
+
 		switch (adapt->live_migration.context_version) {
 		case AMDGV_MIGRATION_CONTEXT_VERSION_V2:
 			ctx->gpu.nps_mode = adapt->mcp.memory_partition_mode;
@@ -2888,6 +2927,9 @@ bool amdgv_migration_pre_copy_supported(amdgv_dev_t dev)
 	if (adapt->status != AMDGV_STATUS_HW_INIT)
 		return false;
 
+	if (adapt->dirtybit.fb_hash_support)
+		return true;
+
 	return !amdgv_xgmi_node_fb_sharing_allowed(adapt);
 }
 
@@ -2934,7 +2976,8 @@ out:
 }
 
 static int amdgv_migration_transfer_manifest_data_event(amdgv_dev_t dev, uint32_t idx_vf, void *buf,
-				enum amdgv_migration_manifest_data_type type)
+				uint64_t gpu_addr, enum amdgv_migration_manifest_data_type type,
+				uint64_t size)
 {
 	struct amdgv_adapter *adapt;
 	union amdgv_sched_event_data data = {0};
@@ -2950,7 +2993,9 @@ static int amdgv_migration_transfer_manifest_data_event(amdgv_dev_t dev, uint32_
 
 	data.lm.type = type;
 	data.lm.addr = (uint64_t)buf;
+	data.lm.gpu_addr = gpu_addr;
 	data.lm.result = &result;
+	data.lm.size = size;
 	ret = amdgv_sched_queue_event_and_wait_ex(adapt, idx_vf,
 					AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA,
 					AMDGV_SCHED_BLOCK_ALL, data);
@@ -3008,18 +3053,57 @@ static enum amdgv_migration_manifest_data_type _amdgv_migration_import_phase_to_
 	return manifest_data_type;
 }
 
-int amdgv_migration_import(amdgv_dev_t dev, uint32_t idx_vf, void *buf,
+int amdgv_migration_end(amdgv_dev_t dev, uint32_t idx_vf)
+{
+	struct amdgv_adapter *adapt;
+	int ret = 0;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	oss_mutex_lock(adapt->api_lock);
+	if (AMDGV_IS_IDX_INVALID(idx_vf) ||
+		(adapt->live_migration.mig_state[idx_vf].state != AMDGV_MIGRATION_VF_STATE_EXPORT &&
+		adapt->live_migration.mig_state[idx_vf].state != AMDGV_MIGRATION_VF_STATE_IMPORT)) {
+		AMDGV_ERROR("Live migration isn't in correct state, can't end live migration.\n");
+		ret = AMDGV_FAILURE;
+		goto out;
+	}
+
+out:
+	oss_mutex_unlock(adapt->api_lock);
+	return ret;
+}
+
+int amdgv_migration_import(amdgv_dev_t dev, uint32_t idx_vf, void *buf, uint64_t size,
 			   enum amdgv_migration_import_phase phase)
 {
 	enum amdgv_migration_manifest_data_type manifest_data_type = _amdgv_migration_import_phase_to_manifest_type_mapping(phase);
-	return amdgv_migration_transfer_manifest_data_event(dev, idx_vf, buf, manifest_data_type);
+	return amdgv_migration_transfer_manifest_data_event(dev, idx_vf, buf, 0,
+							    manifest_data_type, size);
+}
+
+int amdgv_migration_import_ex(amdgv_dev_t dev, uint32_t idx_vf, void *buf,
+			   uint64_t gpu_addr, uint64_t size, enum amdgv_migration_import_phase phase)
+{
+	enum amdgv_migration_manifest_data_type manifest_data_type = _amdgv_migration_import_phase_to_manifest_type_mapping(phase);
+	return amdgv_migration_transfer_manifest_data_event(dev, idx_vf, buf, gpu_addr,
+							    manifest_data_type, size);
 }
 
 int amdgv_migration_export(amdgv_dev_t dev, uint32_t idx_vf, void *buf,
 			   enum amdgv_migration_export_phase phase)
 {
 	enum amdgv_migration_manifest_data_type manifest_data_type = _amdgv_migration_export_phase_to_manifest_type_mapping(phase);
-	return amdgv_migration_transfer_manifest_data_event(dev, idx_vf, buf, manifest_data_type);
+	return amdgv_migration_transfer_manifest_data_event(dev, idx_vf, buf, 0,
+							    manifest_data_type, 0);
+}
+
+int amdgv_migration_export_ex(amdgv_dev_t dev, uint32_t idx_vf, void *buf,
+			   uint64_t gpu_addr, enum amdgv_migration_export_phase phase)
+{
+	enum amdgv_migration_manifest_data_type manifest_data_type = _amdgv_migration_export_phase_to_manifest_type_mapping(phase);
+	return amdgv_migration_transfer_manifest_data_event(dev, idx_vf, buf, gpu_addr,
+							    manifest_data_type, 0);
 }
 
 int amdgv_get_migration_static_package(amdgv_dev_t dev, void *buf, uint64_t *size)
@@ -3257,7 +3341,7 @@ int AMDGV_API amdgv_list_gpu_threads(amdgv_dev_t dev, void **task_list, uint32_t
 
 	task_list[AMDGV_GPU_THREAD_READ_VBIOS] = adapt->vbios.read_vbios_thread;
 	task_list[AMDGV_GPU_THREAD_EVENT] = adapt->sched.event_thread;
-	task_list[AMDGV_GPU_THREAD_ERROR_PROCESS] = adapt->error_process_thread;
+	task_list[AMDGV_GPU_THREAD_ERROR_PROCESS] = adapt->log.process_thread;
 
 	*bdf = adapt->bdf;
 
@@ -3273,7 +3357,7 @@ int amdgv_toggle_ih_registration(amdgv_dev_t dev, bool enable)
 	if (dev != NULL)
 		adapt = (struct amdgv_adapter *)dev;
 	else
-		return AMDGV_ERROR_GPU_DEVICE_LOST;
+		return AMDGV_LOG_GPU_DEVICE_LOST;
 
 	oss_mutex_lock(adapt->api_lock);
 
@@ -3470,7 +3554,7 @@ int amdgv_submit_frame_to_engine(amdgv_dev_t dev, enum amdgv_engine_id id, uint8
 
 int amdgv_toggle_power_saving(amdgv_dev_t dev, bool enable)
 {
-	int ret = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+	int ret = AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 	struct amdgv_adapter *adapt;
 	union amdgv_sched_event_data data;
 	int event_ret = 0;
@@ -3481,37 +3565,37 @@ int amdgv_toggle_power_saving(amdgv_dev_t dev, bool enable)
 
 	if (!(adapt->flags & AMDGV_FLAG_IPS_POWER_SAVING)) {
 		AMDGV_WARN("ips power saving not supported\n");
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 	}
 
 	if (!(adapt->flags & AMDGV_FLAG_DISABLE_SELF_SWITCH)) {
 		AMDGV_WARN(
 			"IPS power saving is not compatible with self-worldswitch"
 			"if we intend to enable power saving, please disable self-worldswitch\n");
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 	}
 
 	if (!adapt->pp.pp_funcs || !adapt->pp.pp_funcs->enter_power_saving ||
 	    !adapt->pp.pp_funcs->exit_power_saving ||
 	    !adapt->pp.pp_funcs->query_power_saving_status) {
 		AMDGV_WARN("enter/exit powersaving function is NULL\n");
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 	}
 
 	if (adapt->pp.pp_funcs->query_power_saving_status(adapt, &status)) {
 		AMDGV_WARN("power saving feature not supported\n");
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 	}
 
 	if (enable && adapt->in_live_update) {
 		AMDGV_WARN("skip powersaving since it's in live udpate\n");
-		return AMDGV_ERROR_GPUMON_VF_BUSY;
+		return AMDGV_LOG_GPUMON_VF_BUSY;
 	}
 
 	for (i = 0; enable && i < adapt->num_vf; i++) {
 		if (is_active_vf(i)) {
 			AMDGV_WARN("please shutdown all vf for powersaving\n");
-			return AMDGV_ERROR_GPUMON_VF_BUSY;
+			return AMDGV_LOG_GPUMON_VF_BUSY;
 		}
 	}
 
@@ -3546,24 +3630,24 @@ int amdgv_query_power_saving_status(amdgv_dev_t dev, uint32_t *status)
 
 	if (!status) {
 		AMDGV_ERROR("invalid input parameter\n");
-		return AMDGV_ERROR_DRIVER_INVALID_VALUE;
+		return AMDGV_LOG_DRIVER_INVALID_VALUE;
 	}
 
 	if (!(adapt->flags & AMDGV_FLAG_IPS_POWER_SAVING)) {
 		AMDGV_WARN("ips power saving not supported\n");
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 	}
 
 	if (!(adapt->flags & AMDGV_FLAG_DISABLE_SELF_SWITCH)) {
 		AMDGV_WARN(
 			"IPS power saving is not compatible with self-worldswitch"
 			"if we intend to enable power saving, please disable self-worldswitch\n");
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 	}
 
 	if (!adapt->pp.pp_funcs || !adapt->pp.pp_funcs->query_power_saving_status) {
 		AMDGV_WARN("query powersaving function is NULL\n");
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 	}
 
 	/* Allocation requires atomic operation */
@@ -3578,7 +3662,7 @@ int amdgv_query_power_saving_status(amdgv_dev_t dev, uint32_t *status)
 
 int amdgv_toggle_power_saving_external(amdgv_dev_t dev, bool enable)
 {
-	int ret = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+	int ret = AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
 	ret = amdgv_toggle_power_saving(dev, enable);
 
@@ -3587,7 +3671,7 @@ int amdgv_toggle_power_saving_external(amdgv_dev_t dev, bool enable)
 
 int amdgv_query_power_saving_status_external(amdgv_dev_t dev, uint32_t *status)
 {
-	int ret = AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+	int ret = AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
 	ret = amdgv_query_power_saving_status(dev, status);
 
@@ -3640,16 +3724,61 @@ int AMDGV_API amdgv_set_rlcv_timestamp_dump(amdgv_dev_t dev, uint64_t enable)
 {
 	int ret = 0;
 	struct amdgv_adapter *adapt;
+	enum amdgv_gpuiov_event_id event;
+	int hw_sched_id;
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
 	oss_mutex_lock(adapt->api_lock);
 
-	adapt->rlcv_stamp_todo = enable;
-	adapt->rlcv_stamp_count = -2;
-	// Initializing to -2 is to make the data in right order. We should guarantee
-	// the data is recorded from IDLE, so bypass the first two world switch loops.
+	if (!adapt->gpuiov.funcs->setup_sched_debug_log) {
+		AMDGV_WARN("TS LOG is not supported on this asic.\n");
+		ret = AMDGV_FAILURE;
+		goto unlock;
+	}
+	AMDGV_INFO("TS LOG is %s\n", enable ? "enabled" : "disabled");
 
+	if (enable) {
+		ret = adapt->gpuiov.funcs->setup_sched_debug_log(adapt, AMDGV_SCHED_TS_LOG);
+		if (ret) {
+			AMDGV_WARN("Failed to setup ts_log.\n");
+			goto unlock;
+		}
+
+		for_each_id(hw_sched_id, amdgv_sched_get_hw_sched_mask_by_sched_block(
+						      adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX)) {
+			ret = amdgv_sched_world_switch_config_auto_sched_mode(adapt, hw_sched_id);
+			if (ret) {
+				AMDGV_ERROR("failed to push sched mem desc for ts_log\n");
+				goto unlock;
+			}
+		}
+	}
+
+	event = AMDGV_EVENT_TS_LOG;
+	for_each_id(hw_sched_id, amdgv_sched_get_hw_sched_mask_by_sched_block(
+					      adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX)) {
+		ret = amdgv_gpuiov_event_notification(adapt, AMDGV_PF_IDX, hw_sched_id,
+							event, enable);
+		if (ret) {
+			AMDGV_ERROR("failed to send event notification\n");
+			goto unlock;
+		}
+	}
+
+unlock:
+	oss_mutex_unlock(adapt->api_lock);
+
+	return ret;
+}
+
+int AMDGV_API amdgv_dump_rlcv_timestamp_log(amdgv_dev_t dev)
+{
+	struct amdgv_adapter *adapt;
+	int ret;
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+	oss_mutex_lock(adapt->api_lock);
+	ret = amdgv_sched_dump_ts_log_data(adapt);
 	oss_mutex_unlock(adapt->api_lock);
 
 	return ret;
@@ -4118,6 +4247,13 @@ int AMDGV_API amdgv_send_ws_cmd(amdgv_dev_t dev, uint32_t ws_event, uint32_t hw_
 	case AMDGV_SHUTDOWN_GPU:
 		if (AMDGV_IS_IDX_INVALID(idx_vf))
 			return AMDGV_FAILURE;
+		// fall through
+	case AMDGV_ENABLE_AUTO_HW_SWITCH:
+	case AMDGV_DISABLE_AUTO_HW_SCHED:
+		if (hw_sched_id >= adapt->gpuiov.num_ctrl_blocks) {
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_SCHED_INVALID_HW_SCHED_ID, hw_sched_id);
+			return AMDGV_FAILURE;
+		}
 		break;
 	default:
 		break;
@@ -4128,27 +4264,27 @@ int AMDGV_API amdgv_send_ws_cmd(amdgv_dev_t dev, uint32_t ws_event, uint32_t hw_
 	switch (ws_event) {
 	case AMDGV_IDLE_GPU:
 		if (amdgv_gpuiov_idle_vf(adapt, idx_vf, hw_sched_id))
-			ret = AMDGV_ERROR_IOV_WS_IDLE_TIMEOUT;
+			ret = AMDGV_LOG_IOV_WS_IDLE_TIMEOUT;
 		break;
 	case AMDGV_SAVE_GPU_STATE:
 		if (amdgv_gpuiov_save_vf(adapt, idx_vf, hw_sched_id))
-			ret = AMDGV_ERROR_IOV_WS_SAVE_TIMEOUT;
+			ret = AMDGV_LOG_IOV_WS_SAVE_TIMEOUT;
 		break;
 	case AMDGV_LOAD_GPU_STATE:
 		if (amdgv_gpuiov_load_vf(adapt, idx_vf, hw_sched_id))
-			ret = AMDGV_ERROR_IOV_WS_LOAD_TIMEOUT;
+			ret = AMDGV_LOG_IOV_WS_LOAD_TIMEOUT;
 		break;
 	case AMDGV_RUN_GPU:
 		if (amdgv_gpuiov_run_vf(adapt, idx_vf, hw_sched_id))
-			ret = AMDGV_ERROR_IOV_WS_SAVE_TIMEOUT;
+			ret = AMDGV_LOG_IOV_WS_SAVE_TIMEOUT;
 		break;
 	case AMDGV_INIT_GPU:
 		if (amdgv_gpuiov_init_vf(adapt, idx_vf, hw_sched_id))
-			ret = AMDGV_ERROR_IOV_WS_LOAD_TIMEOUT;
+			ret = AMDGV_LOG_IOV_WS_LOAD_TIMEOUT;
 		break;
 	case AMDGV_SHUTDOWN_GPU:
 		if (amdgv_gpuiov_shutdown_vf(adapt, idx_vf, hw_sched_id))
-			ret = AMDGV_ERROR_IOV_WS_SHUTDOWN_TIMEOUT;
+			ret = AMDGV_LOG_IOV_WS_SHUTDOWN_TIMEOUT;
 		break;
 	case AMDGV_ENABLE_AUTO_HW_SWITCH:
 		if (amdgv_gpuiov_enable_auto_sched(adapt, hw_sched_id))
@@ -4272,7 +4408,40 @@ int AMDGV_API amdgv_error_ring_buffer_dump(amdgv_dev_t dev, char *buf, int buf_s
 	int len;
 	SET_ADAPT_AND_CHECK_STATUS_MINIMAL(adapt, dev);
 	oss_mutex_lock(adapt->api_lock);
-	len = amdgv_error_get_error_all(adapt, buf, buf_size);
+	len = amdgv_log_get_all(adapt, buf, buf_size);
+	oss_mutex_unlock(adapt->api_lock);
+	return len;
+}
+
+int AMDGV_API amdgv_info_ring_buffer_dump(amdgv_dev_t dev, char *buf, int buf_size)
+{
+	struct amdgv_adapter *adapt;
+	int len;
+	SET_ADAPT_AND_CHECK_STATUS_MINIMAL(adapt, dev);
+	oss_mutex_lock(adapt->api_lock);
+	len = amdgv_log_dump_ring(adapt, AMDGV_LOG_RING_INFO, buf, buf_size);
+	oss_mutex_unlock(adapt->api_lock);
+	return len;
+}
+
+int AMDGV_API amdgv_debug_ring_buffer_dump(amdgv_dev_t dev, char *buf, int buf_size)
+{
+	struct amdgv_adapter *adapt;
+	int len;
+	SET_ADAPT_AND_CHECK_STATUS_MINIMAL(adapt, dev);
+	oss_mutex_lock(adapt->api_lock);
+	len = amdgv_log_dump_ring(adapt, AMDGV_LOG_RING_DEBUG, buf, buf_size);
+	oss_mutex_unlock(adapt->api_lock);
+	return len;
+}
+
+int AMDGV_API amdgv_combined_ring_buffer_dump(amdgv_dev_t dev, char *buf, int buf_size)
+{
+	struct amdgv_adapter *adapt;
+	int len;
+	SET_ADAPT_AND_CHECK_STATUS_MINIMAL(adapt, dev);
+	oss_mutex_lock(adapt->api_lock);
+	len = amdgv_log_dump_combined(adapt, buf, buf_size);
 	oss_mutex_unlock(adapt->api_lock);
 	return len;
 }
@@ -4338,6 +4507,7 @@ void *AMDGV_API amdgv_map_sysmem_with_attr(amdgv_dev_t dev, uint64_t len,
 
 	if (!*va_ptr)
 		*va_ptr = mem->sys_mem.va_ptr;
+	mem->sys_mem.size = len;
 	oss_mutex_unlock(adapt->api_lock);
 
 	return (void *)(&mem->sys_mem);
@@ -4360,6 +4530,15 @@ int AMDGV_API amdgv_unmap_sysmem(amdgv_dev_t dev,
 	ret = amdgv_memmgr_free(mem);
 	oss_mutex_unlock(adapt->api_lock);
 	return ret;
+}
+
+int amdgv_handle_ras_ioctl_cmd(amdgv_dev_t dev, struct amdgv_ras_ioctl_cmd *data)
+{
+	struct amdgv_adapter *adapt;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	return amdgv_ras_ioctl_handler(adapt, data);
 }
 
 bool amdgv_compare_mig_ctx(amdgv_dev_t dev, uint32_t idx_vf,

@@ -158,8 +158,6 @@ int amdgv_ecc_get_correctable_error_count(struct amdgv_adapter *adapt,
 					uint32_t idx_vf);
 int amdgv_ecc_get_uncorrectable_error_count(struct amdgv_adapter *adapt,
 					uint32_t idx_vf);
-int amdgv_ecc_get_deferred_error_count(struct amdgv_adapter *adapt,
-					uint32_t idx_vf);
 int amdgv_ecc_get_error_count(struct amdgv_adapter *adapt, struct amdgv_smi_ras_query_if *info);
 void amdgv_ecc_check_for_errors(struct amdgv_adapter *adapt, struct amdgv_sched_event *event);
 int amdgv_ecc_check_global_ras_errors(struct amdgv_adapter *adapt);
@@ -195,5 +193,4 @@ void amdgv_ras_inst_reset_ras_error_count(struct amdgv_adapter *adapt,
 enum amdgv_live_info_status amdgv_ecc_export_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_ecc *ecc_info);
 enum amdgv_live_info_status amdgv_ecc_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_ecc *ecc_info);
 int amdgv_ecc_reset_all_error_counts(struct amdgv_adapter *adapt);
-void amdgv_ecc_handle_umc_event(struct amdgv_adapter *adapt, uint32_t idx_vf);
 #endif

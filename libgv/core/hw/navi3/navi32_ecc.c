@@ -66,7 +66,7 @@ static void navi32_handle_fatal_error_consumption(struct amdgv_adapter *adapt,
 
 	if (err_data->ce_count) {
 		adapt->ecc.correctable_error_num += err_data->ce_count;
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_VF_CE, err_data->ce_count);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_VF_CE, err_data->ce_count);
 	}
 
 	if (err_data->ue_count)

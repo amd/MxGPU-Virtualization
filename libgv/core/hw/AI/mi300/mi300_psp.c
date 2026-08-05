@@ -31,6 +31,11 @@ static const uint32_t this_block = AMDGV_SECURITY_BLOCK;
 /* PSP FW reserves the TMR area. Host driver need not reserve it. */
 enum { PSP_TMR_SIZE = 0x0 };
 
+#ifdef __linux__
+_Static_assert(MI300_MIGRATION_PSP_STATIC_DATA_SIZE <= AMDGV_MIGRATION_MAX_PSP_STATIC_DATA_SIZE,
+	       "MI300 PSP static data size exceeds the maximum limit.");
+#endif
+
 int mi300_psp_ring_destroy(struct amdgv_adapter *adapt)
 {
 	uint32_t flag = 0x80000000;
@@ -308,7 +313,7 @@ static enum psp_status mi300_psp_program_register(struct amdgv_adapter *adapt, u
 	struct psp_cmd_km *program_reg_cmd = adapt->psp.psp_cmd_km_mem;
 
 	if (!program_reg_cmd) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				sizeof(struct psp_cmd_km));
 
 		return PSP_STATUS__ERROR_GENERIC;
@@ -419,7 +424,7 @@ static enum psp_status mi300_psp_set_mb_int(struct amdgv_adapter *adapt, uint32_
 	struct psp_gfx_resp psp_resp = { 0 };
 
 	if (!vfgate_cmd) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				sizeof(struct psp_cmd_km));
 
 		return PSP_STATUS__ERROR_GENERIC;
@@ -475,7 +480,7 @@ static enum psp_status mi300_psp_get_mb_int_status(struct amdgv_adapter *adapt,
 		return ret;
 
 	if (!vfgate_cmd) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				sizeof(struct psp_cmd_km));
 
 		return PSP_STATUS__ERROR_GENERIC;
@@ -1125,7 +1130,7 @@ enum psp_status mi300_psp_dump_tracelog(struct amdgv_adapter *adapt, uint64_t bu
 
 	dump_tracelog_cmd = adapt->psp.psp_cmd_km_mem;
 	if (!dump_tracelog_cmd) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				sizeof(struct psp_cmd_km));
 
 		return PSP_STATUS__ERROR_GENERIC;
@@ -1160,7 +1165,7 @@ enum psp_status mi300_psp_set_snapshot_addr(struct amdgv_adapter *adapt, uint64_
 
 	snapshot_set_addr_cmd = adapt->psp.psp_cmd_km_mem;
 	if (!snapshot_set_addr_cmd) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				sizeof(struct psp_cmd_km));
 		return ret;
 	}
@@ -1192,7 +1197,7 @@ enum psp_status mi300_psp_trigger_snapshot(struct amdgv_adapter *adapt, uint32_t
 
 	snapshot_trigger_cmd = adapt->psp.psp_cmd_km_mem;
 	if (!snapshot_trigger_cmd) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				sizeof(struct psp_cmd_km));
 		return ret;
 	}
@@ -1232,8 +1237,8 @@ static enum psp_status mi300_psp_get_migration_version(struct amdgv_adapter *ada
 
 	migration_get_psp_info_cmd = adapt->psp.psp_cmd_km_mem;
 	if (!migration_get_psp_info_cmd) {
-		amdgv_put_error(AMDGV_PF_IDX,
-			AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX,
+			AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 			sizeof(struct psp_cmd_km));
 		return ret;
 	}
@@ -1381,22 +1386,22 @@ static enum psp_status mi300_psp_transfer_manifest_data(struct amdgv_adapter *ad
 
 	migration_cmd = adapt->psp.psp_cmd_km_mem;
 	if (!migration_cmd) {
-		amdgv_put_error(AMDGV_PF_IDX,
-			AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX,
+			AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 			sizeof(struct psp_cmd_km));
 		return ret;
 	}
 
 	if (mi300_psp_migration_cmd_init(migration_cmd, idx_vf, data_addr, size, type)) {
-		amdgv_put_error(AMDGV_PF_IDX,
-			AMDGV_ERROR_FW_MIGRATION_EXPORT_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX,
+			AMDGV_LOG_FW_MIGRATION_EXPORT_FAIL,
 			psp_resp.status);
 		return ret;
 	}
 
 	if (type == PSP_MIGRATION_EXPORT_STATIC_DATA &&
 	    !adapt->psp.vf_cp_migration_is_supported(adapt, idx_vf)) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_MIGRATION_VF_CP_NOT_SUPPORTED, idx_vf);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_MIGRATION_VF_CP_NOT_SUPPORTED, idx_vf);
 		return PSP_STATUS__ERROR_GENERIC;
 	}
 
@@ -1520,13 +1525,13 @@ static int mi300_psp_sw_init(struct amdgv_adapter *adapt)
 		psp_ret = amdgv_psp_xgmi_mem_init(adapt);
 
 	if (psp_ret != PSP_STATUS__SUCCESS) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_INIT_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_INIT_FAIL, 0);
 		mi300_psp_sw_fini(adapt);
 		ret = AMDGV_FAILURE;
 	}
 
 	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION) {
-		adapt->live_migration.static_data_size = MI300_MIGRATION_PSP_STATIC_DATA_SIZE;
+		adapt->live_migration.static_data_size = AMDGV_MIGRATION_STATIC_DATA_SIZE;
 		adapt->live_migration.dynamic_data_size = MI300_MIGRATION_PSP_DYNAMIC_DATA_SIZE;
 	}
 
@@ -1553,7 +1558,7 @@ static int mi300_psp_load_psp_fw(struct amdgv_adapter *adapt)
 	ucode_id = AMDGV_FIRMWARE_ID__PSP_KEYDB;
 	r = adapt->ucode.load(adapt, &ucode_id, 1);
 	if (r) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_UCODE_LOAD_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_UCODE_LOAD_FAIL,
 				amdgv_psp_bl_command_map(ucode_id));
 		return r;
 	}
@@ -1561,7 +1566,7 @@ static int mi300_psp_load_psp_fw(struct amdgv_adapter *adapt)
 	ucode_id = AMDGV_FIRMWARE_ID__PSP_SYS;
 	r = adapt->ucode.load(adapt, &ucode_id, 1);
 	if (r) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_UCODE_LOAD_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_UCODE_LOAD_FAIL,
 				amdgv_psp_bl_command_map(ucode_id));
 		return r;
 	}
@@ -1569,9 +1574,9 @@ static int mi300_psp_load_psp_fw(struct amdgv_adapter *adapt)
 	ucode_id = AMDGV_FIRMWARE_ID__PSP_RAS;
 	r = adapt->ucode.load(adapt, &ucode_id, 1);
 	if (r) {
-		amdgv_put_error(
+		amdgv_put_log(
 			AMDGV_PF_IDX,
-			AMDGV_ERROR_FW_UCODE_LOAD_FAIL,
+			AMDGV_LOG_FW_UCODE_LOAD_FAIL,
 			amdgv_psp_cmd_km_fw_id_map(ucode_id)
 		);
 		return r;
@@ -1580,7 +1585,7 @@ static int mi300_psp_load_psp_fw(struct amdgv_adapter *adapt)
 	ucode_id = AMDGV_FIRMWARE_ID__PSP_SOC;
 	r = adapt->ucode.load(adapt, &ucode_id, 1);
 	if (r) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_UCODE_LOAD_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_UCODE_LOAD_FAIL,
 				amdgv_psp_bl_command_map(ucode_id));
 		return r;
 	}
@@ -1588,7 +1593,7 @@ static int mi300_psp_load_psp_fw(struct amdgv_adapter *adapt)
 	ucode_id = AMDGV_FIRMWARE_ID__PSP_INTF;
 	r = adapt->ucode.load(adapt, &ucode_id, 1);
 	if (r) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_UCODE_LOAD_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_UCODE_LOAD_FAIL,
 				amdgv_psp_bl_command_map(ucode_id));
 		return r;
 	}
@@ -1596,7 +1601,7 @@ static int mi300_psp_load_psp_fw(struct amdgv_adapter *adapt)
 	ucode_id = AMDGV_FIRMWARE_ID__PSP_DBG;
 	r = adapt->ucode.load(adapt, &ucode_id, 1);
 	if (r) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_UCODE_LOAD_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_UCODE_LOAD_FAIL,
 				amdgv_psp_bl_command_map(ucode_id));
 		return r;
 	}
@@ -1604,7 +1609,7 @@ static int mi300_psp_load_psp_fw(struct amdgv_adapter *adapt)
 	ucode_id = AMDGV_FIRMWARE_ID__PSP_SOS;
 	r = adapt->ucode.load(adapt, &ucode_id, 1);
 	if (r) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_UCODE_LOAD_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_UCODE_LOAD_FAIL,
 				amdgv_psp_bl_command_map(ucode_id));
 		return r;
 	}
@@ -1712,7 +1717,7 @@ static int mi300_psp_hw_init(struct amdgv_adapter *adapt)
 
 	psp_ret = mi300_psp_ring_start(adapt);
 	if (psp_ret != PSP_STATUS__SUCCESS) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_START_RING_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_START_RING_FAIL, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -1807,7 +1812,7 @@ static int mi300_psp_hw_init(struct amdgv_adapter *adapt)
 
 init_fail:
 	if (r)
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_INIT_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_INIT_FAIL, 0);
 	return r;
 }
 

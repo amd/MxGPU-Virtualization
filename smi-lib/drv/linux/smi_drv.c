@@ -741,6 +741,17 @@ static int smi_lnx_drv_open(struct inode *inode, smi_process_handle file)
 
 static int smi_lnx_drv_release(struct inode *inode, smi_process_handle file)
 {
+	struct smi_ctx *ctx = file->private_data;
+
+	/* Revoke any event fds still held against this /dev context before
+	 * smi_core_release() frees the smi_ctx. The per-device event_ctx[]
+	 * notifier array is never populated on Linux (notifiers live in the
+	 * per-fd wrapper), so the destroy loop in smi_core_release() never
+	 * reaches these fds; without this a later poll()/read()/close() on a
+	 * held fd would dereference the freed smi_ctx. */
+	if (ctx)
+		smi_destroy_event(ctx, NULL, 0);
+
 	return smi_core_release((file_t) file);
 }
 

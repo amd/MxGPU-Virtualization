@@ -18,7 +18,4 @@ int  ras_eeprom_legacy_process_records(struct amdgv_adapter *adapt,
 			bool write,
 			int num);
 
-bool ras_eeprom_legacy_validate_tbl_checksum(struct amdgv_adapter *adapt,
-			struct amdgv_ras_eeprom_control *control);
-
 #endif // _AMDGV_RAS_EEPROM_LEGACY_H

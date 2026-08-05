@@ -97,6 +97,7 @@ enum smi_cmd_code {
 	SMI_CMD_CODE_GET_TDI_STATE				= SMI_IOCTL | 0x00000041,
 	SMI_CMD_CODE_GET_VF_HBM_INFO				= SMI_IOCTL | 0x00000042,
 	SMI_CMD_CODE_GET_FABRIC_INFO				= SMI_IOCTL | 0x00000043,
+	SMI_CMD_CODE_GET_SUPPORTED_POWER_CAP			= SMI_IOCTL | 0x00000044,
 	SMI_CMD_CODE__MAX					= 0xffffffff
 };
 
@@ -151,6 +152,7 @@ enum smi_cmd_code {
 #define SMI_MAX_PROFILE_COUNT 16
 #define SMI_MAX_UUID_ELEMENTS 16
 #define SMI_MAX_NAME 32
+#define SMI_MAX_PPT_SENSOR_LENGTH 2
 
 /**
  * @brief string format
@@ -1344,6 +1346,26 @@ struct smi_device_info {
 struct smi_device_info_ex {
 	smi_device_handle_t dev_id;
 	uint64_t reserved[3];
+};
+
+typedef enum {
+	SMI_POWER_CAP_TYPE_PPT0,	//!< PPT0 power cap; lower limit, filtered input
+	SMI_POWER_CAP_TYPE_PPT1,	//!< PPT1 power cap; higher limit, raw input
+} smi_power_cap_type_t;
+
+struct smi_supported_power_cap {
+	uint32_t sensor_count;
+	uint32_t sensor_inds[SMI_MAX_PPT_SENSOR_LENGTH];
+	smi_power_cap_type_t sensor_types[SMI_MAX_PPT_SENSOR_LENGTH];
+	uint32_t reserved[3];
+};
+
+/* Input for SMI_CMD_CODE_GET_POWER_CAP_INFO: dedicated struct (not shared
+ * with other APIs) so the power-cap sensor index has an explicit field. */
+struct smi_get_power_cap {
+	smi_device_handle_t dev_id;
+	uint32_t sensor_ind;
+	uint32_t reserved[3];
 };
 
 struct smi_node_info {

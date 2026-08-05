@@ -139,31 +139,31 @@ func (t NicFwVersionType) String() string {
 
 // C #define macros are not accessible via CGO, so they must be redefined here.
 const (
-	AMDSMI_MAX_DEVICES                = 32
-	AMDSMI_MAX_VF_COUNT               = 32
-	AMDSMI_GPU_UUID_SIZE              = 38
-	AMDSMI_MAX_PROFILE_COUNT          = 16
-	AMDSMI_MAX_ERR_RECORDS            = 10
-	AMDSMI_DFC_FW_NUMBER_OF_ENTRIES   = 9
-	AMDSMI_MAX_WHITE_LIST_ELEMENTS    = 16
-	AMDSMI_MAX_BLACK_LIST_ELEMENTS    = 64
-	AMDSMI_MAX_UUID_ELEMENTS          = 16
-	AMDSMI_MAX_TA_WHITE_LIST_ELEMENTS = 8
-	AMDSMI_MAX_NUM_NUMA_NODES         = 32
-	AMDSMI_MAX_CP_PROFILE_RESOURCES   = 32
-	AMDSMI_MAX_ACCELERATOR_PARTITIONS = 8
-	AMDSMI_MAX_ACCELERATOR_PROFILE    = 32
-	AMDSMI_MAX_STRING_LENGTH          = 256
-	AMDSMI_MAX_CACHE_TYPES            = 10
-	AMDSMI_GUARD_EVENT__MAX           = 7
-	AMDSMI_MAX_NUM_XGMI_PHYSICAL_LINK = 64
-	AMDSMI_MAX_NUM_PM_POLICIES        = 32
-	AMDSMI_MAX_NIC_PORTS              = 32
-	AMDSMI_MAX_NIC_RDMA_DEV           = 32
-	AMDSMI_MAX_NIC_FW                 = 64
-	AMDSMI_MAX_NUM_FREQUENCIES        = 33
-	MAX_NUMBER_OF_AFIDS_PER_RECORD    = 12
-	AMDSMI_MAX_NUM_METRICS            = 512
+	AMDSMI_MAX_DEVICES                    = 32
+	AMDSMI_MAX_VF_COUNT                   = 32
+	AMDSMI_GPU_UUID_SIZE                  = 38
+	AMDSMI_MAX_PROFILE_COUNT              = 16
+	AMDSMI_MAX_ERR_RECORDS                = 10
+	AMDSMI_DFC_FW_NUMBER_OF_ENTRIES       = 9
+	AMDSMI_MAX_WHITE_LIST_ELEMENTS        = 16
+	AMDSMI_MAX_BLACK_LIST_ELEMENTS        = 64
+	AMDSMI_MAX_UUID_ELEMENTS              = 16
+	AMDSMI_MAX_TA_WHITE_LIST_ELEMENTS     = 8
+	AMDSMI_MAX_NUM_NUMA_NODES             = 32
+	AMDSMI_MAX_CP_PROFILE_RESOURCES       = 32
+	AMDSMI_MAX_ACCELERATOR_PARTITIONS     = 8
+	AMDSMI_MAX_ACCELERATOR_PROFILE        = 32
+	AMDSMI_MAX_STRING_LENGTH              = 256
+	AMDSMI_MAX_CACHE_TYPES                = 10
+	AMDSMI_GUARD_EVENT__MAX               = 7
+	AMDSMI_MAX_NUM_XGMI_PHYSICAL_LINK     = 64
+	AMDSMI_MAX_NUM_PM_POLICIES            = 32
+	AMDSMI_MAX_NIC_PORTS                  = 32
+	AMDSMI_MAX_NIC_RDMA_DEV               = 32
+	AMDSMI_MAX_NIC_FW                     = 64
+	AMDSMI_MAX_NUM_FREQUENCIES            = 33
+	AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD = 12
+	AMDSMI_MAX_NUM_METRICS                = 512
 
 	AMDSMI_FABRIC_PPOD_ID_SIZE                    = 16
 	AMDSMI_FABRIC_ACTIVE_ACCELERATORS_BITMAP_SIZE = 32
@@ -3641,7 +3641,7 @@ func GetGpuCperEntries(ph ProcessorHandle, severityMask uint32, cursor uint64, b
 }
 
 // GetAfidsFromCper extracts AF IDs from a single CPER record buffer (such as
-// CperEntry.Bytes). Up to MAX_NUMBER_OF_AFIDS_PER_RECORD ids are returned.
+// CperEntry.Bytes). Up to AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD ids are returned.
 func GetAfidsFromCper(cperBuffer []byte) ([]uint64, error) {
 	if len(cperBuffer) == 0 {
 		return nil, &StatusError{Code: AMDSMI_STATUS_INVAL, Name: statusNames[AMDSMI_STATUS_INVAL]}
@@ -3650,8 +3650,8 @@ func GetAfidsFromCper(cperBuffer []byte) ([]uint64, error) {
 	cBuf := C.CBytes(cperBuffer)
 	defer C.free(cBuf)
 
-	var afids [MAX_NUMBER_OF_AFIDS_PER_RECORD]C.uint64_t
-	nAfids := C.uint32_t(MAX_NUMBER_OF_AFIDS_PER_RECORD)
+	var afids [AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD]C.uint64_t
+	nAfids := C.uint32_t(AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD)
 
 	ret := C.amdsmi_get_afids_from_cper(
 		(*C.char)(cBuf),
@@ -3664,8 +3664,8 @@ func GetAfidsFromCper(cperBuffer []byte) ([]uint64, error) {
 	}
 
 	count := uint32(nAfids)
-	if count > MAX_NUMBER_OF_AFIDS_PER_RECORD {
-		count = MAX_NUMBER_OF_AFIDS_PER_RECORD
+	if count > AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD {
+		count = AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD
 	}
 	out := make([]uint64, count)
 	for i := uint32(0); i < count; i++ {

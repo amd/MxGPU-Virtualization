@@ -553,8 +553,13 @@ std::string host_fill_limit_info(Arguments arg, std::string value)
 		shutdown_vram_temperature["value"] = value.c_str();
 		shutdown_vram_temperature["unit"] = "N/A";
 
-		nlohmann::ordered_json limit_json = { { "max_power",  max_power} };
-		limit_json["socket_power"] = socket_power;
+		nlohmann::ordered_json ppt_power{};
+		ppt_power["max_power"] = max_power;
+		ppt_power["min_power"] = min_power;
+		ppt_power["socket_power"] = socket_power;
+
+		nlohmann::ordered_json limit_json = { { "ppt0",  ppt_power} };
+		limit_json["ppt1"] = ppt_power;
 		limit_json["slowdown_edge_temperature"] = slowdown_edge_temperature;
 		limit_json["slowdown_hotspot_temperature"] = slowdown_hotspot_temperature;
 		limit_json["slowdown_mem_temperature"] = slowdown_vram_temperature;
@@ -565,16 +570,18 @@ std::string host_fill_limit_info(Arguments arg, std::string value)
 		out = limit_json.dump(4);
 	} else if (arg.output == csv) {
 		out = string_format(
-				  ",%s,%s,%s,%s,%s,%s,%s,%s,%s", value.c_str(),
-				  value.c_str(), value.c_str(),
+				  ",%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",
+				  value.c_str(), value.c_str(), value.c_str(),
+				  value.c_str(), value.c_str(), value.c_str(),
 				  value.c_str(), value.c_str(), value.c_str(),
 				  value.c_str(), value.c_str(), value.c_str() );
 	} else {
 		out = string_format(
-				  staticLimitTemplate, value.c_str(), value.c_str(), "", value.c_str(),"",
-				  value.c_str(), "",value.c_str(),"",
-				  value.c_str(), "",value.c_str(),"",
-				  value.c_str(),"", value.c_str(),"" );
+				  staticLimitTemplate,
+				  value.c_str(), "", value.c_str(), "", value.c_str(), "",
+				  value.c_str(), "", value.c_str(), "", value.c_str(), "",
+				  value.c_str(), "", value.c_str(), "", value.c_str(), "",
+				  value.c_str(), "", value.c_str(), "", value.c_str(), "" );
 	}
 
 	return out;
@@ -1003,7 +1010,9 @@ int AmdSmiApiHost::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argumen
 	int ret;
 
 	amdsmi_power_cap_info_t power_cap_info;
+	amdsmi_power_cap_info_t power_cap1_info;
 	uint32_t sensor_ind = 0;
+	uint32_t sensor_ind1 = 1;
 	int64_t therm_limit_edge;
 	int64_t therm_limit_junction;
 	int64_t therm_limit_vram;
@@ -1032,6 +1041,13 @@ int AmdSmiApiHost::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argumen
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		host_fill_limit_info(arg, "N/A");
 		return ret;
+	}
+	/* PPT1 is optional; treat failure as not supported */
+	if (host_amdsmi_get_power_cap_info(processor, sensor_ind1, &power_cap1_info) !=
+			AMDSMI_STATUS_SUCCESS) {
+		power_cap1_info.power_cap = UINT64_MAX;
+		power_cap1_info.max_power_cap = UINT64_MAX;
+		power_cap1_info.min_power_cap = UINT64_MAX;
 	}
 	ret = host_amdsmi_get_temp_metric(
 			  processor, AMDSMI_TEMPERATURE_TYPE_EDGE, AMDSMI_TEMP_CRITICAL, &therm_limit_edge);
@@ -1084,6 +1100,16 @@ int AmdSmiApiHost::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argumen
 	std::string min_power_cap_string = power_cap_info.min_power_cap == -1 ?
 									   "N/A" :
 									   string_format("%lld", power_cap_info.min_power_cap);
+
+	std::string power_cap1_string = power_cap1_info.power_cap == UINT64_MAX ?
+								   "N/A" :
+								   string_format("%lld", power_cap1_info.power_cap);
+	std::string max_power_cap1_string = power_cap1_info.max_power_cap == UINT64_MAX ?
+									   "N/A" :
+									   string_format("%lld", power_cap1_info.max_power_cap);
+	std::string min_power_cap1_string = power_cap1_info.min_power_cap == UINT64_MAX ?
+									   "N/A" :
+									   string_format("%lld", power_cap1_info.min_power_cap);
 
 	std::string therm_limit_edge_string;
 	if(therm_limit_edge == UINT_MAX) {
@@ -1172,6 +1198,31 @@ int AmdSmiApiHost::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argumen
 			min_power["unit"] = "W";
 		}
 
+		nlohmann::ordered_json max_power1{};
+		nlohmann::ordered_json min_power1{};
+		nlohmann::ordered_json socket_power1{};
+		if (power_cap1_info.power_cap == UINT64_MAX) {
+			socket_power1["value"] = "N/A";
+			socket_power1["unit"] = "N/A";
+		} else {
+			socket_power1["value"] = power_cap1_info.power_cap;
+			socket_power1["unit"] = "W";
+		}
+		if (power_cap1_info.max_power_cap == UINT64_MAX) {
+			max_power1["value"] = "N/A";
+			max_power1["unit"] = "N/A";
+		} else {
+			max_power1["value"] = power_cap1_info.max_power_cap;
+			max_power1["unit"] = "W";
+		}
+		if (power_cap1_info.min_power_cap == UINT64_MAX) {
+			min_power1["value"] = "N/A";
+			min_power1["unit"] = "N/A";
+		} else {
+			min_power1["value"] = power_cap1_info.min_power_cap;
+			min_power1["unit"] = "W";
+		}
+
 		nlohmann::ordered_json slowdown_edge_temperature{};
 		if (therm_limit_edge_string == "N/A") {
 			slowdown_edge_temperature["value"] = "N/A";
@@ -1215,10 +1266,17 @@ int AmdSmiApiHost::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argumen
 		}
 		shutdown_vram_temperature["unit"] = vram_shutdown_temperature_string == "N/A" ? "N/A" : "C";
 
-		nlohmann::ordered_json limit_json = { { "max_power",  max_power} };
+		nlohmann::ordered_json ppt0_json{};
+		ppt0_json["max_power"] = max_power;
+		ppt0_json["min_power"] = min_power;
+		ppt0_json["socket_power"] = socket_power;
+		nlohmann::ordered_json ppt1_json{};
+		ppt1_json["max_power"] = max_power1;
+		ppt1_json["min_power"] = min_power1;
+		ppt1_json["socket_power"] = socket_power1;
 
-		limit_json["min_power"] = min_power;
-		limit_json["socket_power"] = socket_power;
+		nlohmann::ordered_json limit_json = { { "ppt0",  ppt0_json} };
+		limit_json["ppt1"] = ppt1_json;
 		limit_json["slowdown_edge_temperature"] = slowdown_edge_temperature;
 		limit_json["slowdown_hotspot_temperature"] = slowdown_hotspot_temperature;
 		limit_json["slowdown_mem_temperature"] = slowdown_vram_temperature;
@@ -1233,9 +1291,13 @@ int AmdSmiApiHost::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argumen
 		formatted_string = limit_json.dump(4);
 	} else if (arg.output == csv) {
 		formatted_string = string_format(
-							   ",%s,%s,%s,%s,%s,%s,%s,%s,%s", max_power_cap_string.c_str(),
+							   ",%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s", max_power_cap_string.c_str(),
 							   min_power_cap_string.c_str(),
-							   power_cap_string.c_str(), therm_limit_edge_string.c_str(),
+							   power_cap_string.c_str(),
+							   max_power_cap1_string.c_str(),
+							   min_power_cap1_string.c_str(),
+							   power_cap1_string.c_str(),
+							   therm_limit_edge_string.c_str(),
 							   therm_limit_junction_string.c_str(),
 							   therm_limit_vram_string.c_str(),
 							   edge_shutdown_temperature_string.c_str(),
@@ -1248,6 +1310,9 @@ int AmdSmiApiHost::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argumen
 		std::string max_power_cap_string_uint = max_power_cap_string == "N/A" ? "" : "W";
 		std::string min_power_cap_string_uint = min_power_cap_string == "N/A" ? "" : "W";
 		std::string power_cap_string_unit = power_cap_string == "N/A" ? "" : "W";
+		std::string max_power_cap1_string_uint = max_power_cap1_string == "N/A" ? "" : "W";
+		std::string min_power_cap1_string_uint = min_power_cap1_string == "N/A" ? "" : "W";
+		std::string power_cap1_string_unit = power_cap1_string == "N/A" ? "" : "W";
 		std::string therm_limit_edge_string_unit = therm_limit_edge_string == "N/A" ? "" : "C";
 		std::string therm_limit_junction_string_unit = therm_limit_junction_string == "N/A" ? "" : "C";
 		std::string therm_limit_vram_string_unit = therm_limit_vram_string == "N/A" ? "" : "C";
@@ -1262,6 +1327,9 @@ int AmdSmiApiHost::amdsmi_get_limit_info_command(uint64_t processor_bdf, Argumen
 							   max_power_cap_string_uint.c_str(), min_power_cap_string.c_str(),
 							   min_power_cap_string_uint.c_str(), power_cap_string.c_str(),
 							   power_cap_string_unit.c_str(),
+							   max_power_cap1_string.c_str(), max_power_cap1_string_uint.c_str(),
+							   min_power_cap1_string.c_str(), min_power_cap1_string_uint.c_str(),
+							   power_cap1_string.c_str(), power_cap1_string_unit.c_str(),
 							   therm_limit_edge_string.c_str(),therm_limit_edge_string_unit.c_str(),
 							   therm_limit_junction_string.c_str(), therm_limit_junction_string_unit.c_str(),
 							   therm_limit_vram_string.c_str(),therm_limit_vram_string_unit.c_str(),
@@ -1498,7 +1566,7 @@ int AmdSmiApiHost::amdsmi_get_dfc_info_command(uint64_t processor_bdf, Arguments
 			}
 
 			for (auto dfc_white_list_elem : dfc_info.data[i].white_list) {
-				if (dfc_white_list_elem.latest != 0 &&
+				if (dfc_white_list_elem.latest != 0 ||
 						dfc_white_list_elem.oldest != 0) {
 					if (arg.output == human) {
 						formatted_string +=

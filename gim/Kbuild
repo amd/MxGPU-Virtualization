@@ -16,12 +16,21 @@ subdir-ccflags-y += -I$(GIM_COMS_PATH)/inc
 subdir-ccflags-y += -I$(src)/inc
 subdir-ccflags-y += -include $(src)/dkms/config.h
 subdir-ccflags-y += -Werror -Wimplicit-fallthrough=2 -Wno-enum-conversion -Wno-expansion-to-defined
+subdir-ccflags-y += -DAMDGV_UNIRAS_SUPPORT
+subdir-ccflags-y += -DSHIM_LAYER_OSS_RADIX_TREE -DSHIM_LAYER_OSS_KFIFO -DSHIM_LAYER_OSS_MEMPOOL
+
+# Ensure RAS portable-container objects always see shim flags (some kbuild paths
+# omit global subdir-ccflags-y for ../uniras/ras/ sources).
+CFLAGS_amdgv_ras_mempool.o += -DSHIM_LAYER_OSS_MEMPOOL
+CFLAGS_amdgv_ras_fifo.o += -DSHIM_LAYER_OSS_KFIFO
 
 include $(GIM_SHIM_PATH)/Kbuild
 
 include $(LIBGV_PATH)/Makefile
 gim-y += $(addprefix ../libgv/,$(LIBGV_COMPILE_FILES))
 subdir-ccflags-y += $(LIBGV_CCFLAGS)
+
+gim-y += $(patsubst uniras/ras/%,../uniras/ras/%,$(AMD_GPU_RAS_FILES))
 
 include $(SMI_DRV_PATH)/Makefile
 gim-y += $(addprefix ../smi-lib/drv/,$(SMI_COMPILE_FILES))

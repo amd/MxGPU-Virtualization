@@ -1006,7 +1006,7 @@ _AMDSMI_MAX_DEVICES = 32
 _AMDSMI_MAX_NUM_METRICS = 512
 _AMDSMI_MAX_BAD_PAGE_RECORD = 16384
 _AMDSMI_MAX_ACCELERATOR_PROFILE = 32
-_MAX_NUMBER_OF_AFIDS_PER_RECORD = 12
+_AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD = 12
 
 
 def _parse_bdf(bdf):
@@ -2074,7 +2074,7 @@ def amdsmi_get_dfc_fw_table(processor_handle):
     for i in range(0, dfc_table.header.dfc_fw_total_entries):
         white_list = list()
         for x in range(len(dfc_table.data[i].c__SA_amdsmi_dfc_fw_data_t_0.white_list)):
-            if dfc_table.data[i].c__SA_amdsmi_dfc_fw_data_t_0.white_list[x].latest != 0 and dfc_table.data[i].c__SA_amdsmi_dfc_fw_data_t_0.white_list[x].oldest != 0:
+            if dfc_table.data[i].c__SA_amdsmi_dfc_fw_data_t_0.white_list[x].latest != 0 or dfc_table.data[i].c__SA_amdsmi_dfc_fw_data_t_0.white_list[x].oldest != 0:
                 white_list.append({
                     'latest': dfc_table.data[i].c__SA_amdsmi_dfc_fw_data_t_0.white_list[x].latest,
                     'oldest': dfc_table.data[i].c__SA_amdsmi_dfc_fw_data_t_0.white_list[x].oldest
@@ -2082,7 +2082,7 @@ def amdsmi_get_dfc_fw_table(processor_handle):
         black_list = list()
         for x in range(len(dfc_table.data[i].black_list)):
             white_list_index = int(x/4)
-            if dfc_table.data[i].c__SA_amdsmi_dfc_fw_data_t_0.white_list[white_list_index].latest != 0 and dfc_table.data[i].c__SA_amdsmi_dfc_fw_data_t_0.white_list[white_list_index].oldest != 0:
+            if dfc_table.data[i].c__SA_amdsmi_dfc_fw_data_t_0.white_list[white_list_index].latest != 0 or dfc_table.data[i].c__SA_amdsmi_dfc_fw_data_t_0.white_list[white_list_index].oldest != 0:
                 black_list.append({
                     'version': dfc_table.data[i].black_list[x]
                 })
@@ -2887,8 +2887,8 @@ def amdsmi_topo_get_p2p_status(processor_handle_src, processor_handle_dst):
 def amdsmi_get_afids_from_cper(cper_buffer):
     buf_size = len(cper_buffer)
 
-    afids = (ctypes.c_uint64 * _MAX_NUMBER_OF_AFIDS_PER_RECORD)()
-    num_afids = ctypes.c_uint32(_MAX_NUMBER_OF_AFIDS_PER_RECORD)
+    afids = (ctypes.c_uint64 * _AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD)()
+    num_afids = ctypes.c_uint32(_AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD)
 
     cper_array = (ctypes.c_ubyte * len(cper_buffer))(*cper_buffer)
     char_pointer = ctypes.cast(cper_array, ctypes.POINTER(ctypes.c_char))

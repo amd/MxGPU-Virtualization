@@ -309,10 +309,10 @@ static int ras_eeprom_v2_1_reset_table(struct amdgv_adapter *adapt,
 	oss_mutex_unlock(control->tbl_mutex);
 
 	if (ret == 1) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_EEPROM_RESET, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_RESET, 0);
 		ret = 0;
 	} else {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_EEPROM_RESET_FAILED, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_RESET_FAILED, 0);
 		ret = AMDGV_FAILURE;
 	}
 
@@ -450,8 +450,8 @@ static bool ras_eeprom_v2_1_need_fix_threshold(struct amdgv_adapter *adapt,
 		changed = true;
 
 	if (changed)
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_THD_CHANGED,
-			AMDGV_ERROR_32_32(egi_v2_1->ecc_page_threshold, BAD_PAGE_RECORD_THRESHOLD));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_THD_CHANGED,
+			AMDGV_LOG_DATA_32_32(egi_v2_1->ecc_page_threshold, BAD_PAGE_RECORD_THRESHOLD));
 
 	return changed;
 }
@@ -563,8 +563,8 @@ static int ras_eeprom_v2_1_fix_overwrite_table(struct amdgv_adapter *adapt,
 	new_count = ras_eeprom_v2_1_remove_dups(adapt, bp_cache, control->num_recs);
 	if (new_count != control->num_recs) {
 		overwrite = true;
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_DUP_ENTRIES,
-			AMDGV_ERROR_32_32(control->num_recs, new_count));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_DUP_ENTRIES,
+			AMDGV_LOG_DATA_32_32(control->num_recs, new_count));
 	}
 	fix_threshold = ras_eeprom_v2_1_need_fix_threshold(adapt, control, new_count);
 
@@ -649,7 +649,7 @@ static int ras_eeprom_v2_1_fix_and_upgrade_table(struct amdgv_adapter *adapt,
 		force_overwrite = true;
 	} else {
 		ret = AMDGV_FAILURE;
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_EEPROM_CHK_MISMATCH, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_CHK_MISMATCH, 0);
 		goto free_bp_cache;
 	}
 
@@ -719,7 +719,7 @@ static int ras_eeprom_v2_1_parse_header(struct amdgv_adapter *adapt,
 	__decode_table_header_from_buff(hdr, &buff[EEPROM_ADDRESS_SIZE]);
 
 	if (hdr->header != EEPROM_TABLE_HDR_VAL && hdr->header != EEPROM_TABLE_HDR_BAD) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_EEPROM_WRONG_HDR, hdr->header);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_WRONG_HDR, hdr->header);
 		return AMDGV_FAILURE;
 	}
 
@@ -728,8 +728,8 @@ static int ras_eeprom_v2_1_parse_header(struct amdgv_adapter *adapt,
 	    hdr->version != EEPROM_TABLE_VER_V3 &&
 	    hdr->version != EEPROM_TABLE_VER_V4)
 	{
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_EEPROM_WRONG_VER,
-				AMDGV_ERROR_32_32(hdr->version, EEPROM_TABLE_VER_V2_1));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_WRONG_VER,
+				AMDGV_LOG_DATA_32_32(hdr->version, EEPROM_TABLE_VER_V2_1));
 		return AMDGV_FAILURE;
 	}
 

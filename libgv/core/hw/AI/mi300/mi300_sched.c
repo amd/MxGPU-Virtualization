@@ -357,7 +357,7 @@ static int mi300_sched_reconfig_mapping_tables(struct amdgv_adapter *adapt, uint
 {
 	AMDGV_WARN("MI300 series does not support dynamic VF number change\n");
 
-	return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+	return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 }
 
 static int mi300_sched_sw_init(struct amdgv_adapter *adapt)

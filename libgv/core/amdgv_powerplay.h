@@ -8,6 +8,7 @@
 #include "amdgv_powerplay_hwmgr.h"
 #include "amdgv_common_eeprom.h"
 #include "amdgv_gpumon.h"
+#include "amdgv_gpumon_internal.h"
 
 #define PP_METRICS_CACHE_EXPIRY_US 1000
 
@@ -174,7 +175,8 @@ struct amdgv_pp_funcs {
 	int (*set_driver_config)(struct amdgv_adapter *adapt);
 	int (*get_clock_limit)(struct amdgv_adapter *adapt, enum pp_clock_type clk,
 			       enum pp_clock_limit_type limit_type, uint32_t *freq);
-	int (*get_power_capacity)(struct amdgv_adapter *adapt, int *val);
+	int (*get_power_capacity)(struct amdgv_adapter *adapt, int *val,
+				  enum amdgv_gpumon_type ppt_type);
 	int (*set_power_capacity)(struct amdgv_adapter *adapt, int val);
 	int (*get_dpm_capacity)(struct amdgv_adapter *adapt, int *val);
 	int (*i2c_eeprom_xfer)(struct amdgv_adapter *adapt, uint8_t port, struct i2c_msg *msgs,
@@ -184,6 +186,7 @@ struct amdgv_pp_funcs {
 	int (*send_hbm_bad_pages_num)(struct amdgv_adapter *adapt, uint32_t size);
 	int (*send_hbm_bad_channel_flag)(struct amdgv_adapter *adapt, uint32_t size);
 	int (*trigger_vf_flr)(struct amdgv_adapter *adapt, uint32_t param);
+	int (*prepare_vf_unload)(struct amdgv_adapter *adapt, uint32_t idx_vf);
 	int (*parse_smu_table_info)(struct amdgv_adapter *adapt);
 	int (*get_clock_limit_driver_freq)(struct amdgv_adapter *adapt, enum pp_clock_type clk,
 					enum pp_clock_limit_type limit_type, uint32_t *freq);

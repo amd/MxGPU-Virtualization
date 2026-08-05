@@ -146,7 +146,7 @@ static int mi200_ecc_hw_init(struct amdgv_adapter *adapt)
 	 */
 	ret = amdgv_psp_ras_initialize(adapt, psp_ras_bin, sizeof(psp_ras_bin));
 	if (ret != PSP_STATUS__SUCCESS) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_INIT_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_INIT_FAIL, 0);
 		ret = AMDGV_FAILURE;
 		goto out;
 	}

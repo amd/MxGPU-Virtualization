@@ -99,7 +99,6 @@ static int amdgv_sched_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf,
 		/* pop from stack */
 		while (adapt->ecc.last_err_bps_cnt > 0) {
 			if (amdgv_ffbm_replace_bad_pages(adapt, &adapt->ecc.last_err_bps[--adapt->ecc.last_err_bps_cnt], 1)) {
-				AMDGV_ERROR("Failed to replace bad pages!\n");
 				/* check if RMA criteria is hit */
 				if (amdgv_ras_eeprom_is_gpu_bad(adapt))
 					amdgv_device_set_status(adapt, AMDGV_STATUS_HW_RMA);
@@ -143,7 +142,10 @@ static int amdgv_sched_whole_gpu_reset(struct amdgv_adapter *adapt, uint32_t tri
 
 	/* Query all ras block ecc errors in ecc gpu reset */
 	if (oss_atomic_read(adapt->in_ecc_recovery)) {
-		amdgv_ecc_query_ras_errors(adapt);
+		if (amdgv_uniras_enabled(adapt))
+			amdgv_ras_mgr_flush_ras_ecc_info(adapt);
+		else
+			amdgv_ecc_query_ras_errors(adapt);
 	}
 
 	amdgv_debug_test_and_hang_wgr(adapt);
@@ -159,7 +161,7 @@ static int amdgv_sched_whole_gpu_reset(struct amdgv_adapter *adapt, uint32_t tri
 
 	/* handle PF first if PF is used */
 	if (adapt->flags & AMDGV_FLAG_USE_PF) {
-		AMDGV_DEBUG("notify reset PF\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_RESET_NOTIFY_VF, 0);
 		amdgv_reset_mailbox_notify_vf(adapt, AMDGV_PF_IDX, false);
 	}
 
@@ -178,7 +180,7 @@ static int amdgv_sched_whole_gpu_reset(struct amdgv_adapter *adapt, uint32_t tri
 			continue;
 
 		if (!oss_atomic_read(adapt->in_ecc_recovery)) {
-			AMDGV_DEBUG("notify reset %s\n", amdgv_idx_to_str(idx_vf));
+			amdgv_put_log(idx_vf, AMDGV_LOG_RESET_NOTIFY_VF, 0);
 			amdgv_reset_mailbox_notify_vf(adapt, idx_vf, false);
 			adapt->array_vf[idx_vf].ready_to_reset = false;
 		}
@@ -218,8 +220,7 @@ static int amdgv_sched_whole_gpu_reset(struct amdgv_adapter *adapt, uint32_t tri
 		if (!is_active_or_suspend_vf(adapt, idx_vf))
 			continue;
 
-		AMDGV_DEBUG("notify %s whole GPU reset completion\n",
-			    amdgv_idx_to_str(idx_vf));
+		amdgv_put_log(idx_vf, AMDGV_LOG_RESET_NOTIFY_VF_COMPLETION, 0);
 		/* notify vf reset completion */
 		amdgv_reset_mailbox_notify_vf(adapt, idx_vf, true);
 
@@ -289,12 +290,11 @@ static int amdgv_sched_gpu_chain_reset(struct amdgv_adapter *adapt, bool reset_a
 			if (adapt_next == adapt)
 				continue;
 
-			AMDGV_INFO("notify chain reset on node 0x%llx\n", adapt_next->xgmi.node_id);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_XGMI_CHAIN_RESET_NOTIFY, adapt_next->xgmi.node_id);
 			adapt_next->reset.in_xgmi_chain_reset = true;
 			if (amdgv_sched_queue_event(adapt_next, AMDGV_PF_IDX,
 						    AMDGV_EVENT_SCHED_FORCE_RESET_GPU_INTERNAL, 0))
-				AMDGV_ERROR("notify chain reset on node 0x%llx failed\n",
-					    adapt_next->xgmi.node_id);
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_XGMI_CHAIN_RESET_NOTIFY_FAILED, adapt_next->xgmi.node_id);
 		}
 	}
 
@@ -320,7 +320,7 @@ self_reset:
 
 		task_barrier_exit(&hive->tb_chain_reset, hive->number_adapters);
 	} else {
-		AMDGV_INFO("drop orphan reset request\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_RESET_DROP_ORPHAN_REQUEST, 0);
 	}
 
 	return ret;
@@ -332,7 +332,7 @@ int amdgv_sched_gpu_reset_wrap(struct amdgv_adapter *adapt, bool reset_all, uint
 
 	if (amdgv_xgmi_is_hive_bad(adapt) ||
 		 (adapt->xgmi.phy_nodes_num == 1 && amdgv_ras_eeprom_is_gpu_bad(adapt))) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_RESET_GPU_HIVE_FAILED, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_RESET_GPU_HIVE_FAILED, 0);
 		return ret;
 	}
 
@@ -417,16 +417,12 @@ int amdgv_sched_reset_vf(struct amdgv_adapter *adapt, uint32_t idx_vf,
 
 	amdgv_time_log_note_vf_reset_start(adapt, idx_vf);
 
-	AMDGV_INFO("start %s reset\n", amdgv_idx_to_str(idx_vf));
-
 	notify_vf = (is_active_vf(idx_vf) ? true : false) ||
 		    adapt->array_vf[idx_vf].vf_status == AMDGV_VF_STATUS_START_INIT;
 
 	ret = amdgv_sched_vf_flr(adapt, idx_vf, sched_block, notify_vf);
-	if (ret) {
-		AMDGV_INFO("failed %s FLR\n", amdgv_idx_to_str(idx_vf));
+	if (ret)
 		goto whole_gpu_reset;
-	}
 
 	if (!(adapt->flags & AMDGV_FLAG_USE_LEGACY_FLR_SEQUENCE) && (idx_vf != AMDGV_PF_IDX)) {
 		for_each_id (world_switch_id, amdgv_sched_get_world_switch_mask_by_sched_block(
@@ -458,15 +454,13 @@ int amdgv_sched_reset_vf(struct amdgv_adapter *adapt, uint32_t idx_vf,
 		}
 	}
 
-	AMDGV_INFO("finish %s reset\n", amdgv_idx_to_str(idx_vf));
+	amdgv_put_log(idx_vf, AMDGV_LOG_RESET_FLR_DONE, 0);
 
 	amdgv_time_log_note_vf_reset_end(adapt, idx_vf);
 
 	return 0;
 
 whole_gpu_reset:
-	AMDGV_INFO("Trying whole gpu reset ...\n");
-
 	amdgv_notify_shim(adapt->dev, AMDGV_NOTIFICATION_ERROR_WHOLE_GPU_RESET,
 			  "Whole GPU reset triggered by failed FLR on %s.",
 			  amdgv_idx_to_str(idx_vf));
@@ -489,7 +483,7 @@ int amdgv_sched_reset_vf_auto(struct amdgv_adapter *adapt)
 	struct amdgv_sched_world_switch *world_switch;
 
 	if (adapt->flags & AMDGV_FLAG_VF_HANG_GPU_RESET) {
-		AMDGV_INFO("FLR is disabled\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_RESET_FLR_DISABLED, 0);
 		goto whole_gpu_reset__auto;
 	}
 
@@ -507,8 +501,9 @@ int amdgv_sched_reset_vf_auto(struct amdgv_adapter *adapt)
 		if (curr_vf_state == AMDGV_VF_CONTEXT_ABNORMAL) {
 			if (amdgv_sched_get_world_switch_by_hw_sched_id(
 					adapt, hw_sched_id, &abnormal_world_switch)) {
-				AMDGV_ERROR(
-					"HW Scheduler doesn't belong to any logical scheduler!");
+				amdgv_put_log(AMDGV_PF_IDX,
+					      AMDGV_LOG_SCHED_HW_SCHED_NO_LOGICAL,
+					      hw_sched_id);
 				goto whole_gpu_reset__auto;
 			}
 			break;
@@ -516,15 +511,13 @@ int amdgv_sched_reset_vf_auto(struct amdgv_adapter *adapt)
 	}
 
 	if (!abnormal_world_switch) {
-		AMDGV_WARN("No engine in abnormal state, skip reset.\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_SCHED_NO_ABNORMAL_ENGINE, 0);
 		return 0;
 	}
 
 	abnormal_idx_vf = abnormal_world_switch->curr_idx_vf;
 
-	AMDGV_INFO("start reset auto on VF%d (%s engine hung)\n",
-		   abnormal_world_switch->curr_idx_vf,
-		   amdgv_sched_block_to_name(abnormal_world_switch->sched_block));
+	amdgv_put_log(abnormal_idx_vf, AMDGV_LOG_SCHED_RESET_AUTO_ENGINE_HUNG, abnormal_world_switch->sched_block);
 
 	for_each_id(world_switch_id,
 		     amdgv_sched_get_world_switch_mask(adapt, abnormal_idx_vf)) {
@@ -536,11 +529,11 @@ int amdgv_sched_reset_vf_auto(struct amdgv_adapter *adapt)
 		amdgv_time_log_note_vf_reset_start(adapt, abnormal_idx_vf);
 
 	if (!(adapt->flags & AMDGV_FLAG_USE_PF) && (abnormal_idx_vf == AMDGV_PF_IDX)) {
-		AMDGV_WARN("PF is currently the active FCN on hung engine. Perform Whole GPU Reset\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_SCHED_PF_HUNG_WGR, 0);
 		goto whole_gpu_reset__auto;
 	}
 	if (AMDGV_IS_IDX_INVALID(abnormal_idx_vf)) {
-		AMDGV_WARN("INVALID VFID on hung engine\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_SCHED_HUNG_ENGINE_INVALID_VF, abnormal_idx_vf);
 		goto whole_gpu_reset__auto;
 	}
 
@@ -570,10 +563,8 @@ int amdgv_sched_reset_vf_auto(struct amdgv_adapter *adapt)
 			  "Reset %s initiated from reset_vf_auto on %s",
 			  amdgv_idx_to_str(abnormal_idx_vf),
 			  amdgv_sched_block_to_name(AMDGV_SCHED_BLOCK_ALL));
-	if (ret) {
-		AMDGV_INFO("failed %s FLR\n", amdgv_idx_to_str(abnormal_idx_vf));
+	if (ret)
 		goto whole_gpu_reset__auto;
-	}
 
 	/* set the vf to AVAIL state */
 	amdgv_sched_reset_vf_sched_state(adapt, abnormal_idx_vf);
@@ -624,16 +615,18 @@ int amdgv_sched_reset_vf_auto(struct amdgv_adapter *adapt)
 		}
 	}
 
-	AMDGV_INFO("finish VF reset auto.\n");
+	amdgv_put_log(abnormal_idx_vf, AMDGV_LOG_RESET_FLR_DONE, 0);
 
 	/* end recording for VF */
 	amdgv_time_log_note_vf_reset_end(adapt, abnormal_idx_vf);
 
+	/* FLR recovery above can take a long time (RLCV cmd timeouts), so run one
+	 * scheduling pass here to keep bystander VFs from starving. */
+	amdgv_sched_context_one_time_loop(adapt, abnormal_idx_vf);
+
 	return 0;
 
 whole_gpu_reset__auto:
-	AMDGV_INFO("Trying whole gpu reset ...\n");
-
 	amdgv_notify_shim(adapt->dev, AMDGV_NOTIFICATION_ERROR_WHOLE_GPU_RESET,
 			  "Whole GPU reset triggered by failed VF reset auto.");
 

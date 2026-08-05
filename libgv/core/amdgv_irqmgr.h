@@ -131,6 +131,7 @@ struct amdgv_irqmgr {
 
 	void (*write_virtualized_interrupt)(struct amdgv_adapter *adapt, uint32_t vfIndex, uint32_t tableIndex, uint64_t messageAddress, uint32_t messageData, uint32_t vectorControl, bool is_direct_write);
 	void (*update_virtualized_interrupt)(struct amdgv_adapter *adapt, uint32_t vfIndex);
+	int (*vf_disp_timer2_control)(struct amdgv_adapter *adapt, uint32_t vfIndex, bool enable);
 
 	struct amdgv_virtualized_interrupt_info virtualized_interrupt_info_db[AMDGV_MAX_VF_NUM];
 };
@@ -176,5 +177,6 @@ void amdgv_irqmgr_decode_iv(struct amdgv_adapter *adapt, struct amdgv_iv_entry *
 int amdgv_irqmgr_write_virtualized_interrupt(struct amdgv_adapter *adapt, uint32_t vfIndex, uint32_t tableIndex,
 		uint64_t messageAddress, uint32_t messageData, uint32_t vectorControl, bool is_direct_write);
 void amdgv_irqmgr_update_virtualized_interrupt(struct amdgv_adapter *adapt, uint32_t vfIndex);
+int amdgv_irqmgr_vf_disp_timer2_control(struct amdgv_adapter *adapt, uint32_t vfIndex, bool enable);
 
 #endif

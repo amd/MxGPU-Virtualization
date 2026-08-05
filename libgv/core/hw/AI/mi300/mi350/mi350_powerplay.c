@@ -53,6 +53,7 @@ typedef struct Mi350_PPTable {
 	uint32_t MaxSocketPowerLimit;
 	uint32_t HotSpotCtfTemp;
 	uint32_t MemCtfTemp;
+	uint32_t DefaultPowerLimit;
 } PPTable_t;
 
 enum mi350_smu_table_type {
@@ -387,10 +388,17 @@ static int mi350_smu_send_msg_internal(struct amdgv_adapter *adapt, uint32_t msg
 
 	oss_mutex_lock(adapt->pp.smu_lock);
 
-	ret = mi350_smu_wait_for_response(adapt, resp, AMDGV_WAIT_FOR_SMU_CHECK_HANG);
-	if (ret) {
-		ret = AMDGV_FAILURE;
-		goto end;
+	/* In sync flood, PMFW abandons any in-flight low-priority message, leaving
+	 * the mailbox response unchanged. Skip the pre-send hang-check for messages
+	 * still serviced in sync flood so it does not falsely abort on that stale
+	 * response; the post-send wait still validates the message. */
+	if (!(oss_atomic_read(adapt->in_sync_flood) &&
+	      mi350_smu_msg_allowed_in_sync_flood(adapt, msg))) {
+		ret = mi350_smu_wait_for_response(adapt, resp, AMDGV_WAIT_FOR_SMU_CHECK_HANG);
+		if (ret) {
+			ret = AMDGV_FAILURE;
+			goto end;
+		}
 	}
 
 	mi350_smu_send_msg_nocheck(adapt, msg, param);
@@ -496,10 +504,15 @@ static int mi350_smu_record_version(struct amdgv_adapter *adapt)
 	return 0;
 }
 
-static int mi350_smu_get_power_limit(struct amdgv_adapter *adapt, uint32_t *val)
+static int mi350_smu_get_power_limit(struct amdgv_adapter *adapt, uint32_t *val,
+				     enum amdgv_gpumon_type ppt_type)
 {
 	if (!val)
 		return AMDGV_FAILURE;
+
+	/* PPT1 uses GetPptLimit2, PPT0 uses GetPptLimit */
+	if (ppt_type == GPUMON_GET_GPU_POWER_CAP2)
+		return mi350_smu_send_msg(adapt, PPSMC_MSG_GetPptLimit2, val);
 
 	return mi350_smu_send_msg(adapt, PPSMC_MSG_GetPptLimit, val);
 }
@@ -985,7 +998,7 @@ static void mi350_smu_notify_throttler_error(struct amdgv_adapter *adapt,
 
 	AMDGV_DEBUG("mi350 smu notify throttler status 0x%08x, throttler_event 0x%016llx\n",
 		    throttler_status, throttler_event);
-	amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_PP_THROTTLER_EVENT, throttler_event);
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_THROTTLER_EVENT, throttler_event);
 }
 
 static int mi350_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv_entry *entry)
@@ -1527,6 +1540,12 @@ static int mi350_smu_init_pptable(struct amdgv_adapter *adapt)
 
 	ret = mi350_smu_send_msg_with_param(adapt, PPSMC_MSG_GetCTFLimit,
 					    PPSMC_HBM_THM_TYPE, &pptable->MemCtfTemp);
+	if (ret)
+		return ret;
+
+	ret = mi350_smu_send_msg_with_param(adapt,
+		PPSMC_MSG_GetPptLimit, 0, &pptable->DefaultPowerLimit);
+
 	if (ret)
 		return ret;
 
@@ -2323,7 +2342,7 @@ static int mi350_smu_early_sw_init(struct amdgv_adapter *adapt)
 
 	adapt->pp.smu_lock = oss_mutex_init();
 	if (adapt->pp.smu_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_MUTEX_FAIL, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -2406,15 +2425,16 @@ const struct amdgv_init_func mi350_smu_late_func = {
 	.hw_fini = mi350_smu_late_hw_fini,
 };
 
-static int mi350_smu_pp_get_power_capacity(struct amdgv_adapter *adapt, int *val)
+static int mi350_smu_pp_get_power_capacity(struct amdgv_adapter *adapt, int *val,
+					   enum amdgv_gpumon_type ppt_type)
 {
-	uint32_t tmp;
+	uint32_t tmp = 0;
 	int ret;
 
 	if (!val)
 		return AMDGV_FAILURE;
 
-	ret = mi350_smu_get_power_limit(adapt, &tmp);
+	ret = mi350_smu_get_power_limit(adapt, &tmp, ppt_type);
 	if (ret)
 		return ret;
 
@@ -2669,6 +2689,19 @@ static int mi350_pp_smu_get_max_configurable_power_limit(struct amdgv_adapter *a
 	PPTable_t *pptable = &table_context->pptable;
 
 	*power_limit = pptable->MaxSocketPowerLimit;
+
+	return 0;
+}
+
+static int mi350_pp_smu_get_default_power_limit(struct amdgv_adapter *adapt,
+	int *default_power)
+{
+	struct smu_context *smu = adapt_to_smu(adapt);
+	struct mi350_smu_table_context *table_context =
+		(struct mi350_smu_table_context *)smu->smu_table_context;
+	PPTable_t *pptable = &table_context->pptable;
+
+	*default_power = pptable->DefaultPowerLimit;
 
 	return 0;
 }
@@ -3634,6 +3667,7 @@ static const struct amdgv_pp_funcs mi350_amdgv_pp_funcs = {
 	.get_pp_metrics = mi350_smu_pp_get_pp_metrics,
 	.is_clock_locked = mi350_smu_pp_is_clock_locked,
 	.get_max_configurable_power_limit = mi350_pp_smu_get_max_configurable_power_limit,
+	.get_default_power_limit = mi350_pp_smu_get_default_power_limit,
 	.get_metrics_ext = mi350_pp_smu_get_metrics_ext,
 	.get_num_metrics_ext_entries = mi350_pp_smu_get_num_metrics_ext_entries,
 	.parse_smu_table_info = mi350_parse_smu_table_info,
@@ -3755,7 +3789,7 @@ rma_check:
 				if (adapt->ecc.bad_page_detection_mode & BIT(AMDGV_RAS_ECC_FLAG_IGNORE_RMA))
 					return 0;
 
-				amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_EEPROM_REACH_THD, 0);
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_REACH_THD, 0);
 				amdgv_device_handle_bad_gpu(adapt);
 			}
 		}

@@ -38,7 +38,7 @@ static int amdgv_world_switch_do_enable_auto_sched(struct amdgv_adapter *adapt,
 		if (adapt->flags & AMDGV_FLAG_USE_PF &&
 			adapt->flags & AMDGV_FLAG_DEBUG_DUMP_ENABLE) {
 			if (IS_HW_SCHED_TYPE_GFX(hw_sched_id))
-				amdgv_sched_set_auto_sched_log_feature(adapt, hw_sched_id, AMDGV_AUTO_SCHED_DEBUG_DUMP, true);
+				amdgv_sched_set_auto_sched_log_feature(adapt, hw_sched_id, AMDGV_SCHED_DEBUG_DUMP, true);
 		}
 		if (amdgv_gpuiov_enable_auto_sched(adapt, hw_sched_id)) {
 			AMDGV_ERROR("WSSM: Failed to move from %s to AUTO state for VF%d\n",
@@ -187,8 +187,8 @@ int world_switch_bulk_goto_state_manual(struct amdgv_adapter *adapt, uint32_t ta
 
 	for_each_id(hw_sched_id, initial_hw_sched_mask) {
 		if (oss_rwsema_write_trylock(adapt->sched.hw_state_machine[hw_sched_id].ws_lock)) {
-			amdgv_put_error(target_vf, AMDGV_ERROR_IOV_WS_REENTRANT_ERROR, 0);
-			return AMDGV_ERROR_IOV_WS_REENTRANT_ERROR;
+			amdgv_put_log(target_vf, AMDGV_LOG_IOV_WS_REENTRANT_ERROR, 0);
+			return AMDGV_LOG_IOV_WS_REENTRANT_ERROR;
 		}
 	}
 
@@ -217,7 +217,7 @@ next_goto_state:
 
 		if (!(loop_okay--)) {
 			AMDGV_ERROR("Potential Infinite loop.  Too long in state machine\n");
-			ret = AMDGV_ERROR_IOV_WS_INFINITE_LOOP;
+			ret = AMDGV_LOG_IOV_WS_INFINITE_LOOP;
 			goto ws_exit;
 		}
 	}
@@ -262,7 +262,7 @@ next_goto_state:
 				"MANUAL: Unknown next GPU state %d on %s. Marking scheduler as abnormal.\n",
 				adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state,
 				amdgv_hw_sched_id_to_name(adapt, hw_sched_id));
-			ret = AMDGV_ERROR_IOV_CMD_ERROR;
+			ret = AMDGV_LOG_IOV_CMD_ERROR;
 			break;
 		}
 
@@ -382,8 +382,8 @@ static int world_switch_goto_state_manual(struct amdgv_adapter *adapt, uint32_t 
 	uint32_t loop_okay = 20;
 
 	if (oss_rwsema_write_trylock(adapt->sched.hw_state_machine[hw_sched_id].ws_lock)) {
-		amdgv_put_error(target_vf, AMDGV_ERROR_IOV_WS_REENTRANT_ERROR, 0);
-		return AMDGV_ERROR_IOV_WS_REENTRANT_ERROR;
+		amdgv_put_log(target_vf, AMDGV_LOG_IOV_WS_REENTRANT_ERROR, 0);
+		return AMDGV_LOG_IOV_WS_REENTRANT_ERROR;
 	}
 
 #if DEBUG_WS_STATE_MACHINE_MANUAL_LOG
@@ -407,7 +407,7 @@ static int world_switch_goto_state_manual(struct amdgv_adapter *adapt, uint32_t 
 
 		if (!(loop_okay--)) {
 			AMDGV_ERROR("Potential Infinite loop.  Too long in state machine\n");
-			ret = AMDGV_ERROR_IOV_WS_INFINITE_LOOP;
+			ret = AMDGV_LOG_IOV_WS_INFINITE_LOOP;
 			goto ws_exit;
 		}
 
@@ -487,7 +487,7 @@ shutdown_gpu:
 				adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state);
 			/* assign an invalid state */
 			next_state = 0;
-			ret = AMDGV_ERROR_IOV_CMD_ERROR;
+			ret = AMDGV_LOG_IOV_CMD_ERROR;
 			goto ws_exit;
 		}
 
@@ -504,37 +504,37 @@ shutdown_gpu:
 		switch (next_state) {
 		case AMDGV_IDLE_GPU:
 			if (amdgv_gpuiov_idle_vf(adapt, next_vf, hw_sched_id)) {
-				ret = AMDGV_ERROR_IOV_WS_IDLE_TIMEOUT;
+				ret = AMDGV_LOG_IOV_WS_IDLE_TIMEOUT;
 				goto ws_exit;
 			}
 			break;
 		case AMDGV_RUN_GPU:
 			if (amdgv_gpuiov_run_vf(adapt, next_vf, hw_sched_id)) {
-				ret = AMDGV_ERROR_IOV_WS_RUN_TIMEOUT;
+				ret = AMDGV_LOG_IOV_WS_RUN_TIMEOUT;
 				goto ws_exit;
 			}
 			break;
 		case AMDGV_SAVE_GPU_STATE:
 			if (amdgv_gpuiov_save_vf(adapt, next_vf, hw_sched_id)) {
-				ret = AMDGV_ERROR_IOV_WS_SAVE_TIMEOUT;
+				ret = AMDGV_LOG_IOV_WS_SAVE_TIMEOUT;
 				goto ws_exit;
 			}
 			break;
 		case AMDGV_INIT_GPU:
 			if (amdgv_gpuiov_init_vf(adapt, next_vf, hw_sched_id)) {
-				ret = AMDGV_ERROR_IOV_WS_LOAD_TIMEOUT;
+				ret = AMDGV_LOG_IOV_WS_LOAD_TIMEOUT;
 				goto ws_exit;
 			}
 			break;
 		case AMDGV_LOAD_GPU_STATE:
 			if (amdgv_gpuiov_load_vf(adapt, next_vf, hw_sched_id)) {
-				ret = AMDGV_ERROR_IOV_WS_LOAD_TIMEOUT;
+				ret = AMDGV_LOG_IOV_WS_LOAD_TIMEOUT;
 				goto ws_exit;
 			}
 			break;
 		case AMDGV_SHUTDOWN_GPU:
 			if (amdgv_gpuiov_shutdown_vf(adapt, next_vf, hw_sched_id)) {
-				ret = AMDGV_ERROR_IOV_WS_SHUTDOWN_TIMEOUT;
+				ret = AMDGV_LOG_IOV_WS_SHUTDOWN_TIMEOUT;
 				goto ws_exit;
 			}
 			break;
@@ -542,7 +542,7 @@ shutdown_gpu:
 			AMDGV_WARN(
 				"MANUAL: Unknown next GPU state %d.  Don't know how to continue\n",
 				adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state);
-			ret = AMDGV_ERROR_IOV_CMD_ERROR;
+			ret = AMDGV_LOG_IOV_CMD_ERROR;
 			goto ws_exit;
 		}
 		adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state = next_state;
@@ -585,8 +585,8 @@ static int world_switch_goto_state_auto(struct amdgv_adapter *adapt, uint32_t ta
 		return AMDGV_FAILURE;
 
 	if (oss_rwsema_write_trylock(adapt->sched.hw_state_machine[hw_sched_id].ws_lock)) {
-		amdgv_put_error(target_vf, AMDGV_ERROR_IOV_WS_REENTRANT_ERROR, 0);
-		return AMDGV_ERROR_IOV_WS_REENTRANT_ERROR;
+		amdgv_put_log(target_vf, AMDGV_LOG_IOV_WS_REENTRANT_ERROR, 0);
+		return AMDGV_LOG_IOV_WS_REENTRANT_ERROR;
 	}
 
 	psched = amdgv_hw_sched_id_to_name(adapt, hw_sched_id);
@@ -623,7 +623,7 @@ static int world_switch_goto_state_auto(struct amdgv_adapter *adapt, uint32_t ta
 
 		if (!(loop_okay--)) {
 			AMDGV_ERROR("Potential Infinite loop.  Too long in state machine\n");
-			ret = AMDGV_ERROR_IOV_WS_INFINITE_LOOP;
+			ret = AMDGV_LOG_IOV_WS_INFINITE_LOOP;
 			goto ws_exit;
 		}
 
@@ -641,7 +641,7 @@ static int world_switch_goto_state_auto(struct amdgv_adapter *adapt, uint32_t ta
 				AMDGV_ERROR(
 					"WSSM: Failed to move from IDLE to SAVE state for VF%d\n",
 					cur_vf);
-				ret = AMDGV_ERROR_IOV_WS_SAVE_TIMEOUT;
+				ret = AMDGV_LOG_IOV_WS_SAVE_TIMEOUT;
 				goto ws_exit;
 			}
 			adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state =
@@ -672,6 +672,13 @@ static int world_switch_goto_state_auto(struct amdgv_adapter *adapt, uint32_t ta
 		 */
 		/* Due to feature in MMSCH SAVE can also go to ENABLE auto switch */
 		case AMDGV_SAVE_GPU_STATE:
+			if (is_suspend_vf(target_vf) && target_vf != cur_vf && target_vf != AMDGV_PF_IDX) {
+#if DEBUG_WS_STATE_MACHINE_AUTO_LOG
+				AMDGV_INFO("AUTO:    %s - VF%d is suspended, switch from VF%d(SAVE) to VF%d(SAVE)\n", psched, target_vf, cur_vf, target_vf);
+#endif
+				cur_vf = target_vf;
+				adapt->sched.hw_state_machine[hw_sched_id].cur_vf_id = target_vf;
+			}
 			if (target_state == AMDGV_SHUTDOWN_GPU && cur_vf == target_vf) {
 #if DEBUG_WS_STATE_MACHINE_AUTO_LOG
 				AMDGV_INFO(
@@ -686,7 +693,7 @@ static int world_switch_goto_state_auto(struct amdgv_adapter *adapt, uint32_t ta
 					AMDGV_ERROR(
 						"WSSM: Failed to move from SAVE to SHUTDOWN state for VF%d\n",
 						cur_vf);
-					ret = AMDGV_ERROR_IOV_WS_SHUTDOWN_TIMEOUT;
+					ret = AMDGV_LOG_IOV_WS_SHUTDOWN_TIMEOUT;
 					goto ws_exit;
 				}
 				adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state =
@@ -784,7 +791,7 @@ shutdown_gpu:
 load_gpu:
 				if (amdgv_gpuiov_load_vf(adapt, target_vf, hw_sched_id)) {
 					AMDGV_ERROR("WSSM: Failed to LOAD VF%d", target_vf);
-					ret = AMDGV_ERROR_IOV_WS_LOAD_TIMEOUT;
+					ret = AMDGV_LOG_IOV_WS_LOAD_TIMEOUT;
 					goto ws_exit;
 				}
 				adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state =
@@ -806,7 +813,7 @@ load_gpu:
 
 				if (amdgv_gpuiov_init_vf(adapt, target_vf, hw_sched_id)) {
 					AMDGV_ERROR("WSSM: Failed to INIT VF%d\n", target_vf);
-					ret = AMDGV_ERROR_IOV_WS_LOAD_TIMEOUT;
+					ret = AMDGV_LOG_IOV_WS_LOAD_TIMEOUT;
 					goto ws_exit;
 				}
 				adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state =
@@ -833,7 +840,7 @@ load_gpu:
 			if (amdgv_gpuiov_run_vf(adapt, cur_vf, hw_sched_id)) {
 				AMDGV_ERROR("WSSM: Failed to switch to RUN state for VF%d\n",
 					    cur_vf);
-				ret = AMDGV_ERROR_IOV_WS_RUN_TIMEOUT;
+				ret = AMDGV_LOG_IOV_WS_RUN_TIMEOUT;
 				goto ws_exit;
 			}
 			adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state =
@@ -883,7 +890,7 @@ load_gpu:
 #endif
 				if (amdgv_gpuiov_idle_vf(adapt, cur_vf, hw_sched_id)) {
 					AMDGV_ERROR("WSSM: Failed to IDLE VF%d\n", cur_vf);
-					ret = AMDGV_ERROR_IOV_WS_IDLE_TIMEOUT;
+					ret = AMDGV_LOG_IOV_WS_IDLE_TIMEOUT;
 					goto ws_exit;
 				}
 				adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state =
@@ -939,7 +946,7 @@ load_gpu:
 				if (adapt->flags & AMDGV_FLAG_USE_PF &&
 					adapt->flags & AMDGV_FLAG_DEBUG_DUMP_ENABLE) {
 					if (IS_HW_SCHED_TYPE_GFX(hw_sched_id))
-						amdgv_sched_set_auto_sched_log_feature(adapt, hw_sched_id, AMDGV_AUTO_SCHED_DEBUG_DUMP, false);
+						amdgv_sched_set_auto_sched_log_feature(adapt, hw_sched_id, AMDGV_SCHED_DEBUG_DUMP, false);
 				}
 				/*
 				 * Cur VF is not known after leaving AUTO switch state
@@ -981,7 +988,7 @@ load_gpu:
 					if (amdgv_gpuiov_idle_vf(adapt, cur_vf, hw_sched_id)) {
 						AMDGV_ERROR("WSSM: Failed to IDLE VF%d\n",
 							    cur_vf);
-						ret = AMDGV_ERROR_IOV_WS_IDLE_TIMEOUT;
+						ret = AMDGV_LOG_IOV_WS_IDLE_TIMEOUT;
 						goto ws_exit;
 					}
 				}
@@ -1030,7 +1037,7 @@ load_gpu:
 			AMDGV_WARN(
 				"AUTO: Unknown current GPU state %d.  Don't know how to continue\n",
 				adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state);
-			ret = AMDGV_ERROR_IOV_CMD_ERROR;
+			ret = AMDGV_LOG_IOV_CMD_ERROR;
 			goto ws_exit;
 		}
 	}
@@ -1058,7 +1065,7 @@ int amdgv_hw_sched_state_run(struct amdgv_adapter *adapt, uint32_t idx_vf,
 					 adapt->sched.hw_state_machine[hw_sched_id].cur_vf_id,
 					 hw_sched_id)) {
 			amdgv_sched_dump_gpu_state(adapt);
-			return AMDGV_ERROR_IOV_WS_IDLE_TIMEOUT;
+			return AMDGV_LOG_IOV_WS_IDLE_TIMEOUT;
 		}
 		adapt->sched.hw_state_machine[hw_sched_id].cur_gpu_state = AMDGV_IDLE_GPU;
 	}

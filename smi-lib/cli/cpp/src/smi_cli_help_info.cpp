@@ -450,7 +450,7 @@ void AmdSmiHelpInfo::configure_windows_host_mi3xx(const Arguments& arg)
 	staticConfig.include_gpu_device = true;
 	CommandConfig topologyConfig = {};
 	topologyConfig.include_gpu_device = true;
-	topologyConfig.common_prefix = topology_common;
+	topologyConfig.common_prefix = topology_arguments_header;
 
 	help_specific = build_help_commands_from_categories(help_supported_command_map, {{"gpu_nic_common", "common"}, {"gpu", "common"}, {"gpu", "windows_host"}, {"gpu", "host_mi3xx"}});
 
@@ -728,7 +728,7 @@ void AmdSmiHelpInfo::configure_linux_host_mi300(const Arguments& arg)
 		metricConfig.common_prefix = metric_common;
 		CommandConfig topologyConfig = {};
 		topologyConfig.include_gpu_device = true;
-		topologyConfig.common_prefix = topology_common;
+		topologyConfig.common_prefix = topology_arguments_header;
 
 		configure_list_settings(
 			usage_list_specific, list_specific,
@@ -773,7 +773,7 @@ void AmdSmiHelpInfo::configure_linux_host_mi300(const Arguments& arg)
 		metricConfig.common_prefix = metric_common;
 		CommandConfig topologyConfig = {};
 		topologyConfig.include_nic_device = true;
-		topologyConfig.common_prefix = topology_common;
+		topologyConfig.common_prefix = topology_arguments_header;
 		configure_list_settings(
 			usage_list_specific, list_specific,
 		listConfig
@@ -853,7 +853,7 @@ void AmdSmiHelpInfo::configure_linux_host_mi300(const Arguments& arg)
 			{"gpu_nic_common", "host"}, {"gpu", "host"}, {"nic", "host_linux"}
 		});
 
-		topology_specific = topology_common + get_help_arguments() +
+		topology_specific = topology_arguments_header + get_help_arguments() +
 		build_arguments_from_categories(topology_argument_vectors_map, {{"gpu_nic_common", "host"}}) +
 		common_gpu + get_device_arguments("gpu") +
 		build_arguments_from_categories(topology_argument_vectors_map, {{"gpu", "host"}}) +
@@ -1062,7 +1062,7 @@ void AmdSmiHelpInfo::configure_linux_host_mi200(const Arguments& arg)
 	metricConfig.common_prefix = metric_common;
 	CommandConfig topologyConfig = {};
 	topologyConfig.include_gpu_device = true;
-	topologyConfig.common_prefix = topology_common;
+	topologyConfig.common_prefix = topology_arguments_header;
 
 	configure_list_settings(
 		usage_list_specific, list_specific,

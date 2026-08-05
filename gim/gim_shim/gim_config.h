@@ -132,6 +132,12 @@
 
 #define BAD_PAGE_RECORD_THRESHOLD__KEY      "bad_page_record_threshold"
 #define BAD_PAGE_RECORD_THRESHOLD__START    -2
+/*
+ * If uniras is not enabled, value <= 0 indicates the adapter will use the
+ * default bad page threshold defined in ecc_sw_init. If uniras is enabled,
+ * the definitions are described in the amdgv_ras_mgr_init_eeprom_config
+ * function.
+ */
 #define BAD_PAGE_RECORD_THRESHOLD__DEFAULT  -1
 #define BAD_PAGE_RECORD_THRESHOLD__MAX      256
 
@@ -170,6 +176,16 @@
 #define VF_HBM_MGMT_MODE__DEFAULT            AMDGV_VF_HBM_MGMT_MODE_DRIVER_MANAGED
 #define VF_HBM_MGMT_MODE__MAX                AMDGV_VF_HBM_MGMT_MODE_DISABLED
 
+#define ENABLE_UNIRAS__KEY "enable_uniras"
+#define ENABLE_UNIRAS__START       0
+#define ENABLE_UNIRAS__DEFAULT     0
+#define ENABLE_UNIRAS__MAX         1
+
+#define SHADER_HASH_MODE__KEY      "shader_hash_mode"
+#define SHADER_HASH_MODE__START    0
+#define SHADER_HASH_MODE__DEFAULT  0
+#define SHADER_HASH_MODE__MAX      1
+
 enum gim_conf_opt_idx {
 	CONF_OPT_START = 0,
 	CONF_OPT_VF_NUMBER = CONF_OPT_START,
@@ -205,6 +221,8 @@ enum gim_conf_opt_idx {
 	CONF_OPT_ENABLE_LIVE_MIGRATION,
 	CONF_OPT_THERMAL_THROTTLE_RATE_LIMIT,
 	CONF_OPT_VF_HBM_MGMT_MODE,
+	CONF_OPT_ENABLE_UNIRAS,
+	CONF_OPT_SHADER_HASH_MODE,
 	CONF_OPT_MAX
 };
 
@@ -282,5 +300,7 @@ uint64_t gim_conf_get_pf_fb_size_opt(uint32_t id);
 
 uint32_t gim_conf_get_debug_mode_opt(uint32_t id);
 uint32_t gim_conf_get_enable_live_migration_opt(void);
+uint32_t gim_conf_get_enable_uniras_opt(uint32_t id);
+uint32_t gim_conf_get_shader_hash_mode_opt(void);
 #endif
 

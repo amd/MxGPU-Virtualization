@@ -178,6 +178,9 @@ int navi32_gfx_check_rlc_autoload_complete(struct amdgv_adapter *adapt)
 		return AMDGV_FAILURE;
 	}
 
+	AMDGV_DEBUG("Disable harvesting GCEA instances after RLC autoload\n");
+	amdgv_dirtybit_gcea_sdp_control(adapt, false);
+
 	AMDGV_DEBUG("PSP: RLC Autoload OK. RLC_RLCS_BOOTLOAD_STATUS=0x%x\n",
 			bootload_status);
 
@@ -403,7 +406,7 @@ static uint64_t navi32_gfx_read_perf_counter(struct amdgv_adapter *adapt, uint32
 	uint32_t wgp_idx;
 
 	switch (perf_counter_select) {
-	case PERFCOUNTER_SQ0:   /* For SQ PERFCOUNTER{rep}_SELECT is for PERFCOUNTER{rep/2}_LO, see doc GFX11_PerfCtr_per_WGP.docx */
+	case PERFCOUNTER_SQ0:
 		reg_lo = SOC15_REG_OFFSET(GC, 0, regSQ_PERFCOUNTER0_LO);
 		reg_hi = 0;
 		break;
@@ -546,6 +549,15 @@ struct amdgv_gfx_funcs navi32_gfx_funcs = {
 static int navi32_gfx_sw_init(struct amdgv_adapter *adapt)
 {
 	adapt->gfx.funcs = &navi32_gfx_funcs;
+
+	/*
+	 * Navi32 requires the GFX engine in PF context for RLCV CP DMA during
+	 * TRANSFER_VF_DATA in live migration; other ASICs do not need this
+	 * context switch.
+	 */
+	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)
+		adapt->live_migration.need_gfx_pf_ctx_switch = true;
+
 	return 0;
 }
 
@@ -567,7 +579,7 @@ static int navi32_gfx_hw_init(struct amdgv_adapter *adapt)
 		adapt->sched.dump_gpu_state(adapt);
 
 	if (ret)
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_INIT_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_INIT_FAIL, 0);
 
 	if (adapt->gfx.hang_detection_supported)
 		navi32_gfx_init_perf_counter(adapt);

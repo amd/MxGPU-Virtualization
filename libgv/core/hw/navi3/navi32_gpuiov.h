@@ -196,6 +196,7 @@ enum navi32_gpuiov_cmd_lx7 {
 	NAVI32_DISABLE_HW_AUTO_SCHEDULING  = 0x0B,
 
 	NAVI32_SHUTDOWN_GPU_LX7            = 0x0D,
+	NAVI32_PAUSE_VF                    = 0x0E,
 
 	NAVI32_CONFIG_SCHEDULER_FEATURE    = 0x0F,
 	NAVI32_INVALID_COMMAND             = 0x10,
@@ -215,6 +216,7 @@ enum navi32_gpuiv_cmd_status_lx7 {
 	NAVI32_DISABLE_HW_AUTO_SCHEDULING_STATUS    = 0x0B,
 
 	NAVI32_SHUTDOWN_GPU_STATUS_LX7              = 0x0D,
+	NAVI32_PAUSE_VF_STATUS                      = 0x0E,
 
 	NAVI32_CONFIG_SCHEDULER_FEATURE_STATUS      = 0x0F,
 };

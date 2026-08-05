@@ -10,11 +10,100 @@
 
 #include "smi_drv_oss_wrapper.h"
 
+#if defined(SMI_ESXI_BUILD) || defined(ESX)
+#include "smi_drv_event.h"
+#endif
+
 struct oss_interface *smi_oss_funcs;
 struct smi_shim_interface *smi_shim_funcs;
 
 /* ESXi only: set by smi_drain_in_flight_ioctls during unload. */
 volatile bool smi_shutting_down = false;
+
+/*
+ * Registry of all open smi_ctx, used by the unload-time notifier drain
+ * (smi_release_all_notifiers). Intrusive list (link in struct smi_ctx) so
+ * insertion is allocation-free and can't fail, guaranteeing every open fd
+ * is reachable by the drain.
+ */
+static struct smi_ctx *smi_ctx_list;
+static mutex_t         smi_ctx_list_lock;
+
+static int smi_ctx_list_init(void)
+{
+	if (smi_ctx_list_lock != NULL)
+		return 0;
+
+	smi_ctx_list_lock = smi_oss_funcs->mutex_init();
+	if (smi_ctx_list_lock == NULL) {
+		smi_print("warning: SMI ctx list lock alloc failed; "
+			  "unload-time notifier drain disabled\n");
+		return -SMI_ENOMEM;
+	}
+
+	smi_ctx_list = NULL;
+	return 0;
+}
+
+static void smi_ctx_list_fini(void)
+{
+	if (smi_ctx_list_lock == NULL)
+		return;
+
+	smi_oss_funcs->mutex_lock(smi_ctx_list_lock);
+	smi_ctx_list = NULL;
+	smi_oss_funcs->mutex_unlock(smi_ctx_list_lock);
+
+	smi_oss_funcs->mutex_fini(smi_ctx_list_lock);
+	smi_ctx_list_lock = NULL;
+}
+
+static void smi_ctx_list_add(struct smi_ctx *ctx)
+{
+	if (smi_ctx_list_lock == NULL || ctx == NULL)
+		return;
+
+	smi_oss_funcs->mutex_lock(smi_ctx_list_lock);
+	ctx->next_open = smi_ctx_list;
+	smi_ctx_list = ctx;
+	smi_oss_funcs->mutex_unlock(smi_ctx_list_lock);
+}
+
+static void smi_ctx_list_remove(struct smi_ctx *ctx)
+{
+	struct smi_ctx **pp;
+
+	if (smi_ctx_list_lock == NULL || ctx == NULL)
+		return;
+
+	smi_oss_funcs->mutex_lock(smi_ctx_list_lock);
+	for (pp = &smi_ctx_list; *pp != NULL; pp = &(*pp)->next_open) {
+		if (*pp == ctx) {
+			*pp = ctx->next_open;
+			ctx->next_open = NULL;
+			break;
+		}
+	}
+	smi_oss_funcs->mutex_unlock(smi_ctx_list_lock);
+}
+
+#if defined(SMI_ESXI_BUILD) || defined(ESX)
+void smi_release_all_notifiers(void)
+{
+	struct smi_ctx *ctx;
+
+	if (smi_ctx_list_lock == NULL)
+		return;
+
+	smi_oss_funcs->mutex_lock(smi_ctx_list_lock);
+	for (ctx = smi_ctx_list; ctx != NULL; ctx = ctx->next_open) {
+		if (ctx->event_ctx == NULL)
+			continue;
+		smi_esxi_release_event_notifiers(ctx);
+	}
+	smi_oss_funcs->mutex_unlock(smi_ctx_list_lock);
+}
+#endif /* SMI_ESXI_BUILD || ESX */
 
 #define smi_min(a, b) ((a) < (b) ? (a) : (b))
 
@@ -93,11 +182,15 @@ int smi_core_init(struct oss_interface *oss_interface,
 	if (oss_interface->copy_to_user == NULL)
 		smi_print("error: copy_to_user is not implemented\n");
 
+	(void)smi_ctx_list_init();
+
 	return ret;
 }
 
 int smi_core_fini(void)
 {
+	smi_ctx_list_fini();
+
 	smi_oss_funcs = NULL;
 	smi_shim_funcs = NULL;
 
@@ -185,6 +278,8 @@ int smi_core_open(file_t filp, bool is_privileged)
 		goto failed;
 	}
 
+	smi_ctx_list_add(ctx);
+
 	return 0;
 
 failed:
@@ -211,6 +306,8 @@ int smi_core_release(file_t filp)
 
 	/* Recover the context from the file descriptor */
 	smi_get_file_private_data(filp, &ctx);
+
+	smi_ctx_list_remove(ctx);
 
 	/* lock ioctl to prevent access during ioctl */
 	smi_oss_funcs->mutex_lock(ctx->ioctl_mutex);

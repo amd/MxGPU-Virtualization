@@ -12,6 +12,9 @@
 #include <amdgv_powerplay.h>
 #include <amdgv_gpumon.h>
 #include "mi300_gpumon.h"
+#include "mi300_fb_hash_shader.h"
+
+#define MI300_CP_HQD_SAVE_REGS_NUM (regCP_HQD_PQ_WPTR_HI - regCP_MQD_BASE_ADDR + 1)
 
 static const uint32_t this_block = AMDGV_GFX_BLOCK;
 
@@ -48,7 +51,7 @@ static void gfx_v9_4_3_query_ras_error_count(struct amdgv_adapter *adapt,
 	adapt->mca.funcs->pop_block_error_count(adapt, AMDGV_RAS_BLOCK__GFX, ras_error_status);
 }
 
-void gfx_v9_4_2_dirtybit_control(struct amdgv_adapter *adapt, bool enable)
+void gfx_v9_4_3_dirtybit_control(struct amdgv_adapter *adapt, bool enable)
 {
 	uint32_t gc_value;
 	int xcc_id;
@@ -1190,6 +1193,743 @@ static int gfx_v9_4_3_cp_resume(struct amdgv_adapter *adapt)
 	}
 
 	return 0;
+}
+
+int gfx_v9_4_3_aql_queue_init(struct amdgv_adapter *adapt,
+				     struct gfx_v9_4_3_aql_queue *aq, uint32_t num_xcc)
+{
+	uint32_t ring_size = AQL_QUEUE_RING_DWORDS * sizeof(uint32_t);
+	uint32_t mqd_stride_size = sizeof(struct v9_mqd_allocation);
+	uint64_t mqd_base_gpu;
+	uint8_t *mqd_base_cpu;
+	uint32_t i;
+
+	oss_memset(aq, 0, sizeof(*aq));
+	if (num_xcc == 0 || num_xcc > AMDGV_MAX_GC_INSTANCES)
+		return AMDGV_FAILURE;
+	aq->num_xcc = num_xcc;
+
+	aq->ring_buf = amdgv_memmgr_alloc_align_zero(&adapt->memmgr_pf, ring_size, PAGE_SIZE,
+						     MEM_GFX_IB);
+	if (!aq->ring_buf)
+		goto fail_ring_buf;
+	aq->ring_buf_gpu = amdgv_memmgr_get_gpu_addr(aq->ring_buf);
+	aq->ring_buf_cpu = (volatile uint32_t *)amdgv_memmgr_get_cpu_addr(aq->ring_buf);
+
+	aq->eop_obj = amdgv_memmgr_alloc_align_zero(&adapt->memmgr_pf, GFX9_MEC_HPD_SIZE,
+						    PAGE_SIZE, MEM_GFX_IB);
+	if (!aq->eop_obj)
+		goto fail_eop;
+	aq->eop_gpu = amdgv_memmgr_get_gpu_addr(aq->eop_obj);
+
+	aq->wb_obj = amdgv_memmgr_alloc_align_zero(&adapt->memmgr_pf, 64, 64, MEM_GFX_IB);
+	if (!aq->wb_obj)
+		goto fail_wb;
+	aq->wptr_gpu = amdgv_memmgr_get_gpu_addr(aq->wb_obj);
+	aq->wptr_cpu = (volatile uint64_t *)amdgv_memmgr_get_cpu_addr(aq->wb_obj);
+	aq->rptr_gpu = aq->wptr_gpu + sizeof(uint64_t);
+	aq->rptr_cpu = (volatile uint32_t *)((uint8_t *)amdgv_memmgr_get_cpu_addr(aq->wb_obj) +
+					     sizeof(uint64_t));
+
+	aq->mqd_obj = amdgv_memmgr_alloc_align_zero(
+		&adapt->memmgr_pf, (uint64_t)num_xcc * mqd_stride_size, PAGE_SIZE, MEM_GFX_IB);
+	if (!aq->mqd_obj)
+		goto fail_mqd;
+	mqd_base_gpu = amdgv_memmgr_get_gpu_addr(aq->mqd_obj);
+	mqd_base_cpu = (uint8_t *)amdgv_memmgr_get_cpu_addr(aq->mqd_obj);
+
+	aq->hqd_save = (uint32_t *)oss_zalloc((uint64_t)num_xcc * MI300_CP_HQD_SAVE_REGS_NUM *
+					      sizeof(uint32_t));
+	if (!aq->hqd_save)
+		goto fail_hqd_save;
+
+	for (i = 0; i < num_xcc; i++) {
+		aq->mqd_gpu[i] = mqd_base_gpu + (uint64_t)i * mqd_stride_size;
+		aq->mqd_cpu[i] = mqd_base_cpu + (uint64_t)i * mqd_stride_size;
+	}
+
+	for (i = 0; i < num_xcc; i++) {
+		aq->doorbell_index[i] = (adapt->doorbell_index.mec_ring0 +
+					 i * adapt->doorbell_index.xcc_doorbell_range)
+					<< 1;
+	}
+
+	for (i = 0; i < AQL_QUEUE_RING_DWORDS; i++) {
+		aq->ring_buf_cpu[i] = (i % 16 == 0) ? AMDGV_AQL_INVALID_PACKET_HEADER :
+						      AMDGV_AQL_INVALID_PACKET_DATA;
+	}
+	*aq->wptr_cpu = 0;
+	*aq->rptr_cpu = 0;
+
+	return 0;
+
+fail_hqd_save:
+	amdgv_memmgr_free(aq->mqd_obj);
+fail_mqd:
+	amdgv_memmgr_free(aq->wb_obj);
+fail_wb:
+	amdgv_memmgr_free(aq->eop_obj);
+fail_eop:
+	amdgv_memmgr_free(aq->ring_buf);
+fail_ring_buf:
+	oss_memset(aq, 0, sizeof(*aq));
+	return AMDGV_FAILURE;
+}
+
+void gfx_v9_4_3_aql_queue_fini(struct gfx_v9_4_3_aql_queue *aq)
+{
+	if (aq->hqd_save)
+		oss_free(aq->hqd_save);
+	if (aq->mqd_obj)
+		amdgv_memmgr_free(aq->mqd_obj);
+	if (aq->wb_obj)
+		amdgv_memmgr_free(aq->wb_obj);
+	if (aq->eop_obj)
+		amdgv_memmgr_free(aq->eop_obj);
+	if (aq->ring_buf)
+		amdgv_memmgr_free(aq->ring_buf);
+	oss_memset(aq, 0, sizeof(*aq));
+}
+
+int gfx_v9_4_3_aql_queue_build_mqd(struct amdgv_adapter *adapt,
+				     struct gfx_v9_4_3_aql_queue *aq, uint32_t xcc)
+{
+	struct amdgv_ring tmp_ring;
+	struct v9_mqd_allocation *mqd_alloc;
+	struct v9_mqd *mqd;
+	struct amdgv_ring *template_ring;
+	uint32_t template_idx;
+	int r;
+
+	template_idx = xcc * adapt->gfx.num_compute_rings + XCC_QUEUE_INDEX__AQL;
+	template_ring = &adapt->gfx.compute_ring[template_idx];
+
+	oss_memset(&tmp_ring, 0, sizeof(tmp_ring));
+	tmp_ring.adapt = adapt;
+	tmp_ring.funcs = template_ring->funcs;
+	tmp_ring.xcc_id = xcc;
+	tmp_ring.me = template_ring->me;
+	tmp_ring.pipe = template_ring->pipe;
+	tmp_ring.queue = template_ring->queue;
+	tmp_ring.aql_enable = true;
+	tmp_ring.use_doorbell = true;
+	tmp_ring.doorbell_index = aq->doorbell_index[xcc];
+	tmp_ring.gpu_addr = aq->ring_buf_gpu;
+	tmp_ring.ring = (volatile uint32_t *)aq->ring_buf_cpu;
+	tmp_ring.ring_size = AQL_QUEUE_RING_DWORDS;
+	tmp_ring.log2_ring_size = AQL_QUEUE_RING_LOG2;
+	tmp_ring.buf_mask = AQL_QUEUE_RING_DWORDS - 1;
+	tmp_ring.ptr_mask = (tmp_ring.funcs && tmp_ring.funcs->support_64bit_ptrs) ?
+				    0xffffffffffffffffULL :
+				    tmp_ring.buf_mask;
+	tmp_ring.eop_gpu_addr = aq->eop_gpu;
+	tmp_ring.mqd_obj = aq->mqd_obj;
+	tmp_ring.mqd_gpu_addr = aq->mqd_gpu[xcc];
+	tmp_ring.mqd_ptr = aq->mqd_cpu[xcc];
+	tmp_ring.wptr_gpu_addr = aq->wptr_gpu;
+	tmp_ring.wptr_cpu_addr = (volatile uint32_t *)aq->wptr_cpu;
+	tmp_ring.rptr_gpu_addr = aq->rptr_gpu;
+	tmp_ring.rptr_cpu_addr = (volatile uint32_t *)aq->rptr_cpu;
+
+	mqd_alloc = (struct v9_mqd_allocation *)aq->mqd_cpu[xcc];
+	oss_memset(mqd_alloc, 0, sizeof(*mqd_alloc));
+
+	oss_mutex_lock(adapt->srbm_mutex);
+	soc15_grbm_select(adapt, tmp_ring.me, tmp_ring.pipe, tmp_ring.queue, 0, (int)xcc);
+	r = gfx_v9_4_3_xcc_mqd_init(&tmp_ring, (int)xcc);
+	soc15_grbm_select(adapt, 0, 0, 0, 0, (int)xcc);
+	oss_mutex_unlock(adapt->srbm_mutex);
+	if (r)
+		return r;
+
+	mqd = &mqd_alloc->mqd;
+
+	mqd->cp_hqd_pq_control |= CP_HQD_PQ_CONTROL__NO_UPDATE_RPTR_MASK |
+				  (2 << CP_HQD_PQ_CONTROL__SLOT_BASED_WPTR__SHIFT) |
+				  1 << CP_HQD_PQ_CONTROL__QUEUE_FULL_EN__SHIFT |
+				  1 << CP_HQD_PQ_CONTROL__WPP_CLAMP_EN__SHIFT;
+
+	mqd->cp_hqd_pq_doorbell_control |= CP_HQD_PQ_DOORBELL_CONTROL__DOORBELL_BIF_DROP_MASK |
+					   CP_HQD_PQ_DOORBELL_CONTROL__DOORBELL_MODE_MASK;
+
+	mqd->compute_tg_chunk_size = 1;
+	mqd->compute_current_logic_xcc_id = xcc;
+
+	mqd_alloc->mqd.cp_mqd_stride_size = sizeof(struct v9_mqd_allocation);
+
+	if (xcc == 0) {
+		mqd->cp_hqd_pq_control &= ~CP_HQD_PQ_CONTROL__NO_UPDATE_RPTR_MASK;
+	}
+
+	return 0;
+}
+
+int gfx_v9_4_3_aql_queue_kiq_map_xcc(struct amdgv_adapter *adapt,
+				       struct gfx_v9_4_3_aql_queue *aq, uint32_t xcc)
+{
+	struct amdgv_kiq *kiq = &adapt->gfx.kiq[xcc];
+	struct amdgv_ring *kiq_ring = &kiq->ring;
+	struct amdgv_ring temp_kcq;
+	struct amdgv_ring *src_ring;
+	uint32_t src_idx;
+
+	if (!kiq->pmf || !kiq->pmf->kiq_map_queues)
+		return AMDGV_FAILURE;
+
+	src_idx = xcc * adapt->gfx.num_compute_rings + XCC_QUEUE_INDEX__AQL;
+	src_ring = &adapt->gfx.compute_ring[src_idx];
+
+	oss_memset(&temp_kcq, 0, sizeof(temp_kcq));
+	temp_kcq.funcs = src_ring->funcs;
+	temp_kcq.me = src_ring->me;
+	temp_kcq.pipe = src_ring->pipe;
+	temp_kcq.queue = src_ring->queue;
+	temp_kcq.xcc_id = xcc;
+	temp_kcq.doorbell_index = aq->doorbell_index[xcc];
+	temp_kcq.mqd_gpu_addr = aq->mqd_gpu[xcc];
+	temp_kcq.wptr_gpu_addr = aq->wptr_gpu;
+
+	oss_spin_lock(kiq->ring_lock);
+	if (amdgv_ring_alloc(kiq_ring, kiq->pmf->map_queues_size)) {
+		oss_spin_unlock(kiq->ring_lock);
+		return AMDGV_FAILURE;
+	}
+	kiq->pmf->kiq_map_queues(kiq_ring, &temp_kcq);
+	amdgv_ring_commit(kiq_ring);
+	oss_spin_unlock(kiq->ring_lock);
+
+	aq->mapped[xcc] = true;
+	return 0;
+}
+
+int gfx_v9_4_3_aql_queue_kiq_unmap_xcc(struct amdgv_adapter *adapt,
+					 struct gfx_v9_4_3_aql_queue *aq, uint32_t xcc)
+{
+	struct amdgv_kiq *kiq = &adapt->gfx.kiq[xcc];
+	struct amdgv_ring *kiq_ring = &kiq->ring;
+	struct amdgv_ring temp_kcq;
+	struct amdgv_ring *src_ring;
+	uint32_t src_idx;
+
+	if (!aq->mapped[xcc])
+		return 0;
+
+	if (!kiq->pmf || !kiq->pmf->kiq_unmap_queues)
+		return AMDGV_FAILURE;
+
+	src_idx = xcc * adapt->gfx.num_compute_rings + XCC_QUEUE_INDEX__AQL;
+	src_ring = &adapt->gfx.compute_ring[src_idx];
+
+	oss_memset(&temp_kcq, 0, sizeof(temp_kcq));
+	temp_kcq.funcs = src_ring->funcs;
+	temp_kcq.me = src_ring->me;
+	temp_kcq.pipe = src_ring->pipe;
+	temp_kcq.queue = src_ring->queue;
+	temp_kcq.xcc_id = xcc;
+	temp_kcq.doorbell_index = aq->doorbell_index[xcc];
+	temp_kcq.mqd_gpu_addr = aq->mqd_gpu[xcc];
+	temp_kcq.wptr_gpu_addr = aq->wptr_gpu;
+
+	oss_spin_lock(kiq->ring_lock);
+	if (amdgv_ring_alloc(kiq_ring, kiq->pmf->unmap_queues_size)) {
+		oss_spin_unlock(kiq->ring_lock);
+		return AMDGV_FAILURE;
+	}
+	kiq->pmf->kiq_unmap_queues(kiq_ring, &temp_kcq, RESET_QUEUES, 0, 0);
+	amdgv_ring_commit(kiq_ring);
+	oss_spin_unlock(kiq->ring_lock);
+
+	aq->mapped[xcc] = false;
+	return 0;
+}
+
+void gfx_v9_4_3_aql_queue_save_hqd(struct amdgv_adapter *adapt,
+				   struct gfx_v9_4_3_aql_queue *aq, uint32_t xcc)
+{
+	struct amdgv_ring *src_ring;
+	uint32_t *save;
+	uint32_t src_idx;
+	uint32_t i;
+
+	src_idx = xcc * adapt->gfx.num_compute_rings + XCC_QUEUE_INDEX__AQL;
+	src_ring = &adapt->gfx.compute_ring[src_idx];
+	save = aq->hqd_save + (uint64_t)xcc * MI300_CP_HQD_SAVE_REGS_NUM;
+
+	oss_mutex_lock(adapt->srbm_mutex);
+	soc15_grbm_select(adapt, src_ring->me, src_ring->pipe, src_ring->queue, 0, (int)xcc);
+
+	for (i = 0; i < MI300_CP_HQD_SAVE_REGS_NUM; i++)
+		save[i] = RREG32_SOC15_OFFSET(GC, GET_INST(GC, xcc), regCP_MQD_BASE_ADDR, i);
+
+	soc15_grbm_select(adapt, 0, 0, 0, 0, (int)xcc);
+	oss_mutex_unlock(adapt->srbm_mutex);
+}
+
+void gfx_v9_4_3_aql_queue_restore_hqd(struct amdgv_adapter *adapt,
+				      struct gfx_v9_4_3_aql_queue *aq, uint32_t xcc)
+{
+	struct amdgv_ring *src_ring;
+	const uint32_t *save;
+	uint32_t src_idx;
+	uint32_t i;
+
+	src_idx = xcc * adapt->gfx.num_compute_rings + XCC_QUEUE_INDEX__AQL;
+	src_ring = &adapt->gfx.compute_ring[src_idx];
+	save = aq->hqd_save + (uint64_t)xcc * MI300_CP_HQD_SAVE_REGS_NUM;
+
+	oss_mutex_lock(adapt->srbm_mutex);
+	soc15_grbm_select(adapt, src_ring->me, src_ring->pipe, src_ring->queue, 0, (int)xcc);
+
+	for (i = 0; i < MI300_CP_HQD_SAVE_REGS_NUM; i++)
+		WREG32_SOC15_OFFSET(GC, GET_INST(GC, xcc), regCP_MQD_BASE_ADDR, i, save[i]);
+
+	RREG32_SOC15(GC, GET_INST(GC, xcc), regCP_HQD_PQ_CONTROL);
+
+	soc15_grbm_select(adapt, 0, 0, 0, 0, (int)xcc);
+	oss_mutex_unlock(adapt->srbm_mutex);
+}
+
+int gfx_v9_4_3_aql_queue_submit_packet_data(struct amdgv_adapter *adapt,
+					    struct gfx_v9_4_3_aql_queue *aq,
+					    const uint32_t *pkt_data)
+{
+	const uint32_t pkt_dwords = sizeof(hsa_kernel_dispatch_packet_t) / sizeof(uint32_t);
+	const uint32_t ring_slots = AQL_QUEUE_RING_DWORDS / 16;
+	const uint64_t full_timeout_us = 1000 * 1000; /* 1s */
+	uint64_t wptr_old, wptr_new, start, slot_idx;
+	uint32_t *queue_slot;
+	uint32_t i;
+
+	if (pkt_dwords > AQL_QUEUE_RING_DWORDS)
+		return AMDGV_FAILURE;
+
+	wptr_old = *aq->wptr_cpu;
+	wptr_new = wptr_old + 1;
+	slot_idx = wptr_old % ring_slots;
+	queue_slot =
+		(uint32_t *)&aq->ring_buf_cpu[slot_idx * pkt_dwords];
+
+	start = oss_get_time_stamp();
+	while ((wptr_old - (uint64_t)*aq->rptr_cpu) >= ring_slots) {
+		if (oss_get_time_stamp() - start > full_timeout_us) {
+			AMDGV_WARN("AQL: ring full (wptr=%llu rptr=%llu)\n", wptr_old,
+				   (uint64_t)*aq->rptr_cpu);
+			return AMDGV_FAILURE;
+		}
+		oss_udelay(1);
+	}
+
+	queue_slot[0] = AMDGV_AQL_INVALID_PACKET_HEADER;
+	oss_mb();
+	*aq->wptr_cpu = wptr_new;
+	oss_mb();
+	for (i = 1; i < pkt_dwords; i++)
+		queue_slot[i] = pkt_data[i];
+	oss_mb();
+	queue_slot[0] = pkt_data[0];
+	oss_mb();
+	amdgv_misc_hdp_flush(adapt);
+
+	for (i = 0; i < aq->num_xcc; i++) {
+		if (!aq->mapped[i])
+			continue;
+		WDOORBELL32(aq->doorbell_index[i], (uint32_t)wptr_new);
+	}
+
+	return 0;
+}
+
+struct gfx_v9_4_3_fb_hash_resources {
+	struct amdgv_memmgr_mem *kernelobj;
+	struct amdgv_memmgr_mem *kernarg;
+	struct amdgv_memmgr_mem *signal;
+	struct amdgv_memmgr_mem *packet;
+	struct amdgv_memmgr_mem *done_counter;
+	struct amdgv_memmgr_mem *block_counter;
+};
+
+static void gfx_v9_4_3_fb_hash_free_resources(struct gfx_v9_4_3_fb_hash_resources *res)
+{
+	if (res->packet) {
+		amdgv_memmgr_free(res->packet);
+		res->packet = NULL;
+	}
+	if (res->signal) {
+		amdgv_memmgr_free(res->signal);
+		res->signal = NULL;
+	}
+	if (res->done_counter) {
+		amdgv_memmgr_free(res->done_counter);
+		res->done_counter = NULL;
+	}
+	if (res->block_counter) {
+		amdgv_memmgr_free(res->block_counter);
+		res->block_counter = NULL;
+	}
+	if (res->kernarg) {
+		amdgv_memmgr_free(res->kernarg);
+		res->kernarg = NULL;
+	}
+	if (res->kernelobj) {
+		amdgv_memmgr_free(res->kernelobj);
+		res->kernelobj = NULL;
+	}
+}
+
+static int gfx_v9_4_3_fb_hash_alloc_resources(struct amdgv_adapter *adapt,
+				       struct gfx_v9_4_3_fb_hash_resources *res,
+				       uint64_t kernelobj_size, uint32_t kernarg_bytes)
+{
+	res->kernelobj = amdgv_memmgr_alloc_align_zero(&adapt->memmgr_pf,
+				kernelobj_size, PAGE_SIZE,
+				MEM_GFX_IB);
+	if (!res->kernelobj)
+		goto fail;
+
+	res->kernarg = amdgv_memmgr_alloc_align_zero(&adapt->memmgr_pf,
+				kernarg_bytes, 256,
+				MEM_GFX_IB);
+	if (!res->kernarg)
+		goto fail;
+
+	res->signal = amdgv_memmgr_alloc_align_zero(&adapt->memmgr_pf,
+				256, 256, MEM_GFX_IB);
+	if (!res->signal)
+		goto fail;
+
+	/* done_counter / block_counter back the shader-side last-block
+	 * completion handshake. Both must be zeroed before each launch.
+	 */
+	res->done_counter = amdgv_memmgr_alloc_align_zero(&adapt->memmgr_pf,
+				256, 256, MEM_GFX_IB);
+	if (!res->done_counter)
+		goto fail;
+
+	res->block_counter = amdgv_memmgr_alloc_align_zero(&adapt->memmgr_pf,
+				256, 256, MEM_GFX_IB);
+	if (!res->block_counter)
+		goto fail;
+
+	res->packet = amdgv_memmgr_alloc_align_zero(&adapt->memmgr_pf,
+				sizeof(hsa_kernel_dispatch_packet_t),
+				256, MEM_GFX_IB);
+	if (!res->packet)
+		goto fail;
+
+	return 0;
+fail:
+	gfx_v9_4_3_fb_hash_free_resources(res);
+	return AMDGV_FAILURE;
+}
+
+static void gfx_v9_4_3_fb_hash_build_kernarg_sha256(uint8_t *kernarg_cpu,
+					     uint64_t page_base_gpua,
+					     uint64_t page_size, uint64_t num_pages,
+					     uint64_t page_hash_gpua,
+					     uint64_t done_counter_gpua,
+					     uint64_t block_counter_gpua, uint32_t num_blocks,
+					     uint32_t workgroup_x)
+{
+	oss_memset(kernarg_cpu, 0, SHA256_KERNARG_BYTES);
+
+	*(uint64_t *)(kernarg_cpu + 0x00) = page_base_gpua;
+	*(uint64_t *)(kernarg_cpu + 0x08) = page_size;
+	*(uint64_t *)(kernarg_cpu + 0x10) = num_pages;
+	*(uint64_t *)(kernarg_cpu + 0x18) = page_hash_gpua;
+	*(uint64_t *)(kernarg_cpu + 0x20) = done_counter_gpua;
+	*(uint64_t *)(kernarg_cpu + 0x28) = block_counter_gpua;
+
+	*(uint32_t *)(kernarg_cpu + 0x30) = num_blocks;
+	*(uint32_t *)(kernarg_cpu + 0x34) = 1;
+	*(uint32_t *)(kernarg_cpu + 0x38) = 1;
+	*(uint16_t *)(kernarg_cpu + 0x3c) = (uint16_t)workgroup_x;
+	*(uint16_t *)(kernarg_cpu + 0x3e) = 1;
+	*(uint16_t *)(kernarg_cpu + 0x40) = 1;
+}
+
+static void gfx_v9_4_3_fb_hash_build_kernarg_rapidhash(uint8_t *kernarg_cpu,
+					     uint64_t page_base_gpua,
+					     uint64_t page_size, uint64_t per_thread_bytes,
+					     uint64_t seed, uint64_t page_hash_gpua,
+					     uint64_t done_counter_gpua,
+					     uint64_t block_counter_gpua, uint32_t page_count,
+					     uint32_t workgroup_x)
+{
+	oss_memset(kernarg_cpu, 0, RAPIDHASH_KERNARG_BYTES);
+
+	*(uint64_t *)(kernarg_cpu + 0x00) = page_base_gpua;
+	*(uint64_t *)(kernarg_cpu + 0x08) = page_size;
+	*(uint64_t *)(kernarg_cpu + 0x10) = per_thread_bytes;
+	*(uint64_t *)(kernarg_cpu + 0x18) = seed;
+	*(uint64_t *)(kernarg_cpu + 0x20) = page_hash_gpua;
+	*(uint64_t *)(kernarg_cpu + 0x28) = done_counter_gpua;
+	*(uint64_t *)(kernarg_cpu + 0x30) = block_counter_gpua;
+
+	*(uint32_t *)(kernarg_cpu + 0x38) = page_count;
+	*(uint32_t *)(kernarg_cpu + 0x3c) = 1;
+	*(uint32_t *)(kernarg_cpu + 0x40) = 1;
+	*(uint16_t *)(kernarg_cpu + 0x44) = (uint16_t)workgroup_x;
+	*(uint16_t *)(kernarg_cpu + 0x46) = 1;
+	*(uint16_t *)(kernarg_cpu + 0x48) = 1;
+}
+
+static void gfx_v9_4_3_fb_hash_build_packet(hsa_kernel_dispatch_packet_t *pkt, uint64_t kd_gpua,
+					    uint64_t kernarg_gpua, uint64_t signal_gpua,
+					    uint32_t num_blocks, uint32_t workgroup_x,
+					    uint32_t lds_bytes)
+{
+	oss_memset(pkt, 0, sizeof(*pkt));
+
+	pkt->header = (uint16_t)(HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE);
+	pkt->header |=
+		(uint16_t)(HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE);
+	pkt->header |=
+		(uint16_t)(HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE);
+	pkt->setup = 1u << HSA_KERNEL_DISPATCH_PACKET_SETUP_DIMENSIONS;
+
+	pkt->workgroup_size_x = (uint16_t)workgroup_x;
+	pkt->workgroup_size_y = 1;
+	pkt->workgroup_size_z = 1;
+	pkt->grid_size_x = (uint32_t)num_blocks * workgroup_x;
+	pkt->grid_size_y = 1;
+	pkt->grid_size_z = 1;
+
+	pkt->private_segment_size = 0;
+	pkt->group_segment_size = lds_bytes; /* dynamic LDS */
+	pkt->kernel_object = kd_gpua;
+	pkt->kernarg_address = (void *)(unsigned long)kernarg_gpua;
+	pkt->completion_signal.handle = signal_gpua;
+}
+
+static int fb_hash_done_cb(void *ctx)
+{
+	volatile uint64_t *done_cpu = ctx;
+	return *done_cpu ? 0 : 1;
+}
+
+
+static int gfx_v9_4_3_fb_hash_dispatch_internal(struct amdgv_adapter *adapt,
+						uint64_t page_bytes,
+						uint64_t page_base_gpua, uint32_t page_count,
+						struct amdgv_memmgr_mem *page_hash,
+						uint64_t page_hash_byte_offset)
+{
+	struct gfx_v9_4_3_fb_hash_resources res;
+	struct gfx_v9_4_3_aql_queue aq;
+	uint64_t kernelobj_size;
+	uint64_t kernarg_gpua, page_hash_gpua, signal_gpua;
+	uint64_t done_counter_gpua, block_counter_gpua, kd_gpua;
+	uint8_t *kernarg_cpua;
+	hsa_kernel_dispatch_packet_t *pkt_cpua;
+	uint32_t num_xcc, lds_bytes, xcc, num_workgroups;
+	const uint32_t *fb_hash_shader;
+	uint32_t fb_hash_shader_size;
+	const kernel_descriptor_t *fb_hash_kd;
+	uint32_t kernarg_bytes;
+	enum amdgv_fb_hash_mode mode = adapt->dirtybit.fb_hash_mode;
+	uint8_t *kobj_cpua;
+	volatile int64_t *signal_cpu;
+	volatile uint64_t *done_cpu;
+	volatile uint32_t *block_cpu;
+	struct amdgv_wait_for_cb_context cb_context = { 0 };
+	int ret;
+
+	oss_memset(&res, 0, sizeof(res));
+	oss_memset(&aq, 0, sizeof(aq));
+
+	num_xcc = adapt->mcp.gfx.num_xcc ? adapt->mcp.gfx.num_xcc : 1;
+
+	if (mode == AMDGV_FB_HASH_MODE_RAPIDHASH) {
+		fb_hash_kd = &rapidhash_kd;
+		kernarg_bytes = RAPIDHASH_KERNARG_BYTES;
+		switch (adapt->asic_type) {
+		case CHIP_MI350X:
+			fb_hash_shader = mi350_rapidhash_shader;
+			fb_hash_shader_size = sizeof(mi350_rapidhash_shader);
+			break;
+		case CHIP_MI308X:
+			fb_hash_shader = mi308_rapidhash_shader;
+			fb_hash_shader_size = sizeof(mi308_rapidhash_shader);
+			break;
+		default:
+			AMDGV_WARN("fb_hash: no shader for asic_type=%d\n", adapt->asic_type);
+			return AMDGV_FAILURE;
+		}
+	} else {
+		fb_hash_kd = &sha256_kd;
+		kernarg_bytes = SHA256_KERNARG_BYTES;
+		switch (adapt->asic_type) {
+		case CHIP_MI350X:
+			fb_hash_shader = mi350_sha256_shader;
+			fb_hash_shader_size = sizeof(mi350_sha256_shader);
+			break;
+		case CHIP_MI308X:
+			fb_hash_shader = mi308_sha256_shader;
+			fb_hash_shader_size = sizeof(mi308_sha256_shader);
+			break;
+		default:
+			AMDGV_WARN("fb_hash: no shader for asic_type=%d\n", adapt->asic_type);
+			return AMDGV_FAILURE;
+		}
+	}
+
+	kernelobj_size = (FB_HASH_CODE_ENTRY_OFFSET + fb_hash_shader_size + PAGE_SIZE - 1) &
+			 ~(PAGE_SIZE - 1);
+	ret = gfx_v9_4_3_fb_hash_alloc_resources(adapt, &res, kernelobj_size, kernarg_bytes);
+	if (ret) {
+		AMDGV_ERROR("fb_hash: failed to allocate resources\n");
+		return ret;
+	}
+
+	kobj_cpua = (uint8_t *)amdgv_memmgr_get_cpu_addr(res.kernelobj);
+	oss_memcpy(kobj_cpua, fb_hash_kd, sizeof(*fb_hash_kd));
+	((kernel_descriptor_t *)kobj_cpua)->kernel_code_entry_byte_offset =
+		FB_HASH_CODE_ENTRY_OFFSET;
+	oss_memcpy(kobj_cpua + FB_HASH_CODE_ENTRY_OFFSET, fb_hash_shader, fb_hash_shader_size);
+
+	kd_gpua = amdgv_memmgr_get_gpu_addr(res.kernelobj);
+	kernarg_gpua = amdgv_memmgr_get_gpu_addr(res.kernarg);
+	page_hash_gpua = amdgv_memmgr_get_gpu_addr(page_hash) + page_hash_byte_offset;
+	signal_gpua = amdgv_memmgr_get_gpu_addr(res.signal);
+	done_counter_gpua = amdgv_memmgr_get_gpu_addr(res.done_counter);
+	block_counter_gpua = amdgv_memmgr_get_gpu_addr(res.block_counter);
+
+	kernarg_cpua = (uint8_t *)amdgv_memmgr_get_cpu_addr(res.kernarg);
+	if (mode == AMDGV_FB_HASH_MODE_RAPIDHASH) {
+		num_workgroups = page_count;
+		lds_bytes = FB_HASH_WORKGROUP_X * (uint32_t)sizeof(uint64_t);
+		gfx_v9_4_3_fb_hash_build_kernarg_rapidhash(kernarg_cpua, page_base_gpua,
+					page_bytes, page_bytes / FB_HASH_WORKGROUP_X,
+					RAPIDHASH_SEED, page_hash_gpua, done_counter_gpua,
+					block_counter_gpua, page_count, FB_HASH_WORKGROUP_X);
+	} else {
+		num_workgroups = DIV_ROUND_UP(page_count, FB_HASH_WORKGROUP_X);
+		lds_bytes = 0;
+		gfx_v9_4_3_fb_hash_build_kernarg_sha256(kernarg_cpua, page_base_gpua, page_bytes,
+					page_count, page_hash_gpua, done_counter_gpua,
+					block_counter_gpua, num_workgroups, FB_HASH_WORKGROUP_X);
+	}
+
+	pkt_cpua = (hsa_kernel_dispatch_packet_t *)amdgv_memmgr_get_cpu_addr(res.packet);
+
+	gfx_v9_4_3_fb_hash_build_packet(pkt_cpua, kd_gpua, kernarg_gpua, signal_gpua,
+					num_workgroups, FB_HASH_WORKGROUP_X, lds_bytes);
+
+	ret = gfx_v9_4_3_aql_queue_init(adapt, &aq, num_xcc);
+	if (ret) {
+		AMDGV_ERROR("fb_hash: failed to init AQL queue\n");
+		goto err_aql_queue_init;
+	}
+
+	for (xcc = 0; xcc < num_xcc; xcc++)
+		gfx_v9_4_3_aql_queue_save_hqd(adapt, &aq, xcc);
+
+	for (xcc = 0; xcc < num_xcc; xcc++) {
+		ret = gfx_v9_4_3_aql_queue_build_mqd(adapt, &aq, xcc);
+		if (ret) {
+			AMDGV_WARN("fb_hash: failed to build mqd for xcc %u ret=%d\n", xcc,
+				   ret);
+			goto err_aql_restore_hqd;
+		}
+	}
+	for (xcc = 0; xcc < num_xcc; xcc++) {
+		ret = gfx_v9_4_3_aql_queue_kiq_map_xcc(adapt, &aq, xcc);
+		if (ret) {
+			AMDGV_WARN("fb_hash: failed to map kiq for xcc %u ret=%d\n", xcc, ret);
+			goto err_aql_map_xcc;
+		}
+	}
+
+	signal_cpu = (volatile int64_t *)amdgv_memmgr_get_cpu_addr(res.signal);
+	done_cpu = (volatile uint64_t *)amdgv_memmgr_get_cpu_addr(res.done_counter);
+	block_cpu = (volatile uint32_t *)amdgv_memmgr_get_cpu_addr(res.block_counter);
+	*signal_cpu = 0;
+	*done_cpu = 0;
+	*block_cpu = 0;
+	oss_mb();
+	amdgv_misc_hdp_flush(adapt);
+	oss_mb();
+
+	ret = gfx_v9_4_3_aql_queue_submit_packet_data(adapt, &aq, (const uint32_t *)pkt_cpua);
+	if (ret) {
+		AMDGV_WARN("fb_hash: failed to submit packet data\n");
+		goto err_aql_submit;
+	}
+
+	cb_context.ctx = (void *)done_cpu;
+	cb_context.type = AMDGV_WAIT_FOR_FB_HASH_DONE;
+	ret = amdgv_wait_for(adapt, fb_hash_done_cb, &cb_context, FB_HASH_TIMEOUT_US, 0);
+	if (ret) {
+		AMDGV_WARN("fb_hash: wait for done failed ret=%d\n", ret);
+		goto err_aql_submit;
+	}
+	oss_mb();
+	amdgv_misc_hdp_flush(adapt);
+	oss_mb();
+
+err_aql_submit:
+err_aql_map_xcc:
+	for (xcc = 0; xcc < num_xcc; xcc++) {
+		if (aq.mapped[xcc])
+			gfx_v9_4_3_aql_queue_kiq_unmap_xcc(adapt, &aq, xcc);
+	}
+err_aql_restore_hqd:
+	for (xcc = 0; xcc < num_xcc; xcc++)
+		gfx_v9_4_3_aql_queue_restore_hqd(adapt, &aq, xcc);
+	gfx_v9_4_3_aql_queue_fini(&aq);
+err_aql_queue_init:
+	gfx_v9_4_3_fb_hash_free_resources(&res);
+	return ret;
+}
+
+int gfx_v9_4_3_fb_hash_compute_page_hash(struct amdgv_adapter *adapt, uint32_t idx_vf,
+					 uint64_t page_size,
+					 struct amdgv_memmgr_mem *fb_hash_buf)
+{
+	struct amdgv_vf_device *vf;
+	uint64_t vf_fb_size_bytes;
+	uint64_t page_base_gpua;
+	uint64_t needed_bytes;
+	uint64_t vf_start_page;
+	uint64_t page_hash_byte_offset;
+	uint32_t page_count;
+
+	if (adapt->flags & AMDGV_FLAG_DISABLE_COMPUTE_ENGINE ||
+	    adapt->flags & AMDGV_FLAG_ENABLE_COMPUTE_PAGING) {
+		AMDGV_ERROR("Compute engine disabled or compute paging on\n");
+		return AMDGV_FAILURE;
+	}
+
+	vf = &adapt->array_vf[idx_vf];
+	if (!vf->configured) {
+		AMDGV_WARN("vf%u not configured\n", idx_vf);
+		return AMDGV_FAILURE;
+	}
+
+	vf_fb_size_bytes = MBYTES_TO_BYTES(vf->fb_size);
+	page_count = (uint32_t)(vf_fb_size_bytes / page_size);
+	if (page_count == 0) {
+		AMDGV_WARN("fb_hash_compute_page_hash: page_count=0 (fb=0x%llx page_size=0x%llx)\n",
+			   (unsigned long long)vf_fb_size_bytes,
+			   (unsigned long long)page_size);
+		return AMDGV_FAILURE;
+	}
+
+	vf_start_page = MBYTES_TO_BYTES(vf->fb_offset) / page_size;
+	page_hash_byte_offset = vf_start_page * adapt->dirtybit.fb_hash_digest_bytes;
+	needed_bytes = (vf_start_page + page_count) * adapt->dirtybit.fb_hash_digest_bytes;
+	if (amdgv_memmgr_get_size(fb_hash_buf) < needed_bytes) {
+		AMDGV_WARN(
+			"fb_hash_buf size 0x%llx < needed 0x%llx\n",
+			(unsigned long long)amdgv_memmgr_get_size(fb_hash_buf),
+			(unsigned long long)needed_bytes);
+		return AMDGV_FAILURE;
+	}
+
+	page_base_gpua = adapt->memmgr_pf.mc_base + MBYTES_TO_BYTES(vf->fb_offset);
+
+	return gfx_v9_4_3_fb_hash_dispatch_internal(adapt, page_size, page_base_gpua,
+						    page_count, fb_hash_buf, page_hash_byte_offset);
 }
 
 static int gfx_v9_4_3_hw_init(struct amdgv_adapter *adapt)

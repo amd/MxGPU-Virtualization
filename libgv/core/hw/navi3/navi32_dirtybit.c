@@ -19,6 +19,12 @@
 
 static const int this_block = AMDGV_LIVE_MIGRATION_BLOCK;
 
+/* GL2C instance index -> MAM instance for GCEA_SDP access (GRBM_GFX_INDEX). */
+static const uint8_t navi32_gl2c_to_mam[16] = {
+	0,  8,  1,  9,  2, 10,  3, 11,	/* GL2C 0-7 */
+	4, 12,  5, 13,  6, 14,  7, 15,	/* GL2C 8-15 */
+};
+
 void navi32_select_mam_instance(struct amdgv_adapter *adapt, uint8_t mam_instance)
 {
 	uint32_t data = 0;
@@ -31,6 +37,34 @@ void navi32_select_mam_instance(struct amdgv_adapter *adapt, uint8_t mam_instanc
 	data = REG_SET_FIELD(0, GRBM_GFX_INDEX, INSTANCE_INDEX, mam_instance);
 
 	WREG32(SOC15_REG_OFFSET(GC, 0, regGRBM_GFX_INDEX), data);
+}
+
+void navi32_dirtybit_gcea_sdp_control(struct amdgv_adapter *adapt, bool gcea_sdp_enable)
+{
+	uint32_t tcc_value;
+	uint16_t gl2c_harvested_mask = 0;
+	uint32_t sdp_value = 0;
+	int i;
+
+	/* Find out which instance of GL2C is harvested */
+	/* nv32 has 16 instances of GL2C, so only get the TCC_DISABLE field */
+	tcc_value = RREG32(SOC15_REG_OFFSET(GC, 0, regCGTS_TCC_DISABLE));
+	gl2c_harvested_mask = REG_GET_FIELD(tcc_value, CGTS_TCC_DISABLE, TCC_DISABLE);
+	AMDGV_DEBUG("GL2C harvested instance: %d\n", gl2c_harvested_mask);
+
+	for (i = 0; i < 16; i++) {
+		if (gl2c_harvested_mask & (1 << i)) {
+			AMDGV_DEBUG("%s SDP for harvested GL2C instance %d GCEA instance %d\n", gcea_sdp_enable ? "Enable" : "Disable", i, navi32_gl2c_to_mam[i]);
+			navi32_select_mam_instance(adapt, navi32_gl2c_to_mam[i]);
+			sdp_value = RREG32(SOC15_REG_OFFSET(GC, 0, regGCEA_SDP_ENABLE));
+			if (REG_GET_FIELD(sdp_value, GCEA_SDP_ENABLE, ENABLE) != gcea_sdp_enable) {
+				sdp_value = REG_SET_FIELD(sdp_value, GCEA_SDP_ENABLE, ENABLE, gcea_sdp_enable ? 1 : 0);
+				WREG32(SOC15_REG_OFFSET(GC, 0, regGCEA_SDP_ENABLE), sdp_value);
+			}
+		}
+	}
+
+	navi32_select_mam_instance(adapt, 0);
 }
 
 int navi32_dirtybit_control(struct amdgv_adapter *adapt, bool enable)
@@ -77,9 +111,9 @@ static int navi32_dirtybit_query_dirty_page_size(struct amdgv_adapter *adapt, ui
 int navi32_is_segment_dirty(struct amdgv_adapter *adapt, uint64_t segment, bool dbit_preserve,
 				enum NV32_DBIT_QUERY query_type, bool *is_dirty)
 {
-	uint8_t i;
 	uint32_t gc_value = 0;
 	uint32_t mm_value = 0;
+	uint32_t grbm_data = 0;
 	int wait_ret;
 	int ret = 0;
 
@@ -90,7 +124,7 @@ int navi32_is_segment_dirty(struct amdgv_adapter *adapt, uint64_t segment, bool 
 		/* wait for GC MAM 0 query ready */
 		navi32_select_mam_instance(adapt, 0);
 
-		/* wait for a query ready */
+		/* a1. wait for a query ready */
 		wait_ret = amdgv_wait_for_register(
 			adapt, SOC15_REG_OFFSET_NAME(GC, 0, regGCEA_MAM_STATUS),
 			REG_FIELD_MASK(GCEA_MAM_STATUS, DBIT_QUERY_RDY),
@@ -103,25 +137,29 @@ int navi32_is_segment_dirty(struct amdgv_adapter *adapt, uint64_t segment, bool 
 			goto out;
 		}
 
-		/* query GC MAM instances */
-		for (i = 0; i < MAX_MAM_INSTANCES_NAVI32; i++) {
-			navi32_select_mam_instance(adapt, i);
-			gc_value = RREG32(SOC15_REG_OFFSET(GC, 0, regGCEA_MAM_DBIT_QUERY));
-			/* segment is 256-k aligned memory segment pysical address */
-			gc_value = REG_SET_FIELD(gc_value, GCEA_MAM_DBIT_QUERY, QUERY_ADDR, segment);
-			gc_value = REG_SET_FIELD(gc_value, GCEA_MAM_DBIT_QUERY, QUERY_EN, 1);
+		/* b1. query GC MAM instances - broadcast write to all instances */
+		gc_value = RREG32(SOC15_REG_OFFSET(GC, 0, regGCEA_MAM_DBIT_QUERY));
+		/* segment is 256-k aligned memory segment physical address */
+		gc_value = REG_SET_FIELD(gc_value, GCEA_MAM_DBIT_QUERY, QUERY_ADDR, segment);
+		gc_value = REG_SET_FIELD(gc_value, GCEA_MAM_DBIT_QUERY, QUERY_EN, 1);
 
-			if (dbit_preserve)
-				gc_value = REG_SET_FIELD(gc_value, GCEA_MAM_DBIT_QUERY, DBIT_PRESERVE, 1);
-			else
-				gc_value = REG_SET_FIELD(gc_value, GCEA_MAM_DBIT_QUERY, DBIT_PRESERVE, 0);
+		if (dbit_preserve)
+			gc_value = REG_SET_FIELD(gc_value, GCEA_MAM_DBIT_QUERY, DBIT_PRESERVE, 1);
+		else
+			gc_value = REG_SET_FIELD(gc_value, GCEA_MAM_DBIT_QUERY, DBIT_PRESERVE, 0);
 
-			WREG32(SOC15_REG_OFFSET(GC, 0, regGCEA_MAM_DBIT_QUERY), gc_value);
-		}
+		grbm_data = REG_SET_FIELD(grbm_data, GRBM_GFX_INDEX, INSTANCE_BROADCAST_WRITES, 1);
+		grbm_data = REG_SET_FIELD(grbm_data, GRBM_GFX_INDEX, SE_BROADCAST_WRITES, 1);
+		grbm_data = REG_SET_FIELD(grbm_data, GRBM_GFX_INDEX, SA_BROADCAST_WRITES, 1);
+		WREG32(SOC15_REG_OFFSET(GC, 0, regGRBM_GFX_INDEX), grbm_data);
+
+		WREG32(SOC15_REG_OFFSET(GC, 0, regGCEA_MAM_DBIT_QUERY), gc_value);
+
+		navi32_select_mam_instance(adapt, 0);
 	}
 
 	if (query_type == NV32_DBIT_QUERY_GC_MM || query_type == NV32_DBIT_QUERY_MM) {
-		/* wait MM MAM query ready */
+		/* a2. wait MM MAM query ready */
 		wait_ret = amdgv_wait_for_register(
 			adapt, SOC15_REG_OFFSET_NAME(MMHUB, 0, regDAGB0_MAM_STATUS),
 			REG_FIELD_MASK(DAGB0_MAM_STATUS, DBIT_QUERY_RDY),
@@ -134,7 +172,7 @@ int navi32_is_segment_dirty(struct amdgv_adapter *adapt, uint64_t segment, bool 
 			goto out;
 		}
 
-		/* query MM MAM */
+		/* b2.query MM MAM */
 		mm_value = RREG32(SOC15_REG_OFFSET(MMHUB, 0, regDAGB0_MAM_DBIT_QUERY));
 		/* segment is 256-k aligned memory segment physical address */
 		mm_value = REG_SET_FIELD(mm_value, DAGB0_MAM_DBIT_QUERY, QUERY_ADDR, segment);
@@ -148,7 +186,7 @@ int navi32_is_segment_dirty(struct amdgv_adapter *adapt, uint64_t segment, bool 
 		WREG32(SOC15_REG_OFFSET(MMHUB, 0, regDAGB0_MAM_DBIT_QUERY), mm_value);
 	}
 
-	/* read result */
+	/* c. read result */
 	if (query_type == NV32_DBIT_QUERY_GC_MM || query_type == NV32_DBIT_QUERY_GC) {
 		/* wait for GC MAM 0 query ready */
 		navi32_select_mam_instance(adapt, 0);
@@ -165,10 +203,6 @@ int navi32_is_segment_dirty(struct amdgv_adapter *adapt, uint64_t segment, bool 
 			ret = AMDGV_FAILURE;
 			goto out;
 		}
-
-		do {
-			gc_value = RREG32(SOC15_REG_OFFSET(GC, 0, regGCEA_MAM_STATUS));
-		} while (!(REG_GET_FIELD(gc_value, GCEA_MAM_STATUS, DBIT_QUERY_RDY)));
 
 		gc_value = RREG32(SOC15_REG_OFFSET(GC, 0, regGCEA_MAM_STATUS));
 		gc_value = REG_GET_FIELD(gc_value, GCEA_MAM_STATUS, DBIT_QUERY_DIRTY);
@@ -197,209 +231,6 @@ int navi32_is_segment_dirty(struct amdgv_adapter *adapt, uint64_t segment, bool 
 out:
 	return ret;
 }
-
-/* get the address output SPA that we want to query dirty bit */
-static uint64_t navi32_get_query_ffbm_spa(struct ffbm_map_entry entry, uint64_t offset_input)
-{
-	uint64_t address_output = 0x0;
-	uint64_t offset_temp = entry.gpa;
-
-	/* Check if the input offset is in the range of the current block */
-	if ((offset_input >= offset_temp)  &&
-		(offset_input < offset_temp + entry.size)) {
-		/* Calculate the spa using the spa base of the block and the offset */
-		address_output = entry.spa + (offset_input - offset_temp);
-	}
-
-	return address_output;
-}
-
-/* manual driver query and update result dbit */
-static int navi32_query_spa_update_dbit(struct amdgv_adapter *adapt, uint64_t query_spa, uint32_t temp_query_bits,
-			uint32_t prev_leftover_bits, bool dbit_preserve, uint8_t *dbit_data_ptr, enum NV32_DBIT_QUERY query_type,
-			uint32_t *leftover_bits_ret)
-{
-	uint8_t dbit_results = 0;
-	uint8_t prev_leftover_dbit_results = *dbit_data_ptr;
-	uint8_t *dbit_data_ptr_temp = dbit_data_ptr;
-	uint32_t leftover_bits = (temp_query_bits + prev_leftover_bits) % 8;
-	bool is_segment_dirty = false;
-	int ret = 0;
-	int j = 0;
-	/* Query the segments in the current FFBM block*/
-	/* start at one for easy 8 bit mod */
-	for (j = prev_leftover_bits + 1; j <= temp_query_bits + prev_leftover_bits ; j++) {
-		ret = navi32_is_segment_dirty(adapt, query_spa, dbit_preserve, query_type, &is_segment_dirty);
-
-		if (ret)
-			goto out;
-
-		if (is_segment_dirty)
-			dbit_results |= 0x80;
-
-		if (j % 8 == 0) {
-
-			if (j == 8 && prev_leftover_bits) {
-				dbit_results = dbit_results | prev_leftover_dbit_results;
-			}
-
-			/* write into dbit plane */
-			oss_memcpy(dbit_data_ptr_temp, &dbit_results, sizeof(uint8_t));
-			dbit_data_ptr_temp++;
-			dbit_results = 0;
-		} else {
-			dbit_results >>= 1;
-		}
-
-		query_spa += SEGMENT_SIZE_1M;
-	}
-
-	/* handle leftover dbit_results that is less than 8 bit */
-	if (leftover_bits) {
-
-		if (prev_leftover_bits && (temp_query_bits + prev_leftover_bits) < 8) {
-			dbit_results >>= (8 - prev_leftover_bits - temp_query_bits - 1);
-			dbit_results = dbit_results | prev_leftover_dbit_results;
-		} else {
-			/* copy last byte of dbit result*/
-			dbit_results >>= (8 - leftover_bits - 1); /*  minus 1 cause the for loop will shift one more */
-		}
-		oss_memcpy(dbit_data_ptr_temp, &dbit_results, sizeof(uint8_t));
-	}
-
-	*leftover_bits_ret = leftover_bits;
-
-out:
-	return ret;
-}
-
-static int navi32_dirtybit_query_data_internal(struct amdgv_adapter *adapt,
-				struct amdgv_query_dirty_bit_data *data, enum NV32_DBIT_QUERY query_type)
-{
-	int ret = 0;
-	uint64_t offset_input = data->query_fb_offset;
-	uint64_t query_spa = 0;
-	uint64_t leftover_query_size = data->query_size;
-	uint8_t *temp_dbit_data_ptr = data->dbit_plane_data_buffer;
-	uint64_t temp_query_size = 0;
-	uint32_t temp_query_bits = 0;
-	uint32_t temp_query_bytes_used = 0;
-	uint32_t prev_leftover_bits = 0;
-	uint32_t i = 0;
-	/* get ffbm mapping list for VF */
-	struct amdgv_vf_ffbm_map_list *vf_ffbm_map_list = oss_malloc(sizeof(struct amdgv_vf_ffbm_map_list));
-
-	if (!vf_ffbm_map_list) {
-		amdgv_put_error(AMDGV_PF_IDX,
-			AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
-			sizeof(struct amdgv_vf_ffbm_map_list));
-		ret = AMDGV_FAILURE;
-		goto fail;
-	}
-
-	amdgv_get_vf_fb_mapping_list(adapt, data->idx_vf, vf_ffbm_map_list, true);
-
-	/* Find the valid FFBM map list */
-	if (vf_ffbm_map_list->count != 0) {
-		for (i = 0; i < vf_ffbm_map_list->count; i++) {
-			/* Adjust offset_input to TMR block size */
-			if (vf_ffbm_map_list->entry[i].gpa == MBYTES_TO_BYTES(AMDGV_FFBM_FB_TMR_OFFSET)) {
-				offset_input += vf_ffbm_map_list->entry[i].size;
-				continue;
-			}
-
-			/* Check if there's valid spa to query */
-			query_spa = navi32_get_query_ffbm_spa(vf_ffbm_map_list->entry[i], offset_input);
-			if (query_spa != 0x0) {
-				temp_query_size = (leftover_query_size < vf_ffbm_map_list->entry[i].size) ?
-									leftover_query_size : vf_ffbm_map_list->entry[i].size;
-				temp_query_bits = temp_query_size >> SHIFT_1M;
-
-				/* Query the segments in the current FFBM block */
-				ret = navi32_query_spa_update_dbit(adapt, query_spa, temp_query_bits,
-									prev_leftover_bits, data->dbit_preserve, temp_dbit_data_ptr,
-									query_type, &prev_leftover_bits);
-
-				if (ret)
-					goto out;
-
-				temp_query_bytes_used = temp_query_bits >> 3;
-				temp_dbit_data_ptr += temp_query_bytes_used;
-				leftover_query_size -= temp_query_size;
-				offset_input += temp_query_size;
-			}
-
-			if (leftover_query_size == 0x0)
-				break;
-		}
-		/* Handle corner case: The first 2MB reserved block is always clean.
-		* The 2MB reserve block starts at the beginning of VF's gpa.
-		* Check if the queried range includes the 2MB reserved block.
-		*/
-		if (data->query_fb_offset < MBYTES_TO_BYTES(2)) {
-			uint8_t temp_dbit = 0;
-			temp_dbit_data_ptr = data->dbit_plane_data_buffer;
-
-			if (data->query_fb_offset == 0) {
-				/* query range includes the whole 2MB, so first 2 bits are clean */
-				temp_dbit = 0xFC;
-			} else {
-				/* query range includes the the second half of 2MB, so first bit is clean */
-				temp_dbit = 0xFE;
-			}
-
-			*temp_dbit_data_ptr = *temp_dbit_data_ptr & temp_dbit;
-
-		}
-	} else {
-		AMDGV_ERROR("Dirty Bit: No FFBM blocks for vf%d\n", data->idx_vf);
-		ret = AMDGV_FAILURE;
-	}
-
-out:
-	oss_free(vf_ffbm_map_list);
-fail:
-	return ret;
-}
-
-#ifdef PURE_DRIVER_QUERY_DBIT
-/* driver dirty bit query */
-static int navi32_dirtybit_query_data(struct amdgv_adapter *adapt,
-				struct amdgv_query_dirty_bit_data *data)
-{
-	struct amdgv_vf_device *vf_dev = &adapt->array_vf[data->idx_vf];
-	/* nv32 must have ffbm enabled */
-	if (!adapt->ffbm.enabled) {
-		AMDGV_ERROR("FFBM not enabled\n");
-		return AMDGV_FAILURE;
-	}
-
-	if ((data->query_size == 0) ||
-		((data->query_fb_offset + data->query_size) > MBYTES_TO_BYTES(vf_dev->fb_size_os)) ||
-		(data->dbit_plane_data_buffer == NULL) ||
-		(data->dbit_plane_data_size == 0)) {
-		AMDGV_ERROR("Dirty Bit: Invalid query input\n");
-		return AMDGV_FAILURE;
-	}
-
-	/* calculate how many segments to cover query size compare to the dbit_plane size */
-	uint64_t num_segments = roundup(data->query_size, SEGMENT_SIZE_1M);
-	num_segments >>= SHIFT_1M;
-
-	uint64_t num_bits = data->dbit_plane_data_size * 8;
-	/* query_addr_basis should be already page size aligned */
-	uint64_t query_addr = SEGMENT_SIZE_1M_ALIGN(data->query_fb_offset);
-
-	/* check if dbit_plane is big enough */
-	if (num_segments > num_bits) {
-		AMDGV_ERROR("Dirty Bit: dbit_plane is not big enough\n");
-		return AMDGV_FAILURE;
-	}
-
-	return navi32_dirtybit_query_data_internal(adapt, data, NV32_DBIT_QUERY_GC_MM);
-}
-
-#endif
 
 /* sdma dirty bit polling and update dbit */
 static int navi32_dirtybit_sdma_poll_dbit(struct amdgv_adapter *adapt, struct nv32_poll_dbit_write_mem *data)
@@ -448,133 +279,141 @@ static int navi32_dirtybit_sdma_poll_dbit(struct amdgv_adapter *adapt, struct nv
 		r = 0;
 		AMDGV_DEBUG("Dirty Bit: SDMA poll dbit took 0x%llx us\n", (uint64_t)(end - start));
 	}
-
 	return r;
-
 }
 
-static int navi32_dirtybit_query_replaced_pages(struct amdgv_adapter *adapt,  struct amdgv_query_dirty_bit_data *data)
+static void copy_dirty_bits(uint32_t number_of_dirty_bits, uint8_t *dirty_bits,
+			uint32_t dbit_buffer_bit_offset, uint8_t *dbit_buffer)
 {
-	struct amdgv_vf_device *vf_dev = &adapt->array_vf[data->idx_vf];
-	struct ffbm_map_entry *cur_pteb;
-	int ret = 0;
-	uint8_t dbit_results = 0;
-	uint64_t vf_spa = 0;
-	uint8_t *dbit_data_ptr = data->dbit_plane_data_buffer;
-	int64_t query_addr = SEGMENT_SIZE_1M_ALIGN(data->query_fb_offset);
-	bool is_segment_dirty = false;
+	uint32_t dirty_bytes = roundup(number_of_dirty_bits, 8) / 8;
+	uint32_t byte_index = dbit_buffer_bit_offset >> 3;
+	uint32_t shift = dbit_buffer_bit_offset % 8;
 	uint32_t i;
-	uint32_t j;
-	uint64_t first_page_pos;
-	uint32_t number_of_pages_to_overwrite;
-	uint32_t bit_pos;
-	uint32_t byte_pos;
-	uint8_t dbit_mask;
 
-	/* get ffbm mapping list for VF */
-	struct amdgv_vf_ffbm_map_list *vf_ffbm_map_list = oss_malloc(sizeof(struct amdgv_vf_ffbm_map_list));
+	if (0 == shift)	{
+		for (i = 0; i < dirty_bytes; i++)
+			dbit_buffer[byte_index + i] = dirty_bits[i];
+	} else {
+		uint8_t carry = 0;
+		uint8_t next_carry = 0;
 
-	if (!vf_ffbm_map_list) {
-		amdgv_put_error(AMDGV_PF_IDX,
-			AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
-			sizeof(struct amdgv_vf_ffbm_map_list));
-		ret = AMDGV_FAILURE;
-		goto fail;
-	}
-
-	amdgv_get_vf_fb_mapping_list(adapt, data->idx_vf, vf_ffbm_map_list, false);
-
-	for (i = 1; i < vf_ffbm_map_list->count; i++) {
-		/* skips first block as it is 2MB reserve block */
-		if (vf_ffbm_map_list->entry[i].size > AMDGV_FFBM_PAGE_SIZE(adapt->ffbm.default_fragment)) {
-			vf_spa = vf_ffbm_map_list->entry[i].spa - (vf_ffbm_map_list->entry[i].gpa - MBYTES_TO_BYTES(adapt->tmr_size));
-			break;
+		for (i = 0; i < dirty_bytes; i++) {
+			next_carry = dirty_bits[i] >> (8 - shift);
+			dbit_buffer[byte_index + i] |= ((dirty_bits[i] << shift) | carry);
+			carry = next_carry;
 		}
+		if (carry)
+			dbit_buffer[byte_index + dirty_bytes] |= carry;
 	}
+}
 
-	/* query and fill in any bad pages and update OS's buffer*/
-	for (i = 1; i < vf_ffbm_map_list->count; i++) {
-		/* skips first block as it is 2MB reserve block, which is handled */
-		cur_pteb = &vf_ffbm_map_list->entry[i];
-		if ((cur_pteb->spa > vf_spa + MBYTES_TO_BYTES(vf_dev->fb_size_os)) && //check that spa is in the reserved page range
-			((cur_pteb->gpa - MBYTES_TO_BYTES(adapt->tmr_size)) < (query_addr + data->query_size)) &&
-			((cur_pteb->gpa - MBYTES_TO_BYTES(adapt->tmr_size) + cur_pteb->size) > query_addr)) {
+static int mmio_query_dirty_bits(struct amdgv_adapter *adapt, enum NV32_DBIT_QUERY dbit_query,
+			uint32_t dbit_buffer_bit_offset, uint8_t *dbit_buffer,
+			bool dbit_preserve, uint64_t dbit_query_spa, uint64_t dbit_query_size)
+{
+	static uint8_t bits[] = { 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80 };
+	uint64_t query_spa = dbit_query_spa;
+	bool is_segment_dirty = false;
+	uint32_t number_of_dirty_bits = (dbit_query_size >> SHIFT_1M);
+	uint32_t i;
 
-			for (j = 0; j < (cur_pteb->size >> SHIFT_1M) ; j++) { // should be 2MB per reserve page
-				ret = navi32_is_segment_dirty(adapt, cur_pteb->spa + j * SEGMENT_SIZE_1M, data->dbit_preserve, NV32_DBIT_QUERY_GC_MM, &is_segment_dirty);
+	for (i = 0; i < number_of_dirty_bits; i++) {
+		if (navi32_is_segment_dirty(adapt, query_spa, dbit_preserve, dbit_query, &is_segment_dirty))
+			return AMDGV_FAILURE;
+		if (is_segment_dirty) {
+			uint32_t byte_offset = dbit_buffer_bit_offset >> 3;
+			uint32_t bit_offset = dbit_buffer_bit_offset % 8;
 
-				if (ret)
-					goto out;
-
-				if (is_segment_dirty)
-					dbit_results |= 0x80;
-
-				dbit_results >>= 1;
-			}
-
-			dbit_results >>= (7 - j); // so that the result is in first 2 bits
-			/* find the bits position in */
-			first_page_pos = 0;
-			number_of_pages_to_overwrite = cur_pteb->size >> SHIFT_1M;
-			if ((cur_pteb->gpa - MBYTES_TO_BYTES(adapt->tmr_size)) < query_addr) {
-				/* handle case where the first bit is out of range */
-				first_page_pos = (SEGMENT_SIZE_1M + (cur_pteb->gpa - MBYTES_TO_BYTES(adapt->tmr_size))) - query_addr;
-				/* discard the first bit of dbit_results */
-				number_of_pages_to_overwrite -= 1;
-				dbit_results >>= 1;
-			} else {
-				first_page_pos = ((cur_pteb->gpa - MBYTES_TO_BYTES(adapt->tmr_size)) - query_addr);
-			}
-			if ((cur_pteb->gpa - MBYTES_TO_BYTES(adapt->tmr_size) + cur_pteb->size) > (query_addr + data->query_size)) {
-				/* handle case where the second bit is out of query range */
-				dbit_results &= ~(0b10);
-				number_of_pages_to_overwrite -= 1;
-			}
-			bit_pos = first_page_pos >> SHIFT_1M;
-			byte_pos = bit_pos / 8;
-			dbit_data_ptr = data->dbit_plane_data_buffer;
-			dbit_data_ptr += byte_pos;
-			dbit_mask = number_of_pages_to_overwrite == 1 ? 0x1 : 0x3;
-			dbit_mask <<= (bit_pos % 8);
-			*dbit_data_ptr &= ~dbit_mask;
-			*dbit_data_ptr |= (dbit_results << (bit_pos % 8));
-
-			/* corner case, the 2 bits are in different byte position */
-			if ((bit_pos % 8) == 7 &&
-				(number_of_pages_to_overwrite == 2) &&
-				(byte_pos + 1 < data->dbit_plane_data_size)) {
-				dbit_data_ptr++;
-				/* clear out first bit */
-				*dbit_data_ptr &= (uint8_t) ~0x1;
-				*dbit_data_ptr |= (dbit_results >> 1);
-			}
+			dbit_buffer[byte_offset] |= bits[bit_offset];
 		}
+		query_spa += SEGMENT_SIZE_1M;
+		++dbit_buffer_bit_offset;
 	}
+	return 0;
+}
 
-out:
-	oss_free(vf_ffbm_map_list);
+static int query_block_dirty_bits(struct amdgv_adapter *adapt, uint32_t dbit_buffer_bit_offset,
+			uint8_t *dbit_buffer, bool dbit_preserve, uint64_t dbit_query_spa, uint64_t dbit_query_size)
+{
+	int ret = AMDGV_FAILURE;
+	struct nv32_poll_dbit_write_mem sdma_data = {0};
+	uint8_t *dbit_gc = (uint8_t *)amdgv_memmgr_get_cpu_addr(adapt->dirtybit.gc_dirty_bitplane);
+	uint32_t number_of_dirty_bits = (dbit_query_size >> SHIFT_1M);
+	uint32_t sdma_dbit_bytes = roundup(number_of_dirty_bits, 8) / 8;
 
-fail:
+	oss_memset(dbit_gc, 0, sdma_dbit_bytes);
+
+	/* Query the contiguous segment starting at VF FB SPA + query_fb_offset */
+	sdma_data.query_addr = dbit_query_spa + adapt->mc_fb_loc_addr;
+	sdma_data.number_of_pages = number_of_dirty_bits;
+	sdma_data.clear_dbit = dbit_preserve ? 0 : 1;
+	sdma_data.gc_destination_addr = amdgv_memmgr_get_gpu_addr(adapt->dirtybit.gc_dirty_bitplane);
+
+	if (!navi32_dirtybit_sdma_poll_dbit(adapt, &sdma_data))	{
+		copy_dirty_bits(number_of_dirty_bits, dbit_gc, dbit_buffer_bit_offset, dbit_buffer);
+		ret = mmio_query_dirty_bits(adapt, NV32_DBIT_QUERY_MM, dbit_buffer_bit_offset,
+							dbit_buffer, dbit_preserve, dbit_query_spa, dbit_query_size);
+	}
 	return ret;
 }
 
-/* hybrid query: sdma poll from GC and driver query from MMhub*/
-static int navi32_dirtybit_query_data_hybrid(struct amdgv_adapter *adapt,
+static int query_dirty_bits_through_ffbm_blocks(struct amdgv_adapter *adapt,
+		struct amdgv_vf_ffbm_map_list *vf_ffbm_map_list, uint64_t query_offset,
+		uint64_t query_end_offset, uint8_t *dbit_buffer, bool dbit_preserve)
+{
+	int ret = 0;
+	uint64_t ffbm_offset = 0;
+	uint64_t dbit_query_offset = query_offset;
+	uint64_t dbit_query_spa;
+	uint64_t dbit_query_size;
+	uint64_t block_offset;
+	uint64_t end_offset;
+	uint32_t dbit_buffer_bit_offset;
+	uint32_t i;
+
+	for (i = 0; i < vf_ffbm_map_list->count; i++) {
+		dbit_query_size = 0;
+		end_offset = ffbm_offset + vf_ffbm_map_list->entry[i].size;
+		if (ffbm_offset <= dbit_query_offset && dbit_query_offset < end_offset) {
+			block_offset = dbit_query_offset - ffbm_offset;
+			dbit_query_spa = vf_ffbm_map_list->entry[i].spa + block_offset;
+			dbit_query_size = vf_ffbm_map_list->entry[i].size - block_offset;
+			if (end_offset > query_end_offset)
+				dbit_query_size -= (end_offset - query_end_offset);
+		}
+		if (dbit_query_size) {
+			dbit_buffer_bit_offset = (uint32_t)((dbit_query_offset - query_offset) >> SHIFT_1M);
+#ifdef PURE_DRIVER_QUERY_DBIT
+			ret = mmio_query_dirty_bits(adapt, NV32_DBIT_QUERY_GC_MM, dbit_buffer_bit_offset,
+							dbit_buffer, dbit_preserve, dbit_query_spa, dbit_query_size);
+#else
+			ret = query_block_dirty_bits(adapt, dbit_buffer_bit_offset, dbit_buffer, dbit_preserve,
+						dbit_query_spa, dbit_query_size);
+#endif
+			if (ret)
+				break;
+		}
+		ffbm_offset += vf_ffbm_map_list->entry[i].size;
+		dbit_query_offset += dbit_query_size;
+
+		if (dbit_query_offset >= query_end_offset)
+			break;
+	}
+	return ret;
+}
+
+static int navi32_query_dirtybit_data(struct amdgv_adapter *adapt,
 				struct amdgv_query_dirty_bit_data *data)
 {
 	struct amdgv_vf_device *vf_dev = &adapt->array_vf[data->idx_vf];
 	int ret = 0;
-	uint8_t *dbit_data_ptr = data->dbit_plane_data_buffer;
+	uint8_t *dbit_buffer = data->dbit_plane_data_buffer;
 	uint64_t num_segments = 0;
 	uint64_t num_bits = 0;
-	int64_t query_addr = 0;
-	uint64_t vf_spa = 0;
-	uint8_t *dbit_gc = NULL;
-	struct nv32_poll_dbit_write_mem sdma_data = {0};
-	uint32_t sdma_dbit_plane_size  = 0;
-	uint32_t i;
-	uint8_t temp_dbit = 0;
+	uint64_t query_offset = 0;
 	struct amdgv_vf_ffbm_map_list *vf_ffbm_map_list = NULL;
+	uint64_t query_end_offset = data->query_fb_offset + data->query_size;
+	uint64_t query_bytes_size;
 
 	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)) {
 		AMDGV_ERROR("GPUV live migration not enabled\n");
@@ -595,11 +434,19 @@ static int navi32_dirtybit_query_data_hybrid(struct amdgv_adapter *adapt,
 		return AMDGV_FAILURE;
 	}
 
-	num_segments = roundup(data->query_size, SEGMENT_SIZE_1M);
-	num_segments >>= SHIFT_1M;
+	ret = amdgv_sched_context_switch_to_vf(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_ALL);
+	if (ret) {
+		/* TODO: defer on transient WS fail in mVF case */
+		AMDGV_WARN("Failed to context switch to PF for dirtybit query\n");
+		return AMDGV_FAILURE;
+	}
 
+	query_offset = rounddown(data->query_fb_offset, SEGMENT_SIZE_1M);
+	query_end_offset = roundup(query_end_offset, SEGMENT_SIZE_1M);
+	query_bytes_size = query_end_offset - query_offset;
+
+	num_segments = query_bytes_size >> SHIFT_1M;
 	num_bits = data->dbit_plane_data_size * 8;
-	query_addr = SEGMENT_SIZE_1M_ALIGN(data->query_fb_offset);
 
 	/* check if dbit_plane is big enough */
 	if (num_segments > num_bits) {
@@ -611,8 +458,8 @@ static int navi32_dirtybit_query_data_hybrid(struct amdgv_adapter *adapt,
 	vf_ffbm_map_list = oss_malloc(sizeof(struct amdgv_vf_ffbm_map_list));
 
 	if (!vf_ffbm_map_list) {
-		amdgv_put_error(AMDGV_PF_IDX,
-			AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX,
+			AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 			sizeof(struct amdgv_vf_ffbm_map_list));
 		ret = AMDGV_FAILURE;
 		goto fail;
@@ -620,79 +467,15 @@ static int navi32_dirtybit_query_data_hybrid(struct amdgv_adapter *adapt,
 
 	amdgv_get_vf_fb_mapping_list(adapt, data->idx_vf, vf_ffbm_map_list, false);
 
-	if (vf_ffbm_map_list->count != 0) {
-		/* Get a big ffbm pte block that is more than 2MB (non-replaced page) from the mapping list.
-		* Use the SPA and GPA of this block to get the SPA of the VF FB start.
-		*/
-		for (i = 1; i < vf_ffbm_map_list->count; i++) {
-			/* skips first block as it is 2MB reserve block */
-			if (vf_ffbm_map_list->entry[i].size > AMDGV_FFBM_PAGE_SIZE(adapt->ffbm.default_fragment)) {
-				vf_spa = vf_ffbm_map_list->entry[i].spa - (vf_ffbm_map_list->entry[i].gpa - MBYTES_TO_BYTES(adapt->tmr_size));
-				break;
-			}
-		}
-	} else {
+	if (vf_ffbm_map_list->count == 0) {
 		AMDGV_ERROR("Dirty Bit: No FFBM blocks for vf%d\n", data->idx_vf);
 		ret = AMDGV_FAILURE;
 		goto out;
 	}
 
-	/* Query the contiguous segment starting at VF FB SPA + query_fb_offset */
-	sdma_data.query_addr = vf_spa + query_addr + adapt->mc_fb_loc_addr;
-	sdma_data.number_of_pages = num_segments;
-
-	sdma_data.clear_dbit = data->dbit_preserve ? 0 : 1;
-	sdma_data.gc_destination_addr = amdgv_memmgr_get_gpu_addr(adapt->dirtybit.gc_dirty_bitplane);
-	sdma_data.mm_destination_addr = amdgv_memmgr_get_gpu_addr(adapt->dirtybit.mm_dirty_bitplane);
-
-	if (navi32_dirtybit_sdma_poll_dbit(adapt, &sdma_data)) {
-		AMDGV_ERROR("Dirty Bit: SDMA poll dbit failed\n");
-		ret = AMDGV_FAILURE;
-		goto out;
-	}
-
-	/* Manual query from mmhub */
-	if (navi32_dirtybit_query_data_internal(adapt, data, NV32_DBIT_QUERY_MM)) {
-		AMDGV_ERROR("Dirty Bit: query mmhub dbit failed\n");
-		ret = AMDGV_FAILURE;
-		goto out;
-	}
-
-	/* OR the GC result and MM result (in dbit_data_ptr) into OS's buffer */
-	dbit_gc = (uint8_t *)amdgv_memmgr_get_cpu_addr(adapt->dirtybit.gc_dirty_bitplane);
-	sdma_dbit_plane_size = roundup(sdma_data.number_of_pages, 8) / 8;
-
-	for (i = 1; i <= sdma_dbit_plane_size; i++) {
-		*dbit_data_ptr = *dbit_gc | *dbit_data_ptr;
-		dbit_data_ptr++;
-		dbit_gc++;
-	}
-
-	/* clean up gc_dbit */
-	dbit_gc = (uint8_t *)amdgv_memmgr_get_cpu_addr(adapt->dirtybit.gc_dirty_bitplane);
-	oss_memset(dbit_gc, 0, sdma_dbit_plane_size);
-
-	/* Handle corner case: The first 2MB reserved block is always clean.
-	* The 2MB reserve block starts at the beginning of VF's gpa.
-	* Check if the queried range includes the 2MB reserved block.
-	*/
-	if (data->query_fb_offset < MBYTES_TO_BYTES(2)) {
-		temp_dbit = 0;
-		dbit_data_ptr = data->dbit_plane_data_buffer;
-
-		if (data->query_fb_offset == 0) {
-			/* query range includes the whole 2MB, so first 2 bits are clean */
-			temp_dbit = 0xFC;
-		} else {
-			/* query range includes the the second half of 2MB, so first bit is clean */
-			temp_dbit = 0xFE;
-		}
-
-		*dbit_data_ptr = *dbit_data_ptr & temp_dbit;
-	}
-
-	/* query dbit for replaced pages */
-	ret = navi32_dirtybit_query_replaced_pages(adapt, data);
+	oss_memset(dbit_buffer, 0, data->dbit_plane_data_size);
+	ret = query_dirty_bits_through_ffbm_blocks(adapt, vf_ffbm_map_list,
+			query_offset, query_end_offset, dbit_buffer, data->dbit_preserve);
 
 out:
 	oss_free(vf_ffbm_map_list);
@@ -702,8 +485,9 @@ fail:
 
 static const struct amdgv_dirtybit_funcs navi32_db_funcs = {
 	.control = navi32_dirtybit_control,
+	.gcea_sdp_control = navi32_dirtybit_gcea_sdp_control,
     .query_dirty_page_size = navi32_dirtybit_query_dirty_page_size,
-	.query_data = navi32_dirtybit_query_data_hybrid,
+	.query_data = navi32_query_dirtybit_data,
 };
 
 int navi32_dirtybit_sw_init(struct amdgv_adapter *adapt)
@@ -717,10 +501,17 @@ int navi32_dirtybit_sw_init(struct amdgv_adapter *adapt)
 	adapt->dirtybit.query_submission_frame = (uint8_t *)oss_malloc(adapt->sdma.sdma_ring[1].max_dw * 4);
 
 	if (!adapt->dirtybit.query_submission_frame) {
-		amdgv_put_error(AMDGV_PF_IDX,
-			AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX,
+			AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 			(adapt->sdma.sdma_ring[1].max_dw * 4));
 		ret = AMDGV_FAILURE;
+		return ret;
+	}
+
+	if (amdgv_dirtybit_sw_init(adapt)) {
+		oss_free(adapt->dirtybit.query_submission_frame);
+		adapt->dirtybit.query_submission_frame = NULL;
+		return AMDGV_FAILURE;
 	}
 
 	return ret;
@@ -730,15 +521,27 @@ int navi32_dirtybit_sw_fini(struct amdgv_adapter *adapt)
 {
 	if (adapt->dirtybit.query_submission_frame != NULL)
 		oss_free(adapt->dirtybit.query_submission_frame);
+
+	amdgv_dirtybit_free_acc_bits_whole_fb(adapt);
+
 	return 0;
+}
+
+void navi32_dirtybit_setup_sdma_hbm_page_size(struct amdgv_adapter *adapt)
+{
+	uint32_t sdma_hbm_value;
+
+	/* setup HBM page size of 1MB for sdma1 */
+	sdma_hbm_value = REG_SET_FIELD(0, SDMA1_HBM_PAGE_CONFIG, PAGE_SIZE_EXPONENT, 2);
+	WREG32(SOC15_REG_OFFSET(GC, 0, regSDMA1_HBM_PAGE_CONFIG), sdma_hbm_value);
 }
 
 int navi32_dirtybit_hw_init(struct amdgv_adapter *adapt)
 {
+	int ret = 0;
 	uint8_t i;
 	uint32_t gc_value;
 	uint32_t mm_value;
-	uint32_t sdma_hbm_value;
 	uint32_t total_usable_fb;
 	uint32_t pf_fb_size;
 	uint64_t bitplane_size = 0;
@@ -777,9 +580,7 @@ int navi32_dirtybit_hw_init(struct amdgv_adapter *adapt)
 		mm_value = RREG32(SOC15_REG_OFFSET(MMHUB, 0, regDAGB0_MAM_CTRL2));
 		AMDGV_DEBUG("MAM regDAGB0_MAM_CTRL2 = 0x%x\n", mm_value);
 
-		/* setup HBM page size of 1MB for sdma1 */
-		sdma_hbm_value = REG_SET_FIELD(0, SDMA1_HBM_PAGE_CONFIG, PAGE_SIZE_EXPONENT, 2);
-		WREG32(SOC15_REG_OFFSET(GC, 0, regSDMA1_HBM_PAGE_CONFIG), sdma_hbm_value);
+		navi32_dirtybit_setup_sdma_hbm_page_size(adapt);
 
 		adapt->dirtybit.gc_dirty_bitplane = amdgv_memmgr_alloc(
 			&adapt->memmgr_pf, bitplane_size, MEM_GC_DIRTY_BIT_PLANE);
@@ -792,9 +593,16 @@ int navi32_dirtybit_hw_init(struct amdgv_adapter *adapt)
 			goto mm_bitplane_fail;
 
 		adapt->dirtybit.dirty_page_size = SEGMENT_SIZE_1M;
-	}
-	return 0;
 
+		ret = amdgv_dirtybit_control(adapt, true);
+		if (ret)
+			goto fail;
+	}
+	return ret;
+
+fail:
+	amdgv_memmgr_free(adapt->dirtybit.mm_dirty_bitplane);
+	adapt->dirtybit.mm_dirty_bitplane = NULL;
 mm_bitplane_fail:
 	amdgv_memmgr_free(adapt->dirtybit.gc_dirty_bitplane);
 	adapt->dirtybit.gc_dirty_bitplane = NULL;
@@ -804,6 +612,11 @@ gc_bitplane_fail:
 
 int navi32_dirtybit_hw_fini(struct amdgv_adapter *adapt)
 {
+	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION))
+		return 0;
+
+	amdgv_dirtybit_hw_fini(adapt);
+
 	if (adapt->dirtybit.gc_dirty_bitplane != NULL)
 		amdgv_memmgr_free(adapt->dirtybit.gc_dirty_bitplane);
 

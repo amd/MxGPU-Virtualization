@@ -228,8 +228,8 @@ static void mi300_ras_boot_time_error_reporting(struct amdgv_adapter *adapt,
 	boot_error = mi300_ras_read_register_by_instance(adapt, mmMP0_SMN_C2PMSG_126, instance);
 
 	if (boot_error == AMDGV_RAS_BOOT_READ_ERR_VAL) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_RAS_BOOT_REG_READ_FAIL,
-			AMDGV_ERROR_32_32(boot_error, fw_status));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_RAS_BOOT_REG_READ_FAIL,
+			AMDGV_LOG_DATA_32_32(boot_error, fw_status));
 		return;
 	}
 
@@ -242,47 +242,47 @@ static void mi300_ras_boot_time_error_reporting(struct amdgv_adapter *adapt,
 		socket_id = mi300_ras_read_register_by_instance(adapt, mmSMUIO_MCM_CONFIG, 0);
 		socket_id = REG_GET_FIELD(socket_id, SMUIO_MCM_CONFIG, SOCKET_ID);
 
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_RAS_BOOT_FAIL,
-			AMDGV_ERROR_16_16_32(socket_id, instance, fw_status));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_RAS_BOOT_FAIL,
+			AMDGV_LOG_DATA_16_16_32(socket_id, instance, fw_status));
 		return;
 	}
 
 
 	if (AMDGV_RAS_GPU_ERR_UNKNOWN(boot_error))
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_RAS_BOOT_FAIL,
-			AMDGV_ERROR_16_16_32(socket_id, aid_id, fw_status));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_RAS_BOOT_FAIL,
+			AMDGV_LOG_DATA_16_16_32(socket_id, aid_id, fw_status));
 
 	if (AMDGV_RAS_GPU_ERR_MEM_TRAINING(boot_error))
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_RAS_MEM_TRAIN_FAIL,
-			AMDGV_ERROR_16_16_32(socket_id, aid_id, hbm_id));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_RAS_MEM_TRAIN_FAIL,
+			AMDGV_LOG_DATA_16_16_32(socket_id, aid_id, hbm_id));
 
 	if (AMDGV_RAS_GPU_ERR_FW_LOAD(boot_error))
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_RAS_FW_LOAD_FAIL,
-			AMDGV_ERROR_32_32(socket_id, aid_id));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_RAS_FW_LOAD_FAIL,
+			AMDGV_LOG_DATA_32_32(socket_id, aid_id));
 
 	if (AMDGV_RAS_GPU_ERR_WAFL_LINK_TRAINING(boot_error))
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_RAS_WAFL_LINK_TRAIN_FAIL,
-			AMDGV_ERROR_32_32(socket_id, aid_id));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_RAS_WAFL_LINK_TRAIN_FAIL,
+			AMDGV_LOG_DATA_32_32(socket_id, aid_id));
 
 	if (AMDGV_RAS_GPU_ERR_XGMI_LINK_TRAINING(boot_error))
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_RAS_XGMI_LINK_TRAIN_FAIL,
-			AMDGV_ERROR_32_32(socket_id, aid_id));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_RAS_XGMI_LINK_TRAIN_FAIL,
+			AMDGV_LOG_DATA_32_32(socket_id, aid_id));
 
 	if (AMDGV_RAS_GPU_ERR_USR_CP_LINK_TRAINING(boot_error))
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_RAS_USR_CP_LINK_TRAIN_FAIL,
-			AMDGV_ERROR_32_32(socket_id, aid_id));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_RAS_USR_CP_LINK_TRAIN_FAIL,
+			AMDGV_LOG_DATA_32_32(socket_id, aid_id));
 
 	if (AMDGV_RAS_GPU_ERR_USR_DP_LINK_TRAINING(boot_error))
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_RAS_USR_DP_LINK_TRAIN_FAIL,
-			AMDGV_ERROR_32_32(socket_id, aid_id));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_RAS_USR_DP_LINK_TRAIN_FAIL,
+			AMDGV_LOG_DATA_32_32(socket_id, aid_id));
 
 	if (AMDGV_RAS_GPU_ERR_HBM_MEM_TEST(boot_error))
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_RAS_HBM_MEM_TEST_FAIL,
-			AMDGV_ERROR_16_16_32(socket_id, aid_id, hbm_id));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_RAS_HBM_MEM_TEST_FAIL,
+			AMDGV_LOG_DATA_16_16_32(socket_id, aid_id, hbm_id));
 
 	if (AMDGV_RAS_GPU_ERR_HBM_BIST_TEST(boot_error))
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_RAS_HBM_BIST_TEST_FAIL,
-			AMDGV_ERROR_16_16_32(socket_id, aid_id, hbm_id));
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_RAS_HBM_BIST_TEST_FAIL,
+			AMDGV_LOG_DATA_16_16_32(socket_id, aid_id, hbm_id));
 }
 
 static int mi300_psp_wait_for_boot_complete_cb(void *context)
@@ -583,7 +583,7 @@ static int mi300_ecc_hw_init(struct amdgv_adapter *adapt)
 		ras_context->ras_bin_size) {
 		ret = amdgv_psp_ras_initialize(adapt, ras_context->ras_bin_buf, ras_context->ras_bin_size);
 		if (ret != PSP_STATUS__SUCCESS) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_FW_INIT_FAIL, 0);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_INIT_FAIL, 0);
 			ret = AMDGV_FAILURE;
 			goto out;
 		}
@@ -643,6 +643,20 @@ static int mi300_ecc_sw_init_ext(struct amdgv_adapter *adapt)
 {
 	struct amdgv_init_func *init_func = &mi300_legacy_ecc_func;
 
+	if (amdgv_uniras_enabled(adapt)) {
+	adapt->ecc.get_ras_cap = mi300_get_ras_cap;
+	umc_v12_0_set_umc_funcs(adapt);
+	nbio_v7_9_set_ras_funcs(adapt);
+
+	gfx_v9_4_3_set_funcs(adapt);
+	mmhub_v1_8_set_ras_funcs(adapt);
+
+	sdma_v4_4_2_set_ras_funcs(adapt);
+
+	mi300_xgmi_set_ras_funcs(adapt);
+	init_func = amdgv_ras_mgr_get_init_func(adapt);
+	}
+
 	return init_func->sw_init(adapt);
 }
 
@@ -650,6 +664,8 @@ static int mi300_ecc_sw_fini_ext(struct amdgv_adapter *adapt)
 {
 	struct amdgv_init_func *init_func = &mi300_legacy_ecc_func;
 
+	if (amdgv_uniras_enabled(adapt))
+		init_func = amdgv_ras_mgr_get_init_func(adapt);
 
 	return init_func->sw_fini(adapt);
 }
@@ -658,6 +674,8 @@ static int mi300_ecc_hw_init_ext(struct amdgv_adapter *adapt)
 {
 	struct amdgv_init_func *init_func = &mi300_legacy_ecc_func;
 
+	if (amdgv_uniras_enabled(adapt))
+		init_func = amdgv_ras_mgr_get_init_func(adapt);
 
 	return init_func->hw_init(adapt);
 }
@@ -666,6 +684,8 @@ static int mi300_ecc_hw_fini_ext(struct amdgv_adapter *adapt)
 {
 	struct amdgv_init_func *init_func = &mi300_legacy_ecc_func;
 
+	if (amdgv_uniras_enabled(adapt))
+		init_func = amdgv_ras_mgr_get_init_func(adapt);
 
 	return init_func->hw_fini(adapt);
 }

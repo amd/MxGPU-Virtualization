@@ -463,7 +463,7 @@ static int mi300_reset_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 		pos = oss_pci_find_capability(vf->dev, PCI_CAP_ID_EXP);
 
 		if (!pos) {
-			AMDGV_ERROR("this device does not support capability: %x\n", PCI_CAP_ID_EXP);
+			amdgv_put_log(idx_vf, AMDGV_LOG_DRIVER_PCIE_CAP_MISSING, PCI_CAP_ID_EXP);
 			return AMDGV_FAILURE;
 		}
 
@@ -491,7 +491,7 @@ static int mi300_reset_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	}
 
 	if (wait_ret)
-		AMDGV_WARN("Abort data transaction on %s for FLR\n", amdgv_idx_to_str(idx_vf));
+		amdgv_put_log(idx_vf, AMDGV_LOG_RESET_FLR_TRANS_PENDING, 0);
 
 	/* enable FLR */
 	if (!(adapt->flags & AMDGV_FLAG_ENABLE_CFG_FLR_NOTIFY)) {
@@ -533,7 +533,7 @@ static int mi300_reset_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 static int mi300_reset_verify_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
 	if (mi300_gfx_wait_for_grbm(adapt, idx_vf)) {
-		AMDGV_ERROR("GRBM_STATUS2 is not clean after FLR.\n");
+		amdgv_put_log(idx_vf, AMDGV_LOG_RESET_FLR_GRBM_NOT_CLEAN, 0);
 		return AMDGV_FAILURE;
 	}
 	return 0;
@@ -546,8 +546,7 @@ static int mi300_reset_pf_allowed(struct amdgv_adapter *adapt, uint32_t active_v
 
 	for_each_id(idx_vf, active_vf_mask) {
 		if (pf_xcc_mask & amdgv_sched_get_xcc_mask_by_vf(adapt, idx_vf)) {
-			AMDGV_WARN("PF and VF %d share the same xcc mask %x, "
-				   "promote PF Soft FLR to Mode1 reset\n", idx_vf, pf_xcc_mask);
+			amdgv_put_log(idx_vf, AMDGV_LOG_RESET_PF_FLR_SHARED_XCC_MASK, 0);
 			return false;
 		}
 	}
@@ -598,7 +597,7 @@ static int mi300_reset_trigger_vf_flr(struct amdgv_adapter *adapt,
 
 	/* need SMU FW loaded and responding to do FLR */
 	if (!mi300_smu_get_fw_loaded_status(adapt)) {
-		AMDGV_ERROR("SMU FW not responding. Unable to do FLR\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_SMU_NOT_RESPONDING, 0);
 		ret = AMDGV_FAILURE;
 		goto failed;
 	}
@@ -608,11 +607,9 @@ static int mi300_reset_trigger_vf_flr(struct amdgv_adapter *adapt,
 		return mi300_reset_trigger_pf_soft_flr(adapt);
 	}
 
-	AMDGV_INFO("start %s FLR\n", amdgv_idx_to_str(idx_vf));
-
 	vf_state.pci_cfg = oss_zalloc(PCI_CONFIG_SIZE);
 	if (!vf_state.pci_cfg) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 			PCI_CONFIG_SIZE);
 		ret = AMDGV_FAILURE;
 		goto failed;
@@ -640,8 +637,7 @@ static int mi300_reset_trigger_vf_flr(struct amdgv_adapter *adapt,
 
 	if (adapt->psp.psp_program_guest_mc_settings) {
 		/* program vf mc settings */
-		AMDGV_DEBUG("program %s mc settings\n",
-				amdgv_idx_to_str(idx_vf));
+		amdgv_put_log(idx_vf, AMDGV_LOG_RESET_PROGRAM_VF_MC_SETTINGS, 0);
 		ret = adapt->psp.psp_program_guest_mc_settings(adapt, idx_vf);
 		if (ret)
 			goto failed;
@@ -703,9 +699,6 @@ static int mi300_reset_trigger_vf_flr(struct amdgv_adapter *adapt,
 		mi300_clockgating_spm_mgcg(adapt, xcc_id, true);
 
 	ret = amdgv_sched_reset(adapt, idx_vf, AMDGV_SCHED_BLOCK_ALL);
-
-	if (!ret)
-		AMDGV_INFO("completed %s FLR succesfully\n", amdgv_idx_to_str(idx_vf));
 
 failed:
 	mi300_flr_exit(adapt);
@@ -890,7 +883,7 @@ static int mi300_reset_trigger_pf_soft_flr(struct amdgv_adapter *adapt)
 
 	reset_state = oss_zalloc(sizeof(struct mi300_whole_gpu_reset_state));
 	if (!reset_state) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 			sizeof(struct mi300_whole_gpu_reset_state));
 		return AMDGV_FAILURE;
 	}
@@ -964,14 +957,14 @@ static int mi300_reset_trigger_pf_soft_flr(struct amdgv_adapter *adapt)
 	ret = amdgv_sched_reset(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_ALL);
 
 	if (!ret)
-		AMDGV_INFO("completed PF Soft FLR succesfully\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_RESET_PF_SOFT_FLR_DONE, 0);
 
 failed:
 	oss_free(reset_state);
 	return ret;
 }
 
-int mi300_reset_trigger_whole_gpu_reset(struct amdgv_adapter *adapt, bool is_unload)
+static int mi300_reset_hw_for_reload(struct amdgv_adapter *adapt, bool is_unload)
 {
 	int ret = 0;
 	uint32_t tmp;
@@ -982,11 +975,10 @@ int mi300_reset_trigger_whole_gpu_reset(struct amdgv_adapter *adapt, bool is_unl
 	/* alloc memory for whole GPU reset */
 	reset_state = oss_zalloc(sizeof(struct mi300_whole_gpu_reset_state));
 	if (reset_state == NULL) {
-		AMDGV_ERROR("Failed to alloc memory for whole GPU reset\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			sizeof(struct mi300_whole_gpu_reset_state));
 		return AMDGV_FAILURE;
 	}
-
-	AMDGV_INFO("start whole gpu reset\n");
 
 	/* save mmio protection info before WHOLE_GPU_RESET */
 	mi300_reset_save_access_info(adapt, &access_info);
@@ -1032,9 +1024,9 @@ exit:
 	oss_free(reset_state);
 
 	if (ret)
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_RESET_GPU_FAILED, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_RESET_GPU_FAILED, 0);
 	else
-		AMDGV_INFO("complete whole gpu reset\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_RESET_GPU_DONE, 0);
 
 	return ret;
 }
@@ -1064,7 +1056,7 @@ void mi300_clear_dummy_mode_after_reset(struct amdgv_adapter *adapt)
  *  6) MSI-X table should be saved and retored for both PF and VF by GIM
  *  7) VF GPU driver should reinit GPU after reset
  */
-static int mi300_reset_whole_gpu_reset(struct amdgv_adapter *adapt)
+static int mi300_gpu_reset_and_reinit(struct amdgv_adapter *adapt)
 {
 	int ret = 0;
 	int idx;
@@ -1077,11 +1069,10 @@ static int mi300_reset_whole_gpu_reset(struct amdgv_adapter *adapt)
 	/* alloc memory for whole GPU reset */
 	reset_state = oss_zalloc(sizeof(struct mi300_whole_gpu_reset_state));
 	if (reset_state == NULL) {
-		AMDGV_ERROR("Failed to alloc memory for whole GPU reset\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			sizeof(struct mi300_whole_gpu_reset_state));
 		return AMDGV_FAILURE;
 	}
-
-	AMDGV_INFO("start whole gpu reset\n");
 
 	mi300_reset_clear_all_pci_errors(adapt);
 
@@ -1111,8 +1102,10 @@ static int mi300_reset_whole_gpu_reset(struct amdgv_adapter *adapt)
 
 	if (adapt->reset.in_xgmi_chain_reset) {
 		hive = amdgv_get_xgmi_hive(adapt);
-		if (!hive)
+		if (!hive) {
+			ret = AMDGV_FAILURE;
 			goto exit;
+		}
 
 		/* Only 1 GPU should perform XGMI FB sharing sanity check */
 		if (adapt->xgmi.phy_node_id == 0)
@@ -1156,7 +1149,7 @@ static int mi300_reset_whole_gpu_reset(struct amdgv_adapter *adapt)
 	tmp &= ~ATOM_ASIC_INIT_COMPLETE;
 	WREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BIOS_SCRATCH_7), tmp);
 
-	if (!adapt->umc.is_pmfw_managed_eeprom) {
+	if (!adapt->umc.is_pmfw_managed_eeprom && !amdgv_uniras_enabled(adapt)) {
 		ret = amdgv_umc_replace_bad_pages(adapt);
 		if (ret) {
 			goto exit;
@@ -1168,7 +1161,7 @@ static int mi300_reset_whole_gpu_reset(struct amdgv_adapter *adapt)
 		if (adapt->init_funcs[idx]->hw_init) {
 			ret = adapt->init_funcs[idx]->hw_init(adapt);
 			if (ret) {
-				amdgv_put_error(idx, AMDGV_ERROR_DRIVER_HW_INIT_FAIL, 0);
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_HW_INIT_FAIL, 0);
 
 				goto exit;
 			}
@@ -1186,9 +1179,9 @@ exit:
 	oss_free(reset_state);
 
 	if (ret)
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_RESET_GPU_FAILED, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_RESET_GPU_FAILED, 0);
 	else
-		AMDGV_INFO("complete whole gpu reset\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_RESET_GPU_DONE, 0);
 
 	return ret;
 }
@@ -1256,20 +1249,20 @@ static bool mi300_reset_is_hw_sched_abnormal(struct amdgv_adapter *adapt, uint32
 static int mi300_reset_notify_engine_status(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
 	if (mi300_reset_is_engine_busy(adapt, idx_vf, &mi300_engine_reg_info[RLC_STAT]))
-		amdgv_put_error(idx_vf, AMDGV_ERROR_GPU_RLC_ENGINE_BUSY, 0);
+		amdgv_put_log(idx_vf, AMDGV_LOG_GPU_RLC_ENGINE_BUSY, 0);
 
 	if (mi300_reset_is_engine_busy(adapt, idx_vf, &mi300_engine_reg_info[SDMA_STATUS_REG]) ||
 		mi300_reset_is_engine_busy(adapt, idx_vf, &mi300_engine_reg_info[SDMA_STATUS4_REG]))
-		amdgv_put_error(idx_vf, AMDGV_ERROR_GPU_SDMA_ENGINE_BUSY, 0);
+		amdgv_put_log(idx_vf, AMDGV_LOG_GPU_SDMA_ENGINE_BUSY, 0);
 
 	if (mi300_reset_is_engine_busy(adapt, idx_vf, &mi300_engine_reg_info[GRBM_STATUS]))
-		amdgv_put_error(idx_vf, AMDGV_ERROR_GPU_GC_ENGINE_BUSY, 0);
+		amdgv_put_log(idx_vf, AMDGV_LOG_GPU_GC_ENGINE_BUSY, 0);
 
 	if (mi300_reset_is_hw_sched_abnormal(adapt, idx_vf, MI300_XCC_SCHED_MASK))
-		amdgv_put_error(idx_vf, AMDGV_ERROR_GPU_RLCV_ABNORMAL_STATE, 0);
+		amdgv_put_log(idx_vf, AMDGV_LOG_GPU_RLCV_ABNORMAL_STATE, 0);
 
 	if (mi300_reset_is_hw_sched_abnormal(adapt, idx_vf, ~MI300_XCC_SCHED_MASK))
-		amdgv_put_error(idx_vf, AMDGV_ERROR_GPU_MMSCH_ABNORMAL_STATE, 0);
+		amdgv_put_log(idx_vf, AMDGV_LOG_GPU_MMSCH_ABNORMAL_STATE, 0);
 
 	return 0;
 }
@@ -1277,8 +1270,8 @@ static int mi300_reset_notify_engine_status(struct amdgv_adapter *adapt, uint32_
 struct amdgv_gpu_reset_funcs mi300_reset_funcs = {
 	.save_vddgfx_state = mi300_reset_save_vddgfx_state,
 	.trigger_vf_flr = mi300_reset_trigger_vf_flr,
-	.trigger_gpu_hw_reset = mi300_reset_trigger_whole_gpu_reset,
-	.gpu_reset_and_reinit = mi300_reset_whole_gpu_reset,
+	.reset_hw_for_reload = mi300_reset_hw_for_reload,
+	.gpu_reset_and_reinit = mi300_gpu_reset_and_reinit,
 	.notify_engine_status = mi300_reset_notify_engine_status,
 	.reset_pf_allowed = mi300_reset_pf_allowed
 };

@@ -31,7 +31,8 @@ auto constexpr ifwi_csv_header {",ifwi_name,ifwi_build_date,ifwi_part_number,ifw
 auto constexpr
 board_csv_header {",board_model_number,board_product_serial,board_fru_id,board_manufacturer_name,board_product_name"};
 auto constexpr limit_csv_header {
-	",max_power,min_power,socket_power,slowdown_edge_temperature,slowdown_hotspot_temperature,slowdown_mem_temperature,"
+	",max_power_ppt0,min_power_ppt0,socket_power_ppt0,max_power_ppt1,min_power_ppt1,socket_power_ppt1,"
+	"slowdown_edge_temperature,slowdown_hotspot_temperature,slowdown_mem_temperature,"
 	"shutdown_edge_temperature,shutdown_hotspot_temperature,shutdown_mem_temperature"
 };
 auto constexpr driver_csv_header {",driver_name,driver_version,driver_date,driver_model"};
@@ -1059,6 +1060,9 @@ void AmdSmiStaticCommand::static_command_csv()
 				int error = handle_exceptions(ret, param, arg);
 				if (error == 0) {
 					header.append(asic_csv_header);
+					if (!AmdSmiPlatform::getInstance().is_host()) {
+						header.append(",target_graphics_version");
+					}
 					results.push_back({formatted_string});
 					formatted_string.clear();
 				}

@@ -64,7 +64,7 @@ int amdgv_xgmi_init_hive(struct amdgv_adapter *adapt)
 
 	hive->mcm_hive_lock = oss_mutex_init();
 	if (hive->mcm_hive_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_MUTEX_FAIL, 0);
 		goto fail;
 	}
 
@@ -80,7 +80,7 @@ int amdgv_xgmi_init_hive(struct amdgv_adapter *adapt)
 
 	hive->chain_reset_lock = oss_spin_lock_init(0);
 	if (hive->chain_reset_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_SPIN_LOCK_FAIL, 0);
 		goto fail;
 	}
 
@@ -339,7 +339,7 @@ int amdgv_xgmi_update_topology(struct amdgv_adapter *adapt)
 failed:
 	adapt->xgmi.fb_sharing_mode = AMDGV_XGMI_FB_SHARING_MODE_UNKNOWN;
 	adapt->xgmi.topology_status = AMDGV_XGMI_PSP_TOPOLOGY_STATUS__FAILED;
-	amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_XGMI_TOPOLOGY_UPDATE_FAILED, 0);
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_XGMI_TOPOLOGY_UPDATE_FAILED, 0);
 	return ret;
 }
 
@@ -394,6 +394,12 @@ bool amdgv_xgmi_is_fb_sharing_allowed(struct amdgv_adapter *adapt,
 		return adapt->xgmi.is_fb_sharing_allowed(adapt,
 			src_phy_node_id, dest_phy_node_id, mode);
 	}
+
+	/* Without an ASIC-specific is_fb_sharing_allowed callback, isolate FB
+	 * sharing for multi-VF: only same-node sharing is allowed.
+	 */
+	if (adapt->num_vf > 1)
+		return src_phy_node_id == dest_phy_node_id;
 
 	if (adapt->xgmi.fb_sharing_mode == AMDGV_XGMI_FB_SHARING_MODE_DEFAULT) {
 		return true;

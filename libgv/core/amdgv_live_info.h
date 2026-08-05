@@ -14,7 +14,7 @@
 extern struct amdgv_adapter *adapt;
 
 #define LIVE_INFO_VERSION_MAJOR		2
-#define LIVE_INFO_VERSION_MINOR		1
+#define LIVE_INFO_VERSION_MINOR		2
 
 #define LIVE_INFO_VERSION_MAJOR_MASK	0xffff0000
 #define LIVE_INFO_VERSION_MAJOR_SHIFT	0x10
@@ -252,7 +252,8 @@ struct amdgv_live_info_param {
 	uint32_t max_cper_count;
 	int32_t ras_vf_telemetry_policy;
 	uint32_t vf_hbm_mgmt_mode;
-	uint8_t reserved[35]; // 0x80 align
+	uint32_t sys_log_level;
+	uint8_t reserved[31]; // 0x80 align
 };
 
 struct amdgv_live_info_vbios {

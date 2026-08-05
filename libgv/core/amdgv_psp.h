@@ -402,6 +402,12 @@ struct psp_context {
 	int (*psp_ring_destroy)(struct amdgv_adapter *adapt);
 	enum psp_status (*psp_program_guest_mc_settings)(struct amdgv_adapter *adapt,
 							 uint32_t idx_vf);
+	int (*get_ras_ta_fw)(struct amdgv_adapter *adapt,
+			     uint8_t **bin_addr, uint32_t *bin_size,
+			     uint32_t *fw_version, uint32_t *feature_version);
+	int (*get_ras_rl_fw)(struct amdgv_adapter *adapt,
+			     uint8_t **bin_addr, uint32_t *bin_size,
+			     uint32_t *fw_version, uint32_t *feature_version);
 	enum psp_status (*vf_relay)(struct amdgv_adapter *adapt, uint32_t vf_id);
 	enum psp_status (*load_asd_fw_to_mem)(struct amdgv_adapter *adapt,
 		struct psp_local_memory *asd_bin_mem, uint32_t *size);

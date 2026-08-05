@@ -819,10 +819,15 @@ static int navi32_powerplay_append_vbios_pptable(struct amdgv_adapter *adapt)
 	return 0;
 }
 
-static int navi32_powerplay_get_power_capacity(struct amdgv_adapter *adapt, int *val)
+static int navi32_powerplay_get_power_capacity(struct amdgv_adapter *adapt, int *val,
+					       enum amdgv_gpumon_type ppt_type)
 {
 	uint32_t asic_default_power_limit = 0;
 	int ret = 0;
+
+	/* navi32 only supports PPT0 */
+	if (ppt_type == GPUMON_GET_GPU_POWER_CAP2)
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
 	ret = navi32_powerplay_get_arg_with_param(adapt, SMU_13_0_MSG__GET_PPT_LIMIT,
 						 POWER_SOURCE_AC << 16,
@@ -2527,6 +2532,17 @@ static int navi32_pp_smu_is_pm_enabled(struct amdgv_adapter *adapt, bool *pm_ena
 	return 0;
 }
 
+static int navi32_pp_smu_prepare_vf_unload(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	int ret;
+
+	ret = navi32_powerplay_send_msg_with_param(adapt,
+			SMU_13_0_MSG__PREPARE_FOR_VF_UNLOAD, idx_vf);
+
+	AMDGV_INFO("prepare VF %d unload through SMU, ret=%d\n", idx_vf, ret);
+	return ret;
+}
+
 static int navi32_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv_entry *entry)
 {
 	int ret = 0;
@@ -2565,6 +2581,7 @@ static int navi32_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv
 				break;
 
 			if (adapt->sched.array_vf[i].state == AMDGV_SCHED_ACTIVE) {
+				adapt->array_vf[i].pending_remove = true; /* VM gone: skip FLR, just remove */
 				ret = amdgv_sched_queue_event(
 						adapt, i, AMDGV_EVENT_SCHED_FORCE_RESET_VF, AMDGV_SCHED_BLOCK_ALL);
 
@@ -2609,6 +2626,7 @@ const struct amdgv_pp_funcs navi32_amdgv_pp_funcs = {
 	.prepare_unload = navi32_prepare_unload,
 	.is_pm_enabled = navi32_pp_smu_is_pm_enabled,
 	.handle_smu_irq = navi32_smu_pp_handle_irq,
+	.prepare_vf_unload = navi32_pp_smu_prepare_vf_unload,
 	.enter_power_saving = navi32_enter_power_saving,
 	.exit_power_saving = navi32_exit_power_saving,
 	.query_power_saving_status = navi32_query_power_saving_status,

@@ -43,6 +43,8 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_VBIOS_INFO)(amdsmi_processor_handle,
 		amdsmi_vbios_info_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_DRIVER_INFO)(amdsmi_processor_handle,
 		amdsmi_driver_info_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_DRIVER_MODEL)(amdsmi_processor_handle,
+		amdsmi_driver_model_type_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_PCIE_INFO)(amdsmi_processor_handle,
 		amdsmi_pcie_info_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_RAS_FEATURE_INFO)(amdsmi_processor_handle,
@@ -75,6 +77,7 @@ typedef amdsmi_status_t (*AMDSMI_GET_LIB_VERSION)(amdsmi_version_t *);
 
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_PROCESS_ISOLATION)(amdsmi_processor_handle, uint32_t *);
 typedef amdsmi_status_t (*AMDSMI_SET_GPU_PROCESS_ISOLATION)(amdsmi_processor_handle, uint32_t);
+typedef amdsmi_status_t (*AMDSMI_SET_POWER_CAP)(amdsmi_processor_handle, uint32_t, uint64_t);
 typedef amdsmi_status_t (*AMDSMI_CLEAN_GPU_LOCAL_DATA)(amdsmi_processor_handle);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_VIRTUALIZATION_MODE)(amdsmi_processor_handle,
 		amdsmi_virtualization_mode_t *);
@@ -90,6 +93,7 @@ AMDSMI_GET_GPU_DEVICE_BDF guest_amdsmi_get_gpu_device_bdf;
 AMDSMI_GET_GPU_DEVICE_UUID guest_amdsmi_get_gpu_device_uuid;
 AMDSMI_GET_GPU_VBIOS_INFO guest_amdsmi_get_gpu_vbios_info;
 AMDSMI_GET_GPU_DRIVER_INFO guest_amdsmi_get_gpu_driver_info;
+AMDSMI_GET_GPU_DRIVER_MODEL guest_amdsmi_get_gpu_driver_model;
 AMDSMI_GET_PCIE_INFO guest_amdsmi_get_pcie_info;
 AMDSMI_GET_GPU_RAS_FEATURE_INFO guest_amdsmi_get_gpu_ras_feature_info;
 AMDSMI_GET_GPU_ACTIVITY guest_amdsmi_get_gpu_activity;
@@ -106,6 +110,7 @@ AMDSMI_GET_LIB_VERSION guest_amdsmi_get_lib_version;
 
 AMDSMI_GET_GPU_PROCESS_ISOLATION guest_amdsmi_get_gpu_process_isolation;
 AMDSMI_SET_GPU_PROCESS_ISOLATION guest_amdsmi_set_gpu_process_isolation;
+AMDSMI_SET_POWER_CAP guest_amdsmi_set_power_cap;
 AMDSMI_CLEAN_GPU_LOCAL_DATA guest_amdsmi_clean_gpu_local_data;
 AMDSMI_GET_GPU_VIRTUALIZATION_MODE guest_amdsmi_get_gpu_virtualization_mode;
 
@@ -152,6 +157,8 @@ AmdSmiApiGuest::AmdSmiApiGuest()
 										  amdSmiLibHandle, "amdsmi_get_gpu_vbios_info");
 	guest_amdsmi_get_gpu_driver_info = (AMDSMI_GET_GPU_DRIVER_INFO)LOAD_SYM(
 										   amdSmiLibHandle, "amdsmi_get_gpu_driver_info");
+	guest_amdsmi_get_gpu_driver_model = (AMDSMI_GET_GPU_DRIVER_MODEL)LOAD_SYM(
+											amdSmiLibHandle, "amdsmi_get_gpu_driver_model");
 	guest_amdsmi_get_pcie_info = (AMDSMI_GET_PCIE_INFO)LOAD_SYM(
 									 amdSmiLibHandle, "amdsmi_get_pcie_info");
 	guest_amdsmi_get_gpu_ras_feature_info = (AMDSMI_GET_GPU_RAS_FEATURE_INFO)LOAD_SYM(
@@ -180,6 +187,8 @@ AmdSmiApiGuest::AmdSmiApiGuest()
 		"amdsmi_get_gpu_process_isolation");
 	guest_amdsmi_set_gpu_process_isolation = (AMDSMI_SET_GPU_PROCESS_ISOLATION)LOAD_SYM(amdSmiLibHandle,
 		"amdsmi_set_gpu_process_isolation");
+	guest_amdsmi_set_power_cap = (AMDSMI_SET_POWER_CAP)LOAD_SYM(amdSmiLibHandle,
+								 "amdsmi_set_power_cap");
 	guest_amdsmi_clean_gpu_local_data = (AMDSMI_CLEAN_GPU_LOCAL_DATA)LOAD_SYM(amdSmiLibHandle,
 										"amdsmi_clean_gpu_local_data");
 	guest_amdsmi_get_gpu_virtualization_mode = (AMDSMI_GET_GPU_VIRTUALIZATION_MODE)LOAD_SYM(amdSmiLibHandle,

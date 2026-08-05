@@ -122,6 +122,14 @@ std::string transform_fw(int fw_block_id, uint32_t uversion)
 										  (uversion >> 16) & 0xFF,
 										  (uversion >> 8) & 0xFF,
 										  uversion & 0xFF);
+		} else if (AmdSmiPlatform::getInstance().is_baremetal() &&
+				   (AmdSmiPlatform::getInstance().is_nv() ||
+					AmdSmiPlatform::getInstance().is_apu())) {
+			uversion_str = ((uversion >> 24) & 0xFF) > 0
+						   ? string_format("%d.", (uversion >> 24) & 0xFF) : "";
+			uversion_str += string_format("%d.%d.%d", (uversion >> 16) & 0xFF,
+										  (uversion >> 8) & 0xFF,
+										  uversion & 0xFF);
 		} else {
 			uversion_str = (uversion & 0xFF) > 0 ? string_format("%d.", uversion & 0xFF) : "";
 			uversion_str += string_format("%d.%d.%d", (uversion >> 8) & 0xFF,
@@ -238,6 +246,9 @@ std::string convert_slot_type_to_string(uint32_t pcie_slot_type)
 	}
 	if(pcie_slot_type == 1) {
 		return "OAM";
+	}
+	if(pcie_slot_type == 2) {
+		return "CEM";
 	}
 	return "N/A";
 }

@@ -9,6 +9,7 @@
 #include "amdgv_list.h"
 #include "amdgv_oss_wrapper.h"
 #include "ta_ras_if.h"
+#include "amdgv_ras_event.h"
 #include "amdgv_task_barrier.h"
 
 #define AMDGV_MAX_XGMI_HIVE 8
@@ -64,6 +65,7 @@ struct amdgv_hive_info {
 	atomic_t psp_mb_cmd_ref_cnt;
 
 	struct shared_exclusion_lock flr_cp_dma_lock;
+	struct ras_event_manager event_mgr;
 };
 
 struct amdgv_xgmi_psp_link_info {

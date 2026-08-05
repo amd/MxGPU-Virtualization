@@ -148,10 +148,10 @@ static int amdgv_vbios_read_rom_from_reg(struct amdgv_adapter *adapt, uint8_t *b
 void amdgv_vbios_cache_update(struct amdgv_adapter *adapt)
 {
 	struct amdgv_vbios_info *vbiosinfo = &adapt->vbios_cache;
-	unsigned short offset;
-	struct _ATOM_ROM_HEADER atom_rom_header;
-	struct _ATOM_MASTER_DATA_TABLE master_table;
-	struct _ATOM_FIRMWARE_INFO atom_fw_info;
+	unsigned short offset = 0;
+	struct _ATOM_ROM_HEADER atom_rom_header = { 0 };
+	struct _ATOM_MASTER_DATA_TABLE master_table = { 0 };
+	struct _ATOM_FIRMWARE_INFO atom_fw_info = { 0 };
 
 	amdgv_vbios_read_rom_image(adapt, (unsigned char *)&offset, sizeof(unsigned short),
 				   OFFSET_TO_POINTER_TO_ATOM_ROM_HEADER);
@@ -234,17 +234,19 @@ static int amdgv_vbios_alloc_images(struct amdgv_adapter *adapt)
 	const uint32_t guest_image_size = EEPROM_BYTE_SIZE;
 	vbios->image = (uint8_t *)oss_alloc_memory(EEPROM_BYTE_SIZE);
 	if (vbios->image == NULL) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				EEPROM_BYTE_SIZE);
 		return AMDGV_FAILURE;
 	}
 
 	vbios->guest_image = (uint8_t *)oss_alloc_memory(guest_image_size);
 	if (vbios->guest_image == NULL) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				EEPROM_BYTE_SIZE);
 		return AMDGV_FAILURE;
 	}
+
+	oss_memset(vbios->guest_image, 0, guest_image_size);
 
 	return 0;
 }
@@ -294,7 +296,7 @@ int amdgv_vbios_atom_sw_init(struct amdgv_adapter *adapt)
 	ctx->card = atom_card_info;
 	ctx->mutex = oss_mutex_init();
 	if (ctx->mutex == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_MUTEX_FAIL, 0);
 		amdgv_vbios_atom_sw_fini(adapt);
 		return AMDGV_FAILURE;
 	}
@@ -353,7 +355,7 @@ static int amdgv_vbios_image_checksum(struct amdgv_adapter *adapt)
 		sum += vbios->image[i];
 
 	if (sum & 0xff) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_VBIOS_CHECKSUM_ERR, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_VBIOS_CHECKSUM_ERR, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -365,7 +367,7 @@ static int amdgv_vbios_fill_guest_image(struct amdgv_adapter *adapt)
 	struct amdgv_vbios *vbios = &adapt->vbios;
 	int ret = amdgv_vbios_get_info(adapt, vbios->image);
 	if (ret) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_VBIOS_READ_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_VBIOS_READ_FAIL, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -379,12 +381,12 @@ static int amdgv_vbios_read_img_and_verify(struct amdgv_adapter *adapt, uint32_t
 	struct amdgv_vbios *vbios = &adapt->vbios;
 	int ret = amdgv_vbios_read_rom_from_reg(adapt, vbios->image, read_size);
 	if (ret) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_VBIOS_READ_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_VBIOS_READ_FAIL, 0);
 		return AMDGV_FAILURE;
 	}
 
 	if (!AMDGV_VBIOS_IS_VALID(vbios->image)) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_VBIOS_INVALID, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_VBIOS_INVALID, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -462,7 +464,7 @@ int amdgv_vbios_read_img(struct amdgv_adapter *adapt)
 	adapt->vbios.read_vbios_thread = oss_create_thread(amdgv_vbios_read_img_thread,
 							   (void *)adapt, "read_vbios_thread");
 	if (adapt->vbios.read_vbios_thread == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_THREAD_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_THREAD_FAIL, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -487,12 +489,15 @@ int amdgv_vbios_read_img(struct amdgv_adapter *adapt)
 }
 
 static int amdgv_vbios_update_guest_checksum(struct amdgv_adapter *adapt, uint8_t *image,
-					      unsigned int image_size, int64_t delta)
+					      unsigned int image_size)
 {
-	uint32_t sum;
+	uint32_t i, sum = 0;
 	VBIOS_ROM_HEADER *rom_header = (VBIOS_ROM_HEADER *)image;
 
-	sum = (uint32_t)((int64_t)adapt->vbios.byte_sum + delta);
+	rom_header->CheckSum[0] = 0;
+	for (i = 0; i < image_size; i++)
+		sum += image[i];
+
 	adapt->vbios.byte_sum = sum;
 	rom_header->CheckSum[0] = 0x100 - (uint8_t)sum;
 
@@ -504,8 +509,6 @@ static int amdgv_vbios_update_guest_checksum(struct amdgv_adapter *adapt, uint8_
 
 static int amdgv_vbios_update_image_offset(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
-	int64_t delta = 0;
-	uint32_t tmp_original = 0;
 	uint16_t data_offset = 0;
 	uint16_t size = 0;
 	uint8_t frev = 0;
@@ -529,13 +532,8 @@ static int amdgv_vbios_update_image_offset(struct amdgv_adapter *adapt, uint32_t
 			firmware_usage_v2_2 = (struct vram_usagebyfirmware_v2_2 *)(adapt->vbios.guest_image + data_offset);
 
 			/* set all values to 0 to avoid double reservation on guest driver side */
-			tmp_original = firmware_usage_v2_2->used_by_driver_region0_in_kb;
 			firmware_usage_v2_2->used_by_driver_region0_in_kb = 0;
-			delta += (int64_t)tmp_original - (int64_t)(firmware_usage_v2_2->used_by_driver_region0_in_kb);
-
-			tmp_original = firmware_usage_v2_2->fw_region_start_address_in_kb;
 			firmware_usage_v2_2->fw_region_start_address_in_kb = 0 | (ATOM_VRAM_BLOCK_NEEDS_NO_RESERVATION << 30);
-			delta += (int64_t)tmp_original - (int64_t)(firmware_usage_v2_2->fw_region_start_address_in_kb);
 			AMDGV_DEBUG("update atom firmware usage v2_2 start at %08x %dkb fw and start at %08x %dkb drv region0\n",
 				firmware_usage_v2_2->fw_region_start_address_in_kb,
 				firmware_usage_v2_2->used_by_firmware_in_kb,
@@ -547,7 +545,7 @@ static int amdgv_vbios_update_image_offset(struct amdgv_adapter *adapt, uint32_t
 		}
 
 		amdgv_vbios_update_guest_checksum(adapt, adapt->vbios.guest_image,
-						  adapt->vbios.image_size, delta);
+						  adapt->vbios.image_size);
 
 		return 0;
 	}
@@ -679,49 +677,58 @@ int amdgv_vbios_get_vbios_date(struct amdgv_adapter *adapt, unsigned char *date_
 int amdgv_vbios_get_vbios_name(struct amdgv_adapter *adapt, unsigned char *name_str)
 {
 	unsigned char *p_rom;
+	unsigned char *p_end;
 	unsigned char str_num;
 	unsigned short off_to_vbios_str;
 	unsigned char *c_ptr;
+	unsigned char *back;
 	int name_size;
 	int i;
 
 	const char *na = "--N/A--";
-	char *back;
 
 	p_rom = adapt->vbios.image;
+	p_end = p_rom + adapt->vbios.image_size;
 
 	str_num = *(p_rom + OFFSET_TO_GET_ATOMBIOS_NUMBER_OF_STRINGS);
-	if (str_num != 0) {
-		off_to_vbios_str =
-			*(unsigned short *)(p_rom + OFFSET_TO_GET_ATOMBIOS_STRING_START);
+	if (str_num == 0)
+		goto not_found;
 
-		c_ptr = (unsigned char *)(p_rom + off_to_vbios_str);
-	} else {
-		/* do not know where to find name */
-		oss_memcpy(name_str, na, 7);
-		name_str[7] = 0;
-		return 0;
-	}
+	off_to_vbios_str =
+		*(unsigned short *)(p_rom + OFFSET_TO_GET_ATOMBIOS_STRING_START);
+	c_ptr = (unsigned char *)(p_rom + off_to_vbios_str);
 
 	/*
 	 * skip the atombios strings, usually 4
 	 * 1st is P/N, 2nd is ASIC, 3rd is PCI type, 4th is Memory type
 	 */
 	for (i = 0; i < str_num; i++) {
-		while (*c_ptr != 0)
+		while (c_ptr < p_end && *c_ptr != 0)
 			c_ptr++;
+		if (c_ptr >= p_end)
+			goto not_found;
 		c_ptr++;
 	}
 
 	/* skip the following 2 chars: 0x0D 0x0A */
 	c_ptr += 2;
 
-	name_size = oss_strnlen(c_ptr, STRLEN_LONG - 1);
+	if (c_ptr >= p_end)
+		goto not_found;
+
+	name_size = oss_strnlen(c_ptr,
+			min((uint32_t)(STRLEN_LONG - 1), (uint32_t)(p_end - c_ptr)));
 	oss_memcpy(name_str, c_ptr, name_size);
 	back = name_str + name_size;
-	while ((*--back) == ' ')
-		;
-	*(back + 1) = '\0';
+	while (back > name_str && *(back - 1) == ' ')
+		back--;
+	*back = '\0';
+
+	return 0;
+
+not_found:
+	oss_memcpy(name_str, na, 7);
+	name_str[7] = 0;
 
 	return 0;
 }
@@ -748,6 +755,10 @@ unsigned int amdgv_vbios_read_rom_image(struct amdgv_adapter *adapt, unsigned ch
 {
 	uint32_t i;
 	unsigned char *p_rom;
+
+	if (offset > adapt->vbios.image_size ||
+	    size > adapt->vbios.image_size - offset)
+		return 0;
 
 	p_rom = (unsigned char *)(adapt->vbios.image);
 	p_rom += offset;

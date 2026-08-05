@@ -63,6 +63,8 @@ struct oss_dma_mem_info {
 	uint64_t phys_addr;
 	/* this dma memory handle */
 	void	*handle;
+	/* size in bytes of the mapped dma memory */
+	uint64_t size;
 };
 
 #define AMDGV_IH_SRC_DATA_MAX_SIZE_DW 4
@@ -209,6 +211,8 @@ struct oss_spa_range {
 	uint64_t base;
 	uint64_t size;
 };
+
+typedef int (*condition_func)(void *param);
 
 struct oss_mce {
 	uint64_t status;		/* Bank's MCi_STATUS MSR */
@@ -563,6 +567,42 @@ struct oss_interface {
 				struct oss_spa_range *entry);
 
 	int (*set_dma_mask)(oss_dev_t dev, uint32_t bits);
+#ifdef SHIM_LAYER_OSS_RADIX_TREE
+	void (*radix_tree_init)(void *root);
+	void  (*radix_tree_fini)(void *root);
+	int (*radix_tree_insert)(void *root, unsigned long index, void *item);
+	void *(*radix_tree_delete)(void *root, unsigned long index);
+	void *(*radix_tree_lookup)(void *root, unsigned long index);
+	unsigned int (*radix_tree_gang_lookup_tag)(void *root, void **results,
+		unsigned long first_index, unsigned int max_items, unsigned int tag);
+	void *(*radix_tree_tag_set)(void *root, unsigned long index, unsigned int tag);
+	void *(*radix_tree_tag_clear)(void *root, unsigned long index, unsigned int tag);
+
+	void **(*radix_tree_iter_init)(void *iter, unsigned long start);
+	void **(*radix_tree_next_chunk)(void *root, void *iter, unsigned int flags);
+	void **(*radix_tree_next_slot)(void **slot, void *iter, unsigned int flags);
+	void *(*radix_tree_deref_slot)(void **slot);
+	void *(*radix_tree_delete_iter)(void *root, void *iter);
+#endif
+#ifdef SHIM_LAYER_OSS_KFIFO
+	int (*kfifo_alloc)(void *fifo, uint32_t size);
+	int (*kfifo_in_spinlocked_raw)(void *fifo, void *buf, uint32_t size, void *spinlock);
+	int (*kfifo_out_spinlocked_raw)(void *fifo, void *buf, uint32_t size, void *spinlock);
+	unsigned int (*kfifo_out_peek)(void *fifo, void *buf, unsigned int n);
+	unsigned int (*kfifo_len)(void *fifo);
+	void (*kfifo_free)(void *fifo);
+#endif
+#ifdef AMDGV_UNIRAS_SUPPORT
+	void (*init_waitqueue_head)(void *wq_head);
+	long (*wait_event_interruptible_timeout)(void *wq_head, condition_func condition, void *param, unsigned int timeout);
+	unsigned long (*msecs_to_jiffies)(const unsigned int m);
+#endif
+#ifdef SHIM_LAYER_OSS_MEMPOOL
+	void *(*mempool_create_kmalloc_pool)(int element_nr, unsigned long element_size);
+	void (*mempool_destroy)(void *pool);
+	void *(*mempool_alloc_preallocated)(void *pool);
+	void (*mempool_free)(void *element, void *pool);
+#endif
 	/*
 	 * register_mce_notifier: 0 on success; -EINVAL if dev or notifier is NULL;
 	 * -ENOMEM if no free slot. Re-registering the same dev updates the notifier.

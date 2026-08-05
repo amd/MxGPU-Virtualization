@@ -46,7 +46,7 @@ enum psp_cmd_km_type {
 	PSP_CMD_KM_TYPE__MIGRATION_IMPORT		= 0x27,
 	PSP_CMD_KM_TYPE__MIGRATION_GET_DATA_SIZE	= 0x28,
 	PSP_CMD_KM_TYPE__MIGRATION_RLC_AUTOLOAD = 0x37, /* Live migration RLC Autoload */
-	PSP_CMD_KM_TYPE__VF_RELAY        = 0x00000045, /* PSP VF Command Replay*/
+	PSP_CMD_KM_TYPE__VF_RELAY        = 0x00000045, /* PSP VF Command Relay*/
 	PSP_CMD_KM_TYPE__NPS_MODE = 0x00000048,
 	PSP_CMD_KM_TYPE__SRIOV_DRIVER_PASSTHROUGH = 0x0000004A, /* SRIOV Driver Passthrough */
 	PSP_CMD_KM_TYPE__PERF_HW = 0x0000004C, /* Performance HW (PTL) */
@@ -82,8 +82,6 @@ enum psp_gfx_cmd_id {
 	GFX_CMD_ID_DBG_SNAPSHOT_TRIGGER  = 0x00000011, /* trigger soc snapshot memory dump */
 	GFX_CMD_ID_DUMP_TRACELOG    = 0x00000013, /* dump tracelog log */
 	// IDs upto 0x1F are reserved for older programs
-	// which are build from 10-RV branch in Perforce.
-	//
 	GFX_CMD_ID_LOAD_TOC	    = 0x00000020, /* Load TOC and obtain TMR size */
 	GFX_CMD_ID_AUTOLOAD_RLC     = 0x00000021, /* Indicates all graphics fw loaded, start RLC
 						     autoload */
@@ -1491,13 +1489,22 @@ enum psp_status amdgv_psp_ras_trigger_error(struct amdgv_adapter *adapt,
 					    struct ta_ras_trigger_error_input *info);
 enum psp_status amdgv_psp_ras_set_feature(struct amdgv_adapter *adapt,
 					union ta_ras_cmd_input *info, bool is_enable);
-enum psp_status amdgv_psp_ras_get_ta_version(struct amdgv_adapter *adapt, void *fw_image, uint32_t *ver_ptr);
+enum psp_status amdgv_psp_ras_get_ta_version(struct amdgv_adapter *adapt, void *fw_image,
+					     uint32_t fw_size, uint32_t *ver_ptr);
 bool amdgv_psp_vfgate_support(struct amdgv_adapter *adapt);
 enum psp_status amdgv_psp_set_mb_int(struct amdgv_adapter *adapt, uint32_t idx_vf,
 				     bool enable);
 enum psp_status amdgv_psp_get_mb_int_status(struct amdgv_adapter *adapt, uint32_t idx_vf,
 					struct psp_mb_status *mb_status);
-uint32_t amdgv_psp_ta_version(struct amdgv_adapter *adapt, void *fw_image, char *name);
+uint32_t amdgv_psp_ta_version(struct amdgv_adapter *adapt, void *fw_image,
+			      uint32_t fw_size, char *name);
+
+int amdgv_psp_get_ras_ta_fw(struct amdgv_adapter *adapt,
+		uint8_t **bin_addr, uint32_t *bin_size,
+		uint32_t *fw_version, uint32_t *feature_version);
+int amdgv_psp_get_ras_rl_fw(struct amdgv_adapter *adapt,
+		uint8_t **bin_addr, uint32_t *bin_size,
+		uint32_t *fw_version, uint32_t *feature_version);
 
 enum psp_status amdgv_psp_xgmi_load(struct amdgv_adapter *adapt);
 enum psp_status amdgv_psp_xgmi_invoke(struct amdgv_adapter *adapt, uint32_t ta_cmd_id,

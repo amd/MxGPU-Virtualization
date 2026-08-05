@@ -29,8 +29,6 @@ typedef amdsmi_status_t (*AMDSMI_GET_POWER_INFO)(amdsmi_processor_handle, amdsmi
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_VRAM_USAGE)(amdsmi_processor_handle,
 		amdsmi_vram_usage_t *);
 typedef amdsmi_status_t (*AMDSMI_GET_PCIE_INFO)(amdsmi_processor_handle, amdsmi_pcie_info_t *);
-typedef amdsmi_status_t (*AMDSMI_GET_GPU_TOTAL_ECC_COUNT)(amdsmi_processor_handle,
-		amdsmi_error_count_t *);
 
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF guest_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_POWER_INFO guest_amdsmi_get_power_info;
@@ -39,7 +37,6 @@ extern AMDSMI_GET_CLOCK_INFO guest_amdsmi_get_clock_info;
 extern AMDSMI_GET_GPU_ACTIVITY guest_amdsmi_get_gpu_activity;
 extern AMDSMI_GET_GPU_VRAM_USAGE guest_amdsmi_get_gpu_vram_usage;
 extern AMDSMI_GET_PCIE_INFO guest_amdsmi_get_pcie_info;
-extern AMDSMI_GET_GPU_TOTAL_ECC_COUNT guest_amdsmi_get_gpu_total_ecc_count;
 
 
 std::string guest_fill_power_usage(Arguments arg, std::string value = "N/A")
@@ -119,25 +116,6 @@ std::string guest_fill_mem(Arguments arg, std::string value = "N/A")
 	} else {
 		out = string_format("%s,%s", value.c_str(), value.c_str());
 	}
-	return out;
-}
-
-std::string guest_fill_empty_ecc(Arguments arg, std::string value = "N/A")
-{
-	std::string out{};
-	if (arg.output == json) {
-		nlohmann::ordered_json result{};
-
-		result["total_correctable_count"] = value.c_str();
-		result["total_uncorrectable_count"] = value.c_str();
-
-		out = result.dump(4);
-	} else if (arg.output == csv) {
-		out = string_format(",%s,%s", value.c_str(), value.c_str());
-	} else {
-		out = string_format("%s,%s", value.c_str(), value.c_str());
-	}
-
 	return out;
 }
 
@@ -522,60 +500,6 @@ int AmdSmiApiGuest::amdsmi_get_encoder_monitor_command(uint64_t processor_bdf, A
 
 	if (arg.output == json) {
 		formatted_string = result.dump(4);
-	}
-
-	return AMDSMI_STATUS_SUCCESS;
-}
-
-int AmdSmiApiGuest::amdsmi_get_ecc_monitor_command(uint64_t processor_bdf, Arguments arg,
-		std::string &formatted_string)
-{
-	amdsmi_status_t ret;
-
-	amdsmi_error_count_t total_error_count;
-
-	amdsmi_processor_handle processor;
-	amdsmi_bdf_t tmp_bdf;
-	tmp_bdf.as_uint = processor_bdf;
-
-	ret = guest_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
-	if (ret != AMDSMI_STATUS_SUCCESS) {
-		formatted_string = guest_fill_empty_ecc(arg);
-		return ret;
-	}
-
-	ret = guest_amdsmi_get_gpu_total_ecc_count(processor, &total_error_count);
-	if (ret != AMDSMI_STATUS_SUCCESS) {
-		formatted_string = guest_fill_empty_ecc(arg);
-		return ret;
-	}
-
-	std::string total_error_correctable_count{};
-	if (total_error_count.correctable_count == UINT64_MAX) {
-		total_error_correctable_count = string_format("%s", "N/A");
-	} else {
-		total_error_correctable_count = string_format("%lld", total_error_count.correctable_count);
-	}
-
-	std::string total_error_uncorrectable_count{};
-	if (total_error_count.uncorrectable_count == UINT64_MAX) {
-		total_error_uncorrectable_count = string_format("%s", "N/A");
-	} else {
-		total_error_uncorrectable_count = string_format("%lld", total_error_count.uncorrectable_count);
-	}
-
-	if (arg.output == json) {
-		nlohmann::ordered_json error_count_json{};
-		error_count_json["total_correctable_count"] = total_error_count.correctable_count;
-		error_count_json["total_uncorrectable_count"] = total_error_count.uncorrectable_count;
-
-		formatted_string = error_count_json.dump(4);
-	} else if (arg.output == csv) {
-		formatted_string = string_format(",%s,%s", total_error_correctable_count.c_str(),
-										 total_error_uncorrectable_count.c_str());
-	} else {
-		formatted_string = string_format("%s,%s", total_error_correctable_count.c_str(),
-										 total_error_uncorrectable_count.c_str());
 	}
 
 	return AMDSMI_STATUS_SUCCESS;

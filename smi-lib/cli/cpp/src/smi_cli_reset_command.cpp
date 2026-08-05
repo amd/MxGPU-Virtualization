@@ -57,7 +57,8 @@ void AmdSmiResetCommand::reset_command()
 			(std::find(arg.options.begin(), arg.options.end(), "G") != arg.options.end()) ||
 			arg.all_arguments) {
 		unsigned int gpu_count;
-		if (AmdSmiPlatform::getInstance().is_nv() == true) {
+		if (AmdSmiPlatform::getInstance().is_nv() == true ||
+				AmdSmiPlatform::getInstance().is_apu() == true) {
 			for (unsigned int i = 0; i < arg.devices.size(); i++) {
 				uint64_t gpu_bdf = arg.devices[i]->get_bdf();
 				ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_reset_gpu_command(gpu_bdf, arg);

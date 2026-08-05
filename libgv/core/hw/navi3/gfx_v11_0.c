@@ -727,7 +727,7 @@ static int gfx_v11_sw_init(struct amdgv_adapter *adapt)
 		(adapt->gpuiov.ctrl_blocks[NAVI32_HW_SCHED_BLOCK_GFX_SCH0_RLCV].sched_mode > AMDGV_SCHED_MAX_HW_SCHED_MODE)) {
 		adapt->gfx.hang_detection_supported = true;
 		adapt->gfx.hang_detection_threshold_us = ((adapt->sched.get_asic_time_slice) ? \
-				(adapt->sched.get_asic_time_slice(adapt, AMDGV_SCHED_BLOCK_GFX, adapt->sched.num_vf_per_gfx_sched)) : DEFAULT_GFX_TIME_SLICE);
+				(adapt->sched.get_asic_time_slice(adapt, AMDGV_SCHED_BLOCK_GFX, adapt->sched.num_vf_per_gfx_sched, 0)) : DEFAULT_GFX_TIME_SLICE);
 		adapt->gfx.hang_detection_duration_us = 10000;
 		AMDGV_INFO("Hang Detection Enabled\n");
 	} else {
@@ -866,7 +866,11 @@ static void gfx_v11_ring_submit_frame(struct amdgv_ring *ring, uint8_t *frame_da
 	uint32_t i;
 
 	for (i = 0; i < ring->max_dw; i++) {
-		ring->ring[dword_wptr++] = data32[i];
+		ring->ring[dword_wptr + i] = data32[i];
+	}
+	for (i = 0; i < ring->max_dw; i++) {
+		if (ring->ring[dword_wptr + i] != data32[i])
+			ring->ring[dword_wptr + i] = data32[i];
 	}
 	ring->wptr += ring->max_dw;
 

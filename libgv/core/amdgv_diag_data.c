@@ -689,7 +689,7 @@ static int amdgv_diag_data_mem_init(struct amdgv_adapter *adapt)
 	if (oss_alloc_dma_mem(adapt->dev, AMDGV_DIAG_DATA_ASIC_MEM_SIZE,
 			      OSS_DMA_MEM_CACHEABLE, &adapt->diag_data.asic_sys_mem) != 0) {
 		adapt->diag_data.asic_buff.vaddr = NULL;
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_DMA_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_DMA_MEM_FAIL,
 				AMDGV_DIAG_DATA_ASIC_MEM_SIZE);
 	} else {
 		/* Assign asic buffer, 1MB of contig memory */
@@ -703,7 +703,7 @@ static int amdgv_diag_data_mem_init(struct amdgv_adapter *adapt)
 	adapt->diag_data.host_drv_buff.vaddr =
 		oss_alloc_memory(AMDGV_DIAG_DATA_HOST_DRV_MEM_SIZE);
 	if (adapt->diag_data.host_drv_buff.vaddr == NULL) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				AMDGV_DIAG_DATA_HOST_DRV_MEM_SIZE);
 
 		/* Return failure if both memory alloc fails */
@@ -738,7 +738,7 @@ int amdgv_diag_data_init(struct amdgv_adapter *adapt)
 	adapt->diag_data.get_gpu_ref_timestamp = amdgv_diag_data_get_gpu_ref_timestamp;
 
 	if (amdgv_diag_data_mem_init(adapt) != 0) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_DIAG_DATA_MEM_REQ_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_DIAG_DATA_MEM_REQ_FAIL,
 				AMDGV_DIAG_DATA_MEM_SIZE);
 		return AMDGV_FAILURE;
 	}
@@ -746,7 +746,7 @@ int amdgv_diag_data_init(struct amdgv_adapter *adapt)
 	/* Init the host driver resources */
 	if (amdgv_diag_data_host_driver_init(adapt) != 0) {
 		/* amdgv_device_internal_init calls amdgv_diag_data_fini */
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_DIAG_DATA_INIT_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_DIAG_DATA_INIT_FAIL, 0);
 		return AMDGV_FAILURE;
 	}
 

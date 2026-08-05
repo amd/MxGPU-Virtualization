@@ -177,7 +177,7 @@ int amdgv_memmgr_init(struct amdgv_adapter *adapt, struct amdgv_memmgr *memmgr,
 		      uint64_t offset, uint64_t size, uint32_t align, bool down)
 {
 	if (!memmgr) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_NO_FB_MANAGER,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_NO_FB_MANAGER,
 				sizeof(struct amdgv_memmgr_mem));
 		return AMDGV_FAILURE;
 	}
@@ -189,13 +189,13 @@ int amdgv_memmgr_init(struct amdgv_adapter *adapt, struct amdgv_memmgr *memmgr,
 
 	memmgr->lock = oss_mutex_init();
 	if (memmgr->lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_MUTEX_FAIL, 0);
 		return AMDGV_FAILURE;
 	}
 
 	memmgr->allocs = oss_malloc(sizeof(struct amdgv_memmgr_mem));
 	if (!memmgr->allocs) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				sizeof(struct amdgv_memmgr_mem));
 		goto allocs_fail;
 	}
@@ -204,7 +204,7 @@ int amdgv_memmgr_init(struct amdgv_adapter *adapt, struct amdgv_memmgr *memmgr,
 	AMDGV_INIT_LIST_HEAD(&memmgr->reserved_pages);
 	memmgr->rsv_lock = oss_mutex_init();
 	if (memmgr->rsv_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_MUTEX_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_MUTEX_FAIL, 0);
 		oss_mutex_fini(memmgr->lock);
 		memmgr->lock = OSS_INVALID_HANDLE;
 		oss_free(memmgr->allocs);
@@ -219,7 +219,7 @@ int amdgv_memmgr_init(struct amdgv_adapter *adapt, struct amdgv_memmgr *memmgr,
 
 	memmgr->reserves = oss_malloc(sizeof(struct amdgv_memmgr_mem));
 	if (!memmgr->reserves) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_RESERVE_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_RESERVE_SYSTEM_MEM_FAIL,
 				sizeof(struct amdgv_memmgr_mem));
 		goto reserves_fail;
 	}
@@ -455,8 +455,8 @@ static int amdgv_memmgr_import_mem_allocs(struct amdgv_memmgr *memmgr,
 
 			new = oss_malloc(sizeof(struct amdgv_memmgr_mem));
 			if (!new) {
-				amdgv_put_error(AMDGV_PF_IDX,
-						AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+				amdgv_put_log(AMDGV_PF_IDX,
+						AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 						sizeof(struct amdgv_memmgr_mem));
 				goto fail;
 			}
@@ -743,8 +743,8 @@ static struct amdgv_memmgr_mem *amdgv_memmgr_reserve_attrs(struct amdgv_memmgr *
 
 	new = oss_malloc(sizeof(struct amdgv_memmgr_mem));
 	if (!new) {
-		amdgv_put_error(AMDGV_PF_IDX,
-						AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX,
+						AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 						sizeof(struct amdgv_memmgr_mem));
 		amdgv_memmgr_mem_id_remove(adapt, mem_id);
 		return NULL;
@@ -826,11 +826,17 @@ static struct amdgv_memmgr_mem *amdgv_memmgr_alloc_unify_align(struct amdgv_memm
 			goto alloc_new;
 		} else
 			goto alloc_new;
+	} else {
+		/* AMDGV_GPU_PAGE_SIZE is the minimal size GART can manage.
+		 * roundup the length and alignment to AMDGV_GPU_PAGE_SIZE.
+		 */
+		len = roundup(len, AMDGV_GPU_PAGE_SIZE);
+		align = roundup(align, AMDGV_GPU_PAGE_SIZE);
 	}
 alloc_new:
 	new = oss_malloc(sizeof(struct amdgv_memmgr_mem));
 	if (!new) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				sizeof(struct amdgv_memmgr_mem));
 		return NULL;
 	}
@@ -846,7 +852,7 @@ alloc_new:
 	if (prev->alloc_off == memmgr->tom) {
 		if (AMDGV_MEMMGR_ALIGN(memmgr->tom, align) + len >
 		    (memmgr->offset + memmgr->size)) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_FB_MEM_FAIL,
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL,
 					len);
 			goto alloc_fail;
 		}
@@ -865,15 +871,9 @@ alloc_new:
 	new->sys_mem.va_ptr = va_ptr;
 
 	if (memmgr->is_sys) {
-		/* AMDGV_GPU_PAGE_SIZE is the minimal size GART can manage.
-		 * roundup the length and alignment to AMDGV_GPU_PAGE_SIZE.
-		 */
-		len = roundup(len, AMDGV_GPU_PAGE_SIZE);
-		align = roundup(align, AMDGV_GPU_PAGE_SIZE);
-
 		if (oss_alloc_dma_mem_with_attr(adapt->dev, len, OSS_DMA_ALLOW_DMA_NOT_CONTIGUOUS,
 			page_attr, &new->sys_mem) != 0) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_DMA_MEM_FAIL, len);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_DMA_MEM_FAIL, len);
 			goto alloc_fail;
 		}
 
@@ -882,7 +882,7 @@ alloc_new:
 
 		if (adapt->gart_ready) {
 			if (amdgv_map_mem_gart(new, AMDGV_MAP)) {
-				amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_MAP_DMA_MEM_FAIL, len);
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_MAP_DMA_MEM_FAIL, len);
 				goto map_fail;
 			}
 		}
@@ -1020,7 +1020,7 @@ struct amdgv_memmgr_mem *amdgv_memmgr_alloc_align_at(struct amdgv_memmgr *memmgr
 
 	new = oss_zalloc(sizeof(struct amdgv_memmgr_mem));
 	if (!new) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				sizeof(struct amdgv_memmgr_mem));
 		return NULL;
 	}
@@ -1035,7 +1035,7 @@ struct amdgv_memmgr_mem *amdgv_memmgr_alloc_align_at(struct amdgv_memmgr *memmgr
 	 * to the end of allocable space
 	 */
 	if (AMDGV_MEMMGR_ALIGN(offset, align) + len > (memmgr->offset + memmgr->size)) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_FB_MEM_FAIL, len);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL, len);
 		goto alloc_fail;
 	}
 	/* Find where to place an aligned memory block of the req size */
@@ -1709,7 +1709,7 @@ int amdgv_memmgr_assign_reserved_region(struct amdgv_memmgr_mem *reserved)
 	if (prev->alloc_off == memmgr->tom) {
 		if (AMDGV_MEMMGR_ALIGN(memmgr->tom, align) + len >
 		    (memmgr->offset + memmgr->size)) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_FB_MEM_FAIL,
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL,
 					len);
 			goto alloc_fail;
 		}

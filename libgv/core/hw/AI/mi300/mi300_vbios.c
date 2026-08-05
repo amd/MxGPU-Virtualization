@@ -278,11 +278,11 @@ static int mi300_vbios_early_hw_init(struct amdgv_adapter *adapt)
 					r = task_barrier_enter_timeout(&reload_reset_tb, adapt->xgmi.phy_nodes_num,
 							AMDGV_TIMEOUT(TIMEOUT_CHAIN_RESET));
 					if (r == 0) {
-						r = mi300_reset_trigger_whole_gpu_reset(adapt, false);
+						r = amdgv_reset_hw_for_reload(adapt, false);
 						task_barrier_exit(&reload_reset_tb, adapt->xgmi.phy_nodes_num);
 					}
 				} else {
-					r = mi300_reset_trigger_whole_gpu_reset(adapt, false);
+					r = amdgv_reset_hw_for_reload(adapt, false);
 				}
 			}
 		} else {
@@ -388,7 +388,7 @@ static int mi300_vbios_early_hw_fini(struct amdgv_adapter *adapt)
 		mi300_nbio_enable_doorbell_aperture(adapt, false);
 
 		amdgv_sched_stop_all(adapt);
-		mi300_reset_trigger_whole_gpu_reset(adapt, true);
+		amdgv_reset_hw_for_reload(adapt, true);
 
 		if (adapt->vbios.image) {
 			oss_free_memory(adapt->vbios.image);

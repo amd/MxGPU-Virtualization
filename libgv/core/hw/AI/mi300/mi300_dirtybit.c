@@ -10,16 +10,12 @@
 #include "gfx_v9_4_3.h"
 #include "mmhub_v1_8.h"
 #include "sdma_v4_4_2.h"
+#include "mi300_fb_hash_shader.h"
+
+#define MI300_DIRTYBIT_FB_HASH_MAX_PAGE_COUNT \
+	(288ULL * 1024ULL * 1024ULL * 1024ULL / (2ULL * 1024ULL * 1024ULL))
 
 static const uint32_t this_block = AMDGV_GFX_BLOCK;
-
-static int mi300_dirtybit_control(struct amdgv_adapter *adapt, bool enable)
-{
-	gfx_v9_4_2_dirtybit_control(adapt, enable);
-	mmhub_v1_8_dirtybit_control(adapt, enable);
-
-	return 0;
-}
 
 static int mi300_dirtybit_query_dirty_page_size(struct amdgv_adapter *adapt, uint32_t *dirty_page_size)
 {
@@ -242,6 +238,204 @@ static int mi300_dirtybit_query_data_sdma(struct amdgv_adapter *adapt, uint64_t 
 	return ret;
 }
 
+static void mi300_dirtybit_fb_hash_free_state(
+		struct amdgv_adapter *adapt,
+		struct amdgv_fb_hash_state *state)
+{
+	if (state->page_hash_sys[0]) {
+		amdgv_memmgr_free(state->page_hash_sys[0]);
+		state->page_hash_sys[0] = NULL;
+	}
+	if (state->page_hash_sys[1]) {
+		amdgv_memmgr_free(state->page_hash_sys[1]);
+		state->page_hash_sys[1] = NULL;
+	}
+	amdgv_dirtybit_reset_all_hash_state(adapt);
+	state->page_count = 0;
+	state->page_size = 0;
+}
+
+static int mi300_dirtybit_fb_hash_alloc_state(struct amdgv_adapter *adapt,
+					      struct amdgv_fb_hash_state *state,
+					      uint32_t page_count, uint32_t page_size)
+{
+	uint64_t bytes = (uint64_t)page_count * adapt->dirtybit.fb_hash_digest_bytes;
+
+	state->page_hash_sys[0] = amdgv_memmgr_alloc_sys_align_zero(&adapt->memmgr_sys, bytes,
+								    PAGE_SIZE, NULL, NULL);
+	if (!state->page_hash_sys[0]) {
+		AMDGV_ERROR("fb_hash dirtybit: digest[0] sysmem alloc failed\n");
+		goto fail;
+	}
+	state->page_hash_sys[1] = amdgv_memmgr_alloc_sys_align_zero(&adapt->memmgr_sys, bytes,
+								    PAGE_SIZE, NULL, NULL);
+	if (!state->page_hash_sys[1]) {
+		AMDGV_ERROR("fb_hash dirtybit: digest[1] sysmem alloc failed\n");
+		goto fail;
+	}
+
+	state->page_count = page_count;
+	state->page_size = page_size;
+	amdgv_dirtybit_reset_all_hash_state(adapt);
+	return 0;
+
+fail:
+	mi300_dirtybit_fb_hash_free_state(adapt, state);
+	return AMDGV_FAILURE;
+}
+
+static const uint8_t *mi300_dirtybit_fb_hash_zero_page_hash(struct amdgv_adapter *adapt,
+							    uint32_t page_size)
+{
+	if (adapt->dirtybit.fb_hash_mode == AMDGV_FB_HASH_MODE_RAPIDHASH) {
+		if (page_size == MI308_2MB_DIRTY_PAGE_SIZE)
+			return rapidhash_zero_hash_2mb;
+		else if (page_size == MI350_4MB_DIRTY_PAGE_SIZE)
+			return rapidhash_zero_hash_4mb;
+		else
+			return NULL;
+	}
+
+	if (page_size == MI308_2MB_DIRTY_PAGE_SIZE)
+		return sha256_zero_hash_2mb;
+	else if (page_size == MI350_4MB_DIRTY_PAGE_SIZE)
+		return sha256_zero_hash_4mb;
+	else
+		return NULL;
+}
+
+static uint32_t mi300_dirtybit_fb_hash_diff_to_zero(const uint8_t *cur,
+						     const uint8_t *zero_hash,
+						     uint32_t digest_bytes,
+						     uint32_t start_page, uint32_t num_pages,
+						     uint8_t *bitmap)
+{
+	uint32_t i;
+	uint32_t dirty_count = 0;
+
+	for (i = 0; i < num_pages; i++) {
+		if (oss_memcmp(cur + (uint64_t)(start_page + i) * digest_bytes,
+			       zero_hash, digest_bytes) != 0) {
+			bitmap[i >> 3] |= (uint8_t)(1u << (i & 7));
+			dirty_count++;
+		}
+	}
+	return dirty_count;
+}
+
+static uint32_t mi300_dirtybit_fb_hash_diff_to_prev(const uint8_t *cur,
+				    const uint8_t *prev_hash, uint32_t digest_bytes,
+				    uint32_t start_page, uint32_t num_pages, uint8_t *bitmap)
+{
+	uint32_t i;
+	uint64_t offset;
+	uint32_t dirty_count = 0;
+
+	for (i = 0; i < num_pages; i++) {
+		offset = (uint64_t)(start_page + i) * digest_bytes;
+
+		if (oss_memcmp(cur + offset, prev_hash + offset, digest_bytes) != 0) {
+			bitmap[i >> 3] |= (uint8_t)(1u << (i & 7));
+			dirty_count++;
+		}
+	}
+	return dirty_count;
+}
+
+static int mi300_dirtybit_fb_hash_query_data(
+		struct amdgv_adapter *adapt,
+		struct amdgv_query_dirty_bit_data *data)
+{
+	int ret;
+	uint32_t idx_vf = data->idx_vf;
+	uint32_t page_size = 0;
+	uint64_t nr_query_pages, start_page, vf_start_page;
+	uint64_t query_bitmap_size;
+	struct amdgv_vf_device *vf;
+	struct amdgv_fb_hash_state *state;
+	struct amdgv_fb_hash_vf_state *vf_state;
+	const uint8_t *zero_page_hash;
+	uint32_t nr_dirty_pages;
+	uint32_t digest_bytes = adapt->dirtybit.fb_hash_digest_bytes;
+	int cur_idx;
+	const uint8_t *cur_hash;
+	if (amdgv_dirtybit_get_dirty_page_size(adapt, &page_size)) {
+		AMDGV_ERROR("failed to get dirty page size\n");
+		return AMDGV_FAILURE;
+	}
+
+	vf = &adapt->array_vf[idx_vf];
+
+	vf_start_page = MBYTES_TO_BYTES(vf->fb_offset) / page_size;
+	start_page = vf_start_page + data->query_fb_offset / page_size;
+	nr_query_pages = DIV_ROUND_UP(data->query_size, page_size);
+	nr_query_pages = nr_query_pages == 0 ? 1 : nr_query_pages;
+
+	query_bitmap_size = amdgv_fb_size_to_bitmap_size_align(data->query_size, page_size);
+
+
+	state = &adapt->dirtybit.fb_hash_state;
+	vf_state = &state->vf[idx_vf];
+
+	cur_idx = !vf_state->prev_idx;
+	amdgv_sched_stop_all(adapt);
+	ret = amdgv_sched_context_switch_to_vf(adapt, AMDGV_PF_IDX, AMDGV_SCHED_BLOCK_GFX);
+	if (ret) {
+		AMDGV_ERROR("fb_hash dirtybit: vf%u failed to switch GFX to PF. ret=%d\n",
+			    idx_vf, ret);
+		return ret;
+	}
+
+	ret = gfx_v9_4_3_fb_hash_compute_page_hash(adapt, idx_vf, (uint64_t)page_size,
+						   state->page_hash_sys[cur_idx]);
+	if (ret) {
+		AMDGV_ERROR("fb_hash dirtybit: vf%u failed to compute page hash. ret=%d\n",
+			    idx_vf, ret);
+		return ret;
+	}
+
+	cur_hash = amdgv_memmgr_get_cpu_addr(state->page_hash_sys[cur_idx]);
+	if (!vf_state->initialized || adapt->dirtybit.acc_bits[idx_vf].is_first_query) {
+		zero_page_hash = mi300_dirtybit_fb_hash_zero_page_hash(adapt, page_size);
+		nr_dirty_pages =
+			mi300_dirtybit_fb_hash_diff_to_zero(cur_hash, zero_page_hash,
+							    digest_bytes,
+							    start_page, nr_query_pages,
+							    data->dbit_plane_data_buffer);
+		vf_state->prev_idx = cur_idx;
+		vf_state->initialized = true;
+		AMDGV_INFO("vf%u: Start using shader hash to calculate dirty bits\n", idx_vf);
+		return 0;
+	}
+
+	nr_dirty_pages = mi300_dirtybit_fb_hash_diff_to_prev(
+		cur_hash, amdgv_memmgr_get_cpu_addr(state->page_hash_sys[vf_state->prev_idx]),
+		digest_bytes, start_page, nr_query_pages, data->dbit_plane_data_buffer);
+	AMDGV_DEBUG("fb_hash dirtybit: vf%u diff vs prev: %u dirty pages\n", idx_vf,
+			nr_dirty_pages);
+	if (!data->dbit_preserve)
+		vf_state->prev_idx = cur_idx;
+
+	return 0;
+}
+
+static int mi300_dirtybit_fb_hash_clear(struct amdgv_adapter *adapt)
+{
+	mi300_dirtybit_fb_hash_free_state(adapt, &adapt->dirtybit.fb_hash_state);
+
+	return 0;
+}
+
+static int mi300_dirtybit_control(struct amdgv_adapter *adapt, bool enable)
+{
+	gfx_v9_4_3_dirtybit_control(adapt, enable);
+	mmhub_v1_8_dirtybit_control(adapt, enable);
+
+	if (adapt->dirtybit.fb_hash_support)
+		amdgv_dirtybit_reset_all_hash_state(adapt);
+	return 0;
+}
+
 static int mi300_dirtybit_query_data(struct amdgv_adapter *adapt, struct amdgv_query_dirty_bit_data *data)
 {
 	struct amdgv_vf_device *entry = &adapt->array_vf[data->idx_vf];
@@ -254,20 +448,26 @@ static int mi300_dirtybit_query_data(struct amdgv_adapter *adapt, struct amdgv_q
 	if (mc_addr > vf_fb_size)
 		return AMDGV_FAILURE;
 
-	if (mc_addr + data->query_size > vf_fb_size)
-		data->query_size = vf_fb_size - mc_addr;
+	if (!amdgv_xgmi_node_fb_sharing_allowed(adapt)) {
+		if (mc_addr + data->query_size > vf_fb_size)
+			data->query_size = vf_fb_size - mc_addr;
 
-	mc_addr += adapt->mc_fb_loc_addr + vf_fb_offset;
-	if (adapt->xgmi.phy_nodes_num > 1)
-		mc_addr += adapt->xgmi.phy_node_id * adapt->xgmi.node_segment_size;
+		mc_addr += adapt->mc_fb_loc_addr + vf_fb_offset;
+		if (adapt->xgmi.phy_nodes_num > 1)
+			mc_addr += adapt->xgmi.phy_node_id * adapt->xgmi.node_segment_size;
 
-	AMDGV_DEBUG("query_offset=0x%llx, mc_addr=0x%llx, query_size=0x%llx, bm_size=0x%llx,"
-		"vf_fb=0x%llx, vf_fb_size=0x%llx"
-		"node_id=%d, segmet_size=0x%llx\n",
-		data->query_fb_offset, mc_addr, data->query_size, data->dbit_plane_data_size,
-		vf_fb_offset, vf_fb_size, adapt->xgmi.phy_node_id, adapt->xgmi.node_segment_size);
-
-	return mi300_dirtybit_query_data_sdma(adapt, mc_addr, data);
+		AMDGV_DEBUG(
+			"query_offset=0x%llx, mc_addr=0x%llx, query_size=0x%llx, bm_size=0x%llx,"
+			"vf_fb=0x%llx, vf_fb_size=0x%llx"
+			"node_id=%d, segmet_size=0x%llx\n",
+			data->query_fb_offset, mc_addr, data->query_size,
+			data->dbit_plane_data_size, vf_fb_offset, vf_fb_size,
+			adapt->xgmi.phy_node_id, adapt->xgmi.node_segment_size);
+		return mi300_dirtybit_query_data_sdma(adapt, mc_addr, data);
+	} else if (adapt->dirtybit.fb_hash_support) {
+		return mi300_dirtybit_fb_hash_query_data(adapt, data);
+	}
+	return AMDGV_FAILURE;
 }
 
 static const struct amdgv_dirtybit_funcs mi300_db_funcs = {
@@ -287,23 +487,52 @@ static int mi300_dirtybit_sw_init(struct amdgv_adapter *adapt)
 	switch (adapt->asic_type) {
 	case CHIP_MI308X:
 		adapt->dirtybit.mam_adram_mode = MI308_2MB_MAM_ADRAM_MODE;
+		adapt->dirtybit.fb_hash_support = true;
 		break;
 	case CHIP_MI350X:
 		adapt->dirtybit.mam_adram_mode = MI350_4MB_MAM_ADRAM_MODE;
+		adapt->dirtybit.fb_hash_support = true;
 		break;
 	default:
 		AMDGV_WARN("Invalid asic_type: %d, set mam_adram_mode to default:0\n", adapt->asic_type);
 		break;
 	}
 
-	adapt->dirtybit.acc_bits_whole_fb = oss_malloc(AMDGV_DIRTYBIT_BUFFER_SIZE);
-	if (adapt->dirtybit.acc_bits_whole_fb == NULL) {
-		AMDGV_ERROR("failed to allocate acc_bits_whole_fb\n");
+	if (amdgv_dirtybit_sw_init(adapt))
 		return AMDGV_FAILURE;
+
+	if (adapt->dirtybit.fb_hash_support) {
+		uint32_t page_size = 0;
+
+		if (adapt->opt.shader_hash_mode == AMDGV_FB_HASH_MODE_RAPIDHASH) {
+			adapt->dirtybit.fb_hash_mode = AMDGV_FB_HASH_MODE_RAPIDHASH;
+			adapt->dirtybit.fb_hash_digest_bytes = RAPIDHASH_DIGEST_BYTES;
+		} else {
+			adapt->dirtybit.fb_hash_mode = AMDGV_FB_HASH_MODE_SHA256;
+			adapt->dirtybit.fb_hash_digest_bytes = SHA256_DIGEST_BYTES;
+		}
+		AMDGV_DEBUG("fb_hash dirtybit: using %s page-hash shader\n",
+			   adapt->dirtybit.fb_hash_mode == AMDGV_FB_HASH_MODE_RAPIDHASH ?
+			   "rapidhash" : "SHA-256");
+
+		if (amdgv_dirtybit_get_dirty_page_size(adapt, &page_size)) {
+			AMDGV_ERROR("failed to get dirty page size\n");
+			goto free_acc_bits;
+		}
+
+		if (mi300_dirtybit_fb_hash_alloc_state(adapt, &adapt->dirtybit.fb_hash_state,
+						       MI300_DIRTYBIT_FB_HASH_MAX_PAGE_COUNT,
+						       page_size)) {
+			AMDGV_ERROR("failed to allocate fb_hash_state\n");
+			goto free_acc_bits;
+		}
 	}
-	oss_memset(adapt->dirtybit.acc_bits_whole_fb, 0, AMDGV_DIRTYBIT_BUFFER_SIZE);
 
 	return 0;
+
+free_acc_bits:
+	amdgv_dirtybit_free_acc_bits_whole_fb(adapt);
+	return AMDGV_FAILURE;
 }
 
 static int mi300_dirtybit_sw_fini(struct amdgv_adapter *adapt)
@@ -311,8 +540,10 @@ static int mi300_dirtybit_sw_fini(struct amdgv_adapter *adapt)
 	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION))
 		return 0;
 
-	oss_free(adapt->dirtybit.acc_bits_whole_fb);
-	adapt->dirtybit.acc_bits_whole_fb = NULL;
+	if (adapt->dirtybit.fb_hash_support)
+		mi300_dirtybit_fb_hash_clear(adapt);
+
+	amdgv_dirtybit_free_acc_bits_whole_fb(adapt);
 
 	return 0;
 }
@@ -322,7 +553,7 @@ static int mi300_dirtybit_hw_init(struct amdgv_adapter *adapt)
 	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION))
 		return 0;
 
-	mi300_dirtybit_control(adapt, true);
+	amdgv_dirtybit_control(adapt, true);
 
 	if (amdgv_dirtybit_assgin_acc_bits_to_vf(adapt)) {
 		AMDGV_ERROR("Failed to assign the acc_bits to VF");
@@ -337,8 +568,7 @@ static int mi300_dirtybit_hw_fini(struct amdgv_adapter *adapt)
 	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION))
 		return 0;
 
-	mi300_dirtybit_control(adapt, false);
-	amdgv_dirtybit_destroy_vf_acc_bits(adapt);
+	amdgv_dirtybit_hw_fini(adapt);
 
 	return 0;
 }

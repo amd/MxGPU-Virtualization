@@ -265,6 +265,21 @@ struct gim_conf_opt conf_opts[] = {
 		.max = VF_HBM_MGMT_MODE__MAX,
 		.def = VF_HBM_MGMT_MODE__DEFAULT,
 		.array = false },
+	/* enable unified ras module */
+	[CONF_OPT_ENABLE_UNIRAS] = { .name = ENABLE_UNIRAS__KEY,
+		.value = { ENABLE_UNIRAS__DEFAULT },
+		.repeat_val_idx = 1,
+		.min = ENABLE_UNIRAS__START,
+		.max = ENABLE_UNIRAS__MAX,
+		.def = ENABLE_UNIRAS__DEFAULT,
+		.array = false },
+	[CONF_OPT_SHADER_HASH_MODE] = { .name = SHADER_HASH_MODE__KEY,
+		.value = { SHADER_HASH_MODE__DEFAULT },
+		.repeat_val_idx = 1,
+		.min = SHADER_HASH_MODE__START,
+		.max = SHADER_HASH_MODE__MAX,
+		.def = SHADER_HASH_MODE__DEFAULT,
+		.array = false },
 };
 
 #define MAX_OPTION (sizeof(conf_opts)/sizeof(struct gim_conf_opt))
@@ -469,11 +484,17 @@ MODULE_PARM_DESC(pf_fb_size, "PF reserved frame buffer size in MB\n\t"
 				"256 <= Dx <= 1024 (MB), 0 <= x <= 31\n\t");
 
 int bad_page_threshold_size;
-uint bad_page_threshold[AMDGV_MAX_GPU_NUM] = {0};
-module_param_array(bad_page_threshold, uint, &bad_page_threshold_size, 0444);
+int bad_page_threshold[AMDGV_MAX_GPU_NUM] = {BAD_PAGE_RECORD_THRESHOLD__DEFAULT};
+module_param_array(bad_page_threshold, int, &bad_page_threshold_size, 0444);
 MODULE_PARM_DESC(bad_page_threshold, "Bad page threshold for GPUs\n\t"
 				"bad_page_threshold=[D0[,D1[...[,Dx]]]]\n\t"
-				"10 <= Dx <= 256;\n\t");
+				"-2 <= Dx <= 256;\n\t"
+				"-2: Threshold determined by a formula (approx 1 bad page per 100MB of VRAM); continue runtime services when reached\n\t"
+				"-1: Use default threshold; warn and continue runtime services when reached (Default)\n\t"
+				" 0: Disable bad page retirement; driver will not retire bad pages (Debugging)\n\t"
+				"0 < Dx <= 256: User-defined threshold; halt runtime services when reached\n\t"
+				"Note: the 'Dx <= 0' semantics apply only when uniras is enabled;\n\t"
+				"      for the legacy ras, the default bad page threshold is used when Dx <= 0\n\t");
 
 int ras_vf_telemetry_policy_size;
 uint ras_vf_telemetry_policy[AMDGV_MAX_GPU_NUM] = {0};
@@ -540,6 +561,18 @@ MODULE_PARM_DESC(vf_hbm_mgmt_mode, "VF HBM Memory Management Mode\n\t"
 				"0(default): Driver Managed\n\t"
 				"1: DAX\n\t"
 				"2: Disabled\n\t");
+uint enable_uniras;
+module_param(enable_uniras, uint, 0444);
+MODULE_PARM_DESC(enable_uniras, "whether enable unified ras module(0:disable 1:enable)\n\t"
+				"By default, it is disabled\n\t"
+				"0: Disable unified ras module\n\t"
+				"1: Enable unified ras module\n\t");
+
+uint shader_hash_mode;
+module_param(shader_hash_mode, uint, 0444);
+MODULE_PARM_DESC(shader_hash_mode, "FB page-hash shader algorithm for live migration\n\t"
+				"0(default): rapidhash (64-bit fingerprint)\n\t"
+				"1: SHA-256 (256-bit fingerprint)\n\t");
 
 static int gim_conf_search_config_key(char *key)
 {
@@ -1052,7 +1085,7 @@ int gim_conf_init(void)
 
 	if (bad_page_threshold_size > 0) {
 		set_array_value(CONF_OPT_BAD_PAGE_RECORD_THRESHOLD,
-				bad_page_threshold, bad_page_threshold_size);
+				(uint *)bad_page_threshold, bad_page_threshold_size);
 	}
 
 	if (ras_vf_telemetry_policy_size > 0) {
@@ -1105,6 +1138,26 @@ int gim_conf_init(void)
 		}
 		for (j = 0; j < AMDGV_MAX_GPU_NUM; j++)
 			conf_opts[CONF_OPT_VF_HBM_MGMT_MODE].value[j] = vf_hbm_mgmt_mode;
+	}
+
+	if (enable_uniras > 0) {
+		if (gim_conf_valid_opt(CONF_OPT_ENABLE_UNIRAS, enable_uniras)) {
+			gim_warn("invalid token (enable_uniras) value: %d\n",
+				enable_uniras);
+			enable_uniras = ENABLE_UNIRAS__DEFAULT;
+		}
+		for (j = 0; j < AMDGV_MAX_GPU_NUM; j++)
+			conf_opts[CONF_OPT_ENABLE_UNIRAS].value[j] = enable_uniras;
+	}
+
+	if (shader_hash_mode > 0) {
+		if (gim_conf_valid_opt(CONF_OPT_SHADER_HASH_MODE, shader_hash_mode)) {
+			gim_warn("invalid token (shader_hash_mode) value: %d\n",
+				shader_hash_mode);
+			shader_hash_mode = SHADER_HASH_MODE__DEFAULT;
+		}
+		for (j = 0; j < AMDGV_MAX_GPU_NUM; j++)
+			conf_opts[CONF_OPT_SHADER_HASH_MODE].value[j] = shader_hash_mode;
 	}
 
 	gim_conf_clear_saved_persist_config(config_file_created);
@@ -1354,6 +1407,19 @@ uint32_t gim_conf_get_vf_hbm_mgmt_mode_opt(uint32_t id)
 		id = AMDGV_MAX_GPU_NUM - 1;
 
 	return conf_opts[CONF_OPT_VF_HBM_MGMT_MODE].value[id];
+}
+
+uint32_t gim_conf_get_enable_uniras_opt(uint32_t id)
+{
+	if (id >= AMDGV_MAX_GPU_NUM)
+		id = AMDGV_MAX_GPU_NUM - 1;
+
+	return conf_opts[CONF_OPT_ENABLE_UNIRAS].value[id];
+}
+
+uint32_t gim_conf_get_shader_hash_mode_opt(void)
+{
+	return conf_opts[CONF_OPT_SHADER_HASH_MODE].value[0];
 }
 
 uint32_t gim_conf_set_vf_num_opt(int value)

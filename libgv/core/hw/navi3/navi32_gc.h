@@ -14,6 +14,7 @@ uint32_t gc_v11_0_3_get_page_table_end_addr_lo32(struct amdgv_adapter *adapt);
 uint32_t gc_v11_0_3_get_page_table_end_addr_hi32(struct amdgv_adapter *adapt);
 int gc_v11_0_3_wait_grbm_clean(struct amdgv_adapter *adapt);
 void gc_v11_0_3_toggle_rlcg_vf_interface(struct amdgv_adapter *adapt, bool enable);
+uint32_t gc_v11_0_3_rlcg_rreg(struct amdgv_adapter *adapt, uint32_t off_dw);
 
 
 #endif

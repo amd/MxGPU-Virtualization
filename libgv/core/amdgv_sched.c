@@ -128,7 +128,7 @@ int amdgv_sched_init(struct amdgv_adapter *adapt)
 
 	adapt->reset.pf_rel_gpu_init = oss_event_init();
 	if (adapt->reset.pf_rel_gpu_init == OSS_INVALID_HANDLE) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_CREATE_EVENT_FAIL, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_EVENT_FAIL, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -517,30 +517,55 @@ int amdgv_sched_context_switch_gfx_to_pf(struct amdgv_adapter *adapt, uint32_t i
 	return 0;
 }
 
+/* On VM destroy/reset the SMU raises a VF FLR notify and we mark the VF
+ * pending_remove. Its world switches are stopped as part of idx_vf's reset,
+ * so remove such VFs from scheduling and free their slots instead of paying
+ * a per-VF FLR; the next VF reinit clears the stale HW state. */
+static void amdgv_sched_remove_pending_vfs(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	uint32_t idx_vf_ws_mask = amdgv_sched_get_world_switch_mask(adapt, idx_vf);
+	uint32_t vf;
+
+	for (vf = 0; vf < AMDGV_PF_IDX; vf++) {
+		uint32_t vf_ws_mask;
+
+		/* only VFs whose VM was destroyed (marked on VF FLR notify) */
+		if (!adapt->array_vf[vf].pending_remove)
+			continue;
+
+		/* still scheduled (an avail slot has nothing to remove) */
+		if (!is_active_vf(vf))
+			continue;
+
+		/* The VF can be safely removed only if every world switch it belongs to
+		 * is also associated with idx_vf, since those world switches have already
+		 * been stopped. */
+		vf_ws_mask = amdgv_sched_get_world_switch_mask(adapt, vf);
+		if (!BITMAP_SUBSET(vf_ws_mask, idx_vf_ws_mask))
+			continue;
+
+		amdgv_sched_remove_vf(adapt, vf);
+		set_to_avail_vf(vf);
+		adapt->array_vf[vf].pending_remove = false;
+		AMDGV_DEBUG("%s removed from all world switches\n",
+			    amdgv_idx_to_str(vf));
+	}
+}
+
 int amdgv_sched_context_one_time_loop(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
-	int ret;
 	uint32_t world_switch_id;
 	struct amdgv_sched_world_switch *world_switch;
 
-	if (amdgv_sched_active_vf_num(adapt) == 0)
+	if (amdgv_sched_active_vf_num(adapt) == 0 || adapt->sched.enable_per_partition_full_access)
 		return 0;
+
+	amdgv_sched_remove_pending_vfs(adapt, idx_vf);
 
 	for_each_id(world_switch_id, amdgv_sched_get_world_switch_mask(adapt, idx_vf)) {
 		world_switch = &adapt->sched.world_switch[world_switch_id];
-		ret = amdgv_sched_world_context_one_time_loop(adapt, world_switch);
-		if (ret)
-			goto failed;
+		amdgv_sched_world_context_one_time_loop(adapt, world_switch);
 	}
-
-	return 0;
-
-failed:
-	ret = amdgv_sched_reset_vf_auto(adapt);
-	if (ret)
-		return ret;
-
-	amdgv_sched_start_auto(adapt, world_switch->curr_idx_vf);
 
 	return 0;
 }
@@ -687,6 +712,9 @@ int amdgv_sched_add_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	uint32_t world_switch_id;
 	struct amdgv_sched_world_switch *world_switch;
 
+	/* re-added VF is live again; clear any stale pending_remove flag */
+	adapt->array_vf[idx_vf].pending_remove = false;
+
 	/* Special case: 1VF mode, no self switch and want to add PF
 	 * Need to enable self switch so that PF can also get time slice
 	 * Ensure PF has timeslice after adding PF to scheduler
@@ -753,6 +781,28 @@ int amdgv_sched_remove_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	return ret;
 }
 
+int amdgv_sched_pause_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	int ret = 0;
+	uint32_t world_switch_id;
+	struct amdgv_sched_world_switch *world_switch;
+
+	// Pause VF is mmsch only cmd. GFx doesnot have this cmd.
+	for_each_id(world_switch_id, amdgv_sched_get_world_switch_mask(adapt, idx_vf)) {
+		// GFX does not need to be paused
+		world_switch = &adapt->sched.world_switch[world_switch_id];
+		if (world_switch->sched_block == AMDGV_SCHED_BLOCK_GFX) {
+			continue;
+		}
+
+		ret = amdgv_gpuiov_pause_vf(adapt, idx_vf, world_switch_id);
+		if (ret)
+			return ret;
+	}
+
+	return ret;
+}
+
 int amdgv_sched_set_vf_num(struct amdgv_adapter *adapt, uint32_t num_vf)
 {
 	uint32_t idx_vf;
@@ -762,12 +812,12 @@ int amdgv_sched_set_vf_num(struct amdgv_adapter *adapt, uint32_t num_vf)
 
 	/* Check if dynamic VF number change is supported on this platform */
 	if (adapt->flags & AMDGV_FLAG_NO_DYNAMIC_VF_NUM)
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
 	/* set vf number should not count PF in */
 	for (idx_vf = 0; idx_vf < AMDGV_MAX_VF_NUM; idx_vf++) {
 		if (!is_unavail_vf(idx_vf)) {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_SCHED_RESET_VF_NUM_FAIL,
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_SCHED_RESET_VF_NUM_FAIL,
 					idx_vf);
 			return AMDGV_FAILURE;
 		}
@@ -1122,7 +1172,8 @@ static uint32_t amdgv_sched_get_asic_time_slice_mm(struct amdgv_adapter *adapt)
 }
 
 uint32_t amdgv_sched_get_asic_time_slice(struct amdgv_adapter *adapt,
-					 enum amdgv_sched_block sched_block, uint32_t num_vf)
+					 enum amdgv_sched_block sched_block, uint32_t num_vf,
+					 uint32_t idx_vf)
 {
 	if (sched_block == AMDGV_SCHED_BLOCK_GFX)
 		return amdgv_sched_get_asic_time_slice_gfx(adapt, num_vf);
@@ -1167,7 +1218,7 @@ int amdgv_sched_set_hliquid_min_ts(struct amdgv_adapter *adapt, int hliquid_min_
 	int ret = AMDGV_FAILURE;
 	struct amdgv_sched_world_switch *world_switch = NULL;
 
-	vf_ts = amdgv_sched_default_gfx_time_slice(adapt, adapt->sched.num_vf_per_gfx_sched);
+	vf_ts = amdgv_sched_default_gfx_time_slice(adapt, adapt->sched.num_vf_per_gfx_sched, 0);
 	for (world_switch_id = 0; world_switch_id < adapt->sched.num_world_switch; world_switch_id++) {
 		/* only for hybrid liquid mode on GFX IP */
 
@@ -1190,15 +1241,15 @@ int amdgv_sched_set_hliquid_min_ts(struct amdgv_adapter *adapt, int hliquid_min_
 	return ret;
 }
 
-int amdgv_sched_set_auto_sched_log_feature(struct amdgv_adapter *adapt, uint32_t hw_sched_id, enum amdgv_auto_sched_log_op op, bool enable)
+int amdgv_sched_set_auto_sched_log_feature(struct amdgv_adapter *adapt, uint32_t hw_sched_id, enum amdgv_sched_log_op op, bool enable)
 {
 	int event = 0;
 
 	switch (op) {
-	case AMDGV_AUTO_SCHED_PERF_LOG:
+	case AMDGV_SCHED_PERF_LOG:
 		event = AMDGV_EVENT_PERF_LOG;
 		break;
-	case AMDGV_AUTO_SCHED_DEBUG_DUMP:
+	case AMDGV_SCHED_DEBUG_DUMP:
 		event = AMDGV_EVENT_DEBUG_LOG;
 		break;
 	default:
@@ -1230,7 +1281,7 @@ int amdgv_sched_toggle_perflog(struct amdgv_adapter *adapt, bool enable, uint32_
 		}
 		AMDGV_DEBUG("toggle %s perf log in rlcv auto scheduler\n", enable ? "on" : "off");
 
-		ret = amdgv_sched_set_auto_sched_log_feature(adapt, hw_sched_id, AMDGV_AUTO_SCHED_PERF_LOG, enable);
+		ret = amdgv_sched_set_auto_sched_log_feature(adapt, hw_sched_id, AMDGV_SCHED_PERF_LOG, enable);
 		if (ret)
 			break;
 		adapt->sched.perf_log_enabled[hw_sched_id] = enable;
@@ -1309,6 +1360,43 @@ int amdgv_sched_read_perf_log_data(struct amdgv_adapter *adapt)
 	}
 
 	return 0;
+}
+
+int amdgv_sched_dump_ts_log_data(struct amdgv_adapter *adapt)
+{
+	int i;
+	int ret;
+	uint32_t *data;
+	uint64_t fb_offset;
+
+	if (!adapt->gpuiov.ts_log_mem) {
+		AMDGV_WARN("ts log memory not allocated\n");
+		return AMDGV_FAILURE;
+	}
+
+	data = oss_alloc_memory(TSL_FB_SIZE);
+	if (data == NULL) {
+		amdgv_put_log(AMDGV_PF_IDX,
+				AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+				TSL_FB_SIZE);
+		return AMDGV_FAILURE;
+	}
+	fb_offset = amdgv_memmgr_get_gpu_addr(adapt->gpuiov.ts_log_mem) - adapt->memmgr_pf.mc_base;
+
+	for (i = 0; i < TSL_FB_SIZE / 4; i++) {
+		*(data + i) = READ_FB32(fb_offset + i * 4);
+
+		if (i % 64 == 0 &&
+		    READ_FB32(fb_offset + (i + 2) * 4) == 0 &&
+		    READ_FB32(fb_offset + (i + 3) * 4) == 0)
+			break;
+	}
+
+	ret = oss_store_rlcv_timestamp((char *)data, i * 4, adapt->bdf);
+	if (ret)
+		AMDGV_WARN("store rlcv timestamp failed, ret=%d\n", ret);
+	oss_free_memory(data);
+	return ret;
 }
 
 #ifdef WS_RECORD
@@ -1504,7 +1592,7 @@ void amdgv_sched_clear_dirty_vf_fb(struct amdgv_adapter *adapt, int vf_idx)
 }
 
 int amdgv_sched_set_ws_log_op(struct amdgv_adapter *adapt,
-		 enum amdgv_auto_sched_log_op op, bool enable)
+		 enum amdgv_sched_log_op op, bool enable)
 {
 	int ret = 0;
 	uint32_t world_switch_id, hw_sched_id;
@@ -1516,7 +1604,7 @@ int amdgv_sched_set_ws_log_op(struct amdgv_adapter *adapt,
 		for_each_id(hw_sched_id, world_switch->hw_sched_mask) {
 			if (adapt->gpuiov.ctrl_blocks[hw_sched_id].sched_mode > AMDGV_SCHED_MAX_HW_SCHED_MODE)
 				return AMDGV_FAILURE;
-			if (op == AMDGV_AUTO_SCHED_PERF_LOG) {
+			if (op == AMDGV_SCHED_PERF_LOG) {
 				ret = amdgv_sched_toggle_perflog(adapt, enable, hw_sched_id);
 			} else
 				ret = amdgv_sched_set_auto_sched_log_feature(adapt, hw_sched_id, op, enable);

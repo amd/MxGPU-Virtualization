@@ -17,6 +17,7 @@
 #include "navi32_gfx.h"
 #include "navi32_sched.h"
 #include "navi32_mmsch.h"
+#include "amdgv_live_migration.h"
 
 /* navi3 has different default time slice value */
 /* 1,2,3,4,6 supports 60fps CG, >6vf supprots 30fps VDI */
@@ -26,6 +27,7 @@
 #define NAVI32_GFX_TIME_SLICE_4VF                   (4000)
 #define NAVI32_GFX_TIME_SLICE_6VF                   (2500)
 #define NAVI32_GFX_TIME_SLICE_LARGER_6VF            (2750)
+#define NAVI32_GFX_TIME_SLICE_LM_PF                 (15000)
 
 static const uint32_t this_block = AMDGV_SCHEDULER_BLOCK;
 
@@ -144,10 +146,25 @@ static uint32_t navi32_sched_get_asic_time_slice_mm(struct amdgv_adapter *adapt)
 	return DEFAULT_MM_TIME_SLICE;
 }
 
-static uint32_t navi32_sched_get_asic_time_slice(struct amdgv_adapter *adapt, enum amdgv_sched_block sched_block, uint32_t num_vf)
+static uint32_t navi32_sched_get_asic_time_slice(struct amdgv_adapter *adapt, enum amdgv_sched_block sched_block, uint32_t num_vf, uint32_t idx_vf)
 {
-	if (sched_block == AMDGV_SCHED_BLOCK_GFX)
+	bool lm_active = false;
+	uint32_t i;
+	if (sched_block == AMDGV_SCHED_BLOCK_GFX) {
+		if (idx_vf == AMDGV_PF_IDX) {
+			for (i = 0; i < AMDGV_MAX_VF_NUM; i++) {
+				if (adapt->live_migration.mig_state[i].state != AMDGV_MIGRATION_VF_STATE_DEFAULT) {
+					lm_active = true;
+					break;
+				}
+			}
+			if (lm_active) {
+				return NAVI32_GFX_TIME_SLICE_LM_PF;
+			}
+		}
+
 		return navi32_sched_get_asic_time_slice_gfx(adapt, num_vf);
+	}
 	else
 		return navi32_sched_get_asic_time_slice_mm(adapt);
 }

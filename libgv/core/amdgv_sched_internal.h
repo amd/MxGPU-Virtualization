@@ -159,6 +159,9 @@ int amdgv_sched_queue_event_process_suspend(struct amdgv_adapter *adapt);
 void amdgv_sched_queue_event_process_resume(struct amdgv_adapter *adapt);
 int amdgv_sched_event_queue_process_init(struct amdgv_adapter *adapt);
 void amdgv_sched_event_queue_process_fini(struct amdgv_adapter *adapt);
+int amdgv_sched_event_do_fb_copy(struct amdgv_adapter *adapt, int idx_vf,
+				 uint64_t src, uint64_t dst, uint64_t size,
+				 void *src_vaddr, void *dst_vaddr);
 
 #ifdef WS_RECORD
 int amdgv_sched_record_queue_process_init(struct amdgv_adapter *adapt);

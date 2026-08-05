@@ -65,8 +65,7 @@ int amdgv_reset_mailbox_notify_after_pf(struct amdgv_adapter *adapt)
 	for (idx_vf = 0; idx_vf < adapt->max_num_vf; idx_vf++) {
 		if (adapt->array_vf[idx_vf].reset_notify_vf_pending) {
 			/* notify vf reset completion */
-			AMDGV_DEBUG("notify %s whole GPU reset completion\n",
-				    amdgv_idx_to_str(idx_vf));
+			amdgv_put_log(idx_vf, AMDGV_LOG_RESET_NOTIFY_VF_COMPLETION, 0);
 			amdgv_reset_mailbox_notify_vf(adapt, idx_vf, true);
 			adapt->array_vf[idx_vf].reset_notify_vf_pending = false;
 		}
@@ -89,8 +88,7 @@ int amdgv_reset_program_vf_mc_settings(struct amdgv_adapter *adapt)
 		if (adapt->array_vf[idx_vf].configured) {
 			if (adapt->psp.psp_program_guest_mc_settings) {
 				/* program vf mc settings */
-				AMDGV_DEBUG("program %s mc settings\n",
-					    amdgv_idx_to_str(idx_vf));
+				amdgv_put_log(idx_vf, AMDGV_LOG_RESET_PROGRAM_VF_MC_SETTINGS, 0);
 				if (adapt->psp.psp_program_guest_mc_settings(adapt, idx_vf)) {
 					ret = AMDGV_FAILURE;
 				}
@@ -110,12 +108,19 @@ int amdgv_reset_notify_engine_status(struct amdgv_adapter *adapt, uint32_t idx_v
 	return 0;
 }
 
-int amdgv_reset_trigger_gpu_hw_reset(struct amdgv_adapter *adapt, bool is_unload)
+int amdgv_reset_hw_for_reload(struct amdgv_adapter *adapt, bool is_unload)
 {
-	if (adapt->reset.funcs && adapt->reset.funcs->trigger_gpu_hw_reset)
-		return adapt->reset.funcs->trigger_gpu_hw_reset(adapt, is_unload);
-	else
+	if (!adapt->reset.funcs || !adapt->reset.funcs->reset_hw_for_reload) {
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_RESET_GPU_FAILED, 0);
 		return AMDGV_FAILURE;
+	}
+
+	if (is_unload)
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_RESET_GPU_UNLOAD, 0);
+	else
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_RESET_GPU_RELOAD, 0);
+
+	return adapt->reset.funcs->reset_hw_for_reload(adapt, is_unload);
 }
 
 int amdgv_reset_gpu_and_reinit(struct amdgv_adapter *adapt)
@@ -127,8 +132,10 @@ int amdgv_reset_gpu_and_reinit(struct amdgv_adapter *adapt)
 	adapt->reset.reset_num++;
 	adapt->reset.reset_state = true;
 
-	if (!adapt->mcp.mem_mode_switch_requested)
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_RESET_GPU, 0);
+	if (adapt->mcp.mem_mode_switch_requested)
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_RESET_GPU_CONFIG_CHANGE, 0);
+	else
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_RESET_GPU, 0);
 
 	funcs = adapt->reset.funcs;
 
@@ -143,12 +150,11 @@ int amdgv_reset_gpu_and_reinit(struct amdgv_adapter *adapt)
 				AMDGV_DEBUG("Disabled interrupts\n");
 			}
 		} else {
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_RESET_GPU_FAILED, 0);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_RESET_GPU_FAILED, 0);
 		}
 	} else {
 		ret = AMDGV_FAILURE;
-		if (!adapt->mcp.mem_mode_switch_requested)
-			amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_RESET_GPU_FAILED, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_RESET_GPU_FAILED, 0);
 	}
 
 	adapt->reset.reset_state = false;
@@ -180,12 +186,14 @@ int amdgv_reset_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	int ret = 0, i;
 	const struct amdgv_gpu_reset_funcs *funcs;
 
-	amdgv_put_error(idx_vf, AMDGV_ERROR_RESET_FLR, idx_vf);
+	amdgv_put_log(idx_vf, AMDGV_LOG_RESET_FLR, idx_vf);
 
 	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION) {
-		if (!IS_DEDICATED_SDMA_RING_AVAILABLE(adapt)) {
+		if (amdgv_xgmi_node_fb_sharing_allowed(adapt) && adapt->dirtybit.fb_hash_support) {
+			amdgv_dirtybit_reset_vf_hash_state(adapt, idx_vf);
+		} else if (!IS_DEDICATED_SDMA_RING_AVAILABLE(adapt)) {
 			amdgv_dirtybit_set_vf_acc_bits(adapt, idx_vf, 0xff);
-			AMDGV_INFO("Set VF[%d] acc bits to all-dirty before VF FLR (no PF SDMA ring)\n", idx_vf);
+			amdgv_put_log(idx_vf, AMDGV_LOG_RESET_FLR_SET_ACC_BITS_DIRTY, 0);
 		} else {
 			amdgv_dirtybit_query_vf_fb_dbit(adapt, idx_vf);
 		}
@@ -193,7 +201,7 @@ int amdgv_reset_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 
 	// During GPUV live update bootup, need PF FLR, so ignore whether force reset flag is set
 	if ((adapt->flags & AMDGV_FLAG_VF_HANG_GPU_RESET) && !amdgv_in_live_update_seq()) {
-		AMDGV_INFO("FLR is disabled\n");
+		amdgv_put_log(idx_vf, AMDGV_LOG_RESET_FLR_DISABLED, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -217,7 +225,7 @@ int amdgv_reset_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 		amdgv_dirtybit_control(adapt, true);
 
 	if (ret)
-		amdgv_put_error(idx_vf, AMDGV_ERROR_RESET_FLR_FAILED, idx_vf);
+		amdgv_put_log(idx_vf, AMDGV_LOG_RESET_FLR_FAILED, idx_vf);
 
 	return ret;
 }
@@ -270,7 +278,7 @@ void amdgv_reset_restore_sriov(struct amdgv_adapter *adapt)
 
 	/* restore VF resizable BAR */
 	if (!(adapt->flags & AMDGV_FLAG_USE_PF) && oss_pci_restore_vf_rebar(adapt->dev, 0))
-		AMDGV_ERROR("Failed to restore VF resizable BAR\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_VF_RESIZE_BAR_FAIL, 0);
 }
 
 void amdgv_reset_restore_interrupt(struct amdgv_adapter *adapt)

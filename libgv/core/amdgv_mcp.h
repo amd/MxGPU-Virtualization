@@ -22,6 +22,26 @@ struct spatial_partition_gfx {
 	uint16_t	num_xcc;
 	uint32_t	num_xcc_per_partition;
 	uint32_t	sdma_mask;
+	/* Pre-harvest XCC count; num_xcc drops as XCCs are harvested. */
+	uint32_t	max_xcc;
+};
+
+#define AMDGV_MCP_MAX_SPATIAL_PARTITIONS 8
+/* SPX/DPX/QPX/CPX are the partition modes an adapter can expose. */
+#define AMDGV_MCP_MAX_PARTITION_MODES 4
+
+/* One spatial partitioning of the adapter into num_partitions partitions, each
+ * described by the physical XCCs it owns and the physical VCNs (decoders) those
+ * XCCs align to. Both the scheduler and gpumon derive their own representations
+ * from this.
+ */
+struct amdgv_spatial_partition_layout {
+	enum spatial_partition_mode mode;
+	uint32_t num_partitions;
+	struct {
+		uint32_t xcc_mask;
+		uint32_t vcn_mask;
+	} part[AMDGV_MCP_MAX_SPATIAL_PARTITIONS];
 };
 
 struct amdgv_mcp {
@@ -39,6 +59,10 @@ struct amdgv_mcp {
 	} numa_range[AMDGV_MAX_NUMA_NODES];
 	struct spatial_partition_gfx gfx;
 
+	/* Spatial partition layouts, built once at init from gfx.xcc_mask. */
+	struct amdgv_spatial_partition_layout partition_layouts[AMDGV_MCP_MAX_PARTITION_MODES];
+	uint32_t num_partition_layouts;
+
 	int (*amdgv_mcp_get_gfx_num_spatial_partitions)(
 		struct amdgv_adapter *adapt, uint32_t *count);
 	int (*amdgv_mcp_get_spatial_partition_mode)(struct amdgv_adapter *adapt, enum spatial_partition_mode *mode);
@@ -54,5 +78,9 @@ int amdgv_mcp_get_xcc_mask_by_idx_part(struct amdgv_adapter *adapt, uint32_t idx
 int amdgv_mcp_get_vf_mask_by_xcc(struct amdgv_adapter *adapt, uint32_t idx_xcc);
 int amdgv_mcp_get_vf_mask_by_aid(struct amdgv_adapter *adapt, uint32_t idx_aid);
 int amdgv_mcp_get_xcp_by_xcc(struct amdgv_adapter *adapt, uint32_t idx_xcc);
+int amdgv_mcp_build_partition_layout(uint32_t xcc_mask, uint32_t max_xcc,
+				     uint32_t max_vcn, uint32_t num_partitions,
+				     struct amdgv_spatial_partition_layout *out);
+void amdgv_mcp_build_partition_layouts(struct amdgv_adapter *adapt);
 
 #endif

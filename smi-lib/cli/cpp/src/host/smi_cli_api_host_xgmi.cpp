@@ -15,6 +15,8 @@
 
 #include "json/json.h"
 
+#include <algorithm>
+#include <climits>
 #include <sstream>
 #ifdef _WIN64
 #include <windows.h>
@@ -38,6 +40,8 @@ typedef amdsmi_status_t (*AMDSMI_SET_XGMI_FB_SHARING_MODE_INFO)(amdsmi_processor
 		amdsmi_xgmi_fb_sharing_mode_t);
 typedef amdsmi_status_t (*AMDSMI_GET_LINK_METRICS)(amdsmi_processor_handle,
 		amdsmi_link_metrics_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_ASIC_INFO)(amdsmi_processor_handle,
+		amdsmi_asic_info_t *);
 
 extern AMDSMI_GET_PROCESSOR_HANDLES host_amdsmi_get_processor_handles;
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
@@ -46,11 +50,160 @@ extern AMDSMI_GET_XGMI_FB_SHARING_CAPS host_amdsmi_get_xgmi_fb_sharing_caps;
 extern AMDSMI_GET_XGMI_FB_SHARING_MODE_INFO host_amdsmi_get_xgmi_fb_sharing_mode_info;
 extern AMDSMI_SET_XGMI_FB_SHARING_MODE_INFO host_amdsmi_set_xgmi_fb_sharing_mode_info;
 extern AMDSMI_GET_LINK_METRICS host_amdsmi_get_link_metrics;
+extern AMDSMI_GET_GPU_ASIC_INFO host_amdsmi_get_gpu_asic_info;
 
 struct amdsmi_link_metrics_values_t {
 	uint64_t read;
 	uint64_t write;
 };
+
+namespace
+{
+
+struct GpuSortKey {
+	unsigned int gpu_index;
+	uint32_t     oam_id;       // UINT32_MAX if unsupported
+	uint64_t     bdf_as_uint;  // amdsmi_bdf_t::as_uint
+};
+
+int collect_gpu_sort_keys(std::vector<GpuSortKey>& keys)
+{
+	unsigned int gpu_count = 0;
+	amdsmi_socket_handle socket = NULL;
+	int ret = host_amdsmi_get_processor_handles(socket, &gpu_count, NULL);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		return ret;
+	}
+	if (gpu_count == 0) {
+		keys.clear();
+		return AMDSMI_STATUS_SUCCESS;
+	}
+
+	std::vector<amdsmi_processor_handle> processors(gpu_count);
+	ret = host_amdsmi_get_processor_handles(socket, &gpu_count, processors.data());
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		return ret;
+	}
+
+	keys.clear();
+	keys.reserve(gpu_count);
+	for (unsigned int i = 0; i < gpu_count; i++) {
+		GpuSortKey k{};
+		k.gpu_index = i;
+		k.oam_id = UINT32_MAX;
+		k.bdf_as_uint = 0;
+
+		amdsmi_bdf_t bdf{};
+		int rc = host_amdsmi_get_gpu_device_bdf(processors[i], &bdf);
+		if (rc == AMDSMI_STATUS_SUCCESS) {
+			k.bdf_as_uint = bdf.as_uint;
+		}
+
+		amdsmi_asic_info_t asic{};
+		rc = host_amdsmi_get_gpu_asic_info(processors[i], &asic);
+		if (rc == AMDSMI_STATUS_SUCCESS) {
+			k.oam_id = asic.oam_id;
+		} else {
+			// Log and keep going so the rest of the table still renders.
+			Logger::getInstance().log(LogLevel::Error, rc, __FUNCTION__, __FILE__, __LINE__);
+		}
+
+		keys.push_back(k);
+	}
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+void sort_keys_by_phy_id(std::vector<GpuSortKey>& keys)
+{
+	std::stable_sort(keys.begin(), keys.end(),
+	[](const GpuSortKey& a, const GpuSortKey& b) {
+		// Unsupported oam_id (UINT32_MAX) sorts last; bdf, then index break ties.
+		if (a.oam_id != b.oam_id) {
+			return a.oam_id < b.oam_id;
+		}
+		if (a.bdf_as_uint != b.bdf_as_uint) {
+			return a.bdf_as_uint < b.bdf_as_uint;
+		}
+		return a.gpu_index < b.gpu_index;
+	});
+}
+
+void sort_keys_by_bdf(std::vector<GpuSortKey>& keys)
+{
+	std::stable_sort(keys.begin(), keys.end(),
+	[](const GpuSortKey& a, const GpuSortKey& b) {
+		if (a.bdf_as_uint != b.bdf_as_uint) {
+			return a.bdf_as_uint < b.bdf_as_uint;
+		}
+		return a.gpu_index < b.gpu_index;
+	});
+}
+
+} // namespace
+
+int build_gpu_display_order(const Arguments& arg, std::vector<unsigned int>& order)
+{
+	order.clear();
+
+	unsigned int gpu_count = 0;
+	amdsmi_socket_handle socket = NULL;
+	int rc = host_amdsmi_get_processor_handles(socket, &gpu_count, NULL);
+	if (rc != AMDSMI_STATUS_SUCCESS) {
+		return rc;
+	}
+
+	std::vector<GpuSortKey> keys;
+	int ret = collect_gpu_sort_keys(keys);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		order.reserve(gpu_count);
+		for (unsigned int i = 0; i < gpu_count; i++) {
+			order.push_back(i);
+		}
+		return ret;
+	}
+
+	if (arg.sort_order == SORT_BDF) {
+		sort_keys_by_bdf(keys);
+	} else {
+		sort_keys_by_phy_id(keys);
+	}
+	order.reserve(keys.size());
+	for (const auto& k : keys) {
+		order.push_back(k.gpu_index);
+	}
+	return AMDSMI_STATUS_SUCCESS;
+}
+
+int sort_arg_devices_for_display(Arguments& arg)
+{
+	if (arg.devices.size() < 2) {
+		return AMDSMI_STATUS_SUCCESS;
+	}
+
+	std::vector<unsigned int> order;
+	int ret = build_gpu_display_order(arg, order);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		return ret;
+	}
+
+	std::vector<int> rank_of(order.size(), -1);
+	for (size_t pos = 0; pos < order.size(); pos++) {
+		if (order[pos] < rank_of.size()) {
+			rank_of[order[pos]] = static_cast<int>(pos);
+		}
+	}
+
+	std::stable_sort(arg.devices.begin(), arg.devices.end(),
+	[&rank_of](const std::shared_ptr<Device>& a, const std::shared_ptr<Device>& b) {
+		int idx_a = a->get_gpu_index();
+		int idx_b = b->get_gpu_index();
+		int ra = (idx_a >= 0 && static_cast<size_t>(idx_a) < rank_of.size()) ? rank_of[idx_a] : INT_MAX;
+		int rb = (idx_b >= 0 && static_cast<size_t>(idx_b) < rank_of.size()) ? rank_of[idx_b] : INT_MAX;
+		return ra < rb;
+	});
+
+	return AMDSMI_STATUS_SUCCESS;
+}
 
 std::string get_xgmi_caps_empty_table()
 {
@@ -100,6 +253,15 @@ int AmdSmiApiHost::amdsmi_get_caps_xgmi_command(Arguments arg, std::string& out)
 	}
 	out.append("\n");
 	return ret;
+}
+
+// Returns the column iteration order for one xgmi sub-table.
+// Empty vector means "no reordering"; callers fall back to natural order.
+static std::vector<unsigned int> resolve_column_order(const Arguments& arg)
+{
+	std::vector<unsigned int> order;
+	build_gpu_display_order(arg, order);
+	return order;
 }
 
 int AmdSmiApiHost::amdsmi_get_fb_sharing_xgmi_command(Arguments arg, std::string& out)
@@ -181,11 +343,18 @@ int AmdSmiApiHost::amdsmi_get_fb_sharing_xgmi_command(Arguments arg, std::string
 				};
 	}
 
+	std::vector<unsigned int> column_order = resolve_column_order(arg);
+
 	for (auto mode : modes) {
 		std::vector<uint8_t> visit_dev_src_indexes = requested_indexes;
 		std::vector<uint8_t> visit_dev_dst_indexes{};
-		for (uint8_t i = 0; i < gpu_count; i++) {
-			visit_dev_dst_indexes.push_back(i);
+		for (auto idx : column_order) {
+			visit_dev_dst_indexes.push_back(static_cast<uint8_t>(idx));
+		}
+		if (visit_dev_dst_indexes.empty()) {
+			for (uint8_t i = 0; i < gpu_count; i++) {
+				visit_dev_dst_indexes.push_back(i);
+			}
 		}
 		uint8_t last_group_src_index{0};
 		uint8_t last_group_dst_index{0};
@@ -293,6 +462,18 @@ int AmdSmiApiHost::amdsmi_get_fb_sharing_xgmi_command(Arguments arg, std::string
 				i += 1;
 			}
 		}
+		// group_matrix is keyed on GPU index, so restore --sort order for output.
+		visit_dev_dst_indexes.clear();
+		for (auto idx : column_order) {
+			visit_dev_dst_indexes.push_back(static_cast<uint8_t>(idx));
+		}
+		if (visit_dev_dst_indexes.empty()) {
+			for (uint8_t k = 0; k < gpu_count; k++) {
+				visit_dev_dst_indexes.push_back(k);
+			}
+		}
+		visit_dev_src_indexes = requested_indexes;
+
 		for (uint8_t i = 1; i < header_row.size(); i++) {
 			mode_matrix[0][i] = bdf_list[visit_dev_dst_indexes[i-1]];
 		}
@@ -355,16 +536,16 @@ int AmdSmiApiHost::amdsmi_get_fb_sharing_xgmi_command(Arguments arg, std::string
 }
 
 void print_first_row(std::string &out,
-					 std::vector<std::string> bdf_vector)
+					 std::vector<std::string> bdf_vector,
+					 const std::vector<unsigned int>& column_order)
 {
-	unsigned int gpu_count;
-	AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
-
 	out.append(string_format("%-10s%-13s%-9s%-14s%-10s", " ",
 							 "bdf","bit_rate","max_bandwidth","link_type"));
-	for (unsigned int i = 0; i < gpu_count; i++) {
-		out.append(string_format("%-13s",
-								 bdf_vector[i].c_str()));
+	for (auto idx : column_order) {
+		if (idx < bdf_vector.size()) {
+			out.append(string_format("%-13s",
+									 bdf_vector[idx].c_str()));
+		}
 	}
 
 	out.append("\n");
@@ -394,13 +575,13 @@ void print_gpu_row(const char *spaces,int gpu_index,
 
 void print_read_write_row(const char *read_write,int gpu_index, int i,
 						  std::string &out, std::vector<std::map<int, amdsmi_link_metrics_values_t>> xgmi_matrix,
-						  unsigned int gpu_count)
+						  const std::vector<unsigned int>& column_order)
 {
 	out.append(string_format("%-3s%-5s%-48s", " ",
 							 read_write," "));
 
-	for (unsigned int j = 0; j < gpu_count; j++) {
-		if(gpu_index == j) {
+	for (auto j : column_order) {
+		if(gpu_index == static_cast<int>(j)) {
 			out.append(string_format("%-13s",
 									 "SELF"));
 		} else {
@@ -414,13 +595,13 @@ void print_read_write_row(const char *read_write,int gpu_index, int i,
 
 void print_read_row(const char *read_write,int gpu_index, int i,
 					std::string &out, std::vector<std::map<int, amdsmi_link_metrics_values_t>> xgmi_matrix,
-					unsigned int gpu_count)
+					const std::vector<unsigned int>& column_order)
 {
 	out.append(string_format("%-3s%-5s%-48s", " ",
 							 read_write," "));
 
-	for (unsigned int j = 0; j < gpu_count; j++) {
-		if(gpu_index == j) {
+	for (auto j : column_order) {
+		if(gpu_index == static_cast<int>(j)) {
 			out.append(string_format("%-13s",
 									 "SELF"));
 		} else {
@@ -437,20 +618,21 @@ void print_all_xgmi_table(size_t gpu_number,
 						  std::string &out, std::vector<std::string> bdf_vector,
 						  amdsmi_link_metrics_t link_metrics,
 						  std::vector<std::map<int, amdsmi_link_metrics_values_t>> xgmi_matrix,
-						  std::vector<std::shared_ptr<Device> > devices, unsigned int gpu_count)
+						  std::vector<std::shared_ptr<Device> > devices, unsigned int gpu_count,
+						  const std::vector<unsigned int>& column_order)
 {
 
 	unsigned int i;
 	int gpu_index;
 
 	out.append(metricXgmiLinkMetricTableTemplate);
-	print_first_row(out,bdf_vector);
+	print_first_row(out, bdf_vector, column_order);
 
 	for (i = 0; i < gpu_number; i++) {
 		gpu_index = devices[i]->get_gpu_index();
 		print_gpu_row("%-s%-7d",gpu_index,out,bdf_vector,link_metrics);
-		print_read_row("READ", gpu_index, i,out,xgmi_matrix, gpu_count);
-		print_read_write_row("WRITE", gpu_index, i,out,xgmi_matrix, gpu_count);
+		print_read_row("READ", gpu_index, i, out, xgmi_matrix, column_order);
+		print_read_write_row("WRITE", gpu_index, i, out, xgmi_matrix, column_order);
 	}
 	out.append("\n");
 }
@@ -538,8 +720,15 @@ int AmdSmiApiHost::amdsmi_get_xgmi_metric_command(Arguments arg, std::string& ou
 		xgmi_matrix.push_back(bdf_value_map);
 	}
 
+	std::vector<unsigned int> column_order = resolve_column_order(arg);
+	if (column_order.empty()) {
+		for (unsigned int k = 0; k < gpu_count; k++) {
+			column_order.push_back(k);
+		}
+	}
+
 	print_all_xgmi_table(gpu_number, out, bdf_vector, link_metrics,
-						 xgmi_matrix, arg.devices, gpu_count);
+						 xgmi_matrix, arg.devices, gpu_count, column_order);
 
 	free(processors);
 	return ret;
@@ -651,10 +840,20 @@ int AmdSmiApiHost::amdsmi_get_xgmi_link_status_command(Arguments arg, std::strin
 		return all;
 	}();
 
+	std::vector<unsigned int> column_order;
+	build_gpu_display_order(arg, column_order);
+	if (column_order.empty()) {
+		for (unsigned int k = 0; k < gpu_count; k++) {
+			column_order.push_back(k);
+		}
+	}
+
 	out.append("XGMI_LINK_STATUS:\n");
 	out.append(string_format("%-13s%-15s", "GPU", "BDF"));
-	for (const auto& col_bdf : bdf_vector) {
-		out.append(string_format("%-15s", col_bdf.c_str()));
+	for (auto idx : column_order) {
+		if (idx < bdf_vector.size()) {
+			out.append(string_format("%-15s", bdf_vector[idx].c_str()));
+		}
 	}
 	out.append("\n");
 
@@ -691,7 +890,11 @@ int AmdSmiApiHost::amdsmi_get_xgmi_link_status_command(Arguments arg, std::strin
 			bdf_to_status[link_bdf] = link_status_string;
 		}
 
-		for (const auto& col_bdf : bdf_vector) {
+		for (auto idx : column_order) {
+			if (idx >= bdf_vector.size()) {
+				continue;
+			}
+			const std::string& col_bdf = bdf_vector[idx];
 			if (row_bdf == col_bdf) {
 				out.append(string_format("%-15s", "SELF"));
 			} else {
@@ -924,7 +1127,15 @@ int AmdSmiApiHost::amdsmi_get_all_xgmi_command(Arguments arg, std::string& out)
 		if (std::find(arg.options.begin(), arg.options.end(), "fb-sharing") != arg.options.end() ||
 				arg.all_arguments) {
 			json["link_metrics"]["fb_sharing"] = nlohmann::ordered_json::array();
-			for (j = 0; j < gpu_count; j++) {
+			std::vector<unsigned int> column_order;
+			build_gpu_display_order(arg, column_order);
+			if (column_order.empty()) {
+				for (unsigned int k = 0; k < gpu_count; k++) {
+					column_order.push_back(k);
+				}
+			}
+			for (auto col_idx : column_order) {
+				j = col_idx;
 				amdsmi_processor_handle destination = processors[j];
 				uint8_t mode1_enabled{0};
 				uint8_t mode2_enabled{0};
@@ -938,27 +1149,27 @@ int AmdSmiApiHost::amdsmi_get_all_xgmi_command(Arguments arg, std::string& out)
 				nlohmann::ordered_json fb_sharing_element = {};
 				fb_sharing_element["gpu"] = j;
 				fb_sharing_element["bdf"] = gpu_bdf;
-				ret = host_amdsmi_get_xgmi_fb_sharing_mode_info(processors[i],
+				ret = host_amdsmi_get_xgmi_fb_sharing_mode_info(processors[gpu_index],
 						processors[j], AMDSMI_XGMI_FB_SHARING_MODE_1, &mode1_enabled);
 				if (ret == 0 && xgmi_caps.cap.mode_1_cap) {
 					fb_sharing_element["mode_1"] = mode1_enabled == 1 ? "ON" : "OFF";
 				}
-				ret = host_amdsmi_get_xgmi_fb_sharing_mode_info(processors[i],
+				ret = host_amdsmi_get_xgmi_fb_sharing_mode_info(processors[gpu_index],
 						processors[j], AMDSMI_XGMI_FB_SHARING_MODE_2, &mode2_enabled);
 				if (ret == 0 && xgmi_caps.cap.mode_2_cap) {
 					fb_sharing_element["mode_2"] = mode2_enabled == 1 ? "ON" : "OFF";
 				}
-				ret = host_amdsmi_get_xgmi_fb_sharing_mode_info(processors[i],
+				ret = host_amdsmi_get_xgmi_fb_sharing_mode_info(processors[gpu_index],
 						processors[j], AMDSMI_XGMI_FB_SHARING_MODE_4, &mode4_enabled);
 				if (ret == 0 && xgmi_caps.cap.mode_4_cap) {
 					fb_sharing_element["mode_4"] = mode4_enabled == 1 ? "ON" : "OFF";
 				}
-				ret = host_amdsmi_get_xgmi_fb_sharing_mode_info(processors[i],
+				ret = host_amdsmi_get_xgmi_fb_sharing_mode_info(processors[gpu_index],
 						processors[j], AMDSMI_XGMI_FB_SHARING_MODE_8, &mode8_enabled);
 				if (ret == 0 && xgmi_caps.cap.mode_8_cap) {
 					fb_sharing_element["mode_8"] = mode8_enabled == 1 ? "ON" : "OFF";
 				}
-				ret = host_amdsmi_get_xgmi_fb_sharing_mode_info(processors[i],
+				ret = host_amdsmi_get_xgmi_fb_sharing_mode_info(processors[gpu_index],
 						processors[j], AMDSMI_XGMI_FB_SHARING_MODE_CUSTOM, &mode_custom_enabled);
 				if (ret == 0 && xgmi_caps.cap.mode_custom_cap) {
 					fb_sharing_element["mode_custom"] = mode_custom_enabled == 1 ? "ON" : "OFF";

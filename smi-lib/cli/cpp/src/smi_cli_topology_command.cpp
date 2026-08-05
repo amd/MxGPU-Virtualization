@@ -12,14 +12,11 @@
 #include "smi_cli_platform.h"
 #include "smi_cli_templates.h"
 #include "smi_cli_api_base.h"
+#include "smi_cli_api_host.h"
 #include "json/json.h"
 
 AmdSmiTopologyCommand::AmdSmiTopologyCommand(Arguments args) : AmdSmiCommands(args)
 {
-	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().initTopology(arg, bdf_vector, nic_bdf_vector);
-	if (ret != 0) {
-		throw SmiToolSMILIBErrorException(ret);
-	}
 }
 
 int AmdSmiTopologyCommand::topology_command_weight(std::string &formatted_string)
@@ -304,6 +301,11 @@ void AmdSmiTopologyCommand::execute_command()
 			|| AmdSmiPlatform::getInstance().is_mi200())
 			&& AmdSmiPlatform::getInstance().getInstance().is_host()) {
 		if ((gpu_count > 1) || (nic_count >= 1 && gpu_count >= 1)) {
+			sort_arg_devices_for_display(arg);
+			int ret = AmdSmiApiBase::CreateAmdSmiApiObject().initTopology(arg, bdf_vector, nic_bdf_vector);
+			if (ret != 0) {
+				throw SmiToolSMILIBErrorException(ret);
+			}
 			if (arg.output == human) {
 				topology_command_human();
 			} else if (arg.output == json) {

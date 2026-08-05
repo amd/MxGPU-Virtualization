@@ -248,7 +248,8 @@ static int mi200_hv_event_process(struct amdgv_adapter *adapt)
 	oss_spin_unlock(adapt->irqmgr.hv_event_lock);
 
 	if (sta_bits != 0)
-		AMDGV_ERROR("some interrupts(0x%x) are not handled\n", intr_bits);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_UNHANDLED_HV_INTR,
+			      AMDGV_LOG_DATA_32_32(sta_bits, intr_bits));
 
 	return 0;
 }
@@ -486,14 +487,14 @@ static int mi200_register_interrupt(struct amdgv_adapter *adapt)
 
 	intr_regrt_info = oss_malloc(sizeof(struct oss_intr_regrt_info));
 	if (intr_regrt_info == NULL) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				sizeof(struct oss_intr_regrt_info));
 		return -1;
 	}
 
 	intr_entries = oss_malloc(sizeof(struct oss_intr_regrt_entry) * 4);
 	if (intr_entries == NULL) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				sizeof(struct oss_intr_regrt_entry) * 4);
 		oss_free(intr_regrt_info);
 		return -1;
@@ -538,7 +539,7 @@ static int mi200_register_interrupt(struct amdgv_adapter *adapt)
 
 	/* register interrupt handler to OS */
 	if (oss_register_interrupt(adapt->dev, intr_regrt_info) != 0) {
-		AMDGV_ERROR("failed to register interrupt handler!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_REGISTER_INTERRUPT_FAIL, 0);
 		goto fail;
 	}
 
@@ -606,7 +607,6 @@ static int mi200_irqmgr_sw_init(struct amdgv_adapter *adapt)
 
 	/* register interrupt handler */
 	if (mi200_register_interrupt(adapt) < 0) {
-		AMDGV_ERROR("failed to register interrupt!\n");
 		return -1;
 	}
 

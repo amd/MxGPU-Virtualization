@@ -35,6 +35,7 @@ enum amdgv_gpumon_type {
 	GPUMON_GET_GPU_POWER_USAGE,
 	GPUMON_GET_GPU_POWER_CAP,
 	GPUMON_SET_GPU_POWER_CAP,
+	GPUMON_GET_GPU_POWER_CAP2,
 	GPUMON_GET_VDDC,
 	GPUMON_GET_DPM_STATUS,
 	GPUMON_GET_PCIE_CONFS,
@@ -140,7 +141,8 @@ extern uint32_t gpumon_unrecov_err_whitelist_len;
 
 struct amdgv_gpumon_funcs {
 	int (*get_gpu_power_usage)(struct amdgv_adapter *adapt, int *val);
-	int (*get_gpu_power_capacity)(struct amdgv_adapter *adapt, int *val);
+	int (*get_gpu_power_capacity)(struct amdgv_adapter *adapt, int *val,
+				      enum amdgv_gpumon_type ppt_type);
 	int (*set_gpu_power_capacity)(struct amdgv_adapter *adapt, int val);
 	int (*get_dpm_status)(struct amdgv_adapter *adapt, int *val);
 	int (*get_dpm_cap)(struct amdgv_adapter *adapt, int *val);

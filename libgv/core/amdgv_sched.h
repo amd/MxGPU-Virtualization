@@ -18,9 +18,9 @@ struct amdgv_live_info_sched;
 /* default gfx time slice is 6ms */
 #define DEFAULT_GFX_TIME_SLICE			6000
 
-/* get asic time slice for gfx*/
-#define GET_GFX_TIME_SLICE(adapt, num_vf)		((adapt->sched.get_asic_time_slice) ? \
-				(adapt->sched.get_asic_time_slice(adapt, AMDGV_SCHED_BLOCK_GFX, num_vf)) : DEFAULT_GFX_TIME_SLICE)
+/* get asic time slice for gfx */
+#define GET_GFX_TIME_SLICE(adapt, num_vf, idx_vf)		((adapt->sched.get_asic_time_slice) ? \
+				(adapt->sched.get_asic_time_slice(adapt, AMDGV_SCHED_BLOCK_GFX, num_vf, idx_vf)) : DEFAULT_GFX_TIME_SLICE)
 /* whether need to switch to pf when submite PSP command */
 #define NEED_SWITCH_TO_PF(adapt) ((adapt->psp.need_switch_to_pf != NULL) ? \
 				(adapt->psp.need_switch_to_pf(adapt)) : true)
@@ -35,13 +35,13 @@ struct amdgv_live_info_sched;
 #define DEFAULT_MM_TIME_SLICE	255000
 /* get multimedia slice is 255ms, since mm use same policy, use UVD for convenient*/
 #define GET_MM_TIME_SLICE(adapt) 		((adapt->sched.get_asic_time_slice) ? \
-				(adapt->sched.get_asic_time_slice(adapt, AMDGV_SCHED_BLOCK_UVD)) : DEFAULT_MM_TIME_SLICE)
+				(adapt->sched.get_asic_time_slice(adapt, AMDGV_SCHED_BLOCK_UVD, 0, 0)) : DEFAULT_MM_TIME_SLICE)
 
 /* different kinds of allowed VF assignment for sched engines (GFX, VCN etc.) */
 #define AMDGV_SCHED_ALLOWED_VF_ASSIGNMENT_ALL  (0xFFFFFFFF)
 
-#define amdgv_sched_default_gfx_time_slice(adapt, num_vf)                                     \
-	((num_vf == 1) ? DEFAULT_GFX_TIME_SLICE_1VF : GET_GFX_TIME_SLICE(adapt, num_vf))
+#define amdgv_sched_default_gfx_time_slice(adapt, num_vf, idx_vf)                                     \
+	((num_vf == 1) ? DEFAULT_GFX_TIME_SLICE_1VF : GET_GFX_TIME_SLICE(adapt, num_vf, idx_vf))
 
 #define AUTO_SCHED_PERF_LOG_CSA_OFFSET		0x1A800
 
@@ -326,8 +326,10 @@ union amdgv_sched_event_data {
 	} poison;
 	struct {
 		uint64_t addr;
+		uint64_t gpu_addr;
 		enum amdgv_migration_manifest_data_type type;
 		int *result;
+		uint64_t size;
 	} lm;
 	struct {
 		uint64_t fb_offset;
@@ -693,7 +695,7 @@ struct amdgv_sched {
 	bool skip_full_access_timeout_check;
 
 	void (*dump_gpu_state)(struct amdgv_adapter *adapt);
-	uint32_t (*get_asic_time_slice)(struct amdgv_adapter *adapt, enum amdgv_sched_block sched_block, uint32_t num_vf);
+	uint32_t (*get_asic_time_slice)(struct amdgv_adapter *adapt, enum amdgv_sched_block sched_block, uint32_t num_vf, uint32_t idx_vf);
 	uint32_t (*cp_sched_state)(struct amdgv_adapter *adapt, uint32_t idx_vf);
 	/* Enable/Disable CG */
 	int (*cg_control)(struct amdgv_adapter *adapt, bool enable);
@@ -836,7 +838,7 @@ uint32_t amdgv_sched_time_slice_to_bandwidth(struct amdgv_adapter *adapt,
 
 void amdgv_sched_setup_self_switch(struct amdgv_adapter *adapt, bool enable);
 
-uint32_t amdgv_sched_get_asic_time_slice(struct amdgv_adapter *adapt, enum amdgv_sched_block sched_block, uint32_t num_vf);
+uint32_t amdgv_sched_get_asic_time_slice(struct amdgv_adapter *adapt, enum amdgv_sched_block sched_block, uint32_t num_vf, uint32_t idx_vf);
 
 int amdgv_sched_set_time_slice(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_t time_slice,
 							   enum amdgv_sched_block sched_block);
@@ -845,8 +847,9 @@ int amdgv_sched_part_mapping_init(struct amdgv_adapter *adapt);
 
 int amdgv_sched_get_hliquid_min_ts(struct amdgv_adapter *adapt);
 int amdgv_sched_set_hliquid_min_ts(struct amdgv_adapter *adapt, int hliquid_min_ts);
-int amdgv_sched_set_auto_sched_log_feature(struct amdgv_adapter *adapt, uint32_t hw_sched_id, enum amdgv_auto_sched_log_op op, bool enable);
+int amdgv_sched_set_auto_sched_log_feature(struct amdgv_adapter *adapt, uint32_t hw_sched_id, enum amdgv_sched_log_op op, bool enable);
 int amdgv_sched_read_perf_log_data(struct amdgv_adapter *adapt);
+int amdgv_sched_dump_ts_log_data(struct amdgv_adapter *adapt);
 int amdgv_sched_handle_req_gpu_init_data(struct amdgv_adapter *adapt, uint32_t idx_vf);
 #ifdef WS_RECORD
 void amdgv_sched_debug_dump_data_flush(struct amdgv_adapter *adapt);
@@ -863,5 +866,6 @@ bool amdgv_sched_is_unrecov_err(struct amdgv_adapter *adapt);
 void amdgv_sched_clear_dirty_vf_fb(struct amdgv_adapter *adapt, int vf_idx);
 int amdgv_sched_toggle_perflog(struct amdgv_adapter *adapt, bool enable, uint32_t hw_sched_id);
 
-int amdgv_sched_set_ws_log_op(struct amdgv_adapter *adapt, enum amdgv_auto_sched_log_op op, bool enable);
+int amdgv_sched_set_ws_log_op(struct amdgv_adapter *adapt, enum amdgv_sched_log_op op, bool enable);
+int amdgv_sched_pause_vf(struct amdgv_adapter *adapt, uint32_t idx_vf);
 #endif

@@ -10,41 +10,41 @@
 #define SET_ADAPT_AND_CHECK_STATUS(adapt, dev)                                                \
 	do {                                                                                  \
 		if (dev == AMDGV_INVALID_HANDLE)                                              \
-			return AMDGV_ERROR_GPU_DEVICE_LOST;                                   \
+			return AMDGV_LOG_GPU_DEVICE_LOST;                                   \
 		adapt = (struct amdgv_adapter *)dev;                                          \
 		if (adapt->status == AMDGV_STATUS_SW_INIT)                                    \
-			return AMDGV_ERROR_GPU_NOT_INITIALIZED;                               \
+			return AMDGV_LOG_GPU_NOT_INITIALIZED;                               \
 		if (adapt->status != AMDGV_STATUS_HW_INIT)                                    \
-			return AMDGV_ERROR_DRIVER_DEV_INIT_FAIL;                              \
+			return AMDGV_LOG_DRIVER_DEV_INIT_FAIL;                              \
 	} while (0)
 
 /* GPU is in RMA state due to excessive bad pages, but otherwise HW is still healthy. */
 #define SET_ADAPT_AND_CHECK_STATUS_NOT_LOST(adapt, dev)                                       \
 	do {                                                                                  \
 		if (dev == AMDGV_INVALID_HANDLE)                                              \
-			return AMDGV_ERROR_GPU_DEVICE_LOST;                                   \
+			return AMDGV_LOG_GPU_DEVICE_LOST;                                   \
 		adapt = (struct amdgv_adapter *)dev;                                          \
 		if (adapt->status == AMDGV_STATUS_SW_INIT)                                    \
-			return AMDGV_ERROR_GPU_NOT_INITIALIZED;                               \
+			return AMDGV_LOG_GPU_NOT_INITIALIZED;                               \
 		if (!(adapt->status == AMDGV_STATUS_HW_INIT) &&                               \
 		    !(adapt->status == AMDGV_STATUS_HW_RMA)  &&                               \
 		    !(adapt->status == AMDGV_STATUS_HW_HIVE_RMA))                             \
-			return AMDGV_ERROR_DRIVER_DEV_INIT_FAIL;                              \
+			return AMDGV_LOG_DRIVER_DEV_INIT_FAIL;                              \
 	} while (0)
 
 /* GPU is in a bad state. Limit driver to SW operations only */
 #define SET_ADAPT_AND_CHECK_STATUS_MINIMAL(adapt, dev)                                        \
 	do {                                                                                  \
 		if (dev == AMDGV_INVALID_HANDLE)                                              \
-			return AMDGV_ERROR_GPU_DEVICE_LOST;                                   \
+			return AMDGV_LOG_GPU_DEVICE_LOST;                                   \
 		adapt = (struct amdgv_adapter *)dev;                                          \
 		if (adapt->status == AMDGV_STATUS_SW_INIT)                                    \
-			return AMDGV_ERROR_GPU_NOT_INITIALIZED;                               \
+			return AMDGV_LOG_GPU_NOT_INITIALIZED;                               \
 		if (!(adapt->status == AMDGV_STATUS_HW_INIT)     &&                           \
 		    !(adapt->status == AMDGV_STATUS_HW_RMA)      &&                           \
 		    !(adapt->status == AMDGV_STATUS_HW_HIVE_RMA) &&                           \
 		    !(adapt->status == AMDGV_STATUS_HW_LOST))                                 \
-			return AMDGV_ERROR_DRIVER_DEV_INIT_FAIL;                              \
+			return AMDGV_LOG_DRIVER_DEV_INIT_FAIL;                              \
 	} while (0)
 
 int amdgv_int_allocate_vf(struct amdgv_adapter *adapt, struct amdgv_vf_option *option);

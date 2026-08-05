@@ -9,7 +9,7 @@
 #include <amdgv.h>
 #include <amdgv_device.h>
 
-#define AMDGV_VF_NPS_MAX_COMBINATIONS		4
+#define AMDGV_VF_NPS_MAX_COMBINATIONS		5
 #define AMDGV_NPS_COMPUTE_MAX_COMBINATIONS	12
 
 struct amdgv_nps_compute_combination {

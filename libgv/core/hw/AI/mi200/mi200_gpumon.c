@@ -188,12 +188,12 @@ static int mi200_get_card_form_factor(struct amdgv_adapter *adapt,
 }
 
 static int mi200_get_gpu_power_capacity(struct amdgv_adapter *adapt,
-					 int *val)
+					 int *val, enum amdgv_gpumon_type ppt_type)
 {
 	int ret = AMDGV_FAILURE;
 
 	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->get_power_capacity) {
-		ret = adapt->pp.pp_funcs->get_power_capacity(adapt, val);
+		ret = adapt->pp.pp_funcs->get_power_capacity(adapt, val, ppt_type);
 		if (ret != 0)
 			*val = 0;
 	}
@@ -304,7 +304,7 @@ static int mi200_get_xgmi_fb_sharing_mode_info(struct amdgv_adapter *src_adapt,
 
 	libgv_mode = gpumon_to_xgmi_fb_sharing_mode(mode);
 	if (libgv_mode > MI200_XGMI_MAX_SUPPORTED_MODE)
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
 	hive = amdgv_get_xgmi_hive(src_adapt);
 	if (hive && amdgv_xgmi_is_node_in_hive(hive, dest_adapt)) {
@@ -337,7 +337,7 @@ static int mi200_set_xgmi_fb_sharing_mode(struct amdgv_adapter *adapt,
 
 	libgv_mode = gpumon_to_xgmi_fb_sharing_mode(mode);
 	if (libgv_mode > MI200_XGMI_MAX_SUPPORTED_MODE)
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
 	ret = amdgv_xgmi_update_topology_with_fb_sharing_mode(adapt, libgv_mode);
 
@@ -355,7 +355,7 @@ static int mi200_set_xgmi_fb_sharing_mode_ex(struct amdgv_adapter *adapt,
 
 	libgv_mode = gpumon_to_xgmi_fb_sharing_mode(mode);
 	if (libgv_mode > MI200_XGMI_MAX_SUPPORTED_MODE)
-		return AMDGV_ERROR_GPUMON_NOT_SUPPORTED;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
 	adapt->xgmi.custom_mode_sharing_mask = 0;
 

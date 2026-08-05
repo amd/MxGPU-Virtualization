@@ -200,7 +200,7 @@ enum {
 	AMDGV_SECURITY_BLOCK		= (1 << 9),
 	AMDGV_XGMI_BLOCK		= (1 << 10),
 	AMDGV_SDMA_BLOCK		= (1 << 11),
-	AMDGV_SRIOV_DRV_BLOCK		= (1 << 12),
+	AMDGV_IOVM_DRV_BLOCK		= (1 << 12),
 	AMDGV_UAL_BLOCK			= (1 << 13),
 	AMDGV_MAX_LOG_BLOCK
 };
@@ -748,6 +748,9 @@ enum amdgv_migration_vf_state {
 	AMDGV_MIGRATION_VF_STATE_DEFAULT = 0,
 	AMDGV_MIGRATION_VF_STATE_PRE_COPY = 1,
 	AMDGV_MIGRATION_VF_STATE_STOP_COPY = 2,
+	AMDGV_MIGRATION_VF_STATE_EXPORT,
+	AMDGV_MIGRATION_VF_STATE_IMPORT,
+	AMDGV_MIGRATION_VF_STATE_MAX
 };
 
 enum amdgv_asymmetric_fb_mode {
@@ -756,10 +759,11 @@ enum amdgv_asymmetric_fb_mode {
 	AMDGV_ASYMMETRIC_FB_MODE_MAX
 };
 
-enum amdgv_auto_sched_log_op {
-	AMDGV_AUTO_SCHED_PERF_LOG,
-	AMDGV_AUTO_SCHED_DEBUG_DUMP,
-	AMDGV_AUTO_SCHED_DEBUG_UNKNOWN
+enum amdgv_sched_log_op {
+	AMDGV_SCHED_PERF_LOG = 0x1,
+	AMDGV_SCHED_DEBUG_DUMP = 0x2,
+	AMDGV_SCHED_TS_LOG = 0x3,
+	AMDGV_SCHED_DEBUG_UNKNOWN = 0xF
 };
 
 enum amdgv_bad_page_detection_mode {
@@ -900,6 +904,11 @@ struct amdgv_init_config_opt {
 
 	/* the length of time between thermal throttling events, in unit of microseconds */
 	uint32_t thermal_throttle_rate_limit;
+
+	bool unified_ras_enabled;
+	int32_t sys_log_level;
+
+	uint32_t shader_hash_mode;
 };
 
 struct amdgv_fini_config_opt {
@@ -1835,6 +1844,12 @@ struct amdgv_perf_log_info {
 		uint32_t skipped_cycle_cnt;
 		uint32_t yield_cnt;
 	} vf_perf_log_info[AMDGV_MAX_VF_SLOT];
+};
+
+struct amdgv_ras_ioctl_cmd {
+	uint32_t version;
+	uint32_t data_len;
+	uint64_t data_addr;
 };
 
 /**
@@ -2790,6 +2805,15 @@ bool amdgv_is_migration_supported(amdgv_dev_t dev);
 bool amdgv_migration_pre_copy_supported(amdgv_dev_t dev);
 
 /*
+ * amdgv_migration_end - End Live Migration
+ *
+ * @dev:	amdgv device handle
+ * @idx_vf:	target VF
+ *
+ */
+ int amdgv_migration_end(amdgv_dev_t dev, uint32_t idx_vf);
+
+/*
  * amdgv_migration_export - export PSP package for migration
  *
  * @dev:	amdgv device handle
@@ -2802,16 +2826,52 @@ int amdgv_migration_export(amdgv_dev_t dev, uint32_t idx_vf,
 	void *buf, enum amdgv_migration_export_phase type);
 
 /*
+ * amdgv_migration_export_ex - export PSP package for migration
+ *
+ * Same as amdgv_migration_export, but the caller also supplies the GPU
+ * address of @buf (must be GART-mapped) so the copy out of the PF scratch
+ * buffer can be offloaded to SDMA. Pass gpu_addr == 0 to force the CPU copy.
+ *
+ * @dev:	amdgv device handle
+ * @idx_vf:	target VF
+ * @buf:	dst cpu address to export pkg data (used for the CPU fallback)
+ * @gpu_addr:	GPU address of @buf, or 0 if not GART-mapped
+ * @phase:	enum value to indicate export phases
+ *
+ */
+int amdgv_migration_export_ex(amdgv_dev_t dev, uint32_t idx_vf,
+	void *buf, uint64_t gpu_addr, enum amdgv_migration_export_phase phase);
+
+/*
  * amdgv_migration_import - import PSP package for migration
  *
  * @dev:	amdgv device handle
  * @idx_vf:	target VF
  * @buf:	src address to import pkg data
+ * @size:	size in bytes of the data pointed to by @buf
  * @phase:	enum value to indicate import phases
  *
  */
 int amdgv_migration_import(amdgv_dev_t dev, uint32_t idx_vf,
-	void *buf, enum amdgv_migration_import_phase phase);
+	void *buf, uint64_t size, enum amdgv_migration_import_phase phase);
+
+/*
+ * amdgv_migration_import_ex - import PSP package for migration
+ *
+ * Same as amdgv_migration_import, but the caller also supplies the GPU
+ * address of @buf (must be GART-mapped) so the copy into the PF scratch
+ * buffer can be offloaded to SDMA. Pass gpu_addr == 0 to force the CPU copy.
+ *
+ * @dev:	amdgv device handle
+ * @idx_vf:	target VF
+ * @buf:	src cpu address to import pkg data (used for the CPU fallback)
+ * @gpu_addr:	GPU address of @buf, or 0 if not GART-mapped
+ * @size:	size in bytes of the data pointed to by @buf
+ * @phase:	enum value to indicate import phases
+ *
+ */
+int amdgv_migration_import_ex(amdgv_dev_t dev, uint32_t idx_vf,
+	void *buf, uint64_t gpu_addr, uint64_t size, enum amdgv_migration_import_phase phase);
 
 /*
  * amdgv_get_migration_data_size - get size for migration data
@@ -2918,7 +2978,19 @@ struct amdgv_fb_copy_entry {
 	uint64_t size;
 	uint64_t gpu_addr;
 	void *vaddr;
+	/* Optional sysmem transfer-buffer DMA handle (struct oss_dma_mem_info *)
+	 * this entry's vaddr belongs to. When set, libgv flushes the entry's
+	 * range around the copy (FROM_MEMORY before a to_fb copy, TO_MEMORY after
+	 * a from_fb copy) so the OS caller need not sync CPU/SDMA writes. */
+	void *dma_handle;
 };
+
+#define AMDGV_FB_COPY_ENTRY_FLUSHABLE(dma_mem, entry) \
+	((dma_mem) != NULL && \
+	 (char *)(entry)->vaddr >= (char *)(dma_mem)->va_ptr && \
+	 (entry)->size <= (dma_mem)->size && \
+	 (char *)(entry)->vaddr + (entry)->size <= \
+		(char *)(dma_mem)->va_ptr + (dma_mem)->size)
 
 /*
  * amdgv_vf_fb_copy_async - async copy VF FB data to/from VF FB.
@@ -3107,6 +3179,13 @@ int amdgv_update_spirom(amdgv_dev_t dev);
 int amdgv_get_vbflash_status(amdgv_dev_t dev, uint32_t *status);
 
 int amdgv_set_rlcv_timestamp_dump(amdgv_dev_t dev, uint64_t enable);
+/*
+ * amdgv_dump_rlcv_timestamp_log - dump rlcv timestamp log
+ *
+ * @dev:	amdgv device handle
+ *
+ */
+int amdgv_dump_rlcv_timestamp_log(amdgv_dev_t dev);
 /*
  * amdgv_ffbm_vf_map - ffbm mapping
  *
@@ -3455,6 +3534,9 @@ int amdgv_register_interrupt_handler(amdgv_dev_t dev, enum amdgv_interrupt_handl
 int amdgv_gpu_timer(amdgv_dev_t dev, uint64_t micro_seconds);
 
 int amdgv_error_ring_buffer_dump(amdgv_dev_t dev, char *buf, int len);
+int amdgv_info_ring_buffer_dump(amdgv_dev_t dev, char *buf, int len);
+int amdgv_debug_ring_buffer_dump(amdgv_dev_t dev, char *buf, int len);
+int amdgv_combined_ring_buffer_dump(amdgv_dev_t dev, char *buf, int len);
 
 /**
  * amdgv_is_service_vm_enabled
@@ -3467,6 +3549,8 @@ int amdgv_error_ring_buffer_dump(amdgv_dev_t dev, char *buf, int len);
  * true for yes, false for not.
  */
 bool amdgv_is_service_vm_enabled(amdgv_dev_t dev);
+
+int amdgv_handle_ras_ioctl_cmd(amdgv_dev_t dev, struct amdgv_ras_ioctl_cmd *data);
 
 /**
  * amdgv_write_virtualized_interrupt

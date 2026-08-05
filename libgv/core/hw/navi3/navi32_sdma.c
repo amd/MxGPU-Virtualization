@@ -41,7 +41,11 @@ static void navi32_sdma_ring_submit_frame(struct amdgv_ring *ring, uint8_t *fram
 	uint64_t ring_byte_wptr;
 
 	for (i = 0; i < ring->max_dw; i++) {
-		ring->ring[dword_wptr++] = data32[i];
+		ring->ring[dword_wptr + i] = data32[i];
+	}
+	for (i = 0; i < ring->max_dw; i++) {
+		if (ring->ring[dword_wptr + i] != data32[i])
+			ring->ring[dword_wptr + i] = data32[i];
 	}
 	ring->wptr += ring->max_dw;
 

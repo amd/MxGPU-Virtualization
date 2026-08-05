@@ -22,6 +22,8 @@ int smi_get_gpu_driver_info(struct smi_ctx *ctx, void *inb,
 				void *outb, uint16_t in_len, uint16_t out_len);
 int smi_get_gpu_power_cap_info(struct smi_ctx *ctx, void *inb,
 				void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_supported_power_cap(struct smi_ctx *ctx, void *inb,
+				void *outb, uint16_t in_len, uint16_t out_len);
 int smi_get_gpu_fb_info(struct smi_ctx *ctx, void *inb,
 				void *outb, uint16_t in_len, uint16_t out_len);
 int smi_get_gpu_cache_info(struct smi_ctx *ctx, void *inb,

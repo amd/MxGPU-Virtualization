@@ -247,13 +247,13 @@ int gim_guard_init_dev_sys(struct pci_dev *pdev)
 
 	ret = device_create_file(&pdev->dev, &dev_attr_guard_status);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
 		goto err_guard_status;
 	}
 
 	ret = device_create_file(&pdev->dev, &dev_attr_guard_threshold);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
 		goto err_guard_threshold;
 	}
 
@@ -433,13 +433,13 @@ int gim_guard_init_drv_sys(struct device_driver *drv)
 
 	ret = driver_create_file(drv, &driver_attr_guard_status);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DRIVER_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DRIVER_FILE_FAIL, 0);
 		goto err_guard_status;
 	}
 
 	ret = driver_create_file(drv, &driver_attr_guard_threshold);
 	if (ret) {
-		gim_put_error(AMDGV_ERROR_DRIVER_CREATE_DRIVER_FILE_FAIL, 0);
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DRIVER_FILE_FAIL, 0);
 		goto err_guard_threshold;
 	}
 

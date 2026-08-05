@@ -94,8 +94,8 @@ int gim_error_read_buffer(struct gim_error_ring_buffer *rb,
 	/* check overflow */
 	if (wr_diff > GIM_ERROR_BUF_SIZE) {
 		entry->timestamp  = (uint64_t)ktime_to_us(ktime_get());
-		entry->error_code = AMDGV_ERROR_DRIVER_BUFFER_OVERFLOW;
-		entry->error_data = wr_diff - GIM_ERROR_BUF_SIZE;
+		entry->log_code = AMDGV_LOG_DRIVER_BUFFER_OVERFLOW;
+		entry->log_data = wr_diff - GIM_ERROR_BUF_SIZE;
 
 		rb->read_count = write_count - GIM_ERROR_BUF_SIZE;
 	} else {
@@ -141,12 +141,12 @@ int gim_put_error_int(struct gim_error_ring_buffer *rb,
 
 	if (rb) {
 		entry.timestamp = (uint64_t)ktime_to_us(ktime_get());
-		entry.error_code = error_code;
-		entry.error_data = error_data;
+		entry.log_code = error_code;
+		entry.log_data = error_data;
 		gim_error_write_buffer(rb, &entry);
 	}
 
-	amdgv_error_get_error_text(error_code, error_data,
+	amdgv_log_get_text(error_code, error_data,
 				print_buf, BUFFER_SIZE);
 
 	printk(KERN_ERR GIM_ERROR_PRINT_HEADER "%s\n",

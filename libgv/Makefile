@@ -9,7 +9,7 @@ LIBGV_PATH := $(dir $(lastword $(MAKEFILE_LIST)))
 LIBGV_CCFLAGS = -D MAJOR_VERSION=0 -D MINOR_VERSION=0 -D SUBMINOR_VERSION=0
 LIBGV_CCFLAGS += -D RWLOCK
 
-LIBGV_CCFLAGS += -I $(LIBGV_PATH)/inc -I $(LIBGV_PATH)/core -I $(LIBGV_PATH)/core/hw/common
+LIBGV_CCFLAGS += -I $(LIBGV_PATH)/inc -I $(LIBGV_PATH)/core -I $(LIBGV_PATH)/core/hw/common -I $(LIBGV_PATH)/core/hwip -I $(LIBGV_PATH)/core/hwip/psp -I $(LIBGV_PATH)/core/hwip/ucode/psp
 
 LIBGV_CCFLAGS += -I $(LIBGV_PATH)/core/hw/AI -I $(LIBGV_PATH)/core/hw/AI/asic_reg
 	LIBGV_CCFLAGS += -I $(LIBGV_PATH)/core/hw/AI/mi200
@@ -17,6 +17,8 @@ LIBGV_CCFLAGS += -I $(LIBGV_PATH)/core/hw/AI -I $(LIBGV_PATH)/core/hw/AI/asic_re
 LIBGV_CCFLAGS += -I $(LIBGV_PATH)/core/hw/AI/mi300
 
 LIBGV_CCFLAGS += -I $(LIBGV_PATH)/core/hw/navi3 -I $(LIBGV_PATH)/core/hw/navi3/asic_reg
+
+LIBGV_CCFLAGS += -I $(LIBGV_PATH)/../uniras/ras -I $(LIBGV_PATH)/../uniras/ras/amdgv_ras_mgr -I $(LIBGV_PATH)/../uniras/ras/rascore
 
 
 ifeq ($(enable_gcov), true)

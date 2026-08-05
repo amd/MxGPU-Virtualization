@@ -113,7 +113,7 @@ int amdgv_ras_eeprom_reset_table(struct amdgv_adapter *adapt,
 	if (adapt->ras_eeprom.funcs && adapt->ras_eeprom.funcs->reset_table)
 		ret = adapt->ras_eeprom.funcs->reset_table(adapt, control);
 	else
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_EEPROM_RESET_FAILED, 0);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_RESET_FAILED, 0);
 
 	return ret;
 }
@@ -144,7 +144,13 @@ bool amdgv_ras_eeprom_is_header_bad(struct amdgv_adapter *adapt)
 
 bool amdgv_ras_eeprom_is_gpu_bad(struct amdgv_adapter *adapt)
 {
+#if defined(AMDGV_UNIRAS_SUPPORT)
+	if (amdgv_uniras_enabled(adapt))
+		return amdgv_ras_mgr_is_rma(adapt);
+	else if (adapt->ras_eeprom.funcs && adapt->ras_eeprom.funcs->is_gpu_bad)
+#else
 	if (adapt->ras_eeprom.funcs && adapt->ras_eeprom.funcs->is_gpu_bad)
+#endif
 		return adapt->ras_eeprom.funcs->is_gpu_bad(adapt);
 	else
 		AMDGV_ERROR("Cannot check if GPU is bad.\n");
@@ -169,7 +175,7 @@ int amdgv_ras_eeprom_version_init(struct amdgv_adapter *adapt)
 				 * Ignore the configured bad page threshold if set by user.
 				 */
 				if (adapt->opt.bad_page_record_threshold > 0)
-					amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_ECC_EEPROM_CONFIG_BP_THD_NOT_SUPPORTED, 0);
+					amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_CONFIG_BP_THD_NOT_SUPPORTED, 0);
 
 				adapt->umc.eeprom_version = EEPROM_TABLE_VER_V4;
 				AMDGV_INFO("Using EEPROM format v4.0.\n");

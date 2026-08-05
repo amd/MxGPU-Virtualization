@@ -118,7 +118,7 @@ void AmdSmiDefaultCommand::gather_gpu_row_data(size_t i, DefaultCommandData &dat
 
 	std::string hotspot_temperature{"N/A"};
 	std::string mem_temp{"N/A"};
-	if (AmdSmiPlatform::getInstance().is_host()) {
+	if (AmdSmiPlatform::getInstance().is_host() || AmdSmiPlatform::getInstance().is_baremetal()) {
 		ret = default_command_temperature(proc_bdf, hotspot_temperature);
 		if (ret == 0) {
 			std::vector<std::string> temp_data{split_string(hotspot_temperature, ',')};

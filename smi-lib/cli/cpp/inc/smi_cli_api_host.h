@@ -9,6 +9,14 @@
 
 #include "tabulate/tabulate.hpp"
 
+// Build a permutation of GPU indices in the requested display order
+// (phy_id by default, bdf if requested). On failure falls back to natural
+// order and returns a non-zero amdsmi status.
+int build_gpu_display_order(const Arguments& arg, std::vector<unsigned int>& order);
+
+// Reorder arg.devices to match build_gpu_display_order(); no-op for <2 GPUs.
+int sort_arg_devices_for_display(Arguments& arg);
+
 class AmdSmiApiHost : public AmdSmiApiBase
 {
 private:

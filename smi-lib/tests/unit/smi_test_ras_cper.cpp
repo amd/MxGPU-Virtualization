@@ -58,8 +58,8 @@ TEST_F(AmdSmiRasCperTests, InvalidParams)
     uint64_t cursor = 0;
     uint32_t severity_mask = 0;
 
-    uint64_t afids[MAX_NUMBER_OF_AFIDS_PER_RECORD];
-    uint32_t num_afids = MAX_NUMBER_OF_AFIDS_PER_RECORD;
+    uint64_t afids[AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD];
+    uint32_t num_afids = AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD;
 
     ret = amdsmi_get_gpu_cper_entries(NULL, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, &cursor);
     ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
@@ -165,8 +165,8 @@ TEST_F(AmdSmiRasCperTests, GetCperEntriesSuccess)
 TEST_F(AmdSmiRasCperTests, AfidBufferTooSmall) {
     int ret;
     char cper_buffer[16]; // Insufficient buffer size
-    uint64_t afids[MAX_NUMBER_OF_AFIDS_PER_RECORD];
-    uint32_t num_afids = MAX_NUMBER_OF_AFIDS_PER_RECORD;
+    uint64_t afids[AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD];
+    uint32_t num_afids = AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD;
 
     ret = amdsmi_get_afids_from_cper(cper_buffer, sizeof(cper_buffer), afids, &num_afids);
     ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
@@ -175,8 +175,8 @@ TEST_F(AmdSmiRasCperTests, AfidBufferTooSmall) {
 TEST_F(AmdSmiRasCperTests, AfidInvalidSignature) {
     int ret;
     char cper_buffer[1024];
-    uint64_t afids[MAX_NUMBER_OF_AFIDS_PER_RECORD];
-    uint32_t num_afids = MAX_NUMBER_OF_AFIDS_PER_RECORD;
+    uint64_t afids[AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD];
+    uint32_t num_afids = AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD;
 
     // Set an invalid signature in the CPER buffer
     memset(cper_buffer, 0, sizeof(cper_buffer));
@@ -187,8 +187,8 @@ TEST_F(AmdSmiRasCperTests, AfidInvalidSignature) {
 TEST_F(AmdSmiRasCperTests, AfidValidInput) {
     int ret;
     char cper_buffer[1024];
-    uint64_t afids[MAX_NUMBER_OF_AFIDS_PER_RECORD];
-    uint32_t num_afids = MAX_NUMBER_OF_AFIDS_PER_RECORD;
+    uint64_t afids[AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD];
+    uint32_t num_afids = AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD;
 
     // Set a valid CPER signature
     memcpy(cper_buffer, "CPER", 4);
@@ -196,13 +196,13 @@ TEST_F(AmdSmiRasCperTests, AfidValidInput) {
 
     ret = amdsmi_get_afids_from_cper(cper_buffer, sizeof(cper_buffer), afids, &num_afids);
     ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
-    ASSERT_LE(num_afids, static_cast<uint32_t>(MAX_NUMBER_OF_AFIDS_PER_RECORD));
+    ASSERT_LE(num_afids, static_cast<uint32_t>(AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD));
 }
 
 TEST_F(AmdSmiRasCperTests, AfidSectionTypeNonStandard) {
     char buffer[1024] = {};
-    uint64_t afids[MAX_NUMBER_OF_AFIDS_PER_RECORD] = {};
-    uint32_t num_afids = MAX_NUMBER_OF_AFIDS_PER_RECORD;
+    uint64_t afids[AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD] = {};
+    uint32_t num_afids = AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD;
 
     // Fill header and section for GPU_NONSTANDARD_ERROR
     fill_cper_header_and_section(buffer, 1, GPU_NONSTANDARD_ERROR, sizeof(amdsmi_cper_hdr_t) + sizeof(struct cper_sec_desc));
@@ -218,8 +218,8 @@ TEST_F(AmdSmiRasCperTests, AfidSectionTypeNonStandard) {
 
 TEST_F(AmdSmiRasCperTests, AfidSectionTypeCrashdump) {
     char buffer[1024] = {};
-    uint64_t afids[MAX_NUMBER_OF_AFIDS_PER_RECORD] = {};
-    uint32_t num_afids = MAX_NUMBER_OF_AFIDS_PER_RECORD;
+    uint64_t afids[AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD] = {};
+    uint32_t num_afids = AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD;
 
     // Fill header and section for CRASHDUMP
     fill_cper_header_and_section(buffer, 1, CRASHDUMP, sizeof(amdsmi_cper_hdr_t) + sizeof(struct cper_sec_desc));

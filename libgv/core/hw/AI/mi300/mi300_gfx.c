@@ -243,9 +243,6 @@ int mi300_gfx_init_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 		}
 	}
 
-	if (mi300_gfx_wait_for_grbm(adapt, idx_vf))
-		AMDGV_WARN("GRBM_STATUS2 is not clean for FLR\n");
-
 	return 0;
 }
 

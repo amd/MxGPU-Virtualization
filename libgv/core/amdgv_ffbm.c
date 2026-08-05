@@ -925,7 +925,7 @@ void amdgv_ffbm_reserve_all_bad_pages(struct amdgv_adapter *adapt)
 
 	record = oss_zalloc(sizeof(*record));
 	if (!record) {
-		amdgv_put_error(AMDGV_PF_IDX, AMDGV_ERROR_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
 				sizeof(struct eeprom_table_record));
 		return;
 	}

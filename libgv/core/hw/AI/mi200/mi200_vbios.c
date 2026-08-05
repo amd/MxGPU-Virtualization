@@ -456,7 +456,7 @@ static int mi200_vbios_early_hw_init(struct amdgv_adapter *adapt)
 		if (psp_v13_wait_sos_loaded_status(adapt) &&
 		    mi200_smu_13_0_get_fw_loaded_status(adapt) &&
 			adapt->xgmi.phy_nodes_num < 2) {
-			r = mi200_reset_trigger_whole_gpu_reset(adapt);
+			r = amdgv_reset_hw_for_reload(adapt, false);
 			if (r)
 				goto failed;
 		} else

@@ -300,11 +300,11 @@ void SmiCliArgumentFactory::initialize_metric_arguments()
 					   "If no metric information argument is provided all metric information will be displayed",
 					   "<gpu_index:vf_index | vf_bdf | vf_uuid>"));
 
-	arguments_.emplace("schedule", SmiCliArgument("", "--schedule", "All scheduling info", "", true));
-	arguments_.emplace("guard", SmiCliArgument("", "--guard", "All guard information", "", true));
-	arguments_.emplace("guest-data", SmiCliArgument("", "--guest-data", "All guest data information",
+	arguments_.emplace("schedule", SmiCliArgument("-s", "--schedule", "All scheduling info", "", true));
+	arguments_.emplace("guard", SmiCliArgument("-G", "--guard", "All guard information", "", true));
+	arguments_.emplace("guest-data", SmiCliArgument("-u", "--guest-data", "All guest data information",
 					   "", true));
-	arguments_.emplace("per-partition", SmiCliArgument("", "--per-partition",
+	arguments_.emplace("per-partition", SmiCliArgument("-pp", "--per-partition",
 					   "All metric per partition information", "", true));
 
 	arguments_.emplace("watch_time", SmiCliArgument("-W", "--watch_time",
@@ -336,6 +336,9 @@ void SmiCliArgumentFactory::initialize_topology_arguments()
 	arguments_.emplace("dma", SmiCliArgument("", "--dma", "dma link capability information"));
 	arguments_.emplace("numa", SmiCliArgument("", "--numa",
 					   "NUMA node information"));
+	arguments_.emplace("sort", SmiCliArgument("", "--sort",
+					   "Sort GPUs in the output by physical id or PCIe BDF (default)",
+					   "phy_id|bdf"));
 }
 
 void SmiCliArgumentFactory::initialize_device_arguments()
