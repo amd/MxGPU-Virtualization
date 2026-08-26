@@ -521,7 +521,7 @@ int amdgv_sched_context_switch_gfx_to_pf(struct amdgv_adapter *adapt, uint32_t i
  * pending_remove. Its world switches are stopped as part of idx_vf's reset,
  * so remove such VFs from scheduling and free their slots instead of paying
  * a per-VF FLR; the next VF reinit clears the stale HW state. */
-static void amdgv_sched_remove_pending_vfs(struct amdgv_adapter *adapt, uint32_t idx_vf)
+void amdgv_sched_remove_pending_vfs(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
 	uint32_t idx_vf_ws_mask = amdgv_sched_get_world_switch_mask(adapt, idx_vf);
 	uint32_t vf;
@@ -554,6 +554,7 @@ static void amdgv_sched_remove_pending_vfs(struct amdgv_adapter *adapt, uint32_t
 
 int amdgv_sched_context_one_time_loop(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
+	int ret;
 	uint32_t world_switch_id;
 	struct amdgv_sched_world_switch *world_switch;
 
@@ -564,8 +565,19 @@ int amdgv_sched_context_one_time_loop(struct amdgv_adapter *adapt, uint32_t idx_
 
 	for_each_id(world_switch_id, amdgv_sched_get_world_switch_mask(adapt, idx_vf)) {
 		world_switch = &adapt->sched.world_switch[world_switch_id];
-		amdgv_sched_world_context_one_time_loop(adapt, world_switch);
+		ret = amdgv_sched_world_context_one_time_loop(adapt, world_switch);
+		if (ret)
+			goto failed;
 	}
+
+	return 0;
+
+failed:
+	ret = amdgv_sched_reset_vf_auto(adapt);
+	if (ret)
+		return ret;
+
+	amdgv_sched_start_auto(adapt, world_switch->curr_idx_vf);
 
 	return 0;
 }

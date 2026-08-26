@@ -751,6 +751,7 @@ int amdgv_sched_context_switch_to_vf_saved(struct amdgv_adapter *adapt, uint32_t
 				   enum amdgv_sched_block sched_block);
 int amdgv_sched_context_switch_gfx_to_pf(struct amdgv_adapter *adapt, uint32_t idx_vf);
 int amdgv_sched_context_one_time_loop(struct amdgv_adapter *adapt, uint32_t idx_vf);
+void amdgv_sched_remove_pending_vfs(struct amdgv_adapter *adapt, uint32_t idx_vf);
 int amdgv_sched_context_clear_state(struct amdgv_adapter *adapt, uint32_t idx_vf,
 				   enum amdgv_sched_block sched_block);
 int amdgv_sched_reset(struct amdgv_adapter *adapt, uint32_t idx_vf,

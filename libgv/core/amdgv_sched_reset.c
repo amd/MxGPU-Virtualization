@@ -620,9 +620,8 @@ int amdgv_sched_reset_vf_auto(struct amdgv_adapter *adapt)
 	/* end recording for VF */
 	amdgv_time_log_note_vf_reset_end(adapt, abnormal_idx_vf);
 
-	/* FLR recovery above can take a long time (RLCV cmd timeouts), so run one
-	 * scheduling pass here to keep bystander VFs from starving. */
-	amdgv_sched_context_one_time_loop(adapt, abnormal_idx_vf);
+	/* free the slots of VFs whose VM is already gone */
+	amdgv_sched_remove_pending_vfs(adapt, abnormal_idx_vf);
 
 	return 0;
 

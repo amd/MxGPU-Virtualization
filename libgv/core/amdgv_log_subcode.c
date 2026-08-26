@@ -212,6 +212,11 @@ error_category(DRIVER) = {
 		  AMDGV_LOG_SEVERITY_INFO, "Enabled VF number set to %llu."),
 	add_entry(AMDGV_LOG_DRIVER_LIVE_UPDATE_SLOT_OVERFLOW, LOG_DATA_ARG_32_32,
 		  AMDGV_LOG_SEVERITY_ERROR_LOW, "Live-update slot overflow: slot %u exceeds %u available slots."),
+	add_entry_ext(AMDGV_LOG_DRIVER_PCI_CFG_WAIT_TIMEOUT, LOG_DATA_ARG_FIVE_64_EXT,
+		  AMDGV_LOG_SEVERITY_WARNING,
+		  "Timeout waiting for PCI config [0x%llx]. check_ne=%llu expect=0x%llx actual=0x%llx elapsed=%llu us."),
+	add_entry(AMDGV_LOG_DRIVER_IRQ_HANDLER_TIMEOUT, LOG_DATA_ARG_64,
+		  AMDGV_LOG_SEVERITY_ERROR_LOW, "Timeout waiting for IRQ handler (elapsed %llu us)."),
 
 	/* this one is the MAX - test entry intentionally on ERROR ring */
 	add_entry(AMDGV_LOG_DRIVER_MAX, LOG_DATA_ARG_64, AMDGV_LOG_SEVERITY_ERROR_MED,
@@ -341,6 +346,22 @@ error_category(FW) = {
 		  AMDGV_LOG_SEVERITY_ERROR_MED, "Failed to send trigger VF FLR message to SMU."),
 	add_entry(AMDGV_LOG_FW_TRIGGER_VF_FLR_NOT_IMPLEMENTED, LOG_DATA_ARG_NONE,
 		  AMDGV_LOG_SEVERITY_ERROR_LOW, "Trigger VF FLR SMU callback not implemented."),
+
+	add_entry_ext(AMDGV_LOG_FW_PSP_RING_RESP_TIMEOUT, LOG_DATA_ARG_THREE_64_EXT,
+		  AMDGV_LOG_SEVERITY_WARNING,
+		  "Timeout waiting for PSP ring response [0x%llx] (elapsed %llu us)."),
+	add_entry(AMDGV_LOG_FW_PSP_MB_INT_TIMEOUT, LOG_DATA_ARG_64,
+		  AMDGV_LOG_SEVERITY_ERROR_LOW, "Timeout waiting for PSP mailbox interrupt (elapsed %llu us)."),
+	add_entry(AMDGV_LOG_FW_PSP_TOS_LOADED_TIMEOUT, LOG_DATA_ARG_64,
+		  AMDGV_LOG_SEVERITY_ERROR_HIGH, "Timeout waiting for PSP TOS loaded status (elapsed %llu us)."),
+	add_entry(AMDGV_LOG_FW_PSP_BOOT_COMPLETE_TIMEOUT, LOG_DATA_ARG_64,
+		  AMDGV_LOG_SEVERITY_ERROR_HIGH, "Timeout waiting for PSP boot complete (elapsed %llu us)."),
+	add_entry(AMDGV_LOG_FW_RLC_AUTOLOAD_TIMEOUT, LOG_DATA_ARG_64,
+		  AMDGV_LOG_SEVERITY_ERROR_MED, "Timeout waiting for RLC autoload complete (elapsed %llu us)."),
+	add_entry(AMDGV_LOG_FW_LSDMA_PIO_TIMEOUT, LOG_DATA_ARG_64,
+		  AMDGV_LOG_SEVERITY_ERROR_LOW, "Timeout waiting for LSDMA PIO (elapsed %llu us)."),
+	add_entry(AMDGV_LOG_FW_CP_DMA_PIO_TIMEOUT, LOG_DATA_ARG_64,
+		  AMDGV_LOG_SEVERITY_ERROR_LOW, "Timeout waiting for CP DMA PIO (elapsed %llu us)."),
 
 	/* this one is the MAX */
 	add_entry(AMDGV_LOG_FW_MAX, LOG_DATA_ARG_64, AMDGV_LOG_SEVERITY_INFO,
@@ -538,6 +559,17 @@ error_category(IOV) = {
 	add_entry(AMDGV_LOG_IOV_BAD_PAGE_CRIT_REGION_COND_AVAIL, LOG_DATA_ARG_64,
 		  AMDGV_LOG_SEVERITY_INFO, "Bad page found in VF critical region (version id %llu); setting VF to conditionally available."),
 
+	add_entry_ext(AMDGV_LOG_IOV_WS_FIRST_CMD_TIMEOUT, LOG_DATA_ARG_THREE_64_EXT,
+		  AMDGV_LOG_SEVERITY_ERROR_LOW,
+		  "Timeout waiting for world switch first command complete. mask=0x%llx elapsed=%llu us."),
+	add_entry_ext(AMDGV_LOG_IOV_WS_CMD_TIMEOUT, LOG_DATA_ARG_THREE_64_EXT,
+		  AMDGV_LOG_SEVERITY_ERROR_LOW,
+		  "Timeout waiting for world switch command complete. hw_sched_id=%llu elapsed=%llu us."),
+	add_entry(AMDGV_LOG_IOV_MB_TRN_MSG_ACK_TIMEOUT, LOG_DATA_ARG_64,
+		  AMDGV_LOG_SEVERITY_INFO, "Timeout waiting for mailbox transaction message ack (elapsed %llu us)."),
+	add_entry(AMDGV_LOG_IOV_GUEST_RESET_READY_TIMEOUT, LOG_DATA_ARG_64,
+		  AMDGV_LOG_SEVERITY_WARNING, "Timeout waiting for guest reset ready (elapsed %llu us)."),
+
 	/* this one is the MAX */
 	add_entry(AMDGV_LOG_IOV_MAX, LOG_DATA_ARG_64, AMDGV_LOG_SEVERITY_INFO,
 		  "This is error log collect test for IOV component (test count %llu)."),
@@ -709,6 +741,8 @@ error_category(ECC) = {
 		"socket: %u, die: %u, %u new correctable hardware errors detected in MMSCH Block. %u total MMSCH Block correctable ECC errors since GPU load."),
 	add_entry(AMDGV_LOG_ECC_MMSCH_CHIPLET_UE, LOG_DATA_ARG_16_16_16_16, AMDGV_LOG_SEVERITY_ERROR_MED,
 		"socket: %u, die: %u, %u new uncorrectable hardware errors detected in MMSCH Block. %u total MMSCH Block uncorrectable ECC errors since GPU load."),
+	add_entry(AMDGV_LOG_ECC_RAS_INTR_TIMEOUT, LOG_DATA_ARG_64, AMDGV_LOG_SEVERITY_ERROR_LOW,
+		"Timeout waiting for RAS interrupt (elapsed %llu us)."),
 	/* this one is the MAX */
 	add_entry(AMDGV_LOG_ECC_MAX, LOG_DATA_ARG_64, AMDGV_LOG_SEVERITY_INFO,
 		  "This is error log collect test for ECC component (test count %llu)."),
@@ -927,6 +961,10 @@ error_category(GPU) = {
 		  "GL2C error detected."),
 	add_entry(AMDGV_LOG_GPU_GC_SOFT_RESET_VMID_TIMEOUT, LOG_DATA_ARG_NONE, AMDGV_LOG_SEVERITY_ERROR_MED,
 		  "GC soft reset timed out waiting for CP_VMID_RESET to clear."),
+	add_entry_ext(AMDGV_LOG_GPU_REG_WAIT_TIMEOUT, LOG_DATA_ARG_FIVE_64_EXT, AMDGV_LOG_SEVERITY_WARNING,
+		  "Timeout waiting for register [0x%llx]. check_ne=%llu expect=0x%llx actual=0x%llx elapsed=%llu us."),
+	add_entry(AMDGV_LOG_GPU_FB_HASH_TIMEOUT, LOG_DATA_ARG_64, AMDGV_LOG_SEVERITY_ERROR_LOW,
+		  "Timeout waiting for FB hash done (elapsed %llu us)."),
 	/* this one is the MAX */
 	add_entry(AMDGV_LOG_GPU_MAX, LOG_DATA_ARG_64, AMDGV_LOG_SEVERITY_INFO,
 		  "This is error log collect test for GPU component (test count %llu)."),
