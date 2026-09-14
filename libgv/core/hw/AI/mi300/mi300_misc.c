@@ -98,74 +98,6 @@ static void mi300_cp_dma_exit(struct amdgv_adapter *adapt)
 	shared_exclusion_exit(adapt, &hive->flr_cp_dma_lock, SHARED_EXCLUSION_GROUP_CP_DMA);
 }
 
-#define DMA_COPY_CONTEXT_REGS 8
-static struct amdgv_reg_dump_info dma_copy_context_regs[DMA_COPY_CONTEXT_REGS] = {
-	{
-		.name = "CP_DMA_CNTL",
-		.hwip = GC_HWIP,
-		.seg = regCP_DMA_CNTL_BASE_IDX,
-		.logical_inst = 0,
-		.offset_hwip = regCP_DMA_CNTL,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-	{
-		.name = "CP_DMA_CNTL",
-		.hwip = GC_HWIP,
-		.seg = regCP_DMA_CNTL_BASE_IDX,
-		.logical_inst = 1,
-		.offset_hwip = regCP_DMA_CNTL,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-	{
-		.name = "CP_DMA_CNTL",
-		.hwip = GC_HWIP,
-		.seg = regCP_DMA_CNTL_BASE_IDX,
-		.logical_inst = 2,
-		.offset_hwip = regCP_DMA_CNTL,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-	{
-		.name = "CP_DMA_CNTL",
-		.hwip = GC_HWIP,
-		.seg = regCP_DMA_CNTL_BASE_IDX,
-		.logical_inst = 3,
-		.offset_hwip = regCP_DMA_CNTL,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-	{
-		.name = "CP_DMA_CNTL",
-		.hwip = GC_HWIP,
-		.seg = regCP_DMA_CNTL_BASE_IDX,
-		.logical_inst = 4,
-		.offset_hwip = regCP_DMA_CNTL,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-	{
-		.name = "CP_DMA_CNTL",
-		.hwip = GC_HWIP,
-		.seg = regCP_DMA_CNTL_BASE_IDX,
-		.logical_inst = 5,
-		.offset_hwip = regCP_DMA_CNTL,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-	{
-		.name = "CP_DMA_CNTL",
-		.hwip = GC_HWIP,
-		.seg = regCP_DMA_CNTL_BASE_IDX,
-		.logical_inst = 6,
-		.offset_hwip = regCP_DMA_CNTL,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-	{
-		.name = "CP_DMA_CNTL",
-		.hwip = GC_HWIP,
-		.seg = regCP_DMA_CNTL_BASE_IDX,
-		.logical_inst = 7,
-		.offset_hwip = regCP_DMA_CNTL,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-};
-
 static int mi300_cp_dma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, bool fill_mode,
 			      uint64_t src, uint64_t dst, uint64_t size, uint64_t *size_copied)
 {
@@ -184,8 +116,6 @@ static int mi300_cp_dma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, bool 
 
 	ctx.adapt = adapt;
 	cb_context.type = AMDGV_WAIT_FOR_CP_DMA_PIO;
-	cb_context.ctx_ext = dma_copy_context_regs;
-	cb_context.num_ctx_ext = min(DMA_COPY_CONTEXT_REGS, adapt->mcp.gfx.num_xcc);
 
 	/* to use CP_DMA copy, need to make sure GFX is switched to PF */
 	*size_copied = 0;

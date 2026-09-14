@@ -15,21 +15,22 @@
 #include "smi_drv_utils.h"
 
 #ifdef _WIN64
-#include <ctype.h>
+	#include <ctype.h>
 #endif
 
-static inline char smi_toupper(unsigned char c) {
-    return ('a' <= c && c <= 'z') ? (char)(c - ('a' - 'A')) : (char)c;
+static inline char smi_toupper(unsigned char c)
+{
+	return ('a' <= c && c <= 'z') ? (char)(c - ('a' - 'A')) : (char)c;
 }
 
 enum smi_error_type {
-	ERROR_OTHER		= 1,
-	ERROR_ALLOCATION	= 2,
-	ERROR_FREE		= 3,
-	ERROR_SET_VF		= 4,
-	ERROR_SET_VF_NUM	= 5,
-	ERROR_CLEAR_VF_FB	= 6,
-	ERROR_PARAM_CHECK	= 7,
+	ERROR_OTHER	  = 1,
+	ERROR_ALLOCATION  = 2,
+	ERROR_FREE	  = 3,
+	ERROR_SET_VF	  = 4,
+	ERROR_SET_VF_NUM  = 5,
+	ERROR_CLEAR_VF_FB = 6,
+	ERROR_PARAM_CHECK = 7,
 };
 
 void smi_put_handle(amdgv_dev_t adev, struct smi_ctx *ctx);
@@ -38,8 +39,7 @@ void smi_put_handle(amdgv_dev_t adev, struct smi_ctx *ctx);
  * convert libgv error into SMI error return value
  * we maybe need more SMI error return value
  */
-static int smi_convert_ret_value(enum smi_error_type type,
-				int libgv_error_subcode)
+static int smi_convert_ret_value(enum smi_error_type type, int libgv_error_subcode)
 {
 	/* global conversion */
 	switch (libgv_error_subcode) {
@@ -107,10 +107,11 @@ static int smi_convert_ret_value(enum smi_error_type type,
 }
 
 static amdgv_dev_t smi_get_handle(struct smi_ctx *ctx,
-			smi_device_handle_t *dev_id,
-			struct smi_device_data *ret_dev_data, bool *dev_busy)
+				  smi_device_handle_t *dev_id,
+				  struct smi_device_data *ret_dev_data,
+				  bool *dev_busy)
 {
-	amdgv_dev_t adev = NULL;
+	amdgv_dev_t adev		= NULL;
 	struct smi_device_data dev_data = {0};
 	uint32_t i;
 
@@ -143,29 +144,27 @@ void smi_put_handle(amdgv_dev_t adev, struct smi_ctx *ctx)
 /*
  * Dummy function for testing
  */
-int smi_dummy_cmd(struct smi_ctx *ctx, void *inb, void *outb,
-			  uint16_t in_len, uint16_t out_len)
+int smi_dummy_cmd(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	return SMI_STATUS_NOT_SUPPORTED;
 }
 
-int smi_get_server_static_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_server_static_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_server_static_info *info = NULL;
+	struct smi_server_static_info *info   = NULL;
 	union amdgv_smi_query_info *smi_query = NULL;
 	uint32_t i;
-	struct smi_device_data dev_data = {0};
-	bool dev_busy = false;
-	amdgv_dev_t *adev = NULL;
+	struct smi_device_data dev_data	  = {0};
+	bool dev_busy			  = false;
+	amdgv_dev_t *adev		  = NULL;
 	struct amdgv_init_data *init_data = NULL;
 
 	/* Check version */
-	if ((in_len != 0) || (out_len !=
-			sizeof(struct smi_server_static_info)))
+	if ((in_len != 0) || (out_len != sizeof(struct smi_server_static_info)))
 		return SMI_STATUS_INVAL;
 
-	info = (struct smi_server_static_info *) outb;
+	info = (struct smi_server_static_info *)outb;
 	smi_oss_funcs->memset(info, 0, sizeof(*info));
 
 	info->num_devices = ctx->num_devices;
@@ -177,9 +176,9 @@ int smi_get_server_static_info(struct smi_ctx *ctx, void *inb,
 	}
 
 	for (i = 0; i < ctx->num_devices; i++) {
-		info->devices[i].bdf.as_uint = ctx->devices[i].bdf;
+		info->devices[i].bdf.as_uint   = ctx->devices[i].bdf;
 		info->devices[i].dev_id.handle = ctx->devices[i].handle;
-		info->devices[i].failed = true;
+		info->devices[i].failed	       = true;
 
 		adev = smi_get_handle(ctx, &info->devices[i].dev_id, &dev_data, &dev_busy);
 		if (!adev) {
@@ -195,7 +194,7 @@ int smi_get_server_static_info(struct smi_ctx *ctx, void *inb,
 		if (smi_query->status_info.status == AMDGV_STATUS_HW_INIT)
 			info->devices[i].failed = false;
 
-		init_data = &dev_data.init_data;
+		init_data			  = &dev_data.init_data;
 		info->devices[i].dev_id.device_id = init_data->info.dev_id;
 		smi_put_handle(adev, ctx);
 	}
@@ -219,21 +218,21 @@ int smi_get_server_static_info(struct smi_ctx *ctx, void *inb,
 	return SMI_STATUS_SUCCESS;
 }
 
-int smi_get_gpu_vbios_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_gpu_vbios_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
+	struct smi_device_info *id  = NULL;
 	struct smi_vbios_info *info = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	amdgv_dev_t *adev	    = NULL;
+	bool dev_busy		    = false;
 	struct amdgv_vbios_info vbios;
 	int ret = 0;
 	/* Check version */
 	if ((in_len != sizeof(struct smi_device_info)) ||
-		(out_len != sizeof(struct smi_vbios_info)))
+	    (out_len != sizeof(struct smi_vbios_info)))
 		return SMI_STATUS_INVAL;
-	info = (struct smi_vbios_info *) outb;
-	id = (struct smi_device_info *) inb;
+	info = (struct smi_vbios_info *)outb;
+	id   = (struct smi_device_info *)inb;
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev)
 		return SMI_STATUS_NOT_FOUND;
@@ -243,37 +242,32 @@ int smi_get_gpu_vbios_info(struct smi_ctx *ctx, void *inb,
 	ret = amdgv_gpumon_get_vbios_info(adev, &vbios);
 	if (ret)
 		goto end;
-	smi_oss_funcs->memcpy(
-		info->name, vbios.name, STRLEN_VERYLONG);
-	smi_oss_funcs->memcpy(
-		info->build_date, vbios.date, STRLEN_NORMAL);
-	smi_oss_funcs->memcpy(
-		info->part_number, vbios.vbios_pn, STRLEN_VERYLONG);
-	smi_oss_funcs->memcpy(
-		info->version, "N/A", STRLEN_VERYLONG);
-	smi_oss_funcs->memcpy(
-		info->boot_firmware, vbios.vbios_version_string, STRLEN_VERYLONG);
+	smi_oss_funcs->memcpy(info->name, vbios.name, STRLEN_VERYLONG);
+	smi_oss_funcs->memcpy(info->build_date, vbios.date, STRLEN_NORMAL);
+	smi_oss_funcs->memcpy(info->part_number, vbios.vbios_pn, STRLEN_VERYLONG);
+	smi_oss_funcs->memcpy(info->version, "N/A", STRLEN_VERYLONG);
+	smi_oss_funcs->memcpy(info->boot_firmware, vbios.vbios_version_string, STRLEN_VERYLONG);
 end:
 	smi_put_handle(adev, ctx);
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
-int smi_get_gpu_board_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_gpu_board_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
-	struct smi_board_info *info = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	struct smi_device_info *id	   = NULL;
+	struct smi_board_info *info	   = NULL;
+	amdgv_dev_t *adev		   = NULL;
+	bool dev_busy			   = false;
 	struct amdgv_product_info *product = NULL;
-	struct smi_device_data dev_data = {0};
-	int ret = 0;
+	struct smi_device_data dev_data	   = {0};
+	int ret				   = 0;
 	uint32_t i;
 	/* Check version */
 	if ((in_len != sizeof(struct smi_device_info)) ||
-		(out_len != sizeof(struct smi_board_info)))
+	    (out_len != sizeof(struct smi_board_info)))
 		return SMI_STATUS_INVAL;
-	info = (struct smi_board_info *) outb;
-	id = (struct smi_device_info *) inb;
+	info = (struct smi_board_info *)outb;
+	id   = (struct smi_device_info *)inb;
 	adev = smi_get_handle(ctx, &id->dev_id, &dev_data, &dev_busy);
 	if (!adev)
 		return SMI_STATUS_NOT_FOUND;
@@ -290,12 +284,12 @@ int smi_get_gpu_board_info(struct smi_ctx *ctx, void *inb,
 	if (ret || !(product->valid)) {
 		if (dev_data.parent >= 0) {
 			for (i = 0; i < ctx->num_devices; i++) {
-				smi_device_handle_t sib = { .handle = ctx->devices[i].handle };
-				amdgv_dev_t *sib_adev = NULL;
-				bool sib_busy = false;
+				smi_device_handle_t sib = {.handle = ctx->devices[i].handle};
+				amdgv_dev_t *sib_adev	= NULL;
+				bool sib_busy		= false;
 
 				if ((ctx->devices[i].parent != dev_data.parent) ||
-						(id->dev_id.handle == ctx->devices[i].handle))
+				    (id->dev_id.handle == ctx->devices[i].handle))
 					continue;
 
 				sib_adev = smi_get_handle(ctx, &sib, NULL, &sib_busy);
@@ -309,44 +303,44 @@ int smi_get_gpu_board_info(struct smi_ctx *ctx, void *inb,
 		}
 	}
 	if (product->valid) {
+		smi_oss_funcs->memcpy(info->model_number, product->model_number, STRLEN_VERYLONG);
 		smi_oss_funcs->memcpy(
-			info->model_number, product->model_number, STRLEN_VERYLONG);
+		    info->product_serial, product->product_serial, STRLEN_VERYLONG);
+		smi_oss_funcs->memcpy(info->fru_id, product->fru_id, STRLEN_VERYLONG);
+		smi_oss_funcs->memcpy(info->product_name, product->product_name, STRLEN_VERYLONG);
 		smi_oss_funcs->memcpy(
-			info->product_serial, product->product_serial, STRLEN_VERYLONG);
-		smi_oss_funcs->memcpy(
-			info->fru_id, product->fru_id, STRLEN_VERYLONG);
-		smi_oss_funcs->memcpy(
-			info->product_name, product->product_name, STRLEN_VERYLONG);
-		smi_oss_funcs->memcpy(
-			info->manufacturer_name, product->manufacturer_name, STRLEN_VERYLONG);
+		    info->manufacturer_name, product->manufacturer_name, STRLEN_VERYLONG);
 	}
 	smi_oss_funcs->free_memory(product);
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_gpu_asic_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_gpu_asic_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
-	struct smi_asic_info *info = NULL;
-	amdgv_dev_t *adev = NULL;
-	struct smi_device_data dev_data = {0};
-	union amdgv_dev_info dev_info;
-	bool dev_busy = false;
+	struct smi_device_info *id	  = NULL;
+	struct smi_asic_info *info	  = NULL;
+	struct smi_asic_info_ex *info_ex  = NULL;
+	amdgv_dev_t *adev		  = NULL;
+	struct smi_device_data dev_data	  = {0};
+	union amdgv_dev_info dev_info	  = {0};
+	bool dev_busy			  = false;
 	struct amdgv_init_data *init_data = NULL;
-	int ret = 0;
+	int ret				  = 0;
 	uint64_t asic_serial;
 	const char *marketing_name = NULL;
 	struct amdgv_gpumon_gfx_config gfx_config;
 
-	/* Check version */
+	/* Check version: older userspace sends smi_asic_info; VF UUID sends smi_asic_info_ex. */
 	if ((in_len != sizeof(struct smi_device_info)) ||
-		(out_len != sizeof(struct smi_asic_info)))
+	    ((out_len != sizeof(struct smi_asic_info)) &&
+	     (out_len != sizeof(struct smi_asic_info_ex))))
 		return SMI_STATUS_INVAL;
-	info = (struct smi_asic_info *) outb;
-	smi_oss_funcs->memset(info, 0, sizeof(*info));
+	info_ex = (struct smi_asic_info_ex *)outb;
+	info	= &info_ex->asic_info;
+	smi_oss_funcs->memset(outb, 0, out_len);
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, &dev_data, &dev_busy);
 	if (!adev)
@@ -354,60 +348,72 @@ int smi_get_gpu_asic_info(struct smi_ctx *ctx, void *inb,
 	if (dev_busy)
 		return SMI_STATUS_BUSY;
 	init_data = &dev_data.init_data;
-	/* Fill the data */
-	info->vendor_id = init_data->info.vendor_id;
-	info->device_id = init_data->info.dev_id;
-	info->rev_id = init_data->info.rev_id;
-	/* get marketing name */
-	marketing_name = amdgv_get_market_name(init_data->info.dev_id, init_data->info.rev_id);
-	smi_oss_funcs->memcpy(info->market_name, marketing_name, smi_oss_funcs->strlen(marketing_name) + 1);
-	ret = amdgv_get_dev_info(adev, AMDGV_GET_OAM_IDX, &dev_info);
-	if (ret) {
-		smi_put_handle(adev, ctx);
-		return SMI_STATUS_API_FAILED;
-	}
-	info->oam_id = dev_info.oam.oam_idx;
+	/* Fill PCI/static fields from init data */
+	info->vendor_id	   = init_data->info.vendor_id;
+	info->device_id	   = init_data->info.dev_id;
+	info->rev_id	   = init_data->info.rev_id;
 	info->subvendor_id = init_data->info.sub_vnd_id;
+	info->subsystem_id = init_data->info.sub_sys_id;
+	if (out_len == sizeof(struct smi_asic_info_ex))
+		info_ex->vf_device_id = init_data->info.sriov_vf_devid;
+	info->oam_id		      = (uint32_t)SMI_NOT_SUPPORTED;
+	info->num_of_compute_units    = (uint32_t)SMI_NOT_SUPPORTED;
+	info->target_graphics_version = (uint64_t)SMI_NOT_SUPPORTED;
+	info->flags		      = (uint64_t)SMI_NOT_SUPPORTED;
+
+	/* The fields below are filled best-effort: a value libgv cannot report keeps
+	 * its not-supported sentinel instead of failing the whole query, so the ASIC
+	 * identity (PCI IDs, GC IP version) is still reported on parts where the
+	 * PMFW-backed data is unavailable. */
+	marketing_name =
+	    amdgv_get_market_name(adev, init_data->info.dev_id, init_data->info.rev_id);
+	if (marketing_name)
+		smi_oss_funcs->memcpy(
+		    info->market_name, marketing_name, smi_oss_funcs->strlen(marketing_name) + 1);
+	else
+		smi_vsnprintf(info->market_name, SMI_MAX_STRING_LENGTH, "%s", "N/A");
+
+	ret = amdgv_get_dev_info(adev, AMDGV_GET_OAM_IDX, &dev_info);
+	if (!ret)
+		info->oam_id = dev_info.oam.oam_idx;
 
 	ret = amdgv_gpumon_get_gfx_config(adev, &gfx_config);
-	if (ret) {
-		smi_put_handle(adev, ctx);
-		return SMI_STATUS_API_FAILED;
+	if (!ret) {
+		info->num_of_compute_units = gfx_config.active_cu_count;
+		/* full_ver >> 8 matches libgv IP_VERSION_MAJ_MIN_REV() / KMD packed GC IP
+		 * format */
+		if (gfx_config.ip.full_ver)
+			info->target_graphics_version = (uint64_t)(gfx_config.ip.full_ver >> 8);
 	}
-	info->num_of_compute_units = gfx_config.active_cu_count;
 
-	info->target_graphics_version = SMI_NOT_SUPPORTED;
-	info->subsystem_id = init_data->info.sub_sys_id;
-	info->flags = SMI_NOT_SUPPORTED;
 	ret = amdgv_gpumon_get_asic_serial(adev, &asic_serial);
-	if (ret) {
-		smi_put_handle(adev, ctx);
-		return SMI_STATUS_API_FAILED;
-	}
-	smi_vsnprintf(info->asic_serial, SMI_MAX_STRING_LENGTH, "0x%llX", asic_serial);
+	if (!ret)
+		smi_vsnprintf(info->asic_serial, SMI_MAX_STRING_LENGTH, "0x%llX", asic_serial);
+	else
+		smi_vsnprintf(info->asic_serial, SMI_MAX_STRING_LENGTH, "%s", "N/A");
+
 	/* only master GPU has product info */
 	smi_put_handle(adev, ctx);
-	return smi_convert_ret_value(ERROR_OTHER, ret);
+	return SMI_STATUS_SUCCESS;
 }
-int smi_get_gpu_vram_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_gpu_vram_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_device_info *id = NULL;
 	struct smi_vram_info *info = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	amdgv_dev_t *adev	   = NULL;
+	bool dev_busy		   = false;
 	struct amdgv_gpumon_vram_info vram_info;
 	struct amdgv_gpumon_metrics_ext *gpumon_metrics_ext = NULL;
-	struct amdgv_gpumon_metric_ext *metric = NULL;
-	uint32_t i = 0;
-	int ret = 0;
-	int metrics_ret = 0;
+	struct amdgv_gpumon_metric_ext *metric		    = NULL;
+	uint32_t i					    = 0;
+	int ret						    = 0;
+	int metrics_ret					    = 0;
 	/* Check version */
-	if ((in_len != sizeof(struct smi_device_info)) ||
-		(out_len != sizeof(struct smi_vram_info)))
+	if ((in_len != sizeof(struct smi_device_info)) || (out_len != sizeof(struct smi_vram_info)))
 		return SMI_STATUS_INVAL;
-	info = (struct smi_vram_info *) outb;
-	id = (struct smi_device_info *) inb;
+	info = (struct smi_vram_info *)outb;
+	id   = (struct smi_device_info *)inb;
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev)
 		return SMI_STATUS_NOT_FOUND;
@@ -417,13 +423,15 @@ int smi_get_gpu_vram_info(struct smi_ctx *ctx, void *inb,
 	if (ret == 0) {
 		info->vram_size = vram_info.vram_size_mb;
 		info->vram_type = smi_map_vram_type(vram_info.vram_type);
-		smi_oss_funcs->memcpy(info->vram_vendor, smi_map_vram_vendor(vram_info.vram_vendor),
-			smi_oss_funcs->strlen(smi_map_vram_vendor(vram_info.vram_vendor)));
+		smi_oss_funcs->memcpy(
+		    info->vram_vendor,
+		    smi_map_vram_vendor(vram_info.vram_vendor),
+		    smi_oss_funcs->strlen(smi_map_vram_vendor(vram_info.vram_vendor)));
 		info->vram_bit_width = vram_info.vram_bit_width;
 	} else if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
-		info->vram_size = SMI_NOT_SUPPORTED;
+		info->vram_size	     = SMI_NOT_SUPPORTED;
 		info->vram_bit_width = SMI_NOT_SUPPORTED;
-		ret = SMI_STATUS_SUCCESS;
+		ret		     = SMI_STATUS_SUCCESS;
 	} else {
 		goto end;
 	}
@@ -436,7 +444,8 @@ int smi_get_gpu_vram_info(struct smi_ctx *ctx, void *inb,
 		if (metrics_ret == SMI_STATUS_SUCCESS) {
 			for (i = 0; i < gpumon_metrics_ext->num_metric; i++) {
 				metric = &gpumon_metrics_ext->metric[i];
-				if (metric->name == AMDGV_GPUMON_METRIC_EXT_NAME__MAX_DRAM_BANDWIDTH &&
+				if (metric->name ==
+					AMDGV_GPUMON_METRIC_EXT_NAME__MAX_DRAM_BANDWIDTH &&
 				    !metric->flag_data_filter_acc) {
 					info->vram_max_bandwidth = metric->val;
 					break;
@@ -449,20 +458,20 @@ end:
 	smi_put_handle(adev, ctx);
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
-int smi_get_gpu_driver_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_gpu_driver_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
+	struct smi_device_info *id   = NULL;
 	struct smi_driver_info *info = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
-	int ret = 0;
+	amdgv_dev_t *adev	     = NULL;
+	bool dev_busy		     = false;
+	int ret			     = 0;
 	/* Check version */
 	if ((in_len != sizeof(struct smi_device_info)) ||
-		(out_len != sizeof(struct smi_driver_info)))
+	    (out_len != sizeof(struct smi_driver_info)))
 		return SMI_STATUS_INVAL;
-	info = (struct smi_driver_info *) outb;
-	id = (struct smi_device_info *) inb;
+	info = (struct smi_driver_info *)outb;
+	id   = (struct smi_device_info *)inb;
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev)
 		return SMI_STATUS_NOT_FOUND;
@@ -486,26 +495,26 @@ int smi_get_gpu_driver_info(struct smi_ctx *ctx, void *inb,
 	smi_put_handle(adev, ctx);
 	return SMI_STATUS_SUCCESS;
 }
-int smi_get_gpu_power_cap_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_gpu_power_cap_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_get_power_cap *id = NULL;
-	struct smi_power_cap_info *info = NULL;
-	uint32_t sensor_ind = 0;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
-	int ret = 0;
-	int default_power = 0;
+	struct smi_get_power_cap *id			    = NULL;
+	struct smi_power_cap_info *info			    = NULL;
+	uint32_t sensor_ind				    = 0;
+	amdgv_dev_t *adev				    = NULL;
+	bool dev_busy					    = false;
+	int ret						    = 0;
+	int default_power				    = 0;
 	struct amdgv_gpumon_metrics_ext *gpumon_metrics_ext = NULL;
-	struct amdgv_gpumon_metric_ext *metric = NULL;
-	uint32_t i = 0;
+	struct amdgv_gpumon_metric_ext *metric		    = NULL;
+	uint32_t i					    = 0;
 
 	/* Check version */
 	if ((in_len != sizeof(struct smi_get_power_cap)) ||
-		(out_len != sizeof(struct smi_power_cap_info)))
+	    (out_len != sizeof(struct smi_power_cap_info)))
 		return SMI_STATUS_INVAL;
-	info = (struct smi_power_cap_info *) outb;
-	id = (struct smi_get_power_cap *) inb;
+	info	   = (struct smi_power_cap_info *)outb;
+	id	   = (struct smi_get_power_cap *)inb;
 	sensor_ind = id->sensor_ind;
 
 	/* Cheap, ASIC-independent sanity check. Whether sensor_ind is actually
@@ -525,17 +534,17 @@ int smi_get_gpu_power_cap_info(struct smi_ctx *ctx, void *inb,
 	if (dev_busy)
 		return SMI_STATUS_BUSY;
 
-	/* PPT1: only power_cap is exposed by FW */
+	/* PPT1: other fields are NOT_SUPPORTED; power_cap from FW or sentinel. */
 	if (sensor_ind != 0) {
-		info->dpm_cap = SMI_NOT_SUPPORTED;
+		info->dpm_cap		= SMI_NOT_SUPPORTED;
 		info->default_power_cap = SMI_NOT_SUPPORTED;
-		info->max_power_cap = SMI_NOT_SUPPORTED;
-		info->min_power_cap = SMI_NOT_SUPPORTED;
-		ret = amdgv_gpumon_get_gpu_power_capacity(adev, sensor_ind,
-							  (int *)&info->power_cap);
+		info->max_power_cap	= SMI_NOT_SUPPORTED;
+		info->min_power_cap	= SMI_NOT_SUPPORTED;
+		ret =
+		    amdgv_gpumon_get_gpu_power_capacity(adev, sensor_ind, (int *)&info->power_cap);
 		if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 			info->power_cap = SMI_NOT_SUPPORTED;
-			ret = SMI_STATUS_SUCCESS;
+			ret		= SMI_STATUS_SUCCESS;
 		}
 		goto end;
 	}
@@ -544,7 +553,7 @@ int smi_get_gpu_power_cap_info(struct smi_ctx *ctx, void *inb,
 	ret = amdgv_gpumon_get_dpm_cap(adev, (int *)&info->dpm_cap);
 	if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->dpm_cap = SMI_NOT_SUPPORTED;
-		ret = SMI_STATUS_SUCCESS;
+		ret	      = SMI_STATUS_SUCCESS;
 	} else if (ret != SMI_STATUS_SUCCESS)
 		goto end;
 
@@ -553,13 +562,15 @@ int smi_get_gpu_power_cap_info(struct smi_ctx *ctx, void *inb,
 	if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		/* If not supported via gpumon, try to get it from metrics table*/
 		info->power_cap = SMI_NOT_SUPPORTED;
-		gpumon_metrics_ext = smi_oss_funcs->alloc_memory(sizeof(struct amdgv_gpumon_metrics_ext));
+		gpumon_metrics_ext =
+		    smi_oss_funcs->alloc_memory(sizeof(struct amdgv_gpumon_metrics_ext));
 		if (gpumon_metrics_ext != NULL) {
 			ret = amdgv_gpumon_get_metrics_ext(adev, gpumon_metrics_ext);
 			if (ret == SMI_STATUS_SUCCESS) {
 				for (i = 0; i < gpumon_metrics_ext->num_metric; i++) {
 					metric = &gpumon_metrics_ext->metric[i];
-					if (metric->name == AMDGV_GPUMON_METRIC_EXT_NAME__POWER_LIMIT) {
+					if (metric->name ==
+					    AMDGV_GPUMON_METRIC_EXT_NAME__POWER_LIMIT) {
 						info->power_cap = (uint64_t)metric->val;
 						break;
 					}
@@ -574,7 +585,7 @@ int smi_get_gpu_power_cap_info(struct smi_ctx *ctx, void *inb,
 	ret = amdgv_gpumon_get_max_configurable_power_limit(adev, (int *)&info->max_power_cap);
 	if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->max_power_cap = SMI_NOT_SUPPORTED;
-		ret = SMI_STATUS_SUCCESS;
+		ret		    = SMI_STATUS_SUCCESS;
 	} else if (ret != SMI_STATUS_SUCCESS)
 		goto end;
 	else
@@ -582,14 +593,14 @@ int smi_get_gpu_power_cap_info(struct smi_ctx *ctx, void *inb,
 	ret = amdgv_gpumon_get_min_power_limit(adev, (int *)&info->min_power_cap);
 	if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->min_power_cap = SMI_NOT_SUPPORTED;
-		ret = SMI_STATUS_SUCCESS;
+		ret		    = SMI_STATUS_SUCCESS;
 	} else if (ret != SMI_STATUS_SUCCESS)
 		goto end;
 
 	ret = amdgv_gpumon_get_default_power_limit(adev, &default_power);
 	if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->default_power_cap = SMI_NOT_SUPPORTED;
-		ret = SMI_STATUS_SUCCESS;
+		ret			= SMI_STATUS_SUCCESS;
 	} else if (ret != SMI_STATUS_SUCCESS) {
 		goto end;
 	} else {
@@ -599,24 +610,24 @@ end:
 	smi_put_handle(adev, ctx);
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
-int smi_get_supported_power_cap(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_supported_power_cap(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *dev = NULL;
+	struct smi_device_info *dev	    = NULL;
 	struct smi_supported_power_cap *out = NULL;
 	struct amdgv_supported_power_cap sensors_info;
 	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	bool dev_busy	  = false;
 	uint32_t i;
 	int ret = 0;
 
 	/* Check version */
 	if ((in_len != sizeof(struct smi_device_info)) ||
-		(out_len != sizeof(struct smi_supported_power_cap)))
+	    (out_len != sizeof(struct smi_supported_power_cap)))
 		return SMI_STATUS_INVAL;
 
-	out = (struct smi_supported_power_cap *) outb;
-	dev = (struct smi_device_info *) inb;
+	out  = (struct smi_supported_power_cap *)outb;
+	dev  = (struct smi_device_info *)inb;
 	adev = smi_get_handle(ctx, &dev->dev_id, NULL, &dev_busy);
 	if (!adev)
 		return SMI_STATUS_NOT_FOUND;
@@ -633,7 +644,7 @@ int smi_get_supported_power_cap(struct smi_ctx *ctx, void *inb,
 	if (out->sensor_count > SMI_MAX_PPT_SENSOR_LENGTH)
 		out->sensor_count = SMI_MAX_PPT_SENSOR_LENGTH;
 	for (i = 0; i < out->sensor_count; i++) {
-		out->sensor_inds[i] = sensors_info.sensor_inds[i];
+		out->sensor_inds[i]  = sensors_info.sensor_inds[i];
 		out->sensor_types[i] = (smi_power_cap_type_t)sensors_info.sensor_types[i];
 	}
 
@@ -641,63 +652,63 @@ end:
 	smi_put_handle(adev, ctx);
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
-int smi_get_gpu_fb_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_gpu_fb_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
+	struct smi_device_info *id  = NULL;
 	struct smi_pf_fb_info *info = NULL;
 	union amdgv_dev_info dev_info;
 	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
-	int ret = 0;
+	bool dev_busy	  = false;
+	int ret		  = 0;
 	/* Check version */
 	if ((in_len != sizeof(struct smi_device_info)) ||
-		(out_len != sizeof(struct smi_pf_fb_info)))
+	    (out_len != sizeof(struct smi_pf_fb_info)))
 		return SMI_STATUS_INVAL;
-	info = (struct smi_pf_fb_info *) outb;
-	id = (struct smi_device_info *) inb;
+	info = (struct smi_pf_fb_info *)outb;
+	id   = (struct smi_device_info *)inb;
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev)
 		return SMI_STATUS_NOT_FOUND;
 	if (dev_busy)
 		return SMI_STATUS_BUSY;
 	/*
-	* current FB layout
-	* |            PF                |   VFs... | other |
-	* |          pf_size             |          |
-	* |        pf_fb_reserved        |          |
-	* |              total_fb_size              |
-	*/
+	 * current FB layout
+	 * |            PF                |   VFs... | other |
+	 * |          pf_size             |          |
+	 * |        pf_fb_reserved        |          |
+	 * |              total_fb_size              |
+	 */
 	ret = amdgv_get_dev_info(adev, AMDGV_GET_FB_LAYOUT, &dev_info);
 	if (ret)
 		goto end;
-	info->total_fb_size = dev_info.layout.total_vf_usable_fb +
-		dev_info.layout.vf_usable_fb_offset;
+	info->total_fb_size =
+	    dev_info.layout.total_vf_usable_fb + dev_info.layout.vf_usable_fb_offset;
 	info->max_vf_fb_usable = dev_info.layout.total_vf_usable_fb;
 	info->min_vf_fb_usable = AMDGV_MIN_PF_SIZE;
-	info->pf_fb_reserved = dev_info.layout.vf_usable_fb_offset;
-	info->pf_fb_offset = 0x0;
-	info->fb_alignment = 16;
+	info->pf_fb_reserved   = dev_info.layout.vf_usable_fb_offset;
+	info->pf_fb_offset     = 0x0;
+	info->fb_alignment     = 16;
 end:
 	smi_put_handle(adev, ctx);
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
-int smi_get_gpu_cache_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_gpu_cache_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
+	struct smi_device_info *id	= NULL;
 	struct smi_gpu_cache_info *info = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	amdgv_dev_t *adev		= NULL;
+	bool dev_busy			= false;
 	struct amdgv_gpumon_gpu_cache_info gpu_cache_info;
-	int ret = 0;
+	int ret	   = 0;
 	uint32_t i = 0;
 	/* Check version */
 	if ((in_len != sizeof(struct smi_device_info)) ||
-		(out_len != sizeof(struct smi_gpu_cache_info)))
+	    (out_len != sizeof(struct smi_gpu_cache_info)))
 		return SMI_STATUS_INVAL;
-	info = (struct smi_gpu_cache_info *) outb;
-	id = (struct smi_device_info *) inb;
+	info = (struct smi_gpu_cache_info *)outb;
+	id   = (struct smi_device_info *)inb;
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev)
 		return SMI_STATUS_NOT_FOUND;
@@ -707,36 +718,37 @@ int smi_get_gpu_cache_info(struct smi_ctx *ctx, void *inb,
 	if (ret == 0) {
 		info->num_cache_types = gpu_cache_info.num_cache_types;
 		for (i = 0; i < gpu_cache_info.num_cache_types; i++) {
-			info->cache[i].cache_size = gpu_cache_info.cache[i].cache_size_kb;
-			info->cache[i].cache_level = gpu_cache_info.cache[i].cache_level;
+			info->cache[i].cache_size	= gpu_cache_info.cache[i].cache_size_kb;
+			info->cache[i].cache_level	= gpu_cache_info.cache[i].cache_level;
 			info->cache[i].cache_properties = gpu_cache_info.cache[i].flags;
-			info->cache[i].max_num_cu_shared = gpu_cache_info.cache[i].max_num_cu_shared;
-			info->cache[i].num_cache_instance = gpu_cache_info.cache[i].num_cache_instance;
+			info->cache[i].max_num_cu_shared =
+			    gpu_cache_info.cache[i].max_num_cu_shared;
+			info->cache[i].num_cache_instance =
+			    gpu_cache_info.cache[i].num_cache_instance;
 		}
 	} else if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->num_cache_types = SMI_NOT_SUPPORTED;
-		ret = SMI_STATUS_SUCCESS;
+		ret		      = SMI_STATUS_SUCCESS;
 	}
 	smi_put_handle(adev, ctx);
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_set_gpu_power_cap(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_set_gpu_power_cap(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_set_gpu_power_cap *id = NULL;
-	struct amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	struct amdgv_dev_t *adev	 = NULL;
+	bool dev_busy			 = false;
 	uint32_t max_power_cap;
 	uint32_t min_power_cap;
 	int ret = SMI_STATUS_SUCCESS;
 
-	if ((in_len != sizeof(struct smi_set_gpu_power_cap)) ||
-		(out_len != 0)) {
+	if ((in_len != sizeof(struct smi_set_gpu_power_cap)) || (out_len != 0)) {
 		return SMI_STATUS_INVAL;
 	}
 
-	id = (struct smi_set_gpu_power_cap *)inb;
+	id   = (struct smi_set_gpu_power_cap *)inb;
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 
 	if (!adev)
@@ -765,24 +777,24 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_gpu_driver_model(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_gpu_driver_model(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
-	struct amdgv_dev_t *adev = NULL;
+	struct smi_device_info *id	   = NULL;
+	struct amdgv_dev_t *adev	   = NULL;
 	struct smi_gpu_driver_model *model = NULL;
-	int ret = SMI_STATUS_SUCCESS;
-	bool dev_busy = false;
+	int ret				   = SMI_STATUS_SUCCESS;
+	bool dev_busy			   = false;
 
 	/* Check version */
 	if ((in_len != sizeof(struct smi_device_info)) ||
 	    (out_len != sizeof(struct smi_gpu_driver_model))) {
 		return SMI_STATUS_INVAL;
 	}
-	model = (struct smi_gpu_driver_model *) outb;
+	model = (struct smi_gpu_driver_model *)outb;
 	smi_oss_funcs->memset(model, 0, sizeof(*model));
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev)
@@ -797,13 +809,13 @@ int smi_get_gpu_driver_model(struct smi_ctx *ctx, void *inb,
 	return ret;
 }
 
-int smi_get_gpu_fw_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_gpu_fw_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_device_info *id = NULL;
-	struct smi_fw_info *info = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	struct smi_fw_info *info   = NULL;
+	amdgv_dev_t *adev	   = NULL;
+	bool dev_busy		   = false;
 
 	union amdgv_smi_query_info *smi_query;
 	uint32_t i;
@@ -811,14 +823,13 @@ int smi_get_gpu_fw_info(struct smi_ctx *ctx, void *inb,
 	uint32_t ucode_counter;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_device_info)) ||
-		(out_len != sizeof(struct smi_fw_info)))
+	if ((in_len != sizeof(struct smi_device_info)) || (out_len != sizeof(struct smi_fw_info)))
 		return SMI_STATUS_INVAL;
 
-	info = (struct smi_fw_info *) outb;
+	info = (struct smi_fw_info *)outb;
 	smi_oss_funcs->memset(info, 0, sizeof(*info));
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev)
@@ -843,7 +854,7 @@ int smi_get_gpu_fw_info(struct smi_ctx *ctx, void *inb,
 		if (ucode_id != SMI_FW_ID__MAX) {
 			info->fw_info_list[ucode_counter].fw_id = (uint8_t)ucode_id;
 			info->fw_info_list[ucode_counter].fw_version =
-				smi_query->firmware_info.fw_info[i].version;
+			    smi_query->firmware_info.fw_info[i].version;
 			ucode_counter++;
 		}
 	}
@@ -857,30 +868,334 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_gpu_performance_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+static void smi_apply_metric_ext_to_performance_info(struct smi_gpu_performance_info *info,
+						     const struct amdgv_gpumon_metric_ext *metric,
+						     bool *has_gfx_clk,
+						     uint32_t *gfx_xcd_instance,
+						     bool *has_mem_clk,
+						     uint32_t *mem_aid_instance,
+						     bool *has_mem_temp,
+						     uint32_t *vcn_usage_sum,
+						     uint32_t *vcn_usage_count)
 {
-	struct smi_device_info *id = NULL;
+	uint32_t val;
+
+	switch (metric->name) {
+	case AMDGV_GPUMON_METRIC_EXT_NAME__USAGE_GFX:
+		if (metric->flag_data_filter_inst &&
+		    metric->res_group == AMDGV_GPUMON_METRIC_EXT_RES_GROUP__GPU)
+			info->usage.gfx_activity = (uint32_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__USAGE_MEM:
+		if (metric->flag_data_filter_inst &&
+		    metric->res_group == AMDGV_GPUMON_METRIC_EXT_RES_GROUP__GPU)
+			info->usage.umc_activity = (uint32_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__USAGE_MM:
+		if (metric->flag_data_filter_inst &&
+		    metric->res_group == AMDGV_GPUMON_METRIC_EXT_RES_GROUP__GPU)
+			info->usage.mm_activity = (uint32_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__USAGE_VCN:
+		if (metric->flag_data_filter_inst) {
+			*vcn_usage_sum += (uint32_t)metric->val;
+			(*vcn_usage_count)++;
+		}
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_GFX:
+		if (metric->flag_data_filter_inst &&
+		    metric->res_group == AMDGV_GPUMON_METRIC_EXT_RES_GROUP__XCP &&
+		    (!*has_gfx_clk || metric->res_instance < *gfx_xcd_instance)) {
+			val				      = (uint32_t)metric->val;
+			info->clock.cur_clk[SMI_CLK_TYPE_GFX] = val;
+			info->clock.avg_clk[SMI_CLK_TYPE_GFX] = val;
+			*gfx_xcd_instance		      = metric->res_instance;
+			*has_gfx_clk			      = true;
+		}
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_MEM:
+		if (metric->flag_data_filter_inst &&
+		    metric->res_group == AMDGV_GPUMON_METRIC_EXT_RES_GROUP__AID &&
+		    metric->res_subgroup == AMDGV_GPUMON_METRIC_EXT_RES_SUBGROUP__NA &&
+		    (!*has_mem_clk || metric->res_instance < *mem_aid_instance)) {
+			val				      = (uint32_t)metric->val;
+			info->clock.cur_clk[SMI_CLK_TYPE_MEM] = val;
+			info->clock.avg_clk[SMI_CLK_TYPE_MEM] = val;
+			*mem_aid_instance		      = metric->res_instance;
+			*has_mem_clk			      = true;
+		}
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_VCLK:
+		if (metric->flag_data_filter_inst) {
+			val = (uint32_t)metric->val;
+			if (metric->res_instance == 0) {
+				info->clock.cur_clk[SMI_CLK_TYPE_VCLK0] = val;
+				info->clock.avg_clk[SMI_CLK_TYPE_VCLK0] = val;
+			} else if (metric->res_instance == 1) {
+				info->clock.cur_clk[SMI_CLK_TYPE_VCLK1] = val;
+				info->clock.avg_clk[SMI_CLK_TYPE_VCLK1] = val;
+			}
+		}
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_DCLK:
+		if (metric->flag_data_filter_inst) {
+			val = (uint32_t)metric->val;
+			if (metric->res_instance == 0) {
+				info->clock.cur_clk[SMI_CLK_TYPE_DCLK0] = val;
+				info->clock.avg_clk[SMI_CLK_TYPE_DCLK0] = val;
+			} else if (metric->res_instance == 1) {
+				info->clock.cur_clk[SMI_CLK_TYPE_DCLK1] = val;
+				info->clock.avg_clk[SMI_CLK_TYPE_DCLK1] = val;
+			}
+		}
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_GFX_DS_DISABLED:
+		if (metric->flag_data_filter_inst &&
+		    metric->res_group == AMDGV_GPUMON_METRIC_EXT_RES_GROUP__XCP)
+			info->clock.clk_deep_sleep[SMI_CLK_TYPE_GFX] = (uint8_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_MEM_DS_DISABLED:
+		if (metric->flag_data_filter_inst &&
+		    metric->res_group == AMDGV_GPUMON_METRIC_EXT_RES_GROUP__AID)
+			info->clock.clk_deep_sleep[SMI_CLK_TYPE_MEM] = (uint8_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_VCLK_DS_DISABLED:
+		if (metric->flag_data_filter_inst) {
+			if (metric->res_instance == 0)
+				info->clock.clk_deep_sleep[SMI_CLK_TYPE_VCLK0] =
+				    (uint8_t)metric->val;
+			else if (metric->res_instance == 1)
+				info->clock.clk_deep_sleep[SMI_CLK_TYPE_VCLK1] =
+				    (uint8_t)metric->val;
+		}
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_DCLK_DS_DISABLED:
+		if (metric->flag_data_filter_inst) {
+			if (metric->res_instance == 0)
+				info->clock.clk_deep_sleep[SMI_CLK_TYPE_DCLK0] =
+				    (uint8_t)metric->val;
+			else if (metric->res_instance == 1)
+				info->clock.clk_deep_sleep[SMI_CLK_TYPE_DCLK1] =
+				    (uint8_t)metric->val;
+		}
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_GFX_MAX_LIMIT:
+		info->clock.max_clk[SMI_CLK_TYPE_GFX] = (uint32_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_GFX_MIN_LIMIT:
+		info->clock.min_clk[SMI_CLK_TYPE_GFX] = (uint32_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_MEM_MAX_LIMIT:
+		info->clock.max_clk[SMI_CLK_TYPE_MEM] = (uint32_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_MEM_MIN_LIMIT:
+		info->clock.min_clk[SMI_CLK_TYPE_MEM] = (uint32_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_VCLK_MAX_LIMIT:
+		info->clock.max_clk[SMI_CLK_TYPE_VCLK0] = (uint32_t)metric->val;
+		info->clock.max_clk[SMI_CLK_TYPE_VCLK1] = (uint32_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_VCLK_MIN_LIMIT:
+		info->clock.min_clk[SMI_CLK_TYPE_VCLK0] = (uint32_t)metric->val;
+		info->clock.min_clk[SMI_CLK_TYPE_VCLK1] = (uint32_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_DCLK_MAX_LIMIT:
+		info->clock.max_clk[SMI_CLK_TYPE_DCLK0] = (uint32_t)metric->val;
+		info->clock.max_clk[SMI_CLK_TYPE_DCLK1] = (uint32_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_DCLK_MIN_LIMIT:
+		info->clock.min_clk[SMI_CLK_TYPE_DCLK0] = (uint32_t)metric->val;
+		info->clock.min_clk[SMI_CLK_TYPE_DCLK1] = (uint32_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_GFX_LOCKED:
+		info->clock.clk_locked[SMI_CLK_TYPE_GFX] = (uint8_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__TEMP_HOTSPOT_CURR:
+		if (metric->flag_data_filter_inst &&
+		    metric->res_group == AMDGV_GPUMON_METRIC_EXT_RES_GROUP__GPU)
+			info->temp.temp[SMI_TEMPERATURE_TYPE_HOTSPOT] = (uint32_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__TEMP_MEM_CURR:
+		if (metric->flag_data_filter_inst &&
+		    metric->res_group == AMDGV_GPUMON_METRIC_EXT_RES_GROUP__AID &&
+		    metric->res_subgroup == AMDGV_GPUMON_METRIC_EXT_RES_SUBGROUP__HBM) {
+			val = (uint32_t)metric->val;
+			/* Reported per HBM stack; keep the hottest so the value matches
+			 * the aggregate reading ASICs with a GPU-scoped entry report. */
+			if (!*has_mem_temp || val > info->temp.temp[SMI_TEMPERATURE_TYPE_VRAM])
+				info->temp.temp[SMI_TEMPERATURE_TYPE_VRAM] = val;
+			*has_mem_temp = true;
+		}
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__TEMP_HOTSPOT_LIMIT:
+		info->temp_limit.temp[SMI_TEMPERATURE_TYPE_HOTSPOT] = (uint32_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__TEMP_MEM_LIMIT:
+		info->temp_limit.temp[SMI_TEMPERATURE_TYPE_VRAM] = (uint32_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__TEMP_SHUTDOWN:
+		info->temp_shutdown.temp[SMI_TEMPERATURE_TYPE_HOTSPOT] = (uint32_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__TEMP_SHUTDOWN_HBM:
+		/* Emitted twice under the same name: STATIC_TEMPERATURE carries the CTF
+		 * (shutdown) value, STATIC_THROTTLE carries the thermal limit. */
+		if (metric->category == AMDGV_GPUMON_METRIC_EXT_CATEGORY__STATIC_TEMPERATURE)
+			info->temp_shutdown.temp[SMI_TEMPERATURE_TYPE_VRAM] = (uint32_t)metric->val;
+		else if (metric->category == AMDGV_GPUMON_METRIC_EXT_CATEGORY__STATIC_THROTTLE)
+			info->temp_limit.temp[SMI_TEMPERATURE_TYPE_VRAM] = (uint32_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__POWER_CURR:
+		if (metric->flag_data_filter_inst &&
+		    metric->res_group == AMDGV_GPUMON_METRIC_EXT_RES_GROUP__GPU)
+			info->power.socket_power = (uint32_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__VOLT_GFX:
+		if (metric->flag_data_filter_inst &&
+		    metric->res_group == AMDGV_GPUMON_METRIC_EXT_RES_GROUP__GPU) {
+			val			= (uint32_t)metric->val;
+			info->power.gfx_voltage = val == SMI_NOT_SUPPORTED ? val : val / 100;
+		}
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__VOLT_SOC:
+		if (metric->flag_data_filter_inst &&
+		    metric->res_group == AMDGV_GPUMON_METRIC_EXT_RES_GROUP__GPU) {
+			val			= (uint32_t)metric->val;
+			info->power.soc_voltage = val == SMI_NOT_SUPPORTED ? val : val / 100;
+		}
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__VOLT_MEM:
+		if (metric->flag_data_filter_inst &&
+		    metric->res_group == AMDGV_GPUMON_METRIC_EXT_RES_GROUP__GPU) {
+			val			= (uint32_t)metric->val;
+			info->power.mem_voltage = val == SMI_NOT_SUPPORTED ? val : val / 100;
+		}
+		break;
+	default:
+		break;
+	}
+}
+
+static int smi_fill_gpu_performance_info_from_metrics_ext(amdgv_dev_t adev,
+							  struct smi_gpu_performance_info *info)
+{
+	struct amdgv_gpumon_metrics_ext *metrics_ext = NULL;
+	struct amdgv_gpumon_metrics_ext *static_ext  = NULL;
+	struct amdgv_gpumon_metric_ext *metric	     = NULL;
+	uint32_t num_static			     = 0;
+	uint32_t total_alloc			     = 0;
+	uint32_t i;
+	int ret			  = SMI_STATUS_SUCCESS;
+	bool has_gfx_clk	  = false;
+	bool has_mem_clk	  = false;
+	bool has_mem_temp	  = false;
+	uint32_t gfx_xcd_instance = 0;
+	uint32_t mem_aid_instance = 0;
+	uint32_t vcn_usage_sum	  = 0;
+	uint32_t vcn_usage_count  = 0;
+
+	metrics_ext = smi_oss_funcs->alloc_memory(sizeof(struct amdgv_gpumon_metrics_ext));
+	if (metrics_ext == NULL)
+		return SMI_STATUS_OUT_OF_RESOURCES;
+
+	ret = amdgv_gpumon_get_metrics_ext(adev, metrics_ext);
+	if (ret) {
+		ret = smi_convert_ret_value(ERROR_OTHER, ret);
+		goto cleanup;
+	}
+
+	/* Entries the metrics table does not carry must read back as "not supported"
+	 * so they render as N/A instead of a plausible-looking zero. */
+	for (i = 0; i <= SMI_CLK_TYPE__MAX; i++) {
+		info->clock.cur_clk[i]	      = SMI_NOT_SUPPORTED;
+		info->clock.avg_clk[i]	      = SMI_NOT_SUPPORTED;
+		info->clock.max_clk[i]	      = SMI_NOT_SUPPORTED;
+		info->clock.min_clk[i]	      = SMI_NOT_SUPPORTED;
+		info->clock.clk_locked[i]     = SMI_NOT_SUPPORTED;
+		info->clock.clk_deep_sleep[i] = SMI_NOT_SUPPORTED;
+	}
+
+	for (i = 0; i <= SMI_TEMPERATURE_TYPE__MAX; i++) {
+		info->temp.temp[i]	    = SMI_NOT_SUPPORTED;
+		info->temp_limit.temp[i]    = SMI_NOT_SUPPORTED;
+		info->temp_shutdown.temp[i] = SMI_NOT_SUPPORTED;
+	}
+
+	/* Voltages are uint64_t here, but every consumer tests the 32-bit sentinel
+	 * the legacy path leaves behind, so stay in that width. */
+	info->power.gfx_voltage = (uint32_t)SMI_NOT_SUPPORTED;
+	info->power.soc_voltage = (uint32_t)SMI_NOT_SUPPORTED;
+	info->power.mem_voltage = (uint32_t)SMI_NOT_SUPPORTED;
+	info->power.ubb_power	= SMI_NOT_SUPPORTED;
+
+	for (i = 0; i < metrics_ext->num_metric; i++) {
+		metric = &metrics_ext->metric[i];
+		smi_apply_metric_ext_to_performance_info(info,
+							 metric,
+							 &has_gfx_clk,
+							 &gfx_xcd_instance,
+							 &has_mem_clk,
+							 &mem_aid_instance,
+							 &has_mem_temp,
+							 &vcn_usage_sum,
+							 &vcn_usage_count);
+	}
+
+	if (vcn_usage_count > 0)
+		info->usage.mm_activity = vcn_usage_sum / vcn_usage_count;
+
+	if (!amdgv_gpumon_get_num_static_metrics_ext_entries(adev, &num_static) && num_static > 0) {
+		total_alloc = sizeof(struct amdgv_gpumon_metrics_ext) +
+			      (num_static * sizeof(struct amdgv_gpumon_metric_ext));
+		static_ext = smi_oss_funcs->alloc_memory(total_alloc);
+		if (static_ext != NULL && !amdgv_gpumon_get_static_metrics_ext(adev, static_ext)) {
+			for (i = 0; i < static_ext->num_metric; i++) {
+				metric = &static_ext->metric[i];
+				smi_apply_metric_ext_to_performance_info(info,
+									 metric,
+									 &has_gfx_clk,
+									 &gfx_xcd_instance,
+									 &has_mem_clk,
+									 &mem_aid_instance,
+									 &has_mem_temp,
+									 &vcn_usage_sum,
+									 &vcn_usage_count);
+			}
+		}
+	}
+
+cleanup:
+	if (metrics_ext != NULL)
+		smi_oss_funcs->free_memory(metrics_ext);
+	if (static_ext != NULL)
+		smi_oss_funcs->free_memory(static_ext);
+
+	return ret;
+}
+
+int smi_get_gpu_performance_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
+{
+	struct smi_device_info *id	      = NULL;
 	struct smi_gpu_performance_info *info = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	amdgv_dev_t *adev		      = NULL;
+	bool dev_busy			      = false;
 	struct amdgv_gpumon_metrics metrics;
 	struct amdgv_gpumon_metrics_ext *gpumon_metrics_ext = NULL;
-	struct amdgv_gpumon_metric_ext *metric = NULL;
-	void *node_dev = NULL;
-	uint32_t i = 0;
-	int ret = SMI_STATUS_SUCCESS;
+	struct amdgv_gpumon_metric_ext *metric		    = NULL;
+	void *node_dev					    = NULL;
+	uint32_t i					    = 0;
+	int ret						    = SMI_STATUS_SUCCESS;
 	int mm_ret;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_device_info_ex)) || (out_len !=
-			sizeof(struct smi_gpu_performance_info)))
+	if ((in_len != sizeof(struct smi_device_info_ex)) ||
+	    (out_len != sizeof(struct smi_gpu_performance_info)))
 		return SMI_STATUS_INVAL;
 
-	info = (struct smi_gpu_performance_info *) outb;
+	info = (struct smi_gpu_performance_info *)outb;
 	smi_oss_funcs->memset(info, 0, sizeof(*info));
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev)
@@ -890,6 +1205,14 @@ int smi_get_gpu_performance_info(struct smi_ctx *ctx, void *inb,
 
 	/* Fill the data */
 	ret = amdgv_gpumon_get_metrics(adev, &metrics);
+	if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
+		/* Kept out of ret, which the end label still converts from a libgv
+		 * code: this one is already an SMI status and must not be remapped. */
+		int smi_status = smi_fill_gpu_performance_info_from_metrics_ext(adev, info);
+
+		smi_put_handle(adev, ctx);
+		return smi_status;
+	}
 	if (ret)
 		goto end;
 
@@ -898,49 +1221,34 @@ int smi_get_gpu_performance_info(struct smi_ctx *ctx, void *inb,
 	info->usage.gfx_activity = metrics.gfx_usage;
 	info->usage.umc_activity = metrics.mem_usage;
 
-	info->usage.mm_activity = (metrics.mm_ip_usage[0] + metrics.mm_ip_usage[1])/2;
+	info->usage.mm_activity = (metrics.mm_ip_usage[0] + metrics.mm_ip_usage[1]) / 2;
 
-	info->clock.avg_clk[SMI_CLK_TYPE_GFX] =
-		metrics.clocks[AMDGV_PP_CLK_GFX].avg;
-	info->clock.avg_clk[SMI_CLK_TYPE_MEM] =
-		metrics.clocks[AMDGV_PP_CLK_MEM].avg;
-	info->clock.cur_clk[SMI_CLK_TYPE_GFX] =
-		metrics.clocks[AMDGV_PP_CLK_GFX].curr;
-	info->clock.cur_clk[SMI_CLK_TYPE_MEM] =
-		metrics.clocks[AMDGV_PP_CLK_MEM].curr;
-	info->clock.cur_clk[SMI_CLK_TYPE_VCLK0] =
-		metrics.clocks[AMDGV_PP_CLK_VCLK_0].curr;
-	info->clock.cur_clk[SMI_CLK_TYPE_VCLK1] =
-		metrics.clocks[AMDGV_PP_CLK_VCLK_1].curr;
-	info->clock.avg_clk[SMI_CLK_TYPE_VCLK0] =
-		metrics.clocks[AMDGV_PP_CLK_VCLK_0].avg;
-	info->clock.avg_clk[SMI_CLK_TYPE_VCLK1] =
-		metrics.clocks[AMDGV_PP_CLK_VCLK_1].avg;
-	info->clock.cur_clk[SMI_CLK_TYPE_DCLK0] =
-		metrics.clocks[AMDGV_PP_CLK_DCLK_0].curr;
-	info->clock.cur_clk[SMI_CLK_TYPE_DCLK1] =
-		metrics.clocks[AMDGV_PP_CLK_DCLK_1].curr;
-	info->clock.avg_clk[SMI_CLK_TYPE_DCLK0] =
-		metrics.clocks[AMDGV_PP_CLK_DCLK_0].avg;
-	info->clock.avg_clk[SMI_CLK_TYPE_DCLK1] =
-		metrics.clocks[AMDGV_PP_CLK_DCLK_1].avg;
-	info->clock.clk_deep_sleep[SMI_CLK_TYPE_GFX] =
-		metrics.clocks[AMDGV_PP_CLK_GFX].ds_disabled;
-	info->clock.clk_deep_sleep[SMI_CLK_TYPE_MEM] =
-		metrics.clocks[AMDGV_PP_CLK_MEM].ds_disabled;
+	info->clock.avg_clk[SMI_CLK_TYPE_GFX]	     = metrics.clocks[AMDGV_PP_CLK_GFX].avg;
+	info->clock.avg_clk[SMI_CLK_TYPE_MEM]	     = metrics.clocks[AMDGV_PP_CLK_MEM].avg;
+	info->clock.cur_clk[SMI_CLK_TYPE_GFX]	     = metrics.clocks[AMDGV_PP_CLK_GFX].curr;
+	info->clock.cur_clk[SMI_CLK_TYPE_MEM]	     = metrics.clocks[AMDGV_PP_CLK_MEM].curr;
+	info->clock.cur_clk[SMI_CLK_TYPE_VCLK0]	     = metrics.clocks[AMDGV_PP_CLK_VCLK_0].curr;
+	info->clock.cur_clk[SMI_CLK_TYPE_VCLK1]	     = metrics.clocks[AMDGV_PP_CLK_VCLK_1].curr;
+	info->clock.avg_clk[SMI_CLK_TYPE_VCLK0]	     = metrics.clocks[AMDGV_PP_CLK_VCLK_0].avg;
+	info->clock.avg_clk[SMI_CLK_TYPE_VCLK1]	     = metrics.clocks[AMDGV_PP_CLK_VCLK_1].avg;
+	info->clock.cur_clk[SMI_CLK_TYPE_DCLK0]	     = metrics.clocks[AMDGV_PP_CLK_DCLK_0].curr;
+	info->clock.cur_clk[SMI_CLK_TYPE_DCLK1]	     = metrics.clocks[AMDGV_PP_CLK_DCLK_1].curr;
+	info->clock.avg_clk[SMI_CLK_TYPE_DCLK0]	     = metrics.clocks[AMDGV_PP_CLK_DCLK_0].avg;
+	info->clock.avg_clk[SMI_CLK_TYPE_DCLK1]	     = metrics.clocks[AMDGV_PP_CLK_DCLK_1].avg;
+	info->clock.clk_deep_sleep[SMI_CLK_TYPE_GFX] = metrics.clocks[AMDGV_PP_CLK_GFX].ds_disabled;
+	info->clock.clk_deep_sleep[SMI_CLK_TYPE_MEM] = metrics.clocks[AMDGV_PP_CLK_MEM].ds_disabled;
 	info->clock.clk_deep_sleep[SMI_CLK_TYPE_VCLK0] =
-		metrics.clocks[AMDGV_PP_CLK_VCLK_0].ds_disabled;
+	    metrics.clocks[AMDGV_PP_CLK_VCLK_0].ds_disabled;
 	info->clock.clk_deep_sleep[SMI_CLK_TYPE_VCLK1] =
-		metrics.clocks[AMDGV_PP_CLK_VCLK_1].ds_disabled;
+	    metrics.clocks[AMDGV_PP_CLK_VCLK_1].ds_disabled;
 	info->clock.clk_deep_sleep[SMI_CLK_TYPE_DCLK0] =
-		metrics.clocks[AMDGV_PP_CLK_DCLK_0].ds_disabled;
+	    metrics.clocks[AMDGV_PP_CLK_DCLK_0].ds_disabled;
 	info->clock.clk_deep_sleep[SMI_CLK_TYPE_DCLK1] =
-		metrics.clocks[AMDGV_PP_CLK_DCLK_1].ds_disabled;
+	    metrics.clocks[AMDGV_PP_CLK_DCLK_1].ds_disabled;
 
 	ret = amdgv_gpumon_get_max_sclk(adev, &info->clock.max_clk[SMI_CLK_TYPE_GFX]);
 	if (ret)
 		goto end;
-
 
 	amdgv_gpumon_get_min_sclk(adev, &info->clock.min_clk[SMI_CLK_TYPE_GFX]);
 
@@ -950,14 +1258,13 @@ int smi_get_gpu_performance_info(struct smi_ctx *ctx, void *inb,
 
 	amdgv_gpumon_get_min_mclk(adev, &info->clock.min_clk[SMI_CLK_TYPE_MEM]);
 
-
 	mm_ret = amdgv_gpumon_get_max_vclk0(adev, &info->clock.max_clk[SMI_CLK_TYPE_VCLK0]);
 	// ret can be not supported for GPUs that don't support MM1 and MM2 domains
 	if (mm_ret && mm_ret != AMDGV_LOG_GPUMON_NOT_SUPPORTED)
 		goto end;
 	else if (mm_ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->clock.max_clk[SMI_CLK_TYPE_VCLK0] = SMI_NOT_SUPPORTED;
-		ret = SMI_STATUS_SUCCESS;
+		ret					= SMI_STATUS_SUCCESS;
 	}
 
 	mm_ret = amdgv_gpumon_get_min_vclk0(adev, &info->clock.min_clk[SMI_CLK_TYPE_VCLK0]);
@@ -967,7 +1274,7 @@ int smi_get_gpu_performance_info(struct smi_ctx *ctx, void *inb,
 		goto end;
 	else if (mm_ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->clock.min_clk[SMI_CLK_TYPE_VCLK0] = SMI_NOT_SUPPORTED;
-		ret = SMI_STATUS_SUCCESS;
+		ret					= SMI_STATUS_SUCCESS;
 	}
 
 	mm_ret = amdgv_gpumon_get_max_vclk1(adev, &info->clock.max_clk[SMI_CLK_TYPE_VCLK1]);
@@ -976,7 +1283,7 @@ int smi_get_gpu_performance_info(struct smi_ctx *ctx, void *inb,
 		goto end;
 	else if (mm_ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->clock.max_clk[SMI_CLK_TYPE_VCLK1] = SMI_NOT_SUPPORTED;
-		ret = SMI_STATUS_SUCCESS;
+		ret					= SMI_STATUS_SUCCESS;
 	}
 
 	mm_ret = amdgv_gpumon_get_min_vclk1(adev, &info->clock.min_clk[SMI_CLK_TYPE_VCLK1]);
@@ -985,7 +1292,7 @@ int smi_get_gpu_performance_info(struct smi_ctx *ctx, void *inb,
 		goto end;
 	else if (mm_ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->clock.min_clk[SMI_CLK_TYPE_VCLK1] = SMI_NOT_SUPPORTED;
-		ret = SMI_STATUS_SUCCESS;
+		ret					= SMI_STATUS_SUCCESS;
 	}
 
 	mm_ret = amdgv_gpumon_get_max_dclk0(adev, &info->clock.max_clk[SMI_CLK_TYPE_DCLK0]);
@@ -994,7 +1301,7 @@ int smi_get_gpu_performance_info(struct smi_ctx *ctx, void *inb,
 		goto end;
 	else if (mm_ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->clock.max_clk[SMI_CLK_TYPE_DCLK0] = SMI_NOT_SUPPORTED;
-		ret = SMI_STATUS_SUCCESS;
+		ret					= SMI_STATUS_SUCCESS;
 	}
 
 	mm_ret = amdgv_gpumon_get_min_dclk0(adev, &info->clock.min_clk[SMI_CLK_TYPE_DCLK0]);
@@ -1003,7 +1310,7 @@ int smi_get_gpu_performance_info(struct smi_ctx *ctx, void *inb,
 		goto end;
 	else if (mm_ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->clock.min_clk[SMI_CLK_TYPE_DCLK0] = SMI_NOT_SUPPORTED;
-		ret = SMI_STATUS_SUCCESS;
+		ret					= SMI_STATUS_SUCCESS;
 	}
 
 	mm_ret = amdgv_gpumon_get_max_dclk1(adev, &info->clock.max_clk[SMI_CLK_TYPE_DCLK1]);
@@ -1012,7 +1319,7 @@ int smi_get_gpu_performance_info(struct smi_ctx *ctx, void *inb,
 		goto end;
 	else if (mm_ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->clock.max_clk[SMI_CLK_TYPE_DCLK1] = SMI_NOT_SUPPORTED;
-		ret = SMI_STATUS_SUCCESS;
+		ret					= SMI_STATUS_SUCCESS;
 	}
 
 	mm_ret = amdgv_gpumon_get_min_dclk1(adev, &info->clock.min_clk[SMI_CLK_TYPE_DCLK1]);
@@ -1021,13 +1328,14 @@ int smi_get_gpu_performance_info(struct smi_ctx *ctx, void *inb,
 		goto end;
 	else if (mm_ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->clock.min_clk[SMI_CLK_TYPE_DCLK1] = SMI_NOT_SUPPORTED;
-		ret = SMI_STATUS_SUCCESS;
+		ret					= SMI_STATUS_SUCCESS;
 	}
 
-	ret = amdgv_gpumon_is_clk_locked(adev, AMDGV_PP_CLK_GFX, &info->clock.clk_locked[SMI_CLK_TYPE_GFX]);
+	ret = amdgv_gpumon_is_clk_locked(
+	    adev, AMDGV_PP_CLK_GFX, &info->clock.clk_locked[SMI_CLK_TYPE_GFX]);
 	if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->clock.clk_locked[SMI_CLK_TYPE_GFX] = SMI_NOT_SUPPORTED;
-		ret = SMI_STATUS_SUCCESS;
+		ret					 = SMI_STATUS_SUCCESS;
 	} else if (ret != SMI_STATUS_SUCCESS)
 		goto end;
 	else
@@ -1036,16 +1344,22 @@ int smi_get_gpu_performance_info(struct smi_ctx *ctx, void *inb,
 
 	info->power.ubb_power = SMI_NOT_SUPPORTED;
 	if (amdgv_gpumon_get_node_handle(adev, &node_dev) == 0 && node_dev != NULL) {
-		gpumon_metrics_ext = smi_oss_funcs->alloc_memory(sizeof(struct amdgv_gpumon_metrics_ext));
+		gpumon_metrics_ext =
+		    smi_oss_funcs->alloc_memory(sizeof(struct amdgv_gpumon_metrics_ext));
 		if (gpumon_metrics_ext != NULL) {
-			ret = amdgv_gpumon_get_metrics_ext((amdgv_dev_t)node_dev, gpumon_metrics_ext);
+			ret =
+			    amdgv_gpumon_get_metrics_ext((amdgv_dev_t)node_dev, gpumon_metrics_ext);
 			if (ret == SMI_STATUS_SUCCESS) {
 				for (i = 0; i < gpumon_metrics_ext->num_metric; i++) {
 					metric = &gpumon_metrics_ext->metric[i];
-					if (metric->name == AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_POWER_UBB_POWER &&
-					    metric->flag_data_filter_inst && !metric->flag_data_filter_acc &&
-					    metric->res_group == AMDGV_GPUMON_METRIC_EXT_RES_GROUP__SYSTEM &&
-					    metric->res_subgroup == AMDGV_GPUMON_METRIC_EXT_RES_SUBGROUP__BASEBOARD) {
+					if (metric->name ==
+						AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_POWER_UBB_POWER &&
+					    metric->flag_data_filter_inst &&
+					    !metric->flag_data_filter_acc &&
+					    metric->res_group ==
+						AMDGV_GPUMON_METRIC_EXT_RES_GROUP__SYSTEM &&
+					    metric->res_subgroup ==
+						AMDGV_GPUMON_METRIC_EXT_RES_SUBGROUP__BASEBOARD) {
 						info->power.ubb_power = (uint64_t)metric->val;
 						break;
 					}
@@ -1057,22 +1371,25 @@ int smi_get_gpu_performance_info(struct smi_ctx *ctx, void *inb,
 	ret = SMI_STATUS_SUCCESS;
 
 	/* The unit of voltages are in mV */
-	info->power.gfx_voltage = metrics.volt_gfx == SMI_NOT_SUPPORTED ? metrics.volt_gfx : metrics.volt_gfx / 100 ;
-	info->power.soc_voltage = metrics.volt_soc == SMI_NOT_SUPPORTED ? metrics.volt_soc : metrics.volt_soc / 100 ;
-	info->power.mem_voltage = metrics.volt_mem == SMI_NOT_SUPPORTED ? metrics.volt_mem : metrics.volt_mem / 100 ;
+	info->power.gfx_voltage =
+	    metrics.volt_gfx == SMI_NOT_SUPPORTED ? metrics.volt_gfx : metrics.volt_gfx / 100;
+	info->power.soc_voltage =
+	    metrics.volt_soc == SMI_NOT_SUPPORTED ? metrics.volt_soc : metrics.volt_soc / 100;
+	info->power.mem_voltage =
+	    metrics.volt_mem == SMI_NOT_SUPPORTED ? metrics.volt_mem : metrics.volt_mem / 100;
 
-	info->temp_shutdown.temp[SMI_TEMPERATURE_TYPE_EDGE] = metrics.temp_edge_shutdown;
+	info->temp_shutdown.temp[SMI_TEMPERATURE_TYPE_EDGE]    = metrics.temp_edge_shutdown;
 	info->temp_shutdown.temp[SMI_TEMPERATURE_TYPE_HOTSPOT] = metrics.temp_hotspot_shutdown;
-	info->temp_shutdown.temp[SMI_TEMPERATURE_TYPE_VRAM] = metrics.temp_mem_shutdown;
+	info->temp_shutdown.temp[SMI_TEMPERATURE_TYPE_VRAM]    = metrics.temp_mem_shutdown;
 
-	info->temp.temp[SMI_TEMPERATURE_TYPE_EDGE] = metrics.temp_edge;
+	info->temp.temp[SMI_TEMPERATURE_TYPE_EDGE]    = metrics.temp_edge;
 	info->temp.temp[SMI_TEMPERATURE_TYPE_HOTSPOT] = metrics.temp_hotspot;
-	info->temp.temp[SMI_TEMPERATURE_TYPE_VRAM] = metrics.temp_mem;
-	info->temp.temp[SMI_TEMPERATURE_TYPE_PLX] = metrics.temp_plx;
+	info->temp.temp[SMI_TEMPERATURE_TYPE_VRAM]    = metrics.temp_mem;
+	info->temp.temp[SMI_TEMPERATURE_TYPE_PLX]     = metrics.temp_plx;
 
-	info->temp_limit.temp[SMI_TEMPERATURE_TYPE_EDGE] = metrics.temp_edge_limit;
+	info->temp_limit.temp[SMI_TEMPERATURE_TYPE_EDGE]    = metrics.temp_edge_limit;
 	info->temp_limit.temp[SMI_TEMPERATURE_TYPE_HOTSPOT] = metrics.temp_hotspot_limit;
-	info->temp_limit.temp[SMI_TEMPERATURE_TYPE_VRAM] = metrics.temp_mem_limit;
+	info->temp_limit.temp[SMI_TEMPERATURE_TYPE_VRAM]    = metrics.temp_mem_limit;
 
 end:
 	smi_put_handle(adev, ctx);
@@ -1080,26 +1397,24 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_data(struct smi_ctx *ctx, void *inb,
-		     void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_data(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_data_query *smi_query = NULL;
-	union smi_data *info = NULL;
-	uint32_t ecc_supported = 0;
-	uint64_t ras_caps = 0;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
-	int ret = SMI_STATUS_SUCCESS;
+	union smi_data *info		 = NULL;
+	uint32_t ecc_supported		 = 0;
+	uint64_t ras_caps		 = 0;
+	amdgv_dev_t *adev		 = NULL;
+	bool dev_busy			 = false;
+	int ret				 = SMI_STATUS_SUCCESS;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_data_query)) || (out_len !=
-			sizeof(union smi_data)))
+	if ((in_len != sizeof(struct smi_data_query)) || (out_len != sizeof(union smi_data)))
 		return SMI_STATUS_INVAL;
 
-	info = (union smi_data *) outb;
+	info = (union smi_data *)outb;
 	smi_oss_funcs->memset(info, 0, sizeof(*info));
 
-	smi_query = (struct smi_data_query *) inb;
+	smi_query = (struct smi_data_query *)inb;
 
 	adev = smi_get_handle(ctx, &smi_query->dev.dev_id, NULL, &dev_busy);
 	if (!adev)
@@ -1109,10 +1424,11 @@ int smi_get_data(struct smi_ctx *ctx, void *inb,
 
 	switch (smi_query->type) {
 	case SMI_POWER_MANAGEMENT:
-		ret = amdgv_gpumon_is_power_management_enabled(adev, &info->power_management_enabled);
+		ret =
+		    amdgv_gpumon_is_power_management_enabled(adev, &info->power_management_enabled);
 		break;
 	case SMI_RAS_CAPS:
-		ret = amdgv_gpumon_get_ecc_support_flag(adev, &ecc_supported, &ras_caps);
+		ret	       = amdgv_gpumon_get_ecc_support_flag(adev, &ecc_supported, &ras_caps);
 		info->ras_caps = ras_caps;
 		break;
 	default:
@@ -1125,14 +1441,14 @@ int smi_get_data(struct smi_ctx *ctx, void *inb,
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_vf_static_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_vf_static_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
+	struct smi_device_info *id	= NULL;
 	struct smi_vf_static_info *info = NULL;
 	smi_device_handle_t pf;
 	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	bool dev_busy	  = false;
 
 	uint32_t idx_vf;
 	struct amdgv_vf_option vf_opt;
@@ -1142,21 +1458,21 @@ int smi_get_vf_static_info(struct smi_ctx *ctx, void *inb,
 
 	/* Check version */
 	if ((in_len != sizeof(struct smi_device_info)) ||
-			(out_len != sizeof(struct smi_vf_static_info)))
+	    (out_len != sizeof(struct smi_vf_static_info)))
 		return SMI_STATUS_INVAL;
 
-	info = (struct smi_vf_static_info *) outb;
+	info = (struct smi_vf_static_info *)outb;
 	smi_oss_funcs->memset(info, 0, sizeof(*info));
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
 	pf.handle = make_parent_handle(id->dev_id.handle);
-	tmp = smi_get_vf_index(ctx, (struct smi_vf_handle *)&id->dev_id);
+	tmp	  = smi_get_vf_index(ctx, (struct smi_vf_handle *)&id->dev_id);
 	if (tmp < 0)
 		return SMI_STATUS_NOT_FOUND;
 
-	idx_vf = (uint32_t) tmp;
-	adev = smi_get_handle(ctx, &pf, NULL, &dev_busy);
+	idx_vf = (uint32_t)tmp;
+	adev   = smi_get_handle(ctx, &pf, NULL, &dev_busy);
 	if (!adev)
 		return SMI_STATUS_NOT_FOUND;
 	if (dev_busy)
@@ -1172,7 +1488,7 @@ int smi_get_vf_static_info(struct smi_ctx *ctx, void *inb,
 	if (ret)
 		goto out;
 
-	info->bdf.as_uint = ctx->vf_info.id.bdf;
+	info->bdf.as_uint	   = ctx->vf_info.id.bdf;
 	info->config.gfx_timeslice = vf_opt.gfx_time_slice;
 
 	guard_info.type = AMDGV_GUARD_ALL;
@@ -1182,7 +1498,7 @@ int smi_get_vf_static_info(struct smi_ctx *ctx, void *inb,
 		goto out;
 
 	info->config.fb.fb_offset = (uint32_t)vf_opt.fb_offset;
-	info->config.fb.fb_size = (uint32_t)vf_opt.fb_size;
+	info->config.fb.fb_size	  = (uint32_t)vf_opt.fb_size;
 
 out:
 	smi_put_handle(adev, ctx);
@@ -1190,14 +1506,14 @@ out:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_vf_partition_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_vf_partition_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	int ret;
-	struct smi_device_info *id = NULL;
+	struct smi_device_info *id	   = NULL;
 	struct smi_vf_partition_info *info = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	amdgv_dev_t *adev		   = NULL;
+	bool dev_busy			   = false;
 	uint32_t idx_vf;
 	union amdgv_dev_info dev_info;
 	struct amdgv_vf_option vf_opt;
@@ -1205,14 +1521,14 @@ int smi_get_vf_partition_info(struct smi_ctx *ctx, void *inb,
 	int num_vf_supported = 0;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_device_info)) || (out_len !=
-			sizeof(struct smi_vf_partition_info)))
+	if ((in_len != sizeof(struct smi_device_info)) ||
+	    (out_len != sizeof(struct smi_vf_partition_info)))
 		return SMI_STATUS_INVAL;
 
-	info = (struct smi_vf_partition_info *) outb;
+	info = (struct smi_vf_partition_info *)outb;
 	smi_oss_funcs->memset(info, 0, sizeof(*info));
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev)
@@ -1230,10 +1546,9 @@ int smi_get_vf_partition_info(struct smi_ctx *ctx, void *inb,
 		ret = amdgv_get_vf_option(adev, idx_vf, &vf_opt);
 		if (ret)
 			goto out;
-		info->partition[idx_vf].id.handle =
-			smi_get_vf_handle(ctx, &id->dev_id, idx_vf);
+		info->partition[idx_vf].id.handle    = smi_get_vf_handle(ctx, &id->dev_id, idx_vf);
 		info->partition[idx_vf].fb.fb_offset = (uint32_t)vf_opt.fb_offset;
-		info->partition[idx_vf].fb.fb_size = (uint32_t)vf_opt.fb_size;
+		info->partition[idx_vf].fb.fb_size   = (uint32_t)vf_opt.fb_size;
 	}
 
 	smi_get_pcie_confs(adev, &pcie_speed, &pcie_width, &num_vf_supported);
@@ -1245,21 +1560,19 @@ out:
 	return smi_convert_ret_value(ERROR_PARAM_CHECK, ret);
 }
 
-
-int smi_set_vf_partition_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_set_vf_partition_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_vf_partition_config *config = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	amdgv_dev_t *adev		       = NULL;
+	bool dev_busy			       = false;
 	int ret;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_vf_partition_config)) ||
-	    (out_len != 0))
+	if ((in_len != sizeof(struct smi_vf_partition_config)) || (out_len != 0))
 		return SMI_STATUS_INVAL;
 
-	config = (struct smi_vf_partition_config *) inb;
+	config = (struct smi_vf_partition_config *)inb;
 
 	adev = smi_get_handle(ctx, &config->dev_id, NULL, &dev_busy);
 	if (!adev)
@@ -1287,13 +1600,12 @@ out:
 	return smi_convert_ret_value(ERROR_SET_VF_NUM, ret);
 }
 
-int smi_clear_vf_fb(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_clear_vf_fb(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_device_info *dev_info = NULL;
-	uint8_t pattern = 0x00;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	uint8_t pattern			 = 0x00;
+	amdgv_dev_t *adev		 = NULL;
+	bool dev_busy			 = false;
 	union amdgv_dev_conf dev_conf;
 	uint32_t idx_vf = 0;
 	smi_device_handle_t pf;
@@ -1301,14 +1613,13 @@ int smi_clear_vf_fb(struct smi_ctx *ctx, void *inb,
 	int tmp;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_device_info)) ||
-	    (out_len != 0))
+	if ((in_len != sizeof(struct smi_device_info)) || (out_len != 0))
 		return SMI_STATUS_INVAL;
 
-	dev_info = (struct smi_device_info *) inb;
+	dev_info = (struct smi_device_info *)inb;
 
 	pf.handle = make_parent_handle(dev_info->dev_id.handle);
-	adev = smi_get_handle(ctx, &pf, NULL, &dev_busy);
+	adev	  = smi_get_handle(ctx, &pf, NULL, &dev_busy);
 	if (!adev)
 		return SMI_STATUS_NOT_FOUND;
 	if (dev_busy)
@@ -1320,7 +1631,7 @@ int smi_clear_vf_fb(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_NOT_FOUND;
 	}
 
-	idx_vf = (uint32_t) tmp;
+	idx_vf = (uint32_t)tmp;
 
 	ret = amdgv_get_dev_conf(adev, AMDGV_CONF_ENABLE_CLEAR_VF_FB, &dev_conf);
 	if (ret)
@@ -1346,14 +1657,14 @@ out:
 	return smi_convert_ret_value(ERROR_CLEAR_VF_FB, ret);
 }
 
-int smi_get_vf_dynamic_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_vf_dynamic_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_device_info *input = NULL;
-	struct smi_vf_data *info = NULL;
+	struct smi_vf_data *info      = NULL;
 	smi_device_handle_t pf;
 	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	bool dev_busy	  = false;
 	int tmp;
 	uint32_t idx_vf;
 	int ret = 0;
@@ -1372,29 +1683,27 @@ int smi_get_vf_dynamic_info(struct smi_ctx *ctx, void *inb,
 	uint64_t total_running_time;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_device_info)) ||
-	    (out_len != sizeof(struct smi_vf_data)))
+	if ((in_len != sizeof(struct smi_device_info)) || (out_len != sizeof(struct smi_vf_data)))
 		return SMI_STATUS_INVAL;
 
-	input = (struct smi_device_info *) inb;
+	input = (struct smi_device_info *)inb;
 
-	info = (struct smi_vf_data *) outb;
+	info = (struct smi_vf_data *)outb;
 	smi_oss_funcs->memset(info, 0, sizeof(*info));
 
 	tmp = smi_get_vf_index(ctx, (struct smi_vf_handle *)&input->dev_id);
 	if (tmp < 0)
 		return SMI_STATUS_NOT_FOUND;
-	idx_vf = (uint32_t) tmp;
+	idx_vf = (uint32_t)tmp;
 
 	pf.handle = make_parent_handle(input->dev_id.handle);
-	adev = smi_get_handle(ctx, &pf, NULL, &dev_busy);
+	adev	  = smi_get_handle(ctx, &pf, NULL, &dev_busy);
 	if (!adev)
 		return SMI_STATUS_NOT_FOUND;
 	if (dev_busy)
 		return SMI_STATUS_BUSY;
 
-	ret = amdgv_get_vf_info(adev, idx_vf, AMDGV_GET_VF_TIME_LOG,
-				&ctx->vf_info);
+	ret = amdgv_get_vf_info(adev, idx_vf, AMDGV_GET_VF_TIME_LOG, &ctx->vf_info);
 	if (ret)
 		goto out;
 
@@ -1402,113 +1711,77 @@ int smi_get_vf_dynamic_info(struct smi_ctx *ctx, void *inb,
 
 	info->sched.flr_count = time_log->reset_count;
 
-	smi_generate_date_string(
-		info->sched.last_boot_start,
-		time_log->init_start);
-	smi_generate_date_string(
-		info->sched.last_boot_end,
-		time_log->init_end);
-	info->sched.boot_up_time =
-		time_log->init_end - time_log->init_start;
+	smi_generate_date_string(info->sched.last_boot_start, time_log->init_start);
+	smi_generate_date_string(info->sched.last_boot_end, time_log->init_end);
+	info->sched.boot_up_time = time_log->init_end - time_log->init_start;
 
-	smi_generate_date_string(
-		info->sched.last_shutdown_start,
-		time_log->finish_start);
-	smi_generate_date_string(
-		info->sched.last_shutdown_end,
-		time_log->finish_end);
-	info->sched.shutdown_time =
-		time_log->finish_end - time_log->finish_start;
+	smi_generate_date_string(info->sched.last_shutdown_start, time_log->finish_start);
+	smi_generate_date_string(info->sched.last_shutdown_end, time_log->finish_end);
+	info->sched.shutdown_time = time_log->finish_end - time_log->finish_start;
 
-	smi_generate_date_string(
-		info->sched.last_reset_start,
-		time_log->reset_start);
-	smi_generate_date_string(
-		info->sched.last_reset_end,
-		time_log->reset_end);
-	info->sched.reset_time =
-		time_log->reset_end - time_log->reset_start;
+	smi_generate_date_string(info->sched.last_reset_start, time_log->reset_start);
+	smi_generate_date_string(info->sched.last_reset_end, time_log->reset_end);
+	info->sched.reset_time = time_log->reset_end - time_log->reset_start;
 
 	/* total active time */
-	total_active_time  = time_log->cumulative_active_time;
+	total_active_time = time_log->cumulative_active_time;
 
 	total_running_time = time_log->cumulative_running_time;
 
-	if (time_log->last_save_end != 0 &&
-		time_log->last_save_end <= time_log->last_load_start &&
-		time_log->finish_end <= time_log->init_start)
+	if (time_log->last_save_end != 0 && time_log->last_save_end <= time_log->last_load_start &&
+	    time_log->finish_end <= time_log->init_start)
 		total_active_time += now - time_log->last_load_start;
 
 	if ((time_log->finish_end == 0 && time_log->init_start != 0) ||
-		(time_log->finish_end != 0 && time_log->finish_end <= time_log->init_start))
+	    (time_log->finish_end != 0 && time_log->finish_end <= time_log->init_start))
 		total_running_time += now - time_log->init_start;
 
-	smi_generate_time_string(
-		info->sched.total_active_time,
-		total_active_time);
+	smi_generate_time_string(info->sched.total_active_time, total_active_time);
 
-	smi_generate_time_string(
-		info->sched.total_running_time,
-		total_running_time
-	);
+	smi_generate_time_string(info->sched.total_running_time, total_running_time);
 
 	/* check whether VF is shutdown already */
-	running_start = time_log->init_start;
-	running_end = time_log->finish_end;
+	running_start  = time_log->init_start;
+	running_end    = time_log->finish_end;
 	is_vf_shutdown = running_end >= running_start;
 
 	if (is_vf_shutdown) {
-		smi_generate_time_string(
-			info->sched.current_running_time, 0);
-		smi_generate_time_string(
-			info->sched.current_active_time, 0);
+		smi_generate_time_string(info->sched.current_running_time, 0);
+		smi_generate_time_string(info->sched.current_active_time, 0);
 	} else {
 		if (time_log->last_save_end == 0) {
 			total_active_time += now - time_log->last_load_start;
-			smi_generate_time_string(
-				info->sched.total_active_time,
-				total_active_time);
+			smi_generate_time_string(info->sched.total_active_time, total_active_time);
 		}
-		smi_generate_time_string(
-			info->sched.current_running_time,
-			now - running_start);
-		smi_generate_time_string(
-			info->sched.current_active_time,
-			total_active_time - time_log->historical_active_time_data);
+		smi_generate_time_string(info->sched.current_running_time, now - running_start);
+		smi_generate_time_string(info->sched.current_active_time,
+					 total_active_time - time_log->historical_active_time_data);
 	}
-	ret = amdgv_get_vf_info(adev, idx_vf, AMDGV_GET_VF_SCHED_STATE,
-				&ctx->vf_info);
+	ret = amdgv_get_vf_info(adev, idx_vf, AMDGV_GET_VF_SCHED_STATE, &ctx->vf_info);
 	if (ret)
 		goto out;
-	if (!amdgv_is_customized_vf_mode(adev) &&
-		ctx->vf_info.sched.state == AMDGV_SCHED_AVAIL)
+	if (!amdgv_is_customized_vf_mode(adev) && ctx->vf_info.sched.state == AMDGV_SCHED_AVAIL)
 		info->sched.state = SMI_VF_STATE_DEFAULT_AVAILABLE;
 	else
 		info->sched.state = smi_map_sched_state(ctx->vf_info.sched.state);
 
 	guard.type = AMDGV_GUARD_ALL;
-	ret = amdgv_get_guard_info(adev, idx_vf, &guard);
+	ret	   = amdgv_get_guard_info(adev, idx_vf, &guard);
 	if (ret)
 		goto out;
-	info->guard.enabled =
-		guard.parm.general.state == AMDGV_GUARD_ENABLED;
+	info->guard.enabled = guard.parm.general.state == AMDGV_GUARD_ENABLED;
 
 	for (i = 0; i < SMI_GUARD_EVENT__MAX; i++) {
 		guard.type = i;
-		ret = amdgv_get_guard_info(adev, idx_vf, &guard);
+		ret	   = amdgv_get_guard_info(adev, idx_vf, &guard);
 		if (ret)
 			goto out;
 
-		info->guard.guard[i].state =
-			guard.parm.event.state;
-		info->guard.guard[i].amount =
-			guard.parm.event.amount;
-		info->guard.guard[i].interval =
-			guard.parm.event.interval;
-		info->guard.guard[i].threshold =
-			guard.parm.event.threshold;
-		info->guard.guard[i].active =
-			guard.parm.event.active;
+		info->guard.guard[i].state     = guard.parm.event.state;
+		info->guard.guard[i].amount    = guard.parm.event.amount;
+		info->guard.guard[i].interval  = guard.parm.event.interval;
+		info->guard.guard[i].threshold = guard.parm.event.threshold;
+		info->guard.guard[i].active    = guard.parm.event.active;
 	}
 out:
 	smi_put_handle(adev, ctx);
@@ -1516,23 +1789,23 @@ out:
 	return smi_convert_ret_value(ERROR_PARAM_CHECK, ret);
 }
 
-int smi_create_event_set(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_create_event_set(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_event_set_config *config = NULL;
-	smi_event_handle_t *handle = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	smi_event_handle_t *handle	    = NULL;
+	amdgv_dev_t *adev		    = NULL;
+	bool dev_busy			    = false;
 	int ret;
 
 	/* Check version */
 	if ((in_len != sizeof(struct smi_event_set_config)) ||
-	   (out_len != sizeof(smi_event_handle_t)))
+	    (out_len != sizeof(smi_event_handle_t)))
 		return SMI_STATUS_INVAL;
 
-	config = (struct smi_event_set_config *) inb;
+	config = (struct smi_event_set_config *)inb;
 
-	handle = (smi_event_handle_t *) outb;
+	handle = (smi_event_handle_t *)outb;
 	smi_oss_funcs->memset(handle, 0, sizeof(*handle));
 
 	adev = smi_get_handle(ctx, &config->dev_id, NULL, &dev_busy);
@@ -1554,22 +1827,22 @@ int smi_create_event_set(struct smi_ctx *ctx, void *inb,
 	return SMI_STATUS_SUCCESS;
 }
 
-int smi_read_event_set(struct smi_ctx *ctx, void *inb,
-		   void *outb, uint16_t in_len, uint16_t out_len)
+int smi_read_event_set(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_event_read_request *req = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
-	struct smi_event_entry *event = NULL;
-	int res = 0;
+	amdgv_dev_t *adev		   = NULL;
+	bool dev_busy			   = false;
+	struct smi_event_entry *event	   = NULL;
+	int res				   = 0;
 
 	/* Check version */
 	if ((in_len != sizeof(struct smi_event_read_request)) ||
-		   (out_len != sizeof(struct smi_event_entry)))
+	    (out_len != sizeof(struct smi_event_entry)))
 		return SMI_STATUS_INVAL;
 
-	req = (struct smi_event_read_request *) inb;
-	event = (struct smi_event_entry *) outb;
+	req   = (struct smi_event_read_request *)inb;
+	event = (struct smi_event_entry *)outb;
 	smi_oss_funcs->memset(event, 0, sizeof(*event));
 
 	adev = smi_get_handle(ctx, &req->dev_id, NULL, &dev_busy);
@@ -1590,20 +1863,19 @@ int smi_read_event_set(struct smi_ctx *ctx, void *inb,
 	return res;
 }
 
-int smi_destroy_event_set(struct smi_ctx *ctx, void *inb,
-		   void *outb, uint16_t in_len, uint16_t out_len)
+int smi_destroy_event_set(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_device_info *id = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
-	int res = 0;
+	amdgv_dev_t *adev	   = NULL;
+	bool dev_busy		   = false;
+	int res			   = 0;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_device_info)) ||
-	   (out_len != 0))
+	if ((in_len != sizeof(struct smi_device_info)) || (out_len != 0))
 		return SMI_STATUS_INVAL;
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev)
@@ -1622,30 +1894,28 @@ int smi_destroy_event_set(struct smi_ctx *ctx, void *inb,
 	return SMI_STATUS_SUCCESS;
 }
 
-int smi_get_ecc_info(struct smi_ctx *ctx, void *inb,
-		     void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_ecc_info(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_ecc_info *info = NULL;
-	struct smi_device_info *id = NULL;
+	struct smi_ecc_info *info	     = NULL;
+	struct smi_device_info *id	     = NULL;
 	struct amdgv_smi_ras_query_if gv_qif = {0};
-	uint64_t total_correctable = 0;
-	uint64_t total_uncorrectable = 0;
-	uint64_t total_deferred = 0;
-	uint32_t num_enabled_blocks = 0;
+	uint64_t total_correctable	     = 0;
+	uint64_t total_uncorrectable	     = 0;
+	uint64_t total_deferred		     = 0;
+	uint32_t num_enabled_blocks	     = 0;
 	int ret;
 	int i;
 
 	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	bool dev_busy	  = false;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_device_info)) ||
-	    (out_len != sizeof(struct smi_ecc_info)))
+	if ((in_len != sizeof(struct smi_device_info)) || (out_len != sizeof(struct smi_ecc_info)))
 		return SMI_STATUS_INVAL;
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
-	info = (struct smi_ecc_info *) outb;
+	info = (struct smi_ecc_info *)outb;
 	smi_oss_funcs->memset(info, 0, sizeof(*info));
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
@@ -1656,7 +1926,7 @@ int smi_get_ecc_info(struct smi_ctx *ctx, void *inb,
 
 	for (i = AMDGV_SMI_RAS_BLOCK__UMC; i < AMDGV_SMI_NUM_BLOCK_MAX; i++) {
 		gv_qif.head.block = i;
-		ret = amdgv_gpumon_get_ecc_info(adev, &gv_qif);
+		ret		  = amdgv_gpumon_get_ecc_info(adev, &gv_qif);
 		if (!ret) {
 			total_correctable += gv_qif.ce_count;
 			total_uncorrectable += gv_qif.ue_count;
@@ -1670,43 +1940,45 @@ int smi_get_ecc_info(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_NOT_SUPPORTED;
 	}
 
-	info->err_count.correctable_count = total_correctable;
+	info->err_count.correctable_count   = total_correctable;
 	info->err_count.uncorrectable_count = total_uncorrectable;
-	info->err_count.deferred_count = total_deferred;
+	info->err_count.deferred_count	    = total_deferred;
 
 	smi_put_handle(adev, ctx);
 
 	return SMI_STATUS_SUCCESS;
 }
 
-int smi_get_ecc_block_info(struct smi_ctx *ctx, void *inb,
-			   void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_ecc_block_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_ecc_info *info = NULL;
-	struct smi_ras_query_if *qif = NULL;
+	struct smi_ecc_info *info	     = NULL;
+	struct smi_ras_query_if *qif	     = NULL;
 	struct amdgv_smi_ras_query_if gv_qif = {0};
 	int ret;
 
 	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	bool dev_busy	  = false;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_ras_query_if)) ||
-	    (out_len != sizeof(struct smi_ecc_info)))
+	if ((in_len != sizeof(struct smi_ras_query_if)) || (out_len != sizeof(struct smi_ecc_info)))
 		return SMI_STATUS_INVAL;
 
-	qif = (struct smi_ras_query_if *) inb;
+	qif = (struct smi_ras_query_if *)inb;
 
-	info = (struct smi_ecc_info *) outb;
+	info = (struct smi_ecc_info *)outb;
 	smi_oss_funcs->memset(info, 0, sizeof(*info));
 
-	smi_oss_funcs->memcpy(&gv_qif.head, &qif->head,
-			      sizeof(struct amdgv_smi_ras_common_if));
-
 	gv_qif.head.block = smi_map_gpu_block(qif->head.block);
-	if (gv_qif.head.block == AMDGV_SMI_NUM_BLOCK_MAX) {
-		return SMI_STATUS_API_FAILED;
-	}
+	if (gv_qif.head.block == AMDGV_SMI_NUM_BLOCK_MAX)
+		return SMI_STATUS_INVAL;
+
+	/* smi_ras_common_if and amdgv_smi_ras_common_if have different layouts,
+	 * so the remaining fields must be copied individually.
+	 */
+	gv_qif.head.type	    = (enum amdgv_smi_ras_error_type)qif->head.type;
+	gv_qif.head.sub_block_index = qif->head.sub_block_index;
+	smi_oss_funcs->memcpy(gv_qif.head.name, qif->head.name, sizeof(gv_qif.head.name) - 1);
 
 	adev = smi_get_handle(ctx, &qif->dev_id, NULL, &dev_busy);
 	if (!adev)
@@ -1719,9 +1991,9 @@ int smi_get_ecc_block_info(struct smi_ctx *ctx, void *inb,
 		goto end;
 	}
 
-	info->err_count.correctable_count = gv_qif.ce_count;
+	info->err_count.correctable_count   = gv_qif.ce_count;
 	info->err_count.uncorrectable_count = gv_qif.ue_count;
-	info->err_count.deferred_count = gv_qif.de_count;
+	info->err_count.deferred_count	    = gv_qif.de_count;
 
 end:
 	smi_put_handle(adev, ctx);
@@ -1730,8 +2002,8 @@ end:
 }
 
 static int smi_handle_eeprom_table_record(struct amdgv_smi_ras_eeprom_table_record *records,
-		   struct amdgv_smi_ras_eeprom_table_record record,
-		   uint32_t eeprom_version)
+					  struct amdgv_smi_ras_eeprom_table_record record,
+					  uint32_t eeprom_version)
 {
 	records->retired_page = record.retired_page;
 
@@ -1740,32 +2012,31 @@ static int smi_handle_eeprom_table_record(struct amdgv_smi_ras_eeprom_table_reco
 	} else {
 		records->ts = smi_eeprom_to_utc_format(record.ts);
 	}
-	records->err_type = record.err_type;
+	records->err_type    = record.err_type;
 	records->mem_channel = record.mem_channel;
-	records->mcumc_id = record.mcumc_id;
+	records->mcumc_id    = record.mcumc_id;
 
 	return SMI_STATUS_SUCCESS;
 }
 
-int smi_query_bad_page_info(struct smi_ctx *ctx, void *inb,
-			    void *outb, uint16_t in_len, uint16_t out_len)
+int smi_query_bad_page_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_bad_page_info *bad_page_info = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
-	struct amdgv_smi_ras_eeprom_table_record record = {0};
+	struct smi_bad_page_info *bad_page_info			   = NULL;
+	amdgv_dev_t *adev					   = NULL;
+	bool dev_busy						   = false;
+	struct amdgv_smi_ras_eeprom_table_record record		   = {0};
 	struct amdgv_smi_ras_eeprom_table_record *bad_page_records = NULL;
-	int bp_cnt = 0;
-	int i = 0;
-	int ret = SMI_STATUS_SUCCESS;
-	uint32_t ras_eeprom_version = 0;
+	int bp_cnt						   = 0;
+	int i							   = 0;
+	int ret							   = SMI_STATUS_SUCCESS;
+	uint32_t ras_eeprom_version				   = 0;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_bad_page_info)) ||
-	    (out_len != 0))
+	if ((in_len != sizeof(struct smi_bad_page_info)) || (out_len != 0))
 		return SMI_STATUS_INVAL;
 
-	bad_page_info = (struct smi_bad_page_info *) inb;
+	bad_page_info = (struct smi_bad_page_info *)inb;
 
 	if (bad_page_info->size > SMI_MAX_BAD_PAGE_RECORD)
 		return SMI_STATUS_INVAL;
@@ -1786,7 +2057,8 @@ int smi_query_bad_page_info(struct smi_ctx *ctx, void *inb,
 		bp_cnt = (int)bad_page_info->size;
 	}
 
-	bad_page_records = smi_oss_funcs->alloc_memory(bp_cnt * sizeof(struct amdgv_smi_ras_eeprom_table_record));
+	bad_page_records =
+	    smi_oss_funcs->alloc_memory(bp_cnt * sizeof(struct amdgv_smi_ras_eeprom_table_record));
 	if (bad_page_records == NULL) {
 		smi_put_handle(adev, ctx);
 		return SMI_STATUS_OUT_OF_RESOURCES;
@@ -1812,51 +2084,49 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_handle_id(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_handle_id(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_get_handle_info *info = NULL;
 	struct smi_get_handle_resp *resp = NULL;
 	uint32_t i, j, idx;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_get_handle_info)) || (out_len !=
-			sizeof(struct smi_get_handle_resp)))
+	if ((in_len != sizeof(struct smi_get_handle_info)) ||
+	    (out_len != sizeof(struct smi_get_handle_resp)))
 		return SMI_STATUS_INVAL;
 
-	info = (struct smi_get_handle_info *) inb;
+	info = (struct smi_get_handle_info *)inb;
 
-	resp = (struct smi_get_handle_resp *) outb;
+	resp = (struct smi_get_handle_resp *)outb;
 	smi_oss_funcs->memset(resp, 0, sizeof(*resp));
 
 	for (i = 0; i < ctx->num_devices; i++) {
 		if (ctx->devices[i].bdf == info->bdf.as_uint) {
 			resp->dev_id.handle = ctx->devices[i].handle;
-			resp->vf_id.handle = (uint64_t) 0;
+			resp->vf_id.handle  = (uint64_t)0;
 			return SMI_STATUS_SUCCESS;
 		}
 
 		for (j = 0; j < SMI_MAX_VF_COUNT; j++) {
 			idx = i * SMI_MAX_VF_COUNT + j;
 			if (ctx->vf_map[idx].bdf == info->bdf.as_uint) {
-				resp->vf_id.handle = ctx->vf_map[idx].handle;
-				resp->dev_id.handle = (uint64_t) 0;
+				resp->vf_id.handle  = ctx->vf_map[idx].handle;
+				resp->dev_id.handle = (uint64_t)0;
 				return SMI_STATUS_SUCCESS;
 			}
 		}
-
 	}
 
 	return SMI_STATUS_NOT_FOUND;
 }
 
-int smi_get_guest_data(struct smi_ctx *ctx, void *inb,
-		       void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_guest_data(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
-	struct smi_guest_info *guest_info = NULL;
+	struct smi_device_info *id		    = NULL;
+	amdgv_dev_t *adev			    = NULL;
+	bool dev_busy				    = false;
+	struct smi_guest_info *guest_info	    = NULL;
 	struct amd_sriov_msg_vf2pf_info *vf2pf_info = NULL;
 	smi_device_handle_t pf;
 	struct smi_guest_data *guest_data = NULL;
@@ -1868,13 +2138,13 @@ int smi_get_guest_data(struct smi_ctx *ctx, void *inb,
 	    (out_len != sizeof(struct smi_guest_info)))
 		return SMI_STATUS_INVAL;
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
-	guest_info = (struct smi_guest_info *) outb;
+	guest_info = (struct smi_guest_info *)outb;
 	smi_oss_funcs->memset(guest_info, 0, sizeof(*guest_info));
 
 	pf.handle = make_parent_handle(id->dev_id.handle);
-	adev = smi_get_handle(ctx, &pf, NULL, &dev_busy);
+	adev	  = smi_get_handle(ctx, &pf, NULL, &dev_busy);
 	if (!adev)
 		return SMI_STATUS_NOT_FOUND;
 	if (dev_busy)
@@ -1886,8 +2156,7 @@ int smi_get_guest_data(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_NOT_FOUND;
 	}
 
-	vf2pf_info = smi_oss_funcs->alloc_small_memory(
-		sizeof(struct amd_sriov_msg_vf2pf_info));
+	vf2pf_info = smi_oss_funcs->alloc_small_memory(sizeof(struct amd_sriov_msg_vf2pf_info));
 	if (vf2pf_info == NULL) {
 		smi_put_handle(adev, ctx);
 		return SMI_STATUS_API_FAILED;
@@ -1896,7 +2165,7 @@ int smi_get_guest_data(struct smi_ctx *ctx, void *inb,
 	/* Initialize to zeros to avoid garbage data if VF2PF info is invalid */
 	smi_oss_funcs->memset(vf2pf_info, 0, sizeof(struct amd_sriov_msg_vf2pf_info));
 
-	ret = amdgv_get_vf2pf_info(adev, (uint32_t) idx_vf, vf2pf_info);
+	ret = amdgv_get_vf2pf_info(adev, (uint32_t)idx_vf, vf2pf_info);
 	if (ret) {
 		smi_oss_funcs->free_small_memory(vf2pf_info);
 		smi_put_handle(adev, ctx);
@@ -1906,7 +2175,8 @@ int smi_get_guest_data(struct smi_ctx *ctx, void *inb,
 	guest_data = &guest_info->guest_data;
 
 	smi_oss_funcs->memcpy(guest_data->driver_version,
-			      vf2pf_info->driver_version, sizeof(vf2pf_info->driver_version));
+			      vf2pf_info->driver_version,
+			      sizeof(vf2pf_info->driver_version));
 	guest_data->fb_usage = vf2pf_info->fb_usage;
 
 	smi_oss_funcs->free_small_memory(vf2pf_info);
@@ -1915,27 +2185,24 @@ int smi_get_guest_data(struct smi_ctx *ctx, void *inb,
 	return SMI_STATUS_SUCCESS;
 }
 
-int smi_get_dfc_fw(struct smi_ctx *ctx, void *inb,
-			      void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_dfc_fw(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
-	struct smi_dfc_fw *dfc_fw_info = NULL;
+	struct smi_device_info *id	      = NULL;
+	struct smi_dfc_fw *dfc_fw_info	      = NULL;
 	union amdgv_smi_query_info *smi_query = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	amdgv_dev_t *adev		      = NULL;
+	bool dev_busy			      = false;
 	uint32_t dfc_fw_total_entries;
 	int ret;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_device_info)) ||
-	    (out_len != sizeof(struct smi_dfc_fw)))
+	if ((in_len != sizeof(struct smi_device_info)) || (out_len != sizeof(struct smi_dfc_fw)))
 		return SMI_STATUS_INVAL;
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
-	dfc_fw_info = (struct smi_dfc_fw *) outb;
+	dfc_fw_info = (struct smi_dfc_fw *)outb;
 	smi_oss_funcs->memset(dfc_fw_info, 0, sizeof(*dfc_fw_info));
-
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev)
@@ -1956,13 +2223,15 @@ int smi_get_dfc_fw(struct smi_ctx *ctx, void *inb,
 
 	if (smi_query) {
 		dfc_fw_total_entries = smi_query->dfc_fw.header.dfc_fw_total_entries;
-		dfc_fw_total_entries = dfc_fw_total_entries >= SMI_DFC_FW_NUMBER_OF_ENTRIES ?
-			SMI_DFC_FW_NUMBER_OF_ENTRIES : dfc_fw_total_entries;
+		dfc_fw_total_entries = dfc_fw_total_entries >= SMI_DFC_FW_NUMBER_OF_ENTRIES
+					   ? SMI_DFC_FW_NUMBER_OF_ENTRIES
+					   : dfc_fw_total_entries;
 
 		smi_oss_funcs->memcpy(&dfc_fw_info->data,
-			&smi_query->dfc_fw.data, sizeof(struct smi_dfc_fw_data) * dfc_fw_total_entries);
+				      &smi_query->dfc_fw.data,
+				      sizeof(struct smi_dfc_fw_data) * dfc_fw_total_entries);
 		dfc_fw_info->header.dfc_fw_total_entries = dfc_fw_total_entries;
-		dfc_fw_info->header.dfc_fw_version = smi_query->dfc_fw.header.dfc_fw_version;
+		dfc_fw_info->header.dfc_fw_version	 = smi_query->dfc_fw.header.dfc_fw_version;
 	}
 
 end:
@@ -1973,22 +2242,66 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_pcie_info(struct smi_ctx *ctx, void *inb,
-			      void *outb, uint16_t in_len, uint16_t out_len)
+static void smi_apply_metric_ext_to_pcie_info(struct smi_pcie_info *info,
+					      const struct amdgv_gpumon_metric_ext *metric)
+{
+	switch (metric->name) {
+	case AMDGV_GPUMON_METRIC_EXT_NAME__PCIE_LINK_WIDTH:
+		if (metric->flag_data_filter_inst)
+			info->pcie_metric.pcie_width = (uint16_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__PCIE_LINK_SPEED:
+		if (metric->flag_data_filter_inst)
+			info->pcie_metric.pcie_speed = (uint32_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__PCIE_BANDWIDTH:
+		if (metric->flag_data_filter_inst)
+			info->pcie_metric.pcie_bandwidth = (uint32_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__PCIE_REPLAY_COUNT:
+		if (metric->flag_data_filter_acc)
+			info->pcie_metric.pcie_replay_count = metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__PCIE_L0_TO_RECOVERY_COUNT:
+		if (metric->flag_data_filter_acc)
+			info->pcie_metric.pcie_l0_to_recovery_count = metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__PCIE_REPLAY_ROLLOVER_COUNT:
+		if (metric->flag_data_filter_acc)
+			info->pcie_metric.pcie_replay_roll_over_count = (uint32_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__PCIE_NAK_SENT_COUNT:
+		if (metric->flag_data_filter_acc)
+			info->pcie_metric.pcie_nak_sent_count = metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__PCIE_NAK_RECEIVED_COUNT:
+		if (metric->flag_data_filter_acc)
+			info->pcie_metric.pcie_nak_received_count = metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__PCIE_OTHER_END_RECOVERY_COUNT:
+		info->pcie_metric.pcie_lc_perf_other_end_recovery_count = (uint32_t)metric->val;
+		break;
+	default:
+		break;
+	}
+}
+
+int smi_get_pcie_info(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_device_info *id = NULL;
 	struct smi_pcie_info *info = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	amdgv_dev_t *adev	   = NULL;
+	bool dev_busy		   = false;
 	struct amdgv_gpumon_metrics metrics;
 	enum amdgv_gpumon_card_form_factor type;
 	int max_vf_num = 0;
 	struct amdgv_gpumon_pcie_levels pcie_levels;
 	int pcie_ret;
 	uint32_t i;
-	int ret = SMI_STATUS_SUCCESS;
+	int ret						    = SMI_STATUS_SUCCESS;
 	struct amdgv_gpumon_metrics_ext *gpumon_metrics_ext = NULL;
-	struct amdgv_gpumon_metric_ext *metric = NULL;
+	struct amdgv_gpumon_metric_ext *metric		    = NULL;
+	int metrics_ret;
 
 	/* Check version */
 	if ((in_len != sizeof(struct smi_device_info)) ||
@@ -1996,10 +2309,10 @@ int smi_get_pcie_info(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_INVAL;
 	}
 
-	info = (struct smi_pcie_info *) outb;
+	info = (struct smi_pcie_info *)outb;
 	smi_oss_funcs->memset(info, 0, sizeof(*info));
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev)
@@ -2007,52 +2320,61 @@ int smi_get_pcie_info(struct smi_ctx *ctx, void *inb,
 	if (dev_busy)
 		return SMI_STATUS_BUSY;
 
-	/* Fill the data */
-	ret = amdgv_gpumon_get_metrics(adev, &metrics);
-	if (ret)
-		goto end;
+	/* Fill the data. The metrics read is best-effort: when the PMFW-backed table is
+	 * unavailable or the read fails, the metric fields keep their zeroed values
+	 * instead of failing the whole query, so the static PCIe configuration below is
+	 * still reported. */
+	metrics_ret = amdgv_gpumon_get_metrics(adev, &metrics);
+	if (!metrics_ret) {
+		// metric PCIe info
+		info->pcie_metric.pcie_width		      = (uint16_t)metrics.pcie_width;
+		info->pcie_metric.pcie_speed		      = (uint32_t)metrics.pcie_rate;
+		info->pcie_metric.pcie_bandwidth	      = metrics.pcie_bandwidth;
+		info->pcie_metric.pcie_replay_count	      = metrics.pcie_replay_count;
+		info->pcie_metric.pcie_l0_to_recovery_count   = metrics.pcie_l0_to_recovery_count;
+		info->pcie_metric.pcie_replay_roll_over_count = metrics.pcie_replay_roll_over_count;
+		info->pcie_metric.pcie_nak_sent_count	      = metrics.pcie_nak_sent_count;
+		info->pcie_metric.pcie_nak_received_count     = metrics.pcie_nak_received_count;
+		info->pcie_metric.pcie_lc_perf_other_end_recovery_count = SMI_NOT_SUPPORTED;
+	}
 
-	// metric PCIe info
-	info->pcie_metric.pcie_width = (uint16_t)metrics.pcie_width;
-	info->pcie_metric.pcie_speed = (uint32_t)metrics.pcie_rate;
-	info->pcie_metric.pcie_bandwidth = metrics.pcie_bandwidth;
-	info->pcie_metric.pcie_replay_count = metrics.pcie_replay_count;
-	info->pcie_metric.pcie_l0_to_recovery_count = metrics.pcie_l0_to_recovery_count;
-	info->pcie_metric.pcie_replay_roll_over_count = metrics.pcie_replay_roll_over_count;
-	info->pcie_metric.pcie_nak_sent_count = metrics.pcie_nak_sent_count;
-	info->pcie_metric.pcie_nak_received_count = metrics.pcie_nak_received_count;
-	info->pcie_metric.pcie_lc_perf_other_end_recovery_count = SMI_NOT_SUPPORTED;
 	gpumon_metrics_ext = smi_oss_funcs->alloc_memory(sizeof(struct amdgv_gpumon_metrics_ext));
 	if (gpumon_metrics_ext != NULL) {
-		ret = amdgv_gpumon_get_metrics_ext(adev, gpumon_metrics_ext);
-		if (ret == SMI_STATUS_SUCCESS) {
+		if (!amdgv_gpumon_get_metrics_ext(adev, gpumon_metrics_ext)) {
 			for (i = 0; i < gpumon_metrics_ext->num_metric; i++) {
 				metric = &gpumon_metrics_ext->metric[i];
-				if (metric->name == AMDGV_GPUMON_METRIC_EXT_NAME__PCIE_OTHER_END_RECOVERY_COUNT) {
-					info->pcie_metric.pcie_lc_perf_other_end_recovery_count = (uint32_t)metric->val;
-					break;
-				}
+
+				/* When the legacy table was read, everything except the
+				 * other-end recovery count is already filled in - that one
+				 * has no field in struct amdgv_gpumon_metrics. */
+				if (metrics_ret ||
+				    metric->name ==
+					AMDGV_GPUMON_METRIC_EXT_NAME__PCIE_OTHER_END_RECOVERY_COUNT)
+					smi_apply_metric_ext_to_pcie_info(info, metric);
 			}
 		}
 		smi_oss_funcs->free_memory(gpumon_metrics_ext);
 	}
-	ret = SMI_STATUS_SUCCESS;
 
 	// static PCIe info
-	smi_get_pcie_confs(adev, &info->pcie_static.max_pcie_speed, (int *) &info->pcie_static.max_pcie_width, &max_vf_num);
+	smi_get_pcie_confs(adev,
+			   &info->pcie_static.max_pcie_speed,
+			   (int *)&info->pcie_static.max_pcie_width,
+			   &max_vf_num);
 	ret = amdgv_gpumon_get_card_form_factor(adev, &type);
 	if (ret == 0) {
 		info->pcie_static.slot_type = smi_map_card_form_factor(type);
 	} else if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->pcie_static.slot_type = SMI_CARD_FORM_FACTOR_UNKNOWN;
-		ret = SMI_STATUS_SUCCESS;
+		ret			    = SMI_STATUS_SUCCESS;
 	} else {
 		goto end;
 	}
-	ret = amdgv_gpumon_get_gpu_max_pcie_link_generation(adev, &info->pcie_static.max_pcie_interface_version);
+	ret = amdgv_gpumon_get_gpu_max_pcie_link_generation(
+	    adev, &info->pcie_static.max_pcie_interface_version);
 	if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		info->pcie_static.max_pcie_interface_version = SMI_NOT_SUPPORTED;
-		ret = SMI_STATUS_SUCCESS;
+		ret					     = SMI_STATUS_SUCCESS;
 	} else if (ret) {
 		goto end;
 	}
@@ -2063,9 +2385,12 @@ int smi_get_pcie_info(struct smi_ctx *ctx, void *inb,
 		if (info->pcie_static.num_pcie_levels > SMI_MAX_PCIE_DPM_LEVELS)
 			info->pcie_static.num_pcie_levels = SMI_MAX_PCIE_DPM_LEVELS;
 		for (i = 0; i < info->pcie_static.num_pcie_levels; i++) {
-			info->pcie_static.pcie_levels[i].gen_speed = pcie_levels.levels[i].gen_speed;
-			info->pcie_static.pcie_levels[i].lane_count = pcie_levels.levels[i].lane_count;
-			info->pcie_static.pcie_levels[i].lclk_freq = pcie_levels.levels[i].lclk_freq;
+			info->pcie_static.pcie_levels[i].gen_speed =
+			    pcie_levels.levels[i].gen_speed;
+			info->pcie_static.pcie_levels[i].lane_count =
+			    pcie_levels.levels[i].lane_count;
+			info->pcie_static.pcie_levels[i].lclk_freq =
+			    pcie_levels.levels[i].lclk_freq;
 		}
 	} else {
 		info->pcie_static.num_pcie_levels = 0;
@@ -2077,14 +2402,14 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_ucode_err_records(struct smi_ctx *ctx, void *inb,
-			      void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_ucode_err_records(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
+	struct smi_device_info *id	    = NULL;
 	struct smi_fw_error_record *records = NULL;
 	struct amdgv_psp_mb_err_record err_record[AMDGV_MAX_PSP_MB_ERROR_RECORD];
 	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	bool dev_busy	  = false;
 	int ret;
 	int i;
 	uint32_t ucode_counter;
@@ -2095,9 +2420,9 @@ int smi_get_ucode_err_records(struct smi_ctx *ctx, void *inb,
 	    (out_len != sizeof(struct smi_fw_error_record)))
 		return SMI_STATUS_INVAL;
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
-	records = (struct smi_fw_error_record *) outb;
+	records = (struct smi_fw_error_record *)outb;
 	smi_oss_funcs->memset(records, 0, sizeof(*records));
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
@@ -2113,8 +2438,8 @@ int smi_get_ucode_err_records(struct smi_ctx *ctx, void *inb,
 		uint32_t ucode_id = smi_ucode_amdgv_to_smi(err_record[i].fw_id);
 		if (ucode_id != SMI_FW_ID__MAX) {
 			records->err_records[ucode_counter].timestamp = err_record[i].timestamp;
-			records->err_records[ucode_counter].vf_idx = err_record[i].vf_idx;
-			records->err_records[ucode_counter].fw_id = ucode_id;
+			records->err_records[ucode_counter].vf_idx    = err_record[i].vf_idx;
+			records->err_records[ucode_counter].fw_id     = ucode_id;
 			records->err_records[ucode_counter].status = (uint16_t)err_record[i].status;
 			ucode_counter++;
 		}
@@ -2126,8 +2451,8 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_vf_ucode_info(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_vf_ucode_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_device_info *id = NULL;
 	struct smi_fw_info *ucodes = NULL;
@@ -2135,24 +2460,22 @@ int smi_get_vf_ucode_info(struct smi_ctx *ctx, void *inb,
 	uint8_t ucode_info_num = 0;
 	smi_device_handle_t pf;
 	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	bool dev_busy	  = false;
 	int ret;
 	int i;
 	int idx_vf;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_device_info)) ||
-	    (out_len != sizeof(struct smi_fw_info)))
+	if ((in_len != sizeof(struct smi_device_info)) || (out_len != sizeof(struct smi_fw_info)))
 		return SMI_STATUS_INVAL;
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
-	ucodes = (struct smi_fw_info *) outb;
+	ucodes = (struct smi_fw_info *)outb;
 	smi_oss_funcs->memset(ucodes, 0, sizeof(*ucodes));
 
-
 	pf.handle = make_parent_handle(id->dev_id.handle);
-	adev = smi_get_handle(ctx, &pf, NULL, &dev_busy);
+	adev	  = smi_get_handle(ctx, &pf, NULL, &dev_busy);
 	if (!adev)
 		return SMI_STATUS_NOT_FOUND;
 	if (dev_busy)
@@ -2164,20 +2487,21 @@ int smi_get_vf_ucode_info(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_NOT_FOUND;
 	}
 
-	smi_oss_funcs->memset(ucode_info, 0,
-		sizeof(struct amdgv_firmware_info) * AMDGV_FIRMWARE_ID__MAX);
+	smi_oss_funcs->memset(
+	    ucode_info, 0, sizeof(struct amdgv_firmware_info) * AMDGV_FIRMWARE_ID__MAX);
 
-	ret = amdgv_gpumon_get_vf_fw_info(adev, (uint32_t) idx_vf, &ucode_info_num,
-					  ucode_info);
+	ret = amdgv_gpumon_get_vf_fw_info(adev, (uint32_t)idx_vf, &ucode_info_num, ucode_info);
 	if (ret) {
 		ret = smi_convert_ret_value(ERROR_OTHER, ret);
 		goto end;
 	}
 
-	if (((int)SMI_FW_ID__MAX < ucode_info_num) || (ucode_info_num >= AMDGV_FIRMWARE_ID__MAX)) {
-		ret = SMI_STATUS_API_FAILED;
-		goto end;
-	}
+	/* libgv and smi maintain separate firmware id enums, so libgv reporting
+	 * more entries than smi knows about is expected, not an error. Only bound
+	 * the read to what libgv actually filled in.
+	 */
+	if (ucode_info_num > (int)AMDGV_FIRMWARE_ID__MAX)
+		ucode_info_num = AMDGV_FIRMWARE_ID__MAX;
 
 	ucodes->num_fw_info = 0;
 	for (i = 0; i < ucode_info_num; i++) {
@@ -2185,7 +2509,10 @@ int smi_get_vf_ucode_info(struct smi_ctx *ctx, void *inb,
 		if (ucode_info[i].id == 0 || smi_ucode_id == SMI_FW_ID__MAX)
 			continue;
 
-		ucodes->fw_info_list[ucodes->num_fw_info].fw_id = (uint8_t)smi_ucode_id;
+		if (ucodes->num_fw_info >= SMI_FW_ID__MAX)
+			break;
+
+		ucodes->fw_info_list[ucodes->num_fw_info].fw_id	     = (uint8_t)smi_ucode_id;
 		ucodes->fw_info_list[ucodes->num_fw_info].fw_version = ucode_info[i].version;
 		ucodes->num_fw_info++;
 	}
@@ -2195,14 +2522,14 @@ end:
 	return ret;
 }
 
-int smi_get_partition_profile_info(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_partition_profile_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
-	struct smi_profile_info *profile_info = NULL;
+	struct smi_device_info *id		  = NULL;
+	struct smi_profile_info *profile_info	  = NULL;
 	struct smi_profile_info *oss_profile_info = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	amdgv_dev_t *adev			  = NULL;
+	bool dev_busy				  = false;
 	int ret;
 	uint32_t i, j;
 
@@ -2211,11 +2538,10 @@ int smi_get_partition_profile_info(struct smi_ctx *ctx, void *inb,
 	    (out_len != sizeof(struct smi_profile_info)))
 		return SMI_STATUS_INVAL;
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
-	profile_info = (struct smi_profile_info *) outb;
+	profile_info = (struct smi_profile_info *)outb;
 	smi_oss_funcs->memset(profile_info, 0, sizeof(*profile_info));
-
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev)
@@ -2223,8 +2549,7 @@ int smi_get_partition_profile_info(struct smi_ctx *ctx, void *inb,
 	if (dev_busy)
 		return SMI_STATUS_BUSY;
 
-	oss_profile_info = smi_oss_funcs->alloc_small_memory(
-		sizeof(struct smi_profile_info));
+	oss_profile_info = smi_oss_funcs->alloc_small_memory(sizeof(struct smi_profile_info));
 
 	if (oss_profile_info == NULL) {
 		ret = SMI_STATUS_OUT_OF_RESOURCES;
@@ -2243,7 +2568,7 @@ int smi_get_partition_profile_info(struct smi_ctx *ctx, void *inb,
 		}
 	}
 
-	profile_info->profile_count = (uint8_t)oss_profile_info->profile_count;
+	profile_info->profile_count	    = (uint8_t)oss_profile_info->profile_count;
 	profile_info->current_profile_index = (uint8_t)oss_profile_info->current_profile_index;
 
 	for (i = 0; i < oss_profile_info->profile_count; i++) {
@@ -2251,26 +2576,34 @@ int smi_get_partition_profile_info(struct smi_ctx *ctx, void *inb,
 		for (j = 0; j < SMI_PROFILE_CAPABILITY__MAX; j++) {
 			if (j != SMI_PROFILE_CAPABILITY_MEMORY) {
 				profile_info->profiles[i].profile_caps[j].total =
-						oss_profile_info->profiles[i].profile_caps[j].total;
+				    oss_profile_info->profiles[i].profile_caps[j].total;
 				profile_info->profiles[i].profile_caps[j].available =
-						oss_profile_info->profiles[i].profile_caps[j].available;
+				    oss_profile_info->profiles[i].profile_caps[j].available;
 				profile_info->profiles[i].profile_caps[j].optimal =
-						oss_profile_info->profiles[i].profile_caps[j].optimal;
+				    oss_profile_info->profiles[i].profile_caps[j].optimal;
 				profile_info->profiles[i].profile_caps[j].min_value =
-						oss_profile_info->profiles[i].profile_caps[j].min_value;
+				    oss_profile_info->profiles[i].profile_caps[j].min_value;
 				profile_info->profiles[i].profile_caps[j].max_value =
-						oss_profile_info->profiles[i].profile_caps[j].max_value;
+				    oss_profile_info->profiles[i].profile_caps[j].max_value;
 			} else {
 				profile_info->profiles[i].profile_caps[j].total =
-						(oss_profile_info->profiles[i].profile_caps[j].total / 1024) / 1024;
+				    (oss_profile_info->profiles[i].profile_caps[j].total / 1024) /
+				    1024;
 				profile_info->profiles[i].profile_caps[j].available =
-						(oss_profile_info->profiles[i].profile_caps[j].available / 1024) / 1024;
+				    (oss_profile_info->profiles[i].profile_caps[j].available /
+				     1024) /
+				    1024;
 				profile_info->profiles[i].profile_caps[j].optimal =
-						(oss_profile_info->profiles[i].profile_caps[j].optimal / 1024) / 1024;
+				    (oss_profile_info->profiles[i].profile_caps[j].optimal / 1024) /
+				    1024;
 				profile_info->profiles[i].profile_caps[j].min_value =
-						(oss_profile_info->profiles[i].profile_caps[j].min_value / 1024) / 1024;
+				    (oss_profile_info->profiles[i].profile_caps[j].min_value /
+				     1024) /
+				    1024;
 				profile_info->profiles[i].profile_caps[j].max_value =
-						(oss_profile_info->profiles[i].profile_caps[j].max_value / 1024) / 1024;
+				    (oss_profile_info->profiles[i].profile_caps[j].max_value /
+				     1024) /
+				    1024;
 			}
 		}
 	}
@@ -2282,27 +2615,27 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_link_metrics(struct smi_ctx *ctx, void *inb,
-			      void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_link_metrics(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
-	struct smi_link_metrics *link = NULL;
+	struct smi_device_info *id		       = NULL;
+	amdgv_dev_t *adev			       = NULL;
+	bool dev_busy				       = false;
+	struct smi_link_metrics *link		       = NULL;
 	struct amdgv_gpumon_link_metrics *link_metrics = NULL;
-	uint32_t i = 0;
-	int ret = SMI_STATUS_SUCCESS;
-	struct smi_device_data dev_data = {0};
+	uint32_t i				       = 0;
+	int ret					       = SMI_STATUS_SUCCESS;
+	struct smi_device_data dev_data		       = {0};
 	/* Check version */
 	if ((in_len != sizeof(struct smi_device_info)) ||
 	    (out_len != sizeof(struct smi_link_metrics))) {
 		return SMI_STATUS_INVAL;
 	}
 
-	link = (struct smi_link_metrics *) outb;
+	link = (struct smi_link_metrics *)outb;
 	smi_oss_funcs->memset(link, 0, sizeof(*link));
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, &dev_data, &dev_busy);
 	if (!adev)
@@ -2328,10 +2661,11 @@ int smi_get_link_metrics(struct smi_ctx *ctx, void *inb,
 			link->links[i].bdf.as_uint = link_metrics->links[i].bdf;
 		}
 		link->links[i].bit_rate = link_metrics->links[i].speed;
-		link->links[i].max_bandwidth = link_metrics->links[i].speed*link_metrics->links[i].width;
-		link->links[i].link_type = smi_map_link_type(link_metrics->links[i].link_type);
-		link->links[i].read = link_metrics->links[i].read;
-		link->links[i].write = link_metrics->links[i].write;
+		link->links[i].max_bandwidth =
+		    link_metrics->links[i].speed * link_metrics->links[i].width;
+		link->links[i].link_type   = smi_map_link_type(link_metrics->links[i].link_type);
+		link->links[i].read	   = link_metrics->links[i].read;
+		link->links[i].write	   = link_metrics->links[i].write;
 		link->links[i].link_status = smi_map_link_status(link_metrics->links[i].status);
 	}
 
@@ -2342,14 +2676,14 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_link_topology(struct smi_ctx *ctx, void *inb,
-			      void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_link_topology(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_device_pair_info *id = NULL;
-	amdgv_dev_t *src_adev = NULL;
-	amdgv_dev_t *dst_adev = NULL;
-	bool dev_busy = false;
-	struct smi_io_link *link = NULL;
+	amdgv_dev_t *src_adev		= NULL;
+	amdgv_dev_t *dst_adev		= NULL;
+	bool dev_busy			= false;
+	struct smi_io_link *link	= NULL;
 	struct amdgv_gpumon_link_topology_info link_topology;
 	int ret = SMI_STATUS_SUCCESS;
 
@@ -2359,10 +2693,10 @@ int smi_get_link_topology(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_INVAL;
 	}
 
-	link = (struct smi_io_link *) outb;
+	link = (struct smi_io_link *)outb;
 	smi_oss_funcs->memset(link, 0, sizeof(*link));
 
-	id = (struct smi_device_pair_info *) inb;
+	id = (struct smi_device_pair_info *)inb;
 
 	src_adev = smi_get_handle(ctx, &id->src.dev_id, NULL, &dev_busy);
 	if (!src_adev)
@@ -2385,17 +2719,21 @@ int smi_get_link_topology(struct smi_ctx *ctx, void *inb,
 	if (ret)
 		goto end;
 
-	link->link_topology.weight = link_topology.weight;
+	link->link_topology.weight	= link_topology.weight;
 	link->link_topology.link_status = smi_map_link_status(link_topology.link_status);
-	link->link_topology.link_type = smi_map_link_type(link_topology.link_type);
-	link->link_topology.num_hops = link_topology.num_hops;
-	link->link_topology.fb_sharing = link_topology.is_fb_sharing_enabled;
+	link->link_topology.link_type	= smi_map_link_type(link_topology.link_type);
+	link->link_topology.num_hops	= link_topology.num_hops;
+	link->link_topology.fb_sharing	= link_topology.is_fb_sharing_enabled;
 
-	link->p2p_capability.is_iolink_coherent = (uint8_t)link_topology.p2p_caps.is_iolink_coherent;
-	link->p2p_capability.is_iolink_atomics_32bit = (uint8_t)link_topology.p2p_caps.is_iolink_atomics_32bit;
-	link->p2p_capability.is_iolink_atomics_64bit  = (uint8_t)link_topology.p2p_caps.is_iolink_atomics_64bit ;
+	link->p2p_capability.is_iolink_coherent =
+	    (uint8_t)link_topology.p2p_caps.is_iolink_coherent;
+	link->p2p_capability.is_iolink_atomics_32bit =
+	    (uint8_t)link_topology.p2p_caps.is_iolink_atomics_32bit;
+	link->p2p_capability.is_iolink_atomics_64bit =
+	    (uint8_t)link_topology.p2p_caps.is_iolink_atomics_64bit;
 	link->p2p_capability.is_iolink_dma = (uint8_t)link_topology.p2p_caps.is_iolink_dma;
-	link->p2p_capability.is_iolink_bi_directional = (uint8_t)link_topology.p2p_caps.is_iolink_bi_directional;
+	link->p2p_capability.is_iolink_bi_directional =
+	    (uint8_t)link_topology.p2p_caps.is_iolink_bi_directional;
 
 end:
 	smi_put_handle(src_adev, ctx);
@@ -2404,12 +2742,12 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_xgmi_fb_sharing_caps(struct smi_ctx *ctx, void *inb,
-			      void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_xgmi_fb_sharing_caps(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	struct smi_device_info *id	     = NULL;
+	amdgv_dev_t *adev		     = NULL;
+	bool dev_busy			     = false;
 	union smi_xgmi_fb_sharing_caps *xgmi = NULL;
 	union amdgv_gpumon_xgmi_fb_sharing_caps xgmi_caps;
 	int ret = SMI_STATUS_SUCCESS;
@@ -2420,10 +2758,10 @@ int smi_get_xgmi_fb_sharing_caps(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_INVAL;
 	}
 
-	xgmi = (union smi_xgmi_fb_sharing_caps *) outb;
+	xgmi = (union smi_xgmi_fb_sharing_caps *)outb;
 	smi_oss_funcs->memset(xgmi, 0, sizeof(*xgmi));
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev)
@@ -2442,13 +2780,13 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_xgmi_fb_sharing_mode_info(struct smi_ctx *ctx, void *inb,
-			      void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_xgmi_fb_sharing_mode_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_xgmi_fb_sharing *id = NULL;
-	amdgv_dev_t *src_adev = NULL;
-	amdgv_dev_t *dst_adev = NULL;
-	bool dev_busy = false;
+	struct smi_xgmi_fb_sharing *id	      = NULL;
+	amdgv_dev_t *src_adev		      = NULL;
+	amdgv_dev_t *dst_adev		      = NULL;
+	bool dev_busy			      = false;
 	struct smi_xgmi_fb_sharing_flag *xgmi = NULL;
 	enum amdgv_gpumon_xgmi_fb_sharing_mode fb_sharing_mode;
 	int ret = SMI_STATUS_SUCCESS;
@@ -2459,10 +2797,10 @@ int smi_get_xgmi_fb_sharing_mode_info(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_INVAL;
 	}
 
-	xgmi = (struct smi_xgmi_fb_sharing_flag *) outb;
+	xgmi = (struct smi_xgmi_fb_sharing_flag *)outb;
 	smi_oss_funcs->memset(xgmi, 0, sizeof(*xgmi));
 
-	id = (struct smi_xgmi_fb_sharing *) inb;
+	id = (struct smi_xgmi_fb_sharing *)inb;
 
 	src_adev = smi_get_handle(ctx, &id->src_dev, NULL, &dev_busy);
 	if (!src_adev)
@@ -2482,7 +2820,8 @@ int smi_get_xgmi_fb_sharing_mode_info(struct smi_ctx *ctx, void *inb,
 	}
 
 	fb_sharing_mode = smi_map_fb_sharing_mode(id->mode);
-	ret = amdgv_gpumon_get_xgmi_fb_sharing_mode_info(src_adev, dst_adev, fb_sharing_mode, &xgmi->fb_sharing);
+	ret		= amdgv_gpumon_get_xgmi_fb_sharing_mode_info(
+		src_adev, dst_adev, fb_sharing_mode, &xgmi->fb_sharing);
 
 	smi_put_handle(src_adev, ctx);
 	smi_put_handle(dst_adev, ctx);
@@ -2490,22 +2829,21 @@ int smi_get_xgmi_fb_sharing_mode_info(struct smi_ctx *ctx, void *inb,
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_set_xgmi_fb_sharing_mode(struct smi_ctx *ctx, void *inb,
-			      void *outb, uint16_t in_len, uint16_t out_len)
+int smi_set_xgmi_fb_sharing_mode(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_set_xgmi_fb_sharing_mode *id = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	amdgv_dev_t *adev			= NULL;
+	bool dev_busy				= false;
 	enum amdgv_gpumon_xgmi_fb_sharing_mode fb_sharing_mode;
 	int ret = SMI_STATUS_SUCCESS;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_set_xgmi_fb_sharing_mode)) ||
-	    (out_len != 0)) {
+	if ((in_len != sizeof(struct smi_set_xgmi_fb_sharing_mode)) || (out_len != 0)) {
 		return SMI_STATUS_INVAL;
 	}
 
-	id = (struct smi_set_xgmi_fb_sharing_mode *) inb;
+	id = (struct smi_set_xgmi_fb_sharing_mode *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev)
@@ -2514,30 +2852,29 @@ int smi_set_xgmi_fb_sharing_mode(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_BUSY;
 
 	fb_sharing_mode = smi_map_fb_sharing_mode(id->mode);
-	ret = amdgv_gpumon_set_xgmi_fb_sharing_mode(adev, fb_sharing_mode);
+	ret		= amdgv_gpumon_set_xgmi_fb_sharing_mode(adev, fb_sharing_mode);
 
 	smi_put_handle(adev, ctx);
 
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_set_xgmi_fb_custom_sharing_mode(struct smi_ctx *ctx, void *inb,
-			      void *outb, uint16_t in_len, uint16_t out_len)
+int smi_set_xgmi_fb_custom_sharing_mode(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_set_xgmi_fb_custom_sharing_mode *id = NULL;
 	uint32_t dev_list_size;
 	amdgv_dev_t *dev_list = NULL;
-	bool dev_busy = false;
-	int ret = SMI_STATUS_SUCCESS;
-	uint32_t i = 0;
-	int j = 0;
+	bool dev_busy	      = false;
+	int ret		      = SMI_STATUS_SUCCESS;
+	uint32_t i	      = 0;
+	int j		      = 0;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_set_xgmi_fb_custom_sharing_mode)) ||
-	    (out_len != 0)) {
+	if ((in_len != sizeof(struct smi_set_xgmi_fb_custom_sharing_mode)) || (out_len != 0)) {
 		return SMI_STATUS_INVAL;
 	}
-	id = (struct smi_set_xgmi_fb_custom_sharing_mode *) inb;
+	id = (struct smi_set_xgmi_fb_custom_sharing_mode *)inb;
 
 	dev_list_size = id->num_processors;
 
@@ -2572,14 +2909,14 @@ int smi_set_xgmi_fb_custom_sharing_mode(struct smi_ctx *ctx, void *inb,
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_ras_feature_info(struct smi_ctx *ctx, void *inb,
-			     void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_ras_feature_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	struct smi_device_info *id	 = NULL;
+	amdgv_dev_t *adev		 = NULL;
+	bool dev_busy			 = false;
 	struct smi_ras_feature *ras_info = NULL;
-	int ret = SMI_STATUS_SUCCESS;
+	int ret				 = SMI_STATUS_SUCCESS;
 
 	/* Check version */
 	if ((in_len != sizeof(struct smi_device_info)) ||
@@ -2587,10 +2924,10 @@ int smi_get_ras_feature_info(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_INVAL;
 	}
 
-	ras_info = (struct smi_ras_feature *) outb;
+	ras_info = (struct smi_ras_feature *)outb;
 	smi_oss_funcs->memset(ras_info, 0, sizeof(*ras_info));
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev)
@@ -2600,13 +2937,13 @@ int smi_get_ras_feature_info(struct smi_ctx *ctx, void *inb,
 
 	ras_info->ras_eeprom_version = 0;
 	ret = amdgv_gpumon_get_ras_eeprom_version(adev, &ras_info->ras_eeprom_version);
-	if (ret){
+	if (ret) {
 		goto end;
 	}
 	ret = amdgv_gpumon_get_ecc_correction_schema(adev, &ras_info->ecc_correction_schema_flag);
 	if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		ras_info->ecc_correction_schema_flag = SMI_NOT_SUPPORTED;
-		ret = SMI_STATUS_SUCCESS;
+		ret				     = SMI_STATUS_SUCCESS;
 	}
 end:
 	smi_put_handle(adev, ctx);
@@ -2614,14 +2951,14 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_bad_page_threshold(struct smi_ctx *ctx, void *inb,
-			     void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_bad_page_threshold(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	struct smi_device_info *id	 = NULL;
+	amdgv_dev_t *adev		 = NULL;
+	bool dev_busy			 = false;
 	struct smi_ras_feature *ras_info = NULL;
-	int ret = SMI_STATUS_SUCCESS;
+	int ret				 = SMI_STATUS_SUCCESS;
 
 	/* Check version */
 	if ((in_len != sizeof(struct smi_device_info)) ||
@@ -2629,8 +2966,8 @@ int smi_get_bad_page_threshold(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_INVAL;
 	}
 
-	ras_info = (struct smi_ras_feature *) outb;
-	id = (struct smi_device_info *) inb;
+	ras_info = (struct smi_ras_feature *)outb;
+	id	 = (struct smi_device_info *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev)
@@ -2638,33 +2975,32 @@ int smi_get_bad_page_threshold(struct smi_ctx *ctx, void *inb,
 	if (dev_busy)
 		return SMI_STATUS_BUSY;
 
-	ret = amdgv_gpumon_get_bad_page_record_threshold(adev, &ras_info->bad_page_record_threshold);
+	ret =
+	    amdgv_gpumon_get_bad_page_record_threshold(adev, &ras_info->bad_page_record_threshold);
 
 	smi_put_handle(adev, ctx);
 
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-
-int smi_get_metrics_table(struct smi_ctx *ctx, void *inb,
-			    void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_metrics_table(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_metrics_table *metrics_table = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
-	int ret = SMI_STATUS_SUCCESS;
-	struct amdgv_gpumon_metrics_ext *gpumon_metrics_table = NULL;
+	struct smi_metrics_table *metrics_table			     = NULL;
+	amdgv_dev_t *adev					     = NULL;
+	bool dev_busy						     = false;
+	int ret							     = SMI_STATUS_SUCCESS;
+	struct amdgv_gpumon_metrics_ext *gpumon_metrics_table	     = NULL;
 	struct amdgv_gpumon_metrics_ext *gpumon_static_metrics_table = NULL;
-	uint32_t num_static_metrics = 0;
-	uint32_t total_alloc_size = 0;
-	uint32_t i = 0;
+	uint32_t num_static_metrics				     = 0;
+	uint32_t total_alloc_size				     = 0;
+	uint32_t i						     = 0;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_metrics_table)) ||
-	    (out_len != 0))
+	if ((in_len != sizeof(struct smi_metrics_table)) || (out_len != 0))
 		return SMI_STATUS_INVAL;
 
-	metrics_table = (struct smi_metrics_table *) inb;
+	metrics_table = (struct smi_metrics_table *)inb;
 
 	adev = smi_get_handle(ctx, &metrics_table->dev_id, NULL, &dev_busy);
 	if (!adev)
@@ -2695,7 +3031,7 @@ int smi_get_metrics_table(struct smi_ctx *ctx, void *inb,
 	 */
 	if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 		num_static_metrics = 0;
-		ret = SMI_STATUS_SUCCESS;
+		ret		   = SMI_STATUS_SUCCESS;
 	} else if (ret != SMI_STATUS_SUCCESS) {
 		goto end;
 	}
@@ -2713,7 +3049,7 @@ int smi_get_metrics_table(struct smi_ctx *ctx, void *inb,
 		ret = amdgv_gpumon_get_static_metrics_ext(adev, gpumon_static_metrics_table);
 		if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 			num_static_metrics = 0;
-			ret = SMI_STATUS_SUCCESS;
+			ret		   = SMI_STATUS_SUCCESS;
 		} else if (ret != SMI_STATUS_SUCCESS) {
 			goto end;
 		} else {
@@ -2731,7 +3067,7 @@ int smi_get_metrics_table(struct smi_ctx *ctx, void *inb,
 		if (total_metrics > metrics_table->size) {
 			/* Truncate static metrics to fit */
 			num_static_metrics = metrics_table->size - dynamic_count;
-			total_metrics = metrics_table->size;
+			total_metrics	   = metrics_table->size;
 		}
 
 		/* Allocate combined table */
@@ -2747,15 +3083,15 @@ int smi_get_metrics_table(struct smi_ctx *ctx, void *inb,
 		combined_table->num_metric = total_metrics;
 		for (i = 0; i < dynamic_count; i++) {
 			smi_oss_funcs->memcpy(&combined_table->metric[i],
-					       &gpumon_metrics_table->metric[i],
-					       sizeof(struct amdgv_gpumon_metric_ext));
+					      &gpumon_metrics_table->metric[i],
+					      sizeof(struct amdgv_gpumon_metric_ext));
 		}
 
 		/* Append static metrics */
 		for (i = 0; i < num_static_metrics; i++) {
 			smi_oss_funcs->memcpy(&combined_table->metric[dynamic_count + i],
-					       &gpumon_static_metrics_table->metric[i],
-					       sizeof(struct amdgv_gpumon_metric_ext));
+					      &gpumon_static_metrics_table->metric[i],
+					      sizeof(struct amdgv_gpumon_metric_ext));
 		}
 
 		/* Free original dynamic table and use combined table */
@@ -2778,13 +3114,13 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_memory_partition_config(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_memory_partition_config(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
+	struct smi_device_info *id			      = NULL;
 	struct smi_memory_partition_config *partition_setting = NULL;
-	struct amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	struct amdgv_dev_t *adev			      = NULL;
+	bool dev_busy					      = false;
 	struct amdgv_gpumon_memory_partition_info memory_partition_info;
 	union amdgv_gpumon_memory_partition_config memory_partition_config;
 	uint32_t i;
@@ -2796,10 +3132,10 @@ int smi_get_memory_partition_config(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_INVAL;
 	}
 
-	partition_setting = (struct smi_memory_partition_config *) outb;
+	partition_setting = (struct smi_memory_partition_config *)outb;
 	smi_oss_funcs->memset(partition_setting, 0, sizeof(*partition_setting));
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev)
@@ -2818,11 +3154,12 @@ int smi_get_memory_partition_config(struct smi_ctx *ctx, void *inb,
 
 	partition_setting->mp_mode = smi_map_mp_mode(memory_partition_info.memory_partition_mode);
 	partition_setting->partition_caps.nps_cap_mask = memory_partition_config.mp_cap_mask;
-	partition_setting->num_numa_ranges = memory_partition_info.num_numa_ranges;
+	partition_setting->num_numa_ranges	       = memory_partition_info.num_numa_ranges;
 	for (i = 0; i < partition_setting->num_numa_ranges; i++) {
-		partition_setting->numa_range[i].memory_type = smi_map_vram_type(memory_partition_info.numa_range[i].memory_type);
+		partition_setting->numa_range[i].memory_type =
+		    smi_map_vram_type(memory_partition_info.numa_range[i].memory_type);
 		partition_setting->numa_range[i].start = memory_partition_info.numa_range[i].start;
-		partition_setting->numa_range[i].end = memory_partition_info.numa_range[i].end;
+		partition_setting->numa_range[i].end   = memory_partition_info.numa_range[i].end;
 	}
 
 end:
@@ -2830,18 +3167,16 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-
-int smi_set_memory_partition_setting(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_set_memory_partition_setting(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	union amdgv_gpumon_memory_partition_config memory_partition_config;
 	struct smi_set_gpu_memory_partition_setting *id = NULL;
-	struct amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
-	int ret = SMI_STATUS_SUCCESS;
+	struct amdgv_dev_t *adev			= NULL;
+	bool dev_busy					= false;
+	int ret						= SMI_STATUS_SUCCESS;
 
-	if ((in_len != sizeof(struct smi_set_gpu_memory_partition_setting)) ||
-		(out_len != 0)) {
+	if ((in_len != sizeof(struct smi_set_gpu_memory_partition_setting)) || (out_len != 0)) {
 		return SMI_STATUS_INVAL;
 	}
 
@@ -2867,39 +3202,45 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_accelerator_partition_profile_config(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_accelerator_partition_profile_config(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	return smi_get_accelerator_partition_profile_config_common(ctx, inb, in_len, 0);
 }
 
-int smi_get_accelerator_partition_profile_config_global(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_accelerator_partition_profile_config_global(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	return smi_get_accelerator_partition_profile_config_common(ctx, inb, in_len, 1);
 }
 
-int smi_get_accelerator_partition_profile_config_common(
-	struct smi_ctx *ctx,
-	void *inb,
-	int in_len,
-	int is_global)
+int smi_get_accelerator_partition_profile_config_common(struct smi_ctx *ctx,
+							void *inb,
+							int in_len,
+							int is_global)
 {
-	struct amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
-	void *profile_configs = inb;
+	struct amdgv_dev_t *adev				       = NULL;
+	bool dev_busy						       = false;
+	void *profile_configs					       = inb;
 	struct amdgv_gpumon_accelerator_partition_profile_config *caps = NULL;
-	int ret = SMI_STATUS_SUCCESS;
+	int ret							       = SMI_STATUS_SUCCESS;
 
 	// Check version (adjust struct size based on is_global)
-	if ((in_len != (is_global ? sizeof(struct smi_profile_configs_global) : sizeof(struct smi_profile_configs))))
+	if ((in_len != (is_global ? sizeof(struct smi_profile_configs_global)
+				  : sizeof(struct smi_profile_configs))))
 		return SMI_STATUS_INVAL;
 
-	adev = smi_get_handle(ctx, is_global ?
-		&((struct smi_profile_configs_global *)profile_configs)->dev_id :
-		&((struct smi_profile_configs *)profile_configs)->dev_id, NULL, &dev_busy);
+	adev = smi_get_handle(ctx,
+			      is_global
+				  ? &((struct smi_profile_configs_global *)profile_configs)->dev_id
+				  : &((struct smi_profile_configs *)profile_configs)->dev_id,
+			      NULL,
+			      &dev_busy);
 	if (!adev)
 		return SMI_STATUS_NOT_FOUND;
 
-	caps = smi_oss_funcs->alloc_memory(sizeof(struct amdgv_gpumon_accelerator_partition_profile_config));
+	caps = smi_oss_funcs->alloc_memory(
+	    sizeof(struct amdgv_gpumon_accelerator_partition_profile_config));
 	if (caps == NULL) {
 		ret = SMI_STATUS_OUT_OF_RESOURCES;
 		goto end;
@@ -2909,7 +3250,8 @@ int smi_get_accelerator_partition_profile_config_common(
 		ret = amdgv_gpumon_get_accelerator_partition_profile_config_global(adev, caps);
 		if (ret)
 			goto end;
-		ret = smi_get_partition_global((struct smi_profile_configs_global *)profile_configs, caps);
+		ret = smi_get_partition_global((struct smi_profile_configs_global *)profile_configs,
+					       caps);
 	} else {
 		ret = amdgv_gpumon_get_accelerator_partition_profile_config(adev, caps);
 		if (ret)
@@ -2924,13 +3266,13 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_accelerator_partition_profile(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_accelerator_partition_profile(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
+	struct smi_device_info *id			     = NULL;
 	struct smi_accelerator_partition_profile_cap *config = NULL;
-	struct amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	struct amdgv_dev_t *adev			     = NULL;
+	bool dev_busy					     = false;
 	struct amdgv_gpumon_acccelerator_partition_profile profile;
 	uint32_t i, j;
 	int ret = SMI_STATUS_SUCCESS;
@@ -2941,10 +3283,10 @@ int smi_get_accelerator_partition_profile(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_INVAL;
 	}
 
-	config = (struct smi_accelerator_partition_profile_cap *) outb;
+	config = (struct smi_accelerator_partition_profile_cap *)outb;
 	smi_oss_funcs->memset(config, 0, sizeof(*config));
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev)
@@ -2958,11 +3300,11 @@ int smi_get_accelerator_partition_profile(struct smi_ctx *ctx, void *inb,
 		goto end;
 	}
 
-	config->config.profile_type = smi_map_partition_type(profile.profile_type);
-	config->config.num_partitions = profile.num_partitions;
+	config->config.profile_type		= smi_map_partition_type(profile.profile_type);
+	config->config.num_partitions		= profile.num_partitions;
 	config->config.memory_caps.nps_cap_mask = profile.memory_caps.mp_cap_mask;
-	config->config.profile_index = profile.profile_index;
-	config->config.num_resources = profile.num_resources;
+	config->config.profile_index		= profile.profile_index;
+	config->config.num_resources		= profile.num_resources;
 	for (i = 0; i < config->config.num_partitions; i++) {
 		config->partition_id[i] = profile.partition_id[i];
 		for (j = 0; j < config->config.num_resources; j++) {
@@ -2975,17 +3317,17 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_set_accelerator_partition_setting(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_set_accelerator_partition_setting(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_set_gpu_accelerator_partition_setting *id = NULL;
-	struct amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	struct smi_set_gpu_accelerator_partition_setting *id	       = NULL;
+	struct amdgv_dev_t *adev				       = NULL;
+	bool dev_busy						       = false;
 	struct amdgv_gpumon_accelerator_partition_profile_config *caps = NULL;
-	int ret = SMI_STATUS_SUCCESS;
+	int ret							       = SMI_STATUS_SUCCESS;
 
 	if ((in_len != sizeof(struct smi_set_gpu_accelerator_partition_setting)) ||
-		(out_len != 0)) {
+	    (out_len != 0)) {
 		return SMI_STATUS_INVAL;
 	}
 
@@ -2999,7 +3341,8 @@ int smi_set_accelerator_partition_setting(struct smi_ctx *ctx, void *inb,
 	if (dev_busy)
 		return SMI_STATUS_BUSY;
 
-	caps = smi_oss_funcs->alloc_memory(sizeof(struct amdgv_gpumon_accelerator_partition_profile_config));
+	caps = smi_oss_funcs->alloc_memory(
+	    sizeof(struct amdgv_gpumon_accelerator_partition_profile_config));
 	if (caps == NULL) {
 		ret = SMI_STATUS_OUT_OF_RESOURCES;
 		goto end;
@@ -3026,11 +3369,11 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_soc_pstate(struct smi_ctx *ctx, void *inb,
-			    void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_soc_pstate(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	amdgv_dev_t *adev = NULL;
-	struct smi_device_info *id = NULL;
+	amdgv_dev_t *adev		  = NULL;
+	struct smi_device_info *id	  = NULL;
 	struct smi_dpm_policy *dpm_policy = NULL;
 	struct amdgv_gpumon_smu_dpm_policy dpm_policy_info;
 	bool dev_busy = false;
@@ -3043,10 +3386,10 @@ int smi_get_soc_pstate(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_INVAL;
 	}
 
-	dpm_policy = (struct smi_dpm_policy *) outb;
+	dpm_policy = (struct smi_dpm_policy *)outb;
 	smi_oss_funcs->memset(dpm_policy, 0, sizeof(*dpm_policy));
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev) {
@@ -3060,15 +3403,17 @@ int smi_get_soc_pstate(struct smi_ctx *ctx, void *inb,
 		goto end;
 
 	dpm_policy->num_supported = AMDGV_GPUMON_SOC_PSTATE_COUNT;
-	dpm_policy->cur = dpm_policy_info.current_level;
+	dpm_policy->cur		  = dpm_policy_info.current_level;
 
 	for (i = 0; i < AMDGV_GPUMON_SOC_PSTATE_COUNT; i++) {
 		dpm_policy->policies[i].policy_id = dpm_policy_info.policies[i].policy_id;
-		smi_oss_funcs->memcpy(dpm_policy->policies[i].policy_description,
-			dpm_policy_info.policies[i].policy_description,
-			smi_oss_funcs->strlen(dpm_policy_info.policies[i].policy_description));
+		smi_oss_funcs->memcpy(
+		    dpm_policy->policies[i].policy_description,
+		    dpm_policy_info.policies[i].policy_description,
+		    smi_oss_funcs->strlen(dpm_policy_info.policies[i].policy_description));
 		for (j = 0; dpm_policy->policies[i].policy_description[j] != '\0'; j++) {
-			dpm_policy->policies[i].policy_description[j] = (char)smi_toupper((unsigned char)dpm_policy->policies[i].policy_description[j]);
+			dpm_policy->policies[i].policy_description[j] = (char)smi_toupper(
+			    (unsigned char)dpm_policy->policies[i].policy_description[j]);
 		}
 	}
 
@@ -3078,21 +3423,20 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_set_soc_pstate(struct smi_ctx *ctx, void *inb,
-			      void *outb, uint16_t in_len, uint16_t out_len)
+int smi_set_soc_pstate(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_set_dpm_policy *id = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
-	int ret = SMI_STATUS_SUCCESS;
+	amdgv_dev_t *adev	      = NULL;
+	bool dev_busy		      = false;
+	int ret			      = SMI_STATUS_SUCCESS;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_set_dpm_policy)) ||
-	    (out_len != 0)) {
+	if ((in_len != sizeof(struct smi_set_dpm_policy)) || (out_len != 0)) {
 		return SMI_STATUS_INVAL;
 	}
 
-	id = (struct smi_set_dpm_policy *) inb;
+	id = (struct smi_set_dpm_policy *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev) {
@@ -3108,28 +3452,27 @@ int smi_set_soc_pstate(struct smi_ctx *ctx, void *inb,
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_cper_error(struct smi_ctx *ctx, void *inb,
-			    void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_cper_error(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	amdgv_dev_t *adev = NULL;
+	amdgv_dev_t *adev	       = NULL;
 	struct smi_cper_config *config = NULL;
-	bool dev_busy = false;
-	int ret = SMI_STATUS_SUCCESS;
+	bool dev_busy		       = false;
+	int ret			       = SMI_STATUS_SUCCESS;
 
-	uint32_t size = SMI_MAX_CPER_SIZE;
-	uint64_t write_count = 0;
+	uint32_t size		= SMI_MAX_CPER_SIZE;
+	uint64_t write_count	= 0;
 	uint64_t overflow_count = 0;
-	uint64_t left_size = 0;
-	char *buf = NULL;
+	uint64_t left_size	= 0;
+	char *buf		= NULL;
 	uint32_t smi_cper_hdrs[SMI_MAX_CPER_HDRS];
 	uint64_t hardware_write_count = 0;
 
-	struct smi_cper_hdr * hdr = NULL;
-	unsigned int i = 0;
+	struct smi_cper_hdr *hdr = NULL;
+	unsigned int i		 = 0;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_cper_config)) ||
-		(out_len != 0)) {
+	if ((in_len != sizeof(struct smi_cper_config)) || (out_len != 0)) {
 		return SMI_STATUS_INVAL;
 	}
 
@@ -3138,24 +3481,25 @@ int smi_get_cper_error(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_OUT_OF_RESOURCES;
 	}
 
-	config = (struct smi_cper_config *) inb;
+	config = (struct smi_cper_config *)inb;
 
 	adev = smi_get_handle(ctx, &config->dev_id, NULL, &dev_busy);
 	if (!adev) {
 		smi_oss_funcs->free_memory(buf);
 		return SMI_STATUS_NOT_FOUND;
 	}
-	if (dev_busy){
+	if (dev_busy) {
 		smi_oss_funcs->free_memory(buf);
 		return SMI_STATUS_BUSY;
 	}
 
-	ret = amdgv_gpumon_cper_get_entries(adev, config->input_cursor, buf, size, &write_count, &overflow_count, &left_size);
+	ret = amdgv_gpumon_cper_get_entries(
+	    adev, config->input_cursor, buf, size, &write_count, &overflow_count, &left_size);
 	if (ret) {
 		goto end;
 	}
 
-	hdr = (struct smi_cper_hdr*)(buf);
+	hdr		 = (struct smi_cper_hdr *)(buf);
 	smi_cper_hdrs[0] = 0;
 
 	/* Save original write_count */
@@ -3165,15 +3509,16 @@ int smi_get_cper_error(struct smi_ctx *ctx, void *inb,
 	write_count = write_count >= SMI_MAX_CPER_HDRS ? SMI_MAX_CPER_HDRS : write_count;
 
 	for (i = 1; i < write_count; i++) {
-		smi_cper_hdrs[i] = smi_cper_hdrs[i-1] + hdr->record_length;
+		smi_cper_hdrs[i] = smi_cper_hdrs[i - 1] + hdr->record_length;
 
 		/* next entry */
-		hdr = (struct smi_cper_hdr*)((char *)hdr + hdr->record_length);
+		hdr = (struct smi_cper_hdr *)((char *)hdr + hdr->record_length);
 	}
 
 	config->input_cursor = config->input_cursor + write_count + overflow_count;
 
-	ret = smi_get_cper_data(config, in_len, size, buf, write_count, smi_cper_hdrs, overflow_count);
+	ret = smi_get_cper_data(
+	    config, in_len, size, buf, write_count, smi_cper_hdrs, overflow_count);
 	if (ret) {
 		goto end;
 	}
@@ -3189,18 +3534,17 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_reset_gpu(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len)
+int smi_reset_gpu(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_device_info *id = NULL;
-	int ret = SMI_STATUS_SUCCESS;
+	int ret			   = SMI_STATUS_SUCCESS;
 
 	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	bool dev_busy	  = false;
 	if (in_len != sizeof(struct smi_device_info))
 		return SMI_STATUS_INVAL;
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev) {
@@ -3217,11 +3561,10 @@ int smi_reset_gpu(struct smi_ctx *ctx, void *inb,
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_xgmi_plpd(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_xgmi_plpd(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	bool dev_busy	  = false;
 	struct smi_device_info *id;
 	struct smi_dpm_policy *dpm_policy = NULL;
 	struct amdgv_gpumon_smu_dpm_policy dpm_policy_info;
@@ -3234,8 +3577,8 @@ int smi_get_xgmi_plpd(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_INVAL;
 	}
 
-	dpm_policy = (struct smi_dpm_policy *) outb;
-	id = (struct smi_device_info *) inb;
+	dpm_policy = (struct smi_dpm_policy *)outb;
+	id	   = (struct smi_device_info *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev) {
@@ -3249,13 +3592,14 @@ int smi_get_xgmi_plpd(struct smi_ctx *ctx, void *inb,
 		goto end;
 
 	dpm_policy->num_supported = AMDGV_GPUMON_PLPD_COUNT;
-	dpm_policy->cur = dpm_policy_info.current_level;
+	dpm_policy->cur		  = dpm_policy_info.current_level;
 
 	for (i = 0; i < AMDGV_GPUMON_PLPD_COUNT; i++) {
 		dpm_policy->policies[i].policy_id = dpm_policy_info.policies[i].policy_id;
-		smi_oss_funcs->memcpy(dpm_policy->policies[i].policy_description,
-			dpm_policy_info.policies[i].policy_description,
-			smi_oss_funcs->strlen(dpm_policy_info.policies[i].policy_description));
+		smi_oss_funcs->memcpy(
+		    dpm_policy->policies[i].policy_description,
+		    dpm_policy_info.policies[i].policy_description,
+		    smi_oss_funcs->strlen(dpm_policy_info.policies[i].policy_description));
 	}
 
 end:
@@ -3264,21 +3608,19 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_set_xgmi_plpd(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len)
+int smi_set_xgmi_plpd(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_set_dpm_policy *id;
 	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
-	int ret = SMI_STATUS_SUCCESS;
+	bool dev_busy	  = false;
+	int ret		  = SMI_STATUS_SUCCESS;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_set_dpm_policy)) ||
-	    (out_len != 0)) {
+	if ((in_len != sizeof(struct smi_set_dpm_policy)) || (out_len != 0)) {
 		return SMI_STATUS_INVAL;
 	}
 
-	id = (struct smi_set_dpm_policy *) inb;
+	id = (struct smi_set_dpm_policy *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev) {
@@ -3294,14 +3636,14 @@ int smi_set_xgmi_plpd(struct smi_ctx *ctx, void *inb,
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_vf_hbm_info(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_vf_hbm_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
+	struct smi_device_info *id   = NULL;
 	struct smi_vf_hbm_info *info = NULL;
 	smi_device_handle_t pf;
 	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	bool dev_busy	  = false;
 
 	uint32_t idx_vf;
 	int tmp;
@@ -3309,22 +3651,22 @@ int smi_get_vf_hbm_info(struct smi_ctx *ctx, void *inb,
 
 	/* Check version */
 	if ((in_len != sizeof(struct smi_device_info)) ||
-		(out_len != sizeof(struct smi_vf_hbm_info))) {
+	    (out_len != sizeof(struct smi_vf_hbm_info))) {
 		return SMI_STATUS_INVAL;
 	}
 
-	info = (struct smi_vf_hbm_info *) outb;
+	info = (struct smi_vf_hbm_info *)outb;
 	smi_oss_funcs->memset(info, 0, sizeof(*info));
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
 	pf.handle = make_parent_handle(id->dev_id.handle);
-	tmp = smi_get_vf_index(ctx, (struct smi_vf_handle *)&id->dev_id);
+	tmp	  = smi_get_vf_index(ctx, (struct smi_vf_handle *)&id->dev_id);
 	if (tmp < 0) {
 		return SMI_STATUS_NOT_FOUND;
 	}
 
-	idx_vf = (uint32_t) tmp;
+	idx_vf = (uint32_t)tmp;
 
 	adev = smi_get_handle(ctx, &pf, NULL, &dev_busy);
 	if (!adev) {
@@ -3342,34 +3684,34 @@ int smi_get_vf_hbm_info(struct smi_ctx *ctx, void *inb,
 	info->phy_size = ctx->vf_info.vf_hbm_mgmt.phy_size;
 	/* libgv reports -1 when no NUMA node is associated (e.g. DAX mode);
 	 * surface that as 0xFFFFFFFF to match the smi_vf_hbm_info ABI. */
-	info->numa_id = (ctx->vf_info.vf_hbm_mgmt.numa_id < 0) ?
-				0xFFFFFFFF :
-				(uint32_t)ctx->vf_info.vf_hbm_mgmt.numa_id;
-	smi_oss_funcs->memcpy(info->name, ctx->vf_info.vf_hbm_mgmt.name,
-		sizeof(ctx->vf_info.vf_hbm_mgmt.name));
+	info->numa_id = (ctx->vf_info.vf_hbm_mgmt.numa_id < 0)
+			    ? 0xFFFFFFFF
+			    : (uint32_t)ctx->vf_info.vf_hbm_mgmt.numa_id;
+	smi_oss_funcs->memcpy(
+	    info->name, ctx->vf_info.vf_hbm_mgmt.name, sizeof(ctx->vf_info.vf_hbm_mgmt.name));
 
 out:
 	smi_put_handle(adev, ctx);
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_node_handle(struct smi_ctx *ctx, void *inb,
-	void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_node_handle(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	amdgv_dev_t *adev = NULL;
+	amdgv_dev_t *adev    = NULL;
 	amdgv_dev_t node_dev = NULL;
-	bool dev_busy = false;
+	bool dev_busy	     = false;
 	struct smi_device_info *id;
 	struct smi_node_info *node;
 	int ret = SMI_STATUS_SUCCESS;
 
 	if ((in_len != sizeof(struct smi_device_info)) ||
-		(out_len != sizeof(struct smi_node_info))) {
+	    (out_len != sizeof(struct smi_node_info))) {
 		return SMI_STATUS_INVAL;
 	}
 
-	id = (struct smi_device_info *) inb;
-	node = (struct smi_node_info *) outb;
+	id   = (struct smi_device_info *)inb;
+	node = (struct smi_node_info *)outb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 
@@ -3379,8 +3721,7 @@ int smi_get_node_handle(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_BUSY;
 
 	ret = amdgv_gpumon_get_node_handle(adev, &node_dev);
-	if (ret)
-	{
+	if (ret) {
 		goto end;
 	}
 
@@ -3392,43 +3733,46 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_npm_info(struct smi_ctx *ctx, void *inb,
-	void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_npm_info(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_node_info *node;
 	struct smi_npm_info *npm_info = NULL;
 	struct amdgv_gpumon_npm_info gpumon_npm_info;
 	struct amdgv_gpumon_metrics_ext *gpumon_metrics_ext = NULL;
-	struct amdgv_gpumon_metric_ext *metric = NULL;
-	uint32_t i = 0;
-	int ret = SMI_STATUS_SUCCESS;
+	struct amdgv_gpumon_metric_ext *metric		    = NULL;
+	uint32_t i					    = 0;
+	int ret						    = SMI_STATUS_SUCCESS;
 
-	if ((in_len != sizeof(struct smi_node_info)) ||
-		(out_len != sizeof(struct smi_npm_info))) {
+	if ((in_len != sizeof(struct smi_node_info)) || (out_len != sizeof(struct smi_npm_info))) {
 		return SMI_STATUS_INVAL;
 	}
 
-	npm_info = (struct smi_npm_info *) outb;
-	node = (struct smi_node_info *) inb;
+	npm_info = (struct smi_npm_info *)outb;
+	node	 = (struct smi_node_info *)inb;
 
 	ret = amdgv_gpumon_get_npm_info((amdgv_dev_t)node->node.handle, &gpumon_npm_info);
 	if (ret)
 		goto end;
 
 	npm_info->status = smi_map_npm_status(gpumon_npm_info.npm_status);
-	npm_info->limit = gpumon_npm_info.npm_limit;
+	npm_info->limit	 = gpumon_npm_info.npm_limit;
 
 	npm_info->ubb_power_threshold = SMI_NOT_SUPPORTED;
 	gpumon_metrics_ext = smi_oss_funcs->alloc_memory(sizeof(struct amdgv_gpumon_metrics_ext));
 	if (gpumon_metrics_ext != NULL) {
-		ret = amdgv_gpumon_get_metrics_ext((amdgv_dev_t)node->node.handle, gpumon_metrics_ext);
+		ret = amdgv_gpumon_get_metrics_ext((amdgv_dev_t)node->node.handle,
+						   gpumon_metrics_ext);
 		if (ret == SMI_STATUS_SUCCESS) {
 			for (i = 0; i < gpumon_metrics_ext->num_metric; i++) {
 				metric = &gpumon_metrics_ext->metric[i];
-				if (metric->name == AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_POWER_UBB_POWER_THRESHOLD &&
-				    metric->flag_data_filter_inst && !metric->flag_data_filter_acc &&
-				    metric->res_group == AMDGV_GPUMON_METRIC_EXT_RES_GROUP__SYSTEM &&
-				    metric->res_subgroup == AMDGV_GPUMON_METRIC_EXT_RES_SUBGROUP__BASEBOARD) {
+				if (metric->name ==
+					AMDGV_GPUMON_METRIC_EXT_NAME__SYSTEM_POWER_UBB_POWER_THRESHOLD &&
+				    metric->flag_data_filter_inst &&
+				    !metric->flag_data_filter_acc &&
+				    metric->res_group ==
+					AMDGV_GPUMON_METRIC_EXT_RES_GROUP__SYSTEM &&
+				    metric->res_subgroup ==
+					AMDGV_GPUMON_METRIC_EXT_RES_SUBGROUP__BASEBOARD) {
 					npm_info->ubb_power_threshold = (uint32_t)metric->val;
 					break;
 				}
@@ -3442,11 +3786,11 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_ras_policy_info(struct smi_ctx *ctx, void *inb,
-			    void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_ras_policy_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	bool dev_busy	  = false;
 	struct smi_device_info *id;
 	struct smi_gpu_ras_policy_info *ras_policy = NULL;
 	struct amdgv_gpumon_ras_policy_info ras_policy_info;
@@ -3458,8 +3802,8 @@ int smi_get_ras_policy_info(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_INVAL;
 	}
 
-	ras_policy = (struct smi_gpu_ras_policy_info *) outb;
-	id = (struct smi_device_info *) inb;
+	ras_policy = (struct smi_gpu_ras_policy_info *)outb;
+	id	   = (struct smi_device_info *)inb;
 
 	smi_oss_funcs->memset(ras_policy, 0, sizeof(*ras_policy));
 
@@ -3478,36 +3822,41 @@ int smi_get_ras_policy_info(struct smi_ctx *ctx, void *inb,
 	ras_policy->minor_version = ras_policy_info.minor_version;
 
 	smi_oss_funcs->memcpy(&ras_policy->policy_data,
-			(uint8_t*)&ras_policy_info + SMI_RAS_POLICY_HEADER_SIZE,
-			sizeof(ras_policy_info) - SMI_RAS_POLICY_HEADER_SIZE);
+			      (uint8_t *)&ras_policy_info + SMI_RAS_POLICY_HEADER_SIZE,
+			      sizeof(ras_policy_info) - SMI_RAS_POLICY_HEADER_SIZE);
 end:
 	smi_put_handle(adev, ctx);
 
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_gpu_fabric_info(struct smi_ctx *ctx, void *inb,
-			void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_gpu_fabric_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
+	struct smi_device_info *id	 = NULL;
 	struct smi_fabric_info_ver *info = NULL;
-	amdgv_dev_t *adev = NULL;
-	struct smi_device_data dev_data = {0};
-	bool dev_busy = false;
+	amdgv_dev_t *adev		 = NULL;
+	struct smi_device_data dev_data	 = {0};
+	bool dev_busy			 = false;
 	struct amdgv_gpumon_get_config_rsp_ual_v1 config;
+	struct amdgv_gpumon_station_config_ual_v1 station_config;
 	uint32_t intf_ver = 0;
-	uint16_t major = 0;
-	int ret = 0;
+	uint32_t i	  = 0;
+	bool config_ok	  = false;
+	bool station_ok	  = false;
+	uint16_t major	  = 0;
+	int ret		  = 0;
+	int config_ret	  = 0;
+	int station_ret	  = 0;
 
-	/* Check version */
 	if ((in_len != sizeof(struct smi_device_info)) ||
-		(out_len != sizeof(struct smi_fabric_info_ver)))
+	    (out_len != sizeof(struct smi_fabric_info_ver)))
 		return SMI_STATUS_INVAL;
 
-	info = (struct smi_fabric_info_ver *) outb;
+	info = (struct smi_fabric_info_ver *)outb;
 	smi_oss_funcs->memset(info, 0, sizeof(*info));
 
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, &dev_data, &dev_busy);
 	if (!adev)
@@ -3525,36 +3874,72 @@ int smi_get_gpu_fabric_info(struct smi_ctx *ctx, void *inb,
 	}
 
 	info->version = intf_ver;
-	major = (uint16_t)((intf_ver >> 16) & 0xFFFF);
+	major	      = (uint16_t)((intf_ver >> 16) & 0xFFFF);
 
-	if (major == 1) {
+	if (major == 0 || major == 1) {
 		smi_oss_funcs->memset(&config, 0, sizeof(config));
-		ret = amdgv_gpumon_ual_get_config(adev, &config);
-		if (ret) {
-			smi_put_handle(adev, ctx);
-			return smi_convert_ret_value(ERROR_OTHER, ret);
+		config_ret = amdgv_gpumon_ual_get_config(adev, &config);
+		if (!config_ret) {
+			config_ok = true;
+
+			info->fabric_info.v1.fabric_type = smi_map_fabric_type(config.link_type);
+			info->fabric_info.v1.accel_state =
+			    smi_map_fabric_accelerator_vpod_state(config.accel_state);
+
+			info->fabric_info.v1.ppod.accelerator_id = config.accelerator_id;
+			info->fabric_info.v1.ppod.bandwidth	 = config.bandwidth;
+			info->fabric_info.v1.ppod.latency	 = config.latency;
+			smi_oss_funcs->memcpy(info->fabric_info.v1.ppod.ppod_id,
+					      config.ppod_id,
+					      sizeof(info->fabric_info.v1.ppod.ppod_id));
+			info->fabric_info.v1.ppod.ppod_size = config.ppod_size;
+
+			info->fabric_info.v1.vpod.vpod_id   = config.vpod_id;
+			info->fabric_info.v1.vpod.vpod_size = config.vpod_size;
+			smi_oss_funcs->memcpy(
+			    info->fabric_info.v1.vpod.vpod_active_accelerators,
+			    config.vpod_active_accelerators,
+			    sizeof(info->fabric_info.v1.vpod.vpod_active_accelerators));
+			info->fabric_info.v1.vpod.addr_mode =
+			    smi_map_fabric_npa_address_mode(config.addr_mode);
+
+			smi_oss_funcs->memset(info->fabric_info.v1.ppod.local_accelerators,
+					      0xFF,
+					      sizeof(info->fabric_info.v1.ppod.local_accelerators));
+			info->fabric_info.v1.ppod.local_accelerator_count = 0;
+
+			if (config.local_accelerators[0] != 0xFFFFFFFFu) {
+				for (i = 0; i < SMI_FABRIC_MAX_LOCAL_GPUS; i++) {
+					if (config.local_accelerators[i] == 0xFFFFFFFFu)
+						break;
+					info->fabric_info.v1.ppod.local_accelerators[i] =
+					    config.local_accelerators[i];
+					info->fabric_info.v1.ppod.local_accelerator_count++;
+				}
+			}
+		} else {
+			/* Leave PPOD/VPOD subtree at sentinel defaults on failure. */
+			info->fabric_info.v1.fabric_type = SMI_FABRIC_TYPE_UNKNOWN;
+			info->fabric_info.v1.accel_state =
+			    SMI_FABRIC_ACCELERATOR_VPOD_STATE_UNKNOWN;
+			info->fabric_info.v1.vpod.addr_mode = SMI_FABRIC_NPA_ADDRESS_MODE_UNKNOWN;
+			smi_oss_funcs->memset(info->fabric_info.v1.ppod.local_accelerators,
+					      0xFF,
+					      sizeof(info->fabric_info.v1.ppod.local_accelerators));
 		}
 
-		info->fabric_info.v1.accelerator_id = config.accelerator_id;
-		info->fabric_info.v1.fabric_type =
-			smi_map_fabric_type(config.link_type);
-		info->fabric_info.v1.bandwidth = config.bandwidth;
-		info->fabric_info.v1.latency = config.latency;
-		smi_oss_funcs->memcpy(info->fabric_info.v1.ppod_id,
-			config.ppod_id, sizeof(info->fabric_info.v1.ppod_id));
-		info->fabric_info.v1.ppod_size = config.ppod_size;
-		info->fabric_info.v1.vpod_id = config.vpod_id;
-		info->fabric_info.v1.vpod_size = config.vpod_size;
-		smi_oss_funcs->memcpy(info->fabric_info.v1.vpod_active_accelerators,
-			config.vpod_active_accelerators,
-			sizeof(info->fabric_info.v1.vpod_active_accelerators));
-		info->fabric_info.v1.addr_mode =
-			smi_map_fabric_npa_address_mode(config.addr_mode);
-		info->fabric_info.v1.accel_state =
-			smi_map_fabric_accelerator_vpod_state(config.accel_state);
-
-		smi_oss_funcs->memset(info->fabric_info.v1.local_accelerators,
-			0xFF, sizeof(info->fabric_info.v1.local_accelerators)); // SMI_NOT_SUPPORTED
+		smi_oss_funcs->memset(&station_config, 0, sizeof(station_config));
+		station_ret = amdgv_gpumon_ual_get_station_config(adev, &station_config);
+		if (!station_ret) {
+			station_ok = true;
+			info->fabric_info.v1.station.station_flags =
+			    (uint32_t)station_config.station_flag;
+			info->fabric_info.v1.station.num_stations = station_config.num_stations;
+			smi_oss_funcs->memcpy(info->fabric_info.v1.station.lane_en_bitmap,
+					      station_config.lane_en_bitmap,
+					      sizeof(info->fabric_info.v1.station.lane_en_bitmap));
+		}
+		/* Leave station subtree at zero/sentinel defaults on failure. */
 	} else {
 		smi_put_handle(adev, ctx);
 		return SMI_STATUS_NOT_SUPPORTED;
@@ -3562,17 +3947,22 @@ int smi_get_gpu_fabric_info(struct smi_ctx *ctx, void *inb,
 
 	smi_put_handle(adev, ctx);
 
-	return SMI_STATUS_SUCCESS;
+	if (config_ok || station_ok)
+		return SMI_STATUS_SUCCESS;
+
+	if (config_ret)
+		return smi_convert_ret_value(ERROR_OTHER, config_ret);
+
+	return smi_convert_ret_value(ERROR_OTHER, station_ret);
 }
 
-int smi_get_tdi_state(struct smi_ctx *ctx, void *inb,
-		  void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_tdi_state(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
+	struct smi_device_info *id  = NULL;
 	struct smi_tdi_state *state = NULL;
 	enum amdgv_tdi_state tdi_mode;
 	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
+	bool dev_busy	  = false;
 	smi_device_handle_t pf;
 	int idx_vf;
 	int ret = SMI_STATUS_SUCCESS;
@@ -3583,13 +3973,13 @@ int smi_get_tdi_state(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_INVAL;
 	}
 
-	state = (struct smi_tdi_state *) outb;
+	state = (struct smi_tdi_state *)outb;
 	smi_oss_funcs->memset(state, 0, sizeof(*state));
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
 	/* Get the parent PF handle from VF handle */
 	pf.handle = make_parent_handle(id->dev_id.handle);
-	adev = smi_get_handle(ctx, &pf, NULL, &dev_busy);
+	adev	  = smi_get_handle(ctx, &pf, NULL, &dev_busy);
 	if (!adev) {
 		return SMI_STATUS_NOT_FOUND;
 	}
@@ -3613,25 +4003,23 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_cc_mode(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_cc_mode(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_device_info *id = NULL;
-	struct smi_cc_mode *mode = NULL;
+	struct smi_cc_mode *mode   = NULL;
 	enum amdgv_cc_mode cc_mode;
 	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
-	int ret = SMI_STATUS_SUCCESS;
+	bool dev_busy	  = false;
+	int ret		  = SMI_STATUS_SUCCESS;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_device_info)) ||
-	    (out_len != sizeof(struct smi_cc_mode))) {
+	if ((in_len != sizeof(struct smi_device_info)) || (out_len != sizeof(struct smi_cc_mode))) {
 		return SMI_STATUS_INVAL;
 	}
 
-	mode = (struct smi_cc_mode *) outb;
+	mode = (struct smi_cc_mode *)outb;
 	smi_oss_funcs->memset(mode, 0, sizeof(*mode));
-	id = (struct smi_device_info *) inb;
+	id = (struct smi_device_info *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev) {
@@ -3651,21 +4039,19 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_set_cc_mode(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len)
+int smi_set_cc_mode(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_set_cc_mode *id = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
-	int ret = SMI_STATUS_SUCCESS;
+	amdgv_dev_t *adev	   = NULL;
+	bool dev_busy		   = false;
+	int ret			   = SMI_STATUS_SUCCESS;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_set_cc_mode)) ||
-	    (out_len != 0)) {
+	if ((in_len != sizeof(struct smi_set_cc_mode)) || (out_len != 0)) {
 		return SMI_STATUS_INVAL;
 	}
 
-	id = (struct smi_set_cc_mode *) inb;
+	id = (struct smi_set_cc_mode *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev) {
@@ -3681,15 +4067,15 @@ int smi_set_cc_mode(struct smi_ctx *ctx, void *inb,
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_gpu_ptl_state(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_gpu_ptl_state(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
+	struct smi_device_info *id	      = NULL;
 	struct smi_get_gpu_ptl_state *ptl_out = NULL;
 	struct amdgv_ptl_status_info info;
 	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
-	int ret = SMI_STATUS_SUCCESS;
+	bool dev_busy	  = false;
+	int ret		  = SMI_STATUS_SUCCESS;
 
 	/* Check version */
 	if ((in_len != sizeof(struct smi_device_info)) ||
@@ -3697,8 +4083,8 @@ int smi_get_gpu_ptl_state(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_INVAL;
 	}
 
-	ptl_out = (struct smi_get_gpu_ptl_state *) outb;
-	id = (struct smi_device_info *) inb;
+	ptl_out = (struct smi_get_gpu_ptl_state *)outb;
+	id	= (struct smi_device_info *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev) {
@@ -3717,21 +4103,20 @@ int smi_get_gpu_ptl_state(struct smi_ctx *ctx, void *inb,
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_set_gpu_ptl_state(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len)
+int smi_set_gpu_ptl_state(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_set_gpu_ptl_state *ptl = NULL;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
-	int ret = SMI_STATUS_SUCCESS;
+	amdgv_dev_t *adev		  = NULL;
+	bool dev_busy			  = false;
+	int ret				  = SMI_STATUS_SUCCESS;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_set_gpu_ptl_state)) ||
-	    (out_len != 0)) {
+	if ((in_len != sizeof(struct smi_set_gpu_ptl_state)) || (out_len != 0)) {
 		return SMI_STATUS_INVAL;
 	}
 
-	ptl = (struct smi_set_gpu_ptl_state *) inb;
+	ptl = (struct smi_set_gpu_ptl_state *)inb;
 
 	adev = smi_get_handle(ctx, &ptl->dev_id, NULL, &dev_busy);
 	if (!adev) {
@@ -3747,15 +4132,15 @@ int smi_set_gpu_ptl_state(struct smi_ctx *ctx, void *inb,
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_gpu_ptl_formats(struct smi_ctx *ctx, void *inb,
-			    void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_gpu_ptl_formats(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
+	struct smi_device_info *id		= NULL;
 	struct smi_get_gpu_ptl_formats *ptl_out = NULL;
 	struct amdgv_ptl_status_info info;
 	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
-	int ret = SMI_STATUS_SUCCESS;
+	bool dev_busy	  = false;
+	int ret		  = SMI_STATUS_SUCCESS;
 
 	/* Check version */
 	if ((in_len != sizeof(struct smi_device_info)) ||
@@ -3763,8 +4148,8 @@ int smi_get_gpu_ptl_formats(struct smi_ctx *ctx, void *inb,
 		return SMI_STATUS_INVAL;
 	}
 
-	id = (struct smi_device_info *) inb;
-	ptl_out = (struct smi_get_gpu_ptl_formats *) outb;
+	id	= (struct smi_device_info *)inb;
+	ptl_out = (struct smi_get_gpu_ptl_formats *)outb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev) {
@@ -3784,22 +4169,21 @@ int smi_get_gpu_ptl_formats(struct smi_ctx *ctx, void *inb,
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_set_gpu_ptl_formats(struct smi_ctx *ctx, void *inb,
-			    void *outb, uint16_t in_len, uint16_t out_len)
+int smi_set_gpu_ptl_formats(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
 	struct smi_set_gpu_ptl_formats *ptl = NULL;
 	struct amdgv_ptl_enable_info info;
 	amdgv_dev_t *adev = NULL;
-	bool dev_busy = false;
-	int ret = SMI_STATUS_SUCCESS;
+	bool dev_busy	  = false;
+	int ret		  = SMI_STATUS_SUCCESS;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_set_gpu_ptl_formats)) ||
-	    (out_len != 0)) {
+	if ((in_len != sizeof(struct smi_set_gpu_ptl_formats)) || (out_len != 0)) {
 		return SMI_STATUS_INVAL;
 	}
 
-	ptl = (struct smi_set_gpu_ptl_formats *) inb;
+	ptl = (struct smi_set_gpu_ptl_formats *)inb;
 
 	adev = smi_get_handle(ctx, &ptl->dev_id, NULL, &dev_busy);
 	if (!adev) {
@@ -3810,7 +4194,226 @@ int smi_set_gpu_ptl_formats(struct smi_ctx *ctx, void *inb,
 
 	info.pref_format1 = ptl->data_format1;
 	info.pref_format2 = ptl->data_format2;
-	ret = amdgv_gpumon_ptl_set_state(adev, true, &info);
+	ret		  = amdgv_gpumon_ptl_set_state(adev, true, &info);
+
+	smi_put_handle(adev, ctx);
+
+	return smi_convert_ret_value(ERROR_OTHER, ret);
+}
+
+int smi_set_gpu_fabric_ppod_config(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
+{
+	struct smi_set_gpu_fabric_ppod_config *req = NULL;
+	struct amdgv_gpumon_set_ppod_config_req_ual_v1 config;
+	amdgv_dev_t *adev = NULL;
+	bool dev_busy	  = false;
+	int ret		  = SMI_STATUS_SUCCESS;
+
+	if ((in_len != sizeof(struct smi_set_gpu_fabric_ppod_config)) || (out_len != 0))
+		return SMI_STATUS_INVAL;
+
+	req = (struct smi_set_gpu_fabric_ppod_config *)inb;
+
+	adev = smi_get_handle(ctx, &req->dev_id, NULL, &dev_busy);
+	if (!adev)
+		return SMI_STATUS_NOT_FOUND;
+	if (dev_busy)
+		return SMI_STATUS_BUSY;
+
+	if (!req->mask) {
+		smi_put_handle(adev, ctx);
+		return SMI_STATUS_INVAL;
+	}
+
+	if (req->version == 1) {
+		struct amdgv_gpumon_get_config_rsp_ual_v1 current;
+
+		/* Read current config to preserve fields not in mask */
+		smi_oss_funcs->memset(&current, 0, sizeof(current));
+		ret = amdgv_gpumon_ual_get_config(adev, &current);
+		if (ret) {
+			smi_put_handle(adev, ctx);
+			return smi_convert_ret_value(ERROR_OTHER, ret);
+		}
+
+		/* Start from current values */
+		smi_oss_funcs->memset(&config, 0, sizeof(config));
+		config.accelerator_id = current.accelerator_id;
+		smi_oss_funcs->memcpy(config.ppod_id, current.ppod_id, sizeof(config.ppod_id));
+		config.ppod_size = current.ppod_size;
+		config.bandwidth = current.bandwidth;
+		config.latency	 = current.latency;
+		smi_oss_funcs->memcpy(config.local_accelerators,
+				      current.local_accelerators,
+				      sizeof(config.local_accelerators));
+
+		/* Override masked fields with requested values */
+		if (req->mask & SMI_FABRIC_PPOD_FIELD_ACCEL_ID)
+			config.accelerator_id = req->accelerator_id;
+		if (req->mask & SMI_FABRIC_PPOD_FIELD_PPOD_ID)
+			smi_oss_funcs->memcpy(config.ppod_id, req->ppod_id, sizeof(config.ppod_id));
+		if (req->mask & SMI_FABRIC_PPOD_FIELD_PPOD_SIZE)
+			config.ppod_size = req->ppod_size;
+		if (req->mask & SMI_FABRIC_PPOD_FIELD_LOCAL_ACCELS) {
+			uint32_t count = req->local_accelerator_count;
+			uint32_t j;
+
+			if (count > SMI_FABRIC_MAX_LOCAL_GPUS)
+				count = SMI_FABRIC_MAX_LOCAL_GPUS;
+
+			smi_oss_funcs->memset(
+			    config.local_accelerators, 0xFF, sizeof(config.local_accelerators));
+			for (j = 0; j < count; j++)
+				config.local_accelerators[j] = req->local_accelerators[j];
+		}
+		if (req->mask & SMI_FABRIC_PPOD_FIELD_BANDWIDTH)
+			config.bandwidth = req->bandwidth;
+		if (req->mask & SMI_FABRIC_PPOD_FIELD_LATENCY)
+			config.latency = req->latency;
+
+		ret = amdgv_gpumon_ual_set_ppod_config(adev, &config);
+	} else {
+		smi_put_handle(adev, ctx);
+		return SMI_STATUS_NOT_SUPPORTED;
+	}
+
+	smi_put_handle(adev, ctx);
+
+	return smi_convert_ret_value(ERROR_OTHER, ret);
+}
+
+int smi_set_gpu_fabric_vpod_config(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
+{
+	struct smi_set_gpu_fabric_vpod_config *req = NULL;
+	struct amdgv_gpumon_set_vpod_config_req_ual_v1 config;
+	amdgv_dev_t *adev = NULL;
+	bool dev_busy	  = false;
+	int ret		  = SMI_STATUS_SUCCESS;
+
+	if ((in_len != sizeof(struct smi_set_gpu_fabric_vpod_config)) || (out_len != 0))
+		return SMI_STATUS_INVAL;
+
+	req = (struct smi_set_gpu_fabric_vpod_config *)inb;
+
+	adev = smi_get_handle(ctx, &req->dev_id, NULL, &dev_busy);
+	if (!adev)
+		return SMI_STATUS_NOT_FOUND;
+	if (dev_busy)
+		return SMI_STATUS_BUSY;
+
+	if (!req->mask) {
+		smi_put_handle(adev, ctx);
+		return SMI_STATUS_INVAL;
+	}
+
+	if (req->version == 1) {
+		struct amdgv_gpumon_get_config_rsp_ual_v1 current;
+
+		/* Read current config to preserve fields not in mask */
+		smi_oss_funcs->memset(&current, 0, sizeof(current));
+		ret = amdgv_gpumon_ual_get_config(adev, &current);
+		if (ret) {
+			smi_put_handle(adev, ctx);
+			return smi_convert_ret_value(ERROR_OTHER, ret);
+		}
+
+		/* Start from current values */
+		smi_oss_funcs->memset(&config, 0, sizeof(config));
+		config.addr_mode = current.addr_mode;
+		config.vpod_id	 = current.vpod_id;
+		config.vpod_size = current.vpod_size;
+		smi_oss_funcs->memcpy(config.vpod_active_accelerators,
+				      current.vpod_active_accelerators,
+				      sizeof(config.vpod_active_accelerators));
+
+		/* Override masked fields with requested values */
+		if (req->mask & SMI_FABRIC_VPOD_FIELD_VPOD_ID)
+			config.vpod_id = req->vpod_id;
+		if (req->mask & SMI_FABRIC_VPOD_FIELD_VPOD_SIZE)
+			config.vpod_size = req->vpod_size;
+		if (req->mask & SMI_FABRIC_VPOD_FIELD_VPOD_ACTIVE_ACCELS)
+			smi_oss_funcs->memcpy(config.vpod_active_accelerators,
+					      req->vpod_active_accelerators,
+					      sizeof(config.vpod_active_accelerators));
+		if (req->mask & SMI_FABRIC_VPOD_FIELD_ADDR_MODE)
+			config.addr_mode = (enum amdgv_gpumon_ual_npa_address_mode)req->addr_mode;
+
+		ret = amdgv_gpumon_ual_set_vpod_config(adev, &config);
+	} else {
+		smi_put_handle(adev, ctx);
+		return SMI_STATUS_NOT_SUPPORTED;
+	}
+
+	smi_put_handle(adev, ctx);
+
+	return smi_convert_ret_value(ERROR_OTHER, ret);
+}
+
+int smi_set_gpu_fabric_station_config(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
+{
+	struct smi_set_gpu_fabric_station_config *req = NULL;
+	struct amdgv_gpumon_station_config_ual_v1 config;
+	amdgv_dev_t *adev = NULL;
+	bool dev_busy	  = false;
+	int ret		  = SMI_STATUS_SUCCESS;
+
+	if ((in_len != sizeof(struct smi_set_gpu_fabric_station_config)) || (out_len != 0))
+		return SMI_STATUS_INVAL;
+
+	req = (struct smi_set_gpu_fabric_station_config *)inb;
+
+	adev = smi_get_handle(ctx, &req->dev_id, NULL, &dev_busy);
+	if (!adev)
+		return SMI_STATUS_NOT_FOUND;
+	if (dev_busy)
+		return SMI_STATUS_BUSY;
+
+	if (!req->mask) {
+		smi_put_handle(adev, ctx);
+		return SMI_STATUS_INVAL;
+	}
+
+	if (req->version == 1) {
+		struct amdgv_gpumon_station_config_ual_v1 current;
+
+		/* Read current config to preserve fields not in mask */
+		smi_oss_funcs->memset(&current, 0, sizeof(current));
+		ret = amdgv_gpumon_ual_get_station_config(adev, &current);
+		if (ret) {
+			smi_put_handle(adev, ctx);
+			return smi_convert_ret_value(ERROR_OTHER, ret);
+		}
+
+		/* Start from current values */
+		smi_oss_funcs->memset(&config, 0, sizeof(config));
+		config.num_stations = current.num_stations;
+		config.station_flag = current.station_flag;
+		smi_oss_funcs->memcpy(
+		    config.lane_en_bitmap, current.lane_en_bitmap, sizeof(config.lane_en_bitmap));
+
+		/* Override masked fields with requested values */
+		if (req->mask & SMI_FABRIC_DF_FIELD_STATION_FLAGS) {
+			if (req->station_flags > 0xFFu) {
+				smi_put_handle(adev, ctx);
+				return SMI_STATUS_INVAL;
+			}
+			config.station_flag = (uint8_t)req->station_flags;
+		}
+		if (req->mask & SMI_FABRIC_DF_FIELD_LANE_EN_BITMAP)
+			smi_oss_funcs->memcpy(config.lane_en_bitmap,
+					      req->lane_en_bitmap,
+					      sizeof(config.lane_en_bitmap));
+		if (req->mask & SMI_FABRIC_DF_FIELD_NUM_STATIONS)
+			config.num_stations = req->num_stations;
+
+		ret = amdgv_gpumon_ual_set_station_config(adev, &config);
+	} else {
+		smi_put_handle(adev, ctx);
+		return SMI_STATUS_NOT_SUPPORTED;
+	}
 
 	smi_put_handle(adev, ctx);
 

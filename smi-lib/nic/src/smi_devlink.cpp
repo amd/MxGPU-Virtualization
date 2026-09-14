@@ -10,31 +10,31 @@
 
 #ifdef LIBMNL_INSTALLED
 
-#include <cstring>
-#include <utility>
-#include <linux/devlink.h>
-#include <linux/genetlink.h>
+	#include <cstring>
+	#include <utility>
+	#include <linux/devlink.h>
+	#include <linux/genetlink.h>
 
 extern "C" {
-#include <nl.h>
+	#include <nl.h>
 }
 
 namespace {
 
 struct fw_ctx {
-	const std::string &bdf;
-	std::vector<FwVersion> &versions;
+	const std::string& bdf;
+	std::vector<FwVersion>& versions;
 	bool found;
 };
 
-int fw_info_cb(const struct nlmsghdr *nlh, void *data)
+int fw_info_cb(const struct nlmsghdr* nlh, void* data)
 {
-	auto *ctx = static_cast<fw_ctx*>(data);
+	auto* ctx = static_cast<fw_ctx*>(data);
 
-	const char *dev_name = nullptr;
+	const char* dev_name = nullptr;
 
-	auto bdf_cb = [](const struct nlattr *attr, void *data) -> int {
-		auto *out = static_cast<const char**>(data);
+	auto bdf_cb = [](const struct nlattr* attr, void* data) -> int {
+		auto* out = static_cast<const char**>(data);
 		if (mnl_attr_get_type(attr) == DEVLINK_ATTR_DEV_NAME)
 			*out = static_cast<const char*>(mnl_attr_get_payload(attr));
 		return MNL_CB_OK;
@@ -48,8 +48,8 @@ int fw_info_cb(const struct nlmsghdr *nlh, void *data)
 
 	ctx->found = true;
 
-	auto attr_cb = [](const struct nlattr *attr, void *data) -> int {
-		auto *versions = static_cast<std::vector<FwVersion>*>(data);
+	auto attr_cb = [](const struct nlattr* attr, void* data) -> int {
+		auto* versions = static_cast<std::vector<FwVersion>*>(data);
 		FwVersionType type;
 
 		switch (mnl_attr_get_type(attr)) {
@@ -66,9 +66,9 @@ int fw_info_cb(const struct nlmsghdr *nlh, void *data)
 			return MNL_CB_OK;
 		}
 
-		std::pair<const char*, const char*> kv{nullptr, nullptr};
-		auto kv_cb = [](const struct nlattr *attr, void *data) -> int {
-			auto *kv = static_cast<std::pair<const char*, const char*>*>(data);
+		std::pair<const char*, const char*> kv {nullptr, nullptr};
+		auto kv_cb = [](const struct nlattr* attr, void* data) -> int {
+			auto* kv = static_cast<std::pair<const char*, const char*>*>(data);
 			switch (mnl_attr_get_type(attr)) {
 			case DEVLINK_ATTR_INFO_VERSION_NAME:
 				kv->first = static_cast<const char*>(mnl_attr_get_payload(attr));
@@ -81,7 +81,7 @@ int fw_info_cb(const struct nlmsghdr *nlh, void *data)
 		};
 		mnl_attr_parse_nested(attr, kv_cb, &kv);
 		if (kv.first && kv.second) {
-			versions->push_back(FwVersion{type, kv.first, kv.second});
+			versions->push_back(FwVersion {type, kv.first, kv.second});
 		}
 		return MNL_CB_OK;
 	};
@@ -92,16 +92,16 @@ int fw_info_cb(const struct nlmsghdr *nlh, void *data)
 
 using flavour_ctx = std::pair<const std::string*, std::string*>;
 
-int port_flavour_cb(const struct nlmsghdr *nlh, void *data)
+int port_flavour_cb(const struct nlmsghdr* nlh, void* data)
 {
-	auto *ctx = static_cast<flavour_ctx*>(data);
+	auto* ctx = static_cast<flavour_ctx*>(data);
 	if (!ctx->second->empty())
 		return MNL_CB_OK;
 
-	std::pair<const char*, uint16_t> port_data{nullptr, UINT16_MAX};
+	std::pair<const char*, uint16_t> port_data {nullptr, UINT16_MAX};
 
-	auto attr_cb = [](const struct nlattr *attr, void *data) -> int {
-		auto *pd = static_cast<std::pair<const char*, uint16_t>*>(data);
+	auto attr_cb = [](const struct nlattr* attr, void* data) -> int {
+		auto* pd = static_cast<std::pair<const char*, uint16_t>*>(data);
 		switch (mnl_attr_get_type(attr)) {
 		case DEVLINK_ATTR_PORT_NETDEV_NAME:
 			pd->first = static_cast<const char*>(mnl_attr_get_payload(attr));
@@ -122,12 +122,11 @@ int port_flavour_cb(const struct nlmsghdr *nlh, void *data)
 	return MNL_CB_OK;
 }
 
-}
+} // namespace
 
 // **** SmiDevlink ****
 
-SmiDevlink::SmiDevlink()
-	: conn_(nullptr)
+SmiDevlink::SmiDevlink() : conn_(nullptr)
 {
 }
 
@@ -171,16 +170,14 @@ int SmiDevlink::get_fw_versions(std::vector<FwVersion>& versions)
 	}
 
 	char buf[MNL_SOCKET_BUFFER_SIZE];
-	struct nlmsghdr *nlh = nl_req_init(conn_, buf, sizeof(buf),
-					  DEVLINK_CMD_INFO_GET,
-					  DEVLINK_GENL_VERSION);
+	struct nlmsghdr* nlh =
+	    nl_req_init(conn_, buf, sizeof(buf), DEVLINK_CMD_INFO_GET, DEVLINK_GENL_VERSION);
 	nlh->nlmsg_flags |= NLM_F_DUMP;
 	mnl_attr_put_strz(nlh, DEVLINK_ATTR_BUS_NAME, "pci");
 	mnl_attr_put_strz(nlh, DEVLINK_ATTR_DEV_NAME, bdf_.c_str());
 
-	fw_ctx ctx{bdf_, versions, false};
-	int ret = nl_req_run(conn_, buf, sizeof(buf), nlh,
-			    fw_info_cb, &ctx);
+	fw_ctx ctx {bdf_, versions, false};
+	int ret = nl_req_run(conn_, buf, sizeof(buf), nlh, fw_info_cb, &ctx);
 
 	if (ret != 0) {
 		return SMI_NIC_STATUS_ERROR;
@@ -200,16 +197,14 @@ int SmiDevlink::get_port_flavour(const std::string& netdev, std::string& flavour
 	}
 
 	char buf[MNL_SOCKET_BUFFER_SIZE];
-	struct nlmsghdr *nlh = nl_req_init(conn_, buf, sizeof(buf),
-					  DEVLINK_CMD_PORT_GET,
-					  DEVLINK_GENL_VERSION);
+	struct nlmsghdr* nlh =
+	    nl_req_init(conn_, buf, sizeof(buf), DEVLINK_CMD_PORT_GET, DEVLINK_GENL_VERSION);
 	nlh->nlmsg_flags |= NLM_F_DUMP;
 	mnl_attr_put_strz(nlh, DEVLINK_ATTR_BUS_NAME, "pci");
 	mnl_attr_put_strz(nlh, DEVLINK_ATTR_DEV_NAME, bdf_.c_str());
 
 	flavour_ctx ctx(&netdev, &flavour);
-	int ret = nl_req_run(conn_, buf, sizeof(buf), nlh,
-			    port_flavour_cb, &ctx);
+	int ret = nl_req_run(conn_, buf, sizeof(buf), nlh, port_flavour_cb, &ctx);
 
 	if (ret != 0) {
 		return SMI_NIC_STATUS_ERROR;
@@ -220,8 +215,7 @@ int SmiDevlink::get_port_flavour(const std::string& netdev, std::string& flavour
 
 #else /* !LIBMNL_INSTALLED */
 
-SmiDevlink::SmiDevlink()
-	: conn_(nullptr)
+SmiDevlink::SmiDevlink() : conn_(nullptr)
 {
 }
 

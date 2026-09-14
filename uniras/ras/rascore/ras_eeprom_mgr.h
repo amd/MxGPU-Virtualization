@@ -120,5 +120,6 @@ int ras_core_enable_early_init(struct ras_core_context *ras_core,
 		bool enabled);
 bool ras_eeprom_mgr_early_init_service_supported(struct ras_core_context *ras_core);
 bool ras_eeprom_mgr_fw_record_enabled(struct ras_core_context *ras_core);
+bool ras_eeprom_mgr_page_retire_disabled(struct ras_core_context *ras_core);
 int  ras_eeprom_mgr_dump_fw_records(struct ras_core_context *ras_core);
 #endif

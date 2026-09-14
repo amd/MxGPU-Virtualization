@@ -10,58 +10,6 @@
 
 static const uint32_t this_block = AMDGV_POWER_BLOCK;
 
-#define SMU_V15_0_8_MB_CONTEXT_REGS_NUM		6
-static struct amdgv_reg_dump_info smu_v15_0_8_mb_context_regs[SMU_V15_0_8_MB_CONTEXT_REGS_NUM] = {
-	{
-		.name = "regMP1_SMN_C2PMSG_40 (msg)",
-		.hwip = MP1_HWIP,
-		.seg = regMP1_SMN_C2PMSG_40_BASE_IDX,
-		.logical_inst = 0,
-		.offset_hwip = regMP1_SMN_C2PMSG_40,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-	{
-		.name = "regMP1_SMN_C2PMSG_41 (resp)",
-		.hwip = MP1_HWIP,
-		.seg = regMP1_SMN_C2PMSG_41_BASE_IDX,
-		.logical_inst = 0,
-		.offset_hwip = regMP1_SMN_C2PMSG_41,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-	{
-		.name = "regMP1_SMN_C2PMSG_42 (param)",
-		.hwip = MP1_HWIP,
-		.seg = regMP1_SMN_C2PMSG_42_BASE_IDX,
-		.logical_inst = 0,
-		.offset_hwip = regMP1_SMN_C2PMSG_42,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-	{
-		.name = "regMP1_SMN_C2PMSG_43 (param)",
-		.hwip = MP1_HWIP,
-		.seg = regMP1_SMN_C2PMSG_43_BASE_IDX,
-		.logical_inst = 0,
-		.offset_hwip = regMP1_SMN_C2PMSG_43,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-	{
-		.name = "regMP1_SMN_C2PMSG_44 (param)",
-		.hwip = MP1_HWIP,
-		.seg = regMP1_SMN_C2PMSG_44_BASE_IDX,
-		.logical_inst = 0,
-		.offset_hwip = regMP1_SMN_C2PMSG_44,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-	{
-		.name = "regMP1_SMN_C2PMSG_45 (param)",
-		.hwip = MP1_HWIP,
-		.seg = regMP1_SMN_C2PMSG_45_BASE_IDX,
-		.logical_inst = 0,
-		.offset_hwip = regMP1_SMN_C2PMSG_45,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-};
-
 static int smu_v15_0_8_wait_for_response(struct amdgv_adapter *adapt, uint32_t *val,
 					 enum amdgv_wait_for_types wait_type)
 {
@@ -71,28 +19,18 @@ static int smu_v15_0_8_wait_for_response(struct amdgv_adapter *adapt, uint32_t *
 	ret = amdgv_wait_for_smu_msg_resp(adapt, SOC15_REG_OFFSET_NAME(MP1, 0, regMP1_SMN_C2PMSG_41),
 					  MP1_SMN_C2PMSG_41__CONTENT_MASK, 0,
 					  AMDGV_TIMEOUT(TIMEOUT_SMU_REG), AMDGV_WAIT_CHECK_NE,
-					  wait_type, smu_v15_0_8_mb_context_regs,
-					  SMU_V15_0_8_MB_CONTEXT_REGS_NUM);
+					  wait_type);
 
 	tmp = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_41));
 	if (val)
 		*val = tmp;
-
-	/* Add the message to diagnosis data trace log */
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_READ_RESP, ret, regMP1_SMN_C2PMSG_41,
-				      tmp);
 
 	return ret;
 }
 
 static void smu_v15_0_8_write_args(struct amdgv_adapter *adapt, struct smu_15_0_8_msg *msg)
 {
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_ARG_START, 0, regMP1_SMN_C2PMSG_42,
-				      msg->in_arg[0]);
 	WREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_42), msg->in_arg[0]);
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_ARG_END, 0, regMP1_SMN_C2PMSG_42,
-				      RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_42)));
-
 	WREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_43), msg->in_arg[1]);
 	WREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_44), msg->in_arg[2]);
 	WREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_45), msg->in_arg[3]);
@@ -104,6 +42,19 @@ static void smu_v15_0_8_read_args(struct amdgv_adapter *adapt, struct smu_15_0_8
 	msg->out_arg[1] = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_43));
 	msg->out_arg[2] = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_44));
 	msg->out_arg[3] = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_45));
+}
+
+void smu_v15_0_8_put_timeout(struct amdgv_adapter *adapt, uint64_t elapsed)
+{
+	uint32_t msg  = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_40));
+	uint32_t resp = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_41));
+	uint32_t a0   = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_42));
+	uint32_t a1   = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_43));
+	uint32_t a2   = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_44));
+	uint32_t a3   = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_45));
+
+	amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_TIMEOUT_EX,
+			  elapsed, msg, resp, a0, a1, a2, a3);
 }
 
 static int smu_v15_0_8_msg_allowed_in_sync_flood(struct amdgv_adapter *adapt, uint32_t msg)
@@ -126,16 +77,16 @@ int smu_v15_0_8_send_msg(struct amdgv_adapter *adapt, struct smu_15_0_8_msg *msg
 
 	oss_mutex_lock(adapt->pp.smu_lock);
 
+	amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_WRITE_EX,
+			  msg->id,
+			  msg->in_arg[0], msg->in_arg[1],
+			  msg->in_arg[2], msg->in_arg[3]);
+
 	/* clear previous response */
 	WREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_41), 0);
 
 	smu_v15_0_8_write_args(adapt, msg);
-
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_MSG_START, 0, regMP1_SMN_C2PMSG_40,
-				      msg->id);
 	WREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_40), msg->id);
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_MSG_END, 0, regMP1_SMN_C2PMSG_40,
-		RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_40)));
 
 	ret = smu_v15_0_8_wait_for_response(adapt, &resp, AMDGV_WAIT_FOR_SMU_MSG_RESPONSE);
 	if (ret) {
@@ -144,17 +95,20 @@ int smu_v15_0_8_send_msg(struct amdgv_adapter *adapt, struct smu_15_0_8_msg *msg
 	}
 
 	if (resp != PPSMC_Result_OK) {
-		AMDGV_REG_DUMP(ERROR, "SMU responded with failure. SMU Mailbox contents:",
-			       smu_v15_0_8_mb_context_regs,
-			       SMU_V15_0_8_MB_CONTEXT_REGS_NUM);
+		amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_FAIL_EX,
+				msg->id, resp,
+				msg->in_arg[0], msg->in_arg[1],
+				msg->in_arg[2], msg->in_arg[3]);
 		ret = AMDGV_FAILURE;
 		goto end;
 	}
 
 	smu_v15_0_8_read_args(adapt, msg);
-	AMDGV_REG_DUMP(DEBUG, "SMU responded with success. SMU Mailbox contents:",
-			smu_v15_0_8_mb_context_regs,
-			SMU_V15_0_8_MB_CONTEXT_REGS_NUM);
+
+	amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_RECV_EX,
+			msg->id, resp,
+			msg->out_arg[0], msg->out_arg[1],
+			msg->out_arg[2], msg->out_arg[3]);
 end:
 	oss_mutex_unlock(adapt->pp.smu_lock);
 
@@ -284,27 +238,6 @@ static void smu_v15_0_8_disable_smu_features(struct amdgv_adapter *adapt)
 	smu_v15_0_8_send_msg(adapt, &msg);
 }
 
-static int smu_v15_0_8_sw_init(struct amdgv_adapter *adapt)
-{
-	adapt->pp.smu_lock = oss_mutex_init();
-	if (adapt->pp.smu_lock == OSS_INVALID_HANDLE) {
-		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_MUTEX_FAIL, 0);
-		return AMDGV_FAILURE;
-	}
-
-	return 0;
-}
-
-static int smu_v15_0_8_sw_fini(struct amdgv_adapter *adapt)
-{
-	if (adapt->pp.smu_lock) {
-		oss_mutex_fini(adapt->pp.smu_lock);
-		adapt->pp.smu_lock = OSS_INVALID_HANDLE;
-	}
-
-	return 0;
-}
-
 static int smu_v15_0_8_irq_control(struct amdgv_adapter *adapt, bool enable)
 {
 	uint32_t val;
@@ -329,7 +262,28 @@ static int smu_v15_0_8_irq_control(struct amdgv_adapter *adapt, bool enable)
 	return 0;
 }
 
-static int smu_v15_0_8_hw_init(struct amdgv_adapter *adapt)
+static int smu_v15_0_8_early_sw_init(struct amdgv_adapter *adapt)
+{
+	adapt->pp.smu_lock = oss_mutex_init();
+	if (adapt->pp.smu_lock == OSS_INVALID_HANDLE) {
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_CREATE_MUTEX_FAIL, 0);
+		return AMDGV_FAILURE;
+	}
+
+	return 0;
+}
+
+static int smu_v15_0_8_early_sw_fini(struct amdgv_adapter *adapt)
+{
+	if (adapt->pp.smu_lock) {
+		oss_mutex_fini(adapt->pp.smu_lock);
+		adapt->pp.smu_lock = OSS_INVALID_HANDLE;
+	}
+
+	return 0;
+}
+
+static int smu_v15_0_8_early_hw_init(struct amdgv_adapter *adapt)
 {
 	uint32_t pmfw_if_version;
 
@@ -339,12 +293,32 @@ static int smu_v15_0_8_hw_init(struct amdgv_adapter *adapt)
 	if (smu_v15_0_8_get_version(adapt, &adapt->pp.smu_fw_version, &pmfw_if_version))
 		return AMDGV_FAILURE;
 
-	AMDGV_INFO("PMFW version:%08x, PMFW IF version:%08x, Driver IF version:%08x\n",
-			adapt->pp.smu_fw_version, pmfw_if_version, DRIVER_IF_SMU_V15_0_8_VERSION);
+	amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_VERSION,
+			  (uint64_t)adapt->pp.smu_fw_version,
+			  (uint64_t)pmfw_if_version,
+			  (uint64_t)DRIVER_IF_SMU_V15_0_8_VERSION);
 
 	if (adapt->psp.fw_info)
 		adapt->psp.fw_info[AMDGV_FIRMWARE_ID__SMU] = adapt->pp.smu_fw_version;
 
+	return 0;
+}
+
+static int smu_v15_0_8_early_hw_fini(struct amdgv_adapter *adapt)
+{
+	return 0;
+}
+
+const struct amdgv_init_func smu_v15_0_8_early_func = {
+	.name = "smu_v15_0_8_early_func",
+	.sw_init = smu_v15_0_8_early_sw_init,
+	.sw_fini = smu_v15_0_8_early_sw_fini,
+	.hw_init = smu_v15_0_8_early_hw_init,
+	.hw_fini = smu_v15_0_8_early_hw_fini,
+};
+
+static int smu_v15_0_8_late_hw_init(struct amdgv_adapter *adapt)
+{
 	if (smu_v15_0_8_enable_smu_features(adapt))
 		return AMDGV_FAILURE;
 
@@ -353,7 +327,7 @@ static int smu_v15_0_8_hw_init(struct amdgv_adapter *adapt)
 	return 0;
 }
 
-static int smu_v15_0_8_hw_fini(struct amdgv_adapter *adapt)
+static int smu_v15_0_8_late_hw_fini(struct amdgv_adapter *adapt)
 {
 	smu_v15_0_8_irq_control(adapt, false);
 	smu_v15_0_8_disable_smu_features(adapt);
@@ -361,10 +335,8 @@ static int smu_v15_0_8_hw_fini(struct amdgv_adapter *adapt)
 	return 0;
 }
 
-const struct amdgv_init_func smu_v15_0_8_func = {
-	.name = "smu_v15_0_8_func",
-	.sw_init = smu_v15_0_8_sw_init,
-	.sw_fini = smu_v15_0_8_sw_fini,
-	.hw_init = smu_v15_0_8_hw_init,
-	.hw_fini = smu_v15_0_8_hw_fini,
+const struct amdgv_init_func smu_v15_0_8_late_func = {
+	.name = "smu_v15_0_8_late_func",
+	.hw_init = smu_v15_0_8_late_hw_init,
+	.hw_fini = smu_v15_0_8_late_hw_fini,
 };

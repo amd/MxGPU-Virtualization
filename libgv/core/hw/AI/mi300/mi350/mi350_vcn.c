@@ -51,7 +51,7 @@ void mi350_vcn_get_mmsch_regid_instid(struct amdgv_adapter *adapt,
 
 void mi350_vcn_set_mmsch_doorbell_addr_base(struct amdgv_adapter *adapt)
 {
-	int i, vcn_inst;
+	int vcn_id;
 	int doorbell_index;
 	int vcns_per_vf = 4;
 
@@ -70,11 +70,10 @@ void mi350_vcn_set_mmsch_doorbell_addr_base(struct amdgv_adapter *adapt)
 		break;
 	}
 
-	for (i = 0; i < adapt->config.mm.count[AMDGV_VCN_ENGINE]; i++) {
-		vcn_inst = GET_INST(VCN, i);
+	for_each_id (vcn_id, adapt->vcn.active_mask) {
 		/* Map the db address so each VF's vcn0 is set to AMDGV_MI300_DOORBELL_MMSCH0 << 1 */
-		doorbell_index = (AMDGV_MI300_DOORBELL_MMSCH0 << 1) + 32 * (vcn_inst % vcns_per_vf);
-		WREG32(SOC15_REG_OFFSET(VCN, vcn_inst, regMMSCH_DB_ADDR_BASE),
+		doorbell_index = (AMDGV_MI300_DOORBELL_MMSCH0 << 1) + 32 * (vcn_id % vcns_per_vf);
+		WREG32(SOC15_REG_OFFSET(VCN, vcn_id, regMMSCH_DB_ADDR_BASE),
 				doorbell_index << 2);
 	}
 }

@@ -9,10 +9,10 @@
 #include "smi_drv_types.h"
 
 enum SMI_HASH_TABLE_RET_CODES {
-	SMI_HASH_TABLE_SUCCESS, // Successful Hash Table operation
-	SMI_HASH_TABLE_KEY_ERROR, // Invalid Hash Table key passed
+	SMI_HASH_TABLE_SUCCESS,	      // Successful Hash Table operation
+	SMI_HASH_TABLE_KEY_ERROR,     // Invalid Hash Table key passed
 	SMI_HASH_TABLE_INVALID_PARAM, // Invalid input parameter
-	SMI_HASH_TABLE_MEMORY_ERROR // Unable to allocate memory
+	SMI_HASH_TABLE_MEMORY_ERROR   // Unable to allocate memory
 };
 
 struct hash_table_element {
@@ -23,8 +23,7 @@ struct hash_table_element {
 
 struct hash_table {
 	unsigned int num_of_elements;
-	unsigned int (*hash_function)(unsigned int num_of_elements,
-					  uint64_t key);
+	unsigned int (*hash_function)(unsigned int num_of_elements, uint64_t key);
 	struct hash_table_element **table;
 	struct oss_interface *oss_funcs;
 	void *mutex;
@@ -58,8 +57,8 @@ unsigned int default_hash_function(unsigned int num_of_elements, uint64_t key);
  *  \return         Pointer to the allocated hash table
  */
 struct hash_table *create_hash_table(unsigned int num_of_rows,
-					 unsigned int (*function)(unsigned int,
-								  uint64_t), struct oss_interface *oss_funcs);
+				     unsigned int (*function)(unsigned int, uint64_t),
+				     struct oss_interface *oss_funcs);
 
 /**
  *  \brief          Frees memory allocated for the hash table.
@@ -87,8 +86,7 @@ enum SMI_HASH_TABLE_RET_CODES destroy_hash_table(struct hash_table *table);
  *                  SMI_HASH_TABLE_INVALID_PARAM - Parameters are not valid or
  * NULL
  */
-enum SMI_HASH_TABLE_RET_CODES add_to_hash_table(struct hash_table *table,
-						uint64_t key, void *data);
+enum SMI_HASH_TABLE_RET_CODES add_to_hash_table(struct hash_table *table, uint64_t key, void *data);
 
 /**
  *  \brief          Deletes data from the given hash table for the given key
@@ -103,8 +101,7 @@ enum SMI_HASH_TABLE_RET_CODES add_to_hash_table(struct hash_table *table,
  *                  SMI_HASH_TABLE_INVALID_PARAM - Parameters are not valid or
  * NULL
  */
-enum SMI_HASH_TABLE_RET_CODES remove_from_hash_table(struct hash_table *table,
-							 uint64_t key);
+enum SMI_HASH_TABLE_RET_CODES remove_from_hash_table(struct hash_table *table, uint64_t key);
 
 /**
  *  \brief          Pops data from the given hash table for the given key
@@ -121,8 +118,8 @@ enum SMI_HASH_TABLE_RET_CODES remove_from_hash_table(struct hash_table *table,
  *                  SMI_HASH_TABLE_INVALID_PARAM - Parameters are not valid or
  * NULL
  */
-enum SMI_HASH_TABLE_RET_CODES pop_from_hash_table(struct hash_table *table,
-						  uint64_t key, void *data);
+enum SMI_HASH_TABLE_RET_CODES
+pop_from_hash_table(struct hash_table *table, uint64_t key, void *data);
 
 /**
  *  \brief          For the given hash table and key returns data.
@@ -138,8 +135,8 @@ enum SMI_HASH_TABLE_RET_CODES pop_from_hash_table(struct hash_table *table,
  *                  SMI_HASH_TABLE_INVALID_PARAM - Parameters are not valid or
  * NULL
  */
-enum SMI_HASH_TABLE_RET_CODES get_from_hash_table(struct hash_table *table,
-						  uint64_t key, void **data);
+enum SMI_HASH_TABLE_RET_CODES
+get_from_hash_table(struct hash_table *table, uint64_t key, void **data);
 /**
  *  \brief          Clears the data from the table.
  *

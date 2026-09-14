@@ -321,6 +321,7 @@ static int gpuiov_v9_0_reset_pf_flr(struct amdgv_adapter *adapt)
 {
 	int ret = 0;
 	uint16_t val;
+	uint32_t strap4;
 	int pos = 0;
 
 	pos = oss_pci_find_capability(adapt->dev, PCI_CAP_ID_EXP);
@@ -338,16 +339,29 @@ static int gpuiov_v9_0_reset_pf_flr(struct amdgv_adapter *adapt)
 			       AMDGV_TIMEOUT(TIMEOUT_PCI_TRANS),
 			       AMDGV_WAIT_CHECK_EQ, 0);
 
+	if (!(adapt->flags & AMDGV_FLAG_ENABLE_CFG_FLR_NOTIFY)) {
+		strap4 = RREG32_SOC15(NBIO, 0, regRCC_STRAP0_RCC_DEV0_EPF0_STRAP4);
+		strap4 |= RCC_STRAP0_RCC_DEV0_EPF0_STRAP4__STRAP_FLR_EN_DEV0_F0_MASK;
+		WREG32_SOC15(NBIO, 0, regRCC_STRAP0_RCC_DEV0_EPF0_STRAP4, strap4);
+	}
+
 	oss_pci_read_config_word(adapt->dev, pos + PCI_EXP_DEVCTL, &val);
 	val |= PCI_EXP_DEVCTL_BCR_FLR;
 	oss_pci_write_config_word(adapt->dev, pos + PCI_EXP_DEVCTL, val);
 
-	/* Wait for FLR Complete indication. */
+	/* Wait for FLR Complete indication in VENDOR_SPECIFIC1 (0x108). */
 	ret = amdgv_wait_for_pci_cfg(adapt, adapt->dev,
 				     cfgBIF_CFG_DEV0_EPF0_PCIE_VENDOR_SPECIFIC1,
 				     0xffffffff, 1, 4,
 				     AMDGV_TIMEOUT(TIMEOUT_SMU_REG),
 				     AMDGV_WAIT_CHECK_EQ, 0);
+
+	if (!(adapt->flags & AMDGV_FLAG_ENABLE_CFG_FLR_NOTIFY)) {
+		strap4 = RREG32_SOC15(NBIO, 0, regRCC_STRAP0_RCC_DEV0_EPF0_STRAP4);
+		strap4 &= ~RCC_STRAP0_RCC_DEV0_EPF0_STRAP4__STRAP_FLR_EN_DEV0_F0_MASK;
+		WREG32_SOC15(NBIO, 0, regRCC_STRAP0_RCC_DEV0_EPF0_STRAP4, strap4);
+	}
+
 	if (ret)
 		return ret;
 
@@ -435,12 +449,15 @@ static int gpuiov_v9_0_gpu_reset_and_reinit(struct amdgv_adapter *adapt)
 	if (amdgv_ras_intr_triggered())
 		amdgv_ras_intr_cleared();
 
-	//@TODO: re-enable when RAS is supported
-	// if (!adapt->umc.is_pmfw_managed_eeprom) {
-	// 	ret = amdgv_umc_replace_bad_pages(adapt);
-	// 	if (ret)
-	// 	goto exit;
-	// }
+	/* Mode 2 reset on A+A only resets XCDs + GL2 which is not enough
+	 * to relocate allocations whose owning IPs aren't reset (e.g. IH
+	 * ring).
+	 * Therefore, only attempt bad page replacement after mode 0 reset. */
+	 if (!adapt->xgmi.connected_to_cpu) {
+		ret = amdgv_memmgr_replace_bad_pages(adapt);
+		if (ret)
+			goto exit;
+	}
 
 	/* re-init HW */
 	for (i = 0; i < adapt->num_funcs; i++) {
@@ -601,8 +618,10 @@ static int gpuiov_v9_0_reset_trigger_soft_pf_flr(struct amdgv_adapter *adapt)
 
 	if (adapt->psp.psp_program_guest_mc_settings) {
 		ret = adapt->psp.psp_program_guest_mc_settings(adapt, AMDGV_PF_IDX);
-		if (ret)
+		if (ret) {
+			AMDGV_ERROR("program PF MC settings failed\n");
 			goto failed;
+		}
 	}
 
 	amdgv_mmhub_gart_enable(adapt);
@@ -676,8 +695,10 @@ static int gpuiov_v9_0_reset_trigger_vf_flr(struct amdgv_adapter *adapt, uint32_
 
 	if (adapt->psp.psp_program_guest_mc_settings) {
 		ret = adapt->psp.psp_program_guest_mc_settings(adapt, idx_vf);
-		if (ret)
+		if (ret) {
+			AMDGV_ERROR("program %s mc settings failed\n", amdgv_idx_to_str(idx_vf));
 			goto failed;
+		}
 	}
 	amdgv_gpuiov_set_vf_fb(adapt, idx_vf, adapt->array_vf[idx_vf].fb_offset,
 				  adapt->array_vf[idx_vf].fb_size);

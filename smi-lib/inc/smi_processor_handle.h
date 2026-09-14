@@ -6,7 +6,7 @@
 #ifndef __SMI_PROCESSOR_HANDLE_H__
 #define __SMI_PROCESSOR_HANDLE_H__
 
-#define AMDSMI_MAX_NODES    32  //!< Maximum number of nodes supported
+#define AMDSMI_MAX_NODES 32 //!< Maximum number of nodes supported
 
 enum smi_handle_type {
 	SMI_HANDLE_TYPE_UNKNOWN = 0,

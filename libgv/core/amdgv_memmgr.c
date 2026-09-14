@@ -599,6 +599,7 @@ fini:
 
 	return 0;
 }
+
 static int amdgv_memmgr_always_alloc_new(enum amdgv_mem_id id)
 {
 	switch (id) {
@@ -929,6 +930,13 @@ struct amdgv_memmgr_mem *amdgv_memmgr_alloc_align(struct amdgv_memmgr *memmgr, u
 	case CHIP_MI350X:
 		if (adapt->status == AMDGV_STATUS_INVALID && !adapt->opt.skip_hw_init)
 			return amdgv_memmgr_reserve_attrs(memmgr, len, align, id);
+		break;
+	case CHIP_IP_DISCOVERY:
+		/* TODO: remove MEM_IP_DISCOVERY condition when system memory method is confirmed */
+		if (adapt->status == AMDGV_STATUS_INVALID && !adapt->opt.skip_hw_init &&
+			id != MEM_IP_DISCOVERY)
+			return amdgv_memmgr_reserve_attrs(memmgr, len, align, id);
+		break;
 	}
 
 	return amdgv_memmgr_alloc_unify_align(memmgr, len, align, id, NULL, NULL,
@@ -1127,6 +1135,58 @@ static int amdgv_memmgr_fill_reserved_bad_pages(struct amdgv_memmgr *memmgr,
 fail:
 	oss_mutex_unlock(memmgr->lock);
 	return AMDGV_FAILURE;
+}
+
+int amdgv_memmgr_resize(struct amdgv_adapter *adapt, struct amdgv_memmgr *memmgr)
+{
+	uint64_t fb_alignment_byte = MBYTES_TO_BYTES(AMDGV_FUNCTION_FB_ALIGNMENT);
+	uint64_t total_alloc = 0, new_size = 0, current_size = 0;
+	uint64_t bad_page_threshold = 0;
+	int ret = 0;
+
+	if (!adapt || !memmgr || !memmgr->is_init)
+		return AMDGV_FAILURE;
+
+	if (!amdgv_uniras_enabled(adapt))
+		return 0;
+
+	/* Resize the pool before bad pages are checked and before
+	 * deferred allocs are placed.
+	 *
+	 * Formula:
+	 *   new_size = roundup(total_alloc + bad_page_threshold * 64KB,
+	 *                      fb_alignment_byte)
+	 *
+	 * 64KB per bad page gives slack for allocations larger than 4KB
+	 * that need contiguous memory to be relocated. Bad pages can be
+	 * reserved in either pool, so each pool gets the full
+	 * bad_page_threshold slack. */
+	total_alloc = amdgv_memmgr_get_mem_list_size(memmgr, memmgr->allocs);
+	total_alloc += amdgv_memmgr_get_mem_list_size(memmgr, memmgr->reserves);
+
+	ret = amdgv_ras_mgr_get_bad_page_threshold(adapt, &bad_page_threshold);
+	if (ret) {
+		AMDGV_WARN("failed to query bad page threshold, fallback to default memmgr size\n");
+		return 0;
+	}
+	if (!bad_page_threshold)
+		return 0;
+
+	new_size = roundup(total_alloc +
+			(uint64_t)bad_page_threshold * (64 * 1024), fb_alignment_byte);
+
+	/* Only override the pool size if it would grow. */
+	amdgv_memmgr_get_limit(memmgr, &current_size);
+	if (new_size <= current_size)
+		return 0;
+
+	ret = amdgv_memmgr_set_size(memmgr, new_size);
+	if (ret) {
+		AMDGV_ERROR("failed to resize memmgr to 0x%llx\n", new_size);
+		return ret;
+	}
+
+	return 0;
 }
 
 int amdgv_memmgr_fill_reserved_bad_pages_all(struct amdgv_adapter *adapt,
@@ -1784,6 +1844,9 @@ bool amdgv_memmgr_addr_in_range(struct amdgv_adapter *adapt, struct amdgv_memmgr
 	amdgv_memmgr_get_limit(memmgr, &limit);
 	config_memsize = MBYTES_TO_BYTES(amdgv_nbio_get_memsize(adapt));
 
+	if (config_memsize == 0)
+		config_memsize = adapt->fb_size;
+
 	if (memmgr->down) {
 		memmgr_start = config_memsize - limit;
 		memmgr_end = config_memsize;
@@ -1793,4 +1856,135 @@ bool amdgv_memmgr_addr_in_range(struct amdgv_adapter *adapt, struct amdgv_memmgr
 	}
 
 	return (addr >= memmgr_start && addr < memmgr_end);
+}
+
+bool amdgv_memmgr_has_pending_reservations(struct amdgv_memmgr *memmgr)
+{
+	if (!memmgr)
+		return 0;
+
+	return !amdgv_list_empty(&memmgr->reservations_pending);
+}
+
+uint64_t amdgv_memmgr_get_mem_list_size(struct amdgv_memmgr *memmgr,
+		struct amdgv_memmgr_mem *mem_list)
+{
+	struct amdgv_memmgr_mem *alloc;
+	uint64_t total = 0;
+
+	if (!memmgr || !memmgr->is_init || !mem_list)
+		return 0;
+
+	oss_mutex_lock(memmgr->lock);
+	amdgv_list_for_each_entry(alloc, &mem_list->node,
+			struct amdgv_memmgr_mem, node) {
+		total += roundup(alloc->len, alloc->align);
+	}
+	oss_mutex_unlock(memmgr->lock);
+
+	return total;
+}
+
+int amdgv_memmgr_replace_bad_pages(struct amdgv_adapter *adapt)
+{
+	int ret;
+
+	if (amdgv_memmgr_has_pending_reservations(&adapt->memmgr_pf)) {
+		ret = amdgv_memmgr_replace_pending_bad_pages(adapt, &adapt->memmgr_pf);
+		if (ret)
+			return ret;
+	}
+
+	if (amdgv_memmgr_has_pending_reservations(&adapt->memmgr_gpu)) {
+		ret = amdgv_memmgr_replace_pending_bad_pages(adapt, &adapt->memmgr_gpu);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
+}
+
+int amdgv_memmgr_replace_pending_bad_pages(struct amdgv_adapter *adapt,
+												struct amdgv_memmgr *memmgr)
+{
+	struct amdgv_mem_reservation *rsv, *rsv_tmp;
+	struct amdgv_memmgr_mem *old, *new_mem, *prev;
+	struct amdgv_memmgr_mem *alloc, *alloc_tmp;
+	struct amdgv_list_head list_tmp;
+	int ret = 0;
+
+	AMDGV_INIT_LIST_HEAD(&list_tmp);
+
+	oss_mutex_lock(memmgr->rsv_lock);
+
+	/*
+	 * For each pending reservation, move overlapping
+	 * allocations out of memmgr and pin the bad page address.
+	 */
+	amdgv_list_for_each_entry_safe(rsv, rsv_tmp, &memmgr->reservations_pending,
+			struct amdgv_mem_reservation, blocks) {
+
+		oss_mutex_lock(memmgr->lock);
+		old = amdgv_memmgr_find_mem_at_offset(memmgr, rsv->start, rsv->size);
+		while (old) {
+			if (old == amdgv_list_last_entry(&memmgr->allocs->node,
+					struct amdgv_memmgr_mem, node)) {
+				prev = amdgv_list_last_entry(&old->node,
+						struct amdgv_memmgr_mem, node);
+				memmgr->tom = prev->alloc_off;
+			}
+
+			amdgv_list_move_entry(&old->node, &list_tmp);
+			old = amdgv_memmgr_find_mem_at_offset(memmgr, rsv->start, rsv->size);
+		}
+		oss_mutex_unlock(memmgr->lock);
+
+		rsv->rsv_mem = amdgv_memmgr_alloc_align_at(memmgr,
+				rsv->start, rsv->size, MEM_ECC_BAD_PAGE);
+		if (!rsv->rsv_mem) {
+			AMDGV_ERROR("Failed to reserve bad page at 0x%llx\n", rsv->start);
+			ret = AMDGV_FAILURE;
+			break;
+		}
+
+		amdgv_list_move_entry(&rsv->blocks, &memmgr->reserved_pages);
+	}
+
+	/*
+	 * Reallocate each displaced allocation to a new
+	 * safe location that avoids the pinned bad pages.
+	 */
+	amdgv_list_for_each_entry_safe(alloc, alloc_tmp, &list_tmp,
+			struct amdgv_memmgr_mem, node) {
+		if (alloc->len == 0)
+			continue;
+
+		/* use MEM_ECC_BAD_PAGE to always allocate new mem */
+		new_mem = amdgv_memmgr_alloc_and_replace(adapt, memmgr,
+				alloc, MEM_ECC_BAD_PAGE);
+		if (new_mem) {
+			amdgv_list_del(&new_mem->node);
+			if (new_mem->sys_mem.handle)
+				oss_free_dma_mem(new_mem->sys_mem.handle);
+			oss_free(new_mem);
+		} else {
+			ret = AMDGV_FAILURE;
+			break;
+		}
+	}
+
+	/* Cleanup any remaining displaced allocations on failure */
+	if (!amdgv_list_empty(&list_tmp)) {
+		amdgv_list_for_each_entry_safe(alloc, alloc_tmp, &list_tmp,
+				struct amdgv_memmgr_mem, node) {
+			amdgv_list_del(&alloc->node);
+			if (alloc->sys_mem.handle)
+				oss_free_dma_mem(alloc->sys_mem.handle);
+			oss_free(alloc);
+		}
+	}
+
+	oss_mutex_unlock(memmgr->rsv_lock);
+
+	return ret;
 }

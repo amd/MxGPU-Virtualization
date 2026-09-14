@@ -36,3 +36,11 @@ int amdgv_powerplay_flr_reset(struct amdgv_adapter *adapt, uint32_t idx_vf)
 		return AMDGV_FAILURE;
 	}
 }
+
+void amdgv_powerplay_put_timeout(struct amdgv_adapter *adapt, uint64_t elapsed)
+{
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->put_timeout)
+		adapt->pp.pp_funcs->put_timeout(adapt, elapsed);
+	else
+		AMDGV_ERROR("SMU Wait for Timed out\n");
+}

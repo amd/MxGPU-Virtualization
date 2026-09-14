@@ -10,7 +10,8 @@
 #include <iostream>
 #include <algorithm>
 
-SmiSysfsReader::SysfsStatus SmiSysfsReader::readAll(const std::string& filepath, std::vector<SysfsValue>& content)
+SmiSysfsReader::SysfsStatus SmiSysfsReader::readAll(const std::string& filepath,
+						    std::vector<SysfsValue>& content)
 {
 	std::ifstream file(filepath);
 	std::string line;
@@ -52,7 +53,8 @@ SmiSysfsReader::SysfsStatus SmiSysfsReader::readAll(const std::string& filepath,
 	return SmiSysfsReader::SysfsStatus::Success;
 }
 
-SmiSysfsReader::SysfsStatus SmiSysfsReader::readLine(const std::string& filepath, SmiSysfsReader::SysfsValue& content)
+SmiSysfsReader::SysfsStatus SmiSysfsReader::readLine(const std::string& filepath,
+						     SmiSysfsReader::SysfsValue& content)
 {
 	std::ifstream file(filepath);
 	std::string line;
@@ -76,7 +78,7 @@ SmiSysfsReader::SysfsStatus SmiSysfsReader::readLine(const std::string& filepath
 			try {
 				if (token.find("0x") == 0 || token.find("0X") == 0) {
 					int hex_value = std::stoi(token, nullptr, 16);
-					content = hex_value;
+					content	      = hex_value;
 				} else if (std::all_of(token.begin(), token.end(), ::isdigit)) {
 					content = std::stoi(token);
 				} else {
@@ -92,7 +94,8 @@ SmiSysfsReader::SysfsStatus SmiSysfsReader::readLine(const std::string& filepath
 	return SmiSysfsReader::SysfsStatus::Success;
 }
 
-SmiSysfsReader::SysfsStatus SmiSysfsReader::readBytes(const std::string& filepath, size_t offset, void* buf, size_t len)
+SmiSysfsReader::SysfsStatus SmiSysfsReader::readBytes(const std::string& filepath, size_t offset,
+						      void* buf, size_t len)
 {
 	if ((buf == nullptr) || (len == 0)) {
 		return SmiSysfsReader::SysfsStatus::IOError;

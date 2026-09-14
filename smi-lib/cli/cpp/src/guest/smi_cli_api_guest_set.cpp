@@ -14,19 +14,18 @@
 
 #include <sstream>
 #ifdef _WIN64
-#include <windows.h>
-#include <sysinfoapi.h>
+	#include <windows.h>
+	#include <sysinfoapi.h>
 #endif
 
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
-		amdsmi_processor_handle *);
+								amdsmi_processor_handle*);
 typedef amdsmi_status_t (*AMDSMI_SET_GPU_PROCESS_ISOLATION)(amdsmi_processor_handle, uint32_t);
 typedef amdsmi_status_t (*AMDSMI_SET_POWER_CAP)(amdsmi_processor_handle, uint32_t, uint64_t);
 
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF guest_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_SET_GPU_PROCESS_ISOLATION guest_amdsmi_set_gpu_process_isolation;
 extern AMDSMI_SET_POWER_CAP guest_amdsmi_set_power_cap;
-
 
 int AmdSmiApiGuest::amdsmi_set_process_isolation_command(uint64_t processor_bdf, Arguments arg)
 {
@@ -38,7 +37,7 @@ int AmdSmiApiGuest::amdsmi_set_process_isolation_command(uint64_t processor_bdf,
 	uint32_t mode;
 	if (arg.process_isolation_set == "0") {
 		mode = 0;
-	} else if(arg.process_isolation_set == "1") {
+	} else if (arg.process_isolation_set == "1") {
 		mode = 1;
 	} else {
 		return INVALID_PARAM_VALUE;
@@ -80,5 +79,3 @@ int AmdSmiApiGuest::amdsmi_set_power_cap_command(uint64_t processor_bdf, Argumen
 
 	return ret;
 }
-
-

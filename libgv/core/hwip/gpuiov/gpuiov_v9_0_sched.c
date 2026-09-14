@@ -81,6 +81,12 @@ static uint32_t gpuiov_v9_0_cp_sched_state(struct amdgv_adapter *adapt, uint32_t
 	uint32_t xcc_id;
 	uint32_t ret = 0;
 
+#if 1
+	/* Return idle for PF until PF RLC scheduling registers are programmed */
+	if (idx_vf == AMDGV_PF_IDX)
+		return 1;
+#endif
+
 	for_each_id (xcc_id, amdgv_sched_get_xcc_mask_by_vf(adapt, idx_vf)) {
 		ret |= RREG32(SOC15_REG_OFFSET(GC, GET_INST(GC, xcc_id), regRLC_CP_SCHEDULERS));
 	}
@@ -108,6 +114,18 @@ static int gpuiov_v9_0_sched_setup_spatial_part_table(struct amdgv_adapter *adap
 			      adapt->mcp.gfx.num_xcc);
 		return AMDGV_FAILURE;
 	}
+
+#if 1
+	/* A+A pre-silicon has no MMSCH/VCN; limit spatial partition to GFX schedulers */
+	if (adapt->xgmi.connected_to_cpu) {
+		uint32_t i;
+		const uint32_t mm_sched_mask =
+			BIT(GPUIOV_V9_0_HW_SCHED_BLOCK_GFX_SCH0_RLCV) - 1;
+
+		for (i = 0; i < num_vf; i++)
+			adapt->sched.spatial_part[i].hw_sched_mask &= ~mm_sched_mask;
+	}
+#endif
 
 	return 0;
 }

@@ -1,6 +1,7 @@
-/******************************************************************************\
- * Copyright Advanced Micro Devices, Inc. All rights reserved.
-\******************************************************************************/
+/* Copyright Advanced Micro Devices, Inc.
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 #ifndef DFC_FW_H
 #define DFC_FW_H

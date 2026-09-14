@@ -25,6 +25,7 @@ struct amdgv_ras_policy_info {
 	uint16_t od_sram_ecc_threshold;
 	uint16_t wdt_threshold;
 	uint16_t hwa_threshold;
+
 	uint16_t dram_non_critical_region_threshold;	// Non-critical region UCE threshold
 	uint16_t dram_critical_region_threshold;		// Critical region UCE threshold
 };

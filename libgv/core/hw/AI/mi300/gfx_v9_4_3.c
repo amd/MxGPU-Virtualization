@@ -387,7 +387,8 @@ static int gfx_v9_4_3_mec_init(struct amdgv_adapter *adapt)
 			amdgv_memmgr_alloc_align(&adapt->memmgr_pf,
 					 mec_hpd_size, PAGE_SIZE, MEM_GFX_EOP);
 		if (!adapt->gfx.mec.hpd_eop_obj) {
-			AMDGV_WARN("create HDP EOP bo failed\n");
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL,
+				      (uint64_t)mec_hpd_size);
 			gfx_v9_4_3_mec_fini(adapt);
 			return AMDGV_FAILURE;
 		}
@@ -444,10 +445,8 @@ static int gfx_v9_4_3_sw_init_internal(struct amdgv_adapter *adapt)
 	adapt->gfx.gfx_current_status = AMDGV_GFX_NORMAL_MODE;
 
 	r = gfx_v9_4_3_mec_init(adapt);
-	if (r) {
-		AMDGV_ERROR("Failed to init MEC BOs!\n");
+	if (r)
 		return r;
-	}
 
 	/* set up the compute queues - allocate horizontally across pipes */
 	for (xcc_id = 0; xcc_id < num_xcc; xcc_id++) {
@@ -468,10 +467,8 @@ static int gfx_v9_4_3_sw_init_internal(struct amdgv_adapter *adapt)
 		}
 
 		r = amdgv_gfx_kiq_init(adapt, GFX9_MEC_HPD_SIZE, xcc_id);
-		if (r) {
-			AMDGV_ERROR("Failed to init KIQ BOs!\n");
+		if (r)
 			return r;
-		}
 
 		kiq = &adapt->gfx.kiq[xcc_id];
 		kiq->ring.me = 2;
@@ -501,10 +498,8 @@ static int gfx_v9_4_3_hw_init_internal_set(struct amdgv_adapter *adapt)
 	uint32_t i, j, k;
 
 	r = gfx_v9_4_3_mec_init_set(adapt);
-	if (r) {
-		AMDGV_ERROR("Failed to init MEC set!\n");
+	if (r)
 		return r;
-	}
 
 	num_xcc = adapt->mcp.gfx.num_xcc;
 
@@ -532,10 +527,8 @@ static int gfx_v9_4_3_hw_init_internal_set(struct amdgv_adapter *adapt)
 		}
 
 		r = amdgv_gfx_kiq_init_set(adapt, GFX9_MEC_HPD_SIZE, xcc_id);
-		if (r) {
-			AMDGV_ERROR("Failed to init KIQ BOs!\n");
+		if (r)
 			return r;
-		}
 
 		ring = &adapt->gfx.kiq[xcc_id].ring;
 		r = amdgv_ring_init_set(adapt, ring);
@@ -1036,7 +1029,7 @@ static int gfx_v9_4_3_xcc_q_fini_register(struct amdgv_ring *ring, int xcc_id)
 		}
 
 		if (i == AMDGV_GFX_MAX_USEC_TIMEOUT) {
-			AMDGV_ERROR("KIQ dequeue request failed.\n");
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_GFX_KIQ_DEQUEUE_TIMEOUT, 0);
 
 			/* Manual disable if dequeue request times out */
 			WREG32_SOC15_RLC(GC, GET_INST(GC, xcc_id), regCP_HQD_ACTIVE, 0);
@@ -1089,6 +1082,7 @@ static int gfx_v9_4_3_xcc_kiq_init_queue(struct amdgv_ring *ring, int xcc_id)
 	if (init_mqd_alloc && init_mqd_alloc->mqd.cp_hqd_pq_control) {
 		oss_memcpy(mqd_alloc, init_mqd_alloc, sizeof(struct v9_mqd_allocation));
 	} else {
+		oss_memset(mqd_alloc, 0, sizeof(struct v9_mqd_allocation));
 		gfx_v9_4_3_xcc_mqd_init(ring, xcc_id);
 		if (init_mqd_alloc)
 			oss_memcpy(init_mqd_alloc, mqd_alloc, sizeof(struct v9_mqd_allocation));
@@ -1115,6 +1109,7 @@ static int gfx_v9_4_3_xcc_kcq_init_queue(struct amdgv_ring *ring, int xcc_id)
 	if (init_mqd_alloc && init_mqd_alloc->mqd.cp_hqd_pq_control) {
 		oss_memcpy(mqd_alloc, init_mqd_alloc, sizeof(struct v9_mqd_allocation));
 	} else {
+		oss_memset(mqd_alloc, 0, sizeof(struct v9_mqd_allocation));
 		oss_mutex_lock(adapt->srbm_mutex);
 		soc15_grbm_select(adapt, ring->me, ring->pipe, ring->queue, 0, xcc_id);
 		gfx_v9_4_3_xcc_mqd_init(ring, xcc_id);
@@ -1512,8 +1507,7 @@ int gfx_v9_4_3_aql_queue_submit_packet_data(struct amdgv_adapter *adapt,
 	start = oss_get_time_stamp();
 	while ((wptr_old - (uint64_t)*aq->rptr_cpu) >= ring_slots) {
 		if (oss_get_time_stamp() - start > full_timeout_us) {
-			AMDGV_WARN("AQL: ring full (wptr=%llu rptr=%llu)\n", wptr_old,
-				   (uint64_t)*aq->rptr_cpu);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_GFX_AQL_RING_FULL, 0);
 			return AMDGV_FAILURE;
 		}
 		oss_udelay(1);
@@ -1777,7 +1771,7 @@ static int gfx_v9_4_3_fb_hash_dispatch_internal(struct amdgv_adapter *adapt,
 			 ~(PAGE_SIZE - 1);
 	ret = gfx_v9_4_3_fb_hash_alloc_resources(adapt, &res, kernelobj_size, kernarg_bytes);
 	if (ret) {
-		AMDGV_ERROR("fb_hash: failed to allocate resources\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL, 0);
 		return ret;
 	}
 
@@ -1817,7 +1811,7 @@ static int gfx_v9_4_3_fb_hash_dispatch_internal(struct amdgv_adapter *adapt,
 
 	ret = gfx_v9_4_3_aql_queue_init(adapt, &aq, num_xcc);
 	if (ret) {
-		AMDGV_ERROR("fb_hash: failed to init AQL queue\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL, 0);
 		goto err_aql_queue_init;
 	}
 
@@ -1826,18 +1820,13 @@ static int gfx_v9_4_3_fb_hash_dispatch_internal(struct amdgv_adapter *adapt,
 
 	for (xcc = 0; xcc < num_xcc; xcc++) {
 		ret = gfx_v9_4_3_aql_queue_build_mqd(adapt, &aq, xcc);
-		if (ret) {
-			AMDGV_WARN("fb_hash: failed to build mqd for xcc %u ret=%d\n", xcc,
-				   ret);
+		if (ret)
 			goto err_aql_restore_hqd;
-		}
 	}
 	for (xcc = 0; xcc < num_xcc; xcc++) {
 		ret = gfx_v9_4_3_aql_queue_kiq_map_xcc(adapt, &aq, xcc);
-		if (ret) {
-			AMDGV_WARN("fb_hash: failed to map kiq for xcc %u ret=%d\n", xcc, ret);
+		if (ret)
 			goto err_aql_map_xcc;
-		}
 	}
 
 	signal_cpu = (volatile int64_t *)amdgv_memmgr_get_cpu_addr(res.signal);
@@ -1851,18 +1840,14 @@ static int gfx_v9_4_3_fb_hash_dispatch_internal(struct amdgv_adapter *adapt,
 	oss_mb();
 
 	ret = gfx_v9_4_3_aql_queue_submit_packet_data(adapt, &aq, (const uint32_t *)pkt_cpua);
-	if (ret) {
-		AMDGV_WARN("fb_hash: failed to submit packet data\n");
+	if (ret)
 		goto err_aql_submit;
-	}
 
 	cb_context.ctx = (void *)done_cpu;
 	cb_context.type = AMDGV_WAIT_FOR_FB_HASH_DONE;
 	ret = amdgv_wait_for(adapt, fb_hash_done_cb, &cb_context, FB_HASH_TIMEOUT_US, 0);
-	if (ret) {
-		AMDGV_WARN("fb_hash: wait for done failed ret=%d\n", ret);
+	if (ret)
 		goto err_aql_submit;
-	}
 	oss_mb();
 	amdgv_misc_hdp_flush(adapt);
 	oss_mb();
@@ -1896,7 +1881,7 @@ int gfx_v9_4_3_fb_hash_compute_page_hash(struct amdgv_adapter *adapt, uint32_t i
 
 	if (adapt->flags & AMDGV_FLAG_DISABLE_COMPUTE_ENGINE ||
 	    adapt->flags & AMDGV_FLAG_ENABLE_COMPUTE_PAGING) {
-		AMDGV_ERROR("Compute engine disabled or compute paging on\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_GFX_COMPUTE_ENGINE_UNAVAILABLE, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -1909,9 +1894,7 @@ int gfx_v9_4_3_fb_hash_compute_page_hash(struct amdgv_adapter *adapt, uint32_t i
 	vf_fb_size_bytes = MBYTES_TO_BYTES(vf->fb_size);
 	page_count = (uint32_t)(vf_fb_size_bytes / page_size);
 	if (page_count == 0) {
-		AMDGV_WARN("fb_hash_compute_page_hash: page_count=0 (fb=0x%llx page_size=0x%llx)\n",
-			   (unsigned long long)vf_fb_size_bytes,
-			   (unsigned long long)page_size);
+		amdgv_put_log(idx_vf, AMDGV_LOG_DRIVER_INVALID_VALUE, (uint64_t)page_size);
 		return AMDGV_FAILURE;
 	}
 
@@ -1919,10 +1902,7 @@ int gfx_v9_4_3_fb_hash_compute_page_hash(struct amdgv_adapter *adapt, uint32_t i
 	page_hash_byte_offset = vf_start_page * adapt->dirtybit.fb_hash_digest_bytes;
 	needed_bytes = (vf_start_page + page_count) * adapt->dirtybit.fb_hash_digest_bytes;
 	if (amdgv_memmgr_get_size(fb_hash_buf) < needed_bytes) {
-		AMDGV_WARN(
-			"fb_hash_buf size 0x%llx < needed 0x%llx\n",
-			(unsigned long long)amdgv_memmgr_get_size(fb_hash_buf),
-			(unsigned long long)needed_bytes);
+		amdgv_put_log(idx_vf, AMDGV_LOG_DRIVER_INVALID_VALUE, (uint64_t)needed_bytes);
 		return AMDGV_FAILURE;
 	}
 
@@ -2105,11 +2085,8 @@ static int gfx_v9_4_3_ring_test_ring(struct amdgv_ring *ring)
 		oss_udelay(1);
 	}
 
-	if (i >= AMDGV_GFX_MAX_USEC_TIMEOUT) {
-		AMDGV_ERROR("amdgpu: ring(%s) failed in self-test with WPTR update\n", ring->name);
-	} else {
-		AMDGV_INFO("amdgpu: ring(%s) succeeded in self-test with WPTR update\n", ring->name);
-	}
+	if (i >= AMDGV_GFX_MAX_USEC_TIMEOUT)
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_GFX_RING_TEST_FAIL, 0);
 
 	if (i >= AMDGV_GFX_MAX_USEC_TIMEOUT)
 		r = AMDGV_FAILURE;

@@ -7,15 +7,15 @@
 #define __SMI_DRV_TYPES_H__
 
 #ifdef __KERNEL__
-#include <linux/types.h>
+	#include <linux/types.h>
 
 typedef struct file *smi_process_handle;
 #else
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <stdint.h>
+	#include <stdbool.h>
+	#include <string.h>
 
 struct smi_file {
 	void *private_data;

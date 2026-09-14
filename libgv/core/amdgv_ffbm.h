@@ -113,7 +113,7 @@ struct amdgv_ffbm {
 
 int amdgv_ffbm_sw_init(struct amdgv_adapter *adapt);
 int amdgv_ffbm_sw_fini(struct amdgv_adapter *adapt);
-int amdgv_ffbm_page_table_update_by_fcn(struct amdgv_adapter *adapt, uint32_t vf_idx);
+int amdgv_ffbm_page_table_update_by_fcn(struct amdgv_adapter *adapt, uint32_t vf_idx, bool reserve);
 int amdgv_ffbm_page_table_init(struct amdgv_adapter *adapt);
 uint64_t amdgv_ffbm_gpa_to_spa(struct amdgv_adapter *adapt, uint64_t gpa, uint32_t vf_idx);
 uint64_t amdgv_ffbm_spa_to_gpa(struct amdgv_adapter *adapt, uint64_t spa, uint32_t *vf_idx);
@@ -128,6 +128,7 @@ void amdgv_ffbm_read_page_table(struct amdgv_adapter *adapt, char *page_table_co
 void amdgv_ffbm_copy_page_table(struct amdgv_adapter *adapt, void *page_table_content, int max_num, int *len);
 int amdgv_ffbm_replace_bad_pages(struct amdgv_adapter *adapt, struct eeprom_table_record *bps, int pages);
 int amdgv_ffbm_apply_page_table(struct amdgv_adapter *adapt);
+int amdgv_ffbm_apply_page_table_by_fcn(struct amdgv_adapter *adapt, uint32_t vf_idx);
 enum amdgv_live_info_status amdgv_ffbm_export_spa(struct amdgv_adapter *adapt, struct amdgv_live_info_ffbm *ffbm_info);
 enum amdgv_live_info_status amdgv_ffbm_import_spa_and_gpa(struct amdgv_adapter *adapt, struct amdgv_live_info_ffbm *ffbm_info);
 int amdgv_get_vf_fb_mapping_list(struct amdgv_adapter *adapt, uint32_t vf_idx, struct amdgv_vf_ffbm_map_list *list, bool include_tmr_block);

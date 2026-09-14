@@ -49,6 +49,9 @@ struct amdgv_misc {
 	/* if (fill_mode), src contains pattern to fill */
 	int (*dma_copy)(struct amdgv_adapter *adapt, uint32_t idx_vf, bool fill_mode,
 			   uint64_t src, uint64_t dst, uint64_t size, uint64_t *size_copied);
+	/* VF FB clear uses an independent DMA engine (e.g. LSDMA), so no world
+	 * switch stop or GFX->PF context switch is needed to clear VF FB */
+	bool clear_vf_fb_no_ws_stop;
 	/* ASIC specified common timeout values */
 	uint64_t timeouts[TIMEOUT_SEC_LEN];
 

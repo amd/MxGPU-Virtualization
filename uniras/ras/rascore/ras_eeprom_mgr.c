@@ -32,6 +32,18 @@ static bool __ras_eeprom_disabled(struct ras_core_context *ras_core)
 	return !ras_core->ras_eeprom_supported;
 }
 
+/*
+ * Bad page retirement is disabled when the bad page threshold is configured
+ * to 0 (DISABLE_RETIRE_PAGE). In this mode the driver must not
+ * retire bad pages, which is intended for debugging purposes.
+ */
+bool ras_eeprom_mgr_page_retire_disabled(struct ras_core_context *ras_core)
+{
+	struct ras_eeprom_mgr *mgr = &ras_core->eeprom_mgr;
+
+	return mgr->work_mode_over_thresh == RAS_WORK_MODE_OVER_THRESH_DEBUG;
+}
+
 static const struct ras_eeprom_ops *ras_eeprom_mgr_get_ip_func(
 				struct ras_core_context *ras_core, uint32_t ip_version)
 {
@@ -191,7 +203,7 @@ int ras_eeprom_mgr_get_record_count(struct ras_core_context *ras_core)
 	struct ras_eeprom_mgr *mgr = &ras_core->eeprom_mgr;
 	int ret = 0;
 
-	if (__ras_eeprom_disabled(ras_core))
+	if (__ras_eeprom_disabled(ras_core) || ras_eeprom_mgr_page_retire_disabled(ras_core))
 		return 0;
 
 	if (!mgr->eeprom_ops)
@@ -263,7 +275,7 @@ int ras_eeprom_mgr_check_and_report_status(struct ras_core_context *ras_core, bo
 	int valid_err_count;
 	int ret = 0;
 
-	if (__ras_eeprom_disabled(ras_core))
+	if (__ras_eeprom_disabled(ras_core) || ras_eeprom_mgr_page_retire_disabled(ras_core))
 		return 0;
 
 	if (!mgr->eeprom_ops || !mgr->eeprom_ops->get_eeprom_info)
@@ -338,7 +350,7 @@ enum ras_gpu_op_status
 	struct ras_eeprom_info info = {0};
 	int ret;
 
-	if (__ras_eeprom_disabled(ras_core))
+	if (__ras_eeprom_disabled(ras_core) || ras_eeprom_mgr_page_retire_disabled(ras_core))
 		return RAS_GPU_OP_STATUS_OK;
 
 	if (!mgr->eeprom_ops || !mgr->eeprom_ops->get_eeprom_info)

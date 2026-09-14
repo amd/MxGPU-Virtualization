@@ -551,6 +551,10 @@ int navi32_copy_ip_data_to_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	ret = amdgv_vfmgr_copy_to_vf_fb_abs(adapt, idx_vf, offset, vf_copy.data,
 					    AMDGV_IP_DISCOVERY_SIZE);
 
+	// flush ip discovery data when ffbm supports
+	if (adapt->ffbm.enabled)
+		amdgv_misc_hdp_flush(adapt);
+
 	oss_free_memory(vf_copy.data);
 
 	return ret;

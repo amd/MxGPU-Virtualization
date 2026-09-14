@@ -13,16 +13,15 @@ unsigned int default_hash_function(unsigned int num_of_elements, uint64_t key)
 }
 
 struct hash_table *create_hash_table(unsigned int num_of_rows,
-					 unsigned int (*function)(unsigned int,
-								  uint64_t), struct oss_interface *oss_funcs)
+				     unsigned int (*function)(unsigned int, uint64_t),
+				     struct oss_interface *oss_funcs)
 {
 	struct hash_table *hash = NULL;
 
 	if (num_of_rows == 0)
 		return NULL;
 
-	hash = (struct hash_table *)oss_funcs->alloc_small_zero_memory(
-		sizeof(struct hash_table));
+	hash = (struct hash_table *)oss_funcs->alloc_small_zero_memory(sizeof(struct hash_table));
 	if (hash == NULL) {
 		return NULL;
 	}
@@ -35,14 +34,14 @@ struct hash_table *create_hash_table(unsigned int num_of_rows,
 	}
 
 	hash->table = (struct hash_table_element **)oss_funcs->alloc_small_zero_memory(
-		hash->num_of_elements * sizeof(struct hash_table_element *));
+	    hash->num_of_elements * sizeof(struct hash_table_element *));
 	if (hash->table == NULL) {
 		oss_funcs->free_small_memory(hash);
 		return NULL;
 	}
 
-	oss_funcs->memset(hash->table, 0,
-		   hash->num_of_elements * sizeof(struct hash_table_element *));
+	oss_funcs->memset(
+	    hash->table, 0, hash->num_of_elements * sizeof(struct hash_table_element *));
 
 	hash->oss_funcs = oss_funcs;
 
@@ -62,7 +61,7 @@ enum SMI_HASH_TABLE_RET_CODES clear_table(struct hash_table *table)
 
 	for (unsigned int i = 0; i < table->num_of_elements; ++i) {
 		while (table->table[i] != NULL) {
-			element = table->table[i];
+			element		= table->table[i];
 			table->table[i] = table->table[i]->next_element;
 			table->oss_funcs->free_small_memory(element->data);
 			table->oss_funcs->free_small_memory(element);
@@ -92,12 +91,11 @@ enum SMI_HASH_TABLE_RET_CODES destroy_hash_table(struct hash_table *table)
 	return SMI_HASH_TABLE_SUCCESS;
 }
 
-enum SMI_HASH_TABLE_RET_CODES add_to_hash_table(struct hash_table *table,
-						uint64_t key, void *data)
+enum SMI_HASH_TABLE_RET_CODES add_to_hash_table(struct hash_table *table, uint64_t key, void *data)
 {
-	void *new_data = NULL;
-	struct hash_table_element *new_element = NULL;
-	struct hash_table_element *iterator = NULL;
+	void *new_data				 = NULL;
+	struct hash_table_element *new_element	 = NULL;
+	struct hash_table_element *iterator	 = NULL;
 	struct hash_table_element *prev_iterator = NULL;
 
 	if (table == NULL) {
@@ -107,20 +105,19 @@ enum SMI_HASH_TABLE_RET_CODES add_to_hash_table(struct hash_table *table,
 	table->oss_funcs->mutex_lock(table->mutex);
 	new_data = data;
 
-	const unsigned int index =
-		table->hash_function(table->num_of_elements, key);
+	const unsigned int index = table->hash_function(table->num_of_elements, key);
 
 	new_element = (struct hash_table_element *)table->oss_funcs->alloc_small_zero_memory(
-		sizeof(struct hash_table_element));
+	    sizeof(struct hash_table_element));
 	if (new_element == NULL) {
 		table->oss_funcs->mutex_unlock(table->mutex);
 		return SMI_HASH_TABLE_MEMORY_ERROR;
 	}
 
 	new_element->data = new_data;
-	new_element->key = key;
+	new_element->key  = key;
 
-	iterator = table->table[index];
+	iterator      = table->table[index];
 	prev_iterator = NULL;
 	while (iterator != NULL) {
 		if (iterator->key == key) {
@@ -129,13 +126,13 @@ enum SMI_HASH_TABLE_RET_CODES add_to_hash_table(struct hash_table *table,
 			return SMI_HASH_TABLE_KEY_ERROR;
 		}
 		prev_iterator = iterator;
-		iterator = iterator->next_element;
+		iterator      = iterator->next_element;
 	}
 	if (prev_iterator == NULL) {
 		new_element->next_element = table->table[index];
-		table->table[index] = new_element;
+		table->table[index]	  = new_element;
 	} else {
-		new_element->next_element = NULL;
+		new_element->next_element   = NULL;
 		prev_iterator->next_element = new_element;
 	}
 
@@ -143,10 +140,9 @@ enum SMI_HASH_TABLE_RET_CODES add_to_hash_table(struct hash_table *table,
 	return SMI_HASH_TABLE_SUCCESS;
 }
 
-enum SMI_HASH_TABLE_RET_CODES remove_from_hash_table(struct hash_table *table,
-							 uint64_t key)
+enum SMI_HASH_TABLE_RET_CODES remove_from_hash_table(struct hash_table *table, uint64_t key)
 {
-	struct hash_table_element *iterator = NULL;
+	struct hash_table_element *iterator	 = NULL;
 	struct hash_table_element *prev_iterator = NULL;
 
 	if (table == NULL) {
@@ -154,34 +150,32 @@ enum SMI_HASH_TABLE_RET_CODES remove_from_hash_table(struct hash_table *table,
 	}
 
 	table->oss_funcs->mutex_lock(table->mutex);
-	const unsigned int index =
-		table->hash_function(table->num_of_elements, key);
+	const unsigned int index = table->hash_function(table->num_of_elements, key);
 
-	iterator = table->table[index];
+	iterator      = table->table[index];
 	prev_iterator = NULL;
 	while (iterator != NULL) {
 		if (iterator->key == key) {
 			if (prev_iterator == NULL) {
 				table->table[index] = iterator->next_element;
 			} else {
-				prev_iterator->next_element =
-					iterator->next_element;
+				prev_iterator->next_element = iterator->next_element;
 			}
 			table->oss_funcs->free_small_memory(iterator);
 			table->oss_funcs->mutex_unlock(table->mutex);
 			return SMI_HASH_TABLE_SUCCESS;
 		}
 		prev_iterator = iterator;
-		iterator = iterator->next_element;
+		iterator      = iterator->next_element;
 	}
 	table->oss_funcs->mutex_unlock(table->mutex);
 	return SMI_HASH_TABLE_KEY_ERROR;
 }
 
-enum SMI_HASH_TABLE_RET_CODES pop_from_hash_table(struct hash_table *table,
-						  uint64_t key, void *data)
+enum SMI_HASH_TABLE_RET_CODES
+pop_from_hash_table(struct hash_table *table, uint64_t key, void *data)
 {
-	struct hash_table_element *iterator = NULL;
+	struct hash_table_element *iterator	 = NULL;
 	struct hash_table_element *prev_iterator = NULL;
 
 	if (table == NULL) {
@@ -190,17 +184,15 @@ enum SMI_HASH_TABLE_RET_CODES pop_from_hash_table(struct hash_table *table,
 
 	table->oss_funcs->mutex_lock(table->mutex);
 
-	const unsigned int index =
-		table->hash_function(table->num_of_elements, key);
-	iterator = table->table[index];
-	prev_iterator = NULL;
+	const unsigned int index = table->hash_function(table->num_of_elements, key);
+	iterator		 = table->table[index];
+	prev_iterator		 = NULL;
 	while (iterator != NULL) {
 		if (iterator->key == key) {
 			if (prev_iterator == NULL) {
 				table->table[index] = iterator->next_element;
 			} else {
-				prev_iterator->next_element =
-					iterator->next_element;
+				prev_iterator->next_element = iterator->next_element;
 			}
 			data = iterator->data;
 			table->oss_funcs->free_small_memory(iterator);
@@ -208,14 +200,14 @@ enum SMI_HASH_TABLE_RET_CODES pop_from_hash_table(struct hash_table *table,
 			return SMI_HASH_TABLE_SUCCESS;
 		}
 		prev_iterator = iterator;
-		iterator = iterator->next_element;
+		iterator      = iterator->next_element;
 	}
 	table->oss_funcs->mutex_unlock(table->mutex);
 	return SMI_HASH_TABLE_KEY_ERROR;
 }
 
-enum SMI_HASH_TABLE_RET_CODES get_from_hash_table(struct hash_table *table,
-						  uint64_t key, void **data)
+enum SMI_HASH_TABLE_RET_CODES
+get_from_hash_table(struct hash_table *table, uint64_t key, void **data)
 {
 	struct hash_table_element *iterator = NULL;
 
@@ -225,8 +217,7 @@ enum SMI_HASH_TABLE_RET_CODES get_from_hash_table(struct hash_table *table,
 
 	table->oss_funcs->mutex_lock(table->mutex);
 
-	const unsigned int index =
-		table->hash_function(table->num_of_elements, key);
+	const unsigned int index = table->hash_function(table->num_of_elements, key);
 
 	iterator = table->table[index];
 	while (iterator != NULL) {

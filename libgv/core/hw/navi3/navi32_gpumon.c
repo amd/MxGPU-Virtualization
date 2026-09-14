@@ -14,6 +14,7 @@
 #include "navi32_reg_inc.h"
 #include "navi32_powerplay.h"
 #include "navi32_powerplay_swsmu.h"
+#include "navi32_smu_driver_if.h"
 #include "navi32_nbio.h"
 #include "navi32_fru.h"
 
@@ -347,6 +348,54 @@ static int navi32_get_dpm_capacity(struct amdgv_adapter *adapt, int *val)
 	return ret;
 }
 
+static int navi32_get_max_configurable_power_limit(struct amdgv_adapter *adapt,
+						   int *power_limit)
+{
+	int ret = AMDGV_FAILURE;
+
+	if (adapt->pp.pp_funcs->get_max_configurable_power_limit)
+		ret = adapt->pp.pp_funcs->get_max_configurable_power_limit(adapt, power_limit);
+
+	return ret;
+}
+
+static int navi32_get_default_power_limit(struct amdgv_adapter *adapt,
+					  int *default_power)
+{
+	int ret = AMDGV_FAILURE;
+
+	if (adapt->pp.pp_funcs->get_default_power_limit)
+		ret = adapt->pp.pp_funcs->get_default_power_limit(adapt, default_power);
+
+	return ret;
+}
+
+static int navi32_get_min_power_limit(struct amdgv_adapter *adapt, int *val)
+{
+	struct smu_context *smu;
+	struct smu_table_context *table_context;
+	struct smu_13_0_0_powerplay_table *powerplay_table;
+	SkuTable_t *sku;
+
+	if (!val)
+		return AMDGV_FAILURE;
+
+	smu = (struct smu_context *)(adapt->pp.smu_backend);
+	if (!smu)
+		return AMDGV_FAILURE;
+
+	table_context = (struct smu_table_context *)(smu->smu_table_context);
+	if (!table_context || !table_context->power_play_table)
+		return AMDGV_FAILURE;
+
+	powerplay_table = (struct smu_13_0_0_powerplay_table *)table_context->power_play_table;
+	sku = &powerplay_table->smc_pptable.SkuTable;
+
+	*val = sku->MsgLimits.PowerMinPpt0[POWER_SOURCE_AC];
+
+	return 0;
+}
+
 static int navi32_is_pm_enabled(struct amdgv_adapter *adapt, bool *pm_enabled)
 {
 	int ret = AMDGV_FAILURE;
@@ -442,6 +491,9 @@ static const struct amdgv_gpumon_funcs navi32_gpumon_funcs = {
 	.get_vddc = navi32_get_vddc,
 
 	.get_dpm_cap = navi32_get_dpm_capacity,
+	.get_max_configurable_power_limit = navi32_get_max_configurable_power_limit,
+	.get_default_power_limit = navi32_get_default_power_limit,
+	.get_min_power_limit = navi32_get_min_power_limit,
 
 	.get_sclk = navi32_get_sclk,
 	.get_gfx_activity = navi32_get_gfx_activity,

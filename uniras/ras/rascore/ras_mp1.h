@@ -39,6 +39,23 @@ enum ras_mp1_msg_id {
 	RAS_MP1_MSG_MAX
 };
 
+/* Max bytes of version-specific raw policy carried opaquely in
+ * ras_mp1_policy_info.policy_data.
+ */
+#define RAS_MP1_POLICY_DATA_MAX 40
+
+struct ras_mp1_policy_info {
+	u8 minor_version;
+	u8 major_version;
+
+	u64 bad_page_threshold;
+
+	/* Version-specific raw policy. The version layer
+	 * that fills it owns the layout; caller re-interprets these bytes.
+	 */
+	u8 policy_data[RAS_MP1_POLICY_DATA_MAX];
+};
+
 struct eeprom_err_record {
 	u64 timestamp;
 	u64 mca_addr;
@@ -64,6 +81,8 @@ struct ras_mp1_ip_func {
 			u32 *count);
 	int (*get_record)(struct ras_core_context *ras_core,
 			u32 idx, struct eeprom_err_record *rec);
+	int (*get_ras_policy)(struct ras_core_context *ras_core,
+			struct ras_mp1_policy_info *info);
 };
 
 struct ras_mp1 {
@@ -92,4 +111,6 @@ int ras_mp1_reset_ras_table(struct ras_core_context *ras_core,
 int ras_mp1_get_record_count(struct ras_core_context *ras_core, u32 *count);
 int ras_mp1_get_record(struct ras_core_context *ras_core,
 		u32 idx, struct eeprom_err_record *rec);
+int ras_mp1_get_ras_policy(struct ras_core_context *ras_core,
+		struct ras_mp1_policy_info *info);
 #endif

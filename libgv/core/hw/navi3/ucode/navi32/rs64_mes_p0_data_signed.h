@@ -1,4 +1,7 @@
-// Copyright Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
+ *
+ * SPDX-License-Identifier: MIT
+ */
 #ifndef RS64_MES_P0_DATA_H
 #define RS64_MES_P0_DATA_H
 

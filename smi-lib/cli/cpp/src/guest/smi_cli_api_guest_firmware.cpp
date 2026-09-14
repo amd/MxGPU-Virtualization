@@ -14,45 +14,40 @@
 
 #include <sstream>
 #ifdef _WIN64
-#include <windows.h>
-#include <sysinfoapi.h>
+	#include <windows.h>
+	#include <sysinfoapi.h>
 #endif
 
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
-		amdsmi_processor_handle *);
-typedef amdsmi_status_t (*AMDSMI_GET_FW_INFO)(amdsmi_processor_handle, amdsmi_fw_info_t *);
+								amdsmi_processor_handle*);
+typedef amdsmi_status_t (*AMDSMI_GET_FW_INFO)(amdsmi_processor_handle, amdsmi_fw_info_t*);
 
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF guest_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_FW_INFO guest_amdsmi_get_fw_info;
 
 std::string guest_fill_fw_list(Arguments arg, std::string value)
 {
-	std::string out{};
+	std::string out {};
 
 	if (arg.output == json) {
 		auto fw_list_json = nlohmann::ordered_json::array();
-		fw_list_json.push_back(nlohmann::ordered_json::object( {
-			{ "fw_id", value.c_str() },
-			{ "fw_version", value.c_str() } }));
+		fw_list_json.push_back(nlohmann::ordered_json::object(
+		    {{"fw_id", value.c_str()}, {"fw_version", value.c_str()}}));
 		out = fw_list_json.dump(4);
 	} else if (arg.output == csv) {
-		out += string_format(
-				   "%s,%s,%s\n", value.c_str(), value.c_str(),
-				   value.c_str());
+		out += string_format("%s,%s,%s\n", value.c_str(), value.c_str(), value.c_str());
 	} else {
 		out = fwListTemplate;
-		out += string_format(
-				   fwTemplate, value.c_str(), value.c_str(),
-				   value.c_str());
+		out += string_format(fwTemplate, value.c_str(), value.c_str(), value.c_str());
 	}
 
 	return out;
 }
 
 int AmdSmiApiGuest::amdsmi_firmware_fw_list_command(uint64_t processor_bdf, Arguments arg,
-		std::string &out_string, std::string *gpu_id)
+						    std::string& out_string, std::string* gpu_id)
 {
-	std::string out{};
+	std::string out {};
 	amdsmi_fw_info_t fw_info;
 	std::string fw_name_str;
 	std::string fw_version_str;
@@ -80,26 +75,22 @@ int AmdSmiApiGuest::amdsmi_firmware_fw_list_command(uint64_t processor_bdf, Argu
 	}
 	uint8_t num_fw = fw_info.num_fw_info;
 	for (uint8_t fw_iterator = 0; fw_iterator < num_fw; fw_iterator++) {
-		auto fw_id = fw_info.fw_info_list[fw_iterator].fw_id;
+		auto fw_id	= fw_info.fw_info_list[fw_iterator].fw_id;
 		auto fw_version = fw_info.fw_info_list[fw_iterator].fw_version;
 
 		if (fw_version != 0) {
-			fw_version_str =
-				transform_fw(
-					fw_id, fw_version);
+			fw_version_str = transform_fw(fw_id, fw_version);
 			get_string_from_enum_fw_block(fw_id, fw_name_str);
 			if (arg.output == json) {
-				fw_list_json.push_back(nlohmann::ordered_json::object( {
-					{ "fw_id", fw_name_str.c_str() },
-					{ "fw_version", fw_version_str.c_str() } }));
+				fw_list_json.push_back(nlohmann::ordered_json::object(
+				    {{"fw_id", fw_name_str.c_str()},
+				     {"fw_version", fw_version_str.c_str()}}));
 			} else if (arg.output == csv) {
-				out += string_format(
-						   "%s,%s,%s\n", (*gpu_id).c_str(), fw_name_str.c_str(),
-						   fw_version_str.c_str());
+				out += string_format("%s,%s,%s\n", (*gpu_id).c_str(),
+						     fw_name_str.c_str(), fw_version_str.c_str());
 			} else {
-				out += string_format(
-						   fwTemplate, fw_iterator, fw_name_str.c_str(),
-						   fw_version_str.c_str());
+				out += string_format(fwTemplate, fw_iterator, fw_name_str.c_str(),
+						     fw_version_str.c_str());
 			}
 		}
 	}

@@ -154,6 +154,8 @@ static const struct pci_device_id amd_vfio_pci_table[] = { { 0x1002, 0x74B6, PCI
 							     PCI_ANY_ID, 0, 0, 11 },
 							    { 0x1002, 0x75B0, PCI_ANY_ID,
 							     PCI_ANY_ID, 0, 0, 11 },
+							    { 0x1002, 0x75B8, PCI_ANY_ID,
+							     PCI_ANY_ID, 0, 0, 11 },
 							   {} };
 
 static const struct vfio_device_ops amd_vfio_pci_ops = {

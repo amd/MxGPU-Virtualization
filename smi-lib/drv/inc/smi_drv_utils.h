@@ -12,27 +12,26 @@
 #include "smi_drv_core_api.h"
 #include "amdgv_gpumon.h"
 
-
 /* Bad page timestamp format
  * yy[31:27] mm[26:23] day[22:17] hh[16:12] mm[11:6] ss[5:0]
  */
-#define EEPROM_TIMESTAMP_MINUTE  6
-#define EEPROM_TIMESTAMP_HOUR    12
-#define EEPROM_TIMESTAMP_DAY     17
-#define EEPROM_TIMESTAMP_MONTH   23
-#define EEPROM_TIMESTAMP_YEAR    27
-#define IS_LEAP_YEAR(x) ((x % 4 == 0 && x % 100 != 0) || x % 400 == 0)
+#define EEPROM_TIMESTAMP_MINUTE 6
+#define EEPROM_TIMESTAMP_HOUR	12
+#define EEPROM_TIMESTAMP_DAY	17
+#define EEPROM_TIMESTAMP_MONTH	23
+#define EEPROM_TIMESTAMP_YEAR	27
+#define IS_LEAP_YEAR(x)		((x % 4 == 0 && x % 100 != 0) || x % 400 == 0)
 
 /* bad page timestamp format changed after V4
  * ts_hi yy[31:16] mm[15:8] day[7:0]
  * ts_lo hh[23:16] mm[15:8] ss[7:0]
  */
-#define EEPROM_V4_TIMESTAMP_MINUTE  8
-#define EEPROM_V4_TIMESTAMP_HOUR    16
-#define EEPROM_V4_TIMESTAMP_MONTH   8
-#define EEPROM_V4_TIMESTAMP_YEAR    16
+#define EEPROM_V4_TIMESTAMP_MINUTE 8
+#define EEPROM_V4_TIMESTAMP_HOUR   16
+#define EEPROM_V4_TIMESTAMP_MONTH  8
+#define EEPROM_V4_TIMESTAMP_YEAR   16
 
-#define EEPROM_TABLE_VER_V3         0x00030000
+#define EEPROM_TABLE_VER_V3 0x00030000
 
 /**
  * @brief Converts an EEPROM timestamp to UTC format.
@@ -102,7 +101,8 @@ uint64_t smi_eeprom_v4_to_utc_format(uint64_t eeprom_timestamp);
 void smi_generate_time_string(char *buf, uint64_t microsec);
 
 /**
- * @brief Maps an enum representing a LibGV ucode/firmware ID to an enum representing an SMI ucode/firmware ID.
+ * @brief Maps an enum representing a LibGV ucode/firmware ID to an enum representing an SMI
+ * ucode/firmware ID.
  *
  * This function takes an enum value representing a LibGV ucode/firmware ID and maps it to an
  * equivalent enum value representing an SMI ucode/firmware ID. The mapping is performed based on
@@ -112,40 +112,43 @@ void smi_generate_time_string(char *buf, uint64_t microsec);
  * @param[in] ucode_id The enum value representing LibGV ucode/firmware ID.
  * @return The enum value representing the corresponding mapped SMI ucode/firmware ID.
  *
- * @note This function assumes that the enum values for both enums (smi_fw_block and amdgv_firmware_id)
- * are compatible and represent similar concepts.
+ * @note This function assumes that the enum values for both enums (smi_fw_block and
+ * amdgv_firmware_id) are compatible and represent similar concepts.
  */
 enum smi_fw_block smi_ucode_amdgv_to_smi(enum amdgv_firmware_id ucode_id);
 
 /**
- * @brief Maps an enum representing an SMI framebuffer sharing mode to an enum representing a LibGV framebuffer sharing mode.
+ * @brief Maps an enum representing an SMI framebuffer sharing mode to an enum representing a LibGV
+ * framebuffer sharing mode.
  *
  * This function takes an enum value representing an SMI framebuffer sharing mode and maps it to an
- * equivalent enum value representing a LibGV framebuffer sharing mode. The mapping is performed based on
- * predefined set of rules. If the provided SMI framebuffer sharing mode does not match any of the
- * predefined values, it is mapped to SMI_XGMI_FB_SHARING_MODE_UNKNOWN.
+ * equivalent enum value representing a LibGV framebuffer sharing mode. The mapping is performed
+ * based on predefined set of rules. If the provided SMI framebuffer sharing mode does not match any
+ * of the predefined values, it is mapped to SMI_XGMI_FB_SHARING_MODE_UNKNOWN.
  *
  * @param[in] mode The enum value representing SMI framebuffer sharing mode.
  * @return The enum value representing the corresponding mapped LibGV framebuffer sharing mode.
  *
- * @note This function assumes that the enum values for both enums (amdgv_gpumon_xgmi_fb_sharing_mode and smi_xgmi_fb_sharing_mode)
- * are compatible and represent similar concepts.
+ * @note This function assumes that the enum values for both enums
+ * (amdgv_gpumon_xgmi_fb_sharing_mode and smi_xgmi_fb_sharing_mode) are compatible and represent
+ * similar concepts.
  */
 enum amdgv_gpumon_xgmi_fb_sharing_mode smi_map_fb_sharing_mode(enum smi_xgmi_fb_sharing_mode mode);
 
 /**
- * @brief Maps an enum representing an SMI memory partition mode to an enum representing a LibGV memory mode.
+ * @brief Maps an enum representing an SMI memory partition mode to an enum representing a LibGV
+ * memory mode.
  *
  * This function takes an enum value representing an SMI memory partition mode and maps it to an
- * equivalent enum value representing a LibGV memory partition mode. The mapping is performed based on
- * predefined set of rules. If the provided SMI memory partition mode does not match any of the
+ * equivalent enum value representing a LibGV memory partition mode. The mapping is performed based
+ * on predefined set of rules. If the provided SMI memory partition mode does not match any of the
  * predefined values, it is mapped to AMDGV_MEMORY_PARTITION_MODE_UNKNOWN.
  *
  * @param[in] mode The enum value representing SMI memory partition mode.
  * @return The enum value representing the corresponding mapped LibGV memory partition mode.
  *
- * @note This function assumes that the enum values for both enums (enum smi_memory_partition_type and amdgv_memory_partition_mode)
- * are compatible and represent similar concepts.
+ * @note This function assumes that the enum values for both enums (enum smi_memory_partition_type
+ * and amdgv_memory_partition_mode) are compatible and represent similar concepts.
  */
 enum amdgv_memory_partition_mode smi_map_memory_partition_mode(enum smi_memory_partition_type mode);
 
@@ -160,8 +163,8 @@ enum amdgv_memory_partition_mode smi_map_memory_partition_mode(enum smi_memory_p
  * @param[in] amdgv_link_status The enum value representing LibGV link status.
  * @return The enum value representing the corresponding mapped SMI link status.
  *
- * @note This function assumes that the enum values for both enums (smi_link_status and amdgv_link_status)
- * are compatible and represent similar concepts.
+ * @note This function assumes that the enum values for both enums (smi_link_status and
+ * amdgv_link_status) are compatible and represent similar concepts.
  */
 enum smi_link_status smi_map_link_status(enum amdgv_gpumon_link_status amdgv_link_status);
 
@@ -176,13 +179,14 @@ enum smi_link_status smi_map_link_status(enum amdgv_gpumon_link_status amdgv_lin
  * @param[in] amdgv_link_type The enum value representing LibGV link type.
  * @return The enum value representing the corresponding mapped SMI link type.
  *
- * @note This function assumes that the enum values for both enums (smi_link_type and amdgv_gpumon_link_type)
- * are compatible and represent similar concepts.
+ * @note This function assumes that the enum values for both enums (smi_link_type and
+ * amdgv_gpumon_link_type) are compatible and represent similar concepts.
  */
 enum smi_link_type smi_map_link_type(enum amdgv_gpumon_link_type amdgv_link_type);
 
 /**
- * @brief Maps an enum representing a LibGV card form factor to an enum representing an SMI card form factor.
+ * @brief Maps an enum representing a LibGV card form factor to an enum representing an SMI card
+ * form factor.
  *
  * This function takes an enum value representing a LibGV card form factor and maps it to an
  * equivalent enum value representing an SMI card form factor. The mapping is performed based on
@@ -192,8 +196,8 @@ enum smi_link_type smi_map_link_type(enum amdgv_gpumon_link_type amdgv_link_type
  * @param[in] type The enum value representing LibGV card form factor.
  * @return The enum value representing the corresponding mapped SMI card form factor.
  *
- * @note This function assumes that the enum values for both enums (smi_card_form_factor and amdgv_gpumon_card_form_factor)
- * are compatible and represent similar concepts.
+ * @note This function assumes that the enum values for both enums (smi_card_form_factor and
+ * amdgv_gpumon_card_form_factor) are compatible and represent similar concepts.
  */
 enum smi_card_form_factor smi_map_card_form_factor(enum amdgv_gpumon_card_form_factor type);
 
@@ -208,10 +212,10 @@ enum smi_card_form_factor smi_map_card_form_factor(enum amdgv_gpumon_card_form_f
  * @param[in] block The enum value representing SMI GPU block.
  * @return The enum value representing the corresponding mapped LibGV GPU block.
  *
- * @note This function assumes that the enum values for both enums (amdgv_smi_ras_block and smi_gpu_block)
- * are compatible and represent similar concepts.
+ * @note This function assumes that the enum values for both enums (amdgv_smi_ras_block and
+ * smi_gpu_block) are compatible and represent similar concepts.
  */
-enum amdgv_smi_ras_block smi_map_gpu_block(enum smi_gpu_block block);
+enum amdgv_smi_ras_block smi_map_gpu_block(uint64_t block);
 
 /**
  * @brief Maps an enum representing a LibGV vram type to an enum representing an SMI vram type.
@@ -224,8 +228,8 @@ enum amdgv_smi_ras_block smi_map_gpu_block(enum smi_gpu_block block);
  * @param[in] type The enum value representing LibGV vram type.
  * @return The enum value representing the corresponding mapped SMI vram type.
  *
- * @note This function assumes that the enum values for both enums (smi_vram_type and amdgv_gpumon_vram_type)
- * are compatible and represent similar concepts.
+ * @note This function assumes that the enum values for both enums (smi_vram_type and
+ * amdgv_gpumon_vram_type) are compatible and represent similar concepts.
  */
 enum smi_vram_type smi_map_vram_type(enum amdgv_gpumon_vram_type type);
 
@@ -243,7 +247,7 @@ enum smi_vram_type smi_map_vram_type(enum amdgv_gpumon_vram_type type);
  * @note This function assumes that the enum value and string value
  * are compatible and represent similar concepts.
  */
-const char* smi_map_vram_vendor(enum amdgv_gpumon_vram_vendor vendor);
+const char *smi_map_vram_vendor(enum amdgv_gpumon_vram_vendor vendor);
 
 /**
  * @brief Comparison function for sorting devices by BDF.
@@ -251,7 +255,8 @@ const char* smi_map_vram_vendor(enum amdgv_gpumon_vram_vendor vendor);
  * @param[in] a Pointer to the first smi_device_data structure.
  * @param[in] b Pointer to the second smi_device_data structure.
  * @return A negative value if the value of the BDF in 'a' is less than that in 'b',
- *         zero if they are equal, and a positive value if the value of the BDF in 'a' is greater than that in 'b'.
+ *         zero if they are equal, and a positive value if the value of the BDF in 'a' is greater
+ * than that in 'b'.
  *
  * @note This function assumes that the 'bdf' field within the smi_device_data structure
  *       holds a value that is suitable for comparison.
@@ -260,7 +265,8 @@ const char* smi_map_vram_vendor(enum amdgv_gpumon_vram_vendor vendor);
 int smi_compare_dev_bdf(const void *a, const void *b);
 
 /**
- * @brief Maps an enum representing a LibGV metric category to an enum representing an SMI metric category.
+ * @brief Maps an enum representing a LibGV metric category to an enum representing an SMI metric
+ * category.
  *
  * This function takes an enum value representing a LibGV metric category and maps it to an
  * equivalent enum value representing an SMI metric category. The mapping is performed based on
@@ -270,8 +276,8 @@ int smi_compare_dev_bdf(const void *a, const void *b);
  * @param[in] category The enum value representing LibGV metric category.
  * @return The enum value representing the corresponding mapped SMI metric category.
  *
- * @note This function assumes that the enum values for both enums (smi_metric_category and amdgv_gpumon_metric_ext_category)
- * are compatible and represent similar concepts.
+ * @note This function assumes that the enum values for both enums (smi_metric_category and
+ * amdgv_gpumon_metric_ext_category) are compatible and represent similar concepts.
  */
 enum smi_metric_category smi_map_metric_category(enum amdgv_gpumon_metric_ext_category category);
 
@@ -286,8 +292,8 @@ enum smi_metric_category smi_map_metric_category(enum amdgv_gpumon_metric_ext_ca
  * @param[in] name The enum value representing LibGV metric name.
  * @return The enum value representing the corresponding mapped SMI metric name.
  *
- * @note This function assumes that the enum values for both enums (smi_metric_name and amdgv_gpumon_metric_ext_name)
- * are compatible and represent similar concepts.
+ * @note This function assumes that the enum values for both enums (smi_metric_name and
+ * amdgv_gpumon_metric_ext_name) are compatible and represent similar concepts.
  */
 enum smi_metric_name smi_map_metric_name(enum amdgv_gpumon_metric_ext_name name);
 
@@ -302,13 +308,14 @@ enum smi_metric_name smi_map_metric_name(enum amdgv_gpumon_metric_ext_name name)
  * @param[in] unit The enum value representing LibGV metric unit.
  * @return The enum value representing the corresponding mapped SMI metric unit.
  *
- * @note This function assumes that the enum values for both enums (smi_metric_unit and amdgv_gpumon_metric_ext_unit)
- * are compatible and represent similar concepts.
+ * @note This function assumes that the enum values for both enums (smi_metric_unit and
+ * amdgv_gpumon_metric_ext_unit) are compatible and represent similar concepts.
  */
 enum smi_metric_unit smi_map_metric_unit(enum amdgv_gpumon_metric_ext_unit unit);
 
 /**
- * @brief Maps an enum representing a LibGV metric resource group to an enum representing an SMI metric resource group.
+ * @brief Maps an enum representing a LibGV metric resource group to an enum representing an SMI
+ * metric resource group.
  *
  * This function takes an enum value representing a LibGV resource group and maps it to an
  * equivalent enum value representing an SMI resource group. The mapping is performed based on
@@ -318,13 +325,15 @@ enum smi_metric_unit smi_map_metric_unit(enum amdgv_gpumon_metric_ext_unit unit)
  * @param[in] res_group The enum value representing LibGV resource group.
  * @return The enum value representing the corresponding mapped SMI metric resource group.
  *
- * @note This function assumes that the enum values for both enums (smi_metric_res_group and amdgv_gpumon_metric_ext_res_group)
- * are compatible and represent similar concepts.
+ * @note This function assumes that the enum values for both enums (smi_metric_res_group and
+ * amdgv_gpumon_metric_ext_res_group) are compatible and represent similar concepts.
  */
-enum smi_metric_res_group smi_map_metric_res_group(enum amdgv_gpumon_metric_ext_res_group res_group);
+enum smi_metric_res_group
+smi_map_metric_res_group(enum amdgv_gpumon_metric_ext_res_group res_group);
 
 /**
- * @brief Maps an enum representing a LibGV metric resource subgroup to an enum representing an SMI metric resource subgroup.
+ * @brief Maps an enum representing a LibGV metric resource subgroup to an enum representing an SMI
+ * metric resource subgroup.
  *
  * This function takes an enum value representing a LibGV resource subgroup and maps it to an
  * equivalent enum value representing an SMI resource subgroup. The mapping is performed based on
@@ -334,29 +343,32 @@ enum smi_metric_res_group smi_map_metric_res_group(enum amdgv_gpumon_metric_ext_
  * @param[in] res_subgroup The enum value representing LibGV resource group.
  * @return The enum value representing the corresponding mapped SMI metric resource group.
  *
- * @note This function assumes that the enum values for both enums (smi_metric_res_subgroup and amdgv_gpumon_metric_ext_res_subgroup)
- * are compatible and represent similar concepts.
+ * @note This function assumes that the enum values for both enums (smi_metric_res_subgroup and
+ * amdgv_gpumon_metric_ext_res_subgroup) are compatible and represent similar concepts.
  */
-enum smi_metric_res_subgroup smi_map_metric_res_subgroup(enum amdgv_gpumon_metric_ext_res_subgroup res_subgroup);
+enum smi_metric_res_subgroup
+smi_map_metric_res_subgroup(enum amdgv_gpumon_metric_ext_res_subgroup res_subgroup);
 
 /**
- * @brief Maps an enum representing a LibGV memory partition mode to an enum representing an SMI memory partition mode.
+ * @brief Maps an enum representing a LibGV memory partition mode to an enum representing an SMI
+ * memory partition mode.
  *
  * This function takes an enum value representing a LibGV memory partition mode and maps it to an
- * equivalent enum value representing an SMI memory partition mode. The mapping is performed based on
- * predefined set of rules. If the provided LibGV memory partition mode does not match any of the
+ * equivalent enum value representing an SMI memory partition mode. The mapping is performed based
+ * on predefined set of rules. If the provided LibGV memory partition mode does not match any of the
  * predefined values, it is mapped to SMI_MEMORY_PARTITION_UNKNOWN.
  *
  * @param[in] unit The enum value representing LibGV memory partition mode.
  * @return The enum value representing the corresponding mapped SMI memory partition mode.
  *
- * @note This function assumes that the enum values for both enums (smi_memory_partition_type and amdgv_memory_partition_mode)
- * are compatible and represent similar concepts.
+ * @note This function assumes that the enum values for both enums (smi_memory_partition_type and
+ * amdgv_memory_partition_mode) are compatible and represent similar concepts.
  */
 enum smi_memory_partition_type smi_map_mp_mode(enum amdgv_memory_partition_mode mode);
 
 /**
- * @brief Maps an enum representing a LibGV partition type to an enum representing an SMI partition type.
+ * @brief Maps an enum representing a LibGV partition type to an enum representing an SMI partition
+ * type.
  *
  * This function takes an enum value representing a LibGV partition type and maps it to an
  * equivalent enum value representing an SMI partition type. The mapping is performed based on
@@ -366,13 +378,15 @@ enum smi_memory_partition_type smi_map_mp_mode(enum amdgv_memory_partition_mode 
  * @param[in] unit The enum value representing LibGV partition type.
  * @return The enum value representing the corresponding mapped SMI partition type.
  *
- * @note This function assumes that the enum values for both enums (smi_accelerator_partition_type and amdgv_gpumon_acccelerator_partition_type)
- * are compatible and represent similar concepts.
+ * @note This function assumes that the enum values for both enums (smi_accelerator_partition_type
+ * and amdgv_gpumon_acccelerator_partition_type) are compatible and represent similar concepts.
  */
-enum smi_accelerator_partition_type smi_map_partition_type(enum amdgv_gpumon_acccelerator_partition_type type);
+enum smi_accelerator_partition_type
+smi_map_partition_type(enum amdgv_gpumon_acccelerator_partition_type type);
 
 /**
- * @brief Maps an enum representing a LibGV resource type to an enum representing an SMI resource type.
+ * @brief Maps an enum representing a LibGV resource type to an enum representing an SMI resource
+ * type.
  *
  * This function takes an enum value representing a LibGV resource type and maps it to an
  * equivalent enum value representing an SMI resource type. The mapping is performed based on
@@ -382,13 +396,15 @@ enum smi_accelerator_partition_type smi_map_partition_type(enum amdgv_gpumon_acc
  * @param[in] unit The enum value representing LibGV resource type.
  * @return The enum value representing the corresponding mapped SMI resource type.
  *
- * @note This function assumes that the enum values for both enums (smi_accelerator_partition_resource_type and amdgv_gpumon_accelerator_partition_resource_type)
+ * @note This function assumes that the enum values for both enums
+ * (smi_accelerator_partition_resource_type and amdgv_gpumon_accelerator_partition_resource_type)
  * are compatible and represent similar concepts.
  */
-enum smi_accelerator_partition_resource_type smi_map_resource_type(enum amdgv_gpumon_accelerator_partition_resource_type type);
+enum smi_accelerator_partition_resource_type
+smi_map_resource_type(enum amdgv_gpumon_accelerator_partition_resource_type type);
 
 /*
-*/
+ */
 enum smi_vf_sched_state smi_map_sched_state(enum amdgv_sched_state state);
 
 /**
@@ -402,23 +418,25 @@ enum smi_vf_sched_state smi_map_sched_state(enum amdgv_sched_state state);
  * @param[in] amdgv_npm_status The enum value representing LibGV npm status.
  * @return The enum value representing the corresponding mapped SMI npm status.
  *
- * @note This function assumes that the enum values for both enums (smi_npm_status and AMDGV_GPU_NPM_STATUS)
- * are compatible and represent similar concepts.
+ * @note This function assumes that the enum values for both enums (smi_npm_status and
+ * AMDGV_GPU_NPM_STATUS) are compatible and represent similar concepts.
  */
 enum smi_npm_status smi_map_npm_status(enum AMDGV_GPU_NPM_STATUS amdgv_npm_status);
 
 /**
  * @brief Maps an enum representing a LibGV TDI state to an int representing an SMI TDI state.
  *
- * This function takes an enum value representing a LibGV TDI (Trusted Device Interface) state and maps it to an
- * equivalent int value representing an SMI TDI state. The mapping is performed based on
- * predefined set of rules. If the provided LibGV TDI state does not match any of the
- * predefined values, it returns INT_MAX.
+ * This function takes an enum value representing a LibGV TDI (Trusted Device Interface) state and
+ * maps it to an equivalent int value representing an SMI TDI state. The mapping is performed based
+ * on predefined set of rules. If the provided LibGV TDI state does not match any of the predefined
+ * values, it returns INT_MAX.
  *
  * @param[in] state The enum value representing LibGV TDI state.
- * @return The int value representing the corresponding mapped SMI TDI state, or INT_MAX if no match.
+ * @return The int value representing the corresponding mapped SMI TDI state, or INT_MAX if no
+ * match.
  *
- * @note This function returns INT_MAX for unrecognized TDI states to avoid returning an invalid value.
+ * @note This function returns INT_MAX for unrecognized TDI states to avoid returning an invalid
+ * value.
  */
 int smi_map_tdi_state(enum amdgv_tdi_state state);
 
@@ -433,7 +451,8 @@ int smi_map_tdi_state(enum amdgv_tdi_state state);
  * @param[in] mode The enum value representing LibGV CC mode.
  * @return The int value representing the corresponding mapped SMI CC mode, or INT_MAX if no match.
  *
- * @note This function returns INT_MAX for unrecognized CC modes to avoid returning an invalid value.
+ * @note This function returns INT_MAX for unrecognized CC modes to avoid returning an invalid
+ * value.
  */
 int smi_map_cc_mode(enum amdgv_cc_mode mode);
 
@@ -446,14 +465,17 @@ int smi_map_cc_mode(enum amdgv_cc_mode mode);
  * predefined values, it returns INT_MAX.
  *
  * @param[in] mode The int value representing SMI CC mode.
- * @return The int value representing the corresponding mapped LibGV CC mode, or INT_MAX if no match.
+ * @return The int value representing the corresponding mapped LibGV CC mode, or INT_MAX if no
+ * match.
  *
- * @note This function returns INT_MAX for unrecognized CC modes to avoid returning an invalid value.
+ * @note This function returns INT_MAX for unrecognized CC modes to avoid returning an invalid
+ * value.
  */
 int smi_map_cc_mode_reverse(enum smi_cc_mode_t mode);
 
 /**
- * @brief Maps an enum representing a LibGV ptl format type to an enum representing an SMI ptl format type.
+ * @brief Maps an enum representing a LibGV ptl format type to an enum representing an SMI ptl
+ * format type.
  *
  * This function takes an enum value representing a LibGV ptl format type and maps it to an
  * equivalent enum value representing an SMI ptl format type. The mapping is performed based on
@@ -463,8 +485,8 @@ int smi_map_cc_mode_reverse(enum smi_cc_mode_t mode);
  * @param[in] unit The enum value representing LibGV ptl format type.
  * @return The enum value representing the corresponding mapped SMI ptl format type.
  *
- * @note This function assumes that the enum values for both enums (smi_ptl_data_format and amdgv_ptl_format_type)
- * are compatible and represent similar concepts.
+ * @note This function assumes that the enum values for both enums (smi_ptl_data_format and
+ * amdgv_ptl_format_type) are compatible and represent similar concepts.
  */
 enum smi_ptl_data_format smi_map_ptl_format(enum amdgv_ptl_format_type drv_fmt);
 
@@ -488,8 +510,8 @@ enum smi_fabric_type smi_map_fabric_type(enum amdgv_gpumon_ual_link_type type);
  * @param[in] mode The LibGV UAL NPA address mode.
  * @return The corresponding SMI fabric NPA address mode.
  */
-enum smi_fabric_npa_address_mode smi_map_fabric_npa_address_mode(
-	enum amdgv_gpumon_ual_npa_address_mode mode);
+enum smi_fabric_npa_address_mode
+smi_map_fabric_npa_address_mode(enum amdgv_gpumon_ual_npa_address_mode mode);
 
 /**
  * @brief Maps a LibGV UAL accelerator vPoD state to an SMI fabric
@@ -501,7 +523,7 @@ enum smi_fabric_npa_address_mode smi_map_fabric_npa_address_mode(
  * @param[in] state The LibGV UAL accelerator vPoD state.
  * @return The corresponding SMI fabric accelerator vPoD state.
  */
-enum smi_fabric_accelerator_vpod_state smi_map_fabric_accelerator_vpod_state(
-	enum amdgv_gpumon_ual_accelerator_vpod_state state);
+enum smi_fabric_accelerator_vpod_state
+smi_map_fabric_accelerator_vpod_state(enum amdgv_gpumon_ual_accelerator_vpod_state state);
 
 #endif // __SMI_DRV_UTILS_H__

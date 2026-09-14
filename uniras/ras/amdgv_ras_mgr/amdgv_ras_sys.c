@@ -98,16 +98,26 @@ static int amdgv_ras_sys_reserve_bad_page(struct amdgv_adapter *adapt, uint64_t 
 		(err_addr_pf < adapt->memmgr_pf.offset + adapt->memmgr_pf.size)) {
 		ret = amdgv_memmgr_reserve_page(adapt,
 				&adapt->memmgr_pf, RAS_ADDR_TO_PFN(err_addr_pf));
-		if (ret)
-			AMDGV_WARN("Reserve page at 0x%llx in memmgr_pf failed, ret:%d\n",
-					err_addr_pf, ret);
+
+		if (ret && ret != AMDGV_ERR_BUSY)
+			RAS_DEV_ERR(adapt,
+				"Reserve page at 0x%llx in memmgr_pf failed, ret:%d\n",
+				err_addr_pf, ret);
+
 	} else if ((err_addr_gpu >= adapt->memmgr_gpu.offset) &&
 		(err_addr_gpu < adapt->memmgr_gpu.offset + adapt->memmgr_gpu.size)) {
 		ret = amdgv_memmgr_reserve_page(adapt,
 				&adapt->memmgr_gpu, RAS_ADDR_TO_PFN(err_addr_gpu));
-		if (ret)
-			AMDGV_WARN("Reserve page at 0x%llx in memmgr_gpu failed, ret:%d\n",
-					err_addr_gpu, ret);
+
+		if (ret && ret != AMDGV_ERR_BUSY)
+			RAS_DEV_ERR(adapt,
+				"Reserve page at 0x%llx in memmgr_gpu failed, ret:%d\n",
+				err_addr_gpu, ret);
+	}
+
+	if (ret == AMDGV_ERR_BUSY) {
+		adapt->bp_msg_type = AMDGV_BP_MSG_IN_PF_FB;
+		amdgv_umc_log_bp_errors(adapt, ras_umc_get_badpage_count(ras_mgr->ras_core));
 	}
 
 	return ret;
@@ -143,8 +153,10 @@ static int amdgv_ras_reset_gpu(struct amdgv_adapter *adapt, uint32_t reset_flags
 
 		adapt->reset.reset_mode = AMDGV_RESET_MODE1; //adapt->umc.reset_mode;
 		if (adapt->xgmi.master_adapt) {
-			AMDGV_INFO("Forwarding reset event to master adapter:0x%x\n",
-					adapt->xgmi.master_adapt->bdf);
+			AMDGV_DEBUG("Forwarding reset event to master adapter:%02x:%02x.%x\n",
+					(adapt->xgmi.master_adapt->bdf >> 8) & 0xFF,
+					(adapt->xgmi.master_adapt->bdf >> 3) & 0x1F,
+					adapt->xgmi.master_adapt->bdf & 0x7);
 			tmp_adapt = adapt->xgmi.master_adapt;
 		}
 
@@ -179,7 +191,24 @@ static int amdgv_ras_sys_detect_fatal_event(struct ras_core_context *ras_core, v
 static int amdgv_ras_early_init_reserve_badpage(struct ras_core_context *ras_core,
 			uint64_t pfn)
 {
-	/* Not supported yet */
+	struct amdgv_adapter *adapt = (struct amdgv_adapter *)ras_core->dev;
+	uint64_t offset = pfn << AMDGV_GPU_PAGE_SHIFT;
+
+	if (!adapt->memmgr_pf.is_init)
+		return -RAS_CORE_EINVAL;
+
+	if (!amdgv_memmgr_addr_in_range(adapt, &adapt->memmgr_pf, offset))
+		return 0;
+
+	if (!amdgv_memmgr_alloc_align_at(&adapt->memmgr_pf,
+			offset, PAGE_SIZE, MEM_ECC_BAD_PAGE)) {
+		RAS_DEV_WARN(adapt,
+			"Failed to reserve bad page at offset 0x%llx in memmgr_pf\n", offset);
+		return -RAS_CORE_ENOMEM;
+	}
+
+	RAS_DEV_INFO(adapt,
+		"Reserved bad page at offset 0x%llx in memmgr_pf\n", offset);
 	return 0;
 }
 
@@ -194,6 +223,14 @@ static int amdgv_ras_sys_event_notifier(struct ras_core_context *ras_core,
 		ret = ras_umc_handle_bad_pages(ras_core, data);
 		if (ret == 0)
 			amdgv_sched_notify_vfs_bad_pages_at_poison_creation(adapt);
+
+		/* On dGPU, trigger mode-0 reset to re-allocate bad pages.
+		 * On A+A, do nothing */
+		if ((amdgv_memmgr_has_pending_reservations(&adapt->memmgr_pf) ||
+				amdgv_memmgr_has_pending_reservations(&adapt->memmgr_gpu)) &&
+				!adapt->xgmi.connected_to_cpu)
+			amdgv_sched_queue_event(adapt, AMDGV_PF_IDX,
+					AMDGV_EVENT_SCHED_FORCE_RESET_GPU, 0);
 		break;
 	case RAS_EVENT_ID__RESERVE_BAD_PAGE:
 		ret = amdgv_ras_sys_reserve_bad_page(adapt, *(uint64_t *)data);
@@ -307,8 +344,15 @@ static int amdgv_ras_sys_check_gpu_status(struct ras_core_context *ras_core,
 
 static int amdgv_ras_sys_async_handle_ras_event(struct ras_core_context *ras_core, void *data)
 {
-	amdgv_sched_queue_event(ras_core->dev, AMDGV_PF_IDX,
+	struct amdgv_adapter *adapt = (struct amdgv_adapter *)ras_core->dev;
+
+	// Do not queue this event if the scheduler is suspended.
+	if (adapt->lock_world_switch) {
+		return -RAS_CORE_EBUSY;
+	} else {
+		amdgv_sched_queue_event(ras_core->dev, AMDGV_PF_IDX,
 			AMDGV_EVENT_SCHED_RAS_EVENT, AMDGV_SCHED_BLOCK_ALL);
+	}
 
 	return 0;
 }
@@ -492,6 +536,24 @@ static int amdgv_ras_sys_get_vram_type(struct ras_core_context *ras_core)
 	return convert_atom_mem_type_to_vram_type(adapt, adapt->vram_info.vram_type);
 }
 
+static int amdgpv_ras_sys_check_address_sanity(struct ras_core_context *ras_core,
+						uint64_t addr)
+{
+	struct amdgv_adapter *adapt = (struct amdgv_adapter *)ras_core->dev;
+	struct amdgv_gpumon_vram_info vram_info = {0};
+	int ret;
+
+	ret = amdgv_gpumon_get_vram_info(adapt, &vram_info);
+	if (ret)
+		return ret;
+
+	if ((vram_info.vram_size_mb && addr >= MBYTES_TO_BYTES(vram_info.vram_size_mb)) ||
+	    (addr >= RAS_UMC_INJECT_ADDR_LIMIT))
+		return -RAS_CORE_EINVAL;
+
+	return 0;
+}
+
 const struct ras_sys_func amdgv_ras_sys_fn = {
 	.ras_notifier = amdgv_ras_sys_event_notifier,
 	.get_utc_second_timestamp = amdgv_ras_sys_get_utc_second_timestamp,
@@ -504,4 +566,5 @@ const struct ras_sys_func amdgv_ras_sys_fn = {
 	.put_gpu_mem = amdgv_ras_sys_put_gpu_mem,
 	.get_nps_mode = amdgv_ras_sys_get_nps_mode,
 	.get_vram_type = amdgv_ras_sys_get_vram_type,
+	.check_address_sanity = amdgpv_ras_sys_check_address_sanity,
 };

@@ -35,17 +35,7 @@ enum psp_status psp_v15_0_8_get_cc_mode(struct amdgv_adapter *adapt,
 			enum amdgv_cc_mode *cc_mode);
 enum psp_status psp_v15_0_8_set_cc_mode(struct amdgv_adapter *adapt,
 			enum amdgv_cc_mode cc_mode);
-enum psp_status psp_v15_0_8_ual_get_interface_version(struct amdgv_adapter *adapt, uint32_t *version);
-enum psp_status psp_v15_0_8_ual_get_config(struct amdgv_adapter *adapt,
-	uint64_t data_addr, uint32_t size);
-enum psp_status psp_v15_0_8_ual_set_ppod_config(struct amdgv_adapter *adapt,
-		struct amdgv_gpumon_set_ppod_config_req_ual_v1 *config);
-enum psp_status psp_v15_0_8_ual_set_vpod_config(struct amdgv_adapter *adapt,
-		struct amdgv_gpumon_set_vpod_config_req_ual_v1 *config);
-enum psp_status psp_v15_0_8_ual_set_station_config(struct amdgv_adapter *adapt,
-		struct amdgv_gpumon_set_station_config_req_ual_v1 *config);
-enum psp_status psp_v15_0_8_ual_send_completion(struct amdgv_adapter *adapt,
-		uint32_t cmd_id, uint32_t status);
+
 enum psp_status psp_v15_0_8_set_memory_partition_mode(struct amdgv_adapter *adapt,
 		enum amdgv_memory_partition_mode memory_partition_mode);
 

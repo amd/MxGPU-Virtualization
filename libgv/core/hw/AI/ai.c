@@ -88,6 +88,7 @@ extern struct amdgv_init_func mi300_sdma_v4_4_2_func;
 extern struct amdgv_init_func mi300_gfx_v9_4_3_func;
 extern struct amdgv_init_func mi308_ucode_func;
 extern struct amdgv_init_func mi350_ucode_func;
+extern struct amdgv_init_func mi350p_ucode_func;
 extern struct amdgv_init_func mi350_mem_func;
 extern struct amdgv_init_func mi350_pmfw_eeprom_func;
 extern struct amdgv_init_func mi350_smu_early_func;
@@ -173,6 +174,40 @@ struct amdgv_init_func *mi350x_init_table[] = {
 	&mi350_mem_func,
 	&mi300_gart_func,
 	&mi350_ucode_func,
+	&mi300_psp_func,
+	&mi350_smu_late_func,
+	&mi300_clockgating_func,
+	&mi300_vbios_late_func,
+	&mi300_ecc_func,
+	&mi300_gpuiov_func,
+	&mi300_xgmi_late_func,
+	&mi300_doorbell_func,
+	&mi300_irqmgr_func,
+	&mi300_mailbox_func,
+	&mi300_reset_func,
+	&mi350_powerplay_func,
+	&mi300_gpumon_func,
+	&mi300_misc_func,
+	&amdgv_vfmgr_func,
+	&mi300_sched_early_func,
+	&amdgv_migration_func,
+	&mi300_dirtybit_func,
+	&mi300_sdma_v4_4_2_func,
+	&mi300_gfx_v9_4_3_func,
+	&mi300_sched_late_func,
+	NULL,
+};
+
+struct amdgv_init_func *mi350px_init_table[] = {
+	&mi300_ip_discovery_func,
+	&mi300_mcp_func,
+	&mi300_xgmi_early_func,
+	&mi300_vbios_early_func,
+	&mi350_smu_early_func,
+	&mi350_pmfw_eeprom_func,
+	&mi350_mem_func,
+	&mi300_gart_func,
+	&mi350p_ucode_func,
 	&mi300_psp_func,
 	&mi350_smu_late_func,
 	&mi300_clockgating_func,

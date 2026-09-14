@@ -224,7 +224,7 @@ static int ras_process_thread(void *context)
 	while (!oss_kthread_should_stop()) {
 		ras_wait_event_interruptible_timeout(&ras_proc->ras_process_wq,
 			thread_wait_condition, ras_proc,
-			oss_msecs_to_jiffies(RAS_POLLING_ECC_TIMEOUT));
+			oss_msecs_to_jiffies(ras_proc->ras_thread_poll_interval_ms));
 
 		if (oss_kthread_should_stop())
 			break;
@@ -265,6 +265,10 @@ int ras_process_init(struct ras_core_context *ras_core)
 		return ret;
 
 	oss_spin_lock_init_raw(&ras_proc->fifo_spinlock);
+
+	ras_proc->ras_thread_poll_interval_ms = ras_core->config->ras_thread_poll_interval_ms;
+	if (!ras_proc->ras_thread_poll_interval_ms)
+		ras_proc->ras_thread_poll_interval_ms = RAS_POLLING_ECC_TIMEOUT;
 
 	oss_init_waitqueue_head(&ras_proc->ras_process_wq);
 

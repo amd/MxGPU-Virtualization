@@ -16,9 +16,10 @@ LIBGV_CORE_FILES = amdgv_device.o amdgv_api.o amdgv_gpuiov.o amdgv_irqmgr.o \
 	amdgv_marketing_name.o amdgv_debug.o amdgv_cper.o amdgv_ras_eeprom.o \
 	amdgv_ras_eeprom_internal.o amdgv_live_info.o amdgv_live_migration.o \
 	amdgv_dirtybit.o amdgv_diag_data.o amdgv_diag_data_host_drv.o \
-	amdgv_diag_data_exclude_list.o amdgv_uni_cmd.o amdgv_sdma.o \
+	amdgv_diag_data_exclude_list.o amdgv_uni_cmd.o amdgv_sdma.o amdgv_lsdma.o \
 	amdgv_ip_discovery.o amdgv_mmhub.o amdgv_gfxhub.o amdgv_nbio.o \
-	amdgv_powerplay.o amdgv_iovm_drv.o amdgv_task_barrier.o amdgv_vfmgr_xchg.o amdgv_ual.o
+	amdgv_powerplay.o amdgv_iovm_drv.o amdgv_task_barrier.o amdgv_vfmgr_xchg.o amdgv_ual.o \
+	amdgv_pci.o
 
 include $(LIBGV_CORE_PATH)/atombios/Makefile
 LIBGV_CORE_FILES += $(addprefix atombios/,$(LIBGV_ATOMBIOS_FILES))
@@ -43,7 +44,6 @@ include $(AMD_GPU_RAS_FULL_PATH)/Makefile
 endif
 
 LIBGV_HW_GPUIOV_FILES = gpuiov_v9_0.o gpuiov_v9_0_sched.o gpuiov_v9_0_reset.o
-#endif
 
 LIBGV_HW_OSSSYS_FILES = ih_v7_1.o
 LIBGV_HW_NBIO_FILES = nbio_v6_3_2.o nbio_v6_3_2_mcp.o nbio_v6_3_2_mailbox.o
@@ -53,8 +53,12 @@ LIBGV_HW_GMC_FILES = gmc_v12_1.o
 LIBGV_HW_SDMA_FILES = sdma_v7_1.o
 LIBGV_HW_LSDMA_FILES = lsdma_v7_1.o
 LIBGV_HW_PSP_FILES = psp_v15_0_8.o psp_v15_0_8_ras_fw.o
-LIBGV_HW_SMU_FILES = smu_v15_0_8.o smu_v15_0_8_gpumon.o smu_v15_0_8_pp.o smu_v15_0_8_eeprom.o smuio_v15_0_8.o
+LIBGV_HW_SMU_FILES = smu_v15_0_8.o smu_v15_0_8_gpumon.o smu_v15_0_8_pp.o smuio_v15_0_8.o
 LIBGV_HW_VCN_FILES = vcn_v5_0_2.o
+LIBGV_HW_UCODE_FILES = rlc/12_1_0/rlc_12_1_0_ucode_wrap.o \
+	rlc/12_1_0/rlc_12_1_0_ucode_a0.o rlc/12_1_0/rlc_12_1_0_ucode_b0.o \
+	cp/12_1_0/mec_12_1_0_ucode_wrap.o \
+	cp/12_1_0/mec_12_1_0_ucode_a0.o cp/12_1_0/mec_12_1_0_ucode_b0.o
 
 LIBGV_CORE_FILES += $(addprefix hwip/gc/,$(LIBGV_HW_GC_FILES))
 LIBGV_CORE_FILES += $(addprefix hwip/osssys/,$(LIBGV_HW_OSSSYS_FILES))
@@ -68,3 +72,4 @@ LIBGV_CORE_FILES += $(addprefix hwip/lsdma/,$(LIBGV_HW_LSDMA_FILES))
 LIBGV_CORE_FILES += $(addprefix hwip/psp/,$(LIBGV_HW_PSP_FILES))
 LIBGV_CORE_FILES += $(addprefix hwip/smu/,$(LIBGV_HW_SMU_FILES))
 LIBGV_CORE_FILES += $(addprefix hwip/vcn/,$(LIBGV_HW_VCN_FILES))
+LIBGV_CORE_FILES += $(addprefix hwip/ucode/,$(LIBGV_HW_UCODE_FILES))

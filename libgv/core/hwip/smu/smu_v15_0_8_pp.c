@@ -6,6 +6,7 @@
 #include <amdgv_device.h>
 #include "smu_v15_0_8_internal.h"
 #include "smu_v15_0_8_pp.h"
+#include "amdgv_ras_mgr.h"
 
 static const uint32_t this_block = AMDGV_POWER_BLOCK;
 
@@ -19,6 +20,19 @@ static const uint8_t smu_v15_0_8_pp_throttler_event_map[] = {
 	[THROTTLER_THERMAL_SOCKET_BIT] = AMDGV_PP_THROTTLER_EVENT__SOCKET,
 	[THROTTLER_THERMAL_HBM_BIT] = AMDGV_PP_THROTTLER_EVENT__HBM,
 	[THROTTLER_THERMAL_VR_BIT] = AMDGV_PP_THROTTLER_EVENT__VR,
+};
+
+static const uint32_t smu_v15_0_8_ras_msg_maps[PP_SMU_RAS_MSG_MAX] = {
+	[PP_SMU_RAS_MSG_GetRasTableVersion] = PPSMC_MSG_GetRasTableVersion,
+	[PP_SMU_RAS_MSG_GetRmaStatus]       = PPSMC_MSG_GetRmaStatus,
+	[PP_SMU_RAS_MSG_GetBadPageCount]    = PPSMC_MSG_GetBadPageCount,
+	[PP_SMU_RAS_MSG_GetBadPageMcaAddr]  = PPSMC_MSG_GetBadPageMcaAddress,
+	[PP_SMU_RAS_MSG_GetBadPagePaAddr]   = PPSMC_MSG_GetBadPagePaAddress,
+	[PP_SMU_RAS_MSG_SetTimestamp]       = PPSMC_MSG_SetTimestamp,
+	[PP_SMU_RAS_MSG_GetTimestamp]       = PPSMC_MSG_GetTimestamp,
+	[PP_SMU_RAS_MSG_GetRasPolicy]       = PPSMC_MSG_GetRasPolicy,
+	[PP_SMU_RAS_MSG_GetBadPageIpId]     = PPSMC_MSG_GetBadPageIpIdLoHi,
+	[PP_SMU_RAS_MSG_EraseRasTable]      = PPSMC_MSG_EraseRasTable,
 };
 
 static int smu_v15_0_8_pp_metrics_init(struct amdgv_adapter *adapt);
@@ -183,6 +197,10 @@ static int smu_v15_0_8_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_i
 			amdgv_live_info_prepare_reset(adapt);
 		}
 		break;
+	case IH_INTERRUPT_HBM_BP_INT:
+		ret = amdgv_sched_queue_event(adapt, AMDGV_PF_IDX,
+				AMDGV_EVENT_SCHED_RAS_EVENT, AMDGV_SCHED_BLOCK_ALL);
+		break;
 	case IH_INTERRUPT_CONTEXT_ID_THERMAL_THROTTLING:
 		curr_time = oss_get_time_stamp();
 		throttle_delta = curr_time - adapt->pp.thermal_throttle_start_time;
@@ -263,6 +281,9 @@ static int smu_v15_0_8_pp_get_metric(struct amdgv_adapter *adapt,
 		break;
 	case Q10_64:
 		*(uint64_t *)val = SMUQ10_ROUND(*(uint64_t *)metric_addr);
+		break;
+	case Q16_64:
+		*(uint64_t *)val = SMUQ16_ROUND(*(uint64_t *)metric_addr);
 		break;
 	case UINT_32:
 		*(uint32_t *)val = *(uint32_t *)metric_addr;
@@ -377,14 +398,14 @@ static bool smu_v15_0_8_pp_cap_supported(struct amdgv_adapter *adapt, int cap)
 static int smu_v15_0_8_pp_get_npm_info(struct amdgv_adapter *adapt,
 				       struct amdgv_gpumon_npm_info *npm_info)
 {
-	SystemMetricsTable_t *metrics = ADAPT_TO_SMU_TABLE(adapt, SMU_TABLE__SYSTEM_METRICS);
+	SystemMetricsTable_t *metrics = (SystemMetricsTable_t *)ADAPT_TO_SMU_TABLE(adapt, SMU_TABLE__SYSTEM_METRICS);
 
 	if (smu_v15_0_8_pp_get_fw_table(adapt, SMU_TABLE__SYSTEM_METRICS, true))
 		return AMDGV_FAILURE;
 
 	if (metrics->NodePower) {
 		npm_info->npm_status = AMDGPUMON_NPM_ENABLED;
-		npm_info->npm_limit = SMUQ10_ROUND(metrics->NodePowerLimit);
+		npm_info->npm_limit = metrics->NodePowerLimit;
 	} else {
 		npm_info->npm_status = AMDGPUMON_NPM_DISABLED;
 		npm_info->npm_limit = 0;
@@ -397,7 +418,14 @@ static int smu_v15_0_8_pp_is_pm_enabled(struct amdgv_adapter *adapt, bool *pm_en
 {
 	struct smu_context *smu = ADAPT_TO_SMU(adapt);
 
-	return smu->features ? true : false;
+	if (adapt->pp.smu_fw_version < 0x027d0900)
+		*pm_enabled = false;
+	else if (!smu->features)
+		*pm_enabled = false;
+	else
+		*pm_enabled = true;
+
+	return 0;
 }
 
 static int smu_v15_0_8_pp_set_power_capacity(struct amdgv_adapter *adapt, int val)
@@ -422,7 +450,7 @@ static int smu_v15_0_8_pp_set_df_cstate(struct amdgv_adapter *adapt, enum pp_df_
 static int smu_v15_0_8_pp_get_clock_limit(struct amdgv_adapter *adapt, enum pp_clock_type clk,
 					enum pp_clock_limit_type limit_type, uint32_t *freq)
 {
-	StaticMetricsTable_t *metrics = ADAPT_TO_SMU_TABLE(adapt, SMU_TABLE__STATIC_METRICS);
+	StaticMetricsTable_t *metrics = (StaticMetricsTable_t *)ADAPT_TO_SMU_TABLE(adapt, SMU_TABLE__STATIC_METRICS);
 
 	if (!freq)
 		return AMDGV_FAILURE;
@@ -462,10 +490,66 @@ static int smu_v15_0_8_pp_get_clock_limit(struct amdgv_adapter *adapt, enum pp_c
 	return 0;
 }
 
+static int smu_v15_0_8_pp_send_ras_msg(struct amdgv_adapter *adapt,
+		enum pp_smu_ras_msg msg,
+		uint32_t *params, uint32_t num_params,
+		uint32_t *read_args, uint32_t num_read_args)
+{
+	struct smu_15_0_8_msg smu_msg = {0};
+	uint32_t ppsmc_code;
+	uint32_t i;
+	int ret;
+
+	if (msg >= PP_SMU_RAS_MSG_MAX)
+		return AMDGV_FAILURE;
+
+	if (num_params && !params)
+		return AMDGV_FAILURE;
+
+	if (num_read_args && !read_args)
+		return AMDGV_FAILURE;
+
+	if (num_params > SMU_15_0_8_MAX_ARGS || num_read_args > SMU_15_0_8_MAX_ARGS) {
+		AMDGV_ERROR("Inputs exceeds SMU_15_0_8_MAX_ARGS\n");
+		return AMDGV_FAILURE;
+	}
+
+	ppsmc_code = smu_v15_0_8_ras_msg_maps[msg];
+	if (!ppsmc_code)
+		return AMDGV_FAILURE;
+
+	smu_msg.id = ppsmc_code;
+
+	for (i = 0; i < num_params && i < SMU_15_0_8_MAX_ARGS; i++)
+		smu_msg.in_arg[i] = params[i];
+
+	ret = smu_v15_0_8_send_msg(adapt, &smu_msg);
+	if (ret)
+		return ret;
+
+	for (i = 0; i < num_read_args && i < SMU_15_0_8_MAX_ARGS; i++)
+		read_args[i] = smu_msg.out_arg[i];
+
+	return 0;
+}
+
+static int smu_v15_0_8_pp_get_serial(struct amdgv_adapter *adapt, uint64_t *serial)
+{
+	StaticMetricsTable_t *metrics = ADAPT_TO_SMU_TABLE(adapt, SMU_TABLE__STATIC_METRICS);
+
+	if (smu_v15_0_8_pp_get_fw_table(adapt, SMU_TABLE__STATIC_METRICS, false))
+		return AMDGV_FAILURE;
+
+	*serial = metrics->PublicSerialNumber_AID[0];
+
+	return 0;
+}
+
 const struct amdgv_pp_funcs smu_v15_0_8_pp_funcs = {
 	.gpu_mode2_reset			= smu_v15_0_8_pp_gpu_mode2_reset,
 	.trigger_vf_flr				= smu_v15_0_8_pp_trigger_vf_flr,
 	.gpu_mode0_reset			= smu_v15_0_8_pp_gpu_mode0_reset,
+	.put_timeout				= smu_v15_0_8_put_timeout,
 	.reset_vf_arbiters			= smu_v15_0_8_pp_reset_vf_arbiters,
 	.handle_smu_irq				= smu_v15_0_8_pp_handle_irq,
 	.parse_smu_table_info			= smu_v15_0_8_pp_table_info,
@@ -489,6 +573,7 @@ const struct amdgv_pp_funcs smu_v15_0_8_pp_funcs = {
 	.read_mca_bank_reg32 = NULL,
 	.smu_error_inject_set_pm_policy = NULL,
 	.smu_error_inject_restore_pm_policy = NULL,
+	.smu_send_ras_msg = smu_v15_0_8_pp_send_ras_msg,
 
 	/* Not applicable for SMU_15 */
 	.get_link_metrics = NULL,
@@ -502,6 +587,7 @@ const struct amdgv_pp_funcs smu_v15_0_8_pp_funcs = {
 	.get_max_configurable_power_limit = NULL,	/* Available in static metrics */
 	.smu_get_pm_policy = NULL,
 	.smu_compare_and_set_pm_policy = NULL,
+	.get_serial = smu_v15_0_8_pp_get_serial,
 };
 
 static void smu_v15_0_8_pp_fw_tables_fini(struct amdgv_adapter *adapt)
@@ -702,8 +788,8 @@ static int smu_v15_0_8_pp_set_driver_table_addr(struct amdgv_adapter *adapt, uin
 	struct smu_15_0_8_msg msg = { 0 };
 
 	msg.id = PPSMC_MSG_SetDriverDramAddr;
-	msg.in_arg[0] = upper_32_bits(addr);
-	msg.in_arg[1] = lower_32_bits(addr);
+	msg.in_arg[0] = lower_32_bits(addr);
+	msg.in_arg[1] = upper_32_bits(addr);
 
 	if (smu_v15_0_8_send_msg(adapt, &msg))
 		return AMDGV_FAILURE;
@@ -716,8 +802,8 @@ static int smu_v15_0_8_pp_set_tool_table_addr(struct amdgv_adapter *adapt, uint6
 	struct smu_15_0_8_msg msg = { 0 };
 
 	msg.id = PPSMC_MSG_SetToolsDramAddr;
-	msg.in_arg[0] = upper_32_bits(addr);
-	msg.in_arg[1] = lower_32_bits(addr);
+	msg.in_arg[0] = lower_32_bits(addr);
+	msg.in_arg[1] = upper_32_bits(addr);
 
 	if (smu_v15_0_8_send_msg(adapt, &msg))
 		return AMDGV_FAILURE;
@@ -751,7 +837,7 @@ static void smu_v15_0_8_pp_init_supported_caps(struct amdgv_adapter *adapt)
 
 static int smu_v15_0_8_pp_save_product_info(struct amdgv_adapter *adapt)
 {
-	StaticMetricsTable_t *static_metrics = ADAPT_TO_SMU_TABLE(adapt, SMU_TABLE__STATIC_METRICS);
+	StaticMetricsTable_t *static_metrics = (StaticMetricsTable_t *)ADAPT_TO_SMU_TABLE(adapt, SMU_TABLE__STATIC_METRICS);
 
 	oss_memset(&adapt->product_info, 0, sizeof(adapt->product_info));
 
@@ -809,7 +895,7 @@ static void smu_v15_0_8_pp_drv_gpu_xcp_metrics_init(struct amdgv_adapter *adapt,
 	ADD_DRV_METRICS_ENTRY(SMU_15_THROT_GFX_BEL_THM_ACC,	vf_mask, xcp_id, Q10_64,	&metrics->GfxclkBelowHostLimitThmAcc[xcc_id]);
 	ADD_DRV_METRICS_ENTRY(SMU_15_THROT_GFX_BEL_TOT_ACC,	vf_mask, xcp_id, Q10_64,	&metrics->GfxclkBelowHostLimitTotalAcc[xcc_id]);
 	ADD_DRV_METRICS_ENTRY(SMU_15_THROT_GFX_CLK_LOW_ACC,	vf_mask, xcp_id, Q10_64,	&metrics->GfxclkLowUtilizationAcc[xcc_id]);
-	ADD_DRV_METRICS_ENTRY(SMU_15_TEMP_XCD,			vf_mask, xcp_id, UINT_32,	&metrics->XcdTemperature[xcc_id]);
+	ADD_DRV_METRICS_ENTRY(SMU_15_TEMP_XCD,			vf_mask, xcp_id, Q10_32,	&metrics->XcdTemperature[xcc_id]);
 }
 
 static void smu_v15_0_8_pp_drv_gpu_aid_metrics_init(struct amdgv_adapter *adapt,
@@ -819,7 +905,7 @@ static void smu_v15_0_8_pp_drv_gpu_aid_metrics_init(struct amdgv_adapter *adapt,
 {
 	uint32_t vf_mask = amdgv_mcp_get_vf_mask_by_aid(adapt, aid_id);
 
-	ADD_DRV_METRICS_ENTRY(SMU_15_TEMP_AID,		vf_mask, aid_id, UINT_32,	&metrics->AidTemperature[aid_id]);
+	ADD_DRV_METRICS_ENTRY(SMU_15_TEMP_AID,		vf_mask, aid_id, Q10_32,	&metrics->AidTemperature[aid_id]);
 	ADD_DRV_METRICS_ENTRY(SMU_15_MEMCLK,		vf_mask, aid_id, Q10_32,	&metrics->UclkFrequency[aid_id]);
 	ADD_DRV_METRICS_ENTRY(SMU_15_MEM_CLK_DS,	vf_mask, aid_id, Q10_32_DS,	&metrics->UclkFrequency[aid_id]);
 	ADD_DRV_METRICS_ENTRY(SMU_15_FCLK,		vf_mask, aid_id, Q10_32,	&metrics->FclkFrequency[aid_id]);
@@ -835,27 +921,26 @@ static void smu_v15_0_8_pp_drv_gpu_mid_metrics_init(struct amdgv_adapter *adapt,
 	uint32_t vf_mask = amdgv_mcp_get_vf_mask_by_aid(adapt, mid_id);
 	uint32_t i = 0;
 
-	//@TODO: verify the encoding
-	ADD_DRV_METRICS_ENTRY(SMU_15_TEMP_MID,		vf_mask, mid_id, UINT_32,	&metrics->MidTemperature[mid_id]);
+	ADD_DRV_METRICS_ENTRY(SMU_15_TEMP_MID,		vf_mask, mid_id, Q10_32,	&metrics->MidTemperature[mid_id]);
 
 	ADD_DRV_METRICS_ENTRY(SMU_15_SOC_CLK,		vf_mask, mid_id, Q10_32,	&metrics->SocclkFrequency[mid_id]);
 	ADD_DRV_METRICS_ENTRY(SMU_15_SOC_CLK_DS,	vf_mask, mid_id, Q10_32_DS,	&metrics->SocclkFrequency[mid_id]);
-	ADD_DRV_METRICS_ENTRY(SMU_15_LCLK,		vf_mask, i, Q10_32,		&metrics->LclkFrequency[i]);
-	ADD_DRV_METRICS_ENTRY(SMU_15_LCLK_DS,		vf_mask, i, Q10_32_DS,		&metrics->LclkFrequency[i]);
+	ADD_DRV_METRICS_ENTRY(SMU_15_LCLK,		vf_mask, mid_id, Q10_32,	&metrics->LclkFrequency[mid_id]);
+	ADD_DRV_METRICS_ENTRY(SMU_15_LCLK_DS,		vf_mask, mid_id, Q10_32_DS,	&metrics->LclkFrequency[mid_id]);
 
 	/* 2 per MID */
 	i = mid_id * 2;
-	ADD_DRV_METRICS_ENTRY(SMU_15_USAGE_VCN,		vf_mask, i, Q10_32,	&metrics->VcnBusy[i]);
-	ADD_DRV_METRICS_ENTRY(SMU_15_VCLK,		vf_mask, i, Q10_32,	&metrics->VclkFrequency[i]);
-	ADD_DRV_METRICS_ENTRY(SMU_15_VCLK_DS,		vf_mask, i, Q10_32_DS,	&metrics->VclkFrequency[i]);
-	ADD_DRV_METRICS_ENTRY(SMU_15_DCLK,		vf_mask, i, Q10_32,	&metrics->DclkFrequency[i]);
-	ADD_DRV_METRICS_ENTRY(SMU_15_DCLK_DS,		vf_mask, i, Q10_32_DS,	&metrics->DclkFrequency[i]);
+	ADD_DRV_METRICS_ENTRY(SMU_15_USAGE_VCN,		vf_mask, mid_id, Q10_32,	&metrics->VcnBusy[i]);
+	ADD_DRV_METRICS_ENTRY(SMU_15_VCLK,		vf_mask, mid_id, Q10_32,	&metrics->VclkFrequency[i]);
+	ADD_DRV_METRICS_ENTRY(SMU_15_VCLK_DS,		vf_mask, mid_id, Q10_32_DS,	&metrics->VclkFrequency[i]);
+	ADD_DRV_METRICS_ENTRY(SMU_15_DCLK,		vf_mask, mid_id, Q10_32,	&metrics->DclkFrequency[i]);
+	ADD_DRV_METRICS_ENTRY(SMU_15_DCLK_DS,		vf_mask, mid_id, Q10_32_DS,	&metrics->DclkFrequency[i]);
 	i++;
-	ADD_DRV_METRICS_ENTRY(SMU_15_USAGE_VCN,		vf_mask, i, Q10_32,	&metrics->VcnBusy[i]);
-	ADD_DRV_METRICS_ENTRY(SMU_15_VCLK,		vf_mask, i, Q10_32,	&metrics->VclkFrequency[i]);
-	ADD_DRV_METRICS_ENTRY(SMU_15_VCLK_DS,		vf_mask, i, Q10_32_DS,	&metrics->VclkFrequency[i]);
-	ADD_DRV_METRICS_ENTRY(SMU_15_DCLK,		vf_mask, i, Q10_32,	&metrics->DclkFrequency[i]);
-	ADD_DRV_METRICS_ENTRY(SMU_15_DCLK_DS,		vf_mask, i, Q10_32_DS,	&metrics->DclkFrequency[i]);
+	ADD_DRV_METRICS_ENTRY(SMU_15_USAGE_VCN,		vf_mask, mid_id, Q10_32,	&metrics->VcnBusy[i]);
+	ADD_DRV_METRICS_ENTRY(SMU_15_VCLK,		vf_mask, mid_id, Q10_32,	&metrics->VclkFrequency[i]);
+	ADD_DRV_METRICS_ENTRY(SMU_15_VCLK_DS,		vf_mask, mid_id, Q10_32_DS,	&metrics->VclkFrequency[i]);
+	ADD_DRV_METRICS_ENTRY(SMU_15_DCLK,		vf_mask, mid_id, Q10_32,	&metrics->DclkFrequency[i]);
+	ADD_DRV_METRICS_ENTRY(SMU_15_DCLK_DS,		vf_mask, mid_id, Q10_32_DS,	&metrics->DclkFrequency[i]);
 
 	for (i = SMU_15_JPEG_PER_MID * mid_id; i < SMU_15_JPEG_PER_MID * mid_id + SMU_15_JPEG_PER_MID; i++)
 		ADD_DRV_METRICS_ENTRY(SMU_15_USAGE_JPEG, vf_mask, (i / SMU_15_JPEG_PER_MID), Q10_32, &metrics->JpegBusy[i]);
@@ -868,9 +953,9 @@ static void smu_v15_0_8_pp_drv_gpu_hbm_metrics_init(struct amdgv_adapter *adapt,
 {
 	uint32_t vf_mask = amdgv_mcp_get_vf_mask_by_aid(adapt, idx / SMU_15_HBM_PER_AID);
 
-	ADD_DRV_METRICS_ENTRY(SMU_15_TEMP_HBM, vf_mask, idx / SMU_15_HBM_PER_AID, UINT_32,
+	ADD_DRV_METRICS_ENTRY(SMU_15_TEMP_HBM, vf_mask, idx / SMU_15_HBM_PER_AID, Q10_32,
 			      &metrics->HbmTemperature[idx]);
-	ADD_DRV_METRICS_ENTRY(SMU_15_TEMP_HBM_ACC, vf_mask, idx / SMU_15_HBM_PER_AID, UINT_64,
+	ADD_DRV_METRICS_ENTRY(SMU_15_TEMP_HBM_ACC, vf_mask, idx / SMU_15_HBM_PER_AID, Q10_64,
 			      &metrics->HbmTemperatureAcc[idx]);
 }
 
@@ -881,13 +966,13 @@ static int smu_v15_0_8_pp_drv_gpu_metrics_init(struct amdgv_adapter *adapt)
 	uint32_t whole_gpu_vf_mask = (BIT(adapt->num_vf) - 1) | BIT(AMDGV_PF_IDX);
 	uint32_t i = 0;
 
-	metrics = ADAPT_TO_SMU_TABLE(adapt, SMU_TABLE__METRICS);
+	metrics = (MetricsTable_t *)ADAPT_TO_SMU_TABLE(adapt, SMU_TABLE__METRICS);
 	drv_metrics = adapt_to_pp_metrics(adapt, AMDGV_PP_METRIC__GPU);
 
 	smu_v15_0_8_pp_clear_drv_metrics(adapt, drv_metrics);
 
 	ADD_DRV_METRICS_ENTRY(SMU_15_METRICS_COUNTER, whole_gpu_vf_mask, SMU_15_GPU_RES_ID,
-			      UINT_32, &metrics->AccumulationCounter);
+			      UINT_64, &metrics->AccumulationCounter);
 
 	for (i = 0; i < SMU_15_NUM_XCD; i++)
 		smu_v15_0_8_pp_drv_gpu_xcp_metrics_init(adapt, drv_metrics, metrics, i);
@@ -907,8 +992,8 @@ static int smu_v15_0_8_pp_drv_gpu_metrics_init(struct amdgv_adapter *adapt)
 	ADD_DRV_METRICS_ENTRY(SMU_15_TEMP_VR_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, Q10_64,		&metrics->MaxVrTemperatureAcc);
 	ADD_DRV_METRICS_ENTRY(SMU_15_POWER_MAX,				whole_gpu_vf_mask, SMU_15_GPU_RES_ID, Q10_32,		&metrics->SocketPowerLimit);
 	ADD_DRV_METRICS_ENTRY(SMU_15_POWER,				whole_gpu_vf_mask, SMU_15_GPU_RES_ID, Q10_32,		&metrics->SocketPower);
-	ADD_DRV_METRICS_ENTRY(SMU_15_ENERGY_SOCKET_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_64,		&metrics->SocketEnergyAcc);
-	ADD_DRV_METRICS_ENTRY(SMU_15_ENERGY_MEM_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_64,		&metrics->HbmEnergyAcc);
+	ADD_DRV_METRICS_ENTRY(SMU_15_ENERGY_SOCKET_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, Q16_64,		&metrics->SocketEnergyAcc);
+	ADD_DRV_METRICS_ENTRY(SMU_15_ENERGY_MEM_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, Q16_64,		&metrics->HbmEnergyAcc);
 	ADD_DRV_METRICS_ENTRY(SMU_15_USAGE_GFX,				whole_gpu_vf_mask, SMU_15_GPU_RES_ID, Q10_32,		&metrics->SocketGfxBusy);
 	ADD_DRV_METRICS_ENTRY(SMU_15_USAGE_MEM,				whole_gpu_vf_mask, SMU_15_GPU_RES_ID, Q10_32,		&metrics->DramBandwidthUtilization);
 	ADD_DRV_METRICS_ENTRY(SMU_15_USAGE_GFX_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, Q10_64,		&metrics->SocketGfxBusyAcc);
@@ -916,18 +1001,18 @@ static int smu_v15_0_8_pp_drv_gpu_metrics_init(struct amdgv_adapter *adapt)
 	ADD_DRV_METRICS_ENTRY(SMU_15_DRAM_BANDWIDTH_ACC,		whole_gpu_vf_mask, SMU_15_GPU_RES_ID, Q10_64,		&metrics->DramBandwidthAcc);
 	ADD_DRV_METRICS_ENTRY(SMU_15_DRAM_BANDWIDTH_MAX,		whole_gpu_vf_mask, SMU_15_GPU_RES_ID, Q10_32,		&metrics->MaxDramBandwidth);
 	ADD_DRV_METRICS_ENTRY(SMU_15_PCIE_BANDWIDTH_ACC,		whole_gpu_vf_mask, SMU_15_GPU_RES_ID, Q10_64,		&metrics->PcieBandwidthAcc[0]);
-	ADD_DRV_METRICS_ENTRY(SMU_15_THROT_PROCHOT_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,		&metrics->ProchotResidencyAcc);
-	ADD_DRV_METRICS_ENTRY(SMU_15_THROT_PPT_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,		&metrics->PptResidencyAcc);
-	ADD_DRV_METRICS_ENTRY(SMU_15_THROT_SOCKET_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,		&metrics->SocketThmResidencyAcc);
-	ADD_DRV_METRICS_ENTRY(SMU_15_THROT_VR_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,		&metrics->VrThmResidencyAcc);
-	ADD_DRV_METRICS_ENTRY(SMU_15_THROT_MEM_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,		&metrics->HbmThmResidencyAcc);
+	ADD_DRV_METRICS_ENTRY(SMU_15_THROT_PROCHOT_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_64,		&metrics->ProchotResidencyAcc);
+	ADD_DRV_METRICS_ENTRY(SMU_15_THROT_PPT_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_64,		&metrics->PptResidencyAcc);
+	ADD_DRV_METRICS_ENTRY(SMU_15_THROT_SOCKET_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_64,		&metrics->SocketThmResidencyAcc);
+	ADD_DRV_METRICS_ENTRY(SMU_15_THROT_VR_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_64,		&metrics->VrThmResidencyAcc);
+	ADD_DRV_METRICS_ENTRY(SMU_15_THROT_MEM_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_64,		&metrics->HbmThmResidencyAcc);
 	ADD_DRV_METRICS_ENTRY(SMU_15_PCIE_BANDWIDTH,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, Q10_32,		&(metrics->PcieBandwidth[0]));
-	ADD_DRV_METRICS_ENTRY(SMU_15_PCIE_L0_TO_RECOVER_ACC,		whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,		&(metrics->PCIeL0ToRecoveryCountAcc));
-	ADD_DRV_METRICS_ENTRY(SMU_15_PCIE_REPL_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,		&(metrics->PCIenReplayAAcc));
-	ADD_DRV_METRICS_ENTRY(SMU_15_PCIE_REPL_ROLLOVER_ACC,		whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,		&(metrics->PCIenReplayARolloverCountAcc));
-	ADD_DRV_METRICS_ENTRY(SMU_15_PCIE_NAK_SENT_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,		&(metrics->PCIeNAKSentCountAcc));
-	ADD_DRV_METRICS_ENTRY(SMU_15_PCIE_NAK_RECEIVED_ACC,		whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,		&(metrics->PCIeNAKReceivedCountAcc));
-	ADD_DRV_METRICS_ENTRY(SMU_15_PCIE_OTHER_END_RECOVERY_ACC,	whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,		&(metrics->PCIeOtherEndRecoveryAcc));
+	ADD_DRV_METRICS_ENTRY(SMU_15_PCIE_L0_TO_RECOVER_ACC,		whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_64,		&(metrics->PCIeL0ToRecoveryCountAcc));
+	ADD_DRV_METRICS_ENTRY(SMU_15_PCIE_REPL_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_64,		&(metrics->PCIenReplayAAcc));
+	ADD_DRV_METRICS_ENTRY(SMU_15_PCIE_REPL_ROLLOVER_ACC,		whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_64,		&(metrics->PCIenReplayARolloverCountAcc));
+	ADD_DRV_METRICS_ENTRY(SMU_15_PCIE_NAK_SENT_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_64,		&(metrics->PCIeNAKSentCountAcc));
+	ADD_DRV_METRICS_ENTRY(SMU_15_PCIE_NAK_RECEIVED_ACC,		whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_64,		&(metrics->PCIeNAKReceivedCountAcc));
+	ADD_DRV_METRICS_ENTRY(SMU_15_PCIE_OTHER_END_RECOVERY_ACC,	whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_64,		&(metrics->PCIeOtherEndRecoveryAcc));
 	ADD_DRV_METRICS_ENTRY(SMU_15_PCIE_LINK_SPEED,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,		&(metrics->PCIeLinkSpeed));
 	ADD_DRV_METRICS_ENTRY(SMU_15_PCIE_LINK_WIDTH,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,		&(metrics->PCIeLinkWidth));
 
@@ -940,7 +1025,7 @@ static int smu_v15_0_8_pp_drv_static_metrics_init(struct amdgv_adapter *adapt)
 	struct drv_metrics *drv_metrics;
 	StaticMetricsTable_t *metrics;
 
-	metrics = ADAPT_TO_SMU_TABLE(adapt, SMU_TABLE__STATIC_METRICS);
+	metrics = (StaticMetricsTable_t *)ADAPT_TO_SMU_TABLE(adapt, SMU_TABLE__STATIC_METRICS);
 	drv_metrics = adapt_to_pp_metrics(adapt, AMDGV_PP_METRIC__GPU_STATIC);
 
 	smu_v15_0_8_pp_clear_drv_metrics(adapt, drv_metrics);
@@ -953,6 +1038,17 @@ static int smu_v15_0_8_pp_drv_static_metrics_init(struct amdgv_adapter *adapt)
 	ADD_DRV_METRICS_ENTRY(SMU_15_FCLK_MIN,		whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->MinFclkFrequency);
 	ADD_DRV_METRICS_ENTRY(SMU_15_MEMCLK_MAX,	whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->UclkFrequencyTable[3]);
 	ADD_DRV_METRICS_ENTRY(SMU_15_MEMCLK_MIN,	whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->UclkFrequencyTable[0]);
+	ADD_DRV_METRICS_ENTRY(SMU_15_POWER_STATIC,	whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->MaxSocketPowerLimit);
+	ADD_DRV_METRICS_ENTRY(SMU_15_GL2CLK_MAX,	whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->MaxGl2clkFrequency);
+	ADD_DRV_METRICS_ENTRY(SMU_15_GL2CLK_MIN,	whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->MinGl2clkFrequency);
+	ADD_DRV_METRICS_ENTRY(SMU_15_SOC_CLK_MAX,	whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->SocclkFrequency);
+	ADD_DRV_METRICS_ENTRY(SMU_15_SOC_CLK_MIN,	whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->SocclkFrequency);
+	ADD_DRV_METRICS_ENTRY(SMU_15_LCLK_MAX,		whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->LclkFrequency);
+	ADD_DRV_METRICS_ENTRY(SMU_15_LCLK_MIN,		whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->LclkFrequency);
+	ADD_DRV_METRICS_ENTRY(SMU_15_VCLK_MAX,		whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->VclkFrequency);
+	ADD_DRV_METRICS_ENTRY(SMU_15_VCLK_MIN,		whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->VclkFrequency);
+	ADD_DRV_METRICS_ENTRY(SMU_15_DCLK_MAX,		whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->DclkFrequency);
+	ADD_DRV_METRICS_ENTRY(SMU_15_DCLK_MIN,		whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->DclkFrequency);
 	ADD_DRV_METRICS_ENTRY(SMU_15_CTF_XCD,		whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->CTFLimit_XCD);
 	ADD_DRV_METRICS_ENTRY(SMU_15_CTF_AID,		whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->CTFLimit_AID);
 	ADD_DRV_METRICS_ENTRY(SMU_15_CTF_MID,		whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->CTFLimit_MID);
@@ -986,7 +1082,7 @@ static int smu_v15_0_8_pp_drv_system_metrics_init(struct amdgv_adapter *adapt)
 	struct drv_metrics *drv_metrics;
 	SystemMetricsTable_t *metrics;
 
-	metrics = ADAPT_TO_SMU_TABLE(adapt, SMU_TABLE__SYSTEM_METRICS);
+	metrics = (SystemMetricsTable_t *)ADAPT_TO_SMU_TABLE(adapt, SMU_TABLE__SYSTEM_METRICS);
 	drv_metrics = adapt_to_pp_metrics(adapt, AMDGV_PP_METRIC__SYSTEM);
 
 	smu_v15_0_8_pp_clear_drv_metrics(adapt, drv_metrics);
@@ -1078,6 +1174,9 @@ static int smu_v15_0_8_pp_metrics_init(struct amdgv_adapter *adapt)
 static int smu_v15_0_8_pp_hw_init(struct amdgv_adapter *adapt)
 {
 	smu_v15_0_8_pp_init_supported_caps(adapt);
+
+	if (adapt->pp.smu_fw_version < 0x027d0900)
+		return 0;
 
 	if (smu_v15_0_8_pp_set_table_address(adapt))
 		return AMDGV_FAILURE;

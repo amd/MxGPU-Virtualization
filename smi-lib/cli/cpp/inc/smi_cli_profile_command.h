@@ -18,5 +18,5 @@ public:
 	void profile_command_human();
 	void profile_command_csv();
 
-	int get_profile_info(uint64_t processors, int gpu_index, std::string &formatted_string);
+	int get_profile_info(uint64_t processors, int gpu_index, std::string& formatted_string);
 };

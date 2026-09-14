@@ -55,6 +55,58 @@ amdgv_live_info_get_block(struct amdgv_adapter *adapt, uint32_t data_op,
 	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
 }
 
+static bool amdgv_live_info_validate_param_pre(struct amdgv_adapter *adapt,
+					       const struct amdgv_live_info_param *param_info)
+{
+	if (param_info->num_vf == 0 || param_info->num_vf > adapt->max_num_vf) {
+		AMDGV_ERROR("live-update PRE invalid num_vf %u (max %u)\n",
+			    param_info->num_vf, adapt->max_num_vf);
+		return false;
+	}
+
+	if (param_info->fw_load_type <= AMDGV_FW_LOAD_TYPE_BEGIN ||
+	    param_info->fw_load_type >= AMDGV_FW_LOAD_TYPE_END) {
+		AMDGV_ERROR("live-update PRE invalid fw_load_type %u\n",
+			    param_info->fw_load_type);
+		return false;
+	}
+
+	if (param_info->vf_hbm_mgmt_mode > AMDGV_VF_HBM_MGMT_MODE_DISABLED) {
+		AMDGV_ERROR("live-update PRE invalid vf_hbm_mgmt_mode %u\n",
+			    param_info->vf_hbm_mgmt_mode);
+		return false;
+	}
+
+	if (param_info->memory_partition_mode >= AMDGV_MEMORY_PARTITION_MODE_MAX) {
+		AMDGV_ERROR("live-update PRE invalid memory_partition_mode %u\n",
+			    param_info->memory_partition_mode);
+		return false;
+	}
+
+	if (param_info->accelerator_partition_mode >= AMDGV_ACCELERATOR_PARTITION_MODE_MAX) {
+		AMDGV_ERROR("live-update PRE invalid accelerator_partition_mode %u\n",
+			    param_info->accelerator_partition_mode);
+		return false;
+	}
+
+	/* opt.max_cper_count < 0 disables CPER; exported as -1 in blob. */
+	if (param_info->max_cper_count != (uint32_t)-1 &&
+	    param_info->max_cper_count > AMDGV_CPER_MAX_ALLOWED_COUNT) {
+		AMDGV_ERROR("live-update PRE invalid max_cper_count %u\n",
+			    param_info->max_cper_count);
+		return false;
+	}
+
+	if (param_info->ras_vf_telemetry_policy < 0 ||
+	    param_info->ras_vf_telemetry_policy >= AMDGV_RAS_VF_TELEMETRY_POLICY_COUNT) {
+		AMDGV_ERROR("live-update PRE invalid ras_vf_telemetry_policy %d\n",
+			    param_info->ras_vf_telemetry_policy);
+		return false;
+	}
+
+	return true;
+}
+
 enum amdgv_live_info_status amdgv_import_data_by_op(struct amdgv_adapter *adapt,
 							   uint32_t data_op)
 {
@@ -543,6 +595,11 @@ int amdgv_live_info_import_data(struct amdgv_adapter *adapt, uint32_t data_op,
 	}
 	case AMDGV_LIVE_INFO_DATA__MODULE_PARAM_PRE: {
 		struct amdgv_live_info_param *param_info = data;
+
+		if (!amdgv_live_info_validate_param_pre(adapt, param_info)) {
+			*status = AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
+			break;
+		}
 
 		adapt->customized_vf_config_mode = param_info->customized_vf_config_mode;
 		adapt->num_vf = param_info->num_vf;

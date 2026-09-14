@@ -13,69 +13,73 @@
 #include "smi_cli_api_host.h"
 #include "smi_cli_templates.h"
 
-int AmdSmiXgmiCommand::xgmi_command_caps(std::string &formatted_string)
+int AmdSmiXgmiCommand::xgmi_command_caps(std::string& formatted_string)
 {
-	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_caps_xgmi_command(arg,
-			  formatted_string);
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_caps_xgmi_command(
+	    arg, formatted_string);
 	return ret;
 }
 
-int AmdSmiXgmiCommand::xgmi_command_fb_sharing(std::string &formatted_string)
+int AmdSmiXgmiCommand::xgmi_command_fb_sharing(std::string& formatted_string)
 {
-	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_fb_sharing_xgmi_command(arg,
-			  formatted_string);
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_fb_sharing_xgmi_command(
+	    arg, formatted_string);
 	return ret;
 }
 
-int AmdSmiXgmiCommand::xgmi_command_all(std::string &formatted_string)
+int AmdSmiXgmiCommand::xgmi_command_all(std::string& formatted_string)
 {
-	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_all_xgmi_command(arg,
-			  formatted_string);
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_all_xgmi_command(
+	    arg, formatted_string);
 	return ret;
 }
 
-int AmdSmiXgmiCommand::metric_command_xgmi(std::string &formatted_string)
+int AmdSmiXgmiCommand::metric_command_xgmi(std::string& formatted_string)
 {
 	int ret = PARAM_NOT_SUPPORTED_ON_PLATFORM;
-	if (AmdSmiPlatform::getInstance().is_host() && (AmdSmiPlatform::getInstance().is_mi300()
-			|| AmdSmiPlatform::getInstance().is_mi200() || AmdSmiPlatform::getInstance().is_mi350())) {
-		ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_xgmi_metric_command(arg, formatted_string);
+	if (AmdSmiPlatform::getInstance().is_host() &&
+	    (AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200() ||
+	     AmdSmiPlatform::getInstance().is_mi350())) {
+		ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_xgmi_metric_command(
+		    arg, formatted_string);
 	}
 	return ret;
 }
 
-int AmdSmiXgmiCommand::source_gpu_status_command_xgmi(std::string &formatted_string)
+int AmdSmiXgmiCommand::source_gpu_status_command_xgmi(std::string& formatted_string)
 {
 	int ret = PARAM_NOT_SUPPORTED_ON_PLATFORM;
-	if (AmdSmiPlatform::getInstance().is_host() && (AmdSmiPlatform::getInstance().is_mi300()
-			|| AmdSmiPlatform::getInstance().is_mi200() || AmdSmiPlatform::getInstance().is_mi350())) {
-		ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_source_gpu_xgmi_status_command(arg, formatted_string);
+	if (AmdSmiPlatform::getInstance().is_host() &&
+	    (AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200() ||
+	     AmdSmiPlatform::getInstance().is_mi350())) {
+		ret = AmdSmiApiBase::CreateAmdSmiApiObject()
+			  .amdsmi_get_source_gpu_xgmi_status_command(arg, formatted_string);
 	}
 	return ret;
 }
 
-int AmdSmiXgmiCommand::xgmi_link_status_command(std::string &formatted_string)
+int AmdSmiXgmiCommand::xgmi_link_status_command(std::string& formatted_string)
 {
 	int ret = PARAM_NOT_SUPPORTED_ON_PLATFORM;
-	if (AmdSmiPlatform::getInstance().is_host() && (AmdSmiPlatform::getInstance().is_mi300()
-			|| AmdSmiPlatform::getInstance().is_mi200() || AmdSmiPlatform::getInstance().is_mi350())) {
-		ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_xgmi_link_status_command(arg, formatted_string);
+	if (AmdSmiPlatform::getInstance().is_host() &&
+	    (AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200() ||
+	     AmdSmiPlatform::getInstance().is_mi350())) {
+		ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_xgmi_link_status_command(
+		    arg, formatted_string);
 	}
 	return ret;
 }
-
 
 void AmdSmiXgmiCommand::xgmi_command_human()
 {
 	int ret;
-	std::string formatted_string{};
-	std::string out{};
+	std::string formatted_string {};
+	std::string out {};
 
-	if ((std::find(arg.options.begin(), arg.options.end(), "caps") !=
-			arg.options.end()) ||
-			arg.all_arguments) {
+	if ((std::find(arg.options.begin(), arg.options.end(), "caps") != arg.options.end()) ||
+	    arg.all_arguments) {
 		ret = xgmi_command_caps(formatted_string);
-		std::string param{"--caps"};
+		std::string param {"--caps"};
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {
 			out.append(formatted_string);
@@ -85,11 +89,12 @@ void AmdSmiXgmiCommand::xgmi_command_human()
 		}
 	}
 
-	if ((std::find(arg.options.begin(), arg.options.end(), "fb-sharing") != arg.options.end())
-			&& (std::find(arg.options.begin(), arg.options.end(), "set") == arg.options.end()) ||
-			arg.all_arguments) {
+	if ((std::find(arg.options.begin(), arg.options.end(), "fb-sharing") !=
+	     arg.options.end()) &&
+		(std::find(arg.options.begin(), arg.options.end(), "set") == arg.options.end()) ||
+	    arg.all_arguments) {
 		ret = xgmi_command_fb_sharing(formatted_string);
-		std::string param{"--fb-sharing"};
+		std::string param {"--fb-sharing"};
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {
 			out.append(formatted_string);
@@ -100,9 +105,9 @@ void AmdSmiXgmiCommand::xgmi_command_human()
 	}
 
 	if ((std::find(arg.options.begin(), arg.options.end(), "metric") != arg.options.end()) ||
-			arg.all_arguments) {
+	    arg.all_arguments) {
 		ret = metric_command_xgmi(formatted_string);
-		std::string param{"metric"};
+		std::string param {"metric"};
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {
 			out += formatted_string;
@@ -111,10 +116,11 @@ void AmdSmiXgmiCommand::xgmi_command_human()
 		formatted_string.clear();
 	}
 
-	if ((std::find(arg.options.begin(), arg.options.end(), "source-status") != arg.options.end()) ||
-			arg.all_arguments) {
+	if ((std::find(arg.options.begin(), arg.options.end(), "source-status") !=
+	     arg.options.end()) ||
+	    arg.all_arguments) {
 		ret = source_gpu_status_command_xgmi(formatted_string);
-		std::string param{"source-status"};
+		std::string param {"source-status"};
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {
 			out += formatted_string;
@@ -123,10 +129,11 @@ void AmdSmiXgmiCommand::xgmi_command_human()
 		formatted_string.clear();
 	}
 
-	if ((std::find(arg.options.begin(), arg.options.end(), "link-status") != arg.options.end()) ||
-			arg.all_arguments) {
+	if ((std::find(arg.options.begin(), arg.options.end(), "link-status") !=
+	     arg.options.end()) ||
+	    arg.all_arguments) {
 		ret = xgmi_link_status_command(formatted_string);
-		std::string param{"link-status"};
+		std::string param {"link-status"};
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {
 			out += formatted_string;
@@ -145,12 +152,12 @@ void AmdSmiXgmiCommand::xgmi_command_human()
 void AmdSmiXgmiCommand::xgmi_command_json()
 {
 	if ((std::find(arg.options.begin(), arg.options.end(), "set") != arg.options.end())) {
-		std::string param{"--json"};
+		std::string param {"--json"};
 		throw SmiToolParameterNotSupportedException(param);
 	}
 	int ret;
-	std::string out{};
-	std::string param{"xgmi"};
+	std::string out {};
+	std::string param {"xgmi"};
 
 	ret = xgmi_command_all(out);
 	handle_exceptions(ret, param, arg);
@@ -165,26 +172,28 @@ void AmdSmiXgmiCommand::xgmi_command_json()
 void AmdSmiXgmiCommand::execute_command()
 {
 	unsigned int gpu_count;
-	AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
-	if ((AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200() || AmdSmiPlatform::getInstance().is_mi350())
-			&& AmdSmiPlatform::getInstance().getInstance().is_host()) {
+	AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_device_count(
+	    gpu_count, static_cast<int>(DeviceType::GPU));
+	if ((AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200() ||
+	     AmdSmiPlatform::getInstance().is_mi350()) &&
+	    AmdSmiPlatform::getInstance().getInstance().is_host()) {
 		if (gpu_count > 1) {
 			sort_arg_devices_for_display(arg);
 			if (arg.output == human) {
 				xgmi_command_human();
 			} else if (arg.output == json) {
-				std::string param{"--json"};
+				std::string param {"--json"};
 				xgmi_command_json();
 			} else if (arg.output == csv) {
-				std::string param{"--csv"};
+				std::string param {"--csv"};
 				throw SmiToolParameterNotSupportedException(param);
 			}
 		} else {
-			std::string command{"xgmi"};
+			std::string command {"xgmi"};
 			throw SmiToolCommandNotSupportedException(command);
 		}
 	} else {
-		std::string command{"xgmi"};
+		std::string command {"xgmi"};
 		throw SmiToolCommandNotSupportedException(command);
 	}
 }

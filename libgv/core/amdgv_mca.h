@@ -100,7 +100,12 @@ struct amdgv_mca_error_count_cache {
 
 struct amdgv_mca_error_count_cache_client {
 	bool enabled;
-	struct amdgv_mca_error_count_cache cache[AMDGV_RAS_BLOCK__LAST];
+	/*
+	 * Sized to AMDGV_SMI_NUM_BLOCK_MAX so that callers using SMI block
+	 * ordinals (which now exceed AMDGV_RAS_BLOCK__LAST for newer IP blocks
+	 * such as CS, SHUB, SSBDCI, UCIE_PCS) cannot index out-of-bounds.
+	 */
+	struct amdgv_mca_error_count_cache cache[AMDGV_SMI_NUM_BLOCK_MAX];
 };
 
 struct amdgv_mca_error_count_cache_mgr {

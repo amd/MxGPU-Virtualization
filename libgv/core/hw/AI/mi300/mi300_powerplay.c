@@ -207,34 +207,6 @@ uint64_t mi300_drv_metric_code[MI300_METRIC_NAME_COUNT] = {
 					       mi300_drv_metric_code[drv_metric_code],		\
 					       encoding, addr, vf_mask, res_instance)
 
-#define MI300_SMU_MB_CONTEXT_REGS_NUM	3
-static struct amdgv_reg_dump_info mi300_smu_mb_context_regs[MI300_SMU_MB_CONTEXT_REGS_NUM] = {
-	{
-		.name = "regMP1_SMN_C2PMSG_90 (resp)",
-		.hwip = MP1_HWIP,
-		.seg = regMP1_SMN_C2PMSG_90_BASE_IDX,
-		.logical_inst = 0,
-		.offset_hwip = regMP1_SMN_C2PMSG_90,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-	{
-		.name = "regMP1_SMN_C2PMSG_82 (param)",
-		.hwip = MP1_HWIP,
-		.seg = regMP1_SMN_C2PMSG_82_BASE_IDX,
-		.logical_inst = 0,
-		.offset_hwip = regMP1_SMN_C2PMSG_82,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-	{
-		.name = "regMP1_SMN_C2PMSG_66 (msg)",
-		.hwip = MP1_HWIP,
-		.seg = regMP1_SMN_C2PMSG_66_BASE_IDX,
-		.logical_inst = 0,
-		.offset_hwip = regMP1_SMN_C2PMSG_66,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	}
-};
-
 static int mi300_smu_wait_for_response(struct amdgv_adapter *adapt, uint32_t *val,
 				       enum amdgv_wait_for_types wait_type)
 {
@@ -242,16 +214,13 @@ static int mi300_smu_wait_for_response(struct amdgv_adapter *adapt, uint32_t *va
 	uint32_t tmp;
 
 	ret = amdgv_wait_for_smu_msg_resp(adapt, SOC15_REG_OFFSET_NAME(MP1, 0, regMP1_SMN_C2PMSG_90),
-				          MP1_SMN_C2PMSG_90__CONTENT_MASK, 0,
-				          AMDGV_TIMEOUT(TIMEOUT_SMU_REG), AMDGV_WAIT_CHECK_NE,
-				          wait_type, mi300_smu_mb_context_regs, MI300_SMU_MB_CONTEXT_REGS_NUM);
+					  MP1_SMN_C2PMSG_90__CONTENT_MASK, 0,
+					  AMDGV_TIMEOUT(TIMEOUT_SMU_REG), AMDGV_WAIT_CHECK_NE,
+					  wait_type);
 
 	tmp = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90));
 	if (val)
 		*val = tmp;
-
-	/* Add the message to diagnosis data trace log */
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_READ_RESP, ret, regMP1_SMN_C2PMSG_90, tmp);
 
 	/* timeout means wrong logic */
 	if (ret)
@@ -264,24 +233,24 @@ static void mi300_smu_send_msg_nocheck(struct amdgv_adapter *adapt, uint32_t msg
 				       uint32_t param)
 {
 	WREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90), 0);
-
-	/* Set param, and add parameters start/end to the diagnosis data */
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_ARG_START, 0, regMP1_SMN_C2PMSG_82,
-				 param);
 	WREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82), param);
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_ARG_END, 0, regMP1_SMN_C2PMSG_82,
-		RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82)));
-
-	/* Set msg, and add parameters start/end to the diagnosis data */
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_MSG_START, 0, regMP1_SMN_C2PMSG_66, msg);
 	WREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_66), msg);
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_MSG_END, 0, regMP1_SMN_C2PMSG_66,
-		RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_66)));
+
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_WRITE,
+		      AMDGV_LOG_DATA_32_32(msg, param));
 }
 
 uint32_t mi300_smu_read_arg(struct amdgv_adapter *adapt)
 {
 	return (uint32_t)RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82));
+}
+
+static void mi300_smu_put_timeout(struct amdgv_adapter *adapt, uint64_t elapsed)
+{
+	amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_TIMEOUT, elapsed,
+			  RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_66)),
+			  RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90)),
+			  RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82)));
 }
 
 static int mi300_smu_msg_allowed_in_sync_flood(struct amdgv_adapter *adapt, uint32_t msg)
@@ -305,6 +274,20 @@ static int mi300_smu_msg_allowed_in_sync_flood(struct amdgv_adapter *adapt, uint
 	return ret;
 }
 
+#define MI300_SMU_INTR_READY_TIMEOUT_US (200 * 1000)
+
+static int mi300_smu_wait_pmfw_intr_ready(struct amdgv_adapter *adapt)
+{
+	/* MP1_FIRMWARE_FLAGS bits 31:1 are reserved (0), so the only valid ready
+	 * value is exactly INTERRUPTS_ENABLED */
+	return amdgv_wait_for_register_pcie_ext(adapt,
+			SOC15_REG_OFFSET_SMN(MP1, 0, regMP1_FIRMWARE_FLAGS, MP1_Public),
+			"MP1_FIRMWARE_FLAGS",
+			0xffffffff,
+			MP1_FIRMWARE_FLAGS__INTERRUPTS_ENABLED_MASK,
+			MI300_SMU_INTR_READY_TIMEOUT_US, AMDGV_WAIT_CHECK_EQ, 0);
+}
+
 static int mi300_smu_send_msg_with_param_ex(struct amdgv_adapter *adapt, uint32_t msg, uint32_t param,
 					uint32_t *arg, bool suppress_err_print)
 {
@@ -313,7 +296,7 @@ static int mi300_smu_send_msg_with_param_ex(struct amdgv_adapter *adapt, uint32_
 	int ret = 0;
 
 	if (oss_atomic_read(adapt->in_sync_flood) && !mi300_smu_msg_allowed_in_sync_flood(adapt, msg)) {
-		AMDGV_ERROR("Skip msg:0x%x due to fatal error interrupt\n", msg);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_MSG_SKIPPED_SYNC_FLOOD, (uint64_t)msg);
 		return AMDGV_FAILURE;
 	}
 
@@ -330,6 +313,9 @@ static int mi300_smu_send_msg_with_param_ex(struct amdgv_adapter *adapt, uint32_
 			ret = AMDGV_FAILURE;
 			goto end;
 		}
+
+		/* best-effort: on wait timeout; send message anyway */
+		(void)mi300_smu_wait_pmfw_intr_ready(adapt);
 	}
 
 	mi300_smu_send_msg_nocheck(adapt, msg, param);
@@ -357,9 +343,8 @@ static int mi300_smu_send_msg_with_param_ex(struct amdgv_adapter *adapt, uint32_
 
 	if (resp != PPSMC_Result_OK) {
 		if (!suppress_err_print)
-			AMDGV_REG_DUMP(ERROR, "SMU responded with failure. SMU Mailbox contents:",
-					mi300_smu_mb_context_regs,
-					MI300_SMU_MB_CONTEXT_REGS_NUM);
+			amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_FAIL, msg, resp,
+					  mi300_smu_read_arg(adapt));
 		ret = AMDGV_FAILURE;
 		goto end;
 	}
@@ -367,9 +352,8 @@ static int mi300_smu_send_msg_with_param_ex(struct amdgv_adapter *adapt, uint32_
 	if (arg)
 		*arg = mi300_smu_read_arg(adapt);
 
-	AMDGV_REG_DUMP(DEBUG, "SMU responded with success. SMU Mailbox contents:",
-			mi300_smu_mb_context_regs,
-			MI300_SMU_MB_CONTEXT_REGS_NUM);
+	amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_RECV, msg, resp,
+			  mi300_smu_read_arg(adapt));
 end:
 	oss_mutex_unlock(adapt->pp.smu_lock);
 
@@ -521,10 +505,8 @@ int mi300_gpu_mode1_reset(struct amdgv_adapter *adapt, bool is_unload)
 	 */
 	if ((!is_unload) || (hive == NULL) || ((hive != NULL) && (hive->number_adapters == 0))) {
 		/* allow time for all blocks to complete RESET */
-		if (mi300_psp_wait_for_bootloader_steady(adapt) != PSP_STATUS__SUCCESS) {
-			AMDGV_ERROR("mode1_reset timed out\n");
+		if (mi300_psp_wait_for_bootloader_steady(adapt) != PSP_STATUS__SUCCESS)
 			return AMDGV_FAILURE;
-		}
 	}
 
 	oss_atomic_set(adapt->in_sync_flood, 0);
@@ -542,9 +524,9 @@ int mi300_wait_gpu_reset_completion(struct amdgv_adapter *adapt)
 		return ret;
 
 	if (resp != PPSMC_Result_OK) {
-		AMDGV_REG_DUMP(ERROR, "SMU responded with failure. SMU Mailbox contents:",
-			       mi300_smu_mb_context_regs,
-			       MI300_SMU_MB_CONTEXT_REGS_NUM);
+		amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_FAIL,
+				  RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_66)), resp,
+				  RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82)));
 		return AMDGV_FAILURE;
 	}
 
@@ -714,9 +696,6 @@ static int mi300_smu_select_policy_soc_pstate(struct amdgv_adapter *adapt,
 
 	ret = mi300_smu_send_msg_with_param(adapt, PPSMC_MSG_SelectPstatePolicy,
 					      param, NULL);
-
-	if (ret)
-		AMDGV_ERROR("Select soc pstate policy %d failed!\n", policy);
 
 	return ret;
 }
@@ -954,7 +933,7 @@ static void mi300_smu_restore_pm_policy(struct amdgv_adapter *adapt,
 		return;
 	ret = mi300_smu_set_pm_policy(adapt, policy, policy->current_level);
 	if (ret && (ret != AMDGV_NOT_SUPPORTED))
-		AMDGV_ERROR("Failed to restore PM Policy");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_RESTORE_PM_POLICY_FAIL, 0);
 
 	return;
 }
@@ -1049,7 +1028,6 @@ static int mi300_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv_
 						adapt, i, AMDGV_EVENT_SCHED_FORCE_RESET_VF, AMDGV_SCHED_BLOCK_ALL, data);
 
 				if (ret) {
-					AMDGV_ERROR("Failed to trigger VFFLR for VF %d\n", i);
 					ret = AMDGV_FAILURE;
 					break;
 				}
@@ -1113,7 +1091,7 @@ static int mi300_smu_sw_init(struct amdgv_adapter *adapt)
 
 	smu = oss_zalloc(sizeof(struct smu_context));
 	if (!smu) {
-		AMDGV_ERROR("Failed to alloc memory for smu context\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL, (uint64_t)sizeof(struct smu_context));
 		return AMDGV_FAILURE;
 	}
 
@@ -1126,14 +1104,14 @@ static int mi300_smu_sw_init(struct amdgv_adapter *adapt)
 	adapt->pp.metrics[AMDGV_PP_METRIC__GPU] =
 		oss_zalloc(sizeof(struct mi300_pp_drv_metrics_ext));
 	if (!adapt->pp.metrics[AMDGV_PP_METRIC__GPU]) {
-		AMDGV_ERROR("Failed to alloc memory for drv_metrics_ext\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL, (uint64_t)sizeof(struct mi300_pp_drv_metrics_ext));
 		return AMDGV_FAILURE;
 	}
 
 	adapt->pp.metrics[AMDGV_PP_METRIC__GPU_STATIC] =
 		oss_zalloc(sizeof(struct mi300_pp_drv_metrics_ext));
 	if (!adapt->pp.metrics[AMDGV_PP_METRIC__GPU_STATIC]) {
-		AMDGV_ERROR("Failed to alloc memory for drv_static_metrics_ext\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL, (uint64_t)sizeof(struct mi300_pp_drv_metrics_ext));
 		return AMDGV_FAILURE;
 	}
 
@@ -1447,7 +1425,6 @@ static int mi300_smu_init_supported_caps(struct amdgv_adapter *adapt)
 	/* Get the metrics table version */
 	ret = mi300_smu_send_msg(adapt, PPSMC_MSG_GetMetricsVersion, &version);
 	if (ret) {
-		AMDGV_ERROR("failed to get metrics table version\n");
 		return ret;
 	}
 
@@ -1622,8 +1599,7 @@ static int mi300_smu_check_version(struct amdgv_adapter *adapt)
 	if (ret)
 		return ret;
 
-	AMDGV_INFO("SMU PMFW version:%08x, PMFW IF version:%08x, Driver IF version:%08x\n",
-		   smu_version, driver_if_version, DRIVER_IF_MI300_VERSION);
+	amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_VERSION, (uint64_t)smu_version, (uint64_t)driver_if_version, (uint64_t)DRIVER_IF_MI300_VERSION);
 
 	return 0;
 }
@@ -1853,8 +1829,7 @@ static int mi300_pp_smu_add_drv_metrics_ext_entry(struct amdgv_adapter *adapt,
 	uint32_t entry_idx = drv_metrics_ext->num_metric;
 
 	if (entry_idx >= AMDGV_GPUMON_MAX_NUM_METRICS_EXT) {
-		AMDGV_ERROR("Entry %d dropped. Chiplet Metrics table V1 cannot support more than %d entries\n",
-			entry_idx, AMDGV_GPUMON_MAX_NUM_METRICS_EXT);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_METRICS_TABLE_FULL, AMDGV_LOG_DATA_32_32(entry_idx, AMDGV_GPUMON_MAX_NUM_METRICS_EXT));
 		return AMDGV_FAILURE;
 	}
 
@@ -2236,7 +2211,6 @@ static int mi300_smu_hw_live_init(struct amdgv_adapter *adapt)
 
 	ret = mi300_smu_init_supported_caps(adapt);
 	if (ret) {
-		AMDGV_ERROR("Failed to reinitialize SMU caps during live update\n");
 		return ret;
 	}
 
@@ -2729,8 +2703,6 @@ int mi300_smu_trigger_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 						PPSMC_MSG_TriggerVFFLR,
 						(1 << idx_vf),
 						NULL);
-	if (ret)
-		AMDGV_ERROR("Trigger VF FLR failed\n");
 
 	return ret;
 }
@@ -2741,8 +2713,6 @@ int mi300_smu_trigger_mode_3_reset(struct amdgv_adapter *adapt, uint32_t xcc_mas
 						PPSMC_MSG_GfxDriverReset,
 						((xcc_mask << 8) | PPSMC_RESET_TYPE_DRIVER_MODE_3_RESET),
 						NULL);
-	if (ret)
-		AMDGV_ERROR("Trigger mode 3 reset failed\n");
 
 	return ret;
 }
@@ -2751,9 +2721,6 @@ int mi300_smu_gfx_flr_recovery(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
 	int ret = mi300_smu_send_msg_with_param(adapt,
 			PPSMC_MSG_GfxDriverResetRecovery, (1 << idx_vf), NULL);
-
-	if (ret)
-		AMDGV_ERROR("PMFW reset recovery failed\n");
 
 	return ret;
 }
@@ -2766,9 +2733,6 @@ int mi300_smu_gfx_mode_3_recovery(struct amdgv_adapter *adapt, uint32_t xcc_mask
 			PPSMC_MSG_GfxDriverResetRecovery,
 			MI300_SMU_XCC_MASK_ARG | xcc_mask,
 			NULL);
-
-	if (ret)
-		AMDGV_ERROR("PMFW reset recovery failed\n");
 
 	return ret;
 }
@@ -2917,7 +2881,6 @@ static int mi300_smu_i2c_eeprom_read_data(struct amdgv_adapter *adapt, uint8_t a
 	}
 
 	if (ret) {
-		AMDGV_WARN("i2c_eeprom_read_data - error occurred :%x\n", ret);
 		return ret;
 	}
 
@@ -2952,7 +2915,6 @@ static int mi300_smu_i2c_eeprom_write_data(struct amdgv_adapter *adapt, uint8_t 
 	}
 
 	if (ret) {
-		AMDGV_WARN("i2c_write- error occurred :%x\n", ret);
 		return ret;
 	}
 
@@ -3170,6 +3132,7 @@ static const struct amdgv_pp_funcs mi300_amdgv_pp_funcs = {
 	.get_num_static_metrics_ext_entries = mi300_pp_smu_get_num_static_metrics_ext_entries,
 	.init_drv_metrics_ext = mi300_pp_smu_init_drv_metrics_ext,
 	.get_smu_cap_supported = mi300_smu_cap_supported,
+	.put_timeout = mi300_smu_put_timeout,
 };
 
 static int mi300_powerplay_sw_init(struct amdgv_adapter *adapt)

@@ -277,6 +277,86 @@ static struct amdgv_sched_spatial_part mi308_block_configs
 		},
 	};
 
+static struct amdgv_sched_spatial_part mi350p_block_configs
+	[SPATIAL_PARTITION_MODE__NUM_MODES][AMDGV_SCHED_SPATIAL_PARTITION_MAX] = {
+		[SPATIAL_PARTITION_MODE__SPX] = {
+			[AMDGV_SCHED_SPATIAL_PARTITION_0] = {
+				.idx_vf_mask = BIT(0) | BIT(AMDGV_PF_IDX),
+				.hw_sched_mask =
+					(BIT(MI300_HW_SCHED_BLOCK_GFX_SCH0_RLCV) |
+					 BIT(MI300_HW_SCHED_BLOCK_GFX_SCH1_RLCV) |
+					 BIT(MI300_HW_SCHED_BLOCK_GFX_SCH2_RLCV) |
+					 BIT(MI300_HW_SCHED_BLOCK_GFX_SCH3_RLCV) |
+					 BIT(MI300_HW_SCHED_BLOCK_VCN_SCH0_MMSCH) |
+					 BIT(MI300_HW_SCHED_BLOCK_JPEG_SCH0_MMSCH) |
+					 BIT(MI300_HW_SCHED_BLOCK_JPEG1_SCH0_MMSCH) |
+					 BIT(MI300_HW_SCHED_BLOCK_VCN_SCH1_MMSCH) |
+					 BIT(MI300_HW_SCHED_BLOCK_JPEG_SCH1_MMSCH) |
+					 BIT(MI300_HW_SCHED_BLOCK_JPEG1_SCH1_MMSCH)),
+			},
+		},
+		[SPATIAL_PARTITION_MODE__DPX] = {
+			[AMDGV_SCHED_SPATIAL_PARTITION_0] = {
+				.idx_vf_mask = BIT(0) | BIT(AMDGV_PF_IDX),
+				.hw_sched_mask =
+					(BIT(MI300_HW_SCHED_BLOCK_GFX_SCH0_RLCV) |
+					 BIT(MI300_HW_SCHED_BLOCK_GFX_SCH1_RLCV) |
+					 BIT(MI300_HW_SCHED_BLOCK_VCN_SCH0_MMSCH) |
+					 BIT(MI300_HW_SCHED_BLOCK_JPEG_SCH0_MMSCH) |
+					 BIT(MI300_HW_SCHED_BLOCK_JPEG1_SCH0_MMSCH)),
+			},
+			[AMDGV_SCHED_SPATIAL_PARTITION_1] = {
+				.idx_vf_mask = BIT(1) | BIT(AMDGV_PF_IDX),
+				.hw_sched_mask =
+					(BIT(MI300_HW_SCHED_BLOCK_GFX_SCH2_RLCV) |
+					 BIT(MI300_HW_SCHED_BLOCK_GFX_SCH3_RLCV) |
+					 BIT(MI300_HW_SCHED_BLOCK_VCN_SCH1_MMSCH) |
+					 BIT(MI300_HW_SCHED_BLOCK_JPEG_SCH1_MMSCH) |
+					 BIT(MI300_HW_SCHED_BLOCK_JPEG1_SCH1_MMSCH)),
+			},
+		},
+		[SPATIAL_PARTITION_MODE__TPX] = {
+			[AMDGV_SCHED_SPATIAL_PARTITION_0] = {0},
+		},
+		[SPATIAL_PARTITION_MODE__QPX] = {
+			[AMDGV_SCHED_SPATIAL_PARTITION_0] = {0},
+		},
+		[SPATIAL_PARTITION_MODE__CPX] = {
+			[AMDGV_SCHED_SPATIAL_PARTITION_0] = {
+				.idx_vf_mask = BIT(0) | BIT(AMDGV_PF_IDX),
+				.hw_sched_mask =
+					(BIT(MI300_HW_SCHED_BLOCK_GFX_SCH0_RLCV) |
+					 BIT(MI300_HW_SCHED_BLOCK_VCN_SCH0_MMSCH) |
+					 BIT(MI300_HW_SCHED_BLOCK_JPEG_SCH0_MMSCH) |
+					 BIT(MI300_HW_SCHED_BLOCK_JPEG1_SCH0_MMSCH)),
+			},
+			[AMDGV_SCHED_SPATIAL_PARTITION_1] = {
+				.idx_vf_mask = BIT(1) | BIT(AMDGV_PF_IDX),
+				.hw_sched_mask =
+					(BIT(MI300_HW_SCHED_BLOCK_GFX_SCH1_RLCV) |
+					 BIT(MI300_HW_SCHED_BLOCK_VCN_SCH0_MMSCH) |
+					 BIT(MI300_HW_SCHED_BLOCK_JPEG_SCH0_MMSCH) |
+					 BIT(MI300_HW_SCHED_BLOCK_JPEG1_SCH0_MMSCH)),
+			},
+			[AMDGV_SCHED_SPATIAL_PARTITION_2] = {
+				.idx_vf_mask = BIT(2) | BIT(AMDGV_PF_IDX),
+				.hw_sched_mask =
+					(BIT(MI300_HW_SCHED_BLOCK_GFX_SCH2_RLCV) |
+					 BIT(MI300_HW_SCHED_BLOCK_VCN_SCH1_MMSCH) |
+					 BIT(MI300_HW_SCHED_BLOCK_JPEG_SCH1_MMSCH) |
+					 BIT(MI300_HW_SCHED_BLOCK_JPEG1_SCH1_MMSCH)),
+			},
+			[AMDGV_SCHED_SPATIAL_PARTITION_3] = {
+				.idx_vf_mask = BIT(3) | BIT(AMDGV_PF_IDX),
+				.hw_sched_mask =
+					(BIT(MI300_HW_SCHED_BLOCK_GFX_SCH3_RLCV) |
+					 BIT(MI300_HW_SCHED_BLOCK_VCN_SCH1_MMSCH) |
+					 BIT(MI300_HW_SCHED_BLOCK_JPEG_SCH1_MMSCH) |
+					 BIT(MI300_HW_SCHED_BLOCK_JPEG1_SCH1_MMSCH)),
+			},
+		},
+	};
+
 
 static void mi300_sched_dump_gpu_state(struct amdgv_adapter *adapt)
 {
@@ -303,8 +383,22 @@ static int mi300_sched_copy_static_spatial_part_table(struct amdgv_adapter *adap
 {
 	int r;
 	enum spatial_partition_mode mode;
-	uint32_t gfx_partition_count, i;
+	uint32_t gfx_partition_count, i, vcn_inst;
 	static struct amdgv_sched_spatial_part *table;
+	static const uint32_t vcn_sched_masks[] = {
+		BIT(MI300_HW_SCHED_BLOCK_VCN_SCH0_MMSCH) |
+		BIT(MI300_HW_SCHED_BLOCK_JPEG_SCH0_MMSCH) |
+		BIT(MI300_HW_SCHED_BLOCK_JPEG1_SCH0_MMSCH),
+		BIT(MI300_HW_SCHED_BLOCK_VCN_SCH1_MMSCH) |
+		BIT(MI300_HW_SCHED_BLOCK_JPEG_SCH1_MMSCH) |
+		BIT(MI300_HW_SCHED_BLOCK_JPEG1_SCH1_MMSCH),
+		BIT(MI300_HW_SCHED_BLOCK_VCN_SCH2_MMSCH) |
+		BIT(MI300_HW_SCHED_BLOCK_JPEG_SCH2_MMSCH) |
+		BIT(MI300_HW_SCHED_BLOCK_JPEG1_SCH2_MMSCH),
+		BIT(MI300_HW_SCHED_BLOCK_VCN_SCH3_MMSCH) |
+		BIT(MI300_HW_SCHED_BLOCK_JPEG_SCH3_MMSCH) |
+		BIT(MI300_HW_SCHED_BLOCK_JPEG1_SCH3_MMSCH),
+	};
 
 	oss_memset(adapt->sched.spatial_part, 0, sizeof(struct amdgv_sched_spatial_part));
 
@@ -334,6 +428,9 @@ static int mi300_sched_copy_static_spatial_part_table(struct amdgv_adapter *adap
 	case (0x74a8):
 		table = mi308_block_configs[mode];
 		break;
+	case (0x75A8):
+		table = mi350p_block_configs[mode];
+		break;
 	default:
 		AMDGV_ERROR("Invalid or unsupported device ID!\n");
 		return AMDGV_FAILURE;
@@ -341,6 +438,12 @@ static int mi300_sched_copy_static_spatial_part_table(struct amdgv_adapter *adap
 
 	for (i = 0; i < adapt->sched.num_spatial_partitions; i++) {
 		adapt->sched.spatial_part[i].hw_sched_mask = table[i].hw_sched_mask;
+		for (vcn_inst = 0; vcn_inst < ARRAY_SIZE(vcn_sched_masks);
+		     vcn_inst++) {
+			if (!(adapt->vcn.active_mask & BIT(vcn_inst)))
+				adapt->sched.spatial_part[i].hw_sched_mask &=
+					~vcn_sched_masks[vcn_inst];
+		}
 		/* Remove all invalid VF bits */
 		adapt->sched.spatial_part[i].idx_vf_mask =
 			((table[i].idx_vf_mask & ((1 << num_vf) - 1)) | (1 << AMDGV_PF_IDX));

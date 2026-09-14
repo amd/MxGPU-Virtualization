@@ -20,25 +20,60 @@ enum SortOrder { SORT_PHY_ID, SORT_BDF };
 enum ProcessType { name, pid };
 using process_value = std::string;
 
+struct FabricPpodSetArgs {
+	bool accelerator_id_set {false};
+	uint32_t accelerator_id {0};
+	bool ppod_id_set {false};
+	std::string ppod_id;
+	bool ppod_size_set {false};
+	uint32_t ppod_size {0};
+	bool local_accelerators_set {false};
+	std::vector<uint32_t> local_accelerators;
+	bool bandwidth_set {false};
+	uint32_t bandwidth {0};
+	bool latency_set {false};
+	uint32_t latency {0};
+};
+
+struct FabricVpodSetArgs {
+	bool vpod_id_set {false};
+	uint32_t vpod_id {0};
+	bool vpod_size_set {false};
+	uint32_t vpod_size {0};
+	bool vpod_active_accelerators_set {false};
+	std::vector<uint32_t> vpod_active_accelerators;
+	bool addr_mode_set {false};
+	std::string addr_mode;
+};
+
+struct FabricStationSetArgs {
+	bool station_flags_set {false};
+	uint32_t station_flags {0};
+	bool num_stations_set {false};
+	uint32_t num_stations {0};
+	bool lane_en_bitmap_set {false};
+	std::string lane_en_bitmap;
+};
+
 class Arguments
 {
 public:
-	OutputFormat output{ human };
-	bool is_file{ false };
-	bool is_vf{ false };
+	OutputFormat output {human};
+	bool is_file {false};
+	bool is_vf {false};
 	std::string vf_id;
 	std::string file_path;
 	std::string command;
 	std::vector<std::string> options;
-	std::vector<std::shared_ptr<Device> > devices;
-	std::vector<std::shared_ptr<Device> > nic_devices;
-	bool all_arguments{ false };
-	bool is_extended{ false };
-	int watch{ -1 };
-	int watch_time{ -1 };
-	int iterations{ -1 };
+	std::vector<std::shared_ptr<Device>> devices;
+	std::vector<std::shared_ptr<Device>> nic_devices;
+	bool all_arguments {false};
+	bool is_extended {false};
+	int watch {-1};
+	int watch_time {-1};
+	int iterations {-1};
 	std::string process;
-	std::map<process_value, ProcessType> process_map{};
+	std::map<process_value, ProcessType> process_map {};
 	std::string xgmi_mode;
 	std::string process_isolation_set;
 	std::string fb_sharing_mode;
@@ -55,18 +90,21 @@ public:
 	std::string cper_file_path;
 	std::string plpd_set;
 	std::string num_vf;
-	bool ptl_supported{ false };
+	bool ptl_supported {false};
 	std::string ptl_status_set;
 	std::string ptl_format_set;
-	DevicesType devices_type{ ALL_TYPE };
-	std::map<DevicesType, std::vector<std::string>> device_format{};
-	SortOrder sort_order{ SORT_PHY_ID };
-	bool sort_explicit{ false };
+	FabricPpodSetArgs fabric_ppod_set;
+	FabricVpodSetArgs fabric_vpod_set;
+	FabricStationSetArgs fabric_station_set;
+	DevicesType devices_type {ALL_TYPE};
+	std::map<DevicesType, std::vector<std::string>> device_format {};
+	SortOrder sort_order {SORT_PHY_ID};
+	bool sort_explicit {false};
 	Arguments() {};
 };
 
 struct deviceType {
-	deviceType(std::string const &val) : value(val)
+	deviceType(std::string const& val) : value(val)
 	{
 	}
 	std::string value;
@@ -75,244 +113,270 @@ struct deviceType {
 class AmdSmiParser
 {
 private:
-	unsigned int gpu_count = 0;
-	unsigned int nic_count = 0;
-	unsigned int brcm_nic_count = 0;
-	std::vector<std::string> SUPPORTED_COMMANDS = { "help",	     "list",	"static",
-		"discovery", "ucode",	"firmware",
-		"bad-pages", "metric",	"process",
-		"profile",   "version", "event", "topology", "xgmi", "reset", "set", "monitor", "partition",
-		"ras", "set", "node", "confidential-compute", "fabric"
-	};
+	unsigned int gpu_count			    = 0;
+	unsigned int nic_count			    = 0;
+	unsigned int brcm_nic_count		    = 0;
+	std::vector<std::string> SUPPORTED_COMMANDS = {"help",	    "list",
+						       "static",    "discovery",
+						       "ucode",	    "firmware",
+						       "bad-pages", "metric",
+						       "process",   "profile",
+						       "version",   "event",
+						       "topology",  "xgmi",
+						       "reset",	    "set",
+						       "monitor",   "partition",
+						       "ras",	    "set",
+						       "node",	    "confidential-compute",
+						       "fabric"};
 
-	std::vector<std::string> COMMANDS_REQUIRING_OPTIONS = { "reset", "set" };
+	std::vector<std::string> COMMANDS_REQUIRING_OPTIONS = {"reset", "set"};
 
-	std::vector<std::string> FW_SUPPORTED_ARGS_GPU = {
-		"--ucode-list", "--fw-list", "-f", "--error-records", "-e"
-	};
+	std::vector<std::string> FW_SUPPORTED_ARGS_GPU = {"--ucode-list", "--fw-list", "-f",
+							  "--error-records", "-e"};
 
-	std::map<std::string, std::vector<std::string> > FW_SUPPORTED_ARGUMENTS = {
-		{ "--gpu", FW_SUPPORTED_ARGS_GPU },
-		{ "-g", FW_SUPPORTED_ARGS_GPU },
-		{ "--vf", { "--ucode-list", "--fw-list", "-f" } },
-		{ "--nic", {} },
-		{ "-n", {} }
-	};
+	std::map<std::string, std::vector<std::string>> FW_SUPPORTED_ARGUMENTS = {
+	    {"--gpu", FW_SUPPORTED_ARGS_GPU},
+	    {"-g", FW_SUPPORTED_ARGS_GPU},
+	    {"--vf", {"--ucode-list", "--fw-list", "-f"}},
+	    {"--nic", {}},
+	    {"-n", {}}};
 
-	std::map<std::string, std::vector<std::string> > BAD_PAGES_SUPPORTED_ARGUMENTS = {
-		{ "--gpu", {} },
-		{ "-g", {} }
-	};
+	std::map<std::string, std::vector<std::string>> BAD_PAGES_SUPPORTED_ARGUMENTS = {
+	    {"--gpu", {}}, {"-g", {}}};
 
-	std::map<std::string, std::vector<std::string> > LIST_SUPPORTED_ARGUMENTS = {
-		{ "--gpu", {} },
-		{ "-g", {} },
-		{ "--nic", {} },
-		{ "-n", {} }
-	};
+	std::map<std::string, std::vector<std::string>> LIST_SUPPORTED_ARGUMENTS = {
+	    {"--gpu", {}}, {"-g", {}}, {"--nic", {}}, {"-n", {}}};
 
-	std::vector<std::string> STATIC_SUPPORTED_ARGS_GPU = {
-		"--asic", "-a", "--bus", "-b", "--vbios", "-V", "--board", "-B",
-		"--limit", "-l", "--driver", "-d",
-		"--ras", "-r", "--dfc-ucode", "-D", "--fb-info", "-f", "--num-vf", "-nv",
-		"--vram", "-v", "--cache", "-c", "--partition", "-p", "--process-isolation", "-R",
-		"--soc-pstate", "-ps", "--virtualization-mode", "-m", "--numa", "-u",
-		"--xgmi-plpd", "-pd", "--ifwi", "-I"
-	};
+	std::vector<std::string> STATIC_SUPPORTED_ARGS_GPU = {"--asic",
+							      "-a",
+							      "--bus",
+							      "-b",
+							      "--vbios",
+							      "-V",
+							      "--board",
+							      "-B",
+							      "--limit",
+							      "-l",
+							      "--driver",
+							      "-d",
+							      "--ras",
+							      "-r",
+							      "--dfc-ucode",
+							      "-D",
+							      "--fb-info",
+							      "-f",
+							      "--num-vf",
+							      "-nv",
+							      "--vram",
+							      "-v",
+							      "--cache",
+							      "-c",
+							      "--partition",
+							      "-p",
+							      "--process-isolation",
+							      "-R",
+							      "--soc-pstate",
+							      "-ps",
+							      "--virtualization-mode",
+							      "-m",
+							      "--numa",
+							      "-u",
+							      "--xgmi-plpd",
+							      "-pd",
+							      "--ifwi",
+							      "-I"};
 
 	std::vector<std::string> STATIC_SUPPORTED_ARGS_NIC = {
-		"--asic", "-a", "--bus", "-b", "--driver", "-d", "--numa", "-u", "--port", "-po", "--rdma-devices", "-rd"
-	};
+	    "--asic", "-a", "--bus",  "-b",  "--driver",       "-d",
+	    "--numa", "-u", "--port", "-po", "--rdma-devices", "-rd"};
 
-	std::vector<std::string> METRIC_SUPPORTED_ARGS_GPU = {
-		"--usage", "-u", "--power", "-p", "--clock", "-c", "--temperature",
-		"-t", "--ecc", "-e", "--ecc-block", "-k", "--pcie", "-P", "--fb-usage", "--energy", "-E",
-		"--gpuboard", "-G", "--throttle", "-th"
-	};
+	std::vector<std::string> METRIC_SUPPORTED_ARGS_GPU = {"--usage",
+							      "-u",
+							      "--power",
+							      "-p",
+							      "--clock",
+							      "-c",
+							      "--temperature",
+							      "-t",
+							      "--ecc",
+							      "-e",
+							      "--ecc-block",
+							      "-k",
+							      "--pcie",
+							      "-P",
+							      "--fb-usage",
+							      "--energy",
+							      "-E",
+							      "--gpuboard",
+							      "-G",
+							      "--throttle",
+							      "-th"};
 
 	std::vector<std::string> METRIC_SUPPORTED_ARGS_VF = {
-		"--schedule", "-s", "--guard", "-G", "--guest-data", "-u",
-		"--per-partition", "-pp"
-	};
+	    "--schedule", "-s", "--guard", "-G", "--guest-data", "-u", "--per-partition", "-pp"};
 
 	std::vector<std::string> METRIC_SUPPORTED_ARGS_NIC = {
-		"--port", "-po", "--rdma-devices", "-rd", "--extended", "-ex"
-	};
+	    "--port", "-po", "--rdma-devices", "-rd", "--extended", "-ex"};
 
-	std::vector<std::string> WATCH_SUPPORTED_ARGS = {
-		"--watch_time", "-W", "--iterations", "-i"
-	};
+	std::vector<std::string> WATCH_SUPPORTED_ARGS = {"--watch_time", "-W", "--iterations",
+							 "-i"};
 
 	std::vector<std::string> TOPOLOGY_SUPPORTED_ARGS_GPU = {
-		"--weight", "--hops", "--fb-sharing", "--link-type",
-		"--coherent", "--atomics", "--dma", "--bi-dir"
-	};
+	    "--weight",	  "--hops",    "--fb-sharing", "--link-type",
+	    "--coherent", "--atomics", "--dma",	       "--bi-dir"};
 
-	std::vector<std::string> TOPOLOGY_SUPPORTED_ARGS_NIC = {
-		"--link-type", "--numa"
-	};
+	std::vector<std::string> TOPOLOGY_SUPPORTED_ARGS_NIC = {"--link-type", "--numa"};
 
-	std::vector<std::string> PROCESS_SUPPORTED_ARGS_GPU = {
-		"--general", "--engine"
-	};
+	std::vector<std::string> PROCESS_SUPPORTED_ARGS_GPU = {"--general", "--engine"};
 
-	std::vector<std::string> RESET_SUPPORTED_ARGS_GPU = {
-		"--clean-local-data", "-l", "--gpureset", "-G"
-	};
+	std::vector<std::string> RESET_SUPPORTED_ARGS_GPU = {"--clean-local-data", "-l",
+							     "--gpureset", "-G"};
 
-	std::vector<std::string> RESET_SUPPORTED_ARGS_VF = {
-		"--vf-fb"
-	};
+	std::vector<std::string> RESET_SUPPORTED_ARGS_VF = {"--vf-fb"};
 
-	std::vector<std::string> SET_SUPPORTED_ARGS_GPU = {
-		"--xgmi", "--fb-sharing-mode", "--group", "--memory-partition", "--accelerator-partition",
-		"process-isolation", "-R", "--soc-pstate", "-ps", "--power-cap", "-pc",
-		"--xgmi-plpd", "-pd", "--num-vf", "--ptl-status", "--ptl-format", "--cc-mode"
-	};
+	std::vector<std::string> SET_SUPPORTED_ARGS_GPU = {"--xgmi",
+							   "--fb-sharing-mode",
+							   "--group",
+							   "--memory-partition",
+							   "--accelerator-partition",
+							   "process-isolation",
+							   "-R",
+							   "--soc-pstate",
+							   "-ps",
+							   "--power-cap",
+							   "-pc",
+							   "--xgmi-plpd",
+							   "-pd",
+							   "--num-vf",
+							   "--ptl-status",
+							   "--ptl-format",
+							   "--cc-mode",
+							   "--fabric-ppod",
+							   "--fabric-vpod",
+							   "--fabric-station"};
+
+	std::vector<std::string> FABRIC_PPOD_SET_SUPPORTED_ARGS = {
+	    "--accelerator-id",	    "--ppod-id",   "--ppod-size",
+	    "--local-accelerators", "--bandwidth", "--latency"};
+
+	std::vector<std::string> FABRIC_VPOD_SET_SUPPORTED_ARGS = {
+	    "--vpod-id", "--vpod-size", "--vpod-active-accelerator", "--addr-mode"};
+
+	std::vector<std::string> FABRIC_STATION_SET_SUPPORTED_ARGS = {
+	    "--station-flags", "--num-stations", "--lane-en-bitmap"};
 
 	std::vector<std::string> PARTITION_SUPPORTED_ARGS_GPU = {
-		"--accelerator", "-a", "--memory", "-m", "--current", "-c", "--global", "-gl"
-	};
+	    "--accelerator", "-a", "--memory", "-m", "--current", "-c", "--global", "-gl"};
 
 	std::vector<std::string> NODE_SUPPORTED_ARGS = {
-		"--baseboard", "-b", "--power-management", "-p"
-	};
+	    "--baseboard", "-b", "--power-management", "-p", "--tray", "-t"};
 
-	std::vector<std::string> FABRIC_SUPPORTED_ARGS_GPU = {
-		"--telemetry", "-t", "--topology", "-T"
-	};
+	std::vector<std::string> FABRIC_SUPPORTED_ARGS_GPU = {"--telemetry", "-t", "--topology",
+							      "-T"};
 
-	std::map<std::string, std::vector<std::string> > PARTITION_SUPPORTED_ARGUMENTS = {
-		{ "--gpu", PARTITION_SUPPORTED_ARGS_GPU },
-		{ "-g", PARTITION_SUPPORTED_ARGS_GPU }
-	};
+	std::map<std::string, std::vector<std::string>> PARTITION_SUPPORTED_ARGUMENTS = {
+	    {"--gpu", PARTITION_SUPPORTED_ARGS_GPU}, {"-g", PARTITION_SUPPORTED_ARGS_GPU}};
 
-	std::vector<std::string> STATIC_SUPPORTED_ARGS_VF = {
-		"--fb-info", "-f", "--hbm-info", "-hbm"
-	};
+	std::vector<std::string> STATIC_SUPPORTED_ARGS_VF = {"--fb-info", "-f", "--hbm-info",
+							     "-hbm"};
 
-	std::map<std::string, std::vector<std::string> > STATIC_SUPPORTED_ARGUMENTS = {
-		{ "--gpu", STATIC_SUPPORTED_ARGS_GPU },
-		{ "-g", STATIC_SUPPORTED_ARGS_GPU },
-		{ "--vf", STATIC_SUPPORTED_ARGS_VF },
-		{ "--nic", STATIC_SUPPORTED_ARGS_NIC },
-		{ "-n", STATIC_SUPPORTED_ARGS_NIC }
-	};
+	std::map<std::string, std::vector<std::string>> STATIC_SUPPORTED_ARGUMENTS = {
+	    {"--gpu", STATIC_SUPPORTED_ARGS_GPU},
+	    {"-g", STATIC_SUPPORTED_ARGS_GPU},
+	    {"--vf", STATIC_SUPPORTED_ARGS_VF},
+	    {"--nic", STATIC_SUPPORTED_ARGS_NIC},
+	    {"-n", STATIC_SUPPORTED_ARGS_NIC}};
 
-	std::map<std::string, std::vector<std::string> > METRIC_SUPPORTED_ARGUMENTS = {
-		{ "--gpu", METRIC_SUPPORTED_ARGS_GPU },
-		{ "-g", METRIC_SUPPORTED_ARGS_GPU },
-		{ "--vf", METRIC_SUPPORTED_ARGS_VF },
-		{ "--watch", WATCH_SUPPORTED_ARGS},
-		{ "--w", WATCH_SUPPORTED_ARGS},
-		{ "--nic", METRIC_SUPPORTED_ARGS_NIC },
-		{ "-n", METRIC_SUPPORTED_ARGS_NIC }
-	};
+	std::map<std::string, std::vector<std::string>> METRIC_SUPPORTED_ARGUMENTS = {
+	    {"--gpu", METRIC_SUPPORTED_ARGS_GPU}, {"-g", METRIC_SUPPORTED_ARGS_GPU},
+	    {"--vf", METRIC_SUPPORTED_ARGS_VF},	  {"--watch", WATCH_SUPPORTED_ARGS},
+	    {"--w", WATCH_SUPPORTED_ARGS},	  {"--nic", METRIC_SUPPORTED_ARGS_NIC},
+	    {"-n", METRIC_SUPPORTED_ARGS_NIC}};
 
-	std::map<std::string, std::vector<std::string> > TOPOLOGY_SUPPORTED_ARGUMENTS = {
-		{ "--gpu", TOPOLOGY_SUPPORTED_ARGS_GPU },
-		{ "-g", TOPOLOGY_SUPPORTED_ARGS_GPU },
-		{ "--nic", TOPOLOGY_SUPPORTED_ARGS_NIC },
-		{ "-n", TOPOLOGY_SUPPORTED_ARGS_NIC }
-	};
+	std::map<std::string, std::vector<std::string>> TOPOLOGY_SUPPORTED_ARGUMENTS = {
+	    {"--gpu", TOPOLOGY_SUPPORTED_ARGS_GPU},
+	    {"-g", TOPOLOGY_SUPPORTED_ARGS_GPU},
+	    {"--nic", TOPOLOGY_SUPPORTED_ARGS_NIC},
+	    {"-n", TOPOLOGY_SUPPORTED_ARGS_NIC}};
 
 	std::vector<std::string> XGMI_SUPPORTED_ARGS_GPU = {
-		"--caps", "--fb-sharing", "--set", "--mode", "--metric", "--source-status",
-		"--link-status"
-	};
+	    "--caps",	"--fb-sharing",	   "--set",	   "--mode",
+	    "--metric", "--source-status", "--link-status"};
 
-	std::map<std::string, std::vector<std::string> > XGMI_SUPPORTED_ARGUMENTS = {
-		{ "--gpu", XGMI_SUPPORTED_ARGS_GPU },
+	std::map<std::string, std::vector<std::string>> XGMI_SUPPORTED_ARGUMENTS = {
+	    {"--gpu", XGMI_SUPPORTED_ARGS_GPU},
 	};
-	std::map<std::string, std::vector<std::string> > EVENT_SUPPORTED_ARGUMENTS = {
-		{ "--gpu", {} },
-		{ "-g", {} }
-	};
+	std::map<std::string, std::vector<std::string>> EVENT_SUPPORTED_ARGUMENTS = {{"--gpu", {}},
+										     {"-g", {}}};
 
-	std::map<std::string, std::vector<std::string> > PROCESS_SUPPORTED_ARGUMENTS = {
-		{ "--gpu", {PROCESS_SUPPORTED_ARGS_GPU} },
-		{ "-g", {PROCESS_SUPPORTED_ARGS_GPU} }
-	};
+	std::map<std::string, std::vector<std::string>> PROCESS_SUPPORTED_ARGUMENTS = {
+	    {"--gpu", {PROCESS_SUPPORTED_ARGS_GPU}}, {"-g", {PROCESS_SUPPORTED_ARGS_GPU}}};
 
-	std::map<std::string, std::vector<std::string> > RESET_SUPPORTED_ARGUMENTS = {
-		{ "--gpu", {RESET_SUPPORTED_ARGS_GPU} },
-		{ "-g", {RESET_SUPPORTED_ARGS_GPU} },
-		{ "--vf", { RESET_SUPPORTED_ARGS_VF } }
-	};
+	std::map<std::string, std::vector<std::string>> RESET_SUPPORTED_ARGUMENTS = {
+	    {"--gpu", {RESET_SUPPORTED_ARGS_GPU}},
+	    {"-g", {RESET_SUPPORTED_ARGS_GPU}},
+	    {"--vf", {RESET_SUPPORTED_ARGS_VF}}};
 
-	std::map<std::string, std::vector<std::string> > SET_SUPPORTED_ARGUMENTS = {
-		{ "--gpu", {SET_SUPPORTED_ARGS_GPU} },
-		{ "-g", {SET_SUPPORTED_ARGS_GPU} }
-	};
+	std::map<std::string, std::vector<std::string>> SET_SUPPORTED_ARGUMENTS = {
+	    {"--gpu", {SET_SUPPORTED_ARGS_GPU}},
+	    {"-g", {SET_SUPPORTED_ARGS_GPU}},
+	    {"--fabric-ppod", FABRIC_PPOD_SET_SUPPORTED_ARGS},
+	    {"--fabric-vpod", FABRIC_VPOD_SET_SUPPORTED_ARGS},
+	    {"--fabric-station", FABRIC_STATION_SET_SUPPORTED_ARGS}};
 
 	std::vector<std::string> MONITOR_SUPPORTED_ARGS_GPU = {
-		"-p", "--power-usage", "-t", "--temperature", "-u", "--gfx", "-m", "--mem",
-		"-n", "--encoder", "-d", "--decoder", "-e", "--ecc",
-		"-v", "--vram-usage", "-r", "--pcie", "-q", "--process"
-	};
+	    "-p", "--power-usage", "-t", "--temperature", "-u", "--gfx", "-m", "--mem",
+	    "-n", "--encoder",	   "-d", "--decoder",	  "-e", "--ecc", "-v", "--vram-usage",
+	    "-r", "--pcie",	   "-q", "--process"};
 
-	std::map<std::string, std::vector<std::string> > MONITOR_SUPPORTED_ARGUMENTS = {
-		{ "--gpu", MONITOR_SUPPORTED_ARGS_GPU },
-		{ "-g", MONITOR_SUPPORTED_ARGS_GPU },
-		{ "--watch", WATCH_SUPPORTED_ARGS},
-		{ "--w", WATCH_SUPPORTED_ARGS}
-	};
+	std::map<std::string, std::vector<std::string>> MONITOR_SUPPORTED_ARGUMENTS = {
+	    {"--gpu", MONITOR_SUPPORTED_ARGS_GPU},
+	    {"-g", MONITOR_SUPPORTED_ARGS_GPU},
+	    {"--watch", WATCH_SUPPORTED_ARGS},
+	    {"--w", WATCH_SUPPORTED_ARGS}};
 
-	std::vector<std::string> RAS_SUPPORTED_ARGS_GPU = {
-		"--cper", "--afid", "--policy"
-	};
+	std::vector<std::string> RAS_SUPPORTED_ARGS_GPU = {"--cper", "--afid", "--policy"};
 
-	std::vector<std::string> CPER_SUPPORTED_ARGS_GPU = {
-		"--severity", "--folder", "--file-limit", "--follow"
-	};
+	std::vector<std::string> CPER_SUPPORTED_ARGS_GPU = {"--severity", "--folder",
+							    "--file-limit", "--follow"};
 
-	std::vector<std::string> AFID_SUPPORTED_ARGS_GPU = {
-		"--cper-file"
-	};
+	std::vector<std::string> AFID_SUPPORTED_ARGS_GPU = {"--cper-file"};
 
-	std::map<std::string, std::vector<std::string> > RAS_SUPPORTED_ARGUMENTS = {
-		{ "--gpu", RAS_SUPPORTED_ARGS_GPU },
-		{ "-g", RAS_SUPPORTED_ARGS_GPU },
-		{ "--cper", CPER_SUPPORTED_ARGS_GPU },
-		{ "--afid", AFID_SUPPORTED_ARGS_GPU }
-	};
+	std::map<std::string, std::vector<std::string>> RAS_SUPPORTED_ARGUMENTS = {
+	    {"--gpu", RAS_SUPPORTED_ARGS_GPU},
+	    {"-g", RAS_SUPPORTED_ARGS_GPU},
+	    {"--cper", CPER_SUPPORTED_ARGS_GPU},
+	    {"--afid", AFID_SUPPORTED_ARGS_GPU}};
 
-	std::map<std::string, std::vector<std::string> > FABRIC_SUPPORTED_ARGUMENTS = {
-		{ "--gpu", FABRIC_SUPPORTED_ARGS_GPU },
-		{ "-g", FABRIC_SUPPORTED_ARGS_GPU }
-	};
+	std::map<std::string, std::vector<std::string>> FABRIC_SUPPORTED_ARGUMENTS = {
+	    {"--gpu", FABRIC_SUPPORTED_ARGS_GPU}, {"-g", FABRIC_SUPPORTED_ARGS_GPU}};
 
-	std::map<std::string, std::vector<std::string> > CC_SUPPORTED_ARGUMENTS = {
-		{ "--gpu", {} },
-		{ "-g", {} },
-		{ "--vf", {} }
-	};
+	std::map<std::string, std::vector<std::string>> CC_SUPPORTED_ARGUMENTS = {
+	    {"--gpu", {}}, {"-g", {}}, {"--vf", {}}};
 
-	std::map<std::string, std::map<std::string, std::vector<std::string> > >
-	COMMAND_SUPPORTED_ARGUMENTS = {
-		{ "help", {} },
-		{ "version", {} },
-		{ "list", LIST_SUPPORTED_ARGUMENTS },
-		{ "discovery", LIST_SUPPORTED_ARGUMENTS },
-		{ "static", STATIC_SUPPORTED_ARGUMENTS },
-		{ "ucode", FW_SUPPORTED_ARGUMENTS },
-		{ "firmware", FW_SUPPORTED_ARGUMENTS },
-		{ "bad-pages", BAD_PAGES_SUPPORTED_ARGUMENTS },
-		{ "metric", METRIC_SUPPORTED_ARGUMENTS },
-		{ "profile", { { "--gpu", {} }, { "-g", {} } } },
-		{ "topology", TOPOLOGY_SUPPORTED_ARGUMENTS },
-		{ "xgmi", XGMI_SUPPORTED_ARGUMENTS },
-		{ "event", EVENT_SUPPORTED_ARGUMENTS },
-		{ "process", PROCESS_SUPPORTED_ARGUMENTS },
-		{ "reset", RESET_SUPPORTED_ARGUMENTS },
-		{ "set", SET_SUPPORTED_ARGUMENTS },
-		{ "monitor", MONITOR_SUPPORTED_ARGUMENTS },
-		{ "partition", PARTITION_SUPPORTED_ARGUMENTS},
-		{ "ras", RAS_SUPPORTED_ARGUMENTS },
-		{ "node", { { "", NODE_SUPPORTED_ARGS } } },
-		{ "confidential-compute", CC_SUPPORTED_ARGUMENTS },
-		{ "fabric", FABRIC_SUPPORTED_ARGUMENTS }
-	};
+	std::map<std::string, std::map<std::string, std::vector<std::string>>>
+	    COMMAND_SUPPORTED_ARGUMENTS = {{"help", {}},
+					   {"version", {}},
+					   {"list", LIST_SUPPORTED_ARGUMENTS},
+					   {"discovery", LIST_SUPPORTED_ARGUMENTS},
+					   {"static", STATIC_SUPPORTED_ARGUMENTS},
+					   {"ucode", FW_SUPPORTED_ARGUMENTS},
+					   {"firmware", FW_SUPPORTED_ARGUMENTS},
+					   {"bad-pages", BAD_PAGES_SUPPORTED_ARGUMENTS},
+					   {"metric", METRIC_SUPPORTED_ARGUMENTS},
+					   {"profile", {{"--gpu", {}}, {"-g", {}}}},
+					   {"topology", TOPOLOGY_SUPPORTED_ARGUMENTS},
+					   {"xgmi", XGMI_SUPPORTED_ARGUMENTS},
+					   {"event", EVENT_SUPPORTED_ARGUMENTS},
+					   {"process", PROCESS_SUPPORTED_ARGUMENTS},
+					   {"reset", RESET_SUPPORTED_ARGUMENTS},
+					   {"set", SET_SUPPORTED_ARGUMENTS},
+					   {"monitor", MONITOR_SUPPORTED_ARGUMENTS},
+					   {"partition", PARTITION_SUPPORTED_ARGUMENTS},
+					   {"ras", RAS_SUPPORTED_ARGUMENTS},
+					   {"node", {{"", NODE_SUPPORTED_ARGS}}},
+					   {"confidential-compute", CC_SUPPORTED_ARGUMENTS},
+					   {"fabric", FABRIC_SUPPORTED_ARGUMENTS}};
 
 	/**
 	 * @brief Check if a string is positive number
@@ -320,7 +384,7 @@ private:
 	 * @param[in] s String for check
 	 * @return true if string is number, else false
 	 */
-	bool is_number(const std::string &s);
+	bool is_number(const std::string& s);
 
 	/**
 	 * @brief Check if a string is negative number
@@ -328,7 +392,7 @@ private:
 	 * @param[in] s String for check
 	 * @return true if string is negative number, else false
 	 */
-	bool is_negative_number(const std::string &s);
+	bool is_negative_number(const std::string& s);
 
 	/**
 	 * @brief Get the device from string
@@ -345,8 +409,8 @@ private:
 	 * @param[inout] parsed_arguments parsed arguments
 	 * @return true if option is valid else false
 	 */
-	bool is_argument_vf(std::vector<std::string> &command_argument_list,
-								Arguments &parsed_arguments);
+	bool is_argument_vf(std::vector<std::string>& command_argument_list,
+			    Arguments& parsed_arguments);
 
 	/**
 	 * @brief Check is option a valid argument
@@ -355,7 +419,7 @@ private:
 	 * @param[inout] parsed_arguments parsed arguments
 	 * @return true if option is valid else false
 	 */
-	bool is_option_argument(std::string option, Arguments &parsed_arguments);
+	bool is_option_argument(std::string option, Arguments& parsed_arguments);
 
 	/**
 	 * @brief Parse command from argument list
@@ -364,7 +428,7 @@ private:
 	 * @param[inout] parsed_arguments parsed arguments
 	 */
 	void parse_command_object(std::vector<std::string> command_argument_list,
-							  Arguments &parsed_arguments);
+				  Arguments& parsed_arguments);
 
 	/**
 	 * @brief Parse command from argument list
@@ -372,22 +436,22 @@ private:
 	 * @param[in] command_argument_list argument list
 	 * @param[inout] parsed_arguments parsed arguments
 	 */
-	void parse_device_type(std::vector<std::string> &command_argument_list,
-							  Arguments &parsed_arguments);
+	void parse_device_type(std::vector<std::string>& command_argument_list,
+			       Arguments& parsed_arguments);
 
 	/**
 	 * @brief Add all gpus into parsed_arguments
 	 *
 	 * @param parsed_arguments parsed arguments
 	 */
-	void add_all_gpus(Arguments &parsed_arguments);
+	void add_all_gpus(Arguments& parsed_arguments);
 
 	/**
 	 * @brief Add all nics into parsed_arguments
 	 *
 	 * @param parsed_arguments parsed arguments
 	 */
-	void add_all_nics(Arguments &parsed_arguments);
+	void add_all_nics(Arguments& parsed_arguments);
 
 	/**
 	 * @brief Parse command options arguments
@@ -396,7 +460,7 @@ private:
 	 * @param[inout] parsed_arguments parsed arguments
 	 */
 	void parse_arguments(std::vector<std::string> command_argument_list,
-						 Arguments &parsed_arguments);
+			     Arguments& parsed_arguments);
 
 	/**
 	 * @brief Parse output command output formats
@@ -405,14 +469,14 @@ private:
 	 * @param parsed_arguments parsed arguments
 	 */
 	void parse_output_format(std::vector<std::string> command_argument_list,
-							 Arguments &parsed_arguments);
+				 Arguments& parsed_arguments);
 
 	/**
 	 * @brief Check is options a valid with input command
 	 *
 	 * @param[inout] parsed_arguments parsed arguments
 	 */
-	void is_options_valid(Arguments &parsed_arguments);
+	void is_options_valid(Arguments& parsed_arguments);
 
 	/**
 	 * @brief Parse given string to uint64 vector
@@ -422,11 +486,11 @@ private:
 	 * @param[inout] parsed_arguments parsed arguments
 	 */
 	void parseAndFillVector(const std::string& input,
-							std::vector<std::vector<uint64_t>>& groupsVector,
-							Arguments &parsed_arguments);
+				std::vector<std::vector<uint64_t>>& groupsVector,
+				Arguments& parsed_arguments);
 
 	bool is_argument_present(const std::vector<std::string>& command_arguments,
-							 const std::string& argument_prefix);
+				 const std::string& argument_prefix);
 	/**
 	 * @brief Check if option is valid and have a valid value
 	 *
@@ -445,9 +509,9 @@ private:
 
 public:
 	/**
-		* @brief Construct a new Smi Parser object
-		*
-		*/
+	 * @brief Construct a new Smi Parser object
+	 *
+	 */
 	AmdSmiParser();
 
 	/**
@@ -458,5 +522,5 @@ public:
 	 * @param[in] ret parser arguments
 	 * @return parsed arguments
 	 */
-	void parse_arg(int argc, char **argv,  Arguments &ret);
+	void parse_arg(int argc, char** argv, Arguments& ret);
 };

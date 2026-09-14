@@ -19,17 +19,9 @@
 
 #include "ucode/mes/12_1_0/rs64_mes_p0_ucode_signed.h"
 #include "ucode/mes/12_1_0/rs64_mes_p0_data_signed.h"
-#include "ucode/cp/12_1_0/rs64_mec_ucode_signed.h"
-#include "ucode/cp/12_1_0/rs64_mec_data_signed.h"
+#include "ucode/cp/12_1_0/mec_12_1_0_ucode_wrap.h"
 #include "ucode/sdma/7_1_0/sdma_ucode_signed.h"
-#include "ucode/rlc/12_1_0/f32_gpm_ucode_signed.h"
-#include "ucode/rlc/12_1_0/rlc_toc_data_signed.h"
-#include "ucode/rlc/12_1_0/rlc_restore_list_gpm_mem_signed.h"
-#include "ucode/rlc/12_1_0/rlc_restore_list_srm_mem_signed.h"
-#include "ucode/rlc/12_1_0/rlc_lx6_1_dram_ucode_signed.h"
-#include "ucode/rlc/12_1_0/rlc_lx6_1_iram_ucode_signed.h"
-#include "ucode/rlc/12_1_0/rlc_lx6_dram_ucode_signed.h"
-#include "ucode/rlc/12_1_0/rlc_lx6_iram_ucode_signed.h"
+#include "ucode/rlc/12_1_0/rlc_12_1_0_ucode_wrap.h"
 #include "ucode/dfc/15_0_8/dfc_fw_signed.h"
 
 static const uint32_t this_block = AMDGV_SECURITY_BLOCK;
@@ -148,16 +140,16 @@ enum psp_status psp_v15_0_8_program_guest_mc_settings(struct amdgv_adapter *adap
 	struct amdgv_vf_device *vf;
 	uint64_t fb_base, fb_top;
 	uint64_t fb_location_base, fb_location_top;
-	uint32_t sys_aper_lo, sys_aper_hi;
+	uint64_t sys_aper_lo, sys_aper_hi;
+
+	vf = &adapt->array_vf[idx_vf];
 
 	if (adapt->xgmi.connected_to_cpu) {
 		fb_location_base = 0x1FFFFFFFF;
 		fb_location_top = 0x0;
-		sys_aper_lo = 0xFFFFFFFF;
-		sys_aper_hi = 0x7F;
+		sys_aper_lo = 0x7FFFFFFFFF;
+		sys_aper_hi = 0x0;
 	} else {
-		vf = &adapt->array_vf[idx_vf];
-
 		/* copy pf fb base to vf*/
 		fb_base = adapt->mc_fb_loc_addr;
 
@@ -174,10 +166,10 @@ enum psp_status psp_v15_0_8_program_guest_mc_settings(struct amdgv_adapter *adap
 		sys_aper_hi = TO_256KBYTES(fb_top);
 	}
 
-	AMDGV_INFO("[VF%d] fb_location_base = 0x%08x\n", idx_vf, fb_location_base);
-	AMDGV_INFO("[VF%d] fb_location_top  = 0x%08x\n", idx_vf, fb_location_top);
-	AMDGV_INFO("[VF%d] sys_aper_lo      = 0x%08x\n", idx_vf, sys_aper_lo);
-	AMDGV_INFO("[VF%d] sys_aper_hi      = 0x%08x\n", idx_vf, sys_aper_hi);
+	AMDGV_INFO("[VF%d] fb_location_base = 0x%llx\n", idx_vf, fb_location_base);
+	AMDGV_INFO("[VF%d] fb_location_top  = 0x%llx\n", idx_vf, fb_location_top);
+	AMDGV_INFO("[VF%d] sys_aper_lo      = 0x%llx\n", idx_vf, sys_aper_lo);
+	AMDGV_INFO("[VF%d] sys_aper_hi      = 0x%llx\n", idx_vf, sys_aper_hi);
 
 	// GCHUB
 	if (psp_v15_0_8_program_register(adapt, idx_vf, lower_32_bits(fb_location_base), upper_32_bits(fb_location_base),
@@ -207,9 +199,11 @@ enum psp_status psp_v15_0_8_program_guest_mc_settings(struct amdgv_adapter *adap
 					   MM_MC_SYSTEM_APERTURE_HI))
 		return PSP_STATUS__ERROR_GENERIC;
 
-	// MEMSIZE
-	if (psp_v15_0_8_program_register(adapt, idx_vf, vf->real_fb_size, 0, RCC_CONFIG_MEMSIZE))
-		return PSP_STATUS__ERROR_GENERIC;
+	if (!adapt->xgmi.connected_to_cpu) {
+		// MEMSIZE
+		if (psp_v15_0_8_program_register(adapt, idx_vf, vf->real_fb_size, 0, RCC_CONFIG_MEMSIZE))
+			return PSP_STATUS__ERROR_GENERIC;
+	}
 
 	return PSP_STATUS__SUCCESS;
 }
@@ -480,58 +474,50 @@ static int psp_v15_0_8_ucode_load(struct amdgv_adapter *adapt, uint32_t *ucode_i
 				  uint32_t ucode_id_count)
 {
 	enum psp_status ret = PSP_STATUS__SUCCESS;
+	unsigned char *ucode_ptr = NULL;
+	uint32_t ucode_size = 0;
 	uint32_t i;
 
 	for (i = 0; i < ucode_id_count; i++) {
 		switch (ucode_id_list[i]) {
 		case AMDGV_FIRMWARE_ID__PSP_TOC:
-			ret = amdgv_psp_load_fw(adapt, (unsigned char *)RLC_TOC_DATA,
-							sizeof(RLC_TOC_DATA), ucode_id_list[i]);
-			break;
 		case AMDGV_FIRMWARE_ID__RLC:
-			ret = amdgv_psp_load_np_fw(adapt, (unsigned char *)aRLC_Ucode,
-							sizeof(aRLC_Ucode), ucode_id_list[i]);
-			break;
 		case AMDGV_FIRMWARE_ID__RLC_RESTORE_LIST_GPM_MEM:
-			ret = amdgv_psp_load_np_fw(adapt,
-							(unsigned char *)aRLC_RESTORE_LIST_GPM_MEM,
-							sizeof(aRLC_RESTORE_LIST_GPM_MEM), ucode_id_list[i]);
-			break;
 		case AMDGV_FIRMWARE_ID__RLC_RESTORE_LIST_SRM_MEM:
-			ret = amdgv_psp_load_np_fw(adapt,
-							(unsigned char *)aRLC_RESTORE_LIST_SRM_MEM,
-							sizeof(aRLC_RESTORE_LIST_SRM_MEM), ucode_id_list[i]);
-			break;
 		case AMDGV_FIRMWARE_ID__RLX6:
-			ret = amdgv_psp_load_np_fw(adapt, (unsigned char *)aLX6_IRAM_UCODE,
-							sizeof(aLX6_IRAM_UCODE), ucode_id_list[i]);
-			break;
 		case AMDGV_FIRMWARE_ID__RLX6_DRAM_BOOT:
-			ret = amdgv_psp_load_np_fw(adapt, (unsigned char *)aLX6_DRAM_UCODE,
-							sizeof(aLX6_DRAM_UCODE), ucode_id_list[i]);
-			break;
 		case AMDGV_FIRMWARE_ID__RLX6_UCODE_CORE1:
-			ret = amdgv_psp_load_np_fw(adapt, (unsigned char *)aLX6_CORE1_IRAM_UCODE,
-							sizeof(aLX6_CORE1_IRAM_UCODE), ucode_id_list[i]);
-			break;
 		case AMDGV_FIRMWARE_ID__RLX6_DRAM_BOOT_CORE1:
-			ret = amdgv_psp_load_np_fw(adapt, (unsigned char *)aLX6_CORE1_DRAM_UCODE,
-							sizeof(aLX6_CORE1_DRAM_UCODE), ucode_id_list[i]);
+			if (!adapt->ucode.get_rlc_ucode ||
+			    adapt->ucode.get_rlc_ucode(adapt, ucode_id_list[i], &ucode_ptr,
+						       &ucode_size) != 0)
+				return AMDGV_FAILURE;
+			/*
+			 * PSP_TOC loads via the plain (non-NP) PSP path; the rest
+			 * of the RLC container loads via the NP path.
+			 */
+			if (ucode_id_list[i] == AMDGV_FIRMWARE_ID__PSP_TOC)
+				ret = amdgv_psp_load_fw(adapt, ucode_ptr, ucode_size,
+							ucode_id_list[i]);
+			else
+				ret = amdgv_psp_load_np_fw(adapt, ucode_ptr, ucode_size,
+							   ucode_id_list[i]);
 			break;
 		case AMDGV_FIRMWARE_ID__SDMA0:
 			ret = amdgv_psp_load_np_fw(adapt, (unsigned char *)aSDMA_Ucode,
 							sizeof(aSDMA_Ucode), ucode_id_list[i]);
 			break;
 		case AMDGV_FIRMWARE_ID__RS64_MEC_UCODE:
-			ret = amdgv_psp_load_np_fw(adapt, (unsigned char *)aRS64_MEC_PRODUCTION_UCODE,
-							sizeof(aRS64_MEC_PRODUCTION_UCODE), ucode_id_list[i]);
-			break;
 		case AMDGV_FIRMWARE_ID__RS64_MEC_P0_DATA:
 		case AMDGV_FIRMWARE_ID__RS64_MEC_P1_DATA:
 		case AMDGV_FIRMWARE_ID__RS64_MEC_P2_DATA:
 		case AMDGV_FIRMWARE_ID__RS64_MEC_P3_DATA:
-			ret = amdgv_psp_load_np_fw(adapt, (unsigned char *)aRS64_MEC_PRODUCTION_DATA,
-							sizeof(aRS64_MEC_PRODUCTION_DATA), ucode_id_list[i]);
+			if (!adapt->ucode.get_mec_ucode ||
+			    adapt->ucode.get_mec_ucode(adapt, ucode_id_list[i], &ucode_ptr,
+						       &ucode_size) != 0)
+				return AMDGV_FAILURE;
+			ret = amdgv_psp_load_np_fw(adapt, ucode_ptr, ucode_size,
+						   ucode_id_list[i]);
 			break;
 		case AMDGV_FIRMWARE_ID__RS64_MES:
 		case AMDGV_FIRMWARE_ID__RS64_KIQ:
@@ -564,6 +550,9 @@ static int psp_v15_0_8_ucode_load(struct amdgv_adapter *adapt, uint32_t *ucode_i
 static int psp_v15_0_8_ucode_get_start_addr(struct amdgv_adapter *adapt, uint32_t ucode_id,
 					    uint64_t *uc_start_addr)
 {
+	uint32_t mec_start_addr_lo = 0;
+	uint32_t mec_start_addr_hi = 0;
+
 	switch (ucode_id) {
 	case AMDGV_FIRMWARE_ID__CP_MES:
 	case AMDGV_FIRMWARE_ID__MES_THREAD1:
@@ -571,8 +560,12 @@ static int psp_v15_0_8_ucode_get_start_addr(struct amdgv_adapter *adapt, uint32_
 			((uint64_t)(RS64_MES_P0_UC_START_ADDR_HI) << 30);
 		break;
 	case AMDGV_FIRMWARE_ID__RS64_MEC_UCODE:
-		*uc_start_addr = RS64_MEC_PRODUCTION_UC_START_ADDR_LO >> 2 |
-			((uint64_t)(RS64_MEC_PRODUCTION_UC_START_ADDR_HI) << 30);
+		if (!adapt->ucode.get_mec_ucode_start_addr)
+			return AMDGV_FAILURE;
+		adapt->ucode.get_mec_ucode_start_addr(adapt, &mec_start_addr_lo,
+						      &mec_start_addr_hi);
+		*uc_start_addr = mec_start_addr_lo >> 2 |
+			((uint64_t)(mec_start_addr_hi) << 30);
 		break;
 	default:
 		AMDGV_ERROR("No ucode start address needed for firmware ID %d\n", ucode_id);
@@ -728,6 +721,11 @@ static struct amdgv_memmgr *psp_v15_0_8_get_memmgr_for_umf(struct amdgv_adapter 
 
 	config_memsize = MBYTES_TO_BYTES(amdgv_nbio_get_memsize(adapt));
 
+	if (config_memsize == 0) {
+		config_memsize = adapt->fb_size;
+		umf_start = umf_start - adapt->fb_pa;
+	}
+
 	if (amdgv_memmgr_addr_in_range(adapt, &adapt->memmgr_pf, umf_start)) {
 		memmgr = &adapt->memmgr_pf;
 		*umf_offset = umf_start;
@@ -763,6 +761,8 @@ static enum psp_status psp_v15_0_8_reserve_umf_region(struct amdgv_adapter *adap
 		return PSP_STATUS__ERROR_GENERIC;
 	}
 
+	adapt->psp.umf_context.mem = mem;
+
 	AMDGV_INFO("UMF reserved in %s at offset 0x%llx, size 0x%llx\n",
 				(memmgr == &adapt->memmgr_gpu) ? "memmgr_gpu" : "memmgr_pf",
 				umf_offset, umf_size);
@@ -770,7 +770,29 @@ static enum psp_status psp_v15_0_8_reserve_umf_region(struct amdgv_adapter *adap
 	return PSP_STATUS__SUCCESS;
 }
 
-enum psp_status psp_v15_0_8_ual_get_interface_version(struct amdgv_adapter *adapt, uint32_t *version)
+static enum psp_status psp_v15_0_8_reserve_umf(struct amdgv_adapter *adapt)
+{
+	if (!MEM_RSV_REGION_FILLED(adapt, REGION_ID__UMF))
+		return PSP_STATUS__SUCCESS;
+
+	if (adapt->psp.umf_context.mem)
+		return PSP_STATUS__SUCCESS;
+
+	return psp_v15_0_8_reserve_umf_region(adapt,
+		adapt->mem_rsv_info.entries[REGION_ID__UMF].start_addr,
+		adapt->mem_rsv_info.entries[REGION_ID__UMF].size);
+}
+
+static void psp_v15_0_8_free_umf(struct amdgv_adapter *adapt)
+{
+	if (adapt->psp.umf_context.mem) {
+		amdgv_memmgr_free(adapt->psp.umf_context.mem);
+		adapt->psp.umf_context.mem = NULL;
+		oss_memset(&adapt->psp.umf_context, 0, sizeof(struct psp_local_memory));
+	}
+}
+
+static enum psp_status psp_v15_0_8_ual_get_interface_version(struct amdgv_adapter *adapt, uint32_t *version)
 {
 	enum psp_status ret = PSP_STATUS__SUCCESS;
 	struct psp_cmd_km psp_cmd = { 0 };
@@ -790,12 +812,10 @@ enum psp_status psp_v15_0_8_ual_get_interface_version(struct amdgv_adapter *adap
 
 	*version = psp_resp.uresp.get_intf_ver_ual.intf_ver;
 
-	AMDGV_INFO("PSP: PSP_CMD_KM_TYPE__UAL_GET_INTERFACE_VER returned version 0x%08x\n", *version);
-
 	return ret;
 }
 
-enum psp_status psp_v15_0_8_ual_get_config(struct amdgv_adapter *adapt,
+static enum psp_status psp_v15_0_8_ual_get_config(struct amdgv_adapter *adapt,
 	uint64_t data_addr, uint32_t size)
 {
 	enum psp_status ret = PSP_STATUS__SUCCESS;
@@ -806,6 +826,7 @@ enum psp_status psp_v15_0_8_ual_get_config(struct amdgv_adapter *adapt,
 	psp_cmd.cmd.get_config_ual.ual_cfg_addr_hi = upper_32_bits(data_addr);
 	psp_cmd.cmd.get_config_ual.ual_cfg_addr_lo = lower_32_bits(data_addr);
 	psp_cmd.cmd.get_config_ual.ual_cfg_size = size;
+	psp_cmd.cmd.get_config_ual.addr_type = PSP_GFX_ADDR_TYPE_AUTO_DETECT;
 
 	psp_resp.status = 0xdeadbeef;
 	ret = amdgv_psp_cmd_km_submit(adapt, &psp_cmd, &psp_resp);
@@ -815,7 +836,7 @@ enum psp_status psp_v15_0_8_ual_get_config(struct amdgv_adapter *adapt,
 	return ret;
 }
 
-enum psp_status psp_v15_0_8_ual_set_ppod_config(struct amdgv_adapter *adapt,
+static enum psp_status psp_v15_0_8_ual_set_ppod_config(struct amdgv_adapter *adapt,
 		struct amdgv_gpumon_set_ppod_config_req_ual_v1 *config)
 {
 	enum psp_status ret = PSP_STATUS__SUCCESS;
@@ -842,21 +863,10 @@ enum psp_status psp_v15_0_8_ual_set_ppod_config(struct amdgv_adapter *adapt,
 	if (ret)
 		return ret;
 
-	AMDGV_DEBUG("PSP: PSP_CMD_KM_TYPE__UAL_SET_PPOD_CONFIG successful - "
-			"accelerator_id=%u ppod_id=%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x ppod_size=%u bandwidth=%u latency=%u\n",
-			config->accelerator_id,
-			config->ppod_id[0], config->ppod_id[1], config->ppod_id[2], config->ppod_id[3],
-			config->ppod_id[4], config->ppod_id[5], config->ppod_id[6], config->ppod_id[7],
-			config->ppod_id[8], config->ppod_id[9], config->ppod_id[10], config->ppod_id[11],
-			config->ppod_id[12], config->ppod_id[13], config->ppod_id[14], config->ppod_id[15],
-			config->ppod_size,
-			config->bandwidth,
-			config->latency);
-
 	return ret;
 }
 
-enum psp_status psp_v15_0_8_ual_set_vpod_config(struct amdgv_adapter *adapt,
+static enum psp_status psp_v15_0_8_ual_set_vpod_config(struct amdgv_adapter *adapt,
 		struct amdgv_gpumon_set_vpod_config_req_ual_v1 *config)
 {
 	enum psp_status ret = PSP_STATUS__SUCCESS;
@@ -881,15 +891,11 @@ enum psp_status psp_v15_0_8_ual_set_vpod_config(struct amdgv_adapter *adapt,
 	if (ret)
 		return ret;
 
-	AMDGV_DEBUG("PSP: PSP_CMD_KM_TYPE__UAL_SET_VPOD_CONFIG successful - "
-			"vpod_id=%u vpod_size=%u\n",
-			config->vpod_id, config->vpod_size);
-
 	return ret;
 }
 
-enum psp_status psp_v15_0_8_ual_set_station_config(struct amdgv_adapter *adapt,
-		struct amdgv_gpumon_set_station_config_req_ual_v1 *config)
+static enum psp_status psp_v15_0_8_ual_set_station_config(struct amdgv_adapter *adapt,
+		struct amdgv_gpumon_station_config_ual_v1 *config)
 {
 	enum psp_status ret = PSP_STATUS__SUCCESS;
 	struct psp_cmd_km psp_cmd = { 0 };
@@ -912,14 +918,31 @@ enum psp_status psp_v15_0_8_ual_set_station_config(struct amdgv_adapter *adapt,
 	if (ret)
 		return ret;
 
-	AMDGV_DEBUG("PSP: PSP_CMD_KM_TYPE__UAL_SET_STATION_CONFIG successful - "
-			"num_stations=%u station_flag=0x%02x\n",
-			config->num_stations, config->station_flag);
+	return ret;
+}
+
+static enum psp_status psp_v15_0_8_ual_get_station_config(struct amdgv_adapter *adapt,
+	uint64_t data_addr, uint32_t size)
+{
+	enum psp_status ret = PSP_STATUS__SUCCESS;
+	struct psp_cmd_km psp_cmd = { 0 };
+	struct psp_gfx_resp psp_resp = { 0 };
+
+	psp_cmd.cmd_id = PSP_CMD_KM_TYPE__UAL_GET_STATION_CONFIG;
+	psp_cmd.cmd.get_station_config_ual.ual_cfg_addr_hi = upper_32_bits(data_addr);
+	psp_cmd.cmd.get_station_config_ual.ual_cfg_addr_lo = lower_32_bits(data_addr);
+	psp_cmd.cmd.get_station_config_ual.ual_cfg_size = size;
+	psp_cmd.cmd.get_station_config_ual.addr_type = PSP_GFX_ADDR_TYPE_AUTO_DETECT;
+
+	psp_resp.status = 0xdeadbeef;
+	ret = amdgv_psp_cmd_km_submit(adapt, &psp_cmd, &psp_resp);
+	if (ret)
+		return ret;
 
 	return ret;
 }
 
-enum psp_status psp_v15_0_8_ual_send_completion(struct amdgv_adapter *adapt,
+static enum psp_status psp_v15_0_8_ual_send_completion(struct amdgv_adapter *adapt,
 		uint32_t cmd_id, uint32_t status)
 {
 	enum psp_status ret = PSP_STATUS__SUCCESS;
@@ -934,9 +957,6 @@ enum psp_status psp_v15_0_8_ual_send_completion(struct amdgv_adapter *adapt,
 	ret = amdgv_psp_cmd_km_submit(adapt, &psp_cmd, &psp_resp);
 	if (ret)
 		return ret;
-
-	AMDGV_DEBUG("PSP: PSP_CMD_KM_TYPE__UAL_SEND_COMPLETION successful - "
-			"cmd_id=0x%08x status=0x%08x\n", cmd_id, status);
 
 	return ret;
 }
@@ -1007,6 +1027,12 @@ static int psp_v15_0_8_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv_e
 		AMDGV_INFO("ASP: Handling UAL resume req interrupt\n");
 		ret = amdgv_sched_queue_event(adapt, AMDGV_PF_IDX,
 					      AMDGV_EVENT_SCHED_UAL_RESUME_REQ,
+					      AMDGV_SCHED_BLOCK_ALL);
+		break;
+	case PSP_GFX_INT_CTXT_UAL_CMD_CFG_UPDATE:
+		AMDGV_INFO("ASP: Handling UAL config update interrupt\n");
+		ret = amdgv_sched_queue_event(adapt, AMDGV_PF_IDX,
+					      AMDGV_EVENT_SCHED_UAL_UPDATE_CONF_REQ,
 					      AMDGV_SCHED_BLOCK_ALL);
 		break;
 	default:
@@ -1160,8 +1186,6 @@ static int psp_v15_0_8_hw_init(struct amdgv_adapter *adapt)
 {
 	int r = 0;
 	int i;
-	int pos;
-	uint16_t ctrl;
 	enum psp_status psp_ret = PSP_STATUS__SUCCESS;
 	enum amdgv_firmware_id ucode_np_seq[] = {
 		AMDGV_FIRMWARE_ID__RLC,
@@ -1183,6 +1207,12 @@ static int psp_v15_0_8_hw_init(struct amdgv_adapter *adapt)
 		AMDGV_FIRMWARE_ID__RS64_KIQ_STACK,
 		AMDGV_FIRMWARE_ID__DFC_FW,
 	};
+
+	if (MEM_RSV_REGION_FILLED(adapt, REGION_ID__UMF)) {
+		psp_ret = psp_v15_0_8_reserve_umf(adapt);
+		if (psp_ret != PSP_STATUS__SUCCESS)
+			return AMDGV_FAILURE;
+	}
 
 	if (adapt->fw_load_type == AMDGV_FW_LOAD_DIRECT)
 		return 0;
@@ -1268,14 +1298,6 @@ static int psp_v15_0_8_hw_init(struct amdgv_adapter *adapt)
 		goto init_fail;
 	}
 
-	/* Check if ATS is enabled before programming register */
-	pos = oss_pci_find_ext_cap(adapt->dev, PCIE_EXT_CAP_ID__ATS);
-	if (pos) {
-		oss_pci_read_config_word(adapt->dev, pos + PCI_ATS_CTRL, &ctrl);
-		if (ctrl & PCI_ATS_CTRL_ENABLE)
-			psp_v15_0_8_program_register(adapt, 0, 0, 0, VM_IOMMU_CONTROL_WA);
-	}
-
 init_fail:
 	if (r)
 		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_INIT_FAIL, 0);
@@ -1290,6 +1312,9 @@ static int psp_v15_0_8_hw_fini(struct amdgv_adapter *adapt)
 	struct psp_local_memory *local_mem = &(psp->tmr_context);
 	struct psp_cmd_km tmr_km_cmd = { 0 };
 	struct psp_ras_context *ras_context = &psp->ras_context;
+
+	if (!in_whole_gpu_reset())
+		psp_v15_0_8_free_umf(adapt);
 
 	if (adapt->fw_load_type == AMDGV_FW_LOAD_DIRECT)
 		return 0;
@@ -1350,24 +1375,6 @@ static int psp_v15_0_8_sw_fini(struct amdgv_adapter *adapt)
 	return r;
 }
 
-static enum psp_status psp_v15_0_8_tmr_init(struct amdgv_adapter *adapt, uint32_t tmr_size)
-{
-	if (!MEM_RSV_REGION_FILLED(adapt, REGION_ID__UMF)) {
-		AMDGV_INFO("PSP: UMF not supported, using common tmr\n");
-		return amdgv_psp_tmr_init(adapt, adapt->psp.allocated_tmr_size);
-	} else {
-		/* Need to extract build num to check if the mem_rsv_info table need flipped */
-		if (adapt->vbios.special_version_check) {
-			AMDGV_INFO("PSP: Extracting build_num from IP Discovery ATOMBIOS table\n");
-			adapt->vbios.special_version_check(adapt, adapt->vbios.ip_discovery_image);
-		}
-
-		AMDGV_INFO("PSP: UMF supported, using UMF\n");
-		return psp_v15_0_8_reserve_umf_region(adapt, adapt->mem_rsv_info.entries[REGION_ID__UMF].start_addr, adapt->mem_rsv_info.entries[REGION_ID__UMF].size);
-
-	}
-}
-
 /*
  * Route the embedded RAS TA/RL firmware accessors by detected PSP (MP0) IP
  * version. Add a row when a new PSP revision in this family ships embedded RAS
@@ -1407,6 +1414,131 @@ void psp_set_ras_fw_accessors(struct amdgv_adapter *adapt)
 		   psp_ip_version);
 }
 
+static int psp_v15_0_8_req_translate_bp_addr(struct amdgv_adapter *adapt,
+		uint64_t ipid, uint64_t mca_addr, uint32_t *crit_region_err)
+{
+	struct psp_context *psp = &adapt->psp;
+	uint32_t encoded_ipid, mca_addr_32;
+	uint32_t reg_val;
+	uint32_t psp_err;
+	int wait_ret;
+
+	encoded_ipid = (uint32_t)((ipid >> 8) & 0x00FFFFFF) |
+		       (uint32_t)(((ipid >> 44) & 0xF) << 24);
+	mca_addr_32 = (uint32_t)(mca_addr & 0xFFFFFFFF);
+
+	/* Write IPID to C2PMSG_69 (ring_addr_lo) */
+	WREG32(SOC15_REG_OFFSET(MP0, psp->idx, regMPASP_SMN_C2PMSG_69), encoded_ipid);
+
+	/* Write MCA address to C2PMSG_70 (ring_addr_hi) */
+	WREG32(SOC15_REG_OFFSET(MP0, psp->idx, regMPASP_SMN_C2PMSG_70), mca_addr_32);
+
+	/* Send cmd GFX_CTRL_CMD_ID_GET_BP_INFO_FOR_RET to C2PMSG_64 */
+	WREG32(SOC15_REG_OFFSET(MP0, psp->idx, regMPASP_SMN_C2PMSG_64),
+			GFX_CTRL_CMD_ID_GET_BP_INFO_FOR_RET);
+
+	/* Wait for response flag (bit 31) */
+	wait_ret = amdgv_wait_for_register(adapt,
+		SOC15_REG_OFFSET_NAME(MP0, psp->idx, regMPASP_SMN_C2PMSG_64),
+		0x80000000, 0x80000000, AMDGV_TIMEOUT(TIMEOUT_PSP_REG),
+		AMDGV_WAIT_CHECK_EQ, 0);
+	if (wait_ret) {
+		AMDGV_ERROR("Timeout waiting for response (PSP not responsive)\n");
+		return AMDGV_FAILURE;
+	}
+
+	reg_val = RREG32(SOC15_REG_OFFSET(MP0, psp->idx, regMPASP_SMN_C2PMSG_64));
+	psp_err = reg_val & 0xFFFF;
+	if (psp_err) {
+		AMDGV_ERROR("PSP returned error 0x%x\n", psp_err);
+		return AMDGV_FAILURE;
+	}
+
+	/* Read CritRegionErr from C2PMSG_69 */
+	if (crit_region_err)
+		*crit_region_err = RREG32(SOC15_REG_OFFSET(MP0, psp->idx,
+					regMPASP_SMN_C2PMSG_69));
+
+	return 0;
+}
+
+static int psp_v15_0_8_get_ras_mem(struct amdgv_adapter *adapt,
+		struct amdgv_mem_ras_error_info *out)
+{
+	struct amdgv_mem_ras_error_info *ras_mem_info;
+	uint64_t ras_mem_start, ras_mem_size, umf_start, umf_size;
+	void *umf_cpu_base;
+
+	/* eSID writes the translation result into the dedicated UMF region. */
+	if (!MEM_RSV_REGION_FILLED(adapt, REGION_ID__RAS_MEM_ERR_INFO) ||
+			!MEM_RSV_REGION_FILLED(adapt, REGION_ID__UMF)) {
+		AMDGV_ERROR("RAS_MEM_ERR_INFO or UMF region is not filled.\n");
+		return AMDGV_FAILURE;
+	}
+
+	if (!adapt->psp.umf_context.mem)
+		return AMDGV_FAILURE;
+
+	umf_start = adapt->mem_rsv_info.entries[REGION_ID__UMF].start_addr;
+	umf_size = adapt->mem_rsv_info.entries[REGION_ID__UMF].size;
+
+	ras_mem_start = adapt->mem_rsv_info.entries[REGION_ID__RAS_MEM_ERR_INFO].start_addr;
+	ras_mem_size = adapt->mem_rsv_info.entries[REGION_ID__RAS_MEM_ERR_INFO].size;
+
+	/* Make sure RAS_MEM falls within the UMF region. */
+	if (ras_mem_start < umf_start || (ras_mem_start + ras_mem_size) > (umf_start + umf_size))
+		return AMDGV_FAILURE;
+
+	umf_cpu_base = amdgv_memmgr_get_cpu_addr(adapt->psp.umf_context.mem);
+	if (!umf_cpu_base)
+		return AMDGV_FAILURE;
+
+	ras_mem_info = (struct amdgv_mem_ras_error_info *)
+			((uint8_t *)umf_cpu_base + (ras_mem_start - umf_start));
+
+	if (ras_mem_info->Version != AMDGV_MEM_RAS_ERROR_INFO_VERSION) {
+		AMDGV_ERROR("Unsupported RAS mem error info table version 0x%x (expected 0x%x).\n",
+			ras_mem_info->Version, AMDGV_MEM_RAS_ERROR_INFO_VERSION);
+		return AMDGV_FAILURE;
+	}
+
+	oss_memcpy(out, ras_mem_info, sizeof(struct amdgv_mem_ras_error_info));
+
+	if (out->ErrorEntryNum > ARRAY_SIZE(out->ErrorMemInfo))
+		out->ErrorEntryNum = ARRAY_SIZE(out->ErrorMemInfo);
+
+	return 0;
+}
+
+static int psp_v15_0_8_translate_bp_addr(struct amdgv_adapter *adapt,
+		uint64_t ipid, uint64_t mca_addr,
+		struct amdgv_mem_ras_error_info *out, uint32_t *crit_region_err)
+{
+	int ret;
+
+	if (!out || !crit_region_err)
+		return AMDGV_FAILURE;
+
+	*crit_region_err = 0;
+
+	/* Request address translation to ASP */
+	ret = psp_v15_0_8_req_translate_bp_addr(adapt, ipid, mca_addr,
+			crit_region_err);
+	if (ret) {
+		AMDGV_ERROR("Bad page address translation failed, exiting.\n");
+		return ret;
+	}
+
+	/* Get translated offsets from RAS MEM within UMF region */
+	ret = psp_v15_0_8_get_ras_mem(adapt, out);
+	if (ret) {
+		AMDGV_ERROR("Failed to get translated bad page offsets.\n");
+		return ret;
+	}
+
+	return 0;
+}
+
 static int psp_v15_0_8_sw_init(struct amdgv_adapter *adapt)
 {
 	int ret = 0;
@@ -1444,9 +1576,17 @@ static int psp_v15_0_8_sw_init(struct amdgv_adapter *adapt)
 	psp_set_ras_fw_accessors(adapt);
 	adapt->ucode.load = psp_v15_0_8_ucode_load;
 	adapt->ucode.get_ucode_start_addr = psp_v15_0_8_ucode_get_start_addr;
-	adapt->psp.tmr_init = psp_v15_0_8_tmr_init;
 	adapt->psp.enable_interrupt = psp_v15_0_8_enable_interrupt;
 	adapt->psp.handle_irq = psp_v15_0_8_handle_irq;
+	adapt->psp.translate_bp_addr = psp_v15_0_8_translate_bp_addr;
+
+	adapt->psp.ual_get_interface_version = psp_v15_0_8_ual_get_interface_version;
+	adapt->psp.ual_get_config = psp_v15_0_8_ual_get_config;
+	adapt->psp.ual_set_ppod_config = psp_v15_0_8_ual_set_ppod_config;
+	adapt->psp.ual_set_vpod_config = psp_v15_0_8_ual_set_vpod_config;
+	adapt->psp.ual_set_station_config = psp_v15_0_8_ual_set_station_config;
+	adapt->psp.ual_get_station_config = psp_v15_0_8_ual_get_station_config;
+	adapt->psp.ual_send_completion = psp_v15_0_8_ual_send_completion;
 
 	psp_ret = amdgv_psp_sw_init(adapt);
 	adapt->psp.ras_context.set_init_flag = true;

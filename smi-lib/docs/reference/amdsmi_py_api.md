@@ -807,9 +807,29 @@ Field | Description
 `FUSE` | FUSE block
 `MCA` | MCA block
 `VCN` | VCN block
-`JPEG` |JPEG block
+`JPEG` | JPEG block
 `IH` | IH block
 `MPIO` | MPIO block
+`MMSCH` | MMSCH block
+`MP5` | MP5 block
+`ATU` | ATU block
+`DACC_BE` | DACC_BE block
+`ECLR` | ECLR block
+`KPX_SERDES` | KPX_SERDES block
+`LSDMA` | LSDMA block
+`MPART` | MPART block
+`MPIFOE` | MPIFOE block
+`MPRAS` | MPRAS block
+`NBIF` | NBIF block
+`NBIO` | NBIO block
+`OXRP` | OXRP block
+`PCIE_PL` | PCIE_PL block
+`PCS_XGMI` | PCS_XGMI block
+`PIE` | PIE block
+`CS` | CS block
+`SHUB` | SHUB block
+`SSBDCI` | SSBDCI block
+`UCIE_PCS` | UCIE_PCS block
 
 Output: Dictionary with fields
 
@@ -872,9 +892,29 @@ Field | Description
 `FUSE` | FUSE block
 `MCA` | MCA block
 `VCN` | VCN block
-`JPEG` |JPEG block
+`JPEG` | JPEG block
 `IH` | IH block
 `MPIO` | MPIO block
+`MMSCH` | MMSCH block
+`MP5` | MP5 block
+`ATU` | ATU block
+`DACC_BE` | DACC_BE block
+`ECLR` | ECLR block
+`KPX_SERDES` | KPX_SERDES block
+`LSDMA` | LSDMA block
+`MPART` | MPART block
+`MPIFOE` | MPIFOE block
+`MPRAS` | MPRAS block
+`NBIF` | NBIF block
+`NBIO` | NBIO block
+`OXRP` | OXRP block
+`PCIE_PL` | PCIE_PL block
+`PCS_XGMI` | PCS_XGMI block
+`PIE` | PIE block
+`CS` | CS block
+`SHUB` | SHUB block
+`SSBDCI` | SSBDCI block
+`UCIE_PCS` | UCIE_PCS block
 
 Exceptions that can be thrown by `amdsmi_get_gpu_ecc_enabled` function:
 
@@ -1047,8 +1087,9 @@ Field | Content
 `rev_id` |  revision id
 `asic_serial` | asic serial
 `oam_id` | xgmi physical id
+`physical_acc_id` | physical accelerator id
 `num_of_compute_units` | number of compute units
-`target_graphics_version` | target graphics version (**_Not supported yet, currently hardcoded to -1_**)
+`target_graphics_version` | GC IP version packed as `(major << 16) | (minor << 8) | rev`. Returns `18446744073709551615` (`UINT64_MAX`) if not supported. Example: `590851` encodes gfx943 (9.4.3).
 `subsystem_id` | subsystem device id
 `flags` | chip flags (**_Not supported yet, currently hardcoded to -1_**)
 
@@ -1466,11 +1507,11 @@ Field | Description
 `EDGE` | edge thermal domain
 `HOTSPOT` | hotspot/junction thermal domain
 `VRAM` | memory/vram thermal domain
-`PLX` | plx thermal domain (**_Not supported yet_**)
-`HBM_0` | HBM 0 thermal domain (**_Not supported yet_**)
-`HBM_1` | HBM 1 thermal domain (**_Not supported yet_**)
-`HBM_2` | HBM 2 thermal domain (**_Not supported yet_**)
-`HBM_3` | HBM 3 thermal domain (**_Not supported yet_**)
+`PLX` | plx thermal domain (**_Not supported yet_**, raises `AmdSmiLibraryException` with `AMDSMI_STATUS_NOT_SUPPORTED`)
+`HBM_0` | HBM 0 thermal domain (**_Not supported yet_**, raises `AmdSmiLibraryException` with `AMDSMI_STATUS_NOT_SUPPORTED`)
+`HBM_1` | HBM 1 thermal domain (**_Not supported yet_**, raises `AmdSmiLibraryException` with `AMDSMI_STATUS_NOT_SUPPORTED`)
+`HBM_2` | HBM 2 thermal domain (**_Not supported yet_**, raises `AmdSmiLibraryException` with `AMDSMI_STATUS_NOT_SUPPORTED`)
+`HBM_3` | HBM 3 thermal domain (**_Not supported yet_**, raises `AmdSmiLibraryException` with `AMDSMI_STATUS_NOT_SUPPORTED`)
 
 * `thermal_metric` one of `AmdSmiTemperatureMetric` enum values:
 
@@ -1700,6 +1741,7 @@ Field | Description
 `HBM2E` | HBM2E VRAM type
 `HBM3` | HBM3 VRAM type
 `HBM3E` | HBM3E VRAM type
+`HBM4` | HBM4 VRAM type
 `DDR2` | DDR2 VRAM type
 `DDR3` | DDR3 VRAM type
 `DDR4` | DDR4 VRAM type
@@ -3798,7 +3840,10 @@ except AmdSmiException as e:
 ```
 
 ### amdsmi_reset_gpu
-Description: Triggers a chain that resets all GPUs.
+Description: Resets the GPU identified by the processor handle. On an
+XGMI-connected system, the reset applies to the complete physical hive containing
+that GPU; other independent XGMI hives are not reset. The current framebuffer-sharing
+mode does not change which GPUs are reset.
 
 Input parameters: GPU device handle
 * `processor_handle`
@@ -4521,14 +4566,66 @@ except AmdSmiException as e:
     print(e)
 ```
 
+### amdsmi_get_tray_info
+
+Description: Returns compute tray form factor and maximum accelerator count for the node.
+
+Input parameters:
+
+* `node_handle` - Node handle obtained from `amdsmi_get_node_handle()`. Reserved for future use; the Python wrapper currently passes `NULL` to the C API regardless of the value supplied. Tray data is sourced from the UALOE sideband path via the first GPU with an active UALOE handle.
+
+Output: Dictionary with fields
+
+Field | Content
+---|---
+`max_acc_per_tray` | maximum accelerators per tray, or `"N/A"` if unsupported
+`tray_type` | compute tray type, one of:
+  * `AmdSmiComputeTrayType.UNKNOWN` - unknown or unsupported tray type
+  * `AmdSmiComputeTrayType.HELIOS_P` - Helios-P tray
+  * `AmdSmiComputeTrayType.HELIOS_R` - Helios-R tray
+  * `AmdSmiComputeTrayType.TITAN` - Titan tray
+
+Exceptions that can be thrown by `amdsmi_get_tray_info` function:
+
+* `AmdSmiLibraryException`
+* `AmdSmiRetryException`
+* `AmdSmiParameterException`
+
+Example:
+
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    node = amdsmi_get_node_handle(processors[0])
+    tray_info = amdsmi_get_tray_info(node)
+    print(tray_info['max_acc_per_tray'])
+    print(tray_info['tray_type'])
+except AmdSmiException as e:
+    print(e)
+```
+
 ### amdsmi_get_gpu_ras_policy_info
 
-Description: Retrieve the Reliability, Availability, and Serviceability (RAS) policy information for a specified GPU device.
+Description: Retrieve the Reliability, Availability, and Serviceability (RAS) policy information for a specified GPU device. Consumers must inspect `major_version` to determine which policy fields are present.
 
 Input parameters:
 
 processor_handle: The handle for the GPU device for which policy information is to be retrieved.
-Output: A dictionary containing RAS policy information including version, major and minor versions, and thresholds for DRAM regions.
+
+Output: A dictionary containing `ras_policy_info` with version fields and version-specific policy data:
+
+* For v4.0 (`major_version=4`, `minor_version=0`):
+  * `major_version`, `minor_version`
+  * `dram_non_critical_region_threshold`
+  * `dram_critical_region_threshold`
+* For v5.0 (`major_version=5`, `minor_version=0`):
+  * `major_version`, `minor_version`
+  * `num_entities`
+  * `event_rma_threshold_per_entity`
+  * `max_pages_per_ret_event`
+  * `od_sram_ecc_threshold`
+  * `hwa_threshold`
+  * `wdt_threshold`
 
 Exceptions that can be thrown by `amdsmi_get_gpu_ras_policy_info` function:
 
@@ -4564,20 +4661,22 @@ Field | Description
 ---|---
 `bdf` | BDF (Bus, Device, Function) identifier formatted as domain:bus:device.function
 `version` | UAL interface version as a `"major.minor"` string
-`version_major` | Major component of the UAL interface version
-`version_minor` | Minor component of the UAL interface version
 `accelerator_id` | Accelerator identifier (version 1)
 `fabric_type` | Type of fabric (version 1) - enum value of type `AmdSmiFabricType`
 `bandwidth` | Fabric bandwidth in Mb/s (version 1)
 `latency` | Fabric latency in nanoseconds (version 1)
 `ppod_id` | Physical PoD (Pod of Devices) ID as a 128-bit UUID hex string (version 1)
 `ppod_size` | Physical PoD size (version 1)
+`local_accelerator_count` | Number of valid entries in `local_accelerators` (version 1)
 `vpod_id` | Virtual PoD ID (version 1)
 `vpod_size` | Virtual PoD size (version 1)
 `vpod_active_accelerators` | List of active accelerators in the virtual PoD (version 1)
-`local_accelerators` | List of all local accelerator ID slots returned by the driver (version 1).
+`local_accelerators` | List of valid local accelerator IDs (version 1); empty when unsupported
 `addr_mode` | Address mode (version 1) - enum value of type `AmdSmiFabricNpaAddressMode`
 `accel_state` | Accelerator state (version 1) - enum value of type `AmdSmiFabricAcceleratorVpodState`
+`station_flags` | Station configuration flags (version 1)
+`num_stations` | Number of Station stations (version 1)
+`lane_en_bitmap` | Station lanes enable bitmap as a hex string (version 1)
 
 Exceptions that can be thrown by `amdsmi_get_gpu_fabric_info` function:
 
@@ -4597,7 +4696,7 @@ try:
             fabric_info = amdsmi_get_gpu_fabric_info(device)
             print(f"BDF: {fabric_info['bdf']}")
             print(f"Version: {fabric_info['version']}")
-            if fabric_info['version_major'] == 1:
+            if fabric_info['version'].startswith('1.'):
                 print(f"Accelerator ID: {fabric_info['accelerator_id']}")
                 print(f"Fabric Type: {fabric_info['fabric_type']}")
                 print(f"Bandwidth: {fabric_info['bandwidth']} Mb/s")
@@ -4889,7 +4988,7 @@ Input parameters:
 * `categories` - (Optional) List of category names to query. Default: all categories
 
 Available categories:
-* `UALOE`, `SWITCH`, `CRYPTO`, `PFC`, `NETPORT`, `DERIVED_IFOE`, `DERIVED_NETPORT`
+* `UALOE`, `SWITCH`, `CRYPTO`, `PFC`, `NETPORT`, `DERIVED_IFOE`, `DERIVED_NETPORT`, `IFOE_DEBUG`, `PHY`
 
 Output: Dictionary containing telemetry data for each requested category
 
@@ -4970,6 +5069,143 @@ try:
         finally:
             telemetry.close()  # Must manually free
 
+except AmdSmiException as e:
+    print(e)
+```
+
+---
+
+### amdsmi_set_gpu_fabric_ppod_config
+
+Description: Apply PPOD (Physical Pod) setup parameters to the GPU fabric. Only fields whose bit is set in `config.mask` are written to hardware; unmasked fields are preserved from the current configuration.
+
+Input parameters:
+* `processor_handle` - Handle for the target GPU
+* `config` - `amdsmi_fabric_ppod_config_t` ctypes struct with the following fields:
+  * `version` - Must be `AmdSmiFabricPpodConfigVersion.V1`
+  * `mask` - Bitmask selecting which fields of `data` to write; must be non-zero or the call raises `AmdSmiLibraryException` (`AMDSMI_STATUS_INVAL`). Combine flags with `|` from `AmdSmiFabricPpodField`:
+    * `AmdSmiFabricPpodField.ACCEL_ID` (bit 0) - write `data.accelerator_id`
+    * `AmdSmiFabricPpodField.PPOD_ID` (bit 1) - write `data.ppod_id`
+    * `AmdSmiFabricPpodField.PPOD_SIZE` (bit 2) - write `data.ppod_size`
+    * `AmdSmiFabricPpodField.LOCAL_ACCELS` (bit 3) - write `data.local_accelerators`
+    * `AmdSmiFabricPpodField.BANDWIDTH` (bit 4) - write `data.bandwidth`
+    * `AmdSmiFabricPpodField.LATENCY` (bit 5) - write `data.latency`
+  * `commit` - When `True`, requests finalize/apply after masked parameter writes. On host, the PSP path already applies masked fields atomically, so this flag has no additional effect
+  * `data` - `amdsmi_fabric_ppod_data_t` ctypes struct with the following fields:
+    * `accelerator_id` - Accelerator identifier
+    * `ppod_id` - Physical PoD UUID (16-byte array)
+    * `ppod_size` - Physical PoD size
+    * `local_accelerators` - Array of up to 16 local accelerator IDs
+    * `local_accelerator_count` - Number of valid entries in `local_accelerators`
+    * `bandwidth` - Station bandwidth share in Mb/s
+    * `latency` - Latency in nanoseconds
+
+Return value: None on success, raises `AmdSmiException` on failure.
+
+Exceptions that can be thrown by `amdsmi_set_gpu_fabric_ppod_config` function:
+* `AmdSmiLibraryException`
+* `AmdSmiRetryException`
+* `AmdSmiParameterException`
+
+Example:
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    for processor in processors:
+        config = amdsmi_wrapper.amdsmi_fabric_ppod_config_t()
+        config.version = AmdSmiFabricPpodConfigVersion.V1
+        config.mask = AmdSmiFabricPpodField.BANDWIDTH | AmdSmiFabricPpodField.LATENCY
+        config.data.bandwidth = 100000
+        config.data.latency = 200
+        amdsmi_set_gpu_fabric_ppod_config(processor, config)
+except AmdSmiException as e:
+    print(e)
+```
+
+---
+
+### amdsmi_set_gpu_fabric_vpod_config
+
+Description: Apply VPOD (Virtual Pod) configuration to the GPU fabric. Only fields whose bit is set in `config.mask` are written to hardware; unmasked fields are preserved from the current configuration.
+
+Input parameters:
+* `processor_handle` - Handle for the target GPU
+* `config` - `amdsmi_fabric_vpod_config_t` ctypes struct with the following fields:
+  * `version` - Must be `AmdSmiFabricVpodConfigVersion.V1`
+  * `mask` - Bitmask selecting which fields of `data` to write; must be non-zero or the call raises `AmdSmiLibraryException` (`AMDSMI_STATUS_INVAL`). Combine flags with `|` from `AmdSmiFabricVpodField`:
+    * `AmdSmiFabricVpodField.VPOD_ID` (bit 0) - write `data.vpod_id`
+    * `AmdSmiFabricVpodField.VPOD_SIZE` (bit 1) - write `data.vpod_size`
+    * `AmdSmiFabricVpodField.VPOD_ACTIVE_ACCELS` (bit 2) - write `data.vpod_active_accelerators`
+    * `AmdSmiFabricVpodField.ADDR_MODE` (bit 3) - write `data.addr_mode`
+  * `commit` - When `True`, requests finalize/apply after masked parameter writes. On host, the PSP path already applies masked fields atomically, so this flag has no additional effect
+  * `data` - `amdsmi_fabric_vpod_data_t` ctypes struct with the following fields:
+    * `vpod_id` - Virtual PoD Identifier
+    * `vpod_size` - Virtual PoD size
+    * `vpod_active_accelerators` - 1024-bit active accelerator bitmap (32 x uint32)
+    * `addr_mode` - NPA address mode, one of:
+      * `AmdSmiFabricNpaAddressMode.SOURCE_ALIASING` - Source aliasing
+      * `AmdSmiFabricNpaAddressMode.SOURCE_IDENTIFICATION` - Source identification
+      * `AmdSmiFabricNpaAddressMode.UNKNOWN` - Unknown
+
+Return value: None on success, raises `AmdSmiException` on failure.
+
+Exceptions that can be thrown by `amdsmi_set_gpu_fabric_vpod_config` function:
+* `AmdSmiLibraryException`
+* `AmdSmiRetryException`
+* `AmdSmiParameterException`
+
+Example:
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    for processor in processors:
+        config = amdsmi_wrapper.amdsmi_fabric_vpod_config_t()
+        config.version = AmdSmiFabricVpodConfigVersion.V1
+        config.mask = AmdSmiFabricVpodField.VPOD_ID | AmdSmiFabricVpodField.VPOD_SIZE
+        config.data.vpod_id = 1
+        config.data.vpod_size = 4
+        amdsmi_set_gpu_fabric_vpod_config(processor, config)
+except AmdSmiException as e:
+    print(e)
+```
+
+---
+
+### amdsmi_set_gpu_fabric_station_config
+
+Description: Apply Station reconfiguration to the GPU fabric. Only fields whose bit is set in `config.mask` are written to hardware; unmasked fields are preserved from the current configuration.
+
+Input parameters:
+* `processor_handle` - Handle for the target GPU
+* `config` - `amdsmi_fabric_station_config_t` ctypes struct with the following fields:
+  * `version` - Must be `AmdSmiFabricStationConfigVersion.V1`
+  * `mask` - Bitmask selecting which fields of `data` to write; must be non-zero or the call raises `AmdSmiLibraryException` (`AMDSMI_STATUS_INVAL`). Combine flags with `|` from `AmdSmiFabricStationField`:
+    * `AmdSmiFabricStationField.STATION_FLAGS` (bit 0) - write `data.station_flags`
+    * `AmdSmiFabricStationField.LANE_EN_BITMAP` (bit 1) - write `data.lane_en_bitmap`
+    * `AmdSmiFabricStationField.NUM_STATIONS` (bit 2) - write `data.num_stations`
+  * `commit` - When `True`, requests finalize/apply after masked parameter writes. On host, the PSP path already applies masked fields atomically, so this flag has no additional effect
+  * `data` - `amdsmi_fabric_station_data_t` ctypes struct with the following fields:
+    * `station_flags` - Station flags (bits [3:0]: PortPerStation = 1, 2, or 4)
+    * `num_stations` - Number of active stations
+    * `lane_en_bitmap` - Lane enable bitmap (64-byte array = 512 bits)
+
+Return value: None on success, raises `AmdSmiException` on failure.
+
+Exceptions that can be thrown by `amdsmi_set_gpu_fabric_station_config` function:
+* `AmdSmiLibraryException`
+* `AmdSmiRetryException`
+* `AmdSmiParameterException`
+
+Example:
+```python
+try:
+    processors = amdsmi_get_processor_handles()
+    for processor in processors:
+        config = amdsmi_wrapper.amdsmi_fabric_station_config_t()
+        config.version = AmdSmiFabricStationConfigVersion.V1
+        config.mask = AmdSmiFabricStationField.NUM_STATIONS
+        config.data.num_stations = 4
+        amdsmi_set_gpu_fabric_station_config(processor, config)
 except AmdSmiException as e:
     print(e)
 ```

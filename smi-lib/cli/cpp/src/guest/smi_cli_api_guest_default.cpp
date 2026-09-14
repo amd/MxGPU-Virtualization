@@ -16,33 +16,26 @@
 #include <vector>
 
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
-	amdsmi_processor_handle *);
-typedef amdsmi_status_t (*AMDSMI_GET_GPU_DEVICE_BDF)(amdsmi_processor_handle, amdsmi_bdf_t *);
+								amdsmi_processor_handle*);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_DEVICE_BDF)(amdsmi_processor_handle, amdsmi_bdf_t*);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_DRIVER_INFO)(amdsmi_processor_handle,
-	amdsmi_driver_info_t *);
-typedef amdsmi_status_t (*AMDSMI_GET_LIB_VERSION)(amdsmi_version_t *);
-typedef amdsmi_status_t (*AMDSMI_GET_GPU_VBIOS_INFO)(amdsmi_processor_handle,
-	amdsmi_vbios_info_t *);
-typedef amdsmi_status_t (*AMDSMI_GET_GPU_ASIC_INFO)(amdsmi_processor_handle,
-	amdsmi_asic_info_t *);
+						      amdsmi_driver_info_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_LIB_VERSION)(amdsmi_version_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_VBIOS_INFO)(amdsmi_processor_handle, amdsmi_vbios_info_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_ASIC_INFO)(amdsmi_processor_handle, amdsmi_asic_info_t*);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_TOTAL_ECC_COUNT)(amdsmi_processor_handle,
-	amdsmi_error_count_t *);
+							  amdsmi_error_count_t*);
 typedef amdsmi_status_t (*AMDSMI_GET_TEMP_METRIC)(amdsmi_processor_handle,
-	amdsmi_temperature_type_t,
-	amdsmi_temperature_metric_t, int64_t *);
-typedef amdsmi_status_t (*AMDSMI_GET_POWER_INFO)(amdsmi_processor_handle,
-	amdsmi_power_info_t *);
+						  amdsmi_temperature_type_t,
+						  amdsmi_temperature_metric_t, int64_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_POWER_INFO)(amdsmi_processor_handle, amdsmi_power_info_t*);
 typedef amdsmi_status_t (*AMDSMI_GET_POWER_CAP_INFO)(amdsmi_processor_handle, uint32_t,
-	amdsmi_power_cap_info_t *);
-typedef amdsmi_status_t (*AMDSMI_GET_GPU_ACTIVITY)(amdsmi_processor_handle,
-	amdsmi_engine_usage_t *);
-typedef amdsmi_status_t (*AMDSMI_GET_PCIE_INFO)(amdsmi_processor_handle,
-	amdsmi_pcie_info_t *);
-typedef amdsmi_status_t (*AMDSMI_GET_GPU_VRAM_USAGE)(amdsmi_processor_handle,
-	amdsmi_vram_usage_t *);
-typedef amdsmi_status_t (*AMDSMI_GET_GPU_PROCESS_LIST)(amdsmi_processor_handle, uint32_t *,
-	amdsmi_proc_info_t *);
-
+						     amdsmi_power_cap_info_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_ACTIVITY)(amdsmi_processor_handle, amdsmi_engine_usage_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_PCIE_INFO)(amdsmi_processor_handle, amdsmi_pcie_info_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_VRAM_USAGE)(amdsmi_processor_handle, amdsmi_vram_usage_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_PROCESS_LIST)(amdsmi_processor_handle, uint32_t*,
+						       amdsmi_proc_info_t*);
 
 extern AMDSMI_GET_LIB_VERSION guest_amdsmi_get_lib_version;
 extern AMDSMI_GET_GPU_DEVICE_BDF guest_amdsmi_get_gpu_device_bdf;
@@ -59,8 +52,8 @@ extern AMDSMI_GET_PCIE_INFO guest_amdsmi_get_pcie_info;
 extern AMDSMI_GET_GPU_VRAM_USAGE guest_amdsmi_get_gpu_vram_usage;
 extern AMDSMI_GET_GPU_PROCESS_LIST guest_amdsmi_get_gpu_process_list;
 
-
-int AmdSmiApiGuest::amdsmi_get_default_version_command(uint64_t processor_bdf, Arguments arg, std::string &formatted_string)
+int AmdSmiApiGuest::amdsmi_get_default_version_command(uint64_t processor_bdf, Arguments arg,
+						       std::string& formatted_string)
 {
 	int ret;
 	amdsmi_driver_info_t driver_info;
@@ -70,17 +63,17 @@ int AmdSmiApiGuest::amdsmi_get_default_version_command(uint64_t processor_bdf, A
 	amdsmi_bdf_t tmp_bdf;
 	tmp_bdf.as_uint = processor_bdf;
 
-	std::string driver_version{"N/A"};
-	std::string amdsmi_lib_ver_str{"N/A"};
-	std::string boot_firmware_version{"N/A"};
-	std::string tool_version{AMDSMI_TOOL_VERSION_STRING};
+	std::string driver_version {"N/A"};
+	std::string amdsmi_lib_ver_str {"N/A"};
+	std::string boot_firmware_version {"N/A"};
+	std::string tool_version {AMDSMI_TOOL_VERSION_STRING};
 
 	ret = guest_amdsmi_get_lib_version(&version);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		amdsmi_lib_ver_str = "N/A";
 	} else {
-		amdsmi_lib_ver_str = string_format("%ld.%ld.%ld", version.major,
-		version.minor, version.release);
+		amdsmi_lib_ver_str =
+		    string_format("%ld.%ld.%ld", version.major, version.minor, version.release);
 	}
 
 	ret = guest_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
@@ -103,12 +96,15 @@ int AmdSmiApiGuest::amdsmi_get_default_version_command(uint64_t processor_bdf, A
 		boot_firmware_version = boot_firmware_info.boot_firmware;
 	}
 
-	formatted_string = string_format("%s,%s,%s,%s", amdsmi_lib_ver_str.c_str(), tool_version.c_str(), driver_version.c_str(), boot_firmware_version.c_str());
+	formatted_string =
+	    string_format("%s,%s,%s,%s", amdsmi_lib_ver_str.c_str(), tool_version.c_str(),
+			  driver_version.c_str(), boot_firmware_version.c_str());
 
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-int AmdSmiApiGuest::amdsmi_get_default_bdf_command(uint64_t index, Arguments arg, std::string &formatted_string)
+int AmdSmiApiGuest::amdsmi_get_default_bdf_command(uint64_t index, Arguments arg,
+						   std::string& formatted_string)
 {
 	int ret;
 	amdsmi_bdf_t tmp_bdf;
@@ -116,7 +112,7 @@ int AmdSmiApiGuest::amdsmi_get_default_bdf_command(uint64_t index, Arguments arg
 
 	int64_t gpu_bdf = arg.devices[index]->get_bdf();
 	tmp_bdf.as_uint = gpu_bdf;
-	ret = guest_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	ret		= guest_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
 		return ret;
@@ -127,12 +123,16 @@ int AmdSmiApiGuest::amdsmi_get_default_bdf_command(uint64_t index, Arguments arg
 		throw SmiToolSMILIBErrorException(ret);
 	}
 
-	formatted_string = convert_bdf_to_string(tmp_bdf.bdf.function_number, tmp_bdf.bdf.device_number, tmp_bdf.bdf.bus_number, tmp_bdf.bdf.domain_number);
+	formatted_string =
+	    convert_bdf_to_string(tmp_bdf.bdf.function_number, tmp_bdf.bdf.device_number,
+				  tmp_bdf.bdf.bus_number, tmp_bdf.bdf.domain_number);
 
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-int AmdSmiApiGuest::amdsmi_get_default_gpu_name_oam_id_command(uint64_t processor_bdf, Arguments arg, std::string &formatted_string)
+int AmdSmiApiGuest::amdsmi_get_default_gpu_name_oam_id_command(uint64_t processor_bdf,
+							       Arguments arg,
+							       std::string& formatted_string)
 {
 	int ret;
 	amdsmi_asic_info_t asic;
@@ -140,8 +140,8 @@ int AmdSmiApiGuest::amdsmi_get_default_gpu_name_oam_id_command(uint64_t processo
 	amdsmi_bdf_t tmp_bdf;
 	tmp_bdf.as_uint = processor_bdf;
 
-	std::string oam_id{"N/A"};
-	std::string gpu_name{"N/A"};
+	std::string oam_id {"N/A"};
+	std::string gpu_name {"N/A"};
 	ret = guest_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
@@ -150,7 +150,7 @@ int AmdSmiApiGuest::amdsmi_get_default_gpu_name_oam_id_command(uint64_t processo
 
 	ret = guest_amdsmi_get_gpu_asic_info(processor, &asic);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
-		oam_id = "N/A";
+		oam_id	 = "N/A";
 		gpu_name = "N/A";
 	} else {
 		if (asic.oam_id == UINT32_MAX || static_cast<int32_t>(asic.oam_id) == -1) {
@@ -166,14 +166,16 @@ int AmdSmiApiGuest::amdsmi_get_default_gpu_name_oam_id_command(uint64_t processo
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-int AmdSmiApiGuest::amdsmi_get_default_partition_mode_command(uint64_t processor_bdf, Arguments arg, std::string &formatted_string)
+int AmdSmiApiGuest::amdsmi_get_default_partition_mode_command(uint64_t processor_bdf, Arguments arg,
+							      std::string& formatted_string)
 {
 	// Partition mode is not available on guest side
 	formatted_string = "N/A";
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-int AmdSmiApiGuest::amdsmi_get_default_uec_command(uint64_t processor_bdf, Arguments arg, std::string &formatted_string)
+int AmdSmiApiGuest::amdsmi_get_default_uec_command(uint64_t processor_bdf, Arguments arg,
+						   std::string& formatted_string)
 {
 	amdsmi_status_t ret;
 	amdsmi_error_count_t total_error_count;
@@ -198,7 +200,8 @@ int AmdSmiApiGuest::amdsmi_get_default_uec_command(uint64_t processor_bdf, Argum
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-int AmdSmiApiGuest::amdsmi_get_default_temperature_command(uint64_t processor_bdf, Arguments arg, std::string &formatted_string)
+int AmdSmiApiGuest::amdsmi_get_default_temperature_command(uint64_t processor_bdf, Arguments arg,
+							   std::string& formatted_string)
 {
 	int ret;
 	int64_t junction_temperature;
@@ -213,32 +216,32 @@ int AmdSmiApiGuest::amdsmi_get_default_temperature_command(uint64_t processor_bd
 		return ret;
 	}
 
-	std::string junction_temperature_string{"N/A"};
-	ret = guest_amdsmi_get_temp_metric(processor,
-							AMDSMI_TEMPERATURE_TYPE_HOTSPOT,
-							AMDSMI_TEMP_CURRENT,
-							&junction_temperature);
+	std::string junction_temperature_string {"N/A"};
+	ret = guest_amdsmi_get_temp_metric(processor, AMDSMI_TEMPERATURE_TYPE_HOTSPOT,
+					   AMDSMI_TEMP_CURRENT, &junction_temperature);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		junction_temperature_string = "N/A";
 	} else {
 		junction_temperature_string = string_format("%lld", junction_temperature);
 	}
 
-	std::string vram_temperature_string{"N/A"};
-	ret = guest_amdsmi_get_temp_metric(
-			  processor, AMDSMI_TEMPERATURE_TYPE_VRAM, AMDSMI_TEMP_CURRENT, &vram_temperature);
+	std::string vram_temperature_string {"N/A"};
+	ret = guest_amdsmi_get_temp_metric(processor, AMDSMI_TEMPERATURE_TYPE_VRAM,
+					   AMDSMI_TEMP_CURRENT, &vram_temperature);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		vram_temperature_string = "N/A";
 	} else {
 		vram_temperature_string = string_format("%lld", vram_temperature);
 	}
 
-	formatted_string = string_format("%s,%s", junction_temperature_string.c_str(), vram_temperature_string.c_str());
+	formatted_string = string_format("%s,%s", junction_temperature_string.c_str(),
+					 vram_temperature_string.c_str());
 
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-int AmdSmiApiGuest::amdsmi_get_default_power_usage_command(uint64_t processor_bdf, Arguments arg, std::string &formatted_string)
+int AmdSmiApiGuest::amdsmi_get_default_power_usage_command(uint64_t processor_bdf, Arguments arg,
+							   std::string& formatted_string)
 {
 	amdsmi_status_t ret;
 
@@ -247,7 +250,7 @@ int AmdSmiApiGuest::amdsmi_get_default_power_usage_command(uint64_t processor_bd
 	amdsmi_bdf_t tmp_bdf;
 	tmp_bdf.as_uint = processor_bdf;
 
-	std::string socket_power_str{"N/A"};
+	std::string socket_power_str {"N/A"};
 	ret = guest_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		formatted_string = "N/A";
@@ -264,7 +267,8 @@ int AmdSmiApiGuest::amdsmi_get_default_power_usage_command(uint64_t processor_bd
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-int AmdSmiApiGuest::amdsmi_get_default_pcie_info_command(uint64_t processor_bdf, Arguments arg, std::string &formatted_string)
+int AmdSmiApiGuest::amdsmi_get_default_pcie_info_command(uint64_t processor_bdf, Arguments arg,
+							 std::string& formatted_string)
 {
 	int ret;
 	amdsmi_pcie_info_t pcie_info;
@@ -284,18 +288,18 @@ int AmdSmiApiGuest::amdsmi_get_default_pcie_info_command(uint64_t processor_bdf,
 		return ret;
 	}
 
-	std::string pcie_width{ string_format(
-		"%d", pcie_info.pcie_static.max_pcie_width) };
-	std::string pcie_info_GTs_value_string{ string_format("%d",
-		pcie_info.pcie_static.max_pcie_speed / 1000) };
+	std::string pcie_width {string_format("%d", pcie_info.pcie_static.max_pcie_width)};
+	std::string pcie_info_GTs_value_string {
+	    string_format("%d", pcie_info.pcie_static.max_pcie_speed / 1000)};
 
-
-	formatted_string = string_format("%s,%s", pcie_width.c_str(), pcie_info_GTs_value_string.c_str());
+	formatted_string =
+	    string_format("%s,%s", pcie_width.c_str(), pcie_info_GTs_value_string.c_str());
 
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-int AmdSmiApiGuest::amdsmi_get_default_utilization_command(uint64_t processor_bdf, Arguments arg, std::string &formatted_string)
+int AmdSmiApiGuest::amdsmi_get_default_utilization_command(uint64_t processor_bdf, Arguments arg,
+							   std::string& formatted_string)
 {
 	int ret;
 	amdsmi_processor_handle processor;
@@ -311,22 +315,25 @@ int AmdSmiApiGuest::amdsmi_get_default_utilization_command(uint64_t processor_bd
 	// Guest does not have access to GPU metrics table, use activity API directly
 	amdsmi_engine_usage_t engine_usage;
 
-	std::string gfx_activity{"N/A"};
-	std::string mem_activity{"N/A"};
+	std::string gfx_activity {"N/A"};
+	std::string mem_activity {"N/A"};
 	ret = guest_amdsmi_get_gpu_activity(processor, &engine_usage);
 	if (ret == AMDSMI_STATUS_SUCCESS) {
 		gfx_activity = string_format("%ld", engine_usage.gfx_activity);
 		mem_activity = string_format("%ld", engine_usage.umc_activity);
 	}
 
-	std::string gfx_util_str{(gfx_activity == "N/A") ? gfx_activity : string_format("%s %%", gfx_activity.c_str())};
-	std::string mem_util_str{(mem_activity == "N/A") ? mem_activity : string_format("%s %%", mem_activity.c_str())};
+	std::string gfx_util_str {
+	    (gfx_activity == "N/A") ? gfx_activity : string_format("%s %%", gfx_activity.c_str())};
+	std::string mem_util_str {
+	    (mem_activity == "N/A") ? mem_activity : string_format("%s %%", mem_activity.c_str())};
 	formatted_string = string_format("%s,%s", gfx_util_str.c_str(), mem_util_str.c_str());
 
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-int AmdSmiApiGuest::amdsmi_get_default_fb_usage_command(uint64_t processor_bdf, Arguments arg, std::string &formatted_string)
+int AmdSmiApiGuest::amdsmi_get_default_fb_usage_command(uint64_t processor_bdf, Arguments arg,
+							std::string& formatted_string)
 {
 	amdsmi_status_t ret;
 	amdsmi_processor_handle processor;
@@ -352,13 +359,14 @@ int AmdSmiApiGuest::amdsmi_get_default_fb_usage_command(uint64_t processor_bdf, 
 }
 
 int AmdSmiApiGuest::amdsmi_get_default_process_info_command(uint64_t processor_bdf, Arguments arg,
-	std::string &formatted_string, int &proc_num, int gpu_id)
+							    std::string& formatted_string,
+							    int& proc_num, int gpu_id)
 {
 	amdsmi_status_t ret;
 	amdsmi_processor_handle processor_handle;
 	amdsmi_bdf_t tmp_bdf;
 	uint32_t max_processes = 0;
-	tmp_bdf.as_uint = processor_bdf;
+	tmp_bdf.as_uint	       = processor_bdf;
 	std::vector<amdsmi_proc_info_t> process_info_list;
 
 	ret = guest_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor_handle);
@@ -368,8 +376,9 @@ int AmdSmiApiGuest::amdsmi_get_default_process_info_command(uint64_t processor_b
 		return ret;
 	}
 
-	std::time_t start_timestamp{std::time(nullptr)};
-	while (std::difftime(std::time(nullptr), start_timestamp) < 1.1) {}
+	std::time_t start_timestamp {std::time(nullptr)};
+	while (std::difftime(std::time(nullptr), start_timestamp) < 1.1) {
+	}
 	ret = guest_amdsmi_get_gpu_process_list(processor_handle, &max_processes, NULL);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
@@ -377,7 +386,8 @@ int AmdSmiApiGuest::amdsmi_get_default_process_info_command(uint64_t processor_b
 		return ret;
 	}
 
-	amdsmi_proc_info_t *info_list = (amdsmi_proc_info_t *)malloc(max_processes * sizeof(amdsmi_proc_info_t));
+	amdsmi_proc_info_t* info_list =
+	    (amdsmi_proc_info_t*)malloc(max_processes * sizeof(amdsmi_proc_info_t));
 	if (info_list == NULL) {
 		throw SmiToolNotEnoughMemException();
 	}
@@ -402,19 +412,20 @@ int AmdSmiApiGuest::amdsmi_get_default_process_info_command(uint64_t processor_b
 
 	for (uint32_t i = 0; i < process_info_list.size(); i++) {
 		int proc_mem = convert_bytes_to_megabytes(process_info_list[i].mem);
-		std::string pid{string_format("%ld", process_info_list[i].pid)};
+		std::string pid {string_format("%ld", process_info_list[i].pid)};
 		std::string mem = {string_format("%lld", proc_mem)};
 		std::string gfx = {string_format("%lld", process_info_list[i].engine_usage.gfx)};
 		std::string enc = {string_format("%lld", process_info_list[i].engine_usage.enc)};
-		std::string gpu_id_str{string_format("%d", gpu_id)};
-		std::string mem_unit{mem == "N/A" ? "" : "MB"};
-		std::string gfx_unit{gfx == "N/A" ? "" : "%"};
-		std::string enc_unit{enc == "N/A" ? "" : "%"};
-		std::string mem_usage{string_format("%s %s", mem.c_str(), mem_unit.c_str())};
-		std::string gfx_str{string_format("%s %s", gfx.c_str(), gfx_unit.c_str())};
-		std::string enc_str{string_format("%s %s", enc.c_str(), enc_unit.c_str())};
-		formatted_string += string_format("%s,%s,%s,%s,%s,%s\n", gpu_id_str.c_str(), pid.c_str(),
-			process_info_list[i].name, mem_usage.c_str(), gfx_str.c_str(), enc_str.c_str());
+		std::string gpu_id_str {string_format("%d", gpu_id)};
+		std::string mem_unit {mem == "N/A" ? "" : "MB"};
+		std::string gfx_unit {gfx == "N/A" ? "" : "%"};
+		std::string enc_unit {enc == "N/A" ? "" : "%"};
+		std::string mem_usage {string_format("%s %s", mem.c_str(), mem_unit.c_str())};
+		std::string gfx_str {string_format("%s %s", gfx.c_str(), gfx_unit.c_str())};
+		std::string enc_str {string_format("%s %s", enc.c_str(), enc_unit.c_str())};
+		formatted_string += string_format(
+		    "%s,%s,%s,%s,%s,%s\n", gpu_id_str.c_str(), pid.c_str(),
+		    process_info_list[i].name, mem_usage.c_str(), gfx_str.c_str(), enc_str.c_str());
 	}
 
 	return AMDSMI_STATUS_SUCCESS;

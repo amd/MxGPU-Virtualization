@@ -14,15 +14,20 @@ static const uint32_t this_block = AMDGV_POWER_BLOCK;
 
 static void gfx_v12_1_gc_set_clock_gating_feature_flag(struct amdgv_adapter *adapt)
 {
+	union gc_clock_gating_support flags;
 	struct gc_context *gc = adapt->cg.gc;
 
-	gc->clock_gating_flags.u32All = 0;
+	oss_memset(&flags, 0, sizeof(flags));
 
-	gc->clock_gating_flags.bits.gc_clockgating_support_gfx_mgcg = 1;
-	gc->clock_gating_flags.bits.gc_clockgating_support_gfx_cgcg = 1;
-	gc->clock_gating_flags.bits.gc_clockgating_support_gfx_fgcg = 1;
-	gc->clock_gating_flags.bits.gc_clockgating_support_gfx_cgls = 1;
-	gc->clock_gating_flags.bits.gc_clockgating_support_gfx_perf_clk = 1;
+	/* @TODO: Enable once verified */
+	// flags.bits.gc_clockgating_support_gfx_mgcg = 1;
+	// flags.bits.gc_clockgating_support_gfx_cgcg = 1;
+	// flags.bits.gc_clockgating_support_gfx_fgcg = 1;
+	// flags.bits.gc_clockgating_support_gfx_cgls = 1;
+	// flags.bits.gc_clockgating_support_gfx_perf_clk = 1;
+	flags.u32All = 0;
+
+	gc->clock_gating_flags.u32All = flags.u32All;
 }
 
 

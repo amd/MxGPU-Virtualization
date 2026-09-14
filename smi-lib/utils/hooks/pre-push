@@ -1,0 +1,82 @@
+#!/bin/bash
+
+# Copyright Advanced Micro Devices, Inc.
+#
+# SPDX-License-Identifier: MIT
+
+# Pre-push hook: checks that C/C++ files under smi-lib/ being pushed are formatted with clang-format.
+# If any file would be changed by clang-format, the push is aborted.
+# Format files with: clang-format -i <file>
+#
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# Extensions that clang-format should check
+EXT_PATTERN='\.(c|C|cc|cpp|cxx|h|H|hh|hpp|hxx)$'
+
+# Collect all files being pushed (added, copied, modified, renamed)
+FILES_TO_CHECK=""
+if ((1))
+then
+    ZERO_SHA="0000000000000000000000000000000000000000"
+    # Git's canonical empty tree; null SHA is not a valid object for diff.
+    EMPTY_TREE="4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+    while read -r local_ref local_sha remote_ref remote_sha; do
+	    if [ "$remote_sha" = "$ZERO_SHA" ]; then
+		    # New branch: all files in the pushed tip commit's tree
+		    FILES_TO_CHECK="$FILES_TO_CHECK $(git diff --name-only --diff-filter=ACMR "$EMPTY_TREE" "$local_sha" | grep -E "$EXT_PATTERN" | grep '^smi-lib/' || true)"
+	    else
+		    # Existing branch: files changed vs remote
+		    FILES_TO_CHECK="$FILES_TO_CHECK $(git diff --name-only --diff-filter=ACMR "$remote_sha" "$local_sha" | grep -E "$EXT_PATTERN" | grep '^smi-lib/' || true)"
+	    fi
+    done
+else
+    # DEBUG else branch. You don't have to commit to see if it is working
+    FILES_TO_CHECK="$FILES_TO_CHECK $(git diff --name-only | grep -E "$EXT_PATTERN" | grep '^smi-lib/' || true)"
+    for x in $FILES_TO_CHECK
+    do
+	echo $x
+    done
+
+    exit 0
+
+fi
+
+
+# Remove duplicates and empty entries
+FILES_TO_CHECK="$(echo "$FILES_TO_CHECK" | tr ' ' '\n' | sort -u | grep -v '^$' || true)"
+
+if [ -z "$FILES_TO_CHECK" ]; then
+	exit 0
+fi
+
+# Require clang-format
+if ! command -v clang-format >/dev/null 2>&1; then
+	echo "pre-push: clang-format not found. Install it or skip this hook with --no-verify." >&2
+	exit 1
+fi
+
+UNFORMATTED=""
+echo "pre-push files checked:"
+for f in $FILES_TO_CHECK; do
+        echo "  $f"
+	[ -f "$f" ] || continue
+	if ! clang-format --dry-run -Werror "$f" 2>/dev/null; then
+		UNFORMATTED="$UNFORMATTED $f"
+	fi
+done
+
+if [ -n "$UNFORMATTED" ]; then
+	echo "pre-push: The following files are not formatted with clang-format:" >&2
+	echo "$UNFORMATTED" | tr ' ' '\n' | grep -v '^$' | sed 's/^/  /' >&2
+	echo "" >&2
+	echo "Run: clang-format -i <file>" >&2
+	echo "Or push with --no-verify to skip this check (not recommended)." >&2
+	exit 1
+fi
+
+exit 0
+

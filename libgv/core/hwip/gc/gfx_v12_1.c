@@ -8,11 +8,15 @@
 #include <amdgv_sched_internal.h>
 
 #include "gfx_v12_1.h"
+#if 0
 #include "amdgv_mes.h"
+#include "gfx_v12_1_doorbell.h"
+#endif
 #include "asic_reg/GC/gc_12_1_0_offset.h"
 #include "asic_reg/GC/gc_12_1_0_sh_mask.h"
-#include "gfx_v12_1_doorbell.h"
-
+#include "amdgv_nbio.h"
+#include "ucode/rlc/12_1_0/rlc_12_1_0_ucode_wrap.h"
+#include "ucode/cp/12_1_0/mec_12_1_0_ucode_wrap.h"
 
 static const uint32_t this_block = AMDGV_SECURITY_BLOCK;
 
@@ -31,6 +35,7 @@ static int gfx_v12_1_xcc_set_safe_mode(struct amdgv_adapter *adapt, int xcc_id)
 		AMDGV_WAIT_CHECK_EQ, AMDGV_WAIT_FLAG_FORCE_YIELD);
 
 	if (ret) {
+		AMDGV_ERROR("Timeout entering RLC safe mode on xcc %d!\n", xcc_id);
 		return AMDGV_FAILURE;
 	}
 
@@ -67,6 +72,85 @@ static const struct amdgv_rlc_funcs gfx_v12_1_rlc_funcs = {
 static void gfx_v12_1_set_rlc_funcs(struct amdgv_adapter *adapt)
 {
 	adapt->gfx.rlc.funcs = &gfx_v12_1_rlc_funcs;
+}
+
+static void gfx_v12_1_select_se_sh(struct amdgv_adapter *adapt, uint32_t se,
+				    uint32_t sh, uint32_t instance, int xcc_id)
+{
+	uint32_t data;
+
+	if (instance == ~0u)
+		data = REG_SET_FIELD(0, GRBM_GFX_INDEX, INSTANCE_BROADCAST_WRITES, 1);
+	else
+		data = REG_SET_FIELD(0, GRBM_GFX_INDEX, INSTANCE_INDEX, instance);
+
+	if (se == ~0u)
+		data = REG_SET_FIELD(data, GRBM_GFX_INDEX, SE_BROADCAST_WRITES, 1);
+	else
+		data = REG_SET_FIELD(data, GRBM_GFX_INDEX, SE_INDEX, se);
+
+	if (sh == ~0u)
+		data = REG_SET_FIELD(data, GRBM_GFX_INDEX, SA_BROADCAST_WRITES, 1);
+	else
+		data = REG_SET_FIELD(data, GRBM_GFX_INDEX, SA_INDEX, sh);
+
+	WREG32_SOC15(GC, GET_INST(GC, xcc_id), regGRBM_GFX_INDEX, data);
+}
+
+static uint32_t gfx_v12_1_get_cu_active_bitmap_per_sh(struct amdgv_adapter *adapt,
+						       int xcc_id, uint32_t num_wgp)
+{
+	uint32_t data, mask;
+
+	data = RREG32_SOC15(GC, GET_INST(GC, xcc_id), regCC_GC_SHADER_ARRAY_CONFIG);
+	data |= RREG32_SOC15(GC, GET_INST(GC, xcc_id), regGC_USER_SHADER_ARRAY_CONFIG);
+
+	data &= CC_GC_SHADER_ARRAY_CONFIG__INACTIVE_WGPS_MASK;
+	data >>= CC_GC_SHADER_ARRAY_CONFIG__INACTIVE_WGPS__SHIFT;
+
+	mask = num_wgp ? ((1u << num_wgp) - 1) : 0;
+
+	return (~data) & mask;
+}
+
+uint32_t gfx_v12_1_get_xcc_cu_count(struct amdgv_adapter *adapt, int xcc_id)
+{
+	struct amdgv_ip_discovery_info *pf_copy = &adapt->ip_discovery.pf_copy;
+	struct amdgv_gc_info_v1_5 *gc_info =
+		GET_GC_TABLE_V1_5(adapt->ip_discovery.pf_copy.gchdr);
+	uint32_t wgp_per_sa0, wgp_per_sa1, wgp_per_sa;
+	uint32_t cu_count = 0;
+	uint32_t i, j, k;
+	uint32_t mask, bitmap;
+
+	if (pf_copy->gchdr->version_major != 1 || pf_copy->gchdr->version_minor != 5)
+		return 0;
+
+	/* SA0 and SA1 within an SE may be populated with a different number of
+	 * WGPs. Mask each SA with its own WGP count so a smaller SA is not
+	 * over-counted against the larger SA's width. */
+	wgp_per_sa0 = gc_info->gc_num_wgp0_per_sa + gc_info->gc_num_wgp1_per_sa;
+	wgp_per_sa1 = gc_info->gc_num_wgp0_per_sa1 + gc_info->gc_num_wgp1_per_sa1;
+
+	for (i = 0; i < adapt->config.gfx.max_shader_engines; i++) {
+		for (j = 0; j < adapt->config.gfx.max_sh_per_se; j++) {
+			wgp_per_sa = (j == 1 && wgp_per_sa1) ? wgp_per_sa1 : wgp_per_sa0;
+
+			mask = 1;
+			gfx_v12_1_select_se_sh(adapt, i, j, ~0u, xcc_id);
+			bitmap = gfx_v12_1_get_cu_active_bitmap_per_sh(adapt, xcc_id, wgp_per_sa);
+
+			/* Each active WGP bit is one CU */
+			for (k = 0; k < wgp_per_sa; k++) {
+				if (bitmap & mask)
+					cu_count += 1;
+				mask <<= 1;
+			}
+		}
+	}
+
+	gfx_v12_1_select_se_sh(adapt, ~0u, ~0u, ~0u, xcc_id);
+	return cu_count;
 }
 
 void gfx_v12_1_grbm_select(struct amdgv_adapter *adapt, uint32_t me,
@@ -118,19 +202,6 @@ static int gfx_v12_1_gfx_check_rlc_autoload_complete(struct amdgv_adapter *adapt
 	int wait_ret;
 	uint32_t xcd_id = 0;
 	struct amdgv_wait_for_cb_context cb_context = { 0 };
-
-	for (xcd_id = 0; xcd_id < adapt->mcp.gfx.num_xcc; xcd_id++) {
-		/* Wait for IMU to exit GFXOFF then touch the RLC_STAT */
-		wait_ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET_NAME(GC, GET_INST(GC, xcd_id), regGFX_IMU_MSG_FLAGS),
-						0x6, 0x6, AMDGV_TIMEOUT(TIMEOUT_STATUS_REG),
-						AMDGV_WAIT_CHECK_EQ, AMDGV_WAIT_FLAG_AUTO);
-
-		if (wait_ret) {
-			AMDGV_INFO("Can't wait for IMU to exit GFXOFF. GFX_IMU_MSG_FLAGS=0x%x\n",
-				RREG32(SOC15_REG_OFFSET(GC, GET_INST(GC, xcd_id), regGFX_IMU_MSG_FLAGS)));
-			return AMDGV_FAILURE;
-		}
-	}
 
 	cb_context.ctx = (void *)adapt;
 	cb_context.type = AMDGV_WAIT_FOR_RLC_AUTOLOAD_COMPLETE;
@@ -395,6 +466,51 @@ static void gfx_v12_1_xcc_constants_init(struct amdgv_adapter *adapt, int xcc_id
 	gfx_v12_1_xcc_init_compute_vmid(adapt, xcc_id);
 }
 
+static void gfx_v12_1_xcc_enable_atomics(struct amdgv_adapter *adapt, int xcc_id)
+{
+	uint32_t data;
+
+	data = RREG32_SOC15(GC, GET_INST(GC, xcc_id), regTCP_UTCL0_CNTL1);
+	data = REG_SET_FIELD(data, TCP_UTCL0_CNTL1, ATOMIC_REQUESTER_EN, 0x1);
+	WREG32_SOC15(GC, GET_INST(GC, xcc_id), regTCP_UTCL0_CNTL1, data);
+}
+
+static void gfx_v12_1_xcc_disable_burst(struct amdgv_adapter *adapt, int xcc_id)
+{
+	WREG32_SOC15(GC, GET_INST(GC, xcc_id), regGL1_DRAM_BURST_CTRL, 0xf);
+	WREG32_SOC15(GC, GET_INST(GC, xcc_id), regGLARB_DRAM_BURST_CTRL, 0xf);
+}
+
+static void gfx_v12_1_xcc_disable_early_write_ack(struct amdgv_adapter *adapt, int xcc_id)
+{
+	uint32_t data;
+
+	data = RREG32_SOC15(GC, GET_INST(GC, xcc_id), regTCP_CNTL3);
+	data = REG_SET_FIELD(data, TCP_CNTL3, DISABLE_EARLY_WRITE_ACK, 0x1);
+	WREG32_SOC15(GC, GET_INST(GC, xcc_id), regTCP_CNTL3, data);
+}
+
+static void gfx_v12_1_xcc_disable_tcp_spill_cache(struct amdgv_adapter *adapt, int xcc_id)
+{
+	uint32_t data;
+
+	data = RREG32_SOC15(GC, GET_INST(GC, xcc_id), regTCP_CNTL);
+	data = REG_SET_FIELD(data, TCP_CNTL, TCP_SPILL_CACHE_DISABLE, 0x1);
+	WREG32_SOC15(GC, GET_INST(GC, xcc_id), regTCP_CNTL, data);
+}
+
+static void gfx_v12_1_init_golden_registers(struct amdgv_adapter *adapt)
+{
+	int i;
+
+	for (i = 0; i < adapt->mcp.gfx.num_xcc; i++) {
+		gfx_v12_1_xcc_disable_burst(adapt, i);
+		gfx_v12_1_xcc_enable_atomics(adapt, i);
+		gfx_v12_1_xcc_disable_early_write_ack(adapt, i);
+		gfx_v12_1_xcc_disable_tcp_spill_cache(adapt, i);
+	}
+}
+
 static void gfx_v12_1_constants_init(struct amdgv_adapter *adapt)
 {
 	int i;
@@ -403,18 +519,25 @@ static void gfx_v12_1_constants_init(struct amdgv_adapter *adapt)
 		gfx_v12_1_xcc_constants_init(adapt, i);
 }
 
-// TODO: This is not completed. Partly implement for WS cmd verfication
 static int gfx_v12_1_sw_init(struct amdgv_adapter *adapt)
 {
 	adapt->gfx.funcs = &gfx_v12_1_funcs;
 
 	gfx_v12_1_set_rlc_funcs(adapt);
 
+#if 0
 	gfx_v12_1_doorbell_index_init(adapt);
 
 	adapt->gfx.mec.num_mec = 2;
 	adapt->gfx.mec.num_pipe_per_mec = 4;
 	adapt->gfx.mec.num_queue_per_pipe = 8;
+#endif
+
+	/* Register the gc_12_1_0 RLC/MEC A0/B0 ucode accessors into adapt->ucode. */
+	rlc_12_1_0_ucode_register(adapt);
+	mec_12_1_0_ucode_register(adapt);
+	AMDGV_INFO("gc_12_1_0 RLC/MEC ucode variant: %s (rev_id 0x%x)\n",
+		   adapt->rev_id == 0 ? "A0" : "B0", adapt->rev_id);
 
 	return 0;
 }
@@ -424,6 +547,7 @@ static int gfx_v12_1_sw_fini(struct amdgv_adapter *adapt)
 	return 0;
 }
 
+#if 0
 static void gfx_v12_1_enable_interrupt(struct amdgv_adapter *adapt, uint32_t xcc_id, bool enable)
 {
 	uint32_t tmp;
@@ -465,18 +589,27 @@ static void gfx_v12_1_cp_set_doorbell_range(struct amdgv_adapter *adapt, uint32_
 			((adapt->doorbell_index.userqueue_end +
 			  xcc_id * adapt->doorbell_index.xcc_doorbell_range) * 2) << 2);
 }
+#endif
 
 static int gfx_v12_1_hw_init_xcc(struct amdgv_adapter *adapt, uint32_t xcc_id)
 {
-	int r = 0;
+	int ret;
 
-	r = gfx_v12_1_prepare_engine(adapt, AMDGV_FIRMWARE_ID__RS64_MEC_UCODE, xcc_id);
-	if (r) {
+	ret = gfx_v12_1_prepare_engine(adapt, AMDGV_FIRMWARE_ID__MES_THREAD1, xcc_id);
+	if (ret) {
 		AMDGV_ERROR("Failed to prepare engine for firmware id %d\n",
-			    AMDGV_FIRMWARE_ID__RS64_MEC_UCODE);
-		return r;
+			    AMDGV_FIRMWARE_ID__MES_THREAD1);
+		return ret;
 	}
 
+	ret = gfx_v12_1_prepare_engine(adapt, AMDGV_FIRMWARE_ID__RS64_MEC_UCODE, xcc_id);
+	if (ret) {
+		AMDGV_ERROR("Failed to prepare engine for firmware id %d\n",
+			    AMDGV_FIRMWARE_ID__RS64_MEC_UCODE);
+		return ret;
+	}
+
+#if 0
 	if (adapt->enable_mes_kiq) {
 		gfx_v12_1_cp_set_doorbell_range(adapt, xcc_id);
 
@@ -484,8 +617,8 @@ static int gfx_v12_1_hw_init_xcc(struct amdgv_adapter *adapt, uint32_t xcc_id)
 
 		gfx_v12_1_enable_interrupt(adapt, xcc_id, true);
 
-		r = amdgv_mes_kiq_hw_init(adapt, xcc_id);
-		if (r) {
+		ret = amdgv_mes_kiq_hw_init(adapt, xcc_id);
+		if (ret) {
 			AMDGV_ERROR("Failed to init MES KIQ on xcc %d\n", xcc_id);
 			gfx_v12_1_enable_interrupt(adapt, xcc_id, false);
 			gfx_v12_1_xcc_cp_compute_enable(adapt, false, xcc_id);
@@ -495,28 +628,35 @@ static int gfx_v12_1_hw_init_xcc(struct amdgv_adapter *adapt, uint32_t xcc_id)
 		AMDGV_ERROR("MES KIQ is not enabled on xcc %d\n", xcc_id);
 		return AMDGV_FAILURE;
 	}
+#else
+	gfx_v12_1_xcc_cp_compute_enable(adapt, true, xcc_id);
+#endif
 
-	return r;
+	return ret;
 }
 
 static int gfx_v12_1_hw_init(struct amdgv_adapter *adapt)
 {
-	int i;
+	int ret, i;
 
+	gfx_v12_1_init_golden_registers(adapt);
 	gfx_v12_1_constants_init(adapt);
 
 	if (amdgv_nbio_gc_doorbell_init(adapt))
 		return AMDGV_FAILURE;
 
-	for (i = 0; i < adapt->mcp.gfx.num_xcc; i++)
-		if (gfx_v12_1_hw_init_xcc(adapt, i))
-			return AMDGV_FAILURE;
+	for (i = 0; i < adapt->mcp.gfx.num_xcc; i++) {
+		ret = gfx_v12_1_hw_init_xcc(adapt, i);
+		if (ret)
+			return ret;
+	}
 
 	return 0;
 }
 
 static int gfx_v12_1_hw_fini_xcc(struct amdgv_adapter *adapt, uint32_t xcc_id)
 {
+#if 0
 	gfx_v12_1_enable_interrupt(adapt, xcc_id, false);
 
 	if (adapt->enable_mes_kiq) {
@@ -524,6 +664,7 @@ static int gfx_v12_1_hw_fini_xcc(struct amdgv_adapter *adapt, uint32_t xcc_id)
 			AMDGV_ERROR("MES KIQ hw fini failed on xcc %d, "
 				    "proceeding with compute disable\n", xcc_id);
 	}
+#endif
 
 	gfx_v12_1_xcc_cp_compute_enable(adapt, false, xcc_id);
 

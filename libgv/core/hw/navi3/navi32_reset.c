@@ -678,10 +678,8 @@ static int navi32_reset_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 
 	/* use SMU msg to trigger FLR instead of PCIe control bit*/
 	ret = navi32_trigger_vf_flr_by_msg(adapt, 1 << idx_vf);
-	if (ret) {
-		amdgv_put_log(idx_vf, AMDGV_LOG_FW_TRIGGER_VF_FLR_FAIL, 0);
+	if (ret)
 		ret = AMDGV_FAILURE;
-	}
 
 	/* After an FLR has been initiated by writing a 1b to
 	 * the Initiate Function Level Reset bit, the Function

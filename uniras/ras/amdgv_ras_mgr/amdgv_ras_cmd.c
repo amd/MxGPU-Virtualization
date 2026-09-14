@@ -84,10 +84,11 @@ static int amdgv_ras_query_interface_info(struct ras_core_context *ras_core,
 	struct ras_cmd_ctx *cmd)
 {
 	struct ras_query_interface_info_rsp *ver_rsp =
-	(struct ras_query_interface_info_rsp *)cmd->output_buff_raw;
+			(struct ras_query_interface_info_rsp *)cmd->output_buff_raw;
 	int ret;
 
-	if (cmd->input_size != sizeof(struct ras_query_interface_info_req))
+	if ((cmd->input_size != sizeof(struct ras_query_interface_info_req)) ||
+		(cmd->output_buf_size < sizeof(*ver_rsp)))
 		return RAS_CMD__ERROR_INVALID_INPUT_SIZE;
 
 	ret = ras_cmd_query_interface_info(ras_core, ver_rsp);
@@ -164,6 +165,9 @@ static int amdgv_ras_get_devices_info(struct ras_core_context *ras_core,
 	struct ras_cmd_mgr *cmd_mgr;
 	struct ras_cmd_dev_info *dev_info;
 	int idx = 0, ret;
+
+	if (cmd->output_buf_size < sizeof(*output_data))
+		return RAS_CMD__ERROR_INVALID_INPUT_SIZE;
 
 	oss_list_for_each_entry(cmd_mgr, &g_ras_cmd_device_list, struct ras_cmd_mgr, head) {
 		dev_info = &output_data->devs[idx];
@@ -350,7 +354,8 @@ static int amdgv_ras_load_ta(struct ras_core_context *ras_core,
 	enum ras_ta_load_status ta_load_status;
 	uint8_t *buf_ptr;
 
-	if (cmd->input_size != sizeof(*input_data))
+	if ((cmd->input_size != sizeof(*input_data)) ||
+		(cmd->output_buf_size < sizeof(*out_data)))
 		return RAS_CMD__ERROR_INVALID_INPUT_DATA;
 
 	if (!input_data->version || !input_data->data_len || !input_data->data_addr) {
@@ -489,7 +494,8 @@ static int amdgv_ras_get_ras_safe_fb_addr_ranges(struct ras_core_context *ras_co
 			(struct ras_cmd_ras_safe_fb_address_ranges_rsp *)cmd->output_buff_raw;
 	uint32_t i = 0;
 
-	if (cmd->input_size != sizeof(*input_data))
+	if ((cmd->input_size != sizeof(*input_data)) ||
+		(cmd->output_buf_size < sizeof(*ranges)))
 		return RAS_CMD__ERROR_INVALID_INPUT_DATA;
 
 	ranges->num_ranges = 0;
@@ -597,7 +603,8 @@ static int amdgv_ras_translate_fb_address(struct ras_core_context *ras_core,
 			(struct ras_cmd_translate_fb_address_rsp *)cmd->output_buff_raw;
 	int ret = RAS_CMD__ERROR_GENERIC;
 
-	if (cmd->input_size != sizeof(struct ras_cmd_translate_fb_address_req))
+	if ((cmd->input_size != sizeof(struct ras_cmd_translate_fb_address_req)) ||
+		(cmd->output_buf_size < sizeof(*rsp_buff)))
 		return RAS_CMD__ERROR_INVALID_INPUT_SIZE;
 
 	if ((req_buff->src_addr_type >= RAS_FB_ADDR_UNKNOWN) ||
@@ -626,7 +633,8 @@ static int amdgv_ras_get_link_topology(struct ras_core_context *ras_core,
 	struct ras_core_context *src_ras_core, *dst_ras_core;
 	int ret;
 
-	if (cmd->input_size != sizeof(struct ras_dev_link_topology_req))
+	if ((cmd->input_size != sizeof(struct ras_dev_link_topology_req)) ||
+		(cmd->output_buf_size < sizeof(*output_data)))
 		return RAS_CMD__ERROR_INVALID_INPUT_SIZE;
 
 	src_ras_core = ras_cmd_get_ras_core(input_data->src.dev_handle);
@@ -731,6 +739,10 @@ static int amdgv_ras_fb_regions(struct ras_core_context *ras_core,
 			(struct ras_cmd_fb_regions_rsp *)cmd->output_buff_raw;
 	int ret;
 
+	if ((cmd->input_size != sizeof(*input_data)) ||
+		(cmd->output_buf_size < sizeof(*output_data)))
+		return RAS_CMD__ERROR_INVALID_INPUT_SIZE;
+
 	if (input_data->vf_idx == AMDGV_PF_IDX)
 		ret = amdgv_get_pf_regions(ras_core, output_data);
 	else
@@ -791,7 +803,8 @@ static int amdgv_ras_get_all_block_ecc_info(struct ras_core_context *ras_core,
 	uint64_t ras_caps;
 	uint32_t blk;
 
-	if (cmd->input_size != sizeof(struct ras_cmd_blocks_ecc_req))
+	if ((cmd->input_size != sizeof(struct ras_cmd_blocks_ecc_req)) ||
+		(cmd->output_buf_size < sizeof(*output_data)))
 		return RAS_CMD__ERROR_INVALID_INPUT_SIZE;
 
 	if (!ras_mgr)
@@ -973,6 +986,7 @@ static int amdgv_ras_check_address_validity(struct ras_core_context *ras_core,
 	int i, count, ret;
 
 	if ((cmd->input_size != sizeof(*input_data)) ||
+		(cmd->output_buf_size < sizeof(*output_data)) ||
 		!input_data->address)
 		return RAS_CMD__ERROR_INVALID_INPUT_DATA;
 
@@ -1035,7 +1049,8 @@ static int amdgv_ras_convert_retired_address(struct ras_core_context *ras_core,
 	int ret = 0, i;
 	uint64_t guest_addr, vf_fb_size;
 
-	if (cmd->input_size != sizeof(struct ras_cmd_convert_retired_address_req))
+	if ((cmd->input_size != sizeof(struct ras_cmd_convert_retired_address_req)) ||
+		(cmd->output_buf_size < sizeof(*output_data)))
 		return RAS_CMD__ERROR_INVALID_INPUT_DATA;
 
 	/* convert GPA to SPA */
@@ -1241,14 +1256,14 @@ int amdgv_ras_submit_cmd(struct ras_core_context *ras_core,
 
 	cmd->cmd_res = res;
 
-	if (cmd->output_size > cmd->output_buf_size) {
+	if (!res && (cmd->output_size > cmd->output_buf_size)) {
 		RAS_DEV_ERR(cmd_core->dev,
 			"Output size 0x%x exceeds output buffer size 0x%x!\n",
 			cmd->output_size, cmd->output_buf_size);
 		return RAS_CMD__SUCCESS_EXEED_BUFFER;
 	}
 
-	return RAS_CMD__SUCCESS;
+	return res;
 }
 
 int amdgv_ras_cmd_ioctl_handler(struct ras_core_context *ras_core,

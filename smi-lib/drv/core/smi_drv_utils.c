@@ -19,21 +19,20 @@ uint64_t smi_eeprom_to_utc_format(uint64_t eeprom_timestamp)
 	uint64_t year, month, day, hour, minute, second;
 	uint64_t i;
 	uint64_t utc_timestamp = 0;
-	int days_in_month[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+	int days_in_month[]    = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
 	second = eeprom_timestamp & 0x3F;
 	minute = (eeprom_timestamp >> EEPROM_TIMESTAMP_MINUTE) & 0x3F;
-	hour = (eeprom_timestamp >> EEPROM_TIMESTAMP_HOUR) & 0x1F;
-	day = (eeprom_timestamp >> EEPROM_TIMESTAMP_DAY) & 0x3F;
-	month = (eeprom_timestamp >> EEPROM_TIMESTAMP_MONTH) & 0x0F;
-	year = (eeprom_timestamp >> EEPROM_TIMESTAMP_YEAR) & 0x1F;
+	hour   = (eeprom_timestamp >> EEPROM_TIMESTAMP_HOUR) & 0x1F;
+	day    = (eeprom_timestamp >> EEPROM_TIMESTAMP_DAY) & 0x3F;
+	month  = (eeprom_timestamp >> EEPROM_TIMESTAMP_MONTH) & 0x0F;
+	year   = (eeprom_timestamp >> EEPROM_TIMESTAMP_YEAR) & 0x1F;
 
 	year += 2000;
 
 	/* Validate extracted values to prevent array bounds violations and invalid dates */
-	if (month < 1 || month > 12 ||
-		day < 1 || day > 31 ||
-		hour > 23 || minute > 59 || second > 59) {
+	if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 ||
+	    second > 59) {
 		/* Invalid date/time, return -1 */
 		return SMI_NOT_SUPPORTED;
 	}
@@ -61,29 +60,28 @@ uint64_t smi_eeprom_v4_to_utc_format(uint64_t eeprom_timestamp)
 	uint64_t year, month, day, hour, minute, second;
 	uint64_t i;
 	uint64_t utc_timestamp = 0;
-	int days_in_month[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+	int days_in_month[]    = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 	uint32_t ts_hi, ts_lo;
 	uint8_t raw_val;
 
-	//V4 format uses the following split format:
-	// ts_hi: yy[31:16] mm[15:8] day[7:0]
-	// ts_lo: hh[23:16] mm[15:8] ss[7:0]
-	ts_hi = (uint32_t)(eeprom_timestamp >> 32);  // Upper 32 bits
-	ts_lo = (uint32_t)(eeprom_timestamp & 0xFFFFFFFF);  // Lower 32 bits
+	// V4 format uses the following split format:
+	//  ts_hi: yy[31:16] mm[15:8] day[7:0]
+	//  ts_lo: hh[23:16] mm[15:8] ss[7:0]
+	ts_hi = (uint32_t)(eeprom_timestamp >> 32);	   // Upper 32 bits
+	ts_lo = (uint32_t)(eeprom_timestamp & 0xFFFFFFFF); // Lower 32 bits
 
 	raw_val = (ts_hi >> EEPROM_V4_TIMESTAMP_YEAR) & 0xFF;
-	year = 2000 + raw_val;
+	year	= 2000 + raw_val;
 
-	month = (ts_hi >> EEPROM_V4_TIMESTAMP_MONTH) & 0xFF;
-	day = ts_hi & 0xFF;
-	hour = (ts_lo >> EEPROM_V4_TIMESTAMP_HOUR) & 0xFF;
+	month  = (ts_hi >> EEPROM_V4_TIMESTAMP_MONTH) & 0xFF;
+	day    = ts_hi & 0xFF;
+	hour   = (ts_lo >> EEPROM_V4_TIMESTAMP_HOUR) & 0xFF;
 	minute = (ts_lo >> EEPROM_V4_TIMESTAMP_MINUTE) & 0xFF;
 	second = ts_lo & 0xFF;
 
 	/* Validate extracted values to prevent array bounds violations and invalid dates */
-	if (month < 1 || month > 12 ||
-		day < 1 || day > 31 ||
-		hour > 23 || minute > 59 || second > 59) {
+	if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 ||
+	    second > 59) {
 		/* Invalid date/time, return -1 */
 		return SMI_NOT_SUPPORTED;
 	}
@@ -116,17 +114,18 @@ void smi_generate_time_string(char *buf, uint64_t microsec)
 	/* convert to sec */
 	sec = microsec / 1000000;
 
-	hour = sec / (60*60);
-	sec  = sec % (60*60);
+	hour = sec / (60 * 60);
+	sec  = sec % (60 * 60);
 	min  = sec / 60;
 	sec  = sec % 60;
 
-	smi_vsnprintf(buf, SMI_MAX_DATE_LENGTH,
-		SMI_TIME_FORMAT,
-		(int) hour,
-		(int) min,
-		(int) sec,
-		(int) millisec);
+	smi_vsnprintf(buf,
+		      SMI_MAX_DATE_LENGTH,
+		      SMI_TIME_FORMAT,
+		      (int)hour,
+		      (int)min,
+		      (int)sec,
+		      (int)millisec);
 
 	/* HH:MM:SS.MSC */
 	buf[12] = 0;
@@ -353,6 +352,51 @@ enum smi_fw_block smi_ucode_amdgv_to_smi(enum amdgv_firmware_id ucode_id)
 	case AMDGV_FIRMWARE_ID__PLDM_VERSION:
 		ret_ucode_id = SMI_FW_ID_PLDM_VERSION;
 		break;
+	case AMDGV_FIRMWARE_ID__RS64_MES:
+		ret_ucode_id = SMI_FW_ID_RS64_MES;
+		break;
+	case AMDGV_FIRMWARE_ID__RS64_MES_STACK:
+		ret_ucode_id = SMI_FW_ID_RS64_MES_STACK;
+		break;
+	case AMDGV_FIRMWARE_ID__RS64_KIQ:
+		ret_ucode_id = SMI_FW_ID_RS64_KIQ;
+		break;
+	case AMDGV_FIRMWARE_ID__RS64_KIQ_STACK:
+		ret_ucode_id = SMI_FW_ID_RS64_KIQ_STACK;
+		break;
+	case AMDGV_FIRMWARE_ID__XGMI_TA:
+		ret_ucode_id = SMI_FW_ID_TA_XGMI;
+		break;
+	case AMDGV_FIRMWARE_ID__RS64_MEC_P4_DATA:
+		ret_ucode_id = SMI_FW_ID_RS64_MEC_P4_DATA;
+		break;
+	case AMDGV_FIRMWARE_ID__RS64_MEC_P5_DATA:
+		ret_ucode_id = SMI_FW_ID_RS64_MEC_P5_DATA;
+		break;
+	case AMDGV_FIRMWARE_ID__RS64_MEC_P6_DATA:
+		ret_ucode_id = SMI_FW_ID_RS64_MEC_P6_DATA;
+		break;
+	case AMDGV_FIRMWARE_ID__RS64_MEC_P7_DATA:
+		ret_ucode_id = SMI_FW_ID_RS64_MEC_P7_DATA;
+		break;
+	case AMDGV_FIRMWARE_ID__F32_LSDMA_UCODE:
+		ret_ucode_id = SMI_FW_ID_LSDMA;
+		break;
+	case AMDGV_FIRMWARE_ID__MP5:
+		ret_ucode_id = SMI_FW_ID_MP5;
+		break;
+	case AMDGV_FIRMWARE_ID__PSP_IPKEYMGR:
+		ret_ucode_id = SMI_FW_ID_PSP_IPKEYMGR;
+		break;
+	case AMDGV_FIRMWARE_ID__PSP_IOVM:
+		ret_ucode_id = SMI_FW_ID_PSP_IOVM;
+		break;
+	case AMDGV_FIRMWARE_ID__PSP_SPDM:
+		ret_ucode_id = SMI_FW_ID_PSP_SPDM;
+		break;
+	case AMDGV_FIRMWARE_ID__PSP_DPE:
+		ret_ucode_id = SMI_FW_ID_PSP_DPE;
+		break;
 	default:
 		ret_ucode_id = SMI_FW_ID__MAX;
 		break;
@@ -496,74 +540,88 @@ enum smi_card_form_factor smi_map_card_form_factor(enum amdgv_gpumon_card_form_f
 	return card_type;
 }
 
-enum amdgv_smi_ras_block smi_map_gpu_block(enum smi_gpu_block block)
+enum amdgv_smi_ras_block smi_map_gpu_block(uint64_t block)
 {
-	uint32_t gpu_block;
+	if (block == SMI_GPU_BLOCK_UMC)
+		return AMDGV_SMI_RAS_BLOCK__UMC;
+	if (block == SMI_GPU_BLOCK_SDMA)
+		return AMDGV_SMI_RAS_BLOCK__SDMA;
+	if (block == SMI_GPU_BLOCK_GFX)
+		return AMDGV_SMI_RAS_BLOCK__GFX;
+	if (block == SMI_GPU_BLOCK_MMHUB)
+		return AMDGV_SMI_RAS_BLOCK__MMHUB;
+	if (block == SMI_GPU_BLOCK_ATHUB)
+		return AMDGV_SMI_RAS_BLOCK__ATHUB;
+	if (block == SMI_GPU_BLOCK_PCIE_BIF)
+		return AMDGV_SMI_RAS_BLOCK__PCIE_BIF;
+	if (block == SMI_GPU_BLOCK_HDP)
+		return AMDGV_SMI_RAS_BLOCK__HDP;
+	if (block == SMI_GPU_BLOCK_XGMI_WAFL)
+		return AMDGV_SMI_RAS_BLOCK__XGMI_WAFL;
+	if (block == SMI_GPU_BLOCK_DF)
+		return AMDGV_SMI_RAS_BLOCK__DF;
+	if (block == SMI_GPU_BLOCK_SMN)
+		return AMDGV_SMI_RAS_BLOCK__SMN;
+	if (block == SMI_GPU_BLOCK_SEM)
+		return AMDGV_SMI_RAS_BLOCK__SEM;
+	if (block == SMI_GPU_BLOCK_MP0)
+		return AMDGV_SMI_RAS_BLOCK__MP0;
+	if (block == SMI_GPU_BLOCK_MP1)
+		return AMDGV_SMI_RAS_BLOCK__MP1;
+	if (block == SMI_GPU_BLOCK_FUSE)
+		return AMDGV_SMI_RAS_BLOCK__FUSE;
+	if (block == SMI_GPU_BLOCK_MCA)
+		return AMDGV_SMI_RAS_BLOCK__MCA;
+	if (block == SMI_GPU_BLOCK_VCN)
+		return AMDGV_SMI_RAS_BLOCK__VCN;
+	if (block == SMI_GPU_BLOCK_JPEG)
+		return AMDGV_SMI_RAS_BLOCK__JPEG;
+	if (block == SMI_GPU_BLOCK_IH)
+		return AMDGV_SMI_RAS_BLOCK__IH;
+	if (block == SMI_GPU_BLOCK_MPIO)
+		return AMDGV_SMI_RAS_BLOCK__MPIO;
+	if (block == SMI_GPU_BLOCK_MMSCH)
+		return AMDGV_SMI_RAS_BLOCK__MMSCH;
+	if (block == SMI_GPU_BLOCK_MP5)
+		return AMDGV_SMI_RAS_BLOCK__MP5;
+	if (block == SMI_GPU_BLOCK_ATU)
+		return AMDGV_SMI_RAS_BLOCK__ATU;
+	if (block == SMI_GPU_BLOCK_DACC_BE)
+		return AMDGV_SMI_RAS_BLOCK__DACC_BE;
+	if (block == SMI_GPU_BLOCK_ECLR)
+		return AMDGV_SMI_RAS_BLOCK__ECLR;
+	if (block == SMI_GPU_BLOCK_KPX_SERDES)
+		return AMDGV_SMI_RAS_BLOCK__KPX_SERDES;
+	if (block == SMI_GPU_BLOCK_LSDMA)
+		return AMDGV_SMI_RAS_BLOCK__LSDMA;
+	if (block == SMI_GPU_BLOCK_MPART)
+		return AMDGV_SMI_RAS_BLOCK__MPART;
+	if (block == SMI_GPU_BLOCK_MPIFOE)
+		return AMDGV_SMI_RAS_BLOCK__MPIFOE;
+	if (block == SMI_GPU_BLOCK_MPRAS)
+		return AMDGV_SMI_RAS_BLOCK__MPRAS;
+	if (block == SMI_GPU_BLOCK_NBIF)
+		return AMDGV_SMI_RAS_BLOCK__NBIF;
+	if (block == SMI_GPU_BLOCK_NBIO)
+		return AMDGV_SMI_RAS_BLOCK__NBIO;
+	if (block == SMI_GPU_BLOCK_OXRP)
+		return AMDGV_SMI_RAS_BLOCK__OXRP;
+	if (block == SMI_GPU_BLOCK_PCIE_PL)
+		return AMDGV_SMI_RAS_BLOCK__PCIE_PL;
+	if (block == SMI_GPU_BLOCK_PCS_XGMI)
+		return AMDGV_SMI_RAS_BLOCK__PCS_XGMI;
+	if (block == SMI_GPU_BLOCK_PIE)
+		return AMDGV_SMI_RAS_BLOCK__PIE;
+	if (block == SMI_GPU_BLOCK_CS)
+		return AMDGV_SMI_RAS_BLOCK__CS;
+	if (block == SMI_GPU_BLOCK_SHUB)
+		return AMDGV_SMI_RAS_BLOCK__SHUB;
+	if (block == SMI_GPU_BLOCK_SSBDCI)
+		return AMDGV_SMI_RAS_BLOCK__SSBDCI;
+	if (block == SMI_GPU_BLOCK_UCIE_PCS)
+		return AMDGV_SMI_RAS_BLOCK__UCIE_PCS;
 
-	switch (block) {
-	case SMI_GPU_BLOCK_UMC:
-		gpu_block = AMDGV_SMI_RAS_BLOCK__UMC;
-		break;
-	case SMI_GPU_BLOCK_SDMA:
-		gpu_block = AMDGV_SMI_RAS_BLOCK__SDMA;
-		break;
-	case SMI_GPU_BLOCK_GFX:
-		gpu_block = AMDGV_SMI_RAS_BLOCK__GFX;
-		break;
-	case SMI_GPU_BLOCK_MMHUB:
-		gpu_block = AMDGV_SMI_RAS_BLOCK__MMHUB;
-		break;
-	case SMI_GPU_BLOCK_ATHUB:
-		gpu_block = AMDGV_SMI_RAS_BLOCK__ATHUB;
-		break;
-	case SMI_GPU_BLOCK_PCIE_BIF:
-		gpu_block = AMDGV_SMI_RAS_BLOCK__PCIE_BIF;
-		break;
-	case SMI_GPU_BLOCK_HDP:
-		gpu_block = AMDGV_SMI_RAS_BLOCK__HDP;
-		break;
-	case SMI_GPU_BLOCK_XGMI_WAFL:
-		gpu_block = AMDGV_SMI_RAS_BLOCK__XGMI_WAFL;
-		break;
-	case SMI_GPU_BLOCK_DF:
-		gpu_block = AMDGV_SMI_RAS_BLOCK__DF;
-		break;
-	case SMI_GPU_BLOCK_SMN:
-		gpu_block = AMDGV_SMI_RAS_BLOCK__SMN;
-		break;
-	case SMI_GPU_BLOCK_SEM:
-		gpu_block = AMDGV_SMI_RAS_BLOCK__SEM;
-		break;
-	case SMI_GPU_BLOCK_MP0:
-		gpu_block = AMDGV_SMI_RAS_BLOCK__MP0;
-		break;
-	case SMI_GPU_BLOCK_MP1:
-		gpu_block = AMDGV_SMI_RAS_BLOCK__MP1;
-		break;
-	case SMI_GPU_BLOCK_FUSE:
-		gpu_block = AMDGV_SMI_RAS_BLOCK__FUSE;
-		break;
-	case SMI_GPU_BLOCK_MCA:
-		gpu_block = AMDGV_SMI_RAS_BLOCK__MCA;
-		break;
-	case SMI_GPU_BLOCK_VCN:
-		gpu_block = AMDGV_SMI_RAS_BLOCK__VCN;
-		break;
-	case SMI_GPU_BLOCK_JPEG:
-		gpu_block = AMDGV_SMI_RAS_BLOCK__JPEG;
-		break;
-	case SMI_GPU_BLOCK_IH:
-		gpu_block = AMDGV_SMI_RAS_BLOCK__IH;
-		break;
-	case SMI_GPU_BLOCK_MPIO:
-		gpu_block = AMDGV_SMI_RAS_BLOCK__MPIO;
-		break;
-	default:
-		gpu_block = AMDGV_SMI_NUM_BLOCK_MAX;
-		break;
-	}
-
-	return gpu_block;
+	return AMDGV_SMI_NUM_BLOCK_MAX;
 }
 
 enum smi_vram_type smi_map_vram_type(enum amdgv_gpumon_vram_type type)
@@ -583,6 +641,9 @@ enum smi_vram_type smi_map_vram_type(enum amdgv_gpumon_vram_type type)
 	case AMDGV_GPUMON_DGPU_VRAM_TYPE__HBM3E:
 		vram_type = SMI_VRAM_TYPE_HBM3E;
 		break;
+	case AMDGV_GPUMON_DGPU_VRAM_TYPE__HBM4:
+		vram_type = SMI_VRAM_TYPE_HBM4;
+		break;
 	case AMDGV_GPUMON_DGPU_VRAM_TYPE__GDDR5:
 		vram_type = SMI_VRAM_TYPE_GDDR5;
 		break;
@@ -600,7 +661,7 @@ enum smi_vram_type smi_map_vram_type(enum amdgv_gpumon_vram_type type)
 	return vram_type;
 }
 
-const char* smi_map_vram_vendor(enum amdgv_gpumon_vram_vendor vendor)
+const char *smi_map_vram_vendor(enum amdgv_gpumon_vram_vendor vendor)
 {
 	switch (vendor) {
 	case AMDGV_GPUMON_VRAM_VENDOR__SAMSUNG:
@@ -1254,7 +1315,8 @@ enum smi_metric_res_group smi_map_metric_res_group(enum amdgv_gpumon_metric_ext_
 	return metric_res_group;
 }
 
-enum smi_metric_res_subgroup smi_map_metric_res_subgroup(enum amdgv_gpumon_metric_ext_res_subgroup res_subgroup)
+enum smi_metric_res_subgroup
+smi_map_metric_res_subgroup(enum amdgv_gpumon_metric_ext_res_subgroup res_subgroup)
 {
 	enum smi_metric_res_group metric_res_subgroup = SMI_METRIC_RES_SUBGROUP_UNKNOWN;
 
@@ -1284,7 +1346,6 @@ enum smi_metric_res_subgroup smi_map_metric_res_subgroup(enum amdgv_gpumon_metri
 	return metric_res_subgroup;
 }
 
-
 enum smi_memory_partition_type smi_map_mp_mode(enum amdgv_memory_partition_mode mode)
 {
 	enum smi_memory_partition_type partition_mode = SMI_MEMORY_PARTITION_UNKNOWN;
@@ -1309,7 +1370,8 @@ enum smi_memory_partition_type smi_map_mp_mode(enum amdgv_memory_partition_mode 
 	return partition_mode;
 }
 
-enum smi_accelerator_partition_type smi_map_partition_type(enum amdgv_gpumon_acccelerator_partition_type type)
+enum smi_accelerator_partition_type
+smi_map_partition_type(enum amdgv_gpumon_acccelerator_partition_type type)
 {
 	enum smi_accelerator_partition_type partition_type = SMI_ACCELERATOR_PARTITION_INVALID;
 
@@ -1336,7 +1398,8 @@ enum smi_accelerator_partition_type smi_map_partition_type(enum amdgv_gpumon_acc
 	return partition_type;
 }
 
-enum smi_accelerator_partition_resource_type smi_map_resource_type(enum amdgv_gpumon_accelerator_partition_resource_type type)
+enum smi_accelerator_partition_resource_type
+smi_map_resource_type(enum amdgv_gpumon_accelerator_partition_resource_type type)
 {
 	enum smi_accelerator_partition_resource_type resource_type = SMI_ACCELERATOR_MAX;
 
@@ -1434,7 +1497,7 @@ enum smi_fabric_type smi_map_fabric_type(enum amdgv_gpumon_ual_link_type type)
 	switch (type) {
 	case AMDGV_GPUMON_UALOE:
 		return SMI_FABRIC_TYPE_UALOE;
-	case AMDGV_GPUMON_UALINK:
+	case AMDGV_GPUMON_UALINK_200:
 		return SMI_FABRIC_TYPE_UALINK;
 	case AMDGV_GPUMON_UALMAX:
 	default:
@@ -1442,8 +1505,8 @@ enum smi_fabric_type smi_map_fabric_type(enum amdgv_gpumon_ual_link_type type)
 	}
 }
 
-enum smi_fabric_npa_address_mode smi_map_fabric_npa_address_mode(
-	enum amdgv_gpumon_ual_npa_address_mode mode)
+enum smi_fabric_npa_address_mode
+smi_map_fabric_npa_address_mode(enum amdgv_gpumon_ual_npa_address_mode mode)
 {
 	switch (mode) {
 	case AMDGV_GPUMON_UAL_NPA_ADDRESS_MODE_SOURCE_ALIASING:
@@ -1456,8 +1519,8 @@ enum smi_fabric_npa_address_mode smi_map_fabric_npa_address_mode(
 	}
 }
 
-enum smi_fabric_accelerator_vpod_state smi_map_fabric_accelerator_vpod_state(
-	enum amdgv_gpumon_ual_accelerator_vpod_state state)
+enum smi_fabric_accelerator_vpod_state
+smi_map_fabric_accelerator_vpod_state(enum amdgv_gpumon_ual_accelerator_vpod_state state)
 {
 	switch (state) {
 	case AMDGV_GPUMON_UAL_ACCEL_VPOD_STATE_UNCONFIGURED:
@@ -1477,22 +1540,22 @@ enum smi_fabric_accelerator_vpod_state smi_map_fabric_accelerator_vpod_state(
 
 enum smi_ptl_data_format smi_map_ptl_format(enum amdgv_ptl_format_type drv_fmt)
 {
-    switch (drv_fmt) {
-    case AMDGV_PTL_FORMAT_I8:
-        return SMI_PTL_DATA_FORMAT_I8;
-    case AMDGV_PTL_FORMAT_F16:
-        return SMI_PTL_DATA_FORMAT_F16;
-    case AMDGV_PTL_FORMAT_BF16:
-        return SMI_PTL_DATA_FORMAT_BF16;
-    case AMDGV_PTL_FORMAT_F32:
-        return SMI_PTL_DATA_FORMAT_F32;
-    case AMDGV_PTL_FORMAT_F64:
-        return SMI_PTL_DATA_FORMAT_F64;
-    case AMDGV_PTL_FORMAT_F8:
-        return SMI_PTL_DATA_FORMAT_F8;
-    case AMDGV_PTL_FORMAT_VECTOR:
-        return SMI_PTL_DATA_FORMAT_VECTOR;
-    default:
-        return SMI_PTL_DATA_FORMAT_INVALID;
-    }
+	switch (drv_fmt) {
+	case AMDGV_PTL_FORMAT_I8:
+		return SMI_PTL_DATA_FORMAT_I8;
+	case AMDGV_PTL_FORMAT_F16:
+		return SMI_PTL_DATA_FORMAT_F16;
+	case AMDGV_PTL_FORMAT_BF16:
+		return SMI_PTL_DATA_FORMAT_BF16;
+	case AMDGV_PTL_FORMAT_F32:
+		return SMI_PTL_DATA_FORMAT_F32;
+	case AMDGV_PTL_FORMAT_F64:
+		return SMI_PTL_DATA_FORMAT_F64;
+	case AMDGV_PTL_FORMAT_F8:
+		return SMI_PTL_DATA_FORMAT_F8;
+	case AMDGV_PTL_FORMAT_VECTOR:
+		return SMI_PTL_DATA_FORMAT_VECTOR;
+	default:
+		return SMI_PTL_DATA_FORMAT_INVALID;
+	}
 }

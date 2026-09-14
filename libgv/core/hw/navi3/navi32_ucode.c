@@ -391,6 +391,8 @@ static int navi32_ucode_load(struct amdgv_adapter *adapt,
 							(unsigned char *)psp_tos_wl_bin_navi32,
 							sizeof(psp_tos_wl_bin_navi32),
 							ucode_id_list[i]);
+				// IFWI doesn't support LM, disable LM
+				adapt->flags &= ~AMDGV_FLAG_GPUV_LIVE_MIGRATION;
 			}
 			break;
 		case AMDGV_FIRMWARE_ID__DFC_FW:
@@ -1284,7 +1286,7 @@ static int navi32_mes_load_ucode(struct amdgv_adapter *adapt, enum amdgv_mes_pip
 	AMDGV_INFO("[CZ] navi32_mes_load_ucode 1\n");
 
 	/* set ucode start address */
-	mes_uc_addr = adapt->mes_uc_start_addr[pipe] >> 2;
+	mes_uc_addr = adapt->mes.uc_start_addr[pipe] >> 2;
 	WREG32(SOC15_REG_OFFSET(GC, 0, regCP_MES_PRGRM_CNTR_START),
 		     lower_32_bits(mes_uc_addr));
 	WREG32(SOC15_REG_OFFSET(GC, 0, regCP_MES_PRGRM_CNTR_START_HI),

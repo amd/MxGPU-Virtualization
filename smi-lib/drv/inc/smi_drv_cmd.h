@@ -6,141 +6,143 @@
 #ifndef __SMI_DRV_CMD_H__
 #define __SMI_DRV_CMD_H__
 
-int smi_dummy_cmd(struct smi_ctx *ctx, void *inb, void *outb,
-			  uint16_t in_len, uint16_t out_len);
-int smi_get_server_static_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_gpu_vbios_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_gpu_board_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_gpu_asic_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_gpu_vram_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_gpu_driver_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_gpu_power_cap_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_supported_power_cap(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_gpu_fb_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_gpu_cache_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_set_gpu_power_cap(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_gpu_fw_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_gpu_performance_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_is_power_management_enabled(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_vf_static_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_vf_dynamic_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_vf_partition_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_set_vf_partition_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_clear_vf_fb(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_create_event_set(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_ecc_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_ecc_block_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_query_bad_page_info(struct smi_ctx *ctx, void *inb,
-		     void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_handle_id(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_guest_data(struct smi_ctx *ctx, void *inb,
-		       void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_dfc_fw(struct smi_ctx *ctx, void *inb,
-			      void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_pcie_info(struct smi_ctx *ctx, void *inb,
-		      void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_ucode_err_records(struct smi_ctx *ctx, void *inb,
-			      void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_vf_ucode_info(struct smi_ctx *ctx, void *inb,
-			      void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_partition_profile_info(struct smi_ctx *ctx, void *inb,
-			      void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_link_metrics(struct smi_ctx *ctx, void *inb,
-			 void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_link_topology(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_xgmi_fb_sharing_caps(struct smi_ctx *ctx, void *inb,
-				 void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_xgmi_fb_sharing_mode_info(struct smi_ctx *ctx, void *inb,
-				      void *outb, uint16_t in_len, uint16_t out_len);
-int smi_set_xgmi_fb_sharing_mode(struct smi_ctx *ctx, void *inb,
-				 void *outb, uint16_t in_len, uint16_t out_len);
-int smi_set_xgmi_fb_custom_sharing_mode(struct smi_ctx *ctx, void *inb,
-				 void *outb, uint16_t in_len, uint16_t out_len);
-int smi_read_event_set(struct smi_ctx *ctx, void *inb,
-		       void *outb, uint16_t in_len, uint16_t out_len);
-int smi_destroy_event_set(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_ras_feature_info(struct smi_ctx *ctx, void *inb,
-			     void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_bad_page_threshold(struct smi_ctx *ctx, void *inb,
-			     void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_data(struct smi_ctx *ctx, void *inb,
-		 void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_metrics_table(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_accelerator_partition_profile_config(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_accelerator_partition_profile_config_global(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_accelerator_partition_profile_config_common(struct smi_ctx *ctx, void *inb, int in_len, int some_other_parameter);
-int smi_get_memory_partition_caps(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_accelerator_partition_profile(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_memory_partition_config(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_set_accelerator_partition_setting(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_set_memory_partition_setting(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_gpu_driver_model(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_soc_pstate(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_set_soc_pstate(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_cper_error(struct smi_ctx *ctx, void *inb,
-			    void *outb, uint16_t in_len, uint16_t out_len);
-int smi_reset_gpu(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_xgmi_plpd(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_set_xgmi_plpd(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_vf_hbm_info(struct smi_ctx *ctx, void *inb,
-				void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_gpu_fabric_info(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_tdi_state(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_cc_mode(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_set_cc_mode(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_ras_policy_info(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_node_handle(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_dummy_cmd(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_server_static_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_gpu_vbios_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_gpu_board_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_gpu_asic_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_gpu_vram_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_gpu_driver_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_gpu_power_cap_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_supported_power_cap(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_gpu_fb_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_gpu_cache_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_set_gpu_power_cap(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_gpu_fw_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_gpu_performance_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_is_power_management_enabled(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_vf_static_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_vf_dynamic_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_vf_partition_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_set_vf_partition_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_clear_vf_fb(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_create_event_set(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_ecc_info(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_ecc_block_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_query_bad_page_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_handle_id(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_guest_data(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_dfc_fw(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_pcie_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_ucode_err_records(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_vf_ucode_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_partition_profile_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_link_metrics(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_link_topology(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_xgmi_fb_sharing_caps(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_xgmi_fb_sharing_mode_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_set_xgmi_fb_sharing_mode(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_set_xgmi_fb_custom_sharing_mode(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_read_event_set(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_destroy_event_set(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_ras_feature_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_bad_page_threshold(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_data(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_metrics_table(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_accelerator_partition_profile_config(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_accelerator_partition_profile_config_global(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_accelerator_partition_profile_config_common(struct smi_ctx *ctx,
+							void *inb,
+							int in_len,
+							int some_other_parameter);
+int smi_get_memory_partition_caps(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_accelerator_partition_profile(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_memory_partition_config(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_set_accelerator_partition_setting(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_set_memory_partition_setting(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_gpu_driver_model(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_soc_pstate(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_set_soc_pstate(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_cper_error(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_reset_gpu(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_xgmi_plpd(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_set_xgmi_plpd(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_vf_hbm_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_gpu_fabric_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_tdi_state(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_cc_mode(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_set_cc_mode(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_ras_policy_info(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_node_handle(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
 int smi_get_npm_info(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_gpu_ptl_state(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_set_gpu_ptl_state(struct smi_ctx *ctx, void *inb,
-			  void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_gpu_ptl_formats(struct smi_ctx *ctx, void *inb,
-			    void *outb, uint16_t in_len, uint16_t out_len);
-int smi_set_gpu_ptl_formats(struct smi_ctx *ctx, void *inb,
-			    void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_gpu_ptl_state(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_set_gpu_ptl_state(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_gpu_ptl_formats(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_set_gpu_ptl_formats(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_set_gpu_fabric_ppod_config(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_set_gpu_fabric_vpod_config(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_set_gpu_fabric_station_config(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
 #endif // __SMI_DRV_CMD_H__

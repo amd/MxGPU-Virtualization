@@ -1,4 +1,7 @@
-/* Copyright Advanced Micro Devices, Inc. All rights reserved. */
+/* Copyright Advanced Micro Devices, Inc.
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 #ifndef SMU_V15_0_8_PPSMC_H
 #define SMU_V15_0_8_PPSMC_H

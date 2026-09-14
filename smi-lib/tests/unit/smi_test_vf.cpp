@@ -48,13 +48,11 @@ static ::testing::AssertionResult guard_info_equal(smi_guard_info expect,
 
 	for (int i = 0; i < AMDSMI_GUARD_EVENT__MAX; i++) {
 		SMI_ASSERT_EQ((int)expect.guard[i].state, (int)actual.guard[i].state)
-			<< " for i = " << i;
-		SMI_ASSERT_EQ(expect.guard[i].amount, actual.guard[i].amount)
-			<< " for i = " << i;
+		    << " for i = " << i;
+		SMI_ASSERT_EQ(expect.guard[i].amount, actual.guard[i].amount) << " for i = " << i;
 		SMI_ASSERT_EQ(expect.guard[i].threshold, actual.guard[i].threshold)
-			<< " for i = " << i;
-		SMI_ASSERT_EQ(expect.guard[i].active, actual.guard[i].active)
-			<< " for i = " << i;
+		    << " for i = " << i;
+		SMI_ASSERT_EQ(expect.guard[i].active, actual.guard[i].active) << " for i = " << i;
 	}
 
 	return ::testing::AssertionSuccess();
@@ -70,7 +68,7 @@ static ::testing::AssertionResult vf_partition_info_equal(smi_partition_info exp
 }
 
 class AmdsmiVfTests : public amdsmi::AmdSmiTest {
-public:
+      public:
 };
 
 TEST_F(AmdsmiVfTests, InvalidParams)
@@ -82,7 +80,7 @@ TEST_F(AmdsmiVfTests, InvalidParams)
 	amdsmi_partition_info_t partition;
 
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
-	amdsmi_vf_handle_t MOCK_VF_HANDLE = VF_MOCK_HANDLE;
+	amdsmi_vf_handle_t MOCK_VF_HANDLE	= VF_MOCK_HANDLE;
 
 	ret = amdsmi_get_num_vf(MOCK_GPU_HANDLE, NULL, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
@@ -123,7 +121,7 @@ TEST_F(AmdsmiVfTests, InvalidParams)
 TEST_F(AmdsmiVfTests, IoctlFailed)
 {
 	int ret;
-	uint32_t num_vf = 4;
+	uint32_t num_vf	     = 4;
 	unsigned int buf_num = 6;
 	uint32_t num_vf_enabled;
 	uint32_t num_vf_supported;
@@ -132,9 +130,9 @@ TEST_F(AmdsmiVfTests, IoctlFailed)
 	amdsmi_vf_data_t info_res;
 	amdsmi_vf_hbm_info_t hbm_info_res;
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
-	amdsmi_vf_handle_t MOCK_VF_HANDLE = VF_MOCK_HANDLE;
+	amdsmi_vf_handle_t MOCK_VF_HANDLE	= VF_MOCK_HANDLE;
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_API_FAILED));
+	    .WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_API_FAILED));
 
 #ifdef _WIN64
 	ret = amdsmi_set_num_vf(MOCK_GPU_HANDLE, num_vf);
@@ -171,11 +169,12 @@ TEST_F(AmdsmiVfTests, GetNumVf)
 	uint32_t num_vf_enabled;
 	uint32_t num_vf_supported;
 
-	mocked_resp.num_vf_supported = 4;
-	mocked_resp.num_vf_enabled = 4;
+	mocked_resp.num_vf_supported		= 4;
+	mocked_resp.num_vf_enabled		= 4;
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 
-	WhenCalling(std::bind(amdsmi_get_num_vf, MOCK_GPU_HANDLE, &num_vf_enabled, &num_vf_supported));
+	WhenCalling(
+	    std::bind(amdsmi_get_num_vf, MOCK_GPU_HANDLE, &num_vf_enabled, &num_vf_supported));
 	ExpectCommand(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO);
 	SaveInputPayloadIn(&in_payload);
 	PlantMockOutput(&mocked_resp);
@@ -195,12 +194,13 @@ TEST_F(AmdsmiVfTests, GetNumVfApiFailed)
 	uint32_t num_vf_enabled;
 	uint32_t num_vf_supported;
 
-	mocked_resp.num_vf_supported = 4;
+	mocked_resp.num_vf_supported		= 4;
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
-	mocked_resp.num_vf_enabled = 4;
+	mocked_resp.num_vf_enabled		= 4;
 
-	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO)))
-		.WillOnce(amdsmi::SetResponseStatus(AMDSMI_STATUS_API_FAILED));
+	EXPECT_CALL(*amdsmi::g_system_mock,
+		    Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO)))
+	    .WillOnce(amdsmi::SetResponseStatus(AMDSMI_STATUS_API_FAILED));
 	SaveInputPayloadIn(&in_payload);
 	PlantMockOutput(&mocked_resp);
 	ret = amdsmi_get_num_vf(MOCK_GPU_HANDLE, &num_vf_enabled, &num_vf_supported);
@@ -211,7 +211,7 @@ TEST_F(AmdsmiVfTests, GetNumVfApiFailed)
 TEST_F(AmdsmiVfTests, SetNumVf)
 {
 	int ret;
-	uint32_t num_vf = 4;
+	uint32_t num_vf				= 4;
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 
 	ret = amdsmi_set_num_vf(MOCK_GPU_HANDLE, num_vf);
@@ -222,7 +222,7 @@ TEST_F(AmdsmiVfTests, SetNumVf)
 {
 	int ret;
 	smi_vf_partition_config in_payload;
-	uint32_t num_vf = 4;
+	uint32_t num_vf				= 4;
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 
 	WhenCalling(std::bind(amdsmi_set_num_vf, MOCK_GPU_HANDLE, num_vf));
@@ -256,16 +256,17 @@ TEST_F(AmdsmiVfTests, GetPartitionInfo)
 	int ret;
 	struct smi_device_info in_payload;
 	smi_vf_partition_info mocked_resp = {};
-	uint32_t num_vf = 1;
+	uint32_t num_vf			  = 1;
 	amdsmi_partition_info_t partition_info;
 
-	mocked_resp.num_vf_enabled = num_vf;
-	mocked_resp.partition[0].fb.fb_size = 4048;
+	mocked_resp.num_vf_enabled	      = num_vf;
+	mocked_resp.partition[0].fb.fb_size   = 4048;
 	mocked_resp.partition[0].fb.fb_offset = 4064;
 
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 
-	WhenCalling(std::bind(amdsmi_get_vf_partition_info, MOCK_GPU_HANDLE, num_vf, &partition_info));
+	WhenCalling(
+	    std::bind(amdsmi_get_vf_partition_info, MOCK_GPU_HANDLE, num_vf, &partition_info));
 	ExpectCommand(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO);
 	SaveInputPayloadIn(&in_payload);
 	PlantMockOutput(&mocked_resp);
@@ -280,13 +281,14 @@ TEST_F(AmdsmiVfTests, GetPartitionInfo_BufferTooSmall)
 	int ret;
 	struct smi_device_info in_payload;
 	struct smi_vf_partition_info mocked_resp = {};
-	unsigned int num_vf = 1;
+	unsigned int num_vf			 = 1;
 	amdsmi_partition_info_t partition_info;
 
-	mocked_resp.num_vf_enabled = 8;
+	mocked_resp.num_vf_enabled		= 8;
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 
-	WhenCalling(std::bind(amdsmi_get_vf_partition_info, MOCK_GPU_HANDLE, num_vf, &partition_info));
+	WhenCalling(
+	    std::bind(amdsmi_get_vf_partition_info, MOCK_GPU_HANDLE, num_vf, &partition_info));
 	ExpectCommand(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO);
 	SaveInputPayloadIn(&in_payload);
 	PlantMockOutput(&mocked_resp);
@@ -302,8 +304,8 @@ TEST_F(AmdsmiVfTests, GetVfConfig)
 	amdsmi_vf_info_t vf_config;
 	amdsmi_vf_handle_t MOCK_VF_HANDLE = VF_MOCK_HANDLE;
 	memset(&mocked_resp.config, 0, sizeof(amdsmi_vf_info_t));
-	mocked_resp.config.fb.fb_size = 4048;
-	mocked_resp.config.fb.fb_offset = 4064;
+	mocked_resp.config.fb.fb_size	 = 4048;
+	mocked_resp.config.fb.fb_offset	 = 4064;
 	mocked_resp.config.gfx_timeslice = 3000;
 
 	WhenCalling(std::bind(amdsmi_get_vf_info, MOCK_VF_HANDLE, &vf_config));
@@ -323,37 +325,57 @@ TEST_F(AmdsmiVfTests, GetVfData)
 	struct smi_vf_data mocked_resp = {};
 	amdsmi_vf_data_t vf_data;
 	amdsmi_vf_handle_t MOCK_VF_HANDLE = VF_MOCK_HANDLE;
-	mocked_resp.sched.state = SMI_VF_STATE_DEFAULT_AVAILABLE;
-	mocked_resp.sched.flr_count = 1;
+	mocked_resp.sched.state		  = SMI_VF_STATE_DEFAULT_AVAILABLE;
+	mocked_resp.sched.flr_count	  = 1;
 #ifdef _WIN64
-	strcpy_s(mocked_resp.sched.last_boot_start, sizeof(mocked_resp.sched.last_boot_start), "01:02:03.004");
-	strcpy_s(mocked_resp.sched.last_boot_end, sizeof(mocked_resp.sched.last_boot_end), "05:06:07.008");
+	strcpy_s(mocked_resp.sched.last_boot_start,
+		 sizeof(mocked_resp.sched.last_boot_start),
+		 "01:02:03.004");
+	strcpy_s(mocked_resp.sched.last_boot_end,
+		 sizeof(mocked_resp.sched.last_boot_end),
+		 "05:06:07.008");
 #else
 	strcpy(mocked_resp.sched.last_boot_start, "01:02:03.004");
 	strcpy(mocked_resp.sched.last_boot_end, "05:06:07.008");
 #endif
 	mocked_resp.sched.boot_up_time = 2;
 #ifdef _WIN64
-	strcpy_s(mocked_resp.sched.last_reset_start, sizeof(mocked_resp.sched.last_reset_start), "00:09:10.011");
-	strcpy_s(mocked_resp.sched.last_reset_end, sizeof(mocked_resp.sched.last_reset_end), "00:12:13.014");
+	strcpy_s(mocked_resp.sched.last_reset_start,
+		 sizeof(mocked_resp.sched.last_reset_start),
+		 "00:09:10.011");
+	strcpy_s(mocked_resp.sched.last_reset_end,
+		 sizeof(mocked_resp.sched.last_reset_end),
+		 "00:12:13.014");
 #else
 	strcpy(mocked_resp.sched.last_reset_start, "00:09:10.011");
 	strcpy(mocked_resp.sched.last_reset_end, "00:12:13.014");
 #endif
 	mocked_resp.sched.reset_time = 3;
 #ifdef _WIN64
-	strcpy_s(mocked_resp.sched.last_shutdown_start, sizeof(mocked_resp.sched.last_shutdown_start), "00:00:15.016");
-	strcpy_s(mocked_resp.sched.last_shutdown_end, sizeof(mocked_resp.sched.last_shutdown_end), "00:00:17.018");
+	strcpy_s(mocked_resp.sched.last_shutdown_start,
+		 sizeof(mocked_resp.sched.last_shutdown_start),
+		 "00:00:15.016");
+	strcpy_s(mocked_resp.sched.last_shutdown_end,
+		 sizeof(mocked_resp.sched.last_shutdown_end),
+		 "00:00:17.018");
 #else
 	strcpy(mocked_resp.sched.last_shutdown_start, "00:00:15.016");
 	strcpy(mocked_resp.sched.last_shutdown_end, "00:00:17.018");
 #endif
 	mocked_resp.sched.shutdown_time = 4;
 #ifdef _WIN64
-	strcpy_s(mocked_resp.sched.current_active_time, sizeof(mocked_resp.sched.current_active_time), "01:01:01.001");
-	strcpy_s(mocked_resp.sched.current_running_time, sizeof(mocked_resp.sched.current_running_time), "02:02:02.002");
-	strcpy_s(mocked_resp.sched.total_active_time, sizeof(mocked_resp.sched.total_active_time), "03:03:03.003");
-	strcpy_s(mocked_resp.sched.total_running_time, sizeof(mocked_resp.sched.total_running_time), "04:04:04.004");
+	strcpy_s(mocked_resp.sched.current_active_time,
+		 sizeof(mocked_resp.sched.current_active_time),
+		 "01:01:01.001");
+	strcpy_s(mocked_resp.sched.current_running_time,
+		 sizeof(mocked_resp.sched.current_running_time),
+		 "02:02:02.002");
+	strcpy_s(mocked_resp.sched.total_active_time,
+		 sizeof(mocked_resp.sched.total_active_time),
+		 "03:03:03.003");
+	strcpy_s(mocked_resp.sched.total_running_time,
+		 sizeof(mocked_resp.sched.total_running_time),
+		 "04:04:04.004");
 #else
 	strcpy(mocked_resp.sched.current_active_time, "01:01:01.001");
 	strcpy(mocked_resp.sched.current_running_time, "02:02:02.002");
@@ -364,11 +386,11 @@ TEST_F(AmdsmiVfTests, GetVfData)
 	mocked_resp.guard.enabled = true;
 
 	for (unsigned i = 0; i < AMDSMI_GUARD_EVENT__MAX; i++) {
-		mocked_resp.guard.guard[i].state = static_cast<smi_guard_state>(i % 3);
-		mocked_resp.guard.guard[i].amount = i;
-		mocked_resp.guard.guard[i].interval = i * 2;
+		mocked_resp.guard.guard[i].state     = static_cast<smi_guard_state>(i % 3);
+		mocked_resp.guard.guard[i].amount    = i;
+		mocked_resp.guard.guard[i].interval  = i * 2;
 		mocked_resp.guard.guard[i].threshold = i * 3;
-		mocked_resp.guard.guard[i].active = i * 4;
+		mocked_resp.guard.guard[i].active    = i * 4;
 	}
 
 	WhenCalling(std::bind(amdsmi_get_vf_data, MOCK_VF_HANDLE, &vf_data));
@@ -393,7 +415,7 @@ TEST_F(AmdsmiVfTests, GetVfhbmInfo)
 	// Setup mock response data
 	mocked_resp.phy_addr = 0x123456789ABCULL;
 	mocked_resp.phy_size = 0x100000000ULL; // 4GB
-	mocked_resp.numa_id = 2;
+	mocked_resp.numa_id  = 2;
 #ifdef _WIN64
 	strcpy_s(mocked_resp.name, sizeof(mocked_resp.name), "hbm0.0");
 #else

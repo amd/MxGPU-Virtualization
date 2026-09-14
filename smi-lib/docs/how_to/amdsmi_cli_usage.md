@@ -188,7 +188,10 @@ The commands and respective arguments that they accept are described as follows:
 
     **GPU Parameters:**
     - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`: Parameters for a specific GPU
-      - `--gpureset`: Reset all GPUs.
+      - `--gpureset`: Reset all GPUs. With `--gpu`, reset the selected GPU(s).
+        GPUs in the same physical XGMI hive are reset together, regardless of the current
+        framebuffer-sharing mode. Multiple `--gpu` values in the same hive issue one reset;
+        values in different hives reset each hive once. `--gpu` / `-g` requires a value.
 
     **VF Parameters:**
     - `--vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>`: Parameters for a specific VF (requires SR-IOV)
@@ -205,10 +208,13 @@ The commands and respective arguments that they accept are described as follows:
     - `--xgmi-plpd=<policy>`: Sets XGMI Per-Link Power Down (PLPD) to enabled or disabled.
     - `--num-vf=<number_of_vfs>`: Sets the number of Virtual Functions (VFs) to be enabled on the specified GPU. The number must be within the supported range for the GPU. Use `amd-smi static --gpu=<gpu> --num-vf` to check current VF configuration and supported limits.
     - `--soc-pstate=<pstate_level>`: Sets the SOC (System on Chip) performance state level to control power and performance characteristics.
-    - `--xgmi --fb-sharing-mode=<AmdSmiXgmiFbSharingMode>`: Sets framebuffer sharing mode from list ["MODE_1", "MODE_2", "MODE_4", "MODE_8"] where, MODE_X represents that X GPUs will be in the same group, linked together: MODE_1 (one GPU in a group), MODE_2 (two GPUs in a group), MODE_4 (four GPUs in a group), MODE_8 (eight GPUs in a group). All possible configurations can be seen by running the `amd-smi xgmi` command, not all of them are supported on all systems.
+    - `--xgmi --fb-sharing-mode=<AmdSmiXgmiFbSharingMode>`: Sets framebuffer sharing mode from list ["MODE_1", "MODE_2", "MODE_4", "MODE_8"] where, MODE_X represents that X GPUs will be in the same group, linked together: MODE_1 (one GPU in a group), MODE_2 (two GPUs in a group), MODE_4 (four GPUs in a group), MODE_8 (eight GPUs in a group). Without `--gpu`, the mode applies to all XGMI hives. With `--gpu`, the mode applies only to the hive containing the selected GPU. `--gpu` can not be combined with `--group`. All possible configurations can be seen by running the `amd-smi xgmi` command, not all of them are supported on all systems.
     - `--cc-mode=<cc_mode_value>`: Sets Confidential Compute (CC) mode. Valid values: OFF, ON, DEV. Current CC mode can be checked with `amd-smi confidential-compute`.
     - `--ptl-status=<STATUS>`: Enable or disable the PTL on a GPU processor (ENABLED/DISABLED).
     - `--ptl-format=<FRMT1,FRMT2>`: Set the PTL format on a GPU processor. For example, --ptl-format I8,F32.
+    - `--fabric-ppod`: Sets fabric PPOD configuration. Optional fields: `--accelerator-id`, `--ppod-id`, `--ppod-size`, `--local-accelerators`, `--bandwidth`, `--latency`. Not all parameters are required; only specified fields are written (mask-based).
+    - `--fabric-vpod`: Sets fabric VPOD configuration. Optional fields: `--vpod-id`, `--vpod-size`, `--vpod-active-accelerator`, `--addr-mode` (`SOURCE_ALIASING` or `SOURCE_IDENTIFICATION`). Not all parameters are required; only specified fields are written (mask-based).
+    - `--fabric-station`: Sets fabric station configuration. Optional fields: `--station-flags`, `--num-stations`, `--lane-en-bitmap` (hex string). Not all parameters are required; only specified fields are written (mask-based).
 
 13. **monitor**
     Monitor target devices for the specified arguments. If no arguments are provided, all arguments will be enabled. Use the watch arguments to run continuously.
@@ -263,13 +269,20 @@ The commands and respective arguments that they accept are described as follows:
       - Displays TEE (Trusted Execution Environment) Device Interface state (UNLOCKED, LOCKED, RUN, or ERROR) - supports VF.
 
 18. **fabric**
-    - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`:
-    Displays fabric topology and configuration information for the specified GPU. If no argument is provided, returns information for all GPUs on the system.
+    Displays fabric topology and telemetry information for the specified GPU. If no argument is provided, returns topology for all GPUs on the system and attempts to collect telemetry when available.
+
+    **GPU Parameters:**
+    - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`: Select a GPU ID, BDF or UUID. If not selected, returns information for all GPUs.
 
     Fabric arguments for the GPU are the following:
-      - `-T, --topology`: Displays fabric topology information.
+      - `-T, --topology`: Displays fabric topology information in a hierarchical layout:
+        - **TOPOLOGY:** BDF, VERSION, FABRIC_TYPE
+        - **PPOD:** ACCELERATOR_ID, PHYSICAL_POD_ID, PHYSICAL_POD_SIZE, LOCAL_ACCELERATORS, BANDWIDTH (Mb/s), LATENCY (ns)
+        - **VPOD:** VIRTUAL_POD_ID, VIRTUAL_POD_SIZE, VIRTUAL_POD_ACTIVE_ACCELERATORS, ACCELERATOR_STATE, ADDRESS_MODE
+        - **STATION:** FLAGS, LANE_EN_BITMAP
+      - `-t, --telemetry`: Displays fabric telemetry information. Requires UALOE/IFOE driver support; if unavailable, an error or note is printed and topology output (if requested) is still returned.
 
-    **Note:** The fabric command supports `--json` and `--csv` format modifiers.
+    **Note:** The fabric command supports the `--json` format modifier. It does not support the `--csv` format modifier.
 
 ## Basic Usage
 
@@ -1261,11 +1274,13 @@ GPU: 0
 
 ```shell-session
 $ sudo amd-smi set --xgmi --fb-sharing-mode=MODE_1
+$ sudo amd-smi set --xgmi --fb-sharing-mode=MODE_2 --gpu=0
 ```
 
 **Output**
 ```
 XGMI FB_SHARING_MODE: Successfully set mode to MODE_1 for the given group/s
+XGMI FB_SHARING_MODE: Successfully set mode to MODE_2 for the selected GPU hive/s
 ```
 
 ### 12. Reset Commands
@@ -1276,23 +1291,40 @@ XGMI FB_SHARING_MODE: Successfully set mode to MODE_1 for the given group/s
 $ sudo amd-smi reset --gpureset
 ```
 
-**Output**
+**Output (no `--gpu`)**
+```
+    GPU_RESET: Successfully reset all GPUs
+```
+
+**Output (no `--gpu`, one block per GPU)**
 ```
 GPU: 0
     GPU_RESET: Successfully reset GPU
-GPU: 1
-    GPU_RESET: Successfully reset GPU
-GPU: 2
-    GPU_RESET: Successfully reset GPU
-GPU: 3
-    GPU_RESET: Successfully reset GPU
+```
+
+To reset a selected GPU (the physical XGMI hive that contains it is reset together):
+
+```shell-session
+$ sudo amd-smi reset --gpu=4 --gpureset
+```
+
+**Output**
+```
 GPU: 4
     GPU_RESET: Successfully reset GPU
+```
+
+Multiple `--gpu` values reset each distinct physical hive once (`-g=0 -g=1` in the same hive is one reset; `-g=1 -g=5` in two hives resets both):
+
+```shell-session
+$ sudo amd-smi reset --gpu=1 --gpu=5 --gpureset
+```
+
+**Output**
+```
+GPU: 1
+    GPU_RESET: Successfully reset GPU
 GPU: 5
-    GPU_RESET: Successfully reset GPU
-GPU: 6
-    GPU_RESET: Successfully reset GPU
-GPU: 7
     GPU_RESET: Successfully reset GPU
 ```
 
@@ -1345,14 +1377,29 @@ $ sudo amd-smi ras --afid --cper-file=/tmp/ras_logs/fatal-2.cper
 $ sudo amd-smi ras [--policy]
 ```
 
-**Output:**
+**Output (v4.0 legacy path):**
 ```
 POLICY:
-  MINOR_VERSION: 4
-  MAJOR_VERSION: 0
-  DRAM_NON_CRITICAL_REGION_THRESHOLD: int(val)
-  DRAM_CRITICAL_REGION_THRESHOLD: int(val)
+  MAJOR_VERSION: 4
+  MINOR_VERSION: 0
+  DRAM_NON_CRITICAL_REGION_THRESHOLD: 24
+  DRAM_CRITICAL_REGION_THRESHOLD: 29
 ```
+
+**Output (v5.0 entity-based policy):**
+```
+POLICY:
+  MAJOR_VERSION: 5
+  MINOR_VERSION: 0
+  NUM_ENTITIES: 8
+  EVENT_RMA_THRESHOLD_PER_ENTITY: 64
+  MAX_PAGES_PER_RET_EVENT: 8
+  OD_SRAM_ECC_THRESHOLD: 16
+  HWA_THRESHOLD: 20
+  WDT_THRESHOLD: 30
+```
+
+CSV output uses version-specific columns: v4.0 DRAM threshold columns or v5.0 entity/threshold columns based on `major_version`.
 
 ### 14. JSON and CSV Format Examples
 
@@ -1732,35 +1779,45 @@ GPU: 0
         MAX_BANDWIDTH: 6810 GB/s
     CACHE_INFO:
         CACHE_0:
+            CACHE_ACRONYM: L1D
             CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
             CACHE_SIZE: 32 KB
             CACHE_LEVEL: 1
             MAX_NUM_CU_SHARED: 1
             NUM_CACHE_INSTANCE: 256
+            TOTAL_CACHE_SIZE: 8192 KB
         CACHE_1:
+            CACHE_ACRONYM: L1D
             CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
             CACHE_SIZE: 16 KB
             CACHE_LEVEL: 1
             MAX_NUM_CU_SHARED: 2
             NUM_CACHE_INSTANCE: 128
+            TOTAL_CACHE_SIZE: 2048 KB
         CACHE_2:
+            CACHE_ACRONYM: L1I
             CACHE_PROPERTIES: INST_CACHE, SIMD_CACHE
             CACHE_SIZE: 64 KB
             CACHE_LEVEL: 1
             MAX_NUM_CU_SHARED: 2
             NUM_CACHE_INSTANCE: 128
+            TOTAL_CACHE_SIZE: 8192 KB
         CACHE_3:
+            CACHE_ACRONYM: L2
             CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
             CACHE_SIZE: 4096 KB
             CACHE_LEVEL: 2
             MAX_NUM_CU_SHARED: 32
             NUM_CACHE_INSTANCE: 8
+            TOTAL_CACHE_SIZE: 32768 KB
         CACHE_4:
+            CACHE_ACRONYM: L3
             CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
             CACHE_SIZE: 262144 KB
             CACHE_LEVEL: 3
             MAX_NUM_CU_SHARED: 256
             NUM_CACHE_INSTANCE: 1
+            TOTAL_CACHE_SIZE: 262144 KB
     XGMI_PLPD:
         NUM_SUPPORTED: 3
         CURRENT_ID: 1
@@ -1885,35 +1942,45 @@ GPU: 1
         MAX_BANDWIDTH: 6810 GB/s
     CACHE_INFO:
         CACHE_0:
+            CACHE_ACRONYM: L1D
             CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
             CACHE_SIZE: 32 KB
             CACHE_LEVEL: 1
             MAX_NUM_CU_SHARED: 1
             NUM_CACHE_INSTANCE: 256
+            TOTAL_CACHE_SIZE: 8192 KB
         CACHE_1:
+            CACHE_ACRONYM: L1D
             CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
             CACHE_SIZE: 16 KB
             CACHE_LEVEL: 1
             MAX_NUM_CU_SHARED: 2
             NUM_CACHE_INSTANCE: 128
+            TOTAL_CACHE_SIZE: 2048 KB
         CACHE_2:
+            CACHE_ACRONYM: L1I
             CACHE_PROPERTIES: INST_CACHE, SIMD_CACHE
             CACHE_SIZE: 64 KB
             CACHE_LEVEL: 1
             MAX_NUM_CU_SHARED: 2
             NUM_CACHE_INSTANCE: 128
+            TOTAL_CACHE_SIZE: 8192 KB
         CACHE_3:
+            CACHE_ACRONYM: L2
             CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
             CACHE_SIZE: 4096 KB
             CACHE_LEVEL: 2
             MAX_NUM_CU_SHARED: 32
             NUM_CACHE_INSTANCE: 8
+            TOTAL_CACHE_SIZE: 32768 KB
         CACHE_4:
+            CACHE_ACRONYM: L3
             CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
             CACHE_SIZE: 262144 KB
             CACHE_LEVEL: 3
             MAX_NUM_CU_SHARED: 256
             NUM_CACHE_INSTANCE: 1
+            TOTAL_CACHE_SIZE: 262144 KB
     XGMI_PLPD:
         NUM_SUPPORTED: 3
         CURRENT_ID: 1
@@ -2038,35 +2105,45 @@ GPU: 2
         MAX_BANDWIDTH: 6810 GB/s
     CACHE_INFO:
         CACHE_0:
+            CACHE_ACRONYM: L1D
             CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
             CACHE_SIZE: 32 KB
             CACHE_LEVEL: 1
             MAX_NUM_CU_SHARED: 1
             NUM_CACHE_INSTANCE: 256
+            TOTAL_CACHE_SIZE: 8192 KB
         CACHE_1:
+            CACHE_ACRONYM: L1D
             CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
             CACHE_SIZE: 16 KB
             CACHE_LEVEL: 1
             MAX_NUM_CU_SHARED: 2
             NUM_CACHE_INSTANCE: 128
+            TOTAL_CACHE_SIZE: 2048 KB
         CACHE_2:
+            CACHE_ACRONYM: L1I
             CACHE_PROPERTIES: INST_CACHE, SIMD_CACHE
             CACHE_SIZE: 64 KB
             CACHE_LEVEL: 1
             MAX_NUM_CU_SHARED: 2
             NUM_CACHE_INSTANCE: 128
+            TOTAL_CACHE_SIZE: 8192 KB
         CACHE_3:
+            CACHE_ACRONYM: L2
             CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
             CACHE_SIZE: 4096 KB
             CACHE_LEVEL: 2
             MAX_NUM_CU_SHARED: 32
             NUM_CACHE_INSTANCE: 8
+            TOTAL_CACHE_SIZE: 32768 KB
         CACHE_4:
+            CACHE_ACRONYM: L3
             CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
             CACHE_SIZE: 262144 KB
             CACHE_LEVEL: 3
             MAX_NUM_CU_SHARED: 256
             NUM_CACHE_INSTANCE: 1
+            TOTAL_CACHE_SIZE: 262144 KB
     XGMI_PLPD:
         NUM_SUPPORTED: 3
         CURRENT_ID: 1
@@ -2250,8 +2327,11 @@ $ sudo amd-smi xgmi --fb-sharing
 # Step 2: View topology to understand GPU connections
 $ sudo amd-smi topology
 
-# Step 3: Set framebuffer sharing mode for 2-GPU group
+# Step 3: Set framebuffer sharing mode for 2-GPU groups in all hives
 $ sudo amd-smi set --xgmi --fb-sharing-mode=MODE_2
+
+# To change only one hive, select any GPU in that hive
+$ sudo amd-smi set --xgmi --fb-sharing-mode=MODE_2 --gpu=0
 
 # Step 4: Verify the framebuffer sharing configuration
 $ sudo amd-smi topology --fb-sharing

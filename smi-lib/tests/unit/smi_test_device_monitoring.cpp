@@ -20,24 +20,22 @@ using testing::_;
 using testing::DoAll;
 using testing::Return;
 
-const char *AmdsmiClockType[] = {
-	"AMDSMI_CLK_TYPE_GFX",
-	"AMDSMI_CLK_TYPE_MEM",
-	"AMDSMI_CLK_TYPE_VCLK0",
-	"AMDSMI_CLK_TYPE_VCLK1",
-	"AMDSMI_CLK_TYPE_DCLK0",
-	"AMDSMI_CLK_TYPE_DCLK1"
-};
+const char *AmdsmiClockType[] = {"AMDSMI_CLK_TYPE_GFX",
+				 "AMDSMI_CLK_TYPE_MEM",
+				 "AMDSMI_CLK_TYPE_VCLK0",
+				 "AMDSMI_CLK_TYPE_VCLK1",
+				 "AMDSMI_CLK_TYPE_DCLK0",
+				 "AMDSMI_CLK_TYPE_DCLK1"};
 
 const char *AmdsmiTemperatureType[] = {
-	"AMDSMI_AMDSMI_TEMPERATURE_TYPE_EDGE",
-	"AMDSMI_AMDSMI_TEMPERATURE_TYPE_HOTSPOT",
-	"AMDSMI_TEMPERATURE_TYPE_VRAM",
-	"AMDSMI_TEMPERATURE_TYPE_PLX",
+    "AMDSMI_AMDSMI_TEMPERATURE_TYPE_EDGE",
+    "AMDSMI_AMDSMI_TEMPERATURE_TYPE_HOTSPOT",
+    "AMDSMI_TEMPERATURE_TYPE_VRAM",
+    "AMDSMI_TEMPERATURE_TYPE_PLX",
 };
 
 class AmdsmiGpuMonitoring : public amdsmi::AmdSmiTest {
-protected:
+      protected:
 	::testing::AssertionResult equal_engine_usage(smi_engine_usage expect,
 						      amdsmi_engine_usage_t actual)
 	{
@@ -48,7 +46,7 @@ protected:
 		return ::testing::AssertionSuccess();
 	}
 	::testing::AssertionResult equal_power_measure(smi_power_info expect,
-					       amdsmi_power_info_t actual)
+						       amdsmi_power_info_t actual)
 	{
 		SMI_ASSERT_EQ(expect.socket_power, actual.socket_power);
 		SMI_ASSERT_EQ(expect.gfx_voltage, actual.gfx_voltage);
@@ -64,89 +62,104 @@ protected:
 						       unsigned domain_index)
 	{
 		SMI_ASSERT_EQ(expect.cur_clk[domain_index], actual.clk)
-			<< " for domain "  << AmdsmiClockType[domain_index];
+		    << " for domain " << AmdsmiClockType[domain_index];
 		SMI_ASSERT_EQ(expect.max_clk[domain_index], actual.max_clk)
-			<< " for domain "  << AmdsmiClockType[domain_index];
+		    << " for domain " << AmdsmiClockType[domain_index];
 		SMI_ASSERT_EQ(expect.min_clk[domain_index], actual.min_clk)
-			<< " for domain "  << AmdsmiClockType[domain_index];
+		    << " for domain " << AmdsmiClockType[domain_index];
 		SMI_ASSERT_EQ(expect.clk_locked[domain_index], actual.clk_locked)
-			<< " for domain "  << AmdsmiClockType[domain_index];
+		    << " for domain " << AmdsmiClockType[domain_index];
 		SMI_ASSERT_EQ(expect.clk_deep_sleep[domain_index], actual.clk_deep_sleep)
-			<< " for domain "  << AmdsmiClockType[domain_index];
+		    << " for domain " << AmdsmiClockType[domain_index];
 
 		return ::testing::AssertionSuccess();
 	}
 
-	::testing::AssertionResult equal_temperature_measure(smi_temp_measure expect,
-							 int64_t actual,
-							 unsigned domain_index)
+	::testing::AssertionResult
+	equal_temperature_measure(smi_temp_measure expect, int64_t actual, unsigned domain_index)
 	{
 		SMI_ASSERT_EQ(expect.temp[domain_index], actual)
-			<< " for domain "  << AmdsmiTemperatureType[domain_index];
+		    << " for domain " << AmdsmiTemperatureType[domain_index];
 
 		return ::testing::AssertionSuccess();
 	}
 
-	::testing::AssertionResult equal_temperature_limit(smi_temp_limit expect,
-							 int64_t actual,
-							 unsigned domain_index)
+	::testing::AssertionResult
+	equal_temperature_limit(smi_temp_limit expect, int64_t actual, unsigned domain_index)
 	{
 		SMI_ASSERT_EQ(expect.temp[domain_index], actual)
-			<< " for domain "  << AmdsmiTemperatureType[domain_index];
+		    << " for domain " << AmdsmiTemperatureType[domain_index];
 
 		return ::testing::AssertionSuccess();
 	}
 
-	::testing::AssertionResult equal_pcie_info(smi_pcie_info expect,
-						   amdsmi_pcie_info_t actual)
+	::testing::AssertionResult equal_pcie_info(smi_pcie_info expect, amdsmi_pcie_info_t actual)
 	{
 		uint32_t expected_speed = 0;
-		uint64_t dev_id = 0;
-		amdsmi_get_pcie_speed_from_pcie_type(expect.pcie_metric.pcie_speed, &expected_speed, dev_id);
+		uint64_t dev_id		= 0;
+		if (amdsmi_get_pcie_speed_from_pcie_type(expect.pcie_metric.pcie_speed,
+							 &expected_speed,
+							 dev_id) != AMDSMI_STATUS_SUCCESS)
+			expected_speed = UINT32_MAX;
 		SMI_ASSERT_EQ(expect.pcie_static.max_pcie_width, actual.pcie_static.max_pcie_width);
 		SMI_ASSERT_EQ(expect.pcie_static.max_pcie_speed, actual.pcie_static.max_pcie_speed);
-		SMI_ASSERT_EQ(expect.pcie_static.pcie_interface_version, actual.pcie_static.pcie_interface_version);
-		SMI_ASSERT_EQ(expect.pcie_static.slot_type, (enum smi_card_form_factor)actual.pcie_static.slot_type);
-		SMI_ASSERT_EQ(expect.pcie_static.max_pcie_interface_version, actual.pcie_static.max_pcie_interface_version);
+		SMI_ASSERT_EQ(expect.pcie_static.pcie_interface_version,
+			      actual.pcie_static.pcie_interface_version);
+		SMI_ASSERT_EQ(expect.pcie_static.slot_type,
+			      (enum smi_card_form_factor)actual.pcie_static.slot_type);
+		SMI_ASSERT_EQ(expect.pcie_static.max_pcie_interface_version,
+			      actual.pcie_static.max_pcie_interface_version);
 		SMI_ASSERT_EQ(expected_speed, actual.pcie_metric.pcie_speed);
 		SMI_ASSERT_EQ(expect.pcie_metric.pcie_width, actual.pcie_metric.pcie_width);
 		SMI_ASSERT_EQ(expect.pcie_metric.pcie_bandwidth, actual.pcie_metric.pcie_bandwidth);
-		SMI_ASSERT_EQ(expect.pcie_metric.pcie_replay_count, actual.pcie_metric.pcie_replay_count);
-		SMI_ASSERT_EQ(expect.pcie_metric.pcie_l0_to_recovery_count, actual.pcie_metric.pcie_l0_to_recovery_count);
-		SMI_ASSERT_EQ(expect.pcie_metric.pcie_replay_roll_over_count, actual.pcie_metric.pcie_replay_roll_over_count);
-		SMI_ASSERT_EQ(expect.pcie_metric.pcie_nak_sent_count, actual.pcie_metric.pcie_nak_sent_count);
-		SMI_ASSERT_EQ(expect.pcie_metric.pcie_nak_received_count, actual.pcie_metric.pcie_nak_received_count);
-		SMI_ASSERT_EQ(expect.pcie_metric.pcie_lc_perf_other_end_recovery_count, actual.pcie_metric.pcie_lc_perf_other_end_recovery_count);
+		SMI_ASSERT_EQ(expect.pcie_metric.pcie_replay_count,
+			      actual.pcie_metric.pcie_replay_count);
+		SMI_ASSERT_EQ(expect.pcie_metric.pcie_l0_to_recovery_count,
+			      actual.pcie_metric.pcie_l0_to_recovery_count);
+		SMI_ASSERT_EQ(expect.pcie_metric.pcie_replay_roll_over_count,
+			      actual.pcie_metric.pcie_replay_roll_over_count);
+		SMI_ASSERT_EQ(expect.pcie_metric.pcie_nak_sent_count,
+			      actual.pcie_metric.pcie_nak_sent_count);
+		SMI_ASSERT_EQ(expect.pcie_metric.pcie_nak_received_count,
+			      actual.pcie_metric.pcie_nak_received_count);
+		SMI_ASSERT_EQ(expect.pcie_metric.pcie_lc_perf_other_end_recovery_count,
+			      actual.pcie_metric.pcie_lc_perf_other_end_recovery_count);
 
 		return ::testing::AssertionSuccess();
 	}
 
 	::testing::AssertionResult equal_cache_info(smi_gpu_cache_info expect,
-						      amdsmi_gpu_cache_info_t actual)
+						    amdsmi_gpu_cache_info_t actual)
 	{
 		SMI_ASSERT_EQ(expect.num_cache_types, actual.num_cache_types);
 
-		for (uint32_t i=0; i < expect.num_cache_types; i++){
-			SMI_ASSERT_EQ((int) expect.cache[i].cache_size, (int)actual.cache[i].cache_size);
-			SMI_ASSERT_EQ((int) expect.cache[i].cache_level, (int)actual.cache[i].cache_level);
-			SMI_ASSERT_EQ((int) expect.cache[i].cache_properties, (int)actual.cache[i].cache_properties);
-			SMI_ASSERT_EQ((int) expect.cache[i].max_num_cu_shared, (int)actual.cache[i].max_num_cu_shared);
-			SMI_ASSERT_EQ((int) expect.cache[i].num_cache_instance, (int)actual.cache[i].num_cache_instance);
+		for (uint32_t i = 0; i < expect.num_cache_types; i++) {
+			SMI_ASSERT_EQ((int)expect.cache[i].cache_size,
+				      (int)actual.cache[i].cache_size);
+			SMI_ASSERT_EQ((int)expect.cache[i].cache_level,
+				      (int)actual.cache[i].cache_level);
+			SMI_ASSERT_EQ((int)expect.cache[i].cache_properties,
+				      (int)actual.cache[i].cache_properties);
+			SMI_ASSERT_EQ((int)expect.cache[i].max_num_cu_shared,
+				      (int)actual.cache[i].max_num_cu_shared);
+			SMI_ASSERT_EQ((int)expect.cache[i].num_cache_instance,
+				      (int)actual.cache[i].num_cache_instance);
 		}
 
 		return ::testing::AssertionSuccess();
 	}
 
 	::testing::AssertionResult equal_dpm_policy(smi_dpm_policy expect,
-						       amdsmi_dpm_policy_t actual)
+						    amdsmi_dpm_policy_t actual)
 	{
 		SMI_ASSERT_EQ(expect.num_supported, actual.num_supported);
 		SMI_ASSERT_EQ(expect.cur, actual.current);
 		for (uint32_t i = 0; i < expect.num_supported; i++) {
-			SMI_ASSERT_STR_EQ(expect.policies[i].policy_description, actual.policies[i].policy_description)
-				<< " for i = " << i;
+			SMI_ASSERT_STR_EQ(expect.policies[i].policy_description,
+					  actual.policies[i].policy_description)
+			    << " for i = " << i;
 			SMI_ASSERT_EQ(expect.policies[i].policy_id, actual.policies[i].policy_id)
-				<< " for i = " << i;
+			    << " for i = " << i;
 		}
 
 		return ::testing::AssertionSuccess();
@@ -191,20 +204,20 @@ TEST_F(AmdsmiGpuMonitoring, InvalidParams)
 	ret = amdsmi_get_clock_info(&NIC_MOCK_HANDLE, AMDSMI_CLK_TYPE_GFX, &clk);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-	ret = amdsmi_get_temp_metric(MOCK_GPU_HANDLE, AMDSMI_TEMPERATURE_TYPE_EDGE,
-								 AMDSMI_TEMP_CURRENT, NULL);
+	ret = amdsmi_get_temp_metric(
+	    MOCK_GPU_HANDLE, AMDSMI_TEMPERATURE_TYPE_EDGE, AMDSMI_TEMP_CURRENT, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-	ret = amdsmi_get_temp_metric(MOCK_GPU_HANDLE, AMDSMI_TEMPERATURE_TYPE_EDGE,
-								 AMDSMI_TEMP_CRITICAL, NULL);
+	ret = amdsmi_get_temp_metric(
+	    MOCK_GPU_HANDLE, AMDSMI_TEMPERATURE_TYPE_EDGE, AMDSMI_TEMP_CRITICAL, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-	ret = amdsmi_get_temp_metric(MOCK_GPU_HANDLE, AMDSMI_TEMPERATURE_TYPE_EDGE,
-								 AMDSMI_TEMP_SHUTDOWN, NULL);
+	ret = amdsmi_get_temp_metric(
+	    MOCK_GPU_HANDLE, AMDSMI_TEMPERATURE_TYPE_EDGE, AMDSMI_TEMP_SHUTDOWN, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-	ret = amdsmi_get_temp_metric(&NIC_MOCK_HANDLE, AMDSMI_TEMPERATURE_TYPE_EDGE,
-								 AMDSMI_TEMP_CURRENT, &temp);
+	ret = amdsmi_get_temp_metric(
+	    &NIC_MOCK_HANDLE, AMDSMI_TEMPERATURE_TYPE_EDGE, AMDSMI_TEMP_CURRENT, &temp);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_get_pcie_info(MOCK_GPU_HANDLE, NULL);
@@ -237,9 +250,11 @@ TEST_F(AmdsmiGpuMonitoring, InvalSensorType)
 	int ret;
 	int64_t temperature;
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
-	int temp_type = AMDSMI_TEMPERATURE_TYPE__MAX+1;
-	ret = amdsmi_get_temp_metric(MOCK_GPU_HANDLE, (amdsmi_temperature_type_t)temp_type,
-								 AMDSMI_TEMP_CURRENT, &temperature);
+	int temp_type				= AMDSMI_TEMPERATURE_TYPE__MAX + 1;
+	ret					= amdsmi_get_temp_metric(MOCK_GPU_HANDLE,
+					 (amdsmi_temperature_type_t)temp_type,
+					 AMDSMI_TEMP_CURRENT,
+					 &temperature);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
 
@@ -260,7 +275,7 @@ TEST_F(AmdsmiGpuMonitoring, IoctlFailed)
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_API_FAILED));
+	    .WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_API_FAILED));
 
 	ret = amdsmi_get_gpu_activity(MOCK_GPU_HANDLE, &engine_res);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
@@ -274,10 +289,14 @@ TEST_F(AmdsmiGpuMonitoring, IoctlFailed)
 	ret = amdsmi_get_clock_info(MOCK_GPU_HANDLE, AMDSMI_CLK_TYPE_GFX, &clock_res);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 
-	ret = amdsmi_get_temp_metric(MOCK_GPU_HANDLE, AMDSMI_TEMPERATURE_TYPE_EDGE, AMDSMI_TEMP_CURRENT, &temperature_res);
+	ret = amdsmi_get_temp_metric(
+	    MOCK_GPU_HANDLE, AMDSMI_TEMPERATURE_TYPE_EDGE, AMDSMI_TEMP_CURRENT, &temperature_res);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 
-	ret = amdsmi_get_temp_metric(MOCK_GPU_HANDLE, AMDSMI_TEMPERATURE_TYPE_EDGE, AMDSMI_TEMP_CRITICAL, &temperature_limit_res);
+	ret = amdsmi_get_temp_metric(MOCK_GPU_HANDLE,
+				     AMDSMI_TEMPERATURE_TYPE_EDGE,
+				     AMDSMI_TEMP_CRITICAL,
+				     &temperature_limit_res);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 
 	ret = amdsmi_get_gpu_cache_info(MOCK_GPU_HANDLE, &cache_res);
@@ -311,7 +330,7 @@ TEST_F(AmdsmiGpuMonitoring, GetGpuActivity)
 
 	mocked_resp.usage.gfx_activity = 30;
 	mocked_resp.usage.umc_activity = 40;
-	mocked_resp.usage.mm_activity = 0;
+	mocked_resp.usage.mm_activity  = 0;
 
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 
@@ -333,10 +352,10 @@ TEST_F(AmdsmiGpuMonitoring, GetPowerMeasure)
 	smi_gpu_performance_info mocked_resp = {};
 
 	mocked_resp.power.socket_power = 20;
-	mocked_resp.power.gfx_voltage = 800;
-	mocked_resp.power.soc_voltage = 61;
-	mocked_resp.power.mem_voltage = 62;
-	mocked_resp.power.ubb_power = 350;
+	mocked_resp.power.gfx_voltage  = 800;
+	mocked_resp.power.soc_voltage  = 61;
+	mocked_resp.power.mem_voltage  = 62;
+	mocked_resp.power.ubb_power    = 350;
 
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 	WhenCalling(std::bind(amdsmi_get_power_info, MOCK_GPU_HANDLE, &power_info));
@@ -356,10 +375,11 @@ TEST_F(AmdsmiGpuMonitoring, GetIsPowerManagementEnabled)
 	bool is_power_management_enabled;
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 
-	union smi_data gpu_power_management = {};
+	union smi_data gpu_power_management	      = {};
 	gpu_power_management.power_management_enabled = false;
 
-	WhenCalling(std::bind(amdsmi_is_gpu_power_management_enabled, MOCK_GPU_HANDLE, &is_power_management_enabled));
+	WhenCalling(std::bind(
+	    amdsmi_is_gpu_power_management_enabled, MOCK_GPU_HANDLE, &is_power_management_enabled));
 	ExpectCommand(SMI_CMD_CODE_GET_SMI_DATA);
 	SaveInputPayloadIn(&in_dev_enabled);
 	PlantMockOutput(&gpu_power_management);
@@ -376,14 +396,20 @@ TEST_F(AmdsmiGpuMonitoring, GetClockMeasure)
 	smi_device_info_ex in_payload;
 	smi_gpu_performance_info gpu_perf_mocked = {};
 
-	amdsmi_clk_type_t supported_ckl_type[7] = {AMDSMI_CLK_TYPE_GFX, AMDSMI_CLK_TYPE_MEM, AMDSMI_CLK_TYPE_MEM, AMDSMI_CLK_TYPE_VCLK0, AMDSMI_CLK_TYPE_VCLK1, AMDSMI_CLK_TYPE_DCLK0, AMDSMI_CLK_TYPE_DCLK1};
+	amdsmi_clk_type_t supported_ckl_type[7] = {AMDSMI_CLK_TYPE_GFX,
+						   AMDSMI_CLK_TYPE_MEM,
+						   AMDSMI_CLK_TYPE_MEM,
+						   AMDSMI_CLK_TYPE_VCLK0,
+						   AMDSMI_CLK_TYPE_VCLK1,
+						   AMDSMI_CLK_TYPE_DCLK0,
+						   AMDSMI_CLK_TYPE_DCLK1};
 	for (unsigned i = 0; i < 7; i++) {
-		gpu_perf_mocked.clock.min_clk[i] = 300 + i;
-		gpu_perf_mocked.clock.cur_clk[i] = 400 + i;
-		gpu_perf_mocked.clock.max_clk[i] = 500 + i;
+		gpu_perf_mocked.clock.min_clk[i]	= 300 + i;
+		gpu_perf_mocked.clock.cur_clk[i]	= 400 + i;
+		gpu_perf_mocked.clock.max_clk[i]	= 500 + i;
 		amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
-		WhenCalling(std::bind(amdsmi_get_clock_info, MOCK_GPU_HANDLE,
-				     supported_ckl_type[i], &clock_measure));
+		WhenCalling(std::bind(
+		    amdsmi_get_clock_info, MOCK_GPU_HANDLE, supported_ckl_type[i], &clock_measure));
 		ExpectCommand(SMI_CMD_CODE_GET_GPU_PERFORMANCE_INFO);
 		SaveInputPayloadIn(&in_payload);
 		PlantMockOutput(&gpu_perf_mocked);
@@ -391,7 +417,8 @@ TEST_F(AmdsmiGpuMonitoring, GetClockMeasure)
 
 		ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 		ASSERT_TRUE(amdsmi::equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
-		ASSERT_TRUE(equal_clock_measure(gpu_perf_mocked.clock, clock_measure, supported_ckl_type[i]));
+		ASSERT_TRUE(equal_clock_measure(
+		    gpu_perf_mocked.clock, clock_measure, supported_ckl_type[i]));
 	}
 }
 
@@ -402,20 +429,26 @@ TEST_F(AmdsmiGpuMonitoring, GetThermalMeasure)
 	smi_device_info_ex in_payload;
 	smi_gpu_performance_info mocked_resp = {};
 
-	amdsmi_temperature_type_t supported_temp_type[3] = {AMDSMI_TEMPERATURE_TYPE_EDGE, AMDSMI_TEMPERATURE_TYPE_HOTSPOT, AMDSMI_TEMPERATURE_TYPE_VRAM};
+	amdsmi_temperature_type_t supported_temp_type[3] = {AMDSMI_TEMPERATURE_TYPE_EDGE,
+							    AMDSMI_TEMPERATURE_TYPE_HOTSPOT,
+							    AMDSMI_TEMPERATURE_TYPE_VRAM};
 
 	for (unsigned i = 0; i < 3; i++) {
-		mocked_resp.temp.temp[i] = 50 + i;
+		mocked_resp.temp.temp[i]		= 50 + i;
 		amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
-		WhenCalling(std::bind(amdsmi_get_temp_metric, MOCK_GPU_HANDLE,
-				      supported_temp_type[i], AMDSMI_TEMP_CURRENT, &temperature_measure));
+		WhenCalling(std::bind(amdsmi_get_temp_metric,
+				      MOCK_GPU_HANDLE,
+				      supported_temp_type[i],
+				      AMDSMI_TEMP_CURRENT,
+				      &temperature_measure));
 		ExpectCommand(SMI_CMD_CODE_GET_GPU_PERFORMANCE_INFO);
 		SaveInputPayloadIn(&in_payload);
 		PlantMockOutput(&mocked_resp);
 		ret = performCall();
 		ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 		ASSERT_TRUE(amdsmi::equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
-		ASSERT_TRUE(equal_temperature_measure(mocked_resp.temp, temperature_measure, supported_temp_type[i]));
+		ASSERT_TRUE(equal_temperature_measure(
+		    mocked_resp.temp, temperature_measure, supported_temp_type[i]));
 	}
 }
 
@@ -426,20 +459,26 @@ TEST_F(AmdsmiGpuMonitoring, GetThermalLimit)
 	smi_device_info_ex in_payload;
 	smi_gpu_performance_info mocked_resp = {};
 
-	amdsmi_temperature_type_t supported_temp_type[4] = {AMDSMI_TEMPERATURE_TYPE_EDGE, AMDSMI_TEMPERATURE_TYPE_HOTSPOT, AMDSMI_TEMPERATURE_TYPE_VRAM};
+	amdsmi_temperature_type_t supported_temp_type[4] = {AMDSMI_TEMPERATURE_TYPE_EDGE,
+							    AMDSMI_TEMPERATURE_TYPE_HOTSPOT,
+							    AMDSMI_TEMPERATURE_TYPE_VRAM};
 
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 	for (unsigned i = 0; i < 4; i++) {
 		mocked_resp.temp.temp[i] = 0;
-		WhenCalling(std::bind(amdsmi_get_temp_metric, MOCK_GPU_HANDLE,
-				      supported_temp_type[i], AMDSMI_TEMP_CRITICAL, &temperature_limit));
+		WhenCalling(std::bind(amdsmi_get_temp_metric,
+				      MOCK_GPU_HANDLE,
+				      supported_temp_type[i],
+				      AMDSMI_TEMP_CRITICAL,
+				      &temperature_limit));
 		ExpectCommand(SMI_CMD_CODE_GET_GPU_PERFORMANCE_INFO);
 		SaveInputPayloadIn(&in_payload);
 		PlantMockOutput(&mocked_resp);
 		ret = performCall();
 		ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 		ASSERT_TRUE(amdsmi::equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
-		ASSERT_TRUE(equal_temperature_measure(mocked_resp.temp, temperature_limit, supported_temp_type[i]));
+		ASSERT_TRUE(equal_temperature_measure(
+		    mocked_resp.temp, temperature_limit, supported_temp_type[i]));
 	}
 }
 
@@ -449,34 +488,40 @@ TEST_F(AmdsmiGpuMonitoring, GetThermalLimitPLX)
 	int64_t temperature_limit;
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 
-	ret = amdsmi_get_temp_metric(MOCK_GPU_HANDLE,
-					AMDSMI_TEMPERATURE_TYPE_PLX, AMDSMI_TEMP_CRITICAL, &temperature_limit);
-	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ret = amdsmi_get_temp_metric(
+	    MOCK_GPU_HANDLE, AMDSMI_TEMPERATURE_TYPE_PLX, AMDSMI_TEMP_CRITICAL, &temperature_limit);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 }
 
 TEST_F(AmdsmiGpuMonitoring, GetThermalLimitHBM_0)
 {
 	int ret;
-	int64_t temperature_limit;
+	constexpr int64_t sentinel		= -12345;
+	int64_t temperature_limit		= sentinel;
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 
 	ret = amdsmi_get_temp_metric(MOCK_GPU_HANDLE,
-					AMDSMI_TEMPERATURE_TYPE_HBM_0, AMDSMI_TEMP_CRITICAL, &temperature_limit);
-	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
-	ASSERT_EQ(temperature_limit, 0);
+				     AMDSMI_TEMPERATURE_TYPE_HBM_0,
+				     AMDSMI_TEMP_CRITICAL,
+				     &temperature_limit);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+	ASSERT_EQ(temperature_limit, sentinel);
 }
 
 TEST_F(AmdsmiGpuMonitoring, GetThermalLimitBadMetric)
 {
 	int ret;
 	int64_t temperature_limit;
-	int metric = AMDSMI_TEMP_CRITICAL+1;
+	int metric = AMDSMI_TEMP_CRITICAL + 1;
 	smi_device_info_ex in_payload;
-	smi_gpu_performance_info mocked_resp = {};
+	smi_gpu_performance_info mocked_resp	= {};
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 
-	WhenCalling(std::bind(amdsmi_get_temp_metric, MOCK_GPU_HANDLE,
-					AMDSMI_TEMPERATURE_TYPE_EDGE, (amdsmi_temperature_metric_t)metric, &temperature_limit));
+	WhenCalling(std::bind(amdsmi_get_temp_metric,
+			      MOCK_GPU_HANDLE,
+			      AMDSMI_TEMPERATURE_TYPE_EDGE,
+			      (amdsmi_temperature_metric_t)metric,
+			      &temperature_limit));
 	ExpectCommand(SMI_CMD_CODE_GET_GPU_PERFORMANCE_INFO);
 	SaveInputPayloadIn(&in_payload);
 	PlantMockOutput(&mocked_resp);
@@ -490,13 +535,18 @@ TEST_F(AmdsmiGpuMonitoring, GetThermalLimitZeroValue)
 	int ret;
 	int64_t temperature_limit;
 	smi_device_info_ex in_payload;
-	smi_gpu_performance_info mocked_resp = {};
-	amdsmi_temperature_type_t supported_temp_type[4] = {AMDSMI_TEMPERATURE_TYPE_EDGE, AMDSMI_TEMPERATURE_TYPE_HOTSPOT, AMDSMI_TEMPERATURE_TYPE_VRAM};
-	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
+	smi_gpu_performance_info mocked_resp		 = {};
+	amdsmi_temperature_type_t supported_temp_type[4] = {AMDSMI_TEMPERATURE_TYPE_EDGE,
+							    AMDSMI_TEMPERATURE_TYPE_HOTSPOT,
+							    AMDSMI_TEMPERATURE_TYPE_VRAM};
+	amdsmi_processor_handle MOCK_GPU_HANDLE		 = &GPU_MOCK_HANDLE;
 	for (unsigned i = 0; i < 4; i++) {
 		mocked_resp.temp_limit.temp[i] = 0;
-		WhenCalling(std::bind(amdsmi_get_temp_metric, MOCK_GPU_HANDLE,
-				      supported_temp_type[i], AMDSMI_TEMP_CRITICAL, &temperature_limit));
+		WhenCalling(std::bind(amdsmi_get_temp_metric,
+				      MOCK_GPU_HANDLE,
+				      supported_temp_type[i],
+				      AMDSMI_TEMP_CRITICAL,
+				      &temperature_limit));
 		ExpectCommand(SMI_CMD_CODE_GET_GPU_PERFORMANCE_INFO);
 		SaveInputPayloadIn(&in_payload);
 		PlantMockOutput(&mocked_resp);
@@ -512,20 +562,26 @@ TEST_F(AmdsmiGpuMonitoring, GetThermalShutdown)
 	smi_device_info_ex in_payload;
 	smi_gpu_performance_info mocked_resp = {};
 
-	amdsmi_temperature_type_t supported_temp_type[4] = {AMDSMI_TEMPERATURE_TYPE_EDGE, AMDSMI_TEMPERATURE_TYPE_HOTSPOT, AMDSMI_TEMPERATURE_TYPE_VRAM};
+	amdsmi_temperature_type_t supported_temp_type[4] = {AMDSMI_TEMPERATURE_TYPE_EDGE,
+							    AMDSMI_TEMPERATURE_TYPE_HOTSPOT,
+							    AMDSMI_TEMPERATURE_TYPE_VRAM};
 
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 	for (unsigned i = 0; i < 4; i++) {
 		mocked_resp.temp.temp[i] = 0;
-		WhenCalling(std::bind(amdsmi_get_temp_metric, MOCK_GPU_HANDLE,
-				      supported_temp_type[i], AMDSMI_TEMP_SHUTDOWN, &temperature_limit));
+		WhenCalling(std::bind(amdsmi_get_temp_metric,
+				      MOCK_GPU_HANDLE,
+				      supported_temp_type[i],
+				      AMDSMI_TEMP_SHUTDOWN,
+				      &temperature_limit));
 		ExpectCommand(SMI_CMD_CODE_GET_GPU_PERFORMANCE_INFO);
 		SaveInputPayloadIn(&in_payload);
 		PlantMockOutput(&mocked_resp);
 		ret = performCall();
 		ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 		ASSERT_TRUE(amdsmi::equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
-		ASSERT_TRUE(equal_temperature_measure(mocked_resp.temp, temperature_limit, supported_temp_type[i]));
+		ASSERT_TRUE(equal_temperature_measure(
+		    mocked_resp.temp, temperature_limit, supported_temp_type[i]));
 	}
 }
 
@@ -537,23 +593,23 @@ TEST_F(AmdsmiGpuMonitoring, GetPcieInfo)
 	struct smi_pcie_info mocked_resp = {};
 	smi_in_hdr in_header;
 
-	mocked_resp.pcie_static.max_pcie_width = 16;
-	mocked_resp.pcie_static.max_pcie_speed = 32;
-	mocked_resp.pcie_static.pcie_interface_version = 4;
-	mocked_resp.pcie_static.slot_type = SMI_CARD_FORM_FACTOR_PCIE;
+	mocked_resp.pcie_static.max_pcie_width		   = 16;
+	mocked_resp.pcie_static.max_pcie_speed		   = 32;
+	mocked_resp.pcie_static.pcie_interface_version	   = 4;
+	mocked_resp.pcie_static.slot_type		   = SMI_CARD_FORM_FACTOR_PCIE;
 	mocked_resp.pcie_static.max_pcie_interface_version = 5;
 
-	mocked_resp.pcie_metric.pcie_speed = 2;
-	mocked_resp.pcie_metric.pcie_width = 16;
-	mocked_resp.pcie_metric.pcie_bandwidth = 300;
-	mocked_resp.pcie_metric.pcie_replay_count = 1;
-	mocked_resp.pcie_metric.pcie_l0_to_recovery_count = 2;
+	mocked_resp.pcie_metric.pcie_speed		    = 2;
+	mocked_resp.pcie_metric.pcie_width		    = 16;
+	mocked_resp.pcie_metric.pcie_bandwidth		    = 300;
+	mocked_resp.pcie_metric.pcie_replay_count	    = 1;
+	mocked_resp.pcie_metric.pcie_l0_to_recovery_count   = 2;
 	mocked_resp.pcie_metric.pcie_replay_roll_over_count = 3;
-	mocked_resp.pcie_metric.pcie_nak_sent_count = 4;
-	mocked_resp.pcie_metric.pcie_nak_received_count = 4;
+	mocked_resp.pcie_metric.pcie_nak_sent_count	    = 4;
+	mocked_resp.pcie_metric.pcie_nak_received_count	    = 4;
 
 	smi_asic_info gpu_info_mock = {};
-	std::string name = "abcdef";
+	std::string name	    = "abcdef";
 #ifdef _WIN64
 	strcpy_s(gpu_info_mock.market_name, sizeof(gpu_info_mock.market_name), name.c_str());
 #else
@@ -561,13 +617,17 @@ TEST_F(AmdsmiGpuMonitoring, GetPcieInfo)
 #endif
 	gpu_info_mock.vendor_id = 2;
 	gpu_info_mock.device_id = 3;
-	gpu_info_mock.rev_id = 4;
+	gpu_info_mock.rev_id	= 4;
 #ifdef _WIN64
 	strcpy_s(gpu_info_mock.asic_serial, sizeof(gpu_info_mock.asic_serial), "1234567");
 #else
 	strcpy(gpu_info_mock.asic_serial, "1234567");
 #endif
-	PrepareIoctl(SMI_CMD_CODE_GET_ASIC_INFO, &in_header, &in_payload, gpu_info_mock, AMDSMI_STATUS_SUCCESS);
+	PrepareIoctl(SMI_CMD_CODE_GET_ASIC_INFO,
+		     &in_header,
+		     &in_payload,
+		     gpu_info_mock,
+		     AMDSMI_STATUS_SUCCESS);
 
 	WhenCalling(std::bind(amdsmi_get_pcie_info, &GPU_MOCK_HANDLE, &pcie_info));
 	ExpectCommand(SMI_CMD_CODE_GET_PCIE_INFO);
@@ -580,8 +640,12 @@ TEST_F(AmdsmiGpuMonitoring, GetPcieInfo)
 	ASSERT_TRUE(equal_pcie_info(mocked_resp, pcie_info));
 
 	mocked_resp.pcie_static.pcie_interface_version = 5;
-	gpu_info_mock.device_id = 0x74A1;
-	PrepareIoctl(SMI_CMD_CODE_GET_ASIC_INFO, &in_header, &in_payload, gpu_info_mock, AMDSMI_STATUS_SUCCESS);
+	gpu_info_mock.device_id			       = 0x74A1;
+	PrepareIoctl(SMI_CMD_CODE_GET_ASIC_INFO,
+		     &in_header,
+		     &in_payload,
+		     gpu_info_mock,
+		     AMDSMI_STATUS_SUCCESS);
 	WhenCalling(std::bind(amdsmi_get_pcie_info, &GPU_MOCK_HANDLE, &pcie_info));
 	ExpectCommand(SMI_CMD_CODE_GET_PCIE_INFO);
 	SaveInputPayloadIn(&in_payload);
@@ -601,23 +665,23 @@ TEST_F(AmdsmiGpuMonitoring, GetPcieInfoApiFailed)
 	struct smi_pcie_info mocked_resp = {};
 	smi_in_hdr in_header;
 
-	mocked_resp.pcie_static.max_pcie_width = 16;
-	mocked_resp.pcie_static.max_pcie_speed = 32;
-	mocked_resp.pcie_static.pcie_interface_version = 4;
-	mocked_resp.pcie_static.slot_type = SMI_CARD_FORM_FACTOR_PCIE;
-	mocked_resp.pcie_static.max_pcie_interface_version = 5;
+	mocked_resp.pcie_static.max_pcie_width		   = 16;
+	mocked_resp.pcie_static.max_pcie_speed		   = 32;
+	mocked_resp.pcie_static.pcie_interface_version	   = 4;
+	mocked_resp.pcie_static.slot_type		   = SMI_CARD_FORM_FACTOR_PCIE;
+	mocked_resp.pcie_static.max_pcie_interface_version = 4;
 
-	mocked_resp.pcie_metric.pcie_speed = 2;
-	mocked_resp.pcie_metric.pcie_width = 16;
-	mocked_resp.pcie_metric.pcie_bandwidth = 300;
-	mocked_resp.pcie_metric.pcie_replay_count = 1;
-	mocked_resp.pcie_metric.pcie_l0_to_recovery_count = 2;
+	mocked_resp.pcie_metric.pcie_speed		    = 2;
+	mocked_resp.pcie_metric.pcie_width		    = 16;
+	mocked_resp.pcie_metric.pcie_bandwidth		    = 300;
+	mocked_resp.pcie_metric.pcie_replay_count	    = 1;
+	mocked_resp.pcie_metric.pcie_l0_to_recovery_count   = 2;
 	mocked_resp.pcie_metric.pcie_replay_roll_over_count = 3;
-	mocked_resp.pcie_metric.pcie_nak_sent_count = 4;
-	mocked_resp.pcie_metric.pcie_nak_received_count = 4;
+	mocked_resp.pcie_metric.pcie_nak_sent_count	    = 4;
+	mocked_resp.pcie_metric.pcie_nak_received_count	    = 4;
 
 	smi_asic_info gpu_info_mock = {};
-	std::string name = "abcdef";
+	std::string name	    = "abcdef";
 #ifdef _WIN64
 	strcpy_s(gpu_info_mock.market_name, sizeof(gpu_info_mock.market_name), name.c_str());
 #else
@@ -625,16 +689,20 @@ TEST_F(AmdsmiGpuMonitoring, GetPcieInfoApiFailed)
 #endif
 	gpu_info_mock.vendor_id = 2;
 	gpu_info_mock.device_id = 3;
-	gpu_info_mock.rev_id = 4;
+	gpu_info_mock.rev_id	= 4;
 #ifdef _WIN64
 	strcpy_s(gpu_info_mock.asic_serial, sizeof(gpu_info_mock.asic_serial), "1234567");
 #else
 	strcpy(gpu_info_mock.asic_serial, "1234567");
 #endif
-	PrepareIoctl(SMI_CMD_CODE_GET_ASIC_INFO, &in_header, &in_payload, gpu_info_mock, AMDSMI_STATUS_SUCCESS);
+	PrepareIoctl(SMI_CMD_CODE_GET_ASIC_INFO,
+		     &in_header,
+		     &in_payload,
+		     gpu_info_mock,
+		     AMDSMI_STATUS_SUCCESS);
 
 	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_PCIE_INFO)))
-		.WillOnce(amdsmi::SetResponseStatus(AMDSMI_STATUS_API_FAILED));
+	    .WillOnce(amdsmi::SetResponseStatus(AMDSMI_STATUS_API_FAILED));
 	SaveInputPayloadIn(&in_payload);
 	PlantMockOutput(&mocked_resp);
 	ret = amdsmi_get_pcie_info(&GPU_MOCK_HANDLE, &pcie_info);
@@ -642,7 +710,7 @@ TEST_F(AmdsmiGpuMonitoring, GetPcieInfoApiFailed)
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 }
 
-TEST_F(AmdsmiGpuMonitoring, GetPcieInfoFail)
+TEST_F(AmdsmiGpuMonitoring, GetPcieInfoUnsupportedMetricSpeed)
 {
 	int ret;
 	smi_device_info in_payload;
@@ -650,37 +718,42 @@ TEST_F(AmdsmiGpuMonitoring, GetPcieInfoFail)
 	amdsmi_pcie_info_t pcie_info;
 	smi_in_hdr in_header;
 
-	mocked_resp.pcie_static.max_pcie_width = 16;
-	mocked_resp.pcie_static.max_pcie_speed = 32;
-	mocked_resp.pcie_static.pcie_interface_version = 5;
-	mocked_resp.pcie_static.slot_type = SMI_CARD_FORM_FACTOR_PCIE;
+	mocked_resp.pcie_static.max_pcie_width		   = 16;
+	mocked_resp.pcie_static.max_pcie_speed		   = 32;
+	mocked_resp.pcie_static.pcie_interface_version	   = 5;
+	mocked_resp.pcie_static.slot_type		   = SMI_CARD_FORM_FACTOR_PCIE;
 	mocked_resp.pcie_static.max_pcie_interface_version = 5;
 
-	mocked_resp.pcie_metric.pcie_speed = UINT32_MAX;
-	mocked_resp.pcie_metric.pcie_width = 16;
-	mocked_resp.pcie_metric.pcie_bandwidth = 300;
-	mocked_resp.pcie_metric.pcie_replay_count = 1;
-	mocked_resp.pcie_metric.pcie_l0_to_recovery_count = 2;
+	mocked_resp.pcie_metric.pcie_speed		    = UINT32_MAX;
+	mocked_resp.pcie_metric.pcie_width		    = 16;
+	mocked_resp.pcie_metric.pcie_bandwidth		    = 300;
+	mocked_resp.pcie_metric.pcie_replay_count	    = 1;
+	mocked_resp.pcie_metric.pcie_l0_to_recovery_count   = 2;
 	mocked_resp.pcie_metric.pcie_replay_roll_over_count = 3;
-	mocked_resp.pcie_metric.pcie_nak_sent_count = 4;
-	mocked_resp.pcie_metric.pcie_nak_received_count = 4;
+	mocked_resp.pcie_metric.pcie_nak_sent_count	    = 4;
+	mocked_resp.pcie_metric.pcie_nak_received_count	    = 4;
 
 	smi_asic_info gpu_info_mock = {};
-	std::string name = "abcdef";
+	std::string name	    = "abcdef";
 #ifdef _WIN64
 	strcpy_s(gpu_info_mock.market_name, sizeof(gpu_info_mock.market_name), name.c_str());
 #else
 	strcpy(gpu_info_mock.market_name, name.c_str());
 #endif
 	gpu_info_mock.vendor_id = 2;
-	gpu_info_mock.device_id = 3;
-	gpu_info_mock.rev_id = 4;
+	/* amdsmi_get_pcie_info() derives pcie_interface_version from the device id */
+	gpu_info_mock.device_id = 0x74A1;
+	gpu_info_mock.rev_id	= 4;
 #ifdef _WIN64
 	strcpy_s(gpu_info_mock.asic_serial, sizeof(gpu_info_mock.asic_serial), "1234567");
 #else
 	strcpy(gpu_info_mock.asic_serial, "1234567");
 #endif
-	PrepareIoctl(SMI_CMD_CODE_GET_ASIC_INFO, &in_header, &in_payload, gpu_info_mock, AMDSMI_STATUS_SUCCESS);
+	PrepareIoctl(SMI_CMD_CODE_GET_ASIC_INFO,
+		     &in_header,
+		     &in_payload,
+		     gpu_info_mock,
+		     AMDSMI_STATUS_SUCCESS);
 
 	WhenCalling(std::bind(amdsmi_get_pcie_info, &GPU_MOCK_HANDLE, &pcie_info));
 	ExpectCommand(SMI_CMD_CODE_GET_PCIE_INFO);
@@ -688,7 +761,8 @@ TEST_F(AmdsmiGpuMonitoring, GetPcieInfoFail)
 	PlantMockOutput(&mocked_resp);
 	ret = performCall();
 
-	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_TRUE(equal_pcie_info(mocked_resp, pcie_info));
 }
 
 TEST_F(AmdsmiGpuMonitoring, GetGpuPciBandwidth)
@@ -698,12 +772,12 @@ TEST_F(AmdsmiGpuMonitoring, GetGpuPciBandwidth)
 	amdsmi_pcie_bandwidth_t bandwidth;
 	struct smi_pcie_info mocked_resp = {};
 
-	mocked_resp.pcie_static.num_pcie_levels = 3;
-	mocked_resp.pcie_static.pcie_levels[0].gen_speed = 0;
+	mocked_resp.pcie_static.num_pcie_levels		  = 3;
+	mocked_resp.pcie_static.pcie_levels[0].gen_speed  = 0;
 	mocked_resp.pcie_static.pcie_levels[0].lane_count = 1;
-	mocked_resp.pcie_static.pcie_levels[1].gen_speed = 2;
+	mocked_resp.pcie_static.pcie_levels[1].gen_speed  = 2;
 	mocked_resp.pcie_static.pcie_levels[1].lane_count = 3;
-	mocked_resp.pcie_static.pcie_levels[2].gen_speed = 3;
+	mocked_resp.pcie_static.pcie_levels[2].gen_speed  = 3;
 	mocked_resp.pcie_static.pcie_levels[2].lane_count = 6;
 
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
@@ -732,14 +806,14 @@ TEST_F(AmdsmiGpuMonitoring, GetGpuPciBandwidthAllGens)
 	amdsmi_pcie_bandwidth_t bandwidth;
 	struct smi_pcie_info mocked_resp = {};
 
-	mocked_resp.pcie_static.num_pcie_levels = 4;
-	mocked_resp.pcie_static.pcie_levels[0].gen_speed = 1;
+	mocked_resp.pcie_static.num_pcie_levels		  = 4;
+	mocked_resp.pcie_static.pcie_levels[0].gen_speed  = 1;
 	mocked_resp.pcie_static.pcie_levels[0].lane_count = 2;
-	mocked_resp.pcie_static.pcie_levels[1].gen_speed = 4;
+	mocked_resp.pcie_static.pcie_levels[1].gen_speed  = 4;
 	mocked_resp.pcie_static.pcie_levels[1].lane_count = 4;
-	mocked_resp.pcie_static.pcie_levels[2].gen_speed = 0;
+	mocked_resp.pcie_static.pcie_levels[2].gen_speed  = 0;
 	mocked_resp.pcie_static.pcie_levels[2].lane_count = 5;
-	mocked_resp.pcie_static.pcie_levels[3].gen_speed = 2;
+	mocked_resp.pcie_static.pcie_levels[3].gen_speed  = 2;
 	mocked_resp.pcie_static.pcie_levels[3].lane_count = 6;
 
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
@@ -787,8 +861,8 @@ TEST_F(AmdsmiGpuMonitoring, GetGpuPciBandwidthDefaultCases)
 	amdsmi_pcie_bandwidth_t bandwidth;
 	struct smi_pcie_info mocked_resp = {};
 
-	mocked_resp.pcie_static.num_pcie_levels = 1;
-	mocked_resp.pcie_static.pcie_levels[0].gen_speed = 255;
+	mocked_resp.pcie_static.num_pcie_levels		  = 1;
+	mocked_resp.pcie_static.pcie_levels[0].gen_speed  = 255;
 	mocked_resp.pcie_static.pcie_levels[0].lane_count = 255;
 
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
@@ -811,7 +885,7 @@ TEST_F(AmdsmiGpuMonitoring, TestPcieLinkSpeedConversion)
 	uint64_t dev_id = 29601;
 
 	// from PCIe standard, in MT/s
-	uint32_t expected_speed[] = { 2500, 5000, 8000, 16000, 32000, 64000 };
+	uint32_t expected_speed[] = {2500, 5000, 8000, 16000, 32000, 64000};
 
 	for (uint8_t pcie_gen = 1; pcie_gen < 6; pcie_gen++) {
 		ret = amdsmi_get_pcie_speed_from_pcie_type(pcie_gen, &returned_speed, dev_id);
@@ -823,13 +897,12 @@ TEST_F(AmdsmiGpuMonitoring, TestPcieLinkSpeedConversion)
 	for (uint8_t pcie_gen = 1; pcie_gen < 6; pcie_gen++) {
 		ret = amdsmi_get_pcie_speed_from_pcie_type(pcie_gen, &returned_speed, dev_id);
 		ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
-		ASSERT_EQ(returned_speed, expected_speed[pcie_gen-1]);
+		ASSERT_EQ(returned_speed, expected_speed[pcie_gen - 1]);
 	}
 
 	// unsupported standards
 	ret = amdsmi_get_pcie_speed_from_pcie_type(UINT32_MAX, &returned_speed, dev_id);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
-
 
 	ret = amdsmi_get_pcie_speed_from_pcie_type(7, &returned_speed, dev_id);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
@@ -845,10 +918,10 @@ TEST_F(AmdsmiGpuMonitoring, TestCacheInfo)
 	mocked_resp.num_cache_types = AMDSMI_MAX_CACHE_TYPES;
 
 	for (int i = 0; i < AMDSMI_MAX_CACHE_TYPES; i++) {
-		mocked_resp.cache[i].cache_size = i * 2 + 1;
-		mocked_resp.cache[i].cache_level = i * 2 + 2;
-		mocked_resp.cache[i].cache_properties = i * 2 + 3;
-		mocked_resp.cache[i].max_num_cu_shared = i * 2 + 4;
+		mocked_resp.cache[i].cache_size		= i * 2 + 1;
+		mocked_resp.cache[i].cache_level	= i * 2 + 2;
+		mocked_resp.cache[i].cache_properties	= i * 2 + 3;
+		mocked_resp.cache[i].max_num_cu_shared	= i * 2 + 4;
 		mocked_resp.cache[i].num_cache_instance = i * 2 + 5;
 	}
 
@@ -888,29 +961,37 @@ TEST_F(AmdsmiGpuMonitoring, GetSocPstate)
 	smi_device_info in_payload;
 	smi_dpm_policy mocked_resp = {};
 
-	mocked_resp.num_supported = 4;
-	mocked_resp.cur = 1;
+	mocked_resp.num_supported	  = 4;
+	mocked_resp.cur			  = 1;
 	mocked_resp.policies[0].policy_id = 0;
 #ifdef _WIN64
-	strcpy_s(mocked_resp.policies[0].policy_description, sizeof(mocked_resp.policies[0].policy_description), "pstate_default");
+	strcpy_s(mocked_resp.policies[0].policy_description,
+		 sizeof(mocked_resp.policies[0].policy_description),
+		 "pstate_default");
 #else
 	strcpy(mocked_resp.policies[0].policy_description, "pstate_default");
 #endif
 	mocked_resp.policies[1].policy_id = 1;
 #ifdef _WIN64
-	strcpy_s(mocked_resp.policies[1].policy_description, sizeof(mocked_resp.policies[1].policy_description), "soc_pstate_0");
+	strcpy_s(mocked_resp.policies[1].policy_description,
+		 sizeof(mocked_resp.policies[1].policy_description),
+		 "soc_pstate_0");
 #else
 	strcpy(mocked_resp.policies[1].policy_description, "soc_pstate_0");
 #endif
 	mocked_resp.policies[2].policy_id = 2;
 #ifdef _WIN64
-	strcpy_s(mocked_resp.policies[2].policy_description, sizeof(mocked_resp.policies[2].policy_description), "soc_pstate_1");
+	strcpy_s(mocked_resp.policies[2].policy_description,
+		 sizeof(mocked_resp.policies[2].policy_description),
+		 "soc_pstate_1");
 #else
 	strcpy(mocked_resp.policies[2].policy_description, "soc_pstate_1");
 #endif
 	mocked_resp.policies[3].policy_id = 3;
 #ifdef _WIN64
-	strcpy_s(mocked_resp.policies[3].policy_description, sizeof(mocked_resp.policies[3].policy_description), "soc_pstate_2");
+	strcpy_s(mocked_resp.policies[3].policy_description,
+		 sizeof(mocked_resp.policies[3].policy_description),
+		 "soc_pstate_2");
 #else
 	strcpy(mocked_resp.policies[3].policy_description, "soc_pstate_2");
 #endif
@@ -931,7 +1012,7 @@ TEST_F(AmdsmiGpuMonitoring, SetSocPstate)
 	int ret;
 	struct smi_set_dpm_policy in_payload;
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
-	uint32_t policy_id = 1;
+	uint32_t policy_id			= 1;
 
 	WhenCalling(std::bind(amdsmi_set_soc_pstate, MOCK_GPU_HANDLE, policy_id));
 	ExpectCommand(SMI_CMD_CODE_SET_SOC_PSTATE);

@@ -12,9 +12,10 @@
 
 auto constexpr version_header {"tool_name,tool_version,lib_version,driver_version"};
 
-int AmdSmiVersionCommand::version_command(uint64_t processor_bdf, Arguments arg, std::string &out)
+int AmdSmiVersionCommand::version_command(uint64_t processor_bdf, Arguments arg, std::string& out)
 {
-	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_version_command(processor_bdf, arg, out);
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_version_command(processor_bdf,
+										    arg, out);
 	return ret;
 }
 
@@ -23,19 +24,17 @@ void AmdSmiVersionCommand::version_command_json()
 	int ret;
 	nlohmann::ordered_json json_format = nlohmann::ordered_json::array();
 	nlohmann::ordered_json json;
-	std::string out{};
-	std::string result{};
+	std::string out {};
+	std::string result {};
 	nlohmann::ordered_json values_json;
 
-	if ((std::find(arg.options.begin(), arg.options.end(), "version") !=
-			arg.options.end() ||
-			std::find(arg.options.begin(), arg.options.end(), "v") !=
-			arg.options.end()) ||
-			arg.all_arguments) {
-		std::string param{"version"};
+	if ((std::find(arg.options.begin(), arg.options.end(), "version") != arg.options.end() ||
+	     std::find(arg.options.begin(), arg.options.end(), "v") != arg.options.end()) ||
+	    arg.all_arguments) {
+		std::string param {"version"};
 		uint64_t processor_bdf = arg.devices[0]->get_bdf();
-		ret = version_command(processor_bdf, arg, out);
-		int error = handle_exceptions(ret, param, arg);
+		ret		       = version_command(processor_bdf, arg, out);
+		int error	       = handle_exceptions(ret, param, arg);
 		if (error == 0) {
 			values_json = nlohmann::ordered_json::parse(out);
 			out.clear();
@@ -57,16 +56,14 @@ void AmdSmiVersionCommand::version_command_json()
 void AmdSmiVersionCommand::version_command_human()
 {
 	int ret;
-	std::string formatted_string{};
-	std::string out{};
-	if ((std::find(arg.options.begin(), arg.options.end(), "version") !=
-			arg.options.end() ||
-			std::find(arg.options.begin(), arg.options.end(), "v") !=
-			arg.options.end()) ||
-			arg.all_arguments) {
+	std::string formatted_string {};
+	std::string out {};
+	if ((std::find(arg.options.begin(), arg.options.end(), "version") != arg.options.end() ||
+	     std::find(arg.options.begin(), arg.options.end(), "v") != arg.options.end()) ||
+	    arg.all_arguments) {
 		uint64_t processor_bdf = arg.devices[0]->get_bdf();
-		ret = version_command(processor_bdf, arg, formatted_string);
-		std::string param{"version"};
+		ret		       = version_command(processor_bdf, arg, formatted_string);
+		std::string param {"version"};
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {
 			out += formatted_string;
@@ -84,21 +81,19 @@ void AmdSmiVersionCommand::version_command_human()
 void AmdSmiVersionCommand::version_command_csv()
 {
 	int ret;
-	std::string headers{};
-	std::string values{};
-	std::string formatted_string{};
-	std::string out{};
-	std::string gpu_id{};
-	std::string vf_id{};
+	std::string headers {};
+	std::string values {};
+	std::string formatted_string {};
+	std::string out {};
+	std::string gpu_id {};
+	std::string vf_id {};
 
-	if ((std::find(arg.options.begin(), arg.options.end(), "version") !=
-			arg.options.end()) ||
-			(std::find(arg.options.begin(), arg.options.end(), "v") !=
-			 arg.options.end()) ||
-			arg.all_arguments) {
+	if ((std::find(arg.options.begin(), arg.options.end(), "version") != arg.options.end()) ||
+	    (std::find(arg.options.begin(), arg.options.end(), "v") != arg.options.end()) ||
+	    arg.all_arguments) {
 		uint64_t processor_bdf = arg.devices[0]->get_bdf();
-		ret = version_command(processor_bdf, arg, formatted_string);
-		std::string param{"version"};
+		ret		       = version_command(processor_bdf, arg, formatted_string);
+		std::string param {"version"};
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {
 			headers.append(version_header);

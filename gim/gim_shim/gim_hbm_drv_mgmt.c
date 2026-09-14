@@ -1,23 +1,6 @@
-/*
- * Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE
+ * SPDX-License-Identifier: MIT
  */
 
 #include <linux/module.h>
@@ -30,22 +13,103 @@
 #include <linux/mm.h>
 #include <linux/memory.h>
 #include <linux/errno.h>
+#include <linux/workqueue.h>
 #include "gim_debug.h"
 #include "gim_hbm_drv_mgmt.h"
 
 #define GIM_HBM_DRV_MGMT_NAME_LEN 32
+
+/*
+ * Defer HBM NUMA registration so add_memory_driver_managed() does not run
+ * during VF enable while cgroup users may be iterating tasks.
+ * Some platform and kernel 6.14 combinations can WARN/hang when zonelists
+ * rebuild races cgroup scan.
+ */
+static unsigned int hbm_reg_delay_ms = 5000;
+module_param(hbm_reg_delay_ms, uint, 0644);
+MODULE_PARM_DESC(hbm_reg_delay_ms,
+	"Delay before registering VF HBM with NUMA via add_memory_driver_managed (ms). "
+	"0 schedules registration immediately on a dedicated workqueue.");
+
+static struct workqueue_struct *gim_hbm_wq;
+
 struct gim_hbm_drv_mgmt_t {
 	char name[GIM_HBM_DRV_MGMT_NAME_LEN];
+	char vf_name[GIM_HBM_DRV_MGMT_NAME_LEN];
 	int numa_id;
 	uint64_t phy_addr;
 	uint64_t phy_size;
+	struct delayed_work reg_work;
+	bool registered;
 };
 
-void *gim_hbm_drv_mgmt_init(const char *name, int numa_id,
-					uint64_t *phy_addr, uint64_t *phy_size)
+static int gim_hbm_drv_mgmt_add_memory(struct gim_hbm_drv_mgmt_t *ctx)
 {
 	int ret;
-	struct gim_hbm_drv_mgmt_t *gim_hbm_drv_mgmt;
+
+	ret = add_memory_driver_managed(ctx->numa_id, ctx->phy_addr, ctx->phy_size,
+					ctx->name, MHP_MEMMAP_ON_MEMORY);
+	if (ret == -EINVAL) {
+		gim_info("%s: MHP_MEMMAP_ON_MEMORY unsupported, retry with MHP_NONE\n",
+			 ctx->vf_name);
+		ret = add_memory_driver_managed(ctx->numa_id, ctx->phy_addr, ctx->phy_size,
+						ctx->name, MHP_NONE);
+	}
+
+	return ret;
+}
+
+static void gim_hbm_drv_mgmt_reg_work(struct work_struct *work)
+{
+	struct gim_hbm_drv_mgmt_t *ctx =
+		container_of(to_delayed_work(work), struct gim_hbm_drv_mgmt_t, reg_work);
+	int ret;
+
+	ret = gim_hbm_drv_mgmt_add_memory(ctx);
+	if (ret) {
+		gim_warn("%s: Failed to add HBM memory to kernel memory management (error: %d)\n",
+			 ctx->vf_name, ret);
+		if (ret == -EEXIST)
+			gim_warn("%s: Memory region already exists or overlaps with existing memory\n",
+				 ctx->vf_name);
+		else if (ret == -EINVAL)
+			gim_warn("%s: Invalid memory region params (check alignment and address range)\n",
+				 ctx->vf_name);
+		else if (ret == -ENOMEM)
+			gim_warn("%s: Insufficient memory for memory management structures\n",
+				 ctx->vf_name);
+		return;
+	}
+
+	ctx->registered = true;
+	gim_info("%s: Successfully added HBM memory region start=0x%llx, size=0x%llx to NUMA node %d\n",
+		 ctx->name, ctx->phy_addr, ctx->phy_size, ctx->numa_id);
+}
+
+int gim_hbm_drv_mgmt_module_init(void)
+{
+	gim_hbm_wq = alloc_workqueue("gim_hbm", WQ_UNBOUND | WQ_MEM_RECLAIM, 1);
+	if (!gim_hbm_wq) {
+		gim_warn("failed to create HBM registration workqueue\n");
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
+void gim_hbm_drv_mgmt_module_fini(void)
+{
+	if (gim_hbm_wq) {
+		flush_workqueue(gim_hbm_wq);
+		destroy_workqueue(gim_hbm_wq);
+		gim_hbm_wq = NULL;
+	}
+}
+
+void *gim_hbm_drv_mgmt_init(const char *name, int numa_id,
+			    uint64_t *phy_addr, uint64_t *phy_size)
+{
+	struct gim_hbm_drv_mgmt_t *ctx;
 	uint64_t block_size;
 	uint64_t req_addr;
 	uint64_t req_size;
@@ -56,6 +120,11 @@ void *gim_hbm_drv_mgmt_init(const char *name, int numa_id,
 
 	if (name == NULL || phy_addr == NULL || phy_size == NULL) {
 		gim_warn("invalid params (name or addr/size pointers)\n");
+		return NULL;
+	}
+
+	if (!gim_hbm_wq) {
+		gim_warn("%s: HBM registration workqueue is not initialized\n", name);
 		return NULL;
 	}
 
@@ -90,63 +159,49 @@ void *gim_hbm_drv_mgmt_init(const char *name, int numa_id,
 	gim_info("%s: HBM memory region aligned start=0x%llx size=0x%llx (requested 0x%llx/0x%llx) block_size=0x%llx\n",
 		name, aligned_addr, aligned_size, req_addr, req_size, block_size);
 
-	/* Allocate gim hbm mgmt context */
-	gim_hbm_drv_mgmt = kzalloc(sizeof(struct gim_hbm_drv_mgmt_t), GFP_KERNEL);
-	if (gim_hbm_drv_mgmt == NULL) {
+	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
+	if (ctx == NULL) {
 		gim_warn("failed to allocate memory for gim hbm mgmt\n");
 		return NULL;
 	}
 
-	gim_hbm_drv_mgmt->numa_id = numa_id;
-	gim_hbm_drv_mgmt->phy_addr = aligned_addr;
-	gim_hbm_drv_mgmt->phy_size = aligned_size;
-	snprintf(gim_hbm_drv_mgmt->name, sizeof(gim_hbm_drv_mgmt->name),
-		"System RAM (%s)", name);
+	ctx->numa_id = numa_id;
+	ctx->phy_addr = aligned_addr;
+	ctx->phy_size = aligned_size;
+	snprintf(ctx->name, sizeof(ctx->name), "System RAM (%s)", name);
+	snprintf(ctx->vf_name, sizeof(ctx->vf_name), "%s", name);
 
-	/* Add memory to NUMA node as driver-managed */
-	ret = add_memory_driver_managed(
-			gim_hbm_drv_mgmt->numa_id,
-			gim_hbm_drv_mgmt->phy_addr,
-			gim_hbm_drv_mgmt->phy_size,
-			gim_hbm_drv_mgmt->name,
-			MHP_NONE);
-	if (ret) {
-		gim_warn("%s: Failed to add HBM memory to kernel memory management (error: %d)\n",
-			name, ret);
-		if (ret == -EEXIST) {
-			gim_warn("%s: Memory region already exists or overlaps with existing memory\n",
-				name);
-		} else if (ret == -EINVAL) {
-			gim_warn("%s: Invalid memory region params (check alignment and address range)\n",
-				name);
-		} else if (ret == -ENOMEM) {
-			gim_warn("%s: Insufficient memory for memory management structures\n",
-				name);
-		}
-		kfree(gim_hbm_drv_mgmt);
-		return NULL;
-	}
-	gim_info("%s: Successfully added HBM memory region start=0x%llx, size=0x%llx to NUMA node %d\n",
-		gim_hbm_drv_mgmt->name, gim_hbm_drv_mgmt->phy_addr, gim_hbm_drv_mgmt->phy_size, gim_hbm_drv_mgmt->numa_id);
+	INIT_DELAYED_WORK(&ctx->reg_work, gim_hbm_drv_mgmt_reg_work);
+	queue_delayed_work(gim_hbm_wq, &ctx->reg_work,
+			     msecs_to_jiffies(hbm_reg_delay_ms));
+
+	gim_info("%s: scheduled HBM NUMA registration on node %d in %u ms\n",
+		 name, numa_id, hbm_reg_delay_ms);
 
 	*phy_addr = aligned_addr;
 	*phy_size = aligned_size;
 
-	return gim_hbm_drv_mgmt;
+	return ctx;
 }
 
-void gim_hbm_drv_mgmt_fini(void *hbm_drv_mgmt) {
-	int ret;
-	struct gim_hbm_drv_mgmt_t *gim_hbm_drv_mgmt = (struct gim_hbm_drv_mgmt_t *)hbm_drv_mgmt;
-	if (gim_hbm_drv_mgmt != NULL) {
-		ret = remove_memory(gim_hbm_drv_mgmt->phy_addr, gim_hbm_drv_mgmt->phy_size);
-		if (ret) {
-			gim_warn("%s: remove_memory() failed: %d (memory still present. reboot required)\n",
-				gim_hbm_drv_mgmt->name, ret);
-		} else {
-			gim_info("%s: Successfully removed HBM memory region start=0x%llx, size=0x%llx from NUMA node %d\n",
-				gim_hbm_drv_mgmt->name, gim_hbm_drv_mgmt->phy_addr, gim_hbm_drv_mgmt->phy_size, gim_hbm_drv_mgmt->numa_id);
+void gim_hbm_drv_mgmt_fini(void *hbm_drv_mgmt)
+{
+	struct gim_hbm_drv_mgmt_t *ctx = hbm_drv_mgmt;
+
+	if (ctx != NULL) {
+		cancel_delayed_work_sync(&ctx->reg_work);
+		if (ctx->registered) {
+			int ret;
+
+			ret = remove_memory(ctx->phy_addr, ctx->phy_size);
+			if (ret) {
+				gim_warn("%s: remove_memory() failed: %d (memory still present. reboot required)\n",
+					 ctx->name, ret);
+			} else {
+				gim_info("%s: Successfully removed HBM memory region start=0x%llx, size=0x%llx from NUMA node %d\n",
+					 ctx->name, ctx->phy_addr, ctx->phy_size, ctx->numa_id);
+			}
 		}
-		kfree(gim_hbm_drv_mgmt);
+		kfree(ctx);
 	}
 }

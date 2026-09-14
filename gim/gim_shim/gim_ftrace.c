@@ -55,6 +55,7 @@ char *gim_exclude_list[] = {
 	"gim_pci_find_next_ext_cap",
 	"gim_pci_find_ext_cap",
 	"gim_pci_find_cap",
+	"gim_pci_upstream_bridge",
 	"gim_pci_write_config_dword",
 	"gim_pci_write_config_word",
 	"gim_pci_write_config_byte",

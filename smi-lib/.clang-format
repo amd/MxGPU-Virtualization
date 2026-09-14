@@ -1,1 +1,57 @@
-# ADD FORMAT
+---
+Language: Cpp
+BasedOnStyle: LLVM
+
+UseTab: Always
+TabWidth:        8
+IndentWidth: 8
+#SpacesInParentheses: true
+
+ColumnLimit: 100
+
+PointerAlignment: Right
+
+
+AlignConsecutiveAssignments: Consecutive
+AlignConsecutiveBitFields : Consecutive
+AlignConsecutiveMacros: true
+
+
+ContinuationIndentWidth: 4
+AlignAfterOpenBracket: Align
+BinPackArguments: false
+BinPackParameters: false
+
+SpaceAfterCStyleCast: false
+
+SpaceBeforeParens: ControlStatements
+
+AllowShortBlocksOnASingleLine: Never
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+
+IndentCaseLabels: false
+AllowShortCaseLabelsOnASingleLine: false
+
+SortIncludes: false
+IncludeCategories:
+  - Regex:           '^<.*>'
+    Priority:        1
+  - Regex:           '^".*"'
+    Priority:        2
+
+MaxEmptyLinesToKeep: 1
+
+IndentPPDirectives: BeforeHash
+
+AllowAllParametersOfDeclarationOnNextLine: true
+
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: true
+
+#Supported only in latest clang-format
+
+#InsertNewlineAtEOF: true
+#OneLineFormatOffRegex: ^(// NOLINT|logger$)

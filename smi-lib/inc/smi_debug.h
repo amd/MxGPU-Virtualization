@@ -29,13 +29,13 @@
 #define UNDL(x) ("\x1B[4m" x RST)
 
 #ifdef SMI_ENABLE_LOGGING
-#define SMI_LOG_BASE(COLOR, x, ...)                   \
-	do {                                          \
-		printf("%s:%d ", __FILE__, __LINE__); \
-		printf(COLOR(x), ##__VA_ARGS__);      \
-	} while (0);
+	#define SMI_LOG_BASE(COLOR, x, ...)                                                        \
+		do {                                                                               \
+			printf("%s:%d ", __FILE__, __LINE__);                                      \
+			printf(COLOR(x), ##__VA_ARGS__);                                           \
+		} while (0);
 #else
-#define SMI_LOG_BASE(COLOR, x, ...)
+	#define SMI_LOG_BASE(COLOR, x, ...)
 #endif
 
 #define SMI_DEBUG(x, ...)   SMI_LOG_BASE(FGRN, x, ##__VA_ARGS__)
@@ -43,15 +43,18 @@
 #define SMI_ERROR(x, ...)   SMI_LOG_BASE(FRED, x, ##__VA_ARGS__)
 
 #ifdef SMI_ENABLE_LOGGING
-#define SMI_ERROR_MESSAGE(ret)                                                                \
-	do {                                                                                  \
-		if (ret != AMDSMI_STATUS_RETRY) {                                             \
-			printf("%s:%d \x1B[31m %s:%d \x1B[0m\n", __FUNCTION__, __LINE__,      \
-				smi_get_error_message(ret), ret);                             \
-		}                                                                             \
-	} while (0);
+	#define SMI_ERROR_MESSAGE(ret)                                                             \
+		do {                                                                               \
+			if (ret != AMDSMI_STATUS_RETRY) {                                          \
+				printf("%s:%d \x1B[31m %s:%d \x1B[0m\n",                           \
+				       __FUNCTION__,                                               \
+				       __LINE__,                                                   \
+				       smi_get_error_message(ret),                                 \
+				       ret);                                                       \
+			}                                                                          \
+		} while (0);
 #else
-#define SMI_ERROR_MESSAGE(ret)
+	#define SMI_ERROR_MESSAGE(ret)
 #endif
 
 #endif //__SMI_DEBUG_H__

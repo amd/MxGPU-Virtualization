@@ -1128,6 +1128,7 @@ static int gfx_v11_kiq_init_queue(struct amdgv_ring *ring)
 	if (init_mqd && init_mqd->cp_hqd_pq_control) {
 		oss_memcpy(mqd, init_mqd, sizeof(struct v11_compute_mqd));
 	} else {
+		oss_memset(mqd, 0, sizeof(struct v11_compute_mqd));
 		gfx_v11_mqd_init(ring);
 		if (init_mqd) {
 			// save the intial MQD setup
@@ -1157,6 +1158,7 @@ static int gfx_v11_kcq_init_queue(struct amdgv_ring *ring)
 	if (init_mqd && init_mqd->cp_hqd_pq_control) {
 		oss_memcpy(mqd, init_mqd, sizeof(struct v11_compute_mqd));
 	} else {
+		oss_memset(mqd, 0, sizeof(struct v11_compute_mqd));
 		oss_mutex_lock(adapt->srbm_mutex);
 		navi32_grbm_select(adapt, ring->me, ring->pipe, ring->queue, 0);
 		gfx_v11_mqd_init(ring);

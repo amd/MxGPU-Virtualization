@@ -1188,15 +1188,18 @@ int amdgv_umc_sw_init(struct amdgv_adapter *adapt)
 		goto error;
 
 	adapt->ecc.eh_data->last_retired_pfn = AMDGV_RAS_INV_MEM_PFN;
-	(*data)->rom_data.bps_cap = BAD_PAGE_RECORD_THRESHOLD;
+	/* pmfw may raise the bad page threshold after sw_init, so size the buffers
+	 * with the maximum threshold to keep alloc and free lengths in sync.
+	 */
+	(*data)->rom_data.bps_cap = MAX_BAD_PAGE_THRESHOLD;
 	(*data)->rom_data.bps = oss_zalloc(AMDGV_UMC_ALIGN(
 		(*data)->rom_data.bps_cap * sizeof(*(*data)->rom_data.bps), AMDGV_UMC_ALIGNMENT));
 
-	(*data)->bps_cap = BAD_PAGE_RECORD_THRESHOLD;
+	(*data)->bps_cap = MAX_BAD_PAGE_THRESHOLD;
 	(*data)->bps = oss_zalloc(AMDGV_UMC_ALIGN(
 		(*data)->bps_cap * sizeof(*(*data)->bps), AMDGV_UMC_ALIGNMENT));
 	(*data)->bps_mem = oss_zalloc(AMDGV_UMC_ALIGN(
-		BAD_PAGE_RECORD_THRESHOLD * sizeof(*(*data)->bps_mem), AMDGV_UMC_ALIGNMENT));
+		MAX_BAD_PAGE_THRESHOLD * sizeof(*(*data)->bps_mem), AMDGV_UMC_ALIGNMENT));
 
 	(*data)->bp_replace_pending = false;
 
@@ -1373,7 +1376,7 @@ int amdgv_umc_sw_fini(struct amdgv_adapter *adapt)
 
 		if (data->bps_mem) {
 			oss_memset(data->bps_mem, 0,
-				AMDGV_UMC_ALIGN(BAD_PAGE_RECORD_THRESHOLD * sizeof(*data->bps_mem),
+				AMDGV_UMC_ALIGN(MAX_BAD_PAGE_THRESHOLD * sizeof(*data->bps_mem),
 						AMDGV_UMC_ALIGNMENT));
 			oss_free(data->bps_mem);
 			data->bps_mem = NULL;

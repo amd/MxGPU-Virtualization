@@ -189,6 +189,7 @@ static int fw_eeprom_hw_init(struct ras_core_context *ras_core,
 			struct ras_eeprom_param *param)
 {
 	struct fw_eeprom_control *ctl;
+	int ret = 0;
 
 	if (!ras_core->eeprom_mgr.ras_eeprom)
 		return -RAS_CORE_EINVAL;
@@ -196,6 +197,10 @@ static int fw_eeprom_hw_init(struct ras_core_context *ras_core,
 	ctl = ras_core->eeprom_mgr.ras_eeprom;
 
 	ras_mp1_get_table_version(ras_core, &ctl->ras_table_format_version);
+
+	ret = ras_mp1_set_timestamp(ras_core, ras_core_get_utc_second_timestamp(ras_core));
+	if (ret)
+		RAS_DEV_WARN(ras_core->dev, "Failed to sync PMFW timestamp, ret:%d\n", ret);
 
 	return 0;
 }

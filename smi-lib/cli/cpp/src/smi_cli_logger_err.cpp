@@ -16,9 +16,9 @@ Logger& Logger::getInstance()
 
 Logger::Logger()
 {
-	bool isFile = false;
+	bool isFile		    = false;
 	const std::string file_name = "default_log.txt";
-	if(isFile)
+	if (isFile)
 		logFile.open(file_name, std::ios::app);
 }
 
@@ -42,14 +42,14 @@ void Logger::log(LogLevel level, int ret, const char* parent_fun, const char* fi
 	std::string typeOfMsg = getLogLevelString(level);
 
 	if (logFile.is_open()) {
-		logFile << "[" << typeOfMsg << "] " << parent_fun << "(" <<
-				getFileName(file_name) << ", " << line << ") -> " <<
-				amdsmi_get_error_message(ret) << ": " << ret << std::endl;
+		logFile << "[" << typeOfMsg << "] " << parent_fun << "(" << getFileName(file_name)
+			<< ", " << line << ") -> " << amdsmi_get_error_message(ret) << ": " << ret
+			<< std::endl;
 		logFile.flush();
 	} else {
-		std::cout << "[" << typeOfMsg << "] " << parent_fun << "(" <<
-				  getFileName(file_name) << ", " << line << ") -> " <<
-				  amdsmi_get_error_message(ret) << ": " << ret << std::endl;
+		std::cout << "[" << typeOfMsg << "] " << parent_fun << "(" << getFileName(file_name)
+			  << ", " << line << ") -> " << amdsmi_get_error_message(ret) << ": " << ret
+			  << std::endl;
 	}
 #endif
 }

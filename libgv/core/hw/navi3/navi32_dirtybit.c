@@ -292,7 +292,7 @@ static void copy_dirty_bits(uint32_t number_of_dirty_bits, uint8_t *dirty_bits,
 
 	if (0 == shift)	{
 		for (i = 0; i < dirty_bytes; i++)
-			dbit_buffer[byte_index + i] = dirty_bits[i];
+			dbit_buffer[byte_index + i] |= dirty_bits[i];
 	} else {
 		uint8_t carry = 0;
 		uint8_t next_carry = 0;
@@ -473,7 +473,6 @@ static int navi32_query_dirtybit_data(struct amdgv_adapter *adapt,
 		goto out;
 	}
 
-	oss_memset(dbit_buffer, 0, data->dbit_plane_data_size);
 	ret = query_dirty_bits_through_ffbm_blocks(adapt, vf_ffbm_map_list,
 			query_offset, query_end_offset, dbit_buffer, data->dbit_preserve);
 

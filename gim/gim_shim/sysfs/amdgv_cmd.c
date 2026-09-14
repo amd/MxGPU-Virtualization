@@ -171,6 +171,8 @@ static enum amdgv_cmd_asic_type amd_asic_type_to_amdgv_cmd_asic_type(enum amd_as
 	case CHIP_MI350X:
 		if (dev_id == 0x75A3)
 			return AMDGV_CMD_CHIP_MI355X;
+		else if (dev_id == 0x75A8)
+			return AMDGV_CMD_CHIP_MI350P;
 		else
 			return AMDGV_CMD_CHIP_MI350X;
 	case CHIP_LAST:
@@ -895,8 +897,9 @@ static uint8_t amdgv_get_ras_policy_info(struct amdgv_cmd_dev_handle *input_data
 
 	output_data->minor_version = ras_policy_info.minor_version;
 	output_data->major_version = ras_policy_info.major_version;
-	output_data->dram_non_critical_region_threshold = ras_policy_info.dram_non_critical_region_threshold;
-	output_data->dram_critical_region_threshold = ras_policy_info.dram_critical_region_threshold;
+
+	memcpy(&output_data->policy_data, &ras_policy_info.policy_data,
+			sizeof(output_data->policy_data));
 
 	return AMDGV_CMD__SUCCESS;
 }

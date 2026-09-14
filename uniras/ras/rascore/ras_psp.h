@@ -142,7 +142,6 @@ struct ras_psp_ctx {
 	void *external_mutex;
 	struct oss_mutex internal_mutex;
 	uint64_t in_fence_value;
-	struct gpu_mem_block *psp_cmd_gpu_mem;
 	struct gpu_mem_block *out_fence_gpu_mem;
 };
 

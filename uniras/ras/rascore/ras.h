@@ -273,6 +273,7 @@ struct ras_sys_func {
 		enum gpu_mem_type mem_type, struct gpu_mem_block *gpu_mem);
 	int (*get_nps_mode)(struct ras_core_context *ras_core);
 	int (*get_vram_type)(struct ras_core_context *ras_core);
+	int (*check_address_sanity)(struct ras_core_context *ras_core, uint64_t addr);
 };
 
 struct ras_ecc_count {
@@ -327,6 +328,7 @@ struct ras_core_config {
 	u32 nbio_ip_version;
 	u32 psp_ip_version;
 
+	u32 ras_thread_poll_interval_ms;
 	bool early_init_service_supported;
 	bool poison_supported;
 	bool ras_eeprom_supported;
@@ -361,6 +363,7 @@ struct ras_core_context {
 	struct ras_cmd_mgr ras_cmd;
 	struct ras_log_ring ras_log_ring;
 	struct ras_mce ras_mce;
+	struct ras_cper ras_cper;
 
 	const struct ras_sys_func *sys_fn;
 
@@ -439,4 +442,7 @@ bool ras_core_poison_supported(struct ras_core_context *ras_core);
 bool ras_core_in_early_init(struct ras_core_context *ras_core);
 bool ras_core_early_init_service_enabled(struct ras_core_context *ras_core);
 int ras_core_eeprom_early_init_service(struct ras_core_context *ras_core);
+int ras_core_add_log_event(struct ras_core_context *ras_core,
+		uint32_t event, void *data, uint32_t data_sz);
+int ras_core_check_address_sanity(struct ras_core_context *ras_core, uint64_t addr);
 #endif

@@ -33,10 +33,12 @@ static const struct amdgv_marketing_name_entry amdgv_marketing_name_table[] = {
 	/* Mi350 PF */
 	{ CHIP_MI350X, 0x75A0, 0x00, "AMD Instinct MI350X"},
 	{ CHIP_MI350X, 0x75A3, 0x00, "AMD Instinct MI355X"},
+	{ CHIP_MI350X, 0x75A8, 0x00, "AMD Instinct MI350P"},
 
 	/* Mi350 VF */
 	{ CHIP_MI350X, 0x75B0, 0x00, "AMD Instinct MI350X VF"},
 	{ CHIP_MI350X, 0x75B3, 0x00, "AMD Instinct MI355X VF"},
+	{ CHIP_MI350X, 0x75B8, 0x00, "AMD Instinct MI350P VF"},
 
 	/* Navi32 PF */
 	{ CHIP_NAVI32, 0x7460, 0x00, "AMD Radeon PRO V710"},
@@ -45,7 +47,7 @@ static const struct amdgv_marketing_name_entry amdgv_marketing_name_table[] = {
 	{ CHIP_NAVI32, 0x7461, 0x00, "AMD Radeon PRO V710"},
 };
 
-const char *amdgv_get_marketing_name(uint32_t dev_id, uint32_t rev_id)
+const char *amdgv_get_marketing_name(struct amdgv_adapter *adapt, uint32_t dev_id, uint32_t rev_id)
 {
 	int i;
 	struct amdgv_marketing_name_entry *entry;
@@ -56,6 +58,9 @@ const char *amdgv_get_marketing_name(uint32_t dev_id, uint32_t rev_id)
 		if (entry->dev_id == dev_id && entry->rev_id == rev_id)
 			return entry->marketing_name;
 	}
+
+	if (adapt->asic_type == CHIP_IP_DISCOVERY)
+		return "AMD Radeon Graphics";
 
 	return "UNKNOWN";
 }

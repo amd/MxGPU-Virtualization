@@ -20,47 +20,56 @@
 #include "smi_cli_exception.h"
 
 auto constexpr ras_policy_header_v_4_0 {
-"gpu,policy_major_version,policy_minor_version,"
-"policy_dram_non_critical_region_threshold,policy_dram_critical_region_threshold"
-};
+    "gpu,policy_major_version,policy_minor_version,"
+    "policy_dram_non_critical_region_threshold,policy_dram_critical_region_threshold"};
 
-int AmdSmiRasCommand::ras_command_cper(std::string &formatted_string)
+auto constexpr ras_policy_header_v_5_0 {
+    "gpu,policy_major_version,policy_minor_version,policy_num_entities,"
+    "policy_event_rma_threshold_per_entity,policy_max_pages_per_ret_event,"
+    "policy_od_sram_ecc_threshold,policy_hwa_threshold,policy_wdt_threshold"};
+
+int AmdSmiRasCommand::ras_command_cper(std::string& formatted_string)
 {
-	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_cper_entries_command(arg, formatted_string);
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_cper_entries_command(
+	    arg, formatted_string);
 	return ret;
 }
 
-int AmdSmiRasCommand::ras_command_afid(std::string &formatted_string)
+int AmdSmiRasCommand::ras_command_afid(std::string& formatted_string)
 {
-	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_cper_afid_command(arg, formatted_string);
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_cper_afid_command(
+	    arg, formatted_string);
 	return ret;
 }
 
-int AmdSmiRasCommand::ras_command_policy(uint64_t processor, std::string &formatted_string)
+int AmdSmiRasCommand::ras_command_policy(uint64_t processor, std::string& formatted_string,
+					 uint8_t* major_version)
 {
-	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_policy_command(processor,
-			arg, formatted_string);
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_policy_command(
+	    processor, arg, formatted_string, major_version);
 	return ret;
 }
 
 void AmdSmiRasCommand::ras_command_csv()
 {
 	int ret;
-	std::string headers{};
-	std::string values{};
-	std::string formatted_string{};
-	std::string out{};
+	std::string headers {};
+	std::string values {};
+	std::string formatted_string {};
+	std::string out {};
+	uint8_t ras_policy_major_version = 0;
 
 	if ((std::find(arg.options.begin(), arg.options.end(), "policy") != arg.options.end()) ||
-		arg.all_arguments) {
+	    arg.all_arguments) {
 		for (unsigned int i = 0; i < arg.devices.size(); i++) {
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
-			int gpu_id = arg.devices[i]->get_gpu_index();
+			int gpu_id	 = arg.devices[i]->get_gpu_index();
 
-			std::string gpu_id_str{string_format("%d",gpu_id)};
+			std::string gpu_id_str {string_format("%d", gpu_id)};
 			values.append(gpu_id_str);
-			ret = ras_command_policy(gpu_bdf, formatted_string);
-			std::string param{"policy"};
+			ret = ras_command_policy(gpu_bdf, formatted_string,
+						 &ras_policy_major_version);
+			std::string param {"policy"};
 			int error = handle_exceptions(ret, param, arg);
 			if (error == 0) {
 				values.append(formatted_string).append("\n");
@@ -68,7 +77,11 @@ void AmdSmiRasCommand::ras_command_csv()
 			}
 		}
 	}
-	out.append(ras_policy_header_v_4_0).append("\n");
+	if (ras_policy_major_version == 5) {
+		out.append(ras_policy_header_v_5_0).append("\n");
+	} else {
+		out.append(ras_policy_header_v_4_0).append("\n");
+	}
 	out.append(values);
 	values.clear();
 
@@ -83,21 +96,21 @@ void AmdSmiRasCommand::ras_command_csv()
 void AmdSmiRasCommand::ras_command_json()
 {
 	int ret;
-	int i = 0;
+	int i				   = 0;
 	nlohmann::ordered_json json_format = nlohmann::ordered_json::array();
 	nlohmann::ordered_json json;
-	std::string out{};
-	std::string result{};
+	std::string out {};
+	std::string result {};
 	nlohmann::ordered_json values_json;
 	if ((std::find(arg.options.begin(), arg.options.end(), "policy") != arg.options.end()) ||
-		arg.all_arguments) {
+	    arg.all_arguments) {
 		for (i = 0; i < arg.devices.size(); i++) {
-			json = {};
+			json	    = {};
 			json["gpu"] = arg.devices[i]->get_gpu_index();
 			nlohmann::ordered_json values_json;
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
-			ret = ras_command_policy(gpu_bdf, out);
-			std::string param{"policy"};
+			ret		 = ras_command_policy(gpu_bdf, out);
+			std::string param {"policy"};
 			int error = handle_exceptions(ret, param, arg);
 			if (error == 0) {
 				values_json = nlohmann::ordered_json::parse(out);
@@ -120,13 +133,13 @@ void AmdSmiRasCommand::ras_command_json()
 void AmdSmiRasCommand::ras_command_human()
 {
 	int ret;
-	std::string formatted_string{};
-	std::string out{};
+	std::string formatted_string {};
+	std::string out {};
 
 	if ((std::find(arg.options.begin(), arg.options.end(), "cper") != arg.options.end()) ||
-			(std::find(arg.options.begin(), arg.options.end(), "c") != arg.options.end())) {
+	    (std::find(arg.options.begin(), arg.options.end(), "c") != arg.options.end())) {
 		ret = ras_command_cper(formatted_string);
-		std::string param{"cper"};
+		std::string param {"cper"};
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {
 			out.append(formatted_string);
@@ -136,7 +149,7 @@ void AmdSmiRasCommand::ras_command_human()
 	}
 	if ((std::find(arg.options.begin(), arg.options.end(), "afid") != arg.options.end())) {
 		ret = ras_command_afid(formatted_string);
-		std::string param{"afid"};
+		std::string param {"afid"};
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {
 			out.append(formatted_string);
@@ -145,15 +158,15 @@ void AmdSmiRasCommand::ras_command_human()
 		formatted_string.clear();
 	}
 	if ((std::find(arg.options.begin(), arg.options.end(), "policy") != arg.options.end()) ||
-		arg.all_arguments) {
+	    arg.all_arguments) {
 		for (unsigned int i = 0; i < arg.devices.size(); i++) {
 			out += string_format(gpuTemplate, arg.devices[i]->get_gpu_index());
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
-			ret = ras_command_policy(gpu_bdf, formatted_string);
+			ret		 = ras_command_policy(gpu_bdf, formatted_string);
 			if (ret == 2 && arg.all_arguments) {
 				throw SmiToolRequiredCommandException(std::string("ras"));
 			}
-			std::string param{"policy"};
+			std::string param {"policy"};
 			int error = handle_exceptions(ret, param, arg);
 			if (error == 0) {
 				out.append(formatted_string);
@@ -173,17 +186,18 @@ void AmdSmiRasCommand::ras_command_human()
 void AmdSmiRasCommand::execute_command()
 {
 
-	if ((AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi350())
-			&& AmdSmiPlatform::getInstance().is_host()) {
+	if ((AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi350() ||
+	     AmdSmiPlatform::getInstance().is_gc_12_1()) &&
+	    AmdSmiPlatform::getInstance().is_host()) {
 		if (arg.output == human) {
 			ras_command_human();
 		} else if (arg.output == json) {
 			ras_command_json();
-		} else if(arg.output == csv) {
+		} else if (arg.output == csv) {
 			ras_command_csv();
 		}
 	} else {
-		std::string command{"ras"};
+		std::string command {"ras"};
 		throw SmiToolCommandNotSupportedException(command);
 	}
 };

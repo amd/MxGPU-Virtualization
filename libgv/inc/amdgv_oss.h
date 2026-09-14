@@ -295,6 +295,9 @@ struct oss_interface {
 	int (*pci_find_ext_cap)(oss_dev_t dev, int cap);
 	int (*pci_find_next_ext_cap)(oss_dev_t dev, int start_pos, int cap);
 
+	/* dev's upstream bridge, NULL at root port or if unknown */
+	oss_dev_t (*pci_upstream_bridge)(oss_dev_t dev);
+
 	/* restore VF resizable BAR */
 	int (*pci_restore_vf_rebar)(oss_dev_t dev, int bar_idx);
 
@@ -340,7 +343,7 @@ struct oss_interface {
 			      enum oss_dma_direction dir, uint64_t offset, uint64_t size);
 	uint64_t (*sg_dma_address)(void *handle, uint32_t page);
 
-	void *(*memremap)(uint64_t offset, uint32_t size, uint32_t flags);
+	void *(*memremap)(uint64_t offset, uint64_t size, uint32_t flags);
 	void (*memunmap)(void *addr);
 
 	/* memory operations */
@@ -613,6 +616,8 @@ struct oss_interface {
 	 */
 	int (*register_mce_notifier)(void *dev, mce_notifier notifier);
 	int (*unregister_mce_notifier)(void *dev);
+
+	void (*emergency_restart)(void);
 };
 
 #endif

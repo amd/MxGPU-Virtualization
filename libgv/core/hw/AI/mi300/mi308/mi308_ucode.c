@@ -124,7 +124,7 @@ static int mi308_ucode_load(struct amdgv_adapter *adapt, enum amdgv_firmware_id 
 				sizeof(psp_drv_ras_mi308));
 			break;
 		default:
-			AMDGV_WARN("Unsupported FW id 0x%x. Skipping...\n", ucode_id_list[i]);
+			AMDGV_DEBUG("Unsupported FW id 0x%x. Skipping...\n", ucode_id_list[i]);
 			break;
 		}
 		if (ret != PSP_STATUS__SUCCESS)

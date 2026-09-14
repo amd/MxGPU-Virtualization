@@ -361,7 +361,7 @@ static int gfx_v9_4_2_run_shader(struct amdgv_adapter *adapt,
 	r = amdgv_ib_get(adapt, total_size,
 					AMDGV_IB_POOL_DIRECT, ib);
 	if (r) {
-		AMDGV_ERROR("failed to get ib (%d).\n", r);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_GFX_IB_ALLOC_FAIL, 0);
 		return r;
 	}
 
@@ -409,7 +409,7 @@ static int gfx_v9_4_2_run_shader(struct amdgv_adapter *adapt,
 	/* shedule the ib on the ring */
 	r = amdgv_ib_schedule(ring, 1, ib);
 	if (r) {
-		AMDGV_ERROR("ib submit failed (%d).\n", r);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_GFX_IB_SUBMIT_FAIL, 0);
 		amdgv_ib_free(adapt, ib);
 	}
 	return r;
@@ -447,8 +447,8 @@ static int gfx_v9_4_2_wait_for_waves_assigned(struct amdgv_adapter *adapt,
 		oss_udelay(1000);
 	} while (++loop < 2000 && wait);
 
-	AMDGV_ERROR("actual wave num: %d, expected wave num: %d\n",
-		wave_cnt, num_wave);
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_GFX_WAVE_COVERAGE_FAIL,
+		AMDGV_LOG_DATA_32_32(wave_cnt, num_wave));
 
 	return AMDGV_FAILURE;
 }
@@ -467,7 +467,7 @@ static int gfx_v9_4_2_do_sgprs_init(struct amdgv_adapter *adapt)
 	r = amdgv_ib_get(adapt, (1 + wb_size) * sizeof(uint32_t),
 			  AMDGV_IB_POOL_DIRECT, &wb_ib);
 	if (r) {
-		AMDGV_ERROR("failed to get ib (%d) for wb\n", r);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_GFX_IB_ALLOC_FAIL, 0);
 		return r;
 	}
 	oss_memset(wb_ib.ptr, 0, (1 + wb_size) * sizeof(uint32_t));
@@ -482,7 +482,6 @@ static int gfx_v9_4_2_do_sgprs_init(struct amdgv_adapter *adapt)
 			adapt->gfx.cu_dump_data_info.cu_info.number,
 			wb_ib.gpu_addr, pattern[0]);
 	if (r) {
-		AMDGV_ERROR("failed to clear first 224 sgprs\n");
 		goto pro_end;
 	}
 
@@ -492,8 +491,6 @@ static int gfx_v9_4_2_do_sgprs_init(struct amdgv_adapter *adapt)
 			adapt->gfx.cu_dump_data_info.cu_info.number * SIMD_ID_MAX * 2,
 			true);
 	if (r) {
-		AMDGV_ERROR(
-			"wave coverage failed when clear first 224 sgprs\n");
 		wb_ib.ptr[0] = 0xdeadbeaf; /* stop waves */
 		goto disp0_failed;
 	}
@@ -508,7 +505,6 @@ static int gfx_v9_4_2_do_sgprs_init(struct amdgv_adapter *adapt)
 			adapt->gfx.cu_dump_data_info.cu_info.number * 2,
 			wb_ib.gpu_addr, pattern[1]);
 	if (r) {
-		AMDGV_ERROR("failed to clear next 576 sgprs\n");
 		goto disp0_failed;
 	}
 
@@ -517,8 +513,6 @@ static int gfx_v9_4_2_do_sgprs_init(struct amdgv_adapter *adapt)
 			pattern[1], adapt->gfx.cu_dump_data_info.cu_info.number * SIMD_ID_MAX * 6,
 			true);
 	if (r) {
-		AMDGV_ERROR(
-			"wave coverage failed when clear first 576 sgprs\n");
 		wb_ib.ptr[0] = 0xdeadbeaf; /* stop waves */
 		goto disp1_failed;
 	}
@@ -536,7 +530,6 @@ static int gfx_v9_4_2_do_sgprs_init(struct amdgv_adapter *adapt)
 			adapt->gfx.cu_dump_data_info.cu_info.number,
 			wb_ib.gpu_addr, pattern[2]);
 	if (r) {
-		AMDGV_ERROR("failed to clear first 256 sgprs\n");
 		goto disp1_failed;
 	}
 
@@ -546,8 +539,6 @@ static int gfx_v9_4_2_do_sgprs_init(struct amdgv_adapter *adapt)
 			adapt->gfx.cu_dump_data_info.cu_info.number * SIMD_ID_MAX * 4,
 			true);
 	if (r) {
-		AMDGV_ERROR(
-			"wave coverage failed when clear first 256 sgprs\n");
 		wb_ib.ptr[0] = 0xdeadbeaf; /* stop waves */
 		goto disp2_failed;
 	}
@@ -562,9 +553,6 @@ disp0_failed:
 	amdgv_ib_free(adapt, &disp_ibs[0]);
 pro_end:
 	amdgv_ib_free(adapt, &wb_ib);
-
-	if (r)
-		AMDGV_ERROR("Init SGPRS Failed\n");
 
 	return r;
 }
@@ -584,7 +572,7 @@ static int gfx_v9_4_2_do_vgprs_init(struct amdgv_adapter *adapt)
 	r = amdgv_ib_get(adapt, (1 + wb_size) * sizeof(uint32_t),
 			  AMDGV_IB_POOL_DIRECT, &wb_ib);
 	if (r) {
-		AMDGV_ERROR("failed to get ib (%d) for wb.\n", r);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_GFX_IB_ALLOC_FAIL, 0);
 		return r;
 	}
 	oss_memset(wb_ib.ptr, 0, (1 + wb_size) * sizeof(uint32_t));
@@ -599,7 +587,6 @@ static int gfx_v9_4_2_do_vgprs_init(struct amdgv_adapter *adapt)
 			adapt->gfx.cu_dump_data_info.cu_info.number,
 			wb_ib.gpu_addr, pattern);
 	if (r) {
-		AMDGV_ERROR("failed to clear vgprs\n");
 		goto pro_end;
 	}
 
@@ -609,7 +596,6 @@ static int gfx_v9_4_2_do_vgprs_init(struct amdgv_adapter *adapt)
 			adapt->gfx.cu_dump_data_info.cu_info.number * SIMD_ID_MAX,
 			false);
 	if (r) {
-		AMDGV_ERROR("failed to cover all simds when clearing vgprs\n");
 		goto disp_failed;
 	}
 
@@ -617,9 +603,6 @@ disp_failed:
 	amdgv_ib_free(adapt, &disp_ib);
 pro_end:
 	amdgv_ib_free(adapt, &wb_ib);
-
-	if (r)
-		AMDGV_ERROR("Init VGPRS Failed\n");
 
 	return r;
 }

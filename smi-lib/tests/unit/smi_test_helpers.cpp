@@ -15,33 +15,19 @@ extern "C" {
 #include "smi_system_mock.hpp"
 #include "common/smi_device_handle.h"
 
-amdsmi_bdf_t MOCK_BDF = { { 0x4, 0x3, 0x2, 0x1 } }; // 0001:02:03.04
+amdsmi_bdf_t MOCK_BDF = {{0x4, 0x3, 0x2, 0x1}}; // 0001:02:03.04
 const char *GPU_MOCK_UUID{"9aff0003-0000-1000-801f-188c37cb1ee6"};
 const char *VF_MOCK_UUID{"9a0174b5-0000-1000-801f-188c37cb1ee6"};
 struct smi_gpu_handle GPU_MOCK_HANDLE = {
-	SMI_HANDLE_TYPE_AMD_GPU,
-	{ { 0x4, 0x3, 0x2, 0x1 } },
-	(0x1234ULL << 32) | 0x1234,
-	0x5678
-};
-amdsmi_vf_handle_t VF_MOCK_HANDLE = { (0x1234ULL << 32) | 0x4567 };
-struct smi_nic_handle NIC_MOCK_HANDLE = {
-	SMI_HANDLE_TYPE_AMD_NIC,
-	{ { 0x4, 0x3, 0x2, 0x1 } }
-};
+    SMI_HANDLE_TYPE_AMD_GPU, {{0x4, 0x3, 0x2, 0x1}}, (0x1234ULL << 32) | 0x1234, 0x5678};
+amdsmi_vf_handle_t VF_MOCK_HANDLE     = {(0x1234ULL << 32) | 0x4567};
+struct smi_nic_handle NIC_MOCK_HANDLE = {SMI_HANDLE_TYPE_AMD_NIC, {{0x4, 0x3, 0x2, 0x1}}};
 
-struct smi_nic_handle BRCM_NIC_MOCK_HANDLE = {
-	SMI_HANDLE_TYPE_BRCM_NIC,
-	{ { 0x4, 0x3, 0x2, 0x1 } }
-};
+struct smi_nic_handle BRCM_NIC_MOCK_HANDLE = {SMI_HANDLE_TYPE_BRCM_NIC, {{0x4, 0x3, 0x2, 0x1}}};
 
-struct smi_node_handle NODE_MOCK_HANDLE = {
-	SMI_HANDLE_TYPE_NODE,
-	(0x1234ULL << 32) | 0x1235
-};
+struct smi_node_handle NODE_MOCK_HANDLE = {SMI_HANDLE_TYPE_NODE, (0x1234ULL << 32) | 0x1235};
 
-namespace amdsmi
-{
+namespace amdsmi {
 std::unique_ptr<NiceMock<SystemMock>> g_system_mock;
 
 SystemMock *GetSystemMock()
@@ -54,20 +40,21 @@ void AmdSmiTest::initialize_smi_lib(uint32_t version, uint8_t num_dev)
 	handshake_version = version;
 	// set the appropriate version for successful handshake
 	EXPECT_CALL(*GetSystemMock(), Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_HANDSHAKE)))
-		.WillOnce(testing::DoAll(SetPayload(smi_handshake{ handshake_version }),
-					 testing::Return(0)));
+	    .WillOnce(
+		testing::DoAll(SetPayload(smi_handshake{handshake_version}), testing::Return(0)));
 
 	smi_server_static_info server_info_mock = {};
 	for (uint32_t i = 0; i < num_dev; i++) {
 		server_info_mock.devices[i].bdf.as_uint = MOCK_BDF.as_uint;
-		server_info_mock.devices[i].bdf.bdf.device_number = (server_info_mock.devices[i].bdf.bdf.device_number + i) % 32;
+		server_info_mock.devices[i].bdf.bdf.device_number =
+		    (server_info_mock.devices[i].bdf.bdf.device_number + i) % 32;
 
 		server_info_mock.devices[i].dev_id.handle = GPU_MOCK_HANDLE.handle;
 		server_info_mock.devices[i].dev_id.handle += i;
 	}
 	server_info_mock.num_devices = num_dev;
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
 
 	int res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	ASSERT_EQ(res, AMDSMI_STATUS_SUCCESS);
@@ -81,8 +68,7 @@ void AmdSmiTest::finalize_smi_lib()
 	ASSERT_EQ(res, AMDSMI_STATUS_SUCCESS);
 }
 
-::testing::AssertionResult vf_configs_equal(smi_vf_info expect,
-					    amdsmi_vf_info_t actual)
+::testing::AssertionResult vf_configs_equal(smi_vf_info expect, amdsmi_vf_info_t actual)
 {
 	SMI_ASSERT_EQ(expect.fb.fb_offset, actual.fb.fb_offset);
 	SMI_ASSERT_EQ(expect.fb.fb_size, actual.fb.fb_size);
@@ -91,8 +77,7 @@ void AmdSmiTest::finalize_smi_lib()
 	return ::testing::AssertionSuccess();
 }
 
-::testing::AssertionResult equal_handles(smi_device_handle_t expect,
-					 struct smi_gpu_handle actual)
+::testing::AssertionResult equal_handles(smi_device_handle_t expect, struct smi_gpu_handle actual)
 {
 	SMI_ASSERT_EQ(expect.handle, actual.handle);
 	return ::testing::AssertionSuccess();
@@ -104,16 +89,16 @@ void AmdSmiTest::finalize_smi_lib()
 	return ::testing::AssertionSuccess();
 }
 
-::testing::AssertionResult equal_dpm_policy(smi_dpm_policy expect,
-							amdsmi_dpm_policy_t actual)
+::testing::AssertionResult equal_dpm_policy(smi_dpm_policy expect, amdsmi_dpm_policy_t actual)
 {
 	SMI_ASSERT_EQ(expect.num_supported, actual.num_supported);
 	SMI_ASSERT_EQ(expect.cur, actual.current);
 	for (uint32_t i = 0; i < expect.num_supported; i++) {
-		SMI_ASSERT_STR_EQ(expect.policies[i].policy_description, actual.policies[i].policy_description)
-			<< " for i = " << i;
+		SMI_ASSERT_STR_EQ(expect.policies[i].policy_description,
+				  actual.policies[i].policy_description)
+		    << " for i = " << i;
 		SMI_ASSERT_EQ(expect.policies[i].policy_id, actual.policies[i].policy_id)
-			<< " for i = " << i;
+		    << " for i = " << i;
 	}
 
 	return ::testing::AssertionSuccess();

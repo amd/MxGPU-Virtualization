@@ -49,12 +49,12 @@ struct amdgv_sdma {
 	int num_instances;
 	uint32_t harvest_instances;
 	uint32_t num_pf_dedicated_inst;
-	uint32_t sdma_mask;
 	uint32_t harvest_sdma_mask;
 	int num_sdma_rings;
 	uint32_t page_size_config;
 	struct amdgv_ring sdma_ring[AMDGV_MAX_SDMA_RINGS];
 	int num_inst_per_aid;
+	int num_inst_per_xcc;
 	struct ras_common_if	*ras_if;
 	const struct amdgv_sdma_ras_funcs	*funcs;
 	int (*sdma_copy)(struct amdgv_ring *ring, uint64_t src, uint64_t size, uint64_t dest);

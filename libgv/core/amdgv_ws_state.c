@@ -917,8 +917,17 @@ load_gpu:
 					break;
 				}
 				/* disable perf log before exit auto sched */
-				if (IS_HW_SCHED_TYPE_GFX(hw_sched_id))
-					amdgv_sched_toggle_perflog(adapt, false, hw_sched_id);
+				if (IS_HW_SCHED_TYPE_GFX(hw_sched_id) &&
+					amdgv_sched_toggle_perflog(adapt, false, hw_sched_id) == AMDGV_FAILURE) {
+					AMDGV_ERROR(
+						"WSSM: Failed to disable perf log, skip DISABLE_AUTO for VF%d\n",
+						cur_vf);
+					ret = AMDGV_FAILURE;
+					amdgv_gpuiov_get_active_vf_idx(adapt, hw_sched_id, &cur_vf);
+					adapt->sched.hw_state_machine[hw_sched_id].cur_vf_id = cur_vf;
+					world_switch->curr_idx_vf = cur_vf;
+					goto ws_exit;
+				}
 				if (amdgv_gpuiov_disable_auto_sched(adapt, hw_sched_id)) {
 					AMDGV_ERROR(
 						"WSSM: Failed to move from ENABLE_AUTO to DISABLE_AUTO state for VF%d\n",

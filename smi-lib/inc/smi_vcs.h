@@ -9,8 +9,8 @@
 #include <stdbool.h>
 #include "common/smi_cmd.h"
 
-#define SMI_UNKNOWN_VERSION 0
-#define SMI_CMD_CODE_INVALID    0
+#define SMI_UNKNOWN_VERSION  0
+#define SMI_CMD_CODE_INVALID 0
 
 /**
  *  \brief  Returns whether the specified command is compatible

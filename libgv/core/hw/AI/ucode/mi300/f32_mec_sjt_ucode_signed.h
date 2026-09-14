@@ -1,6 +1,9 @@
+/* Copyright Advanced Micro Devices, Inc.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 //-------------------------------------------------------------------------
-//  Copyright Advanced Micro Devices, Inc.
-//
 //  Description:
 //      This file provides an array of hard-coded micro-instructions
 //      for the F32 RISC processor.

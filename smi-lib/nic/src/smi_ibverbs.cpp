@@ -8,20 +8,25 @@
 
 #ifdef LIBIBVERBS_INSTALLED
 
-#include <dlfcn.h>
+	#include <dlfcn.h>
 
-#include <cstring>
+	#include <cstring>
 
 namespace {
 
 uint16_t mtu_enum_to_bytes(enum ibv_mtu mtu)
 {
 	switch (mtu) {
-	case IBV_MTU_256:  return 256;
-	case IBV_MTU_512:  return 512;
-	case IBV_MTU_1024: return 1024;
-	case IBV_MTU_2048: return 2048;
-	case IBV_MTU_4096: return 4096;
+	case IBV_MTU_256:
+		return 256;
+	case IBV_MTU_512:
+		return 512;
+	case IBV_MTU_1024:
+		return 1024;
+	case IBV_MTU_2048:
+		return 2048;
+	case IBV_MTU_4096:
+		return 4096;
 	}
 	return 0;
 }
@@ -50,21 +55,19 @@ IbverbsLoader::IbverbsLoader()
 		return;
 	}
 
-	get_device_list  = reinterpret_cast<decltype(get_device_list)>(
-		::dlsym(handle_, "ibv_get_device_list"));
-	free_device_list = reinterpret_cast<decltype(free_device_list)>(
-		::dlsym(handle_, "ibv_free_device_list"));
-	get_device_name  = reinterpret_cast<decltype(get_device_name)>(
-		::dlsym(handle_, "ibv_get_device_name"));
-	open_device      = reinterpret_cast<decltype(open_device)>(
-		::dlsym(handle_, "ibv_open_device"));
-	close_device     = reinterpret_cast<decltype(close_device)>(
-		::dlsym(handle_, "ibv_close_device"));
-	query_port       = reinterpret_cast<decltype(query_port)>(
-		::dlsym(handle_, "ibv_query_port"));
+	get_device_list =
+	    reinterpret_cast<decltype(get_device_list)>(::dlsym(handle_, "ibv_get_device_list"));
+	free_device_list =
+	    reinterpret_cast<decltype(free_device_list)>(::dlsym(handle_, "ibv_free_device_list"));
+	get_device_name =
+	    reinterpret_cast<decltype(get_device_name)>(::dlsym(handle_, "ibv_get_device_name"));
+	open_device = reinterpret_cast<decltype(open_device)>(::dlsym(handle_, "ibv_open_device"));
+	close_device =
+	    reinterpret_cast<decltype(close_device)>(::dlsym(handle_, "ibv_close_device"));
+	query_port = reinterpret_cast<decltype(query_port)>(::dlsym(handle_, "ibv_query_port"));
 
-	available_ = get_device_list && free_device_list && get_device_name &&
-		     open_device && close_device && query_port;
+	available_ = get_device_list && free_device_list && get_device_name && open_device &&
+		     close_device && query_port;
 }
 
 std::optional<PortMtu> query_port_mtu(const std::string& rdma_dev, uint8_t port_num)
@@ -74,20 +77,20 @@ std::optional<PortMtu> query_port_mtu(const std::string& rdma_dev, uint8_t port_
 		return std::nullopt;
 	}
 
-	int num_devices = 0;
-	struct ibv_device **dev_list = ibv.get_device_list(&num_devices);
+	int num_devices		     = 0;
+	struct ibv_device** dev_list = ibv.get_device_list(&num_devices);
 	if (!dev_list) {
 		return std::nullopt;
 	}
 
 	std::optional<PortMtu> result;
 	for (int i = 0; i < num_devices; i++) {
-		const char *name = ibv.get_device_name(dev_list[i]);
+		const char* name = ibv.get_device_name(dev_list[i]);
 		if (!name || rdma_dev != name) {
 			continue;
 		}
 
-		struct ibv_context *ctx = ibv.open_device(dev_list[i]);
+		struct ibv_context* ctx = ibv.open_device(dev_list[i]);
 		if (!ctx) {
 			break;
 		}
@@ -96,9 +99,9 @@ std::optional<PortMtu> query_port_mtu(const std::string& rdma_dev, uint8_t port_
 		std::memset(&attr, 0, sizeof(attr));
 		if (ibv.query_port(ctx, port_num, &attr) == 0) {
 			uint16_t active = mtu_enum_to_bytes(attr.active_mtu);
-			uint16_t max    = mtu_enum_to_bytes(attr.max_mtu);
+			uint16_t max	= mtu_enum_to_bytes(attr.max_mtu);
 			if (active != 0 && max != 0) {
-				result = PortMtu{active, max};
+				result = PortMtu {active, max};
 			}
 		}
 

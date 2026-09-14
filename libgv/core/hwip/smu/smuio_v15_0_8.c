@@ -86,7 +86,7 @@ static enum amdgv_ual_link_type smuio_v15_0_8_get_link_type(struct amdgv_adapter
 
 	/* data[4:3]
 	 * 0 - UALOE connected A+A system
-	 * 1 - UALINK connected A+A system
+	 * 1 - UALINK 200 connected A+A system
 	 * etc.
 	 */
 	link_type = ((data & SMUIO_MCM_CONFIG__LINK_TYPE_MASK) >> 3);
@@ -95,10 +95,10 @@ static enum amdgv_ual_link_type smuio_v15_0_8_get_link_type(struct amdgv_adapter
 	case 0:
 		return AMDGV_UALOE;
 	case 1:
-		return AMDGV_UALINK;
+		return AMDGV_UALINK_200;
 	default:
 		AMDGV_ERROR("Unknown Link type: %d\n", link_type);
-		return AMDGV_UAL_NONE;
+		return AMDGV_UALMAX;
 	}
 }
 

@@ -83,6 +83,8 @@
 	((struct amdgv_gc_info_v1_2 *) gchdr)
 #define GET_GC_TABLE_V1_3(gchdr) \
 	((struct amdgv_gc_info_v1_3 *) gchdr)
+#define GET_GC_TABLE_V1_5(gchdr) \
+	((struct amdgv_gc_info_v1_5 *) gchdr)
 #define GET_GC_TABLE_V2_1(gchdr) \
 	((struct amdgv_gc_info_v2_1 *) gchdr)
 
@@ -250,6 +252,54 @@ struct amdgv_gc_info_v1_3 {
     uint32_t gc_tcc_cache_line_size;
 };
 
+struct amdgv_gc_info_v1_5 {
+    struct amdgv_gpu_info_header header;
+    uint32_t gc_num_se;
+    uint32_t gc_num_wgp0_per_sa;
+    uint32_t gc_num_wgp1_per_sa;
+    uint32_t gc_num_rb_per_se;
+    uint32_t gc_num_gl2c;
+    uint32_t gc_num_gprs;
+    uint32_t gc_num_max_gs_thds;
+    uint32_t gc_gs_table_depth;
+    uint32_t gc_gsprim_buff_depth;
+    uint32_t gc_parameter_cache_depth;
+    uint32_t gc_double_offchip_lds_buffer;
+    uint32_t gc_wave_size;
+    uint32_t gc_max_waves_per_simd;
+    uint32_t gc_max_scratch_slots_per_cu;
+    uint32_t gc_lds_size;
+    uint32_t gc_num_sc_per_se;
+    uint32_t gc_num_sa_per_se;
+    uint32_t gc_num_packer_per_sc;
+    uint32_t gc_num_gl2a;
+    uint32_t gc_num_tcp_per_sa;
+    uint32_t gc_num_sdp_interface;
+    uint32_t gc_num_tcps;
+    uint32_t gc_num_tcp_per_wpg;
+    uint32_t gc_tcp_l1_size;
+    uint32_t gc_num_sqc_per_wgp;
+    uint32_t gc_l1_instruction_cache_size_per_sqc;
+    uint32_t gc_l1_data_cache_size_per_sqc;
+    uint32_t gc_gl1c_per_sa;
+    uint32_t gc_gl1c_size_per_instance;
+    uint32_t gc_gl2c_per_gpu;
+    uint32_t gc_tcp_size_per_cu;
+    uint32_t gc_tcp_cache_line_size;
+    uint32_t gc_instruction_cache_size_per_sqc;
+    uint32_t gc_instruction_cache_line_size;
+    uint32_t gc_scalar_data_cache_size_per_sqc;
+    uint32_t gc_scalar_data_cache_line_size;
+    uint32_t gc_tcc_size;
+    uint32_t gc_tcc_cache_line_size;
+	/* new for v1.5 */
+    uint32_t gc_num_wgp0_per_sa1;
+    uint32_t gc_num_wgp1_per_sa1;
+    uint32_t gc_max_num_residency_ways;
+    uint32_t gc_cache_ways_size_in_bytes;
+    uint32_t gc_reserved;
+};
+
 struct amdgv_gc_info_v2_1 {
     struct amdgv_gpu_info_header gpu_info_header;
     /* carried over from v2.0 */
@@ -285,6 +335,7 @@ union gc_info {
 	struct amdgv_gc_info_v1_1 v1_1;
 	struct amdgv_gc_info_v1_2 v1_2;
 	struct amdgv_gc_info_v1_3 v1_3;
+	struct amdgv_gc_info_v1_5 v1_5;
 	struct amdgv_gc_info_v2_1 v2_1;
 };
 
@@ -494,7 +545,6 @@ struct amdgv_ip_discovery {
 	bool enable_live_update;
 	// Index mapping for table IDs to header table list
 	uint16_t header_index[TOTAL_TABLES_V2];
-	struct amdgv_memmgr_mem *ip_discovery_mem;
 };
 
 int amdgv_discover_ip(struct amdgv_adapter *adapt);

@@ -464,10 +464,8 @@ static int mi200_reset_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	/* use SMU msg to trigger FLR instead of PCIe control bit*/
 	if (adapt->pp.pp_funcs->trigger_vf_flr) {
 		ret = adapt->pp.pp_funcs->trigger_vf_flr(adapt, 1 << idx_vf);
-		if (ret) {
-			amdgv_put_log(idx_vf, AMDGV_LOG_FW_TRIGGER_VF_FLR_FAIL, 0);
+		if (ret)
 			ret = AMDGV_FAILURE;
-		}
 	} else {
 		amdgv_put_log(idx_vf, AMDGV_LOG_FW_TRIGGER_VF_FLR_NOT_IMPLEMENTED, 0);
 		ret = AMDGV_FAILURE;

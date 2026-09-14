@@ -9,37 +9,29 @@
 #include "amdsmi.h"
 #include <stdbool.h>
 
-const char *const EVENT_CATEGORY_STR[] = {
-	"NULL",
-	"Driver",
-	"Reset",
-	"Scheduler",
-	"VBIOS",
-	"ECC",
-	"Powerplay",
-	"SRIOV",
-	"VF",
-	"Ucode",
-	"GPU device",
-	"Event guard",
-	"GPU monitor",
-	"MMSCH",
-	"XGMI"
-};
+const char *const EVENT_CATEGORY_STR[] = {"NULL",
+					  "Driver",
+					  "Reset",
+					  "Scheduler",
+					  "VBIOS",
+					  "ECC",
+					  "Powerplay",
+					  "SRIOV",
+					  "VF",
+					  "Ucode",
+					  "GPU device",
+					  "Event guard",
+					  "GPU monitor",
+					  "MMSCH",
+					  "XGMI"};
 
-const char *const EVENT_SEVERITY_STR[] = {
-	"High",
-	"Medium",
-	"Low",
-	"Warn",
-	"Info"
-};
+const char *const EVENT_SEVERITY_STR[] = {"High", "Medium", "Low", "Warn", "Info"};
 
 int main(int argc, char *argv[])
 {
-	int ret = 0;
-	unsigned int gpu_count = 0;
-	amdsmi_socket_handle socket = NULL;
+	int ret				    = 0;
+	unsigned int gpu_count		    = 0;
+	amdsmi_socket_handle socket	    = NULL;
 	amdsmi_processor_handle *processors = NULL;
 
 	amdsmi_event_set monitor;
@@ -49,7 +41,7 @@ int main(int argc, char *argv[])
 	unsigned long severity = 5;
 
 	amdsmi_bdf_t gpu_bdf = {0};
-	amdsmi_bdf_t vf_bdf = {0};
+	amdsmi_bdf_t vf_bdf  = {0};
 
 	/* a clear event mask which only masks high severities */
 	uint64_t event_mask = AMDSMI_MASK_INIT;
@@ -108,11 +100,11 @@ int main(int argc, char *argv[])
 		goto finish;
 
 	gpu_count = AMDSMI_MAX_DEVICES;
-	ret = amdsmi_get_processor_handles(socket, &gpu_count, NULL);
+	ret	  = amdsmi_get_processor_handles(socket, &gpu_count, NULL);
 	if (ret != AMDSMI_STATUS_SUCCESS)
 		goto finish;
 
-	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*gpu_count);
+	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * gpu_count);
 	if (processors == NULL) {
 		ret = AMDSMI_STATUS_OUT_OF_RESOURCES;
 		goto finish;
@@ -123,7 +115,7 @@ int main(int argc, char *argv[])
 		goto cleanup_processors;
 
 	/* log all events */
-	ret = amdsmi_event_create(&processors[0], (uint8_t) gpu_count, event_mask, &monitor);
+	ret = amdsmi_event_create(&processors[0], (uint8_t)gpu_count, event_mask, &monitor);
 	if (ret != AMDSMI_STATUS_SUCCESS)
 		goto cleanup_processors;
 
@@ -151,11 +143,13 @@ int main(int argc, char *argv[])
 			printf("--------------------------------------\n");
 			printf("  Processor:\n");
 			printf("  GPU BDF %02x:%02x.%01x\n",
-				gpu_bdf.bdf.bus_number,
-				gpu_bdf.bdf.device_number, gpu_bdf.bdf.function_number);
+			       gpu_bdf.bdf.bus_number,
+			       gpu_bdf.bdf.device_number,
+			       gpu_bdf.bdf.function_number);
 			printf("  VF  BDF %02x:%02x.%01x\n",
-				vf_bdf.bdf.bus_number,
-				vf_bdf.bdf.device_number, vf_bdf.bdf.function_number);
+			       vf_bdf.bdf.bus_number,
+			       vf_bdf.bdf.device_number,
+			       vf_bdf.bdf.function_number);
 			printf("--------------------------------------\n");
 			printf("  Event meta:\n");
 			printf("  Category: %s\n", EVENT_CATEGORY_STR[event.category]);

@@ -74,7 +74,7 @@ static int convert_ma_to_pa(struct ras_core_context *ras_core,
 
 	ret = ras_umc_psp_translate_addr(ras_core,
 				addr_in, addr_out, nps);
-	if (ret != RAS_CORE_EOPNOTSUPP)
+	if (ret != -RAS_CORE_EOPNOTSUPP)
 		return ret;
 
 	if (ras_psp_check_supported_cmd(ras_core, RAS_TA_CMD_ID__QUERY_ADDRESS))

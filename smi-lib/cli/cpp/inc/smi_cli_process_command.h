@@ -19,11 +19,10 @@ public:
 	void process_command_csv();
 	void process_command_watch();
 
-	int process_command_all_arguments(uint64_t processor, std::string &formatted_string,
-									  int &proc_num,
-									  int gpu_id);
-	int process_command_general(uint64_t processor, std::string &formatted_string, int &proc_num,
-								int gpu_id);
-	int process_command_engine(uint64_t processor, std::string &formatted_string, int &proc_num,
-							   int gpu_id);
+	int process_command_all_arguments(uint64_t processor, std::string& formatted_string,
+					  int& proc_num, int gpu_id);
+	int process_command_general(uint64_t processor, std::string& formatted_string,
+				    int& proc_num, int gpu_id);
+	int process_command_engine(uint64_t processor, std::string& formatted_string, int& proc_num,
+				   int gpu_id);
 };

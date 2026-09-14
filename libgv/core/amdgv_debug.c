@@ -88,6 +88,20 @@ int amdgv_debug_test_and_hang_wgr(struct amdgv_adapter *adapt)
 	return 0;
 }
 
+int amdgv_debug_break_point(struct amdgv_adapter *adapt)
+{
+	if (!is_debug_mode_break_point())
+		return 0;
+
+	AMDGV_WARN("Entered break point. Disable break point or unload driver to escape.\n");
+
+	while (is_debug_mode_break_point())
+		oss_msleep(5000);
+
+	AMDGV_INFO("Releasing break point.\n");
+	return 0;
+}
+
 void amdgv_debug_set_mode(struct amdgv_adapter *adapt, enum amdgv_debug_mode mode)
 {
 	adapt->debug.mode = mode;

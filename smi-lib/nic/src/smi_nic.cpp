@@ -28,11 +28,13 @@
 
 // **** SmiNicPort ****
 
-SmiNicPort::SmiNicPort(const std::string& iface, const std::string& bdf, const std::string& sysfs_class_path, const std::string& sysfs_bus_path,
+SmiNicPort::SmiNicPort(const std::string& iface, const std::string& bdf,
+		       const std::string& sysfs_class_path, const std::string& sysfs_bus_path,
 		       NicVendor vendor)
-	: iface_(iface), bdf_(bdf), vendor_(vendor), sysfs_class_path_(sysfs_class_path), sysfs_bus_path_(sysfs_bus_path)
+    : iface_(iface), bdf_(bdf), vendor_(vendor), sysfs_class_path_(sysfs_class_path),
+      sysfs_bus_path_(sysfs_bus_path)
 {
-	port_num_ = smi_utils::get_sysfs_data<uint32_t>(sysfs_class_path_ + "/dev_port");
+	port_num_	= smi_utils::get_sysfs_data<uint32_t>(sysfs_class_path_ + "/dev_port");
 	auto type_value = smi_utils::get_sysfs_data<int>(sysfs_class_path_ + "/type");
 
 	if (type_value.has_value()) {
@@ -120,7 +122,8 @@ void SmiNicPort::set_flavour(const std::string& flavour)
 
 std::optional<uint32_t> SmiNicPort::active_fec() const
 {
-	struct ethtool_fecparam fec{};
+	struct ethtool_fecparam fec {
+	};
 	fec.cmd = ETHTOOL_GFECPARAM;
 
 	int ret = smi_ethtool_ioctl(iface_, &fec);
@@ -132,20 +135,21 @@ std::optional<uint32_t> SmiNicPort::active_fec() const
 
 std::optional<std::string> SmiNicPort::autoneg() const
 {
-	struct ethtool_link_settings link_settings_query{};
-	link_settings_query.cmd = ETHTOOL_GLINKSETTINGS;
+	struct ethtool_link_settings link_settings_query {
+	};
+	link_settings_query.cmd			   = ETHTOOL_GLINKSETTINGS;
 	link_settings_query.link_mode_masks_nwords = 0;
 
 	int ret = smi_ethtool_ioctl(iface_, &link_settings_query);
 	if (ret == 0 && link_settings_query.link_mode_masks_nwords < 0) {
-		int nwords = -link_settings_query.link_mode_masks_nwords;
+		int nwords  = -link_settings_query.link_mode_masks_nwords;
 		size_t size = sizeof(ethtool_link_settings) + 3 * nwords * sizeof(uint32_t);
 
 		std::unique_ptr<ethtool_link_settings, decltype(&std::free)> settings(
-			static_cast<ethtool_link_settings*>(std::calloc(1, size)), &std::free);
+		    static_cast<ethtool_link_settings*>(std::calloc(1, size)), &std::free);
 
 		if (settings) {
-			settings->cmd = ETHTOOL_GLINKSETTINGS;
+			settings->cmd			 = ETHTOOL_GLINKSETTINGS;
 			settings->link_mode_masks_nwords = static_cast<__s8>(nwords);
 
 			if (smi_ethtool_ioctl(iface_, settings.get()) == 0) {
@@ -158,7 +162,8 @@ std::optional<std::string> SmiNicPort::autoneg() const
 
 std::optional<std::string> SmiNicPort::pause_autoneg() const
 {
-	struct ethtool_pauseparam pause{};
+	struct ethtool_pauseparam pause {
+	};
 	pause.cmd = ETHTOOL_GPAUSEPARAM;
 
 	int ret = smi_ethtool_ioctl(iface_, &pause);
@@ -170,7 +175,8 @@ std::optional<std::string> SmiNicPort::pause_autoneg() const
 
 std::optional<std::string> SmiNicPort::pause_rx() const
 {
-	struct ethtool_pauseparam pause{};
+	struct ethtool_pauseparam pause {
+	};
 	pause.cmd = ETHTOOL_GPAUSEPARAM;
 
 	int ret = smi_ethtool_ioctl(iface_, &pause);
@@ -182,7 +188,8 @@ std::optional<std::string> SmiNicPort::pause_rx() const
 
 std::optional<std::string> SmiNicPort::pause_tx() const
 {
-	struct ethtool_pauseparam pause{};
+	struct ethtool_pauseparam pause {
+	};
 	pause.cmd = ETHTOOL_GPAUSEPARAM;
 
 	int ret = smi_ethtool_ioctl(iface_, &pause);
@@ -195,24 +202,30 @@ std::optional<std::string> SmiNicPort::pause_tx() const
 void SmiNicPort::discover_infiniband()
 {
 	std::string infiniband_path = sysfs_bus_path_ + "/infiniband";
-	if (!std::filesystem::exists(infiniband_path) || !std::filesystem::is_directory(infiniband_path)) {
+	if (!std::filesystem::exists(infiniband_path) ||
+	    !std::filesystem::is_directory(infiniband_path)) {
 		return;
 	}
 
 	for (const auto& entry : std::filesystem::directory_iterator(infiniband_path)) {
 		if (entry.is_directory()) {
 
-			std::string name = entry.path().filename().string();
+			std::string name       = entry.path().filename().string();
 			std::string sysfs_path = entry.path().string();
 			SmiInfiniBand ib(name, sysfs_path);
 
 			std::string ports_path = sysfs_path + "/ports";
-			if (std::filesystem::exists(ports_path) && std::filesystem::is_directory(ports_path)) {
-				for (const auto& port_entry : std::filesystem::directory_iterator(ports_path)) {
+			if (std::filesystem::exists(ports_path) &&
+			    std::filesystem::is_directory(ports_path)) {
+				for (const auto& port_entry :
+				     std::filesystem::directory_iterator(ports_path)) {
 					if (port_entry.is_directory()) {
-						std::string port_name = port_entry.path().filename().string();
-						std::string port_sysfs_path = port_entry.path().string();
-						SmiInfiniBandPort port(iface_, name, port_name, port_sysfs_path);
+						std::string port_name =
+						    port_entry.path().filename().string();
+						std::string port_sysfs_path =
+						    port_entry.path().string();
+						SmiInfiniBandPort port(iface_, name, port_name,
+								       port_sysfs_path);
 						port.collect_hw_counters();
 						ib.add_port(port);
 					}
@@ -238,9 +251,10 @@ uint8_t SmiNicPort::infiniband_num() const
 	return static_cast<uint8_t>(infiniband_.size());
 }
 
-void SmiNicPort::collect_vendor_statistics()
+std::map<std::string, uint64_t> SmiNicPort::collect_vendor_statistics() const
 {
-	int ret = 0;
+	std::map<std::string, uint64_t> stats_map;
+	int ret		   = 0;
 	uint32_t stats_num = 0;
 
 	auto drvinfo = std::make_unique<ethtool_drvinfo>();
@@ -248,78 +262,75 @@ void SmiNicPort::collect_vendor_statistics()
 
 	ret = smi_ethtool_ioctl(iface_, drvinfo.get());
 	if (ret != 0 || !drvinfo) {
-		return;
+		return stats_map;
 	}
 	stats_num = drvinfo->n_stats;
 
 	size_t strings_len = sizeof(ethtool_gstrings) + stats_num * ETH_GSTRING_LEN;
 	std::unique_ptr<ethtool_gstrings, decltype(&free)> strings(
-		static_cast<ethtool_gstrings*>(std::calloc(1, strings_len)), &free);
-	strings->cmd = ETHTOOL_GSTRINGS;
+	    static_cast<ethtool_gstrings*>(std::calloc(1, strings_len)), &free);
+	strings->cmd	    = ETHTOOL_GSTRINGS;
 	strings->string_set = ETH_SS_STATS;
-	strings->len = static_cast<__u32>(stats_num);
+	strings->len	    = static_cast<__u32>(stats_num);
 
 	ret = smi_ethtool_ioctl(iface_, strings.get());
 	if (ret != 0 || !strings) {
-		return;
+		return stats_map;
 	}
 
 	size_t stats_len = sizeof(ethtool_stats) + stats_num * sizeof(uint64_t);
 	std::unique_ptr<ethtool_stats, decltype(&free)> stats(
-		static_cast<ethtool_stats*>(std::calloc(1, stats_len)), &free);
-	stats->cmd = ETHTOOL_GSTATS;
+	    static_cast<ethtool_stats*>(std::calloc(1, stats_len)), &free);
+	stats->cmd     = ETHTOOL_GSTATS;
 	stats->n_stats = static_cast<__u32>(stats_num);
 
 	ret = smi_ethtool_ioctl(iface_, stats.get());
 	if (ret != 0 || !stats) {
-		return;
+		return stats_map;
 	}
 
-	add_vendor_statistic(strings.get(), stats.get());
+	add_vendor_statistic(strings.get(), stats.get(), stats_map);
+	return stats_map;
 }
 
-void SmiNicPort::add_vendor_statistic(struct ethtool_gstrings *strings, struct ethtool_stats *stats)
+void SmiNicPort::add_vendor_statistic(struct ethtool_gstrings* strings, struct ethtool_stats* stats,
+				      std::map<std::string, uint64_t>& out) const
 {
 	if (!strings || !stats) {
 		return;
 	}
 	for (unsigned int i = 0; i < stats->n_stats; ++i) {
-		std::string key(reinterpret_cast<char*>(&strings->data[i * ETH_GSTRING_LEN]), ETH_GSTRING_LEN);
+		std::string key(reinterpret_cast<char*>(&strings->data[i * ETH_GSTRING_LEN]),
+				ETH_GSTRING_LEN);
 		key.erase(std::find(key.begin(), key.end(), '\0'), key.end());
 		if (vendor_stat_supported(key)) {
 			uint64_t value = stats->data[i];
-			vendor_stats_map_[key] = value;
+			out[key]       = value;
 		}
 	}
 }
 
-const std::map<std::string, uint64_t>& SmiNicPort::get_vendor_stats_map() const
+std::map<std::string, uint64_t> SmiNicPort::collect_standard_statistics() const
 {
-	return vendor_stats_map_;
-}
-
-void SmiNicPort::collect_standard_statistics()
-{
+	std::map<std::string, uint64_t> stats_map;
 	std::string stats_path = sysfs_class_path_ + "/statistics";
 
 	if (!std::filesystem::exists(stats_path) || !std::filesystem::is_directory(stats_path)) {
-		return;
+		return stats_map;
 	}
 
 	for (const auto& entry : std::filesystem::directory_iterator(stats_path)) {
 		if (entry.is_regular_file()) {
 			std::string stat_name = entry.path().filename().string();
-			auto stat_value = smi_utils::get_sysfs_data<uint64_t>(entry.path().string());
+			auto stat_value =
+			    smi_utils::get_sysfs_data<uint64_t>(entry.path().string());
 			if (stat_value.has_value()) {
-				standard_stats_map_[stat_name] = stat_value.value();
+				stats_map[stat_name] = stat_value.value();
 			}
 		}
 	}
-}
 
-const std::map<std::string, uint64_t>& SmiNicPort::get_standard_stats_map() const
-{
-	return standard_stats_map_;
+	return stats_map;
 }
 
 std::optional<std::string> SmiNicPort::read_vpd_content() const
@@ -331,7 +342,11 @@ std::optional<std::string> SmiNicPort::read_vpd_content() const
 
 	std::string content = vpd.value();
 	content.erase(std::remove_if(content.begin(), content.end(),
-		[](char c) { return !(std::isprint(static_cast<unsigned char>(c)) || c == '\n'); }), content.end());
+				     [](char c) {
+					     return !(std::isprint(static_cast<unsigned char>(c)) ||
+						      c == '\n');
+				     }),
+		      content.end());
 
 	return content;
 }
@@ -353,13 +368,13 @@ bool SmiNicPort::vendor_stat_supported(const std::string& stat_name) const
 
 SmiInfiniBandPort::SmiInfiniBandPort(const std::string& netdev, const std::string& rdma_dev,
 				     const std::string& name, const std::string& sysfs_path)
-	: netdev_(netdev), rdma_dev_(rdma_dev), name_(name), sysfs_path_(sysfs_path)
+    : netdev_(netdev), rdma_dev_(rdma_dev), name_(name), sysfs_path_(sysfs_path)
 {
 	auto port = port_num();
 	if (port.has_value()) {
 		auto info = smi_ibverbs::query_port_mtu(rdma_dev_, port.value());
 		if (info.has_value()) {
-			max_mtu_ = info->max_mtu;
+			max_mtu_    = info->max_mtu;
 			active_mtu_ = info->active_mtu;
 		}
 	}
@@ -392,7 +407,7 @@ std::optional<std::string> SmiInfiniBandPort::state() const
 	}
 
 	const std::string& state = raw_state.value();
-	auto pos = state.find(": ");
+	auto pos		 = state.find(": ");
 
 	if (pos != std::string::npos) {
 		return state.substr(pos + 2);
@@ -415,14 +430,16 @@ void SmiInfiniBandPort::collect_hw_counters()
 {
 	std::string hw_counters_path = sysfs_path_ + "/hw_counters";
 
-	if (!std::filesystem::exists(hw_counters_path) || !std::filesystem::is_directory(hw_counters_path)) {
+	if (!std::filesystem::exists(hw_counters_path) ||
+	    !std::filesystem::is_directory(hw_counters_path)) {
 		return;
 	}
 
 	for (const auto& entry : std::filesystem::directory_iterator(hw_counters_path)) {
 		if (entry.is_regular_file()) {
 			std::string counter_name = entry.path().filename().string();
-			auto counter_value = smi_utils::get_sysfs_data<uint64_t>(entry.path().string());
+			auto counter_value =
+			    smi_utils::get_sysfs_data<uint64_t>(entry.path().string());
 			if (counter_value.has_value()) {
 				hw_counters_map_[counter_name] = counter_value.value();
 			}
@@ -438,7 +455,7 @@ const std::map<std::string, uint64_t>& SmiInfiniBandPort::get_hw_counters_map() 
 // **** SmiInfiniBand ****
 
 SmiInfiniBand::SmiInfiniBand(const std::string& name, const std::string& sysfs_path)
-	: name_(name), sysfs_path_(sysfs_path)
+    : name_(name), sysfs_path_(sysfs_path)
 {
 }
 
@@ -460,7 +477,7 @@ std::optional<std::string> SmiInfiniBand::node_type() const
 	}
 
 	const std::string& node_type = raw_node_type.value();
-	auto pos = node_type.find(": ");
+	auto pos		     = node_type.find(": ");
 
 	if (pos != std::string::npos) {
 		return node_type.substr(pos + 2);
@@ -499,8 +516,8 @@ uint8_t SmiInfiniBand::ports_num() const
 SmiNic::SmiNic(const std::string& iface, const std::string& bdf, NicType type,
 	       const std::string& sysfs_class_path, const std::string& sysfs_bus_path,
 	       NicVendor vendor, NicProduct product)
-	: iface_(iface), bdf_(bdf), type_(type), vendor_(vendor), product_(product),
-	  sysfs_class_path_(sysfs_class_path), sysfs_bus_path_(sysfs_bus_path)
+    : iface_(iface), bdf_(bdf), type_(type), vendor_(vendor), product_(product),
+      sysfs_class_path_(sysfs_class_path), sysfs_bus_path_(sysfs_bus_path)
 {
 }
 
@@ -592,7 +609,7 @@ std::optional<std::string> SmiNic::perm_address() const
 
 	const std::string& port_iface = ports_[0].interface();
 	struct ethtool_perm_addr permaddr;
-	permaddr.cmd = ETHTOOL_GPERMADDR;
+	permaddr.cmd  = ETHTOOL_GPERMADDR;
 	permaddr.size = 6;
 
 	int ret = smi_ethtool_ioctl(port_iface, &permaddr);
@@ -604,7 +621,8 @@ std::optional<std::string> SmiNic::perm_address() const
 		std::stringstream ss;
 		ss << std::hex << std::setfill('0');
 		for (int i = 0; i < 6; i++) {
-			if (i > 0) ss << ":";
+			if (i > 0)
+				ss << ":";
 			ss << std::setw(2) << static_cast<unsigned int>(permaddr.data[i]);
 		}
 		return ss.str();
@@ -618,15 +636,18 @@ std::optional<uint32_t> SmiNic::pcie_class() const
 	return smi_utils::get_sysfs_data<uint32_t>(sysfs_bus_path_ + "/class");
 }
 
-std::optional<uint8_t> SmiNic::max_pcie_width() const {
+std::optional<uint8_t> SmiNic::max_pcie_width() const
+{
 	return smi_utils::get_sysfs_data<uint8_t>(sysfs_bus_path_ + "/max_link_width");
 }
 
-std::optional<uint32_t> SmiNic::max_pcie_speed() const {
+std::optional<uint32_t> SmiNic::max_pcie_speed() const
+{
 	return smi_utils::get_sysfs_data<uint32_t>(sysfs_bus_path_ + "/max_link_speed");
 }
 
-std::optional<uint8_t> SmiNic::numa_node() const {
+std::optional<uint8_t> SmiNic::numa_node() const
+{
 	return smi_utils::get_sysfs_data<uint8_t>(sysfs_bus_path_ + "/numa_node");
 }
 
@@ -645,12 +666,13 @@ std::optional<std::string> SmiNic::pcie_parent_bdf() const
 // Check if this NIC shares the same immediate PCIe parent with another device
 bool SmiNic::share_same_pcie_parent(uint64_t bdf) const
 {
-	auto nic_parent = pcie_parent_bdf();
+	auto nic_parent	    = pcie_parent_bdf();
 	std::string bdf_str = smi_utils::format_bdf(bdf);
-	auto device_parent = smi_utils::get_pcie_parent_bdf(bdf_str);
+	auto device_parent  = smi_utils::get_pcie_parent_bdf(bdf_str);
 
 	// Both must have a valid parent and parents must match
-	return nic_parent.has_value() && device_parent.has_value() && nic_parent.value() == device_parent.value();
+	return nic_parent.has_value() && device_parent.has_value() &&
+	       nic_parent.value() == device_parent.value();
 }
 
 std::optional<NicLinkType> SmiNic::link_type(uint64_t bdf) const
@@ -667,7 +689,7 @@ std::optional<NicLinkType> SmiNic::link_type(uint64_t bdf) const
 
 	// Priority 2 & 3: Use NUMA nodes to determine NUMA vs XNUMA
 	auto device_numa_node = smi_utils::get_numa_node_from_bdf(bdf_str);
-	auto nic_numa_node = numa_node();
+	auto nic_numa_node    = numa_node();
 
 	if (device_numa_node.has_value() && nic_numa_node.has_value()) {
 		if (device_numa_node.value() != nic_numa_node.value()) {
@@ -685,9 +707,10 @@ std::optional<NicLinkType> SmiNic::link_type(uint64_t bdf) const
 // **** SmiNicPensando ****
 
 SmiNicPensando::SmiNicPensando(const std::string& iface, const std::string& bdf, NicType type,
-			       const std::string& sysfs_class_path, const std::string& sysfs_bus_path,
-			       NicVendor vendor, NicProduct product)
-	: SmiNic(iface, bdf, type, sysfs_class_path, sysfs_bus_path, vendor, product)
+			       const std::string& sysfs_class_path,
+			       const std::string& sysfs_bus_path, NicVendor vendor,
+			       NicProduct product)
+    : SmiNic(iface, bdf, type, sysfs_class_path, sysfs_bus_path, vendor, product)
 {
 }
 
@@ -708,7 +731,7 @@ std::optional<std::string> SmiNicPensando::product_name() const
 	}
 
 	const std::string& content = vpd.value();
-	size_t pn_pos = content.find("PN");
+	size_t pn_pos		   = content.find("PN");
 
 	if (pn_pos != std::string::npos) {
 		std::string product_name = content.substr(0, pn_pos);
@@ -732,8 +755,8 @@ std::optional<std::string> SmiNicPensando::part_number() const
 	}
 
 	const std::string& content = vpd.value();
-	size_t pn_pos = content.find("PN");
-	size_t sn_pos = content.find("SN", pn_pos);
+	size_t pn_pos		   = content.find("PN");
+	size_t sn_pos		   = content.find("SN", pn_pos);
 
 	if (pn_pos != std::string::npos && sn_pos != std::string::npos) {
 		std::string part_number = content.substr(pn_pos + 2, sn_pos - (pn_pos + 2));
@@ -757,8 +780,8 @@ std::optional<std::string> SmiNicPensando::serial_number() const
 	}
 
 	const std::string& content = vpd.value();
-	size_t sn_pos = content.find("SN");
-	size_t ec_pos = content.find("EC", sn_pos);
+	size_t sn_pos		   = content.find("SN");
+	size_t ec_pos		   = content.find("EC", sn_pos);
 
 	if (sn_pos != std::string::npos && ec_pos != std::string::npos) {
 		std::string serial_number = content.substr(sn_pos + 2, ec_pos - (sn_pos + 2));
@@ -773,9 +796,10 @@ std::optional<std::string> SmiNicPensando::serial_number() const
 // **** SmiNicBroadcom ****
 
 SmiNicBroadcom::SmiNicBroadcom(const std::string& iface, const std::string& bdf, NicType type,
-			       const std::string& sysfs_class_path, const std::string& sysfs_bus_path,
-			       NicVendor vendor, NicProduct product)
-	: SmiNic(iface, bdf, type, sysfs_class_path, sysfs_bus_path, vendor, product)
+			       const std::string& sysfs_class_path,
+			       const std::string& sysfs_bus_path, NicVendor vendor,
+			       NicProduct product)
+    : SmiNic(iface, bdf, type, sysfs_class_path, sysfs_bus_path, vendor, product)
 {
 }
 
@@ -788,7 +812,11 @@ std::optional<std::string> SmiNicBroadcom::read_vpd_content() const
 
 	std::string content = vpd.value();
 	content.erase(std::remove_if(content.begin(), content.end(),
-		[](char c) { return !(std::isprint(static_cast<unsigned char>(c)) || c == '\n'); }), content.end());
+				     [](char c) {
+					     return !(std::isprint(static_cast<unsigned char>(c)) ||
+						      c == '\n');
+				     }),
+		      content.end());
 
 	return content;
 }
@@ -806,14 +834,14 @@ std::optional<std::string> SmiNicBroadcom::product_name() const
 	}
 
 	const std::string& content = vpd.value();
-	size_t pn_pos = content.find("PN");
+	size_t pn_pos		   = content.find("PN");
 
 	if (pn_pos != std::string::npos) {
 		std::string product_name = content.substr(0, pn_pos);
 		product_name.erase(product_name.find_last_not_of(" \n\r\t") + 1);
 		product_name.erase(0, product_name.find_first_not_of(" \n\r\t"));
 		auto alpha = std::find_if(product_name.begin(), product_name.end(),
-			[](unsigned char c) { return std::isalpha(c); });
+					  [](unsigned char c) { return std::isalpha(c); });
 		if (alpha != product_name.end()) {
 			product_name.erase(product_name.begin(), alpha);
 		}
@@ -831,8 +859,8 @@ std::optional<std::string> SmiNicBroadcom::part_number() const
 	}
 
 	const std::string& content = vpd.value();
-	size_t pn_pos = content.find("PN");
-	size_t mn_pos = content.find("MN", pn_pos);
+	size_t pn_pos		   = content.find("PN");
+	size_t mn_pos		   = content.find("MN", pn_pos);
 
 	if (pn_pos != std::string::npos && mn_pos != std::string::npos) {
 		std::string part_number = content.substr(pn_pos + 2, mn_pos - (pn_pos + 2));
@@ -852,8 +880,8 @@ std::optional<std::string> SmiNicBroadcom::serial_number() const
 	}
 
 	const std::string& content = vpd.value();
-	size_t sn_pos = content.find("SN");
-	size_t v0_pos = content.find("V0", sn_pos);
+	size_t sn_pos		   = content.find("SN");
+	size_t v0_pos		   = content.find("V0", sn_pos);
 	if (v0_pos == std::string::npos) {
 		v0_pos = content.length();
 	}

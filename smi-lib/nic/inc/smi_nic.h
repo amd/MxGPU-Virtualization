@@ -22,26 +22,23 @@ enum class NicType {
 	InfiniBand,
 };
 
-enum class NicVendor {
-	Unknown,
-	AMD,
-	Broadcom
-};
+enum class NicVendor { Unknown, AMD, Broadcom };
 
 enum class NicProduct {
 	Unknown,
 	Pollara, //!< AMD Pensando Pollara
-	Thor2    //!< Broadcom Thor2
+	Thor2	 //!< Broadcom Thor2
 };
 
 enum class NicLinkType {
-	UNKNOWN,  //!< unknown type.
-	PCIE,     //!< two processors connect via same PCIe switch
-	NUMA,     //!< two processors connect via different PCIe switches but on the same CPU
-	XNUMA     //!< two processors connect via different PCIe switches but on different CPUs
+	UNKNOWN, //!< unknown type.
+	PCIE,	 //!< two processors connect via same PCIe switch
+	NUMA,	 //!< two processors connect via different PCIe switches but on the same CPU
+	XNUMA	 //!< two processors connect via different PCIe switches but on different CPUs
 };
 
-class SmiInfiniBandPort {
+class SmiInfiniBandPort
+{
 public:
 	SmiInfiniBandPort(const std::string& netdev, const std::string& rdma_dev,
 			  const std::string& name, const std::string& sysfs_path);
@@ -65,7 +62,8 @@ private:
 	std::optional<uint16_t> active_mtu_;
 };
 
-class SmiInfiniBand {
+class SmiInfiniBand
+{
 public:
 	SmiInfiniBand(const std::string& name, const std::string& sysfs_path);
 
@@ -86,9 +84,11 @@ private:
 	std::vector<SmiInfiniBandPort> ports_;
 };
 
-class SmiNicPort {
+class SmiNicPort
+{
 public:
-	SmiNicPort(const std::string& iface, const std::string& bdf, const std::string& sysfs_class_path, const std::string& sysfs_bus_path,
+	SmiNicPort(const std::string& iface, const std::string& bdf,
+		   const std::string& sysfs_class_path, const std::string& sysfs_bus_path,
 		   NicVendor vendor = NicVendor::Unknown);
 
 	const std::string& interface() const;
@@ -118,11 +118,10 @@ public:
 	void add_infiniband(const SmiInfiniBand& infiniband);
 	const std::vector<SmiInfiniBand>& infiniband() const;
 	uint8_t infiniband_num() const;
-	void collect_vendor_statistics();
-	void add_vendor_statistic(struct ethtool_gstrings *strings, struct ethtool_stats *stats);
-	const std::map<std::string, uint64_t>& get_vendor_stats_map() const;
-	void collect_standard_statistics();
-	const std::map<std::string, uint64_t>& get_standard_stats_map() const;
+	std::map<std::string, uint64_t> collect_vendor_statistics() const;
+	void add_vendor_statistic(struct ethtool_gstrings* strings, struct ethtool_stats* stats,
+				  std::map<std::string, uint64_t>& out) const;
+	std::map<std::string, uint64_t> collect_standard_statistics() const;
 	std::optional<std::string> read_vpd_content() const;
 
 private:
@@ -137,11 +136,10 @@ private:
 	std::string sysfs_bus_path_;
 	std::optional<uint32_t> port_num_;
 	std::vector<SmiInfiniBand> infiniband_;
-	std::map<std::string, uint64_t> vendor_stats_map_;
-	std::map<std::string, uint64_t> standard_stats_map_;
 };
 
-class SmiNic {
+class SmiNic
+{
 public:
 	SmiNic(const std::string& iface, const std::string& bdf, NicType type = NicType::Unknown,
 	       const std::string& sysfs_class_path = "", const std::string& sysfs_bus_path = "",
@@ -182,9 +180,9 @@ public:
 	bool share_same_pcie_parent(uint64_t bdf) const;
 
 	// Vendor specific
-	virtual std::optional<std::string> product_name() const = 0;
-	virtual std::optional<std::string> vendor_name() const = 0;
-	virtual std::optional<std::string> part_number() const = 0;
+	virtual std::optional<std::string> product_name() const	 = 0;
+	virtual std::optional<std::string> vendor_name() const	 = 0;
+	virtual std::optional<std::string> part_number() const	 = 0;
 	virtual std::optional<std::string> serial_number() const = 0;
 
 protected:
@@ -198,11 +196,13 @@ protected:
 	std::vector<SmiNicPort> ports_;
 };
 
-class SmiNicPensando : public SmiNic {
+class SmiNicPensando : public SmiNic
+{
 public:
-	SmiNicPensando(const std::string& iface, const std::string& bdf, NicType type = NicType::Unknown,
-		       const std::string& sysfs_class_path = "", const std::string& sysfs_bus_path = "",
-		       NicVendor vendor = NicVendor::AMD, NicProduct product = NicProduct::Pollara);
+	SmiNicPensando(const std::string& iface, const std::string& bdf,
+		       NicType type = NicType::Unknown, const std::string& sysfs_class_path = "",
+		       const std::string& sysfs_bus_path = "", NicVendor vendor = NicVendor::AMD,
+		       NicProduct product = NicProduct::Pollara);
 
 	std::optional<std::string> vendor_name() const override;
 	std::optional<std::string> product_name() const override;
@@ -210,11 +210,14 @@ public:
 	std::optional<std::string> serial_number() const override;
 };
 
-class SmiNicBroadcom : public SmiNic {
+class SmiNicBroadcom : public SmiNic
+{
 public:
-	SmiNicBroadcom(const std::string& iface, const std::string& bdf, NicType type = NicType::Unknown,
-		       const std::string& sysfs_class_path = "", const std::string& sysfs_bus_path = "",
-		       NicVendor vendor = NicVendor::Broadcom, NicProduct product = NicProduct::Thor2);
+	SmiNicBroadcom(const std::string& iface, const std::string& bdf,
+		       NicType type = NicType::Unknown, const std::string& sysfs_class_path = "",
+		       const std::string& sysfs_bus_path = "",
+		       NicVendor vendor			 = NicVendor::Broadcom,
+		       NicProduct product		 = NicProduct::Thor2);
 
 	std::optional<std::string> vendor_name() const override;
 	std::optional<std::string> product_name() const override;

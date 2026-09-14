@@ -14,8 +14,7 @@ extern "C" {
 #include "smi_system_mock.hpp"
 #include "smi_test_helpers.hpp"
 
-class AmdsmiVersionTests : public amdsmi::AmdSmiTest {
-};
+class AmdsmiVersionTests : public amdsmi::AmdSmiTest {};
 
 TEST_F(AmdsmiVersionTests, GetVersion)
 {

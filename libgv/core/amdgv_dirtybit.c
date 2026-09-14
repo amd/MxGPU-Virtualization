@@ -302,6 +302,14 @@ static int amdgv_dirtybit_querydata(struct amdgv_adapter *adapt,
 		return AMDGV_FAILURE;
 	}
 
+	/* Start from a clean buffer unless the caller keeps its own dirty set in it
+	 * across queries. Done here rather than per ASIC so every backend below can
+	 * just OR its result in and the semantics do not depend on which ASIC
+	 * answers the query.
+	 */
+	if (!data->buffer_accumulate && data->dbit_plane_data_size)
+		oss_memset(data->dbit_plane_data_buffer, 0, data->dbit_plane_data_size);
+
 	if (amdgv_xgmi_node_fb_sharing_allowed(adapt) && !adapt->dirtybit.fb_hash_support) {
 		AMDGV_DEBUG("FB sharing mode is enabled, set queried FB range dirty in bitmap\n");
 		return amdgv_dirtybit_set_bitmap_query_buffer_to_dirty(adapt, data);
@@ -360,6 +368,8 @@ static inline void amdgv_dirtybit_prepare_query_params(struct amdgv_adapter *ada
 	data->dbit_plane_data_size = size;
 	data->dbit_preserve = preserve;// clear the Dbit
 	data->idx_vf = idx_vf;
+	/* bitmap is freshly allocated for this one-shot query, nothing to keep */
+	data->buffer_accumulate = false;
 }
 
 static int amdgv_dirtybit_query_vf_fb_dbit_common(struct amdgv_adapter *adapt,

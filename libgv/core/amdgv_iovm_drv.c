@@ -1,5 +1,6 @@
-/*
- * Copyright Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
+ *
+ * SPDX-License-Identifier: MIT
  */
 
 #include "amdgv.h"
@@ -169,6 +170,7 @@ uint32_t amdgv_iovm_drv_gpuiov_set_command(struct amdgv_adapter *adapt, uint32_t
 	enum psp_status ret;
 	struct psp_cmd_km iovm_drv_km_cmd = { 0 };
 	struct iovm_drv_gpuiov_cmd gpuiov_cmd_buf = { 0 };
+	struct iovm_drv_gpuiov_resp *gpuiov_resp = NULL;
 	uint64_t gpu_addr = 0;
 
 	if (!adapt->iovm_drv.iovm_drv_gpuiov_cmd_resp_mem) {
@@ -195,7 +197,21 @@ uint32_t amdgv_iovm_drv_gpuiov_set_command(struct amdgv_adapter *adapt, uint32_t
 
 	ret = amdgv_psp_cmd_km_submit(adapt, &iovm_drv_km_cmd, NULL);
 
-	// TODO: Verify command response
+	if (ret != PSP_STATUS__SUCCESS)
+		AMDGV_ERROR("SR-IOV Drv Gpuiov Set Command failed.\n");
+
+	gpuiov_resp = (struct iovm_drv_gpuiov_resp *)(amdgv_memmgr_get_cpu_addr(adapt->iovm_drv.iovm_drv_gpuiov_cmd_resp_mem));
+	if (ret == PSP_STATUS__SUCCESS) {
+		if (gpuiov_resp->version != IOVM_DRV_GPUIOV_CMD_VERSION) {
+			AMDGV_ERROR("SR-IOV Drv Query Gpuiov Status invalid resp version %u\n", gpuiov_resp->version);
+			ret = PSP_STATUS__ERROR_GENERIC;
+		} else if (gpuiov_resp->result != IOVM_DRV_CMD_SUCCESS && gpuiov_resp->result != IOVM_DRV_CMD_PENDING_RLC) {
+			AMDGV_ERROR("SR-IOV Drv Query Gpuiov Status invalid resp result %u\n", gpuiov_resp->result);
+			ret = PSP_STATUS__ERROR_GENERIC;
+		}
+		// TODO: Parse Command Responses After using IOVM.Drv 1.9
+	}
+
 	oss_mutex_unlock(adapt->iovm_drv.gpuiov_cmd_lock);
 	return ret;
 }

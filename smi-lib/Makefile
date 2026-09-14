@@ -44,12 +44,12 @@ $(info SMI-Lib NIC support: $(AMD_SMI_NIC_SUPPORT))
 $(info SMI-Lib UALOE support (auto-detected): $(HAS_UALOE))
 AMDSMI_BUILD_DIR := $(BUILD_DIR)/amdsmi
 OUTPUT_DIR := $(AMDSMI_BUILD_DIR)/$(BUILD_TYPE)
-PACKAGE_OUTPUT_DIR := $(AMDSMI_BUILD_DIR)/package/$(BUILD_TYPE)/amdsmi
 
 # Configuration tracking - automatically rebuild when config changes
 CONFIG_STAMP := $(OUTPUT_DIR)/.config.stamp
 CONFIG_VARS := HAS_UALOE=$(HAS_UALOE) BUILD_TYPE=$(BUILD_TYPE) THREAD_SAFE=$(THREAD_SAFE) AMD_SMI_NIC_SUPPORT=$(AMD_SMI_NIC_SUPPORT)
 
+PACKAGE_OUTPUT_DIR := $(AMDSMI_BUILD_DIR)/package/$(BUILD_TYPE)/amdsmi
 DOCS_OUTPUT_DIR := $(AMDSMI_BUILD_DIR)/docs
 DOXYGEN_OUTPUT_DIR := $(DOCS_OUTPUT_DIR)/doxygen
 HOOKS_DIR := $(PROJECT_ROOT)/../.git/hooks
@@ -80,77 +80,35 @@ OBJS += $(addprefix ${OUTPUT_DIR}/,$(SRCS_ACA:.c=.c.o))
 OBJS += $(addprefix ${OUTPUT_DIR}/,$(SRCS_UALOE:.c=.c.o))
 OBJS  += $(GIM_COMS_OBJS)
 DEPS := $(OBJS:.o=.d)
-LIBNAME := libamdsmi
-DYNAMICLIB_TARGET := $(LIBNAME).so
 INCLUDE := $(addprefix -I,$(INCLUDE_DIR) $(INCLUDE_DIR)/aca-decode/ $(INTERFACE_DIR) $(LIN_HOST_INCLUDE_DIR) $(GIM_COMS_INCLUDE_DIR) $(NIC_INCLUDE_DIR) $(NIC_INTERFACE_DIR) $(SOURCE_DIR)/nic)
 ifeq ($(HAS_UALOE), True)
 INCLUDE += $(addprefix -I,ualoe-lib/ualoe_lib ualoe-lib/include $(SOURCE_DIR)/ualoe)
 endif
 INCLUDE += $(HOST_INCLUDE_FLAGS)
-CFLAGS  = $(DEFAULT_CFLAGS) $(INCLUDE) -fPIC
+
+include make/linux/common.mk
+
+# UALOE-specific flags (real library only).
 ifeq ($(HAS_UALOE), True)
-# Add libnl dependencies for ualoe
 CFLAGS += $(shell pkg-config --cflags libnl-3.0 libnl-genl-3.0 libmnl)
 CFLAGS += -DENABLE_UALOE
 UALOE_LIBS := $(shell pkg-config --libs libnl-3.0 libnl-genl-3.0 libmnl)
+DYNAMICLIB_FLAGS += $(UALOE_LIBS)
 else
 UALOE_LIBS :=
 endif
-VERSION_FILE := VERSION
-VERSION_MAJOR := $(shell grep 'major=' $(VERSION_FILE) | cut -d '=' -f 2)
-VERSION_MINOR := $(shell grep 'minor=' $(VERSION_FILE) | cut -d '=' -f 2)
-VERSION_RELEASE := $(shell grep 'release=' $(VERSION_FILE) | cut -d '=' -f 2)
-CFLAGS += -DAMDSMI_VERSION_MAJOR=$(VERSION_MAJOR)
-CFLAGS += -DAMDSMI_VERSION_MINOR=$(VERSION_MINOR)
-CFLAGS += -DAMDSMI_VERSION_RELEASE=$(VERSION_RELEASE)
-VERSION_LIB := AMDSMI_VERSION_MAJOR=$(VERSION_MAJOR) AMDSMI_VERSION_MINOR=$(VERSION_MINOR) AMDSMI_VERSION_RELEASE=$(VERSION_RELEASE)
-DYNAMICLIB_FLAGS = -Wl,-soname,libamdsmi.so
-DYNAMICLIB_FLAGS += -Wl,-rpath,'$$ORIGIN:/usr/local/lib'
-DYNAMICLIB_FLAGS += $(HOST_DYNAMIC_FLAGS)
-DYNAMICLIB_FLAGS += $(UALOE_LIBS)
-GCC_MAJOR := $(shell $(CXX) -dumpversion | cut -d. -f1)
-ifeq ($(shell test $(GCC_MAJOR) -lt 9; echo $$?),0)
-    DYNAMICLIB_FLAGS += -lstdc++fs
+
+ifeq ($(AMD_SMI_NIC_SUPPORT), True)
+CFLAGS += -DAMD_SMI_NIC_SUPPORT
+DYNAMICLIB_FLAGS += -DAMD_SMI_NIC_SUPPORT
 endif
 
-ifeq ($(THREAD_SAFE), True)
-  CFLAGS  += -DTHREAD_SAFE -pthread
-  ifeq ($(THREAD_SANITIZER), True)
-    CFLAGS  += -fsanitize=thread
-    DYNAMICLIB_FLAGS += -fsanitize=thread
-  endif
-endif
-ifeq ($(BUILD_TYPE), Debug)
-  CFLAGS += -g -fsanitize=address
-  DYNAMICLIB_FLAGS += -fsanitize=address
-else
-  CFLAGS += -O2
-endif
-ifeq ($(ADDRESS_SANITIZER), True)
-CFLAGS  += -fsanitize=address,undefined
-DYNAMICLIB_FLAGS += -fsanitize=address,undefined
-endif
-ifeq ($(LOGGING), True)
-	CFLAGS += -D SMI_ENABLE_LOGGING
-endif
-ifeq ($(BUILD_TYPE), Release)
-	CFLAGS  += -Wl,-z,relro,-z,noexecstack,-z,noexecheap -Wl,--strip-debug -Wl,--strip-all
-	DYNAMICLIB_FLAGS += -Wl,-z,relro,-z,noexecstack,-z,noexecheap -Wl,--strip-debug -Wl,--strip-all
-endif
-ifeq ($(ENABLE_GCOV), True)
-	CFLAGS += -coverage -DENABLE_GCOV
-	DYNAMICLIB_FLAGS += -lgcov
-endif
 DEFAULT_DEPS := $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET)
 ifeq ($(THREAD_SANITIZER), False)
 	DEFAULT_DEPS += package
 endif
 ifeq ($(CPPTOOL_BUILD), True)
 	DEFAULT_DEPS += cpptool_build
-endif
-ifeq ($(AMD_SMI_NIC_SUPPORT), True)
-CFLAGS += -DAMD_SMI_NIC_SUPPORT
-DYNAMICLIB_FLAGS += -DAMD_SMI_NIC_SUPPORT
 endif
 default: $(DEFAULT_DEPS)
 ALL_DEPS := default test_run install-hooks
@@ -189,7 +147,7 @@ $(OUTPUT_DIR)/%.c.o: $(SOURCE_DIR)/aca-decode/%.c | $(OUTPUT_DIR)
 	$(CC) $(CFLAGS) -DBUILD_TYPE=$(BUILD_TYPE) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
 ifeq ($(HAS_UALOE), True)
 $(OUTPUT_DIR)/%.c.o: ualoe-lib/ualoe_lib/%.c | $(OUTPUT_DIR)
-	$(CC) $(CFLAGS) -DUALOE_NETLINK -DCFG_MOCK -Wno-unused-variable -Wno-unused-parameter -Wno-conversion -Wno-enum-conversion -Wno-sign-compare -Wno-stringop-truncation -DBUILD_TYPE=$(BUILD_TYPE) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
+	$(CC) $(CFLAGS) -DUALOE_NETLINK -DCFG_MOCK -Wno-unused-variable -Wno-unused-parameter -Wno-conversion -Wno-enum-conversion -Wno-sign-compare -Wno-stringop-truncation -Wno-maybe-uninitialized -DBUILD_TYPE=$(BUILD_TYPE) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
 $(OUTPUT_DIR)/%.c.o: $(SOURCE_DIR)/ualoe/%.c | $(OUTPUT_DIR)
 	$(CC) $(CFLAGS) -DBUILD_TYPE=$(BUILD_TYPE) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
 endif
@@ -224,7 +182,6 @@ package: $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET) | $(PACKAGE_OUTPUT_DIR)
 	cp $(PY_INTERFACE_DIR)/amdsmi_exception.py $(PACKAGE_OUTPUT_DIR)
 	cp $(PY_INTERFACE_DIR)/amdsmi_nic_interface.py $(PACKAGE_OUTPUT_DIR)
 	echo $(PACKAGE_OUTPUT_DIR)
-PYTHONPATH=$(PACKAGE_OUTPUT_DIR)/../ python3 -B $(PY_DIR)/tests/unit/smi_unit_tests.py
 .PHONY: python_wrapper
 python_wrapper: EXTRACT | $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET)
 	cp $(PROJECT_ROOT)/utils/scripts/smi_generator.py $(AMDSMI_BUILD_DIR)/amdsmi_wrapper
@@ -262,7 +219,7 @@ endif
 install-hooks:
 	@if [ -d $(HOOKS_DIR) ]; then \
 		echo "Installing git hooks..."; \
-		for hook in pre-commit post-rewrite version-check.sh; do \
+		for hook in pre-commit pre-push post-rewrite version-check.sh; do \
 			if [ -f $(HOOKS_DIR)/$$hook ]; then \
 				echo "Removing outdated $$hook hook..."; \
 				rm $(HOOKS_DIR)/$$hook; \
@@ -282,7 +239,7 @@ ifeq ($(AMD_SMI_NIC_SUPPORT), True)
 	$(MAKE) -C $(NIC_DIR)/ clean
 endif
 	@if [ -d $(HOOKS_DIR) ]; then \
-		for hook in pre-commit post-rewrite version-check.sh; do \
+		for hook in pre-commit pre-push post-rewrite version-check.sh; do \
 			if [ -f $(HOOKS_DIR)/$$hook ]; then \
 				echo "Removing $$hook hook..."; \
 				rm $(HOOKS_DIR)/$$hook; \

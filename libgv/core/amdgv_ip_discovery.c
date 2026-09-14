@@ -9,6 +9,7 @@
 #include <amdgv.h>
 #include <amdgv_vfmgr.h>
 #include "hwip/asic_reg/soc15_hw_ip.h"
+#include "hwip/gc/gfx_v12_1.h"
 
 #define HARVEST_TABLE_LEN 32 //Check if this is right.
 #define MAX(a, b)	((a) > (b) ? (a) : (b))
@@ -21,6 +22,32 @@
 
 
 static const uint32_t this_block = AMDGV_SECURITY_BLOCK;
+
+static int amdgv_init_soc_topology(struct amdgv_adapter *adapt)
+{
+	uint32_t gc_version = adapt->ip_versions[GC_HWIP][0];
+	uint32_t xcc;
+	uint32_t sdma_mask = 0;
+
+	switch (gc_version) {
+	case IP_VERSION(12, 1, 0):
+		if (!adapt->mcp.gfx.xcc_mask) {
+			AMDGV_ERROR("xcc_mask is 0, cannot derive SDMA topology\n");
+			return AMDGV_FAILURE;
+		}
+
+		adapt->sdma.num_inst_per_xcc = 2;
+		for_each_id(xcc, adapt->mcp.gfx.xcc_mask)
+			sdma_mask |= ((1U << adapt->sdma.num_inst_per_xcc) - 1)
+				     << (xcc * adapt->sdma.num_inst_per_xcc);
+		adapt->mcp.gfx.sdma_mask = sdma_mask;
+		break;
+	default:
+		adapt->sdma.num_inst_per_xcc = 1;
+		break;
+	}
+	return 0;
+}
 
 static int amdgv_init_funcs_table(struct amdgv_adapter *adapt)
 {
@@ -694,7 +721,6 @@ static int amdgv_parse_harvest_table(struct amdgv_adapter *adapt)
 			adapt->mcp.gfx.xcc_mask &= ~(1U << list[i].number_instance);
 			break;
 		case SDMA0_HWID:
-			adapt->sdma.num_instances--;
 			adapt->mcp.gfx.sdma_mask &= ~(1U << list[i].number_instance);
 			break;
 		case UMC_HWID:
@@ -728,7 +754,6 @@ static void amdgv_hw_ip_count(struct amdgv_adapter *adapt, struct amdgv_ip_v4 *i
 			case SDMA1_HWID:
 			case SDMA2_HWID:
 			case SDMA3_HWID:
-				adapt->sdma.num_instances++;
 				adapt->mcp.gfx.sdma_mask |= (1U << ip->instance_number);
 				break;
 			case VCE_HWID:
@@ -898,7 +923,7 @@ static int amdgv_parse_gc_table(struct amdgv_adapter *adapt)
 {
 	struct amdgv_ip_discovery_info *pf_copy;
 	union gc_info *gc_info;
-	//uint32_t i;
+	uint32_t wgps_per_sa0, wgps_per_sa1;
 
 	pf_copy = &adapt->ip_discovery.pf_copy;
 
@@ -911,21 +936,27 @@ static int amdgv_parse_gc_table(struct amdgv_adapter *adapt)
 
 	switch (pf_copy->gchdr->version_major) {
 		case 1:
-			/* For major version 1, libgv currently only use members from v1_0
-			 * that are common across v1_0 to v1_3. If in the future need
-			 * to use new members, then add cases for v1_1, v1_2, v1_3 accordingly.
-			 */
 			adapt->config.gfx.max_shader_engines = gc_info->v1_0.gc_num_se;
-			adapt->config.gfx.max_cu_per_sh =
-				2 * (gc_info->v1_0.gc_num_wgp0_per_sa + gc_info->v1_0.gc_num_wgp1_per_sa);
 			adapt->config.gfx.max_sh_per_se = gc_info->v1_0.gc_num_sa_per_se;
 			adapt->config.gfx.max_waves_per_simd = gc_info->v1_0.gc_max_waves_per_simd;
 			adapt->config.gfx.wave_size = gc_info->v1_0.gc_wave_size;
 
-			AMDGV_INFO("+gc_num_se          : %d\n", gc_info->v1_0.gc_num_se);
-			AMDGV_INFO("+gc_num_wgp0_per_sa : %d\n", gc_info->v1_0.gc_num_wgp0_per_sa);
-			AMDGV_INFO("+gc_num_wgp1_per_sa : %d\n", gc_info->v1_0.gc_num_wgp1_per_sa);
-			AMDGV_INFO("+gc_num_sa_per_se   : %d\n", gc_info->v1_0.gc_num_sa_per_se);
+			wgps_per_sa0 = gc_info->v1_0.gc_num_wgp0_per_sa +
+				       gc_info->v1_0.gc_num_wgp1_per_sa;
+			if (pf_copy->gchdr->version_minor == 5) {
+				wgps_per_sa1 = gc_info->v1_5.gc_num_wgp0_per_sa1 +
+					       gc_info->v1_5.gc_num_wgp1_per_sa1;
+				adapt->config.gfx.max_cu_per_sh =
+					wgps_per_sa0 >= wgps_per_sa1 ? wgps_per_sa0 :
+								       wgps_per_sa1;
+			} else {
+				adapt->config.gfx.max_cu_per_sh = 2 * wgps_per_sa0;
+			}
+
+			AMDGV_DEBUG("+gc_num_se          : %d\n", gc_info->v1_0.gc_num_se);
+			AMDGV_DEBUG("+gc_num_wgp0_per_sa : %d\n", gc_info->v1_0.gc_num_wgp0_per_sa);
+			AMDGV_DEBUG("+gc_num_wgp1_per_sa : %d\n", gc_info->v1_0.gc_num_wgp1_per_sa);
+			AMDGV_DEBUG("+gc_num_sa_per_se   : %d\n", gc_info->v1_0.gc_num_sa_per_se);
 			break;
 		default:
 			/* The legacy asics have their own callbacks to parse gc infos.
@@ -936,17 +967,18 @@ static int amdgv_parse_gc_table(struct amdgv_adapter *adapt)
 			return AMDGV_FAILURE;
 	}
 
-	adapt->config.gfx.active_cu_count = 0;
-
-	// TODO: check active cu when we have the gc reg def for gc12_1
-	// for (i = 0; i < adapt->mcp.gfx.num_xcc; i++) {
-	// 	adapt->config.gfx.active_cu_count += gfx_v12_1_get_xcc_cu_count(adapt, i);
-	// }
-	adapt->config.gfx.active_cu_count = adapt->mcp.gfx.num_xcc;
-
-	AMDGV_INFO("+gc_num_active_cu   : %d\n", adapt->config.gfx.active_cu_count);
-
 	return 0;
+}
+
+static void amdgv_collect_active_cu_count(struct amdgv_adapter *adapt)
+{
+	uint32_t i;
+
+	adapt->config.gfx.active_cu_count = 0;
+	for (i = 0; i < adapt->mcp.gfx.num_xcc; i++)
+		adapt->config.gfx.active_cu_count += gfx_v12_1_get_xcc_cu_count(adapt, i);
+
+	AMDGV_DEBUG("+gc_num_active_cu   : %d\n", adapt->config.gfx.active_cu_count);
 }
 
 static int amdgv_parse_nps_table(struct amdgv_adapter *adapt)
@@ -1013,10 +1045,23 @@ static int amdgv_parse_mem_rsv_table(struct amdgv_adapter *adapt)
 	}
 
 	mem_rsv_info = GET_MEM_RSV_INFO_V1_0(pf_copy->mrsvhdr);
+
+	if (mem_rsv_info->mem_rsv_count > MEM_RSV_INFO_TABLE_MAX_NUM_INSTANCES) {
+		AMDGV_ERROR("MEM_RSV count %u exceeds max %u\n",
+			mem_rsv_info->mem_rsv_count, MEM_RSV_INFO_TABLE_MAX_NUM_INSTANCES);
+		return AMDGV_FAILURE;
+	}
+
 	adapt->mem_rsv_info.count = mem_rsv_info->mem_rsv_count;
 
 	for (i = 0; i < adapt->mem_rsv_info.count; i++) {
 		region_id = mem_rsv_info->instance_info[i].region_id;
+
+		if (region_id >= REGION_ID__MAX) {
+			AMDGV_ERROR("MEM_RSV entry %u has out-of-range region_id %u\n",
+				i, region_id);
+			return AMDGV_FAILURE;
+		}
 
 		AMDGV_DEBUG("id=%u size=0x%016llx start_addr=0x%016llx\n",
 			region_id,
@@ -1146,40 +1191,72 @@ static void amdgv_ip_map_init(struct amdgv_adapter *adapt)
 static int amdgv_ip_discovery_read_from_mem(struct amdgv_adapter *adapt)
 {
 	unsigned int i;
-	uint32_t rcc_config;
 	uint32_t size;
 	uint64_t fb_offset;
+	uint64_t vram_size;
+	uint64_t vram_bytes;
+	void *discv_regn;
 
 	AMDGV_DEBUG("Reading IP Discovery Data from Memory...\n");
 
-	rcc_config = RREG32(regRCC_CONFIG_RESERVED);
-	if (rcc_config >> 24) {
-
+	vram_size = RREG32(regRCC_CONFIG_MEMSIZE);
+	if (vram_size == 0) {
+		AMDGV_DEBUG("VRAM size read from RCC_CONFIG_MEMSIZE is 0, trying to read from system memory\n");
 		fb_offset = RREG32(regDRIVER_SCRATCH_0);
 		fb_offset |= ((uint64_t)RREG32(regDRIVER_SCRATCH_1) << 32);
 		size = RREG32(regDRIVER_SCRATCH_2);
-	} else {
-		// read from FB TOP - 64KB
-		fb_offset = RREG32(regRCC_CONFIG_MEMSIZE) << 20;
-		fb_offset -= AMDGV_IP_DISCOVERY_OFFSET;
-		size = AMDGV_IP_DISCOVERY_SIZE;
-	}
 
-	if (adapt->mapped_fb_size >= fb_offset + size)
-		oss_memcpy(adapt->ip_discovery.pf_copy.data, (uint8_t *)adapt->fb + fb_offset, size);
-	else {
-		for (i = 0; i < size >> 2; i++, fb_offset += 4)
-			adapt->ip_discovery.pf_copy.data[i] = READ_FB32(fb_offset);
+		if (size > AMDGV_IP_DISCOVERY_SIZE) {
+			AMDGV_ERROR("IP Discovery size from scratch registers (0x%x) exceeds maximum (0x%x)\n",
+				    size, AMDGV_IP_DISCOVERY_SIZE);
+			return AMDGV_FAILURE;
+		}
+
+		discv_regn = oss_memremap(fb_offset, size, OSS_MEMREMAP_WC);
+		if (!discv_regn) {
+			AMDGV_ERROR("Failed to map IP Discovery region at 0x%llx (size: 0x%x)\n",
+				    fb_offset, size);
+			return AMDGV_FAILURE;
+		}
+
+		oss_memcpy(adapt->ip_discovery.pf_copy.data, discv_regn, size);
+		oss_memunmap(discv_regn);
+		AMDGV_DEBUG("Successfully read IP Discovery from system memory\n");
+		return 0;
+	} else {
+		AMDGV_DEBUG("VRAM size read from RCC_CONFIG_MEMSIZE is 0x%llx, trying to read from VRAM\n", vram_size);
+		vram_bytes = vram_size << 20;
+		size = RREG32(regDRIVER_SCRATCH_2);
+		if (size) {
+			fb_offset = RREG32(regDRIVER_SCRATCH_0);
+			fb_offset |= ((uint64_t)RREG32(regDRIVER_SCRATCH_1) << 32);
+			if (size > AMDGV_IP_DISCOVERY_SIZE) {
+				AMDGV_ERROR("IP Discovery size from scratch registers (0x%x) exceeds maximum (0x%x)\n",
+					    size, AMDGV_IP_DISCOVERY_SIZE);
+				return AMDGV_FAILURE;
+			}
+			if (fb_offset >= vram_bytes || size > vram_bytes - fb_offset) {
+				AMDGV_ERROR("IP Discovery region (offset 0x%llx size 0x%x) exceeds VRAM size 0x%llx\n",
+					    fb_offset, size, vram_bytes);
+				return AMDGV_FAILURE;
+			}
+			AMDGV_DEBUG("IP discovery from scratch regs: fb_offset=0x%llx size=0x%x bytes\n",
+				   fb_offset, size);
+		} else {
+			// read from FB TOP - 64KB
+			fb_offset = vram_bytes - AMDGV_IP_DISCOVERY_OFFSET;
+			size = AMDGV_IP_DISCOVERY_SIZE;
+		}
+
+		if (adapt->mapped_fb_size >= fb_offset + size)
+			oss_memcpy(adapt->ip_discovery.pf_copy.data, (uint8_t *)adapt->fb + fb_offset, size);
+		else {
+			for (i = 0; i < size >> 2; i++, fb_offset += 4)
+				adapt->ip_discovery.pf_copy.data[i] = READ_FB32(fb_offset);
+		}
 	}
 
 	return 0;
-}
-
-static int amdgv_ip_discovery_read_from_psp(struct amdgv_adapter *adapt)
-{
-	AMDGV_DEBUG("Reading IP Discovery Data from PSP...\n");
-	return amdgv_psp_read_ip_discovery(adapt,
-			adapt->ip_discovery.ip_discovery_mem);
 }
 
 int amdgv_discover_ip(struct amdgv_adapter *adapt)
@@ -1187,6 +1264,7 @@ int amdgv_discover_ip(struct amdgv_adapter *adapt)
 	/* save ASIC name and supported flags and restore it */
 	char asic_name[AMDGV_SMI_ASIC_NAME];
 	uint32_t supported_flags = adapt->config.caps.supported_fields_flags;
+	uint32_t inst;
 
 	oss_memcpy(asic_name, adapt->config.name, AMDGV_SMI_ASIC_NAME);
 
@@ -1196,18 +1274,17 @@ int amdgv_discover_ip(struct amdgv_adapter *adapt)
 	oss_memcpy(adapt->config.name, asic_name, AMDGV_SMI_ASIC_NAME);
 	adapt->config.caps.supported_fields_flags = supported_flags;
 
-	if (amdgv_ip_discovery_read_from_psp(adapt)) {
-		AMDGV_WARN("Failed to read IP Discovery Data from PSP, fallback to read from memory\n");
-		amdgv_ip_discovery_read_from_mem(adapt);
+	if (amdgv_ip_discovery_read_from_mem(adapt)) {
+		AMDGV_ERROR("Failed to read IP Discovery Data from memory\n");
+		return AMDGV_FAILURE;
 	}
 
 	/* count IPs (XCCs, SDMAs, VCNs) and perform checksums */
 	if (amdgv_parse_ip_discovery(adapt))
 		return AMDGV_FAILURE;
-
 	/* Capture the full (pre-harvest) XCC count before harvesting removes XCCs.
 	 */
-	adapt->mcp.gfx.max_xcc = adapt->mcp.gfx.num_xcc;
+	 adapt->mcp.gfx.max_xcc = adapt->mcp.gfx.num_xcc;
 
 	/* harvest IPs (XCCs, SDMAs) */
 	if (amdgv_parse_harvest_table(adapt))
@@ -1235,8 +1312,26 @@ int amdgv_discover_ip(struct amdgv_adapter *adapt)
 	if (amdgv_parse_atombios_table(adapt))
 		return AMDGV_FAILURE;
 
+	/* Reconcile per-IP-version topology before building ip_map. Some
+	 * IP versions (e.g. GC v12.1.0) need to override the discovered
+	 * SDMA instance count because the IP discovery table cannot
+	 * enumerate them accurately.
+	 */
+	if (amdgv_init_soc_topology(adapt))
+		return AMDGV_FAILURE;
+
+	/* sdma_mask is final only after amdgv_init_soc_topology(), which rebuilds
+	 * it wholesale from xcc_mask on gc_12_1.
+	 */
+	adapt->sdma.num_instances = 0;
+	for_each_id(inst, adapt->mcp.gfx.sdma_mask)
+		adapt->sdma.num_instances++;
+
 	/* Map the GC and SDMA instances after they have been parsed and harvested from the IP Discovery Data */
 	amdgv_ip_map_init(adapt);
+
+	/* Count active CUs now that ip_map is live and GET_INST() is safe */
+	amdgv_collect_active_cu_count(adapt);
 
 	AMDGV_INFO("\n[IP Config]\n"
 			   "Num AID:   0x%x\n" "Num XCC:   0x%x\n" "Num SDMA:  0x%x\n" "Num UMC:   0x%x\n"
@@ -1276,7 +1371,7 @@ int amdgv_copy_ip_data_to_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	vf = &adapt->array_vf[idx_vf];
 
 	ret = amdgv_vfmgr_copy_to_vf_xchg_table(adapt, idx_vf, AMD_SRIOV_MSG_IPD_TABLE_ID, 0,
-						vf_copy.data, AMDGV_IP_DISCOVERY_SIZE);
+					vf_copy.data, AMDGV_IP_DISCOVERY_SIZE);
 
 	oss_free_memory(vf_copy.data);
 
@@ -1339,15 +1434,10 @@ int amdgv_ip_discovery_init(struct amdgv_adapter *adapt)
 	if (amdgv_memmgr_pf_init(adapt))
 		goto fail;
 
-	adapt->ip_discovery.ip_discovery_mem =
-			amdgv_memmgr_alloc_align(&adapt->memmgr_pf,
-					AMDGV_IP_DISCOVERY_SIZE,
-					KBYTES_TO_BYTES(16), MEM_IP_DISCOVERY);
-
-	if (!adapt->ip_discovery.ip_discovery_mem)
-		goto fail;
-
 	if (adapt->asic_type == CHIP_IP_DISCOVERY) {
+		if (RREG32(regRCC_CONFIG_MEMSIZE) == 0)
+			amdgv_psp_disable_fb_carveout(adapt);
+
 		if (amdgv_discover_ip(adapt))
 			goto fail;
 	}
@@ -1368,10 +1458,6 @@ int amdgv_ip_discovery_fini(struct amdgv_adapter *adapt)
 	if (adapt->ip_discovery.vf_copy.data) {
 		oss_free(adapt->ip_discovery.vf_copy.data);
 		adapt->ip_discovery.vf_copy.data = NULL;
-	}
-	if (adapt->ip_discovery.ip_discovery_mem) {
-		amdgv_memmgr_free(adapt->ip_discovery.ip_discovery_mem);
-		adapt->ip_discovery.ip_discovery_mem = NULL;
 	}
 
 	amdgv_memmgr_pf_fini(adapt);

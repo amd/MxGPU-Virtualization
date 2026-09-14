@@ -25,9 +25,8 @@ uint16_t nl_family_id(const struct nl_conn *conn)
 	return 0;
 }
 
-struct nlmsghdr *nl_req_init(struct nl_conn *conn,
-			     char *buf, size_t buflen,
-			     uint8_t cmd, uint8_t version)
+struct nlmsghdr *
+nl_req_init(struct nl_conn *conn, char *buf, size_t buflen, uint8_t cmd, uint8_t version)
 {
 	(void)conn;
 	(void)buf;
@@ -38,9 +37,11 @@ struct nlmsghdr *nl_req_init(struct nl_conn *conn,
 }
 
 int nl_req_run(struct nl_conn *conn,
-	       char *buf, size_t buflen,
+	       char *buf,
+	       size_t buflen,
 	       struct nlmsghdr *nlh,
-	       mnl_cb_t data_cb, void *data)
+	       mnl_cb_t data_cb,
+	       void *data)
 {
 	(void)conn;
 	(void)buf;
@@ -52,9 +53,11 @@ int nl_req_run(struct nl_conn *conn,
 }
 
 int nl_req_run2(struct nl_conn *conn,
-		char *buf, size_t buflen,
+		char *buf,
+		size_t buflen,
 		struct nlmsghdr *nlh,
-		mnl_cb_t data_cb, void *data,
+		mnl_cb_t data_cb,
+		void *data,
 		mnl_cb_t err_cb)
 {
 	(void)conn;

@@ -127,6 +127,7 @@ enum amdgv_sched_event_id {
 	AMDGV_EVENT_SCHED_SET_VF_COND_AVAIL,
 	AMDGV_EVENT_SCHED_UAL_PAUSE_REQ      = 0xff80,
 	AMDGV_EVENT_SCHED_UAL_RESUME_REQ     = 0xff81,
+	AMDGV_EVENT_SCHED_UAL_UPDATE_CONF_REQ       = 0xff82,
 	AMDGV_EVENT_SCHED_VF_REQ_GPU_INIT_XCHG_REGION,
 	AMDGV_EVENT_SCHED_RAS_EVENT,
 	AMDGV_EVENT_SCHED_VF_RAS_REMOTE_CMD,
@@ -249,7 +250,8 @@ union amdgv_sched_event_data {
 				struct amdgv_gpumon_get_config_rsp_ual_v1 *get_config;
 				struct amdgv_gpumon_set_ppod_config_req_ual_v1 *set_ppod_config;
 				struct amdgv_gpumon_set_vpod_config_req_ual_v1 *set_vpod_config;
-				struct amdgv_gpumon_set_station_config_req_ual_v1 *set_station_config;
+				struct amdgv_gpumon_station_config_ual_v1 *set_station_config;
+				struct amdgv_gpumon_station_config_ual_v1 *get_station_config;
 			} ual;
 			struct {
 				union {
@@ -627,6 +629,9 @@ struct amdgv_sched {
 	/* event ring buffer */
 	spin_lock_t queue_lock;
 
+	/* whether the event queue still accepts new events. */
+	bool event_queue_open;
+
 	/* the handle of event process thread */
 	thread_t event_thread;
 
@@ -751,6 +756,7 @@ int amdgv_sched_context_switch_to_vf_saved(struct amdgv_adapter *adapt, uint32_t
 				   enum amdgv_sched_block sched_block);
 int amdgv_sched_context_switch_gfx_to_pf(struct amdgv_adapter *adapt, uint32_t idx_vf);
 int amdgv_sched_context_one_time_loop(struct amdgv_adapter *adapt, uint32_t idx_vf);
+void amdgv_sched_remove_pending_vfs(struct amdgv_adapter *adapt, uint32_t idx_vf);
 int amdgv_sched_context_clear_state(struct amdgv_adapter *adapt, uint32_t idx_vf,
 				   enum amdgv_sched_block sched_block);
 int amdgv_sched_reset(struct amdgv_adapter *adapt, uint32_t idx_vf,
@@ -775,6 +781,11 @@ enum amdgv_sched_state amdgv_sched_get_vf_status(struct amdgv_adapter *adapt, ui
 
 void amdgv_sched_notify_vf_unrecov_err(struct amdgv_adapter *adapt, uint32_t idx_vf);
 void amdgv_sched_notify_vfs_bad_pages_at_poison_creation(struct amdgv_adapter *adapt);
+
+void amdgv_sched_do_force_reset_vf(struct amdgv_adapter *adapt, uint32_t idx_vf,
+				   bool reset_arbiters);
+void amdgv_sched_do_remove_vf(struct amdgv_adapter *adapt, uint32_t idx_vf);
+void amdgv_sched_event_queue_stop(struct amdgv_adapter *adapt);
 
 int amdgv_sched_queue_event(struct amdgv_adapter *adapt, uint32_t idx_vf,
 			    enum amdgv_sched_event_id event_id,

@@ -201,6 +201,45 @@ static int mi200_get_gpu_power_capacity(struct amdgv_adapter *adapt,
 	return ret;
 }
 
+static int mi200_set_gpu_power_capacity(struct amdgv_adapter *adapt, int val)
+{
+	int ret = AMDGV_FAILURE;
+
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->set_power_capacity)
+		ret = adapt->pp.pp_funcs->set_power_capacity(adapt, val);
+
+	return ret;
+}
+
+static int mi200_get_max_configurable_power_limit(struct amdgv_adapter *adapt,
+						   int *power_limit)
+{
+	int ret = AMDGV_FAILURE;
+
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->get_max_configurable_power_limit)
+		ret = adapt->pp.pp_funcs->get_max_configurable_power_limit(adapt, power_limit);
+
+	return ret;
+}
+
+static int mi200_get_default_power_limit(struct amdgv_adapter *adapt,
+					  int *default_power)
+{
+	int ret = AMDGV_FAILURE;
+
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->get_default_power_limit)
+		ret = adapt->pp.pp_funcs->get_default_power_limit(adapt, default_power);
+
+	return ret;
+}
+
+static int mi200_get_min_power_limit(struct amdgv_adapter *adapt, int *val)
+{
+	*val = 0;
+
+	return 0;
+}
+
 static int mi200_get_dpm_capacity(struct amdgv_adapter *adapt,
 				   int *val)
 {
@@ -402,6 +441,15 @@ static int mi200_get_link_topology(struct amdgv_adapter *adapt,
 		topology_info->weight = 0;
 		topology_info->is_fb_sharing_enabled = true;
 		topology_info->link_type = AMDGV_GPUMON_LINK_TYPE_NOT_APPLICABLE;
+		topology_info->p2p_caps.is_iolink_coherent = true;
+		topology_info->p2p_caps.is_iolink_atomics_32bit =
+			(adapt->pcie_atomic_ops_support_flags &
+			PCIE_DEVICE_CAP2__ATOMIC_COMP32) ? 1 : 0;
+		topology_info->p2p_caps.is_iolink_atomics_64bit =
+			(adapt->pcie_atomic_ops_support_flags &
+			PCIE_DEVICE_CAP2__ATOMIC_COMP64) ? 1 : 0;
+		topology_info->p2p_caps.is_iolink_dma = true;
+		topology_info->p2p_caps.is_iolink_bi_directional = true;
 		return 0;
 	}
 
@@ -441,6 +489,16 @@ static int mi200_get_link_topology(struct amdgv_adapter *adapt,
 		topology_info->is_fb_sharing_enabled = psp_node_info->is_sharing_enabled;
 		topology_info->num_hops = psp_node_info->num_hops;
 		topology_info->weight = MI200_XGMI_LINK_WEIGHT * topology_info->num_hops;
+
+		topology_info->p2p_caps.is_iolink_coherent = true;
+		topology_info->p2p_caps.is_iolink_atomics_32bit =
+			(adapt->pcie_atomic_ops_support_flags &
+			PCIE_DEVICE_CAP2__ATOMIC_COMP32) ? 1 : 0;
+		topology_info->p2p_caps.is_iolink_atomics_64bit =
+			(adapt->pcie_atomic_ops_support_flags &
+			PCIE_DEVICE_CAP2__ATOMIC_COMP64) ? 1 : 0;
+		topology_info->p2p_caps.is_iolink_dma = true;
+		topology_info->p2p_caps.is_iolink_bi_directional = true;
 	}
 
 	/* If XGMI FB Sharing is disabled / N/A, fallback on PCIE connection (not POR for MI200) */
@@ -452,6 +510,16 @@ static int mi200_get_link_topology(struct amdgv_adapter *adapt,
 
 		topology_info->link_type = AMDGV_GPUMON_LINK_TYPE_PCIE;
 		topology_info->weight = MI200_PCIE_LINK_WEIGHT * topology_info->num_hops;
+
+		topology_info->p2p_caps.is_iolink_coherent = false;
+		topology_info->p2p_caps.is_iolink_atomics_32bit =
+			(adapt->pcie_atomic_ops_support_flags &
+			PCIE_DEVICE_CAP2__ATOMIC_COMP32) ? 1 : 0;
+		topology_info->p2p_caps.is_iolink_atomics_64bit =
+			(adapt->pcie_atomic_ops_support_flags &
+			PCIE_DEVICE_CAP2__ATOMIC_COMP64) ? 1 : 0;
+		topology_info->p2p_caps.is_iolink_dma = true;
+		topology_info->p2p_caps.is_iolink_bi_directional = true;
 	}
 
 	return 0;
@@ -516,6 +584,10 @@ static const struct amdgv_gpumon_funcs mi200_gpumon_funcs = {
 	.get_asic_temperature = mi200_get_asic_temperature,
 	.get_gpu_power_usage = mi200_get_gpu_power_usage,
 	.get_gpu_power_capacity = mi200_get_gpu_power_capacity,
+	.set_gpu_power_capacity = mi200_set_gpu_power_capacity,
+	.get_max_configurable_power_limit = mi200_get_max_configurable_power_limit,
+	.get_default_power_limit = mi200_get_default_power_limit,
+	.get_min_power_limit = mi200_get_min_power_limit,
 	.get_dpm_cap = mi200_get_dpm_capacity,
 	.get_dpm_status = mi200_get_dpm_status,
 	.get_vddc = mi200_get_vddc,

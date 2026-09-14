@@ -68,6 +68,7 @@ const char *const amdgv_inf_name[] = {
 	"pci_find_cap",
 	"pci_find_ext_cap",
 	"pci_find_next_ext_cap",
+	"pci_upstream_bridge",
 	"pci_restore_vf_rebar",
 	"pci_enable_sriov",
 	"pci_disable_sriov",
@@ -260,6 +261,7 @@ const char *const amdgv_inf_name[] = {
 #endif
 	"register_mce_notifier",
 	"unregister_mce_notifier",
+	"emergency_restart",
 };
 
 int AMDGV_API amdgv_init(struct oss_interface *funcs, uint16_t *dev_id_array, uint32_t flags)
@@ -1831,6 +1833,8 @@ int amdgv_get_smi_info(amdgv_dev_t dev, enum amdgv_smi_query_type type,
 				info->firmware_info.fw_info[i - 1].id = i;
 			}
 
+			/* every id is filled in, including the unsupported ones */
+			info->firmware_info.fw_num = adapt->psp.fw_num - 1;
 		} else {
 			if (AMDGV_IS_IDX_INVALID(info->firmware_info.vf_idx)) {
 				AMDGV_ERROR("Error: invalid VF index\n");
@@ -1843,9 +1847,10 @@ int amdgv_get_smi_info(amdgv_dev_t dev, enum amdgv_smi_query_type type,
 			oss_memcpy(
 				&info->firmware_info.fw_info, &vf->fw_info,
 				(AMDGV_FIRMWARE_ID__MAX * sizeof(struct amdgv_firmware_info)));
-		}
 
-		info->firmware_info.fw_num = adapt->psp.fw_num - 1;
+			info->firmware_info.fw_num =
+				amdgv_psp_get_vf_fw_num(adapt, info->firmware_info.vf_idx);
+		}
 		break;
 
 	case AMDGV_SMI_GPU_PERFORMANCE:
@@ -3060,17 +3065,9 @@ int amdgv_migration_end(amdgv_dev_t dev, uint32_t idx_vf)
 
 	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
 
-	oss_mutex_lock(adapt->api_lock);
-	if (AMDGV_IS_IDX_INVALID(idx_vf) ||
-		(adapt->live_migration.mig_state[idx_vf].state != AMDGV_MIGRATION_VF_STATE_EXPORT &&
-		adapt->live_migration.mig_state[idx_vf].state != AMDGV_MIGRATION_VF_STATE_IMPORT)) {
-		AMDGV_ERROR("Live migration isn't in correct state, can't end live migration.\n");
-		ret = AMDGV_FAILURE;
-		goto out;
-	}
+	if (AMDGV_IS_IDX_INVALID(idx_vf))
+		return AMDGV_FAILURE;
 
-out:
-	oss_mutex_unlock(adapt->api_lock);
 	return ret;
 }
 
@@ -4337,10 +4334,18 @@ int AMDGV_API amdgv_dump_asymmetric_fb_layout(amdgv_dev_t dev, char *buf, int *l
 	return ret;
 }
 
-const char * AMDGV_API amdgv_get_market_name(uint32_t dev_id, uint32_t rev_id)
+const char *AMDGV_API amdgv_get_market_name(amdgv_dev_t dev, uint32_t dev_id, uint32_t rev_id)
 {
-	const char *marketing_name = amdgv_get_marketing_name(dev_id, rev_id);
-	return marketing_name;
+	struct amdgv_adapter *adapt;
+
+	if (dev == AMDGV_INVALID_HANDLE)
+		return "UNKNOWN";
+
+	adapt = (struct amdgv_adapter *)dev;
+	if (adapt->status != AMDGV_STATUS_HW_INIT)
+		return "UNKNOWN";
+
+	return amdgv_get_marketing_name(adapt, dev_id, rev_id);
 }
 
 int AMDGV_API amdgv_set_sysmem_va_ptr(amdgv_dev_t dev, void *ptr)

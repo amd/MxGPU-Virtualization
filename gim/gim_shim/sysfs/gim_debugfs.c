@@ -205,14 +205,7 @@ static int attr_hang_debug_set(void *data, u64 val)
 
 	dev_data = (struct gim_dev_data *)data;
 
-	if (val == 0)
-		conf.flag_switch = 0;
-	else if (val == 1)
-		conf.flag_switch = 1;
-	else if (val == 2)
-		conf.flag_switch = 2;
-	else
-		return 0;
+	conf.flag_switch = (u32)val;
 
 	ret = amdgv_set_dev_conf(dev_data->adev,
 					AMDGV_CONF_HANG_DEBUG_FLAG,
@@ -232,12 +225,7 @@ static int attr_hang_debug_get(void *data, u64 *val)
 					AMDGV_CONF_HANG_DEBUG_FLAG,
 					&conf);
 
-	if (conf.flag_switch == 1)
-		*val = 1;
-	else if (conf.flag_switch == 2)
-		*val = 2;
-	else
-		*val = 0;
+	*val = (u64)conf.flag_switch;
 
 	return ret;
 }
@@ -762,19 +750,13 @@ static ssize_t hang_debug_all_write(struct file *file,
 	if (gim_debugfs_copy_user_cmd(user_buf, count, buf, sizeof(buf)))
 		return -EFAULT;
 
-	if (sscanf(buf, "%d", &val) != 1) {
+	/* Reject negatives: the cast would arm every debug mode on every adapter. */
+	if (sscanf(buf, "%d", &val) != 1 || val < 0) {
 		pr_warn("invalid parameter\n");
 		return -EINVAL;
 	}
 
-	if (val == 0)
-		conf.flag_switch = 0;
-	else if (val == 1)
-		conf.flag_switch = 1;
-	else if (val == 2)
-		conf.flag_switch = 2;
-	else
-		return count;
+	conf.flag_switch = (u32)val;
 
 	list_for_each_entry(dev_data, &gim_device_list, list) {
 		amdgv_set_dev_conf(dev_data->adev,

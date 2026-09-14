@@ -28,7 +28,7 @@
 #include "smi_cli_cc_command.h"
 #include "smi_cli_default_command.h"
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
 	Arguments parsed_arguments;
 
@@ -44,7 +44,7 @@ int main(int argc, char **argv)
 			AmdSmiVersionCommand cmd(parsed_arguments);
 			cmd.execute_command();
 		} else if (parsed_arguments.command == "list" ||
-				   parsed_arguments.command == "discovery") {
+			   parsed_arguments.command == "discovery") {
 			AmdSmiListCommand cmd(parsed_arguments);
 			cmd.execute_command();
 		} else if (parsed_arguments.command == "static") {
@@ -54,7 +54,7 @@ int main(int argc, char **argv)
 			AmdSmiBadPagesCommand cmd(parsed_arguments);
 			cmd.execute_command();
 		} else if (parsed_arguments.command == "ucode" ||
-				   parsed_arguments.command == "firmware") {
+			   parsed_arguments.command == "firmware") {
 			AmdSmiFirmwareCommand cmd(parsed_arguments);
 			cmd.execute_command();
 		} else if (parsed_arguments.command == "metric") {
@@ -103,9 +103,9 @@ int main(int argc, char **argv)
 			AmdSmiDefaultCommand cmd(parsed_arguments);
 			cmd.execute_command();
 		}
-	} catch (SmiToolException &e) {
+	} catch (SmiToolException& e) {
 		print_errors(e, parsed_arguments.output, parsed_arguments.file_path);
-	} catch (std::exception &e) {
+	} catch (std::exception& e) {
 		std::cerr << e.what() << std::endl;
 	}
 	return 0;

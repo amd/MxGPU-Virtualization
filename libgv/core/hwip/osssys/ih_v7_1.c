@@ -175,15 +175,29 @@ static void ih_v7_1_handle_page_fault(struct amdgv_adapter *adapt, struct amdgv_
 	}
 }
 
+static int ih_v7_1_get_active_vf(struct amdgv_adapter *adapt,
+				 enum amdgv_sched_block sched_block, uint32_t *idx_vf)
+{
+	struct amdgv_sched_world_switch *world_switch;
+	uint32_t i;
+
+	for (i = 0; i < adapt->sched.num_world_switch; i++) {
+		world_switch = &adapt->sched.world_switch[i];
+		if (!world_switch->enabled || world_switch->sched_block != sched_block)
+			continue;
+
+		return amdgv_gpuiov_get_active_vf_idx(
+			adapt, amdgv_ffs(world_switch->hw_sched_mask) - 1, idx_vf);
+	}
+
+	return AMDGV_FAILURE;
+}
+
 static int ih_v7_1_hv_event_process(struct amdgv_adapter *adapt)
 {
 	uint32_t intr_bits;
 	uint32_t sta_bits;
 	uint32_t active_vf = 0;
-#ifdef CONFIG_HVVM_MAILBOX
-	uint32_t idx_vf;
-	uint32_t valid_bits;
-#endif
 
 	if (adapt->status != AMDGV_STATUS_HW_INIT)
 		return 0;
@@ -199,49 +213,25 @@ static int ih_v7_1_hv_event_process(struct amdgv_adapter *adapt)
 
 	if (sta_bits & AMDGV_GFX_HANG_NEED_FLR_INTR) {
 		sta_bits &= ~AMDGV_GFX_HANG_NEED_FLR_INTR;
-		AMDGV_ERROR("HW SCHED RESET IS NOT SUPPORTED\n");
-		// amdgv_gpuiov_get_active_vf_idx(adapt, GPUIOV_V9_0_HW_SCHED_BLOCK_GFX_SCH0_RLCV,
-		// 			       &active_vf);
-		// amdgv_sched_queue_event(adapt, active_vf, AMDGV_EVENT_HW_SCHED_RESET_VF,
-		// 			AMDGV_SCHED_BLOCK_GFX);
-
-		amdgv_guard_add_active_event(adapt, active_vf, AMDGV_GUARD_EVENT_ALL_INT);
+		if (!ih_v7_1_get_active_vf(adapt, AMDGV_SCHED_BLOCK_GFX, &active_vf)) {
+			amdgv_sched_queue_event(adapt, active_vf,
+						AMDGV_EVENT_HW_SCHED_RESET_VF,
+						AMDGV_SCHED_BLOCK_GFX);
+			amdgv_guard_add_active_event(adapt, active_vf,
+						     AMDGV_GUARD_EVENT_ALL_INT);
+		}
 	}
 
 	if (sta_bits & AMDGV_UVD_HANG_NEED_FLR_INTR) {
 		sta_bits &= ~AMDGV_UVD_HANG_NEED_FLR_INTR;
-		AMDGV_ERROR("HW SCHED RESET IS NOT SUPPORTED\n");
-		// amdgv_gpuiov_get_active_vf_idx(adapt, GPUIOV_V9_0_HW_SCHED_BLOCK_VCN_SCH0_MMSCH,
-		// 			       &active_vf);
-		// amdgv_sched_queue_event(adapt, active_vf, AMDGV_EVENT_HW_SCHED_RESET_VF,
-		// 			AMDGV_SCHED_BLOCK_VCN);
-		amdgv_guard_add_active_event(adapt, active_vf, AMDGV_GUARD_EVENT_ALL_INT);
-	}
-
-#ifdef CONFIG_HVVM_MAILBOX
-	if (sta_bits & AMDGV_HVVM_MAILBOX_TRN_ACK_INTR) {
-		sta_bits &= ~AMDGV_HVVM_MAILBOX_TRN_ACK_INTR,
-			amdgv_gpuiov_set_mbox_valid(adapt, 0);
-	}
-
-	if (sta_bits & AMDGV_HVVM_MAILBOX_RCV_VALID_INTR) {
-		sta_bits &= ~AMDGV_HVVM_MAILBOX_RCV_VALID_INTR;
-
-		/* get msg valid bitmap for valid bit of 1PF + 16VF */
-		amdgv_gpuiov_get_mbox_msg_valid(adapt, &valid_bits);
-		for (idx_vf = 0; (idx_vf < 17) && (valid_bits != 0); idx_vf++) {
-			if (valid_bits & 1) {
-				amdgv_hvvm_mailbox_receive_msg(adapt, idx_vf & event, true);
-				amdgv_sched_queue_event(adapt, idx_vf, event);
-
-				amdgv_guard_add_active_event(adapt, idx_vf,
-							     AMDGV_GUARD_EVENT_ALL_INT);
-			}
-
-			valid_bits >> 1;
+		if (!ih_v7_1_get_active_vf(adapt, AMDGV_SCHED_BLOCK_VCN, &active_vf)) {
+			amdgv_sched_queue_event(adapt, active_vf,
+						AMDGV_EVENT_HW_SCHED_RESET_VF,
+						AMDGV_SCHED_BLOCK_VCN);
+			amdgv_guard_add_active_event(adapt, active_vf,
+						     AMDGV_GUARD_EVENT_ALL_INT);
 		}
 	}
-#endif
 
 	/* restore interrupt */
 	amdgv_gpuiov_set_intr(adapt, intr_bits);

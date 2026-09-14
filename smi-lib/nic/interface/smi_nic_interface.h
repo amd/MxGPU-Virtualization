@@ -16,41 +16,41 @@ extern "C" {
 #include <linux/ethtool.h>
 
 #define SMI_NIC_MAX_STRING_LENGTH 256
-#define SMI_NIC_MAX_DEVICES 64
-#define SMI_NIC_MAX_STATISTICS 256
-#define SMI_NIC_MAX_PORTS 32
-#define SMI_NIC_MAX_RDMA_DEV 32
-#define SMI_NIC_MAX_FW_VERSIONS 64
+#define SMI_NIC_MAX_DEVICES	  64
+#define SMI_NIC_MAX_STATISTICS	  256
+#define SMI_NIC_MAX_PORTS	  32
+#define SMI_NIC_MAX_RDMA_DEV	  32
+#define SMI_NIC_MAX_FW_VERSIONS	  64
 
 /**
  * @brief NIC Link Types for topology
  */
 typedef enum {
-	SMI_NIC_LINK_TYPE_UNKNOWN,  //!< Unknown link type
-	SMI_NIC_LINK_TYPE_PCIE,     //!< Same PCIe switch
-	SMI_NIC_LINK_TYPE_NUMA,     //!< Same NUMA node, different PCIe switch
-	SMI_NIC_LINK_TYPE_XNUMA     //!< Different NUMA nodes
+	SMI_NIC_LINK_TYPE_UNKNOWN, //!< Unknown link type
+	SMI_NIC_LINK_TYPE_PCIE,	   //!< Same PCIe switch
+	SMI_NIC_LINK_TYPE_NUMA,	   //!< Same NUMA node, different PCIe switch
+	SMI_NIC_LINK_TYPE_XNUMA	   //!< Different NUMA nodes
 } smi_nic_link_type_t;
 
 typedef enum {
-	SMI_NIC_STATUS_SUCCESS = 0,		//!< API completed successfully
-	SMI_NIC_STATUS_ERROR = 1,		//!< Generic error
-	SMI_NIC_STATUS_WRONG_PARAM = 2,		//!< Wrong parameter provided
-	SMI_NIC_STATUS_NOT_FOUND = 3,		//!< NIC not found
-	SMI_NIC_STATUS_NO_RESOURCE = 4,		//!< Memory allocation failed
-	SMI_NIC_STATUS_NOT_SUPPORTED = 5,	//!< API not supported
-	SMI_NIC_STATUS_NOT_INIT = 6,		//!< Not initialized
-	SMI_NIC_STATUS_NO_DATA = 7,		//!< Requested data not found
-	SMI_NIC_STATUS_DRIVER_NOT_LOADED = 8	//!< Required driver not loaded
+	SMI_NIC_STATUS_SUCCESS		 = 0, //!< API completed successfully
+	SMI_NIC_STATUS_ERROR		 = 1, //!< Generic error
+	SMI_NIC_STATUS_WRONG_PARAM	 = 2, //!< Wrong parameter provided
+	SMI_NIC_STATUS_NOT_FOUND	 = 3, //!< NIC not found
+	SMI_NIC_STATUS_NO_RESOURCE	 = 4, //!< Memory allocation failed
+	SMI_NIC_STATUS_NOT_SUPPORTED	 = 5, //!< API not supported
+	SMI_NIC_STATUS_NOT_INIT		 = 6, //!< Not initialized
+	SMI_NIC_STATUS_NO_DATA		 = 7, //!< Requested data not found
+	SMI_NIC_STATUS_DRIVER_NOT_LOADED = 8  //!< Required driver not loaded
 } smi_nic_status_t;
 
 /**
  * @brief Firmware version types from devlink
  */
 typedef enum {
-	SMI_NIC_FW_VERSION_TYPE_FIXED,		//!< Fixed (hardware) firmware version
-	SMI_NIC_FW_VERSION_TYPE_RUNNING,	//!< Currently running firmware version
-	SMI_NIC_FW_VERSION_TYPE_STORED		//!< Stored (pending) firmware version
+	SMI_NIC_FW_VERSION_TYPE_FIXED,	 //!< Fixed (hardware) firmware version
+	SMI_NIC_FW_VERSION_TYPE_RUNNING, //!< Currently running firmware version
+	SMI_NIC_FW_VERSION_TYPE_STORED	 //!< Stored (pending) firmware version
 } smi_nic_fw_version_type_t;
 
 /**
@@ -76,9 +76,9 @@ typedef struct {
  * @brief NIC vendors
  */
 typedef enum {
-	SMI_NIC_VENDOR_UNKNOWN,  //!< Unknown NIC vendor
-	SMI_NIC_VENDOR_AMD,      //!< AMD NIC vendor
-	SMI_NIC_VENDOR_BROADCOM  //!< Broadcom NIC vendor
+	SMI_NIC_VENDOR_UNKNOWN, //!< Unknown NIC vendor
+	SMI_NIC_VENDOR_AMD,	//!< AMD NIC vendor
+	SMI_NIC_VENDOR_BROADCOM //!< Broadcom NIC vendor
 } smi_nic_vendor_t;
 
 /**
@@ -97,7 +97,7 @@ typedef struct {
 	uint32_t count;
 	struct {
 		char bdf[SMI_NIC_MAX_STRING_LENGTH]; //!< PCI BDF
-		smi_nic_vendor_t vendor; //!< NIC vendor
+		smi_nic_vendor_t vendor;	     //!< NIC vendor
 	} devices[SMI_NIC_MAX_DEVICES];
 } smi_nic_discovery_t;
 
@@ -107,7 +107,7 @@ typedef struct {
  * This handle represents a thread-safe NIC context.
  * Multiple contexts can be created and used concurrently from different threads.
  */
-typedef struct smi_nic_ctx *smi_nic_ctx_t;
+typedef struct smi_nic_ctx* smi_nic_ctx_t;
 
 /**
  * @struct smi_nic_stat_t
@@ -274,7 +274,7 @@ typedef struct {
  * @note The context must be destroyed with smi_nic_destroy_context()
  *
  */
-smi_nic_status_t smi_nic_create_context(smi_nic_ctx_t *ctx);
+smi_nic_status_t smi_nic_create_context(smi_nic_ctx_t* ctx);
 
 /**
  * @brief Destroy a NIC context and free its resources
@@ -304,7 +304,7 @@ smi_nic_status_t smi_nic_destroy_context(smi_nic_ctx_t ctx);
  *
  * @note This function is thread-safe
  */
- smi_nic_status_t smi_nic_driver_loaded(smi_nic_vendor_t vendor);
+smi_nic_status_t smi_nic_driver_loaded(smi_nic_vendor_t vendor);
 
 /**
  * @brief Discover available NICs and their BDFs.
@@ -318,7 +318,7 @@ smi_nic_status_t smi_nic_destroy_context(smi_nic_ctx_t ctx);
  * @note This function is thread-safe when using separate contexts
  * @note Maximum of SMI_NIC_MAX_DEVICES devices can be discovered
  */
-smi_nic_status_t smi_discover_nics(smi_nic_ctx_t ctx, smi_nic_discovery_t *discovery);
+smi_nic_status_t smi_discover_nics(smi_nic_ctx_t ctx, smi_nic_discovery_t* discovery);
 
 /**
  * @brief Retrieve NIC driver information.
@@ -328,7 +328,8 @@ smi_nic_status_t smi_discover_nics(smi_nic_ctx_t ctx, smi_nic_discovery_t *disco
  * @param info Pointer to smi_nic_driver_info_t structure to be filled.
  * @return ::smi_nic_status_t | ::SMI_NIC_STATUS_SUCCESS on success, non-zero on fail
  */
-smi_nic_status_t smi_get_nic_driver_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_driver_info_t *info);
+smi_nic_status_t smi_get_nic_driver_info(smi_nic_ctx_t ctx, uint64_t device,
+					 smi_nic_driver_info_t* info);
 
 /**
  * @brief Retrieve NIC ASIC information.
@@ -341,7 +342,8 @@ smi_nic_status_t smi_get_nic_driver_info(smi_nic_ctx_t ctx, uint64_t device, smi
  * @param info Pointer to smi_nic_asic_info_t structure to be filled.
  * @return ::smi_nic_status_t | ::SMI_NIC_STATUS_SUCCESS on success, non-zero on fail
  */
-smi_nic_status_t smi_get_nic_asic_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_asic_info_t *info);
+smi_nic_status_t smi_get_nic_asic_info(smi_nic_ctx_t ctx, uint64_t device,
+				       smi_nic_asic_info_t* info);
 
 /**
  * @brief Retrieve NIC bus/PCIe information.
@@ -354,7 +356,7 @@ smi_nic_status_t smi_get_nic_asic_info(smi_nic_ctx_t ctx, uint64_t device, smi_n
  * @param info Pointer to smi_nic_bus_info_t structure to be filled.
  * @return ::smi_nic_status_t | ::SMI_NIC_STATUS_SUCCESS on success, non-zero on fail
  */
-smi_nic_status_t smi_get_nic_bus_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_bus_info_t *info);
+smi_nic_status_t smi_get_nic_bus_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_bus_info_t* info);
 
 /**
  * @brief Retrieve NIC NUMA information.
@@ -366,7 +368,8 @@ smi_nic_status_t smi_get_nic_bus_info(smi_nic_ctx_t ctx, uint64_t device, smi_ni
  * @param info Pointer to smi_nic_numa_info_t structure to be filled.
  * @return ::smi_nic_status_t | ::SMI_NIC_STATUS_SUCCESS on success, non-zero on fail
  */
-smi_nic_status_t smi_get_nic_numa_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_numa_info_t *info);
+smi_nic_status_t smi_get_nic_numa_info(smi_nic_ctx_t ctx, uint64_t device,
+				       smi_nic_numa_info_t* info);
 
 /**
  * @brief Retrieve NIC port information for all ports.
@@ -379,7 +382,8 @@ smi_nic_status_t smi_get_nic_numa_info(smi_nic_ctx_t ctx, uint64_t device, smi_n
  * @param info Pointer to smi_nic_port_info_t structure to be filled.
  * @return ::smi_nic_status_t | ::SMI_NIC_STATUS_SUCCESS on success, non-zero on fail
  */
-smi_nic_status_t smi_get_nic_port_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_port_info_t *info);
+smi_nic_status_t smi_get_nic_port_info(smi_nic_ctx_t ctx, uint64_t device,
+				       smi_nic_port_info_t* info);
 
 /**
  * @brief Retrieve RDMA device information for a NIC.
@@ -394,7 +398,8 @@ smi_nic_status_t smi_get_nic_port_info(smi_nic_ctx_t ctx, uint64_t device, smi_n
  * @note Returns SMI_NIC_STATUS_NO_DATA if no RDMA devices found
  * @return ::smi_nic_status_t | ::SMI_NIC_STATUS_SUCCESS on success, non-zero on fail
  */
-smi_nic_status_t smi_get_nic_rdma_dev_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_rdma_devices_info_t *info);
+smi_nic_status_t smi_get_nic_rdma_dev_info(smi_nic_ctx_t ctx, uint64_t device,
+					   smi_nic_rdma_devices_info_t* info);
 
 /**
  * @brief Get the count of available standard port statistics for a specified NIC port.
@@ -405,7 +410,8 @@ smi_nic_status_t smi_get_nic_rdma_dev_info(smi_nic_ctx_t ctx, uint64_t device, s
  * @param count Pointer to uint32_t to store the number of available statistics.
  * @return ::smi_nic_status_t | ::SMI_NIC_STATUS_SUCCESS on success, non-zero on failure.
  */
-smi_nic_status_t smi_get_nic_port_statistics_count(smi_nic_ctx_t ctx, uint64_t device, uint32_t port_index, uint32_t *count);
+smi_nic_status_t smi_get_nic_port_statistics_count(smi_nic_ctx_t ctx, uint64_t device,
+						   uint32_t port_index, uint32_t* count);
 
 /**
  * @brief Retrieve standard port statistics list for a specified NIC port.
@@ -416,7 +422,8 @@ smi_nic_status_t smi_get_nic_port_statistics_count(smi_nic_ctx_t ctx, uint64_t d
  * @param stats Pointer to smi_nic_stat_info_t structure to be filled.
  * @return ::smi_nic_status_t | ::SMI_NIC_STATUS_SUCCESS on success, non-zero on failure.
  */
-smi_nic_status_t smi_get_nic_port_statistics_list(smi_nic_ctx_t ctx, uint64_t device, uint32_t port_index, smi_nic_stat_info_t *stats);
+smi_nic_status_t smi_get_nic_port_statistics_list(smi_nic_ctx_t ctx, uint64_t device,
+						  uint32_t port_index, smi_nic_stat_info_t* stats);
 
 /**
  * @brief Get the count of available vendor statistics for a specified NIC port.
@@ -427,7 +434,8 @@ smi_nic_status_t smi_get_nic_port_statistics_list(smi_nic_ctx_t ctx, uint64_t de
  * @param count Pointer to uint32_t to store the number of available statistics.
  * @return ::smi_nic_status_t | ::SMI_NIC_STATUS_SUCCESS on success, non-zero on failure.
  */
-smi_nic_status_t smi_get_nic_vendor_statistics_count(smi_nic_ctx_t ctx, uint64_t device, uint32_t port_index, uint32_t *count);
+smi_nic_status_t smi_get_nic_vendor_statistics_count(smi_nic_ctx_t ctx, uint64_t device,
+						     uint32_t port_index, uint32_t* count);
 
 /**
  * @brief Retrieve vendor statistics list for a specified NIC port.
@@ -438,7 +446,9 @@ smi_nic_status_t smi_get_nic_vendor_statistics_count(smi_nic_ctx_t ctx, uint64_t
  * @param stats Pointer to smi_nic_stat_info_t structure to be filled.
  * @return ::smi_nic_status_t | ::SMI_NIC_STATUS_SUCCESS on success, non-zero on failure.
  */
-smi_nic_status_t smi_get_nic_vendor_statistics_list(smi_nic_ctx_t ctx, uint64_t device, uint32_t port_index, smi_nic_stat_info_t *stats);
+smi_nic_status_t smi_get_nic_vendor_statistics_list(smi_nic_ctx_t ctx, uint64_t device,
+						    uint32_t port_index,
+						    smi_nic_stat_info_t* stats);
 
 /**
  * @brief Get the count of available RDMA hardware counters for a specified InfiniBand port.
@@ -451,7 +461,9 @@ smi_nic_status_t smi_get_nic_vendor_statistics_list(smi_nic_ctx_t ctx, uint64_t 
  * @param count Pointer to uint32_t to store the number of available counters.
  * @return ::smi_nic_status_t | ::SMI_NIC_STATUS_SUCCESS on success, non-zero on failure.
  */
-smi_nic_status_t smi_get_nic_rdma_port_statistics_count(smi_nic_ctx_t ctx, uint64_t device, uint32_t port_index, uint32_t ib_index, uint32_t rdma_port_index, uint32_t *count);
+smi_nic_status_t smi_get_nic_rdma_port_statistics_count(smi_nic_ctx_t ctx, uint64_t device,
+							uint32_t port_index, uint32_t ib_index,
+							uint32_t rdma_port_index, uint32_t* count);
 
 /**
  * @brief Retrieve RDMA hardware counters list for a specified InfiniBand port.
@@ -464,7 +476,10 @@ smi_nic_status_t smi_get_nic_rdma_port_statistics_count(smi_nic_ctx_t ctx, uint6
  * @param stats Pointer to smi_nic_stat_info_t structure to be filled.
  * @return ::smi_nic_status_t | ::SMI_NIC_STATUS_SUCCESS on success, non-zero on failure.
  */
-smi_nic_status_t smi_get_nic_rdma_port_statistics_list(smi_nic_ctx_t ctx, uint64_t device, uint32_t port_index, uint32_t ib_index, uint32_t rdma_port_index, smi_nic_stat_info_t *stats);
+smi_nic_status_t smi_get_nic_rdma_port_statistics_list(smi_nic_ctx_t ctx, uint64_t device,
+						       uint32_t port_index, uint32_t ib_index,
+						       uint32_t rdma_port_index,
+						       smi_nic_stat_info_t* stats);
 
 /**
  * @brief Retrieve NIC firmware version information via devlink.
@@ -476,7 +491,7 @@ smi_nic_status_t smi_get_nic_rdma_port_statistics_list(smi_nic_ctx_t ctx, uint64
  * @param info Pointer to smi_nic_fw_info_t structure to be filled.
  * @return ::smi_nic_status_t | ::SMI_NIC_STATUS_SUCCESS on success, non-zero on fail
  */
-smi_nic_status_t smi_get_nic_fw_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_fw_info_t *info);
+smi_nic_status_t smi_get_nic_fw_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_fw_info_t* info);
 
 /**
  * @brief Get link type between GPU and NIC based on PCIe topology
@@ -492,7 +507,8 @@ smi_nic_status_t smi_get_nic_fw_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic
  *
  * @return SMI_NIC_STATUS_SUCCESS on success, error code otherwise
  */
-smi_nic_status_t smi_topo_get_nic_link_type(smi_nic_ctx_t ctx, uint64_t device_src, uint64_t device_dst, smi_nic_link_type_t *type);
+smi_nic_status_t smi_topo_get_nic_link_type(smi_nic_ctx_t ctx, uint64_t device_src,
+					    uint64_t device_dst, smi_nic_link_type_t* type);
 
 #ifdef __cplusplus
 }

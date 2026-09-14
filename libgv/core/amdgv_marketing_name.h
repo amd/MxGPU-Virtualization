@@ -15,6 +15,6 @@ struct amdgv_marketing_name_entry {
 	const char *marketing_name;
 };
 
-const char *amdgv_get_marketing_name(uint32_t dev_id, uint32_t rev_id);
+const char *amdgv_get_marketing_name(struct amdgv_adapter *adapt, uint32_t dev_id, uint32_t rev_id);
 
 #endif

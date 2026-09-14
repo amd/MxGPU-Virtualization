@@ -58,6 +58,7 @@ enum amdgv_cmd_ual_id {
 	AMDGV_CMD_UAL_PAUSE = AMDGV_UAL_IOCTL | 0x006,
 	AMDGV_CMD_UAL_RESUME = AMDGV_UAL_IOCTL | 0x007,
 	AMDGV_CMD_UAL_TRIGGER_MODE2 = AMDGV_UAL_IOCTL | 0x008,
+	AMDGV_CMD_UAL_GET_STATION_CONFIG = AMDGV_UAL_IOCTL | 0x009,
 	AMDGV_CMD_UAL_SUPPORTED_MAX
 };
 
@@ -79,6 +80,7 @@ enum amdgv_cmd_asic_type {
 	AMDGV_CMD_CHIP_MI350X = 12,
 	AMDGV_CMD_CHIP_MI325X = 13,
 	AMDGV_CMD_CHIP_MI355X = 14,
+	AMDGV_CMD_CHIP_MI350P = 15,
 	AMDGV_CMD_CHIP_UNKNOWN = 0xFFFF,
 	AMDGV_CMD_CHIP_LAST = AMDGV_CMD_CHIP_UNKNOWN,
 };
@@ -334,13 +336,29 @@ struct amdgv_uni_cmd {
 };
 #pragma pack(pop)
 
+struct amdgv_cmd_ras_policy_v4_0 {
+	uint16_t dram_non_critical_region_threshold;	// Non-critical region UCE threshold
+	uint16_t dram_critical_region_threshold;		// Critical region UCE threshold
+	uint32_t reserved[8];
+};
+
+struct amdgv_cmd_ras_policy_v5_0 {
+	uint32_t num_entities;
+	uint32_t event_rma_threshold_per_entity;
+	uint32_t max_pages_per_ret_event;
+	uint32_t od_sram_ecc_threshold;
+	uint32_t hwa_threshold;
+	uint32_t wdt_threshold;
+};
+
 struct amdgv_cmd_ras_policy_info {
 	uint8_t minor_version;
 	uint8_t major_version;
 	uint8_t padding[2];
-	uint16_t dram_non_critical_region_threshold;	// Non-critical region UCE threshold
-	uint16_t dram_critical_region_threshold;		// Critical region UCE threshold
-	uint32_t reserved[8];
+	union {
+		struct amdgv_cmd_ras_policy_v4_0 v4_0;
+		struct amdgv_cmd_ras_policy_v5_0 v5_0;
+	} policy_data;
 };
 
 struct amdgv_cmd_partition_info {
@@ -350,9 +368,9 @@ struct amdgv_cmd_partition_info {
 };
 
 enum amdgv_cmd_ual_link_type {
-	AMDGV_CMD_NONE = 0,
-	AMDGV_CMD_UALOE = 1,
-	AMDGV_CMD_UALINK = 2,
+	AMDGV_CMD_UALOE = 0,
+	AMDGV_CMD_UALINK_200 = 1,
+	AMDGV_CMD_UALINK_128 = 2,
 	AMDGV_CMD_UALMAX
 };
 
@@ -434,7 +452,7 @@ enum amdgv_cmd_ual_ports_per_station {
     AMDGV_CMD_UAL_PPS_4 = 4					/* 4x 200Gbps */
 };
 
-struct amdgv_cmd_set_station_config_req_ual_v1 {
+struct amdgv_cmd_station_config_ual_v1 {
 	struct amdgv_cmd_dev_handle dev;
 	/**
 	 * Number of valid stations in this configuration
@@ -454,6 +472,10 @@ struct amdgv_cmd_set_station_config_req_ual_v1 {
 	 * in logical station order.
 	 */
 	uint8_t lane_en_bitmap[AMDGV_CMD_UAL_MAX_STATIONS_V1];
+};
+
+struct amdgv_cmd_get_station_config_req_ual_v1 {
+	struct amdgv_cmd_dev_handle dev;
 };
 
 struct amdgv_cmd_pause_req_ual_v1 {

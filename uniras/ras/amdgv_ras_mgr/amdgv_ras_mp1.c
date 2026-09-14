@@ -65,4 +65,3 @@ static int amdgv_ras_send_mp1_msg(struct ras_core_context *ras_core, u32 msg_id,
 const struct ras_mp1_sys_func amdgv_ras_mp1_sys_func = {
 	.mp1_send_ras_msg = amdgv_ras_send_mp1_msg,
 };
-

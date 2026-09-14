@@ -20,13 +20,13 @@
 #include <stdbool.h>
 
 #ifdef __linux__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunknown-pragmas"
+	#pragma GCC diagnostic push
+	#pragma GCC diagnostic ignored "-Wunknown-pragmas"
 #endif
 
 /* Define stub types matching the real UALOE context */
 typedef int ualoe_handle_t;
-typedef int pthread_mutex_t;  /* Stub mutex type */
+typedef int pthread_mutex_t; /* Stub mutex type */
 
 #define UALOE_MAX_DEVICES AMDSMI_MAX_DEVICES
 
@@ -34,7 +34,7 @@ typedef int pthread_mutex_t;  /* Stub mutex type */
 typedef struct {
 	ualoe_handle_t handle;
 	bool initialized;
-	pthread_mutex_t mutex;        /* Mutex protecting this UALOE handle */
+	pthread_mutex_t mutex; /* Mutex protecting this UALOE handle */
 	bool mutex_initialized;
 } ualoe_handle_ctx_t;
 
@@ -47,10 +47,10 @@ typedef struct {
 
 /* Stub UALOE context - always uninitialized since UALOE is not enabled */
 fabric_ualoe_context_t g_fabric_ualoe_ctx = {
-	.num_handles = 0,
-	.handles = {{0}},
-	.global_init = false
-};
+    .num_handles = 0, .handles = {{0}}, .global_init = false};
+
+amdsmi_status_t smi_ualoe_fill_physical_acc_id(amdsmi_processor_handle processor_handle,
+					       uint32_t *physical_acc_id);
 
 /**
  * @brief Stub implementation for amdsmi_alloc_fabric_telemetry
@@ -60,7 +60,7 @@ amdsmi_status_t amdsmi_alloc_fabric_telemetry(amdsmi_processor_handle processor_
 					      uint32_t category_mask,
 					      amdsmi_fabric_telemetry_t **telemetry)
 {
-	#pragma SMI_EXPORT
+#pragma SMI_EXPORT
 	(void)processor_handle;
 	(void)category_mask;
 	(void)telemetry;
@@ -74,7 +74,7 @@ amdsmi_status_t amdsmi_alloc_fabric_telemetry(amdsmi_processor_handle processor_
 amdsmi_status_t amdsmi_get_fabric_telemetry_data(amdsmi_processor_handle processor_handle,
 						 amdsmi_fabric_telemetry_t *telemetry)
 {
-	#pragma SMI_EXPORT
+#pragma SMI_EXPORT
 	(void)processor_handle;
 	(void)telemetry;
 	return AMDSMI_STATUS_NOT_SUPPORTED;
@@ -87,7 +87,7 @@ amdsmi_status_t amdsmi_get_fabric_telemetry_data(amdsmi_processor_handle process
 amdsmi_status_t amdsmi_free_fabric_telemetry(amdsmi_processor_handle processor_handle,
 					     amdsmi_fabric_telemetry_t *telemetry)
 {
-	#pragma SMI_EXPORT
+#pragma SMI_EXPORT
 	(void)processor_handle;
 	(void)telemetry;
 	return AMDSMI_STATUS_NOT_SUPPORTED;
@@ -98,11 +98,14 @@ amdsmi_status_t amdsmi_free_fabric_telemetry(amdsmi_processor_handle processor_h
  * @return AMDSMI_STATUS_NOT_SUPPORTED
  */
 amdsmi_status_t amdsmi_get_fabric_cper_entries(amdsmi_processor_handle processor_handle,
-					       uint32_t severity_mask, char *cper_data,
-					       uint64_t *buf_size, amdsmi_cper_hdr_t **cper_hdrs,
-					       uint64_t *entry_count, uint64_t *cursor)
+					       uint32_t severity_mask,
+					       char *cper_data,
+					       uint64_t *buf_size,
+					       amdsmi_cper_hdr_t **cper_hdrs,
+					       uint64_t *entry_count,
+					       uint64_t *cursor)
 {
-	#pragma SMI_EXPORT
+#pragma SMI_EXPORT
 	(void)processor_handle;
 	(void)severity_mask;
 	(void)cper_data;
@@ -113,7 +116,34 @@ amdsmi_status_t amdsmi_get_fabric_cper_entries(amdsmi_processor_handle processor
 	return AMDSMI_STATUS_NOT_SUPPORTED;
 }
 
-#ifdef __linux__
-#pragma GCC diagnostic pop
-#endif
+amdsmi_status_t smi_ualoe_fill_physical_acc_id(amdsmi_processor_handle processor_handle,
+					       uint32_t *physical_acc_id)
+{
+	(void)processor_handle;
 
+	if (physical_acc_id == NULL) {
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	*physical_acc_id = UINT32_MAX;
+	return AMDSMI_STATUS_NOT_SUPPORTED;
+}
+
+amdsmi_status_t amdsmi_get_tray_info(amdsmi_node_handle node_handle, amdsmi_tray_info_t *info)
+{
+#pragma SMI_EXPORT
+
+	if (info == NULL) {
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	if (node_handle != NULL) {
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	return AMDSMI_STATUS_NOT_SUPPORTED;
+}
+
+#ifdef __linux__
+	#pragma GCC diagnostic pop
+#endif

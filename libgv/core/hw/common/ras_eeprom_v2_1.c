@@ -120,7 +120,7 @@ static int ras_eeprom_v2_1_write_table_header(struct amdgv_adapter *adapt,
 
 	ret = __smu_i2c_transfer(adapt, control, &msg, 1);
 	if (ret < 1)
-		AMDGV_ERROR("Failed to write EEPROM table header, ret:%d\n", ret);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_HDR_WRITE_FAILED, 0);
 
 	return ret;
 }
@@ -141,7 +141,7 @@ static int ras_eeprom_v2_1_write_table_header_ext(struct amdgv_adapter *adapt,
 
 	buff = (unsigned char *)oss_zalloc(len);
 	if (!buff) {
-		AMDGV_ERROR("Alloc memory to update extra info failed\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL, len);
 		return AMDGV_FAILURE;
 	}
 
@@ -151,7 +151,7 @@ static int ras_eeprom_v2_1_write_table_header_ext(struct amdgv_adapter *adapt,
 
 	ret = __smu_i2c_transfer(adapt, control, &msg, 1);
 	if (ret < 1)
-		AMDGV_ERROR("Failed to write EEPROM extra gpu info, ret:%d\n", ret);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_EXTRA_WRITE_FAILED, 0);
 
 	oss_free(buff);
 
@@ -327,7 +327,8 @@ static int ras_eeprom_v2_1_parse_table_hdr_extra_info(struct amdgv_adapter *adap
 
 	buff = (unsigned char *)oss_zalloc(EEPROM_ADDRESS_SIZE + EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE);
 	if (!buff) {
-		AMDGV_ERROR("Alloc memory to read extra info failed\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			      EEPROM_ADDRESS_SIZE + EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE);
 		return AMDGV_FAILURE;
 	}
 
@@ -337,7 +338,7 @@ static int ras_eeprom_v2_1_parse_table_hdr_extra_info(struct amdgv_adapter *adap
 			EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE);
 
 	if (ret < 1) {
-		AMDGV_ERROR("Failed to read EEPROM extra gpu info, ret:%d\n", ret);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_EXTRA_READ_FAILED, 0);
 		goto out;
 	}
 
@@ -360,8 +361,8 @@ static int ras_eeprom_v2_1_init_sw_control(struct amdgv_adapter *adapt, struct a
 		 */
 		if (control->tbl_hdr.tbl_size < EEPROM_TABLE_HEADER_SIZE +
 						EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE) {
-			AMDGV_ERROR("Invalid EEPROM table size 0x%x for V2_1\n",
-				    control->tbl_hdr.tbl_size);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_INVALID_TBL_SIZE,
+				      (uint64_t)control->tbl_hdr.tbl_size);
 			return AMDGV_FAILURE;
 		}
 		control->num_recs = (control->tbl_hdr.tbl_size - EEPROM_TABLE_HEADER_SIZE - EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE) /
@@ -375,8 +376,8 @@ static int ras_eeprom_v2_1_init_sw_control(struct amdgv_adapter *adapt, struct a
 		 * the unsigned subtraction below (CWE-191).
 		 */
 		if (control->tbl_hdr.tbl_size < EEPROM_TABLE_HEADER_SIZE) {
-			AMDGV_ERROR("Invalid EEPROM table size 0x%x for V2\n",
-				    control->tbl_hdr.tbl_size);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_INVALID_TBL_SIZE,
+				      (uint64_t)control->tbl_hdr.tbl_size);
 			return AMDGV_FAILURE;
 		}
 		control->num_recs = (control->tbl_hdr.tbl_size - EEPROM_TABLE_HEADER_SIZE) /
@@ -390,8 +391,8 @@ static int ras_eeprom_v2_1_init_sw_control(struct amdgv_adapter *adapt, struct a
 		 * the unsigned subtraction below (CWE-191).
 		 */
 		if (control->tbl_hdr.tbl_size < EEPROM_TABLE_HEADER_SIZE) {
-			AMDGV_ERROR("Invalid EEPROM table size 0x%x for V1\n",
-				    control->tbl_hdr.tbl_size);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_INVALID_TBL_SIZE,
+				      (uint64_t)control->tbl_hdr.tbl_size);
 			return AMDGV_FAILURE;
 		}
 		control->num_recs = (control->tbl_hdr.tbl_size - EEPROM_TABLE_HEADER_SIZE) /
@@ -401,7 +402,8 @@ static int ras_eeprom_v2_1_init_sw_control(struct amdgv_adapter *adapt, struct a
 				EEPROM_TABLE_RECORD_SIZE;
 		control->tbl_byte_sum = __calc_hdr_byte_sum(control);
 	} else {
-		AMDGV_WARN("Invalid eeprom table version 0x%x\n", control->tbl_hdr.version);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_WRONG_VER,
+			      AMDGV_LOG_DATA_32_32(control->tbl_hdr.version, EEPROM_TABLE_VER_V2_1));
 		ret = AMDGV_FAILURE;
 	}
 
@@ -682,7 +684,7 @@ static int ras_eeprom_v2_1_get_eeprom_data(
 
 		ret = __smu_i2c_transfer(adapt, control, &msg, 1);
 		if (ret < 1) {
-			AMDGV_ERROR("Failed to read EEPROM data, ret:%d\n", ret);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_DATA_READ_FAILED, 0);
 			return AMDGV_FAILURE;
 		}
 	} else if (adapt->ecc.ras_eerpom_raw_data.data_buf) {
@@ -691,7 +693,8 @@ static int ras_eeprom_v2_1_get_eeprom_data(
 			oss_memcpy(buff + EEPROM_ADDRESS_SIZE, adapt->ecc.ras_eerpom_raw_data.data_buf + eeprom_address, data_len);
 			ret = 1;
 		} else {
-			AMDGV_ERROR("Failed to get EEPROM data from live update, out of buffer bounds\n");
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_LIVE_UPDATE_OOB,
+				      AMDGV_LOG_DATA_32_32(eeprom_address, data_len));
 			return AMDGV_FAILURE;
 		}
 	}
@@ -712,7 +715,7 @@ static int ras_eeprom_v2_1_parse_header(struct amdgv_adapter *adapt,
 	ret = ras_eeprom_v2_1_get_eeprom_data(adapt, control, EEPROM_HDR_START, buff, EEPROM_TABLE_HEADER_SIZE);
 
 	if (ret < 1) {
-		AMDGV_ERROR("Failed to read EEPROM table header, ret:%d\n", ret);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_HDR_READ_FAILED, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -765,8 +768,8 @@ static int ras_eeprom_v2_1_init(struct amdgv_adapter *adapt,
 		 * overflow (CWE-190).
 		 */
 		if (control->num_recs > control->max_record_num) {
-			AMDGV_ERROR("EEPROM record count %u exceeds max %u\n",
-				    control->num_recs, control->max_record_num);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_REC_COUNT_EXCEEDS_MAX,
+				      AMDGV_LOG_DATA_32_32(control->num_recs, control->max_record_num));
 			goto reset_eeprom;
 		}
 
@@ -779,7 +782,7 @@ static int ras_eeprom_v2_1_init(struct amdgv_adapter *adapt,
 	return ret;
 
 reset_eeprom:
-	AMDGV_INFO("Creating new EEPROM table\n");
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_CREATE_NEW, 0);
 	ret = ras_eeprom_v2_1_reset_table(adapt, control);
 
 	return ret;
@@ -803,7 +806,7 @@ static int ras_eeprom_v2_1_process_record(struct amdgv_adapter *adapt,
 	if (ras_eeprom_v2_1_i2c_transfer_record(adapt, control,
 		encoded_record,
 		sizeof(encoded_record), write)) {
-		AMDGV_ERROR("Failed to %s EEPROM table record\n", write ? "write" : "read");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_REC_XFER_FAILED, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -855,7 +858,7 @@ int ras_eeprom_v2_1_process_records(struct amdgv_adapter *adapt,
 	for (i = 0; i < num; i++) {
 
 		if (ras_eeprom_v2_1_entry_overflow(control)) {
-			AMDGV_WARN("Reached end of EEPROM. Ignore process request\n");
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_FULL_IGNORE, 0);
 			break;
 		}
 

@@ -55,6 +55,8 @@ struct amdgv_mes {
     struct amdgv_ring              ring[AMDGV_MAX_MES_INST_PIPES];
 	uint32_t   total_max_queue;
 
+	uint64_t uc_start_addr[AMDGV_MAX_MES_PIPES];
+
     /* MES context */
     uint64_t  default_process_quantum;
 	uint64_t  default_gang_quantum;

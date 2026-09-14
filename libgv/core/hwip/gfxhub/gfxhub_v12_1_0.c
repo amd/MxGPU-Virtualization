@@ -25,6 +25,8 @@ static void gfxhub_v12_1_0_setup_pt_regs(struct amdgv_adapter *adapt)
 
 	page_table_base |= AMDGV_PTE_VALID;
 	page_table_base |= AMDGV_PTE_SNOOPED;
+	if (adapt->xgmi.connected_to_cpu)
+		page_table_base |= AMDGV_PTE_SYSTEM;
 
 	for (i = 0; i < adapt->mcp.gfx.num_xcc; i++) {
 		WREG32_SOC15_OFFSET(GC, GET_INST(GC, i),
@@ -82,6 +84,8 @@ static void gfxhub_v12_1_0_init_system_aperture_regs(struct amdgv_adapter *adapt
 		l2_prot = RREG32_SOC15(GC, GET_INST(GC, i), regGCVM_L2_PROTECTION_FAULT_CNTL2);
 		l2_prot = REG_SET_FIELD(l2_prot, GCVM_L2_PROTECTION_FAULT_CNTL2,
 					ACTIVE_PAGE_MIGRATION_PTE_READ_RETRY, 1);
+		l2_prot = REG_SET_FIELD(l2_prot, GCVM_L2_PROTECTION_FAULT_CNTL2,
+					ENABLE_RETRY_FAULT_INTERRUPT, 1);
 		WREG32_SOC15(GC, GET_INST(GC, i), regGCVM_L2_PROTECTION_FAULT_CNTL2, l2_prot);
 	}
 }

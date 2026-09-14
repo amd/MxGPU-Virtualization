@@ -156,7 +156,7 @@ struct amdgv_diag_data_gen_info {
 			uint32_t reserved;
 		} vbios_info; /* <BLK END> */
 
-		/* <name:Firmware Information; blk:GEN.GPU.FW; rep: 71;> */
+		/* <name:Firmware Information; blk:GEN.GPU.FW; rep: 87;> */
 		struct {
 			/* <IDX MAP> */
 			/* <name:Firmware IDX> */
@@ -220,18 +220,33 @@ struct amdgv_diag_data_gen_info {
 			/* <58:AMDGV_FIRMWARE_ID__RS64_MEC_P1_DATA> */
 			/* <59:AMDGV_FIRMWARE_ID__RS64_MEC_P2_DATA> */
 			/* <60:AMDGV_FIRMWARE_ID__RS64_MEC_P3_DATA> */
-			/* <61:AMDGV_FIRMWARE_ID__PPTABLE> */
-			/* <62:AMDGV_FIRMWARE_ID__P2S_TABLE> */
-			/* <63:AMDGV_FIRMWARE_ID__PSP_SOC> */
-			/* <64:AMDGV_FIRMWARE_ID__PSP_DBG> */
-			/* <65:AMDGV_FIRMWARE_ID__PSP_INTF> */
-			/* <66:AMDGV_FIRMWARE_ID__RLX6_UCODE_CORE1> */
-			/* <67:AMDGV_FIRMWARE_ID__RLX6_DRAM_BOOT_CORE1> */
-			/* <68:AMDGV_FIRMWARE_ID__RLCV_LX7> */
-			/* <69:AMDGV_FIRMWARE_ID__RLC_SAVE_RESTROE_LIST> */
-			/* <70:AMDGV_FIRMWARE_ID__PSP_RAS> */
-			/* <71:AMDGV_FIRMWARE_ID__RAS_TA> */
-			/* <72:AMDGV_FIRMWARE_ID__XGMI_TA> */
+			/* <61:AMDGV_FIRMWARE_ID__RS64_MES> */
+			/* <62:AMDGV_FIRMWARE_ID__RS64_MES_STACK> */
+			/* <63:AMDGV_FIRMWARE_ID__RS64_KIQ> */
+			/* <64:AMDGV_FIRMWARE_ID__RS64_KIQ_STACK> */
+			/* <65:AMDGV_FIRMWARE_ID__PPTABLE> */
+			/* <66:AMDGV_FIRMWARE_ID__P2S_TABLE> */
+			/* <67:AMDGV_FIRMWARE_ID__PSP_SOC> */
+			/* <68:AMDGV_FIRMWARE_ID__PSP_DBG> */
+			/* <69:AMDGV_FIRMWARE_ID__PSP_INTF> */
+			/* <70:AMDGV_FIRMWARE_ID__RLX6_UCODE_CORE1> */
+			/* <71:AMDGV_FIRMWARE_ID__RLX6_DRAM_BOOT_CORE1> */
+			/* <72:AMDGV_FIRMWARE_ID__RLCV_LX7> */
+			/* <73:AMDGV_FIRMWARE_ID__RLC_SAVE_RESTROE_LIST> */
+			/* <74:AMDGV_FIRMWARE_ID__PSP_RAS> */
+			/* <75:AMDGV_FIRMWARE_ID__RAS_TA> */
+			/* <76:AMDGV_FIRMWARE_ID__PLDM_VERSION> */
+			/* <77:AMDGV_FIRMWARE_ID__XGMI_TA> */
+			/* <78:AMDGV_FIRMWARE_ID__RS64_MEC_P4_DATA> */
+			/* <79:AMDGV_FIRMWARE_ID__RS64_MEC_P5_DATA> */
+			/* <80:AMDGV_FIRMWARE_ID__RS64_MEC_P6_DATA> */
+			/* <81:AMDGV_FIRMWARE_ID__RS64_MEC_P7_DATA> */
+			/* <82:AMDGV_FIRMWARE_ID__F32_LSDMA_UCODE> */
+			/* <83:AMDGV_FIRMWARE_ID__MP5> */
+			/* <84:AMDGV_FIRMWARE_ID__PSP_IPKEYMGR> */
+			/* <85:AMDGV_FIRMWARE_ID__PSP_IOVM> */
+			/* <86:AMDGV_FIRMWARE_ID__PSP_SPDM> */
+			/* <87:AMDGV_FIRMWARE_ID__PSP_DPE> */
 			/* <IDX MAP END> */
 			/* <name:Firmware ID; type:INT; size:4; base:10; idxmap:Firmware IDX; valmap:1;> */
 			uint32_t fw_id;

@@ -15,14 +15,14 @@ smi_tss_t smi_thread_key;
 
 void smi_free_handle(void *thread)
 {
-#ifdef AMD_SMI_NIC_SUPPORT
+	#ifdef AMD_SMI_NIC_SUPPORT
 	smi_thread_ctx *ctx = (smi_thread_ctx *)thread;
 	if (ctx && ctx->nic_init && ctx->nic_ctx) {
 		smi_nic_destroy_context(ctx->nic_ctx);
-		ctx->nic_ctx = NULL;
+		ctx->nic_ctx  = NULL;
 		ctx->nic_init = false;
 	}
-#endif
+	#endif
 	free(thread);
 }
 
@@ -33,7 +33,7 @@ static void cleanup(void)
 	smi_tss_set(smi_thread_key, NULL);
 	smi_mutex_destroy(&g_smi_handle.lock);
 }
-#ifdef _WIN64
+	#ifdef _WIN64
 BOOL init_smi_once(PINIT_ONCE InitOnce, PVOID Parameter, PVOID *lpContext)
 {
 	if (smi_tss_create(&smi_thread_key, smi_free_handle) == 0) {
@@ -45,7 +45,7 @@ BOOL init_smi_once(PINIT_ONCE InitOnce, PVOID Parameter, PVOID *lpContext)
 
 	return FALSE;
 }
-#else
+	#else
 void init_smi_once(void)
 {
 	if (smi_tss_create(&smi_thread_key, smi_free_handle) == 0) {
@@ -54,7 +54,7 @@ void init_smi_once(void)
 		atexit(cleanup);
 	}
 }
-#endif
+	#endif
 
 #else
 smi_thread_ctx g_smi_thread;

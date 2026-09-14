@@ -255,7 +255,7 @@ int gim_iova_mem_allocate(struct pci_dev *pdev, uint64_t size, uint64_t align,
 {
 	struct gim_iova_mem_info *iova_info;
 	uint32_t size_align;
-	int r;
+	int r = 0;
 
 	if (size == 0 || align == 0 || dma_info == NULL)
 		return -EINVAL;

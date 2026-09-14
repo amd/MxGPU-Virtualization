@@ -73,6 +73,7 @@ enum amdgv_cmd_asic_type {
 	AMDGV_CMD_CHIP_MI350X = 12,
 	AMDGV_CMD_CHIP_MI325X = 13,
 	AMDGV_CMD_CHIP_MI355X = 14,
+	AMDGV_CMD_CHIP_MI350P = 15,
 	AMDGV_CMD_CHIP_UNKNOWN = 0xFFFF,
 	AMDGV_CMD_CHIP_LAST = AMDGV_CMD_CHIP_UNKNOWN,
 };
@@ -428,13 +429,29 @@ struct amdgv_get_cper_records_output {
 	uint64_t left_size;
 };
 
+struct amdgv_cmd_ras_policy_v4_0 {
+	uint16_t dram_non_critical_region_threshold;	// Non-critical region UCE threshold
+	uint16_t dram_critical_region_threshold;		// Critical region UCE threshold
+	uint32_t reserved[8];
+};
+
+struct amdgv_cmd_ras_policy_v5_0 {
+	uint32_t num_entities;
+	uint32_t event_rma_threshold_per_entity;
+	uint32_t max_pages_per_ret_event;
+	uint32_t od_sram_ecc_threshold;
+	uint32_t hwa_threshold;
+	uint32_t wdt_threshold;
+};
+
 struct amdgv_cmd_ras_policy_info {
 	uint8_t minor_version;
 	uint8_t major_version;
 	uint8_t padding[2];
-	uint16_t dram_non_critical_region_threshold;	// Non-critical region UCE threshold
-	uint16_t dram_critical_region_threshold;		// Critical region UCE threshold
-	uint32_t reserved[8];
+	union {
+		struct amdgv_cmd_ras_policy_v4_0 v4_0;
+		struct amdgv_cmd_ras_policy_v5_0 v5_0;
+	} policy_data;
 };
 
 struct amdgv_cmd_partition_info {

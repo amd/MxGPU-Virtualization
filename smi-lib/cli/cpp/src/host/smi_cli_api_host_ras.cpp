@@ -23,21 +23,21 @@
 #include <climits>
 
 #ifdef _WIN32
-#include <direct.h>
-#define MKDIR(path) _mkdir(path)
+	#include <direct.h>
+	#define MKDIR(path) _mkdir(path)
 #else
-#include <sys/stat.h>
-#include <sys/types.h>
-#define MKDIR(path) mkdir(path, 0777)
+	#include <sys/stat.h>
+	#include <sys/types.h>
+	#define MKDIR(path) mkdir(path, 0777)
 #endif
 
 #define CPER_DATA_BUFFER_SIZE 4096
 #ifdef SMI_ESXI_BUILD
 	#define CPER_RAW_DATA_BUFFER_SIZE (1024 * 128)
-	#define CPER_HDRS_ARRAY_SIZE 128
+	#define CPER_HDRS_ARRAY_SIZE	  128
 #else
 	#define CPER_RAW_DATA_BUFFER_SIZE (1024 * 1024)
-	#define CPER_HDRS_ARRAY_SIZE 1024
+	#define CPER_HDRS_ARRAY_SIZE	  1024
 #endif
 
 struct CperEntryInfo {
@@ -50,38 +50,47 @@ struct CperEntryInfo {
 	char cper_data[CPER_DATA_BUFFER_SIZE];
 	uint32_t record_length;
 
-	CperEntryInfo(std::string ts, amdsmi_cper_timestamp_t cts, int gpu, int sev, amdsmi_cper_guid_t nt,std::string sev_str, char* cd, uint32_t rl)
-		: timestamp(ts), cper_timestamp(cts), gpu_id(gpu), error_severity(sev), notify_type(nt),
-		  severity_string(sev_str), record_length(rl) {
-			std::memcpy(cper_data, cd, std::min(sizeof(cper_data), (size_t)rl));
-		}
+	CperEntryInfo(std::string ts, amdsmi_cper_timestamp_t cts, int gpu, int sev,
+		      amdsmi_cper_guid_t nt, std::string sev_str, char* cd, uint32_t rl)
+	    : timestamp(ts), cper_timestamp(cts), gpu_id(gpu), error_severity(sev), notify_type(nt),
+	      severity_string(sev_str), record_length(rl)
+	{
+		std::memcpy(cper_data, cd, std::min(sizeof(cper_data), (size_t)rl));
+	}
 
-	bool operator<(const CperEntryInfo& other) const {
-		if (cper_timestamp.year != other.cper_timestamp.year) return cper_timestamp.year < other.cper_timestamp.year;
-		if (cper_timestamp.month != other.cper_timestamp.month) return cper_timestamp.month < other.cper_timestamp.month;
-		if (cper_timestamp.day != other.cper_timestamp.day) return cper_timestamp.day < other.cper_timestamp.day;
-		if (cper_timestamp.hours != other.cper_timestamp.hours) return cper_timestamp.hours < other.cper_timestamp.hours;
-		if (cper_timestamp.minutes != other.cper_timestamp.minutes) return cper_timestamp.minutes < other.cper_timestamp.minutes;
+	bool operator<(const CperEntryInfo& other) const
+	{
+		if (cper_timestamp.year != other.cper_timestamp.year)
+			return cper_timestamp.year < other.cper_timestamp.year;
+		if (cper_timestamp.month != other.cper_timestamp.month)
+			return cper_timestamp.month < other.cper_timestamp.month;
+		if (cper_timestamp.day != other.cper_timestamp.day)
+			return cper_timestamp.day < other.cper_timestamp.day;
+		if (cper_timestamp.hours != other.cper_timestamp.hours)
+			return cper_timestamp.hours < other.cper_timestamp.hours;
+		if (cper_timestamp.minutes != other.cper_timestamp.minutes)
+			return cper_timestamp.minutes < other.cper_timestamp.minutes;
 		return cper_timestamp.seconds < other.cper_timestamp.seconds;
 	}
 };
 
 namespace fs = std::filesystem;
 
-typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLES)(amdsmi_socket_handle, uint32_t *,
-		amdsmi_processor_handle *);
+typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLES)(amdsmi_socket_handle, uint32_t*,
+							amdsmi_processor_handle*);
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
-		amdsmi_processor_handle *);
-typedef amdsmi_status_t (*AMDSMI_GET_GPU_DEVICE_BDF)(amdsmi_processor_handle, amdsmi_bdf_t *);
+								amdsmi_processor_handle*);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_DEVICE_BDF)(amdsmi_processor_handle, amdsmi_bdf_t*);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_CPER_ENTRIES)(amdsmi_processor_handle, uint32_t, char*,
-		uint64_t *,
-		amdsmi_cper_hdr_t**, uint64_t *, uint64_t *);
+						       uint64_t*, amdsmi_cper_hdr_t**, uint64_t*,
+						       uint64_t*);
 typedef amdsmi_status_t (*AMDSMI_GET_FABRIC_CPER_ENTRIES)(amdsmi_processor_handle, uint32_t, char*,
-		uint64_t *,
-		amdsmi_cper_hdr_t**, uint64_t *, uint64_t *);
-typedef amdsmi_status_t (*AMDSMI_GET_AFIDS_FROM_CPER)(char*cper_buffer, uint32_t buf_size, uint64_t *afids, uint32_t *num_afids);
+							  uint64_t*, amdsmi_cper_hdr_t**, uint64_t*,
+							  uint64_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_AFIDS_FROM_CPER)(char* cper_buffer, uint32_t buf_size,
+						      uint64_t* afids, uint32_t* num_afids);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_RAS_POLICY_INFO)(amdsmi_processor_handle,
-		amdsmi_gpu_ras_policy_info_t *);
+							  amdsmi_gpu_ras_policy_info_t*);
 
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_GPU_DEVICE_BDF host_amdsmi_get_gpu_device_bdf;
@@ -91,32 +100,27 @@ extern AMDSMI_GET_PROCESSOR_HANDLES host_amdsmi_get_processor_handles;
 extern AMDSMI_GET_AFIDS_FROM_CPER host_amdsmi_get_afids_from_cper;
 extern AMDSMI_GET_GPU_RAS_POLICY_INFO host_amdsmi_get_gpu_ras_policy_info;
 
-#define GUID_INIT(a, b, c, d0, d1, d2, d3, d4, d5, d6, d7)                 \
-{ { (a) & 0xff, ((a) >> 8) & 0xff, ((a) >> 16) & 0xff, ((a) >> 24) & 0xff, \
-   (b) & 0xff, ((b) >> 8) & 0xff,                                          \
-   (c) & 0xff, ((c) >> 8) & 0xff,                                          \
-   (d0), (d1), (d2), (d3), (d4), (d5), (d6), (d7) } };
+#define GUID_INIT(a, b, c, d0, d1, d2, d3, d4, d5, d6, d7)                                         \
+	{{(a) & 0xff, ((a) >> 8) & 0xff, ((a) >> 16) & 0xff, ((a) >> 24) & 0xff, (b) & 0xff,       \
+	  ((b) >> 8) & 0xff, (c) & 0xff, ((c) >> 8) & 0xff, (d0), (d1), (d2), (d3), (d4), (d5),    \
+	  (d6), (d7)}};
 
-#define CPER_NOTIFY_MCE                                               \
-	GUID_INIT(0xE8F56FFE, 0x919C, 0x4cc5, 0xBA, 0x88, 0x65, 0xAB, \
-		  0xE1, 0x49, 0x13, 0xBB)
-#define CPER_NOTIFY_CMC                                               \
-	GUID_INIT(0x2DCE8BB1, 0xBDD7, 0x450e, 0xB9, 0xAD, 0x9C, 0xF4, \
-		  0xEB, 0xD4, 0xF8, 0x90)
-#define BOOT_TYPE                                                     \
-	GUID_INIT(0x3D61A466, 0xAB40, 0x409a, 0xA6, 0x98, 0xF3, 0x62, \
-		  0xD4, 0x64, 0xB3, 0x8F)
+#define CPER_NOTIFY_MCE                                                                            \
+	GUID_INIT(0xE8F56FFE, 0x919C, 0x4cc5, 0xBA, 0x88, 0x65, 0xAB, 0xE1, 0x49, 0x13, 0xBB)
+#define CPER_NOTIFY_CMC                                                                            \
+	GUID_INIT(0x2DCE8BB1, 0xBDD7, 0x450e, 0xB9, 0xAD, 0x9C, 0xF4, 0xEB, 0xD4, 0xF8, 0x90)
+#define BOOT_TYPE                                                                                  \
+	GUID_INIT(0x3D61A466, 0xAB40, 0x409a, 0xA6, 0x98, 0xF3, 0x62, 0xD4, 0x64, 0xB3, 0x8F)
 /* TODO: Replace with actual GUID once UALOE team provides it */
-#define CPER_NOTIFY_IFOE                                              \
-	GUID_INIT(0x00000000, 0x0000, 0x0000, 0x00, 0x00, 0x00, 0x00, \
-		  0x00, 0x00, 0x00, 0x00)
+#define CPER_NOTIFY_IFOE                                                                           \
+	GUID_INIT(0x00000000, 0x0000, 0x0000, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00)
 
 amdsmi_cper_guid_t boot_guid = BOOT_TYPE;
-amdsmi_cper_guid_t mce_guid = CPER_NOTIFY_MCE;
+amdsmi_cper_guid_t mce_guid  = CPER_NOTIFY_MCE;
 amdsmi_cper_guid_t ifoe_guid = CPER_NOTIFY_IFOE;
 
 std::string generate_file_name(int error_severity, const amdsmi_cper_guid_t notify_type,
-							   int error_count = 1)
+			       int error_count = 1)
 {
 	std::string prefix;
 
@@ -149,16 +153,16 @@ std::string generate_file_name(int error_severity, const amdsmi_cper_guid_t noti
 	return file_name;
 }
 
-std::string print_cper_timestamp(amdsmi_cper_timestamp_t *timestamp)
+std::string print_cper_timestamp(amdsmi_cper_timestamp_t* timestamp)
 {
 	if (timestamp == NULL) {
 		printf("Invalid timestamp\n");
 		return "";
 	}
 
-	std::string formatted_string = string_format(" %02d/%02d/20%02d  %02d:%02d:%02d",
-								   timestamp->day, timestamp->month, timestamp->year, timestamp->hours, timestamp->minutes,
-								   timestamp->seconds);
+	std::string formatted_string = string_format(
+	    " %02d/%02d/20%02d  %02d:%02d:%02d", timestamp->day, timestamp->month, timestamp->year,
+	    timestamp->hours, timestamp->minutes, timestamp->seconds);
 
 	return formatted_string;
 }
@@ -203,7 +207,6 @@ uint32_t convert_to_severity_mask(std::vector<std::string>& severities)
 	return severity_mask;
 }
 
-
 int extract_number_from_filename(const std::string& filename)
 {
 	std::regex re(R"([-_]([0-9]+)\.cper)");
@@ -215,8 +218,9 @@ int extract_number_from_filename(const std::string& filename)
 	return std::numeric_limits<int>::max(); // Max value if pattern doesn't match
 }
 
-void count_and_replace_oldest_files(const std::string& folder_path,
-									const std::unordered_map<std::string, std::string>& file_timestamp_map, int file_limit)
+void count_and_replace_oldest_files(
+    const std::string& folder_path,
+    const std::unordered_map<std::string, std::string>& file_timestamp_map, int file_limit)
 {
 	std::vector<std::pair<fs::path, std::string>> files;
 	int file_count = 0;
@@ -225,7 +229,7 @@ void count_and_replace_oldest_files(const std::string& folder_path,
 	for (const auto& entry : fs::directory_iterator(folder_path)) {
 		if (fs::is_regular_file(entry.status())) {
 			std::string filename = entry.path().filename().string();
-			auto it = file_timestamp_map.find(filename);
+			auto it		     = file_timestamp_map.find(filename);
 			if (it != file_timestamp_map.end()) {
 				files.emplace_back(entry.path(), it->second);
 				++file_count;
@@ -235,9 +239,8 @@ void count_and_replace_oldest_files(const std::string& folder_path,
 
 	// If the number of files exceeds the limit, delete the oldest files based on timestamp
 	if (file_count > file_limit) {
-		std::sort(files.begin(), files.end(), [](const auto& a, const auto& b) {
-			return a.second < b.second;
-		});
+		std::sort(files.begin(), files.end(),
+			  [](const auto& a, const auto& b) { return a.second < b.second; });
 
 		while (file_count > file_limit) {
 			fs::remove(files.front().first);
@@ -260,21 +263,24 @@ static void collect_cper_entries_from_buffer(char* cper_data, amdsmi_cper_hdr_t*
 
 	for (uint32_t i = 0; i < entry_count; i++) {
 		std::string cper_timestamp = print_cper_timestamp(&local_cper_hdrs[i]->timestamp);
-		int error_severity = local_cper_hdrs[i]->error_severity;
-		std::string severity_mask_string = get_string_from_enum_cper_severity_mask(error_severity);
+		int error_severity	   = local_cper_hdrs[i]->error_severity;
+		std::string severity_mask_string =
+		    get_string_from_enum_cper_severity_mask(error_severity);
 
 		char byte_array[CPER_DATA_BUFFER_SIZE];
 		std::memcpy(byte_array, local_cper_hdrs[i], local_cper_hdrs[i]->record_length);
 		amdsmi_cper_hdr_t local_hdr = *local_cper_hdrs[i];
 
-		entries_info.emplace_back(cper_timestamp, local_hdr.timestamp, gpu_id, local_hdr.error_severity,
-					  local_hdr.notify_type, severity_mask_string, byte_array, local_hdr.record_length);
+		entries_info.emplace_back(cper_timestamp, local_hdr.timestamp, gpu_id,
+					  local_hdr.error_severity, local_hdr.notify_type,
+					  severity_mask_string, byte_array,
+					  local_hdr.record_length);
 	}
 }
 
-int process_cper_entries(amdsmi_processor_handle processor, uint32_t severity_mask, uint64_t* cursor,
-						 uint64_t* fabric_cursor, const std::string& folder_name,
-						 int gpu_id, std::vector<CperEntryInfo>& entries_info)
+int process_cper_entries(amdsmi_processor_handle processor, uint32_t severity_mask,
+			 uint64_t* cursor, uint64_t* fabric_cursor, const std::string& folder_name,
+			 int gpu_id, std::vector<CperEntryInfo>& entries_info)
 {
 	int ret;
 	std::string file_name;
@@ -282,37 +288,41 @@ int process_cper_entries(amdsmi_processor_handle processor, uint32_t severity_ma
 	std::string severity_mask_string;
 	static int total_cper_count = 0;
 
-	char cper_data[CPER_RAW_DATA_BUFFER_SIZE];   // the buffer to hold the raw cper data
-	amdsmi_cper_hdr_t* cper_hdrs[CPER_HDRS_ARRAY_SIZE];  // the buffer to hold the parsed cper headers
-	uint64_t buf_size = sizeof(cper_data);
-	uint64_t entry_count = CPER_HDRS_ARRAY_SIZE; //sizeof(cper_hdrs) / sizeof(cper_hdrs[0]);
+	char cper_data[CPER_RAW_DATA_BUFFER_SIZE]; // the buffer to hold the raw cper data
+	amdsmi_cper_hdr_t*
+	    cper_hdrs[CPER_HDRS_ARRAY_SIZE]; // the buffer to hold the parsed cper headers
+	uint64_t buf_size    = sizeof(cper_data);
+	uint64_t entry_count = CPER_HDRS_ARRAY_SIZE; // sizeof(cper_hdrs) / sizeof(cper_hdrs[0]);
 
 	/* Fetch GPU CPERs (from libgv) */
 	do {
-		ret = host_amdsmi_get_gpu_cper_entries(processor, severity_mask, cper_data, &buf_size, cper_hdrs,
-											   &entry_count, cursor);
+		ret = host_amdsmi_get_gpu_cper_entries(processor, severity_mask, cper_data,
+						       &buf_size, cper_hdrs, &entry_count, cursor);
 		if (ret != AMDSMI_STATUS_SUCCESS && ret != AMDSMI_STATUS_MORE_DATA) {
 			break;
 		}
-		collect_cper_entries_from_buffer(cper_data, cper_hdrs, entry_count, gpu_id, entries_info);
+		collect_cper_entries_from_buffer(cper_data, cper_hdrs, entry_count, gpu_id,
+						 entries_info);
 	} while (ret == AMDSMI_STATUS_MORE_DATA);
 
 	/* Fetch fabric CPERs (from UALOE) */
 	if (host_amdsmi_get_fabric_cper_entries != NULL) {
 		int fabric_ret;
 		do {
-			buf_size = sizeof(cper_data);
+			buf_size    = sizeof(cper_data);
 			entry_count = CPER_HDRS_ARRAY_SIZE;
-			fabric_ret = host_amdsmi_get_fabric_cper_entries(processor, severity_mask, cper_data, &buf_size,
-									cper_hdrs, &entry_count, fabric_cursor);
-			if (fabric_ret != AMDSMI_STATUS_SUCCESS && fabric_ret != AMDSMI_STATUS_MORE_DATA) {
+			fabric_ret  = host_amdsmi_get_fabric_cper_entries(
+			     processor, severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count,
+			     fabric_cursor);
+			if (fabric_ret != AMDSMI_STATUS_SUCCESS &&
+			    fabric_ret != AMDSMI_STATUS_MORE_DATA) {
 				break;
 			}
-			collect_cper_entries_from_buffer(cper_data, cper_hdrs, entry_count, gpu_id, entries_info);
+			collect_cper_entries_from_buffer(cper_data, cper_hdrs, entry_count, gpu_id,
+							 entries_info);
 		} while (fabric_ret == AMDSMI_STATUS_MORE_DATA);
 
-		if (ret == AMDSMI_STATUS_SUCCESS &&
-		    fabric_ret != AMDSMI_STATUS_SUCCESS) {
+		if (ret == AMDSMI_STATUS_SUCCESS && fabric_ret != AMDSMI_STATUS_SUCCESS) {
 			ret = fabric_ret;
 		}
 	}
@@ -336,7 +346,7 @@ int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg, std::string& o
 	std::unordered_map<std::string, std::string> file_timestamp_map;
 
 	uint64_t afids[AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD];
-	uint32_t num_afids = 0;
+	uint32_t num_afids    = 0;
 	std::string out_afids = {};
 
 	ret = host_amdsmi_get_processor_handles(socket, &gpu_count, NULL);
@@ -344,8 +354,8 @@ int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg, std::string& o
 		return ret;
 	}
 
-	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(
-			amdsmi_processor_handle) * gpu_count);
+	amdsmi_processor_handle* processors =
+	    (amdsmi_processor_handle*)malloc(sizeof(amdsmi_processor_handle) * gpu_count);
 	ret = host_amdsmi_get_processor_handles(socket, &gpu_count, &processors[0]);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		return ret;
@@ -355,40 +365,45 @@ int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg, std::string& o
 		folder_name = arg.folder_name;
 		create_directory(folder_name);
 	} else {
-		printf("WARNING: No cper files will be dumped unless the --folder=<folder_name> is specified\n\n");
+		printf("WARNING: No cper files will be dumped unless the --folder=<folder_name> is "
+		       "specified\n\n");
 	}
 
 	if (std::find(arg.options.begin(), arg.options.end(), "follow") != arg.options.end()) {
 		printf("Press CTRL + C when you want to stop\n\n");
-		printf("%-24s %-8s %-24s %-24s %s\n","timestamp", "gpu_id", "severity", "file_name", "list of afids");
+		printf("%-24s %-8s %-24s %-24s %s\n", "timestamp", "gpu_id", "severity",
+		       "file_name", "list of afids");
 		while (true) {
 			// Iterate through specified devices or all GPUs if none specified
 			for (uint32_t i = 0; i < arg.devices.size(); i++) {
 				uint32_t gpu_id = arg.devices[i]->get_gpu_index();
-				ret  = process_cper_entries(processors[gpu_id], severity_mask, &cursor[gpu_id], &fabric_cursor[gpu_id], folder_name, gpu_id, all_entries_info);
+				ret = process_cper_entries(processors[gpu_id], severity_mask,
+							   &cursor[gpu_id], &fabric_cursor[gpu_id],
+							   folder_name, gpu_id, all_entries_info);
 			}
 
-			std::sort(all_entries_info.begin(), all_entries_info.end(), [](const CperEntryInfo& a,
-			const CperEntryInfo& b) {
-				return a < b;
-			});
+			std::sort(
+			    all_entries_info.begin(), all_entries_info.end(),
+			    [](const CperEntryInfo& a, const CperEntryInfo& b) { return a < b; });
 
 			for (auto& entry : all_entries_info) {
 				++total_cper_count;
-				std::string file_name = generate_file_name(entry.error_severity, entry.notify_type,
-										total_cper_count);
+				std::string file_name = generate_file_name(
+				    entry.error_severity, entry.notify_type, total_cper_count);
 
-				ret = host_amdsmi_get_afids_from_cper(entry.cper_data, entry.record_length, afids, &num_afids);
+				ret = host_amdsmi_get_afids_from_cper(
+				    entry.cper_data, entry.record_length, afids, &num_afids);
 				if (ret != AMDSMI_STATUS_SUCCESS) {
 					return ret;
 				}
 
-				for(uint32_t i = 0; i < num_afids; i++) {
+				for (uint32_t i = 0; i < num_afids; i++) {
 					out_afids += std::to_string(afids[i]) + " ";
 				}
 
-				out = string_format(RasCperTemplate, entry.timestamp.c_str(), entry.gpu_id,
-					   entry.severity_string.c_str(), file_name.c_str(), out_afids.c_str());
+				out = string_format(RasCperTemplate, entry.timestamp.c_str(),
+						    entry.gpu_id, entry.severity_string.c_str(),
+						    file_name.c_str(), out_afids.c_str());
 				printf("%s", out.c_str());
 				out_afids.clear();
 
@@ -401,9 +416,11 @@ int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg, std::string& o
 				file_timestamp_map[file_name] = entry.timestamp;
 			}
 
-			if (std::find(arg.options.begin(), arg.options.end(), "file-limit") != arg.options.end()) {
+			if (std::find(arg.options.begin(), arg.options.end(), "file-limit") !=
+			    arg.options.end()) {
 				if (!folder_name.empty()) {
-					count_and_replace_oldest_files(folder_name, file_timestamp_map, arg.file_limit);
+					count_and_replace_oldest_files(
+					    folder_name, file_timestamp_map, arg.file_limit);
 				}
 			}
 			all_entries_info.clear();
@@ -412,24 +429,26 @@ int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg, std::string& o
 		}
 
 	} else {
-		printf("%-24s %-8s %-24s %-24s %s\n","timestamp", "gpu_id", "severity", "file_name", "list of afids");
+		printf("%-24s %-8s %-24s %-24s %s\n", "timestamp", "gpu_id", "severity",
+		       "file_name", "list of afids");
 		// Iterate through specified devices or all GPUs if none specified
 		for (uint32_t i = 0; i < arg.devices.size(); i++) {
 			uint32_t gpu_id = arg.devices[i]->get_gpu_index();
-			ret  = process_cper_entries(processors[gpu_id], severity_mask, &cursor[gpu_id], &fabric_cursor[gpu_id], folder_name, gpu_id, all_entries_info);
+			ret		= process_cper_entries(processors[gpu_id], severity_mask,
+							       &cursor[gpu_id], &fabric_cursor[gpu_id],
+							       folder_name, gpu_id, all_entries_info);
 		}
 
-		std::sort(all_entries_info.begin(), all_entries_info.end(), [](const CperEntryInfo& a,
-		const CperEntryInfo& b) {
-			return a < b;
-		});
+		std::sort(all_entries_info.begin(), all_entries_info.end(),
+			  [](const CperEntryInfo& a, const CperEntryInfo& b) { return a < b; });
 
 		for (auto& entry : all_entries_info) {
 			++total_cper_count;
-			std::string file_name = generate_file_name(entry.error_severity, entry.notify_type,
-									total_cper_count);
+			std::string file_name = generate_file_name(
+			    entry.error_severity, entry.notify_type, total_cper_count);
 
-			ret = host_amdsmi_get_afids_from_cper(entry.cper_data, entry.record_length, afids, &num_afids);
+			ret = host_amdsmi_get_afids_from_cper(entry.cper_data, entry.record_length,
+							      afids, &num_afids);
 			if (ret != AMDSMI_STATUS_SUCCESS) {
 				return ret;
 			}
@@ -439,7 +458,8 @@ int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg, std::string& o
 			}
 
 			out = string_format(RasCperTemplate, entry.timestamp.c_str(), entry.gpu_id,
-					entry.severity_string.c_str(), file_name.c_str(), out_afids.c_str());
+					    entry.severity_string.c_str(), file_name.c_str(),
+					    out_afids.c_str());
 			printf("%s", out.c_str());
 			out_afids.clear();
 
@@ -451,9 +471,11 @@ int AmdSmiApiHost::amdsmi_get_cper_entries_command(Arguments arg, std::string& o
 			file_timestamp_map[file_name] = entry.timestamp;
 		}
 
-		if (std::find(arg.options.begin(), arg.options.end(), "file-limit") != arg.options.end()) {
+		if (std::find(arg.options.begin(), arg.options.end(), "file-limit") !=
+		    arg.options.end()) {
 			if (!folder_name.empty()) {
-				count_and_replace_oldest_files(folder_name, file_timestamp_map, arg.file_limit);
+				count_and_replace_oldest_files(folder_name, file_timestamp_map,
+							       arg.file_limit);
 			}
 		}
 	}
@@ -492,7 +514,7 @@ int AmdSmiApiHost::amdsmi_get_cper_afid_command(Arguments arg, std::string& out)
 		return ret;
 	}
 
-	for(uint32_t i = 0; i < num_afids; i++) {
+	for (uint32_t i = 0; i < num_afids; i++) {
 		out += std::to_string(afids[i]) + " ";
 	}
 
@@ -501,24 +523,19 @@ int AmdSmiApiHost::amdsmi_get_cper_afid_command(Arguments arg, std::string& out)
 	return ret;
 }
 
-int AmdSmiApiHost::amdsmi_get_policy_command(uint64_t processor_bdf, Arguments arg, std::string& out_string)
+int AmdSmiApiHost::amdsmi_get_policy_command(uint64_t processor_bdf, Arguments arg,
+					     std::string& out_string, uint8_t* major_version)
 {
 	int ret = 0;
 	amdsmi_gpu_ras_policy_info_t ras_policy_info;
 	nlohmann::ordered_json json_out;
-	uint8_t major_version = 0;
-	uint8_t minor_version = 0;
-	uint16_t dram_non_critical_region_threshold = 0;
-	uint16_t dram_critical_region_threshold = 0;
-	std::string major_version_str{};
-	std::string minor_version_str{};
-	std::string dram_non_critical_region_threshold_str{};
-	std::string dram_critical_region_threshold_str{};
+	std::string major_version_str {};
+	std::string minor_version_str {};
 
 	amdsmi_processor_handle processor;
 	amdsmi_bdf_t tmp_bdf;
 	tmp_bdf.as_uint = processor_bdf;
-	ret = host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	ret		= host_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		Logger::getInstance().log(LogLevel::Error, ret, __FUNCTION__, __FILE__, __LINE__);
 		return ret;
@@ -527,36 +544,68 @@ int AmdSmiApiHost::amdsmi_get_policy_command(uint64_t processor_bdf, Arguments a
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		return ret;
 	}
-	major_version = ras_policy_info.major_version;
-	minor_version = ras_policy_info.minor_version;
 
-	if(ras_policy_info.major_version == 4 && ras_policy_info.minor_version == 0) {
-		dram_non_critical_region_threshold = ras_policy_info.policy_data.v4_0.dram_non_critical_region_threshold;
-		dram_critical_region_threshold = ras_policy_info.policy_data.v4_0.dram_critical_region_threshold;
-		major_version_str = string_format("%u", major_version);
-		minor_version_str = string_format("%u", minor_version);
-		dram_non_critical_region_threshold_str = string_format("%u", dram_non_critical_region_threshold);
-		dram_critical_region_threshold_str = string_format("%u", dram_critical_region_threshold);
-	}
+	if (major_version)
+		*major_version = ras_policy_info.major_version;
+	major_version_str = string_format("%u", ras_policy_info.major_version);
+	minor_version_str = string_format("%u", ras_policy_info.minor_version);
 
-	if (arg.output == json) {
-		json_out = {
-			{"major_version", major_version},
-			{"minor_version", minor_version},
-			{"dram_non_critical_region_threshold", dram_non_critical_region_threshold},
-			{"dram_critical_region_threshold", dram_critical_region_threshold}
-		};
-		out_string = json_out.dump(4);
-	} else if (arg.output == csv) {
-		out_string = string_format(",%s,%s,%s,%s", major_version_str.c_str(),
-						     minor_version_str.c_str(),
-						     dram_non_critical_region_threshold_str.c_str(),
-						     dram_critical_region_threshold_str.c_str());
+	if (ras_policy_info.major_version == 4 && ras_policy_info.minor_version == 0) {
+		const uint16_t dram_non_critical_region_threshold =
+		    ras_policy_info.policy_data.v4_0.dram_non_critical_region_threshold;
+		const uint16_t dram_critical_region_threshold =
+		    ras_policy_info.policy_data.v4_0.dram_critical_region_threshold;
+
+		if (arg.output == json) {
+			json_out = {
+			    {"major_version", ras_policy_info.major_version},
+			    {"minor_version", ras_policy_info.minor_version},
+			    {"dram_non_critical_region_threshold",
+			     dram_non_critical_region_threshold},
+			    {"dram_critical_region_threshold", dram_critical_region_threshold}};
+			out_string = json_out.dump(4);
+		} else if (arg.output == csv) {
+			out_string = string_format(
+			    ",%s,%s,%u,%u", major_version_str.c_str(), minor_version_str.c_str(),
+			    dram_non_critical_region_threshold, dram_critical_region_threshold);
+		} else {
+			out_string = string_format(
+			    rasPolicyTemplate, major_version_str.c_str(), minor_version_str.c_str(),
+			    string_format("%u", dram_non_critical_region_threshold).c_str(),
+			    string_format("%u", dram_critical_region_threshold).c_str());
+		}
+	} else if (ras_policy_info.major_version == 5 && ras_policy_info.minor_version == 0) {
+		const amdsmi_gpu_ras_policy_v5_0_t& v5 = ras_policy_info.policy_data.v5_0;
+
+		if (arg.output == json) {
+			json_out = {
+			    {"major_version", ras_policy_info.major_version},
+			    {"minor_version", ras_policy_info.minor_version},
+			    {"num_entities", v5.num_entities},
+			    {"event_rma_threshold_per_entity", v5.event_rma_threshold_per_entity},
+			    {"max_pages_per_ret_event", v5.max_pages_per_ret_event},
+			    {"od_sram_ecc_threshold", v5.od_sram_ecc_threshold},
+			    {"hwa_threshold", v5.hwa_threshold},
+			    {"wdt_threshold", v5.wdt_threshold}};
+			out_string = json_out.dump(4);
+		} else if (arg.output == csv) {
+			out_string = string_format(
+			    ",%s,%s,%u,%u,%u,%u,%u,%u", major_version_str.c_str(),
+			    minor_version_str.c_str(), v5.num_entities,
+			    v5.event_rma_threshold_per_entity, v5.max_pages_per_ret_event,
+			    v5.od_sram_ecc_threshold, v5.hwa_threshold, v5.wdt_threshold);
+		} else {
+			out_string = string_format(
+			    rasPolicyTemplateV5, major_version_str.c_str(),
+			    minor_version_str.c_str(), string_format("%u", v5.num_entities).c_str(),
+			    string_format("%u", v5.event_rma_threshold_per_entity).c_str(),
+			    string_format("%u", v5.max_pages_per_ret_event).c_str(),
+			    string_format("%u", v5.od_sram_ecc_threshold).c_str(),
+			    string_format("%u", v5.hwa_threshold).c_str(),
+			    string_format("%u", v5.wdt_threshold).c_str());
+		}
 	} else {
-		out_string = string_format(rasPolicyTemplate, major_version_str.c_str(),
-							minor_version_str.c_str(),
-							dram_non_critical_region_threshold_str.c_str(),
-							dram_critical_region_threshold_str.c_str());
+		return AMDSMI_STATUS_NOT_SUPPORTED;
 	}
 
 	return AMDSMI_STATUS_SUCCESS;

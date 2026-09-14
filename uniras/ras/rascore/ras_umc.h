@@ -46,6 +46,9 @@
 #define UMC_ECC_NEW_DETECTED_TAG       0x1
 #define UMC_INV_MEM_PFN  (0xFFFFFFFFFFFFFFFF)
 
+/* inject address is 52 bits */
+#define RAS_UMC_INJECT_ADDR_LIMIT       (0x1ULL << 52)
+
 /* three column bits and one row bit in MCA address flip
  * in bad page retirement
  */

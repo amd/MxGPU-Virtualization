@@ -354,6 +354,7 @@ c__EA_amdsmi_vram_type_t__enumvalues = {
     3: 'AMDSMI_VRAM_TYPE_HBM2E',
     4: 'AMDSMI_VRAM_TYPE_HBM3',
     5: 'AMDSMI_VRAM_TYPE_HBM3E',
+    6: 'AMDSMI_VRAM_TYPE_HBM4',
     10: 'AMDSMI_VRAM_TYPE_DDR2',
     11: 'AMDSMI_VRAM_TYPE_DDR3',
     12: 'AMDSMI_VRAM_TYPE_DDR4',
@@ -375,6 +376,7 @@ AMDSMI_VRAM_TYPE_HBM2 = 2
 AMDSMI_VRAM_TYPE_HBM2E = 3
 AMDSMI_VRAM_TYPE_HBM3 = 4
 AMDSMI_VRAM_TYPE_HBM3E = 5
+AMDSMI_VRAM_TYPE_HBM4 = 6
 AMDSMI_VRAM_TYPE_DDR2 = 10
 AMDSMI_VRAM_TYPE_DDR3 = 11
 AMDSMI_VRAM_TYPE_DDR4 = 12
@@ -687,7 +689,27 @@ c__EA_amdsmi_gpu_block_t__enumvalues = {
     65536: 'AMDSMI_GPU_BLOCK_JPEG',
     131072: 'AMDSMI_GPU_BLOCK_IH',
     262144: 'AMDSMI_GPU_BLOCK_MPIO',
-    262144: 'AMDSMI_GPU_BLOCK_LAST',
+    524288: 'AMDSMI_GPU_BLOCK_MMSCH',
+    1048576: 'AMDSMI_GPU_BLOCK_MP5',
+    2097152: 'AMDSMI_GPU_BLOCK_ATU',
+    4194304: 'AMDSMI_GPU_BLOCK_DACC_BE',
+    8388608: 'AMDSMI_GPU_BLOCK_ECLR',
+    16777216: 'AMDSMI_GPU_BLOCK_KPX_SERDES',
+    33554432: 'AMDSMI_GPU_BLOCK_LSDMA',
+    67108864: 'AMDSMI_GPU_BLOCK_MPART',
+    134217728: 'AMDSMI_GPU_BLOCK_MPIFOE',
+    268435456: 'AMDSMI_GPU_BLOCK_MPRAS',
+    536870912: 'AMDSMI_GPU_BLOCK_NBIF',
+    1073741824: 'AMDSMI_GPU_BLOCK_NBIO',
+    2147483648: 'AMDSMI_GPU_BLOCK_OXRP',
+    4294967296: 'AMDSMI_GPU_BLOCK_PCIE_PL',
+    8589934592: 'AMDSMI_GPU_BLOCK_PCS_XGMI',
+    17179869184: 'AMDSMI_GPU_BLOCK_PIE',
+    34359738368: 'AMDSMI_GPU_BLOCK_CS',
+    68719476736: 'AMDSMI_GPU_BLOCK_SHUB',
+    137438953472: 'AMDSMI_GPU_BLOCK_SSBDCI',
+    274877906944: 'AMDSMI_GPU_BLOCK_UCIE_PCS',
+    274877906944: 'AMDSMI_GPU_BLOCK_LAST',
     9223372036854775808: 'AMDSMI_GPU_BLOCK_RESERVED',
 }
 AMDSMI_GPU_BLOCK_INVALID = 0
@@ -711,7 +733,27 @@ AMDSMI_GPU_BLOCK_VCN = 32768
 AMDSMI_GPU_BLOCK_JPEG = 65536
 AMDSMI_GPU_BLOCK_IH = 131072
 AMDSMI_GPU_BLOCK_MPIO = 262144
-AMDSMI_GPU_BLOCK_LAST = 262144
+AMDSMI_GPU_BLOCK_MMSCH = 524288
+AMDSMI_GPU_BLOCK_MP5 = 1048576
+AMDSMI_GPU_BLOCK_ATU = 2097152
+AMDSMI_GPU_BLOCK_DACC_BE = 4194304
+AMDSMI_GPU_BLOCK_ECLR = 8388608
+AMDSMI_GPU_BLOCK_KPX_SERDES = 16777216
+AMDSMI_GPU_BLOCK_LSDMA = 33554432
+AMDSMI_GPU_BLOCK_MPART = 67108864
+AMDSMI_GPU_BLOCK_MPIFOE = 134217728
+AMDSMI_GPU_BLOCK_MPRAS = 268435456
+AMDSMI_GPU_BLOCK_NBIF = 536870912
+AMDSMI_GPU_BLOCK_NBIO = 1073741824
+AMDSMI_GPU_BLOCK_OXRP = 2147483648
+AMDSMI_GPU_BLOCK_PCIE_PL = 4294967296
+AMDSMI_GPU_BLOCK_PCS_XGMI = 8589934592
+AMDSMI_GPU_BLOCK_PIE = 17179869184
+AMDSMI_GPU_BLOCK_CS = 34359738368
+AMDSMI_GPU_BLOCK_SHUB = 68719476736
+AMDSMI_GPU_BLOCK_SSBDCI = 137438953472
+AMDSMI_GPU_BLOCK_UCIE_PCS = 274877906944
+AMDSMI_GPU_BLOCK_LAST = 274877906944
 AMDSMI_GPU_BLOCK_RESERVED = 9223372036854775808
 c__EA_amdsmi_gpu_block_t = ctypes.c_uint64 # enum
 amdsmi_gpu_block_t = c__EA_amdsmi_gpu_block_t
@@ -803,7 +845,21 @@ c__EA_amdsmi_fw_block_t__enumvalues = {
     81: 'AMDSMI_FW_ID_PSP_RAS',
     82: 'AMDSMI_FW_ID_P2S_TABLE',
     83: 'AMDSMI_FW_ID_PLDM_BUNDLE',
-    84: 'AMDSMI_FW_ID__MAX',
+    84: 'AMDSMI_FW_ID_RS64_MES',
+    85: 'AMDSMI_FW_ID_RS64_MES_STACK',
+    86: 'AMDSMI_FW_ID_RS64_KIQ',
+    87: 'AMDSMI_FW_ID_RS64_KIQ_STACK',
+    88: 'AMDSMI_FW_ID_RS64_MEC_P4_DATA',
+    89: 'AMDSMI_FW_ID_RS64_MEC_P5_DATA',
+    90: 'AMDSMI_FW_ID_RS64_MEC_P6_DATA',
+    91: 'AMDSMI_FW_ID_RS64_MEC_P7_DATA',
+    92: 'AMDSMI_FW_ID_LSDMA',
+    93: 'AMDSMI_FW_ID_MP5',
+    94: 'AMDSMI_FW_ID_PSP_IPKEYMGR',
+    95: 'AMDSMI_FW_ID_PSP_IOVM',
+    96: 'AMDSMI_FW_ID_PSP_SPDM',
+    97: 'AMDSMI_FW_ID_PSP_DPE',
+    98: 'AMDSMI_FW_ID__MAX',
 }
 AMDSMI_FW_ID_SMU = 1
 AMDSMI_FW_ID_FIRST = 1
@@ -889,7 +945,21 @@ AMDSMI_FW_ID_DMCU = 80
 AMDSMI_FW_ID_PSP_RAS = 81
 AMDSMI_FW_ID_P2S_TABLE = 82
 AMDSMI_FW_ID_PLDM_BUNDLE = 83
-AMDSMI_FW_ID__MAX = 84
+AMDSMI_FW_ID_RS64_MES = 84
+AMDSMI_FW_ID_RS64_MES_STACK = 85
+AMDSMI_FW_ID_RS64_KIQ = 86
+AMDSMI_FW_ID_RS64_KIQ_STACK = 87
+AMDSMI_FW_ID_RS64_MEC_P4_DATA = 88
+AMDSMI_FW_ID_RS64_MEC_P5_DATA = 89
+AMDSMI_FW_ID_RS64_MEC_P6_DATA = 90
+AMDSMI_FW_ID_RS64_MEC_P7_DATA = 91
+AMDSMI_FW_ID_LSDMA = 92
+AMDSMI_FW_ID_MP5 = 93
+AMDSMI_FW_ID_PSP_IPKEYMGR = 94
+AMDSMI_FW_ID_PSP_IOVM = 95
+AMDSMI_FW_ID_PSP_SPDM = 96
+AMDSMI_FW_ID_PSP_DPE = 97
+AMDSMI_FW_ID__MAX = 98
 c__EA_amdsmi_fw_block_t = ctypes.c_uint32 # enum
 amdsmi_fw_block_t = c__EA_amdsmi_fw_block_t
 amdsmi_fw_block_t__enumvalues = c__EA_amdsmi_fw_block_t__enumvalues
@@ -932,6 +1002,21 @@ AMDSMI_NPM_STATUS_ENABLED = 1
 c__EA_amdsmi_npm_status_t = ctypes.c_uint32 # enum
 amdsmi_npm_status_t = c__EA_amdsmi_npm_status_t
 amdsmi_npm_status_t__enumvalues = c__EA_amdsmi_npm_status_t__enumvalues
+
+# values for enumeration 'c__EA_amdsmi_compute_tray_type_t'
+c__EA_amdsmi_compute_tray_type_t__enumvalues = {
+    0: 'AMDSMI_COMPUTE_TRAY_TYPE_UNKNOWN',
+    1: 'AMDSMI_COMPUTE_TRAY_TYPE_HELIOS_P',
+    2: 'AMDSMI_COMPUTE_TRAY_TYPE_HELIOS_R',
+    3: 'AMDSMI_COMPUTE_TRAY_TYPE_TITAN',
+}
+AMDSMI_COMPUTE_TRAY_TYPE_UNKNOWN = 0
+AMDSMI_COMPUTE_TRAY_TYPE_HELIOS_P = 1
+AMDSMI_COMPUTE_TRAY_TYPE_HELIOS_R = 2
+AMDSMI_COMPUTE_TRAY_TYPE_TITAN = 3
+c__EA_amdsmi_compute_tray_type_t = ctypes.c_uint32 # enum
+amdsmi_compute_tray_type_t = c__EA_amdsmi_compute_tray_type_t
+amdsmi_compute_tray_type_t__enumvalues = c__EA_amdsmi_compute_tray_type_t__enumvalues
 
 # values for enumeration 'c__EA_amdsmi_link_status_t'
 c__EA_amdsmi_link_status_t__enumvalues = {
@@ -1161,7 +1246,8 @@ struct_c__SA_amdsmi_asic_info_t._fields_ = [
     ('subsystem_id', ctypes.c_uint32),
     ('PADDING_1', ctypes.c_ubyte * 4),
     ('flags', ctypes.c_uint64),
-    ('reserved', ctypes.c_uint32 * 18),
+    ('physical_acc_id', ctypes.c_uint32),
+    ('reserved', ctypes.c_uint32 * 17),
 ]
 
 amdsmi_asic_info_t = struct_c__SA_amdsmi_asic_info_t
@@ -1194,6 +1280,21 @@ struct_c__SA_amdsmi_driver_info_t._fields_ = [
 ]
 
 amdsmi_driver_info_t = struct_c__SA_amdsmi_driver_info_t
+
+# values for enumeration 'c__EA_amdsmi_driver_model_type_t'
+c__EA_amdsmi_driver_model_type_t__enumvalues = {
+    0: 'AMDSMI_DRIVER_MODEL_TYPE_WDDM',
+    1: 'AMDSMI_DRIVER_MODEL_TYPE_WDM',
+    2: 'AMDSMI_DRIVER_MODEL_TYPE_MCDM',
+    3: 'AMDSMI_DRIVER_MODEL_TYPE__MAX',
+}
+AMDSMI_DRIVER_MODEL_TYPE_WDDM = 0
+AMDSMI_DRIVER_MODEL_TYPE_WDM = 1
+AMDSMI_DRIVER_MODEL_TYPE_MCDM = 2
+AMDSMI_DRIVER_MODEL_TYPE__MAX = 3
+c__EA_amdsmi_driver_model_type_t = ctypes.c_uint32 # enum
+amdsmi_driver_model_type_t = c__EA_amdsmi_driver_model_type_t
+amdsmi_driver_model_type_t__enumvalues = c__EA_amdsmi_driver_model_type_t__enumvalues
 class struct_c__SA_amdsmi_vram_info_t(Structure):
     pass
 
@@ -1381,6 +1482,17 @@ struct_c__SA_amdsmi_npm_info_t._fields_ = [
 ]
 
 amdsmi_npm_info_t = struct_c__SA_amdsmi_npm_info_t
+class struct_c__SA_amdsmi_tray_info_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_tray_info_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_tray_info_t._fields_ = [
+    ('max_acc_per_tray', ctypes.c_uint32),
+    ('tray_type', amdsmi_compute_tray_type_t),
+    ('reserved', ctypes.c_uint32 * 14),
+]
+
+amdsmi_tray_info_t = struct_c__SA_amdsmi_tray_info_t
 class struct_c__SA_amdsmi_gpu_cache_info_t(Structure):
     pass
 
@@ -1423,7 +1535,7 @@ struct_c__SA_amdsmi_fw_info_t._pack_ = 1 # source:False
 struct_c__SA_amdsmi_fw_info_t._fields_ = [
     ('num_fw_info', ctypes.c_ubyte),
     ('PADDING_0', ctypes.c_ubyte * 7),
-    ('fw_info_list', struct_fw_info_list_ * 84),
+    ('fw_info_list', struct_fw_info_list_ * 98),
     ('reserved', ctypes.c_uint32 * 7),
     ('PADDING_1', ctypes.c_ubyte * 4),
 ]
@@ -1532,6 +1644,20 @@ struct_c__SA_amdsmi_gpu_ras_policy_v4_0_t._fields_ = [
 ]
 
 amdsmi_gpu_ras_policy_v4_0_t = struct_c__SA_amdsmi_gpu_ras_policy_v4_0_t
+class struct_c__SA_amdsmi_gpu_ras_policy_v5_0_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_gpu_ras_policy_v5_0_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_gpu_ras_policy_v5_0_t._fields_ = [
+    ('num_entities', ctypes.c_uint32),
+    ('event_rma_threshold_per_entity', ctypes.c_uint32),
+    ('max_pages_per_ret_event', ctypes.c_uint32),
+    ('od_sram_ecc_threshold', ctypes.c_uint32),
+    ('hwa_threshold', ctypes.c_uint32),
+    ('wdt_threshold', ctypes.c_uint32),
+]
+
+amdsmi_gpu_ras_policy_v5_0_t = struct_c__SA_amdsmi_gpu_ras_policy_v5_0_t
 class struct_c__SA_amdsmi_gpu_ras_policy_info_t(Structure):
     pass
 
@@ -1541,6 +1667,7 @@ class union_policy_data_(Union):
 union_policy_data_._pack_ = 1 # source:False
 union_policy_data_._fields_ = [
     ('v4_0', amdsmi_gpu_ras_policy_v4_0_t),
+    ('v5_0', amdsmi_gpu_ras_policy_v5_0_t),
     ('info', ctypes.c_uint64 * 5),
 ]
 
@@ -1623,6 +1750,264 @@ struct_c__SA_amdsmi_cper_hdr_t._fields_ = [
 ]
 
 amdsmi_cper_hdr_t = struct_c__SA_amdsmi_cper_hdr_t
+
+# values for enumeration 'c__EA_amdsmi_fabric_telemetry_category_t'
+c__EA_amdsmi_fabric_telemetry_category_t__enumvalues = {
+    0: 'AMDSMI_FABRIC_TELEMETRY_CATEGORY_UALOE',
+    1: 'AMDSMI_FABRIC_TELEMETRY_CATEGORY_SWITCH',
+    2: 'AMDSMI_FABRIC_TELEMETRY_CATEGORY_CRYPTO',
+    3: 'AMDSMI_FABRIC_TELEMETRY_CATEGORY_PFC',
+    4: 'AMDSMI_FABRIC_TELEMETRY_CATEGORY_NETPORT',
+    5: 'AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_UALOE',
+    6: 'AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_NETPORT',
+    7: 'AMDSMI_FABRIC_TELEMETRY_CATEGORY_IFOE_DEBUG',
+    8: 'AMDSMI_FABRIC_TELEMETRY_CATEGORY_PHY',
+    9: 'AMDSMI_FABRIC_TELEMETRY_CATEGORY_MAX',
+    4294967295: 'AMDSMI_FABRIC_TELEMETRY_CATEGORY_INVALID',
+}
+AMDSMI_FABRIC_TELEMETRY_CATEGORY_UALOE = 0
+AMDSMI_FABRIC_TELEMETRY_CATEGORY_SWITCH = 1
+AMDSMI_FABRIC_TELEMETRY_CATEGORY_CRYPTO = 2
+AMDSMI_FABRIC_TELEMETRY_CATEGORY_PFC = 3
+AMDSMI_FABRIC_TELEMETRY_CATEGORY_NETPORT = 4
+AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_UALOE = 5
+AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_NETPORT = 6
+AMDSMI_FABRIC_TELEMETRY_CATEGORY_IFOE_DEBUG = 7
+AMDSMI_FABRIC_TELEMETRY_CATEGORY_PHY = 8
+AMDSMI_FABRIC_TELEMETRY_CATEGORY_MAX = 9
+AMDSMI_FABRIC_TELEMETRY_CATEGORY_INVALID = 4294967295
+c__EA_amdsmi_fabric_telemetry_category_t = ctypes.c_uint32 # enum
+amdsmi_fabric_telemetry_category_t = c__EA_amdsmi_fabric_telemetry_category_t
+amdsmi_fabric_telemetry_category_t__enumvalues = c__EA_amdsmi_fabric_telemetry_category_t__enumvalues
+class struct_c__SA_amdsmi_fabric_telemetry_item_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_fabric_telemetry_item_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_fabric_telemetry_item_t._fields_ = [
+    ('id', ctypes.c_uint64),
+    ('value', ctypes.c_uint64),
+]
+
+amdsmi_fabric_telemetry_item_t = struct_c__SA_amdsmi_fabric_telemetry_item_t
+class struct_c__SA_amdsmi_fabric_label_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_fabric_label_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_fabric_label_t._fields_ = [
+    ('text', ctypes.c_char * 32),
+]
+
+amdsmi_fabric_label_t = struct_c__SA_amdsmi_fabric_label_t
+class struct_c__SA_amdsmi_fabric_telemetry_instance_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_fabric_telemetry_instance_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_fabric_telemetry_instance_t._fields_ = [
+    ('name', amdsmi_fabric_label_t),
+    ('logical_idx', ctypes.c_uint32),
+    ('item_count', ctypes.c_uint32),
+    ('items', ctypes.POINTER(struct_c__SA_amdsmi_fabric_telemetry_item_t)),
+]
+
+amdsmi_fabric_telemetry_instance_t = struct_c__SA_amdsmi_fabric_telemetry_instance_t
+class struct_c__SA_amdsmi_fabric_telemetry_dataset_t(Structure):
+    pass
+
+class struct_timespec(Structure):
+    pass
+
+struct_timespec._pack_ = 1 # source:False
+struct_timespec._fields_ = [
+    ('tv_sec', ctypes.c_int64),
+    ('tv_nsec', ctypes.c_int64),
+]
+
+struct_c__SA_amdsmi_fabric_telemetry_dataset_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_fabric_telemetry_dataset_t._fields_ = [
+    ('category', amdsmi_fabric_telemetry_category_t),
+    ('PADDING_0', ctypes.c_ubyte * 4),
+    ('generation_count', ctypes.c_uint64),
+    ('timestamp', struct_timespec),
+    ('instance_count', ctypes.c_uint32),
+    ('PADDING_1', ctypes.c_ubyte * 4),
+    ('instances', ctypes.POINTER(struct_c__SA_amdsmi_fabric_telemetry_instance_t)),
+]
+
+amdsmi_fabric_telemetry_dataset_t = struct_c__SA_amdsmi_fabric_telemetry_dataset_t
+class struct_c__SA_amdsmi_fabric_telemetry_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_fabric_telemetry_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_fabric_telemetry_t._fields_ = [
+    ('datasets', ctypes.POINTER(struct_c__SA_amdsmi_fabric_telemetry_dataset_t) * 9),
+]
+
+amdsmi_fabric_telemetry_t = struct_c__SA_amdsmi_fabric_telemetry_t
+
+# values for enumeration 'c__EA_amdsmi_fabric_size_constants_t'
+c__EA_amdsmi_fabric_size_constants_t__enumvalues = {
+    32: 'AMDSMI_FABRIC_ACTIVE_ACCELERATORS_BITMAP_SIZE',
+    16: 'AMDSMI_FABRIC_MAX_LOCAL_GPUS',
+    64: 'AMDSMI_FABRIC_MAX_BITMAP_SIZE',
+}
+AMDSMI_FABRIC_ACTIVE_ACCELERATORS_BITMAP_SIZE = 32
+AMDSMI_FABRIC_MAX_LOCAL_GPUS = 16
+AMDSMI_FABRIC_MAX_BITMAP_SIZE = 64
+c__EA_amdsmi_fabric_size_constants_t = ctypes.c_uint32 # enum
+amdsmi_fabric_size_constants_t = c__EA_amdsmi_fabric_size_constants_t
+amdsmi_fabric_size_constants_t__enumvalues = c__EA_amdsmi_fabric_size_constants_t__enumvalues
+
+# values for enumeration 'c__EA_amdsmi_fabric_npa_address_mode_t'
+c__EA_amdsmi_fabric_npa_address_mode_t__enumvalues = {
+    0: 'AMDSMI_FABRIC_NPA_ADDRESS_MODE_SOURCE_ALIASING',
+    1: 'AMDSMI_FABRIC_NPA_ADDRESS_MODE_SOURCE_IDENTIFICATION',
+    2: 'AMDSMI_FABRIC_NPA_ADDRESS_MODE_UNKNOWN',
+}
+AMDSMI_FABRIC_NPA_ADDRESS_MODE_SOURCE_ALIASING = 0
+AMDSMI_FABRIC_NPA_ADDRESS_MODE_SOURCE_IDENTIFICATION = 1
+AMDSMI_FABRIC_NPA_ADDRESS_MODE_UNKNOWN = 2
+c__EA_amdsmi_fabric_npa_address_mode_t = ctypes.c_uint32 # enum
+amdsmi_fabric_npa_address_mode_t = c__EA_amdsmi_fabric_npa_address_mode_t
+amdsmi_fabric_npa_address_mode_t__enumvalues = c__EA_amdsmi_fabric_npa_address_mode_t__enumvalues
+
+# values for enumeration 'c__EA_amdsmi_fabric_accelerator_vpod_state_t'
+c__EA_amdsmi_fabric_accelerator_vpod_state_t__enumvalues = {
+    0: 'AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_UNCONFIGURED',
+    1: 'AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_CONFIGURED',
+    2: 'AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_READY',
+    3: 'AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_ACTIVE',
+    4: 'AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_ERROR',
+    5: 'AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_UNKNOWN',
+}
+AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_UNCONFIGURED = 0
+AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_CONFIGURED = 1
+AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_READY = 2
+AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_ACTIVE = 3
+AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_ERROR = 4
+AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_UNKNOWN = 5
+c__EA_amdsmi_fabric_accelerator_vpod_state_t = ctypes.c_uint32 # enum
+amdsmi_fabric_accelerator_vpod_state_t = c__EA_amdsmi_fabric_accelerator_vpod_state_t
+amdsmi_fabric_accelerator_vpod_state_t__enumvalues = c__EA_amdsmi_fabric_accelerator_vpod_state_t__enumvalues
+class struct_c__SA_amdsmi_fabric_ppod_data_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_fabric_ppod_data_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_fabric_ppod_data_t._fields_ = [
+    ('accelerator_id', ctypes.c_uint32),
+    ('ppod_id', ctypes.c_ubyte * 16),
+    ('ppod_size', ctypes.c_uint32),
+    ('local_accelerators', ctypes.c_uint32 * 16),
+    ('local_accelerator_count', ctypes.c_uint32),
+    ('bandwidth', ctypes.c_uint32),
+    ('latency', ctypes.c_uint32),
+]
+
+amdsmi_fabric_ppod_data_t = struct_c__SA_amdsmi_fabric_ppod_data_t
+class struct_c__SA_amdsmi_fabric_vpod_data_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_fabric_vpod_data_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_fabric_vpod_data_t._fields_ = [
+    ('vpod_id', ctypes.c_uint32),
+    ('vpod_size', ctypes.c_uint32),
+    ('vpod_active_accelerators', ctypes.c_uint32 * 32),
+    ('addr_mode', amdsmi_fabric_npa_address_mode_t),
+]
+
+amdsmi_fabric_vpod_data_t = struct_c__SA_amdsmi_fabric_vpod_data_t
+class struct_c__SA_amdsmi_fabric_station_data_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_fabric_station_data_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_fabric_station_data_t._fields_ = [
+    ('station_flags', ctypes.c_uint32),
+    ('num_stations', ctypes.c_ubyte),
+    ('lane_en_bitmap', ctypes.c_ubyte * 64),
+    ('PADDING_0', ctypes.c_ubyte * 3),
+]
+
+amdsmi_fabric_station_data_t = struct_c__SA_amdsmi_fabric_station_data_t
+
+# values for enumeration 'c__EA_amdsmi_fabric_type_t'
+c__EA_amdsmi_fabric_type_t__enumvalues = {
+    0: 'AMDSMI_FABRIC_TYPE_UALOE',
+    1: 'AMDSMI_FABRIC_TYPE_UALINK',
+    2: 'AMDSMI_FABRIC_TYPE_UNKNOWN',
+}
+AMDSMI_FABRIC_TYPE_UALOE = 0
+AMDSMI_FABRIC_TYPE_UALINK = 1
+AMDSMI_FABRIC_TYPE_UNKNOWN = 2
+c__EA_amdsmi_fabric_type_t = ctypes.c_uint32 # enum
+amdsmi_fabric_type_t = c__EA_amdsmi_fabric_type_t
+amdsmi_fabric_type_t__enumvalues = c__EA_amdsmi_fabric_type_t__enumvalues
+class struct_c__SA_amdsmi_fabric_info_v1_t(Structure):
+    _pack_ = 1 # source:False
+    _fields_ = [
+    ('fabric_type', amdsmi_fabric_type_t),
+    ('accel_state', amdsmi_fabric_accelerator_vpod_state_t),
+    ('ppod', amdsmi_fabric_ppod_data_t),
+    ('vpod', amdsmi_fabric_vpod_data_t),
+    ('station', amdsmi_fabric_station_data_t),
+     ]
+
+amdsmi_fabric_info_v1_t = struct_c__SA_amdsmi_fabric_info_v1_t
+class struct_c__SA_amdsmi_fabric_info_t(Structure):
+    pass
+
+class union_fabric_info_(Union):
+    _pack_ = 1 # source:False
+    _fields_ = [
+    ('v1', amdsmi_fabric_info_v1_t),
+     ]
+
+struct_c__SA_amdsmi_fabric_info_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_fabric_info_t._fields_ = [
+    ('bdf', amdsmi_bdf_t),
+    ('fabric_version', ctypes.c_uint32),
+    ('fabric_info', union_fabric_info_),
+    ('reserved', ctypes.c_uint32 * 15),
+]
+
+amdsmi_fabric_info_t = struct_c__SA_amdsmi_fabric_info_t
+class struct_c__SA_amdsmi_fabric_ppod_config_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_fabric_ppod_config_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_fabric_ppod_config_t._fields_ = [
+    ('version', ctypes.c_uint32),
+    ('mask', ctypes.c_uint32),
+    ('commit', ctypes.c_bool),
+    ('PADDING_0', ctypes.c_ubyte * 3),
+    ('data', amdsmi_fabric_ppod_data_t),
+]
+
+amdsmi_fabric_ppod_config_t = struct_c__SA_amdsmi_fabric_ppod_config_t
+class struct_c__SA_amdsmi_fabric_vpod_config_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_fabric_vpod_config_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_fabric_vpod_config_t._fields_ = [
+    ('version', ctypes.c_uint32),
+    ('mask', ctypes.c_uint32),
+    ('commit', ctypes.c_bool),
+    ('PADDING_0', ctypes.c_ubyte * 3),
+    ('data', amdsmi_fabric_vpod_data_t),
+]
+
+amdsmi_fabric_vpod_config_t = struct_c__SA_amdsmi_fabric_vpod_config_t
+class struct_c__SA_amdsmi_fabric_station_config_t(Structure):
+    pass
+
+struct_c__SA_amdsmi_fabric_station_config_t._pack_ = 1 # source:False
+struct_c__SA_amdsmi_fabric_station_config_t._fields_ = [
+    ('version', ctypes.c_uint32),
+    ('mask', ctypes.c_uint32),
+    ('commit', ctypes.c_bool),
+    ('PADDING_0', ctypes.c_ubyte * 3),
+    ('data', amdsmi_fabric_station_data_t),
+]
+
+amdsmi_fabric_station_config_t = struct_c__SA_amdsmi_fabric_station_config_t
 amdsmi_event_set = ctypes.POINTER(None)
 
 # values for enumeration 'c__EA_amdsmi_event_category_t'
@@ -3011,66 +3396,6 @@ c__EA_amdsmi_vf_mode_t = ctypes.c_uint32 # enum
 amdsmi_vf_mode_t = c__EA_amdsmi_vf_mode_t
 amdsmi_vf_mode_t__enumvalues = c__EA_amdsmi_vf_mode_t__enumvalues
 
-# values for enumeration 'c__EA_amdsmi_driver_model_type_t'
-c__EA_amdsmi_driver_model_type_t__enumvalues = {
-    0: 'AMDSMI_DRIVER_MODEL_TYPE_WDDM',
-    1: 'AMDSMI_DRIVER_MODEL_TYPE_WDM',
-    2: 'AMDSMI_DRIVER_MODEL_TYPE_MCDM',
-    3: 'AMDSMI_DRIVER_MODEL_TYPE__MAX',
-}
-AMDSMI_DRIVER_MODEL_TYPE_WDDM = 0
-AMDSMI_DRIVER_MODEL_TYPE_WDM = 1
-AMDSMI_DRIVER_MODEL_TYPE_MCDM = 2
-AMDSMI_DRIVER_MODEL_TYPE__MAX = 3
-c__EA_amdsmi_driver_model_type_t = ctypes.c_uint32 # enum
-amdsmi_driver_model_type_t = c__EA_amdsmi_driver_model_type_t
-amdsmi_driver_model_type_t__enumvalues = c__EA_amdsmi_driver_model_type_t__enumvalues
-
-# values for enumeration 'c__EA_amdsmi_fabric_type_t'
-c__EA_amdsmi_fabric_type_t__enumvalues = {
-    0: 'AMDSMI_FABRIC_TYPE_UALOE',
-    1: 'AMDSMI_FABRIC_TYPE_UALINK',
-    2: 'AMDSMI_FABRIC_TYPE_UNKNOWN',
-}
-AMDSMI_FABRIC_TYPE_UALOE = 0
-AMDSMI_FABRIC_TYPE_UALINK = 1
-AMDSMI_FABRIC_TYPE_UNKNOWN = 2
-c__EA_amdsmi_fabric_type_t = ctypes.c_uint32 # enum
-amdsmi_fabric_type_t = c__EA_amdsmi_fabric_type_t
-amdsmi_fabric_type_t__enumvalues = c__EA_amdsmi_fabric_type_t__enumvalues
-
-# values for enumeration 'c__EA_amdsmi_fabric_npa_address_mode_t'
-c__EA_amdsmi_fabric_npa_address_mode_t__enumvalues = {
-    0: 'AMDSMI_FABRIC_NPA_ADDRESS_MODE_SOURCE_ALIASING',
-    1: 'AMDSMI_FABRIC_NPA_ADDRESS_MODE_SOURCE_IDENTIFICATION',
-    2: 'AMDSMI_FABRIC_NPA_ADDRESS_MODE_UNKNOWN',
-}
-AMDSMI_FABRIC_NPA_ADDRESS_MODE_SOURCE_ALIASING = 0
-AMDSMI_FABRIC_NPA_ADDRESS_MODE_SOURCE_IDENTIFICATION = 1
-AMDSMI_FABRIC_NPA_ADDRESS_MODE_UNKNOWN = 2
-c__EA_amdsmi_fabric_npa_address_mode_t = ctypes.c_uint32 # enum
-amdsmi_fabric_npa_address_mode_t = c__EA_amdsmi_fabric_npa_address_mode_t
-amdsmi_fabric_npa_address_mode_t__enumvalues = c__EA_amdsmi_fabric_npa_address_mode_t__enumvalues
-
-# values for enumeration 'c__EA_amdsmi_fabric_accelerator_vpod_state_t'
-c__EA_amdsmi_fabric_accelerator_vpod_state_t__enumvalues = {
-    0: 'AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_UNCONFIGURED',
-    1: 'AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_CONFIGURED',
-    2: 'AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_READY',
-    3: 'AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_ACTIVE',
-    4: 'AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_ERROR',
-    5: 'AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_UNKNOWN',
-}
-AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_UNCONFIGURED = 0
-AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_CONFIGURED = 1
-AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_READY = 2
-AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_ACTIVE = 3
-AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_ERROR = 4
-AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_UNKNOWN = 5
-c__EA_amdsmi_fabric_accelerator_vpod_state_t = ctypes.c_uint32 # enum
-amdsmi_fabric_accelerator_vpod_state_t = c__EA_amdsmi_fabric_accelerator_vpod_state_t
-amdsmi_fabric_accelerator_vpod_state_t__enumvalues = c__EA_amdsmi_fabric_accelerator_vpod_state_t__enumvalues
-
 # values for enumeration 'c__EA_amdsmi_tdi_state_t'
 c__EA_amdsmi_tdi_state_t__enumvalues = {
     0: 'AMDSMI_TDI_STATE_UNLOCKED',
@@ -3529,143 +3854,6 @@ struct_c__SA_amdsmi_accelerator_partition_profile_config_global_t._fields_ = [
 
 amdsmi_accelerator_partition_profile_config_global_t = struct_c__SA_amdsmi_accelerator_partition_profile_config_global_t
 
-# values for enumeration 'c__EA_amdsmi_fabric_telemetry_category_t'
-c__EA_amdsmi_fabric_telemetry_category_t__enumvalues = {
-    0: 'AMDSMI_FABRIC_TELEMETRY_CATEGORY_UALOE',
-    1: 'AMDSMI_FABRIC_TELEMETRY_CATEGORY_SWITCH',
-    2: 'AMDSMI_FABRIC_TELEMETRY_CATEGORY_CRYPTO',
-    3: 'AMDSMI_FABRIC_TELEMETRY_CATEGORY_PFC',
-    4: 'AMDSMI_FABRIC_TELEMETRY_CATEGORY_NETPORT',
-    5: 'AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_UALOE',
-    6: 'AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_NETPORT',
-    7: 'AMDSMI_FABRIC_TELEMETRY_CATEGORY_MAX',
-    4294967295: 'AMDSMI_FABRIC_TELEMETRY_CATEGORY_INVALID',
-}
-AMDSMI_FABRIC_TELEMETRY_CATEGORY_UALOE = 0
-AMDSMI_FABRIC_TELEMETRY_CATEGORY_SWITCH = 1
-AMDSMI_FABRIC_TELEMETRY_CATEGORY_CRYPTO = 2
-AMDSMI_FABRIC_TELEMETRY_CATEGORY_PFC = 3
-AMDSMI_FABRIC_TELEMETRY_CATEGORY_NETPORT = 4
-AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_UALOE = 5
-AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_NETPORT = 6
-AMDSMI_FABRIC_TELEMETRY_CATEGORY_MAX = 7
-AMDSMI_FABRIC_TELEMETRY_CATEGORY_INVALID = 4294967295
-c__EA_amdsmi_fabric_telemetry_category_t = ctypes.c_uint32 # enum
-amdsmi_fabric_telemetry_category_t = c__EA_amdsmi_fabric_telemetry_category_t
-amdsmi_fabric_telemetry_category_t__enumvalues = c__EA_amdsmi_fabric_telemetry_category_t__enumvalues
-class struct_c__SA_amdsmi_fabric_telemetry_item_t(Structure):
-    pass
-
-struct_c__SA_amdsmi_fabric_telemetry_item_t._pack_ = 1 # source:False
-struct_c__SA_amdsmi_fabric_telemetry_item_t._fields_ = [
-    ('id', ctypes.c_uint64),
-    ('value', ctypes.c_uint64),
-]
-
-amdsmi_fabric_telemetry_item_t = struct_c__SA_amdsmi_fabric_telemetry_item_t
-class struct_c__SA_amdsmi_fabric_label_t(Structure):
-    pass
-
-struct_c__SA_amdsmi_fabric_label_t._pack_ = 1 # source:False
-struct_c__SA_amdsmi_fabric_label_t._fields_ = [
-    ('text', ctypes.c_char * 32),
-]
-
-amdsmi_fabric_label_t = struct_c__SA_amdsmi_fabric_label_t
-class struct_c__SA_amdsmi_fabric_telemetry_instance_t(Structure):
-    pass
-
-struct_c__SA_amdsmi_fabric_telemetry_instance_t._pack_ = 1 # source:False
-struct_c__SA_amdsmi_fabric_telemetry_instance_t._fields_ = [
-    ('name', amdsmi_fabric_label_t),
-    ('logical_idx', ctypes.c_uint32),
-    ('item_count', ctypes.c_uint32),
-    ('items', ctypes.POINTER(struct_c__SA_amdsmi_fabric_telemetry_item_t)),
-]
-
-amdsmi_fabric_telemetry_instance_t = struct_c__SA_amdsmi_fabric_telemetry_instance_t
-class struct_c__SA_amdsmi_fabric_telemetry_dataset_t(Structure):
-    pass
-
-class struct_timespec(Structure):
-    pass
-
-struct_timespec._pack_ = 1 # source:False
-struct_timespec._fields_ = [
-    ('tv_sec', ctypes.c_int64),
-    ('tv_nsec', ctypes.c_int64),
-]
-
-struct_c__SA_amdsmi_fabric_telemetry_dataset_t._pack_ = 1 # source:False
-struct_c__SA_amdsmi_fabric_telemetry_dataset_t._fields_ = [
-    ('category', amdsmi_fabric_telemetry_category_t),
-    ('PADDING_0', ctypes.c_ubyte * 4),
-    ('generation_count', ctypes.c_uint64),
-    ('timestamp', struct_timespec),
-    ('instance_count', ctypes.c_uint32),
-    ('PADDING_1', ctypes.c_ubyte * 4),
-    ('instances', ctypes.POINTER(struct_c__SA_amdsmi_fabric_telemetry_instance_t)),
-]
-
-amdsmi_fabric_telemetry_dataset_t = struct_c__SA_amdsmi_fabric_telemetry_dataset_t
-class struct_c__SA_amdsmi_fabric_telemetry_t(Structure):
-    pass
-
-struct_c__SA_amdsmi_fabric_telemetry_t._pack_ = 1 # source:False
-struct_c__SA_amdsmi_fabric_telemetry_t._fields_ = [
-    ('datasets', ctypes.POINTER(struct_c__SA_amdsmi_fabric_telemetry_dataset_t) * 7),
-]
-
-amdsmi_fabric_telemetry_t = struct_c__SA_amdsmi_fabric_telemetry_t
-class struct_c__SA_amdsmi_fabric_info_v1_t(Structure):
-    pass
-
-struct_c__SA_amdsmi_fabric_info_v1_t._pack_ = 1 # source:False
-struct_c__SA_amdsmi_fabric_info_v1_t._fields_ = [
-    ('accelerator_id', ctypes.c_uint32),
-    ('fabric_type', amdsmi_fabric_type_t),
-    ('bandwidth', ctypes.c_uint32),
-    ('latency', ctypes.c_uint32),
-    ('ppod_id', ctypes.c_ubyte * 16),
-    ('ppod_size', ctypes.c_uint32),
-    ('vpod_id', ctypes.c_uint32),
-    ('vpod_size', ctypes.c_uint32),
-    ('vpod_active_accelerators', ctypes.c_uint32 * 32),
-    ('local_accelerators', ctypes.c_uint32 * 8),
-    ('addr_mode', amdsmi_fabric_npa_address_mode_t),
-    ('accel_state', amdsmi_fabric_accelerator_vpod_state_t),
-]
-
-amdsmi_fabric_info_v1_t = struct_c__SA_amdsmi_fabric_info_v1_t
-class struct_c__SA_amdsmi_fabric_info_ver_t(Structure):
-    pass
-
-class union_c__SA_amdsmi_fabric_info_ver_t_0(Union):
-    _pack_ = 1 # source:False
-    _fields_ = [
-    ('v1', amdsmi_fabric_info_v1_t),
-     ]
-
-struct_c__SA_amdsmi_fabric_info_ver_t._pack_ = 1 # source:False
-struct_c__SA_amdsmi_fabric_info_ver_t._fields_ = [
-    ('version', ctypes.c_uint32),
-    ('fabric_info', union_c__SA_amdsmi_fabric_info_ver_t_0),
-]
-
-amdsmi_fabric_info_ver_t = struct_c__SA_amdsmi_fabric_info_ver_t
-class struct_c__SA_amdsmi_fabric_info_t(Structure):
-    pass
-
-struct_c__SA_amdsmi_fabric_info_t._pack_ = 1 # source:False
-struct_c__SA_amdsmi_fabric_info_t._fields_ = [
-    ('bdf', amdsmi_bdf_t),
-    ('info', amdsmi_fabric_info_ver_t),
-    ('reserved', ctypes.c_uint32 * 15),
-    ('PADDING_0', ctypes.c_ubyte * 4),
-]
-
-amdsmi_fabric_info_t = struct_c__SA_amdsmi_fabric_info_t
-
 # values for enumeration 'c__EA_amdsmi_nic_fw_version_type_t'
 c__EA_amdsmi_nic_fw_version_type_t__enumvalues = {
     0: 'AMDSMI_NIC_FW_VERSION_TYPE_FIXED',
@@ -4088,6 +4276,9 @@ amdsmi_reset_gpu.argtypes = [amdsmi_processor_handle]
 amdsmi_get_npm_info = _libraries['libamdsmi.so'].amdsmi_get_npm_info
 amdsmi_get_npm_info.restype = amdsmi_status_t
 amdsmi_get_npm_info.argtypes = [amdsmi_node_handle, ctypes.POINTER(struct_c__SA_amdsmi_npm_info_t)]
+amdsmi_get_tray_info = _libraries['libamdsmi.so'].amdsmi_get_tray_info
+amdsmi_get_tray_info.restype = amdsmi_status_t
+amdsmi_get_tray_info.argtypes = [amdsmi_node_handle, ctypes.POINTER(struct_c__SA_amdsmi_tray_info_t)]
 amdsmi_get_gpu_ptl_state = _libraries['libamdsmi.so'].amdsmi_get_gpu_ptl_state
 amdsmi_get_gpu_ptl_state.restype = amdsmi_status_t
 amdsmi_get_gpu_ptl_state.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_bool)]
@@ -4100,6 +4291,27 @@ amdsmi_get_gpu_ptl_formats.argtypes = [amdsmi_processor_handle, ctypes.POINTER(c
 amdsmi_set_gpu_ptl_formats = _libraries['libamdsmi.so'].amdsmi_set_gpu_ptl_formats
 amdsmi_set_gpu_ptl_formats.restype = amdsmi_status_t
 amdsmi_set_gpu_ptl_formats.argtypes = [amdsmi_processor_handle, amdsmi_ptl_data_format_t, amdsmi_ptl_data_format_t]
+amdsmi_get_gpu_fabric_info = _libraries['libamdsmi.so'].amdsmi_get_gpu_fabric_info
+amdsmi_get_gpu_fabric_info.restype = amdsmi_status_t
+amdsmi_get_gpu_fabric_info.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_c__SA_amdsmi_fabric_info_t)]
+amdsmi_alloc_fabric_telemetry = _libraries['libamdsmi.so'].amdsmi_alloc_fabric_telemetry
+amdsmi_alloc_fabric_telemetry.restype = amdsmi_status_t
+amdsmi_alloc_fabric_telemetry.argtypes = [amdsmi_processor_handle, uint32_t, ctypes.POINTER(ctypes.POINTER(struct_c__SA_amdsmi_fabric_telemetry_t))]
+amdsmi_get_fabric_telemetry_data = _libraries['libamdsmi.so'].amdsmi_get_fabric_telemetry_data
+amdsmi_get_fabric_telemetry_data.restype = amdsmi_status_t
+amdsmi_get_fabric_telemetry_data.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_c__SA_amdsmi_fabric_telemetry_t)]
+amdsmi_free_fabric_telemetry = _libraries['libamdsmi.so'].amdsmi_free_fabric_telemetry
+amdsmi_free_fabric_telemetry.restype = amdsmi_status_t
+amdsmi_free_fabric_telemetry.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_c__SA_amdsmi_fabric_telemetry_t)]
+amdsmi_set_gpu_fabric_ppod_config = _libraries['libamdsmi.so'].amdsmi_set_gpu_fabric_ppod_config
+amdsmi_set_gpu_fabric_ppod_config.restype = amdsmi_status_t
+amdsmi_set_gpu_fabric_ppod_config.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_c__SA_amdsmi_fabric_ppod_config_t)]
+amdsmi_set_gpu_fabric_vpod_config = _libraries['libamdsmi.so'].amdsmi_set_gpu_fabric_vpod_config
+amdsmi_set_gpu_fabric_vpod_config.restype = amdsmi_status_t
+amdsmi_set_gpu_fabric_vpod_config.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_c__SA_amdsmi_fabric_vpod_config_t)]
+amdsmi_set_gpu_fabric_station_config = _libraries['libamdsmi.so'].amdsmi_set_gpu_fabric_station_config
+amdsmi_set_gpu_fabric_station_config.restype = amdsmi_status_t
+amdsmi_set_gpu_fabric_station_config.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_c__SA_amdsmi_fabric_station_config_t)]
 amdsmi_get_num_vf = _libraries['libamdsmi.so'].amdsmi_get_num_vf
 amdsmi_get_num_vf.restype = amdsmi_status_t
 amdsmi_get_num_vf.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32)]
@@ -4149,18 +4361,6 @@ amdsmi_get_cc_mode.argtypes = [amdsmi_processor_handle, ctypes.POINTER(c__EA_amd
 amdsmi_set_cc_mode = _libraries['libamdsmi.so'].amdsmi_set_cc_mode
 amdsmi_set_cc_mode.restype = amdsmi_status_t
 amdsmi_set_cc_mode.argtypes = [amdsmi_processor_handle, amdsmi_cc_mode_t]
-amdsmi_get_gpu_fabric_info = _libraries['libamdsmi.so'].amdsmi_get_gpu_fabric_info
-amdsmi_get_gpu_fabric_info.restype = amdsmi_status_t
-amdsmi_get_gpu_fabric_info.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_c__SA_amdsmi_fabric_info_t)]
-amdsmi_alloc_fabric_telemetry = _libraries['libamdsmi.so'].amdsmi_alloc_fabric_telemetry
-amdsmi_alloc_fabric_telemetry.restype = amdsmi_status_t
-amdsmi_alloc_fabric_telemetry.argtypes = [amdsmi_processor_handle, uint32_t, ctypes.POINTER(ctypes.POINTER(struct_c__SA_amdsmi_fabric_telemetry_t))]
-amdsmi_get_fabric_telemetry_data = _libraries['libamdsmi.so'].amdsmi_get_fabric_telemetry_data
-amdsmi_get_fabric_telemetry_data.restype = amdsmi_status_t
-amdsmi_get_fabric_telemetry_data.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_c__SA_amdsmi_fabric_telemetry_t)]
-amdsmi_free_fabric_telemetry = _libraries['libamdsmi.so'].amdsmi_free_fabric_telemetry
-amdsmi_free_fabric_telemetry.restype = amdsmi_status_t
-amdsmi_free_fabric_telemetry.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_c__SA_amdsmi_fabric_telemetry_t)]
 amdsmi_get_nic_driver_info = _libraries['libamdsmi.so'].amdsmi_get_nic_driver_info
 amdsmi_get_nic_driver_info.restype = amdsmi_status_t
 amdsmi_get_nic_driver_info.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_c__SA_amdsmi_nic_driver_info_t)]
@@ -4216,6 +4416,10 @@ __all__ = \
     'AMDSMI_CLK_TYPE_PCIE', 'AMDSMI_CLK_TYPE_SOC',
     'AMDSMI_CLK_TYPE_SYS', 'AMDSMI_CLK_TYPE_VCLK0',
     'AMDSMI_CLK_TYPE_VCLK1', 'AMDSMI_CLK_TYPE__MAX',
+    'AMDSMI_COMPUTE_TRAY_TYPE_HELIOS_P',
+    'AMDSMI_COMPUTE_TRAY_TYPE_HELIOS_R',
+    'AMDSMI_COMPUTE_TRAY_TYPE_TITAN',
+    'AMDSMI_COMPUTE_TRAY_TYPE_UNKNOWN',
     'AMDSMI_CPER_NOTIFY_TYPE_BOOT', 'AMDSMI_CPER_NOTIFY_TYPE_CMC',
     'AMDSMI_CPER_NOTIFY_TYPE_CPE',
     'AMDSMI_CPER_NOTIFY_TYPE_CXL_COMPONENT',
@@ -4466,16 +4670,20 @@ __all__ = \
     'AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_READY',
     'AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_UNCONFIGURED',
     'AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_UNKNOWN',
+    'AMDSMI_FABRIC_ACTIVE_ACCELERATORS_BITMAP_SIZE',
+    'AMDSMI_FABRIC_MAX_BITMAP_SIZE', 'AMDSMI_FABRIC_MAX_LOCAL_GPUS',
     'AMDSMI_FABRIC_NPA_ADDRESS_MODE_SOURCE_ALIASING',
     'AMDSMI_FABRIC_NPA_ADDRESS_MODE_SOURCE_IDENTIFICATION',
     'AMDSMI_FABRIC_NPA_ADDRESS_MODE_UNKNOWN',
     'AMDSMI_FABRIC_TELEMETRY_CATEGORY_CRYPTO',
     'AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_NETPORT',
     'AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_UALOE',
+    'AMDSMI_FABRIC_TELEMETRY_CATEGORY_IFOE_DEBUG',
     'AMDSMI_FABRIC_TELEMETRY_CATEGORY_INVALID',
     'AMDSMI_FABRIC_TELEMETRY_CATEGORY_MAX',
     'AMDSMI_FABRIC_TELEMETRY_CATEGORY_NETPORT',
     'AMDSMI_FABRIC_TELEMETRY_CATEGORY_PFC',
+    'AMDSMI_FABRIC_TELEMETRY_CATEGORY_PHY',
     'AMDSMI_FABRIC_TELEMETRY_CATEGORY_SWITCH',
     'AMDSMI_FABRIC_TELEMETRY_CATEGORY_UALOE',
     'AMDSMI_FABRIC_TYPE_UALINK', 'AMDSMI_FABRIC_TYPE_UALOE',
@@ -4488,14 +4696,17 @@ __all__ = \
     'AMDSMI_FW_ID_DMCU_ERAM', 'AMDSMI_FW_ID_DMCU_ISR',
     'AMDSMI_FW_ID_DRV_CAP', 'AMDSMI_FW_ID_FIRST',
     'AMDSMI_FW_ID_IMU_DRAM', 'AMDSMI_FW_ID_IMU_IRAM',
-    'AMDSMI_FW_ID_ISP', 'AMDSMI_FW_ID_MC', 'AMDSMI_FW_ID_MES_KIQ',
-    'AMDSMI_FW_ID_MES_STACK', 'AMDSMI_FW_ID_MES_THREAD1',
-    'AMDSMI_FW_ID_MES_THREAD1_STACK', 'AMDSMI_FW_ID_MMSCH',
+    'AMDSMI_FW_ID_ISP', 'AMDSMI_FW_ID_LSDMA', 'AMDSMI_FW_ID_MC',
+    'AMDSMI_FW_ID_MES_KIQ', 'AMDSMI_FW_ID_MES_STACK',
+    'AMDSMI_FW_ID_MES_THREAD1', 'AMDSMI_FW_ID_MES_THREAD1_STACK',
+    'AMDSMI_FW_ID_MMSCH', 'AMDSMI_FW_ID_MP5',
     'AMDSMI_FW_ID_P2S_TABLE', 'AMDSMI_FW_ID_PLDM_BUNDLE',
     'AMDSMI_FW_ID_PM', 'AMDSMI_FW_ID_PPTABLE', 'AMDSMI_FW_ID_PSP_BL',
-    'AMDSMI_FW_ID_PSP_DBG', 'AMDSMI_FW_ID_PSP_INTF',
-    'AMDSMI_FW_ID_PSP_KEYDB', 'AMDSMI_FW_ID_PSP_RAS',
-    'AMDSMI_FW_ID_PSP_SOC', 'AMDSMI_FW_ID_PSP_SOSDRV',
+    'AMDSMI_FW_ID_PSP_DBG', 'AMDSMI_FW_ID_PSP_DPE',
+    'AMDSMI_FW_ID_PSP_INTF', 'AMDSMI_FW_ID_PSP_IOVM',
+    'AMDSMI_FW_ID_PSP_IPKEYMGR', 'AMDSMI_FW_ID_PSP_KEYDB',
+    'AMDSMI_FW_ID_PSP_RAS', 'AMDSMI_FW_ID_PSP_SOC',
+    'AMDSMI_FW_ID_PSP_SOSDRV', 'AMDSMI_FW_ID_PSP_SPDM',
     'AMDSMI_FW_ID_PSP_SPL', 'AMDSMI_FW_ID_PSP_SYSDRV',
     'AMDSMI_FW_ID_PSP_TOC', 'AMDSMI_FW_ID_REG_ACCESS_WHITELIST',
     'AMDSMI_FW_ID_RLC', 'AMDSMI_FW_ID_RLCV_LX7', 'AMDSMI_FW_ID_RLC_P',
@@ -4506,10 +4717,14 @@ __all__ = \
     'AMDSMI_FW_ID_RLC_SRLS', 'AMDSMI_FW_ID_RLC_V',
     'AMDSMI_FW_ID_RLX6', 'AMDSMI_FW_ID_RLX6_CORE1',
     'AMDSMI_FW_ID_RLX6_DRAM_BOOT',
-    'AMDSMI_FW_ID_RLX6_DRAM_BOOT_CORE1', 'AMDSMI_FW_ID_RS64_ME',
+    'AMDSMI_FW_ID_RLX6_DRAM_BOOT_CORE1', 'AMDSMI_FW_ID_RS64_KIQ',
+    'AMDSMI_FW_ID_RS64_KIQ_STACK', 'AMDSMI_FW_ID_RS64_ME',
     'AMDSMI_FW_ID_RS64_MEC', 'AMDSMI_FW_ID_RS64_MEC_P0_DATA',
     'AMDSMI_FW_ID_RS64_MEC_P1_DATA', 'AMDSMI_FW_ID_RS64_MEC_P2_DATA',
-    'AMDSMI_FW_ID_RS64_MEC_P3_DATA', 'AMDSMI_FW_ID_RS64_ME_P0_DATA',
+    'AMDSMI_FW_ID_RS64_MEC_P3_DATA', 'AMDSMI_FW_ID_RS64_MEC_P4_DATA',
+    'AMDSMI_FW_ID_RS64_MEC_P5_DATA', 'AMDSMI_FW_ID_RS64_MEC_P6_DATA',
+    'AMDSMI_FW_ID_RS64_MEC_P7_DATA', 'AMDSMI_FW_ID_RS64_MES',
+    'AMDSMI_FW_ID_RS64_MES_STACK', 'AMDSMI_FW_ID_RS64_ME_P0_DATA',
     'AMDSMI_FW_ID_RS64_ME_P1_DATA', 'AMDSMI_FW_ID_RS64_PFP',
     'AMDSMI_FW_ID_RS64_PFP_P0_DATA', 'AMDSMI_FW_ID_RS64_PFP_P1_DATA',
     'AMDSMI_FW_ID_SDMA0', 'AMDSMI_FW_ID_SDMA1', 'AMDSMI_FW_ID_SDMA2',
@@ -4520,16 +4735,26 @@ __all__ = \
     'AMDSMI_FW_ID_SMU', 'AMDSMI_FW_ID_TA_RAS', 'AMDSMI_FW_ID_TA_XGMI',
     'AMDSMI_FW_ID_UVD', 'AMDSMI_FW_ID_VCE', 'AMDSMI_FW_ID_VCN',
     'AMDSMI_FW_ID_XGMI', 'AMDSMI_FW_ID__MAX',
-    'AMDSMI_GPU_BLOCK_ATHUB', 'AMDSMI_GPU_BLOCK_DF',
+    'AMDSMI_GPU_BLOCK_ATHUB', 'AMDSMI_GPU_BLOCK_ATU',
+    'AMDSMI_GPU_BLOCK_CS', 'AMDSMI_GPU_BLOCK_DACC_BE',
+    'AMDSMI_GPU_BLOCK_DF', 'AMDSMI_GPU_BLOCK_ECLR',
     'AMDSMI_GPU_BLOCK_FIRST', 'AMDSMI_GPU_BLOCK_FUSE',
     'AMDSMI_GPU_BLOCK_GFX', 'AMDSMI_GPU_BLOCK_HDP',
     'AMDSMI_GPU_BLOCK_IH', 'AMDSMI_GPU_BLOCK_INVALID',
-    'AMDSMI_GPU_BLOCK_JPEG', 'AMDSMI_GPU_BLOCK_LAST',
+    'AMDSMI_GPU_BLOCK_JPEG', 'AMDSMI_GPU_BLOCK_KPX_SERDES',
+    'AMDSMI_GPU_BLOCK_LAST', 'AMDSMI_GPU_BLOCK_LSDMA',
     'AMDSMI_GPU_BLOCK_MCA', 'AMDSMI_GPU_BLOCK_MMHUB',
-    'AMDSMI_GPU_BLOCK_MP0', 'AMDSMI_GPU_BLOCK_MP1',
-    'AMDSMI_GPU_BLOCK_MPIO', 'AMDSMI_GPU_BLOCK_PCIE_BIF',
-    'AMDSMI_GPU_BLOCK_RESERVED', 'AMDSMI_GPU_BLOCK_SDMA',
-    'AMDSMI_GPU_BLOCK_SEM', 'AMDSMI_GPU_BLOCK_SMN',
+    'AMDSMI_GPU_BLOCK_MMSCH', 'AMDSMI_GPU_BLOCK_MP0',
+    'AMDSMI_GPU_BLOCK_MP1', 'AMDSMI_GPU_BLOCK_MP5',
+    'AMDSMI_GPU_BLOCK_MPART', 'AMDSMI_GPU_BLOCK_MPIFOE',
+    'AMDSMI_GPU_BLOCK_MPIO', 'AMDSMI_GPU_BLOCK_MPRAS',
+    'AMDSMI_GPU_BLOCK_NBIF', 'AMDSMI_GPU_BLOCK_NBIO',
+    'AMDSMI_GPU_BLOCK_OXRP', 'AMDSMI_GPU_BLOCK_PCIE_BIF',
+    'AMDSMI_GPU_BLOCK_PCIE_PL', 'AMDSMI_GPU_BLOCK_PCS_XGMI',
+    'AMDSMI_GPU_BLOCK_PIE', 'AMDSMI_GPU_BLOCK_RESERVED',
+    'AMDSMI_GPU_BLOCK_SDMA', 'AMDSMI_GPU_BLOCK_SEM',
+    'AMDSMI_GPU_BLOCK_SHUB', 'AMDSMI_GPU_BLOCK_SMN',
+    'AMDSMI_GPU_BLOCK_SSBDCI', 'AMDSMI_GPU_BLOCK_UCIE_PCS',
     'AMDSMI_GPU_BLOCK_UMC', 'AMDSMI_GPU_BLOCK_VCN',
     'AMDSMI_GPU_BLOCK_XGMI_WAFL', 'AMDSMI_GUARD_EVENT_ALL_INT',
     'AMDSMI_GUARD_EVENT_EXCLUSIVE_MOD',
@@ -4888,11 +5113,11 @@ __all__ = \
     'AMDSMI_VRAM_TYPE_GDDR6', 'AMDSMI_VRAM_TYPE_GDDR7',
     'AMDSMI_VRAM_TYPE_HBM', 'AMDSMI_VRAM_TYPE_HBM2',
     'AMDSMI_VRAM_TYPE_HBM2E', 'AMDSMI_VRAM_TYPE_HBM3',
-    'AMDSMI_VRAM_TYPE_HBM3E', 'AMDSMI_VRAM_TYPE_LPDDR4',
-    'AMDSMI_VRAM_TYPE_LPDDR5', 'AMDSMI_VRAM_TYPE_UNKNOWN',
-    'AMDSMI_VRAM_TYPE__MAX', 'AMDSMI_XGMI_FB_SHARING_MODE_1',
-    'AMDSMI_XGMI_FB_SHARING_MODE_2', 'AMDSMI_XGMI_FB_SHARING_MODE_4',
-    'AMDSMI_XGMI_FB_SHARING_MODE_8',
+    'AMDSMI_VRAM_TYPE_HBM3E', 'AMDSMI_VRAM_TYPE_HBM4',
+    'AMDSMI_VRAM_TYPE_LPDDR4', 'AMDSMI_VRAM_TYPE_LPDDR5',
+    'AMDSMI_VRAM_TYPE_UNKNOWN', 'AMDSMI_VRAM_TYPE__MAX',
+    'AMDSMI_XGMI_FB_SHARING_MODE_1', 'AMDSMI_XGMI_FB_SHARING_MODE_2',
+    'AMDSMI_XGMI_FB_SHARING_MODE_4', 'AMDSMI_XGMI_FB_SHARING_MODE_8',
     'AMDSMI_XGMI_FB_SHARING_MODE_CUSTOM',
     'AMDSMI_XGMI_FB_SHARING_MODE_UNKNOWN',
     'amdsmi_accelerator_partition_profile_config_global_t',
@@ -4913,7 +5138,8 @@ __all__ = \
     'amdsmi_card_form_factor_t__enumvalues', 'amdsmi_cc_mode_t',
     'amdsmi_cc_mode_t__enumvalues', 'amdsmi_clear_vf_fb',
     'amdsmi_clk_info_t', 'amdsmi_clk_type_t',
-    'amdsmi_clk_type_t__enumvalues', 'amdsmi_cper_guid_t',
+    'amdsmi_clk_type_t__enumvalues', 'amdsmi_compute_tray_type_t',
+    'amdsmi_compute_tray_type_t__enumvalues', 'amdsmi_cper_guid_t',
     'amdsmi_cper_hdr_t', 'amdsmi_cper_notify_type_t',
     'amdsmi_cper_notify_type_t__enumvalues', 'amdsmi_cper_sev_t',
     'amdsmi_cper_sev_t__enumvalues', 'amdsmi_cper_timestamp_t',
@@ -4948,15 +5174,19 @@ __all__ = \
     'amdsmi_fabric_accelerator_vpod_state_t',
     'amdsmi_fabric_accelerator_vpod_state_t__enumvalues',
     'amdsmi_fabric_info_t', 'amdsmi_fabric_info_v1_t',
-    'amdsmi_fabric_info_ver_t', 'amdsmi_fabric_label_t',
-    'amdsmi_fabric_npa_address_mode_t',
+    'amdsmi_fabric_label_t', 'amdsmi_fabric_npa_address_mode_t',
     'amdsmi_fabric_npa_address_mode_t__enumvalues',
+    'amdsmi_fabric_ppod_config_t', 'amdsmi_fabric_ppod_data_t',
+    'amdsmi_fabric_size_constants_t',
+    'amdsmi_fabric_size_constants_t__enumvalues',
+    'amdsmi_fabric_station_config_t', 'amdsmi_fabric_station_data_t',
     'amdsmi_fabric_telemetry_category_t',
     'amdsmi_fabric_telemetry_category_t__enumvalues',
     'amdsmi_fabric_telemetry_dataset_t',
     'amdsmi_fabric_telemetry_instance_t',
     'amdsmi_fabric_telemetry_item_t', 'amdsmi_fabric_telemetry_t',
     'amdsmi_fabric_type_t', 'amdsmi_fabric_type_t__enumvalues',
+    'amdsmi_fabric_vpod_config_t', 'amdsmi_fabric_vpod_data_t',
     'amdsmi_free_fabric_telemetry', 'amdsmi_frequencies_t',
     'amdsmi_fw_block_t', 'amdsmi_fw_block_t__enumvalues',
     'amdsmi_fw_error_record_t', 'amdsmi_fw_info_t',
@@ -5006,19 +5236,21 @@ __all__ = \
     'amdsmi_get_processor_type', 'amdsmi_get_soc_pstate',
     'amdsmi_get_socket_handles', 'amdsmi_get_socket_info',
     'amdsmi_get_supported_power_cap', 'amdsmi_get_tdi_state',
-    'amdsmi_get_temp_metric', 'amdsmi_get_vf_bdf',
-    'amdsmi_get_vf_data', 'amdsmi_get_vf_fw_info',
-    'amdsmi_get_vf_handle_from_bdf', 'amdsmi_get_vf_handle_from_uuid',
+    'amdsmi_get_temp_metric', 'amdsmi_get_tray_info',
+    'amdsmi_get_vf_bdf', 'amdsmi_get_vf_data',
+    'amdsmi_get_vf_fw_info', 'amdsmi_get_vf_handle_from_bdf',
+    'amdsmi_get_vf_handle_from_uuid',
     'amdsmi_get_vf_handle_from_vf_index', 'amdsmi_get_vf_hbm_info',
     'amdsmi_get_vf_info', 'amdsmi_get_vf_partition_info',
     'amdsmi_get_vf_uuid', 'amdsmi_get_xgmi_fb_sharing_caps',
     'amdsmi_get_xgmi_fb_sharing_mode_info', 'amdsmi_get_xgmi_plpd',
     'amdsmi_gpu_block_t', 'amdsmi_gpu_block_t__enumvalues',
     'amdsmi_gpu_cache_info_t', 'amdsmi_gpu_ras_policy_info_t',
-    'amdsmi_gpu_ras_policy_v4_0_t', 'amdsmi_guard_info_t',
-    'amdsmi_guard_state_t', 'amdsmi_guard_state_t__enumvalues',
-    'amdsmi_guard_type_t', 'amdsmi_guard_type_t__enumvalues',
-    'amdsmi_guest_data_t', 'amdsmi_guest_fw_engine_id_t',
+    'amdsmi_gpu_ras_policy_v4_0_t', 'amdsmi_gpu_ras_policy_v5_0_t',
+    'amdsmi_guard_info_t', 'amdsmi_guard_state_t',
+    'amdsmi_guard_state_t__enumvalues', 'amdsmi_guard_type_t',
+    'amdsmi_guard_type_t__enumvalues', 'amdsmi_guest_data_t',
+    'amdsmi_guest_fw_engine_id_t',
     'amdsmi_guest_fw_engine_id_t__enumvalues',
     'amdsmi_guest_fw_load_status_t',
     'amdsmi_guest_fw_load_status_t__enumvalues', 'amdsmi_handshake_t',
@@ -5067,6 +5299,9 @@ __all__ = \
     'amdsmi_sched_block_t__enumvalues', 'amdsmi_sched_info_t',
     'amdsmi_set_cc_mode',
     'amdsmi_set_gpu_accelerator_partition_profile',
+    'amdsmi_set_gpu_fabric_ppod_config',
+    'amdsmi_set_gpu_fabric_station_config',
+    'amdsmi_set_gpu_fabric_vpod_config',
     'amdsmi_set_gpu_memory_partition_mode',
     'amdsmi_set_gpu_ptl_formats', 'amdsmi_set_gpu_ptl_state',
     'amdsmi_set_num_vf', 'amdsmi_set_power_cap',
@@ -5081,7 +5316,7 @@ __all__ = \
     'amdsmi_temperature_type_t__enumvalues',
     'amdsmi_topo_get_link_type', 'amdsmi_topo_get_numa_node_number',
     'amdsmi_topo_get_p2p_status', 'amdsmi_topology_nearest_t',
-    'amdsmi_vbios_info_t', 'amdsmi_version_t',
+    'amdsmi_tray_info_t', 'amdsmi_vbios_info_t', 'amdsmi_version_t',
     'amdsmi_vf_config_flags_t',
     'amdsmi_vf_config_flags_t__enumvalues', 'amdsmi_vf_data_t',
     'amdsmi_vf_fb_info_t', 'amdsmi_vf_handle_t',
@@ -5098,9 +5333,9 @@ __all__ = \
     'c__EA_amdsmi_affinity_scope_t',
     'c__EA_amdsmi_cache_property_type_t',
     'c__EA_amdsmi_card_form_factor_t', 'c__EA_amdsmi_cc_mode_t',
-    'c__EA_amdsmi_clk_type_t', 'c__EA_amdsmi_cper_notify_type_t',
-    'c__EA_amdsmi_cper_sev_t', 'c__EA_amdsmi_driver_model_type_t',
-    'c__EA_amdsmi_driver_t',
+    'c__EA_amdsmi_clk_type_t', 'c__EA_amdsmi_compute_tray_type_t',
+    'c__EA_amdsmi_cper_notify_type_t', 'c__EA_amdsmi_cper_sev_t',
+    'c__EA_amdsmi_driver_model_type_t', 'c__EA_amdsmi_driver_t',
     'c__EA_amdsmi_ecc_correction_schema_support_t',
     'c__EA_amdsmi_event_category_t', 'c__EA_amdsmi_event_driver_t',
     'c__EA_amdsmi_event_ecc_t', 'c__EA_amdsmi_event_fw_t',
@@ -5112,6 +5347,7 @@ __all__ = \
     'c__EA_amdsmi_event_xgmi_t',
     'c__EA_amdsmi_fabric_accelerator_vpod_state_t',
     'c__EA_amdsmi_fabric_npa_address_mode_t',
+    'c__EA_amdsmi_fabric_size_constants_t',
     'c__EA_amdsmi_fabric_telemetry_category_t',
     'c__EA_amdsmi_fabric_type_t', 'c__EA_amdsmi_fw_block_t',
     'c__EA_amdsmi_gpu_block_t', 'c__EA_amdsmi_guard_state_t',
@@ -5164,12 +5400,17 @@ __all__ = \
     'struct_c__SA_amdsmi_event_entry_t',
     'struct_c__SA_amdsmi_fabric_info_t',
     'struct_c__SA_amdsmi_fabric_info_v1_t',
-    'struct_c__SA_amdsmi_fabric_info_ver_t',
     'struct_c__SA_amdsmi_fabric_label_t',
+    'struct_c__SA_amdsmi_fabric_ppod_config_t',
+    'struct_c__SA_amdsmi_fabric_ppod_data_t',
+    'struct_c__SA_amdsmi_fabric_station_config_t',
+    'struct_c__SA_amdsmi_fabric_station_data_t',
     'struct_c__SA_amdsmi_fabric_telemetry_dataset_t',
     'struct_c__SA_amdsmi_fabric_telemetry_instance_t',
     'struct_c__SA_amdsmi_fabric_telemetry_item_t',
     'struct_c__SA_amdsmi_fabric_telemetry_t',
+    'struct_c__SA_amdsmi_fabric_vpod_config_t',
+    'struct_c__SA_amdsmi_fabric_vpod_data_t',
     'struct_c__SA_amdsmi_frequencies_t',
     'struct_c__SA_amdsmi_fw_error_record_t',
     'struct_c__SA_amdsmi_fw_info_t',
@@ -5177,6 +5418,7 @@ __all__ = \
     'struct_c__SA_amdsmi_gpu_cache_info_t',
     'struct_c__SA_amdsmi_gpu_ras_policy_info_t',
     'struct_c__SA_amdsmi_gpu_ras_policy_v4_0_t',
+    'struct_c__SA_amdsmi_gpu_ras_policy_v5_0_t',
     'struct_c__SA_amdsmi_guard_info_t',
     'struct_c__SA_amdsmi_guard_info_t_0',
     'struct_c__SA_amdsmi_guest_data_t',
@@ -5212,6 +5454,7 @@ __all__ = \
     'struct_c__SA_amdsmi_ras_feature_t',
     'struct_c__SA_amdsmi_sched_info_t',
     'struct_c__SA_amdsmi_topology_nearest_t',
+    'struct_c__SA_amdsmi_tray_info_t',
     'struct_c__SA_amdsmi_vbios_info_t',
     'struct_c__SA_amdsmi_version_t', 'struct_c__SA_amdsmi_vf_data_t',
     'struct_c__SA_amdsmi_vf_fb_info_t',
@@ -5225,8 +5468,8 @@ __all__ = \
     'struct_valid_bits_', 'uint32_t', 'uint64_t',
     'union_c__SA_amdsmi_dfc_fw_data_t_0',
     'union_c__SA_amdsmi_eeprom_table_record_t_0',
-    'union_c__SA_amdsmi_fabric_info_ver_t_0',
     'union_c__UA_amdsmi_bdf_t',
     'union_c__UA_amdsmi_cper_valid_bits_t',
     'union_c__UA_amdsmi_nps_caps_t',
-    'union_c__UA_amdsmi_xgmi_fb_sharing_caps_t', 'union_policy_data_']
+    'union_c__UA_amdsmi_xgmi_fb_sharing_caps_t', 'union_fabric_info_',
+    'union_policy_data_']

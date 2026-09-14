@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-
+#include "amdsmi.h"
 #include "smi_cli_cc_command.h"
 #include "smi_cli_helpers.h"
 #include "smi_cli_templates.h"
@@ -15,17 +15,17 @@
 
 auto constexpr cc_mode_csv_header {",cc-mode"};
 
-int AmdSmiCCCommand::cc_command_vf_get_tdi_state(std::string vf_bdf, std::string &formatted_string)
+int AmdSmiCCCommand::cc_command_vf_get_tdi_state(std::string vf_bdf, std::string& formatted_string)
 {
-	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_vf_tdi_state_command(vf_bdf,
-			  arg, formatted_string);
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_vf_tdi_state_command(
+	    vf_bdf, arg, formatted_string);
 	return ret;
 }
 
-int AmdSmiCCCommand::cc_command_get_mode(uint64_t processors, std::string &formatted_string)
+int AmdSmiCCCommand::cc_command_get_mode(uint64_t processors, std::string& formatted_string)
 {
-	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_cc_mode_command(processors,
-			  arg, formatted_string);
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_cc_mode_command(
+	    processors, arg, formatted_string);
 	return ret;
 }
 
@@ -36,26 +36,26 @@ void AmdSmiCCCommand::cc_command_json()
 	nlohmann::ordered_json json_format = nlohmann::ordered_json::array();
 	nlohmann::ordered_json json;
 	nlohmann::ordered_json option_json;
-	std::string out{};
-	std::string result{};
+	std::string out {};
+	std::string result {};
 
 	if (arg.is_vf) {
 		nlohmann::ordered_json values_json;
 		std::string vf_bdf;
 		std::tuple<std::string, std::string, std::string> indexes =
-			getGpuVfIndexFromVfId(arg.vf_id);
-		vf_bdf = std::get<2>(indexes).c_str();
-		json = {};
+		    getGpuVfIndexFromVfId(arg.vf_id);
+		vf_bdf		   = std::get<2>(indexes).c_str();
+		json		   = {};
 		uint64_t gpu_index = std::stoi(std::get<0>(indexes));
-		uint64_t vf_index = std::stoi(std::get<1>(indexes));
-		json["gpu"] = gpu_index;
-		json["vf"] = vf_index;
+		uint64_t vf_index  = std::stoi(std::get<1>(indexes));
+		json["gpu"]	   = gpu_index;
+		json["vf"]	   = vf_index;
 
-		std::string param_tdi{"tdi-state"};
-		ret = cc_command_vf_get_tdi_state(vf_bdf, out);
+		std::string param_tdi {"tdi-state"};
+		ret	      = cc_command_vf_get_tdi_state(vf_bdf, out);
 		int error_tdi = handle_exceptions(ret, param_tdi, arg);
 		if (error_tdi == 0) {
-			values_json = nlohmann::ordered_json::parse(out);
+			values_json	  = nlohmann::ordered_json::parse(out);
 			json["tdi_state"] = values_json;
 			out.clear();
 		}
@@ -67,16 +67,16 @@ void AmdSmiCCCommand::cc_command_json()
 		result = json_format.dump(4);
 	} else {
 		for (i = 0; i < arg.devices.size(); i++) {
-			json = {};
+			json	    = {};
 			option_json = {};
 			nlohmann::ordered_json values_json;
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
 
-			std::string param_mode{"mode"};
-			ret = cc_command_get_mode(gpu_bdf, out);
+			std::string param_mode {"mode"};
+			ret	       = cc_command_get_mode(gpu_bdf, out);
 			int error_mode = handle_exceptions(ret, param_mode, arg);
 			if (error_mode == 0) {
-				values_json = nlohmann::ordered_json::parse(out);
+				values_json	       = nlohmann::ordered_json::parse(out);
 				option_json["cc_mode"] = values_json;
 				out.clear();
 			}
@@ -104,21 +104,20 @@ void AmdSmiCCCommand::cc_command_json()
 void AmdSmiCCCommand::cc_command_human()
 {
 	int ret;
-	std::string formatted_string{};
-	std::string out{};
-	std::string options_string{};
+	std::string formatted_string {};
+	std::string out {};
+	std::string options_string {};
 
 	if (arg.is_vf) {
 		std::string vf_bdf;
 		std::tuple<std::string, std::string, std::string> indexes =
-			getGpuVfIndexFromVfId(arg.vf_id);
-		out += string_format(
-				   vfNestedTemplate, std::get<0>(indexes).c_str(),
-				   std::get<1>(indexes).c_str());
+		    getGpuVfIndexFromVfId(arg.vf_id);
+		out += string_format(vfNestedTemplate, std::get<0>(indexes).c_str(),
+				     std::get<1>(indexes).c_str());
 		vf_bdf = std::get<2>(indexes).c_str();
 
 		ret = cc_command_vf_get_tdi_state(vf_bdf, formatted_string);
-		std::string param_tdi{"tdi-state"};
+		std::string param_tdi {"tdi-state"};
 		int error_tdi = handle_exceptions(ret, param_tdi, arg);
 		if (error_tdi == 0) {
 			out += formatted_string;
@@ -129,7 +128,7 @@ void AmdSmiCCCommand::cc_command_human()
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
 
 			ret = cc_command_get_mode(gpu_bdf, formatted_string);
-			std::string param_mode{"mode"};
+			std::string param_mode {"mode"};
 			int error_mode = handle_exceptions(ret, param_mode, arg);
 			if (error_mode == 0) {
 				options_string += formatted_string;
@@ -155,26 +154,26 @@ void AmdSmiCCCommand::cc_command_human()
 void AmdSmiCCCommand::cc_command_csv()
 {
 	int ret;
-	std::string header{};
-	std::string formatted_string{};
-	std::string out{};
+	std::string header {};
+	std::string formatted_string {};
+	std::string out {};
 
 	if (arg.is_vf) {
 		std::string vf_bdf;
 		std::tuple<std::string, std::string, std::string> indexes =
-			getGpuVfIndexFromVfId(arg.vf_id);
-		vf_bdf = std::get<2>(indexes).c_str();
+		    getGpuVfIndexFromVfId(arg.vf_id);
+		vf_bdf		   = std::get<2>(indexes).c_str();
 		uint64_t gpu_index = std::stoi(std::get<0>(indexes));
-		uint64_t vf_index = std::stoi(std::get<1>(indexes));
+		uint64_t vf_index  = std::stoi(std::get<1>(indexes));
 
 		header.append("gpu,vf,tdi_state");
 		out.append(header).append("\n");
 
-		std::string values{};
+		std::string values {};
 		values.append(string_format("%d,%d", (int)gpu_index, (int)vf_index));
 
 		ret = cc_command_vf_get_tdi_state(vf_bdf, formatted_string);
-		std::string param_tdi{"tdi-state"};
+		std::string param_tdi {"tdi-state"};
 		int error_tdi = handle_exceptions(ret, param_tdi, arg);
 		if (error_tdi == 0) {
 			values.append(formatted_string);
@@ -186,10 +185,10 @@ void AmdSmiCCCommand::cc_command_csv()
 	} else {
 		for (unsigned int i = 0; i < arg.devices.size(); i++) {
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
-			int gpu_id = arg.devices[i]->get_gpu_index();
-			std::string values{};
+			int gpu_id	 = arg.devices[i]->get_gpu_index();
+			std::string values {};
 
-			std::string gpu_id_str{string_format("%d",gpu_id)};
+			std::string gpu_id_str {string_format("%d", gpu_id)};
 			values.append(gpu_id_str);
 
 			if (i == 0) {
@@ -198,7 +197,7 @@ void AmdSmiCCCommand::cc_command_csv()
 			}
 
 			ret = cc_command_get_mode(gpu_bdf, formatted_string);
-			std::string param_mode{"mode"};
+			std::string param_mode {"mode"};
 			int error_mode = handle_exceptions(ret, param_mode, arg);
 			if (error_mode == 0) {
 				values.append(formatted_string);
@@ -225,9 +224,23 @@ void AmdSmiCCCommand::cc_command_csv()
 
 void AmdSmiCCCommand::execute_command()
 {
-	if (!(AmdSmiPlatform::getInstance().is_mixxx() &&
+	if (!(AmdSmiPlatform::getInstance().is_gc_12_1() &&
 	      AmdSmiPlatform::getInstance().is_host())) {
-		std::string command{"confidential-compute"};
+		std::string command {"confidential-compute"};
+		throw SmiToolCommandNotSupportedException(command);
+	}
+
+	std::string output {};
+	int ret;
+	if (arg.is_vf) {
+		std::tuple<std::string, std::string, std::string> indexes =
+		    getGpuVfIndexFromVfId(arg.vf_id);
+		ret = cc_command_vf_get_tdi_state(std::get<2>(indexes), output);
+	} else {
+		ret = cc_command_get_mode(arg.devices[0]->get_bdf(), output);
+	}
+	if (ret == AMDSMI_STATUS_NOT_SUPPORTED || ret == PARAM_NOT_SUPPORTED_ON_PLATFORM) {
+		std::string command {"confidential-compute"};
 		throw SmiToolCommandNotSupportedException(command);
 	}
 

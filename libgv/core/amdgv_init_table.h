@@ -13,9 +13,9 @@ extern struct amdgv_init_func gmc_v12_1_func;
 extern struct amdgv_init_func gfx_v12_1_func;
 extern struct amdgv_init_func gfx_v12_1_clockgating_func;
 extern struct amdgv_init_func psp_v15_0_8_func;
-extern struct amdgv_init_func smu_v15_0_8_func;
+extern struct amdgv_init_func smu_v15_0_8_early_func;
+extern struct amdgv_init_func smu_v15_0_8_late_func;
 extern struct amdgv_init_func smu_v15_0_8_pp_func;
-extern struct amdgv_init_func smu_v15_0_8_eeprom_func;
 extern struct amdgv_init_func ih_v7_1_func;
 extern struct amdgv_init_func gpuiov_v9_0_func;
 extern struct amdgv_init_func gpuiov_v9_0_sched_early_func;
@@ -34,16 +34,20 @@ extern struct amdgv_init_func mes_v12_1_func;
 extern struct amdgv_init_func amdgv_ual_func;
 #ifdef AMDGV_UNIRAS_SUPPORT
 extern struct amdgv_init_func amdgv_ras_mgr_func;
+extern struct amdgv_init_func amdgv_ras_mgr_early_func;
 #endif
 
 struct amdgv_init_func *gc_12_1_init_table[] = {
 	&nbio_v6_3_2_mcp_func,
 	&nbio_v6_3_2_func,
+	&smu_v15_0_8_early_func,
+#ifdef AMDGV_UNIRAS_SUPPORT
+	&amdgv_ras_mgr_early_func,
+#endif
 	&gmc_v12_1_func,
 	&mmhub_v4_2_0_func,
 	&psp_v15_0_8_func,
-	&smu_v15_0_8_func,
-	&smu_v15_0_8_eeprom_func,
+	&smu_v15_0_8_late_func,
 #ifdef AMDGV_UNIRAS_SUPPORT
 	&amdgv_ras_mgr_func,
 #endif
@@ -63,7 +67,7 @@ struct amdgv_init_func *gc_12_1_init_table[] = {
 	&gfx_v12_1_func,
 	&mes_v12_1_func,
 	&gpuiov_v9_0_sched_late_func,
-	//&amdgv_ual_func,
+	&amdgv_ual_func,
 	NULL,
 };
 

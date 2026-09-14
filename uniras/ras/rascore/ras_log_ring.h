@@ -41,6 +41,7 @@ enum ras_log_event {
 	RAS_LOG_EVENT_MCE,
 	RAS_LOG_EVENT_BOOT,
 	RAS_LOG_EVENT_CPU_RAS,
+	RAS_LOG_EVENT_DRIVER_EVENT,
 	RAS_LOG_EVENT_COUNT_MAX,
 };
 
@@ -100,7 +101,7 @@ int ras_log_ring_sw_fini(struct ras_core_context *ras_core);
 struct ras_log_batch_tag *ras_log_ring_create_batch_tag(struct ras_core_context *ras_core);
 void ras_log_ring_destroy_batch_tag(struct ras_core_context *ras_core,
 			struct ras_log_batch_tag *tag);
-void ras_log_ring_add_log_event(struct ras_core_context *ras_core,
+int ras_log_ring_add_log_event(struct ras_core_context *ras_core,
 		enum ras_log_event event,
 		void *data, uint32_t size, struct ras_log_batch_tag *batch_tag);
 

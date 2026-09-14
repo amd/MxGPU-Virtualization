@@ -28,6 +28,7 @@
 #include "ras_eeprom.h"
 #include "ras_log_ring.h"
 #include "ras_cper.h"
+#include "ras_mp1.h"
 
 #define RAS_CMD_DEV_HANDLE_MAGIC 0xFEEDAD00UL
 
@@ -80,6 +81,7 @@ enum ras_cmd_id {
 	RAS_CMD__CHECK_ADDRESS_VALIDITY,
 	RAS_CMD__CONVERT_RETIRED_ADDRESS,
 	RAS_CMD__GET_RAS_CAP,
+	RAS_CMD__GET_RAS_POLICY_INFO,
 	RAS_CMD__SUPPORTED_MAX = RAS_CMD_ID_COMMON_END,
 };
 
@@ -495,6 +497,21 @@ struct ras_cmd_get_ras_cap_rsp {
 	uint32_t int_ecc_attributes; // for internal driver or tools use
 	uint64_t ras_block_mask; // match with SMI definitions
 	uint32_t reserved[8];
+};
+
+struct ras_cmd_ras_policy_info_req {
+	struct ras_cmd_dev_handle dev;
+	uint32_t reserved[4];
+};
+
+struct ras_cmd_ras_policy_info_rsp {
+	uint32_t version;
+	uint8_t  minor_version;
+	uint8_t  major_version;
+	uint8_t  reserved[2];
+	uint64_t bad_page_threshold;
+
+	uint8_t  policy_data[RAS_MP1_POLICY_DATA_MAX];
 };
 
 #pragma pack(pop)

@@ -104,6 +104,31 @@ int amdgv_ffbm_apply_page_table(struct amdgv_adapter *adapt)
 	return ret;
 }
 
+/* Same as amdgv_ffbm_apply_page_table(), but scoped to one fcn's own gpa_list
+ * so applying its pending pteb can't also push another fcn's unrelated
+ * not-yet-applied pteb to hardware.
+ */
+int amdgv_ffbm_apply_page_table_by_fcn(struct amdgv_adapter *adapt, uint32_t vf_idx)
+{
+	struct amdgv_ffbm_pte_block *pteb;
+	int ret = 0;
+
+	if (!adapt->ffbm.enabled)
+		return 0;
+
+	FFBM_LOCK_LIST;
+	amdgv_list_for_each_entry(pteb, &adapt->array_vf[vf_idx].gpa_list,
+				   struct amdgv_ffbm_pte_block, gpa_list_node) {
+		if ((pteb->type == AMDGV_FFBM_MEM_TYPE_VF ||
+		     pteb->type == AMDGV_FFBM_MEM_TYPE_TMR) &&
+		    pteb->applied == false)
+			ret = adapt->ffbm.apply_pteb(adapt, pteb, true);
+	}
+	FFBM_UNLOCK_LIST;
+
+	return ret;
+}
+
 static struct amdgv_ffbm_pte_block *amdgv_ffbm_find_pteb_by_phy(struct amdgv_adapter *adapt,
 								uint64_t spa)
 {
@@ -794,7 +819,7 @@ int amdgv_ffbm_sw_fini(struct amdgv_adapter *adapt)
 }
 
 /* update FFBM page table according to PF/VF FB settings */
-int amdgv_ffbm_page_table_update_by_fcn(struct amdgv_adapter *adapt, uint32_t vf_idx)
+int amdgv_ffbm_page_table_update_by_fcn(struct amdgv_adapter *adapt, uint32_t vf_idx, bool reserve)
 {
 	int ret = 0;
 	struct amdgv_vf_device *entry = &adapt->array_vf[vf_idx];
@@ -833,7 +858,16 @@ int amdgv_ffbm_page_table_update_by_fcn(struct amdgv_adapter *adapt, uint32_t vf
 		/* VF FFBM should be already unmapped */
 		/* don't map ffbm if size is 0 */
 		fb_size = (adapt->ffbm.share_tmr) ? entry->fb_size_tmr : entry->fb_size;
-		if (fb_size > 0) {
+
+		/* reserve only skips remapping if this fcn actually still owns
+		 * reserved pte blocks to re-apply; otherwise (e.g. fully torn
+		 * down by amdgv_vfmgr_remove_inactive_vfs()) fall back to a
+		 * fresh mapping so the VF isn't left without FFBM mappings.
+		 */
+		if (reserve && amdgv_list_empty(&entry->gpa_list))
+			reserve = false;
+
+		if (fb_size > 0 && !reserve) {
 			/* VF gap [0x200000, 0x200000+TMR size] map to PF TMR [0x200000, 0x200000+TMR size] -- manual map */
 			ret = amdgv_ffbm_manual_map(adapt, vf_idx,
 						    MBYTES_TO_BYTES(adapt->tmr_size),
@@ -852,7 +886,11 @@ int amdgv_ffbm_page_table_update_by_fcn(struct amdgv_adapter *adapt, uint32_t vf
 						AMDGV_FFBM_FB_TMR_OFFSET),
 				AMDGV_FFBM_PERM_RW, AMDGV_FFBM_MEM_TYPE_VF);
 		}
-		amdgv_ffbm_apply_page_table(adapt);
+
+		if (reserve)
+			amdgv_ffbm_apply_page_table_by_fcn(adapt, vf_idx); // minimum the impact of existing code
+		else
+			amdgv_ffbm_apply_page_table(adapt);
 	}
 
 	return ret;

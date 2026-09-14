@@ -12,6 +12,7 @@ struct amdgv_vcn_ras_funcs {
 
 struct amdgv_vcn {
 	int num_instances;
+	uint32_t active_mask;
 	struct ras_common_if	*ras_if;
 	const struct amdgv_vcn_ras_funcs	*funcs;
 };

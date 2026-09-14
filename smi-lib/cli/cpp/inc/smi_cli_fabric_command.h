@@ -17,6 +17,6 @@ public:
 	void fabric_command_human();
 	void fabric_command_json();
 
-	int fabric_command_telemetry(uint64_t processor, std::string &formatted_string);
-	int fabric_command_topology(uint64_t processor, std::string &formatted_string);
+	int fabric_command_telemetry(uint64_t processor, std::string& formatted_string);
+	int fabric_command_topology(uint64_t processor, std::string& formatted_string);
 };

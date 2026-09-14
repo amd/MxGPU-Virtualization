@@ -5,26 +5,27 @@
 
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 class AmdSmiPlatform
 {
 private:
 	std::string operating_system;
-	bool is_host_{ false };
-	bool is_guest_os_{ false };
-	bool is_baremetal_{ false };
-	bool unknown_platform { false };
-	bool is_linux_{ false };
-	bool is_windows_{ false };
-	bool is_esxi_ { false };
-	bool is_mi300_{ false };
-	bool is_mi308_{ false };
-	bool is_mi350_{ false };
-	bool is_nv_ { false };
-	bool is_apu_ { false };
-	bool is_mi200_ { false };
-	bool is_mixxx_ { false };
+	bool is_host_ {false};
+	bool is_guest_os_ {false};
+	bool is_baremetal_ {false};
+	bool unknown_platform {false};
+	bool is_linux_ {false};
+	bool is_windows_ {false};
+	bool is_esxi_ {false};
+	bool is_mi300_ {false};
+	bool is_mi308_ {false};
+	bool is_mi350_ {false};
+	bool is_nv_ {false};
+	bool is_apu_ {false};
+	bool is_mi200_ {false};
+	bool is_gc_12_1_ {false};
 	/**
 	 * @brief Construct a new Amd Smi Helpers object
 	 *
@@ -36,14 +37,15 @@ private:
 	 * @param[in] cmd command for execution
 	 * @return command output
 	 */
-	std::string exec(const char *cmd);
+	std::string exec(const char* cmd);
+
 public:
 	/**
 	 * @brief Get the static class object
 	 *
 	 * @return static instance of AmdSmiPlatform class
 	 */
-	static AmdSmiPlatform &getInstance()
+	static AmdSmiPlatform& getInstance()
 	{
 		static AmdSmiPlatform instance;
 		return instance;
@@ -116,11 +118,21 @@ public:
 	 */
 	bool is_mi200();
 	/**
-	 * @brief Check if it is mixxx gpu
+	 * @brief Check if GC IP is 12.1
 	 *
-	 * @return true if it is mixxx gpu
+	 * @return true if target_graphics_version is GC 12.1
 	 */
-	bool is_mixxx();
+	bool is_gc_12_1();
+	/**
+	 * @brief Detect GC 12.1 from the GC IP version reported by SMI.
+	 *
+	 * Packed format is `(major << 16) | (minor << 8) | rev`. Matches GC 12.1
+	 * only;
+	 * Must be called after amdsmi_init() once target_graphics_version is available.
+	 *
+	 * @param[in] target_graphics_version packed GC IP from amdsmi_get_gpu_asic_info()
+	 */
+	void refine_gc_12_1_detection_from_graphics_version(uint64_t target_graphics_version);
 	/**
 	 * @brief Get the platform string
 	 *

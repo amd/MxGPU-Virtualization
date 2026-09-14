@@ -23,8 +23,7 @@ static int family_attr_cb(const struct nlattr *attr, void *data)
 
 static int family_cb(const struct nlmsghdr *nlh, void *data)
 {
-	return mnl_attr_parse(nlh, sizeof(struct genlmsghdr),
-			      family_attr_cb, data);
+	return mnl_attr_parse(nlh, sizeof(struct genlmsghdr), family_attr_cb, data);
 }
 
 int nl_resolve_family_id(struct nl_conn *conn, const char *name)
@@ -36,14 +35,14 @@ int nl_resolve_family_id(struct nl_conn *conn, const char *name)
 
 	memset(buf, 0, sizeof(buf));
 
-	nlh = mnl_nlmsg_put_header(buf);
-	nlh->nlmsg_type = GENL_ID_CTRL;
+	nlh		 = mnl_nlmsg_put_header(buf);
+	nlh->nlmsg_type	 = GENL_ID_CTRL;
 	nlh->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
-	nlh->nlmsg_seq = ++conn->seq;
-	nlh->nlmsg_pid = conn->port_id;
+	nlh->nlmsg_seq	 = ++conn->seq;
+	nlh->nlmsg_pid	 = conn->port_id;
 
-	genlh = mnl_nlmsg_put_extra_header(nlh, sizeof(*genlh));
-	genlh->cmd = CTRL_CMD_GETFAMILY;
+	genlh	       = mnl_nlmsg_put_extra_header(nlh, sizeof(*genlh));
+	genlh->cmd     = CTRL_CMD_GETFAMILY;
 	genlh->version = 2;
 
 	mnl_attr_put_strz(nlh, CTRL_ATTR_FAMILY_NAME, name);
@@ -54,8 +53,7 @@ int nl_resolve_family_id(struct nl_conn *conn, const char *name)
 
 	ret = mnl_socket_recvfrom(conn->soc, buf, sizeof(buf));
 	while (ret > 0) {
-		ret = mnl_cb_run(buf, ret, conn->seq, conn->port_id,
-				family_cb, &conn->family_id);
+		ret = mnl_cb_run(buf, ret, conn->seq, conn->port_id, family_cb, &conn->family_id);
 		if (ret <= MNL_CB_STOP) {
 			break;
 		}

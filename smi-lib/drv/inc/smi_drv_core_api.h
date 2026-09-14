@@ -19,8 +19,7 @@ struct smi_device_data {
 	int64_t parent;
 };
 
-int smi_core_init(struct oss_interface *oss_interface,
-		struct smi_shim_interface *shim_interface);
+int smi_core_init(struct oss_interface *oss_interface, struct smi_shim_interface *shim_interface);
 int smi_core_fini(void);
 
 int smi_core_open(file_t filp, bool is_privileged);

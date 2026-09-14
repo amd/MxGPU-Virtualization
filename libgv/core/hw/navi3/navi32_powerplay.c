@@ -32,43 +32,9 @@ static const uint32_t this_block = AMDGV_POWER_BLOCK;
 
 #define NAVI32_UMC_CHANNEL_NUM  16
 
-#define NAVI32_SMU_MB_CONTEXT_REGS_NUM	3
-static struct amdgv_reg_dump_info navi32_smu_mb_context_regs[NAVI32_SMU_MB_CONTEXT_REGS_NUM] = {
-	{
-		.name = "regMP1_SMN_C2PMSG_90 (resp)",
-		.hwip = MP1_HWIP,
-		.seg = regMP1_SMN_C2PMSG_90_BASE_IDX,
-		.logical_inst = 0,
-		.offset_hwip = regMP1_SMN_C2PMSG_90,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-	{
-		.name = "regMP1_SMN_C2PMSG_82 (param)",
-		.hwip = MP1_HWIP,
-		.seg = regMP1_SMN_C2PMSG_82_BASE_IDX,
-		.logical_inst = 0,
-		.offset_hwip = regMP1_SMN_C2PMSG_82,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-	{
-		.name = "regMP1_SMN_C2PMSG_66 (msg)",
-		.hwip = MP1_HWIP,
-		.seg = regMP1_SMN_C2PMSG_66_BASE_IDX,
-		.logical_inst = 0,
-		.offset_hwip = regMP1_SMN_C2PMSG_66,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	}
-};
-
 static int navi32_powerplay_send_msg_without_waiting(struct amdgv_adapter *adapt, uint16_t msg)
 {
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_MSG_START, 0, regMP1_SMN_C2PMSG_66, msg);
-
 	WREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_66), msg);
-
-	/* Add the message to diagnosis data trace log */
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_MSG_END, 0, regMP1_SMN_C2PMSG_66,
-		RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_66)));
 	return 0;
 }
 
@@ -76,6 +42,14 @@ static int navi32_powerplay_read_arg(struct amdgv_adapter *adapt, uint32_t *arg)
 {
 	*arg = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82));
 	return 0;
+}
+
+static void navi32_powerplay_put_timeout(struct amdgv_adapter *adapt, uint64_t elapsed)
+{
+	amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_TIMEOUT, elapsed,
+			  RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_66)),
+			  RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90)),
+			  RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82)));
 }
 
 static int navi32_powerplay_wait_for_response(struct amdgv_adapter *adapt, uint32_t *val,
@@ -86,14 +60,10 @@ static int navi32_powerplay_wait_for_response(struct amdgv_adapter *adapt, uint3
 	wait_ret = amdgv_wait_for_smu_msg_resp(adapt, SOC15_REG_OFFSET_NAME(MP1, 0, regMP1_SMN_C2PMSG_90),
 					       MP1_C2PMSG_90__CONTENT_MASK, 0,
 					       AMDGV_TIMEOUT(TIMEOUT_SMU_REG), AMDGV_WAIT_CHECK_NE,
-					       wait_type, navi32_smu_mb_context_regs, NAVI32_SMU_MB_CONTEXT_REGS_NUM);
+					       wait_type);
 
 	/* read as return value */
 	*val = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90));
-
-	/* Add the message to diagnosis data trace log */
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_READ_RESP, wait_ret, regMP1_SMN_C2PMSG_90,
-		RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90)));
 
 	if (wait_ret)
 		return AMDGV_FAILURE;
@@ -118,6 +88,9 @@ int navi32_powerplay_send_msg(struct amdgv_adapter *adapt, uint16_t msg)
 
 	WREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90), 0);
 
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_WRITE,
+		      AMDGV_LOG_DATA_32_32(msg, 0));
+
 	navi32_powerplay_send_msg_without_waiting(adapt, msg);
 
 	ret = navi32_powerplay_wait_for_response(adapt, &resp, AMDGV_WAIT_FOR_SMU_MSG_RESPONSE);
@@ -127,16 +100,16 @@ int navi32_powerplay_send_msg(struct amdgv_adapter *adapt, uint16_t msg)
 	}
 
 	if (resp != PPSMC_Result_OK) {
-		AMDGV_REG_DUMP(ERROR, "SMU responded with failure. SMU Mailbox contents:",
-			       navi32_smu_mb_context_regs,
-			       NAVI32_SMU_MB_CONTEXT_REGS_NUM);
+		// amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_FAIL, msg, resp,
+		// 		  RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82)));
+		AMDGV_ERROR("SMU responded with failure. Msg=0x%x, resp=0x%x, arg=0x%x\n",
+			    msg, resp, RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82)));
 		oss_mutex_unlock(adapt->pp.smu_lock);
 		return AMDGV_FAILURE;
 	}
 
-	AMDGV_REG_DUMP(DEBUG, "SMU responded with success. SMU Mailbox contents:",
-			navi32_smu_mb_context_regs,
-			NAVI32_SMU_MB_CONTEXT_REGS_NUM);
+	amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_RECV, msg, resp,
+			  RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82)));
 
 	oss_mutex_unlock(adapt->pp.smu_lock);
 
@@ -159,16 +132,11 @@ int navi32_powerplay_send_msg_with_param(struct amdgv_adapter *adapt, uint16_t m
 		}
 	}
 
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_ARG_START, 0,
-			regMP1_SMN_C2PMSG_82, param);
-
 	WREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90), 0);
-
 	WREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82), param);
 
-	/* Add the message to diagnosis data trace log */
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_ARG_END, 0, regMP1_SMN_C2PMSG_82,
-		RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82)));
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_WRITE,
+		      AMDGV_LOG_DATA_32_32(msg, param));
 
 	navi32_powerplay_send_msg_without_waiting(adapt, msg);
 
@@ -179,16 +147,16 @@ int navi32_powerplay_send_msg_with_param(struct amdgv_adapter *adapt, uint16_t m
 	}
 
 	if (resp != PPSMC_Result_OK) {
-		AMDGV_REG_DUMP(ERROR, "SMU responded with failure. SMU Mailbox contents:",
-			       navi32_smu_mb_context_regs,
-			       NAVI32_SMU_MB_CONTEXT_REGS_NUM);
+		// amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_FAIL, msg, resp,
+		// 		  RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82)));
+		AMDGV_ERROR("SMU responded with failure. Msg=0x%x, resp=0x%x, arg=0x%x\n",
+			    msg, resp, RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82)));
 		oss_mutex_unlock(adapt->pp.smu_lock);
 		return AMDGV_FAILURE;
 	}
 
-	AMDGV_REG_DUMP(DEBUG, "SMU responded with success. SMU Mailbox contents:",
-			navi32_smu_mb_context_regs,
-			NAVI32_SMU_MB_CONTEXT_REGS_NUM);
+	amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_RECV, msg, resp,
+			  RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82)));
 
 	oss_mutex_unlock(adapt->pp.smu_lock);
 
@@ -211,7 +179,8 @@ static int navi32_powerplay_initialize_dpm_context(struct amdgv_adapter *adapt)
 	smu = (struct smu_context *)(adapt->pp.smu_backend);
 	smu->smu_dpm_context = oss_zalloc(sizeof(struct smu_13_0_dpm_context));
 	if (smu->smu_dpm_context == NULL) {
-		AMDGV_ERROR("Failed to alloc memory for smu dpm context\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			      (uint64_t)sizeof(struct smu_13_0_dpm_context));
 		return AMDGV_FAILURE;
 	}
 
@@ -273,7 +242,8 @@ static int navi32_smu_initialize_pptable(struct amdgv_adapter *adapt)
 
 	table_context = oss_zalloc(sizeof(struct smu_table_context));
 	if (table_context == NULL) {
-		AMDGV_ERROR("Failed to alloc memory for smu table ctxt\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			      (uint64_t)sizeof(struct smu_table_context));
 		return AMDGV_FAILURE;
 	}
 
@@ -281,7 +251,8 @@ static int navi32_smu_initialize_pptable(struct amdgv_adapter *adapt)
 	table_context->power_play_table = oss_zalloc(table_context->power_play_table_size);
 
 	if (table_context->power_play_table == NULL) {
-		AMDGV_ERROR("Failed to alloc memory for pp tb\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			      (uint64_t)table_context->power_play_table_size);
 		return AMDGV_FAILURE;
 	}
 	smu->smu_table_context = table_context;
@@ -304,45 +275,52 @@ static int navi32_powerplay_initialize_smc_tables(struct amdgv_adapter *adapt)
 
 	table_context->watermark_table = oss_zalloc(sizeof(Watermarks_t));
 	if (table_context->watermark_table == NULL) {
-		AMDGV_ERROR("Failed to alloc memory for watermark tb\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			      (uint64_t)sizeof(Watermarks_t));
 		ret = AMDGV_FAILURE;
 		goto fail_free;
 	}
 	table_context->metrics_table = oss_zalloc(sizeof(SmuMetrics_t));
 	if (table_context->metrics_table == NULL) {
-		AMDGV_ERROR("Failed to alloc memory for smu metric tb\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			      (uint64_t)sizeof(SmuMetrics_t));
 		ret = AMDGV_FAILURE;
 		goto fail_free;
 	}
 	table_context->config_table = oss_zalloc(sizeof(DriverSmuConfig_t));
 	if (table_context->config_table == NULL) {
-		AMDGV_ERROR("Failed to alloc memory for smu config tb\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			      (uint64_t)sizeof(DriverSmuConfig_t));
 		ret = AMDGV_FAILURE;
 		goto fail_free;
 	}
 	table_context->overdrive_table = oss_zalloc(sizeof(OverDriveTable_t));
 	if (table_context->overdrive_table == NULL) {
-		AMDGV_ERROR("Failed to alloc memory for od tb\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			      (uint64_t)sizeof(OverDriveTable_t));
 		ret = AMDGV_FAILURE;
 		goto fail_free;
 	}
 	table_context->i2c_table = oss_zalloc(sizeof(SwI2cRequest_t));
 	if (table_context->i2c_table == NULL) {
-		AMDGV_ERROR("Failed to alloc memory for i2c tb\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			      (uint64_t)sizeof(SwI2cRequest_t));
 		ret = AMDGV_FAILURE;
 		goto fail_free;
 	}
 	table_context->activity_monitor_table =
 		oss_zalloc(sizeof(DpmActivityMonitorCoeffInt_t));
 	if (table_context->activity_monitor_table == NULL) {
-		AMDGV_ERROR("Failed to alloc memory for smu act tb\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			      (uint64_t)sizeof(DpmActivityMonitorCoeffInt_t));
 		ret = AMDGV_FAILURE;
 		goto fail_free;
 	}
 	table_context->ecc_info_table =
 		oss_zalloc(sizeof(EccInfoTable_t));
 	if (table_context->ecc_info_table == NULL) {
-		AMDGV_ERROR("Failed to alloc memory for smu ecc info tb\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			      (uint64_t)sizeof(EccInfoTable_t));
 		ret = AMDGV_FAILURE;
 		goto fail_free;
 	}
@@ -379,7 +357,6 @@ static int navi32_powerplay_initialize_smc_tables(struct amdgv_adapter *adapt)
 
 	ret = navi32_powerplay_initialize_dpm_context(adapt);
 	if (ret) {
-		AMDGV_ERROR("Failed to allocate memory for dpm context!\n");
 		ret = AMDGV_FAILURE;
 		goto fail_free;
 	}
@@ -432,7 +409,8 @@ static int navi32_powerplay_init_fb_allocations(struct amdgv_adapter *adapt)
 					 table_context->smc_pptable.alignment, MEM_SMC_PPTABLE);
 	if (!table_context->smc_pptable.mem) {
 		navi32_powerplay_destroy_smc_table(adapt);
-		AMDGV_ERROR("Failed to allocate memory for pp table!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL,
+			      (uint64_t)table_context->smc_pptable.size);
 		return AMDGV_FAILURE;
 	}
 	/* allocate space for watermark table */
@@ -443,7 +421,8 @@ static int navi32_powerplay_init_fb_allocations(struct amdgv_adapter *adapt)
 					 MEM_SMC_WATERMARK_TABLE);
 	if (!table_context->smc_watermark_table.mem) {
 		navi32_powerplay_destroy_smc_table(adapt);
-		AMDGV_ERROR("Failed to allocate memory for watermark table!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL,
+			      (uint64_t)table_context->smc_watermark_table.size);
 		return AMDGV_FAILURE;
 	}
 	/* allocate space for metrics table */
@@ -454,7 +433,8 @@ static int navi32_powerplay_init_fb_allocations(struct amdgv_adapter *adapt)
 					 MEM_SMC_METRICS_TABLE);
 	if (!table_context->smc_metrics_table.mem) {
 		navi32_powerplay_destroy_smc_table(adapt);
-		AMDGV_ERROR("Failed to allocate memory for metrics table!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL,
+			      (uint64_t)table_context->smc_metrics_table.size);
 		return AMDGV_FAILURE;
 	}
 	/* allocate space for smu driver config table */
@@ -465,7 +445,8 @@ static int navi32_powerplay_init_fb_allocations(struct amdgv_adapter *adapt)
 					 MEM_SMU_CONFIG_TABLE);
 	if (!table_context->smc_driver_smu_config_table.mem) {
 		navi32_powerplay_destroy_smc_table(adapt);
-		AMDGV_ERROR("Failed to allocate memory for smu config table!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL,
+			      (uint64_t)table_context->smc_driver_smu_config_table.size);
 		return AMDGV_FAILURE;
 	}
 	/* allocate space for overdrive table */
@@ -476,7 +457,8 @@ static int navi32_powerplay_init_fb_allocations(struct amdgv_adapter *adapt)
 					 MEM_SMC_OVERRIDE_TABLE);
 	if (!table_context->smc_overdrive_table.mem) {
 		navi32_powerplay_destroy_smc_table(adapt);
-		AMDGV_ERROR("Failed to allocate memory for overdrive table!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL,
+			      (uint64_t)table_context->smc_overdrive_table.size);
 		return AMDGV_FAILURE;
 	}
 	/* allocate space for I2C command table */
@@ -485,7 +467,8 @@ static int navi32_powerplay_init_fb_allocations(struct amdgv_adapter *adapt)
 					 table_context->smc_i2c_table.alignment, MEM_SMC_I2C_TABLE);
 	if (!table_context->smc_i2c_table.mem) {
 		navi32_powerplay_destroy_smc_table(adapt);
-		AMDGV_ERROR("Failed to allocate memory for I2c table!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL,
+			      (uint64_t)table_context->smc_i2c_table.size);
 		return AMDGV_FAILURE;
 	}
 	/* allocate space for activity monitor table */
@@ -496,8 +479,8 @@ static int navi32_powerplay_init_fb_allocations(struct amdgv_adapter *adapt)
 					 MEM_SMC_ACTIVITY_TABLE);
 	if (!table_context->smc_activity_monitor_table.mem) {
 		navi32_powerplay_destroy_smc_table(adapt);
-		AMDGV_ERROR("Failed to allocate memory for "
-			    "activity monitor table!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL,
+			      (uint64_t)table_context->smc_activity_monitor_table.size);
 		return AMDGV_FAILURE;
 	}
 	/* allocate space for tools table */
@@ -508,7 +491,8 @@ static int navi32_powerplay_init_fb_allocations(struct amdgv_adapter *adapt)
 					 MEM_SMC_PM_STATUS_TABLE);
 	if (!table_context->smc_pm_status_log_table.mem) {
 		navi32_powerplay_destroy_smc_table(adapt);
-		AMDGV_ERROR("Failed to allocate memory for tools table!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL,
+			      (uint64_t)table_context->smc_pm_status_log_table.size);
 		return AMDGV_FAILURE;
 	}
 	/* allocate space for ecc info table */
@@ -519,7 +503,8 @@ static int navi32_powerplay_init_fb_allocations(struct amdgv_adapter *adapt)
 					 MEM_SMU_ECC_INFO_TABLE);
 	if (!table_context->smc_ecc_info_table.mem) {
 		navi32_powerplay_destroy_smc_table(adapt);
-		AMDGV_ERROR("Failed to allocate memory for ecc info table!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL,
+			      (uint64_t)table_context->smc_ecc_info_table.size);
 		return AMDGV_FAILURE;
 	}
 
@@ -601,23 +586,17 @@ static int navi32_powerplay_smc_table_sw_init(struct amdgv_adapter *adapt)
 
 	ret = navi32_smu_initialize_pptable(adapt);
 
-	if (ret) {
-		AMDGV_ERROR("[navi32_smu_initialize_pptable] Failed!\n");
+	if (ret)
 		return ret;
-	}
 
 	ret = navi32_powerplay_initialize_smc_tables(adapt);
 
-	if (ret) {
-		AMDGV_ERROR("[navi32_powerplay_initialize_smc_tables]Failed!\n");
+	if (ret)
 		return ret;
-	}
 
 	ret = navi32_powerplay_init_fb_allocations(adapt);
-	if (ret) {
-		AMDGV_ERROR("Failed to alloc tables in fb!\n");
+	if (ret)
 		return AMDGV_FAILURE;
-	}
 
 	return 0;
 }
@@ -628,31 +607,23 @@ static int navi32_powerplay_smc_table_sw_fini(struct amdgv_adapter *adapt)
 	struct smu_context *smu = (struct smu_context *)(adapt->pp.smu_backend);
 
 	ret = navi32_powerplay_release_fb_allocations(adapt);
-	if (ret) {
-		AMDGV_ERROR("Failed to free tables in fb!\n");
+	if (ret)
 		return AMDGV_FAILURE;
-	}
 
 	ret = navi32_powerplay_destroy_smc_table(adapt);
 
-	if (ret) {
-		AMDGV_ERROR("[navi32_powerplay_destroy_smc_table] Failed!\n");
+	if (ret)
 		return ret;
-	}
 
 	ret = navi32_powerplay_destroy_dpm_context(adapt);
 
-	if (ret) {
-		AMDGV_ERROR("[navi32_powerplay_destroy_dpm_context] Failed!\n");
+	if (ret)
 		return ret;
-	}
 
 	ret = navi32_smu_destroy_pptable(adapt);
 
-	if (ret) {
-		AMDGV_ERROR("[navi32_smu_destroy_pptable] Failed!\n");
+	if (ret)
 		return ret;
-	}
 
 	oss_free(smu);
 
@@ -687,7 +658,7 @@ static int navi32_powerplay_check_fw_status(struct amdgv_adapter *adapt)
 
 	ret = navi32_powerplay_wait_for_fw_loaded(adapt);
 	if (ret)
-		AMDGV_ERROR("[navi32_powerplay_wait_for_fw_loaded] Failed!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_FW_NOT_READY, 0);
 	else
 		/* Fix to avoid gim wait too long and timeout before we send first
 		 * smu message, since SMU does not init all the response registers to 1.
@@ -727,7 +698,8 @@ static int navi32_powerplay_get_vbios_bootup_values(struct amdgv_adapter *adapt)
 		return ret;
 	}
 	if (header->format_revision != 3) {
-		AMDGV_ERROR("unknowned atom_firmware_info_version for smu13!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_INVALID_VALUE,
+			      (uint64_t)header->format_revision);
 		return AMDGV_FAILURE;
 	}
 
@@ -812,9 +784,69 @@ static int navi32_powerplay_append_vbios_pptable(struct amdgv_adapter *adapt)
 	if (dpm != NULL) {
 		oss_memcpy(board_table, &(dpm->BoardTable), sizeof(BoardTable_t));
 	} else {
-		AMDGV_ERROR("failed to get smc dpm info from vbios!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_PPTABLE_INVALID, 0);
 		return AMDGV_FAILURE;
 	}
+
+	return 0;
+}
+
+static int navi32_powerplay_get_sku_table(struct amdgv_adapter *adapt,
+					  SkuTable_t **sku)
+{
+	struct smu_context *smu;
+	struct smu_table_context *table_context;
+	struct smu_13_0_0_powerplay_table *powerplay_table;
+
+	if (!adapt || !sku)
+		return AMDGV_FAILURE;
+
+	smu = (struct smu_context *)(adapt->pp.smu_backend);
+	if (!smu)
+		return AMDGV_FAILURE;
+
+	table_context = (struct smu_table_context *)(smu->smu_table_context);
+	if (!table_context || !table_context->power_play_table)
+		return AMDGV_FAILURE;
+
+	powerplay_table = (struct smu_13_0_0_powerplay_table *)table_context->power_play_table;
+	*sku = &powerplay_table->smc_pptable.SkuTable;
+
+	return 0;
+}
+
+static int navi32_powerplay_get_max_configurable_power_limit(struct amdgv_adapter *adapt,
+							     int *power_limit)
+{
+	SkuTable_t *sku;
+	int ret;
+
+	if (!power_limit)
+		return AMDGV_FAILURE;
+
+	ret = navi32_powerplay_get_sku_table(adapt, &sku);
+	if (ret)
+		return ret;
+
+	*power_limit = sku->MsgLimits.Power[PPT_THROTTLER_PPT0][POWER_SOURCE_AC];
+
+	return 0;
+}
+
+static int navi32_powerplay_get_default_power_limit(struct amdgv_adapter *adapt,
+						    int *default_power)
+{
+	SkuTable_t *sku;
+	int ret;
+
+	if (!default_power)
+		return AMDGV_FAILURE;
+
+	ret = navi32_powerplay_get_sku_table(adapt, &sku);
+	if (ret)
+		return ret;
+
+	*default_power = sku->SocketPowerLimitAc[PPT_THROTTLER_PPT0];
 
 	return 0;
 }
@@ -884,11 +916,13 @@ static int navi32_powerplay_check_pptable(struct amdgv_adapter *adapt)
 	AMDGV_INFO("PPTable Debu Overrides=0x%x\n", powerplay_table->smc_pptable.SkuTable.DebugOverrides);
 
 	if (SMU_13_0_0_TABLE_FORMAT_REVISION > powerplay_table->header.format_revision) {
-		AMDGV_ERROR("Unsupported PP table format!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_PPTABLE_FORMAT_UNSUPPORTED,
+			      AMDGV_LOG_DATA_32_32(powerplay_table->header.format_revision,
+						   SMU_13_0_0_TABLE_FORMAT_REVISION));
 		return 0;
 	}
 	if (powerplay_table->header.structuresize == 0) {
-		AMDGV_ERROR("Invalid PP table!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_PPTABLE_INVALID, 0);
 		return 0;
 	}
 
@@ -936,7 +970,7 @@ static int navi32_powerplay_parse_default_dpm_tables(struct amdgv_adapter *adapt
 		NUM_DCFCLK_DPM_LEVELS < num_clk_level[PPCLK_DCFCLK] ||
 		NUM_DTBCLK_DPM_LEVELS < num_clk_level[PPCLK_DTBCLK] ||
 		NUM_FCLK_DPM_LEVELS < num_clk_level[PPCLK_FCLK]) {
-		AMDGV_ERROR("Get invalid value from DpmDescriptor!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_INVALID_DPM_DESCRIPTOR, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -951,7 +985,7 @@ static int navi32_powerplay_parse_default_dpm_tables(struct amdgv_adapter *adapt
 		num_clk_level[PPCLK_DCFCLK] == 0 ||
 		num_clk_level[PPCLK_DTBCLK] == 0 ||
 		num_clk_level[PPCLK_FCLK] == 0) {
-		AMDGV_ERROR("Get 0 from DpmDescriptor!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_INVALID_DPM_DESCRIPTOR, 0);
 		return AMDGV_FAILURE;
 	}
 	cur_tb->soc_table.min = driver_sku_tbl->FreqTableSocclk[0];
@@ -1188,6 +1222,100 @@ int navi32_powerplay_get_clock_limit(struct amdgv_adapter *adapt, enum pp_clock_
 	return ret;
 }
 
+static int navi32_powerplay_set_clock_limit_driver_freq(struct amdgv_adapter *adapt,
+							enum pp_clock_type clk,
+							enum pp_clock_limit_type limit_type,
+							uint32_t freq)
+{
+	uint32_t ppclk;
+	uint32_t param;
+	uint16_t msg;
+	int ret;
+
+	if (!navi32_powerplay_check_clock_type(adapt, clk))
+		return AMDGV_FAILURE;
+
+	ppclk = navi32_powerplay_convert_clk_type(adapt, clk);
+	if (ppclk == 0xFFFF)
+		return AMDGV_FAILURE;
+
+	switch (limit_type) {
+	case PP_CLOCK_LIMIT_TYPE__SOFT_MIN:
+		msg = SMU_13_0_MSG__SET_SOFT_MIN_BY_FREQ;
+		break;
+	case PP_CLOCK_LIMIT_TYPE__SOFT_MAX:
+		msg = SMU_13_0_MSG__SET_SOFT_MAX_BY_FREQ;
+		break;
+	default:
+		AMDGV_ERROR("clock limit isn't supported\n");
+		return AMDGV_FAILURE;
+	}
+
+	/* PPCLK selector in bits [31:16], frequency in MHz in bits [15:0]. */
+	param = ppclk | (freq & 0xffff);
+
+	ret = navi32_powerplay_send_msg_with_param(adapt, msg, param);
+	if (ret) {
+		AMDGV_ERROR("Failed to set clk type %d limit %d to %u MHz\n",
+			    clk, limit_type, freq);
+		return AMDGV_FAILURE;
+	}
+
+	return 0;
+}
+
+static int navi32_powerplay_migration_boost_clk(struct amdgv_adapter *adapt)
+{
+	uint32_t max_freq = 0;
+	int ret;
+
+	ret = navi32_powerplay_get_clock_limit(adapt, PP_CLOCK_TYPE__UCLK,
+					       PP_CLOCK_LIMIT_TYPE__SOFT_MAX, &max_freq);
+	if (ret || max_freq == 0)
+		return AMDGV_FAILURE;
+
+	ret = navi32_powerplay_set_clock_limit_driver_freq(adapt, PP_CLOCK_TYPE__UCLK,
+					       PP_CLOCK_LIMIT_TYPE__SOFT_MAX, max_freq);
+	if (ret)
+		return ret;
+
+	return navi32_powerplay_set_clock_limit_driver_freq(adapt, PP_CLOCK_TYPE__UCLK,
+					       PP_CLOCK_LIMIT_TYPE__SOFT_MIN, max_freq);
+}
+
+static int navi32_powerplay_migration_restore_clk(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	uint32_t max_freq = 0;
+	uint32_t min_freq = 0;
+	int ret;
+
+	/* A single-VF import target keeps the boosted clock: PMFW imports the
+	 * VF's frequencies and the host must not overwrite them. Every other
+	 * case (export, or multi-VF import) restores the default DPM range.
+	 */
+	if (adapt->num_vf == 1 &&
+	    adapt->live_migration.mig_state[idx_vf].is_target)
+		return 0;
+
+	ret = navi32_powerplay_get_clock_limit(adapt, PP_CLOCK_TYPE__UCLK,
+					       PP_CLOCK_LIMIT_TYPE__SOFT_MAX, &max_freq);
+	if (ret)
+		return ret;
+
+	ret = navi32_powerplay_get_clock_limit(adapt, PP_CLOCK_TYPE__UCLK,
+					       PP_CLOCK_LIMIT_TYPE__SOFT_MIN, &min_freq);
+	if (ret)
+		return ret;
+
+	ret = navi32_powerplay_set_clock_limit_driver_freq(adapt, PP_CLOCK_TYPE__UCLK,
+					       PP_CLOCK_LIMIT_TYPE__SOFT_MAX, max_freq);
+	if (ret)
+		return ret;
+
+	return navi32_powerplay_set_clock_limit_driver_freq(adapt, PP_CLOCK_TYPE__UCLK,
+					       PP_CLOCK_LIMIT_TYPE__SOFT_MIN, min_freq);
+}
+
 static int navi32_powerplay_populate_smc_pptable(struct amdgv_adapter *adapt)
 {
 	int ret = 0;
@@ -1207,14 +1335,11 @@ static int navi32_powerplay_check_fw_version(struct amdgv_adapter *adapt)
 		ret = navi32_powerplay_read_arg(adapt, &driver_version);
 		if (ret == 0) {
 			if (driver_version != adapt->pp.smu_fw_version) {
-				AMDGV_ERROR("SMU driver version(0x%x) doesn't"
-					    " match SW-defined version(0x%x)!\n",
-					    driver_version, adapt->pp.smu_fw_version);
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_VERSION_MISMATCH,
+					      AMDGV_LOG_DATA_32_32(driver_version, adapt->pp.smu_fw_version));
 				ret = AMDGV_FAILURE;
 			}
 		}
-	} else {
-		AMDGV_ERROR("Failed to get F/W version!\n");
 	}
 
 	return ret;
@@ -1597,10 +1722,8 @@ static int navi32_powerplay_set_driver_smu_config(struct amdgv_adapter *adapt)
 	config->SocketPowerLpfTau = 100; // 100ms
 
 	ret = navi32_powerplay_write_smc_table(adapt, TABLE_DRIVER_SMU_CONFIG);
-	if (ret) {
-		AMDGV_ERROR("Failed to copy smu config table to SMU!\n");
+	if (ret)
 		return AMDGV_FAILURE;
-	}
 
 	return 0;
 }
@@ -1664,10 +1787,8 @@ static int navi32_powerplay_set_custom_workload(struct amdgv_adapter *adapt)
 
 	ret = navi32_powerplay_read_smc_table(adapt, (WORKLOAD_PPLIB_CUSTOM_BIT << 16) |
 							    TABLE_ACTIVITY_MONITOR_COEFF);
-	if (ret) {
-		AMDGV_ERROR("failed to read compute activity table!\n");
+	if (ret)
 		return AMDGV_FAILURE;
-	}
 
 /*
 	coeff->Gfx_ActiveHystLimit = 0;
@@ -1704,10 +1825,8 @@ static int navi32_powerplay_set_custom_workload(struct amdgv_adapter *adapt)
 	coeff->Gfx_PD_Data_time_constant = (adapt->num_vf == 1) ? 0xa : 0x64;
 	ret = navi32_powerplay_write_smc_table(adapt, TABLE_ACTIVITY_MONITOR_COEFF);
 
-	if (ret) {
-		AMDGV_ERROR("failed to write custom activity table!\n");
+	if (ret)
 		return AMDGV_FAILURE;
-	}
 
 	workload_mask  = 1 << WORKLOAD_PPLIB_CUSTOM_BIT;
 	workload_mask |= 1 << WORKLOAD_PPLIB_POWER_SAVING_BIT;
@@ -1715,10 +1834,8 @@ static int navi32_powerplay_set_custom_workload(struct amdgv_adapter *adapt)
 	ret = navi32_powerplay_send_msg_with_param(adapt, SMU_13_0_MSG__SET_WORKLOAD_MASK,
 						  workload_mask);
 
-	if (ret) {
-		AMDGV_ERROR("failed to set custom workload policy!\n");
+	if (ret)
 		return AMDGV_FAILURE;
-	}
 
 	return ret;
 }
@@ -1768,38 +1885,20 @@ static int navi32_powerplay_smc_table_hw_init(struct amdgv_adapter *adapt)
 		navi32_powerplay_read_pptable_from_vbios(adapt);
 
 	ret = navi32_powerplay_check_pptable(adapt);
-	if (ret) {
-		AMDGV_ERROR("Failed at PP table check!\n");
+	if (ret)
 		return AMDGV_FAILURE;
-	}
 
 	ret = navi32_powerplay_populate_smc_pptable(adapt);
-	if (ret) {
-		AMDGV_ERROR("Failed to populate smc PP table!\n");
+	if (ret)
 		return AMDGV_FAILURE;
-	}
 
 	ret = navi32_powerplay_check_fw_version(adapt);
-	if (ret) {
-		AMDGV_ERROR("Firmware version check failed!\n");
+	if (ret)
 		return AMDGV_FAILURE;
-	}
 
 	ret = navi32_powerplay_set_tool_table_location(adapt);
-	if (ret) {
-		AMDGV_ERROR("Failed to set tool table location!\n");
+	if (ret)
 		return AMDGV_FAILURE;
-	}
-
-	AMDGV_INFO("smc i2c cmd table, gpu addr:0x%llx base:0x%llx offs0:0x%llx offs:0x%llx len:0x%llx\n",
-		 amdgv_memmgr_get_gpu_addr(table_context->smc_i2c_table.mem),
-		 table_context->smc_i2c_table.mem->memmgr->mc_base,
-		 table_context->smc_i2c_table.mem->memmgr->offset,
-		 table_context->smc_i2c_table.mem->alloc_off,
-		 table_context->smc_i2c_table.mem->len);
-	AMDGV_INFO("smc i2c cmd table, mmdown:%d size:0x%llx\n",
-		 table_context->smc_i2c_table.mem->memmgr->down,
-		 table_context->smc_i2c_table.mem->memmgr->size);
 
 	return 0;
 }
@@ -1820,16 +1919,14 @@ int navi32_enter_baco(struct amdgv_adapter *adapt)
 	/* check if fused for BACO */
 	reg_data = RREG32(SOC15_REG_OFFSET(NBIO, 0, regRCC_STRAP0_RCC_BIF_STRAP0));
 	if (!(reg_data & RCC_BIF_STRAP0__STRAP_PX_CAPABLE_MASK)) {
-		AMDGV_ERROR("BACO not supported! SMU strapped Default-Deny\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_BACO_NOT_SUPPORTED, 0);
 		return AMDGV_FAILURE;
 	}
 
 	/* check if BACO support is enabled */
 	ret = navi32_powerplay_send_msg(adapt, SMU_13_0_MSG__GET_ENABLED_SMU_FEATURES_LOW);
-	if (ret) {
-		AMDGV_ERROR("Unable to request SMU features enabled\n");
+	if (ret)
 		return AMDGV_FAILURE;
-	}
 	ret = navi32_powerplay_read_arg(adapt, &reg_data);
 	if (ret) {
 		AMDGV_ERROR("Unable to get SMU features enabled\n");
@@ -1841,18 +1938,14 @@ int navi32_enter_baco(struct amdgv_adapter *adapt)
 		reg_data |= baco_enable_bit;
 		ret = navi32_powerplay_send_msg_with_param(
 			adapt, SMU_13_0_MSG__ENABLE_SMU_FEATURES_LOW, reg_data);
-		if (ret) {
-			AMDGV_ERROR("Unable to re-enable SMU BACO support\n");
+		if (ret)
 			return AMDGV_FAILURE;
-		}
 	}
 
 	AMDGV_DEBUG("entering BACO...\n");
 	ret = navi32_powerplay_send_msg_with_param(adapt, SMU_13_0_MSG__ENTER_BACO, 0);
-	if (ret) {
-		AMDGV_ERROR("failed to message SMU to enter BACO\n");
+	if (ret)
 		return AMDGV_FAILURE;
-	}
 
 	/* allow time for SMU to complete entering BACO */
 	oss_msleep(100);
@@ -1862,10 +1955,8 @@ int navi32_enter_baco(struct amdgv_adapter *adapt)
 					   BACO_CNTL__BACO_MODE_MASK, 0,
 					   AMDGV_TIMEOUT(TIMEOUT_RESET), AMDGV_WAIT_CHECK_NE, 0);
 
-	if (wait_ret) {
-		AMDGV_ERROR("TIMEOUT waiting SMU to enter BACO\n");
+	if (wait_ret)
 		return AMDGV_FAILURE;
-	}
 
 	AMDGV_DEBUG("enter BACO completed\n");
 	return 0;
@@ -1878,17 +1969,13 @@ int navi32_exit_baco(struct amdgv_adapter *adapt)
 	int wait_ret;
 
 	reg_data = RREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BACO_CNTL));
-	if (!(reg_data & BACO_CNTL__BACO_MODE_MASK)) {
-		AMDGV_ERROR("Attempt to re-exit BACO\n");
+	if (!(reg_data & BACO_CNTL__BACO_MODE_MASK))
 		return AMDGV_FAILURE;
-	}
 
 	AMDGV_DEBUG("exiting BACO...\n");
 	ret = navi32_powerplay_send_msg(adapt, SMU_13_0_MSG__EXIT_BACO);
-	if (ret) {
-		AMDGV_ERROR("failed to message SMU to exit BACO\n");
+	if (ret)
 		return AMDGV_FAILURE;
-	}
 
 	/* allow time for all blocks to complete RESET */
 	oss_msleep(100);
@@ -1899,7 +1986,6 @@ int navi32_exit_baco(struct amdgv_adapter *adapt)
 					   AMDGV_TIMEOUT(TIMEOUT_RESET), AMDGV_WAIT_CHECK_EQ, 0);
 
 	if (wait_ret) {
-		AMDGV_ERROR("TIMEOUT waiting SMU to exit BACO\n");
 		return AMDGV_FAILURE;
 	} else {
 		AMDGV_DEBUG("exit BACO completed\n");
@@ -1945,10 +2031,6 @@ int navi32_wait_mode1_reset_completion(struct amdgv_adapter *adapt)
 	/* read as return value */
 	resp = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_54));
 
-	/* Add the message to diagnosis data trace log */
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_READ_RESP, ret, regMP1_SMN_C2PMSG_54,
-		RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_54)));
-
 	if (ret == AMDGV_FAILURE || resp != PPSMC_Result_OK) {
 		AMDGV_ERROR("Failed to send message 0x%x C2PMSG_54, response 0x%x\n",
 			DEBUGSMC_MSG_Mode1Reset, resp);
@@ -1974,28 +2056,13 @@ int navi32_powerplay_wait_idle(struct amdgv_adapter *adapt, int timeout)
 	 * If SMU responds successfully, means SMU is IDLE
 	 */
 	WREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90), 0);
-
-	/* Set param, and add parameters start/end to diagnosis data */
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_ARG_START, 0,
-			regMP1_SMN_C2PMSG_82, param);
 	WREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82), param);
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_ARG_END, 0, regMP1_SMN_C2PMSG_82,
-		RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82)));
-
-	/* Set msg, and add parameters start/end to diagnosis data */
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_MSG_START, 0, regMP1_SMN_C2PMSG_66,
-		PPSMC_MSG_TestMessage);
 	WREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_66), PPSMC_MSG_TestMessage);
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_MSG_END, 0, regMP1_SMN_C2PMSG_66,
-		RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_66)));
 
 	if (navi32_powerplay_wait_for_response(adapt, &rd, AMDGV_WAIT_FOR_SMU_CHECK_HANG)) {
 		return 1; /* This may not be error! (depends on caller) */
 	}
 	rd = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82));
-
-	/* Add the message to diagnosis data trace log */
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_READ_ARG, 0, regMP1_SMN_C2PMSG_82, rd);
 
 	if (rd != (param + 1)) {
 		AMDGV_WARN("SMU responded (0x%08x) but expected (0x%08x)\n", rd, (param + 1));
@@ -2110,8 +2177,7 @@ static int navi32_powerplay_i2c_eeprom_read_data(struct amdgv_adapter *adapt,
 
 		AMDGV_DEBUG("i2c_eeprom_read_data, address = %x, bytes = %d\n",
 				  (uint16_t)address, numbytes);
-	} else
-		AMDGV_WARN("i2c_eeprom_read_data - error occurred :%x\n", ret);
+	}
 
 	return ret;
 }
@@ -2140,8 +2206,7 @@ static int navi32_powerplay_i2c_eeprom_write_data(struct amdgv_adapter *adapt,
 		 */
 		oss_msleep(10);
 
-	} else
-		AMDGV_WARN("i2c_write- error occurred :%x\n", ret);
+	}
 
 	return ret;
 }
@@ -2306,28 +2371,20 @@ static int navi32_parse_smu_table_info(struct amdgv_adapter *adapt)
 	int ret = 0;
 
 	ret = navi32_powerplay_get_vbios_bootup_values(adapt);
-	if (ret) {
-		AMDGV_ERROR("Failed to get VBIOS bootup values!\n");
+	if (ret)
 		return AMDGV_FAILURE;
-	}
 
 	ret = navi32_powerplay_read_pptable_from_vbios(adapt);
-	if (ret) {
-		AMDGV_ERROR("Failed to get PP table from VBIOS!\n");
+	if (ret)
 		return AMDGV_FAILURE;
-	}
 
 	ret = navi32_powerplay_append_vbios_pptable(adapt);
-	if (ret) {
-		AMDGV_ERROR("Failed to append VBIOS PP table!\n");
+	if (ret)
 		return AMDGV_FAILURE;
-	}
 
 	ret = navi32_powerplay_populate_smc_pptable(adapt);
-	if (ret) {
-		AMDGV_ERROR("Failed to populate smc PP table!\n");
+	if (ret)
 		return AMDGV_FAILURE;
-	}
 
 	return 0;
 }
@@ -2339,10 +2396,8 @@ static int navi32_powerplay_send_hbm_bad_channel_flag(struct amdgv_adapter *adap
 	/* message SMU to update the bad channel info on SMBUS */
 	ret = navi32_powerplay_send_msg_with_param(adapt,
 			SMU_13_0_MSG__SET_BAD_HBM_CHANNEL_FLAG, bad_channel_bitmap);
-	if (ret) {
-		AMDGV_ERROR("failed to message SMU to update bad channel bitmap\n");
+	if (ret)
 		ret = AMDGV_FAILURE;
-	}
 
 	return ret;
 }
@@ -2354,10 +2409,8 @@ static int navi32_powerplay_send_hbm_bad_page_num(struct amdgv_adapter *adapt, u
 	/* message SMU to update the bad page number on SMBUS */
 	ret = navi32_powerplay_send_msg_with_param(adapt,
 			SMU_13_0_MSG__SET_NUM_BAD_HBM_PAGES_RETIRED, size);
-	if (ret) {
-		AMDGV_ERROR("failed to message SMU to update HBM bad pages number\n");
+	if (ret)
 		ret = AMDGV_FAILURE;
-	}
 
 	return ret;
 }
@@ -2367,10 +2420,8 @@ static int navi32_powerplay_disallow_gfxoff(struct amdgv_adapter *adapt)
 	int ret = 0;
 
 	ret = navi32_powerplay_send_msg(adapt, SMU_13_0_MSG__DISALLOW_GFX_OFF);
-	if (ret) {
-		AMDGV_ERROR("Failed to Disallow GFXOFF\n");
+	if (ret)
 		ret = AMDGV_FAILURE;
-	}
 
 	return ret;
 }
@@ -2392,10 +2443,8 @@ int navi32_powerplay_enable_smu_features(struct amdgv_adapter *adapt)
 
 	ret = navi32_powerplay_send_msg_with_param(
 					adapt, SMU_13_0_MSG__ENABLE_ALL_SMU_FEATURES, 0);
-	if (ret) {
-		AMDGV_ERROR("Failed to Enable all SMU Features\n");
+	if (ret)
 		ret = AMDGV_FAILURE;
-	}
 
 	return ret;
 }
@@ -2407,17 +2456,13 @@ int navi32_power_on_vcn(struct amdgv_adapter *adapt)
 	ret = navi32_powerplay_send_msg_with_param(
 					adapt, SMU_13_0_MSG__POWER_UP_VCN,
 					SMU_13_VCN0 | SMU_13_KEEP_UVDS_TILE_ON);
-	if (ret) {
-		AMDGV_ERROR("Failed to power on VCN0\n");
+	if (ret)
 		return AMDGV_FAILURE;
-	}
 
 	ret = navi32_powerplay_send_msg_with_param(
 					adapt, SMU_13_0_MSG__POWER_UP_VCN, SMU_13_VCN1);
-	if (ret) {
-		AMDGV_ERROR("Failed to power on VCN1\n");
+	if (ret)
 		ret = AMDGV_FAILURE;
-	}
 
 	return ret;
 }
@@ -2428,17 +2473,13 @@ int navi32_power_down_vcn(struct amdgv_adapter *adapt)
 
 	ret = navi32_powerplay_send_msg_with_param(
 					adapt, SMU_13_0_MSG__POWER_DOWN_VCN, SMU_13_VCN0);
-	if (ret) {
-		AMDGV_ERROR("Failed to power down VCN0\n");
+	if (ret)
 		return AMDGV_FAILURE;
-	}
 
 	ret = navi32_powerplay_send_msg_with_param(
 					adapt, SMU_13_0_MSG__POWER_DOWN_VCN, SMU_13_VCN1);
-	if (ret) {
-		AMDGV_ERROR("Failed to power down VCN1\n");
+	if (ret)
 		ret = AMDGV_FAILURE;
-	}
 
 	return ret;
 }
@@ -2452,15 +2493,13 @@ static int navi32_enter_power_saving(struct amdgv_adapter *adapt)
 	/* check if fused for BACO */
 	reg_data = RREG32(SOC15_REG_OFFSET(NBIO, 0, regRCC_STRAP0_RCC_BIF_STRAP0));
 	if (!(reg_data & RCC_BIF_STRAP0__STRAP_PX_CAPABLE_MASK)) {
-		AMDGV_ERROR("BACO not supported! SMU strapped Default-Deny\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_BACO_NOT_SUPPORTED, 0);
 		return AMDGV_FAILURE;
 	}
 
 	reg_data = RREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BACO_CNTL));
-	if (reg_data & BACO_CNTL__BACO_MODE_MASK) {
-		AMDGV_WARN("already entered BACO Power Saving\n");
+	if (reg_data & BACO_CNTL__BACO_MODE_MASK)
 		return 0;
-	}
 
 	return navi32_reset_enter_power_saving(adapt);
 }
@@ -2472,15 +2511,13 @@ static int navi32_exit_power_saving(struct amdgv_adapter *adapt)
 	/* check if fused for BACO */
 	reg_data = RREG32(SOC15_REG_OFFSET(NBIO, 0, regRCC_STRAP0_RCC_BIF_STRAP0));
 	if (!(reg_data & RCC_BIF_STRAP0__STRAP_PX_CAPABLE_MASK)) {
-		AMDGV_ERROR("BACO not supported! SMU strapped Default-Deny\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_BACO_NOT_SUPPORTED, 0);
 		return AMDGV_FAILURE;
 	}
 
 	reg_data = RREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX0_BACO_CNTL));
-	if (!(reg_data & BACO_CNTL__BACO_MODE_MASK)) {
-		AMDGV_ERROR("Attempt to re-exit BACO Power Saving\n");
+	if (!(reg_data & BACO_CNTL__BACO_MODE_MASK))
 		return AMDGV_FAILURE;
-	}
 
 	return navi32_reset_exit_power_saving(adapt);
 }
@@ -2496,7 +2533,7 @@ static int navi32_query_power_saving_status(struct amdgv_adapter *adapt,
 	/* check if fused for BACO */
 	reg_data = RREG32(SOC15_REG_OFFSET(NBIO, 0, regRCC_STRAP0_RCC_BIF_STRAP0));
 	if (!(reg_data & RCC_BIF_STRAP0__STRAP_PX_CAPABLE_MASK)) {
-		AMDGV_WARN("Powersaving BACO feature not supported \n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_BACO_NOT_SUPPORTED, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -2511,10 +2548,8 @@ static int navi32_query_power_saving_status(struct amdgv_adapter *adapt,
 
 static int navi32_prepare_unload(struct amdgv_adapter *adapt)
 {
-	if (navi32_powerplay_send_msg_with_param(adapt, SMU_13_0_MSG__PREPARE_MP1_FOR_UNLOAD, SRIOV_GC_RESET_VCN_ROUTER)) {
-		AMDGV_WARN("Fail to send unload to SMU\n");
+	if (navi32_powerplay_send_msg_with_param(adapt, SMU_13_0_MSG__PREPARE_MP1_FOR_UNLOAD, SRIOV_GC_RESET_VCN_ROUTER))
 		return AMDGV_FAILURE;
-	}
 
 	return 0;
 }
@@ -2586,7 +2621,6 @@ static int navi32_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv
 						adapt, i, AMDGV_EVENT_SCHED_FORCE_RESET_VF, AMDGV_SCHED_BLOCK_ALL);
 
 				if (ret) {
-					AMDGV_ERROR("Failed to trigger VFFLR for VF %d\n", i);
 					ret = AMDGV_FAILURE;
 					break;
 				}
@@ -2616,7 +2650,12 @@ const struct amdgv_pp_funcs navi32_amdgv_pp_funcs = {
 	.get_pp_metrics = navi32_powerplay_get_pp_metrics,
 	.get_ecc_info = navi32_powerplay_get_ecc_info,
 	.get_clock_limit = navi32_powerplay_get_clock_limit,
+	.set_clock_limit_driver_freq = navi32_powerplay_set_clock_limit_driver_freq,
+	.migration_boost_clk = navi32_powerplay_migration_boost_clk,
+	.migration_restore_clk = navi32_powerplay_migration_restore_clk,
 	.get_power_capacity = navi32_powerplay_get_power_capacity,
+	.get_max_configurable_power_limit = navi32_powerplay_get_max_configurable_power_limit,
+	.get_default_power_limit = navi32_powerplay_get_default_power_limit,
 	.get_dpm_capacity = navi32_powerplay_get_dpm_level_count,
 	.i2c_eeprom_xfer = navi32_powerplay_i2c_eeprom_i2c_xfer,
 	.get_fru_product_info = navi32_fru_get_product_info,
@@ -2631,6 +2670,7 @@ const struct amdgv_pp_funcs navi32_amdgv_pp_funcs = {
 	.exit_power_saving = navi32_exit_power_saving,
 	.query_power_saving_status = navi32_query_power_saving_status,
 	.set_workload_profile = navi32_powerplay_set_custom_workload,
+	.put_timeout = navi32_powerplay_put_timeout,
 };
 
 static int navi32_powerplay_sw_init(struct amdgv_adapter *adapt)
@@ -2646,16 +2686,12 @@ static int navi32_powerplay_hw_init(struct amdgv_adapter *adapt)
 
 	ret = navi32_powerplay_check_fw_status(adapt);
 
-	if (ret) {
-		AMDGV_ERROR("[navi32_powerplay_check_fw_status] Failed!\n");
+	if (ret)
 		return ret;
-	}
 
 	ret = navi32_powerplay_set_driver_smu_config(adapt);
-	if (ret) {
-		AMDGV_ERROR("[navi32_powerplay_set_driver_smu_config] Failed!\n");
+	if (ret)
 		return ret;
-	}
 
 	/* set to custom workload policy to support tuned FCLK/UCLK/GFXCLK DPM settings */
 	workload_mask  = 1 << WORKLOAD_PPLIB_CUSTOM_BIT;
@@ -2665,10 +2701,8 @@ static int navi32_powerplay_hw_init(struct amdgv_adapter *adapt)
 	workload_mask |= 1 << WORKLOAD_PPLIB_POWER_SAVING_BIT;
 
 	ret = navi32_powerplay_send_msg_with_param(adapt, SMU_13_0_MSG__SET_WORKLOAD_MASK, workload_mask);
-	if (ret) {
-		AMDGV_ERROR("Set workload policy failed!\n");
+	if (ret)
 		return ret;
-	}
 
 	navi32_powerplay_get_enabled_smu_features(adapt);
 	AMDGV_DEBUG("SMU_FEATURES = 0x%x\n", ((struct smu_context *)(adapt->pp.smu_backend))->features);
@@ -2681,10 +2715,8 @@ static int navi32_powerplay_hw_fini(struct amdgv_adapter *adapt)
 	int ret = 0;
 
 	ret = navi32_powerplay_smc_table_hw_fini(adapt);
-	if (ret) {
-		AMDGV_ERROR("[navi32_powerplay_smc_table_hw_fini] Failed!\n");
+	if (ret)
 		return ret;
-	}
 
 	return 0;
 }
@@ -2701,7 +2733,8 @@ static int navi32_smu_sw_init(struct amdgv_adapter *adapt)
 
 	smu = oss_zalloc(sizeof(struct smu_context));
 	if (smu == NULL) {
-		AMDGV_ERROR("Failed to alloc memory for smu context\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			      (uint64_t)sizeof(struct smu_context));
 		return AMDGV_FAILURE;
 	}
 	adapt->pp.smu_backend = smu;
@@ -2718,10 +2751,8 @@ static int navi32_smu_sw_fini(struct amdgv_adapter *adapt)
 	int ret = 0;
 
 	ret = navi32_powerplay_smc_table_sw_fini(adapt);
-	if (ret) {
-		AMDGV_ERROR("[navi32_powerplay_smc_table_sw_fini] Failed!\n");
+	if (ret)
 		return ret;
-	}
 
 	return ret;
 }
@@ -2732,8 +2763,6 @@ int navi32_powerplay_notify_no_dal(struct amdgv_adapter *adapt)
 
 #ifdef PPSMC_MSG_DALNotPresent
 	ret = navi32_powerplay_send_msg(adapt, SMU_13_0_MSG__DAL_NOT_PRESENT);
-	if (ret)
-		AMDGV_ERROR("Failed to Notify SMU about no DAL environment\n");
 #endif
 
 	return ret;
@@ -2744,16 +2773,12 @@ static int navi32_smu_hw_init(struct amdgv_adapter *adapt)
 	int ret = 0;
 
 	ret = navi32_powerplay_check_fw_status(adapt);
-	if (ret) {
-		AMDGV_ERROR("[navi32_powerplay_check_fw_status] Failed!\n");
+	if (ret)
 		return ret;
-	}
 
 	ret = navi32_powerplay_smc_table_hw_init(adapt);
-	if (ret) {
-		AMDGV_ERROR("[navi32_powerplay_smc_table_hw_init] Failed!\n");
+	if (ret)
 		return AMDGV_FAILURE;
-	}
 
 	/* Poll on IMU Start before start HW init */
 	ret = amdgv_wait_for_register(adapt, SOC15_REG_OFFSET_NAME(GC, 0, regGFX_IMU_MSG_FLAGS), 0x1, 0x1,
@@ -2778,10 +2803,8 @@ static int navi32_smu_hw_init(struct amdgv_adapter *adapt)
 
 
 	ret = navi32_powerplay_notify_no_dal(adapt);
-	if (ret) {
-		AMDGV_ERROR("[navi32_powerplay_notify_no_dal] Failed!\n");
+	if (ret)
 		return ret;
-	}
 
 	return 0;
 }
@@ -2791,10 +2814,8 @@ static int navi32_smu_hw_fini(struct amdgv_adapter *adapt)
 	int ret = 0;
 	if (0) {
 		ret = navi32_powerplay_smc_table_hw_fini(adapt);
-		if (ret) {
-			AMDGV_ERROR("[navi32_powerplay_smc_table_hw_fini] Failed!\n");
+		if (ret)
 			return ret;
-		}
 	}
 
 	return 0;
@@ -2802,7 +2823,6 @@ static int navi32_smu_hw_fini(struct amdgv_adapter *adapt)
 
 int navi32_powerplay_ras_report(struct amdgv_adapter *adapt, int ras_type)
 {
-	AMDGV_INFO("RAS type 0x%x is reported to OOB\n", ras_type);
 	return navi32_powerplay_send_msg_with_param(adapt, PPSMC_MSG_RAS_Alarms, ras_type);
 }
 

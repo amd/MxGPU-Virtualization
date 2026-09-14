@@ -18,10 +18,9 @@ using amdsmi::equal_handles;
 using amdsmi::g_system_mock;
 using amdsmi::SetResponseStatus;
 
-amdsmi_vf_handle_t MOCK_VF_HANDLE_BAD = { ( VF_MOCK_HANDLE.handle << 32) | 0x0003 };
+amdsmi_vf_handle_t MOCK_VF_HANDLE_BAD = {(VF_MOCK_HANDLE.handle << 32) | 0x0003};
 
-class AmdsmiUUIDTests : public amdsmi::AmdSmiTest {
-};
+class AmdsmiUUIDTests : public amdsmi::AmdSmiTest {};
 
 TEST_F(AmdsmiUUIDTests, InvalidParams)
 {
@@ -30,7 +29,7 @@ TEST_F(AmdsmiUUIDTests, InvalidParams)
 	unsigned int uuid_length = AMDSMI_GPU_UUID_SIZE;
 
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
-	amdsmi_processor_handle nic_handle = &NIC_MOCK_HANDLE;
+	amdsmi_processor_handle nic_handle	= &NIC_MOCK_HANDLE;
 
 	ret = amdsmi_get_gpu_device_uuid(MOCK_GPU_HANDLE, NULL, uuid);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
@@ -50,12 +49,11 @@ TEST_F(AmdsmiUUIDTests, GetUUIDFail)
 {
 	int ret;
 	char uuid[AMDSMI_GPU_UUID_SIZE];
-	unsigned int uuid_length = AMDSMI_GPU_UUID_SIZE;
+	unsigned int uuid_length		= AMDSMI_GPU_UUID_SIZE;
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 
-	EXPECT_CALL(*amdsmi::g_system_mock,
-		    Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_ASIC_INFO)))
-		.WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_API_FAILED));
+	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_ASIC_INFO)))
+	    .WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_API_FAILED));
 
 	ret = amdsmi_get_gpu_device_uuid(MOCK_GPU_HANDLE, &uuid_length, uuid);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
@@ -65,12 +63,12 @@ TEST_F(AmdsmiUUIDTests, GetUUID_PF)
 {
 	int ret;
 	char uuid[AMDSMI_GPU_UUID_SIZE];
-	unsigned int uuid_length = AMDSMI_GPU_UUID_SIZE;
+	unsigned int uuid_length		= AMDSMI_GPU_UUID_SIZE;
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 
 	smi_device_info in_payload;
 	smi_asic_info gpu_info_mock = {};
-	std::string name = "abcdef";
+	std::string name	    = "abcdef";
 #ifdef _WIN64
 	strcpy_s(gpu_info_mock.market_name, sizeof(gpu_info_mock.market_name), name.c_str());
 #else
@@ -79,9 +77,10 @@ TEST_F(AmdsmiUUIDTests, GetUUID_PF)
 
 	gpu_info_mock.vendor_id = 2;
 	gpu_info_mock.device_id = 3;
-	gpu_info_mock.rev_id = 4;
+	gpu_info_mock.rev_id	= 4;
 #ifdef _WIN64
-	strcpy_s(gpu_info_mock.asic_serial, sizeof(gpu_info_mock.asic_serial), "0x9A1F188C37CB1EE6");
+	strcpy_s(
+	    gpu_info_mock.asic_serial, sizeof(gpu_info_mock.asic_serial), "0x9A1F188C37CB1EE6");
 #else
 	strcpy(gpu_info_mock.asic_serial, "0x9A1F188C37CB1EE6");
 #endif
@@ -103,24 +102,28 @@ TEST_F(AmdsmiUUIDTests, GetUUID_VF)
 {
 	int ret;
 	char uuid[AMDSMI_GPU_UUID_SIZE];
-	unsigned int uuid_length = AMDSMI_GPU_UUID_SIZE;
+	unsigned int uuid_length	  = AMDSMI_GPU_UUID_SIZE;
 	amdsmi_vf_handle_t MOCK_VF_HANDLE = VF_MOCK_HANDLE;
 
 	smi_device_info in_payload;
-	smi_asic_info gpu_info_mock = {};
-	std::string name = "abcdef";
+	smi_asic_info_ex gpu_info_mock = {};
+	std::string name	       = "abcdef";
 #ifdef _WIN64
-	strcpy_s(gpu_info_mock.market_name, sizeof(gpu_info_mock.market_name), name.c_str());
+	strcpy_s(gpu_info_mock.asic_info.market_name,
+		 sizeof(gpu_info_mock.asic_info.market_name),
+		 name.c_str());
 #else
-	strcpy(gpu_info_mock.market_name, name.c_str());
+	strcpy(gpu_info_mock.asic_info.market_name, name.c_str());
 #endif
-	gpu_info_mock.vendor_id = 2;
-	gpu_info_mock.device_id = 0x74A1;
-	gpu_info_mock.rev_id = 4;
+	gpu_info_mock.asic_info.vendor_id = 2;
+	gpu_info_mock.asic_info.device_id = 0x74A1;
+	gpu_info_mock.asic_info.rev_id	  = 4;
 #ifdef _WIN64
-	strcpy_s(gpu_info_mock.asic_serial, sizeof(gpu_info_mock.asic_serial), "0x9A1F188C37CB1EE6");
+	strcpy_s(gpu_info_mock.asic_info.asic_serial,
+		 sizeof(gpu_info_mock.asic_info.asic_serial),
+		 "0x9A1F188C37CB1EE6");
 #else
-	strcpy(gpu_info_mock.asic_serial, "0x9A1F188C37CB1EE6");
+	strcpy(gpu_info_mock.asic_info.asic_serial, "0x9A1F188C37CB1EE6");
 #endif
 	smi_in_hdr actual_in_hdr;
 	smi_device_info device_info;
@@ -128,13 +131,16 @@ TEST_F(AmdsmiUUIDTests, GetUUID_VF)
 
 	testing::Mock::VerifyAndClearExpectations(g_system_mock.get());
 
-	vf_partition_info.num_vf_enabled = 1;
-	vf_partition_info.partition[0].id.handle = MOCK_VF_HANDLE_BAD.handle;
+	vf_partition_info.num_vf_enabled	    = 1;
+	vf_partition_info.partition[0].id.handle    = MOCK_VF_HANDLE_BAD.handle;
 	vf_partition_info.partition[0].fb.fb_offset = 0;
-	vf_partition_info.partition[0].fb.fb_size = 1024;
+	vf_partition_info.partition[0].fb.fb_size   = 1024;
 
-	PrepareIoctl(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO, &actual_in_hdr, &device_info,
-			vf_partition_info, AMDSMI_STATUS_SUCCESS);
+	PrepareIoctl(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO,
+		     &actual_in_hdr,
+		     &device_info,
+		     vf_partition_info,
+		     AMDSMI_STATUS_SUCCESS);
 
 	WhenCalling(std::bind(amdsmi_get_vf_uuid, MOCK_VF_HANDLE, &uuid_length, uuid));
 	ExpectCommand(SMI_CMD_CODE_GET_ASIC_INFO);
@@ -146,16 +152,19 @@ TEST_F(AmdsmiUUIDTests, GetUUID_VF)
 
 	testing::Mock::VerifyAndClearExpectations(g_system_mock.get());
 
-	vf_partition_info.num_vf_enabled = 2;
-	vf_partition_info.partition[0].id.handle = MOCK_VF_HANDLE_BAD.handle;
+	vf_partition_info.num_vf_enabled	    = 2;
+	vf_partition_info.partition[0].id.handle    = MOCK_VF_HANDLE_BAD.handle;
 	vf_partition_info.partition[0].fb.fb_offset = 0;
-	vf_partition_info.partition[0].fb.fb_size = 1024;
-	vf_partition_info.partition[1].id.handle = VF_MOCK_HANDLE.handle;
+	vf_partition_info.partition[0].fb.fb_size   = 1024;
+	vf_partition_info.partition[1].id.handle    = VF_MOCK_HANDLE.handle;
 	vf_partition_info.partition[1].fb.fb_offset = 2048;
-	vf_partition_info.partition[1].fb.fb_size = 1024;
+	vf_partition_info.partition[1].fb.fb_size   = 1024;
 
-	PrepareIoctl(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO, &actual_in_hdr, &device_info,
-			vf_partition_info, AMDSMI_STATUS_SUCCESS);
+	PrepareIoctl(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO,
+		     &actual_in_hdr,
+		     &device_info,
+		     vf_partition_info,
+		     AMDSMI_STATUS_SUCCESS);
 
 	WhenCalling(std::bind(amdsmi_get_vf_uuid, MOCK_VF_HANDLE, &uuid_length, uuid));
 	ExpectCommand(SMI_CMD_CODE_GET_ASIC_INFO);
@@ -168,11 +177,122 @@ TEST_F(AmdsmiUUIDTests, GetUUID_VF)
 	ASSERT_EQ(strcmp(uuid, "9a0174b5-0000-1000-801f-188c37cb1ee6"), 0);
 }
 
+TEST_F(AmdsmiUUIDTests, GetUUID_VF_UnlistedAsicUsesSriovCapability)
+{
+	int ret;
+	char uuid[AMDSMI_GPU_UUID_SIZE];
+	unsigned int uuid_length	  = AMDSMI_GPU_UUID_SIZE;
+	amdsmi_vf_handle_t MOCK_VF_HANDLE = VF_MOCK_HANDLE;
+
+	smi_device_info in_payload;
+	smi_asic_info_ex gpu_info_mock = {};
+	smi_in_hdr actual_in_hdr;
+	smi_device_info device_info;
+	smi_vf_partition_info vf_partition_info = {};
+
+	/* PF device id absent from the static PF-to-VF table. */
+	gpu_info_mock.asic_info.vendor_id = 2;
+	gpu_info_mock.asic_info.device_id = 0x75D0;
+	gpu_info_mock.asic_info.rev_id	  = 4;
+	gpu_info_mock.vf_device_id	  = 0x7540;
+#ifdef _WIN64
+	strcpy_s(gpu_info_mock.asic_info.asic_serial,
+		 sizeof(gpu_info_mock.asic_info.asic_serial),
+		 "0x9A1F188C37CB1EE6");
+#else
+	strcpy(gpu_info_mock.asic_info.asic_serial, "0x9A1F188C37CB1EE6");
+#endif
+
+	vf_partition_info.num_vf_enabled	    = 2;
+	vf_partition_info.partition[0].id.handle    = MOCK_VF_HANDLE_BAD.handle;
+	vf_partition_info.partition[0].fb.fb_offset = 0;
+	vf_partition_info.partition[0].fb.fb_size   = 1024;
+	vf_partition_info.partition[1].id.handle    = VF_MOCK_HANDLE.handle;
+	vf_partition_info.partition[1].fb.fb_offset = 2048;
+	vf_partition_info.partition[1].fb.fb_size   = 1024;
+
+	PrepareIoctl(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO,
+		     &actual_in_hdr,
+		     &device_info,
+		     vf_partition_info,
+		     AMDSMI_STATUS_SUCCESS);
+
+	WhenCalling(std::bind(amdsmi_get_vf_uuid, MOCK_VF_HANDLE, &uuid_length, uuid));
+	ExpectCommand(SMI_CMD_CODE_GET_ASIC_INFO);
+	SaveInputPayloadIn(&in_payload);
+	PlantMockOutput(&gpu_info_mock);
+	ret = performCall();
+
+	/* The VF device id comes from the SR-IOV capability, not the 0xFFFF sentinel. */
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(uuid_length, AMDSMI_GPU_UUID_SIZE);
+	ASSERT_EQ(strcmp(uuid, "9a017540-0000-1000-801f-188c37cb1ee6"), 0);
+}
+
+TEST_F(AmdsmiUUIDTests, GetUUID_VF_LegacyDriverFallsBackToTable)
+{
+	int ret;
+	char uuid[AMDSMI_GPU_UUID_SIZE];
+	unsigned int uuid_length	  = AMDSMI_GPU_UUID_SIZE;
+	amdsmi_vf_handle_t MOCK_VF_HANDLE = VF_MOCK_HANDLE;
+
+	smi_asic_info legacy_info = {};
+	smi_in_hdr extended_in_hdr;
+	smi_in_hdr legacy_in_hdr;
+	smi_device_info device_info;
+	smi_vf_partition_info vf_partition_info = {};
+
+	legacy_info.vendor_id = 2;
+	legacy_info.device_id = 0x74A1;
+	legacy_info.rev_id    = 4;
+#ifdef _WIN64
+	strcpy_s(legacy_info.asic_serial, sizeof(legacy_info.asic_serial), "0x9A1F188C37CB1EE6");
+#else
+	strcpy(legacy_info.asic_serial, "0x9A1F188C37CB1EE6");
+#endif
+
+	vf_partition_info.num_vf_enabled	    = 2;
+	vf_partition_info.partition[0].id.handle    = MOCK_VF_HANDLE_BAD.handle;
+	vf_partition_info.partition[0].fb.fb_offset = 0;
+	vf_partition_info.partition[0].fb.fb_size   = 1024;
+	vf_partition_info.partition[1].id.handle    = VF_MOCK_HANDLE.handle;
+	vf_partition_info.partition[1].fb.fb_offset = 2048;
+	vf_partition_info.partition[1].fb.fb_size   = 1024;
+
+	/* A host driver that predates smi_asic_info_ex rejects the extended output size,
+	 * so the query has to be retried with the original layout. */
+	{
+		testing::InSequence seq;
+
+		EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_ASIC_INFO)))
+		    .WillOnce(DoAll(amdsmi::SaveInputHeader(&extended_in_hdr),
+				    amdsmi::SetResponseStatus(AMDSMI_STATUS_INVAL)));
+		EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_ASIC_INFO)))
+		    .WillOnce(DoAll(amdsmi::SaveInputHeader(&legacy_in_hdr),
+				    amdsmi::SetPayload(legacy_info),
+				    Return(0)));
+		EXPECT_CALL(*g_system_mock,
+			    Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO)))
+		    .WillOnce(DoAll(amdsmi::SaveInputPayload(&device_info),
+				    amdsmi::SetPayload(vf_partition_info),
+				    Return(0)));
+	}
+
+	ret = amdsmi_get_vf_uuid(MOCK_VF_HANDLE, &uuid_length, uuid);
+
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	EXPECT_EQ(extended_in_hdr.out_len, (int16_t)sizeof(struct smi_asic_info_ex));
+	EXPECT_EQ(legacy_in_hdr.out_len, (int16_t)sizeof(struct smi_asic_info));
+	/* Without the SR-IOV value the VF device id comes from the PF-to-VF table. */
+	EXPECT_EQ(uuid_length, AMDSMI_GPU_UUID_SIZE);
+	EXPECT_EQ(strcmp(uuid, "9a0174b5-0000-1000-801f-188c37cb1ee6"), 0);
+}
+
 TEST_F(AmdsmiUUIDTests, GetUUID_VF_INVAL)
 {
 	int ret;
 	amdsmi_vf_handle_t MOCK_VF_HANDLE = VF_MOCK_HANDLE;
-	unsigned int uuid_length = AMDSMI_GPU_UUID_SIZE;
+	unsigned int uuid_length	  = AMDSMI_GPU_UUID_SIZE;
 
 	ret = amdsmi_get_vf_uuid(MOCK_VF_HANDLE, &uuid_length, NULL);
 
@@ -183,11 +303,11 @@ TEST_F(AmdsmiUUIDTests, GetUuidVfApiFail)
 {
 	int ret;
 	char uuid[AMDSMI_GPU_UUID_SIZE];
-	unsigned int uuid_length = AMDSMI_GPU_UUID_SIZE;
+	unsigned int uuid_length	  = AMDSMI_GPU_UUID_SIZE;
 	amdsmi_vf_handle_t MOCK_VF_HANDLE = VF_MOCK_HANDLE;
 
 	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_ASIC_INFO)))
-		.WillOnce(amdsmi::SetResponseStatus(AMDSMI_STATUS_API_FAILED));
+	    .WillOnce(amdsmi::SetResponseStatus(AMDSMI_STATUS_API_FAILED));
 	ret = amdsmi_get_vf_uuid(MOCK_VF_HANDLE, &uuid_length, uuid);
 
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);

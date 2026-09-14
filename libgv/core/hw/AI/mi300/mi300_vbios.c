@@ -208,6 +208,9 @@ static int mi300_vbios_early_sw_init(struct amdgv_adapter *adapt)
 	case (0x75A3):
 		name = "MI355X";
 		break;
+	case (0x75A8):
+		name = "MI350P";
+		break;
 	default:
 		name = "MI300X";
 		break;
@@ -317,6 +320,8 @@ static int mi300_vbios_early_hw_init(struct amdgv_adapter *adapt)
 			mi300_gfx_rlc_smu_handshake_cntl(adapt, true);
 	} else {
 		AMDGV_WARN("SMU fw not responding\n");
+		r = AMDGV_FAILURE;
+		goto failed;
 	}
 
 	mi300_mc_location_setting(adapt);

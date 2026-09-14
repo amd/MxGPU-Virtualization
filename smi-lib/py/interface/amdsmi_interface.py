@@ -7,7 +7,7 @@
 
 import ctypes
 import re
-from enum import IntEnum, Enum
+from enum import IntEnum, Enum, IntFlag
 from collections.abc import Iterable
 from typing import Any, Dict, List, Tuple, Union
 
@@ -117,6 +117,34 @@ class AmdSmiFabricAcceleratorVpodState(IntEnum):
     UNKNOWN = amdsmi_wrapper.AMDSMI_FABRIC_ACCELERATOR_VPOD_STATE_UNKNOWN
 
 
+class AmdSmiFabricPpodConfigVersion(IntEnum):
+    V1 = 1
+
+class AmdSmiFabricPpodField(IntFlag):
+    ACCEL_ID = 1 << 0
+    PPOD_ID = 1 << 1
+    PPOD_SIZE = 1 << 2
+    LOCAL_ACCELS = 1 << 3
+    BANDWIDTH = 1 << 4
+    LATENCY = 1 << 5
+
+class AmdSmiFabricVpodConfigVersion(IntEnum):
+    V1 = 1
+
+class AmdSmiFabricVpodField(IntFlag):
+    VPOD_ID = 1 << 0
+    VPOD_SIZE = 1 << 1
+    VPOD_ACTIVE_ACCELS = 1 << 2
+    ADDR_MODE = 1 << 3
+
+class AmdSmiFabricStationConfigVersion(IntEnum):
+    V1 = 1
+
+class AmdSmiFabricStationField(IntFlag):
+    STATION_FLAGS = 1 << 0
+    LANE_EN_BITMAP = 1 << 1
+    NUM_STATIONS = 1 << 2
+
 class AmdSmiVramType(IntEnum):
     UNKNOWN = amdsmi_wrapper.AMDSMI_VRAM_TYPE_UNKNOWN
     # HBM
@@ -125,6 +153,7 @@ class AmdSmiVramType(IntEnum):
     HBM2E = amdsmi_wrapper.AMDSMI_VRAM_TYPE_HBM2E
     HBM3 = amdsmi_wrapper.AMDSMI_VRAM_TYPE_HBM3
     HBM3E = amdsmi_wrapper.AMDSMI_VRAM_TYPE_HBM3E
+    HBM4 = amdsmi_wrapper.AMDSMI_VRAM_TYPE_HBM4
     # DDR
     DDR2 = amdsmi_wrapper.AMDSMI_VRAM_TYPE_DDR2
     DDR3 = amdsmi_wrapper.AMDSMI_VRAM_TYPE_DDR3
@@ -245,6 +274,20 @@ class AmdSmiFwBlock(IntEnum):
     FW_ID_PSP_RAS = amdsmi_wrapper.AMDSMI_FW_ID_PSP_RAS
     FW_ID_P2S_TABLE = amdsmi_wrapper.AMDSMI_FW_ID_P2S_TABLE
     FW_ID_PLDM_BUNDLE = amdsmi_wrapper.AMDSMI_FW_ID_PLDM_BUNDLE
+    FW_ID_RS64_MES = amdsmi_wrapper.AMDSMI_FW_ID_RS64_MES
+    FW_ID_RS64_MES_STACK = amdsmi_wrapper.AMDSMI_FW_ID_RS64_MES_STACK
+    FW_ID_RS64_KIQ = amdsmi_wrapper.AMDSMI_FW_ID_RS64_KIQ
+    FW_ID_RS64_KIQ_STACK = amdsmi_wrapper.AMDSMI_FW_ID_RS64_KIQ_STACK
+    FW_ID_RS64_MEC_P4_DATA = amdsmi_wrapper.AMDSMI_FW_ID_RS64_MEC_P4_DATA
+    FW_ID_RS64_MEC_P5_DATA = amdsmi_wrapper.AMDSMI_FW_ID_RS64_MEC_P5_DATA
+    FW_ID_RS64_MEC_P6_DATA = amdsmi_wrapper.AMDSMI_FW_ID_RS64_MEC_P6_DATA
+    FW_ID_RS64_MEC_P7_DATA = amdsmi_wrapper.AMDSMI_FW_ID_RS64_MEC_P7_DATA
+    FW_ID_LSDMA = amdsmi_wrapper.AMDSMI_FW_ID_LSDMA
+    FW_ID_MP5 = amdsmi_wrapper.AMDSMI_FW_ID_MP5
+    FW_ID_PSP_IPKEYMGR = amdsmi_wrapper.AMDSMI_FW_ID_PSP_IPKEYMGR
+    FW_ID_PSP_IOVM = amdsmi_wrapper.AMDSMI_FW_ID_PSP_IOVM
+    FW_ID_PSP_SPDM = amdsmi_wrapper.AMDSMI_FW_ID_PSP_SPDM
+    FW_ID_PSP_DPE = amdsmi_wrapper.AMDSMI_FW_ID_PSP_DPE
 
 class AmdSmiEventCategory(IntEnum):
     NOT_USED = amdsmi_wrapper.AMDSMI_EVENT_CATEGORY_NON_USED
@@ -673,6 +716,26 @@ class AmdSmiGpuBlock(IntEnum):
     JPEG = amdsmi_wrapper.AMDSMI_GPU_BLOCK_JPEG
     IH = amdsmi_wrapper.AMDSMI_GPU_BLOCK_IH
     MPIO = amdsmi_wrapper.AMDSMI_GPU_BLOCK_MPIO
+    MMSCH = amdsmi_wrapper.AMDSMI_GPU_BLOCK_MMSCH
+    MP5 = amdsmi_wrapper.AMDSMI_GPU_BLOCK_MP5
+    ATU = amdsmi_wrapper.AMDSMI_GPU_BLOCK_ATU
+    DACC_BE = amdsmi_wrapper.AMDSMI_GPU_BLOCK_DACC_BE
+    ECLR = amdsmi_wrapper.AMDSMI_GPU_BLOCK_ECLR
+    KPX_SERDES = amdsmi_wrapper.AMDSMI_GPU_BLOCK_KPX_SERDES
+    LSDMA = amdsmi_wrapper.AMDSMI_GPU_BLOCK_LSDMA
+    MPART = amdsmi_wrapper.AMDSMI_GPU_BLOCK_MPART
+    MPIFOE = amdsmi_wrapper.AMDSMI_GPU_BLOCK_MPIFOE
+    MPRAS = amdsmi_wrapper.AMDSMI_GPU_BLOCK_MPRAS
+    NBIF = amdsmi_wrapper.AMDSMI_GPU_BLOCK_NBIF
+    NBIO = amdsmi_wrapper.AMDSMI_GPU_BLOCK_NBIO
+    OXRP = amdsmi_wrapper.AMDSMI_GPU_BLOCK_OXRP
+    PCIE_PL = amdsmi_wrapper.AMDSMI_GPU_BLOCK_PCIE_PL
+    PCS_XGMI = amdsmi_wrapper.AMDSMI_GPU_BLOCK_PCS_XGMI
+    PIE = amdsmi_wrapper.AMDSMI_GPU_BLOCK_PIE
+    CS = amdsmi_wrapper.AMDSMI_GPU_BLOCK_CS
+    SHUB = amdsmi_wrapper.AMDSMI_GPU_BLOCK_SHUB
+    SSBDCI = amdsmi_wrapper.AMDSMI_GPU_BLOCK_SSBDCI
+    UCIE_PCS = amdsmi_wrapper.AMDSMI_GPU_BLOCK_UCIE_PCS
 
 
 class AmdSmiEccCorrectionSchemaSupport(IntEnum):
@@ -987,6 +1050,12 @@ class AmdSmiAffinityScope(IntEnum):
 class AmdSmiNpmStatus(IntEnum):
     DISABLED = amdsmi_wrapper.AMDSMI_NPM_STATUS_DISABLED
     ENABLED = amdsmi_wrapper.AMDSMI_NPM_STATUS_ENABLED
+
+class AmdSmiComputeTrayType(IntEnum):
+    UNKNOWN = amdsmi_wrapper.AMDSMI_COMPUTE_TRAY_TYPE_UNKNOWN
+    HELIOS_P = amdsmi_wrapper.AMDSMI_COMPUTE_TRAY_TYPE_HELIOS_P
+    HELIOS_R = amdsmi_wrapper.AMDSMI_COMPUTE_TRAY_TYPE_HELIOS_R
+    TITAN = amdsmi_wrapper.AMDSMI_COMPUTE_TRAY_TYPE_TITAN
 
 class AmdSmiTDIState(IntEnum):
     UNLOCKED = amdsmi_wrapper.AMDSMI_TDI_STATE_UNLOCKED
@@ -1503,7 +1572,8 @@ def amdsmi_get_gpu_asic_info(processor_handle):
         'num_of_compute_units': asic_info.num_of_compute_units,
         'target_graphics_version': asic_info.target_graphics_version,
         'subsystem_id': asic_info.subsystem_id,
-        'flags': asic_info.flags
+        'flags': asic_info.flags,
+        'physical_acc_id': asic_info.physical_acc_id
     }
     string_values = ['market_name', 'vendor_name']
     for value in string_values:
@@ -1520,6 +1590,9 @@ def amdsmi_get_gpu_asic_info(processor_handle):
     # Check for max value as a sign for not applicable
     if asic_info_struct['oam_id'] == 0xFFFFFFFF: # uint 32 max
         asic_info_struct['oam_id'] = "N/A"
+
+    if asic_info_struct['physical_acc_id'] == 0xFFFFFFFF:
+        asic_info_struct['physical_acc_id'] = "N/A"
 
     return asic_info_struct
 
@@ -3020,6 +3093,25 @@ def amdsmi_get_npm_info(node_handle):
         "ubb_power_threshold": npm_info.ubb_power_threshold
     }
 
+def amdsmi_get_tray_info(node_handle):
+    if not isinstance(node_handle, amdsmi_wrapper.amdsmi_node_handle):
+        raise AmdSmiParameterException(
+            node_handle, amdsmi_wrapper.amdsmi_node_handle)
+
+    tray_info = amdsmi_wrapper.amdsmi_tray_info_t()
+    # node_handle is reserved; the C API currently requires NULL.
+    _check_res(amdsmi_wrapper.amdsmi_get_tray_info(
+        amdsmi_wrapper.amdsmi_node_handle(), ctypes.byref(tray_info)))
+
+    max_acc = tray_info.max_acc_per_tray
+    if max_acc == 0xFFFFFFFF:
+        max_acc = "N/A"
+
+    return {
+        "max_acc_per_tray": max_acc,
+        "tray_type": AmdSmiComputeTrayType(tray_info.tray_type).name,
+    }
+
 def amdsmi_get_gpu_ras_policy_info(processor_handle):
     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
         raise AmdSmiParameterException(
@@ -3041,6 +3133,15 @@ def amdsmi_get_gpu_ras_policy_info(processor_handle):
                 "dram_non_critical_region_threshold": policy_info.policy_data.v4_0.dram_non_critical_region_threshold,
                 "dram_critical_region_threshold": policy_info.policy_data.v4_0.dram_critical_region_threshold
             })
+        case (5, 0):
+            ras_policy_info.update({
+                "num_entities": policy_info.policy_data.v5_0.num_entities,
+                "event_rma_threshold_per_entity": policy_info.policy_data.v5_0.event_rma_threshold_per_entity,
+                "max_pages_per_ret_event": policy_info.policy_data.v5_0.max_pages_per_ret_event,
+                "od_sram_ecc_threshold": policy_info.policy_data.v5_0.od_sram_ecc_threshold,
+                "hwa_threshold": policy_info.policy_data.v5_0.hwa_threshold,
+                "wdt_threshold": policy_info.policy_data.v5_0.wdt_threshold
+            })
 
     return { "ras_policy_info": ras_policy_info }
 
@@ -3056,32 +3157,33 @@ def amdsmi_get_gpu_fabric_info(processor_handle):
         processor_handle, ctypes.byref(fabric_info)))
 
     # The UAL interface version is packed as (major << 16) | minor.
-    raw_version = fabric_info.info.version
+    raw_version = fabric_info.fabric_version
     version_major = (raw_version >> 16) & 0xFFFF
     version_minor = raw_version & 0xFFFF
 
     result = {
         "bdf": _format_bdf(fabric_info.bdf),
         "version": f"{version_major}.{version_minor}",
-        "version_major": version_major,
-        "version_minor": version_minor,
     }
     match version_major:
         case 1:
-            v1 = fabric_info.info.fabric_info.v1
+            v1 = fabric_info.fabric_info.v1
+            ppod = v1.ppod
+            vpod = v1.vpod
+            station = v1.station
 
             # Convert vpod_active_accelerators bitmap to list of active IDs
             BITS_PER_WORD = ctypes.sizeof(ctypes.c_uint32) * 8
             vpod_active_accels = []
-            for word_idx in range(len(v1.vpod_active_accelerators)):
-                word = v1.vpod_active_accelerators[word_idx]
+            for word_idx in range(len(vpod.vpod_active_accelerators)):
+                word = vpod.vpod_active_accelerators[word_idx]
                 for bit in range(BITS_PER_WORD):
                     if word & (1 << bit):
                         accel_id = (word_idx * BITS_PER_WORD) + bit
                         vpod_active_accels.append(accel_id)
 
             # Format ppod_id (128-bit UUID) as a standard 8-4-4-4-12 hex string
-            ppod_id_bytes = bytes(v1.ppod_id)
+            ppod_id_bytes = bytes(ppod.ppod_id)
             ppod_id_str = "{}-{}-{}-{}-{}".format(
                 ppod_id_bytes[0:4].hex(),
                 ppod_id_bytes[4:6].hex(),
@@ -3090,22 +3192,27 @@ def amdsmi_get_gpu_fabric_info(processor_handle):
                 ppod_id_bytes[10:16].hex(),
             )
 
-            local_accels = [v1.local_accelerators[i]
-                            for i in range(len(v1.local_accelerators))]
+            local_accels = [ppod.local_accelerators[i]
+                            for i in range(len(ppod.local_accelerators))
+                            if ppod.local_accelerators[i] != 0xFFFFFFFF]
 
             result.update({
-                "accelerator_id": v1.accelerator_id,
+                "accelerator_id": ppod.accelerator_id,
                 "fabric_type": AmdSmiFabricType(v1.fabric_type),
-                "bandwidth": v1.bandwidth,
-                "latency": v1.latency,
+                "bandwidth": ppod.bandwidth,
+                "latency": ppod.latency,
                 "ppod_id": ppod_id_str,
-                "ppod_size": v1.ppod_size,
-                "vpod_id": v1.vpod_id,
-                "vpod_size": v1.vpod_size,
+                "ppod_size": ppod.ppod_size,
+                "local_accelerator_count": len(local_accels),
+                "vpod_id": vpod.vpod_id,
+                "vpod_size": vpod.vpod_size,
                 "vpod_active_accelerators": vpod_active_accels,
                 "local_accelerators": local_accels,
-                "addr_mode": AmdSmiFabricNpaAddressMode(v1.addr_mode),
-                "accel_state": AmdSmiFabricAcceleratorVpodState(v1.accel_state)
+                "addr_mode": AmdSmiFabricNpaAddressMode(vpod.addr_mode),
+                "accel_state": AmdSmiFabricAcceleratorVpodState(v1.accel_state),
+                "station_flags": station.station_flags,
+                "num_stations": station.num_stations,
+                "lane_en_bitmap": bytes(station.lane_en_bitmap).hex(),
             })
 
     return result
@@ -3201,6 +3308,8 @@ class AmdSmiFabricTelemetry:
         "NETPORT": amdsmi_wrapper.AMDSMI_FABRIC_TELEMETRY_CATEGORY_NETPORT,
         "DERIVED_IFOE": amdsmi_wrapper.AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_UALOE,
         "DERIVED_NETPORT": amdsmi_wrapper.AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_NETPORT,
+        "IFOE_DEBUG": amdsmi_wrapper.AMDSMI_FABRIC_TELEMETRY_CATEGORY_IFOE_DEBUG,
+        "PHY": amdsmi_wrapper.AMDSMI_FABRIC_TELEMETRY_CATEGORY_PHY,
     }
     def __init__(self, processor_handle, categories=None):
         if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
@@ -3330,3 +3439,36 @@ class AmdSmiFabricTelemetry:
 def amdsmi_get_fabric_telemetry(processor_handle, categories=None):
     with AmdSmiFabricTelemetry(processor_handle, categories) as telemetry:
         return telemetry.get()
+
+
+def amdsmi_set_gpu_fabric_ppod_config(processor_handle, config):
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+    if not isinstance(config, amdsmi_wrapper.amdsmi_fabric_ppod_config_t):
+        raise AmdSmiParameterException(config, amdsmi_wrapper.amdsmi_fabric_ppod_config_t)
+
+    _check_res(amdsmi_wrapper.amdsmi_set_gpu_fabric_ppod_config(
+        processor_handle, ctypes.byref(config)))
+
+
+def amdsmi_set_gpu_fabric_vpod_config(processor_handle, config):
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+    if not isinstance(config, amdsmi_wrapper.amdsmi_fabric_vpod_config_t):
+        raise AmdSmiParameterException(config, amdsmi_wrapper.amdsmi_fabric_vpod_config_t)
+
+    _check_res(amdsmi_wrapper.amdsmi_set_gpu_fabric_vpod_config(
+        processor_handle, ctypes.byref(config)))
+
+
+def amdsmi_set_gpu_fabric_station_config(processor_handle, config):
+    if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+        raise AmdSmiParameterException(
+            processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+    if not isinstance(config, amdsmi_wrapper.amdsmi_fabric_station_config_t):
+        raise AmdSmiParameterException(config, amdsmi_wrapper.amdsmi_fabric_station_config_t)
+
+    _check_res(amdsmi_wrapper.amdsmi_set_gpu_fabric_station_config(
+        processor_handle, ctypes.byref(config)))

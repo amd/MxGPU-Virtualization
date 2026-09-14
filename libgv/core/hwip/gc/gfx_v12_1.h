@@ -33,6 +33,7 @@ void gfx_v12_1_grbm_select(struct amdgv_adapter *adapt, uint32_t me,
 		uint32_t pipe, uint32_t queue, uint32_t vmid, int xcc_id);
 int gfx_v12_1_hw_resume(struct amdgv_adapter *adapt, uint32_t xcc_mask);
 int gfx_v12_1_hw_suspend(struct amdgv_adapter *adapt, uint32_t xcc_mask);
+uint32_t gfx_v12_1_get_xcc_cu_count(struct amdgv_adapter *adapt, int xcc_id);
 
 struct v12_1_compute_mqd {
 	uint32_t header; // offset: 0  (0x0)

@@ -325,8 +325,11 @@ Commands that do and their arguments are:
     Available only in human readable format.
   * `--clean-local-data`
         Clean up data in LDS/GPRs.
-    * `--resetgpu`
-        Reset all GPUs.
+    * `--gpureset`
+        Reset all GPUs. With `--gpu`, reset the selected GPU(s).
+        GPUs in the same physical XGMI hive reset together, regardless of the
+        current framebuffer-sharing mode. Multiple `--gpu` values in the same
+        hive issue one reset. `--gpu` / `-g` requires a value.
 
 ### set
 
@@ -335,11 +338,12 @@ Commands that do and their arguments are:
     If no argument is provided, returns tool exception.
     Available only in human readable format.
   * Sets xgmi frame buffer sharing mode
-    * `--xgmi --fb-sharing-mode=<AmdSmiXgmiFbSharingMode> --group="<gpu_id1-gpu_id2>"`
+    * `--xgmi --fb-sharing-mode=<AmdSmiXgmiFbSharingMode> [--gpu=<gpu>] [--group="<gpu_id1-gpu_id2>"]`
                 Sets framebuffer sharing mode from group ["MODE_1", "MODE_2", "MODE_4", "MODE_8", "CUSTOM"]
                 Where, MODE_X represents that X GPUs will be in the same group, linked together:
                 MODE_1 (one GPU in a group), MODE_2 (two GPUs in a group), MODE_4 (four GPUs in a group), MODE_8 (eight GPUs in a group).
                 For MODE_X, the --group parameter is not needed and if it is used then the call will fail.
+                Without --gpu, MODE_X applies to all XGMI hives. With --gpu, it applies only to the hive containing the selected GPU.
                 For CUSTOM mode we need to specify which GPUs will be connected --group="0-2" and that means
                 that 0th and the second gpu will be connected. If we want the GPU to share the frame buffer with another GPU, and it is already in the previous group, the previous group will be freed and a new one will be created, with which it will share the frame buffer.
                 Note: This command will only work if the VM for which GPU we are setting the FB sharing is not running, otherwise it will fail.
@@ -542,36 +546,46 @@ GPU 0:
         VENDOR: HYNIX
         SIZE: 196592 MB
     CACHE_INFO:
-        CACHE 0:
-            CACHE_PROPERTIES: ENABLED, DATA_CACHE, SIMD_CACHE
+        CACHE_0:
+            CACHE_ACRONYM: L1D
+            CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
             CACHE_SIZE: 32 KB
             CACHE_LEVEL: 1
             MAX_NUM_CU_SHARED: 1
             NUM_CACHE_INSTANCE: 304
-        CACHE 1:
-            CACHE_PROPERTIES: ENABLED, DATA_CACHE, SIMD_CACHE
+            TOTAL_CACHE_SIZE: 9728 KB
+        CACHE_1:
+            CACHE_ACRONYM: L1D
+            CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
             CACHE_SIZE: 16 KB
             CACHE_LEVEL: 1
             MAX_NUM_CU_SHARED: 2
             NUM_CACHE_INSTANCE: 152
-        CACHE 2:
-            CACHE_PROPERTIES: ENABLED, INST_CACHE, SIMD_CACHE
+            TOTAL_CACHE_SIZE: 2432 KB
+        CACHE_2:
+            CACHE_ACRONYM: L1I
+            CACHE_PROPERTIES: INST_CACHE, SIMD_CACHE
             CACHE_SIZE: 64 KB
             CACHE_LEVEL: 1
             MAX_NUM_CU_SHARED: 2
             NUM_CACHE_INSTANCE: 152
-        CACHE 3:
-            CACHE_PROPERTIES: ENABLED, DATA_CACHE, SIMD_CACHE
+            TOTAL_CACHE_SIZE: 9728 KB
+        CACHE_3:
+            CACHE_ACRONYM: L2
+            CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
             CACHE_SIZE: 4096 KB
             CACHE_LEVEL: 2
             MAX_NUM_CU_SHARED: 38
             NUM_CACHE_INSTANCE: 8
-        CACHE 4:
-            CACHE_PROPERTIES: ENABLED, DATA_CACHE, SIMD_CACHE
+            TOTAL_CACHE_SIZE: 32768 KB
+        CACHE_4:
+            CACHE_ACRONYM: L3
+            CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE
             CACHE_SIZE: 262144 KB
             CACHE_LEVEL: 3
             MAX_NUM_CU_SHARED: 304
             NUM_CACHE_INSTANCE: 1
+            TOTAL_CACHE_SIZE: 262144 KB
 …
 
 *

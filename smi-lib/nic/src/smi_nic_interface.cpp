@@ -27,10 +27,12 @@ struct smi_nic_ctx {
 	std::mutex ctx_mutex;
 	std::atomic<bool> init;
 
-	smi_nic_ctx() : init(false) {}
+	smi_nic_ctx() : init(false)
+	{
+	}
 };
 
-static SmiNicSystem* get_nic_system_from_context(smi_nic_ctx *ctx)
+static SmiNicSystem* get_nic_system_from_context(smi_nic_ctx* ctx)
 {
 	if (!ctx || !ctx->init || !ctx->nic_system) {
 		return nullptr;
@@ -39,23 +41,23 @@ static SmiNicSystem* get_nic_system_from_context(smi_nic_ctx *ctx)
 }
 
 extern "C" {
-smi_nic_status_t smi_nic_create_context(smi_nic_ctx_t *ctx)
+smi_nic_status_t smi_nic_create_context(smi_nic_ctx_t* ctx)
 {
 	try {
 		if (!ctx) {
 			return SMI_NIC_STATUS_WRONG_PARAM;
 		}
 
-		auto context = std::make_unique<smi_nic_ctx>();
+		auto context	    = std::make_unique<smi_nic_ctx>();
 		context->nic_system = std::make_unique<SmiNicSystem>();
 
-		if (!context->nic_system->driver_loaded(NicVendor::AMD, DriverType::IONIC)
-			&& !context->nic_system->driver_loaded(NicVendor::Broadcom, DriverType::BNXT_EN)) {
+		if (!context->nic_system->driver_loaded(NicVendor::AMD, DriverType::IONIC) &&
+		    !context->nic_system->driver_loaded(NicVendor::Broadcom, DriverType::BNXT_EN)) {
 			return SMI_NIC_STATUS_DRIVER_NOT_LOADED;
 		}
 
 		context->init = true;
-		*ctx = context.release();
+		*ctx	      = context.release();
 
 		(*ctx)->nic_system->discover_nics();
 
@@ -117,7 +119,7 @@ smi_nic_status_t smi_nic_driver_loaded(smi_nic_vendor_t vendor)
 	return SMI_NIC_STATUS_DRIVER_NOT_LOADED;
 }
 
-smi_nic_status_t smi_discover_nics(smi_nic_ctx_t ctx, smi_nic_discovery_t *discovery)
+smi_nic_status_t smi_discover_nics(smi_nic_ctx_t ctx, smi_nic_discovery_t* discovery)
 {
 	if (!ctx || !discovery) {
 		return SMI_NIC_STATUS_WRONG_PARAM;
@@ -143,7 +145,7 @@ smi_nic_status_t smi_discover_nics(smi_nic_ctx_t ctx, smi_nic_discovery_t *disco
 		uint32_t index = 0;
 		for (const auto* nic : nics) {
 			std::snprintf(discovery->devices[index].bdf, SMI_NIC_MAX_STRING_LENGTH,
-						"%s", nic->bdf().c_str());
+				      "%s", nic->bdf().c_str());
 
 			switch (nic->vendor()) {
 			case NicVendor::AMD:
@@ -168,7 +170,8 @@ smi_nic_status_t smi_discover_nics(smi_nic_ctx_t ctx, smi_nic_discovery_t *disco
 	}
 }
 
-smi_nic_status_t smi_get_nic_driver_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_driver_info_t *info)
+smi_nic_status_t smi_get_nic_driver_info(smi_nic_ctx_t ctx, uint64_t device,
+					 smi_nic_driver_info_t* info)
 {
 	if (!ctx) {
 		return SMI_NIC_STATUS_WRONG_PARAM;
@@ -183,7 +186,7 @@ smi_nic_status_t smi_get_nic_driver_info(smi_nic_ctx_t ctx, uint64_t device, smi
 	if (!nic_system) {
 		return SMI_NIC_STATUS_NOT_INIT;
 	}
-	const SmiNic *nic = nic_system->get_nic_by_bdf(device);
+	const SmiNic* nic = nic_system->get_nic_by_bdf(device);
 	if (!nic) {
 		return SMI_NIC_STATUS_NOT_FOUND;
 	}
@@ -203,7 +206,8 @@ smi_nic_status_t smi_get_nic_driver_info(smi_nic_ctx_t ctx, uint64_t device, smi
 	}
 
 	*info = {};
-	struct ethtool_drvinfo drvinfo{};
+	struct ethtool_drvinfo drvinfo {
+	};
 	drvinfo.cmd = ETHTOOL_GDRVINFO;
 
 	int ret = smi_ethtool_ioctl(ports[0].interface(), &drvinfo);
@@ -217,7 +221,8 @@ smi_nic_status_t smi_get_nic_driver_info(smi_nic_ctx_t ctx, uint64_t device, smi
 	return SMI_NIC_STATUS_SUCCESS;
 }
 
-smi_nic_status_t smi_get_nic_asic_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_asic_info_t *info)
+smi_nic_status_t smi_get_nic_asic_info(smi_nic_ctx_t ctx, uint64_t device,
+				       smi_nic_asic_info_t* info)
 {
 	if (!ctx) {
 		return SMI_NIC_STATUS_WRONG_PARAM;
@@ -232,7 +237,7 @@ smi_nic_status_t smi_get_nic_asic_info(smi_nic_ctx_t ctx, uint64_t device, smi_n
 	if (!nic_system) {
 		return SMI_NIC_STATUS_NOT_INIT;
 	}
-	const SmiNic *nic = nic_system->get_nic_by_bdf(device);
+	const SmiNic* nic = nic_system->get_nic_by_bdf(device);
 	if (!nic) {
 		return SMI_NIC_STATUS_NOT_FOUND;
 	}
@@ -251,35 +256,35 @@ smi_nic_status_t smi_get_nic_asic_info(smi_nic_ctx_t ctx, uint64_t device, smi_n
 		}
 	}
 
-	*info = {};
-	info->vendor_id = nic->vendor_id().value_or(std::numeric_limits<uint16_t>::max());
+	*info		   = {};
+	info->vendor_id	   = nic->vendor_id().value_or(std::numeric_limits<uint16_t>::max());
 	info->subvendor_id = nic->subvendor_id().value_or(std::numeric_limits<uint16_t>::max());
-	info->device_id = nic->device_id().value_or(std::numeric_limits<uint16_t>::max());
+	info->device_id	   = nic->device_id().value_or(std::numeric_limits<uint16_t>::max());
 	info->subsystem_id = nic->subsystem_id().value_or(std::numeric_limits<uint16_t>::max());
-	info->revision = nic->revision().value_or(std::numeric_limits<uint8_t>::max());
+	info->revision	   = nic->revision().value_or(std::numeric_limits<uint8_t>::max());
 
 	std::snprintf(info->permanent_address, SMI_NIC_MAX_STRING_LENGTH, "%s",
-		nic->perm_address().value_or("N/A").c_str());
+		      nic->perm_address().value_or("N/A").c_str());
 	std::snprintf(info->product_name, SMI_NIC_MAX_STRING_LENGTH, "%s",
-		nic->product_name().value_or("N/A").c_str());
+		      nic->product_name().value_or("N/A").c_str());
 	std::snprintf(info->vendor_name, SMI_NIC_MAX_STRING_LENGTH, "%s",
-		nic->vendor_name().value_or("N/A").c_str());
+		      nic->vendor_name().value_or("N/A").c_str());
 	std::snprintf(info->part_number, SMI_NIC_MAX_STRING_LENGTH, "%s",
-		nic->part_number().value_or("N/A").c_str());
+		      nic->part_number().value_or("N/A").c_str());
 	std::snprintf(info->serial_number, SMI_NIC_MAX_STRING_LENGTH, "%s",
-		nic->serial_number().value_or("N/A").c_str());
+		      nic->serial_number().value_or("N/A").c_str());
 
 	return SMI_NIC_STATUS_SUCCESS;
 }
 
-smi_nic_status_t smi_get_nic_bus_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_bus_info_t *info)
+smi_nic_status_t smi_get_nic_bus_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_bus_info_t* info)
 {
 	if (!ctx) {
 		return SMI_NIC_STATUS_WRONG_PARAM;
 	}
 
 	if (!info) {
-	    return SMI_NIC_STATUS_WRONG_PARAM;
+		return SMI_NIC_STATUS_WRONG_PARAM;
 	}
 
 	std::lock_guard<std::mutex> lock(ctx->ctx_mutex);
@@ -287,7 +292,7 @@ smi_nic_status_t smi_get_nic_bus_info(smi_nic_ctx_t ctx, uint64_t device, smi_ni
 	if (!nic_system) {
 		return SMI_NIC_STATUS_NOT_INIT;
 	}
-	const SmiNic *nic = nic_system->get_nic_by_bdf(device);
+	const SmiNic* nic = nic_system->get_nic_by_bdf(device);
 	if (!nic) {
 		return SMI_NIC_STATUS_NOT_FOUND;
 	}
@@ -306,15 +311,15 @@ smi_nic_status_t smi_get_nic_bus_info(smi_nic_ctx_t ctx, uint64_t device, smi_ni
 		}
 	}
 
-	*info = {};
-	info->bdf = device;
+	*info		     = {};
+	info->bdf	     = device;
 	info->max_pcie_width = nic->max_pcie_width().value_or(std::numeric_limits<uint8_t>::max());
 	info->max_pcie_speed = nic->max_pcie_speed().value_or(std::numeric_limits<uint32_t>::max());
 
 	auto pcie_gen = smi_utils::get_pcie_link_gen(nic->bdf());
 	if (pcie_gen.has_value()) {
 		std::snprintf(info->pcie_interface_version, SMI_NIC_MAX_STRING_LENGTH, "%u",
-			static_cast<unsigned>(pcie_gen.value()));
+			      static_cast<unsigned>(pcie_gen.value()));
 	} else {
 		std::snprintf(info->pcie_interface_version, SMI_NIC_MAX_STRING_LENGTH, "%s", "N/A");
 	}
@@ -323,7 +328,8 @@ smi_nic_status_t smi_get_nic_bus_info(smi_nic_ctx_t ctx, uint64_t device, smi_ni
 	return SMI_NIC_STATUS_SUCCESS;
 }
 
-smi_nic_status_t smi_get_nic_numa_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_numa_info_t *info)
+smi_nic_status_t smi_get_nic_numa_info(smi_nic_ctx_t ctx, uint64_t device,
+				       smi_nic_numa_info_t* info)
 {
 	if (!ctx) {
 		return SMI_NIC_STATUS_WRONG_PARAM;
@@ -338,7 +344,7 @@ smi_nic_status_t smi_get_nic_numa_info(smi_nic_ctx_t ctx, uint64_t device, smi_n
 	if (!nic_system) {
 		return SMI_NIC_STATUS_NOT_INIT;
 	}
-	const SmiNic *nic = nic_system->get_nic_by_bdf(device);
+	const SmiNic* nic = nic_system->get_nic_by_bdf(device);
 	if (!nic) {
 		return SMI_NIC_STATUS_NOT_FOUND;
 	}
@@ -357,15 +363,16 @@ smi_nic_status_t smi_get_nic_numa_info(smi_nic_ctx_t ctx, uint64_t device, smi_n
 		}
 	}
 
-	*info = {};
+	*info	   = {};
 	info->node = nic->numa_node().value_or(std::numeric_limits<uint8_t>::max());
 	std::snprintf(info->affinity, SMI_NIC_MAX_STRING_LENGTH, "%s",
-		nic->numa_affinity(info->node).value_or("N/A").c_str());
+		      nic->numa_affinity(info->node).value_or("N/A").c_str());
 
 	return SMI_NIC_STATUS_SUCCESS;
 }
 
-smi_nic_status_t smi_get_nic_port_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_port_info_t *info)
+smi_nic_status_t smi_get_nic_port_info(smi_nic_ctx_t ctx, uint64_t device,
+				       smi_nic_port_info_t* info)
 {
 	if (!ctx) {
 		return SMI_NIC_STATUS_WRONG_PARAM;
@@ -380,7 +387,7 @@ smi_nic_status_t smi_get_nic_port_info(smi_nic_ctx_t ctx, uint64_t device, smi_n
 	if (!nic_system) {
 		return SMI_NIC_STATUS_NOT_INIT;
 	}
-	const SmiNic *nic = nic_system->get_nic_by_bdf(device);
+	const SmiNic* nic = nic_system->get_nic_by_bdf(device);
 	if (!nic) {
 		return SMI_NIC_STATUS_NOT_FOUND;
 	}
@@ -392,7 +399,7 @@ smi_nic_status_t smi_get_nic_port_info(smi_nic_ctx_t ctx, uint64_t device, smi_n
 
 	*info = {};
 
-	uint32_t port_count = 0;
+	uint32_t port_count    = 0;
 	bool driver_not_loaded = false;
 	for (uint32_t i = 0; i < ports.size() && port_count < SMI_NIC_MAX_PORTS; i++) {
 		const auto& port = ports[i];
@@ -409,58 +416,65 @@ smi_nic_status_t smi_get_nic_port_info(smi_nic_ctx_t ctx, uint64_t device, smi_n
 			}
 		}
 
-		smi_nic_port_t *port_info = &info->ports[port_count];
+		smi_nic_port_t* port_info = &info->ports[port_count];
 
 		port_info->bdf = smi_utils::parse_bdf(port.bdf());
-		port_info->port_num = port.port_num().value_or(std::numeric_limits<uint32_t>::max());
+		port_info->port_num =
+		    port.port_num().value_or(std::numeric_limits<uint32_t>::max());
 
 		auto port_type = port.port_type();
 		std::snprintf(port_info->type, SMI_NIC_MAX_STRING_LENGTH, "%s",
-			!port_type.empty() ? port_type.c_str() : "N/A");
+			      !port_type.empty() ? port_type.c_str() : "N/A");
 
 		std::string flavour = port.flavour();
 		std::snprintf(port_info->flavour, SMI_NIC_MAX_STRING_LENGTH, "%s",
-			!flavour.empty() ? flavour.c_str() : "N/A");
+			      !flavour.empty() ? flavour.c_str() : "N/A");
 
 		const std::string& netdev = port.interface();
 		std::snprintf(port_info->netdev, SMI_NIC_MAX_STRING_LENGTH, "%s",
-			!netdev.empty() ? netdev.c_str() : "N/A");
+			      !netdev.empty() ? netdev.c_str() : "N/A");
 
 		port_info->ifindex = port.ifindex().value_or(std::numeric_limits<uint8_t>::max());
 
 		auto mac = port.mac_address();
 		std::snprintf(port_info->mac_address, SMI_NIC_MAX_STRING_LENGTH, "%s",
-			(mac.has_value() && !mac.value().empty()) ? mac.value().c_str() : "N/A");
+			      (mac.has_value() && !mac.value().empty()) ? mac.value().c_str()
+									: "N/A");
 
 		port_info->carrier = port.carrier().value_or(std::numeric_limits<uint8_t>::max());
-		port_info->mtu = port.mtu().value_or(std::numeric_limits<uint16_t>::max());
+		port_info->mtu	   = port.mtu().value_or(std::numeric_limits<uint16_t>::max());
 
 		auto link_state = port.link_state();
 		std::snprintf(port_info->link_state, SMI_NIC_MAX_STRING_LENGTH, "%s",
-			(link_state.has_value() && !link_state.value().empty()) ? link_state.value().c_str() : "N/A");
+			      (link_state.has_value() && !link_state.value().empty())
+				  ? link_state.value().c_str()
+				  : "N/A");
 
-		port_info->link_speed = port.link_speed().value_or(std::numeric_limits<uint32_t>::max());
+		port_info->link_speed =
+		    port.link_speed().value_or(std::numeric_limits<uint32_t>::max());
 
-		struct ethtool_fecparam fecparam_info{};
-		fecparam_info.cmd = ETHTOOL_GFECPARAM;
+		struct ethtool_fecparam fecparam_info {
+		};
+		fecparam_info.cmd     = ETHTOOL_GFECPARAM;
 		port_info->active_fec = (smi_ethtool_ioctl(port.interface(), &fecparam_info) == 0)
-			? fecparam_info.active_fec : std::numeric_limits<uint32_t>::max();
+					    ? fecparam_info.active_fec
+					    : std::numeric_limits<uint32_t>::max();
 
 		auto autoneg = port.autoneg();
 		std::snprintf(port_info->autoneg, SMI_NIC_MAX_STRING_LENGTH, "%s",
-			autoneg.value_or("N/A").c_str());
+			      autoneg.value_or("N/A").c_str());
 
 		auto pause_autoneg = port.pause_autoneg();
 		std::snprintf(port_info->pause_autoneg, SMI_NIC_MAX_STRING_LENGTH, "%s",
-			pause_autoneg.value_or("N/A").c_str());
+			      pause_autoneg.value_or("N/A").c_str());
 
 		auto pause_rx = port.pause_rx();
 		std::snprintf(port_info->pause_rx, SMI_NIC_MAX_STRING_LENGTH, "%s",
-			pause_rx.value_or("N/A").c_str());
+			      pause_rx.value_or("N/A").c_str());
 
 		auto pause_tx = port.pause_tx();
 		std::snprintf(port_info->pause_tx, SMI_NIC_MAX_STRING_LENGTH, "%s",
-			pause_tx.value_or("N/A").c_str());
+			      pause_tx.value_or("N/A").c_str());
 
 		port_count++;
 	}
@@ -473,7 +487,8 @@ smi_nic_status_t smi_get_nic_port_info(smi_nic_ctx_t ctx, uint64_t device, smi_n
 	return SMI_NIC_STATUS_SUCCESS;
 }
 
-smi_nic_status_t smi_get_nic_rdma_dev_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_rdma_devices_info_t *info)
+smi_nic_status_t smi_get_nic_rdma_dev_info(smi_nic_ctx_t ctx, uint64_t device,
+					   smi_nic_rdma_devices_info_t* info)
 {
 	if (!ctx) {
 		return SMI_NIC_STATUS_WRONG_PARAM;
@@ -488,7 +503,7 @@ smi_nic_status_t smi_get_nic_rdma_dev_info(smi_nic_ctx_t ctx, uint64_t device, s
 	if (!nic_system) {
 		return SMI_NIC_STATUS_NOT_INIT;
 	}
-	const SmiNic *nic = nic_system->get_nic_by_bdf(device);
+	const SmiNic* nic = nic_system->get_nic_by_bdf(device);
 	if (!nic) {
 		return SMI_NIC_STATUS_NOT_FOUND;
 	}
@@ -500,7 +515,7 @@ smi_nic_status_t smi_get_nic_rdma_dev_info(smi_nic_ctx_t ctx, uint64_t device, s
 
 	*info = {};
 
-	uint8_t rdma_count = 0;
+	uint8_t rdma_count     = 0;
 	bool driver_not_loaded = false;
 	for (uint32_t i = 0; i < ports.size() && rdma_count < SMI_NIC_MAX_RDMA_DEV; i++) {
 		const auto& port = ports[i];
@@ -518,33 +533,36 @@ smi_nic_status_t smi_get_nic_rdma_dev_info(smi_nic_ctx_t ctx, uint64_t device, s
 
 		const auto& ibs = port.infiniband();
 		for (uint8_t j = 0; j < ibs.size() && rdma_count < SMI_NIC_MAX_RDMA_DEV; j++) {
-			const auto& ib = ibs[j];
-			smi_nic_rdma_dev_info_t *rdma_dev = &info->rdma_dev_info[rdma_count];
+			const auto& ib			  = ibs[j];
+			smi_nic_rdma_dev_info_t* rdma_dev = &info->rdma_dev_info[rdma_count];
 
 			std::snprintf(rdma_dev->rdma_dev, SMI_NIC_MAX_STRING_LENGTH, "%s",
-				ib.rdma_dev().c_str());
+				      ib.rdma_dev().c_str());
 			std::snprintf(rdma_dev->node_guid, SMI_NIC_MAX_STRING_LENGTH, "%s",
-				ib.node_guid().value_or("N/A").c_str());
+				      ib.node_guid().value_or("N/A").c_str());
 			std::snprintf(rdma_dev->node_type, SMI_NIC_MAX_STRING_LENGTH, "%s",
-				ib.node_type().value_or("N/A").c_str());
+				      ib.node_type().value_or("N/A").c_str());
 			std::snprintf(rdma_dev->sys_image_guid, SMI_NIC_MAX_STRING_LENGTH, "%s",
-				ib.sys_image_guid().value_or("N/A").c_str());
+				      ib.sys_image_guid().value_or("N/A").c_str());
 			std::snprintf(rdma_dev->fw_ver, SMI_NIC_MAX_STRING_LENGTH, "%s",
-				ib.fw_ver().value_or("N/A").c_str());
+				      ib.fw_ver().value_or("N/A").c_str());
 
-			const auto& ib_ports = ib.ports();
+			const auto& ib_ports	 = ib.ports();
 			rdma_dev->num_rdma_ports = ib.ports_num();
 			for (uint8_t k = 0; k < ib_ports.size() && k < SMI_NIC_MAX_PORTS; k++) {
-				const auto& ib_port = ib_ports[k];
-				smi_nic_rdma_port_info_t *port_info = &rdma_dev->rdma_port_info[k];
+				const auto& ib_port		    = ib_ports[k];
+				smi_nic_rdma_port_info_t* port_info = &rdma_dev->rdma_port_info[k];
 
 				std::snprintf(port_info->netdev, SMI_NIC_MAX_STRING_LENGTH, "%s",
-					port.interface().c_str());
+					      port.interface().c_str());
 				std::snprintf(port_info->state, SMI_NIC_MAX_STRING_LENGTH, "%s",
-					ib_port.state().value_or("N/A").c_str());
-				port_info->rdma_port = ib_port.port_num().value_or(std::numeric_limits<uint8_t>::max());
-				port_info->max_mtu = ib_port.max_mtu().value_or(std::numeric_limits<uint16_t>::max());
-				port_info->active_mtu = ib_port.active_mtu().value_or(std::numeric_limits<uint16_t>::max());
+					      ib_port.state().value_or("N/A").c_str());
+				port_info->rdma_port = ib_port.port_num().value_or(
+				    std::numeric_limits<uint8_t>::max());
+				port_info->max_mtu = ib_port.max_mtu().value_or(
+				    std::numeric_limits<uint16_t>::max());
+				port_info->active_mtu = ib_port.active_mtu().value_or(
+				    std::numeric_limits<uint16_t>::max());
 			}
 			rdma_count++;
 		}
@@ -562,7 +580,7 @@ smi_nic_status_t smi_get_nic_rdma_dev_info(smi_nic_ctx_t ctx, uint64_t device, s
 	return SMI_NIC_STATUS_SUCCESS;
 }
 
-smi_nic_status_t smi_get_nic_fw_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_fw_info_t *info)
+smi_nic_status_t smi_get_nic_fw_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_fw_info_t* info)
 {
 	if (!ctx || !info) {
 		return SMI_NIC_STATUS_WRONG_PARAM;
@@ -574,7 +592,7 @@ smi_nic_status_t smi_get_nic_fw_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic
 		return SMI_NIC_STATUS_NOT_INIT;
 	}
 
-	const SmiNic *nic = nic_system->get_nic_by_bdf(device);
+	const SmiNic* nic = nic_system->get_nic_by_bdf(device);
 	if (!nic) {
 		return SMI_NIC_STATUS_NOT_FOUND;
 	}
@@ -615,10 +633,10 @@ smi_nic_status_t smi_get_nic_fw_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic
 			break;
 		}
 
-		std::snprintf(info->versions[count].name,
-			      SMI_NIC_MAX_STRING_LENGTH, "%s", v.name.c_str());
-		std::snprintf(info->versions[count].version,
-			      SMI_NIC_MAX_STRING_LENGTH, "%s", v.version.c_str());
+		std::snprintf(info->versions[count].name, SMI_NIC_MAX_STRING_LENGTH, "%s",
+			      v.name.c_str());
+		std::snprintf(info->versions[count].version, SMI_NIC_MAX_STRING_LENGTH, "%s",
+			      v.version.c_str());
 
 		switch (v.type) {
 		case FwVersionType::Fixed:
@@ -638,7 +656,8 @@ smi_nic_status_t smi_get_nic_fw_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic
 	return SMI_NIC_STATUS_SUCCESS;
 }
 
-smi_nic_status_t smi_topo_get_nic_link_type(smi_nic_ctx_t ctx, uint64_t device_src, uint64_t device_dst, smi_nic_link_type_t *type)
+smi_nic_status_t smi_topo_get_nic_link_type(smi_nic_ctx_t ctx, uint64_t device_src,
+					    uint64_t device_dst, smi_nic_link_type_t* type)
 {
 	if (!ctx || !type) {
 		return SMI_NIC_STATUS_WRONG_PARAM;
@@ -651,7 +670,7 @@ smi_nic_status_t smi_topo_get_nic_link_type(smi_nic_ctx_t ctx, uint64_t device_s
 
 	std::lock_guard<std::mutex> lock(ctx->ctx_mutex);
 
-	const SmiNic *nic = nic_system->get_nic_by_bdf(device_src);
+	const SmiNic* nic = nic_system->get_nic_by_bdf(device_src);
 	if (!nic) {
 		return SMI_NIC_STATUS_NOT_FOUND;
 	}
@@ -679,7 +698,8 @@ smi_nic_status_t smi_topo_get_nic_link_type(smi_nic_ctx_t ctx, uint64_t device_s
 	return SMI_NIC_STATUS_SUCCESS;
 }
 
-smi_nic_status_t smi_get_nic_port_statistics_count(smi_nic_ctx_t ctx, uint64_t device, uint32_t port_index, uint32_t *count)
+smi_nic_status_t smi_get_nic_port_statistics_count(smi_nic_ctx_t ctx, uint64_t device,
+						   uint32_t port_index, uint32_t* count)
 {
 	if (!ctx || !count) {
 		return SMI_NIC_STATUS_WRONG_PARAM;
@@ -690,7 +710,7 @@ smi_nic_status_t smi_get_nic_port_statistics_count(smi_nic_ctx_t ctx, uint64_t d
 	if (!nic_system) {
 		return SMI_NIC_STATUS_NOT_INIT;
 	}
-	const SmiNic *nic = nic_system->get_nic_by_bdf(device);
+	const SmiNic* nic = nic_system->get_nic_by_bdf(device);
 	if (!nic) {
 		return SMI_NIC_STATUS_NOT_FOUND;
 	}
@@ -714,14 +734,15 @@ smi_nic_status_t smi_get_nic_port_statistics_count(smi_nic_ctx_t ctx, uint64_t d
 		}
 	}
 
-	const auto& port = ports[port_index];
-	const auto& stats_map = port.get_standard_stats_map();
-	*count = static_cast<uint32_t>(stats_map.size());
+	const auto& port     = ports[port_index];
+	const auto stats_map = port.collect_standard_statistics();
+	*count		     = static_cast<uint32_t>(stats_map.size());
 
 	return SMI_NIC_STATUS_SUCCESS;
 }
 
-smi_nic_status_t smi_get_nic_port_statistics_list(smi_nic_ctx_t ctx, uint64_t device, uint32_t port_index, smi_nic_stat_info_t *stats)
+smi_nic_status_t smi_get_nic_port_statistics_list(smi_nic_ctx_t ctx, uint64_t device,
+						  uint32_t port_index, smi_nic_stat_info_t* stats)
 {
 	if (!ctx || !stats) {
 		return SMI_NIC_STATUS_WRONG_PARAM;
@@ -732,7 +753,7 @@ smi_nic_status_t smi_get_nic_port_statistics_list(smi_nic_ctx_t ctx, uint64_t de
 	if (!nic_system) {
 		return SMI_NIC_STATUS_NOT_INIT;
 	}
-	const SmiNic *nic = nic_system->get_nic_by_bdf(device);
+	const SmiNic* nic = nic_system->get_nic_by_bdf(device);
 	if (!nic) {
 		return SMI_NIC_STATUS_NOT_FOUND;
 	}
@@ -756,20 +777,22 @@ smi_nic_status_t smi_get_nic_port_statistics_list(smi_nic_ctx_t ctx, uint64_t de
 		}
 	}
 
-	const auto& port = ports[port_index];
-	const auto& stats_map = port.get_standard_stats_map();
+	const auto& port     = ports[port_index];
+	const auto stats_map = port.collect_standard_statistics();
 
 	if (stats_map.empty()) {
 		return SMI_NIC_STATUS_NO_DATA;
 	}
 
-	stats->count = static_cast<uint32_t>(std::min(stats_map.size(), static_cast<size_t>(SMI_NIC_MAX_STATISTICS)));
+	stats->count = static_cast<uint32_t>(
+	    std::min(stats_map.size(), static_cast<size_t>(SMI_NIC_MAX_STATISTICS)));
 	uint32_t i = 0;
 	for (const auto& stat_pair : stats_map) {
 		if (i >= stats->count) {
 			break;
 		}
-		std::snprintf(stats->stats[i].name, SMI_NIC_MAX_STRING_LENGTH, "%s", stat_pair.first.c_str());
+		std::snprintf(stats->stats[i].name, SMI_NIC_MAX_STRING_LENGTH, "%s",
+			      stat_pair.first.c_str());
 		stats->stats[i].value = stat_pair.second;
 		i++;
 	}
@@ -777,7 +800,8 @@ smi_nic_status_t smi_get_nic_port_statistics_list(smi_nic_ctx_t ctx, uint64_t de
 	return SMI_NIC_STATUS_SUCCESS;
 }
 
-smi_nic_status_t smi_get_nic_vendor_statistics_count(smi_nic_ctx_t ctx, uint64_t device, uint32_t port_index, uint32_t *count)
+smi_nic_status_t smi_get_nic_vendor_statistics_count(smi_nic_ctx_t ctx, uint64_t device,
+						     uint32_t port_index, uint32_t* count)
 {
 	if (!ctx || !count) {
 		return SMI_NIC_STATUS_WRONG_PARAM;
@@ -788,7 +812,7 @@ smi_nic_status_t smi_get_nic_vendor_statistics_count(smi_nic_ctx_t ctx, uint64_t
 	if (!nic_system) {
 		return SMI_NIC_STATUS_NOT_INIT;
 	}
-	const SmiNic *nic = nic_system->get_nic_by_bdf(device);
+	const SmiNic* nic = nic_system->get_nic_by_bdf(device);
 	if (!nic) {
 		return SMI_NIC_STATUS_NOT_FOUND;
 	}
@@ -812,14 +836,15 @@ smi_nic_status_t smi_get_nic_vendor_statistics_count(smi_nic_ctx_t ctx, uint64_t
 		}
 	}
 
-	const auto& port = ports[port_index];
-	const auto& stats_map = port.get_vendor_stats_map();
-	*count = static_cast<uint32_t>(stats_map.size());
+	const auto& port     = ports[port_index];
+	const auto stats_map = port.collect_vendor_statistics();
+	*count		     = static_cast<uint32_t>(stats_map.size());
 
 	return SMI_NIC_STATUS_SUCCESS;
 }
 
-smi_nic_status_t smi_get_nic_vendor_statistics_list(smi_nic_ctx_t ctx, uint64_t device, uint32_t port_index, smi_nic_stat_info_t *stats)
+smi_nic_status_t smi_get_nic_vendor_statistics_list(smi_nic_ctx_t ctx, uint64_t device,
+						    uint32_t port_index, smi_nic_stat_info_t* stats)
 {
 	if (!ctx || !stats) {
 		return SMI_NIC_STATUS_WRONG_PARAM;
@@ -830,7 +855,7 @@ smi_nic_status_t smi_get_nic_vendor_statistics_list(smi_nic_ctx_t ctx, uint64_t 
 	if (!nic_system) {
 		return SMI_NIC_STATUS_NOT_INIT;
 	}
-	const SmiNic *nic = nic_system->get_nic_by_bdf(device);
+	const SmiNic* nic = nic_system->get_nic_by_bdf(device);
 	if (!nic) {
 		return SMI_NIC_STATUS_NOT_FOUND;
 	}
@@ -854,20 +879,22 @@ smi_nic_status_t smi_get_nic_vendor_statistics_list(smi_nic_ctx_t ctx, uint64_t 
 		}
 	}
 
-	const auto& port = ports[port_index];
-	const auto& stats_map = port.get_vendor_stats_map();
+	const auto& port     = ports[port_index];
+	const auto stats_map = port.collect_vendor_statistics();
 
 	if (stats_map.empty()) {
 		return SMI_NIC_STATUS_NO_DATA;
 	}
 
-	stats->count = static_cast<uint32_t>(std::min(stats_map.size(), static_cast<size_t>(SMI_NIC_MAX_STATISTICS)));
+	stats->count = static_cast<uint32_t>(
+	    std::min(stats_map.size(), static_cast<size_t>(SMI_NIC_MAX_STATISTICS)));
 	uint32_t i = 0;
 	for (const auto& stat_pair : stats_map) {
 		if (i >= stats->count) {
 			break;
 		}
-		std::snprintf(stats->stats[i].name, SMI_NIC_MAX_STRING_LENGTH, "%s", stat_pair.first.c_str());
+		std::snprintf(stats->stats[i].name, SMI_NIC_MAX_STRING_LENGTH, "%s",
+			      stat_pair.first.c_str());
 		stats->stats[i].value = stat_pair.second;
 		i++;
 	}
@@ -875,7 +902,9 @@ smi_nic_status_t smi_get_nic_vendor_statistics_list(smi_nic_ctx_t ctx, uint64_t 
 	return SMI_NIC_STATUS_SUCCESS;
 }
 
-smi_nic_status_t smi_get_nic_rdma_port_statistics_count(smi_nic_ctx_t ctx, uint64_t device, uint32_t port_index, uint32_t ib_index, uint32_t rdma_port_index, uint32_t *count)
+smi_nic_status_t smi_get_nic_rdma_port_statistics_count(smi_nic_ctx_t ctx, uint64_t device,
+							uint32_t port_index, uint32_t ib_index,
+							uint32_t rdma_port_index, uint32_t* count)
 {
 	if (!ctx || !count) {
 		return SMI_NIC_STATUS_WRONG_PARAM;
@@ -886,7 +915,7 @@ smi_nic_status_t smi_get_nic_rdma_port_statistics_count(smi_nic_ctx_t ctx, uint6
 	if (!nic_system) {
 		return SMI_NIC_STATUS_NOT_INIT;
 	}
-	const SmiNic *nic = nic_system->get_nic_by_bdf(device);
+	const SmiNic* nic = nic_system->get_nic_by_bdf(device);
 	if (!nic) {
 		return SMI_NIC_STATUS_NOT_FOUND;
 	}
@@ -920,14 +949,17 @@ smi_nic_status_t smi_get_nic_rdma_port_statistics_count(smi_nic_ctx_t ctx, uint6
 		return SMI_NIC_STATUS_WRONG_PARAM;
 	}
 
-	const auto& ib_port = ib_ports[rdma_port_index];
+	const auto& ib_port   = ib_ports[rdma_port_index];
 	const auto& stats_map = ib_port.get_hw_counters_map();
-	*count = static_cast<uint32_t>(stats_map.size());
+	*count		      = static_cast<uint32_t>(stats_map.size());
 
 	return SMI_NIC_STATUS_SUCCESS;
 }
 
-smi_nic_status_t smi_get_nic_rdma_port_statistics_list(smi_nic_ctx_t ctx, uint64_t device, uint32_t port_index, uint32_t ib_index, uint32_t rdma_port_index, smi_nic_stat_info_t *stats)
+smi_nic_status_t smi_get_nic_rdma_port_statistics_list(smi_nic_ctx_t ctx, uint64_t device,
+						       uint32_t port_index, uint32_t ib_index,
+						       uint32_t rdma_port_index,
+						       smi_nic_stat_info_t* stats)
 {
 	if (!ctx || !stats) {
 		return SMI_NIC_STATUS_WRONG_PARAM;
@@ -938,7 +970,7 @@ smi_nic_status_t smi_get_nic_rdma_port_statistics_list(smi_nic_ctx_t ctx, uint64
 	if (!nic_system) {
 		return SMI_NIC_STATUS_NOT_INIT;
 	}
-	const SmiNic *nic = nic_system->get_nic_by_bdf(device);
+	const SmiNic* nic = nic_system->get_nic_by_bdf(device);
 	if (!nic) {
 		return SMI_NIC_STATUS_NOT_FOUND;
 	}
@@ -972,20 +1004,22 @@ smi_nic_status_t smi_get_nic_rdma_port_statistics_list(smi_nic_ctx_t ctx, uint64
 		return SMI_NIC_STATUS_NOT_FOUND;
 	}
 
-	const auto& ib_port = ib_ports[rdma_port_index];
+	const auto& ib_port   = ib_ports[rdma_port_index];
 	const auto& stats_map = ib_port.get_hw_counters_map();
 
 	if (stats_map.empty()) {
 		return SMI_NIC_STATUS_NO_DATA;
 	}
 
-	stats->count = static_cast<uint32_t>(std::min(stats_map.size(), static_cast<size_t>(SMI_NIC_MAX_STATISTICS)));
+	stats->count = static_cast<uint32_t>(
+	    std::min(stats_map.size(), static_cast<size_t>(SMI_NIC_MAX_STATISTICS)));
 	uint32_t i = 0;
 	for (const auto& stat_pair : stats_map) {
 		if (i >= stats->count) {
 			break;
 		}
-		std::snprintf(stats->stats[i].name, SMI_NIC_MAX_STRING_LENGTH, "%s", stat_pair.first.c_str());
+		std::snprintf(stats->stats[i].name, SMI_NIC_MAX_STRING_LENGTH, "%s",
+			      stat_pair.first.c_str());
 		stats->stats[i].value = stat_pair.second;
 		i++;
 	}

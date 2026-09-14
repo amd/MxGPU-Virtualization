@@ -186,6 +186,11 @@
 #define SHADER_HASH_MODE__DEFAULT  0
 #define SHADER_HASH_MODE__MAX      1
 
+#define EMU_MODE__KEY        "emu_mode"
+#define EMU_MODE__START      0
+#define EMU_MODE__DEFAULT    0
+#define EMU_MODE__MAX        1
+
 enum gim_conf_opt_idx {
 	CONF_OPT_START = 0,
 	CONF_OPT_VF_NUMBER = CONF_OPT_START,
@@ -223,6 +228,7 @@ enum gim_conf_opt_idx {
 	CONF_OPT_VF_HBM_MGMT_MODE,
 	CONF_OPT_ENABLE_UNIRAS,
 	CONF_OPT_SHADER_HASH_MODE,
+	CONF_OPT_EMU_MODE,
 	CONF_OPT_MAX
 };
 
@@ -259,6 +265,7 @@ uint32_t gim_conf_get_ras_vf_telemetry_policy_opt(uint32_t id);
 uint32_t gim_conf_get_max_cper_count_opt(uint32_t id);
 uint32_t gim_conf_get_sentinel_mode_opt(void);
 uint32_t gim_conf_get_thermal_throttle_rate_limit_opt(uint32_t id);
+uint32_t gim_conf_get_emu_mode_opt(void);
 uint32_t gim_conf_set_opt(int index, int value);
 uint32_t gim_conf_clear_conf_file(void);
 int gim_conf_save(void);

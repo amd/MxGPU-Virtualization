@@ -15,6 +15,7 @@
 #include "vcn/vcn_v5_0_2.h"
 #include "psp/psp_v15_0_8.h"
 #include "smu/smu_v15_0_8_internal.h"
+#include <amdgv_gfx.h>
 
 static const uint32_t this_block = AMDGV_COMMUNICATION_BLOCK;
 
@@ -647,11 +648,6 @@ static void nbio_v6_3_2_disable_vf_flr(struct amdgv_adapter *adapt)
 	WREG32(SOC15_REG_OFFSET(NBIO, 0, regRCC_STRAP0_RCC_DEV0_EPF0_STRAP4), val);
 }
 
-static void nbio_v6_3_2_assign_sdma_to_vf(struct amdgv_adapter *adapt)
-{
-	AMDGV_ERROR("NOT IMPLEMENTED!\n");
-}
-
 static void nbio_v6_3_2_assign_mmsch_doorbell(struct amdgv_adapter *adapt)
 {
 	vcn_v5_0_2_set_mmsch_doorbell_addr_base(adapt);
@@ -688,25 +684,6 @@ static int nbio_v6_3_2_vbios_read_rom_from_reg(struct amdgv_adapter *adapt,
 	return ret;
 }
 
-static bool nbio_v6_3_2_vbios_need_post(struct amdgv_adapter *adapt)
-{
-	uint32_t val;
-
-	val = RREG32_SOC15(NBIO, 0, regBIF_BX0_BIOS_SCRATCH_7);
-	AMDGV_DEBUG("BIOS_SCRATCH_7 = 0x%08x\n", val);
-
-	if (val & ATOM_ASIC_INIT_COMPLETE) {
-		val &= ~ATOM_ASIC_INIT_COMPLETE;
-		WREG32_SOC15(NBIO, 0, regBIF_BX0_BIOS_SCRATCH_7, val);
-
-		AMDGV_INFO("ATOM_ASIC_POSTED\n");
-		return false;
-	}
-
-	AMDGV_INFO("ATOM_ASIC_NEED_POST\n");
-	return true;
-}
-
 static int nbio_v6_3_2_sw_init(struct amdgv_adapter *adapt)
 {
 	const char *name = "GC_V12_1_0";
@@ -734,7 +711,6 @@ static int nbio_v6_3_2_sw_init(struct amdgv_adapter *adapt)
 	adapt->flags |= AMDGV_FLAG_GC_REG_RLC_EN;
 
 	oss_memcpy(adapt->config.name, name, oss_strlen(name));
-
 	amdgv_vbios_atom_sw_init(adapt);
 
 	return 0;
@@ -744,7 +720,6 @@ static int nbio_v6_3_2_sw_fini(struct amdgv_adapter *adapt)
 {
 	adapt->nbio.funcs = NULL;
 	adapt->nbio.ras = NULL;
-
 	amdgv_vbios_atom_sw_fini(adapt);
 
 	return 0;
@@ -762,16 +737,6 @@ static int nbio_v6_3_2_hw_init(struct amdgv_adapter *adapt)
 	if (amdgv_vbios_atom_hw_init(adapt))
 		goto fail;
 
-	/* VBIOS POST will be set on driver reload.
-	 * If set, trigger a reset, then continue reload. */
-	if (!nbio_v6_3_2_vbios_need_post(adapt)) {
-		if (psp_v15_0_8_wait_sos_loaded_status(adapt) && smu_v15_0_8_is_fw_alive(adapt)) {
-			ret = amdgv_reset_hw_for_reload(adapt, false);
-			if (ret)
-				goto fail;
-		}
-	}
-
 	if (amdgv_atomfirmware_post(adapt, VBIOS_POST_ASIC_INIT))
 		goto fail;
 
@@ -780,6 +745,16 @@ static int nbio_v6_3_2_hw_init(struct amdgv_adapter *adapt)
 
 	if (amdgv_atomfirmware_get_vram_info(adapt))
 		goto fail;
+
+	if (!in_whole_gpu_reset() && !amdgv_gfx_is_gfx_off(adapt)) {
+		/* GFX is expected to be off on cold boot.
+		 * If GFX is ON, assume this is driver reload and issue
+		 * a HW reset.
+		 */
+		ret = amdgv_reset_hw_for_reload(adapt, false);
+		if (ret)
+			goto fail;
+	}
 
 	/* Get XGMI info for A+A configurations */
 	if (adapt->xgmi.connected_to_cpu) {
@@ -794,8 +769,6 @@ static int nbio_v6_3_2_hw_init(struct amdgv_adapter *adapt)
 	nbio_v6_3_2_enable_func_doorbell_access(adapt, true);
 	nbio_v6_3_2_set_xcd_doorbell_fence(adapt);
 	nbio_v6_3_2_assign_mmsch_doorbell(adapt);
-	nbio_v6_3_2_assign_sdma_to_vf(adapt);
-
 	nbio_v6_3_2_enable_pci_atomic_request(adapt);
 	nbio_v6_3_2_enable_vf_access_mmio_over_512k(adapt);
 	nbio_v6_3_2_disable_vf_flr(adapt);

@@ -13,8 +13,7 @@ extern "C" {
 #include <cstdio>
 }
 
-namespace amdsmi
-{
+namespace amdsmi {
 extern SystemMock *GetSystemMock();
 
 static int ioctl(smi_file_handle fd, smi_ioctl_cmd *ioctl_cmd)
@@ -33,8 +32,7 @@ static int access(void)
 	return GetSystemMock()->Access();
 }
 
-static int poll(struct smi_event_set_s *event_set, amdsmi_event_entry_t *event,
-			    int64_t timeout)
+static int poll(struct smi_event_set_s *event_set, amdsmi_event_entry_t *event, int64_t timeout)
 {
 	return GetSystemMock()->Poll(event_set, event, timeout);
 }
@@ -84,17 +82,17 @@ static long sysconf(int name)
 	return GetSystemMock()->Sysconf(name);
 }
 
-static FILE* fopen(const char* filename, const char* mode)
+static FILE *fopen(const char *filename, const char *mode)
 {
 	return GetSystemMock()->Fopen(filename, mode);
 }
 
-static char* fgets(char* str, int count, FILE* stream)
+static char *fgets(char *str, int count, FILE *stream)
 {
 	return GetSystemMock()->Fgets(str, count, stream);
 }
 
-static int snprintf(char* str, size_t size, const char* format, ...)
+static int snprintf(char *str, size_t size, const char *format, ...)
 {
 	return GetSystemMock()->Snprintf(str, size, format);
 }
@@ -102,24 +100,23 @@ static int snprintf(char* str, size_t size, const char* format, ...)
 } // namespace amdsmi
 
 static system_wrapper wrapper = {
-	(void *(*)(size_t))amdsmi::malloc,
-	(void *(*)(size_t, size_t))amdsmi::calloc,
-	(void (*)(void *))amdsmi::free,
-	(int (*)(smi_file_handle, smi_ioctl_cmd *))amdsmi::ioctl,
-	(smi_file_handle (*)(enum smi_file_access_mode))amdsmi::open,
-	(int (*)(void))amdsmi::access,
-	(int (*)(smi_file_handle))amdsmi::close,
-	(int (*)(struct smi_event_set_s *, struct smi_event_entry *, int64_t))amdsmi::poll,
-	(void *(*)(smi_event_handle_t *, uint32_t))amdsmi::poll_alloc,
-	NULL,
-	(void *(*)(void**, size_t, size_t))amdsmi::aligned_alloc,
-	(void (*)(void *))amdsmi::aligned_free,
-	(int (*)(char *, size_t, const char *, size_t))amdsmi::strncpy,
-	(long (*)(int))amdsmi::sysconf,
-	(FILE *(*)(const char *, const char *))amdsmi::fopen,
-	(char *(*)(char *, int, FILE *))amdsmi::fgets,
-	(int (*)(char *, size_t, const char *, ...))amdsmi::snprintf
-};
+    (void *(*)(size_t))amdsmi::malloc,
+    (void *(*)(size_t, size_t))amdsmi::calloc,
+    (void (*)(void *))amdsmi::free,
+    (int (*)(smi_file_handle, smi_ioctl_cmd *))amdsmi::ioctl,
+    (smi_file_handle(*)(enum smi_file_access_mode))amdsmi::open,
+    (int (*)(void))amdsmi::access,
+    (int (*)(smi_file_handle))amdsmi::close,
+    (int (*)(struct smi_event_set_s *, struct smi_event_entry *, int64_t))amdsmi::poll,
+    (void *(*)(smi_event_handle_t *, uint32_t))amdsmi::poll_alloc,
+    NULL,
+    (void *(*)(void **, size_t, size_t))amdsmi::aligned_alloc,
+    (void (*)(void *))amdsmi::aligned_free,
+    (int (*)(char *, size_t, const char *, size_t))amdsmi::strncpy,
+    (long (*)(int))amdsmi::sysconf,
+    (FILE * (*)(const char *, const char *)) amdsmi::fopen,
+    (char *(*)(char *, int, FILE *))amdsmi::fgets,
+    (int (*)(char *, size_t, const char *, ...))amdsmi::snprintf};
 
 extern "C" {
 

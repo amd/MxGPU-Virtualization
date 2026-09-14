@@ -1,5 +1,6 @@
-/*
- * Copyright Advanced Micro Devices, Inc. All rights reserved.
+/* Copyright Advanced Micro Devices, Inc.
+ *
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef AMDGV_IOVM_DRV_H

@@ -17,7 +17,7 @@ void AmdSmiListCommand::execute_command()
 	std::string out;
 
 	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_list_command(arg, out);
-	std::string param{"list"};
+	std::string param {"list"};
 	int error = handle_exceptions(ret, param, arg);
 	if (error == 0) {
 		if (arg.is_file) {

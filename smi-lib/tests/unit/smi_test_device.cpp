@@ -21,33 +21,39 @@ using testing::Return;
 #define UUID_LENGTH 37
 
 class AmdSmiDeviceTests : public amdsmi::AmdSmiTest {
-public:
-	AmdSmiDeviceTests() : amdsmi::AmdSmiTest(1) {}
+      public:
+	AmdSmiDeviceTests() : amdsmi::AmdSmiTest(1)
+	{
+	}
 };
 
 class AmdSmiNicDeviceTests : public amdsmi::AmdSmiTest {
-public:
-	AmdSmiNicDeviceTests() : amdsmi::AmdSmiTest(0) {}
+      public:
+	AmdSmiNicDeviceTests() : amdsmi::AmdSmiTest(0)
+	{
+	}
 };
 
 class AmdSmiZeroDeviceTests : public amdsmi::AmdSmiTest {
-public:
-	AmdSmiZeroDeviceTests() : amdsmi::AmdSmiTest(0) {}
+      public:
+	AmdSmiZeroDeviceTests() : amdsmi::AmdSmiTest(0)
+	{
+	}
 };
 
 TEST_F(AmdSmiDeviceTests, InvalidParams)
 {
 	int ret;
 	amdsmi_socket_handle socket_handle = NULL;
-	uint8_t fcn_idx = 0;
-	uint32_t processor_index = AMDSMI_MAX_DEVICES + 100;
-	unsigned int processor_count = AMDSMI_MAX_DEVICES;
+	uint8_t fcn_idx			   = 0;
+	uint32_t processor_index	   = AMDSMI_MAX_DEVICES + 100;
+	unsigned int processor_count	   = AMDSMI_MAX_DEVICES;
 	const char *BAD_GPU_MOCK_UUID{"9aff000rr3-0000-1000-801f-188c37cb1ee6"};
 	amdsmi_vf_handle_t vf;
 	amdsmi_bdf_t bdf;
 
 	amdsmi_processor_handle handle = &GPU_MOCK_HANDLE;
-	amdsmi_vf_handle_t vf_handle = VF_MOCK_HANDLE;
+	amdsmi_vf_handle_t vf_handle   = VF_MOCK_HANDLE;
 
 	ret = amdsmi_get_processor_handle_from_bdf(MOCK_BDF, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
@@ -123,7 +129,7 @@ TEST_F(AmdSmiDeviceTests, InvalidParams)
 	ret = amdsmi_get_processor_handles(socket_handle, &processor_count, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	handle = &GPU_MOCK_HANDLE;
-	ret = amdsmi_get_processor_handle_from_index(processor_count, &handle);
+	ret    = amdsmi_get_processor_handle_from_index(processor_count, &handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_get_processor_handle_from_uuid(GPU_MOCK_UUID, NULL);
@@ -166,7 +172,7 @@ TEST_F(AmdSmiDeviceTests, ResetGpuTest)
 	EXPECT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 #else
 	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_RESET_GPU)))
-		.WillRepeatedly(amdsmi::SetResponseStatus(AMDSMI_STATUS_SUCCESS));
+	    .WillRepeatedly(amdsmi::SetResponseStatus(AMDSMI_STATUS_SUCCESS));
 
 	ret = amdsmi_reset_gpu(handle);
 	EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
@@ -182,7 +188,9 @@ TEST_F(AmdSmiDeviceTests, WrongUUIDCharSequence)
 	ret = amdsmi_get_processor_handle_from_uuid(WRONG_CHAR_SEQUENCE_UUID, &handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 #ifdef _WIN64
-	strcpy_s(WRONG_CHAR_SEQUENCE_UUID, sizeof(WRONG_CHAR_SEQUENCE_UUID), "9aff0003*0000-1000-801f-188c37cb1ee6");
+	strcpy_s(WRONG_CHAR_SEQUENCE_UUID,
+		 sizeof(WRONG_CHAR_SEQUENCE_UUID),
+		 "9aff0003*0000-1000-801f-188c37cb1ee6");
 #else
 	strcpy(WRONG_CHAR_SEQUENCE_UUID, "9aff0003*0000-1000-801f-188c37cb1ee6");
 #endif
@@ -190,7 +198,9 @@ TEST_F(AmdSmiDeviceTests, WrongUUIDCharSequence)
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 #ifdef _WIN64
-	strcpy_s(WRONG_CHAR_SEQUENCE_UUID, sizeof(WRONG_CHAR_SEQUENCE_UUID), "9aff0003-r000-1000-801f-188c37cb1ee6");
+	strcpy_s(WRONG_CHAR_SEQUENCE_UUID,
+		 sizeof(WRONG_CHAR_SEQUENCE_UUID),
+		 "9aff0003-r000-1000-801f-188c37cb1ee6");
 #else
 	strcpy(WRONG_CHAR_SEQUENCE_UUID, "9aff0003-r000-1000-801f-188c37cb1ee6");
 #endif
@@ -198,7 +208,9 @@ TEST_F(AmdSmiDeviceTests, WrongUUIDCharSequence)
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 #ifdef _WIN64
-	strcpy_s(WRONG_CHAR_SEQUENCE_UUID, sizeof(WRONG_CHAR_SEQUENCE_UUID), "9aff0003-0000*1000-801f-188c37cb1ee6");
+	strcpy_s(WRONG_CHAR_SEQUENCE_UUID,
+		 sizeof(WRONG_CHAR_SEQUENCE_UUID),
+		 "9aff0003-0000*1000-801f-188c37cb1ee6");
 #else
 	strcpy(WRONG_CHAR_SEQUENCE_UUID, "9aff0003-0000*1000-801f-188c37cb1ee6");
 #endif
@@ -206,7 +218,9 @@ TEST_F(AmdSmiDeviceTests, WrongUUIDCharSequence)
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 #ifdef _WIN64
-	strcpy_s(WRONG_CHAR_SEQUENCE_UUID, sizeof(WRONG_CHAR_SEQUENCE_UUID), "9aff0003-0000-1r00-801f-188c37cb1ee6");
+	strcpy_s(WRONG_CHAR_SEQUENCE_UUID,
+		 sizeof(WRONG_CHAR_SEQUENCE_UUID),
+		 "9aff0003-0000-1r00-801f-188c37cb1ee6");
 #else
 	strcpy(WRONG_CHAR_SEQUENCE_UUID, "9aff0003-0000-1r00-801f-188c37cb1ee6");
 #endif
@@ -214,7 +228,9 @@ TEST_F(AmdSmiDeviceTests, WrongUUIDCharSequence)
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 #ifdef _WIN64
-	strcpy_s(WRONG_CHAR_SEQUENCE_UUID, sizeof(WRONG_CHAR_SEQUENCE_UUID), "9aff0003-0000-1000*801f-188c37cb1ee6");
+	strcpy_s(WRONG_CHAR_SEQUENCE_UUID,
+		 sizeof(WRONG_CHAR_SEQUENCE_UUID),
+		 "9aff0003-0000-1000*801f-188c37cb1ee6");
 #else
 	strcpy(WRONG_CHAR_SEQUENCE_UUID, "9aff0003-0000-1000*801f-188c37cb1ee6");
 #endif
@@ -222,7 +238,9 @@ TEST_F(AmdSmiDeviceTests, WrongUUIDCharSequence)
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 #ifdef _WIN64
-	strcpy_s(WRONG_CHAR_SEQUENCE_UUID, sizeof(WRONG_CHAR_SEQUENCE_UUID), "9aff0003-0000-1000-80uf-188c37cb1ee6");
+	strcpy_s(WRONG_CHAR_SEQUENCE_UUID,
+		 sizeof(WRONG_CHAR_SEQUENCE_UUID),
+		 "9aff0003-0000-1000-80uf-188c37cb1ee6");
 #else
 	strcpy(WRONG_CHAR_SEQUENCE_UUID, "9aff0003-0000-1000-80uf-188c37cb1ee6");
 #endif
@@ -230,18 +248,22 @@ TEST_F(AmdSmiDeviceTests, WrongUUIDCharSequence)
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 #ifdef _WIN64
-	strcpy_s(WRONG_CHAR_SEQUENCE_UUID, sizeof(WRONG_CHAR_SEQUENCE_UUID), "9aff0003-0000-1000-801f*188c37cb1ee6");
+	strcpy_s(WRONG_CHAR_SEQUENCE_UUID,
+		 sizeof(WRONG_CHAR_SEQUENCE_UUID),
+		 "9aff0003-0000-1000-801f*188c37cb1ee6");
 #else
 	strcpy(WRONG_CHAR_SEQUENCE_UUID, "9aff0003-0000-1000-801f*188c37cb1ee6");
 #endif
 	ret = amdsmi_get_processor_handle_from_uuid(WRONG_CHAR_SEQUENCE_UUID, &handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-	const char* too_long_uuid = "12345678-1234-1234-1234-123456789abcf";
-	ret = amdsmi_get_processor_handle_from_uuid(too_long_uuid, &handle);
+	const char *too_long_uuid = "12345678-1234-1234-1234-123456789abcf";
+	ret			  = amdsmi_get_processor_handle_from_uuid(too_long_uuid, &handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 #ifdef _WIN64
-	strcpy_s(WRONG_CHAR_SEQUENCE_UUID, sizeof(WRONG_CHAR_SEQUENCE_UUID), "9aff0003-0000-1000-801f-1&8c37cb1ee6");
+	strcpy_s(WRONG_CHAR_SEQUENCE_UUID,
+		 sizeof(WRONG_CHAR_SEQUENCE_UUID),
+		 "9aff0003-0000-1000-801f-1&8c37cb1ee6");
 #else
 	strcpy(WRONG_CHAR_SEQUENCE_UUID, "9aff0003-0000-1000-801f-1&8c37cb1ee6");
 #endif
@@ -260,7 +282,7 @@ TEST_F(AmdSmiDeviceTests, IoctlFailed)
 	amdsmi_processor_handle handle;
 
 	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_ASIC_INFO)))
-		.WillRepeatedly(amdsmi::SetResponseStatus(AMDSMI_STATUS_API_FAILED));
+	    .WillRepeatedly(amdsmi::SetResponseStatus(AMDSMI_STATUS_API_FAILED));
 
 	ret = amdsmi_get_processor_handle_from_uuid(GPU_MOCK_UUID, &handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
@@ -270,15 +292,15 @@ TEST_F(AmdSmiDeviceTests, IoctlFailed)
 	amdsmi_vf_handle_t vf_handle;
 
 	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_HANDLE)))
-		.WillOnce(amdsmi::SetResponse(
-			smi_ioctl_cmd{ {}, { AMDSMI_STATUS_API_FAILED }, { SMI_VERSION_MAX} }
-		));
+	    .WillOnce(amdsmi::SetResponse(
+		smi_ioctl_cmd{{}, {AMDSMI_STATUS_API_FAILED}, {SMI_VERSION_MAX}}));
 
 	ret = amdsmi_get_vf_handle_from_bdf(MOCK_BDF, &vf_handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 
-	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO)))
-		.WillRepeatedly(amdsmi::SetResponseStatus(AMDSMI_STATUS_API_FAILED));
+	EXPECT_CALL(*amdsmi::g_system_mock,
+		    Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO)))
+	    .WillRepeatedly(amdsmi::SetResponseStatus(AMDSMI_STATUS_API_FAILED));
 
 	ret = amdsmi_get_vf_handle_from_uuid(VF_MOCK_UUID, &vf_handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
@@ -288,7 +310,7 @@ TEST_F(AmdSmiDeviceTests, DeviceBDFNotFound)
 {
 	int ret;
 	amdsmi_processor_handle handle;
-	amdsmi_bdf_t MOCK_BDF_WRONG = { { 0x1, 0x2, 0x3, 0x4 } };
+	amdsmi_bdf_t MOCK_BDF_WRONG = {{0x1, 0x2, 0x3, 0x4}};
 
 	ret = amdsmi_get_processor_handle_from_bdf(MOCK_BDF_WRONG, &handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_FOUND);
@@ -310,24 +332,23 @@ TEST_F(AmdSmiDeviceTests, GetDeviceHandle)
 {
 	amdsmi_processor_handle handle;
 	smi_get_handle_resp mocked_resp = {};
-	int ret = 0;
+	int ret				= 0;
 
 	ret = amdsmi_get_processor_handle_from_bdf(MOCK_BDF, &handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
-	ASSERT_EQ(((struct smi_gpu_handle*)handle)->handle, GPU_MOCK_HANDLE.handle);
+	ASSERT_EQ(((struct smi_gpu_handle *)handle)->handle, GPU_MOCK_HANDLE.handle);
 
 	Mock::VerifyAndClearExpectations(amdsmi::GetSystemMock());
 
 	mocked_resp.vf_id.handle = VF_MOCK_HANDLE.handle;
 	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_HANDLE)))
-		.WillOnce(testing::DoAll(amdsmi::SetPayload(mocked_resp), testing::Return(0)));
+	    .WillOnce(testing::DoAll(amdsmi::SetPayload(mocked_resp), testing::Return(0)));
 
 	amdsmi_vf_handle_t vf_handle;
 	ret = amdsmi_get_vf_handle_from_bdf(MOCK_BDF, &vf_handle);
 
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(vf_handle.handle, VF_MOCK_HANDLE.handle);
-
 }
 
 TEST_F(AmdSmiDeviceTests, GetDeviceHandleVfHandleZero)
@@ -337,13 +358,12 @@ TEST_F(AmdSmiDeviceTests, GetDeviceHandleVfHandleZero)
 	mocked_resp.vf_id.handle = VF_MOCK_HANDLE.handle;
 	mocked_resp.vf_id.handle = 0;
 	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_HANDLE)))
-		.WillOnce(testing::DoAll(amdsmi::SetPayload(mocked_resp), testing::Return(0)));
+	    .WillOnce(testing::DoAll(amdsmi::SetPayload(mocked_resp), testing::Return(0)));
 
 	amdsmi_vf_handle_t vf_handle;
 	int ret = amdsmi_get_vf_handle_from_bdf(MOCK_BDF, &vf_handle);
 
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_FOUND);
-
 }
 
 TEST_F(AmdSmiDeviceTests, GetDeviceBdfForVf)
@@ -369,10 +389,7 @@ TEST_F(AmdSmiDeviceTests, GetGpuDeviceBdf)
 	int ret;
 	amdsmi_bdf_t bdf;
 	struct smi_gpu_handle GPU_MOCK_HANDLE_WRONG = {
-		SMI_HANDLE_TYPE_AMD_GPU,
-		{ { 0x4, 0x3, 0x2, 0x2 } },
-		(0x1234ULL << 32) | 0x4321
-	};
+	    SMI_HANDLE_TYPE_AMD_GPU, {{0x4, 0x3, 0x2, 0x2}}, (0x1234ULL << 32) | 0x4321};
 
 	ret = amdsmi_get_gpu_device_bdf(&GPU_MOCK_HANDLE, &bdf);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
@@ -387,10 +404,8 @@ TEST_F(AmdSmiDeviceTests, GetNicDeviceBdf)
 {
 	int ret;
 	amdsmi_bdf_t bdf;
-	struct smi_nic_handle NIC_MOCK_HANDLE_WRONG = {
-		SMI_HANDLE_TYPE_AMD_NIC,
-		{ { 0x4, 0x3, 0x2, 0x2 } }
-	};
+	struct smi_nic_handle NIC_MOCK_HANDLE_WRONG = {SMI_HANDLE_TYPE_AMD_NIC,
+						       {{0x4, 0x3, 0x2, 0x2}}};
 
 	ret = amdsmi_get_nic_device_bdf(&NIC_MOCK_HANDLE, &bdf);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
@@ -416,14 +431,15 @@ TEST_F(AmdSmiDeviceTests, GetNicProcessorBdf)
 
 TEST_F(AmdSmiDeviceTests, GetNicIndex)
 {
-	uint32_t processor_count = 1;
-	uint32_t processor_index = AMDSMI_MAX_DEVICES;
+	uint32_t processor_count	    = 1;
+	uint32_t processor_index	    = AMDSMI_MAX_DEVICES;
 	amdsmi_processor_handle *processors = NULL;
-	int ret = 0;
+	int ret				    = 0;
 
-	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * processor_count);
+	processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * processor_count);
 	processors[0] = &NIC_MOCK_HANDLE;
-	ret = amdsmi_get_index_from_processor_handle(processors[0], &processor_index);
+	ret	      = amdsmi_get_index_from_processor_handle(processors[0], &processor_index);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(processor_index, 0);
 	free(processors);
@@ -444,34 +460,36 @@ TEST_F(AmdSmiNicDeviceTests, GetNicDeviceHandleFromBdf)
 
 	ret = amdsmi_get_processor_handle_from_bdf(MOCK_BDF, &handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
-	ASSERT_EQ(((struct smi_nic_handle*)handle)->bdf.as_uint, NIC_MOCK_HANDLE.bdf.as_uint);
+	ASSERT_EQ(((struct smi_nic_handle *)handle)->bdf.as_uint, NIC_MOCK_HANDLE.bdf.as_uint);
 }
 
 TEST_F(AmdSmiNicDeviceTests, GetNicProcessorHandles)
 {
 	amdsmi_socket_handle socket_handle = nullptr;
-	uint32_t processor_count = 0;
-	int ret = 0;
+	uint32_t processor_count	   = 0;
+	int ret				   = 0;
 
 	ret = amdsmi_get_nic_processor_handles(socket_handle, &processor_count, nullptr);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(processor_count, 2);
 
-	amdsmi_processor_handle* processors = (amdsmi_processor_handle*)malloc(sizeof(amdsmi_processor_handle) * processor_count);
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * processor_count);
 
 	ret = amdsmi_get_nic_processor_handles(socket_handle, &processor_count, processors);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(processor_count, 2);
 
-
 	processor_type_t type1, type2;
 	ret = amdsmi_get_processor_type(processors[0], &type1);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
-	ASSERT_TRUE(type1 == AMDSMI_PROCESSOR_TYPE_AMD_NIC || type1 == AMDSMI_PROCESSOR_TYPE_BRCM_NIC);
+	ASSERT_TRUE(type1 == AMDSMI_PROCESSOR_TYPE_AMD_NIC ||
+		    type1 == AMDSMI_PROCESSOR_TYPE_BRCM_NIC);
 
 	ret = amdsmi_get_processor_type(processors[1], &type2);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
-	ASSERT_TRUE(type2 == AMDSMI_PROCESSOR_TYPE_AMD_NIC || type2 == AMDSMI_PROCESSOR_TYPE_BRCM_NIC);
+	ASSERT_TRUE(type2 == AMDSMI_PROCESSOR_TYPE_AMD_NIC ||
+		    type2 == AMDSMI_PROCESSOR_TYPE_BRCM_NIC);
 
 	ASSERT_NE(type1, type2);
 
@@ -494,10 +512,7 @@ TEST_F(AmdSmiDeviceTests, GetProcessorBdfWrongType)
 	int ret;
 	amdsmi_bdf_t bdf;
 	struct smi_gpu_handle UNKNOWN_HANDLE = {
-		SMI_HANDLE_TYPE_UNKNOWN,
-		{ { 0x4, 0x3, 0x2, 0x1 } },
-		(0x1234ULL << 32) | 0x1234
-	};
+	    SMI_HANDLE_TYPE_UNKNOWN, {{0x4, 0x3, 0x2, 0x1}}, (0x1234ULL << 32) | 0x1234};
 
 	ret = amdsmi_get_processor_bdf(&UNKNOWN_HANDLE, &bdf);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
@@ -506,35 +521,36 @@ TEST_F(AmdSmiDeviceTests, GetProcessorBdfWrongType)
 TEST_F(AmdSmiDeviceTests, GetDeviceHandles)
 {
 	amdsmi_socket_handle socket_handle = NULL;
-	unsigned int processor_count = 8;
-	smi_device_handle_t dev = { GPU_MOCK_HANDLE.handle };
-	int ret = 0;
+	unsigned int processor_count	   = 8;
+	smi_device_handle_t dev		   = {GPU_MOCK_HANDLE.handle};
+	int ret				   = 0;
 
 	ret = amdsmi_get_processor_handles(socket_handle, &processor_count, NULL);
 
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(processor_count, 1);
 
-	amdsmi_processor_handle* processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * processor_count);
-
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * processor_count);
 
 	ret = amdsmi_get_processor_handles(socket_handle, &processor_count, &processors[0]);
 
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
-	ASSERT_TRUE(amdsmi::equal_handles(dev, *((struct smi_gpu_handle*)processors[0])));
+	ASSERT_TRUE(amdsmi::equal_handles(dev, *((struct smi_gpu_handle *)processors[0])));
 
 	free(processors);
 }
 
 TEST_F(AmdSmiDeviceTests, GetVfHandleFromIdx)
 {
-	smi_vf_partition_info mocked_resp = {};
-	uint8_t fcn_idx = 0;
+	smi_vf_partition_info mocked_resp	 = {};
+	uint8_t fcn_idx				 = 0;
 	mocked_resp.partition[fcn_idx].id.handle = VF_MOCK_HANDLE.handle;
-	mocked_resp.num_vf_enabled = 4;
+	mocked_resp.num_vf_enabled		 = 4;
 
-	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO)))
-		.WillOnce(testing::DoAll(amdsmi::SetPayload(mocked_resp), testing::Return(0)));
+	EXPECT_CALL(*amdsmi::g_system_mock,
+		    Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO)))
+	    .WillOnce(testing::DoAll(amdsmi::SetPayload(mocked_resp), testing::Return(0)));
 
 	amdsmi_vf_handle_t vf_handle;
 	int ret = amdsmi_get_vf_handle_from_vf_index(&GPU_MOCK_HANDLE, fcn_idx, &vf_handle);
@@ -545,13 +561,14 @@ TEST_F(AmdSmiDeviceTests, GetVfHandleFromIdx)
 
 TEST_F(AmdSmiDeviceTests, GetVfHandleFromIdxInvalParam)
 {
-	smi_vf_partition_info mocked_resp = {};
-	uint8_t fcn_idx = 6;
+	smi_vf_partition_info mocked_resp	 = {};
+	uint8_t fcn_idx				 = 6;
 	mocked_resp.partition[fcn_idx].id.handle = VF_MOCK_HANDLE.handle;
-	mocked_resp.num_vf_enabled = 4;
+	mocked_resp.num_vf_enabled		 = 4;
 
-	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO)))
-		.WillOnce(testing::DoAll(amdsmi::SetPayload(mocked_resp), testing::Return(0)));
+	EXPECT_CALL(*amdsmi::g_system_mock,
+		    Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO)))
+	    .WillOnce(testing::DoAll(amdsmi::SetPayload(mocked_resp), testing::Return(0)));
 
 	amdsmi_vf_handle_t vf_handle;
 	int ret = amdsmi_get_vf_handle_from_vf_index(&GPU_MOCK_HANDLE, fcn_idx, &vf_handle);
@@ -563,8 +580,9 @@ TEST_F(AmdSmiDeviceTests, GetVfHandleFromIdxApiFailed)
 {
 	uint8_t fcn_idx = 0;
 
-	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO)))
-		.WillOnce(amdsmi::SetResponseStatus(AMDSMI_STATUS_API_FAILED));
+	EXPECT_CALL(*amdsmi::g_system_mock,
+		    Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO)))
+	    .WillOnce(amdsmi::SetResponseStatus(AMDSMI_STATUS_API_FAILED));
 
 	amdsmi_vf_handle_t vf_handle;
 	int ret = amdsmi_get_vf_handle_from_vf_index(&GPU_MOCK_HANDLE, fcn_idx, &vf_handle);
@@ -583,7 +601,7 @@ TEST_F(AmdSmiDeviceTests, GetDeviceBdfForVfNotSupp)
 	amdsmi_bdf_t bdf;
 
 	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_VF_STATIC_INFO)))
-		.WillOnce(amdsmi::SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED));
+	    .WillOnce(amdsmi::SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED));
 
 	int ret = amdsmi_get_vf_bdf(VF_MOCK_HANDLE, &bdf);
 
@@ -593,16 +611,17 @@ TEST_F(AmdSmiDeviceTests, GetDeviceBdfForVfNotSupp)
 TEST_F(AmdSmiDeviceTests, GetGpuIndex)
 {
 	amdsmi_socket_handle socket_handle = NULL;
-	unsigned int processor_count = 8;
-	uint32_t processor_index = AMDSMI_MAX_DEVICES;
-	smi_device_handle_t dev = { GPU_MOCK_HANDLE.handle};
-	int ret = 0;
+	unsigned int processor_count	   = 8;
+	uint32_t processor_index	   = AMDSMI_MAX_DEVICES;
+	smi_device_handle_t dev		   = {GPU_MOCK_HANDLE.handle};
+	int ret				   = 0;
 
 	ret = amdsmi_get_processor_handles(socket_handle, &processor_count, NULL);
 
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 
-	amdsmi_processor_handle* processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * processor_count);
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * processor_count);
 	ret = amdsmi_get_processor_handles(socket_handle, &processor_count, &processors[0]);
 
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
@@ -617,26 +636,25 @@ TEST_F(AmdSmiDeviceTests, GetGpuIndex)
 
 TEST_F(AmdSmiDeviceTests, GetGpuIndexDeviceNotFound)
 {
-	uint32_t processor_index = AMDSMI_MAX_DEVICES;
-	struct smi_gpu_handle MOCK_GPU_HANDLE_BAD = { SMI_HANDLE_TYPE_AMD_GPU, {{0}}, ( GPU_MOCK_HANDLE.handle << 32) | 0x0003, 0x5678 };
+	uint32_t processor_index		  = AMDSMI_MAX_DEVICES;
+	struct smi_gpu_handle MOCK_GPU_HANDLE_BAD = {
+	    SMI_HANDLE_TYPE_AMD_GPU, {{0}}, (GPU_MOCK_HANDLE.handle << 32) | 0x0003, 0x5678};
 	int ret = amdsmi_get_index_from_processor_handle(&MOCK_GPU_HANDLE_BAD, &processor_index);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_FOUND);
 }
 
 TEST_F(AmdSmiDeviceTests, GetNicIndexDeviceNotFound)
 {
-	uint32_t processor_index = AMDSMI_MAX_DEVICES;
-	struct smi_nic_handle NIC_MOCK_HANDLE_BAD = {
-		SMI_HANDLE_TYPE_AMD_NIC,
-		{ { 0x1, 0x2, 0x3, 0x4 } }
-	};
+	uint32_t processor_index		  = AMDSMI_MAX_DEVICES;
+	struct smi_nic_handle NIC_MOCK_HANDLE_BAD = {SMI_HANDLE_TYPE_AMD_NIC,
+						     {{0x1, 0x2, 0x3, 0x4}}};
 	int ret = amdsmi_get_index_from_processor_handle(&NIC_MOCK_HANDLE_BAD, &processor_index);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_FOUND);
 }
 
 TEST_F(AmdSmiDeviceTests, GetDeviceFromIndex)
 {
-	uint32_t processor_index = 0;
+	uint32_t processor_index	      = 0;
 	amdsmi_processor_handle device_handle = &GPU_MOCK_HANDLE;
 	int ret = amdsmi_get_processor_handle_from_index(processor_index, &device_handle);
 
@@ -646,19 +664,17 @@ TEST_F(AmdSmiDeviceTests, GetDeviceFromIndex)
 
 TEST_F(AmdSmiDeviceTests, GetIndexFromNicDeviceNotFound)
 {
-	uint32_t processor_index = AMDSMI_MAX_DEVICES;
-	struct smi_nic_handle NIC_MOCK_HANDLE_BAD = {
-		SMI_HANDLE_TYPE_AMD_NIC,
-		{{ 0x7, 0x6, 0x5, 0x4 }}
-	};
+	uint32_t processor_index		  = AMDSMI_MAX_DEVICES;
+	struct smi_nic_handle NIC_MOCK_HANDLE_BAD = {SMI_HANDLE_TYPE_AMD_NIC,
+						     {{0x7, 0x6, 0x5, 0x4}}};
 	int ret = amdsmi_get_index_from_processor_handle(&NIC_MOCK_HANDLE_BAD, &processor_index);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_FOUND);
 }
 
 TEST_F(AmdSmiDeviceTests, GetIndexFromDeviceUnknownType)
 {
-	uint32_t processor_index = AMDSMI_MAX_DEVICES;
-	struct smi_gpu_handle unknown_handle = { SMI_HANDLE_TYPE_UNKNOWN, {{0}} };
+	uint32_t processor_index	     = AMDSMI_MAX_DEVICES;
+	struct smi_gpu_handle unknown_handle = {SMI_HANDLE_TYPE_UNKNOWN, {{0}}};
 	int ret = amdsmi_get_index_from_processor_handle(&unknown_handle, &processor_index);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
@@ -669,7 +685,7 @@ TEST_F(AmdSmiDeviceTests, DeviceForUUIDNotFound)
 	amdsmi_processor_handle handle = &GPU_MOCK_HANDLE;
 
 	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_ASIC_INFO)))
-		.WillRepeatedly(amdsmi::SetResponseStatus(AMDSMI_STATUS_NOT_FOUND));
+	    .WillRepeatedly(amdsmi::SetResponseStatus(AMDSMI_STATUS_NOT_FOUND));
 
 	ret = amdsmi_get_processor_handle_from_uuid(GPU_MOCK_UUID, &handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_FOUND);
@@ -678,7 +694,7 @@ TEST_F(AmdSmiDeviceTests, DeviceForUUIDNotFound)
 
 	smi_device_info in_payload;
 	smi_asic_info gpu_info_mock = {};
-	std::string name = "abcdef";
+	std::string name	    = "abcdef";
 #ifdef _WIN64
 	strcpy_s(gpu_info_mock.market_name, sizeof(gpu_info_mock.market_name), name.c_str());
 #else
@@ -687,9 +703,10 @@ TEST_F(AmdSmiDeviceTests, DeviceForUUIDNotFound)
 
 	gpu_info_mock.vendor_id = 2;
 	gpu_info_mock.device_id = 3;
-	gpu_info_mock.rev_id = 4;
+	gpu_info_mock.rev_id	= 4;
 #ifdef _WIN64
-	strcpy_s(gpu_info_mock.asic_serial, sizeof(gpu_info_mock.asic_serial), "0x8A1F188C37CB1KE9");
+	strcpy_s(
+	    gpu_info_mock.asic_serial, sizeof(gpu_info_mock.asic_serial), "0x8A1F188C37CB1KE9");
 #else
 	strcpy(gpu_info_mock.asic_serial, "0x8A1F188C37CB1KE9");
 #endif
@@ -704,15 +721,16 @@ TEST_F(AmdSmiDeviceTests, DeviceForUUIDNotFound)
 
 	testing::Mock::VerifyAndClearExpectations(amdsmi::g_system_mock.get());
 
-	smi_vf_partition_info mocked_resp = {};
-	uint8_t fcn_idx = 0;
+	smi_vf_partition_info mocked_resp	 = {};
+	uint8_t fcn_idx				 = 0;
 	mocked_resp.partition[fcn_idx].id.handle = VF_MOCK_HANDLE.handle;
 
-	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO)))
-		.WillRepeatedly(testing::DoAll(amdsmi::SetPayload(mocked_resp), testing::Return(0)));
+	EXPECT_CALL(*amdsmi::g_system_mock,
+		    Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO)))
+	    .WillRepeatedly(testing::DoAll(amdsmi::SetPayload(mocked_resp), testing::Return(0)));
 
 	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_ASIC_INFO)))
-		.WillRepeatedly(amdsmi::SetResponseStatus(AMDSMI_STATUS_NOT_FOUND));
+	    .WillRepeatedly(amdsmi::SetResponseStatus(AMDSMI_STATUS_NOT_FOUND));
 
 	ret = amdsmi_get_vf_handle_from_uuid(VF_MOCK_UUID, &VF_MOCK_HANDLE);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_FOUND);
@@ -721,11 +739,12 @@ TEST_F(AmdSmiDeviceTests, DeviceForUUIDNotFound)
 
 	mocked_resp.num_vf_enabled = 2;
 
-	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO)))
-		.WillRepeatedly(testing::DoAll(amdsmi::SetPayload(mocked_resp), testing::Return(0)));
+	EXPECT_CALL(*amdsmi::g_system_mock,
+		    Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO)))
+	    .WillRepeatedly(testing::DoAll(amdsmi::SetPayload(mocked_resp), testing::Return(0)));
 
 	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_ASIC_INFO)))
-		.WillRepeatedly(amdsmi::SetResponseStatus(AMDSMI_STATUS_INVAL));
+	    .WillRepeatedly(amdsmi::SetResponseStatus(AMDSMI_STATUS_INVAL));
 
 	ret = amdsmi_get_vf_handle_from_uuid(VF_MOCK_UUID, &VF_MOCK_HANDLE);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
@@ -737,7 +756,7 @@ TEST_F(AmdSmiDeviceTests, GetDeviceHandleForUUID)
 	amdsmi_processor_handle handle = &GPU_MOCK_HANDLE;
 	smi_device_info in_payload;
 	smi_asic_info gpu_info_mock = {};
-	std::string name = "abcdef";
+	std::string name	    = "abcdef";
 #ifdef _WIN64
 	strcpy_s(gpu_info_mock.market_name, sizeof(gpu_info_mock.market_name), name.c_str());
 #else
@@ -746,9 +765,10 @@ TEST_F(AmdSmiDeviceTests, GetDeviceHandleForUUID)
 
 	gpu_info_mock.vendor_id = 2;
 	gpu_info_mock.device_id = 3;
-	gpu_info_mock.rev_id = 4;
+	gpu_info_mock.rev_id	= 4;
 #ifdef _WIN64
-	strcpy_s(gpu_info_mock.asic_serial, sizeof(gpu_info_mock.asic_serial), "0x9A1F188C37CB1EE6");
+	strcpy_s(
+	    gpu_info_mock.asic_serial, sizeof(gpu_info_mock.asic_serial), "0x9A1F188C37CB1EE6");
 #else
 	strcpy(gpu_info_mock.asic_serial, "0x9A1F188C37CB1EE6");
 #endif
@@ -764,11 +784,11 @@ TEST_F(AmdSmiDeviceTests, GetDeviceHandleForUUID)
 
 TEST_F(AmdSmiDeviceTests, GetVfHandleForUUID)
 {
-	amdsmi_vf_handle_t MOCK_VF_HANDLE_BAD = { ( VF_MOCK_HANDLE.handle << 32) | 0x0003 };
+	amdsmi_vf_handle_t MOCK_VF_HANDLE_BAD = {(VF_MOCK_HANDLE.handle << 32) | 0x0003};
 
 	int ret;
-	smi_asic_info  gpu_info_mock = {};
-	std::string name = "abcdef";
+	smi_asic_info gpu_info_mock = {};
+	std::string name	    = "abcdef";
 #ifdef _WIN64
 	strcpy_s(gpu_info_mock.market_name, sizeof(gpu_info_mock.market_name), name.c_str());
 #else
@@ -776,27 +796,30 @@ TEST_F(AmdSmiDeviceTests, GetVfHandleForUUID)
 #endif
 	gpu_info_mock.vendor_id = 2;
 	gpu_info_mock.device_id = 0x74A1;
-	gpu_info_mock.rev_id = 4;
+	gpu_info_mock.rev_id	= 4;
 #ifdef _WIN64
-	strcpy_s(gpu_info_mock.asic_serial, sizeof(gpu_info_mock.asic_serial), "0x9A1F188C37CB1EE6");
+	strcpy_s(
+	    gpu_info_mock.asic_serial, sizeof(gpu_info_mock.asic_serial), "0x9A1F188C37CB1EE6");
 #else
 	strcpy(gpu_info_mock.asic_serial, "0x9A1F188C37CB1EE6");
 #endif
 	smi_vf_partition_info vf_partition_info = {};
 
-	vf_partition_info.num_vf_enabled = 2;
-	vf_partition_info.partition[0].id.handle = MOCK_VF_HANDLE_BAD.handle;
+	vf_partition_info.num_vf_enabled	    = 2;
+	vf_partition_info.partition[0].id.handle    = MOCK_VF_HANDLE_BAD.handle;
 	vf_partition_info.partition[0].fb.fb_offset = 0;
-	vf_partition_info.partition[0].fb.fb_size = 1024;
-	vf_partition_info.partition[1].id.handle = VF_MOCK_HANDLE.handle;
+	vf_partition_info.partition[0].fb.fb_size   = 1024;
+	vf_partition_info.partition[1].id.handle    = VF_MOCK_HANDLE.handle;
 	vf_partition_info.partition[1].fb.fb_offset = 2048;
-	vf_partition_info.partition[1].fb.fb_size = 1024;
+	vf_partition_info.partition[1].fb.fb_size   = 1024;
 
-	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO)))
-		.WillRepeatedly(testing::DoAll(amdsmi::SetPayload(vf_partition_info), testing::Return(0)));
+	EXPECT_CALL(*amdsmi::g_system_mock,
+		    Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_VF_PARTITIONING_INFO)))
+	    .WillRepeatedly(
+		testing::DoAll(amdsmi::SetPayload(vf_partition_info), testing::Return(0)));
 
 	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_ASIC_INFO)))
-		.WillRepeatedly(testing::DoAll(amdsmi::SetPayload(gpu_info_mock), testing::Return(0)));
+	    .WillRepeatedly(testing::DoAll(amdsmi::SetPayload(gpu_info_mock), testing::Return(0)));
 
 	ret = amdsmi_get_vf_handle_from_uuid(VF_MOCK_UUID, &VF_MOCK_HANDLE);
 
@@ -826,15 +849,13 @@ TEST_F(AmdSmiDeviceTests, GetProcessorType)
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(processor_type, AMDSMI_PROCESSOR_TYPE_BRCM_NIC);
 
-	struct smi_gpu_handle unknown_handle = { SMI_HANDLE_TYPE_UNKNOWN, 0 };
+	struct smi_gpu_handle unknown_handle = {SMI_HANDLE_TYPE_UNKNOWN, 0};
 	ret = amdsmi_get_processor_type(&unknown_handle, &processor_type);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(processor_type, AMDSMI_PROCESSOR_TYPE_UNKNOWN);
 
-	struct smi_nic_handle unknown_nic_handle = {
-		SMI_HANDLE_TYPE_UNKNOWN,
-		{ { 0x4, 0x3, 0x2, 0x1 } }
-	};
+	struct smi_nic_handle unknown_nic_handle = {SMI_HANDLE_TYPE_UNKNOWN,
+						    {{0x4, 0x3, 0x2, 0x1}}};
 	ret = amdsmi_get_processor_type(&unknown_nic_handle, &processor_type);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(processor_type, AMDSMI_PROCESSOR_TYPE_UNKNOWN);
@@ -844,62 +865,78 @@ TEST_F(AmdSmiDeviceTests, GetProcessorHandlesByType)
 {
 	int ret;
 	amdsmi_socket_handle socket_handle = NULL;
-	uint32_t processor_count = AMDSMI_MAX_DEVICES;
-	amdsmi_processor_handle* processors = (amdsmi_processor_handle*)malloc(sizeof(amdsmi_processor_handle) * processor_count);
+	uint32_t processor_count	   = AMDSMI_MAX_DEVICES;
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * processor_count);
 
-	ret = amdsmi_get_processor_handles_by_type(socket_handle, AMDSMI_PROCESSOR_TYPE_AMD_GPU, processors, &processor_count);
+	ret = amdsmi_get_processor_handles_by_type(
+	    socket_handle, AMDSMI_PROCESSOR_TYPE_AMD_GPU, processors, &processor_count);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(processor_count, 1);
 
 #ifdef AMD_SMI_NIC_SUPPORT
 	processor_count = AMDSMI_MAX_DEVICES;
-	ret = amdsmi_get_processor_handles_by_type(socket_handle, AMDSMI_PROCESSOR_TYPE_AMD_NIC, processors, &processor_count);
+	ret		= amdsmi_get_processor_handles_by_type(
+		socket_handle, AMDSMI_PROCESSOR_TYPE_AMD_NIC, processors, &processor_count);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 
-	ret = amdsmi_get_processor_handles_by_type(socket_handle, AMDSMI_PROCESSOR_TYPE_AMD_NIC, processors, NULL);
+	ret = amdsmi_get_processor_handles_by_type(
+	    socket_handle, AMDSMI_PROCESSOR_TYPE_AMD_NIC, processors, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	processor_count = AMDSMI_MAX_DEVICES;
-	ret = amdsmi_get_processor_handles_by_type(socket_handle, AMDSMI_PROCESSOR_TYPE_AMD_NIC, NULL, &processor_count);
+	ret		= amdsmi_get_processor_handles_by_type(
+		socket_handle, AMDSMI_PROCESSOR_TYPE_AMD_NIC, NULL, &processor_count);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(processor_count, 1);
 
 	processor_count = AMDSMI_MAX_DEVICES;
-	ret = amdsmi_get_processor_handles_by_type(socket_handle, AMDSMI_PROCESSOR_TYPE_BRCM_NIC, processors, &processor_count);
+	ret		= amdsmi_get_processor_handles_by_type(
+		socket_handle, AMDSMI_PROCESSOR_TYPE_BRCM_NIC, processors, &processor_count);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 
-	ret = amdsmi_get_processor_handles_by_type(socket_handle, AMDSMI_PROCESSOR_TYPE_BRCM_NIC, processors, NULL);
+	ret = amdsmi_get_processor_handles_by_type(
+	    socket_handle, AMDSMI_PROCESSOR_TYPE_BRCM_NIC, processors, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	processor_count = AMDSMI_MAX_DEVICES;
-	ret = amdsmi_get_processor_handles_by_type(socket_handle, AMDSMI_PROCESSOR_TYPE_BRCM_NIC, NULL, &processor_count);
+	ret		= amdsmi_get_processor_handles_by_type(
+		socket_handle, AMDSMI_PROCESSOR_TYPE_BRCM_NIC, NULL, &processor_count);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(processor_count, 1);
 #endif
 
-	ret = amdsmi_get_processor_handles_by_type(socket_handle, AMDSMI_PROCESSOR_TYPE_AMD_CPU, processors, &processor_count);
+	ret = amdsmi_get_processor_handles_by_type(
+	    socket_handle, AMDSMI_PROCESSOR_TYPE_AMD_CPU, processors, &processor_count);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 
-	ret = amdsmi_get_processor_handles_by_type(socket_handle, AMDSMI_PROCESSOR_TYPE_NON_AMD_GPU, processors, &processor_count);
+	ret = amdsmi_get_processor_handles_by_type(
+	    socket_handle, AMDSMI_PROCESSOR_TYPE_NON_AMD_GPU, processors, &processor_count);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 
-	ret = amdsmi_get_processor_handles_by_type(socket_handle, AMDSMI_PROCESSOR_TYPE_NON_AMD_CPU, processors, &processor_count);
+	ret = amdsmi_get_processor_handles_by_type(
+	    socket_handle, AMDSMI_PROCESSOR_TYPE_NON_AMD_CPU, processors, &processor_count);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 
-	ret = amdsmi_get_processor_handles_by_type(socket_handle, AMDSMI_PROCESSOR_TYPE_AMD_CPU_CORE, processors, &processor_count);
+	ret = amdsmi_get_processor_handles_by_type(
+	    socket_handle, AMDSMI_PROCESSOR_TYPE_AMD_CPU_CORE, processors, &processor_count);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 
-	ret = amdsmi_get_processor_handles_by_type(socket_handle, AMDSMI_PROCESSOR_TYPE_AMD_APU, processors, &processor_count);
+	ret = amdsmi_get_processor_handles_by_type(
+	    socket_handle, AMDSMI_PROCESSOR_TYPE_AMD_APU, processors, &processor_count);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 
-	ret = amdsmi_get_processor_handles_by_type(socket_handle, AMDSMI_PROCESSOR_TYPE_UNKNOWN, processors, &processor_count);
+	ret = amdsmi_get_processor_handles_by_type(
+	    socket_handle, AMDSMI_PROCESSOR_TYPE_UNKNOWN, processors, &processor_count);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	processor_count = AMDSMI_MAX_DEVICES;
-	ret = amdsmi_get_processor_handles_by_type(socket_handle, AMDSMI_PROCESSOR_TYPE_AMD_GPU, NULL, &processor_count);
+	ret		= amdsmi_get_processor_handles_by_type(
+		socket_handle, AMDSMI_PROCESSOR_TYPE_AMD_GPU, NULL, &processor_count);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 
-	ret = amdsmi_get_processor_handles_by_type(socket_handle, AMDSMI_PROCESSOR_TYPE_AMD_GPU, processors, NULL);
+	ret = amdsmi_get_processor_handles_by_type(
+	    socket_handle, AMDSMI_PROCESSOR_TYPE_AMD_GPU, processors, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	free(processors);
@@ -909,10 +946,12 @@ TEST_F(AmdSmiZeroDeviceTests, GetProcessorHandlesZeroGPUs)
 {
 	int ret;
 	amdsmi_socket_handle socket_handle = NULL;
-	uint32_t processor_count = AMDSMI_MAX_DEVICES;
-	amdsmi_processor_handle* processors = (amdsmi_processor_handle*)malloc(sizeof(amdsmi_processor_handle) * processor_count);
+	uint32_t processor_count	   = AMDSMI_MAX_DEVICES;
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * processor_count);
 
-	ret = amdsmi_get_processor_handles_by_type(socket_handle, AMDSMI_PROCESSOR_TYPE_AMD_GPU, processors, &processor_count);
+	ret = amdsmi_get_processor_handles_by_type(
+	    socket_handle, AMDSMI_PROCESSOR_TYPE_AMD_GPU, processors, &processor_count);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NO_DATA);
 
 	free(processors);

@@ -8,7 +8,7 @@
 
 #ifdef __cplusplus
 extern "C" {
-#include "smi_nic_interface.h"
+	#include "smi_nic_interface.h"
 #endif
 
 /**

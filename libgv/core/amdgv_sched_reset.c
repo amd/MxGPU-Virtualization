@@ -8,7 +8,6 @@
 #include "amdgv_sched_internal.h"
 #include "amdgv_reset.h"
 #include "amdgv_guard.h"
-#include "amdgv_notify.h"
 #include "amdgv_task_barrier.h"
 #include "amdgv_ras_eeprom.h"
 #include "amdgv_psp_gfx_if.h"
@@ -461,9 +460,8 @@ int amdgv_sched_reset_vf(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	return 0;
 
 whole_gpu_reset:
-	amdgv_notify_shim(adapt->dev, AMDGV_NOTIFICATION_ERROR_WHOLE_GPU_RESET,
-			  "Whole GPU reset triggered by failed FLR on %s.",
-			  amdgv_idx_to_str(idx_vf));
+	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)
+		amdgv_live_migration_set_abort_all(adapt);
 
 	ret = amdgv_sched_gpu_reset_wrap(adapt, 1, idx_vf);
 
@@ -559,10 +557,6 @@ int amdgv_sched_reset_vf_auto(struct amdgv_adapter *adapt)
 	 * on different "sched_id". So make sure VF that will be FLR knows
 	 */
 	ret = amdgv_sched_vf_flr(adapt, abnormal_idx_vf, AMDGV_SCHED_BLOCK_ALL, true);
-	amdgv_notify_shim(adapt->dev, AMDGV_NOTIFICATION_ERROR_RESET_VF,
-			  "Reset %s initiated from reset_vf_auto on %s",
-			  amdgv_idx_to_str(abnormal_idx_vf),
-			  amdgv_sched_block_to_name(AMDGV_SCHED_BLOCK_ALL));
 	if (ret)
 		goto whole_gpu_reset__auto;
 
@@ -620,16 +614,12 @@ int amdgv_sched_reset_vf_auto(struct amdgv_adapter *adapt)
 	/* end recording for VF */
 	amdgv_time_log_note_vf_reset_end(adapt, abnormal_idx_vf);
 
-	/* FLR recovery above can take a long time (RLCV cmd timeouts), so run one
-	 * scheduling pass here to keep bystander VFs from starving. */
-	amdgv_sched_context_one_time_loop(adapt, abnormal_idx_vf);
+	/* free the slots of VFs whose VM is already gone */
+	amdgv_sched_remove_pending_vfs(adapt, abnormal_idx_vf);
 
 	return 0;
 
 whole_gpu_reset__auto:
-	amdgv_notify_shim(adapt->dev, AMDGV_NOTIFICATION_ERROR_WHOLE_GPU_RESET,
-			  "Whole GPU reset triggered by failed VF reset auto.");
-
 	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)
 		amdgv_live_migration_set_abort_all(adapt);
 

@@ -202,6 +202,7 @@ enum {
 	AMDGV_SDMA_BLOCK		= (1 << 11),
 	AMDGV_IOVM_DRV_BLOCK		= (1 << 12),
 	AMDGV_UAL_BLOCK			= (1 << 13),
+	AMDGV_LSDMA_BLOCK		= (1 << 14),
 	AMDGV_MAX_LOG_BLOCK
 };
 #define AMDGV_ALL_BLOCK		(((AMDGV_MAX_LOG_BLOCK - 1) << 1) - 1)
@@ -642,11 +643,12 @@ enum amdgv_debug_mode {
 	AMDGV_DEBUG_MODE_MULTI_VF             = (1 << 2),
 	AMDGV_DEBUG_MODE_RAS_SMU              = (1 << 3),
 	AMDGV_DEBUG_MODE_CONDITIONAL_HANG     = (1 << 4),
+	AMDGV_DEBUG_MODE_BREAK_POINT          = (1 << 5),
 	AMDGV_DEBUG_MODE_HANG                 = AMDGV_DEBUG_MODE_VF_FLR_HANG | AMDGV_DEBUG_MODE_WHOLE_GPU_RESET_HANG,
 	AMDGV_DEBUG_MODE_HANG_RAS_SMU         = AMDGV_DEBUG_MODE_HANG | AMDGV_DEBUG_MODE_RAS_SMU,
 	AMDGV_DEBUG_MODE_MASK                 = AMDGV_DEBUG_MODE_VF_FLR_HANG | AMDGV_DEBUG_MODE_WHOLE_GPU_RESET_HANG |
 						AMDGV_DEBUG_MODE_MULTI_VF | AMDGV_DEBUG_MODE_RAS_SMU |
-						AMDGV_DEBUG_MODE_CONDITIONAL_HANG,
+						AMDGV_DEBUG_MODE_CONDITIONAL_HANG | AMDGV_DEBUG_MODE_BREAK_POINT,
 };
 
 enum amdgv_reset_mode {
@@ -909,6 +911,8 @@ struct amdgv_init_config_opt {
 	int32_t sys_log_level;
 
 	uint32_t shader_hash_mode;
+    /* reserve ffbm spa list to workaround os circle deadlock issue */
+    bool reserve_ffbm_pteb;
 };
 
 struct amdgv_fini_config_opt {
@@ -1424,6 +1428,25 @@ enum amdgv_smi_ras_block {
 	AMDGV_SMI_RAS_BLOCK__IH,
 	AMDGV_SMI_RAS_BLOCK__MPIO,
 	AMDGV_SMI_RAS_BLOCK__MMSCH,
+	AMDGV_SMI_RAS_BLOCK__MP5,
+	AMDGV_SMI_RAS_BLOCK__ATU,
+	AMDGV_SMI_RAS_BLOCK__DACC_BE,
+	AMDGV_SMI_RAS_BLOCK__ECLR,
+	AMDGV_SMI_RAS_BLOCK__KPX_SERDES,
+	AMDGV_SMI_RAS_BLOCK__LSDMA,
+	AMDGV_SMI_RAS_BLOCK__MPART,
+	AMDGV_SMI_RAS_BLOCK__MPIFOE,
+	AMDGV_SMI_RAS_BLOCK__MPRAS,
+	AMDGV_SMI_RAS_BLOCK__NBIF,
+	AMDGV_SMI_RAS_BLOCK__NBIO,
+	AMDGV_SMI_RAS_BLOCK__OXRP,
+	AMDGV_SMI_RAS_BLOCK__PCIE_PL,
+	AMDGV_SMI_RAS_BLOCK__PCS_XGMI,
+	AMDGV_SMI_RAS_BLOCK__PIE,
+	AMDGV_SMI_RAS_BLOCK__CS,
+	AMDGV_SMI_RAS_BLOCK__SHUB,
+	AMDGV_SMI_RAS_BLOCK__SSBDCI,
+	AMDGV_SMI_RAS_BLOCK__UCIE_PCS,
 	AMDGV_SMI_NUM_BLOCK_MAX
 };
 
@@ -1720,6 +1743,9 @@ struct amdgv_query_dirty_bit_data {
 	uint32_t         idx_vf;
 	/* if the dbit is cleared during query – it’s not cleared when set to true*/
 	bool dbit_preserve;
+	/* the query ORs its result onto the bits already set in
+	 * dbit_plane_data_buffer when set to true, and replaces them when false */
+	bool buffer_accumulate;
 };
 
 enum amdgv_migration_context_version {
@@ -2918,7 +2944,11 @@ int amdgv_control_dirtybit(amdgv_dev_t dev, bool enable);
  * amdgv_query_dirtybit_data – query dirty bit tracking data.
  *
  * @dev:	amdgv device handle
- * @enable:	enable/disable dirty bit tracking
+ * @data:	query parameters and the buffer receiving the dirty bitmap
+ *
+ * Set data->buffer_accumulate when the caller keeps its own dirty set in
+ * dbit_plane_data_buffer across queries: the result is then ORed onto what is
+ * already there instead of replacing it.
  *
  */
 int amdgv_query_dirtybit_data(amdgv_dev_t dev, struct amdgv_query_dirty_bit_data *data);
@@ -3475,11 +3505,12 @@ int amdgv_dump_asymmetric_fb_layout(amdgv_dev_t dev, char *buf, int *len, uint32
 /*
  * amdgv_get_market_name - get marketing name
  *
+ * @dev:			device handle
  * @dev_id:			device id
  * @rev_id:			revision id
  *
  */
-const char *amdgv_get_market_name(uint32_t dev_id, uint32_t rev_id);
+const char *amdgv_get_market_name(amdgv_dev_t dev, uint32_t dev_id, uint32_t rev_id);
 
 int amdgv_set_sysmem_va_ptr(amdgv_dev_t dev, void *ptr);
 

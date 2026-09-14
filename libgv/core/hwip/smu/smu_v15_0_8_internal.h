@@ -18,7 +18,9 @@
 #define SMUQ10_TO_UINT(x) ((x) >> 10)
 #define SMUQ16_TO_UINT(x) ((x) >> 16)
 #define SMUQ10_FRAC(x) ((x) & 0x3ff)
+#define SMUQ16_FRAC(x) ((x) & 0xffff)
 #define SMUQ10_ROUND(x) ((SMUQ10_TO_UINT(x)) + ((SMUQ10_FRAC(x)) >= 0x200))
+#define SMUQ16_ROUND(x) ((SMUQ16_TO_UINT(x)) + ((SMUQ16_FRAC(x)) >= 0x8000))
 
 #define PLDM_VERSION_NOT_SUPPORTED	0xffffffff
 #define SMU_15_0_8_MAX_ARGS		4
@@ -36,5 +38,6 @@ struct smu_15_0_8_msg {
 int smu_v15_0_8_send_msg(struct amdgv_adapter *adapt, struct smu_15_0_8_msg *msg);
 void smu_v15_0_8_ack_irq(struct amdgv_adapter *adapt);
 bool smu_v15_0_8_is_fw_alive(struct amdgv_adapter *adapt);
+void smu_v15_0_8_put_timeout(struct amdgv_adapter *adapt, uint64_t elapsed);
 
 #endif

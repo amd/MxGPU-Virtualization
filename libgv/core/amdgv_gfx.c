@@ -130,8 +130,6 @@ int amdgv_gfx_kiq_init_ring(struct amdgv_adapter *adapt, struct amdgv_ring *ring
 	 * KIQ tasks get submitted directly to the ring.
 	 */
 	r = amdgv_ring_init(adapt, ring, frame_dword_size, frame_number, AMDGV_RING_PRIO_DEFAULT, NULL, MEM_KIQ_RING);
-	if (r)
-		AMDGV_WARN("(%d) failed to init kiq ring\n", r);
 
 	return r;
 }
@@ -166,7 +164,7 @@ int amdgv_gfx_kiq_init(struct amdgv_adapter *adapt, unsigned int hpd_size, int x
 	kiq->eop_obj =
 		amdgv_memmgr_alloc_align(&adapt->memmgr_pf, hpd_size, PAGE_SIZE, MEM_KIQ_EOP);
 	if (!kiq->eop_obj) {
-		AMDGV_WARN("failed to create KIQ bo.\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL, (uint64_t)hpd_size);
 		return AMDGV_FAILURE;
 	}
 
@@ -203,7 +201,7 @@ int amdgv_gfx_mqd_sw_init(struct amdgv_adapter *adapt,
 		ring->mqd_obj = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, mqd_size,
 							 PAGE_SIZE, MEM_KIQ_MQD);
 		if (!ring->mqd_obj) {
-			AMDGV_WARN("failed to create ring mqd ob");
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL, (uint64_t)mqd_size);
 			return AMDGV_FAILURE;
 		}
 
@@ -220,7 +218,7 @@ int amdgv_gfx_mqd_sw_init(struct amdgv_adapter *adapt,
 			ring->mqd_obj = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, mqd_size,
 								 PAGE_SIZE, MEM_COMPUTE0_MQD + i);
 			if (!ring->mqd_obj) {
-				AMDGV_WARN("failed to create ring mqd bo");
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL, (uint64_t)mqd_size);
 				return AMDGV_FAILURE;
 			}
 
@@ -312,8 +310,8 @@ int amdgv_gfx_kiq_set_resources(struct amdgv_adapter *adapt, int xcc_id)
 		queue_mask |= (1ull << amdgv_queue_mask_bit_to_set_resource_bit(adapt, i));
 	}
 
-	AMDGV_INFO("kiq ring mec %d pipe %d q %d\n", kiq_ring->me, kiq_ring->pipe,
-		   kiq_ring->queue);
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_KIQ_RING_INFO,
+		      AMDGV_LOG_DATA_16_16_32(kiq_ring->me, kiq_ring->pipe, kiq_ring->queue));
 
 	oss_spin_lock(adapt->gfx.kiq[xcc_id].ring_lock);
 	r = amdgv_ring_alloc(kiq_ring, kiq->pmf->set_resources_size);
@@ -485,11 +483,8 @@ int amdgv_gfx_rlc_safe_mode(struct amdgv_adapter *adapt, bool enable)
 		else
 			ret = amdgv_gfx_rlc_exit_safe_mode(adapt, xcc_id);
 
-		if (ret) {
-			AMDGV_WARN("failed to %s RLC safe mode on XCC%d\n",
-				   enable ? "enter" : "exit", xcc_id);
+		if (ret)
 			return ret;
-		}
 	}
 
 	return 0;

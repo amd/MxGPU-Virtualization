@@ -115,30 +115,35 @@ static void walkthrough_test()
 	uint32_t sensor_ind = 0;
 
 	ASSERT_EQ(amdsmi_get_lib_version(&version), AMDSMI_STATUS_SUCCESS);
-	std::cout << "AMD SMI Library version: " <<
-		version.major << "." << version.minor << "." << version.release << std::endl;
+	std::cout << "AMD SMI Library version: " << version.major << "." << version.minor << "."
+		  << version.release << std::endl;
 
 	ASSERT_EQ(amdsmi_get_processor_handles(socket, &dev_cnt, NULL), AMDSMI_STATUS_SUCCESS);
 	ASSERT_GE(dev_cnt, (unsigned)1);
 	ASSERT_LE(dev_cnt, (unsigned)32);
 	std::cout << "Number of processors on server: " << dev_cnt << '\n';
 
-	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
-	ASSERT_EQ(amdsmi_get_processor_handles(socket, &dev_cnt, &processors[0]), AMDSMI_STATUS_SUCCESS);
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	ASSERT_EQ(amdsmi_get_processor_handles(socket, &dev_cnt, &processors[0]),
+		  AMDSMI_STATUS_SUCCESS);
 
-	ASSERT_EQ(amdsmi_get_index_from_processor_handle(processors[0], &processor_index), AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(amdsmi_get_index_from_processor_handle(processors[0], &processor_index),
+		  AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(processor_index, 0);
 
 	/* below use printf since data format can be hex and dec mixed */
 	for (uint32_t i = 0; i < dev_cnt; ++i) {
 		printf("GPU %u\n", i);
 
-		ASSERT_EQ(amdsmi_get_gpu_driver_info(processors[i], &driver_version), AMDSMI_STATUS_SUCCESS);
+		ASSERT_EQ(amdsmi_get_gpu_driver_info(processors[i], &driver_version),
+			  AMDSMI_STATUS_SUCCESS);
 		printf("Host driver name: %s\n", driver_version.driver_name);
 		printf("Host driver version: %s\n", driver_version.driver_version);
 		printf("Host driver date: %s\n", driver_version.driver_date);
 
-		ASSERT_EQ(amdsmi_get_gpu_virtualization_mode(processors[i], &virtualization_mode), AMDSMI_STATUS_SUCCESS);
+		ASSERT_EQ(amdsmi_get_gpu_virtualization_mode(processors[i], &virtualization_mode),
+			  AMDSMI_STATUS_SUCCESS);
 		printf("Virtualization mode: %d\n", virtualization_mode);
 
 		ret = amdsmi_get_gpu_driver_model(processors[i], &driver_model);
@@ -149,7 +154,8 @@ static void walkthrough_test()
 			printf("Driver model: %s\n", "N/A");
 		}
 
-		ASSERT_EQ(amdsmi_get_gpu_asic_info(processors[i], &asic_info), AMDSMI_STATUS_SUCCESS);
+		ASSERT_EQ(amdsmi_get_gpu_asic_info(processors[i], &asic_info),
+			  AMDSMI_STATUS_SUCCESS);
 		printf("ASIC info:\n");
 		printf("    Market name: %s\n", asic_info.market_name);
 		printf("    Vendor ID: 0x%x\n", asic_info.vendor_id);
@@ -160,7 +166,8 @@ static void walkthrough_test()
 		printf("    OAM ID: %d\n", asic_info.oam_id);
 		printf("    Num Of Compute Units: %d\n", asic_info.num_of_compute_units);
 		printf("    Subsystem ID: 0x%x\n", asic_info.subsystem_id);
-		printf("    Target Graphics Version: %s\n", na_u64(asic_info.target_graphics_version).c_str());
+		printf("    Target Graphics Version: %s\n",
+		       na_u64(asic_info.target_graphics_version).c_str());
 		printf("    Flags: %s\n", na_u64(asic_info.flags).c_str());
 		ASSERT_EQ(amdsmi_get_gpu_device_uuid(processors[i], &uuid_length, uuid),
 			  AMDSMI_STATUS_SUCCESS);
@@ -168,7 +175,8 @@ static void walkthrough_test()
 		printf("    UUID: %s\n", uuid);
 		printf("    UUID Length: %u\n", uuid_length);
 
-		ASSERT_EQ(amdsmi_get_processor_handle_from_uuid(uuid, &processor_handle), AMDSMI_STATUS_SUCCESS);
+		ASSERT_EQ(amdsmi_get_processor_handle_from_uuid(uuid, &processor_handle),
+			  AMDSMI_STATUS_SUCCESS);
 		ASSERT_EQ(processor_handle, processors[i]);
 
 		ret = amdsmi_get_pcie_info(processors[i], &pcie_info);
@@ -176,37 +184,52 @@ static void walkthrough_test()
 		if (ret == AMDSMI_STATUS_SUCCESS) {
 			EXPECT_TRUE(pcie_info.pcie_static.max_pcie_speed > 0);
 			EXPECT_TRUE((pcie_info.pcie_static.max_pcie_width >= 16) &&
-					(pcie_info.pcie_static.max_pcie_width <= 32));
+				    (pcie_info.pcie_static.max_pcie_width <= 32));
 
 			printf("PCIe static info:\n");
-			printf("    Maximum PCIe width: %d\n", pcie_info.pcie_static.max_pcie_width);
-			printf("    Maximum PCIe speed: %d\n", pcie_info.pcie_static.max_pcie_speed);
-			printf("    PCIe interface version: %u\n", pcie_info.pcie_static.pcie_interface_version);
+			printf("    Maximum PCIe width: %d\n",
+			       pcie_info.pcie_static.max_pcie_width);
+			printf("    Maximum PCIe speed: %d\n",
+			       pcie_info.pcie_static.max_pcie_speed);
+			printf("    PCIe interface version: %u\n",
+			       pcie_info.pcie_static.pcie_interface_version);
 			printf("    Slot type: %d\n", pcie_info.pcie_static.slot_type);
-			printf("    Maximum PCIe interface version: %d\n", pcie_info.pcie_static.max_pcie_interface_version);
-
+			printf("    Maximum PCIe interface version: %d\n",
+			       pcie_info.pcie_static.max_pcie_interface_version);
 
 			printf("PCIe metric info:\n");
 			printf("    PCIe speed: %u\n", pcie_info.pcie_metric.pcie_speed);
 			printf("    PCIe width: %u\n", pcie_info.pcie_metric.pcie_width);
-			printf("    PCIe bandwidth: %s\n", na_u32(pcie_info.pcie_metric.pcie_bandwidth).c_str());
-			printf("    PCIe replay count: %s\n", na_u64(pcie_info.pcie_metric.pcie_replay_count).c_str());
-			printf("    PCIe l0 to recovery count: %s\n", na_u64(pcie_info.pcie_metric.pcie_l0_to_recovery_count).c_str());
-			printf("    PCIe replay roll over count: %s\n", na_u64(pcie_info.pcie_metric.pcie_replay_roll_over_count).c_str());
-			printf("    PCIe nak sent count: %s\n", na_u64(pcie_info.pcie_metric.pcie_nak_sent_count).c_str());
-			printf("    PCIe nak received count: %s\n", na_u64(pcie_info.pcie_metric.pcie_nak_received_count).c_str());
-			printf("    PCIe lc perf other end recovery count: %s\n", na_u32(pcie_info.pcie_metric.pcie_lc_perf_other_end_recovery_count).c_str());
+			printf("    PCIe bandwidth: %s\n",
+			       na_u32(pcie_info.pcie_metric.pcie_bandwidth).c_str());
+			printf("    PCIe replay count: %s\n",
+			       na_u64(pcie_info.pcie_metric.pcie_replay_count).c_str());
+			printf("    PCIe l0 to recovery count: %s\n",
+			       na_u64(pcie_info.pcie_metric.pcie_l0_to_recovery_count).c_str());
+			printf("    PCIe replay roll over count: %s\n",
+			       na_u64(pcie_info.pcie_metric.pcie_replay_roll_over_count).c_str());
+			printf("    PCIe nak sent count: %s\n",
+			       na_u64(pcie_info.pcie_metric.pcie_nak_sent_count).c_str());
+			printf("    PCIe nak received count: %s\n",
+			       na_u64(pcie_info.pcie_metric.pcie_nak_received_count).c_str());
+			printf("    PCIe lc perf other end recovery count: %s\n",
+			       na_u32(pcie_info.pcie_metric.pcie_lc_perf_other_end_recovery_count)
+				   .c_str());
 		}
 
-		ASSERT_EQ(amdsmi_get_power_cap_info(processors[i], sensor_ind, &pwr_info), AMDSMI_STATUS_SUCCESS);
+		ASSERT_EQ(amdsmi_get_power_cap_info(processors[i], sensor_ind, &pwr_info),
+			  AMDSMI_STATUS_SUCCESS);
 
 		EXPECT_TRUE(pwr_info.dpm_cap <= 16);
-		EXPECT_TRUE((pwr_info.max_power_cap == UINT64_MAX) || (pwr_info.power_cap <= pwr_info.max_power_cap));
-		EXPECT_TRUE((pwr_info.min_power_cap == UINT64_MAX) || (pwr_info.power_cap >= pwr_info.min_power_cap));
+		EXPECT_TRUE((pwr_info.max_power_cap == UINT64_MAX) ||
+			    (pwr_info.power_cap <= pwr_info.max_power_cap));
+		EXPECT_TRUE((pwr_info.min_power_cap == UINT64_MAX) ||
+			    (pwr_info.power_cap >= pwr_info.min_power_cap));
 
 		printf("Power capabilities:\n");
 		printf("    DPM: %s\n", na_u64(pwr_info.dpm_cap).c_str());
-		printf("    Default power: %s\n", na_u64_unit(pwr_info.default_power_cap, "W").c_str());
+		printf("    Default power: %s\n",
+		       na_u64_unit(pwr_info.default_power_cap, "W").c_str());
 		printf("    Power: %s\n", na_u64_unit(pwr_info.power_cap, "W").c_str());
 		printf("    Max power: %s\n", na_u64_unit(pwr_info.max_power_cap, "W").c_str());
 		printf("    Min power: %s\n", na_u64_unit(pwr_info.min_power_cap, "W").c_str());
@@ -215,22 +238,24 @@ static void walkthrough_test()
 
 		EXPECT_TRUE((pf_fb_info.total_fb_size >= 1024) &&
 			    (pf_fb_info.total_fb_size <= 295000));
-		EXPECT_TRUE((pf_fb_info.pf_fb_reserved >= 1) &&
-			    (pf_fb_info.pf_fb_reserved <= 512));
+		EXPECT_TRUE((pf_fb_info.pf_fb_reserved >= 1) && (pf_fb_info.pf_fb_reserved <= 512));
 		EXPECT_TRUE((pf_fb_info.max_vf_fb_usable >= 1024) &&
 			    (pf_fb_info.max_vf_fb_usable <= pf_fb_info.total_fb_size));
 		EXPECT_TRUE((pf_fb_info.min_vf_fb_usable > 0) &&
 			    (pf_fb_info.min_vf_fb_usable <= pf_fb_info.total_fb_size));
-		EXPECT_EQ(pf_fb_info.max_vf_fb_usable, pf_fb_info.total_fb_size - pf_fb_info.pf_fb_reserved);
-
+		EXPECT_EQ(pf_fb_info.max_vf_fb_usable,
+			  pf_fb_info.total_fb_size - pf_fb_info.pf_fb_reserved);
 
 		printf("FB info:\n");
 		printf("    Total size: %" PRIu64 " MB\n", (uint64_t)pf_fb_info.total_fb_size);
 		printf("    Reserved size: %" PRIu64 " MB\n", (uint64_t)pf_fb_info.pf_fb_reserved);
-		printf("    Maximum usable: %" PRIu64 " MB\n", (uint64_t)pf_fb_info.max_vf_fb_usable);
-		printf("    Minimum usable: %" PRIu64 " MB\n", (uint64_t)pf_fb_info.min_vf_fb_usable);
+		printf("    Maximum usable: %" PRIu64 " MB\n",
+		       (uint64_t)pf_fb_info.max_vf_fb_usable);
+		printf("    Minimum usable: %" PRIu64 " MB\n",
+		       (uint64_t)pf_fb_info.min_vf_fb_usable);
 
-		ASSERT_EQ(amdsmi_get_gpu_vbios_info(processors[i], &vbios_info), AMDSMI_STATUS_SUCCESS);
+		ASSERT_EQ(amdsmi_get_gpu_vbios_info(processors[i], &vbios_info),
+			  AMDSMI_STATUS_SUCCESS);
 		printf("vBIOS info:\n");
 		printf("    Build date: %s\n", vbios_info.build_date);
 		printf("    Name: %s\n", vbios_info.name);
@@ -245,15 +270,13 @@ static void walkthrough_test()
 			printf("    Cache count: %d\n", cache_info.num_cache_types);
 			for (uint32_t j = 0; j < cache_info.num_cache_types; ++j) {
 				printf("    Cache properties: %d\n",
-					cache_info.cache[j].cache_properties);
-				printf("    Cache size: %d KB\n",
-						cache_info.cache[j].cache_size);
-				printf("    Cache level: %d\n",
-						cache_info.cache[j].cache_level);
+				       cache_info.cache[j].cache_properties);
+				printf("    Cache size: %d KB\n", cache_info.cache[j].cache_size);
+				printf("    Cache level: %d\n", cache_info.cache[j].cache_level);
 				printf("    Num Compute Units share: %d\n",
-						cache_info.cache[j].max_num_cu_shared);
+				       cache_info.cache[j].max_num_cu_shared);
 				printf("    Max num of instance of this cache type: %d\n",
-						cache_info.cache[j].num_cache_instance);
+				       cache_info.cache[j].num_cache_instance);
 			}
 		}
 
@@ -266,8 +289,7 @@ static void walkthrough_test()
 		printf("    Firmware count: %d\n", fw_info.num_fw_info);
 		for (uint32_t j = 0; j < fw_info.num_fw_info; ++j) {
 			if (fw_info.fw_info_list[j].fw_version != 0) {
-				printf("    Firmware ID: 0x%x\n",
-				       fw_info.fw_info_list[j].fw_id);
+				printf("    Firmware ID: 0x%x\n", fw_info.fw_info_list[j].fw_id);
 				printf("    Firmware version: 0x%" PRIx64 "\n",
 				       fw_info.fw_info_list[j].fw_version);
 			}
@@ -275,9 +297,8 @@ static void walkthrough_test()
 		ASSERT_EQ(amdsmi_get_num_vf(processors[i], &num_vf_enabled, &num_vf_supported),
 			  AMDSMI_STATUS_SUCCESS);
 		ret = amdsmi_set_num_vf(processors[i], num_vf_enabled);
-		EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS
-					|| ret == AMDSMI_STATUS_BUSY
-					|| ret == AMDSMI_STATUS_NOT_SUPPORTED);
+		EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_BUSY ||
+			    ret == AMDSMI_STATUS_NOT_SUPPORTED);
 
 		EXPECT_TRUE(num_vf_supported <= 31);
 		printf("Num VF supported: %d\n", num_vf_supported);
@@ -285,7 +306,8 @@ static void walkthrough_test()
 		EXPECT_TRUE(num_vf_enabled <= 31);
 		EXPECT_LE(num_vf_enabled, num_vf_supported);
 		printf("Num VF enabled: %d\n", num_vf_enabled);
-		ASSERT_EQ(amdsmi_get_gpu_board_info(processors[i], &board_info), AMDSMI_STATUS_SUCCESS);
+		ASSERT_EQ(amdsmi_get_gpu_board_info(processors[i], &board_info),
+			  AMDSMI_STATUS_SUCCESS);
 		printf("Board model: %s\n", board_info.model_number);
 		printf("Board product serial: %s\n", board_info.product_serial);
 		printf("Board FRU ID: %s\n", board_info.fru_id);
@@ -293,9 +315,9 @@ static void walkthrough_test()
 		printf("Board product name: %s\n", board_info.product_name);
 
 		partitioning_info = new amdsmi_partition_info_t[num_vf_enabled];
-		ASSERT_EQ(amdsmi_get_vf_partition_info(processors[i], num_vf_enabled,
-							partitioning_info),
-			  AMDSMI_STATUS_SUCCESS);
+		ASSERT_EQ(
+		    amdsmi_get_vf_partition_info(processors[i], num_vf_enabled, partitioning_info),
+		    AMDSMI_STATUS_SUCCESS);
 
 		for (uint32_t j = 0; j < num_vf_enabled; ++j) {
 			ASSERT_EQ(amdsmi_get_vf_handle_from_vf_index(processors[i], j, &vf_handle),
@@ -305,21 +327,22 @@ static void walkthrough_test()
 
 			printf("Partitioning info for VF%d\n", j);
 			printf("    Handle: 0x%" PRIx64 "\n", partitioning_info[j].id.handle);
-			printf("    FB offset: %" PRIu64 " MB\n", (uint64_t)partitioning_info[j].fb.fb_offset);
-			printf("    FB size:   %" PRIu64 " MB\n", (uint64_t)partitioning_info[j].fb.fb_size);
+			printf("    FB offset: %" PRIu64 " MB\n",
+			       (uint64_t)partitioning_info[j].fb.fb_offset);
+			printf("    FB size:   %" PRIu64 " MB\n",
+			       (uint64_t)partitioning_info[j].fb.fb_size);
 		}
 		for (uint32_t j = 0; j < num_vf_enabled; ++j) {
 			printf("UUID info for VF%d\n", j);
-			ASSERT_EQ(amdsmi_get_vf_uuid(partitioning_info[j].id,
-							  &uuid_length, uuid),
+			ASSERT_EQ(amdsmi_get_vf_uuid(partitioning_info[j].id, &uuid_length, uuid),
 				  AMDSMI_STATUS_SUCCESS);
 			printf("    UUID: %s\n", uuid);
 			printf("    UUID Length: %u\n", uuid_length);
-			ASSERT_EQ(amdsmi_get_vf_handle_from_uuid(uuid, &vf_handle), AMDSMI_STATUS_SUCCESS);
+			ASSERT_EQ(amdsmi_get_vf_handle_from_uuid(uuid, &vf_handle),
+				  AMDSMI_STATUS_SUCCESS);
 			ASSERT_EQ(vf_handle.handle, partitioning_info[j].id.handle);
 			printf("Scheduler info for VF%d\n", j);
-			ASSERT_EQ(amdsmi_get_vf_data(partitioning_info[j].id,
-							 &vf_data),
+			ASSERT_EQ(amdsmi_get_vf_data(partitioning_info[j].id, &vf_data),
 				  AMDSMI_STATUS_SUCCESS);
 			printf("    Boot up time: %" PRIu64 " us\n", vf_data.sched.boot_up_time);
 			printf("    Flr count: %" PRIu64 "\n", vf_data.sched.flr_count);
@@ -362,7 +385,8 @@ static void walkthrough_test()
 			printf("    Last reset end: %s\n", vf_data.sched.last_reset_end);
 			printf("    Reset time: %" PRIu64 " us\n", vf_data.sched.reset_time);
 			printf("    Current active time: %s\n", vf_data.sched.current_active_time);
-			printf("    Current running time: %s\n", vf_data.sched.current_running_time);
+			printf("    Current running time: %s\n",
+			       vf_data.sched.current_running_time);
 			printf("    Total active time: %s\n", vf_data.sched.total_active_time);
 			printf("    Total running time: %s\n", vf_data.sched.total_running_time);
 
@@ -381,31 +405,45 @@ static void walkthrough_test()
 
 				switch (vf_data.guard.guard[guard_type].state) {
 				case AMDSMI_GUARD_STATE_NORMAL:
-					printf("		State: AMDSMI_GUARD_STATE_NORMAL(%d)\n", vf_data.guard.guard[guard_type].state);
+					printf(
+					    "		State: AMDSMI_GUARD_STATE_NORMAL(%d)\n",
+					    vf_data.guard.guard[guard_type].state);
 					break;
 				case AMDSMI_GUARD_STATE_FULL:
-					printf("		State: AMDSMI_GUARD_STATE_FULL(%d)\n", vf_data.guard.guard[guard_type].state);
+					printf(
+					    "		State: AMDSMI_GUARD_STATE_FULL(%d)\n",
+					    vf_data.guard.guard[guard_type].state);
 					break;
 				case AMDSMI_GUARD_STATE_OVERFLOW:
-					printf("		State: AMDSMI_GUARD_STATE_OVERFLOW(%d)\n", vf_data.guard.guard[guard_type].state);
+					printf(
+					    "		State: AMDSMI_GUARD_STATE_OVERFLOW(%d)\n",
+					    vf_data.guard.guard[guard_type].state);
 					break;
 				default:
-					printf("		State: INVALID(%d)\n", vf_data.guard.guard[guard_type].state);
+					printf("		State: INVALID(%d)\n",
+					       vf_data.guard.guard[guard_type].state);
 					break;
 				}
 
-				printf("		Amount: %u\n", vf_data.guard.guard[guard_type].amount);
-				printf("		Interval: %" PRIu64 "\n", vf_data.guard.guard[guard_type].interval);
-				printf("		Threshold: %u\n", vf_data.guard.guard[guard_type].threshold);
-				printf("		Active: %u\n", vf_data.guard.guard[guard_type].active);
+				printf("		Amount: %u\n",
+				       vf_data.guard.guard[guard_type].amount);
+				printf("		Interval: %" PRIu64 "\n",
+				       vf_data.guard.guard[guard_type].interval);
+				printf("		Threshold: %u\n",
+				       vf_data.guard.guard[guard_type].threshold);
+				printf("		Active: %u\n",
+				       vf_data.guard.guard[guard_type].active);
 			}
 
 			printf("hbm info for VF%d\n", j);
 			ret = amdsmi_get_vf_hbm_info(partitioning_info[j].id, &vf_hbm_info);
-			EXPECT_TRUE((ret == AMDSMI_STATUS_SUCCESS) || (ret == AMDSMI_STATUS_NOT_SUPPORTED));
+			EXPECT_TRUE((ret == AMDSMI_STATUS_SUCCESS) ||
+				    (ret == AMDSMI_STATUS_NOT_SUPPORTED));
 			if (ret == AMDSMI_STATUS_SUCCESS) {
-				printf("    Physical address: 0x%" PRIx64 "\n", vf_hbm_info.phy_addr);
-				printf("    Physical size: %" PRIu64 " bytes\n", vf_hbm_info.phy_size);
+				printf("    Physical address: 0x%" PRIx64 "\n",
+				       vf_hbm_info.phy_addr);
+				printf("    Physical size: %" PRIu64 " bytes\n",
+				       vf_hbm_info.phy_size);
 				printf("    NUMA id: %" PRIu32 "\n", vf_hbm_info.numa_id);
 				printf("    hbm name: %s\n", vf_hbm_info.name);
 			}
@@ -452,16 +490,20 @@ TEST(amdsmiIntegrationTests, DeviceBDFTests)
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 
-	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
-	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, &processors[0]), AMDSMI_STATUS_SUCCESS);
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, &processors[0]),
+		  AMDSMI_STATUS_SUCCESS);
 
 	ASSERT_GE(dev_cnt, (unsigned)1);
 	ASSERT_LE(dev_cnt, (unsigned)AMDSMI_MAX_DEVICES);
 
 	for (uint32_t i = 0; i < dev_cnt; ++i) {
 		printf("GPU %u\n", i);
-		ASSERT_EQ(amdsmi_get_gpu_device_bdf(processors[i], &dev_bdf), AMDSMI_STATUS_SUCCESS);
-		ASSERT_EQ(amdsmi_get_processor_handle_from_bdf(dev_bdf, &dev_handle), AMDSMI_STATUS_SUCCESS);
+		ASSERT_EQ(amdsmi_get_gpu_device_bdf(processors[i], &dev_bdf),
+			  AMDSMI_STATUS_SUCCESS);
+		ASSERT_EQ(amdsmi_get_processor_handle_from_bdf(dev_bdf, &dev_handle),
+			  AMDSMI_STATUS_SUCCESS);
 	}
 
 	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
@@ -483,15 +525,18 @@ TEST(amdsmiIntegrationTests, GpuPerformanceTest)
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 
-	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
-	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, &processors[0]), AMDSMI_STATUS_SUCCESS);
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, &processors[0]),
+		  AMDSMI_STATUS_SUCCESS);
 	ASSERT_GE(dev_cnt, (unsigned)1);
 	ASSERT_LE(dev_cnt, (unsigned)AMDSMI_MAX_DEVICES);
 	std::cout << "Number of processors on server: " << dev_cnt << '\n';
 
 	for (uint32_t i = 0; i < dev_cnt; ++i) {
 		std::cout << "GPU " << i << '\n';
-		ASSERT_EQ(amdsmi_get_gpu_asic_info(processors[i], &asic_info), AMDSMI_STATUS_SUCCESS);
+		ASSERT_EQ(amdsmi_get_gpu_asic_info(processors[i], &asic_info),
+			  AMDSMI_STATUS_SUCCESS);
 
 		ret = amdsmi_get_gpu_activity(processors[i], &engine_usage);
 
@@ -502,8 +547,7 @@ TEST(amdsmiIntegrationTests, GpuPerformanceTest)
 			std::cout << "GPU activity: " << std::endl;
 			std::cout << "    GFX usage: " << engine_usage.gfx_activity << std::endl;
 			std::cout << "    Memory usage: "
-				<< std::to_string(engine_usage.umc_activity)
-				<< std::endl;
+				  << std::to_string(engine_usage.umc_activity) << std::endl;
 
 			std::cout << "    mm_activity: " << engine_usage.mm_activity << std::endl;
 		}
@@ -513,16 +557,19 @@ TEST(amdsmiIntegrationTests, GpuPerformanceTest)
 		EXPECT_TRUE((ret == AMDSMI_STATUS_SUCCESS) || (ret == AMDSMI_STATUS_NOT_SUPPORTED));
 		if (ret == AMDSMI_STATUS_SUCCESS) {
 			EXPECT_TRUE(power_info.socket_power <= 750);
-			EXPECT_TRUE(power_info.gfx_voltage <= 12000 || power_info.gfx_voltage == std::numeric_limits<uint32_t>::max());
-			EXPECT_TRUE(power_info.soc_voltage <= 12000 || power_info.soc_voltage == std::numeric_limits<uint32_t>::max());
-			EXPECT_TRUE(power_info.mem_voltage <= 12000 || power_info.mem_voltage == std::numeric_limits<uint32_t>::max());
-			EXPECT_TRUE(power_info.ubb_power <= 4000 || power_info.ubb_power == std::numeric_limits<uint32_t>::max());
+			EXPECT_TRUE(power_info.gfx_voltage <= 12000 ||
+				    power_info.gfx_voltage == std::numeric_limits<uint32_t>::max());
+			EXPECT_TRUE(power_info.soc_voltage <= 12000 ||
+				    power_info.soc_voltage == std::numeric_limits<uint32_t>::max());
+			EXPECT_TRUE(power_info.mem_voltage <= 12000 ||
+				    power_info.mem_voltage == std::numeric_limits<uint32_t>::max());
+			EXPECT_TRUE(power_info.ubb_power <= 4000 ||
+				    power_info.ubb_power == std::numeric_limits<uint32_t>::max());
 
 			std::cout << "Power measure: " << std::endl;
 			std::cout << "    power: " << power_info.socket_power << std::endl;
-			std::cout << "    gfx voltage: "
-				<< std::to_string(power_info.gfx_voltage)
-				<< std::endl;
+			std::cout << "    gfx voltage: " << std::to_string(power_info.gfx_voltage)
+				  << std::endl;
 			std::cout << "    soc voltage: " << power_info.soc_voltage << std::endl;
 			std::cout << "    mem voltage: " << power_info.mem_voltage << std::endl;
 			std::cout << "    ubb power: " << power_info.ubb_power << std::endl;
@@ -530,19 +577,25 @@ TEST(amdsmiIntegrationTests, GpuPerformanceTest)
 
 		ret = amdsmi_get_soc_pstate(processors[i], &dpm_policy_info);
 
-		EXPECT_TRUE((ret == AMDSMI_STATUS_SUCCESS) || (ret == AMDSMI_STATUS_NOT_SUPPORTED) || (ret == AMDSMI_STATUS_API_FAILED));
+		EXPECT_TRUE((ret == AMDSMI_STATUS_SUCCESS) ||
+			    (ret == AMDSMI_STATUS_NOT_SUPPORTED) ||
+			    (ret == AMDSMI_STATUS_API_FAILED));
 
 		if (ret == AMDSMI_STATUS_SUCCESS) {
 			std::cout << "Soc pstate: " << std::endl;
-			std::cout << "    num supported: " << dpm_policy_info.num_supported << std::endl;
+			std::cout << "    num supported: " << dpm_policy_info.num_supported
+				  << std::endl;
 			std::cout << "    current: " << dpm_policy_info.current << std::endl;
 			std::cout << "	  policies: " << std::endl;
 			for (unsigned int j = 0; j < dpm_policy_info.num_supported; ++j) {
-				std::cout << "	  	  policy id: " << dpm_policy_info.policies[j].policy_id << std::endl;
-				std::cout << "	  	  policy description: " << dpm_policy_info.policies[j].policy_description << std::endl;
+				std::cout << "	  	  policy id: "
+					  << dpm_policy_info.policies[j].policy_id << std::endl;
+				std::cout << "	  	  policy description: "
+					  << dpm_policy_info.policies[j].policy_description
+					  << std::endl;
 			}
 			dpm_policy_default = dpm_policy_info.current;
-			ret = amdsmi_set_soc_pstate(processors[i], 0);
+			ret		   = amdsmi_set_soc_pstate(processors[i], 0);
 			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS);
 			ret = amdsmi_get_soc_pstate(processors[i], &dpm_policy_info);
 			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS);
@@ -570,10 +623,9 @@ TEST(amdsmiIntegrationTests, GpuPerformanceTest)
 		}
 
 		std::string clk_deep_sleep_str = "N/A";
-		std::string clk_locked_str = "N/A";
-		ret = amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_MEM,
-						    &clock_measure);
-		if(clock_measure.clk_deep_sleep != (uint8_t)-1) {
+		std::string clk_locked_str     = "N/A";
+		ret = amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_MEM, &clock_measure);
+		if (clock_measure.clk_deep_sleep != (uint8_t)-1) {
 			clk_deep_sleep_str = clock_measure.clk_deep_sleep ? "true" : "false";
 		}
 
@@ -586,17 +638,17 @@ TEST(amdsmiIntegrationTests, GpuPerformanceTest)
 			std::cout << "    cur clk: " << clock_measure.clk << std::endl;
 			std::cout << "    max clk: " << clock_measure.max_clk << std::endl;
 			std::cout << "    min clk: " << clock_measure.min_clk << std::endl;
-			std::cout << "    mem clk deep sleep: " << clk_deep_sleep_str.c_str() << std::endl;
+			std::cout << "    mem clk deep sleep: " << clk_deep_sleep_str.c_str()
+				  << std::endl;
 		}
 
-		ret = amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_GFX,
-						    &clock_measure);
-		if(clock_measure.clk_deep_sleep != (uint8_t)-1) {
+		ret = amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_GFX, &clock_measure);
+		if (clock_measure.clk_deep_sleep != (uint8_t)-1) {
 			clk_deep_sleep_str = clock_measure.clk_deep_sleep ? "true" : "false";
 		} else {
 			clk_deep_sleep_str = "N/A";
 		}
-		if(clock_measure.clk_locked != (uint8_t)-1) {
+		if (clock_measure.clk_locked != (uint8_t)-1) {
 			clk_locked_str = clock_measure.clk_locked ? "true" : "false";
 		} else {
 			clk_locked_str = "N/A";
@@ -611,12 +663,12 @@ TEST(amdsmiIntegrationTests, GpuPerformanceTest)
 			std::cout << "    max clk: " << clock_measure.max_clk << std::endl;
 			std::cout << "    min clk: " << clock_measure.min_clk << std::endl;
 			std::cout << "    clk locked: " << clk_locked_str.c_str() << std::endl;
-			std::cout << "    gfx clk deep sleep: " << clk_deep_sleep_str.c_str() << std::endl;
+			std::cout << "    gfx clk deep sleep: " << clk_deep_sleep_str.c_str()
+				  << std::endl;
 		}
 
-		ret = amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_VCLK0,
-						&clock_measure);
-		if(clock_measure.clk_deep_sleep != (uint8_t)-1) {
+		ret = amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_VCLK0, &clock_measure);
+		if (clock_measure.clk_deep_sleep != (uint8_t)-1) {
 			clk_deep_sleep_str = clock_measure.clk_deep_sleep ? "true" : "false";
 		} else {
 			clk_deep_sleep_str = "N/A";
@@ -628,14 +680,14 @@ TEST(amdsmiIntegrationTests, GpuPerformanceTest)
 			std::cout << "    cur vclk0 clk: " << clock_measure.clk << std::endl;
 			std::cout << "    max vclk0 clk: " << clock_measure.max_clk << std::endl;
 			std::cout << "    min vclk0 clk: " << clock_measure.min_clk << std::endl;
-			std::cout << "    vclk0 clk deep sleep: " << clk_deep_sleep_str.c_str() << std::endl;
+			std::cout << "    vclk0 clk deep sleep: " << clk_deep_sleep_str.c_str()
+				  << std::endl;
 		} else {
 			std::cout << "    N/A" << std::endl;
 		}
 
-		ret = amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_VCLK1,
-						&clock_measure);
-		if(clock_measure.clk_deep_sleep != (uint8_t)-1) {
+		ret = amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_VCLK1, &clock_measure);
+		if (clock_measure.clk_deep_sleep != (uint8_t)-1) {
 			clk_deep_sleep_str = clock_measure.clk_deep_sleep ? "true" : "false";
 		} else {
 			clk_deep_sleep_str = "N/A";
@@ -646,14 +698,14 @@ TEST(amdsmiIntegrationTests, GpuPerformanceTest)
 			std::cout << "    cur vclk1 clk: " << clock_measure.clk << std::endl;
 			std::cout << "    max vclk1 clk: " << clock_measure.max_clk << std::endl;
 			std::cout << "    min vclk1 clk: " << clock_measure.min_clk << std::endl;
-			std::cout << "    vclk1 clk deep sleep: " << clk_deep_sleep_str.c_str() << std::endl;
+			std::cout << "    vclk1 clk deep sleep: " << clk_deep_sleep_str.c_str()
+				  << std::endl;
 		} else {
 			std::cout << "    N/A" << std::endl;
 		}
 
-		ret = amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_DCLK0,
-						&clock_measure);
-		if(clock_measure.clk_deep_sleep != (uint8_t)-1) {
+		ret = amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_DCLK0, &clock_measure);
+		if (clock_measure.clk_deep_sleep != (uint8_t)-1) {
 			clk_deep_sleep_str = clock_measure.clk_deep_sleep ? "true" : "false";
 		} else {
 			clk_deep_sleep_str = "N/A";
@@ -665,14 +717,14 @@ TEST(amdsmiIntegrationTests, GpuPerformanceTest)
 			std::cout << "    cur dclk0 clk: " << clock_measure.clk << std::endl;
 			std::cout << "    max dclk0 clk: " << clock_measure.max_clk << std::endl;
 			std::cout << "    min dclk0 clk: " << clock_measure.min_clk << std::endl;
-			std::cout << "    dclk0 clk deep sleep: " << clk_deep_sleep_str.c_str() << std::endl;
+			std::cout << "    dclk0 clk deep sleep: " << clk_deep_sleep_str.c_str()
+				  << std::endl;
 		} else {
 			std::cout << "    N/A" << std::endl;
 		}
 
-		ret = amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_DCLK1,
-						&clock_measure);
-		if(clock_measure.clk_deep_sleep != (uint8_t)-1) {
+		ret = amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_DCLK1, &clock_measure);
+		if (clock_measure.clk_deep_sleep != (uint8_t)-1) {
 			clk_deep_sleep_str = clock_measure.clk_deep_sleep ? "true" : "false";
 		} else {
 			clk_deep_sleep_str = "N/A";
@@ -683,14 +735,18 @@ TEST(amdsmiIntegrationTests, GpuPerformanceTest)
 			std::cout << "    cur dclk1 clk: " << clock_measure.clk << std::endl;
 			std::cout << "    max dclk1 clk: " << clock_measure.max_clk << std::endl;
 			std::cout << "    min dclk1 clk: " << clock_measure.min_clk << std::endl;
-			std::cout << "    dclk1 clk deep sleep: " << clk_deep_sleep_str.c_str() << std::endl;
+			std::cout << "    dclk1 clk deep sleep: " << clk_deep_sleep_str.c_str()
+				  << std::endl;
 		} else {
 			std::cout << "    N/A" << std::endl;
 		}
 
-		ret = amdsmi_get_temp_metric(processors[i], AMDSMI_TEMPERATURE_TYPE_VRAM,
-						      AMDSMI_TEMP_CURRENT, &temp_measure);
-		ASSERT_TRUE(ret ==(unsigned int) AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+		ret = amdsmi_get_temp_metric(processors[i],
+					     AMDSMI_TEMPERATURE_TYPE_VRAM,
+					     AMDSMI_TEMP_CURRENT,
+					     &temp_measure);
+		ASSERT_TRUE(ret == (unsigned int)AMDSMI_STATUS_SUCCESS ||
+			    ret == AMDSMI_STATUS_NOT_SUPPORTED);
 
 		int ret = amdsmi_get_gpu_vram_info(processors[i], &vram_info);
 		EXPECT_TRUE((ret == AMDSMI_STATUS_SUCCESS) || (ret == AMDSMI_STATUS_NOT_SUPPORTED));
@@ -700,53 +756,104 @@ TEST(amdsmiIntegrationTests, GpuPerformanceTest)
 			std::cout << "memory temperature: " << temp_measure << std::endl;
 		}
 
-		ret = amdsmi_get_temp_metric(processors[i], AMDSMI_TEMPERATURE_TYPE_HOTSPOT,
-						      AMDSMI_TEMP_CURRENT, &temp_measure);
-		ASSERT_TRUE(ret ==(unsigned int) AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+		ret = amdsmi_get_temp_metric(processors[i],
+					     AMDSMI_TEMPERATURE_TYPE_HOTSPOT,
+					     AMDSMI_TEMP_CURRENT,
+					     &temp_measure);
+		ASSERT_TRUE(ret == (unsigned int)AMDSMI_STATUS_SUCCESS ||
+			    ret == AMDSMI_STATUS_NOT_SUPPORTED);
 
 		if (ret == AMDSMI_STATUS_SUCCESS) {
 			EXPECT_TRUE(temp_measure <= 108);
 			std::cout << "hotspot temperature: " << temp_measure << std::endl;
 		}
 
-		ret = amdsmi_get_temp_metric(processors[i], AMDSMI_TEMPERATURE_TYPE_EDGE,
-						      AMDSMI_TEMP_CURRENT, &temp_measure);
-		ASSERT_TRUE(ret ==(unsigned int) AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+		ret = amdsmi_get_temp_metric(processors[i],
+					     AMDSMI_TEMPERATURE_TYPE_EDGE,
+					     AMDSMI_TEMP_CURRENT,
+					     &temp_measure);
+		ASSERT_TRUE(ret == (unsigned int)AMDSMI_STATUS_SUCCESS ||
+			    ret == AMDSMI_STATUS_NOT_SUPPORTED);
 
 		if (ret == AMDSMI_STATUS_SUCCESS) {
 			EXPECT_TRUE(temp_measure <= 100 || std::numeric_limits<uint32_t>::max());
 			std::cout << "edge temperature: " << temp_measure << std::endl;
 		}
 
-		ret = amdsmi_get_temp_metric(processors[i], AMDSMI_TEMPERATURE_TYPE_VRAM,
-						      AMDSMI_TEMP_CRITICAL, &temp_measure);
-		ASSERT_TRUE(ret ==(unsigned int) AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+		ret = amdsmi_get_temp_metric(processors[i],
+					     AMDSMI_TEMPERATURE_TYPE_VRAM,
+					     AMDSMI_TEMP_CRITICAL,
+					     &temp_measure);
+		ASSERT_TRUE(ret == (unsigned int)AMDSMI_STATUS_SUCCESS ||
+			    ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		std::cout << "memory temperature limit: " << temp_measure << std::endl;
 
-		ret = amdsmi_get_temp_metric(processors[i], AMDSMI_TEMPERATURE_TYPE_HOTSPOT,
-						      AMDSMI_TEMP_CRITICAL, &temp_measure);
-		ASSERT_TRUE(ret ==(unsigned int) AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+		ret = amdsmi_get_temp_metric(processors[i],
+					     AMDSMI_TEMPERATURE_TYPE_HOTSPOT,
+					     AMDSMI_TEMP_CRITICAL,
+					     &temp_measure);
+		ASSERT_TRUE(ret == (unsigned int)AMDSMI_STATUS_SUCCESS ||
+			    ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		std::cout << "hotspot temperature limit: " << temp_measure << std::endl;
 
-		ret = amdsmi_get_temp_metric(processors[i], AMDSMI_TEMPERATURE_TYPE_EDGE,
-						      AMDSMI_TEMP_CRITICAL, &temp_measure);
-		ASSERT_TRUE(ret ==(unsigned int) AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+		ret = amdsmi_get_temp_metric(processors[i],
+					     AMDSMI_TEMPERATURE_TYPE_EDGE,
+					     AMDSMI_TEMP_CRITICAL,
+					     &temp_measure);
+		ASSERT_TRUE(ret == (unsigned int)AMDSMI_STATUS_SUCCESS ||
+			    ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		std::cout << "edge temperature limit: " << temp_measure << std::endl;
 
-		ret = amdsmi_get_temp_metric(processors[i], AMDSMI_TEMPERATURE_TYPE_VRAM,
-						      AMDSMI_TEMP_SHUTDOWN, &temp_measure);
-		ASSERT_TRUE(ret ==(unsigned int) AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+		ret = amdsmi_get_temp_metric(processors[i],
+					     AMDSMI_TEMPERATURE_TYPE_VRAM,
+					     AMDSMI_TEMP_SHUTDOWN,
+					     &temp_measure);
+		ASSERT_TRUE(ret == (unsigned int)AMDSMI_STATUS_SUCCESS ||
+			    ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		std::cout << "memory temperature shutdown: " << temp_measure << std::endl;
 
-		ret = amdsmi_get_temp_metric(processors[i], AMDSMI_TEMPERATURE_TYPE_HOTSPOT,
-						      AMDSMI_TEMP_SHUTDOWN, &temp_measure);
-		ASSERT_TRUE(ret ==(unsigned int) AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+		ret = amdsmi_get_temp_metric(processors[i],
+					     AMDSMI_TEMPERATURE_TYPE_HOTSPOT,
+					     AMDSMI_TEMP_SHUTDOWN,
+					     &temp_measure);
+		ASSERT_TRUE(ret == (unsigned int)AMDSMI_STATUS_SUCCESS ||
+			    ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		std::cout << "hotspot temperature shutdown: " << temp_measure << std::endl;
 
-		ret = amdsmi_get_temp_metric(processors[i], AMDSMI_TEMPERATURE_TYPE_EDGE,
-						      AMDSMI_TEMP_SHUTDOWN, &temp_measure);
-		ASSERT_TRUE(ret ==(unsigned int) AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+		ret = amdsmi_get_temp_metric(processors[i],
+					     AMDSMI_TEMPERATURE_TYPE_EDGE,
+					     AMDSMI_TEMP_SHUTDOWN,
+					     &temp_measure);
+		ASSERT_TRUE(ret == (unsigned int)AMDSMI_STATUS_SUCCESS ||
+			    ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		std::cout << "edge temperature shutdown: " << temp_measure << std::endl;
+
+		/* No host ASIC reports these sensors; the output must be left alone. */
+		const amdsmi_temperature_type_t unsupported_sensors[] = {
+		    AMDSMI_TEMPERATURE_TYPE_PLX,
+		    AMDSMI_TEMPERATURE_TYPE_HBM_0,
+		    AMDSMI_TEMPERATURE_TYPE_HBM_1,
+		    AMDSMI_TEMPERATURE_TYPE_HBM_2,
+		    AMDSMI_TEMPERATURE_TYPE_HBM_3,
+		};
+		const amdsmi_temperature_metric_t temp_metrics[] = {
+		    AMDSMI_TEMP_CURRENT,
+		    AMDSMI_TEMP_CRITICAL,
+		    AMDSMI_TEMP_SHUTDOWN,
+		};
+
+		for (auto sensor : unsupported_sensors) {
+			for (auto temp_metric : temp_metrics) {
+				const int64_t sentinel = -12345;
+
+				temp_measure = sentinel;
+
+				ret = amdsmi_get_temp_metric(
+				    processors[i], sensor, temp_metric, &temp_measure);
+				ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+				ASSERT_EQ(temp_measure, sentinel);
+			}
+		}
 	}
 	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
 	free(processors);
@@ -756,7 +863,7 @@ TEST(amdsmiIntegrationTests, PowerCapTests)
 {
 	amdsmi_power_cap_info_t changed_power_cap;
 	amdsmi_power_cap_info_t default_power_cap;
-	uint64_t power_cap = 60;
+	uint64_t power_cap  = 60;
 	uint32_t sensor_ind = 0;
 	int ret;
 
@@ -764,24 +871,30 @@ TEST(amdsmiIntegrationTests, PowerCapTests)
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 
-	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
 	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, processors), AMDSMI_STATUS_SUCCESS);
 	ASSERT_GE(dev_cnt, (unsigned)1);
 	ASSERT_LE(dev_cnt, (unsigned)AMDSMI_MAX_DEVICES);
 
 	for (unsigned int i = 0; i < dev_cnt; ++i) {
-		ASSERT_EQ(amdsmi_get_power_cap_info(processors[i], sensor_ind, &default_power_cap), AMDSMI_STATUS_SUCCESS);
+		ASSERT_EQ(amdsmi_get_power_cap_info(processors[i], sensor_ind, &default_power_cap),
+			  AMDSMI_STATUS_SUCCESS);
 		ret = amdsmi_set_power_cap(processors[i], sensor_ind, power_cap);
 		EXPECT_TRUE((ret == AMDSMI_STATUS_SUCCESS) || (ret == AMDSMI_STATUS_NOT_SUPPORTED));
 		if (ret == AMDSMI_STATUS_SUCCESS) {
-			ASSERT_EQ(amdsmi_get_power_cap_info(processors[i], sensor_ind, &changed_power_cap), AMDSMI_STATUS_SUCCESS);
+			ASSERT_EQ(amdsmi_get_power_cap_info(
+				      processors[i], sensor_ind, &changed_power_cap),
+				  AMDSMI_STATUS_SUCCESS);
 			EXPECT_EQ(changed_power_cap.power_cap, power_cap);
 #ifdef _WIN64
 			printf(" GPU power cap is set on: %lldW\n", changed_power_cap.power_cap);
 #else
 			printf(" GPU power cap is set on: %ldW\n", changed_power_cap.power_cap);
 #endif
-			ASSERT_EQ(amdsmi_set_power_cap(processors[i], sensor_ind, default_power_cap.power_cap), AMDSMI_STATUS_SUCCESS);
+			ASSERT_EQ(amdsmi_set_power_cap(
+				      processors[i], sensor_ind, default_power_cap.power_cap),
+				  AMDSMI_STATUS_SUCCESS);
 		}
 	}
 
@@ -791,31 +904,43 @@ TEST(amdsmiIntegrationTests, PowerCapTests)
 
 TEST(amdsmiIntegrationTests, SupportedPowerCapTests)
 {
-	const uint32_t max_power_cap_sensors = 2;
-	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
-	uint32_t sensor_count = 0;
-	uint32_t sensor_inds[max_power_cap_sensors] = {0};
+	const uint32_t max_power_cap_sensors			    = 2;
+	uint32_t dev_cnt					    = AMDSMI_MAX_DEVICES;
+	uint32_t sensor_count					    = 0;
+	uint32_t sensor_inds[max_power_cap_sensors]		    = {0};
 	amdsmi_power_cap_type_t sensor_types[max_power_cap_sensors] = {AMDSMI_POWER_CAP_TYPE_PPT0};
 	int ret;
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 
-	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
 	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, processors), AMDSMI_STATUS_SUCCESS);
 	ASSERT_GE(dev_cnt, (unsigned)1);
 
 	for (uint32_t i = 0; i < dev_cnt; ++i) {
-		ret = amdsmi_get_supported_power_cap(processors[i], &sensor_count, sensor_inds, sensor_types);
+		ret = amdsmi_get_supported_power_cap(
+		    processors[i], &sensor_count, sensor_inds, sensor_types);
 		EXPECT_TRUE((ret == AMDSMI_STATUS_SUCCESS) || (ret == AMDSMI_STATUS_NOT_SUPPORTED));
 		if (ret == AMDSMI_STATUS_SUCCESS) {
-			/* PPT1 is optional */
+			/* PPT1 optional until FW support. */
 			EXPECT_TRUE((sensor_count >= 1) && (sensor_count <= max_power_cap_sensors));
 			EXPECT_EQ(sensor_inds[0], 0u);
 			EXPECT_EQ(sensor_types[0], AMDSMI_POWER_CAP_TYPE_PPT0);
 			printf("Power cap supported sensors: %u\n", sensor_count);
 			for (uint32_t j = 0; j < sensor_count; ++j) {
-				printf("    SENSOR%u: index=%u type=%s\n", j, sensor_inds[j],
-				       sensor_types[j] == AMDSMI_POWER_CAP_TYPE_PPT0 ? "PPT0" : "PPT1");
+				printf("    SENSOR%u: index=%u type=%s\n",
+				       j,
+				       sensor_inds[j],
+				       sensor_types[j] == AMDSMI_POWER_CAP_TYPE_PPT0 ? "PPT0"
+										     : "PPT1");
+
+				amdsmi_power_cap_info_t pwr_info = {};
+				ASSERT_EQ(amdsmi_get_power_cap_info(
+					      processors[i], sensor_inds[j], &pwr_info),
+					  AMDSMI_STATUS_SUCCESS);
+				EXPECT_TRUE((pwr_info.power_cap == UINT64_MAX) ||
+					    (pwr_info.power_cap > 0));
 			}
 		}
 	}
@@ -837,7 +962,8 @@ TEST(amdsmiIntegrationTests, ECCTests)
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 
-	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
 	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, processors), AMDSMI_STATUS_SUCCESS);
 	ASSERT_GE(dev_cnt, (unsigned)1);
 	ASSERT_LE(dev_cnt, (unsigned)AMDSMI_MAX_DEVICES);
@@ -850,12 +976,15 @@ TEST(amdsmiIntegrationTests, ECCTests)
 
 		std::cout << "Enabled GPU blocks:      " << enabled_blocks << std::endl;
 
-		ASSERT_EQ(amdsmi_get_gpu_asic_info(processors[i], &asic_info), AMDSMI_STATUS_SUCCESS);
+		ASSERT_EQ(amdsmi_get_gpu_asic_info(processors[i], &asic_info),
+			  AMDSMI_STATUS_SUCCESS);
 		if (asic_info.device_id == 29857) {
 			ASSERT_EQ(amdsmi_get_gpu_ras_feature_info(processors[i], &ras_feature),
-			  	AMDSMI_STATUS_SUCCESS);
-			std::cout << "RAS EEPROM version:      " << ras_feature.ras_eeprom_version << std::endl;
-			std::cout << "ECC correction schema:      " << ras_feature.ecc_correction_schema_flag << std::endl;
+				  AMDSMI_STATUS_SUCCESS);
+			std::cout << "RAS EEPROM version:      " << ras_feature.ras_eeprom_version
+				  << std::endl;
+			std::cout << "ECC correction schema:      "
+				  << ras_feature.ecc_correction_schema_flag << std::endl;
 		}
 
 		ret = amdsmi_get_gpu_ras_policy_info(processors[i], &policy_info);
@@ -863,21 +992,52 @@ TEST(amdsmiIntegrationTests, ECCTests)
 		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
 
 		if (ret == AMDSMI_STATUS_SUCCESS) {
-			if(policy_info.major_version == 4 && policy_info.minor_version == 0) {
-				std::cout << "RAS policy major version:      " << policy_info.major_version << std::endl;
-				std::cout << "RAS policy minor version:      " << policy_info.minor_version << std::endl;
-				std::cout << "DRAM non critical region threshold:      " << policy_info.policy_data.v4_0.dram_non_critical_region_threshold << std::endl;
-				std::cout << "DRAM critical region threshold:      " << policy_info.policy_data.v4_0.dram_critical_region_threshold << std::endl;
+			if (policy_info.major_version == 4 && policy_info.minor_version == 0) {
+				std::cout << "RAS policy major version:      "
+					  << policy_info.major_version << std::endl;
+				std::cout << "RAS policy minor version:      "
+					  << policy_info.minor_version << std::endl;
+				std::cout << "DRAM non critical region threshold:      "
+					  << policy_info.policy_data.v4_0
+						 .dram_non_critical_region_threshold
+					  << std::endl;
+				std::cout
+				    << "DRAM critical region threshold:      "
+				    << policy_info.policy_data.v4_0.dram_critical_region_threshold
+				    << std::endl;
+			} else if (policy_info.major_version == 5 &&
+				   policy_info.minor_version == 0) {
+				std::cout << "RAS policy major version:      "
+					  << policy_info.major_version << std::endl;
+				std::cout << "RAS policy minor version:      "
+					  << policy_info.minor_version << std::endl;
+				std::cout << "RAS policy num entities:      "
+					  << policy_info.policy_data.v5_0.num_entities << std::endl;
+				std::cout
+				    << "RAS policy event RMA threshold per entity:      "
+				    << policy_info.policy_data.v5_0.event_rma_threshold_per_entity
+				    << std::endl;
+				std::cout << "RAS policy max pages per ret event:      "
+					  << policy_info.policy_data.v5_0.max_pages_per_ret_event
+					  << std::endl;
+				std::cout << "RAS policy OD SRAM ECC threshold:      "
+					  << policy_info.policy_data.v5_0.od_sram_ecc_threshold
+					  << std::endl;
+				std::cout << "RAS policy HWA threshold:      "
+					  << policy_info.policy_data.v5_0.hwa_threshold
+					  << std::endl;
+				std::cout << "RAS policy WDT threshold:      "
+					  << policy_info.policy_data.v5_0.wdt_threshold
+					  << std::endl;
 			}
 		}
 
 		ret = amdsmi_get_gpu_total_ecc_count(processors[i], &ec);
 		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		if (ret == AMDSMI_STATUS_SUCCESS) {
-			std::cout << "ECC:"
-			  << "\n\t Correctable errors: " << ec.correctable_count
-			  << "\n\t Uncorrectable errors: " << ec.uncorrectable_count
-			  << "\n\t Deferred errors: " << ec.deferred_count << std::endl;
+			std::cout << "ECC:" << "\n\t Correctable errors: " << ec.correctable_count
+				  << "\n\t Uncorrectable errors: " << ec.uncorrectable_count
+				  << "\n\t Deferred errors: " << ec.deferred_count << std::endl;
 
 			EXPECT_GE(ec.uncorrectable_count, 0);
 			EXPECT_GE(ec.correctable_count, 0);
@@ -887,10 +1047,9 @@ TEST(amdsmiIntegrationTests, ECCTests)
 		ret = amdsmi_get_gpu_total_ecc_count(processors[i], &ec);
 		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		if (ret == AMDSMI_STATUS_SUCCESS) {
-			std::cout << "ECC:"
-			  << "\n\t Correctable errors: " << ec.correctable_count
-			  << "\n\t Uncorrectable errors: " << ec.uncorrectable_count
-			  << "\n\t Deferred errors: " << ec.deferred_count << std::endl;
+			std::cout << "ECC:" << "\n\t Correctable errors: " << ec.correctable_count
+				  << "\n\t Uncorrectable errors: " << ec.uncorrectable_count
+				  << "\n\t Deferred errors: " << ec.deferred_count << std::endl;
 
 			EXPECT_GE(ec.uncorrectable_count, 0);
 			EXPECT_GE(ec.correctable_count, 0);
@@ -900,10 +1059,9 @@ TEST(amdsmiIntegrationTests, ECCTests)
 		ret = amdsmi_get_gpu_total_ecc_count(processors[i], &ec);
 		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		if (ret == AMDSMI_STATUS_SUCCESS) {
-			std::cout << "ECC:"
-			  << "\n\t Correctable errors: " << ec.correctable_count
-			  << "\n\t Uncorrectable errors: " << ec.uncorrectable_count
-			  << "\n\t Deferred errors: " << ec.deferred_count << std::endl;
+			std::cout << "ECC:" << "\n\t Correctable errors: " << ec.correctable_count
+				  << "\n\t Uncorrectable errors: " << ec.uncorrectable_count
+				  << "\n\t Deferred errors: " << ec.deferred_count << std::endl;
 			EXPECT_GE(ec.uncorrectable_count, 0);
 			EXPECT_GE(ec.correctable_count, 0);
 			EXPECT_GE(ec.deferred_count, 0);
@@ -918,23 +1076,24 @@ TEST(amdsmiIntegrationTests, ECCTestsPerBlock)
 {
 	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
 
-	amdsmi_error_count_t ec = {0};
-	amdsmi_gpu_block_t block = AMDSMI_GPU_BLOCK_FIRST;
-	uint64_t enabled_blocks = 0;
-	uint32_t j = 0;
+	amdsmi_error_count_t ec	      = {0};
+	amdsmi_gpu_block_t block      = AMDSMI_GPU_BLOCK_FIRST;
+	uint64_t enabled_blocks	      = 0;
+	uint64_t j		      = 0;
 	bool all_blocks_not_supported = true;
-	int ret = 0;
+	int ret			      = 0;
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 
-	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
 	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, processors), AMDSMI_STATUS_SUCCESS);
 	ASSERT_GE(dev_cnt, (unsigned)1);
 	ASSERT_LE(dev_cnt, (unsigned)AMDSMI_MAX_DEVICES);
 
 	for (uint32_t i = 0; i < dev_cnt; ++i) {
 		all_blocks_not_supported = true;
-		block = AMDSMI_GPU_BLOCK_FIRST;
+		block			 = AMDSMI_GPU_BLOCK_FIRST;
 		std::cout << "GPU " << i << '\n';
 
 		// Per-block ECC is not supported on MI210 (gfx90a) in the SR-IOV
@@ -945,33 +1104,35 @@ TEST(amdsmiIntegrationTests, ECCTestsPerBlock)
 		// amdsmi_get_gpu_ecc_enabled "[Skip: MI210]"). Evaluate this
 		// per-device so non-MI210 GPUs in the same system are still tested.
 		amdsmi_asic_info_t ecc_asic_info;
-		ASSERT_EQ(amdsmi_get_gpu_asic_info(processors[i], &ecc_asic_info), AMDSMI_STATUS_SUCCESS);
+		ASSERT_EQ(amdsmi_get_gpu_asic_info(processors[i], &ecc_asic_info),
+			  AMDSMI_STATUS_SUCCESS);
 		if (ecc_asic_info.device_id == 0x740F) { // MI210 (gfx90a)
-			std::cout << "Skipping per-block ECC on MI210 (unsupported per DTP)" << std::endl;
+			std::cout << "Skipping per-block ECC on MI210 (unsupported per DTP)"
+				  << std::endl;
 			continue;
 		}
 
 		ASSERT_EQ(amdsmi_get_gpu_ecc_enabled(processors[i], &enabled_blocks),
-			AMDSMI_STATUS_SUCCESS);
+			  AMDSMI_STATUS_SUCCESS);
 
 		std::cout << "Enabled GPU blocks:      " << enabled_blocks << std::endl;
 
-		j = 0;
-		while (block <= AMDSMI_GPU_BLOCK_LAST) {
-			block = (amdsmi_gpu_block_t)pow(2, j);
-			ret = amdsmi_get_gpu_ecc_count(processors[i], block, &ec);
-			ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_API_FAILED || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+		for (j = 0; (1ULL << j) <= (1ULL << 38); j++) {
+			block = (amdsmi_gpu_block_t)(1ULL << j);
+			ret   = amdsmi_get_gpu_ecc_count(processors[i], block, &ec);
+			ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS ||
+				    ret == AMDSMI_STATUS_API_FAILED ||
+				    ret == AMDSMI_STATUS_NOT_SUPPORTED);
 			if (ret == AMDSMI_STATUS_SUCCESS) {
-				std::cout << "ECC:"
-					<< "\n\t Correctable errors: " << ec.correctable_count
-					<< "\n\t Uncorrectable errors: " << ec.uncorrectable_count
-					<< "\n\t Deferred errors: " << ec.deferred_count << std::endl;
+				std::cout
+				    << "ECC:" << "\n\t Correctable errors: " << ec.correctable_count
+				    << "\n\t Uncorrectable errors: " << ec.uncorrectable_count
+				    << "\n\t Deferred errors: " << ec.deferred_count << std::endl;
 				EXPECT_GE(ec.uncorrectable_count, 0);
 				EXPECT_GE(ec.correctable_count, 0);
 				EXPECT_GE(ec.deferred_count, 0);
 				all_blocks_not_supported = false;
 			}
-			j++;
 		}
 
 		ASSERT_EQ(all_blocks_not_supported, false);
@@ -983,8 +1144,8 @@ TEST(amdsmiIntegrationTests, ECCTestsPerBlock)
 
 TEST(amdsmiIntegrationTests, BadPageInfoTest)
 {
-	uint32_t dev_cnt = 0;
-	amdsmi_socket_handle socket_handle = NULL;
+	uint32_t dev_cnt		    = 0;
+	amdsmi_socket_handle socket_handle  = NULL;
 	amdsmi_processor_handle *processors = NULL;
 	amdsmi_eeprom_table_record_t *eeprom_table_records;
 	uint32_t bad_page_count = AMDSMI_MAX_BAD_PAGE_RECORD;
@@ -994,47 +1155,62 @@ TEST(amdsmiIntegrationTests, BadPageInfoTest)
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 
-	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, NULL), AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, NULL),
+		  AMDSMI_STATUS_SUCCESS);
 	ASSERT_GE(dev_cnt, (unsigned)1);
 	ASSERT_LE(dev_cnt, AMDSMI_MAX_DEVICES);
 
 	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
-	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, &processors[0]), AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, &processors[0]),
+		  AMDSMI_STATUS_SUCCESS);
 
 	for (uint32_t i = 0; i < dev_cnt; i++) {
 		bad_page_count = AMDSMI_MAX_BAD_PAGE_RECORD;
-		ret = amdsmi_get_gpu_bad_page_info(processors[i], &bad_page_count, NULL);
+		ret	       = amdsmi_get_gpu_bad_page_info(processors[i], &bad_page_count, NULL);
 		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NO_DATA);
 		if (bad_page_count != 0) {
-			eeprom_table_records = (amdsmi_eeprom_table_record_t *)malloc(sizeof(amdsmi_eeprom_table_record_t) * bad_page_count);
-			ASSERT_EQ(amdsmi_get_gpu_bad_page_info(processors[i], &bad_page_count, eeprom_table_records), AMDSMI_STATUS_SUCCESS);
+			eeprom_table_records = (amdsmi_eeprom_table_record_t *)malloc(
+			    sizeof(amdsmi_eeprom_table_record_t) * bad_page_count);
+			ASSERT_EQ(amdsmi_get_gpu_bad_page_info(
+				      processors[i], &bad_page_count, eeprom_table_records),
+				  AMDSMI_STATUS_SUCCESS);
 			printf("Bad page count: %u\n", bad_page_count);
 			for (uint32_t j = 0; j < bad_page_count; ++j) {
 				printf("Page %u\n", j);
-				printf("Retired page address: 0x%" PRIx64 "\n", eeprom_table_records[j].retired_page);
+				printf("Retired page address: 0x%" PRIx64 "\n",
+				       eeprom_table_records[j].retired_page);
 				time_t rawtime = eeprom_table_records[j].ts;
 #ifdef _WIN64
-				if(localtime_s(&dtime, &rawtime) != 0)
-				{
+				if (localtime_s(&dtime, &rawtime) != 0) {
 					printf("Retired page timestamp: N/A\n");
-				}
-				else {
-					printf("Retired page timestamp: %d/%d/%d:%d/%d/%d\n", dtime.tm_year + 1900, dtime.tm_mon + 1, dtime.tm_mday,
-											dtime.tm_hour, dtime.tm_min, dtime.tm_sec);
+				} else {
+					printf("Retired page timestamp: %d/%d/%d:%d/%d/%d\n",
+					       dtime.tm_year + 1900,
+					       dtime.tm_mon + 1,
+					       dtime.tm_mday,
+					       dtime.tm_hour,
+					       dtime.tm_min,
+					       dtime.tm_sec);
 				}
 #else
-				if(localtime_r(&rawtime, &dtime) != 0)
-				{
+				if (localtime_r(&rawtime, &dtime) != 0) {
 					printf("Retired page timestamp: N/A\n");
-				}
-				else {
-					printf("Retired page timestamp: %d/%d/%d:%d/%d/%d\n", dtime.tm_year + 1900, dtime.tm_mon + 1, dtime.tm_mday,
-											dtime.tm_hour, dtime.tm_min, dtime.tm_sec);
+				} else {
+					printf("Retired page timestamp: %d/%d/%d:%d/%d/%d\n",
+					       dtime.tm_year + 1900,
+					       dtime.tm_mon + 1,
+					       dtime.tm_mday,
+					       dtime.tm_hour,
+					       dtime.tm_min,
+					       dtime.tm_sec);
 				}
 #endif
-				printf("Retired page error type: %u\n", eeprom_table_records[j].err_type);
-				printf("Retired page mem channel: %u\n", eeprom_table_records[j].mem_channel);
-				printf("Retired page mcumc id: %u\n", eeprom_table_records[j].mcumc_id);
+				printf("Retired page error type: %u\n",
+				       eeprom_table_records[j].err_type);
+				printf("Retired page mem channel: %u\n",
+				       eeprom_table_records[j].mem_channel);
+				printf("Retired page mcumc id: %u\n",
+				       eeprom_table_records[j].mcumc_id);
 			}
 			free(eeprom_table_records);
 		}
@@ -1051,7 +1227,8 @@ static void dfc_fw_table_test()
 	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
 	amdsmi_dfc_fw_t dfc_fw;
 
-	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
 	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, processors), AMDSMI_STATUS_SUCCESS);
 	ASSERT_GE(dev_cnt, (unsigned)1);
 	ASSERT_LE(dev_cnt, (unsigned)AMDSMI_MAX_DEVICES);
@@ -1065,28 +1242,35 @@ static void dfc_fw_table_test()
 		printf("   DFC gart wr guest min: %u\n", dfc_fw.header.dfc_gart_wr_guest_min);
 		printf("   DFC gart wr guest max: %u\n", dfc_fw.header.dfc_gart_wr_guest_max);
 		for (uint32_t j = 0; j < dfc_fw.header.dfc_fw_total_entries; j++) {
-			printf("entry %u:\n", j+1);
-			printf("dfc fw type: %u\n",dfc_fw.data[j].dfc_fw_type);
-			printf("verification enabled: %s\n",dfc_fw.data[j].verification_enabled ? "True" : "False");
-			printf("customer ordinal: %u\n",dfc_fw.data[j].customer_ordinal);
+			printf("entry %u:\n", j + 1);
+			printf("dfc fw type: %u\n", dfc_fw.data[j].dfc_fw_type);
+			printf("verification enabled: %s\n",
+			       dfc_fw.data[j].verification_enabled ? "True" : "False");
+			printf("customer ordinal: %u\n", dfc_fw.data[j].customer_ordinal);
 			for (uint32_t k = 0; k < 16; k++) {
 				if (dfc_fw.data[j].white_list[k].latest != 0) {
-					printf("white list[%u] latest: %u\n", k, dfc_fw.data[j].white_list[k].latest);
+					printf("white list[%u] latest: %u\n",
+					       k,
+					       dfc_fw.data[j].white_list[k].latest);
 				}
 				if (dfc_fw.data[j].white_list[k].oldest != 0) {
-					printf("white list[%u] oldest: %u\n", k, dfc_fw.data[j].white_list[k].oldest);
+					printf("white list[%u] oldest: %u\n",
+					       k,
+					       dfc_fw.data[j].white_list[k].oldest);
 				}
 			}
 			for (uint32_t k = 0; k < 64; k++) {
 				if (dfc_fw.data[j].black_list[k] != 0) {
-					printf("black list[%u]: %u\n", k, dfc_fw.data[j].black_list[k]);
+					printf("black list[%u]: %u\n",
+					       k,
+					       dfc_fw.data[j].black_list[k]);
 				}
 			}
 		}
 #else
-		ASSERT_EQ(amdsmi_get_dfc_fw_table(processors[i], &dfc_fw), AMDSMI_STATUS_NOT_SUPPORTED);
+		ASSERT_EQ(amdsmi_get_dfc_fw_table(processors[i], &dfc_fw),
+			  AMDSMI_STATUS_NOT_SUPPORTED);
 #endif
-
 	}
 
 	free(processors);
@@ -1102,7 +1286,7 @@ TEST(amdsmiIntegrationTests, DFCTableTest)
 static void firmware_attestation_test()
 {
 	amdsmi_status_t ret = AMDSMI_STATUS_SUCCESS;
-	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
+	uint32_t dev_cnt    = AMDSMI_MAX_DEVICES;
 	amdsmi_fw_error_record_t records;
 	amdsmi_fw_info_t fw_info;
 	amdsmi_partition_info_t partitions[AMDSMI_MAX_VF_COUNT];
@@ -1110,7 +1294,8 @@ static void firmware_attestation_test()
 	uint32_t num_vf_enabled;
 	uint32_t num_vf_supported;
 
-	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
 	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, processors), AMDSMI_STATUS_SUCCESS);
 	ASSERT_GE(dev_cnt, (unsigned)1);
 	ASSERT_LE(dev_cnt, (unsigned)AMDSMI_MAX_DEVICES);
@@ -1119,11 +1304,10 @@ static void firmware_attestation_test()
 		ASSERT_EQ(amdsmi_get_num_vf(processors[i], &num_vf_enabled, &num_vf_supported),
 			  AMDSMI_STATUS_SUCCESS);
 		ret = amdsmi_set_num_vf(processors[i], num_vf_enabled);
-		EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS
-					|| ret == AMDSMI_STATUS_BUSY
-					|| ret == AMDSMI_STATUS_NOT_SUPPORTED);
-		ASSERT_EQ(amdsmi_get_vf_partition_info(processors[i], num_vf_enabled,
-			  partitions), AMDSMI_STATUS_SUCCESS);
+		EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_BUSY ||
+			    ret == AMDSMI_STATUS_NOT_SUPPORTED);
+		ASSERT_EQ(amdsmi_get_vf_partition_info(processors[i], num_vf_enabled, partitions),
+			  AMDSMI_STATUS_SUCCESS);
 
 		for (uint32_t j = 0; j < num_vf_enabled; j++) {
 			ASSERT_EQ(amdsmi_get_vf_data(partitions[j].id, &vf_data),
@@ -1136,9 +1320,9 @@ static void firmware_attestation_test()
 				EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 			} else {
 				// If VF is in another state, we cannot be sure
-				EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS
-					|| ret == AMDSMI_STATUS_NOT_SUPPORTED
-					|| ret == AMDSMI_STATUS_API_FAILED);
+				EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS ||
+					    ret == AMDSMI_STATUS_NOT_SUPPORTED ||
+					    ret == AMDSMI_STATUS_API_FAILED);
 			}
 
 			if (ret == AMDSMI_STATUS_SUCCESS) {
@@ -1149,9 +1333,9 @@ static void firmware_attestation_test()
 				for (uint32_t j = 0; j < fw_info.num_fw_info; ++j) {
 					if (fw_info.fw_info_list[j].fw_version != 0) {
 						printf("    Firmware ID: 0x%x\n",
-						fw_info.fw_info_list[j].fw_id);
+						       fw_info.fw_info_list[j].fw_id);
 						printf("    Firmware version: 0x%" PRIx64 "\n",
-						fw_info.fw_info_list[j].fw_version);
+						       fw_info.fw_info_list[j].fw_version);
 					}
 				}
 			}
@@ -1161,9 +1345,11 @@ static void firmware_attestation_test()
 		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		if (ret == AMDSMI_STATUS_SUCCESS) {
 			printf("Firmware error records:\n");
-			printf("   Number of firmware error records: %d\n", records.num_err_records);
+			printf("   Number of firmware error records: %d\n",
+			       records.num_err_records);
 			for (uint8_t j = 0; j < records.num_err_records; j++) {
-				printf("timestamp: %" PRIu64 "\n", records.err_records[j].timestamp);
+				printf("timestamp: %" PRIu64 "\n",
+				       records.err_records[j].timestamp);
 				printf("vf idx: %u\n", records.err_records[j].vf_idx);
 				printf("fw id: %u\n", records.err_records[j].fw_id);
 				printf("status: %u\n", records.err_records[j].status);
@@ -1183,8 +1369,8 @@ TEST(amdsmiIntegrationTests, FirmwareAttestationTest)
 
 TEST(amdsmiIntegrationTests, Vf2PfTest)
 {
-	uint32_t dev_cnt = 0;
-	amdsmi_socket_handle socket_handle = NULL;
+	uint32_t dev_cnt		    = 0;
+	amdsmi_socket_handle socket_handle  = NULL;
 	amdsmi_processor_handle *processors = NULL;
 	uint32_t num_vf_enabled;
 	uint32_t num_vf_supported;
@@ -1194,31 +1380,32 @@ TEST(amdsmiIntegrationTests, Vf2PfTest)
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 
-	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, NULL), AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, NULL),
+		  AMDSMI_STATUS_SUCCESS);
 	ASSERT_GE(dev_cnt, (unsigned)1);
 	ASSERT_LE(dev_cnt, AMDSMI_MAX_DEVICES);
 
 	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
-	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, &processors[0]), AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, &processors[0]),
+		  AMDSMI_STATUS_SUCCESS);
 
 	for (uint32_t i = 0; i < dev_cnt; i++) {
 		ASSERT_EQ(amdsmi_get_num_vf(processors[i], &num_vf_enabled, &num_vf_supported),
 			  AMDSMI_STATUS_SUCCESS);
 		int ret = amdsmi_set_num_vf(processors[i], num_vf_enabled);
-		EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS
-					|| ret == AMDSMI_STATUS_BUSY
-					|| ret == AMDSMI_STATUS_NOT_SUPPORTED);
-		ASSERT_EQ(amdsmi_get_vf_partition_info(processors[i], num_vf_enabled,
-			  partitions), AMDSMI_STATUS_SUCCESS);
+		EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_BUSY ||
+			    ret == AMDSMI_STATUS_NOT_SUPPORTED);
+		ASSERT_EQ(amdsmi_get_vf_partition_info(processors[i], num_vf_enabled, partitions),
+			  AMDSMI_STATUS_SUCCESS);
 
 		for (uint32_t j = 0; j < num_vf_enabled; j++) {
 			ASSERT_EQ(amdsmi_get_vf_data(partitions[j].id, &vf_data),
 				  AMDSMI_STATUS_SUCCESS);
 
 			if (vf_data.sched.state == AMDSMI_VF_STATE_ACTIVE ||
-				vf_data.sched.state == AMDSMI_VF_STATE_DEFAULT_AVAILABLE) {
-				ASSERT_EQ(amdsmi_get_guest_data(partitions[j].id,
-					  &guest_data), AMDSMI_STATUS_SUCCESS);
+			    vf_data.sched.state == AMDSMI_VF_STATE_DEFAULT_AVAILABLE) {
+				ASSERT_EQ(amdsmi_get_guest_data(partitions[j].id, &guest_data),
+					  AMDSMI_STATUS_SUCCESS);
 
 				printf("Guest data:\n");
 				printf("    driver_version: %s\n", guest_data.driver_version);
@@ -1227,8 +1414,8 @@ TEST(amdsmiIntegrationTests, Vf2PfTest)
 				printf("    Guest microcode info:\n");
 			}
 			if (vf_data.sched.state == AMDSMI_VF_STATE_UNAVAILABLE) {
-				ASSERT_EQ(amdsmi_get_guest_data(partitions[j].id,
-					  &guest_data), AMDSMI_STATUS_API_FAILED);
+				ASSERT_EQ(amdsmi_get_guest_data(partitions[j].id, &guest_data),
+					  AMDSMI_STATUS_API_FAILED);
 			}
 		}
 	}
@@ -1239,24 +1426,26 @@ TEST(amdsmiIntegrationTests, Vf2PfTest)
 
 TEST(amdsmiIntegrationTests, EventTimeoutTests)
 {
-	uint32_t dev_cnt = 0;
+	uint32_t dev_cnt		    = 0;
 	amdsmi_processor_handle *processors = NULL;
-	amdsmi_socket_handle socket_handle = NULL;
+	amdsmi_socket_handle socket_handle  = NULL;
 	amdsmi_event_set set;
 	amdsmi_event_entry_t amdsmi_event;
 	int ret;
 	uint64_t events = AMDSMI_MASK_INIT;
-	events = AMDSMI_MASK_INCLUDE_INFO_SEVERITY(events);
-	events = AMDSMI_MASK_INCLUDE_CATEGORY(events, AMDSMI_EVENT_CATEGORY_RESET);
+	events		= AMDSMI_MASK_INCLUDE_INFO_SEVERITY(events);
+	events		= AMDSMI_MASK_INCLUDE_CATEGORY(events, AMDSMI_EVENT_CATEGORY_RESET);
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 
-	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, NULL), AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, NULL),
+		  AMDSMI_STATUS_SUCCESS);
 	ASSERT_GE(dev_cnt, (unsigned)1);
 	ASSERT_LE(dev_cnt, AMDSMI_MAX_DEVICES);
 
 	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
-	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, &processors[0]), AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, &processors[0]),
+		  AMDSMI_STATUS_SUCCESS);
 
 	ret = amdsmi_event_create(&processors[0], 1, events, &set);
 	if (ret != AMDSMI_STATUS_NOT_SUPPORTED) {
@@ -1272,8 +1461,8 @@ TEST(amdsmiIntegrationTests, EventTimeoutTests)
 
 TEST(amdsmiIntegrationTests, XgmiTest)
 {
-	uint32_t dev_cnt = 0;
-	amdsmi_socket_handle socket_handle = NULL;
+	uint32_t dev_cnt		    = 0;
+	amdsmi_socket_handle socket_handle  = NULL;
 	amdsmi_processor_handle *processors = NULL;
 	amdsmi_link_metrics_t link_metrics;
 	amdsmi_link_topology_t topology_info;
@@ -1289,12 +1478,14 @@ TEST(amdsmiIntegrationTests, XgmiTest)
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 
-	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, NULL), AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, NULL),
+		  AMDSMI_STATUS_SUCCESS);
 	ASSERT_GE(dev_cnt, (unsigned)1);
 	ASSERT_LE(dev_cnt, AMDSMI_MAX_DEVICES);
 
 	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
-	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, &processors[0]), AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, &processors[0]),
+		  AMDSMI_STATUS_SUCCESS);
 
 	for (uint32_t i = 0; i < dev_cnt; i++) {
 		ret = amdsmi_get_link_metrics(processors[i], &link_metrics);
@@ -1316,20 +1507,28 @@ TEST(amdsmiIntegrationTests, XgmiTest)
 		ret = amdsmi_get_xgmi_fb_sharing_caps(processors[i], &caps);
 		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		if (ret == AMDSMI_STATUS_NOT_SUPPORTED) {
-			printf("XGMI FB sharing caps not supported on GPU%d, skipping further XGMI checks\n", i);
+			printf("XGMI FB sharing caps not supported on GPU%d, skipping further XGMI "
+			       "checks\n",
+			       i);
 			continue;
 		}
 		printf("XGMI CAPS:\n");
-		printf("XGMI CUSTOM MODE: %s\n", caps.cap.mode_custom_cap ? "Supported" : "Unsupported");
-		printf("XGMI MODE 1: %s\n",  caps.cap.mode_1_cap ? "Supported" : "Unsupported");
-		printf("XGMI MODE 2: %s\n",  caps.cap.mode_2_cap ? "Supported" : "Unsupported");
-		printf("XGMI MODE 4: %s\n",  caps.cap.mode_4_cap ? "Supported" : "Unsupported");
-		printf("XGMI MODE 8: %s\n",  caps.cap.mode_8_cap ? "Supported" : "Unsupported");
+		printf("XGMI CUSTOM MODE: %s\n",
+		       caps.cap.mode_custom_cap ? "Supported" : "Unsupported");
+		printf("XGMI MODE 1: %s\n", caps.cap.mode_1_cap ? "Supported" : "Unsupported");
+		printf("XGMI MODE 2: %s\n", caps.cap.mode_2_cap ? "Supported" : "Unsupported");
+		printf("XGMI MODE 4: %s\n", caps.cap.mode_4_cap ? "Supported" : "Unsupported");
+		printf("XGMI MODE 8: %s\n", caps.cap.mode_8_cap ? "Supported" : "Unsupported");
 		for (uint32_t j = 0; j < dev_cnt; j++) {
-			ret = amdsmi_get_link_topology(processors[i], processors[j], &topology_info);
-			ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+			ret =
+			    amdsmi_get_link_topology(processors[i], processors[j], &topology_info);
+			ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS ||
+				    ret == AMDSMI_STATUS_NOT_SUPPORTED);
 			if (ret == AMDSMI_STATUS_NOT_SUPPORTED) {
-				printf("Link topology not supported for GPU%d<->GPU%d, skipping pair\n", i, j);
+				printf("Link topology not supported for GPU%d<->GPU%d, skipping "
+				       "pair\n",
+				       i,
+				       j);
 				continue;
 			}
 			printf("[GPU%d, GPU%d] XGMI TOPOLOGY:\n", i, j);
@@ -1338,41 +1537,60 @@ TEST(amdsmiIntegrationTests, XgmiTest)
 			printf("	Type: %d\n", topology_info.link_type);
 			printf("	Num hops: %d\n", topology_info.num_hops);
 			printf("	Is fb sharing enabled: %d\n", topology_info.fb_sharing);
-			ret = amdsmi_get_xgmi_fb_sharing_mode_info(processors[i], processors[j], AMDSMI_XGMI_FB_SHARING_MODE_CUSTOM, &fb_sharing);
-			ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+			ret =
+			    amdsmi_get_xgmi_fb_sharing_mode_info(processors[i],
+								 processors[j],
+								 AMDSMI_XGMI_FB_SHARING_MODE_CUSTOM,
+								 &fb_sharing);
+			ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS ||
+				    ret == AMDSMI_STATUS_NOT_SUPPORTED);
 
 			static const struct {
 				amdsmi_xgmi_fb_sharing_mode_t mode;
 				const char *name;
 			} fb_modes[] = {
-				{ AMDSMI_XGMI_FB_SHARING_MODE_1, "1" },
-				{ AMDSMI_XGMI_FB_SHARING_MODE_2, "2" },
-				{ AMDSMI_XGMI_FB_SHARING_MODE_4, "4" },
-				{ AMDSMI_XGMI_FB_SHARING_MODE_8, "8" },
+			    {AMDSMI_XGMI_FB_SHARING_MODE_1, "1"},
+			    {AMDSMI_XGMI_FB_SHARING_MODE_2, "2"},
+			    {AMDSMI_XGMI_FB_SHARING_MODE_4, "4"},
+			    {AMDSMI_XGMI_FB_SHARING_MODE_8, "8"},
 			};
 			for (const auto &m : fb_modes) {
-				ret = amdsmi_get_xgmi_fb_sharing_mode_info(processors[i], processors[j], m.mode, &fb_sharing);
-				ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+				ret = amdsmi_get_xgmi_fb_sharing_mode_info(
+				    processors[i], processors[j], m.mode, &fb_sharing);
+				ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS ||
+					    ret == AMDSMI_STATUS_NOT_SUPPORTED);
 				if (ret == AMDSMI_STATUS_SUCCESS) {
-					printf("[GPU%d, GPU%d] XGMI FB SHARING MODE %s:\n", i, j, m.name);
+					printf("[GPU%d, GPU%d] XGMI FB SHARING MODE %s:\n",
+					       i,
+					       j,
+					       m.name);
 					printf("	Is fb sharing enabled: %d\n", fb_sharing);
 				}
 			}
 
-			ret = amdsmi_topo_get_p2p_status(processors[i], processors[j], &type, &p2p_capability);
-			ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+			ret = amdsmi_topo_get_p2p_status(
+			    processors[i], processors[j], &type, &p2p_capability);
+			ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS ||
+				    ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		}
-		ret = amdsmi_get_link_topology_nearest(processors[i], AMDSMI_LINK_TYPE_XGMI, &topology_nearest_info);
+		ret = amdsmi_get_link_topology_nearest(
+		    processors[i], AMDSMI_LINK_TYPE_XGMI, &topology_nearest_info);
 		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		if (ret == AMDSMI_STATUS_NOT_SUPPORTED) {
-			printf("Nearest topology not supported on GPU%d, skipping further checks\n", i);
+			printf("Nearest topology not supported on GPU%d, skipping further checks\n",
+			       i);
 			continue;
 		}
-		ASSERT_EQ(amdsmi_get_index_from_processor_handle(processors[i], &processor_index), AMDSMI_STATUS_SUCCESS);
-		printf("Device with index %d have %u nearest devices\n", processor_index, topology_nearest_info.count);
+		ASSERT_EQ(amdsmi_get_index_from_processor_handle(processors[i], &processor_index),
+			  AMDSMI_STATUS_SUCCESS);
+		printf("Device with index %d have %u nearest devices\n",
+		       processor_index,
+		       topology_nearest_info.count);
 		printf("Indexes of nearest devices are following:\n");
 		for (unsigned int j = 0; j < topology_nearest_info.count; j++) {
-			ASSERT_EQ(amdsmi_get_index_from_processor_handle(topology_nearest_info.processor_list[j], &processor_index), AMDSMI_STATUS_SUCCESS);
+			ASSERT_EQ(amdsmi_get_index_from_processor_handle(
+				      topology_nearest_info.processor_list[j], &processor_index),
+				  AMDSMI_STATUS_SUCCESS);
 			printf("Device %d with index: %d\n", j, processor_index);
 		}
 
@@ -1381,15 +1599,19 @@ TEST(amdsmiIntegrationTests, XgmiTest)
 
 		if (ret == AMDSMI_STATUS_SUCCESS) {
 			std::cout << "XGMI plpd: " << std::endl;
-			std::cout << "    num supported: " << dpm_policy_info.num_supported << std::endl;
+			std::cout << "    num supported: " << dpm_policy_info.num_supported
+				  << std::endl;
 			std::cout << "    current: " << dpm_policy_info.current << std::endl;
 			std::cout << "	  plpds: " << std::endl;
 			for (unsigned int j = 0; j < dpm_policy_info.num_supported; ++j) {
-				std::cout << "	  	  policy id: " << dpm_policy_info.policies[j].policy_id << std::endl;
-				std::cout << "	  	  policy description: " << dpm_policy_info.policies[j].policy_description << std::endl;
+				std::cout << "	  	  policy id: "
+					  << dpm_policy_info.policies[j].policy_id << std::endl;
+				std::cout << "	  	  policy description: "
+					  << dpm_policy_info.policies[j].policy_description
+					  << std::endl;
 			}
 			dpm_policy_default = dpm_policy_info.current;
-			for (uint32_t policy : { 0u, 1u, 2u }) {
+			for (uint32_t policy : {0u, 1u, 2u}) {
 				ret = amdsmi_set_xgmi_plpd(processors[i], policy);
 				EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS);
 				ret = amdsmi_get_xgmi_plpd(processors[i], &dpm_policy_info);
@@ -1410,8 +1632,8 @@ TEST(amdsmiIntegrationTests, XgmiTest)
 
 TEST(amdsmiIntegrationTests, PtlTest)
 {
-	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
-	bool ptl_enabled = false;
+	uint32_t dev_cnt	= AMDSMI_MAX_DEVICES;
+	bool ptl_enabled	= false;
 	bool ptl_original_state = false;
 	amdsmi_ptl_data_format_t ptl_format1, ptl_format2;
 	amdsmi_ptl_data_format_t original_format1 = AMDSMI_PTL_DATA_FORMAT_I8;
@@ -1420,7 +1642,8 @@ TEST(amdsmiIntegrationTests, PtlTest)
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 
-	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
 	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, processors), AMDSMI_STATUS_SUCCESS);
 	ASSERT_GE(dev_cnt, (unsigned)1);
 	ASSERT_LE(dev_cnt, (unsigned)AMDSMI_MAX_DEVICES);
@@ -1438,16 +1661,20 @@ TEST(amdsmiIntegrationTests, PtlTest)
 		}
 
 		ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
-		std::cout << "  Initial PTL State: " << (ptl_enabled ? "ENABLED" : "DISABLED") << std::endl;
+		std::cout << "  Initial PTL State: " << (ptl_enabled ? "ENABLED" : "DISABLED")
+			  << std::endl;
 		ptl_original_state = ptl_enabled;
 
 		// Get original PTL formats if enabled
 		if (ptl_enabled) {
-			ret = amdsmi_get_gpu_ptl_formats(processors[i], &original_format1, &original_format2);
+			ret = amdsmi_get_gpu_ptl_formats(
+			    processors[i], &original_format1, &original_format2);
 			EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 			if (ret == AMDSMI_STATUS_SUCCESS) {
-				std::cout << "  Original PTL Format 1: " << original_format1 << std::endl;
-				std::cout << "  Original PTL Format 2: " << original_format2 << std::endl;
+				std::cout << "  Original PTL Format 1: " << original_format1
+					  << std::endl;
+				std::cout << "  Original PTL Format 2: " << original_format2
+					  << std::endl;
 			}
 		}
 
@@ -1462,9 +1689,8 @@ TEST(amdsmiIntegrationTests, PtlTest)
 		}
 
 		// Test set PTL formats
-		ret = amdsmi_set_gpu_ptl_formats(processors[i],
-						 AMDSMI_PTL_DATA_FORMAT_F16,
-						 AMDSMI_PTL_DATA_FORMAT_BF16);
+		ret = amdsmi_set_gpu_ptl_formats(
+		    processors[i], AMDSMI_PTL_DATA_FORMAT_F16, AMDSMI_PTL_DATA_FORMAT_BF16);
 		EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 		if (ret == AMDSMI_STATUS_SUCCESS) {
 			ret = amdsmi_get_gpu_ptl_formats(processors[i], &ptl_format1, &ptl_format2);
@@ -1475,9 +1701,8 @@ TEST(amdsmiIntegrationTests, PtlTest)
 		}
 
 		// Test another format combination
-		ret = amdsmi_set_gpu_ptl_formats(processors[i],
-						 AMDSMI_PTL_DATA_FORMAT_F32,
-						 AMDSMI_PTL_DATA_FORMAT_F64);
+		ret = amdsmi_set_gpu_ptl_formats(
+		    processors[i], AMDSMI_PTL_DATA_FORMAT_F32, AMDSMI_PTL_DATA_FORMAT_F64);
 		EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 		if (ret == AMDSMI_STATUS_SUCCESS) {
 			ret = amdsmi_get_gpu_ptl_formats(processors[i], &ptl_format1, &ptl_format2);
@@ -1503,7 +1728,8 @@ TEST(amdsmiIntegrationTests, PtlTest)
 
 		// Restore original formats if PTL was originally enabled
 		if (ptl_original_state && ret == AMDSMI_STATUS_SUCCESS) {
-			ret = amdsmi_set_gpu_ptl_formats(processors[i], original_format1, original_format2);
+			ret = amdsmi_set_gpu_ptl_formats(
+			    processors[i], original_format1, original_format2);
 			EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 		}
 
@@ -1516,29 +1742,32 @@ TEST(amdsmiIntegrationTests, PtlTest)
 
 TEST(amdsmiIntegrationTests, ChipletMetricTest)
 {
-	uint32_t dev_cnt = 0;
-	amdsmi_socket_handle socket_handle = NULL;
+	uint32_t dev_cnt		    = 0;
+	amdsmi_socket_handle socket_handle  = NULL;
 	amdsmi_processor_handle *processors = NULL;
 	amdsmi_metric_t *metrics;
 	uint32_t size = AMDSMI_MAX_NUM_METRICS;
-	int ret = AMDSMI_STATUS_SUCCESS;
+	int ret	      = AMDSMI_STATUS_SUCCESS;
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 
-	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, NULL), AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, NULL),
+		  AMDSMI_STATUS_SUCCESS);
 	ASSERT_GE(dev_cnt, (unsigned)1);
 	ASSERT_LE(dev_cnt, AMDSMI_MAX_DEVICES);
 
 	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
-	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, &processors[0]), AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, &processors[0]),
+		  AMDSMI_STATUS_SUCCESS);
 
 	for (uint32_t i = 0; i < dev_cnt; i++) {
 		size = AMDSMI_MAX_NUM_METRICS;
-		ret = amdsmi_get_gpu_metrics(processors[i], &size, NULL);
+		ret  = amdsmi_get_gpu_metrics(processors[i], &size, NULL);
 		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		if (!ret) {
 			metrics = (amdsmi_metric_t *)malloc(sizeof(amdsmi_metric_t) * size);
-			ASSERT_EQ(amdsmi_get_gpu_metrics(processors[i], &size, metrics), AMDSMI_STATUS_SUCCESS);
+			ASSERT_EQ(amdsmi_get_gpu_metrics(processors[i], &size, metrics),
+				  AMDSMI_STATUS_SUCCESS);
 			free(metrics);
 		}
 	}
@@ -1549,7 +1778,7 @@ TEST(amdsmiIntegrationTests, ChipletMetricTest)
 
 static void partition_tests()
 {
-	unsigned int dev_cnt = AMDSMI_MAX_DEVICES;
+	unsigned int dev_cnt		    = AMDSMI_MAX_DEVICES;
 	amdsmi_processor_handle *processors = NULL;
 	amdsmi_accelerator_partition_profile_t profile;
 	uint32_t partition_id[AMDSMI_MAX_ACCELERATOR_PROFILE];
@@ -1557,7 +1786,7 @@ static void partition_tests()
 	amdsmi_accelerator_partition_profile_config_t profile_configs;
 	amdsmi_accelerator_partition_profile_config_global_t profile_configs_global;
 	unsigned int i = 0;
-	int ret = 0;
+	int ret	       = 0;
 
 	memset(&profile, 0, sizeof(profile));
 	memset(&memory_setting, 0, sizeof(memory_setting));
@@ -1570,56 +1799,89 @@ static void partition_tests()
 	ASSERT_LE(dev_cnt, (unsigned)AMDSMI_MAX_DEVICES);
 
 	for (i = 0; i < dev_cnt; i++) {
-		ret = amdsmi_get_gpu_accelerator_partition_profile_config(processors[i], &profile_configs);
+		ret = amdsmi_get_gpu_accelerator_partition_profile_config(processors[i],
+									  &profile_configs);
 		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
-		printf("   Number of resource profiles: %d\n", profile_configs.num_resource_profiles);
+		printf("   Number of resource profiles: %d\n",
+		       profile_configs.num_resource_profiles);
 		printf("   Number of profiles: %d\n", profile_configs.num_profiles);
 		printf("   Default profile index: %d\n", profile_configs.default_profile_index);
 		for (uint32_t j = 0; j < profile_configs.num_resource_profiles; j++) {
-			printf("   Index of a profile: %d\n", profile_configs.resource_profiles[j].profile_index);
-			printf("   Resource type: %d\n", profile_configs.resource_profiles[j].resource_type);
-			printf("   Resource in a partition: %d\n", profile_configs.resource_profiles[j].partition_resource);
-			printf("   Number of partitions share resource: %d\n", profile_configs.resource_profiles[j].num_partitions_share_resource);
+			printf("   Index of a profile: %d\n",
+			       profile_configs.resource_profiles[j].profile_index);
+			printf("   Resource type: %d\n",
+			       profile_configs.resource_profiles[j].resource_type);
+			printf("   Resource in a partition: %d\n",
+			       profile_configs.resource_profiles[j].partition_resource);
+			printf("   Number of partitions share resource: %d\n",
+			       profile_configs.resource_profiles[j].num_partitions_share_resource);
 		}
 		for (uint32_t j = 0; j < profile_configs.num_profiles; j++) {
 			printf("   Profile type: %d\n", profile_configs.profiles[j].profile_type);
-			printf("   Number of partitions: %d\n", profile_configs.profiles[j].num_partitions);
-			printf("   Memory capability: %d\n", profile_configs.profiles[j].memory_caps.nps_cap_mask);
-			printf("   Index of profile: %d\n", profile_configs.profiles[j].profile_index);
-			printf("   Number of resources: %d\n", profile_configs.profiles[j].num_resources);
+			printf("   Number of partitions: %d\n",
+			       profile_configs.profiles[j].num_partitions);
+			printf("   Memory capability: %d\n",
+			       profile_configs.profiles[j].memory_caps.nps_cap_mask);
+			printf("   Index of profile: %d\n",
+			       profile_configs.profiles[j].profile_index);
+			printf("   Number of resources: %d\n",
+			       profile_configs.profiles[j].num_resources);
 			for (uint32_t k = 0; k < profile_configs.profiles[j].num_partitions; k++) {
-				for (uint32_t l = 0; l < profile_configs.profiles[j].num_resources; l++) {
-					printf("   Index of resource profile: %d\n", profile_configs.profiles[j].resources[k][l]);
+				for (uint32_t l = 0; l < profile_configs.profiles[j].num_resources;
+				     l++) {
+					printf("   Index of resource profile: %d\n",
+					       profile_configs.profiles[j].resources[k][l]);
 				}
 			}
 		}
 
-		ret = amdsmi_get_gpu_accelerator_partition_profile_config_global(processors[i], &profile_configs_global);
+		ret = amdsmi_get_gpu_accelerator_partition_profile_config_global(
+		    processors[i], &profile_configs_global);
 		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		printf("   [Global] Number of profiles: %d\n", profile_configs_global.num_profiles);
-		printf("   [Global] Number of resource profiles: %d\n", profile_configs_global.num_resource_profiles);
-		printf("   [Global] Default profile index: %d\n", profile_configs_global.default_profile_index);
+		printf("   [Global] Number of resource profiles: %d\n",
+		       profile_configs_global.num_resource_profiles);
+		printf("   [Global] Default profile index: %d\n",
+		       profile_configs_global.default_profile_index);
 		for (uint32_t j = 0; j < profile_configs_global.num_resource_profiles; j++) {
-			printf("   Index of a profile: %d\n", profile_configs_global.resource_profiles[j].profile_index);
-			printf("   Resource type: %d\n", profile_configs_global.resource_profiles[j].resource_type);
-			printf("   Resource in a partition: %d\n", profile_configs_global.resource_profiles[j].partition_resource);
-			printf("   Number of partitions share resource: %d\n", profile_configs_global.resource_profiles[j].num_partitions_share_resource);
+			printf("   Index of a profile: %d\n",
+			       profile_configs_global.resource_profiles[j].profile_index);
+			printf("   Resource type: %d\n",
+			       profile_configs_global.resource_profiles[j].resource_type);
+			printf("   Resource in a partition: %d\n",
+			       profile_configs_global.resource_profiles[j].partition_resource);
+			printf("   Number of partitions share resource: %d\n",
+			       profile_configs_global.resource_profiles[j]
+				   .num_partitions_share_resource);
 		}
 		for (uint32_t j = 0; j < profile_configs_global.num_profiles; j++) {
-			printf("   [Global] Profile type: %d\n", profile_configs_global.profiles[j].profile.profile_type);
-			printf("   [Global] Number of partitions: %d\n", profile_configs_global.profiles[j].profile.num_partitions);
-			printf("   [Global] Memory capability: %d\n", profile_configs_global.profiles[j].profile.memory_caps.nps_cap_mask);
-			printf("   [Global] Index of profile: %d\n", profile_configs_global.profiles[j].profile.profile_index);
-			printf("   [Global] Number of resources: %d\n", profile_configs_global.profiles[j].profile.num_resources);
-			for (uint32_t k = 0; k < profile_configs_global.profiles[j].profile.num_partitions; k++) {
-				for (uint32_t l = 0; l < profile_configs_global.profiles[j].profile.num_resources; l++) {
-					printf("   Index of resource profile: %d\n", profile_configs_global.profiles[j].profile.resources[k][l]);
+			printf("   [Global] Profile type: %d\n",
+			       profile_configs_global.profiles[j].profile.profile_type);
+			printf("   [Global] Number of partitions: %d\n",
+			       profile_configs_global.profiles[j].profile.num_partitions);
+			printf("   [Global] Memory capability: %d\n",
+			       profile_configs_global.profiles[j].profile.memory_caps.nps_cap_mask);
+			printf("   [Global] Index of profile: %d\n",
+			       profile_configs_global.profiles[j].profile.profile_index);
+			printf("   [Global] Number of resources: %d\n",
+			       profile_configs_global.profiles[j].profile.num_resources);
+			for (uint32_t k = 0;
+			     k < profile_configs_global.profiles[j].profile.num_partitions;
+			     k++) {
+				for (uint32_t l = 0;
+				     l < profile_configs_global.profiles[j].profile.num_resources;
+				     l++) {
+					printf("   Index of resource profile: %d\n",
+					       profile_configs_global.profiles[j]
+						   .profile.resources[k][l]);
 				}
 			}
-			printf("   [Global] Supported VF modes: %d\n", profile_configs_global.profiles[j].vf_mode);
+			printf("   [Global] Supported VF modes: %d\n",
+			       profile_configs_global.profiles[j].vf_mode);
 		}
 
-		ret = amdsmi_get_gpu_accelerator_partition_profile(processors[i], &profile, partition_id);
+		ret = amdsmi_get_gpu_accelerator_partition_profile(
+		    processors[i], &profile, partition_id);
 		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		printf("   Profile type: %d\n", profile.profile_type);
 		printf("   Number of partitions: %d\n", profile.num_partitions);
@@ -1628,16 +1890,19 @@ static void partition_tests()
 		printf("   Number of resources: %d\n", profile.num_resources);
 		for (uint32_t j = 0; j < profile.num_partitions; j++) {
 			for (uint32_t k = 0; k < profile.num_resources; k++) {
-				printf("   Index of resource profile: %d\n", profile.resources[j][k]);
+				printf("   Index of resource profile: %d\n",
+				       profile.resources[j][k]);
 			}
 		}
 
 		for (uint32_t j = 0; j < profile.num_partitions; j++) {
-				printf("   Partition id%d: %d\n", i, partition_id[j]);
+			printf("   Partition id%d: %d\n", i, partition_id[j]);
 		}
 
-		ret = amdsmi_set_gpu_accelerator_partition_profile(processors[i], profile.profile_index);
-		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_API_FAILED || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+		ret = amdsmi_set_gpu_accelerator_partition_profile(processors[i],
+								   profile.profile_index);
+		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_API_FAILED ||
+			    ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		printf(" Set accelerator partition to profile index: %d\n", profile.profile_index);
 
 		ret = amdsmi_get_gpu_memory_partition_config(processors[i], &memory_setting);
@@ -1647,21 +1912,23 @@ static void partition_tests()
 		printf("   Number of numa ranges: %d\n", memory_setting.num_numa_ranges);
 		for (uint32_t j = 0; j < memory_setting.num_numa_ranges; j++) {
 			printf("   Memory type: %d\n", memory_setting.numa_range[j].memory_type);
-			printf("   Numa range start: %" PRIu64 "\n", memory_setting.numa_range[j].start);
-			printf("   Numa range end: %" PRIu64 "\n", memory_setting.numa_range[j].end);
+			printf("   Numa range start: %" PRIu64 "\n",
+			       memory_setting.numa_range[j].start);
+			printf("   Numa range end: %" PRIu64 "\n",
+			       memory_setting.numa_range[j].end);
 		}
 
 		ret = amdsmi_set_gpu_memory_partition_mode(processors[i], memory_setting.mp_mode);
-		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_API_FAILED || ret == AMDSMI_STATUS_NOT_SUPPORTED || ret == AMDSMI_STATUS_INVAL);
+		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_API_FAILED ||
+			    ret == AMDSMI_STATUS_NOT_SUPPORTED || ret == AMDSMI_STATUS_INVAL);
 		printf(" Set memory partition mode: %d\n", memory_setting.mp_mode);
-
 	}
 	free(processors);
 }
 
 static void confidential_compute_test()
 {
-	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
+	uint32_t dev_cnt		    = AMDSMI_MAX_DEVICES;
 	amdsmi_processor_handle *processors = NULL;
 	amdsmi_tdi_state_t tdi_state;
 	amdsmi_cc_mode_t cc_mode, original_cc_mode;
@@ -1680,7 +1947,8 @@ static void confidential_compute_test()
 		ret = amdsmi_get_vf_handle_from_vf_index(processors[i], 0, &vf_handle);
 		if (ret == AMDSMI_STATUS_SUCCESS) {
 			ret = amdsmi_get_tdi_state(vf_handle, &tdi_state);
-			ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+			ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS ||
+				    ret == AMDSMI_STATUS_NOT_SUPPORTED);
 			if (ret == AMDSMI_STATUS_SUCCESS) {
 				printf("TDI State: ");
 				switch (tdi_state) {
@@ -1732,8 +2000,9 @@ static void confidential_compute_test()
 			printf("Testing CC mode transitions...\n");
 
 			ret = amdsmi_set_cc_mode(processors[i], AMDSMI_CC_MODE_OFF);
-			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED
-				|| ret == AMDSMI_STATUS_API_FAILED);
+			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS ||
+				    ret == AMDSMI_STATUS_NOT_SUPPORTED ||
+				    ret == AMDSMI_STATUS_API_FAILED);
 			if (ret == AMDSMI_STATUS_SUCCESS) {
 				ret = amdsmi_get_cc_mode(processors[i], &cc_mode);
 				ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
@@ -1742,8 +2011,9 @@ static void confidential_compute_test()
 			}
 
 			ret = amdsmi_set_cc_mode(processors[i], AMDSMI_CC_MODE_DEV);
-			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED
-				|| ret == AMDSMI_STATUS_API_FAILED);
+			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS ||
+				    ret == AMDSMI_STATUS_NOT_SUPPORTED ||
+				    ret == AMDSMI_STATUS_API_FAILED);
 			if (ret == AMDSMI_STATUS_SUCCESS) {
 				ret = amdsmi_get_cc_mode(processors[i], &cc_mode);
 				ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
@@ -1753,8 +2023,9 @@ static void confidential_compute_test()
 
 			// Restore original mode
 			ret = amdsmi_set_cc_mode(processors[i], original_cc_mode);
-			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED
-				|| ret == AMDSMI_STATUS_API_FAILED);
+			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS ||
+				    ret == AMDSMI_STATUS_NOT_SUPPORTED ||
+				    ret == AMDSMI_STATUS_API_FAILED);
 			if (ret == AMDSMI_STATUS_SUCCESS) {
 				ret = amdsmi_get_cc_mode(processors[i], &cc_mode);
 				ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
@@ -1787,19 +2058,19 @@ TEST(amdsmiIntegrationTests, ConfidentialComputeTest)
 
 TEST(amdsmiIntegrationTests, CperTests)
 {
-	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
+	uint32_t dev_cnt		    = AMDSMI_MAX_DEVICES;
 	amdsmi_processor_handle *processors = NULL;
-	int ret = 0;
+	int ret				    = 0;
 
-	char *cper_data = (char*)malloc(1024*1024);
-	uint64_t buf_size = 1024*1024;
+	char *cper_data	  = (char *)malloc(1024 * 1024);
+	uint64_t buf_size = 1024 * 1024;
 	amdsmi_cper_hdr_t *cper_hdrs[1024];
-	uint64_t cursor = 0;
+	uint64_t cursor	       = 0;
 	uint32_t severity_mask = 3;
 
 	memset(cper_hdrs, 0, sizeof(cper_hdrs));
 
-	processors =  (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, processors), AMDSMI_STATUS_SUCCESS);
 	ASSERT_GE(dev_cnt, (unsigned)1);
@@ -1808,13 +2079,23 @@ TEST(amdsmiIntegrationTests, CperTests)
 	do {
 		for (uint32_t i = 0; i < dev_cnt; i++) {
 			uint64_t current_entry_count = 1024;
-			ret = amdsmi_get_gpu_cper_entries(processors[i], severity_mask, cper_data, &buf_size, cper_hdrs, &current_entry_count, &cursor);
-			EXPECT_TRUE((ret == AMDSMI_STATUS_SUCCESS) || (ret == AMDSMI_STATUS_NOT_SUPPORTED) || (ret == AMDSMI_STATUS_MORE_DATA));
+			ret			     = amdsmi_get_gpu_cper_entries(processors[i],
+							   severity_mask,
+							   cper_data,
+							   &buf_size,
+							   cper_hdrs,
+							   &current_entry_count,
+							   &cursor);
+			EXPECT_TRUE((ret == AMDSMI_STATUS_SUCCESS) ||
+				    (ret == AMDSMI_STATUS_NOT_SUPPORTED) ||
+				    (ret == AMDSMI_STATUS_MORE_DATA));
 			if (ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_MORE_DATA) {
 				for (uint64_t j = 0; j < current_entry_count; j++) {
 					if (cper_hdrs[j] != NULL) {
-						printf("Record id: 		%s \n", cper_hdrs[j]->record_id);
-						printf("Error severity: %d \n", cper_hdrs[j]->error_severity);
+						printf("Record id: 		%s \n",
+						       cper_hdrs[j]->record_id);
+						printf("Error severity: %d \n",
+						       cper_hdrs[j]->error_severity);
 					}
 				}
 			}
@@ -1829,7 +2110,7 @@ TEST(amdsmiIntegrationTests, CperTests)
 TEST(amdsmiIntegrationTests, ResetGpuTest)
 {
 	amdsmi_processor_handle *processors = NULL;
-	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
+	uint32_t dev_cnt		    = AMDSMI_MAX_DEVICES;
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 
 	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
@@ -1855,7 +2136,8 @@ TEST(amdsmiIntegrationTests, FabricInfoTest)
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 
-	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
 	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, processors), AMDSMI_STATUS_SUCCESS);
 	ASSERT_GE(dev_cnt, (unsigned)1);
 	ASSERT_LE(dev_cnt, (unsigned)AMDSMI_MAX_DEVICES);
@@ -1869,57 +2151,62 @@ TEST(amdsmiIntegrationTests, FabricInfoTest)
 
 		if (ret == AMDSMI_STATUS_SUCCESS) {
 			printf("    BDF: %04lx:%02x:%02x.%x\n",
-				(unsigned long)fabric_info.bdf.bdf.domain_number,
-				(unsigned int)fabric_info.bdf.bdf.bus_number,
-				(unsigned int)fabric_info.bdf.bdf.device_number,
-				(unsigned int)fabric_info.bdf.bdf.function_number);
+			       (unsigned long)fabric_info.bdf.bdf.domain_number,
+			       (unsigned int)fabric_info.bdf.bdf.bus_number,
+			       (unsigned int)fabric_info.bdf.bdf.device_number,
+			       (unsigned int)fabric_info.bdf.bdf.function_number);
 
 			printf("    Fabric Info Version: %u.%u (raw 0x%08x)\n",
-				AMDSMI_FABRIC_VERSION_MAJOR(fabric_info.info.version),
-				AMDSMI_FABRIC_VERSION_MINOR(fabric_info.info.version),
-				fabric_info.info.version);
+			       AMDSMI_FABRIC_VERSION_MAJOR(fabric_info.fabric_version),
+			       AMDSMI_FABRIC_VERSION_MINOR(fabric_info.fabric_version),
+			       fabric_info.fabric_version);
 
-			if (AMDSMI_FABRIC_VERSION_MAJOR(fabric_info.info.version) == 1) {
-				printf("    Accelerator ID: %u\n", fabric_info.info.fabric_info.v1.accelerator_id);
-				printf("    Fabric Type: %d\n", fabric_info.info.fabric_info.v1.fabric_type);
-				printf("    Bandwidth: %u Mb/s\n", fabric_info.info.fabric_info.v1.bandwidth);
-				printf("    Latency: %u ns\n", fabric_info.info.fabric_info.v1.latency);
+			if (AMDSMI_FABRIC_VERSION_MAJOR(fabric_info.fabric_version) == 1) {
+				auto &v1 = fabric_info.fabric_info.v1;
+
+				printf("    Accelerator ID: %u\n", v1.ppod.accelerator_id);
+				printf("    Fabric Type: %d\n", v1.fabric_type);
+				printf("    Bandwidth: %u Mb/s\n", v1.ppod.bandwidth);
+				printf("    Latency: %u ns\n", v1.ppod.latency);
 
 				// Print Physical PoD ID as 128-bit UUID hex string
 				printf("    Physical PoD ID: ");
 				for (uint32_t j = 0; j < AMDSMI_FABRIC_PPOD_ID_SIZE; j++) {
-					printf("%02x", fabric_info.info.fabric_info.v1.ppod_id[j]);
+					printf("%02x", v1.ppod.ppod_id[j]);
 				}
 				printf("\n");
 
-				printf("    Physical PoD Size: %u\n", fabric_info.info.fabric_info.v1.ppod_size);
-				printf("    Virtual PoD ID: %u\n", fabric_info.info.fabric_info.v1.vpod_id);
-				printf("    Virtual PoD Size: %u\n", fabric_info.info.fabric_info.v1.vpod_size);
-				printf("    Address Mode: %d\n", fabric_info.info.fabric_info.v1.addr_mode);
-				printf("    Accelerator State: %d\n", fabric_info.info.fabric_info.v1.accel_state);
+				printf("    Physical PoD Size: %u\n", v1.ppod.ppod_size);
+				printf("    Virtual PoD ID: %u\n", v1.vpod.vpod_id);
+				printf("    Virtual PoD Size: %u\n", v1.vpod.vpod_size);
+				printf("    Address Mode: %d\n", v1.vpod.addr_mode);
+				printf("    Accelerator State: %d\n", v1.accel_state);
 
 				printf("    Local Accelerators: ");
 				for (uint32_t j = 0; j < AMDSMI_FABRIC_MAX_LOCAL_GPUS; j++) {
-					if (j != 0) printf(", ");
-					printf("%u", fabric_info.info.fabric_info.v1.local_accelerators[j]);
+					if (j != 0)
+						printf(", ");
+					printf("%u", v1.ppod.local_accelerators[j]);
 				}
 				printf("\n");
 
 				// Print active accelerators bitmap
 				printf("    vPoD Active Accelerators: 0x");
-				for (int j = AMDSMI_FABRIC_ACTIVE_ACCELERATORS_BITMAP_SIZE - 1; j >= 0; j--) {
-					printf("%08x", fabric_info.info.fabric_info.v1.vpod_active_accelerators[j]);
+				for (int j = AMDSMI_FABRIC_ACTIVE_ACCELERATORS_BITMAP_SIZE - 1;
+				     j >= 0;
+				     j--) {
+					printf("%08x", v1.vpod.vpod_active_accelerators[j]);
 				}
 				printf("\n");
 
 				// Validate some basic constraints
-				EXPECT_LE(fabric_info.info.fabric_info.v1.accelerator_id, 1023);
-				EXPECT_LE(fabric_info.info.fabric_info.v1.vpod_id, 1023);
-				EXPECT_LE(fabric_info.info.fabric_info.v1.vpod_size, 72);
-				EXPECT_TRUE(fabric_info.info.fabric_info.v1.fabric_type >= 0);
-				EXPECT_GE(fabric_info.info.fabric_info.v1.vpod_size, 0);
-				EXPECT_GE(fabric_info.info.fabric_info.v1.vpod_id, 0);
-				EXPECT_GE(fabric_info.info.fabric_info.v1.ppod_size, 0);
+				EXPECT_LE(v1.ppod.accelerator_id, 1023);
+				EXPECT_LE(v1.vpod.vpod_id, 1023);
+				EXPECT_LE(v1.vpod.vpod_size, 72);
+				EXPECT_TRUE(v1.fabric_type >= 0);
+				EXPECT_GE(v1.vpod.vpod_size, 0);
+				EXPECT_GE(v1.vpod.vpod_id, 0);
+				EXPECT_GE(v1.ppod.ppod_size, 0);
 			}
 		} else {
 			printf("    Fabric Info: Not Supported\n");
@@ -1939,7 +2226,7 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 		amdsmi_bdf_t bdf;
 		uint64_t handle;
 		uint64_t dev_id;
-	} fake_handle = { 1, {{0}}, 123446, 0 };
+	} fake_handle				= {1, {{0}}, 123446, 0};
 	amdsmi_processor_handle fake_dev_handle = &fake_handle;
 	amdsmi_vf_handle_t vf_handle;
 	amdsmi_driver_info_t driver_version;
@@ -1947,10 +2234,10 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 	amdsmi_bdf_t dev_bdf;
 	uint32_t num_vf_enabled;
 	uint32_t num_vf_supported;
-	amdsmi_temperature_type_t sensor_type = AMDSMI_TEMPERATURE_TYPE_EDGE;
+	amdsmi_temperature_type_t sensor_type	   = AMDSMI_TEMPERATURE_TYPE_EDGE;
 	amdsmi_temperature_metric_t metric_current = AMDSMI_TEMP_CURRENT;
-	amdsmi_socket_handle socket = NULL;
-	amdsmi_event_set set = NULL;
+	amdsmi_socket_handle socket		   = NULL;
+	amdsmi_event_set set			   = NULL;
 	amdsmi_event_entry_t entry;
 	amdsmi_link_topology_t topology_info;
 	amdsmi_topology_nearest_t topology_nearest_info;
@@ -1965,27 +2252,31 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 	amdsmi_accelerator_partition_profile_t profile;
 	uint32_t partition_id[AMDSMI_MAX_ACCELERATOR_PROFILE];
 	uint32_t sensor_ind = 0;
-	char *cper_data = (char*)malloc(1024*1024);
-	amdsmi_cper_hdr_t* cper_hdrs[1024];
+	char *cper_data	    = (char *)malloc(1024 * 1024);
+	amdsmi_cper_hdr_t *cper_hdrs[1024];
 	uint32_t severity_mask = 3;
-	uint64_t buf_size = 1024*1024;
-	uint64_t entry_count = 1024;
-	uint64_t cursor = 0;
+	uint64_t buf_size      = 1024 * 1024;
+	uint64_t entry_count   = 1024;
+	uint64_t cursor	       = 0;
 	amdsmi_cc_mode_t cc_mode_test;
 	bool ptl_enabled;
 	amdsmi_ptl_data_format_t ptl_format1, ptl_format2;
 
-	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
-	ASSERT_EQ(amdsmi_get_processor_handles(socket, &dev_cnt, processors), AMDSMI_STATUS_NOT_INIT);
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	ASSERT_EQ(amdsmi_get_processor_handles(socket, &dev_cnt, processors),
+		  AMDSMI_STATUS_NOT_INIT);
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 
 	ASSERT_EQ(amdsmi_get_processor_handles(socket, NULL, processors), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_processor_handles(socket, &dev_cnt, NULL), AMDSMI_STATUS_SUCCESS);
 
-	ASSERT_EQ(amdsmi_get_processor_handles(socket, &dev_cnt, processors), AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(amdsmi_get_processor_handles(socket, &dev_cnt, processors),
+		  AMDSMI_STATUS_SUCCESS);
 
-	ASSERT_EQ(amdsmi_get_index_from_processor_handle(NULL, &processor_index), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_index_from_processor_handle(NULL, &processor_index),
+		  AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_index_from_processor_handle(processors[0], NULL), AMDSMI_STATUS_INVAL);
 
 	ASSERT_EQ(amdsmi_get_gpu_driver_info(fake_dev_handle, &driver_version),
@@ -2005,8 +2296,10 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 	ASSERT_EQ(amdsmi_get_num_vf(processors[0], &num_vf_enabled, NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_gpu_board_info(processors[0], NULL), AMDSMI_STATUS_INVAL);
 
-	ASSERT_EQ(amdsmi_get_num_vf(processors[0], &num_vf_enabled, &num_vf_supported), AMDSMI_STATUS_SUCCESS);
-	partitioning_info = (amdsmi_partition_info_t*)malloc(sizeof(amdsmi_partition_info_t) * num_vf_enabled);
+	ASSERT_EQ(amdsmi_get_num_vf(processors[0], &num_vf_enabled, &num_vf_supported),
+		  AMDSMI_STATUS_SUCCESS);
+	partitioning_info =
+	    (amdsmi_partition_info_t *)malloc(sizeof(amdsmi_partition_info_t) * num_vf_enabled);
 	ASSERT_EQ(amdsmi_get_vf_partition_info(processors[0], 0, partitioning_info),
 		  AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_vf_partition_info(processors[0], num_vf_enabled, NULL),
@@ -2015,10 +2308,12 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 		  AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(amdsmi_get_vf_handle_from_vf_index(processors[0], 0, NULL), AMDSMI_STATUS_INVAL);
 
-	ASSERT_EQ(amdsmi_get_vf_handle_from_vf_index(processors[0], 0, &vf_handle), AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(amdsmi_get_vf_handle_from_vf_index(processors[0], 0, &vf_handle),
+		  AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(vf_handle.handle, partitioning_info[0].id.handle);
 
-	ASSERT_EQ(amdsmi_get_vf_uuid(partitioning_info[0].id, &uuid_length, uuid), AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(amdsmi_get_vf_uuid(partitioning_info[0].id, &uuid_length, uuid),
+		  AMDSMI_STATUS_SUCCESS);
 
 	ASSERT_EQ(amdsmi_get_processor_handle_from_uuid(uuid, NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_vf_handle_from_uuid(uuid, NULL), AMDSMI_STATUS_INVAL);
@@ -2040,7 +2335,8 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 		  AMDSMI_STATUS_INVAL);
 
 	ASSERT_EQ(amdsmi_get_gpu_total_ecc_count(processors[0], NULL), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_gpu_ecc_count(processors[0], AMDSMI_GPU_BLOCK_GFX, NULL), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_ecc_count(processors[0], AMDSMI_GPU_BLOCK_GFX, NULL),
+		  AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_gpu_ecc_enabled(processors[0], NULL), AMDSMI_STATUS_INVAL);
 
 	ASSERT_EQ(amdsmi_get_fw_error_records(processors[0], NULL), AMDSMI_STATUS_INVAL);
@@ -2057,24 +2353,46 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 
 	ASSERT_EQ(amdsmi_get_link_metrics(processors[0], NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_xgmi_fb_sharing_caps(processors[0], NULL), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_link_topology(processors[0], NULL, &topology_info), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_link_topology(NULL, processors[0], &topology_info), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_link_topology(processors[0], processors[0], NULL), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_link_topology_nearest(NULL, AMDSMI_LINK_TYPE_XGMI, &topology_nearest_info), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_link_topology_nearest(processors[0], AMDSMI_LINK_TYPE_XGMI, NULL), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_link_topology_nearest(processors[0], (amdsmi_link_type_t)invalid_link_min, &topology_nearest_info), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_link_topology_nearest(processors[0], (amdsmi_link_type_t)invalid_link_max , &topology_nearest_info), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_link_topology_nearest(processors[0], AMDSMI_LINK_TYPE_INTERNAL, &topology_nearest_info), AMDSMI_STATUS_NOT_SUPPORTED);
-	ASSERT_EQ(amdsmi_get_xgmi_fb_sharing_mode_info(processors[0], processors[0], AMDSMI_XGMI_FB_SHARING_MODE_4, NULL), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_xgmi_fb_sharing_mode_info(NULL, processors[0], AMDSMI_XGMI_FB_SHARING_MODE_4, &fb_sharing), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_xgmi_fb_sharing_mode_info(processors[0], NULL, AMDSMI_XGMI_FB_SHARING_MODE_4, &fb_sharing), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_set_xgmi_fb_sharing_mode(NULL, AMDSMI_XGMI_FB_SHARING_MODE_4), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_set_xgmi_fb_sharing_mode(processors[0], AMDSMI_XGMI_FB_SHARING_MODE_CUSTOM), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_link_topology(processors[0], NULL, &topology_info),
+		  AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_link_topology(NULL, processors[0], &topology_info),
+		  AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_link_topology(processors[0], processors[0], NULL),
+		  AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(
+	    amdsmi_get_link_topology_nearest(NULL, AMDSMI_LINK_TYPE_XGMI, &topology_nearest_info),
+	    AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_link_topology_nearest(processors[0], AMDSMI_LINK_TYPE_XGMI, NULL),
+		  AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_link_topology_nearest(
+		      processors[0], (amdsmi_link_type_t)invalid_link_min, &topology_nearest_info),
+		  AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_link_topology_nearest(
+		      processors[0], (amdsmi_link_type_t)invalid_link_max, &topology_nearest_info),
+		  AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_link_topology_nearest(
+		      processors[0], AMDSMI_LINK_TYPE_INTERNAL, &topology_nearest_info),
+		  AMDSMI_STATUS_NOT_SUPPORTED);
+	ASSERT_EQ(amdsmi_get_xgmi_fb_sharing_mode_info(
+		      processors[0], processors[0], AMDSMI_XGMI_FB_SHARING_MODE_4, NULL),
+		  AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_xgmi_fb_sharing_mode_info(
+		      NULL, processors[0], AMDSMI_XGMI_FB_SHARING_MODE_4, &fb_sharing),
+		  AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_xgmi_fb_sharing_mode_info(
+		      processors[0], NULL, AMDSMI_XGMI_FB_SHARING_MODE_4, &fb_sharing),
+		  AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_set_xgmi_fb_sharing_mode(NULL, AMDSMI_XGMI_FB_SHARING_MODE_4),
+		  AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(
+	    amdsmi_set_xgmi_fb_sharing_mode(processors[0], AMDSMI_XGMI_FB_SHARING_MODE_CUSTOM),
+	    AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_xgmi_plpd(processors[0], NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_set_xgmi_plpd(NULL, 0), AMDSMI_STATUS_INVAL);
 
 	// Get a VF handle for testing TDI state with invalid parameters
-	if (amdsmi_get_vf_handle_from_vf_index(processors[0], 0, &vf_handle) == AMDSMI_STATUS_SUCCESS) {
+	if (amdsmi_get_vf_handle_from_vf_index(processors[0], 0, &vf_handle) ==
+	    AMDSMI_STATUS_SUCCESS) {
 		ASSERT_EQ(amdsmi_get_tdi_state(vf_handle, NULL), AMDSMI_STATUS_INVAL);
 	}
 	ASSERT_EQ(amdsmi_get_cc_mode(processors[0], NULL), AMDSMI_STATUS_INVAL);
@@ -2083,40 +2401,97 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 	ASSERT_EQ(amdsmi_get_gpu_ptl_state(NULL, &ptl_enabled), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_gpu_ptl_state(processors[0], NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_set_gpu_ptl_state(NULL, true), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_gpu_ptl_formats(NULL, &ptl_format1, &ptl_format2), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_gpu_ptl_formats(processors[0], NULL, &ptl_format2), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_gpu_ptl_formats(processors[0], &ptl_format1, NULL), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_set_gpu_ptl_formats(NULL, AMDSMI_PTL_DATA_FORMAT_F16, AMDSMI_PTL_DATA_FORMAT_BF16), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_ptl_formats(NULL, &ptl_format1, &ptl_format2),
+		  AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_ptl_formats(processors[0], NULL, &ptl_format2),
+		  AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_ptl_formats(processors[0], &ptl_format1, NULL),
+		  AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_set_gpu_ptl_formats(
+		      NULL, AMDSMI_PTL_DATA_FORMAT_F16, AMDSMI_PTL_DATA_FORMAT_BF16),
+		  AMDSMI_STATUS_INVAL);
 
 	ASSERT_EQ(amdsmi_get_gpu_metrics(processors[0], NULL, NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_gpu_metrics(processors[0], NULL, &metrics), AMDSMI_STATUS_INVAL);
 
 	ASSERT_EQ(amdsmi_get_gpu_bad_page_info(processors[0], NULL, NULL), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_gpu_bad_page_info(processors[0], NULL, &bad_pages), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_bad_page_info(processors[0], NULL, &bad_pages),
+		  AMDSMI_STATUS_INVAL);
 
-	ASSERT_EQ(amdsmi_get_gpu_accelerator_partition_profile_config(processors[0], NULL), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_gpu_accelerator_partition_profile_config_global(processors[0], NULL), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_gpu_accelerator_partition_profile(processors[0], NULL, NULL), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_gpu_accelerator_partition_profile(processors[0], &profile, NULL), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_gpu_accelerator_partition_profile(processors[0], NULL, partition_id), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_accelerator_partition_profile_config(processors[0], NULL),
+		  AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_accelerator_partition_profile_config_global(processors[0], NULL),
+		  AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_accelerator_partition_profile(processors[0], NULL, NULL),
+		  AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_accelerator_partition_profile(processors[0], &profile, NULL),
+		  AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_accelerator_partition_profile(processors[0], NULL, partition_id),
+		  AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_gpu_memory_partition_config(processors[0], NULL), AMDSMI_STATUS_INVAL);
 
-	ASSERT_EQ(amdsmi_get_gpu_cper_entries(processors[0], severity_mask, NULL, &buf_size, cper_hdrs, &entry_count, &cursor), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_gpu_cper_entries(processors[0], severity_mask, cper_data, NULL, cper_hdrs, &entry_count, &cursor), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_gpu_cper_entries(processors[0], severity_mask, cper_data, &buf_size, NULL, &entry_count, &cursor), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_gpu_cper_entries(processors[0], severity_mask, cper_data, &buf_size, cper_hdrs, NULL, &cursor), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_gpu_cper_entries(processors[0], severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, NULL), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(
+	    amdsmi_get_gpu_cper_entries(
+		processors[0], severity_mask, NULL, &buf_size, cper_hdrs, &entry_count, &cursor),
+	    AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(
+	    amdsmi_get_gpu_cper_entries(
+		processors[0], severity_mask, cper_data, NULL, cper_hdrs, &entry_count, &cursor),
+	    AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(
+	    amdsmi_get_gpu_cper_entries(
+		processors[0], severity_mask, cper_data, &buf_size, NULL, &entry_count, &cursor),
+	    AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_cper_entries(
+		      processors[0], severity_mask, cper_data, &buf_size, cper_hdrs, NULL, &cursor),
+		  AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(
+	    amdsmi_get_gpu_cper_entries(
+		processors[0], severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, NULL),
+	    AMDSMI_STATUS_INVAL);
 
-	ASSERT_TRUE(amdsmi_get_fabric_cper_entries(processors[0], severity_mask, NULL, &buf_size, cper_hdrs, &entry_count, &cursor) == AMDSMI_STATUS_INVAL ||
-		    amdsmi_get_fabric_cper_entries(processors[0], severity_mask, NULL, &buf_size, cper_hdrs, &entry_count, &cursor) == AMDSMI_STATUS_NOT_SUPPORTED);
-	ASSERT_TRUE(amdsmi_get_fabric_cper_entries(processors[0], severity_mask, cper_data, NULL, cper_hdrs, &entry_count, &cursor) == AMDSMI_STATUS_INVAL ||
-		    amdsmi_get_fabric_cper_entries(processors[0], severity_mask, cper_data, NULL, cper_hdrs, &entry_count, &cursor) == AMDSMI_STATUS_NOT_SUPPORTED);
-	ASSERT_TRUE(amdsmi_get_fabric_cper_entries(processors[0], severity_mask, cper_data, &buf_size, NULL, &entry_count, &cursor) == AMDSMI_STATUS_INVAL ||
-		    amdsmi_get_fabric_cper_entries(processors[0], severity_mask, cper_data, &buf_size, NULL, &entry_count, &cursor) == AMDSMI_STATUS_NOT_SUPPORTED);
-	ASSERT_TRUE(amdsmi_get_fabric_cper_entries(processors[0], severity_mask, cper_data, &buf_size, cper_hdrs, NULL, &cursor) == AMDSMI_STATUS_INVAL ||
-		    amdsmi_get_fabric_cper_entries(processors[0], severity_mask, cper_data, &buf_size, cper_hdrs, NULL, &cursor) == AMDSMI_STATUS_NOT_SUPPORTED);
-	ASSERT_TRUE(amdsmi_get_fabric_cper_entries(processors[0], severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, NULL) == AMDSMI_STATUS_INVAL ||
-		    amdsmi_get_fabric_cper_entries(processors[0], severity_mask, cper_data, &buf_size, cper_hdrs, &entry_count, NULL) == AMDSMI_STATUS_NOT_SUPPORTED);
+	ASSERT_TRUE(
+	    amdsmi_get_fabric_cper_entries(
+		processors[0], severity_mask, NULL, &buf_size, cper_hdrs, &entry_count, &cursor) ==
+		AMDSMI_STATUS_INVAL ||
+	    amdsmi_get_fabric_cper_entries(
+		processors[0], severity_mask, NULL, &buf_size, cper_hdrs, &entry_count, &cursor) ==
+		AMDSMI_STATUS_NOT_SUPPORTED);
+	ASSERT_TRUE(
+	    amdsmi_get_fabric_cper_entries(
+		processors[0], severity_mask, cper_data, NULL, cper_hdrs, &entry_count, &cursor) ==
+		AMDSMI_STATUS_INVAL ||
+	    amdsmi_get_fabric_cper_entries(
+		processors[0], severity_mask, cper_data, NULL, cper_hdrs, &entry_count, &cursor) ==
+		AMDSMI_STATUS_NOT_SUPPORTED);
+	ASSERT_TRUE(
+	    amdsmi_get_fabric_cper_entries(
+		processors[0], severity_mask, cper_data, &buf_size, NULL, &entry_count, &cursor) ==
+		AMDSMI_STATUS_INVAL ||
+	    amdsmi_get_fabric_cper_entries(
+		processors[0], severity_mask, cper_data, &buf_size, NULL, &entry_count, &cursor) ==
+		AMDSMI_STATUS_NOT_SUPPORTED);
+	ASSERT_TRUE(
+	    amdsmi_get_fabric_cper_entries(
+		processors[0], severity_mask, cper_data, &buf_size, cper_hdrs, NULL, &cursor) ==
+		AMDSMI_STATUS_INVAL ||
+	    amdsmi_get_fabric_cper_entries(
+		processors[0], severity_mask, cper_data, &buf_size, cper_hdrs, NULL, &cursor) ==
+		AMDSMI_STATUS_NOT_SUPPORTED);
+	ASSERT_TRUE(amdsmi_get_fabric_cper_entries(processors[0],
+						   severity_mask,
+						   cper_data,
+						   &buf_size,
+						   cper_hdrs,
+						   &entry_count,
+						   NULL) == AMDSMI_STATUS_INVAL ||
+		    amdsmi_get_fabric_cper_entries(processors[0],
+						   severity_mask,
+						   cper_data,
+						   &buf_size,
+						   cper_hdrs,
+						   &entry_count,
+						   NULL) == AMDSMI_STATUS_NOT_SUPPORTED);
 
 	ASSERT_EQ(amdsmi_get_gpu_ras_policy_info(processors[0], NULL), AMDSMI_STATUS_INVAL);
 
@@ -2126,62 +2501,112 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 	ASSERT_EQ(amdsmi_get_gpu_fabric_info(NULL, NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_gpu_fabric_info(processors[0], NULL), AMDSMI_STATUS_INVAL);
 
+	ASSERT_EQ(amdsmi_set_gpu_fabric_ppod_config(NULL, NULL), AMDSMI_STATUS_INVAL);
+	{
+		amdsmi_fabric_ppod_config_t ppod_cfg = {};
+		ASSERT_EQ(amdsmi_set_gpu_fabric_ppod_config(processors[0], NULL),
+			  AMDSMI_STATUS_INVAL);
+		/* With a valid handle and valid config the call is allowed to succeed or return
+		 * NOT_SUPPORTED. */
+		amdsmi_status_t ppod_ret =
+		    amdsmi_set_gpu_fabric_ppod_config(processors[0], &ppod_cfg);
+		ASSERT_TRUE(ppod_ret == AMDSMI_STATUS_SUCCESS ||
+			    ppod_ret == AMDSMI_STATUS_NOT_SUPPORTED ||
+			    ppod_ret == AMDSMI_STATUS_INVAL);
+	}
+
+	ASSERT_EQ(amdsmi_set_gpu_fabric_vpod_config(NULL, NULL), AMDSMI_STATUS_INVAL);
+	{
+		amdsmi_fabric_vpod_config_t vpod_cfg = {};
+		ASSERT_EQ(amdsmi_set_gpu_fabric_vpod_config(processors[0], NULL),
+			  AMDSMI_STATUS_INVAL);
+		amdsmi_status_t vpod_ret =
+		    amdsmi_set_gpu_fabric_vpod_config(processors[0], &vpod_cfg);
+		ASSERT_TRUE(vpod_ret == AMDSMI_STATUS_SUCCESS ||
+			    vpod_ret == AMDSMI_STATUS_NOT_SUPPORTED ||
+			    vpod_ret == AMDSMI_STATUS_INVAL);
+	}
+
+	ASSERT_EQ(amdsmi_set_gpu_fabric_station_config(NULL, NULL), AMDSMI_STATUS_INVAL);
+	{
+		amdsmi_fabric_station_config_t station_cfg = {};
+		ASSERT_EQ(amdsmi_set_gpu_fabric_station_config(processors[0], NULL),
+			  AMDSMI_STATUS_INVAL);
+		amdsmi_status_t station_ret =
+		    amdsmi_set_gpu_fabric_station_config(processors[0], &station_cfg);
+		ASSERT_TRUE(station_ret == AMDSMI_STATUS_SUCCESS ||
+			    station_ret == AMDSMI_STATUS_NOT_SUPPORTED ||
+			    station_ret == AMDSMI_STATUS_INVAL);
+	}
+
 	ASSERT_EQ(amdsmi_get_cc_mode(processors[0], NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_cc_mode(NULL, &cc_mode_test), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_set_cc_mode(NULL, AMDSMI_CC_MODE_ON), AMDSMI_STATUS_INVAL);
 
 	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
-	ASSERT_EQ(amdsmi_get_processor_handles(socket, &dev_cnt, processors), AMDSMI_STATUS_NOT_INIT);
+	ASSERT_EQ(amdsmi_get_processor_handles(socket, &dev_cnt, processors),
+		  AMDSMI_STATUS_NOT_INIT);
 	free(cper_data);
 	free(partitioning_info);
 	free(processors);
 }
 
-
 #ifdef __linux__
-#if !defined(SMI_ESXI_BUILD)
+	#if !defined(SMI_ESXI_BUILD)
 TEST(amdsmiIntegrationTests, NumaInfoTest)
 {
-	uint32_t dev_cnt = 0;
-	amdsmi_socket_handle socket_handle = NULL;
+	uint32_t dev_cnt		    = 0;
+	amdsmi_socket_handle socket_handle  = NULL;
 	amdsmi_processor_handle *processors = NULL;
-	int ret = 0;
-	uint32_t numa_node = 0;
+	int ret				    = 0;
+	uint32_t numa_node		    = 0;
 	uint64_t cpu_set[4];
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 
-	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, NULL), AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, NULL),
+		  AMDSMI_STATUS_SUCCESS);
 	ASSERT_GE(dev_cnt, (unsigned)1);
 	ASSERT_LE(dev_cnt, AMDSMI_MAX_DEVICES);
 
 	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
-	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, &processors[0]), AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(amdsmi_get_processor_handles(socket_handle, &dev_cnt, &processors[0]),
+		  AMDSMI_STATUS_SUCCESS);
 
 	for (uint32_t i = 0; i < dev_cnt; i++) {
+		/*
+		 * A device is not always attached to a NUMA node. Platforms that
+		 * report no NUMA affinity return NOT_SUPPORTED, which is valid.
+		 */
 		ret = amdsmi_topo_get_numa_node_number(processors[i], &numa_node);
-		ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+		bool has_numa_node = (ret == AMDSMI_STATUS_SUCCESS);
 
-		ret = amdsmi_get_cpu_affinity_with_scope(processors[i],4, cpu_set, AMDSMI_AFFINITY_SCOPE_NODE);
-		ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
-
+		ret = amdsmi_get_cpu_affinity_with_scope(
+		    processors[i], 4, cpu_set, AMDSMI_AFFINITY_SCOPE_NODE);
+		ASSERT_EQ(ret, has_numa_node ? AMDSMI_STATUS_SUCCESS : AMDSMI_STATUS_NOT_SUPPORTED);
 
 		printf("GPU %u \n", i);
-		printf("NUMA NODE: %d \n", numa_node);
+		if (!has_numa_node) {
+			printf("NUMA NODE: N/A \n");
+			printf("CPU_AFFINITY: N/A \n");
+			continue;
+		}
+
+		printf("NUMA NODE: %u \n", numa_node);
 		printf("CPU_AFFINITY 0: %016lx \n", cpu_set[0]);
 		printf("CPU_AFFINITY 1: %016lx \n", cpu_set[1]);
 		printf("CPU_AFFINITY 2: %016lx \n", cpu_set[2]);
 		printf("CPU_AFFINITY 3: %016lx \n", cpu_set[3]);
-
 	}
 
 	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
 	free(processors);
 }
-#endif /* !SMI_ESXI_BUILD */
+	#endif /* !SMI_ESXI_BUILD */
 
 TEST(amdsmiIntegrationTests, NodeInfoTest)
 {
-	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
+	uint32_t dev_cnt	    = AMDSMI_MAX_DEVICES;
 	amdsmi_socket_handle socket = NULL;
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
@@ -2190,8 +2615,10 @@ TEST(amdsmiIntegrationTests, NodeInfoTest)
 	ASSERT_GE(dev_cnt, (unsigned)1);
 	ASSERT_LE(dev_cnt, (unsigned)AMDSMI_MAX_DEVICES);
 
-	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
-	ASSERT_EQ(amdsmi_get_processor_handles(socket, &dev_cnt, &processors[0]), AMDSMI_STATUS_SUCCESS);
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	ASSERT_EQ(amdsmi_get_processor_handles(socket, &dev_cnt, &processors[0]),
+		  AMDSMI_STATUS_SUCCESS);
 
 	amdsmi_node_handle node_handle;
 	int ret = amdsmi_get_node_handle(processors[0], &node_handle);
@@ -2203,29 +2630,42 @@ TEST(amdsmiIntegrationTests, NodeInfoTest)
 		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		if (ret == AMDSMI_STATUS_SUCCESS) {
 			std::cout << "Node NPM info: \n    status: " << npm_info.status << " ("
-					<< (npm_info.limit == 0 ? "DISABLED" : "ENABLED") << ")"
-					<< "\n    limit: " << npm_info.limit << " W"
-					<< "\n    ubb_power_threshold: " << npm_info.ubb_power_threshold << " W\n";
+				  << (npm_info.limit == 0 ? "DISABLED" : "ENABLED") << ")"
+				  << "\n    limit: " << npm_info.limit << " W"
+				  << "\n    ubb_power_threshold: " << npm_info.ubb_power_threshold
+				  << " W\n";
 		} else if (ret == AMDSMI_STATUS_NOT_SUPPORTED) {
 			std::cout << "Node NPM info: NOT SUPPORTED\n";
 		} else {
 			std::cout << "Node NPM info: ERROR (ret=" << ret << ")\n";
 		}
 	}
+
+	amdsmi_tray_info_t tray_info;
+	ret = amdsmi_get_tray_info(NULL, &tray_info);
+	ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
+	if (ret == AMDSMI_STATUS_SUCCESS) {
+		std::cout << "Node tray info:\n    max_acc_per_tray: " << tray_info.max_acc_per_tray
+			  << "\n    tray_type: " << tray_info.tray_type << "\n";
+	} else {
+		std::cout << "Node tray info: NOT SUPPORTED\n";
+	}
+
 	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
 	free(processors);
 }
 
 TEST(amdsmiIntegrationTests, FabricTelemetryTest)
 {
-	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
-	amdsmi_fabric_telemetry_t* telemetry = nullptr;
+	uint32_t dev_cnt		     = AMDSMI_MAX_DEVICES;
+	amdsmi_fabric_telemetry_t *telemetry = nullptr;
 	uint32_t category_mask;
 	int ret;
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 
-	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
 	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, processors), AMDSMI_STATUS_SUCCESS);
 	ASSERT_GE(dev_cnt, (unsigned)1);
 	ASSERT_LE(dev_cnt, (unsigned)AMDSMI_MAX_DEVICES);
@@ -2243,17 +2683,23 @@ TEST(amdsmiIntegrationTests, FabricTelemetryTest)
 
 			// Get telemetry data
 			ret = amdsmi_get_fabric_telemetry_data(processors[i], telemetry);
-			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_API_FAILED);
+			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS ||
+				    ret == AMDSMI_STATUS_API_FAILED);
 
 			if (ret == AMDSMI_STATUS_SUCCESS) {
 				std::cout << "  Fabric telemetry data retrieved successfully\n";
 
-			// Print basic telemetry info
-			for (unsigned int cat = 0; cat < AMDSMI_FABRIC_TELEMETRY_CATEGORY_MAX; cat++) {
+				// Print basic telemetry info
+				for (unsigned int cat = 0;
+				     cat < AMDSMI_FABRIC_TELEMETRY_CATEGORY_MAX;
+				     cat++) {
 					if (telemetry->datasets[cat] != nullptr) {
-						std::cout << "    Category " << cat << ": "
-								  << telemetry->datasets[cat]->instance_count << " instances, "
-								  << "generation " << telemetry->datasets[cat]->generation_count << "\n";
+						std::cout
+						    << "    Category " << cat << ": "
+						    << telemetry->datasets[cat]->instance_count
+						    << " instances, " << "generation "
+						    << telemetry->datasets[cat]->generation_count
+						    << "\n";
 					}
 				}
 			} else {
@@ -2279,14 +2725,15 @@ TEST(amdsmiIntegrationTests, FabricTelemetryTest)
 
 TEST(amdsmiIntegrationTests, FabricTelemetryMultipleCategoriesTest)
 {
-	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
-	amdsmi_fabric_telemetry_t* telemetry = nullptr;
+	uint32_t dev_cnt		     = AMDSMI_MAX_DEVICES;
+	amdsmi_fabric_telemetry_t *telemetry = nullptr;
 	uint32_t category_mask;
 	int ret;
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 
-	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
 	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, processors), AMDSMI_STATUS_SUCCESS);
 	ASSERT_GE(dev_cnt, (unsigned)1);
 	ASSERT_LE(dev_cnt, (unsigned)AMDSMI_MAX_DEVICES);
@@ -2296,8 +2743,8 @@ TEST(amdsmiIntegrationTests, FabricTelemetryMultipleCategoriesTest)
 
 		// Test with multiple categories
 		category_mask = AMDSMI_FABRIC_TELEMETRY_CATEGORY_MASK_UALOE |
-						AMDSMI_FABRIC_TELEMETRY_CATEGORY_MASK_SWITCH |
-						AMDSMI_FABRIC_TELEMETRY_CATEGORY_MASK_NETPORT;
+				AMDSMI_FABRIC_TELEMETRY_CATEGORY_MASK_SWITCH |
+				AMDSMI_FABRIC_TELEMETRY_CATEGORY_MASK_NETPORT;
 
 		ret = amdsmi_alloc_fabric_telemetry(processors[i], category_mask, &telemetry);
 
@@ -2307,7 +2754,8 @@ TEST(amdsmiIntegrationTests, FabricTelemetryMultipleCategoriesTest)
 
 			// Get telemetry data
 			ret = amdsmi_get_fabric_telemetry_data(processors[i], telemetry);
-			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_API_FAILED);
+			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS ||
+				    ret == AMDSMI_STATUS_API_FAILED);
 
 			if (ret == AMDSMI_STATUS_SUCCESS) {
 				std::cout << "  Telemetry data for multiple categories retrieved\n";
@@ -2321,7 +2769,8 @@ TEST(amdsmiIntegrationTests, FabricTelemetryMultipleCategoriesTest)
 		} else if (ret == AMDSMI_STATUS_NOT_SUPPORTED) {
 			std::cout << "  Multiple categories telemetry NOT SUPPORTED\n";
 		} else {
-			std::cout << "  Multiple categories allocation failed (ret=" << ret << ")\n";
+			std::cout << "  Multiple categories allocation failed (ret=" << ret
+				  << ")\n";
 		}
 	}
 
@@ -2331,14 +2780,15 @@ TEST(amdsmiIntegrationTests, FabricTelemetryMultipleCategoriesTest)
 
 TEST(amdsmiIntegrationTests, FabricTelemetryInvalidParamsTest)
 {
-	uint32_t dev_cnt = AMDSMI_MAX_DEVICES;
-	amdsmi_fabric_telemetry_t* telemetry = nullptr;
-	uint32_t category_mask = AMDSMI_FABRIC_TELEMETRY_CATEGORY_MASK_UALOE;
+	uint32_t dev_cnt		     = AMDSMI_MAX_DEVICES;
+	amdsmi_fabric_telemetry_t *telemetry = nullptr;
+	uint32_t category_mask		     = AMDSMI_FABRIC_TELEMETRY_CATEGORY_MASK_UALOE;
 	int ret;
 
 	ASSERT_EQ(amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS), AMDSMI_STATUS_SUCCESS);
 
-	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
 	ASSERT_EQ(amdsmi_get_processor_handles(NULL, &dev_cnt, processors), AMDSMI_STATUS_SUCCESS);
 	ASSERT_GE(dev_cnt, (unsigned)1);
 	ASSERT_LE(dev_cnt, (unsigned)AMDSMI_MAX_DEVICES);

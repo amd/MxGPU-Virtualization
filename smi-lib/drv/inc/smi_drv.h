@@ -13,8 +13,7 @@
 
 struct oss_interface;
 
-int smi_init(struct oss_interface *oss_interface,
-		struct smi_shim_interface *shim_interface);
+int smi_init(struct oss_interface *oss_interface, struct smi_shim_interface *shim_interface);
 void smi_lock_devices(void);
 void smi_unlock_devices(void);
 void smi_cleanup(void);

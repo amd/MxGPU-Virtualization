@@ -67,32 +67,33 @@ uint16_t nl_family_id(const struct nl_conn *conn)
 	return conn->family_id;
 }
 
-struct nlmsghdr *nl_req_init(struct nl_conn *conn,
-			     char *buf, size_t buflen,
-			     uint8_t cmd, uint8_t version)
+struct nlmsghdr *
+nl_req_init(struct nl_conn *conn, char *buf, size_t buflen, uint8_t cmd, uint8_t version)
 {
 	struct genlmsghdr *genlh;
 	struct nlmsghdr *nlh;
 
 	memset(buf, 0, buflen);
 
-	nlh = mnl_nlmsg_put_header(buf);
-	nlh->nlmsg_type = conn->family_id;
+	nlh		 = mnl_nlmsg_put_header(buf);
+	nlh->nlmsg_type	 = conn->family_id;
 	nlh->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
-	nlh->nlmsg_seq = ++conn->seq;
-	nlh->nlmsg_pid = conn->port_id;
+	nlh->nlmsg_seq	 = ++conn->seq;
+	nlh->nlmsg_pid	 = conn->port_id;
 
-	genlh = mnl_nlmsg_put_extra_header(nlh, sizeof(*genlh));
-	genlh->cmd = cmd;
+	genlh	       = mnl_nlmsg_put_extra_header(nlh, sizeof(*genlh));
+	genlh->cmd     = cmd;
 	genlh->version = version;
 
 	return nlh;
 }
 
 int nl_req_run(struct nl_conn *conn,
-	       char *buf, size_t buflen,
+	       char *buf,
+	       size_t buflen,
 	       struct nlmsghdr *nlh,
-	       mnl_cb_t data_cb, void *data)
+	       mnl_cb_t data_cb,
+	       void *data)
 {
 	int ret;
 
@@ -102,8 +103,7 @@ int nl_req_run(struct nl_conn *conn,
 
 	ret = mnl_socket_recvfrom(conn->soc, buf, buflen);
 	while (ret > 0) {
-		ret = mnl_cb_run(buf, ret, conn->seq, conn->port_id,
-				data_cb, data);
+		ret = mnl_cb_run(buf, ret, conn->seq, conn->port_id, data_cb, data);
 		if (ret <= MNL_CB_STOP) {
 			break;
 		}
@@ -117,9 +117,11 @@ int nl_req_run(struct nl_conn *conn,
 }
 
 int nl_req_run2(struct nl_conn *conn,
-		char *buf, size_t buflen,
+		char *buf,
+		size_t buflen,
 		struct nlmsghdr *nlh,
-		mnl_cb_t data_cb, void *data,
+		mnl_cb_t data_cb,
+		void *data,
 		mnl_cb_t err_cb)
 {
 	mnl_cb_t cb_ctl_array[NLMSG_MIN_TYPE];
@@ -134,8 +136,14 @@ int nl_req_run2(struct nl_conn *conn,
 
 	ret = mnl_socket_recvfrom(conn->soc, buf, buflen);
 	while (ret > 0) {
-		ret = mnl_cb_run2(buf, ret, conn->seq, conn->port_id,
-				 data_cb, data, cb_ctl_array, NLMSG_MIN_TYPE);
+		ret = mnl_cb_run2(buf,
+				  ret,
+				  conn->seq,
+				  conn->port_id,
+				  data_cb,
+				  data,
+				  cb_ctl_array,
+				  NLMSG_MIN_TYPE);
 		if (ret <= MNL_CB_STOP) {
 			break;
 		}

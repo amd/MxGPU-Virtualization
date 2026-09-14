@@ -15,40 +15,56 @@
 #include <inttypes.h>
 #include <stdio.h>
 #ifdef SMI_ESXI_BUILD
-#include <unistd.h>   /* access()/F_OK for get_numa_node_from_vsish (ESXi-only) */
+	#include <unistd.h> /* access()/F_OK for get_numa_node_from_vsish (ESXi-only) */
 #endif
 
-amdsmi_status_t amdsmi_request(smi_req_ctx *smi_req, uint32_t cmd_code, size_t input_size, size_t output_size)
+amdsmi_status_t
+amdsmi_request(smi_req_ctx *smi_req, uint32_t cmd_code, size_t input_size, size_t output_size)
 {
 	system_wrapper *sys_wrapper;
 
 	if (smi_req == NULL) {
-		SMI_ERROR("Invalid param value, NULL pointer passed as smi_req parameter. Return code: %d", AMDSMI_STATUS_INVAL);
+		SMI_ERROR("Invalid param value, NULL pointer passed as smi_req parameter. Return "
+			  "code: %d",
+			  AMDSMI_STATUS_INVAL);
 		return AMDSMI_STATUS_INVAL;
 	}
 	sys_wrapper = get_system_wrapper();
 	if (!smi_is_supported((enum smi_cmd_code)cmd_code, smi_req->handle->version)) {
-		SMI_ERROR("Specified command is not compatible with the negotiated API version. Return code: %d", AMDSMI_STATUS_NOT_SUPPORTED);
+		SMI_ERROR("Specified command is not compatible with the negotiated API version. "
+			  "Return code: %d",
+			  AMDSMI_STATUS_NOT_SUPPORTED);
 		return AMDSMI_STATUS_NOT_SUPPORTED;
 	} else {
-		smi_req->thread->ioctl_cmd.in_hdr.code = cmd_code;
-		smi_req->thread->ioctl_cmd.in_hdr.in_len = (int16_t) input_size;
-		smi_req->thread->ioctl_cmd.in_hdr.out_len = (int16_t) output_size;
-		const int ret = sys_wrapper->smi_ioctl(smi_req->handle->fd, &smi_req->thread->ioctl_cmd);
+		smi_req->thread->ioctl_cmd.in_hdr.code	  = cmd_code;
+		smi_req->thread->ioctl_cmd.in_hdr.in_len  = (int16_t)input_size;
+		smi_req->thread->ioctl_cmd.in_hdr.out_len = (int16_t)output_size;
+		const int ret =
+		    sys_wrapper->smi_ioctl(smi_req->handle->fd, &smi_req->thread->ioctl_cmd);
 		if (ret != 0) {
 			if (SMI_LAST_ERROR == SMI_EIO) {
-				SMI_ERROR("SMI_LAST_ERROR errno code equals to AMDSMI_EIO error code. Return code: %d", smi_req->thread->ioctl_cmd.out_hdr.status);
+				SMI_ERROR("SMI_LAST_ERROR errno code equals to AMDSMI_EIO error "
+					  "code. Return code: %d",
+					  smi_req->thread->ioctl_cmd.out_hdr.status);
 				return smi_req->thread->ioctl_cmd.out_hdr.status;
 			}
-			if (SMI_LAST_ERROR == SMI_ACCESS_DENIED || SMI_LAST_ERROR == SMI_INVAL_ARG) {
-				SMI_ERROR("SMI_LAST_ERROR errno code equals to AMDSMI_ACCESS_DENIED or AMDSMI_INVAL_ARG error code. Return code: %d", AMDSMI_STATUS_NOT_SUPPORTED);
+			if (SMI_LAST_ERROR == SMI_ACCESS_DENIED ||
+			    SMI_LAST_ERROR == SMI_INVAL_ARG) {
+				SMI_ERROR(
+				    "SMI_LAST_ERROR errno code equals to AMDSMI_ACCESS_DENIED or "
+				    "AMDSMI_INVAL_ARG error code. Return code: %d",
+				    AMDSMI_STATUS_NOT_SUPPORTED);
 				return AMDSMI_STATUS_NOT_SUPPORTED;
 			}
-			SMI_ERROR("Unknown error occured, ioctl call failed, result not equal to 0. Return code: %d", AMDSMI_STATUS_UNKNOWN_ERROR);
+			SMI_ERROR("Unknown error occured, ioctl call failed, result not equal to "
+				  "0. Return code: %d",
+				  AMDSMI_STATUS_UNKNOWN_ERROR);
 			return AMDSMI_STATUS_UNKNOWN_ERROR;
 		}
 		if (smi_req->thread->ioctl_cmd.out_hdr.status != AMDSMI_STATUS_SUCCESS) {
-			SMI_ERROR("Status of smi request output not returned AMDSMI_STATUS_SUCCESS. Return code: %d", smi_req->thread->ioctl_cmd.out_hdr.status);
+			SMI_ERROR("Status of smi request output not returned "
+				  "AMDSMI_STATUS_SUCCESS. Return code: %d",
+				  smi_req->thread->ioctl_cmd.out_hdr.status);
 			return smi_req->thread->ioctl_cmd.out_hdr.status;
 		}
 	}
@@ -56,69 +72,73 @@ amdsmi_status_t amdsmi_request(smi_req_ctx *smi_req, uint32_t cmd_code, size_t i
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-amdsmi_status_t amdsmi_ioctl_get_vf_partitioning_info(smi_req_ctx *smi_req, smi_device_handle_t handle)
+amdsmi_status_t amdsmi_ioctl_get_vf_partitioning_info(smi_req_ctx *smi_req,
+						      smi_device_handle_t handle)
 {
-	struct smi_device_info *gpu =
-		(struct smi_device_info *)&smi_req->thread->ioctl_cmd.payload;
-	gpu->dev_id.handle = handle.handle;
+	struct smi_device_info *gpu = (struct smi_device_info *)&smi_req->thread->ioctl_cmd.payload;
+	gpu->dev_id.handle	    = handle.handle;
 
-	return amdsmi_request(smi_req, (uint32_t)SMI_CMD_CODE_GET_VF_PARTITIONING_INFO,
-			   sizeof(struct smi_device_info),
-			   sizeof(struct smi_vf_partition_info));
+	return amdsmi_request(smi_req,
+			      (uint32_t)SMI_CMD_CODE_GET_VF_PARTITIONING_INFO,
+			      sizeof(struct smi_device_info),
+			      sizeof(struct smi_vf_partition_info));
 }
 
 amdsmi_status_t amdsmi_ioctl_get_vf_static_info(smi_req_ctx *smi_req, smi_device_handle_t vf_handle)
 {
-	struct smi_device_info *vf =
-		(struct smi_device_info *)&smi_req->thread->ioctl_cmd.payload;
-	vf->dev_id.handle = vf_handle.handle;
+	struct smi_device_info *vf = (struct smi_device_info *)&smi_req->thread->ioctl_cmd.payload;
+	vf->dev_id.handle	   = vf_handle.handle;
 
-	const int code =
-		amdsmi_request(smi_req, (uint32_t)SMI_CMD_CODE_GET_VF_STATIC_INFO,
-			    sizeof(struct smi_device_info),
-			    sizeof(struct smi_vf_static_info));
+	const int code = amdsmi_request(smi_req,
+					(uint32_t)SMI_CMD_CODE_GET_VF_STATIC_INFO,
+					sizeof(struct smi_device_info),
+					sizeof(struct smi_vf_static_info));
 
 	return code;
 }
 
-amdsmi_status_t amdsmi_ioctl_get_gpu_performance_info(smi_req_ctx *smi_req, smi_device_handle_t handle)
+amdsmi_status_t amdsmi_ioctl_get_gpu_performance_info(smi_req_ctx *smi_req,
+						      smi_device_handle_t handle)
 {
 	struct smi_device_info_ex *gpu =
-		(struct smi_device_info_ex *)&smi_req->thread->ioctl_cmd.payload;
+	    (struct smi_device_info_ex *)&smi_req->thread->ioctl_cmd.payload;
 	gpu->dev_id.handle = handle.handle;
 
-	const int code = amdsmi_request(smi_req, (uint32_t)SMI_CMD_CODE_GET_GPU_PERFORMANCE_INFO,
-			sizeof(struct smi_device_info_ex),
-			sizeof(struct smi_gpu_performance_info));
+	const int code = amdsmi_request(smi_req,
+					(uint32_t)SMI_CMD_CODE_GET_GPU_PERFORMANCE_INFO,
+					sizeof(struct smi_device_info_ex),
+					sizeof(struct smi_gpu_performance_info));
 
 	return code;
 }
 
 amdsmi_status_t amdsmi_ioctl_get_ecc_error_count(smi_req_ctx *smi_req, smi_device_handle_t handle)
 {
-	struct smi_device_info *gpu =
-		(struct smi_device_info *)&smi_req->thread->ioctl_cmd.payload;
-	gpu->dev_id.handle = handle.handle;
+	struct smi_device_info *gpu = (struct smi_device_info *)&smi_req->thread->ioctl_cmd.payload;
+	gpu->dev_id.handle	    = handle.handle;
 
-	return amdsmi_request(smi_req, (uint32_t)SMI_CMD_CODE_GET_ECC_STATUS,
-			   sizeof(struct smi_device_info),
-			   sizeof(struct smi_ecc_info));
+	return amdsmi_request(smi_req,
+			      (uint32_t)SMI_CMD_CODE_GET_ECC_STATUS,
+			      sizeof(struct smi_device_info),
+			      sizeof(struct smi_ecc_info));
 }
 
-amdsmi_status_t amdsmi_ioctl_get_vf_dynamic_info(smi_req_ctx *smi_req, smi_device_handle_t vf_handle)
+amdsmi_status_t amdsmi_ioctl_get_vf_dynamic_info(smi_req_ctx *smi_req,
+						 smi_device_handle_t vf_handle)
 {
-	struct smi_device_info *vf =
-		(struct smi_device_info *)&smi_req->thread->ioctl_cmd.payload;
-	vf->dev_id.handle = vf_handle.handle;
+	struct smi_device_info *vf = (struct smi_device_info *)&smi_req->thread->ioctl_cmd.payload;
+	vf->dev_id.handle	   = vf_handle.handle;
 
-	const int code = amdsmi_request(smi_req, (uint32_t)SMI_CMD_CODE_GET_VF_DYNAMIC_INFO,
-				     sizeof(struct smi_device_info),
-				     sizeof(struct smi_vf_data));
+	const int code = amdsmi_request(smi_req,
+					(uint32_t)SMI_CMD_CODE_GET_VF_DYNAMIC_INFO,
+					sizeof(struct smi_device_info),
+					sizeof(struct smi_vf_data));
 
 	return code;
 }
 
-amdsmi_status_t amdsmi_get_pcie_speed_from_pcie_type(uint32_t pcie_type, uint32_t *pcie_speed, uint64_t dev_id)
+amdsmi_status_t
+amdsmi_get_pcie_speed_from_pcie_type(uint32_t pcie_type, uint32_t *pcie_speed, uint64_t dev_id)
 {
 	uint64_t case_start_from_zero = 0x73a1;
 	switch (pcie_type + (dev_id == case_start_from_zero)) {
@@ -149,26 +169,40 @@ amdsmi_status_t amdsmi_get_pcie_speed_from_pcie_type(uint32_t pcie_type, uint32_
 uint64_t pcie_gen_to_transfer_rate(uint8_t gen_speed)
 {
 	switch (gen_speed) {
-	case 0: return 2500000000ULL;
-	case 1: return 5000000000ULL;
-	case 2: return 8000000000ULL;
-	case 3: return 16000000000ULL;
-	case 4: return 32000000000ULL;
-	case 5: return 64000000000ULL;
-	default: return 0;
+	case 0:
+		return 2500000000ULL;
+	case 1:
+		return 5000000000ULL;
+	case 2:
+		return 8000000000ULL;
+	case 3:
+		return 16000000000ULL;
+	case 4:
+		return 32000000000ULL;
+	case 5:
+		return 64000000000ULL;
+	default:
+		return 0;
 	}
 }
 
 uint32_t pcie_lane_count_to_lanes(uint8_t lane_count)
 {
 	switch (lane_count) {
-	case 1: return 1;
-	case 2: return 2;
-	case 3: return 4;
-	case 4: return 8;
-	case 5: return 12;
-	case 6: return 16;
-	default: return 0;
+	case 1:
+		return 1;
+	case 2:
+		return 2;
+	case 3:
+		return 4;
+	case 4:
+		return 8;
+	case 5:
+		return 12;
+	case 6:
+		return 16;
+	default:
+		return 0;
 	}
 }
 
@@ -209,7 +243,8 @@ amdsmi_status_t amdsmi_get_string_from_status_enum(amdsmi_status_t status, const
 		*out = "AMDSMI_STATUS_NO_PERM - Permission Denied";
 		break;
 	case AMDSMI_STATUS_INTERRUPT:
-		*out = "AMDSMI_STATUS_INTERRUPT - An interrupt occurred during execution of function";
+		*out =
+		    "AMDSMI_STATUS_INTERRUPT - An interrupt occurred during execution of function";
 		break;
 	case AMDSMI_STATUS_IO:
 		*out = "AMDSMI_STATUS_IO - I/O Error";
@@ -227,13 +262,16 @@ amdsmi_status_t amdsmi_get_string_from_status_enum(amdsmi_status_t status, const
 		*out = "AMDSMI_STATUS_INTERNAL_EXCEPTION - An internal exception was caught";
 		break;
 	case AMDSMI_STATUS_INPUT_OUT_OF_BOUNDS:
-		*out = "AMDSMI_STATUS_INPUT_OUT_OF_BOUNDS - The provided input is out of allowable or safe range";
+		*out = "AMDSMI_STATUS_INPUT_OUT_OF_BOUNDS - The provided input is out of allowable "
+		       "or safe range";
 		break;
 	case AMDSMI_STATUS_INIT_ERROR:
-		*out = "AMDSMI_STATUS_INIT_ERROR - An error occurred when initializing internal data structures";
+		*out = "AMDSMI_STATUS_INIT_ERROR - An error occurred when initializing internal "
+		       "data structures";
 		break;
 	case AMDSMI_STATUS_REFCOUNT_OVERFLOW:
-		*out = "AMDSMI_STATUS_REFCOUNT_OVERFLOW - An internal reference counter exceeded INT32_MAX";
+		*out = "AMDSMI_STATUS_REFCOUNT_OVERFLOW - An internal reference counter exceeded "
+		       "INT32_MAX";
 		break;
 	case AMDSMI_STATUS_BUSY:
 		*out = "AMDSMI_STATUS_BUSY - Processor busy";
@@ -254,13 +292,15 @@ amdsmi_status_t amdsmi_get_string_from_status_enum(amdsmi_status_t status, const
 		*out = "AMDSMI_STATUS_NO_DATA - No data was found for a given input";
 		break;
 	case AMDSMI_STATUS_INSUFFICIENT_SIZE:
-		*out = "AMDSMI_STATUS_INSUFFICIENT_SIZE - Not enough resources were available for the operation";
+		*out = "AMDSMI_STATUS_INSUFFICIENT_SIZE - Not enough resources were available for "
+		       "the operation";
 		break;
 	case AMDSMI_STATUS_UNEXPECTED_SIZE:
 		*out = "AMDSMI_STATUS_UNEXPECTED_SIZE - An unexpected amount of data was read";
 		break;
 	case AMDSMI_STATUS_UNEXPECTED_DATA:
-		*out = "AMDSMI_STATUS_UNEXPECTED_DATA - The data read or provided to function is not what was expected";
+		*out = "AMDSMI_STATUS_UNEXPECTED_DATA - The data read or provided to function is "
+		       "not what was expected";
 		break;
 	case AMDSMI_STATUS_NON_AMD_CPU:
 		*out = "AMDSMI_STATUS_NON_AMD_CPU - System has different cpu than AMD";
@@ -299,7 +339,8 @@ amdsmi_status_t amdsmi_get_string_from_status_enum(amdsmi_status_t status, const
 		*out = "AMDSMI_STATUS_SETTING_UNAVAILABLE - Setting is not available";
 		break;
 	case AMDSMI_STATUS_MAP_ERROR:
-		*out = "AMDSMI_STATUS_MAP_ERROR - The internal library error did not map to a status code";
+		*out = "AMDSMI_STATUS_MAP_ERROR - The internal library error did not map to a "
+		       "status code";
 		break;
 	case AMDSMI_STATUS_UNKNOWN_ERROR:
 		*out = "AMDSMI_STATUS_UNKNOWN_ERROR - An unknown error occurred";
@@ -337,23 +378,25 @@ static void print_uuid(char *str, uuid_t *uuid)
 #ifdef _WIN64
 	sprintf_s(str,
 		  AMDSMI_GPU_UUID_SIZE,
-		  "%08x-%04x-%04x-%02x%02x-%04x%08x", uuid->time_low,
-						      uuid->time_mid,
-						      ((uuid->version << 12) | uuid->time_high),
-						      ((uuid->variant << 6) | uuid->clk_seq_hi),
-						      uuid->clk_seq_low,
-						      uuid->asic_4,
-						      uuid->asic_0);
+		  "%08x-%04x-%04x-%02x%02x-%04x%08x",
+		  uuid->time_low,
+		  uuid->time_mid,
+		  ((uuid->version << 12) | uuid->time_high),
+		  ((uuid->variant << 6) | uuid->clk_seq_hi),
+		  uuid->clk_seq_low,
+		  uuid->asic_4,
+		  uuid->asic_0);
 #else
 	snprintf(str,
-		  AMDSMI_GPU_UUID_SIZE,
-		  "%08x-%04x-%04x-%02x%02x-%04x%08x", uuid->time_low,
-						      uuid->time_mid,
-						      ((uuid->version << 12) | uuid->time_high),
-						      ((uuid->variant << 6) | uuid->clk_seq_hi),
-						      uuid->clk_seq_low,
-						      uuid->asic_4,
-						      uuid->asic_0);
+		 AMDSMI_GPU_UUID_SIZE,
+		 "%08x-%04x-%04x-%02x%02x-%04x%08x",
+		 uuid->time_low,
+		 uuid->time_mid,
+		 ((uuid->version << 12) | uuid->time_high),
+		 ((uuid->variant << 6) | uuid->clk_seq_hi),
+		 uuid->clk_seq_low,
+		 uuid->asic_4,
+		 uuid->asic_0);
 #endif
 }
 
@@ -378,23 +421,25 @@ static void insert_fcn(uuid_t *uuid, uint8_t fcn_idx)
 static void insert_clk_seq(uuid_t *uuid, uint16_t seq)
 {
 	uuid->clk_seq_low = (uint8_t)seq;
-	uuid->clk_seq_hi = (seq >> 8) & 0x3fU;
+	uuid->clk_seq_hi  = (seq >> 8) & 0x3fU;
 }
 
 int smi_get_vf_device_id_from_pf(uint64_t pf_device_id, uint64_t *vf_device_id)
 {
-    static const struct {
+	static const struct {
 		uint64_t pf_id;
 		uint64_t vf_id;
-	} pf_vf_map[] = {
-		{0x74A1, 0x74B5},
-		{0x74A2, 0x74B6},
-		{0x74A8, 0x74BC},
-		{0x74A9, 0x74BD},
-		{0x75A0, 0x75B0},
-		{0x75A3, 0x75B3},
-		{0x7460, 0x7461}
-	};
+	} pf_vf_map[] = {{0x74A1, 0x74B5},
+			 {0x74A2, 0x74B6},
+			 {0x74A8, 0x74BC},
+			 {0x74A9, 0x74BD},
+			 {0x75A0, 0x75B0},
+			 {0x75A3, 0x75B3},
+			 {0x75A8, 0x75B8},
+			 {0x7460, 0x7461}};
+
+	if (vf_device_id == NULL)
+		return -1;
 
 	for (size_t i = 0; i < sizeof(pf_vf_map) / sizeof(pf_vf_map[0]); i++) {
 		if (pf_device_id == pf_vf_map[i].pf_id) {
@@ -405,6 +450,19 @@ int smi_get_vf_device_id_from_pf(uint64_t pf_device_id, uint64_t *vf_device_id)
 
 	*vf_device_id = 0xFFFF;
 	return -1;
+}
+
+int smi_get_vf_device_id(uint64_t pf_device_id, uint16_t sriov_vf_devid, uint64_t *vf_device_id)
+{
+	if (vf_device_id == NULL)
+		return -1;
+
+	if (sriov_vf_devid != 0 && sriov_vf_devid != 0xFFFF) {
+		*vf_device_id = sriov_vf_devid;
+		return 0;
+	}
+
+	return smi_get_vf_device_id_from_pf(pf_device_id, vf_device_id);
 }
 
 int smi_uuid_gen(char *str, uint64_t serial, uint16_t did, uint8_t idx)
@@ -441,7 +499,7 @@ static bool are_hex_sequence_match(const char *str, int *index, int length)
 	return true;
 }
 
-static bool are_char_match(const char *str,  int *index, char expected)
+static bool are_char_match(const char *str, int *index, char expected)
 {
 	if (str[*index] != expected) {
 		return false;
@@ -487,36 +545,37 @@ bool is_uuid_valid(const char *uuid)
 	return true;
 }
 
-bool guid_equals(const guid_t* guid1,const guid_t* guid2) {
-    return memcmp(guid1->b, guid2->b, sizeof(guid1->b)) == 0;
+bool guid_equals(const guid_t *guid1, const guid_t *guid2)
+{
+	return memcmp(guid1->b, guid2->b, sizeof(guid1->b)) == 0;
 }
 
-void amdsmi_get_register_array(const uint8_t* data, size_t size, uint64_t *register_array) {
+void amdsmi_get_register_array(const uint8_t *data, size_t size, uint64_t *register_array)
+{
 	uint8_t index = 0;
-    for (size_t i = 0; i < size; i += sizeof(uint64_t)) {
-        uint64_t value = 0;
-        if (i + sizeof(uint64_t) <= size) {
-            value = *(uint64_t*)(data + i);
+	for (size_t i = 0; i < size; i += sizeof(uint64_t)) {
+		uint64_t value = 0;
+		if (i + sizeof(uint64_t) <= size) {
+			value		      = *(uint64_t *)(data + i);
 			register_array[index] = value;
 			index++;
-        } else {
-            memcpy(&value, data + i, size - i); // Handle remaining bytes
-        }
-    }
+		} else {
+			memcpy(&value, data + i, size - i); // Handle remaining bytes
+		}
+	}
 }
 
 int make_sysfs_pci_device_prefix(amdsmi_bdf_t bdf, char *out_path, size_t out_path_size)
 {
 	system_wrapper *sys_wrapper = get_system_wrapper();
 	// Format: /sys/bus/pci/devices/0000:22:00.0/
-	int n = sys_wrapper->snprintf(
-		out_path, out_path_size,
-		"/sys/bus/pci/devices/%04x:%02x:%02x.%01x/",
-		(unsigned)bdf.bdf.domain_number,
-		bdf.bdf.bus_number,
-		bdf.bdf.device_number,
-		bdf.bdf.function_number
-	);
+	int n = sys_wrapper->snprintf(out_path,
+				      out_path_size,
+				      "/sys/bus/pci/devices/%04x:%02x:%02x.%01x/",
+				      (unsigned)bdf.bdf.domain_number,
+				      bdf.bdf.bus_number,
+				      bdf.bdf.device_number,
+				      bdf.bdf.function_number);
 	if (n < 0 || (size_t)n >= out_path_size) {
 		return -1; // Buffer too small or snprintf error
 	}
@@ -530,15 +589,19 @@ int parse_cpu_list(const char *cpu_list, uint64_t *cpu_set, uint32_t cpu_set_siz
 
 	const char *p = cpu_list;
 	while (*p) {
-		while (*p && !isdigit(*p)) p++;
-		if (!*p) break;
+		while (*p && !isdigit(*p))
+			p++;
+		if (!*p)
+			break;
 		int start = atoi(p);
-		while (*p && isdigit(*p)) p++;
+		while (*p && isdigit(*p))
+			p++;
 		int end = start;
 		if (*p == '-') {
 			p++;
 			end = atoi(p);
-			while (*p && isdigit(*p)) p++;
+			while (*p && isdigit(*p))
+				p++;
 		}
 
 		// Set bits from start to end
@@ -548,27 +611,77 @@ int parse_cpu_list(const char *cpu_list, uint64_t *cpu_set, uint32_t cpu_set_siz
 			if (idx < cpu_set_size)
 				cpu_set[idx] |= (1ULL << bit);
 		}
-		while (*p && *p != ',') p++;
-		if (*p == ',') p++;
+		while (*p && *p != ',')
+			p++;
+		if (*p == ',')
+			p++;
 	}
 	return 0;
+}
+
+amdsmi_status_t get_numa_node_from_sysfs(amdsmi_bdf_t bdf, uint32_t *numa_node)
+{
+	char prefix[AMDSMI_MAX_STRING_LENGTH / 2];
+	char path[AMDSMI_MAX_STRING_LENGTH];
+	char buf[AMDSMI_MAX_STRING_LENGTH];
+	char *endptr = NULL;
+	long value;
+	FILE *f;
+	system_wrapper *sys_wrapper = get_system_wrapper();
+
+	if (numa_node == NULL) {
+		SMI_ERROR("Nullpointer given as input. Return code: %d", AMDSMI_STATUS_INVAL);
+		return AMDSMI_STATUS_INVAL;
+	}
+
+	if (make_sysfs_pci_device_prefix(bdf, prefix, sizeof(prefix)) != 0) {
+		SMI_ERROR("Failed to create sysfs prefix\n");
+		return AMDSMI_STATUS_API_FAILED;
+	}
+
+	sys_wrapper->snprintf(path, sizeof(path), "%snuma_node", prefix);
+
+	f = sys_wrapper->fopen(path, "r");
+	if (!f) {
+		SMI_ERROR("Cannot open %s: %s\n", path, strerror(errno));
+		return AMDSMI_STATUS_NOT_SUPPORTED;
+	}
+
+	if (sys_wrapper->fgets(buf, sizeof(buf), f) == NULL) {
+		fclose(f);
+		return AMDSMI_STATUS_IO;
+	}
+
+	fclose(f);
+
+	buf[strcspn(buf, "\n")] = 0; // Remove newline
+
+	errno = 0;
+	value = strtol(buf, &endptr, 10);
+
+	if (endptr == buf) {
+		SMI_ERROR(
+		    "Cannot parse %s content \"%s\". Return code: %d", path, buf, AMDSMI_STATUS_IO);
+		return AMDSMI_STATUS_IO;
+	}
+
+	if (errno == ERANGE || value < 0 || value > INT32_MAX) {
+		SMI_DEBUG("No NUMA node number available for the device. Return code: %d",
+			  AMDSMI_STATUS_NOT_SUPPORTED);
+		return AMDSMI_STATUS_NOT_SUPPORTED;
+	}
+
+	*numa_node = (uint32_t)value;
+
+	return AMDSMI_STATUS_SUCCESS;
 }
 
 amdsmi_status_t is_cmd_supported(uint64_t device_id)
 {
 	static const uint64_t dev_id_list_nv[] = {
-		0x73C4,
-		0x73C5,
-		0x73C8,
-		0x7460,
-		0x7461,
-		0x73A1,
-		0x73AE
-	};
+	    0x73C4, 0x73C5, 0x73C8, 0x7460, 0x7461, 0x73A1, 0x73AE};
 
-	static const uint64_t dev_id_list_mi2plus[] = {
-		0x7410
-	};
+	static const uint64_t dev_id_list_mi2plus[] = {0x7410};
 
 	for (size_t i = 0; i < sizeof(dev_id_list_nv) / sizeof(dev_id_list_nv[0]); i++) {
 		if (device_id == dev_id_list_nv[i]) {
@@ -592,9 +705,9 @@ int get_numa_node_from_vsish(amdsmi_bdf_t bdf, uint32_t *numa_node)
 	 * Absolute locations for vsish. ESXi layouts differ across versions:
 	 * vsish lives at /bin/vsish on some and /sbin/vsish on others.
 	 */
-	static const char * const vsish_paths[] = {
-		"/bin/vsish",
-		"/sbin/vsish",
+	static const char *const vsish_paths[] = {
+	    "/bin/vsish",
+	    "/sbin/vsish",
 	};
 	system_wrapper *sys_wrapper = get_system_wrapper();
 	char cmd[AMDSMI_MAX_STRING_LENGTH];
@@ -622,13 +735,15 @@ int get_numa_node_from_vsish(amdsmi_bdf_t bdf, uint32_t *numa_node)
 		return -1;
 	}
 
-	sys_wrapper->snprintf(cmd, sizeof(cmd),
-		"%s -e get /hardware/pci/seg/%llu/bus/%d/slot/%d/func/%d/pciConfigHeader 2>/dev/null",
-		vsish,
-		(unsigned long long)bdf.bdf.domain_number,
-		bdf.bdf.bus_number,
-		bdf.bdf.device_number,
-		bdf.bdf.function_number);
+	sys_wrapper->snprintf(
+	    cmd,
+	    sizeof(cmd),
+	    "%s -e get /hardware/pci/seg/%llu/bus/%d/slot/%d/func/%d/pciConfigHeader 2>/dev/null",
+	    vsish,
+	    (unsigned long long)bdf.bdf.domain_number,
+	    bdf.bdf.bus_number,
+	    bdf.bdf.device_number,
+	    bdf.bdf.function_number);
 
 	fp = popen(cmd, "r");
 	if (!fp) {
@@ -645,8 +760,20 @@ int get_numa_node_from_vsish(amdsmi_bdf_t bdf, uint32_t *numa_node)
 			while (*value_str == ' ' || *value_str == '\t') {
 				value_str++;
 			}
-			*numa_node = (uint32_t)strtoul(value_str, NULL, 10);
-			found = 1;
+			char *endptr = NULL;
+			long value;
+
+			errno = 0;
+			value = strtol(value_str, &endptr, 10);
+
+			if (endptr == value_str || errno == ERANGE || value < 0 ||
+			    value > INT32_MAX) {
+				pclose(fp);
+				return -1;
+			}
+
+			*numa_node = (uint32_t)value;
+			found	   = 1;
 			break;
 		}
 	}

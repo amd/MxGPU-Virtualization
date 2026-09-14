@@ -16,12 +16,12 @@ extern "C" {
 
 #include "smi_test_helpers.hpp"
 #ifdef AMD_SMI_NIC_SUPPORT
-#include "smi_fake_nic_interface.h"
+	#include "smi_fake_nic_interface.h"
 #endif
 #ifdef _WIN64
-#define SET_SYSTEM_ERROR(x) SetLastError(x);
+	#define SET_SYSTEM_ERROR(x) SetLastError(x);
 #else
-#define SET_SYSTEM_ERROR(x) errno = x;
+	#define SET_SYSTEM_ERROR(x) errno = x;
 #endif
 
 using amdsmi::g_system_mock;
@@ -33,23 +33,19 @@ using testing::DoAll;
 
 ACTION_P(SetBadVersionResponse, versionResponse)
 {
-	smi_ioctl_cmd payload = { {},
-				  { AMDSMI_STATUS_NOT_SUPPORTED },
-				  { (uint32_t)versionResponse } };
+	smi_ioctl_cmd payload = {{}, {AMDSMI_STATUS_NOT_SUPPORTED}, {(uint32_t)versionResponse}};
 	std::memcpy(arg0, &payload, sizeof(payload));
 	return 0; // IOCTL successful
 }
 
 ACTION_P(SetGoodVersionResponse, versionResponse)
 {
-	smi_ioctl_cmd payload = { {},
-				  { AMDSMI_STATUS_SUCCESS },
-				  { (uint32_t)versionResponse } };
+	smi_ioctl_cmd payload = {{}, {AMDSMI_STATUS_SUCCESS}, {(uint32_t)versionResponse}};
 	std::memcpy(arg0, &payload, sizeof(payload));
 }
 
 class AmdSmiInitTests : public ::testing::Test {
-protected:
+      protected:
 	void SetUp() override
 	{
 		g_system_mock.reset(new NiceMock<amdsmi::SystemMock>);
@@ -67,17 +63,16 @@ TEST_F(AmdSmiInitTests, InitTest_OpenFailed)
 {
 	int res;
 
-	EXPECT_CALL(*g_system_mock, Open(_))
-		.WillRepeatedly(Return(SMI_INVAL_HANDLE));
+	EXPECT_CALL(*g_system_mock, Open(_)).WillRepeatedly(Return(SMI_INVAL_HANDLE));
 
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_API_FAILED);
 
-	EXPECT_CALL(*g_system_mock, Open(_))
-		.WillRepeatedly(Invoke([](auto) {
-			SET_SYSTEM_ERROR(SMI_ACCESS_DENIED);
-			return SMI_INVAL_HANDLE;
-		}));;
+	EXPECT_CALL(*g_system_mock, Open(_)).WillRepeatedly(Invoke([](auto) {
+		SET_SYSTEM_ERROR(SMI_ACCESS_DENIED);
+		return SMI_INVAL_HANDLE;
+	}));
+	;
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_NO_PERM);
 
@@ -88,8 +83,7 @@ TEST_F(AmdSmiInitTests, BadInitTest_IoctlCrash)
 {
 	int res;
 
-	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillRepeatedly(Return(-1));
+	EXPECT_CALL(*g_system_mock, Ioctl(_)).WillRepeatedly(Return(-1));
 
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_UNKNOWN_ERROR);
@@ -100,13 +94,12 @@ TEST_F(AmdSmiInitTests, IoctlGetDevicesCrash)
 	int res;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_HANDSHAKE)))
-		.WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX),
-					 testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
 
 	smi_server_static_info server_info_mock = {};
-	server_info_mock.num_devices = 7;
+	server_info_mock.num_devices		= 7;
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(-1)));
+	    .WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(-1)));
 
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_API_FAILED);
@@ -117,15 +110,13 @@ TEST_F(AmdSmiInitTests, VersionInSupportedRangeOfSmi)
 	int res;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_HANDSHAKE)))
-		.WillOnce(SetResponse(
-			smi_ioctl_cmd{ {}, { -1 }, { SMI_VERSION_MAX + 1} }))
-		.WillOnce(SetResponse(
-			smi_ioctl_cmd{ {}, { AMDSMI_STATUS_SUCCESS }, { SMI_VERSION_MAX} }));
+	    .WillOnce(SetResponse(smi_ioctl_cmd{{}, {-1}, {SMI_VERSION_MAX + 1}}))
+	    .WillOnce(SetResponse(smi_ioctl_cmd{{}, {AMDSMI_STATUS_SUCCESS}, {SMI_VERSION_MAX}}));
 
 	smi_server_static_info server_info_mock = {};
-	server_info_mock.num_devices = 7;
+	server_info_mock.num_devices		= 7;
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
 
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_SUCCESS);
@@ -135,8 +126,7 @@ TEST_F(AmdSmiInitTests, BadInitTest_AccessRights)
 {
 	int res;
 
-	EXPECT_CALL(*g_system_mock, Access())
-		.WillRepeatedly(Return(-1));
+	EXPECT_CALL(*g_system_mock, Access()).WillRepeatedly(Return(-1));
 
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_DRIVER_NOT_LOADED);
@@ -147,24 +137,20 @@ TEST_F(AmdSmiInitTests, InitTest_CloseFailed)
 	int res;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_HANDSHAKE)))
-		.WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX),
-					 testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
 
 	smi_server_static_info server_info_mock = {};
 
 	server_info_mock.num_devices = 7;
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
-
+	    .WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
 
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_SUCCESS);
 
 	testing::Mock::VerifyAndClearExpectations(g_system_mock.get());
 
-	EXPECT_CALL(*g_system_mock, Close(_))
-		.WillOnce(Return(-1))
-		.WillRepeatedly(Return(0));
+	EXPECT_CALL(*g_system_mock, Close(_)).WillOnce(Return(-1)).WillRepeatedly(Return(0));
 
 	res = amdsmi_shut_down();
 	ASSERT_EQ(res, AMDSMI_STATUS_IO);
@@ -178,8 +164,8 @@ TEST_F(AmdSmiInitTests, InitTest_UnkownVersion)
 	int res;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillOnce(SetBadVersionResponse(SMI_UNKNOWN_VERSION))
-		.WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED));
+	    .WillOnce(SetBadVersionResponse(SMI_UNKNOWN_VERSION))
+	    .WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED));
 
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_NOT_SUPPORTED);
@@ -190,8 +176,8 @@ TEST_F(AmdSmiInitTests, InitTest_TooBigVersion)
 	int res;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillOnce(SetBadVersionResponse(SMI_VERSION_MAX + 1))
-		.WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED));
+	    .WillOnce(SetBadVersionResponse(SMI_VERSION_MAX + 1))
+	    .WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED));
 
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_NOT_SUPPORTED);
@@ -202,8 +188,8 @@ TEST_F(AmdSmiInitTests, InitTest_TooSmallVersion)
 	int res;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_HANDSHAKE)))
-		.WillOnce(SetBadVersionResponse(SMI_VERSION_MIN))
-		.WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED));
+	    .WillOnce(SetBadVersionResponse(SMI_VERSION_MIN))
+	    .WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED));
 
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_NOT_SUPPORTED);
@@ -214,13 +200,12 @@ TEST_F(AmdSmiInitTests, InitTest_Success)
 	int res;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_HANDSHAKE)))
-		.WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX),
-					 testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
 
 	smi_server_static_info server_info_mock = {};
-	server_info_mock.num_devices = 7;
+	server_info_mock.num_devices		= 7;
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
 
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_SUCCESS);
@@ -236,8 +221,8 @@ TEST_F(AmdSmiInitTests, InitTest_SuccessAfterFail)
 	int res;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED))
-		.WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED));
+	    .WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED))
+	    .WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED));
 
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_NOT_SUPPORTED);
@@ -245,13 +230,12 @@ TEST_F(AmdSmiInitTests, InitTest_SuccessAfterFail)
 	testing::Mock::VerifyAndClearExpectations(g_system_mock.get());
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX),
-					 testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
 
 	smi_server_static_info server_info_mock = {};
-	server_info_mock.num_devices = 7;
+	server_info_mock.num_devices		= 7;
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
 
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_SUCCESS);
@@ -262,13 +246,12 @@ TEST_F(AmdSmiInitTests, InitTest_FailureAfterSuccess)
 	int res;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX),
-					 testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
 
 	smi_server_static_info server_info_mock = {};
-	server_info_mock.num_devices = 7;
+	server_info_mock.num_devices		= 7;
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
 
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_SUCCESS);
@@ -279,8 +262,8 @@ TEST_F(AmdSmiInitTests, InitTest_FailureAfterSuccess)
 	EXPECT_EQ(res, AMDSMI_STATUS_SUCCESS);
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED))
-		.WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED));
+	    .WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED))
+	    .WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED));
 
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_NOT_SUPPORTED);
@@ -291,13 +274,12 @@ TEST_F(AmdSmiInitTests, InitTest_SuccessFailureSucess)
 	int res;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX),
-					 testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
 
 	smi_server_static_info server_info_mock = {};
-	server_info_mock.num_devices = 7;
+	server_info_mock.num_devices		= 7;
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
 
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_SUCCESS);
@@ -307,13 +289,12 @@ TEST_F(AmdSmiInitTests, InitTest_SuccessFailureSucess)
 
 	testing::Mock::VerifyAndClearExpectations(g_system_mock.get());
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED))
-		.WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED))
-		.WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX),
-					 testing::Return(0)));
+	    .WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED))
+	    .WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED))
+	    .WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
 
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
 
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_NOT_SUPPORTED);
@@ -327,8 +308,8 @@ TEST_F(AmdSmiInitTests, InitTest_FailureSucessFailure)
 	int res;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED))
-		.WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED));
+	    .WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED))
+	    .WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED));
 
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_NOT_SUPPORTED);
@@ -336,13 +317,12 @@ TEST_F(AmdSmiInitTests, InitTest_FailureSucessFailure)
 	testing::Mock::VerifyAndClearExpectations(g_system_mock.get());
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX),
-					 testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
 
 	smi_server_static_info server_info_mock = {};
-	server_info_mock.num_devices = 1;
+	server_info_mock.num_devices		= 1;
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(DoAll(SetPayload(server_info_mock), Return(0)));
+	    .WillOnce(DoAll(SetPayload(server_info_mock), Return(0)));
 
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_SUCCESS);
@@ -353,8 +333,8 @@ TEST_F(AmdSmiInitTests, InitTest_FailureSucessFailure)
 	testing::Mock::VerifyAndClearExpectations(g_system_mock.get());
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED))
-		.WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED));
+	    .WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED))
+	    .WillOnce(SetResponseStatus(AMDSMI_STATUS_NOT_SUPPORTED));
 
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_NOT_SUPPORTED);
@@ -362,20 +342,20 @@ TEST_F(AmdSmiInitTests, InitTest_FailureSucessFailure)
 
 TEST_F(AmdSmiInitTests, InitTest_TwoThreads)
 {
-	int fini_res = AMDSMI_STATUS_NOT_SUPPORTED;
-	int dev_cnt_res = AMDSMI_STATUS_UNKNOWN_ERROR;
+	int fini_res	     = AMDSMI_STATUS_NOT_SUPPORTED;
+	int dev_cnt_res	     = AMDSMI_STATUS_UNKNOWN_ERROR;
 	unsigned int dev_cnt = AMDSMI_MAX_DEVICES;
-	amdsmi_processor_handle* processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*dev_cnt);
-	amdsmi_socket_handle socket_handles = NULL;
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	amdsmi_socket_handle socket_handles	= NULL;
 	smi_server_static_info server_info_mock = {};
-	server_info_mock.num_devices = 7;
+	server_info_mock.num_devices		= 7;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_HANDSHAKE)))
-		.WillOnce(SetResponse(
-			smi_ioctl_cmd{ {}, { AMDSMI_STATUS_SUCCESS }, { SMI_VERSION_MAX } }));
+	    .WillOnce(SetResponse(smi_ioctl_cmd{{}, {AMDSMI_STATUS_SUCCESS}, {SMI_VERSION_MAX}}));
 
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(DoAll(SetPayload(server_info_mock), Return(0)));
+	    .WillOnce(DoAll(SetPayload(server_info_mock), Return(0)));
 
 	int res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_SUCCESS);
@@ -384,7 +364,7 @@ TEST_F(AmdSmiInitTests, InitTest_TwoThreads)
 
 	auto body = [&fini_res, &dev_cnt_res, socket_handles, &dev_cnt, &processors]() {
 		dev_cnt_res = amdsmi_get_processor_handles(socket_handles, &dev_cnt, processors);
-		fini_res = amdsmi_shut_down();
+		fini_res    = amdsmi_shut_down();
 	};
 
 	std::thread tt(body);
@@ -398,21 +378,21 @@ TEST_F(AmdSmiInitTests, InitTest_TwoThreads)
 
 TEST_F(AmdSmiInitTests, InitTest_TwoThreadsFiniAtEnd)
 {
-	int fini_res = AMDSMI_STATUS_NOT_SUPPORTED;
-	int dev_cnt_res = AMDSMI_STATUS_NOT_SUPPORTED;
+	int fini_res	     = AMDSMI_STATUS_NOT_SUPPORTED;
+	int dev_cnt_res	     = AMDSMI_STATUS_NOT_SUPPORTED;
 	unsigned int dev_cnt = AMDSMI_MAX_DEVICES;
-	amdsmi_processor_handle* processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*dev_cnt);
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
 	amdsmi_socket_handle socket_handles = NULL;
 
 	smi_server_static_info server_info_mock = {};
-	server_info_mock.num_devices = 7;
+	server_info_mock.num_devices		= 7;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_HANDSHAKE)))
-		.WillOnce(SetResponse(
-			smi_ioctl_cmd{ {}, { AMDSMI_STATUS_SUCCESS }, { SMI_VERSION_MAX } }));
+	    .WillOnce(SetResponse(smi_ioctl_cmd{{}, {AMDSMI_STATUS_SUCCESS}, {SMI_VERSION_MAX}}));
 
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(DoAll(SetPayload(server_info_mock), Return(0)));
+	    .WillOnce(DoAll(SetPayload(server_info_mock), Return(0)));
 
 	int res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_SUCCESS);
@@ -440,12 +420,12 @@ TEST_F(AmdSmiInitTests, InitTest_NicInitFailure)
 	int res;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_HANDSHAKE)))
-		.WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
 
 	smi_server_static_info server_info_mock = {};
-	server_info_mock.num_devices = 1;
+	server_info_mock.num_devices		= 1;
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
 
 	const bool nic_flag = get_nic_init();
 	set_nic_init(false);
@@ -461,12 +441,12 @@ TEST_F(AmdSmiInitTests, InitTest_NicGetDevicesFailure)
 	int res;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_HANDSHAKE)))
-		.WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
 
 	smi_server_static_info server_info_mock = {};
-	server_info_mock.num_devices = 1;
+	server_info_mock.num_devices		= 1;
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
 
 	const bool nic_flag = get_nic_discovery();
 	set_nic_discovery(false);
@@ -482,12 +462,12 @@ TEST_F(AmdSmiInitTests, ShutDownTest_NicCleanupFailure)
 	int res;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_HANDSHAKE)))
-		.WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
 
 	smi_server_static_info server_info_mock = {};
-	server_info_mock.num_devices = 1;
+	server_info_mock.num_devices		= 1;
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
 
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_SUCCESS);
@@ -509,23 +489,23 @@ TEST_F(AmdSmiInitTests, InitTest_NicGetDevices_BdfsAllocFailure)
 	int malloc_call_count = 0;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_HANDSHAKE)))
-		.WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
 
 	smi_server_static_info server_info_mock = {};
-	server_info_mock.num_devices = 1;
+	server_info_mock.num_devices		= 1;
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
 
 	EXPECT_CALL(*g_system_mock, Malloc(testing::_))
-		// LCOV_EXCL_START
-		.WillRepeatedly(testing::Invoke([&malloc_call_count](size_t size) -> void* {
-			malloc_call_count++;
-			if (malloc_call_count == 2) {
-				return nullptr;
-			}
-			return malloc(size);
-		}));
-		// LCOV_EXCL_STOP
+	    // LCOV_EXCL_START
+	    .WillRepeatedly(testing::Invoke([&malloc_call_count](size_t size) -> void * {
+		    malloc_call_count++;
+		    if (malloc_call_count == 2) {
+			    return nullptr;
+		    }
+		    return malloc(size);
+	    }));
+	// LCOV_EXCL_STOP
 
 	res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
 	EXPECT_EQ(res, AMDSMI_STATUS_SUCCESS);
@@ -536,12 +516,12 @@ TEST_F(AmdSmiInitTests, InitTest_NicGetDevices_InterfaceNameTooLong)
 	int res;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_HANDSHAKE)))
-		.WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(SMI_VERSION_MAX), testing::Return(0)));
 
 	smi_server_static_info server_info_mock = {};
-	server_info_mock.num_devices = 1;
+	server_info_mock.num_devices		= 1;
 	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
-		.WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
+	    .WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
 
 	set_nic_long_interface_name(true);
 

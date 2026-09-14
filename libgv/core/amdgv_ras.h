@@ -563,6 +563,8 @@ bool amdgv_ras_mgr_is_rma(struct amdgv_adapter *adapt);
 void amdgv_ras_mgr_get_ras_caps(struct amdgv_adapter *adapt,
 		struct amd_sriov_msg_pf2vf_info *pf2vf_msg);
 void amdgv_ras_mgr_vf_lifespan_init(struct amdgv_adapter *adapt, uint32_t idx_vf);
+int amdgv_ras_mgr_get_bad_page_threshold(struct amdgv_adapter *adapt,
+		uint64_t *bad_page_threshold);
 #else
 static inline bool amdgv_uniras_enabled(struct amdgv_adapter *adapt)
 {
@@ -672,6 +674,13 @@ static inline void amdgv_ras_mgr_vf_lifespan_init(struct amdgv_adapter *adapt,
 		uint32_t idx_vf)
 {
 	return;
+}
+
+static inline int amdgv_ras_mgr_get_bad_page_threshold(struct amdgv_adapter *adapt,
+	uint64_t *bad_page_threshold)
+{
+	*bad_page_threshold = 0;
+	return 0;
 }
 #endif
 #endif

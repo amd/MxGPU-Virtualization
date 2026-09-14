@@ -12,9 +12,9 @@
 #define AMDGV_UAL_CMD_RESP_SIZE 4096
 
 enum amdgv_ual_link_type {
-	AMDGV_UAL_NONE = 0,
-	AMDGV_UALOE = 1,
-	AMDGV_UALINK = 2,
+	AMDGV_UALOE = 0,
+	AMDGV_UALINK_200 = 1,
+	AMDGV_UALINK_128 = 2,
 	AMDGV_UALMAX
 };
 
@@ -30,6 +30,16 @@ enum amdgv_ual_accelerator_vpod_state {
 	AMDGV_UAL_ACCEL_VPOD_STATE_READY = 2,		/* Accelerator is part of a vPod, but not active (nHT disabled / VF driver not loaded, etc.) */
 	AMDGV_UAL_ACCEL_VPOD_STATE_ACTIVE = 3,		/* Accelerator is in a vPod and active */
 	AMDGV_UAL_ACCEL_VPOD_STATE_ERROR = 4		/* Accelerator is in error state */
+};
+
+enum amdgv_ual_config_state {
+	AMDGV_UAL_CFG_IDLE        = 0,
+	AMDGV_UAL_CFG_PPOD        = 1,
+	AMDGV_UAL_CFG_VPOD        = 2,
+	AMDGV_UAL_CFG_PAUSE       = 3,
+	AMDGV_UAL_CFG_STATION     = 4,
+	AMDGV_UAL_CFG_COMPLETE    = 5,
+	AMDGV_UAL_CFG_INVALID     = 0xFF
 };
 
 /* State value validation (for a raw enum value) */
@@ -79,6 +89,9 @@ struct amdgv_ual_node_info_v1 {
 
 	/* Accelerator vPoD State */
 	enum amdgv_ual_accelerator_vpod_state accel_state;
+
+	/* UAL Configuration State Reported by ASP */
+	enum amdgv_ual_config_state config_state;
 };
 
 struct amdgv_ual_topology_info_v1 {
@@ -118,6 +131,7 @@ struct amdgv_ual_link_info_v1 {
 };
 
 struct amdgv_ual {
+	bool is_initialized;
 
 	uint32_t socket_id;
 
@@ -155,7 +169,8 @@ int amdgv_ual_get_interface_version(struct amdgv_adapter *adapt, uint32_t *versi
 int amdgv_ual_get_config(struct amdgv_adapter *adapt, struct amdgv_gpumon_get_config_rsp_ual_v1 *config);
 int amdgv_ual_set_ppod_config(struct amdgv_adapter *adapt, struct amdgv_gpumon_set_ppod_config_req_ual_v1 *config);
 int amdgv_ual_set_vpod_config(struct amdgv_adapter *adapt, struct amdgv_gpumon_set_vpod_config_req_ual_v1 *config);
-int amdgv_ual_set_station_config(struct amdgv_adapter *adapt, struct amdgv_gpumon_set_station_config_req_ual_v1 *config);
+int amdgv_ual_set_station_config(struct amdgv_adapter *adapt, struct amdgv_gpumon_station_config_ual_v1 *config);
+int amdgv_ual_get_station_config(struct amdgv_adapter *adapt, struct amdgv_gpumon_station_config_ual_v1 *config);
 int amdgv_ual_pause(struct amdgv_adapter *adapt, bool send_completion);
 int amdgv_ual_resume(struct amdgv_adapter *adapt, bool send_completion);
 int amdgv_ual_trigger_mode2(struct amdgv_adapter *adapt);

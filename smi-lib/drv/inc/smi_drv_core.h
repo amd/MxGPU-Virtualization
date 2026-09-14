@@ -14,7 +14,7 @@
 #include <smi_drv_ioctl.h>
 
 struct smi_ctx;
-typedef int (*smi_cmd_func) (struct smi_ctx *, void *, void *, uint16_t, uint16_t);
+typedef int (*smi_cmd_func)(struct smi_ctx *, void *, void *, uint16_t, uint16_t);
 
 extern struct oss_interface *smi_oss_funcs;
 
@@ -36,18 +36,18 @@ struct smi_vf_entry {
 struct smi_event_ctx {
 	void *handle;
 	struct amdgv_log_notifier *notifier;
-	uint64_t event_id;  /* ESXi event ID*/
+	uint64_t event_id; /* ESXi event ID*/
 };
 
 struct smi_ctx {
-	mutex_t				ioctl_mutex;
-	uint32_t			version;
-	bool				privileged;
-	uint8_t				padding[3];
-	struct smi_cmd_entry		*tbl_cmd;
-	uint32_t			max_cmd;
-	struct smi_in_command		in_command;
-	struct smi_out_response		out_response;
+	mutex_t ioctl_mutex;
+	uint32_t version;
+	bool privileged;
+	uint8_t padding[3];
+	struct smi_cmd_entry *tbl_cmd;
+	uint32_t max_cmd;
+	struct smi_in_command in_command;
+	struct smi_out_response out_response;
 	struct {
 		int64_t parent;
 		uint64_t bdf;
@@ -63,23 +63,23 @@ struct smi_ctx {
 	uint32_t padding_3;
 	struct smi_event_ctx *event_ctx;
 	bool mutex_flag;
-	uint64_t shared_event_id;  /* ESXi: shared event ID */
-	uint8_t event_readers;     /* ESXi: threads inside smi_read_event */
-	bool releasing;            /* context teardown in progress (ESXi; Linux event revoke) */
-	uint8_t padding_4[1];
+	uint64_t shared_event_id; /* ESXi: shared event ID */
+	void *shared_wakeup;	  /* Windows: shared KEVENT for notify + wait */
+	uint32_t event_readers;	  /* ESXi/Windows: threads inside smi_read_event */
+	bool releasing;		  /* context teardown in progress (ESXi; Linux event revoke) */
+	uint8_t padding_4[3];
 	struct smi_ctx *next_open; /* link in the global open-ctx registry */
 };
 
-#define SMI_ASSIGN_FUNC(ctx, i, c, f, ins, outs) do {\
-	ctx->tbl_cmd[i].cmd              = c;  \
-	ctx->tbl_cmd[i].func             = &f; \
-	ctx->tbl_cmd[i].in_buffer_len    = ins;  \
-	ctx->tbl_cmd[i++].out_buffer_len = outs; \
+#define SMI_ASSIGN_FUNC(ctx, i, c, f, ins, outs)                                                   \
+	do {                                                                                       \
+		ctx->tbl_cmd[i].cmd		 = c;                                              \
+		ctx->tbl_cmd[i].func		 = &f;                                             \
+		ctx->tbl_cmd[i].in_buffer_len	 = ins;                                            \
+		ctx->tbl_cmd[i++].out_buffer_len = outs;                                           \
 	} while (0)
 
-int smi_cmd_handshake(struct smi_ctx *ctx,
-		void *inb, void *outb,
-		uint16_t ins, uint16_t outs);
+int smi_cmd_handshake(struct smi_ctx *ctx, void *inb, void *outb, uint16_t ins, uint16_t outs);
 
 int smi_vf_map_update(struct smi_ctx *ctx, void *adev);
 int smi_get_vf_index(struct smi_ctx *ctx, struct smi_vf_handle *vf_handle);

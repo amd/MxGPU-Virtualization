@@ -11,11 +11,7 @@
 
 #include "smi_cli_helpers.h"
 
-enum class LogLevel {
-	Info,
-	Warning,
-	Error
-};
+enum class LogLevel { Info, Warning, Error };
 
 class Logger
 {
@@ -27,10 +23,10 @@ public:
 	 */
 	static Logger& getInstance();
 
-	Logger(Logger const&) = delete;
-	Logger(Logger&&) = delete;
+	Logger(Logger const&)		 = delete;
+	Logger(Logger&&)		 = delete;
 	Logger& operator=(Logger const&) = delete;
-	Logger& operator=(Logger&&) = delete;
+	Logger& operator=(Logger&&)	 = delete;
 
 	void log(LogLevel level, int ret, const char* parent_fun, const char* file_name, int line);
 
@@ -41,4 +37,4 @@ private:
 	~Logger();
 };
 
-#endif  // LOGGER_H
+#endif // LOGGER_H

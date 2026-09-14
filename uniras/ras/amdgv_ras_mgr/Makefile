@@ -31,7 +31,8 @@ RAS_MGR_FILES := amdgv_ras_sys.o  \
 		amdgv_ras_fifo.o \
 		amdgv_ras_mempool.o \
 		amdgv_ras_gpumon.o \
-		amdgv_ras_mce.o
+		amdgv_ras_mce.o \
+		amdgv_ras_cper.o
 
 RAS_MGR = $(addprefix $(AMD_GPU_RAS_PATH)/amdgv_ras_mgr/, $(RAS_MGR_FILES))
 

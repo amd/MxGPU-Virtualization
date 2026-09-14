@@ -99,7 +99,7 @@ std::string nic_type_to_string(NicType type);
  * @param flavour Devlink port flavour value
  * @return String representation of the port flavour
  */
-const char *flavour_to_string(uint16_t flavour);
+const char* flavour_to_string(uint16_t flavour);
 #endif
 
 /**
@@ -112,8 +112,7 @@ const char *flavour_to_string(uint16_t flavour);
  * @param path Path to the sysfs file
  * @return Value of type T, or nullopt if read fails
  */
-template <typename T>
-std::optional<T> get_sysfs_data(const std::string& path)
+template <typename T> std::optional<T> get_sysfs_data(const std::string& path)
 {
 	SmiSysfsReader::SysfsValue val;
 	if (SmiSysfsReader::readLine(path, val) == SmiSysfsReader::SysfsStatus::Success) {
@@ -129,7 +128,8 @@ std::optional<T> get_sysfs_data(const std::string& path)
 				return static_cast<T>(std::get<int>(val));
 			}
 			if (std::holds_alternative<std::string>(val)) {
-				return static_cast<T>(std::stoul(std::get<std::string>(val), nullptr, 0));
+				return static_cast<T>(
+				    std::stoul(std::get<std::string>(val), nullptr, 0));
 			}
 		}
 	}
@@ -140,4 +140,3 @@ std::optional<T> get_sysfs_data(const std::string& path)
 } // namespace smi_utils
 
 #endif // __SMI_UTILS_H__
-

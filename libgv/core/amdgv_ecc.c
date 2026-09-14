@@ -4,7 +4,6 @@
  */
 
 #include "amdgv_device.h"
-#include "amdgv_notify.h"
 #include "amdgv_ecc.h"
 #include "amdgv_ras.h"
 #include "amdgv_ras_eeprom.h"
@@ -31,24 +30,15 @@
 	if ((corr_error > 0) && (!adapt->mca.enabled)) { \
 		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_##BLOCK##_CE_TOTAL, \
 				(CE_ERR_NUM)); \
-		amdgv_notify_shim(adapt->dev, AMDGV_NOTIFICATION_ECC_CORR_ERROR, \
-				  "%s ECC Correctable Error Detected.Count:%d", \
-				  #BLOCK, corr_error); \
 	} \
 	if ((uncorr_error > 0) && (!adapt->mca.enabled)) { \
 		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_##BLOCK##_UE_TOTAL, \
 				(UE_ERR_NUM)); \
-		amdgv_notify_shim(adapt->dev, AMDGV_NOTIFICATION_ECC_UNCORR_ERROR, \
-				  "%s ECC UnCorrectable Error Detected.Count:%d", \
-				  #BLOCK, uncorr_error); \
 	} \
 	if ((info.head.block == AMDGV_SMI_RAS_BLOCK__UMC) && \
 	    (deferred_error > 0) && (!adapt->mca.enabled)) { \
 		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_UMC_DE_TOTAL, \
 				(DE_ERR_NUM)); \
-		amdgv_notify_shim(adapt->dev, AMDGV_NOTIFICATION_ECC_DFCORR_ERROR, \
-				  "%s ECC Deferred Error Detected.Count:%d", \
-				  #BLOCK, deferred_error); \
 	} \
 } while (0)
 
@@ -181,8 +171,6 @@ int amdgv_ecc_get_error_count(struct amdgv_adapter *adapt,
 				ret = adapt->pp.pp_funcs->get_ecc_info(adapt,
 								       &(adapt->ecc.umc_ecc));
 				if (ret) {
-					AMDGV_WARN(
-						"Message SMU to get ecc info table failed.\n");
 					return 0;
 				}
 			}
@@ -290,7 +278,7 @@ int amdgv_ecc_get_error_count(struct amdgv_adapter *adapt,
 		qif->ue_count = adapt->ecc.xgmi_uncorrectable_error_num;
 		break;
 	default:
-		AMDGV_WARN("Block unsupport ecc!\n");
+		AMDGV_DEBUG("Block unsupport ecc!\n");
 		break;
 	}
 
@@ -311,27 +299,13 @@ void amdgv_ecc_check_for_errors(struct amdgv_adapter *adapt, struct amdgv_sched_
 		if (corr_error > 0) {
 			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_CE,
 					adapt->ecc.correctable_error_num);
-			amdgv_notify_shim(adapt->dev, AMDGV_NOTIFICATION_ECC_CORR_ERROR,
-					  "ECC Correctable Error Detected.Count:%d",
-					  corr_error);
-		} else if (corr_error == 0)
-			AMDGV_WARN("No ECC Correctable Error Detected.\n");
-		else /* corr_error<0 */
-			AMDGV_WARN("ECC not supported for this ASIC.\n");
+		}
 
 		if (uncorr_error > 0) {
 			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_UCE,
 					adapt->ecc.uncorrectable_error_num);
-			amdgv_notify_shim(adapt->dev, AMDGV_NOTIFICATION_ECC_UNCORR_ERROR,
-					  "ECC UnCorrectable Error Detected.Count:%d",
-					  uncorr_error);
-		} else if (uncorr_error == 0)
-			AMDGV_WARN("No ECC UnCorrectable Error Detected.\n");
-		else /* uncorr_error<0 */
-			AMDGV_WARN("ECC not supported for this ASIC.\n");
-	} else
-		AMDGV_WARN(
-			"Counting correctable/uncorrectable errors not supported for this ASIC.\n");
+		}
+	}
 
 	/* check if the ecc fault left this gpu as bad one */
 	if (amdgv_ras_eeprom_is_gpu_bad(adapt) && event->id == AMDGV_EVENT_SCHED_RAS_UMC)
@@ -389,7 +363,8 @@ int amdgv_ecc_enable_ras_feature(struct amdgv_adapter *adapt)
 
 	info = oss_malloc(sizeof(union ta_ras_cmd_input));
 	if (!info) {
-		AMDGV_ERROR("Alloc ta_ras_cm_input failed.\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+				sizeof(union ta_ras_cmd_input));
 		return AMDGV_FAILURE;
 	}
 	oss_memset(info, 0, sizeof(union ta_ras_cmd_input));
@@ -416,7 +391,8 @@ int amdgv_ecc_disable_ras_feature(struct amdgv_adapter *adapt)
 
 	info = oss_malloc(sizeof(union ta_ras_cmd_input));
 	if (!info) {
-		AMDGV_ERROR("Alloc ta_ras_cm_input failed.\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+				sizeof(union ta_ras_cmd_input));
 		return AMDGV_FAILURE;
 	}
 	oss_memset(info, 0, sizeof(union ta_ras_cmd_input));
@@ -451,8 +427,8 @@ void amdgv_ras_poison_mode_init(struct amdgv_adapter *adapt)
 	if (df_poison && umc_poison)
 		adapt->ecc.supported |= (1 << AMDGV_RAS_POISON_ECC_SUPPORT);
 	else if (df_poison != umc_poison)
-		AMDGV_WARN("Poison setting is inconsistent in DF/UMC(%d:%d)!\n", df_poison,
-			   umc_poison);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_POISON_MODE_INCONSISTENT,
+			AMDGV_LOG_DATA_32_32(df_poison, umc_poison));
 }
 
 bool amdgv_ras_is_poison_mode_supported(struct amdgv_adapter *adapt)

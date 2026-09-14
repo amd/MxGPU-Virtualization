@@ -175,6 +175,18 @@ static const struct amdgv_asic_entry amdgv_sriov_device_table[] = {
 		&mi300_mitigation_table,
 		mi300_reg_base_init,
 	},
+	/* Mi350P */
+	{
+		CHIP_MI350X,
+		0x75A8,
+		ANY_ID,
+		ANY_ID,
+		MI300_CAPS,
+		&mi350px_init_table,
+		NULL,
+		&mi300_mitigation_table,
+		mi300_reg_base_init,
+	},
 	/* navi32 */
 	{
 		CHIP_NAVI32,
@@ -654,106 +666,82 @@ static void amdgv_wait_for_timeout_print(struct amdgv_adapter *adapt, struct amd
 	switch (cb_context->type) {
 	case AMDGV_WAIT_FOR_REGISTER:
 		reg_context = (struct amdgv_wait_for_register_context *)cb_context->ctx;
-		AMDGV_WARN("Timeout: %s %s [0x%x]. Expect val_mask%s0x%08x. Actual val=0x%08x. Elapsed=%ld\n",
-			    amdgv_wait_for_type_to_name(cb_context->type),
-			    reg_context->name,
-			    reg_context->offset,
-			    reg_context->check_flag ? "!=" : "==",
-			    reg_context->value & reg_context->mask,
-			    reg_context->last_read,
-			    elapsed);
+		amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_GPU_REG_WAIT_TIMEOUT,
+				  reg_context->offset,
+				  reg_context->check_flag,
+				  reg_context->value & reg_context->mask,
+				  reg_context->last_read,
+				  elapsed);
 		break;
 	case AMDGV_WAIT_FOR_PSP_RING_RESPONSE:
 		mem_context = (struct amdgv_wait_for_psp_ring_response_context *)cb_context->ctx;
 		if (cb_context->psp_cmd)
-			amdgv_psp_put_cmd_error(adapt, cb_context->psp_cmd, NULL, true);
+			amdgv_psp_put_cmd_timeout(adapt, cb_context->psp_cmd);
 		else
-			AMDGV_WARN("Timeout: %s [%p]. Elapsed=%ld\n",
-				   amdgv_wait_for_type_to_name(cb_context->type),
-				   mem_context->address,
-				   elapsed);
+			amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_FW_PSP_RING_RESP_TIMEOUT,
+					  (uint64_t)mem_context->address,
+					  elapsed, 0);
 		break;
 	case AMDGV_WAIT_FOR_PCI_CFG:
 		cfg_context = (struct amdgv_wait_for_pci_cfg_context *)cb_context->ctx;
-		AMDGV_WARN("Timeout: %s [0x%x]. Expect val_mask%s0x%08x. Actual val=0x%08x. Elapsed=%ld\n",
-			    amdgv_wait_for_type_to_name(cb_context->type),
-			    cfg_context->offset,
-			    cfg_context->check_flag ? "!=" : "==",
-			    cfg_context->value & cfg_context->mask,
-			    cfg_context->last_read,
-			    elapsed);
+		amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_PCI_CFG_WAIT_TIMEOUT,
+				  cfg_context->offset,
+				  cfg_context->check_flag,
+				  cfg_context->value & cfg_context->mask,
+				  cfg_context->last_read,
+				  elapsed);
 		break;
 
 	case AMDGV_WAIT_FOR_WS_FIRST_CMD_COMPLETE:
-		AMDGV_ERROR("Timeout: %s Mask=0x%08x. Elapsed=%ld\n",
-			    amdgv_wait_for_type_to_name(cb_context->type),
-			    ((struct amdgv_gpuiov_wait_for_first_context *)cb_context->ctx)->hw_sched_mask,
-			    elapsed);
+		amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_IOV_WS_FIRST_CMD_TIMEOUT,
+				  ((struct amdgv_gpuiov_wait_for_first_context *)cb_context->ctx)->hw_sched_mask,
+				  elapsed, 0);
 		break;
 	case AMDGV_WAIT_FOR_WS_CMD_COMPLETE:
 		gpuiov_context = (struct amdgv_gpuiov_wait_context *)cb_context->ctx;
-		AMDGV_ERROR("Timeout: %s. Sched=%s. Elapsed=%ld\n",
-			    amdgv_wait_for_type_to_name(cb_context->type),
-			    amdgv_hw_sched_id_to_name(adapt, gpuiov_context->hw_sched_id),
-			    elapsed);
+		amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_IOV_WS_CMD_TIMEOUT,
+				  gpuiov_context->hw_sched_id,
+				  elapsed, 0);
 		break;
 	case AMDGV_WAIT_FOR_SMU_CHECK_HANG:
-		if (cb_context->ctx_ext && cb_context->num_ctx_ext > 0)
-			AMDGV_REG_DUMP(ERROR, "SMU in hung State. SMU mailbox contents:",
-				       cb_context->ctx_ext,
-				       cb_context->num_ctx_ext);
-		else
-			AMDGV_ERROR("Timeout: %s. Elapsed=%ld\n",
-				    amdgv_wait_for_type_to_name(cb_context->type),
-				    elapsed);
-		break;
 	case AMDGV_WAIT_FOR_SMU_MSG_RESPONSE:
-		if (cb_context->ctx_ext && cb_context->num_ctx_ext > 0)
-			AMDGV_REG_DUMP(ERROR, "SMU Timeout. SMU mailbox contents:",
-				       cb_context->ctx_ext,
-				       cb_context->num_ctx_ext);
-		else
-			AMDGV_ERROR("Timeout: %s. Elapsed=%ld\n",
-				    amdgv_wait_for_type_to_name(cb_context->type),
-				    elapsed);
+		amdgv_powerplay_put_timeout(adapt, elapsed);
 		break;
 	case AMDGV_WAIT_FOR_IRQ_HANDLER:
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_IRQ_HANDLER_TIMEOUT, elapsed);
+		break;
 	case AMDGV_WAIT_FOR_PSP_MB_INT:
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_PSP_MB_INT_TIMEOUT, elapsed);
+		break;
 	case AMDGV_WAIT_FOR_RAS_INTR:
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_RAS_INTR_TIMEOUT, elapsed);
+		break;
 	case AMDGV_WAIT_FOR_VBIOS_READ_IMG:
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_VBIOS_TIMEOUT, 0);
+		break;
 	case AMDGV_WAIT_FOR_PSP_TOS_LOADED_STATUS:
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_PSP_TOS_LOADED_TIMEOUT, elapsed);
+		break;
 	case AMDGV_WAIT_FOR_PSP_BOOT_COMPLETE:
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_PSP_BOOT_COMPLETE_TIMEOUT, elapsed);
+		break;
 	case AMDGV_WAIT_FOR_RLC_AUTOLOAD_COMPLETE:
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_RLC_AUTOLOAD_TIMEOUT, elapsed);
+		break;
 	case AMDGV_WAIT_FOR_FB_HASH_DONE:
-		AMDGV_ERROR("Timeout: %s. Elapsed=%ld\n",
-			amdgv_wait_for_type_to_name(cb_context->type),
-			elapsed);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_FB_HASH_TIMEOUT, elapsed);
 		break;
 	case AMDGV_WAIT_FOR_GUEST_RESET_READY:
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_GUEST_RESET_READY_TIMEOUT, elapsed);
+		break;
 	case AMDGV_WAIT_FOR_MB_TRN_MSG_ACK:
-		AMDGV_WARN("Timeout: %s. Elapsed=%ld\n",
-			amdgv_wait_for_type_to_name(cb_context->type),
-			elapsed);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_MB_TRN_MSG_ACK_TIMEOUT, elapsed);
 		break;
 	case AMDGV_WAIT_FOR_LSDMA_PIO:
-		if (cb_context->ctx_ext && cb_context->num_ctx_ext > 0)
-			AMDGV_REG_DUMP(ERROR, "Timeout: LSDMA PIO. Context:",
-				       cb_context->ctx_ext,
-				       cb_context->num_ctx_ext);
-		else
-			AMDGV_ERROR("Timeout: %s. Elapsed=%ld\n",
-				    amdgv_wait_for_type_to_name(cb_context->type),
-				    elapsed);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_LSDMA_PIO_TIMEOUT, elapsed);
 		break;
 	case AMDGV_WAIT_FOR_CP_DMA_PIO:
-		if (cb_context->ctx_ext && cb_context->num_ctx_ext > 0)
-			AMDGV_REG_DUMP(ERROR, "Timeout: CP DMA. Context:",
-				       cb_context->ctx_ext,
-				       cb_context->num_ctx_ext);
-		else
-			AMDGV_ERROR("Timeout: %s. Elapsed=%ld\n",
-				    amdgv_wait_for_type_to_name(cb_context->type),
-				    elapsed);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_CP_DMA_PIO_TIMEOUT, elapsed);
 		break;
 	default:
 		AMDGV_WARN("Wait For timeout. Elapsed=%ld\n", elapsed);
@@ -1008,10 +996,59 @@ int amdgv_wait_for_register(struct amdgv_adapter *adapt, uint32_t offset, const 
 			      wait_flag);
 }
 
+// callback to check register values accessed over PCIE extended (SMN) space
+static int amdgv_wait_for_register_pcie_ext_cb(void *context)
+{
+	struct amdgv_wait_for_register_context *reg_context =
+		(struct amdgv_wait_for_register_context *)context;
+	struct amdgv_adapter *adapt = reg_context->adapt;
+	uint32_t offset = reg_context->offset;
+	uint32_t mask = reg_context->mask;
+	uint32_t value = reg_context->value;
+	uint32_t check_flag = reg_context->check_flag;
+
+	/* if mask is 0, it means no mask */
+	if (mask == 0)
+		mask = ~mask;
+
+	/* we need to return 0 if hit, otherwise non 0 */
+	reg_context->last_read = RREG32_PCIE_EXT(offset);
+	switch (check_flag) {
+	case AMDGV_WAIT_CHECK_EQ:
+		return !((reg_context->last_read & mask) == value);
+	case AMDGV_WAIT_CHECK_NE:
+		return !((reg_context->last_read & mask) != value);
+	default:
+		AMDGV_ERROR("Wrong check flag\n");
+		return AMDGV_FAILURE;
+	}
+}
+
+// function to wait for a register value accessed over PCIE extended (SMN) space
+int amdgv_wait_for_register_pcie_ext(struct amdgv_adapter *adapt, uint32_t offset, const char *name,
+				uint32_t mask, uint32_t value, uint64_t timeout_us,
+				uint32_t check_flag, uint32_t wait_flag)
+{
+	struct amdgv_wait_for_register_context reg_context;
+	struct amdgv_wait_for_cb_context cb_context = { 0 };
+
+	reg_context.adapt = adapt;
+	reg_context.offset = offset;
+	reg_context.mask = mask;
+	reg_context.value = value;
+	reg_context.check_flag = check_flag;
+	reg_context.name = name;
+
+	cb_context.ctx = (void *)&reg_context;
+	cb_context.type = AMDGV_WAIT_FOR_REGISTER;
+
+	return amdgv_wait_for(adapt, amdgv_wait_for_register_pcie_ext_cb, &cb_context, timeout_us,
+			      wait_flag);
+}
+
 int amdgv_wait_for_smu_msg_resp(struct amdgv_adapter *adapt, uint32_t offset, const char *name,
 				uint32_t mask, uint32_t value, uint64_t timeout_us,
-				uint32_t check_flag, enum amdgv_wait_for_types wait_type,
-				struct amdgv_reg_dump_info *ctx_ext, uint8_t num_ctx_ext)
+				uint32_t check_flag, enum amdgv_wait_for_types wait_type)
 {
 	struct amdgv_wait_for_register_context reg_context;
 	struct amdgv_wait_for_cb_context cb_context = { 0 };
@@ -1025,8 +1062,6 @@ int amdgv_wait_for_smu_msg_resp(struct amdgv_adapter *adapt, uint32_t offset, co
 
 	cb_context.ctx = (void *)&reg_context;
 	cb_context.type = wait_type;
-	cb_context.ctx_ext = ctx_ext;
-	cb_context.num_ctx_ext = num_ctx_ext;
 
 	return amdgv_wait_for(adapt, amdgv_wait_for_register_cb, &cb_context, timeout_us, 0);
 }
@@ -2112,12 +2147,6 @@ struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_da
 	if (amdgv_copy_config_opt(adapt, init_data) < 0)
 		goto fail;
 
-#ifndef EXCLUDE_GC12
-	/* GC12 only supports unified RAS - enable by default */
-	if (adapt->asic_type == CHIP_IP_DISCOVERY)
-		adapt->opt.unified_ras_enabled = true;
-#endif
-
 	/* parse config option */
 	if (amdgv_parse_config_opt(adapt) < 0) {
 		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_INIT_CONFIG_ERROR, 0);
@@ -2316,6 +2345,11 @@ void amdgv_device_internal_fini(struct amdgv_adapter *adapt,
 			/* we are going to hw_fini, set this
 			 * to notify all other threads stop touching hardware */
 			adapt->status = AMDGV_STATUS_HW_FINI;
+
+			/* If VFs are down, finish the in-flight event,
+			 * join the event thread, discard the queue. */
+			amdgv_sched_event_queue_stop(adapt);
+
 			amdgv_device_func_hw_fini(adapt);
 		} else {
 			amdgv_device_func_hw_live_fini(adapt);

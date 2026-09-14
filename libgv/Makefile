@@ -15,6 +15,8 @@ LIBGV_CCFLAGS += -I $(LIBGV_PATH)/core/hw/AI -I $(LIBGV_PATH)/core/hw/AI/asic_re
 	LIBGV_CCFLAGS += -I $(LIBGV_PATH)/core/hw/AI/mi200
 
 LIBGV_CCFLAGS += -I $(LIBGV_PATH)/core/hw/AI/mi300
+LIBGV_CCFLAGS += -I $(LIBGV_PATH)/core/hw/AI/mi300/mi350
+LIBGV_CCFLAGS += -I $(LIBGV_PATH)/core/hw/AI/mi300/mi350/mi350p
 
 LIBGV_CCFLAGS += -I $(LIBGV_PATH)/core/hw/navi3 -I $(LIBGV_PATH)/core/hw/navi3/asic_reg
 

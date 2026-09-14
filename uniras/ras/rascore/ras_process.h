@@ -37,6 +37,7 @@ struct ras_event_req {
 struct ras_process {
 	void *dev;
 	void *ras_process_thread;
+	u32 ras_thread_poll_interval_ms;
 	oss_wait_queue_head_t ras_process_wq;
 	oss_atomic_t ras_interrupt_req;
 	oss_atomic_t umc_interrupt_count;

@@ -61,9 +61,18 @@ if(NOT (BUILD_TYPE STREQUAL "debug" OR BUILD_TYPE STREQUAL "release"))
   )
 endif()
 
+if(BUILD_TYPE STREQUAL "debug")
+  set(CMAKE_BUILD_TYPE Debug)
+else()
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
 set(CMAKE_EXE_LINKER_FLAGS
-    "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,relro,-z,noexecstack,-z,noexecheap -Wl,--strip-debug -Wl,--strip-all"
-)
+    "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,relro,-z,noexecstack,-z,noexecheap")
+if(BUILD_TYPE STREQUAL "release")
+  set(CMAKE_EXE_LINKER_FLAGS
+      "${CMAKE_EXE_LINKER_FLAGS} -Wl,--strip-debug -Wl,--strip-all")
+endif()
 
 file(GLOB_RECURSE THIRD_PARTY_HPPS "${THIRD_PARTY_INCLUDE_DIR}/*.h")
 list(APPEND HPPS ${THIRD_PARTY_HPPS})

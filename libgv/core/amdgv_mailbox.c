@@ -115,8 +115,10 @@ int amdgv_mailbox_send_msg(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_
 	for (i = 0; i < msg_len; i++)
 		adapt->mailbox.funcs->trn_msg(adapt, idx_vf, i, msg_data[i]);
 
-	if (need_valid)
+	if (need_valid) {
+		adapt->mailbox.state_vf[idx_vf].trn_msg_acked = false;
 		adapt->mailbox.funcs->trn_msg_valid(adapt, idx_vf, true);
+	}
 
 	/* diagnosis data Log */
 	AMDGV_DIAG_DATA_TRACE_LOG_MB(idx_vf, msg_data[0], AMDGV_DIAG_DATA_TRACE_MB_DIR_PF_TO_VF);
@@ -422,24 +424,47 @@ int amdgv_mailbox_notify_gpu_debug(struct amdgv_adapter *adapt, uint32_t idx_vf,
 
 static int amdgv_mailbox_wait_trn_msg_ack_cb(void *context)
 {
-	struct amdgv_adapter *adapt = (struct amdgv_adapter *)context;
-	return !adapt->mailbox.funcs->peek_ack(adapt);
+	int ack;
+	struct amdgv_mailbox_trn_msg_ack_context *ctx =
+		(struct amdgv_mailbox_trn_msg_ack_context *)context;
+	struct amdgv_adapter *adapt = ctx->adapt;
+	uint32_t idx_vf = ctx->idx_vf;
+
+	oss_spin_lock_irq(adapt->mailbox.lock);
+
+	/* ACK already cleared by IRQ thread */
+	if (adapt->mailbox.state_vf[idx_vf].trn_msg_acked) {
+		adapt->mailbox.state_vf[idx_vf].trn_msg_acked = false;
+		oss_spin_unlock_irq(adapt->mailbox.lock);
+		return 0;
+	}
+
+	adapt->mailbox.funcs->update_index(adapt, idx_vf);
+	ack = adapt->mailbox.funcs->peek_ack(adapt);
+
+	oss_spin_unlock_irq(adapt->mailbox.lock);
+
+	return !ack;
 }
 
 /*
  * Wait function for mailbox ack from vf after a mailbox message is sent to vf
  * Wait until ack received or timeout reached
  */
-int amdgv_mailbox_wait_trn_msg_ack(struct amdgv_adapter *adapt)
+int amdgv_mailbox_wait_trn_msg_ack(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
 	uint32_t wait_flag = 0;
 	struct amdgv_wait_for_cb_context cb_context = { 0 };
+	struct amdgv_mailbox_trn_msg_ack_context trn_msg_ack_context = {
+		.adapt = adapt,
+		.idx_vf = idx_vf,
+	};
 
 	if (!adapt->mailbox.funcs->peek_ack) {
 		return AMDGV_FAILURE;
 	}
 
-	cb_context.ctx = (void *)adapt;
+	cb_context.ctx = (void *)&trn_msg_ack_context;
 	cb_context.type = AMDGV_WAIT_FOR_MB_TRN_MSG_ACK;
 
 	return amdgv_wait_for(adapt, amdgv_mailbox_wait_trn_msg_ack_cb, &cb_context,

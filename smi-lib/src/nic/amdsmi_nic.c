@@ -19,19 +19,20 @@
 #include "smi_sys_wrapper.h"
 
 #ifdef __linux__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunknown-pragmas"
+	#pragma GCC diagnostic push
+	#pragma GCC diagnostic ignored "-Wunknown-pragmas"
 #endif
 
-amdsmi_status_t amdsmi_get_nic_driver_info(amdsmi_processor_handle processor_handle, amdsmi_nic_driver_info_t *info)
+amdsmi_status_t amdsmi_get_nic_driver_info(amdsmi_processor_handle processor_handle,
+					   amdsmi_nic_driver_info_t *info)
 {
-	#pragma SMI_EXPORT
+#pragma SMI_EXPORT
 	smi_req_ctx smi_req;
 	struct smi_nic_handle *nic = NULL;
 	enum smi_handle_type type;
 	smi_nic_driver_info_t driver_info;
 	system_wrapper *sys_wrapper = get_system_wrapper();
-	int ret = 0;
+	int ret			    = 0;
 
 	AMDSMI_ESCAPE_IF_NOT_INIT;
 
@@ -54,22 +55,24 @@ amdsmi_status_t amdsmi_get_nic_driver_info(amdsmi_processor_handle processor_han
 		return smi_map_nic_status(ret);
 	}
 
-	sys_wrapper->smi_strncpy(info->name, sizeof(info->name), driver_info.name, AMDSMI_MAX_STRING_LENGTH);
-	sys_wrapper->smi_strncpy(info->version, sizeof(info->version), driver_info.version, AMDSMI_MAX_STRING_LENGTH);
+	sys_wrapper->smi_strncpy(
+	    info->name, sizeof(info->name), driver_info.name, AMDSMI_MAX_STRING_LENGTH);
+	sys_wrapper->smi_strncpy(
+	    info->version, sizeof(info->version), driver_info.version, AMDSMI_MAX_STRING_LENGTH);
 
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-
-amdsmi_status_t amdsmi_get_nic_fw_info(amdsmi_processor_handle processor_handle, amdsmi_nic_fw_info_t *info)
+amdsmi_status_t amdsmi_get_nic_fw_info(amdsmi_processor_handle processor_handle,
+				       amdsmi_nic_fw_info_t *info)
 {
-	#pragma SMI_EXPORT
+#pragma SMI_EXPORT
 	smi_req_ctx smi_req;
 	struct smi_nic_handle *nic = NULL;
 	enum smi_handle_type type;
 	smi_nic_fw_info_t fw_info;
 	system_wrapper *sys_wrapper = get_system_wrapper();
-	int ret = 0;
+	int ret			    = 0;
 
 	AMDSMI_ESCAPE_IF_NOT_INIT;
 
@@ -99,25 +102,29 @@ amdsmi_status_t amdsmi_get_nic_fw_info(amdsmi_processor_handle processor_handle,
 
 	for (uint32_t i = 0; i < info->num_fw; i++) {
 		info->fw[i].type = (amdsmi_nic_fw_version_type_t)fw_info.versions[i].type;
-		sys_wrapper->smi_strncpy(info->fw[i].fw.name, sizeof(info->fw[i].fw.name),
-					 fw_info.versions[i].name, AMDSMI_MAX_STRING_LENGTH);
-		sys_wrapper->smi_strncpy(info->fw[i].fw.version, sizeof(info->fw[i].fw.version),
-					 fw_info.versions[i].version, AMDSMI_MAX_STRING_LENGTH);
+		sys_wrapper->smi_strncpy(info->fw[i].fw.name,
+					 sizeof(info->fw[i].fw.name),
+					 fw_info.versions[i].name,
+					 AMDSMI_MAX_STRING_LENGTH);
+		sys_wrapper->smi_strncpy(info->fw[i].fw.version,
+					 sizeof(info->fw[i].fw.version),
+					 fw_info.versions[i].version,
+					 AMDSMI_MAX_STRING_LENGTH);
 	}
 
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-
-amdsmi_status_t amdsmi_get_nic_asic_info(amdsmi_processor_handle processor_handle, amdsmi_nic_asic_info_t *info)
+amdsmi_status_t amdsmi_get_nic_asic_info(amdsmi_processor_handle processor_handle,
+					 amdsmi_nic_asic_info_t *info)
 {
-	#pragma SMI_EXPORT
+#pragma SMI_EXPORT
 	smi_req_ctx smi_req;
 	struct smi_nic_handle *nic = NULL;
 	enum smi_handle_type type;
 	smi_nic_asic_info_t asic_info;
 	system_wrapper *sys_wrapper = get_system_wrapper();
-	int ret = 0;
+	int ret			    = 0;
 
 	AMDSMI_ESCAPE_IF_NOT_INIT;
 
@@ -141,29 +148,45 @@ amdsmi_status_t amdsmi_get_nic_asic_info(amdsmi_processor_handle processor_handl
 		return smi_map_nic_status(ret);
 	}
 
-	info->vendor_id = asic_info.vendor_id;
+	info->vendor_id	   = asic_info.vendor_id;
 	info->subvendor_id = asic_info.subvendor_id;
-	info->device_id = asic_info.device_id;
+	info->device_id	   = asic_info.device_id;
 	info->subsystem_id = asic_info.subsystem_id;
-	info->revision = asic_info.revision;
-	sys_wrapper->smi_strncpy(info->permanent_address, sizeof(info->permanent_address), asic_info.permanent_address, AMDSMI_MAX_STRING_LENGTH);
-	sys_wrapper->smi_strncpy(info->product_name, sizeof(info->product_name), asic_info.product_name, AMDSMI_MAX_STRING_LENGTH);
-	sys_wrapper->smi_strncpy(info->vendor_name, sizeof(info->vendor_name), asic_info.vendor_name, AMDSMI_MAX_STRING_LENGTH);
-	sys_wrapper->smi_strncpy(info->part_number, sizeof(info->part_number), asic_info.part_number, AMDSMI_MAX_STRING_LENGTH);
-	sys_wrapper->smi_strncpy(info->serial_number, sizeof(info->serial_number), asic_info.serial_number, AMDSMI_MAX_STRING_LENGTH);
+	info->revision	   = asic_info.revision;
+	sys_wrapper->smi_strncpy(info->permanent_address,
+				 sizeof(info->permanent_address),
+				 asic_info.permanent_address,
+				 AMDSMI_MAX_STRING_LENGTH);
+	sys_wrapper->smi_strncpy(info->product_name,
+				 sizeof(info->product_name),
+				 asic_info.product_name,
+				 AMDSMI_MAX_STRING_LENGTH);
+	sys_wrapper->smi_strncpy(info->vendor_name,
+				 sizeof(info->vendor_name),
+				 asic_info.vendor_name,
+				 AMDSMI_MAX_STRING_LENGTH);
+	sys_wrapper->smi_strncpy(info->part_number,
+				 sizeof(info->part_number),
+				 asic_info.part_number,
+				 AMDSMI_MAX_STRING_LENGTH);
+	sys_wrapper->smi_strncpy(info->serial_number,
+				 sizeof(info->serial_number),
+				 asic_info.serial_number,
+				 AMDSMI_MAX_STRING_LENGTH);
 
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-amdsmi_status_t amdsmi_get_nic_bus_info(amdsmi_processor_handle processor_handle, amdsmi_nic_bus_info_t *info)
+amdsmi_status_t amdsmi_get_nic_bus_info(amdsmi_processor_handle processor_handle,
+					amdsmi_nic_bus_info_t *info)
 {
-	#pragma SMI_EXPORT
+#pragma SMI_EXPORT
 	smi_req_ctx smi_req;
 	struct smi_nic_handle *nic = NULL;
 	enum smi_handle_type type;
 	smi_nic_bus_info_t bus_info;
 	system_wrapper *sys_wrapper = get_system_wrapper();
-	int ret = 0;
+	int ret			    = 0;
 
 	AMDSMI_ESCAPE_IF_NOT_INIT;
 
@@ -186,24 +209,29 @@ amdsmi_status_t amdsmi_get_nic_bus_info(amdsmi_processor_handle processor_handle
 		return smi_map_nic_status(ret);
 	}
 
-	info->bdf.as_uint = bus_info.bdf;
+	info->bdf.as_uint    = bus_info.bdf;
 	info->max_pcie_speed = bus_info.max_pcie_speed;
 	info->max_pcie_width = bus_info.max_pcie_width;
-	sys_wrapper->smi_strncpy(info->pcie_interface_version, sizeof(info->pcie_interface_version), bus_info.pcie_interface_version, AMDSMI_MAX_STRING_LENGTH);
-	sys_wrapper->smi_strncpy(info->slot_type, sizeof(info->slot_type), bus_info.slot_type, AMDSMI_MAX_STRING_LENGTH);
+	sys_wrapper->smi_strncpy(info->pcie_interface_version,
+				 sizeof(info->pcie_interface_version),
+				 bus_info.pcie_interface_version,
+				 AMDSMI_MAX_STRING_LENGTH);
+	sys_wrapper->smi_strncpy(
+	    info->slot_type, sizeof(info->slot_type), bus_info.slot_type, AMDSMI_MAX_STRING_LENGTH);
 
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-amdsmi_status_t amdsmi_get_nic_numa_info(amdsmi_processor_handle processor_handle, amdsmi_nic_numa_info_t *info)
+amdsmi_status_t amdsmi_get_nic_numa_info(amdsmi_processor_handle processor_handle,
+					 amdsmi_nic_numa_info_t *info)
 {
-	#pragma SMI_EXPORT
+#pragma SMI_EXPORT
 	smi_req_ctx smi_req;
 	struct smi_nic_handle *nic = NULL;
 	enum smi_handle_type type;
 	smi_nic_numa_info_t numa_info;
 	system_wrapper *sys_wrapper = get_system_wrapper();
-	int ret = 0;
+	int ret			    = 0;
 
 	AMDSMI_ESCAPE_IF_NOT_INIT;
 
@@ -227,20 +255,22 @@ amdsmi_status_t amdsmi_get_nic_numa_info(amdsmi_processor_handle processor_handl
 	}
 
 	info->node = numa_info.node;
-	sys_wrapper->smi_strncpy(info->affinity, sizeof(info->affinity), numa_info.affinity, AMDSMI_MAX_STRING_LENGTH);
+	sys_wrapper->smi_strncpy(
+	    info->affinity, sizeof(info->affinity), numa_info.affinity, AMDSMI_MAX_STRING_LENGTH);
 
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-amdsmi_status_t amdsmi_get_nic_port_info(amdsmi_processor_handle processor_handle, amdsmi_nic_port_info_t *info)
+amdsmi_status_t amdsmi_get_nic_port_info(amdsmi_processor_handle processor_handle,
+					 amdsmi_nic_port_info_t *info)
 {
-	#pragma SMI_EXPORT
+#pragma SMI_EXPORT
 	smi_req_ctx smi_req;
 	struct smi_nic_handle *nic = NULL;
 	enum smi_handle_type type;
 	smi_nic_port_info_t port_info;
 	system_wrapper *sys_wrapper = get_system_wrapper();
-	int ret = 0;
+	int ret			    = 0;
 
 	AMDSMI_ESCAPE_IF_NOT_INIT;
 
@@ -268,44 +298,68 @@ amdsmi_status_t amdsmi_get_nic_port_info(amdsmi_processor_handle processor_handl
 		const smi_nic_port_t *port = &port_info.ports[i];
 
 		info->ports[i].bdf.as_uint = port->bdf;
-		info->ports[i].port_num = port->port_num;
-		sys_wrapper->smi_strncpy(info->ports[i].type, sizeof(info->ports[i].type), port->type, AMDSMI_MAX_STRING_LENGTH);
-		sys_wrapper->smi_strncpy(info->ports[i].flavour, sizeof(info->ports[i].flavour), port->flavour, AMDSMI_MAX_STRING_LENGTH);
-		sys_wrapper->smi_strncpy(info->ports[i].netdev, sizeof(info->ports[i].netdev), port->netdev, AMDSMI_MAX_STRING_LENGTH);
+		info->ports[i].port_num	   = port->port_num;
+		sys_wrapper->smi_strncpy(info->ports[i].type,
+					 sizeof(info->ports[i].type),
+					 port->type,
+					 AMDSMI_MAX_STRING_LENGTH);
+		sys_wrapper->smi_strncpy(info->ports[i].flavour,
+					 sizeof(info->ports[i].flavour),
+					 port->flavour,
+					 AMDSMI_MAX_STRING_LENGTH);
+		sys_wrapper->smi_strncpy(info->ports[i].netdev,
+					 sizeof(info->ports[i].netdev),
+					 port->netdev,
+					 AMDSMI_MAX_STRING_LENGTH);
 		info->ports[i].ifindex = port->ifindex;
-		sys_wrapper->smi_strncpy(info->ports[i].mac_address, sizeof(info->ports[i].mac_address), port->mac_address, AMDSMI_MAX_STRING_LENGTH);
+		sys_wrapper->smi_strncpy(info->ports[i].mac_address,
+					 sizeof(info->ports[i].mac_address),
+					 port->mac_address,
+					 AMDSMI_MAX_STRING_LENGTH);
 		info->ports[i].carrier = port->carrier;
-		info->ports[i].mtu = port->mtu;
+		info->ports[i].mtu     = port->mtu;
 
-		sys_wrapper->smi_strncpy(info->ports[i].link_state, sizeof(info->ports[i].link_state),
-			((strcmp(port->link_state, "up") == 0) ? "UP" : "DOWN"), AMDSMI_MAX_STRING_LENGTH);
+		sys_wrapper->smi_strncpy(info->ports[i].link_state,
+					 sizeof(info->ports[i].link_state),
+					 ((strcmp(port->link_state, "up") == 0) ? "UP" : "DOWN"),
+					 AMDSMI_MAX_STRING_LENGTH);
 
 		info->ports[i].link_speed = port->link_speed;
 		info->ports[i].active_fec = port->active_fec;
 
-		sys_wrapper->smi_strncpy(info->ports[i].autoneg, sizeof(info->ports[i].autoneg),
-			port->autoneg, AMDSMI_MAX_STRING_LENGTH);
-		sys_wrapper->smi_strncpy(info->ports[i].pause_autoneg, sizeof(info->ports[i].pause_autoneg),
-			port->pause_autoneg, AMDSMI_MAX_STRING_LENGTH);
-		sys_wrapper->smi_strncpy(info->ports[i].pause_rx, sizeof(info->ports[i].pause_rx),
-			port->pause_rx, AMDSMI_MAX_STRING_LENGTH);
-		sys_wrapper->smi_strncpy(info->ports[i].pause_tx, sizeof(info->ports[i].pause_tx),
-			port->pause_tx, AMDSMI_MAX_STRING_LENGTH);
+		sys_wrapper->smi_strncpy(info->ports[i].autoneg,
+					 sizeof(info->ports[i].autoneg),
+					 port->autoneg,
+					 AMDSMI_MAX_STRING_LENGTH);
+		sys_wrapper->smi_strncpy(info->ports[i].pause_autoneg,
+					 sizeof(info->ports[i].pause_autoneg),
+					 port->pause_autoneg,
+					 AMDSMI_MAX_STRING_LENGTH);
+		sys_wrapper->smi_strncpy(info->ports[i].pause_rx,
+					 sizeof(info->ports[i].pause_rx),
+					 port->pause_rx,
+					 AMDSMI_MAX_STRING_LENGTH);
+		sys_wrapper->smi_strncpy(info->ports[i].pause_tx,
+					 sizeof(info->ports[i].pause_tx),
+					 port->pause_tx,
+					 AMDSMI_MAX_STRING_LENGTH);
 	}
 
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-amdsmi_status_t amdsmi_get_nic_vendor_statistics(amdsmi_processor_handle processor_handle, uint32_t port_index,
-						 uint32_t *num_stats, amdsmi_nic_stat_t *stats)
+amdsmi_status_t amdsmi_get_nic_vendor_statistics(amdsmi_processor_handle processor_handle,
+						 uint32_t port_index,
+						 uint32_t *num_stats,
+						 amdsmi_nic_stat_t *stats)
 {
-	#pragma SMI_EXPORT
+#pragma SMI_EXPORT
 	smi_req_ctx smi_req;
 	struct smi_nic_handle *nic = NULL;
 	enum smi_handle_type type;
 	smi_nic_stat_info_t vendor_stats;
 	system_wrapper *sys_wrapper = get_system_wrapper();
-	int ret = 0;
+	int ret			    = 0;
 
 	AMDSMI_ESCAPE_IF_NOT_INIT;
 
@@ -321,13 +375,16 @@ amdsmi_status_t amdsmi_get_nic_vendor_statistics(amdsmi_processor_handle process
 
 	nic = ((struct smi_nic_handle *)processor_handle);
 	if (stats == NULL) {
-		ret = smi_get_nic_vendor_statistics_count(smi_req.thread->nic_ctx, nic->bdf.as_uint, port_index, num_stats);
+		ret = smi_get_nic_vendor_statistics_count(
+		    smi_req.thread->nic_ctx, nic->bdf.as_uint, port_index, num_stats);
 		if (ret != SMI_NIC_STATUS_SUCCESS) {
-			SMI_ERROR("Failed to get nic vendor statistics count. Return code: %d", ret);
+			SMI_ERROR("Failed to get nic vendor statistics count. Return code: %d",
+				  ret);
 			return smi_map_nic_status(ret);
 		}
 	} else {
-		ret = smi_get_nic_vendor_statistics_list(smi_req.thread->nic_ctx, nic->bdf.as_uint, port_index, &vendor_stats);
+		ret = smi_get_nic_vendor_statistics_list(
+		    smi_req.thread->nic_ctx, nic->bdf.as_uint, port_index, &vendor_stats);
 		if (ret != SMI_NIC_STATUS_SUCCESS) {
 			SMI_ERROR("Failed to get nic vendor statistics list. Return code: %d", ret);
 			return smi_map_nic_status(ret);
@@ -338,7 +395,10 @@ amdsmi_status_t amdsmi_get_nic_vendor_statistics(amdsmi_processor_handle process
 		}
 
 		for (uint32_t i = 0; i < *num_stats; i++) {
-			sys_wrapper->smi_strncpy(stats[i].name, sizeof(stats[i].name), vendor_stats.stats[i].name, AMDSMI_MAX_STRING_LENGTH);
+			sys_wrapper->smi_strncpy(stats[i].name,
+						 sizeof(stats[i].name),
+						 vendor_stats.stats[i].name,
+						 AMDSMI_MAX_STRING_LENGTH);
 			stats[i].value = vendor_stats.stats[i].value;
 		}
 	}
@@ -346,16 +406,18 @@ amdsmi_status_t amdsmi_get_nic_vendor_statistics(amdsmi_processor_handle process
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-amdsmi_status_t amdsmi_get_nic_port_statistics(amdsmi_processor_handle processor_handle, uint32_t port_index,
-					       uint32_t *num_stats, amdsmi_nic_stat_t *stats)
+amdsmi_status_t amdsmi_get_nic_port_statistics(amdsmi_processor_handle processor_handle,
+					       uint32_t port_index,
+					       uint32_t *num_stats,
+					       amdsmi_nic_stat_t *stats)
 {
-	#pragma SMI_EXPORT
+#pragma SMI_EXPORT
 	smi_req_ctx smi_req;
 	struct smi_nic_handle *nic = NULL;
 	enum smi_handle_type type;
 	smi_nic_stat_info_t port_stats;
 	system_wrapper *sys_wrapper = get_system_wrapper();
-	int ret = 0;
+	int ret			    = 0;
 
 	AMDSMI_ESCAPE_IF_NOT_INIT;
 
@@ -371,13 +433,15 @@ amdsmi_status_t amdsmi_get_nic_port_statistics(amdsmi_processor_handle processor
 
 	nic = ((struct smi_nic_handle *)processor_handle);
 	if (stats == NULL) {
-		ret = smi_get_nic_port_statistics_count(smi_req.thread->nic_ctx, nic->bdf.as_uint, port_index, num_stats);
+		ret = smi_get_nic_port_statistics_count(
+		    smi_req.thread->nic_ctx, nic->bdf.as_uint, port_index, num_stats);
 		if (ret != SMI_NIC_STATUS_SUCCESS) {
 			SMI_ERROR("Failed to get nic port statistics count. Return code: %d", ret);
 			return smi_map_nic_status(ret);
 		}
 	} else {
-		ret = smi_get_nic_port_statistics_list(smi_req.thread->nic_ctx, nic->bdf.as_uint, port_index, &port_stats);
+		ret = smi_get_nic_port_statistics_list(
+		    smi_req.thread->nic_ctx, nic->bdf.as_uint, port_index, &port_stats);
 		if (ret != SMI_NIC_STATUS_SUCCESS) {
 			SMI_ERROR("Failed to get nic port statistics list. Return code: %d", ret);
 			return smi_map_nic_status(ret);
@@ -388,7 +452,10 @@ amdsmi_status_t amdsmi_get_nic_port_statistics(amdsmi_processor_handle processor
 		}
 
 		for (uint32_t i = 0; i < *num_stats; i++) {
-			sys_wrapper->smi_strncpy(stats[i].name, sizeof(stats[i].name), port_stats.stats[i].name, AMDSMI_MAX_STRING_LENGTH);
+			sys_wrapper->smi_strncpy(stats[i].name,
+						 sizeof(stats[i].name),
+						 port_stats.stats[i].name,
+						 AMDSMI_MAX_STRING_LENGTH);
 			stats[i].value = port_stats.stats[i].value;
 		}
 	}
@@ -396,15 +463,16 @@ amdsmi_status_t amdsmi_get_nic_port_statistics(amdsmi_processor_handle processor
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-amdsmi_status_t amdsmi_get_nic_rdma_dev_info(amdsmi_processor_handle processor_handle, amdsmi_nic_rdma_devices_info_t *info)
+amdsmi_status_t amdsmi_get_nic_rdma_dev_info(amdsmi_processor_handle processor_handle,
+					     amdsmi_nic_rdma_devices_info_t *info)
 {
-	#pragma SMI_EXPORT
+#pragma SMI_EXPORT
 	smi_req_ctx smi_req;
 	struct smi_nic_handle *nic = NULL;
 	enum smi_handle_type type;
 	smi_nic_rdma_devices_info_t rdma_info;
 	system_wrapper *sys_wrapper = get_system_wrapper();
-	int ret = 0;
+	int ret			    = 0;
 
 	AMDSMI_ESCAPE_IF_NOT_INIT;
 
@@ -430,29 +498,39 @@ amdsmi_status_t amdsmi_get_nic_rdma_dev_info(amdsmi_processor_handle processor_h
 	info->num_rdma_dev = rdma_info.num_rdma_dev;
 	for (uint8_t i = 0; i < info->num_rdma_dev; i++) {
 		const smi_nic_rdma_dev_info_t *rdma = &rdma_info.rdma_dev_info[i];
-		amdsmi_nic_rdma_dev_info_t *out = &info->rdma_dev_info[i];
+		amdsmi_nic_rdma_dev_info_t *out	    = &info->rdma_dev_info[i];
 
-		sys_wrapper->smi_strncpy(out->rdma_dev, sizeof(out->rdma_dev),
-			rdma->rdma_dev, AMDSMI_MAX_STRING_LENGTH);
-		sys_wrapper->smi_strncpy(out->node_guid, sizeof(out->node_guid),
-			rdma->node_guid, AMDSMI_MAX_STRING_LENGTH);
-		sys_wrapper->smi_strncpy(out->node_type, sizeof(out->node_type),
-			rdma->node_type, AMDSMI_MAX_STRING_LENGTH);
-		sys_wrapper->smi_strncpy(out->sys_image_guid, sizeof(out->sys_image_guid),
-			rdma->sys_image_guid, AMDSMI_MAX_STRING_LENGTH);
-		sys_wrapper->smi_strncpy(out->fw_ver, sizeof(out->fw_ver),
-			rdma->fw_ver, AMDSMI_MAX_STRING_LENGTH);
+		sys_wrapper->smi_strncpy(
+		    out->rdma_dev, sizeof(out->rdma_dev), rdma->rdma_dev, AMDSMI_MAX_STRING_LENGTH);
+		sys_wrapper->smi_strncpy(out->node_guid,
+					 sizeof(out->node_guid),
+					 rdma->node_guid,
+					 AMDSMI_MAX_STRING_LENGTH);
+		sys_wrapper->smi_strncpy(out->node_type,
+					 sizeof(out->node_type),
+					 rdma->node_type,
+					 AMDSMI_MAX_STRING_LENGTH);
+		sys_wrapper->smi_strncpy(out->sys_image_guid,
+					 sizeof(out->sys_image_guid),
+					 rdma->sys_image_guid,
+					 AMDSMI_MAX_STRING_LENGTH);
+		sys_wrapper->smi_strncpy(
+		    out->fw_ver, sizeof(out->fw_ver), rdma->fw_ver, AMDSMI_MAX_STRING_LENGTH);
 		out->num_rdma_ports = rdma->num_rdma_ports;
 
 		for (uint8_t j = 0; j < rdma->num_rdma_ports; j++) {
 			const smi_nic_rdma_port_info_t *rdma_port = &rdma->rdma_port_info[j];
 
-			sys_wrapper->smi_strncpy(out->rdma_port_info[j].netdev, sizeof(out->rdma_port_info[j].netdev),
-				rdma_port->netdev, AMDSMI_MAX_STRING_LENGTH);
-			sys_wrapper->smi_strncpy(out->rdma_port_info[j].state, sizeof(out->rdma_port_info[j].state),
-				rdma_port->state, AMDSMI_MAX_STRING_LENGTH);
-			out->rdma_port_info[j].rdma_port = rdma_port->rdma_port;
-			out->rdma_port_info[j].max_mtu = rdma_port->max_mtu;
+			sys_wrapper->smi_strncpy(out->rdma_port_info[j].netdev,
+						 sizeof(out->rdma_port_info[j].netdev),
+						 rdma_port->netdev,
+						 AMDSMI_MAX_STRING_LENGTH);
+			sys_wrapper->smi_strncpy(out->rdma_port_info[j].state,
+						 sizeof(out->rdma_port_info[j].state),
+						 rdma_port->state,
+						 AMDSMI_MAX_STRING_LENGTH);
+			out->rdma_port_info[j].rdma_port  = rdma_port->rdma_port;
+			out->rdma_port_info[j].max_mtu	  = rdma_port->max_mtu;
 			out->rdma_port_info[j].active_mtu = rdma_port->active_mtu;
 		}
 	}
@@ -460,16 +538,18 @@ amdsmi_status_t amdsmi_get_nic_rdma_dev_info(amdsmi_processor_handle processor_h
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-amdsmi_status_t amdsmi_get_nic_rdma_port_statistics(amdsmi_processor_handle processor_handle, uint32_t rdma_port_index,
-						uint32_t *num_stats, amdsmi_nic_stat_t *stats)
+amdsmi_status_t amdsmi_get_nic_rdma_port_statistics(amdsmi_processor_handle processor_handle,
+						    uint32_t rdma_port_index,
+						    uint32_t *num_stats,
+						    amdsmi_nic_stat_t *stats)
 {
-	#pragma SMI_EXPORT
+#pragma SMI_EXPORT
 	smi_req_ctx smi_req;
 	struct smi_nic_handle *nic = NULL;
 	enum smi_handle_type type;
 	smi_nic_stat_info_t rdma_stats;
 	system_wrapper *sys_wrapper = get_system_wrapper();
-	int ret = 0;
+	int ret			    = 0;
 
 	AMDSMI_ESCAPE_IF_NOT_INIT;
 
@@ -485,15 +565,19 @@ amdsmi_status_t amdsmi_get_nic_rdma_port_statistics(amdsmi_processor_handle proc
 
 	nic = ((struct smi_nic_handle *)processor_handle);
 	if (stats == NULL) {
-		ret = smi_get_nic_rdma_port_statistics_count(smi_req.thread->nic_ctx, nic->bdf.as_uint, 0, 0, rdma_port_index, num_stats);
+		ret = smi_get_nic_rdma_port_statistics_count(
+		    smi_req.thread->nic_ctx, nic->bdf.as_uint, 0, 0, rdma_port_index, num_stats);
 		if (ret != SMI_NIC_STATUS_SUCCESS) {
-			SMI_ERROR("Failed to get nic rdma port statistics count. Return code: %d", ret);
+			SMI_ERROR("Failed to get nic rdma port statistics count. Return code: %d",
+				  ret);
 			return smi_map_nic_status(ret);
 		}
 	} else {
-		ret = smi_get_nic_rdma_port_statistics_list(smi_req.thread->nic_ctx, nic->bdf.as_uint, 0, 0, rdma_port_index, &rdma_stats);
+		ret = smi_get_nic_rdma_port_statistics_list(
+		    smi_req.thread->nic_ctx, nic->bdf.as_uint, 0, 0, rdma_port_index, &rdma_stats);
 		if (ret != SMI_NIC_STATUS_SUCCESS) {
-			SMI_ERROR("Failed to get nic rdma port statistics list. Return code: %d", ret);
+			SMI_ERROR("Failed to get nic rdma port statistics list. Return code: %d",
+				  ret);
 			return smi_map_nic_status(ret);
 		}
 
@@ -502,7 +586,10 @@ amdsmi_status_t amdsmi_get_nic_rdma_port_statistics(amdsmi_processor_handle proc
 		}
 
 		for (uint32_t i = 0; i < *num_stats; i++) {
-			sys_wrapper->smi_strncpy(stats[i].name, sizeof(stats[i].name), rdma_stats.stats[i].name, AMDSMI_MAX_STRING_LENGTH);
+			sys_wrapper->smi_strncpy(stats[i].name,
+						 sizeof(stats[i].name),
+						 rdma_stats.stats[i].name,
+						 AMDSMI_MAX_STRING_LENGTH);
 			stats[i].value = rdma_stats.stats[i].value;
 		}
 	}
@@ -511,5 +598,5 @@ amdsmi_status_t amdsmi_get_nic_rdma_port_statistics(amdsmi_processor_handle proc
 }
 
 #ifdef __linux__
-#pragma GCC diagnostic pop
+	#pragma GCC diagnostic pop
 #endif

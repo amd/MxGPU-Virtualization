@@ -273,34 +273,6 @@ uint64_t mi350_drv_metric_code[MI350_METRIC_NAME_COUNT] = {
 	[MI350__VR_TEMP_VDDIO_11_E32]			= METRIC_EXT_CODE(SYS_GPUBOARD_TEMP,	VR_TEMP_VDDIO_11_E32,			CELSIUS,		SYSTEM,	GPUBOARD,	METRIC_EXT_FLAG(DATA_FILTER_INST)),
 };
 
-#define MI350_SMU_MB_CONTEXT_REGS_NUM	3
-static struct amdgv_reg_dump_info mi350_smu_mb_context_regs[MI350_SMU_MB_CONTEXT_REGS_NUM] = {
-	{
-		.name = "regMP1_SMN_C2PMSG_90 (resp)",
-		.hwip = MP1_HWIP,
-		.seg = regMP1_SMN_C2PMSG_90_BASE_IDX,
-		.logical_inst = 0,
-		.offset_hwip = regMP1_SMN_C2PMSG_90,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-	{
-		.name = "regMP1_SMN_C2PMSG_82 (param)",
-		.hwip = MP1_HWIP,
-		.seg = regMP1_SMN_C2PMSG_82_BASE_IDX,
-		.logical_inst = 0,
-		.offset_hwip = regMP1_SMN_C2PMSG_82,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-	{
-		.name = "regMP1_SMN_C2PMSG_66 (msg)",
-		.hwip = MP1_HWIP,
-		.seg = regMP1_SMN_C2PMSG_66_BASE_IDX,
-		.logical_inst = 0,
-		.offset_hwip = regMP1_SMN_C2PMSG_66,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	}
-};
-
 static int mi350_smu_wait_for_response(struct amdgv_adapter *adapt, uint32_t *val,
 				       enum amdgv_wait_for_types wait_type)
 {
@@ -310,14 +282,11 @@ static int mi350_smu_wait_for_response(struct amdgv_adapter *adapt, uint32_t *va
 	ret = amdgv_wait_for_smu_msg_resp(adapt, SOC15_REG_OFFSET_NAME(MP1, 0, regMP1_SMN_C2PMSG_90),
 					  MP1_SMN_C2PMSG_90__CONTENT_MASK, 0,
 					  AMDGV_TIMEOUT(TIMEOUT_SMU_REG), AMDGV_WAIT_CHECK_NE,
-					  wait_type, mi350_smu_mb_context_regs, MI350_SMU_MB_CONTEXT_REGS_NUM);
+					  wait_type);
 
 	tmp = RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90));
 	if (val)
 		*val = tmp;
-
-	/* Add the message to diagnosis data trace log */
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_READ_RESP, ret, regMP1_SMN_C2PMSG_90, tmp);
 
 	/* timeout means wrong logic */
 	if (ret)
@@ -330,24 +299,24 @@ static void mi350_smu_send_msg_nocheck(struct amdgv_adapter *adapt, uint32_t msg
 				       uint32_t param)
 {
 	WREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90), 0);
-
-	/* Set param, and add parameters start/end to the diagnosis data */
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_ARG_START, 0, regMP1_SMN_C2PMSG_82,
-				 param);
 	WREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82), param);
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_ARG_END, 0, regMP1_SMN_C2PMSG_82,
-				 RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82)));
-
-	/* Set msg, and add parameters start/end to the diagnosis data */
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_MSG_START, 0, regMP1_SMN_C2PMSG_66, msg);
 	WREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_66), msg);
-	AMDGV_DIAG_DATA_TRACE_LOG_SMU(AMDGV_DIAG_DATA_SMU_WRITE_MSG_END, 0, regMP1_SMN_C2PMSG_66,
-				 RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_66)));
+
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_WRITE,
+		      AMDGV_LOG_DATA_32_32(msg, param));
 }
 
 uint32_t mi350_smu_read_arg(struct amdgv_adapter *adapt)
 {
 	return (uint32_t)RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82));
+}
+
+static void mi350_smu_put_timeout(struct amdgv_adapter *adapt, uint64_t elapsed)
+{
+	amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_TIMEOUT, elapsed,
+			  RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_66)),
+			  RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_90)),
+			  RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82)));
 }
 
 static int mi350_smu_msg_allowed_in_sync_flood(struct amdgv_adapter *adapt, uint32_t msg)
@@ -371,6 +340,20 @@ static int mi350_smu_msg_allowed_in_sync_flood(struct amdgv_adapter *adapt, uint
 	return ret;
 }
 
+#define MI350_SMU_INTR_READY_TIMEOUT_US (200 * 1000)
+#define MI350_SMU_INTR_ENABLED_MASK    (0x1)
+
+static int mi350_smu_wait_pmfw_intr_ready(struct amdgv_adapter *adapt)
+{
+	/* MP1_FIRMWARE_FLAGS bits 31:1 are reserved (0), so the only valid ready
+	 * value is exactly INTERRUPTS_ENABLED */
+	return amdgv_wait_for_register_pcie_ext(adapt,
+			SOC15_REG_OFFSET_SMN(MP1, 0, regMP1_FIRMWARE_FLAGS, MP1_Public),
+			"MP1_FIRMWARE_FLAGS",
+			0xffffffff, MI350_SMU_INTR_ENABLED_MASK,
+			MI350_SMU_INTR_READY_TIMEOUT_US, AMDGV_WAIT_CHECK_EQ, 0);
+}
+
 static int mi350_smu_send_msg_internal(struct amdgv_adapter *adapt, uint32_t msg, uint32_t param,
 					uint32_t *arg, uint32_t *resp)
 {
@@ -382,7 +365,7 @@ static int mi350_smu_send_msg_internal(struct amdgv_adapter *adapt, uint32_t msg
 		resp = &local_resp;
 
 	if (oss_atomic_read(adapt->in_sync_flood) && !mi350_smu_msg_allowed_in_sync_flood(adapt, msg)) {
-		AMDGV_ERROR("Skip msg:0x%x due to fatal error interrupt\n", msg);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_MSG_SKIPPED_SYNC_FLOOD, (uint64_t)msg);
 		return AMDGV_FAILURE;
 	}
 
@@ -399,6 +382,9 @@ static int mi350_smu_send_msg_internal(struct amdgv_adapter *adapt, uint32_t msg
 			ret = AMDGV_FAILURE;
 			goto end;
 		}
+
+		/* best-effort: on wait timeout, send message anyway */
+		(void)mi350_smu_wait_pmfw_intr_ready(adapt);
 	}
 
 	mi350_smu_send_msg_nocheck(adapt, msg, param);
@@ -410,18 +396,17 @@ static int mi350_smu_send_msg_internal(struct amdgv_adapter *adapt, uint32_t msg
 	}
 
 	if (ret && (*resp != PPSMC_Result_OK)) {
-		AMDGV_ERROR("smu responds with failure to msg:0x%x param:0x%08x. Resp value:%08x\n", msg, param, *resp);
+		amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_FAIL, msg, *resp,
+				  mi350_smu_read_arg(adapt));
 		ret = AMDGV_FAILURE;
 		goto end;
 	}
 
-	if (arg) {
+	if (arg)
 		*arg = mi350_smu_read_arg(adapt);
-		AMDGV_DEBUG("smu send msg:%d param:0x%08x readback:0x%08x success\n", msg,
-			param, *arg);
-	} else {
-		AMDGV_DEBUG("smu send msg:%d param:0x%08x success\n", msg, param);
-	}
+
+	amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_RECV, msg, *resp,
+			  mi350_smu_read_arg(adapt));
 
 end:
 	oss_mutex_unlock(adapt->pp.smu_lock);
@@ -510,9 +495,9 @@ static int mi350_smu_get_power_limit(struct amdgv_adapter *adapt, uint32_t *val,
 	if (!val)
 		return AMDGV_FAILURE;
 
-	/* PPT1 uses GetPptLimit2, PPT0 uses GetPptLimit */
+	/* PPT1 unsupported until FW enables GetPptLimit2. */
 	if (ppt_type == GPUMON_GET_GPU_POWER_CAP2)
-		return mi350_smu_send_msg(adapt, PPSMC_MSG_GetPptLimit2, val);
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
 	return mi350_smu_send_msg(adapt, PPSMC_MSG_GetPptLimit, val);
 }
@@ -569,10 +554,8 @@ int mi350_gpu_mode1_reset(struct amdgv_adapter *adapt, bool is_unload)
 	 */
 	if ((!is_unload) || (hive == NULL) || ((hive != NULL) && (hive->number_adapters == 0))) {
 		/* allow time for all blocks to complete RESET */
-		if (mi300_psp_wait_for_bootloader_steady(adapt) != PSP_STATUS__SUCCESS) {
-			AMDGV_ERROR("mode1_reset timed out\n");
+		if (mi300_psp_wait_for_bootloader_steady(adapt) != PSP_STATUS__SUCCESS)
 			return AMDGV_FAILURE;
-			}
 	}
 
 	oss_atomic_set(adapt->in_sync_flood, 0);
@@ -590,9 +573,10 @@ int mi350_wait_gpu_reset_completion(struct amdgv_adapter *adapt)
 		return ret;
 
 	if (resp != PPSMC_Result_OK) {
-		AMDGV_REG_DUMP(ERROR, "SMU responded with failure. SMU Mailbox contents:",
-			       mi350_smu_mb_context_regs,
-			       MI350_SMU_MB_CONTEXT_REGS_NUM);
+		amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_FAIL,
+				  RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_66)),
+				  resp,
+				  RREG32(SOC15_REG_OFFSET(MP1, 0, regMP1_SMN_C2PMSG_82)));
 		return AMDGV_FAILURE;
 	}
 
@@ -953,7 +937,7 @@ static void mi350_smu_restore_pm_policy(struct amdgv_adapter *adapt,
 		return;
 	ret = mi350_smu_set_pm_policy(adapt, policy, policy->current_level);
 	if (ret && (ret != AMDGV_NOT_SUPPORTED))
-		AMDGV_ERROR("Failed to restore PM Policy");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_RESTORE_PM_POLICY_FAIL, 0);
 
 	return;
 }
@@ -1044,7 +1028,6 @@ static int mi350_smu_pp_handle_irq(struct amdgv_adapter *adapt, struct amdgv_iv_
 						adapt, i, AMDGV_EVENT_SCHED_FORCE_RESET_VF, AMDGV_SCHED_BLOCK_ALL);
 
 				if (ret) {
-					AMDGV_ERROR("Failed to trigger VFFLR for VF %d\n", i);
 					ret = AMDGV_FAILURE;
 					break;
 				}
@@ -1108,21 +1091,21 @@ static int mi350_smu_late_sw_init(struct amdgv_adapter *adapt)
 	adapt->pp.metrics[AMDGV_PP_METRIC__GPU] =
 		oss_zalloc(sizeof(struct mi350_pp_drv_metrics_ext));
 	if (!adapt->pp.metrics[AMDGV_PP_METRIC__GPU]) {
-		AMDGV_ERROR("Failed to alloc memory for drv_metrics_ext\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL, (uint64_t)sizeof(struct mi350_pp_drv_metrics_ext));
 		return AMDGV_FAILURE;
 	}
 
 	adapt->pp.metrics[AMDGV_PP_METRIC__GPU_STATIC] =
 		oss_zalloc(sizeof(struct mi350_pp_drv_metrics_ext));
 	if (!adapt->pp.metrics[AMDGV_PP_METRIC__GPU_STATIC]) {
-		AMDGV_ERROR("Failed to alloc memory for drv_static_metrics_ext\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL, (uint64_t)sizeof(struct mi350_pp_drv_metrics_ext));
 		return AMDGV_FAILURE;
 	}
 
 	adapt->pp.metrics[AMDGV_PP_METRIC__SYSTEM] =
 		oss_zalloc(sizeof(struct mi350_pp_drv_metrics_ext));
 	if (!adapt->pp.metrics[AMDGV_PP_METRIC__SYSTEM]) {
-		AMDGV_ERROR("Failed to alloc memory for drv_static_metrics_ext\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL, (uint64_t)sizeof(struct mi350_pp_drv_metrics_ext));
 		return AMDGV_FAILURE;
 	}
 
@@ -1375,10 +1358,10 @@ static void mi350_smu_dump_feature_state(struct amdgv_adapter *adapt, uint64_t f
 {
 	int i;
 
-	AMDGV_INFO("SMU features: 0x%016llx\n", features);
+	AMDGV_DEBUG("SMU features: 0x%016llx\n", features);
 	for (i = 0; i < 64; i++) {
 		if (features & (1ULL << i)) {
-			AMDGV_INFO("SMU %s (%d) Enabled\n", mi350_smu_get_feature_name(i), i);
+			AMDGV_DEBUG("SMU %s (%d) Enabled\n", mi350_smu_get_feature_name(i), i);
 		}
 	}
 }
@@ -1566,8 +1549,7 @@ static int mi350_smu_check_version(struct amdgv_adapter *adapt)
 	if (ret)
 		return ret;
 
-	AMDGV_INFO("SMU PMFW version:%08x, PMFW IF version:%08x, Driver IF version:%08x\n",
-		   smu_version, driver_if_version, DRIVER_IF_MI350_VERSION);
+	amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_VERSION, (uint64_t)smu_version, (uint64_t)driver_if_version, (uint64_t)DRIVER_IF_MI350_VERSION);
 
 	return 0;
 }
@@ -1777,8 +1759,7 @@ static int mi350_pp_smu_add_drv_metrics_ext_entry(struct amdgv_adapter *adapt,
 	uint32_t entry_idx = drv_metrics_ext->num_metric;
 
 	if (entry_idx >= MI350_MAX_NUM_METRICS_EXT) {
-		AMDGV_ERROR("Entry %d dropped. drv_metrics table cannot support more than %d entries\n",
-			entry_idx, MI350_MAX_NUM_METRICS_EXT);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_METRICS_TABLE_FULL, AMDGV_LOG_DATA_32_32(entry_idx, MI350_MAX_NUM_METRICS_EXT));
 		return AMDGV_FAILURE;
 	}
 
@@ -2330,7 +2311,7 @@ static int mi350_smu_early_sw_init(struct amdgv_adapter *adapt)
 
 	smu = oss_zalloc(sizeof(struct smu_context));
 	if (!smu) {
-		AMDGV_ERROR("Failed to alloc memory for smu context\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL, (uint64_t)sizeof(struct smu_context));
 		return AMDGV_FAILURE;
 	}
 
@@ -2376,13 +2357,12 @@ static int mi350_smu_early_hw_init(struct amdgv_adapter *adapt)
 
 	ret = mi350_smu_check_fw_status(adapt);
 	if (ret) {
-		AMDGV_ERROR("Failed to check MP1 FW status.\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_SMU_FW_NOT_READY, 0);
 		return ret;
 	}
 
 	ret = mi350_smu_get_version(adapt, &adapt->pp.smu_fw_version, NULL);
 	if (ret) {
-		AMDGV_ERROR("Failed to get SMU version.\n");
 		return ret;
 	}
 
@@ -2391,13 +2371,11 @@ static int mi350_smu_early_hw_init(struct amdgv_adapter *adapt)
 
 	ret = mi350_smu_check_version(adapt);
 	if (ret) {
-		AMDGV_ERROR("Failed to get PMFW version.\n");
 		return ret;
 	}
 
 	ret = mi350_smu_record_version(adapt);
 	if (ret) {
-		AMDGV_ERROR("Failed to record SMU version.\n");
 		return ret;
 	}
 
@@ -2948,8 +2926,6 @@ static int mi350_smu_trigger_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf
 						PPSMC_MSG_TriggerVFFLR,
 						(1 << idx_vf),
 						NULL);
-	if (ret)
-		AMDGV_ERROR("Trigger VF FLR failed\n");
 
 	return ret;
 }
@@ -3096,7 +3072,6 @@ static int mi350_smu_i2c_eeprom_read_data(struct amdgv_adapter *adapt, uint8_t a
 	}
 
 	if (ret) {
-		AMDGV_WARN("i2c_eeprom_read_data - error occurred :%x\n", ret);
 		return ret;
 	}
 
@@ -3131,7 +3106,6 @@ static int mi350_smu_i2c_eeprom_write_data(struct amdgv_adapter *adapt, uint8_t 
 	}
 
 	if (ret) {
-		AMDGV_WARN("i2c_write- error occurred :%x\n", ret);
 		return ret;
 	}
 
@@ -3370,7 +3344,7 @@ static bool mi350_smu_is_pmme_ready(struct amdgv_adapter *adapt)
 		return false;
 	}
 
-	AMDGV_ERROR("Timedout waiting for PMFW managed EEPROM initialization to be finished.\n");
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_PMFW_EEPROM_INIT_TIMEOUT, 0);
 	return false;
 }
 
@@ -3415,10 +3389,6 @@ static int mi350_smu_get_ras_table_version(struct amdgv_adapter *adapt,
 
 	ret = mi350_smu_send_msg(adapt, PPSMC_MSG_GetRasTableVersion, eeprom_version);
 
-	if (ret) {
-		AMDGV_ERROR("Failed to get RAS table version\n");
-	}
-
 	return ret;
 }
 
@@ -3430,8 +3400,6 @@ static int mi350_smu_get_rma_status(struct amdgv_adapter *adapt, uint32_t *rma_s
 		return ret;
 
 	ret = mi350_smu_send_msg(adapt, PPSMC_MSG_GetRmaStatus, rma_status);
-	if (ret)
-		AMDGV_ERROR("Failed to get RMA status\n");
 
 	return ret;
 }
@@ -3446,8 +3414,6 @@ static int mi350_smu_get_bad_page_count(struct amdgv_adapter *adapt,
 	ret = mi350_smu_send_msg(adapt,
 		PPSMC_MSG_GetBadPageCount,
 		bad_page_count);
-	if (ret)
-		AMDGV_ERROR("Failed to get bad page count\n");
 
 	AMDGV_DEBUG("Get %d bad page count.\n", *bad_page_count);
 
@@ -3468,15 +3434,11 @@ static int mi350_smu_get_bad_page_address(struct amdgv_adapter *adapt,
 	ret = mi350_smu_send_msg_with_param(adapt,
 		PPSMC_MSG_GetBadPagePaAddress,
 		param, &soc_pa_lo);
-	if (ret)
-		AMDGV_ERROR("Failed to get bad page address lo\n");
 
 	param = (bp_rec_idx & 0xFFFF) | (PP_GET_BAD_PAGE_INFO_CMD_TYPE_HI << 16);
 	ret = mi350_smu_send_msg_with_param(adapt,
 		PPSMC_MSG_GetBadPagePaAddress,
 		param, &soc_pa_hi);
-	if (ret)
-		AMDGV_ERROR("Failed to get bad page address hi\n");
 
 	*soc_pa = (uint64_t)soc_pa_hi << 32 | soc_pa_lo;
 	return ret;
@@ -3490,39 +3452,33 @@ static int mi350_smu_fetch_bad_page_info(struct amdgv_adapter *adapt, uint32_t b
 
 	ret = mi350_smu_send_msg_with_param(adapt, PPSMC_MSG_GetBadPageSeverity, param, &bad_page_info->severity);
 	if (ret) {
-		AMDGV_ERROR("Failed to get bad page error severity\n");
 		return ret;
 	}
 
 	ret = mi350_smu_send_msg_with_param(adapt, PPSMC_MSG_GetTimestamp, param, &bad_page_info->timestamp);
 	if (ret) {
-		AMDGV_ERROR("Failed to get bad page timestamp\n");
 		return ret;
 	}
 
 	param = (bp_rec_idx & 0xFFFF) | (PP_GET_BAD_PAGE_INFO_CMD_TYPE_LO << 16);
 	ret = mi350_smu_send_msg_with_param(adapt, PPSMC_MSG_GetBadPageMcaAddress, param, &bad_page_info->mca_addr_lo);
 	if (ret) {
-		AMDGV_ERROR("Failed to get bad page mca address lo\n");
 		return ret;
 	}
 
 	ret = mi350_smu_send_msg_with_param(adapt, PPSMC_MSG_GetBadPageIpIdLoHi, param, &bad_page_info->mca_ipid_lo);
 	if (ret) {
-		AMDGV_ERROR("Failed to get bad page ipid lo\n");
 		return ret;
 	}
 
 	param = (bp_rec_idx & 0xFFFF) | (PP_GET_BAD_PAGE_INFO_CMD_TYPE_HI << 16);
 	ret = mi350_smu_send_msg_with_param(adapt, PPSMC_MSG_GetBadPageMcaAddress, param, &bad_page_info->mca_addr_hi);
 	if (ret) {
-		AMDGV_ERROR("Failed to get bad page mca address hi\n");
 		return ret;
 	}
 
 	ret = mi350_smu_send_msg_with_param(adapt, PPSMC_MSG_GetBadPageIpIdLoHi, param, &bad_page_info->mca_ipid_hi);
 	if (ret) {
-		AMDGV_ERROR("Failed to get bad page ipid hi\n");
 		return ret;
 	}
 
@@ -3549,7 +3505,6 @@ static int mi350_smu_set_eeprom_timestamp(struct amdgv_adapter *adapt, uint64_t 
 		(uint32_t)utc_timestamp,
 		NULL);
 	if (ret) {
-		AMDGV_ERROR("Failed to set timestamp for EEPROM\n");
 		return ret;
 	}
 
@@ -3608,10 +3563,8 @@ static int mi350_smu_erase_ras_table(struct amdgv_adapter *adapt, uint32_t *stat
 	ret = mi350_smu_send_msg(adapt,
 		PPSMC_MSG_EraseRasTable,
 		status);
-	if (ret)
-		AMDGV_ERROR("Failed to erase ras eeprom table\n");
-	else if (*status)
-		AMDGV_ERROR("Erase ras table returned status = %d\n", *status);
+	if (!ret && *status)
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_ERASE_RAS_TABLE_FAIL, (uint64_t)*status);
 
 	return ret;
 }
@@ -3620,41 +3573,6 @@ static bool mi350_smu_migration_is_supported(struct amdgv_adapter *adapt)
 {
 	struct smu_context *smu = adapt_to_smu(adapt);
 	return (smu->supported_caps & SMU_CAPS(SMU_CAP_LIVE_MIGRATION)) != 0;
-}
-
-static const uint32_t mi350_smu_ras_msg_maps[PP_SMU_RAS_MSG_MAX] = {
-	[PP_SMU_RAS_MSG_GetRasTableVersion] = PPSMC_MSG_GetRasTableVersion,
-	[PP_SMU_RAS_MSG_GetRmaStatus] = PPSMC_MSG_GetRmaStatus,
-	[PP_SMU_RAS_MSG_GetBadPageCount] = PPSMC_MSG_GetBadPageCount,
-	[PP_SMU_RAS_MSG_GetBadPageMcaAddr] = PPSMC_MSG_GetBadPageMcaAddress,
-	[PP_SMU_RAS_MSG_GetBadPagePaAddr] = PPSMC_MSG_GetBadPagePaAddress,
-	[PP_SMU_RAS_MSG_SetTimestamp] = PPSMC_MSG_SetTimestamp,
-	[PP_SMU_RAS_MSG_GetTimestamp] = PPSMC_MSG_GetTimestamp,
-	[PP_SMU_RAS_MSG_GetRasPolicy] = PPSMC_MSG_GetRasPolicy,
-	[PP_SMU_RAS_MSG_GetBadPageIpId] = PPSMC_MSG_GetBadPageIpIdLoHi,
-	[PP_SMU_RAS_MSG_EraseRasTable] = PPSMC_MSG_EraseRasTable,
-};
-
-static int mi350_smu_send_msg_with_params(struct amdgv_adapter *adapt, uint32_t msg,
-		uint32_t *params, uint32_t num_params, uint32_t *read_args, uint32_t num_read_args)
-{
-	return 0;
-}
-
-static int mi350_smu_send_ras_msg(struct amdgv_adapter *adapt, enum pp_smu_ras_msg msg,
-		uint32_t *params, uint32_t num_params, uint32_t *read_args, uint32_t num_read_args)
-{
-	uint32_t smu_msg;
-
-	if (msg >= PP_SMU_RAS_MSG_MAX)
-		return AMDGV_FAILURE;
-
-	smu_msg = mi350_smu_ras_msg_maps[msg];
-	if (!smu_msg)
-		return AMDGV_FAILURE;
-
-	return mi350_smu_send_msg_with_params(adapt, smu_msg,
-				params, num_params, read_args, num_read_args);
 }
 
 static const struct amdgv_pp_funcs mi350_amdgv_pp_funcs = {
@@ -3693,7 +3611,7 @@ static const struct amdgv_pp_funcs mi350_amdgv_pp_funcs = {
 	.get_smu_cap_supported = mi350_smu_cap_supported,
 	.init_drv_metrics_ext = mi350_pp_smu_init_drv_metrics_ext,
 	.migration_smu_is_supported = mi350_smu_migration_is_supported,
-	.smu_send_ras_msg = mi350_smu_send_ras_msg,
+	.put_timeout = mi350_smu_put_timeout,
 };
 
 static const struct amdgv_pmme_funcs mi350_amdgv_pmme_funcs = {
@@ -3730,8 +3648,7 @@ static int mi350_pmfw_eeprom_hw_init(struct amdgv_adapter *adapt)
 		amdgv_ras_eeprom_version_init(adapt);
 
 		if (!adapt->umc.is_pmfw_managed_eeprom) {
-			AMDGV_WARN("PMFW managed EEPROM is not enabled, fallback to legacy EEPROM 0x%x.\n",
-							adapt->umc.eeprom_version);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_EEPROM_FALLBACK_LEGACY, (uint64_t)adapt->umc.eeprom_version);
 			return 0;
 		}
 
@@ -3763,7 +3680,6 @@ static int mi350_pmfw_eeprom_hw_init(struct amdgv_adapter *adapt)
 
 			ret = amdgv_umc_across_nps_err_data_init(adapt);
 			if (ret) {
-				AMDGV_ERROR("Failed to initialize cross NPS error data.\n");
 				return ret;
 			}
 

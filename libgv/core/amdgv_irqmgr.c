@@ -213,6 +213,22 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 			handled = 1;
 		}
 		break;
+	case IH_IV_CLIENTID_IMU:
+		if (entry->src_id == IH_IV_SRCID_IMU_GFX_ACCESS_VIOLATION) {
+			uint32_t initiator_id;
+			uint32_t reg_addr;
+			uint32_t unit_id;
+
+			initiator_id = (entry->src_data[0] >> IH_IV_IMU_VIOLATION_INITIATOR_SHIFT) &
+				       IH_IV_IMU_VIOLATION_INITIATOR_MASK;
+			reg_addr = entry->src_data[0] & IH_IV_IMU_VIOLATION_ADDR_MASK;
+			unit_id = entry->src_data[1] & IH_IV_IMU_VIOLATION_UNIT_MASK;
+
+			AMDGV_WARN("IMU GFX access violation: initiator=%u unit=%u gc_byte_offset=0x%05x\n",
+				   initiator_id, unit_id, reg_addr);
+			handled = 1;
+		}
+		break;
 	default:
 		break;
 	}
@@ -381,6 +397,7 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 			    AMDGV_EVENT_OVERFLOW)
 				break;
 			/* clear msg buffer to VF */
+			adapt->mailbox.state_vf[idx_vf].trn_msg_acked = true;
 			amdgv_mailbox_clear_valid_msg(adapt, idx_vf);
 		}
 		break;

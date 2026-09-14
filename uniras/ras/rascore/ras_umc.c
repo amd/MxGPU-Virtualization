@@ -233,7 +233,8 @@ static int ras_umc_expand_row_pages(struct ras_core_context *ras_core,
 
 	row_pa = retired_addr & ~(flip_mask);
 
-	if (count < nr_page_pfns)
+	if ((count < nr_page_pfns) &&
+	    !ras_core_check_address_sanity(ras_core, row_pa))
 		page_pfns[count++] = RAS_ADDR_TO_PFN(row_pa);
 
 	subset = flip_mask;
@@ -243,7 +244,8 @@ static int ras_umc_expand_row_pages(struct ras_core_context *ras_core,
 		if (count >= nr_page_pfns)
 			break;
 
-		page_pfns[count++] = RAS_ADDR_TO_PFN(addr);
+		if (!ras_core_check_address_sanity(ras_core, addr))
+			page_pfns[count++] = RAS_ADDR_TO_PFN(addr);
 
 		subset = (subset - 1) & flip_mask;
 	};
@@ -271,7 +273,7 @@ int ras_umc_convert_record_to_row_pages(struct ras_core_context *ras_core,
 	}
 
 	count = ras_umc_expand_row_pages(ras_core, record, page_pfns, nr_page_pfns);
-	if (count > 0)
+	if (count >= 0)
 		record->cur_nps_valid_page_num = count;
 
 	return count;
@@ -463,9 +465,12 @@ static int ras_umc_update_eeprom_ram_data(struct ras_core_context *ras_core,
 	struct eeprom_store_record *data = &ras_umc->umc_err_data.ram_data;
 	int j;
 
-	if (!bps || !page_pfns || !nr_page_pfns ||
+	if (!bps || !page_pfns ||
 		(nr_page_pfns > ras_umc->max_pages_per_row))
 		return -RAS_CORE_EINVAL;
+
+	if (!nr_page_pfns)
+		return 0;
 
 	if (!data->space_left &&
 		ras_umc_realloc_err_data_space(ras_core, data, 256))
@@ -599,6 +604,17 @@ int ras_umc_load_bad_pages(struct ras_core_context *ras_core)
 	return ret;
 }
 
+static int ras_umc_count_valid_pages(struct ras_core_context *ras_core,
+		struct eeprom_umc_record *records, const u32 nr_records)
+{
+	int count = 0, i;
+
+	for (i = 0; i < nr_records; i++)
+		count += records[i].cur_nps_valid_page_num;
+
+	return count;
+}
+
 /*
  * write error record array to eeprom, the function should be
  * protected by recovery_lock
@@ -636,7 +652,9 @@ static int ras_umc_save_bad_pages(struct ras_core_context *ras_core)
 			goto exit;
 		}
 
-		RAS_DEV_INFO(ras_core->dev, "Saved %d records to EEPROM table.\n", save_count);
+		RAS_DEV_INFO(ras_core->dev, "Saved %d pages to EEPROM table.\n",
+			ras_umc_count_valid_pages(ras_core,
+				&data->bps[eeprom_record_num], save_count));
 	}
 
 exit:
@@ -898,6 +916,10 @@ int ras_umc_dump_fw_records(struct ras_core_context *ras_core)
 		if (!ret)
 			new_count += c;
 	}
+
+	if (new_count > 0)
+		ras_core_event_notify(ras_core,
+				RAS_EVENT_ID__BAD_PAGE_DETECTED, NULL);
 
 	return new_count;
 }

@@ -222,7 +222,7 @@ void ras_log_ring_destroy_batch_tag(struct ras_core_context *ras_core,
 	oss_free(batch_tag);
 }
 
-void ras_log_ring_add_log_event(struct ras_core_context *ras_core,
+int ras_log_ring_add_log_event(struct ras_core_context *ras_core,
 		enum ras_log_event event,
 		void *data, uint32_t size, struct ras_log_batch_tag *batch_tag)
 {
@@ -231,6 +231,12 @@ void ras_log_ring_add_log_event(struct ras_core_context *ras_core,
 	struct ras_log_info *log;
 	uint64_t socket_id;
 	void *obj;
+
+	if (size > sizeof(union ras_log_body)) {
+		RAS_DEV_ERR(ras_core->dev,
+			"Log event(0x%x) data size exceeded buffer!\n", event);
+		return -RAS_CORE_EINVAL;
+	}
 
 	obj = oss_mempool_alloc_preallocated(log_ring->ras_log_mempool);
 	if (!obj ||
@@ -242,7 +248,7 @@ void ras_log_ring_add_log_event(struct ras_core_context *ras_core,
 
 	if (!obj) {
 		RAS_DEV_ERR(ras_core->dev, "ERROR: Failed to alloc ras log buffer!\n");
-		return;
+		return -RAS_CORE_ENOMEM;
 	}
 
 	log = (struct ras_log_info *)obj;
@@ -263,7 +269,7 @@ void ras_log_ring_add_log_event(struct ras_core_context *ras_core,
 		log->body.aca_reg.regs[ACA_REG_IDX__IPID] |= (((socket_id % 4) & 0x3) << 44);
 	}
 
-	ras_log_ring_add_data(ras_core, log, batch_tag);
+	return ras_log_ring_add_data(ras_core, log, batch_tag);
 }
 
 static int ras_log_ring_lookup_data(struct ras_core_context *ras_core,

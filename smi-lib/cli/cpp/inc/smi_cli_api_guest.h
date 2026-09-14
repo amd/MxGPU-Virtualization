@@ -10,112 +10,121 @@
 class AmdSmiApiGuest : public AmdSmiApiBase
 {
 public:
-	AmdSmiApiGuest ();
-	virtual ~AmdSmiApiGuest (void);
+	AmdSmiApiGuest();
+	virtual ~AmdSmiApiGuest(void);
 	void* amdSmiLibHandle;
 
-	virtual int amdsmi_get_bdf_from_gpu_index(uint64_t &processor_bdf, int index) override;
-	virtual int amdsmi_get_bdf_from_uuid_or_bdf(uint64_t &processor_bdf, int &gpu_index,
-			std::string device, int type) override;
+	virtual int amdsmi_get_bdf_from_gpu_index(uint64_t& processor_bdf, int index) override;
+	virtual int amdsmi_get_bdf_from_uuid_or_bdf(uint64_t& processor_bdf, int& gpu_index,
+						    std::string device, int type) override;
 
 	virtual int amdsmi_get_error_message(int error_code, std::string& out) override;
 	virtual int get_string_from_enum_fw_block(int fw_block, std::string& out) override;
 
-	int list_command(int format, unsigned int gpu_index, std::string bdf, char *uuid,
-					 std::string &formatted_string);
-	virtual int amdsmi_get_gpu_count(unsigned int &gpu_count) override;
-	virtual int amdsmi_get_device_count(unsigned int &device_count, int device_type) override;
+	int list_command(int format, unsigned int gpu_index, std::string bdf, char* uuid,
+			 std::string& formatted_string);
+	virtual int amdsmi_get_gpu_count(unsigned int& gpu_count) override;
+	virtual int amdsmi_get_device_count(unsigned int& device_count, int device_type) override;
 
 	virtual int amdsmi_get_list_command(Arguments arg, std::string& out) override;
 	virtual int csv_recursion(std::string& main_buffer,
-							  const std::vector<std::vector<std::string>> &results) override;
-	//static
+				  const std::vector<std::vector<std::string>>& results) override;
+	// static
 	virtual int amdsmi_get_asic_info_command(uint64_t processor_bdf, Arguments arg,
-			std::string& out) override;
+						 std::string& out) override;
 	virtual int amdsmi_get_vbios_info_command(uint64_t processor_bdf, Arguments arg,
-			std::string &formatted_string) override;
+						  std::string& formatted_string) override;
 	virtual int amdsmi_get_driver_info_command(uint64_t processor_bdf, Arguments arg,
-			std::string &formatted_string) override;
+						   std::string& formatted_string) override;
 	virtual int amdsmi_get_bus_info_command(uint64_t processor_bdf, Arguments arg,
-											std::string &formatted_string) override;
+						std::string& formatted_string) override;
 	virtual int amdsmi_get_ras_info_command(uint64_t processor_bdf, Arguments arg,
-											std::string &formatted_string) override;
-	virtual int amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments &arg,
-			std::string &formatted_string) override;
+						std::string& formatted_string) override;
+	virtual int amdsmi_get_limit_info_command(uint64_t processor_bdf, Arguments& arg,
+						  std::string& formatted_string) override;
 	virtual int amdsmi_get_process_isolation(uint64_t processor_bdf, Arguments arg,
-			std::string &formatted_string) override;
+						 std::string& formatted_string) override;
 	virtual int amdsmi_get_virtualization_mode_command(uint64_t processor_bdf, Arguments arg,
-			std::string &formatted_string) override;
-	//metric
+							   std::string& formatted_string) override;
+	// metric
 	virtual int amdsmi_get_usage_metric_command(uint64_t processor_bdf, Arguments arg,
-			std::string& out) override;
+						    std::string& out) override;
 	virtual int amdsmi_get_power_metric_command(uint64_t processor_bdf, Arguments arg,
-			std::string& out) override;
+						    std::string& out) override;
 	virtual int amdsmi_get_clock_metric_command(uint64_t processor_bdf, Arguments arg,
-			std::string& out) override;
+						    std::string& out) override;
 	virtual int amdsmi_get_temperature_metric_command(uint64_t processor_bdf, Arguments arg,
-			std::string& out) override;
+							  std::string& out) override;
 	virtual int amdsmi_get_ecc_metric_command(uint64_t processor_bdf, Arguments arg,
-			std::string& out) override;
+						  std::string& out) override;
 	virtual int amdsmi_get_pcie_metric_command(uint64_t processor_bdf, Arguments arg,
-			std::string& out) override;
+						   std::string& out) override;
 
 	virtual int amdsmi_get_fb_usage_command(uint64_t processor_bdf, Arguments arg,
-											std::string& out) override;
+						std::string& out) override;
 
 	virtual int amdsmi_firmware_fw_list_command(uint64_t processor_bdf, Arguments arg,
-			std::string &out_string, std::string *gpu_id) override;
+						    std::string& out_string,
+						    std::string* gpu_id) override;
 
-	//process
+	// process
 	virtual int amdsmi_get_all_arguments_process_command(uint64_t processor, Arguments arg,
-			std::string &out_string, int &proc_num, int gpu_id) override;
+							     std::string& out_string, int& proc_num,
+							     int gpu_id) override;
 	virtual int amdsmi_get_general_process_command(uint64_t processor, Arguments arg,
-			std::string &out_string, int &proc_num, int gpu_id) override;
+						       std::string& out_string, int& proc_num,
+						       int gpu_id) override;
 	virtual int amdsmi_get_engine_process_command(uint64_t processor, Arguments arg,
-			std::string &out_string, int &proc_num, int gpu_id) override;
+						      std::string& out_string, int& proc_num,
+						      int gpu_id) override;
 
-	virtual int amdsmi_get_version_command(uint64_t processor_bdf, Arguments arg, std::string &out_string) override;
+	virtual int amdsmi_get_version_command(uint64_t processor_bdf, Arguments arg,
+					       std::string& out_string) override;
 
-	virtual int amdsmi_set_process_isolation_command(uint64_t processor_bdf, Arguments arg) override;
+	virtual int amdsmi_set_process_isolation_command(uint64_t processor_bdf,
+							 Arguments arg) override;
 	virtual int amdsmi_set_power_cap_command(uint64_t processor_bdf, Arguments arg) override;
 	virtual int amdsmi_reset_local_data_command(uint64_t processor_bdf, Arguments arg) override;
 
 	// monitor
 	virtual int amdsmi_get_power_usage_monitor_command(uint64_t processor_bdf, Arguments arg,
-			std::string &formatted_string) override;
+							   std::string& formatted_string) override;
 	virtual int amdsmi_get_temperature_monitor_command(uint64_t processor_bdf, Arguments arg,
-			std::string &formatted_string) override;
+							   std::string& formatted_string) override;
 	virtual int amdsmi_get_gfx_monitor_command(uint64_t processor_bdf, Arguments arg,
-			std::string &formatted_string) override;
+						   std::string& formatted_string) override;
 	virtual int amdsmi_get_mem_monitor_command(uint64_t processor_bdf, Arguments arg,
-			std::string &formatted_string) override;
+						   std::string& formatted_string) override;
 	virtual int amdsmi_get_encoder_monitor_command(uint64_t processor_bdf, Arguments arg,
-			std::string &formatted_string) override;
+						       std::string& formatted_string) override;
 	virtual int amdsmi_get_vram_usage_monitor_command(uint64_t processor_bdf, Arguments arg,
-			std::string &formatted_string) override;
+							  std::string& formatted_string) override;
 	virtual int amdsmi_get_pcie_info_monitor_command(uint64_t processor_bdf, Arguments arg,
-			std::string &formatted_string) override;
+							 std::string& formatted_string) override;
 
 	virtual int amdsmi_get_default_version_command(uint64_t processor_bdf, Arguments arg,
-			std::string &formatted_string) override;
+						       std::string& formatted_string) override;
 	virtual int amdsmi_get_default_bdf_command(uint64_t index, Arguments arg,
-			std::string &formatted_string) override;
-	virtual int amdsmi_get_default_gpu_name_oam_id_command(uint64_t processor_bdf,
-			Arguments arg, std::string &formatted_string) override;
-	virtual int amdsmi_get_default_partition_mode_command(uint64_t processor_bdf,
-			Arguments arg, std::string &formatted_string) override;
+						   std::string& formatted_string) override;
+	virtual int
+	amdsmi_get_default_gpu_name_oam_id_command(uint64_t processor_bdf, Arguments arg,
+						   std::string& formatted_string) override;
+	virtual int
+	amdsmi_get_default_partition_mode_command(uint64_t processor_bdf, Arguments arg,
+						  std::string& formatted_string) override;
 	virtual int amdsmi_get_default_uec_command(uint64_t processor_bdf, Arguments arg,
-			std::string &formatted_string) override;
+						   std::string& formatted_string) override;
 	virtual int amdsmi_get_default_temperature_command(uint64_t processor_bdf, Arguments arg,
-			std::string &formatted_string) override;
+							   std::string& formatted_string) override;
 	virtual int amdsmi_get_default_power_usage_command(uint64_t processor_bdf, Arguments arg,
-			std::string &formatted_string) override;
+							   std::string& formatted_string) override;
 	virtual int amdsmi_get_default_utilization_command(uint64_t processor_bdf, Arguments arg,
-			std::string &formatted_string) override;
+							   std::string& formatted_string) override;
 	virtual int amdsmi_get_default_pcie_info_command(uint64_t processor_bdf, Arguments arg,
-			std::string &formatted_string) override;
+							 std::string& formatted_string) override;
 	virtual int amdsmi_get_default_fb_usage_command(uint64_t processor_bdf, Arguments arg,
-			std::string &formatted_string) override;
+							std::string& formatted_string) override;
 	virtual int amdsmi_get_default_process_info_command(uint64_t processor_bdf, Arguments arg,
-			std::string &formatted_string, int &proc_num, int gpu_id) override;
+							    std::string& formatted_string,
+							    int& proc_num, int gpu_id) override;
 };

@@ -153,16 +153,14 @@ const SmiNic* SmiNicSystem::get_nic_by_bdf(const std::string& bdf) const
 const SmiNic* SmiNicSystem::get_nic_by_bdf(uint64_t bdf) const
 {
 	uint64_t function_number = bdf & 0x7;
-	uint64_t device_number = (bdf >> 3) & 0x1F;
-	uint64_t bus_number = (bdf >> 8) & 0xFF;
-	uint64_t domain_number = (bdf >> 16) & 0xFFFFFFFF;
+	uint64_t device_number	 = (bdf >> 3) & 0x1F;
+	uint64_t bus_number	 = (bdf >> 8) & 0xFF;
+	uint64_t domain_number	 = (bdf >> 16) & 0xFFFFFFFF;
 	std::ostringstream oss;
 
-	oss << std::hex << std::setfill('0')
-	    << std::setw(4) << domain_number << ":"
-	    << std::setw(2) << bus_number << ":"
-	    << std::setw(2) << device_number << "."
-	    << std::setw(1) << function_number;
+	oss << std::hex << std::setfill('0') << std::setw(4) << domain_number << ":" << std::setw(2)
+	    << bus_number << ":" << std::setw(2) << device_number << "." << std::setw(1)
+	    << function_number;
 
 	return get_nic_by_bdf(oss.str());
 }

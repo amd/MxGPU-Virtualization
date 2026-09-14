@@ -13,20 +13,9 @@
 
 auto constexpr event_csv_header {"gpu, message, category, date"};
 
-const char *const EVENT_CATEGORY_STR[] = {
-	"NULL",
-	"Driver",
-	"Reset",
-	"Scheduler",
-	"VBIOS",
-	"ECC",
-	"Powerplay",
-	"SRIOV",
-	"VF",
-	"Ucode",
-	"GPU device",
-	"Event guard",
-	"GPU monitor",
+const char* const EVENT_CATEGORY_STR[] = {
+    "NULL",  "Driver", "Reset", "Scheduler",  "VBIOS",	     "ECC",	    "Powerplay",
+    "SRIOV", "VF",     "Ucode", "GPU device", "Event guard", "GPU monitor",
 };
 class AmdSmiEventCommand : public AmdSmiCommands
 {

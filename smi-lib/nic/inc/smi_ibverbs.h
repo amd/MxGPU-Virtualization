@@ -12,7 +12,7 @@
 #include <string>
 
 #ifdef LIBIBVERBS_INSTALLED
-#include <infiniband/verbs.h>
+	#include <infiniband/verbs.h>
 #endif
 
 namespace smi_ibverbs {
@@ -40,34 +40,37 @@ struct PortMtu {
  * leave dangling pointers. Leaking the handle for process lifetime is the
  * standard pattern for optional dlopen()'d libraries.
  */
-class IbverbsLoader {
+class IbverbsLoader
+{
 public:
 	static IbverbsLoader& instance();
 
-	bool available() const { return available_; }
+	bool available() const
+	{
+		return available_;
+	}
 
 private:
 	IbverbsLoader();
-	~IbverbsLoader() = default;
-	IbverbsLoader(const IbverbsLoader&) = delete;
+	~IbverbsLoader()			       = default;
+	IbverbsLoader(const IbverbsLoader&)	       = delete;
 	IbverbsLoader& operator=(const IbverbsLoader&) = delete;
 
 	/*
 	 * Only query_port_mtu() consumes these resolved symbols; keep them
 	 * private and grant it access rather than exposing the vtable.
 	 */
-	friend std::optional<PortMtu> query_port_mtu(const std::string& rdma_dev,
-						     uint8_t port_num);
+	friend std::optional<PortMtu> query_port_mtu(const std::string& rdma_dev, uint8_t port_num);
 
-	struct ibv_device **(*get_device_list)(int *num_devices) = nullptr;
-	void (*free_device_list)(struct ibv_device **list) = nullptr;
-	const char *(*get_device_name)(struct ibv_device *device) = nullptr;
-	struct ibv_context *(*open_device)(struct ibv_device *device) = nullptr;
-	int (*close_device)(struct ibv_context *context) = nullptr;
-	int (*query_port)(struct ibv_context *context, uint8_t port_num,
-			  struct ibv_port_attr *port_attr) = nullptr;
+	struct ibv_device** (*get_device_list)(int* num_devices)      = nullptr;
+	void (*free_device_list)(struct ibv_device** list)	      = nullptr;
+	const char* (*get_device_name)(struct ibv_device* device)     = nullptr;
+	struct ibv_context* (*open_device)(struct ibv_device* device) = nullptr;
+	int (*close_device)(struct ibv_context* context)	      = nullptr;
+	int (*query_port)(struct ibv_context* context, uint8_t port_num,
+			  struct ibv_port_attr* port_attr)	      = nullptr;
 
-	void *handle_ = nullptr;
+	void* handle_	= nullptr;
 	bool available_ = false;
 };
 

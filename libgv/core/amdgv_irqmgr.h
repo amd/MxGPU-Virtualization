@@ -21,6 +21,23 @@
 
 #define IH_IV_SRCID_RLC_GC_FED_COOKIE     0xCB
 
+/* src_id is scoped to the client, so this is only a GFX access violation
+ * under IH_IV_CLIENTID_IMU. */
+#define IH_IV_SRCID_IMU_GFX_ACCESS_VIOLATION 0x1
+
+/*
+ * Payload of an IMU GFX access violation:
+ *   src_data[0] = {INITIATOR_ID[9:0], 2'b0, ADDR[19:0]}
+ *   src_data[1] = {1'b0, UNIT_ID[6:0]}
+ * ADDR is the GC byte offset of the oldest fenced access since the IMU last
+ * armed its fence log, which is not necessarily the access that raised this
+ * interrupt.
+ */
+#define IH_IV_IMU_VIOLATION_INITIATOR_SHIFT 22
+#define IH_IV_IMU_VIOLATION_INITIATOR_MASK  0x3FF
+#define IH_IV_IMU_VIOLATION_ADDR_MASK	    0x000FFFFC
+#define IH_IV_IMU_VIOLATION_UNIT_MASK	    0x7F
+
 #define IH_IV_CLIENTID_DF    0x17
 #define IH_IV_CLIENTID_VMC   0x12
 #define IH_IV_CLIENTID_UTCL2 0x1B
@@ -30,6 +47,7 @@
 /* ClientID for SOC21 */
 #define IH_IV_CLIENTID_GFX   0xA
 #define IH_IV_CLIENTID_RLC   0x7
+#define IH_IV_CLIENTID_IMU   0xB
 
 struct amdgv_ih_ring {
 	volatile uint32_t       *ring;

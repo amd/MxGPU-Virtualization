@@ -514,8 +514,9 @@ static uint8_t amdgv_get_ras_policy_info(amdgv_dev_t adev, struct amdgv_uni_cmd 
 
 	output_data->minor_version = ras_policy_info.minor_version;
 	output_data->major_version = ras_policy_info.major_version;
-	output_data->dram_non_critical_region_threshold = ras_policy_info.dram_non_critical_region_threshold;
-	output_data->dram_critical_region_threshold = ras_policy_info.dram_critical_region_threshold;
+
+	oss_memcpy(&output_data->policy_data, &ras_policy_info.policy_data,
+			sizeof(output_data->policy_data));
 
 	cmd->output_size = sizeof(struct amdgv_cmd_ras_policy_info);
 	return AMDGV_CMD__SUCCESS;
@@ -558,6 +559,8 @@ static enum amdgv_cmd_asic_type amd_asic_type_to_amdgv_cmd_asic_type(enum amd_as
 	case CHIP_MI350X:
 		if (dev_id == 0x75A3)
 			return AMDGV_CMD_CHIP_MI355X;
+		else if (dev_id == 0x75A8)
+			return AMDGV_CMD_CHIP_MI350P;
 		else
 			return AMDGV_CMD_CHIP_MI350X;
 	case CHIP_LAST:
@@ -737,7 +740,7 @@ static uint8_t amdgv_cmd_ual_get_config(amdgv_dev_t adev, struct amdgv_uni_cmd *
 			(struct amdgv_cmd_get_config_rsp_ual_v1 *)cmd->output_buff_raw;
 	struct amdgv_gpumon_get_config_rsp_ual_v1 config = {0};
 	int ret = AMDGV_CMD__ERROR_GENERIC;
-	
+
 	if (cmd->input_size != sizeof(struct amdgv_cmd_get_config_req_ual_v1) ||
 			cmd->version != AMDGV_CMD_VERSION_V1 || !adev)
 		return AMDGV_CMD__ERROR_INVALID_INPUT;
@@ -803,7 +806,7 @@ static uint8_t amdgv_cmd_ual_set_vpod_config(amdgv_dev_t adev, struct amdgv_uni_
 		(struct amdgv_cmd_set_vpod_config_req_ual_v1 *)cmd->input_buff_raw;
 	struct amdgv_gpumon_set_vpod_config_req_ual_v1 config = {0};
 	int ret = AMDGV_CMD__ERROR_GENERIC;
-	
+
 	if (cmd->input_size != sizeof(struct amdgv_cmd_set_vpod_config_req_ual_v1) ||
 			cmd->version != AMDGV_CMD_VERSION_V1 || !adev)
 		return AMDGV_CMD__ERROR_INVALID_INPUT;
@@ -824,12 +827,12 @@ static uint8_t amdgv_cmd_ual_set_vpod_config(amdgv_dev_t adev, struct amdgv_uni_
 
 static uint8_t amdgv_cmd_ual_set_station_config(amdgv_dev_t adev, struct amdgv_uni_cmd *cmd)
 {
-	struct amdgv_cmd_set_station_config_req_ual_v1 *input_data =
-		(struct amdgv_cmd_set_station_config_req_ual_v1 *)cmd->input_buff_raw;
-	struct amdgv_gpumon_set_station_config_req_ual_v1 config = {0};
+	struct amdgv_cmd_station_config_ual_v1 *input_data =
+		(struct amdgv_cmd_station_config_ual_v1 *)cmd->input_buff_raw;
+	struct amdgv_gpumon_station_config_ual_v1 config = {0};
 	int ret = AMDGV_CMD__ERROR_GENERIC;
-	
-	if (cmd->input_size != sizeof(struct amdgv_cmd_set_station_config_req_ual_v1) ||
+
+	if (cmd->input_size != sizeof(struct amdgv_cmd_station_config_ual_v1) ||
 			cmd->version != AMDGV_CMD_VERSION_V1 || !adev)
 		return AMDGV_CMD__ERROR_INVALID_INPUT;
 
@@ -842,6 +845,34 @@ static uint8_t amdgv_cmd_ual_set_station_config(amdgv_dev_t adev, struct amdgv_u
 	ret = amdgv_gpumon_ual_set_station_config(adev, &config);
 	if (ret)
 		return AMDGV_CMD__ERROR_GENERIC;
+
+	return AMDGV_CMD__SUCCESS;
+}
+
+static uint8_t amdgv_cmd_ual_get_station_config(amdgv_dev_t adev, struct amdgv_uni_cmd *cmd)
+{
+	struct amdgv_cmd_station_config_ual_v1 *output_data =
+		(struct amdgv_cmd_station_config_ual_v1 *)cmd->output_buff_raw;
+	struct amdgv_gpumon_station_config_ual_v1 config = {0};
+	int ret = AMDGV_CMD__ERROR_GENERIC;
+
+	if (cmd->input_size != sizeof(struct amdgv_cmd_get_station_config_req_ual_v1) ||
+			cmd->version != AMDGV_CMD_VERSION_V1 || !adev)
+		return AMDGV_CMD__ERROR_INVALID_INPUT;
+
+	if (sizeof(struct amdgv_cmd_station_config_ual_v1) > sizeof(cmd->output_buff_raw))
+		return AMDGV_CMD__ERROR_INVALID_INPUT;
+
+	ret = amdgv_gpumon_ual_get_station_config(adev, &config);
+	if (ret)
+		return AMDGV_CMD__ERROR_GENERIC;
+
+	output_data->num_stations = config.num_stations;
+	output_data->station_flag = config.station_flag;
+	oss_memcpy(output_data->lane_en_bitmap, config.lane_en_bitmap,
+		sizeof(output_data->lane_en_bitmap));
+
+	cmd->output_size = sizeof(struct amdgv_cmd_station_config_ual_v1);
 
 	return AMDGV_CMD__SUCCESS;
 }
@@ -918,6 +949,7 @@ static amdgv_cmd_func_map amdgv_cmd_ual_func[] = {
 	{AMDGV_CMD_UAL_SET_PPOD_CONFIG, amdgv_cmd_ual_set_ppod_config},
 	{AMDGV_CMD_UAL_SET_VPOD_CONFIG, amdgv_cmd_ual_set_vpod_config},
 	{AMDGV_CMD_UAL_SET_STATION_CONFIG, amdgv_cmd_ual_set_station_config},
+	{AMDGV_CMD_UAL_GET_STATION_CONFIG, amdgv_cmd_ual_get_station_config},
 	{AMDGV_CMD_UAL_PAUSE, amdgv_cmd_ual_pause},
 	{AMDGV_CMD_UAL_RESUME, amdgv_cmd_ual_resume},
 	{AMDGV_CMD_UAL_TRIGGER_MODE2, amdgv_cmd_ual_trigger_mode2},

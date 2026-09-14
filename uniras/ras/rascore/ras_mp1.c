@@ -173,6 +173,22 @@ int ras_mp1_get_record(struct ras_core_context *ras_core,
 	return ret;
 }
 
+int ras_mp1_get_ras_policy(struct ras_core_context *ras_core,
+		struct ras_mp1_policy_info *info)
+{
+	struct ras_mp1 *mp1 = &ras_core->ras_mp1;
+	int ret;
+
+	if (!mp1->ip_func || !mp1->ip_func->get_ras_policy)
+		return -RAS_CORE_EOPNOTSUPP;
+
+	oss_mutex_lock(&mp1->op_mutex);
+	ret = mp1->ip_func->get_ras_policy(ras_core, info);
+	oss_mutex_unlock(&mp1->op_mutex);
+
+	return ret;
+}
+
 int ras_mp1_sw_init(struct ras_core_context *ras_core)
 {
 	struct ras_mp1 *mp1 = &ras_core->ras_mp1;

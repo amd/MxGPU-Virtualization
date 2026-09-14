@@ -48,8 +48,7 @@ void amdgv_live_migration_set_abort_all(struct amdgv_adapter *adapt)
 	int i;
 
 	for (i = 0; i < adapt->num_vf; i++) {
-		if (adapt->live_migration.mig_state[i].state == AMDGV_MIGRATION_VF_STATE_PRE_COPY ||
-		    adapt->live_migration.mig_state[i].state == AMDGV_MIGRATION_VF_STATE_STOP_COPY) {
+		if (adapt->live_migration.mig_state[i].state != AMDGV_MIGRATION_VF_STATE_DEFAULT) {
 			AMDGV_DEBUG("VF[%d] migration aborted.\n", i);
 			AMDGV_MIGRATION_SET_ABORT(adapt, i);
 			adapt->live_migration.mig_state[i].is_target = false;
@@ -87,6 +86,15 @@ int amdgv_live_migration_set_vf_mig_state(struct amdgv_adapter *adapt, uint32_t 
 	return 0;
 }
 
+enum amdgv_migration_vf_state amdgv_migration_get_vf_state(struct amdgv_adapter *adapt,
+							   uint32_t idx_vf)
+{
+	if (idx_vf >= AMDGV_MAX_VF_NUM)
+		return AMDGV_MIGRATION_VF_STATE_DEFAULT;
+
+	return adapt->live_migration.mig_state[idx_vf].state;
+}
+
 void amdgv_live_migration_abort_check(struct amdgv_adapter *adapt, uint32_t idx_vf, enum amdgv_sched_event_id event_id)
 {
 	int i;
@@ -103,8 +111,7 @@ void amdgv_live_migration_abort_check(struct amdgv_adapter *adapt, uint32_t idx_
 	case AMDGV_EVENT_SCHED_RAS_FED:
 	case AMDGV_EVENT_SCHED_RAS_POISON_CREATION:
 		for (i = 0; i < adapt->num_vf; i++) {
-			if (adapt->live_migration.mig_state[i].state == AMDGV_MIGRATION_VF_STATE_PRE_COPY ||
-				adapt->live_migration.mig_state[i].state == AMDGV_MIGRATION_VF_STATE_STOP_COPY) {
+			if (adapt->live_migration.mig_state[i].state != AMDGV_MIGRATION_VF_STATE_DEFAULT) {
 				AMDGV_DEBUG("VF[%d] migration aborted by event %d\n", i, event_id);
 				AMDGV_MIGRATION_SET_ABORT(adapt, i);
 				adapt->live_migration.mig_state[i].is_target = false;
@@ -129,8 +136,7 @@ void amdgv_live_migration_abort_check(struct amdgv_adapter *adapt, uint32_t idx_
 	case AMDGV_EVENT_HANDLE_CRASH:
 	case AMDGV_EVENT_SCHED_RAS_POISON_CONSUMPTION:
 	case AMDGV_EVENT_SCHED_VF_REQ_GPU_INIT_XCHG_REGION:
-		if (adapt->live_migration.mig_state[idx_vf].state == AMDGV_MIGRATION_VF_STATE_PRE_COPY ||
-			adapt->live_migration.mig_state[idx_vf].state == AMDGV_MIGRATION_VF_STATE_STOP_COPY) {
+		if (adapt->live_migration.mig_state[idx_vf].state != AMDGV_MIGRATION_VF_STATE_DEFAULT) {
 			AMDGV_DEBUG("VF[%d] migration aborted by event %d\n", idx_vf, event_id);
 			AMDGV_MIGRATION_SET_ABORT(adapt, idx_vf);
 			adapt->live_migration.mig_state[idx_vf].is_target = false;
@@ -300,6 +306,23 @@ static int amdgv_migration_import_bad_pages(struct amdgv_adapter *adapt,
 	return 0;
 }
 
+/* No-op on ASICs that don't implement the hooks (e.g. MI*). */
+int amdgv_migration_boost_clk(struct amdgv_adapter *adapt)
+{
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->migration_boost_clk)
+		return adapt->pp.pp_funcs->migration_boost_clk(adapt);
+
+	return 0;
+}
+
+int amdgv_migration_restore_clk(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->migration_restore_clk)
+		return adapt->pp.pp_funcs->migration_restore_clk(adapt, idx_vf);
+
+	return 0;
+}
+
 static int amdgv_migration_prepare_transfer_vf_data(struct amdgv_adapter *adapt,
 						    uint32_t idx_vf)
 {
@@ -391,8 +414,26 @@ int amdgv_migration_transfer_manifest_data(struct amdgv_adapter *adapt, struct a
 			goto exit;
 		}
 
+		/* Boost UCLK for the PSP dynamic export transfer. Without the
+		 * boost the transfer would run at the default clock and time
+		 * out, so fail fast if the boost itself fails. The boost pins
+		 * SOFT_MIN last, so a failed boost never leaves the floor
+		 * pinned and needs no restore.
+		 */
+		ret = amdgv_migration_boost_clk(adapt);
+		if (ret) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_EXPORT_DYNAMIC_FAILED, 0);
+			goto exit;
+		}
+
 		ret = amdgv_psp_transfer_manifest_data(adapt, idx_vf,
 					amdgv_memmgr_get_gpu_addr(mem), size, PSP_MIGRATION_EXPORT_DYNAMIC_DATA);
+
+		/* Always restore after the transfer; the ASIC hook decides
+		 * whether a restore is actually required for this VF.
+		 */
+		amdgv_migration_restore_clk(adapt, idx_vf);
+
 		if (ret) {
 			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_EXPORT_DYNAMIC_FAILED, 0);
 			goto exit;
@@ -511,8 +552,30 @@ int amdgv_migration_transfer_manifest_data(struct amdgv_adapter *adapt, struct a
 			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_DYNAMIC_FAILED, 0);
 			goto exit;
 		}
+
+		/* Boost UCLK for the PSP dynamic import transfer. Without the
+		 * boost the transfer would run at the default clock and time
+		 * out, so fail fast if the boost itself fails. The boost pins
+		 * SOFT_MIN last, so a failed boost never leaves the floor
+		 * pinned and needs no restore.
+		 */
+		ret = amdgv_migration_boost_clk(adapt);
+		if (ret) {
+			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_DYNAMIC_FAILED, 0);
+			goto exit;
+		}
+
 		ret = amdgv_psp_transfer_manifest_data(adapt, idx_vf,
 					amdgv_memmgr_get_gpu_addr(mem), size, PSP_MIGRATION_IMPORT_DYNAMIC_DATA);
+
+		/* Always restore after the transfer; the ASIC hook decides
+		 * whether a restore is actually required for this VF (e.g. a
+		 * successful single-VF import keeps the boost, because PMFW
+		 * imports the freqs for the VF, which the host doesn't
+		 * overwrite).
+		 */
+		amdgv_migration_restore_clk(adapt, idx_vf);
+
 		if (ret) {
 			amdgv_put_log(idx_vf, AMDGV_LOG_IOV_LIVE_MIGRATION_IMPORT_DYNAMIC_FAILED, 0);
 			goto exit;
@@ -546,6 +609,16 @@ int amdgv_migration_transfer_manifest_data(struct amdgv_adapter *adapt, struct a
 		break;
 	}
 exit:
+	/* Latch the VF aborted on any driver-side migration failure: later
+	 * migration events short-circuit on AMDGV_MIGRATION_SHOULD_ABORT. Clear
+	 * is_target too so a failed import isn't left flagged as a valid target
+	 * (matches amdgv_live_migration_abort_check).
+	 */
+	if (ret && idx_vf < AMDGV_MAX_VF_NUM) {
+		AMDGV_MIGRATION_SET_ABORT(adapt, idx_vf);
+		adapt->live_migration.mig_state[idx_vf].is_target = false;
+	}
+
 	return ret;
 }
 
@@ -617,9 +690,6 @@ static int amdgv_migration_sw_init(struct amdgv_adapter *adapt)
 static int amdgv_migration_sw_fini(struct amdgv_adapter *adapt)
 {
 	int i;
-
-	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION))
-		return 0;
 
 	if (adapt->live_migration.static_data_mem) {
 		amdgv_memmgr_free(adapt->live_migration.static_data_mem);

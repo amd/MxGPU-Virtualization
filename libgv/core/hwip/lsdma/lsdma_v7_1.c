@@ -26,18 +26,6 @@ static int lsdma_v7_1_wait_for_lsdma_pio_cb(void *context)
 	return fifo_full;
 }
 
-#define DMA_COPY_CONTEXT_REGS 1
-static struct amdgv_reg_dump_info dma_copy_context_regs[DMA_COPY_CONTEXT_REGS] = {
-	{
-		.name = "LSDMA_PIO_STATUS",
-		.hwip = LSDMA_HWIP,
-		.seg = regLSDMA_PIO_STATUS_BASE_IDX,
-		.logical_inst = 0,
-		.offset_hwip = regLSDMA_PIO_STATUS,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-};
-
 static int lsdma_v7_1_lsdma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, bool fill_mode,
 				uint64_t src, uint64_t dst, uint64_t size, uint64_t *size_copied)
 {
@@ -50,9 +38,6 @@ static int lsdma_v7_1_lsdma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, b
 
 	cb_context.ctx = (void *)adapt;
 	cb_context.type = AMDGV_WAIT_FOR_LSDMA_PIO;
-	cb_context.ctx_ext = dma_copy_context_regs;
-	cb_context.num_ctx_ext = DMA_COPY_CONTEXT_REGS;
-
 
 	*size_copied = 0;
 	while ((*size_copied) < size) {

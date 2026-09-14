@@ -116,7 +116,12 @@ int amdgv_vfmgr_init_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, bool mb
 
 	if (adapt->vf_hbm_mgmt_mode == AMDGV_VF_HBM_MGMT_MODE_DRIVER_MANAGED) {
 		oss_vsnprintf(entry->vf_hbm_mgmt.name, sizeof(entry->vf_hbm_mgmt.name), "GIM-VF%d", idx_vf);
-		entry->vf_hbm_mgmt.numa_id = adapt->pf_numa_id + idx_vf + 1;
+#if 1
+		if (adapt->pf_numa_id >= 0)
+			entry->vf_hbm_mgmt.numa_id = adapt->pf_numa_id + idx_vf + 1;
+		else
+			entry->vf_hbm_mgmt.numa_id = 3 + idx_vf;
+#endif
 		entry->vf_hbm_mgmt.phy_addr = adapt->fb_pa + fb_offset;
 		entry->vf_hbm_mgmt.phy_size = fb_size;
 		entry->hbm_mgmt_handle = oss_hbm_drv_mgmt_init(entry->vf_hbm_mgmt.name,
@@ -175,7 +180,7 @@ void amdgv_vfmgr_set_pf_fb(struct amdgv_adapter *adapt)
 
 	amdgv_gpuiov_set_total_fb_consumed(adapt, (total_avail_fb - pf_fb_size));
 
-	amdgv_ffbm_page_table_update_by_fcn(adapt, AMDGV_PF_IDX);
+	amdgv_ffbm_page_table_update_by_fcn(adapt, AMDGV_PF_IDX, false);
 
 	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_PF_FB_SIZE, pf_fb_size);
 }
@@ -192,7 +197,7 @@ void amdgv_vfmgr_import_pf_fb(struct amdgv_adapter *adapt)
 	adapt->array_vf[AMDGV_PF_IDX].fb_size = total_avail_fb - total_fb_consumed;
 }
 
-static void amdgv_vfmgr_set_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf)
+static void amdgv_vfmgr_set_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, bool reserve)
 {
 	struct amdgv_vf_device *entry = &adapt->array_vf[idx_vf];
 
@@ -200,7 +205,7 @@ static void amdgv_vfmgr_set_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf)
 		return;
 
 	if (idx_vf != AMDGV_PF_IDX)
-		amdgv_ffbm_unmap_by_fcn(adapt, idx_vf, false);
+		amdgv_ffbm_unmap_by_fcn(adapt, idx_vf, reserve);
 
 	if (adapt->ffbm.enabled && adapt->ffbm.share_tmr)
 		amdgv_gpuiov_set_vf_fb(adapt, idx_vf, entry->fb_offset_tmr,
@@ -209,7 +214,7 @@ static void amdgv_vfmgr_set_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf)
 		amdgv_gpuiov_set_vf_fb(adapt, idx_vf, entry->fb_offset,
 				entry->fb_size);
 
-	amdgv_ffbm_page_table_update_by_fcn(adapt, idx_vf);
+	amdgv_ffbm_page_table_update_by_fcn(adapt, idx_vf, reserve);
 
 	amdgv_vfmgr_init_vf_fb(adapt, idx_vf, false, 0x00, 0);
 
@@ -582,7 +587,7 @@ int amdgv_vfmgr_vf_fb_resize(struct amdgv_adapter *adapt, uint32_t idx_vf, uint6
 	/* Reconfig vf fb layout. Apply to HW if no error. */
 	ret = amdgv_vfmgr_asymmetric_fb_reconfig(adapt, idx_vf, fb_size);
 	if (!ret) {
-		amdgv_vfmgr_set_vf_fb(adapt, idx_vf);
+		amdgv_vfmgr_set_vf_fb(adapt, idx_vf, false);
 
 		if (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM))
 			amdgv_vfmgr_map_vf_dev_res(adapt, idx_vf);
@@ -666,6 +671,9 @@ static void amdgv_vfmgr_init_vfs_fb_config_tmr(struct amdgv_adapter *adapt)
 	uint32_t vf_fb_offset_tmr, vf_fb_size_tmr, pf_fb_size, vf_fb_offset, vf_fb_size;
 	uint32_t total_usable_fb, total_vf_fb_size;
 	struct amdgv_vf_device *entry;
+
+	if (!adapt->psp.tmr_context.mem)
+		return;
 
 	amdgv_gpuiov_get_usable_fb_size(adapt, &total_usable_fb);
 
@@ -942,7 +950,7 @@ static void amdgv_vfmgr_reset_vfs_to_default_config(struct amdgv_adapter *adapt)
 
 	/* apply all vf settings before vf resource mapping */
 	for (idx_vf = 0; idx_vf < adapt->num_vf; idx_vf++)
-		amdgv_vfmgr_set_vf_fb(adapt, idx_vf);
+		amdgv_vfmgr_set_vf_fb(adapt, idx_vf, false);
 
 	for (idx_vf = 0; idx_vf < adapt->num_vf; idx_vf++) {
 		entry = &adapt->array_vf[idx_vf];
@@ -1010,6 +1018,52 @@ static void amdgv_vfmgr_remove_inactive_vfs(struct amdgv_adapter *adapt)
 	}
 }
 
+static enum amdgv_mem_id amdgv_vfmgr_table_id_to_memmgr_id(enum amd_sriov_msg_table_id_enum id)
+{
+	switch (id) {
+	case AMD_SRIOV_MSG_INITD_H_TABLE_ID:
+		return MEM_VF_INITD_H_TABLE;
+	case AMD_SRIOV_MSG_IPD_TABLE_ID:
+		return MEM_VF_IPD_TABLE;
+	case AMD_SRIOV_MSG_VBIOS_IMG_TABLE_ID:
+		return MEM_VF_VBIOS_IMG;
+	case AMD_SRIOV_MSG_RAS_TELEMETRY_TABLE_ID:
+		return MEM_VF_RAS_TELEMETRY_TABLE;
+	case AMD_SRIOV_MSG_DATAEXCHANGE_TABLE_ID:
+		return MEM_VF_DATAEXCHANGE_TABLE;
+	case AMD_SRIOV_MSG_BAD_PAGE_INFO_TABLE_ID:
+		return MEM_VF_BAD_PAGE_INFO_TABLE;
+
+	default:
+		return MEM_ID_UNKNOWN;
+	}
+}
+
+/*
+ * Release the VF exchange memory manager and everything reserved inside it.
+ *
+ * The manager is created on the guest driver's init path
+ * (amdgv_vfmgr_init_dynamic_crit_region_tables), so it must be torn down on
+ * every path that unconfigures the VF. Missing it leaves the allocations
+ * behind after the VM is powered off, which keeps the host driver heaps
+ * non-empty and makes the module refuse to unload.
+ */
+static void amdgv_vfmgr_fini_xchg_memmgr(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	struct amdgv_vf_device *entry = &adapt->array_vf[idx_vf];
+	int tb_idx;
+
+	if (!entry->xchg.memmgr_vf.is_init)
+		return;
+
+	for (tb_idx = 0; tb_idx < AMD_SRIOV_MSG_MAX_TABLE_ID; tb_idx++)
+		amdgv_memmgr_free_by_id(&entry->xchg.memmgr_vf,
+					amdgv_vfmgr_table_id_to_memmgr_id(tb_idx));
+
+	amdgv_memmgr_free_by_id(&entry->xchg.memmgr_vf, MEM_ECC_BAD_PAGE);
+	amdgv_memmgr_fini(adapt, &entry->xchg.memmgr_vf);
+}
+
 static void amdgv_vfmgr_remove_configured_vfs(struct amdgv_adapter *adapt)
 {
 	uint32_t idx_vf;
@@ -1029,11 +1083,18 @@ static void amdgv_vfmgr_remove_configured_vfs(struct amdgv_adapter *adapt)
 			if ((adapt->asic_type != CHIP_MI300X) &&
 			    (adapt->asic_type != CHIP_MI308X) &&
 			    (adapt->asic_type != CHIP_MI350X)) {
-				amdgv_sched_queue_flr_vf(adapt, idx_vf);
+
+				if (adapt->sched.event_thread == OSS_INVALID_HANDLE)
+					amdgv_sched_do_force_reset_vf(adapt, idx_vf, false);
+				else
+					amdgv_sched_queue_flr_vf(adapt, idx_vf);
 			}
 
 			/* remove vf from the scheduler */
-			amdgv_sched_queue_remove_vf(adapt, idx_vf);
+			if (adapt->sched.event_thread == OSS_INVALID_HANDLE)
+				amdgv_sched_do_remove_vf(adapt, idx_vf);
+			else
+				amdgv_sched_queue_remove_vf(adapt, idx_vf);
 		}
 
 		if (!(adapt->flags & AMDGV_FLAG_ENABLE_SVM)) {
@@ -1072,7 +1133,7 @@ static void amdgv_vfmgr_remove_configured_vfs(struct amdgv_adapter *adapt)
 		/* set its framebuffer to 0 */
 		amdgv_gpuiov_set_vf_fb(adapt, idx_vf, 0, 0);
 
-		amdgv_memmgr_fini(adapt, &adapt->array_vf[idx_vf].xchg.memmgr_vf);
+		amdgv_vfmgr_fini_xchg_memmgr(adapt, idx_vf);
 	}
 }
 
@@ -1538,7 +1599,7 @@ int amdgv_vfmgr_hw_init(struct amdgv_adapter *adapt)
 	for (idx_vf = 0; idx_vf < adapt->num_vf; idx_vf++) {
 		if (!adapt->array_vf[idx_vf].configured)
 			continue;
-		amdgv_vfmgr_set_vf_fb(adapt, idx_vf);
+		amdgv_vfmgr_set_vf_fb(adapt, idx_vf, false);
 
 		/* Guests that never negotiate rely on these defaults; without
 		 * them VBIOS and data exchange both land at offset 0.
@@ -1599,8 +1660,12 @@ int amdgv_vfmgr_hw_fini(struct amdgv_adapter *adapt)
 	amdgv_vfmgr_remove_configured_vfs(adapt);
 
 	/* if PF is enabled, remove pf from scheduler */
-	if (adapt->flags & AMDGV_FLAG_USE_PF)
-		amdgv_sched_queue_remove_vf(adapt, AMDGV_PF_IDX);
+	if (adapt->flags & AMDGV_FLAG_USE_PF) {
+		if (adapt->sched.event_thread == OSS_INVALID_HANDLE)
+			amdgv_sched_do_remove_vf(adapt, AMDGV_PF_IDX);
+		else
+			amdgv_sched_queue_remove_vf(adapt, AMDGV_PF_IDX);
+	}
 
 	return 0;
 }
@@ -1671,7 +1736,7 @@ static void amdgv_vfmgr_set_entry(struct amdgv_adapter *adapt, enum amdgv_set_vf
 			if (adapt->asymmetric_fb_enabled)
 				amdgv_vfmgr_vf_fb_resize(adapt, idx_vf, entry->fb_size);
 			else
-				amdgv_vfmgr_set_vf_fb(adapt, idx_vf);
+				amdgv_vfmgr_set_vf_fb(adapt, idx_vf, adapt->opt.reserve_ffbm_pteb);
 		}
 	}
 
@@ -1744,7 +1809,8 @@ int amdgv_vfmgr_free_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	/* clear VF FB on VM shutdown/Force-Off */
 	ret = amdgv_misc_clear_vf_fb(adapt, idx_vf, 0x00);
 	if (ret)
-		return ret;
+		AMDGV_WARN("%s free_vf: VF FB was not cleared, its content stays visible to the next VM assigned to this VF\n",
+			   amdgv_idx_to_str(idx_vf));
 
 	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION)
 		amdgv_dirtybit_clear_fb_dbit(adapt, idx_vf);
@@ -1777,9 +1843,16 @@ int amdgv_vfmgr_free_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 		amdgv_vfmgr_free_fb_block(adapt, amdgv_vfmgr_find_fb_block_by_fcn(adapt, idx_vf));
 
 	if (adapt->ffbm.enabled && idx_vf != AMDGV_PF_IDX)
-		amdgv_ffbm_unmap_by_fcn(adapt, idx_vf, false);
+		amdgv_ffbm_unmap_by_fcn(adapt, idx_vf, adapt->opt.reserve_ffbm_pteb);
 
 	amdgv_gpuiov_set_vf_fb(adapt, idx_vf, 0, 0);
+
+	/*
+	 * Clearing entry->configured above makes
+	 * amdgv_vfmgr_remove_configured_vfs() skip this VF at hw_fini, so this
+	 * is the last chance to release the exchange memory manager.
+	 */
+	amdgv_vfmgr_fini_xchg_memmgr(adapt, idx_vf);
 
 	return 0;
 }
@@ -1862,8 +1935,18 @@ int amdgv_vfmgr_set_vf_num(struct amdgv_adapter *adapt, uint32_t num_vf)
 		/* config has been changed, need disable customized_vf_config_mode */
 		if (cur_num_vf != num_vf)
 			adapt->customized_vf_config_mode = false;
+
 		/* re-init vf's sw config and FFBM WA */
 		amdgv_vfmgr_init_vfs_config_tmr(adapt, false);
+
+		if (adapt->opt.reserve_ffbm_pteb) {
+			/* build every slot's mapping once, it has to stay valid until
+			 * the next partition count change */
+			for (idx_vf = 0; idx_vf < adapt->num_vf; idx_vf++) {
+				amdgv_ffbm_unmap_by_fcn(adapt, idx_vf, false);
+				amdgv_ffbm_page_table_update_by_fcn(adapt, idx_vf, false);
+			}
+		}
 	}
 
 	if (cur_num_vf != num_vf) {
@@ -2306,27 +2389,6 @@ static void amdgv_vfmgr_init_dynamic_crit_region_table_sizes(struct amdgv_adapte
 		AMD_SRIOV_MSG_BAD_PAGE_SIZE_KB_V1);
 }
 
-static enum amdgv_mem_id amdgv_vfmgr_table_id_to_memmgr_id(enum amd_sriov_msg_table_id_enum id)
-{
-	switch (id) {
-	case AMD_SRIOV_MSG_INITD_H_TABLE_ID:
-		return MEM_VF_INITD_H_TABLE;
-	case AMD_SRIOV_MSG_IPD_TABLE_ID:
-		return MEM_VF_IPD_TABLE;
-	case AMD_SRIOV_MSG_VBIOS_IMG_TABLE_ID:
-		return MEM_VF_VBIOS_IMG;
-	case AMD_SRIOV_MSG_RAS_TELEMETRY_TABLE_ID:
-		return MEM_VF_RAS_TELEMETRY_TABLE;
-	case AMD_SRIOV_MSG_DATAEXCHANGE_TABLE_ID:
-		return MEM_VF_DATAEXCHANGE_TABLE;
-	case AMD_SRIOV_MSG_BAD_PAGE_INFO_TABLE_ID:
-		return MEM_VF_BAD_PAGE_INFO_TABLE;
-
-	default:
-		return MEM_ID_UNKNOWN;
-	}
-}
-
 static const char *amdgv_vfmgr_table_name(enum amd_sriov_msg_table_id_enum id)
 {
 	switch (id) {
@@ -2386,14 +2448,7 @@ static int amdgv_vfmgr_init_dynamic_crit_region_tables(struct amdgv_adapter *ada
 
 	if (entry->xchg.memmgr_vf.is_init) {
 		AMDGV_DEBUG("VF%d memmgr already initialized, cleaning up first\n", idx_vf);
-
-		for (tb_idx = 0; tb_idx < AMD_SRIOV_MSG_MAX_TABLE_ID; tb_idx++) {
-			amdgv_memmgr_free_by_id(&entry->xchg.memmgr_vf,
-						amdgv_vfmgr_table_id_to_memmgr_id(tb_idx));
-		}
-
-		amdgv_memmgr_free_by_id(&entry->xchg.memmgr_vf, MEM_ECC_BAD_PAGE);
-		amdgv_memmgr_fini(adapt, &entry->xchg.memmgr_vf);
+		amdgv_vfmgr_fini_xchg_memmgr(adapt, idx_vf);
 	}
 
 	/* Allocate a memory manager for the VF new critical region (incl. bad pages) */

@@ -60,7 +60,7 @@ static int gim_mig_query_dirtybit_data(struct gim_mig_device *gdev,
 					    uint64_t offset, uint64_t size,
 					    void *bitmap_addr, uint64_t bitmap_size, bool dbit_preserve)
 {
-	struct amdgv_query_dirty_bit_data bm_info;
+	struct amdgv_query_dirty_bit_data bm_info = { 0 };
 
 	bm_info.query_fb_offset = offset;
 	bm_info.query_size = size;
@@ -68,6 +68,8 @@ static int gim_mig_query_dirtybit_data(struct gim_mig_device *gdev,
 	bm_info.dbit_plane_data_size = bitmap_size;
 	bm_info.dbit_preserve = dbit_preserve;// clear the Dbit
 	bm_info.idx_vf = vf_idx;
+	/* Always set to true, due to multiple times are called to predict the dirty FB size */
+	bm_info.buffer_accumulate = true;
 
 	if (amdgv_query_dirtybit_data(gdev->pf_data->adev, &bm_info))
 		return -EFAULT;
@@ -178,7 +180,8 @@ static int gim_mig_vf_data_import(struct gim_mig_file *migf)
 		}
 		offset = sec->offset;
 		length = sec->length;
-		if (offset + length > migf->msg.size)
+		if (offset > migf->msg.size ||
+		    length > migf->msg.size - offset)
 			return -EINVAL;
 
 		if (!gim_mig_ctx_check(vf_ctx, (struct amdgv_migration_ctx *)((void *)hdr + offset)))
@@ -198,7 +201,8 @@ static int gim_mig_vf_data_import(struct gim_mig_file *migf)
 		}
 		offset = sec->offset;
 		length = sec->length;
-		if (offset + length > migf->msg.size)
+		if (offset > migf->msg.size ||
+		    length > migf->msg.size - offset)
 			return -EINVAL;
 
 		if (amdgv_migration_import(gdev->pf_data->adev, vf_ctx->vf_idx, (void *)hdr + offset,
@@ -216,7 +220,8 @@ static int gim_mig_vf_data_import(struct gim_mig_file *migf)
 		}
 		offset = sec->offset;
 		length = sec->length;
-		if (offset + length > migf->msg.size)
+		if (offset > migf->msg.size ||
+		    length > migf->msg.size - offset)
 			return -EINVAL;
 
 		if (amdgv_migration_import(gdev->pf_data->adev, vf_ctx->vf_idx, (void *)hdr + offset,
@@ -229,7 +234,8 @@ static int gim_mig_vf_data_import(struct gim_mig_file *migf)
 	if (sec->valid) {
 		offset = sec->offset;
 		length = sec->length;
-		if (offset + length > migf->msg.size)
+		if (offset > migf->msg.size ||
+		    length > migf->msg.size - offset)
 			return -EINVAL;
 
 		if (GIM_MIG_FB_PAGE_SIZE != ((1 << sec->granularity) << PAGE_SHIFT)) {

@@ -1518,7 +1518,7 @@ static int mi300_psp_sw_init(struct amdgv_adapter *adapt)
 	adapt->psp.ras_context.set_init_flag = true;
 	adapt->psp.skip_ta_fw_version = true;
 
-	if (adapt->asic_type == CHIP_MI350X)
+	if (adapt->asic_type == CHIP_MI350X && adapt->dev_id != 0x75A8)
 		adapt->psp.get_xgmi_fw_info = get_xgmi_fw_info;
 
 	if (psp_ret == PSP_STATUS__SUCCESS)

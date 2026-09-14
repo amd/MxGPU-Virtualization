@@ -12,19 +12,16 @@
 #include <string>
 #include <variant>
 
-class SmiSysfsReader {
+class SmiSysfsReader
+{
 public:
 	using SysfsValue = std::variant<int, std::string>;
-	enum class SysfsStatus {
-		Success = 0,
-		FileNotFound,
-		IOError,
-		ParseError
-	};
+	enum class SysfsStatus { Success = 0, FileNotFound, IOError, ParseError };
 
 	static SysfsStatus readAll(const std::string& filepath, std::vector<SysfsValue>& content);
 	static SysfsStatus readLine(const std::string& filepath, SysfsValue& content);
-	static SysfsStatus readBytes(const std::string& filepath, size_t offset, void* buf, size_t len);
+	static SysfsStatus readBytes(const std::string& filepath, size_t offset, void* buf,
+				     size_t len);
 	static bool exists(const std::string& filepath);
 
 	SmiSysfsReader() = delete;

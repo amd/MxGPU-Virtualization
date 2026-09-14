@@ -1035,6 +1035,9 @@ static int mi300_gpuiov_hw_fini(struct amdgv_adapter *adapt)
 		WREG32(SOC15_REG_OFFSET(NBIO, 0, regRCC_STRAP0_RCC_DEV0_EPF0_STRAP4), strap4);
 	}
 
+	/* quarter second delay to let transient vram traffic die down
+	 * before memory space disable */
+	oss_msleep(250);
 	mi300_gpuiov_toggle_vf_mse(adapt, false);
 
 	if (oss_atomic_read(adapt->in_sync_flood)) {
@@ -1060,8 +1063,6 @@ static int mi300_gpuiov_hw_init(struct amdgv_adapter *adapt)
 	int ret;
 	uint32_t xgmi_enable;
 	uint32_t strap4;
-	uint32_t cap;
-	uint16_t tmp;
 	uint32_t offset;
 
 	if (oss_atomic_read(adapt->in_ecc_recovery)) {
@@ -1123,14 +1124,7 @@ static int mi300_gpuiov_hw_init(struct amdgv_adapter *adapt)
 		}
 		AMDGV_DEBUG("PCI_ENABLE_SRIOV(num_vf=%d)\n", adapt->num_vf);
 
-		oss_pci_read_config_dword(adapt->dev, adapt->sriov_cap_pos + PCIE_EXT_SRIOV_CAP, &cap);
-		if (cap & PCIE_EXT_SRIOV_CAP_VF_10BIT_TAG) {
-			oss_pci_read_config_word(adapt->dev, adapt->sriov_cap_pos + PCIE_EXT_SRIOV_CTRL, &tmp);
-			tmp |= PCIE_EXT_SRIOV_CTRL_VF_10BIT_TAG;
-			oss_pci_write_config_word(adapt->dev,
-				adapt->sriov_cap_pos + PCIE_EXT_SRIOV_CTRL, tmp);
-		}
-
+		amdgv_enable_sriov_10bit_tag(adapt);
 	} else {
 		/* Need to disable VF, before enabling it back */
 		if (adapt->asic_type == CHIP_MI350X || adapt->asic_type == CHIP_MI300X) {

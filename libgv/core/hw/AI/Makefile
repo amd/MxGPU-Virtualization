@@ -26,6 +26,9 @@ LIBGV_HW_MI308_LOCAL = mi308_ucode.o mi308_mcp.o
 
 LIBGV_HW_MI350_LOCAL = mi350_ucode.o mi350_powerplay.o mi350_vcn.o
 
+LIBGV_HW_MI350P_LOCAL = mi350p_ucode.o
+
 LIBGV_HW_AI_FILES += $(addprefix mi300/,$(LIBGV_HW_MI300_LOCAL))
 LIBGV_HW_AI_FILES += $(addprefix mi300/mi308/,$(LIBGV_HW_MI308_LOCAL))
 LIBGV_HW_AI_FILES += $(addprefix mi300/mi350/,$(LIBGV_HW_MI350_LOCAL))
+LIBGV_HW_AI_FILES += $(addprefix mi300/mi350/mi350p/,$(LIBGV_HW_MI350P_LOCAL))

@@ -196,7 +196,7 @@ static int navi32_ffbm_invalidate_tlb(struct amdgv_adapter *adapt, struct amdgv_
 
 	navi32_ffbm_request_access(adapt, false);
 
-	return 0;
+	return wait_ret;
 }
 
 static int navi32_ffbm_sw_init(struct amdgv_adapter *adapt)

@@ -17,7 +17,7 @@ int amdgv_mca_get_new_banks(struct amdgv_adapter *adapt, enum amdgv_mca_error_ty
 	if (adapt->mca.funcs && adapt->mca.funcs->get_new_banks) {
 		ret = adapt->mca.funcs->get_new_banks(adapt, type);
 	} else {
-		AMDGV_ERROR("Cannot get MCA bank info\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_MCA_FUNC_UNAVAILABLE, 0);
 		ret = AMDGV_FAILURE;
 	}
 
@@ -34,7 +34,7 @@ int amdgv_mca_reset_block_error_count(struct amdgv_adapter *adapt, enum amdgv_ra
 	} else if (adapt->mca.funcs->reset_block_error_count) {
 		ret = adapt->mca.funcs->reset_block_error_count(adapt, block);
 	} else {
-		AMDGV_ERROR("Cannot reset MCA block error count\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_MCA_FUNC_UNAVAILABLE, 1);
 		ret = AMDGV_FAILURE;
 	}
 
@@ -49,7 +49,7 @@ int amdgv_mca_decode_block(struct amdgv_adapter *adapt, struct mca_bank_entry *b
 	if (adapt->mca.funcs && adapt->mca.funcs->decode_block) {
 		ret = adapt->mca.funcs->decode_block(adapt, bank, block);
 	} else {
-		AMDGV_ERROR("Cannot decode MCA Bank\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_MCA_FUNC_UNAVAILABLE, 2);
 		ret = AMDGV_FAILURE;
 	}
 
@@ -145,6 +145,10 @@ int amdgv_mca_count_cache_put(struct amdgv_adapter *adapt,
 {
 	uint32_t idx_vf;
 
+	/* See amdgv_mca_count_cache_client_get() for the legacy ras_cap guard. */
+	if (block >= AMDGV_RAS_BLOCK__LAST)
+		return 0;
+
 	if (!(adapt->ecc.ras_cap & BIT(block)))
 		return 0;
 
@@ -171,6 +175,14 @@ int amdgv_mca_count_cache_client_get(struct amdgv_adapter *adapt,
 	int ret = 0;
 	struct amdgv_mca_error_count_cache_client *client;
 	struct amdgv_mca_error_count_cache *cache;
+
+	/*
+	 * ras_cap is a legacy bitmask indexed by AMDGV_RAS_BLOCK__* (0..LAST-1).
+	 * Callers may pass SMI ordinals (which extend further for UniRAS blocks);
+	 * guard before BIT() to avoid shift UB and skip blocks this path does not track.
+	 */
+	if (block >= AMDGV_RAS_BLOCK__LAST)
+		return 0;
 
 	if (!(adapt->ecc.ras_cap & BIT(block)))
 		return 0;
@@ -245,7 +257,7 @@ int amdgv_mca_cache_notify_event(struct amdgv_adapter *adapt,
 		break;
 	case MCA_CACHE_EVENT_NUM_VF_CHANGE:
 		if (param > 1) {
-			AMDGV_WARN("RAS VF Telemetry is not supported for multi-VF");
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_MCA_VF_TELEMETRY_MULTI_VF_UNSUPPORTED, 0);
 			for (tmp_vf = 0; tmp_vf < adapt->num_vf; tmp_vf++)
 				amdgv_mca_count_cache_remove_client(adapt, tmp_vf);
 			break;
@@ -258,7 +270,7 @@ int amdgv_mca_cache_notify_event(struct amdgv_adapter *adapt,
 		}
 		break;
 	default:
-		AMDGV_WARN("Unsupported MCA cache notify event: %d\n", event);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_MCA_UNSUPPORTED_CACHE_EVENT, event);
 		break;
 	}
 
@@ -276,7 +288,7 @@ static enum cper_error_severity amdgv_mca_type_to_cper_sev(struct amdgv_adapter 
 	case AMDGV_MCA_ERROR_TYPE_DE:
 		return CPER_SEV_NON_FATAL_UNCORRECTED;
 	default:
-		AMDGV_ERROR("Unknown MCA Type!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_MCA_UNKNOWN_TYPE, type);
 		return CPER_SEV_FATAL;
 	}
 }
@@ -441,7 +453,7 @@ int amdgv_mca_export_live_data(struct amdgv_adapter *adapt, struct amdgv_live_in
 	// Export mca client cache data
 	for (idx_live_data = 0; idx_live_data < adapt->num_vf + 1; idx_live_data++) {
 		if (idx_live_data >= AMDGV_MAX_VF_LIVE) {
-			AMDGV_ERROR("VF MGR export live data error, slot# %u, %u live update slots\n", idx_live_data, AMDGV_MAX_VF_LIVE);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_LIVE_UPDATE_SLOT_OVERFLOW, AMDGV_LOG_DATA_32_32(idx_live_data, AMDGV_MAX_VF_LIVE));
 			return AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
 		}
 
@@ -455,7 +467,7 @@ int amdgv_mca_export_live_data(struct amdgv_adapter *adapt, struct amdgv_live_in
 		for (i = 0; i < AMDGV_RAS_BLOCK_COUNT; i++) {
 
 			if (i >= AMDGV_LIVE_MAX_RAS_BLOCK) {
-				AMDGV_ERROR("VF MGR export live data error, ras block# %u, %u ras blocks\n", i, AMDGV_LIVE_MAX_RAS_BLOCK);
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_LIVE_UPDATE_RAS_BLOCK_OVERFLOW, AMDGV_LOG_DATA_32_32(i, AMDGV_LIVE_MAX_RAS_BLOCK));
 				return AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
 			}
 
@@ -478,7 +490,7 @@ int amdgv_mca_export_live_data(struct amdgv_adapter *adapt, struct amdgv_live_in
 	for (i = 0; i < AMDGV_RAS_BLOCK_COUNT; i++) {
 
 		if (i >= AMDGV_LIVE_MAX_RAS_BLOCK) {
-			AMDGV_ERROR("VF MGR export live data error, ras block# %u, %u ras blocks\n", i, AMDGV_LIVE_MAX_RAS_BLOCK);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_LIVE_UPDATE_RAS_BLOCK_OVERFLOW, AMDGV_LOG_DATA_32_32(i, AMDGV_LIVE_MAX_RAS_BLOCK));
 			return AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
 		}
 
@@ -486,7 +498,7 @@ int amdgv_mca_export_live_data(struct amdgv_adapter *adapt, struct amdgv_live_in
 		for (j = 0; j < adapt->mca.max_aid_xcd_num; j++) {
 
 			if (j >= AMDGV_LIVE_MAX_XCD_NUM) {
-				AMDGV_ERROR("VF MGR export live data error, xcd# %u, %u xcds\n", j, AMDGV_LIVE_MAX_XCD_NUM);
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_LIVE_UPDATE_XCD_OVERFLOW, AMDGV_LOG_DATA_32_32(j, AMDGV_LIVE_MAX_XCD_NUM));
 				return AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
 			}
 
@@ -517,7 +529,7 @@ int amdgv_mca_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_in
 	// Import mca client cache data
 	for (idx_live_data = 0; idx_live_data < adapt->num_vf + 1; idx_live_data++) {
 		if (idx_live_data >= AMDGV_MAX_VF_LIVE) {
-			AMDGV_ERROR("VF MGR import live data error, slot# %u, %u live update slots\n", idx_live_data, AMDGV_MAX_VF_LIVE);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_LIVE_UPDATE_SLOT_OVERFLOW, AMDGV_LOG_DATA_32_32(idx_live_data, AMDGV_MAX_VF_LIVE));
 			return AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
 		}
 
@@ -531,7 +543,7 @@ int amdgv_mca_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_in
 		for (i = 0; i < AMDGV_RAS_BLOCK_COUNT; i++) {
 
 			if (i >= AMDGV_LIVE_MAX_RAS_BLOCK) {
-				AMDGV_ERROR("VF MGR import live data error, ras block# %u, %u ras blocks\n", i, AMDGV_LIVE_MAX_RAS_BLOCK);
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_LIVE_UPDATE_RAS_BLOCK_OVERFLOW, AMDGV_LOG_DATA_32_32(i, AMDGV_LIVE_MAX_RAS_BLOCK));
 				return AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
 			}
 
@@ -554,7 +566,7 @@ int amdgv_mca_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_in
 	for (i = 0; i < AMDGV_RAS_BLOCK_COUNT; i++) {
 
 		if (i >= AMDGV_LIVE_MAX_RAS_BLOCK) {
-			AMDGV_ERROR("VF MGR import live data error, ras block# %u, %u ras blocks\n", i, AMDGV_LIVE_MAX_RAS_BLOCK);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_LIVE_UPDATE_RAS_BLOCK_OVERFLOW, AMDGV_LOG_DATA_32_32(i, AMDGV_LIVE_MAX_RAS_BLOCK));
 			return AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
 		}
 
@@ -562,7 +574,7 @@ int amdgv_mca_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_in
 		for (j = 0; j < adapt->mca.max_aid_xcd_num; j++) {
 
 			if (j >= AMDGV_LIVE_MAX_XCD_NUM) {
-				AMDGV_ERROR("VF MGR import live data error, xcd# %u, %u xcds\n", j, AMDGV_LIVE_MAX_XCD_NUM);
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_LIVE_UPDATE_XCD_OVERFLOW, AMDGV_LOG_DATA_32_32(j, AMDGV_LIVE_MAX_XCD_NUM));
 				return AMDGV_LIVE_INFO_STATUS_GENERIC_ERROR;
 			}
 

@@ -256,4 +256,10 @@ int amdgv_memmgr_alloc_deferred_region(struct amdgv_memmgr *memmgr);
 
 bool amdgv_memmgr_addr_in_range(struct amdgv_adapter *adapt, struct amdgv_memmgr *memmgr, uint64_t addr);
 
+int amdgv_memmgr_replace_bad_pages(struct amdgv_adapter *adapt);
+int amdgv_memmgr_replace_pending_bad_pages(struct amdgv_adapter *adapt, struct amdgv_memmgr *memmgr);
+bool amdgv_memmgr_has_pending_reservations(struct amdgv_memmgr *memmgr);
+uint64_t amdgv_memmgr_get_mem_list_size(struct amdgv_memmgr *memmgr,
+		struct amdgv_memmgr_mem *mem_list);
+int amdgv_memmgr_resize(struct amdgv_adapter *adapt, struct amdgv_memmgr *memmgr);
 #endif

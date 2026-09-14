@@ -107,17 +107,33 @@ static int amdgv_ras_mce_notifier(void *dev, unsigned int id, unsigned long val,
 	return 0;
 }
 
+static bool amdgv_ras_mce_supported(struct amdgv_adapter *adapt)
+{
+	return adapt->xgmi.connected_to_cpu;
+}
+
 int amdgv_ras_mce_sw_init(struct amdgv_adapter *adapt)
 {
-	oss_register_mce_notifier(adapt, amdgv_ras_mce_notifier);
+	int ret;
+
+	if (!amdgv_ras_mce_supported(adapt))
+		return 0;
+
+	ret = oss_register_mce_notifier(adapt, amdgv_ras_mce_notifier);
+	if (ret)
+		RAS_DEV_WARN(adapt, "MCE notifier register failed: %d\n", ret);
 
 	return 0;
 }
 
 int amdgv_ras_mce_sw_fini(struct amdgv_adapter *adapt)
 {
-	int ret = oss_unregister_mce_notifier(adapt);
+	int ret;
 
+	if (!amdgv_ras_mce_supported(adapt))
+		return 0;
+
+	ret = oss_unregister_mce_notifier(adapt);
 	if (ret == -RAS_CORE_ENOENT)
 		RAS_DEV_WARN(adapt, "MCE notifier unregister: dev not registered\n");
 

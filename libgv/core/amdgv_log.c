@@ -512,13 +512,31 @@ static int amdgv_log_format_text_ext(const struct log_text *log_text, uint64_t d
 	text_ptr = log_text->text + oss_strlen(AMDGV_LOG_PRINT_HEADER);
 
 	switch (log_text->arg_type) {
+	case LOG_DATA_ARG_SEVEN_64_EXT:
+		oss_vsnprintf(buf, size, text_ptr, data,
+			data_ext[0], data_ext[1], data_ext[2], data_ext[3],
+			data_ext[4], data_ext[5]);
+		break;
+	case LOG_DATA_ARG_SIX_64_EXT:
+		oss_vsnprintf(buf, size, text_ptr, data,
+			data_ext[0], data_ext[1], data_ext[2], data_ext[3],
+			data_ext[4]);
+		break;
 	case LOG_DATA_ARG_FIVE_64_EXT:
 		oss_vsnprintf(buf, size, text_ptr, data,
 			data_ext[0], data_ext[1], data_ext[2], data_ext[3]);
 		break;
+	case LOG_DATA_ARG_FOUR_64_EXT:
+		oss_vsnprintf(buf, size, text_ptr, data,
+			data_ext[0], data_ext[1], data_ext[2]);
+		break;
 	case LOG_DATA_ARG_THREE_64_EXT:
 		oss_vsnprintf(buf, size, text_ptr, data,
 			data_ext[0], data_ext[1]);
+		break;
+	case LOG_DATA_ARG_TWO_64_EXT:
+		oss_vsnprintf(buf, size, text_ptr, data,
+			data_ext[0]);
 		break;
 	default:
 		return 0;
@@ -639,16 +657,39 @@ static int amdgv_log_kprint_ext(uint32_t pf_bdf, uint32_t idx_vf,
 	}
 
 	switch (log_text->arg_type) {
+	case LOG_DATA_ARG_SEVEN_64_EXT:
+		oss_print(print_level, log_text->text, print_header, (pf_bdf >> 16), (pf_bdf >> 8) & (0xff),
+			  (pf_bdf >> 3) & (0x1f), (pf_bdf) & (0x7), str_vf, func_name,
+			  line_num, data, data_ext[0], data_ext[1],
+			  data_ext[2], data_ext[3], data_ext[4], data_ext[5]);
+		break;
+	case LOG_DATA_ARG_SIX_64_EXT:
+		oss_print(print_level, log_text->text, print_header, (pf_bdf >> 16), (pf_bdf >> 8) & (0xff),
+			  (pf_bdf >> 3) & (0x1f), (pf_bdf) & (0x7), str_vf, func_name,
+			  line_num, data, data_ext[0], data_ext[1],
+			  data_ext[2], data_ext[3], data_ext[4]);
+		break;
 	case LOG_DATA_ARG_FIVE_64_EXT:
 		oss_print(print_level, log_text->text, print_header, (pf_bdf >> 16), (pf_bdf >> 8) & (0xff),
 			  (pf_bdf >> 3) & (0x1f), (pf_bdf) & (0x7), str_vf, func_name,
 			  line_num, data, data_ext[0], data_ext[1],
 			  data_ext[2], data_ext[3]);
 		break;
+	case LOG_DATA_ARG_FOUR_64_EXT:
+		oss_print(print_level, log_text->text, print_header, (pf_bdf >> 16), (pf_bdf >> 8) & (0xff),
+			  (pf_bdf >> 3) & (0x1f), (pf_bdf) & (0x7), str_vf, func_name,
+			  line_num, data, data_ext[0], data_ext[1],
+			  data_ext[2]);
+		break;
 	case LOG_DATA_ARG_THREE_64_EXT:
 		oss_print(print_level, log_text->text, print_header, (pf_bdf >> 16), (pf_bdf >> 8) & (0xff),
 			  (pf_bdf >> 3) & (0x1f), (pf_bdf) & (0x7), str_vf, func_name,
 			  line_num, data, data_ext[0], data_ext[1]);
+		break;
+	case LOG_DATA_ARG_TWO_64_EXT:
+		oss_print(print_level, log_text->text, print_header, (pf_bdf >> 16), (pf_bdf >> 8) & (0xff),
+			  (pf_bdf >> 3) & (0x1f), (pf_bdf) & (0x7), str_vf, func_name,
+			  line_num, data, data_ext[0]);
 		break;
 	default:
 		return 0;
@@ -855,10 +896,18 @@ void amdgv_put_event(amdgv_dev_t dev, uint32_t idx_vf, uint32_t log_code,
 static int amdgv_log_arg_type_to_arg_ext_num(uint8_t arg_type)
 {
 	switch (arg_type) {
+	case LOG_DATA_ARG_SEVEN_64_EXT:
+		return 6; /* data + 6 variadic args*/
+	case LOG_DATA_ARG_SIX_64_EXT:
+		return 5; /* data + 5 variadic args*/
 	case LOG_DATA_ARG_FIVE_64_EXT:
 		return 4; /* data + 4 variadic args*/
+	case LOG_DATA_ARG_FOUR_64_EXT:
+		return 3; /* data + 3 variadic args*/
 	case LOG_DATA_ARG_THREE_64_EXT:
 		return 2; /* data + 2 variadic args*/
+	case LOG_DATA_ARG_TWO_64_EXT:
+		return 1; /* data + 1 variadic arg*/
 	default:
 		return 0;
 	}

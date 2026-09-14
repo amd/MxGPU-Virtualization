@@ -23,8 +23,7 @@ static void gim_lock_device_list(void)
 	pthread_mutex_lock(&gim_device_list_lock);
 }
 
-static void gim_get_device_list(struct smi_device_data *dev_list,
-				int *size)
+static void gim_get_device_list(struct smi_device_data *dev_list, int *size)
 {
 	struct gim_dev_data *dev_data;
 	int i = 0;
@@ -43,9 +42,9 @@ static void gim_get_device_list(struct smi_device_data *dev_list,
 				  SMI_MAX_DEVICES);
 			break;
 		}
-		memcpy(&dev_list[i].init_data, &dev_data->init_data,
-			sizeof(struct amdgv_init_data));
-		dev_list[i].adev = dev_data->adev;
+		memcpy(
+		    &dev_list[i].init_data, &dev_data->init_data, sizeof(struct amdgv_init_data));
+		dev_list[i].adev   = dev_data->adev;
 		dev_list[i].parent = -1; // Implement later: dev_data->parent;
 		i++;
 	}
@@ -58,12 +57,11 @@ static void gim_unlock_device_list(void)
 	pthread_mutex_unlock(&gim_device_list_lock);
 }
 
-static struct gim_dev_data *
-gim_get_device_data_from_adev(struct gim_drv *vfio_drv,
-	amdgv_dev_t adev)
+static struct gim_dev_data *gim_get_device_data_from_adev(struct gim_drv *vfio_drv,
+							  amdgv_dev_t adev)
 {
 	struct gim_dev_data *dev_data = NULL;
-	bool found = false;
+	bool found		      = false;
 
 	pthread_mutex_lock(&gim_device_list_lock);
 	SLIST_FOREACH(dev_data, &vfio_drv->head, entries)
@@ -78,8 +76,7 @@ gim_get_device_data_from_adev(struct gim_drv *vfio_drv,
 	return (found == true) ? dev_data : NULL;
 }
 
-static void gim_get_device_data(amdgv_dev_t adev,
-	struct smi_device_data *ret_dev_data)
+static void gim_get_device_data(amdgv_dev_t adev, struct smi_device_data *ret_dev_data)
 {
 	struct gim_dev_data *dev_data = NULL;
 	struct gim_drv *vfio_drv;
@@ -101,9 +98,9 @@ static void gim_get_device_data(amdgv_dev_t adev,
 	}
 
 	if (ret_dev_data) {
-		memcpy(&ret_dev_data->init_data, &dev_data->init_data,
-			sizeof(struct amdgv_init_data));
-		ret_dev_data->adev = dev_data->adev;
+		memcpy(
+		    &ret_dev_data->init_data, &dev_data->init_data, sizeof(struct amdgv_init_data));
+		ret_dev_data->adev   = dev_data->adev;
 		ret_dev_data->parent = -1; // Implement later: dev_data->parent;
 	}
 
@@ -154,19 +151,24 @@ static void gim_generate_date_string(char *buf, uint64_t utime)
 	}
 
 	utc_timestamp = gim_gpumon_time_to_utc(utime);
-	utc_sec = utc_timestamp / 1000000;
-	millisec = (utc_timestamp / 1000) % 1000;
+	utc_sec	      = utc_timestamp / 1000000;
+	millisec      = (utc_timestamp / 1000) % 1000;
 
 	utc_time = gmtime(&utc_sec);
 
-	snprintf(buf, SMI_MAX_DATE_LENGTH, SMI_DATE_FORMAT,
-		utc_time->tm_year + 1900, utc_time->tm_mon + 1,
-		utc_time->tm_mday, utc_time->tm_hour, utc_time->tm_min,
-		utc_time->tm_sec, (int)millisec);
+	snprintf(buf,
+		 SMI_MAX_DATE_LENGTH,
+		 SMI_DATE_FORMAT,
+		 utc_time->tm_year + 1900,
+		 utc_time->tm_mon + 1,
+		 utc_time->tm_mday,
+		 utc_time->tm_hour,
+		 utc_time->tm_min,
+		 utc_time->tm_sec,
+		 (int)millisec);
 }
 
-static int gim_get_pcie_confs(amdgv_dev_t adev,
-	int *speed, int *width, int *max_vf_num)
+static int gim_get_pcie_confs(amdgv_dev_t adev, int *speed, int *width, int *max_vf_num)
 {
 	int ret = 0;
 	struct gim_dev_data *dev_data;
@@ -184,9 +186,8 @@ static int gim_get_pcie_confs(amdgv_dev_t adev,
 		return -EIO;
 	}
 
-	ret = amdgv_gpumon_get_pcie_confs(adev, dev_data,
-			gim_gpumon_get_pcie_confs,
-			speed, width, max_vf_num);
+	ret = amdgv_gpumon_get_pcie_confs(
+	    adev, dev_data, gim_gpumon_get_pcie_confs, speed, width, max_vf_num);
 
 	return ret;
 }
@@ -217,36 +218,61 @@ static int gim_get_driver_version(amdgv_dev_t adev, uint32_t *length, char *vers
 
 	if (smi_oss_funcs->strnstr(gim_driver_version, "staging", STRLEN_NORMAL) != -1) {
 		client_id = 'K';
-		major = 0;
-		subminor = 0;
-		minor = 0;
-		*length = smi_vsnprintf(version, SMI_MAX_STRING_LENGTH,
-			"%d.%d.%d+%c", major, minor, subminor, client_id);
+		major	  = 0;
+		subminor  = 0;
+		minor	  = 0;
+		*length	  = smi_vsnprintf(version,
+					  SMI_MAX_STRING_LENGTH,
+					  "%d.%d.%d+%c",
+					  major,
+					  minor,
+					  subminor,
+					  client_id);
 	} else {
 		if ((sscanf(gim_driver_version, "%c", &client_id) == 1) &&
-			((client_id >= 'a' && client_id <= 'z') ||
-			(client_id >= 'A' && client_id <= 'Z'))) {
-			if (sscanf(gim_driver_version, "%c.%u.%u.%u", &client_id,
-				&major, &minor, &subminor) != 4) {
+		    ((client_id >= 'a' && client_id <= 'z') ||
+		     (client_id >= 'A' && client_id <= 'Z'))) {
+			if (sscanf(gim_driver_version,
+				   "%c.%u.%u.%u",
+				   &client_id,
+				   &major,
+				   &minor,
+				   &subminor) != 4) {
 				client_id = '-';
-				major = 0;
-				subminor = 0;
-				minor = 0;
+				major	  = 0;
+				subminor  = 0;
+				minor	  = 0;
 			}
-			*length = smi_vsnprintf(version, SMI_MAX_STRING_LENGTH,
-				"%c.%u.%u.%u", client_id, major, minor, subminor);
+			*length = smi_vsnprintf(version,
+						SMI_MAX_STRING_LENGTH,
+						"%c.%u.%u.%u",
+						client_id,
+						major,
+						minor,
+						subminor);
 		} else {
 			char special_character;
-			if ((sscanf(gim_driver_version, "%u.%u.%u%c%c", &major, &minor,
-				&subminor, &special_character, &client_id) != 5) ||
-				(special_character != '+' &&  special_character == '.')) {
+			if ((sscanf(gim_driver_version,
+				    "%u.%u.%u%c%c",
+				    &major,
+				    &minor,
+				    &subminor,
+				    &special_character,
+				    &client_id) != 5) ||
+			    (special_character != '+' && special_character == '.')) {
 				client_id = '-';
-				major = 0;
-				subminor = 0;
-				minor = 0;
+				major	  = 0;
+				subminor  = 0;
+				minor	  = 0;
 			}
-			*length = smi_vsnprintf(version, SMI_MAX_STRING_LENGTH,
-			"%u.%u.%u%c%c", major, minor, subminor, special_character, client_id);
+			*length = smi_vsnprintf(version,
+						SMI_MAX_STRING_LENGTH,
+						"%u.%u.%u%c%c",
+						major,
+						minor,
+						subminor,
+						special_character,
+						client_id);
 		}
 	}
 
@@ -260,19 +286,21 @@ static int gim_get_driver_id(uint8_t *driver_id)
 	return 0;
 }
 
-static int gim_get_profile_info(amdgv_dev_t adev,
-	struct smi_profile_info *profile_info)
+static int gim_get_profile_info(amdgv_dev_t adev, struct smi_profile_info *profile_info)
 {
 	return SMI_STATUS_NOT_SUPPORTED;
 }
 
-static int gim_create_event(struct smi_ctx *ctx, amdgv_dev_t *adev,
-	uint64_t dev_id, uint64_t event_mask)
+static int
+gim_create_event(struct smi_ctx *ctx, amdgv_dev_t *adev, uint64_t dev_id, uint64_t event_mask)
 {
 	return SMI_STATUS_NOT_SUPPORTED;
 }
 
-static int gim_read_event(struct smi_ctx *ctx, amdgv_dev_t *adev, uint64_t dev_id, struct smi_event_entry *event)
+static int gim_read_event(struct smi_ctx *ctx,
+			  amdgv_dev_t *adev,
+			  uint64_t dev_id,
+			  struct smi_event_entry *event)
 {
 	return SMI_STATUS_NOT_SUPPORTED;
 }
@@ -294,66 +322,71 @@ static int gim_get_driver_model(amdgv_dev_t adev, enum smi_driver_model_type *dr
 }
 
 static int gim_get_partition(struct smi_profile_configs *profile_configs,
-				   struct amdgv_gpumon_accelerator_partition_profile_config *caps)
+			     struct amdgv_gpumon_accelerator_partition_profile_config *caps)
 {
 	return SMI_STATUS_NOT_SUPPORTED;
 }
 
 static int gim_get_partition_global(struct smi_profile_configs_global *profile_configs_global,
-				struct amdgv_gpumon_accelerator_partition_profile_config *caps)
+				    struct amdgv_gpumon_accelerator_partition_profile_config *caps)
 {
 	return SMI_STATUS_NOT_SUPPORTED;
 }
 
-static int gim_get_metric_table(struct smi_metrics_table *metrics_table, uint16_t size,
-				   struct amdgv_gpumon_metrics_ext *gpumon_metrics_table)
+static int gim_get_metric_table(struct smi_metrics_table *metrics_table,
+				uint16_t size,
+				struct amdgv_gpumon_metrics_ext *gpumon_metrics_table)
 {
 	return SMI_STATUS_NOT_SUPPORTED;
 }
 
-static int gim_get_eeprom_table(struct smi_bad_page_info *eeprom_table, uint16_t size, uint32_t bp_cnt,
-				   struct amdgv_smi_ras_eeprom_table_record *gpumon_eeprom_table)
+static int gim_get_eeprom_table(struct smi_bad_page_info *eeprom_table,
+				uint16_t size,
+				uint32_t bp_cnt,
+				struct amdgv_smi_ras_eeprom_table_record *gpumon_eeprom_table)
 {
 	return SMI_STATUS_NOT_SUPPORTED;
 }
 
-static int gim_get_cper_data(struct smi_cper_config *cper_config, uint16_t in_len, uint64_t size, char* buffer, uint64_t write_count,
-				   uint32_t* smi_cper_hdrs)
+static int gim_get_cper_data(struct smi_cper_config *cper_config,
+			     uint16_t in_len,
+			     uint64_t size,
+			     char *buffer,
+			     uint64_t write_count,
+			     uint32_t *smi_cper_hdrs)
 {
 	return SMI_STATUS_NOT_SUPPORTED;
 }
 
-struct smi_shim_interface gim_smi_interfaces = {
-	.lock_device_list = gim_lock_device_list,
-	.get_device_list = gim_get_device_list,
-	.unlock_device_list = gim_unlock_device_list,
-	.get_shim_log_level = gim_get_log_level,
-	.get_device_data = gim_get_device_data,
-	.put_handle = gim_put_handle,
+struct smi_shim_interface gim_smi_interfaces = {.lock_device_list   = gim_lock_device_list,
+						.get_device_list    = gim_get_device_list,
+						.unlock_device_list = gim_unlock_device_list,
+						.get_shim_log_level = gim_get_log_level,
+						.get_device_data    = gim_get_device_data,
+						.put_handle	    = gim_put_handle,
 
-	.set_file_private_data = NULL,
-	.get_file_private_data = NULL,
-	.verify_file_descriptor = NULL,
+						.set_file_private_data	= NULL,
+						.get_file_private_data	= NULL,
+						.verify_file_descriptor = NULL,
 
-	.generate_date_string = gim_generate_date_string,
-	.get_pcie_confs = gim_get_pcie_confs,
-	.create_hash_64 = gim_hash_64,
+						.generate_date_string = gim_generate_date_string,
+						.get_pcie_confs	      = gim_get_pcie_confs,
+						.create_hash_64	      = gim_hash_64,
 
-	.get_driver_version = gim_get_driver_version,
-	.get_driver_id = gim_get_driver_id,
-	.get_profile_info = gim_get_profile_info,
-	.get_driver_date = gim_get_driver_date,
-	.get_driver_model = gim_get_driver_model,
-	.get_metric_table = gim_get_metric_table,
-	.get_eeprom_table = gim_get_eeprom_table,
-	.get_partition = gim_get_partition,
-	.get_partition_global = gim_get_partition_global,
-	.get_cper_data = gim_get_cper_data,
+						.get_driver_version   = gim_get_driver_version,
+						.get_driver_id	      = gim_get_driver_id,
+						.get_profile_info     = gim_get_profile_info,
+						.get_driver_date      = gim_get_driver_date,
+						.get_driver_model     = gim_get_driver_model,
+						.get_metric_table     = gim_get_metric_table,
+						.get_eeprom_table     = gim_get_eeprom_table,
+						.get_partition	      = gim_get_partition,
+						.get_partition_global = gim_get_partition_global,
+						.get_cper_data	      = gim_get_cper_data,
 
-	.create_event = gim_create_event,
-	.read_event = gim_read_event,
-	.destroy_event = gim_destroy_event
-};
+						.create_event  = gim_create_event,
+						.read_event    = gim_read_event,
+						.destroy_event = gim_destroy_event};
 
 static int smi_set_file_private_data(file_t filp, struct smi_ctx *sctx)
 {
@@ -364,7 +397,7 @@ static int smi_set_file_private_data(file_t filp, struct smi_ctx *sctx)
 		return -EINVAL;
 	}
 
-	file = (smi_process_handle)filp;
+	file		   = (smi_process_handle)filp;
 	file->private_data = sctx;
 
 	return 0;
@@ -379,7 +412,7 @@ static int smi_get_file_private_data(file_t filp, struct smi_ctx **sctx)
 		return -EINVAL;
 	}
 
-	file = (smi_process_handle)filp;
+	file  = (smi_process_handle)filp;
 	*sctx = file->private_data;
 
 	return 0;
@@ -391,16 +424,15 @@ static int smi_verify_file_descriptor(file_t filp)
 	return 0;
 }
 
-int smi_init(struct oss_interface *oss_interface,
-		struct smi_shim_interface *shim_interface)
+int smi_init(struct oss_interface *oss_interface, struct smi_shim_interface *shim_interface)
 {
 	int ret;
 
 	/* pass oss function to smi core */
-	shim_interface->set_file_private_data = smi_set_file_private_data;
-	shim_interface->get_file_private_data = smi_get_file_private_data;
+	shim_interface->set_file_private_data  = smi_set_file_private_data;
+	shim_interface->get_file_private_data  = smi_get_file_private_data;
 	shim_interface->verify_file_descriptor = smi_verify_file_descriptor;
-	ret = smi_core_init(oss_interface, shim_interface);
+	ret				       = smi_core_init(oss_interface, shim_interface);
 	if (ret < 0) {
 		gim_error("failed to init SMI core\n");
 		return ret;

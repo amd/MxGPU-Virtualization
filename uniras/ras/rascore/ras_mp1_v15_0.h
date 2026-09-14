@@ -25,6 +25,15 @@
 #define __RAS_MP1_V15_0_H__
 #include "ras_mp1.h"
 
+struct ras_mp1_policy_v5_0 {
+	u32 num_entities;
+	u32 event_rma_threshold_per_entity;
+	u32 max_pages_per_ret_event;
+	u32 od_sram_ecc_threshold;
+	u32 hwa_threshold;
+	u32 wdt_threshold;
+};
+
 extern const struct ras_mp1_ip_func mp1_ras_func_v15_0;
 
 #endif

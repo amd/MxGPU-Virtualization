@@ -15,54 +15,55 @@
 #include "smi_cli_templates.h"
 #include "smi_cli_platform.h"
 
-int AmdSmiPartitionCommand::accelerator_partition_command(uint64_t processor,
-		std::vector<tabulate::Table::Row_t> &rows, std::vector<tabulate::Table::Row_t> &resource_rows,
-		std::string &gpu_id)
+int AmdSmiPartitionCommand::accelerator_partition_command(
+    uint64_t processor, std::vector<tabulate::Table::Row_t>& rows,
+    std::vector<tabulate::Table::Row_t>& resource_rows, std::string& gpu_id)
 {
-	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_accelerator_partition_command(processor,
-			  arg,
-			  rows, resource_rows, gpu_id);
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_accelerator_partition_command(
+	    processor, arg, rows, resource_rows, gpu_id);
 	return ret;
 }
 
 int AmdSmiPartitionCommand::memory_partition_command(uint64_t processor,
-		std::string &formatted_string)
+						     std::string& formatted_string)
 {
-	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_memory_partition_command(processor, arg,
-			  formatted_string);
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_memory_partition_command(
+	    processor, arg, formatted_string);
 	return ret;
 }
 
 int AmdSmiPartitionCommand::current_partition_command(uint64_t processor,
-		std::string &formatted_string)
+						      std::string& formatted_string)
 {
-	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_current_partition_command(processor,
-			  arg, formatted_string);
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_current_partition_command(
+	    processor, arg, formatted_string);
 	return ret;
 }
 
 int AmdSmiPartitionCommand::global_partition_command(uint64_t processor,
-		std::vector<tabulate::Table::Row_t> &rows, std::string &gpu_id)
+						     std::vector<tabulate::Table::Row_t>& rows,
+						     std::string& gpu_id)
 {
-	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_global_partition_command(processor,
-			  arg, rows, gpu_id);
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_global_partition_command(
+	    processor, arg, rows, gpu_id);
 	return ret;
 }
 
-std::string format_accelerator_table(tabulate::Table &table)
+std::string format_accelerator_table(tabulate::Table& table)
 {
-	table.format().font_style({tabulate::FontStyle::bold})
-		 .border_top("")
-		 .border_bottom("")
-		 .border_left("")
-		 .border_right("")
-		 .corner("")
-		 .column_separator("")
-		 .padding_top(0)
-		 .padding_left(1)
-		 .padding_right(1)
-		 .padding_bottom(0)
-		 .font_align(tabulate::FontAlign::left);
+	table.format()
+	    .font_style({tabulate::FontStyle::bold})
+	    .border_top("")
+	    .border_bottom("")
+	    .border_left("")
+	    .border_right("")
+	    .corner("")
+	    .column_separator("")
+	    .padding_top(0)
+	    .padding_left(1)
+	    .padding_right(1)
+	    .padding_bottom(0)
+	    .font_align(tabulate::FontAlign::left);
 	std::string out = table.str();
 	return out;
 }
@@ -70,28 +71,28 @@ std::string format_accelerator_table(tabulate::Table &table)
 void AmdSmiPartitionCommand::partition_command_human()
 {
 	int ret;
-	std::string out{};
+	std::string out {};
 	std::vector<tabulate::Table::Row_t> all_rows;
 	std::vector<tabulate::Table::Row_t> resource_rows;
 	std::vector<tabulate::Table::Row_t> global_rows;
 	bool header_added = false;
-	std::string formatted_string{};
+	std::string formatted_string {};
 	int error = 0;
 
 	if ((std::find(arg.options.begin(), arg.options.end(), "current") != arg.options.end()) ||
-			(std::find(arg.options.begin(), arg.options.end(), "c") != arg.options.end()) ||
-			arg.all_arguments) {
+	    (std::find(arg.options.begin(), arg.options.end(), "c") != arg.options.end()) ||
+	    arg.all_arguments) {
 		tabulate::Table table;
 		tabulate::Table::Row_t header;
 		tabulate::Table::Row_t current_row;
 		for (int i = 0; i < arg.devices.size(); i++) {
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
-			std::string gpu_id{string_format("%d", arg.devices[i]->get_gpu_index())};
+			std::string gpu_id {string_format("%d", arg.devices[i]->get_gpu_index())};
 			ret = current_partition_command(gpu_bdf, formatted_string);
-			std::string param{"current"};
+			std::string param {"current"};
 			error = handle_exceptions(ret, param, arg);
 			if (error == 0) {
-				std::vector<std::string> cells{};
+				std::vector<std::string> cells {};
 				cells = split_string(formatted_string, '|');
 
 				header.push_back("GPU");
@@ -115,24 +116,26 @@ void AmdSmiPartitionCommand::partition_command_human()
 			formatted_string.clear();
 		}
 		if (table.size() != 0 && error == 0) {
-			out.append(" CURRENT_PARTITION:\n").append(format_accelerator_table(table)).append("\n\n");
+			out.append(" CURRENT_PARTITION:\n")
+			    .append(format_accelerator_table(table))
+			    .append("\n\n");
 		}
 	}
 
 	if ((std::find(arg.options.begin(), arg.options.end(), "memory") != arg.options.end()) ||
-			(std::find(arg.options.begin(), arg.options.end(), "m") != arg.options.end()) ||
-			arg.all_arguments) {
+	    (std::find(arg.options.begin(), arg.options.end(), "m") != arg.options.end()) ||
+	    arg.all_arguments) {
 		tabulate::Table table;
 		tabulate::Table::Row_t header;
 		tabulate::Table::Row_t current_row;
 		for (int i = 0; i < arg.devices.size(); i++) {
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
-			std::string gpu_id{string_format("%d", arg.devices[i]->get_gpu_index())};
+			std::string gpu_id {string_format("%d", arg.devices[i]->get_gpu_index())};
 			ret = memory_partition_command(gpu_bdf, formatted_string);
-			std::string param{"memory"};
+			std::string param {"memory"};
 			error = handle_exceptions(ret, param, arg);
 			if (error == 0) {
-				std::vector<std::string> cells{};
+				std::vector<std::string> cells {};
 				cells = split_string(formatted_string, '|');
 
 				header.push_back("GPU");
@@ -155,67 +158,78 @@ void AmdSmiPartitionCommand::partition_command_human()
 		}
 
 		if (table.size() != 0 && error == 0) {
-			out.append(" MEMORY_PARTITION:\n").append(format_accelerator_table(table)).append("\n\n");
+			out.append(" MEMORY_PARTITION:\n")
+			    .append(format_accelerator_table(table))
+			    .append("\n\n");
 		}
 	}
 
 	for (int i = 0; i < arg.devices.size(); i++) {
 		uint64_t gpu_bdf = arg.devices[i]->get_bdf();
-		std::string gpu_id{string_format("%d", arg.devices[i]->get_gpu_index())};
+		std::string gpu_id {string_format("%d", arg.devices[i]->get_gpu_index())};
 
-		if ((std::find(arg.options.begin(), arg.options.end(), "accelerator") != arg.options.end()) ||
-				(std::find(arg.options.begin(), arg.options.end(), "a") != arg.options.end())
-				|| arg.all_arguments) {
-			ret = accelerator_partition_command(gpu_bdf, all_rows, resource_rows, gpu_id);
-			std::string param{"accelerator"};
+		if ((std::find(arg.options.begin(), arg.options.end(), "accelerator") !=
+		     arg.options.end()) ||
+		    (std::find(arg.options.begin(), arg.options.end(), "a") != arg.options.end()) ||
+		    arg.all_arguments) {
+			ret =
+			    accelerator_partition_command(gpu_bdf, all_rows, resource_rows, gpu_id);
+			std::string param {"accelerator"};
 			error = handle_exceptions(ret, param, arg);
 			if (i == 0 && error == 0) {
 				out += " ACCELERATOR_PARTITION_PROFILES:\n";
 			}
 			if (error == 0 && i == arg.devices.size() - 1) {
-				//Add tables and header only once
+				// Add tables and header only once
 				tabulate::Table profiles_table;
-				profiles_table.add_row({"GPU", "PROFILE_INDEX", "MEMORY_PARTITION_CAPS", "ACCELERATOR_TYPE", "PARTITION_ID",
-										"NUM_PARTITIONS", "NUM_RESOURCES", "RESOURCE_INDEX", "RESOURCE_TYPE", "RESOURCE_INSTANCES", "RESOURCES_SHARED"});
-				for (const auto &row : all_rows) {
+				profiles_table.add_row(
+				    {"GPU", "PROFILE_INDEX", "MEMORY_PARTITION_CAPS",
+				     "ACCELERATOR_TYPE", "PARTITION_ID", "NUM_PARTITIONS",
+				     "NUM_RESOURCES", "RESOURCE_INDEX", "RESOURCE_TYPE",
+				     "RESOURCE_INSTANCES", "RESOURCES_SHARED"});
+				for (const auto& row : all_rows) {
 					profiles_table.add_row(row);
 				}
 				out += format_accelerator_table(profiles_table);
 
 				tabulate::Table resources_table;
-				resources_table.add_row({"RESOURCE_INDEX", "RESOURCE_TYPE", "RESOURCE_INSTANCES", "RESOURCE_SHARED"});
-				for (const auto &row : resource_rows) {
+				resources_table.add_row({"RESOURCE_INDEX", "RESOURCE_TYPE",
+							 "RESOURCE_INSTANCES", "RESOURCE_SHARED"});
+				for (const auto& row : resource_rows) {
 					resources_table.add_row(row);
 				}
-				out = out +  "\n\n" + " ACCELERATOR_PARTITION_RESOURCES:\n" + format_accelerator_table(
-						  resources_table) + "\n\n";
+				out = out + "\n\n" + " ACCELERATOR_PARTITION_RESOURCES:\n" +
+				      format_accelerator_table(resources_table) + "\n\n";
 			}
 		}
 	}
 
 	for (int i = 0; i < arg.devices.size(); i++) {
 		uint64_t gpu_bdf = arg.devices[i]->get_bdf();
-		std::string gpu_id{string_format("%d", arg.devices[i]->get_gpu_index())};
-		if ((std::find(arg.options.begin(), arg.options.end(), "global") != arg.options.end()) ||
-				(std::find(arg.options.begin(), arg.options.end(), "gl") != arg.options.end())
-				|| arg.all_arguments) {
+		std::string gpu_id {string_format("%d", arg.devices[i]->get_gpu_index())};
+		if ((std::find(arg.options.begin(), arg.options.end(), "global") !=
+		     arg.options.end()) ||
+		    (std::find(arg.options.begin(), arg.options.end(), "gl") !=
+		     arg.options.end()) ||
+		    arg.all_arguments) {
 
 			ret = global_partition_command(gpu_bdf, global_rows, gpu_id);
-			std::string param{"global"};
+			std::string param {"global"};
 			if (i == 0 && error == 0) {
 				out += " GLOBAL_PARTITION_CONFIG:\n";
 			}
 			if (error == 0 && i == arg.devices.size() - 1) {
-				//Add tables and header only once
+				// Add tables and header only once
 				tabulate::Table global_table;
-				global_table.add_row({"GPU", "ACCELERATOR_TYPE", "SUPPORTED_VF_MODE", "MEMORY_PARTITION_CAPS"});
-				for (const auto &row : global_rows) {
+				global_table.add_row({"GPU", "ACCELERATOR_TYPE",
+						      "SUPPORTED_VF_MODE",
+						      "MEMORY_PARTITION_CAPS"});
+				for (const auto& row : global_rows) {
 					global_table.add_row(row);
 				}
 				out += format_accelerator_table(global_table);
 			}
 		}
-
 	}
 
 	if (arg.is_file) {
@@ -229,8 +243,9 @@ void AmdSmiPartitionCommand::partition_command_human()
 
 void AmdSmiPartitionCommand::execute_command()
 {
-	if ((AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi350())
-			&& AmdSmiPlatform::getInstance().getInstance().is_host()) {
+	if ((AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi350() ||
+	     AmdSmiPlatform::getInstance().is_gc_12_1()) &&
+	    AmdSmiPlatform::getInstance().is_host()) {
 		if (arg.output == json) {
 			throw SmiToolInvalidParameterException("--json");
 		}
@@ -241,7 +256,7 @@ void AmdSmiPartitionCommand::execute_command()
 			partition_command_human();
 		}
 	} else {
-		std::string command{"partition"};
+		std::string command {"partition"};
 		throw SmiToolCommandNotSupportedException(command);
 	}
 }

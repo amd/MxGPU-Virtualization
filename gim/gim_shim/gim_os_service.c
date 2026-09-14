@@ -5,6 +5,8 @@
 
 #include <linux/module.h>
 #include <linux/pci.h>
+#include <linux/reboot.h>
+#include <linux/suspend.h>
 #include <linux/delay.h>
 #include <linux/wait.h>
 #include <linux/signal.h>
@@ -269,6 +271,9 @@ static int gim_map_vf_dev_res(oss_dev_t dev, struct oss_dev_res *res)
 		}
 
 		res->fb_size = pci_resource_len(pdev, 0);
+	} else {
+		res->fb_size = 0;
+		res->fb = NULL;
 	}
 
 	return 0;
@@ -444,6 +449,15 @@ static int gim_pci_resize_vf_bar(oss_dev_t dev, int bar_idx, uint32_t num_vf)
 
 	if (bar_idx < 0 || bar_idx >= PCI_SRIOV_NUM_BARS)
 		return -EINVAL;
+
+	/* A+A platforms have no VF FB BAR; skip resize only when the VF BAR is
+	 * not configured as a memory BAR. Other ASICs proceed normally.
+	 */
+	bar_base = iov_pos + PCI_SRIOV_BAR + 4 * bar_idx;
+	pci_read_config_dword(pdev, bar_base, &save_lo);
+	pci_read_config_dword(pdev, bar_base + 4, &save_hi);
+	if (!(save_lo & PCI_BASE_ADDRESS_MEM_TYPE_MASK) && !save_hi)
+		return 0;
 
 	/* Check if enough resource is reserved for the VF BAR */
 	pci_read_config_word(pdev, iov_pos + PCI_SRIOV_TOTAL_VF, &total_vf);
@@ -667,6 +681,11 @@ static int gim_pci_find_next_ext_cap(oss_dev_t dev, int start_pos, int cap)
 static int gim_pci_find_cap(oss_dev_t dev, int cap)
 {
 	return pci_find_capability(dev, cap);
+}
+
+static oss_dev_t gim_pci_upstream_bridge(oss_dev_t dev)
+{
+	return pci_upstream_bridge((struct pci_dev *)dev);
 }
 
 static bool gim_read_bios_from_rom_bar(struct pci_dev *pdev, unsigned char *dest, unsigned long *bytes_copied, unsigned long max_size)
@@ -1000,7 +1019,7 @@ static void gim_free_memory(void *ptr)
 	gim_vfree(ptr);
 }
 
-static void *gim_memremap(uint64_t offset, uint32_t size, enum oss_memremap_type type)
+static void *gim_memremap(uint64_t offset, uint64_t size, enum oss_memremap_type type)
 {
 	return memremap(offset, size, type);
 }
@@ -2396,6 +2415,12 @@ static void gim_mb (void)
 	mb();
 }
 
+static void gim_emergency_restart(void)
+{
+	ksys_sync_helper();
+	emergency_restart();
+}
+
 #if !defined(HAVE_PAGE_FOLIO)
 struct folio;
 #endif
@@ -2941,6 +2966,7 @@ struct oss_interface gim_oss_interfaces = {
 	.pci_find_ext_cap = gim_pci_find_ext_cap,
 	.pci_find_next_ext_cap = gim_pci_find_next_ext_cap,
 	.pci_find_cap = gim_pci_find_cap,
+	.pci_upstream_bridge = gim_pci_upstream_bridge,
 	.pci_map_rom = gim_pci_map_rom,
 	.pci_unmap_rom = gim_pci_unmap_rom,
 	.pci_read_rom = gim_pci_read_rom,
@@ -3121,4 +3147,5 @@ struct oss_interface gim_oss_interfaces = {
 #endif
 	.register_mce_notifier = gim_register_mce_notifier,
 	.unregister_mce_notifier = gim_unregister_mce_notifier,
+	.emergency_restart = gim_emergency_restart,
 };

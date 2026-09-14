@@ -50,13 +50,46 @@ static int smu_v15_0_8_get_ecc_info(struct amdgv_adapter *adapt, int *correctabl
 
 static int smu_v15_0_8_get_vbios_cache(struct amdgv_adapter *adapt)
 {
-	return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+	struct amdgv_vbios_info *vbiosinfo = &adapt->vbios_cache;
+	int i;
+
+	if (adapt->serial == 0) {
+		if (adapt->gpumon.funcs->get_vbios_info) {
+			vbiosinfo->serial = 0;
+			adapt->gpumon.funcs->get_vbios_info(adapt, vbiosinfo);
+			adapt->serial = vbiosinfo->serial;
+
+			if (vbiosinfo->serial != 0) {
+				adapt->unitid_support = true;
+				for (i = 0; i < adapt->num_vf; i++)
+					adapt->array_vf[i].unitid =
+						amdgv_gpumon_fcn_ref_id_encode(adapt->serial, i);
+			}
+		}
+	}
+
+	amdgv_vbios_cache_update(adapt);
+
+	return 0;
 }
 
 static int smu_v15_0_8_get_vbios_info(struct amdgv_adapter *adapt,
 				struct amdgv_vbios_info *vbiosinfo)
 {
-	return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+	uint32_t pci_data;
+
+	if (adapt->pp.pp_funcs && adapt->pp.pp_funcs->get_serial) {
+		if (adapt->pp.pp_funcs->get_serial(adapt, &vbiosinfo->serial))
+			vbiosinfo->serial = 0;
+	}
+
+	oss_pci_read_config_dword(adapt->dev, 0, &pci_data);
+	vbiosinfo->dev_id = pci_data >> 16;
+	pci_data = 0;
+	oss_pci_read_config_dword(adapt->dev, 8, &pci_data);
+	vbiosinfo->rev_id = pci_data & 0x000000FF;
+
+	return 0;
 }
 
 static int smu_v15_0_8_get_gpu_power_capacity(struct amdgv_adapter *adapt, int *val,
@@ -182,8 +215,6 @@ static int smu_v15_0_8_get_min_sclk(struct amdgv_adapter *adapt, int *val)
 	return ret;
 }
 
-// static int smu_v15_0_8_get_min_mclk(struct amdgv_adapter *adapt, int *val)
-
 static int smu_v15_0_8_get_min_vclk0(struct amdgv_adapter *adapt, int *val)
 {
 	int ret = AMDGV_LOG_GPUMON_NOT_SUPPORTED;
@@ -266,11 +297,14 @@ static int smu_v15_0_8_get_pp_metrics(struct amdgv_adapter *adapt,
 static int smu_v15_0_8_get_vram_info(struct amdgv_adapter *adapt,
 				     struct amdgv_gpumon_vram_info *vram_info)
 {
-	// vram_info->vram_size_mb = smu_v15_0_8_nbio_get_total_vram_size(adapt);
-	// vram_info->vram_type = vram_type_to_gpumon_vram_type(adapt->vram_info.vram_type);
-	// vram_info->vram_vendor = vram_vendor_to_gpumon_vram_vendor(adapt->vram_info.vram_vendor);
-	// vram_info->vram_bit_width = adapt->vram_info.vram_bit_width;
-	return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+	vram_info->vram_size_mb = TO_MBYTES(adapt->fb_size);
+
+	/* TODO: Should come from IP Discovery Table */
+	vram_info->vram_type = AMDGV_GPUMON_DGPU_VRAM_TYPE__HBM4;
+	vram_info->vram_vendor = AMDGV_GPUMON_VRAM_VENDOR__PLACEHOLDER0;
+	vram_info->vram_bit_width = 384 * 64;
+
+	return 0;
 }
 
 static int smu_v15_0_8_is_clk_locked(struct amdgv_adapter *adapt,
@@ -915,8 +949,146 @@ static int smu_v15_0_8_set_xgmi_fb_sharing_mode_ex(struct amdgv_adapter *adapt,
 static int smu_v15_0_8_get_gpu_cache_info(struct amdgv_adapter *adapt,
 					  struct amdgv_gpumon_gpu_cache_info *gpu_cache_info)
 {
-	/* IP Discovery Not ready yet */
-	return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+	struct amdgv_ip_discovery_info *pf_copy;
+	struct amdgv_gc_info_v1_5 *gc_info;
+	struct amdgv_mall_info_v2_0 *mall_info;
+	uint32_t cu_per_tcp;
+	uint32_t cu_per_sqc;
+	/* v1.5: SA0 and SA1 within an SE may have different WGP counts */
+	uint32_t cu_per_sa0, cu_per_sa1;
+	uint32_t num_sa0, num_sa1;
+	bool asymmetric_sa;
+	uint32_t mall_size_kb;
+	uint32_t active_cu_count;
+	int i = 0;
+
+	pf_copy = &adapt->ip_discovery.pf_copy;
+
+	if (pf_copy->gchdr->version_major != 1 || pf_copy->gchdr->version_minor != 5) {
+		AMDGV_WARN("Unsupported GC version!\n");
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+	}
+
+	gc_info = GET_GC_TABLE_V1_5(pf_copy->gchdr);
+	mall_info = GET_MALL_INFO_V2_0(pf_copy->mhdr);
+
+	active_cu_count = adapt->config.gfx.active_cu_count;
+
+	cu_per_tcp = gc_info->gc_num_tcp_per_wpg / 2;
+	cu_per_sqc = gc_info->gc_num_sqc_per_wgp * 2;
+
+	cu_per_sa0 = (gc_info->gc_num_wgp0_per_sa + gc_info->gc_num_wgp1_per_sa);
+	cu_per_sa1 = (gc_info->gc_num_wgp0_per_sa1 + gc_info->gc_num_wgp1_per_sa1);
+	asymmetric_sa = (cu_per_sa1 > 0) && (cu_per_sa0 != cu_per_sa1);
+
+	num_sa0 = adapt->mcp.gfx.num_xcc * adapt->config.gfx.max_shader_engines;
+	num_sa1 = num_sa0;
+
+	if (gc_info->gc_tcp_l1_size && cu_per_tcp) {
+		gpu_cache_info->cache[i].flags = (AMDGV_GPUMON_CACHE_FLAGS_ENABLED |
+						  AMDGV_GPUMON_CACHE_FLAGS_DATA_CACHE |
+						  AMDGV_GPUMON_CACHE_FLAGS_SIMD_CACHE);
+		gpu_cache_info->cache[i].cache_level = 1;
+		gpu_cache_info->cache[i].cache_size_kb = gc_info->gc_tcp_l1_size;
+		gpu_cache_info->cache[i].max_num_cu_shared = cu_per_tcp;
+		gpu_cache_info->cache[i].num_cache_instance = active_cu_count * cu_per_tcp;
+		i++;
+	}
+
+	/* Instruction cache (I$), per SQC */
+	if (gc_info->gc_l1_instruction_cache_size_per_sqc && cu_per_sqc) {
+		gpu_cache_info->cache[i].flags = (AMDGV_GPUMON_CACHE_FLAGS_ENABLED |
+						  AMDGV_GPUMON_CACHE_FLAGS_INST_CACHE |
+						  AMDGV_GPUMON_CACHE_FLAGS_SIMD_CACHE);
+		gpu_cache_info->cache[i].cache_level = 1;
+		gpu_cache_info->cache[i].cache_size_kb = gc_info->gc_l1_instruction_cache_size_per_sqc;
+		gpu_cache_info->cache[i].max_num_cu_shared = cu_per_sqc;
+		if (asymmetric_sa) {
+			gpu_cache_info->cache[i].num_cache_instance =
+				num_sa0 * cu_per_sa0 / cu_per_sqc;
+			i++;
+			gpu_cache_info->cache[i] = gpu_cache_info->cache[i - 1];
+			gpu_cache_info->cache[i].num_cache_instance =
+				num_sa1 * cu_per_sa1 / cu_per_sqc;
+		} else {
+			gpu_cache_info->cache[i].num_cache_instance = active_cu_count / cu_per_sqc;
+		}
+		i++;
+	}
+
+	/* Scalar L1 data cache (sL1D / K$), per SQC */
+	if (gc_info->gc_l1_data_cache_size_per_sqc && cu_per_sqc) {
+		gpu_cache_info->cache[i].flags = (AMDGV_GPUMON_CACHE_FLAGS_ENABLED |
+						  AMDGV_GPUMON_CACHE_FLAGS_DATA_CACHE |
+						  AMDGV_GPUMON_CACHE_FLAGS_SIMD_CACHE);
+		gpu_cache_info->cache[i].cache_level = 1;
+		gpu_cache_info->cache[i].cache_size_kb = gc_info->gc_l1_data_cache_size_per_sqc;
+		gpu_cache_info->cache[i].max_num_cu_shared = cu_per_sqc;
+		if (asymmetric_sa) {
+			gpu_cache_info->cache[i].num_cache_instance =
+				num_sa0 * cu_per_sa0 / cu_per_sqc;
+			i++;
+			gpu_cache_info->cache[i] = gpu_cache_info->cache[i - 1];
+			gpu_cache_info->cache[i].num_cache_instance =
+				num_sa1 * cu_per_sa1 / cu_per_sqc;
+		} else {
+			gpu_cache_info->cache[i].num_cache_instance = active_cu_count / cu_per_sqc;
+		}
+		i++;
+	}
+
+	/* GL1 data cache, per SA */
+	if (gc_info->gc_gl1c_per_sa && gc_info->gc_gl1c_size_per_instance && cu_per_sa0) {
+		gpu_cache_info->cache[i].flags = (AMDGV_GPUMON_CACHE_FLAGS_ENABLED |
+						  AMDGV_GPUMON_CACHE_FLAGS_DATA_CACHE |
+						  AMDGV_GPUMON_CACHE_FLAGS_SIMD_CACHE);
+		gpu_cache_info->cache[i].cache_level = 1;
+		gpu_cache_info->cache[i].cache_size_kb =
+			gc_info->gc_gl1c_per_sa * gc_info->gc_gl1c_size_per_instance;
+		gpu_cache_info->cache[i].max_num_cu_shared = cu_per_sa0;
+		if (asymmetric_sa) {
+			gpu_cache_info->cache[i].num_cache_instance = num_sa0;
+			i++;
+			gpu_cache_info->cache[i] = gpu_cache_info->cache[i - 1];
+			gpu_cache_info->cache[i].max_num_cu_shared = cu_per_sa1;
+			gpu_cache_info->cache[i].num_cache_instance = num_sa1;
+		} else {
+			gpu_cache_info->cache[i].num_cache_instance = active_cu_count / cu_per_sa0;
+		}
+		i++;
+	}
+
+	/* GL2 / L2 cache, GPU-wide single logical instance */
+	if (gc_info->gc_gl2c_per_gpu) {
+		gpu_cache_info->cache[i].flags = (AMDGV_GPUMON_CACHE_FLAGS_ENABLED |
+						  AMDGV_GPUMON_CACHE_FLAGS_DATA_CACHE |
+						  AMDGV_GPUMON_CACHE_FLAGS_SIMD_CACHE);
+		gpu_cache_info->cache[i].cache_level = 2;
+		gpu_cache_info->cache[i].cache_size_kb = gc_info->gc_gl2c_per_gpu;
+		gpu_cache_info->cache[i].max_num_cu_shared = active_cu_count;
+		gpu_cache_info->cache[i].num_cache_instance = 1;
+		i++;
+	}
+
+	/* MALL / L3 cache, GPU-wide */
+	mall_size_kb = (adapt->umc.node_inst_num * mall_info->mall_size_per_umc) / 1024;
+	if (mall_size_kb) {
+		gpu_cache_info->cache[i].flags = (AMDGV_GPUMON_CACHE_FLAGS_ENABLED |
+						  AMDGV_GPUMON_CACHE_FLAGS_DATA_CACHE |
+						  AMDGV_GPUMON_CACHE_FLAGS_SIMD_CACHE);
+		gpu_cache_info->cache[i].cache_level = 3;
+		gpu_cache_info->cache[i].cache_size_kb = mall_size_kb;
+		gpu_cache_info->cache[i].max_num_cu_shared = active_cu_count;
+		gpu_cache_info->cache[i].num_cache_instance = 1;
+		i++;
+	}
+
+	gpu_cache_info->num_cache_types = i;
+
+	if (gpu_cache_info->num_cache_types > AMDGV_GPUMON_MAX_CACHE_TYPES)
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+
+	return 0;
 }
 
 static int smu_v15_0_8_get_max_pcie_link_generation(struct amdgv_adapter *adapt,
@@ -987,11 +1159,21 @@ static int smu_v15_0_8_ual_set_vpod_config(struct amdgv_adapter *adapt,
 }
 
 static int smu_v15_0_8_ual_set_station_config(struct amdgv_adapter *adapt,
-					struct amdgv_gpumon_set_station_config_req_ual_v1 *config)
+					struct amdgv_gpumon_station_config_ual_v1 *config)
 {
 	int ret = AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
 	ret = amdgv_ual_set_station_config(adapt, config);
+
+	return ret;
+}
+
+static int smu_v15_0_8_ual_get_station_config(struct amdgv_adapter *adapt,
+	struct amdgv_gpumon_station_config_ual_v1 *config)
+{
+	int ret = AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+
+	ret = amdgv_ual_get_station_config(adapt, config);
 
 	return ret;
 }
@@ -1092,6 +1274,7 @@ static const struct amdgv_gpumon_funcs smu_v15_0_8_gpumon_funcs = {
 	.ual_set_ppod_config = smu_v15_0_8_ual_set_ppod_config,
 	.ual_set_vpod_config = smu_v15_0_8_ual_set_vpod_config,
 	.ual_set_station_config = smu_v15_0_8_ual_set_station_config,
+	.ual_get_station_config = smu_v15_0_8_ual_get_station_config,
 	.ual_pause = smu_v15_0_8_ual_pause,
 	.ual_resume = smu_v15_0_8_ual_resume,
 	.ual_trigger_mode2 = smu_v15_0_8_ual_trigger_mode2,

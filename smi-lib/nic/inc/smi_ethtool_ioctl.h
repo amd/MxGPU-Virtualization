@@ -31,7 +31,6 @@
  * @note Supported for various ethtool structures including ethtool_stats, ethtool_gstrings,
  *       ethtool_drvinfo, ethtool_pauseparam, ethtool_fecparam, ethtool_link_settings,...
  */
-template <typename T>
-int smi_ethtool_ioctl(const std::string& device, T* data);
+template <typename T> int smi_ethtool_ioctl(const std::string& device, T* data);
 
 #endif // __SMI_ETHTOOL_IOCTL_H__

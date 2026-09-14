@@ -25,7 +25,8 @@
 #include "smi_nic_subsystem.h"
 #include "smi_utils.h"
 
-class SmiNicSystem {
+class SmiNicSystem
+{
 public:
 	SmiNicSystem();
 	~SmiNicSystem() = default;
@@ -42,10 +43,10 @@ public:
 	const SmiNic* get_nic_by_bdf(const std::string& bdf) const;
 	const SmiNic* get_nic_by_bdf(uint64_t bdf) const;
 
-	SmiNicSystem(const SmiNicSystem &) = delete;
-	SmiNicSystem & operator = (const SmiNicSystem &) = delete;
-	SmiNicSystem(SmiNicSystem &&) = delete;
-	SmiNicSystem & operator = (SmiNicSystem &&) = delete;
+	SmiNicSystem(const SmiNicSystem&)	     = delete;
+	SmiNicSystem& operator=(const SmiNicSystem&) = delete;
+	SmiNicSystem(SmiNicSystem&&)		     = delete;
+	SmiNicSystem& operator=(SmiNicSystem&&)	     = delete;
 
 private:
 	std::string net_path_;

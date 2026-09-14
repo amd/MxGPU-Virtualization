@@ -1937,6 +1937,10 @@ int amdgv_sched_world_context_one_time_loop(struct amdgv_adapter *adapt,
 		return 0;
 
 	for (idx_vf = 0; idx_vf <= AMDGV_PF_IDX; ++idx_vf) {
+		/* skip VFs not assigned to this world switch */
+		if (!(world_switch->allowed_vf_assignment & BIT(idx_vf)))
+			continue;
+
 		if (adapt->array_vf[idx_vf].unshutdown)
 			continue;
 
@@ -1949,25 +1953,22 @@ int amdgv_sched_world_context_one_time_loop(struct amdgv_adapter *adapt,
 		else
 			time_slice = adapt->array_vf[idx_vf].time_slice[world_switch->sched_block];
 
+		/* 1VF magic time slice is a sentinel, not a duration */
+		if (time_slice == DEFAULT_GFX_TIME_SLICE_1VF)
+			continue;
+
 		ret = amdgv_sched_world_context_load(adapt, idx_vf, world_switch);
 		if (ret)
-			goto reset_vf;
+			return ret;
 
 		oss_usleep(time_slice);
 
 		ret = amdgv_sched_world_context_save(adapt, world_switch);
 		if (ret)
-			goto reset_vf;
+			return ret;
 	}
 
 	return 0;
-
-reset_vf:
-	/* WS cmd failed, curr WS is ABNORMAL now. Queue a targeted reset of the
-	 * offending VF to recover, same as manual switch. */
-	amdgv_sched_queue_event(adapt, world_switch->curr_idx_vf,
-				AMDGV_EVENT_SCHED_RESET_VF, world_switch->sched_block);
-	return ret;
 }
 int amdgv_sched_world_context_init(struct amdgv_adapter *adapt, uint32_t idx_vf,
 				   struct amdgv_sched_world_switch *world_switch)

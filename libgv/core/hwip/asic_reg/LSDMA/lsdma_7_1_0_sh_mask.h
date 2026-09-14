@@ -82,17 +82,7 @@
 #define LSDMA_PIO_COMMAND__RAW_WAIT_MASK                                                                      0x40000000L
 #define LSDMA_PIO_COMMAND__CONSTANT_FILL_MASK                                                                 0x80000000L
 #define LSDMA_PIO_COMMAND__BYTE_COUNT__SHIFT                                                                  0x0
-#define LSDMA_PIO_COMMAND__SRC_LOCATION__SHIFT                                                                0x1a
-#define LSDMA_PIO_COMMAND__DST_LOCATION__SHIFT                                                                0x1b
-#define LSDMA_PIO_COMMAND__SRC_ADDR_INC__SHIFT                                                                0x1c
-#define LSDMA_PIO_COMMAND__DST_ADDR_INC__SHIFT                                                                0x1d
-#define LSDMA_PIO_COMMAND__OVERLAP_DISABLE__SHIFT                                                             0x1e
 #define LSDMA_PIO_COMMAND__BYTE_COUNT_MASK                                                                    0x03FFFFFFL
-#define LSDMA_PIO_COMMAND__SRC_LOCATION_MASK                                                                  0x04000000L
-#define LSDMA_PIO_COMMAND__DST_LOCATION_MASK                                                                  0x08000000L
-#define LSDMA_PIO_COMMAND__SRC_ADDR_INC_MASK                                                                  0x10000000L
-#define LSDMA_PIO_COMMAND__DST_ADDR_INC_MASK                                                                  0x20000000L
-#define LSDMA_PIO_COMMAND__OVERLAP_DISABLE_MASK                                                               0x40000000L
 //LSDMA_PIO_CONSTFILL_DATA
 #define LSDMA_PIO_CONSTFILL_DATA__DATA__SHIFT                                                                 0x0
 #define LSDMA_PIO_CONSTFILL_DATA__DATA_MASK                                                                   0xFFFFFFFFL

@@ -7,7 +7,11 @@
 #define __SMI_DRV_EVENT_H__
 #include "smi_handle.h"
 int smi_create_event(struct smi_ctx *smi, amdgv_dev_t *adev, struct smi_event_set_config *config);
-int smi_read_event(struct smi_ctx *ctx, amdgv_dev_t *adev, uint64_t dev_id, struct smi_event_entry *event, int64_t timeout_usec);
+int smi_read_event(struct smi_ctx *ctx,
+		   amdgv_dev_t *adev,
+		   uint64_t dev_id,
+		   struct smi_event_entry *event,
+		   int64_t timeout_usec);
 int smi_destroy_event(struct smi_ctx *ctx, amdgv_dev_t *adev, uint64_t dev_id);
 
 /* Linux only. Revoke every event fd bound to adev before the device is torn
@@ -24,5 +28,11 @@ void smi_clear_device_teardown(amdgv_dev_t *adev);
 
 /* ESXi only. */
 void smi_esxi_release_event_notifiers(struct smi_ctx *ctx);
+
+/* Called from smi_core_release before destroying event notifiers. */
+void smi_release_ctx_events_begin(struct smi_ctx *ctx);
+
+/* Called from smi_core_release after event_ctx is freed. */
+void smi_release_ctx_events_end(struct smi_ctx *ctx);
 
 #endif // __SMI_DRV_EVENT_H__

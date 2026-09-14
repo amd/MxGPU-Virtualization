@@ -13,7 +13,6 @@
 #include <linux/delay.h>
 #include <linux/kthread.h>
 #include <linux/version.h>
-#include <linux/acpi.h>
 #include "gim_live_update.h"
 
 #include <linux/ftrace.h>
@@ -33,6 +32,7 @@
 #include "amdgv_api.h"
 #include "amdgv_gpumon.h"
 #include "gim_memory_sentinel.h"
+#include "gim_hbm_drv_mgmt.h"
 
 #include "gim_guard.h"
 #include "gim_debugfs.h"
@@ -70,80 +70,6 @@ static const char gim_driver_string[] =
 static const char gim_copyright[] =
 		"Copyright Advanced Micro Devices, Inc.";
 
-static int gim_find_gpu_memory_in_srat(struct pci_dev *pdev, int32_t pf_numa_id,
-	uint64_t *base_addr, uint64_t *length)
-{
-	struct acpi_table_header *table_header = NULL;
-	struct acpi_subtable_header *sub_header = NULL;
-	unsigned long table_end, subtable_len;
-	acpi_status status;
-	struct acpi_srat_mem_affinity *mem;
-	bool found = false;
-
-	if (pf_numa_id < 0) {
-		gim_warn("NUMA configuration is not available\n");
-		return -1;
-	}
-
-	/* Fetch the SRAT table from ACPI */
-	status = acpi_get_table(ACPI_SIG_SRAT, 0, &table_header);
-	if (status == AE_NOT_FOUND) {
-		gim_warn("SRAT table not found\n");
-		return -1;
-	} else if (ACPI_FAILURE(status)) {
-		const char *err = acpi_format_exception(status);
-		gim_warn("SRAT table error: %s\n", err);
-		return -1;
-	}
-
-	table_end = (unsigned long)table_header + table_header->length;
-
-	/* Parse all entries looking for a match memory */
-	sub_header = (struct acpi_subtable_header *)
-			((unsigned long)table_header +
-			sizeof(struct acpi_table_srat));
-	subtable_len = sub_header->length;
-
-	while (((unsigned long)sub_header) + subtable_len  <= table_end) {
-		/*
-		* If length is 0, break from this loop to avoid
-		* infinite loop.
-		*/
-		if (subtable_len == 0) {
-			gim_warn("SRAT invalid zero length\n");
-			break;
-		}
-
-		switch (sub_header->type) {
-		case ACPI_SRAT_TYPE_MEMORY_AFFINITY:
-			mem = (struct acpi_srat_mem_affinity *)sub_header;
-			if (pf_numa_id == pxm_to_node(mem->proximity_domain)) {
-				*base_addr = mem->base_address;
-				*length = mem->length;
-				found = true;
-				gim_info("SRAT: gpu base address: %llx length: %llx\n", mem->base_address, mem->length);
-			}
-			break;
-		default:
-			break;
-		}
-
-		if (found)
-			break;
-
-		sub_header = (struct acpi_subtable_header *)
-				((unsigned long)sub_header + subtable_len);
-		subtable_len = sub_header->length;
-	}
-
-	acpi_put_table(table_header);
-
-	if (found)
-		return 0;
-	else
-		return -1;
-}
-
 static int gim_map_pci_res(struct amdgv_init_data *data, struct pci_dev *pdev)
 {
 	int ret;
@@ -155,16 +81,12 @@ static int gim_map_pci_res(struct amdgv_init_data *data, struct pci_dev *pdev)
 	}
 
 	data->info.pf_numa_id = dev_to_node(&pdev->dev);
-	gim_info("NUMA: node: %d for PF\n", data->info.pf_numa_id);
 
+#if 1
 	if (pci_resource_len(pdev, 0) == 0) {
-		ret = gim_find_gpu_memory_in_srat(pdev, data->info.pf_numa_id,
-				&data->info.fb_pa, &data->info.fb_size);
-		if (ret) {
-			gim_warn("Can't find GPU memory in SRAT table\n");
-			goto err;
-		}
-		data->info.fb = ioremap_cache(data->info.fb_pa, data->info.fb_size);
+		data->info.fb_pa = 0;
+		data->info.fb_size = 0;
+		data->info.fb = NULL;
 	} else {
 		/* framebuffer bar mapping */
 		data->info.fb_pa = pci_resource_start(pdev, 0);
@@ -172,11 +94,12 @@ static int gim_map_pci_res(struct amdgv_init_data *data, struct pci_dev *pdev)
 		data->info.fb = devm_ioremap_wc(&pdev->dev,
 						data->info.fb_pa,
 						data->info.fb_size);
+		if (data->info.fb == NULL) {
+			gim_put_error(AMDGV_LOG_DRIVER_FB_MAP_FAIL, 0);
+			goto err;
+		}
 	}
-	if (data->info.fb == NULL) {
-		gim_put_error(AMDGV_LOG_DRIVER_FB_MAP_FAIL, 0);
-		goto err;
-	}
+#endif
 
 	/* doorbell bar mapping */
 	data->info.doorbell_pa = pci_resource_start(pdev, 2);
@@ -223,11 +146,8 @@ static void gim_release_pci_res(struct amdgv_init_data *data,
 {
 	devm_iounmap(&pdev->dev, data->info.mmio);
 	devm_iounmap(&pdev->dev, data->info.doorbell);
-	if (pci_resource_len(pdev, 0) == 0) {
-		iounmap(data->info.fb);
-	} else {
+	if (data->info.fb)
 		devm_iounmap(&pdev->dev, data->info.fb);
-	}
 	if (data->info.io_mem)
 		pci_iounmap(pdev, data->info.io_mem);
 
@@ -439,6 +359,11 @@ static int gim_init_thread_func(void *context)
 	data->opt.debug_mode = gim_conf_get_debug_mode_opt(dev_data->gpu_index);
 	data->opt.thermal_throttle_rate_limit = gim_conf_get_thermal_throttle_rate_limit_opt(dev_data->gpu_index);
 	data->opt.unified_ras_enabled = gim_conf_get_enable_uniras_opt(dev_data->gpu_index);
+
+	if (gim_conf_get_emu_mode_opt()) {
+		data->opt.flags |= AMDGV_FLAG_EMU_MODE;
+		data->opt.flags |= AMDGV_FLAG_SIM_MODE;
+	}
 
 	/* Initialize device and enable SRIOV */
 	if (pci_enable_device(pdev) != 0) {
@@ -862,6 +787,11 @@ static int gim_init(void)
 
 	gim_memory_sentinel_init();
 
+	if (gim_hbm_drv_mgmt_module_init()) {
+		ret = -ENOMEM;
+		goto err_hbm_wq;
+	}
+
 	/* Start ftrace here */
 	if (gim_ftrace_init(adapt_list) != 0)
 		gim_warn("Unable to init ftracing\n");
@@ -979,6 +909,10 @@ err_reg_drv:
 err_conf_init:
 	gim_ftrace_fini();
 
+err_hbm_wq:
+	gim_hbm_drv_mgmt_module_fini();
+	gim_memory_sentinel_fini();
+
 	return ret;
 }
 
@@ -1067,6 +1001,7 @@ static void gim_exit(void)
 
 	gim_error_ring_buffer_fini(&gim_error_rb);
 
+	gim_hbm_drv_mgmt_module_fini();
 	gim_memory_sentinel_fini();
 }
 

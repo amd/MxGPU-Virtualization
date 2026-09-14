@@ -2,28 +2,25 @@
  *
  * SPDX-License-Identifier: MIT
  */
- #include "amdsmi.h"
- #include "smi_cli_api_host.h"
- #include "smi_cli_parser.h"
- #include "smi_cli_logger_err.h"
- #include "smi_cli_templates.h"
- #include "smi_cli_device.h"
- #include "smi_cli_platform.h"
- 
- #include "json/json.h"
+#include "amdsmi.h"
+#include "smi_cli_api_host.h"
+#include "smi_cli_parser.h"
+#include "smi_cli_logger_err.h"
+#include "smi_cli_templates.h"
+#include "smi_cli_device.h"
+#include "smi_cli_platform.h"
+
+#include "json/json.h"
 
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
-		amdsmi_processor_handle *);
-typedef amdsmi_status_t (*AMDSMI_GET_CC_MODE)(amdsmi_processor_handle,
-		amdsmi_cc_mode_t *);
-typedef amdsmi_status_t (*AMDSMI_GET_TDI_STATE)(amdsmi_vf_handle_t,
-		amdsmi_tdi_state_t *);
+								amdsmi_processor_handle*);
+typedef amdsmi_status_t (*AMDSMI_GET_CC_MODE)(amdsmi_processor_handle, amdsmi_cc_mode_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_TDI_STATE)(amdsmi_vf_handle_t, amdsmi_tdi_state_t*);
 
-typedef amdsmi_status_t (*AMDSMI_GET_VF_HANDLE_FROM_BDF)(amdsmi_bdf_t,
-		amdsmi_vf_handle_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_VF_HANDLE_FROM_BDF)(amdsmi_bdf_t, amdsmi_vf_handle_t*);
 
-typedef amdsmi_status_t (*AMDSMI_GET_VF_HANDLE_FROM_VF_INDEX)(amdsmi_processor_handle,
-		uint32_t, amdsmi_vf_handle_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_VF_HANDLE_FROM_VF_INDEX)(amdsmi_processor_handle, uint32_t,
+							      amdsmi_vf_handle_t*);
 
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_VF_HANDLE_FROM_BDF host_amdsmi_get_vf_handle_from_bdf;
@@ -33,16 +30,14 @@ extern AMDSMI_GET_TDI_STATE host_amdsmi_get_tdi_state;
 
 std::string host_fill_tdi_state(Arguments arg, std::string value)
 {
-	std::string out{};
+	std::string out {};
 
 	if (arg.output == json) {
 		nlohmann::ordered_json tdi_state_json = value.c_str();
-		out = tdi_state_json.dump(4);
-	}
-	else if (arg.output == csv) {
+		out				      = tdi_state_json.dump(4);
+	} else if (arg.output == csv) {
 		out = string_format(",%s", value.c_str());
-	}
-	else {
+	} else {
 		out = string_format(tdiStateTemplate, value.c_str());
 	}
 	return out;
@@ -50,23 +45,21 @@ std::string host_fill_tdi_state(Arguments arg, std::string value)
 
 std::string host_fill_cc_mode(Arguments arg, std::string value)
 {
-	std::string out{};
+	std::string out {};
 
 	if (arg.output == json) {
 		nlohmann::ordered_json cc_mode_json = value.c_str();
-		out = cc_mode_json.dump(4);
-	}
-	else if (arg.output == csv) {
+		out				    = cc_mode_json.dump(4);
+	} else if (arg.output == csv) {
 		out = string_format(",%s", value.c_str());
-	}
-	else {
+	} else {
 		out = string_format(ccModeTemplate, value.c_str());
 	}
 	return out;
 }
 
 int AmdSmiApiHost::amdsmi_get_vf_tdi_state_command(std::string vf_bdf, Arguments arg,
-		std::string &formatted_string)
+						   std::string& formatted_string)
 {
 	int ret;
 	amdsmi_bdf_t tmp_bdf;
@@ -74,9 +67,9 @@ int AmdSmiApiHost::amdsmi_get_vf_tdi_state_command(std::string vf_bdf, Arguments
 	amdsmi_tdi_state_t tdi_state;
 	std::string tdi_state_str;
 
-	tmp_bdf.bdf.domain_number = std::stoi(vf_bdf.substr(0, 4), nullptr, 16);
-	tmp_bdf.bdf.bus_number = std::stoi(vf_bdf.substr(5, 2), nullptr, 16);
-	tmp_bdf.bdf.device_number = std::stoi(vf_bdf.substr(8, 2), nullptr, 16);
+	tmp_bdf.bdf.domain_number   = std::stoi(vf_bdf.substr(0, 4), nullptr, 16);
+	tmp_bdf.bdf.bus_number	    = std::stoi(vf_bdf.substr(5, 2), nullptr, 16);
+	tmp_bdf.bdf.device_number   = std::stoi(vf_bdf.substr(8, 2), nullptr, 16);
 	tmp_bdf.bdf.function_number = std::stoi(vf_bdf.substr(11), nullptr, 16);
 
 	ret = host_amdsmi_get_vf_handle_from_bdf(tmp_bdf, &vf_handle);
@@ -95,19 +88,17 @@ int AmdSmiApiHost::amdsmi_get_vf_tdi_state_command(std::string vf_bdf, Arguments
 
 	if (arg.output == json) {
 		nlohmann::ordered_json tdi_state_json = tdi_state_str.c_str();
-		formatted_string = tdi_state_json.dump(4);
-	}
-	else if (arg.output == csv) {
+		formatted_string		      = tdi_state_json.dump(4);
+	} else if (arg.output == csv) {
 		formatted_string = string_format(",%s", tdi_state_str.c_str());
-	}
-	else {
+	} else {
 		formatted_string = string_format(tdiStateTemplate, tdi_state_str.c_str());
 	}
 	return ret;
 }
 
 int AmdSmiApiHost::amdsmi_get_cc_mode_command(uint64_t processor_bdf, Arguments arg,
-		std::string &formatted_string)
+					      std::string& formatted_string)
 {
 	int ret;
 	amdsmi_processor_handle processor;
@@ -132,12 +123,10 @@ int AmdSmiApiHost::amdsmi_get_cc_mode_command(uint64_t processor_bdf, Arguments 
 
 	if (arg.output == json) {
 		nlohmann::ordered_json cc_mode_json = cc_mode_str.c_str();
-		formatted_string = cc_mode_json.dump(4);
-	}
-	else if (arg.output == csv) {
+		formatted_string		    = cc_mode_json.dump(4);
+	} else if (arg.output == csv) {
 		formatted_string = string_format(",%s", cc_mode_str.c_str());
-	}
-	else {
+	} else {
 		formatted_string = string_format(ccModeTemplate, cc_mode_str.c_str());
 	}
 

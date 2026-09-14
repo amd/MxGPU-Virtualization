@@ -192,6 +192,8 @@ struct amdgv_pp_funcs {
 					enum pp_clock_limit_type limit_type, uint32_t *freq);
 	int (*set_clock_limit_driver_freq)(struct amdgv_adapter *adapt, enum pp_clock_type clk,
 					enum pp_clock_limit_type limit_type, uint32_t freq);
+	int (*migration_boost_clk)(struct amdgv_adapter *adapt);
+	int (*migration_restore_clk)(struct amdgv_adapter *adapt, uint32_t idx_vf);
 	int (*enter_power_saving)(struct amdgv_adapter *adapt);
 	int (*exit_power_saving)(struct amdgv_adapter *adapt);
 	int (*query_power_saving_status)(struct amdgv_adapter *adapt, uint32_t *status);
@@ -244,6 +246,8 @@ struct amdgv_pp_funcs {
 		uint32_t *params, uint32_t num_params, uint32_t *read_args, uint32_t num_read_args);
 	int (*gpu_mode0_reset)(struct amdgv_adapter *adapt);
 	bool (*migration_smu_is_supported)(struct amdgv_adapter *adapt);
+	void (*put_timeout)(struct amdgv_adapter *adapt, uint64_t elapsed);
+	int (*get_serial)(struct amdgv_adapter *adapt, uint64_t *serial);
 };
 
 struct amdgv_pmme_funcs {
@@ -328,6 +332,7 @@ int amdgv_powerplay_mode2_reset(struct amdgv_adapter *adapt);
 int amdgv_powerplay_flr_reset(struct amdgv_adapter *adapt, uint32_t idx_vf);
 int amdgv_powerplay_mode0_reset(struct amdgv_adapter *adapt);
 
+void amdgv_powerplay_put_timeout(struct amdgv_adapter *adapt, uint64_t elapsed);
 
 int amdgv_smu_send_ras_msg(struct amdgv_adapter *adapt, enum pp_smu_ras_msg msg,
 	uint32_t *params, uint32_t num_params, uint32_t *read_args, uint32_t num_read_args);

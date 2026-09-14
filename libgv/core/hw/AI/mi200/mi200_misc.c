@@ -61,18 +61,6 @@ static int mi200_wait_for_cp_dma_pio_cb(void *context)
 	return !(dma_pio_count < 2 && !dma_pio_full);
 }
 
-#define DMA_COPY_CONTEXT_REGS 1
-static struct amdgv_reg_dump_info dma_copy_context_regs[DMA_COPY_CONTEXT_REGS] = {
-	{
-		.name = "CP_DMA_CNTL",
-		.hwip = GC_HWIP,
-		.seg = mmCP_DMA_CNTL_BASE_IDX,
-		.logical_inst = 0,
-		.offset_hwip = mmCP_DMA_CNTL,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-};
-
 static int mi200_cp_dma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, bool fill_mode,
 			      uint64_t src, uint64_t dst, uint64_t size, uint64_t *size_copied)
 {
@@ -87,8 +75,6 @@ static int mi200_cp_dma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, bool 
 
 	cb_context.ctx = (void *)adapt;
 	cb_context.type = AMDGV_WAIT_FOR_CP_DMA_PIO;
-	cb_context.ctx_ext = dma_copy_context_regs;
-	cb_context.num_ctx_ext = DMA_COPY_CONTEXT_REGS;
 
 	/*
 	 * to use CP_DMA copy, need to make sure GFX is switched to PF

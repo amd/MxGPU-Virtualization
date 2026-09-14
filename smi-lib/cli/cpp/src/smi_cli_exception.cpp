@@ -11,9 +11,10 @@
 
 #include "json/json.h"
 
-SmiToolInvalidCommandException::SmiToolInvalidCommandException(std::string cmd) : command{cmd}
+SmiToolInvalidCommandException::SmiToolInvalidCommandException(std::string cmd) : command {cmd}
 {
-	message = string_format("Command '%s' is invalid. Run 'help' for more info.", command.c_str());
+	message =
+	    string_format("Command '%s' is invalid. Run 'help' for more info.", command.c_str());
 }
 
 int SmiToolInvalidCommandException::get_error_code()
@@ -26,9 +27,11 @@ std::string SmiToolInvalidCommandException::get_message()
 	return message;
 }
 
-SmiToolInvalidParameterException::SmiToolInvalidParameterException(std::string param) : parameter{param}
+SmiToolInvalidParameterException::SmiToolInvalidParameterException(std::string param)
+    : parameter {param}
 {
-	message = string_format("Parameter '%s' is invalid. Run 'help' for more info.", parameter.c_str());
+	message = string_format("Parameter '%s' is invalid. Run 'help' for more info.",
+				parameter.c_str());
 }
 
 int SmiToolInvalidParameterException::get_error_code()
@@ -51,11 +54,10 @@ std::string SmiToolDeviceNotFoundException::get_message()
 SmiToolDeviceNotFoundException::SmiToolDeviceNotFoundException(std::string param)
 {
 	message = string_format("Can not find a device with the corresponding identifier: \'%s\'",
-							param.c_str());
+				param.c_str());
 }
 
-
-SmiToolInvalidFilePathException::SmiToolInvalidFilePathException(std::string path) : path{path}
+SmiToolInvalidFilePathException::SmiToolInvalidFilePathException(std::string path) : path {path}
 {
 	message = string_format("Path '%s' cannot be found.", path.c_str());
 }
@@ -70,10 +72,12 @@ std::string SmiToolInvalidFilePathException::get_message()
 }
 
 SmiToolInvalidParameterValueException::SmiToolInvalidParameterValueException(
-	std::string parametervalue) : parametervalue{parametervalue}
+    std::string parametervalue)
+    : parametervalue {parametervalue}
 {
-	message = string_format("Value '%s' is not of valid type or format. Run 'help' for more info.",
-							parametervalue.c_str());
+	message =
+	    string_format("Value '%s' is not of valid type or format. Run 'help' for more info.",
+			  parametervalue.c_str());
 }
 int SmiToolInvalidParameterValueException::get_error_code()
 {
@@ -84,11 +88,11 @@ std::string SmiToolInvalidParameterValueException::get_message()
 	return message;
 }
 
-SmiToolMissingParameterValueException::SmiToolMissingParameterValueException(
-	std::string parameter) : parameter{parameter}
+SmiToolMissingParameterValueException::SmiToolMissingParameterValueException(std::string parameter)
+    : parameter {parameter}
 {
 	message = string_format("Parameter '%s' requires a value. Run 'help' for more info.",
-							parameter.c_str());
+				parameter.c_str());
 }
 int SmiToolMissingParameterValueException::get_error_code()
 {
@@ -99,11 +103,12 @@ std::string SmiToolMissingParameterValueException::get_message()
 	return message;
 }
 
-SmiToolCommandNotSupportedException::SmiToolCommandNotSupportedException(
-	std::string command) : command{command}
+SmiToolCommandNotSupportedException::SmiToolCommandNotSupportedException(std::string command)
+    : command {command}
 {
-	message = string_format("Command '%s' is not supported on the system. Run 'help' for more info.",
-							command.c_str());
+	message =
+	    string_format("Command '%s' is not supported on the system. Run 'help' for more info.",
+			  command.c_str());
 }
 int SmiToolCommandNotSupportedException::get_error_code()
 {
@@ -114,12 +119,12 @@ std::string SmiToolCommandNotSupportedException::get_message()
 	return message;
 }
 
-
-SmiToolParameterNotSupportedException::SmiToolParameterNotSupportedException(
-	std::string param) : parameter{param}
+SmiToolParameterNotSupportedException::SmiToolParameterNotSupportedException(std::string param)
+    : parameter {param}
 {
-	message = string_format("Parameter '%s' is not supported on the system. Run 'help' for more info.",
-							parameter.c_str());
+	message = string_format(
+	    "Parameter '%s' is not supported on the system. Run 'help' for more info.",
+	    parameter.c_str());
 }
 int SmiToolParameterNotSupportedException::get_error_code()
 {
@@ -130,10 +135,12 @@ std::string SmiToolParameterNotSupportedException::get_message()
 	return message;
 }
 
-SmiToolRequiredCommandException::SmiToolRequiredCommandException(std::string param) : parameter{param}
+SmiToolRequiredCommandException::SmiToolRequiredCommandException(std::string param)
+    : parameter {param}
 {
-	message = string_format("Command '%s' requires a target argument. Run '--help' for more info.",
-							parameter.c_str());
+	message =
+	    string_format("Command '%s' requires a target argument. Run '--help' for more info.",
+			  parameter.c_str());
 }
 int SmiToolRequiredCommandException::get_error_code()
 {
@@ -146,8 +153,9 @@ std::string SmiToolRequiredCommandException::get_message()
 
 SmiToolInvalidSubcommandException::SmiToolInvalidSubcommandException(std::string command)
 {
-	message = string_format("Command '%s' is invalid. Must receive valid AMD-SMI Command first. Run '--help' for more info.",
-		command.c_str());
+	message = string_format("Command '%s' is invalid. Must receive valid AMD-SMI Command "
+				"first. Run '--help' for more info.",
+				command.c_str());
 }
 int SmiToolInvalidSubcommandException::get_error_code()
 {
@@ -173,7 +181,8 @@ std::string SmiToolPermissionDeniedException::get_message()
 
 SmiToolInvalidPlatformException::SmiToolInvalidPlatformException()
 {
-	message = "Host SMI tool detected. This platform is unsupported. Use the AMD-SMI build that matches this environment";
+	message = "Host SMI tool detected. This platform is unsupported. Use the AMD-SMI build "
+		  "that matches this environment";
 }
 int SmiToolInvalidPlatformException::get_error_code()
 {
@@ -197,10 +206,11 @@ std::string SmiToolNotEnoughMemException::get_message()
 	return message;
 }
 
-SmiToolUnknownErrorException::SmiToolUnknownErrorException(std::string param) : parameter{param}
+SmiToolUnknownErrorException::SmiToolUnknownErrorException(std::string param) : parameter {param}
 {
-	message = string_format("Command '%s' requires a target argument. Run '--help' for more info.",
-							parameter.c_str());
+	message =
+	    string_format("Command '%s' requires a target argument. Run '--help' for more info.",
+			  parameter.c_str());
 }
 int SmiToolUnknownErrorException::get_error_code()
 {
@@ -211,11 +221,12 @@ std::string SmiToolUnknownErrorException::get_message()
 	return message;
 }
 
-SmiToolSMILIBErrorException::SmiToolSMILIBErrorException(int error_code) : smilib_error_code{error_code}
+SmiToolSMILIBErrorException::SmiToolSMILIBErrorException(int error_code)
+    : smilib_error_code {error_code}
 {
 	error_code = -1000 - smilib_error_code;
-	message = string_format("SMI-LIB has returned status %d - %s.", error_code,
-							SMI_LIB_ERROR_MESSAGES[smilib_error_code].c_str());
+	message	   = string_format("SMI-LIB has returned status %d - %s.", error_code,
+				   SMI_LIB_ERROR_MESSAGES[smilib_error_code].c_str());
 }
 int SmiToolSMILIBErrorException::get_error_code()
 {
@@ -227,23 +238,27 @@ std::string SmiToolSMILIBErrorException::get_message()
 	return message;
 }
 
-void print_errors(SmiToolException &e, OutputFormat format, std::string file_path)
+void print_errors(SmiToolException& e, OutputFormat format, std::string file_path)
 {
 	if (e.get_error_code() == -4) {
 		file_path = "";
 	}
-	std::string out{};
+	std::string out {};
 	if (format == json) {
 		nlohmann::ordered_json json;
 		json["status_message"] = e.get_message();
-		json["status_code"] = e.get_error_code();
-		out = json.dump(4);
+		json["status_code"]    = e.get_error_code();
+		out		       = json.dump(4);
 	} else if (format == csv) {
-		std::string error_code_string{string_format("%d", e.get_error_code())};
-		out.append("status_message,status_code").append("\n").append(e.get_message()).append(",").append(
-			   error_code_string).append("\n");
+		std::string error_code_string {string_format("%d", e.get_error_code())};
+		out.append("status_message,status_code")
+		    .append("\n")
+		    .append(e.get_message())
+		    .append(",")
+		    .append(error_code_string)
+		    .append("\n");
 	} else {
-		std::string error_code_string{string_format("%d", e.get_error_code())};
+		std::string error_code_string {string_format("%d", e.get_error_code())};
 		out.append(e.get_message()).append(" Status code: ").append(error_code_string);
 	}
 

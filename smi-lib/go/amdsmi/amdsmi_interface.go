@@ -35,10 +35,10 @@ static uint64_t amdsmi_go_cper_persistence_info(const amdsmi_cper_hdr_t *h) {
 	return h->persistence_info;
 }
 
-// CGO does not expose union members on amdsmi_fabric_info_ver_t.
+// CGO does not expose union members on amdsmi_fabric_info_t.
 // This accessor returns a pointer to the v1 variant.
 static const amdsmi_fabric_info_v1_t *amdsmi_go_fabric_info_v1(const amdsmi_fabric_info_t *info) {
-	return &info->info.fabric_info.v1;
+	return &info->fabric_info.v1;
 }
 
 // CGO renders C arrays of pointers as opaque types in some toolchains; expose
@@ -83,6 +83,7 @@ type TemperatureMetric int32                // TemperatureMetric selects which t
 // Values are in Celsius.
 type PowerCapType int32   // PowerCapType identifies a power-cap sensor / PPT rail (amdsmi_power_cap_type_t)
 type NpmStatus int32      // NpmStatus reports whether node power management is enabled (amdsmi_npm_status_t)
+type ComputeTrayType int32 // ComputeTrayType identifies the compute tray form factor (amdsmi_compute_tray_type_t)
 type PtlDataFormat uint32 // PtlDataFormat selects a PTL peak-performance data format (amdsmi_ptl_data_format_t)
 type AffinityScope int32
 type NicFwVersionType int32   // amdsmi_nic_fw_version_type_t
@@ -167,8 +168,29 @@ const (
 
 	AMDSMI_FABRIC_PPOD_ID_SIZE                    = 16
 	AMDSMI_FABRIC_ACTIVE_ACCELERATORS_BITMAP_SIZE = 32
-	AMDSMI_FABRIC_MAX_LOCAL_GPUS                  = 8
+	AMDSMI_FABRIC_MAX_LOCAL_GPUS                  = 16
+	AMDSMI_FABRIC_MAX_BITMAP_SIZE                 = 64
 	AMDSMI_FABRIC_LABEL_MAX                       = 32
+
+	AMDSMI_FABRIC_PPOD_CONFIG_V1    = 1
+	AMDSMI_FABRIC_VPOD_CONFIG_V1    = 1
+	AMDSMI_FABRIC_STATION_CONFIG_V1 = 1
+
+	AMDSMI_FABRIC_PPOD_FIELD_ACCEL_ID     uint32 = 1 << 0
+	AMDSMI_FABRIC_PPOD_FIELD_PPOD_ID      uint32 = 1 << 1
+	AMDSMI_FABRIC_PPOD_FIELD_PPOD_SIZE    uint32 = 1 << 2
+	AMDSMI_FABRIC_PPOD_FIELD_LOCAL_ACCELS uint32 = 1 << 3
+	AMDSMI_FABRIC_PPOD_FIELD_BANDWIDTH    uint32 = 1 << 4
+	AMDSMI_FABRIC_PPOD_FIELD_LATENCY      uint32 = 1 << 5
+
+	AMDSMI_FABRIC_VPOD_FIELD_VPOD_ID            uint32 = 1 << 0
+	AMDSMI_FABRIC_VPOD_FIELD_VPOD_SIZE          uint32 = 1 << 1
+	AMDSMI_FABRIC_VPOD_FIELD_VPOD_ACTIVE_ACCELS uint32 = 1 << 2
+	AMDSMI_FABRIC_VPOD_FIELD_ADDR_MODE          uint32 = 1 << 3
+
+	AMDSMI_FABRIC_DF_FIELD_STATION_FLAGS  uint32 = 1 << 0
+	AMDSMI_FABRIC_DF_FIELD_LANE_EN_BITMAP uint32 = 1 << 1
+	AMDSMI_FABRIC_DF_FIELD_NUM_STATIONS   uint32 = 1 << 2
 )
 
 const (
@@ -201,29 +223,49 @@ type GpuBlock uint64
 
 // amdsmi_gpu_block_t values
 const (
-	AMDSMI_GPU_BLOCK_INVALID   GpuBlock = 0
-	AMDSMI_GPU_BLOCK_FIRST     GpuBlock = (1 << 0)
-	AMDSMI_GPU_BLOCK_UMC       GpuBlock = AMDSMI_GPU_BLOCK_FIRST
-	AMDSMI_GPU_BLOCK_SDMA      GpuBlock = (1 << 1)
-	AMDSMI_GPU_BLOCK_GFX       GpuBlock = (1 << 2)
-	AMDSMI_GPU_BLOCK_MMHUB     GpuBlock = (1 << 3)
-	AMDSMI_GPU_BLOCK_ATHUB     GpuBlock = (1 << 4)
-	AMDSMI_GPU_BLOCK_PCIE_BIF  GpuBlock = (1 << 5)
-	AMDSMI_GPU_BLOCK_HDP       GpuBlock = (1 << 6)
-	AMDSMI_GPU_BLOCK_XGMI_WAFL GpuBlock = (1 << 7)
-	AMDSMI_GPU_BLOCK_DF        GpuBlock = (1 << 8)
-	AMDSMI_GPU_BLOCK_SMN       GpuBlock = (1 << 9)
-	AMDSMI_GPU_BLOCK_SEM       GpuBlock = (1 << 10)
-	AMDSMI_GPU_BLOCK_MP0       GpuBlock = (1 << 11)
-	AMDSMI_GPU_BLOCK_MP1       GpuBlock = (1 << 12)
-	AMDSMI_GPU_BLOCK_FUSE      GpuBlock = (1 << 13)
-	AMDSMI_GPU_BLOCK_MCA       GpuBlock = (1 << 14)
-	AMDSMI_GPU_BLOCK_VCN       GpuBlock = (1 << 15)
-	AMDSMI_GPU_BLOCK_JPEG      GpuBlock = (1 << 16)
-	AMDSMI_GPU_BLOCK_IH        GpuBlock = (1 << 17)
-	AMDSMI_GPU_BLOCK_MPIO      GpuBlock = (1 << 18)
-	AMDSMI_GPU_BLOCK_LAST      GpuBlock = AMDSMI_GPU_BLOCK_MPIO
-	AMDSMI_GPU_BLOCK_RESERVED  GpuBlock = (1 << 63)
+	AMDSMI_GPU_BLOCK_INVALID    GpuBlock = 0
+	AMDSMI_GPU_BLOCK_FIRST      GpuBlock = (1 << 0)
+	AMDSMI_GPU_BLOCK_UMC        GpuBlock = AMDSMI_GPU_BLOCK_FIRST
+	AMDSMI_GPU_BLOCK_SDMA       GpuBlock = (1 << 1)
+	AMDSMI_GPU_BLOCK_GFX        GpuBlock = (1 << 2)
+	AMDSMI_GPU_BLOCK_MMHUB      GpuBlock = (1 << 3)
+	AMDSMI_GPU_BLOCK_ATHUB      GpuBlock = (1 << 4)
+	AMDSMI_GPU_BLOCK_PCIE_BIF   GpuBlock = (1 << 5)
+	AMDSMI_GPU_BLOCK_HDP        GpuBlock = (1 << 6)
+	AMDSMI_GPU_BLOCK_XGMI_WAFL  GpuBlock = (1 << 7)
+	AMDSMI_GPU_BLOCK_DF         GpuBlock = (1 << 8)
+	AMDSMI_GPU_BLOCK_SMN        GpuBlock = (1 << 9)
+	AMDSMI_GPU_BLOCK_SEM        GpuBlock = (1 << 10)
+	AMDSMI_GPU_BLOCK_MP0        GpuBlock = (1 << 11)
+	AMDSMI_GPU_BLOCK_MP1        GpuBlock = (1 << 12)
+	AMDSMI_GPU_BLOCK_FUSE       GpuBlock = (1 << 13)
+	AMDSMI_GPU_BLOCK_MCA        GpuBlock = (1 << 14)
+	AMDSMI_GPU_BLOCK_VCN        GpuBlock = (1 << 15)
+	AMDSMI_GPU_BLOCK_JPEG       GpuBlock = (1 << 16)
+	AMDSMI_GPU_BLOCK_IH         GpuBlock = (1 << 17)
+	AMDSMI_GPU_BLOCK_MPIO       GpuBlock = (1 << 18)
+	AMDSMI_GPU_BLOCK_MMSCH      GpuBlock = (1 << 19)
+	AMDSMI_GPU_BLOCK_MP5        GpuBlock = (1 << 20)
+	AMDSMI_GPU_BLOCK_ATU        GpuBlock = (1 << 21)
+	AMDSMI_GPU_BLOCK_DACC_BE    GpuBlock = (1 << 22)
+	AMDSMI_GPU_BLOCK_ECLR       GpuBlock = (1 << 23)
+	AMDSMI_GPU_BLOCK_KPX_SERDES GpuBlock = (1 << 24)
+	AMDSMI_GPU_BLOCK_LSDMA      GpuBlock = (1 << 25)
+	AMDSMI_GPU_BLOCK_MPART      GpuBlock = (1 << 26)
+	AMDSMI_GPU_BLOCK_MPIFOE     GpuBlock = (1 << 27)
+	AMDSMI_GPU_BLOCK_MPRAS      GpuBlock = (1 << 28)
+	AMDSMI_GPU_BLOCK_NBIF       GpuBlock = (1 << 29)
+	AMDSMI_GPU_BLOCK_NBIO       GpuBlock = (1 << 30)
+	AMDSMI_GPU_BLOCK_OXRP       GpuBlock = (1 << 31)
+	AMDSMI_GPU_BLOCK_PCIE_PL    GpuBlock = (1 << 32)
+	AMDSMI_GPU_BLOCK_PCS_XGMI   GpuBlock = (1 << 33)
+	AMDSMI_GPU_BLOCK_PIE        GpuBlock = (1 << 34)
+	AMDSMI_GPU_BLOCK_CS         GpuBlock = (1 << 35)
+	AMDSMI_GPU_BLOCK_SHUB       GpuBlock = (1 << 36)
+	AMDSMI_GPU_BLOCK_SSBDCI     GpuBlock = (1 << 37)
+	AMDSMI_GPU_BLOCK_UCIE_PCS   GpuBlock = (1 << 38)
+	AMDSMI_GPU_BLOCK_LAST       GpuBlock = AMDSMI_GPU_BLOCK_UCIE_PCS
+	AMDSMI_GPU_BLOCK_RESERVED   GpuBlock = (1 << 63)
 )
 
 const (
@@ -311,6 +353,20 @@ const (
 	AMDSMI_FW_ID_PSP_RAS
 	AMDSMI_FW_ID_P2S_TABLE
 	AMDSMI_FW_ID_PLDM_BUNDLE
+	AMDSMI_FW_ID_RS64_MES
+	AMDSMI_FW_ID_RS64_MES_STACK
+	AMDSMI_FW_ID_RS64_KIQ
+	AMDSMI_FW_ID_RS64_KIQ_STACK
+	AMDSMI_FW_ID_RS64_MEC_P4_DATA
+	AMDSMI_FW_ID_RS64_MEC_P5_DATA
+	AMDSMI_FW_ID_RS64_MEC_P6_DATA
+	AMDSMI_FW_ID_RS64_MEC_P7_DATA
+	AMDSMI_FW_ID_LSDMA
+	AMDSMI_FW_ID_MP5
+	AMDSMI_FW_ID_PSP_IPKEYMGR
+	AMDSMI_FW_ID_PSP_IOVM
+	AMDSMI_FW_ID_PSP_SPDM
+	AMDSMI_FW_ID_PSP_DPE
 	AMDSMI_FW_ID__MAX
 )
 
@@ -482,6 +538,34 @@ func (b FwBlock) String() string {
 		return "FW_ID_P2S_TABLE"
 	case AMDSMI_FW_ID_PLDM_BUNDLE:
 		return "FW_ID_PLDM_BUNDLE"
+	case AMDSMI_FW_ID_RS64_MES:
+		return "FW_ID_RS64_MES"
+	case AMDSMI_FW_ID_RS64_MES_STACK:
+		return "FW_ID_RS64_MES_STACK"
+	case AMDSMI_FW_ID_RS64_KIQ:
+		return "FW_ID_RS64_KIQ"
+	case AMDSMI_FW_ID_RS64_KIQ_STACK:
+		return "FW_ID_RS64_KIQ_STACK"
+	case AMDSMI_FW_ID_RS64_MEC_P4_DATA:
+		return "FW_ID_RS64_MEC_P4_DATA"
+	case AMDSMI_FW_ID_RS64_MEC_P5_DATA:
+		return "FW_ID_RS64_MEC_P5_DATA"
+	case AMDSMI_FW_ID_RS64_MEC_P6_DATA:
+		return "FW_ID_RS64_MEC_P6_DATA"
+	case AMDSMI_FW_ID_RS64_MEC_P7_DATA:
+		return "FW_ID_RS64_MEC_P7_DATA"
+	case AMDSMI_FW_ID_LSDMA:
+		return "FW_ID_LSDMA"
+	case AMDSMI_FW_ID_MP5:
+		return "FW_ID_MP5"
+	case AMDSMI_FW_ID_PSP_IPKEYMGR:
+		return "FW_ID_PSP_IPKEYMGR"
+	case AMDSMI_FW_ID_PSP_IOVM:
+		return "FW_ID_PSP_IOVM"
+	case AMDSMI_FW_ID_PSP_SPDM:
+		return "FW_ID_PSP_SPDM"
+	case AMDSMI_FW_ID_PSP_DPE:
+		return "FW_ID_PSP_DPE"
 	case AMDSMI_FW_ID__MAX:
 		return "FW_ID__MAX"
 	default:
@@ -585,6 +669,7 @@ const (
 	AMDSMI_VRAM_TYPE_HBM2E VramType = 3
 	AMDSMI_VRAM_TYPE_HBM3  VramType = 4
 	AMDSMI_VRAM_TYPE_HBM3E VramType = 5
+	AMDSMI_VRAM_TYPE_HBM4  VramType = 6
 	// DDR
 	AMDSMI_VRAM_TYPE_DDR2 VramType = 10
 	AMDSMI_VRAM_TYPE_DDR3 VramType = 11
@@ -766,6 +851,28 @@ func (npm NpmStatus) String() string {
 }
 
 const (
+	AMDSMI_COMPUTE_TRAY_TYPE_UNKNOWN  ComputeTrayType = 0
+	AMDSMI_COMPUTE_TRAY_TYPE_HELIOS_P ComputeTrayType = 1
+	AMDSMI_COMPUTE_TRAY_TYPE_HELIOS_R ComputeTrayType = 2
+	AMDSMI_COMPUTE_TRAY_TYPE_TITAN    ComputeTrayType = 3
+)
+
+func (t ComputeTrayType) String() string {
+	switch t {
+	case AMDSMI_COMPUTE_TRAY_TYPE_UNKNOWN:
+		return "UNKNOWN"
+	case AMDSMI_COMPUTE_TRAY_TYPE_HELIOS_P:
+		return "HELIOS_P"
+	case AMDSMI_COMPUTE_TRAY_TYPE_HELIOS_R:
+		return "HELIOS_R"
+	case AMDSMI_COMPUTE_TRAY_TYPE_TITAN:
+		return "TITAN"
+	default:
+		return fmt.Sprintf("UNKNOWN(%d)", int32(t))
+	}
+}
+
+const (
 	AMDSMI_PTL_DATA_FORMAT_I8      PtlDataFormat = 0x0
 	AMDSMI_PTL_DATA_FORMAT_F16     PtlDataFormat = 0x1
 	AMDSMI_PTL_DATA_FORMAT_BF16    PtlDataFormat = 0x2
@@ -889,6 +996,8 @@ func (v VramType) String() string {
 		return "HBM3"
 	case AMDSMI_VRAM_TYPE_HBM3E:
 		return "HBM3E"
+	case AMDSMI_VRAM_TYPE_HBM4:
+		return "HBM4"
 	case AMDSMI_VRAM_TYPE_DDR2:
 		return "DDR2"
 	case AMDSMI_VRAM_TYPE_DDR3:
@@ -1432,6 +1541,7 @@ type AsicInfo struct {
 	TargetGraphicsVersion uint64
 	SubsystemID           uint32
 	Flags                 uint64
+	PhysicalAccId         uint32
 }
 
 // GetGpuAsicInfo returns ASIC information for the given processor.
@@ -1454,6 +1564,7 @@ func GetGpuAsicInfo(ph ProcessorHandle) (AsicInfo, error) {
 		TargetGraphicsVersion: uint64(cInfo.target_graphics_version),
 		SubsystemID:           uint32(cInfo.subsystem_id),
 		Flags:                 uint64(cInfo.flags),
+		PhysicalAccId:         uint32(cInfo.physical_acc_id),
 	}, nil
 }
 
@@ -3325,6 +3436,7 @@ type GpuCacheInfo struct {
 }
 
 // GetGpuCacheInfo returns cache information for the given processor.
+
 func GetGpuCacheInfo(ph ProcessorHandle) (GpuCacheInfo, error) {
 	var cInfo C.amdsmi_gpu_cache_info_t
 	ret := C.amdsmi_get_gpu_cache_info(ph.cPtr(), &cInfo)
@@ -3770,11 +3882,22 @@ type RasPolicyV4_0 struct {
 	DramCriticalRegionThreshold    uint16
 }
 
+// RasPolicyV5_0 holds v5.0 entity-based RAS policy fields.
+type RasPolicyV5_0 struct {
+	NumEntities                uint32
+	EventRmaThresholdPerEntity uint32
+	MaxPagesPerRetEvent        uint32
+	OdSramEccThreshold         uint32
+	HwaThreshold               uint32
+	WdtThreshold               uint32
+}
+
 // RasPolicyInfo holds versioned RAS policy information for a GPU.
 type RasPolicyInfo struct {
 	MajorVersion uint8
 	MinorVersion uint8
 	V4_0         *RasPolicyV4_0
+	V5_0         *RasPolicyV5_0
 }
 
 // GetGpuRasPolicyInfo returns the RAS policy info for the given processor.
@@ -3795,6 +3918,16 @@ func GetGpuRasPolicyInfo(ph ProcessorHandle) (RasPolicyInfo, error) {
 		result.V4_0 = &RasPolicyV4_0{
 			DramNonCriticalRegionThreshold: uint16(v4_0.dram_non_critical_region_threshold),
 			DramCriticalRegionThreshold:    uint16(v4_0.dram_critical_region_threshold),
+		}
+	} else if result.MajorVersion == 5 && result.MinorVersion == 0 {
+		v5_0 := (*C.amdsmi_gpu_ras_policy_v5_0_t)(unsafe.Pointer(&cInfo.policy_data))
+		result.V5_0 = &RasPolicyV5_0{
+			NumEntities:                uint32(v5_0.num_entities),
+			EventRmaThresholdPerEntity: uint32(v5_0.event_rma_threshold_per_entity),
+			MaxPagesPerRetEvent:        uint32(v5_0.max_pages_per_ret_event),
+			OdSramEccThreshold:         uint32(v5_0.od_sram_ecc_threshold),
+			HwaThreshold:               uint32(v5_0.hwa_threshold),
+			WdtThreshold:               uint32(v5_0.wdt_threshold),
 		}
 	}
 
@@ -3837,6 +3970,30 @@ func GetNpmInfo(nh NodeHandle) (NpmInfo, error) {
 		Status:            NpmStatus(cInfo.status),
 		Limit:             uint64(cInfo.limit),
 		UbbPowerThreshold: uint32(cInfo.ubb_power_threshold),
+	}, nil
+}
+
+// TrayInfo holds compute tray form factor and capacity (amdsmi_tray_info_t).
+type TrayInfo struct {
+	MaxAccPerTray uint32
+	TrayType      ComputeTrayType
+}
+
+// GetTrayInfo returns compute tray information for the node (amdsmi_get_tray_info).
+// nodeHandle is reserved for future use; the wrapper currently passes NULL to the C API.
+func GetTrayInfo(nodeHandle NodeHandle) (TrayInfo, error) {
+	_ = nodeHandle // reserved for future C API use; pass NULL for now
+
+	var cInfo C.amdsmi_tray_info_t
+
+	ret := C.amdsmi_get_tray_info(NodeHandle{}.cPtr(), &cInfo)
+	if err := checkStatus(Status(ret)); err != nil {
+		return TrayInfo{}, err
+	}
+
+	return TrayInfo{
+		MaxAccPerTray: uint32(cInfo.max_acc_per_tray),
+		TrayType:      ComputeTrayType(cInfo.tray_type),
 	}, nil
 }
 
@@ -6133,22 +6290,15 @@ func (s FabricAcceleratorVpodState) String() string {
 
 // FabricInfoV1 mirrors amdsmi_fabric_info_v1_t.
 //
-// PpodID is a 128-bit UUID stored as a 16-byte array (AMDSMI_FABRIC_PPOD_ID_SIZE).
-// VpodActiveAccelerators is a 1024-bit bitmap stored as 32 uint32 words; bit
-// N set means accelerator ID N is active in this vPoD.
+// Data is grouped by originating subtree: Ppod (setup), Vpod (config), and
+// Station. Fields left unpopulated because the corresponding subtree
+// was missing, empty, or unreadable retain their default/sentinel value.
 type FabricInfoV1 struct {
-	AcceleratorID          uint32
-	FabricType             FabricType
-	Bandwidth              uint32
-	Latency                uint32
-	PpodID                 [AMDSMI_FABRIC_PPOD_ID_SIZE]byte
-	PpodSize               uint32
-	VpodID                 uint32
-	VpodSize               uint32
-	VpodActiveAccelerators [AMDSMI_FABRIC_ACTIVE_ACCELERATORS_BITMAP_SIZE]uint32
-	LocalAccelerators      [AMDSMI_FABRIC_MAX_LOCAL_GPUS]uint32
-	AddrMode               FabricNpaAddressMode
-	AccelState             FabricAcceleratorVpodState
+	FabricType FabricType
+	AccelState FabricAcceleratorVpodState
+	Ppod       FabricPpodData
+	Vpod       FabricVpodData
+	Station    FabricStationData
 }
 
 // FabricInfo holds fabric configuration for a GPU (amdsmi_fabric_info_t).
@@ -6170,30 +6320,43 @@ func GetGpuFabricInfo(ph ProcessorHandle) (FabricInfo, error) {
 		return FabricInfo{}, err
 	}
 
+	packedVersion := uint32(cInfo.fabric_version)
 	out := FabricInfo{
 		Bdf:     *(*Bdf)(unsafe.Pointer(&cInfo.bdf)),
-		Version: uint32(cInfo.info.version),
+		Version: (packedVersion >> 16) & 0xFFFF,
 	}
 
 	if out.Version == 1 {
 		v1 := C.amdsmi_go_fabric_info_v1(&cInfo)
 		out.InfoV1 = FabricInfoV1{
-			AcceleratorID: uint32(v1.accelerator_id),
-			FabricType:    FabricType(v1.fabric_type),
-			Bandwidth:     uint32(v1.bandwidth),
-			Latency:       uint32(v1.latency),
-			PpodID:        *(*[AMDSMI_FABRIC_PPOD_ID_SIZE]byte)(unsafe.Pointer(&v1.ppod_id[0])),
-			PpodSize:      uint32(v1.ppod_size),
-			VpodID:        uint32(v1.vpod_id),
-			VpodSize:      uint32(v1.vpod_size),
-			AddrMode:      FabricNpaAddressMode(v1.addr_mode),
-			AccelState:    FabricAcceleratorVpodState(v1.accel_state),
+			FabricType: FabricType(v1.fabric_type),
+			AccelState: FabricAcceleratorVpodState(v1.accel_state),
+			Ppod: FabricPpodData{
+				AcceleratorID:         uint32(v1.ppod.accelerator_id),
+				PpodID:                *(*[AMDSMI_FABRIC_PPOD_ID_SIZE]byte)(unsafe.Pointer(&v1.ppod.ppod_id[0])),
+				PpodSize:              uint32(v1.ppod.ppod_size),
+				LocalAcceleratorCount: uint32(v1.ppod.local_accelerator_count),
+				Bandwidth:             uint32(v1.ppod.bandwidth),
+				Latency:               uint32(v1.ppod.latency),
+			},
+			Vpod: FabricVpodData{
+				VpodID:   uint32(v1.vpod.vpod_id),
+				VpodSize: uint32(v1.vpod.vpod_size),
+				AddrMode: FabricNpaAddressMode(v1.vpod.addr_mode),
+			},
+			Station: FabricStationData{
+				StationFlags: uint32(v1.station.station_flags),
+				NumStations:  uint8(v1.station.num_stations),
+			},
 		}
 		for i := 0; i < AMDSMI_FABRIC_ACTIVE_ACCELERATORS_BITMAP_SIZE; i++ {
-			out.InfoV1.VpodActiveAccelerators[i] = uint32(v1.vpod_active_accelerators[i])
+			out.InfoV1.Vpod.VpodActiveAccelerators[i] = uint32(v1.vpod.vpod_active_accelerators[i])
 		}
 		for i := 0; i < AMDSMI_FABRIC_MAX_LOCAL_GPUS; i++ {
-			out.InfoV1.LocalAccelerators[i] = uint32(v1.local_accelerators[i])
+			out.InfoV1.Ppod.LocalAccelerators[i] = uint32(v1.ppod.local_accelerators[i])
+		}
+		for i := 0; i < AMDSMI_FABRIC_MAX_BITMAP_SIZE; i++ {
+			out.InfoV1.Station.LaneEnBitmap[i] = byte(v1.station.lane_en_bitmap[i])
 		}
 	}
 
@@ -6212,7 +6375,9 @@ const (
 	AMDSMI_FABRIC_TELEMETRY_CATEGORY_NETPORT         FabricTelemetryCategory = 4
 	AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_UALOE   FabricTelemetryCategory = 5
 	AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_NETPORT FabricTelemetryCategory = 6
-	AMDSMI_FABRIC_TELEMETRY_CATEGORY_MAX             FabricTelemetryCategory = 7
+	AMDSMI_FABRIC_TELEMETRY_CATEGORY_IFOE_DEBUG      FabricTelemetryCategory = 7
+	AMDSMI_FABRIC_TELEMETRY_CATEGORY_PHY             FabricTelemetryCategory = 8
+	AMDSMI_FABRIC_TELEMETRY_CATEGORY_MAX             FabricTelemetryCategory = 9
 	AMDSMI_FABRIC_TELEMETRY_CATEGORY_INVALID         FabricTelemetryCategory = 0xFFFFFFFF
 )
 
@@ -6232,6 +6397,10 @@ func (c FabricTelemetryCategory) String() string {
 		return "DERIVED_UALOE"
 	case AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_NETPORT:
 		return "DERIVED_NETPORT"
+	case AMDSMI_FABRIC_TELEMETRY_CATEGORY_IFOE_DEBUG:
+		return "IFOE_DEBUG"
+	case AMDSMI_FABRIC_TELEMETRY_CATEGORY_PHY:
+		return "PHY"
 	case AMDSMI_FABRIC_TELEMETRY_CATEGORY_INVALID:
 		return "INVALID"
 	default:
@@ -6249,6 +6418,8 @@ const (
 	AMDSMI_FABRIC_TELEMETRY_CATEGORY_MASK_NETPORT         uint32 = 1 << uint32(AMDSMI_FABRIC_TELEMETRY_CATEGORY_NETPORT)
 	AMDSMI_FABRIC_TELEMETRY_CATEGORY_MASK_DERIVED_UALOE   uint32 = 1 << uint32(AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_UALOE)
 	AMDSMI_FABRIC_TELEMETRY_CATEGORY_MASK_DERIVED_NETPORT uint32 = 1 << uint32(AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_NETPORT)
+	AMDSMI_FABRIC_TELEMETRY_CATEGORY_MASK_IFOE_DEBUG      uint32 = 1 << uint32(AMDSMI_FABRIC_TELEMETRY_CATEGORY_IFOE_DEBUG)
+	AMDSMI_FABRIC_TELEMETRY_CATEGORY_MASK_PHY             uint32 = 1 << uint32(AMDSMI_FABRIC_TELEMETRY_CATEGORY_PHY)
 )
 
 // FabricTelemetryItem is a single (id, value) telemetry sample
@@ -6299,6 +6470,8 @@ var allFabricTelemetryCategories = []FabricTelemetryCategory{
 	AMDSMI_FABRIC_TELEMETRY_CATEGORY_NETPORT,
 	AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_UALOE,
 	AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_NETPORT,
+	AMDSMI_FABRIC_TELEMETRY_CATEGORY_IFOE_DEBUG,
+	AMDSMI_FABRIC_TELEMETRY_CATEGORY_PHY,
 }
 
 // FabricTelemetry is the lifecycle wrapper around C-allocated telemetry
@@ -6318,7 +6491,7 @@ type FabricTelemetry struct {
 // AllocFabricTelemetry allocates telemetry storage on the device for the
 // requested categories (amdsmi_alloc_fabric_telemetry).
 //
-// If categories is empty, all categories from UALOE through DERIVED_NETPORT
+// If categories is empty, all categories from UALOE through PHY
 // are requested (matching the Python default).
 //
 // The returned *FabricTelemetry must be released with Close once no longer
@@ -6455,7 +6628,7 @@ func (t *FabricTelemetry) Categories() []FabricTelemetryCategory {
 // session before returning. It mirrors the Python amdsmi_get_fabric_telemetry
 // helper.
 //
-// If categories is empty, all categories from UALOE through DERIVED_NETPORT
+// If categories is empty, all categories from UALOE through PHY
 // are requested.
 func GetFabricTelemetry(ph ProcessorHandle, categories ...FabricTelemetryCategory) (FabricTelemetryData, error) {
 	t, err := AllocFabricTelemetry(ph, categories...)
@@ -6464,4 +6637,124 @@ func GetFabricTelemetry(ph ProcessorHandle, categories ...FabricTelemetryCategor
 	}
 	defer t.Close()
 	return t.Get()
+}
+
+// FabricPpodData holds the PPOD payload shared by FabricPpodConfig
+// (amdsmi_fabric_ppod_data_t).
+type FabricPpodData struct {
+	AcceleratorID         uint32
+	PpodID                [AMDSMI_FABRIC_PPOD_ID_SIZE]byte
+	PpodSize              uint32
+	LocalAccelerators     [AMDSMI_FABRIC_MAX_LOCAL_GPUS]uint32
+	LocalAcceleratorCount uint32
+	Bandwidth             uint32
+	Latency               uint32
+}
+
+// FabricPpodConfig holds the parameters for a PPOD setup request
+// (amdsmi_fabric_ppod_config_t).
+//
+// Mask selects which fields of Data are written using AMDSMI_FABRIC_PPOD_FIELD_* bits.
+// When Commit is true, the configuration is finalized and applied to hardware.
+type FabricPpodConfig struct {
+	Version uint32
+	Mask    uint32
+	Commit  bool
+	Data    FabricPpodData
+}
+
+// SetGpuFabricPpodConfig applies PPOD setup parameters to the GPU fabric
+// (amdsmi_set_gpu_fabric_ppod_config).
+func SetGpuFabricPpodConfig(ph ProcessorHandle, cfg FabricPpodConfig) error {
+	var cCfg C.amdsmi_fabric_ppod_config_t
+	cCfg.version = C.uint32_t(cfg.Version)
+	cCfg.mask = C.uint32_t(cfg.Mask)
+	cCfg.commit = C.bool(cfg.Commit)
+	cCfg.data.accelerator_id = C.uint32_t(cfg.Data.AcceleratorID)
+	for i := 0; i < AMDSMI_FABRIC_PPOD_ID_SIZE; i++ {
+		cCfg.data.ppod_id[i] = C.uint8_t(cfg.Data.PpodID[i])
+	}
+	cCfg.data.ppod_size = C.uint32_t(cfg.Data.PpodSize)
+	for i := 0; i < AMDSMI_FABRIC_MAX_LOCAL_GPUS; i++ {
+		cCfg.data.local_accelerators[i] = C.uint32_t(cfg.Data.LocalAccelerators[i])
+	}
+	cCfg.data.local_accelerator_count = C.uint32_t(cfg.Data.LocalAcceleratorCount)
+	cCfg.data.bandwidth = C.uint32_t(cfg.Data.Bandwidth)
+	cCfg.data.latency = C.uint32_t(cfg.Data.Latency)
+	ret := C.amdsmi_set_gpu_fabric_ppod_config(ph.cPtr(), &cCfg)
+	return checkStatus(Status(ret))
+}
+
+// FabricVpodData holds the VPOD payload shared by FabricVpodConfig
+// (amdsmi_fabric_vpod_data_t).
+type FabricVpodData struct {
+	VpodID                 uint32
+	VpodSize               uint32
+	VpodActiveAccelerators [AMDSMI_FABRIC_ACTIVE_ACCELERATORS_BITMAP_SIZE]uint32
+	AddrMode               FabricNpaAddressMode
+}
+
+// FabricVpodConfig holds the parameters for a VPOD configuration request
+// (amdsmi_fabric_vpod_config_t).
+//
+// Mask selects which fields of Data are written using AMDSMI_FABRIC_VPOD_FIELD_* bits.
+// When Commit is true, the configuration is finalized and applied to hardware.
+type FabricVpodConfig struct {
+	Version uint32
+	Mask    uint32
+	Commit  bool
+	Data    FabricVpodData
+}
+
+// SetGpuFabricVpodConfig applies VPOD configuration to the GPU fabric
+// (amdsmi_set_gpu_fabric_vpod_config).
+func SetGpuFabricVpodConfig(ph ProcessorHandle, cfg FabricVpodConfig) error {
+	var cCfg C.amdsmi_fabric_vpod_config_t
+	cCfg.version = C.uint32_t(cfg.Version)
+	cCfg.mask = C.uint32_t(cfg.Mask)
+	cCfg.commit = C.bool(cfg.Commit)
+	cCfg.data.vpod_id = C.uint32_t(cfg.Data.VpodID)
+	cCfg.data.vpod_size = C.uint32_t(cfg.Data.VpodSize)
+	for i := 0; i < AMDSMI_FABRIC_ACTIVE_ACCELERATORS_BITMAP_SIZE; i++ {
+		cCfg.data.vpod_active_accelerators[i] = C.uint32_t(cfg.Data.VpodActiveAccelerators[i])
+	}
+	cCfg.data.addr_mode = C.amdsmi_fabric_npa_address_mode_t(cfg.Data.AddrMode)
+	ret := C.amdsmi_set_gpu_fabric_vpod_config(ph.cPtr(), &cCfg)
+	return checkStatus(Status(ret))
+}
+
+// FabricStationData holds the Station payload shared by FabricStationConfig
+// (amdsmi_fabric_station_data_t).
+type FabricStationData struct {
+	StationFlags uint32
+	NumStations  uint8
+	LaneEnBitmap [AMDSMI_FABRIC_MAX_BITMAP_SIZE]byte
+}
+
+// FabricStationConfig holds the parameters for a Station reconfiguration
+// (amdsmi_fabric_station_config_t).
+//
+// Mask selects which fields of Data are written using AMDSMI_FABRIC_DF_FIELD_* bits.
+// When Commit is true, the configuration is finalized and applied to hardware.
+type FabricStationConfig struct {
+	Version uint32
+	Mask    uint32
+	Commit  bool
+	Data    FabricStationData
+}
+
+// SetGpuFabricStationConfig applies Station reconfiguration to the GPU fabric
+// (amdsmi_set_gpu_fabric_station_config).
+func SetGpuFabricStationConfig(ph ProcessorHandle, cfg FabricStationConfig) error {
+	var cCfg C.amdsmi_fabric_station_config_t
+	cCfg.version = C.uint32_t(cfg.Version)
+	cCfg.mask = C.uint32_t(cfg.Mask)
+	cCfg.commit = C.bool(cfg.Commit)
+	cCfg.data.station_flags = C.uint32_t(cfg.Data.StationFlags)
+	cCfg.data.num_stations = C.uint8_t(cfg.Data.NumStations)
+	for i := 0; i < AMDSMI_FABRIC_MAX_BITMAP_SIZE; i++ {
+		cCfg.data.lane_en_bitmap[i] = C.uint8_t(cfg.Data.LaneEnBitmap[i])
+	}
+	ret := C.amdsmi_set_gpu_fabric_station_config(ph.cPtr(), &cCfg)
+	return checkStatus(Status(ret))
 }

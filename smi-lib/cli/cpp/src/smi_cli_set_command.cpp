@@ -26,174 +26,196 @@ void AmdSmiSetCommand::set_command()
 	for (unsigned int i = 0; i < arg.devices.size(); i++) {
 		uint64_t gpu_bdf = arg.devices[i]->get_bdf();
 
-		if ((std::find(arg.options.begin(), arg.options.end(),
-					   "accelerator-partition") != arg.options.end())) {
+		if ((std::find(arg.options.begin(), arg.options.end(), "accelerator-partition") !=
+		     arg.options.end())) {
 
-			std::string param{"accelerator-partition"};
+			std::string param {"accelerator-partition"};
 			if ((AmdSmiPlatform::getInstance().is_mi200())) {
 				throw SmiToolParameterNotSupportedException(param);
 			}
 
 			if (i == 0) {
-				std::cout << "Setting accelerator-partition in progress. This may take a while...\n" <<std::endl;
+				std::cout << "Setting accelerator-partition in progress. This may "
+					     "take a while...\n"
+					  << std::endl;
 			}
-			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_accelerator_partition_command(gpu_bdf,
-				  arg);
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject()
+				  .amdsmi_set_accelerator_partition_command(gpu_bdf, arg);
 			if (ret == 1) {
-				std::cout << "ACCELERATOR_PARTITION: Can't set accelerator partition to " <<
-						  arg.accelerator_partition_setting
-						  << ". Check amd-smi partition command for more information." << std::endl;
+				std::cout
+				    << "ACCELERATOR_PARTITION: Can't set accelerator partition to "
+				    << arg.accelerator_partition_setting
+				    << ". Check amd-smi partition command for more information."
+				    << std::endl;
 			}
 			int error = handle_exceptions(ret, param, arg);
 			if (error == 0) {
-				std::cout << string_format(setSuccessfullyTemplate,
-							   arg.devices[i]->get_gpu_index(),
-							   "ACCELERATOR_PARTITION",
-							   "accelerator partition",
-							   string_format("%d", arg.accelerator_partition_setting).c_str());
+				std::cout << string_format(
+				    setSuccessfullyTemplate, arg.devices[i]->get_gpu_index(),
+				    "ACCELERATOR_PARTITION", "accelerator partition",
+				    string_format("%d", arg.accelerator_partition_setting).c_str());
 			}
 		}
-		if ((std::find(arg.options.begin(), arg.options.end(), "memory-partition") != arg.options.end())) {
+		if ((std::find(arg.options.begin(), arg.options.end(), "memory-partition") !=
+		     arg.options.end())) {
 
-			std::string param{"memory-partition"};
+			std::string param {"memory-partition"};
 			if ((AmdSmiPlatform::getInstance().is_mi200())) {
 				throw SmiToolParameterNotSupportedException(param);
 			}
 
 			if (i == 0) {
-				std::cout << "NOTE: This change could affect the current accelerator partition configuration. Check amd-smi partition command for more information." << std::endl;
-				std::cout << "Setting memory-partition in progress. This may take a while...\n" << std::endl;
+				std::cout << "NOTE: This change could affect the current "
+					     "accelerator partition configuration. Check amd-smi "
+					     "partition command for more information."
+					  << std::endl;
+				std::cout << "Setting memory-partition in progress. This may take "
+					     "a while...\n"
+					  << std::endl;
 			}
-			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_memory_partition_command(gpu_bdf,
-				  arg);
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject()
+				  .amdsmi_set_memory_partition_command(gpu_bdf, arg);
 			if (ret == 1) {
-				std::cout << "MEMORY_PARTITION: Can't set memory partition to " << arg.memory_partition_setting
-						  << ". Check amd-smi partition command for more information." << std::endl;
+				std::cout
+				    << "MEMORY_PARTITION: Can't set memory partition to "
+				    << arg.memory_partition_setting
+				    << ". Check amd-smi partition command for more information."
+				    << std::endl;
 			}
 			int error = handle_exceptions(ret, param, arg);
 			if (error == 0) {
 				std::cout << string_format(setSuccessfullyTemplate,
 							   arg.devices[i]->get_gpu_index(),
-							   "MEMORY_PARTITION",
-							   "memory partition",
+							   "MEMORY_PARTITION", "memory partition",
 							   (arg.memory_partition_setting).c_str());
 			}
-
 		}
 	}
 
 	if ((std::find(arg.options.begin(), arg.options.end(), "xgmi") != arg.options.end())) {
-		std::string param{"xgmi fb-sharing-mode"};
-		int error;
+		std::string param {"xgmi fb-sharing-mode"};
+		if (!arg.fb_sharing_mode.empty())
+			param.append("=").append(arg.fb_sharing_mode);
+		int error {0};
+		const bool gpu_selected = !arg.device_format[DevicesType::GPU_TYPE].empty();
 
-		if ((!AmdSmiPlatform::getInstance().is_mi300() && !AmdSmiPlatform::getInstance().is_mi200() && !AmdSmiPlatform::getInstance().is_mi350())
-				|| !AmdSmiPlatform::getInstance().is_host()) {
+		if ((!AmdSmiPlatform::getInstance().is_mi300() &&
+		     !AmdSmiPlatform::getInstance().is_mi200() &&
+		     !AmdSmiPlatform::getInstance().is_mi350() &&
+		     !AmdSmiPlatform::getInstance().is_gc_12_1()) ||
+		    !AmdSmiPlatform::getInstance().is_host()) {
 			throw SmiToolParameterNotSupportedException(param);
 		}
 
 		// custom mode
-		for (auto bdf_list: arg.groups) {
-			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_xgmi_fb_sharing_mode_command(bdf_list, arg);
+		for (auto bdf_list : arg.groups) {
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject()
+				  .amdsmi_set_xgmi_fb_sharing_mode_command(bdf_list, arg);
 			error = handle_exceptions(ret, param, arg);
 		}
 
-		// auto mode
+		// auto mode: --gpu scopes to a single hive (the selected GPU's).
 		if (arg.groups.size() == 0) {
-			std::vector<std::size_t> bfd_list{};
-			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_xgmi_fb_sharing_mode_command(bfd_list, arg);
+			std::vector<uint64_t> bdf_list {};
+			if (gpu_selected)
+				bdf_list.push_back(arg.devices.front()->get_bdf());
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject()
+				  .amdsmi_set_xgmi_fb_sharing_mode_command(bdf_list, arg);
 			error = handle_exceptions(ret, param, arg);
 		}
 
 		if (error == 0) {
-			std::cout << "XGMI FB_SHARING_MODE: Successfully set mode to " << arg.fb_sharing_mode
-				  << " for the given group/s" << std::endl;
+			std::cout << "XGMI FB_SHARING_MODE: Successfully set mode to "
+				  << arg.fb_sharing_mode
+				  << (gpu_selected ? " for the selected GPU hive"
+						   : " for the given group/s")
+				  << std::endl;
 		}
 	}
 
-	if ((std::find(arg.options.begin(), arg.options.end(), "process-isolation") != arg.options.end()) ||
-			(std::find(arg.options.begin(), arg.options.end(), "R") != arg.options.end()) ||
-			arg.all_arguments) {
+	if ((std::find(arg.options.begin(), arg.options.end(), "process-isolation") !=
+	     arg.options.end()) ||
+	    (std::find(arg.options.begin(), arg.options.end(), "R") != arg.options.end()) ||
+	    arg.all_arguments) {
 
-		std::string param{"process-isolation"};
+		std::string param {"process-isolation"};
 		if ((AmdSmiPlatform::getInstance().is_mi200())) {
 			throw SmiToolParameterNotSupportedException(param);
 		}
 
 		for (unsigned int i = 0; i < arg.devices.size(); i++) {
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
-			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_process_isolation_command(gpu_bdf,
-				  arg);
-			std::string param{"process-isolation"};
+			ret		 = AmdSmiApiBase::CreateAmdSmiApiObject()
+				  .amdsmi_set_process_isolation_command(gpu_bdf, arg);
+			std::string param {"process-isolation"};
 			int error = handle_exceptions(ret, param, arg);
 			if (error == 0) {
-				std::string process_isolation_set_str = arg.process_isolation_set == "0" ? "Disable" : "Enable";
+				std::string process_isolation_set_str =
+				    arg.process_isolation_set == "0" ? "Disable" : "Enable";
 				std::cout << string_format(setSuccessfullyTemplate,
 							   arg.devices[i]->get_gpu_index(),
-							   "PROCESS_ISOLATION",
-							   "process isolation",
+							   "PROCESS_ISOLATION", "process isolation",
 							   process_isolation_set_str.c_str());
 			}
 		}
 	}
 
-	if ((std::find(arg.options.begin(), arg.options.end(), "soc-pstate") != arg.options.end()) ||
-			(std::find(arg.options.begin(), arg.options.end(), "p") != arg.options.end()) ||
-			arg.all_arguments) {
+	if ((std::find(arg.options.begin(), arg.options.end(), "soc-pstate") !=
+	     arg.options.end()) ||
+	    (std::find(arg.options.begin(), arg.options.end(), "p") != arg.options.end()) ||
+	    arg.all_arguments) {
 
-		std::string param{"soc-pstate"};
+		std::string param {"soc-pstate"};
 		if ((AmdSmiPlatform::getInstance().is_mi200())) {
 			throw SmiToolParameterNotSupportedException(param);
 		}
 
 		for (unsigned int i = 0; i < arg.devices.size(); i++) {
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
-			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_soc_pstate_command(gpu_bdf,
-				  arg);
-			std::string param{"soc-pstate"};
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_soc_pstate_command(
+			    gpu_bdf, arg);
+			std::string param {"soc-pstate"};
 			int error = handle_exceptions(ret, param, arg);
 			if (error == 0) {
 				std::cout << string_format(setSuccessfullyTemplate,
 							   arg.devices[i]->get_gpu_index(),
-							   "SOC_PSTATE",
-							   "dpm soc pstate policy",
+							   "SOC_PSTATE", "dpm soc pstate policy",
 							   (arg.pstate_set).c_str());
 			}
 		}
 	}
 
 	if ((std::find(arg.options.begin(), arg.options.end(), "power-cap") != arg.options.end()) ||
-			(std::find(arg.options.begin(), arg.options.end(), "o") != arg.options.end()) ||
-			arg.all_arguments) {
+	    (std::find(arg.options.begin(), arg.options.end(), "o") != arg.options.end()) ||
+	    arg.all_arguments) {
 		for (unsigned int i = 0; i < arg.devices.size(); i++) {
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
-			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_power_cap_command(gpu_bdf,
-				  arg);
-			std::string param{"power-cap"};
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_power_cap_command(
+			    gpu_bdf, arg);
+			std::string param {"power-cap"};
 			int error = handle_exceptions(ret, param, arg);
 			if (error == 0) {
-				std::cout << string_format(setSuccessfullyTemplate,
-							   arg.devices[i]->get_gpu_index(),
-							   "POWER_CAP",
-							   "new power cap value",
-							   string_format("%d", arg.power_cap_set).c_str());
+				std::cout << string_format(
+				    setSuccessfullyTemplate, arg.devices[i]->get_gpu_index(),
+				    "POWER_CAP", "new power cap value",
+				    string_format("%d", arg.power_cap_set).c_str());
 			}
 		}
 	}
 
 	if ((std::find(arg.options.begin(), arg.options.end(), "xgmi-plpd") != arg.options.end()) ||
-	(std::find(arg.options.begin(), arg.options.end(), "pd") != arg.options.end())) {
+	    (std::find(arg.options.begin(), arg.options.end(), "pd") != arg.options.end())) {
 		for (unsigned int i = 0; i < arg.devices.size(); i++) {
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
-			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_plpd_command(gpu_bdf,
-				arg);
-			std::string param{"xgmi-plpd"};
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_plpd_command(
+			    gpu_bdf, arg);
+			std::string param {"xgmi-plpd"};
 			int error = handle_exceptions(ret, param, arg);
 			if (error == 0) {
-				std::cout << string_format(setSuccessfullyTemplate,
-							   arg.devices[i]->get_gpu_index(),
-							   "DPM_POLICY",
-							   "xgmi per-link power down policy",
-							   (arg.plpd_set).c_str());
+				std::cout << string_format(
+				    setSuccessfullyTemplate, arg.devices[i]->get_gpu_index(),
+				    "DPM_POLICY", "xgmi per-link power down policy",
+				    (arg.plpd_set).c_str());
 			}
 		}
 	}
@@ -201,16 +223,14 @@ void AmdSmiSetCommand::set_command()
 	if (std::find(arg.options.begin(), arg.options.end(), "ptl-status") != arg.options.end()) {
 		for (unsigned int i = 0; i < arg.devices.size(); i++) {
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
-			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_ptl_status_command(gpu_bdf,
-				arg);
-			std::string param{"ptl-status"};
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_ptl_status_command(
+			    gpu_bdf, arg);
+			std::string param {"ptl-status"};
 			int error = handle_exceptions(ret, param, arg);
 			if (error == 0) {
-				std::cout << string_format(setSuccessfullyTemplate,
-							   arg.devices[i]->get_gpu_index(),
-							   "PTL_STATUS",
-							   "PTL status",
-							   (arg.ptl_status_set).c_str());
+				std::cout << string_format(
+				    setSuccessfullyTemplate, arg.devices[i]->get_gpu_index(),
+				    "PTL_STATUS", "PTL status", (arg.ptl_status_set).c_str());
 			}
 		}
 	}
@@ -218,15 +238,14 @@ void AmdSmiSetCommand::set_command()
 	if (std::find(arg.options.begin(), arg.options.end(), "ptl-format") != arg.options.end()) {
 		for (unsigned int i = 0; i < arg.devices.size(); i++) {
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
-			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_ptl_format_command(gpu_bdf,
-				arg);
-			std::string param{"ptl-format"};
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_ptl_format_command(
+			    gpu_bdf, arg);
+			std::string param {"ptl-format"};
 			int error = handle_exceptions(ret, param, arg);
 			if (error == 0) {
 				std::cout << string_format(setSuccessfullyTemplate,
 							   arg.devices[i]->get_gpu_index(),
-							   "PTL_FORMAT",
-							   "PTL preferred formats",
+							   "PTL_FORMAT", "PTL preferred formats",
 							   (arg.ptl_format_set).c_str());
 			}
 		}
@@ -235,16 +254,14 @@ void AmdSmiSetCommand::set_command()
 	if (std::find(arg.options.begin(), arg.options.end(), "num-vf") != arg.options.end()) {
 		for (unsigned int i = 0; i < arg.devices.size(); i++) {
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
-			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_num_vf_command(gpu_bdf,
-				arg);
-			std::string param{"num-vf"};
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_num_vf_command(
+			    gpu_bdf, arg);
+			std::string param {"num-vf"};
 			int error = handle_exceptions(ret, param, arg);
 			if (error == 0) {
-				std::cout << string_format(setSuccessfullyTemplate,
-							   arg.devices[i]->get_gpu_index(),
-							   "NUM_VF_ENABLED",
-							   "enabled VFs",
-							   (arg.num_vf).c_str());
+				std::cout << string_format(
+				    setSuccessfullyTemplate, arg.devices[i]->get_gpu_index(),
+				    "NUM_VF_ENABLED", "enabled VFs", (arg.num_vf).c_str());
 			}
 		}
 	}
@@ -252,16 +269,79 @@ void AmdSmiSetCommand::set_command()
 	if (std::find(arg.options.begin(), arg.options.end(), "cc-mode") != arg.options.end()) {
 		for (unsigned int i = 0; i < arg.devices.size(); i++) {
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
-			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_cc_mode_command(gpu_bdf,
-				arg);
-			std::string param{"cc-mode"};
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_cc_mode_command(
+			    gpu_bdf, arg);
+			std::string param {"cc-mode"};
 			int error = handle_exceptions(ret, param, arg);
 			if (error == 0) {
 				std::cout << string_format(setSuccessfullyTemplate,
 							   arg.devices[i]->get_gpu_index(),
-							   "CC_MODE",
-							   "confidential compute mode",
+							   "CC_MODE", "confidential compute mode",
 							   (arg.cc_mode_setting).c_str());
+			}
+		}
+	}
+
+	const bool fabric_ppod_set =
+	    std::find(arg.options.begin(), arg.options.end(), "fabric-ppod") != arg.options.end();
+	const bool fabric_vpod_set =
+	    std::find(arg.options.begin(), arg.options.end(), "fabric-vpod") != arg.options.end();
+	const bool fabric_station_set = std::find(arg.options.begin(), arg.options.end(),
+						  "fabric-station") != arg.options.end();
+
+	if ((fabric_ppod_set ? 1 : 0) + (fabric_vpod_set ? 1 : 0) + (fabric_station_set ? 1 : 0) >
+	    1) {
+		throw SmiToolInvalidParameterException("fabric");
+	}
+
+	if (fabric_ppod_set || fabric_vpod_set || fabric_station_set) {
+		if (!AmdSmiPlatform::getInstance().is_gc_12_1() ||
+		    !AmdSmiPlatform::getInstance().is_host()) {
+			throw SmiToolParameterNotSupportedException("fabric");
+		}
+	}
+
+	if (fabric_ppod_set) {
+		std::string param {"fabric-ppod"};
+		for (unsigned int i = 0; i < arg.devices.size(); i++) {
+			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_fabric_ppod_command(
+			    gpu_bdf, arg);
+			int error = handle_exceptions(ret, param, arg);
+			if (error == 0) {
+				std::cout << string_format(
+				    setFabricSuccessTemplate, arg.devices[i]->get_gpu_index(),
+				    "FABRIC_PPOD", "fabric PPOD configuration");
+			}
+		}
+	}
+
+	if (fabric_vpod_set) {
+		std::string param {"fabric-vpod"};
+		for (unsigned int i = 0; i < arg.devices.size(); i++) {
+			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_fabric_vpod_command(
+			    gpu_bdf, arg);
+			int error = handle_exceptions(ret, param, arg);
+			if (error == 0) {
+				std::cout << string_format(
+				    setFabricSuccessTemplate, arg.devices[i]->get_gpu_index(),
+				    "FABRIC_VPOD", "fabric VPOD configuration");
+			}
+		}
+	}
+
+	if (fabric_station_set) {
+		std::string param {"fabric-station"};
+		for (unsigned int i = 0; i < arg.devices.size(); i++) {
+			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
+			ret		 = AmdSmiApiBase::CreateAmdSmiApiObject()
+				  .amdsmi_set_fabric_station_command(gpu_bdf, arg);
+			int error = handle_exceptions(ret, param, arg);
+			if (error == 0) {
+				std::cout << string_format(
+				    setFabricSuccessTemplate, arg.devices[i]->get_gpu_index(),
+				    "FABRIC_STATION", "fabric station configuration");
 			}
 		}
 	}

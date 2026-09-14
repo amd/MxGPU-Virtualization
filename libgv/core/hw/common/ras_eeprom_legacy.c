@@ -76,7 +76,7 @@ static int __update_table_header(struct amdgv_adapter *adapt,
 
 	ret = __smu_i2c_transfer(adapt, control, &msg, 1);
 	if (ret < 1)
-		AMDGV_ERROR("Failed to write EEPROM table header, ret:%d\n", ret);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_HDR_WRITE_FAILED, 0);
 
 	return ret;
 }
@@ -94,7 +94,8 @@ static int __update_extra_gpu_info(struct amdgv_adapter *adapt,
 	buff = (unsigned char *)oss_zalloc(EEPROM_ADDRESS_SIZE +
 					   EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE);
 	if (!buff) {
-		AMDGV_ERROR("Alloc memory to update extra info failed\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			      EEPROM_ADDRESS_SIZE + EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE);
 		return AMDGV_FAILURE;
 	}
 	msg.buf = buff;
@@ -108,14 +109,14 @@ static int __update_extra_gpu_info(struct amdgv_adapter *adapt,
 		buff[0] = ((EEPROM_TABLE_V2_1_EXTRA_GPU_INFO_START >> 8) & 0xFF);
 		buff[1] = (EEPROM_TABLE_V2_1_EXTRA_GPU_INFO_START & 0xFF);
 	} else {
-		AMDGV_WARN("EEPROM table version 0x%x is invalid to update extra gpu info\n",
-			   control->tbl_hdr.version);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_WRONG_VER,
+			      AMDGV_LOG_DATA_32_32(control->tbl_hdr.version, EEPROM_TABLE_VER_V2_1));
 	}
 	__encode_eeprom_extra_info_to_buff(control, buff + EEPROM_ADDRESS_SIZE);
 
 	ret = __smu_i2c_transfer(adapt, control, &msg, 1);
 	if (ret < 1)
-		AMDGV_ERROR("Failed to write EEPROM extra gpu info, ret:%d\n", ret);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_EXTRA_WRITE_FAILED, 0);
 
 	oss_free(buff);
 
@@ -233,8 +234,8 @@ static int ras_eeprom_legacy_reset_table(struct amdgv_adapter *adapt,
 		control->next_addr = EEPROM_RECORD_START_V2_1;
 		break;
 	default:
-		AMDGV_WARN("INVALID EEPROM table header version 0x%x\n",
-			   hdr->version);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_WRONG_VER,
+			      AMDGV_LOG_DATA_32_32(hdr->version, EEPROM_TABLE_VER_V2_1));
 		break;
 	}
 
@@ -274,7 +275,8 @@ static int ras_eeprom_legacy_parse_table_hdr_extra_info(struct amdgv_adapter *ad
 	buff = (unsigned char *)oss_zalloc(EEPROM_ADDRESS_SIZE +
 					   EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE);
 	if (!buff) {
-		AMDGV_ERROR("Alloc memory to read extra info failed\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_SYSTEM_MEM_FAIL,
+			      EEPROM_ADDRESS_SIZE + EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE);
 		return AMDGV_FAILURE;
 	}
 	msg->buf = buff;
@@ -286,8 +288,8 @@ static int ras_eeprom_legacy_parse_table_hdr_extra_info(struct amdgv_adapter *ad
 		 */
 		if (hdr->tbl_size < EEPROM_TABLE_HEADER_SIZE +
 					EEPROM_TABLE_TOTAL_EXTRA_INFO_SIZE) {
-			AMDGV_ERROR("Invalid EEPROM table size 0x%x for V2_1\n",
-				    hdr->tbl_size);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_INVALID_TBL_SIZE,
+				      (uint64_t)hdr->tbl_size);
 			ret = AMDGV_FAILURE;
 			goto out;
 		}
@@ -305,8 +307,7 @@ static int ras_eeprom_legacy_parse_table_hdr_extra_info(struct amdgv_adapter *ad
 		/* Read eeprom extra gpu info from EEPROM address */
 		ret = __smu_i2c_transfer(adapt, control, msg, 1);
 		if (ret < 1) {
-			AMDGV_ERROR("Failed to read EEPROM extra gpu info, ret:%d\n",
-				    ret);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_EXTRA_READ_FAILED, 0);
 			goto out;
 		}
 
@@ -317,8 +318,8 @@ static int ras_eeprom_legacy_parse_table_hdr_extra_info(struct amdgv_adapter *ad
 		 * the unsigned subtraction below (CWE-191).
 		 */
 		if (hdr->tbl_size < EEPROM_TABLE_HEADER_SIZE) {
-			AMDGV_ERROR("Invalid EEPROM table size 0x%x for V2\n",
-				    hdr->tbl_size);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_INVALID_TBL_SIZE,
+				      (uint64_t)hdr->tbl_size);
 			ret = AMDGV_FAILURE;
 			goto out;
 		}
@@ -334,8 +335,7 @@ static int ras_eeprom_legacy_parse_table_hdr_extra_info(struct amdgv_adapter *ad
 		/* Read eeprom extra gpu info from EEPROM address */
 		ret = __smu_i2c_transfer(adapt, control, msg, 1);
 		if (ret < 1) {
-			AMDGV_ERROR("Failed to read EEPROM extra gpu info, ret:%d\n",
-				    ret);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_EXTRA_READ_FAILED, 0);
 			goto out;
 		}
 
@@ -345,8 +345,8 @@ static int ras_eeprom_legacy_parse_table_hdr_extra_info(struct amdgv_adapter *ad
 		 * the unsigned subtraction below (CWE-191).
 		 */
 		if (hdr->tbl_size < EEPROM_TABLE_HEADER_SIZE) {
-			AMDGV_ERROR("Invalid EEPROM table size 0x%x for V1\n",
-				    hdr->tbl_size);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_INVALID_TBL_SIZE,
+				      (uint64_t)hdr->tbl_size);
 			ret = AMDGV_FAILURE;
 			goto out;
 		}
@@ -355,8 +355,8 @@ static int ras_eeprom_legacy_parse_table_hdr_extra_info(struct amdgv_adapter *ad
 		control->tbl_byte_sum = __calc_hdr_byte_sum(control);
 		control->next_addr = EEPROM_RECORD_START;
 	} else {
-		AMDGV_WARN("Invalid eeprom table version 0x%x\n",
-			   hdr->version);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_WRONG_VER,
+			      AMDGV_LOG_DATA_32_32(hdr->version, EEPROM_TABLE_VER_V2_1));
 		ret = AMDGV_FAILURE;
 	}
 
@@ -391,14 +391,14 @@ static int ras_eeprom_legacy_init(struct amdgv_adapter *adapt,
 	/* Read/Create table header from EEPROM address 0 */
 	ret = __smu_i2c_transfer(adapt, control, &msg, 1);
 	if (ret < 1) {
-		AMDGV_ERROR("Failed to read EEPROM table header, ret:%d\n", ret);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_HDR_READ_FAILED, 0);
 		return ret;
 	}
 
 	__decode_table_header_from_buff(hdr, &buff[2]);
 
 	if (hdr->header != EEPROM_TABLE_HDR_VAL && hdr->header != EEPROM_TABLE_HDR_BAD) {
-		AMDGV_ERROR("Invalid EEPROM Table detected.\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_WRONG_HDR, (uint64_t)hdr->header);
 		goto reset_eeprom;
 	}
 
@@ -416,8 +416,8 @@ static int ras_eeprom_legacy_init(struct amdgv_adapter *adapt,
 		 * (CWE-190).
 		 */
 		if (control->num_recs > control->max_record_num) {
-			AMDGV_ERROR("EEPROM record count %u exceeds max %u\n",
-				    control->num_recs, control->max_record_num);
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_REC_COUNT_EXCEEDS_MAX,
+				      AMDGV_LOG_DATA_32_32(control->num_recs, control->max_record_num));
 			goto reset_eeprom;
 		}
 	}
@@ -425,7 +425,7 @@ static int ras_eeprom_legacy_init(struct amdgv_adapter *adapt,
 	return 0;
 
 reset_eeprom:
-	AMDGV_INFO("Creating new EEPROM table\n");
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_CREATE_NEW, 0);
 	ret = ras_eeprom_legacy_reset_table(adapt, control);
 
 	return ret;
@@ -443,8 +443,7 @@ static uint32_t __correct_eeprom_dest_address(struct amdgv_adapter *adapt,
 
 	/* When all EEPROM memory used jump back to 0 address */
 	if (next_address > EEPROM_SIZE_BYTES) {
-		AMDGV_WARN("Reached end of EEPROM memory, jumping to 0 "
-			   "and overriding old record\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_MEM_WRAP, 0);
 		if (adapt->eeprom_control.tbl_hdr.version == EEPROM_TABLE_VER_V1)
 			return EEPROM_RECORD_START;
 		else if (adapt->eeprom_control.tbl_hdr.version == EEPROM_TABLE_VER_V2)
@@ -463,9 +462,6 @@ static uint32_t __correct_eeprom_dest_address(struct amdgv_adapter *adapt,
 	 * https://www.st.com/resource/en/datasheet/m24m02-dr.pdf sec. 5.1.2
 	 */
 	if ((curr_address & EEPROM_ADDR_MSB_MASK) != (next_address & EEPROM_ADDR_MSB_MASK)) {
-		AMDGV_INFO("Reached end of EEPROM memory page, jumping to next: %lx\n",
-			   (next_address & EEPROM_ADDR_MSB_MASK));
-
 		return (next_address & EEPROM_ADDR_MSB_MASK);
 	}
 
@@ -569,8 +565,8 @@ int ras_eeprom_legacy_process_records(struct amdgv_adapter *adapt,
 	 * read/init (write=false) and write paths.
 	 */
 	if (num < 0 || (uint32_t)num > control->max_record_num) {
-		AMDGV_ERROR("Invalid EEPROM record count %d (max %u)\n",
-			    num, control->max_record_num);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_REC_COUNT_EXCEEDS_MAX,
+			      AMDGV_LOG_DATA_32_32(num, control->max_record_num));
 		return -1;
 	}
 
@@ -642,7 +638,7 @@ int ras_eeprom_legacy_process_records(struct amdgv_adapter *adapt,
 
 	ret = __smu_i2c_transfer(adapt, control, msgs, num);
 	if (ret < 1) {
-		AMDGV_ERROR("Failed to process EEPROM table records, ret:%d\n", ret);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_REC_XFER_FAILED, 0);
 
 		/* TODO Restore prev next EEPROM address ? */
 		goto free_msgs;
@@ -697,7 +693,7 @@ int ras_eeprom_legacy_process_records(struct amdgv_adapter *adapt,
 		if (control->tbl_hdr.version > EEPROM_TABLE_VER_V1)
 			__update_extra_gpu_info(adapt, control);
 	} else if (!__update_and_validate_tbl_checksum(adapt, control, records, num)) {
-		AMDGV_WARN("EEPROM Table checksum mismatch!\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_CHK_MISMATCH, 0);
 	}
 
 free_msgs:

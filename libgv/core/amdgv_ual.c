@@ -8,7 +8,6 @@
 #include "amdgv_ual.h"
 #include "amdgv_psp_gfx_if.h"
 #include "amdgv_sched.h"
-#include "hwip/psp/psp_v15_0_8.h"
 
 static const uint32_t this_block = AMDGV_UAL_BLOCK;
 
@@ -42,7 +41,8 @@ static int amdgv_ual_hw_init(struct amdgv_adapter *adapt)
 
 	if (adapt->smuio.funcs && adapt->smuio.funcs->get_link_type) {
 		adapt->ual.link_type = adapt->smuio.funcs->get_link_type(adapt);
-		if (adapt->ual.link_type == AMDGV_UAL_NONE)
+		AMDGV_INFO("UAL link_type=%d\n", adapt->ual.link_type);
+		if (adapt->ual.link_type >= AMDGV_UALMAX)
 			return AMDGV_FAILURE;
 	} else {
 		return AMDGV_FAILURE;
@@ -57,6 +57,13 @@ static int amdgv_ual_hw_init(struct amdgv_adapter *adapt)
 	ret = amdgv_ual_get_config(adapt, NULL);
 	if (ret)
 		return ret;
+
+	/* Get UAL station config from ASP and update adapt->ual context */
+	ret = amdgv_ual_get_station_config(adapt, NULL);
+	if (ret)
+		return ret;
+
+	adapt->ual.is_initialized = true;
 
 	return 0;
 }
@@ -96,19 +103,28 @@ enum amdgv_ual_accelerator_vpod_state amdgv_ual_get_accelerator_state(struct amd
 
 bool amdgv_ual_is_supported(struct amdgv_adapter *adapt)
 {
-    if ( (adapt->ual.link_type == AMDGV_UALOE || adapt->ual.link_type == AMDGV_UALINK) && (adapt->num_vf == 1) )
-        return true;
-    else
-        return false;
+	if (!adapt->ual.is_initialized)
+		return false;
+
+	if (adapt->ual.link_type >= AMDGV_UALMAX)
+		return false;
+
+	return (adapt->num_vf == 1);
 }
 
 int amdgv_ual_get_interface_version(struct amdgv_adapter *adapt, uint32_t *version)
 {
 	int ret = AMDGV_FAILURE;
 
-	ret = psp_v15_0_8_ual_get_interface_version(adapt, version);
+	if (!adapt->psp.ual_get_interface_version)
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+
+	ret = adapt->psp.ual_get_interface_version(adapt, version);
 	if (ret != PSP_STATUS__SUCCESS)
 		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+
+	AMDGV_INFO("UAL interface version=0x%x (major=%u minor=%u)\n",
+		*version, *version >> 16, *version & 0xFFFF);
 
 	return ret;
 }
@@ -136,7 +152,12 @@ int amdgv_ual_get_config(struct amdgv_adapter *adapt, struct amdgv_gpumon_get_co
 	int ret = AMDGV_FAILURE;
 	struct psp_km_get_config_ual_v1 *asp_config;
 
-	ret = psp_v15_0_8_ual_get_config(adapt, amdgv_memmgr_get_gpu_addr(adapt->ual.asp_cmd_resp_mem), adapt->ual.asp_cmd_resp_size);
+	if (!adapt->psp.ual_get_config)
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+
+	ret = adapt->psp.ual_get_config(adapt,
+		amdgv_memmgr_get_gpu_addr(adapt->ual.asp_cmd_resp_mem),
+		adapt->ual.asp_cmd_resp_size);
 	if (ret != PSP_STATUS__SUCCESS)
 		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
@@ -161,6 +182,15 @@ int amdgv_ual_get_config(struct amdgv_adapter *adapt, struct amdgv_gpumon_get_co
 
 	/* Derive accel_state from config */
 	adapt->ual.node_info_v1.accel_state = amdgv_ual_derive_accel_state(adapt);
+	adapt->ual.node_info_v1.config_state = asp_config->config_state;
+
+	AMDGV_INFO("UAL get_config: accelerator_id=0x%x ppod_size=%u bandwidth=%u latency=%u "
+		"vpod_id=0x%x vpod_size=%u addr_mode=%d accel_state=%d config_state=%d\n",
+		adapt->ual.node_info_v1.accelerator_id, adapt->ual.node_info_v1.ppod_size,
+		adapt->ual.node_info_v1.bandwidth, adapt->ual.node_info_v1.latency,
+		adapt->ual.topology_info_v1.vpod_id, adapt->ual.topology_info_v1.vpod_size,
+		adapt->ual.topology_info_v1.addr_mode, adapt->ual.node_info_v1.accel_state,
+		adapt->ual.node_info_v1.config_state);
 
 	/* Copy to output config if provided */
 	if (config) {
@@ -190,7 +220,10 @@ int amdgv_ual_set_ppod_config(struct amdgv_adapter *adapt, struct amdgv_gpumon_s
 {
 	int ret = AMDGV_FAILURE;
 
-	ret = psp_v15_0_8_ual_set_ppod_config(adapt, config);
+	if (!adapt->psp.ual_set_ppod_config)
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+
+	ret = adapt->psp.ual_set_ppod_config(adapt, config);
 	if (ret != PSP_STATUS__SUCCESS)
 		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
@@ -208,6 +241,16 @@ int amdgv_ual_set_ppod_config(struct amdgv_adapter *adapt, struct amdgv_gpumon_s
 	/* Derive accel_state from updated config */
 	adapt->ual.node_info_v1.accel_state = amdgv_ual_derive_accel_state(adapt);
 
+	AMDGV_INFO("UAL set_ppod_config: accelerator_id=%u "
+		"ppod_id=%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x "
+		"ppod_size=%u bandwidth=%u latency=%u\n",
+		config->accelerator_id,
+		config->ppod_id[0], config->ppod_id[1], config->ppod_id[2], config->ppod_id[3],
+		config->ppod_id[4], config->ppod_id[5], config->ppod_id[6], config->ppod_id[7],
+		config->ppod_id[8], config->ppod_id[9], config->ppod_id[10], config->ppod_id[11],
+		config->ppod_id[12], config->ppod_id[13], config->ppod_id[14], config->ppod_id[15],
+		config->ppod_size, config->bandwidth, config->latency);
+
 	return ret;
 }
 
@@ -215,7 +258,10 @@ int amdgv_ual_set_vpod_config(struct amdgv_adapter *adapt, struct amdgv_gpumon_s
 {
 	int ret = AMDGV_FAILURE;
 
-	ret = psp_v15_0_8_ual_set_vpod_config(adapt, config);
+	if (!adapt->psp.ual_set_vpod_config)
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+
+	ret = adapt->psp.ual_set_vpod_config(adapt, config);
 	if (ret != PSP_STATUS__SUCCESS)
 		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
@@ -230,16 +276,72 @@ int amdgv_ual_set_vpod_config(struct amdgv_adapter *adapt, struct amdgv_gpumon_s
 	/* Derive accel_state from updated config */
 	adapt->ual.node_info_v1.accel_state = amdgv_ual_derive_accel_state(adapt);
 
+	AMDGV_INFO("UAL set_vpod_config: vpod_id=%u vpod_size=%u addr_mode=%d\n",
+		config->vpod_id, config->vpod_size, config->addr_mode);
+
 	return ret;
 }
 
-int amdgv_ual_set_station_config(struct amdgv_adapter *adapt, struct amdgv_gpumon_set_station_config_req_ual_v1 *config)
+int amdgv_ual_set_station_config(struct amdgv_adapter *adapt, struct amdgv_gpumon_station_config_ual_v1 *config)
 {
 	int ret = AMDGV_FAILURE;
 
-	ret = psp_v15_0_8_ual_set_station_config(adapt, config);
+	if (!adapt->psp.ual_set_station_config)
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+
+	ret = adapt->psp.ual_set_station_config(adapt, config);
 	if (ret != PSP_STATUS__SUCCESS)
 		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+
+	/* Update adapt->ual.link_info_v1 context with station config has been set */
+	adapt->ual.link_info_v1.num_stations = config->num_stations;
+	adapt->ual.link_info_v1.station_flag = config->station_flag;
+	oss_memcpy(adapt->ual.link_info_v1.lane_en_bitmap,
+		config->lane_en_bitmap,
+		sizeof(adapt->ual.link_info_v1.lane_en_bitmap));
+
+	AMDGV_INFO("UAL set_station_config: num_stations=%u station_flag=0x%x\n",
+		adapt->ual.link_info_v1.num_stations, adapt->ual.link_info_v1.station_flag);
+
+	return ret;
+}
+
+int amdgv_ual_get_station_config(struct amdgv_adapter *adapt, struct amdgv_gpumon_station_config_ual_v1 *config)
+{
+	int ret = AMDGV_FAILURE;
+	struct psp_cmd_km_station_config_ual_v1 *station_config;
+
+	if (!adapt->psp.ual_get_station_config)
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+
+	ret = adapt->psp.ual_get_station_config(adapt,
+		amdgv_memmgr_get_gpu_addr(adapt->ual.asp_cmd_resp_mem),
+		adapt->ual.asp_cmd_resp_size);
+	if (ret != PSP_STATUS__SUCCESS)
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+
+	station_config = (struct psp_cmd_km_station_config_ual_v1 *)amdgv_memmgr_get_cpu_addr(adapt->ual.asp_cmd_resp_mem);
+	if (!station_config)
+		return AMDGV_FAILURE;
+
+	/* Update adapt->ual.link_info_v1 context with station config from ASP */
+	adapt->ual.link_info_v1.num_stations = station_config->num_stations;
+	adapt->ual.link_info_v1.station_flag = station_config->station_flag;
+	oss_memcpy(adapt->ual.link_info_v1.lane_en_bitmap,
+		station_config->lane_en_bitmap,
+		sizeof(adapt->ual.link_info_v1.lane_en_bitmap));
+
+	AMDGV_INFO("UAL get_station_config: num_stations=%u station_flag=0x%x\n",
+		adapt->ual.link_info_v1.num_stations, adapt->ual.link_info_v1.station_flag);
+
+	/* Copy to output config if provided */
+	if (config) {
+		config->num_stations = adapt->ual.link_info_v1.num_stations;
+		config->station_flag = adapt->ual.link_info_v1.station_flag;
+		oss_memcpy(config->lane_en_bitmap,
+			adapt->ual.link_info_v1.lane_en_bitmap,
+			sizeof(config->lane_en_bitmap));
+	}
 
 	return ret;
 }
@@ -283,9 +385,14 @@ int amdgv_ual_send_completion(struct amdgv_adapter *adapt, uint32_t cmd_id, uint
 {
 	int ret = AMDGV_FAILURE;
 
-	ret = psp_v15_0_8_ual_send_completion(adapt, cmd_id, status);
+	if (!adapt->psp.ual_send_completion)
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+
+	ret = adapt->psp.ual_send_completion(adapt, cmd_id, status);
 	if (ret != PSP_STATUS__SUCCESS)
 		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+
+	AMDGV_INFO("UAL send_completion: cmd_id=0x%08x status=0x%08x\n", cmd_id, status);
 
 	return ret;
 }

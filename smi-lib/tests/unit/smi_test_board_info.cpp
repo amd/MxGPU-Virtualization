@@ -18,12 +18,10 @@ using amdsmi::equal_handles;
 using amdsmi::g_system_mock;
 using amdsmi::SetResponseStatus;
 
-
 class AmdSmiBoardTests : public amdsmi::AmdSmiTest {
-public:
-protected:
-	::testing::AssertionResult equal_asic_info(smi_asic_info expect,
-						   amdsmi_asic_info_t actual)
+      public:
+      protected:
+	::testing::AssertionResult equal_asic_info(smi_asic_info expect, amdsmi_asic_info_t actual)
 	{
 		SMI_ASSERT_STR_EQ(expect.market_name, actual.market_name);
 		SMI_ASSERT_EQ(expect.vendor_id, actual.vendor_id);
@@ -52,9 +50,11 @@ protected:
 		return ::testing::AssertionSuccess();
 	}
 
-	::testing::AssertionResult equal_supported_power_info(smi_supported_power_cap expect,
-						    uint32_t actual_sensor_count, uint32_t actual_sensor_ind,
-						    smi_power_cap_type_t actual_sensor_type)
+	::testing::AssertionResult
+	equal_supported_power_info(smi_supported_power_cap expect,
+				   uint32_t actual_sensor_count,
+				   uint32_t actual_sensor_ind,
+				   smi_power_cap_type_t actual_sensor_type)
 	{
 		SMI_ASSERT_EQ(expect.sensor_count, actual_sensor_count);
 		SMI_ASSERT_EQ(expect.sensor_inds[0], actual_sensor_ind);
@@ -63,8 +63,7 @@ protected:
 		return ::testing::AssertionSuccess();
 	}
 
-	::testing::AssertionResult equal_fb_info(smi_pf_fb_info expect,
-						 amdsmi_pf_fb_info_t actual)
+	::testing::AssertionResult equal_fb_info(smi_pf_fb_info expect, amdsmi_pf_fb_info_t actual)
 	{
 		SMI_ASSERT_EQ(expect.fb_alignment, actual.fb_alignment);
 		SMI_ASSERT_EQ(expect.pf_fb_offset, actual.pf_fb_offset);
@@ -77,7 +76,7 @@ protected:
 	}
 
 	::testing::AssertionResult equal_vram_vendor(smi_vram_info expect,
-						amdsmi_vram_info_t actual)
+						     amdsmi_vram_info_t actual)
 	{
 		SMI_ASSERT_STR_EQ(expect.vram_vendor, actual.vram_vendor);
 		SMI_ASSERT_EQ(expect.vram_size, actual.vram_size);
@@ -120,8 +119,8 @@ TEST_F(AmdSmiBoardTests, InvalidParams)
 	ret = amdsmi_get_power_cap_info(&NIC_MOCK_HANDLE, sensor_ind, &power_cap);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-	uint32_t sensor_count = 0;
-	uint32_t sensor_inds[2] = {0};
+	uint32_t sensor_count			= 0;
+	uint32_t sensor_inds[2]			= {0};
 	amdsmi_power_cap_type_t sensor_types[2] = {AMDSMI_POWER_CAP_TYPE_PPT0};
 
 	ret = amdsmi_get_supported_power_cap(NULL, &sensor_count, sensor_inds, sensor_types);
@@ -136,7 +135,8 @@ TEST_F(AmdSmiBoardTests, InvalidParams)
 	ret = amdsmi_get_supported_power_cap(&GPU_MOCK_HANDLE, &sensor_count, sensor_inds, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-	ret = amdsmi_get_supported_power_cap(&NIC_MOCK_HANDLE, &sensor_count, sensor_inds, sensor_types);
+	ret = amdsmi_get_supported_power_cap(
+	    &NIC_MOCK_HANDLE, &sensor_count, sensor_inds, sensor_types);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
 	ret = amdsmi_set_power_cap(NULL, sensor_ind, 0);
@@ -174,7 +174,7 @@ TEST_F(AmdSmiBoardTests, IoctlFailed)
 	uint32_t sensor_ind = 0;
 
 	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(_))
-		.WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_API_FAILED));
+	    .WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_API_FAILED));
 
 	ret = amdsmi_get_gpu_asic_info(&GPU_MOCK_HANDLE, &asic_res);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
@@ -185,10 +185,11 @@ TEST_F(AmdSmiBoardTests, IoctlFailed)
 	ret = amdsmi_get_power_cap_info(&GPU_MOCK_HANDLE, sensor_ind, &power_res);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 
-	uint32_t sensor_count = 0;
-	uint32_t sensor_inds[2] = {0};
+	uint32_t sensor_count			= 0;
+	uint32_t sensor_inds[2]			= {0};
 	amdsmi_power_cap_type_t sensor_types[2] = {AMDSMI_POWER_CAP_TYPE_PPT0};
-	ret = amdsmi_get_supported_power_cap(&GPU_MOCK_HANDLE, &sensor_count, sensor_inds, sensor_types);
+	ret					= amdsmi_get_supported_power_cap(
+		&GPU_MOCK_HANDLE, &sensor_count, sensor_inds, sensor_types);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 
 	ret = amdsmi_set_power_cap(&GPU_MOCK_HANDLE, sensor_ind, 0);
@@ -211,14 +212,14 @@ TEST_F(AmdSmiBoardTests, GetAsicInfo)
 #endif
 	gpu_info_mock.vendor_id = 2;
 	gpu_info_mock.device_id = 3;
-	gpu_info_mock.rev_id = 4;
+	gpu_info_mock.rev_id	= 4;
 #ifdef _WIN64
 	strcpy_s(gpu_info_mock.asic_serial, sizeof(gpu_info_mock.asic_serial), "1234567");
 #else
 	strcpy(gpu_info_mock.asic_serial, "1234567");
 #endif
 	gpu_info_mock.oam_id = 0;
-	gpu_info_mock.flags = (uint64_t)-1;
+	gpu_info_mock.flags  = (uint64_t)-1;
 
 	amdsmi_asic_info_t asic_info;
 	WhenCalling(std::bind(amdsmi_get_gpu_asic_info, &GPU_MOCK_HANDLE, &asic_info));
@@ -232,7 +233,6 @@ TEST_F(AmdSmiBoardTests, GetAsicInfo)
 	ASSERT_TRUE(equal_asic_info(gpu_info_mock, asic_info));
 }
 
-
 TEST_F(AmdSmiBoardTests, GetVramInfo)
 {
 	int ret;
@@ -240,12 +240,14 @@ TEST_F(AmdSmiBoardTests, GetVramInfo)
 	smi_device_info in_payload;
 	gpu_info_mock.vram_type = SMI_VRAM_TYPE_GDDR5;
 #ifdef _WIN64
-	strcpy_s(gpu_info_mock.vram_vendor, sizeof(gpu_info_mock.vram_vendor), "SMI_VRAM_VENDOR_SAMSUNG");
+	strcpy_s(gpu_info_mock.vram_vendor,
+		 sizeof(gpu_info_mock.vram_vendor),
+		 "SMI_VRAM_VENDOR_SAMSUNG");
 #else
 	strcpy(gpu_info_mock.vram_vendor, "SMI_VRAM_VENDOR_SAMSUNG");
 #endif
-	gpu_info_mock.vram_size = 512;
-	gpu_info_mock.vram_bit_width = 8192;
+	gpu_info_mock.vram_size		 = 512;
+	gpu_info_mock.vram_bit_width	 = 8192;
 	gpu_info_mock.vram_max_bandwidth = 1024;
 
 	amdsmi_vram_info_t vram_info;
@@ -285,15 +287,16 @@ TEST_F(AmdSmiBoardTests, GetPowerInfo)
 	struct smi_in_hdr in_hdr_enabled;
 	struct smi_get_power_cap in_dev_enabled;
 	smi_power_cap_info gpu_info_mock = {};
-	uint32_t sensor_ind = 0;
+	uint32_t sensor_ind		 = 0;
 
-	gpu_info_mock.power_cap = 120;
-	gpu_info_mock.dpm_cap = 2;
+	gpu_info_mock.power_cap		= 120;
+	gpu_info_mock.dpm_cap		= 2;
 	gpu_info_mock.default_power_cap = 0;
-	gpu_info_mock.max_power_cap = 280;
-	gpu_info_mock.min_power_cap = 0;
+	gpu_info_mock.max_power_cap	= 280;
+	gpu_info_mock.min_power_cap	= 0;
 
-	PrepareIoctl(SMI_CMD_CODE_GET_POWER_CAP_INFO, &in_hdr_enabled, &in_dev_enabled, gpu_info_mock);
+	PrepareIoctl(
+	    SMI_CMD_CODE_GET_POWER_CAP_INFO, &in_hdr_enabled, &in_dev_enabled, gpu_info_mock);
 
 	amdsmi_power_cap_info_t info;
 	ret = amdsmi_get_power_cap_info(&GPU_MOCK_HANDLE, sensor_ind, &info);
@@ -308,18 +311,41 @@ TEST_F(AmdSmiBoardTests, GetPowerInfoPpt1)
 	struct smi_in_hdr in_hdr_enabled;
 	struct smi_get_power_cap in_dev_enabled;
 	smi_power_cap_info gpu_info_mock = {};
-	uint32_t sensor_ind = 1;
+	uint32_t sensor_ind		 = 1;
 
-	/* PPT1: only power_cap is exposed by FW, the other fields come back
-	 * as SMI_NOT_SUPPORTED (see smi_get_gpu_power_cap_info()).
-	 */
-	gpu_info_mock.power_cap = 1000;
-	gpu_info_mock.dpm_cap = SMI_NOT_SUPPORTED;
+	gpu_info_mock.power_cap		= 1000;
+	gpu_info_mock.dpm_cap		= SMI_NOT_SUPPORTED;
 	gpu_info_mock.default_power_cap = SMI_NOT_SUPPORTED;
-	gpu_info_mock.max_power_cap = SMI_NOT_SUPPORTED;
-	gpu_info_mock.min_power_cap = SMI_NOT_SUPPORTED;
+	gpu_info_mock.max_power_cap	= SMI_NOT_SUPPORTED;
+	gpu_info_mock.min_power_cap	= SMI_NOT_SUPPORTED;
 
-	PrepareIoctl(SMI_CMD_CODE_GET_POWER_CAP_INFO, &in_hdr_enabled, &in_dev_enabled, gpu_info_mock);
+	PrepareIoctl(
+	    SMI_CMD_CODE_GET_POWER_CAP_INFO, &in_hdr_enabled, &in_dev_enabled, gpu_info_mock);
+
+	amdsmi_power_cap_info_t info;
+	ret = amdsmi_get_power_cap_info(&GPU_MOCK_HANDLE, sensor_ind, &info);
+
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(in_dev_enabled.sensor_ind, sensor_ind);
+	ASSERT_TRUE(equal_power_info(gpu_info_mock, info));
+}
+
+TEST_F(AmdSmiBoardTests, GetPowerInfoPpt1NotSupported)
+{
+	int ret;
+	struct smi_in_hdr in_hdr_enabled;
+	struct smi_get_power_cap in_dev_enabled;
+	smi_power_cap_info gpu_info_mock = {};
+	uint32_t sensor_ind		 = 1;
+
+	gpu_info_mock.power_cap		= SMI_NOT_SUPPORTED;
+	gpu_info_mock.dpm_cap		= SMI_NOT_SUPPORTED;
+	gpu_info_mock.default_power_cap = SMI_NOT_SUPPORTED;
+	gpu_info_mock.max_power_cap	= SMI_NOT_SUPPORTED;
+	gpu_info_mock.min_power_cap	= SMI_NOT_SUPPORTED;
+
+	PrepareIoctl(
+	    SMI_CMD_CODE_GET_POWER_CAP_INFO, &in_hdr_enabled, &in_dev_enabled, gpu_info_mock);
 
 	amdsmi_power_cap_info_t info;
 	ret = amdsmi_get_power_cap_info(&GPU_MOCK_HANDLE, sensor_ind, &info);
@@ -333,19 +359,19 @@ TEST_F(AmdSmiBoardTests, SetPowerCap)
 {
 	int ret;
 	amdsmi_power_cap_info_t mocked_resp = {};
-	uint32_t sensor_ind = 0;
-	uint64_t cap = 160;
+	uint32_t sensor_ind		    = 0;
+	uint64_t cap			    = 160;
 
-	mocked_resp.power_cap = 120;
-	mocked_resp.dpm_cap = 2;
+	mocked_resp.power_cap	      = 120;
+	mocked_resp.dpm_cap	      = 2;
 	mocked_resp.default_power_cap = 0;
-	mocked_resp.max_power_cap = 280;
-	mocked_resp.min_power_cap = 0;
+	mocked_resp.max_power_cap     = 280;
+	mocked_resp.min_power_cap     = 0;
 
 	amdsmi_processor_handle MOCK_GPU_HANDLE = &GPU_MOCK_HANDLE;
 
 	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_SET_GPU_POWER_CAP)))
-		.WillRepeatedly(testing::DoAll(amdsmi::SetPayload(mocked_resp), testing::Return(0)));
+	    .WillRepeatedly(testing::DoAll(amdsmi::SetPayload(mocked_resp), testing::Return(0)));
 
 	ret = amdsmi_set_power_cap(MOCK_GPU_HANDLE, sensor_ind, cap);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
@@ -357,12 +383,12 @@ TEST_F(AmdSmiBoardTests, GetFbInfo)
 	smi_device_info in_payload;
 	smi_pf_fb_info gpu_info_mock = {};
 
-	gpu_info_mock.fb_alignment = 1;
-	gpu_info_mock.pf_fb_offset = 2;
-	gpu_info_mock.pf_fb_reserved = 3;
+	gpu_info_mock.fb_alignment     = 1;
+	gpu_info_mock.pf_fb_offset     = 2;
+	gpu_info_mock.pf_fb_reserved   = 3;
 	gpu_info_mock.min_vf_fb_usable = 4;
 	gpu_info_mock.max_vf_fb_usable = 5;
-	gpu_info_mock.total_fb_size = 6;
+	gpu_info_mock.total_fb_size    = 6;
 
 	amdsmi_pf_fb_info_t fb_info;
 	WhenCalling(std::bind(amdsmi_get_fb_layout, &GPU_MOCK_HANDLE, &fb_info));
@@ -392,20 +418,21 @@ TEST_F(AmdSmiBoardTests, GetSupportedPowerInfo)
 	struct smi_in_hdr in_hdr_enabled;
 	struct smi_device_info in_dev;
 	struct smi_supported_power_cap gpu_info_mock = {};
-	gpu_info_mock.sensor_count    = 1;
-	gpu_info_mock.sensor_inds[0]  = 0;
-	gpu_info_mock.sensor_types[0] = SMI_POWER_CAP_TYPE_PPT0;
+	gpu_info_mock.sensor_count		     = 1;
+	gpu_info_mock.sensor_inds[0]		     = 0;
+	gpu_info_mock.sensor_types[0]		     = SMI_POWER_CAP_TYPE_PPT0;
 
 	PrepareIoctl(SMI_CMD_CODE_GET_SUPPORTED_POWER_CAP, &in_hdr_enabled, &in_dev, gpu_info_mock);
 
-	uint32_t sensor_count = 0;
-	uint32_t sensor_inds[2] = {0};
+	uint32_t sensor_count			= 0;
+	uint32_t sensor_inds[2]			= {0};
 	amdsmi_power_cap_type_t sensor_types[2] = {AMDSMI_POWER_CAP_TYPE_PPT0};
 
-	ret = amdsmi_get_supported_power_cap(&GPU_MOCK_HANDLE, &sensor_count, sensor_inds, sensor_types);
+	ret = amdsmi_get_supported_power_cap(
+	    &GPU_MOCK_HANDLE, &sensor_count, sensor_inds, sensor_types);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
-	ASSERT_TRUE(equal_supported_power_info(gpu_info_mock, sensor_count, sensor_inds[0],
-					       (smi_power_cap_type_t)sensor_types[0]));
+	ASSERT_TRUE(equal_supported_power_info(
+	    gpu_info_mock, sensor_count, sensor_inds[0], (smi_power_cap_type_t)sensor_types[0]));
 }
 
 TEST_F(AmdSmiBoardTests, GetSupportedPowerInfoBothSensors)
@@ -414,6 +441,7 @@ TEST_F(AmdSmiBoardTests, GetSupportedPowerInfoBothSensors)
 	struct smi_in_hdr in_hdr_enabled;
 	struct smi_device_info in_dev;
 	struct smi_supported_power_cap gpu_info_mock = {};
+
 	gpu_info_mock.sensor_count    = 2;
 	gpu_info_mock.sensor_inds[0]  = 0;
 	gpu_info_mock.sensor_types[0] = SMI_POWER_CAP_TYPE_PPT0;
@@ -422,11 +450,12 @@ TEST_F(AmdSmiBoardTests, GetSupportedPowerInfoBothSensors)
 
 	PrepareIoctl(SMI_CMD_CODE_GET_SUPPORTED_POWER_CAP, &in_hdr_enabled, &in_dev, gpu_info_mock);
 
-	uint32_t sensor_count = 0;
-	uint32_t sensor_inds[2] = {0};
+	uint32_t sensor_count			= 0;
+	uint32_t sensor_inds[2]			= {0};
 	amdsmi_power_cap_type_t sensor_types[2] = {AMDSMI_POWER_CAP_TYPE_PPT0};
 
-	ret = amdsmi_get_supported_power_cap(&GPU_MOCK_HANDLE, &sensor_count, sensor_inds, sensor_types);
+	ret = amdsmi_get_supported_power_cap(
+	    &GPU_MOCK_HANDLE, &sensor_count, sensor_inds, sensor_types);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(sensor_count, 2u);
 	ASSERT_EQ(sensor_inds[0], 0u);

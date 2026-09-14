@@ -412,6 +412,12 @@ static int mi300_parse_harvest_table(struct amdgv_adapter *adapt)
 			adapt->mcp.gfx.sdma_mask &= ~(1U << adapt->ip_discovery.pf_copy.htbl->v1.list[i].number_instance);
 			adapt->sdma.harvest_sdma_mask |= (1U << adapt->ip_discovery.pf_copy.htbl->v1.list[i].number_instance);
 			break;
+		case VCN_HWID:
+			if (adapt->config.mm.count[AMDGV_VCN_ENGINE])
+				adapt->config.mm.count[AMDGV_VCN_ENGINE]--;
+			adapt->vcn.active_mask &=
+				~(1U << adapt->ip_discovery.pf_copy.htbl->v1.list[i].number_instance);
+			break;
 		case UMC_HWID:
 			adapt->umc.num_umc--;
 			adapt->umc.active_mask &= ~(1U << adapt->ip_discovery.pf_copy.htbl->v1.list[i].number_instance);
@@ -451,6 +457,7 @@ static void mi300_hw_ip_count(struct amdgv_adapter *adapt, struct amdgv_ip_v4 *i
 				break;
 			case VCN_HWID:
 				adapt->config.mm.count[AMDGV_VCN_ENGINE]++;
+				adapt->vcn.active_mask |= (1U << ip->instance_number);
 				break;
 			case UMC_HWID:
 				adapt->umc.num_umc++;
@@ -607,6 +614,10 @@ static int mi300_parse_ip_discovery(struct amdgv_adapter *adapt)
 		adapt->mcp.num_aid = 4;
 		adapt->mcp.num_dagb = 6;
 		break;
+	case (0x75A8): /* MI350P: 2 physical AIDs (one MMHUB per AID post-harvest) */
+		adapt->mcp.num_aid = 2;
+		adapt->mcp.num_dagb = 6;
+		break;
 	default:
 		AMDGV_ERROR("not getting proper num_aid setting.\n");
 		break;
@@ -620,6 +631,7 @@ static int mi300_parse_ip_discovery(struct amdgv_adapter *adapt)
 	adapt->umc.num_umc = 0;
 	adapt->umc.node_inst_num = 0;
 	adapt->umc.active_mask = 0;
+	adapt->vcn.active_mask = 0;
 	adapt->mmhub.num_instances = 0;
 	adapt->mmhub.active_mask = 0;
 

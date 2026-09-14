@@ -1,25 +1,7 @@
-/*
-* Copyright 2026 Advanced Micro Devices, Inc.
-*
-* Permission is hereby granted, free of charge, to any person obtaining a
-* copy of this software and associated documentation files (the "Software"),
-* to deal in the Software without restriction, including without limitation
-* the rights to use, copy, modify, merge, publish, distribute, sublicense,
-* and/or sell copies of the Software, and to permit persons to whom the
-* Software is furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in
-* all copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-* THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
-* OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-* ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-* OTHER DEALINGS IN THE SOFTWARE.
-*
-*/
+/* Copyright Advanced Micro Devices, Inc.
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 #include "amdgv.h"
 #include "amdgv_device.h"
@@ -75,8 +57,6 @@ static const char *mes_v12_1_misc_opcodes[] = {
 
 static const uint32_t this_block = AMDGV_GFX_BLOCK;
 
-static int mes_v12_1_hw_fini_xcc(struct amdgv_adapter *adapt, uint32_t xcc_id);
-
 static const char *mes_v12_1_get_op_string(union MESAPI__MISC *x_pkt)
 {
 	const char *op_str = NULL;
@@ -113,7 +93,7 @@ static uint64_t mes_v12_1_ring_get_rptr(struct amdgv_ring *ring)
 	struct amdgv_adapter *adapt = ring->adapt;
 
 	if (ring->rptr_cpu_addr == NULL) {
-		AMDGV_ERROR("Failed to get RPTR pointer (me=%d, pipe=%d)\n", ring->me, ring->pipe);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_MES_RING_PTR_INVALID, AMDGV_LOG_DATA_32_32(ring->me, ring->pipe));
 		return 0;
 	}
 	return (*((volatile uint64_t *)(ring->rptr_cpu_addr)));
@@ -124,7 +104,7 @@ static uint64_t mes_v12_1_ring_get_wptr(struct amdgv_ring *ring)
 	struct amdgv_adapter *adapt = ring->adapt;
 
 	if (ring->wptr_cpu_addr == NULL) {
-		AMDGV_ERROR("Failed to get WPTR pointer (me=%d, pipe=%d)\n", ring->me, ring->pipe);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_MES_RING_PTR_INVALID, AMDGV_LOG_DATA_32_32(ring->me, ring->pipe));
 		return 0;
 	}
 	return (*((volatile uint64_t *)(ring->wptr_cpu_addr)));
@@ -148,17 +128,16 @@ static int mes_v12_1_submit_pkt_and_poll_completion(struct amdgv_mes *mes,
 	uint32_t seq;
 
 	if (x_pkt->header.opcode >= MES_SCH_API_MAX) {
-		AMDGV_ERROR("Invalid MES API opcode (me=%d, pipe=%d)\n", ring->me, ring->pipe);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_MES_INVALID_OPCODE, (uint64_t)x_pkt->header.opcode);
 		return AMDGV_FAILURE;
 	}
 
 	if (!ring->ring_obj || !ring->fence_drv.initialized) {
-		AMDGV_ERROR("MES ring not ready (me=%d, pipe=%d)\n", ring->me, ring->pipe);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_MES_RING_NOT_READY, AMDGV_LOG_DATA_32_32(ring->me, ring->pipe));
 		return AMDGV_FAILURE;
 	}
 
 	if (amdgv_wb_memory_get(adapt, &status_offs)) {
-		AMDGV_ERROR("MES submit single: wb alloc failed\n");
 		return AMDGV_FAILURE;
 	}
 
@@ -168,7 +147,7 @@ static int mes_v12_1_submit_pkt_and_poll_completion(struct amdgv_mes *mes,
 
 	oss_spin_lock(ring->fence_drv.lock);
 	if (amdgv_ring_alloc(ring, (size + sizeof(mes_status_pkt)) / 4)) {
-		AMDGV_ERROR("MES ring full (me=%d, pipe=%d)\n", ring->me, ring->pipe);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_MES_RING_FULL, AMDGV_LOG_DATA_32_32(ring->me, ring->pipe));
 		amdgv_wb_memory_free(adapt, status_offs);
 		oss_spin_unlock(ring->fence_drv.lock);
 		return AMDGV_FAILURE;
@@ -204,12 +183,10 @@ static int mes_v12_1_submit_pkt_and_poll_completion(struct amdgv_mes *mes,
 	if (misc_op_str == NULL)
 		misc_op_str = "UNKNOWN";
 
-	AMDGV_INFO("MES Submission on ring: me=%d, pipe=%d, queue=%d, seq=%d, op_str=%s, misc_op_str=%s\n", ring->me, ring->pipe, ring->queue, seq, op_str, misc_op_str);
-
 	elapsed = amdgv_fence_wait_polling(ring, seq, timeout_us);
 
 	if (elapsed < 1 || !*status_ptr) {
-		AMDGV_ERROR("MES submission timeout (me=%d, pipe=%d, op_str=%s, misc_op_str=%s)\n", ring->me, ring->pipe, op_str, misc_op_str);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_MES_SUBMIT_TIMEOUT, AMDGV_LOG_DATA_16_16_32(ring->me, ring->pipe, x_pkt->header.opcode));
 		amdgv_wb_memory_free(adapt, status_offs);
 		return AMDGV_FAILURE;
 	}
@@ -323,7 +300,6 @@ static int mes_v12_1_ring_test(struct amdgv_ring *ring)
 	signed long timeout_us = 600 * 1000; // 600ms
 
 	if (amdgv_wb_memory_get(adapt, &status_offs)) {
-		AMDGV_ERROR("MES submit single: wb alloc failed\n");
 		return AMDGV_FAILURE;
 	}
 
@@ -339,7 +315,7 @@ static int mes_v12_1_ring_test(struct amdgv_ring *ring)
 
 	oss_spin_lock(ring->fence_drv.lock);
 	if (amdgv_ring_alloc(ring, (sizeof(mes_status_pkt) + sizeof(mes_fence_pkt)) / 4)) {
-		AMDGV_ERROR("MES ring full (me=%d, pipe=%d)\n", ring->me, ring->pipe);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_MES_RING_FULL, AMDGV_LOG_DATA_32_32(ring->me, ring->pipe));
 		amdgv_wb_memory_free(adapt, status_offs);
 		oss_spin_unlock(ring->fence_drv.lock);
 		return AMDGV_FAILURE;
@@ -369,7 +345,7 @@ static int mes_v12_1_ring_test(struct amdgv_ring *ring)
 	elapsed = amdgv_fence_wait_polling(ring, seq, timeout_us);
 
 	if (elapsed < 1 || !*status_ptr) {
-		AMDGV_ERROR("MES submission timeout (me=%d, pipe=%d)\n", ring->me, ring->pipe);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_MES_SUBMIT_TIMEOUT, AMDGV_LOG_DATA_16_16_32(ring->me, ring->pipe, 0));
 		amdgv_wb_memory_free(adapt, status_offs);
 		return AMDGV_FAILURE;
 	}
@@ -477,7 +453,7 @@ static int mes_v12_1_mqd_sw_init(struct amdgv_adapter *adapt,
 
 	ring->mqd_obj = amdgv_memmgr_alloc_align(&adapt->memmgr_pf, mqd_size, PAGE_SIZE, mem_id);
 	if (!ring->mqd_obj) {
-		AMDGV_ERROR("Failed to allocate MQD memory (me=%d, pipe=%d)\n", ring->me, ring->pipe);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_DRIVER_ALLOC_FB_MEM_FAIL, (uint64_t)mqd_size);
 		return AMDGV_FAILURE;
 	}
 
@@ -744,7 +720,7 @@ static int mes_v12_1_enable(struct amdgv_adapter *adapt,
 			r = adapt->ucode.get_ucode_start_addr(adapt, ucode_id, &uc_start_addr);
 
 			if (r || !uc_start_addr) {
-				AMDGV_ERROR("Failed to get ucode start address for firmware id %d\n", ucode_id);
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_UCODE_LOAD_FAIL, (uint64_t)ucode_id);
 				gfx_v12_1_grbm_select(adapt, 0, 0, 0, 0, GET_INST(GC, xcc_id));
 				oss_mutex_unlock(adapt->srbm_mutex);
 				return AMDGV_FAILURE;
@@ -812,7 +788,6 @@ static int mes_v12_1_mes_pipes_status_check(struct amdgv_adapter *adapt, uint32_
 		wait_ret = mes_v12_1_wait_for_hqd_active_pipe_pending(adapt, xcc_id);
 
 	if (wait_ret) {
-		AMDGV_ERROR("Failed to wait for MES.KIQ HQD active pipe pending for XCC %d\n", xcc_id);
 		gfx_v12_1_grbm_select(adapt, 0, 0, 0, 0, GET_INST(GC, xcc_id));
 		oss_mutex_unlock(adapt->srbm_mutex);
 		return AMDGV_FAILURE;
@@ -834,12 +809,12 @@ static int mes_v12_1_mes_pipes_status_check(struct amdgv_adapter *adapt, uint32_
 		xcc_id, mes_cntl, hqd_active, gp3_hi, gp3_lo, inst_ptr << 2);
 
 	if (!mes_cntl) {
-		AMDGV_ERROR("MES.KIQ pipe 1 not active on XCC %d (CP_MES_CNTL.MES_PIPE1_ACTIVE=0)\n", xcc_id);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_MES_PIPE_NOT_ACTIVE, (uint64_t)xcc_id);
 		return AMDGV_FAILURE;
 	}
 
 	if (!hqd_active) {
-		AMDGV_ERROR("MES.KIQ HQD not active on XCC %d (CP_HQD_ACTIVE=0)\n", xcc_id);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_MES_HQD_NOT_ACTIVE, (uint64_t)xcc_id);
 		return AMDGV_FAILURE;
 	}
 
@@ -936,6 +911,10 @@ static int mes_v12_1_sw_fini(struct amdgv_adapter *adapt)
 	int r;
 	struct amdgv_ring *ring;
 
+#if 1
+	return 0;
+#endif
+
 	for (xcc_id = 0; xcc_id < num_xcc; xcc_id++) {
 		for (pipe = 0; pipe < AMDGV_MAX_MES_PIPES; pipe++) {
 			int inst = AMDGV_MES_INST(xcc_id, pipe);
@@ -955,8 +934,6 @@ static int mes_v12_1_sw_fini(struct amdgv_adapter *adapt)
 	}
 
 	r = amdgv_mes_fini(adapt);
-	if (r)
-		AMDGV_ERROR("Failed to fini MES\n");
 
 	return r;
 }
@@ -965,6 +942,10 @@ static int mes_v12_1_sw_init(struct amdgv_adapter *adapt)
 {
 	uint32_t xcc_id, pipe, num_xcc = adapt->mcp.gfx.num_xcc;
 	int r;
+
+#if 1
+	return 0;
+#endif
 
 	adapt->mes.kiq_hw_init = &mes_v12_1_kiq_hw_init;
 	adapt->mes.kiq_hw_fini = &mes_v12_1_kiq_hw_fini;
@@ -1003,6 +984,10 @@ static int mes_v12_1_hw_init(struct amdgv_adapter *adapt)
 	int r;
 	uint32_t xcc_id, num_xcc = adapt->mcp.gfx.num_xcc;
 
+#if 1
+	return 0;
+#endif
+
 	for (xcc_id = 0; xcc_id < num_xcc; xcc_id++) {
 		r = mes_v12_1_xcc_hw_init(adapt, xcc_id);
 		if (r)
@@ -1017,9 +1002,12 @@ static int mes_v12_1_hw_fini(struct amdgv_adapter *adapt)
 	int r = 0;
 	uint32_t xcc_id, num_xcc = adapt->mcp.gfx.num_xcc;
 
+#if 1
+	return 0;
+#endif
+
 	for (xcc_id = 0; xcc_id < num_xcc; xcc_id++) {
 		if (mes_v12_1_hw_fini_xcc(adapt, xcc_id)) {
-			AMDGV_ERROR("Failed to fini MES on xcc %d\n", xcc_id);
 			r = AMDGV_FAILURE;
 		}
 	}

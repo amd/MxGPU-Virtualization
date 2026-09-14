@@ -564,7 +564,8 @@ static int mi300_get_memory_partition_config(
 	memory_partition_config->mp_cap_mask = 0;
 	memory_partition_config->mp_caps.nps1_cap = 1;
 
-	if (adapt->asic_type == CHIP_MI350X)
+	/* MI350P (0x75A8) is NPS1-only, unlike other CHIP_MI350X SKUs */
+	if (adapt->asic_type == CHIP_MI350X && adapt->dev_id != 0x75A8)
 		memory_partition_config->mp_caps.nps2_cap = 1;
 	else if (adapt->asic_type == CHIP_MI300X)
 		memory_partition_config->mp_caps.nps4_cap = 1;
@@ -730,6 +731,52 @@ static struct amdgv_gpumon_accelerator_partition_profile_config
 };
 
 static struct amdgv_gpumon_accelerator_partition_profile_config
+	mi350p_accelerator_partition_profile_configs = {
+	6, // number_of_resource_profiles
+	{
+		{ 0, AMDGV_GPUMON_ACCELERATOR_PARTITION_RESOURCE_XCC, 1, 1 },
+		{ 1, AMDGV_GPUMON_ACCELERATOR_PARTITION_RESOURCE_XCC, 2, 1 },
+		{ 2, AMDGV_GPUMON_ACCELERATOR_PARTITION_RESOURCE_XCC, 4, 1 },
+		{ 3, AMDGV_GPUMON_ACCELERATOR_PARTITION_RESOURCE_DECODER, 1, 1 },
+		{ 4, AMDGV_GPUMON_ACCELERATOR_PARTITION_RESOURCE_DECODER, 2, 1 },
+		{ 5, AMDGV_GPUMON_ACCELERATOR_PARTITION_RESOURCE_DECODER, 1, 2 }
+	},
+	3, // number_of_profiles
+	{
+		{
+			0,
+			AMDGV_GPUMON_ACCELERATOR_PARTITION_SPX,
+			{ .mp_caps = {.nps1_cap = 1 } },
+			1,
+			{0},
+			2,
+			{ { 2, 4 } },
+			(1 << 1)
+		},
+		{
+			1,
+			AMDGV_GPUMON_ACCELERATOR_PARTITION_DPX,
+			{ .mp_caps = {.nps1_cap = 1 } },
+			2,
+			{0, 1},
+			2,
+			{ { 1, 3 }, { 1, 3 } },
+			(1 << 2)
+		},
+		{
+			2,
+			AMDGV_GPUMON_ACCELERATOR_PARTITION_CPX,
+			{ .mp_caps = {.nps1_cap = 1 } },
+			4,
+			{0, 1, 2, 3},
+			2,
+			{ { 0, 5 }, { 0, 5 }, { 0, 5 }, { 0, 5 } },
+			(1 << 1) | (1 << 4)
+		}
+	}
+};
+
+static struct amdgv_gpumon_accelerator_partition_profile_config
 	mi350x_accelerator_partition_profile_configs = {
 	8, // number_of_resource_profiles
 	{
@@ -806,6 +853,8 @@ mi300_get_accelerator_partition_profile_asic_config_global(struct amdgv_adapter 
 	} else if (adapt->asic_type == CHIP_MI308X) {
 		return &mi308x_accelerator_partition_profile_configs;
 	} else if (adapt->asic_type == CHIP_MI350X) {
+		if (adapt->dev_id == 0x75A8)
+			return &mi350p_accelerator_partition_profile_configs;
 		return &mi350x_accelerator_partition_profile_configs;
 	} else {
 		AMDGV_ERROR("asic_type=%u not supported\n", adapt->asic_type);

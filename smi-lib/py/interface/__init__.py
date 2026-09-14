@@ -102,12 +102,16 @@ from .amdsmi_interface import amdsmi_get_cc_mode
 from .amdsmi_interface import amdsmi_set_cc_mode
 from .amdsmi_interface import amdsmi_get_node_handle
 from .amdsmi_interface import amdsmi_get_npm_info
+from .amdsmi_interface import amdsmi_get_tray_info
 from .amdsmi_interface import amdsmi_get_gpu_ras_policy_info
 from .amdsmi_interface import amdsmi_get_gpu_ptl_state
 from .amdsmi_interface import amdsmi_set_gpu_ptl_state
 from .amdsmi_interface import amdsmi_get_gpu_ptl_formats
 from .amdsmi_interface import amdsmi_set_gpu_ptl_formats
 from .amdsmi_interface import amdsmi_get_fabric_telemetry
+from .amdsmi_interface import amdsmi_set_gpu_fabric_ppod_config
+from .amdsmi_interface import amdsmi_set_gpu_fabric_vpod_config
+from .amdsmi_interface import amdsmi_set_gpu_fabric_station_config
 
 from .amdsmi_interface import AmdSmiTemperatureType
 from .amdsmi_interface import AmdSmiTemperatureMetric
@@ -156,9 +160,16 @@ from .amdsmi_interface import AmdSmiAffinityScope
 from .amdsmi_interface import AmdSmiVirtualizationMode
 from .amdsmi_interface import AmdSmiDriverModelType
 from .amdsmi_interface import AmdSmiNpmStatus
+from .amdsmi_interface import AmdSmiComputeTrayType
 from .amdsmi_interface import AmdSmiTDIState
 from .amdsmi_interface import AmdSmiCCMode
 from .amdsmi_interface import AmdSmiFabricTelemetry
+from .amdsmi_interface import AmdSmiFabricPpodConfigVersion
+from .amdsmi_interface import AmdSmiFabricPpodField
+from .amdsmi_interface import AmdSmiFabricVpodConfigVersion
+from .amdsmi_interface import AmdSmiFabricVpodField
+from .amdsmi_interface import AmdSmiFabricStationConfigVersion
+from .amdsmi_interface import AmdSmiFabricStationField
 
 # AMD SMI NIC
 from .amdsmi_nic_interface import amdsmi_get_nic_driver_info

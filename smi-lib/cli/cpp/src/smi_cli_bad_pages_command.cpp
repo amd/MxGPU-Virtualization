@@ -17,40 +17,40 @@
 
 #define AMDSMI_STATUS_NO_DATA 40
 
-auto constexpr
-bad_pages_header_csv {",bad_page,retired_bad_page,timestamp,mem_channel,mcumc_id"};
+auto constexpr bad_pages_header_csv {",bad_page,retired_bad_page,timestamp,mem_channel,mcumc_id"};
 
-int AmdSmiBadPagesCommand::bad_pages_command(uint64_t processors,
-		std::string &out_string, std::string* gpu_id)
+int AmdSmiBadPagesCommand::bad_pages_command(uint64_t processors, std::string& out_string,
+					     std::string* gpu_id)
 {
-	if (AmdSmiPlatform::getInstance().is_guest() || AmdSmiPlatform::getInstance().is_baremetal()) {
+	if (AmdSmiPlatform::getInstance().is_guest() ||
+	    AmdSmiPlatform::getInstance().is_baremetal()) {
 		return COMMAND_NOT_SUPPORTED_ON_PLATFORM;
 	}
-	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_bad_pages_command(processors,
-			  arg, out_string, gpu_id);
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_bad_pages_command(
+	    processors, arg, out_string, gpu_id);
 	return ret;
 }
 
 void AmdSmiBadPagesCommand::execute_command()
 {
 	unsigned int i;
-	std::string out{};
-	std::string formatted_string{};
-	std::string gpu_index_str{};
+	std::string out {};
+	std::string formatted_string {};
+	std::string gpu_index_str {};
 	nlohmann::ordered_json json_format = nlohmann::ordered_json::array();
 	nlohmann::ordered_json json;
-	std::string headers{};
-	nlohmann::ordered_json values_json{};
+	std::string headers {};
+	nlohmann::ordered_json values_json {};
 	std::vector<std::pair<int, std::string>> gpu_data;
 	bool foundSuccessfulCall = false;
 
 	for (i = 0; i < arg.devices.size(); i++) {
 		uint64_t gpu_bdf = arg.devices[i]->get_bdf();
-		int gpu_index = arg.devices[i]->get_gpu_index();
+		int gpu_index	 = arg.devices[i]->get_gpu_index();
 		int ret;
 		if (arg.output == OutputFormat::csv) {
-			gpu_index_str =	string_format("%d", gpu_index);
-			ret = bad_pages_command(gpu_bdf, out, &gpu_index_str);
+			gpu_index_str = string_format("%d", gpu_index);
+			ret	      = bad_pages_command(gpu_bdf, out, &gpu_index_str);
 		} else
 			ret = bad_pages_command(gpu_bdf, out);
 		if (ret == 0) {
@@ -65,7 +65,7 @@ void AmdSmiBadPagesCommand::execute_command()
 				foundSuccessfulCall = true;
 			}
 		} else if (ret != AMDSMI_STATUS_NO_DATA) {
-			std::string param{"bad-pages"};
+			std::string param {"bad-pages"};
 			int error = handle_exceptions(ret, param, arg);
 			if (error == PARAM_NOT_SUPPORTED_ON_PLATFORM) {
 				throw SmiToolParameterNotSupportedException(param);
@@ -80,11 +80,11 @@ void AmdSmiBadPagesCommand::execute_command()
 		}
 
 		for (const auto& bp : gpu_data) {
-			const auto& gpu_index = bp.first;
+			const auto& gpu_index	  = bp.first;
 			const auto& bad_pages_out = bp.second;
 			if (arg.output == OutputFormat::json) {
-				json["gpu"] = gpu_index;
-				values_json = nlohmann::ordered_json::parse(bad_pages_out);
+				json["gpu"]	  = gpu_index;
+				values_json	  = nlohmann::ordered_json::parse(bad_pages_out);
 				json["bad_pages"] = values_json;
 				values_json.clear();
 				json_format.insert(json_format.end(), json);

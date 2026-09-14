@@ -55,6 +55,20 @@ static int mi300_get_error_count(struct amdgv_adapter *adapt,
 	int ret = 0;
 	uint32_t ce_count = 0, de_count = 0, ue_count = 0;
 	uint32_t ce_overflow = 0, de_overflow = 0, ue_overflow = 0;
+	unsigned int block = info->head.block;
+
+	/*
+	 * info->head.block uses SMI ordinals (AMDGV_SMI_RAS_BLOCK__*), which extend
+	 * beyond the legacy driver RAS blocks (AMDGV_RAS_BLOCK__*).  Blocks outside
+	 * the legacy set are handled by UniRAS; on the MCA path they have no data.
+	 */
+	if (block >= AMDGV_RAS_BLOCK__LAST ||
+	    !(adapt->ecc.ras_cap & BIT(block))) {
+		info->ce_count = 0;
+		info->ue_count = 0;
+		info->de_count = 0;
+		return 0;
+	}
 
 	ret = amdgv_mca_get_new_banks(adapt, AMDGV_MCA_ERROR_TYPE_CE);
 	if (ret)
@@ -66,7 +80,7 @@ static int mi300_get_error_count(struct amdgv_adapter *adapt,
 
 	ret = amdgv_mca_count_cache_client_get(adapt, &ce_count, &ue_count,
 					       &de_count, &ce_overflow, &ue_overflow,
-					       &de_overflow, info->head.block,
+					       &de_overflow, (enum amdgv_ras_block)block,
 					       AMDGV_PF_IDX);
 	if (ret)
 		return ret;
@@ -128,6 +142,12 @@ static const struct mi300_ras_cap_entry mi300_ras_cap_table[] = {
 		 BIT(AMDGV_RAS_BLOCK__SDMA) |
 		 BIT(AMDGV_RAS_BLOCK__MMHUB) |
 		 BIT(AMDGV_RAS_BLOCK__XGMI_WAFL) |
+		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF)},
+	/* MI350P: PCIe CEM card, no xGMI fabric -> no XGMI_WAFL RAS block */
+	{0x75A8, (uint32_t)0 | BIT(AMDGV_RAS_BLOCK__UMC) |
+		 BIT(AMDGV_RAS_BLOCK__GFX) |
+		 BIT(AMDGV_RAS_BLOCK__SDMA) |
+		 BIT(AMDGV_RAS_BLOCK__MMHUB) |
 		 BIT(AMDGV_RAS_BLOCK__PCIE_BIF)},
 };
 
@@ -624,8 +644,8 @@ static int mi300_ecc_hw_fini(struct amdgv_adapter *adapt)
 
 	if (adapt->ecc.supported & BIT(AMDGV_RAS_SRAM_ECC_SUPPORT)) {
 		adapt->ecc.supported &= ~BIT(AMDGV_RAS_SRAM_ECC_SUPPORT);
-		adapt->ecc.enabled &= ~BIT(AMDGV_RAS_BLOCK__SDMA) |
-				       BIT(AMDGV_RAS_BLOCK__GFX);
+		adapt->ecc.enabled &= ~(BIT(AMDGV_RAS_BLOCK__SDMA) |
+				       BIT(AMDGV_RAS_BLOCK__GFX));
 	}
 
 	return 0;

@@ -272,33 +272,112 @@ static int amdgv_ras_gpumon_get_ras_caps(struct amdgv_adapter *adapt,
 	return 0;
 }
 
+static int amdgv_ras_gpumon_get_ras_policy_info(struct amdgv_adapter *adapt,
+			struct amdgv_gpumon_ras_policy_info *info)
+{
+	struct amdgv_ras_mgr *ras_mgr = amdgv_ras_mgr_get_context(adapt);
+	struct ras_cmd_ras_policy_info_req req = {0};
+	struct ras_cmd_ras_policy_info_rsp rsp = {0};
+	int ret;
+
+	if (!ras_mgr || !info)
+		return -RAS_CORE_EACCES;
+
+	ret = amdgv_ras_mgr_handle_ras_cmd(adapt, RAS_CMD__GET_RAS_POLICY_INFO,
+			&req, sizeof(struct ras_cmd_ras_policy_info_req),
+			&rsp, sizeof(struct ras_cmd_ras_policy_info_rsp));
+	if (ret)
+		return ret;
+
+	oss_memset(info, 0, sizeof(*info));
+	info->minor_version = rsp.minor_version;
+	info->major_version = rsp.major_version;
+
+	/* MxGPU amdgv_gpumon_ras_policy_info has no policy_data blob; lay out
+	 * the opaque v5 payload after the version header for the SMI driver path.
+	 */
+	if (sizeof(*info) > 4)
+		oss_memcpy((uint8_t *)info + 4, rsp.policy_data,
+				min_t(uint32_t, (uint32_t)sizeof(rsp.policy_data),
+				      (uint32_t)(sizeof(*info) - 4)));
+
+	return 0;
+}
+
+static int amdgv_ras_gpumon_get_bad_page_threshold(struct amdgv_adapter *adapt,
+			uint32_t *bad_page_threshold)
+{
+	struct amdgv_ras_mgr *ras_mgr = amdgv_ras_mgr_get_context(adapt);
+	struct ras_cmd_ras_policy_info_req req = {0};
+	struct ras_cmd_ras_policy_info_rsp rsp = {0};
+	int ret;
+
+	if (!ras_mgr || !bad_page_threshold)
+		return -RAS_CORE_EACCES;
+
+	ret = amdgv_ras_mgr_handle_ras_cmd(adapt, RAS_CMD__GET_RAS_POLICY_INFO,
+			&req, sizeof(struct ras_cmd_ras_policy_info_req),
+			&rsp, sizeof(struct ras_cmd_ras_policy_info_rsp));
+	if (ret)
+		return ret;
+
+	*bad_page_threshold = (uint32_t)rsp.bad_page_threshold;
+
+	return 0;
+}
+
+static int amdgv_ras_gpumon_to_amdgv_ret(int ret)
+{
+	switch (ret) {
+	case RAS_CMD__SUCCESS:
+		return 0;
+	case -RAS_CORE_EOPNOTSUPP:
+	case RAS_CMD__ERROR_UNSUPPORT:
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+	default:
+		return AMDGV_FAILURE;
+	}
+}
+
 int amdgv_ras_mgr_handle_gpumon_req(struct amdgv_adapter *adapt,
 		uint32_t type, void *input, void *output)
 {
+	int ret;
+
 	switch (type) {
 	case GPUMON_GET_ECC_INFO:
-		return amdgv_ras_gpumon_get_ecc_info(adapt, input);
+		ret = amdgv_ras_gpumon_get_ecc_info(adapt, input);
+		break;
 	case GPUMON_GET_BAD_PAGE_COUNT:
-		return amdgv_ras_gpumon_get_badpage_count(adapt, output);
+		ret = amdgv_ras_gpumon_get_badpage_count(adapt, output);
+		break;
 	case GPUMON_GET_BAD_PAGE_INFO:
-		return amdgv_ras_gpumon_get_badpage_info(adapt, input, output);
+		ret = amdgv_ras_gpumon_get_badpage_info(adapt, input, output);
+		break;
 	case GPUMON_GET_BAD_PAGE_THRESHOLD:
+		ret = amdgv_ras_gpumon_get_bad_page_threshold(adapt, output);
 		break;
 	case GPUMON_GET_RAS_EEPROM_VERSION:
-		return amdgv_ras_gpumon_get_ras_eeprom_version(adapt, output);
+		ret = amdgv_ras_gpumon_get_ras_eeprom_version(adapt, output);
+		break;
 	case GPUMON_GET_ECC_CAP:
-		return amdgv_ras_gpumon_get_ras_caps(adapt, output);
+		ret = amdgv_ras_gpumon_get_ras_caps(adapt, output);
+		break;
 	case GPUMON_GET_ECC_CORRECTION_SCHEMA:
-		return amdgv_ras_gpumon_get_ecc_correction_schema(adapt, output);
+		ret = amdgv_ras_gpumon_get_ecc_correction_schema(adapt, output);
+		break;
 	case GPUMON_CPER_GET_COUNT:
-		return amdgv_ras_gpumon_cper_get_count(adapt, input);
+		ret = amdgv_ras_gpumon_cper_get_count(adapt, input);
+		break;
 	case GPUMON_CPER_GET_ENTRIES:
-		return amdgv_ras_gpumon_cper_get_entries(adapt, input);
+		ret = amdgv_ras_gpumon_cper_get_entries(adapt, input);
+		break;
 	case GPUMON_GET_RAS_POLICY_INFO:
+		ret = amdgv_ras_gpumon_get_ras_policy_info(adapt, output);
 		break;
 	default:
-		break;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 	}
 
-	return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+	return amdgv_ras_gpumon_to_amdgv_ret(ret);
 }

@@ -400,13 +400,12 @@ static void mi300_nbio_assign_mmsch_doorbell_vcn(struct amdgv_adapter *adapt, in
 
 void mi300_nbio_assign_mmsch_doorbell(struct amdgv_adapter *adapt)
 {
-	int i, vcn_inst;
+	int vcn_id;
 	int doorbell_index;
 
-	for (i = 0; i < adapt->config.mm.count[AMDGV_VCN_ENGINE]; i++) {
-		vcn_inst = GET_INST(VCN, i);
-		doorbell_index = (AMDGV_MI300_DOORBELL_MMSCH0 << 1) + 32 * vcn_inst;
-		mi300_nbio_assign_mmsch_doorbell_vcn(adapt, vcn_inst, doorbell_index);
+	for_each_id (vcn_id, adapt->vcn.active_mask) {
+		doorbell_index = (AMDGV_MI300_DOORBELL_MMSCH0 << 1) + 32 * vcn_id;
+		mi300_nbio_assign_mmsch_doorbell_vcn(adapt, vcn_id, doorbell_index);
 	}
 
 }

@@ -17,13 +17,14 @@
 #define MAX_VF_DB_SIZE				(64 * 16)
 #define ATTESTATION_TABLE_COOKIE	0x143b6a37
 
-#define regMP0_C2PMSG_64 0x16080
-#define regMP0_C2PMSG_69 0x16085
-#define regMP0_C2PMSG_70 0x16086
-#define regMP0_C2PMSG_71 0x16087
+#define regMP0_C2PMSG_64			0x16080
 
 struct amdgv_live_info_psp;
 struct amdgv_live_info_fw_info;
+struct amdgv_mem_ras_error_info;
+struct amdgv_gpumon_set_ppod_config_req_ual_v1;
+struct amdgv_gpumon_set_vpod_config_req_ual_v1;
+struct amdgv_gpumon_station_config_ual_v1;
 
 /* Forward declaration to avoid circular dependency with amdgv_oss_wrapper.h */
 typedef void *mutex_t;
@@ -348,6 +349,7 @@ struct psp_context {
 	struct psp_asd_context	  asd_context;
 	struct psp_ras_context	  ras_context;
 	struct psp_vbflash_context	  vbflash_context;
+	struct psp_local_memory	  umf_context;
 
 	void *attestation_db_cpu_addr;
 	uint64_t attestation_db_gpu_addr;
@@ -383,6 +385,8 @@ struct psp_context {
 	enum psp_status (*load_spl)(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 					uint32_t fw_image_size);
 	enum psp_status (*load_sysdrv)(struct amdgv_adapter *adapt, const unsigned char *fw_image,
+					   uint32_t fw_image_size);
+	enum psp_status (*load_iovmdrv)(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 					   uint32_t fw_image_size);
 	enum psp_status (*load_rasdrv)(struct amdgv_adapter *adapt, const unsigned char *fw_image,
 					   uint32_t fw_image_size);
@@ -426,6 +430,24 @@ struct psp_context {
 	int (*enable_interrupt)(struct amdgv_adapter *adapt, bool enable);
 	int (*handle_irq)(struct amdgv_adapter *adapt, struct amdgv_iv_entry *entry);
 	bool (*vf_cp_migration_is_supported)(struct amdgv_adapter *adapt, uint32_t idx_vf);
+	int (*translate_bp_addr)(struct amdgv_adapter *adapt, uint64_t ipid, uint64_t mca_addr,
+						struct amdgv_mem_ras_error_info *out, uint32_t *crit_region_err);
+
+	/* UAL callbacks; NULL when UAL is unsupported on this PSP IP version */
+	enum psp_status (*ual_get_interface_version)(struct amdgv_adapter *adapt,
+			uint32_t *version);
+	enum psp_status (*ual_get_config)(struct amdgv_adapter *adapt,
+			uint64_t data_addr, uint32_t size);
+	enum psp_status (*ual_set_ppod_config)(struct amdgv_adapter *adapt,
+			struct amdgv_gpumon_set_ppod_config_req_ual_v1 *config);
+	enum psp_status (*ual_set_vpod_config)(struct amdgv_adapter *adapt,
+			struct amdgv_gpumon_set_vpod_config_req_ual_v1 *config);
+	enum psp_status (*ual_set_station_config)(struct amdgv_adapter *adapt,
+			struct amdgv_gpumon_station_config_ual_v1 *config);
+	enum psp_status (*ual_get_station_config)(struct amdgv_adapter *adapt,
+			uint64_t data_addr, uint32_t size);
+	enum psp_status (*ual_send_completion)(struct amdgv_adapter *adapt,
+			uint32_t cmd_id, uint32_t status);
 };
 
 /* Single property buffer stored in the APP_PROP_BUF structure.
@@ -459,8 +481,9 @@ enum amdgv_live_info_status amdgv_psp_export_live_data(struct amdgv_adapter *ada
 enum amdgv_live_info_status amdgv_psp_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_psp *psp_info);
 enum amdgv_live_info_status amdgv_psp_fw_info_export_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_fw_info *fw_info);
 enum amdgv_live_info_status amdgv_psp_fw_info_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_fw_info *fw_info);
-enum psp_status amdgv_psp_read_ip_discovery(struct amdgv_adapter *adapt,
-						struct amdgv_memmgr_mem *ip_mem);
+bool amdgv_psp_bp_translation_support(struct amdgv_adapter *adapt);
+int amdgv_psp_translate_bp_addr(struct amdgv_adapter *adapt, uint64_t ipid, uint64_t mca_addr,
+		struct amdgv_mem_ras_error_info *out, uint32_t *crit_region_err);
 #define amdgv_psp_transfer_manifest_data(adapt, idx_vf, data_addr, size, type) \
 		((adapt->psp.transfer_manifest_data) ? \
 		 adapt->psp.transfer_manifest_data(adapt, idx_vf, data_addr, size, type) : \
@@ -472,5 +495,6 @@ enum psp_status amdgv_psp_read_ip_discovery(struct amdgv_adapter *adapt,
  *
 */
 enum gpuv_psp_ring_type psp_ring_type_to_gpuv_psp_ring_type(enum psp_ring_type ring_type);
+int amdgv_psp_disable_fb_carveout(struct amdgv_adapter *adapt);
 
 #endif

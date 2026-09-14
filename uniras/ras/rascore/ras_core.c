@@ -315,43 +315,67 @@ int ras_core_sw_init(struct ras_core_context *ras_core)
 	ret = oss_kfifo_alloc(&ras_core->consumption_seqno_fifo,
 		 RAS_SEQNO_FIFO_SIZE);
 	if (ret)
-		return ret;
+		goto err_consumption_fifo;
 
 	oss_spin_lock_init_raw(&ras_core->seqno_lock);
 
 	ret = ras_aca_sw_init(ras_core);
 	if (ret)
-		return ret;
+		goto err_aca;
 
 	ret = ras_umc_sw_init(ras_core);
 	if (ret)
-		return ret;
+		goto err_umc;
 
 	ret = ras_cmd_init(ras_core);
 	if (ret)
-		return ret;
+		goto err_cmd;
 
 	ret = ras_log_ring_sw_init(ras_core);
 	if (ret)
-		return ret;
+		goto err_log_ring;
 
 	ret = ras_psp_sw_init(ras_core);
 	if (ret)
-		return ret;
+		goto err_psp;
 
 	ret = ras_mp1_sw_init(ras_core);
 	if (ret)
-		return ret;
+		goto err_mp1;
 
 	ret = ras_eeprom_mgr_sw_init(ras_core);
 	if (ret)
-		return ret;
+		goto err_eeprom;
 
 	ret = ras_mce_sw_init(ras_core);
+	if (ret)
+		goto err_mce;
+
+	ret = ras_cper_sw_init(ras_core);
 	if (ret)
 		return ret;
 
 	return 0;
+
+err_mce:
+	ras_eeprom_mgr_sw_fini(ras_core);
+err_eeprom:
+	ras_mp1_sw_fini(ras_core);
+err_mp1:
+	ras_psp_sw_fini(ras_core);
+err_psp:
+	ras_log_ring_sw_fini(ras_core);
+err_log_ring:
+	ras_cmd_fini(ras_core);
+err_cmd:
+	ras_umc_sw_fini(ras_core);
+err_umc:
+	ras_aca_sw_fini(ras_core);
+err_aca:
+	oss_kfifo_free(&ras_core->consumption_seqno_fifo);
+err_consumption_fifo:
+	oss_kfifo_free(&ras_core->de_seqno_fifo);
+	return ret;
 }
 
 int ras_core_sw_fini(struct ras_core_context *ras_core)
@@ -367,7 +391,7 @@ int ras_core_sw_fini(struct ras_core_context *ras_core)
 	ras_aca_sw_fini(ras_core);
 	ras_eeprom_mgr_sw_fini(ras_core);
 	ras_mce_sw_fini(ras_core);
-
+	ras_cper_sw_fini(ras_core);
 	return 0;
 }
 
@@ -741,4 +765,25 @@ int ras_core_eeprom_early_init_service(struct ras_core_context *ras_core)
 		return -RAS_CORE_EACCES;
 
 	return ras_core_eeprom_recovery(ras_core);
+}
+
+int ras_core_add_log_event(struct ras_core_context *ras_core,
+		uint32_t event, void *data, uint32_t data_sz)
+{
+	if (event >= RAS_LOG_EVENT_COUNT_MAX) {
+		RAS_DEV_ERR(ras_core->dev, "Invalid ras log event(0x%x)!\n", event);
+		return -RAS_CORE_EINVAL;
+	}
+
+	return ras_log_ring_add_log_event(ras_core, event, data, data_sz, NULL);
+}
+
+int ras_core_check_address_sanity(struct ras_core_context *ras_core,
+		uint64_t addr)
+{
+	if (ras_core && ras_core->sys_fn &&
+		ras_core->sys_fn->check_address_sanity)
+		return ras_core->sys_fn->check_address_sanity(ras_core, addr);
+
+	return 0;
 }

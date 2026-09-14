@@ -14,6 +14,7 @@
 #define is_debug_mode_conditional_hang()	(adapt->debug.mode & AMDGV_DEBUG_MODE_CONDITIONAL_HANG)
 #define is_debug_mode_hang()			(adapt->debug.mode & AMDGV_DEBUG_MODE_HANG)
 #define is_debug_mode_hang_ras_smu()		(adapt->debug.mode & AMDGV_DEBUG_MODE_HANG_RAS_SMU)
+#define is_debug_mode_break_point()		(adapt->debug.mode & AMDGV_DEBUG_MODE_BREAK_POINT)
 
 
 struct amdgv_debug_cond_param {
@@ -33,6 +34,7 @@ struct amdgv_debug {
 
 int amdgv_debug_test_and_hang_flr(struct amdgv_adapter *adapt);
 int amdgv_debug_test_and_hang_wgr(struct amdgv_adapter *adapt);
+int amdgv_debug_break_point(struct amdgv_adapter *adapt);
 void amdgv_debug_set_mode(struct amdgv_adapter *adapt, enum amdgv_debug_mode mode);
 
 #endif

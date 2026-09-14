@@ -11,16 +11,17 @@ AmdSmiEventCommand::AmdSmiEventCommand(Arguments args) : AmdSmiCommands(args), s
 {
 	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().initEvent();
 	if (ret != 0) {
-		std::string command{"event"};
+		std::string command {"event"};
 		throw SmiToolCommandNotSupportedException(command);
 	}
 };
 
 void AmdSmiEventCommand::execute_command()
 {
-	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_event_command(arg, stop, threads);
+	int ret =
+	    AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_event_command(arg, stop, threads);
 	if (ret != 0) {
-		std::string command{"event"};
+		std::string command {"event"};
 		throw SmiToolCommandNotSupportedException(command);
 	}
 }

@@ -24,6 +24,7 @@
 #define PCIE_DEVICE_STATUS   0xA
 #define PCIE_DEVICE_CONTROL2 0x28
 #define PCIE_DEVICE_CAP2     0x24
+#define PCIE_CAP_FLAGS       0x02
 
 /* PCIE AER block registers */
 #define PCIE_EXT_AER_UNCOR_STATUS   0x4
@@ -50,11 +51,19 @@
 /* PCI bit fields definitions */
 #define PCI_COMMAND__BUS_MASTER_EN	   0x0004
 #define PCI_COMMAND__INT_DIS		   0x0400
+#define PCIE_CAP_FLAGS__VERSION            0x000f /* Capability version */
+#define PCIE_CAP_FLAGS__DEV_TYPE           0x00f0 /* Device/Port type */
+#define PCIE_CAP_FLAGS__DEV_TYPE_SHIFT     4
+#define PCIE_DEV_TYPE__ROOT_PORT           0x4
+#define PCIE_CAP_VERSION_MIN_DEVCAP2       2      /* DEVCAP2 exists from v2 on */
 #define PCIE_DEVICE_CONTROL__BCR_FLR	   0x8000
 #define PCIE_DEVICE_STATUS__TRANS_PEND	   0x0020
 #define PCIE_DEVICE_CONTROL2__ATOMICOP_REQ 0x0040
 #define PCIE_DEVICE_CAP2__ATOMIC_COMP32    0x0080
 #define PCIE_DEVICE_CAP2__ATOMIC_COMP64    0x0100
+#define PCIE_DEVICE_CAP2__10BIT_TAG_COMP   0x00010000 /* 10-Bit Tag Completer Supported */
+#define PCIE_DEVICE_CAP2__10BIT_TAG_REQ    0x00020000 /* 10-Bit Tag Requester Supported */
+#define PCIE_DEVICE_CONTROL2__10BIT_TAG_REQ_EN 0x1000 /* 10-Bit Tag Requester Enable */
 
 /* Misc definitions  */
 #define PCIE_EXT_SRIOV_SIZE 0x40

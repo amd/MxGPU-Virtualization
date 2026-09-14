@@ -227,6 +227,13 @@ INLINE int oss_pci_find_next_ext_cap(oss_dev_t dev, int start_pos, int cap)
 	return amdgv_oss_funcs->pci_find_next_ext_cap(dev, start_pos, cap);
 }
 
+INLINE oss_dev_t oss_pci_upstream_bridge(oss_dev_t dev)
+{
+	if (amdgv_oss_funcs->pci_upstream_bridge)
+		return amdgv_oss_funcs->pci_upstream_bridge(dev);
+	return NULL;
+}
+
 INLINE int oss_pci_restore_vf_rebar(oss_dev_t dev, int bar_idx)
 {
 	if (amdgv_oss_funcs->pci_restore_vf_rebar)
@@ -323,7 +330,7 @@ INLINE void oss_free_memory(void *ptr)
 	amdgv_oss_funcs->free_memory(ptr);
 }
 
-INLINE void *oss_memremap(uint64_t offset, uint32_t size, enum oss_memremap_type type)
+INLINE void *oss_memremap(uint64_t offset, uint64_t size, enum oss_memremap_type type)
 {
 	return amdgv_oss_funcs->memremap(offset, size, type);
 }
@@ -1265,6 +1272,12 @@ INLINE void oss_mb(void)
 {
 	if (amdgv_oss_funcs->mb)
 		amdgv_oss_funcs->mb();
+}
+
+INLINE void oss_emergency_restart(void)
+{
+	if (amdgv_oss_funcs->emergency_restart)
+		amdgv_oss_funcs->emergency_restart();
 }
 
 INLINE void oss_get_device_list(oss_dev_t *dev_list, int *size)

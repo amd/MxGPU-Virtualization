@@ -31,6 +31,8 @@
 #include "amdgv_ras_nbio_v7_9.h"
 #include "amdgv_ras_cmd.h"
 #include "amdgv_ras_mce.h"
+#include "amdgv_ras_cper.h"
+#include "amdgv_psp_gfx_if.h"
 #include "ras.h"
 
 #define MAX_AID_NUM_PER_SOCKET_GFX9     4
@@ -243,6 +245,7 @@ static int amdgv_ras_mgr_get_ras_param(struct ras_core_context *ras_core,
 			struct ras_param *param)
 {
 	struct amdgv_adapter *adapt = (struct amdgv_adapter *)ras_core->dev;
+	int ret;
 
 	if (!param)
 		return -RAS_CORE_EINVAL;
@@ -255,18 +258,37 @@ static int amdgv_ras_mgr_get_ras_param(struct ras_core_context *ras_core,
 	if (adapt->umc.funcs && adapt->umc.funcs->query_ras_memchandis)
 		param->ta_param.channel_dis_num = adapt->umc.channel_dis_num;
 
-#if 0
-	// Pending implementation
-	param->fw_param.rl_bin.fw_version = adev->psp.rl.fw_version;
-	param->fw_param.rl_bin.feature_version = adev->psp.rl.feature_version;
-	param->fw_param.rl_bin.bin_size = adev->psp.rl.size_bytes;
-	param->fw_param.rl_bin.bin_addr = adev->psp.rl.start_addr;
+	oss_memset(&param->fw_param, 0, sizeof(param->fw_param));
 
-	param->fw_param.ta_bin.fw_version = adev->psp.ras_context.context->bin_desc.fw_version;
-	param->fw_param.ta_bin.feature_version = adev->psp.ras_context.context->bin_desc.feature_version;
-	param->fw_param.ta_bin.bin_size = adev->psp.ras_context.context->bin_desc.size_bytes;
-	param->fw_param.ta_bin.bin_addr = adev->psp.ras_context.context->bin_desc.start_addr;
-#endif
+	/* Embedded RAS TA/RL is wired per PSP IP (currently 15.0.8 only).
+	 * ASICs without accessors have no blob to load; skip rather than
+	 * failing UniRAS HW init.
+	 */
+	if (!adapt->psp.get_ras_ta_fw && !adapt->psp.get_ras_rl_fw) {
+		RAS_DEV_INFO(adapt,
+			"Embedded RAS TA/RL firmware is not available; skip loading\n");
+		return 0;
+	}
+
+	ret = amdgv_psp_get_ras_ta_fw(adapt,
+			&param->fw_param.ta_bin.bin_addr,
+			&param->fw_param.ta_bin.bin_size,
+			&param->fw_param.ta_bin.fw_version,
+			&param->fw_param.ta_bin.feature_version);
+	if (ret) {
+		RAS_DEV_ERR(adapt, "Failed to get embedded RAS TA firmware (%d)\n", ret);
+		return -RAS_CORE_EINVAL;
+	}
+
+	ret = amdgv_psp_get_ras_rl_fw(adapt,
+			&param->fw_param.rl_bin.bin_addr,
+			&param->fw_param.rl_bin.bin_size,
+			&param->fw_param.rl_bin.fw_version,
+			&param->fw_param.rl_bin.feature_version);
+	if (ret) {
+		RAS_DEV_ERR(adapt, "Failed to get embedded RAS RL firmware (%d)\n", ret);
+		return -RAS_CORE_EINVAL;
+	}
 
 	return 0;
 }
@@ -274,34 +296,45 @@ static int amdgv_ras_mgr_get_ras_param(struct ras_core_context *ras_core,
 static int amdgv_ras_mgr_psp_translate_addr(struct ras_core_context *ras_core,
 	struct ras_psp_addr_trans_in *in, struct ras_psp_addr_trans_out *out)
 {
-	int ret = 0;
-#if 0  // Sample code
 	struct amdgv_adapter *adapt = (struct amdgv_adapter *)ras_core->dev;
-	struct ras_mem_error_info *bp;
+	struct amdgv_mem_ras_error_info *bp;
 	uint64_t all_or  = 0;
 	uint64_t all_and = ~0ULL;
-	int i;
+	uint32_t crit_region_err = 0;
+	uint32_t i;
+	int ret = 0;
 
 	if (!in || !out)
 		return -RAS_CORE_EINVAL;
+
+	if (!amdgv_psp_bp_translation_support(adapt))
+		return -RAS_CORE_EOPNOTSUPP;
 
 	bp = oss_zalloc(sizeof(*bp));
 	if (!bp)
 		return -RAS_CORE_ENOMEM;
 
-	/*
-		libgv add implementation for the following function interfaces：
-		int amdgv_psp_translate_bp_addr(struct amdgv_adapter *adapt,
-			uint64_t ipid, uint64_t mca_addr, uint32_t nps,
-			struct ras_mem_error_info *mem_info);
-	*/
-	ret = amdgv_psp_translate_bp_addr(adapt, in->ipid, in->mca_addr, in->nps, bp);
-	if (ret)
-		goto out;
+	/* amdgv_psp_translate_bp_addr() issues the PSP mailbox translation
+	 * for raw bad page records and fills the HBM-offset into bp.
+	 */
+	ret = amdgv_psp_translate_bp_addr(adapt, in->ipid, in->mca_addr,
+			bp, &crit_region_err);
+	if (ret) {
+		ret = -RAS_CORE_EREMOTEIO;
+		goto exit;
+	}
 
-	if (!bp->entry_num) {
+	/* If a bad page overlaps a FW critical region,
+	 * we only warn it here and the ras process will proceed with RMA handling.
+	 */
+	if (crit_region_err) {
+		RAS_DEV_WARN(adapt, "Bad page overlaps FW critical region.\n");
+		ras_core->is_rma = true;
+	}
+
+	if (!bp->ErrorEntryNum) {
 		ret = -RAS_CORE_EIO;
-		goto out;
+		goto exit;
 	}
 
 	out->channel_id     = bp->ChannelId;
@@ -310,16 +343,16 @@ static int amdgv_ras_mgr_psp_translate_addr(struct ras_core_context *ras_core,
 	out->dram_entity_id = bp->DramEntityId;
 	out->umc_inst_id    = bp->UmcInstId;
 
-	for (i = 0; i < bp->entry_num; i++) {
-		all_or |= RAS_PFN_TO_ADDR(bp->pfns[i]);
-		all_and &= RAS_PFN_TO_ADDR(bp->pfns[i]);
+	for (i = 0; i < bp->ErrorEntryNum; i++) {
+		all_or |= RAS_PFN_TO_ADDR(RAS_ADDR_TO_PFN(bp->ErrorMemInfo[i].LocSocketMemOffset));
+		all_and &= RAS_PFN_TO_ADDR(RAS_ADDR_TO_PFN(bp->ErrorMemInfo[i].LocSocketMemOffset));
 	}
 
 	out->row_pa = all_or;
 	out->pa_flip_mask = all_or ^ all_and;
-out:
+
+exit:
 	oss_free(bp);
-#endif
 	return ret;
 }
 
@@ -364,6 +397,11 @@ static struct ras_core_context *amdgv_ras_mgr_create_ras_core(struct amdgv_adapt
 	init_config.ras_eeprom_supported = true;
 	init_config.poison_supported = false;
 
+	if (adapt->xgmi.connected_to_cpu)
+		init_config.ras_thread_poll_interval_ms = 1000;
+	else
+		init_config.ras_thread_poll_interval_ms = 300;
+
 	amdgv_ras_mgr_init_aca_config(adapt, &init_config);
 	amdgv_ras_mgr_init_eeprom_config(adapt, &init_config);
 	amdgv_ras_mgr_init_mp1_config(adapt, &init_config);
@@ -401,6 +439,9 @@ static int amdgv_ras_mgr_sw_init(struct amdgv_adapter *adapt)
 	struct vf_auto_cmd_mgr *cmd_mgr;
 	int ret = 0, i;
 
+	if (!adapt->opt.unified_ras_enabled)
+		return 0;
+
 	amdgv_ras_mgr_ecc_init(adapt);
 	oss_atomic_set(adapt->in_ecc_recovery, 0);
 
@@ -421,7 +462,12 @@ static int amdgv_ras_mgr_sw_init(struct amdgv_adapter *adapt)
 
 	ras_mgr->ras_core->dev = adapt;
 
-	ras_core_sw_init(ras_mgr->ras_core);
+	ret = ras_core_sw_init(ras_mgr->ras_core);
+	if (ret) {
+		RAS_DEV_ERR(adapt, "Failed to init ras core sw!\n");
+		ret = AMDGV_FAILURE;
+		goto err_sw_init;
+	}
 
 	amdgpv_ras_mgr_init_event_mgr(ras_mgr->ras_core);
 
@@ -436,10 +482,18 @@ static int amdgv_ras_mgr_sw_init(struct amdgv_adapter *adapt)
 
 	amdgv_ras_mce_sw_init(adapt);
 
+	amdgv_ras_cper_sw_init(adapt);
+
 	return 0;
 
+err_sw_init:
+	if (ras_mgr->ras_core) {
+		ras_core_destroy(ras_mgr->ras_core);
+		ras_mgr->ras_core = NULL;
+	}
 err:
 	oss_free(ras_mgr);
+	adapt->ecc.ras_mgr = NULL;
 	return ret;
 }
 
@@ -450,9 +504,13 @@ static int amdgv_ras_mgr_sw_fini(struct amdgv_adapter *adapt)
 	struct auto_update_cmd *auto_cmd, *tmp;
 	int i;
 
+	if (!adapt->opt.unified_ras_enabled)
+		return 0;
+
 	if (!ras_mgr)
 		return AMDGV_FAILURE;
 
+	amdgv_ras_cper_sw_fini(adapt);
 	amdgv_ras_mce_sw_fini(adapt);
 
 	for (i = 0; i < AMDGV_MAX_VF_NUM; i++) {
@@ -484,6 +542,9 @@ static int amdgv_ras_mgr_hw_init(struct amdgv_adapter *adapt)
 			amdgv_ras_mgr_get_context(adapt);
 	int ret;
 
+	if (!adapt->opt.unified_ras_enabled)
+		return 0;
+
 	if (!ras_mgr || !ras_mgr->ras_core)
 		return AMDGV_FAILURE;
 
@@ -509,6 +570,9 @@ static int amdgv_ras_mgr_hw_fini(struct amdgv_adapter *adapt)
 {
 	struct amdgv_ras_mgr *ras_mgr =
 			amdgv_ras_mgr_get_context(adapt);
+
+	if (!adapt->opt.unified_ras_enabled)
+		return 0;
 
 	if (!amdgv_ras_mgr_is_ready(adapt))
 		return AMDGV_FAILURE;
@@ -629,6 +693,47 @@ struct amdgv_init_func amdgv_ras_mgr_func = {
 	.hw_fini = amdgv_ras_mgr_hw_fini,
 };
 
+static int amdgv_ras_mgr_early_hw_init(struct amdgv_adapter *adapt)
+{
+	int ret;
+
+	if (!adapt->opt.unified_ras_enabled)
+		return 0;
+
+	ret = amdgv_memmgr_resize(adapt, &adapt->memmgr_pf);
+	if (ret)
+		return ret;
+
+	if (adapt->memmgr_gpu.is_init) {
+		ret = amdgv_memmgr_resize(adapt, &adapt->memmgr_gpu);
+		if (ret)
+			return ret;
+	}
+
+	ret = amdgv_ras_mgr_early_init_service(adapt);
+	/* libgv re-runs the init function table on a whole GPU reset without
+	 * re-running sw_init, so ras_core has already left in_early_init and the
+	 * EEPROM early init service returns -RAS_CORE_EACCES. Not fatal.
+	 */
+	if (ret && ret != -RAS_CORE_EOPNOTSUPP && ret != -RAS_CORE_EACCES) {
+		RAS_DEV_ERR(adapt, "RAS early init service failed (%d)\n", ret);
+		return AMDGV_FAILURE;
+	}
+
+	return 0;
+}
+
+static int amdgv_ras_mgr_early_hw_fini(struct amdgv_adapter *adapt)
+{
+	return 0;
+}
+
+struct amdgv_init_func amdgv_ras_mgr_early_func = {
+	.name = "amdgv_ras_mgr_early_func",
+	.hw_init = amdgv_ras_mgr_early_hw_init,
+	.hw_fini = amdgv_ras_mgr_early_hw_fini,
+};
+
 struct amdgv_init_func *amdgv_ras_mgr_get_init_func(struct amdgv_adapter *adapt)
 {
 	return &amdgv_ras_mgr_func;
@@ -676,8 +781,10 @@ uint64_t amdgv_ras_mgr_gen_ras_event_seqno(struct amdgv_adapter *adapt,
 	if ((seqno_type == RAS_SEQNO_TYPE_DE) ||
 	    (seqno_type == RAS_SEQNO_TYPE_POISON_CONSUMPTION)) {
 		ret = ras_core_put_seqno(ras_mgr->ras_core, seqno_type, seq_no);
-		if (ret)
+		if (ret) {
 			RAS_DEV_WARN(adapt, "There are too many ras interrupts!");
+			return 0;
+		}
 	}
 
 	return seq_no;
@@ -1024,6 +1131,25 @@ int amdgv_ras_mgr_early_init_service(struct amdgv_adapter *adapt)
 		RAS_DEV_WARN(adapt, "RAS early init failure! ret:%d\n", ret);
 
 	return ret;
+}
+
+int amdgv_ras_mgr_get_bad_page_threshold(struct amdgv_adapter *adapt,
+		uint64_t *bad_page_threshold)
+{
+	struct ras_mp1_policy_info mp1_info = {0};
+	struct amdgv_ras_mgr *ras_mgr = amdgv_ras_mgr_get_context(adapt);
+	int ret;
+
+	if (!bad_page_threshold || !ras_mgr || !ras_mgr->ras_core)
+		return -RAS_CORE_EINVAL;
+
+	ret = ras_mp1_get_ras_policy(ras_mgr->ras_core, &mp1_info);
+	if (ret)
+		return ret;
+
+	*bad_page_threshold = mp1_info.bad_page_threshold;
+
+	return 0;
 }
 
 void amdgv_ras_mgr_get_ras_caps(struct amdgv_adapter *adapt,

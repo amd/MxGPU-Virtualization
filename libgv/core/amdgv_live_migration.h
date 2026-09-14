@@ -59,7 +59,12 @@ void amdgv_migration_set_ctx_version(struct amdgv_adapter *adapt,
 				     enum amdgv_migration_context_version version);
 int amdgv_live_migration_set_vf_mig_state(struct amdgv_adapter *adapt, uint32_t idx_vf,
 				   enum amdgv_migration_vf_state state);
+enum amdgv_migration_vf_state amdgv_migration_get_vf_state(struct amdgv_adapter *adapt,
+							   uint32_t idx_vf);
 void amdgv_live_migration_abort_check(struct amdgv_adapter *adapt, uint32_t idx_vf,
 					enum amdgv_sched_event_id event_id);
 void amdgv_live_migration_set_abort_all(struct amdgv_adapter *adapt);
+
+int amdgv_migration_boost_clk(struct amdgv_adapter *adapt);
+int amdgv_migration_restore_clk(struct amdgv_adapter *adapt, uint32_t idx_vf);
 #endif

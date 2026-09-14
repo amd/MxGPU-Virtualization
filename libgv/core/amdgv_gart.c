@@ -19,15 +19,31 @@ static const uint32_t this_block = AMDGV_MEMORY_BLOCK;
  * @dma_addr: dma dma_addr to write into pte/pde
  * @flags: access flags
  */
-static int amdgv_gart_set_pte_pde(struct amdgv_adapter *adapt, void *cpu_pt_addr,
+static int amdgv_gart_set_pte_pde(struct amdgv_adapter *adapt,
+				struct amdgv_memmgr_mem *pt_mem,
 				uint32_t gpu_page_idx, uint64_t dma_addr,
 				uint64_t flags)
 {
 	uint64_t value;
+	void *cpu_pt_addr;
+	uint64_t fb_offset;
 
 	value = dma_addr & 0x0000FFFFFFFFF000ULL;
 	value |= flags;
-	oss_mm_write64((char *)cpu_pt_addr + (gpu_page_idx * 8), value);
+
+	cpu_pt_addr = pt_mem ? amdgv_memmgr_get_cpu_addr(pt_mem) : NULL;
+	if (cpu_pt_addr) {
+		oss_mm_write64((char *)cpu_pt_addr + (gpu_page_idx * 8), value);
+		return 0;
+	}
+
+	if (!pt_mem)
+		return AMDGV_FAILURE;
+
+	/* HBM without CPU framebuffer mapping: update page tables via MMIO */
+	fb_offset = amdgv_memmgr_get_offset(pt_mem) + ((uint64_t)gpu_page_idx * 8);
+	WRITE_FB32(fb_offset, lower_32_bits(value));
+	WRITE_FB32(fb_offset + 4, upper_32_bits(value));
 
 	return 0;
 }
@@ -65,8 +81,6 @@ void amdgv_gart_map(struct amdgv_adapter *adapt, uint64_t offset, int pages,
 	uint64_t flags = 0;
 	unsigned t;
 	int i;
-	void *ptb_cpu_addr = amdgv_memmgr_get_cpu_addr(adapt->ptb_mem);
-
 	if (adapt->gmc.funcs && adapt->gmc.funcs->get_gart_map_flags && 0 != dma_addr)
 		flags = adapt->gmc.funcs->get_gart_map_flags(adapt);
 
@@ -76,7 +90,7 @@ void amdgv_gart_map(struct amdgv_adapter *adapt, uint64_t offset, int pages,
 		AMDGV_DEBUG("GART address: 0x%llx DMA address: 0x%llx\n",
 			    (offset + (i << AMDGV_GPU_PAGE_SHIFT)),
 			    dma_addr + (i << AMDGV_GPU_PAGE_SHIFT));
-		amdgv_gart_set_pte_pde(adapt, ptb_cpu_addr, t + i,
+		amdgv_gart_set_pte_pde(adapt, adapt->ptb_mem, t + i,
 				       dma_addr + (i << AMDGV_GPU_PAGE_SHIFT), flags);
 	}
 }
@@ -89,23 +103,23 @@ void amdgv_gart_init_pdb0(struct amdgv_adapter *adapt)
 	uint64_t pde0_page_size = AMDGV_PDE0_PAGE_SIZE;
 	uint64_t vram_addr = adapt->fb_pa;
 	uint64_t vram_end = vram_addr + vram_size;
-	void *pdb0_cpu_addr = amdgv_memmgr_get_cpu_addr(adapt->pdb0_mem);
 	uint64_t ptb_pa = amdgv_memmgr_get_gpu_pa(adapt->ptb_mem);
 
 	if (adapt->xgmi.connected_to_cpu) {
 		if (adapt->gmc.funcs && adapt->gmc.funcs->get_gart_map_flags)
 			flags = adapt->gmc.funcs->get_gart_map_flags(adapt);
-		flags &= ~AMDGV_PTE_SYSTEM;
 		flags |= AMDGV_PTE_FRAG(AMDGV_PDE0_PAGE_SHIFT - AMDGV_GPU_PAGE_SHIFT);
 		flags |= AMDGV_PDE_PTE_FLAG(adapt);
 
 		/* First n PDE0 entries for VRAM, n+1'th for PTB */
 		for (i = 0; vram_addr < vram_end; i++, vram_addr += pde0_page_size)
-			amdgv_gart_set_pte_pde(adapt, pdb0_cpu_addr, i, vram_addr, flags);
+			amdgv_gart_set_pte_pde(adapt, adapt->pdb0_mem, i, vram_addr, flags);
 	}
 
 	/* PTB: for xgmi connected_to_cpu use the n+1'th PDE0; otherwise the first PDE0 */
 	flags = AMDGV_PTE_VALID;
 	flags |= AMDGV_PTE_SNOOPED | AMDGV_PDE_BFS_FLAG(adapt, 0);
-	amdgv_gart_set_pte_pde(adapt, pdb0_cpu_addr, i, ptb_pa, flags);
+	if (adapt->xgmi.connected_to_cpu)
+		flags |= AMDGV_PTE_SYSTEM;
+	amdgv_gart_set_pte_pde(adapt, adapt->pdb0_mem, i, ptb_pa, flags);
 }

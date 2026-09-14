@@ -89,8 +89,10 @@ int amdgv_ras_process_handle_consumption_interrupt(struct amdgv_adapter *adapt,
 	} else {
 		adapt->reset.reset_mode = adapt->umc.reset_mode;
 		if (adapt->xgmi.master_adapt) {
-			AMDGV_INFO("Forwarding reset event to master adapter:0x%x\n",
-				   adapt->xgmi.master_adapt->bdf);
+			AMDGV_DEBUG("Forwarding reset event to master adapter:%02x:%02x.%x\n",
+				    (adapt->xgmi.master_adapt->bdf >> 8) & 0xFF,
+				    (adapt->xgmi.master_adapt->bdf >> 3) & 0x1F,
+				    adapt->xgmi.master_adapt->bdf & 0x7);
 			adapt = adapt->xgmi.master_adapt;
 		}
 

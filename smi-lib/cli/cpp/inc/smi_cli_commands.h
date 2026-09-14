@@ -12,7 +12,7 @@ class AmdSmiCommands
 {
 protected:
 	Arguments arg;
-	Logger &log_err = Logger::getInstance();
+	Logger& log_err = Logger::getInstance();
 
 	unsigned int gpu_count;
 

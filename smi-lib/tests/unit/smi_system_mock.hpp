@@ -21,8 +21,7 @@ extern "C" {
 
 using namespace testing;
 
-namespace amdsmi
-{
+namespace amdsmi {
 ACTION(MallocPasstrough)
 {
 	return std::malloc(arg0);
@@ -41,7 +40,6 @@ ACTION(CallocPasstrough)
 {
 	return std::calloc(arg0, arg1);
 }
-
 
 ACTION(AlignedAllocPasstrough)
 {
@@ -95,7 +93,7 @@ ACTION(IoctlPasstrough)
 
 ACTION(StrncpyPasstrough)
 {
-	size_t count = arg3;
+	size_t count  = arg3;
 	size_t destsz = arg1;
 	if (arg3 >= arg1) {
 		count = destsz - 1;
@@ -162,9 +160,9 @@ ACTION_P(SetResponse, payload)
 ACTION_P(SetResponseStatus, outStatus)
 {
 	smi_ioctl_cmd temp = {
-		{},	       // in header
-		{ (int) outStatus }, // out header
-		{}	       // payload
+	    {},		      // in header
+	    {(int)outStatus}, // out header
+	    {}		      // payload
 	};
 	std::memcpy(arg0, &temp, sizeof(temp));
 	return 0; // IOCTL successful
@@ -193,7 +191,7 @@ MATCHER_P(SmiCmd, cmd, "Matches the smi cmd")
 }
 
 class SystemMock {
-public:
+      public:
 	SystemMock()
 	{
 #ifdef _WIN64
@@ -202,23 +200,29 @@ public:
 		int ret = 0;
 #endif
 		ON_CALL(*this, Ioctl(testing::_)).WillByDefault(Return(-1));
-		ON_CALL(*this, Ioctl(testing::_, testing::_, testing::_)).WillByDefault(IoctlPasstrough());
+		ON_CALL(*this, Ioctl(testing::_, testing::_, testing::_))
+		    .WillByDefault(IoctlPasstrough());
 		ON_CALL(*this, Open(testing::_)).WillByDefault(Return(ret));
-		ON_CALL(*this, Open(testing::_, testing::_, testing::_)).WillByDefault(OpenPasstrough());
+		ON_CALL(*this, Open(testing::_, testing::_, testing::_))
+		    .WillByDefault(OpenPasstrough());
 		ON_CALL(*this, Access()).WillByDefault(Return(0));
 		ON_CALL(*this, Access(testing::_, testing::_)).WillByDefault(AccessPasstrough());
 		ON_CALL(*this, Close(testing::_)).WillByDefault(Return(0));
 		ON_CALL(*this, Malloc(testing::_)).WillByDefault(MallocPasstrough());
 		ON_CALL(*this, Calloc(testing::_, testing::_)).WillByDefault(CallocPasstrough());
-		ON_CALL(*this, AlignedAlloc(testing::_, testing::_, testing::_)).WillByDefault(AlignedAllocPasstrough());
+		ON_CALL(*this, AlignedAlloc(testing::_, testing::_, testing::_))
+		    .WillByDefault(AlignedAllocPasstrough());
 		ON_CALL(*this, Free(testing::_)).WillByDefault(FreePasstrough());
 		ON_CALL(*this, AlignedFree(testing::_)).WillByDefault(AlignedFreePasstrough());
 		ON_CALL(*this, GetDriverMode()).WillByDefault(Return(0));
-		ON_CALL(*this, Strncpy(testing::_, testing::_,testing::_, testing::_)).WillByDefault(StrncpyPasstrough());
+		ON_CALL(*this, Strncpy(testing::_, testing::_, testing::_, testing::_))
+		    .WillByDefault(StrncpyPasstrough());
 		ON_CALL(*this, Sysconf(testing::_)).WillByDefault(Return(4096));
 		ON_CALL(*this, Fopen(testing::_, testing::_)).WillByDefault(FopenPasstrough());
-		ON_CALL(*this, Fgets(testing::_, testing::_, testing::_)).WillByDefault(FgetsPasstrough());
-		ON_CALL(*this, Snprintf(testing::_, testing::_, testing::_)).WillByDefault(SnprintfPasstrough());
+		ON_CALL(*this, Fgets(testing::_, testing::_, testing::_))
+		    .WillByDefault(FgetsPasstrough());
+		ON_CALL(*this, Snprintf(testing::_, testing::_, testing::_))
+		    .WillByDefault(SnprintfPasstrough());
 	}
 
 	MOCK_METHOD1(Ioctl, int(smi_ioctl_cmd *));
@@ -232,7 +236,7 @@ public:
 	MOCK_METHOD2(PollAlloc, void *(smi_event_handle_t *, int));
 	MOCK_METHOD1(Malloc, void *(size_t));
 	MOCK_METHOD2(Calloc, void *(size_t, size_t));
-	MOCK_METHOD3(AlignedAlloc, void *(void**, size_t, size_t));
+	MOCK_METHOD3(AlignedAlloc, void *(void **, size_t, size_t));
 	MOCK_METHOD1(Free, void(void *));
 	MOCK_METHOD1(AlignedFree, void(void *));
 	MOCK_METHOD0(GetDriverMode, int(void));

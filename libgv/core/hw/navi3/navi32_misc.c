@@ -65,18 +65,6 @@ static int navi32_wait_for_lsdma_pio_cb(void *context)
 	return fifo_full;
 }
 
-#define DMA_COPY_CONTEXT_REGS 1
-static struct amdgv_reg_dump_info dma_copy_context_regs[DMA_COPY_CONTEXT_REGS] = {
-	{
-		.name = "LSDMA_PIO_STATUS",
-		.hwip = LSDMA_HWIP,
-		.seg = regLSDMA_PIO_STATUS_BASE_IDX,
-		.logical_inst = 0,
-		.offset_hwip = regLSDMA_PIO_STATUS,
-		.access_method = AMDGV_REG_DUMP_ACCESS_MMIO,
-	},
-};
-
 static int navi32_lsdma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, bool fill_mode,
 			     uint64_t src, uint64_t dst, uint64_t size, uint64_t *size_copied)
 {
@@ -87,8 +75,6 @@ static int navi32_lsdma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, bool 
 
 	cb_context.ctx = (void *)adapt;
 	cb_context.type = AMDGV_WAIT_FOR_LSDMA_PIO;
-	cb_context.ctx_ext = dma_copy_context_regs;
-	cb_context.num_ctx_ext = DMA_COPY_CONTEXT_REGS;
 
 	dma_size = (size < LSDMA_PIO_DMA_MAX_SIZE) ? size : LSDMA_PIO_DMA_MAX_SIZE;
 
@@ -260,6 +246,7 @@ static int navi32_misc_sw_init(struct amdgv_adapter *adapt)
 	if (!(adapt->flags & AMDGV_FLAG_DISABLE_CP_DMA)) {
 		adapt->misc.dma_copy = navi32_lsdma_copy;
 		adapt->misc.dma_engine = AMDGV_DMA_ENGINE_LSDMA;
+		adapt->misc.clear_vf_fb_no_ws_stop = true;
 	} else {
 		adapt->misc.dma_engine = AMDGV_DMA_ENGINE_NONE;
 	}

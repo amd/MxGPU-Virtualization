@@ -47,7 +47,8 @@ public:
 	 * @param[in] device_type device type
 	 * @param[in] domain domain
 	 */
-	Device(std::string device, DeviceIdentifierType device_type, std::string domain, DeviceType type);
+	Device(std::string device, DeviceIdentifierType device_type, std::string domain,
+	       DeviceType type);
 
 	/**
 	 * @brief Get the domain object

@@ -280,6 +280,14 @@ struct gim_conf_opt conf_opts[] = {
 		.max = SHADER_HASH_MODE__MAX,
 		.def = SHADER_HASH_MODE__DEFAULT,
 		.array = false },
+	/* EMU Mode */
+	[CONF_OPT_EMU_MODE] = { .name = EMU_MODE__KEY,
+				 .value = { EMU_MODE__DEFAULT },
+				 .repeat_val_idx = 1,
+				 .min = EMU_MODE__START,
+				 .max = EMU_MODE__MAX,
+				 .def = EMU_MODE__DEFAULT,
+				 .array = false },
 };
 
 #define MAX_OPTION (sizeof(conf_opts)/sizeof(struct gim_conf_opt))
@@ -573,6 +581,14 @@ module_param(shader_hash_mode, uint, 0444);
 MODULE_PARM_DESC(shader_hash_mode, "FB page-hash shader algorithm for live migration\n\t"
 				"0(default): rapidhash (64-bit fingerprint)\n\t"
 				"1: SHA-256 (256-bit fingerprint)\n\t");
+
+uint emu_mode;
+module_param(emu_mode, uint, 0444);
+MODULE_PARM_DESC(emu_mode, "emulation mode\n\t"
+				"emu_mode=D\n\t"
+				"0 <= D <= 1;\n\t"
+				"0: emulation mode off(default)\n\t"
+				"1: emulation mode enable\n\t");
 
 static int gim_conf_search_config_key(char *key)
 {
@@ -1160,6 +1176,17 @@ int gim_conf_init(void)
 			conf_opts[CONF_OPT_SHADER_HASH_MODE].value[j] = shader_hash_mode;
 	}
 
+	if (emu_mode > 0) {
+		if (gim_conf_valid_opt(CONF_OPT_EMU_MODE,
+			emu_mode)) {
+			gim_warn("invalid token (emu_mode) value: %d\n",
+				emu_mode);
+				emu_mode = EMU_MODE__DEFAULT;
+		}
+		for (j = 0; j < AMDGV_MAX_GPU_NUM; j++)
+			conf_opts[CONF_OPT_EMU_MODE].value[j] = emu_mode;
+	}
+
 	gim_conf_clear_saved_persist_config(config_file_created);
 
 	/* save options to config file. */
@@ -1420,6 +1447,11 @@ uint32_t gim_conf_get_enable_uniras_opt(uint32_t id)
 uint32_t gim_conf_get_shader_hash_mode_opt(void)
 {
 	return conf_opts[CONF_OPT_SHADER_HASH_MODE].value[0];
+}
+
+uint32_t gim_conf_get_emu_mode_opt(void)
+{
+	return conf_opts[CONF_OPT_EMU_MODE].value[0];
 }
 
 uint32_t gim_conf_set_vf_num_opt(int value)

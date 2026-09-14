@@ -18,5 +18,5 @@ public:
 	void version_command_human();
 	void version_command_csv();
 
-	int version_command(uint64_t processor_bdf, Arguments arg, std::string &out_string);
+	int version_command(uint64_t processor_bdf, Arguments arg, std::string& out_string);
 };

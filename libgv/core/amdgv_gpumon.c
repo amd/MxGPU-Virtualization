@@ -1240,6 +1240,13 @@ int amdgv_gpumon_get_bad_page_record_threshold(amdgv_dev_t dev, uint32_t *bad_pa
 
 	SET_ADAPT_AND_CHECK_STATUS_NOT_LOST(adapt, dev);
 
+	if (!bad_page_record_threshold)
+		return AMDGV_FAILURE;
+
+	if (amdgv_uniras_enabled(adapt))
+		return amdgv_ras_mgr_handle_gpumon_req(adapt,
+				GPUMON_GET_BAD_PAGE_THRESHOLD, NULL, bad_page_record_threshold);
+
 	*bad_page_record_threshold = BAD_PAGE_RECORD_THRESHOLD;
 
 	return 0;
@@ -1254,6 +1261,11 @@ int amdgv_gpumon_get_ras_policy_info(amdgv_dev_t dev, struct amdgv_gpumon_ras_po
 
 	if (!info)
 		return AMDGV_FAILURE;
+
+	if (amdgv_uniras_enabled(adapt))
+		return amdgv_ras_mgr_handle_gpumon_req(adapt,
+				GPUMON_GET_RAS_POLICY_INFO, NULL, info);
+
 	/* Only supported when PMFW managed EEPROM is enabled*/
 	if (!adapt->umc.is_pmfw_managed_eeprom)
 		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
@@ -1262,8 +1274,8 @@ int amdgv_gpumon_get_ras_policy_info(amdgv_dev_t dev, struct amdgv_gpumon_ras_po
 
 	info->minor_version = control->ras_policy_info.minor_version;
 	info->major_version = control->ras_policy_info.major_version;
-	info->dram_non_critical_region_threshold = control->ras_policy_info.dram_non_critical_region_threshold;
-	info->dram_critical_region_threshold = control->ras_policy_info.dram_critical_region_threshold;
+	info->policy_data.v4_0.dram_non_critical_region_threshold = control->ras_policy_info.dram_non_critical_region_threshold;
+	info->policy_data.v4_0.dram_critical_region_threshold = control->ras_policy_info.dram_critical_region_threshold;
 
 	return 0;
 }
@@ -1733,7 +1745,7 @@ static int amdgv_get_vf_fw_info(struct amdgv_adapter *adapt, uint32_t idx_vf, ui
 	oss_memcpy(fw_info, &vf->fw_info,
 		   (AMDGV_FIRMWARE_ID__MAX * sizeof(struct amdgv_firmware_info)));
 
-	*num_fw = adapt->psp.fw_num - 1;
+	*num_fw = amdgv_psp_get_vf_fw_num(adapt, idx_vf);
 
 	return 0;
 }
@@ -4167,6 +4179,16 @@ int amdgv_gpumon_handle_sched_event(struct amdgv_adapter *adapt,
 				event->data.gpumon_data.ual.set_station_config);
 		*event->data.gpumon_data.result = ret;
 		break;
+	case GPUMON_UAL_GET_STATION_CONFIG:
+		if (adapt->gpumon.funcs == NULL ||
+			adapt->gpumon.funcs->ual_get_station_config == NULL) {
+			*event->data.gpumon_data.result = AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+			break;
+		}
+		ret = adapt->gpumon.funcs->ual_get_station_config(adapt,
+				event->data.gpumon_data.ual.get_station_config);
+		*event->data.gpumon_data.result = ret;
+		break;
 	case GPUMON_UAL_PAUSE:
 		if (adapt->gpumon.funcs == NULL ||
 			adapt->gpumon.funcs->ual_pause == NULL) {
@@ -4614,7 +4636,7 @@ int amdgv_gpumon_ual_set_vpod_config(amdgv_dev_t dev, struct amdgv_gpumon_set_vp
 	return ret;
 }
 
-int amdgv_gpumon_ual_set_station_config(amdgv_dev_t dev, struct amdgv_gpumon_set_station_config_req_ual_v1 *config)
+int amdgv_gpumon_ual_set_station_config(amdgv_dev_t dev, struct amdgv_gpumon_station_config_ual_v1 *config)
 {
 	struct amdgv_adapter *adapt = NULL;
 	union amdgv_sched_event_data data = {0};
@@ -4634,6 +4656,31 @@ int amdgv_gpumon_ual_set_station_config(amdgv_dev_t dev, struct amdgv_gpumon_set
 						  AMDGV_EVENT_SCHED_GPUMON,
 						  AMDGV_SCHED_BLOCK_ALL, data);
 
+	if (!ret)
+		ret = event_ret;
+
+	return ret;
+}
+
+int amdgv_gpumon_ual_get_station_config(amdgv_dev_t dev, struct amdgv_gpumon_station_config_ual_v1 *config)
+{
+	struct amdgv_adapter *adapt = NULL;
+	union amdgv_sched_event_data data = {0};
+	int event_ret = 0;
+	int ret = AMDGV_FAILURE;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (!amdgv_ual_is_supported(adapt))
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
+
+	data.gpumon_data.type = GPUMON_UAL_GET_STATION_CONFIG;
+	data.gpumon_data.ual.get_station_config = config;
+	data.gpumon_data.result = &event_ret;
+
+	ret = amdgv_sched_queue_event_and_wait_ex(adapt, AMDGV_PF_IDX,
+						  AMDGV_EVENT_SCHED_GPUMON,
+						  AMDGV_SCHED_BLOCK_ALL, data);
 	if (!ret)
 		ret = event_ret;
 

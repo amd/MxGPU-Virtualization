@@ -15,29 +15,26 @@
 
 #include <sstream>
 #ifdef _WIN64
-#include <windows.h>
-#include <sysinfoapi.h>
+	#include <windows.h>
+	#include <sysinfoapi.h>
 #endif
 
 #include <climits>
 
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
-		amdsmi_processor_handle *);
-typedef amdsmi_status_t (*AMDSMI_GET_GPU_BAD_PAGE_INFO)(amdsmi_processor_handle,
-		uint32_t *,
-		amdsmi_eeprom_table_record_t *);
-
+								amdsmi_processor_handle*);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_BAD_PAGE_INFO)(amdsmi_processor_handle, uint32_t*,
+							amdsmi_eeprom_table_record_t*);
 
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_GPU_BAD_PAGE_INFO host_amdsmi_get_gpu_bad_page_info;
 
-
 int AmdSmiApiHost::amdsmi_get_bad_pages_command(uint64_t processor_bdf, Arguments arg,
-		std::string& out, std::string* gpu_id)
+						std::string& out, std::string* gpu_id)
 {
 	amdsmi_status_t ret;
 	amdsmi_processor_handle processor;
-	amdsmi_eeprom_table_record_t *eeprom_table_records;
+	amdsmi_eeprom_table_record_t* eeprom_table_records;
 	uint32_t bad_page_count = AMDSMI_MAX_BAD_PAGE_RECORD;
 	struct tm dtime;
 	auto bad_pages_list_json = nlohmann::ordered_json::array();
@@ -49,79 +46,66 @@ int AmdSmiApiHost::amdsmi_get_bad_pages_command(uint64_t processor_bdf, Argument
 		return ret;
 	}
 
-	ret = host_amdsmi_get_gpu_bad_page_info(
-			  processor, &bad_page_count, NULL);
+	ret = host_amdsmi_get_gpu_bad_page_info(processor, &bad_page_count, NULL);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		return ret;
 	}
 
-	eeprom_table_records = (amdsmi_eeprom_table_record_t *)malloc(sizeof(amdsmi_eeprom_table_record_t)
-						   *bad_page_count);
+	eeprom_table_records = (amdsmi_eeprom_table_record_t*)malloc(
+	    sizeof(amdsmi_eeprom_table_record_t) * bad_page_count);
 	if (eeprom_table_records == NULL) {
 		throw SmiToolNotEnoughMemException();
 	}
 
-	ret = host_amdsmi_get_gpu_bad_page_info(
-			  processor, &bad_page_count, &eeprom_table_records[0]);
+	ret =
+	    host_amdsmi_get_gpu_bad_page_info(processor, &bad_page_count, &eeprom_table_records[0]);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		free(eeprom_table_records);
 		return ret;
 	}
 
 	for (uint8_t bad_pages_iterator = 0; bad_pages_iterator < bad_page_count;
-			bad_pages_iterator++) {
-		std::string timestamp{"N/A"};
+	     bad_pages_iterator++) {
+		std::string timestamp {"N/A"};
 		time_t rawtime = eeprom_table_records[bad_pages_iterator].ts;
 
 		if (eeprom_table_records[bad_pages_iterator].ts != UINT64_MAX) {
 #ifdef WIN64
-			if(localtime_s(&dtime, &rawtime) == 0) {
+			if (localtime_s(&dtime, &rawtime) == 0) {
 				timestamp = string_format(
-								"%d/%d/%d:%d/%d/%d", dtime.tm_year + 1900, dtime.tm_mon + 1,
-								dtime.tm_mday, dtime.tm_hour, dtime.tm_min, dtime.tm_sec);
+				    "%d/%d/%d:%d/%d/%d", dtime.tm_year + 1900, dtime.tm_mon + 1,
+				    dtime.tm_mday, dtime.tm_hour, dtime.tm_min, dtime.tm_sec);
 			}
 #else
-			if(localtime_r(&rawtime, &dtime) != NULL) {
+			if (localtime_r(&rawtime, &dtime) != NULL) {
 				timestamp = string_format(
-								"%d/%d/%d:%d/%d/%d", dtime.tm_year + 1900, dtime.tm_mon + 1,
-								dtime.tm_mday, dtime.tm_hour, dtime.tm_min, dtime.tm_sec);
+				    "%d/%d/%d:%d/%d/%d", dtime.tm_year + 1900, dtime.tm_mon + 1,
+				    dtime.tm_mday, dtime.tm_hour, dtime.tm_min, dtime.tm_sec);
 			}
 #endif
 		}
-		std::string retired_page { string_format(
-									   "0x%X",
-									   eeprom_table_records[bad_pages_iterator].retired_page)
-								 };
+		std::string retired_page {
+		    string_format("0x%X", eeprom_table_records[bad_pages_iterator].retired_page)};
 
 		if (arg.output == json) {
-			bad_pages_list_json.push_back(nlohmann::ordered_json::object( {
-				{ "bad_page", bad_pages_iterator },
-				{
-					"retired_bad_page",
-					retired_page
-				},
-				{ "timestamp", timestamp },
-				{
-					"mem_channel",
-					eeprom_table_records[bad_pages_iterator].mem_channel
-				},
-				{
-					"mcumc_id",
-					eeprom_table_records[bad_pages_iterator].mcumc_id
-				} }));
+			bad_pages_list_json.push_back(nlohmann::ordered_json::object(
+			    {{"bad_page", bad_pages_iterator},
+			     {"retired_bad_page", retired_page},
+			     {"timestamp", timestamp},
+			     {"mem_channel", eeprom_table_records[bad_pages_iterator].mem_channel},
+			     {"mcumc_id", eeprom_table_records[bad_pages_iterator].mcumc_id}}));
 
 		} else if (arg.output == csv) {
 			out += string_format("%s,%u,%s,%s,%u,%u\n", (*gpu_id).c_str(),
-								 bad_pages_iterator, retired_page.c_str(),
-								 timestamp.c_str(),
-								 eeprom_table_records[bad_pages_iterator].mem_channel,
-								 eeprom_table_records[bad_pages_iterator].mcumc_id);
+					     bad_pages_iterator, retired_page.c_str(),
+					     timestamp.c_str(),
+					     eeprom_table_records[bad_pages_iterator].mem_channel,
+					     eeprom_table_records[bad_pages_iterator].mcumc_id);
 		} else {
-			out += string_format(
-					   badPagesTemplate, bad_pages_iterator, retired_page.c_str(),
-					   timestamp.c_str(),
-					   eeprom_table_records[bad_pages_iterator].mem_channel,
-					   eeprom_table_records[bad_pages_iterator].mcumc_id);
+			out += string_format(badPagesTemplate, bad_pages_iterator,
+					     retired_page.c_str(), timestamp.c_str(),
+					     eeprom_table_records[bad_pages_iterator].mem_channel,
+					     eeprom_table_records[bad_pages_iterator].mcumc_id);
 		}
 	}
 

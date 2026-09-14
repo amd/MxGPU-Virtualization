@@ -20,12 +20,13 @@ struct FwVersion {
 	std::string version;
 };
 
-class SmiDevlink {
+class SmiDevlink
+{
 public:
 	SmiDevlink();
 	~SmiDevlink();
 
-	SmiDevlink(const SmiDevlink&) = delete;
+	SmiDevlink(const SmiDevlink&)		 = delete;
 	SmiDevlink& operator=(const SmiDevlink&) = delete;
 
 	int open(const std::string& bdf);
@@ -36,7 +37,7 @@ public:
 	int get_port_flavour(const std::string& netdev, std::string& flavour);
 
 private:
-	struct nl_conn *conn_;
+	struct nl_conn* conn_;
 	std::string bdf_;
 };
 

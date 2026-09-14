@@ -15,9 +15,16 @@ endif
 
 # exclude sys wrapper - replace it with mock
 EXCLUDE_LIN_LIB_SRCS := smi_sys_wrapper.c
+EXCLUDE_LIB_SRCS := amdsmi_mock.c smi_mock_data.c
 ifeq ($(AMD_SMI_NIC_SUPPORT), True)
-EXCLUDE_LIB_SRCS := amdsmi_nic_stub.c
+EXCLUDE_LIB_SRCS += amdsmi_nic_stub.c
 endif
+LIB_SRCS_UALOE :=
+UALOE_TEST_INCLUDE :=
+UALOE_TEST_CFLAGS :=
+UALOE_TEST_LDFLAGS :=
+HAS_UALOE := False
+-include smi_ualoe_tests.mk
 
 LIB_SRCS := $(filter-out $(EXCLUDE_LIB_SRCS),$(notdir $(wildcard $(SOURCE_DIR)/*.c)))
 ifeq ($(AMD_SMI_NIC_SUPPORT), True)
@@ -34,6 +41,7 @@ endif
 
 OBJSC   := $(addprefix $(OUTPUT_DIR)/,$(LIB_SRCS:.c=.c.o))
 OBJSC	+= $(addprefix ${OUTPUT_DIR}/,$(SRCS_ACA:.c=.c.o))
+OBJSC	+= $(addprefix $(OUTPUT_DIR)/,$(LIB_SRCS_UALOE:.c=.c.o))
 OBJSCPP := $(addprefix $(OUTPUT_DIR)/,$(TEST_SRCS:.cpp=.cpp.o))
 
 DEPS := $(OBJSC:.o=.d) $(OBJSCPP:.o=.d)
@@ -50,6 +58,10 @@ INCLUDE := $(addprefix -I,\
   $(NIC_INTERFACE_DIR)\
   $(SOURCE_DIR)/nic)
 
+ifneq ($(UALOE_TEST_INCLUDE),)
+INCLUDE += $(addprefix -I,$(UALOE_TEST_INCLUDE))
+endif
+
 CFLAGS   = -std=c11 $(DEFAULT_CFLAGS) $(INCLUDE) -g -D_XOPEN_SOURCE=700
 CFLAGS_ACA := $(filter-out $(DEFAULT_CFLAGS), $(CFLAGS))
 CXXFLAGS = -std=c++17 $(DEFAULT_CXXFLAGS) $(INCLUDE) -g -D_XOPEN_SOURCE=700
@@ -58,7 +70,7 @@ CFLAGS += -DAMDSMI_VERSION_MAJOR
 CFLAGS += -DAMDSMI_VERSION_MINOR
 CFLAGS += -DAMDSMI_VERSION_RELEASE
 
-LDFLAGS = -lgtest -lgtest_main -lgmock -lgmock_main -pthread
+LDFLAGS = -lgtest -lgtest_main -lgmock -lgmock_main -pthread $(UALOE_TEST_LDFLAGS)
 ASLR_COMMAND :=
 
 ifeq ($(GEN_COVERAGE), YES)
@@ -90,7 +102,14 @@ CFLAGS += -DAMD_SMI_NIC_SUPPORT
 CXXFLAGS += -DAMD_SMI_NIC_SUPPORT
 endif
 
+CFLAGS += $(UALOE_TEST_CFLAGS)
+CXXFLAGS += $(UALOE_TEST_CFLAGS)
+
+ifeq ($(HAS_UALOE), True)
+vpath %.c $(SOURCE_DIR) $(SOURCE_DIR)/aca-decode/ $(SOURCE_DIR)/nic/ $(SOURCE_DIR)/ualoe/ $(UALOE_LIB_DIR)
+else
 vpath %.c $(SOURCE_DIR) $(SOURCE_DIR)/aca-decode/ $(SOURCE_DIR)/nic/
+endif
 vpath %.cpp $(TEST_UNIT_DIR)
 
 default: $(OUTPUT_DIR)/$(TARGET)
@@ -131,6 +150,14 @@ $(OUTPUT_DIR)/aca_%.c.o: $(SOURCE_DIR)/aca-decode/%.c | $(OUTPUT_DIR)
 
 ifeq ($(AMD_SMI_NIC_SUPPORT), True)
 $(OUTPUT_DIR)/smi_nic_%.c.o: $(SOURCE_DIR)/nic/%.c | $(OUTPUT_DIR)
+	$(CC) $(CFLAGS) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
+endif
+
+ifeq ($(HAS_UALOE), True)
+$(OUTPUT_DIR)/%.c.o: $(UALOE_LIB_DIR)/%.c | $(OUTPUT_DIR)
+	$(CC) $(CFLAGS) -DUALOE_NETLINK -DCFG_MOCK -Wno-unused-variable -Wno-unused-parameter -Wno-conversion -Wno-enum-conversion -Wno-sign-compare -Wno-stringop-truncation -Wno-maybe-uninitialized -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
+
+$(OUTPUT_DIR)/%.c.o: $(SOURCE_DIR)/ualoe/%.c | $(OUTPUT_DIR)
 	$(CC) $(CFLAGS) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
 endif
 

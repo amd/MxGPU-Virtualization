@@ -13,5 +13,6 @@ class AmdSmiBadPagesCommand : public AmdSmiCommands
 public:
 	AmdSmiBadPagesCommand(Arguments args) : AmdSmiCommands(args) {};
 	void execute_command();
-	int bad_pages_command(uint64_t processors, std::string &out_string, std::string* gpu_id=nullptr);
+	int bad_pages_command(uint64_t processors, std::string& out_string,
+			      std::string* gpu_id = nullptr);
 };

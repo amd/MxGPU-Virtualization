@@ -365,8 +365,10 @@
  * 7. WPTR_ADDR_HI [31:0]
  */
 /* CONTROL */
+#              define PACKET3_MAP_QUEUES_EXT_ENG_SEL(x)     ((x) << 2)
 #              define PACKET3_MAP_QUEUES_QUEUE_SEL(x)       ((x) << 4)
 #              define PACKET3_MAP_QUEUES_VMID(x)            ((x) << 8)
+#              define PACKET3_MAP_QUEUES_GWS_ENABLE(x)      ((x) << 12)
 #              define PACKET3_MAP_QUEUES_QUEUE(x)           ((x) << 13)
 #              define PACKET3_MAP_QUEUES_PIPE(x)            ((x) << 16)
 #              define PACKET3_MAP_QUEUES_ME(x)              ((x) << 18)
@@ -535,6 +537,14 @@ struct amdgv_mec {
 	uint32_t paging_me;
 	uint32_t paging_pipe;
 	uint32_t paging_queue;
+};
+
+struct amdgv_me {
+
+	uint32_t			num_me;
+	uint32_t			num_pipe_per_me;
+	uint32_t			num_queue_per_pipe;
+
 };
 
 enum amdgv_unmap_queues_action {
@@ -844,7 +854,11 @@ struct amdgv_gfx {
 	struct amdgv_gfx_config	config;
 	struct amdgv_rlc		rlc;
 	struct amdgv_mec		mec;
+	struct amdgv_me			me;
 	struct amdgv_kiq		kiq[AMDGV_MAX_GC_INSTANCES];
+	uint64_t			me_uc_start_addr;
+	uint64_t			mec_uc_start_addr;
+	uint64_t			pfp_uc_start_addr;
 	uint64_t 			mec_queue_bitmap[AMDGV_MAX_GC_INSTANCES];
 	bool				rs64_enable; /* firmware format */
 	uint32_t			imu_fw_version;

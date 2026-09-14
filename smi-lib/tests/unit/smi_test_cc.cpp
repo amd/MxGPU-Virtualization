@@ -16,18 +16,15 @@ extern "C" {
 using amdsmi::g_system_mock;
 using amdsmi::SetResponseStatus;
 
-
 class AmdSmiConfidentialComputeTests : public amdsmi::AmdSmiTest {
-protected:
-	::testing::AssertionResult equal_tdi_state(smi_tdi_state expect,
-						   amdsmi_tdi_state_t actual)
+      protected:
+	::testing::AssertionResult equal_tdi_state(smi_tdi_state expect, amdsmi_tdi_state_t actual)
 	{
 		SMI_ASSERT_EQ(expect.state, (enum smi_tdi_state_t)actual);
 		return ::testing::AssertionSuccess();
 	}
 
-	::testing::AssertionResult equal_cc_mode(smi_cc_mode expect,
-						 amdsmi_cc_mode_t actual)
+	::testing::AssertionResult equal_cc_mode(smi_cc_mode expect, amdsmi_cc_mode_t actual)
 	{
 		SMI_ASSERT_EQ(expect.mode, (enum smi_cc_mode_t)actual);
 		return ::testing::AssertionSuccess();
@@ -69,7 +66,7 @@ TEST_F(AmdSmiConfidentialComputeTests, IoctlFailed)
 	int ret;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_API_FAILED));
+	    .WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_API_FAILED));
 
 	ret = amdsmi_get_tdi_state(VF_MOCK_HANDLE, &tdi_state);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
@@ -91,7 +88,7 @@ TEST_F(AmdSmiConfidentialComputeTests, GetTdiState)
 	// Test all TDI states
 	for (int i = AMDSMI_TDI_STATE_UNLOCKED; i <= AMDSMI_TDI_STATE_ERROR; i++) {
 		tdi_state_mock.state = (enum smi_tdi_state_t)i;
-		
+
 		WhenCalling(std::bind(amdsmi_get_tdi_state, VF_MOCK_HANDLE, &tdi_state));
 		ExpectCommand(SMI_CMD_CODE_GET_TDI_STATE);
 		SaveInputPayloadIn(&in_payload);
@@ -114,7 +111,7 @@ TEST_F(AmdSmiConfidentialComputeTests, GetCCMode)
 	// Test all CC modes
 	for (int i = AMDSMI_CC_MODE_OFF; i <= AMDSMI_CC_MODE_DEV; i++) {
 		cc_mode_mock.mode = (enum smi_cc_mode_t)i;
-		
+
 		WhenCalling(std::bind(amdsmi_get_cc_mode, &GPU_MOCK_HANDLE, &cc_mode));
 		ExpectCommand(SMI_CMD_CODE_GET_CC_MODE);
 		SaveInputPayloadIn(&in_payload);

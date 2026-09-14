@@ -4,9 +4,9 @@
  */
 
 #if defined(__linux__) && (defined(__SANITIZE_THREAD__) || defined(__SANITIZE_ADDRESS__))
-#ifndef _POSIX_C_SOURCE
-#define _POSIX_C_SOURCE 200809L
-#endif
+	#ifndef _POSIX_C_SOURCE
+		#define _POSIX_C_SOURCE 200809L
+	#endif
 #endif
 
 #include "smi_sys_wrapper.h"
@@ -23,7 +23,7 @@
 #include <fcntl.h>
 
 #ifndef _WIN64
-#include "gim_ioctl.h"
+	#include "gim_ioctl.h"
 #endif
 
 static int64_t microseconds_to_milliseconds(int64_t msec)
@@ -46,23 +46,22 @@ static int64_t diff_time(struct timeval *a, struct timeval *b)
 }
 static void *amdsmi_lnx_poll_alloc(smi_event_handle_t *event_handle, uint32_t num_handles)
 {
-	struct pollfd *poll_fds = malloc((unsigned) num_handles * sizeof(struct pollfd));
+	struct pollfd *poll_fds = malloc((unsigned)num_handles * sizeof(struct pollfd));
 
 	if (poll_fds) {
 		for (uint32_t i = 0; i < num_handles; ++i) {
-			poll_fds[i].fd = event_handle[i].fd;
+			poll_fds[i].fd	   = event_handle[i].fd;
 			poll_fds[i].events = POLLIN;
 		}
 	}
 	return poll_fds;
 }
 
-
-static int amdsmi_lnx_poll(struct smi_event_set_s *event_set, struct smi_event_entry *event,
-			    int64_t timeout)
+static int
+amdsmi_lnx_poll(struct smi_event_set_s *event_set, struct smi_event_entry *event, int64_t timeout)
 {
 	struct timeval stop, start;
-	int poll_res = 0;
+	int poll_res		= 0;
 	struct pollfd *poll_fds = (struct pollfd *)event_set->_private;
 	int64_t cmp;
 	ssize_t read_res;
@@ -70,9 +69,12 @@ static int amdsmi_lnx_poll(struct smi_event_set_s *event_set, struct smi_event_e
 	gettimeofday(&start, NULL);
 
 	do {
-		poll_res = poll(poll_fds, (size_t) event_set->num_handles, (int) microseconds_to_milliseconds(timeout));
+		poll_res = poll(poll_fds,
+				(size_t)event_set->num_handles,
+				(int)microseconds_to_milliseconds(timeout));
 		if (poll_res < 0) {
-			SMI_DEBUG("Poll system call failed. Return code: %d", AMDSMI_STATUS_API_FAILED);
+			SMI_DEBUG("Poll system call failed. Return code: %d",
+				  AMDSMI_STATUS_API_FAILED);
 			return AMDSMI_STATUS_API_FAILED;
 		};
 		if (poll_res > 0)
@@ -96,7 +98,8 @@ static int amdsmi_lnx_poll(struct smi_event_set_s *event_set, struct smi_event_e
 				continue;
 			} else if (read_res < 0) {
 				SMI_ERROR("Poll read failed with error: %d. Return code: %d",
-					errno, AMDSMI_STATUS_API_FAILED);
+					  errno,
+					  AMDSMI_STATUS_API_FAILED);
 				return AMDSMI_STATUS_API_FAILED;
 			} else {
 				break;
@@ -119,11 +122,13 @@ static int amdsmi_ioctl_request(smi_file_handle file_handle, smi_ioctl_cmd *ioct
 	ret = client->ioctl(file_handle, ioctl_cmd);
 	if (ret < 0) {
 		SMI_ERROR("failed to send smi cmd=0x%08X to user mode driver. client fd(%d)\n",
-			ioctl_cmd->in_hdr.code, file_handle);
+			  ioctl_cmd->in_hdr.code,
+			  file_handle);
 		return ret;
 	}
 	SMI_DEBUG("smi cmd=0x%08X successfully processed by user mode driver. status=%d\n",
-		ioctl_cmd->in_hdr.code, ioctl_cmd->out_hdr.status);
+		  ioctl_cmd->in_hdr.code,
+		  ioctl_cmd->out_hdr.status);
 
 	return 0;
 }
@@ -153,8 +158,7 @@ static smi_file_handle amdsmi_open_file_handle(enum smi_file_access_mode access_
 
 	client_fd = client->open(SMI_IOCTL, access);
 	if (client_fd < 0) {
-		SMI_ERROR("failed to open SMI ioctl interface: error=%s\n",
-			strerror(errno));
+		SMI_ERROR("failed to open SMI ioctl interface: error=%s\n", strerror(errno));
 		return client_fd;
 	}
 
@@ -226,25 +230,23 @@ static int amdsmi_strncpy(char *dest, size_t destsz, const char *src, size_t cou
 
 system_wrapper *get_system_wrapper(void)
 {
-	static system_wrapper wrapper = {
-		.smi_malloc = malloc,
-		.smi_calloc = calloc,
-		.smi_free = free,
-		.smi_ioctl = amdsmi_ioctl_request,
-		.smi_open = amdsmi_open_file_handle,
-		.smi_access = amdsmi_verify_driver,
-		.smi_close = amdsmi_close_file_handle,
-		.smi_poll = amdsmi_lnx_poll,
-		.smi_poll_alloc = amdsmi_lnx_poll_alloc,
-		.smi_is_user_mode = amdsmi_is_user_mode,
-		.smi_aligned_alloc = amdsmi_aligned_alloc,
-		.smi_aligned_free = free,
-		.smi_strncpy = amdsmi_strncpy,
-		.smi_sysconf = sysconf,
-		.fopen = fopen,
-		.fgets = fgets,
-		.snprintf = snprintf
-	};
+	static system_wrapper wrapper = {.smi_malloc	    = malloc,
+					 .smi_calloc	    = calloc,
+					 .smi_free	    = free,
+					 .smi_ioctl	    = amdsmi_ioctl_request,
+					 .smi_open	    = amdsmi_open_file_handle,
+					 .smi_access	    = amdsmi_verify_driver,
+					 .smi_close	    = amdsmi_close_file_handle,
+					 .smi_poll	    = amdsmi_lnx_poll,
+					 .smi_poll_alloc    = amdsmi_lnx_poll_alloc,
+					 .smi_is_user_mode  = amdsmi_is_user_mode,
+					 .smi_aligned_alloc = amdsmi_aligned_alloc,
+					 .smi_aligned_free  = free,
+					 .smi_strncpy	    = amdsmi_strncpy,
+					 .smi_sysconf	    = sysconf,
+					 .fopen		    = fopen,
+					 .fgets		    = fgets,
+					 .snprintf	    = snprintf};
 
 	return &wrapper;
 }

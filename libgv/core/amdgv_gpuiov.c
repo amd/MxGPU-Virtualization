@@ -1280,6 +1280,49 @@ error:
 	return AMDGV_LOG_IOV_ENABLE_SRIOV_FAIL;
 }
 
+void amdgv_enable_sriov_10bit_tag(struct amdgv_adapter *adapt)
+{
+	uint32_t cap = 0;
+	uint32_t devcap2 = 0;
+	uint16_t ctrl = 0;
+	bool enable = false;
+	int pcie_pos;
+
+	oss_pci_read_config_dword(adapt->dev,
+		adapt->sriov_cap_pos + PCIE_EXT_SRIOV_CAP, &cap);
+	if (!(cap & PCIE_EXT_SRIOV_CAP_VF_10BIT_TAG))
+		return;
+
+	/*
+	 * Only enable the VF 10-Bit Tag Requester when the entire PCIe path
+	 * from the PF up to the root port supports 10-Bit Tag Completer, and
+	 * the PF itself advertises 10-Bit Tag Requester. Otherwise a VF request
+	 * could reach a device on the path that cannot complete it. When the OS
+	 * cannot resolve upstream bridges the path check returns false and we
+	 * keep it disabled.
+	 */
+	pcie_pos = oss_pci_find_capability(adapt->dev, PCI_CAP_ID__PCIE);
+	if (pcie_pos) {
+		oss_pci_read_config_dword(adapt->dev,
+			pcie_pos + PCIE_DEVICE_CAP2, &devcap2);
+		enable = (devcap2 & PCIE_DEVICE_CAP2__10BIT_TAG_REQ) &&
+			 amdgv_pci_devcap2_supported_on_path(adapt->dev,
+				PCIE_DEVICE_CAP2__10BIT_TAG_COMP);
+	}
+
+	oss_pci_read_config_word(adapt->dev,
+		adapt->sriov_cap_pos + PCIE_EXT_SRIOV_CTRL, &ctrl);
+	if (enable) {
+		ctrl |= PCIE_EXT_SRIOV_CTRL_VF_10BIT_TAG;
+		AMDGV_INFO("enabling VF 10-Bit Tag Requester\n");
+	} else {
+		ctrl &= ~PCIE_EXT_SRIOV_CTRL_VF_10BIT_TAG;
+		AMDGV_INFO("disabling VF 10-Bit Tag Requester\n");
+	}
+	oss_pci_write_config_word(adapt->dev,
+		adapt->sriov_cap_pos + PCIE_EXT_SRIOV_CTRL, ctrl);
+}
+
 bool amdgv_gpuiov_is_sched_mode_supported(struct amdgv_adapter *adapt,
 					 struct amdgv_gpuiov_hw_sched_static_config hw_sched_config, enum amdgv_sched_mode sched_mode)
 {

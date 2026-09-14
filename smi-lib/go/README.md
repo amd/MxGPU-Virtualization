@@ -1086,8 +1086,9 @@ Field | Description
 `RevID` | revision id
 `AsicSerial` | asic serial
 `OamID` | xgmi physical id
+`PhysicalAccId` | physical accelerator id
 `NumComputeUnits` | number of compute units
-`TargetGraphicsVersion` | target graphics version (**_Not supported yet, currently hardcoded to -1_**)
+`TargetGraphicsVersion` | GC IP version packed as `(major << 16) | (minor << 8) | rev`. Returns `18446744073709551615` (`UINT64_MAX`) if not supported. Example: `590851` encodes gfx943 (9.4.3).
 `SubsystemID` | subsystem device id
 `Flags` | chip flags (**_Not supported yet, currently hardcoded to -1_**)
 
@@ -1117,6 +1118,7 @@ if len(processors) == 0 {
         fmt.Println(asicInfo.RevID)
         fmt.Println(asicInfo.AsicSerial)
         fmt.Println(asicInfo.OamID)
+        fmt.Println(asicInfo.PhysicalAccId)
         fmt.Println(asicInfo.NumComputeUnits)
         fmt.Println(asicInfo.TargetGraphicsVersion)
         fmt.Println(asicInfo.Flags)
@@ -1304,6 +1306,7 @@ Field | Description
 `AMDSMI_VRAM_TYPE_HBM2E` | HBM2E VRAM type
 `AMDSMI_VRAM_TYPE_HBM3` | HBM3 VRAM type
 `AMDSMI_VRAM_TYPE_HBM3E` | HBM3E VRAM type
+`AMDSMI_VRAM_TYPE_HBM4` | HBM4 VRAM type
 `AMDSMI_VRAM_TYPE_DDR2` | DDR2 VRAM type
 `AMDSMI_VRAM_TYPE_DDR3` | DDR3 VRAM type
 `AMDSMI_VRAM_TYPE_DDR4` | DDR4 VRAM type
@@ -1896,11 +1899,11 @@ Value | Description
 `AMDSMI_TEMPERATURE_TYPE_EDGE` | edge thermal domain
 `AMDSMI_TEMPERATURE_TYPE_HOTSPOT` | hotspot/junction thermal domain
 `AMDSMI_TEMPERATURE_TYPE_VRAM` | memory/vram thermal domain
-`AMDSMI_TEMPERATURE_TYPE_PLX` | PLX thermal domain (**_not supported yet_**, always returns 0)
-`AMDSMI_TEMPERATURE_TYPE_HBM_0` | HBM 0 thermal domain (**_not supported yet_**, always returns 0)
-`AMDSMI_TEMPERATURE_TYPE_HBM_1` | HBM 1 thermal domain (**_not supported yet_**, always returns 0)
-`AMDSMI_TEMPERATURE_TYPE_HBM_2` | HBM 2 thermal domain (**_not supported yet_**, always returns 0)
-`AMDSMI_TEMPERATURE_TYPE_HBM_3` | HBM 3 thermal domain (**_not supported yet_**, always returns 0)
+`AMDSMI_TEMPERATURE_TYPE_PLX` | PLX thermal domain (**_not supported yet_**, returns `AMDSMI_STATUS_NOT_SUPPORTED` and leaves the output unchanged)
+`AMDSMI_TEMPERATURE_TYPE_HBM_0` | HBM 0 thermal domain (**_not supported yet_**, returns `AMDSMI_STATUS_NOT_SUPPORTED` and leaves the output unchanged)
+`AMDSMI_TEMPERATURE_TYPE_HBM_1` | HBM 1 thermal domain (**_not supported yet_**, returns `AMDSMI_STATUS_NOT_SUPPORTED` and leaves the output unchanged)
+`AMDSMI_TEMPERATURE_TYPE_HBM_2` | HBM 2 thermal domain (**_not supported yet_**, returns `AMDSMI_STATUS_NOT_SUPPORTED` and leaves the output unchanged)
+`AMDSMI_TEMPERATURE_TYPE_HBM_3` | HBM 3 thermal domain (**_not supported yet_**, returns `AMDSMI_STATUS_NOT_SUPPORTED` and leaves the output unchanged)
 
 * `metric` (`TemperatureMetric`) metric type to query, one of:
 
@@ -3401,6 +3404,26 @@ Field | Description
 `AMDSMI_GPU_BLOCK_JPEG` | JPEG block
 `AMDSMI_GPU_BLOCK_IH` | IH block
 `AMDSMI_GPU_BLOCK_MPIO` | MPIO block
+`AMDSMI_GPU_BLOCK_MMSCH` | MMSCH block
+`AMDSMI_GPU_BLOCK_MP5` | MP5 block
+`AMDSMI_GPU_BLOCK_ATU` | ATU block
+`AMDSMI_GPU_BLOCK_DACC_BE` | DACC_BE block
+`AMDSMI_GPU_BLOCK_ECLR` | ECLR block
+`AMDSMI_GPU_BLOCK_KPX_SERDES` | KPX_SERDES block
+`AMDSMI_GPU_BLOCK_LSDMA` | LSDMA block
+`AMDSMI_GPU_BLOCK_MPART` | MPART block
+`AMDSMI_GPU_BLOCK_MPIFOE` | MPIFOE block
+`AMDSMI_GPU_BLOCK_MPRAS` | MPRAS block
+`AMDSMI_GPU_BLOCK_NBIF` | NBIF block
+`AMDSMI_GPU_BLOCK_NBIO` | NBIO block
+`AMDSMI_GPU_BLOCK_OXRP` | OXRP block
+`AMDSMI_GPU_BLOCK_PCIE_PL` | PCIE_PL block
+`AMDSMI_GPU_BLOCK_PCS_XGMI` | PCS_XGMI block
+`AMDSMI_GPU_BLOCK_PIE` | PIE block
+`AMDSMI_GPU_BLOCK_CS` | CS block
+`AMDSMI_GPU_BLOCK_SHUB` | SHUB block
+`AMDSMI_GPU_BLOCK_SSBDCI` | SSBDCI block
+`AMDSMI_GPU_BLOCK_UCIE_PCS` | UCIE_PCS block
 
 Output: `ErrorCount`, `error`
 
@@ -3468,6 +3491,26 @@ Field | Description
 `AMDSMI_GPU_BLOCK_JPEG` | JPEG block
 `AMDSMI_GPU_BLOCK_IH` | IH block
 `AMDSMI_GPU_BLOCK_MPIO` | MPIO block
+`AMDSMI_GPU_BLOCK_MMSCH` | MMSCH block
+`AMDSMI_GPU_BLOCK_MP5` | MP5 block
+`AMDSMI_GPU_BLOCK_ATU` | ATU block
+`AMDSMI_GPU_BLOCK_DACC_BE` | DACC_BE block
+`AMDSMI_GPU_BLOCK_ECLR` | ECLR block
+`AMDSMI_GPU_BLOCK_KPX_SERDES` | KPX_SERDES block
+`AMDSMI_GPU_BLOCK_LSDMA` | LSDMA block
+`AMDSMI_GPU_BLOCK_MPART` | MPART block
+`AMDSMI_GPU_BLOCK_MPIFOE` | MPIFOE block
+`AMDSMI_GPU_BLOCK_MPRAS` | MPRAS block
+`AMDSMI_GPU_BLOCK_NBIF` | NBIF block
+`AMDSMI_GPU_BLOCK_NBIO` | NBIO block
+`AMDSMI_GPU_BLOCK_OXRP` | OXRP block
+`AMDSMI_GPU_BLOCK_PCIE_PL` | PCIE_PL block
+`AMDSMI_GPU_BLOCK_PCS_XGMI` | PCS_XGMI block
+`AMDSMI_GPU_BLOCK_PIE` | PIE block
+`AMDSMI_GPU_BLOCK_CS` | CS block
+`AMDSMI_GPU_BLOCK_SHUB` | SHUB block
+`AMDSMI_GPU_BLOCK_SSBDCI` | SSBDCI block
+`AMDSMI_GPU_BLOCK_UCIE_PCS` | UCIE_PCS block
 
 Errors that can be returned by `GetGpuEccEnabled` function:
 
@@ -3757,6 +3800,7 @@ Field | Description
 `MajorVersion` | Policy major version
 `MinorVersion` | Policy minor version
 `V4_0` | v4.0 policy data (`nil` if version != 4.0)
+`V5_0` | v5.0 policy data (`nil` if version != 5.0)
 
 `RasPolicyV4_0` fields (when `V4_0` is non-nil):
 
@@ -3764,6 +3808,17 @@ Field | Description
 ---|---
 `DramNonCriticalRegionThreshold` | Non-critical region threshold
 `DramCriticalRegionThreshold` | Critical region threshold
+
+`RasPolicyV5_0` fields (when `V5_0` is non-nil):
+
+Field | Description
+---|---
+`NumEntities` | Number of monitored RAS entities
+`EventRmaThresholdPerEntity` | RMA event threshold per entity
+`MaxPagesPerRetEvent` | Max pages retired per retirement event
+`OdSramEccThreshold` | On-die SRAM ECC threshold
+`HwaThreshold` | Hardware Agent threshold
+`WdtThreshold` | Watchdog timer threshold
 
 Errors that can be returned by `GetGpuRasPolicyInfo` function:
 
@@ -3788,6 +3843,13 @@ if len(processors) == 0 {
                 policy.V4_0.DramNonCriticalRegionThreshold)
             fmt.Printf("  Critical threshold: %d\n",
                 policy.V4_0.DramCriticalRegionThreshold)
+        }
+        if policy.V5_0 != nil {
+            fmt.Printf("  Num entities: %d\n", policy.V5_0.NumEntities)
+            fmt.Printf("  Event RMA threshold/entity: %d\n",
+                policy.V5_0.EventRmaThresholdPerEntity)
+            fmt.Printf("  Max pages per ret event: %d\n",
+                policy.V5_0.MaxPagesPerRetEvent)
         }
     }
 }
@@ -3827,7 +3889,10 @@ if len(processors) == 0 {
 
 ### ResetGpu
 
-Description: Triggers a chain that resets all GPUs.
+Description: Resets the GPU identified by the processor handle. On an
+XGMI-connected system, the reset applies to the complete physical hive containing
+that GPU; other independent XGMI hives are not reset. The current framebuffer-sharing
+mode does not change which GPUs are reset.
 
 Input parameters:
 
@@ -3905,6 +3970,48 @@ if len(processors) == 0 {
     }
     fmt.Printf("  GetNpmInfo: status=%s limit=%d W\n", npm.Status.String(), npm.Limit)
 }
+```
+
+### GetTrayInfo
+
+Description: Returns compute tray form factor and maximum accelerator count for the node.
+
+Input parameters:
+
+* `nodeHandle` (`NodeHandle`) — node handle from `GetNodeHandle()`. Reserved for future use; the Go wrapper currently passes `NULL` to the C API regardless of the value supplied. Tray data is sourced from the UALOE sideband path via the first GPU with an active UALOE handle.
+
+Output: `TrayInfo`, `error`
+
+`TrayInfo` fields:
+
+Field | Description
+---|---
+`MaxAccPerTray` | maximum accelerators per tray; `0xFFFFFFFF` if unsupported
+`TrayType` | compute tray type (`ComputeTrayType`), one of:
+  * `ComputeTrayType.UNKNOWN` - unknown or unsupported tray type
+  * `ComputeTrayType.HELIOS_P` - Helios-P tray
+  * `ComputeTrayType.HELIOS_R` - Helios-R tray
+  * `ComputeTrayType.TITAN` - Titan tray
+
+Errors that can be returned by `GetTrayInfo` function:
+
+* `*StatusError`
+
+Example:
+
+```go
+node, err := amdsmi.GetNodeHandle(processor)
+if err != nil {
+    fmt.Printf("Error: %v\n", err)
+    return
+}
+tray, err := amdsmi.GetTrayInfo(node)
+if err != nil {
+    fmt.Printf("Error: %v\n", err)
+    return
+}
+fmt.Printf("  GetTrayInfo: max_acc_per_tray=%d tray_type=%s\n",
+    tray.MaxAccPerTray, tray.TrayType.String())
 ```
 
 ### GetGpuPtlState
@@ -5449,18 +5556,40 @@ Field | Description
 
 Field | Description
 ---|---
-`AcceleratorID` | Accelerator identifier (range 0..1023)
 `FabricType` | `FabricType` (`AMDSMI_FABRIC_TYPE_UALOE`, `AMDSMI_FABRIC_TYPE_UALINK`, or `AMDSMI_FABRIC_TYPE_UNKNOWN`)
-`Bandwidth` | Station bandwidth share in Mb/s
-`Latency` | Latency in nanoseconds
+`AccelState` | `FabricAcceleratorVpodState` (UNCONFIGURED, CONFIGURED, READY, ACTIVE, ERROR, UNKNOWN)
+`Ppod` | `FabricPpodData` - Physical PoD (setup) subtree payload
+`Vpod` | `FabricVpodData` - Virtual PoD (config) subtree payload
+`Station` | `FabricStationData` - Station subtree payload
+
+`FabricPpodData` fields:
+
+Field | Description
+---|---
+`AcceleratorID` | Accelerator identifier (range 0..1023)
 `PpodID` | Physical PoD identifier (128-bit UUID as `[16]byte`)
 `PpodSize` | Physical PoD size
+`LocalAccelerators` | Up to 16 local accelerator IDs
+`LocalAcceleratorCount` | Number of valid entries in `LocalAccelerators`
+`Bandwidth` | Station bandwidth share in Mb/s
+`Latency` | Latency in nanoseconds
+
+`FabricVpodData` fields:
+
+Field | Description
+---|---
 `VpodID` | Virtual PoD identifier
 `VpodSize` | Virtual PoD size
 `VpodActiveAccelerators` | 1024-bit list stored as 32 x `uint32` words; bit N set = accelerator ID N is active in the vPoD
-`LocalAccelerators` | Up to 8 local accelerator IDs
 `AddrMode` | `FabricNpaAddressMode` (source aliasing, source identification, or unknown)
-`AccelState` | `FabricAcceleratorVpodState` (UNCONFIGURED, CONFIGURED, READY, ACTIVE, ERROR, UNKNOWN)
+
+`FabricStationData` fields:
+
+Field | Description
+---|---
+`StationFlags` | Station configuration flags
+`NumStations` | Number of stations
+`LaneEnBitmap` | station lane-enable bitmap as `[64]byte`
 
 `FabricType` values:
 
@@ -5505,10 +5634,10 @@ fmt.Printf("Fabric BDF=%s version=%d\n", info.Bdf, info.Version)
 if info.Version == 1 {
     v1 := info.InfoV1
     fmt.Printf("  accel_id=%d type=%s bw=%d Mb/s latency=%d ns\n",
-        v1.AcceleratorID, v1.FabricType, v1.Bandwidth, v1.Latency)
+        v1.Ppod.AcceleratorID, v1.FabricType, v1.Ppod.Bandwidth, v1.Ppod.Latency)
     fmt.Printf("  ppod=%x/%d  vpod=%d/%d  state=%s addr_mode=%s\n",
-        v1.PpodID, v1.PpodSize, v1.VpodID, v1.VpodSize,
-        v1.AccelState, v1.AddrMode)
+        v1.Ppod.PpodID, v1.Ppod.PpodSize, v1.Vpod.VpodID, v1.Vpod.VpodSize,
+        v1.AccelState, v1.Vpod.AddrMode)
 }
 ```
 
@@ -5523,7 +5652,7 @@ This function mirrors the Python `AmdSmiFabricTelemetry` class.
 Input parameters:
 
 * `ph` (`ProcessorHandle`) GPU for which to allocate telemetry
-* `categories` (`...FabricTelemetryCategory`) variadic list of categories to request. If empty, all categories from `UALOE` through `DERIVED_NETPORT` are requested (matching the Python default).
+* `categories` (`...FabricTelemetryCategory`) variadic list of categories to request. If empty, all categories from `UALOE` through `PHY` are requested (matching the Python default).
 
 Output: `*FabricTelemetry`, `error`
 
@@ -5538,7 +5667,9 @@ Value | Description
 `AMDSMI_FABRIC_TELEMETRY_CATEGORY_NETPORT` (`4`) | Network Port telemetry
 `AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_UALOE` (`5`) | Derived UALOE telemetry
 `AMDSMI_FABRIC_TELEMETRY_CATEGORY_DERIVED_NETPORT` (`6`) | Derived Network Port telemetry
-`AMDSMI_FABRIC_TELEMETRY_CATEGORY_MAX` (`7`) | Maximum number of categories
+`AMDSMI_FABRIC_TELEMETRY_CATEGORY_IFOE_DEBUG` (`7`) | IFoE debug telemetry
+`AMDSMI_FABRIC_TELEMETRY_CATEGORY_PHY` (`8`) | PHY telemetry
+`AMDSMI_FABRIC_TELEMETRY_CATEGORY_MAX` (`9`) | Maximum number of categories
 `AMDSMI_FABRIC_TELEMETRY_CATEGORY_INVALID` (`0xFFFFFFFF`) | Unknown / invalid category
 
 `*FabricTelemetry` methods:
@@ -5621,7 +5752,7 @@ Description: Convenience wrapper that allocates a telemetry session, fetches one
 Input parameters:
 
 * `ph` (`ProcessorHandle`) GPU for which to fetch telemetry
-* `categories` (`...FabricTelemetryCategory`) variadic list of categories to request. If empty, all categories from `UALOE` through `DERIVED_NETPORT` are requested.
+* `categories` (`...FabricTelemetryCategory`) variadic list of categories to request. If empty, all categories from `UALOE` through `PHY` are requested.
 
 Output: `FabricTelemetryData`, `error`
 
@@ -5649,5 +5780,186 @@ for cat, ds := range snap.Datasets {
             }
             return n
         }())
+}
+```
+
+---
+
+### SetGpuFabricPpodConfig
+
+```go
+func SetGpuFabricPpodConfig(ph ProcessorHandle, cfg FabricPpodConfig) error
+```
+
+Apply PPOD (Physical Pod) setup parameters to the GPU fabric.
+
+`FabricPpodConfig` fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Version` | `uint32` | Must be `AMDSMI_FABRIC_PPOD_CONFIG_V1` (1) |
+| `Mask` | `uint32` | `AMDSMI_FABRIC_PPOD_FIELD_*` bits selecting which fields of `Data` to write |
+| `Commit` | `bool` | When `true`, requests finalize/apply after masked parameter writes. On host, the PSP path already applies masked fields atomically, so this flag has no additional effect; `Mask` and `Commit` must not both be zero/`false`, or the call returns a `*StatusError` (`AMDSMI_STATUS_INVAL`) |
+| `Data` | `FabricPpodData` | PPOD payload |
+
+`FabricPpodData` fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `AcceleratorID` | `uint32` | Accelerator identifier |
+| `PpodID` | `[16]byte` | Physical PoD UUID (128-bit) |
+| `PpodSize` | `uint32` | Physical PoD size |
+| `LocalAccelerators` | `[16]uint32` | Local Accelerator IDs |
+| `LocalAcceleratorCount` | `uint32` | Number of valid entries in `LocalAccelerators` |
+| `Bandwidth` | `uint32` | Station bandwidth share in Mb/s |
+| `Latency` | `uint32` | Latency in nanoseconds |
+
+Field mask constants:
+
+| Constant | Value | Field written |
+|----------|-------|---------------|
+| `AMDSMI_FABRIC_PPOD_FIELD_ACCEL_ID` | `1<<0` | `Data.AcceleratorID` |
+| `AMDSMI_FABRIC_PPOD_FIELD_PPOD_ID` | `1<<1` | `Data.PpodID` |
+| `AMDSMI_FABRIC_PPOD_FIELD_PPOD_SIZE` | `1<<2` | `Data.PpodSize` |
+| `AMDSMI_FABRIC_PPOD_FIELD_LOCAL_ACCELS` | `1<<3` | `Data.LocalAccelerators` |
+| `AMDSMI_FABRIC_PPOD_FIELD_BANDWIDTH` | `1<<4` | `Data.Bandwidth` |
+| `AMDSMI_FABRIC_PPOD_FIELD_LATENCY` | `1<<5` | `Data.Latency` |
+
+Errors that can be returned by `SetGpuFabricPpodConfig` function:
+
+* `*StatusError`
+
+Example:
+
+```go
+cfg := amdsmi.FabricPpodConfig{
+    Version: amdsmi.AMDSMI_FABRIC_PPOD_CONFIG_V1,
+    Mask:    amdsmi.AMDSMI_FABRIC_PPOD_FIELD_ACCEL_ID | amdsmi.AMDSMI_FABRIC_PPOD_FIELD_PPOD_SIZE,
+    Data: amdsmi.FabricPpodData{
+        AcceleratorID: 0,
+        PpodSize:      4,
+    },
+}
+if err := amdsmi.SetGpuFabricPpodConfig(handle, cfg); err != nil {
+    fmt.Printf("Error: %v\n", err)
+}
+```
+
+---
+
+### SetGpuFabricVpodConfig
+
+```go
+func SetGpuFabricVpodConfig(ph ProcessorHandle, cfg FabricVpodConfig) error
+```
+
+Apply VPOD (Virtual Pod) configuration to the GPU fabric.
+
+`FabricVpodConfig` fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Version` | `uint32` | Must be `AMDSMI_FABRIC_VPOD_CONFIG_V1` (1) |
+| `Mask` | `uint32` | `AMDSMI_FABRIC_VPOD_FIELD_*` bits selecting which fields of `Data` to write |
+| `Commit` | `bool` | When `true`, requests finalize/apply after masked parameter writes. On host, the PSP path already applies masked fields atomically, so this flag has no additional effect; `Mask` and `Commit` must not both be zero/`false`, or the call returns a `*StatusError` (`AMDSMI_STATUS_INVAL`) |
+| `Data` | `FabricVpodData` | VPOD payload |
+
+`FabricVpodData` fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `VpodID` | `uint32` | Virtual PoD Identifier |
+| `VpodSize` | `uint32` | Virtual PoD size |
+| `VpodActiveAccelerators` | `[32]uint32` | 1024-bit active accelerator bitmap |
+| `AddrMode` | `FabricNpaAddressMode` | NPA address mode |
+
+`FabricNpaAddressMode` values:
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `AMDSMI_FABRIC_NPA_ADDRESS_MODE_SOURCE_ALIASING` | `0` | Source aliasing |
+| `AMDSMI_FABRIC_NPA_ADDRESS_MODE_SOURCE_IDENTIFICATION` | `1` | Source identification |
+| `AMDSMI_FABRIC_NPA_ADDRESS_MODE_UNKNOWN` | `2` | Unknown |
+
+Field mask constants:
+
+| Constant | Value | Field written |
+|----------|-------|---------------|
+| `AMDSMI_FABRIC_VPOD_FIELD_VPOD_ID` | `1<<0` | `Data.VpodID` |
+| `AMDSMI_FABRIC_VPOD_FIELD_VPOD_SIZE` | `1<<1` | `Data.VpodSize` |
+| `AMDSMI_FABRIC_VPOD_FIELD_VPOD_ACTIVE_ACCELS` | `1<<2` | `Data.VpodActiveAccelerators` |
+| `AMDSMI_FABRIC_VPOD_FIELD_ADDR_MODE` | `1<<3` | `Data.AddrMode` |
+
+Errors that can be returned by `SetGpuFabricVpodConfig` function:
+
+* `*StatusError`
+
+Example:
+
+```go
+cfg := amdsmi.FabricVpodConfig{
+    Version: amdsmi.AMDSMI_FABRIC_VPOD_CONFIG_V1,
+    Mask:    amdsmi.AMDSMI_FABRIC_VPOD_FIELD_VPOD_ID | amdsmi.AMDSMI_FABRIC_VPOD_FIELD_ADDR_MODE,
+    Data: amdsmi.FabricVpodData{
+        VpodID:   1,
+        AddrMode: amdsmi.AMDSMI_FABRIC_NPA_ADDRESS_MODE_SOURCE_ALIASING,
+    },
+}
+if err := amdsmi.SetGpuFabricVpodConfig(handle, cfg); err != nil {
+    fmt.Printf("Error: %v\n", err)
+}
+```
+
+---
+
+### SetGpuFabricStationConfig
+
+```go
+func SetGpuFabricStationConfig(ph ProcessorHandle, cfg FabricStationConfig) error
+```
+
+Apply station reconfiguration to the GPU fabric.
+
+`FabricStationConfig` fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Version` | `uint32` | Must be `AMDSMI_FABRIC_STATION_CONFIG_V1` (1) |
+| `Mask` | `uint32` | `AMDSMI_FABRIC_DF_FIELD_*` bits selecting which fields of `Data` to write |
+| `Commit` | `bool` | When `true`, requests finalize/apply after masked parameter writes. On host, the PSP path already applies masked fields atomically, so this flag has no additional effect; `Mask` and `Commit` must not both be zero/`false`, or the call returns a `*StatusError` (`AMDSMI_STATUS_INVAL`) |
+| `Data` | `FabricStationData` | DF/station payload |
+
+`FabricStationData` fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `StationFlags` | `uint32` | Station flags |
+| `NumStations` | `uint8` | Number of active stations |
+| `LaneEnBitmap` | `[64]byte` | Lane enable bitmap (512 bits) |
+
+Field mask constants:
+
+| Constant | Value | Field written |
+|----------|-------|---------------|
+| `AMDSMI_FABRIC_DF_FIELD_STATION_FLAGS` | `1<<0` | `Data.StationFlags` |
+| `AMDSMI_FABRIC_DF_FIELD_LANE_EN_BITMAP` | `1<<1` | `Data.LaneEnBitmap` |
+| `AMDSMI_FABRIC_DF_FIELD_NUM_STATIONS` | `1<<2` | `Data.NumStations` |
+
+Errors that can be returned by `SetGpuFabricStationConfig` function:
+
+* `*StatusError`
+
+Example:
+
+```go
+cfg := amdsmi.FabricStationConfig{
+    Version: amdsmi.AMDSMI_FABRIC_STATION_CONFIG_V1,
+    Mask:    amdsmi.AMDSMI_FABRIC_DF_FIELD_NUM_STATIONS,
+    Data: amdsmi.FabricStationData{
+        NumStations: 4,
+    },
+}
+if err := amdsmi.SetGpuFabricStationConfig(handle, cfg); err != nil {
+    fmt.Printf("Error: %v\n", err)
 }
 ```

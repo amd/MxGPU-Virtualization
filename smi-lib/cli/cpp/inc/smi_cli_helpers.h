@@ -18,20 +18,22 @@
 // Major version should be changed when making incompatible changes to the command interface:
 // - Deprecating or removing existing commands
 // - Modifying input/output format of commands
-#define AMDSMI_TOOL_VERSION_MAJOR 37
+#define AMDSMI_TOOL_VERSION_MAJOR 38
 // Minor version should be incremented for backward-compatible command changes:
 // - Adding new commands
 // - Improvements to existing commands
 // - Adding new options to existing commands without changing the basic input/output format
-#define AMDSMI_TOOL_VERSION_MINOR 0
+#define AMDSMI_TOOL_VERSION_MINOR 3
 // Release version should be incremented for minor issue fixes and maintenance updates
 // that don't add features or change command behavior
-#define AMDSMI_TOOL_VERSION_RELEASE 5
-
+#define AMDSMI_TOOL_VERSION_RELEASE 2
 
 #define AMDSMI_TOOL_VERSION_CREATE_STRING(MAJOR, MINOR, RELEASE) (#MAJOR "." #MINOR "." #RELEASE)
-#define AMDSMI_TOOL_VERSION_EXPAND_PARTS(MAJOR_STR, MINOR_STR, RELEASE_STR) AMDSMI_TOOL_VERSION_CREATE_STRING(MAJOR_STR, MINOR_STR, RELEASE_STR)
-#define AMDSMI_TOOL_VERSION_STRING AMDSMI_TOOL_VERSION_EXPAND_PARTS(AMDSMI_TOOL_VERSION_MAJOR, AMDSMI_TOOL_VERSION_MINOR, AMDSMI_TOOL_VERSION_RELEASE)
+#define AMDSMI_TOOL_VERSION_EXPAND_PARTS(MAJOR_STR, MINOR_STR, RELEASE_STR)                        \
+	AMDSMI_TOOL_VERSION_CREATE_STRING(MAJOR_STR, MINOR_STR, RELEASE_STR)
+#define AMDSMI_TOOL_VERSION_STRING                                                                 \
+	AMDSMI_TOOL_VERSION_EXPAND_PARTS(AMDSMI_TOOL_VERSION_MAJOR, AMDSMI_TOOL_VERSION_MINOR,     \
+					 AMDSMI_TOOL_VERSION_RELEASE)
 #define AMDSMI_TOOL_NAME "AMD SMI tool"
 
 #define AMDSMI_NOT_SUPP_UINT8_RETVAL 255
@@ -43,11 +45,9 @@
  * @param args list of arguments
  * @return std::string formated string
  */
-template <typename... Args>
-std::string string_format(const std::string &format, Args... args)
+template <typename... Args> std::string string_format(const std::string& format, Args... args)
 {
-	int size_s = std::snprintf(nullptr, 0, format.c_str(), args...) +
-				 1; // Extra space for '\0'
+	int size_s = std::snprintf(nullptr, 0, format.c_str(), args...) + 1; // Extra space for '\0'
 	if (size_s <= 0) {
 		throw std::runtime_error("Error during formatting.");
 	}
@@ -55,7 +55,7 @@ std::string string_format(const std::string &format, Args... args)
 	std::unique_ptr<char[]> buf(new char[size]);
 	std::snprintf(buf.get(), size, format.c_str(), args...);
 	return std::string(buf.get(),
-					   buf.get() + size - 1); // We don't want the '\0' inside
+			   buf.get() + size - 1); // We don't want the '\0' inside
 }
 
 /**
@@ -64,9 +64,8 @@ std::string string_format(const std::string &format, Args... args)
  * Primary path uses acc_counter delta as denominator.
  * Fallback uses reference_timestamp delta (in uS) when acc_counter is unsupported.
  */
-inline std::string violation_compute_pct(uint64_t acc_a, uint64_t acc_b,
-					 uint64_t cnt_a, uint64_t cnt_b,
-					 uint64_t ts_delta_us)
+inline std::string violation_compute_pct(uint64_t acc_a, uint64_t acc_b, uint64_t cnt_a,
+					 uint64_t cnt_b, uint64_t ts_delta_us)
 {
 	if (acc_a == UINT64_MAX || acc_b == UINT64_MAX)
 		return "N/A";
@@ -103,7 +102,7 @@ inline std::string violation_is_active(uint64_t acc_a, uint64_t acc_b)
  * @return std::string amdsmi_bdf_t in human readable format
  */
 std::string convert_bdf_to_string(uint64_t function_number, uint64_t device_number,
-								  uint64_t bus_number, uint64_t domain_number);
+				  uint64_t bus_number, uint64_t domain_number);
 
 /**
  * @brief Converts enum name to string
@@ -113,7 +112,13 @@ std::string convert_bdf_to_string(uint64_t function_number, uint64_t device_numb
  */
 std::string get_string_from_enum_fw_block(int fw_block);
 
-std::string get_string_from_enum_ecc_blocks(int ecc_block);
+/**
+ * @brief Converts ecc block bitmask to string
+ *
+ * @param ecc_block ecc block bitmask value
+ * @return std::string of ecc block bitmask
+ */
+std::string get_string_from_enum_ecc_blocks(uint64_t ecc_block);
 
 /**
  * @brief Converts enum name to string
@@ -214,8 +219,8 @@ std::vector<std::string> decode_memory_caps(uint32_t nps_cap_mask);
 /**
  * @brief Decodes a VF partition mask into a vector of human-readable strings.
  *
- * This function takes a 32-bit mask representing VF partition settings and returns a vector of strings,
- * each describing a possible VF partition configuration indicated by the mask.
+ * This function takes a 32-bit mask representing VF partition settings and returns a vector of
+ * strings, each describing a possible VF partition configuration indicated by the mask.
  *
  * @param[in] vf_mask A 32-bit integer mask representing VF partition settings.
  * @return A vector of strings representing the possible VF partition configurations.
@@ -260,11 +265,28 @@ std::vector<std::string> transform_ecc_correction_schema(uint32_t flag);
 
 std::vector<std::string> transform_cache_properties(uint32_t initial_property);
 
-int csv_recursion(std::string& main_buffer, const std::vector<std::vector<std::string>> &results);
-int csv_recursive_function(std::string &main_buff, std::vector<std::string> prefix, int i,
-						   const std::vector<std::vector<std::string>> &results, std::map<int, int> order_map);
+int csv_recursion(std::string& main_buffer, const std::vector<std::vector<std::string>>& results);
+int csv_recursive_function(std::string& main_buff, std::vector<std::string> prefix, int i,
+			   const std::vector<std::vector<std::string>>& results,
+			   std::map<int, int> order_map);
 
-std::vector<std::string> split_string(const std::string &s, char delim);
+std::vector<std::string> split_string(const std::string& s, char delim);
+
+/**
+ * @brief Separator between process table fields
+ *
+ * Process names are file paths, so a character that cannot appear in them is used.
+ */
+constexpr char PROCESS_FIELD_DELIM {'\x1f'};
+
+/**
+ * @brief Build a single process table out of rows collected from every processor
+ *
+ * @param header Column names
+ * @param rows Newline separated rows, fields separated by PROCESS_FIELD_DELIM
+ * @return std::string formatted table
+ */
+std::string format_process_table(const std::vector<std::string>& header, const std::string& rows);
 
 /**
  * @brief Converts all chars to be lower case
@@ -278,7 +300,7 @@ void to_lower_case(char* str);
  *
  * @param table
  */
-void align_table(std::vector<std::vector<std::string>> &table);
+void align_table(std::vector<std::vector<std::string>>& table);
 
 /**
  * @brief Return the number of lines that row need to be splited
@@ -296,12 +318,12 @@ int num_of_lines(std::vector<std::string> row, int max_lenght);
  * @param line_size size fo new strings
  * @return std::vector<std::string> vector of strings size line_size
  */
-std::vector<std::string> split_string_by_size(const std::string &str, int line_size);
+std::vector<std::string> split_string_by_size(const std::string& str, int line_size);
 
 int convert_bytes_to_megabytes(uint64_t bytes);
 
 std::vector<std::string> splitString(const std::string& s, const std::string& delimiter,
-									 bool skipEmptyParts);
+				     bool skipEmptyParts);
 
 /**
  * @brief Write string to given file
@@ -332,7 +354,8 @@ bool is_UUID(std::string s);
  * @brief Converts a 64-bit mask to a string of bit ranges.
  *
  * @param[in] mask 64-bit value whose set bits are converted into ranges
- * @param[in] bitOffset Starting offset for bit numbering (used when processing part of a larger array)
+ * @param[in] bitOffset Starting offset for bit numbering (used when processing part of a larger
+ * array)
  * @return String representation of ranges of set bits, e.g. "0-15,32-47"
  */
 std::vector<std::pair<uint64_t, std::string>> bitmaskToRangesList(uint64_t mask, int bitOffset);
@@ -358,9 +381,17 @@ std::string get_string_from_enum_nic_topo_link_type(int nic_link_type);
 std::string get_string_from_enum_nic_fw_type(int nic_fw_type);
 
 /**
+ * @brief Converts compute tray type enum to string
+ *
+ * @param tray_type amdsmi_compute_tray_type_t value
+ * @return std::string representation of the tray type
+ */
+std::string get_string_from_enum_compute_tray_type(int tray_type);
+
+/**
  * @brief Get the index of the main GPU
  *
  * @param gpu_index index of the main GPU
  * @return int AMDSMI_STATUS_SUCCESS if successful, otherwise an error code
  */
-int get_index_from_main_gpu(int &gpu_index);
+int get_index_from_main_gpu(int& gpu_index);

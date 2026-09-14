@@ -95,6 +95,7 @@ enum amdgv_gpumon_type {
 	GPUMON_PTL_QUERY_STATUS,
 	GPUMON_UAL_GET_INTERFACE_VERSION,
 	GPUMON_UAL_GET_CONFIG,
+	GPUMON_UAL_GET_STATION_CONFIG,
 	GPUMON_GET_PCIE_DPM_LEVELS,
 	GPUMON_GET_BAD_PAGE_COUNT,
 	GPUMON_GET_BAD_PAGE_INFO,
@@ -296,7 +297,9 @@ struct amdgv_gpumon_funcs {
 	int (*ual_set_vpod_config)(struct amdgv_adapter *adapt,
 			struct amdgv_gpumon_set_vpod_config_req_ual_v1 *config);
 	int (*ual_set_station_config)(struct amdgv_adapter *adapt,
-			struct amdgv_gpumon_set_station_config_req_ual_v1 *config);
+			struct amdgv_gpumon_station_config_ual_v1 *config);
+	int (*ual_get_station_config)(struct amdgv_adapter *adapt,
+			struct amdgv_gpumon_station_config_ual_v1 *config);
 	int (*ual_pause)(struct amdgv_adapter *adapt);
 	int (*ual_resume)(struct amdgv_adapter *adapt);
 	int (*ual_trigger_mode2)(struct amdgv_adapter *adapt);

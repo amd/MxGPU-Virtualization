@@ -7,26 +7,26 @@
 #define __SMI_HANDLE_H__
 
 #ifndef __KERNEL__
-#include <stdint.h>
-#include <stdbool.h>
+	#include <stdint.h>
+	#include <stdbool.h>
 #endif
 #include "smi_cmd_ioctl.h"
 
 #ifdef _WIN64
-#ifndef _KERNEL_MODE
-#include <fileapi.h>
-#endif
+	#ifndef _KERNEL_MODE
+		#include <fileapi.h>
+	#endif
 typedef HANDLE smi_file_handle;
 #else
 typedef int smi_file_handle;
 #endif
 
 #ifdef THREAD_SAFE
-#include "smi_thread.h"
+	#include "smi_thread.h"
 #endif
 
 #ifdef AMD_SMI_NIC_SUPPORT
-#include "smi_nic_interface.h"
+	#include "smi_nic_interface.h"
 #endif
 
 typedef struct smi_req_ctx_s smi_req_ctx;
@@ -51,7 +51,7 @@ typedef struct {
 
 struct smi_req_ctx_s {
 	smi_handle_struct *handle;
-	smi_thread_ctx    *thread;
+	smi_thread_ctx *thread;
 };
 
 typedef union {

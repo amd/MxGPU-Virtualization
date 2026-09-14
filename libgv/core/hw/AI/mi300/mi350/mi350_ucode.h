@@ -23,4 +23,9 @@
 #include "ucode/mi350/rlc_restore_list_srm_mem_signed.h"
 #include "ucode/mi350/mmschfw_signed.h"
 #include "ucode/mi350/dfc_fw_signed.h"
+
+int mi350_ucode_load(struct amdgv_adapter *adapt,
+		     enum amdgv_firmware_id *ucode_id_list,
+		     uint32_t ucode_id_count);
+
 #endif

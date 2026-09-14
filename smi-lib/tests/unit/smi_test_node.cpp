@@ -19,7 +19,7 @@ using amdsmi::g_system_mock;
 using amdsmi::SetResponseStatus;
 
 class AmdSmiNodeTests : public amdsmi::AmdSmiTest {
-protected:
+      protected:
 	::testing::AssertionResult equal_npm_info(smi_npm_info expect, amdsmi_npm_info_t actual)
 	{
 		SMI_ASSERT_EQ(static_cast<int>(expect.status), static_cast<int>(actual.status));
@@ -36,11 +36,11 @@ TEST_F(AmdSmiNodeTests, IoctlFailed)
 	amdsmi_node_handle node_handle;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_API_FAILED));
+	    .WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_API_FAILED));
 
-	auto handle = GPU_MOCK_HANDLE;
+	auto handle   = GPU_MOCK_HANDLE;
 	handle.dev_id = 0x75A0;
-	ret = amdsmi_get_node_handle(&handle, &node_handle);
+	ret	      = amdsmi_get_node_handle(&handle, &node_handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 }
 
@@ -50,7 +50,7 @@ TEST_F(AmdSmiNodeTests, GetNodeHandleInvalidProcessorHandle)
 	amdsmi_node_handle node_handle;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_INVAL));
+	    .WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_INVAL));
 
 	ret = amdsmi_get_node_handle(NULL, &node_handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
@@ -61,7 +61,7 @@ TEST_F(AmdSmiNodeTests, GetNodeHandleInvalidNodeHandle)
 	int ret;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_INVAL));
+	    .WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_INVAL));
 
 	ret = amdsmi_get_node_handle(&GPU_MOCK_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
@@ -73,11 +73,11 @@ TEST_F(AmdSmiNodeTests, GetNodeHandleSuccess)
 	amdsmi_node_handle node_handle;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_SUCCESS));
+	    .WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_SUCCESS));
 
-	auto handle = GPU_MOCK_HANDLE;
+	auto handle   = GPU_MOCK_HANDLE;
 	handle.dev_id = 0x75A0;
-	ret = amdsmi_get_node_handle(&handle, &node_handle);
+	ret	      = amdsmi_get_node_handle(&handle, &node_handle);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 }
 
@@ -87,7 +87,7 @@ TEST_F(AmdSmiNodeTests, GetNpmInfoFailed)
 	amdsmi_npm_info_t npm_info;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_API_FAILED));
+	    .WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_API_FAILED));
 
 	ret = amdsmi_get_npm_info(&NODE_MOCK_HANDLE, &npm_info);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
@@ -99,7 +99,7 @@ TEST_F(AmdSmiNodeTests, GetNpmInfoSuccess)
 	amdsmi_npm_info_t npm_info;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_SUCCESS));
+	    .WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_SUCCESS));
 
 	ret = amdsmi_get_npm_info(&NODE_MOCK_HANDLE, &npm_info);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
@@ -111,7 +111,7 @@ TEST_F(AmdSmiNodeTests, GetNpmInfoInvalidNodeHandle)
 	amdsmi_npm_info_t npm_info;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_INVAL));
+	    .WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_INVAL));
 
 	ret = amdsmi_get_npm_info(NULL, &npm_info);
 	EXPECT_EQ(ret, AMDSMI_STATUS_INVAL);
@@ -124,8 +124,8 @@ TEST_F(AmdSmiNodeTests, GetNpmInfoMockedSuccess)
 	smi_node_info in_payload;
 
 	smi_npm_info mocked_npm_info;
-	mocked_npm_info.status = SMI_NPM_STATUS_ENABLED;
-	mocked_npm_info.limit = 100;
+	mocked_npm_info.status		    = SMI_NPM_STATUS_ENABLED;
+	mocked_npm_info.limit		    = 100;
 	mocked_npm_info.ubb_power_threshold = 500;
 
 	WhenCalling(std::bind(&amdsmi_get_npm_info, &NODE_MOCK_HANDLE, &npm_info));
@@ -135,4 +135,23 @@ TEST_F(AmdSmiNodeTests, GetNpmInfoMockedSuccess)
 	ret = performCall();
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_TRUE(equal_npm_info(mocked_npm_info, npm_info));
+}
+
+TEST_F(AmdSmiNodeTests, GetTrayInfoInvalidNodeHandle)
+{
+	int ret;
+	amdsmi_tray_info_t tray_info;
+	amdsmi_node_handle node_handle = reinterpret_cast<amdsmi_node_handle>(0x1);
+
+	ret = amdsmi_get_tray_info(node_handle, &tray_info);
+	EXPECT_EQ(ret, AMDSMI_STATUS_INVAL);
+}
+
+TEST_F(AmdSmiNodeTests, GetTrayInfoNotSupportedWithoutUaloe)
+{
+	int ret;
+	amdsmi_tray_info_t tray_info;
+
+	ret = amdsmi_get_tray_info(NULL, &tray_info);
+	EXPECT_TRUE(ret == AMDSMI_STATUS_NOT_SUPPORTED || ret == AMDSMI_STATUS_SUCCESS);
 }

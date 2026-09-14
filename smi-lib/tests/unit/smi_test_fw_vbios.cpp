@@ -18,8 +18,8 @@ using amdsmi::g_system_mock;
 using amdsmi::SetResponseStatus;
 
 class AmdSmiFirmwareVbiosTests : public amdsmi::AmdSmiTest {
-public:
-protected:
+      public:
+      protected:
 	::testing::AssertionResult equal_vbios_info(smi_vbios_info expect,
 						    amdsmi_vbios_info_t actual)
 	{
@@ -44,18 +44,17 @@ protected:
 		return ::testing::AssertionSuccess();
 	}
 
-	::testing::AssertionResult equal_fw_info(smi_fw_info expect,
-						amdsmi_fw_info_t actual)
+	::testing::AssertionResult equal_fw_info(smi_fw_info expect, amdsmi_fw_info_t actual)
 	{
 		SMI_ASSERT_EQ(expect.num_fw_info, actual.num_fw_info);
 
 		for (uint32_t i = 0; i < expect.num_fw_info; i++) {
 			SMI_ASSERT_EQ(expect.fw_info_list[i].fw_id,
 				      (enum smi_fw_block)actual.fw_info_list[i].fw_id)
-				<< " for i = " << i;
+			    << " for i = " << i;
 			SMI_ASSERT_EQ(expect.fw_info_list[i].fw_version,
 				      actual.fw_info_list[i].fw_version)
-				<< " for i = " << i;
+			    << " for i = " << i;
 		}
 		for (int i = expect.num_fw_info; i < AMDSMI_FW_ID__MAX; i++) {
 			SMI_ASSERT_EQ(0, actual.fw_info_list[i].fw_id) << " for i = " << i;
@@ -101,7 +100,7 @@ TEST_F(AmdSmiFirmwareVbiosTests, IoctlFailed)
 	amdsmi_fw_info_t fw_info;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillRepeatedly(amdsmi::SetResponseStatus(AMDSMI_STATUS_API_FAILED));
+	    .WillRepeatedly(amdsmi::SetResponseStatus(AMDSMI_STATUS_API_FAILED));
 
 	ret = amdsmi_get_gpu_vbios_info(&GPU_MOCK_HANDLE, &vbios_res);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
@@ -118,17 +117,19 @@ TEST_F(AmdSmiFirmwareVbiosTests, GetVbiosInfo)
 	int ret;
 	smi_device_info in_payload;
 	smi_vbios_info gpu_info_mock = {};
-	std::string build_date = "2020/05/19 23:07";
-	std::string name = "VG10 A1 D05318 32Mx128 8GB 300e/945m";
-	std::string part_number = "113-D0531800-B04";
-	std::string version = "017.003.000.007.015638";
-	std::string boot_firmware = "N/A";
+	std::string build_date	     = "2020/05/19 23:07";
+	std::string name	     = "VG10 A1 D05318 32Mx128 8GB 300e/945m";
+	std::string part_number	     = "113-D0531800-B04";
+	std::string version	     = "017.003.000.007.015638";
+	std::string boot_firmware    = "N/A";
 #ifdef _WIN64
 	strcpy_s(gpu_info_mock.build_date, sizeof(gpu_info_mock.build_date), build_date.c_str());
 	strcpy_s(gpu_info_mock.name, sizeof(gpu_info_mock.name), name.c_str());
 	strcpy_s(gpu_info_mock.part_number, sizeof(gpu_info_mock.part_number), part_number.c_str());
 	strcpy_s(gpu_info_mock.version, sizeof(gpu_info_mock.version), version.c_str());
-	strcpy_s(gpu_info_mock.boot_firmware, sizeof(gpu_info_mock.boot_firmware), boot_firmware.c_str());
+	strcpy_s(gpu_info_mock.boot_firmware,
+		 sizeof(gpu_info_mock.boot_firmware),
+		 boot_firmware.c_str());
 #else
 	strcpy(gpu_info_mock.build_date, build_date.c_str());
 	strcpy(gpu_info_mock.name, name.c_str());
@@ -136,7 +137,6 @@ TEST_F(AmdSmiFirmwareVbiosTests, GetVbiosInfo)
 	strcpy(gpu_info_mock.version, version.c_str());
 	strcpy(gpu_info_mock.boot_firmware, boot_firmware.c_str());
 #endif
-
 
 	amdsmi_vbios_info_t vbios_info;
 	WhenCalling(std::bind(amdsmi_get_gpu_vbios_info, &GPU_MOCK_HANDLE, &vbios_info));
@@ -154,18 +154,24 @@ TEST_F(AmdSmiFirmwareVbiosTests, GetBoardInfo)
 {
 	int ret;
 	smi_device_info in_payload;
-	smi_board_info gpu_info_mock = {};
-	std::string fru_id = "abc";
-	std::string model_number = "def";
-	std::string product_serial = "ghk";
-	std::string product_name = "GPU";
+	smi_board_info gpu_info_mock  = {};
+	std::string fru_id	      = "abc";
+	std::string model_number      = "def";
+	std::string product_serial    = "ghk";
+	std::string product_name      = "GPU";
 	std::string manufacturer_name = "AMD";
 #ifdef _WIN64
 	strcpy_s(gpu_info_mock.fru_id, sizeof(gpu_info_mock.fru_id), fru_id.c_str());
-	strcpy_s(gpu_info_mock.model_number, sizeof(gpu_info_mock.model_number), model_number.c_str());
-	strcpy_s(gpu_info_mock.product_serial, sizeof(gpu_info_mock.product_serial), product_serial.c_str());
-	strcpy_s(gpu_info_mock.manufacturer_name, sizeof(gpu_info_mock.manufacturer_name), manufacturer_name.c_str());
-	strcpy_s(gpu_info_mock.product_name, sizeof(gpu_info_mock.product_name), product_name.c_str());
+	strcpy_s(
+	    gpu_info_mock.model_number, sizeof(gpu_info_mock.model_number), model_number.c_str());
+	strcpy_s(gpu_info_mock.product_serial,
+		 sizeof(gpu_info_mock.product_serial),
+		 product_serial.c_str());
+	strcpy_s(gpu_info_mock.manufacturer_name,
+		 sizeof(gpu_info_mock.manufacturer_name),
+		 manufacturer_name.c_str());
+	strcpy_s(
+	    gpu_info_mock.product_name, sizeof(gpu_info_mock.product_name), product_name.c_str());
 #else
 	strcpy(gpu_info_mock.fru_id, fru_id.c_str());
 	strcpy(gpu_info_mock.model_number, model_number.c_str());
@@ -194,7 +200,7 @@ TEST_F(AmdSmiFirmwareVbiosTests, GetFwInfo)
 	mocked_resp.num_fw_info = SMI_FW_ID__MAX;
 
 	for (int i = 0; i < SMI_FW_ID__MAX; i++) {
-		mocked_resp.fw_info_list[i].fw_id = (enum smi_fw_block)i;
+		mocked_resp.fw_info_list[i].fw_id      = (enum smi_fw_block)i;
 		mocked_resp.fw_info_list[i].fw_version = i * 2 + 1;
 	}
 

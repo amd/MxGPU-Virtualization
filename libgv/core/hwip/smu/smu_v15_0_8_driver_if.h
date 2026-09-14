@@ -1,4 +1,7 @@
-/* Copyright Advanced Micro Devices, Inc. All rights reserved. */
+/* Copyright Advanced Micro Devices, Inc.
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 #ifndef SMU_V15_0_8_DRIVER_IF_H
 #define SMU_V15_0_8_DRIVER_IF_H
@@ -293,6 +296,7 @@ typedef struct {
 #define IH_INTERRUPT_ID_TO_DRIVER                   0xFE
 #define IH_INTERRUPT_CONTEXT_ID_THERMAL_THROTTLING  0x7
 #define IH_INTERRUPT_VFFLR_INT                      0xA
+#define IH_INTERRUPT_HBM_BP_INT                     0xB
 
 //thermal over-temp mask defines for IH interrup to host
 #define THROTTLER_PROCHOT_BIT           0

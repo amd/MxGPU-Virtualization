@@ -98,7 +98,7 @@ uint64_t amdgv_ras_eeprom_utc_to_eeprom_format(struct amdgv_adapter *adapt,
 	if (adapt->ras_eeprom.funcs && adapt->ras_eeprom.funcs->utc_to_eeprom_format)
 		return adapt->ras_eeprom.funcs->utc_to_eeprom_format(adapt, utc_timestamp);
 	else
-		AMDGV_ERROR("Cannot convert UTC timestamp to EEPROM format.\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_FUNC_UNAVAILABLE, 0);
 
 	return 0;
 
@@ -127,7 +127,7 @@ int amdgv_ras_eeprom_process_records(struct amdgv_adapter *adapt,
 	if (adapt->ras_eeprom.funcs && adapt->ras_eeprom.funcs->process_records)
 		ret = adapt->ras_eeprom.funcs->process_records(adapt, control, records, write, num);
 	else
-		AMDGV_ERROR("Cannot process EEPROM Records.\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_FUNC_UNAVAILABLE, 1);
 
 	return ret;
 }
@@ -153,7 +153,7 @@ bool amdgv_ras_eeprom_is_gpu_bad(struct amdgv_adapter *adapt)
 #endif
 		return adapt->ras_eeprom.funcs->is_gpu_bad(adapt);
 	else
-		AMDGV_ERROR("Cannot check if GPU is bad.\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_FUNC_UNAVAILABLE, 2);
 	return false;
 }
 
@@ -162,7 +162,7 @@ int amdgv_ras_eeprom_version_init(struct amdgv_adapter *adapt)
 	int ret = AMDGV_FAILURE;
 
 	if (adapt->umc.use_legacy_eeprom_format) {
-		AMDGV_INFO("Using legacy EEPROM format.\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_FORMAT_LEGACY, 0);
 		ret = ras_eeprom_legacy_sw_init(adapt);
 	} else {
 		if (adapt->pp.pmme_funcs &&
@@ -178,16 +178,19 @@ int amdgv_ras_eeprom_version_init(struct amdgv_adapter *adapt)
 					amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_CONFIG_BP_THD_NOT_SUPPORTED, 0);
 
 				adapt->umc.eeprom_version = EEPROM_TABLE_VER_V4;
-				AMDGV_INFO("Using EEPROM format v4.0.\n");
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_FORMAT,
+					      AMDGV_LOG_DATA_32_32(4, 0));
 				ret = ras_eeprom_pmme_sw_init(adapt);
 				return ret;
 			}
 		}
 
 		if (adapt->umc.eeprom_version == EEPROM_TABLE_VER_V3)
-			AMDGV_INFO("Using EEPROM format v3.0.\n");
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_FORMAT,
+				      AMDGV_LOG_DATA_32_32(3, 0));
 		else
-			AMDGV_INFO("Using EEPROM format v2.1.\n");
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_FORMAT,
+				      AMDGV_LOG_DATA_32_32(2, 1));
 		ret = ras_eeprom_v2_1_sw_init(adapt);
 	}
 
@@ -203,7 +206,7 @@ int amdgv_ras_eeprom_init(struct amdgv_adapter *adapt,
 	if (adapt->ras_eeprom.funcs && adapt->ras_eeprom.funcs->init)
 		ret = adapt->ras_eeprom.funcs->init(adapt, control);
 	else
-		AMDGV_ERROR("Cannot init EEPROM control.\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_ECC_EEPROM_FUNC_UNAVAILABLE, 3);
 
 	return ret;
 }

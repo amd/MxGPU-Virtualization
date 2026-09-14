@@ -10,7 +10,8 @@
 #include "smi_nic_interface.h"
 
 /**
- * @brief Maps an enum representing a NIC library status to an enum representing AMDSMI library status.
+ * @brief Maps an enum representing a NIC library status to an enum representing AMDSMI library
+ * status.
  *
  * This function takes an enum value representing a NIC library status and maps it to an
  * equivalent enum value representing an AMDSMI library status. The mapping is performed based on
@@ -20,9 +21,9 @@
  * @param[in] unit The enum value representing NIC library status.
  * @return The enum value representing the corresponding mapped AMDSMI library status.
  *
- * @note This function assumes that the enum values for both enums (amdsmi_status_t and smi_nic_status_t)
- * are compatible and represent similar concepts.
-*/
+ * @note This function assumes that the enum values for both enums (amdsmi_status_t and
+ * smi_nic_status_t) are compatible and represent similar concepts.
+ */
 amdsmi_status_t smi_map_nic_status(smi_nic_status_t status);
 
 /**

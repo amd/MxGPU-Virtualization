@@ -13,7 +13,7 @@ extern "C" {
 #include "smi_test_helpers.hpp"
 
 class AmdSmiNicStubTests : public amdsmi::AmdSmiTest {
-protected:
+      protected:
 };
 
 TEST_F(AmdSmiNicStubTests, GetNicDriverInfoStub)
@@ -142,14 +142,12 @@ TEST_F(AmdSmiNicStubTests, GetNicRdmaDevInfoStub)
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 }
 
-
 TEST_F(AmdSmiNicStubTests, GetNicPortStatisticsStub)
 {
 	uint32_t num_stats;
 	amdsmi_nic_stat_t *stats;
 	amdsmi_status_t ret;
 	uint32_t port_index = 0;
-
 
 	ret = amdsmi_get_nic_port_statistics(&NIC_MOCK_HANDLE, port_index, &num_stats, nullptr);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
@@ -160,9 +158,9 @@ TEST_F(AmdSmiNicStubTests, GetNicPortStatisticsStub)
 	ret = amdsmi_get_nic_port_statistics(&NIC_MOCK_HANDLE, port_index, nullptr, nullptr);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 
-	stats = (amdsmi_nic_stat_t*)malloc(7 * sizeof(amdsmi_nic_stat_t));
+	stats	  = (amdsmi_nic_stat_t *)malloc(7 * sizeof(amdsmi_nic_stat_t));
 	num_stats = 7;
-	ret = amdsmi_get_nic_port_statistics(&NIC_MOCK_HANDLE, port_index, &num_stats, stats);
+	ret	  = amdsmi_get_nic_port_statistics(&NIC_MOCK_HANDLE, port_index, &num_stats, stats);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 	free(stats);
 }
@@ -182,13 +180,12 @@ TEST_F(AmdSmiNicStubTests, GetNicVendorStatisticsStub)
 	ret = amdsmi_get_nic_vendor_statistics(&NIC_MOCK_HANDLE, 0, nullptr, nullptr);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 
-	stats = (amdsmi_nic_stat_t*)malloc(7 * sizeof(amdsmi_nic_stat_t));
+	stats	  = (amdsmi_nic_stat_t *)malloc(7 * sizeof(amdsmi_nic_stat_t));
 	num_stats = 7;
-	ret = amdsmi_get_nic_vendor_statistics(&NIC_MOCK_HANDLE, 0, &num_stats, stats);
+	ret	  = amdsmi_get_nic_vendor_statistics(&NIC_MOCK_HANDLE, 0, &num_stats, stats);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 	free(stats);
 }
-
 
 TEST_F(AmdSmiNicStubTests, GetNicRdmaPortStatisticsStub)
 {
@@ -197,20 +194,21 @@ TEST_F(AmdSmiNicStubTests, GetNicRdmaPortStatisticsStub)
 	amdsmi_status_t ret;
 	uint32_t rdma_port_index = 0;
 
-
-	ret = amdsmi_get_nic_rdma_port_statistics(&NIC_MOCK_HANDLE, rdma_port_index, &num_stats, nullptr);
+	ret = amdsmi_get_nic_rdma_port_statistics(
+	    &NIC_MOCK_HANDLE, rdma_port_index, &num_stats, nullptr);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 
 	ret = amdsmi_get_nic_rdma_port_statistics(nullptr, rdma_port_index, &num_stats, nullptr);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 
-	ret = amdsmi_get_nic_rdma_port_statistics(&NIC_MOCK_HANDLE, rdma_port_index, nullptr, nullptr);
+	ret = amdsmi_get_nic_rdma_port_statistics(
+	    &NIC_MOCK_HANDLE, rdma_port_index, nullptr, nullptr);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 
-
-	stats = (amdsmi_nic_stat_t*)malloc(7 * sizeof(amdsmi_nic_stat_t));
+	stats	  = (amdsmi_nic_stat_t *)malloc(7 * sizeof(amdsmi_nic_stat_t));
 	num_stats = 7;
-	ret = amdsmi_get_nic_rdma_port_statistics(&NIC_MOCK_HANDLE, rdma_port_index, &num_stats, stats);
+	ret	  = amdsmi_get_nic_rdma_port_statistics(
+		  &NIC_MOCK_HANDLE, rdma_port_index, &num_stats, stats);
 	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
 	free(stats);
 }

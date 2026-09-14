@@ -189,6 +189,7 @@ enum amdgv_gpumon_vram_type {
 	AMDGV_GPUMON_DGPU_VRAM_TYPE__GDDR6 = 0x70,
 	AMDGV_GPUMON_DGPU_VRAM_TYPE__HBM3 = 0x80,
 	AMDGV_GPUMON_DGPU_VRAM_TYPE__HBM3E = 0x81,
+	AMDGV_GPUMON_DGPU_VRAM_TYPE__HBM4 = 0x82,
 	AMDGV_GPUMON_DGPU_VRAM_TYPE__GDDR7 = 0x90,
 };
 
@@ -535,6 +536,7 @@ enum amdgv_gpumon_metric_ext_category {
 	AMDGV_GPUMON_METRIC_EXT_CATEGORY__STATIC_FREQUENCY	= 13ULL,
 	AMDGV_GPUMON_METRIC_EXT_CATEGORY__STATIC_TEMPERATURE	= 14ULL,
 	AMDGV_GPUMON_METRIC_EXT_CATEGORY__STATIC_THROTTLE	= 15ULL,
+	AMDGV_GPUMON_METRIC_EXT_CATEGORY__STATIC_POWER		= 16ULL,
 };
 
 enum amdgv_gpumon_metric_ext_name {
@@ -697,6 +699,8 @@ enum amdgv_gpumon_metric_ext_name {
 	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDCR_SOCIO_A_TEMP,
 	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDCR_SOCIO_C_TEMP,
 	AMDGV_GPUMON_METRIC_EXT_NAME__SVI_PLANE_VDDAN_075_TEMP,
+	AMDGV_GPUMON_METRIC_EXT_NAME__CLK_GL2CLK_MAX_LIMIT,
+	AMDGV_GPUMON_METRIC_EXT_NAME__CLK_GL2CLK_MIN_LIMIT,
 };
 
 enum amdgv_gpumon_metric_ext_unit {
@@ -782,13 +786,30 @@ struct amdgv_gpumon_metrics_ext {
 	struct amdgv_gpumon_metric_ext metric[AMDGV_GPUMON_MAX_NUM_METRICS_EXT];
 };
 
+struct amdgv_gpumon_ras_policy_v4_0 {
+	uint16_t dram_non_critical_region_threshold;	//Non-critical region UCE threshold
+	uint16_t dram_critical_region_threshold;		//Critical region UCE threshold
+	uint32_t reserved[8];
+};
+
+struct amdgv_gpumon_ras_policy_v5_0 {
+	uint32_t num_entities;
+	uint32_t event_rma_threshold_per_entity;
+	uint32_t max_pages_per_ret_event;
+	uint32_t od_sram_ecc_threshold;
+	uint32_t hwa_threshold;
+	uint32_t wdt_threshold;
+};
+
+/* Mirrors struct smi_gpu_ras_policy_info */
 struct amdgv_gpumon_ras_policy_info {
 	uint8_t minor_version;
 	uint8_t major_version;
 	uint8_t padding[2];
-	uint16_t dram_non_critical_region_threshold;	//Non-critical region UCE threshold
-	uint16_t dram_critical_region_threshold;		//Critical region UCE threshold
-	uint32_t reserved[8];
+	union {
+		struct amdgv_gpumon_ras_policy_v4_0 v4_0;
+		struct amdgv_gpumon_ras_policy_v5_0 v5_0;
+	} policy_data;
 };
 
 struct amdgv_gpumon_partition_info {
@@ -826,7 +847,8 @@ struct amdgv_ptl_enable_info {
 
 enum amdgv_gpumon_ual_link_type {
 	AMDGV_GPUMON_UALOE = 0,
-	AMDGV_GPUMON_UALINK = 1,
+	AMDGV_GPUMON_UALINK_200 = 1,
+	AMDGV_GPUMON_UALINK_128 = 2,
 	AMDGV_GPUMON_UALMAX
 };
 
@@ -901,7 +923,7 @@ enum amdgv_gpumon_ual_ports_per_station {
     AMDGV_GPUMON_UAL_PPS_4 = 4				/* 4x 200Gbps */
 };
 
-struct amdgv_gpumon_set_station_config_req_ual_v1 {
+struct amdgv_gpumon_station_config_ual_v1 {
 	/**
 	 * Number of valid stations in this configuration
 	 * Only lane_en_bitmap[0..num_stations-1] will be processed.
@@ -1159,7 +1181,8 @@ int amdgv_gpumon_ual_get_interface_version(amdgv_dev_t dev, uint32_t *version);
 int amdgv_gpumon_ual_get_config(amdgv_dev_t dev, struct amdgv_gpumon_get_config_rsp_ual_v1 *config);
 int amdgv_gpumon_ual_set_ppod_config(amdgv_dev_t dev, struct amdgv_gpumon_set_ppod_config_req_ual_v1 *config);
 int amdgv_gpumon_ual_set_vpod_config(amdgv_dev_t dev, struct amdgv_gpumon_set_vpod_config_req_ual_v1 *config);
-int amdgv_gpumon_ual_set_station_config(amdgv_dev_t dev, struct amdgv_gpumon_set_station_config_req_ual_v1 *config);
+int amdgv_gpumon_ual_set_station_config(amdgv_dev_t dev, struct amdgv_gpumon_station_config_ual_v1 *config);
+int amdgv_gpumon_ual_get_station_config(amdgv_dev_t dev, struct amdgv_gpumon_station_config_ual_v1 *config);
 int amdgv_gpumon_ual_pause(amdgv_dev_t dev);
 int amdgv_gpumon_ual_resume(amdgv_dev_t dev);
 int amdgv_gpumon_ual_trigger_mode2(amdgv_dev_t dev);

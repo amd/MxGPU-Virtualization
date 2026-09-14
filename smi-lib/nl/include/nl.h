@@ -11,9 +11,9 @@
 #include <stdint.h>
 
 #ifdef LIBMNL_INSTALLED
-#include <libmnl/libmnl.h>
+	#include <libmnl/libmnl.h>
 #else
-#include <linux/netlink.h>
+	#include <linux/netlink.h>
 typedef int (*mnl_cb_t)(const struct nlmsghdr *nlh, void *data);
 #endif
 
@@ -73,9 +73,8 @@ uint16_t nl_family_id(const struct nl_conn *conn);
  *
  * @return Pointer to the prepared nlmsghdr inside @p buf.
  */
-struct nlmsghdr *nl_req_init(struct nl_conn *conn,
-			     char *buf, size_t buflen,
-			     uint8_t cmd, uint8_t version);
+struct nlmsghdr *
+nl_req_init(struct nl_conn *conn, char *buf, size_t buflen, uint8_t cmd, uint8_t version);
 
 /**
  * @brief Send a netlink request and process responses.
@@ -93,9 +92,11 @@ struct nlmsghdr *nl_req_init(struct nl_conn *conn,
  * @return 0 on success, positive @c errno value on failure.
  */
 int nl_req_run(struct nl_conn *conn,
-	       char *buf, size_t buflen,
+	       char *buf,
+	       size_t buflen,
 	       struct nlmsghdr *nlh,
-	       mnl_cb_t data_cb, void *data);
+	       mnl_cb_t data_cb,
+	       void *data);
 
 /**
  * @brief Send a netlink request and process responses with a custom error
@@ -115,9 +116,11 @@ int nl_req_run(struct nl_conn *conn,
  * @return 0 on success, positive @c errno value on failure.
  */
 int nl_req_run2(struct nl_conn *conn,
-		char *buf, size_t buflen,
+		char *buf,
+		size_t buflen,
 		struct nlmsghdr *nlh,
-		mnl_cb_t data_cb, void *data,
+		mnl_cb_t data_cb,
+		void *data,
 		mnl_cb_t err_cb);
 
 #ifdef __cplusplus

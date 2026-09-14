@@ -4,15 +4,15 @@
  */
 
 #ifdef _WIN64
-#define _CRTDBG_MAP_ALLOC
-#include <stdlib.h>
-#include <crtdbg.h>
-#include <windows.h>
-#define SLEEP(x) Sleep(x)
+	#define _CRTDBG_MAP_ALLOC
+	#include <stdlib.h>
+	#include <crtdbg.h>
+	#include <windows.h>
+	#define SLEEP(x) Sleep(x)
 #else
-#include <stdlib.h>
-#include <unistd.h>
-#define SLEEP(x) usleep((x)*1000)
+	#include <stdlib.h>
+	#include <unistd.h>
+	#define SLEEP(x) usleep((x) * 1000)
 #endif
 #include <stdio.h>
 #include "amdsmi.h"
@@ -21,28 +21,34 @@
 #include <inttypes.h>
 
 #ifdef WINDOW_MODE
-#include <ncurses.h>
+	#include <ncurses.h>
 #else
-#define printw(...) printf(__VA_ARGS__)
+	#define printw(...) printf(__VA_ARGS__)
 #endif
-#define CHECKRET(a)                                                            \
-	do {                                                                                \
-		do {                                                                            \
-			ret = a;                                                                    \
-			if (ret == AMDSMI_STATUS_RETRY || ret == AMDSMI_STATUS_BUSY) {              \
-				SLEEP(500);                                                             \
-				continue;                                                               \
-			} else                                                                      \
-				break;                                                                  \
-		} while (true);                                                                 \
-		if (ret == AMDSMI_STATUS_NOT_SUPPORTED) {                                       \
-			printw("GPU%u Warning in line %d : %s not supported with ret=%d\n", i,      \
-				   __LINE__, #a, ret);                                                  \
-		} else if (ret != AMDSMI_STATUS_SUCCESS) {                                      \
-			printw("GPU%u Error in line %d : %s failed with ret=%d\n", i,               \
-			       __LINE__, #a, ret);                                                  \
-			goto fini;                                                              \
-		}                                                                               \
+#define CHECKRET(a)                                                                                \
+	do {                                                                                       \
+		do {                                                                               \
+			ret = a;                                                                   \
+			if (ret == AMDSMI_STATUS_RETRY || ret == AMDSMI_STATUS_BUSY) {             \
+				SLEEP(500);                                                        \
+				continue;                                                          \
+			} else                                                                     \
+				break;                                                             \
+		} while (true);                                                                    \
+		if (ret == AMDSMI_STATUS_NOT_SUPPORTED) {                                          \
+			printw("GPU%u Warning in line %d : %s not supported with ret=%d\n",        \
+			       i,                                                                  \
+			       __LINE__,                                                           \
+			       #a,                                                                 \
+			       ret);                                                               \
+		} else if (ret != AMDSMI_STATUS_SUCCESS) {                                         \
+			printw("GPU%u Error in line %d : %s failed with ret=%d\n",                 \
+			       i,                                                                  \
+			       __LINE__,                                                           \
+			       #a,                                                                 \
+			       ret);                                                               \
+			goto fini;                                                                 \
+		}                                                                                  \
 	} while (0)
 static const char *__str_sched_state(amdsmi_vf_sched_state_t status)
 {
@@ -66,15 +72,19 @@ static const char *__str_sched_state(amdsmi_vf_sched_state_t status)
 }
 static double convert_volt(uint64_t v)
 {
-	return (double) (v / 1000);
+	return (double)(v / 1000);
 }
 #ifdef _WIN64
 void dumpMemoryLeakInfo(void)
 {
 	HANDLE hLogFile;
-	hLogFile = CreateFile(L".\\monitor_memory_leak.txt", GENERIC_WRITE,
-			      FILE_SHARE_WRITE, NULL, CREATE_ALWAYS,
-			      FILE_ATTRIBUTE_NORMAL, NULL);
+	hLogFile = CreateFile(L".\\monitor_memory_leak.txt",
+			      GENERIC_WRITE,
+			      FILE_SHARE_WRITE,
+			      NULL,
+			      CREATE_ALWAYS,
+			      FILE_ATTRIBUTE_NORMAL,
+			      NULL);
 	_CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_FILE);
 	_CrtSetReportFile(_CRT_WARN, hLogFile);
 	_CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
@@ -110,13 +120,13 @@ int main(void)
 	amdsmi_vf_data_t vf_data;
 	amdsmi_board_info_t board_info;
 	amdsmi_bdf_t bdf;
-	char uuid[AMDSMI_GPU_UUID_SIZE] = {0};
-	char clk_deep_sleep_str[6] = {0};
-	char clk_locked_str[6] = {0};
-	unsigned int uuid_length = AMDSMI_GPU_UUID_SIZE;
+	char uuid[AMDSMI_GPU_UUID_SIZE]	   = {0};
+	char clk_deep_sleep_str[6]	   = {0};
+	char clk_locked_str[6]		   = {0};
+	unsigned int uuid_length	   = AMDSMI_GPU_UUID_SIZE;
 	char uuid_vf[AMDSMI_GPU_UUID_SIZE] = {0};
-	unsigned int uuid_vf_length = AMDSMI_GPU_UUID_SIZE;
-	uint32_t sensor_ind = 0;
+	unsigned int uuid_vf_length	   = AMDSMI_GPU_UUID_SIZE;
+	uint32_t sensor_ind		   = 0;
 	uint32_t i;
 	uint32_t j;
 
@@ -128,7 +138,8 @@ int main(void)
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		return ret;
 	}
-	amdsmi_processor_handle *processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*gpu_count);
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * gpu_count);
 	ret = amdsmi_get_processor_handles(socket, &gpu_count, &processors[0]);
 	if (ret != AMDSMI_STATUS_SUCCESS)
 		goto fini;
@@ -139,153 +150,200 @@ int main(void)
 		clear();
 		refresh(); /* Print it on to the real screen */
 #endif
-	for (i = 0; i < gpu_count; i++) {
-		CHECKRET(amdsmi_get_gpu_device_bdf(processors[i], &bdf));
-		CHECKRET(amdsmi_get_gpu_asic_info(processors[i], &asic));
-		CHECKRET(amdsmi_get_gpu_driver_info(processors[i], &driver_version));
-		printw("BDF:[%02" PRIx64 ":%02" PRIx64 ".%" PRIu64 "] [%04x:%04" PRIx64" ]\n",
-			(uint64_t)bdf.bdf.bus_number,
-			(uint64_t)bdf.bdf.device_number,
-			(uint64_t)bdf.bdf.function_number,
-			asic.vendor_id,
-			asic.device_id);
-		CHECKRET(amdsmi_get_num_vf(processors[i], &num_vf_enabled, &num_vf_supported));
-		printf("Num vf enabled: %d\n", num_vf_enabled);
-		CHECKRET(amdsmi_get_gpu_device_uuid(processors[i], &uuid_length, uuid));
-		CHECKRET(amdsmi_get_fb_layout(processors[i], &fb));
-		CHECKRET(amdsmi_get_power_cap_info(processors[i], sensor_ind, &power));
-		printw("GPU[%s] BDF:[%02" PRIx64 ":%02" PRIx64 ".%" PRIu64 "] [%04x:%04" PRIu64 "] %s %" PRIx64 "MB "
-			"TDP: %" PRIu64 "W\n",
-		       uuid,
-		       (uint64_t)bdf.bdf.bus_number,
-		       (uint64_t)bdf.bdf.device_number,
-		       (uint64_t)bdf.bdf.function_number,
-		       asic.vendor_id,
-		       asic.device_id,
-		       asic.market_name,
-		       (uint64_t)fb.total_fb_size,
-		       power.power_cap);
-		printw(" S/N: %s\n", asic.asic_serial);
-		CHECKRET(amdsmi_get_gpu_board_info(processors[i], &board_info));
-		printw(" Model: %s Serial: %s FRU_ID: %s Manufacturer name: %s Product name: %s\n",
-				board_info.model_number,
-				board_info.product_serial,
-				board_info.fru_id,
-				board_info.manufacturer_name,
-				board_info.product_name);
-		printw("-->Driver version: %s\n", driver_version.driver_version);
-		printw("-->Driver date: %s\n", driver_version.driver_date);
-		CHECKRET(amdsmi_get_gpu_vbios_info(processors[i], &vbios));
-		printw("+VBIOS ver:%s %s %s %s\n", vbios.version, vbios.build_date,
-				vbios.part_number, vbios.boot_firmware);
-		CHECKRET(amdsmi_get_gpu_activity(processors[i], &usage));
-		CHECKRET(amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_GFX,
-					&clock));
-		if (clock.clk_deep_sleep != (uint8_t)-1) {
+		for (i = 0; i < gpu_count; i++) {
+			CHECKRET(amdsmi_get_gpu_device_bdf(processors[i], &bdf));
+			CHECKRET(amdsmi_get_gpu_asic_info(processors[i], &asic));
+			CHECKRET(amdsmi_get_gpu_driver_info(processors[i], &driver_version));
+			printw("BDF:[%02" PRIx64 ":%02" PRIx64 ".%" PRIu64 "] [%04x:%04" PRIx64
+			       " ]\n",
+			       (uint64_t)bdf.bdf.bus_number,
+			       (uint64_t)bdf.bdf.device_number,
+			       (uint64_t)bdf.bdf.function_number,
+			       asic.vendor_id,
+			       asic.device_id);
+			CHECKRET(
+			    amdsmi_get_num_vf(processors[i], &num_vf_enabled, &num_vf_supported));
+			printf("Num vf enabled: %d\n", num_vf_enabled);
+			CHECKRET(amdsmi_get_gpu_device_uuid(processors[i], &uuid_length, uuid));
+			CHECKRET(amdsmi_get_fb_layout(processors[i], &fb));
+			CHECKRET(amdsmi_get_power_cap_info(processors[i], sensor_ind, &power));
+			printw("GPU[%s] BDF:[%02" PRIx64 ":%02" PRIx64 ".%" PRIu64
+			       "] [%04x:%04" PRIu64 "] %s %" PRIx64 "MB "
+			       "TDP: %" PRIu64 "W\n",
+			       uuid,
+			       (uint64_t)bdf.bdf.bus_number,
+			       (uint64_t)bdf.bdf.device_number,
+			       (uint64_t)bdf.bdf.function_number,
+			       asic.vendor_id,
+			       asic.device_id,
+			       asic.market_name,
+			       (uint64_t)fb.total_fb_size,
+			       power.power_cap);
+			printw(" S/N: %s\n", asic.asic_serial);
+			CHECKRET(amdsmi_get_gpu_board_info(processors[i], &board_info));
+			printw(" Model: %s Serial: %s FRU_ID: %s Manufacturer name: %s Product "
+			       "name: %s\n",
+			       board_info.model_number,
+			       board_info.product_serial,
+			       board_info.fru_id,
+			       board_info.manufacturer_name,
+			       board_info.product_name);
+			printw("-->Driver version: %s\n", driver_version.driver_version);
+			printw("-->Driver date: %s\n", driver_version.driver_date);
+			CHECKRET(amdsmi_get_gpu_vbios_info(processors[i], &vbios));
+			printw("+VBIOS ver:%s %s %s %s\n",
+			       vbios.version,
+			       vbios.build_date,
+			       vbios.part_number,
+			       vbios.boot_firmware);
+			CHECKRET(amdsmi_get_gpu_activity(processors[i], &usage));
+			CHECKRET(amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_GFX, &clock));
+			if (clock.clk_deep_sleep != (uint8_t)-1) {
 #ifdef _WIN64
-			strcpy_s(clk_deep_sleep_str, sizeof(clk_deep_sleep_str), clock.clk_deep_sleep ? "true" : "false");
+				strcpy_s(clk_deep_sleep_str,
+					 sizeof(clk_deep_sleep_str),
+					 clock.clk_deep_sleep ? "true" : "false");
 #else
 			strcpy(clk_deep_sleep_str, clock.clk_deep_sleep ? "true" : "false");
 #endif
-		} else {
+			} else {
 #ifdef _WIN64
-			strcpy_s(clk_deep_sleep_str, sizeof(clk_deep_sleep_str), "N/A");
+				strcpy_s(clk_deep_sleep_str, sizeof(clk_deep_sleep_str), "N/A");
 #else
 			strcpy(clk_deep_sleep_str, "N/A");
 #endif
-		}
-		if (clock.clk_locked != (uint8_t)-1) {
+			}
+			if (clock.clk_locked != (uint8_t)-1) {
 #ifdef _WIN64
-			strcpy_s(clk_locked_str, sizeof(clk_locked_str), clock.clk_locked ? "true" : "false");
+				strcpy_s(clk_locked_str,
+					 sizeof(clk_locked_str),
+					 clock.clk_locked ? "true" : "false");
 #else
 			strcpy(clk_locked_str, clock.clk_locked ? "true" : "false");
 #endif
-		} else {
+			} else {
 #ifdef _WIN64
-			strcpy_s(clk_locked_str, sizeof(clk_locked_str), "N/A");
+				strcpy_s(clk_locked_str, sizeof(clk_locked_str), "N/A");
 #else
 			strcpy(clk_locked_str, "N/A");
 #endif
+			}
+			printw("+GFX %d%% cur %dMhz is locked %s is in deep sleep %s\n",
+			       usage.gfx_activity,
+			       clock.clk,
+			       clk_locked_str,
+			       clk_deep_sleep_str);
+			CHECKRET(amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_MEM, &clock));
+			printw("+MEM %d%% cur %dMhz\n", usage.umc_activity, clock.clk);
+			CHECKRET(
+			    amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_VCLK0, &clock));
+			printw("+ENC0 cur %uMhz max: %uMhz\n", clock.clk, clock.max_clk);
+			CHECKRET(
+			    amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_VCLK1, &clock));
+			printw("+ENC1 cur %uMhz max: %uMhz\n", clock.clk, clock.max_clk);
+			CHECKRET(
+			    amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_DCLK0, &clock));
+			printw("+DEC0 cur %uMhz max: %uMhz\n", clock.clk, clock.max_clk);
+			CHECKRET(
+			    amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_DCLK1, &clock));
+			printw("+DEC1 cur %uMhz max: %uMhz\n", clock.clk, clock.max_clk);
+			if (strstr(asic.market_name, "MI300") != NULL) {
+				CHECKRET(amdsmi_is_gpu_power_management_enabled(
+				    processors[i], &is_power_management_enabled));
+				printw("+Power management enabled: %s\n",
+				       is_power_management_enabled ? "true" : "false");
+			}
+			CHECKRET(amdsmi_get_power_info(processors[i], &power_info));
+			CHECKRET(amdsmi_get_temp_metric(processors[i],
+							AMDSMI_TEMPERATURE_TYPE_EDGE,
+							AMDSMI_TEMP_CURRENT,
+							&temp_edge));
+			CHECKRET(amdsmi_get_temp_metric(processors[i],
+							AMDSMI_TEMPERATURE_TYPE_VRAM,
+							AMDSMI_TEMP_CURRENT,
+							&temp_mem));
+			CHECKRET(amdsmi_get_temp_metric(processors[i],
+							AMDSMI_TEMPERATURE_TYPE_HOTSPOT,
+							AMDSMI_TEMP_CURRENT,
+							&temp_hotspot));
+			printw("+Power: %" PRIu64 "W Voltage: %.4fV Edge: %" PRIu64
+			       "C Hotspot: %" PRIu64 "C Mem: %" PRIu64 "C\n",
+			       power_info.socket_power,
+			       convert_volt(power_info.gfx_voltage),
+			       temp_edge,
+			       temp_hotspot,
+			       temp_mem);
+			CHECKRET(amdsmi_get_temp_metric(processors[i],
+							AMDSMI_TEMPERATURE_TYPE_EDGE,
+							AMDSMI_TEMP_CRITICAL,
+							&temp_edge_limit));
+			CHECKRET(amdsmi_get_temp_metric(processors[i],
+							AMDSMI_TEMPERATURE_TYPE_VRAM,
+							AMDSMI_TEMP_CRITICAL,
+							&temp_mem_limit));
+			CHECKRET(amdsmi_get_temp_metric(processors[i],
+							AMDSMI_TEMPERATURE_TYPE_HOTSPOT,
+							AMDSMI_TEMP_CRITICAL,
+							&temp_hotspot_limit));
+			printw("+Power cap: %" PRIu64 "W Edge cap: %" PRIu64
+			       "C Hotspot cap: %" PRIu64 "C Mem cap: %" PRIu64 "C\n",
+			       power.power_cap,
+			       temp_edge_limit,
+			       temp_hotspot_limit,
+			       temp_mem_limit);
+			CHECKRET(amdsmi_get_temp_metric(processors[i],
+							AMDSMI_TEMPERATURE_TYPE_EDGE,
+							AMDSMI_TEMP_SHUTDOWN,
+							&temp_edge_shutdown));
+			CHECKRET(amdsmi_get_temp_metric(processors[i],
+							AMDSMI_TEMPERATURE_TYPE_VRAM,
+							AMDSMI_TEMP_SHUTDOWN,
+							&temp_mem_shutdown));
+			CHECKRET(amdsmi_get_temp_metric(processors[i],
+							AMDSMI_TEMPERATURE_TYPE_HOTSPOT,
+							AMDSMI_TEMP_SHUTDOWN,
+							&temp_hotspot_shutdown));
+			printw("+Edge shutdown: %" PRIu64 "C Hotspot shutdown: %" PRIu64
+			       "C Mem shutdown: %" PRIu64 "C\n",
+			       temp_edge_shutdown,
+			       temp_hotspot_shutdown,
+			       temp_mem_shutdown);
+			CHECKRET(amdsmi_get_pcie_info(processors[i], &pcie_info));
+			printw("+PCIe: lanes %u speed: %u MT/s bandwidth: %u Mb/s replay count: "
+			       "%" PRIu64 " l0 recovery count: %" PRIu64
+			       " replay roll over count: %" PRIu64 " nak sent count: %" PRIu64
+			       " nak received count: %" PRIu64 " \n",
+			       pcie_info.pcie_metric.pcie_width,
+			       pcie_info.pcie_metric.pcie_speed,
+			       pcie_info.pcie_metric.pcie_bandwidth,
+			       pcie_info.pcie_metric.pcie_replay_count,
+			       pcie_info.pcie_metric.pcie_l0_to_recovery_count,
+			       pcie_info.pcie_metric.pcie_replay_roll_over_count,
+			       pcie_info.pcie_metric.pcie_nak_sent_count,
+			       pcie_info.pcie_metric.pcie_nak_received_count);
+			CHECKRET(amdsmi_get_fw_info(processors[i], &fw));
+			CHECKRET(amdsmi_get_vf_partition_info(
+			    processors[i], num_vf_enabled, partitions));
+			printw("+ Num VF Enabled: %d\n", num_vf_enabled);
+			for (j = 0; j < num_vf_enabled; j++) {
+				CHECKRET(amdsmi_get_vf_bdf(partitions[j].id, &bdf));
+				CHECKRET(amdsmi_get_vf_info(partitions[j].id, &config));
+				CHECKRET(amdsmi_get_vf_data(partitions[j].id, &vf_data));
+				CHECKRET(
+				    amdsmi_get_vf_uuid(partitions[j].id, &uuid_vf_length, uuid_vf));
+				printw("  -- vf[%s] %02" PRIx64 ":%02" PRIx64 ".%" PRIu64
+				       "\tFB size: %" PRIx64 "MB offset: %" PRIx64
+				       "MB GFX ts:%uusec sched[%s]\n",
+				       uuid_vf,
+				       (uint64_t)bdf.bdf.bus_number,
+				       (uint64_t)bdf.bdf.device_number,
+				       (uint64_t)bdf.bdf.function_number,
+				       (uint64_t)config.fb.fb_size,
+				       (uint64_t)config.fb.fb_offset,
+				       config.gfx_timeslice,
+				       __str_sched_state(vf_data.sched.state));
+			}
 		}
-		printw("+GFX %d%% cur %dMhz is locked %s is in deep sleep %s\n", usage.gfx_activity,
-				clock.clk, clk_locked_str, clk_deep_sleep_str);
-		CHECKRET(amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_MEM,
-									   &clock));
-		printw("+MEM %d%% cur %dMhz\n", usage.umc_activity, clock.clk);
-		CHECKRET(amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_VCLK0,
-				&clock));
-		printw("+ENC0 cur %uMhz max: %uMhz\n", clock.clk, clock.max_clk);
-		CHECKRET(amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_VCLK1,
-				&clock));
-		printw("+ENC1 cur %uMhz max: %uMhz\n", clock.clk, clock.max_clk);
-		CHECKRET(amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_DCLK0,
-				&clock));
-		printw("+DEC0 cur %uMhz max: %uMhz\n", clock.clk, clock.max_clk);
-		CHECKRET(amdsmi_get_clock_info(processors[i], AMDSMI_CLK_TYPE_DCLK1,
-				&clock));
-		printw("+DEC1 cur %uMhz max: %uMhz\n", clock.clk, clock.max_clk);
-		if (strstr(asic.market_name, "MI300") != NULL) {
-			CHECKRET(amdsmi_is_gpu_power_management_enabled(processors[i], &is_power_management_enabled));
-			printw("+Power management enabled: %s\n", is_power_management_enabled ? "true" : "false");
-		}
-		CHECKRET(amdsmi_get_power_info(processors[i], &power_info));
-		CHECKRET(amdsmi_get_temp_metric(processors[i], AMDSMI_TEMPERATURE_TYPE_EDGE,
-										AMDSMI_TEMP_CURRENT, &temp_edge));
-		CHECKRET(amdsmi_get_temp_metric(processors[i], AMDSMI_TEMPERATURE_TYPE_VRAM,
-										AMDSMI_TEMP_CURRENT, &temp_mem));
-		CHECKRET(amdsmi_get_temp_metric(processors[i], AMDSMI_TEMPERATURE_TYPE_HOTSPOT,
-										AMDSMI_TEMP_CURRENT, &temp_hotspot));
-		printw("+Power: %" PRIu64 "W Voltage: %.4fV Edge: %" PRIu64 "C Hotspot: %" PRIu64 "C Mem: %" PRIu64 "C\n",
-			power_info.socket_power,
-			convert_volt(power_info.gfx_voltage),
-			temp_edge,
-			temp_hotspot,
-			temp_mem);
-		CHECKRET(amdsmi_get_temp_metric(processors[i], AMDSMI_TEMPERATURE_TYPE_EDGE,
-										AMDSMI_TEMP_CRITICAL, &temp_edge_limit));
-		CHECKRET(amdsmi_get_temp_metric(processors[i], AMDSMI_TEMPERATURE_TYPE_VRAM,
-										AMDSMI_TEMP_CRITICAL, &temp_mem_limit));
-		CHECKRET(amdsmi_get_temp_metric(processors[i], AMDSMI_TEMPERATURE_TYPE_HOTSPOT,
-										AMDSMI_TEMP_CRITICAL, &temp_hotspot_limit));
-		printw("+Power cap: %" PRIu64 "W Edge cap: %" PRIu64 "C Hotspot cap: %" PRIu64 "C Mem cap: %" PRIu64 "C\n",
-			power.power_cap,
-			temp_edge_limit,
-			temp_hotspot_limit,
-			temp_mem_limit);
-		CHECKRET(amdsmi_get_temp_metric(processors[i], AMDSMI_TEMPERATURE_TYPE_EDGE,
-										AMDSMI_TEMP_SHUTDOWN, &temp_edge_shutdown));
-		CHECKRET(amdsmi_get_temp_metric(processors[i], AMDSMI_TEMPERATURE_TYPE_VRAM,
-										AMDSMI_TEMP_SHUTDOWN, &temp_mem_shutdown));
-		CHECKRET(amdsmi_get_temp_metric(processors[i], AMDSMI_TEMPERATURE_TYPE_HOTSPOT,
-										AMDSMI_TEMP_SHUTDOWN, &temp_hotspot_shutdown));
-		printw("+Edge shutdown: %" PRIu64 "C Hotspot shutdown: %" PRIu64 "C Mem shutdown: %" PRIu64 "C\n",
-			temp_edge_shutdown,
-			temp_hotspot_shutdown,
-			temp_mem_shutdown);
-		CHECKRET(amdsmi_get_pcie_info(processors[i], &pcie_info));
-		printw("+PCIe: lanes %u speed: %u MT/s bandwidth: %u Mb/s replay count: %" PRIu64 " l0 recovery count: %" PRIu64 " replay roll over count: %" PRIu64 " nak sent count: %" PRIu64 " nak received count: %" PRIu64" \n",
-			pcie_info.pcie_metric.pcie_width, pcie_info.pcie_metric.pcie_speed, pcie_info.pcie_metric.pcie_bandwidth, pcie_info.pcie_metric.pcie_replay_count, pcie_info.pcie_metric.pcie_l0_to_recovery_count, pcie_info.pcie_metric.pcie_replay_roll_over_count,
-			pcie_info.pcie_metric.pcie_nak_sent_count, pcie_info.pcie_metric.pcie_nak_received_count);
-		CHECKRET(amdsmi_get_fw_info(processors[i], &fw));
-		CHECKRET(amdsmi_get_vf_partition_info(processors[i], num_vf_enabled, partitions));
-		printw("+ Num VF Enabled: %d\n", num_vf_enabled);
-		for (j = 0; j < num_vf_enabled; j++) {
-			CHECKRET(amdsmi_get_vf_bdf(partitions[j].id, &bdf));
-			CHECKRET(amdsmi_get_vf_info(partitions[j].id, &config));
-			CHECKRET(amdsmi_get_vf_data(partitions[j].id, &vf_data));
-			CHECKRET(amdsmi_get_vf_uuid(partitions[j].id,
-								&uuid_vf_length, uuid_vf));
-			printw("  -- vf[%s] %02" PRIx64 ":%02" PRIx64 ".%" PRIu64 "\tFB size: %" PRIx64 "MB offset: %" PRIx64 "MB GFX ts:%uusec sched[%s]\n",
-					uuid_vf,
-					(uint64_t)bdf.bdf.bus_number,
-					(uint64_t)bdf.bdf.device_number,
-					(uint64_t)bdf.bdf.function_number,
-					(uint64_t)config.fb.fb_size,
-					(uint64_t)config.fb.fb_offset,
-					config.gfx_timeslice,
-					__str_sched_state(vf_data.sched.state));
-		}
-	}
 #ifdef WINDOW_MODE
 		/* Wait for user input or execution error */
 		if (getch() == 'q' || ret != AMDSMI_STATUS_SUCCESS)

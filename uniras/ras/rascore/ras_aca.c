@@ -255,6 +255,7 @@ static int aca_log_bad_bank(struct ras_core_context *ras_core,
 
 	/* Log ACA bad bank when FW management EEPROM is disabled. */
 	if (!ras_eeprom_mgr_fw_record_enabled(ras_core) &&
+		!ras_eeprom_mgr_page_retire_disabled(ras_core) &&
 	    (aca_blk->blk_info->ras_block_id == RAS_BLOCK_ID__UMC) &&
 	    bank_ecc->de_count) {
 		struct ras_bank_ecc  ras_ecc = {0};

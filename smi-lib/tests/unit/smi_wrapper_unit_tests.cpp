@@ -17,9 +17,8 @@ extern "C" {
 
 using namespace ::testing;
 
-namespace amdsmi
-{
-std::unique_ptr<NiceMock<SystemMock> > g_system_mock;
+namespace amdsmi {
+std::unique_ptr<NiceMock<SystemMock>> g_system_mock;
 SystemMock *GetSystemMock()
 {
 	return g_system_mock.get();
@@ -30,13 +29,12 @@ extern "C" {
 
 extern int __real_poll(struct pollfd *fds, nfds_t nfds, int timeout);
 extern ssize_t __real_read(int fd, void *buf, size_t count);
-extern int __real_ioctl(int fd, unsigned long request, void* buffer);
+extern int __real_ioctl(int fd, unsigned long request, void *buffer);
 extern int __real_open(const char *pathname, int flags, int mode);
 extern int __real_access(const char *pathname, int mode);
 extern ssize_t __real_write(int fd, void *buf, size_t count);
 
-
-static const int MAGIC_FD = 0x12345578;
+static const int MAGIC_FD	   = 0x12345578;
 static const char *IOCTL_FILE_NAME = "/dev/gim-smi0";
 
 static int poll_cnt;
@@ -74,7 +72,7 @@ ssize_t __wrap_read(int fd, void *buf, size_t count)
 	return __real_read(fd, buf, count);
 }
 
-int __wrap_ioctl(int fd, unsigned long request, void* buffer)
+int __wrap_ioctl(int fd, unsigned long request, void *buffer)
 {
 	if (fd == MAGIC_FD) {
 		ioctl_cnt++;
@@ -110,27 +108,26 @@ int __wrap_access(const char *pathname, int mode)
 	return __real_access(pathname, mode);
 }
 
-
 #pragma GCC diagnostic pop
 }
 
 class AmdSmiLnxWrapperTests : public Test {
-protected:
+      protected:
 	void SetUp() override
 	{
 		amdsmi::g_system_mock.reset(new NiceMock<amdsmi::SystemMock>);
-		poll_cnt = 0;
-		read_cnt = 0;
-		write_cnt = 0;
-		ioctl_cnt = 0;
-		open_cnt = 0;
+		poll_cnt   = 0;
+		read_cnt   = 0;
+		write_cnt  = 0;
+		ioctl_cnt  = 0;
+		open_cnt   = 0;
 		access_cnt = 0;
 
-		poll_ret = 0; // timeout by default
-		read_ret = 0; // EOF by default
-		write_cnt = 0;
-		ioctl_ret = -1; // error by default
-		open_ret = -1; // error by default
+		poll_ret   = 0; // timeout by default
+		read_ret   = 0; // EOF by default
+		write_cnt  = 0;
+		ioctl_ret  = -1; // error by default
+		open_ret   = -1; // error by default
 		access_ret = -1; // error by default
 	}
 
@@ -143,8 +140,8 @@ protected:
 TEST_F(AmdSmiLnxWrapperTests, TestDefaultWrapper)
 {
 	auto wrapper = get_system_wrapper();
-	ASSERT_EQ((void*)wrapper->smi_free, (void*)free);
-	ASSERT_EQ((void*)wrapper->smi_malloc, (void*)malloc);
+	ASSERT_EQ((void *)wrapper->smi_free, (void *)free);
+	ASSERT_EQ((void *)wrapper->smi_malloc, (void *)malloc);
 }
 
 TEST_F(AmdSmiLnxWrapperTests, TestPollAlloc)
@@ -172,13 +169,13 @@ TEST_F(AmdSmiLnxWrapperTests, TestEventTimeout)
 {
 	auto wrapper = get_system_wrapper();
 
-	struct pollfd fd = { MAGIC_FD, POLLIN, 0 };
+	struct pollfd fd = {MAGIC_FD, POLLIN, 0};
 	struct smi_event_entry event;
 	int64_t timeout = 10 * 1000; // 10ms
 	struct smi_event_set_s event_set;
 
 	event_set.num_handles = 1;
-	event_set._private = &fd;
+	event_set._private    = &fd;
 
 	poll_ret = 0; // timeout
 
@@ -193,14 +190,14 @@ TEST_F(AmdSmiLnxWrapperTests, TestPollFailed)
 {
 	auto wrapper = get_system_wrapper();
 
-	struct pollfd fd = { MAGIC_FD, POLLIN, 0 };
+	struct pollfd fd = {MAGIC_FD, POLLIN, 0};
 	struct smi_event_entry event;
 	int64_t timeout = 10 * 1000; // 10ms
 	struct smi_event_set_s event_set;
 
 	event_set.num_handles = 1;
-	event_set._private = &fd;
-	poll_ret = -1; // error
+	event_set._private    = &fd;
+	poll_ret	      = -1; // error
 
 	int ret = wrapper->smi_poll(&event_set, &event, timeout);
 
@@ -213,13 +210,13 @@ TEST_F(AmdSmiLnxWrapperTests, TestPollWaitOne)
 {
 	auto wrapper = get_system_wrapper();
 
-	struct pollfd fd = { MAGIC_FD, POLLIN, 0 };
+	struct pollfd fd = {MAGIC_FD, POLLIN, 0};
 	struct smi_event_entry event;
 	int64_t timeout = 1;
 	struct smi_event_set_s event_set;
 
 	event_set.num_handles = 1;
-	event_set._private = &fd;
+	event_set._private    = &fd;
 
 	poll_ret = 1;
 	read_ret = 0; // EOF
@@ -235,13 +232,13 @@ TEST_F(AmdSmiLnxWrapperTests, TestPollWaitForever)
 {
 	auto wrapper = get_system_wrapper();
 
-	struct pollfd fd = { MAGIC_FD, POLLIN, 0 };
+	struct pollfd fd = {MAGIC_FD, POLLIN, 0};
 	struct smi_event_entry event;
 	int64_t timeout = -1; // forever
 	struct smi_event_set_s event_set;
 
 	event_set.num_handles = 1;
-	event_set._private = &fd;
+	event_set._private    = &fd;
 
 	poll_ret = 1;
 	read_ret = 0; // EOF
@@ -257,13 +254,13 @@ TEST_F(AmdSmiLnxWrapperTests, TestReadSucceeds)
 {
 	auto wrapper = get_system_wrapper();
 
-	struct pollfd fd = { MAGIC_FD, POLLIN, 0 };
+	struct pollfd fd = {MAGIC_FD, POLLIN, 0};
 	struct smi_event_entry event;
 	int64_t timeout = -1; // forever
 	struct smi_event_set_s event_set;
 
 	event_set.num_handles = 1;
-	event_set._private = &fd;
+	event_set._private    = &fd;
 
 	poll_ret = 1;
 	read_ret = 1;
@@ -279,13 +276,13 @@ TEST_F(AmdSmiLnxWrapperTests, TestReadFailed)
 {
 	auto wrapper = get_system_wrapper();
 
-	struct pollfd fd = { MAGIC_FD, POLLIN, 0 };
+	struct pollfd fd = {MAGIC_FD, POLLIN, 0};
 	struct smi_event_entry event;
 	int64_t timeout = -1; // forever
 	struct smi_event_set_s event_set;
 
 	event_set.num_handles = 1;
-	event_set._private = &fd;
+	event_set._private    = &fd;
 
 	poll_ret = 1;
 	read_ret = -1; // error
@@ -299,8 +296,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestReadFailed)
 
 TEST_F(AmdSmiLnxWrapperTests, TestIoctlNull)
 {
-	EXPECT_CALL(*amdsmi::g_system_mock, GetDriverMode())
-		.WillOnce(Return(2));
+	EXPECT_CALL(*amdsmi::g_system_mock, GetDriverMode()).WillOnce(Return(2));
 	smi_ioctl_cmd *buffer = nullptr;
 
 	auto wrapper = get_system_wrapper();
@@ -330,7 +326,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestIoctlSuccess)
 TEST_F(AmdSmiLnxWrapperTests, TestIoctlFailed)
 {
 	EXPECT_CALL(*amdsmi::g_system_mock, Ioctl(testing::_, testing::_, testing::_))
-		.WillOnce(Return(-1));
+	    .WillOnce(Return(-1));
 	smi_ioctl_cmd *buffer = nullptr;
 
 	auto wrapper = get_system_wrapper();
@@ -346,8 +342,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestIoctlFailed)
 
 TEST_F(AmdSmiLnxWrapperTests, TestOpenNull)
 {
-	EXPECT_CALL(*amdsmi::g_system_mock, GetDriverMode())
-		.WillOnce(Return(2));
+	EXPECT_CALL(*amdsmi::g_system_mock, GetDriverMode()).WillOnce(Return(2));
 	auto wrapper = get_system_wrapper();
 
 	open_ret = -EINVAL;
@@ -370,7 +365,6 @@ TEST_F(AmdSmiLnxWrapperTests, TestOpenSuccess)
 	ASSERT_EQ(open_cnt, 1);
 }
 
-
 TEST_F(AmdSmiLnxWrapperTests, TestOpenFailed)
 {
 	auto wrapper = get_system_wrapper();
@@ -382,13 +376,12 @@ TEST_F(AmdSmiLnxWrapperTests, TestOpenFailed)
 	ASSERT_EQ(open_ret, ret);
 	ASSERT_EQ(open_cnt, 1);
 
-	#pragma GCC diagnostic push
-	#pragma GCC diagnostic ignored "-Wconversion"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wconversion"
 	ret = wrapper->smi_open((smi_file_access_mode)(SMI_RDWR + 5));
-	#pragma GCC diagnostic pop
+#pragma GCC diagnostic pop
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
-
 
 TEST_F(AmdSmiLnxWrapperTests, TestAccessSuccess)
 {
@@ -401,7 +394,6 @@ TEST_F(AmdSmiLnxWrapperTests, TestAccessSuccess)
 	ASSERT_EQ(access_ret, ret);
 	ASSERT_EQ(access_cnt, 1);
 }
-
 
 TEST_F(AmdSmiLnxWrapperTests, TestAccessFailed)
 {
@@ -417,10 +409,9 @@ TEST_F(AmdSmiLnxWrapperTests, TestAccessFailed)
 
 TEST_F(AmdSmiLnxWrapperTests, TestSysWrapperNull)
 {
-	EXPECT_CALL(*amdsmi::g_system_mock, GetDriverMode())
-		.WillOnce(Return(2));
+	EXPECT_CALL(*amdsmi::g_system_mock, GetDriverMode()).WillOnce(Return(2));
 	auto wrapper = get_system_wrapper();
-	access_ret = -1;
+	access_ret   = -1;
 
 	int ret = wrapper->smi_access();
 
@@ -430,7 +421,7 @@ TEST_F(AmdSmiLnxWrapperTests, TestSysWrapperNull)
 TEST_F(AmdSmiLnxWrapperTests, TestIsUserModeDriver)
 {
 	auto wrapper = get_system_wrapper();
-	access_ret = 1;
+	access_ret   = 1;
 
 	int ret = wrapper->smi_is_user_mode();
 
@@ -439,10 +430,9 @@ TEST_F(AmdSmiLnxWrapperTests, TestIsUserModeDriver)
 
 TEST_F(AmdSmiLnxWrapperTests, TestIsKernelModeDriver)
 {
-	EXPECT_CALL(*amdsmi::g_system_mock, GetDriverMode())
-		.WillOnce(Return(1));
+	EXPECT_CALL(*amdsmi::g_system_mock, GetDriverMode()).WillOnce(Return(1));
 	auto wrapper = get_system_wrapper();
-	access_ret = 0;
+	access_ret   = 0;
 
 	int ret = wrapper->smi_is_user_mode();
 
@@ -451,10 +441,9 @@ TEST_F(AmdSmiLnxWrapperTests, TestIsKernelModeDriver)
 
 TEST_F(AmdSmiLnxWrapperTests, TestIsNullModeDriver)
 {
-	EXPECT_CALL(*amdsmi::g_system_mock, GetDriverMode())
-		.WillOnce(Return(2));
+	EXPECT_CALL(*amdsmi::g_system_mock, GetDriverMode()).WillOnce(Return(2));
 	auto wrapper = get_system_wrapper();
-	access_ret = 0;
+	access_ret   = 0;
 
 	int ret = wrapper->smi_is_user_mode();
 
@@ -463,10 +452,9 @@ TEST_F(AmdSmiLnxWrapperTests, TestIsNullModeDriver)
 
 TEST_F(AmdSmiLnxWrapperTests, TestCloseNull)
 {
-	EXPECT_CALL(*amdsmi::g_system_mock, GetDriverMode())
-		.WillOnce(Return(2));
+	EXPECT_CALL(*amdsmi::g_system_mock, GetDriverMode()).WillOnce(Return(2));
 	auto wrapper = get_system_wrapper();
-	access_ret = 0;
+	access_ret   = 0;
 
 	int ret = wrapper->smi_close(MAGIC_FD);
 
@@ -475,10 +463,9 @@ TEST_F(AmdSmiLnxWrapperTests, TestCloseNull)
 
 TEST_F(AmdSmiLnxWrapperTests, TestCloseSuccess)
 {
-	EXPECT_CALL(*amdsmi::g_system_mock, Close(testing::_))
-		.WillOnce(Return(0));
+	EXPECT_CALL(*amdsmi::g_system_mock, Close(testing::_)).WillOnce(Return(0));
 	auto wrapper = get_system_wrapper();
-	access_ret = 0;
+	access_ret   = 0;
 
 	int ret = wrapper->smi_close(MAGIC_FD);
 
@@ -487,10 +474,9 @@ TEST_F(AmdSmiLnxWrapperTests, TestCloseSuccess)
 
 TEST_F(AmdSmiLnxWrapperTests, TestCloseFailed)
 {
-	EXPECT_CALL(*amdsmi::g_system_mock, Close(testing::_))
-		.WillOnce(Return(1));
+	EXPECT_CALL(*amdsmi::g_system_mock, Close(testing::_)).WillOnce(Return(1));
 	auto wrapper = get_system_wrapper();
-	access_ret = 1;
+	access_ret   = 1;
 
 	int ret = wrapper->smi_close(MAGIC_FD);
 
@@ -499,16 +485,17 @@ TEST_F(AmdSmiLnxWrapperTests, TestCloseFailed)
 
 TEST_F(AmdSmiLnxWrapperTests, TestAlignedAlloc)
 {
-	auto wrapper = get_system_wrapper();
-	int *mem = (int*)malloc(sizeof(int));
-	long page_size = 0;
+	auto wrapper	  = get_system_wrapper();
+	int *mem	  = (int *)malloc(sizeof(int));
+	long page_size	  = 0;
 	void *aligned_mem = NULL;
 
-	*mem = 300;
+	*mem	  = 300;
 	page_size = 4096;
-	aligned_mem = wrapper->smi_aligned_alloc((void **)mem, (size_t)page_size, page_size*sizeof(int));
+	aligned_mem =
+	    wrapper->smi_aligned_alloc((void **)mem, (size_t)page_size, page_size * sizeof(int));
 
-	ASSERT_EQ(aligned_mem ? 0:1, 0);
+	ASSERT_EQ(aligned_mem ? 0 : 1, 0);
 	free(mem);
 	free(aligned_mem);
 }
@@ -517,10 +504,10 @@ TEST_F(AmdSmiLnxWrapperTests, TestStrncpySuccess)
 {
 	auto wrapper = get_system_wrapper();
 	char dest[7];
-	size_t destsz = 7;
+	size_t destsz	= 7;
 	const char *src = "random";
-	size_t count = 7;
-	int ret = 0;
+	size_t count	= 7;
+	int ret		= 0;
 
 	ret = wrapper->smi_strncpy(dest, destsz, src, count);
 
@@ -531,10 +518,10 @@ TEST_F(AmdSmiLnxWrapperTests, TestStrncpyFail)
 {
 	auto wrapper = get_system_wrapper();
 	char dest[7];
-	size_t destsz = 0;
+	size_t destsz	= 0;
 	const char *src = "random";
-	size_t count = 7;
-	int ret = 0;
+	size_t count	= 7;
+	int ret		= 0;
 
 	ret = wrapper->smi_strncpy(dest, destsz, src, count);
 
@@ -545,10 +532,10 @@ TEST_F(AmdSmiLnxWrapperTests, TestStrncpyCount)
 {
 	auto wrapper = get_system_wrapper();
 	char dest[7];
-	size_t destsz = 7;
+	size_t destsz	= 7;
 	const char *src = "random";
-	size_t count = destsz + 1;
-	int ret = 0;
+	size_t count	= destsz + 1;
+	int ret		= 0;
 
 	ret = wrapper->smi_strncpy(dest, destsz, src, count);
 

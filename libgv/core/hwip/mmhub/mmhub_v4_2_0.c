@@ -53,6 +53,8 @@ static void mmhub_v4_2_0_init_system_aperture_regs(struct amdgv_adapter *adapt)
 		l2_prot = RREG32_SOC15(MMHUB, GET_INST(MMHUB, i), regMMVM_L2_PROTECTION_FAULT_CNTL2);
 		l2_prot = REG_SET_FIELD(l2_prot, MMVM_L2_PROTECTION_FAULT_CNTL2,
 					ACTIVE_PAGE_MIGRATION_PTE_READ_RETRY, 1);
+		l2_prot = REG_SET_FIELD(l2_prot, MMVM_L2_PROTECTION_FAULT_CNTL2,
+					ENABLE_RETRY_FAULT_INTERRUPT, 1);
 		WREG32_SOC15(MMHUB, GET_INST(MMHUB, i), regMMVM_L2_PROTECTION_FAULT_CNTL2, l2_prot);
 	}
 }
@@ -264,6 +266,8 @@ static void mmhub_v4_2_0_setup_pt_regs(struct amdgv_adapter *adapt)
 
 	page_table_base |= AMDGV_PTE_VALID;
 	page_table_base |= AMDGV_PTE_SNOOPED;
+	if (adapt->xgmi.connected_to_cpu)
+		page_table_base |= AMDGV_PTE_SYSTEM;
 
 	for (i = 0; i < adapt->mmhub.num_instances; i++) {
 		WREG32_SOC15_OFFSET(MMHUB, GET_INST(MMHUB, i),

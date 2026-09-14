@@ -11,11 +11,13 @@
 #include "smi_cli_api_base.h"
 #include "smi_cli_platform.h"
 
+#include "tabulate/tabulate.hpp"
+
 std::string convert_bdf_to_string(uint64_t function_number, uint64_t device_number,
-								  uint64_t bus_number, uint64_t domain_number)
+				  uint64_t bus_number, uint64_t domain_number)
 {
-	return string_format("%04x:%02x:%02x.%01x", domain_number, bus_number,
-						 device_number, function_number);
+	return string_format("%04x:%02x:%02x.%01x", domain_number, bus_number, device_number,
+			     function_number);
 }
 
 std::string get_string_from_enum_vf_sched_state(int vf_state)
@@ -43,7 +45,7 @@ std::string get_string_from_enum_accelerator_partition_type(int partition_type)
 {
 	std::string out;
 	AmdSmiApiBase::CreateAmdSmiApiObject().get_string_from_enum_accelerator_partition_type(
-		partition_type, out);
+	    partition_type, out);
 	return out;
 }
 
@@ -57,7 +59,8 @@ std::string get_string_from_enum_mp_setting(int mp_setting)
 std::string get_string_from_enum_resource_type(int resource_type)
 {
 	std::string out;
-	AmdSmiApiBase::CreateAmdSmiApiObject().get_string_from_enum_resource_type(resource_type, out);
+	AmdSmiApiBase::CreateAmdSmiApiObject().get_string_from_enum_resource_type(resource_type,
+										  out);
 	return out;
 }
 
@@ -71,16 +74,15 @@ std::string get_string_from_enum_vram_type(int vram_type)
 std::string get_string_from_enum_driver_model(int driver_model)
 {
 	std::string out;
-	AmdSmiApiBase::CreateAmdSmiApiObject().get_string_from_enum_driver_model(driver_model,
-			out);
+	AmdSmiApiBase::CreateAmdSmiApiObject().get_string_from_enum_driver_model(driver_model, out);
 	return out;
 }
 
 std::string get_string_from_enum_cper_severity_mask(int severity_mask)
 {
 	std::string out;
-	AmdSmiApiBase::CreateAmdSmiApiObject().get_string_from_enum_cper_severity_mask(severity_mask,
-			out);
+	AmdSmiApiBase::CreateAmdSmiApiObject().get_string_from_enum_cper_severity_mask(
+	    severity_mask, out);
 	return out;
 }
 
@@ -91,7 +93,7 @@ std::string get_string_from_enum_fw_block(int fw_block)
 	return out;
 }
 
-std::string get_string_from_enum_ecc_blocks(int ecc_block)
+std::string get_string_from_enum_ecc_blocks(uint64_t ecc_block)
 {
 	std::string out;
 	AmdSmiApiBase::CreateAmdSmiApiObject().get_string_from_enum_ecc_blocks(ecc_block, out);
@@ -115,43 +117,43 @@ std::string get_string_from_enum_cc_mode(int cc_mode)
 std::string transform_fw(int fw_block_id, uint32_t uversion)
 {
 	std::string uversion_str;
-	switch(fw_block_id) {
+	switch (fw_block_id) {
 	case 1: //"SMU"
-		if (AmdSmiPlatform::getInstance().is_mi300() || AmdSmiPlatform::getInstance().is_mi200() || AmdSmiPlatform::getInstance().is_mi350()) {
-			uversion_str += string_format("%d.%d.%d.%d",(uversion >> 24) & 0xFF,
-										  (uversion >> 16) & 0xFF,
-										  (uversion >> 8) & 0xFF,
-										  uversion & 0xFF);
+		if (AmdSmiPlatform::getInstance().is_mi300() ||
+		    AmdSmiPlatform::getInstance().is_mi200() ||
+		    AmdSmiPlatform::getInstance().is_mi350() ||
+		    AmdSmiPlatform::getInstance().is_gc_12_1()) {
+			uversion_str += string_format("%d.%d.%d.%d", (uversion >> 24) & 0xFF,
+						      (uversion >> 16) & 0xFF,
+						      (uversion >> 8) & 0xFF, uversion & 0xFF);
 		} else if (AmdSmiPlatform::getInstance().is_baremetal() &&
-				   (AmdSmiPlatform::getInstance().is_nv() ||
-					AmdSmiPlatform::getInstance().is_apu())) {
+			   (AmdSmiPlatform::getInstance().is_nv() ||
+			    AmdSmiPlatform::getInstance().is_apu())) {
 			uversion_str = ((uversion >> 24) & 0xFF) > 0
-						   ? string_format("%d.", (uversion >> 24) & 0xFF) : "";
+					   ? string_format("%d.", (uversion >> 24) & 0xFF)
+					   : "";
 			uversion_str += string_format("%d.%d.%d", (uversion >> 16) & 0xFF,
-										  (uversion >> 8) & 0xFF,
-										  uversion & 0xFF);
+						      (uversion >> 8) & 0xFF, uversion & 0xFF);
 		} else {
-			uversion_str = (uversion & 0xFF) > 0 ? string_format("%d.", uversion & 0xFF) : "";
-			uversion_str += string_format("%d.%d.%d", (uversion >> 8) & 0xFF,
-										  (uversion >> 16) & 0xFF,
-										  (uversion >> 24) & 0xFF);
+			uversion_str =
+			    (uversion & 0xFF) > 0 ? string_format("%d.", uversion & 0xFF) : "";
+			uversion_str +=
+			    string_format("%d.%d.%d", (uversion >> 8) & 0xFF,
+					  (uversion >> 16) & 0xFF, (uversion >> 24) & 0xFF);
 		}
 		break;
 	case 28: //"MMSCH"
 		uversion_str = string_format("%d.%d.%d", (uversion >> 24) & 0xFF,
-									 (uversion >> 16) & 0xFF,
-									 uversion & 0xFFFF);
+					     (uversion >> 16) & 0xFF, uversion & 0xFFFF);
 		break;
 	case 19: //"UVD"
-		uversion_str = string_format("%d.%d.%d.%d", (uversion >> 30) & 0x3,
-									 (uversion >> 24) & 0x3F,
-									 (uversion >> 8) & 0xFF,
-									 (uversion & 0xFF));
+		uversion_str =
+		    string_format("%d.%d.%d.%d", (uversion >> 30) & 0x3, (uversion >> 24) & 0x3F,
+				  (uversion >> 8) & 0xFF, (uversion & 0xFF));
 		break;
 	case 20: // "VCE"
 		uversion_str = string_format("%d.%d.%d", (uversion >> 20) & 0xFFF,
-									 (uversion >> 8) & 0xFFF,
-									 uversion & 0xFF);
+					     (uversion >> 8) & 0xFFF, uversion & 0xFF);
 		break;
 	case 29: //"PSP_SYSDRV"
 	case 30: //"PSP_SOSDRV"
@@ -164,29 +166,39 @@ std::string transform_fw(int fw_block_id, uint32_t uversion)
 	case 66: //"PSP_DBG"
 	case 67: //"PSP_INTF"
 	case 73: //"TA_RAS"
+	case 74: //"TA_XGMI"
 	case 81: //"PSP_RAS"
-		uversion_str = string_format("%x.%x.%x.%x", (uversion >> 24) & 0xFF,
-									 (uversion >> 16) & 0xFF,
-									 (uversion >> 8) & 0xFF,
-									 uversion & 0xFF);
+	case 94: //"PSP_IPKEYMGR"
+	case 95: //"PSP_IOVM"
+	case 96: //"PSP_SPDM"
+	case 97: //"PSP_DPE"
+		uversion_str =
+		    string_format("%x.%x.%x.%x", (uversion >> 24) & 0xFF, (uversion >> 16) & 0xFF,
+				  (uversion >> 8) & 0xFF, uversion & 0xFF);
 		break;
 	case 18: //"VCN"
-		uversion_str = string_format("%d.%d.%d.%d", (uversion >> 24) & 0xF,
-									 (uversion >> 20) & 0xF,
-									 (uversion >> 12) & 0xFF,
-									 uversion & 0xFFF);
+		uversion_str =
+		    string_format("%d.%d.%d.%d", (uversion >> 24) & 0xF, (uversion >> 20) & 0xF,
+				  (uversion >> 12) & 0xFF, uversion & 0xFFF);
 		break;
 	case 42: //"IMU_DRAM"
 	case 43: //"IMU_IRAM"
 	case 83: //"PLDM_VERSION"
-		uversion_str = string_format("%d.%d.%d.%d", (uversion >> 24) & 0xFF,
-									 (uversion >> 16) & 0xFF,
-									 (uversion >> 8) & 0xFF,
-									 uversion & 0xFF);
+		uversion_str =
+		    string_format("%d.%d.%d.%d", (uversion >> 24) & 0xFF, (uversion >> 16) & 0xFF,
+				  (uversion >> 8) & 0xFF, uversion & 0xFF);
 		break;
 	case 24: //"RLC_RESTORE_LIST_GPM_MEM"
 	case 25: //"RLC_RESTORE_LIST_SRM_MEM"
 	case 26: //"RLC_RESTORE_LIST_CNTL"
+	case 84: //"RS64_MES"
+	case 85: //"RS64_MES_STACK"
+	case 86: //"RS64_KIQ"
+	case 87: //"RS64_KIQ_STACK"
+	case 88: //"RS64_MEC_P4_DATA"
+	case 89: //"RS64_MEC_P5_DATA"
+	case 90: //"RS64_MEC_P6_DATA"
+	case 91: //"RS64_MEC_P7_DATA"
 		uversion_str = string_format("0x%x", uversion);
 		break;
 	case 46: //"CP_MES"
@@ -203,11 +215,12 @@ std::string transform_fw(int fw_block_id, uint32_t uversion)
 
 const char* getFileName(const char* fullPath)
 {
-	const char* lastSlash = strrchr(fullPath, '/');
+	const char* lastSlash	  = strrchr(fullPath, '/');
 	const char* lastBackslash = strrchr(fullPath, '\\');
 
-	const char* fileNameStart = (lastSlash != nullptr) ? lastSlash + 1 :
-								(lastBackslash != nullptr) ? lastBackslash + 1 : fullPath;
+	const char* fileNameStart = (lastSlash != nullptr)	 ? lastSlash + 1
+				    : (lastBackslash != nullptr) ? lastBackslash + 1
+								 : fullPath;
 
 	return fileNameStart;
 }
@@ -226,7 +239,7 @@ std::string decimal_string_to_hex(const std::string& decimalStr)
 	try {
 		decimalNum = std::stoull(decimalStr);
 		ss << "0x" << std::hex << std::uppercase << decimalNum;
-	} catch(...) {
+	} catch (...) {
 		ss << "N/A";
 	}
 	return ss.str();
@@ -241,13 +254,13 @@ std::vector<std::map<std::string, std::string>> get_vf_tree()
 
 std::string convert_slot_type_to_string(uint32_t pcie_slot_type)
 {
-	if(pcie_slot_type == 0) {
+	if (pcie_slot_type == 0) {
 		return "PCIE";
 	}
-	if(pcie_slot_type == 1) {
+	if (pcie_slot_type == 1) {
 		return "OAM";
 	}
-	if(pcie_slot_type == 2) {
+	if (pcie_slot_type == 2) {
 		return "CEM";
 	}
 	return "N/A";
@@ -281,12 +294,11 @@ bool is_BDF(std::string s)
 bool is_UUID(std::string s)
 {
 	std::regex isUUID(
-		"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
+	    "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 	return std::regex_match(s, isUUID);
 }
 
-std::tuple<std::string, std::string, std::string>
-getGpuVfIndexFromVfId(std::string vf_id)
+std::tuple<std::string, std::string, std::string> getGpuVfIndexFromVfId(std::string vf_id)
 {
 	if (vf_id.empty()) {
 		throw SmiToolMissingParameterValueException("--vf");
@@ -299,36 +311,34 @@ getGpuVfIndexFromVfId(std::string vf_id)
 	std::tuple<std::string, std::string, std::string> gpu_vf_indexes;
 	std::string vf_id_cleaned = vf_id;
 	vf_id_cleaned.erase(std::remove_if(vf_id_cleaned.begin(), vf_id_cleaned.end(),
-	[](char c) {
-		return c == ':' || c == '.';
-	}),
-	vf_id_cleaned.end());
+					   [](char c) { return c == ':' || c == '.'; }),
+			    vf_id_cleaned.end());
 	std::string vf_id_at_cleaned {};
-	bool foundGpuIndex { false };
+	bool foundGpuIndex {false};
 	std::vector<std::map<std::string, std::string>> vfs = get_vf_tree();
 	for (const auto& vf : vfs) {
 		vf_id_at_cleaned = vf.at("vf_bdf");
-		vf_id_at_cleaned.erase(std::remove_if(vf_id_at_cleaned.begin(), vf_id_at_cleaned.end(),
-		[](char c) {
-			return c == ':' || c == '.';
-		}),
-		vf_id_at_cleaned.end());
-		if(vf_id == vf.at("vf_bdf") || vf_id == vf.at("vf_uuid") || vf_id == vf.at("vf_id")
-				|| vf_id_cleaned == vf_id_at_cleaned) {
+		vf_id_at_cleaned.erase(std::remove_if(vf_id_at_cleaned.begin(),
+						      vf_id_at_cleaned.end(),
+						      [](char c) { return c == ':' || c == '.'; }),
+				       vf_id_at_cleaned.end());
+		if (vf_id == vf.at("vf_bdf") || vf_id == vf.at("vf_uuid") ||
+		    vf_id == vf.at("vf_id") || vf_id_cleaned == vf_id_at_cleaned) {
 			std::get<0>(gpu_vf_indexes) = vf.at("gpu");
 			std::get<1>(gpu_vf_indexes) = vf.at("vf");
 			std::get<2>(gpu_vf_indexes) = vf.at("vf_bdf");
-			foundGpuIndex = true;
+			foundGpuIndex		    = true;
 		}
 	}
-	if(!foundGpuIndex) {
+	if (!foundGpuIndex) {
 		if (is_ID(vf_id)) {
 			unsigned int gpu_count;
-			int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
+			int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_device_count(
+			    gpu_count, static_cast<int>(DeviceType::GPU));
 			if (ret != 0) {
 				throw SmiToolSMILIBErrorException(ret);
 			}
-			size_t gpu_index = vf_id.find(":");
+			size_t gpu_index	 = vf_id.find(":");
 			std::string vf_gpu_index = vf_id.substr(0, gpu_index);
 			if (std::stoi(vf_gpu_index) >= gpu_count) {
 				throw SmiToolDeviceNotFoundException(vf_gpu_index);
@@ -354,13 +364,15 @@ std::vector<std::string> transform_ecc_correction_schema(uint32_t flag)
 std::vector<std::string> transform_cache_properties(uint32_t initial_property)
 {
 	std::vector<std::string> property;
-	AmdSmiApiBase::CreateAmdSmiApiObject().transform_cache_properties(initial_property, property);
+	AmdSmiApiBase::CreateAmdSmiApiObject().transform_cache_properties(initial_property,
+									  property);
 	return property;
 }
-int csv_recursive_function(std::string &main_buff, std::vector<std::string> prefix, int i,
-						   const std::vector<std::vector<std::string>> &results, std::map<int, int> order_map)
+int csv_recursive_function(std::string& main_buff, std::vector<std::string> prefix, int i,
+			   const std::vector<std::vector<std::string>>& results,
+			   std::map<int, int> order_map)
 {
-	std::vector<std::string> local_buff{};
+	std::vector<std::string> local_buff {};
 	if (i == results.size()) {
 		for (auto p : prefix) {
 			main_buff += p;
@@ -372,25 +384,25 @@ int csv_recursive_function(std::string &main_buff, std::vector<std::string> pref
 
 	if (results[i].size() == 1) {
 		prefix[index] += results[i][0];
-		csv_recursive_function(main_buff, prefix,(i + 1), results, order_map);
+		csv_recursive_function(main_buff, prefix, (i + 1), results, order_map);
 	} else {
 		local_buff = prefix;
 		for (int j = 0; j < results[i].size(); j++) {
 			prefix[index] += results[i][j];
-			csv_recursive_function(main_buff, prefix,(i + 1), results, order_map);
+			csv_recursive_function(main_buff, prefix, (i + 1), results, order_map);
 			prefix.clear();
 			prefix = local_buff;
 		}
 	}
 	return -1;
 }
-int csv_recursion(std::string& main_buffer, const std::vector<std::vector<std::string>> &results)
+int csv_recursion(std::string& main_buffer, const std::vector<std::vector<std::string>>& results)
 {
 	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().csv_recursion(main_buffer, results);
 	return ret;
 }
 
-std::vector<std::string> split_string(const std::string &s, char delim)
+std::vector<std::string> split_string(const std::string& s, char delim)
 {
 	std::stringstream ss(s);
 	std::string item;
@@ -399,6 +411,44 @@ std::vector<std::string> split_string(const std::string &s, char delim)
 		elems.push_back(std::move(item));
 	}
 	return elems;
+}
+
+std::string format_process_table(const std::vector<std::string>& header, const std::string& rows)
+{
+	tabulate::Table table;
+	tabulate::Table::Row_t header_row;
+
+	for (const auto& column : header) {
+		header_row.push_back(column);
+	}
+	table.add_row(header_row);
+
+	for (const auto& row : split_string(rows, '\n')) {
+		if (row.empty()) {
+			continue;
+		}
+		tabulate::Table::Row_t table_row;
+		for (const auto& cell : split_string(row, PROCESS_FIELD_DELIM)) {
+			table_row.push_back(cell);
+		}
+		table.add_row(table_row);
+	}
+
+	table.format()
+	    .font_style({tabulate::FontStyle::bold})
+	    .border_top("")
+	    .border_bottom("")
+	    .border_left("")
+	    .border_right("")
+	    .corner("")
+	    .column_separator("")
+	    .padding_top(0)
+	    .padding_left(1)
+	    .padding_right(1)
+	    .padding_bottom(0)
+	    .font_align(tabulate::FontAlign::left);
+
+	return table.str() + "\n";
 }
 
 void to_lower_case(char* str)
@@ -413,11 +463,11 @@ int convert_bytes_to_megabytes(uint64_t bytes)
 	return int((bytes / 1024) / 1024);
 }
 
-void align_table(std::vector<std::vector<std::string>> &table)
+void align_table(std::vector<std::vector<std::string>>& table)
 {
-	size_t num_of_rows{table.size()};
-	size_t num_of_columns{table[0].size()};
-	std::vector<size_t> fill_sizes{};
+	size_t num_of_rows {table.size()};
+	size_t num_of_columns {table[0].size()};
+	std::vector<size_t> fill_sizes {};
 
 	for (int i = 0; i < num_of_columns; i++) {
 		size_t max = 0;
@@ -440,8 +490,8 @@ void align_table(std::vector<std::vector<std::string>> &table)
 
 int num_of_lines(std::vector<std::string> row, int max_lenght)
 {
-	size_t num_of_lines{};
-	size_t current_num_of_lines{};
+	size_t num_of_lines {};
+	size_t current_num_of_lines {};
 	for (auto x : row) {
 		current_num_of_lines = (x.size() / max_lenght) + 1;
 		if (num_of_lines < current_num_of_lines) {
@@ -451,9 +501,9 @@ int num_of_lines(std::vector<std::string> row, int max_lenght)
 	return static_cast<int>(num_of_lines);
 }
 
-std::vector<std::string> split_string_by_size(const std::string &str, int line_size)
+std::vector<std::string> split_string_by_size(const std::string& str, int line_size)
 {
-	std::vector<std::string> result{};
+	std::vector<std::string> result {};
 	for (int i = 0; i < str.size(); i += line_size) {
 		result.push_back(str.substr(i, line_size));
 	}
@@ -468,21 +518,22 @@ void write_to_file(std::string file_name, std::string string, bool enable_append
 	if (!enable_append) {
 		std::ifstream file(file_name.c_str());
 		if (file.good()) {
-			std::cout << "File alredy exists. Do you want to overwrite current file? Any for yes, 'n' for no:";
-			std::string in{};
+			std::cout << "File alredy exists. Do you want to overwrite current file? "
+				     "Any for yes, 'n' for no:";
+			std::string in {};
 			std::cin >> in;
 			if (in == "n") {
-				std::string new_file_name{};
+				std::string new_file_name {};
 				std::cout << "New file name:";
 				std::cin >> new_file_name;
-				std::ofstream file{new_file_name.c_str()};
+				std::ofstream file {new_file_name.c_str()};
 				if (file.is_open()) {
 					file << string.c_str();
 				} else {
 					throw SmiToolInvalidFilePathException(new_file_name);
 				}
 			} else {
-				std::ofstream file{file_name.c_str()};
+				std::ofstream file {file_name.c_str()};
 				if (file.is_open()) {
 					file << string.c_str();
 				} else {
@@ -490,7 +541,7 @@ void write_to_file(std::string file_name, std::string string, bool enable_append
 				}
 			}
 		} else {
-			std::ofstream file{file_name.c_str()};
+			std::ofstream file {file_name.c_str()};
 			if (file.is_open()) {
 				file << string.c_str() << "\n";
 			} else {
@@ -498,7 +549,7 @@ void write_to_file(std::string file_name, std::string string, bool enable_append
 			}
 		}
 	} else {
-		std::ofstream file{file_name.c_str(), std::ios::app};
+		std::ofstream file {file_name.c_str(), std::ios::app};
 		if (file.is_open()) {
 			file << string.c_str() << "\n";
 		} else {
@@ -507,14 +558,15 @@ void write_to_file(std::string file_name, std::string string, bool enable_append
 	}
 }
 
-std::vector<std::pair<uint64_t, std::string>> bitmaskToRangesList(uint64_t mask, int bitOffset) {
+std::vector<std::pair<uint64_t, std::string>> bitmaskToRangesList(uint64_t mask, int bitOffset)
+{
 	std::vector<std::pair<uint64_t, std::string>> results;
 
 	if (mask == 0) {
 		return results;
 	}
 
-	int startRange = -1;
+	int startRange	     = -1;
 	uint64_t currentMask = 0;
 
 	for (int bit = 0; bit < 64; ++bit) {
@@ -527,9 +579,9 @@ std::vector<std::pair<uint64_t, std::string>> bitmaskToRangesList(uint64_t mask,
 			currentMask |= (1ULL << bit);
 		} else {
 			if (startRange != -1) {
-				int endRange = bit - 1;
+				int endRange	    = bit - 1;
 				int startWithOffset = startRange + bitOffset;
-				int endWithOffset = endRange + bitOffset;
+				int endWithOffset   = endRange + bitOffset;
 
 				std::stringstream ss;
 				if (startWithOffset == endWithOffset) {
@@ -541,14 +593,14 @@ std::vector<std::pair<uint64_t, std::string>> bitmaskToRangesList(uint64_t mask,
 				results.emplace_back(currentMask, ss.str());
 
 				currentMask = 0;
-				startRange = -1;
+				startRange  = -1;
 			}
 		}
 	}
 
 	if (startRange != -1) {
 		int startWithOffset = startRange + bitOffset;
-		int endWithOffset = 63 + bitOffset;
+		int endWithOffset   = 63 + bitOffset;
 
 		std::stringstream ss;
 		if (startWithOffset == endWithOffset) {
@@ -563,13 +615,15 @@ std::vector<std::pair<uint64_t, std::string>> bitmaskToRangesList(uint64_t mask,
 	return results;
 }
 
-std::string ThrottlerDataToString(uint64_t data) {
+std::string ThrottlerDataToString(uint64_t data)
+{
 	std::string out;
 	AmdSmiApiBase::CreateAmdSmiApiObject().ThrottlerDataToString(data, out);
 	return out;
 }
 
-std::string FecModesToString(uint32_t fec) {
+std::string FecModesToString(uint32_t fec)
+{
 	std::string out;
 	AmdSmiApiBase::CreateAmdSmiApiObject().FecModesToString(fec, out);
 	return out;
@@ -578,7 +632,8 @@ std::string FecModesToString(uint32_t fec) {
 std::string get_string_from_enum_nic_topo_link_type(int nic_link_type)
 {
 	std::string out;
-	AmdSmiApiBase::CreateAmdSmiApiObject().get_string_from_enum_nic_topo_link_type(nic_link_type, out);
+	AmdSmiApiBase::CreateAmdSmiApiObject().get_string_from_enum_nic_topo_link_type(
+	    nic_link_type, out);
 	return out;
 }
 
@@ -589,7 +644,15 @@ std::string get_string_from_enum_nic_fw_type(int nic_fw_type)
 	return out;
 }
 
-int get_index_from_main_gpu(int &gpu_index)
+std::string get_string_from_enum_compute_tray_type(int tray_type)
+{
+	std::string out;
+	AmdSmiApiBase::CreateAmdSmiApiObject().get_string_from_enum_compute_tray_type(tray_type,
+										      out);
+	return out;
+}
+
+int get_index_from_main_gpu(int& gpu_index)
 {
 	return AmdSmiApiBase::CreateAmdSmiApiObject().get_index_from_main_gpu(gpu_index);
 }

@@ -6,6 +6,7 @@
 #include <amdgv_device.h>
 #include <amdgv_gpuiov.h>
 #include <amdgv_psp.h>
+#include "amdgv_nbio.h"
 #include <amdgv.h>
 #include <amdgv_iovm_drv.h>
 #include "gpuiov_v9_0.h"
@@ -201,6 +202,7 @@ static bool gpuiov_v9_0_is_cmd_complete(struct amdgv_adapter *adapt,
 		status = RREG32(reg_status) & 0xFF;
 	} else {
 		/*
+		// TODO: Enable this code path after using iovm.drv 1.9
 		if (adapt->iovm_drv.enabled)
 		{
 			// TODO: Revisit for multi XCD optimization
@@ -499,35 +501,28 @@ static int gpuiov_v9_0_get_active_vf_idx(struct amdgv_adapter *adapt,
 					  uint32_t hw_sched_id,
 					  uint32_t *idx_vf)
 {
-	int offset;
 	uint32_t data;
+	int offset;
+	int inst;
 
-	offset = gpuiov_v9_0_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE)
-		return AMDGV_FAILURE;
+	if (adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_sched_type == AMDGV_HW_SCHED_TYPE_MM) {
+		offset = gpuiov_v9_0_get_sched_block_offset(adapt, hw_sched_id);
+		if (offset == AMDGV_FAILURE)
+			return AMDGV_FAILURE;
 
-	offset += PCI_SCH_ACTIVE_FUNCTION_ID;
-	oss_pci_read_config_dword(adapt->dev, offset, &data);
-
-	switch (adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_sched_type) {
-	case AMDGV_HW_SCHED_TYPE_GFX:
-		if (data & 0x80000000)
-			*idx_vf = data & 0x1F;
-		else
-			*idx_vf = AMDGV_PF_IDX;
-		break;
-	case AMDGV_HW_SCHED_TYPE_MM:
-		if (data & 0x80)
-			*idx_vf = data & 0x1F;
-		else
-			*idx_vf = AMDGV_PF_IDX;
-		break;
-
-	default:
-		return AMDGV_FAILURE;
+		offset += PCI_SCH_ACTIVE_FUNCTION_ID;
+		oss_pci_read_config_dword(adapt->dev, offset, &data);
+	} else {
+		inst = GET_INST(GC, adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst);
+		data = RREG32_SOC15(GC, inst, regRLC_GPU_IOV_ACTIVE_FCN_ID);
 	}
 
-	AMDGV_DEBUG("PCI_SCH_ACTIVE_FUNCTION_ID: readback=0x%08x, idx_vf=%d\n", data, *idx_vf);
+	if (data & 0x80)
+		*idx_vf = data & 0x1F;
+	else
+		*idx_vf = AMDGV_PF_IDX;
+
+	AMDGV_DEBUG("ACTIVE_FCN_ID: readback=0x%08x, idx_vf=%d\n", data, *idx_vf);
 
 	return 0;
 }
@@ -536,14 +531,22 @@ static int gpuiov_v9_0_get_active_vf_status(struct amdgv_adapter *adapt,
 					     uint32_t hw_sched_id,
 					     uint8_t *status)
 {
+	uint32_t data;
 	int offset;
+	int inst;
 
-	offset = gpuiov_v9_0_get_sched_block_offset(adapt, hw_sched_id);
-	if (offset == AMDGV_FAILURE)
-		return AMDGV_FAILURE;
+	if (adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_sched_type == AMDGV_HW_SCHED_TYPE_MM) {
+		offset = gpuiov_v9_0_get_sched_block_offset(adapt, hw_sched_id);
+		if (offset == AMDGV_FAILURE)
+			return AMDGV_FAILURE;
 
-	offset += PCI_SCH_ACTIVE_FUNCTION_ID_STATUS;
-	oss_pci_read_config_byte(adapt->dev, offset, status);
+		offset += PCI_SCH_ACTIVE_FUNCTION_ID_STATUS;
+		oss_pci_read_config_byte(adapt->dev, offset, status);
+	} else {
+		inst = GET_INST(GC, adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst);
+		data = RREG32_SOC15(GC, inst, regRLC_GPU_IOV_ACTIVE_FCN_ID);
+		*status = (data & 0xF00) >> 8;
+	}
 
 	return 0;
 }
@@ -765,7 +768,12 @@ static int gpuiov_v9_0_get_fb_info(struct amdgv_adapter *adapt)
 	}
 
 	/* read total available framebuffer */
-	adapt->gpuiov.total_fb_avail = amdgv_nbio_get_memsize(adapt);
+	if (adapt->xgmi.connected_to_cpu) {
+		/* For A+A configuration, use XGMI segment size */
+		adapt->gpuiov.total_fb_avail = adapt->xgmi.node_segment_size >> 20;
+	} else {
+		adapt->gpuiov.total_fb_avail = amdgv_nbio_get_memsize(adapt);
+	}
 
 	/* Before enable ip discovery, reserve memmgr size */
 	adapt->gpuiov.total_fb_usable = adapt->gpuiov.total_fb_avail - (memmgr_size >> 20);
@@ -773,6 +781,8 @@ static int gpuiov_v9_0_get_fb_info(struct amdgv_adapter *adapt)
 	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPUMON_FB_INFO,
 		      AMDGV_LOG_DATA_32_32(adapt->gpuiov.total_fb_avail,
 					   adapt->gpuiov.total_fb_usable));
+	AMDGV_INFO("Total FB Available = %d MB, Max usable FB size = %d MB\n",
+		   adapt->gpuiov.total_fb_avail, adapt->gpuiov.total_fb_usable);
 
 	return 0;
 }
@@ -952,8 +962,6 @@ static int gpuiov_v9_0_hw_init(struct amdgv_adapter *adapt)
 {
 	int ret;
 	uint32_t xgmi_enable;
-	uint32_t cap;
-	uint16_t tmp;
 
 	if (oss_atomic_read(adapt->in_ecc_recovery)) {
 		gpuiov_v9_0_hw_fini(adapt);
@@ -997,13 +1005,7 @@ static int gpuiov_v9_0_hw_init(struct amdgv_adapter *adapt)
 		}
 		AMDGV_INFO("PCI_ENABLE_SRIOV(num_vf=%d)\n", adapt->num_vf);
 
-		oss_pci_read_config_dword(adapt->dev, adapt->sriov_cap_pos + PCIE_EXT_SRIOV_CAP, &cap);
-		if (cap & PCIE_EXT_SRIOV_CAP_VF_10BIT_TAG) {
-			oss_pci_read_config_word(adapt->dev, adapt->sriov_cap_pos + PCIE_EXT_SRIOV_CTRL, &tmp);
-			tmp |= PCIE_EXT_SRIOV_CTRL_VF_10BIT_TAG;
-			oss_pci_write_config_word(adapt->dev,
-				adapt->sriov_cap_pos + PCIE_EXT_SRIOV_CTRL, tmp);
-		}
+		amdgv_enable_sriov_10bit_tag(adapt);
 	} else {
 		amdgv_reset_restore_sriov(adapt);
 	}

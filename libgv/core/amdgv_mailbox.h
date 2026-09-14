@@ -49,6 +49,7 @@ struct amdgv_mailbox {
 
 	struct {
 		bool rcv_msg_acked;
+		bool trn_msg_acked;
 		uint32_t rcv_ack_count;
 		uint32_t saved_ack_count;
 		uint32_t msg_trn_dw0;
@@ -58,6 +59,11 @@ struct amdgv_mailbox {
 	} state_vf[AMDGV_MAX_VF_SLOT];
 
 	const struct amdgv_mailbox_funcs *funcs;
+};
+
+struct amdgv_mailbox_trn_msg_ack_context {
+	struct 	amdgv_adapter *adapt;
+	uint32_t idx_vf;
 };
 
 int amdgv_mailbox_receive_msg(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_t *msg_data,
@@ -90,7 +96,7 @@ const char *amdgv_mailbox_trn_idh_to_name(uint32_t idh);
 
 int amdgv_mailbox_notify_gpu_debug(struct amdgv_adapter *adapt, uint32_t idx_vf, bool completion);
 
-int amdgv_mailbox_wait_trn_msg_ack(struct amdgv_adapter *adapt);
+int amdgv_mailbox_wait_trn_msg_ack(struct amdgv_adapter *adapt, uint32_t idx_vf);
 
 int amdgv_mailbox_irq_source_enable(struct amdgv_adapter *adapt, bool enable);
 #endif

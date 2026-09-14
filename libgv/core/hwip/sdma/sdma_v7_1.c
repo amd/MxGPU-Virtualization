@@ -26,8 +26,8 @@ static uint32_t sdma_v7_1_get_reg_offset(struct amdgv_adapter *adapt,
 {
 	uint32_t base;
 	uint32_t dev_inst = GET_INST(SDMA0, instance);
-	int xcc_id = adapt->sdma.sdma_ring[instance].xcc_id;
-	int xcc_inst = dev_inst % (adapt->sdma.num_instances / adapt->mcp.gfx.num_xcc);
+	int xcc_id = dev_inst / adapt->sdma.num_inst_per_xcc;
+	int xcc_inst = dev_inst % adapt->sdma.num_inst_per_xcc;
 
 	if (internal_offset >= SDMA0_SDMA_IDX_0_END) {
 		base = adapt->reg_offset[GC_HWIP][xcc_id][1];
@@ -47,6 +47,8 @@ static void sdma_v7_1_program_golden_settings(struct amdgv_adapter *adapt)
 	int i;
 	uint32_t sdma_cntl;
 	uint32_t rb_cntl;
+	uint32_t utcl1_cntl;
+	uint32_t utcl1_page;
 
 	for (i = 0; i < adapt->sdma.num_instances; i++) {
 		/* Read-modify-write to preserve HW default bits (aligned with upstream) */
@@ -63,6 +65,18 @@ static void sdma_v7_1_program_golden_settings(struct amdgv_adapter *adapt)
 		WREG32(sdma_v7_1_get_reg_offset(adapt, i, regSDMA0_SDMA_QUEUE0_RB_CNTL), rb_cntl);
 
 		WREG32(sdma_v7_1_get_reg_offset(adapt, i, regSDMA0_SDMA_UTCL1_TIMEOUT), 0x80);
+
+		/* Set RESP_MODE and REDO_DELAY for UTCL1 translation handling */
+		utcl1_cntl = RREG32(sdma_v7_1_get_reg_offset(adapt, i, regSDMA0_SDMA_UTCL1_CNTL));
+		utcl1_cntl = REG_SET_FIELD(utcl1_cntl, SDMA0_SDMA_UTCL1_CNTL, RESP_MODE, 3);
+		utcl1_cntl = REG_SET_FIELD(utcl1_cntl, SDMA0_SDMA_UTCL1_CNTL, REDO_DELAY, 9);
+		WREG32(sdma_v7_1_get_reg_offset(adapt, i, regSDMA0_SDMA_UTCL1_CNTL), utcl1_cntl);
+
+		/* Program default cache read and write policy */
+		utcl1_page = RREG32(sdma_v7_1_get_reg_offset(adapt, i, regSDMA0_SDMA_UTCL1_PAGE));
+		utcl1_page = REG_SET_FIELD(utcl1_page, SDMA0_SDMA_UTCL1_PAGE, RD_L2_POLICY, 2);
+		utcl1_page = REG_SET_FIELD(utcl1_page, SDMA0_SDMA_UTCL1_PAGE, WR_L2_POLICY, 3);
+		WREG32(sdma_v7_1_get_reg_offset(adapt, i, regSDMA0_SDMA_UTCL1_PAGE), utcl1_page);
 	}
 }
 
@@ -82,10 +96,32 @@ void sdma_v7_1_set_ras_funcs(struct amdgv_adapter *adapt)
 static int sdma_v7_1_sw_init(struct amdgv_adapter *adapt)
 {
 	int i;
+	uint32_t dev_inst;
+	uint32_t xcc_id;
+
+	if (!adapt->sdma.num_inst_per_xcc) {
+		AMDGV_ERROR("SDMA topology not initialized\n");
+		return AMDGV_FAILURE;
+	}
+
+	for (i = 0; i < adapt->sdma.num_instances; i++) {
+		dev_inst = GET_INST(SDMA0, i);
+		if ((int8_t)dev_inst < 0) {
+			AMDGV_ERROR("SDMA inst %d maps to bad dev_inst %d\n",
+				    i, (int8_t)dev_inst);
+			return AMDGV_FAILURE;
+		}
+
+		xcc_id = dev_inst / adapt->sdma.num_inst_per_xcc;
+		if (!(adapt->mcp.gfx.xcc_mask & (1U << xcc_id))) {
+			AMDGV_ERROR("SDMA inst %d maps to inactive XCC %d\n", i, xcc_id);
+			return AMDGV_FAILURE;
+		}
+	}
 
 	sdma_v7_1_set_ras_funcs(adapt);
 
-	adapt->doorbell_index.sdma_doorbell_range = 20;
+	adapt->doorbell_index.sdma_doorbell_range = 14;
 	for (i = 0; i < adapt->sdma.num_instances; i++) {
 		adapt->doorbell_index.sdma_engine[i] =
 			AMDGPU_DOORBELL_SDMA_ENGINE_START +

@@ -1,0 +1,60 @@
+---
+Language: Cpp
+BasedOnStyle: LLVM
+
+UseTab: Always
+TabWidth:        8
+IndentWidth: 8
+# Put Public in class to begining of the line
+AccessModifierOffset: -8
+
+ColumnLimit: 100
+
+PointerAlignment: Left
+#ReferenceAlignment: Right
+
+AlignConsecutiveAssignments: Consecutive
+AlignConsecutiveBitFields : Consecutive
+AlignConsecutiveMacros: true
+
+ContinuationIndentWidth: 4
+AlignAfterOpenBracket: Align
+BinPackArguments: true
+BinPackParameters: true
+
+Cpp11BracedListStyle: true
+
+SpaceAfterCStyleCast: false
+
+SpaceBeforeParens: ControlStatements
+SpaceBeforeCpp11BracedList: true
+
+AllowShortBlocksOnASingleLine: Never
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+
+IndentCaseLabels: false
+AllowShortCaseLabelsOnASingleLine: false
+
+SortIncludes: false
+IncludeCategories:
+  - Regex:           '^<.*>'
+    Priority:        1
+  - Regex:           '^".*"'
+    Priority:        2
+
+MaxEmptyLinesToKeep: 1
+
+IndentPPDirectives: BeforeHash
+
+AllowAllParametersOfDeclarationOnNextLine: true
+
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: true
+  AfterClass: true
+
+#Supported only in latest clang-format
+#InsertNewlineAtEOF: true
+#OneLineFormatOffRegex: ^(// NOLINT|logger$)

@@ -18,7 +18,7 @@ using amdsmi::g_system_mock;
 using amdsmi::SetResponseStatus;
 
 class AmdSmiPartitionProfileTest : public amdsmi::AmdSmiTest {
-protected:
+      protected:
 	::testing::AssertionResult equal_profile_info(smi_profile_info expect,
 						      amdsmi_profile_info_t actual)
 	{
@@ -27,29 +27,29 @@ protected:
 
 		for (uint32_t i = 0; i < expect.profile_count; i++) {
 			SMI_ASSERT_EQ(expect.profiles[i].vf_count, actual.profiles[i].vf_count)
-				<< " for i = " << i;
+			    << " for i = " << i;
 
 			for (int j = 0; j < AMDSMI_PROFILE_CAPABILITY__MAX; j++) {
 
 				SMI_ASSERT_EQ(expect.profiles[i].profile_caps[j].total,
-					actual.profiles[i].profile_caps[j].total)
-					<< " for i = " << i << " for j = " << j;
+					      actual.profiles[i].profile_caps[j].total)
+				    << " for i = " << i << " for j = " << j;
 
 				SMI_ASSERT_EQ(expect.profiles[i].profile_caps[j].available,
-					actual.profiles[i].profile_caps[j].available)
-					<< " for i = " << i << " for j = " << j;
+					      actual.profiles[i].profile_caps[j].available)
+				    << " for i = " << i << " for j = " << j;
 
 				SMI_ASSERT_EQ(expect.profiles[i].profile_caps[j].optimal,
-					actual.profiles[i].profile_caps[j].optimal)
-					<< " for i = " << i << " for j = " << j;
+					      actual.profiles[i].profile_caps[j].optimal)
+				    << " for i = " << i << " for j = " << j;
 
 				SMI_ASSERT_EQ(expect.profiles[i].profile_caps[j].min_value,
-					actual.profiles[i].profile_caps[j].min_value)
-					<< " for i = " << i << " for j = " << j;
+					      actual.profiles[i].profile_caps[j].min_value)
+				    << " for i = " << i << " for j = " << j;
 
 				SMI_ASSERT_EQ(expect.profiles[i].profile_caps[j].max_value,
-					actual.profiles[i].profile_caps[j].max_value)
-					<< " for i = " << i << " for j = " << j;
+					      actual.profiles[i].profile_caps[j].max_value)
+				    << " for i = " << i << " for j = " << j;
 			}
 		}
 
@@ -63,7 +63,7 @@ TEST_F(AmdSmiPartitionProfileTest, IoctlFailed)
 	amdsmi_profile_info_t profile_info;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
-		.WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_API_FAILED));
+	    .WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_API_FAILED));
 
 	ret = amdsmi_get_partition_profile_info(&GPU_MOCK_HANDLE, &profile_info);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
@@ -88,22 +88,21 @@ TEST_F(AmdSmiPartitionProfileTest, GetPartitionProfileInfo)
 	smi_device_info in_payload;
 	struct smi_profile_info mocked_resp = {};
 
-	mocked_resp.profile_count = 2;
+	mocked_resp.profile_count	  = 2;
 	mocked_resp.current_profile_index = 0;
 
 	for (uint32_t i = 0; i < mocked_resp.profile_count; i++) {
-		mocked_resp.profiles[i].vf_count = i+1;
+		mocked_resp.profiles[i].vf_count = i + 1;
 		for (int j = 0; j < AMDSMI_PROFILE_CAPABILITY__MAX; j++) {
-			mocked_resp.profiles[i].profile_caps[j].total = i+j*2;
-			mocked_resp.profiles[i].profile_caps[j].available = i+j*3;
-			mocked_resp.profiles[i].profile_caps[j].optimal = i+j*4;
-			mocked_resp.profiles[i].profile_caps[j].min_value = i+j*5;
-			mocked_resp.profiles[i].profile_caps[j].max_value = i+j*6;
+			mocked_resp.profiles[i].profile_caps[j].total	  = i + j * 2;
+			mocked_resp.profiles[i].profile_caps[j].available = i + j * 3;
+			mocked_resp.profiles[i].profile_caps[j].optimal	  = i + j * 4;
+			mocked_resp.profiles[i].profile_caps[j].min_value = i + j * 5;
+			mocked_resp.profiles[i].profile_caps[j].max_value = i + j * 6;
 		}
 	}
 
-	WhenCalling(std::bind(amdsmi_get_partition_profile_info, &GPU_MOCK_HANDLE,
-			      &profile_info));
+	WhenCalling(std::bind(amdsmi_get_partition_profile_info, &GPU_MOCK_HANDLE, &profile_info));
 	ExpectCommand(SMI_CMD_CODE_GET_PARTITION_PROFILE_INFO);
 	SaveInputPayloadIn(&in_payload);
 	PlantMockOutput(&mocked_resp);

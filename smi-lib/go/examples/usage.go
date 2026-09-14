@@ -116,6 +116,7 @@ func main() {
 		printGetGpuPciBandwidth(ph)
 		printGetSupportedPowerCap(ph)
 		printGetNpmInfo(ph)
+		printGetTrayInfo(ph)
 		printGetGpuPtlState(ph)
 		printGetGpuPtlFormats(ph)
 		printSetGpuPtlState(ph)
@@ -129,6 +130,9 @@ func main() {
 		printGetGpuFabricInfo(ph)
 		printGetFabricTelemetry(ph)
 		printAllocFabricTelemetry(ph)
+		//printSetGpuFabricPpodConfig(ph)      // disabled — writes to hardware config. enable if required
+		//printSetGpuFabricVpodConfig(ph)      // disabled — writes to hardware config. enable if required
+		//printSetGpuFabricStationConfig(ph)   // disabled — writes to hardware config. enable if required
 		printGpuMetrics(ph)
 		//printGPUCperEntries(ph) // disabled for quick check. enable if required
 
@@ -171,6 +175,7 @@ func printAsicInfo(ph amdsmi.ProcessorHandle) {
 	fmt.Printf("    Rev ID:          0x%02X\n", info.RevID)
 	fmt.Printf("    ASIC Serial:     %s\n", info.AsicSerial)
 	fmt.Printf("    OAM ID:          %d\n", info.OamID)
+	fmt.Printf("    Physical Acc ID: %d\n", info.PhysicalAccId)
 	fmt.Printf("    Compute Units:   %d\n", info.NumComputeUnits)
 	fmt.Printf("    GFX Version:     %d\n", info.TargetGraphicsVersion)
 	fmt.Printf("    Subsystem ID:    0x%04X\n", info.SubsystemID)
@@ -313,6 +318,46 @@ func eccBlockLabel(b amdsmi.GpuBlock) string {
 		return "IH"
 	case amdsmi.AMDSMI_GPU_BLOCK_MPIO:
 		return "MPIO"
+	case amdsmi.AMDSMI_GPU_BLOCK_MMSCH:
+		return "MMSCH"
+	case amdsmi.AMDSMI_GPU_BLOCK_MP5:
+		return "MP5"
+	case amdsmi.AMDSMI_GPU_BLOCK_ATU:
+		return "ATU"
+	case amdsmi.AMDSMI_GPU_BLOCK_DACC_BE:
+		return "DACC_BE"
+	case amdsmi.AMDSMI_GPU_BLOCK_ECLR:
+		return "ECLR"
+	case amdsmi.AMDSMI_GPU_BLOCK_KPX_SERDES:
+		return "KPX_SERDES"
+	case amdsmi.AMDSMI_GPU_BLOCK_LSDMA:
+		return "LSDMA"
+	case amdsmi.AMDSMI_GPU_BLOCK_MPART:
+		return "MPART"
+	case amdsmi.AMDSMI_GPU_BLOCK_MPIFOE:
+		return "MPIFOE"
+	case amdsmi.AMDSMI_GPU_BLOCK_MPRAS:
+		return "MPRAS"
+	case amdsmi.AMDSMI_GPU_BLOCK_NBIF:
+		return "NBIF"
+	case amdsmi.AMDSMI_GPU_BLOCK_NBIO:
+		return "NBIO"
+	case amdsmi.AMDSMI_GPU_BLOCK_OXRP:
+		return "OXRP"
+	case amdsmi.AMDSMI_GPU_BLOCK_PCIE_PL:
+		return "PCIE_PL"
+	case amdsmi.AMDSMI_GPU_BLOCK_PCS_XGMI:
+		return "PCS_XGMI"
+	case amdsmi.AMDSMI_GPU_BLOCK_PIE:
+		return "PIE"
+	case amdsmi.AMDSMI_GPU_BLOCK_CS:
+		return "CS"
+	case amdsmi.AMDSMI_GPU_BLOCK_SHUB:
+		return "SHUB"
+	case amdsmi.AMDSMI_GPU_BLOCK_SSBDCI:
+		return "SSBDCI"
+	case amdsmi.AMDSMI_GPU_BLOCK_UCIE_PCS:
+		return "UCIE_PCS"
 	default:
 		return fmt.Sprintf("0x%x", uint64(b))
 	}
@@ -1014,6 +1059,24 @@ func printGetNpmInfo(ph amdsmi.ProcessorHandle) {
 	fmt.Printf("  	Limit (W):  %d\n", info.Limit)
 }
 
+func printGetTrayInfo(ph amdsmi.ProcessorHandle) {
+	nh, err := amdsmi.GetNodeHandle(ph)
+	if err != nil {
+		logSkip("GetTrayInfo (GetNodeHandle)", err)
+		return
+	}
+
+	info, err := amdsmi.GetTrayInfo(nh)
+	if err != nil {
+		logSkip("GetTrayInfo", err)
+		return
+	}
+
+	fmt.Printf("  GetTrayInfo:\n")
+	fmt.Printf("  	Max Acc Per Tray: %d\n", info.MaxAccPerTray)
+	fmt.Printf("  	Tray Type:        %s (%d)\n", info.TrayType.String(), info.TrayType)
+}
+
 func printGetGpuPtlState(ph amdsmi.ProcessorHandle) {
 	enabled, err := amdsmi.GetGpuPtlState(ph)
 	if err != nil {
@@ -1252,6 +1315,14 @@ func printRasPolicyInfo(ph amdsmi.ProcessorHandle) {
 	if info.V4_0 != nil {
 		fmt.Printf("    DRAM non-critical threshold: %d\n", info.V4_0.DramNonCriticalRegionThreshold)
 		fmt.Printf("    DRAM critical threshold:     %d\n", info.V4_0.DramCriticalRegionThreshold)
+	}
+	if info.V5_0 != nil {
+		fmt.Printf("    Num entities:                %d\n", info.V5_0.NumEntities)
+		fmt.Printf("    Event RMA threshold/entity:  %d\n", info.V5_0.EventRmaThresholdPerEntity)
+		fmt.Printf("    Max pages per ret event:     %d\n", info.V5_0.MaxPagesPerRetEvent)
+		fmt.Printf("    OD SRAM ECC threshold:       %d\n", info.V5_0.OdSramEccThreshold)
+		fmt.Printf("    HWA threshold:               %d\n", info.V5_0.HwaThreshold)
+		fmt.Printf("    WDT threshold:               %d\n", info.V5_0.WdtThreshold)
 	}
 }
 
@@ -1879,17 +1950,19 @@ func printGetGpuFabricInfo(ph amdsmi.ProcessorHandle) {
 	}
 	v1 := info.InfoV1
 	fmt.Printf("  	InfoV1:\n")
-	fmt.Printf("  	  Accelerator ID: %d\n", v1.AcceleratorID)
+	fmt.Printf("  	  Accelerator ID: %d\n", v1.Ppod.AcceleratorID)
 	fmt.Printf("  	  Fabric Type:    %s (%d)\n", v1.FabricType, v1.FabricType)
-	fmt.Printf("  	  Bandwidth:      %d Mb/s\n", v1.Bandwidth)
-	fmt.Printf("  	  Latency:        %d ns\n", v1.Latency)
-	fmt.Printf("  	  pPoD:           id=%d size=%d\n", v1.PpodID, v1.PpodSize)
+	fmt.Printf("  	  Bandwidth:      %d Mb/s\n", v1.Ppod.Bandwidth)
+	fmt.Printf("  	  Latency:        %d ns\n", v1.Ppod.Latency)
+	fmt.Printf("  	  pPoD:           id=%x size=%d\n", v1.Ppod.PpodID, v1.Ppod.PpodSize)
 	fmt.Printf("  	  vPoD:           id=%d size=%d state=%s\n",
-		v1.VpodID, v1.VpodSize, v1.AccelState)
-	fmt.Printf("  	  Addr Mode:      %s\n", v1.AddrMode)
+		v1.Vpod.VpodID, v1.Vpod.VpodSize, v1.AccelState)
+	fmt.Printf("  	  Addr Mode:      %s\n", v1.Vpod.AddrMode)
+	fmt.Printf("  	  Station:        flags=%d num_stations=%d\n",
+		v1.Station.StationFlags, v1.Station.NumStations)
 
 	activeAccels := make([]int, 0)
-	for word, bits := range v1.VpodActiveAccelerators {
+	for word, bits := range v1.Vpod.VpodActiveAccelerators {
 		if bits == 0 {
 			continue
 		}
@@ -1902,10 +1975,11 @@ func printGetGpuFabricInfo(ph amdsmi.ProcessorHandle) {
 	fmt.Printf("  	  Active accels:  %v\n", activeAccels)
 
 	localAccels := make([]uint32, 0)
-	for _, a := range v1.LocalAccelerators {
-		if a != 0 {
-			localAccels = append(localAccels, a)
+	for _, a := range v1.Ppod.LocalAccelerators {
+		if a == 0xFFFFFFFF {
+			break
 		}
+		localAccels = append(localAccels, a)
 	}
 	fmt.Printf("  	  Local accels:   %v\n", localAccels)
 }
@@ -1955,6 +2029,53 @@ func printAllocFabricTelemetry(ph amdsmi.ProcessorHandle) {
 	}
 	fmt.Printf("  AllocFabricTelemetry: requested %v\n", tel.Categories())
 	printFabricTelemetryDatasets(snap, "  	")
+}
+
+func printSetGpuFabricPpodConfig(ph amdsmi.ProcessorHandle) {
+	cfg := amdsmi.FabricPpodConfig{
+		Version: amdsmi.AMDSMI_FABRIC_PPOD_CONFIG_V1,
+		Mask:    amdsmi.AMDSMI_FABRIC_PPOD_FIELD_ACCEL_ID | amdsmi.AMDSMI_FABRIC_PPOD_FIELD_PPOD_SIZE,
+		Data: amdsmi.FabricPpodData{
+			AcceleratorID: 0,
+			PpodSize:      4,
+		},
+	}
+	if err := amdsmi.SetGpuFabricPpodConfig(ph, cfg); err != nil {
+		logSkip("SetGpuFabricPpodConfig", err)
+		return
+	}
+	fmt.Printf("  SetGpuFabricPpodConfig: ok\n")
+}
+
+func printSetGpuFabricVpodConfig(ph amdsmi.ProcessorHandle) {
+	cfg := amdsmi.FabricVpodConfig{
+		Version: amdsmi.AMDSMI_FABRIC_VPOD_CONFIG_V1,
+		Mask:    amdsmi.AMDSMI_FABRIC_VPOD_FIELD_VPOD_ID | amdsmi.AMDSMI_FABRIC_VPOD_FIELD_ADDR_MODE,
+		Data: amdsmi.FabricVpodData{
+			VpodID:   1,
+			AddrMode: amdsmi.AMDSMI_FABRIC_NPA_ADDRESS_MODE_SOURCE_ALIASING,
+		},
+	}
+	if err := amdsmi.SetGpuFabricVpodConfig(ph, cfg); err != nil {
+		logSkip("SetGpuFabricVpodConfig", err)
+		return
+	}
+	fmt.Printf("  SetGpuFabricVpodConfig: ok\n")
+}
+
+func printSetGpuFabricStationConfig(ph amdsmi.ProcessorHandle) {
+	cfg := amdsmi.FabricStationConfig{
+		Version: amdsmi.AMDSMI_FABRIC_STATION_CONFIG_V1,
+		Mask:    amdsmi.AMDSMI_FABRIC_DF_FIELD_NUM_STATIONS,
+		Data: amdsmi.FabricStationData{
+			NumStations: 4,
+		},
+	}
+	if err := amdsmi.SetGpuFabricStationConfig(ph, cfg); err != nil {
+		logSkip("SetGpuFabricStationConfig", err)
+		return
+	}
+	fmt.Printf("  SetGpuFabricStationConfig: ok\n")
 }
 
 func logSkip(name string, err error) {

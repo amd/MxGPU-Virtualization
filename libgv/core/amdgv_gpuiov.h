@@ -441,6 +441,7 @@ int amdgv_gpuiov_set_scheduler_config_descriptor(struct amdgv_adapter *adapt,
 int amdgv_gpuiov_wait_auto_sched_stop(struct amdgv_adapter *adapt,
 				      uint32_t hw_sched_id);
 int amdgv_gpuiov_set_sriov_vf_num(struct amdgv_adapter *adapt, uint32_t num_vf);
+void amdgv_enable_sriov_10bit_tag(struct amdgv_adapter *adapt);
 bool amdgv_gpuiov_is_sched_mode_supported(struct amdgv_adapter *adapt,
 					 struct amdgv_gpuiov_hw_sched_static_config hw_sched_config, enum amdgv_sched_mode sched_mode);
 const char *amdgv_gpuiov_cmd_to_name_default(struct amdgv_adapter *adapt, uint32_t cmd, uint32_t hw_sched_id);

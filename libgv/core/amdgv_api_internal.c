@@ -27,18 +27,26 @@ int amdgv_int_allocate_vf(struct amdgv_adapter *adapt, struct amdgv_vf_option *o
 
 	// VF index is already set during GPUV live update restore
 	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_UPDATE) || (adapt->live_update_state != AMDGV_LIVE_UPDATE_RESTORE)) {
-		/* search for free vf */
-		for (i = 0; i < adapt->num_vf; i++) {
-			if (is_unavail_vf(i))
-				break;
-		}
-		if (i == adapt->num_vf) {
-			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPUMON_NO_AVAILABLE_SLOT, 0);
-			opt_err = AMDGV_LOG_GPUMON_NO_AVAILABLE_SLOT;
-			goto unlock;
-		}
+		/* caller already ties this idx_vf to a specific BDF/VMBus
+		 * channel, so honor it instead of silently reassigning it to
+		 * whichever slot happens to be free first. Only auto-pick when
+		 * the caller left idx_vf unspecified. */
+		if (option->idx_vf < adapt->num_vf && is_unavail_vf(option->idx_vf)) {
+			i = option->idx_vf;
+		} else {
+			/* search for free vf */
+			for (i = 0; i < adapt->num_vf; i++) {
+				if (is_unavail_vf(i))
+					break;
+			}
+			if (i == adapt->num_vf) {
+				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPUMON_NO_AVAILABLE_SLOT, 0);
+				opt_err = AMDGV_LOG_GPUMON_NO_AVAILABLE_SLOT;
+				goto unlock;
+			}
 
-		option->idx_vf = i;
+			option->idx_vf = i;
+		}
 	}
 
 	/* for now check SMI option only */

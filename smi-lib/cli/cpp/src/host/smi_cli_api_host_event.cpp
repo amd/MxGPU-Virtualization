@@ -18,27 +18,24 @@
 #include <iostream>
 #include <sstream>
 #ifdef _WIN64
-#include <windows.h>
-#include <sysinfoapi.h>
+	#include <windows.h>
+	#include <sysinfoapi.h>
 #endif
 
-typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLES)(amdsmi_socket_handle, uint32_t *,
-		amdsmi_processor_handle *);
-typedef amdsmi_status_t (*AMDSMI_EVENT_CREATE)(amdsmi_processor_handle *, uint32_t,
-		uint64_t, amdsmi_event_set *);
-typedef amdsmi_status_t (*AMDSMI_EVENT_READ)(amdsmi_event_set, int64_t, amdsmi_event_entry_t *);
+typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLES)(amdsmi_socket_handle, uint32_t*,
+							amdsmi_processor_handle*);
+typedef amdsmi_status_t (*AMDSMI_EVENT_CREATE)(amdsmi_processor_handle*, uint32_t, uint64_t,
+					       amdsmi_event_set*);
+typedef amdsmi_status_t (*AMDSMI_EVENT_READ)(amdsmi_event_set, int64_t, amdsmi_event_entry_t*);
 typedef amdsmi_status_t (*AMDSMI_EVENT_DESTROY)(amdsmi_event_set);
-
 
 extern AMDSMI_GET_PROCESSOR_HANDLES host_amdsmi_get_processor_handles;
 extern AMDSMI_EVENT_CREATE host_amdsmi_event_create;
 extern AMDSMI_EVENT_READ host_amdsmi_event_read;
 extern AMDSMI_EVENT_DESTROY host_amdsmi_event_destroy;
 
-
 amdsmi_event_set set;
-amdsmi_processor_handle *processors;
-
+amdsmi_processor_handle* processors;
 
 int AmdSmiApiHost::initEvent()
 {
@@ -48,7 +45,7 @@ int AmdSmiApiHost::initEvent()
 
 	amdsmi_get_device_count(gpu_count, static_cast<int>(DeviceType::GPU));
 
-	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle)*gpu_count);
+	processors = (amdsmi_processor_handle*)malloc(sizeof(amdsmi_processor_handle) * gpu_count);
 	if (processors == NULL) {
 		throw SmiToolNotEnoughMemException();
 	}
@@ -63,49 +60,58 @@ int AmdSmiApiHost::initEvent()
 	return ret;
 }
 
-void thread_func_human(char *stopped, amdsmi_event_set set, Arguments arg)
+void thread_func_human(char* stopped, amdsmi_event_set set, Arguments arg)
 {
 	amdsmi_status_t ret;
 	amdsmi_event_entry_t event;
-	std::string formatted_string{};
+	std::string formatted_string {};
 	int gpu_index;
-	std::string event_msg{};
+	std::string event_msg {};
 
-	while(*stopped != 'q') {
+	while (*stopped != 'q') {
 #ifdef SMI_ESXI_BUILD
-		ret = host_amdsmi_event_read(set, 500*1000, &event);
+		ret = host_amdsmi_event_read(set, 500 * 1000, &event);
 #else
-		ret = host_amdsmi_event_read(set, 10*1000*1000, &event);
+		ret = host_amdsmi_event_read(set, 10 * 1000 * 1000, &event);
 #endif
 		if (ret == AMDSMI_STATUS_TIMEOUT)
 			continue;
-		if ((ret == AMDSMI_STATUS_SUCCESS) && (event.category != AMDSMI_EVENT_CATEGORY_NON_USED)) {
+		if ((ret == AMDSMI_STATUS_SUCCESS) &&
+		    (event.category != AMDSMI_EVENT_CATEGORY_NON_USED)) {
 			for (unsigned int i = 0; i < arg.devices.size(); i++) {
 				gpu_index = arg.devices[i]->get_gpu_index();
 				if (processors[gpu_index] == event.processor_handle) {
 					if ((event.category == AMDSMI_EVENT_CATEGORY_PP) &&
-						(event.subcode == AMDSMI_EVENT_PP_THROTTLER_EVENT)) {
+					    (event.subcode == AMDSMI_EVENT_PP_THROTTLER_EVENT)) {
 						std::string base_msg = std::string(event.message);
-						size_t colon_pos = base_msg.find(':');
+						size_t colon_pos     = base_msg.find(':');
 						if (colon_pos != std::string::npos) {
 							std::string throttler_data;
-							throttler_data = ThrottlerDataToString(event.data);
-							event_msg = base_msg.substr(0, colon_pos + 1) + " " + throttler_data;
+							throttler_data =
+							    ThrottlerDataToString(event.data);
+							event_msg =
+							    base_msg.substr(0, colon_pos + 1) +
+							    " " + throttler_data;
 						} else {
 							std::string throttler_data;
-							throttler_data = ThrottlerDataToString(event.data);
-							event_msg = base_msg + ": " + throttler_data;
+							throttler_data =
+							    ThrottlerDataToString(event.data);
+							event_msg =
+							    base_msg + ": " + throttler_data;
 						}
 					} else {
 						event_msg = std::string(event.message);
 					}
-					event_msg = std::regex_replace(event_msg, std::regex("\n"), " ");
+					event_msg =
+					    std::regex_replace(event_msg, std::regex("\n"), " ");
 					formatted_string = string_format(
-										   eventMessageTemplate, gpu_index, event_msg.c_str(), EVENT_CATEGORY_STR[unsigned(event.category)],
-										   event.date);
+					    eventMessageTemplate, gpu_index, event_msg.c_str(),
+					    EVENT_CATEGORY_STR[unsigned(event.category)],
+					    event.date);
 					formatted_string.append("\n");
 					if (arg.is_file) {
-						write_to_file(arg.file_path, formatted_string, true);
+						write_to_file(arg.file_path, formatted_string,
+							      true);
 					} else {
 						std::cout << formatted_string.c_str();
 					}
@@ -116,54 +122,62 @@ void thread_func_human(char *stopped, amdsmi_event_set set, Arguments arg)
 		event = {};
 	}
 }
-void thread_func_json(char *stopped, amdsmi_event_set set, Arguments arg)
+void thread_func_json(char* stopped, amdsmi_event_set set, Arguments arg)
 {
 
 	amdsmi_status_t ret;
 	amdsmi_event_entry_t event;
-	std::string formatted_string{};
+	std::string formatted_string {};
 	int gpu_index;
-	std::string event_msg{};
+	std::string event_msg {};
 
-	while(*stopped != 'q') {
+	while (*stopped != 'q') {
 #ifdef SMI_ESXI_BUILD
-		ret = host_amdsmi_event_read(set, 500*1000, &event);
+		ret = host_amdsmi_event_read(set, 500 * 1000, &event);
 #else
-		ret = host_amdsmi_event_read(set, 10*1000*1000, &event);
+		ret = host_amdsmi_event_read(set, 10 * 1000 * 1000, &event);
 #endif
 		if (ret == AMDSMI_STATUS_TIMEOUT)
 			continue;
-		if ((ret == AMDSMI_STATUS_SUCCESS) && (event.category != AMDSMI_EVENT_CATEGORY_NON_USED)) {
+		if ((ret == AMDSMI_STATUS_SUCCESS) &&
+		    (event.category != AMDSMI_EVENT_CATEGORY_NON_USED)) {
 			for (unsigned int i = 0; i < arg.devices.size(); i++) {
 				gpu_index = arg.devices[i]->get_gpu_index();
 				if (processors[gpu_index] == event.processor_handle) {
 					if ((event.category == AMDSMI_EVENT_CATEGORY_PP) &&
-						(event.subcode == AMDSMI_EVENT_PP_THROTTLER_EVENT)) {
+					    (event.subcode == AMDSMI_EVENT_PP_THROTTLER_EVENT)) {
 						std::string base_msg = std::string(event.message);
-						size_t colon_pos = base_msg.find(':');
+						size_t colon_pos     = base_msg.find(':');
 						if (colon_pos != std::string::npos) {
 							std::string throttler_data;
-							throttler_data = ThrottlerDataToString(event.data);
-							event_msg = base_msg.substr(0, colon_pos + 1) + " " + throttler_data;
+							throttler_data =
+							    ThrottlerDataToString(event.data);
+							event_msg =
+							    base_msg.substr(0, colon_pos + 1) +
+							    " " + throttler_data;
 						} else {
 							std::string throttler_data;
-							throttler_data = ThrottlerDataToString(event.data);
-							event_msg = base_msg + ": " + throttler_data;
+							throttler_data =
+							    ThrottlerDataToString(event.data);
+							event_msg =
+							    base_msg + ": " + throttler_data;
 						}
 					} else {
 						event_msg = std::string(event.message);
 					}
-					event_msg = std::regex_replace(event_msg, std::regex("\n"), " ");
+					event_msg =
+					    std::regex_replace(event_msg, std::regex("\n"), " ");
 					nlohmann::ordered_json event_json = {
-						{ "gpu", gpu_index },
-						{ "message", event_msg },
-						{ "category", EVENT_CATEGORY_STR[unsigned(event.category)]},
-						{ "date", event.date }
-					};
+					    {"gpu", gpu_index},
+					    {"message", event_msg},
+					    {"category",
+					     EVENT_CATEGORY_STR[unsigned(event.category)]},
+					    {"date", event.date}};
 					formatted_string = event_json.dump(4);
 					formatted_string.append("\n");
 					if (arg.is_file) {
-						write_to_file(arg.file_path, formatted_string, true);
+						write_to_file(arg.file_path, formatted_string,
+							      true);
 					} else {
 						std::cout << formatted_string.c_str();
 					}
@@ -174,49 +188,61 @@ void thread_func_json(char *stopped, amdsmi_event_set set, Arguments arg)
 		event = {};
 	}
 }
-void thread_func_csv(char *stopped, amdsmi_event_set set, Arguments arg)
+void thread_func_csv(char* stopped, amdsmi_event_set set, Arguments arg)
 {
 
 	amdsmi_status_t ret;
 	amdsmi_event_entry_t event;
-	std::string formatted_string{};
+	std::string formatted_string {};
 	int gpu_index;
-	std::string event_msg{};
+	std::string event_msg {};
 
-	while(*stopped != 'q') {
+	while (*stopped != 'q') {
 #ifdef SMI_ESXI_BUILD
-		ret = host_amdsmi_event_read(set, 500*1000, &event);
+		ret = host_amdsmi_event_read(set, 500 * 1000, &event);
 #else
-		ret = host_amdsmi_event_read(set, 10*1000*1000, &event);
+		ret = host_amdsmi_event_read(set, 10 * 1000 * 1000, &event);
 #endif
 		if (ret == AMDSMI_STATUS_TIMEOUT)
 			continue;
-		if ((ret == AMDSMI_STATUS_SUCCESS) && (event.category != AMDSMI_EVENT_CATEGORY_NON_USED)) {
+		if ((ret == AMDSMI_STATUS_SUCCESS) &&
+		    (event.category != AMDSMI_EVENT_CATEGORY_NON_USED)) {
 			for (unsigned int i = 0; i < arg.devices.size(); i++) {
 				gpu_index = arg.devices[i]->get_gpu_index();
 				if (processors[gpu_index] == event.processor_handle) {
 					if ((event.category == AMDSMI_EVENT_CATEGORY_PP) &&
-						(event.subcode == AMDSMI_EVENT_PP_THROTTLER_EVENT)) {
+					    (event.subcode == AMDSMI_EVENT_PP_THROTTLER_EVENT)) {
 						std::string base_msg = std::string(event.message);
-						size_t colon_pos = base_msg.find(':');
+						size_t colon_pos     = base_msg.find(':');
 						if (colon_pos != std::string::npos) {
 							std::string throttler_data;
-							throttler_data = ThrottlerDataToString(event.data);
-							event_msg = base_msg.substr(0, colon_pos + 1) + " " + throttler_data;
+							throttler_data =
+							    ThrottlerDataToString(event.data);
+							event_msg =
+							    base_msg.substr(0, colon_pos + 1) +
+							    " " + throttler_data;
 						} else {
 							std::string throttler_data;
-							throttler_data = ThrottlerDataToString(event.data);
-							event_msg = base_msg + ": " + throttler_data;
+							throttler_data =
+							    ThrottlerDataToString(event.data);
+							event_msg =
+							    base_msg + ": " + throttler_data;
 						}
-						event_msg = std::regex_replace(event_msg, std::regex(","), "");
+						event_msg = std::regex_replace(event_msg,
+									       std::regex(","), "");
 					} else {
 						event_msg = std::string(event.message);
 					}
-					event_msg = std::regex_replace(event_msg, std::regex("\n"), " ");
-					formatted_string = string_format("%s\n%d,%s,%s,%s\n", event_csv_header, gpu_index,
-													 event_msg.c_str(), EVENT_CATEGORY_STR[unsigned(event.category)], event.date);
+					event_msg =
+					    std::regex_replace(event_msg, std::regex("\n"), " ");
+					formatted_string = string_format(
+					    "%s\n%d,%s,%s,%s\n", event_csv_header, gpu_index,
+					    event_msg.c_str(),
+					    EVENT_CATEGORY_STR[unsigned(event.category)],
+					    event.date);
 					if (arg.is_file) {
-						write_to_file(arg.file_path, formatted_string, true);
+						write_to_file(arg.file_path, formatted_string,
+							      true);
 					} else {
 						std::cout << formatted_string.c_str();
 					}
@@ -228,12 +254,11 @@ void thread_func_csv(char *stopped, amdsmi_event_set set, Arguments arg)
 	}
 }
 
-
-int AmdSmiApiHost::amdsmi_get_event_command(Arguments arg, char &stop,
-		std::vector<std::thread> &threads)
+int AmdSmiApiHost::amdsmi_get_event_command(Arguments arg, char& stop,
+					    std::vector<std::thread>& threads)
 {
 	amdsmi_status_t ret;
-	std::string out{};
+	std::string out {};
 
 #ifdef SMI_ESXI_BUILD
 	/* ESXi: Create only ONE thread to read events for ALL devices */
