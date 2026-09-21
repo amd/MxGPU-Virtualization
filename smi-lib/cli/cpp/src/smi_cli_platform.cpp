@@ -300,13 +300,16 @@ AmdSmiPlatform::AmdSmiPlatform()
 	operating_system = "unknown";
 #endif
 	if(is_windows_) {
-		std::string diskpart_out = exec("diskpart /?");
-		if (diskpart_out.find("MININT") != std::string::npos) {
+#ifdef _WIN64
+		// Preserve the MININT computer-name check without launching an elevated utility.
+		wchar_t computer_name[MAX_COMPUTERNAME_LENGTH + 1] = {};
+		DWORD computer_name_size = MAX_COMPUTERNAME_LENGTH + 1;
+		if (GetComputerNameW(computer_name, &computer_name_size) &&
+				std::wstring(computer_name, computer_name_size).find(L"MININT") != std::wstring::npos) {
 			is_baremetal_ = true;
 			is_nv_ = true;
 			return;
 		}
-#ifdef _WIN64
 		std::string output = get_device_ids();
 		is_mi300_ = check_if_mi30x(output);
 		is_nv_ = check_if_nv(output);
@@ -323,12 +326,7 @@ AmdSmiPlatform::AmdSmiPlatform()
 			} else if (status == "FALSE") {
 				is_baremetal_ = true;
 			} else {
-				std::string diskpart_out = exec("diskpart /?");
-				if (diskpart_out.find("MININT") != std::string::npos) {
-					is_baremetal_ = true;
-				} else {
-					unknown_platform = true;
-				}
+				unknown_platform = true;
 			}
 		}
 #endif
