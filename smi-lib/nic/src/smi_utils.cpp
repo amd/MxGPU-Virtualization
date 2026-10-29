@@ -10,6 +10,8 @@
 #include <filesystem>
 #include <sstream>
 #include <iomanip>
+#include <unordered_set>
+#include <vector>
 
 #ifdef LIBMNL_INSTALLED
 	#include <linux/devlink.h>
@@ -62,7 +64,11 @@ std::optional<int> get_numa_node_from_bdf(const std::string& bdf)
 		return std::nullopt;
 	}
 
-	return get_sysfs_data<int>(SYSFS_PCI_BUS_PATH + bdf + "/numa_node");
+	auto node = get_sysfs_data<int>(SYSFS_PCI_BUS_PATH + bdf + "/numa_node");
+	if (node.has_value() && node.value() < 0) {
+		return std::nullopt;
+	}
+	return node;
 }
 
 std::optional<std::string> get_pcie_parent_bdf(const std::string& bdf)
@@ -148,6 +154,48 @@ std::optional<uint8_t> get_pcie_link_gen(const std::string& bdf)
 	}
 
 	return std::nullopt;
+}
+
+std::vector<std::string> get_pcie_ancestors(const std::string& bdf)
+{
+	static constexpr int MAX_PCIE_ANCESTORS = 64;
+
+	std::vector<std::string> ancestors;
+	std::string current = bdf;
+	for (int hops = 0; hops < MAX_PCIE_ANCESTORS; hops++) {
+		auto parent = get_pcie_parent_bdf(current);
+		if (!parent.has_value()) {
+			break;
+		}
+		ancestors.push_back(parent.value());
+		current = parent.value();
+	}
+	return ancestors;
+}
+
+bool share_same_pcie_switch(const std::string& bdf1, const std::string& bdf2)
+{
+	if (!is_valid_bdf(bdf1) || !is_valid_bdf(bdf2)) {
+		return false;
+	}
+
+	const std::vector<std::string> ancestors1 = get_pcie_ancestors(bdf1);
+	if (ancestors1.empty()) {
+		return false;
+	}
+	const std::unordered_set<std::string> ancestor_set1(ancestors1.begin(), ancestors1.end());
+
+	// Walk up from device2, looking for the first ancestor shared with device1.
+	for (const auto& ancestor : get_pcie_ancestors(bdf2)) {
+		if (ancestor_set1.count(ancestor) == 0) {
+			continue;
+		}
+		// Found a common ancestor. Verify it's actually a switch (has its own
+		// parent) rather than the root complex (no parent).
+		return get_pcie_parent_bdf(ancestor).has_value();
+	}
+
+	return false;
 }
 
 std::string nic_type_to_string(NicType type)

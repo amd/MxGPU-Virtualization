@@ -1,3 +1,4 @@
+
 /* Copyright Advanced Micro Devices, Inc.
  *
  * SPDX-License-Identifier: MIT
@@ -12,7 +13,7 @@
 
 #include "atombios/atomfirmware.h"
 #include "smu/smuio_v15_0_8.h"
-#include "vcn/vcn_v5_0_2.h"
+#include "mmsch/mmsch_v10_0.h"
 #include "psp/psp_v15_0_8.h"
 #include "smu/smu_v15_0_8_internal.h"
 #include <amdgv_gfx.h>
@@ -202,6 +203,66 @@ static void nbio_v6_3_2_assign_sdma_doorbell(struct amdgv_adapter *adapt,
 
 		WREG32_SOC15(NBIO, 0, regGDC_S2A0_S2A_DOORBELL_ENTRY_6_CTRL, doorbell_range);
 		WREG32_SOC15(NBIO, 0, regGDC_S2A0_S2A_DOORBELL_ENTRY_6_CTRL1, doorbell_range1);
+	}
+}
+
+static void nbio_v6_3_2_vcn_doorbell_range(struct amdgv_adapter *adapt,
+					   bool use_doorbell, int doorbell_index,
+					   int instance)
+{
+	uint32_t doorbell_ctrl = 0;
+	uint32_t doorbell_ctrl1 = 0;
+	uint32_t awid;
+	uint32_t target_dieid;
+
+	if (!use_doorbell) {
+		AMDGV_ERROR("VCN doorbell must be enabled on NBIO v6.3.2 (instance=%d)\n",
+			    instance);
+		return;
+	}
+
+	awid = (instance % MMSCH_V10_0_VCN_PER_MID) ? 0x7 : 0x4;
+	target_dieid = (instance / MMSCH_V10_0_VCN_PER_MID) ? 0x3 : 0x0;
+
+	doorbell_ctrl = REG_SET_FIELD(doorbell_ctrl, GDC_S2A0_S2A_DOORBELL_ENTRY_2_CTRL,
+					      S2A_DOORBELL_PORT2_ENABLE, 1);
+	doorbell_ctrl = REG_SET_FIELD(doorbell_ctrl, GDC_S2A0_S2A_DOORBELL_ENTRY_2_CTRL,
+					      S2A_DOORBELL_PORT2_AWID, awid);
+	doorbell_ctrl = REG_SET_FIELD(doorbell_ctrl, GDC_S2A0_S2A_DOORBELL_ENTRY_2_CTRL,
+					      S2A_DOORBELL_PORT2_RANGE_OFFSET, doorbell_index);
+	doorbell_ctrl = REG_SET_FIELD(doorbell_ctrl, GDC_S2A0_S2A_DOORBELL_ENTRY_2_CTRL,
+					      S2A_DOORBELL_PORT2_RANGE_SIZE, 12);
+	doorbell_ctrl = REG_SET_FIELD(doorbell_ctrl, GDC_S2A0_S2A_DOORBELL_ENTRY_2_CTRL,
+					      S2A_DOORBELL_PORT2_AWADDR_31_28_VALUE, awid);
+
+	doorbell_ctrl1 = REG_SET_FIELD(doorbell_ctrl1, GDC_S2A0_S2A_DOORBELL_ENTRY_2_CTRL1,
+					       S2A_DOORBELL_PORT2_TARGET_PORT_TYPE, 0x3);
+	doorbell_ctrl1 = REG_SET_FIELD(doorbell_ctrl1, GDC_S2A0_S2A_DOORBELL_ENTRY_2_CTRL1,
+					       S2A_DOORBELL_PORT2_TARGET_DIEID, target_dieid);
+	doorbell_ctrl1 = REG_SET_FIELD(doorbell_ctrl1, GDC_S2A0_S2A_DOORBELL_ENTRY_2_CTRL1,
+					       S2A_DOORBELL_PORT2_TARGET_PORT_ID, 0x0);
+
+	switch (instance) {
+	case 0:
+		WREG32_SOC15(NBIO, 0, regGDC_S2A0_S2A_DOORBELL_ENTRY_2_CTRL, doorbell_ctrl);
+		WREG32_SOC15(NBIO, 0, regGDC_S2A0_S2A_DOORBELL_ENTRY_2_CTRL1, doorbell_ctrl1);
+		break;
+	case 1:
+		WREG32_SOC15(NBIO, 0, regGDC_S2A0_S2A_DOORBELL_ENTRY_3_CTRL, doorbell_ctrl);
+		WREG32_SOC15(NBIO, 0, regGDC_S2A0_S2A_DOORBELL_ENTRY_3_CTRL1, doorbell_ctrl1);
+		break;
+	case 2:
+		WREG32_SOC15(NBIO, 0, regGDC_S2A0_S2A_DOORBELL_ENTRY_4_CTRL, doorbell_ctrl);
+		WREG32_SOC15(NBIO, 0, regGDC_S2A0_S2A_DOORBELL_ENTRY_4_CTRL1, doorbell_ctrl1);
+		break;
+	case 3:
+		WREG32_SOC15(NBIO, 0, regGDC_S2A0_S2A_DOORBELL_ENTRY_5_CTRL, doorbell_ctrl);
+		WREG32_SOC15(NBIO, 0, regGDC_S2A0_S2A_DOORBELL_ENTRY_5_CTRL1, doorbell_ctrl1);
+		break;
+	default:
+		AMDGV_ERROR("invalid VCN instance %d when programming doorbell range\n",
+			    instance);
+		break;
 	}
 }
 
@@ -496,6 +557,7 @@ const struct amdgv_nbio_funcs nbio_v6_3_2_funcs = {
 	.gc_doorbell_init = nbio_v6_3_2_gc_doorbell_init,
 	.get_memsize = 	nbio_v6_3_2_get_memsize,
 	.sdma_doorbell_range = nbio_v6_3_2_assign_sdma_doorbell,
+	.vcn_doorbell_range = nbio_v6_3_2_vcn_doorbell_range,
 	.get_nps_mode = nbio_v6_3_2_get_nps_mode,
 	.get_accel_partition_mode = nbio_v6_3_2_get_accelerator_partition_mode,
 	.get_default_accel_partition_mode = nbio_v6_3_2_get_accelerator_partition_mode_default_setting,
@@ -648,9 +710,77 @@ static void nbio_v6_3_2_disable_vf_flr(struct amdgv_adapter *adapt)
 	WREG32(SOC15_REG_OFFSET(NBIO, 0, regRCC_STRAP0_RCC_DEV0_EPF0_STRAP4), val);
 }
 
-static void nbio_v6_3_2_assign_mmsch_doorbell(struct amdgv_adapter *adapt)
+static int nbio_v6_3_2_assign_mmsch_doorbell(struct amdgv_adapter *adapt)
 {
-	vcn_v5_0_2_set_mmsch_doorbell_addr_base(adapt);
+	int i, vcn_inst;
+	int doorbell_index;
+	int ret;
+
+	ret = mmsch_v10_0_set_doorbell_addr_base(adapt);
+	if (ret)
+		return ret;
+
+	for (i = 0; i < adapt->config.mm.count[AMDGV_VCN_ENGINE]; i++) {
+		vcn_inst = GET_INST(VCN, i);
+		doorbell_index = (AMDGV_NBIO_DOORBELL_MMSCH0 << 1) + 32 * vcn_inst;
+		ret = amdgv_nbio_vcn_doorbell_range(adapt, true, doorbell_index, vcn_inst);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
+}
+
+static void nbio_v6_3_2_assign_vcn_to_vf(struct amdgv_adapter *adapt)
+{
+	uint32_t vf_target[8] = { 0 };
+	uint32_t val;
+
+	switch (adapt->num_vf) {
+	case 1:
+		vf_target[0] = 0x3210;
+		break;
+	case 2:
+		vf_target[0] = 0x10;
+		vf_target[1] = 0x32;
+		break;
+	case 4:
+		vf_target[0] = 0x0;
+		vf_target[1] = 0x1;
+		vf_target[2] = 0x2;
+		vf_target[3] = 0x3;
+		break;
+	case 8:
+		vf_target[0] = 0x0;
+		vf_target[1] = 0x0;
+		vf_target[2] = 0x1;
+		vf_target[3] = 0x1;
+		vf_target[4] = 0x2;
+		vf_target[5] = 0x2;
+		vf_target[6] = 0x3;
+		vf_target[7] = 0x3;
+		break;
+	default:
+		AMDGV_WARN("Need to config the VF VCN assignment for num_vf=%d\n",
+			   adapt->num_vf);
+		return;
+	}
+
+	val = (vf_target[1] << 16) | vf_target[0];
+	WREG32_SOC15(NBIO, 0, regGDC0_DOORBELL_VCN_TARGET_VF0, val);
+	WREG32_SOC15(NBIO, 0, regGDC1_DOORBELL_VCN_TARGET_VF0, val);
+
+	val = (vf_target[3] << 16) | vf_target[2];
+	WREG32_SOC15(NBIO, 0, regGDC0_DOORBELL_VCN_TARGET_VF2, val);
+	WREG32_SOC15(NBIO, 0, regGDC1_DOORBELL_VCN_TARGET_VF2, val);
+
+	val = (vf_target[5] << 16) | vf_target[4];
+	WREG32_SOC15(NBIO, 0, regGDC0_DOORBELL_VCN_TARGET_VF4, val);
+	WREG32_SOC15(NBIO, 0, regGDC1_DOORBELL_VCN_TARGET_VF4, val);
+
+	val = (vf_target[7] << 16) | vf_target[6];
+	WREG32_SOC15(NBIO, 0, regGDC0_DOORBELL_VCN_TARGET_VF6, val);
+	WREG32_SOC15(NBIO, 0, regGDC1_DOORBELL_VCN_TARGET_VF6, val);
 }
 
 static void nbio_v6_3_2_clear_dummy_mode(struct amdgv_adapter *adapt)
@@ -684,6 +814,17 @@ static int nbio_v6_3_2_vbios_read_rom_from_reg(struct amdgv_adapter *adapt,
 	return ret;
 }
 
+static void nbio_v6_3_2_mask_pci_aer_unsup_req(struct amdgv_adapter *adapt)
+{
+	int pos;
+	uint32_t mask;
+
+	pos = oss_pci_find_ext_cap(adapt->dev, PCI_EXT_CAP_ID_ERR);
+	oss_pci_read_config_dword(adapt->dev, pos + PCI_ERR_UNCOR_MASK, &mask);
+	mask |= 0x00100000;
+	oss_pci_write_config_dword(adapt->dev, pos + PCI_ERR_UNCOR_MASK, mask);
+}
+
 static int nbio_v6_3_2_sw_init(struct amdgv_adapter *adapt)
 {
 	const char *name = "GC_V12_1_0";
@@ -709,6 +850,9 @@ static int nbio_v6_3_2_sw_init(struct amdgv_adapter *adapt)
 
 	adapt->flags |= AMDGV_FLAG_IH_REG_PSP_EN;
 	adapt->flags |= AMDGV_FLAG_GC_REG_RLC_EN;
+
+	if (adapt->xgmi.connected_to_cpu)
+		adapt->use_vf_sysmem_xchg = true;
 
 	oss_memcpy(adapt->config.name, name, oss_strlen(name));
 	amdgv_vbios_atom_sw_init(adapt);
@@ -768,10 +912,11 @@ static int nbio_v6_3_2_hw_init(struct amdgv_adapter *adapt)
 	nbio_v6_3_2_clear_dummy_mode(adapt);
 	nbio_v6_3_2_enable_func_doorbell_access(adapt, true);
 	nbio_v6_3_2_set_xcd_doorbell_fence(adapt);
-	nbio_v6_3_2_assign_mmsch_doorbell(adapt);
 	nbio_v6_3_2_enable_pci_atomic_request(adapt);
+	nbio_v6_3_2_mask_pci_aer_unsup_req(adapt);
 	nbio_v6_3_2_enable_vf_access_mmio_over_512k(adapt);
 	nbio_v6_3_2_disable_vf_flr(adapt);
+	nbio_v6_3_2_assign_vcn_to_vf(adapt);
 
 	return 0;
 
@@ -804,10 +949,20 @@ static int nbio_v6_3_2_hw_fini(struct amdgv_adapter *adapt)
 	return 0;
 }
 
+static int nbio_v6_3_2_doorbell_hw_init(struct amdgv_adapter *adapt)
+{
+	return nbio_v6_3_2_assign_mmsch_doorbell(adapt);
+}
+
 const struct amdgv_init_func nbio_v6_3_2_func = {
 	.name = "nbio_v6_3_2_func",
 	.sw_init = nbio_v6_3_2_sw_init,
 	.sw_fini = nbio_v6_3_2_sw_fini,
 	.hw_init = nbio_v6_3_2_hw_init,
 	.hw_fini = nbio_v6_3_2_hw_fini,
+};
+
+const struct amdgv_init_func nbio_v6_3_2_doorbell_func = {
+	.name = "nbio_v6_3_2_doorbell_func",
+	.hw_init = nbio_v6_3_2_doorbell_hw_init,
 };

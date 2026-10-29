@@ -50,6 +50,18 @@ void fill_cper_header_and_section(char *buffer,
 	memcpy(&section->sec_type, &sec_type, sizeof(guid_t));
 }
 
+static constexpr uint64_t GC_IP_9_4_3 = (9ULL << 16) | (4ULL << 8) | 3;
+static constexpr uint64_t GC_IP_9_4_2 = (9ULL << 16) | (4ULL << 8) | 2;
+
+static void expect_asic_gc_ip(uint64_t target_graphics_version)
+{
+	struct smi_asic_info asic = {};
+
+	asic.target_graphics_version = target_graphics_version;
+	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_ASIC_INFO)))
+	    .WillOnce(testing::DoAll(amdsmi::SetPayload(asic), testing::Return(0)));
+}
+
 TEST_F(AmdSmiRasCperTests, InvalidParams)
 {
 	int ret;
@@ -139,13 +151,8 @@ TEST_F(AmdSmiRasCperTests, GetCperEntriesAllocFail)
 	uint64_t cursor	       = 0;
 	uint32_t severity_mask = 0;
 
-#ifdef _WIN64
-	EXPECT_CALL(*g_system_mock, Calloc(testing::_, testing::_))
-	    .WillOnce(testing::Return(nullptr));
-#else
 	EXPECT_CALL(*g_system_mock, AlignedAlloc(testing::_, testing::_, testing::_))
 	    .WillOnce(testing::Return(nullptr));
-#endif
 	ret = amdsmi_get_gpu_cper_entries(&GPU_MOCK_HANDLE,
 					  severity_mask,
 					  cper_data,
@@ -168,20 +175,12 @@ TEST_F(AmdSmiRasCperTests, GetCperEntriesSuccess)
 
 	struct smi_cper_config in_payload;
 	struct smi_cper *cper;
-#ifdef _WIN64
-	cper = (struct smi_cper *)calloc(1, sizeof(struct smi_cper));
-#else
 	cper = (struct smi_cper *)amdsmi::mem_aligned_alloc(
 	    (void **)&cper, 4096, sizeof(struct smi_cper));
-#endif
 	cper->entry_count = entry_count;
 
-#ifdef _WIN64
-	EXPECT_CALL(*g_system_mock, Calloc(testing::_, testing::_)).WillOnce(testing::Return(cper));
-#else
 	EXPECT_CALL(*g_system_mock, AlignedAlloc(testing::_, testing::_, testing::_))
 	    .WillOnce(testing::Return(cper));
-#endif
 
 	WhenCalling(std::bind(amdsmi_get_gpu_cper_entries,
 			      &GPU_MOCK_HANDLE,
@@ -206,6 +205,7 @@ TEST_F(AmdSmiRasCperTests, AfidBufferTooSmall)
 	uint64_t afids[AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD];
 	uint32_t num_afids = AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD;
 
+	expect_asic_gc_ip(GC_IP_9_4_3);
 	ret = amdsmi_get_afids_from_cper(cper_buffer, sizeof(cper_buffer), afids, &num_afids);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
@@ -219,6 +219,7 @@ TEST_F(AmdSmiRasCperTests, AfidInvalidSignature)
 
 	// Set an invalid signature in the CPER buffer
 	memset(cper_buffer, 0, sizeof(cper_buffer));
+	expect_asic_gc_ip(GC_IP_9_4_3);
 	ret = amdsmi_get_afids_from_cper(cper_buffer, sizeof(cper_buffer), afids, &num_afids);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
@@ -234,6 +235,7 @@ TEST_F(AmdSmiRasCperTests, AfidValidInput)
 	memcpy(cper_buffer, "CPER", 4);
 	reinterpret_cast<amdsmi_cper_hdr_t *>(cper_buffer)->record_length = sizeof(cper_buffer);
 
+	expect_asic_gc_ip(GC_IP_9_4_3);
 	ret = amdsmi_get_afids_from_cper(cper_buffer, sizeof(cper_buffer), afids, &num_afids);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_LE(num_afids, static_cast<uint32_t>(AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD));
@@ -256,6 +258,7 @@ TEST_F(AmdSmiRasCperTests, AfidSectionTypeNonStandard)
 	    buffer + sizeof(amdsmi_cper_hdr_t) + sizeof(struct cper_sec_desc));
 	memset(nonstd_err, 0, sizeof(struct cper_sec_nonstd_err));
 
+	expect_asic_gc_ip(GC_IP_9_4_3);
 	int ret = amdsmi_get_afids_from_cper(buffer, sizeof(buffer), afids, &num_afids);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(num_afids, 1);
@@ -276,9 +279,52 @@ TEST_F(AmdSmiRasCperTests, AfidSectionTypeCrashdump)
 	    buffer + sizeof(amdsmi_cper_hdr_t) + sizeof(struct cper_sec_desc));
 	memset(crashdump, 0, sizeof(struct cper_sec_crashdump_fatal));
 
+	expect_asic_gc_ip(GC_IP_9_4_3);
 	int ret = amdsmi_get_afids_from_cper(buffer, sizeof(buffer), afids, &num_afids);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(num_afids, 1);
+}
+
+TEST_F(AmdSmiRasCperTests, AfidAsicInfoFailed)
+{
+	char cper_buffer[1024]				      = {};
+	uint64_t afids[AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD] = {};
+	uint32_t num_afids = AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD;
+
+	memcpy(cper_buffer, "CPER", 4);
+	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_ASIC_INFO)))
+	    .WillOnce(SetResponseStatus(AMDSMI_STATUS_API_FAILED));
+
+	int ret = amdsmi_get_afids_from_cper(cper_buffer, sizeof(cper_buffer), afids, &num_afids);
+	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
+}
+
+TEST_F(AmdSmiRasCperTests, AfidGcIp942NotSupported)
+{
+	char cper_buffer[1024]				      = {};
+	uint64_t afids[AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD] = {};
+	uint32_t num_afids = AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD;
+
+	memcpy(cper_buffer, "CPER", 4);
+	expect_asic_gc_ip(GC_IP_9_4_2);
+
+	int ret = amdsmi_get_afids_from_cper(cper_buffer, sizeof(cper_buffer), afids, &num_afids);
+	ASSERT_EQ(ret, AMDSMI_STATUS_NOT_SUPPORTED);
+}
+
+TEST_F(AmdSmiRasCperTests, AfidGfxVersionUnavailableDecodes)
+{
+	char cper_buffer[1024]				      = {};
+	uint64_t afids[AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD] = {};
+	uint32_t num_afids = AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD;
+
+	memcpy(cper_buffer, "CPER", 4);
+	reinterpret_cast<amdsmi_cper_hdr_t *>(cper_buffer)->record_length = sizeof(cper_buffer);
+	expect_asic_gc_ip(UINT64_MAX);
+
+	int ret = amdsmi_get_afids_from_cper(cper_buffer, sizeof(cper_buffer), afids, &num_afids);
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(num_afids, 0u);
 }
 
 TEST_F(AmdSmiRasCperTests, FabricCperInvalidParams)

@@ -115,7 +115,8 @@ union amd_sriov_msg_feature_flags {
 		uint32_t ptl_support		: 1;
 		uint32_t unitid_support		: 1;
 		uint32_t uniras_support		: 1;
-		uint32_t reserved		: 15;
+		uint32_t bad_page_checksum	: 1;
+		uint32_t reserved			: 14;
 	} flags;
 	uint32_t all;
 };
@@ -251,7 +252,7 @@ struct amd_sriov_msg_pf2vf_info_header {
 	uint32_t reserved[2];
 };
 
-#define AMD_SRIOV_MSG_PF2VF_INFO_FILLED_SIZE (59)
+#define AMD_SRIOV_MSG_PF2VF_INFO_FILLED_SIZE (60)
 struct amd_sriov_msg_pf2vf_info {
 	/* header contains size and version */
 	struct amd_sriov_msg_pf2vf_info_header header;
@@ -314,6 +315,7 @@ struct amd_sriov_msg_pf2vf_info {
 	uint32_t ptl_pref_format2;   // Current preferred format 2
 	uint8_t unitid;
 	uint8_t padding[3];  //use the 3 bytes to align
+	uint32_t bp_block_checksum;
 	/* reserved */
 	uint32_t reserved[256 - AMD_SRIOV_MSG_PF2VF_INFO_FILLED_SIZE];
 };

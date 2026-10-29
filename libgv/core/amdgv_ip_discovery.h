@@ -547,6 +547,21 @@ struct amdgv_ip_discovery {
 	uint16_t header_index[TOTAL_TABLES_V2];
 };
 
+/*
+ * Firmware publishes the silicon revision in die_info[0].die_id:
+ *   bit[11:8] MID revision
+ *   bit[7:4]  AID revision
+ *   bit[3:0]  XCD revision
+ */
+#define AMDGV_DIE_REV_XCD__SHIFT 0
+#define AMDGV_DIE_REV_AID__SHIFT 4
+#define AMDGV_DIE_REV_MID__SHIFT 8
+#define AMDGV_DIE_REV_XCD__MASK  0xF
+#define AMDGV_DIE_REV(mid, aid, xcd)          \
+	(((mid) << AMDGV_DIE_REV_MID__SHIFT) | \
+	 ((aid) << AMDGV_DIE_REV_AID__SHIFT) | \
+	 ((xcd) << AMDGV_DIE_REV_XCD__SHIFT))
+
 int amdgv_discover_ip(struct amdgv_adapter *adapt);
 int amdgv_ip_discovery_init(struct amdgv_adapter *adapt);
 int amdgv_ip_discovery_fini(struct amdgv_adapter *adapt);

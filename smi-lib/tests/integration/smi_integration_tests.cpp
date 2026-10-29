@@ -162,6 +162,8 @@ static void walkthrough_test()
 		printf("    Subvendor ID: 0x%x\n", asic_info.subvendor_id);
 		printf("    Device ID: 0x%" PRIx64 "\n", asic_info.device_id);
 		printf("    Revision ID: 0x%x\n", asic_info.rev_id);
+		printf("    Chip Revision ID: %s\n", na_u32(asic_info.chip_rev_id).c_str());
+		printf("    External Revision ID: %s\n", na_u32(asic_info.external_rev_id).c_str());
 		printf("    ASIC Serial: 0x%s\n", asic_info.asic_serial);
 		printf("    OAM ID: %d\n", asic_info.oam_id);
 		printf("    Num Of Compute Units: %d\n", asic_info.num_of_compute_units);
@@ -1931,7 +1933,7 @@ static void confidential_compute_test()
 	uint32_t dev_cnt		    = AMDSMI_MAX_DEVICES;
 	amdsmi_processor_handle *processors = NULL;
 	amdsmi_tdi_state_t tdi_state;
-	amdsmi_cc_mode_t cc_mode, original_cc_mode;
+	amdsmi_gpu_cc_mode_t cc_mode, original_cc_mode;
 	int ret = 0;
 
 	processors = (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
@@ -1976,19 +1978,19 @@ static void confidential_compute_test()
 		}
 
 		// Test CC mode get
-		ret = amdsmi_get_cc_mode(processors[i], &cc_mode);
+		ret = amdsmi_get_gpu_cc_mode(processors[i], &cc_mode);
 		ASSERT_TRUE(ret == AMDSMI_STATUS_SUCCESS || ret == AMDSMI_STATUS_NOT_SUPPORTED);
 		if (ret == AMDSMI_STATUS_SUCCESS) {
 			original_cc_mode = cc_mode;
 			printf("CC Mode: ");
 			switch (cc_mode) {
-			case AMDSMI_CC_MODE_OFF:
+			case AMDSMI_GPU_CC_MODE_OFF:
 				printf("OFF (%d)\n", cc_mode);
 				break;
-			case AMDSMI_CC_MODE_ON:
+			case AMDSMI_GPU_CC_MODE_ON:
 				printf("ON (%d)\n", cc_mode);
 				break;
-			case AMDSMI_CC_MODE_DEV:
+			case AMDSMI_GPU_CC_MODE_DEV:
 				printf("DEV (%d)\n", cc_mode);
 				break;
 			default:
@@ -1999,35 +2001,35 @@ static void confidential_compute_test()
 			// Test CC mode set (cycle through modes and restore original)
 			printf("Testing CC mode transitions...\n");
 
-			ret = amdsmi_set_cc_mode(processors[i], AMDSMI_CC_MODE_OFF);
+			ret = amdsmi_set_gpu_cc_mode(processors[i], AMDSMI_GPU_CC_MODE_OFF);
 			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS ||
 				    ret == AMDSMI_STATUS_NOT_SUPPORTED ||
 				    ret == AMDSMI_STATUS_API_FAILED);
 			if (ret == AMDSMI_STATUS_SUCCESS) {
-				ret = amdsmi_get_cc_mode(processors[i], &cc_mode);
+				ret = amdsmi_get_gpu_cc_mode(processors[i], &cc_mode);
 				ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
-				EXPECT_EQ(cc_mode, AMDSMI_CC_MODE_OFF);
+				EXPECT_EQ(cc_mode, AMDSMI_GPU_CC_MODE_OFF);
 				printf("  Set to OFF: SUCCESS\n");
 			}
 
-			ret = amdsmi_set_cc_mode(processors[i], AMDSMI_CC_MODE_DEV);
+			ret = amdsmi_set_gpu_cc_mode(processors[i], AMDSMI_GPU_CC_MODE_DEV);
 			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS ||
 				    ret == AMDSMI_STATUS_NOT_SUPPORTED ||
 				    ret == AMDSMI_STATUS_API_FAILED);
 			if (ret == AMDSMI_STATUS_SUCCESS) {
-				ret = amdsmi_get_cc_mode(processors[i], &cc_mode);
+				ret = amdsmi_get_gpu_cc_mode(processors[i], &cc_mode);
 				ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
-				EXPECT_EQ(cc_mode, AMDSMI_CC_MODE_DEV);
+				EXPECT_EQ(cc_mode, AMDSMI_GPU_CC_MODE_DEV);
 				printf("  Set to DEV: SUCCESS\n");
 			}
 
 			// Restore original mode
-			ret = amdsmi_set_cc_mode(processors[i], original_cc_mode);
+			ret = amdsmi_set_gpu_cc_mode(processors[i], original_cc_mode);
 			EXPECT_TRUE(ret == AMDSMI_STATUS_SUCCESS ||
 				    ret == AMDSMI_STATUS_NOT_SUPPORTED ||
 				    ret == AMDSMI_STATUS_API_FAILED);
 			if (ret == AMDSMI_STATUS_SUCCESS) {
-				ret = amdsmi_get_cc_mode(processors[i], &cc_mode);
+				ret = amdsmi_get_gpu_cc_mode(processors[i], &cc_mode);
 				ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 				EXPECT_EQ(cc_mode, original_cc_mode);
 				printf("  Restored to original mode: SUCCESS\n");
@@ -2258,7 +2260,7 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 	uint64_t buf_size      = 1024 * 1024;
 	uint64_t entry_count   = 1024;
 	uint64_t cursor	       = 0;
-	amdsmi_cc_mode_t cc_mode_test;
+	amdsmi_gpu_cc_mode_t cc_mode_test;
 	bool ptl_enabled;
 	amdsmi_ptl_data_format_t ptl_format1, ptl_format2;
 
@@ -2395,9 +2397,9 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 	    AMDSMI_STATUS_SUCCESS) {
 		ASSERT_EQ(amdsmi_get_tdi_state(vf_handle, NULL), AMDSMI_STATUS_INVAL);
 	}
-	ASSERT_EQ(amdsmi_get_cc_mode(processors[0], NULL), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_cc_mode(NULL, &cc_mode_test), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_set_cc_mode(NULL, AMDSMI_CC_MODE_ON), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_cc_mode(processors[0], NULL), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_cc_mode(NULL, &cc_mode_test), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_set_gpu_cc_mode(NULL, AMDSMI_GPU_CC_MODE_ON), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_gpu_ptl_state(NULL, &ptl_enabled), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_get_gpu_ptl_state(processors[0], NULL), AMDSMI_STATUS_INVAL);
 	ASSERT_EQ(amdsmi_set_gpu_ptl_state(NULL, true), AMDSMI_STATUS_INVAL);
@@ -2539,9 +2541,9 @@ TEST(amdsmiIntegrationTests, WrongParamsTests)
 			    station_ret == AMDSMI_STATUS_INVAL);
 	}
 
-	ASSERT_EQ(amdsmi_get_cc_mode(processors[0], NULL), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_get_cc_mode(NULL, &cc_mode_test), AMDSMI_STATUS_INVAL);
-	ASSERT_EQ(amdsmi_set_cc_mode(NULL, AMDSMI_CC_MODE_ON), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_cc_mode(processors[0], NULL), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_get_gpu_cc_mode(NULL, &cc_mode_test), AMDSMI_STATUS_INVAL);
+	ASSERT_EQ(amdsmi_set_gpu_cc_mode(NULL, AMDSMI_GPU_CC_MODE_ON), AMDSMI_STATUS_INVAL);
 
 	ASSERT_EQ(amdsmi_shut_down(), AMDSMI_STATUS_SUCCESS);
 	ASSERT_EQ(amdsmi_get_processor_handles(socket, &dev_cnt, processors),

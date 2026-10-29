@@ -8,17 +8,19 @@
 #include <amdgv_sched_internal.h>
 
 #include "gfx_v12_1.h"
-#if 0
 #include "amdgv_mes.h"
 #include "gfx_v12_1_doorbell.h"
-#endif
 #include "asic_reg/GC/gc_12_1_0_offset.h"
 #include "asic_reg/GC/gc_12_1_0_sh_mask.h"
 #include "amdgv_nbio.h"
+#include "gfx_v12_1_cleaner_shader.h"
 #include "ucode/rlc/12_1_0/rlc_12_1_0_ucode_wrap.h"
 #include "ucode/cp/12_1_0/mec_12_1_0_ucode_wrap.h"
 
 static const uint32_t this_block = AMDGV_SECURITY_BLOCK;
+
+/* LAUNCH_CLEANER_SHADER is implemented starting with MEC 2440. */
+#define GFX_V12_1_MEC_CLEANER_SHADER_MIN_VER	2440
 
 static int gfx_v12_1_xcc_set_safe_mode(struct amdgv_adapter *adapt, int xcc_id)
 {
@@ -400,12 +402,100 @@ static uint32_t gfx_v12_1_get_num_xcc_in_xcp(struct amdgv_adapter *adapt)
 	}
 }
 
+static uint32_t gfx_v12_1_mec_cp_version(struct amdgv_adapter *adapt)
+{
+	unsigned char *fw = NULL;
+	uint32_t size = 0;
+
+	if (!adapt->ucode.get_mec_ucode)
+		return 0;
+
+	if (adapt->ucode.get_mec_ucode(adapt, AMDGV_FIRMWARE_ID__RS64_MEC_UCODE,
+				       &fw, &size))
+		return 0;
+
+	if (!fw || size < sizeof(struct psp_fw_image_header))
+		return 0;
+
+	return ((struct psp_fw_image_header *)fw)->image_version;
+}
+
+static int gfx_v12_1_run_cleaner_shader_on_xcc(struct amdgv_adapter *adapt, uint32_t xcc_id)
+{
+	struct mes_misc_op_input input = { 0 };
+	int r;
+
+	AMDGV_INFO("cleaner shader: launch xcc %u via MES KIQ\n", xcc_id);
+
+	if (!adapt->mes.funcs || !adapt->mes.funcs->misc_op) {
+		AMDGV_INFO("cleaner shader: MES misc_op unavailable on xcc %u\n",
+			   xcc_id);
+		return AMDGV_FAILURE;
+	}
+
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_CLEANER_SHADER_MES_SUBMIT,
+		      xcc_id);
+	input.xcc_id = xcc_id;
+	input.op = MES_MISC_OP_LAUNCH_CLEANER_SHADER;
+	r = adapt->mes.funcs->misc_op(&adapt->mes, &input);
+	AMDGV_INFO("cleaner shader: launch xcc %u returned %d\n", xcc_id, r);
+	return r;
+}
+
+static int gfx_v12_1_run_cleaner_shader(struct amdgv_adapter *adapt, uint32_t xcp_id)
+{
+	uint32_t xcc_id;
+	uint32_t xcc_mask;
+	uint32_t num_part;
+	uint32_t mec_ver;
+	int r;
+
+	mec_ver = gfx_v12_1_mec_cp_version(adapt);
+	if (mec_ver < GFX_V12_1_MEC_CLEANER_SHADER_MIN_VER) {
+		AMDGV_INFO("cleaner shader: skip, MEC version %u < %u\n",
+			   mec_ver, GFX_V12_1_MEC_CLEANER_SHADER_MIN_VER);
+		return AMDGV_FAILURE;
+	}
+
+	num_part = adapt->sched.num_spatial_partitions;
+	if (!num_part)
+		num_part = 1;
+	if (xcp_id >= num_part)
+		return AMDGV_FAILURE;
+
+	if (adapt->sched.num_spatial_partitions)
+		xcc_mask = adapt->sched.spatial_part[xcp_id].xcc_mask;
+	else if (adapt->mcp.gfx.xcc_mask)
+		xcc_mask = adapt->mcp.gfx.xcc_mask;
+	else if (adapt->mcp.gfx.num_xcc && adapt->mcp.gfx.num_xcc < 32)
+		xcc_mask = (1U << adapt->mcp.gfx.num_xcc) - 1;
+	else
+		xcc_mask = 0;
+
+	if (!xcc_mask)
+		return AMDGV_FAILURE;
+
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_CLEANER_SHADER_REQUEST,
+		      AMDGV_LOG_DATA_32_32(xcp_id, xcc_mask));
+
+	for_each_id(xcc_id, xcc_mask) {
+		r = gfx_v12_1_run_cleaner_shader_on_xcc(adapt, xcc_id);
+		if (r)
+			return r;
+	}
+
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPU_CLEANER_SHADER_DONE, xcp_id);
+
+	return 0;
+}
+
 struct amdgv_gfx_funcs gfx_v12_1_funcs = {
 	.check_rlc_autoload_complete = gfx_v12_1_gfx_check_rlc_autoload_complete,
 	.is_gfx_off = gfx_v12_1_is_gfx_off,
 	.get_num_xcc_in_xcp = gfx_v12_1_get_num_xcc_in_xcp,
 	.set_clockgating_state = gfx_v12_1_set_clockgating_state,
 	.set_poison_interrupt_routing = gfx_v12_1_set_poison_interrupt_routing,
+	.run_cleaner_shader = gfx_v12_1_run_cleaner_shader,
 };
 
 static void gfx_v12_1_xcc_init_compute_vmid(struct amdgv_adapter *adapt, int xcc_id)
@@ -519,35 +609,113 @@ static void gfx_v12_1_constants_init(struct amdgv_adapter *adapt)
 		gfx_v12_1_xcc_constants_init(adapt, i);
 }
 
+static int gfx_v12_1_cleaner_shader_sw_init(struct amdgv_adapter *adapt)
+{
+	struct amdgv_memmgr *memmgr = &adapt->memmgr_pf;
+
+	adapt->gfx.cleaner_shader_size =
+		sizeof(gfx_12_1_0_cleaner_shader_hex);
+
+	adapt->gfx.cleaner_shader_gpu_addr = 0;
+	adapt->gfx.cleaner_shader_cpu_ptr = NULL;
+	adapt->gfx.cleaner_shader_obj = amdgv_memmgr_alloc_align(
+		memmgr, adapt->gfx.cleaner_shader_size,
+		PAGE_SIZE, MEM_GFX_CLEANER_SHADER);
+	if (!adapt->gfx.cleaner_shader_obj) {
+		AMDGV_ERROR("cleaner shader: PF alloc failed, size %u align %u status %d memmgr init %d mc_base 0x%llx cpu_base %p size 0x%llx tom 0x%llx\n",
+			    adapt->gfx.cleaner_shader_size, (uint32_t)PAGE_SIZE, adapt->status,
+			    memmgr->is_init, memmgr->mc_base, memmgr->cpu_base,
+			    memmgr->size, memmgr->tom);
+		return AMDGV_FAILURE;
+	}
+
+	return 0;
+}
+
+static int gfx_v12_1_cleaner_shader_hw_init(struct amdgv_adapter *adapt)
+{
+	struct amdgv_memmgr *memmgr = &adapt->memmgr_pf;
+	struct amdgv_memmgr_mem *mem = adapt->gfx.cleaner_shader_obj;
+
+	if (!mem || !adapt->gfx.cleaner_shader_size) {
+		AMDGV_ERROR("cleaner shader: hw_init missing reservation\n");
+		return AMDGV_FAILURE;
+	}
+
+	if (!mem->alloc_off) {
+		AMDGV_ERROR("cleaner shader: allocation not placed, alloc_off 0 mc_base 0x%llx cpu_base %p\n",
+			    memmgr->mc_base, memmgr->cpu_base);
+		return AMDGV_FAILURE;
+	}
+
+	adapt->gfx.cleaner_shader_gpu_addr = amdgv_memmgr_get_gpu_addr(mem);
+	adapt->gfx.cleaner_shader_cpu_ptr = amdgv_memmgr_get_cpu_addr(mem);
+	if (!adapt->gfx.cleaner_shader_cpu_ptr) {
+		AMDGV_ERROR("cleaner shader: CPU mapping unavailable, gpu_addr 0x%llx alloc_off 0x%llx cpu_base %p\n",
+			    adapt->gfx.cleaner_shader_gpu_addr, mem->alloc_off,
+			    memmgr->cpu_base);
+		return AMDGV_FAILURE;
+	}
+
+	oss_memcpy(adapt->gfx.cleaner_shader_cpu_ptr,
+		   gfx_12_1_0_cleaner_shader_hex,
+		   adapt->gfx.cleaner_shader_size);
+
+	return 0;
+}
+
 static int gfx_v12_1_sw_init(struct amdgv_adapter *adapt)
 {
+	int r;
+
 	adapt->gfx.funcs = &gfx_v12_1_funcs;
 
 	gfx_v12_1_set_rlc_funcs(adapt);
 
-#if 0
 	gfx_v12_1_doorbell_index_init(adapt);
 
 	adapt->gfx.mec.num_mec = 2;
 	adapt->gfx.mec.num_pipe_per_mec = 4;
 	adapt->gfx.mec.num_queue_per_pipe = 8;
-#endif
+
+	if (adapt->nbio.chip_rev_id == AMDGV_REV_ID_UNKNOWN) {
+		AMDGV_ERROR("gc_12_1_0: unknown chip_rev_id, cannot select A0/B0 ucode\n");
+		return AMDGV_FAILURE;
+	}
 
 	/* Register the gc_12_1_0 RLC/MEC A0/B0 ucode accessors into adapt->ucode. */
 	rlc_12_1_0_ucode_register(adapt);
 	mec_12_1_0_ucode_register(adapt);
-	AMDGV_INFO("gc_12_1_0 RLC/MEC ucode variant: %s (rev_id 0x%x)\n",
-		   adapt->rev_id == 0 ? "A0" : "B0", adapt->rev_id);
+	AMDGV_INFO("gc_12_1_0 RLC/MEC ucode variant: %s (chip_rev_id 0x%x)\n",
+		   (adapt->nbio.chip_rev_id & AMDGV_DIE_REV_XCD__MASK) ? "B0" : "A0",
+		   adapt->nbio.chip_rev_id);
 
-	return 0;
+	r = gfx_v12_1_cleaner_shader_sw_init(adapt);
+	if (r)
+		AMDGV_ERROR("Failed to initialize gfx12.1 cleaner shader\n");
+
+	return r;
+}
+
+static void gfx_v12_1_cleaner_shader_sw_fini(struct amdgv_adapter *adapt)
+{
+	if (!adapt->gfx.cleaner_shader_obj)
+		return;
+
+	amdgv_memmgr_free(adapt->gfx.cleaner_shader_obj);
+	adapt->gfx.cleaner_shader_obj = NULL;
+	adapt->gfx.cleaner_shader_cpu_ptr = NULL;
+	adapt->gfx.cleaner_shader_gpu_addr = 0;
+	adapt->gfx.cleaner_shader_size = 0;
 }
 
 static int gfx_v12_1_sw_fini(struct amdgv_adapter *adapt)
 {
+	gfx_v12_1_cleaner_shader_sw_fini(adapt);
+
 	return 0;
 }
 
-#if 0
 static void gfx_v12_1_enable_interrupt(struct amdgv_adapter *adapt, uint32_t xcc_id, bool enable)
 {
 	uint32_t tmp;
@@ -589,7 +757,31 @@ static void gfx_v12_1_cp_set_doorbell_range(struct amdgv_adapter *adapt, uint32_
 			((adapt->doorbell_index.userqueue_end +
 			  xcc_id * adapt->doorbell_index.xcc_doorbell_range) * 2) << 2);
 }
-#endif
+
+static int gfx_v12_1_program_cleaner_shader(struct amdgv_adapter *adapt,
+					     uint32_t xcc_id)
+{
+	uint32_t addr_hi;
+	uint32_t addr_lo;
+
+	if (!adapt->gfx.cleaner_shader_obj ||
+	    !adapt->gfx.cleaner_shader_size ||
+	    !adapt->gfx.cleaner_shader_cpu_ptr) {
+		AMDGV_INFO("cleaner shader: skip CSIB program on xcc %u, shader not ready\n",
+			   xcc_id);
+		return AMDGV_FAILURE;
+	}
+
+	addr_hi = upper_32_bits(adapt->gfx.cleaner_shader_gpu_addr);
+	addr_lo = lower_32_bits(adapt->gfx.cleaner_shader_gpu_addr) & 0xfffffffc;
+
+	WREG32_SOC15(GC, GET_INST(GC, xcc_id), regRLC_CSIB_ADDR_HI, addr_hi);
+	WREG32_SOC15(GC, GET_INST(GC, xcc_id), regRLC_CSIB_ADDR_LO, addr_lo);
+	WREG32_SOC15(GC, GET_INST(GC, xcc_id), regRLC_CSIB_LENGTH,
+		    adapt->gfx.cleaner_shader_size);
+
+	return 0;
+}
 
 static int gfx_v12_1_hw_init_xcc(struct amdgv_adapter *adapt, uint32_t xcc_id)
 {
@@ -609,7 +801,12 @@ static int gfx_v12_1_hw_init_xcc(struct amdgv_adapter *adapt, uint32_t xcc_id)
 		return ret;
 	}
 
-#if 0
+	ret = gfx_v12_1_program_cleaner_shader(adapt, xcc_id);
+	if (ret) {
+		AMDGV_ERROR("Failed to program cleaner shader on xcc %d\n", xcc_id);
+		return ret;
+	}
+
 	if (adapt->enable_mes_kiq) {
 		gfx_v12_1_cp_set_doorbell_range(adapt, xcc_id);
 
@@ -622,22 +819,26 @@ static int gfx_v12_1_hw_init_xcc(struct amdgv_adapter *adapt, uint32_t xcc_id)
 			AMDGV_ERROR("Failed to init MES KIQ on xcc %d\n", xcc_id);
 			gfx_v12_1_enable_interrupt(adapt, xcc_id, false);
 			gfx_v12_1_xcc_cp_compute_enable(adapt, false, xcc_id);
+			return ret;
 		}
 	} else {
-		// KIQ must be enabled on gfx12.1
+		/* KIQ must be enabled on gfx12.1 */
 		AMDGV_ERROR("MES KIQ is not enabled on xcc %d\n", xcc_id);
 		return AMDGV_FAILURE;
 	}
-#else
-	gfx_v12_1_xcc_cp_compute_enable(adapt, true, xcc_id);
-#endif
 
-	return ret;
+	return 0;
 }
 
 static int gfx_v12_1_hw_init(struct amdgv_adapter *adapt)
 {
 	int ret, i;
+
+	ret = gfx_v12_1_cleaner_shader_hw_init(adapt);
+	if (ret) {
+		AMDGV_ERROR("Failed to copy gfx12.1 cleaner shader\n");
+		return ret;
+	}
 
 	gfx_v12_1_init_golden_registers(adapt);
 	gfx_v12_1_constants_init(adapt);
@@ -656,7 +857,6 @@ static int gfx_v12_1_hw_init(struct amdgv_adapter *adapt)
 
 static int gfx_v12_1_hw_fini_xcc(struct amdgv_adapter *adapt, uint32_t xcc_id)
 {
-#if 0
 	gfx_v12_1_enable_interrupt(adapt, xcc_id, false);
 
 	if (adapt->enable_mes_kiq) {
@@ -664,7 +864,6 @@ static int gfx_v12_1_hw_fini_xcc(struct amdgv_adapter *adapt, uint32_t xcc_id)
 			AMDGV_ERROR("MES KIQ hw fini failed on xcc %d, "
 				    "proceeding with compute disable\n", xcc_id);
 	}
-#endif
 
 	gfx_v12_1_xcc_cp_compute_enable(adapt, false, xcc_id);
 
@@ -693,6 +892,11 @@ int gfx_v12_1_hw_resume(struct amdgv_adapter *adapt, uint32_t xcc_mask)
 {
 	uint32_t xcc_id;
 	int r = 0;
+
+	if (gfx_v12_1_cleaner_shader_hw_init(adapt)) {
+		AMDGV_ERROR("Failed to copy gfx12.1 cleaner shader on resume\n");
+		return AMDGV_FAILURE;
+	}
 
 	for_each_id (xcc_id, xcc_mask) {
 		if (gfx_v12_1_hw_init_xcc(adapt, xcc_id)) {

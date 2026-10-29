@@ -27,7 +27,6 @@ static const uint32_t smu_v15_0_8_ras_msg_maps[PP_SMU_RAS_MSG_MAX] = {
 	[PP_SMU_RAS_MSG_GetRmaStatus]       = PPSMC_MSG_GetRmaStatus,
 	[PP_SMU_RAS_MSG_GetBadPageCount]    = PPSMC_MSG_GetBadPageCount,
 	[PP_SMU_RAS_MSG_GetBadPageMcaAddr]  = PPSMC_MSG_GetBadPageMcaAddress,
-	[PP_SMU_RAS_MSG_GetBadPagePaAddr]   = PPSMC_MSG_GetBadPagePaAddress,
 	[PP_SMU_RAS_MSG_SetTimestamp]       = PPSMC_MSG_SetTimestamp,
 	[PP_SMU_RAS_MSG_GetTimestamp]       = PPSMC_MSG_GetTimestamp,
 	[PP_SMU_RAS_MSG_GetRasPolicy]       = PPSMC_MSG_GetRasPolicy,
@@ -48,9 +47,8 @@ static int smu_v15_0_8_pp_add_drv_metrics_entry(struct amdgv_adapter *adapt,
 	uint32_t idx = drv_metrics_ext->num_metric;
 
 	if (idx >= MAX_NUM_METRICS) {
-		AMDGV_ERROR("Entry %d dropped. "
-			    "drv_metrics table cannot support more than %d entries\n",
-			    idx, MAX_NUM_METRICS);
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_METRICS_TABLE_FULL,
+			      AMDGV_LOG_DATA_32_32(idx, MAX_NUM_METRICS));
 		return AMDGV_FAILURE;
 	}
 
@@ -252,7 +250,7 @@ static int smu_v15_0_8_pp_get_metric(struct amdgv_adapter *adapt,
 				     void *metric_addr)
 {
 	if (!val || !metric_addr) {
-		AMDGV_ERROR("Invalid metric entry\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_INVALID_METRIC_ENTRY, 0);
 		return AMDGV_FAILURE;
 	}
 
@@ -298,7 +296,7 @@ static int smu_v15_0_8_pp_get_metric(struct amdgv_adapter *adapt,
 		*(uint64_t *)val = -1;
 		break;
 	default:
-		AMDGV_ERROR("Unknown metric encoding type!\n");
+		AMDGV_DEBUG("Unknown metric encoding type!\n");
 		*(uint32_t *)val = *(uint32_t *)metric_addr;
 		break;
 	}
@@ -334,6 +332,22 @@ static int smu_v15_0_8_pp_append_drv_metric_to_user(struct amdgv_adapter *adapt,
 	return 0;
 }
 
+static int smu_v15_0_8_pp_get_fast_ppt_limit(struct amdgv_adapter *adapt)
+{
+	struct smu_context *smu = ADAPT_TO_SMU(adapt);
+	struct smu_15_0_8_msg msg = { 0 };
+	int ret;
+
+	msg.id = PPSMC_MSG_GetFastPptLimit;
+	ret = smu_v15_0_8_send_msg(adapt, &msg);
+	if (ret)
+		return ret;
+
+	smu->fast_ppt_limit = msg.out_arg[0];
+
+	return 0;
+}
+
 static int smu_v15_0_8_pp_get_metrics(struct amdgv_adapter *adapt,
 				      struct amdgv_gpumon_metrics_ext *metrics_ext)
 {
@@ -349,6 +363,8 @@ static int smu_v15_0_8_pp_get_metrics(struct amdgv_adapter *adapt,
 	if (smu_v15_0_8_pp_get_fw_table(adapt, SMU_TABLE__METRICS, false))
 		return AMDGV_FAILURE;
 	if (smu_v15_0_8_pp_get_fw_table(adapt, SMU_TABLE__SYSTEM_METRICS, false))
+		return AMDGV_FAILURE;
+	if (smu_v15_0_8_pp_get_fast_ppt_limit(adapt))
 		return AMDGV_FAILURE;
 
 	if (smu_v15_0_8_pp_update_drv_metrics(adapt, drv_gpu_metrics))
@@ -510,13 +526,15 @@ static int smu_v15_0_8_pp_send_ras_msg(struct amdgv_adapter *adapt,
 		return AMDGV_FAILURE;
 
 	if (num_params > SMU_15_0_8_MAX_ARGS || num_read_args > SMU_15_0_8_MAX_ARGS) {
-		AMDGV_ERROR("Inputs exceeds SMU_15_0_8_MAX_ARGS\n");
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_RAS_MSG_ARGS_OVERFLOW, 0);
 		return AMDGV_FAILURE;
 	}
 
 	ppsmc_code = smu_v15_0_8_ras_msg_maps[msg];
-	if (!ppsmc_code)
+	if (!ppsmc_code) {
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_RAS_MSG_INVALID, msg);
 		return AMDGV_FAILURE;
+	}
 
 	smu_msg.id = ppsmc_code;
 
@@ -827,12 +845,25 @@ static int smu_v15_0_8_pp_set_table_address(struct amdgv_adapter *adapt)
 	return 0;
 }
 
-static void smu_v15_0_8_pp_init_supported_caps(struct amdgv_adapter *adapt)
+static int smu_v15_0_8_pp_init_supported_caps(struct amdgv_adapter *adapt)
 {
 	struct smu_context *smu = ADAPT_TO_SMU(adapt);
+	SystemMetricsTable_t *sys_metrics =
+		(SystemMetricsTable_t *)ADAPT_TO_SMU_TABLE(adapt, SMU_TABLE__SYSTEM_METRICS);
+
 
 	smu->supported_caps = 0;
-	/* Add PMFW/Driver version compatability checks here */
+
+	if (!(smu->features & BIT(FEATURE_ID_NODE_POWER_MANAGER)))
+		return 0;
+
+	if (smu_v15_0_8_pp_get_fw_table(adapt, SMU_TABLE__SYSTEM_METRICS, false))
+		return AMDGV_FAILURE;
+
+	if (sys_metrics->NpmSupported)
+		smu->supported_caps |= SMU_CAPS(SMU_CAP_NPM);
+
+	return 0;
 }
 
 static int smu_v15_0_8_pp_save_product_info(struct amdgv_adapter *adapt)
@@ -961,6 +992,7 @@ static void smu_v15_0_8_pp_drv_gpu_hbm_metrics_init(struct amdgv_adapter *adapt,
 
 static int smu_v15_0_8_pp_drv_gpu_metrics_init(struct amdgv_adapter *adapt)
 {
+	struct smu_context *smu = ADAPT_TO_SMU(adapt);
 	struct drv_metrics *drv_metrics;
 	MetricsTable_t *metrics;
 	uint32_t whole_gpu_vf_mask = (BIT(adapt->num_vf) - 1) | BIT(AMDGV_PF_IDX);
@@ -992,6 +1024,7 @@ static int smu_v15_0_8_pp_drv_gpu_metrics_init(struct amdgv_adapter *adapt)
 	ADD_DRV_METRICS_ENTRY(SMU_15_TEMP_VR_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, Q10_64,		&metrics->MaxVrTemperatureAcc);
 	ADD_DRV_METRICS_ENTRY(SMU_15_POWER_MAX,				whole_gpu_vf_mask, SMU_15_GPU_RES_ID, Q10_32,		&metrics->SocketPowerLimit);
 	ADD_DRV_METRICS_ENTRY(SMU_15_POWER,				whole_gpu_vf_mask, SMU_15_GPU_RES_ID, Q10_32,		&metrics->SocketPower);
+	ADD_DRV_METRICS_ENTRY(SMU_15_PPT1_MAX,				whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,		&smu->fast_ppt_limit);
 	ADD_DRV_METRICS_ENTRY(SMU_15_ENERGY_SOCKET_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, Q16_64,		&metrics->SocketEnergyAcc);
 	ADD_DRV_METRICS_ENTRY(SMU_15_ENERGY_MEM_ACC,			whole_gpu_vf_mask, SMU_15_GPU_RES_ID, Q16_64,		&metrics->HbmEnergyAcc);
 	ADD_DRV_METRICS_ENTRY(SMU_15_USAGE_GFX,				whole_gpu_vf_mask, SMU_15_GPU_RES_ID, Q10_32,		&metrics->SocketGfxBusy);
@@ -1039,6 +1072,8 @@ static int smu_v15_0_8_pp_drv_static_metrics_init(struct amdgv_adapter *adapt)
 	ADD_DRV_METRICS_ENTRY(SMU_15_MEMCLK_MAX,	whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->UclkFrequencyTable[3]);
 	ADD_DRV_METRICS_ENTRY(SMU_15_MEMCLK_MIN,	whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->UclkFrequencyTable[0]);
 	ADD_DRV_METRICS_ENTRY(SMU_15_POWER_STATIC,	whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->MaxSocketPowerLimit);
+	ADD_DRV_METRICS_ENTRY(SMU_15_PPT1_STATIC_MAX,	whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->PPT1Max);
+	ADD_DRV_METRICS_ENTRY(SMU_15_PPT1_STATIC_MIN,	whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->PPT1Min);
 	ADD_DRV_METRICS_ENTRY(SMU_15_GL2CLK_MAX,	whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->MaxGl2clkFrequency);
 	ADD_DRV_METRICS_ENTRY(SMU_15_GL2CLK_MIN,	whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->MinGl2clkFrequency);
 	ADD_DRV_METRICS_ENTRY(SMU_15_SOC_CLK_MAX,	whole_gpu_vf_mask, SMU_15_GPU_RES_ID, UINT_32,	&metrics->SocclkFrequency);
@@ -1171,17 +1206,39 @@ static int smu_v15_0_8_pp_metrics_init(struct amdgv_adapter *adapt)
 	return 0;
 };
 
+static int smu_v15_0_8_pp_query_features(struct amdgv_adapter *adapt)
+{
+	struct smu_context *smu = ADAPT_TO_SMU(adapt);
+	struct smu_15_0_8_msg msg = { 0 };
+	int ret;
+
+	msg.id = PPSMC_MSG_GetEnabledSmuFeatures;
+	ret = smu_v15_0_8_send_msg(adapt, &msg);
+	if (ret)
+		return ret;
+
+	smu->features = ((uint64_t)msg.out_arg[1] << 32) | msg.out_arg[0];
+
+	amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_PP_ENABLED_SMU_FEATURES, smu->features);
+
+	return 0;
+}
+
 static int smu_v15_0_8_pp_hw_init(struct amdgv_adapter *adapt)
 {
-	smu_v15_0_8_pp_init_supported_caps(adapt);
-
 	if (adapt->pp.smu_fw_version < 0x027d0900)
 		return 0;
+
+	if (smu_v15_0_8_pp_query_features(adapt))
+		return AMDGV_FAILURE;
 
 	if (smu_v15_0_8_pp_set_table_address(adapt))
 		return AMDGV_FAILURE;
 
 	if (smu_v15_0_8_pp_metrics_init(adapt))
+		return AMDGV_FAILURE;
+
+	if (smu_v15_0_8_pp_init_supported_caps(adapt))
 		return AMDGV_FAILURE;
 
 	if (!adapt->product_info.visit)

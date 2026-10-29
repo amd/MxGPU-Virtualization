@@ -14,10 +14,16 @@
 
 #include "smi_cli_platform.h"
 #include "smi_cli_exception.h"
+#include "smi_cli_build_config.h"
+
+#include <cstdio>
 
 #ifdef _WIN64
 	#include <Wbemidl.h>
+	#include <sysinfoapi.h>
 	#pragma comment(lib, "wbemuuid.lib")
+#else
+	#include <unistd.h>
 #endif
 
 const std::vector<std::string> dev_id_list_mi30x   = {"74A0", "74A1", "74A2", "74B6", "74A9",
@@ -402,15 +408,15 @@ std::string is_virtualization_host()
 
 AmdSmiPlatform::AmdSmiPlatform()
 {
-#if defined(__linux__)
-	operating_system = "linux";
-	is_linux_	 = true;
-#elif _WIN64
-	operating_system = "windows";
-	is_windows_	 = true;
-#else
-	operating_system = "unknown";
-#endif
+	if constexpr (smi::config::is_linux) {
+		operating_system = "linux";
+		is_linux_	 = true;
+	} else if constexpr (smi::config::is_windows) {
+		operating_system = "windows";
+		is_windows_	 = true;
+	} else {
+		operating_system = "unknown";
+	}
 	if (is_windows_) {
 #ifdef _WIN64
 		char* sys_root	    = nullptr;
@@ -489,19 +495,39 @@ AmdSmiPlatform::AmdSmiPlatform()
 	}
 }
 
+static FILE* platform_popen(const char* cmd)
+{
+#ifdef _WIN64
+	return _popen(cmd, "r");
+#elif defined(__linux__)
+	/* Pin $PATH so popen()'s bare helpers (lsmod, grep, pgrep, lspci)
+	 * resolve the same way on every host. */
+	if (setenv("PATH", "/usr/sbin:/usr/bin:/sbin:/bin", 1) != 0)
+		throw std::runtime_error("setenv(PATH) failed!");
+	return popen(cmd, "r");
+#else
+	(void)cmd;
+	return nullptr;
+#endif
+}
+
+static int platform_pclose(FILE* pipe)
+{
+#ifdef _WIN64
+	return _pclose(pipe);
+#elif defined(__linux__)
+	return pclose(pipe);
+#else
+	(void)pipe;
+	return -1;
+#endif
+}
+
 std::string AmdSmiPlatform::exec(const char* cmd)
 {
 	char buffer[128];
 	std::string result = "";
-#ifdef _WIN64
-	FILE* pipe = _popen(cmd, "r");
-#elif __linux__
-	/* Pin $PATH to the standard system directories so popen()'s bare helper
-	 * names (lsmod, grep, pgrep, lspci, ...) resolve deterministically. */
-	if (setenv("PATH", "/usr/sbin:/usr/bin:/sbin:/bin", 1) != 0)
-		throw std::runtime_error("setenv(PATH) failed!");
-	FILE* pipe = popen(cmd, "r");
-#endif
+	FILE* pipe	   = platform_popen(cmd);
 
 	if (!pipe)
 		throw std::runtime_error("popen() failed!");
@@ -510,19 +536,11 @@ std::string AmdSmiPlatform::exec(const char* cmd)
 			result += buffer;
 		}
 	} catch (...) {
-#ifdef _WIN64
-		_pclose(pipe);
-#elif __linux__
-		pclose(pipe);
-#endif
+		platform_pclose(pipe);
 		throw;
 	}
 
-#ifdef _WIN64
-	_pclose(pipe);
-#elif __linux__
-	pclose(pipe);
-#endif
+	platform_pclose(pipe);
 	return result;
 }
 
@@ -590,6 +608,17 @@ void AmdSmiPlatform::refine_gc_12_1_detection_from_graphics_version(
 	const uint8_t gc_major = (target_graphics_version >> 16) & 0xFF;
 	const uint8_t gc_minor = (target_graphics_version >> 8) & 0xFF;
 	is_gc_12_1_	       = (gc_major == GC_12_1_MAJOR && gc_minor == GC_12_1_MINOR);
+}
+
+long AmdSmiPlatform::get_cpu_count()
+{
+#ifdef _WIN64
+	SYSTEM_INFO sysInfo;
+	GetSystemInfo(&sysInfo);
+	return static_cast<long>(sysInfo.dwNumberOfProcessors);
+#else
+	return sysconf(_SC_NPROCESSORS_CONF);
+#endif
 }
 
 std::string AmdSmiPlatform::get_platform()

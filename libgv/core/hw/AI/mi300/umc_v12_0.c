@@ -169,6 +169,9 @@ static int convert_ma_to_nps_pa(struct amdgv_adapter *adapt,
 	bool hbm3e = (adapt->vram_info.vram_type == AMDGV_DGPU_VRAM_TYPE__HBM3E) ? 1 : 0;
 	uint64_t lfb_size = (hbm3e) ? SOCKET_LFB_SIZE_HBM3E : SOCKET_LFB_SIZE;
 
+	if (adapt->dev_id == 0x75A8)
+		lfb_size = SOCKET_LFB_SIZE_HBM3E_MI350P;
+
 	if (node_inst != RAS_INV_AID_NODE) {
 		if (ch_inst >= UMC_V12_0_CHANNEL_INSTANCE_NUM ||
 			umc_inst >= UMC_V12_0_UMC_INSTANCE_NUM ||
@@ -233,16 +236,23 @@ static int convert_ma_to_nps_pa(struct amdgv_adapter *adapt,
 			na_nps |= ((err_addr >> i) & 0x1ULL) << umc_v12_0_ma2na_mapping[i];
 	}
 
-	if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS1)
-		na_shift = 8;
-	else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS2)
-		na_shift = 9;
-	else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS4)
-		na_shift = 10;
-	else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS8)
-		na_shift = 11;
-	else
-		return AMDGV_FAILURE;
+	if (adapt->dev_id == 0x75A8) {
+		if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS1)
+			na_shift = 9;
+		else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS2)
+			na_shift = 10;
+	} else {
+		if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS1)
+			na_shift = 8;
+		else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS2)
+			na_shift = 9;
+		else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS4)
+			na_shift = 10;
+		else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS8)
+			na_shift = 11;
+		else
+			return AMDGV_FAILURE;
+	}
 
 	na = ((na_nps >> na_shift) << 8) | (na_nps & 0xff);
 
@@ -271,19 +281,31 @@ static int convert_ma_to_nps_pa(struct amdgv_adapter *adapt,
 	/* get some channel bits from na_nps directly and
 	* add nps section offset
 	*/
-	if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS2) {
-		soc_pa &= ~(0x1ULL << UMC_V12_0_PA_CH5_BIT);
-		soc_pa |= ((na_nps & 0x100) << 5);
-		soc_pa += (node_inst >> 1) * (lfb_size >> 1);
-	} else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS4) {
-		soc_pa &= ~(0x3ULL << UMC_V12_0_PA_CH4_BIT);
-		soc_pa |= ((na_nps & 0x300) << 4);
-		soc_pa += node_inst * (lfb_size >> 2);
-	} else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS8) {
-		soc_pa &= ~(0x7ULL << UMC_V12_0_PA_CH4_BIT);
-		soc_pa |= ((na_nps & 0x700) << 4);
-		soc_pa += node_inst * (lfb_size >> 2) +
-			(channel_index >> 4) * (lfb_size >> 3);
+	if (adapt->dev_id == 0x75A8) {
+		if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS1) {
+			soc_pa &= ~(0x1ULL << UMC_V12_0_PA_CH5_BIT);
+			soc_pa |= ((na_nps & 0x100) << 5);
+			soc_pa += (node_inst >> 1) * (lfb_size >> 1);
+		} else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS2) {
+			soc_pa &= ~(0x3ULL << UMC_V12_0_PA_CH4_BIT);
+			soc_pa |= ((na_nps & 0x300) << 4);
+			soc_pa += node_inst * (lfb_size >> 2);
+		}
+	} else {
+		if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS2) {
+			soc_pa &= ~(0x1ULL << UMC_V12_0_PA_CH5_BIT);
+			soc_pa |= ((na_nps & 0x100) << 5);
+			soc_pa += (node_inst >> 1) * (lfb_size >> 1);
+		} else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS4) {
+			soc_pa &= ~(0x3ULL << UMC_V12_0_PA_CH4_BIT);
+			soc_pa |= ((na_nps & 0x300) << 4);
+			soc_pa += node_inst * (lfb_size >> 2);
+		} else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS8) {
+			soc_pa &= ~(0x7ULL << UMC_V12_0_PA_CH4_BIT);
+			soc_pa |= ((na_nps & 0x700) << 4);
+			soc_pa += node_inst * (lfb_size >> 2) +
+				(channel_index >> 4) * (lfb_size >> 3);
+		}
 	}
 
 	addr_out->pa = soc_pa;
@@ -303,47 +325,86 @@ static int get_nps_pa_mask_bits(struct amdgv_adapter *adapt,
 	if (!loop_bits || !flip_row_bit || !r13_in_pa || (num < UMC_V12_0_RETIRE_LOOP_BITS))
 		return AMDGV_FAILURE;
 
-	loop_bits[0] = UMC_V12_0_PA_C2_BIT;
-	loop_bits[1] = UMC_V12_0_PA_C3_BIT;
-	loop_bits[2] = UMC_V12_0_PA_C4_BIT;
-	loop_bits[3] = UMC_V12_0_PA_R13_BIT;
-	*flip_row_bit = 13;
-	*r13_in_pa = UMC_V12_0_PA_R13_BIT;
+	if (adapt->umc.num_umc == 16) {
+		/* Default NPS1 setting. */
+		loop_bits[0] = UMC_V12_0_PA_C2_BIT;
+		loop_bits[1] = UMC_V12_0_PA_C3_BIT;
+		loop_bits[2] = UMC_V12_0_PA_C4_BIT;
+		loop_bits[3] = UMC_V12_0_PA_R13_BIT;
+		*flip_row_bit = 13;
+		*r13_in_pa = UMC_V12_0_PA_R13_BIT;
 
-	if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS2) {
+		if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS2) {
+			loop_bits[0] = UMC_V12_0_PA_CH5_BIT;
+			loop_bits[1] = UMC_V12_0_PA_C2_BIT;
+			loop_bits[2] = UMC_V12_0_PA_B1_BIT;
+			*r13_in_pa = UMC_V12_0_PA_R12_BIT;
+		} else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS4) {
+			loop_bits[0] = UMC_V12_0_PA_CH4_BIT;
+			loop_bits[1] = UMC_V12_0_PA_CH5_BIT;
+			loop_bits[2] = UMC_V12_0_PA_B0_BIT;
+			*r13_in_pa = UMC_V12_0_PA_R11_BIT;
+		}
+
+		switch (vram_type) {
+		case AMDGV_DGPU_VRAM_TYPE__HBM3:
+			/* Other NPS modes use the NPS1 layout. */
+			if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS2)
+				loop_bits[3] = UMC_V12_0_PA_R12_BIT;
+			else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS4)
+				loop_bits[3] = UMC_V12_0_PA_R11_BIT;
+			break;
+		case AMDGV_DGPU_VRAM_TYPE__HBM3E:
+			loop_bits[3] = UMC_V12_0_PA_R12_BIT;
+			*flip_row_bit = 12;
+
+			if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS2)
+				loop_bits[3] = UMC_V12_0_PA_R11_BIT;
+			else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS4)
+				loop_bits[3] = UMC_V12_0_PA_R10_BIT;
+			break;
+		default:
+			AMDGV_WARN("Unknown HBM type, using default RAS retire row bit.\n");
+			break;
+		}
+	} else if (adapt->umc.num_umc == 8) {
+		/* Default NPS1 setting for two dies. */
 		loop_bits[0] = UMC_V12_0_PA_CH5_BIT;
 		loop_bits[1] = UMC_V12_0_PA_C2_BIT;
 		loop_bits[2] = UMC_V12_0_PA_B1_BIT;
-		*r13_in_pa = UMC_V12_0_PA_R12_BIT;
-	} else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS4) {
-		loop_bits[0] = UMC_V12_0_PA_CH4_BIT;
-		loop_bits[1] = UMC_V12_0_PA_CH5_BIT;
-		loop_bits[2] = UMC_V12_0_PA_B0_BIT;
-		*r13_in_pa = UMC_V12_0_PA_R11_BIT;
-	}
-
-	switch (vram_type) {
-	case AMDGV_DGPU_VRAM_TYPE__HBM3:
-		/* other nps modes are taken as nps1 */
-		if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS2)
-			loop_bits[3] = UMC_V12_0_PA_R12_BIT;
-		else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS4)
-			loop_bits[3] = UMC_V12_0_PA_R11_BIT;
-		break;
-
-	case AMDGV_DGPU_VRAM_TYPE__HBM3E:
-		loop_bits[3] = UMC_V12_0_PA_R12_BIT;
+		loop_bits[3] = UMC_V12_0_PA_R11_BIT;
 		*flip_row_bit = 12;
+		*r13_in_pa = UMC_V12_0_PA_R12_BIT;
 
-		if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS2)
+		if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS2) {
+			loop_bits[0] = UMC_V12_0_PA_CH4_BIT;
+			loop_bits[1] = UMC_V12_0_PA_CH5_BIT;
+			loop_bits[2] = UMC_V12_0_PA_B0_BIT;
+			*r13_in_pa = UMC_V12_0_PA_R11_BIT;
+		}
+
+		switch (vram_type) {
+		case AMDGV_DGPU_VRAM_TYPE__HBM3:
+			loop_bits[3] = UMC_V12_0_PA_R12_BIT;
+
+			/* Other NPS modes use the NPS1 layout. */
+			if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS2)
+				loop_bits[3] = UMC_V12_0_PA_R11_BIT;
+			break;
+		case AMDGV_DGPU_VRAM_TYPE__HBM3E:
 			loop_bits[3] = UMC_V12_0_PA_R11_BIT;
-		else if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS4)
-			loop_bits[3] = UMC_V12_0_PA_R10_BIT;
-		break;
+			*flip_row_bit = 12;
 
-	default:
-		AMDGV_WARN("Unknown HBM type, set RAS retire loop bits to the value in NPS1 mode.\n");
-		break;
+			if (nps == AMDGV_MEMORY_PARTITION_MODE_NPS2)
+				loop_bits[3] = UMC_V12_0_PA_R10_BIT;
+			break;
+		default:
+			AMDGV_WARN("Unknown HBM type, using default RAS retire row bit.\n");
+			break;
+		}
+	} else {
+		AMDGV_WARN("Unsupported UMC number(%d), failed to set RAS flip bits.\n",
+			adapt->umc.num_umc);
 	}
 
 	return 0;

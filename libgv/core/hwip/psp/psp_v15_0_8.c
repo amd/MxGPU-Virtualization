@@ -22,6 +22,7 @@
 #include "ucode/cp/12_1_0/mec_12_1_0_ucode_wrap.h"
 #include "ucode/sdma/7_1_0/sdma_ucode_signed.h"
 #include "ucode/rlc/12_1_0/rlc_12_1_0_ucode_wrap.h"
+#include "ucode/mmsch/10_0/mmschfw_signed.h"
 #include "ucode/dfc/15_0_8/dfc_fw_signed.h"
 
 static const uint32_t this_block = AMDGV_SECURITY_BLOCK;
@@ -470,7 +471,7 @@ static int psp_v15_0_8_load_toc(struct amdgv_adapter *adapt)
 }
 
 
-static int psp_v15_0_8_ucode_load(struct amdgv_adapter *adapt, uint32_t *ucode_id_list,
+static int psp_v15_0_8_ucode_load(struct amdgv_adapter *adapt, enum amdgv_firmware_id *ucode_id_list,
 				  uint32_t ucode_id_count)
 {
 	enum psp_status ret = PSP_STATUS__SUCCESS;
@@ -502,6 +503,10 @@ static int psp_v15_0_8_ucode_load(struct amdgv_adapter *adapt, uint32_t *ucode_i
 			else
 				ret = amdgv_psp_load_np_fw(adapt, ucode_ptr, ucode_size,
 							   ucode_id_list[i]);
+			break;
+		case AMDGV_FIRMWARE_ID__MMSCH:
+			ret = amdgv_psp_load_np_fw(adapt, (unsigned char *)a_MMSCH_SIGNED_Ucode,
+							sizeof(a_MMSCH_SIGNED_Ucode), ucode_id_list[i]);
 			break;
 		case AMDGV_FIRMWARE_ID__SDMA0:
 			ret = amdgv_psp_load_np_fw(adapt, (unsigned char *)aSDMA_Ucode,
@@ -884,7 +889,7 @@ static enum psp_status psp_v15_0_8_ual_set_vpod_config(struct amdgv_adapter *ada
 	oss_memcpy(psp_cmd.cmd.set_vpod_config_ual.vpod_active_accelerators,
 		config->vpod_active_accelerators,
 		sizeof(psp_cmd.cmd.set_vpod_config_ual.vpod_active_accelerators));
-	psp_cmd.cmd.set_vpod_config_ual.addr_mode = config->addr_mode;
+	psp_cmd.cmd.set_vpod_config_ual.addr_mode = (enum psp_gfx_ual_npa_address_mode)config->addr_mode;
 
 	psp_resp.status = 0xdeadbeef;
 	ret = amdgv_psp_cmd_km_submit(adapt, &psp_cmd, &psp_resp);
@@ -1566,6 +1571,9 @@ static int psp_v15_0_8_sw_init(struct amdgv_adapter *adapt)
 	adapt->psp.set_mb_int = psp_v15_0_8_set_mb_int;
 	adapt->psp.get_mb_int_status = psp_v15_0_8_get_mb_int_status;
 	adapt->psp.vfgate_support = psp_v15_0_8_vfgate_support;
+	/* PSP preserves the per-VF mailbox gate across VF FLR; toggle it only at
+	 * VF lifecycle boundaries. */
+	adapt->psp.vfgate_lifecycle_scoped = true;
 	adapt->psp.clear_vf_fw = psp_v15_0_8_clear_vf_fw;
 	adapt->psp.psp_program_guest_mc_settings = psp_v15_0_8_program_guest_mc_settings;
 	adapt->psp.need_switch_to_pf = psp_v15_0_8_need_switch_to_pf;

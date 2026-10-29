@@ -6,6 +6,7 @@
 #pragma once
 
 #include "smi_cli_api_base.h"
+#include "smi_cli_loader.h"
 
 #include "tabulate/tabulate.hpp"
 
@@ -20,10 +21,11 @@ int sort_arg_devices_for_display(Arguments& arg);
 class AmdSmiApiHost : public AmdSmiApiBase
 {
 private:
+	SmiDynamicLoader loader_;
+
 public:
 	AmdSmiApiHost();
 	virtual ~AmdSmiApiHost(void);
-	void* amdSmiLibHandle;
 
 	virtual int amdsmi_get_bdf_from_gpu_index(uint64_t& processor_bdf, int index) override;
 	virtual int amdsmi_get_bdf_from_nic_index(uint64_t& processor_bdf, int index) override;
@@ -302,9 +304,9 @@ public:
 	// confidential-compute
 	virtual int amdsmi_get_vf_tdi_state_command(std::string vf_bdf, Arguments arg,
 						    std::string& formatted_string) override;
-	virtual int amdsmi_get_cc_mode_command(uint64_t processor_bdf, Arguments arg,
-					       std::string& formatted_string) override;
-	virtual int amdsmi_set_cc_mode_command(uint64_t processor_bdf, Arguments arg) override;
+	virtual int amdsmi_get_gpu_cc_mode_command(uint64_t processor_bdf, Arguments arg,
+						   std::string& formatted_string) override;
+	virtual int amdsmi_set_gpu_cc_mode_command(uint64_t processor_bdf, Arguments arg) override;
 	virtual int amdsmi_set_fabric_ppod_command(uint64_t processor_bdf, Arguments arg) override;
 	virtual int amdsmi_set_fabric_vpod_command(uint64_t processor_bdf, Arguments arg) override;
 	virtual int amdsmi_set_fabric_station_command(uint64_t processor_bdf,

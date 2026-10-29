@@ -275,8 +275,8 @@ static int mi300_vbios_early_hw_init(struct amdgv_adapter *adapt)
 	/* post vbios */
 	if (!mi300_nbio_vbios_need_post(adapt)) {
 		if (mi300_psp_wait_sos_loaded_status(adapt, AMDGV_WAIT_FLAG_NO_WARNING)) {
-			if (((adapt->asic_type == CHIP_MI350X) && mi350_smu_get_fw_loaded_status(adapt)) ||
-					((adapt->asic_type != CHIP_MI350X) && mi300_smu_get_fw_loaded_status(adapt))) {
+			if ((amdgv_asic_is_mi350(adapt->asic_type) && mi350_smu_get_fw_loaded_status(adapt)) ||
+					((!amdgv_asic_is_mi350(adapt->asic_type)) && mi300_smu_get_fw_loaded_status(adapt))) {
 				if (adapt->xgmi.phy_nodes_num > 1) {
 					r = task_barrier_enter_timeout(&reload_reset_tb, adapt->xgmi.phy_nodes_num,
 							AMDGV_TIMEOUT(TIMEOUT_CHAIN_RESET));
@@ -311,8 +311,8 @@ static int mi300_vbios_early_hw_init(struct amdgv_adapter *adapt)
 	//if (adapt->asic_type == CHIP_MI350X)
 	//	adapt->flags |= AMDGV_FLAG_L1_TLB_CNTL_REG_PSP_EN;
 
-	if (((adapt->asic_type == CHIP_MI350X) && mi350_smu_get_fw_loaded_status(adapt)) ||
-		((adapt->asic_type != CHIP_MI350X) && mi300_smu_get_fw_loaded_status(adapt))) {
+	if ((amdgv_asic_is_mi350(adapt->asic_type) && mi350_smu_get_fw_loaded_status(adapt)) ||
+		((!amdgv_asic_is_mi350(adapt->asic_type)) && mi300_smu_get_fw_loaded_status(adapt))) {
 		/* RLCg needs to handshake with MP5(XCD) firmware if SMU is alived */
 		if (adapt->flags & AMDGV_FLAG_EMU_MODE)
 			mi300_gfx_rlc_smu_handshake_cntl(adapt, false);
@@ -332,6 +332,17 @@ failed:
 	amdgv_vbios_atom_hw_fini(adapt);
 
 	return r;
+}
+
+static void mi300_mask_pci_aer_unsup_req(struct amdgv_adapter *adapt)
+{
+	int pos;
+	uint32_t mask;
+
+	pos = oss_pci_find_ext_cap(adapt->dev, PCI_EXT_CAP_ID_ERR);
+	oss_pci_read_config_dword(adapt->dev, pos + PCI_ERR_UNCOR_MASK, &mask);
+	mask |= 0x00100000;
+	oss_pci_write_config_dword(adapt->dev, pos + PCI_ERR_UNCOR_MASK, mask);
 }
 
 static int mi300_vbios_late_hw_init(struct amdgv_adapter *adapt)
@@ -377,6 +388,8 @@ static int mi300_vbios_late_hw_init(struct amdgv_adapter *adapt)
 		AMDGV_ERROR("enable pci atomic request failed!\n");
 		return r;
 	}
+
+	mi300_mask_pci_aer_unsup_req(adapt);
 
 	mi300_nbio_enable_vf_access_mmio_over_512k(adapt);
 

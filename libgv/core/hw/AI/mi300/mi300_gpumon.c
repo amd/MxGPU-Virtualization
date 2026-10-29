@@ -564,8 +564,7 @@ static int mi300_get_memory_partition_config(
 	memory_partition_config->mp_cap_mask = 0;
 	memory_partition_config->mp_caps.nps1_cap = 1;
 
-	/* MI350P (0x75A8) is NPS1-only, unlike other CHIP_MI350X SKUs */
-	if (adapt->asic_type == CHIP_MI350X && adapt->dev_id != 0x75A8)
+	if (adapt->asic_type == CHIP_MI350X)
 		memory_partition_config->mp_caps.nps2_cap = 1;
 	else if (adapt->asic_type == CHIP_MI300X)
 		memory_partition_config->mp_caps.nps4_cap = 1;
@@ -852,9 +851,9 @@ mi300_get_accelerator_partition_profile_asic_config_global(struct amdgv_adapter 
 		return &mi300x_accelerator_partition_profile_configs;
 	} else if (adapt->asic_type == CHIP_MI308X) {
 		return &mi308x_accelerator_partition_profile_configs;
+	} else if (adapt->asic_type == CHIP_MI350P) {
+		return &mi350p_accelerator_partition_profile_configs;
 	} else if (adapt->asic_type == CHIP_MI350X) {
-		if (adapt->dev_id == 0x75A8)
-			return &mi350p_accelerator_partition_profile_configs;
 		return &mi350x_accelerator_partition_profile_configs;
 	} else {
 		AMDGV_ERROR("asic_type=%u not supported\n", adapt->asic_type);
@@ -1550,7 +1549,8 @@ static int mi300_get_gpu_cache_info(struct amdgv_adapter *adapt,
 	if (gpu_cache_info->num_cache_types > AMDGV_GPUMON_MAX_CACHE_TYPES)
 		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
-	if (adapt->asic_type != CHIP_MI300X && adapt->asic_type != CHIP_MI308X && adapt->asic_type != CHIP_MI350X)
+	if (adapt->asic_type != CHIP_MI300X && adapt->asic_type != CHIP_MI308X &&
+	    !amdgv_asic_is_mi350(adapt->asic_type))
 		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
 	/* vL1D (Also known as TCP, GL0, CU$). On MI300 marked as GL1 cache */

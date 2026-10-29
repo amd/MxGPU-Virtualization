@@ -398,7 +398,7 @@ static int ras_cmd_inject_error(struct ras_core_context *ras_core,
 		.value = req->method,
 	};
 
-	ret = ras_psp_get_block_ta_id(ras_core, req->block_id, &block_info.block_id);
+	ret = ras_psp_get_block_ta_id(ras_core, req->block_id, (uint32_t *)&block_info.block_id);
 	if (ret == -RAS_CORE_NOT_SUPPORTED)
 		return RAS_CMD__ERROR_UNSUPPORT;
 	else if (ret)

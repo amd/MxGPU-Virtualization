@@ -205,8 +205,9 @@ static int gim_mig_vf_data_import(struct gim_mig_file *migf)
 		    length > migf->msg.size - offset)
 			return -EINVAL;
 
-		if (amdgv_migration_import(gdev->pf_data->adev, vf_ctx->vf_idx, (void *)hdr + offset,
-				       length, AMDGV_MIGRATION_IMPORT_PHASE2_STATIC_DATA))
+		if (amdgv_migration_import_ex(gdev->pf_data->adev, vf_ctx->vf_idx, (void *)hdr + offset,
+				       migf->msg.msg_gpu_addr + offset, length,
+				       AMDGV_MIGRATION_IMPORT_PHASE2_STATIC_DATA))
 			return -EFAULT;
 
 		migf->copied_mask |= GIM_MIG_COPY_MASK_VF_HW_STATIC_DATA;
@@ -224,8 +225,9 @@ static int gim_mig_vf_data_import(struct gim_mig_file *migf)
 		    length > migf->msg.size - offset)
 			return -EINVAL;
 
-		if (amdgv_migration_import(gdev->pf_data->adev, vf_ctx->vf_idx, (void *)hdr + offset,
-				       length, AMDGV_MIGRATION_IMPORT_PHASE3_DYNAMIC_DATA))
+		if (amdgv_migration_import_ex(gdev->pf_data->adev, vf_ctx->vf_idx, (void *)hdr + offset,
+				       migf->msg.msg_gpu_addr + offset, length,
+				       AMDGV_MIGRATION_IMPORT_PHASE3_DYNAMIC_DATA))
 			return -EFAULT;
 
 		migf->copied_mask |= GIM_MIG_COPY_MASK_VF_HW_DYNAMIC_DATA;
@@ -283,7 +285,8 @@ static int gim_mig_vf_data_export(struct gim_mig_file *migf)
 		sec->length = gdev->fw_s_size;
 		sec->offset = offset;
 
-		if (amdgv_migration_export(gdev->pf_data->adev, vf_ctx->vf_idx, ((void *)hdr) + sec->offset,
+		if (amdgv_migration_export_ex(gdev->pf_data->adev, vf_ctx->vf_idx, ((void *)hdr) + sec->offset,
+				       migf->msg.msg_gpu_addr + sec->offset,
 				       AMDGV_MIGRATION_EXPORT_PHASE1_STATIC_DATA))
 			return -EFAULT;
 
@@ -299,7 +302,8 @@ static int gim_mig_vf_data_export(struct gim_mig_file *migf)
 		sec->length = gdev->fw_d_size;
 		sec->offset = offset;
 
-		if (amdgv_migration_export(gdev->pf_data->adev, vf_ctx->vf_idx, ((void *)hdr) + sec->offset,
+		if (amdgv_migration_export_ex(gdev->pf_data->adev, vf_ctx->vf_idx, ((void *)hdr) + sec->offset,
+				migf->msg.msg_gpu_addr + sec->offset,
 				AMDGV_MIGRATION_EXPORT_PHASE2_DYNAMIC_DATA))
 			return -EFAULT;
 
@@ -834,17 +838,24 @@ static int gim_mig_buffer_init(struct gim_mig_vf_ctx *vf_ctx)
 {
 	struct gim_mig_file *migf = &vf_ctx->migf;
 	struct gim_mig_device *gdev = vf_ctx->gdev;
+	void *msg_va = NULL;
 
+	/* GART-mapped so libgv can move the manifest data with SDMA instead of a CPU copy */
 	migf->msg.size = GIM_MIG_VF_MSG_BUF_SIZE(vf_ctx->vf_idx);
-	migf->msg.va_ptr = gim_vzalloc(migf->msg.size);
-	if (migf->msg.va_ptr == NULL) {
+	migf->msg.msg_handle = amdgv_map_sysmem(gdev->pf_data->adev,
+					migf->msg.size,
+					&msg_va,
+					&migf->msg.msg_gpu_addr);
+	if (migf->msg.msg_handle == NULL) {
 		return -ENOMEM;
 	}
+	migf->msg.va_ptr = msg_va;
+	memset(migf->msg.va_ptr, 0, migf->msg.size);
 	migf->msg.bitmap = migf->msg.va_ptr + GIM_MIG_BITMAP_OFFSET;
 
 	migf->shadow_bitmap = gim_vzalloc(GIM_MIG_VF_FB_BITMAP_SIZE(vf_ctx->vf_idx));
 	if (migf->shadow_bitmap == NULL) {
-		gim_vfree(migf->msg.va_ptr);
+		amdgv_unmap_sysmem(gdev->pf_data->adev, migf->msg.msg_handle);
 		return -ENOMEM;
 	}
 
@@ -854,7 +865,7 @@ static int gim_mig_buffer_init(struct gim_mig_vf_ctx *vf_ctx)
 					&migf->ring.va_ptr,
 					&migf->ring.gpu_addr);
 	if (migf->ring.buf == NULL) {
-		gim_vfree(migf->msg.va_ptr);
+		amdgv_unmap_sysmem(gdev->pf_data->adev, migf->msg.msg_handle);
 		gim_vfree(migf->shadow_bitmap);
 		return -ENOMEM;
 	}
@@ -869,11 +880,13 @@ static void gim_mig_buffer_fini(struct gim_mig_file *migf)
 
 	amdgv_unmap_sysmem(gdev->pf_data->adev, migf->ring.buf);
 	gim_vfree(migf->shadow_bitmap);
-	gim_vfree(migf->msg.va_ptr);
+	amdgv_unmap_sysmem(gdev->pf_data->adev, migf->msg.msg_handle);
 	migf->ring.buf = NULL;
 	migf->ring.va_ptr = NULL;
 	migf->ring.gpu_addr = 0;
 	migf->ring.size = 0;
+	migf->msg.msg_handle = NULL;
+	migf->msg.msg_gpu_addr = 0;
 	migf->msg.va_ptr = NULL;
 	migf->msg.size = 0;
 	migf->msg.bitmap = NULL;

@@ -1471,7 +1471,7 @@ static int dcore_iova_node_create(struct pci_dev *pdev, int minor)
 	}
 	devno = MKDEV(MAJOR(dcore.devid), minor);
 
-	node->dev = device_create(dcore.dcore_class, NULL, devno, NULL, pci_name(pdev));
+	node->dev = device_create(dcore.dcore_class, NULL, devno, NULL, "%s", pci_name(pdev));
 
 	cdev_init(&node->iova_cdev, &iova_file_ops);
 	res = cdev_add(&node->iova_cdev, devno, 1);

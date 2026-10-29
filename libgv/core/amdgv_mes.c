@@ -119,6 +119,25 @@ int amdgv_mes_init(struct amdgv_adapter *adapt)
 
 	adapt->mes.total_max_queue = AMDGV_MAX_MES_INST_PIPES;
 
+	if (adapt->mcp.gfx.num_xcc > AMDGV_MAX_GC_INSTANCES)
+		return AMDGV_FAILURE;
+
+	for (i = 0; i < AMDGV_MAX_GC_INSTANCES; i++)
+		adapt->mes.cleaner_shader_fence_offs[i] = AMDGV_MES_WB_OFFS_INVALID;
+
+	/*
+	 * Writeback is mapped in GMC hw_init, after this sw_init. Reserve the
+	 * slots here and leave MC and CPU addresses unset until wb is live.
+	 */
+	for (i = 0; i < AMDGV_MAX_MES_INST_PIPES; i++) {
+		adapt->mes.sch_ctx_offs[i] = AMDGV_MES_WB_OFFS_INVALID;
+		adapt->mes.sch_ctx_gpu_addr[i] = 0;
+		adapt->mes.sch_ctx_ptr[i] = NULL;
+		adapt->mes.query_status_fence_offs[i] = AMDGV_MES_WB_OFFS_INVALID;
+		adapt->mes.query_status_fence_gpu_addr[i] = 0;
+		adapt->mes.query_status_fence_ptr[i] = NULL;
+	}
+
 	num_pipes = adapt->gfx.mec.num_pipe_per_mec * adapt->gfx.mec.num_mec;
 
 	if (num_pipes > AMDGV_MES_MAX_COMPUTE_PIPES)
@@ -142,14 +161,9 @@ int amdgv_mes_init(struct amdgv_adapter *adapt)
 	for (i = 0; i < AMDGV_MAX_MES_INST_PIPES; i++) {
 		r = amdgv_wb_memory_get(adapt, &adapt->mes.sch_ctx_offs[i]);
 		if (r) {
-			AMDGV_WARN ("failed to get sch ctx offs\n");
+			AMDGV_WARN("failed to get sch ctx offs\n");
 			goto error;
 		}
-
-		adapt->mes.sch_ctx_gpu_addr[i] =
-			adapt->wb.gpu_addr + (adapt->mes.sch_ctx_offs[i] * 4);
-		adapt->mes.sch_ctx_ptr[i] =
-			(uint64_t *)&adapt->wb.wb[adapt->mes.sch_ctx_offs[i]];
 
 		r = amdgv_wb_memory_get(adapt,
 				 &adapt->mes.query_status_fence_offs[i]);
@@ -157,10 +171,17 @@ int amdgv_mes_init(struct amdgv_adapter *adapt)
 			AMDGV_WARN("query_status_fence_offs wb alloc failed\n");
 			goto error;
 		}
-		adapt->mes.query_status_fence_gpu_addr[i] = adapt->wb.gpu_addr +
-			(adapt->mes.query_status_fence_offs[i] * 4);
-		adapt->mes.query_status_fence_ptr[i] =
-			(uint64_t *)&adapt->wb.wb[adapt->mes.query_status_fence_offs[i]];
+	}
+
+	for (i = 0; i < adapt->mcp.gfx.num_xcc; i++) {
+		r = amdgv_wb_memory_get(adapt,
+				&adapt->mes.cleaner_shader_fence_offs[i]);
+		if (r) {
+			AMDGV_WARN("cleaner_shader_fence_offs wb alloc failed\n");
+			goto error;
+		}
+		adapt->mes.cleaner_shader_fence_gpu_addr[i] = 0;
+		adapt->mes.cleaner_shader_fence_ptr[i] = NULL;
 	}
 
 	r = amdgv_mes_doorbell_init(adapt);
@@ -172,13 +193,31 @@ int amdgv_mes_init(struct amdgv_adapter *adapt)
 	return 0;
 error:
 	for (i = 0; i < AMDGV_MAX_MES_INST_PIPES; i++) {
-		if (adapt->mes.sch_ctx_ptr[i]) {
+		if (adapt->mes.sch_ctx_offs[i] != AMDGV_MES_WB_OFFS_INVALID) {
 			amdgv_wb_memory_free(adapt, adapt->mes.sch_ctx_offs[i]);
+			adapt->mes.sch_ctx_offs[i] = AMDGV_MES_WB_OFFS_INVALID;
 			adapt->mes.sch_ctx_ptr[i] = NULL;
+			adapt->mes.sch_ctx_gpu_addr[i] = 0;
 		}
-		if (adapt->mes.query_status_fence_ptr[i]) {
-			amdgv_wb_memory_free(adapt, adapt->mes.query_status_fence_offs[i]);
+		if (adapt->mes.query_status_fence_offs[i] !=
+		    AMDGV_MES_WB_OFFS_INVALID) {
+			amdgv_wb_memory_free(adapt,
+				adapt->mes.query_status_fence_offs[i]);
+			adapt->mes.query_status_fence_offs[i] =
+				AMDGV_MES_WB_OFFS_INVALID;
 			adapt->mes.query_status_fence_ptr[i] = NULL;
+			adapt->mes.query_status_fence_gpu_addr[i] = 0;
+		}
+	}
+	for (i = 0; i < AMDGV_MAX_GC_INSTANCES; i++) {
+		if (adapt->mes.cleaner_shader_fence_offs[i] !=
+		    AMDGV_MES_WB_OFFS_INVALID) {
+			amdgv_wb_memory_free(adapt,
+				adapt->mes.cleaner_shader_fence_offs[i]);
+			adapt->mes.cleaner_shader_fence_offs[i] =
+				AMDGV_MES_WB_OFFS_INVALID;
+			adapt->mes.cleaner_shader_fence_ptr[i] = NULL;
+			adapt->mes.cleaner_shader_fence_gpu_addr[i] = 0;
 		}
 	}
 
@@ -190,13 +229,31 @@ int amdgv_mes_fini(struct amdgv_adapter *adapt)
 	int i;
 
 	for (i = 0; i < AMDGV_MAX_MES_INST_PIPES; i++) {
-		if (adapt->mes.sch_ctx_ptr[i]) {
+		if (adapt->mes.sch_ctx_offs[i] != AMDGV_MES_WB_OFFS_INVALID) {
 			amdgv_wb_memory_free(adapt, adapt->mes.sch_ctx_offs[i]);
+			adapt->mes.sch_ctx_offs[i] = AMDGV_MES_WB_OFFS_INVALID;
 			adapt->mes.sch_ctx_ptr[i] = NULL;
+			adapt->mes.sch_ctx_gpu_addr[i] = 0;
 		}
-		if (adapt->mes.query_status_fence_ptr[i]) {
-			amdgv_wb_memory_free(adapt, adapt->mes.query_status_fence_offs[i]);
+		if (adapt->mes.query_status_fence_offs[i] !=
+		    AMDGV_MES_WB_OFFS_INVALID) {
+			amdgv_wb_memory_free(adapt,
+				adapt->mes.query_status_fence_offs[i]);
+			adapt->mes.query_status_fence_offs[i] =
+				AMDGV_MES_WB_OFFS_INVALID;
 			adapt->mes.query_status_fence_ptr[i] = NULL;
+			adapt->mes.query_status_fence_gpu_addr[i] = 0;
+		}
+	}
+	for (i = 0; i < AMDGV_MAX_GC_INSTANCES; i++) {
+		if (adapt->mes.cleaner_shader_fence_offs[i] !=
+		    AMDGV_MES_WB_OFFS_INVALID) {
+			amdgv_wb_memory_free(adapt,
+				adapt->mes.cleaner_shader_fence_offs[i]);
+			adapt->mes.cleaner_shader_fence_offs[i] =
+				AMDGV_MES_WB_OFFS_INVALID;
+			adapt->mes.cleaner_shader_fence_ptr[i] = NULL;
+			adapt->mes.cleaner_shader_fence_gpu_addr[i] = 0;
 		}
 	}
 

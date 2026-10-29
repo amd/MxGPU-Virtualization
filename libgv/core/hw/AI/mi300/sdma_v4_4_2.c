@@ -25,6 +25,7 @@ static int sdma_v4_4_2_get_dbit_page_size_config(struct amdgv_adapter *adapt)
 	case CHIP_MI308X:
 		return SDMA_V4_4_2_DBIT_PAGE_SIZE_CONFIG_2MB_MI308;
 	case CHIP_MI350X:
+	case CHIP_MI350P:
 		return SDMA_V4_4_2_DBIT_PAGE_SIZE_CONFIG_4MB_MI350;
 	default:
 		AMDGV_WARN("Invalid asic_type: %d, set page size config to default:0\n", adapt->asic_type);
@@ -301,7 +302,7 @@ static int mi300_sdma_sw_init(struct amdgv_adapter *adapt)
 	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION) {
 		adapt->sdma.page_size_config = sdma_v4_4_2_get_dbit_page_size_config(adapt);
 
-		if (adapt->asic_type == CHIP_MI350X)
+		if (amdgv_asic_is_mi350(adapt->asic_type))
 			adapt->sdma.num_sdma_rings = adapt->sdma.num_instances;
 		else if (adapt->asic_type == CHIP_MI308X)
 			adapt->sdma.num_pf_dedicated_inst = adapt->sdma.harvest_instances;
@@ -431,7 +432,7 @@ static int mi300_enable_sdma(struct amdgv_adapter *adapt, uint32_t instance)
 	WREG32_SOC15(SDMA0, GET_INST(SDMA0, instance), regSDMA_GFX_RB_CNTL, data);
 
 	if ((adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION) &&
-	    (adapt->asic_type == CHIP_MI308X || adapt->asic_type == CHIP_MI350X)) {
+	    (adapt->asic_type == CHIP_MI308X || amdgv_asic_is_mi350(adapt->asic_type))) {
 		WREG32_SOC15(SDMA0, GET_INST(SDMA0, instance), regSDMA_HBM_PAGE_CONFIG,
 			     adapt->sdma.page_size_config);
 	}

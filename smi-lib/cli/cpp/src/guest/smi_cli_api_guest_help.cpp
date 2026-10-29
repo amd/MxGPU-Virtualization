@@ -15,11 +15,6 @@
 #include <vector>
 #include <iostream>
 #include <sstream>
-#ifdef _WIN64
-	#include <windows.h>
-	#include <sysinfoapi.h>
-#endif
-
 template <typename T> struct EnumToString {
 	std::unordered_map<T, std::string> data;
 	std::string operator()(T value) const

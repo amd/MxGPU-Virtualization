@@ -781,7 +781,7 @@ enum psp_status navi32_psp_get_fw_attestation_database_addr(struct amdgv_adapter
 	// FW attestation mc_address bound check
 	ret = navi32_psp_fb_addr_bound_check(adapt,
 			(adapt->psp).attestation_db_gpu_addr,
-			sizeof(struct ATTESTATION_DB_HEADER));
+			sizeof(struct FWMAN_DB_HEADER));
 
 	if (ret != PSP_STATUS__SUCCESS) {
 		AMDGV_ERROR("Attestation mc_address locates at an invalid region.\n");
@@ -790,9 +790,9 @@ enum psp_status navi32_psp_get_fw_attestation_database_addr(struct amdgv_adapter
 	}
 
 	// Get FW attestation CPU virtual address
-	if (amdgv_acquire_fb_virtual_addr(adapt,
-			(adapt->psp).attestation_db_gpu_addr,
-			sizeof(struct ATTESTATION_DB_HEADER), (uint64_t *)&cpu_addr) == 0) {
+	if (amdgv_acquire_fb_virtual_addr(adapt, (adapt->psp).attestation_db_gpu_addr,
+					  roundup(sizeof(struct FWMAN_DB_HEADER), AMDGV_GPU_PAGE_SIZE),
+					  (uint64_t *)&cpu_addr) == 0) {
 		(adapt->psp).attestation_db_cpu_addr = cpu_addr;
 	} else {
 		AMDGV_ERROR("Acquire frame buffer cpu virtual address failed, cpu virtual addr is NULL.\n");

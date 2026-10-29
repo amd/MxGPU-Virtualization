@@ -18,11 +18,6 @@
 #include <sstream>
 #include <cstring>
 #include <algorithm>
-#ifdef _WIN64
-	#include <windows.h>
-	#include <sysinfoapi.h>
-#endif
-
 template <typename T> struct EnumToString {
 	std::unordered_map<T, std::string> data;
 	std::string operator()(T value) const
@@ -184,7 +179,6 @@ int AmdSmiApiHost::amdsmi_get_all_nic_devices(std::vector<std::pair<DeviceType, 
 int AmdSmiApiHost::amdsmi_get_nic_processor_from_index(void* processor_handle, int index)
 {
 	unsigned int nic_count;
-	unsigned int processors_count;
 	amdsmi_socket_handle socket = NULL;
 	amdsmi_processor_handle* processors;
 
@@ -926,11 +920,12 @@ int AmdSmiApiHost::get_string_from_enum_tdi_state(int tdi_state, std::string& ou
 
 int AmdSmiApiHost::get_string_from_enum_cc_mode(int cc_mode, std::string& out)
 {
-	EnumToString<amdsmi_cc_mode_t> enum_cc_mode;
-	enum_cc_mode.data = {
-	    {AMDSMI_CC_MODE_OFF, "OFF"}, {AMDSMI_CC_MODE_ON, "ON"}, {AMDSMI_CC_MODE_DEV, "DEV"}};
+	EnumToString<amdsmi_gpu_cc_mode_t> enum_cc_mode;
+	enum_cc_mode.data = {{AMDSMI_GPU_CC_MODE_OFF, "OFF"},
+			     {AMDSMI_GPU_CC_MODE_ON, "ON"},
+			     {AMDSMI_GPU_CC_MODE_DEV, "DEV"}};
 
-	out = enum_cc_mode((amdsmi_cc_mode_t)cc_mode);
+	out = enum_cc_mode((amdsmi_gpu_cc_mode_t)cc_mode);
 	return AMDSMI_STATUS_SUCCESS;
 }
 int AmdSmiApiHost::get_string_from_enum_ptl_format(int format, std::string& out)

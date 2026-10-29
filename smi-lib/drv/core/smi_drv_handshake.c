@@ -176,8 +176,8 @@ int smi_cmd_handshake(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_le
 				cmd,
 				SMI_CMD_CODE_GET_DFC_FW_TABLE,
 				smi_get_dfc_fw,
-				sizeof(struct smi_device_info),
-				sizeof(struct smi_dfc_fw));
+				sizeof(struct smi_dfc_fw_info),
+				0);
 		SMI_ASSIGN_FUNC(ctx,
 				cmd,
 				SMI_CMD_CODE_GET_PCIE_INFO,
@@ -402,15 +402,15 @@ int smi_cmd_handshake(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_le
 				sizeof(struct smi_tdi_state));
 		SMI_ASSIGN_FUNC(ctx,
 				cmd,
-				SMI_CMD_CODE_GET_CC_MODE,
-				smi_get_cc_mode,
+				SMI_CMD_CODE_GET_GPU_CC_MODE,
+				smi_get_gpu_cc_mode,
 				sizeof(struct smi_device_info),
-				sizeof(struct smi_cc_mode));
+				sizeof(struct smi_gpu_cc_mode));
 		SMI_ASSIGN_FUNC(ctx,
 				cmd,
-				SMI_CMD_CODE_SET_CC_MODE,
-				smi_set_cc_mode,
-				sizeof(struct smi_set_cc_mode),
+				SMI_CMD_CODE_SET_GPU_CC_MODE,
+				smi_set_gpu_cc_mode,
+				sizeof(struct smi_set_gpu_cc_mode),
 				0);
 		SMI_ASSIGN_FUNC(ctx,
 				cmd,

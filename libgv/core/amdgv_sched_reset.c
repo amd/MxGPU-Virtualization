@@ -97,7 +97,7 @@ static int amdgv_sched_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf,
 		oss_mutex_lock(adapt->ecc.unhandled_bps_lock);
 		/* pop from stack */
 		while (adapt->ecc.last_err_bps_cnt > 0) {
-			if (amdgv_ffbm_replace_bad_pages(adapt, &adapt->ecc.last_err_bps[--adapt->ecc.last_err_bps_cnt], 1)) {
+			if (amdgv_ffbm_replace_bad_pages(adapt, &adapt->ecc.last_err_bps[--adapt->ecc.last_err_bps_cnt], 1, false)) {
 				/* check if RMA criteria is hit */
 				if (amdgv_ras_eeprom_is_gpu_bad(adapt))
 					amdgv_device_set_status(adapt, AMDGV_STATUS_HW_RMA);

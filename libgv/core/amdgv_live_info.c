@@ -71,12 +71,6 @@ static bool amdgv_live_info_validate_param_pre(struct amdgv_adapter *adapt,
 		return false;
 	}
 
-	if (param_info->vf_hbm_mgmt_mode > AMDGV_VF_HBM_MGMT_MODE_DISABLED) {
-		AMDGV_ERROR("live-update PRE invalid vf_hbm_mgmt_mode %u\n",
-			    param_info->vf_hbm_mgmt_mode);
-		return false;
-	}
-
 	if (param_info->memory_partition_mode >= AMDGV_MEMORY_PARTITION_MODE_MAX) {
 		AMDGV_ERROR("live-update PRE invalid memory_partition_mode %u\n",
 			    param_info->memory_partition_mode);
@@ -390,7 +384,6 @@ int amdgv_live_info_export_data(struct amdgv_adapter *adapt, uint32_t data_op,
 		param_info->sys_log_level = adapt->sys_log_level;
 		param_info->log_mask = adapt->log_mask;
 		param_info->flags = adapt->flags;
-		param_info->vf_hbm_mgmt_mode = adapt->vf_hbm_mgmt_mode;
 
 		param_info->allow_time_full_access = adapt->sched.allow_time_full_access;
 		param_info->perf_mon_enable = adapt->opt.perf_mon_enable;
@@ -609,7 +602,6 @@ int amdgv_live_info_import_data(struct amdgv_adapter *adapt, uint32_t data_op,
 		adapt->sys_log_level = param_info->sys_log_level;
 		adapt->log_mask = param_info->log_mask;
 		adapt->flags = param_info->flags;
-		adapt->vf_hbm_mgmt_mode = param_info->vf_hbm_mgmt_mode;
 
 		adapt->sched.allow_time_full_access = param_info->allow_time_full_access;
 		adapt->opt.perf_mon_enable = param_info->perf_mon_enable;

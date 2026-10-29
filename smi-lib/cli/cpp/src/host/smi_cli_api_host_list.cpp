@@ -15,11 +15,6 @@
 #include "json/json.h"
 
 #include <sstream>
-#ifdef _WIN64
-	#include <windows.h>
-	#include <sysinfoapi.h>
-#endif
-
 auto constexpr list_header_csv {"gpu,gpu_bdf,gpu_uuid,vf,vf_bdf,vf_uuid\n"};
 
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,

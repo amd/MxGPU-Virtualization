@@ -1615,7 +1615,7 @@ static int amdgv_sched_world_switch_init_sw_config(struct amdgv_adapter *adapt)
 
 				if (adapt->gpuiov.ctrl_blocks[hw_sched_id].sched_mode == AMDGV_SCHED_FAIRNESS &&
 					adapt->sched.enable_bulk_goto_state)
-					world_switch->bulk_goto_state = world_switch_bulk_goto_state_manual;
+					amdgv_set_bulk_goto_state(adapt, world_switch);
 
 				idx++;
 			}

@@ -33,12 +33,12 @@ static const struct amdgv_marketing_name_entry amdgv_marketing_name_table[] = {
 	/* Mi350 PF */
 	{ CHIP_MI350X, 0x75A0, 0x00, "AMD Instinct MI350X"},
 	{ CHIP_MI350X, 0x75A3, 0x00, "AMD Instinct MI355X"},
-	{ CHIP_MI350X, 0x75A8, 0x00, "AMD Instinct MI350P"},
+	{ CHIP_MI350P, 0x75A8, 0x00, "AMD Instinct MI350P"},
 
 	/* Mi350 VF */
 	{ CHIP_MI350X, 0x75B0, 0x00, "AMD Instinct MI350X VF"},
 	{ CHIP_MI350X, 0x75B3, 0x00, "AMD Instinct MI355X VF"},
-	{ CHIP_MI350X, 0x75B8, 0x00, "AMD Instinct MI350P VF"},
+	{ CHIP_MI350P, 0x75B8, 0x00, "AMD Instinct MI350P VF"},
 
 	/* Navi32 PF */
 	{ CHIP_NAVI32, 0x7460, 0x00, "AMD Radeon PRO V710"},

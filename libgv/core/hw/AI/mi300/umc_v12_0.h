@@ -296,6 +296,8 @@ extern const uint32_t
 /* one device has 288GB HBM3e memory */
 #define SOCKET_LFB_SIZE_HBM3E 0x4800000000ULL
 
+/* one device has 144GB HBM3e memory for MI350P */
+#define SOCKET_LFB_SIZE_HBM3E_MI350P 0x2400000000ULL
 
 struct umc_mca_addr {
 	uint64_t err_addr;

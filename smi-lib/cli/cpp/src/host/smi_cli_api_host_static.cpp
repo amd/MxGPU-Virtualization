@@ -15,10 +15,6 @@
 
 #include <map>
 #include <sstream>
-#ifdef _WIN64
-	#include <windows.h>
-	#include <sysinfoapi.h>
-#endif
 #include <limits.h>
 #include <cstdint>
 #include <cinttypes>
@@ -176,6 +172,8 @@ std::string host_fill_asic_info(Arguments arg, std::string value)
 						    {"device_id", value.c_str()},
 						    {"subsystem_id", value.c_str()},
 						    {"rev_id", value.c_str()},
+						    {"chip_rev_id", value.c_str()},
+						    {"external_rev_id", value.c_str()},
 						    {"asic_serial", value.c_str()},
 						    {"oam_id", value.c_str()},
 						    {"physical_acc_id", value.c_str()},
@@ -183,15 +181,15 @@ std::string host_fill_asic_info(Arguments arg, std::string value)
 
 		out = asic_json.dump(4);
 	} else if (arg.output == csv) {
-		out = string_format(",%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s", value.c_str(),
+		out = string_format(",%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s", value.c_str(),
 				    value.c_str(), value.c_str(), value.c_str(), value.c_str(),
 				    value.c_str(), value.c_str(), value.c_str(), value.c_str(),
-				    value.c_str(), value.c_str());
+				    value.c_str(), value.c_str(), value.c_str(), value.c_str());
 	} else {
 		out = string_format(staticAsicHostTemplate, value.c_str(), value.c_str(),
 				    value.c_str(), value.c_str(), value.c_str(), value.c_str(),
 				    value.c_str(), value.c_str(), value.c_str(), value.c_str(),
-				    value.c_str());
+				    value.c_str(), value.c_str(), value.c_str());
 	}
 
 	return out;
@@ -662,6 +660,12 @@ int AmdSmiApiHost::amdsmi_get_asic_info_command(uint64_t processor_bdf, Argument
 	std::string rev_id_hex	  = string_format("0x%X", asic.rev_id);
 	std::string serial_id_hex = asic.asic_serial;
 
+	std::string chip_rev_id_hex {
+	    asic.chip_rev_id == UINT32_MAX ? "N/A" : string_format("0x%X", asic.chip_rev_id)};
+	std::string external_rev_id_hex {asic.external_rev_id == UINT32_MAX
+					     ? "N/A"
+					     : string_format("0x%X", asic.external_rev_id)};
+
 	std::string subvendor_id_hex {};
 	if (asic.subvendor_id == UINT_MAX) {
 		subvendor_id_hex = "N/A";
@@ -721,6 +725,8 @@ int AmdSmiApiHost::amdsmi_get_asic_info_command(uint64_t processor_bdf, Argument
 		    {"device_id", device_id_hex},
 		    {"subsystem_id", subsystem_id_hex.c_str()},
 		    {"rev_id", rev_id_hex},
+		    {"chip_rev_id", chip_rev_id_hex},
+		    {"external_rev_id", external_rev_id_hex},
 		    {"asic_serial", serial_id_hex},
 		    {"oam_id", oam_id_json},
 		    {"physical_acc_id", physical_acc_id_json},
@@ -729,16 +735,18 @@ int AmdSmiApiHost::amdsmi_get_asic_info_command(uint64_t processor_bdf, Argument
 		out = asic_json.dump(4);
 	} else if (arg.output == csv) {
 		out = string_format(
-		    ",%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s", asic.market_name, vendor_id_hex.c_str(),
-		    vendor_name.c_str(), subvendor_id_hex.c_str(), device_id_hex.c_str(),
-		    subsystem_id_hex.c_str(), rev_id_hex.c_str(), serial_id_hex.c_str(),
+		    ",%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s", asic.market_name,
+		    vendor_id_hex.c_str(), vendor_name.c_str(), subvendor_id_hex.c_str(),
+		    device_id_hex.c_str(), subsystem_id_hex.c_str(), rev_id_hex.c_str(),
+		    chip_rev_id_hex.c_str(), external_rev_id_hex.c_str(), serial_id_hex.c_str(),
 		    oam_id.c_str(), physical_acc_id.c_str(), num_of_compute_units.c_str());
 	} else {
-		out = string_format(staticAsicHostTemplate, asic.market_name, vendor_id_hex.c_str(),
-				    vendor_name.c_str(), subvendor_id_hex.c_str(),
-				    device_id_hex.c_str(), subsystem_id_hex.c_str(),
-				    rev_id_hex.c_str(), serial_id_hex.c_str(), oam_id.c_str(),
-				    physical_acc_id.c_str(), num_of_compute_units.c_str());
+		out = string_format(
+		    staticAsicHostTemplate, asic.market_name, vendor_id_hex.c_str(),
+		    vendor_name.c_str(), subvendor_id_hex.c_str(), device_id_hex.c_str(),
+		    subsystem_id_hex.c_str(), rev_id_hex.c_str(), chip_rev_id_hex.c_str(),
+		    external_rev_id_hex.c_str(), serial_id_hex.c_str(), oam_id.c_str(),
+		    physical_acc_id.c_str(), num_of_compute_units.c_str());
 	}
 
 	return ret;
@@ -1855,7 +1863,8 @@ int AmdSmiApiHost::amdsmi_get_vram_info_command(uint64_t processor_bdf, Argument
 		}
 		nlohmann::ordered_json vram_info_json = {
 		    {"type", vram_type_str.c_str()},
-		    {"vendor", vram_info.vram_vendor == "UNKNOWN" ? "N/A" : vram_info.vram_vendor},
+		    {"vendor",
+		     strcmp(vram_info.vram_vendor, "UNKNOWN") == 0 ? "N/A" : vram_info.vram_vendor},
 		    {"size", vram_size},
 		    {"bit_width", vram_info.vram_bit_width},
 		    {"max_bandwidth", vram_max_bandwidth}};
@@ -2091,8 +2100,9 @@ int AmdSmiApiHost::amdsmi_get_vf_hbm_info_command(std::string device, Arguments 
 		return ret;
 	}
 
+	uint64_t phy_size_mb	 = hbm_info.phy_size / (1024ULL * 1024ULL);
 	std::string phy_addr_str = string_format("0x%" PRIx64, hbm_info.phy_addr);
-	std::string phy_size_str = string_format("%" PRIu64, hbm_info.phy_size);
+	std::string phy_size_str = string_format("%" PRIu64, phy_size_mb);
 	std::string numa_id_str =
 	    hbm_info.numa_id == UINT32_MAX ? "N/A" : string_format("%" PRIu32, hbm_info.numa_id);
 	std::string name_str = hbm_info.name;
@@ -2101,8 +2111,8 @@ int AmdSmiApiHost::amdsmi_get_vf_hbm_info_command(std::string device, Arguments 
 
 	if (arg.output == json) {
 		nlohmann::ordered_json phy_size_json {};
-		phy_size_json["value"] = hbm_info.phy_size;
-		phy_size_json["unit"]  = "B";
+		phy_size_json["value"] = phy_size_mb;
+		phy_size_json["unit"]  = "MB";
 		nlohmann::ordered_json hbm_info_content {};
 		hbm_info_content["phy_addr"]	     = phy_addr_str;
 		hbm_info_content["phy_size"]	     = phy_size_json;
@@ -2116,14 +2126,13 @@ int AmdSmiApiHost::amdsmi_get_vf_hbm_info_command(std::string device, Arguments 
 		    {"hbm_info", hbm_info_content}};
 		formatted_string = hbm_info_json.dump(4);
 	} else if (arg.output == csv) {
-		std::string phy_size_str_with_unit = string_format("%" PRIu64, hbm_info.phy_size);
-		formatted_string = string_format(",%s,%s,%s,%s", phy_addr_str.c_str(),
-						 phy_size_str_with_unit.c_str(),
-						 numa_id_str.c_str(), name_str.c_str());
+		formatted_string =
+		    string_format(",%s,%s,%s,%s", phy_addr_str.c_str(), phy_size_str.c_str(),
+				  numa_id_str.c_str(), name_str.c_str());
 	} else {
 		formatted_string =
 		    string_format(statichbmInfoTemplate, phy_addr_str.c_str(), phy_size_str.c_str(),
-				  "B", numa_id_str.c_str(), name_str.c_str());
+				  "MB", numa_id_str.c_str(), name_str.c_str());
 	}
 
 	return AMDSMI_STATUS_SUCCESS;
@@ -2367,13 +2376,7 @@ int AmdSmiApiHost::amdsmi_get_numa_command(uint64_t processor_bdf, Arguments arg
 {
 	int ret;
 	uint32_t numa_node;
-#ifdef _WIN64
-	SYSTEM_INFO sysInfo;
-	GetSystemInfo(&sysInfo);
-	long num_processors = sysInfo.dwNumberOfProcessors;
-#else
-	long num_processors = sysconf(_SC_NPROCESSORS_CONF);
-#endif
+	long num_processors	      = AmdSmiPlatform::getInstance().get_cpu_count();
 	uint32_t cpu_set_size_loc     = (num_processors + 63) / 64; // Ceiling division
 	amdsmi_affinity_scope_t scope = AMDSMI_AFFINITY_SCOPE_NODE;
 	amdsmi_processor_handle processor;

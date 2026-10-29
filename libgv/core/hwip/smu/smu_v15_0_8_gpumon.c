@@ -729,7 +729,7 @@ static int smu_v15_0_8_get_memory_partition_mode(struct amdgv_adapter *adapt,
 
 	memory_partition_info->num_numa_ranges = adapt->mcp.numa_count;
 	for (i = 0; i < memory_partition_info->num_numa_ranges; i++) {
-		memory_partition_info->numa_range[i].memory_type =adapt->vram_info.vram_type;
+		memory_partition_info->numa_range[i].memory_type = (enum amdgv_gpumon_vram_type)adapt->vram_info.vram_type;
 		memory_partition_info->numa_range[i].start = adapt->mcp.numa_range[i].start;
 		memory_partition_info->numa_range[i].end = adapt->mcp.numa_range[i].end;
 	}

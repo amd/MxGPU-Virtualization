@@ -177,7 +177,7 @@ static const struct amdgv_asic_entry amdgv_sriov_device_table[] = {
 	},
 	/* Mi350P */
 	{
-		CHIP_MI350X,
+		CHIP_MI350P,
 		0x75A8,
 		ANY_ID,
 		ANY_ID,
@@ -1209,7 +1209,7 @@ static void amdgv_fill_device_info(struct amdgv_adapter *adapt,
 {
 	adapt->dev = init_data->info.dev;
 	adapt->bdf = init_data->info.bdf;
-	adapt->pf_numa_id = init_data->info.pf_numa_id;
+	adapt->pf_pd = init_data->info.pf_pd;
 	adapt->vendor_id = init_data->info.vendor_id;
 	adapt->dev_id = init_data->info.dev_id;
 	adapt->rev_id = init_data->info.rev_id;
@@ -1373,8 +1373,6 @@ static int amdgv_parse_config_opt(struct amdgv_adapter *adapt)
 
 	if (adapt->opt.ras_vf_telemetry_policy < AMDGV_RAS_VF_TELEMETRY_POLICY_COUNT)
 		adapt->mca.vf_policy = adapt->opt.ras_vf_telemetry_policy;
-
-	adapt->vf_hbm_mgmt_mode = adapt->opt.vf_hbm_mgmt_mode;
 
 	adapt->mcp.memory_partition_mode = adapt->opt.memory_partition_mode;
 	adapt->mcp.accelerator_partition_mode = adapt->opt.accelerator_partition_mode;
@@ -2001,6 +1999,8 @@ struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_da
 			"Cannot allocate memory for adapter during device initialization\n");
 		return NULL;
 	}
+	adapt->nbio.chip_rev_id = AMDGV_REV_ID_UNKNOWN;
+	adapt->nbio.external_rev_id = AMDGV_REV_ID_UNKNOWN;
 
 #ifdef WS_RECORD
 	adapt->record_buf = (char *)oss_zalloc(MAX_RECORD_LENGTH);
@@ -2200,8 +2200,6 @@ struct amdgv_adapter *amdgv_device_internal_init(struct amdgv_init_data *init_da
 	}
 
 	amdgv_import_data_by_op(adapt, AMDGV_LIVE_INFO_DATA__MODULE_PARAM_PRE);
-
-	adapt->use_vf_sysmem_xchg = false;
 
 	/* device function initialization */
 	if (amdgv_device_func_sw_init(adapt) < 0) {
@@ -2440,19 +2438,20 @@ void amdgv_device_handle_bad_gpu(struct amdgv_adapter *adapt)
 	struct amdgv_hive_info *hive;
 	struct amdgv_adapter *entry, *tmp;
 
+	amdgv_device_dispatch_rma(adapt);
 	hive = amdgv_get_xgmi_hive(adapt);
 	if (hive) {
 		amdgv_xgmi_mark_bad_gpu_in_hive(adapt);
 		amdgv_list_for_each_entry_safe(entry, tmp, &hive->adapt_list,
 						struct amdgv_adapter, xgmi.head) {
-				if (amdgv_xgmi_is_fb_sharing_allowed(adapt,
-						adapt->xgmi.phy_node_id,
-						entry->xgmi.phy_node_id,
-						adapt->xgmi.fb_sharing_mode))
-							amdgv_device_dispatch_rma(entry);
+			if (adapt->xgmi.phy_node_id == entry->xgmi.phy_node_id)
+				continue;
+			if (amdgv_xgmi_is_fb_sharing_allowed(adapt,
+					adapt->xgmi.phy_node_id,
+					entry->xgmi.phy_node_id,
+					adapt->xgmi.fb_sharing_mode))
+						amdgv_device_dispatch_rma(entry);
 		}
-	} else {
-		amdgv_device_dispatch_rma(adapt);
 	}
 }
 

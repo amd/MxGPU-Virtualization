@@ -329,6 +329,13 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 				amdgv_sched_queue_event_ex(adapt, idx_vf, sched_event,
 								AMDGV_SCHED_BLOCK_ALL, event_data);
 			} else if (sched_event == AMDGV_EVENT_SCHED_RAS_POISON_CONSUMPTION) {
+				/* Drop request if the reported RAS block is out of range */
+				if (msg_data[1] >= AMDGV_RAS_BLOCK__LAST) {
+					AMDGV_WARN("Invalid RAS block %u in poison consumption request from %s\n",
+						msg_data[1], amdgv_idx_to_str(idx_vf));
+					break;
+				}
+
 				event_data.poison.consumption.block = msg_data[1];
 				amdgv_put_log(idx_vf, AMDGV_LOG_ECC_POISON_CONSUMPTION,
 						AMDGV_LOG_DATA_32_32(idx_vf, msg_data[1]));
@@ -405,6 +412,12 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 	case IH_IV_SRCID_DF_MCA_INT:
 		idx_vf = entry->src_data[0];
 		AMDGV_INFO("ECC Uncorrectable Error Interrupt Received\n");
+		if (AMDGV_IS_IDX_INVALID(idx_vf)) {
+			AMDGV_ERROR("Invalid VF index in DF MCA int: src_data[0]=0x%x\n",
+				idx_vf);
+			amdgv_ih_dump_irq_info(adapt, entry, true);
+			break;
+		}
 		amdgv_ih_dump_irq_info(adapt, entry, false);
 		amdgv_sched_queue_event(adapt, idx_vf, AMDGV_EVENT_SCHED_RAS_UMC,
 					AMDGV_SCHED_BLOCK_ALL);
@@ -423,6 +436,12 @@ int amdgv_ih_iv_ring_entry_process(struct amdgv_adapter *adapt, struct amdgv_iv_
 				} else {
 					idx_vf = entry->src_data[0];
 					AMDGV_INFO("ECC RAS Error Interrupt Received\n");
+					if (AMDGV_IS_IDX_INVALID(idx_vf)) {
+						AMDGV_ERROR("Invalid VF index in DF RAS int: src_data[0]=0x%x\n",
+							idx_vf);
+						amdgv_ih_dump_irq_info(adapt, entry, true);
+						break;
+					}
 					amdgv_ih_dump_irq_info(adapt, entry, false);
 					amdgv_sched_queue_event(adapt, idx_vf,
 								AMDGV_EVENT_SCHED_RAS_UMC,
@@ -591,7 +610,7 @@ static enum oss_irq_return _amdgv_ih_process_handle(struct amdgv_adapter *adapt)
 	while (wptr != adapt->irqmgr.ih.rptr) {
 		AMDGV_DEBUG("rptr 0x%x, wptr 0x%x\n", adapt->irqmgr.ih.rptr, wptr);
 
-		oss_memory_fence();
+		oss_mb();
 
 		while (adapt->irqmgr.ih.rptr != wptr) {
 			/* If interrupt handler gets disabled,

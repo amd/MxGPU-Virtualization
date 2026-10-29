@@ -8,6 +8,7 @@
 
 #include <amdgv_pci_def.h>
 #include <amdgv_sched.h>
+#include <amdgv_gpuiov.h>
 
 enum GPUIOV_V9_0_HW_SCHED_BLOCK{
 	GPUIOV_V9_0_HW_SCHED_BLOCK_VCN_SCH0_MMSCH = 0,
@@ -33,7 +34,8 @@ enum GPUIOV_V9_0_HW_SCHED_BLOCK{
 	GPUIOV_V9_0_HW_SCHED_BLOCK_NUM,
 };
 
-#define CMD_EXECUTE (0x10)
+#define CMD_EXECUTE         (0x1 << 4)
+#define CMD_EXECUTE_INTR_EN (0x1 << 5)
 
 #define PCI_GPUIOV_FUNC_ID(idx_vf)                                                            \
 	((idx_vf == AMDGV_PF_IDX || idx_vf >= adapt->max_num_vf) ? 0 :                        \
@@ -236,6 +238,8 @@ struct gpuiov_v9_0_cmd_id {
 	uint32_t    cmd;
 	uint32_t    gpuiov_v9_0_cmd;
 };
+
+void gpuiov_v9_0_set_bulk_goto_state(struct amdgv_adapter *adapt, struct amdgv_sched_world_switch *world_switch);
 
 int gpuiov_v9_0_sched_compute_spatial_part_table(struct amdgv_sched_spatial_part *table,
 						 uint32_t xcc_mask, uint32_t num_vf);

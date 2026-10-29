@@ -131,6 +131,11 @@ enum amdgv_sched_event_id {
 	AMDGV_EVENT_SCHED_VF_REQ_GPU_INIT_XCHG_REGION,
 	AMDGV_EVENT_SCHED_RAS_EVENT,
 	AMDGV_EVENT_SCHED_VF_RAS_REMOTE_CMD,
+	/*
+	 * Completion of SCHED_STOP_VF for a VF already in SCHED_SUSPEND while
+	 * another VF holds full access. List 3 runs it after REL_GPU_INIT.
+	 */
+	AMDGV_EVENT_SCHED_STOP_SUSPENDED_VF,
 	AMDGV_EVENT_INVALID_EVENT = 0xffffffff,
 };
 
@@ -393,6 +398,9 @@ struct amdgv_sched_event {
 
 	/* oss event signal */
 	event_t signal;
+
+	/* times this event was re-queued to wait out a pending GPU reset */
+	uint32_t requeue_count;
 
 	/* event data */
 	union amdgv_sched_event_data data;
@@ -710,6 +718,7 @@ struct amdgv_sched {
 	int (*setup_vf_timeslice)(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_t timeslice, enum amdgv_sched_block sched_block);
 	int (*setup_default_vfs_timeslice)(struct amdgv_adapter *adapt);
 	int (*asymmetric_fb_reconfig)(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_t fb_size);
+	void (*set_bulk_goto_state)(struct amdgv_adapter *adapt, struct amdgv_sched_world_switch *world_switch);
 };
 
 int amdgv_sched_init(struct amdgv_adapter *adapt);
@@ -868,6 +877,7 @@ void amdgv_sched_debug_dump_data_flush(struct amdgv_adapter *adapt);
 enum amdgv_live_info_status amdgv_sched_export_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_sched *sched_info);
 enum amdgv_live_info_status amdgv_sched_import_live_data(struct amdgv_adapter *adapt, struct amdgv_live_info_sched *sched_info);
 int amdgv_sched_setup_vf_timeslice(struct amdgv_adapter *adapt, uint32_t idx_vf, uint32_t timeslice, enum amdgv_sched_block sched_block);
+void amdgv_set_bulk_goto_state(struct amdgv_adapter *adapt, struct amdgv_sched_world_switch *world_switch);
 int amdgv_sched_setup_default_vfs_timeslice(struct amdgv_adapter *adapt);
 void amdgv_sched_remove_stale_events_after_wgr(struct amdgv_adapter *adapt);
 int amdgv_sched_get_sched_mode(struct amdgv_adapter *adapt, enum amdgv_sched_block sched_block, enum amdgv_sched_mode *sched_mode);

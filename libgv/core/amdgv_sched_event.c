@@ -29,6 +29,9 @@ static const uint32_t this_block = AMDGV_SCHEDULER_BLOCK;
 /* stop processing the remaining events and keep the current event */
 #define AMDGV_EVENT_STOP_AND_KEEP 2
 
+/* how many times a GPUMON request may be re-queued before giving up */
+#define AMDGV_GPUMON_MAX_RETRY_COUNT 4
+
 /**
 * amdgv_sched_full_access_status - full access status
 *
@@ -108,6 +111,8 @@ static const char *amdgv_event_name(uint32_t event)
 		return "SCHED_PSP_VF_GATE";
 	case AMDGV_EVENT_HANDLE_CRASH:
 		return "AMDGV_EVENT_HANDLE_CRASH";
+	case AMDGV_EVENT_SCHED_STOP_SUSPENDED_VF:
+		return "SCHED_STOP_SUSPENDED_VF";
 	case AMDGV_EVENT_COLLECT_DIAG_DATA:
 		return "COLLECT_DIAG_DATA";
 	case AMDGV_EVENT_ENTER_POWER_SAVING:
@@ -483,6 +488,16 @@ static int amdgv_sched_event_queue_push_ex(struct amdgv_adapter *adapt, uint32_t
 		AMDGV_DEBUG4("queue %s request from %s for %s\n", amdgv_event_name(event_id),
 			    amdgv_idx_to_str(idx_vf), amdgv_sched_block_to_name(sched_block));
 
+	/* idx_vf is used to index the fixed size VF arrays when the event is
+	 * processed, so an index outside the VF slot range must never be
+	 * queued. AMDGV_PF_IDX is the last slot and stays valid here.
+	 */
+	if (idx_vf >= AMDGV_MAX_VF_SLOT) {
+		AMDGV_ERROR("queue %s DENIED: VF index out of range: idx_vf=0x%x\n",
+				amdgv_event_name(event_id), idx_vf);
+		return AMDGV_FAILURE;
+	}
+
 	// Do not use vf_idx other than PF index to perform certain actions
 	if (amdgv_sched_event_is_event_invalid(adapt, idx_vf, event_id, sched_block)) {
 		AMDGV_WARN("Event %s request from %s for %s is pushed with incorrect parameters\n",
@@ -541,6 +556,7 @@ static int amdgv_sched_event_queue_push_ex(struct amdgv_adapter *adapt, uint32_t
 	event->signal = signal;
 	event->data = data;
 	event->status = AMDGV_EVENT_STATUS_NORMAL;
+	event->requeue_count = 0;
 
 	oss_spin_unlock_irq(adapt->sched.queue_lock);
 
@@ -807,6 +823,7 @@ static void amdgv_sched_event_arrange_event_list(struct amdgv_adapter *adapt,
 		case AMDGV_EVENT_SCHED_PSP_VF_GATE:
 		case AMDGV_EVENT_SCHED_PSP_VF_CMD_RELAY:
 		case AMDGV_EVENT_HANDLE_CRASH:
+		case AMDGV_EVENT_SCHED_STOP_SUSPENDED_VF:
 		case AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA:
 		case AMDGV_EVENT_VF_FB_COPY:
 		case AMDGV_EVENT_VF_FB_COPY_ASYNC:
@@ -1016,6 +1033,7 @@ static void amdgv_sched_push_back_event(struct amdgv_adapter *adapt,
 	case AMDGV_EVENT_SCHED_MMSCH_GENERAL_NOTIFICATION:
 	case AMDGV_EVENT_SCHED_PSP_VF_CMD_RELAY:
 	case AMDGV_EVENT_HANDLE_CRASH:
+	case AMDGV_EVENT_SCHED_STOP_SUSPENDED_VF:
 	case AMDGV_EVENT_LIVE_MIGRATION_MANIFEST_DATA:
 	case AMDGV_EVENT_VF_FB_COPY:
 	case AMDGV_EVENT_VF_FB_COPY_ASYNC:
@@ -1286,6 +1304,13 @@ static void amdgv_sched_handle_vf_ptl_update(struct amdgv_adapter *adapt, uint32
 
 	if (!adapt->ptl_supported) {
 		AMDGV_WARN("PTL not supported, dropping request from %s\n",
+			   amdgv_idx_to_str(idx_vf));
+		resp_status = AMD_SRIOV_RESP_UNSUPPORTED;
+		goto send_response;
+	}
+
+	if (!adapt->array_vf[idx_vf].ptl_exposed) {
+		AMDGV_WARN("PTL not granted to %s, rejecting request\n",
 			   amdgv_idx_to_str(idx_vf));
 		resp_status = AMD_SRIOV_RESP_UNSUPPORTED;
 		goto send_response;
@@ -1859,7 +1884,7 @@ static bool amdgv_sched_is_event_pair(struct amdgv_adapter *adapt,
 
 /* Following VM shutdown of PV2VF mailbox failures a VF can be orphaned
  * and never be shutdown. Destroy the PSP ring and if the VF is active
- * reset the GPU
+ * reset the GPU. A suspended VF is shut down and returned to available.
  */
 static int amdgv_sched_handle_orphan_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
@@ -1881,6 +1906,10 @@ static int amdgv_sched_handle_orphan_vf(struct amdgv_adapter *adapt, uint32_t id
 
 		if (amdgv_sched_reset_vf(adapt, idx_vf, AMDGV_SCHED_BLOCK_ALL) != 0)
 			return AMDGV_FAILURE;
+	} else if (is_suspend_vf(idx_vf)) {
+		amdgv_sched_shutdown_vf(adapt, idx_vf);
+		adapt->array_vf[idx_vf].unshutdown = false;
+		set_to_avail_vf(idx_vf);
 	}
 
 	return 0;
@@ -1905,6 +1934,22 @@ static int amdgv_sched_event_set_vf_cond_avail(struct amdgv_adapter *adapt, uint
 	set_to_cond_avail_vf(idx_vf);
 
 	return 0;
+}
+
+/* Some ASICs keep the VFGATE open for the whole VF lifecycle: enable it on GPU
+ * init, and disable it only on GPU shutdown (REL_GPU_FINI). The gate is left
+ * untouched across FLR/reset (a per-VF FLR does not clear it on these ASICs) and
+ * is re-armed by the next GPU init. Other ASICs toggle on every full-access
+ * enter/exit (legacy behavior). */
+static bool amdgv_sched_vfgate_toggle_allowed(struct amdgv_adapter *adapt,
+					      enum amdgv_sched_event_id event_id,
+					      bool enable)
+{
+	if (!adapt->psp.vfgate_lifecycle_scoped)
+		return true;
+
+	return enable ? (event_id == AMDGV_EVENT_REQ_GPU_INIT)
+		      : (event_id == AMDGV_EVENT_REL_GPU_FINI);
 }
 
 static int amdgv_sched_enter_full_access(struct amdgv_adapter *adapt,
@@ -1991,12 +2036,14 @@ static int amdgv_sched_enter_full_access(struct amdgv_adapter *adapt,
 	}
 
 	/* Enable psp mailbox ints */
-	if (adapt->xgmi.phy_nodes_num > 1 && adapt->xgmi.set_mb_in_hive)
-		ret = amdgv_sched_psp_set_mb_int_in_hive(adapt, event->idx_vf,
-							 true);
-	else
-		ret = amdgv_sched_psp_set_mb_int(adapt, event->idx_vf, true);
-	AMDGV_ASSERT(ret == 0);
+	if (amdgv_sched_vfgate_toggle_allowed(adapt, event->id, true)) {
+		if (adapt->xgmi.phy_nodes_num > 1 && adapt->xgmi.set_mb_in_hive)
+			ret = amdgv_sched_psp_set_mb_int_in_hive(adapt, event->idx_vf,
+								 true);
+		else
+			ret = amdgv_sched_psp_set_mb_int(adapt, event->idx_vf, true);
+		AMDGV_ASSERT(ret == 0);
+	}
 
 	/* enable MMIO register write, FB, DOORBELL VF access */
 	amdgv_gpuiov_set_vf_access(adapt, event->idx_vf, AMDGV_VF_ACCESS_ALL, true);
@@ -2082,7 +2129,7 @@ static int amdgv_sched_enter_full_access(struct amdgv_adapter *adapt,
 		 * PF. If it does not the driver is an unrecoverable error
 		 * and will be handled by the event process
 		 */
-		if (!ret) {
+		if (!ret && amdgv_sched_vfgate_toggle_allowed(adapt, event->id, false)) {
 			if (adapt->xgmi.phy_nodes_num > 1  && adapt->xgmi.set_mb_in_hive)
 				ret = amdgv_sched_psp_set_mb_int_in_hive(
 				    adapt, event->idx_vf, false);
@@ -2225,12 +2272,14 @@ static void amdgv_sched_exit_full_access(struct amdgv_adapter *adapt,
 						AMDGV_LOG_DATA_16_16_32((uint16_t)event->idx_vf, (uint16_t)mb_status.status, mb_status.fw_id));
 	}
 
-	if (adapt->xgmi.phy_nodes_num > 1  && adapt->xgmi.set_mb_in_hive)
-		ret = amdgv_sched_psp_set_mb_int_in_hive(adapt, event->idx_vf,
-							 false);
-	else
-		ret = amdgv_sched_psp_set_mb_int(adapt, event->idx_vf, false);
-	AMDGV_ASSERT(ret == 0);
+	if (amdgv_sched_vfgate_toggle_allowed(adapt, event->id, false)) {
+		if (adapt->xgmi.phy_nodes_num > 1  && adapt->xgmi.set_mb_in_hive)
+			ret = amdgv_sched_psp_set_mb_int_in_hive(adapt, event->idx_vf,
+								 false);
+		else
+			ret = amdgv_sched_psp_set_mb_int(adapt, event->idx_vf, false);
+		AMDGV_ASSERT(ret == 0);
+	}
 
 	if (vf_init) {
 		/* NOTE: "add_vf" checks "sched_block" and takes care of
@@ -2338,6 +2387,9 @@ static void amdgv_sched_exit_full_access_timeout(struct amdgv_adapter *adapt, ui
 		goto out;
 
 out:
+	/* Full-access timeout is a genuine teardown (VF is FLR'd and set
+	 * available), so close the gate unconditionally - the guest re-arms it on
+	 * its next GPU init. */
 	if (adapt->xgmi.phy_nodes_num > 1 && adapt->xgmi.set_mb_in_hive)
 		ret = amdgv_sched_psp_set_mb_int_in_hive(adapt, idx_vf, false);
 	else
@@ -2808,6 +2860,45 @@ static int amdgv_perform_segmented_fb_copy(struct amdgv_adapter *adapt, int idx_
 	}
 
 	return ret;
+}
+
+/*
+ * Sysmem range a whole FB copy batch occupies. Returns true if one flush can
+ * cover it: the entries share one dma_handle and are packed in increasing
+ * order, so bounding first..last covers every entry in between.
+ */
+static bool amdgv_fb_copy_batch_range(struct amdgv_fb_copy_entry *entries,
+				      uint32_t num_entries,
+				      struct oss_dma_mem_info **dma_mem,
+				      uint64_t *off, uint64_t *bytes)
+{
+	struct amdgv_fb_copy_entry *first, *last;
+	struct oss_dma_mem_info *mem;
+	uint32_t i;
+
+	if (!entries || !num_entries)
+		return false;
+
+	first = &entries[0];
+	last = &entries[num_entries - 1];
+	mem = (struct oss_dma_mem_info *)first->dma_handle;
+
+	for (i = 1; i < num_entries; i++) {
+		if (entries[i].dma_handle != first->dma_handle ||
+		    (char *)entries[i].vaddr <
+		    (char *)entries[i - 1].vaddr + entries[i - 1].size)
+			return false;
+	}
+
+	if (!AMDGV_FB_COPY_ENTRY_FLUSHABLE(mem, first) ||
+	    !AMDGV_FB_COPY_ENTRY_FLUSHABLE(mem, last))
+		return false;
+
+	*dma_mem = mem;
+	*off = (uint64_t)((char *)first->vaddr - (char *)mem->va_ptr);
+	*bytes = (uint64_t)((char *)last->vaddr + last->size - (char *)first->vaddr);
+
+	return true;
 }
 
 static int amdgv_sched_event_vf_fb_copy_skip_bad_pages(struct amdgv_adapter *adapt, int idx_vf,
@@ -3290,9 +3381,28 @@ static int handle_event_in_full_access(struct amdgv_adapter *adapt,
 							AMDGV_EVENT_HANDLE_CRASH,
 							AMDGV_SCHED_BLOCK_ALL,
 							OSS_INVALID_HANDLE, event->data, true);
+		} else if (is_suspend_vf(event->idx_vf)) {
+			/*
+			 * Shutdown runs in the non-full-access handler, after
+			 * REL_GPU_INIT. The stop waiter stays on that event so
+			 * the caller cannot observe SCHED_SUSPEND as completion.
+			 */
+			AMDGV_INFO("Defer stop of suspended %s until full access exits\n",
+				   amdgv_idx_to_str(event->idx_vf));
+			if (amdgv_sched_event_queue_push_ex(adapt, event->idx_vf,
+							    AMDGV_EVENT_SCHED_STOP_SUSPENDED_VF,
+							    AMDGV_SCHED_BLOCK_ALL,
+							    event->signal, event->data,
+							    true)) {
+				AMDGV_WARN("Failed to defer stop of suspended %s\n",
+					   amdgv_idx_to_str(event->idx_vf));
+				break;
+			}
+			event->signal = OSS_INVALID_HANDLE;
 		}
 		break;
 	case AMDGV_EVENT_HANDLE_CRASH:
+	case AMDGV_EVENT_SCHED_STOP_SUSPENDED_VF:
 		amdgv_sched_push_back_event(adapt, event);
 		ret = AMDGV_EVENT_STOP_AND_KEEP;
 		break;
@@ -3887,6 +3997,15 @@ set_to_cond_avail:
 		set_to_avail_vf(event->idx_vf);
 		break;
 
+	case AMDGV_EVENT_SCHED_STOP_SUSPENDED_VF:
+		/* Paired with the full-access deferral of SCHED_STOP_VF. */
+		if (is_suspend_vf(event->idx_vf)) {
+			amdgv_sched_shutdown_vf(adapt, event->idx_vf);
+			entry->unshutdown = false;
+			set_to_avail_vf(event->idx_vf);
+		}
+		break;
+
 	case AMDGV_EVENT_HANDLE_CRASH:
 		amdgv_sched_stop(adapt, event->idx_vf);
 
@@ -3932,7 +4051,17 @@ set_to_cond_avail:
 			amdgv_sched_push_back_event(adapt, event);
 			ret = AMDGV_EVENT_STOP_AND_KEEP;
 		} else {
-			amdgv_gpumon_handle_sched_event(adapt, event);
+			if (amdgv_gpumon_handle_sched_event(adapt, event) == AMDGV_LOG_GPUMON_RETRY &&
+				event->requeue_count < AMDGV_GPUMON_MAX_RETRY_COUNT) {
+				event->requeue_count++;
+				AMDGV_INFO("GPUMON request failed, re-queueing (%u/%u)\n",
+					   event->requeue_count,
+					   AMDGV_GPUMON_MAX_RETRY_COUNT);
+				amdgv_sched_push_back_event(adapt, event);
+				/* Outer loop only re-runs while the ring is non-empty. */
+				oss_signal_event(adapt->sched.event);
+				ret = AMDGV_EVENT_STOP_AND_KEEP;
+			}
 		}
 		break;
 
@@ -4075,6 +4204,9 @@ set_to_cond_avail:
 		int copy_ret = 0;
 		uint32_t i;
 		bool to_fb = event->data.vf_fb_copy_data.to_fb;
+		struct oss_dma_mem_info *batch_dma = NULL;
+		uint64_t batch_off = 0, batch_bytes = 0;
+		bool batch_flush;
 
 		if (AMDGV_MIGRATION_SHOULD_ABORT(adapt, event->idx_vf)) {
 			*event->data.vf_fb_copy_data.buf_transfer_state =
@@ -4083,28 +4215,40 @@ set_to_cond_avail:
 		}
 		if (amdgv_sched_active_vf_ex_pf_num(adapt) > 0)
 			amdgv_sched_stop(adapt, event->idx_vf);
+
+		batch_flush = amdgv_fb_copy_batch_range(
+				event->data.vf_fb_copy_data.entries,
+				event->data.vf_fb_copy_data.num_entries,
+				&batch_dma, &batch_off, &batch_bytes);
+
+		/* to_fb copy reads the sysmem buffer the OS just wrote: sync CPU
+		 * writes before SDMA reads it. Done in the event thread so it
+		 * overlaps the OS stream caller. */
+		if (batch_flush && to_fb)
+			oss_flush_dma_mem(batch_dma, OSS_DMA_DIR_FROM_MEMORY,
+					  batch_off, batch_bytes);
+
 		for (i = 0; i < event->data.vf_fb_copy_data.num_entries; i++) {
 			struct amdgv_fb_copy_entry *entry =
 				&event->data.vf_fb_copy_data.entries[i];
 			struct oss_dma_mem_info *dma_mem =
 				(struct oss_dma_mem_info *)entry->dma_handle;
-			uint64_t buf_off;
+			uint64_t buf_off = 0;
 
-			if (!AMDGV_FB_COPY_ENTRY_FLUSHABLE(dma_mem, entry)) {
-				copy_ret = AMDGV_FAILURE;
-				break;
+			if (!batch_flush) {
+				if (!AMDGV_FB_COPY_ENTRY_FLUSHABLE(dma_mem, entry)) {
+					copy_ret = AMDGV_FAILURE;
+					break;
+				}
+				buf_off = (uint64_t)((char *)entry->vaddr - (char *)dma_mem->va_ptr);
 			}
-			buf_off = (uint64_t)((char *)entry->vaddr - (char *)dma_mem->va_ptr);
 
 			event->data.vf_fb_copy_data.fb_offset = entry->fb_offset;
 			event->data.vf_fb_copy_data.size = entry->size;
 			event->data.vf_fb_copy_data.gpu_addr = entry->gpu_addr;
 			event->data.vf_fb_copy_data.vaddr = entry->vaddr;
 
-			/* to_fb copy reads the sysmem buffer the OS just wrote:
-			 * sync CPU writes before SDMA reads this range. Done in
-			 * the event thread so it overlaps the OS stream caller. */
-			if (to_fb)
+			if (!batch_flush && to_fb)
 				oss_flush_dma_mem(dma_mem, OSS_DMA_DIR_FROM_MEMORY,
 						  buf_off, entry->size);
 
@@ -4113,12 +4257,16 @@ set_to_cond_avail:
 			if (copy_ret)
 				break;
 
-			/* from_fb copy wrote the sysmem buffer via SDMA: sync
-			 * those writes before the OS reads this range. */
-			if (!to_fb)
+			if (!batch_flush && !to_fb)
 				oss_flush_dma_mem(dma_mem, OSS_DMA_DIR_TO_MEMORY,
 						  buf_off, entry->size);
 		}
+
+		/* from_fb copy wrote the sysmem buffer via SDMA: sync those
+		 * writes before the OS reads them. */
+		if (batch_flush && !to_fb)
+			oss_flush_dma_mem(batch_dma, OSS_DMA_DIR_TO_MEMORY,
+					  batch_off, batch_bytes);
 
 		if (copy_ret) {
 			*event->data.vf_fb_copy_data.buf_transfer_state =

@@ -104,31 +104,6 @@ int amdgv_ffbm_apply_page_table(struct amdgv_adapter *adapt)
 	return ret;
 }
 
-/* Same as amdgv_ffbm_apply_page_table(), but scoped to one fcn's own gpa_list
- * so applying its pending pteb can't also push another fcn's unrelated
- * not-yet-applied pteb to hardware.
- */
-int amdgv_ffbm_apply_page_table_by_fcn(struct amdgv_adapter *adapt, uint32_t vf_idx)
-{
-	struct amdgv_ffbm_pte_block *pteb;
-	int ret = 0;
-
-	if (!adapt->ffbm.enabled)
-		return 0;
-
-	FFBM_LOCK_LIST;
-	amdgv_list_for_each_entry(pteb, &adapt->array_vf[vf_idx].gpa_list,
-				   struct amdgv_ffbm_pte_block, gpa_list_node) {
-		if ((pteb->type == AMDGV_FFBM_MEM_TYPE_VF ||
-		     pteb->type == AMDGV_FFBM_MEM_TYPE_TMR) &&
-		    pteb->applied == false)
-			ret = adapt->ffbm.apply_pteb(adapt, pteb, true);
-	}
-	FFBM_UNLOCK_LIST;
-
-	return ret;
-}
-
 static struct amdgv_ffbm_pte_block *amdgv_ffbm_find_pteb_by_phy(struct amdgv_adapter *adapt,
 								uint64_t spa)
 {
@@ -336,7 +311,8 @@ static void amdgv_ffbm_insert_new_ffbm_node(struct amdgv_adapter *adapt,
 	FFBM_UNLOCK_LIST;
 }
 
-static int amdgv_ffbm_replace_page(struct amdgv_adapter *adapt, uint64_t spa)
+static int amdgv_ffbm_replace_page(struct amdgv_adapter *adapt, uint64_t spa,
+				   bool without_data_copy)
 {
 	struct amdgv_ffbm_pte_block *pteb, *new_pteb, *reserved_pteb;
 	uint64_t aligned_spa, page_size = 0;
@@ -384,26 +360,28 @@ static int amdgv_ffbm_replace_page(struct amdgv_adapter *adapt, uint64_t spa)
 	}
 
 	/* Copy the data of bad pteb to new pteb */
-	bad_spa = pteb->spa;
-	bad_spa_end = bad_spa + page_size;
-	new_spa = new_pteb->spa;
+	if (!without_data_copy) {
+		bad_spa = pteb->spa;
+		bad_spa_end = bad_spa + page_size;
+		new_spa = new_pteb->spa;
 
-	AMDGV_DEBUG(
-		"FFBM: Copy pteb data: bad_spa:0x%llx, bad_spa_end:0x%llx, new_spa:0x%llx, page_size:0x%llx\n",
-		bad_spa, bad_spa_end, new_spa, page_size);
+		AMDGV_DEBUG(
+			"FFBM: Copy pteb data: bad_spa:0x%llx, bad_spa_end:0x%llx, new_spa:0x%llx, page_size:0x%llx\n",
+			bad_spa, bad_spa_end, new_spa, page_size);
 
-	while (bad_spa < bad_spa_end) {
-		/* Skip the bad page */
-		if (bad_spa == spa) {
-			AMDGV_DEBUG(
-				"FFBM: Skip copying bad page, bad_spa:0x%llx, new_spa:0x%llx, size:0x%x\n",
-				bad_spa, new_spa, PAGE_SIZE);
-			bad_spa += PAGE_SIZE;
-			new_spa += PAGE_SIZE;
-		} else {
-			WRITE_FB32(new_spa, READ_FB32(bad_spa));
-			bad_spa += 4;
-			new_spa += 4;
+		while (bad_spa < bad_spa_end) {
+			/* Skip the bad page */
+			if (bad_spa == spa) {
+				AMDGV_DEBUG(
+					"FFBM: Skip copying bad page, bad_spa:0x%llx, new_spa:0x%llx, size:0x%x\n",
+					bad_spa, new_spa, PAGE_SIZE);
+				bad_spa += PAGE_SIZE;
+				new_spa += PAGE_SIZE;
+			} else {
+				WRITE_FB32(new_spa, READ_FB32(bad_spa));
+				bad_spa += 4;
+				new_spa += 4;
+			}
 		}
 	}
 
@@ -432,8 +410,11 @@ static int amdgv_ffbm_replace_page(struct amdgv_adapter *adapt, uint64_t spa)
 	return 0;
 }
 
+/* without_data_copy: remap only. Use it in hw_init, where the VF FB holds no
+ * live guest data; runtime callers pass false to keep the guest data.
+ */
 int amdgv_ffbm_replace_bad_pages(struct amdgv_adapter *adapt, struct eeprom_table_record *bps,
-				 int pages)
+				 int pages, bool without_data_copy)
 {
 	int i = 0;
 	int ret = 0;
@@ -441,7 +422,7 @@ int amdgv_ffbm_replace_bad_pages(struct amdgv_adapter *adapt, struct eeprom_tabl
 
 	for (i = 0; i < pages; i++) {
 		spa = bps[i].retired_page << AMDGV_GPU_PAGE_SHIFT;
-		ret = amdgv_ffbm_replace_page(adapt, spa);
+		ret = amdgv_ffbm_replace_page(adapt, spa, without_data_copy);
 		if (ret) {
 			AMDGV_ERROR("FFBM failed to replace bad page\n");
 			break;
@@ -689,7 +670,7 @@ void amdgv_ffbm_unmap_by_fcn(struct amdgv_adapter *adapt, uint32_t vf_idx, bool 
 		FFBM_LOCK_LIST;
 		amdgv_list_for_each_entry(pteb, &entry->gpa_list, struct amdgv_ffbm_pte_block,
 					   gpa_list_node) {
-			if (pteb->vf_idx == vf_idx && pteb->applied) {
+			if (pteb->vf_idx == vf_idx && (!reserve || pteb->applied)) {
 				found = true;
 				break;
 			}
@@ -819,7 +800,7 @@ int amdgv_ffbm_sw_fini(struct amdgv_adapter *adapt)
 }
 
 /* update FFBM page table according to PF/VF FB settings */
-int amdgv_ffbm_page_table_update_by_fcn(struct amdgv_adapter *adapt, uint32_t vf_idx, bool reserve)
+int amdgv_ffbm_page_table_update_by_fcn(struct amdgv_adapter *adapt, uint32_t vf_idx)
 {
 	int ret = 0;
 	struct amdgv_vf_device *entry = &adapt->array_vf[vf_idx];
@@ -858,16 +839,7 @@ int amdgv_ffbm_page_table_update_by_fcn(struct amdgv_adapter *adapt, uint32_t vf
 		/* VF FFBM should be already unmapped */
 		/* don't map ffbm if size is 0 */
 		fb_size = (adapt->ffbm.share_tmr) ? entry->fb_size_tmr : entry->fb_size;
-
-		/* reserve only skips remapping if this fcn actually still owns
-		 * reserved pte blocks to re-apply; otherwise (e.g. fully torn
-		 * down by amdgv_vfmgr_remove_inactive_vfs()) fall back to a
-		 * fresh mapping so the VF isn't left without FFBM mappings.
-		 */
-		if (reserve && amdgv_list_empty(&entry->gpa_list))
-			reserve = false;
-
-		if (fb_size > 0 && !reserve) {
+		if (fb_size > 0) {
 			/* VF gap [0x200000, 0x200000+TMR size] map to PF TMR [0x200000, 0x200000+TMR size] -- manual map */
 			ret = amdgv_ffbm_manual_map(adapt, vf_idx,
 						    MBYTES_TO_BYTES(adapt->tmr_size),
@@ -886,11 +858,7 @@ int amdgv_ffbm_page_table_update_by_fcn(struct amdgv_adapter *adapt, uint32_t vf
 						AMDGV_FFBM_FB_TMR_OFFSET),
 				AMDGV_FFBM_PERM_RW, AMDGV_FFBM_MEM_TYPE_VF);
 		}
-
-		if (reserve)
-			amdgv_ffbm_apply_page_table_by_fcn(adapt, vf_idx); // minimum the impact of existing code
-		else
-			amdgv_ffbm_apply_page_table(adapt);
+		amdgv_ffbm_apply_page_table(adapt);
 	}
 
 	return ret;
@@ -977,7 +945,7 @@ void amdgv_ffbm_reserve_all_bad_pages(struct amdgv_adapter *adapt)
 			continue;
 		}
 
-		ret = amdgv_ffbm_replace_bad_pages(adapt, record, 1);
+		ret = amdgv_ffbm_replace_bad_pages(adapt, record, 1, true);
 		if (ret) {
 			AMDGV_ERROR("FFBM: failed to reserve bad page\n");
 			break;
@@ -1024,6 +992,10 @@ void amdgv_ffbm_page_table_destroy(struct amdgv_adapter *adapt)
 void amdgv_ffbm_dump_page_table(struct amdgv_adapter *adapt)
 {
 	struct amdgv_ffbm_pte_block *pteb;
+
+	if (!adapt->ffbm.enabled)
+		return;
+
 	AMDGV_ERROR("FFBM list dump start\n");
 	AMDGV_INFO("Physical List:");
 	FFBM_LOCK_LIST;
@@ -1044,6 +1016,11 @@ void amdgv_ffbm_read_page_table(struct amdgv_adapter *adapt, char *page_table_co
 	int length, ret;
 	bool dump_table = false;
 	length = 0;
+	*len = 0;
+
+	if (!adapt->ffbm.enabled)
+		return;
+
 	FFBM_LOCK_LIST;
 	amdgv_list_for_each_entry(pteb, &adapt->ffbm.spa_list, struct amdgv_ffbm_pte_block,
 				   spa_list_node) {
@@ -1073,6 +1050,10 @@ void amdgv_ffbm_copy_page_table(struct amdgv_adapter *adapt, void *page_table_co
 	char *pteb_buff = page_table_content;
 	int index = 0;
 	int pte_size = sizeof(struct amdgv_ffbm_pte_block);
+
+	*len = 0;
+	if (!adapt->ffbm.enabled)
+		return;
 
 	FFBM_LOCK_LIST;
 	amdgv_list_for_each_entry(pteb, &adapt->ffbm.spa_list, struct amdgv_ffbm_pte_block,

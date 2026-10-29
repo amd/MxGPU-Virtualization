@@ -24,6 +24,7 @@ struct smi_bad_page_info;
 struct amdgv_gpumon_metrics_ext;
 struct amdgv_smi_ras_eeprom_table_record;
 struct amdgv_gpumon_accelerator_partition_profile_config;
+struct dfc_fw;
 struct smi_compute_partition_profile;
 struct smi_profile_configs;
 struct smi_event_entry;
@@ -85,6 +86,9 @@ struct smi_shim_interface {
 			     uint64_t write_count,
 			     uint32_t *smi_cper_hdrs,
 			     uint64_t overflow_count);
+	int (*get_dfc_table)(struct smi_dfc_fw_info *dfc_info,
+			     uint16_t size,
+			     struct dfc_fw *dfc_fw_data);
 };
 
 #define SMI_EPERM  1  /* Operation not permitted */

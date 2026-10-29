@@ -14,6 +14,7 @@
 #include <map>
 
 #include "smi_ethtool_ioctl.h"
+#include "smi_ibverbs.h"
 
 enum class NicType {
 	Unknown,
@@ -47,19 +48,14 @@ public:
 	const std::string& name() const;
 	std::optional<uint8_t> port_num() const;
 	std::optional<std::string> state() const;
-	std::optional<uint16_t> max_mtu() const;
-	std::optional<uint16_t> active_mtu() const;
-	void collect_hw_counters();
-	const std::map<std::string, uint64_t>& get_hw_counters_map() const;
+	std::optional<smi_ibverbs::PortMtu> mtu() const;
+	std::map<std::string, uint64_t> collect_hw_counters() const;
 
 private:
 	std::string netdev_;
 	std::string rdma_dev_;
 	std::string name_;
 	std::string sysfs_path_;
-	std::map<std::string, uint64_t> hw_counters_map_;
-	std::optional<uint16_t> max_mtu_;
-	std::optional<uint16_t> active_mtu_;
 };
 
 class SmiInfiniBand
@@ -122,7 +118,6 @@ public:
 	void add_vendor_statistic(struct ethtool_gstrings* strings, struct ethtool_stats* stats,
 				  std::map<std::string, uint64_t>& out) const;
 	std::map<std::string, uint64_t> collect_standard_statistics() const;
-	std::optional<std::string> read_vpd_content() const;
 
 private:
 	bool vendor_stat_supported(const std::string& stat_name) const;
@@ -176,8 +171,8 @@ public:
 	// PCIe parent BDF for this NIC
 	std::optional<std::string> pcie_parent_bdf() const;
 
-	// Check if this NIC shares the same immediate PCIe parent with another device
-	bool share_same_pcie_parent(uint64_t bdf) const;
+	// Check if this NIC shares the same PCIe switch with another device
+	bool share_same_pcie_switch(uint64_t bdf) const;
 
 	// Vendor specific
 	virtual std::optional<std::string> product_name() const	 = 0;
@@ -186,6 +181,8 @@ public:
 	virtual std::optional<std::string> serial_number() const = 0;
 
 protected:
+	std::optional<std::string> read_vpd_content(const std::string& sysfs_bus_path) const;
+
 	std::string iface_;
 	std::string bdf_;
 	NicType type_;
@@ -194,6 +191,7 @@ protected:
 	std::string sysfs_class_path_;
 	std::string sysfs_bus_path_;
 	std::vector<SmiNicPort> ports_;
+	mutable std::optional<std::string> vpd_content_;
 };
 
 class SmiNicPensando : public SmiNic
@@ -223,9 +221,6 @@ public:
 	std::optional<std::string> product_name() const override;
 	std::optional<std::string> part_number() const override;
 	std::optional<std::string> serial_number() const override;
-
-private:
-	std::optional<std::string> read_vpd_content() const;
 };
 
 #endif // __SMI_NIC_H__

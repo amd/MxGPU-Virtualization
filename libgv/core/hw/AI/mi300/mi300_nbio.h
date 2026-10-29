@@ -32,6 +32,8 @@ void mi300_nbio_dump_partition_config(struct amdgv_adapter *adapt);
 int mi300_nbio_pcie_curr_link_speed(struct amdgv_adapter *adapt);
 int mi300_nbio_pcie_curr_link_width(struct amdgv_adapter *adapt);
 int mi300_nbio_get_pcie_replay_count(struct amdgv_adapter *adapt);
+void mi300_nbio_get_revision_ids(struct amdgv_adapter *adapt, uint32_t *chip_rev_id,
+				 uint32_t *external_rev_id);
 void nbio_v7_9_set_ras_funcs(struct amdgv_adapter *adapt);
 void mi300_hdp_flush(struct amdgv_adapter *adapt);
 #endif

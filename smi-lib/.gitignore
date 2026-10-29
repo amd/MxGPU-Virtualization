@@ -4,3 +4,4 @@ msgpuv/build/wNow64a/B_*
 msgpuv/build/wNxt64a/B_*
 .venv/*
 .design-cache/
+py/examples/amdsmi/

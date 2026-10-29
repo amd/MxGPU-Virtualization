@@ -14,7 +14,7 @@
 
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 								amdsmi_processor_handle*);
-typedef amdsmi_status_t (*AMDSMI_GET_CC_MODE)(amdsmi_processor_handle, amdsmi_cc_mode_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_CC_MODE)(amdsmi_processor_handle, amdsmi_gpu_cc_mode_t*);
 typedef amdsmi_status_t (*AMDSMI_GET_TDI_STATE)(amdsmi_vf_handle_t, amdsmi_tdi_state_t*);
 
 typedef amdsmi_status_t (*AMDSMI_GET_VF_HANDLE_FROM_BDF)(amdsmi_bdf_t, amdsmi_vf_handle_t*);
@@ -25,7 +25,7 @@ typedef amdsmi_status_t (*AMDSMI_GET_VF_HANDLE_FROM_VF_INDEX)(amdsmi_processor_h
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF host_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_VF_HANDLE_FROM_BDF host_amdsmi_get_vf_handle_from_bdf;
 extern AMDSMI_GET_VF_HANDLE_FROM_VF_INDEX host_amdsmi_get_vf_handle_from_vf_index;
-extern AMDSMI_GET_CC_MODE host_amdsmi_get_cc_mode;
+extern AMDSMI_GET_GPU_CC_MODE host_amdsmi_get_gpu_cc_mode;
 extern AMDSMI_GET_TDI_STATE host_amdsmi_get_tdi_state;
 
 std::string host_fill_tdi_state(Arguments arg, std::string value)
@@ -97,13 +97,13 @@ int AmdSmiApiHost::amdsmi_get_vf_tdi_state_command(std::string vf_bdf, Arguments
 	return ret;
 }
 
-int AmdSmiApiHost::amdsmi_get_cc_mode_command(uint64_t processor_bdf, Arguments arg,
-					      std::string& formatted_string)
+int AmdSmiApiHost::amdsmi_get_gpu_cc_mode_command(uint64_t processor_bdf, Arguments arg,
+						  std::string& formatted_string)
 {
 	int ret;
 	amdsmi_processor_handle processor;
 	amdsmi_bdf_t tmp_bdf;
-	amdsmi_cc_mode_t cc_mode;
+	amdsmi_gpu_cc_mode_t cc_mode;
 	tmp_bdf.as_uint = processor_bdf;
 	std::string cc_mode_str;
 
@@ -113,7 +113,7 @@ int AmdSmiApiHost::amdsmi_get_cc_mode_command(uint64_t processor_bdf, Arguments 
 		return ret;
 	}
 
-	ret = host_amdsmi_get_cc_mode(processor, &cc_mode);
+	ret = host_amdsmi_get_gpu_cc_mode(processor, &cc_mode);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		formatted_string = host_fill_cc_mode(arg, "N/A");
 		return ret;

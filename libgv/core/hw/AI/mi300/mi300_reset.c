@@ -672,7 +672,7 @@ static int mi300_reset_trigger_vf_flr(struct amdgv_adapter *adapt,
 		goto failed;
 
 	/* Allow DPM jobs to clear before sending GFX recovery msg */
-	if (adapt->asic_type == CHIP_MI350X)
+	if (amdgv_asic_is_mi350(adapt->asic_type))
 		oss_usleep(50000);
 
 	/* PMFW unhalt SDMA & RLCV, restore GPUIOV settings */
@@ -907,6 +907,8 @@ static int mi300_reset_trigger_pf_soft_flr(struct amdgv_adapter *adapt)
 		if (ret)
 			goto failed;
 	}
+
+	mi300_gpuiov_program_pf_hdp_surface(adapt);
 
 	/* restore SDMA golden register settings */
 	mi300_sdma_program_golden_settings(adapt);

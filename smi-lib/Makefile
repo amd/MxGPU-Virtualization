@@ -12,11 +12,11 @@ ADDRESS_SANITIZER ?= False
 CPPTOOL_BUILD ?= False
 ENABLE_GCOV ?= False
 
-# Auto-detect UALOE support based on presence of the ualoe-lib/ source tree.
+# Auto-detect UALOE support based on presence of the imported/ualoe source tree.
 # When present (and netlink libs are installed) we build the real fabric
 # telemetry implementation; otherwise we fall back to src/amdsmi_ualoe_stub.c
 # which makes the fabric telemetry APIs return AMDSMI_STATUS_NOT_SUPPORTED.
-HAS_UALOE := $(if $(wildcard ualoe-lib/ualoe_lib),True,False)
+HAS_UALOE := $(if $(wildcard $(IMPORTED_UALOE_SRC_DIR)/ualoe_lib.c),True,False)
 ifeq ($(HAS_UALOE), True)
   HAS_NETLINK := $(shell pkg-config --exists libnl-3.0 libnl-genl-3.0 libmnl 2>/dev/null && echo True)
   ifneq ($(HAS_NETLINK), True)
@@ -64,9 +64,9 @@ ifeq ($(HAS_UALOE), True)
 EXCLUDE_SRCS += amdsmi_ualoe_stub.c
 endif
 SRCS := $(filter-out $(EXCLUDE_SRCS),$(notdir $(wildcard $(SOURCE_DIR)/*.c)))
-SRCS_ACA := $(filter-out $(EXCLUDE_SRCS),$(notdir $(wildcard $(SOURCE_DIR)/aca-decode/*.c)))
+SRCS_ACA := $(filter-out $(EXCLUDE_SRCS),$(notdir $(wildcard $(IMPORTED_ACA_SRC_DIR)/*.c)))
 ifeq ($(HAS_UALOE), True)
-SRCS_UALOE := $(notdir $(wildcard ualoe-lib/ualoe_lib/*.c))
+SRCS_UALOE := $(notdir $(wildcard $(IMPORTED_UALOE_SRC_DIR)/*.c))
 SRCS_UALOE += $(notdir $(wildcard $(SOURCE_DIR)/ualoe/*.c))
 else
 SRCS_UALOE :=
@@ -80,9 +80,9 @@ OBJS += $(addprefix ${OUTPUT_DIR}/,$(SRCS_ACA:.c=.c.o))
 OBJS += $(addprefix ${OUTPUT_DIR}/,$(SRCS_UALOE:.c=.c.o))
 OBJS  += $(GIM_COMS_OBJS)
 DEPS := $(OBJS:.o=.d)
-INCLUDE := $(addprefix -I,$(INCLUDE_DIR) $(INCLUDE_DIR)/aca-decode/ $(INTERFACE_DIR) $(LIN_HOST_INCLUDE_DIR) $(GIM_COMS_INCLUDE_DIR) $(NIC_INCLUDE_DIR) $(NIC_INTERFACE_DIR) $(SOURCE_DIR)/nic)
+INCLUDE := $(addprefix -I,$(INCLUDE_DIR) $(IMPORTED_DIR) $(INTERFACE_DIR) $(LIN_HOST_INCLUDE_DIR) $(GIM_COMS_INCLUDE_DIR) $(NIC_INCLUDE_DIR) $(NIC_INTERFACE_DIR) $(SOURCE_DIR)/nic)
 ifeq ($(HAS_UALOE), True)
-INCLUDE += $(addprefix -I,ualoe-lib/ualoe_lib ualoe-lib/include $(SOURCE_DIR)/ualoe)
+INCLUDE += $(addprefix -I,$(IMPORTED_UALOE_SRC_DIR) $(IMPORTED_UALOE_INC_DIR) $(SOURCE_DIR)/ualoe)
 endif
 INCLUDE += $(HOST_INCLUDE_FLAGS)
 
@@ -119,9 +119,9 @@ endif
 .PHONY: all
 all: $(ALL_DEPS)
 ifeq ($(HAS_UALOE), True)
-vpath %.c $(SOURCE_DIR) $(SOURCE_DIR)/aca-decode/ $(SOURCE_DIR)/nic/ $(SOURCE_DIR)/ualoe/ ualoe-lib/ualoe_lib
+vpath %.c $(SOURCE_DIR) $(IMPORTED_ACA_SRC_DIR) $(SOURCE_DIR)/nic/ $(SOURCE_DIR)/ualoe/ $(IMPORTED_UALOE_SRC_DIR)
 else
-vpath %.c $(SOURCE_DIR) $(SOURCE_DIR)/aca-decode/ $(SOURCE_DIR)/nic/
+vpath %.c $(SOURCE_DIR) $(IMPORTED_ACA_SRC_DIR) $(SOURCE_DIR)/nic/
 endif
 
 # Configuration stamp file rule - detects config changes and forces rebuild
@@ -143,10 +143,10 @@ $(NIC_DIR)/build/libamdsminic.a:
 endif
 $(OUTPUT_DIR)/%.c.o: $(SOURCE_DIR)/%.c | $(OUTPUT_DIR)
 	$(CC) $(CFLAGS) -DBUILD_TYPE=$(BUILD_TYPE) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
-$(OUTPUT_DIR)/%.c.o: $(SOURCE_DIR)/aca-decode/%.c | $(OUTPUT_DIR)
-	$(CC) $(CFLAGS) -DBUILD_TYPE=$(BUILD_TYPE) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
+$(OUTPUT_DIR)/%.c.o: $(IMPORTED_ACA_SRC_DIR)/%.c | $(OUTPUT_DIR)
+	$(CC) $(CFLAGS) -I$(IMPORTED_ACA_INC_DIR) -DBUILD_TYPE=$(BUILD_TYPE) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
 ifeq ($(HAS_UALOE), True)
-$(OUTPUT_DIR)/%.c.o: ualoe-lib/ualoe_lib/%.c | $(OUTPUT_DIR)
+$(OUTPUT_DIR)/%.c.o: $(IMPORTED_UALOE_SRC_DIR)/%.c | $(OUTPUT_DIR)
 	$(CC) $(CFLAGS) -DUALOE_NETLINK -DCFG_MOCK -Wno-unused-variable -Wno-unused-parameter -Wno-conversion -Wno-enum-conversion -Wno-sign-compare -Wno-stringop-truncation -Wno-maybe-uninitialized -DBUILD_TYPE=$(BUILD_TYPE) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
 $(OUTPUT_DIR)/%.c.o: $(SOURCE_DIR)/ualoe/%.c | $(OUTPUT_DIR)
 	$(CC) $(CFLAGS) -DBUILD_TYPE=$(BUILD_TYPE) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
@@ -182,6 +182,10 @@ package: $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET) | $(PACKAGE_OUTPUT_DIR)
 	cp $(PY_INTERFACE_DIR)/amdsmi_exception.py $(PACKAGE_OUTPUT_DIR)
 	cp $(PY_INTERFACE_DIR)/amdsmi_nic_interface.py $(PACKAGE_OUTPUT_DIR)
 	echo $(PACKAGE_OUTPUT_DIR)
+.PHONY: python_examples
+python_examples: package
+	$(RM) -rf $(PY_DIR)/examples/amdsmi
+	cp -a $(PACKAGE_OUTPUT_DIR) $(PY_DIR)/examples/
 .PHONY: python_wrapper
 python_wrapper: EXTRACT | $(OUTPUT_DIR)/$(DYNAMICLIB_TARGET)
 	cp $(PROJECT_ROOT)/utils/scripts/smi_generator.py $(AMDSMI_BUILD_DIR)/amdsmi_wrapper
@@ -233,6 +237,7 @@ install-hooks:
 .PHONY: clean
 clean:
 	$(RM) -rf $(OBJS) $(AMDSMI_BUILD_DIR) $(DEPS) $(CONFIG_STAMP)
+	$(RM) -rf $(PY_DIR)/examples/amdsmi
 	$(MAKE) -C $(TEST_DIR)/ clean AMD_SMI_NIC_SUPPORT=$(AMD_SMI_NIC_SUPPORT)
 	$(MAKE) -C $(EXAMPLES_DIR)/ clean AMD_SMI_NIC_SUPPORT=$(AMD_SMI_NIC_SUPPORT)
 ifeq ($(AMD_SMI_NIC_SUPPORT), True)
@@ -259,10 +264,5 @@ docs:
 	@doxygen --version > /dev/null || (echo "ERROR: doxygen is required to generate documentation. You can install it by typing: sudo apt-get install doxygen"; exit 1)
 	python3 -mvenv .venv
 	.venv/bin/python -m pip install -r docs/sphinx/requirements.txt
-	mkdir -p $(DOXYGEN_OUTPUT_DIR)
-	cd $(PROJECT_ROOT)/docs/doxygen && \
-	DOXYGEN_INPUT_DIR=$(INTERFACE_DIR) \
-	DOXYGEN_OUTPUT_DIR=$(DOXYGEN_OUTPUT_DIR) \
-		doxygen Doxyfile
-	.venv/bin/sphinx-build -b html docs/ $(DOCS_OUTPUT_DIR)
+	.venv/bin/sphinx-build -j auto -b html docs/ $(DOCS_OUTPUT_DIR)
 	@echo "Documentation generated at: $(AMDSMI_BUILD_DIR)/docs/index.html"

@@ -405,47 +405,63 @@ TEST_F(AmdSmiNicIntegrationTests, NicRdmaDevInfoTest)
 
 TEST_F(AmdSmiNicIntegrationTests, NicRdmaPortStatisticsTest)
 {
-	amdsmi_status_t ret = AMDSMI_STATUS_SUCCESS;
+	amdsmi_nic_rdma_devices_info_t rdma_info;
 
 	for (uint32_t i = 0; i < nic_count_; i++) {
 		std::cout << "NIC " << i << " RDMA Port Statistics:" << std::endl;
 
-		uint32_t num_stats = 0;
-		ret =
-		    amdsmi_get_nic_rdma_port_statistics(nic_processors_[i], 0, &num_stats, nullptr);
-
-		if (ret != AMDSMI_STATUS_SUCCESS) {
-			std::cout << "  Failed to get RDMA port statistics count (status: " << ret
-				  << ")" << std::endl;
-			EXPECT_TRUE(ret == AMDSMI_STATUS_NOT_SUPPORTED ||
-				    ret == AMDSMI_STATUS_NOT_FOUND ||
-				    ret == AMDSMI_STATUS_DRIVER_NOT_LOADED);
-			continue;
-		}
-
-		if (num_stats == 0) {
-			std::cout << "  No RDMA port statistics available" << std::endl;
-			continue;
-		}
-
-		amdsmi_nic_stat_t *stats = new amdsmi_nic_stat_t[num_stats];
-		ret = amdsmi_get_nic_rdma_port_statistics(nic_processors_[i], 0, &num_stats, stats);
-
-		if (ret == AMDSMI_STATUS_SUCCESS) {
-			for (uint32_t j = 0; j < num_stats; j++) {
-				std::cout << "  RDMA Port 0: " << stats[j].name << ": "
-					  << stats[j].value << std::endl;
-				EXPECT_GE(stats[j].value, 0);
-			}
-		} else {
-			std::cout << "  Failed to get RDMA port statistics (status: " << ret << ")"
+		amdsmi_status_t info_ret =
+		    amdsmi_get_nic_rdma_dev_info(nic_processors_[i], &rdma_info);
+		if (info_ret != AMDSMI_STATUS_SUCCESS) {
+			std::cout << "  RDMA info not available (status: " << info_ret << ")"
 				  << std::endl;
-			EXPECT_TRUE(ret == AMDSMI_STATUS_NOT_SUPPORTED ||
-				    ret == AMDSMI_STATUS_NOT_FOUND ||
-				    ret == AMDSMI_STATUS_DRIVER_NOT_LOADED);
+			EXPECT_TRUE(info_ret == AMDSMI_STATUS_NOT_SUPPORTED ||
+				    info_ret == AMDSMI_STATUS_NOT_FOUND ||
+				    info_ret == AMDSMI_STATUS_NO_DATA ||
+				    info_ret == AMDSMI_STATUS_DRIVER_NOT_LOADED);
+			continue;
 		}
 
-		delete[] stats;
+		uint32_t rdma_port_index = 0;
+		for (uint8_t dev = 0; dev < rdma_info.num_rdma_dev; dev++) {
+			const uint8_t nports = rdma_info.rdma_dev_info[dev].num_rdma_ports;
+			for (uint8_t port = 0; port < nports; port++) {
+				uint32_t num_stats  = 0;
+				amdsmi_status_t ret = amdsmi_get_nic_rdma_port_statistics(
+				    nic_processors_[i], rdma_port_index, &num_stats, nullptr);
+				EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+				std::cout << "  RDMA port index " << rdma_port_index << " ("
+					  << rdma_info.rdma_dev_info[dev].rdma_dev << " port "
+					  << (int)port << "): " << num_stats << " statistics"
+					  << std::endl;
+				if (ret == AMDSMI_STATUS_SUCCESS && num_stats > 0) {
+					amdsmi_nic_stat_t *stats = new amdsmi_nic_stat_t[num_stats];
+					ret = amdsmi_get_nic_rdma_port_statistics(
+					    nic_processors_[i], rdma_port_index, &num_stats, stats);
+					EXPECT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+					if (ret == AMDSMI_STATUS_SUCCESS) {
+						for (uint32_t j = 0; j < num_stats; j++) {
+							std::cout << "    " << stats[j].name << ": "
+								  << stats[j].value << std::endl;
+							EXPECT_GE(stats[j].value, 0);
+						}
+					}
+					delete[] stats;
+				}
+				rdma_port_index++;
+			}
+		}
+
+		uint32_t num_stats  = 0;
+		amdsmi_status_t ret = amdsmi_get_nic_rdma_port_statistics(
+		    nic_processors_[i], rdma_port_index, &num_stats, nullptr);
+		EXPECT_EQ(ret, AMDSMI_STATUS_NOT_FOUND);
+
+		amdsmi_nic_stat_t one_stat{};
+		num_stats = 1;
+		ret	  = amdsmi_get_nic_rdma_port_statistics(
+			  nic_processors_[i], rdma_port_index, &num_stats, &one_stat);
+		EXPECT_EQ(ret, AMDSMI_STATUS_NOT_FOUND);
 	}
 }
 

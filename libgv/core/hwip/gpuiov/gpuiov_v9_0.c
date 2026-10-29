@@ -10,11 +10,15 @@
 #include <amdgv.h>
 #include <amdgv_iovm_drv.h>
 #include "gpuiov_v9_0.h"
-#include "vcn/vcn_v5_0_2.h"
+#include "mmsch/mmsch_v10_0.h"
 #include "asic_reg/GC/gc_12_1_0_offset.h"
 #include "asic_reg/GC/gc_12_1_0_sh_mask.h"
 #include "asic_reg/NBIO/nbio_6_3_2_offset.h"
 #include "asic_reg/NBIO/nbio_6_3_2_sh_mask.h"
+#include "asic_reg/MMHUB/mmhub_4_2_0_offset.h"
+#include "asic_reg/MMHUB/mmhub_4_2_0_sh_mask.h"
+#include "asic_reg/VCN/vcn_5_0_0_offset.h"
+#include "asic_reg/VCN/vcn_5_0_0_sh_mask.h"
 
 static const int this_block = AMDGV_COMMUNICATION_BLOCK;
 
@@ -94,7 +98,6 @@ static int gpuiov_v9_0_get_sched_block_offset(struct amdgv_adapter *adapt,
 	return (adapt->gpuiov.pos + (adapt->gpuiov.ctrl_blocks[hw_sched_id].offset << 4));
 }
 
-
 static enum gpuiov_v9_0_cmd gpuiov_v9_0_decode_cmd(enum amdgv_gpuiov_cmd cmd)
 {
 	uint32_t i;
@@ -129,96 +132,63 @@ static int gpuiov_v9_0_set_cmd(struct amdgv_adapter *adapt,
 				 uint32_t hw_sched_id,
 				 uint32_t idx_vf, uint32_t next_idx_vf)
 {
-	uint32_t data, func_id, next_func_id;
-	uint64_t reg_control = 0;
 	enum gpuiov_v9_0_cmd cmd_v9_0;
 	uint32_t xcd_bitmask = 0;
-
-	func_id = PCI_GPUIOV_FUNC_ID(idx_vf);
-	next_func_id = PCI_GPUIOV_FUNC_ID(next_idx_vf);
+	uint32_t mmsch_bitmask = 0;
 
 	if (IS_HW_SCHED_TYPE_GFX(hw_sched_id)) {
 		cmd_v9_0 = gpuiov_v9_0_decode_cmd(cmd);
 		if (cmd_v9_0 == GPUIOV_V9_0_INVALID_COMMAND)
 			goto out;
 
-		/* Use idx of vf directly, otherwise decoding needed in RLCV */
-		if (cmd_v9_0 == GPUIOV_V9_0_CONFIG_AUTO_SCHEDULING) {
-			func_id = idx_vf;
-			next_func_id = next_idx_vf;
-		}
-		cmd = cmd_v9_0;
+		cmd = (enum amdgv_gpuiov_cmd)cmd_v9_0;
 	}
 
-	data = (cmd & 0x0F) | CMD_EXECUTE | (func_id << 8) | (next_func_id << 16);
-
 	if (!oss_atomic_read(adapt->in_sync_flood)) {
-		if (IS_HW_SCHED_TYPE_MM(hw_sched_id)) {
-			/* TODO: Move to SR-IOV driver*/
-			vcn_v5_0_2_get_mmsch_regid_instid(adapt, hw_sched_id, &reg_control, true);
-			WREG32(reg_control, data);
-		} else {
-			if (adapt->iovm_drv.enabled)
-			{
-				/* TODO: Revisit for multi XCD optimization */
-				oss_mutex_lock(adapt->gpuiov.lock);
-				xcd_bitmask |= BIT(adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst);
-				amdgv_iovm_drv_gpuiov_set_command(adapt, xcd_bitmask, 0, idx_vf, next_idx_vf, cmd);
-				oss_mutex_unlock(adapt->gpuiov.lock);
-				goto out;
-			}
-		}
-		AMDGV_INFO("GPUIOV command: idx_vf=%d sched_id=%d (%s) cmd=0x%x (%s) func_id=0x%x "
-				"next_func_id=0x%x\n",
-				idx_vf, hw_sched_id, amdgv_hw_sched_id_to_name(adapt, hw_sched_id), cmd,
-				gpuiov_v9_0_cmd_to_name(adapt, cmd, hw_sched_id), func_id, next_func_id);
+		oss_mutex_lock(adapt->gpuiov.lock);
+		if (IS_HW_SCHED_TYPE_GFX(hw_sched_id))
+			xcd_bitmask |= BIT(adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst);
+		if (IS_HW_SCHED_TYPE_MM(hw_sched_id))
+			mmsch_bitmask = BIT(hw_sched_id);
+		amdgv_iovm_drv_gpuiov_set_command(adapt, xcd_bitmask, mmsch_bitmask, idx_vf, next_idx_vf, cmd);
+		oss_mutex_unlock(adapt->gpuiov.lock);
+		goto out;
 	} else {
-		AMDGV_DEBUG("In in_sync_flood. Skip idx_vf=%d sched_id=%d (%s) cmd=0x%x (%s) func_id=0x%x "
-				"next_func_id=0x%x\n",
+		AMDGV_DEBUG("In in_sync_flood. Skip idx_vf=%d sched_id=%d (%s) cmd=0x%x (%s) idx_vf=0x%x "
+				"next_idx_vf=0x%x\n",
 				idx_vf, hw_sched_id, amdgv_hw_sched_id_to_name(adapt, hw_sched_id), cmd,
-				gpuiov_v9_0_cmd_to_name(adapt, cmd, hw_sched_id), func_id, next_func_id);
+				gpuiov_v9_0_cmd_to_name(adapt, cmd, hw_sched_id), idx_vf, next_idx_vf);
+		return AMDGV_FAILURE;
 	}
 
 out:
-	adapt->gpuiov.ctrl_blocks[hw_sched_id].last_cmd = cmd;
-	adapt->gpuiov.ctrl_blocks[hw_sched_id].last_status = AMDGV_CMD_STATUS_PENDING_EXECUTE;
+	AMDGV_INFO("GPUIOV command: idx_vf=%d sched_id=%d (%s) cmd=0x%x (%s) idx_vf=0x%x "
+			"next_idx_vf=0x%x\n",
+			idx_vf, hw_sched_id, amdgv_hw_sched_id_to_name(adapt, hw_sched_id), cmd,
+			gpuiov_v9_0_cmd_to_name(adapt, cmd, hw_sched_id), idx_vf, next_idx_vf);
+
 	return 0;
 }
 
 static bool gpuiov_v9_0_is_cmd_complete(struct amdgv_adapter *adapt,
 					uint32_t hw_sched_id)
 {
-	uint8_t command, status;
-	uint64_t reg_control, reg_status;
-	//uint32_t xcd_bitmask = 0;
+	uint8_t command, status, ret;
+	uint32_t xcd_bitmask = 0;
+	uint32_t mmsch_bitmask = 0;
 
-	reg_control = 0;
-	reg_status = 0;
+	if (IS_HW_SCHED_TYPE_GFX(hw_sched_id))
+		xcd_bitmask |= BIT(adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst);
 
-	if (IS_HW_SCHED_TYPE_MM(hw_sched_id)) {
-		vcn_v5_0_2_get_mmsch_regid_instid(adapt, hw_sched_id, &reg_control, true);
-		vcn_v5_0_2_get_mmsch_regid_instid(adapt, hw_sched_id, &reg_status, false);
-		command = RREG32(reg_control);
-		status = RREG32(reg_status) & 0xFF;
-	} else {
-		/*
-		// TODO: Enable this code path after using iovm.drv 1.9
-		if (adapt->iovm_drv.enabled)
-		{
-			// TODO: Revisit for multi XCD optimization
-			// TODO: Add MMSCH Support
-			return (amdgv_iovm_drv_gpuiov_query_status(adapt, xcd_bitmask, 0) == 0);
-		}
-		*/
-		command = RREG32(SOC15_REG_OFFSET(GC, adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst,
-						  regRLC_GPU_IOV_CFG_REG1));
-		status = RREG32(SOC15_REG_OFFSET(GC, adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst,
-						 regRLC_RLCS_IOV_CMD_STATUS)) & 0xFF;
-	}
-	adapt->gpuiov.ctrl_blocks[hw_sched_id].last_cmd = command;
-	adapt->gpuiov.ctrl_blocks[hw_sched_id].last_status = status;
+	if (IS_HW_SCHED_TYPE_MM(hw_sched_id))
+		mmsch_bitmask = BIT(hw_sched_id);
 
-	return ((!(command & CMD_EXECUTE)) && status == 0);
+	ret = amdgv_iovm_drv_gpuiov_query_status(adapt, xcd_bitmask, mmsch_bitmask);
+
+	command = adapt->gpuiov.ctrl_blocks[hw_sched_id].last_cmd;
+	status = adapt->gpuiov.ctrl_blocks[hw_sched_id].last_status;
+
+	return (ret == 0 && (!(command & CMD_EXECUTE)) && status == 0);
 }
 
 static void gpuiov_v9_0_dump_cmd_status(struct amdgv_adapter *adapt, uint32_t hw_sched_id)
@@ -237,9 +207,17 @@ static void gpuiov_v9_0_dump_cmd_status(struct amdgv_adapter *adapt, uint32_t hw
 static int gpuiov_v9_0_set_total_fb_consumed(struct amdgv_adapter *adapt,
 					      uint16_t total_fb_consumed)
 {
-	uint32_t offset = adapt->gpuiov.pos + PCI_GPUIOV_TOTAL_FB_CONSUMED;
+	uint32_t reg_offset;
+	uint32_t reg;
 
-	return oss_pci_write_config_word(adapt->dev, offset, total_fb_consumed);
+	reg_offset = SOC15_REG_OFFSET(NBIO, 0,
+		regBIF_CFG_DEV0_EPF0_0_PCIE_VENDOR_SPECIFIC_HDR_GPUIOV_TOTAL_FB);
+	reg = RREG32(reg_offset);
+	reg = REG_SET_FIELD(reg, BIF_CFG_DEV0_EPF0_0_PCIE_VENDOR_SPECIFIC_HDR_GPUIOV_TOTAL_FB,
+			    TOTAL_FB_CONSUMED, total_fb_consumed);
+	WREG32(reg_offset, reg);
+
+	return 0;
 }
 
 static int gpuiov_v9_0_set_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf,
@@ -248,8 +226,8 @@ static int gpuiov_v9_0_set_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	uint32_t i;
 	uint32_t reg;
 
-	/*256 MB offset granularity, 16 MB size granularity */
-	uint32_t data = ((fb_size >> 4)) | ((fb_offset >> 8) << 16);
+	/* 256 MB size and offset granularity */
+	uint32_t data = ((fb_size >> 8)) | ((fb_offset >> 8) << 16);
 	amdgv_put_log(idx_vf, AMDGV_LOG_SCHED_SET_VF_FB,
 		      AMDGV_LOG_DATA_32_32(fb_offset, fb_size));
 
@@ -273,11 +251,11 @@ static int gpuiov_v9_0_get_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf,
 	inst = amdgv_ffs(amdgv_sched_get_xcc_mask_by_vf(adapt, idx_vf)) - 1;
 
 	/* VF registers are defined in a continuous range */
-	offset = SOC15_REG_OFFSET(GC, GET_INST(GC, inst), regGCMC_VM_FB_SIZE_OFFSET_VF0);
+	offset = SOC15_REG_OFFSET(GC, inst, regGCMC_VM_FB_SIZE_OFFSET_VF0);
 	offset += idx_vf;
 	data = RREG32(offset);
 
-	*fb_offset = ((data & 0xFFFF0000) >> 16) << 4;
+	*fb_offset = ((data & 0xFFFF0000) >> 16) << 8;
 	*real_fb_size = (data & 0x0000FFFF) << 8;
 	*fb_size = *real_fb_size;
 
@@ -288,13 +266,21 @@ static int gpuiov_v9_0_get_vm_busy_status(struct amdgv_adapter *adapt,
 					   uint32_t hw_sched_id,
 					   uint32_t *vm_busy_status)
 {
+	uint64_t reg;
 	int offset = gpuiov_v9_0_get_sched_block_offset(adapt, hw_sched_id);
 	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
 
-	offset += PCI_SCH_VM_BUSY_STATUS;
+	if (IS_HW_SCHED_TYPE_MM(hw_sched_id)) {
+		mmsch_v10_0_get_gpuiov_reg(adapt, hw_sched_id, &reg, regMMSCH_GPUIOV_VM_BUSY_STATUS);
+		*vm_busy_status = RREG32(reg);
+		return 0;
+	}
 
-	return oss_pci_read_config_dword(adapt->dev, offset, vm_busy_status);
+	*vm_busy_status = RREG32(SOC15_REG_OFFSET(GC,
+				 adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst,
+				 regRLC_GPU_IOV_VM_BUSY_STATUS));
+	return 0;
 }
 
 static int gpuiov_v9_0_clear_intr_status(struct amdgv_adapter *adapt, uint32_t bits)
@@ -458,11 +444,17 @@ static int gpuiov_v9_0_get_active_vfs(struct amdgv_adapter *adapt,
 				       uint32_t hw_sched_id,
 				       uint32_t *active_vfs)
 {
-	int offset;
+	uint64_t reg;
 
-	offset = gpuiov_v9_0_get_sched_block_offset(adapt, hw_sched_id) +
-		 PCI_SCH_ACTIVE_FUNCTIONS;
-	oss_pci_read_config_dword(adapt->dev, offset, active_vfs);
+	if (IS_HW_SCHED_TYPE_MM(hw_sched_id)) {
+		mmsch_v10_0_get_gpuiov_reg(adapt, hw_sched_id, &reg, regMMSCH_GPUIOV_ACTIVE_FCNS);
+		*active_vfs = RREG32(reg);
+		return 0;
+	}
+
+	*active_vfs = RREG32(SOC15_REG_OFFSET(GC,
+			     adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst,
+			     regRLC_GPU_IOV_SCH_0));
 
 	return 0;
 }
@@ -471,11 +463,16 @@ static int gpuiov_v9_0_set_active_vfs(struct amdgv_adapter *adapt,
 				       uint32_t hw_sched_id,
 				       uint32_t active_vfs)
 {
-	int offset;
+	uint64_t reg;
 
-	offset = gpuiov_v9_0_get_sched_block_offset(adapt, hw_sched_id) +
-		 PCI_SCH_ACTIVE_FUNCTIONS;
-	oss_pci_write_config_dword(adapt->dev, offset, active_vfs);
+	if (IS_HW_SCHED_TYPE_MM(hw_sched_id)) {
+		mmsch_v10_0_get_gpuiov_reg(adapt, hw_sched_id, &reg, regMMSCH_GPUIOV_ACTIVE_FCNS);
+		WREG32(reg, active_vfs);
+		return 0;
+	}
+
+	WREG32(SOC15_REG_OFFSET(GC, adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst,
+				regRLC_GPU_IOV_SCH_0), active_vfs);
 
 	return 0;
 }
@@ -502,18 +499,15 @@ static int gpuiov_v9_0_get_active_vf_idx(struct amdgv_adapter *adapt,
 					  uint32_t *idx_vf)
 {
 	uint32_t data;
-	int offset;
+	uint64_t reg;
+
 	int inst;
 
-	if (adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_sched_type == AMDGV_HW_SCHED_TYPE_MM) {
-		offset = gpuiov_v9_0_get_sched_block_offset(adapt, hw_sched_id);
-		if (offset == AMDGV_FAILURE)
-			return AMDGV_FAILURE;
-
-		offset += PCI_SCH_ACTIVE_FUNCTION_ID;
-		oss_pci_read_config_dword(adapt->dev, offset, &data);
+	if (IS_HW_SCHED_TYPE_MM(hw_sched_id)) {
+		mmsch_v10_0_get_gpuiov_reg(adapt, hw_sched_id, &reg, regMMSCH_GPUIOV_ACTIVE_FCN_ID);
+		data = RREG32(reg);
 	} else {
-		inst = GET_INST(GC, adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst);
+		inst = adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst;
 		data = RREG32_SOC15(GC, inst, regRLC_GPU_IOV_ACTIVE_FCN_ID);
 	}
 
@@ -531,19 +525,16 @@ static int gpuiov_v9_0_get_active_vf_status(struct amdgv_adapter *adapt,
 					     uint32_t hw_sched_id,
 					     uint8_t *status)
 {
+	uint64_t reg;
 	uint32_t data;
-	int offset;
 	int inst;
 
-	if (adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_sched_type == AMDGV_HW_SCHED_TYPE_MM) {
-		offset = gpuiov_v9_0_get_sched_block_offset(adapt, hw_sched_id);
-		if (offset == AMDGV_FAILURE)
-			return AMDGV_FAILURE;
-
-		offset += PCI_SCH_ACTIVE_FUNCTION_ID_STATUS;
-		oss_pci_read_config_byte(adapt->dev, offset, status);
+	if (IS_HW_SCHED_TYPE_MM(hw_sched_id)) {
+		mmsch_v10_0_get_gpuiov_reg(adapt, hw_sched_id, &reg, regMMSCH_GPUIOV_ACTIVE_FCN_ID);
+		*status = (RREG32(reg) >> 8) & 0xff;
+		return 0;
 	} else {
-		inst = GET_INST(GC, adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst);
+		inst = adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst;
 		data = RREG32_SOC15(GC, inst, regRLC_GPU_IOV_ACTIVE_FCN_ID);
 		*status = (data & 0xF00) >> 8;
 	}
@@ -557,19 +548,35 @@ static int gpuiov_v9_0_get_time_quanta_index(struct amdgv_adapter *adapt,
 					      uint32_t *time_quanta_index)
 {
 	uint32_t data;
-	int offset;
+	uint32_t offset;
+	uint32_t shift;
+	uint64_t reg;
 
 	offset = gpuiov_v9_0_get_sched_block_offset(adapt, hw_sched_id);
 	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
 
+	if (IS_HW_SCHED_TYPE_MM(hw_sched_id)) {
+		mmsch_v10_0_get_time_quanta_index_reg(adapt, hw_sched_id, idx_vf, &reg);
+		data = RREG32(reg);
+		if (idx_vf == AMDGV_PF_IDX) {
+			*time_quanta_index = PCI_SCH_TIME_QUANTA_PF__GET(data);
+		} else {
+			shift = (idx_vf % 16) * 2;
+			*time_quanta_index = (data >> shift) & 0x3;
+		}
+		return 0;
+	}
+
 	if (idx_vf == AMDGV_PF_IDX) {
-		offset += PCI_SCH_TIME_QUANTA_PF;
-		oss_pci_read_config_dword(adapt->dev, offset, &data);
+		data = RREG32(SOC15_REG_OFFSET(GC,
+				adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst,
+				regRLC_GPU_IOV_SCH_2));
 		*time_quanta_index = PCI_SCH_TIME_QUANTA_PF__GET(data);
 	} else {
-		offset += PCI_SCH_TIME_QUANTA_PER_VF;
-		oss_pci_read_config_dword(adapt->dev, offset, &data);
+		data = RREG32(SOC15_REG_OFFSET(GC,
+				adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst,
+				regRLC_GPU_IOV_SCH_1));
 		*time_quanta_index = (data >> (idx_vf * 2)) & 0x3;
 	}
 
@@ -582,24 +589,45 @@ static int gpuiov_v9_0_set_time_quanta_index(struct amdgv_adapter *adapt,
 					      uint32_t time_quanta_index)
 {
 	uint32_t data;
-	int offset;
+	uint32_t offset;
+	uint32_t shift;
+	uint64_t reg;
 
 	offset = gpuiov_v9_0_get_sched_block_offset(adapt, hw_sched_id);
 	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
 
+	if (IS_HW_SCHED_TYPE_MM(hw_sched_id)) {
+		mmsch_v10_0_get_time_quanta_index_reg(adapt, hw_sched_id, idx_vf, &reg);
+		data = RREG32(reg);
+		if (idx_vf == AMDGV_PF_IDX) {
+			data &= ~PCI_SCH_TIME_QUANTA_PF__SET(0x3);
+			data |= PCI_SCH_TIME_QUANTA_PF__SET(time_quanta_index);
+		} else {
+			shift = (idx_vf % 16) * 2;
+			data &= ~(0x3 << shift);
+			data |= ((time_quanta_index & 0x3) << shift);
+		}
+		WREG32(reg, data);
+		return 0;
+	}
+
 	if (idx_vf == AMDGV_PF_IDX) {
-		offset += PCI_SCH_TIME_QUANTA_PF;
-		data = PCI_SCH_TIME_QUANTA_PF__SET(time_quanta_index);
-		oss_pci_write_config_dword(adapt->dev, offset, data);
+		offset = SOC15_REG_OFFSET(GC, adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst,
+					  regRLC_GPU_IOV_SCH_2);
+		data = RREG32(offset);
+		data &= ~PCI_SCH_TIME_QUANTA_PF__SET(0x3);
+		data |= PCI_SCH_TIME_QUANTA_PF__SET(time_quanta_index);
+		WREG32(offset, data);
 	} else {
-		offset += PCI_SCH_TIME_QUANTA_PER_VF;
-		oss_pci_read_config_dword(adapt->dev, offset, &data);
+		offset = SOC15_REG_OFFSET(GC, adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst,
+					  regRLC_GPU_IOV_SCH_1);
+		data = RREG32(offset);
 
 		data &= ~((0x3) << (idx_vf * 2));
 		data |= ((time_quanta_index & 0x3) << (idx_vf * 2));
 
-		oss_pci_write_config_dword(adapt->dev, offset, data);
+		WREG32(offset, data);
 	}
 
 	return 0;
@@ -610,14 +638,23 @@ static int gpuiov_v9_0_get_time_quanta_definition(struct amdgv_adapter *adapt,
 					int index, uint8_t *quanta_option)
 {
 	uint32_t data;
-	int offset;
+	uint32_t offset;
+	uint64_t reg;
 
 	offset = gpuiov_v9_0_get_sched_block_offset(adapt, hw_sched_id);
 	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
 
-	offset += PCI_SCH_TIME_QUANTA_OPTION;
-	oss_pci_read_config_dword(adapt->dev, offset, &data);
+	if (IS_HW_SCHED_TYPE_MM(hw_sched_id)) {
+		mmsch_v10_0_get_gpuiov_reg(adapt, hw_sched_id, &reg, regMMSCH_GPUIOV_DW6);
+		data = RREG32(reg);
+		*quanta_option = (data >> (index * 8)) & 0xff;
+		return 0;
+	}
+
+	data = RREG32(SOC15_REG_OFFSET(GC,
+			adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst,
+			regRLC_GPU_IOV_SCH_3));
 	*quanta_option = (data >> (index * 8)) & 0xff;
 
 	return 0;
@@ -628,19 +665,30 @@ static int gpuiov_v9_0_set_time_quanta_definition(struct amdgv_adapter *adapt,
 					int index, uint8_t quanta_option)
 {
 	uint32_t data;
-	int offset;
+	uint32_t offset;
+	uint64_t reg;
 
 	offset = gpuiov_v9_0_get_sched_block_offset(adapt, hw_sched_id);
 	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
 
-	offset += PCI_SCH_TIME_QUANTA_OPTION;
-	oss_pci_read_config_dword(adapt->dev, offset, &data);
+	if (IS_HW_SCHED_TYPE_MM(hw_sched_id)) {
+		mmsch_v10_0_get_gpuiov_reg(adapt, hw_sched_id, &reg, regMMSCH_GPUIOV_DW6);
+		data = RREG32(reg);
+		data &= ~(0xff << (index * 8));
+		data |= quanta_option << (index * 8);
+		WREG32(reg, data);
+		return 0;
+	}
+
+	offset = SOC15_REG_OFFSET(GC, adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst,
+				  regRLC_GPU_IOV_SCH_3);
+	data = RREG32(offset);
 
 	data &= ~(0xff << (index * 8));
 	data |= quanta_option << (index * 8);
 
-	oss_pci_write_config_dword(adapt->dev, offset, data);
+	WREG32(offset, data);
 	return 0;
 }
 
@@ -665,14 +713,22 @@ static int gpuiov_v9_0_get_time_quanta_option(struct amdgv_adapter *adapt,
 					    uint32_t hw_sched_id,
 					    uint32_t *time_quanta_option)
 {
-	int offset;
+	uint64_t reg;
+	uint32_t offset;
 
 	offset = gpuiov_v9_0_get_sched_block_offset(adapt, hw_sched_id);
 	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
 
-	offset += PCI_SCH_TIME_QUANTA_OPTION;
-	oss_pci_read_config_dword(adapt->dev, offset, time_quanta_option);
+	if (IS_HW_SCHED_TYPE_MM(hw_sched_id)) {
+		mmsch_v10_0_get_gpuiov_reg(adapt, hw_sched_id, &reg, regMMSCH_GPUIOV_DW6);
+		*time_quanta_option = RREG32(reg);
+		return 0;
+	}
+
+	*time_quanta_option = RREG32(SOC15_REG_OFFSET(GC,
+				     adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst,
+				     regRLC_GPU_IOV_SCH_3));
 	return 0;
 }
 
@@ -680,14 +736,21 @@ static int gpuiov_v9_0_set_time_quanta_option(struct amdgv_adapter *adapt,
 					    uint32_t hw_sched_id,
 					    uint32_t time_quanta_option)
 {
-	int offset;
+	uint64_t reg;
+	uint32_t offset;
 
 	offset = gpuiov_v9_0_get_sched_block_offset(adapt, hw_sched_id);
 	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
 
-	offset += PCI_SCH_TIME_QUANTA_OPTION;
-	oss_pci_write_config_dword(adapt->dev, offset, time_quanta_option);
+	if (IS_HW_SCHED_TYPE_MM(hw_sched_id)) {
+		mmsch_v10_0_get_gpuiov_reg(adapt, hw_sched_id, &reg, regMMSCH_GPUIOV_DW6);
+		WREG32(reg, time_quanta_option);
+		return 0;
+	}
+
+	WREG32(SOC15_REG_OFFSET(GC, adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst,
+				regRLC_GPU_IOV_SCH_3), time_quanta_option);
 
 	return 0;
 }
@@ -787,31 +850,6 @@ static int gpuiov_v9_0_get_fb_info(struct amdgv_adapter *adapt)
 	return 0;
 }
 
-static bool gpuiov_v9_0_skip_reading_sch_offset(struct amdgv_adapter *adapt, uint32_t hw_sched_id)
-{
-	if (IS_HW_SCHED_TYPE_GFX(hw_sched_id))
-		return !(adapt->mcp.gfx.xcc_mask & (1 << adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst));
-
-	return false;
-}
-
-static void gpuiov_v9_0_get_sch_offset(struct amdgv_adapter *adapt)
-{
-	uint32_t offset, i;
-
-	for (i = 0; i < adapt->gpuiov.num_ctrl_blocks; i++) {
-		if (gpuiov_v9_0_skip_reading_sch_offset(adapt, i))
-			continue;
-
-		offset = adapt->gpuiov.pos + adapt->gpuiov.ctrl_blocks[i].pci_gpuiov_offset;
-		oss_pci_read_config_byte(adapt->dev, offset, &adapt->gpuiov.ctrl_blocks[i].offset);
-
-		AMDGV_DEBUG("pci offset = 0x%x %s block offset = 0x%x\n", offset,\
-			    adapt->gpuiov.ctrl_blocks[i].name, 		\
-			    adapt->gpuiov.ctrl_blocks[i].offset << 4);
-	}
-}
-
 static int gpuiov_v9_0_get_config_info(struct amdgv_adapter *adapt)
 {
 	adapt->gpuiov.pos = gpuiov_v9_0_find_cap(adapt);
@@ -823,8 +861,6 @@ static int gpuiov_v9_0_get_config_info(struct amdgv_adapter *adapt)
 	if (gpuiov_v9_0_get_fb_info(adapt))
 		return AMDGV_FAILURE;
 
-	gpuiov_v9_0_get_sch_offset(adapt);
-
 	if (oss_pci_find_ext_cap(adapt->dev, PCIE_EXT_CAP_ID__REBAR) != 0)
 		adapt->vf_rebar_en = true;
 
@@ -835,8 +871,9 @@ static int gpuiov_v9_0_wait_auto_sched_stop(struct amdgv_adapter *adapt,
 						uint32_t hw_sched_id)
 {
 	struct amdgv_sched_world_switch *world_switch;
-	int offset;
 	int wait_ret;
+	uint32_t offset;
+	uint64_t reg;
 
 	if (amdgv_sched_get_world_switch_by_hw_sched_id(adapt, hw_sched_id, &world_switch))
 		return AMDGV_FAILURE;
@@ -845,13 +882,22 @@ static int gpuiov_v9_0_wait_auto_sched_stop(struct amdgv_adapter *adapt,
 		return AMDGV_FAILURE;
 
 	offset = gpuiov_v9_0_get_sched_block_offset(adapt, hw_sched_id);
-
 	if (offset == AMDGV_FAILURE)
 		return AMDGV_FAILURE;
 
-	offset += PCI_SCH_ACTIVE_FUNCTION_ID_STATUS;
-	wait_ret = amdgv_wait_for_pci_cfg(adapt, adapt->dev, offset,
-			0xf, 0, 1, AMDGV_TIMEOUT(TIMEOUT_AUTO_SWITCH_MM), AMDGV_WAIT_CHECK_EQ, 0);
+	if (IS_HW_SCHED_TYPE_MM(hw_sched_id)) {
+		mmsch_v10_0_get_gpuiov_reg(adapt, hw_sched_id, &reg, regMMSCH_GPUIOV_ACTIVE_FCN_ID);
+		wait_ret = amdgv_wait_for_register(adapt, reg, "regMMSCH_GPUIOV_ACTIVE_FCN_ID",
+				MMSCH_GPUIOV_ACTIVE_FCN_ID_0__ID_STATUS_MASK, 0,
+				AMDGV_TIMEOUT(TIMEOUT_AUTO_SWITCH_MM), AMDGV_WAIT_CHECK_EQ, 0);
+	} else {
+		wait_ret = amdgv_wait_for_register(adapt,
+				SOC15_REG_OFFSET(GC, adapt->gpuiov.ctrl_blocks[hw_sched_id].hw_inst,
+						 regRLC_GPU_IOV_ACTIVE_FCN_ID),
+				"regRLC_GPU_IOV_ACTIVE_FCN_ID",
+				RLC_GPU_IOV_ACTIVE_FCN_ID__ACTIVE_FCN_ID_STATUS_MASK, 0,
+				AMDGV_TIMEOUT(TIMEOUT_AUTO_SWITCH_MM), AMDGV_WAIT_CHECK_EQ, 0);
+	}
 
 	if (wait_ret)
 		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_SCHED_AUTO_SCHED_STOP_TIMEOUT,
@@ -978,8 +1024,6 @@ static int gpuiov_v9_0_hw_init(struct amdgv_adapter *adapt)
 
 	if (gpuiov_v9_0_get_fb_info(adapt))
 		return AMDGV_FAILURE;
-
-	gpuiov_v9_0_get_sch_offset(adapt);
 
 	if (adapt->xgmi.phy_nodes_num > 1) {
 		if (adapt->psp.program_register) {

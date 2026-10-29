@@ -34,6 +34,8 @@ class AmdSmiBoardTests : public amdsmi::AmdSmiTest {
 		SMI_ASSERT_EQ(expect.target_graphics_version, actual.target_graphics_version);
 		SMI_ASSERT_EQ(expect.subsystem_id, actual.subsystem_id);
 		SMI_ASSERT_EQ(expect.flags, actual.flags);
+		SMI_ASSERT_EQ(expect.chip_rev_id, actual.chip_rev_id);
+		SMI_ASSERT_EQ(expect.external_rev_id, actual.external_rev_id);
 
 		return ::testing::AssertionSuccess();
 	}
@@ -218,8 +220,10 @@ TEST_F(AmdSmiBoardTests, GetAsicInfo)
 #else
 	strcpy(gpu_info_mock.asic_serial, "1234567");
 #endif
-	gpu_info_mock.oam_id = 0;
-	gpu_info_mock.flags  = (uint64_t)-1;
+	gpu_info_mock.oam_id	      = 0;
+	gpu_info_mock.flags	      = (uint64_t)-1;
+	gpu_info_mock.chip_rev_id     = 0x1;
+	gpu_info_mock.external_rev_id = 0x47;
 
 	amdsmi_asic_info_t asic_info;
 	WhenCalling(std::bind(amdsmi_get_gpu_asic_info, &GPU_MOCK_HANDLE, &asic_info));
@@ -231,6 +235,51 @@ TEST_F(AmdSmiBoardTests, GetAsicInfo)
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_TRUE(amdsmi::equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
 	ASSERT_TRUE(equal_asic_info(gpu_info_mock, asic_info));
+}
+
+TEST_F(AmdSmiBoardTests, GetAsicInfoRevisionIdsNotSupported)
+{
+	int ret;
+	smi_asic_info gpu_info_mock = {};
+	smi_device_info in_payload;
+	amdsmi_asic_info_t asic_info;
+
+	/* ASICs with no stepping source report the sentinel, not a plausible 0 */
+	gpu_info_mock.chip_rev_id     = UINT32_MAX;
+	gpu_info_mock.external_rev_id = UINT32_MAX;
+
+	WhenCalling(std::bind(amdsmi_get_gpu_asic_info, &GPU_MOCK_HANDLE, &asic_info));
+	ExpectCommand(SMI_CMD_CODE_GET_ASIC_INFO);
+	SaveInputPayloadIn(&in_payload);
+	PlantMockOutput(&gpu_info_mock);
+	ret = performCall();
+
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_TRUE(amdsmi::equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
+	ASSERT_EQ(asic_info.chip_rev_id, UINT32_MAX);
+	ASSERT_EQ(asic_info.external_rev_id, UINT32_MAX);
+}
+
+TEST_F(AmdSmiBoardTests, GetAsicInfoChipRevIdZeroIsNotSentinel)
+{
+	int ret;
+	smi_asic_info gpu_info_mock = {};
+	smi_device_info in_payload;
+	amdsmi_asic_info_t asic_info;
+
+	/* 0 means A0 silicon and must stay distinct from not-supported */
+	gpu_info_mock.chip_rev_id     = 0;
+	gpu_info_mock.external_rev_id = 0x20;
+
+	WhenCalling(std::bind(amdsmi_get_gpu_asic_info, &GPU_MOCK_HANDLE, &asic_info));
+	ExpectCommand(SMI_CMD_CODE_GET_ASIC_INFO);
+	SaveInputPayloadIn(&in_payload);
+	PlantMockOutput(&gpu_info_mock);
+	ret = performCall();
+
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_EQ(asic_info.chip_rev_id, 0u);
+	ASSERT_EQ(asic_info.external_rev_id, 0x20u);
 }
 
 TEST_F(AmdSmiBoardTests, GetVramInfo)

@@ -16,6 +16,6 @@ struct nl_conn {
 	unsigned int port_id;
 };
 
-int nl_resolve_family_id(struct nl_conn *conn, const char *name);
+int smi_nl_resolve_family_id(struct nl_conn *conn, const char *name);
 
 #endif /* NL_PRIV_H */

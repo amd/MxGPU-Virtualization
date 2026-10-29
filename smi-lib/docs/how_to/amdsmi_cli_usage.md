@@ -5,17 +5,17 @@ myst:
     "keywords": "amdsmi, cli, usage, commands, examples, gpu, nic, network, monitoring"
 ---
 
-# AMD SMI CLI Tool - Usage Guide
+# AMD SMI CLI tool - usage guide
 
 ## Overview
 
 **AMD SMI tool** is a command line utility that utilizes AMD SMI Library APIs to monitor and configure AMD GPUs and NICs on Linux host systems. The tool is used to monitor AMD GPUs and NICs status in virtualization environments, providing comprehensive GPU management capabilities for host administrators. The tool outputs GPU and NIC information in plain text, in JSON, or in CSV formats while it can also show the info in the console or save to the specified output file.
 
-## Return Codes
+## Return codes
 
 The **AMD SMI CLI tool** uses specific return codes to indicate the status of command execution:
 
-| Return Code | Description |
+| Return code | Description |
 |---------|-------------|
 | 0       | Success. Does not display a message |
 | -1       | Invalid Command "Command [command_user_wrote] is invalid. Run 'help' for more info." |
@@ -31,7 +31,8 @@ The **AMD SMI CLI tool** uses specific return codes to indicate the status of co
 | -11      | Permission Denied "Permission denied. This action requires elevated privileges." |
 | -100     | Unknown Error "An unknown error has occurred. Run 'help' for more info." |
 
-**Library Error Codes:**
+### Library error codes
+
 (-1014) – (-1001) – SMI-LIB Error "SMI-LIB has returned error [smi_lib_error_code] - [smi_lib_error_code_string]"
 
 ## Commands
@@ -51,7 +52,7 @@ The commands and respective arguments that they accept are described as follows:
 4. **static**
    Gets static information about the specified GPU or VF. If no target is specified, returns information for all devices on the system.
 
-   **GPU Parameters:**
+   **GPU parameters:**
    - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`: Parameters for a specific GPU
    - `--asic`: All asic information.
    - `--bus`: All bus information.
@@ -69,12 +70,12 @@ The commands and respective arguments that they accept are described as follows:
    - `--ifwi`: All IFWI/video bios information.
    - `--numa`: All NUMA information.
 
-   **VF Parameters:**
+   **VF parameters:**
    - `--vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>`: Gets general information about the specified VF
    - `--fb-info`: Displays framebuffer information for the VF (size, offset, timeslice).
    - `--hbm-info`: Displays HBM (High Bandwidth Memory) information for the VF (physical address, size, name).
 
-   **NIC Parameters:**
+   **NIC parameters:**
    - `--nic=<nic_index from list, nic_bdf>`: Parameters for a specific NIC
      - `--asic`: All asic information.
      - `--bus`: All bus information.
@@ -87,16 +88,16 @@ The commands and respective arguments that they accept are described as follows:
 5. **firmware** (ucode)
    Gets firmware information about the specified GPU, VF, or NIC. If no target is specified, returns information for all GPUs on the system.
 
-   **GPU Parameters:**
+   **GPU parameters:**
    - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`: Parameters for a specific GPU
    - `--fw-list`: All firmware list information.
    - `--error-records`: All error records information.
 
-   **VF Parameters:**
+   **VF parameters:**
    - `--vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>`: Parameters for a specific VF
    - `--fw-list`: All firmware list information.
 
-   **NIC Parameters:**
+   **NIC parameters:**
    - `--nic=<nic_index from list, nic_bdf>`: Gets firmware information about the specified NIC.
 
 
@@ -107,7 +108,7 @@ The commands and respective arguments that they accept are described as follows:
 7. **metric**
    Gets metric information about the specified GPU, VF, or NIC. If no target is specified, returns information for all devices on the system.
 
-   **GPU Parameters:**
+   **GPU parameters:**
    - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`: Parameters for a specific GPU
    - `--usage`: All usage information.
    - `--power`: All power readings information.
@@ -119,14 +120,14 @@ The commands and respective arguments that they accept are described as follows:
    - `--energy`: Amount of energy consumed.
    - `--throttle`: Displays throttle violation accumulators, activity percentages, and status.
 
-   **VF Parameters:**
+   **VF parameters:**
    - `--vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>`: Parameters for a specific VF
    - `--schedule`: All scheduling info.
    - `--guard`: All guard information.
    - `--guest-data`: All guest data information.
    - `--per-partition`: Per-partition metrics information.
 
-   **NIC Parameters:**
+   **NIC parameters:**
    - `--nic=<nic_index from list, nic_bdf>`: Parameters for a specific NIC
      - `--port`: All port information.
      - `--rdma-devices`: All RDMA devices information.
@@ -142,7 +143,7 @@ The commands and respective arguments that they accept are described as follows:
 9. **topology**
    Displays link topology information. If no target is specified, returns information for all devices on the system.
 
-   **GPU Parameters:**
+   **GPU parameters:**
    - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`: Parameters for a specific GPU
    - `--weight`: Current weight information.
    - `--hops`: Current hops information.
@@ -153,12 +154,12 @@ The commands and respective arguments that they accept are described as follows:
    - `--bi-dir`: bi-directional link capability information.
    - `--dma`: dma link capability information.
 
-   **NIC Parameters:**
+   **NIC parameters:**
      - `--nic=<nic_index from list, nic_bdf>`: Parameters for a specific NIC
      - `--link-type`: Link type between NICs and GPUs (PCIE, NUMA, XNUMA, UNKNOWN).
      - `--numa`: NUMA node and CPU AFFINITY information for NICs.
 
-   **Link Type Definitions:**
+   **Link type definitions:**
    - `PCIE`: Two processors connect via the same PCIe switch.
    - `NUMA`: Two processors connect via different PCIe switches but on the same CPU.
    - `XNUMA`: Two processors connect via different PCIe switches on different CPUs (NUMA nodes).
@@ -186,14 +187,14 @@ The commands and respective arguments that they accept are described as follows:
 11. **reset**
     Reset or cleanup operations for GPUs and VFs. Available only in plain text. If no target is provided, returns tool exception.
 
-    **GPU Parameters:**
+    **GPU parameters:**
     - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`: Parameters for a specific GPU
       - `--gpureset`: Reset all GPUs. With `--gpu`, reset the selected GPU(s).
         GPUs in the same physical XGMI hive are reset together, regardless of the current
         framebuffer-sharing mode. Multiple `--gpu` values in the same hive issue one reset;
         values in different hives reset each hive once. `--gpu` / `-g` requires a value.
 
-    **VF Parameters:**
+    **VF parameters:**
     - `--vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>`: Parameters for a specific VF (requires SR-IOV)
       - `--vf-fb`: Cleanup VF FB for the specified VF.
 
@@ -219,7 +220,7 @@ The commands and respective arguments that they accept are described as follows:
 13. **monitor**
     Monitor target devices for the specified arguments. If no arguments are provided, all arguments will be enabled. Use the watch arguments to run continuously.
 
-    **GPU Parameters:**
+    **GPU parameters:**
     - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`: Monitor a specific GPU
       - `--gfx`: Monitor graphics utilization (%) and clock (MHz).
       - `--mem`: Monitor memory utilization (%) and clock (MHz).
@@ -260,18 +261,18 @@ The commands and respective arguments that they accept are described as follows:
 17. **confidential-compute**
     Displays Confidential Compute and security information for the specified GPU or VF. If no target is specified, returns information for all GPUs on the system.
 
-    **GPU Parameters:**
+    **GPU parameters:**
     - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`: Select a GPU ID, BDF or UUID, if not selected it will return for all GPUs.
       - Displays Confidential Compute mode (OFF, ON, or DEV) - PF only.
 
-    **VF Parameters:**
+    **VF parameters:**
     - `--vf=<gpu_index:vf_index from list, vf_bdf, vf_uuid>`: Select a VF to query TDI state.
       - Displays TEE (Trusted Execution Environment) Device Interface state (UNLOCKED, LOCKED, RUN, or ERROR) - supports VF.
 
 18. **fabric**
     Displays fabric topology and telemetry information for the specified GPU. If no argument is provided, returns topology for all GPUs on the system and attempts to collect telemetry when available.
 
-    **GPU Parameters:**
+    **GPU parameters:**
     - `--gpu=<gpu_index from list, gpu_bdf, gpu_uuid>`: Select a GPU ID, BDF or UUID. If not selected, returns information for all GPUs.
 
     Fabric arguments for the GPU are the following:
@@ -284,9 +285,9 @@ The commands and respective arguments that they accept are described as follows:
 
     **Note:** The fabric command supports the `--json` format modifier. It does not support the `--csv` format modifier.
 
-## Basic Usage
+## Basic usage
 
-### Command Syntax
+### Command syntax
 
 ```shell-session
 sudo amd-smi <command> <options>
@@ -295,7 +296,7 @@ sudo amd-smi <command> <options>
 - `<command>` is the primary command to execute. It must be the first argument after **amd-smi**.
 - `<options>` can include subcommands, modifiers, or other arguments relevant to the specified command.
 
-### Getting Help
+### Getting help
 
 To get detailed information about the available commands and options, you can run help command.
 The help command provides a comprehensive overview of the tool's functionalities and usage instructions.
@@ -359,11 +360,11 @@ Command Modifiers:
 --file FILE           Saves output into a file on the provided path (stdout by default).
 ```
 
-### Output Formats
+### Output formats
 
 The **AMD SMI CLI tool** supports three output formats:
 
-#### Human-readable (Default)
+#### Human-readable (default)
 ```shell-session
 $ sudo amd-smi list
 
@@ -375,7 +376,7 @@ GPU: 0
         UUID: 670074a1-0000-1000-8081-b5b9fd6edd00
 ```
 
-#### JSON Format
+#### JSON format
 ```shell-session
 $ sudo amd-smi list --json
 
@@ -395,7 +396,7 @@ $ sudo amd-smi list --json
 ]
 ```
 
-#### CSV Format
+#### CSV format
 ```shell-session
 $ sudo amd-smi list --csv
 
@@ -403,7 +404,42 @@ gpu,gpu_bdf,gpu_uuid,vf,vf_bdf,vf_uuid
 0,0000:0c:00.0,67ff74a1-0000-1000-8081-b5b9fd6edd00,0,0000:0c:02.0,670074a1-0000-1000-8081-b5b9fd6edd00
 ```
 
-### Saving Output to File
+### About N/A values
+
+`N/A` typically indicates that the data for a specific field is either unavailable or irrelevant in the current context for your device and its software environment. The exact reason may vary depending on the field and the GPU. In general, you can interpret `N/A` to mean one of the following:
+
+**Not applicable:** The value does not apply to this GPU or its current configuration. Not every reading is available on every GPU generation, so the SR-IOV host driver marks the missing value as unavailable instead of reporting a misleading zero. Other fields in the same output can still show their values.
+
+**Not available:** `amd-smi` cannot retrieve the information at this time. The rest of the command still completes. This can happen when:
+
+- The value is optional and cannot be read on the current system. Only the affected values show `N/A`.
+- A group of values cannot be retrieved while `amd-smi` is displaying several groups at once, such as with `amd-smi static`. The affected group shows `N/A` and the remaining groups are still displayed.
+
+`N/A` is not an error. If a command or option is not supported on the current system, `amd-smi` reports it as not supported instead of printing `N/A`.
+
+The following example shows `N/A` for power and temperature limits that are not reported on this system, while the other limits still show values:
+
+```
+$ sudo amd-smi static --gpu=0 --limit
+GPU: 0
+    LIMIT:
+        PPT0:
+            MAX_POWER: 750 W
+            MIN_POWER: 100 W
+            SOCKET_POWER: 750 W
+        PPT1:
+            MAX_POWER: N/A
+            MIN_POWER: N/A
+            SOCKET_POWER: N/A
+        SLOWDOWN_EDGE_TEMPERATURE: N/A
+        SLOWDOWN_HOTSPOT_TEMPERATURE: 100 C
+        SLOWDOWN_MEM_TEMPERATURE: 95 C
+        SHUTDOWN_EDGE_TEMPERATURE: N/A
+        SHUTDOWN_HOTSPOT_TEMPERATURE: 110 C
+        SHUTDOWN_MEM_TEMPERATURE: 105 C
+```
+
+### Saving output to file
 
 All outputs can be saved to a file using the `--file` parameter:
 
@@ -411,9 +447,9 @@ All outputs can be saved to a file using the `--file` parameter:
 sudo amd-smi list --file=output.txt
 ```
 
-## Command Examples with Sample Outputs
+## Command examples with sample outputs
 
-### 1. Version Information
+### 1. Version information
 
 ```shell-session
 $ sudo amd-smi version
@@ -425,9 +461,11 @@ VERSION:
     TOOL_NAME: AMD SMI tool
     TOOL_VERSION: 29.0.0
     LIB_VERSION: 35.0.0
+    DRIVER_VERSION: 9.3.0
+    ROCM_VERSION: N/A
 ```
 
-### 2. Static Information
+### 2. Static information
 
 **Get all static information for GPU 0:**
 
@@ -446,6 +484,8 @@ GPU: 0
         DEVICE_ID: 0x74A1
         SUBSYSTEM_ID: 0x74A1
         REV_ID: 0x0
+        CHIP_REV_ID: 0x1
+        EXTERNAL_REV_ID: 0x47
         ASIC_SERIAL: 0xF33397508B72EAAF
         OAM_ID: 2
         NUM_OF_COMPUTE_UNITS: 304
@@ -504,6 +544,8 @@ GPU: 0
         DEVICE_ID: 0x75A0
         SUBSYSTEM_ID: 0x75A0
         REV_ID: 0x0
+        CHIP_REV_ID: 0x0
+        EXTERNAL_REV_ID: 0x50
         ASIC_SERIAL: 0xBA6524093004B8B2
         OAM_ID: 0
         NUM_OF_COMPUTE_UNITS: 256
@@ -521,7 +563,7 @@ GPU: 0
         PTL_FORMAT: I8,BF16
 ```
 
-### 3. Metric Information
+### 3. Metric information
 
 **Get usage metrics:**
 
@@ -640,7 +682,7 @@ A violation status of `TRUE` indicates an active throttling condition, which may
 
 All violation counters (both the accumulation counter and the per-violation accumulated counters) are reset to zero on server reboot, GIM driver unload, GPU reset, or memory partition change.
 
-### 4. Firmware Information
+### 4. Firmware information
 
 ```shell-session
 $ sudo amd-smi firmware --gpu=0
@@ -716,7 +758,7 @@ GPU: 0
     ERROR_RECORDS:
 ```
 
-### 5. Bad Pages Information
+### 5. Bad pages information
 
 ```shell-session
 $ sudo amd-smi bad-pages --gpu=0
@@ -737,7 +779,7 @@ GPU: 0
         MCUMC_ID: 1
 ```
 
-### 6. Event Information
+### 6. Event information
 
 ```shell-session
 $ sudo amd-smi event --gpu=0
@@ -756,7 +798,7 @@ GPU: 0
     DATE: 2025-10-09:10:34:25.237
 ```
 
-### 7. Topology Information
+### 7. Topology information
 
 ```shell-session
 $ sudo amd-smi topology --weight
@@ -776,7 +818,7 @@ WEIGHT_TABLE:
 0000:df:00.0 15           15           15           15           15           15           15           0
 ```
 
-#### NIC to GPU Link Type
+#### NIC to GPU link type
 
 ```shell-session
 $ sudo amd-smi topology --nic --link-type
@@ -790,7 +832,7 @@ NIC_LINK_TYPE_TABLE:
 0000:d6:00.0 XNUMA        XNUMA        XNUMA        XNUMA        NUMA         NUMA         NUMA         PCIE
 ```
 
-#### NUMA Node Information
+#### NUMA node information
 
 ```shell-session
 $ sudo amd-smi topology --numa
@@ -804,7 +846,7 @@ NIC_NUMA_TABLE:
 0000:d6:00.0 1            [64-127]
 ```
 
-### 8. XGMI Information
+### 8. XGMI information
 
 ```shell-session
 $ sudo amd-smi xgmi --caps
@@ -824,7 +866,7 @@ XGMI_CONFIGURATION_SUPPORT_CAPABILITY:
 0000:df:00.0 SUPPORTED    SUPPORTED    SUPPORTED    SUPPORTED    SUPPORTED
 ```
 
-### 9. Partition Information
+### 9. Partition information
 
 ```shell-session
 $ sudo amd-smi partition --gpu=0 --current
@@ -851,6 +893,7 @@ GPU: 0
     VF: 0
         PER_PARTITION:
             AID_0:
+                CLK_MEM: 1900 MHz
                 CLK_VCLK: 29 MHz
                 CLK_VCLK_MIN_LIMIT: 914 MHz
                 CLK_VCLK_MAX_LIMIT: 1333 MHz
@@ -865,6 +908,7 @@ GPU: 0
                 TEMPERATURE: 37 C
                 HBM_TEMPERATURE: [35 C, 34 C]
             AID_1:
+                CLK_MEM: 1900 MHz
                 CLK_VCLK: 29 MHz
                 CLK_VCLK_MIN_LIMIT: 914 MHz
                 CLK_VCLK_MAX_LIMIT: 1333 MHz
@@ -879,6 +923,7 @@ GPU: 0
                 TEMPERATURE: 36 C
                 HBM_TEMPERATURE: [34 C, 33 C]
             AID_2:
+                CLK_MEM: 1900 MHz
                 CLK_VCLK: 29 MHz
                 CLK_VCLK_MIN_LIMIT: 914 MHz
                 CLK_VCLK_MAX_LIMIT: 1333 MHz
@@ -893,6 +938,7 @@ GPU: 0
                 TEMPERATURE: 35 C
                 HBM_TEMPERATURE: [33 C, 32 C]
             AID_3:
+                CLK_MEM: 1900 MHz
                 CLK_VCLK: 29 MHz
                 CLK_VCLK_MIN_LIMIT: 914 MHz
                 CLK_VCLK_MAX_LIMIT: 1333 MHz
@@ -1106,7 +1152,7 @@ GPU  ACCELERATOR_TYPE  SUPPORTED_VF_MODE  MEMORY_PARTITION_CAPS
 
 ```
 
-### 10. Monitor Command (Continuous Monitoring)
+### 10. Monitor command (continuous monitoring)
 
 ```shell-session
 $ sudo amd-smi monitor
@@ -1125,7 +1171,7 @@ $ sudo amd-smi monitor
    7  140 W          38 C      33 C       0 %    132 MHz       0 %    900 MHz       0 %  29 MHz       0 %  22 MHz                0                  0            0   18 Mb/s
 ```
 
-### 11. Set Commands
+### 11. Set commands
 
 **Set power cap:**
 
@@ -1193,7 +1239,7 @@ GPU: 7
     NUM_VF_ENABLED: Successfully set enabled VFs to 1
 ```
 
-**Set XGMI Per-Link Down Policy**
+#### Set XGMI per-link down policy
 
 ```shell-session
 $ sudo amd-smi set --xgmi-plpd=0
@@ -1219,7 +1265,7 @@ GPU: 7
     DPM_POLICY: Successfully set xgmi per-link power down policy to 0
 ```
 
-**Set SOC Pstate**
+#### Set SOC P-state
 
 ```shell-session
 $ sudo amd-smi set --soc-pstate=0
@@ -1270,7 +1316,7 @@ GPU: 0
     PTL_STATUS: Successfully set PTL status to DISABLED
 ```
 
-**Set XGMI FB Sharing Mode**
+#### Set XGMI FB sharing mode
 
 ```shell-session
 $ sudo amd-smi set --xgmi --fb-sharing-mode=MODE_1
@@ -1283,7 +1329,7 @@ XGMI FB_SHARING_MODE: Successfully set mode to MODE_1 for the given group/s
 XGMI FB_SHARING_MODE: Successfully set mode to MODE_2 for the selected GPU hive/s
 ```
 
-### 12. Reset Commands
+### 12. Reset commands
 
 **Reset GPU:**
 
@@ -1339,7 +1385,7 @@ $ sudo amd-smi reset --vf=0:0 --vf-fb
 Successfully reset vf fb for vf with id: 0:0
 ```
 
-### 13. RAS Error Information (MI300 Host Systems Only)
+### 13. RAS error information (MI300 host systems only)
 
 **Get CPER entries with fatal severity:**
 
@@ -1401,7 +1447,7 @@ POLICY:
 
 CSV output uses version-specific columns: v4.0 DRAM threshold columns or v5.0 entity/threshold columns based on `major_version`.
 
-### 14. JSON and CSV Format Examples
+### 14. JSON and CSV format examples
 
 **JSON format for metrics:**
 
@@ -1446,7 +1492,7 @@ gpu,pcie_current_width,pcie_current_speed,pcie_current_bandwidth,pcie_replay_cou
 0,16,32,18,0,0,0,0,0
 ```
 
-### 15. NIC Information and Monitoring
+### 15. NIC information and monitoring
 
 **List NICs:**
 
@@ -1695,6 +1741,8 @@ GPU: 0
         DEVICE_ID: 0x75A0
         SUBSYSTEM_ID: 0x75A0
         REV_ID: 0x0
+        CHIP_REV_ID: 0x0
+        EXTERNAL_REV_ID: 0x50
         ASIC_SERIAL: 0xDB992407CFE01E26
         OAM_ID: 6
         NUM_OF_COMPUTE_UNITS: 256
@@ -1858,6 +1906,8 @@ GPU: 1
         DEVICE_ID: 0x75A0
         SUBSYSTEM_ID: 0x75A0
         REV_ID: 0x0
+        CHIP_REV_ID: 0x0
+        EXTERNAL_REV_ID: 0x50
         ASIC_SERIAL: 0x5F002195F0DFC795
         OAM_ID: 7
         NUM_OF_COMPUTE_UNITS: 256
@@ -2021,6 +2071,8 @@ GPU: 2
         DEVICE_ID: 0x75A0
         SUBSYSTEM_ID: 0x75A0
         REV_ID: 0x0
+        CHIP_REV_ID: 0x0
+        EXTERNAL_REV_ID: 0x50
         ASIC_SERIAL: 0x20285E597D0C8872
         OAM_ID: 5
         NUM_OF_COMPUTE_UNITS: 256
@@ -2261,7 +2313,7 @@ NIC_NUMA_TABLE:
 0000:d6:00.0 1            [64-127]
 ```
 
-### 16. NODE information
+### 16. Node information
 
 ```shell-session
 $ sudo amd-smi node -p
@@ -2275,11 +2327,11 @@ NODE:
         STATUS: ENABLED
 ```
 
-### Use Case Scenarios
+## Use case scenarios
 
 This section provides practical workflows for common administrative tasks using **amd-smi**.
 
-### Memory Partition Management
+### Memory partition management
 
 **Scenario**: Configure memory partitioning modes
 
@@ -2297,7 +2349,7 @@ $ sudo amd-smi set --memory-partition=NPS2
 $ sudo amd-smi partition --gpu=0 --current
 ```
 
-### Accelerator Partition Configuration
+### Accelerator partition configuration
 
 **Scenario**: Set up accelerator partitioning modes
 
@@ -2315,7 +2367,7 @@ $ sudo amd-smi set --accelerator-partition=2
 $ sudo amd-smi partition --gpu=0 --current
 ```
 
-### XGMI Framebuffer Sharing Setup
+### XGMI framebuffer sharing setup
 
 **Scenario**: Configure framebuffer sharing
 
@@ -2337,7 +2389,7 @@ $ sudo amd-smi set --xgmi --fb-sharing-mode=MODE_2 --gpu=0
 $ sudo amd-smi topology --fb-sharing
 ```
 
-### System Health Monitoring
+### System health monitoring
 
 **Scenario**: Perform comprehensive system health check
 
@@ -2357,7 +2409,7 @@ $ sudo amd-smi static --limit
 $ sudo amd-smi monitor --gpu=0 --temperature --power-usage --ecc --watch=1
 ```
 
-### Performance Analysis Workflow
+### Performance analysis workflow
 
 **Scenario**: Analyze GPU performance and utilization patterns
 
@@ -2375,7 +2427,7 @@ $ sudo amd-smi metric --gpu=0 --usage --clock --temperature --pcie
 $ sudo amd-smi metric --gpu=0 --usage --clock --power --json > performance_data.json
 ```
 
-### VF Management in SR-IOV Environment
+### VF management in SR-IOV environment
 
 **Scenario**: Manage Virtual Functions for GPU virtualization
 
@@ -2396,7 +2448,7 @@ $ sudo amd-smi static --gpu=0 --num-vf
 $ sudo amd-smi metric --vf=0:0 --schedule --guard
 ```
 
-### Firmware and Driver Validation
+### Firmware and driver validation
 
 **Scenario**: Validate firmware versions and driver compatibility
 
@@ -2411,7 +2463,7 @@ $ sudo amd-smi static --gpu=0 --driver
 $ sudo amd-smi firmware --gpu=0 --error-records
 ```
 
-### RAS Error Monitoring (MI300 Host Systems)
+### RAS error monitoring (MI300 host systems)
 
 **Scenario**: Monitor and analyze hardware reliability errors
 
@@ -2429,7 +2481,7 @@ $ sudo amd-smi ras --afid --cper-file=/var/log/gpu_errors/fatal-1.cper
 $ sudo amd-smi ras --gpu=0 --cper --severity=nonfatal-corrected --folder=/var/log/gpu0_errors
 ```
 
-### Network Interface Management
+### Network interface management
 
 **Scenario**: Monitor and manage network interface performance
 
@@ -2445,7 +2497,7 @@ $ sudo amd-smi metric --nic=0 --port
 
 ```
 
-### Multi-Device System Monitoring
+### Multi-device system monitoring
 
 **Scenario**: Comprehensive monitoring of GPUs and NICs in a multi-device system
 
@@ -2460,3 +2512,4 @@ $ sudo amd-smi static --json --nic=0 > system_nic_static.json
 $ sudo amd-smi metric --json --nic=0 > system_nic_metrics.json
 $ sudo amd-smi static --json > system_static.json
 $ sudo amd-smi metric --json > system_metrics.json
+```

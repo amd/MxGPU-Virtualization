@@ -11,6 +11,8 @@ void navi32_nbio_set_ras_funcs(struct amdgv_adapter *adapt);
 void navi32_nbio_get_vram_vendor(struct amdgv_adapter *adapt);
 uint32_t navi32_nbio_get_total_vram_size(struct amdgv_adapter *adapt);
 void navi32_hdp_flush(struct amdgv_adapter *adapt);
+void navi32_nbio_get_revision_ids(struct amdgv_adapter *adapt, uint32_t *chip_rev_id,
+				  uint32_t *external_rev_id);
 #define SOC15_REG_OFFSET_SMN_NBIO_BLOCK(idx_vf, blk, reg) \
     (idx_vf == 0 ? smn##blk##_DEV0_EPF0_VF0_##reg : \
     (idx_vf == 1 ? smn##blk##_DEV0_EPF0_VF1_##reg : \

@@ -588,6 +588,30 @@ static const struct amdgv_nps_combination_cap_entry mi300_nps_combination_cap_ta
 			},
 		}
 	},
+
+	/* MI350P supports 1VF/2VF/4VF NPS1 only */
+	{CHIP_MI350P, .vf_nps = {
+			{
+			.vf_num = 1,
+			.combinations = {
+				{AMDGV_MEMORY_PARTITION_MODE_NPS1, AMDGV_ACCELERATOR_PARTITION_MODE_SPX},
+				{AMDGV_MEMORY_PARTITION_MODE_NPS1, AMDGV_ACCELERATOR_PARTITION_MODE_QPX},
+				}
+			},
+			{
+			.vf_num = 2,
+			.combinations = {
+				{AMDGV_MEMORY_PARTITION_MODE_NPS1, AMDGV_ACCELERATOR_PARTITION_MODE_DPX},
+				}
+			},
+			{
+			.vf_num = 4,
+			.combinations = {
+				{AMDGV_MEMORY_PARTITION_MODE_NPS1, AMDGV_ACCELERATOR_PARTITION_MODE_QPX},
+				}
+			},
+		}
+	},
 };
 
 static int mi300_nbio_get_asic_nps_caps(struct amdgv_adapter *adapt,
@@ -903,8 +927,27 @@ void mi300_hdp_flush(struct amdgv_adapter *adapt)
 	WREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX_PF0_HDP_MEM_COHERENCY_FLUSH_CNTL), 0x0);
 }
 
+void mi300_nbio_get_revision_ids(struct amdgv_adapter *adapt, uint32_t *chip_rev_id,
+				 uint32_t *external_rev_id)
+{
+	uint32_t strap;
+	uint32_t family_base;
+
+	strap = RREG32_SOC15(NBIO, 0, regRCC_STRAP0_RCC_DEV0_EPF0_STRAP0);
+	*chip_rev_id = REG_GET_FIELD(strap, RCC_STRAP0_RCC_DEV0_EPF0_STRAP0,
+				     STRAP_ATI_REV_ID_DEV0_F0);
+
+	if (adapt->asic_type == CHIP_MI350X)
+		family_base = 0x50;
+	else
+		family_base = 0x46; /* MI300X, MI308X */
+
+	*external_rev_id = *chip_rev_id + family_base;
+}
+
 const struct amdgv_nbio_funcs mi300_nbio_funcs = {
 	.hdp_flush = mi300_hdp_flush,
+	.get_revision_ids = mi300_nbio_get_revision_ids,
 	.get_nps_mode = mi300_nbio_get_nps_mode,
 	.get_accel_partition_mode = mi300_nbio_get_accelerator_partition_mode,
 	.get_default_accel_partition_mode = mi300_nbio_get_accelerator_partition_mode_default_setting,

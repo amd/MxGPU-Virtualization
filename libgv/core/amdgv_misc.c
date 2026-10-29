@@ -263,6 +263,10 @@ int amdgv_misc_clear_vf_fb(struct amdgv_adapter *adapt, uint32_t idx_vf, uint8_t
 	if (!(adapt->flags & AMDGV_FLAG_ENABLE_CLEAR_VF_FB))
 		return 0;
 
+	/* clearing the VF FB is not required on A+A (GPU XGMI-attached to CPU) */
+	if (adapt->xgmi.connected_to_cpu)
+		return 0;
+
 	entry = &adapt->array_vf[idx_vf];
 	if (!entry->configured) {
 		AMDGV_ERROR("Cannot clean non configured VF%d FB", idx_vf);

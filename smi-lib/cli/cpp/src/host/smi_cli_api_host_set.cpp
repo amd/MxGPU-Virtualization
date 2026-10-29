@@ -16,11 +16,6 @@
 #include <cstring>
 #include <iomanip>
 #include <sstream>
-#ifdef _WIN64
-	#include <windows.h>
-	#include <sysinfoapi.h>
-#endif
-
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 								amdsmi_processor_handle*);
 typedef amdsmi_status_t (*AMDSMI_SET_XGMI_FB_SHARING_MODE_V2)(amdsmi_processor_handle, uint32_t,
@@ -47,7 +42,7 @@ typedef amdsmi_status_t (*AMDSMI_GET_LINK_TOPOLOGY)(amdsmi_processor_handle,
 						    amdsmi_processor_handle,
 						    amdsmi_link_topology_t*);
 typedef amdsmi_status_t (*AMDSMI_SET_NUM_VF)(amdsmi_processor_handle, uint32_t);
-typedef amdsmi_status_t (*AMDSMI_SET_CC_MODE)(amdsmi_processor_handle, amdsmi_cc_mode_t);
+typedef amdsmi_status_t (*AMDSMI_SET_GPU_CC_MODE)(amdsmi_processor_handle, amdsmi_gpu_cc_mode_t);
 typedef amdsmi_status_t (*AMDSMI_SET_GPU_FABRIC_PPOD_CONFIG)(amdsmi_processor_handle,
 							     const amdsmi_fabric_ppod_config_t*);
 typedef amdsmi_status_t (*AMDSMI_SET_GPU_FABRIC_VPOD_CONFIG)(amdsmi_processor_handle,
@@ -69,7 +64,7 @@ extern AMDSMI_SET_GPU_PTL_FORMATS host_amdsmi_set_gpu_ptl_formats;
 extern AMDSMI_GET_XGMI_FB_SHARING_MODE_INFO host_amdsmi_get_xgmi_fb_sharing_mode_info;
 extern AMDSMI_GET_LINK_TOPOLOGY host_amdsmi_get_link_topology;
 extern AMDSMI_SET_NUM_VF host_amdsmi_set_num_vf;
-extern AMDSMI_SET_CC_MODE host_amdsmi_set_cc_mode;
+extern AMDSMI_SET_GPU_CC_MODE host_amdsmi_set_gpu_cc_mode;
 extern AMDSMI_SET_GPU_FABRIC_PPOD_CONFIG host_amdsmi_set_gpu_fabric_ppod_config;
 extern AMDSMI_SET_GPU_FABRIC_VPOD_CONFIG host_amdsmi_set_gpu_fabric_vpod_config;
 extern AMDSMI_SET_GPU_FABRIC_STATION_CONFIG host_amdsmi_set_gpu_fabric_station_config;
@@ -497,20 +492,20 @@ int AmdSmiApiHost::amdsmi_set_num_vf_command(uint64_t processor_bdf, Arguments a
 	return ret;
 }
 
-int AmdSmiApiHost::amdsmi_set_cc_mode_command(uint64_t processor_bdf, Arguments arg)
+int AmdSmiApiHost::amdsmi_set_gpu_cc_mode_command(uint64_t processor_bdf, Arguments arg)
 {
 	int ret;
 	amdsmi_bdf_t tmp_bdf;
 	amdsmi_processor_handle processor;
-	amdsmi_cc_mode_t mode;
+	amdsmi_gpu_cc_mode_t mode;
 	tmp_bdf.as_uint = processor_bdf;
 
 	if (arg.cc_mode_setting == "OFF") {
-		mode = AMDSMI_CC_MODE_OFF;
+		mode = AMDSMI_GPU_CC_MODE_OFF;
 	} else if (arg.cc_mode_setting == "ON") {
-		mode = AMDSMI_CC_MODE_ON;
+		mode = AMDSMI_GPU_CC_MODE_ON;
 	} else if (arg.cc_mode_setting == "DEV") {
-		mode = AMDSMI_CC_MODE_DEV;
+		mode = AMDSMI_GPU_CC_MODE_DEV;
 	} else {
 		throw SmiToolInvalidParameterValueException(arg.cc_mode_setting);
 	}
@@ -520,7 +515,7 @@ int AmdSmiApiHost::amdsmi_set_cc_mode_command(uint64_t processor_bdf, Arguments 
 		return ret;
 	}
 
-	ret = host_amdsmi_set_cc_mode(processor, mode);
+	ret = host_amdsmi_set_gpu_cc_mode(processor, mode);
 
 	return ret;
 }

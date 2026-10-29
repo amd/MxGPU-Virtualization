@@ -13,6 +13,8 @@ extern "C" {
 #include "smi_system_mock.hpp"
 #include "smi_test_helpers.hpp"
 
+#include <cstring>
+
 using amdsmi::equal_handles;
 using amdsmi::g_system_mock;
 using amdsmi::SetResponseStatus;
@@ -27,6 +29,45 @@ class AmdSmiEccTests : public amdsmi::AmdSmiTest {
 		SMI_ASSERT_EQ(expect.err_count.deferred_count, actual.deferred_count);
 
 		return ::testing::AssertionSuccess();
+	}
+
+	static void
+	fill_bad_page_record(struct smi_bad_page_record *rec, uint32_t num, bool fill_entries)
+	{
+		rec->num_bad_page = num;
+		if (!fill_entries) {
+			return;
+		}
+		for (unsigned int i = 0; i < rec->num_bad_page; i++) {
+			rec->bad_page[i].retired_page = i;
+			rec->bad_page[i].ts	      = i * 2;
+			rec->bad_page[i].err_type     = (unsigned char)(i * 3);
+			rec->bad_page[i].bank	      = (unsigned char)(i * 4);
+			rec->bad_page[i].cu	      = (unsigned char)(i * 4);
+			rec->bad_page[i].mem_channel  = (unsigned char)(i * 5);
+			rec->bad_page[i].mcumc_id     = (unsigned char)(i * 6);
+		}
+	}
+
+	/*
+	 * Driver fills the allocated table during ioctl, after the library
+	 * zeroes it. performCall() cannot do that: it only copies the ioctl
+	 * payload struct, not *bad_pages.
+	 */
+	void
+	expect_bad_page_ioctl(struct smi_bad_page_info *in_payload, uint32_t num, bool fill_entries)
+	{
+		EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_BAD_PAGE_INFO)))
+		    .WillOnce(
+			testing::Invoke([in_payload, num, fill_entries](smi_ioctl_cmd *cmd) -> int {
+				std::memcpy(in_payload, cmd->payload, sizeof(*in_payload));
+				auto *info = (struct smi_bad_page_info *)cmd->payload;
+				if (info->bad_pages != NULL) {
+					fill_bad_page_record(info->bad_pages, num, fill_entries);
+				}
+				cmd->out_hdr.status = AMDSMI_STATUS_SUCCESS;
+				return 0;
+			}));
 	}
 };
 
@@ -145,7 +186,7 @@ TEST_F(AmdSmiEccTests, GetEccCountPerBlock)
 	ret = performCall();
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_TRUE(amdsmi::equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
-	ASSERT_EQ(in_payload.head.block, (uint64_t)AMDSMI_GPU_BLOCK_GFX);
+	ASSERT_EQ(in_payload.head.block, AMDSMI_GPU_BLOCK_GFX);
 	ASSERT_TRUE(equal_errors(mocked_resp, ec));
 }
 
@@ -167,7 +208,7 @@ TEST_F(AmdSmiEccTests, GetEccCountPerBlockHighBit)
 	ret = performCall();
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_TRUE(amdsmi::equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
-	ASSERT_EQ(in_payload.head.block, (uint64_t)AMDSMI_GPU_BLOCK_PCIE_PL);
+	ASSERT_EQ(in_payload.head.block, SMI_GPU_BLOCK_PCIE_PL);
 	ASSERT_TRUE(equal_errors(mocked_resp, ec));
 }
 
@@ -216,13 +257,8 @@ TEST_F(AmdSmiEccTests, GetEccBadPageInfoAllocFail)
 	int ret;
 	amdsmi_eeprom_table_record_t bad_pages;
 	uint32_t size = 1;
-#ifdef _WIN64
-	EXPECT_CALL(*g_system_mock, Calloc(testing::_, testing::_))
-	    .WillOnce(testing::Return(nullptr));
-#else
 	EXPECT_CALL(*g_system_mock, AlignedAlloc(testing::_, testing::_, testing::_))
 	    .WillOnce(testing::Return(nullptr));
-#endif
 	ret = amdsmi_get_gpu_bad_page_info(&GPU_MOCK_HANDLE, &size, &bad_pages);
 	ASSERT_EQ(ret, AMDSMI_STATUS_OUT_OF_RESOURCES);
 }
@@ -244,26 +280,14 @@ TEST_F(AmdSmiEccTests, GetEccBadPageInfoSizeOnly)
 	struct smi_bad_page_info in_payload;
 	struct smi_bad_page_record *eeprom_table;
 	amdsmi_eeprom_table_record_t *bad_pages = NULL;
-#ifdef _WIN64
-	eeprom_table = (struct smi_bad_page_record *)calloc(1, sizeof(struct smi_bad_page_record));
-#else
 	eeprom_table = (struct smi_bad_page_record *)amdsmi::mem_aligned_alloc(
 	    (void **)&eeprom_table, 4096, sizeof(struct smi_bad_page_record));
-#endif
-	eeprom_table->num_bad_page = 16;
 
-#ifdef _WIN64
-	EXPECT_CALL(*g_system_mock, Calloc(testing::_, testing::_))
-	    .WillOnce(testing::Return(eeprom_table));
-#else
 	EXPECT_CALL(*g_system_mock, AlignedAlloc(testing::_, testing::_, testing::_))
 	    .WillOnce(testing::Return(eeprom_table));
-#endif
+	expect_bad_page_ioctl(&in_payload, 16, false);
 
-	WhenCalling(std::bind(amdsmi_get_gpu_bad_page_info, &GPU_MOCK_HANDLE, &size, bad_pages));
-	ExpectCommand(SMI_CMD_CODE_GET_BAD_PAGE_INFO);
-	SaveInputPayloadIn(&in_payload);
-	ret = performCall();
+	ret = amdsmi_get_gpu_bad_page_info(&GPU_MOCK_HANDLE, &size, bad_pages);
 
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_TRUE(equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
@@ -277,36 +301,16 @@ TEST_F(AmdSmiEccTests, GetEccBadPageInfoSizeAboveMax)
 	uint32_t size = AMDSMI_MAX_BAD_PAGE_RECORD + 1;
 	struct smi_bad_page_info in_payload;
 	struct smi_bad_page_record *eeprom_table;
-#ifdef _WIN64
-	eeprom_table = (struct smi_bad_page_record *)calloc(1, sizeof(struct smi_bad_page_record));
-#else
 	eeprom_table = (struct smi_bad_page_record *)amdsmi::mem_aligned_alloc(
 	    (void **)&eeprom_table, 4096, sizeof(struct smi_bad_page_record));
-#endif
-	eeprom_table->num_bad_page = SMI_MAX_BAD_PAGE_RECORD;
-	for (unsigned int i = 0; i < eeprom_table->num_bad_page; i++) {
-		eeprom_table->bad_page[i].retired_page = i;
-		eeprom_table->bad_page[i].ts	       = i * 2;
-		eeprom_table->bad_page[i].err_type     = (unsigned char)(i * 3);
-		eeprom_table->bad_page[i].bank	       = (unsigned char)(i * 4);
-		eeprom_table->bad_page[i].cu	       = (unsigned char)(i * 4);
-		eeprom_table->bad_page[i].mem_channel  = (unsigned char)(i * 5);
-		eeprom_table->bad_page[i].mcumc_id     = (unsigned char)(i * 6);
-	}
 
-#ifdef _WIN64
-	EXPECT_CALL(*g_system_mock, Calloc(testing::_, testing::_))
-	    .WillOnce(testing::Return(eeprom_table));
-#else
 	EXPECT_CALL(*g_system_mock, AlignedAlloc(testing::_, testing::_, testing::_))
 	    .WillOnce(testing::Return(eeprom_table));
-#endif
+	expect_bad_page_ioctl(&in_payload, SMI_MAX_BAD_PAGE_RECORD, true);
+
 	bad_pages =
 	    (amdsmi_eeprom_table_record_t *)malloc(sizeof(amdsmi_eeprom_table_record_t) * size);
-	WhenCalling(std::bind(amdsmi_get_gpu_bad_page_info, &GPU_MOCK_HANDLE, &size, bad_pages));
-	ExpectCommand(SMI_CMD_CODE_GET_BAD_PAGE_INFO);
-	SaveInputPayloadIn(&in_payload);
-	ret = performCall();
+	ret = amdsmi_get_gpu_bad_page_info(&GPU_MOCK_HANDLE, &size, bad_pages);
 	free(bad_pages);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_TRUE(equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
@@ -320,21 +324,12 @@ TEST_F(AmdSmiEccTests, GetEccBadPageInfoNoData)
 	amdsmi_eeprom_table_record_t bad_pages[16];
 	struct smi_bad_page_record *eeprom_table;
 
-#ifdef _WIN64
-	eeprom_table = (struct smi_bad_page_record *)calloc(1, sizeof(struct smi_bad_page_record));
-#else
 	eeprom_table = (struct smi_bad_page_record *)amdsmi::mem_aligned_alloc(
 	    (void **)&eeprom_table, 4096, sizeof(struct smi_bad_page_record));
-#endif
 	eeprom_table->num_bad_page = 16;
 
-#ifdef _WIN64
-	EXPECT_CALL(*g_system_mock, Calloc(testing::_, testing::_))
-	    .WillOnce(testing::Return(eeprom_table));
-#else
 	EXPECT_CALL(*g_system_mock, AlignedAlloc(testing::_, testing::_, testing::_))
 	    .WillOnce(testing::Return(eeprom_table));
-#endif
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
 	    .WillRepeatedly(SetResponseStatus(AMDSMI_STATUS_NO_DATA));
@@ -351,29 +346,17 @@ TEST_F(AmdSmiEccTests, GetEccBadPageInfoBufferSizeNotSufficient)
 	struct smi_bad_page_info in_payload;
 	struct smi_bad_page_record *eeprom_table;
 
-#ifdef _WIN64
-	eeprom_table = (struct smi_bad_page_record *)calloc(1, sizeof(struct smi_bad_page_record));
-#else
 	eeprom_table = (struct smi_bad_page_record *)amdsmi::mem_aligned_alloc(
 	    (void **)&eeprom_table, 4096, sizeof(struct smi_bad_page_record));
-#endif
-	eeprom_table->num_bad_page = 4;
 
-#ifdef _WIN64
-	EXPECT_CALL(*g_system_mock, Calloc(testing::_, testing::_))
-	    .WillOnce(testing::Return(eeprom_table));
-#else
 	EXPECT_CALL(*g_system_mock, AlignedAlloc(testing::_, testing::_, testing::_))
 	    .WillOnce(testing::Return(eeprom_table));
-#endif
+	expect_bad_page_ioctl(&in_payload, 4, false);
 
 	bad_pages =
 	    (amdsmi_eeprom_table_record_t *)malloc(sizeof(amdsmi_eeprom_table_record_t) * size);
 
-	WhenCalling(std::bind(amdsmi_get_gpu_bad_page_info, &GPU_MOCK_HANDLE, &size, bad_pages));
-	ExpectCommand(SMI_CMD_CODE_GET_BAD_PAGE_INFO);
-	SaveInputPayloadIn(&in_payload);
-	ret = performCall();
+	ret = amdsmi_get_gpu_bad_page_info(&GPU_MOCK_HANDLE, &size, bad_pages);
 
 	free(bad_pages);
 	ASSERT_EQ(ret, AMDSMI_STATUS_OUT_OF_RESOURCES);
@@ -388,43 +371,26 @@ TEST_F(AmdSmiEccTests, GetEccBadPageInfo)
 	struct smi_bad_page_info in_payload;
 	struct smi_bad_page_record *eeprom_table;
 
-#ifdef _WIN64
-	eeprom_table = (struct smi_bad_page_record *)calloc(1, sizeof(struct smi_bad_page_record));
-#else
 	eeprom_table = (struct smi_bad_page_record *)amdsmi::mem_aligned_alloc(
 	    (void **)&eeprom_table, 4096, sizeof(struct smi_bad_page_record));
-#endif
-	eeprom_table->num_bad_page = size;
 
-	for (unsigned int i = 0; i < eeprom_table->num_bad_page; i++) {
-		eeprom_table->bad_page[i].retired_page = i;
-		eeprom_table->bad_page[i].ts	       = i * 2;
-		eeprom_table->bad_page[i].err_type     = (unsigned char)(i * 3);
-		eeprom_table->bad_page[i].bank	       = (unsigned char)(i * 4);
-		eeprom_table->bad_page[i].cu	       = (unsigned char)(i * 4);
-		eeprom_table->bad_page[i].mem_channel  = (unsigned char)(i * 5);
-		eeprom_table->bad_page[i].mcumc_id     = (unsigned char)(i * 6);
-	}
-
-#ifdef _WIN64
-	EXPECT_CALL(*g_system_mock, Calloc(testing::_, testing::_))
-	    .WillOnce(testing::Return(eeprom_table));
-#else
 	EXPECT_CALL(*g_system_mock, AlignedAlloc(testing::_, testing::_, testing::_))
 	    .WillOnce(testing::Return(eeprom_table));
-#endif
+	expect_bad_page_ioctl(&in_payload, size, true);
 
 	bad_pages =
 	    (amdsmi_eeprom_table_record_t *)malloc(sizeof(amdsmi_eeprom_table_record_t) * size);
 
-	WhenCalling(std::bind(amdsmi_get_gpu_bad_page_info, &GPU_MOCK_HANDLE, &size, bad_pages));
-	ExpectCommand(SMI_CMD_CODE_GET_BAD_PAGE_INFO);
-	SaveInputPayloadIn(&in_payload);
-	ret = performCall();
+	ret = amdsmi_get_gpu_bad_page_info(&GPU_MOCK_HANDLE, &size, bad_pages);
 
-	free(bad_pages);
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_TRUE(equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
+	ASSERT_EQ(size, 16);
+	for (uint32_t i = 0; i < size; i++) {
+		ASSERT_EQ(bad_pages[i].retired_page, i);
+		ASSERT_EQ(bad_pages[i].ts, i * 2);
+	}
+	free(bad_pages);
 }
 
 TEST_F(AmdSmiEccTests, GetEccBadPageInfoConfigSysconfFailed)
@@ -433,17 +399,9 @@ TEST_F(AmdSmiEccTests, GetEccBadPageInfoConfigSysconfFailed)
 	amdsmi_eeprom_table_record_t bad_pages;
 	uint32_t size = 2;
 
-#ifndef _WIN64
-	// Mock sysconf to return -1
 	EXPECT_CALL(*g_system_mock, Sysconf(testing::_)).WillOnce(testing::Return(-1));
-#endif
 	ret = amdsmi_get_gpu_bad_page_info(&GPU_MOCK_HANDLE, &size, &bad_pages);
-
-#ifndef _WIN64
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
-#else
-	ASSERT_NE(ret, AMDSMI_STATUS_SUCCESS);
-#endif
 }
 
 TEST_F(AmdSmiEccTests, GetBadPageRecordThreshold)

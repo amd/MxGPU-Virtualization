@@ -77,6 +77,8 @@ struct gim_mig_file {
 		 * @off represents the copied position in one page
 		 */
 		uint32_t off;
+		uint64_t msg_gpu_addr; // GPU address of the msg buffer
+		struct oss_dma_mem_info *msg_handle; // handle to the msg buffer
 	} msg; // buffer for ctrl, FW static/dynamic data, CTX, bitmap
 
 	struct {

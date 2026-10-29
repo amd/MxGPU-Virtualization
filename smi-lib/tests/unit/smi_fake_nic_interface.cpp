@@ -18,6 +18,9 @@ static bool g_nic_discovery_flag	      = true;
 static bool g_use_long_interface_name	      = false;
 static smi_nic_status_t g_nic_api_status_code = SMI_NIC_STATUS_SUCCESS;
 static smi_nic_link_type_t g_nic_link_type    = SMI_NIC_LINK_TYPE_PCIE;
+static uint32_t g_last_rdma_port_index	      = 0;
+static uint32_t g_last_rdma_ib_index	      = 0;
+static uint32_t g_last_rdma_ib_port_index     = 0;
 
 extern "C" {
 
@@ -69,6 +72,15 @@ void set_nic_api_status(smi_nic_status_t status)
 void set_nic_link_type(smi_nic_link_type_t link_type)
 {
 	g_nic_link_type = link_type;
+}
+
+void get_last_nic_rdma_port_statistics_indices(uint32_t *port_index,
+					       uint32_t *ib_index,
+					       uint32_t *ib_port_index)
+{
+	*port_index    = g_last_rdma_port_index;
+	*ib_index      = g_last_rdma_ib_index;
+	*ib_port_index = g_last_rdma_ib_port_index;
 }
 
 smi_nic_status_t smi_nic_create_context(smi_nic_ctx_t *ctx)
@@ -375,18 +387,36 @@ smi_nic_status_t smi_get_nic_vendor_statistics_list(smi_nic_ctx_t ctx,
 	return g_nic_api_status_code;
 }
 
+smi_nic_status_t smi_get_nic_rdma_port_location(smi_nic_ctx_t ctx,
+						uint64_t device,
+						uint32_t rdma_port_index,
+						uint32_t *port_index,
+						uint32_t *ib_index,
+						uint32_t *ib_port_index)
+{
+	(void)ctx;
+	(void)device;
+	if (!port_index || !ib_index || !ib_port_index) {
+		return SMI_NIC_STATUS_WRONG_PARAM;
+	}
+	*port_index    = rdma_port_index;
+	*ib_index      = rdma_port_index + 1;
+	*ib_port_index = rdma_port_index + 2;
+	return g_nic_api_status_code;
+}
+
 smi_nic_status_t smi_get_nic_rdma_port_statistics_count(smi_nic_ctx_t ctx,
 							uint64_t device,
 							uint32_t port_index,
 							uint32_t ib_index,
-							uint32_t rdma_port_index,
+							uint32_t ib_port_index,
 							uint32_t *count)
 {
 	(void)ctx;
 	(void)device;
-	(void)port_index;
-	(void)ib_index;
-	(void)rdma_port_index;
+	g_last_rdma_port_index	  = port_index;
+	g_last_rdma_ib_index	  = ib_index;
+	g_last_rdma_ib_port_index = ib_port_index;
 	if (count) {
 		*count = 7;
 	}
@@ -397,14 +427,14 @@ smi_nic_status_t smi_get_nic_rdma_port_statistics_list(smi_nic_ctx_t ctx,
 						       uint64_t device,
 						       uint32_t port_index,
 						       uint32_t ib_index,
-						       uint32_t rdma_port_index,
+						       uint32_t ib_port_index,
 						       smi_nic_stat_info_t *stats)
 {
 	(void)ctx;
 	(void)device;
-	(void)port_index;
-	(void)ib_index;
-	(void)rdma_port_index;
+	g_last_rdma_port_index	  = port_index;
+	g_last_rdma_ib_index	  = ib_index;
+	g_last_rdma_ib_port_index = ib_port_index;
 	if (stats) {
 		stats->count = 7;
 		std::snprintf(stats->stats[0].name, SMI_NIC_MAX_STRING_LENGTH, "%s", "rdma_stat1");

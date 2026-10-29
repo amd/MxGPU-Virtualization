@@ -98,8 +98,8 @@ from .amdsmi_interface import amdsmi_set_xgmi_plpd
 from .amdsmi_interface import amdsmi_get_vf_hbm_info
 from .amdsmi_interface import amdsmi_get_gpu_fabric_info
 from .amdsmi_interface import amdsmi_get_tdi_state
-from .amdsmi_interface import amdsmi_get_cc_mode
-from .amdsmi_interface import amdsmi_set_cc_mode
+from .amdsmi_interface import amdsmi_get_gpu_cc_mode
+from .amdsmi_interface import amdsmi_set_gpu_cc_mode
 from .amdsmi_interface import amdsmi_get_node_handle
 from .amdsmi_interface import amdsmi_get_npm_info
 from .amdsmi_interface import amdsmi_get_tray_info
@@ -162,7 +162,7 @@ from .amdsmi_interface import AmdSmiDriverModelType
 from .amdsmi_interface import AmdSmiNpmStatus
 from .amdsmi_interface import AmdSmiComputeTrayType
 from .amdsmi_interface import AmdSmiTDIState
-from .amdsmi_interface import AmdSmiCCMode
+from .amdsmi_interface import AmdSmiGpuCCMode
 from .amdsmi_interface import AmdSmiFabricTelemetry
 from .amdsmi_interface import AmdSmiFabricPpodConfigVersion
 from .amdsmi_interface import AmdSmiFabricPpodField

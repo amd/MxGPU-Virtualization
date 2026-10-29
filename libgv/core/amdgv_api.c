@@ -164,7 +164,6 @@ const char *const amdgv_inf_name[] = {
 	"msleep",
 	"usleep",
 	"yield",
-	"memory_fence",
 	"get_time_stamp",
 	"get_utc_time_stamp",
 	"get_utc_time_stamp_str",
@@ -192,8 +191,6 @@ const char *const amdgv_inf_name[] = {
 	"store_record",
 #endif
 	"store_rlcv_timestamp",
-	"hbm_dax_init",
-	"hbm_dax_fini",
 	"hbm_drv_mgmt_init",
 	"hbm_drv_mgmt_fini",
 	"get_ih_rb_info",
@@ -262,6 +259,7 @@ const char *const amdgv_inf_name[] = {
 	"register_mce_notifier",
 	"unregister_mce_notifier",
 	"emergency_restart",
+	"get_vf_fb_bar_size",
 };
 
 int AMDGV_API amdgv_init(struct oss_interface *funcs, uint16_t *dev_id_array, uint32_t flags)
@@ -358,11 +356,15 @@ static const char *libgv_build_date(void)
 	/* "YYYY-MM-DD HH:MM:SS\0" = 20 bytes */
 	static char date_buf[20];
 
+#if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdate-time"
+#endif
 	const char *d = __DATE__;	/* "Mmm dd yyyy" */
 	const char *t = __TIME__;	/* "hh:mm:ss" */
+#if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic pop
+#endif
 	int month;
 
 	switch (d[0]) {
@@ -612,6 +614,40 @@ unlock:
 	return ret;
 }
 
+int AMDGV_API amdgv_clear_vf_fb(amdgv_dev_t dev, uint32_t idx_vf)
+{
+	int ret;
+	struct amdgv_adapter *adapt;
+	union amdgv_sched_event_data data;
+	int event_ret = 0;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (AMDGV_IS_IDX_INVALID(idx_vf) || idx_vf == AMDGV_PF_IDX)
+		return AMDGV_LOG_GPUMON_INVALID_VF_INDEX;
+
+	oss_mutex_lock(adapt->api_lock);
+
+	/*
+	 * Use SCHED_GPUMON + park/unpark (same pattern as free_vf), not
+	 * INIT_VF_FB. INIT_VF_FB only performs clear while PF is in full
+	 * access, which does not happen during ResetGpupBegin after
+	 * REL_GPU_FINI / STOP_VF.
+	 */
+	data.gpumon_data.type = GPUMON_CLEAR_VF_FB;
+	data.gpumon_data.val = idx_vf;
+	data.gpumon_data.result = &event_ret;
+
+	ret = amdgv_sched_queue_event_and_wait_ex(
+		adapt, AMDGV_PF_IDX, AMDGV_EVENT_SCHED_GPUMON, AMDGV_SCHED_BLOCK_ALL, data);
+	if (!ret)
+		ret = event_ret;
+
+	oss_mutex_unlock(adapt->api_lock);
+
+	return ret;
+}
+
 int AMDGV_API amdgv_stop_vf(amdgv_dev_t dev, uint32_t idx_vf)
 {
 	int ret;
@@ -644,6 +680,23 @@ int AMDGV_API amdgv_force_reset_gpu(amdgv_dev_t dev)
 
 	ret = amdgv_sched_queue_force_reset_gpu(adapt);
 
+	oss_mutex_unlock(adapt->api_lock);
+
+	return ret;
+}
+
+int AMDGV_API amdgv_gfx_run_cleaner_shader(amdgv_dev_t dev, uint32_t partition)
+{
+	int ret;
+	struct amdgv_adapter *adapt;
+
+	SET_ADAPT_AND_CHECK_STATUS(adapt, dev);
+
+	if (!adapt->gfx.funcs || !adapt->gfx.funcs->run_cleaner_shader)
+		return AMDGV_FAILURE;
+
+	oss_mutex_lock(adapt->api_lock);
+	ret = adapt->gfx.funcs->run_cleaner_shader(adapt, partition);
 	oss_mutex_unlock(adapt->api_lock);
 
 	return ret;
@@ -957,6 +1010,10 @@ int AMDGV_API amdgv_get_dev_info(amdgv_dev_t dev, enum amdgv_dev_info_type type,
 		info->basic_info.sub_vendor_id = adapt->sub_vnd_id;
 		info->basic_info.bdf = adapt->bdf;
 		info->basic_info.dsn = adapt->serial;
+		break;
+	case AMDGV_GET_REVISION_IDS:
+		info->revision_ids.chip_rev_id = adapt->nbio.chip_rev_id;
+		info->revision_ids.external_rev_id = adapt->nbio.external_rev_id;
 		break;
 	default:
 		ret = AMDGV_FAILURE;
@@ -3068,7 +3125,33 @@ int amdgv_migration_end(amdgv_dev_t dev, uint32_t idx_vf)
 	if (AMDGV_IS_IDX_INVALID(idx_vf))
 		return AMDGV_FAILURE;
 
-	return ret;
+	if (adapt->live_migration.mig_state[idx_vf].state ==
+	    AMDGV_MIGRATION_VF_STATE_EXPORT &&
+	    !adapt->live_migration.mig_state[idx_vf].is_target &&
+	    !is_avail_vf(idx_vf)) {
+		/* Latch abort so the DEFAULT transition logs it. */
+		adapt->live_migration.mig_state[idx_vf].aborted = true;
+		return ret;
+	}
+
+	if (adapt->live_migration.mig_state[idx_vf].state ==
+		    AMDGV_MIGRATION_VF_STATE_IMPORT &&
+	    (AMDGV_MIGRATION_SHOULD_ABORT(adapt, idx_vf) ||
+	     (adapt->live_migration.mig_state[idx_vf].is_target &&
+	      !is_active_vf(idx_vf)))) {
+		/*
+		 * Latch abort so the DEFAULT transition logs it, and stop
+		 * the VF so it does not stay suspended.
+		 *
+		 * This check will NOT latch abort to case where imported VF has no guest driver loaded. The VF is in AVAILABLE state.
+		 * This is considered a valid case, and live migration operation will be skipped for this VF. Since prepare import is skipped,
+		 * the VF is NOT set to is_target = true, so it will not be aborted.
+		 */
+		adapt->live_migration.mig_state[idx_vf].aborted = true;
+		return amdgv_stop_vf(dev, idx_vf);
+	}
+
+	return 0; // no abort
 }
 
 int amdgv_migration_import(amdgv_dev_t dev, uint32_t idx_vf, void *buf, uint64_t size,
@@ -3863,7 +3946,7 @@ int AMDGV_API amdgv_ffbm_mark_badpage(amdgv_dev_t dev, uint64_t spa)
 	}
 	bp->retired_page = spa >> AMDGV_GPU_PAGE_SHIFT;
 	oss_mutex_lock(adapt->api_lock);
-	ret = amdgv_ffbm_replace_bad_pages(adapt, bp, 1);
+	ret = amdgv_ffbm_replace_bad_pages(adapt, bp, 1, false);
 	oss_mutex_unlock(adapt->api_lock);
 	oss_free(bp);
 	return ret;

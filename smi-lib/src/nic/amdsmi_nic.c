@@ -549,6 +549,9 @@ amdsmi_status_t amdsmi_get_nic_rdma_port_statistics(amdsmi_processor_handle proc
 	enum smi_handle_type type;
 	smi_nic_stat_info_t rdma_stats;
 	system_wrapper *sys_wrapper = get_system_wrapper();
+	uint32_t port_index	    = 0;
+	uint32_t ib_index	    = 0;
+	uint32_t ib_port_index	    = 0;
 	int ret			    = 0;
 
 	AMDSMI_ESCAPE_IF_NOT_INIT;
@@ -564,17 +567,36 @@ amdsmi_status_t amdsmi_get_nic_rdma_port_statistics(amdsmi_processor_handle proc
 	}
 
 	nic = ((struct smi_nic_handle *)processor_handle);
+	ret = smi_get_nic_rdma_port_location(smi_req.thread->nic_ctx,
+					     nic->bdf.as_uint,
+					     rdma_port_index,
+					     &port_index,
+					     &ib_index,
+					     &ib_port_index);
+	if (ret != SMI_NIC_STATUS_SUCCESS) {
+		SMI_ERROR("Failed to resolve NIC RDMA port index. Return code: %d", ret);
+		return smi_map_nic_status(ret);
+	}
+
 	if (stats == NULL) {
-		ret = smi_get_nic_rdma_port_statistics_count(
-		    smi_req.thread->nic_ctx, nic->bdf.as_uint, 0, 0, rdma_port_index, num_stats);
+		ret = smi_get_nic_rdma_port_statistics_count(smi_req.thread->nic_ctx,
+							     nic->bdf.as_uint,
+							     port_index,
+							     ib_index,
+							     ib_port_index,
+							     num_stats);
 		if (ret != SMI_NIC_STATUS_SUCCESS) {
 			SMI_ERROR("Failed to get nic rdma port statistics count. Return code: %d",
 				  ret);
 			return smi_map_nic_status(ret);
 		}
 	} else {
-		ret = smi_get_nic_rdma_port_statistics_list(
-		    smi_req.thread->nic_ctx, nic->bdf.as_uint, 0, 0, rdma_port_index, &rdma_stats);
+		ret = smi_get_nic_rdma_port_statistics_list(smi_req.thread->nic_ctx,
+							    nic->bdf.as_uint,
+							    port_index,
+							    ib_index,
+							    ib_port_index,
+							    &rdma_stats);
 		if (ret != SMI_NIC_STATUS_SUCCESS) {
 			SMI_ERROR("Failed to get nic rdma port statistics list. Return code: %d",
 				  ret);

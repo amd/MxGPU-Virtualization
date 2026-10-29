@@ -744,8 +744,11 @@ static int mi300_irqmgr_sw_fini(struct amdgv_adapter *adapt)
 
 void mi300_irqmgr_golden_init(struct amdgv_adapter *adapt)
 {
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_STORM_CLIENT_LIST_CNTL), 0x00040000);
-	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_INT_FLOOD_CNTL), 8);
+	/* MMHUB UTCL2 and SE0SH-SE3SH interrupt storms can overflow IH, so mark them as storm interrupt clients. */
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_STORM_CLIENT_LIST_CNTL), 0x00043C00);
+
+	/* HIGHWATER = 7: 1/2 + 7 * 1/16 = 15/16 of the ring size.*/
+	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_INT_FLOOD_CNTL), 0xF);
 	WREG32(SOC15_REG_OFFSET(OSSSYS, 0, regIH_RETRY_INT_CAM_CNTL), 0x00015810);
 }
 

@@ -43,6 +43,9 @@ enum amdgv_mes_pipe {
 #define AMDGV_MES_INST(xcc_id, pipe) \
     ((xcc_id * AMDGV_MAX_MES_PIPES) + pipe)
 
+/* Writeback slot not reserved. A real slot offset can be zero. */
+#define AMDGV_MES_WB_OFFS_INVALID (~0u)
+
 #define amdgv_mes_kiq_hw_init(adapt, xcc_id) \
 	(adapt)->mes.kiq_hw_init((adapt), (xcc_id))
 #define amdgv_mes_kiq_hw_fini(adapt, xcc_id) \
@@ -77,6 +80,9 @@ struct amdgv_mes {
 	uint32_t  query_status_fence_offs[AMDGV_MAX_MES_INST_PIPES];
 	uint64_t  query_status_fence_gpu_addr[AMDGV_MAX_MES_INST_PIPES];
 	uint64_t  *query_status_fence_ptr[AMDGV_MAX_MES_INST_PIPES];
+	uint32_t  cleaner_shader_fence_offs[AMDGV_MAX_GC_INSTANCES];
+	uint64_t  cleaner_shader_fence_gpu_addr[AMDGV_MAX_GC_INSTANCES];
+	volatile uint64_t *cleaner_shader_fence_ptr[AMDGV_MAX_GC_INSTANCES];
 
 	int       (*kiq_hw_init)(struct amdgv_adapter *adapt, uint32_t xcc_id);
 	int       (*kiq_hw_fini)(struct amdgv_adapter *adapt, uint32_t xcc_id);
@@ -117,6 +123,7 @@ enum mes_misc_opcode {
 	MES_MISC_OP_WRM_REG_WR_WAIT,
 	MES_MISC_OP_SET_SHADER_DEBUGGER,
 	MES_MISC_OP_CHANGE_CONFIG,
+	MES_MISC_OP_LAUNCH_CLEANER_SHADER,
 };
 
 struct mes_reset_queue_input {

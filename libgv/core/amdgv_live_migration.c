@@ -43,6 +43,14 @@ static int amdgv_migration_rlc_autoload(struct amdgv_adapter *adapt, uint32_t vf
                adapt->psp.migration_rlc_autoload(adapt, vf_idx) : 0;
 }
 
+/* Latch the VF migration abort; a failed import is not a valid target. */
+void amdgv_live_migration_latch_abort(struct amdgv_adapter *adapt,
+				      uint32_t idx_vf)
+{
+	AMDGV_MIGRATION_SET_ABORT(adapt, idx_vf);
+	adapt->live_migration.mig_state[idx_vf].is_target = false;
+}
+
 void amdgv_live_migration_set_abort_all(struct amdgv_adapter *adapt)
 {
 	int i;
@@ -50,8 +58,7 @@ void amdgv_live_migration_set_abort_all(struct amdgv_adapter *adapt)
 	for (i = 0; i < adapt->num_vf; i++) {
 		if (adapt->live_migration.mig_state[i].state != AMDGV_MIGRATION_VF_STATE_DEFAULT) {
 			AMDGV_DEBUG("VF[%d] migration aborted.\n", i);
-			AMDGV_MIGRATION_SET_ABORT(adapt, i);
-			adapt->live_migration.mig_state[i].is_target = false;
+			amdgv_live_migration_latch_abort(adapt, i);
 		}
 	}
 }
@@ -59,13 +66,20 @@ void amdgv_live_migration_set_abort_all(struct amdgv_adapter *adapt)
 int amdgv_live_migration_set_vf_mig_state(struct amdgv_adapter *adapt, uint32_t idx_vf,
 				   enum amdgv_migration_vf_state state)
 {
+	enum amdgv_migration_vf_state prev_state;
+	bool session_aborted = false;
+
 	if (idx_vf == AMDGV_PF_IDX)
 		return 0;
 
 	AMDGV_ASSERT(idx_vf < AMDGV_MAX_VF_NUM);
 
+	prev_state = adapt->live_migration.mig_state[idx_vf].state;
+
 	switch (state) {
 	case AMDGV_MIGRATION_VF_STATE_DEFAULT:
+		/* Sample before clear: DEFAULT drops the abort latch. */
+		session_aborted = AMDGV_MIGRATION_SHOULD_ABORT(adapt, idx_vf);
 		AMDGV_MIGRATION_CLEAR_ABORT(adapt, idx_vf);
 		adapt->dirtybit.acc_bits[idx_vf].is_first_query = false;
 		break;
@@ -83,6 +97,29 @@ int amdgv_live_migration_set_vf_mig_state(struct amdgv_adapter *adapt, uint32_t 
 
 	adapt->live_migration.mig_state[idx_vf].state = state;
 
+	if (adapt->flags & AMDGV_FLAG_GPUV_LIVE_MIGRATION) {
+		if (state == AMDGV_MIGRATION_VF_STATE_EXPORT) {
+			amdgv_put_log(idx_vf,
+				      AMDGV_LOG_IOV_LIVE_MIGRATION_SESSION_EXPORT_START,
+				      0);
+		} else if (state == AMDGV_MIGRATION_VF_STATE_IMPORT) {
+			amdgv_put_log(idx_vf,
+				      AMDGV_LOG_IOV_LIVE_MIGRATION_SESSION_IMPORT_START,
+				      0);
+		} else if (state == AMDGV_MIGRATION_VF_STATE_DEFAULT &&
+			   (prev_state == AMDGV_MIGRATION_VF_STATE_EXPORT ||
+			    prev_state == AMDGV_MIGRATION_VF_STATE_IMPORT)) {
+			if (session_aborted)
+				amdgv_put_log(idx_vf,
+					      AMDGV_LOG_IOV_LIVE_MIGRATION_SESSION_ABORTED,
+					      0);
+			else
+				amdgv_put_log(idx_vf,
+					      AMDGV_LOG_IOV_LIVE_MIGRATION_SESSION_END,
+					      0);
+		}
+	}
+
 	return 0;
 }
 
@@ -95,29 +132,38 @@ enum amdgv_migration_vf_state amdgv_migration_get_vf_state(struct amdgv_adapter 
 	return adapt->live_migration.mig_state[idx_vf].state;
 }
 
-void amdgv_live_migration_abort_check(struct amdgv_adapter *adapt, uint32_t idx_vf, enum amdgv_sched_event_id event_id)
+/* Whole-GPU reset or fatal error: aborts every migration. */
+static bool
+amdgv_live_migration_is_whole_gpu_event(enum amdgv_sched_event_id event_id)
 {
-	int i;
-
-	if (idx_vf == AMDGV_PF_IDX)
-		return;
-
-	AMDGV_ASSERT(idx_vf < AMDGV_MAX_VF_NUM);
-
 	switch (event_id) {
 	case AMDGV_EVENT_SCHED_FORCE_RESET_GPU:
 	case AMDGV_EVENT_SCHED_FORCE_RESET_GPU_INTERNAL:
 	case AMDGV_EVENT_SCHED_RMA:
 	case AMDGV_EVENT_SCHED_RAS_FED:
 	case AMDGV_EVENT_SCHED_RAS_POISON_CREATION:
-		for (i = 0; i < adapt->num_vf; i++) {
-			if (adapt->live_migration.mig_state[i].state != AMDGV_MIGRATION_VF_STATE_DEFAULT) {
-				AMDGV_DEBUG("VF[%d] migration aborted by event %d\n", i, event_id);
-				AMDGV_MIGRATION_SET_ABORT(adapt, i);
-				adapt->live_migration.mig_state[i].is_target = false;
-			}
-		}
-		break;
+		return true;
+	default:
+		return false;
+	}
+}
+
+void amdgv_live_migration_abort_check(struct amdgv_adapter *adapt,
+				      uint32_t idx_vf,
+				      enum amdgv_sched_event_id event_id)
+{
+	if (idx_vf == AMDGV_PF_IDX)
+		return;
+
+	AMDGV_ASSERT(idx_vf < AMDGV_MAX_VF_NUM);
+
+	if (amdgv_live_migration_is_whole_gpu_event(event_id)) {
+		AMDGV_DEBUG("Event %d aborts all migrations\n", event_id);
+		amdgv_live_migration_set_abort_all(adapt);
+		return;
+	}
+
+	switch (event_id) {
 	case AMDGV_EVENT_REQ_GPU_INIT:
 	case AMDGV_EVENT_REL_GPU_INIT:
 	case AMDGV_EVENT_REQ_GPU_FINI:
@@ -136,10 +182,21 @@ void amdgv_live_migration_abort_check(struct amdgv_adapter *adapt, uint32_t idx_
 	case AMDGV_EVENT_HANDLE_CRASH:
 	case AMDGV_EVENT_SCHED_RAS_POISON_CONSUMPTION:
 	case AMDGV_EVENT_SCHED_VF_REQ_GPU_INIT_XCHG_REGION:
+		/*
+		 * Certain hypervisors stop the source VF after a successful
+		 * export, while the session is still EXPORT. Stopping an
+		 * already suspended source is not a failed migration.
+		 */
+		if (event_id == AMDGV_EVENT_SCHED_STOP_VF &&
+		    (adapt->flags & AMDGV_FLAG_USE_PF) &&
+		    adapt->live_migration.mig_state[idx_vf].state ==
+			    AMDGV_MIGRATION_VF_STATE_EXPORT &&
+		    is_suspend_vf(idx_vf))
+			break;
+
 		if (adapt->live_migration.mig_state[idx_vf].state != AMDGV_MIGRATION_VF_STATE_DEFAULT) {
 			AMDGV_DEBUG("VF[%d] migration aborted by event %d\n", idx_vf, event_id);
-			AMDGV_MIGRATION_SET_ABORT(adapt, idx_vf);
-			adapt->live_migration.mig_state[idx_vf].is_target = false;
+			amdgv_live_migration_latch_abort(adapt, idx_vf);
 		}
 		break;
 	default:
@@ -610,21 +667,17 @@ int amdgv_migration_transfer_manifest_data(struct amdgv_adapter *adapt, struct a
 	}
 exit:
 	/* Latch the VF aborted on any driver-side migration failure: later
-	 * migration events short-circuit on AMDGV_MIGRATION_SHOULD_ABORT. Clear
-	 * is_target too so a failed import isn't left flagged as a valid target
-	 * (matches amdgv_live_migration_abort_check).
+	 * migration events short-circuit on AMDGV_MIGRATION_SHOULD_ABORT.
 	 */
-	if (ret && idx_vf < AMDGV_MAX_VF_NUM) {
-		AMDGV_MIGRATION_SET_ABORT(adapt, idx_vf);
-		adapt->live_migration.mig_state[idx_vf].is_target = false;
-	}
+	if (ret && idx_vf < AMDGV_MAX_VF_NUM)
+		amdgv_live_migration_latch_abort(adapt, idx_vf);
 
 	return ret;
 }
 
 static int amdgv_migration_sw_init(struct amdgv_adapter *adapt)
 {
-	if (adapt->asic_type == CHIP_NAVI32 || adapt->asic_type == CHIP_MI350X)
+	if (adapt->asic_type == CHIP_NAVI32 || amdgv_asic_is_mi350(adapt->asic_type))
 		adapt->live_migration.mig_data_size_cap = true;
 	else
 		adapt->live_migration.mig_data_size_cap = false;

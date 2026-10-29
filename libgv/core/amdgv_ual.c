@@ -178,11 +178,11 @@ int amdgv_ual_get_config(struct amdgv_adapter *adapt, struct amdgv_gpumon_get_co
 	oss_memcpy(adapt->ual.topology_info_v1.vpod_active_accelerators,
 		asp_config->vpod_active_accelerators,
 		sizeof(adapt->ual.topology_info_v1.vpod_active_accelerators));
-	adapt->ual.topology_info_v1.addr_mode = asp_config->addr_mode;
+	adapt->ual.topology_info_v1.addr_mode = (enum amdgv_ual_npa_address_mode)asp_config->addr_mode;
 
 	/* Derive accel_state from config */
 	adapt->ual.node_info_v1.accel_state = amdgv_ual_derive_accel_state(adapt);
-	adapt->ual.node_info_v1.config_state = asp_config->config_state;
+	adapt->ual.node_info_v1.config_state = (enum amdgv_ual_config_state)asp_config->config_state;
 
 	AMDGV_INFO("UAL get_config: accelerator_id=0x%x ppod_size=%u bandwidth=%u latency=%u "
 		"vpod_id=0x%x vpod_size=%u addr_mode=%d accel_state=%d config_state=%d\n",
@@ -194,7 +194,7 @@ int amdgv_ual_get_config(struct amdgv_adapter *adapt, struct amdgv_gpumon_get_co
 
 	/* Copy to output config if provided */
 	if (config) {
-		config->link_type = adapt->ual.link_type;
+		config->link_type = (enum amdgv_gpumon_ual_link_type)adapt->ual.link_type;
 		config->accelerator_id = adapt->ual.node_info_v1.accelerator_id;
 		oss_memcpy(config->ppod_id, adapt->ual.node_info_v1.ppod_id, sizeof(config->ppod_id));
 		config->ppod_size = adapt->ual.node_info_v1.ppod_size;
@@ -209,8 +209,8 @@ int amdgv_ual_get_config(struct amdgv_adapter *adapt, struct amdgv_gpumon_get_co
 		oss_memcpy(config->vpod_active_accelerators,
 			adapt->ual.topology_info_v1.vpod_active_accelerators,
 			sizeof(config->vpod_active_accelerators));
-		config->addr_mode = adapt->ual.topology_info_v1.addr_mode;
-		config->accel_state = adapt->ual.node_info_v1.accel_state;
+		config->addr_mode = (enum amdgv_gpumon_ual_npa_address_mode)adapt->ual.topology_info_v1.addr_mode;
+		config->accel_state = (enum amdgv_gpumon_ual_accelerator_vpod_state)adapt->ual.node_info_v1.accel_state;
 	}
 
 	return ret;
@@ -271,7 +271,7 @@ int amdgv_ual_set_vpod_config(struct amdgv_adapter *adapt, struct amdgv_gpumon_s
 	oss_memcpy(adapt->ual.topology_info_v1.vpod_active_accelerators,
 		config->vpod_active_accelerators,
 		sizeof(adapt->ual.topology_info_v1.vpod_active_accelerators));
-	adapt->ual.topology_info_v1.addr_mode = config->addr_mode;
+	adapt->ual.topology_info_v1.addr_mode = (enum amdgv_ual_npa_address_mode)config->addr_mode;
 
 	/* Derive accel_state from updated config */
 	adapt->ual.node_info_v1.accel_state = amdgv_ual_derive_accel_state(adapt);

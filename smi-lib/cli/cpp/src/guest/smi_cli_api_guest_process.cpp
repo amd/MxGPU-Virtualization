@@ -15,11 +15,6 @@
 #include "json/json.h"
 
 #include <sstream>
-#ifdef _WIN64
-	#include <windows.h>
-	#include <sysinfoapi.h>
-#endif
-
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 								amdsmi_processor_handle*);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_PROCESS_LIST)(amdsmi_processor_handle, uint32_t*,
@@ -39,6 +34,16 @@ static std::string make_process_row(const std::vector<std::string>& fields)
 	}
 	row += "\n";
 	return row;
+}
+
+// The API reports the full image path, so accept either that or only the file name
+static bool process_name_matches(const std::string& proc_name, const std::string& requested)
+{
+	if (proc_name == requested) {
+		return true;
+	}
+	const size_t separator = proc_name.find_last_of("\\/");
+	return separator != std::string::npos && proc_name.substr(separator + 1) == requested;
 }
 
 int amdsmi_get_process_command_info(uint64_t processor, Arguments arg,
@@ -90,14 +95,15 @@ int amdsmi_get_process_command_info(uint64_t processor, Arguments arg,
 	if (arg.process_map.size() != 0) {
 		for (const auto& map_elem : arg.process_map) {
 			if (map_elem.second == ProcessType::name) {
-				auto it =
-				    std::find_if(process_info_list.begin(), process_info_list.end(),
-						 [&map_elem](const amdsmi_proc_info_t& proc) {
-							 return proc.name == map_elem.first;
-						 });
+				bool found = false;
+				for (const auto& proc : process_info_list) {
+					if (process_name_matches(proc.name, map_elem.first)) {
+						process_info.push_back(proc);
+						found = true;
+					}
+				}
 
-				if (it != process_info_list.end()) {
-					process_info.push_back(*it);
+				if (found) {
 					proc_num += 1;
 				} else {
 					if (arg.process_map.size() == 1) {

@@ -157,7 +157,7 @@ int amdgv_ecc_get_error_count(struct amdgv_adapter *adapt,
 	qif->ce_count = qif->ue_count = qif->de_count = 0;
 
 	if (!amdgv_ecc_is_support(adapt, qif->head.block))
-		return AMDGV_FAILURE;
+		return AMDGV_LOG_GPUMON_NOT_SUPPORTED;
 
 	switch (qif->head.block) {
 	case AMDGV_RAS_BLOCK__UMC:

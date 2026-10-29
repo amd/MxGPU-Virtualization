@@ -545,7 +545,8 @@ int amdgv_ras_mgr_handle_controller_interrupt(struct amdgv_adapter *adapt, void 
 int amdgv_ras_mgr_handle_consumer_interrupt(struct amdgv_adapter *adapt, void *data);
 int amdgv_ras_mgr_copy_bp_records_to_vf(struct amdgv_adapter *adapt,
 					uint32_t idx_vf, uint32_t allowed_size,
-					uint32_t *write_size, uint32_t *more);
+					uint32_t *write_size, uint32_t *more,
+					uint32_t *checksum);
 int amdgv_ras_mgr_get_curr_nps_mode(struct amdgv_adapter *adapt,
 		enum amdgv_memory_partition_mode *nps_mode);
 struct amdgv_init_func *amdgv_ras_mgr_get_init_func(struct amdgv_adapter *adapt);
@@ -611,7 +612,8 @@ static inline int amdgv_ras_mgr_handle_consumer_interrupt(struct amdgv_adapter *
 
 static inline int amdgv_ras_mgr_copy_bp_records_to_vf(struct amdgv_adapter *adapt,
 					uint32_t idx_vf, uint32_t allowed_size,
-					uint32_t *write_size, uint32_t *more)
+					uint32_t *write_size, uint32_t *more,
+					uint32_t *checksum)
 {
 	return 0;
 }

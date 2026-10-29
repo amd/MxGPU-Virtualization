@@ -11,6 +11,7 @@
 #include "navi32_gfx.h"
 #include "navi32_ip_discovery.h"
 #include "navi32_mmsch.h"
+#include "navi32_nbio.h"
 #include "amdgv_sched_internal.h"
 
 static const uint32_t this_block = AMDGV_SECURITY_BLOCK;
@@ -302,7 +303,8 @@ static int navi32_parse_harvest_table(struct amdgv_adapter *adapt)
 			break;
 	}
 
-	adapt->umc.active_mask = (((uint64_t)1 << adapt->umc.node_inst_num) - 1) & ~umc_harvest_config;
+	adapt->umc.active_mask = (((uint64_t)1 << adapt->umc.node_inst_num) - 1) &
+				 ~((uint64_t)umc_harvest_config);
 
 	return 0;
 }
@@ -511,6 +513,14 @@ int navi32_discover_ip(struct amdgv_adapter *adapt)
 		return AMDGV_FAILURE;
 
 	navi32_prepare_ip_discovery_vf(adapt);
+
+	/*
+	 * Cache the strap before SR-IOV is enabled. In confidential compute mode,
+	 * the PF may lose access to it after a VF becomes active.
+	 */
+	navi32_nbio_get_revision_ids(adapt, &adapt->nbio.chip_rev_id,
+				     &adapt->nbio.external_rev_id);
+
 	return 0;
 }
 
@@ -550,10 +560,6 @@ int navi32_copy_ip_data_to_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 
 	ret = amdgv_vfmgr_copy_to_vf_fb_abs(adapt, idx_vf, offset, vf_copy.data,
 					    AMDGV_IP_DISCOVERY_SIZE);
-
-	// flush ip discovery data when ffbm supports
-	if (adapt->ffbm.enabled)
-		amdgv_misc_hdp_flush(adapt);
 
 	oss_free_memory(vf_copy.data);
 

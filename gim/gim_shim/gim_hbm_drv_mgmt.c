@@ -14,8 +14,11 @@
 #include <linux/memory.h>
 #include <linux/errno.h>
 #include <linux/workqueue.h>
+#include <linux/acpi.h>
+#include <linux/numa.h>
 #include "gim_debug.h"
 #include "gim_hbm_drv_mgmt.h"
+#include "gim_acpi_hbm.h"
 
 #define GIM_HBM_DRV_MGMT_NAME_LEN 32
 
@@ -106,8 +109,8 @@ void gim_hbm_drv_mgmt_module_fini(void)
 	}
 }
 
-void *gim_hbm_drv_mgmt_init(const char *name, int numa_id,
-			    uint64_t *phy_addr, uint64_t *phy_size)
+void *gim_hbm_drv_mgmt_init(const char *name, uint32_t pf_bdf, uint32_t idx_vf,
+			    int *numa_id, uint64_t *phy_addr, uint64_t *phy_size)
 {
 	struct gim_hbm_drv_mgmt_t *ctx;
 	uint64_t block_size;
@@ -117,11 +120,42 @@ void *gim_hbm_drv_mgmt_init(const char *name, int numa_id,
 	uint64_t trim;
 	uint64_t rem;
 	uint64_t aligned_size;
+	uint32_t seg = (pf_bdf >> 16) & 0xffff;
+	uint32_t devfn = (pf_bdf & 0xff) + idx_vf + 1;
+	uint8_t bus = (pf_bdf >> 8) & 0xff;
+	int pd;
+	int node;
+
+	if (numa_id)
+		*numa_id = NUMA_NO_NODE;
 
 	if (name == NULL || phy_addr == NULL || phy_size == NULL) {
 		gim_warn("invalid params (name or addr/size pointers)\n");
 		return NULL;
 	}
+
+	if (devfn > 0xff) {
+		gim_warn("%s: VF index %u exceeds SRAT handle for PF %04x:%02x:%02x.%x\n",
+			 name, idx_vf, seg, bus, (pf_bdf >> 3) & 0x1f, pf_bdf & 7);
+		return NULL;
+	}
+	if (gim_acpi_lookup_pd(seg, bus, (uint8_t)devfn, &pd)) {
+		gim_warn("%s: no SRAT proximity domain for PF %04x:%02x:%02x.%x VF index %u\n",
+			 name, seg, bus, (pf_bdf >> 3) & 0x1f, pf_bdf & 7, idx_vf);
+		return NULL;
+	}
+
+#if IS_ENABLED(CONFIG_ACPI_NUMA)
+	node = pxm_to_node(pd);
+#else
+	node = NUMA_NO_NODE;
+#endif
+	if (node == NUMA_NO_NODE) {
+		gim_warn("%s: proximity domain %d has no NUMA node\n", name, pd);
+		return NULL;
+	}
+	if (numa_id)
+		*numa_id = node;
 
 	if (!gim_hbm_wq) {
 		gim_warn("%s: HBM registration workqueue is not initialized\n", name);
@@ -165,7 +199,7 @@ void *gim_hbm_drv_mgmt_init(const char *name, int numa_id,
 		return NULL;
 	}
 
-	ctx->numa_id = numa_id;
+	ctx->numa_id = node;
 	ctx->phy_addr = aligned_addr;
 	ctx->phy_size = aligned_size;
 	snprintf(ctx->name, sizeof(ctx->name), "System RAM (%s)", name);
@@ -175,8 +209,8 @@ void *gim_hbm_drv_mgmt_init(const char *name, int numa_id,
 	queue_delayed_work(gim_hbm_wq, &ctx->reg_work,
 			     msecs_to_jiffies(hbm_reg_delay_ms));
 
-	gim_info("%s: scheduled HBM NUMA registration on node %d in %u ms\n",
-		 name, numa_id, hbm_reg_delay_ms);
+	gim_info("%s: proximity domain %d -> NUMA node %d, registration in %u ms\n",
+		 name, pd, node, hbm_reg_delay_ms);
 
 	*phy_addr = aligned_addr;
 	*phy_size = aligned_size;

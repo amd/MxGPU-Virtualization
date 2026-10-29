@@ -16,6 +16,7 @@ subdir-ccflags-y += -I$(GIM_COMS_PATH)/inc
 subdir-ccflags-y += -I$(src)/inc
 subdir-ccflags-y += -include $(src)/dkms/config.h
 subdir-ccflags-y += -Werror -Wimplicit-fallthrough=2 -Wno-enum-conversion -Wno-expansion-to-defined
+subdir-ccflags-y += -Wformat -Wformat-security -Werror=format-security
 subdir-ccflags-y += -DAMDGV_UNIRAS_SUPPORT
 subdir-ccflags-y += -DSHIM_LAYER_OSS_RADIX_TREE -DSHIM_LAYER_OSS_KFIFO -DSHIM_LAYER_OSS_MEMPOOL
 

@@ -102,7 +102,7 @@ int amdgv_reset_program_vf_mc_settings(struct amdgv_adapter *adapt)
 
 int amdgv_reset_notify_engine_status(struct amdgv_adapter *adapt, uint32_t idx_vf)
 {
-	if (adapt->reset.funcs->notify_engine_status)
+	if (adapt->reset.funcs && adapt->reset.funcs->notify_engine_status)
 		adapt->reset.funcs->notify_engine_status(adapt, idx_vf);
 
 	return 0;
@@ -171,6 +171,7 @@ int amdgv_reset_gpu_and_reinit(struct amdgv_adapter *adapt)
 
 	for (idx_vf = 0; idx_vf < adapt->max_num_vf; idx_vf++) {
 		adapt->array_vf[idx_vf].gpu_init_data_ready = false;
+		adapt->array_vf[idx_vf].ptl_exposed = false;
 		if (adapt->reset.reset_mode != AMDGV_RESET_PF_FLR)
 			adapt->array_vf[idx_vf].vram_lost = true;
 	}
@@ -217,6 +218,7 @@ int amdgv_reset_vf_flr(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	amdgv_gfx_rlc_safe_mode(adapt, false);
 
 	adapt->array_vf[idx_vf].gpu_init_data_ready = false;
+	adapt->array_vf[idx_vf].ptl_exposed = false;
 	/* perf log is reset to disable state after flr */
 	for (i = 0; i < adapt->gpuiov.num_ctrl_blocks; i++)
 		adapt->sched.perf_log_enabled[i] = false;

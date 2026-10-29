@@ -375,18 +375,6 @@ typedef struct uuid_s {
 
 static void print_uuid(char *str, uuid_t *uuid)
 {
-#ifdef _WIN64
-	sprintf_s(str,
-		  AMDSMI_GPU_UUID_SIZE,
-		  "%08x-%04x-%04x-%02x%02x-%04x%08x",
-		  uuid->time_low,
-		  uuid->time_mid,
-		  ((uuid->version << 12) | uuid->time_high),
-		  ((uuid->variant << 6) | uuid->clk_seq_hi),
-		  uuid->clk_seq_low,
-		  uuid->asic_4,
-		  uuid->asic_0);
-#else
 	snprintf(str,
 		 AMDSMI_GPU_UUID_SIZE,
 		 "%08x-%04x-%04x-%02x%02x-%04x%08x",
@@ -397,7 +385,6 @@ static void print_uuid(char *str, uuid_t *uuid)
 		 uuid->clk_seq_low,
 		 uuid->asic_4,
 		 uuid->asic_0);
-#endif
 }
 
 static void insert_asic_serial(uuid_t *uuid, uint64_t serial)

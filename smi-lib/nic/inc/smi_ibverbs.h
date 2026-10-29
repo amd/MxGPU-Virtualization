@@ -87,7 +87,6 @@ private:
  *
  * The returned values are in bytes (256, 512, 1024, 2048 or 4096), already
  * converted from the underlying ibv_mtu enum.
- *
  * @param rdma_dev RDMA device name (e.g. "ionic_0", "bnxt_re0")
  * @param port_num 1-based port number, as exposed under
  *                 /sys/class/infiniband/<dev>/ports/<port_num>

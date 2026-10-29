@@ -373,7 +373,7 @@ void mmhub_v1_8_dirtybit_control(struct amdgv_adapter *adapt, bool enable)
 		mm_value = RREG32(SOC15_REG_OFFSET(MMHUB, i, regMMEA4_MAM_CTRL));
 		AMDGV_DEBUG("AID(%d) regMMEA4_MAM_CTRL = 0x%x\n", i, mm_value);
 
-		if (adapt->asic_type == CHIP_MI350X) {
+		if (amdgv_asic_is_mi350(adapt->asic_type)) {
 			mm_value = RREG32(SOC15_REG_OFFSET(MMHUB, i, regMMEA5_MAM_CTRL));
 			mm_value = REG_SET_FIELD(mm_value, MMEA5_MAM_CTRL, MAM_DISABLE, !enable);
 			mm_value = REG_SET_FIELD(mm_value, MMEA5_MAM_CTRL, ADRAM_MODE, adapt->dirtybit.mam_adram_mode);

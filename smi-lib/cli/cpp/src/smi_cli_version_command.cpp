@@ -10,7 +10,7 @@
 
 #include "json/json.h"
 
-auto constexpr version_header {"tool_name,tool_version,lib_version,driver_version"};
+auto constexpr version_header {"tool_name,tool_version,lib_version,driver_version,rocm_version"};
 
 int AmdSmiVersionCommand::version_command(uint64_t processor_bdf, Arguments arg, std::string& out)
 {

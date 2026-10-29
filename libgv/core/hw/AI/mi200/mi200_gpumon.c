@@ -549,7 +549,7 @@ static int mi200_get_vram_info(struct amdgv_adapter *adapt,
 				struct amdgv_gpumon_vram_info *vram_info)
 {
 	vram_info->vram_size_mb = mi200_nbio_get_total_vram_size(adapt);
-	vram_info->vram_type = adapt->vram_info.vram_type;
+	vram_info->vram_type = (enum amdgv_gpumon_vram_type)adapt->vram_info.vram_type;
 	/* Program requested to remove vendor info from MI200 amd-smi */
 	vram_info->vram_vendor = AMDGV_GPUMON_VRAM_VENDOR__PLACEHOLDER0;
 	vram_info->vram_bit_width = adapt->vram_info.vram_bit_width;
@@ -568,7 +568,8 @@ static int mi200_get_gfx_config(struct amdgv_adapter *adapt,
 			struct amdgv_gpumon_gfx_config *config)
 {
 	config->ip.hw_id = GC_HWIP;
-	config->ip.full_ver = adapt->ip_versions[GC_HWIP][GET_INST(GC, 0)];
+	/* MI200 has no IP discovery table, so ip_versions[] is never populated */
+	config->ip.full_ver = IP_VERSION(9, 4, 2);
 
 	config->max_shader_engines = adapt->config.gfx.max_shader_engines;
 	config->max_cu_per_sh = adapt->config.gfx.max_cu_per_sh;

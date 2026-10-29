@@ -88,7 +88,7 @@
 #define FEATURE_ID_MGCG                   27  /**< MGCG: IP-block level clock gating for power savings */
 #define FEATURE_ID_PSI7                   28  /**< PSI7 power state: low-power VRM operating mode for improved efficiency */
 #define FEATURE_ID_XGMI_PER_LINK_PWR_DOWN 29  /**< XGMI per-link power down: individually power gates unused XGMI links */
-#define FEATURE_ID_SPARE_30               30  /**< Reserved for future use */
+#define FEATURE_ID_NODE_POWER_MANAGER     30  /**< GPU PMFW managed Node Power Management feature in A+A configs*/
 #define FEATURE_ID_GFX_DC_RTC             31  /**< GFX DC RTC: DC-to-AC voltage adjustment based on workload */
 #define FEATURE_ID_SPARE_32               32  /**< Reserved for future use */
 #define FEATURE_ID_PRC                    33  /**< PRC: tracks time spent in PCC states, aggregates real-time usage data for granular power management decisions */
@@ -123,7 +123,9 @@
 #define FEATURE_ID_OCPWARNRC              62  /**< OCP warning response control: configurable response to overcurrent warnings */
 #define FEATURE_ID_XGMI_FOLDING           63  /**< XGMI link folding: reduces active XGMI lanes for power savings during low traffic */
 #define FEATURE_ID_SPARE_64               64  /**< Reserved for future use */
-#define NUM_FEATURES                      65  /**< Total number of feature slots */
+#define FEATURE_ID_MCA_AGGREGATION        65
+#define FEATURE_ID_MCA_POLLING            66
+#define NUM_FEATURES                      67  /**< Total number of feature slots */
 /** @} */
 
 /** @defgroup MGCGFeatures MGCG Feature IDs
@@ -245,7 +247,7 @@ typedef enum {
   SVI_PLANE_VDDCR_SOCIO_C_TEMP,             /**< SoC I/O-C voltage regulator temperature */
 
   SVI_PLANE_VDDAN_075_TEMP,                 /**< 0.75V analog voltage regulator temperature */
-  SVI_MAX_TEMP_ENTRIES,                     /**< Maximum SVI temperature entries (22) */
+  SVI_MAX_TEMP_ENTRIES,                     /**< Maximum SVI temperature entries (21) */
 } SVI_TEMP_e;
 
 /**
@@ -417,7 +419,7 @@ typedef struct {
 #pragma pack(pop)
 
 /** @brief System metrics table version identifier for multi-node compatibility */
-#define SMU_SYSTEM_METRICS_TABLE_VERSION 0x1
+#define SMU_SYSTEM_METRICS_TABLE_VERSION 0x2
 
 #pragma pack(push, 4)
 /**
@@ -439,19 +441,23 @@ typedef struct {
   uint16_t NodeIdentifier;                                  /**< Unique node identifier pushed by SMC */
   int16_t  SystemTemperatures[SYSTEM_TEMP_MAX_ENTRIES];     /**< System-level temperatures in Celsius (32 entries) */
   int16_t  NodeTemperatures[NODE_TEMP_MAX_TEMP_ENTRIES];    /**< Node-level temperatures in Celsius (12 entries) */
-  int16_t  VrTemperatures[SVI_MAX_TEMP_ENTRIES];            /**< Voltage regulator temperatures in Celsius (22 entries) */
+  int16_t  VrTemperatures[SVI_MAX_TEMP_ENTRIES];            /**< Voltage regulator temperatures in Celsius (21 entries) */
   int16_t  spare[7];                                        /**< Reserved for future use */
 
   /** @name Node Power Management
    * Node power management metrics
    * @{
    */
-  uint32_t NodePowerLimit;                  /**< Current node power limit in Watts */
-  uint32_t NodePower;                       /**< Current node power consumption in Watts */
-  uint32_t GlobalPPTResidencyAcc;           /**< Accumulated global PPT throttling time */
-  /** @} */
+   uint32_t NodePowerLimit;                  /**< Current node power limit in Watts */
+   uint32_t NodePower;                       /**< Current node power consumption in Watts */
+   uint32_t NPMResidencyAcc;                 /**< Accumulated NPM node-power throttling residency */
+   /** @} */
 
-  uint16_t SystemPower[SYSTEM_POWER_MAX_ENTRIES];           /**< UBB power and threshold (4 entries) */
+   uint16_t SystemPower[SYSTEM_POWER_MAX_ENTRIES];           /**< UBB power and threshold (4 entries) */
+
+   // NPM flags
+   uint32_t NpmSupported;                    /**< NPM supported on this GPU socket (0/1) */
+   uint32_t NpmEnabled;                      /**< NPM currently enabled (0/1) */
 } SystemMetricsTable_t;
 #pragma pack(pop)
 
@@ -498,7 +504,7 @@ typedef struct {
 #pragma pack(pop)
 
 /** @brief Static metrics table version identifier */
-#define SMU_STATIC_METRICS_TABLE_VERSION 0x1
+#define SMU_STATIC_METRICS_TABLE_VERSION 0x2
 
 #pragma pack(push, 4)
 /**
@@ -600,6 +606,7 @@ typedef struct {
   uint32_t PPT1Min;                         /**< PPT1 minimum limit */
   uint32_t PPT1Default;                     /**< PPT1 default setting */
   /** @} */
+  uint32_t MaxNodePowerLimit;               /**< Maximum node power limit ceiling in Watts */
 } StaticMetricsTable_t;
 #pragma pack(pop)
 

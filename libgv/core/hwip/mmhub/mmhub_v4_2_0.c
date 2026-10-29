@@ -440,7 +440,7 @@ int mmhub_v4_2_0_sw_init(struct amdgv_adapter *adapt)
 
 	mmhub_v4_2_0_set_funcs(adapt);
 
-	for (i = 0; i < adapt->mcp.num_aid; i++) {
+	for (i = 0; i < adapt->mmhub.num_instances; i++) {
 		hub = &adapt->vmhub[AMDGV_MMHUB0(i)];
 
 		hub->ctx0_ptb_addr_lo32 = SOC15_REG_OFFSET(MMHUB, i,

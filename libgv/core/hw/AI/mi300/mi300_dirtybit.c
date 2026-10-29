@@ -26,6 +26,7 @@ static int mi300_dirtybit_query_dirty_page_size(struct amdgv_adapter *adapt, uin
 
 	switch (adapt->asic_type) {
 	case CHIP_MI350X:
+	case CHIP_MI350P:
 		*dirty_page_size = MI350_4MB_DIRTY_PAGE_SIZE;
 		break;
 	case CHIP_MI308X:
@@ -490,6 +491,7 @@ static int mi300_dirtybit_sw_init(struct amdgv_adapter *adapt)
 		adapt->dirtybit.fb_hash_support = true;
 		break;
 	case CHIP_MI350X:
+	case CHIP_MI350P:
 		adapt->dirtybit.mam_adram_mode = MI350_4MB_MAM_ADRAM_MODE;
 		adapt->dirtybit.fb_hash_support = true;
 		break;

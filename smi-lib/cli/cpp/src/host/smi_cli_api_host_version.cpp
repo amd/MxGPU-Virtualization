@@ -13,11 +13,6 @@
 #include "json/json.h"
 
 #include <sstream>
-#ifdef _WIN64
-	#include <windows.h>
-	#include <sysinfoapi.h>
-#endif
-
 typedef amdsmi_status_t (*AMDSMI_GET_LIB_VERSION)(amdsmi_version_t*);
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 								amdsmi_processor_handle*);
@@ -36,7 +31,6 @@ int AmdSmiApiHost::amdsmi_get_version_command(uint64_t processor_bdf, Arguments 
 	amdsmi_driver_info_t driver_info;
 	amdsmi_processor_handle processor;
 	amdsmi_bdf_t tmp_bdf;
-	amdsmi_driver_model_type_t driver_model;
 	tmp_bdf.as_uint = processor_bdf;
 	amdsmi_status_t ret;
 	nlohmann::ordered_json json_out;
@@ -63,18 +57,22 @@ int AmdSmiApiHost::amdsmi_get_version_command(uint64_t processor_bdf, Arguments 
 
 	std::string amdsmi_lib_ver_str =
 	    string_format("%ld.%ld.%ld", version.major, version.minor, version.release);
+	std::string rocm_version {"N/A"};
 
 	if (arg.output == json) {
 		json_out = {{"tool_name", AMDSMI_TOOL_NAME},
 			    {"tool_version", AMDSMI_TOOL_VERSION_STRING},
 			    {"lib_version", amdsmi_lib_ver_str.c_str()},
-			    {"driver_version", driver_version.c_str()}};
+			    {"driver_version", driver_version.c_str()},
+			    {"rocm_version", rocm_version.c_str()}};
 	} else if (arg.output == csv) {
-		out += string_format("%s,%s,%s,%s", AMDSMI_TOOL_NAME, AMDSMI_TOOL_VERSION_STRING,
-				     amdsmi_lib_ver_str.c_str(), driver_version.c_str());
+		out += string_format("%s,%s,%s,%s,%s", AMDSMI_TOOL_NAME, AMDSMI_TOOL_VERSION_STRING,
+				     amdsmi_lib_ver_str.c_str(), driver_version.c_str(),
+				     rocm_version.c_str());
 	} else {
 		out += string_format(versionTemplate, AMDSMI_TOOL_NAME, AMDSMI_TOOL_VERSION_STRING,
-				     amdsmi_lib_ver_str.c_str(), driver_version.c_str());
+				     amdsmi_lib_ver_str.c_str(), driver_version.c_str(),
+				     rocm_version.c_str());
 	}
 
 	if (arg.output == json) {

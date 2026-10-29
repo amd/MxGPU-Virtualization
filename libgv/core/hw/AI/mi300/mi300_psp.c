@@ -21,6 +21,7 @@
 #include "hw/AI/ucode/mi350/psp_xgmi_tee3_sbin.h"
 
 #define PSP_BL_VERSION_STATUS_SUPPORT 0x00A10109
+#define MI300_PSP_VF_RELAY_WTR_PTR_MAX 0x400
 
 /* these registers are used before ip discovery, so we cannot calculate the offset */
 #define reg_mmMP0_SMN_C2PMSG_33                             0x16061
@@ -412,6 +413,9 @@ enum psp_status mi300_psp_program_guest_mc_settings(struct amdgv_adapter *adapt,
 				       HDP_NONSURFACE_BASE_HI))
 		return PSP_STATUS__ERROR_GENERIC;
 
+	if (mi300_gpuiov_program_vf_hdp_surface(adapt, idx_vf))
+		return PSP_STATUS__ERROR_GENERIC;
+
 	return PSP_STATUS__SUCCESS;
 }
 
@@ -527,6 +531,23 @@ static enum psp_status mi300_psp_clear_vf_fw(struct amdgv_adapter *adapt, uint32
 
 	psp_resp.status = 0xdeadbeef;
 	ret = amdgv_psp_cmd_km_submit(adapt, &psp_cmd, &psp_resp);
+	return ret;
+}
+
+static enum psp_status mi300_psp_vf_cmd_relay(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	enum psp_status ret = PSP_STATUS__SUCCESS;
+	struct psp_cmd_km *vf_relay_cmd = adapt->psp.psp_cmd_km_mem;
+	struct psp_gfx_resp psp_resp = { 0 };
+
+	vf_relay_cmd->cmd_id = PSP_CMD_KM_TYPE__VF_RELAY;
+	vf_relay_cmd->cmd.vf_relay.target_vf = idx_vf;
+	vf_relay_cmd->cmd.vf_relay.vf_relay_wtr_ptr = adapt->psp.vf_relay_wtr_ptr[idx_vf];
+
+	ret = amdgv_psp_cmd_km_submit(adapt, vf_relay_cmd, &psp_resp);
+
+	oss_memset(vf_relay_cmd, 0, sizeof(struct psp_cmd_km));
+
 	return ret;
 }
 
@@ -1369,7 +1390,7 @@ static bool mi300_vf_firmware_support_migration(struct amdgv_adapter *adapt, uin
 	if (!mi300_is_two_level_jump_table(mec1))
 		return false;
 
-	if (adapt->asic_type == CHIP_MI350X &&
+	if (amdgv_asic_is_mi350(adapt->asic_type) &&
 	    !mi350_cp_min_version_live_migration(mec1))
 		return false;
 
@@ -1501,6 +1522,8 @@ static int mi300_psp_sw_init(struct amdgv_adapter *adapt)
 	adapt->psp.get_mb_int_status = mi300_psp_get_mb_int_status;
 	adapt->psp.vfgate_support = mi300_psp_vfgate_support;
 	adapt->psp.clear_vf_fw = mi300_psp_clear_vf_fw;
+	adapt->psp.vf_relay = mi300_psp_vf_cmd_relay;
+	adapt->psp.vf_relay_wtr_ptr_max = MI300_PSP_VF_RELAY_WTR_PTR_MAX;
 	adapt->psp.psp_program_guest_mc_settings = mi300_psp_program_guest_mc_settings;
 	adapt->psp.need_switch_to_pf = mi300_psp_need_switch_to_pf;
 	/* false on PSP TEE 3.0 */
@@ -1518,7 +1541,7 @@ static int mi300_psp_sw_init(struct amdgv_adapter *adapt)
 	adapt->psp.ras_context.set_init_flag = true;
 	adapt->psp.skip_ta_fw_version = true;
 
-	if (adapt->asic_type == CHIP_MI350X && adapt->dev_id != 0x75A8)
+	if (adapt->asic_type == CHIP_MI350X)
 		adapt->psp.get_xgmi_fw_info = get_xgmi_fw_info;
 
 	if (psp_ret == PSP_STATUS__SUCCESS)
@@ -1702,7 +1725,8 @@ static int mi300_psp_hw_init(struct amdgv_adapter *adapt)
 
 	adapt->psp.idx = 0;
 
-	if ((adapt->asic_type == CHIP_MI300X) || (adapt->asic_type == CHIP_MI308X) || (adapt->asic_type == CHIP_MI350X)) {
+	if ((adapt->asic_type == CHIP_MI300X) || (adapt->asic_type == CHIP_MI308X) ||
+	    amdgv_asic_is_mi350(adapt->asic_type)) {
 		r = mi300_psp_load_psp_fw(adapt);
 		if (r)
 			goto init_fail;
@@ -1809,6 +1833,8 @@ static int mi300_psp_hw_init(struct amdgv_adapter *adapt)
 		if (ctrl & PCI_ATS_CTRL_ENABLE)
 			mi300_psp_program_register(adapt, 0, 0, 0, VM_IOMMU_CONTROL_WA);
 	}
+
+	amdgv_psp_fw_feature_init(adapt);
 
 init_fail:
 	if (r)
@@ -1929,7 +1955,7 @@ enum psp_status mi300_psp_send_perf_hw_cmd(struct amdgv_adapter *adapt,
 		}
 	}
 
-	psp_cmd.cmd_id = GFX_CMD_ID_PERF_HW;
+	psp_cmd.cmd_id = (enum psp_cmd_km_type)GFX_CMD_ID_PERF_HW;
 	psp_cmd.cmd.perf_hw.req = req->req;
 	psp_cmd.cmd.perf_hw.ptl_state = req->ptl_state;
 	psp_cmd.cmd.perf_hw.pref_format1 = req->pref_format1;

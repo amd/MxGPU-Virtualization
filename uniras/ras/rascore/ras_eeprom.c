@@ -399,7 +399,7 @@ static int ras_eeprom_correct_header_tag(
 	int res;
 	u8 csum;
 
-	csum = -hdr->checksum;
+	csum = (u8)(0U - hdr->checksum);
 
 	hh = (void *) &hdr->header;
 	csum -= (hh[0] + hh[1] + hh[2] + hh[3]);

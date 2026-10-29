@@ -463,12 +463,13 @@ static int gim_get_metric_table(struct smi_metrics_table *metrics_table,
 		    smi_map_metric_res_subgroup(gpumon_metrics_table->metric[i].res_subgroup);
 		metrics->metric[i].res_instance = gpumon_metrics_table->metric[i].res_instance;
 
-		// PMFW reports senergy in 15.625mJ units per value. We need to convert to J
-		if ((metrics->metric[i].metric_union.metric.name ==
-		     SMI_METRIC_NAME_ENERGY_SOCKET) &&
-		    (metrics->metric[i].metric_union.code & METRIC_EXT_FLAG(DATA_FILTER_ACC))) {
+		// Some ASICs report energy in 15.625mJ units per value. We need to convert
+		// to J. ASICs that already report Joules are left untouched.
+		if (metrics->metric[i].metric_union.metric.unit ==
+		    SMI_METRIC_UNIT__15_625_MILLIJOULE) {
 			metrics->metric[i].val =
 			    (gpumon_metrics_table->metric[i].val * 15625) / 1000000;
+			metrics->metric[i].metric_union.metric.unit = SMI_METRIC_UNIT_JOULE;
 		}
 	}
 
@@ -671,6 +672,12 @@ static inline int gim_get_cper_data(struct smi_cper_config *cper_config,
 	return SMI_STATUS_SUCCESS;
 }
 
+static int
+gim_get_dfc_table(struct smi_dfc_fw_info *dfc_info, uint16_t size, struct dfc_fw *dfc_fw_data)
+{
+	return SMI_STATUS_NOT_SUPPORTED;
+}
+
 struct smi_shim_interface gim_smi_interface = {
     .lock_device_list	= gim_lock_device_list,
     .get_device_list	= gim_get_device_list,
@@ -700,6 +707,7 @@ struct smi_shim_interface gim_smi_interface = {
     .get_partition	  = gim_get_partition,
     .get_partition_global = gim_get_partition_global,
     .get_cper_data	  = gim_get_cper_data,
+    .get_dfc_table	  = gim_get_dfc_table,
 };
 
 /* Prototypes for device functions */

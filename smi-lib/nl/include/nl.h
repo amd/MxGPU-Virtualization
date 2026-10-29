@@ -37,16 +37,16 @@ struct nl_conn;
  *
  * @return 0 on success, positive @c errno value on failure.
  */
-int nl_open(struct nl_conn **conn, const char *family_name);
+int smi_nl_open(struct nl_conn **conn, const char *family_name);
 
 /**
  * @brief Close a generic netlink connection.
  *
  * Closes the underlying socket and frees the connection handle.
  *
- * @param[in] conn  Connection handle returned by ::nl_open, or @c NULL.
+ * @param[in] conn  Connection handle returned by ::smi_nl_open, or @c NULL.
  */
-void nl_close(struct nl_conn *conn);
+void smi_nl_close(struct nl_conn *conn);
 
 /**
  * @brief Return the generic netlink family ID for a connection.
@@ -55,7 +55,7 @@ void nl_close(struct nl_conn *conn);
  *
  * @return The resolved family ID, or 0 if @p conn is @c NULL.
  */
-uint16_t nl_family_id(const struct nl_conn *conn);
+uint16_t smi_nl_family_id(const struct nl_conn *conn);
 
 /**
  * @brief Initialize a generic netlink request message.
@@ -74,7 +74,7 @@ uint16_t nl_family_id(const struct nl_conn *conn);
  * @return Pointer to the prepared nlmsghdr inside @p buf.
  */
 struct nlmsghdr *
-nl_req_init(struct nl_conn *conn, char *buf, size_t buflen, uint8_t cmd, uint8_t version);
+smi_nl_req_init(struct nl_conn *conn, char *buf, size_t buflen, uint8_t cmd, uint8_t version);
 
 /**
  * @brief Send a netlink request and process responses.
@@ -91,18 +91,18 @@ nl_req_init(struct nl_conn *conn, char *buf, size_t buflen, uint8_t cmd, uint8_t
  *
  * @return 0 on success, positive @c errno value on failure.
  */
-int nl_req_run(struct nl_conn *conn,
-	       char *buf,
-	       size_t buflen,
-	       struct nlmsghdr *nlh,
-	       mnl_cb_t data_cb,
-	       void *data);
+int smi_nl_req_run(struct nl_conn *conn,
+		   char *buf,
+		   size_t buflen,
+		   struct nlmsghdr *nlh,
+		   mnl_cb_t data_cb,
+		   void *data);
 
 /**
  * @brief Send a netlink request and process responses with a custom error
  *        callback.
  *
- * Behaves like ::nl_req_run but additionally invokes @p err_cb for
+ * Behaves like ::smi_nl_req_run but additionally invokes @p err_cb for
  * NLMSG_ERROR responses instead of the default libmnl error handler.
  *
  * @param[in]     conn     Connection handle.
@@ -115,13 +115,13 @@ int nl_req_run(struct nl_conn *conn,
  *
  * @return 0 on success, positive @c errno value on failure.
  */
-int nl_req_run2(struct nl_conn *conn,
-		char *buf,
-		size_t buflen,
-		struct nlmsghdr *nlh,
-		mnl_cb_t data_cb,
-		void *data,
-		mnl_cb_t err_cb);
+int smi_nl_req_run2(struct nl_conn *conn,
+		    char *buf,
+		    size_t buflen,
+		    struct nlmsghdr *nlh,
+		    mnl_cb_t data_cb,
+		    void *data,
+		    mnl_cb_t err_cb);
 
 #ifdef __cplusplus
 }

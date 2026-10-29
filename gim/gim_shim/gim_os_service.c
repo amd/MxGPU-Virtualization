@@ -70,7 +70,6 @@
 #include "gim.h"
 #include "gim_iova_sys_mem.h"
 
-#include "gim_hbm_dax.h"
 #include "gim_hbm_drv_mgmt.h"
 
 extern struct gim_error_ring_buffer *gim_error_rb;
@@ -281,6 +280,17 @@ static int gim_map_vf_dev_res(oss_dev_t dev, struct oss_dev_res *res)
 failed:
 	iounmap(res->mmio);
 	return -1;
+}
+
+/* VF FB BAR length in bytes. */
+static uint64_t gim_get_vf_fb_bar_size(oss_dev_t dev)
+{
+	struct pci_dev *pdev = (struct pci_dev *)dev;
+
+	if (!pdev)
+		return 0;
+
+	return pci_resource_len(pdev, 0);
 }
 
 static void gim_unmap_vf_dev_res(oss_dev_t dev, struct oss_dev_res *res)
@@ -1493,7 +1503,7 @@ static void *gim_create_thread(oss_callback_t threadfn, void *context,
 {
 	struct task_struct *k;
 
-	k = kthread_run((void *)threadfn, context, name);
+	k = kthread_run((void *)threadfn, context, "%s", name);
 	if (IS_ERR(k))
 		return NULL;
 
@@ -1652,12 +1662,6 @@ static void gim_msleep(uint32_t msecs)
 static void gim_yield(void)
 {
 	schedule();
-}
-
-static void gim_memory_fence(void)
-{
-	/* dummy functions */
-	return;
 }
 
 static uint64_t gim_get_time_stamp(void)
@@ -1859,21 +1863,12 @@ static int gim_store_rlcv_timestamp(const char *buf, uint32_t size, uint32_t bdf
 	return 0;
 }
 
-static void *gim_oss_hbm_dax_init(const char *dev_name,
-				uint64_t phy_addr, uint64_t phy_size)
-{
-	return gim_hbm_dax_init(dev_name, phy_addr, phy_size);
-}
-
-static void gim_oss_hbm_dax_fini(void *hbm_dax)
-{
-	gim_hbm_dax_fini(hbm_dax);
-}
-
-static void *gim_oss_hbm_drv_mgmt_init(const char *hbm_name, int numa_id,
+static void *gim_oss_hbm_drv_mgmt_init(const char *hbm_name, uint32_t pf_bdf,
+				uint32_t idx_vf, int *numa_id,
 				uint64_t *phy_addr, uint64_t *phy_size)
 {
-	return gim_hbm_drv_mgmt_init(hbm_name, numa_id, phy_addr, phy_size);
+	return gim_hbm_drv_mgmt_init(hbm_name, pf_bdf, idx_vf, numa_id,
+				     phy_addr, phy_size);
 }
 
 static void gim_oss_hbm_drv_mgmt_fini(void *hbm_drv_mgmt)
@@ -2050,6 +2045,7 @@ static int gim_get_firmware_name(enum amdgv_firmware_id fw_id,
 		chip_name = "mi300x";
 		break;
 	case CHIP_MI350X:
+	case CHIP_MI350P:
 		chip_name = "mi350";
 		break;
 	default:
@@ -2104,6 +2100,7 @@ static int gim_get_discovery_binary(oss_dev_t dev, enum amd_asic_type asic_type,
 
 	switch (asic_type) {
 	case CHIP_MI350X:
+	case CHIP_MI350P:
 		chip_name = "mi350";
 		break;
 	default:
@@ -2944,6 +2941,7 @@ struct oss_interface gim_oss_interfaces = {
 	.put_vf_dev = gim_put_vf_dev,
 	.map_vf_dev_res = gim_map_vf_dev_res,
 	.unmap_vf_dev_res = gim_unmap_vf_dev_res,
+	.get_vf_fb_bar_size = gim_get_vf_fb_bar_size,
 	.mm_readb = gim_mm_readb,
 	.mm_readw = gim_mm_readw,
 	.mm_readl = gim_mm_readl,
@@ -3057,7 +3055,6 @@ struct oss_interface gim_oss_interfaces = {
 	.msleep = gim_msleep,
 	.usleep = gim_usleep,
 	.yield = gim_yield,
-	.memory_fence = gim_memory_fence,
 	.get_time_stamp = gim_get_time_stamp,
 	.get_utc_time_stamp = gim_get_utc_time_stamp,
 	.get_utc_time_stamp_str = gim_get_utc_time_stamp_str,
@@ -3085,8 +3082,6 @@ struct oss_interface gim_oss_interfaces = {
 	.store_record = gim_store_record,
 #endif
 	.store_rlcv_timestamp = gim_store_rlcv_timestamp,
-	.hbm_dax_init = gim_oss_hbm_dax_init,
-	.hbm_dax_fini = gim_oss_hbm_dax_fini,
 	.hbm_drv_mgmt_init = gim_oss_hbm_drv_mgmt_init,
 	.hbm_drv_mgmt_fini = gim_oss_hbm_drv_mgmt_fini,
 #ifndef EXCLUDE_DCORE_DEBUG

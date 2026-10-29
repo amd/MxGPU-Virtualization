@@ -23,7 +23,7 @@
 // - Adding new commands
 // - Improvements to existing commands
 // - Adding new options to existing commands without changing the basic input/output format
-#define AMDSMI_TOOL_VERSION_MINOR 3
+#define AMDSMI_TOOL_VERSION_MINOR 7
 // Release version should be incremented for minor issue fixes and maintenance updates
 // that don't add features or change command behavior
 #define AMDSMI_TOOL_VERSION_RELEASE 2
@@ -203,8 +203,8 @@ std::string get_string_from_enum_tdi_state(int tdi_state);
 /**
  * @brief Converts enum name to string
  *
- * @param cc_mode amdsmi_cc_mode_t structure
- * @return std::string of amdsmi_cc_mode_t
+ * @param cc_mode amdsmi_gpu_cc_mode_t structure
+ * @return std::string of amdsmi_gpu_cc_mode_t
  */
 std::string get_string_from_enum_cc_mode(int cc_mode);
 

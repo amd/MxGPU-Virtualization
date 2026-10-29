@@ -90,6 +90,17 @@ void set_nic_api_status(smi_nic_status_t status);
  */
 void set_nic_link_type(smi_nic_link_type_t link_type);
 
+/**
+ * @brief Indices last passed to the fake smi_get_nic_rdma_port_statistics_count() or
+ * smi_get_nic_rdma_port_statistics_list().
+ *
+ * The fake smi_get_nic_rdma_port_location() resolves rdma_port_index N to
+ * port_index N, ib_index N + 1 and ib_port_index N + 2.
+ */
+void get_last_nic_rdma_port_statistics_indices(uint32_t *port_index,
+					       uint32_t *ib_index,
+					       uint32_t *ib_port_index);
+
 #ifdef __cplusplus
 }
 #endif

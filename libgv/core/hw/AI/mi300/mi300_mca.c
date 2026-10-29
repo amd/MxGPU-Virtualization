@@ -983,6 +983,9 @@ void mi300_mca_init(struct amdgv_adapter *adapt)
 void mi300_mca_fini(struct amdgv_adapter *adapt)
 {
 	int i = 0;
+	uint32_t id = 0;
+	struct mca_ecc *mca_ecc;
+	struct mca_err_addr *mca_err_addr, *tmp;
 
 	adapt->mca.enabled = false;
 
@@ -990,6 +993,15 @@ void mi300_mca_fini(struct amdgv_adapter *adapt)
 
 	for (i = 0; i < AMDGV_RAS_BLOCK__LAST; i++) {
 		if (adapt->mca.ecc_block[i].mca_ecc) {
+			/* Nodes may still be queued here; nothing else drains them on unload. */
+			for (id = 0; id < adapt->mca.max_aid_xcd_num; id++) {
+				mca_ecc = &adapt->mca.ecc_block[i].mca_ecc[id];
+				amdgv_list_for_each_entry_safe(mca_err_addr, tmp,
+					&mca_ecc->err_addr_list, struct mca_err_addr, node) {
+					mi300_mca_umc_del_err_addr(adapt, mca_ecc, mca_err_addr);
+				}
+			}
+
 			oss_free(adapt->mca.ecc_block[i].mca_ecc);
 			adapt->mca.ecc_block[i].mca_ecc = NULL;
 		}

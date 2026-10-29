@@ -37,6 +37,24 @@
 //HDP_NONSURFACE_BASE_HI
 #define HDP_NONSURFACE_BASE_HI__NONSURF_BASE_47_40__SHIFT                                                     0x0
 #define HDP_NONSURFACE_BASE_HI__NONSURF_BASE_47_40_MASK                                                       0x000000FFL
+//HDP_SURFACE0_LOWER_BOUND
+#define HDP_SURFACE0_LOWER_BOUND__SURF_LOWER__SHIFT                                                           0x0
+#define HDP_SURFACE0_LOWER_BOUND__SURF_LOWER_MASK                                                             0xFFFFFFFFL
+//HDP_SURFACE0_UPPER_BOUND
+#define HDP_SURFACE0_UPPER_BOUND__SURF_UPPER__SHIFT                                                           0x0
+#define HDP_SURFACE0_UPPER_BOUND__SURF_UPPER_MASK                                                             0xFFFFFFFFL
+//HDP_SURFACE0_BASE
+#define HDP_SURFACE0_BASE__SURF_BASE_39_8__SHIFT                                                              0x0
+#define HDP_SURFACE0_BASE__SURF_BASE_39_8_MASK                                                                0xFFFFFFFFL
+//HDP_SURFACE0_BASE_HI
+#define HDP_SURFACE0_BASE_HI__SURF_BASE_47_40__SHIFT                                                          0x0
+#define HDP_SURFACE0_BASE_HI__SURF_BASE_47_40_MASK                                                            0x000000FFL
+//HDP_SURFACE0_LOWER_BOUND_HI
+#define HDP_SURFACE0_LOWER_BOUND_HI__SURF_LOWER_43_40__SHIFT                                                  0x0
+#define HDP_SURFACE0_LOWER_BOUND_HI__SURF_LOWER_43_40_MASK                                                    0x0000000FL
+//HDP_SURFACE0_UPPER_BOUND_HI
+#define HDP_SURFACE0_UPPER_BOUND_HI__SURF_UPPER_43_40__SHIFT                                                  0x0
+#define HDP_SURFACE0_UPPER_BOUND_HI__SURF_UPPER_43_40_MASK                                                    0x0000000FL
 //HDP_SURFACE_WRITE_FLAGS
 #define HDP_SURFACE_WRITE_FLAGS__SURF0_WRITE_FLAG__SHIFT                                                      0x0
 #define HDP_SURFACE_WRITE_FLAGS__SURF1_WRITE_FLAG__SHIFT                                                      0x1

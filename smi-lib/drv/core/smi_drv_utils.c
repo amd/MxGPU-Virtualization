@@ -754,6 +754,9 @@ enum smi_metric_category smi_map_metric_category(enum amdgv_gpumon_metric_ext_ca
 	case AMDGV_GPUMON_METRIC_EXT_CATEGORY__STATIC_THROTTLE:
 		metric_category = SMI_METRIC_CATEGORY_STATIC_THROTTLE;
 		break;
+	case AMDGV_GPUMON_METRIC_EXT_CATEGORY__STATIC_POWER:
+		metric_category = SMI_METRIC_CATEGORY_STATIC_POWER;
+		break;
 	default:
 		metric_category = SMI_METRIC_CATEGORY_UNKNOWN;
 		break;
@@ -917,7 +920,7 @@ enum smi_metric_name smi_map_metric_name(enum amdgv_gpumon_metric_ext_name name)
 	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_GFX_LOCKED:
 		metric_name = SMI_METRIC_NAME_CLK_GFX_LOCKED;
 		break;
-	/*case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_GFX_DS_DISABLED:
+	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_GFX_DS_DISABLED:
 		metric_name = SMI_METRIC_NAME_CLK_GFX_DS_DISABLED;
 		break;
 	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_MEM_DS_DISABLED:
@@ -931,7 +934,7 @@ enum smi_metric_name smi_map_metric_name(enum amdgv_gpumon_metric_ext_name name)
 		break;
 	case AMDGV_GPUMON_METRIC_EXT_NAME__CLK_DCLK_DS_DISABLED:
 		metric_name = SMI_METRIC_NAME_CLK_DCLK_DS_DISABLED;
-		break;*/
+		break;
 	case AMDGV_GPUMON_METRIC_EXT_NAME__PCIE_LINK_SPEED:
 		metric_name = SMI_METRIC_NAME_PCIE_LINK_SPEED;
 		break;
@@ -1318,7 +1321,7 @@ enum smi_metric_res_group smi_map_metric_res_group(enum amdgv_gpumon_metric_ext_
 enum smi_metric_res_subgroup
 smi_map_metric_res_subgroup(enum amdgv_gpumon_metric_ext_res_subgroup res_subgroup)
 {
-	enum smi_metric_res_group metric_res_subgroup = SMI_METRIC_RES_SUBGROUP_UNKNOWN;
+	enum smi_metric_res_subgroup metric_res_subgroup = SMI_METRIC_RES_SUBGROUP_UNKNOWN;
 
 	switch (res_subgroup) {
 	case AMDGV_GPUMON_METRIC_EXT_RES_SUBGROUP__NA:
@@ -1461,32 +1464,32 @@ int smi_map_tdi_state(enum amdgv_tdi_state state)
 	return state_max;
 }
 
-int smi_map_cc_mode(enum amdgv_cc_mode mode)
+int smi_map_gpu_cc_mode(enum amdgv_cc_mode mode)
 {
 	int mode_max = INT_MAX;
 	switch (mode) {
 	case AMDGV_CC_MODE_OFF:
-		return SMI_CC_MODE_OFF;
+		return SMI_GPU_CC_MODE_OFF;
 	case AMDGV_CC_MODE_ON:
-		return SMI_CC_MODE_ON;
+		return SMI_GPU_CC_MODE_ON;
 	case AMDGV_CC_MODE_DEV:
-		return SMI_CC_MODE_DEV;
+		return SMI_GPU_CC_MODE_DEV;
 	case AMDGV_CC_MODE_MAX:
 		return mode_max;
 	}
 	return mode_max;
 }
 
-int smi_map_cc_mode_reverse(enum smi_cc_mode_t mode)
+int smi_map_gpu_cc_mode_reverse(enum smi_gpu_cc_mode_t mode)
 {
 
 	int mode_max = INT_MAX;
 	switch (mode) {
-	case SMI_CC_MODE_OFF:
+	case SMI_GPU_CC_MODE_OFF:
 		return AMDGV_CC_MODE_OFF;
-	case SMI_CC_MODE_ON:
+	case SMI_GPU_CC_MODE_ON:
 		return AMDGV_CC_MODE_ON;
-	case SMI_CC_MODE_DEV:
+	case SMI_GPU_CC_MODE_DEV:
 		return AMDGV_CC_MODE_DEV;
 	}
 	return mode_max;

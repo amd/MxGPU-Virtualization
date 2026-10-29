@@ -822,7 +822,8 @@ int amdgv_ras_mgr_handle_consumer_interrupt(struct amdgv_adapter *adapt, void *d
 
 int amdgv_ras_mgr_copy_bp_records_to_vf(struct amdgv_adapter *adapt,
 				uint32_t idx_vf, uint32_t allowed_size,
-				uint32_t *write_size, uint32_t *more)
+				uint32_t *write_size, uint32_t *more,
+				uint32_t *checksum)
 {
 	struct amdgv_ras_mgr *ras_mgr = amdgv_ras_mgr_get_context(adapt);
 	struct eeprom_umc_record record;
@@ -832,6 +833,8 @@ int amdgv_ras_mgr_copy_bp_records_to_vf(struct amdgv_adapter *adapt,
 	int count, i;
 
 	*more = 0;
+	if (checksum)
+		*checksum = 0;
 
 	count = ras_umc_get_badpage_count(ras_mgr->ras_core);
 	for (i = 0; i < count; i++) {
@@ -843,13 +846,13 @@ int amdgv_ras_mgr_copy_bp_records_to_vf(struct amdgv_adapter *adapt,
 		if (amdgv_umc_check_bp_in_critical_region(adapt, addr, idx_vf, true)) {
 			amdgv_umc_log_bp_errors(adapt, i);
 		} else {
-			if (!amdgv_vfmgr_copy_bp_entry_to_vf_fb(adapt, idx_vf,
-			    record.cur_nps_retired_row_pfn, slot_idx, NULL)) {
-				if (slot_idx < max_slot_idx)
-					slot_idx++;
-				else
-					*more = true;
+			if (slot_idx >= max_slot_idx) {
+				*more = true;
+				break;
 			}
+			if (!amdgv_vfmgr_copy_bp_entry_to_vf_fb(adapt, idx_vf,
+			    record.cur_nps_retired_row_pfn, slot_idx, checksum))
+				slot_idx++;
 		}
 	}
 

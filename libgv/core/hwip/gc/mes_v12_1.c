@@ -53,6 +53,9 @@ static const char *mes_v12_1_misc_opcodes[] = {
 	"SET_SHADER_DEBUGGER",
 	"NOTIFY_WORK_ON_UNMAPPED_QUEUE",
 	"NOTIFY_TO_UNMAP_PROCESSES",
+	"QUERY_HUNG_ENGINE_ID",
+	"CHANGE_CONFIG",
+	"LAUNCH_CLEANER_SHADER",
 };
 
 static const uint32_t this_block = AMDGV_GFX_BLOCK;
@@ -195,9 +198,98 @@ static int mes_v12_1_submit_pkt_and_poll_completion(struct amdgv_mes *mes,
 	return 0;
 }
 
+static int mes_v12_1_cleaner_fence_map(struct amdgv_mes *mes, uint32_t xcc_id)
+{
+	struct amdgv_adapter *adapt = mes->adapt;
+	uint32_t offs;
+
+	if (xcc_id >= adapt->mcp.gfx.num_xcc ||
+	    xcc_id >= AMDGV_MAX_GC_INSTANCES)
+		return AMDGV_FAILURE;
+
+	offs = mes->cleaner_shader_fence_offs[xcc_id];
+	if (offs == AMDGV_MES_WB_OFFS_INVALID || !adapt->wb.wb) {
+		AMDGV_ERROR("cleaner shader: fence not mapped xcc %u offs 0x%x wb %p\n",
+			    xcc_id, offs, adapt->wb.wb);
+		return AMDGV_FAILURE;
+	}
+
+	mes->cleaner_shader_fence_ptr[xcc_id] =
+		(volatile uint64_t *)&adapt->wb.wb[offs];
+	mes->cleaner_shader_fence_gpu_addr[xcc_id] =
+		adapt->wb.gpu_addr + ((uint64_t)offs * 4);
+
+	return 0;
+}
+
+static int mes_v12_1_sched_ctx_map(struct amdgv_mes *mes, uint32_t inst)
+{
+	struct amdgv_adapter *adapt = mes->adapt;
+	uint32_t sch_offs;
+	uint32_t query_offs;
+
+	if (inst >= AMDGV_MAX_MES_INST_PIPES)
+		return AMDGV_FAILURE;
+
+	sch_offs = mes->sch_ctx_offs[inst];
+	query_offs = mes->query_status_fence_offs[inst];
+	if (sch_offs == AMDGV_MES_WB_OFFS_INVALID ||
+	    query_offs == AMDGV_MES_WB_OFFS_INVALID ||
+	    !adapt->wb.wb) {
+		AMDGV_ERROR("MES sched ctx not mapped inst %u sch 0x%x query 0x%x wb %p\n",
+			    inst, sch_offs, query_offs, adapt->wb.wb);
+		return AMDGV_FAILURE;
+	}
+
+	mes->sch_ctx_ptr[inst] = (uint64_t *)&adapt->wb.wb[sch_offs];
+	mes->sch_ctx_gpu_addr[inst] =
+		adapt->wb.gpu_addr + ((uint64_t)sch_offs * 4);
+	mes->query_status_fence_ptr[inst] =
+		(uint64_t *)&adapt->wb.wb[query_offs];
+	mes->query_status_fence_gpu_addr[inst] =
+		adapt->wb.gpu_addr + ((uint64_t)query_offs * 4);
+
+	return 0;
+}
+
 static int mes_v12_1_misc_op(struct amdgv_mes *mes, struct mes_misc_op_input *input)
 {
-	return 0;
+	struct amdgv_adapter *adapt = mes->adapt;
+	union MESAPI__MISC pkt;
+	uint32_t xcc_id;
+	int r;
+
+	if (!input || input->op != MES_MISC_OP_LAUNCH_CLEANER_SHADER)
+		return AMDGV_FAILURE;
+
+	xcc_id = input->xcc_id;
+	if (xcc_id >= adapt->mcp.gfx.num_xcc ||
+	    xcc_id >= AMDGV_MAX_GC_INSTANCES ||
+	    NULL == mes->cleaner_shader_fence_ptr[xcc_id]) {
+		AMDGV_INFO("MES LAUNCH_CLEANER_SHADER: fence not ready xcc %u num_xcc %u\n",
+			   xcc_id, adapt->mcp.gfx.num_xcc);
+		return AMDGV_FAILURE;
+	}
+
+	*mes->cleaner_shader_fence_ptr[xcc_id] = 0;
+
+	oss_memset(&pkt, 0, sizeof(pkt));
+	pkt.header.type = MES_API_TYPE_SCHEDULER;
+	pkt.header.opcode = MES_SCH_API_MISC;
+	pkt.header.dwsize = API_FRAME_SIZE_IN_DWORDS;
+	pkt.opcode = MESAPI_MISC__LAUNCH_CLEANER_SHADER;
+
+	AMDGV_INFO("MES LAUNCH_CLEANER_SHADER: xcc %u fence_mc 0x%llx\n",
+		   xcc_id, mes->cleaner_shader_fence_gpu_addr[xcc_id]);
+
+	r = mes_v12_1_submit_pkt_and_poll_completion(mes, xcc_id,
+			AMDGV_MES_KIQ_PIPE, &pkt, sizeof(pkt),
+			offsetof(union MESAPI__MISC, api_status));
+
+	AMDGV_INFO("MES LAUNCH_CLEANER_SHADER: xcc %u status %d cleaner_fence 0x%llx\n",
+		   xcc_id, r, *mes->cleaner_shader_fence_ptr[xcc_id]);
+
+	return r;
 }
 
 static int mes_v12_1_set_hw_resources(struct amdgv_mes *mes,
@@ -207,6 +299,9 @@ static int mes_v12_1_set_hw_resources(struct amdgv_mes *mes,
 	struct amdgv_adapter *adapt = mes->adapt;
 	int i;
 	int inst = AMDGV_MES_INST(xcc_id, pipe);
+
+	if (mes_v12_1_sched_ctx_map(mes, inst))
+		return AMDGV_FAILURE;
 
 	oss_memset(&pkt, 0, sizeof(pkt));
 
@@ -256,13 +351,25 @@ static int mes_v12_1_set_hw_resources(struct amdgv_mes *mes,
 static int mes_v12_1_set_hw_resources_1(struct amdgv_mes *mes,
 	int pipe, int xcc_id)
 {
+	struct amdgv_adapter *adapt = mes->adapt;
 	union MESAPI_SET_HW_RESOURCES_1 pkt;
+
+	if (xcc_id >= adapt->mcp.gfx.num_xcc ||
+	    xcc_id >= AMDGV_MAX_GC_INSTANCES ||
+	    mes_v12_1_cleaner_fence_map(mes, xcc_id)) {
+		AMDGV_INFO("MES SET_HW_RSRC_1: missing cleaner fence xcc %d num_xcc %u\n",
+			   xcc_id, adapt->mcp.gfx.num_xcc);
+		return AMDGV_FAILURE;
+	}
+
 	oss_memset(&pkt, 0, sizeof(pkt));
 
 	pkt.header.type = MES_API_TYPE_SCHEDULER;
 	pkt.header.opcode = MES_SCH_API_SET_HW_RSRC_1;
 	pkt.header.dwsize = API_FRAME_SIZE_IN_DWORDS;
 	pkt.mes_kiq_unmap_timeout = 100;
+	pkt.cleaner_shader_fence_mc_addr =
+		mes->cleaner_shader_fence_gpu_addr[xcc_id];
 
 	return mes_v12_1_submit_pkt_and_poll_completion(mes, xcc_id, pipe, &pkt,
 				sizeof(pkt), offsetof(union MESAPI_SET_HW_RESOURCES_1, api_status));
@@ -857,37 +964,53 @@ static int mes_v12_1_kiq_hw_init(struct amdgv_adapter *adapt, uint32_t xcc_id)
 	ring = &adapt->mes.ring[inst];
 
 	r = amdgv_ring_init_set(adapt, ring);
-	if (r)
+	if (r) {
+		AMDGV_ERROR("MES KIQ hw init failed at ring init on xcc %d\n", xcc_id);
 		return r;
+	}
 
 	r = mes_v12_1_kiq_setting(ring, xcc_id);
-	if (r)
+	if (r) {
+		AMDGV_ERROR("MES KIQ hw init failed at KIQ setting on xcc %d\n", xcc_id);
 		return r;
+	}
 
 	r = mes_v12_1_enable(adapt, true, xcc_id);
-	if (r)
+	if (r) {
+		AMDGV_ERROR("MES KIQ hw init failed at MES enable on xcc %d\n", xcc_id);
 		goto failure;
+	}
 
 	r = mes_v12_1_queue_init(adapt, AMDGV_MES_KIQ_PIPE, xcc_id);
-	if (r)
+	if (r) {
+		AMDGV_ERROR("MES KIQ hw init failed at queue init on xcc %d\n", xcc_id);
 		goto failure;
+	}
 
 	r = mes_v12_1_mes_pipes_status_check(adapt, xcc_id);
-	if (r)
+	if (r) {
+		AMDGV_ERROR("MES KIQ hw init failed at pipe status check on xcc %d\n", xcc_id);
 		goto failure;
+	}
 
 	r = mes_v12_1_set_hw_resources(&adapt->mes, AMDGV_MES_KIQ_PIPE, xcc_id);
-	if (r)
+	if (r) {
+		AMDGV_ERROR("MES KIQ hw init failed at set hw resources on xcc %d\n", xcc_id);
 		goto failure;
+	}
 
 	r = mes_v12_1_set_hw_resources_1(&adapt->mes, AMDGV_MES_KIQ_PIPE, xcc_id);
-	if (r)
+	if (r) {
+		AMDGV_ERROR("MES KIQ hw init failed at set hw resources 1 on xcc %d\n", xcc_id);
 		goto failure;
+	}
 
 	if (adapt->mes.enable_legacy_queue_map) {
 		r = mes_v12_1_xcc_hw_init(adapt, xcc_id);
-		if (r)
+		if (r) {
+			AMDGV_ERROR("MES KIQ hw init failed at sched pipe init on xcc %d\n", xcc_id);
 			goto failure;
+		}
 	}
 
 	return r;
@@ -910,10 +1033,6 @@ static int mes_v12_1_sw_fini(struct amdgv_adapter *adapt)
 	int pipe, xcc_id, num_xcc = adapt->mcp.gfx.num_xcc;
 	int r;
 	struct amdgv_ring *ring;
-
-#if 1
-	return 0;
-#endif
 
 	for (xcc_id = 0; xcc_id < num_xcc; xcc_id++) {
 		for (pipe = 0; pipe < AMDGV_MAX_MES_PIPES; pipe++) {
@@ -942,10 +1061,6 @@ static int mes_v12_1_sw_init(struct amdgv_adapter *adapt)
 {
 	uint32_t xcc_id, pipe, num_xcc = adapt->mcp.gfx.num_xcc;
 	int r;
-
-#if 1
-	return 0;
-#endif
 
 	adapt->mes.kiq_hw_init = &mes_v12_1_kiq_hw_init;
 	adapt->mes.kiq_hw_fini = &mes_v12_1_kiq_hw_fini;
@@ -984,10 +1099,6 @@ static int mes_v12_1_hw_init(struct amdgv_adapter *adapt)
 	int r;
 	uint32_t xcc_id, num_xcc = adapt->mcp.gfx.num_xcc;
 
-#if 1
-	return 0;
-#endif
-
 	for (xcc_id = 0; xcc_id < num_xcc; xcc_id++) {
 		r = mes_v12_1_xcc_hw_init(adapt, xcc_id);
 		if (r)
@@ -1001,10 +1112,6 @@ static int mes_v12_1_hw_fini(struct amdgv_adapter *adapt)
 {
 	int r = 0;
 	uint32_t xcc_id, num_xcc = adapt->mcp.gfx.num_xcc;
-
-#if 1
-	return 0;
-#endif
 
 	for (xcc_id = 0; xcc_id < num_xcc; xcc_id++) {
 		if (mes_v12_1_hw_fini_xcc(adapt, xcc_id)) {

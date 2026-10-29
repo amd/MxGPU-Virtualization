@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+#if defined(HAVE_APERTURE_REMOVE_CONFLICTING_PCI_DEVICES)
+#include <linux/aperture.h>
+#endif
 #include <linux/module.h>
 #include <linux/pci.h>
 #include <linux/mod_devicetable.h>
@@ -13,6 +16,7 @@
 #include <linux/delay.h>
 #include <linux/kthread.h>
 #include <linux/version.h>
+#include <linux/io.h>
 #include "gim_live_update.h"
 
 #include <linux/ftrace.h>
@@ -33,6 +37,7 @@
 #include "amdgv_gpumon.h"
 #include "gim_memory_sentinel.h"
 #include "gim_hbm_drv_mgmt.h"
+#include "gim_acpi_hbm.h"
 
 #include "gim_guard.h"
 #include "gim_debugfs.h"
@@ -74,19 +79,37 @@ static int gim_map_pci_res(struct amdgv_init_data *data, struct pci_dev *pdev)
 {
 	int ret;
 
+#if defined(HAVE_APERTURE_REMOVE_CONFLICTING_PCI_DEVICES)
+	if ((pdev->class >> 8) == PCI_CLASS_DISPLAY_VGA ||
+	    (pdev->class >> 8) == PCI_CLASS_DISPLAY_OTHER) {
+		/* Get rid of things like offb */
+		ret = aperture_remove_conflicting_pci_devices(pdev, "gim");
+		if (ret)
+			return ret;
+	}
+#endif
+
 	ret = pci_request_regions(pdev, gim_driver_name);
 	if (ret) {
 		gim_put_error(AMDGV_LOG_DRIVER_NO_ACCESS_PCI_REGION, 0);
 		return ret;
 	}
 
-	data->info.pf_numa_id = dev_to_node(&pdev->dev);
+	data->info.pf_pd = -1;
 
-#if 1
 	if (pci_resource_len(pdev, 0) == 0) {
+		int pd;
+		uint64_t hbm_pa = 0, hbm_size = 0;
+
 		data->info.fb_pa = 0;
 		data->info.fb_size = 0;
 		data->info.fb = NULL;
+
+		if (!gim_acpi_discover_hbm(pdev, &pd, &hbm_pa, &hbm_size)) {
+			data->info.pf_pd = pd;
+			data->info.fb_pa = hbm_pa;
+			data->info.fb_size = hbm_size;
+		}
 	} else {
 		/* framebuffer bar mapping */
 		data->info.fb_pa = pci_resource_start(pdev, 0);
@@ -99,7 +122,6 @@ static int gim_map_pci_res(struct amdgv_init_data *data, struct pci_dev *pdev)
 			goto err;
 		}
 	}
-#endif
 
 	/* doorbell bar mapping */
 	data->info.doorbell_pa = pci_resource_start(pdev, 2);
@@ -347,7 +369,6 @@ static int gim_init_thread_func(void *context)
 
 	data->opt.fb_sharing_mode =
 		gim_conf_get_fb_sharing_mode_opt(dev_data->gpu_index);
-	data->opt.vf_hbm_mgmt_mode = gim_conf_get_vf_hbm_mgmt_mode_opt(dev_data->gpu_index);
 	data->opt.accelerator_partition_mode = gim_conf_get_accelerator_partition_mode_opt(dev_data->gpu_index);
 	data->opt.memory_partition_mode = gim_conf_get_memory_partition_mode_opt(dev_data->gpu_index);
 	data->opt.cc_mode = gim_conf_get_cc_mode_opt(dev_data->gpu_index);

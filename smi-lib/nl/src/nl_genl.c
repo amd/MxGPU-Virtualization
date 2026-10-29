@@ -26,7 +26,7 @@ static int family_cb(const struct nlmsghdr *nlh, void *data)
 	return mnl_attr_parse(nlh, sizeof(struct genlmsghdr), family_attr_cb, data);
 }
 
-int nl_resolve_family_id(struct nl_conn *conn, const char *name)
+int smi_nl_resolve_family_id(struct nl_conn *conn, const char *name)
 {
 	char buf[MNL_SOCKET_BUFFER_SIZE];
 	struct genlmsghdr *genlh;

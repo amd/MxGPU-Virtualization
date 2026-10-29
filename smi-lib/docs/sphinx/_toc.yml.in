@@ -4,46 +4,69 @@ root: index
 subtrees:
 - caption: Install
   entries:
+  - file: install/install.md
+    title: Install on Linux SR-IOV hosts
   - file: install/build.md
     title: Build from source
-  - file: install/install.md
-    title: Library and CLI tool installation
 
 - caption: How to
   entries:
   - file: how_to/amdsmi_c_lib.md
-    title: C library usage
+    title: C/C++ library usage
   - file: how_to/amdsmi_py_lib.md
     title: Python library usage
   - file: how_to/amdsmi_go_lib.md
     title: Go library usage
+  - file: how_to/amdsmi_examples.md
+    title: Python / Go Examples
+    entries:
+    - file: how_to/examples/amdsmi_lifecycle_example.md
+      title: Library lifecycle
+    - file: how_to/examples/amdsmi_discovery_example.md
+      title: Processor discovery
+    - file: how_to/examples/amdsmi_static_identity_example.md
+      title: Static identity
+    - file: how_to/examples/amdsmi_telemetry_example.md
+      title: Telemetry
+    - file: how_to/examples/amdsmi_events_example.md
+      title: Event monitoring
+    - file: how_to/examples/amdsmi_firmware_example.md
+      title: Firmware
+    - file: how_to/examples/amdsmi_ras_health_example.md
+      title: RAS health
+    - file: how_to/examples/amdsmi_topology_example.md
+      title: Topology
+    - file: how_to/examples/amdsmi_node_power_example.md
+      title: Node power
+    - file: how_to/examples/amdsmi_partitioning_example.md
+      title: Partitioning
+    - file: how_to/examples/amdsmi_power_perf_control_example.md
+      title: Power and performance control
+    - file: how_to/examples/amdsmi_sriov_vf_example.md
+      title: SR-IOV virtual functions
+    - file: how_to/examples/amdsmi_reset_example.md
+      title: GPU reset
   - file: how_to/amdsmi_cli_usage.md
     title: CLI tool usage
 
 - caption: Reference
   entries:
-  - file: reference/amdsmi_c_api.md
-    title: C API
+  - file: reference/amdsmi_c_api/index.md
+    title: C/C++ API
     entries:
-    - file: doxygen/doxy_build/html/files
-      title: Files
-    - file: doxygen/doxy_build/html/globals
-      title: Globals
-    - file: doxygen/doxy_build/html/annotated
-      title: Data structures
-    - file: doxygen/doxy_build/html/functions_data_fields
-      title: Data fields
+    - file: reference/amdsmi_c_api/functions.md
+      title: Functions
+    - file: reference/amdsmi_c_api/types.md
+      title: Types
+    - file: reference/amdsmi_c_api/defines.md
+      title: Defines
   - file: reference/amdsmi_py_api.md
     title: Python API
   - file: reference/amdsmi_go_api.md
     title: Go API
 
-- caption: General
-  entries:
-  - file: general/versioning.md
-    title: Library and CLI tool versioning
-
 - caption: About
   entries:
+  - file: general/versioning.md
+    title: Versioning
   - file: license.rst
-

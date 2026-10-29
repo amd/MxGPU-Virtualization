@@ -54,6 +54,7 @@ auto constexpr temperature_header_csv {",edge_temperature,hotspot_temperature,vr
 auto constexpr ecc_header_csv {",total_correctable_count,total_uncorrectable_count,total_deferred_"
 			       "count,cache_correctable_count,cache_uncorrectable_count"};
 auto constexpr ecc_block_header_csv {",block,correctable_count,uncorrectable_count,deferred_count"};
+auto constexpr fan_header_csv {",fan_speed,fan_max,fan_rpm,fan_usage"};
 auto constexpr pcie_header_csv {
     ",pcie_current_width,pcie_current_speed,pcie_current_bandwidth,pcie_replay_count,pcie_l0_to_"
     "recovery_count,pcie_replay_roll_over_count,pcie_nak_sent_count,pcie_nak_received_count,lc_"
@@ -147,6 +148,13 @@ int AmdSmiMetricCommand::metric_command_ecc(uint64_t processor, std::string& for
 int AmdSmiMetricCommand::metric_command_ecc_block(uint64_t processor, std::string& formatted_string)
 {
 	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_ecc_block_metric_command(
+	    processor, arg, formatted_string);
+	return ret;
+}
+
+int AmdSmiMetricCommand::metric_command_fan(uint64_t processor, std::string& formatted_string)
+{
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_fan_metric_command(
 	    processor, arg, formatted_string);
 	return ret;
 }
@@ -411,6 +419,18 @@ void AmdSmiMetricCommand::metric_command_json_gpu(int gpu_index, uint64_t gpu_bd
 			}
 		}
 	}
+	if ((std::find(arg.options.begin(), arg.options.end(), "fan") != arg.options.end()) ||
+	    (std::find(arg.options.begin(), arg.options.end(), "f") != arg.options.end()) ||
+	    arg.all_arguments) {
+		ret = metric_command_fan(gpu_bdf, out);
+		std::string param {"fan"};
+		int error = handle_exceptions(ret, param, arg);
+		if (error == 0) {
+			values_json	   = nlohmann::ordered_json::parse(out);
+			option_json["fan"] = values_json;
+			out.clear();
+		}
+	}
 	if ((std::find(arg.options.begin(), arg.options.end(), "energy") != arg.options.end()) ||
 	    (std::find(arg.options.begin(), arg.options.end(), "E") != arg.options.end()) ||
 	    arg.all_arguments) {
@@ -511,7 +531,6 @@ void AmdSmiMetricCommand::metric_command_json_nic(int nic_index, uint64_t nic_bd
 
 void AmdSmiMetricCommand::metric_command_json()
 {
-	int ret;
 	unsigned int i;
 	nlohmann::ordered_json json_format = nlohmann::ordered_json::array();
 	std::string result;
@@ -686,6 +705,19 @@ void AmdSmiMetricCommand::metric_command_human_gpu(int gpu_index, uint64_t gpu_b
 	    arg.all_arguments) {
 		ret = metric_command_ecc_block(gpu_bdf, formatted_string);
 		std::string param {"ecc-block"};
+		int error = handle_exceptions(ret, param, arg);
+		if (error == 0) {
+			options_string += formatted_string;
+			formatted_string.clear();
+		}
+		formatted_string.clear();
+	}
+
+	if ((std::find(arg.options.begin(), arg.options.end(), "fan") != arg.options.end()) ||
+	    (std::find(arg.options.begin(), arg.options.end(), "f") != arg.options.end()) ||
+	    arg.all_arguments) {
+		ret = metric_command_fan(gpu_bdf, formatted_string);
+		std::string param {"fan"};
 		int error = handle_exceptions(ret, param, arg);
 		if (error == 0) {
 			options_string += formatted_string;
@@ -1042,6 +1074,19 @@ void AmdSmiMetricCommand::metric_command_csv_gpu(int gpu_index, uint64_t gpu_bdf
 		formatted_string.clear();
 	}
 
+	if ((std::find(arg.options.begin(), arg.options.end(), "fan") != arg.options.end()) ||
+	    (std::find(arg.options.begin(), arg.options.end(), "f") != arg.options.end()) ||
+	    arg.all_arguments) {
+		ret = metric_command_fan(gpu_bdf, formatted_string);
+		std::string param {"fan"};
+		int error = handle_exceptions(ret, param, arg);
+		if (error == 0) {
+			headers.append(fan_header_csv);
+			results.push_back({formatted_string});
+		}
+		formatted_string.clear();
+	}
+
 	if ((std::find(arg.options.begin(), arg.options.end(), "energy") != arg.options.end()) ||
 	    (std::find(arg.options.begin(), arg.options.end(), "E") != arg.options.end()) ||
 	    arg.all_arguments) {
@@ -1084,7 +1129,6 @@ void AmdSmiMetricCommand::metric_command_csv_gpu(int gpu_index, uint64_t gpu_bdf
 
 void AmdSmiMetricCommand::metric_command_csv()
 {
-	int ret;
 	std::string headers {};
 	std::string values {};
 	std::string formatted_string {};
@@ -1415,6 +1459,22 @@ void AmdSmiMetricCommand::metric_command_watch_gpu(int gpu_index, uint64_t gpu_b
 			fourth_row.push_back(formatted_string.c_str());
 		}
 	}
+	if ((std::find(arg.options.begin(), arg.options.end(), "fan") != arg.options.end()) ||
+	    (std::find(arg.options.begin(), arg.options.end(), "f") != arg.options.end()) ||
+	    arg.all_arguments) {
+		ret = metric_command_fan(gpu_bdf, formatted_string);
+		std::string param {"fan"};
+		int error = handle_exceptions(ret, param, arg);
+		if (error == 0) {
+			if (device_index == 0) {
+				first_row.push_back("fan");
+				second_row.push_back("fs,fm,fr,fu");
+				third_row.push_back("int,int,RPM,%");
+			}
+			fourth_row.push_back(formatted_string.c_str());
+		}
+		formatted_string.clear();
+	}
 }
 
 void AmdSmiMetricCommand::metric_command_watch_format(
@@ -1499,7 +1559,6 @@ void AmdSmiMetricCommand::metric_command_watch_format(
 
 void AmdSmiMetricCommand::metric_command_watch()
 {
-	int ret;
 	std::string out {};
 	std::string formatted_string {};
 	int gpu_number;

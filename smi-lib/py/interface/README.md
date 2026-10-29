@@ -1085,6 +1085,8 @@ Field | Content
 `subvendor_id` | subsystem vendor id
 `device_id` |  unique id of a GPU
 `rev_id` |  revision id
+`chip_rev_id` | silicon stepping as a hex string (`0x0` for A0, `0x1` for A1 and so on), or `"N/A"` if not supported
+`external_rev_id` | stepping offset by an ASIC family base, as a hex string, or `"N/A"` if not supported
 `asic_serial` | asic serial
 `oam_id` | xgmi physical id
 `physical_acc_id` | physical accelerator id
@@ -1116,6 +1118,8 @@ try:
             print(asic_info['device_id'])
             print(asic_info['subsystem_id'])
             print(asic_info['rev_id'])
+            print(asic_info['chip_rev_id'])
+            print(asic_info['external_rev_id'])
             print(asic_info['asic_serial'])
             print(asic_info['oam_id'])
             print(asic_info['num_of_compute_units'])
@@ -2948,6 +2952,7 @@ Field | Description
 `STATIC_FREQUENCY` | static frequency
 `STATIC_TEMPERATURE` | static temperature
 `STATIC_THROTTLE` | static throttle
+`STATIC_POWER` | static power
 `UNKNOWN` | unknown category
 
 `AmdSmiMetricType` enum:
@@ -4368,7 +4373,7 @@ Description: Retrieve RDMA port statistics for the NIC
 
 Input parameters:
 * `processor_handle` NIC for which to query
-* `rdma_port_index` index of the NIC RDMA port to query
+* `rdma_port_index` zero-based position of the RDMA port in the order `amdsmi_get_nic_rdma_dev_info()` lists them: all ports of the first RDMA device, then all ports of the next, and so on. This is not the `rdma_port` number reported for each port.
 
 Output: Returns a list of dictionaries, each containing:
 * `name`
@@ -4388,11 +4393,16 @@ try:
     if len(nic_handles) == 0:
         print("No NICs on machine")
     else:
-        rdma_port_index = 0
         for nic in nic_handles:
-            rdma_stats = amdsmi_get_nic_rdma_port_statistics(nic, rdma_port_index)
-            for stat in rdma_stats:
-                print(f"{stat['name']}: {stat['value']}")
+            rdma_dev_info = amdsmi_get_nic_rdma_dev_info(nic)
+            rdma_port_index = 0
+            for rdma_device in rdma_dev_info['rdma_dev_info']:
+                for _rdma_port in rdma_device['rdma_port_info']:
+                    rdma_stats = amdsmi_get_nic_rdma_port_statistics(
+                        nic, rdma_port_index)
+                    for stat in rdma_stats:
+                        print(f"{stat['name']}: {stat['value']}")
+                    rdma_port_index += 1
 except AmdSmiException as e:
     print(e)
 ```
@@ -4411,7 +4421,7 @@ Field | Description
 ---|---
 `phy_addr` | Physical address (64-bit unsigned integer)
 `phy_size` | Physical size in bytes (64-bit unsigned integer)
-`numa_id` | NUMA node for driver-managed VF HBM, N/A if not supported (DAX mode)
+`numa_id` | NUMA node for driver-managed VF HBM, N/A if not supported
 `name` | HBM device name (string)
 
 Exceptions that can be thrown by `amdsmi_get_vf_hbm_info` function:
@@ -4747,7 +4757,7 @@ except AmdSmiException as e:
     print(e)
 ```
 
-### amdsmi_get_cc_mode
+### amdsmi_get_gpu_cc_mode
 
 Description: Gets the CC (Confidential Compute) mode for the specified GPU
 
@@ -4757,17 +4767,17 @@ Input parameters:
 
 Output:
 
-* CC mode from `amdsmi_cc_mode_t` enum
+* CC mode from `amdsmi_gpu_cc_mode_t` enum
 
-`AmdSmiCCMode` enum:
+`AmdSmiGpuCCMode` enum:
 
 Field | Description
 ---|---
-`AmdSmiCCMode.OFF: 0` | Confidential Compute is disabled
-`AmdSmiCCMode.ON: 1` | Confidential Compute is enabled
-`AmdSmiCCMode.DEV: 2` | Confidential Compute is in development mode
+`AmdSmiGpuCCMode.OFF: 0` | Confidential Compute is disabled
+`AmdSmiGpuCCMode.ON: 1` | Confidential Compute is enabled
+`AmdSmiGpuCCMode.DEV: 2` | Confidential Compute is in development mode
 
-Exceptions that can be thrown by `amdsmi_get_cc_mode` function:
+Exceptions that can be thrown by `amdsmi_get_gpu_cc_mode` function:
 
 * `AmdSmiParameterException`
 * `AmdSmiLibraryException`
@@ -4781,34 +4791,34 @@ try:
         print("No GPUs on machine")
     else:
         for processor in processors:
-            cc_mode = amdsmi_get_cc_mode(processor)
+            cc_mode = amdsmi_get_gpu_cc_mode(processor)
             print(f"Confidential Compute Mode: {cc_mode}")
 except AmdSmiException as e:
     print(e)
 ```
 
-### amdsmi_set_cc_mode
+### amdsmi_set_gpu_cc_mode
 
 Description: Sets the CC (Confidential Compute) mode for the specified GPU
 
 Input parameters:
 
 * `processor_handle` GPU device for which to set
-* `mode` CC mode value from `AmdSmiCCMode` enum to set
+* `mode` CC mode value from `AmdSmiGpuCCMode` enum to set
 
-`AmdSmiCCMode` enum:
+`AmdSmiGpuCCMode` enum:
 
 Field | Description
 ---|---
-`AmdSmiCCMode.OFF: 0` | Confidential Compute is disabled
-`AmdSmiCCMode.ON: 1` | Confidential Compute is enabled
-`AmdSmiCCMode.DEV: 2` | Confidential Compute is in development mode
+`AmdSmiGpuCCMode.OFF: 0` | Confidential Compute is disabled
+`AmdSmiGpuCCMode.ON: 1` | Confidential Compute is enabled
+`AmdSmiGpuCCMode.DEV: 2` | Confidential Compute is in development mode
 
 Output:
 
 * `None`
 
-Exceptions that can be thrown by `amdsmi_set_cc_mode` function:
+Exceptions that can be thrown by `amdsmi_set_gpu_cc_mode` function:
 
 * `AmdSmiParameterException`
 * `AmdSmiLibraryException`
@@ -4823,7 +4833,7 @@ try:
     else:
         for processor in processors:
             # Set Confidential Compute to ON mode
-            amdsmi_set_cc_mode(processor, AmdSmiCCMode.ON)
+            amdsmi_set_gpu_cc_mode(processor, AmdSmiGpuCCMode.ON)
             print("Confidential Compute mode set to ON")
 except AmdSmiException as e:
     print(e)

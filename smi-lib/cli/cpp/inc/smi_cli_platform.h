@@ -134,6 +134,12 @@ public:
 	 */
 	void refine_gc_12_1_detection_from_graphics_version(uint64_t target_graphics_version);
 	/**
+	 * @brief Get the number of CPUs the OS reports as configured
+	 *
+	 * @return configured CPU count
+	 */
+	long get_cpu_count();
+	/**
 	 * @brief Get the platform string
 	 *
 	 * @return platform string

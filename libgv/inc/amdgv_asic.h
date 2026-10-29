@@ -17,11 +17,16 @@ enum amd_asic_type {
 	CHIP_MI300X = 9,
 	CHIP_MI308X = 11,
 	CHIP_MI350X = 12,
-	CHIP_IP_DISCOVERY  = 13,
+	CHIP_IP_DISCOVERY = 13,
+	CHIP_MI350P = 14,
 	CHIP_LAST,
 
 	CHIP_NOT_SUPPORTED = 0xFFFFFFFF
 };
+
+/* gfx950 family: MI350X (OAM) and MI350P (PCIe CEM) share IP paths */
+#define amdgv_asic_is_mi350(asic_type) \
+	((asic_type) == CHIP_MI350X || (asic_type) == CHIP_MI350P)
 
 enum amdgv_firmware_id {
 	AMDGV_FIRMWARE_ID__SMU = 1,

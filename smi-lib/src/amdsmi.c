@@ -18,7 +18,7 @@
 #include "common/smi_device_handle.h"
 #include "smi_debug.h"
 #include "smi_os_defines.h"
-#include "aca-decode/ras_decode_api.h"
+#include "aca-decode/include/ras_decode_api.h"
 #include "smi_processor_handle.h"
 
 #ifdef AMD_SMI_NIC_SUPPORT
@@ -1261,6 +1261,8 @@ amdsmi_status_t amdsmi_get_gpu_asic_info(amdsmi_processor_handle processor_handl
 	info->target_graphics_version = gpu_info->target_graphics_version;
 	info->subsystem_id	      = gpu_info->subsystem_id;
 	info->flags		      = gpu_info->flags;
+	info->chip_rev_id	      = gpu_info->chip_rev_id;
+	info->external_rev_id	      = gpu_info->external_rev_id;
 	info->physical_acc_id	      = UINT32_MAX;
 #ifdef ENABLE_UALOE
 	(void)smi_ualoe_fill_physical_acc_id(processor_handle, &info->physical_acc_id);
@@ -1914,10 +1916,11 @@ amdsmi_status_t amdsmi_get_dfc_fw_table(amdsmi_processor_handle processor_handle
 #else
 	smi_req_ctx smi_req;
 	smi_device_handle_t pf;
-	struct smi_device_info *dev = NULL;
-	struct smi_gpu_handle *gpu  = NULL;
+	struct smi_gpu_handle *gpu = NULL;
 	enum smi_handle_type type;
-	amdsmi_dfc_fw_t *dfc_fw = NULL;
+	struct smi_dfc_fw_info *dfc_table = NULL;
+	struct smi_dfc_fw *dfc_fw_buf	  = NULL;
+	system_wrapper *sys_wrapper	  = get_system_wrapper();
 
 	AMDSMI_ESCAPE_IF_NOT_INIT;
 
@@ -1932,42 +1935,57 @@ amdsmi_status_t amdsmi_get_dfc_fw_table(amdsmi_processor_handle processor_handle
 		return AMDSMI_STATUS_INVAL;
 	}
 
-	gpu		   = (struct smi_gpu_handle *)processor_handle;
-	pf.handle	   = gpu->handle;
-	dev		   = (struct smi_device_info *)&smi_req.thread->ioctl_cmd.payload;
-	dev->dev_id.handle = pf.handle;
+	gpu		  = (struct smi_gpu_handle *)processor_handle;
+	pf.handle	  = gpu->handle;
+	dfc_table	  = (struct smi_dfc_fw_info *)&smi_req.thread->ioctl_cmd.payload;
+	dfc_table->dev_id = pf;
 
-	const int code = amdsmi_request(&smi_req,
-					(uint32_t)SMI_CMD_CODE_GET_DFC_FW_TABLE,
-					sizeof(struct smi_device_info),
-					sizeof(struct smi_dfc_fw));
+	dfc_fw_buf = (struct smi_dfc_fw *)sys_wrapper->smi_calloc(1, sizeof(struct smi_dfc_fw));
+	if (dfc_fw_buf == NULL) {
+		SMI_ERROR("Memory allocation failed for DFC table. Return code: %d",
+			  AMDSMI_STATUS_OUT_OF_RESOURCES);
+		return AMDSMI_STATUS_OUT_OF_RESOURCES;
+	}
+
+	dfc_table->dfc_fw = dfc_fw_buf;
+	dfc_table->size	  = AMDSMI_DFC_FW_NUMBER_OF_ENTRIES;
+
+	const int code = amdsmi_request(
+	    &smi_req, (uint32_t)SMI_CMD_CODE_GET_DFC_FW_TABLE, sizeof(struct smi_dfc_fw_info), 0);
 
 	if (code != AMDSMI_STATUS_SUCCESS) {
 		SMI_ERROR("Ioctl call failed. Return code: %d", code);
+		sys_wrapper->smi_free(dfc_fw_buf);
 		return code;
 	}
 
-	dfc_fw = (amdsmi_dfc_fw_t *)&smi_req.thread->ioctl_cmd.payload;
-
 	memset(info, 0, sizeof(amdsmi_dfc_fw_t));
-	info->header.dfc_fw_total_entries  = dfc_fw->header.dfc_fw_total_entries;
-	info->header.dfc_fw_version	   = dfc_fw->header.dfc_fw_version;
-	info->header.dfc_gart_wr_guest_min = dfc_fw->header.dfc_gart_wr_guest_min;
-	info->header.dfc_gart_wr_guest_max = dfc_fw->header.dfc_gart_wr_guest_max;
 
-	for (uint32_t i = 0; i < dfc_fw->header.dfc_fw_total_entries; i++) {
-		info->data[i].dfc_fw_type	   = dfc_fw->data[i].dfc_fw_type;
-		info->data[i].verification_enabled = dfc_fw->data[i].verification_enabled;
-		info->data[i].customer_ordinal	   = dfc_fw->data[i].customer_ordinal;
+	uint32_t num_entries = dfc_fw_buf->header.dfc_fw_total_entries;
+	if (num_entries > AMDSMI_DFC_FW_NUMBER_OF_ENTRIES)
+		num_entries = AMDSMI_DFC_FW_NUMBER_OF_ENTRIES;
+
+	info->header.dfc_fw_total_entries  = num_entries;
+	info->header.dfc_fw_version	   = dfc_fw_buf->header.dfc_fw_version;
+	info->header.dfc_gart_wr_guest_min = dfc_fw_buf->header.dfc_gart_wr_guest_min;
+	info->header.dfc_gart_wr_guest_max = dfc_fw_buf->header.dfc_gart_wr_guest_max;
+
+	for (uint32_t i = 0; i < num_entries; i++) {
+		info->data[i].dfc_fw_type	   = dfc_fw_buf->data[i].dfc_fw_type;
+		info->data[i].verification_enabled = dfc_fw_buf->data[i].verification_enabled;
+		info->data[i].customer_ordinal	   = dfc_fw_buf->data[i].customer_ordinal;
 		for (uint32_t j = 0; j < AMDSMI_MAX_WHITE_LIST_ELEMENTS; j++) {
-			info->data[i].white_list[j].latest = dfc_fw->data[i].white_list[j].latest;
-			info->data[i].white_list[j].oldest = dfc_fw->data[i].white_list[j].oldest;
+			info->data[i].white_list[j].latest =
+			    dfc_fw_buf->data[i].white_list[j].latest;
+			info->data[i].white_list[j].oldest =
+			    dfc_fw_buf->data[i].white_list[j].oldest;
 		}
 		for (int z = 0; z < AMDSMI_MAX_BLACK_LIST_ELEMENTS; z++) {
-			info->data[i].black_list[z] = dfc_fw->data[i].black_list[z];
+			info->data[i].black_list[z] = dfc_fw_buf->data[i].black_list[z];
 		}
 	}
 
+	sys_wrapper->smi_free(dfc_fw_buf);
 	return AMDSMI_STATUS_SUCCESS;
 #endif
 }
@@ -2562,12 +2580,7 @@ amdsmi_status_t amdsmi_get_gpu_bad_page_info(amdsmi_processor_handle processor_h
 	pf.handle	      = gpu->handle;
 	bad_page_info	      = (struct smi_bad_page_info *)&smi_req.thread->ioctl_cmd.payload;
 	bad_page_info->dev_id = pf;
-#ifdef _WIN64
-	bad_page_record = sys_wrapper->smi_calloc(1, sizeof(struct smi_bad_page_record));
-#else
-	long page_size;
-	size_t alloc_size;
-	page_size = sys_wrapper->smi_sysconf(_SC_PAGESIZE);
+	long page_size	      = sys_wrapper->smi_sysconf(_SC_PAGESIZE);
 	if (page_size == -1) {
 		SMI_ERROR(
 		    "Failed to get system configuration. Couldn't get page size. Return code: %d",
@@ -2575,17 +2588,17 @@ amdsmi_status_t amdsmi_get_gpu_bad_page_info(amdsmi_processor_handle processor_h
 		return AMDSMI_STATUS_API_FAILED;
 	}
 	// Round up size to be a multiple of page_size for aligned_alloc
-	alloc_size =
+	size_t alloc_size =
 	    ((sizeof(struct smi_bad_page_record) + (size_t)page_size - 1) / (size_t)page_size) *
 	    (size_t)page_size;
 	bad_page_record = sys_wrapper->smi_aligned_alloc(
 	    (void **)&bad_page_record, (size_t)page_size, alloc_size);
-#endif
 	if (bad_page_record == NULL) {
 		SMI_ERROR("Memory allocation call failed for eeprom table. Return code: %d",
 			  AMDSMI_STATUS_OUT_OF_RESOURCES);
 		return AMDSMI_STATUS_OUT_OF_RESOURCES;
 	}
+	memset(bad_page_record, 0, sizeof(struct smi_bad_page_record));
 	bad_page_info->bad_pages = bad_page_record;
 	bad_page_info->size	 = *bad_page_size;
 	const int code		 = amdsmi_request(&smi_req,
@@ -2595,19 +2608,19 @@ amdsmi_status_t amdsmi_get_gpu_bad_page_info(amdsmi_processor_handle processor_h
 
 	if (code == AMDSMI_STATUS_NO_DATA) {
 		*bad_page_size = 0;
-		sys_wrapper->smi_free(bad_page_record);
+		sys_wrapper->smi_aligned_free(bad_page_record);
 		return code;
 	}
 	if (code != AMDSMI_STATUS_SUCCESS) {
 		SMI_ERROR("Ioctl call failed. Return code: %d", code);
-		sys_wrapper->smi_free(bad_page_record);
+		sys_wrapper->smi_aligned_free(bad_page_record);
 		return code;
 	}
 
 	if ((*bad_page_size < bad_page_info->bad_pages->num_bad_page) && (bad_pages != NULL)) {
 		SMI_ERROR("Size of the allocated buffer is not sufficient. Return code: %d",
 			  AMDSMI_STATUS_OUT_OF_RESOURCES);
-		sys_wrapper->smi_free(bad_page_record);
+		sys_wrapper->smi_aligned_free(bad_page_record);
 		return AMDSMI_STATUS_OUT_OF_RESOURCES;
 	}
 
@@ -2632,7 +2645,7 @@ amdsmi_status_t amdsmi_get_gpu_bad_page_info(amdsmi_processor_handle processor_h
 		}
 	}
 
-	sys_wrapper->smi_free(bad_page_record);
+	sys_wrapper->smi_aligned_free(bad_page_record);
 
 	return AMDSMI_STATUS_SUCCESS;
 }
@@ -2919,6 +2932,7 @@ amdsmi_status_t amdsmi_get_vf_data(amdsmi_vf_handle_t vf_handle, amdsmi_vf_data_
 #pragma SMI_EXPORT
 	struct smi_vf_data *vf_dynamic_info = NULL;
 	smi_req_ctx smi_req;
+	system_wrapper *sys_wrapper = get_system_wrapper();
 
 	AMDSMI_ESCAPE_IF_NOT_INIT;
 
@@ -2946,79 +2960,46 @@ amdsmi_status_t amdsmi_get_vf_data(amdsmi_vf_handle_t vf_handle, amdsmi_vf_data_
 	info->sched.shutdown_time = vf_dynamic_info->sched.shutdown_time;
 	info->sched.reset_time	  = vf_dynamic_info->sched.reset_time;
 	info->guard.enabled	  = vf_dynamic_info->guard.enabled;
-#ifdef _WIN64
-	strncpy_s(info->sched.last_boot_start,
-		  sizeof(info->sched.last_boot_start),
-		  vf_dynamic_info->sched.last_boot_start,
-		  AMDSMI_MAX_STRING_LENGTH);
-	strncpy_s(info->sched.last_boot_end,
-		  sizeof(info->sched.last_boot_end),
-		  vf_dynamic_info->sched.last_boot_end,
-		  AMDSMI_MAX_STRING_LENGTH);
-	strncpy_s(info->sched.last_shutdown_start,
-		  sizeof(info->sched.last_shutdown_start),
-		  vf_dynamic_info->sched.last_shutdown_start,
-		  AMDSMI_MAX_STRING_LENGTH);
-	strncpy_s(info->sched.last_shutdown_end,
-		  sizeof(info->sched.last_shutdown_end),
-		  vf_dynamic_info->sched.last_shutdown_end,
-		  AMDSMI_MAX_STRING_LENGTH);
-	strncpy_s(info->sched.last_reset_start,
-		  sizeof(info->sched.last_reset_start),
-		  vf_dynamic_info->sched.last_reset_start,
-		  AMDSMI_MAX_STRING_LENGTH);
-	strncpy_s(info->sched.last_reset_end,
-		  sizeof(info->sched.last_reset_end),
-		  vf_dynamic_info->sched.last_reset_end,
-		  AMDSMI_MAX_STRING_LENGTH);
-	strncpy_s(info->sched.current_active_time,
-		  sizeof(info->sched.current_active_time),
-		  vf_dynamic_info->sched.current_active_time,
-		  AMDSMI_MAX_STRING_LENGTH);
-	strncpy_s(info->sched.current_running_time,
-		  sizeof(info->sched.current_running_time),
-		  vf_dynamic_info->sched.current_running_time,
-		  AMDSMI_MAX_STRING_LENGTH);
-	strncpy_s(info->sched.total_active_time,
-		  sizeof(info->sched.total_active_time),
-		  vf_dynamic_info->sched.total_active_time,
-		  AMDSMI_MAX_STRING_LENGTH);
-	strncpy_s(info->sched.total_running_time,
-		  sizeof(info->sched.total_running_time),
-		  vf_dynamic_info->sched.total_running_time,
-		  AMDSMI_MAX_STRING_LENGTH);
-#else
-	strncpy(info->sched.last_boot_start,
-		vf_dynamic_info->sched.last_boot_start,
-		AMDSMI_MAX_STRING_LENGTH);
-	strncpy(info->sched.last_boot_end,
-		vf_dynamic_info->sched.last_boot_end,
-		AMDSMI_MAX_STRING_LENGTH);
-	strncpy(info->sched.last_shutdown_start,
-		vf_dynamic_info->sched.last_shutdown_start,
-		AMDSMI_MAX_STRING_LENGTH);
-	strncpy(info->sched.last_shutdown_end,
-		vf_dynamic_info->sched.last_shutdown_end,
-		AMDSMI_MAX_STRING_LENGTH);
-	strncpy(info->sched.last_reset_start,
-		vf_dynamic_info->sched.last_reset_start,
-		AMDSMI_MAX_STRING_LENGTH);
-	strncpy(info->sched.last_reset_end,
-		vf_dynamic_info->sched.last_reset_end,
-		AMDSMI_MAX_STRING_LENGTH);
-	strncpy(info->sched.current_active_time,
-		vf_dynamic_info->sched.current_active_time,
-		AMDSMI_MAX_STRING_LENGTH);
-	strncpy(info->sched.current_running_time,
-		vf_dynamic_info->sched.current_running_time,
-		AMDSMI_MAX_STRING_LENGTH);
-	strncpy(info->sched.total_active_time,
-		vf_dynamic_info->sched.total_active_time,
-		AMDSMI_MAX_STRING_LENGTH);
-	strncpy(info->sched.total_running_time,
-		vf_dynamic_info->sched.total_running_time,
-		AMDSMI_MAX_STRING_LENGTH);
-#endif
+	sys_wrapper->smi_strncpy(info->sched.last_boot_start,
+				 sizeof(info->sched.last_boot_start),
+				 vf_dynamic_info->sched.last_boot_start,
+				 AMDSMI_MAX_STRING_LENGTH);
+	sys_wrapper->smi_strncpy(info->sched.last_boot_end,
+				 sizeof(info->sched.last_boot_end),
+				 vf_dynamic_info->sched.last_boot_end,
+				 AMDSMI_MAX_STRING_LENGTH);
+	sys_wrapper->smi_strncpy(info->sched.last_shutdown_start,
+				 sizeof(info->sched.last_shutdown_start),
+				 vf_dynamic_info->sched.last_shutdown_start,
+				 AMDSMI_MAX_STRING_LENGTH);
+	sys_wrapper->smi_strncpy(info->sched.last_shutdown_end,
+				 sizeof(info->sched.last_shutdown_end),
+				 vf_dynamic_info->sched.last_shutdown_end,
+				 AMDSMI_MAX_STRING_LENGTH);
+	sys_wrapper->smi_strncpy(info->sched.last_reset_start,
+				 sizeof(info->sched.last_reset_start),
+				 vf_dynamic_info->sched.last_reset_start,
+				 AMDSMI_MAX_STRING_LENGTH);
+	sys_wrapper->smi_strncpy(info->sched.last_reset_end,
+				 sizeof(info->sched.last_reset_end),
+				 vf_dynamic_info->sched.last_reset_end,
+				 AMDSMI_MAX_STRING_LENGTH);
+	sys_wrapper->smi_strncpy(info->sched.current_active_time,
+				 sizeof(info->sched.current_active_time),
+				 vf_dynamic_info->sched.current_active_time,
+				 AMDSMI_MAX_STRING_LENGTH);
+	sys_wrapper->smi_strncpy(info->sched.current_running_time,
+				 sizeof(info->sched.current_running_time),
+				 vf_dynamic_info->sched.current_running_time,
+				 AMDSMI_MAX_STRING_LENGTH);
+	sys_wrapper->smi_strncpy(info->sched.total_active_time,
+				 sizeof(info->sched.total_active_time),
+				 vf_dynamic_info->sched.total_active_time,
+				 AMDSMI_MAX_STRING_LENGTH);
+	sys_wrapper->smi_strncpy(info->sched.total_running_time,
+				 sizeof(info->sched.total_running_time),
+				 vf_dynamic_info->sched.total_running_time,
+				 AMDSMI_MAX_STRING_LENGTH);
 	for (uint32_t i = 0; i < AMDSMI_GUARD_EVENT__MAX; i++) {
 		info->guard.guard[i].active    = vf_dynamic_info->guard.guard[i].active;
 		info->guard.guard[i].interval  = vf_dynamic_info->guard.guard[i].interval / 1000000;
@@ -4018,16 +3999,11 @@ amdsmi_status_t amdsmi_get_gpu_metrics(amdsmi_processor_handle processor_handle,
 		*metrics_size = AMDSMI_MAX_NUM_METRICS;
 	}
 
-	gpu	      = (struct smi_gpu_handle *)processor_handle;
-	pf.handle     = gpu->handle;
-	table	      = (struct smi_metrics_table *)&smi_req.thread->ioctl_cmd.payload;
-	table->dev_id = pf;
-#ifdef _WIN64
-	metrics_table = sys_wrapper->smi_calloc(1, sizeof(struct smi_metrics));
-#else
-	long page_size;
-	size_t alloc_size;
-	page_size = sys_wrapper->smi_sysconf(_SC_PAGESIZE);
+	gpu	       = (struct smi_gpu_handle *)processor_handle;
+	pf.handle      = gpu->handle;
+	table	       = (struct smi_metrics_table *)&smi_req.thread->ioctl_cmd.payload;
+	table->dev_id  = pf;
+	long page_size = sys_wrapper->smi_sysconf(_SC_PAGESIZE);
 	if (page_size == -1) {
 		SMI_ERROR(
 		    "Failed to get system configuration. Couldn't get page size. Return code: %d",
@@ -4035,14 +4011,14 @@ amdsmi_status_t amdsmi_get_gpu_metrics(amdsmi_processor_handle processor_handle,
 		return AMDSMI_STATUS_API_FAILED;
 	}
 	// Round up size to be a multiple of page_size for aligned_alloc
-	alloc_size = ((sizeof(struct smi_metrics) + (size_t)page_size - 1) / (size_t)page_size) *
-		     (size_t)page_size;
+	size_t alloc_size =
+	    ((sizeof(struct smi_metrics) + (size_t)page_size - 1) / (size_t)page_size) *
+	    (size_t)page_size;
 	metrics_table =
 	    sys_wrapper->smi_aligned_alloc((void **)&metrics_table, (size_t)page_size, alloc_size);
 	if (metrics_table != NULL) {
 		memset(metrics_table, 0, sizeof(struct smi_metrics));
 	}
-#endif
 	if (metrics_table == NULL) {
 		SMI_ERROR("Memory allocation call failed for metrics table. Return code: %d",
 			  AMDSMI_STATUS_OUT_OF_RESOURCES);
@@ -4059,14 +4035,14 @@ amdsmi_status_t amdsmi_get_gpu_metrics(amdsmi_processor_handle processor_handle,
 
 	if (code != AMDSMI_STATUS_SUCCESS) {
 		SMI_ERROR("Ioctl call failed. Return code: %d", code);
-		sys_wrapper->smi_free(metrics_table);
+		sys_wrapper->smi_aligned_free(metrics_table);
 		return code;
 	}
 
 	if (*metrics_size < table->metrics->num_metric) {
 		SMI_ERROR("Size of the allocated buffer is not sufficient. Return code: %d",
 			  AMDSMI_STATUS_OUT_OF_RESOURCES);
-		sys_wrapper->smi_free(metrics_table);
+		sys_wrapper->smi_aligned_free(metrics_table);
 		return AMDSMI_STATUS_OUT_OF_RESOURCES;
 	}
 
@@ -4110,7 +4086,7 @@ amdsmi_status_t amdsmi_get_gpu_metrics(amdsmi_processor_handle processor_handle,
 		}
 	}
 
-	sys_wrapper->smi_free(metrics_table);
+	sys_wrapper->smi_aligned_free(metrics_table);
 
 	return AMDSMI_STATUS_SUCCESS;
 }
@@ -4295,12 +4271,7 @@ amdsmi_status_t amdsmi_get_gpu_accelerator_partition_profile_config(
 	accelerator_profile_configs =
 	    (struct smi_profile_configs *)&smi_req.thread->ioctl_cmd.payload;
 	accelerator_profile_configs->dev_id = pf;
-#ifdef _WIN64
-	configs = sys_wrapper->smi_calloc(1, sizeof(amdsmi_accelerator_partition_profile_config_t));
-#else
-	long page_size;
-	size_t alloc_size;
-	page_size = sys_wrapper->smi_sysconf(_SC_PAGESIZE);
+	long page_size			    = sys_wrapper->smi_sysconf(_SC_PAGESIZE);
 	if (page_size == -1) {
 		SMI_ERROR(
 		    "Failed to get system configuration. Couldn't get page size. Return code: %d",
@@ -4308,12 +4279,11 @@ amdsmi_status_t amdsmi_get_gpu_accelerator_partition_profile_config(
 		return AMDSMI_STATUS_API_FAILED;
 	}
 	// Round up size to be a multiple of page_size for aligned_alloc
-	alloc_size =
+	size_t alloc_size =
 	    ((sizeof(amdsmi_accelerator_partition_profile_config_t) + (size_t)page_size - 1) /
 	     (size_t)page_size) *
 	    (size_t)page_size;
 	configs = sys_wrapper->smi_aligned_alloc((void **)&configs, (size_t)page_size, alloc_size);
-#endif
 
 	if (configs == NULL) {
 		SMI_ERROR("Memory allocation call failed for accelerator partition configuration. "
@@ -4335,7 +4305,7 @@ amdsmi_status_t amdsmi_get_gpu_accelerator_partition_profile_config(
 
 	if (code != AMDSMI_STATUS_SUCCESS) {
 		SMI_ERROR("Ioctl call failed. Return code: %d", code);
-		sys_wrapper->smi_free(configs);
+		sys_wrapper->smi_aligned_free(configs);
 		return code;
 	}
 
@@ -4385,7 +4355,7 @@ amdsmi_status_t amdsmi_get_gpu_accelerator_partition_profile_config(
 		}
 	}
 
-	sys_wrapper->smi_free(configs);
+	sys_wrapper->smi_aligned_free(configs);
 	return AMDSMI_STATUS_SUCCESS;
 }
 
@@ -4421,13 +4391,7 @@ amdsmi_status_t amdsmi_get_gpu_accelerator_partition_profile_config_global(
 	accelerator_profile_configs_global =
 	    (struct smi_profile_configs_global *)&smi_req.thread->ioctl_cmd.payload;
 	accelerator_profile_configs_global->dev_id = pf;
-#ifdef _WIN64
-	configs = sys_wrapper->smi_calloc(
-	    1, sizeof(amdsmi_accelerator_partition_profile_config_global_t));
-#else
-	long page_size;
-	size_t alloc_size;
-	page_size = sys_wrapper->smi_sysconf(_SC_PAGESIZE);
+	long page_size				   = sys_wrapper->smi_sysconf(_SC_PAGESIZE);
 	if (page_size == -1) {
 		SMI_ERROR(
 		    "Failed to get system configuration. Couldn't get page size. Return code: %d",
@@ -4435,12 +4399,11 @@ amdsmi_status_t amdsmi_get_gpu_accelerator_partition_profile_config_global(
 		return AMDSMI_STATUS_API_FAILED;
 	}
 	// Round up size to be a multiple of page_size for aligned_alloc
-	alloc_size = ((sizeof(amdsmi_accelerator_partition_profile_config_global_t) +
-		       (size_t)page_size - 1) /
-		      (size_t)page_size) *
-		     (size_t)page_size;
+	size_t alloc_size = ((sizeof(amdsmi_accelerator_partition_profile_config_global_t) +
+			      (size_t)page_size - 1) /
+			     (size_t)page_size) *
+			    (size_t)page_size;
 	configs = sys_wrapper->smi_aligned_alloc((void **)&configs, (size_t)page_size, alloc_size);
-#endif
 
 	if (configs == NULL) {
 		SMI_ERROR("Memory allocation call failed for accelerator partition configuration. "
@@ -4462,7 +4425,7 @@ amdsmi_status_t amdsmi_get_gpu_accelerator_partition_profile_config_global(
 
 	if (code != AMDSMI_STATUS_SUCCESS) {
 		SMI_ERROR("Ioctl call failed. Return code: %d", code);
-		sys_wrapper->smi_free(configs);
+		sys_wrapper->smi_aligned_free(configs);
 		return code;
 	}
 
@@ -4517,7 +4480,7 @@ amdsmi_status_t amdsmi_get_gpu_accelerator_partition_profile_config_global(
 		    accelerator_profile_configs_global->profile_configs->profiles[i].vf_mode;
 	}
 
-	sys_wrapper->smi_free(configs);
+	sys_wrapper->smi_aligned_free(configs);
 	return AMDSMI_STATUS_SUCCESS;
 }
 
@@ -4766,12 +4729,7 @@ amdsmi_status_t amdsmi_get_gpu_cper_entries(amdsmi_processor_handle processor_ha
 	cper_config->dev_id	   = pf;
 	cper_config->severity_mask = severity_mask;
 	cper_config->input_cursor  = *cursor;
-#ifdef _WIN64
-	cper = sys_wrapper->smi_calloc(1, sizeof(struct smi_cper));
-#else
-	long page_size;
-	size_t alloc_size;
-	page_size = sys_wrapper->smi_sysconf(_SC_PAGESIZE);
+	long page_size		   = sys_wrapper->smi_sysconf(_SC_PAGESIZE);
 	if (page_size == -1) {
 		SMI_ERROR(
 		    "Failed to get system configuration. Couldn't get page size. Return code: %d",
@@ -4779,10 +4737,10 @@ amdsmi_status_t amdsmi_get_gpu_cper_entries(amdsmi_processor_handle processor_ha
 		return AMDSMI_STATUS_API_FAILED;
 	}
 	// Round up size to be a multiple of page_size for aligned_alloc
-	alloc_size = ((sizeof(struct smi_cper) + (size_t)page_size - 1) / (size_t)page_size) *
-		     (size_t)page_size;
+	size_t alloc_size =
+	    ((sizeof(struct smi_cper) + (size_t)page_size - 1) / (size_t)page_size) *
+	    (size_t)page_size;
 	cper = sys_wrapper->smi_aligned_alloc((void **)&cper, (size_t)page_size, alloc_size);
-#endif
 	if (cper == NULL) {
 		SMI_ERROR("Memory allocation call failed for cper. Return code: %d",
 			  AMDSMI_STATUS_OUT_OF_RESOURCES);
@@ -4796,7 +4754,7 @@ amdsmi_status_t amdsmi_get_gpu_cper_entries(amdsmi_processor_handle processor_ha
 	    &smi_req, (uint32_t)SMI_CMD_CODE_GET_CPER, sizeof(struct smi_cper_config), 0);
 	if (code != AMDSMI_STATUS_SUCCESS && code != AMDSMI_STATUS_MORE_DATA) {
 		SMI_ERROR("Ioctl call failed. Return code: %d", code);
-		sys_wrapper->smi_free(cper);
+		sys_wrapper->smi_aligned_free(cper);
 		return code;
 	}
 
@@ -4823,7 +4781,7 @@ amdsmi_status_t amdsmi_get_gpu_cper_entries(amdsmi_processor_handle processor_ha
 	*entry_count = entries_count;
 	*buf_size    = real_buffer_size;
 
-	sys_wrapper->smi_free(cper);
+	sys_wrapper->smi_aligned_free(cper);
 	return code;
 }
 
@@ -4927,14 +4885,27 @@ amdsmi_status_t amdsmi_get_afids_from_cper(char *cper_buffer,
 	uint32_t number_of_afids = 0;
 	int sec_afid		 = 0;
 
-	if (cper_buffer == NULL || afids == NULL) {
+	if (cper_buffer == NULL || afids == NULL || num_afids == NULL) {
 		SMI_ERROR("Nullpointer given as input. Return code: %d", AMDSMI_STATUS_INVAL);
 		return AMDSMI_STATUS_INVAL;
 	}
 
 	for (uint32_t i = 0; i < g_gpu_device_handles.num_gpus; i++) {
+		amdsmi_asic_info_t asic_info;
+		amdsmi_status_t ret;
+
 		if (is_cmd_supported(g_gpu_device_handles.gpus[i].dev_id) ==
 		    AMDSMI_STATUS_NOT_SUPPORTED) {
+			SMI_ERROR("Command not supported for device. Return code: %d",
+				  AMDSMI_STATUS_NOT_SUPPORTED);
+			return AMDSMI_STATUS_NOT_SUPPORTED;
+		}
+
+		ret = amdsmi_get_gpu_asic_info(&g_gpu_device_handles.gpus[i], &asic_info);
+		if (ret != AMDSMI_STATUS_SUCCESS)
+			return ret;
+
+		if (asic_info.target_graphics_version == ((9ULL << 16) | (4ULL << 8) | 2ULL)) {
 			SMI_ERROR("Command not supported for device. Return code: %d",
 				  AMDSMI_STATUS_NOT_SUPPORTED);
 			return AMDSMI_STATUS_NOT_SUPPORTED;
@@ -5208,17 +5179,10 @@ amdsmi_status_t amdsmi_get_xgmi_plpd(amdsmi_processor_handle processor_handle,
 	for (i = 0; i < dpm_policy->num_supported; i++) {
 		xgmi_plpd->policies[i].policy_id = dpm_policy->policies[i].policy_id;
 
-#ifdef _WIN64
-		strncpy_s(xgmi_plpd->policies[i].policy_description,
-			  sizeof(xgmi_plpd->policies[i].policy_description),
-			  dpm_policy->policies[i].policy_description,
-			  AMDSMI_MAX_STRING_LENGTH);
-#else
 		sys_wrapper->smi_strncpy(xgmi_plpd->policies[i].policy_description,
 					 sizeof(xgmi_plpd->policies[i].policy_description),
 					 dpm_policy->policies[i].policy_description,
 					 AMDSMI_MAX_STRING_LENGTH);
-#endif
 	}
 
 	return AMDSMI_STATUS_SUCCESS;
@@ -5498,14 +5462,15 @@ amdsmi_status_t amdsmi_get_gpu_fabric_info(amdsmi_processor_handle processor_han
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-amdsmi_status_t amdsmi_get_cc_mode(amdsmi_processor_handle processor_handle, amdsmi_cc_mode_t *mode)
+amdsmi_status_t amdsmi_get_gpu_cc_mode(amdsmi_processor_handle processor_handle,
+				       amdsmi_gpu_cc_mode_t *mode)
 {
 #pragma SMI_EXPORT
 	smi_device_handle_t pf;
 	smi_req_ctx smi_req;
-	struct smi_cc_mode *cc_mode = NULL;
-	struct smi_device_info *dev = NULL;
-	struct smi_gpu_handle *gpu  = NULL;
+	struct smi_gpu_cc_mode *cc_mode = NULL;
+	struct smi_device_info *dev	= NULL;
+	struct smi_gpu_handle *gpu	= NULL;
 	enum smi_handle_type type;
 
 	AMDSMI_ESCAPE_IF_NOT_INIT;
@@ -5527,28 +5492,29 @@ amdsmi_status_t amdsmi_get_cc_mode(amdsmi_processor_handle processor_handle, amd
 	dev->dev_id = pf;
 
 	const int code = amdsmi_request(&smi_req,
-					(uint32_t)SMI_CMD_CODE_GET_CC_MODE,
+					(uint32_t)SMI_CMD_CODE_GET_GPU_CC_MODE,
 					sizeof(struct smi_device_info),
-					sizeof(struct smi_cc_mode));
+					sizeof(struct smi_gpu_cc_mode));
 	if (code != AMDSMI_STATUS_SUCCESS) {
 		SMI_ERROR("Ioctl call failed. Return code: %d", code);
 		return code;
 	}
 
-	cc_mode = (struct smi_cc_mode *)&smi_req.thread->ioctl_cmd.payload;
-	*mode	= (amdsmi_cc_mode_t)cc_mode->mode;
+	cc_mode = (struct smi_gpu_cc_mode *)&smi_req.thread->ioctl_cmd.payload;
+	*mode	= (amdsmi_gpu_cc_mode_t)cc_mode->mode;
 
 	return AMDSMI_STATUS_SUCCESS;
 }
 
-amdsmi_status_t amdsmi_set_cc_mode(amdsmi_processor_handle processor_handle, amdsmi_cc_mode_t mode)
+amdsmi_status_t amdsmi_set_gpu_cc_mode(amdsmi_processor_handle processor_handle,
+				       amdsmi_gpu_cc_mode_t mode)
 {
 #pragma SMI_EXPORT
 	smi_device_handle_t pf;
 	struct smi_gpu_handle *gpu = NULL;
 	enum smi_handle_type type;
 	smi_req_ctx smi_req;
-	struct smi_set_cc_mode *cc_mode = NULL;
+	struct smi_set_gpu_cc_mode *cc_mode = NULL;
 
 	AMDSMI_ESCAPE_IF_NOT_INIT;
 
@@ -5564,9 +5530,9 @@ amdsmi_status_t amdsmi_set_cc_mode(amdsmi_processor_handle processor_handle, amd
 	}
 
 	switch (mode) {
-	case AMDSMI_CC_MODE_OFF:
-	case AMDSMI_CC_MODE_ON:
-	case AMDSMI_CC_MODE_DEV:
+	case AMDSMI_GPU_CC_MODE_OFF:
+	case AMDSMI_GPU_CC_MODE_ON:
+	case AMDSMI_GPU_CC_MODE_DEV:
 		break;
 	default:
 		SMI_ERROR("Invalid setting given as input. Return code: %d", AMDSMI_STATUS_INVAL);
@@ -5575,12 +5541,14 @@ amdsmi_status_t amdsmi_set_cc_mode(amdsmi_processor_handle processor_handle, amd
 
 	gpu		= (struct smi_gpu_handle *)processor_handle;
 	pf.handle	= gpu->handle;
-	cc_mode		= (struct smi_set_cc_mode *)&smi_req.thread->ioctl_cmd.payload;
+	cc_mode		= (struct smi_set_gpu_cc_mode *)&smi_req.thread->ioctl_cmd.payload;
 	cc_mode->dev_id = pf;
-	cc_mode->mode	= (enum smi_cc_mode_t)mode;
+	cc_mode->mode	= (enum smi_gpu_cc_mode_t)mode;
 
-	const int code = amdsmi_request(
-	    &smi_req, (uint32_t)SMI_CMD_CODE_SET_CC_MODE, sizeof(struct smi_set_cc_mode), 0);
+	const int code = amdsmi_request(&smi_req,
+					(uint32_t)SMI_CMD_CODE_SET_GPU_CC_MODE,
+					sizeof(struct smi_set_gpu_cc_mode),
+					0);
 	if (code != AMDSMI_STATUS_SUCCESS) {
 		SMI_ERROR("Ioctl call failed. Return code: %d", code);
 		return code;

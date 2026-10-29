@@ -1424,7 +1424,7 @@ int navi32_reset_grbm_soft_reset_stage_2(struct amdgv_adapter *adapt)
 	/* 21. exit safe mode */
 	(void)amdgv_gfx_rlc_safe_mode(adapt, false);
 
-	return 0;
+	return wait_ret ? AMDGV_FAILURE : 0;
 }
 
 struct amdgv_gpu_reset_funcs navi32_reset_funcs = {

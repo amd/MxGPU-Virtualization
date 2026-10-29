@@ -226,7 +226,6 @@ void SmiNicPort::discover_infiniband()
 						    port_entry.path().string();
 						SmiInfiniBandPort port(iface_, name, port_name,
 								       port_sysfs_path);
-						port.collect_hw_counters();
 						ib.add_port(port);
 					}
 				}
@@ -314,16 +313,13 @@ std::map<std::string, uint64_t> SmiNicPort::collect_standard_statistics() const
 {
 	std::map<std::string, uint64_t> stats_map;
 	std::string stats_path = sysfs_class_path_ + "/statistics";
+	std::error_code ec;
 
-	if (!std::filesystem::exists(stats_path) || !std::filesystem::is_directory(stats_path)) {
-		return stats_map;
-	}
-
-	for (const auto& entry : std::filesystem::directory_iterator(stats_path)) {
-		if (entry.is_regular_file()) {
-			std::string stat_name = entry.path().filename().string();
-			auto stat_value =
-			    smi_utils::get_sysfs_data<uint64_t>(entry.path().string());
+	for (std::filesystem::directory_iterator it(stats_path, ec), end; !ec && it != end;
+	     it.increment(ec)) {
+		if (it->is_regular_file(ec)) {
+			std::string stat_name = it->path().filename().string();
+			auto stat_value = smi_utils::get_sysfs_data<uint64_t>(it->path().string());
 			if (stat_value.has_value()) {
 				stats_map[stat_name] = stat_value.value();
 			}
@@ -331,24 +327,6 @@ std::map<std::string, uint64_t> SmiNicPort::collect_standard_statistics() const
 	}
 
 	return stats_map;
-}
-
-std::optional<std::string> SmiNicPort::read_vpd_content() const
-{
-	auto vpd = smi_utils::get_sysfs_data<std::string>(sysfs_bus_path_ + "/vpd");
-	if (!vpd) {
-		return std::nullopt;
-	}
-
-	std::string content = vpd.value();
-	content.erase(std::remove_if(content.begin(), content.end(),
-				     [](char c) {
-					     return !(std::isprint(static_cast<unsigned char>(c)) ||
-						      c == '\n');
-				     }),
-		      content.end());
-
-	return content;
 }
 
 bool SmiNicPort::vendor_stat_supported(const std::string& stat_name) const
@@ -370,14 +348,6 @@ SmiInfiniBandPort::SmiInfiniBandPort(const std::string& netdev, const std::strin
 				     const std::string& name, const std::string& sysfs_path)
     : netdev_(netdev), rdma_dev_(rdma_dev), name_(name), sysfs_path_(sysfs_path)
 {
-	auto port = port_num();
-	if (port.has_value()) {
-		auto info = smi_ibverbs::query_port_mtu(rdma_dev_, port.value());
-		if (info.has_value()) {
-			max_mtu_    = info->max_mtu;
-			active_mtu_ = info->active_mtu;
-		}
-	}
 }
 
 const std::string& SmiInfiniBandPort::name() const
@@ -416,23 +386,23 @@ std::optional<std::string> SmiInfiniBandPort::state() const
 	return state;
 }
 
-std::optional<uint16_t> SmiInfiniBandPort::max_mtu() const
+std::optional<smi_ibverbs::PortMtu> SmiInfiniBandPort::mtu() const
 {
-	return max_mtu_;
+	auto port = port_num();
+	if (!port.has_value()) {
+		return std::nullopt;
+	}
+	return smi_ibverbs::query_port_mtu(rdma_dev_, port.value());
 }
 
-std::optional<uint16_t> SmiInfiniBandPort::active_mtu() const
+std::map<std::string, uint64_t> SmiInfiniBandPort::collect_hw_counters() const
 {
-	return active_mtu_;
-}
-
-void SmiInfiniBandPort::collect_hw_counters()
-{
+	std::map<std::string, uint64_t> hw_counters;
 	std::string hw_counters_path = sysfs_path_ + "/hw_counters";
 
 	if (!std::filesystem::exists(hw_counters_path) ||
 	    !std::filesystem::is_directory(hw_counters_path)) {
-		return;
+		return hw_counters;
 	}
 
 	for (const auto& entry : std::filesystem::directory_iterator(hw_counters_path)) {
@@ -441,15 +411,12 @@ void SmiInfiniBandPort::collect_hw_counters()
 			auto counter_value =
 			    smi_utils::get_sysfs_data<uint64_t>(entry.path().string());
 			if (counter_value.has_value()) {
-				hw_counters_map_[counter_name] = counter_value.value();
+				hw_counters[counter_name] = counter_value.value();
 			}
 		}
 	}
-}
 
-const std::map<std::string, uint64_t>& SmiInfiniBandPort::get_hw_counters_map() const
-{
-	return hw_counters_map_;
+	return hw_counters;
 }
 
 // **** SmiInfiniBand ****
@@ -657,22 +624,42 @@ std::optional<std::string> SmiNic::numa_affinity(uint8_t node) const
 	return smi_utils::get_sysfs_data<std::string>(path);
 }
 
+std::optional<std::string> SmiNic::read_vpd_content(const std::string& sysfs_bus_path) const
+{
+	if (vpd_content_) {
+		return vpd_content_;
+	}
+
+	SmiSysfsReader::SysfsValue vpd;
+	if (SmiSysfsReader::readLine(sysfs_bus_path + "/vpd", vpd) !=
+		SmiSysfsReader::SysfsStatus::Success ||
+	    !std::holds_alternative<std::string>(vpd)) {
+		return std::nullopt;
+	}
+
+	std::string content = std::get<std::string>(vpd);
+	content.erase(std::remove_if(content.begin(), content.end(),
+				     [](char c) {
+					     return !(std::isprint(static_cast<unsigned char>(c)) ||
+						      c == '\n');
+				     }),
+		      content.end());
+
+	vpd_content_ = content;
+	return vpd_content_;
+}
+
 // PCIe parent BDF for this NIC
 std::optional<std::string> SmiNic::pcie_parent_bdf() const
 {
 	return smi_utils::get_pcie_parent_bdf(bdf_);
 }
 
-// Check if this NIC shares the same immediate PCIe parent with another device
-bool SmiNic::share_same_pcie_parent(uint64_t bdf) const
+// Check if this NIC shares the same PCIe switch with another device
+bool SmiNic::share_same_pcie_switch(uint64_t bdf) const
 {
-	auto nic_parent	    = pcie_parent_bdf();
 	std::string bdf_str = smi_utils::format_bdf(bdf);
-	auto device_parent  = smi_utils::get_pcie_parent_bdf(bdf_str);
-
-	// Both must have a valid parent and parents must match
-	return nic_parent.has_value() && device_parent.has_value() &&
-	       nic_parent.value() == device_parent.value();
+	return smi_utils::share_same_pcie_switch(bdf_, bdf_str);
 }
 
 std::optional<NicLinkType> SmiNic::link_type(uint64_t bdf) const
@@ -681,13 +668,15 @@ std::optional<NicLinkType> SmiNic::link_type(uint64_t bdf) const
 	if (!smi_utils::is_valid_bdf(bdf_str) || !smi_utils::is_valid_bdf(bdf_)) {
 		return NicLinkType::UNKNOWN;
 	}
-	// Priority 1: Check PCIe topology - same switch is most definitive
-	// Direct sysfs check: do both devices have the same immediate parent?
-	if (share_same_pcie_parent(bdf)) {
+
+	// Priority 1: Check if devices share the same PCIe switch
+	// This means they connect via the same PCIe switch (common ancestor)
+	if (share_same_pcie_switch(bdf)) {
 		return NicLinkType::PCIE;
 	}
 
 	// Priority 2 & 3: Use NUMA nodes to determine NUMA vs XNUMA
+	// (different PCIe switches, check if same or different CPU)
 	auto device_numa_node = smi_utils::get_numa_node_from_bdf(bdf_str);
 	auto nic_numa_node    = numa_node();
 
@@ -725,7 +714,7 @@ std::optional<std::string> SmiNicPensando::product_name() const
 		return std::nullopt;
 	}
 
-	auto vpd = ports_[0].read_vpd_content();
+	auto vpd = read_vpd_content(ports_[0].sysfs_bus_path());
 	if (!vpd) {
 		return std::nullopt;
 	}
@@ -749,7 +738,7 @@ std::optional<std::string> SmiNicPensando::part_number() const
 		return std::nullopt;
 	}
 
-	auto vpd = ports_[0].read_vpd_content();
+	auto vpd = read_vpd_content(ports_[0].sysfs_bus_path());
 	if (!vpd) {
 		return std::nullopt;
 	}
@@ -774,7 +763,7 @@ std::optional<std::string> SmiNicPensando::serial_number() const
 		return std::nullopt;
 	}
 
-	auto vpd = ports_[0].read_vpd_content();
+	auto vpd = read_vpd_content(ports_[0].sysfs_bus_path());
 	if (!vpd) {
 		return std::nullopt;
 	}
@@ -803,24 +792,6 @@ SmiNicBroadcom::SmiNicBroadcom(const std::string& iface, const std::string& bdf,
 {
 }
 
-std::optional<std::string> SmiNicBroadcom::read_vpd_content() const
-{
-	auto vpd = smi_utils::get_sysfs_data<std::string>(sysfs_bus_path() + "/vpd");
-	if (!vpd) {
-		return std::nullopt;
-	}
-
-	std::string content = vpd.value();
-	content.erase(std::remove_if(content.begin(), content.end(),
-				     [](char c) {
-					     return !(std::isprint(static_cast<unsigned char>(c)) ||
-						      c == '\n');
-				     }),
-		      content.end());
-
-	return content;
-}
-
 std::optional<std::string> SmiNicBroadcom::vendor_name() const
 {
 	return std::string("Broadcom Inc.");
@@ -828,7 +799,7 @@ std::optional<std::string> SmiNicBroadcom::vendor_name() const
 
 std::optional<std::string> SmiNicBroadcom::product_name() const
 {
-	auto vpd = read_vpd_content();
+	auto vpd = read_vpd_content(sysfs_bus_path_);
 	if (!vpd) {
 		return std::nullopt;
 	}
@@ -853,7 +824,7 @@ std::optional<std::string> SmiNicBroadcom::product_name() const
 
 std::optional<std::string> SmiNicBroadcom::part_number() const
 {
-	auto vpd = read_vpd_content();
+	auto vpd = read_vpd_content(sysfs_bus_path_);
 	if (!vpd) {
 		return std::nullopt;
 	}
@@ -874,7 +845,7 @@ std::optional<std::string> SmiNicBroadcom::part_number() const
 
 std::optional<std::string> SmiNicBroadcom::serial_number() const
 {
-	auto vpd = read_vpd_content();
+	auto vpd = read_vpd_content(sysfs_bus_path_);
 	if (!vpd) {
 		return std::nullopt;
 	}

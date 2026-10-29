@@ -26,7 +26,8 @@ auto constexpr asic_csv_header {
     "subsystem_id,asic_rev_id,asic_serial,oam_id,num_of_compute_units"};
 auto constexpr asic_host_csv_header {
     ",asic_market_name,asic_vendor_id,asic_vendor_name,asic_subvendor_id,asic_device_id,asic_"
-    "subsystem_id,asic_rev_id,asic_serial,oam_id,physical_acc_id,num_of_compute_units"};
+    "subsystem_id,asic_rev_id,asic_chip_rev_id,asic_external_rev_id,asic_serial,oam_id,physical_"
+    "acc_id,num_of_compute_units"};
 auto constexpr bus_csv_header {",bus_bdf,max_pcie_width,max_pcie_speed,pcie_interface_version,slot_"
 			       "type,max_pcie_interface_version"};
 auto constexpr bus_csv_header_pcie {

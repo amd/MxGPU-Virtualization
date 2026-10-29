@@ -27,26 +27,18 @@ int amdgv_int_allocate_vf(struct amdgv_adapter *adapt, struct amdgv_vf_option *o
 
 	// VF index is already set during GPUV live update restore
 	if (!(adapt->flags & AMDGV_FLAG_GPUV_LIVE_UPDATE) || (adapt->live_update_state != AMDGV_LIVE_UPDATE_RESTORE)) {
-		/* caller already ties this idx_vf to a specific BDF/VMBus
-		 * channel, so honor it instead of silently reassigning it to
-		 * whichever slot happens to be free first. Only auto-pick when
-		 * the caller left idx_vf unspecified. */
-		if (option->idx_vf < adapt->num_vf && is_unavail_vf(option->idx_vf)) {
-			i = option->idx_vf;
-		} else {
-			/* search for free vf */
-			for (i = 0; i < adapt->num_vf; i++) {
-				if (is_unavail_vf(i))
-					break;
-			}
-			if (i == adapt->num_vf) {
-				amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPUMON_NO_AVAILABLE_SLOT, 0);
-				opt_err = AMDGV_LOG_GPUMON_NO_AVAILABLE_SLOT;
-				goto unlock;
-			}
-
-			option->idx_vf = i;
+		/* search for free vf */
+		for (i = 0; i < adapt->num_vf; i++) {
+			if (is_unavail_vf(i))
+				break;
 		}
+		if (i == adapt->num_vf) {
+			amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_GPUMON_NO_AVAILABLE_SLOT, 0);
+			opt_err = AMDGV_LOG_GPUMON_NO_AVAILABLE_SLOT;
+			goto unlock;
+		}
+
+		option->idx_vf = i;
 	}
 
 	/* for now check SMI option only */
@@ -59,9 +51,9 @@ int amdgv_int_allocate_vf(struct amdgv_adapter *adapt, struct amdgv_vf_option *o
 	if (opt_err != 0)
 		goto unlock;
 
-	ret = amdgv_sched_park(adapt);
-	if (ret) {
-		opt_err = ret;
+	if (amdgv_sched_park(adapt)) {
+		opt_err = (amdgv_sched_is_unrecov_err(adapt) || adapt->status != AMDGV_STATUS_HW_INIT) ?
+				  AMDGV_FAILURE : AMDGV_LOG_GPUMON_RETRY;
 		goto unlock;
 	}
 	opt_err = amdgv_vfmgr_alloc_vf(adapt, option);
@@ -87,9 +79,9 @@ int amdgv_int_free_vf(struct amdgv_adapter *adapt, uint32_t idx_vf)
 		if (!is_avail_vf(idx_vf))
 			return AMDGV_LOG_GPUMON_VF_BUSY;
 
-		tmp_ret = amdgv_sched_park(adapt);
-		if (tmp_ret) {
-			ret = tmp_ret;
+		if (amdgv_sched_park(adapt)) {
+			ret = (amdgv_sched_is_unrecov_err(adapt) || adapt->status != AMDGV_STATUS_HW_INIT) ?
+				      AMDGV_FAILURE : AMDGV_LOG_GPUMON_RETRY;
 			goto unlock;
 		}
 
@@ -180,8 +172,8 @@ int amdgv_int_ras_trigger_error(struct amdgv_adapter *adapt, struct amdgv_smi_ra
 
 		vf_idx = data->vf_idx;
 		ras_data.value = data->method;
-		ras_data.block_id = data->block_id;
-		ras_data.inject_error_type = data->inject_error_type;
+		ras_data.block_id = (enum ta_ras_block)data->block_id;
+		ras_data.inject_error_type = (enum ta_ras_error_type)data->inject_error_type;
 		ras_data.sub_block_index = data->sub_block_index;
 		ras_data.address = data->address;
 		instance_mask = data->mask;

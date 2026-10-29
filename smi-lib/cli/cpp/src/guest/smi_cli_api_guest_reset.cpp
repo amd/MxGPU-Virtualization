@@ -13,11 +13,6 @@
 #include "smi_cli_exception.h"
 
 #include <sstream>
-#ifdef _WIN64
-	#include <windows.h>
-	#include <sysinfoapi.h>
-#endif
-
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 								amdsmi_processor_handle*);
 typedef amdsmi_status_t (*AMDSMI_CLEAN_GPU_LOCAL_DATA)(amdsmi_processor_handle);

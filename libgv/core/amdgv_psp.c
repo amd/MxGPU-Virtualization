@@ -760,6 +760,65 @@ void amdgv_psp_put_cmd_timeout(struct amdgv_adapter *adapt,
 				  (uint64_t)input->cmd.perf_hw.pref_format1,
 				  (uint64_t)input->cmd.perf_hw.pref_format2);
 		break;
+	case PSP_CMD_KM_TYPE__UAL_GET_INTERFACE_VER:
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_PSP_UAL_GET_INTERFACE_VER_TIMEOUT, 0);
+		break;
+	case PSP_CMD_KM_TYPE__UAL_GET_CONFIG: {
+		uint64_t cfg_addr =
+			((uint64_t)input->cmd.get_config_ual.ual_cfg_addr_hi << 32) |
+			input->cmd.get_config_ual.ual_cfg_addr_lo;
+
+		amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_FW_PSP_UAL_GET_CONFIG_TIMEOUT,
+				  cfg_addr,
+				  (uint64_t)input->cmd.get_config_ual.ual_cfg_size,
+				  (uint64_t)input->cmd.get_config_ual.addr_type);
+		break;
+	}
+	case PSP_CMD_KM_TYPE__UAL_SET_PPOD_CONFIG: {
+		const uint8_t *ppod_id = input->cmd.set_ppod_config_ual.ppod_id;
+		uint64_t ppod_id_hi = 0, ppod_id_lo = 0;
+		int i;
+
+		for (i = 0; i < 8; i++) {
+			ppod_id_hi = (ppod_id_hi << 8) | ppod_id[i];
+			ppod_id_lo = (ppod_id_lo << 8) | ppod_id[8 + i];
+		}
+
+		amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_FW_PSP_UAL_SET_PPOD_CONFIG_TIMEOUT,
+				  (uint64_t)input->cmd.set_ppod_config_ual.accelerator_id,
+				  ppod_id_hi, ppod_id_lo,
+				  (uint64_t)input->cmd.set_ppod_config_ual.ppod_size,
+				  (uint64_t)input->cmd.set_ppod_config_ual.bandwidth,
+				  (uint64_t)input->cmd.set_ppod_config_ual.latency);
+		break;
+	}
+	case PSP_CMD_KM_TYPE__UAL_SET_VPOD_CONFIG:
+		amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_FW_PSP_UAL_SET_VPOD_CONFIG_TIMEOUT,
+				  (uint64_t)input->cmd.set_vpod_config_ual.vpod_id,
+				  (uint64_t)input->cmd.set_vpod_config_ual.vpod_size,
+				  (uint64_t)input->cmd.set_vpod_config_ual.addr_mode);
+		break;
+	case PSP_CMD_KM_TYPE__UAL_SET_STATION_CONFIG:
+		amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_FW_PSP_UAL_SET_STATION_CONFIG_TIMEOUT,
+				  (uint64_t)input->cmd.set_station_config_ual.num_stations,
+				  (uint64_t)input->cmd.set_station_config_ual.station_flag);
+		break;
+	case PSP_CMD_KM_TYPE__UAL_GET_STATION_CONFIG: {
+		uint64_t cfg_addr =
+			((uint64_t)input->cmd.get_station_config_ual.ual_cfg_addr_hi << 32) |
+			input->cmd.get_station_config_ual.ual_cfg_addr_lo;
+
+		amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_FW_PSP_UAL_GET_STATION_CONFIG_TIMEOUT,
+				  cfg_addr,
+				  (uint64_t)input->cmd.get_station_config_ual.ual_cfg_size,
+				  (uint64_t)input->cmd.get_station_config_ual.addr_type);
+		break;
+	}
+	case PSP_CMD_KM_TYPE__UAL_SEND_COMPLETION:
+		amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_FW_PSP_UAL_SEND_COMPLETION_TIMEOUT,
+				  (uint64_t)input->cmd.send_completion_ual.cmd_id,
+				  (uint64_t)input->cmd.send_completion_ual.status);
+		break;
 	default:
 		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_PSP_CMD_TIMEOUT,
 			      (uint64_t)input->cmd_id);
@@ -993,6 +1052,72 @@ void amdgv_psp_put_cmd_error(struct amdgv_adapter *adapt,
 				  (uint64_t)input->cmd.perf_hw.ptl_state,
 				  (uint64_t)input->cmd.perf_hw.pref_format1,
 				  (uint64_t)input->cmd.perf_hw.pref_format2,
+				  (uint64_t)resp->status);
+		break;
+	case PSP_CMD_KM_TYPE__UAL_GET_INTERFACE_VER:
+		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_FW_PSP_UAL_GET_INTERFACE_VER_FAIL,
+			      (uint64_t)resp->status);
+		break;
+	case PSP_CMD_KM_TYPE__UAL_GET_CONFIG: {
+		uint64_t cfg_addr =
+			((uint64_t)input->cmd.get_config_ual.ual_cfg_addr_hi << 32) |
+			input->cmd.get_config_ual.ual_cfg_addr_lo;
+
+		amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_FW_PSP_UAL_GET_CONFIG_FAIL,
+				  cfg_addr,
+				  (uint64_t)input->cmd.get_config_ual.ual_cfg_size,
+				  (uint64_t)input->cmd.get_config_ual.addr_type,
+				  (uint64_t)resp->status);
+		break;
+	}
+	case PSP_CMD_KM_TYPE__UAL_SET_PPOD_CONFIG: {
+		const uint8_t *ppod_id = input->cmd.set_ppod_config_ual.ppod_id;
+		uint64_t ppod_id_hi = 0, ppod_id_lo = 0;
+		int i;
+
+		for (i = 0; i < 8; i++) {
+			ppod_id_hi = (ppod_id_hi << 8) | ppod_id[i];
+			ppod_id_lo = (ppod_id_lo << 8) | ppod_id[8 + i];
+		}
+
+		amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_FW_PSP_UAL_SET_PPOD_CONFIG_FAIL,
+				  (uint64_t)input->cmd.set_ppod_config_ual.accelerator_id,
+				  ppod_id_hi, ppod_id_lo,
+				  (uint64_t)input->cmd.set_ppod_config_ual.ppod_size,
+				  (uint64_t)input->cmd.set_ppod_config_ual.bandwidth,
+				  (uint64_t)input->cmd.set_ppod_config_ual.latency,
+				  (uint64_t)resp->status);
+		break;
+	}
+	case PSP_CMD_KM_TYPE__UAL_SET_VPOD_CONFIG:
+		amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_FW_PSP_UAL_SET_VPOD_CONFIG_FAIL,
+				  (uint64_t)input->cmd.set_vpod_config_ual.vpod_id,
+				  (uint64_t)input->cmd.set_vpod_config_ual.vpod_size,
+				  (uint64_t)input->cmd.set_vpod_config_ual.addr_mode,
+				  (uint64_t)resp->status);
+		break;
+	case PSP_CMD_KM_TYPE__UAL_SET_STATION_CONFIG:
+		amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_FW_PSP_UAL_SET_STATION_CONFIG_FAIL,
+				  (uint64_t)input->cmd.set_station_config_ual.num_stations,
+				  (uint64_t)input->cmd.set_station_config_ual.station_flag,
+				  (uint64_t)resp->status);
+		break;
+	case PSP_CMD_KM_TYPE__UAL_GET_STATION_CONFIG: {
+		uint64_t cfg_addr =
+			((uint64_t)input->cmd.get_station_config_ual.ual_cfg_addr_hi << 32) |
+			input->cmd.get_station_config_ual.ual_cfg_addr_lo;
+
+		amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_FW_PSP_UAL_GET_STATION_CONFIG_FAIL,
+				  cfg_addr,
+				  (uint64_t)input->cmd.get_station_config_ual.ual_cfg_size,
+				  (uint64_t)input->cmd.get_station_config_ual.addr_type,
+				  (uint64_t)resp->status);
+		break;
+	}
+	case PSP_CMD_KM_TYPE__UAL_SEND_COMPLETION:
+		amdgv_put_log_ext(AMDGV_PF_IDX, AMDGV_LOG_FW_PSP_UAL_SEND_COMPLETION_FAIL,
+				  (uint64_t)input->cmd.send_completion_ual.cmd_id,
+				  (uint64_t)input->cmd.send_completion_ual.status,
 				  (uint64_t)resp->status);
 		break;
 	default:
@@ -3873,7 +3998,7 @@ enum psp_status amdgv_psp_vbflash_status(struct amdgv_adapter *adapt, uint32_t *
 {
 	enum psp_status ret = PSP_STATUS__SUCCESS;
 
-	oss_mutex_unlock(adapt->psp_lock);
+	oss_mutex_lock(adapt->psp_lock);
 
 	if (adapt->psp.vbflash_status)
 		ret = adapt->psp.vbflash_status(adapt, status);
@@ -4140,7 +4265,74 @@ enum amdgv_live_info_status amdgv_psp_fw_info_import_live_data(struct amdgv_adap
 	adapt->pp.smu_fw_version = fw_info->smu_fw_version;
 	adapt->psp.fw_info[AMDGV_FIRMWARE_ID__PLDM_VERSION] = fw_info->fw_info_pldm;
 
+	amdgv_psp_fw_feature_init(adapt);
+
 	return AMDGV_LIVE_INFO_STATUS_SUCCESS;
+}
+
+struct amdgv_psp_fw_feature_req {
+	enum amdgv_psp_fw_feature_id feature;
+	uint32_t		 asic_type;
+	enum amdgv_firmware_id	 fw_id;
+	uint32_t		 min_version;
+};
+
+static const struct amdgv_psp_fw_feature_req amdgv_psp_fw_feature_reqs[] = {
+	{ AMDGV_PSP_FW_FEATURE__HDP_SURFACE0, CHIP_MI300X, AMDGV_FIRMWARE_ID__PSP_SOS,
+	  0x00360264 },
+	{ AMDGV_PSP_FW_FEATURE__HDP_SURFACE0, CHIP_MI308X, AMDGV_FIRMWARE_ID__PSP_SOS,
+	  0x00360825 },
+	{ AMDGV_PSP_FW_FEATURE__HDP_SURFACE0, CHIP_MI350X, AMDGV_FIRMWARE_ID__PSP_SOS,
+	  0x00450033 },
+	{ AMDGV_PSP_FW_FEATURE__HDP_SURFACE0, CHIP_MI350P, AMDGV_FIRMWARE_ID__PSP_SOS,
+	  0x0045152c },
+};
+
+static const char *amdgv_psp_fw_feature_name(enum amdgv_psp_fw_feature_id feature)
+{
+	switch (feature) {
+	case AMDGV_PSP_FW_FEATURE__HDP_SURFACE0:
+		return "HDP_SURFACE0";
+	default:
+		return "unknown";
+	}
+}
+
+void amdgv_psp_fw_feature_init(struct amdgv_adapter *adapt)
+{
+	const struct amdgv_psp_fw_feature_req *req;
+	uint64_t features = 0;
+	uint32_t i, version;
+
+	for (i = 0; i < ARRAY_SIZE(amdgv_psp_fw_feature_reqs); i++) {
+		req = &amdgv_psp_fw_feature_reqs[i];
+
+		if (req->asic_type != adapt->asic_type)
+			continue;
+
+		version = adapt->psp.fw_info ? adapt->psp.fw_info[req->fw_id] : 0;
+		if (version >= req->min_version) {
+			features |= 1ULL << req->feature;
+			AMDGV_DEBUG("fw feature %s enabled, fw %d version 0x%08x\n",
+				    amdgv_psp_fw_feature_name(req->feature),
+				    req->fw_id, version);
+		} else {
+			AMDGV_DEBUG("fw feature %s disabled, fw %d version 0x%08x is below 0x%08x\n",
+				    amdgv_psp_fw_feature_name(req->feature), req->fw_id,
+				    version, req->min_version);
+		}
+	}
+
+	adapt->fw_features = features;
+}
+
+bool amdgv_psp_fw_feature_supported(struct amdgv_adapter *adapt,
+				enum amdgv_psp_fw_feature_id feature)
+{
+	if (feature >= AMDGV_PSP_FW_FEATURE__MAX)
+		return false;
+
+	return !!(adapt->fw_features & (1ULL << feature));
 }
 
 enum psp_status amdgv_psp_sw_init(struct amdgv_adapter *adapt)

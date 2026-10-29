@@ -82,6 +82,20 @@ int amdgv_nbio_sdma_doorbell_range(struct amdgv_adapter *adapt, int instance, bo
 	return 0;
 }
 
+int amdgv_nbio_vcn_doorbell_range(struct amdgv_adapter *adapt, bool use_doorbell,
+				  int doorbell_index, int instance)
+{
+	if (adapt->nbio.funcs && adapt->nbio.funcs->vcn_doorbell_range) {
+		adapt->nbio.funcs->vcn_doorbell_range(adapt, use_doorbell, doorbell_index,
+							      instance);
+	} else {
+		AMDGV_ERROR("Unable to set vcn doorbell range");
+		return AMDGV_FAILURE;
+	}
+
+	return 0;
+}
+
 int amdgv_nbio_get_nps_mode(struct amdgv_adapter *adapt,
 			    enum amdgv_memory_partition_mode *memory_partition_mode)
 {
@@ -152,4 +166,3 @@ int amdgv_nbio_get_asic_nps_caps(struct amdgv_adapter *adapt,
 		return AMDGV_ACCELERATOR_PARTITION_MODE_UNKNOWN;
 	}
 }
-

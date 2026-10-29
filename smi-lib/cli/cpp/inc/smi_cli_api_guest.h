@@ -6,13 +6,16 @@
 #pragma once
 
 #include "smi_cli_api_base.h"
+#include "smi_cli_loader.h"
 
 class AmdSmiApiGuest : public AmdSmiApiBase
 {
+private:
+	SmiDynamicLoader loader_;
+
 public:
 	AmdSmiApiGuest();
 	virtual ~AmdSmiApiGuest(void);
-	void* amdSmiLibHandle;
 
 	virtual int amdsmi_get_bdf_from_gpu_index(uint64_t& processor_bdf, int index) override;
 	virtual int amdsmi_get_bdf_from_uuid_or_bdf(uint64_t& processor_bdf, int& gpu_index,
@@ -59,6 +62,8 @@ public:
 						  std::string& out) override;
 	virtual int amdsmi_get_pcie_metric_command(uint64_t processor_bdf, Arguments arg,
 						   std::string& out) override;
+	virtual int amdsmi_get_fan_metric_command(uint64_t processor_bdf, Arguments arg,
+						  std::string& out) override;
 
 	virtual int amdsmi_get_fb_usage_command(uint64_t processor_bdf, Arguments arg,
 						std::string& out) override;

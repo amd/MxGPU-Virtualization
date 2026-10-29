@@ -22,8 +22,9 @@ inline std::string nicListTemplate {"NIC: %d \n"
 				    "    SERIAL_NUMBER: %s\n"
 				    "    VENDOR_NAME: %s\n"};
 
-inline std::string versionTemplate {"VERSION: \n    TOOL_NAME: %s \n    TOOL_VERSION: %s \n    "
-				    "LIB_VERSION: %s \n    DRIVER_VERSION: %s \n"};
+inline std::string versionTemplate {
+    "VERSION: \n    TOOL_NAME: %s \n    TOOL_VERSION: %s \n    "
+    "LIB_VERSION: %s \n    DRIVER_VERSION: %s \n    ROCM_VERSION: %s \n"};
 
 inline std::string staticAsicTemplate {
     "    ASIC: \n        MARKET_NAME: %s \n        VENDOR_ID: %s \n        VENDOR_NAME: %s \n      "
@@ -34,7 +35,8 @@ inline std::string staticAsicTemplate {
 inline std::string staticAsicHostTemplate {
     "    ASIC: \n        MARKET_NAME: %s \n        VENDOR_ID: %s \n        VENDOR_NAME: %s \n      "
     "  SUBVENDOR_ID: %s \n        DEVICE_ID: %s "
-    "\n        SUBSYSTEM_ID: %s \n        REV_ID: %s \n        ASIC_SERIAL: %s\n        OAM_ID: "
+    "\n        SUBSYSTEM_ID: %s \n        REV_ID: %s \n        CHIP_REV_ID: %s \n        EXTERNAL_"
+    "REV_ID: %s \n        ASIC_SERIAL: %s\n        OAM_ID: "
     "%s\n        PHYSICAL_ACC_ID: %s\n        NUM_OF_COMPUTE_UNITS: %s\n"};
 
 inline std::string staticAsicTargetGraphicsVersionTemplate {
@@ -229,6 +231,12 @@ inline std::string AIDTemplate {"            AID_%s:\n"};
 inline std::string XCPTemplate {"            XCP_%s:\n"};
 
 inline std::string MIDTemplate {"            MID_%s:\n"};
+
+inline std::string MEMCLKPerPartitionTemplate {"                CLK_MEM: %s %s\n"};
+
+inline std::string MEMCLKMinPerPartitionTemplate {"                CLK_MEM_MIN_LIMIT: %s %s\n"};
+
+inline std::string MEMCLKMaxPerPartitionTemplate {"                CLK_MEM_MAX_LIMIT: %s %s\n"};
 
 inline std::string activityPerPartitionTemplate {"                VCN_ACTIVITY: %s %s\n"};
 
@@ -672,6 +680,12 @@ inline std::string profileTemplate {"PROFILE_INFO: \n"
 inline std::string metricFbUsageTemplate {"    FB_USAGE:\n"
 					  "        FB_TOTAL: %s %s\n"
 					  "        FB_USED: %s %s\n"};
+
+inline std::string metricFanTemplate {"    FAN:\n"
+				      "        SPEED: %s\n"
+				      "        MAX: %s\n"
+				      "        RPM: %s\n"
+				      "        USAGE: %s %s\n"};
 
 inline std::string staticPartitionTemplate {"    PARTITION: \n"
 					    "        ACCELERATOR_PARTITION: %s \n"

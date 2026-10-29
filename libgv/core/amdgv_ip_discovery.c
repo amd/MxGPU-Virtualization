@@ -74,6 +74,42 @@ static int amdgv_init_funcs_table(struct amdgv_adapter *adapt)
 	return 0;
 }
 
+static void amdgv_cache_revision_ids(struct amdgv_adapter *adapt)
+{
+	struct amdgv_ip_discovery_header *ihdr = adapt->ip_discovery.pf_copy.ihdr;
+	uint32_t die_rev_id;
+
+	if (adapt->ip_versions[MP1_HWIP][0] != IP_VERSION(15, 0, 8) ||
+	    !ihdr || !ihdr->num_dies)
+		return;
+
+	die_rev_id = ihdr->die_info[0].die_id;
+
+	die_rev_id |= (adapt->rev_id & AMDGV_DIE_REV_XCD__MASK)
+		      << AMDGV_DIE_REV_XCD__SHIFT;
+
+	adapt->nbio.chip_rev_id = die_rev_id;
+
+	/* AMDGV_DIE_REV(mid_rev, aid_rev, xcd_rev) */
+	switch (die_rev_id) {
+	case AMDGV_DIE_REV(0, 0, 0):
+		adapt->nbio.external_rev_id = AMDGV_MID_A0_AID_A0_XCD_A0;
+		break;
+	case AMDGV_DIE_REV(0, 0, 1):
+		adapt->nbio.external_rev_id = AMDGV_MID_A0_AID_A0_XCD_B0;
+		break;
+	case AMDGV_DIE_REV(0, 1, 0):
+		adapt->nbio.external_rev_id = AMDGV_MID_A0_AID_A1_XCD_A0;
+		break;
+	case AMDGV_DIE_REV(0, 1, 1):
+		adapt->nbio.external_rev_id = AMDGV_MID_A0_AID_A1_XCD_B0;
+		break;
+	default:
+		AMDGV_WARN("unknown die rev id 0x%x\n", die_rev_id);
+		break;
+	}
+}
+
 static const char *hw_id_names[HW_ID_MAX] = {
 	[MP1_HWID]		= "MP1",
 	[MP2_HWID]		= "MP2",
@@ -1338,6 +1374,8 @@ int amdgv_discover_ip(struct amdgv_adapter *adapt)
 			   "XCC Mask:  0x%x\n" "SDMA Mask: 0x%x\n" "UMC Mask: 0x%x\n",
 			   adapt->mcp.num_aid, adapt->mcp.gfx.num_xcc, adapt->sdma.num_instances, adapt->umc.num_umc,
 			   adapt->mcp.gfx.xcc_mask, adapt->mcp.gfx.sdma_mask, adapt->umc.active_mask);
+
+	amdgv_cache_revision_ids(adapt);
 
 	return 0;
 }

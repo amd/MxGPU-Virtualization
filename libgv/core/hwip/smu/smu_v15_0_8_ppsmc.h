@@ -12,6 +12,7 @@
 #define PPSMC_Result_UnknownCmd                     0xFE
 #define PPSMC_Result_CmdRejectedPrereq              0xFD
 #define PPSMC_Result_CmdRejectedBusy                0xFC
+#define PPSMC_Result_EEpromCorrupted                0xFB
 
 // Message Definitions:
 #define PPSMC_MSG_TestMessage	                    0x1
@@ -47,7 +48,6 @@
 #define PPSMC_MSG_GetRmaStatus	                    0x20
 #define PPSMC_MSG_GetBadPageCount	            0x21
 #define PPSMC_MSG_GetBadPageMcaAddress	            0x22
-#define PPSMC_MSG_GetBadPagePaAddress	            0x23
 #define PPSMC_MSG_SetTimestamp	                    0x24
 #define PPSMC_MSG_GetTimestamp	                    0x25
 #define PPSMC_MSG_GetRasPolicy	                    0x26
@@ -65,7 +65,21 @@
 #define PPSMC_MSG_SetSoftMaxGl2clk	            0x32
 #define PPSMC_MSG_SetSoftMinFclk	            0x33
 #define PPSMC_MSG_SetSoftMaxFclk	            0x34
-#define PPSMC_Message_Count                         0x35
+#define PPSMC_MSG_PowerStabilizationEnablement      0x35
+#define PPSMC_MSG_SetThrottlerMode                  0x36
+#define PPSMC_MSG_SetPowerProfile                   0x37
+#define PPSMC_MSG_GetPowerProfile                   0x38
+#define PPSMC_MSG_ConfigurePowerProfile             0x39
+#define PPSMC_MSG_QueryPowerProfile                 0x3A
+#define PPSMC_MSG_QueryMaxPowerProfile              0x3B
+#define PPSMC_MSG_QueryMinPowerProfile              0x3C
+#define PPSMC_MSG_SetDriverDramAddrHigh             0x3D
+#define PPSMC_MSG_SetDriverDramAddrLow              0x3E
+#define PPSMC_MSG_GetEnabledSmuFeaturesSelect       0x3F
+// NPM limit setter; NPM reads are served from the SystemMetricsTable.
+#define PPSMC_MSG_SetNpmLimit                       0x40
+#define PPSMC_MSG_PrepareNodeForUnload              0x41
+#define PPSMC_Message_Count                         0x42
 
 //PPSMC Reset Types for driver msg argument
 #define PPSMC_RESET_TYPE_DRIVER_MODE_0_RESET        0x1

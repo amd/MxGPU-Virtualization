@@ -16,13 +16,9 @@
 
 #include "json/json.h"
 
+#include <cmath>
 #include <sstream>
 #include <limits.h>
-#ifdef _WIN64
-	#include <windows.h>
-	#include <sysinfoapi.h>
-#endif
-
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)(amdsmi_bdf_t,
 								amdsmi_processor_handle*);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_ACTIVITY)(amdsmi_processor_handle, amdsmi_engine_usage_t*);
@@ -39,6 +35,10 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_DEVICE_BDF)(amdsmi_processor_handle, am
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLES)(amdsmi_socket_handle, uint32_t*,
 							amdsmi_processor_handle*);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_VRAM_USAGE)(amdsmi_processor_handle, amdsmi_vram_usage_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_FAN_RPMS)(amdsmi_processor_handle, uint32_t, int64_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_FAN_SPEED)(amdsmi_processor_handle, uint32_t, int64_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_FAN_SPEED_MAX)(amdsmi_processor_handle, uint32_t,
+							uint64_t*);
 
 extern AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF guest_amdsmi_get_processor_handle_from_bdf;
 extern AMDSMI_GET_GPU_ACTIVITY guest_amdsmi_get_gpu_activity;
@@ -50,6 +50,9 @@ extern AMDSMI_GET_PCIE_INFO guest_amdsmi_get_pcie_info;
 extern AMDSMI_GET_GPU_DEVICE_BDF guest_amdsmi_get_gpu_device_bdf;
 extern AMDSMI_GET_PROCESSOR_HANDLES guest_amdsmi_get_processor_handles;
 extern AMDSMI_GET_GPU_VRAM_USAGE guest_amdsmi_get_gpu_vram_usage;
+extern AMDSMI_GET_GPU_FAN_RPMS guest_amdsmi_get_gpu_fan_rpms;
+extern AMDSMI_GET_GPU_FAN_SPEED guest_amdsmi_get_gpu_fan_speed;
+extern AMDSMI_GET_GPU_FAN_SPEED_MAX guest_amdsmi_get_gpu_fan_speed_max;
 
 std::string guest_fill_usage(Arguments arg, std::string value)
 {
@@ -404,6 +407,31 @@ std::string guest_fill_ecc(Arguments arg, std::string value)
 	} else {
 		out = string_format(metricEccErrorCountTemplate, value.c_str(), value.c_str(),
 				    value.c_str(), value.c_str(), value.c_str());
+	}
+	return out;
+}
+
+std::string guest_fill_fan(Arguments arg, std::string value)
+{
+	std::string out {};
+	if (arg.watch > -1) {
+		out = string_format("%s,%s,%s,%s", value.c_str(), value.c_str(), value.c_str(),
+				    value.c_str());
+	} else if (arg.output == json) {
+		nlohmann::ordered_json usage_json {};
+		usage_json["value"]		= value.c_str();
+		usage_json["unit"]		= "N/A";
+		nlohmann::ordered_json fan_json = {{"speed", value.c_str()},
+						   {"max", value.c_str()},
+						   {"rpm", value.c_str()},
+						   {"usage", usage_json}};
+		out				= fan_json.dump(4);
+	} else if (arg.output == csv) {
+		out = string_format(",%s,%s,%s,%s", value.c_str(), value.c_str(), value.c_str(),
+				    value.c_str());
+	} else {
+		out = string_format(metricFanTemplate, value.c_str(), value.c_str(), value.c_str(),
+				    value.c_str(), "");
 	}
 	return out;
 }
@@ -1510,6 +1538,114 @@ int AmdSmiApiGuest::amdsmi_get_pcie_metric_command(uint64_t processor_bdf, Argum
 	}
 
 	return ret;
+}
+
+static std::string format_fan_usage(double usage)
+{
+	std::string usage_str {string_format("%.2f", usage)};
+	while (usage_str.size() > 3 && usage_str.back() == '0' &&
+	       usage_str[usage_str.size() - 2] != '.') {
+		usage_str.pop_back();
+	}
+	return usage_str;
+}
+
+int AmdSmiApiGuest::amdsmi_get_fan_metric_command(uint64_t processor_bdf, Arguments arg,
+						  std::string& out)
+{
+	if (AmdSmiPlatform::getInstance().is_guest()) {
+		return PARAM_NOT_SUPPORTED_ON_PLATFORM;
+	}
+
+	amdsmi_status_t ret;
+	amdsmi_processor_handle processor;
+	amdsmi_bdf_t tmp_bdf;
+	tmp_bdf.as_uint = processor_bdf;
+
+	ret = guest_amdsmi_get_processor_handle_from_bdf(tmp_bdf, &processor);
+	if (ret != AMDSMI_STATUS_SUCCESS) {
+		out = guest_fill_fan(arg, "N/A");
+		return ret;
+	}
+
+	int64_t fan_speed = 0;
+	int64_t fan_rpm	  = 0;
+	uint64_t fan_max  = 0;
+	bool speed_ok	  = false;
+	bool rpm_ok	  = false;
+	bool max_ok	  = false;
+
+	if (guest_amdsmi_get_gpu_fan_speed != nullptr) {
+		ret = guest_amdsmi_get_gpu_fan_speed(processor, 0, &fan_speed);
+		if (ret == AMDSMI_STATUS_SUCCESS) {
+			speed_ok = true;
+		}
+	}
+
+	if (guest_amdsmi_get_gpu_fan_speed_max != nullptr) {
+		ret = guest_amdsmi_get_gpu_fan_speed_max(processor, 0, &fan_max);
+		if (ret == AMDSMI_STATUS_SUCCESS) {
+			max_ok = true;
+		}
+	}
+
+	if (guest_amdsmi_get_gpu_fan_rpms != nullptr) {
+		ret = guest_amdsmi_get_gpu_fan_rpms(processor, 0, &fan_rpm);
+		if (ret == AMDSMI_STATUS_SUCCESS) {
+			rpm_ok = true;
+		}
+	}
+
+	if (!speed_ok && !max_ok && !rpm_ok) {
+		out = guest_fill_fan(arg, "N/A");
+		return PARAM_NOT_SUPPORTED_ON_PLATFORM;
+	}
+
+	std::string speed_str = speed_ok ? string_format("%lld", fan_speed) : "N/A";
+	std::string max_str   = max_ok ? string_format("%llu", fan_max) : "N/A";
+	std::string rpm_str   = rpm_ok ? string_format("%lld", fan_rpm) : "N/A";
+
+	bool usage_ok	      = speed_ok && max_ok && fan_max > 0;
+	double usage_value    = 0.0;
+	std::string usage_str = "N/A";
+	if (usage_ok) {
+		usage_value = std::round(static_cast<double>(fan_speed) * 10000.0 /
+					 static_cast<double>(fan_max)) /
+			      100.0;
+		usage_str = format_fan_usage(usage_value);
+	}
+
+	if (arg.watch > -1) {
+		out = string_format("%s,%s,%s,%s", speed_str.c_str(), max_str.c_str(),
+				    rpm_str.c_str(), usage_str.c_str());
+	} else if (arg.output == json) {
+		nlohmann::ordered_json usage_json {};
+		if (usage_ok) {
+			usage_json["value"] = usage_value;
+			usage_json["unit"]  = "%";
+		} else {
+			usage_json["value"] = "N/A";
+			usage_json["unit"]  = "N/A";
+		}
+		nlohmann::ordered_json fan_json = {{"speed", speed_ok
+								 ? nlohmann::ordered_json(fan_speed)
+								 : nlohmann::ordered_json("N/A")},
+						   {"max", max_ok ? nlohmann::ordered_json(fan_max)
+								  : nlohmann::ordered_json("N/A")},
+						   {"rpm", rpm_ok ? nlohmann::ordered_json(fan_rpm)
+								  : nlohmann::ordered_json("N/A")},
+						   {"usage", usage_json}};
+		out				= fan_json.dump(4);
+	} else if (arg.output == csv) {
+		out = string_format(",%s,%s,%s,%s", speed_str.c_str(), max_str.c_str(),
+				    rpm_str.c_str(), usage_str.c_str());
+	} else {
+		std::string usage_unit = usage_ok ? "%" : "";
+		out = string_format(metricFanTemplate, speed_str.c_str(), max_str.c_str(),
+				    rpm_str.c_str(), usage_str.c_str(), usage_unit.c_str());
+	}
+
+	return AMDSMI_STATUS_SUCCESS;
 }
 
 int AmdSmiApiGuest::amdsmi_get_fb_usage_command(uint64_t processor_bdf, Arguments arg,

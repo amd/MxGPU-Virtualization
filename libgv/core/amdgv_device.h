@@ -529,6 +529,8 @@ struct amdgv_vf_device {
 	struct amdgv_time_log time_log[AMDGV_MAX_NUM_HW_SCHED];
 
 	bool mes_info_dump_enabled;
+	/* PTL was advertised to this VF in its pf2vf message */
+	bool ptl_exposed;
 	struct amdgv_vf_xchg xchg;
 
 	void *hbm_mgmt_handle;
@@ -658,9 +660,11 @@ struct amdgv_adapter {
 	uint32_t          domain; // not used
 	uint32_t          bdf;
 
-	int32_t           pf_numa_id;
+	int32_t           pf_pd;
 
 	uint32_t          asic_type;
+
+	uint64_t          fw_features; /* enum amdgv_psp_fw_feature_id bits */
 
 	uint32_t          vendor_id;
 	uint32_t          dev_id;
@@ -686,6 +690,7 @@ struct amdgv_adapter {
 	/* the size of framebuffer */
 	uint64_t          fb_size;
 	uint64_t          mapped_fb_size;
+	bool              fb_mapped_by_gmc;
 
 	uint64_t          mmio_pa;
 	uint64_t          mmio_size;
@@ -1006,9 +1011,6 @@ struct amdgv_adapter {
 
 	bool use_vf_sysmem_xchg;
 	bool unload_cmd_sent;
-
-	/* VF HBM Management Mode */
-	enum amdgv_vf_hbm_mgmt_mode vf_hbm_mgmt_mode;
 };
 
 #ifdef WS_RECORD

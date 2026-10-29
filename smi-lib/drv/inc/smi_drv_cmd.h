@@ -124,8 +124,10 @@ int smi_get_gpu_fabric_info(
     struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
 int smi_get_tdi_state(
     struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
-int smi_get_cc_mode(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
-int smi_set_cc_mode(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_get_gpu_cc_mode(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
+int smi_set_gpu_cc_mode(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
 int smi_get_ras_policy_info(
     struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len);
 int smi_get_node_handle(

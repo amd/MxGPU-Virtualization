@@ -828,13 +828,13 @@ int AmdSmiApiBase::amdsmi_get_fabric_topology_command(uint64_t processor_bdf, Ar
 	return 2;
 }
 
-int AmdSmiApiBase::amdsmi_get_cc_mode_command(uint64_t processor_bdf, Arguments arg,
-					      std::string& formatted_string)
+int AmdSmiApiBase::amdsmi_get_gpu_cc_mode_command(uint64_t processor_bdf, Arguments arg,
+						  std::string& formatted_string)
 {
 	return 2;
 }
 
-int AmdSmiApiBase::amdsmi_set_cc_mode_command(uint64_t processor_bdf, Arguments arg)
+int AmdSmiApiBase::amdsmi_set_gpu_cc_mode_command(uint64_t processor_bdf, Arguments arg)
 {
 	return 2;
 }
@@ -940,6 +940,12 @@ int AmdSmiApiBase::amdsmi_get_default_process_info_command(uint64_t processor_bd
 
 int AmdSmiApiBase::amdsmi_get_throttle_metric_command(uint64_t processor_bdf, Arguments arg,
 						      std::string& out)
+{
+	return 2;
+}
+
+int AmdSmiApiBase::amdsmi_get_fan_metric_command(uint64_t processor_bdf, Arguments arg,
+						 std::string& out)
 {
 	return 2;
 }

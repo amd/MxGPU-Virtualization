@@ -143,11 +143,10 @@ uninstall:
 ifeq ($(PLATFORM),linux)
 	@if [ -f build/install_manifest.txt ]; then \
 		xargs rm -f < build/install_manifest.txt; \
-		echo "Uninstalled successfully."; \
 	else \
-		echo "Error: install_manifest.txt not found. Nothing to uninstall."; \
-		exit 1; \
+		rm -f "$(DESTDIR)$(PREFIX)/bin/amd-smi"; \
 	fi
+	@echo "Uninstalled successfully."
 else ifeq ($(PLATFORM),windows)
 	@echo "Installation is not supported on Windows."
 	@exit 1

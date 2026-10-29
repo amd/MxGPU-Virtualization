@@ -12,7 +12,7 @@
 
 #include <nl_priv.h>
 
-int nl_open(struct nl_conn **conn, const char *family_name)
+int smi_nl_open(struct nl_conn **conn, const char *family_name)
 {
 	struct nl_conn *c;
 	int ret;
@@ -35,7 +35,7 @@ int nl_open(struct nl_conn **conn, const char *family_name)
 
 	c->port_id = mnl_socket_get_portid(c->soc);
 
-	ret = nl_resolve_family_id(c, family_name);
+	ret = smi_nl_resolve_family_id(c, family_name);
 	if (ret) {
 		goto err_close;
 	}
@@ -50,7 +50,7 @@ err_free:
 	return ret;
 }
 
-void nl_close(struct nl_conn *conn)
+void smi_nl_close(struct nl_conn *conn)
 {
 	if (!conn) {
 		return;
@@ -59,7 +59,7 @@ void nl_close(struct nl_conn *conn)
 	free(conn);
 }
 
-uint16_t nl_family_id(const struct nl_conn *conn)
+uint16_t smi_nl_family_id(const struct nl_conn *conn)
 {
 	if (!conn) {
 		return 0;
@@ -68,7 +68,7 @@ uint16_t nl_family_id(const struct nl_conn *conn)
 }
 
 struct nlmsghdr *
-nl_req_init(struct nl_conn *conn, char *buf, size_t buflen, uint8_t cmd, uint8_t version)
+smi_nl_req_init(struct nl_conn *conn, char *buf, size_t buflen, uint8_t cmd, uint8_t version)
 {
 	struct genlmsghdr *genlh;
 	struct nlmsghdr *nlh;
@@ -88,12 +88,12 @@ nl_req_init(struct nl_conn *conn, char *buf, size_t buflen, uint8_t cmd, uint8_t
 	return nlh;
 }
 
-int nl_req_run(struct nl_conn *conn,
-	       char *buf,
-	       size_t buflen,
-	       struct nlmsghdr *nlh,
-	       mnl_cb_t data_cb,
-	       void *data)
+int smi_nl_req_run(struct nl_conn *conn,
+		   char *buf,
+		   size_t buflen,
+		   struct nlmsghdr *nlh,
+		   mnl_cb_t data_cb,
+		   void *data)
 {
 	int ret;
 
@@ -116,13 +116,13 @@ int nl_req_run(struct nl_conn *conn,
 	return 0;
 }
 
-int nl_req_run2(struct nl_conn *conn,
-		char *buf,
-		size_t buflen,
-		struct nlmsghdr *nlh,
-		mnl_cb_t data_cb,
-		void *data,
-		mnl_cb_t err_cb)
+int smi_nl_req_run2(struct nl_conn *conn,
+		    char *buf,
+		    size_t buflen,
+		    struct nlmsghdr *nlh,
+		    mnl_cb_t data_cb,
+		    void *data,
+		    mnl_cb_t err_cb)
 {
 	mnl_cb_t cb_ctl_array[NLMSG_MIN_TYPE];
 	int ret;

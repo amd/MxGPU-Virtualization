@@ -58,6 +58,7 @@ public:
 	int metric_command_temperature(uint64_t processor, std::string& formatted_string);
 	int metric_command_ecc(uint64_t processor, std::string& formatted_string);
 	int metric_command_ecc_block(uint64_t processor, std::string& formatted_string);
+	int metric_command_fan(uint64_t processor, std::string& formatted_string);
 	int metric_command_pcie(uint64_t processor, std::string& formatted_string);
 	int metric_vf_command_schedule(std::string vf_handle, std::string& formatted_string);
 	int metric_vf_command_guard(std::string vf_handle, std::string& formatted_string);

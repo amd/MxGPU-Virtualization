@@ -31,7 +31,7 @@ static uint32_t mi300_node_group_size_map[AMDGV_XGMI_FB_SHARING_MODE_NUM] = {
 
 static int mi300_guest_ext_peer_link_ta_cmd_supported (struct amdgv_adapter *adapt)
 {
-	return ((adapt->psp.fw_info[AMDGV_FIRMWARE_ID__XGMI_TA] & 0xFF) >= 0x15);
+	return ((adapt->psp.fw_info[AMDGV_FIRMWARE_ID__XGMI_TA] & 0xFF) >= 0x15 && adapt->num_vf == 1);
 }
 
 enum amdgv_xgmi_fb_sharing_mode
@@ -192,20 +192,14 @@ static bool mi300_xgmi_is_fb_sharing_allowed(struct amdgv_adapter *adapt,
 					     uint32_t dest_phy_node_id,
 					     enum amdgv_xgmi_fb_sharing_mode mode)
 {
-	uint32_t group_size = mi300_node_group_size_map[mode];
-
-	/*
-	 * before default mode is sanitized,
-	 * group size should be 1 for multi-vf and 8 for 1 vf
-	 * later sanitization should convert default mode to 1 for multi-vf and 8 for 1 vf
-	 */
-	if (mode == AMDGV_XGMI_FB_SHARING_MODE_DEFAULT && adapt->num_vf != 1)
-		group_size = mi300_node_group_size_map[AMDGV_XGMI_FB_SHARING_MODE_1];
+	uint32_t group_size;
 
 	if (mode > MI300_XGMI_MAX_SUPPORTED_MODE) {
 		AMDGV_ERROR("MI300 does not support FB Sharing mode: %d", mode);
 		return false;
 	}
+
+	group_size = mi300_node_group_size_map[mode];
 
 	if (mode == AMDGV_XGMI_FB_SHARING_MODE_CUSTOM) {
 		struct amdgv_hive_info *hive;
@@ -262,7 +256,7 @@ static enum amdgv_xgmi_link_status mi300_xgmi_get_link_status(struct amdgv_adapt
 	uint64_t addr = 0;
 	uint32_t reg_stat;
 
-	if (adapt->asic_type == CHIP_MI350X) {
+	if (amdgv_asic_is_mi350(adapt->asic_type)) {
 		n = ARRAY_SIZE(smn_xgmi_6_4_1_pcs_state_hist1);
 		addr = smn_xgmi_6_4_1_pcs_state_hist1[phy_link_idx % n];
 	} else {

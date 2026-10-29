@@ -436,6 +436,52 @@ TEST_F(AmdSmiInitTests, InitTest_NicInitFailure)
 	set_nic_init(nic_flag);
 }
 
+	#ifdef THREAD_SAFE
+TEST_F(AmdSmiInitTests, InitTest_NicInitFailureKeepsLock)
+{
+	int lock_state	     = -1;
+	int dev_cnt_res	     = AMDSMI_STATUS_UNKNOWN_ERROR;
+	unsigned int dev_cnt = AMDSMI_MAX_DEVICES;
+	amdsmi_processor_handle *processors =
+	    (amdsmi_processor_handle *)malloc(sizeof(amdsmi_processor_handle) * dev_cnt);
+	amdsmi_socket_handle socket_handles	= NULL;
+	smi_server_static_info server_info_mock = {};
+	server_info_mock.num_devices		= 1;
+
+	// amdsmi_init() talks to the driver under the global lock, so trylock must see it held.
+	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_HANDSHAKE)))
+	    .WillOnce(testing::DoAll(testing::InvokeWithoutArgs([&lock_state]() {
+					     lock_state = pthread_mutex_trylock(&g_smi_handle.lock);
+					     if (lock_state == 0) {
+						     pthread_mutex_unlock(&g_smi_handle.lock);
+					     }
+				     }),
+				     SetPayload(SMI_VERSION_MAX),
+				     testing::Return(0)));
+	EXPECT_CALL(*g_system_mock, Ioctl(amdsmi::SmiCmd(SMI_CMD_CODE_GET_SERVER_STATIC_INFO)))
+	    .WillOnce(testing::DoAll(SetPayload(server_info_mock), testing::Return(0)));
+
+	const bool nic_flag = get_nic_init();
+	set_nic_init(false);
+
+	int res = amdsmi_init(AMDSMI_INIT_ALL_PROCESSORS);
+	EXPECT_EQ(res, AMDSMI_STATUS_SUCCESS);
+	EXPECT_EQ(lock_state, EBUSY);
+
+	auto body = [&dev_cnt_res, socket_handles, &dev_cnt, &processors]() {
+		dev_cnt_res = amdsmi_get_processor_handles(socket_handles, &dev_cnt, processors);
+	};
+
+	std::thread tt(body);
+	tt.join();
+
+	set_nic_init(nic_flag);
+	free(processors);
+	EXPECT_EQ(dev_cnt_res, AMDSMI_STATUS_SUCCESS);
+	EXPECT_EQ(dev_cnt, server_info_mock.num_devices);
+}
+	#endif
+
 TEST_F(AmdSmiInitTests, InitTest_NicGetDevicesFailure)
 {
 	int res;

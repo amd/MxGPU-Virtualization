@@ -45,7 +45,7 @@ static int mi300_doorbell_sw_fini(struct amdgv_adapter *adapt)
 
 static int mi300_doorbell_hw_init(struct amdgv_adapter *adapt)
 {
-	if (adapt->asic_type == CHIP_MI350X)
+	if (amdgv_asic_is_mi350(adapt->asic_type))
 		mi350_vcn_set_mmsch_doorbell_addr_base(adapt);
 	return 0;
 }

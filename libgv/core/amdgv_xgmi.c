@@ -390,16 +390,16 @@ bool amdgv_xgmi_is_fb_sharing_allowed(struct amdgv_adapter *adapt,
 	uint32_t src_phy_node_id, uint32_t dest_phy_node_id,
 	enum amdgv_xgmi_fb_sharing_mode mode)
 {
+
+	/* No fb-sharing for multivf */
+	if (adapt->num_vf > 1)
+		return false;
+
 	if (adapt->xgmi.is_fb_sharing_allowed) {
 		return adapt->xgmi.is_fb_sharing_allowed(adapt,
 			src_phy_node_id, dest_phy_node_id, mode);
 	}
 
-	/* Without an ASIC-specific is_fb_sharing_allowed callback, isolate FB
-	 * sharing for multi-VF: only same-node sharing is allowed.
-	 */
-	if (adapt->num_vf > 1)
-		return src_phy_node_id == dest_phy_node_id;
 
 	if (adapt->xgmi.fb_sharing_mode == AMDGV_XGMI_FB_SHARING_MODE_DEFAULT) {
 		return true;

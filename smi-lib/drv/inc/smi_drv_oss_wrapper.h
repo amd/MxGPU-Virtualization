@@ -136,6 +136,12 @@ smi_get_eeprom_table(struct smi_bad_page_info *eeprom_table,
 	return smi_shim_funcs->get_eeprom_table(eeprom_table, size, bp_cnt, gpumon_eeprom_table);
 }
 
+static inline int
+smi_get_dfc_table(struct smi_dfc_fw_info *dfc_info, uint16_t size, struct dfc_fw *dfc_fw_data)
+{
+	return smi_shim_funcs->get_dfc_table(dfc_info, size, dfc_fw_data);
+}
+
 static inline int smi_get_partition(struct smi_profile_configs *profile_configs,
 				    struct amdgv_gpumon_accelerator_partition_profile_config *caps)
 {

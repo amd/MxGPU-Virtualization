@@ -40,6 +40,53 @@ static SmiNicSystem* get_nic_system_from_context(smi_nic_ctx* ctx)
 	return ctx->nic_system.get();
 }
 
+struct NicRdmaDevLocation {
+	uint32_t port_index;
+	uint32_t ib_index;
+};
+
+static smi_nic_status_t get_nic_rdma_devices(SmiNicSystem* nic_system, const SmiNic* nic,
+					     std::vector<NicRdmaDevLocation>& devs)
+{
+	const auto& ports = nic->nic_ports();
+	if (ports.empty()) {
+		return SMI_NIC_STATUS_NO_DATA;
+	}
+
+	bool driver_not_loaded = false;
+	for (uint32_t i = 0; i < ports.size() && devs.size() < SMI_NIC_MAX_RDMA_DEV; i++) {
+		const auto& port = ports[i];
+		if (nic->vendor() == NicVendor::AMD) {
+			if (!nic_system->driver_loaded(port.bdf(), DriverType::IONIC_RDMA)) {
+				driver_not_loaded = true;
+				continue;
+			}
+		} else if (nic->vendor() == NicVendor::Broadcom) {
+			if (!nic_system->driver_loaded(port.bdf(), DriverType::BNXT_RE)) {
+				driver_not_loaded = true;
+				continue;
+			}
+		}
+
+		const auto& ibs = port.infiniband();
+		for (uint32_t j = 0; j < ibs.size() && devs.size() < SMI_NIC_MAX_RDMA_DEV; j++) {
+			devs.push_back({i, j});
+		}
+	}
+
+	if (devs.empty()) {
+		return driver_not_loaded ? SMI_NIC_STATUS_DRIVER_NOT_LOADED
+					 : SMI_NIC_STATUS_NO_DATA;
+	}
+	return SMI_NIC_STATUS_SUCCESS;
+}
+
+static uint8_t get_nic_rdma_dev_port_count(const SmiInfiniBand& ib)
+{
+	return static_cast<uint8_t>(
+	    std::min(ib.ports().size(), static_cast<size_t>(SMI_NIC_MAX_PORTS)));
+}
+
 extern "C" {
 smi_nic_status_t smi_nic_create_context(smi_nic_ctx_t* ctx)
 {
@@ -508,76 +555,94 @@ smi_nic_status_t smi_get_nic_rdma_dev_info(smi_nic_ctx_t ctx, uint64_t device,
 		return SMI_NIC_STATUS_NOT_FOUND;
 	}
 
-	const auto& ports = nic->nic_ports();
-	if (ports.empty()) {
-		return SMI_NIC_STATUS_NO_DATA;
-	}
-
 	*info = {};
 
-	uint8_t rdma_count     = 0;
-	bool driver_not_loaded = false;
-	for (uint32_t i = 0; i < ports.size() && rdma_count < SMI_NIC_MAX_RDMA_DEV; i++) {
-		const auto& port = ports[i];
-		if (nic->vendor() == NicVendor::AMD) {
-			if (!nic_system->driver_loaded(port.bdf(), DriverType::IONIC_RDMA)) {
-				driver_not_loaded = true;
-				continue;
-			}
-		} else if (nic->vendor() == NicVendor::Broadcom) {
-			if (!nic_system->driver_loaded(port.bdf(), DriverType::BNXT_RE)) {
-				driver_not_loaded = true;
-				continue;
-			}
-		}
+	std::vector<NicRdmaDevLocation> devs;
+	smi_nic_status_t status = get_nic_rdma_devices(nic_system, nic, devs);
+	if (status != SMI_NIC_STATUS_SUCCESS) {
+		return status;
+	}
 
-		const auto& ibs = port.infiniband();
-		for (uint8_t j = 0; j < ibs.size() && rdma_count < SMI_NIC_MAX_RDMA_DEV; j++) {
-			const auto& ib			  = ibs[j];
-			smi_nic_rdma_dev_info_t* rdma_dev = &info->rdma_dev_info[rdma_count];
+	const auto& ports = nic->nic_ports();
+	for (size_t d = 0; d < devs.size(); d++) {
+		const auto& port		  = ports[devs[d].port_index];
+		const auto& ib			  = port.infiniband()[devs[d].ib_index];
+		smi_nic_rdma_dev_info_t* rdma_dev = &info->rdma_dev_info[d];
 
-			std::snprintf(rdma_dev->rdma_dev, SMI_NIC_MAX_STRING_LENGTH, "%s",
-				      ib.rdma_dev().c_str());
-			std::snprintf(rdma_dev->node_guid, SMI_NIC_MAX_STRING_LENGTH, "%s",
-				      ib.node_guid().value_or("N/A").c_str());
-			std::snprintf(rdma_dev->node_type, SMI_NIC_MAX_STRING_LENGTH, "%s",
-				      ib.node_type().value_or("N/A").c_str());
-			std::snprintf(rdma_dev->sys_image_guid, SMI_NIC_MAX_STRING_LENGTH, "%s",
-				      ib.sys_image_guid().value_or("N/A").c_str());
-			std::snprintf(rdma_dev->fw_ver, SMI_NIC_MAX_STRING_LENGTH, "%s",
-				      ib.fw_ver().value_or("N/A").c_str());
+		std::snprintf(rdma_dev->rdma_dev, SMI_NIC_MAX_STRING_LENGTH, "%s",
+			      ib.rdma_dev().c_str());
+		std::snprintf(rdma_dev->node_guid, SMI_NIC_MAX_STRING_LENGTH, "%s",
+			      ib.node_guid().value_or("N/A").c_str());
+		std::snprintf(rdma_dev->node_type, SMI_NIC_MAX_STRING_LENGTH, "%s",
+			      ib.node_type().value_or("N/A").c_str());
+		std::snprintf(rdma_dev->sys_image_guid, SMI_NIC_MAX_STRING_LENGTH, "%s",
+			      ib.sys_image_guid().value_or("N/A").c_str());
+		std::snprintf(rdma_dev->fw_ver, SMI_NIC_MAX_STRING_LENGTH, "%s",
+			      ib.fw_ver().value_or("N/A").c_str());
 
-			const auto& ib_ports	 = ib.ports();
-			rdma_dev->num_rdma_ports = ib.ports_num();
-			for (uint8_t k = 0; k < ib_ports.size() && k < SMI_NIC_MAX_PORTS; k++) {
-				const auto& ib_port		    = ib_ports[k];
-				smi_nic_rdma_port_info_t* port_info = &rdma_dev->rdma_port_info[k];
+		const auto& ib_ports	 = ib.ports();
+		rdma_dev->num_rdma_ports = get_nic_rdma_dev_port_count(ib);
+		for (uint8_t k = 0; k < rdma_dev->num_rdma_ports; k++) {
+			const auto& ib_port		    = ib_ports[k];
+			smi_nic_rdma_port_info_t* port_info = &rdma_dev->rdma_port_info[k];
 
-				std::snprintf(port_info->netdev, SMI_NIC_MAX_STRING_LENGTH, "%s",
-					      port.interface().c_str());
-				std::snprintf(port_info->state, SMI_NIC_MAX_STRING_LENGTH, "%s",
-					      ib_port.state().value_or("N/A").c_str());
-				port_info->rdma_port = ib_port.port_num().value_or(
-				    std::numeric_limits<uint8_t>::max());
-				port_info->max_mtu = ib_port.max_mtu().value_or(
-				    std::numeric_limits<uint16_t>::max());
-				port_info->active_mtu = ib_port.active_mtu().value_or(
-				    std::numeric_limits<uint16_t>::max());
-			}
-			rdma_count++;
+			std::snprintf(port_info->netdev, SMI_NIC_MAX_STRING_LENGTH, "%s",
+				      port.interface().c_str());
+			std::snprintf(port_info->state, SMI_NIC_MAX_STRING_LENGTH, "%s",
+				      ib_port.state().value_or("N/A").c_str());
+			port_info->rdma_port =
+			    ib_port.port_num().value_or(std::numeric_limits<uint8_t>::max());
+			constexpr uint16_t mtu_na = std::numeric_limits<uint16_t>::max();
+			const auto mtu =
+			    ib_port.mtu().value_or(smi_ibverbs::PortMtu {mtu_na, mtu_na});
+			port_info->max_mtu    = mtu.max_mtu;
+			port_info->active_mtu = mtu.active_mtu;
 		}
 	}
 
-	info->num_rdma_dev = rdma_count;
-	if (driver_not_loaded && rdma_count == 0) {
-		return SMI_NIC_STATUS_DRIVER_NOT_LOADED;
-	}
-
-	if (rdma_count == 0) {
-		return SMI_NIC_STATUS_NO_DATA;
-	}
-
+	info->num_rdma_dev = static_cast<uint8_t>(devs.size());
 	return SMI_NIC_STATUS_SUCCESS;
+}
+
+smi_nic_status_t smi_get_nic_rdma_port_location(smi_nic_ctx_t ctx, uint64_t device,
+						uint32_t rdma_port_index, uint32_t* port_index,
+						uint32_t* ib_index, uint32_t* ib_port_index)
+{
+	if (!ctx || !port_index || !ib_index || !ib_port_index) {
+		return SMI_NIC_STATUS_WRONG_PARAM;
+	}
+
+	std::lock_guard<std::mutex> lock(ctx->ctx_mutex);
+	auto* nic_system = get_nic_system_from_context(ctx);
+	if (!nic_system) {
+		return SMI_NIC_STATUS_NOT_INIT;
+	}
+	const SmiNic* nic = nic_system->get_nic_by_bdf(device);
+	if (!nic) {
+		return SMI_NIC_STATUS_NOT_FOUND;
+	}
+
+	std::vector<NicRdmaDevLocation> devs;
+	smi_nic_status_t status = get_nic_rdma_devices(nic_system, nic, devs);
+	if (status != SMI_NIC_STATUS_SUCCESS) {
+		return status;
+	}
+
+	const auto& ports  = nic->nic_ports();
+	uint32_t remaining = rdma_port_index;
+	for (const auto& dev : devs) {
+		const uint32_t num_ports =
+		    get_nic_rdma_dev_port_count(ports[dev.port_index].infiniband()[dev.ib_index]);
+		if (remaining < num_ports) {
+			*port_index    = dev.port_index;
+			*ib_index      = dev.ib_index;
+			*ib_port_index = remaining;
+			return SMI_NIC_STATUS_SUCCESS;
+		}
+		remaining -= num_ports;
+	}
+
+	return SMI_NIC_STATUS_NOT_FOUND;
 }
 
 smi_nic_status_t smi_get_nic_fw_info(smi_nic_ctx_t ctx, uint64_t device, smi_nic_fw_info_t* info)
@@ -904,7 +969,7 @@ smi_nic_status_t smi_get_nic_vendor_statistics_list(smi_nic_ctx_t ctx, uint64_t 
 
 smi_nic_status_t smi_get_nic_rdma_port_statistics_count(smi_nic_ctx_t ctx, uint64_t device,
 							uint32_t port_index, uint32_t ib_index,
-							uint32_t rdma_port_index, uint32_t* count)
+							uint32_t ib_port_index, uint32_t* count)
 {
 	if (!ctx || !count) {
 		return SMI_NIC_STATUS_WRONG_PARAM;
@@ -945,20 +1010,25 @@ smi_nic_status_t smi_get_nic_rdma_port_statistics_count(smi_nic_ctx_t ctx, uint6
 	}
 
 	const auto& ib_ports = ibs[ib_index].ports();
-	if (rdma_port_index >= static_cast<uint32_t>(ib_ports.size())) {
-		return SMI_NIC_STATUS_WRONG_PARAM;
+	if (ib_port_index >= static_cast<uint32_t>(ib_ports.size())) {
+		return SMI_NIC_STATUS_NOT_FOUND;
 	}
 
-	const auto& ib_port   = ib_ports[rdma_port_index];
-	const auto& stats_map = ib_port.get_hw_counters_map();
-	*count		      = static_cast<uint32_t>(stats_map.size());
+	const auto& ib_port = ib_ports[ib_port_index];
+	try {
+		*count =
+		    static_cast<uint32_t>(std::min(ib_port.collect_hw_counters().size(),
+						   static_cast<size_t>(SMI_NIC_MAX_STATISTICS)));
+	} catch (const std::exception&) {
+		return SMI_NIC_STATUS_ERROR;
+	}
 
 	return SMI_NIC_STATUS_SUCCESS;
 }
 
 smi_nic_status_t smi_get_nic_rdma_port_statistics_list(smi_nic_ctx_t ctx, uint64_t device,
 						       uint32_t port_index, uint32_t ib_index,
-						       uint32_t rdma_port_index,
+						       uint32_t ib_port_index,
 						       smi_nic_stat_info_t* stats)
 {
 	if (!ctx || !stats) {
@@ -1000,12 +1070,17 @@ smi_nic_status_t smi_get_nic_rdma_port_statistics_list(smi_nic_ctx_t ctx, uint64
 	}
 
 	const auto& ib_ports = ibs[ib_index].ports();
-	if (rdma_port_index >= static_cast<uint32_t>(ib_ports.size())) {
+	if (ib_port_index >= static_cast<uint32_t>(ib_ports.size())) {
 		return SMI_NIC_STATUS_NOT_FOUND;
 	}
 
-	const auto& ib_port   = ib_ports[rdma_port_index];
-	const auto& stats_map = ib_port.get_hw_counters_map();
+	const auto& ib_port = ib_ports[ib_port_index];
+	std::map<std::string, uint64_t> stats_map;
+	try {
+		stats_map = ib_port.collect_hw_counters();
+	} catch (const std::exception&) {
+		return SMI_NIC_STATUS_ERROR;
+	}
 
 	if (stats_map.empty()) {
 		return SMI_NIC_STATUS_NO_DATA;

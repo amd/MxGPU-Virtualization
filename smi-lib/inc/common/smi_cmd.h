@@ -91,8 +91,8 @@ enum smi_cmd_code {
 	SMI_CMD_CODE_SET_GPU_PTL_STATE				     = SMI_IOCTL | 0x0000003C,
 	SMI_CMD_CODE_GET_GPU_PTL_FORMATS			     = SMI_IOCTL | 0x0000003D,
 	SMI_CMD_CODE_SET_GPU_PTL_FORMATS			     = SMI_IOCTL | 0x0000003E,
-	SMI_CMD_CODE_GET_CC_MODE				     = SMI_IOCTL | 0x0000003F,
-	SMI_CMD_CODE_SET_CC_MODE				     = SMI_IOCTL | 0x00000040,
+	SMI_CMD_CODE_GET_GPU_CC_MODE				     = SMI_IOCTL | 0x0000003F,
+	SMI_CMD_CODE_SET_GPU_CC_MODE				     = SMI_IOCTL | 0x00000040,
 	SMI_CMD_CODE_GET_TDI_STATE				     = SMI_IOCTL | 0x00000041,
 	SMI_CMD_CODE_GET_VF_HBM_INFO				     = SMI_IOCTL | 0x00000042,
 	SMI_CMD_CODE_GET_FABRIC_INFO				     = SMI_IOCTL | 0x00000043,
@@ -145,7 +145,7 @@ enum smi_cmd_code {
 #define SMI_MAX_NUM_PM_POLICIES	       32
 #define SMI_EVENT_MSG_SIZE	       256
 #define SMI_MAX_DATE_STRING_LENGTH     32
-#define SMI_DFC_FW_NUMBER_OF_ENTRIES   9
+#define SMI_DFC_FW_NUMBER_OF_ENTRIES   64
 #define SMI_MAX_WHITE_LIST_ELEMENTS    16
 #define SMI_MAX_BLACK_LIST_ELEMENTS    64
 #define SMI_MAX_TA_WHITE_LIST_ELEMENTS 8
@@ -496,6 +496,7 @@ enum smi_metric_category {
 	SMI_METRIC_CATEGORY_STATIC_FREQUENCY,
 	SMI_METRIC_CATEGORY_STATIC_TEMPERATURE,
 	SMI_METRIC_CATEGORY_STATIC_THROTTLE,
+	SMI_METRIC_CATEGORY_STATIC_POWER,
 	SMI_METRIC_CATEGORY_UNKNOWN
 };
 
@@ -757,52 +758,49 @@ enum smi_ecc_correction_schema_support {
 	SMI_RAS_ECC_SUPPORT_POISON	  = (1 << 3)
 };
 
-enum smi_gpu_block {
-	SMI_GPU_BLOCK_INVALID = 0, //!< Used to indicate an
-				   //!< invalid block
-	SMI_GPU_BLOCK_FIRST = (1ULL << 0),
-
-	SMI_GPU_BLOCK_UMC	 = SMI_GPU_BLOCK_FIRST, //!< UMC block
-	SMI_GPU_BLOCK_SDMA	 = (1ULL << 1),		//!< SDMA block
-	SMI_GPU_BLOCK_GFX	 = (1ULL << 2),		//!< GFX block
-	SMI_GPU_BLOCK_MMHUB	 = (1ULL << 3),		//!< MMHUB block
-	SMI_GPU_BLOCK_ATHUB	 = (1ULL << 4),		//!< ATHUB block
-	SMI_GPU_BLOCK_PCIE_BIF	 = (1ULL << 5),		//!< PCIE_BIF block
-	SMI_GPU_BLOCK_HDP	 = (1ULL << 6),		//!< HDP block
-	SMI_GPU_BLOCK_XGMI_WAFL	 = (1ULL << 7),		//!< XGMI block
-	SMI_GPU_BLOCK_DF	 = (1ULL << 8),		//!< DF block
-	SMI_GPU_BLOCK_SMN	 = (1ULL << 9),		//!< SMN block
-	SMI_GPU_BLOCK_SEM	 = (1ULL << 10),	//!< SEM block
-	SMI_GPU_BLOCK_MP0	 = (1ULL << 11),	//!< MP0 block
-	SMI_GPU_BLOCK_MP1	 = (1ULL << 12),	//!< MP1 block
-	SMI_GPU_BLOCK_FUSE	 = (1ULL << 13),	//!< Fuse block
-	SMI_GPU_BLOCK_MCA	 = (1ULL << 14),	//!< MCA block
-	SMI_GPU_BLOCK_VCN	 = (1ULL << 15),	//!< VCN block
-	SMI_GPU_BLOCK_JPEG	 = (1ULL << 16),	//!< JPEG block
-	SMI_GPU_BLOCK_IH	 = (1ULL << 17),	//!< IH block
-	SMI_GPU_BLOCK_MPIO	 = (1ULL << 18),	//!< MPIO block
-	SMI_GPU_BLOCK_MMSCH	 = (1ULL << 19),	//!< MMSCH block
-	SMI_GPU_BLOCK_MP5	 = (1ULL << 20),	//!< MP5 block
-	SMI_GPU_BLOCK_ATU	 = (1ULL << 21),	//!< ATU block
-	SMI_GPU_BLOCK_DACC_BE	 = (1ULL << 22),	//!< DACC_BE block
-	SMI_GPU_BLOCK_ECLR	 = (1ULL << 23),	//!< ECLR block
-	SMI_GPU_BLOCK_KPX_SERDES = (1ULL << 24),	//!< KPX_SERDES block
-	SMI_GPU_BLOCK_LSDMA	 = (1ULL << 25),	//!< LSDMA block
-	SMI_GPU_BLOCK_MPART	 = (1ULL << 26),	//!< MPART block
-	SMI_GPU_BLOCK_MPIFOE	 = (1ULL << 27),	//!< MPIFOE block
-	SMI_GPU_BLOCK_MPRAS	 = (1ULL << 28),	//!< MPRAS block
-	SMI_GPU_BLOCK_NBIF	 = (1ULL << 29),	//!< NBIF block
-	SMI_GPU_BLOCK_NBIO	 = (1ULL << 30),	//!< NBIO block
-	SMI_GPU_BLOCK_OXRP	 = (1ULL << 31),	//!< OXRP block
-	SMI_GPU_BLOCK_PCIE_PL	 = (1ULL << 32),	//!< PCIE_PL block
-	SMI_GPU_BLOCK_PCS_XGMI	 = (1ULL << 33),	//!< PCS_XGMI block
-	SMI_GPU_BLOCK_PIE	 = (1ULL << 34),	//!< PIE block
-	SMI_GPU_BLOCK_CS	 = (1ULL << 35),	//!< CS block
-	SMI_GPU_BLOCK_SHUB	 = (1ULL << 36),	//!< SHUB block
-	SMI_GPU_BLOCK_SSBDCI	 = (1ULL << 37),	//!< SSBDCI block
-	SMI_GPU_BLOCK_UCIE_PCS	 = (1ULL << 38),	//!< UCIE_PCS block
-	SMI_GPU_BLOCK_LAST	 = SMI_GPU_BLOCK_UCIE_PCS,
-};
+#define SMI_GPU_BLOCK_INVALID	 0ULL //!< Used to indicate an invalid block
+#define SMI_GPU_BLOCK_FIRST	 (1ULL << 0)
+#define SMI_GPU_BLOCK_UMC	 SMI_GPU_BLOCK_FIRST //!< UMC block
+#define SMI_GPU_BLOCK_SDMA	 (1ULL << 1)	     //!< SDMA block
+#define SMI_GPU_BLOCK_GFX	 (1ULL << 2)	     //!< GFX block
+#define SMI_GPU_BLOCK_MMHUB	 (1ULL << 3)	     //!< MMHUB block
+#define SMI_GPU_BLOCK_ATHUB	 (1ULL << 4)	     //!< ATHUB block
+#define SMI_GPU_BLOCK_PCIE_BIF	 (1ULL << 5)	     //!< PCIE_BIF block
+#define SMI_GPU_BLOCK_HDP	 (1ULL << 6)	     //!< HDP block
+#define SMI_GPU_BLOCK_XGMI_WAFL	 (1ULL << 7)	     //!< XGMI block
+#define SMI_GPU_BLOCK_DF	 (1ULL << 8)	     //!< DF block
+#define SMI_GPU_BLOCK_SMN	 (1ULL << 9)	     //!< SMN block
+#define SMI_GPU_BLOCK_SEM	 (1ULL << 10)	     //!< SEM block
+#define SMI_GPU_BLOCK_MP0	 (1ULL << 11)	     //!< MP0 block
+#define SMI_GPU_BLOCK_MP1	 (1ULL << 12)	     //!< MP1 block
+#define SMI_GPU_BLOCK_FUSE	 (1ULL << 13)	     //!< Fuse block
+#define SMI_GPU_BLOCK_MCA	 (1ULL << 14)	     //!< MCA block
+#define SMI_GPU_BLOCK_VCN	 (1ULL << 15)	     //!< VCN block
+#define SMI_GPU_BLOCK_JPEG	 (1ULL << 16)	     //!< JPEG block
+#define SMI_GPU_BLOCK_IH	 (1ULL << 17)	     //!< IH block
+#define SMI_GPU_BLOCK_MPIO	 (1ULL << 18)	     //!< MPIO block
+#define SMI_GPU_BLOCK_MMSCH	 (1ULL << 19)	     //!< MMSCH block
+#define SMI_GPU_BLOCK_MP5	 (1ULL << 20)	     //!< MP5 block
+#define SMI_GPU_BLOCK_ATU	 (1ULL << 21)	     //!< ATU block
+#define SMI_GPU_BLOCK_DACC_BE	 (1ULL << 22)	     //!< DACC_BE block
+#define SMI_GPU_BLOCK_ECLR	 (1ULL << 23)	     //!< ECLR block
+#define SMI_GPU_BLOCK_KPX_SERDES (1ULL << 24)	     //!< KPX_SERDES block
+#define SMI_GPU_BLOCK_LSDMA	 (1ULL << 25)	     //!< LSDMA block
+#define SMI_GPU_BLOCK_MPART	 (1ULL << 26)	     //!< MPART block
+#define SMI_GPU_BLOCK_MPIFOE	 (1ULL << 27)	     //!< MPIFOE block
+#define SMI_GPU_BLOCK_MPRAS	 (1ULL << 28)	     //!< MPRAS block
+#define SMI_GPU_BLOCK_NBIF	 (1ULL << 29)	     //!< NBIF block
+#define SMI_GPU_BLOCK_NBIO	 (1ULL << 30)	     //!< NBIO block
+#define SMI_GPU_BLOCK_OXRP	 (1ULL << 31)	     //!< OXRP block
+#define SMI_GPU_BLOCK_PCIE_PL	 (1ULL << 32)	     //!< PCIE_PL block
+#define SMI_GPU_BLOCK_PCS_XGMI	 (1ULL << 33)	     //!< PCS_XGMI block
+#define SMI_GPU_BLOCK_PIE	 (1ULL << 34)	     //!< PIE block
+#define SMI_GPU_BLOCK_CS	 (1ULL << 35)	     //!< CS block
+#define SMI_GPU_BLOCK_SHUB	 (1ULL << 36)	     //!< SHUB block
+#define SMI_GPU_BLOCK_SSBDCI	 (1ULL << 37)	     //!< SSBDCI block
+#define SMI_GPU_BLOCK_UCIE_PCS	 (1ULL << 38)	     //!< UCIE_PCS block
+#define SMI_GPU_BLOCK_LAST	 SMI_GPU_BLOCK_UCIE_PCS
+#define SMI_GPU_BLOCK_RESERVED	 (1ULL << 63)
 
 enum smi_profile_capability_type {
 	SMI_PROFILE_CAPABILITY_MEMORY  = 0, //!< memory
@@ -839,10 +837,10 @@ enum smi_tdi_state_t {
 	SMI_TDI_STATE_ERROR    = 3,
 };
 
-enum smi_cc_mode_t {
-	SMI_CC_MODE_OFF = 0,
-	SMI_CC_MODE_ON	= 1,
-	SMI_CC_MODE_DEV = 2,
+enum smi_gpu_cc_mode_t {
+	SMI_GPU_CC_MODE_OFF = 0,
+	SMI_GPU_CC_MODE_ON  = 1,
+	SMI_GPU_CC_MODE_DEV = 2,
 };
 
 // IOCTL input/output enums
@@ -993,7 +991,9 @@ struct smi_asic_info {
 	uint64_t flags;			  //!< Chip flags
 	uint32_t physical_acc_id;	  //!< Not filled by the host ioctl; mirrors
 					  //!< amdsmi_asic_info_t so both layouts match
-	uint32_t reserved[17];
+	uint32_t chip_rev_id;		  //!< 0xFFFFFFFF if not supported
+	uint32_t external_rev_id;	  //!< 0xFFFFFFFF if not supported
+	uint32_t reserved[15];
 };
 
 /**
@@ -1277,6 +1277,13 @@ struct smi_dfc_fw_data {
 struct smi_dfc_fw {
 	struct smi_dfc_fw_header header;
 	struct smi_dfc_fw_data data[SMI_DFC_FW_NUMBER_OF_ENTRIES];
+};
+
+struct smi_dfc_fw_info {
+	smi_device_handle_t dev_id;
+	uint32_t size;
+	struct smi_dfc_fw *dfc_fw;
+	uint32_t reserved[9];
 };
 
 struct smi_fw_load_error_record {
@@ -1886,8 +1893,8 @@ struct smi_set_gpu_ptl_formats {
 struct smi_vf_hbm_info {
 	uint64_t phy_addr;
 	uint64_t phy_size;
-	uint32_t numa_id; //!< NUMA node for driver-managed VF HBM, 0xFFFFFFFF if not supported (DAX
-			  //!< mode)
+	uint32_t numa_id; //!< NUMA node for driver-managed VF HBM, 0xFFFFFFFF if not
+			  //!< supported
 	char name[SMI_MAX_STRING_LENGTH];
 	uint64_t reserved[29];
 };
@@ -1897,14 +1904,14 @@ struct smi_tdi_state {
 	uint64_t reserved[3];
 };
 
-struct smi_cc_mode {
-	enum smi_cc_mode_t mode;
+struct smi_gpu_cc_mode {
+	enum smi_gpu_cc_mode_t mode;
 	uint64_t reserved[3];
 };
 
-struct smi_set_cc_mode {
+struct smi_set_gpu_cc_mode {
 	smi_device_handle_t dev_id;
-	enum smi_cc_mode_t mode;
+	enum smi_gpu_cc_mode_t mode;
 	uint32_t reserved[3];
 };
 

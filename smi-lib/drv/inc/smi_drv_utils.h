@@ -454,7 +454,7 @@ int smi_map_tdi_state(enum amdgv_tdi_state state);
  * @note This function returns INT_MAX for unrecognized CC modes to avoid returning an invalid
  * value.
  */
-int smi_map_cc_mode(enum amdgv_cc_mode mode);
+int smi_map_gpu_cc_mode(enum amdgv_cc_mode mode);
 
 /**
  * @brief Maps an enum representing an SMI CC mode to an enum representing a LibGV CC mode.
@@ -471,7 +471,7 @@ int smi_map_cc_mode(enum amdgv_cc_mode mode);
  * @note This function returns INT_MAX for unrecognized CC modes to avoid returning an invalid
  * value.
  */
-int smi_map_cc_mode_reverse(enum smi_cc_mode_t mode);
+int smi_map_gpu_cc_mode_reverse(enum smi_gpu_cc_mode_t mode);
 
 /**
  * @brief Maps an enum representing a LibGV ptl format type to an enum representing an SMI ptl

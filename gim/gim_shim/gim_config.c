@@ -257,14 +257,6 @@ struct gim_conf_opt conf_opts[] = {
 					.max = THERMAL_THROTTLE_RATE_LIMIT__MAX,
 					.def = THERMAL_THROTTLE_RATE_LIMIT__DEFAULT,
 					.array = true },
-	/* HBM Memory Management Mode */
-	[CONF_OPT_VF_HBM_MGMT_MODE] = { .name = VF_HBM_MGMT_MODE__KEY,
-		.value = { VF_HBM_MGMT_MODE__DEFAULT },
-		.repeat_val_idx = 1,
-		.min = VF_HBM_MGMT_MODE__START,
-		.max = VF_HBM_MGMT_MODE__MAX,
-		.def = VF_HBM_MGMT_MODE__DEFAULT,
-		.array = false },
 	/* enable unified ras module */
 	[CONF_OPT_ENABLE_UNIRAS] = { .name = ENABLE_UNIRAS__KEY,
 		.value = { ENABLE_UNIRAS__DEFAULT },
@@ -563,12 +555,6 @@ MODULE_PARM_DESC(thermal_throttle_rate_limit, "Thermal throttle notification rat
 				"thermal_throttle_rate_limit=[D0[,D1[...[,Dx]]]]\n\t"
 				"0 <= Dx <= 60000000;\n\t");
 
-uint vf_hbm_mgmt_mode;
-module_param(vf_hbm_mgmt_mode, uint, 0444);
-MODULE_PARM_DESC(vf_hbm_mgmt_mode, "VF HBM Memory Management Mode\n\t"
-				"0(default): Driver Managed\n\t"
-				"1: DAX\n\t"
-				"2: Disabled\n\t");
 uint enable_uniras;
 module_param(enable_uniras, uint, 0444);
 MODULE_PARM_DESC(enable_uniras, "whether enable unified ras module(0:disable 1:enable)\n\t"
@@ -1146,16 +1132,6 @@ int gim_conf_init(void)
 				thermal_throttle_rate_limit, thermal_throttle_rate_limit_size);
 	}
 
-	if (vf_hbm_mgmt_mode > 0) {
-		if (gim_conf_valid_opt(CONF_OPT_VF_HBM_MGMT_MODE, vf_hbm_mgmt_mode)) {
-			gim_warn("invalid token (vf_hbm_mgmt_mode) value: %d\n",
-				vf_hbm_mgmt_mode);
-			vf_hbm_mgmt_mode = VF_HBM_MGMT_MODE__DEFAULT;
-		}
-		for (j = 0; j < AMDGV_MAX_GPU_NUM; j++)
-			conf_opts[CONF_OPT_VF_HBM_MGMT_MODE].value[j] = vf_hbm_mgmt_mode;
-	}
-
 	if (enable_uniras > 0) {
 		if (gim_conf_valid_opt(CONF_OPT_ENABLE_UNIRAS, enable_uniras)) {
 			gim_warn("invalid token (enable_uniras) value: %d\n",
@@ -1426,14 +1402,6 @@ uint32_t gim_conf_get_thermal_throttle_rate_limit_opt(uint32_t id)
 		id = AMDGV_MAX_GPU_NUM - 1;
 
 	return conf_opts[CONF_OPT_THERMAL_THROTTLE_RATE_LIMIT].value[id];
-}
-
-uint32_t gim_conf_get_vf_hbm_mgmt_mode_opt(uint32_t id)
-{
-	if (id >= AMDGV_MAX_GPU_NUM)
-		id = AMDGV_MAX_GPU_NUM - 1;
-
-	return conf_opts[CONF_OPT_VF_HBM_MGMT_MODE].value[id];
 }
 
 uint32_t gim_conf_get_enable_uniras_opt(uint32_t id)

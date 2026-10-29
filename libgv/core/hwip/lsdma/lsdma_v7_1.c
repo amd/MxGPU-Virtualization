@@ -10,7 +10,7 @@
 #include <asic_reg/LSDMA/lsdma_7_1_0_sh_mask.h>
 
 
-#define LSDMA_PIO_DMA_MAX_SIZE	0x3FFFFFFL		/* 64MB - 1*/
+#define LSDMA_PIO_DMA_MAX_SIZE	(0x3FFFFFFL + 1)	/* 64MB */
 
 static const uint32_t this_block = AMDGV_MEMORY_BLOCK;
 
@@ -67,7 +67,8 @@ static int lsdma_v7_1_lsdma_copy(struct amdgv_adapter *adapt, uint32_t idx_vf, b
 			if (((*size_copied) + dma_size) > size)
 				dma_size = size - (*size_copied);
 
-			dma_cmd = dma_size << LSDMA_PIO_COMMAND__BYTE_COUNT__SHIFT;
+			/* HW transfers BYTE_COUNT + 1 bytes */
+			dma_cmd = (dma_size - 1) << LSDMA_PIO_COMMAND__BYTE_COUNT__SHIFT;
 
 			if (fill_mode)
 				dma_cmd = dma_cmd | (1 << LSDMA_PIO_COMMAND__CONSTANT_FILL__SHIFT);

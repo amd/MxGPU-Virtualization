@@ -11,6 +11,7 @@
 #include "mi300_gfx.h"
 #include "mi300_ip_discovery.h"
 #include "mi300_ecc.h"
+#include "mi300_nbio.h"
 #include "amdgv_sched_internal.h"
 #include "mi300/NBIO/nbio_7_9_0_offset.h"
 #include "mi300/NBIO/nbio_7_9_0_sh_mask.h"
@@ -420,7 +421,7 @@ static int mi300_parse_harvest_table(struct amdgv_adapter *adapt)
 			break;
 		case UMC_HWID:
 			adapt->umc.num_umc--;
-			adapt->umc.active_mask &= ~(1U << adapt->ip_discovery.pf_copy.htbl->v1.list[i].number_instance);
+			adapt->umc.active_mask &= ~(1ULL << adapt->ip_discovery.pf_copy.htbl->v1.list[i].number_instance);
 			break;
 		case MMHUB_HWID:
 			adapt->mmhub.num_instances--;
@@ -1188,6 +1189,13 @@ int mi300_discover_ip(struct amdgv_adapter *adapt)
 			   "XCC Mask:  0x%x\n" "SDMA Mask: 0x%x\n",
 			   adapt->mcp.num_aid, adapt->mcp.gfx.num_xcc, adapt->sdma.num_instances,
 			   adapt->mcp.gfx.xcc_mask, adapt->mcp.gfx.sdma_mask);
+
+	/*
+	 * Cache the strap before SR-IOV is enabled. In confidential compute mode,
+	 * the PF may lose access to it after a VF becomes active.
+	 */
+	mi300_nbio_get_revision_ids(adapt, &adapt->nbio.chip_rev_id,
+				    &adapt->nbio.external_rev_id);
 
 	return 0;
 }

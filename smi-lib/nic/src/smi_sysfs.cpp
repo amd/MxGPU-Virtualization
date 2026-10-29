@@ -85,6 +85,9 @@ SmiSysfsReader::SysfsStatus SmiSysfsReader::readLine(const std::string& filepath
 					content = token;
 				}
 				return SmiSysfsReader::SysfsStatus::Success;
+			} catch (const std::out_of_range&) {
+				content = token;
+				return SmiSysfsReader::SysfsStatus::Success;
 			} catch (...) {
 				return SmiSysfsReader::SysfsStatus::ParseError;
 			}

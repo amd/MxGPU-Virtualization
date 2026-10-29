@@ -233,6 +233,7 @@ Commands that do and their arguments are:
     Gets all process information about the specified process based on Process ID.
 * `--name=<process_name>`
     Gets all process information about the specified process based on Process Name.
+    Name can be the full path or just the file name (e.g. amd-smi.exe).
     If multiple processes have the same name information is returned for all of them.
 
 ### profile

@@ -216,6 +216,8 @@ public:
 						std::string& out) override;
 	virtual int amdsmi_get_throttle_metric_command(uint64_t processor_bdf, Arguments arg,
 						       std::string& out) override;
+	virtual int amdsmi_get_fan_metric_command(uint64_t processor_bdf, Arguments arg,
+						  std::string& out) override;
 
 	static IAmdSmiApi& CreateAmdSmiApiObject();
 
@@ -304,9 +306,9 @@ public:
 	// confidential-compute
 	virtual int amdsmi_get_vf_tdi_state_command(std::string vf_bdf, Arguments arg,
 						    std::string& formatted_string) override;
-	virtual int amdsmi_get_cc_mode_command(uint64_t processor_bdf, Arguments arg,
-					       std::string& formatted_string) override;
-	virtual int amdsmi_set_cc_mode_command(uint64_t processor_bdf, Arguments arg) override;
+	virtual int amdsmi_get_gpu_cc_mode_command(uint64_t processor_bdf, Arguments arg,
+						   std::string& formatted_string) override;
+	virtual int amdsmi_set_gpu_cc_mode_command(uint64_t processor_bdf, Arguments arg) override;
 	virtual int amdsmi_set_fabric_ppod_command(uint64_t processor_bdf, Arguments arg) override;
 	virtual int amdsmi_set_fabric_vpod_command(uint64_t processor_bdf, Arguments arg) override;
 	virtual int amdsmi_set_fabric_station_command(uint64_t processor_bdf,

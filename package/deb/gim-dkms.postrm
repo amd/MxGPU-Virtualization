@@ -1,0 +1,24 @@
+#!/bin/sh
+set -e
+
+# Copyright Advanced Micro Devices, Inc.
+#
+# SPDX-License-Identifier: MIT
+
+# Remove userspace AMD SMI only when this package is removed or purged.
+# On upgrade, the new postinst replaces it through install-smi.sh.
+
+case "$1" in
+remove|purge)
+	if [ -f /var/lib/gim/smi-manifest ]; then
+		xargs -r rm -f < /var/lib/gim/smi-manifest
+		rm -f /var/lib/gim/smi-manifest
+		rmdir /var/lib/gim 2>/dev/null || true
+	fi
+	ldconfig || true
+	;;
+esac
+
+#DEBHELPER#
+
+exit 0

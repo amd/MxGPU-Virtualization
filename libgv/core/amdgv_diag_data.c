@@ -24,50 +24,108 @@ struct amdgv_rd_cache_buf {
 	bool init;
 } amdgv_rd_cache_buf = { 0 };
 
-static struct amdgv_diag_data_cache_buf *amdgv_diag_data_get_cache_buffer(
-	uint32_t bdf, enum AMDGV_DIAG_DATA_LOG_COLLECT_TYPE type, bool creat_new)
+/*
+ * amdgv_rd_cache_buf is shared by all adapters, whose scheduler threads run
+ * concurrently. Every list traversal and update must hold
+ * amdgv_rd_cache_buf.lock, and a buffer is only accessed outside the lock
+ * while it is privately owned: before it is published, or after it has
+ * been detached from the list.
+ */
+static bool amdgv_diag_data_cache_type_valid(enum AMDGV_DIAG_DATA_LOG_COLLECT_TYPE type)
+{
+	return (amdgv_rd_cache_buf.init &&
+		type > AMDGV_DIAG_DATA_LOG_COLLECT_CACHE_START &&
+		type < AMDGV_DIAG_DATA_LOG_COLLECT_CACHE_END);
+}
+
+/* Caller must hold amdgv_rd_cache_buf.lock */
+static struct amdgv_diag_data_cache_buf *amdgv_diag_data_find_cache_buffer(
+	uint32_t bdf, enum AMDGV_DIAG_DATA_LOG_COLLECT_TYPE type)
 {
 	struct amdgv_diag_data_cache_buf *c_buf;
-
-	if (!amdgv_rd_cache_buf.init)
-		return NULL;
-
-	if (type <= AMDGV_DIAG_DATA_LOG_COLLECT_CACHE_START ||
-	    type >= AMDGV_DIAG_DATA_LOG_COLLECT_CACHE_END)
-		return NULL;
+	struct amdgv_diag_data_cache_buf *found = NULL;
 
 	amdgv_list_for_each_entry(c_buf, &amdgv_rd_cache_buf.head,
 				   struct amdgv_diag_data_cache_buf, head) {
-		if (bdf == c_buf->bdf && type == c_buf->type)
-			return c_buf;
+		if (bdf == c_buf->bdf && type == c_buf->type) {
+			found = c_buf;
+			break;
+		}
 	}
 
-	c_buf = NULL;
-	if (creat_new) {
+	return found;
+}
+
+static bool amdgv_diag_data_cache_buffer_exists(
+	uint32_t bdf, enum AMDGV_DIAG_DATA_LOG_COLLECT_TYPE type)
+{
+	bool exists = false;
+
+	if (amdgv_diag_data_cache_type_valid(type)) {
+		oss_mutex_lock(amdgv_rd_cache_buf.lock);
+		exists = (amdgv_diag_data_find_cache_buffer(bdf, type) != NULL);
+		oss_mutex_unlock(amdgv_rd_cache_buf.lock);
+	}
+
+	return exists;
+}
+
+/* The returned buffer is private to the caller until it is published */
+static struct amdgv_diag_data_cache_buf *amdgv_diag_data_alloc_cache_buffer(
+	uint32_t bdf, enum AMDGV_DIAG_DATA_LOG_COLLECT_TYPE type)
+{
+	struct amdgv_diag_data_cache_buf *c_buf = NULL;
+
+	if (amdgv_diag_data_cache_type_valid(type))
 		c_buf = oss_alloc_memory(sizeof(struct amdgv_diag_data_cache_buf));
-		if (!c_buf)
-			return NULL;
+
+	if (c_buf) {
 		c_buf->bdf = bdf;
 		c_buf->type = type;
 		c_buf->used_size = 0;
 		AMDGV_INIT_LIST_HEAD(&c_buf->head);
-		oss_mutex_lock(amdgv_rd_cache_buf.lock);
-		amdgv_list_add_tail(&c_buf->head, &amdgv_rd_cache_buf.head);
-		oss_mutex_unlock(amdgv_rd_cache_buf.lock);
 	}
+
 	return c_buf;
 }
 
-static void
-amdgv_diag_data_free_cache_buffer(struct amdgv_diag_data_cache_buf *cache_buf)
+/* Returns false if a buffer for the same bdf and type is already cached */
+static bool
+amdgv_diag_data_publish_cache_buffer(struct amdgv_diag_data_cache_buf *c_buf)
 {
-	if (!amdgv_rd_cache_buf.init || !cache_buf)
-		return;
+	bool published = false;
 
 	oss_mutex_lock(amdgv_rd_cache_buf.lock);
-	amdgv_list_del(&cache_buf->head);
+	if (!amdgv_diag_data_find_cache_buffer(c_buf->bdf, c_buf->type)) {
+		amdgv_list_add_tail(&c_buf->head, &amdgv_rd_cache_buf.head);
+		published = true;
+	}
 	oss_mutex_unlock(amdgv_rd_cache_buf.lock);
-	oss_free_memory(cache_buf);
+
+	return published;
+}
+
+/*
+ * Remove the cached buffer from the list if it fits in the remaining user
+ * buffer. The caller owns the returned buffer and must free it.
+ */
+static struct amdgv_diag_data_cache_buf *amdgv_diag_data_detach_cache_buffer(
+	uint32_t bdf, enum AMDGV_DIAG_DATA_LOG_COLLECT_TYPE type,
+	uint32_t offset, uint32_t size)
+{
+	struct amdgv_diag_data_cache_buf *c_buf = NULL;
+
+	if (amdgv_diag_data_cache_type_valid(type)) {
+		oss_mutex_lock(amdgv_rd_cache_buf.lock);
+		c_buf = amdgv_diag_data_find_cache_buffer(bdf, type);
+		if (c_buf && (offset + c_buf->used_size) < size)
+			amdgv_list_del_init(&c_buf->head);
+		else
+			c_buf = NULL;
+		oss_mutex_unlock(amdgv_rd_cache_buf.lock);
+	}
+
+	return c_buf;
 }
 
 static void
@@ -577,15 +635,15 @@ int amdgv_diag_data_cache_dump(struct amdgv_adapter *adapt, uint32_t idx_vf,
 		return 0;
 	}
 
-	c_buf = amdgv_diag_data_get_cache_buffer(adapt->bdf, type, true);
-
-	if (!c_buf)
-		return 0;
-
-	if (c_buf->used_size) {
+	if (amdgv_diag_data_cache_buffer_exists(adapt->bdf, type)) {
 		AMDGV_WARN("Cache logs hasn't been copied to user memory\n");
 		return 0;
 	}
+
+	c_buf = amdgv_diag_data_alloc_cache_buffer(adapt->bdf, type);
+
+	if (!c_buf)
+		return 0;
 
 	c_buf->dev_id = adapt->dev_id;
 	c_buf->used_size = amdgv_diag_data_collect_cache(
@@ -593,8 +651,14 @@ int amdgv_diag_data_cache_dump(struct amdgv_adapter *adapt, uint32_t idx_vf,
 
 	if (!c_buf->used_size) {
 		AMDGV_WARN("Unable to collect data for diagnosis data\n");
-		amdgv_diag_data_free_cache_buffer(c_buf);
+		oss_free_memory(c_buf);
 		return AMDGV_FAILURE;
+	}
+
+	/* Publish the buffer only once it is completely filled */
+	if (!amdgv_diag_data_publish_cache_buffer(c_buf)) {
+		AMDGV_WARN("Cache logs hasn't been copied to user memory\n");
+		oss_free_memory(c_buf);
 	}
 
 	return 0;
@@ -609,22 +673,22 @@ static int amdgv_diag_data_copy_cache_logs(uint32_t bdf, void *buff, uint32_t si
 
 	for (type = AMDGV_DIAG_DATA_LOG_COLLECT_CACHE_START + 1;
 	     type < AMDGV_DIAG_DATA_LOG_COLLECT_CACHE_END; type++) {
-		c_buf = amdgv_diag_data_get_cache_buffer(bdf, type, false);
+		/* Detached buffer is no longer reachable by other adapters */
+		c_buf = amdgv_diag_data_detach_cache_buffer(bdf, type,
+							     data_copied, size);
 		if (c_buf == NULL)
 			continue;
 
-		if ((data_copied + c_buf->used_size) < size) {
-			/* Update block offsets and cache_index in blk hdr */
-			amdgv_diag_data_update_cache_block_header(bdf, data_copied, c_buf);
+		/* Update block offsets and cache_index in blk hdr */
+		amdgv_diag_data_update_cache_block_header(bdf, data_copied, c_buf);
 
-			/* Copy data */
-			oss_memcpy((uint8_t *)buff + data_copied, c_buf->buf,
-				   c_buf->used_size);
-			data_copied += c_buf->used_size;
-			if (dev_id)
-				*dev_id = c_buf->dev_id;
-			amdgv_diag_data_free_cache_buffer(c_buf);
-		}
+		/* Copy data */
+		oss_memcpy((uint8_t *)buff + data_copied, c_buf->buf,
+			   c_buf->used_size);
+		data_copied += c_buf->used_size;
+		if (dev_id)
+			*dev_id = c_buf->dev_id;
+		oss_free_memory(c_buf);
 	}
 
 	/* Return the size of actual blocks data copied */
@@ -777,10 +841,13 @@ void amdgv_diag_data_cache_buf_fini(void)
 	if (!amdgv_rd_cache_buf.init)
 		return;
 
+	oss_mutex_lock(amdgv_rd_cache_buf.lock);
 	amdgv_list_for_each_entry_safe(c_buf, t_buf, &amdgv_rd_cache_buf.head,
 					struct amdgv_diag_data_cache_buf, head) {
-		amdgv_diag_data_free_cache_buffer(c_buf);
+		amdgv_list_del(&c_buf->head);
+		oss_free_memory(c_buf);
 	}
+	oss_mutex_unlock(amdgv_rd_cache_buf.lock);
 	oss_mutex_fini(amdgv_rd_cache_buf.lock);
 	amdgv_rd_cache_buf.init = false;
 }

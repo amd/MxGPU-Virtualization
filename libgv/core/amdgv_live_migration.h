@@ -64,6 +64,8 @@ enum amdgv_migration_vf_state amdgv_migration_get_vf_state(struct amdgv_adapter 
 void amdgv_live_migration_abort_check(struct amdgv_adapter *adapt, uint32_t idx_vf,
 					enum amdgv_sched_event_id event_id);
 void amdgv_live_migration_set_abort_all(struct amdgv_adapter *adapt);
+void amdgv_live_migration_latch_abort(struct amdgv_adapter *adapt,
+				      uint32_t idx_vf);
 
 int amdgv_migration_boost_clk(struct amdgv_adapter *adapt);
 int amdgv_migration_restore_clk(struct amdgv_adapter *adapt, uint32_t idx_vf);

@@ -37,7 +37,6 @@ void init_smi_once(void);
 					if (ret != SMI_NIC_STATUS_SUCCESS) {                       \
 						smi_req.thread->nic_ctx	 = NULL;                   \
 						smi_req.thread->nic_init = false;                  \
-						smi_mutex_unlock(&g_smi_handle.lock);              \
 					}                                                          \
 					smi_req.thread->nic_init = true;                           \
 				}                                                                  \

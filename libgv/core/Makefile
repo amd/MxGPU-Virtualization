@@ -43,7 +43,7 @@ AMD_GPU_RAS_FILES :=
 include $(AMD_GPU_RAS_FULL_PATH)/Makefile
 endif
 
-LIBGV_HW_GPUIOV_FILES = gpuiov_v9_0.o gpuiov_v9_0_sched.o gpuiov_v9_0_reset.o
+LIBGV_HW_GPUIOV_FILES = gpuiov_v9_0.o gpuiov_v9_0_sched.o gpuiov_v9_0_reset.o gpuiov_v9_0_ws_state.o
 
 LIBGV_HW_OSSSYS_FILES = ih_v7_1.o
 LIBGV_HW_NBIO_FILES = nbio_v6_3_2.o nbio_v6_3_2_mcp.o nbio_v6_3_2_mailbox.o
@@ -59,6 +59,7 @@ LIBGV_HW_UCODE_FILES = rlc/12_1_0/rlc_12_1_0_ucode_wrap.o \
 	rlc/12_1_0/rlc_12_1_0_ucode_a0.o rlc/12_1_0/rlc_12_1_0_ucode_b0.o \
 	cp/12_1_0/mec_12_1_0_ucode_wrap.o \
 	cp/12_1_0/mec_12_1_0_ucode_a0.o cp/12_1_0/mec_12_1_0_ucode_b0.o
+LIBGV_HW_MMSCH_FILES = mmsch_v10_0.o
 
 LIBGV_CORE_FILES += $(addprefix hwip/gc/,$(LIBGV_HW_GC_FILES))
 LIBGV_CORE_FILES += $(addprefix hwip/osssys/,$(LIBGV_HW_OSSSYS_FILES))
@@ -73,3 +74,4 @@ LIBGV_CORE_FILES += $(addprefix hwip/psp/,$(LIBGV_HW_PSP_FILES))
 LIBGV_CORE_FILES += $(addprefix hwip/smu/,$(LIBGV_HW_SMU_FILES))
 LIBGV_CORE_FILES += $(addprefix hwip/vcn/,$(LIBGV_HW_VCN_FILES))
 LIBGV_CORE_FILES += $(addprefix hwip/ucode/,$(LIBGV_HW_UCODE_FILES))
+LIBGV_CORE_FILES += $(addprefix hwip/mmsch/,$(LIBGV_HW_MMSCH_FILES))

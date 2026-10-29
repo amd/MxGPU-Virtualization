@@ -92,6 +92,8 @@ static const char *amdgv_gpumon_event_name(enum amdgv_gpumon_type type)
 		return "GPUMON_FREE_VF";
 	case GPUMON_SET_VF:
 		return "GPUMON_SET_VF";
+	case GPUMON_CLEAR_VF_FB:
+		return "GPUMON_CLEAR_VF_FB";
 	case GPUMON_GET_FW_ERR_RECORDS:
 		return "GPUMON_GET_FW_ERR_RECORDS";
 	case GPUMON_GET_VF_FW_INFO:
@@ -764,7 +766,8 @@ int amdgv_gpumon_get_ecc_correction_schema(amdgv_dev_t dev, uint32_t *ecc_correc
 		return amdgv_ras_mgr_handle_gpumon_req(adapt,
 			GPUMON_GET_ECC_CORRECTION_SCHEMA, NULL, ecc_correction_schema);
 
-	if (adapt->gpumon.funcs->get_ecc_correction_schema) {
+	if (adapt->gpumon.funcs &&
+	    adapt->gpumon.funcs->get_ecc_correction_schema) {
 		ret = adapt->gpumon.funcs->get_ecc_correction_schema(adapt, ecc_correction_schema);
 	}
 	return ret;
@@ -1227,7 +1230,8 @@ int amdgv_gpumon_get_ras_eeprom_version(amdgv_dev_t dev, uint32_t *ras_eeprom_ve
 	} else {
 		*ras_eeprom_version = 0;
 
-		if (adapt->gpumon.funcs->get_ras_eeprom_version)
+		if (adapt->gpumon.funcs &&
+		    adapt->gpumon.funcs->get_ras_eeprom_version)
 			adapt->gpumon.funcs->get_ras_eeprom_version(adapt, ras_eeprom_version);
 	}
 
@@ -3843,6 +3847,27 @@ int amdgv_gpumon_handle_sched_event(struct amdgv_adapter *adapt,
 					 event->data.gpumon_data.vf.opt);
 		*event->data.gpumon_data.result = ret;
 		break;
+	case GPUMON_CLEAR_VF_FB: {
+		/*
+		 * Post-shutdown clear (ResetGpupBegin). Same park pattern as
+		 * free_vf: stop world switch, switch GFX to PF, then clear FB.
+		 */
+		int tmp_ret;
+
+		ret = amdgv_sched_park(adapt);
+		if (ret) {
+			AMDGV_WARN("amdgv_sched_park failed for clear vf fb, retry after flr");
+			ret = amdgv_sched_park(adapt);
+		}
+		if (!ret) {
+			ret = amdgv_misc_clear_vf_fb(adapt, event->data.gpumon_data.val, 0x00);
+			tmp_ret = amdgv_sched_unpark(adapt);
+			if (!ret && tmp_ret)
+				ret = tmp_ret;
+		}
+		*event->data.gpumon_data.result = ret;
+		break;
+	}
 
 	case GPUMON_GET_PCIE_CONFS:
 		*event->data.gpumon_data.result = event->data.gpumon_data.pcie_confs.cb(

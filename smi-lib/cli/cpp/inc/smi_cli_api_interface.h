@@ -171,6 +171,8 @@ public:
 						     std::string& out)		    = 0;
 	virtual int amdsmi_get_throttle_metric_command(uint64_t processor_bdf, Arguments arg,
 						       std::string& out)	    = 0;
+	virtual int amdsmi_get_fan_metric_command(uint64_t processor_bdf, Arguments arg,
+						  std::string& out)		    = 0;
 	virtual int amdsmi_get_port_netdev_command(uint64_t processor_bdf, Arguments arg,
 						   std::string& out)		    = 0;
 	virtual int amdsmi_get_port_rdma_command(uint64_t processor_bdf, Arguments arg,
@@ -305,9 +307,9 @@ public:
 	// confidential-compute
 	virtual int amdsmi_get_vf_tdi_state_command(std::string vf_bdf, Arguments arg,
 						    std::string& formatted_string)	     = 0;
-	virtual int amdsmi_get_cc_mode_command(uint64_t processor_bdf, Arguments arg,
-					       std::string& formatted_string)		     = 0;
-	virtual int amdsmi_set_cc_mode_command(uint64_t processor_bdf, Arguments arg)	     = 0;
+	virtual int amdsmi_get_gpu_cc_mode_command(uint64_t processor_bdf, Arguments arg,
+						   std::string& formatted_string)	     = 0;
+	virtual int amdsmi_set_gpu_cc_mode_command(uint64_t processor_bdf, Arguments arg)    = 0;
 	virtual int amdsmi_set_fabric_ppod_command(uint64_t processor_bdf, Arguments arg)    = 0;
 	virtual int amdsmi_set_fabric_vpod_command(uint64_t processor_bdf, Arguments arg)    = 0;
 	virtual int amdsmi_set_fabric_station_command(uint64_t processor_bdf, Arguments arg) = 0;

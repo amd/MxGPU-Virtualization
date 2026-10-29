@@ -18,8 +18,8 @@ void rlc_12_1_0_ucode_register(struct amdgv_adapter *adapt)
 int rlc_12_1_0_ucode_get(struct amdgv_adapter *adapt, enum amdgv_firmware_id fw_id,
 			 unsigned char **ptr, uint32_t *size)
 {
-	/* rev_id == 0 selects A0, any other rev_id selects B0. */
-	bool is_a0 = (adapt->rev_id == 0);
+	/* XCD revision 0 selects A0, any other XCD revision selects B0. */
+	bool is_a0 = !(adapt->nbio.chip_rev_id & AMDGV_DIE_REV_XCD__MASK);
 
 	switch (fw_id) {
 	case AMDGV_FIRMWARE_ID__RLC:

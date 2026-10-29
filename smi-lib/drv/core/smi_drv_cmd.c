@@ -377,6 +377,15 @@ int smi_get_gpu_asic_info(
 	if (!ret)
 		info->oam_id = dev_info.oam.oam_idx;
 
+	/* best-effort: an ASIC without a stepping source must not fail the query */
+	info->chip_rev_id     = SMI_NOT_SUPPORTED;
+	info->external_rev_id = SMI_NOT_SUPPORTED;
+	if (!amdgv_get_dev_info(adev, AMDGV_GET_REVISION_IDS, &dev_info) &&
+	    dev_info.revision_ids.chip_rev_id != AMDGV_REV_ID_UNKNOWN) {
+		info->chip_rev_id     = dev_info.revision_ids.chip_rev_id;
+		info->external_rev_id = dev_info.revision_ids.external_rev_id;
+	}
+
 	ret = amdgv_gpumon_get_gfx_config(adev, &gfx_config);
 	if (!ret) {
 		info->num_of_compute_units = gfx_config.active_cu_count;
@@ -495,6 +504,7 @@ int smi_get_gpu_driver_info(
 	smi_put_handle(adev, ctx);
 	return SMI_STATUS_SUCCESS;
 }
+
 int smi_get_gpu_power_cap_info(
     struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
@@ -534,7 +544,10 @@ int smi_get_gpu_power_cap_info(
 	if (dev_busy)
 		return SMI_STATUS_BUSY;
 
-	/* PPT1: other fields are NOT_SUPPORTED; power_cap from FW or sentinel. */
+	/* PPT1: get the current cap from the ASIC hook when available, otherwise
+	 * use the live FAST_PPT metric exposed by SMU v15. Get its configurable
+	 * range from the SMU v15 static metrics table.
+	 */
 	if (sensor_ind != 0) {
 		info->dpm_cap		= SMI_NOT_SUPPORTED;
 		info->default_power_cap = SMI_NOT_SUPPORTED;
@@ -544,8 +557,58 @@ int smi_get_gpu_power_cap_info(
 		    amdgv_gpumon_get_gpu_power_capacity(adev, sensor_ind, (int *)&info->power_cap);
 		if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
 			info->power_cap = SMI_NOT_SUPPORTED;
-			ret		= SMI_STATUS_SUCCESS;
+			gpumon_metrics_ext =
+			    smi_oss_funcs->alloc_memory(sizeof(struct amdgv_gpumon_metrics_ext));
+			if (gpumon_metrics_ext != NULL) {
+				smi_oss_funcs->memset(
+				    gpumon_metrics_ext, 0, sizeof(struct amdgv_gpumon_metrics_ext));
+				if (amdgv_gpumon_get_metrics_ext(adev, gpumon_metrics_ext) ==
+				    SMI_STATUS_SUCCESS) {
+					for (i = 0; i < gpumon_metrics_ext->num_metric; i++) {
+						metric = &gpumon_metrics_ext->metric[i];
+						if (metric->name !=
+						    AMDGV_GPUMON_METRIC_EXT_NAME__FAST_PPT_LIMIT_CURR)
+							continue;
+						if (metric->val != (uint64_t)SMI_NOT_SUPPORTED &&
+						    metric->val != 0xFFFFFFFFULL)
+							info->power_cap = metric->val;
+						break;
+					}
+				}
+				smi_oss_funcs->free_memory(gpumon_metrics_ext);
+				gpumon_metrics_ext = NULL;
+			}
+		} else if (ret != SMI_STATUS_SUCCESS) {
+			goto end;
 		}
+
+		if (info->power_cap != SMI_NOT_SUPPORTED) {
+			gpumon_metrics_ext =
+			    smi_oss_funcs->alloc_memory(sizeof(struct amdgv_gpumon_metrics_ext));
+			if (gpumon_metrics_ext != NULL) {
+				smi_oss_funcs->memset(
+				    gpumon_metrics_ext, 0, sizeof(struct amdgv_gpumon_metrics_ext));
+				if (amdgv_gpumon_get_static_metrics_ext(adev, gpumon_metrics_ext) ==
+				    SMI_STATUS_SUCCESS) {
+					for (i = 0; i < gpumon_metrics_ext->num_metric; i++) {
+						metric = &gpumon_metrics_ext->metric[i];
+						if (metric->val == (uint64_t)SMI_NOT_SUPPORTED ||
+						    metric->val == 0xFFFFFFFFULL)
+							continue;
+						if (metric->name ==
+						    AMDGV_GPUMON_METRIC_EXT_NAME__FAST_PPT_LIMIT_MAX)
+							info->max_power_cap = metric->val;
+						else if (
+						    metric->name ==
+						    AMDGV_GPUMON_METRIC_EXT_NAME__FAST_PPT_LIMIT_MIN)
+							info->min_power_cap = metric->val;
+					}
+				}
+				smi_oss_funcs->free_memory(gpumon_metrics_ext);
+				gpumon_metrics_ext = NULL;
+			}
+		}
+		ret = SMI_STATUS_SUCCESS;
 		goto end;
 	}
 
@@ -584,8 +647,33 @@ int smi_get_gpu_power_cap_info(
 
 	ret = amdgv_gpumon_get_max_configurable_power_limit(adev, (int *)&info->max_power_cap);
 	if (ret == AMDGV_LOG_GPUMON_NOT_SUPPORTED) {
+		/* ASICs without a max-cap gpumon hook (e.g. SMU 15) expose the SKU
+		 * maximum as a POWER_LIMIT entry in the static metrics table. The
+		 * live table carries a POWER_LIMIT entry too - that one is the
+		 * currently enforced cap - so match on the static category as well. */
 		info->max_power_cap = SMI_NOT_SUPPORTED;
-		ret		    = SMI_STATUS_SUCCESS;
+		gpumon_metrics_ext =
+		    smi_oss_funcs->alloc_memory(sizeof(struct amdgv_gpumon_metrics_ext));
+		if (gpumon_metrics_ext != NULL) {
+			smi_oss_funcs->memset(
+			    gpumon_metrics_ext, 0, sizeof(struct amdgv_gpumon_metrics_ext));
+			if (amdgv_gpumon_get_static_metrics_ext(adev, gpumon_metrics_ext) ==
+			    SMI_STATUS_SUCCESS) {
+				for (i = 0; i < gpumon_metrics_ext->num_metric; i++) {
+					metric = &gpumon_metrics_ext->metric[i];
+					if (metric->category ==
+						AMDGV_GPUMON_METRIC_EXT_CATEGORY__STATIC_POWER &&
+					    metric->name ==
+						AMDGV_GPUMON_METRIC_EXT_NAME__POWER_LIMIT) {
+						info->max_power_cap = (uint64_t)metric->val;
+						break;
+					}
+				}
+			}
+			smi_oss_funcs->free_memory(gpumon_metrics_ext);
+			gpumon_metrics_ext = NULL;
+		}
+		ret = SMI_STATUS_SUCCESS;
 	} else if (ret != SMI_STATUS_SUCCESS)
 		goto end;
 	else
@@ -616,8 +704,10 @@ int smi_get_supported_power_cap(
 	struct smi_device_info *dev	    = NULL;
 	struct smi_supported_power_cap *out = NULL;
 	struct amdgv_supported_power_cap sensors_info;
-	amdgv_dev_t *adev = NULL;
-	bool dev_busy	  = false;
+	struct amdgv_gpumon_metrics_ext *gpumon_metrics_ext = NULL;
+	amdgv_dev_t *adev				    = NULL;
+	bool dev_busy					    = false;
+	bool ppt1_found					    = false;
 	uint32_t i;
 	int ret = 0;
 
@@ -646,6 +736,41 @@ int smi_get_supported_power_cap(
 	for (i = 0; i < out->sensor_count; i++) {
 		out->sensor_inds[i]  = sensors_info.sensor_inds[i];
 		out->sensor_types[i] = (smi_power_cap_type_t)sensors_info.sensor_types[i];
+		if (out->sensor_types[i] == SMI_POWER_CAP_TYPE_PPT1)
+			ppt1_found = true;
+	}
+
+	/* SMU v15 exposes PPT1 through FAST_PPT metrics rather than the legacy
+	 * get_power_capacity callback used by libgv's generic sensor probe. The
+	 * metric entry alone is not enough: it is present even when firmware has
+	 * no FAST PPT value, in which case smi_get_gpu_power_cap_info() reports
+	 * sensor_ind=1 as N/A, so require a usable value here too.
+	 */
+	if (!ppt1_found && out->sensor_count < SMI_MAX_PPT_SENSOR_LENGTH) {
+		gpumon_metrics_ext =
+		    smi_oss_funcs->alloc_memory(sizeof(struct amdgv_gpumon_metrics_ext));
+		if (gpumon_metrics_ext != NULL) {
+			smi_oss_funcs->memset(
+			    gpumon_metrics_ext, 0, sizeof(struct amdgv_gpumon_metrics_ext));
+			if (amdgv_gpumon_get_metrics_ext(adev, gpumon_metrics_ext) ==
+			    SMI_STATUS_SUCCESS) {
+				for (i = 0; i < gpumon_metrics_ext->num_metric; i++) {
+					if (gpumon_metrics_ext->metric[i].name !=
+					    AMDGV_GPUMON_METRIC_EXT_NAME__FAST_PPT_LIMIT_CURR)
+						continue;
+					if (gpumon_metrics_ext->metric[i].val ==
+						(uint64_t)SMI_NOT_SUPPORTED ||
+					    gpumon_metrics_ext->metric[i].val == 0xFFFFFFFFULL)
+						break;
+					out->sensor_inds[out->sensor_count] = 1;
+					out->sensor_types[out->sensor_count] =
+					    SMI_POWER_CAP_TYPE_PPT1;
+					out->sensor_count++;
+					break;
+				}
+			}
+			smi_oss_funcs->free_memory(gpumon_metrics_ext);
+		}
 	}
 
 end:
@@ -1043,6 +1168,17 @@ static void smi_apply_metric_ext_to_performance_info(struct smi_gpu_performance_
 			info->temp_shutdown.temp[SMI_TEMPERATURE_TYPE_VRAM] = (uint32_t)metric->val;
 		else if (metric->category == AMDGV_GPUMON_METRIC_EXT_CATEGORY__STATIC_THROTTLE)
 			info->temp_limit.temp[SMI_TEMPERATURE_TYPE_VRAM] = (uint32_t)metric->val;
+		break;
+	case AMDGV_GPUMON_METRIC_EXT_NAME__TEMP_SHUTDOWN_XCD:
+		/* ASICs without a GPU-scoped TEMP_HOTSPOT_LIMIT/TEMP_SHUTDOWN entry report
+		 * the CTF and throttle limits per die. Hotspot tracks the compute die, so
+		 * XCD carries the hotspot pair; the AID/MID values stay per-partition.
+		 * Split by category the same way the HBM entry does. */
+		if (metric->category == AMDGV_GPUMON_METRIC_EXT_CATEGORY__STATIC_TEMPERATURE)
+			info->temp_shutdown.temp[SMI_TEMPERATURE_TYPE_HOTSPOT] =
+			    (uint32_t)metric->val;
+		else if (metric->category == AMDGV_GPUMON_METRIC_EXT_CATEGORY__STATIC_THROTTLE)
+			info->temp_limit.temp[SMI_TEMPERATURE_TYPE_HOTSPOT] = (uint32_t)metric->val;
 		break;
 	case AMDGV_GPUMON_METRIC_EXT_NAME__POWER_CURR:
 		if (metric->flag_data_filter_inst &&
@@ -2187,31 +2323,24 @@ int smi_get_guest_data(
 
 int smi_get_dfc_fw(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id	      = NULL;
-	struct smi_dfc_fw *dfc_fw_info	      = NULL;
+	struct smi_dfc_fw_info *dfc_info      = NULL;
 	union amdgv_smi_query_info *smi_query = NULL;
 	amdgv_dev_t *adev		      = NULL;
 	bool dev_busy			      = false;
-	uint32_t dfc_fw_total_entries;
 	int ret;
 
-	/* Check version */
-	if ((in_len != sizeof(struct smi_device_info)) || (out_len != sizeof(struct smi_dfc_fw)))
+	if ((in_len != sizeof(struct smi_dfc_fw_info)) || (out_len != 0))
 		return SMI_STATUS_INVAL;
 
-	id = (struct smi_device_info *)inb;
+	dfc_info = (struct smi_dfc_fw_info *)inb;
 
-	dfc_fw_info = (struct smi_dfc_fw *)outb;
-	smi_oss_funcs->memset(dfc_fw_info, 0, sizeof(*dfc_fw_info));
-
-	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
+	adev = smi_get_handle(ctx, &dfc_info->dev_id, NULL, &dev_busy);
 	if (!adev)
 		return SMI_STATUS_NOT_FOUND;
 	if (dev_busy)
 		return SMI_STATUS_BUSY;
 
 	smi_query = smi_oss_funcs->alloc_small_memory(sizeof(union amdgv_smi_query_info));
-
 	if (smi_query == NULL) {
 		smi_put_handle(adev, ctx);
 		return SMI_STATUS_OUT_OF_RESOURCES;
@@ -2221,22 +2350,10 @@ int smi_get_dfc_fw(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, 
 	if (ret)
 		goto end;
 
-	if (smi_query) {
-		dfc_fw_total_entries = smi_query->dfc_fw.header.dfc_fw_total_entries;
-		dfc_fw_total_entries = dfc_fw_total_entries >= SMI_DFC_FW_NUMBER_OF_ENTRIES
-					   ? SMI_DFC_FW_NUMBER_OF_ENTRIES
-					   : dfc_fw_total_entries;
-
-		smi_oss_funcs->memcpy(&dfc_fw_info->data,
-				      &smi_query->dfc_fw.data,
-				      sizeof(struct smi_dfc_fw_data) * dfc_fw_total_entries);
-		dfc_fw_info->header.dfc_fw_total_entries = dfc_fw_total_entries;
-		dfc_fw_info->header.dfc_fw_version	 = smi_query->dfc_fw.header.dfc_fw_version;
-	}
+	ret = smi_get_dfc_table(dfc_info, in_len, &smi_query->dfc_fw);
 
 end:
 	smi_put_handle(adev, ctx);
-
 	smi_oss_funcs->free_small_memory(smi_query);
 
 	return smi_convert_ret_value(ERROR_OTHER, ret);
@@ -3682,7 +3799,7 @@ int smi_get_vf_hbm_info(
 
 	info->phy_addr = ctx->vf_info.vf_hbm_mgmt.phy_addr;
 	info->phy_size = ctx->vf_info.vf_hbm_mgmt.phy_size;
-	/* libgv reports -1 when no NUMA node is associated (e.g. DAX mode);
+	/* libgv reports -1 when no NUMA node is associated;
 	 * surface that as 0xFFFFFFFF to match the smi_vf_hbm_info ABI. */
 	info->numa_id = (ctx->vf_info.vf_hbm_mgmt.numa_id < 0)
 			    ? 0xFFFFFFFF
@@ -4003,21 +4120,23 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_get_cc_mode(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
+int smi_get_gpu_cc_mode(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_device_info *id = NULL;
-	struct smi_cc_mode *mode   = NULL;
+	struct smi_device_info *id   = NULL;
+	struct smi_gpu_cc_mode *mode = NULL;
 	enum amdgv_cc_mode cc_mode;
 	amdgv_dev_t *adev = NULL;
 	bool dev_busy	  = false;
 	int ret		  = SMI_STATUS_SUCCESS;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_device_info)) || (out_len != sizeof(struct smi_cc_mode))) {
+	if ((in_len != sizeof(struct smi_device_info)) ||
+	    (out_len != sizeof(struct smi_gpu_cc_mode))) {
 		return SMI_STATUS_INVAL;
 	}
 
-	mode = (struct smi_cc_mode *)outb;
+	mode = (struct smi_gpu_cc_mode *)outb;
 	smi_oss_funcs->memset(mode, 0, sizeof(*mode));
 	id = (struct smi_device_info *)inb;
 
@@ -4031,7 +4150,7 @@ int smi_get_cc_mode(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len,
 	ret = amdgv_gpumon_get_cc_mode(adev, &cc_mode);
 	if (ret)
 		goto end;
-	mode->mode = smi_map_cc_mode(cc_mode);
+	mode->mode = smi_map_gpu_cc_mode(cc_mode);
 
 end:
 	smi_put_handle(adev, ctx);
@@ -4039,19 +4158,20 @@ end:
 	return smi_convert_ret_value(ERROR_OTHER, ret);
 }
 
-int smi_set_cc_mode(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
+int smi_set_gpu_cc_mode(
+    struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len, uint16_t out_len)
 {
-	struct smi_set_cc_mode *id = NULL;
-	amdgv_dev_t *adev	   = NULL;
-	bool dev_busy		   = false;
-	int ret			   = SMI_STATUS_SUCCESS;
+	struct smi_set_gpu_cc_mode *id = NULL;
+	amdgv_dev_t *adev	       = NULL;
+	bool dev_busy		       = false;
+	int ret			       = SMI_STATUS_SUCCESS;
 
 	/* Check version */
-	if ((in_len != sizeof(struct smi_set_cc_mode)) || (out_len != 0)) {
+	if ((in_len != sizeof(struct smi_set_gpu_cc_mode)) || (out_len != 0)) {
 		return SMI_STATUS_INVAL;
 	}
 
-	id = (struct smi_set_cc_mode *)inb;
+	id = (struct smi_set_gpu_cc_mode *)inb;
 
 	adev = smi_get_handle(ctx, &id->dev_id, NULL, &dev_busy);
 	if (!adev) {
@@ -4060,7 +4180,7 @@ int smi_set_cc_mode(struct smi_ctx *ctx, void *inb, void *outb, uint16_t in_len,
 	if (dev_busy)
 		return SMI_STATUS_BUSY;
 
-	ret = amdgv_gpumon_set_cc_mode(adev, smi_map_cc_mode_reverse(id->mode));
+	ret = amdgv_gpumon_set_cc_mode(adev, smi_map_gpu_cc_mode_reverse(id->mode));
 
 	smi_put_handle(adev, ctx);
 
@@ -4192,8 +4312,8 @@ int smi_set_gpu_ptl_formats(
 	if (dev_busy)
 		return SMI_STATUS_BUSY;
 
-	info.pref_format1 = ptl->data_format1;
-	info.pref_format2 = ptl->data_format2;
+	info.pref_format1 = (enum amdgv_ptl_format_type)ptl->data_format1;
+	info.pref_format2 = (enum amdgv_ptl_format_type)ptl->data_format2;
 	ret		  = amdgv_gpumon_ptl_set_state(adev, true, &info);
 
 	smi_put_handle(adev, ctx);

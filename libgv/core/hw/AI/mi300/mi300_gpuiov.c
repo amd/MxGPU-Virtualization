@@ -108,7 +108,7 @@ static int __mi300_gpuiov_set_cmd(struct amdgv_adapter *adapt,
 	if (!oss_atomic_read(adapt->in_sync_flood)) {
 		if (IS_HW_SCHED_TYPE_MM(hw_sched_id)) {
 
-			if (adapt->asic_type == CHIP_MI350X)
+			if (amdgv_asic_is_mi350(adapt->asic_type))
 				mi350_vcn_get_mmsch_regid_instid(adapt, hw_sched_id, &reg_control, true);
 			else
 				mi300_vcn_get_mmsch_regid_instid(adapt, hw_sched_id, &reg_control, true);
@@ -160,7 +160,7 @@ static bool mi300_gpuiov_is_cmd_complete(struct amdgv_adapter *adapt,
 	reg_status = 0;
 
 	if (IS_HW_SCHED_TYPE_MM(hw_sched_id)) {
-		if (adapt->asic_type == CHIP_MI350X) {
+		if (amdgv_asic_is_mi350(adapt->asic_type)) {
 			mi350_vcn_get_mmsch_regid_instid(adapt, hw_sched_id, &reg_control, true);
 			mi350_vcn_get_mmsch_regid_instid(adapt, hw_sched_id, &reg_status, false);
 		} else {
@@ -1010,7 +1010,7 @@ static int mi300_gpuiov_sw_init(struct amdgv_adapter *adapt)
 	if (adapt->asic_type != CHIP_MI308X || adapt->num_vf > 1)
 		adapt->flags |= AMDGV_FLAG_SKIP_DIAG_DATA;
 
-	if (adapt->asic_type == CHIP_MI350X)
+	if (amdgv_asic_is_mi350(adapt->asic_type))
 		adapt->mmsch.mmsch_funcs = &mi350_mmsch_funcs;
 
 	return amdgv_gpuiov_ctrl_block_setup(adapt, mi300_hw_sched_static_config, ARRAY_SIZE(mi300_hw_sched_static_config));
@@ -1050,12 +1050,174 @@ static int mi300_gpuiov_hw_fini(struct amdgv_adapter *adapt)
 
 		amdgv_gpuiov_fini(adapt);
 	} else {
-		if (adapt->asic_type != CHIP_MI350X && adapt->asic_type != CHIP_MI300X)
+		if (!amdgv_asic_is_mi350(adapt->asic_type) && adapt->asic_type != CHIP_MI300X)
 			oss_pci_write_config_dword(adapt->dev,
 					adapt->sriov_cap_pos + PCIE_EXT_SRIOV_CTRL, 0);
 	}
 
 	return 0;
+}
+
+/* vf->dev may not be stored yet when the VF framebuffer is first set. */
+static uint64_t mi300_gpuiov_get_vf_fb_bar_size(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	struct amdgv_vf_device *vf = &adapt->array_vf[idx_vf];
+	oss_dev_t dev;
+	uint64_t size;
+
+	if (vf->dev)
+		return oss_get_vf_fb_bar_size(vf->dev);
+
+	dev = oss_get_dev_from_bdf(vf->bdf);
+	if (!dev)
+		return 0;
+
+	size = oss_get_vf_fb_bar_size(dev);
+	oss_put_dev(dev);
+
+	return size;
+}
+
+/*
+ * The FB BAR is a power of two and can reach past the framebuffer behind it.
+ * HDP sends such an access to nonsurface base + BAR offset, outside the
+ * framebuffer. Surface 0 folds the BAR range [F, B) back onto the framebuffer
+ * start instead. One surface covers at most F bytes, so the window is
+ * [F, min(B, 2F)).
+ */
+static bool mi300_gpuiov_get_hdp_surface_window(struct amdgv_adapter *adapt, uint32_t idx_vf,
+						uint64_t fb_size, uint64_t bar_size,
+						uint64_t *start, uint64_t *end)
+{
+	if (!fb_size) {
+		AMDGV_DEBUG("%s HDP surface0 disabled, no framebuffer\n",
+			    amdgv_idx_to_str(idx_vf));
+		return false;
+	}
+	if (!bar_size) {
+		AMDGV_WARN("%s HDP surface0 disabled, no FB BAR\n",
+			   amdgv_idx_to_str(idx_vf));
+		return false;
+	}
+	if (bar_size <= fb_size) {
+		AMDGV_DEBUG("%s HDP surface0 disabled, BAR 0x%llx not above FB 0x%llx\n",
+			    amdgv_idx_to_str(idx_vf), bar_size, fb_size);
+		return false;
+	}
+
+	*start = fb_size;
+	*end = bar_size;
+	if (bar_size - fb_size > fb_size) {
+		*end = 2 * fb_size;
+		AMDGV_WARN("%s HDP surface0 clamped to 2F, F 0x%llx B 0x%llx\n",
+			   amdgv_idx_to_str(idx_vf), fb_size, bar_size);
+	}
+
+	return true;
+}
+
+/*
+ * Program the window [F, B) -> fb_base, or clear surface 0 when there is
+ * nothing to fold, so a stale window never outlives a reconfigure. The PF
+ * writes the registers by MMIO; a VF has them set through PSP.
+ */
+static int mi300_gpuiov_set_hdp_surface0(struct amdgv_adapter *adapt, uint32_t idx_vf,
+					 uint64_t fb_size, uint64_t bar_size,
+					 uint64_t fb_base)
+{
+	uint32_t lower = 0, lower_hi = 0, upper = 0, upper_hi = 0, base = 0, base_hi = 0;
+	uint64_t start, end;
+	bool enabled = false;
+
+	if (mi300_gpuiov_get_hdp_surface_window(adapt, idx_vf, fb_size, bar_size,
+						&start, &end)) {
+		/* 256B granules; the bounds reach 44 bits and the base 48. */
+		if (((start | end | fb_base) & 0xff) ||
+		    end > ((uint64_t)1 << 44) || fb_base >= ((uint64_t)1 << 48)) {
+			AMDGV_WARN("%s HDP surface0 disabled, cannot encode [0x%llx, 0x%llx) base 0x%llx\n",
+				   amdgv_idx_to_str(idx_vf), start, end, fb_base);
+		} else {
+			/* UPPER is inclusive, so it takes the last granule of the window. */
+			lower = REG_SET_FIELD(0, HDP_SURFACE0_LOWER_BOUND, SURF_LOWER,
+					      lower_32_bits(start >> 8));
+			lower_hi = REG_SET_FIELD(0, HDP_SURFACE0_LOWER_BOUND_HI, SURF_LOWER_43_40,
+						 upper_32_bits(start >> 8));
+			upper = REG_SET_FIELD(0, HDP_SURFACE0_UPPER_BOUND, SURF_UPPER,
+					      lower_32_bits((end - 1) >> 8));
+			upper_hi = REG_SET_FIELD(0, HDP_SURFACE0_UPPER_BOUND_HI, SURF_UPPER_43_40,
+						 upper_32_bits((end - 1) >> 8));
+			base = REG_SET_FIELD(0, HDP_SURFACE0_BASE, SURF_BASE_39_8,
+					     lower_32_bits(fb_base >> 8));
+			base_hi = REG_SET_FIELD(0, HDP_SURFACE0_BASE_HI, SURF_BASE_47_40,
+						upper_32_bits(fb_base >> 8));
+			enabled = true;
+		}
+	}
+
+	if (idx_vf == AMDGV_PF_IDX) {
+		WREG32(SOC15_REG_OFFSET(HDP, 0, regHDP_SURFACE0_LOWER_BOUND), lower);
+		WREG32(SOC15_REG_OFFSET(HDP, 0, regHDP_SURFACE0_LOWER_BOUND_HI), lower_hi);
+		WREG32(SOC15_REG_OFFSET(HDP, 0, regHDP_SURFACE0_UPPER_BOUND), upper);
+		WREG32(SOC15_REG_OFFSET(HDP, 0, regHDP_SURFACE0_UPPER_BOUND_HI), upper_hi);
+		WREG32(SOC15_REG_OFFSET(HDP, 0, regHDP_SURFACE0_BASE), base);
+		WREG32(SOC15_REG_OFFSET(HDP, 0, regHDP_SURFACE0_BASE_HI), base_hi);
+	} else if (!adapt->psp.program_register ||
+		   adapt->psp.program_register(adapt, idx_vf, lower, 0,
+					       HDP_SURFACE0_LOWER_BOUND) ||
+		   adapt->psp.program_register(adapt, idx_vf, lower_hi, 0,
+					       HDP_SURFACE0_LOWER_BOUND_HI) ||
+		   adapt->psp.program_register(adapt, idx_vf, upper, 0,
+					       HDP_SURFACE0_UPPER_BOUND) ||
+		   adapt->psp.program_register(adapt, idx_vf, upper_hi, 0,
+					       HDP_SURFACE0_UPPER_BOUND_HI) ||
+		   adapt->psp.program_register(adapt, idx_vf, base, 0,
+					       HDP_SURFACE0_BASE) ||
+		   adapt->psp.program_register(adapt, idx_vf, base_hi, 0,
+					       HDP_SURFACE0_BASE_HI)) {
+		return AMDGV_FAILURE;
+	}
+
+	if (enabled)
+		AMDGV_INFO("%s HDP surface0 [0x%llx, 0x%llx) base 0x%llx\n",
+			   amdgv_idx_to_str(idx_vf), start, end, fb_base);
+
+	return 0;
+}
+
+/* PF: F is total_fb_avail and B is the PF BAR, written by MMIO. */
+void mi300_gpuiov_program_pf_hdp_surface(struct amdgv_adapter *adapt)
+{
+	uint64_t fb_size = MBYTES_TO_BYTES(adapt->gpuiov.total_fb_avail);
+	uint64_t fb_base = adapt->mc_fb_loc_addr;
+
+	/* Same node stride as the PF memory manager. */
+	if (adapt->xgmi.phy_nodes_num > 1)
+		fb_base += adapt->xgmi.node_segment_size * adapt->xgmi.phy_node_id;
+
+	mi300_gpuiov_set_hdp_surface0(adapt, AMDGV_PF_IDX, fb_size, adapt->fb_size, fb_base);
+}
+
+/* VF: F is real_fb_size and B is the VF FB BAR, set through PSP GBR_IH_REG. */
+int mi300_gpuiov_program_vf_hdp_surface(struct amdgv_adapter *adapt, uint32_t idx_vf)
+{
+	uint64_t fb_size, bar_size, fb_base = adapt->mc_fb_loc_addr;
+
+	if (idx_vf == AMDGV_PF_IDX || idx_vf >= adapt->num_vf)
+		return 0;
+
+	if (!amdgv_psp_fw_feature_supported(adapt, AMDGV_PSP_FW_FEATURE__HDP_SURFACE0)) {
+		AMDGV_DEBUG("%s HDP surface0 skipped, fw too old\n",
+			    amdgv_idx_to_str(idx_vf));
+		return 0;
+	}
+
+	fb_size = MBYTES_TO_BYTES(adapt->array_vf[idx_vf].real_fb_size);
+	bar_size = mi300_gpuiov_get_vf_fb_bar_size(adapt, idx_vf);
+	/* Same base as the VF HDP nonsurface from mi300_psp_program_guest_mc_settings(). */
+	if (adapt->xgmi.phy_nodes_num > 1)
+		fb_base += fb_size * adapt->xgmi.phy_node_id;
+
+	return mi300_gpuiov_set_hdp_surface0(adapt, idx_vf, fb_size, bar_size, fb_base);
 }
 
 static int mi300_gpuiov_hw_init(struct amdgv_adapter *adapt)
@@ -1127,7 +1289,7 @@ static int mi300_gpuiov_hw_init(struct amdgv_adapter *adapt)
 		amdgv_enable_sriov_10bit_tag(adapt);
 	} else {
 		/* Need to disable VF, before enabling it back */
-		if (adapt->asic_type == CHIP_MI350X || adapt->asic_type == CHIP_MI300X) {
+		if (amdgv_asic_is_mi350(adapt->asic_type) || adapt->asic_type == CHIP_MI300X) {
 			if (mi300_gpuiov_restore_sriov_with_retry(adapt))
 				return AMDGV_FAILURE;
 		} else {
@@ -1137,6 +1299,8 @@ static int mi300_gpuiov_hw_init(struct amdgv_adapter *adapt)
 
 	if (!(RREG32(SOC15_REG_OFFSET(MP0, 0, regMP0_SMN_C2PMSG_91)) & 0x4000))
 		amdgv_put_log(AMDGV_PF_IDX, AMDGV_LOG_IOV_L1_SECURITY_DISABLED, 0);
+
+	mi300_gpuiov_program_pf_hdp_surface(adapt);
 
 	return 0;
 }

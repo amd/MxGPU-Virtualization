@@ -120,7 +120,7 @@ const char *const smi_shim_inf_name[] = {"lock_device_list",	   "get_device_list
 					 "get_driver_date",	   "get_driver_model",
 					 "get_metric_table",	   "get_eeprom_table",
 					 "get_partition",	   "get_partition_global",
-					 "get_cper_data"};
+					 "get_cper_data",	   "get_dfc_table"};
 
 void smi_print(const char *fmt, ...)
 {

@@ -562,6 +562,31 @@ static ssize_t gim_mon_spatial_partition_caps_show(struct device *dev,
 static DEVICE_ATTR(spatial_partition_caps, (0400),
 			gim_mon_spatial_partition_caps_show, NULL);
 
+static ssize_t gim_mon_run_cleaner_shader_store(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t count)
+{
+	int ret;
+	long value;
+	struct gim_dev_data *data;
+	struct pci_dev *pdev = to_pci_dev(dev);
+
+	data = pci_get_drvdata(pdev);
+
+	ret = kstrtol(buf, 0, &value);
+	if (ret || value < 0)
+		return -EINVAL;
+
+	ret = amdgv_gfx_run_cleaner_shader(data->adev, (uint32_t)value);
+	if (ret)
+		return -EIO;
+
+	return count;
+}
+
+static DEVICE_ATTR(run_cleaner_shader, 0200,
+			NULL, gim_mon_run_cleaner_shader_store);
+
 int gim_mon_create_dev_sys(struct gim_dev_data *data)
 {
 	int ret = 0;
@@ -636,7 +661,16 @@ int gim_mon_create_dev_sys(struct gim_dev_data *data)
 		goto err_spatial_partition_caps;
 	}
 
+	ret = device_create_file(dev, &dev_attr_run_cleaner_shader);
+	if (ret) {
+		gim_put_error(AMDGV_LOG_DRIVER_CREATE_DEVICE_FILE_FAIL, 0);
+		goto err_run_cleaner_shader;
+	}
+
 	return ret;
+
+err_run_cleaner_shader:
+	device_remove_file(dev, &dev_attr_spatial_partition_caps);
 
 err_spatial_partition_caps:
 	device_remove_file(dev, &dev_attr_memory_partition_config);
@@ -692,6 +726,7 @@ void gim_mon_remove_dev_sys(struct gim_dev_data *data)
 	device_remove_file(dev, &dev_attr_accelerator_partition_profile_config);
 	device_remove_file(dev, &dev_attr_memory_partition_config);
 	device_remove_file(dev, &dev_attr_spatial_partition_caps);
+	device_remove_file(dev, &dev_attr_run_cleaner_shader);
 }
 
 static ssize_t gim_mon_self_switch_all_show(struct device_driver *drv,

@@ -189,6 +189,8 @@ def amdsmi_get_nic_port_statistics(processor_handle, port_index):
     num_stats = ctypes.c_uint32(0)
     _check_res(amdsmi_wrapper.amdsmi_get_nic_port_statistics(
         processor_handle, port_index, ctypes.byref(num_stats), None))
+    if num_stats.value == 0:
+        return []
 
     stats_list = (amdsmi_wrapper.amdsmi_nic_stat_t * num_stats.value)()
     _check_res(amdsmi_wrapper.amdsmi_get_nic_port_statistics(
@@ -211,6 +213,8 @@ def amdsmi_get_nic_vendor_statistics(processor_handle, port_index):
     num_stats = ctypes.c_uint32(0)
     _check_res(amdsmi_wrapper.amdsmi_get_nic_vendor_statistics(
         processor_handle, port_index, ctypes.byref(num_stats), None))
+    if num_stats.value == 0:
+        return []
 
     stats_list = (amdsmi_wrapper.amdsmi_nic_stat_t * num_stats.value)()
     _check_res(amdsmi_wrapper.amdsmi_get_nic_vendor_statistics(
@@ -233,6 +237,8 @@ def amdsmi_get_nic_rdma_port_statistics(processor_handle, rdma_port_index):
     num_stats = ctypes.c_uint32(0)
     _check_res(amdsmi_wrapper.amdsmi_get_nic_rdma_port_statistics(
         processor_handle, rdma_port_index, ctypes.byref(num_stats), None))
+    if num_stats.value == 0:
+        return []
 
     stats_list = (amdsmi_wrapper.amdsmi_nic_stat_t * num_stats.value)()
     _check_res(amdsmi_wrapper.amdsmi_get_nic_rdma_port_statistics(

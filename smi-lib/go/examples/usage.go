@@ -125,11 +125,12 @@ func main() {
 		printGetVfFwInfo(ph)
 		printGetVfHbmInfo(ph)
 		printGetTdiState(ph)
-		printGetCcMode(ph)
-		//printSetCcMode(ph) // disabled for quick check. enable if required
+		printGetGpuCcMode(ph)
+		//printSetGpuCcMode(ph) // disabled for quick check. enable if required
 		printGetGpuFabricInfo(ph)
 		printGetFabricTelemetry(ph)
 		printAllocFabricTelemetry(ph)
+		printFabricCperEntries(ph)
 		//printSetGpuFabricPpodConfig(ph)      // disabled — writes to hardware config. enable if required
 		//printSetGpuFabricVpodConfig(ph)      // disabled — writes to hardware config. enable if required
 		//printSetGpuFabricStationConfig(ph)   // disabled — writes to hardware config. enable if required
@@ -173,6 +174,8 @@ func printAsicInfo(ph amdsmi.ProcessorHandle) {
 	fmt.Printf("    Subvendor ID:    0x%04X\n", info.SubvendorID)
 	fmt.Printf("    Device ID:       0x%04X\n", info.DeviceID)
 	fmt.Printf("    Rev ID:          0x%02X\n", info.RevID)
+	fmt.Printf("    Chip Rev ID:     0x%02X\n", info.ChipRevId)
+	fmt.Printf("    External Rev ID: 0x%02X\n", info.ExternalRevId)
 	fmt.Printf("    ASIC Serial:     %s\n", info.AsicSerial)
 	fmt.Printf("    OAM ID:          %d\n", info.OamID)
 	fmt.Printf("    Physical Acc ID: %d\n", info.PhysicalAccId)
@@ -1760,7 +1763,7 @@ func printNicRdmaPortStatistics(ph amdsmi.ProcessorHandle, rdmaPortIndex uint32)
 		logSkip("GetNicRdmaPortStatistics", err)
 		return
 	}
-	printNicStats(fmt.Sprintf("NIC RDMA Port Statistics (rdma_port %d)", rdmaPortIndex), stats)
+	printNicStats(fmt.Sprintf("NIC RDMA Port Statistics (RDMA port index %d)", rdmaPortIndex), stats)
 }
 
 // demonstrateEventMonitor opens an EventReader on every processor, polls a few
@@ -1844,6 +1847,45 @@ func printGPUCperEntries(ph amdsmi.ProcessorHandle) {
 	fmt.Printf("  AFIDs from entry 0 (%d): %v\n", len(afids), afids)
 }
 
+// printFabricCperEntries fetches UALoE fabric CPER entries and prints a
+// summary for each. It also demonstrates GetAfidsFromCper on the first record.
+func printFabricCperEntries(ph amdsmi.ProcessorHandle) {
+	const severityMask = 0xFFFFFFFF // all severities
+	entries, cursor, err := amdsmi.GetFabricCperEntries(ph, severityMask, 0, 0)
+	if err != nil {
+		logSkip("GetFabricCperEntries", err)
+		return
+	}
+	if len(entries) == 0 {
+		fmt.Println("  Fabric CPER Entries: (none cached)")
+		return
+	}
+	fmt.Printf("  Fabric CPER Entries (%d, next cursor=%d):\n", len(entries), cursor)
+	for i, e := range entries {
+		fmt.Printf("    Entry %d:\n", i)
+		fmt.Printf("      Signature:    %q\n", e.Header.Signature)
+		fmt.Printf("      Revision:     %d\n", e.Header.Revision)
+		fmt.Printf("      Severity:     %s (%d)\n", e.Header.ErrorSeverity, uint32(e.Header.ErrorSeverity))
+		fmt.Printf("      Notify Type:  %s\n", e.Header.NotifyType.NotifyType())
+		fmt.Printf("      Timestamp:    %s\n", e.Header.Timestamp)
+		fmt.Printf("      Record Len:   %d bytes\n", e.Header.RecordLength)
+		fmt.Printf("      Sec Count:    %d\n", e.Header.SecCnt)
+		fmt.Printf("      Flags:        0x%08X\n", e.Header.Flags)
+		fmt.Printf("      Persistence:  0x%016X\n", e.Header.PersistenceInfo)
+		fmt.Printf("      Record ID:    %q (raw=% X)\n",
+			strings.TrimRight(string(e.Header.RecordID[:]), "\x00"),
+			e.Header.RecordID[:])
+		fmt.Printf("      Raw size:     %d bytes\n", len(e.Bytes))
+	}
+
+	afids, err := amdsmi.GetAfidsFromCper(entries[0].Bytes)
+	if err != nil {
+		logSkip("GetAfidsFromCper (fabric)", err)
+		return
+	}
+	fmt.Printf("  AFIDs from fabric entry 0 (%d): %v\n", len(afids), afids)
+}
+
 func printGpuMetrics(ph amdsmi.ProcessorHandle) {
 	metrics, err := amdsmi.GetGpuMetrics(ph)
 	if err != nil {
@@ -1913,26 +1955,26 @@ func printGetTdiState(ph amdsmi.ProcessorHandle) {
 	}
 }
 
-func printGetCcMode(ph amdsmi.ProcessorHandle) {
-	mode, err := amdsmi.GetCcMode(ph)
+func printGetGpuCcMode(ph amdsmi.ProcessorHandle) {
+	mode, err := amdsmi.GetGpuCcMode(ph)
 	if err != nil {
-		logSkip("GetCcMode", err)
+		logSkip("GetGpuCcMode", err)
 		return
 	}
-	fmt.Printf("  GetCcMode: %s (%d)\n", mode, mode)
+	fmt.Printf("  GetGpuCcMode: %s (%d)\n", mode, mode)
 }
 
-func printSetCcMode(ph amdsmi.ProcessorHandle) {
-	cur, err := amdsmi.GetCcMode(ph)
+func printSetGpuCcMode(ph amdsmi.ProcessorHandle) {
+	cur, err := amdsmi.GetGpuCcMode(ph)
 	if err != nil {
-		logSkip("SetCcMode (GetCcMode)", err)
+		logSkip("SetGpuCcMode (GetGpuCcMode)", err)
 		return
 	}
-	if err := amdsmi.SetCcMode(ph, cur); err != nil {
-		logSkip("SetCcMode", err)
+	if err := amdsmi.SetGpuCcMode(ph, cur); err != nil {
+		logSkip("SetGpuCcMode", err)
 		return
 	}
-	fmt.Printf("  SetCcMode:\n")
+	fmt.Printf("  SetGpuCcMode:\n")
 	fmt.Printf("  	Round-trip current mode (%s): ok\n", cur)
 }
 

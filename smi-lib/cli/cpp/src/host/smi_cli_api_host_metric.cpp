@@ -19,15 +19,11 @@
 
 #include <cstdint>
 #include <sstream>
-#ifdef _WIN64
-	#include <windows.h>
-	#include <sysinfoapi.h>
-#endif
-
 #include <limits.h>
 #include <vector>
 #include <algorithm>
 #include <chrono>
+#include <optional>
 #include <thread>
 #include <cinttypes>
 
@@ -126,6 +122,58 @@ static std::vector<uint32_t> get_resource_instances_for_vf(const amdsmi_metric_t
 
 	std::sort(instances.begin(), instances.end());
 	return instances;
+}
+
+static bool metric_res_group_is_ungrouped(amdsmi_metric_res_group_t group)
+{
+	return group == AMDSMI_METRIC_RES_GROUP_NA || group == AMDSMI_METRIC_RES_GROUP_UNKNOWN;
+}
+
+static bool is_current_gfx_clk(const amdsmi_metric_t& metric)
+{
+	if (metric.name != AMDSMI_METRIC_NAME_CLK_GFX || (metric.flags & AMDSMI_METRIC_TYPE_ACC)) {
+		return false;
+	}
+
+	if (metric_res_group_is_ungrouped(metric.res_group)) {
+		return true;
+	}
+
+	return metric.res_group == AMDSMI_METRIC_RES_GROUP_XCP &&
+	       metric.res_subgroup == AMDSMI_METRIC_RES_SUBGROUP_XCC;
+}
+
+static bool is_current_mem_clk(const amdsmi_metric_t& metric)
+{
+	if (metric.name != AMDSMI_METRIC_NAME_CLK_MEM || (metric.flags & AMDSMI_METRIC_TYPE_ACC)) {
+		return false;
+	}
+
+	return metric_res_group_is_ungrouped(metric.res_group) ||
+	       metric.res_group == AMDSMI_METRIC_RES_GROUP_AID ||
+	       metric.res_group == AMDSMI_METRIC_RES_GROUP_GPU;
+}
+
+static bool is_current_vclk(const amdsmi_metric_t& metric)
+{
+	if (metric.name != AMDSMI_METRIC_NAME_CLK_VCLK || (metric.flags & AMDSMI_METRIC_TYPE_ACC)) {
+		return false;
+	}
+
+	return metric_res_group_is_ungrouped(metric.res_group) ||
+	       metric.res_group == AMDSMI_METRIC_RES_GROUP_MID ||
+	       metric.res_group == AMDSMI_METRIC_RES_GROUP_AID;
+}
+
+static bool is_current_dclk(const amdsmi_metric_t& metric)
+{
+	if (metric.name != AMDSMI_METRIC_NAME_CLK_DCLK || (metric.flags & AMDSMI_METRIC_TYPE_ACC)) {
+		return false;
+	}
+
+	return metric_res_group_is_ungrouped(metric.res_group) ||
+	       metric.res_group == AMDSMI_METRIC_RES_GROUP_MID ||
+	       metric.res_group == AMDSMI_METRIC_RES_GROUP_AID;
 }
 
 static amdsmi_status_t fetch_gpu_metrics(amdsmi_processor_handle processor,
@@ -1762,8 +1810,7 @@ amdsmi_status_t get_metric_ext_clock_data(uint64_t processor_bdf, Arguments arg,
 			return ret;
 		} else {
 			for (int i = 0; i < metric_size; i++) {
-				if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_GFX &&
-				    !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
+				if (is_current_gfx_clk(metrics[i])) {
 					gfx_chiplet["clk"].push_back(metrics[i]);
 				} else if (metrics[i].name ==
 					       AMDSMI_METRIC_NAME_CLK_GFX_MIN_LIMIT &&
@@ -1780,8 +1827,7 @@ amdsmi_status_t get_metric_ext_clock_data(uint64_t processor_bdf, Arguments arg,
 					       AMDSMI_METRIC_NAME_CLK_GFX_DS_DISABLED &&
 					   !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
 					gfx_chiplet["deep_sleep"].push_back(metrics[i]);
-				} else if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_MEM &&
-					   !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
+				} else if (is_current_mem_clk(metrics[i])) {
 					mem_chiplet["clk"].push_back(metrics[i]);
 				} else if (metrics[i].name ==
 					       AMDSMI_METRIC_NAME_CLK_MEM_MIN_LIMIT &&
@@ -1795,8 +1841,7 @@ amdsmi_status_t get_metric_ext_clock_data(uint64_t processor_bdf, Arguments arg,
 					       AMDSMI_METRIC_NAME_CLK_MEM_DS_DISABLED &&
 					   !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
 					mem_chiplet["deep_sleep"].push_back(metrics[i]);
-				} else if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_VCLK &&
-					   !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
+				} else if (is_current_vclk(metrics[i])) {
 					vclk_chiplet["clk"].push_back(metrics[i]);
 				} else if (metrics[i].name ==
 					       AMDSMI_METRIC_NAME_CLK_VCLK_MIN_LIMIT &&
@@ -1810,8 +1855,7 @@ amdsmi_status_t get_metric_ext_clock_data(uint64_t processor_bdf, Arguments arg,
 					       AMDSMI_METRIC_NAME_CLK_VCLK_DS_DISABLED &&
 					   !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
 					vclk_chiplet["deep_sleep"].push_back(metrics[i]);
-				} else if (metrics[i].name == AMDSMI_METRIC_NAME_CLK_DCLK &&
-					   !(metrics[i].flags & AMDSMI_METRIC_TYPE_ACC)) {
+				} else if (is_current_dclk(metrics[i])) {
 					dclk_chiplet["clk"].push_back(metrics[i]);
 				} else if (metrics[i].name ==
 					       AMDSMI_METRIC_NAME_CLK_DCLK_MIN_LIMIT &&
@@ -1834,6 +1878,59 @@ amdsmi_status_t get_metric_ext_clock_data(uint64_t processor_bdf, Arguments arg,
 		out = host_fill_clock(arg, "N/A");
 		return ret;
 	}
+
+	auto sort_by_resource_instance =
+	    [](std::map<std::string, std::vector<amdsmi_metric_t>>& chiplet) {
+		    for (auto& series : chiplet) {
+			    std::stable_sort(
+				series.second.begin(), series.second.end(),
+				[](const amdsmi_metric_t& lhs, const amdsmi_metric_t& rhs) {
+					return lhs.res_instance < rhs.res_instance;
+				});
+		    }
+	    };
+
+	sort_by_resource_instance(gfx_chiplet);
+	sort_by_resource_instance(mem_chiplet);
+	sort_by_resource_instance(vclk_chiplet);
+	sort_by_resource_instance(dclk_chiplet);
+
+	/*
+	 * Clocks are reported per chiplet, while the matching min/max limits and
+	 * the locked/deep sleep states arrive once for the whole GPU. Repeat the
+	 * shorter series so every chiplet is reported, not just the first one.
+	 */
+	auto align_chiplet_series =
+	    [](std::map<std::string, std::vector<amdsmi_metric_t>>& chiplet) {
+		    const std::size_t count = chiplet["clk"].size();
+
+		    for (auto& series : chiplet) {
+			    if (series.second.empty() || series.second.size() >= count) {
+				    continue;
+			    }
+
+			    const amdsmi_metric_t last = series.second.back();
+			    series.second.resize(count, last);
+		    }
+
+		    /*
+		     * min/max are indexed alongside the clocks, so an ASIC that
+		     * reports no limits at all must still yield one entry per
+		     * chiplet. Report those as unavailable instead of dropping
+		     * the whole clock group.
+		     */
+		    amdsmi_metric_t unavailable {};
+		    unavailable.val = UINT64_MAX;
+
+		    for (const char* series_name : {"min_clk", "max_clk"}) {
+			    chiplet[series_name].resize(count, unavailable);
+		    }
+	    };
+
+	align_chiplet_series(gfx_chiplet);
+	align_chiplet_series(mem_chiplet);
+	align_chiplet_series(vclk_chiplet);
+	align_chiplet_series(dclk_chiplet);
 
 	std::size_t gfx_cur_size =
 	    std::min({gfx_chiplet["clk"].size(), gfx_chiplet["min_clk"].size(),
@@ -1944,129 +2041,119 @@ amdsmi_status_t get_metric_ext_clock_data(uint64_t processor_bdf, Arguments arg,
 			} else {
 				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_MEM);
 			}
-			result[string_format("mem_%d", i)] =
+			result[string_format("mem_%d", mem_chiplet["clk"][i].res_instance)] =
 			    nlohmann::ordered_json::object({{"clk", mem_clk_json},
 							    {"min_clk", mem_min_clk_json},
 							    {"max_clk", mem_max_clk_json},
 							    {"clk_locked", "N/A"},
 							    {"deep_sleep", clk_deep_sleep}});
-
-			for (int i = 0; i < vclk_cur_size; i++) {
-				nlohmann::ordered_json vclk_clk_json {};
-				if (vclk_chiplet["clk"][i].val == UINT64_MAX) {
-					vclk_clk_json["value"] = "N/A";
-				} else {
-					vclk_clk_json["value"] = vclk_chiplet["clk"][i].val;
-				}
-				vclk_clk_json["unit"] =
-				    string_format("%llu", vclk_chiplet["clk"][i].val) == "N/A"
-					? "N/A"
-					: "MHz";
-				nlohmann::ordered_json vclk_min_clk_json {};
-				if (vclk_chiplet["min_clk"][i].val == UINT64_MAX) {
-					vclk_min_clk_json["value"] = "N/A";
-				} else {
-					vclk_min_clk_json["value"] = vclk_chiplet["min_clk"][i].val;
-				}
-				vclk_min_clk_json["unit"] =
-				    string_format("%llu", vclk_chiplet["min_clk"][i].val) == "N/A"
-					? "N/A"
-					: "MHz";
-				nlohmann::ordered_json vclk_max_clk_json {};
-				if (vclk_chiplet["max_clk"][i].val == UINT64_MAX) {
-					vclk_max_clk_json["value"] = "N/A";
-				} else {
-					vclk_max_clk_json["value"] = vclk_chiplet["max_clk"][i].val;
-				}
-				vclk_max_clk_json["unit"] =
-				    string_format("%llu", vclk_chiplet["max_clk"][i].val) == "N/A"
-					? "N/A"
-					: "MHz";
-				std::string clk_locked {"N/A"};
-				std::string clk_deep_sleep {"N/A"};
-				if (vclk_chiplet["clk_locked"].size()) {
-					clk_locked =
-					    vclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A"
-					    : vclk_chiplet["clk_locked"][i].val ? "ENABLED"
-										: "DISABLED";
-				}
-				if (vclk_chiplet["deep_sleep"].size()) {
-					clk_deep_sleep =
-					    vclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A"
-					    : vclk_chiplet["deep_sleep"][i].val ? "DISABLED"
-										: "ENABLED";
-				} else {
-					clk_deep_sleep =
-					    get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_VCLK0);
-				}
-				result[string_format("vclk_%d", i)] =
-				    nlohmann::ordered_json::object(
-					{{"clk", vclk_clk_json},
-					 {"min_clk", vclk_min_clk_json},
-					 {"max_clk", vclk_max_clk_json},
-					 {"clk_locked", "N/A"},
-					 {"deep_sleep", clk_deep_sleep}});
-			}
-
-			for (int i = 0; i < dclk_cur_size; i++) {
-				nlohmann::ordered_json dclk_clk_json {};
-				if (dclk_chiplet["clk"][i].val == UINT64_MAX) {
-					dclk_clk_json["value"] = "N/A";
-				} else {
-					dclk_clk_json["value"] = dclk_chiplet["clk"][i].val;
-				}
-				dclk_clk_json["unit"] =
-				    string_format("%llu", dclk_chiplet["clk"][i].val) == "N/A"
-					? "N/A"
-					: "MHz";
-				nlohmann::ordered_json dclk_min_clk_json {};
-				if (dclk_chiplet["min_clk"][i].val == UINT64_MAX) {
-					dclk_min_clk_json["value"] = "N/A";
-				} else {
-					dclk_min_clk_json["value"] = dclk_chiplet["min_clk"][i].val;
-				}
-				dclk_min_clk_json["unit"] =
-				    string_format("%llu", dclk_chiplet["min_clk"][i].val) == "N/A"
-					? "N/A"
-					: "MHz";
-				nlohmann::ordered_json dclk_max_clk_json {};
-				if (dclk_chiplet["max_clk"][i].val == UINT64_MAX) {
-					dclk_max_clk_json["value"] = "N/A";
-				} else {
-					dclk_max_clk_json["value"] = dclk_chiplet["max_clk"][i].val;
-				}
-				dclk_max_clk_json["unit"] =
-				    string_format("%llu", dclk_chiplet["max_clk"][i].val) == "N/A"
-					? "N/A"
-					: "MHz";
-				std::string clk_locked {"N/A"};
-				std::string clk_deep_sleep {"N/A"};
-				if (dclk_chiplet["clk_locked"].size()) {
-					clk_locked =
-					    dclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A"
-					    : dclk_chiplet["clk_locked"][i].val ? "ENABLED"
-										: "DISABLED";
-				}
-				if (dclk_chiplet["deep_sleep"].size()) {
-					clk_deep_sleep =
-					    dclk_chiplet["deep_sleep"][i].val == UINT64_MAX ? "N/A"
-					    : dclk_chiplet["deep_sleep"][i].val ? "DISABLED"
-										: "ENABLED";
-				} else {
-					clk_deep_sleep =
-					    get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_DCLK0);
-				}
-				result[string_format("dclk_%d", i)] =
-				    nlohmann::ordered_json::object(
-					{{"clk", dclk_clk_json},
-					 {"min_clk", dclk_min_clk_json},
-					 {"max_clk", dclk_max_clk_json},
-					 {"clk_locked", "N/A"},
-					 {"deep_sleep", clk_deep_sleep}});
-
-				out = result.dump(4);
-			}
 		}
+
+		for (int i = 0; i < vclk_cur_size; i++) {
+			nlohmann::ordered_json vclk_clk_json {};
+			if (vclk_chiplet["clk"][i].val == UINT64_MAX) {
+				vclk_clk_json["value"] = "N/A";
+			} else {
+				vclk_clk_json["value"] = vclk_chiplet["clk"][i].val;
+			}
+			vclk_clk_json["unit"] =
+			    string_format("%llu", vclk_chiplet["clk"][i].val) == "N/A" ? "N/A"
+										       : "MHz";
+			nlohmann::ordered_json vclk_min_clk_json {};
+			if (vclk_chiplet["min_clk"][i].val == UINT64_MAX) {
+				vclk_min_clk_json["value"] = "N/A";
+			} else {
+				vclk_min_clk_json["value"] = vclk_chiplet["min_clk"][i].val;
+			}
+			vclk_min_clk_json["unit"] =
+			    string_format("%llu", vclk_chiplet["min_clk"][i].val) == "N/A" ? "N/A"
+											   : "MHz";
+			nlohmann::ordered_json vclk_max_clk_json {};
+			if (vclk_chiplet["max_clk"][i].val == UINT64_MAX) {
+				vclk_max_clk_json["value"] = "N/A";
+			} else {
+				vclk_max_clk_json["value"] = vclk_chiplet["max_clk"][i].val;
+			}
+			vclk_max_clk_json["unit"] =
+			    string_format("%llu", vclk_chiplet["max_clk"][i].val) == "N/A" ? "N/A"
+											   : "MHz";
+			std::string clk_locked {"N/A"};
+			std::string clk_deep_sleep {"N/A"};
+			if (vclk_chiplet["clk_locked"].size()) {
+				clk_locked = vclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A"
+					     : vclk_chiplet["clk_locked"][i].val ? "ENABLED"
+										 : "DISABLED";
+			}
+			if (vclk_chiplet["deep_sleep"].size()) {
+				clk_deep_sleep = vclk_chiplet["deep_sleep"][i].val == UINT64_MAX
+						     ? "N/A"
+						 : vclk_chiplet["deep_sleep"][i].val ? "DISABLED"
+										     : "ENABLED";
+			} else {
+				clk_deep_sleep =
+				    get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_VCLK0);
+			}
+			result[string_format("vclk_%d", i)] =
+			    nlohmann::ordered_json::object({{"clk", vclk_clk_json},
+							    {"min_clk", vclk_min_clk_json},
+							    {"max_clk", vclk_max_clk_json},
+							    {"clk_locked", "N/A"},
+							    {"deep_sleep", clk_deep_sleep}});
+		}
+
+		for (int i = 0; i < dclk_cur_size; i++) {
+			nlohmann::ordered_json dclk_clk_json {};
+			if (dclk_chiplet["clk"][i].val == UINT64_MAX) {
+				dclk_clk_json["value"] = "N/A";
+			} else {
+				dclk_clk_json["value"] = dclk_chiplet["clk"][i].val;
+			}
+			dclk_clk_json["unit"] =
+			    string_format("%llu", dclk_chiplet["clk"][i].val) == "N/A" ? "N/A"
+										       : "MHz";
+			nlohmann::ordered_json dclk_min_clk_json {};
+			if (dclk_chiplet["min_clk"][i].val == UINT64_MAX) {
+				dclk_min_clk_json["value"] = "N/A";
+			} else {
+				dclk_min_clk_json["value"] = dclk_chiplet["min_clk"][i].val;
+			}
+			dclk_min_clk_json["unit"] =
+			    string_format("%llu", dclk_chiplet["min_clk"][i].val) == "N/A" ? "N/A"
+											   : "MHz";
+			nlohmann::ordered_json dclk_max_clk_json {};
+			if (dclk_chiplet["max_clk"][i].val == UINT64_MAX) {
+				dclk_max_clk_json["value"] = "N/A";
+			} else {
+				dclk_max_clk_json["value"] = dclk_chiplet["max_clk"][i].val;
+			}
+			dclk_max_clk_json["unit"] =
+			    string_format("%llu", dclk_chiplet["max_clk"][i].val) == "N/A" ? "N/A"
+											   : "MHz";
+			std::string clk_locked {"N/A"};
+			std::string clk_deep_sleep {"N/A"};
+			if (dclk_chiplet["clk_locked"].size()) {
+				clk_locked = dclk_chiplet["clk_locked"][i].val == UINT64_MAX ? "N/A"
+					     : dclk_chiplet["clk_locked"][i].val ? "ENABLED"
+										 : "DISABLED";
+			}
+			if (dclk_chiplet["deep_sleep"].size()) {
+				clk_deep_sleep = dclk_chiplet["deep_sleep"][i].val == UINT64_MAX
+						     ? "N/A"
+						 : dclk_chiplet["deep_sleep"][i].val ? "DISABLED"
+										     : "ENABLED";
+			} else {
+				clk_deep_sleep =
+				    get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_DCLK0);
+			}
+			result[string_format("dclk_%d", i)] =
+			    nlohmann::ordered_json::object({{"clk", dclk_clk_json},
+							    {"min_clk", dclk_min_clk_json},
+							    {"max_clk", dclk_max_clk_json},
+							    {"clk_locked", "N/A"},
+							    {"deep_sleep", clk_deep_sleep}});
+		}
+
+		out = result.dump(4);
 	} else if (arg.output == csv) {
 		std::vector<std::vector<std::string>> output_rows {};
 		std::vector<std::string> value_rows {};
@@ -2118,7 +2205,7 @@ amdsmi_status_t get_metric_ext_clock_data(uint64_t processor_bdf, Arguments arg,
 				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_MEM);
 			}
 			value_rows.push_back(string_format(
-			    ",%d,%s,%s,%s,%s,%s", i,
+			    ",%d,%s,%s,%s,%s,%s", mem_chiplet["clk"][i].res_instance,
 			    mem_chiplet["clk"][i].val == UINT64_MAX
 				? "N/A"
 				: string_format("%llu", mem_chiplet["clk"][i].val).c_str(),
@@ -2249,7 +2336,8 @@ amdsmi_status_t get_metric_ext_clock_data(uint64_t processor_bdf, Arguments arg,
 				clk_deep_sleep = get_clk_deep_sleep(processor, AMDSMI_CLK_TYPE_MEM);
 			}
 			out.append(string_format(
-			    metricChipletMemClockMeasureHostTemplate, i,
+			    metricChipletMemClockMeasureHostTemplate,
+			    mem_chiplet["clk"][i].res_instance,
 			    mem_chiplet["clk"][i].val == UINT64_MAX
 				? "N/A"
 				: string_format("%llu MHz", mem_chiplet["clk"][i].val).c_str(),
@@ -3051,6 +3139,9 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 	std::vector<amdsmi_metric_t> jpeg_chiplet_per_partition {};
 	std::vector<amdsmi_metric_t> temp_aid_chiplet_per_partition {};
 	std::vector<amdsmi_metric_t> temp_hbm_metrics_chiplet_per_partition {};
+	std::vector<amdsmi_metric_t> mem_chiplet_per_partition {};
+	std::vector<amdsmi_metric_t> mem_min_chiplet_per_partition {};
+	std::vector<amdsmi_metric_t> mem_max_chiplet_per_partition {};
 	std::vector<amdsmi_metric_t> vclk_chiplet_per_partition {};
 	std::vector<amdsmi_metric_t> vclk_min_chiplet_per_partition {};
 	std::vector<amdsmi_metric_t> vclk_max_chiplet_per_partition {};
@@ -3092,6 +3183,21 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 	std::vector<amdsmi_metric_t> throttle_total_a {}, throttle_total_b {};
 	std::vector<amdsmi_metric_t> throttle_util_a {}, throttle_util_b {};
 	uint64_t acc_counter_a = UINT64_MAX, acc_counter_b = UINT64_MAX;
+
+	/* SMU-15 based ASICs publish every clock limit once, at whole-GPU
+	 * scope, instead of once per chiplet. Collect those here so they can be
+	 * mirrored into each partition below. */
+	std::optional<amdsmi_metric_t> gpu_gfx_min_limit, gpu_gfx_max_limit;
+	std::optional<amdsmi_metric_t> gpu_fclk_min_limit, gpu_fclk_max_limit;
+	std::optional<amdsmi_metric_t> gpu_lclk_min_limit, gpu_lclk_max_limit;
+	std::optional<amdsmi_metric_t> gpu_vclk_min_limit, gpu_vclk_max_limit;
+	std::optional<amdsmi_metric_t> gpu_dclk_min_limit, gpu_dclk_max_limit;
+	std::optional<amdsmi_metric_t> gpu_sclk_min_limit, gpu_sclk_max_limit;
+	std::optional<amdsmi_metric_t> gpu_mem_min_limit, gpu_mem_max_limit;
+	std::optional<amdsmi_metric_t> gpu_temp_shutdown_aid, gpu_temp_shutdown_mid;
+	std::optional<amdsmi_metric_t> gpu_temp_shutdown_xcd, gpu_temp_shutdown_hbm;
+	std::optional<amdsmi_metric_t> gpu_temp_throttle_aid, gpu_temp_throttle_mid;
+	std::optional<amdsmi_metric_t> gpu_temp_throttle_xcd, gpu_temp_throttle_hbm;
 
 	amdsmi_metric_t* metrics;
 	uint32_t metric_size = AMDSMI_MAX_NUM_METRICS;
@@ -3139,6 +3245,9 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 				break;
 			case AMDSMI_METRIC_NAME_TEMP_MEM_CURR:
 				temp_hbm_metrics_chiplet_per_partition.push_back(metrics[i]);
+				break;
+			case AMDSMI_METRIC_NAME_CLK_MEM:
+				mem_chiplet_per_partition.push_back(metrics[i]);
 				break;
 			case AMDSMI_METRIC_NAME_CLK_VCLK:
 				vclk_chiplet_per_partition.push_back(metrics[i]);
@@ -3240,6 +3349,87 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 				break;
 			}
 		}
+		if (!(metrics[i].flags & AMDSMI_METRIC_TYPE_CHIPLET) &&
+		    metrics[i].res_group == AMDSMI_METRIC_RES_GROUP_GPU) {
+			switch (metrics[i].name) {
+			case AMDSMI_METRIC_NAME_CLK_GFX_MIN_LIMIT:
+				gpu_gfx_min_limit = metrics[i];
+				break;
+			case AMDSMI_METRIC_NAME_CLK_GFX_MAX_LIMIT:
+				gpu_gfx_max_limit = metrics[i];
+				break;
+			case AMDSMI_METRIC_NAME_CLK_FCLK_MIN_LIMIT:
+				gpu_fclk_min_limit = metrics[i];
+				break;
+			case AMDSMI_METRIC_NAME_CLK_FCLK_MAX_LIMIT:
+				gpu_fclk_max_limit = metrics[i];
+				break;
+			case AMDSMI_METRIC_NAME_CLK_LCLK_MIN_LIMIT:
+				gpu_lclk_min_limit = metrics[i];
+				break;
+			case AMDSMI_METRIC_NAME_CLK_LCLK_MAX_LIMIT:
+				gpu_lclk_max_limit = metrics[i];
+				break;
+			case AMDSMI_METRIC_NAME_CLK_VCLK_MIN_LIMIT:
+				gpu_vclk_min_limit = metrics[i];
+				break;
+			case AMDSMI_METRIC_NAME_CLK_VCLK_MAX_LIMIT:
+				gpu_vclk_max_limit = metrics[i];
+				break;
+			case AMDSMI_METRIC_NAME_CLK_DCLK_MIN_LIMIT:
+				gpu_dclk_min_limit = metrics[i];
+				break;
+			case AMDSMI_METRIC_NAME_CLK_DCLK_MAX_LIMIT:
+				gpu_dclk_max_limit = metrics[i];
+				break;
+			case AMDSMI_METRIC_NAME_CLK_SOC_MIN_LIMIT:
+				gpu_sclk_min_limit = metrics[i];
+				break;
+			case AMDSMI_METRIC_NAME_CLK_SOC_MAX_LIMIT:
+				gpu_sclk_max_limit = metrics[i];
+				break;
+			case AMDSMI_METRIC_NAME_CLK_MEM_MIN_LIMIT:
+				gpu_mem_min_limit = metrics[i];
+				break;
+			case AMDSMI_METRIC_NAME_CLK_MEM_MAX_LIMIT:
+				gpu_mem_max_limit = metrics[i];
+				break;
+			case AMDSMI_METRIC_NAME_TEMP_SHUTDOWN_AID:
+			case AMDSMI_METRIC_NAME_TEMP_THROTTLE_AID:
+				if (metrics[i].category == AMDSMI_METRIC_CATEGORY_STATIC_THROTTLE ||
+				    metrics[i].name == AMDSMI_METRIC_NAME_TEMP_THROTTLE_AID)
+					gpu_temp_throttle_aid = metrics[i];
+				else
+					gpu_temp_shutdown_aid = metrics[i];
+				break;
+			case AMDSMI_METRIC_NAME_TEMP_SHUTDOWN_MID:
+			case AMDSMI_METRIC_NAME_TEMP_THROTTLE_MID:
+				if (metrics[i].category == AMDSMI_METRIC_CATEGORY_STATIC_THROTTLE ||
+				    metrics[i].name == AMDSMI_METRIC_NAME_TEMP_THROTTLE_MID)
+					gpu_temp_throttle_mid = metrics[i];
+				else
+					gpu_temp_shutdown_mid = metrics[i];
+				break;
+			case AMDSMI_METRIC_NAME_TEMP_SHUTDOWN_XCD:
+			case AMDSMI_METRIC_NAME_TEMP_THROTTLE_XCD:
+				if (metrics[i].category == AMDSMI_METRIC_CATEGORY_STATIC_THROTTLE ||
+				    metrics[i].name == AMDSMI_METRIC_NAME_TEMP_THROTTLE_XCD)
+					gpu_temp_throttle_xcd = metrics[i];
+				else
+					gpu_temp_shutdown_xcd = metrics[i];
+				break;
+			case AMDSMI_METRIC_NAME_TEMP_SHUTDOWN_HBM:
+			case AMDSMI_METRIC_NAME_TEMP_THROTTLE_HBM:
+				if (metrics[i].category == AMDSMI_METRIC_CATEGORY_STATIC_THROTTLE ||
+				    metrics[i].name == AMDSMI_METRIC_NAME_TEMP_THROTTLE_HBM)
+					gpu_temp_throttle_hbm = metrics[i];
+				else
+					gpu_temp_shutdown_hbm = metrics[i];
+				break;
+			default:
+				break;
+			}
+		}
 		switch (metrics[i].name) {
 		case AMDSMI_METRIC_NAME_METRIC_ACC_COUNTER:
 			acc_counter_a = metrics[i].val;
@@ -3268,6 +3458,80 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 			break;
 		}
 	}
+
+	/* Give a GPU-wide limit the same shape as the clock it bounds, so every
+	 * partition that reports the clock also reports its limits. ASICs that
+	 * already publish per-chiplet limits keep theirs untouched. */
+	auto mirror_gpu_limit = [](const std::optional<amdsmi_metric_t>& gpu_limit,
+				   const std::vector<amdsmi_metric_t>& shape, bool one_per_instance,
+				   std::vector<amdsmi_metric_t>& dest) {
+		if (!gpu_limit.has_value() || !dest.empty())
+			return;
+
+		for (const auto& base : shape) {
+			amdsmi_metric_t mirrored = *gpu_limit;
+
+			if (one_per_instance &&
+			    std::any_of(dest.begin(), dest.end(),
+					[&base](const amdsmi_metric_t& added) {
+						return added.res_group == base.res_group &&
+						       added.res_instance == base.res_instance;
+					}))
+				continue;
+
+			mirrored.res_group    = base.res_group;
+			mirrored.res_subgroup = base.res_subgroup;
+			mirrored.res_instance = base.res_instance;
+			mirrored.flags	      = base.flags;
+			dest.push_back(mirrored);
+		}
+	};
+
+	mirror_gpu_limit(gpu_gfx_min_limit, gfx_chiplet_per_partition, false,
+			 gfx_min_chiplet_per_partition);
+	mirror_gpu_limit(gpu_gfx_max_limit, gfx_chiplet_per_partition, false,
+			 gfx_max_chiplet_per_partition);
+	mirror_gpu_limit(gpu_fclk_min_limit, fclk_chiplet_per_partition, true,
+			 fclk_min_chiplet_per_partition);
+	mirror_gpu_limit(gpu_fclk_max_limit, fclk_chiplet_per_partition, true,
+			 fclk_max_chiplet_per_partition);
+	mirror_gpu_limit(gpu_lclk_min_limit, lclk_chiplet_per_partition, true,
+			 lclk_min_chiplet_per_partition);
+	mirror_gpu_limit(gpu_lclk_max_limit, lclk_chiplet_per_partition, true,
+			 lclk_max_chiplet_per_partition);
+	mirror_gpu_limit(gpu_vclk_min_limit, vclk_chiplet_per_partition, true,
+			 vclk_min_chiplet_per_partition);
+	mirror_gpu_limit(gpu_vclk_max_limit, vclk_chiplet_per_partition, true,
+			 vclk_max_chiplet_per_partition);
+	mirror_gpu_limit(gpu_dclk_min_limit, dclk_chiplet_per_partition, true,
+			 dclk_min_chiplet_per_partition);
+	mirror_gpu_limit(gpu_dclk_max_limit, dclk_chiplet_per_partition, true,
+			 dclk_max_chiplet_per_partition);
+	mirror_gpu_limit(gpu_sclk_min_limit, sclk_chiplet_per_partition, true,
+			 sclk_min_chiplet_per_partition);
+	mirror_gpu_limit(gpu_sclk_max_limit, sclk_chiplet_per_partition, true,
+			 sclk_max_chiplet_per_partition);
+	mirror_gpu_limit(gpu_mem_min_limit, mem_chiplet_per_partition, true,
+			 mem_min_chiplet_per_partition);
+	mirror_gpu_limit(gpu_mem_max_limit, mem_chiplet_per_partition, true,
+			 mem_max_chiplet_per_partition);
+	mirror_gpu_limit(gpu_temp_shutdown_aid, temp_aid_chiplet_per_partition, true,
+			 temp_shutdown_aid_chiplet_per_partition);
+	mirror_gpu_limit(gpu_temp_throttle_aid, temp_aid_chiplet_per_partition, true,
+			 temp_throttle_aid_chiplet_per_partition);
+	mirror_gpu_limit(gpu_temp_shutdown_mid, temp_mid_chiplet_per_partition, true,
+			 temp_shutdown_mid_chiplet_per_partition);
+	mirror_gpu_limit(gpu_temp_throttle_mid, temp_mid_chiplet_per_partition, true,
+			 temp_throttle_mid_chiplet_per_partition);
+	mirror_gpu_limit(gpu_temp_shutdown_xcd, temp_xcd_chiplet_per_partition, true,
+			 temp_shutdown_xcd_chiplet_per_partition);
+	mirror_gpu_limit(gpu_temp_throttle_xcd, temp_xcd_chiplet_per_partition, true,
+			 temp_throttle_xcd_chiplet_per_partition);
+	mirror_gpu_limit(gpu_temp_shutdown_hbm, temp_hbm_metrics_chiplet_per_partition, true,
+			 temp_shutdown_hbm_chiplet_per_partition);
+	mirror_gpu_limit(gpu_temp_throttle_hbm, temp_hbm_metrics_chiplet_per_partition, true,
+			 temp_throttle_hbm_chiplet_per_partition);
+
 	free(metrics);
 	metrics = NULL;
 
@@ -3335,8 +3599,45 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 		for (uint32_t vf_curr_index = 0; vf_curr_index < num_vf_enabled; vf_curr_index++) {
 			if (vf_curr_index == vf_index) {
 				const auto& aids = aid_instances_by_vf[vf_curr_index];
-				nlohmann::ordered_json aid_json;
 				for (auto aid_index : aids) {
+					nlohmann::ordered_json aid_json;
+					for (const auto& mem : mem_chiplet_per_partition) {
+						if (mem.res_group == AMDSMI_METRIC_RES_GROUP_AID &&
+						    mem.res_subgroup ==
+							AMDSMI_METRIC_RES_SUBGROUP_NA &&
+						    mem.res_instance == aid_index) {
+							aid_json["mem_clk"] = {
+							    {"value", mem.val},
+							    {"unit",
+							     mem.unit == AMDSMI_METRIC_UNIT_MHZ
+								 ? "MHz"
+								 : ""}};
+						}
+					}
+					for (const auto& mem_min : mem_min_chiplet_per_partition) {
+						if (mem_min.res_group ==
+							AMDSMI_METRIC_RES_GROUP_AID &&
+						    mem_min.res_instance == aid_index) {
+							aid_json["mem_clk_min"] = {
+							    {"value", mem_min.val},
+							    {"unit",
+							     mem_min.unit == AMDSMI_METRIC_UNIT_MHZ
+								 ? "MHz"
+								 : ""}};
+						}
+					}
+					for (const auto& mem_max : mem_max_chiplet_per_partition) {
+						if (mem_max.res_group ==
+							AMDSMI_METRIC_RES_GROUP_AID &&
+						    mem_max.res_instance == aid_index) {
+							aid_json["mem_clk_max"] = {
+							    {"value", mem_max.val},
+							    {"unit",
+							     mem_max.unit == AMDSMI_METRIC_UNIT_MHZ
+								 ? "MHz"
+								 : ""}};
+						}
+					}
 					// VCLK
 					for (const auto& vclk : vclk_chiplet_per_partition) {
 						if (vclk.res_group == AMDSMI_METRIC_RES_GROUP_AID &&
@@ -3540,7 +3841,7 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						for (const auto& temp :
 						     temp_shutdown_aid_chiplet_per_partition) {
 							if (temp.res_group ==
-								AMDSMI_METRIC_RES_GROUP_GPU &&
+								AMDSMI_METRIC_RES_GROUP_AID &&
 							    temp.res_instance == aid_index) {
 								aid_json["shutdown_temperature"] = {
 								    {"value", temp.val},
@@ -3557,7 +3858,7 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						for (const auto& temp :
 						     temp_shutdown_hbm_chiplet_per_partition) {
 							if (temp.res_group ==
-								AMDSMI_METRIC_RES_GROUP_GPU &&
+								AMDSMI_METRIC_RES_GROUP_AID &&
 							    temp.res_instance == aid_index) {
 								aid_json["hbm_shutdown_"
 									 "temperature"] = {
@@ -3575,7 +3876,7 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						for (const auto& temp :
 						     temp_throttle_aid_chiplet_per_partition) {
 							if (temp.res_group ==
-								AMDSMI_METRIC_RES_GROUP_GPU &&
+								AMDSMI_METRIC_RES_GROUP_AID &&
 							    temp.res_instance == aid_index) {
 								aid_json["throttle_temperature"] = {
 								    {"value", temp.val},
@@ -3592,7 +3893,7 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						for (const auto& temp :
 						     temp_throttle_hbm_chiplet_per_partition) {
 							if (temp.res_group ==
-								AMDSMI_METRIC_RES_GROUP_GPU &&
+								AMDSMI_METRIC_RES_GROUP_AID &&
 							    temp.res_instance == aid_index) {
 								aid_json["hbm_throttle_"
 									 "temperature"] = {
@@ -3770,7 +4071,7 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						for (const auto& temp :
 						     temp_shutdown_xcd_chiplet_per_partition) {
 							if (temp.res_group ==
-								AMDSMI_METRIC_RES_GROUP_GPU &&
+								AMDSMI_METRIC_RES_GROUP_XCP &&
 							    temp.res_instance == xcp_id) {
 								xcp_json["shutdown_temperature"] = {
 								    {"value", temp.val},
@@ -3786,7 +4087,7 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						for (const auto& temp :
 						     temp_throttle_xcd_chiplet_per_partition) {
 							if (temp.res_group ==
-								AMDSMI_METRIC_RES_GROUP_GPU &&
+								AMDSMI_METRIC_RES_GROUP_XCP &&
 							    temp.res_instance == xcp_id) {
 								xcp_json["throttle_temperature"] = {
 								    {"value", temp.val},
@@ -3997,6 +4298,34 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 								  : ""}});
 						}
 					}
+					for (const auto& vclk_min :
+					     vclk_min_chiplet_per_partition) {
+						if (vclk_min.res_group ==
+							AMDSMI_METRIC_RES_GROUP_MID &&
+						    vclk_min.res_instance == mid_index) {
+							has_mid_data	     = true;
+							mid_json["vclk_min"] = {
+							    {"value", vclk_min.val},
+							    {"unit",
+							     vclk_min.unit == AMDSMI_METRIC_UNIT_MHZ
+								 ? "MHz"
+								 : ""}};
+						}
+					}
+					for (const auto& vclk_max :
+					     vclk_max_chiplet_per_partition) {
+						if (vclk_max.res_group ==
+							AMDSMI_METRIC_RES_GROUP_MID &&
+						    vclk_max.res_instance == mid_index) {
+							has_mid_data	     = true;
+							mid_json["vclk_max"] = {
+							    {"value", vclk_max.val},
+							    {"unit",
+							     vclk_max.unit == AMDSMI_METRIC_UNIT_MHZ
+								 ? "MHz"
+								 : ""}};
+						}
+					}
 					for (const auto& dclk : dclk_chiplet_per_partition) {
 						if (dclk.res_group == AMDSMI_METRIC_RES_GROUP_MID &&
 						    dclk.res_instance == mid_index) {
@@ -4009,6 +4338,34 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 								  : ""}});
 						}
 					}
+					for (const auto& dclk_min :
+					     dclk_min_chiplet_per_partition) {
+						if (dclk_min.res_group ==
+							AMDSMI_METRIC_RES_GROUP_MID &&
+						    dclk_min.res_instance == mid_index) {
+							has_mid_data	     = true;
+							mid_json["dclk_min"] = {
+							    {"value", dclk_min.val},
+							    {"unit",
+							     dclk_min.unit == AMDSMI_METRIC_UNIT_MHZ
+								 ? "MHz"
+								 : ""}};
+						}
+					}
+					for (const auto& dclk_max :
+					     dclk_max_chiplet_per_partition) {
+						if (dclk_max.res_group ==
+							AMDSMI_METRIC_RES_GROUP_MID &&
+						    dclk_max.res_instance == mid_index) {
+							has_mid_data	     = true;
+							mid_json["dclk_max"] = {
+							    {"value", dclk_max.val},
+							    {"unit",
+							     dclk_max.unit == AMDSMI_METRIC_UNIT_MHZ
+								 ? "MHz"
+								 : ""}};
+						}
+					}
 					for (const auto& sclk : sclk_chiplet_per_partition) {
 						if (sclk.res_group == AMDSMI_METRIC_RES_GROUP_MID &&
 						    sclk.res_instance == mid_index) {
@@ -4017,6 +4374,34 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 							    {"value", sclk.val},
 							    {"unit",
 							     sclk.unit == AMDSMI_METRIC_UNIT_MHZ
+								 ? "MHz"
+								 : ""}};
+						}
+					}
+					for (const auto& sclk_min :
+					     sclk_min_chiplet_per_partition) {
+						if (sclk_min.res_group ==
+							AMDSMI_METRIC_RES_GROUP_MID &&
+						    sclk_min.res_instance == mid_index) {
+							has_mid_data	     = true;
+							mid_json["sclk_min"] = {
+							    {"value", sclk_min.val},
+							    {"unit",
+							     sclk_min.unit == AMDSMI_METRIC_UNIT_MHZ
+								 ? "MHz"
+								 : ""}};
+						}
+					}
+					for (const auto& sclk_max :
+					     sclk_max_chiplet_per_partition) {
+						if (sclk_max.res_group ==
+							AMDSMI_METRIC_RES_GROUP_MID &&
+						    sclk_max.res_instance == mid_index) {
+							has_mid_data	     = true;
+							mid_json["sclk_max"] = {
+							    {"value", sclk_max.val},
+							    {"unit",
+							     sclk_max.unit == AMDSMI_METRIC_UNIT_MHZ
 								 ? "MHz"
 								 : ""}};
 						}
@@ -4154,6 +4539,53 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 					std::string aid_index_string =
 					    string_format("%d", aid_index);
 					out += string_format(AIDTemplate, aid_index_string.c_str());
+
+					for (const auto& mem : mem_chiplet_per_partition) {
+						if (mem.res_group == AMDSMI_METRIC_RES_GROUP_AID &&
+						    mem.res_subgroup ==
+							AMDSMI_METRIC_RES_SUBGROUP_NA &&
+						    mem.res_instance == aid_index) {
+							std::string mem_unit =
+							    mem.unit == AMDSMI_METRIC_UNIT_MHZ
+								? "MHz"
+								: "";
+							std::string mem_val =
+							    string_format("%d", mem.val);
+							out += string_format(
+							    MEMCLKPerPartitionTemplate,
+							    mem_val.c_str(), mem_unit.c_str());
+						}
+					}
+					for (const auto& mem_min : mem_min_chiplet_per_partition) {
+						if (mem_min.res_group ==
+							AMDSMI_METRIC_RES_GROUP_AID &&
+						    mem_min.res_instance == aid_index) {
+							std::string mem_min_unit =
+							    mem_min.unit == AMDSMI_METRIC_UNIT_MHZ
+								? "MHz"
+								: "";
+							out += string_format(
+							    MEMCLKMinPerPartitionTemplate,
+							    string_format("%d", mem_min.val)
+								.c_str(),
+							    mem_min_unit.c_str());
+						}
+					}
+					for (const auto& mem_max : mem_max_chiplet_per_partition) {
+						if (mem_max.res_group ==
+							AMDSMI_METRIC_RES_GROUP_AID &&
+						    mem_max.res_instance == aid_index) {
+							std::string mem_max_unit =
+							    mem_max.unit == AMDSMI_METRIC_UNIT_MHZ
+								? "MHz"
+								: "";
+							out += string_format(
+							    MEMCLKMaxPerPartitionTemplate,
+							    string_format("%d", mem_max.val)
+								.c_str(),
+							    mem_max_unit.c_str());
+						}
+					}
 
 					for (const auto& vclk : vclk_chiplet_per_partition) {
 						if (vclk.res_group == AMDSMI_METRIC_RES_GROUP_AID &&
@@ -4473,7 +4905,7 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						for (const auto& temp :
 						     temp_throttle_aid_chiplet_per_partition) {
 							if (temp.res_group ==
-								AMDSMI_METRIC_RES_GROUP_GPU &&
+								AMDSMI_METRIC_RES_GROUP_AID &&
 							    temp.res_instance == aid_index) {
 								std::string temp_unit =
 								    temp.unit ==
@@ -4494,7 +4926,9 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						for (const auto& temp :
 						     temp_throttle_hbm_chiplet_per_partition) {
 							if (temp.res_group ==
-								AMDSMI_METRIC_RES_GROUP_GPU &&
+								AMDSMI_METRIC_RES_GROUP_AID &&
+							    temp.res_subgroup ==
+								AMDSMI_METRIC_RES_SUBGROUP_HBM &&
 							    temp.res_instance == aid_index) {
 								std::string temp_unit =
 								    temp.unit ==
@@ -4766,8 +5200,7 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 							}
 						}
 					} else {
-						out += string_format(TempXcdPerPartitionTemplate,
-								     "N/A", "");
+						out += "N/A";
 					}
 					out += metricJpegUsageFooterTemplate;
 
@@ -4776,7 +5209,7 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 					    matching_shutdown_temp_xcd;
 					for (const auto& temp :
 					     temp_shutdown_xcd_chiplet_per_partition) {
-						if (temp.res_group == AMDSMI_METRIC_RES_GROUP_GPU &&
+						if (temp.res_group == AMDSMI_METRIC_RES_GROUP_XCP &&
 						    temp.res_instance == xcp_id) {
 							matching_shutdown_temp_xcd.push_back(&temp);
 						}
@@ -4803,7 +5236,7 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 					    matching_throttle_temp_xcd;
 					for (const auto& temp :
 					     temp_throttle_xcd_chiplet_per_partition) {
-						if (temp.res_group == AMDSMI_METRIC_RES_GROUP_GPU &&
+						if (temp.res_group == AMDSMI_METRIC_RES_GROUP_XCP &&
 						    temp.res_instance == xcp_id) {
 							matching_throttle_temp_xcd.push_back(&temp);
 						}
@@ -5141,6 +5574,41 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						mid_output += metricJpegUsageFooterTemplate;
 					}
 
+					for (const auto& vclk_min :
+					     vclk_min_chiplet_per_partition) {
+						if (vclk_min.res_group ==
+							AMDSMI_METRIC_RES_GROUP_MID &&
+						    vclk_min.res_instance == mid_index) {
+							has_mid_data = true;
+							std::string vclk_min_unit =
+							    vclk_min.unit == AMDSMI_METRIC_UNIT_MHZ
+								? "MHz"
+								: "";
+							mid_output += string_format(
+							    VCLKMinPerPartitionTemplate,
+							    string_format("%d", vclk_min.val)
+								.c_str(),
+							    vclk_min_unit.c_str());
+						}
+					}
+					for (const auto& vclk_max :
+					     vclk_max_chiplet_per_partition) {
+						if (vclk_max.res_group ==
+							AMDSMI_METRIC_RES_GROUP_MID &&
+						    vclk_max.res_instance == mid_index) {
+							has_mid_data = true;
+							std::string vclk_max_unit =
+							    vclk_max.unit == AMDSMI_METRIC_UNIT_MHZ
+								? "MHz"
+								: "";
+							mid_output += string_format(
+							    VCLKMaxPerPartitionTemplate,
+							    string_format("%d", vclk_max.val)
+								.c_str(),
+							    vclk_max_unit.c_str());
+						}
+					}
+
 					std::vector<const amdsmi_metric_t*> matching_dclks;
 					for (const auto& dclk : dclk_chiplet_per_partition) {
 						if (dclk.res_group == AMDSMI_METRIC_RES_GROUP_MID &&
@@ -5165,6 +5633,40 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 						}
 						mid_output += metricJpegUsageFooterTemplate;
 					}
+					for (const auto& dclk_min :
+					     dclk_min_chiplet_per_partition) {
+						if (dclk_min.res_group ==
+							AMDSMI_METRIC_RES_GROUP_MID &&
+						    dclk_min.res_instance == mid_index) {
+							has_mid_data = true;
+							std::string dclk_min_unit =
+							    dclk_min.unit == AMDSMI_METRIC_UNIT_MHZ
+								? "MHz"
+								: "";
+							mid_output += string_format(
+							    DCLKMinPerPartitionTemplate,
+							    string_format("%d", dclk_min.val)
+								.c_str(),
+							    dclk_min_unit.c_str());
+						}
+					}
+					for (const auto& dclk_max :
+					     dclk_max_chiplet_per_partition) {
+						if (dclk_max.res_group ==
+							AMDSMI_METRIC_RES_GROUP_MID &&
+						    dclk_max.res_instance == mid_index) {
+							has_mid_data = true;
+							std::string dclk_max_unit =
+							    dclk_max.unit == AMDSMI_METRIC_UNIT_MHZ
+								? "MHz"
+								: "";
+							mid_output += string_format(
+							    DCLKMaxPerPartitionTemplate,
+							    string_format("%d", dclk_max.val)
+								.c_str(),
+							    dclk_max_unit.c_str());
+						}
+					}
 					for (const auto& sclk : sclk_chiplet_per_partition) {
 						if (sclk.res_group == AMDSMI_METRIC_RES_GROUP_MID &&
 						    sclk.res_instance == mid_index) {
@@ -5177,6 +5679,40 @@ int AmdSmiApiHost::amdsmi_get_metric_command_per_partition(uint64_t processor_bd
 							    SCLKPerPartitionTemplate,
 							    string_format("%d", sclk.val).c_str(),
 							    unit.c_str());
+						}
+					}
+					for (const auto& sclk_min :
+					     sclk_min_chiplet_per_partition) {
+						if (sclk_min.res_group ==
+							AMDSMI_METRIC_RES_GROUP_MID &&
+						    sclk_min.res_instance == mid_index) {
+							has_mid_data = true;
+							std::string sclk_min_unit =
+							    sclk_min.unit == AMDSMI_METRIC_UNIT_MHZ
+								? "MHz"
+								: "";
+							mid_output += string_format(
+							    SCLKMinPerPartitionTemplate,
+							    string_format("%d", sclk_min.val)
+								.c_str(),
+							    sclk_min_unit.c_str());
+						}
+					}
+					for (const auto& sclk_max :
+					     sclk_max_chiplet_per_partition) {
+						if (sclk_max.res_group ==
+							AMDSMI_METRIC_RES_GROUP_MID &&
+						    sclk_max.res_instance == mid_index) {
+							has_mid_data = true;
+							std::string sclk_max_unit =
+							    sclk_max.unit == AMDSMI_METRIC_UNIT_MHZ
+								? "MHz"
+								: "";
+							mid_output += string_format(
+							    SCLKMaxPerPartitionTemplate,
+							    string_format("%d", sclk_max.val)
+								.c_str(),
+							    sclk_max_unit.c_str());
 						}
 					}
 
@@ -8276,6 +8812,7 @@ int AmdSmiApiHost::amdsmi_get_port_rdma_command(uint64_t processor_bdf, Argument
 	if (arg.output == json) {
 		nlohmann::ordered_json result_json;
 		nlohmann::ordered_json rdma_devices_array = nlohmann::ordered_json::array();
+		uint32_t rdma_port_index		  = 0;
 		for (uint32_t rdma_dev_idx = 0; rdma_dev_idx < nic_rdma_devices_info.num_rdma_dev;
 		     rdma_dev_idx++) {
 			nlohmann::ordered_json rdma_device_json;
@@ -8290,20 +8827,16 @@ int AmdSmiApiHost::amdsmi_get_port_rdma_command(uint64_t processor_bdf, Argument
 				nlohmann::ordered_json rdma_port_json;
 
 				nlohmann::ordered_json rdma_port_statistics_json;
-				uint8_t rdma_port_num =
-				    nic_rdma_devices_info.rdma_dev_info[rdma_dev_idx]
-					.rdma_port_info[rdma_port_idx]
-					.rdma_port;
 
 				uint32_t num_rdma_stats = 0;
 				ret			= host_amdsmi_get_nic_rdma_port_statistics(
-					processor, rdma_port_idx, &num_rdma_stats, nullptr);
+					processor, rdma_port_index, &num_rdma_stats, nullptr);
 				if (ret == AMDSMI_STATUS_SUCCESS && num_rdma_stats > 0) {
 					std::vector<amdsmi_nic_stat_t> rdma_stats(num_rdma_stats);
 					uint32_t actual_stats = num_rdma_stats;
 
 					ret = host_amdsmi_get_nic_rdma_port_statistics(
-					    processor, rdma_port_idx, &actual_stats,
+					    processor, rdma_port_index, &actual_stats,
 					    rdma_stats.data());
 					if (ret == AMDSMI_STATUS_SUCCESS) {
 						for (uint32_t i = 0; i < actual_stats; i++) {
@@ -8318,6 +8851,7 @@ int AmdSmiApiHost::amdsmi_get_port_rdma_command(uint64_t processor_bdf, Argument
 				}
 				rdma_port_json["statistics"] = rdma_port_statistics_json;
 				rdma_ports_array.push_back(rdma_port_json);
+				rdma_port_index++;
 			}
 			rdma_device_json["ports"] = rdma_ports_array;
 			rdma_devices_array.push_back(rdma_device_json);
@@ -8326,6 +8860,7 @@ int AmdSmiApiHost::amdsmi_get_port_rdma_command(uint64_t processor_bdf, Argument
 		out			    = result_json.dump(4);
 	} else if (arg.output == human) {
 		out.append(metricNicRdmaStatsHeaderTemplate);
+		uint32_t rdma_port_index = 0;
 		for (uint32_t rdma_dev_idx = 0; rdma_dev_idx < nic_rdma_devices_info.num_rdma_dev;
 		     rdma_dev_idx++) {
 			out.append(string_format(
@@ -8336,20 +8871,16 @@ int AmdSmiApiHost::amdsmi_get_port_rdma_command(uint64_t processor_bdf, Argument
 			     rdma_port_idx <
 			     nic_rdma_devices_info.rdma_dev_info[rdma_dev_idx].num_rdma_ports;
 			     rdma_port_idx++) {
-				uint8_t rdma_port_num =
-				    nic_rdma_devices_info.rdma_dev_info[rdma_dev_idx]
-					.rdma_port_info[rdma_port_idx]
-					.rdma_port;
 				out.append(string_format(metricNicRdmaPortTemplate, rdma_port_idx));
 
 				uint32_t num_rdma_stats = 0;
 				ret			= host_amdsmi_get_nic_rdma_port_statistics(
-					processor, rdma_port_idx, &num_rdma_stats, nullptr);
+					processor, rdma_port_index, &num_rdma_stats, nullptr);
 				if (ret == AMDSMI_STATUS_SUCCESS && num_rdma_stats > 0) {
 					std::vector<amdsmi_nic_stat_t> rdma_stats(num_rdma_stats);
 					uint32_t actual_stats = num_rdma_stats;
 					ret = host_amdsmi_get_nic_rdma_port_statistics(
-					    processor, rdma_port_idx, &actual_stats,
+					    processor, rdma_port_index, &actual_stats,
 					    rdma_stats.data());
 
 					if (ret == AMDSMI_STATUS_SUCCESS) {
@@ -8366,6 +8897,7 @@ int AmdSmiApiHost::amdsmi_get_port_rdma_command(uint64_t processor_bdf, Argument
 						}
 					}
 				}
+				rdma_port_index++;
 			}
 		}
 	}

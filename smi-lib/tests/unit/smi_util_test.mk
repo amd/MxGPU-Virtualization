@@ -31,7 +31,7 @@ ifeq ($(AMD_SMI_NIC_SUPPORT), True)
 LIB_SRCS += $(filter-out $(EXCLUDE_LIB_SRCS),$(notdir $(wildcard $(SOURCE_DIR)/nic/*.c)))
 endif
 LIB_SRCS += $(addprefix $(LIN_HOST_FOLDER)/,$(filter-out $(EXCLUDE_LIN_LIB_SRCS),$(notdir $(wildcard $(LIN_SOURCE_DIR)/*.c))))
-SRCS_ACA := $(filter-out $(EXCLUDE_SRCS),$(notdir $(wildcard $(SOURCE_DIR)/aca-decode/*.c)))
+SRCS_ACA := $(filter-out $(EXCLUDE_SRCS),$(notdir $(wildcard $(IMPORTED_ACA_SRC_DIR)/*.c)))
 
 TEST_SRCS := smi_test_util.cpp
 TEST_SRCS += smi_fake_sys_wrapper.cpp
@@ -53,7 +53,8 @@ INCLUDE := $(addprefix -I,\
   $(INTERFACE_DIR)\
   $(LIN_HOST_INCLUDE_DIR)\
   $(GIM_COMS_INCLUDE_DIR)\
-  $(INCLUDE_DIR)/aca-decode/\
+  $(IMPORTED_DIR)\
+  $(IMPORTED_ACA_INC_DIR)\
   $(NIC_INCLUDE_DIR)\
   $(NIC_INTERFACE_DIR)\
   $(SOURCE_DIR)/nic)
@@ -106,9 +107,9 @@ CFLAGS += $(UALOE_TEST_CFLAGS)
 CXXFLAGS += $(UALOE_TEST_CFLAGS)
 
 ifeq ($(HAS_UALOE), True)
-vpath %.c $(SOURCE_DIR) $(SOURCE_DIR)/aca-decode/ $(SOURCE_DIR)/nic/ $(SOURCE_DIR)/ualoe/ $(UALOE_LIB_DIR)
+vpath %.c $(SOURCE_DIR) $(IMPORTED_ACA_SRC_DIR) $(SOURCE_DIR)/nic/ $(SOURCE_DIR)/ualoe/ $(UALOE_LIB_DIR)
 else
-vpath %.c $(SOURCE_DIR) $(SOURCE_DIR)/aca-decode/ $(SOURCE_DIR)/nic/
+vpath %.c $(SOURCE_DIR) $(IMPORTED_ACA_SRC_DIR) $(SOURCE_DIR)/nic/
 endif
 vpath %.cpp $(TEST_UNIT_DIR)
 
@@ -134,7 +135,7 @@ gen_coverage: run
 			--directory $(OUTPUT_DIR) \
 			--output-file $(OUTPUT_DIR)/coverage.info
 
-	@lcov --remove $(OUTPUT_DIR)/coverage.info "*/aca-decode/*" \
+	@lcov --remove $(OUTPUT_DIR)/coverage.info "*/imported/aca-decode/*" \
 		--output-file $(OUTPUT_DIR)/coverage_filtered.info $(LCOV_OPT)
 	@rm -f $(OUTPUT_DIR)/coverage.info
 	@mv $(OUTPUT_DIR)/coverage_filtered.info $(OUTPUT_DIR)/coverage.info
@@ -142,10 +143,10 @@ gen_coverage: run
 -include $(DEPS)
 CXXFLAGS_ACA := $(filter-out $(DEFAULT_CFLAGS), $(CXXFLAGS)) $(CXX_HOST_FLAGS)
 
-$(OUTPUT_DIR)/%.c.o: %.c Makefile | $(OUTPUT_DIR)
-	$(CC) $(CFLAGS) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
+$(OUTPUT_DIR)/%.c.o: $(IMPORTED_ACA_SRC_DIR)/%.c | $(OUTPUT_DIR)
+	$(CC) $(CFLAGS) -I$(IMPORTED_ACA_INC_DIR) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
 
-$(OUTPUT_DIR)/aca_%.c.o: $(SOURCE_DIR)/aca-decode/%.c | $(OUTPUT_DIR)
+$(OUTPUT_DIR)/%.c.o: %.c Makefile | $(OUTPUT_DIR)
 	$(CC) $(CFLAGS) -DVERSION_FILE_PATH=$(VERSION_FILE_PATH) -MMD -MP -c $< -o $@
 
 ifeq ($(AMD_SMI_NIC_SUPPORT), True)

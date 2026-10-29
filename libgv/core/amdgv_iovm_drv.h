@@ -122,7 +122,8 @@ struct iovm_drv_gpuiov_cmd {
 			uint32_t resp_buf_addr_lo; /* GPU VA[31:0] of iovm_drv_gpuiov_resp */
 			uint32_t resp_buf_size;    /* size of iovm_drv_gpuiov_resp */
 			uint32_t mmsch_bitmask;    /* Add MMSCH support */
-			uint32_t reserved[8];
+			uint32_t wait_for_completion; /* 1: wait for completion, 0: do not wait */
+			uint32_t reserved[7];
 		} gpuiov_cmd_v1_0;
 
 		uint32_t reserved[16];
@@ -161,8 +162,12 @@ struct iovm_drv_gpuiov_resp {
 			uint32_t num_mmsch;
 			uint32_t padding[5];
 			/* +28 start of dynamic size gpuiov response */
-			/* num_xcd/num_mmsch * uint32_t per instance iovm drv cmd status */
-			/* num_xcd/num_mmsch * uint32_t iov status register readback */
+			/* num_xcd   * uint32_t per xcd cmd result */
+			/* num_xcd   * uint32_t per xcd cmd register readback */
+			/* num_xcd   * uint32_t per xcd status register readback */
+			/* num_mmsch * uint32_t per mmsch cmd result */
+			/* num_mmsch * uint32_t per mmsch cmd register readback */
+			/* num_mmsch * uint32_t per mmsch status register readback */
 			uint32_t gpuiov_resp[1];
 		} gpuiov_resp_v1_0;
 
@@ -171,10 +176,8 @@ struct iovm_drv_gpuiov_resp {
 };
 
 struct amdgv_iovm_drv {
-	mutex_t gpuiov_cmd_lock;
-	mutex_t gpuiov_status_lock;
-	struct amdgv_memmgr_mem *iovm_drv_gpuiov_cmd_resp_mem;
-	struct amdgv_memmgr_mem *iovm_drv_gpuiov_status_resp_mem;
+	mutex_t iovm_drv_resp_mem_lock;
+	struct amdgv_memmgr_mem *iovm_drv_resp_mem;
 	bool enabled;
 };
 

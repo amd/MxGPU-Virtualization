@@ -1084,6 +1084,8 @@ Field | Description
 `SubvendorID` | subsystem vendor id
 `DeviceID` | unique id of a GPU
 `RevID` | revision id
+`ChipRevId` | silicon stepping of a GPU, `0` for A0, `1` for A1 and so on; `0xFFFFFFFF` if not supported
+`ExternalRevId` | stepping offset by an ASIC family base, only meaningful together with `DeviceID`; `0xFFFFFFFF` if not supported
 `AsicSerial` | asic serial
 `OamID` | xgmi physical id
 `PhysicalAccId` | physical accelerator id
@@ -1116,6 +1118,8 @@ if len(processors) == 0 {
         fmt.Println(asicInfo.DeviceID)
         fmt.Println(asicInfo.SubsystemID)
         fmt.Println(asicInfo.RevID)
+        fmt.Println(asicInfo.ChipRevId)
+        fmt.Println(asicInfo.ExternalRevId)
         fmt.Println(asicInfo.AsicSerial)
         fmt.Println(asicInfo.OamID)
         fmt.Println(asicInfo.PhysicalAccId)
@@ -2139,6 +2143,10 @@ Constant | Description
 `AMDSMI_METRIC_CATEGORY_SYS_BASEBOARD_TEMP` | system baseboard temperature
 `AMDSMI_METRIC_CATEGORY_SYS_GPUBOARD_TEMP` | system gpu board temperature
 `AMDSMI_METRIC_CATEGORY_SYS_BASEBOARD_POWER` | system baseboard power
+`AMDSMI_METRIC_CATEGORY_STATIC_FREQUENCY` | static frequency
+`AMDSMI_METRIC_CATEGORY_STATIC_TEMPERATURE` | static temperature
+`AMDSMI_METRIC_CATEGORY_STATIC_THROTTLE` | static throttle
+`AMDSMI_METRIC_CATEGORY_STATIC_POWER` | static power
 `AMDSMI_METRIC_CATEGORY_UNKNOWN` | unknown category
 
 `MetricType` bitmask (`Flags` field):
@@ -3668,13 +3676,77 @@ for _, p := range processors {
 }
 ```
 
+### GetFabricCperEntries
+
+Description: Retrieve CPER-formatted error records for UALoE fabric (netport link) events. Uses the same CPER format and calling conventions as `GetGpuCperEntries`, so callers can handle GPU and fabric CPERs with identical code paths.
+
+Input parameters:
+
+* `ph` (`ProcessorHandle`) PF of a GPU device
+* `severityMask` (`uint32`) bitmask of severities to retrieve (e.g. `0xFFFFFFFF` for all)
+* `cursor` (`uint64`) cursor returned by a previous call (use `0` for the first call)
+* `bufferSize` (`uint64`) size of the CPER data buffer in bytes; pass `0` to use the default `4 MiB`
+
+Each call returns at most `20` entries (matching the Python wrapper). Use the returned cursor to fetch additional pages.
+
+Output: `[]CperEntry`, `uint64` (next cursor), `error`
+
+`CperEntry` and `CperHeader` fields are the same as `GetGpuCperEntries`.
+
+`CperSeverity` type (mirrors `amdsmi_cper_sev_t`):
+
+Field | Value | Description
+---|---|---
+`AMDSMI_CPER_SEV_NON_FATAL_UNCORRECTED` | 0 | non-fatal, uncorrected
+`AMDSMI_CPER_SEV_FATAL` | 1 | fatal
+`AMDSMI_CPER_SEV_NON_FATAL_CORRECTED` | 2 | non-fatal, corrected
+`AMDSMI_CPER_SEV_NUM` | 3 | severity count
+`AMDSMI_CPER_SEV_UNUSED` | 10 | unused
+
+`CperNotifyType` type (mirrors `amdsmi_cper_notify_type_t`): `CMC`, `CPE`, `MCE`, `PCIE`, `INIT`, `NMI`, `BOOT`, `DMAR`, `SEA`, `SEI`, `PEI`, `CXL_COMPONENT`. Use `entry.Header.NotifyType.NotifyType()` to decode the GUID.
+
+Errors that can be returned by `GetFabricCperEntries` function:
+
+* `*StatusError` (e.g. `AMDSMI_STATUS_NOT_SUPPORTED` if UALoE fabric is not initialized, `AMDSMI_STATUS_OUT_OF_RESOURCES` if `bufferSize` is too small to hold even one record)
+
+Note: `AMDSMI_STATUS_MORE_DATA` from the underlying C call is treated as success — partial entries are still returned and the caller should retry with the new cursor when there is more data.
+
+Example:
+
+```go
+processors, _ := amdsmi.GetProcessorHandles()
+for _, p := range processors {
+    cursor := uint64(0)
+    for {
+        entries, next, err := amdsmi.GetFabricCperEntries(p, 0xFFFFFFFF, cursor, 0)
+        if err != nil {
+            fmt.Printf("GetFabricCperEntries failed: %v\n", err)
+            break
+        }
+        for i, e := range entries {
+            fmt.Printf("[fabric %s] sev=%s notify=%s record_len=%d\n",
+                e.Header.Timestamp,
+                e.Header.ErrorSeverity,
+                e.Header.NotifyType.NotifyType(),
+                e.Header.RecordLength)
+            afids, _ := amdsmi.GetAfidsFromCper(e.Bytes)
+            fmt.Printf("  entry %d AFIDs: %v\n", i, afids)
+        }
+        if next == 0 || next == cursor {
+            break
+        }
+        cursor = next
+    }
+}
+```
+
 ### GetAfidsFromCper
 
 Description: Extracts AF IDs from a single CPER record buffer. Up to `AMDSMI_MAX_NUMBER_OF_AFIDS_PER_RECORD` (12) ids are returned.
 
 Input parameters:
 
-* `cperBuffer` (`[]byte`) bytes of a single CPER record (e.g. `entry.Bytes` returned by `GetGpuCperEntries`)
+* `cperBuffer` (`[]byte`) bytes of a single CPER record (e.g. `entry.Bytes` returned by `GetGpuCperEntries` or `GetFabricCperEntries`)
 
 Output: `[]uint64`, `error`
 
@@ -5376,7 +5448,7 @@ Uses a two-call pattern internally: first queries the count, then retrieves the 
 Input parameters:
 
 * `ph` (`ProcessorHandle`) NIC device for which to query
-* `rdmaPortIndex` (`uint32`) zero-based NIC RDMA port index
+* `rdmaPortIndex` (`uint32`) zero-based position of the RDMA port in the order `GetNicRdmaDevInfo()` lists them: all ports of the first RDMA device, then all ports of the next, and so on. This is not the `RdmaPort` number.
 
 Output: `[]NicStat`, `error`
 
@@ -5393,9 +5465,20 @@ if err != nil {
     return
 }
 for _, nic := range nics {
-    stats, _ := amdsmi.GetNicRdmaPortStatistics(nic, 0)
-    for _, s := range stats {
-        fmt.Printf("%s = %d\n", s.Name, s.Value)
+    info, err := amdsmi.GetNicRdmaDevInfo(nic)
+    if err != nil {
+        fmt.Printf("Error: %v\n", err)
+        continue
+    }
+    var rdmaPortIndex uint32
+    for _, dev := range info.RdmaDevInfo {
+        for range dev.RdmaPortInfo {
+            stats, _ := amdsmi.GetNicRdmaPortStatistics(nic, rdmaPortIndex)
+            for _, s := range stats {
+                fmt.Printf("%s = %d\n", s.Name, s.Value)
+            }
+            rdmaPortIndex++
+        }
     }
 }
 ```
@@ -5438,7 +5521,7 @@ if err != nil {
 fmt.Printf("TDI state: %s (%d)\n", state, state)
 ```
 
-### GetCcMode
+### GetGpuCcMode
 
 Description: Returns the Confidential Compute mode currently configured on a GPU.
 
@@ -5446,24 +5529,24 @@ Input parameters:
 
 * `ph` (`ProcessorHandle`) PF of a processor for which to query
 
-Output: `CcMode`, `error`
+Output: `GpuCcMode`, `error`
 
-`CcMode` values:
+`GpuCcMode` values:
 
 Value | Description
 ---|---
-`AMDSMI_CC_MODE_OFF` (`0`) | Confidential Compute disabled
-`AMDSMI_CC_MODE_ON` (`1`) | Confidential Compute enabled
-`AMDSMI_CC_MODE_DEV` (`2`) | Confidential Compute enabled in developer mode
+`AMDSMI_GPU_CC_MODE_OFF` (`0`) | Confidential Compute disabled
+`AMDSMI_GPU_CC_MODE_ON` (`1`) | Confidential Compute enabled
+`AMDSMI_GPU_CC_MODE_DEV` (`2`) | Confidential Compute enabled in developer mode
 
-Errors that can be returned by `GetCcMode` function:
+Errors that can be returned by `GetGpuCcMode` function:
 
 * `*StatusError`
 
 Example:
 
 ```go
-mode, err := amdsmi.GetCcMode(handle)
+mode, err := amdsmi.GetGpuCcMode(handle)
 if err != nil {
     fmt.Printf("Error: %v\n", err)
     return
@@ -5471,25 +5554,25 @@ if err != nil {
 fmt.Printf("CC mode: %s (%d)\n", mode, mode)
 ```
 
-### SetCcMode
+### SetGpuCcMode
 
 Description: Sets the Confidential Compute mode on a GPU.
 
 Input parameters:
 
 * `ph` (`ProcessorHandle`) PF of a processor for which to set the mode
-* `mode` (`CcMode`) mode to apply (see `GetCcMode` for the value table)
+* `mode` (`GpuCcMode`) mode to apply (see `GetGpuCcMode` for the value table)
 
 Output: `error`
 
-Errors that can be returned by `SetCcMode` function:
+Errors that can be returned by `SetGpuCcMode` function:
 
 * `*StatusError`
 
 Example:
 
 ```go
-if err := amdsmi.SetCcMode(handle, amdsmi.AMDSMI_CC_MODE_ON); err != nil {
+if err := amdsmi.SetGpuCcMode(handle, amdsmi.AMDSMI_GPU_CC_MODE_ON); err != nil {
     fmt.Printf("Error: %v\n", err)
     return
 }
@@ -5511,7 +5594,7 @@ Field | Description
 ---|---
 `PhyAddr` | Physical address of the HBM region
 `PhySize` | Physical size in bytes
-`NumaID` | NUMA node id for driver-managed VF HBM. `0xFFFFFFFF` when no NUMA association exists (e.g. DAX mode).
+`NumaID` | NUMA node id for driver-managed VF HBM. `0xFFFFFFFF` when no NUMA association exists.
 `Name` | Backing device or region name
 
 Errors that can be returned by `GetVfHbmInfo` function:

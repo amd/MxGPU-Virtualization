@@ -5,6 +5,7 @@
 subdir-ccflags-y := -include $(src)/../dkms/config.h
 subdir-ccflags-y += -I$(src)/../inc
 subdir-ccflags-y += -Werror -Wmissing-prototypes -Wimplicit-fallthrough=2 -Wno-enum-conversion -Wno-expansion-to-defined
+subdir-ccflags-y += -Wformat -Wformat-security -Werror=format-security
 
 amd-vfio-pci-y += amd-vfio.o
 

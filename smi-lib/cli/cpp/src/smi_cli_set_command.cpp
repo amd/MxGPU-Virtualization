@@ -269,7 +269,7 @@ void AmdSmiSetCommand::set_command()
 	if (std::find(arg.options.begin(), arg.options.end(), "cc-mode") != arg.options.end()) {
 		for (unsigned int i = 0; i < arg.devices.size(); i++) {
 			uint64_t gpu_bdf = arg.devices[i]->get_bdf();
-			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_cc_mode_command(
+			ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_set_gpu_cc_mode_command(
 			    gpu_bdf, arg);
 			std::string param {"cc-mode"};
 			int error = handle_exceptions(ret, param, arg);

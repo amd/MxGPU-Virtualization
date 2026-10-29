@@ -15,20 +15,6 @@
 #include <iostream>
 #include <sstream>
 
-#ifdef _WIN64
-	#include <windows.h>
-	#include <sysinfoapi.h>
-#elif __linux__
-	#include <dlfcn.h>
-#endif
-
-#ifdef _WIN64
-	#define LOAD_SYM(a_amdSmiLibHandle, a_name)                                                \
-		GetProcAddress((HMODULE)a_amdSmiLibHandle, a_name)
-#elif __linux__
-	#define LOAD_SYM(a_amdSmiLibHandle, a_name) dlsym(a_amdSmiLibHandle, a_name)
-#endif
-
 typedef amdsmi_status_t (*AMDSMI_INIT)(uint64_t);
 typedef amdsmi_status_t (*AMDSMI_SHUT_DOWN)(void);
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLES)(amdsmi_socket_handle, uint32_t*,
@@ -67,6 +53,7 @@ typedef amdsmi_status_t (*AMDSMI_GET_GPU_VRAM_USAGE)(amdsmi_processor_handle, am
 typedef amdsmi_status_t (*AMDSMI_GET_FW_INFO)(amdsmi_processor_handle, amdsmi_fw_info_t*);
 
 typedef amdsmi_status_t (*AMDSMI_GET_LIB_VERSION)(amdsmi_version_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_ROCM_VERSION)(amdsmi_version_t*);
 
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_PROCESS_ISOLATION)(amdsmi_processor_handle, uint32_t*);
 typedef amdsmi_status_t (*AMDSMI_SET_GPU_PROCESS_ISOLATION)(amdsmi_processor_handle, uint32_t);
@@ -74,6 +61,10 @@ typedef amdsmi_status_t (*AMDSMI_SET_POWER_CAP)(amdsmi_processor_handle, uint32_
 typedef amdsmi_status_t (*AMDSMI_CLEAN_GPU_LOCAL_DATA)(amdsmi_processor_handle);
 typedef amdsmi_status_t (*AMDSMI_GET_GPU_VIRTUALIZATION_MODE)(amdsmi_processor_handle,
 							      amdsmi_virtualization_mode_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_FAN_RPMS)(amdsmi_processor_handle, uint32_t, int64_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_FAN_SPEED)(amdsmi_processor_handle, uint32_t, int64_t*);
+typedef amdsmi_status_t (*AMDSMI_GET_GPU_FAN_SPEED_MAX)(amdsmi_processor_handle, uint32_t,
+							uint64_t*);
 
 /////////////////////
 
@@ -100,90 +91,90 @@ AMDSMI_GET_FW_INFO guest_amdsmi_get_fw_info;
 
 AMDSMI_GET_GPU_PROCESS_LIST guest_amdsmi_get_gpu_process_list;
 AMDSMI_GET_LIB_VERSION guest_amdsmi_get_lib_version;
+AMDSMI_GET_ROCM_VERSION guest_amdsmi_get_rocm_version;
 
 AMDSMI_GET_GPU_PROCESS_ISOLATION guest_amdsmi_get_gpu_process_isolation;
 AMDSMI_SET_GPU_PROCESS_ISOLATION guest_amdsmi_set_gpu_process_isolation;
 AMDSMI_SET_POWER_CAP guest_amdsmi_set_power_cap;
 AMDSMI_CLEAN_GPU_LOCAL_DATA guest_amdsmi_clean_gpu_local_data;
 AMDSMI_GET_GPU_VIRTUALIZATION_MODE guest_amdsmi_get_gpu_virtualization_mode;
+AMDSMI_GET_GPU_FAN_RPMS guest_amdsmi_get_gpu_fan_rpms;
+AMDSMI_GET_GPU_FAN_SPEED guest_amdsmi_get_gpu_fan_speed;
+AMDSMI_GET_GPU_FAN_SPEED_MAX guest_amdsmi_get_gpu_fan_speed_max;
 
-AmdSmiApiGuest::AmdSmiApiGuest()
+AmdSmiApiGuest::AmdSmiApiGuest() : loader_("\\libamdsmi_guest.dll", "./libamdsmi.so", false)
 {
-#ifdef _WIN64
-	char systemPath[MAX_PATH];
-	UINT systemDirLength;
-	const char* dllPath = "\\libamdsmi_guest.dll";
-	systemDirLength	    = GetSystemDirectoryA(systemPath, MAX_PATH);
-	if (systemDirLength == 0) {
-		std::cout << "Error GetSystemDirectoryA" << std::endl; // throw exception
-		exit(1);
-	}
-	strncat_s(systemPath, sizeof(systemPath), dllPath, MAX_PATH - strlen(systemPath) - 1);
-	// load libamdsmi_host.dll located in Windows/System32
-	amdSmiLibHandle = (HMODULE)LoadLibraryA(systemPath);
-#elif __linux__
-	amdSmiLibHandle = dlopen("./libamdsmi.so", RTLD_NOW);
-#endif
-	if (amdSmiLibHandle == NULL) {
+	if (!loader_.is_loaded()) {
 		throw SmiToolSMILIBErrorException(34);
 	}
 
-	guest_amdsmi_init = (AMDSMI_INIT)LOAD_SYM(amdSmiLibHandle, "amdsmi_init");
+	guest_amdsmi_init = (AMDSMI_INIT)loader_.get_symbol("amdsmi_init");
 	guest_amdsmi_get_processor_handles =
-	    (AMDSMI_GET_PROCESSOR_HANDLES)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_processor_handles");
-	guest_amdsmi_get_processor_handle_from_bdf = (AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)LOAD_SYM(
-	    amdSmiLibHandle, "amdsmi_get_processor_handle_from_bdf");
-	guest_amdsmi_shut_down = (AMDSMI_SHUT_DOWN)LOAD_SYM(amdSmiLibHandle, "amdsmi_shut_down");
+	    (AMDSMI_GET_PROCESSOR_HANDLES)loader_.get_symbol("amdsmi_get_processor_handles");
+	guest_amdsmi_get_processor_handle_from_bdf =
+	    (AMDSMI_GET_PROCESSOR_HANDLE_FROM_BDF)loader_.get_symbol(
+		"amdsmi_get_processor_handle_from_bdf");
+	guest_amdsmi_shut_down = (AMDSMI_SHUT_DOWN)loader_.get_symbol("amdsmi_shut_down");
 
 	guest_amdsmi_get_gpu_device_bdf =
-	    (AMDSMI_GET_GPU_DEVICE_BDF)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_gpu_device_bdf");
+	    (AMDSMI_GET_GPU_DEVICE_BDF)loader_.get_symbol("amdsmi_get_gpu_device_bdf");
 	guest_amdsmi_get_gpu_asic_info =
-	    (AMDSMI_GET_GPU_ASIC_INFO)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_gpu_asic_info");
+	    (AMDSMI_GET_GPU_ASIC_INFO)loader_.get_symbol("amdsmi_get_gpu_asic_info");
 	guest_amdsmi_get_gpu_device_uuid =
-	    (AMDSMI_GET_GPU_DEVICE_UUID)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_gpu_device_uuid");
+	    (AMDSMI_GET_GPU_DEVICE_UUID)loader_.get_symbol("amdsmi_get_gpu_device_uuid");
 	guest_amdsmi_get_gpu_process_list =
-	    (AMDSMI_GET_GPU_PROCESS_LIST)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_gpu_process_list");
+	    (AMDSMI_GET_GPU_PROCESS_LIST)loader_.get_symbol("amdsmi_get_gpu_process_list");
 
 	guest_amdsmi_get_gpu_vbios_info =
-	    (AMDSMI_GET_GPU_VBIOS_INFO)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_gpu_vbios_info");
+	    (AMDSMI_GET_GPU_VBIOS_INFO)loader_.get_symbol("amdsmi_get_gpu_vbios_info");
 	guest_amdsmi_get_gpu_driver_info =
-	    (AMDSMI_GET_GPU_DRIVER_INFO)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_gpu_driver_info");
+	    (AMDSMI_GET_GPU_DRIVER_INFO)loader_.get_symbol("amdsmi_get_gpu_driver_info");
 	guest_amdsmi_get_gpu_driver_model =
-	    (AMDSMI_GET_GPU_DRIVER_MODEL)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_gpu_driver_model");
+	    (AMDSMI_GET_GPU_DRIVER_MODEL)loader_.get_symbol("amdsmi_get_gpu_driver_model");
 	guest_amdsmi_get_pcie_info =
-	    (AMDSMI_GET_PCIE_INFO)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_pcie_info");
-	guest_amdsmi_get_gpu_ras_feature_info = (AMDSMI_GET_GPU_RAS_FEATURE_INFO)LOAD_SYM(
-	    amdSmiLibHandle, "amdsmi_get_gpu_ras_feature_info");
+	    (AMDSMI_GET_PCIE_INFO)loader_.get_symbol("amdsmi_get_pcie_info");
+	guest_amdsmi_get_gpu_ras_feature_info =
+	    (AMDSMI_GET_GPU_RAS_FEATURE_INFO)loader_.get_symbol("amdsmi_get_gpu_ras_feature_info");
 
 	guest_amdsmi_get_gpu_activity =
-	    (AMDSMI_GET_GPU_ACTIVITY)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_gpu_activity");
+	    (AMDSMI_GET_GPU_ACTIVITY)loader_.get_symbol("amdsmi_get_gpu_activity");
 	guest_amdsmi_get_power_info =
-	    (AMDSMI_GET_POWER_INFO)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_power_info");
+	    (AMDSMI_GET_POWER_INFO)loader_.get_symbol("amdsmi_get_power_info");
 	guest_amdsmi_get_power_cap_info =
-	    (AMDSMI_GET_POWER_CAP_INFO)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_power_cap_info");
+	    (AMDSMI_GET_POWER_CAP_INFO)loader_.get_symbol("amdsmi_get_power_cap_info");
 	guest_amdsmi_get_clock_info =
-	    (AMDSMI_GET_CLOCK_INFO)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_clock_info");
+	    (AMDSMI_GET_CLOCK_INFO)loader_.get_symbol("amdsmi_get_clock_info");
 	guest_amdsmi_get_temp_metric =
-	    (AMDSMI_GET_TEMP_METRIC)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_temp_metric");
-	guest_amdsmi_get_gpu_total_ecc_count = (AMDSMI_GET_GPU_TOTAL_ECC_COUNT)LOAD_SYM(
-	    amdSmiLibHandle, "amdsmi_get_gpu_total_ecc_count");
+	    (AMDSMI_GET_TEMP_METRIC)loader_.get_symbol("amdsmi_get_temp_metric");
+	guest_amdsmi_get_gpu_total_ecc_count =
+	    (AMDSMI_GET_GPU_TOTAL_ECC_COUNT)loader_.get_symbol("amdsmi_get_gpu_total_ecc_count");
 	guest_amdsmi_get_gpu_vram_usage =
-	    (AMDSMI_GET_GPU_VRAM_USAGE)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_gpu_vram_usage");
-	guest_amdsmi_get_fw_info =
-	    (AMDSMI_GET_FW_INFO)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_fw_info");
+	    (AMDSMI_GET_GPU_VRAM_USAGE)loader_.get_symbol("amdsmi_get_gpu_vram_usage");
+	guest_amdsmi_get_fw_info = (AMDSMI_GET_FW_INFO)loader_.get_symbol("amdsmi_get_fw_info");
 	guest_amdsmi_get_lib_version =
-	    (AMDSMI_GET_LIB_VERSION)LOAD_SYM(amdSmiLibHandle, "amdsmi_get_lib_version");
+	    (AMDSMI_GET_LIB_VERSION)loader_.get_symbol("amdsmi_get_lib_version");
+	guest_amdsmi_get_rocm_version =
+	    (AMDSMI_GET_ROCM_VERSION)loader_.get_symbol("amdsmi_get_rocm_version");
 
-	guest_amdsmi_get_gpu_process_isolation = (AMDSMI_GET_GPU_PROCESS_ISOLATION)LOAD_SYM(
-	    amdSmiLibHandle, "amdsmi_get_gpu_process_isolation");
-	guest_amdsmi_set_gpu_process_isolation = (AMDSMI_SET_GPU_PROCESS_ISOLATION)LOAD_SYM(
-	    amdSmiLibHandle, "amdsmi_set_gpu_process_isolation");
+	guest_amdsmi_get_gpu_process_isolation =
+	    (AMDSMI_GET_GPU_PROCESS_ISOLATION)loader_.get_symbol(
+		"amdsmi_get_gpu_process_isolation");
+	guest_amdsmi_set_gpu_process_isolation =
+	    (AMDSMI_SET_GPU_PROCESS_ISOLATION)loader_.get_symbol(
+		"amdsmi_set_gpu_process_isolation");
 	guest_amdsmi_set_power_cap =
-	    (AMDSMI_SET_POWER_CAP)LOAD_SYM(amdSmiLibHandle, "amdsmi_set_power_cap");
+	    (AMDSMI_SET_POWER_CAP)loader_.get_symbol("amdsmi_set_power_cap");
 	guest_amdsmi_clean_gpu_local_data =
-	    (AMDSMI_CLEAN_GPU_LOCAL_DATA)LOAD_SYM(amdSmiLibHandle, "amdsmi_clean_gpu_local_data");
-	guest_amdsmi_get_gpu_virtualization_mode = (AMDSMI_GET_GPU_VIRTUALIZATION_MODE)LOAD_SYM(
-	    amdSmiLibHandle, "amdsmi_get_gpu_virtualization_mode");
+	    (AMDSMI_CLEAN_GPU_LOCAL_DATA)loader_.get_symbol("amdsmi_clean_gpu_local_data");
+	guest_amdsmi_get_gpu_virtualization_mode =
+	    (AMDSMI_GET_GPU_VIRTUALIZATION_MODE)loader_.get_symbol(
+		"amdsmi_get_gpu_virtualization_mode");
+	guest_amdsmi_get_gpu_fan_rpms =
+	    (AMDSMI_GET_GPU_FAN_RPMS)loader_.get_symbol("amdsmi_get_gpu_fan_rpms");
+	guest_amdsmi_get_gpu_fan_speed =
+	    (AMDSMI_GET_GPU_FAN_SPEED)loader_.get_symbol("amdsmi_get_gpu_fan_speed");
+	guest_amdsmi_get_gpu_fan_speed_max =
+	    (AMDSMI_GET_GPU_FAN_SPEED_MAX)loader_.get_symbol("amdsmi_get_gpu_fan_speed_max");
 
 	int ret = guest_amdsmi_init(AMDSMI_INIT_AMD_GPUS);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
@@ -199,10 +190,4 @@ AmdSmiApiGuest::~AmdSmiApiGuest()
 	int ret = guest_amdsmi_shut_down();
 	if (ret != AMDSMI_STATUS_SUCCESS)
 		printf("AMDSMI failed to finish\n");
-
-#ifdef _WIN64
-	FreeLibrary((HMODULE)amdSmiLibHandle);
-#elif __linux__
-	dlclose(amdSmiLibHandle);
-#endif
 };

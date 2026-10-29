@@ -171,10 +171,10 @@ static enum amdgv_cmd_asic_type amd_asic_type_to_amdgv_cmd_asic_type(enum amd_as
 	case CHIP_MI350X:
 		if (dev_id == 0x75A3)
 			return AMDGV_CMD_CHIP_MI355X;
-		else if (dev_id == 0x75A8)
-			return AMDGV_CMD_CHIP_MI350P;
 		else
 			return AMDGV_CMD_CHIP_MI350X;
+	case CHIP_MI350P:
+		return AMDGV_CMD_CHIP_MI350P;
 	case CHIP_LAST:
 		return AMDGV_CMD_CHIP_LAST;
 	default:

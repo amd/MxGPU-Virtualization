@@ -153,14 +153,12 @@ static int gmc_v12_1_sw_init(struct amdgv_adapter *adapt)
 		return AMDGV_FAILURE;
 	}
 
-#if 0
 	if (!adapt->wb.wb_obj) {
 		if (amdgv_wb_memory_init(adapt)) {
 			AMDGV_ERROR("Failed to init WB memory\n");
 			return AMDGV_FAILURE;
 		}
 	}
-#endif
 
 	return 0;
 }
@@ -171,10 +169,8 @@ static int gmc_v12_1_sw_fini(struct amdgv_adapter *adapt)
 		amdgv_memmgr_free(adapt->pdb0_mem);
 		amdgv_memmgr_free(adapt->ptb_mem);
 	}
-#if 0
 	if (adapt->wb.wb_obj)
 		amdgv_wb_memory_fini(adapt);
-#endif
 
 	amdgv_memmgr_fini(adapt, &adapt->memmgr_gpu);
 
@@ -201,9 +197,11 @@ static int gmc_v12_1_hw_init(struct amdgv_adapter *adapt)
 		AMDGV_DEBUG("mc_fb_offset: 0x%llx\n", adapt->mc_fb_offset);
 		adapt->mc_fb_loc_addr = 0;
 		adapt->mc_fb_top_addr = 0;
-		if (adapt->fb_pa == 0) {
-			adapt->fb_pa = adapt->mc_fb_offset;
-			adapt->fb_size = adapt->xgmi.node_segment_size;
+		if (!adapt->fb) {
+			if (adapt->fb_pa == 0) {
+				adapt->fb_pa = adapt->mc_fb_offset;
+				adapt->fb_size = adapt->xgmi.node_segment_size;
+			}
 			adapt->fb = oss_memremap(adapt->fb_pa,
 					adapt->fb_size,
 					OSS_MEMREMAP_WB);
@@ -212,6 +210,7 @@ static int gmc_v12_1_hw_init(struct amdgv_adapter *adapt)
 				return AMDGV_FAILURE;
 			}
 
+			adapt->fb_mapped_by_gmc = true;
 			adapt->mapped_fb_size = adapt->fb_size;
 		}
 
@@ -242,20 +241,26 @@ static int gmc_v12_1_hw_init(struct amdgv_adapter *adapt)
 		AMDGV_DEBUG("memmgr_gpu gpu base at: 0x%llx\n", adapt->mc_fb_loc_addr + mem_size);
 	}
 
-#if 0
 	if (adapt->wb.wb_obj) {
 		if (amdgv_wb_memory_hw_init_address(adapt)) {
 			AMDGV_ERROR("Failed to init WB memory address\n");
 			return AMDGV_FAILURE;
 		}
 	}
-#endif
 
 	return 0;
 }
 
 static int gmc_v12_1_hw_fini(struct amdgv_adapter *adapt)
 {
+	if (!in_whole_gpu_reset() && adapt->fb_mapped_by_gmc) {
+		oss_memunmap(adapt->fb);
+		adapt->fb_pa = 0;
+		adapt->mapped_fb_size = 0;
+		adapt->fb = NULL;
+		adapt->fb_mapped_by_gmc = false;
+	}
+
 	return 0;
 }
 

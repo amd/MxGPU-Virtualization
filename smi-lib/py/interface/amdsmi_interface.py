@@ -697,45 +697,45 @@ class AmdSmiCardFormFactor(IntEnum):
 
 
 class AmdSmiGpuBlock(IntEnum):
-    UMC = amdsmi_wrapper.AMDSMI_GPU_BLOCK_UMC
-    SDMA = amdsmi_wrapper.AMDSMI_GPU_BLOCK_SDMA
-    GFX = amdsmi_wrapper.AMDSMI_GPU_BLOCK_GFX
-    MMHUB = amdsmi_wrapper.AMDSMI_GPU_BLOCK_MMHUB
-    ATHUB = amdsmi_wrapper.AMDSMI_GPU_BLOCK_ATHUB
-    PCIE_BIF = amdsmi_wrapper.AMDSMI_GPU_BLOCK_PCIE_BIF
-    HDP = amdsmi_wrapper.AMDSMI_GPU_BLOCK_HDP
-    XGMI_WAFL = amdsmi_wrapper.AMDSMI_GPU_BLOCK_XGMI_WAFL
-    DF = amdsmi_wrapper.AMDSMI_GPU_BLOCK_DF
-    SMN = amdsmi_wrapper.AMDSMI_GPU_BLOCK_SMN
-    SEM = amdsmi_wrapper.AMDSMI_GPU_BLOCK_SEM
-    MP0 = amdsmi_wrapper.AMDSMI_GPU_BLOCK_MP0
-    MP1 = amdsmi_wrapper.AMDSMI_GPU_BLOCK_MP1
-    FUSE = amdsmi_wrapper.AMDSMI_GPU_BLOCK_FUSE
-    MCA = amdsmi_wrapper.AMDSMI_GPU_BLOCK_MCA
-    VCN = amdsmi_wrapper.AMDSMI_GPU_BLOCK_VCN
-    JPEG = amdsmi_wrapper.AMDSMI_GPU_BLOCK_JPEG
-    IH = amdsmi_wrapper.AMDSMI_GPU_BLOCK_IH
-    MPIO = amdsmi_wrapper.AMDSMI_GPU_BLOCK_MPIO
-    MMSCH = amdsmi_wrapper.AMDSMI_GPU_BLOCK_MMSCH
-    MP5 = amdsmi_wrapper.AMDSMI_GPU_BLOCK_MP5
-    ATU = amdsmi_wrapper.AMDSMI_GPU_BLOCK_ATU
-    DACC_BE = amdsmi_wrapper.AMDSMI_GPU_BLOCK_DACC_BE
-    ECLR = amdsmi_wrapper.AMDSMI_GPU_BLOCK_ECLR
-    KPX_SERDES = amdsmi_wrapper.AMDSMI_GPU_BLOCK_KPX_SERDES
-    LSDMA = amdsmi_wrapper.AMDSMI_GPU_BLOCK_LSDMA
-    MPART = amdsmi_wrapper.AMDSMI_GPU_BLOCK_MPART
-    MPIFOE = amdsmi_wrapper.AMDSMI_GPU_BLOCK_MPIFOE
-    MPRAS = amdsmi_wrapper.AMDSMI_GPU_BLOCK_MPRAS
-    NBIF = amdsmi_wrapper.AMDSMI_GPU_BLOCK_NBIF
-    NBIO = amdsmi_wrapper.AMDSMI_GPU_BLOCK_NBIO
-    OXRP = amdsmi_wrapper.AMDSMI_GPU_BLOCK_OXRP
-    PCIE_PL = amdsmi_wrapper.AMDSMI_GPU_BLOCK_PCIE_PL
-    PCS_XGMI = amdsmi_wrapper.AMDSMI_GPU_BLOCK_PCS_XGMI
-    PIE = amdsmi_wrapper.AMDSMI_GPU_BLOCK_PIE
-    CS = amdsmi_wrapper.AMDSMI_GPU_BLOCK_CS
-    SHUB = amdsmi_wrapper.AMDSMI_GPU_BLOCK_SHUB
-    SSBDCI = amdsmi_wrapper.AMDSMI_GPU_BLOCK_SSBDCI
-    UCIE_PCS = amdsmi_wrapper.AMDSMI_GPU_BLOCK_UCIE_PCS
+    UMC = 1 << 0
+    SDMA = 1 << 1
+    GFX = 1 << 2
+    MMHUB = 1 << 3
+    ATHUB = 1 << 4
+    PCIE_BIF = 1 << 5
+    HDP = 1 << 6
+    XGMI_WAFL = 1 << 7
+    DF = 1 << 8
+    SMN = 1 << 9
+    SEM = 1 << 10
+    MP0 = 1 << 11
+    MP1 = 1 << 12
+    FUSE = 1 << 13
+    MCA = 1 << 14
+    VCN = 1 << 15
+    JPEG = 1 << 16
+    IH = 1 << 17
+    MPIO = 1 << 18
+    MMSCH = 1 << 19
+    MP5 = 1 << 20
+    ATU = 1 << 21
+    DACC_BE = 1 << 22
+    ECLR = 1 << 23
+    KPX_SERDES = 1 << 24
+    LSDMA = 1 << 25
+    MPART = 1 << 26
+    MPIFOE = 1 << 27
+    MPRAS = 1 << 28
+    NBIF = 1 << 29
+    NBIO = 1 << 30
+    OXRP = 1 << 31
+    PCIE_PL = 1 << 32
+    PCS_XGMI = 1 << 33
+    PIE = 1 << 34
+    CS = 1 << 35
+    SHUB = 1 << 36
+    SSBDCI = 1 << 37
+    UCIE_PCS = 1 << 38
 
 
 class AmdSmiEccCorrectionSchemaSupport(IntEnum):
@@ -954,6 +954,7 @@ class AmdSmiMetricCategory(IntEnum):
     STATIC_FREQUENCY = amdsmi_wrapper.AMDSMI_METRIC_CATEGORY_STATIC_FREQUENCY
     STATIC_TEMPERATURE = amdsmi_wrapper.AMDSMI_METRIC_CATEGORY_STATIC_TEMPERATURE
     STATIC_THROTTLE = amdsmi_wrapper.AMDSMI_METRIC_CATEGORY_STATIC_THROTTLE
+    STATIC_POWER = amdsmi_wrapper.AMDSMI_METRIC_CATEGORY_STATIC_POWER
     UNKNOWN = amdsmi_wrapper.AMDSMI_METRIC_CATEGORY_UNKNOWN
 
 
@@ -1029,19 +1030,20 @@ class AmdSmiCperErrorSeverity(IntEnum):
     NUM = amdsmi_wrapper.AMDSMI_CPER_SEV_NUM
     UNUSED = amdsmi_wrapper.AMDSMI_CPER_SEV_UNUSED
 
+
 class AmdSmiCperNotifyType(Enum):
-    CMC = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_CMC
-    CPE = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_CPE
-    MCE = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_MCE
-    PCIE = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_PCIE
-    INIT = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_INIT
-    NMI = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_NMI
-    BOOT = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_BOOT
-    DMAr = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_DMAR
-    SEA =  amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_SEA
-    SEI = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_SEI
-    PEI = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_PEI
-    CXL_COMPONENT = amdsmi_wrapper.AMDSMI_CPER_NOTIFY_TYPE_CXL_COMPONENT
+    CMC = 0x450eBDD72DCE8BB1
+    CPE = 0x4a55D8434E292F96
+    MCE = 0x4cc5919CE8F56FFE
+    PCIE = 0x4dfc1A16CF93C01F
+    INIT = 0x454a9308CC5263E8
+    NMI = 0x42c9B7E65BAD89FF
+    BOOT = 0x409aAB403D61A466
+    DMAr = 0x4c27C6B3667DD791
+    SEA = 0x11E4BBE89A78788A
+    SEI = 0x4E87B0AE5C284C81
+    PEI = 0x4214520409A9D5AC
+    CXL_COMPONENT = 0x49A341DF69293BC9
 
 class AmdSmiAffinityScope(IntEnum):
     NUMA_SCOPE = amdsmi_wrapper.AMDSMI_AFFINITY_SCOPE_NODE
@@ -1063,10 +1065,10 @@ class AmdSmiTDIState(IntEnum):
     RUN = amdsmi_wrapper.AMDSMI_TDI_STATE_RUN
     ERROR = amdsmi_wrapper.AMDSMI_TDI_STATE_ERROR
 
-class AmdSmiCCMode(IntEnum):
-    OFF = amdsmi_wrapper.AMDSMI_CC_MODE_OFF
-    ON = amdsmi_wrapper.AMDSMI_CC_MODE_ON
-    DEV = amdsmi_wrapper.AMDSMI_CC_MODE_DEV
+class AmdSmiGpuCCMode(IntEnum):
+    OFF = amdsmi_wrapper.AMDSMI_GPU_CC_MODE_OFF
+    ON = amdsmi_wrapper.AMDSMI_GPU_CC_MODE_ON
+    DEV = amdsmi_wrapper.AMDSMI_GPU_CC_MODE_DEV
 
 _AMDSMI_MAX_MM_IP_COUNT = 8
 _GPU_UUID_SIZE = 38
@@ -1567,6 +1569,8 @@ def amdsmi_get_gpu_asic_info(processor_handle):
         'subvendor_id': asic_info.subvendor_id,
         'device_id': asic_info.device_id,
         'rev_id': hex(asic_info.rev_id),
+        'chip_rev_id': asic_info.chip_rev_id,
+        'external_rev_id': asic_info.external_rev_id,
         'asic_serial': asic_info.asic_serial.decode("utf-8"),
         'oam_id': asic_info.oam_id,
         'num_of_compute_units': asic_info.num_of_compute_units,
@@ -1593,6 +1597,12 @@ def amdsmi_get_gpu_asic_info(processor_handle):
 
     if asic_info_struct['physical_acc_id'] == 0xFFFFFFFF:
         asic_info_struct['physical_acc_id'] = "N/A"
+
+    for value in ['chip_rev_id', 'external_rev_id']:
+        if asic_info_struct[value] == 0xFFFFFFFF:
+            asic_info_struct[value] = "N/A"
+        else:
+            asic_info_struct[value] = hex(asic_info_struct[value])
 
     return asic_info_struct
 
@@ -3227,22 +3237,22 @@ def amdsmi_get_tdi_state(vf_handle):
 
     return AmdSmiTDIState(tdi_state.value)
 
-def amdsmi_get_cc_mode(processor_handle):
+def amdsmi_get_gpu_cc_mode(processor_handle):
     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
 
-    cc_mode = amdsmi_wrapper.amdsmi_cc_mode_t()
-    _check_res(amdsmi_wrapper.amdsmi_get_cc_mode(
+    cc_mode = amdsmi_wrapper.amdsmi_gpu_cc_mode_t()
+    _check_res(amdsmi_wrapper.amdsmi_get_gpu_cc_mode(
         processor_handle, ctypes.byref(cc_mode)))
 
-    return AmdSmiCCMode(cc_mode.value)
+    return AmdSmiGpuCCMode(cc_mode.value)
 
-def amdsmi_set_cc_mode(processor_handle, mode):
+def amdsmi_set_gpu_cc_mode(processor_handle, mode):
     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
         raise AmdSmiParameterException(
             processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
 
-    _check_res(amdsmi_wrapper.amdsmi_set_cc_mode(
+    _check_res(amdsmi_wrapper.amdsmi_set_gpu_cc_mode(
             processor_handle, mode))
 
 def amdsmi_get_gpu_ptl_state(processor_handle):

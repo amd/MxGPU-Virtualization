@@ -124,8 +124,8 @@ struct amdgv_init_device_info {
 	uint32_t         domain; // not used
 	/* the PF bdf */
 	uint32_t         bdf;
-	/* the PF NUMA node id */
-	int32_t          pf_numa_id;
+	/* the PF proximity domain */
+	int32_t          pf_pd;
 
 	/* PF's vendor and device information */
 	uint32_t         vendor_id;
@@ -713,12 +713,6 @@ enum amdgv_accelerator_partition_mode {
 	AMDGV_ACCELERATOR_PARTITION_MODE_MAX
 };
 
-enum amdgv_vf_hbm_mgmt_mode {
-	AMDGV_VF_HBM_MGMT_MODE_DRIVER_MANAGED = 0,
-	AMDGV_VF_HBM_MGMT_MODE_DAX = 1,
-	AMDGV_VF_HBM_MGMT_MODE_DISABLED = 2,
-};
-
 enum amdgv_hang_detection_mode {
 	AMDGV_HANG_DETECTION_DISABLED = 0,
 	AMDGV_HANG_DETECTION_ENABLED = 1,
@@ -879,8 +873,6 @@ struct amdgv_init_config_opt {
 
 	enum amdgv_xgmi_fb_sharing_mode fb_sharing_mode;
 
-	enum amdgv_vf_hbm_mgmt_mode vf_hbm_mgmt_mode;
-
 	enum amdgv_accelerator_partition_mode accelerator_partition_mode;
 	enum amdgv_memory_partition_mode memory_partition_mode;
 	enum amdgv_cc_mode cc_mode;
@@ -911,8 +903,6 @@ struct amdgv_init_config_opt {
 	int32_t sys_log_level;
 
 	uint32_t shader_hash_mode;
-    /* reserve ffbm spa list to workaround os circle deadlock issue */
-    bool reserve_ffbm_pteb;
 };
 
 struct amdgv_fini_config_opt {
@@ -993,7 +983,19 @@ enum amdgv_dev_info_type {
 	AMDGV_GET_XGMI_INFO,
 	AMDGV_GET_OAM_IDX,
 	AMDGV_GET_COMPUTE_PROFILE,
-	AMDGV_GET_BASIC_INFO
+	AMDGV_GET_BASIC_INFO,
+	AMDGV_GET_REVISION_IDS
+};
+
+/* reported for a revision the ASIC does not expose */
+#define AMDGV_REV_ID_UNKNOWN 0xFFFFFFFF
+
+/* external_rev_id values for ASICs that pack the die revision per die type */
+enum amdgv_die_external_rev_id {
+	AMDGV_MID_A0_AID_A0_XCD_A0 = 0x1,
+	AMDGV_MID_A0_AID_A0_XCD_B0 = 0x2,
+	AMDGV_MID_A0_AID_A1_XCD_A0 = 0x3,
+	AMDGV_MID_A0_AID_A1_XCD_B0 = 0x4,
 };
 
 /* device infomation that can not be configured by shim */
@@ -1048,6 +1050,13 @@ union amdgv_dev_info {
 		uint32_t bdf;
 		uint64_t dsn;
 	} basic_info;
+
+	/* type AMDGV_GET_REVISION_IDS */
+	struct {
+		/* both AMDGV_REV_ID_UNKNOWN if not available */
+		uint32_t chip_rev_id;
+		uint32_t external_rev_id;
+	} revision_ids;
 };
 
 /* get and set general conf paramters */
@@ -1223,7 +1232,7 @@ struct amdgv_vf_ffbm_map_list {
 struct amdgv_vf_hbm_mgmt {
 	uint64_t phy_addr;
 	uint64_t phy_size;
-	int numa_id; // driver-managed mode: numa id of the VF, dax mode: -1
+	int numa_id; /* Linux NUMA node for the VF, -1 if unknown */
 	char name[VF_HBM_MGMT_NAME_LEN];
 };
 
@@ -2126,6 +2135,22 @@ int amdgv_set_vf(amdgv_dev_t dev, enum amdgv_set_vf_opt_type type,
 int amdgv_flr_vf(amdgv_dev_t dev, uint32_t idx_vf);
 
 /**
+ * amdgv_clear_vf_fb - zero a VF framebuffer
+ *
+ * @dev: amdgv device handle
+ * @idx_vf: the vf whose framebuffer should be cleared
+ *
+ * Intended for post-shutdown clear (e.g. ResetGpupBegin after REL_GPU_FINI /
+ * STOP_VF). Queues SCHED_GPUMON CLEAR_VF_FB, which parks the scheduler
+ * (stop world switch + switch GFX to PF) and calls amdgv_misc_clear_vf_fb.
+ * Does not use INIT_VF_FB (that only clears under PF full access).
+ *
+ * Returns:
+ * 0 for success, errors for failure.
+ */
+int amdgv_clear_vf_fb(amdgv_dev_t dev, uint32_t idx_vf);
+
+/**
  * amdgv_force_reset_gpu - reset PF and all VFs
  *
  * @dev: amdgv device handle
@@ -2136,6 +2161,20 @@ int amdgv_flr_vf(amdgv_dev_t dev, uint32_t idx_vf);
  * 0 for success, errors for failure.
  */
 int amdgv_force_reset_gpu(amdgv_dev_t dev);
+
+/**
+ * amdgv_gfx_run_cleaner_shader - run the cleaner shader on one partition
+ *
+ * @dev: amdgv device handle
+ * @partition: spatial partition index. Write 0 when the GPU has one partition.
+ *
+ * Ask CP firmware to run the cleaner shader on each XCC in the partition.
+ * Clears GPU memory before it is reused.
+ *
+ * Returns:
+ * 0 for success, errors for failure.
+ */
+int amdgv_gfx_run_cleaner_shader(amdgv_dev_t dev, uint32_t partition);
 
 /**
  * amdgv_suspend_vf - temporary remove a VF from the world switch cycle

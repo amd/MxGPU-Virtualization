@@ -453,9 +453,6 @@ struct oss_interface {
 	/* optional yield to allow the system to execute on long tasks */
 	void (*yield)(void);
 
-	/* memory fence */
-	void (*memory_fence)(void);
-
 	/* return the machine's up time
 	 * (return value is in microseconds)
 	 */
@@ -516,9 +513,8 @@ struct oss_interface {
 #endif
 
 	int (*store_rlcv_timestamp)(const char *buf, uint32_t size, uint32_t bdf);
-	void *(*hbm_dax_init)(const char *dev_name, uint64_t phy_addr, uint64_t phy_size);
-	void (*hbm_dax_fini)(void *hbm_dax);
-	void *(*hbm_drv_mgmt_init)(const char *hbm_name, int numa_id,
+	void *(*hbm_drv_mgmt_init)(const char *hbm_name, uint32_t pf_bdf,
+				   uint32_t idx_vf, int *numa_id,
 				   uint64_t *phy_addr, uint64_t *phy_size);
 	void (*hbm_drv_mgmt_fini)(void *hbm_drv_mgmt);
 	bool (*get_ih_rb_info)(oss_dev_t dev, uint32_t ih_index, struct oss_ih_rb_info *p_ih_rb_info);
@@ -618,6 +614,9 @@ struct oss_interface {
 	int (*unregister_mce_notifier)(void *dev);
 
 	void (*emergency_restart)(void);
+
+	/* VF FB BAR length in bytes, or 0. */
+	uint64_t (*get_vf_fb_bar_size)(oss_dev_t dev);
 };
 
 #endif

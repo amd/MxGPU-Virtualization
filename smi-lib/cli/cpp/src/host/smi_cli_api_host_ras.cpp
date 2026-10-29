@@ -6,6 +6,7 @@
 #include "smi_cli_api_host.h"
 #include "amdsmi.h"
 #include "json/json.h"
+#include "smi_cli_build_config.h"
 #include "smi_cli_parser.h"
 #include "smi_cli_logger_err.h"
 #include "smi_cli_templates.h"
@@ -13,7 +14,6 @@
 #include "smi_cli_platform.h"
 #include "smi_cli_exception.h"
 
-#include <sys/stat.h>
 #include <map>
 #include <iostream>
 #include <sstream>
@@ -21,24 +21,11 @@
 #include <filesystem>
 #include <string>
 #include <climits>
-
-#ifdef _WIN32
-	#include <direct.h>
-	#define MKDIR(path) _mkdir(path)
-#else
-	#include <sys/stat.h>
-	#include <sys/types.h>
-	#define MKDIR(path) mkdir(path, 0777)
-#endif
+#include <system_error>
 
 #define CPER_DATA_BUFFER_SIZE 4096
-#ifdef SMI_ESXI_BUILD
-	#define CPER_RAW_DATA_BUFFER_SIZE (1024 * 128)
-	#define CPER_HDRS_ARRAY_SIZE	  128
-#else
-	#define CPER_RAW_DATA_BUFFER_SIZE (1024 * 1024)
-	#define CPER_HDRS_ARRAY_SIZE	  1024
-#endif
+static constexpr unsigned int CPER_RAW_DATA_BUFFER_SIZE = smi::config::cper_raw_data_buffer_size;
+static constexpr unsigned int CPER_HDRS_ARRAY_SIZE	= smi::config::cper_headers_array_size;
 
 struct CperEntryInfo {
 	std::string timestamp;
@@ -169,19 +156,14 @@ std::string print_cper_timestamp(amdsmi_cper_timestamp_t* timestamp)
 
 bool create_directory(const std::string& path)
 {
-	if (MKDIR(path.c_str()) == -1) {
-#ifdef _WIN32
-		if (errno == EEXIST) {
-#else
-		struct stat info;
-		if (stat(path.c_str(), &info) == 0 && (info.st_mode & S_IFDIR)) {
-#endif
-			// Directory already exists
-			return true;
-		} else {
-			std::cerr << "Error creating directory: " << path << std::endl;
-			return false;
-		}
+	std::error_code ec;
+
+	// Succeeds when the directory already exists; ec stays clear.
+	fs::create_directories(path, ec);
+	if (ec) {
+		std::cerr << "Error creating directory: " << path << ": " << ec.message()
+			  << std::endl;
+		return false;
 	}
 	return true;
 }
@@ -499,17 +481,18 @@ int AmdSmiApiHost::amdsmi_get_cper_afid_command(Arguments arg, std::string& out)
 	std::streamsize fileSize = file.tellg();
 	file.seekg(0, std::ios::beg);
 
-	std::vector<char> buffer(fileSize);
-
-	if (fileSize <= 0 || fileSize == LLONG_MAX) {
+	if (fileSize <= 0 || fileSize > UINT32_MAX) {
 		throw SmiToolInvalidFilePathException(arg.cper_file_path);
 	}
+
+	std::vector<char> buffer(fileSize);
 
 	if (!file.read(buffer.data(), fileSize)) {
 		throw SmiToolInvalidFilePathException(arg.cper_file_path);
 	}
 
-	ret = host_amdsmi_get_afids_from_cper(buffer.data(), buffer.size(), afids, &num_afids);
+	ret = host_amdsmi_get_afids_from_cper(buffer.data(), static_cast<uint32_t>(buffer.size()),
+					      afids, &num_afids);
 	if (ret != AMDSMI_STATUS_SUCCESS) {
 		return ret;
 	}

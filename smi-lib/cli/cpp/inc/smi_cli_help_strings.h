@@ -82,7 +82,7 @@ static const std::map<std::string, std::map<std::string, std::vector<std::string
 	  {"host_vf", {"vf"}},
 	  {"host_linux_spec", {"ecc", "ecc-block", "energy", "throttle"}},
 	  {"guest", {"fb-usage"}},
-	  {"bm", {"fb-usage", "power", "clock", "temperature", "pcie"}}}},
+	  {"bm", {"fb-usage", "power", "clock", "temperature", "pcie", "fan"}}}},
 	{"nic", {{"host_linux", {"port", "rdma-devices", "extended"}}}},
 	{"vf",
 	 {{"host_vf", {"schedule", "guard", "guest-data"}},
@@ -179,6 +179,8 @@ std::string process_bm =
     "--pid=<pid1> --pid=<pid2>\n"
     "    --name                                                Gets all process information about "
     "the specified process based on Process Name\n"
+    "                                                          Name can be the full path or just "
+    "the file name (e.g. amd-smi.exe)\n"
     "                                                          If multiple processes have the same "
     "name information is returned for all of them\n"
     "                                                          Multiple name can be specified and "

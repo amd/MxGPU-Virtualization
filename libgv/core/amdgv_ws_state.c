@@ -61,7 +61,7 @@ static int amdgv_world_switch_do_enable_auto_sched(struct amdgv_adapter *adapt,
 
 #define cmd_allow_time() adapt->gpuiov.allow_time_cmd_complete
 
-static int world_switch_get_next_state(struct amdgv_adapter *adapt, uint32_t hw_sched_id,
+int world_switch_get_next_state(struct amdgv_adapter *adapt, uint32_t hw_sched_id,
 					uint32_t target_vf, uint32_t target_state,
 					uint32_t cur_state, uint32_t cur_vf,
 					uint32_t *next_state, uint32_t *next_vf)
@@ -363,6 +363,14 @@ ws_exit:
 		oss_rwsema_write_unlock(adapt->sched.hw_state_machine[hw_sched_id].ws_lock);
 	}
 	return ret;
+}
+
+void amdgv_set_bulk_goto_state(struct amdgv_adapter *adapt, struct amdgv_sched_world_switch *world_switch)
+{
+	if (adapt->sched.set_bulk_goto_state)
+		adapt->sched.set_bulk_goto_state(adapt, world_switch);
+	else
+		world_switch->bulk_goto_state = world_switch_bulk_goto_state_manual;
 }
 
 /*

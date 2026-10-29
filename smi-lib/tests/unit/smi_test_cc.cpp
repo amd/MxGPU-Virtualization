@@ -24,16 +24,17 @@ class AmdSmiConfidentialComputeTests : public amdsmi::AmdSmiTest {
 		return ::testing::AssertionSuccess();
 	}
 
-	::testing::AssertionResult equal_cc_mode(smi_cc_mode expect, amdsmi_cc_mode_t actual)
+	::testing::AssertionResult equal_cc_mode(smi_gpu_cc_mode expect,
+						 amdsmi_gpu_cc_mode_t actual)
 	{
-		SMI_ASSERT_EQ(expect.mode, (enum smi_cc_mode_t)actual);
+		SMI_ASSERT_EQ(expect.mode, (enum smi_gpu_cc_mode_t)actual);
 		return ::testing::AssertionSuccess();
 	}
 
-	::testing::AssertionResult equal_set_cc_mode(smi_set_cc_mode expect,
-						     amdsmi_cc_mode_t actual)
+	::testing::AssertionResult equal_set_cc_mode(smi_set_gpu_cc_mode expect,
+						     amdsmi_gpu_cc_mode_t actual)
 	{
-		SMI_ASSERT_EQ(expect.mode, (enum smi_cc_mode_t)actual);
+		SMI_ASSERT_EQ(expect.mode, (enum smi_gpu_cc_mode_t)actual);
 		return ::testing::AssertionSuccess();
 	}
 };
@@ -41,28 +42,28 @@ class AmdSmiConfidentialComputeTests : public amdsmi::AmdSmiTest {
 TEST_F(AmdSmiConfidentialComputeTests, GetInvalidParams)
 {
 	int ret;
-	amdsmi_cc_mode_t cc_mode;
+	amdsmi_gpu_cc_mode_t cc_mode;
 
 	ret = amdsmi_get_tdi_state(VF_MOCK_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-	ret = amdsmi_get_cc_mode(&GPU_MOCK_HANDLE, NULL);
+	ret = amdsmi_get_gpu_cc_mode(&GPU_MOCK_HANDLE, NULL);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
-	ret = amdsmi_get_cc_mode(NULL, &cc_mode);
+	ret = amdsmi_get_gpu_cc_mode(NULL, &cc_mode);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
-	ret = amdsmi_get_cc_mode(&NIC_MOCK_HANDLE, &cc_mode);
+	ret = amdsmi_get_gpu_cc_mode(&NIC_MOCK_HANDLE, &cc_mode);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 
-	ret = amdsmi_set_cc_mode(NULL, AMDSMI_CC_MODE_ON);
+	ret = amdsmi_set_gpu_cc_mode(NULL, AMDSMI_GPU_CC_MODE_ON);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
-	ret = amdsmi_set_cc_mode(&NIC_MOCK_HANDLE, AMDSMI_CC_MODE_ON);
+	ret = amdsmi_set_gpu_cc_mode(&NIC_MOCK_HANDLE, AMDSMI_GPU_CC_MODE_ON);
 	ASSERT_EQ(ret, AMDSMI_STATUS_INVAL);
 }
 
 TEST_F(AmdSmiConfidentialComputeTests, IoctlFailed)
 {
 	amdsmi_tdi_state_t tdi_state;
-	amdsmi_cc_mode_t cc_mode;
+	amdsmi_gpu_cc_mode_t cc_mode;
 	int ret;
 
 	EXPECT_CALL(*g_system_mock, Ioctl(_))
@@ -71,10 +72,10 @@ TEST_F(AmdSmiConfidentialComputeTests, IoctlFailed)
 	ret = amdsmi_get_tdi_state(VF_MOCK_HANDLE, &tdi_state);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 
-	ret = amdsmi_get_cc_mode(&GPU_MOCK_HANDLE, &cc_mode);
+	ret = amdsmi_get_gpu_cc_mode(&GPU_MOCK_HANDLE, &cc_mode);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 
-	ret = amdsmi_set_cc_mode(&GPU_MOCK_HANDLE, AMDSMI_CC_MODE_ON);
+	ret = amdsmi_set_gpu_cc_mode(&GPU_MOCK_HANDLE, AMDSMI_GPU_CC_MODE_ON);
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
 }
 
@@ -105,15 +106,15 @@ TEST_F(AmdSmiConfidentialComputeTests, GetCCMode)
 {
 	int ret;
 	struct smi_device_info in_payload;
-	struct smi_cc_mode cc_mode_mock = {};
-	amdsmi_cc_mode_t cc_mode;
+	struct smi_gpu_cc_mode cc_mode_mock = {};
+	amdsmi_gpu_cc_mode_t cc_mode;
 
 	// Test all CC modes
-	for (int i = AMDSMI_CC_MODE_OFF; i <= AMDSMI_CC_MODE_DEV; i++) {
-		cc_mode_mock.mode = (enum smi_cc_mode_t)i;
+	for (int i = AMDSMI_GPU_CC_MODE_OFF; i <= AMDSMI_GPU_CC_MODE_DEV; i++) {
+		cc_mode_mock.mode = (enum smi_gpu_cc_mode_t)i;
 
-		WhenCalling(std::bind(amdsmi_get_cc_mode, &GPU_MOCK_HANDLE, &cc_mode));
-		ExpectCommand(SMI_CMD_CODE_GET_CC_MODE);
+		WhenCalling(std::bind(amdsmi_get_gpu_cc_mode, &GPU_MOCK_HANDLE, &cc_mode));
+		ExpectCommand(SMI_CMD_CODE_GET_GPU_CC_MODE);
 		SaveInputPayloadIn(&in_payload);
 		PlantMockOutput(&cc_mode_mock);
 		ret = performCall();
@@ -127,17 +128,18 @@ TEST_F(AmdSmiConfidentialComputeTests, GetCCMode)
 TEST_F(AmdSmiConfidentialComputeTests, SetCCMode)
 {
 	int ret;
-	struct smi_set_cc_mode in_payload;
+	struct smi_set_gpu_cc_mode in_payload;
 
 	// Test all valid CC modes
-	for (int i = AMDSMI_CC_MODE_OFF; i <= AMDSMI_CC_MODE_DEV; i++) {
-		WhenCalling(std::bind(amdsmi_set_cc_mode, &GPU_MOCK_HANDLE, (amdsmi_cc_mode_t)i));
-		ExpectCommand(SMI_CMD_CODE_SET_CC_MODE);
+	for (int i = AMDSMI_GPU_CC_MODE_OFF; i <= AMDSMI_GPU_CC_MODE_DEV; i++) {
+		WhenCalling(
+		    std::bind(amdsmi_set_gpu_cc_mode, &GPU_MOCK_HANDLE, (amdsmi_gpu_cc_mode_t)i));
+		ExpectCommand(SMI_CMD_CODE_SET_GPU_CC_MODE);
 		SaveInputPayloadIn(&in_payload);
 		ret = performCall();
 
 		ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 		ASSERT_TRUE(amdsmi::equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
-		ASSERT_EQ(in_payload.mode, (enum smi_cc_mode_t)i);
+		ASSERT_EQ(in_payload.mode, (enum smi_gpu_cc_mode_t)i);
 	}
 }

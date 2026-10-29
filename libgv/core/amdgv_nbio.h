@@ -8,6 +8,13 @@
 
 #include "amdgv_nps.h"
 
+/* NBIO v6.3.2 doorbell index space. Indices are dword-addressed. */
+enum amdgv_nbio_doorbell_assignment {
+	AMDGV_NBIO_DOORBELL_SDMA0 = 0x100,
+	AMDGV_NBIO_DOORBELL_IH = 0x1A0,
+	AMDGV_NBIO_DOORBELL_MMSCH0 = 0x1B0,
+};
+
 struct nbio_hdp_flush_reg {
 	uint32_t ref_and_mask_cp0;
 	uint32_t ref_and_mask_cp1;
@@ -38,6 +45,8 @@ struct amdgv_nbio_funcs {
 	uint32_t (*get_pcie_port_index_offset)(struct amdgv_adapter *adapt);
 	uint32_t (*get_pcie_port_data_offset)(struct amdgv_adapter *adapt);
 	uint32_t (*get_rev_id)(struct amdgv_adapter *adapt);
+	void (*get_revision_ids)(struct amdgv_adapter *adapt, uint32_t *chip_rev_id,
+				 uint32_t *external_rev_id);
 	void (*mc_access_enable)(struct amdgv_adapter *adapt, bool enable);
 	uint32_t (*get_memsize)(struct amdgv_adapter *adapt);
 	void (*sdma_doorbell_range)(struct amdgv_adapter *adapt,
@@ -99,6 +108,8 @@ struct amdgv_nbio {
 	const struct amdgv_nbio_funcs *funcs;
 	const struct amdgv_nbio_ras	*ras;
 	uint64_t (*encode_ext_smn_addressing)(uint32_t ext_id);
+	uint32_t chip_rev_id;
+	uint32_t external_rev_id;
 };
 
 int amdgv_nbio_ih_doorbell_range(struct amdgv_adapter *adapt, bool use_doorbell,
@@ -110,6 +121,8 @@ uint32_t amdgv_nbio_get_memsize(struct amdgv_adapter *adapt);
 int amdgv_nbio_gc_doorbell_init(struct amdgv_adapter *adapt);
 int amdgv_nbio_sdma_doorbell_range(struct amdgv_adapter *adapt, int instance, bool use_doorbell,
 				   int doorbell_index, int doorbell_size);
+int amdgv_nbio_vcn_doorbell_range(struct amdgv_adapter *adapt, bool use_doorbell,
+				  int doorbell_index, int instance);
 
 int amdgv_nbio_get_nps_mode(struct amdgv_adapter *adapt,
 			    enum amdgv_memory_partition_mode *memory_partition_mode);
@@ -127,4 +140,3 @@ amdgv_nbio_get_default_accel_partition_mode(struct amdgv_adapter *adapt,
 int amdgv_nbio_get_asic_nps_caps(struct amdgv_adapter *adapt,
 				 const struct amdgv_nps_compute_combination **combination);
 #endif
-

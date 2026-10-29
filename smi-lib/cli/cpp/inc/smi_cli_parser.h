@@ -210,7 +210,9 @@ private:
 							      "--gpuboard",
 							      "-G",
 							      "--throttle",
-							      "-th"};
+							      "-th",
+							      "--fan",
+							      "-f"};
 
 	std::vector<std::string> METRIC_SUPPORTED_ARGS_VF = {
 	    "--schedule", "-s", "--guard", "-G", "--guest-data", "-u", "--per-partition", "-pp"};

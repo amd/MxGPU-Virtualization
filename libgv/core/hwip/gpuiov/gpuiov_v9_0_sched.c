@@ -88,7 +88,7 @@ static uint32_t gpuiov_v9_0_cp_sched_state(struct amdgv_adapter *adapt, uint32_t
 #endif
 
 	for_each_id (xcc_id, amdgv_sched_get_xcc_mask_by_vf(adapt, idx_vf)) {
-		ret |= RREG32(SOC15_REG_OFFSET(GC, GET_INST(GC, xcc_id), regRLC_CP_SCHEDULERS));
+		ret |= RREG32(SOC15_REG_OFFSET(GC, xcc_id, regRLC_CP_SCHEDULERS));
 	}
 
 	return ret;
@@ -152,6 +152,7 @@ static int gpuiov_v9_0_sched_sw_init(struct amdgv_adapter *adapt)
 	adapt->sched.cp_sched_state = gpuiov_v9_0_cp_sched_state;
 	adapt->sched.get_asic_time_slice = amdgv_sched_get_asic_time_slice;
 	adapt->sched.reconfig_mapping_tables = gpuiov_v9_0_sched_reconfig_mapping_tables;
+	adapt->sched.set_bulk_goto_state = gpuiov_v9_0_set_bulk_goto_state;
 
 	adapt->sched.enable_bulk_goto_state = true;
 

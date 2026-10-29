@@ -1026,7 +1026,8 @@ int amdgv_umc_copy_bp_records_to_vf(struct amdgv_adapter *adapt,
 				    uint32_t idx_vf,
 				    uint32_t allowed_size,
 				    uint32_t *write_size,
-				    uint32_t *more)
+				    uint32_t *more,
+				    uint32_t *checksum)
 {
 	struct ras_err_handler_data *data = adapt->ecc.eh_data;
 	uint64_t err_addr;
@@ -1034,6 +1035,8 @@ int amdgv_umc_copy_bp_records_to_vf(struct amdgv_adapter *adapt,
 
 	*write_size = 0;
 	*more = 0;
+	if (checksum)
+		*checksum = 0;
 
 	if (!data)
 		return 0;
@@ -1046,7 +1049,7 @@ int amdgv_umc_copy_bp_records_to_vf(struct amdgv_adapter *adapt,
 		    amdgv_umc_check_bp_in_critical_region(adapt, err_addr, idx_vf, true))
 		    continue;
 
-		if (*write_size > allowed_size) {
+		if (*write_size + sizeof(uint64_t) > allowed_size) {
 			*more = true;
 			break;
 		}
@@ -1054,7 +1057,7 @@ int amdgv_umc_copy_bp_records_to_vf(struct amdgv_adapter *adapt,
 		if (!amdgv_vfmgr_copy_bp_entry_to_vf_fb(adapt, idx_vf,
 							data->bps[i].retired_page,
 							(*write_size) / sizeof(uint64_t),
-							NULL))
+							checksum))
 			(*write_size) += sizeof(uint64_t);
 	}
 

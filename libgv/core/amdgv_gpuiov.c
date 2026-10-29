@@ -970,7 +970,7 @@ int amdgv_gpuiov_config_auto_sched_mode(struct amdgv_adapter *adapt, uint32_t hw
 		 */
 		return 0;
 
-	sched_mem_desc->scheduler_mode = sched_mode <= AMDGV_SCHED_MAX_HW_SCHED_MODE ? sched_mode : 0;
+	sched_mem_desc->scheduler_mode = (enum ws_scheduler_mode)(sched_mode <= AMDGV_SCHED_MAX_HW_SCHED_MODE ? sched_mode : 0);
 	sched_mem_desc->feature_flags.flags.config_perf_data_log = 0;
 	sched_mem_desc->feature_flags.flags.config_debug_dump_log = 0;
 	sched_mem_desc->feature_flags.flags.config_ts_log = 0;

@@ -130,10 +130,23 @@ void navi32_hdp_flush(struct amdgv_adapter *adapt)
 	WREG32(SOC15_REG_OFFSET(NBIO, 0, regBIF_BX_PF0_HDP_MEM_COHERENCY_FLUSH_CNTL), 0x0);
 }
 
+void navi32_nbio_get_revision_ids(struct amdgv_adapter *adapt, uint32_t *chip_rev_id,
+				  uint32_t *external_rev_id)
+{
+	uint32_t strap;
+
+	strap = RREG32_SOC15(NBIO, 0, regRCC_STRAP0_RCC_DEV0_EPF0_STRAP0);
+	*chip_rev_id = REG_GET_FIELD(strap, RCC_STRAP0_RCC_DEV0_EPF0_STRAP0,
+				     STRAP_ATI_REV_ID_DEV0_F0);
+
+	*external_rev_id = *chip_rev_id + 0x20;
+}
+
 const struct amdgv_nbio_funcs navi32_nbio_funcs = {
 	.get_hdp_flush_req_offset = navi32_nbio_get_hdp_flush_req_offset,
 	.get_hdp_flush_done_offset = navi32_nbio_get_hdp_flush_done_offset,
 	.hdp_flush = navi32_hdp_flush,
+	.get_revision_ids = navi32_nbio_get_revision_ids,
 };
 
 const struct amdgv_nbio_ras navi32_nbio_ras = {

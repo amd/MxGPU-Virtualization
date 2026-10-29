@@ -138,7 +138,8 @@ int amdgv_umc_copy_bp_records_to_vf(struct amdgv_adapter *adapt,
 				    uint32_t idx_vf,
 				    uint32_t allowed_size,
 				    uint32_t *write_size,
-				    uint32_t *more);
+				    uint32_t *more,
+				    uint32_t *checksum);
 int amdgv_umc_update_fatal_error_record(struct amdgv_adapter *adapt);
 void amdgv_umc_add_addr_to_vf_bad_block_region(struct amdgv_adapter *adapt,
 					       uint64_t err_addr_pf);

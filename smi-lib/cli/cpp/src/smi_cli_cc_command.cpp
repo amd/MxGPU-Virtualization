@@ -24,7 +24,7 @@ int AmdSmiCCCommand::cc_command_vf_get_tdi_state(std::string vf_bdf, std::string
 
 int AmdSmiCCCommand::cc_command_get_mode(uint64_t processors, std::string& formatted_string)
 {
-	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_cc_mode_command(
+	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_gpu_cc_mode_command(
 	    processors, arg, formatted_string);
 	return ret;
 }

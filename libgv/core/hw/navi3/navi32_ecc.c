@@ -87,14 +87,22 @@ static int navi32_poison_consumption(struct amdgv_adapter *adapt,
 	uint64_t err_addr_gpu;
 	uint32_t reg_data;
 	uint32_t i;
+	/* event->data is an untagged union. Only AMDGV_EVENT_SCHED_RAS_FED
+	 * carries fed_data; AMDGV_EVENT_SCHED_RAS_POISON_CONSUMPTION carries
+	 * the poison arm and may be raised from a VF mailbox request. event->id
+	 * is the only discriminator, so select the arm with it before any
+	 * dereference.
+	 */
+	bool is_fed = (event->id == AMDGV_EVENT_SCHED_RAS_FED);
+	bool is_gc_rlc_fed = is_fed && event->data.fed_data.src == AMDGV_FED_SRC_GC_RLC;
 
 	if (!adapt->ecc.fatal_error)
 		amdgv_gpumon_ras_report(adapt, (int)PP_RAS_TYPE__POISON_COMSUMPTION);
 
-	if (event->data.fed_data.src == AMDGV_FED_SRC_GC_RLC) {
+	if (is_gc_rlc_fed) {
 		if (navi32_reset_grbm_soft_reset_stage_1(adapt, event->data.fed_data.data.gc_rlc_ip_bits.gl2c == 1))
 			goto reset_gpu;
-	} else if (event->data.fed_data.src == AMDGV_FED_SRC_DF_SYNC_FLOOD) {
+	} else if (is_fed && event->data.fed_data.src == AMDGV_FED_SRC_DF_SYNC_FLOOD) {
 		if (oss_atomic_read(adapt->in_ecc_recovery)) {
 			/* MP1 fatal error WA: trigger PSP dram read to unhalt PSP during MP1 triggered sync flood
 			 * should not do it after whole GPU reset */
@@ -112,17 +120,21 @@ static int navi32_poison_consumption(struct amdgv_adapter *adapt,
 
 	if (adapt->pp.pp_funcs->get_ecc_info)
 		ret = adapt->pp.pp_funcs->get_ecc_info(adapt, &(adapt->ecc.umc_ecc));
-	if (ret)
+	if (ret) {
+		if (is_gc_rlc_fed)
+			navi32_reset_grbm_soft_reset_stage_2(adapt);
 		goto reset_gpu;
+	}
 
 	/* page judgement and reserve */
 	ret = amdgv_umc_process_ras_data_cb(adapt, &err_data, 0);
 
-	if (adapt->ecc.eh_data->bp_replace_pending) {
-		if (event->data.fed_data.src == AMDGV_FED_SRC_GC_RLC)
-			navi32_reset_grbm_soft_reset_stage_2(adapt);
+	/* stage 2 is the only exit from the safe mode entered by stage 1 */
+	if (is_gc_rlc_fed && navi32_reset_grbm_soft_reset_stage_2(adapt))
 		goto reset_gpu;
-	}
+
+	if (adapt->ecc.eh_data->bp_replace_pending)
+		goto reset_gpu;
 
 	if (err_data.err_addr_cnt == 0) {
 		if (!adapt->ecc.fatal_error)
@@ -148,17 +160,12 @@ static int navi32_poison_consumption(struct amdgv_adapter *adapt,
 			}
 			oss_mutex_unlock(adapt->ecc.unhandled_bps_lock);
 
-			if (event->data.fed_data.src == AMDGV_FED_SRC_GC_RLC)
-				navi32_reset_grbm_soft_reset_stage_2(adapt);
-
 			amdgv_sched_queue_event(adapt, idx_vf, AMDGV_EVENT_SCHED_FORCE_RESET_VF, AMDGV_SCHED_BLOCK_ALL);
 		} else {
 			/*
 			 * not swapable ffbm vf page nor critial case
 			 * (in PF fb and pf not used or multiple VF bps)
 			 */
-			if (event->data.fed_data.src == AMDGV_FED_SRC_GC_RLC)
-				navi32_reset_grbm_soft_reset_stage_2(adapt);
 			goto reset_gpu;
 		}
 	}

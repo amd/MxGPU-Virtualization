@@ -17,10 +17,6 @@
 #include <sstream>
 #include <climits>
 #include <map>
-#ifdef _WIN64
-	#include <windows.h>
-	#include <sysinfoapi.h>
-#endif
 #include <limits.h>
 
 typedef amdsmi_status_t (*AMDSMI_GET_PROCESSOR_HANDLES)(amdsmi_socket_handle, uint32_t*,

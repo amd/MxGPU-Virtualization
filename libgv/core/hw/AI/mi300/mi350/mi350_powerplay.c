@@ -25,7 +25,12 @@ static const uint32_t this_block = AMDGV_POWER_BLOCK;
 #define adapt_to_smu(adapt)	      ((struct smu_context *)((adapt)->pp.smu_backend))
 #define adapt_to_smu_table(adapt, type) ((((struct mi350_smu_table_context *)(adapt_to_smu(adapt)->smu_table_context))->tables[type]).table)
 
+#ifndef max
 #define max(a, b)		      ((a) > (b) ? (a) : (b))
+#endif
+#ifndef min
+#define min(a, b)		      ((a) < (b) ? (a) : (b))
+#endif
 #define MI350_SMU_MAX_DPM_LEVEL_COUNT (4)
 
 #define MI350_SMU_NUM_AID_CLK	4
@@ -1779,10 +1784,12 @@ static void mi350_pp_smu_init_gpu_xcp_metrics(struct amdgv_adapter *adapt,
 					      struct mi350_pp_drv_metrics_ext *drv_metrics_ext,
 					      struct mi350_smu_dpm_context *dpm_context,
 					      MetricsTable_t *metrics_table,
-					      uint32_t xcc_id)
+					      uint32_t logical_xcc_id)
 {
-	uint32_t vf_mask = amdgv_mcp_get_vf_mask_by_xcc(adapt, xcc_id);
-	uint32_t xcp_id = amdgv_mcp_get_xcp_by_xcc(adapt, xcc_id);
+	uint32_t vf_mask = amdgv_mcp_get_vf_mask_by_xcc(adapt, logical_xcc_id);
+	uint32_t xcp_id = amdgv_mcp_get_xcp_by_xcc(adapt, logical_xcc_id);
+	/* PMFW indexes the metrics table by physical XCD */
+	uint32_t xcc_id = GET_INST(GC, logical_xcc_id);
 	uint32_t uint_mask_bit = xcc_id;
 
 	ADD_DRV_METRICS_EXT_ENTRY(MI350_GFX_CLK_XCD, vf_mask, xcp_id,
@@ -1907,6 +1914,7 @@ static int mi350_pp_smu_init_gpu_metrics_ext(struct amdgv_adapter *adapt)
 	struct mi350_smu_dpm_context *dpm_context = (struct mi350_smu_dpm_context *)smu->smu_dpm_context;
 	uint32_t whole_gpu_vf_mask = ((adapt->num_vf - 1) | (1 << AMDGV_PF_IDX));
 	uint32_t i = 0;
+	uint32_t num_xcc, num_aid, num_hbm;
 	struct mi350_pp_drv_metrics_ext *drv_metrics_ext;
 	MetricsTable_t *metrics_table;
 
@@ -1918,15 +1926,24 @@ static int mi350_pp_smu_init_gpu_metrics_ext(struct amdgv_adapter *adapt)
 	ADD_DRV_METRICS_EXT_ENTRY(MI350_METRICS_COUNTER, whole_gpu_vf_mask, MI350_GPU_RES_ID,
 				  UINT_32, (void *)&metrics_table->AccumulationCounter);
 
-	for (i = 0; i < MI350_SMU_NUM_XCC_CLK; i++)
+	/*
+	 * The PMFW metrics table is always sized for the widest MI350 config.
+	 * Only publish the XCDs and AIDs this SKU actually has, otherwise
+	 * harvested instances show up as extra 0 MHz clocks.
+	 */
+	num_xcc = min(adapt->mcp.gfx.num_xcc, (uint32_t)MI350_SMU_NUM_XCC_CLK);
+	num_aid = min(adapt->mcp.num_aid, (uint32_t)MI350_SMU_NUM_AID_CLK);
+	num_hbm = min(num_aid * MI350_HBM_PER_AID, (uint32_t)MI350_SMU_NUM_HBM);
+
+	for (i = 0; i < num_xcc; i++)
 		mi350_pp_smu_init_gpu_xcp_metrics(adapt, drv_metrics_ext, dpm_context,
 						  metrics_table, i);
 
-	for (i = 0; i < MI350_SMU_NUM_AID_CLK; i++)
+	for (i = 0; i < num_aid; i++)
 		mi350_pp_smu_init_gpu_aid_metrics(adapt, drv_metrics_ext, dpm_context,
 						  metrics_table, i);
 
-	for (i = 0; i < MI350_SMU_NUM_HBM; i++) {
+	for (i = 0; i < num_hbm; i++) {
 		mi350_pp_smu_init_gpu_aid_hbm_metrics(adapt, drv_metrics_ext, metrics_table, i);
 	}
 
@@ -3310,7 +3327,7 @@ static int mi350_smu_reset_vf_arbiters(struct amdgv_adapter *adapt, uint32_t idx
 	int ret = -1;
 
 	/* MI350 PMFW v86.38.0 */
-	if (adapt->asic_type == CHIP_MI350X && adapt->pp.smu_fw_version >= 0x00562600) {
+	if (amdgv_asic_is_mi350(adapt->asic_type) && adapt->pp.smu_fw_version >= 0x00562600) {
 		ret = mi350_smu_send_msg_with_param(adapt,
 						    PPSMC_MSG_ResetVfArbitersByIndex,
 						    idx_vf, NULL);

@@ -386,28 +386,43 @@ TEST_F(AmdSmiNicTests, GetNicRdmaPortStatistics)
 	amdsmi_nic_stat_t *stats;
 	int ret;
 	smi_nic_status_t status;
-	int num_status_codes = 0;
+	int num_status_codes	       = 0;
+	const uint32_t rdma_port_index = 3;
+	uint32_t port_index	       = 0;
+	uint32_t ib_index	       = 0;
+	uint32_t ib_port_index	       = 0;
 
 	status		 = get_nic_api_status();
 	num_status_codes = sizeof(map_status) / sizeof(map_status[0]);
 	for (int i = SMI_NIC_STATUS_SUCCESS; i < num_status_codes; i++) {
 		set_nic_api_status((smi_nic_status_t)i);
 
-		ret = amdsmi_get_nic_rdma_port_statistics(&NIC_MOCK_HANDLE, 0, &num_stats, nullptr);
+		ret = amdsmi_get_nic_rdma_port_statistics(
+		    &NIC_MOCK_HANDLE, rdma_port_index, &num_stats, nullptr);
 		ASSERT_EQ(ret, map_status[i].amdsmi_status);
 		if (i == SMI_NIC_STATUS_SUCCESS) {
 			EXPECT_EQ(num_stats, 7);
+			get_last_nic_rdma_port_statistics_indices(
+			    &port_index, &ib_index, &ib_port_index);
+			EXPECT_EQ(port_index, rdma_port_index);
+			EXPECT_EQ(ib_index, rdma_port_index + 1);
+			EXPECT_EQ(ib_port_index, rdma_port_index + 2);
 		}
 
 		stats		      = (amdsmi_nic_stat_t *)malloc(7 * sizeof(amdsmi_nic_stat_t));
 		uint32_t actual_count = 7;
-		ret =
-		    amdsmi_get_nic_rdma_port_statistics(&NIC_MOCK_HANDLE, 0, &actual_count, stats);
+		ret		      = amdsmi_get_nic_rdma_port_statistics(
+		      &NIC_MOCK_HANDLE, rdma_port_index, &actual_count, stats);
 		ASSERT_EQ(ret, map_status[i].amdsmi_status);
 		if (i == SMI_NIC_STATUS_SUCCESS) {
 			EXPECT_EQ(actual_count, 7);
 			EXPECT_STREQ(stats[0].name, "rdma_stat1");
 			EXPECT_EQ(stats[0].value, 300);
+			get_last_nic_rdma_port_statistics_indices(
+			    &port_index, &ib_index, &ib_port_index);
+			EXPECT_EQ(port_index, rdma_port_index);
+			EXPECT_EQ(ib_index, rdma_port_index + 1);
+			EXPECT_EQ(ib_port_index, rdma_port_index + 2);
 		}
 		free(stats);
 	}

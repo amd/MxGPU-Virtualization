@@ -394,12 +394,35 @@ smi_nic_status_t smi_get_nic_port_info(smi_nic_ctx_t ctx, uint64_t device,
  * @return ::smi_nic_status_t | ::SMI_NIC_STATUS_SUCCESS on success, non-zero on fail
  *
  * @note This function aggregates all RDMA/InfiniBand devices across all ports
+ * @note Port MTUs are queried live through libibverbs, which opens and closes the
+ *       RDMA device once per RDMA port while the context lock is held
  * @note Returns SMI_NIC_STATUS_DRIVER_NOT_LOADED if no RDMA driver found on any port
  * @note Returns SMI_NIC_STATUS_NO_DATA if no RDMA devices found
  * @return ::smi_nic_status_t | ::SMI_NIC_STATUS_SUCCESS on success, non-zero on fail
  */
 smi_nic_status_t smi_get_nic_rdma_dev_info(smi_nic_ctx_t ctx, uint64_t device,
 					   smi_nic_rdma_devices_info_t* info);
+
+/**
+ * @brief Resolve a NIC-wide RDMA port index to the indices the RDMA statistics functions take.
+ *
+ * rdma_port_index is the zero-based position in the order smi_get_nic_rdma_dev_info()
+ * lists ports: all ports of rdma_dev_info[0], then all ports of rdma_dev_info[1],
+ * and so on. It is not the rdma_port number.
+ *
+ * @param ctx Context handle
+ * @param device BDF of the NIC device
+ * @param rdma_port_index NIC-wide RDMA port index (0-based)
+ * @param port_index Resolved index of the NIC port (0-based)
+ * @param ib_index Resolved index of the InfiniBand device on that NIC port (0-based)
+ * @param ib_port_index Resolved index of the port on that InfiniBand device (0-based)
+ * @return ::smi_nic_status_t | ::SMI_NIC_STATUS_SUCCESS on success.
+ *         ::SMI_NIC_STATUS_NOT_FOUND if rdma_port_index is past the last RDMA port.
+ *         When the NIC has no RDMA devices, the same status as smi_get_nic_rdma_dev_info().
+ */
+smi_nic_status_t smi_get_nic_rdma_port_location(smi_nic_ctx_t ctx, uint64_t device,
+						uint32_t rdma_port_index, uint32_t* port_index,
+						uint32_t* ib_index, uint32_t* ib_port_index);
 
 /**
  * @brief Get the count of available standard port statistics for a specified NIC port.
@@ -457,13 +480,18 @@ smi_nic_status_t smi_get_nic_vendor_statistics_list(smi_nic_ctx_t ctx, uint64_t 
  * @param device BDF of the network device.
  * @param port_index Index of the NIC port (0-based).
  * @param ib_index Index of the InfiniBand device (0-based).
- * @param rdma_port_index Index of the RDMA port (0-based).
+ * @param ib_port_index Index of the port on that InfiniBand device (0-based).
  * @param count Pointer to uint32_t to store the number of available counters.
  * @return ::smi_nic_status_t | ::SMI_NIC_STATUS_SUCCESS on success, non-zero on failure.
+ *
+ * @note The count is a hint. Counters are re-read on every call, so a following
+ *       smi_get_nic_rdma_port_statistics_list() can return a different number of
+ *       entries. Use stats->count from the list call. The list never writes more
+ *       than SMI_NIC_MAX_STATISTICS entries.
  */
 smi_nic_status_t smi_get_nic_rdma_port_statistics_count(smi_nic_ctx_t ctx, uint64_t device,
 							uint32_t port_index, uint32_t ib_index,
-							uint32_t rdma_port_index, uint32_t* count);
+							uint32_t ib_port_index, uint32_t* count);
 
 /**
  * @brief Retrieve RDMA hardware counters list for a specified InfiniBand port.
@@ -472,13 +500,14 @@ smi_nic_status_t smi_get_nic_rdma_port_statistics_count(smi_nic_ctx_t ctx, uint6
  * @param device BDF of the network device.
  * @param port_index Index of the NIC port (0-based).
  * @param ib_index Index of the InfiniBand device (0-based).
- * @param rdma_port_index Index of the RDMA port (0-based).
+ * @param ib_port_index Index of the port on that InfiniBand device (0-based).
  * @param stats Pointer to smi_nic_stat_info_t structure to be filled.
+ *              On success, stats->count is the number of entries written.
  * @return ::smi_nic_status_t | ::SMI_NIC_STATUS_SUCCESS on success, non-zero on failure.
  */
 smi_nic_status_t smi_get_nic_rdma_port_statistics_list(smi_nic_ctx_t ctx, uint64_t device,
 						       uint32_t port_index, uint32_t ib_index,
-						       uint32_t rdma_port_index,
+						       uint32_t ib_port_index,
 						       smi_nic_stat_info_t* stats);
 
 /**

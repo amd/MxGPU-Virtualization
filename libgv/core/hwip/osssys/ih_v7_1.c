@@ -7,6 +7,7 @@
 #include <amdgv_gpuiov.h>
 #include <amdgv_guard.h>
 #include <amdgv_irqmgr.h>
+#include <amdgv_nbio.h>
 #include <amdgv_oss.h>
 #include <amdgv_oss_wrapper.h>
 #include <amdgv_sched.h>
@@ -344,7 +345,7 @@ static int ih_v7_1_sw_init(struct amdgv_adapter *adapt)
 	adapt->irqmgr.hv_event_process = ih_v7_1_hv_event_process;
 
 	adapt->irqmgr.ih.use_doorbell = true;
-	adapt->irqmgr.ih.doorbell_index = AMDGV_IH_V7_DOORBELL_IH << 1;
+	adapt->irqmgr.ih.doorbell_index = AMDGV_NBIO_DOORBELL_IH << 1;
 
 	if (!adapt->opt.skip_hw_init) {
 		/* register interrupt handler */

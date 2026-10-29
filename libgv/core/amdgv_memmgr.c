@@ -17,7 +17,7 @@ static const uint32_t this_block = AMDGV_MEMORY_BLOCK;
 
 #define DEFAULT_ALIGN_SHIFT		12
 #define DEFAULT_SIZE			(0x1ULL << 36)
-#define AMDGV_MEMMGR_ALIGN(addr, align) (((addr) + (align)-1) & ~(align - 1))
+#define AMDGV_MEMMGR_ALIGN(addr, align) (((addr) + (align)-1) & ~((uint64_t)(align) - 1))
 #define DEFAULT_MEMORY_MANAGER_SIZE (256 << 20)
 
 struct amdgv_mem_reservation {
@@ -114,6 +114,8 @@ static const char *amdgv_mem_id_name(uint32_t id)
 		return "GFX_MQD";
 	case MEM_GFX_IB:
 		return "GFX_IB";
+	case MEM_GFX_CLEANER_SHADER:
+		return "GFX_CLEANER_SHADER";
 	case MEM_KIQ_RING:
 		return "MEM_KIQ_RING";
 	case MEM_KIQ_MQD:
@@ -928,6 +930,7 @@ struct amdgv_memmgr_mem *amdgv_memmgr_alloc_align(struct amdgv_memmgr *memmgr, u
 
 	switch (adapt->asic_type) {
 	case CHIP_MI350X:
+	case CHIP_MI350P:
 		if (adapt->status == AMDGV_STATUS_INVALID && !adapt->opt.skip_hw_init)
 			return amdgv_memmgr_reserve_attrs(memmgr, len, align, id);
 		break;

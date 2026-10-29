@@ -52,13 +52,8 @@ TEST_F(AmdSmiMetricsTest, GetChipletMetricsAllocFail)
 	int ret;
 	amdsmi_metric_t metrics;
 	uint32_t size = 1;
-#ifdef _WIN64
-	EXPECT_CALL(*g_system_mock, Calloc(testing::_, testing::_))
-	    .WillOnce(testing::Return(nullptr));
-#else
 	EXPECT_CALL(*g_system_mock, AlignedAlloc(testing::_, testing::_, testing::_))
 	    .WillOnce(testing::Return(nullptr));
-#endif
 	ret = amdsmi_get_gpu_metrics(&GPU_MOCK_HANDLE, &size, &metrics);
 	ASSERT_EQ(ret, AMDSMI_STATUS_OUT_OF_RESOURCES);
 }
@@ -80,12 +75,8 @@ TEST_F(AmdSmiMetricsTest, GetChipletMetrics)
 	uint32_t size = 7;
 	struct smi_metrics_table in_payload;
 	struct smi_metrics *metrics_table;
-#ifdef _WIN64
-	metrics_table = (struct smi_metrics *)calloc(1, sizeof(struct smi_metrics));
-#else
 	metrics_table = (struct smi_metrics *)amdsmi::mem_aligned_alloc(
 	    (void **)&metrics_table, 4096, sizeof(struct smi_metrics));
-#endif
 	metrics_table->num_metric = size;
 
 	for (unsigned int i = 0; i < metrics_table->num_metric; i++) {
@@ -94,13 +85,8 @@ TEST_F(AmdSmiMetricsTest, GetChipletMetrics)
 		metrics_table->metric[i].vf_mask	   = i * 3;
 		metrics_table->metric[i].res_instance	   = i * 4;
 	}
-#ifdef _WIN64
-	EXPECT_CALL(*g_system_mock, Calloc(testing::_, testing::_))
-	    .WillOnce(testing::Return(metrics_table));
-#else
 	EXPECT_CALL(*g_system_mock, AlignedAlloc(testing::_, testing::_, testing::_))
 	    .WillOnce(testing::Return(metrics_table));
-#endif
 
 	metrics = (amdsmi_metric_t *)malloc(sizeof(amdsmi_metric_t) * size);
 
@@ -120,16 +106,9 @@ TEST_F(AmdSmiMetricsTest, SysconfFailed)
 	amdsmi_metric_t metrics;
 	uint32_t size = 7;
 
-#ifndef _WIN64
-	// Mock sysconf to return -1
 	EXPECT_CALL(*g_system_mock, Sysconf(testing::_)).WillOnce(testing::Return(-1));
-#endif
 	ret = amdsmi_get_gpu_metrics(&GPU_MOCK_HANDLE, &size, &metrics);
-#ifndef _WIN64
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
-#else
-	ASSERT_NE(ret, AMDSMI_STATUS_SUCCESS);
-#endif
 }
 
 TEST_F(AmdSmiMetricsTest, GetChipletMetricsWrongSize)
@@ -140,20 +119,11 @@ TEST_F(AmdSmiMetricsTest, GetChipletMetricsWrongSize)
 	struct smi_metrics_table in_payload {};
 	struct smi_metrics *metrics_table;
 
-#ifdef _WIN64
-	metrics_table = (struct smi_metrics *)calloc(1, sizeof(struct smi_metrics));
-#else
 	metrics_table = (struct smi_metrics *)amdsmi::mem_aligned_alloc(
 	    (void **)&metrics_table, 4096, sizeof(struct smi_metrics));
-#endif
 
-#ifdef _WIN64
-	EXPECT_CALL(*g_system_mock, Calloc(testing::_, testing::_))
-	    .WillOnce(testing::Return(metrics_table));
-#else
 	EXPECT_CALL(*g_system_mock, AlignedAlloc(testing::_, testing::_, testing::_))
 	    .WillOnce(testing::Return(metrics_table));
-#endif
 
 	// Simulate the driver populating num_metric=7 during the ioctl,
 	// after the library zeroes the buffer with memset. Use Invoke so the
@@ -191,12 +161,8 @@ TEST_F(AmdSmiMetricsTest, GetChipletMetricsSizeOutOfRange)
 	struct smi_metrics_table in_payload;
 	struct smi_metrics *metrics_table;
 
-#ifdef _WIN64
-	metrics_table = (struct smi_metrics *)calloc(1, sizeof(struct smi_metrics));
-#else
 	metrics_table = (struct smi_metrics *)amdsmi::mem_aligned_alloc(
 	    (void **)&metrics_table, 4096, sizeof(struct smi_metrics));
-#endif
 	metrics_table->num_metric = 7;
 
 	for (unsigned int i = 0; i < metrics_table->num_metric; i++) {
@@ -206,13 +172,8 @@ TEST_F(AmdSmiMetricsTest, GetChipletMetricsSizeOutOfRange)
 		metrics_table->metric[i].res_instance	   = i * 4;
 	}
 
-#ifdef _WIN64
-	EXPECT_CALL(*g_system_mock, Calloc(testing::_, testing::_))
-	    .WillOnce(testing::Return(metrics_table));
-#else
 	EXPECT_CALL(*g_system_mock, AlignedAlloc(testing::_, testing::_, testing::_))
 	    .WillOnce(testing::Return(metrics_table));
-#endif
 
 	metrics = (amdsmi_metric_t *)malloc(sizeof(amdsmi_metric_t) * size);
 

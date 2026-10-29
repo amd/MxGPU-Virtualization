@@ -260,13 +260,8 @@ TEST_F(AmdSmiPartitionTest, GetAcceleratorCapsAllocFail)
 	int ret;
 	amdsmi_accelerator_partition_profile_config_t cp_caps;
 
-#ifdef _WIN64
-	EXPECT_CALL(*g_system_mock, Calloc(testing::_, testing::_))
-	    .WillOnce(testing::Return(nullptr));
-#else
 	EXPECT_CALL(*g_system_mock, AlignedAlloc(testing::_, testing::_, testing::_))
 	    .WillOnce(testing::Return(nullptr));
-#endif
 	ret = amdsmi_get_gpu_accelerator_partition_profile_config(&GPU_MOCK_HANDLE, &cp_caps);
 	ASSERT_EQ(ret, AMDSMI_STATUS_OUT_OF_RESOURCES);
 }
@@ -276,13 +271,8 @@ TEST_F(AmdSmiPartitionTest, GetAcceleratorCapsGlobalAllocFail)
 	int ret;
 	amdsmi_accelerator_partition_profile_config_global_t cp_caps_global;
 
-#ifdef _WIN64
-	EXPECT_CALL(*g_system_mock, Calloc(testing::_, testing::_))
-	    .WillOnce(testing::Return(nullptr));
-#else
 	EXPECT_CALL(*g_system_mock, AlignedAlloc(testing::_, testing::_, testing::_))
 	    .WillOnce(testing::Return(nullptr));
-#endif
 	ret = amdsmi_get_gpu_accelerator_partition_profile_config_global(&GPU_MOCK_HANDLE,
 									 &cp_caps_global);
 	ASSERT_EQ(ret, AMDSMI_STATUS_OUT_OF_RESOURCES);
@@ -352,32 +342,20 @@ TEST_F(AmdSmiPartitionTest, GetGpuAcceleratorPartitionProfileConfigSysconfFailed
 {
 	int ret;
 	amdsmi_accelerator_partition_profile_config_t config;
-#ifndef _WIN64
-	// Mock sysconf to return -1
+
 	EXPECT_CALL(*g_system_mock, Sysconf(testing::_)).WillOnce(testing::Return(-1));
-#endif
 	ret = amdsmi_get_gpu_accelerator_partition_profile_config(&GPU_MOCK_HANDLE, &config);
-#ifndef _WIN64
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
-#else
-	ASSERT_NE(ret, AMDSMI_STATUS_SUCCESS);
-#endif
 }
 
 TEST_F(AmdSmiPartitionTest, GetGpuAcceleratorPartitionProfileConfigGlobalSysconfFailed)
 {
 	int ret;
 	amdsmi_accelerator_partition_profile_config_global_t config;
-#ifndef _WIN64
-	// Mock sysconf to return -1
+
 	EXPECT_CALL(*g_system_mock, Sysconf(testing::_)).WillOnce(testing::Return(-1));
-#endif
 	ret = amdsmi_get_gpu_accelerator_partition_profile_config_global(&GPU_MOCK_HANDLE, &config);
-#ifndef _WIN64
 	ASSERT_EQ(ret, AMDSMI_STATUS_API_FAILED);
-#else
-	ASSERT_NE(ret, AMDSMI_STATUS_SUCCESS);
-#endif
 }
 
 TEST_F(AmdSmiPartitionTest, GetMemoryPartitionCaps)

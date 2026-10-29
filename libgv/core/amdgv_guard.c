@@ -346,14 +346,18 @@ int amdgv_guard_vf_init(struct amdgv_adapter *adapt, uint32_t idx_vf)
 	return 0;
 
 failed:
-	for (; i > 0; i--) {
+	for (; i >= 0; i--) {
+		event = &vf->guard->event[i];
+
 		if (event->record_array) {
 			oss_free(event->record_array);
 			event->record_array = NULL;
 		}
 
-		if (event->lock)
+		if (event->lock != OSS_INVALID_HANDLE) {
 			oss_spin_lock_fini(event->lock);
+			event->lock = OSS_INVALID_HANDLE;
+		}
 	}
 
 	oss_free(vf->guard);

@@ -7,36 +7,75 @@ myst:
 
 # Go package usage
 
+## Prerequisites
+
 Before using the AMD SMI Go bindings make sure that:
 
 * Go 1.18+ (64-bit) is installed on your system.
 * The AMD SMI C library (`libamdsmi.so`) is built and installed (e.g. in `/usr/local/lib/`), or its location is exported via `LD_LIBRARY_PATH`.
 * CGO is enabled (default when a C toolchain such as `gcc` is available).
+* The AMD SR-IOV Host driver is loaded.
+* The example runs with administrator privileges, using `sudo`. AMD SMI requires them to access the driver device.
+
+Most examples query one or more AMD GPUs. The lifecycle example can run without a GPU processor handle. Individual examples identify their additional hardware, driver, operating-system, or build requirements for optional capabilities such as NICs, SR-IOV VFs, XGMI, and node power management.
 
 The Go bindings are a thin idiomatic wrapper around the AMD SMI C library and live under `smi-lib/go/`:
 
 ```text
 smi-lib/go/
 ├── amdsmi/
-│   └── amdsmi_interface.go   # Go interface (types, constants, functions)
+│   └── amdsmi_interface.go              # Go interface (types, constants, functions)
 ├── examples/
-│   └── usage.go              # Runnable example exercising the API
-├── go.mod                    # Go module definition (module: smi-lib/go)
-└── README.md                 # Documentation
+│   ├── example_utils/                   # Shared helpers for optional APIs
+│   ├── lifecycle/
+│   │   └── amdsmi_lifecycle.go
+│   ├── discovery/
+│   │   └── amdsmi_discovery.go
+│   ├── static_identity/
+│   │   └── amdsmi_static_identity.go
+│   ├── telemetry/
+│   │   └── amdsmi_telemetry.go
+│   ├── events/
+│   │   └── amdsmi_events.go
+│   ├── firmware/
+│   │   └── amdsmi_firmware.go
+│   ├── ras_health/
+│   │   └── amdsmi_ras_health.go
+│   ├── topology/
+│   │   └── amdsmi_topology.go
+│   ├── node_power/
+│   │   └── amdsmi_node_power.go
+│   ├── partitioning/
+│   │   └── amdsmi_partitioning.go
+│   ├── power_perf_control/
+│   │   └── amdsmi_power_perf_control.go
+│   ├── sriov_vf/
+│   │   └── amdsmi_sriov_vf.go
+│   ├── reset/
+│   │   └── amdsmi_reset.go
+│   └── usage.go                         # Full-API demo exercising exported symbols
+├── go.mod                               # Go module definition (module: smi-lib/go)
+└── README.md                            # Documentation
 ```
 
-Open a terminal and navigate to the `smi-lib/go/` directory. The provided example program can be executed with:
+## Run an example
+
+Open a terminal and navigate to the `smi-lib/go/` directory. Run a topic example with:
 
 ```bash
-sudo go run examples/usage.go
+sudo go run examples/<example>/amdsmi_<example>.go
 ```
 
-Running the example requires `libamdsmi.so` to be discoverable at link/run time. If it is installed somewhere other than `/usr/local/lib`, point `LD_LIBRARY_PATH` at it, for example:
+The available processors, values, and optional capabilities depend on the host hardware, driver, firmware, and build configuration. Examples report unsupported optional APIs where possible and continue with their remaining operations.
+
+Running an example requires `libamdsmi.so` to be discoverable at link/run time. If it is installed somewhere other than `/usr/local/lib`, point `LD_LIBRARY_PATH` at it, for example:
 
 ```bash
 export LD_LIBRARY_PATH=/path/to/libamdsmi:$LD_LIBRARY_PATH
-sudo go run examples/usage.go
+sudo go run examples/<example>/amdsmi_<example>.go
 ```
+
+The comprehensive API demo remains `sudo go run examples/usage.go`.
 
 Most functions require you to specify the processor handle for which you want to retrieve information. To obtain handles, call `amdsmi.GetProcessorHandles()`, which returns the list of GPU device handles on the current machine:
 
@@ -64,6 +103,10 @@ Finally, call `amdsmi.ShutDown()` to release the SMI library resources and close
 ```go
 amdsmi.ShutDown()
 ```
+
+## Examples
+
+All examples are documented in [AMD SMI examples](amdsmi_examples.md).
 
 ## AMD SMI Go example
 

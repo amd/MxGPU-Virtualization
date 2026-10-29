@@ -1691,7 +1691,7 @@ static void gfx_v9_4_3_fb_hash_build_packet(hsa_kernel_dispatch_packet_t *pkt, u
 	pkt->private_segment_size = 0;
 	pkt->group_segment_size = lds_bytes; /* dynamic LDS */
 	pkt->kernel_object = kd_gpua;
-	pkt->kernarg_address = (void *)(unsigned long)kernarg_gpua;
+	pkt->kernarg_address = (void *)kernarg_gpua;
 	pkt->completion_signal.handle = signal_gpua;
 }
 
@@ -1738,6 +1738,7 @@ static int gfx_v9_4_3_fb_hash_dispatch_internal(struct amdgv_adapter *adapt,
 		kernarg_bytes = RAPIDHASH_KERNARG_BYTES;
 		switch (adapt->asic_type) {
 		case CHIP_MI350X:
+		case CHIP_MI350P:
 			fb_hash_shader = mi350_rapidhash_shader;
 			fb_hash_shader_size = sizeof(mi350_rapidhash_shader);
 			break;
@@ -1754,6 +1755,7 @@ static int gfx_v9_4_3_fb_hash_dispatch_internal(struct amdgv_adapter *adapt,
 		kernarg_bytes = SHA256_KERNARG_BYTES;
 		switch (adapt->asic_type) {
 		case CHIP_MI350X:
+		case CHIP_MI350P:
 			fb_hash_shader = mi350_sha256_shader;
 			fb_hash_shader_size = sizeof(mi350_sha256_shader);
 			break;

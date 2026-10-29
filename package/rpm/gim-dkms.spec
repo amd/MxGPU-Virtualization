@@ -39,9 +39,28 @@ dkms add -m gim/%{full_version} --rpm_safe_upgrade
 dkms build -m gim/%{full_version}
 dkms install -m gim/%{full_version} --force
 
+%posttrans
+# Runs after the old package's %postun on upgrade. install-smi.sh builds the
+# replacement, removes the previous userspace AMD SMI, and installs the new
+# version. An older package's DKMS POST_REMOVE runs in %preun, so this cannot
+# be done from %post.
+sh /usr/src/gim-%{full_version}/gim/dkms/install-smi.sh
+
 %preun
 # Remove all versions from DKMS registry:
 dkms remove -m gim/%{full_version} --all --rpm_safe_upgrade
+
+%postun
+# Remove userspace AMD SMI only when the package is erased ($1 == 0).
+# On upgrade, the new %posttrans replaces it through install-smi.sh.
+if [ "$1" -eq 0 ]; then
+    if [ -f /var/lib/gim/smi-manifest ]; then
+        xargs -r rm -f < /var/lib/gim/smi-manifest
+        rm -f /var/lib/gim/smi-manifest
+        rmdir /var/lib/gim 2>/dev/null || true
+    fi
+    ldconfig || true
+fi
 
 %files
 %defattr(-,root,root)

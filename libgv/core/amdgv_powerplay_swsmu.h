@@ -25,6 +25,7 @@ typedef enum {
 	SMU_CAP_BOARD_METRICS,
 	SMU_CAP_TEMP_INST_METRICS,
 	SMU_CAP_LIVE_MIGRATION,
+	SMU_CAP_NPM,
 	SMU_CAP_ALL,
 } SMU_CAPS_LIST_e;
 
@@ -90,7 +91,9 @@ struct smu_table_context {
 
 struct smu_context {
 	uint64_t features;
+	uint64_t features_hi; /* feature bits 64-127 */
 	uint64_t supported_caps;
+	uint32_t fast_ppt_limit;
 	void    *smu_table_context;
 	void    *smu_dpm_context;
 	void    *smu_overdrive_context;

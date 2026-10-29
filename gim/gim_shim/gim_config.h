@@ -171,11 +171,6 @@
 #define THERMAL_THROTTLE_RATE_LIMIT__DEFAULT  60000000 // Rate-limit thermal throttling events to every 60 seconds
 #define THERMAL_THROTTLE_RATE_LIMIT__MAX      60000000
 
-#define VF_HBM_MGMT_MODE__KEY                "vf_hbm_mgmt_mode"
-#define VF_HBM_MGMT_MODE__START              AMDGV_VF_HBM_MGMT_MODE_DRIVER_MANAGED
-#define VF_HBM_MGMT_MODE__DEFAULT            AMDGV_VF_HBM_MGMT_MODE_DRIVER_MANAGED
-#define VF_HBM_MGMT_MODE__MAX                AMDGV_VF_HBM_MGMT_MODE_DISABLED
-
 #define ENABLE_UNIRAS__KEY "enable_uniras"
 #define ENABLE_UNIRAS__START       0
 #define ENABLE_UNIRAS__DEFAULT     0
@@ -225,7 +220,6 @@ enum gim_conf_opt_idx {
 	CONF_OPT_SENTINEL_MODE,
 	CONF_OPT_ENABLE_LIVE_MIGRATION,
 	CONF_OPT_THERMAL_THROTTLE_RATE_LIMIT,
-	CONF_OPT_VF_HBM_MGMT_MODE,
 	CONF_OPT_ENABLE_UNIRAS,
 	CONF_OPT_SHADER_HASH_MODE,
 	CONF_OPT_EMU_MODE,
@@ -248,7 +242,6 @@ uint32_t gim_conf_get_perf_mon_enable_opt(uint32_t id);
 uint32_t gim_conf_get_hangdump_timeout_opt(uint32_t id);
 #endif
 uint32_t gim_conf_get_fb_sharing_mode_opt(uint32_t id);
-uint32_t gim_conf_get_vf_hbm_mgmt_mode_opt(uint32_t id);
 uint32_t gim_conf_get_accelerator_partition_mode_opt(uint32_t id);
 uint32_t gim_conf_get_memory_partition_mode_opt(uint32_t id);
 uint32_t gim_conf_get_cc_mode_opt(uint32_t id);

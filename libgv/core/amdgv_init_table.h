@@ -21,6 +21,7 @@ extern struct amdgv_init_func gpuiov_v9_0_func;
 extern struct amdgv_init_func gpuiov_v9_0_sched_early_func;
 extern struct amdgv_init_func gpuiov_v9_0_sched_late_func;
 extern struct amdgv_init_func nbio_v6_3_2_func;
+extern struct amdgv_init_func nbio_v6_3_2_doorbell_func;
 extern struct amdgv_init_func nbio_v6_3_2_mcp_func;
 extern struct amdgv_init_func nbio_v6_3_2_mailbox_func;
 extern struct amdgv_init_func sdma_v7_1_func;
@@ -36,6 +37,7 @@ extern struct amdgv_init_func amdgv_ual_func;
 extern struct amdgv_init_func amdgv_ras_mgr_func;
 extern struct amdgv_init_func amdgv_ras_mgr_early_func;
 #endif
+extern struct amdgv_init_func mmsch_v10_0_func;
 
 struct amdgv_init_func *gc_12_1_init_table[] = {
 	&nbio_v6_3_2_mcp_func,
@@ -53,6 +55,8 @@ struct amdgv_init_func *gc_12_1_init_table[] = {
 #endif
 	&gfxhub_v12_1_0_func,
 	&gfx_v12_1_clockgating_func,
+	&mmsch_v10_0_func,
+	&nbio_v6_3_2_doorbell_func,
 	&gpuiov_v9_0_func,
 	&ih_v7_1_func,
 	&nbio_v6_3_2_mailbox_func,

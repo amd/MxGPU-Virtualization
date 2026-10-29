@@ -327,7 +327,7 @@ static int amdgv_ras_sys_gen_seqno(struct ras_core_context *ras_core,
 }
 
 static int amdgv_ras_sys_check_gpu_status(struct ras_core_context *ras_core,
-			enum ras_gpu_status *status)
+			uint32_t *status)
 {
 	struct amdgv_adapter *adapt = (struct amdgv_adapter *)ras_core->dev;
 	struct amdgv_hive_info *hive = amdgv_get_xgmi_hive(adapt);

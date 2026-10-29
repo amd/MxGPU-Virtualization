@@ -301,6 +301,7 @@ void SmiCliArgumentFactory::initialize_metric_arguments()
 	arguments_.emplace("energy", SmiCliArgument("-E", "--energy", "Amount of energy consumed"));
 	arguments_.emplace("throttle",
 			   SmiCliArgument("-th", "--throttle", "Displays throttle accumulators"));
+	arguments_.emplace("fan", SmiCliArgument("-f", "--fan", "Current fan speed"));
 	arguments_.emplace(
 	    "port",
 	    SmiCliArgument("-po", "--port",

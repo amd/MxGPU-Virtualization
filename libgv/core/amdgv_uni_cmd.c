@@ -81,7 +81,7 @@ static enum amdgv_smi_ras_block amdgv_block_to_ta_block(enum amdgv_ras_block blo
 	}
 }
 
-static enum amdgv_smi_ras_error_type amdgv_ta_error_type_to_ras_error_type(enum amdgv_smi_ras_error_type err_type)
+static enum amdgv_ras_error_type amdgv_ta_error_type_to_ras_error_type(enum amdgv_smi_ras_error_type err_type)
 {
 	switch (err_type) {
 	case AMDGV_SMI_RAS_ERROR__NONE:
@@ -104,7 +104,7 @@ static void __amdgv_update_bad_page_info(struct amdgv_cmd_bad_page_record *amdgv
 {
 	amdgv_record->retired_page = record->retired_page;
 	amdgv_record->ts = record->ts;
-	amdgv_record->err_type = amdgv_ta_error_type_to_ras_error_type(record->err_type);
+	amdgv_record->err_type = (enum amdgv_ras_eeprom_err_type)amdgv_ta_error_type_to_ras_error_type((enum amdgv_smi_ras_error_type)record->err_type);
 	amdgv_record->mem_channel = record->mem_channel;
 	amdgv_record->mcumc_id = record->mcumc_id;
 	amdgv_record->address = record->address;
@@ -453,7 +453,7 @@ static uint8_t amdgv_get_block_ecc_info(amdgv_dev_t adev, struct amdgv_uni_cmd *
 			cmd->version != AMDGV_CMD_VERSION_V1 || !adev)
 		return AMDGV_CMD__ERROR_INVALID_INPUT;
 
-	query_info.head.block = input_data->block_id;
+	query_info.head.block = (enum amdgv_smi_ras_block)input_data->block_id;
 	query_info.head.sub_block_index = input_data->subblock_id;
 
 	if (amdgv_gpumon_get_ecc_info(adev, &query_info))
@@ -559,10 +559,10 @@ static enum amdgv_cmd_asic_type amd_asic_type_to_amdgv_cmd_asic_type(enum amd_as
 	case CHIP_MI350X:
 		if (dev_id == 0x75A3)
 			return AMDGV_CMD_CHIP_MI355X;
-		else if (dev_id == 0x75A8)
-			return AMDGV_CMD_CHIP_MI350P;
 		else
 			return AMDGV_CMD_CHIP_MI350X;
+	case CHIP_MI350P:
+		return AMDGV_CMD_CHIP_MI350P;
 	case CHIP_LAST:
 		return AMDGV_CMD_CHIP_LAST;
 	default:
@@ -752,7 +752,7 @@ static uint8_t amdgv_cmd_ual_get_config(amdgv_dev_t adev, struct amdgv_uni_cmd *
 	if (ret)
 		return AMDGV_CMD__ERROR_GENERIC;
 
-	output_data->link_type = config.link_type;
+	output_data->link_type = (enum amdgv_cmd_ual_link_type)config.link_type;
 	output_data->accelerator_id = config.accelerator_id;
 	oss_memcpy(output_data->ppod_id, config.ppod_id, sizeof(output_data->ppod_id));
 	output_data->ppod_size = config.ppod_size;
@@ -766,8 +766,8 @@ static uint8_t amdgv_cmd_ual_get_config(amdgv_dev_t adev, struct amdgv_uni_cmd *
 	oss_memcpy(output_data->vpod_active_accelerators,
 		config.vpod_active_accelerators,
 		sizeof(output_data->vpod_active_accelerators));
-	output_data->addr_mode = config.addr_mode;
-	output_data->accel_state = config.accel_state;
+	output_data->addr_mode = (enum amdgv_cmd_ual_npa_address_mode)config.addr_mode;
+	output_data->accel_state = (enum amdgv_cmd_ual_accelerator_vpod_state)config.accel_state;
 
 	cmd->output_size = sizeof(struct amdgv_cmd_get_config_rsp_ual_v1);
 
@@ -811,7 +811,7 @@ static uint8_t amdgv_cmd_ual_set_vpod_config(amdgv_dev_t adev, struct amdgv_uni_
 			cmd->version != AMDGV_CMD_VERSION_V1 || !adev)
 		return AMDGV_CMD__ERROR_INVALID_INPUT;
 
-	config.addr_mode = input_data->addr_mode;
+	config.addr_mode = (enum amdgv_gpumon_ual_npa_address_mode)input_data->addr_mode;
 	config.vpod_id = input_data->vpod_id;
 	config.vpod_size = input_data->vpod_size;
 	oss_memcpy(config.vpod_active_accelerators,

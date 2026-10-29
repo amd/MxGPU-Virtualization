@@ -503,6 +503,11 @@ int world_switch_bulk_goto_state_manual(struct amdgv_adapter *adapt, uint32_t ta
 					  uint32_t hw_sched_mask,
 					  uint32_t target_state);
 
+int world_switch_get_next_state(struct amdgv_adapter *adapt, uint32_t hw_sched_id,
+					uint32_t target_vf, uint32_t target_state,
+					uint32_t cur_state, uint32_t cur_vf,
+					uint32_t *next_state, uint32_t *next_vf);
+
 int amdgv_gpuiov_update_vf_busy_status(struct amdgv_adapter *adapt);
 
 void amdgv_update_histogram(struct amdgv_adapter *adapt, uint32_t idx_vf,

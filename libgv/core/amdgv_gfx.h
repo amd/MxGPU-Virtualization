@@ -517,6 +517,7 @@ struct amdgv_gfx_funcs {
 	bool (*is_gfx_off)(struct amdgv_adapter *adapt);
 	uint32_t (*get_num_xcc_in_xcp)(struct amdgv_adapter *adapt);
 	int (*set_clockgating_state)(struct amdgv_adapter *adapt, bool enable);
+	int (*run_cleaner_shader)(struct amdgv_adapter *adapt, uint32_t xcp_id);
 };
 
 struct amdgv_mec {
@@ -882,6 +883,10 @@ struct amdgv_gfx {
 	uint32_t			num_compute_rings;
 	uint32_t			compute_paging_queue_id;
 	struct amdgv_ring	compute_ring[AMDGV_MAX_GC_INSTANCES * AMDGV_MAX_COMPUTE_RINGS];
+	struct amdgv_memmgr_mem	*cleaner_shader_obj;
+	uint64_t			cleaner_shader_gpu_addr;
+	void				*cleaner_shader_cpu_ptr;
+	uint32_t			cleaner_shader_size;
 
 	/* gfx status */
 	uint32_t			gfx_current_status;

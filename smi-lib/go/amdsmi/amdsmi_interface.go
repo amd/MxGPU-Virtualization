@@ -81,10 +81,10 @@ type ClkType int32                          // ClkType identifies a clock domain
 type TemperatureType int32                  // TemperatureType selects which sensor to read (amdsmi_temperature_type_t)
 type TemperatureMetric int32                // TemperatureMetric selects which temperature statistic to read (amdsmi_temperature_metric_t)
 // Values are in Celsius.
-type PowerCapType int32   // PowerCapType identifies a power-cap sensor / PPT rail (amdsmi_power_cap_type_t)
-type NpmStatus int32      // NpmStatus reports whether node power management is enabled (amdsmi_npm_status_t)
+type PowerCapType int32    // PowerCapType identifies a power-cap sensor / PPT rail (amdsmi_power_cap_type_t)
+type NpmStatus int32       // NpmStatus reports whether node power management is enabled (amdsmi_npm_status_t)
 type ComputeTrayType int32 // ComputeTrayType identifies the compute tray form factor (amdsmi_compute_tray_type_t)
-type PtlDataFormat uint32 // PtlDataFormat selects a PTL peak-performance data format (amdsmi_ptl_data_format_t)
+type PtlDataFormat uint32  // PtlDataFormat selects a PTL peak-performance data format (amdsmi_ptl_data_format_t)
 type AffinityScope int32
 type NicFwVersionType int32   // amdsmi_nic_fw_version_type_t
 type GuestFwLoadStatus uint16 //amdsmi_guest_fw_load_status_t
@@ -145,7 +145,7 @@ const (
 	AMDSMI_GPU_UUID_SIZE                  = 38
 	AMDSMI_MAX_PROFILE_COUNT              = 16
 	AMDSMI_MAX_ERR_RECORDS                = 10
-	AMDSMI_DFC_FW_NUMBER_OF_ENTRIES       = 9
+	AMDSMI_DFC_FW_NUMBER_OF_ENTRIES       = 64
 	AMDSMI_MAX_WHITE_LIST_ELEMENTS        = 16
 	AMDSMI_MAX_BLACK_LIST_ELEMENTS        = 64
 	AMDSMI_MAX_UUID_ELEMENTS              = 16
@@ -1542,6 +1542,8 @@ type AsicInfo struct {
 	SubsystemID           uint32
 	Flags                 uint64
 	PhysicalAccId         uint32
+	ChipRevId             uint32
+	ExternalRevId         uint32
 }
 
 // GetGpuAsicInfo returns ASIC information for the given processor.
@@ -1565,6 +1567,8 @@ func GetGpuAsicInfo(ph ProcessorHandle) (AsicInfo, error) {
 		SubsystemID:           uint32(cInfo.subsystem_id),
 		Flags:                 uint64(cInfo.flags),
 		PhysicalAccId:         uint32(cInfo.physical_acc_id),
+		ChipRevId:             uint32(cInfo.chip_rev_id),
+		ExternalRevId:         uint32(cInfo.external_rev_id),
 	}, nil
 }
 
@@ -2136,7 +2140,8 @@ const (
 	AMDSMI_METRIC_CATEGORY_STATIC_FREQUENCY    MetricCategory = 13
 	AMDSMI_METRIC_CATEGORY_STATIC_TEMPERATURE  MetricCategory = 14
 	AMDSMI_METRIC_CATEGORY_STATIC_THROTTLE     MetricCategory = 15
-	AMDSMI_METRIC_CATEGORY_UNKNOWN             MetricCategory = 16
+	AMDSMI_METRIC_CATEGORY_STATIC_POWER        MetricCategory = 16
+	AMDSMI_METRIC_CATEGORY_UNKNOWN             MetricCategory = 17
 )
 
 func (c MetricCategory) String() string {
@@ -2173,6 +2178,8 @@ func (c MetricCategory) String() string {
 		return "STATIC_TEMPERATURE"
 	case AMDSMI_METRIC_CATEGORY_STATIC_THROTTLE:
 		return "STATIC_THROTTLE"
+	case AMDSMI_METRIC_CATEGORY_STATIC_POWER:
+		return "STATIC_POWER"
 	case AMDSMI_METRIC_CATEGORY_UNKNOWN:
 		return "UNKNOWN"
 	default:
@@ -3667,13 +3674,49 @@ type CperEntry struct {
 	Bytes  []byte
 }
 
-// Default buffer size used by GetGpuCperEntries when the caller passes 0,
-// matching the Python wrapper. The per-call entry cap is hard-coded to 20
-// (cperEntriesPerCall) to mirror the Python signature exactly.
+// Default buffer size used by GetGpuCperEntries and GetFabricCperEntries when
+// the caller passes 0, matching the Python wrapper. The per-call entry cap is
+// hard-coded to 20 (cperEntriesPerCall) to mirror the Python signature exactly.
 const (
 	defaultCperBufferSize = 4 * 1024 * 1024 // 4 MiB
 	cperEntriesPerCall    = 20
 )
+
+// cperEntriesCFunc is the CGO signature shared by amdsmi_get_gpu_cper_entries
+// and amdsmi_get_fabric_cper_entries.
+type cperEntriesCFunc func(
+	ph C.amdsmi_processor_handle,
+	severityMask C.uint32_t,
+	cperData *C.char,
+	bufSize *C.uint64_t,
+	cperHdrs **C.amdsmi_cper_hdr_t,
+	entryCount *C.uint64_t,
+	cursor *C.uint64_t,
+) C.amdsmi_status_t
+
+func gpuCperEntriesC(
+	ph C.amdsmi_processor_handle,
+	severityMask C.uint32_t,
+	cperData *C.char,
+	bufSize *C.uint64_t,
+	cperHdrs **C.amdsmi_cper_hdr_t,
+	entryCount *C.uint64_t,
+	cursor *C.uint64_t,
+) C.amdsmi_status_t {
+	return C.amdsmi_get_gpu_cper_entries(ph, severityMask, cperData, bufSize, cperHdrs, entryCount, cursor)
+}
+
+func fabricCperEntriesC(
+	ph C.amdsmi_processor_handle,
+	severityMask C.uint32_t,
+	cperData *C.char,
+	bufSize *C.uint64_t,
+	cperHdrs **C.amdsmi_cper_hdr_t,
+	entryCount *C.uint64_t,
+	cursor *C.uint64_t,
+) C.amdsmi_status_t {
+	return C.amdsmi_get_fabric_cper_entries(ph, severityMask, cperData, bufSize, cperHdrs, entryCount, cursor)
+}
 
 // GetGpuCperEntries calls amdsmi_get_gpu_cper_entries and returns the parsed
 // entries together with the next cursor (pass it back to retrieve more data).
@@ -3686,6 +3729,24 @@ const (
 //
 // See interface/amdsmi.h:amdsmi_get_gpu_cper_entries for the full contract.
 func GetGpuCperEntries(ph ProcessorHandle, severityMask uint32, cursor uint64, bufferSize uint64) ([]CperEntry, uint64, error) {
+	return getCperEntries(ph, severityMask, cursor, bufferSize, gpuCperEntriesC)
+}
+
+// GetFabricCperEntries calls amdsmi_get_fabric_cper_entries and returns CPER
+// records for UALoE fabric (netport link) events, together with the next
+// cursor (pass it back to retrieve more data).
+//
+// The CPER format, buffer conventions, and MORE_DATA paging match
+// GetGpuCperEntries, so callers can handle GPU and fabric CPERs with the
+// same code path. Pass 0 for bufferSize to use the Python default (4 MiB).
+// Up to 20 entries are returned per call.
+//
+// See interface/amdsmi.h:amdsmi_get_fabric_cper_entries for the full contract.
+func GetFabricCperEntries(ph ProcessorHandle, severityMask uint32, cursor uint64, bufferSize uint64) ([]CperEntry, uint64, error) {
+	return getCperEntries(ph, severityMask, cursor, bufferSize, fabricCperEntriesC)
+}
+
+func getCperEntries(ph ProcessorHandle, severityMask uint32, cursor uint64, bufferSize uint64, cperCFuncCall cperEntriesCFunc) ([]CperEntry, uint64, error) {
 	if bufferSize == 0 {
 		bufferSize = defaultCperBufferSize
 	}
@@ -3702,7 +3763,7 @@ func GetGpuCperEntries(ph ProcessorHandle, severityMask uint32, cursor uint64, b
 
 	cHdrs := make([]*C.amdsmi_cper_hdr_t, cperEntriesPerCall)
 
-	ret := C.amdsmi_get_gpu_cper_entries(
+	ret := cperCFuncCall(
 		ph.cPtr(),
 		C.uint32_t(severityMask),
 		(*C.char)(cBuf),
@@ -6144,50 +6205,50 @@ func GetTdiState(vh VfHandle) (TdiState, error) {
 	return TdiState(cState), nil
 }
 
-// CcMode reports whether Confidential Compute is enabled on a GPU
-// (amdsmi_cc_mode_t).
-type CcMode uint32
+// GpuCcMode reports whether Confidential Compute is enabled on a GPU
+// (amdsmi_gpu_cc_mode_t).
+type GpuCcMode uint32
 
 const (
-	AMDSMI_CC_MODE_OFF CcMode = 0
-	AMDSMI_CC_MODE_ON  CcMode = 1
-	AMDSMI_CC_MODE_DEV CcMode = 2
+	AMDSMI_GPU_CC_MODE_OFF GpuCcMode = 0
+	AMDSMI_GPU_CC_MODE_ON  GpuCcMode = 1
+	AMDSMI_GPU_CC_MODE_DEV GpuCcMode = 2
 )
 
-func (m CcMode) String() string {
+func (m GpuCcMode) String() string {
 	switch m {
-	case AMDSMI_CC_MODE_OFF:
+	case AMDSMI_GPU_CC_MODE_OFF:
 		return "OFF"
-	case AMDSMI_CC_MODE_ON:
+	case AMDSMI_GPU_CC_MODE_ON:
 		return "ON"
-	case AMDSMI_CC_MODE_DEV:
+	case AMDSMI_GPU_CC_MODE_DEV:
 		return "DEV"
 	default:
 		return fmt.Sprintf("UNKNOWN(%d)", uint32(m))
 	}
 }
 
-// GetCcMode returns the Confidential Compute mode for the given processor
-// (amdsmi_get_cc_mode).
-func GetCcMode(ph ProcessorHandle) (CcMode, error) {
-	var cMode C.amdsmi_cc_mode_t
-	ret := C.amdsmi_get_cc_mode(ph.cPtr(), &cMode)
+// GetGpuCcMode returns the Confidential Compute mode for the given processor
+// (amdsmi_get_gpu_cc_mode).
+func GetGpuCcMode(ph ProcessorHandle) (GpuCcMode, error) {
+	var cMode C.amdsmi_gpu_cc_mode_t
+	ret := C.amdsmi_get_gpu_cc_mode(ph.cPtr(), &cMode)
 	if err := checkStatus(Status(ret)); err != nil {
-		return AMDSMI_CC_MODE_OFF, err
+		return AMDSMI_GPU_CC_MODE_OFF, err
 	}
-	return CcMode(cMode), nil
+	return GpuCcMode(cMode), nil
 }
 
-// SetCcMode sets the Confidential Compute mode on the given processor
-// (amdsmi_set_cc_mode).
-func SetCcMode(ph ProcessorHandle, mode CcMode) error {
-	ret := C.amdsmi_set_cc_mode(ph.cPtr(), C.amdsmi_cc_mode_t(mode))
+// SetGpuCcMode sets the Confidential Compute mode on the given processor
+// (amdsmi_set_gpu_cc_mode).
+func SetGpuCcMode(ph ProcessorHandle, mode GpuCcMode) error {
+	ret := C.amdsmi_set_gpu_cc_mode(ph.cPtr(), C.amdsmi_gpu_cc_mode_t(mode))
 	return checkStatus(Status(ret))
 }
 
 // VfHbmInfo holds per-VF HBM information (amdsmi_vf_hbm_info_t).
 //
-// NumaID is 0xFFFFFFFF when no NUMA association exists (e.g. DAX mode).
+// NumaID is 0xFFFFFFFF when no NUMA association exists.
 type VfHbmInfo struct {
 	PhyAddr uint64
 	PhySize uint64
@@ -6215,9 +6276,9 @@ func GetVfHbmInfo(vh VfHandle) (VfHbmInfo, error) {
 type FabricType uint32
 
 const (
-	AMDSMI_FABRIC_TYPE_UALOE    FabricType = 0
-	AMDSMI_FABRIC_TYPE_UALINK   FabricType = 1
-	AMDSMI_FABRIC_TYPE_UNKNOWN  FabricType = 2
+	AMDSMI_FABRIC_TYPE_UALOE   FabricType = 0
+	AMDSMI_FABRIC_TYPE_UALINK  FabricType = 1
+	AMDSMI_FABRIC_TYPE_UNKNOWN FabricType = 2
 )
 
 func (t FabricType) String() string {

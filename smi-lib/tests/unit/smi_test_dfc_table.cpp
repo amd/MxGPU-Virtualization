@@ -83,30 +83,31 @@ TEST_F(AmdSmiDfcTable, IoctlFailed)
 TEST_F(AmdSmiDfcTable, GetDfcFwTable)
 {
 	int ret;
-	amdsmi_dfc_fw_t mocked_resp;
-	struct smi_device_info in_payload;
+	struct smi_dfc_fw_info in_payload;
 	amdsmi_dfc_fw_t dfc_fw_table = {};
 
-	mocked_resp.header.dfc_fw_version	 = 65537;
-	mocked_resp.header.dfc_fw_total_entries	 = 2;
-	mocked_resp.header.dfc_gart_wr_guest_min = 3;
-	mocked_resp.header.dfc_gart_wr_guest_max = 4;
-
-	for (unsigned int i = 0; i < mocked_resp.header.dfc_fw_total_entries; i++) {
-		mocked_resp.data[i].dfc_fw_type		 = i + 2;
-		mocked_resp.data[i].verification_enabled = 1;
-		mocked_resp.data[i].customer_ordinal	 = 2;
-		mocked_resp.data[i].white_list[0].latest = 10000;
-		mocked_resp.data[i].white_list[0].oldest = 10001;
-		mocked_resp.data[i].black_list[0]	 = 10002;
-	}
 	WhenCalling(std::bind(amdsmi_get_dfc_fw_table, &GPU_MOCK_HANDLE, &dfc_fw_table));
 	ExpectCommand(SMI_CMD_CODE_GET_DFC_FW_TABLE);
 	SaveInputPayloadIn(&in_payload);
-	PlantMockOutput(&mocked_resp);
 	ret = performCall();
 	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
 	ASSERT_TRUE(amdsmi::equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
-	ASSERT_TRUE(equal_dfc_table(mocked_resp, dfc_fw_table));
+	ASSERT_EQ(in_payload.size, (uint32_t)AMDSMI_DFC_FW_NUMBER_OF_ENTRIES);
+	ASSERT_NE(in_payload.dfc_fw, nullptr);
+}
+
+TEST_F(AmdSmiDfcTable, GetDfcFwTableVerifyDescriptor)
+{
+	int ret;
+	struct smi_dfc_fw_info in_payload;
+	amdsmi_dfc_fw_t dfc_fw_table = {};
+
+	WhenCalling(std::bind(amdsmi_get_dfc_fw_table, &GPU_MOCK_HANDLE, &dfc_fw_table));
+	ExpectCommand(SMI_CMD_CODE_GET_DFC_FW_TABLE);
+	SaveInputPayloadIn(&in_payload);
+	ret = performCall();
+	ASSERT_EQ(ret, AMDSMI_STATUS_SUCCESS);
+	ASSERT_TRUE(amdsmi::equal_handles(in_payload.dev_id, GPU_MOCK_HANDLE));
+	ASSERT_EQ(in_payload.size, (uint32_t)AMDSMI_DFC_FW_NUMBER_OF_ENTRIES);
 }
 #endif

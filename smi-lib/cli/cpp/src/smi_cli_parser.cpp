@@ -5,6 +5,7 @@
 
 #include "smi_cli_parser.h"
 #include "smi_cli_api_base.h"
+#include "smi_cli_build_config.h"
 #include "smi_cli_exception.h"
 #include "smi_cli_platform.h"
 #include "smi_cli_helpers.h"
@@ -45,6 +46,20 @@ static std::vector<uint32_t> parse_comma_separated_uints(const std::string& valu
 	return result;
 }
 
+static bool matches_flag(const std::string& option, const std::string& long_name,
+			 const std::string& short_name, size_t& name_len)
+{
+	if (option.compare(0, long_name.size(), long_name) == 0) {
+		name_len = long_name.size();
+		return true;
+	}
+	if (option.compare(0, short_name.size(), short_name) == 0) {
+		name_len = short_name.size();
+		return true;
+	}
+	return false;
+}
+
 AmdSmiParser::AmdSmiParser()
 {
 	int ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_device_count(
@@ -52,18 +67,18 @@ AmdSmiParser::AmdSmiParser()
 	if (ret != 0) {
 		throw SmiToolSMILIBErrorException(ret);
 	}
-#if defined(__linux__) && defined(AMD_SMI_NIC_SUPPORT)
-	ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_device_count(
-	    nic_count, static_cast<int>(DeviceType::NIC));
-	if (ret != 0) {
-		nic_count = 0;
+	if constexpr (smi::config::is_nic_enabled) {
+		ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_device_count(
+		    nic_count, static_cast<int>(DeviceType::NIC));
+		if (ret != 0) {
+			nic_count = 0;
+		}
+		ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_device_count(
+		    brcm_nic_count, static_cast<int>(DeviceType::BRCM_NIC));
+		if (ret != 0) {
+			brcm_nic_count = 0;
+		}
 	}
-	ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_device_count(
-	    brcm_nic_count, static_cast<int>(DeviceType::BRCM_NIC));
-	if (ret != 0) {
-		brcm_nic_count = 0;
-	}
-#endif
 }
 
 void AmdSmiParser::parseAndFillVector(const std::string& input,
@@ -269,71 +284,75 @@ bool AmdSmiParser::is_option_argument(std::string option, Arguments& parsed_argu
 		return true;
 	}
 
-	if (option.substr(0, 12) == "--watch_time") {
+	size_t name_len = 0;
+	if (matches_flag(option, "--watch_time", "-W", name_len)) {
 		if ((parsed_arguments.command != "metric") &&
 		    (parsed_arguments.command != "process") &&
 		    (parsed_arguments.command != "monitor")) {
-			throw SmiToolInvalidParameterException(option.substr(0, 12));
+			throw SmiToolInvalidParameterException(option.substr(0, name_len));
 		}
 		if (parsed_arguments.iterations > -1) {
-			throw SmiToolInvalidParameterException(option.substr(0, 13));
+			throw SmiToolInvalidParameterException(option.substr(0, name_len));
 		}
 		if (parsed_arguments.watch == -1) {
-			throw SmiToolInvalidParameterException(option.substr(0, 12));
+			throw SmiToolInvalidParameterException(option.substr(0, name_len));
 		}
-		does_option_have_value(option, 12);
-		if (is_negative_number(option.substr(13))) {
-			throw SmiToolInvalidParameterValueException(option.substr(13));
+		does_option_have_value(option, static_cast<uint32_t>(name_len));
+		const std::string value = option.substr(name_len + 1);
+		if (is_negative_number(value)) {
+			throw SmiToolInvalidParameterValueException(value);
 		}
 		try {
-			parsed_arguments.watch_time = std::stoi(option.substr(13));
+			parsed_arguments.watch_time = std::stoi(value);
 		} catch (...) {
-			throw SmiToolInvalidParameterValueException(option.substr(13));
+			throw SmiToolInvalidParameterValueException(value);
 		}
 
 		return true;
 	}
-	if (option.substr(0, 7) == "--watch") {
+	if (matches_flag(option, "--watch", "-w", name_len)) {
 		if ((parsed_arguments.command != "metric") &&
 		    (parsed_arguments.command != "process") &&
 		    (parsed_arguments.command != "monitor")) {
-			throw SmiToolInvalidParameterException(option.substr(0, 7));
+			throw SmiToolInvalidParameterException(option.substr(0, name_len));
 		}
 		if (parsed_arguments.devices_type == DevicesType::NIC_TYPE) {
-			throw SmiToolInvalidParameterException("--watch");
+			throw SmiToolInvalidParameterException(option.substr(0, name_len));
 		}
-		does_option_have_value(option, 7);
-		if (is_negative_number(option.substr(8))) {
-			throw SmiToolInvalidParameterValueException(option.substr(8));
+		does_option_have_value(option, static_cast<uint32_t>(name_len));
+		const std::string value = option.substr(name_len + 1);
+		if (is_negative_number(value)) {
+			throw SmiToolInvalidParameterValueException(value);
 		}
 		try {
-			parsed_arguments.watch = std::stoi(option.substr(8));
+			parsed_arguments.watch = std::stoi(value);
 		} catch (...) {
-			throw SmiToolInvalidParameterValueException(option.substr(8));
+			throw SmiToolInvalidParameterValueException(value);
 		}
 
 		return true;
 	}
-	if (option.substr(0, 12) == "--iterations") {
+	if (matches_flag(option, "--iterations", "-i", name_len)) {
 		if ((parsed_arguments.command != "metric") &&
 		    (parsed_arguments.command != "process") &&
 		    (parsed_arguments.command != "monitor")) {
-			throw SmiToolInvalidParameterException(option.substr(0, 12));
+			throw SmiToolInvalidParameterException(option.substr(0, name_len));
 		}
 		if (parsed_arguments.watch_time > -1) {
-			throw SmiToolInvalidParameterException(option.substr(0, 13));
+			throw SmiToolInvalidParameterException(option.substr(0, name_len));
 		}
 		if (parsed_arguments.watch == -1) {
-			throw SmiToolInvalidParameterException(option.substr(0, 12));
+			throw SmiToolInvalidParameterException(option.substr(0, name_len));
 		}
-		does_option_have_value(option, 12);
-		if (is_negative_number(option.substr(13))) {
-			throw SmiToolInvalidParameterValueException(option.substr(13));
+		does_option_have_value(option, static_cast<uint32_t>(name_len));
+		const std::string value = option.substr(name_len + 1);
+		if (is_negative_number(value)) {
+			throw SmiToolInvalidParameterValueException(value);
 		}
 		try {
-			parsed_arguments.iterations = std::stoi(option.substr(13));
+			parsed_arguments.iterations = std::stoi(value);
 		} catch (...) {
-			throw SmiToolInvalidParameterValueException(option.substr(13));
+			throw SmiToolInvalidParameterValueException(value);
 		}
 		return true;
 	}
@@ -617,7 +636,7 @@ bool AmdSmiParser::is_option_argument(std::string option, Arguments& parsed_argu
 			parsed_arguments.severities.insert(parsed_arguments.severities.begin(),
 							   severities_vector.begin(),
 							   severities_vector.end());
-		} catch (const SmiToolInvalidParameterValueException& ex) {
+		} catch (const SmiToolInvalidParameterValueException&) {
 			throw SmiToolInvalidParameterValueException(option.substr(11));
 		} catch (...) {
 			throw SmiToolMissingParameterValueException(option.substr(0, 10));
@@ -959,19 +978,20 @@ void AmdSmiParser::add_all_gpus(Arguments& parsed_arguments)
 
 void AmdSmiParser::add_all_nics(Arguments& parsed_arguments)
 {
-#if defined(__linux__) && defined(AMD_SMI_NIC_SUPPORT)
-	int ret = 0;
-	std::vector<std::pair<DeviceType, int>> nic_devices;
-	ret = AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_all_nic_devices(nic_devices);
-	if (ret != 0) {
-		throw SmiToolSMILIBErrorException(ret);
-	}
+	if constexpr (smi::config::is_nic_enabled) {
+		int ret = 0;
+		std::vector<std::pair<DeviceType, int>> nic_devices;
+		ret =
+		    AmdSmiApiBase::CreateAmdSmiApiObject().amdsmi_get_all_nic_devices(nic_devices);
+		if (ret != 0) {
+			throw SmiToolSMILIBErrorException(ret);
+		}
 
-	for (const auto& nic : nic_devices) {
-		parsed_arguments.nic_devices.push_back(
-		    get_device_from_input(std::to_string(nic.second), nic.first));
+		for (const auto& nic : nic_devices) {
+			parsed_arguments.nic_devices.push_back(
+			    get_device_from_input(std::to_string(nic.second), nic.first));
+		}
 	}
-#endif
 }
 
 bool is_argument_full_present(const std::vector<std::string>& command_arguments,

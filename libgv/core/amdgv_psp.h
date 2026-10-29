@@ -186,6 +186,13 @@ enum psp_ih_reg {
 
 	RCC_CONFIG_MEMSIZE = 27,
 	RCC_CONFIG_RESERVED = 28,
+
+	HDP_SURFACE0_LOWER_BOUND = 29,
+	HDP_SURFACE0_LOWER_BOUND_HI = 30,
+	HDP_SURFACE0_UPPER_BOUND = 31,
+	HDP_SURFACE0_UPPER_BOUND_HI = 32,
+	HDP_SURFACE0_BASE = 33,
+	HDP_SURFACE0_BASE_HI = 34,
 };
 
 struct psp_local_memory {
@@ -375,6 +382,12 @@ struct psp_context {
 	void (*set_wptr)(struct amdgv_adapter *adapt, uint32_t value);
 	bool (*need_switch_to_pf)(struct amdgv_adapter *adapt);
 	bool (*ras_need_switch_to_pf)(struct amdgv_adapter *adapt);
+	/* Some ASICs' PSP keeps the per-VF VFGATE armed across VF FLR (only a
+	 * whole-GPU reset clears it), so the driver toggles the gate only at VF
+	 * lifecycle boundaries (GPU_INIT / SHUTDOWN) instead of on every
+	 * full-access enter/exit. false where the PSP drops the gate on reset and
+	 * must re-arm on every full-access enter. */
+	bool vfgate_lifecycle_scoped;
 	enum psp_status (*vfgate_support)(struct amdgv_adapter *adapt);
 	enum psp_status (*set_mb_int)(struct amdgv_adapter *adapt, uint32_t idx_vf,
 					  bool enable);
@@ -496,5 +509,15 @@ int amdgv_psp_translate_bp_addr(struct amdgv_adapter *adapt, uint64_t ipid, uint
 */
 enum gpuv_psp_ring_type psp_ring_type_to_gpuv_psp_ring_type(enum psp_ring_type ring_type);
 int amdgv_psp_disable_fb_carveout(struct amdgv_adapter *adapt);
+
+enum amdgv_psp_fw_feature_id {
+	AMDGV_PSP_FW_FEATURE__HDP_SURFACE0 = 0,
+
+	AMDGV_PSP_FW_FEATURE__MAX
+};
+
+void amdgv_psp_fw_feature_init(struct amdgv_adapter *adapt);
+bool amdgv_psp_fw_feature_supported(struct amdgv_adapter *adapt,
+				enum amdgv_psp_fw_feature_id feature);
 
 #endif

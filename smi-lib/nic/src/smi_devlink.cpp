@@ -139,7 +139,7 @@ int SmiDevlink::open(const std::string& bdf)
 {
 	close();
 
-	int ret = nl_open(&conn_, "devlink");
+	int ret = smi_nl_open(&conn_, "devlink");
 	if (ret != 0) {
 		return SMI_NIC_STATUS_NOT_INIT;
 	}
@@ -150,7 +150,7 @@ int SmiDevlink::open(const std::string& bdf)
 void SmiDevlink::close()
 {
 	if (conn_) {
-		nl_close(conn_);
+		smi_nl_close(conn_);
 		conn_ = nullptr;
 	}
 	bdf_.clear();
@@ -171,13 +171,13 @@ int SmiDevlink::get_fw_versions(std::vector<FwVersion>& versions)
 
 	char buf[MNL_SOCKET_BUFFER_SIZE];
 	struct nlmsghdr* nlh =
-	    nl_req_init(conn_, buf, sizeof(buf), DEVLINK_CMD_INFO_GET, DEVLINK_GENL_VERSION);
+	    smi_nl_req_init(conn_, buf, sizeof(buf), DEVLINK_CMD_INFO_GET, DEVLINK_GENL_VERSION);
 	nlh->nlmsg_flags |= NLM_F_DUMP;
 	mnl_attr_put_strz(nlh, DEVLINK_ATTR_BUS_NAME, "pci");
 	mnl_attr_put_strz(nlh, DEVLINK_ATTR_DEV_NAME, bdf_.c_str());
 
 	fw_ctx ctx {bdf_, versions, false};
-	int ret = nl_req_run(conn_, buf, sizeof(buf), nlh, fw_info_cb, &ctx);
+	int ret = smi_nl_req_run(conn_, buf, sizeof(buf), nlh, fw_info_cb, &ctx);
 
 	if (ret != 0) {
 		return SMI_NIC_STATUS_ERROR;
@@ -198,13 +198,13 @@ int SmiDevlink::get_port_flavour(const std::string& netdev, std::string& flavour
 
 	char buf[MNL_SOCKET_BUFFER_SIZE];
 	struct nlmsghdr* nlh =
-	    nl_req_init(conn_, buf, sizeof(buf), DEVLINK_CMD_PORT_GET, DEVLINK_GENL_VERSION);
+	    smi_nl_req_init(conn_, buf, sizeof(buf), DEVLINK_CMD_PORT_GET, DEVLINK_GENL_VERSION);
 	nlh->nlmsg_flags |= NLM_F_DUMP;
 	mnl_attr_put_strz(nlh, DEVLINK_ATTR_BUS_NAME, "pci");
 	mnl_attr_put_strz(nlh, DEVLINK_ATTR_DEV_NAME, bdf_.c_str());
 
 	flavour_ctx ctx(&netdev, &flavour);
-	int ret = nl_req_run(conn_, buf, sizeof(buf), nlh, port_flavour_cb, &ctx);
+	int ret = smi_nl_req_run(conn_, buf, sizeof(buf), nlh, port_flavour_cb, &ctx);
 
 	if (ret != 0) {
 		return SMI_NIC_STATUS_ERROR;

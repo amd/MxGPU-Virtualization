@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+
+# Copyright Advanced Micro Devices, Inc.
+#
+# SPDX-License-Identifier: MIT
+
+# configure runs on first install and on upgrade. install-smi.sh builds the
+# replacement, removes the previous userspace AMD SMI, and installs the new
+# version. DKMS autoinstall for a later kernel builds only the kernel module.
+
+#DEBHELPER#
+
+case "$1" in
+configure)
+	version=$(dpkg-query -W -f '${Version}' gim-dkms)
+	sh "/usr/src/gim-${version}/gim/dkms/install-smi.sh"
+	;;
+esac
+
+exit 0

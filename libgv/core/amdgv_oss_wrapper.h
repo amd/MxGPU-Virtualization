@@ -98,6 +98,13 @@ INLINE void oss_unmap_vf_dev_res(oss_dev_t dev, struct oss_dev_res *res)
 	amdgv_oss_funcs->unmap_vf_dev_res(dev, res);
 }
 
+INLINE uint64_t oss_get_vf_fb_bar_size(oss_dev_t dev)
+{
+	if (amdgv_oss_funcs->get_vf_fb_bar_size)
+		return amdgv_oss_funcs->get_vf_fb_bar_size(dev);
+	return 0;
+}
+
 INLINE int oss_map_framebuffer(oss_dev_t dev, uint64_t phyAddress, uint32_t size, void **mappedAddress)
 {
 	if (amdgv_oss_funcs->map_framebuffer) {
@@ -932,11 +939,6 @@ INLINE int oss_vsnprintf(char *buf, uint32_t size, const char *fmt, ...)
 	return num;
 }
 
-INLINE void oss_memory_fence(void)
-{
-	amdgv_oss_funcs->memory_fence();
-}
-
 /* get current time in microseconds */
 INLINE uint64_t oss_get_time_stamp(void)
 {
@@ -1108,25 +1110,13 @@ INLINE int oss_store_rlcv_timestamp(const char *buf, uint32_t size, uint32_t bdf
 	return amdgv_oss_funcs->store_rlcv_timestamp && amdgv_oss_funcs->store_rlcv_timestamp(buf, size, bdf);
 }
 
-INLINE void *oss_hbm_dax_init(const char *dev_name, uint64_t phy_addr, uint64_t phy_size)
-{
-	if (amdgv_oss_funcs->hbm_dax_init)
-		return amdgv_oss_funcs->hbm_dax_init(dev_name, phy_addr, phy_size);
-	return NULL;
-}
-
-INLINE void oss_hbm_dax_fini(void *hbm_dax)
-{
-	if (amdgv_oss_funcs->hbm_dax_fini)
-		amdgv_oss_funcs->hbm_dax_fini(hbm_dax);
-}
-
-INLINE void *oss_hbm_drv_mgmt_init(const char *hbm_name, int numa_id,
+INLINE void *oss_hbm_drv_mgmt_init(const char *hbm_name, uint32_t pf_bdf,
+				   uint32_t idx_vf, int *numa_id,
 				   uint64_t *phy_addr, uint64_t *phy_size)
 {
 	if (amdgv_oss_funcs->hbm_drv_mgmt_init)
-		return amdgv_oss_funcs->hbm_drv_mgmt_init(hbm_name, numa_id,
-							  phy_addr, phy_size);
+		return amdgv_oss_funcs->hbm_drv_mgmt_init(hbm_name, pf_bdf, idx_vf,
+							  numa_id, phy_addr, phy_size);
 	return NULL;
 }
 

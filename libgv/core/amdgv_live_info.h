@@ -37,6 +37,7 @@ extern struct amdgv_adapter *adapt;
 #define AMDGV_LIVE_MAX_XCD_NUM 16
 #define AMDGV_LIVE_MAX_RAS_BLOCK 32
 #define AMDGV_LIVE_MAX_SRIOV_MSG_TABLE 10
+#define AMDGV_LIVE_INFO_PTL_EXPOSED_VALID 0x5A
 
 /* Use pcie config space 0x108 to store the live info hash */
 #define LIVE_INFO_HASH_ADDR 0x108
@@ -108,7 +109,7 @@ enum amdgv_mem_id {
 	MEM_PSP_TMR                  = 0x14,
 	MEM_PSP_XGMI                 = 0x15,
 	MEM_PSP_VBFLASH              = 0x16,
-	MEM_PSP_SRIOV_DRV            = 0x17,
+	MEM_PSP_IOVM_DRV             = 0x17,
 	MEM_PSP_DUMMY                = 0x18,
 	MEM_PSP_UAL                  = 0x19,
 	/* SMU */
@@ -142,6 +143,7 @@ enum amdgv_mem_id {
 	MEM_GFX_EOP                  = 0x602,
 	MEM_GFX_MQD                  = 0x603,
 	MEM_GFX_IB                   = 0x604,
+	MEM_GFX_CLEANER_SHADER       = 0x605,
 
 	MEM_KIQ_RING                 = 0x610,
 	MEM_KIQ_EOP                  = 0x611,
@@ -251,9 +253,8 @@ struct amdgv_live_info_param {
 	uint32_t bad_page_record_threshold;
 	uint32_t max_cper_count;
 	int32_t ras_vf_telemetry_policy;
-	uint32_t vf_hbm_mgmt_mode;
 	uint32_t sys_log_level;
-	uint8_t reserved[31]; // 0x80 align
+	uint8_t reserved[35]; // 0x80 align
 };
 
 struct amdgv_live_info_vbios {
@@ -599,8 +600,12 @@ struct amdgv_live_info_vf_extend {
 	uint64_t used_time_full_access;
 	uint32_t event_id_full_access;
 	uint8_t in_full_access;
+	uint8_t ptl_exposed;
+	/* AMDGV_LIVE_INFO_PTL_EXPOSED_VALID when ptl_exposed was exported;
+	 * a host predating ptl_exposed leaves both bytes zero */
+	uint8_t ptl_exposed_valid;
 
-	uint8_t reserved[99]; //0x80 align
+	uint8_t reserved[97]; //0x80 align
 };
 
 // Per VF
