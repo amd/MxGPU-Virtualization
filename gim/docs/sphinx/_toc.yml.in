@@ -1,0 +1,32 @@
+# Copyright Advanced Micro Devices, Inc.
+#
+# SPDX-License-Identifier: MIT
+
+root: index
+defaults:
+  numbered: False
+  maxdepth: 6
+subtrees:
+  - caption: Get started
+    entries:
+    - file: userguides/Getting_started_with_MxGPU
+      title: Getting started with virtualization
+
+  - caption: Configure the host
+    entries:
+    - file: userguides/Host_configuration
+      title: Host configuration
+    - file: userguides/GPU_partitioning
+      title: GPU partitioning
+    - file: userguides/XGMI_configuration
+      title: XGMI configuration
+
+  - caption: Configure the guest
+    entries:
+    - file: userguides/VM_setup
+      title: VM setup
+
+  - caption: Maintenance
+    entries:
+    - file: userguides/Removing_MxGPU
+      title: Removing MxGPU
