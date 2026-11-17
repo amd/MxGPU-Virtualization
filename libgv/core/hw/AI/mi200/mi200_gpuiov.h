@@ -141,4 +141,7 @@ int mi200_gpuiov_trn_hvvm_mbox_data(struct amdgv_adapter *adapt,
 int mi200_gpuiov_set_hvvm_mbox_valid(struct amdgv_adapter *adapt, uint8_t bits);
 int mi200_gpuiov_set_hvvm_mbox_ack(struct amdgv_adapter *adapt);
 
+void mi200_gpuiov_program_pf_hdp_surface(struct amdgv_adapter *adapt);
+int mi200_gpuiov_program_vf_hdp_surface(struct amdgv_adapter *adapt, uint32_t idx_vf);
+
 #endif

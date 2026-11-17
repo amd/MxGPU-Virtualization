@@ -14,7 +14,7 @@ Before starting this guide, you must complete:
 Supported partitioning types:
 
 - **Spatial Partitioning:** Instinct MI300X, MI325X and MI350X/MI355X
-- **Temporal Partitioning:** Radeon Pro V710
+- **Temporal Partitioning:** Radeon PRO V710
 
 ## Spatial partitioning
 
@@ -38,6 +38,7 @@ This refers to the logical partitioning of compute chiplets into distinct device
 This method divides all GPU compute resources (like XCCs, Decoders, Encoders, DMA, JPEG engines) equally across the Virtual Functions (VFs) at driver load time. The partitioning is based on the number of VFs enabled, which can be configured as follows:
 
 - 1 VF (SPX)
+- 2 VFs (DPX)
 - 8 VFs (CPX)
 
 To achieve the desired static compute partitioning, use the vf_num parameter with the modprobe command on driver load time. The command should be structured as follows:
@@ -84,7 +85,7 @@ A visual representation illustrating how Dynamic Compute Partition Mode interact
 
 Dynamic Compute Partition Mode - 1 VF
 
-- SPX - 8 XCC work together​
+- SPX - all XCC work together​
 
 - CPX - each XCC works independently
 
@@ -132,7 +133,7 @@ Unlike true spatial partitioning where separate hardware blocks are permanently 
 
 ### VF support for temporal partitioning
 
-Temporal partitioning supports 1-12 VFs. This range is chosen to provide an optimal experience. While the theoretical maximum is 31 VFs, the practical limit is constrained to improve performance.
+Temporal partitioning supports 1-12 VFs. This range is chosen to provide an optimal experience.
 
 To achieve the desired temporal partitioning, use the vf_num parameter with the modprobe command on driver load time. The command should be structured as follows:
 
@@ -183,19 +184,19 @@ All available scheduling modes and their corresponding indexes can be listed wit
 
 ## Partitioning support per GPU model
 
-### AMD Instinct MI300X/MI325X/MI35XX architecture
+### AMD Instinct MI300X/MI325X/MI350X/MI355X architecture
 
 Spatial partitioning:
 
-| Number of VFs per GPU    | Dynamic Compute Partitioning | NPS1                   | NPS2             | NPS4           |
-|--------------------------|------------------------------|------------------------|------------------|----------------|
-| 1 (8 VFs per node)       | SPX (Default)                | MI300X, MI325X, MI35XX |                  |                |
-| 1 (8 VFs per node)       | DPX                          |                        | MI35XX           |                |
-| 1 (8 VFs per node)       | CPX                          |                        | MI35XX           |                |
-| 2 (16 VFs per node)      | DPX                          |                        | MI35XX           |                |
-| 8 (64 VFs per node)      | CPX                          |                        | MI35XX           | MI300X         |
+| Number of VFs per GPU | Dynamic Compute Partitioning | NPS1                                  | NPS2          | NPS4   |
+|-----------------------|------------------------------|---------------------------------------|---------------|--------|
+| 1 (8 VFs per node)    | SPX (Default)                | MI300X, MI325X, MI350X/MI355X, MI350P |               |        |
+| 1 (8 VFs per node)    | DPX                          |                                       | MI350X/MI355X |        |
+| 1 (8 VFs per node)    | CPX                          |                                       | MI350X/MI355X |        |
+| 2 (16 VFs per node)   | DPX                          |                                       | MI350X/MI355X |        |
+| 8 (64 VFs per node)   | CPX                          |                                       | MI350X/MI355X | MI300X |
 
-### AMD Instinct MI210X architecture
+### AMD Instinct MI210 architecture
 
 The AMD Instinct MI210 supports 1 VF per GPU, and does not support spatial or temporal partitioning.
 

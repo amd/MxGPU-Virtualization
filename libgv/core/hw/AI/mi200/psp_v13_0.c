@@ -5,6 +5,7 @@
 
 #include <amdgv.h>
 #include <amdgv_device.h>
+#include <amdgv_psp.h>
 
 #include "mi200.h"
 #include "mi200_gpuiov.h"
@@ -302,6 +303,9 @@ enum psp_status psp_v13_program_guest_mc_settings(struct amdgv_adapter *adapt,
 		return PSP_STATUS__ERROR_GENERIC;
 	if (psp_v13_program_register(adapt, idx_vf,
 			nonsurface_mc_hi, 0, HDP_NONSURFACE_BASE_HI))
+		return PSP_STATUS__ERROR_GENERIC;
+
+	if (mi200_gpuiov_program_vf_hdp_surface(adapt, idx_vf))
 		return PSP_STATUS__ERROR_GENERIC;
 
 	return PSP_STATUS__SUCCESS;
@@ -979,6 +983,8 @@ static int psp_v13_hw_init(struct amdgv_adapter *adapt)
 
 	adapt->psp.xgmi_context.supports_extended_data =
 		!adapt->xgmi.connected_to_cpu;
+
+	amdgv_psp_fw_feature_init(adapt);
 
 init_fail:
 	if (r)

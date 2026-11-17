@@ -1640,18 +1640,10 @@ static int mi300_smu_get_dpmfreq_by_index(struct amdgv_adapter *adapt, uint16_t 
 static int mi300_smu_get_dpmfreq_level_count(struct amdgv_adapter *adapt, uint16_t clk_id,
 					     uint32_t *count)
 {
-	int ret;
-
 	if (!count)
 		return AMDGV_FAILURE;
 
-	ret = mi300_smu_get_dpmfreq_by_index(adapt, clk_id, 0xff, count);
-	if (!ret) {
-		/* PMFW will return the max level index rather than the max level count */
-		*count += 1;
-	}
-
-	return ret;
+	return mi300_smu_get_dpmfreq_by_index(adapt, clk_id, 0xff, count);
 }
 
 static int mi300_smu_set_gfx_dpm_table(struct amdgv_adapter *adapt,

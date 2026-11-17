@@ -2,7 +2,7 @@
 myst:
   html_meta:
     "description": "Learn about AMD MxGPU virtualization technology with SR-IOV support"
-    "keywords": "AMD, Instinct, MxGPU, GPU virtualization, SR-IOV, MI210X, MI300X, MI325X, MI350X, MI355X, Radeon Pro V710"
+    "keywords": "AMD, Instinct, MxGPU, GPU virtualization, SR-IOV, MI210, MI300X, MI325X, MI350X, MI355X, MI350P, Radeon PRO V710"
 ---
 
 # AMD Instinct virtualization driver
@@ -11,10 +11,11 @@ AMD MxGPU technology enables GPU virtualization through SR-IOV (Single Root I/O 
 
 ## Supported hardware
 
-- AMD Instinct MI210X
+- AMD Instinct MI210
 - AMD Instinct MI300X
 - AMD Instinct MI325X
 - AMD Instinct MI350X/MI355X
+- AMD Instinct MI350P
 - AMD Radeon PRO V710
 
 ## Set up MxGPU

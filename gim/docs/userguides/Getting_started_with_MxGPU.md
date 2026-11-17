@@ -24,44 +24,45 @@ KVM (Kernel-based Virtual Machine) and QEMU (Quick Emulator) are integral compon
 
 Instinct:
 
-- MI210X
+- MI210
 - MI300X
 - MI325X
 - MI350X/MI355X
+- MI350P
 
 Radeon:
 
 - PRO V710
 
-Listed GPUs officially support the MxGPU technology, enabling enhanced GPU virtualization capabilities. Additionally, AMD plans to announce support for more architectures in the future, further expanding the versatility and application of its GPU solutions.
+Listed GPUs officially support the MxGPU technology, enabling enhanced GPU virtualization capabilities.
 
 ### AMD Instinct GPU models
 
-#### AMD Instinct MI210X architecture
+#### AMD Instinct MI210
 
-[The AMD Instinct MI210X series accelerators](https://www.amd.com/en/products/accelerators/instinct/mi200/mi210.html), built on the 2nd Gen AMD CDNA architecture, excel in high-performance computing (HPC), artificial intelligence (AI), and machine learning (ML) tasks, particularly in double-precision (FP64) computations. These accelerators leverage AMD Infinity Fabric technology to provide high-bandwidth data transfer, supporting PCIe Gen4 for efficient connectivity across multiple GPUs. Equipped with 64GB of HBM2e memory at 1.6 GHz, the MI210X ensures effective handling of large data sets. AMD's Matrix Core technology enhances mixed-precision capabilities, making the MI210X ideal for deep learning and versatile AI applications.
+The [AMD Instinct MI210](https://www.amd.com/en/products/accelerators/instinct/mi200/mi210.html) is an AMD CDNA 2 GPU in a dual-slot PCIe card form factor, part of the Instinct MI200 Series. It has 104 compute units and 64 GB of HBM2e memory with 1.6 TB/s peak bandwidth. It connects to the host over PCIe Gen 4 x16 and to other GPUs in the same server over AMD Infinity Fabric (XGMI) links.
 
-#### AMD Instinct MI300X architecture
+#### AMD Instinct MI300X
 
-[The AMD Instinct MI300X series accelerators](https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html), based on the advanced AMD CDNA 3 architecture, offer substantial improvements in AI and HPC workloads. With 304 high-throughput compute units and cutting-edge AI-specific functions, the MI300X integrates 192 GB of HBM3 memory and utilizes die stacking for enhanced efficiency. Delivering significantly higher performance, it features 13.7x peak AI/ML workload improvement using FP8 and a 3.4x advantage for HPC with FP32 calculations compared to previous models. AMD's 4th Gen Infinity Architecture provides superior I/O efficiency and scalability, with PCIe Gen 5 interfaces and robust multi-GPU configurations. The MI300X also incorporates SR-IOV capabilities for effective GPU partitioning, providing coherent shared memory and caches to support data-intensive machine-learning models across GPUs, with 5.3 TB/s bandwidth and 128 GB/s inter-GPU connectivity.
+The [AMD Instinct MI300X](https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html) is an AMD CDNA 3 GPU in the OAM form factor, part of the Instinct MI300 Series. It has 304 compute units and 192 GB of HBM3 memory with 5.3 TB/s peak bandwidth. It connects to the host over PCIe Gen 5 x16 and to other GPUs in the same server over AMD Infinity Fabric (XGMI) links.
 
-#### AMD Instinct MI325X architecture
+#### AMD Instinct MI325X
 
-[The AMD Instinct MI325X series accelerators](https://www.amd.com/en/products/accelerators/instinct/mi300/mi325x.html), built on the cutting-edge 3rd Gen AMD CDNA architecture, are designed to meet the demands of modern AI and HPC workloads. With a robust configuration of 304 compute units, the MI325X excels in processing a wide array of data types, making it ideal for both high-precision inference and training tasks. The accelerator is equipped with an industry-leading 256 GB of HBM3E memory, delivering an impressive 6 TB/s bandwidth, which allows it to efficiently handle one-trillion parameter models and reduce total cost of ownership for large-language models. AMD Infinity Fabric technology ensures excellent I/O efficiency and scalability, with a 16-lane PCIe Gen 5 host interface and seven Infinity Fabric links for seamless connectivity between GPUs. Integrated with AMD's comprehensive software ecosystem, the MI325X supports key AI and HPC frameworks, simplifying deployment and accelerating development across a wide range of applications.
+The [AMD Instinct MI325X](https://www.amd.com/en/products/accelerators/instinct/mi300/mi325x.html) is an AMD CDNA 3 GPU in the OAM form factor, part of the Instinct MI300 Series. It has 304 compute units and 256 GB of HBM3E memory with 6 TB/s peak bandwidth. It connects to the host over PCIe Gen 5 x16 and to other GPUs in the same server over AMD Infinity Fabric (XGMI) links.
 
-#### AMD Instinct MI350X/MI355X architecture
+#### AMD Instinct MI350X/MI355X
 
-Leveraging the latest CDNA 4 architecture, the AMD Instinct [MI350X](https://www.amd.com/en/products/accelerators/instinct/mi350/mi350x.html) and [MI355X](https://www.amd.com/en/products/accelerators/instinct/mi350/mi355x.html) series accelerators are engineered for the most demanding AI and HPC workloads. Featuring up to 256 compute units, these GPUs harness 288 GB of HBM3E memory to manage large data sets efficiently, achieving up to 8 TB/s of memory bandwidth for complex, data-driven applications. Advanced AMD Infinity Fabric interconnects enhance multi-GPU scalability and performance, supporting ultra-dense configurations for large-scale AI training.
+The [AMD Instinct MI350X](https://www.amd.com/en/products/accelerators/instinct/mi350/mi350x.html) and [AMD Instinct MI355X](https://www.amd.com/en/products/accelerators/instinct/mi350/mi355x.html) are AMD CDNA 4 GPUs in the OAM form factor, part of the Instinct MI350 Series. Both have 256 compute units and 288 GB of HBM3E memory with 8 TB/s peak bandwidth. Both connect to the host over PCIe Gen 5 x16 and to other GPUs in the same server over AMD Infinity Fabric (XGMI) links. The MI355X has a higher peak engine clock than the MI350X (2.4 GHz versus 2.2 GHz) and a higher typical board power (1400 W versus 1000 W).
 
-The AMD Instinct MI355X GPU is purpose built for high density computing environments, offering more peak performance than its counterpart the MI350X. This increased power enables the MI355X to sustain higher performance over time, minimizing throttling and maximizing throughput during prolonged or intensive workloads.
+#### AMD Instinct MI350P
 
-Designed for high-performance, energy-efficient operation, these accelerators maintain robust computational output across a wide range of workloads. With comprehensive support for various precision modes and data types, the MI350X and MI355X deliver flexible and efficient computation for scientific, AI, and HPC tasks.
+The [AMD Instinct MI350P](https://www.amd.com/en/products/accelerators/instinct/mi350/mi350p.html) is an AMD CDNA 4 GPU in a dual-slot PCIe card form factor, part of the Instinct MI350 Series. It has 128 compute units and 144 GB of HBM3E memory with 4 TB/s peak bandwidth. It connects to the host over PCIe Gen 5 x16 and has no Infinity Fabric (XGMI) connection to other GPUs. Up to eight cards can be installed in one server, and board power can be lowered from 600 W to 450 W to fit existing power and cooling limits.
 
 ### AMD Radeon GPU models
 
 #### AMD Radeon PRO V710
 
-[The AMD Radeon PRO V710](https://www.amd.com/en/products/accelerators/radeon-pro/amd-radeon-pro-v710.html), part of the Radeon PRO V Series, is designed for high-performance server environments using the AMD RDNA™ 3 architecture. It supports 8K AV1 video encoding and delivers 55 TFLOPS peak FP16 inference performance, with support for BF16, INT8, and INT4 data types. The GPU features accelerated Raytracing 2.0 with Variable Rate Shading (VRS) and includes 28 GB of GDDR6 memory with 54 MB of AMD Infinity Cache, achieving 448 GB/s peak memory bandwidth. With 54 compute units and 3456 stream processors, it operates at a peak engine clock of 2 GHz and a total board power of 158W. The V710 supports major operating systems and APIs, making it versatile for modern server applications.
+The [AMD Radeon PRO V710](https://www.amd.com/en/products/accelerators/radeon-pro/amd-radeon-pro-v710.html) is an AMD RDNA 3 GPU in a single-slot PCIe card form factor, part of the Radeon PRO V Series. It has 54 compute units and 28 GB of GDDR6 memory with 448 GB/s peak bandwidth. It connects to the host over PCIe Gen 4 x16 and has no Infinity Fabric (XGMI) connection to other GPUs. It also provides hardware ray tracing and 8K AV1 video encoding for graphics and media workloads.
 
 ## MxGPU software stack
 

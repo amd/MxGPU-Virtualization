@@ -4278,6 +4278,8 @@ struct amdgv_psp_fw_feature_req {
 };
 
 static const struct amdgv_psp_fw_feature_req amdgv_psp_fw_feature_reqs[] = {
+	{ AMDGV_PSP_FW_FEATURE__HDP_SURFACE0, CHIP_MI200, AMDGV_FIRMWARE_ID__PSP_SOS,
+	  0x00270088 },
 	{ AMDGV_PSP_FW_FEATURE__HDP_SURFACE0, CHIP_MI300X, AMDGV_FIRMWARE_ID__PSP_SOS,
 	  0x00360264 },
 	{ AMDGV_PSP_FW_FEATURE__HDP_SURFACE0, CHIP_MI308X, AMDGV_FIRMWARE_ID__PSP_SOS,

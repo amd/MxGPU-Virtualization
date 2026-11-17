@@ -138,10 +138,11 @@ By carefully selecting the appropriate FB sharing mode based on the number of VM
 | GPU                        | Infinity Fabric (XGMI) Configuration |
 |----------------------------|--------------------------------------|
 | AMD Instinct MI350X/MI355X | Between 2/4/8 GPUs                   |
+| AMD Instinct MI350P        | N/A                                  |
 | AMD Instinct MI325X        | Between 2/4/8 GPUs                   |
 | AMD Instinct MI300X        | Between 2/4/8 GPUs                   |
-| AMD Instinct MI210X        | Between 4/8 GPUs                     |
-| AMD Radeon Pro V710        | N/A                                  |
+| AMD Instinct MI210         | Between 2/4 GPUs                     |
+| AMD Radeon PRO V710        | N/A                                  |
 
 ---
 

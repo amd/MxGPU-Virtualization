@@ -224,7 +224,7 @@ The PF driver is loaded with one VF by default, which means that if we use a pla
 
 4. To ensure that the PF driver has loaded correctly, check if the GPU VF devices are visible by running:
 
-MI210X:
+MI210:
 
 ```bash
 # lspci -d 1002:7410
@@ -248,7 +248,19 @@ MI350X:
 # lspci -d 1002:75b0
 ```
 
-Radeon Pro V710:
+MI355X:
+
+```bash
+# lspci -d 1002:75b3
+```
+
+MI350P:
+
+```bash
+# lspci -d 1002:75b8
+```
+
+Radeon PRO V710:
 
 ```bash
 # lspci -d 1002:7461
