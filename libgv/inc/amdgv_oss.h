@@ -6,11 +6,7 @@
 #ifndef AMDGV_OSS_H
 #define AMDGV_OSS_H
 
-#ifdef HAVE_LINUX_STDARG_H
 #include <linux/stdarg.h>
-#else
-#include <stdarg.h>
-#endif
 
 #include "amdgv_asic.h"
 
